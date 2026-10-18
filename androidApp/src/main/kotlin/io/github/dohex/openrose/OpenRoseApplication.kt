@@ -1,6 +1,12 @@
 package io.github.dohex.openrose
 
 import android.app.Application
+import android.bluetooth.BluetoothAdapter
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.os.Build
 import io.github.dohex.openrose.core.ControlSession
 import io.github.dohex.openrose.core.UserSettings
 import io.github.dohex.openrose.core.UserSettingsCodec
@@ -18,6 +24,19 @@ class OpenRoseApplication : Application() {
                 (value as? String)?.let { key to it }
             }.toMap()),
         )
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context, intent: Intent) {
+                // Re-read system facts instead of trusting broadcast extras.
+                if (intent.action == BluetoothAdapter.ACTION_STATE_CHANGED) refreshPlatform()
+            }
+        }
+        val filter = IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED)
+        // Bluetooth broadcasts may originate in a privileged app with a non-system UID.
+        if (Build.VERSION.SDK_INT >= 33) {
+            registerReceiver(receiver, filter, RECEIVER_EXPORTED)
+        } else {
+            registerReceiver(receiver, filter)
+        }
     }
 
     fun updateSettings(settings: UserSettings) {
