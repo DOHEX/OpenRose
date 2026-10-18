@@ -43,6 +43,10 @@ fun main() {
                 },
                 onRequestPermission = {},
                 onOpenSystemSettings = {},
+                onStartScan = {},
+                onStopScan = {},
+                onConnect = {},
+                onDisconnect = {},
             )
         }
     }

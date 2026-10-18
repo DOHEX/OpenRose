@@ -30,7 +30,6 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.dp
 import io.github.dohex.openrose.core.Appearance
-import io.github.dohex.openrose.core.ConnectionState
 import io.github.dohex.openrose.core.ControlState
 import io.github.dohex.openrose.core.InterfaceStyle
 import io.github.dohex.openrose.core.IslandMode
@@ -40,6 +39,7 @@ import io.github.dohex.openrose.core.PermissionState
 import io.github.dohex.openrose.core.PlatformState
 import io.github.dohex.openrose.core.TransportAvailability
 import io.github.dohex.openrose.core.UserSettings
+import io.github.dohex.openrose.core.transport.DeviceId
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.theme.darkColorScheme as miuixDarkColorScheme
 import top.yukonga.miuix.kmp.theme.lightColorScheme as miuixLightColorScheme
@@ -54,6 +54,10 @@ fun OpenRoseApp(
     onSettingsChange: (UserSettings) -> Unit,
     onRequestPermission: () -> Unit,
     onOpenSystemSettings: () -> Unit,
+    onStartScan: () -> Unit,
+    onStopScan: () -> Unit,
+    onConnect: (DeviceId) -> Unit,
+    onDisconnect: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val settings = state.settings
@@ -82,7 +86,7 @@ fun OpenRoseApp(
                     if (maxWidth >= 800.dp) {
                         Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
                             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(20.dp)) {
-                                DeviceCard(state.connection)
+                                DevicePanel(state, onStartScan, onStopScan, onConnect, onDisconnect)
                                 PlatformCard(state.platform, onRequestPermission, onOpenSystemSettings)
                             }
                             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(20.dp)) {
@@ -92,14 +96,14 @@ fun OpenRoseApp(
                         }
                     } else {
                         Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
-                            DeviceCard(state.connection)
+                            DevicePanel(state, onStartScan, onStopScan, onConnect, onDisconnect)
                             PlatformCard(state.platform, onRequestPermission, onOpenSystemSettings)
                             AppearanceCard(settings, onSettingsChange)
                             IntegrationCard(settings, state.platform.module, onSettingsChange)
                         }
                     }
                 }
-                AppText("项目初始化阶段 · 设备连接与系统适配仍在建设中", secondary = true)
+                AppText("系统适配与各型号实机验证进度分别记录。", secondary = true)
             }
         }
     }
@@ -114,23 +118,6 @@ fun OpenRoseApp(
                 content = content,
             )
         }
-    }
-}
-
-@Composable
-private fun DeviceCard(connection: ConnectionState) {
-    AppCard {
-        AppText("我的耳机", title = true)
-        Spacer(Modifier.height(24.dp))
-        when (connection) {
-            ConnectionState.Disconnected -> {
-                AppText("未连接耳机", title = true)
-                Spacer(Modifier.height(8.dp))
-                AppText("连接后将在这里显示设备状态和可用控制。", secondary = true)
-            }
-        }
-        Spacer(Modifier.height(16.dp))
-        AppText("尚未取得设备数据", secondary = true)
     }
 }
 

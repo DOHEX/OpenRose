@@ -91,6 +91,7 @@ internal fun AppButton(
     onClick: () -> Unit,
     selected: Boolean = false,
     choice: Boolean = false,
+    enabled: Boolean = true,
 ) {
     val modifier = Modifier.heightIn(min = 48.dp).then(
         if (choice) Modifier.semantics { this.selected = selected } else Modifier,
@@ -100,13 +101,14 @@ internal fun AppButton(
             text = text,
             onClick = onClick,
             modifier = modifier,
+            enabled = enabled,
             colors = if (selected || !choice) MiuixButtonDefaults.textButtonColorsPrimary()
             else MiuixButtonDefaults.textButtonColors(),
         )
         InterfaceStyle.MATERIAL3 -> if (selected || !choice) {
-            Button(onClick = onClick, modifier = modifier) { Text(text) }
+            Button(onClick = onClick, modifier = modifier, enabled = enabled) { Text(text) }
         } else {
-            OutlinedButton(onClick = onClick, modifier = modifier) { Text(text) }
+            OutlinedButton(onClick = onClick, modifier = modifier, enabled = enabled) { Text(text) }
         }
     }
 }

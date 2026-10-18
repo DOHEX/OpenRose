@@ -5,6 +5,8 @@ import android.bluetooth.BluetoothManager
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
+import android.location.LocationManager
+import android.provider.Settings
 import io.github.dohex.openrose.core.ModuleAvailability
 import io.github.dohex.openrose.core.PermissionState
 import io.github.dohex.openrose.core.PlatformState
@@ -27,13 +29,15 @@ internal fun Context.readPlatformState(permissionRequested: Boolean): PlatformSt
     val transport = when {
         !packageManager.hasSystemFeature(PackageManager.FEATURE_BLUETOOTH_LE) ->
             TransportAvailability.Unavailable("此设备没有 BLE 硬件")
-        !granted -> TransportAvailability.Unavailable("授予权限后可检测蓝牙；控制传输尚未实现")
+        !granted -> TransportAvailability.Unavailable("授予权限后可检测蓝牙并发现耳机")
         else -> {
             val adapter = getSystemService(BluetoothManager::class.java)?.adapter
             when {
                 adapter == null -> TransportAvailability.Unavailable("系统蓝牙适配器不可用")
                 !adapter.isEnabled -> TransportAvailability.Disabled
-                else -> TransportAvailability.Unavailable("蓝牙已开启；Android 控制传输尚未实现")
+                Build.VERSION.SDK_INT <= 30 && !locationServicesEnabled() ->
+                    TransportAvailability.Unavailable("请在系统设置中开启定位服务，以便此 Android 版本扫描蓝牙设备")
+                else -> TransportAvailability.Available
             }
         }
     }
@@ -42,4 +46,12 @@ internal fun Context.readPlatformState(permissionRequested: Boolean): PlatformSt
         transport = transport,
         module = ModuleAvailability.Unavailable("系统模块尚未接入，普通客户端可独立运行"),
     )
+}
+
+private fun Context.locationServicesEnabled(): Boolean = if (Build.VERSION.SDK_INT >= 28) {
+    getSystemService(LocationManager::class.java)?.isLocationEnabled == true
+} else {
+    @Suppress("DEPRECATION")
+    Settings.Secure.getInt(contentResolver, Settings.Secure.LOCATION_MODE, Settings.Secure.LOCATION_MODE_OFF) !=
+        Settings.Secure.LOCATION_MODE_OFF
 }

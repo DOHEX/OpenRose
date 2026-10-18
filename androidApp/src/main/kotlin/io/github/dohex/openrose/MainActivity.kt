@@ -47,6 +47,10 @@ class MainActivity : ComponentActivity() {
                 onSettingsChange = owner::updateSettings,
                 onRequestPermission = ::requestBluetoothPermission,
                 onOpenSystemSettings = { startActivity(Intent(Settings.ACTION_BLUETOOTH_SETTINGS)) },
+                onStartScan = owner::startScan,
+                onStopScan = owner::stopScan,
+                onConnect = owner::connect,
+                onDisconnect = owner::disconnect,
             )
         }
     }
@@ -54,6 +58,12 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         owner.refreshPlatform()
+    }
+
+    override fun onStop() {
+        super.onStop()
+        // Discovery is a foreground interaction; control ownership and active links stay in the host.
+        owner.stopScan()
     }
 
     private fun requestBluetoothPermission() {
