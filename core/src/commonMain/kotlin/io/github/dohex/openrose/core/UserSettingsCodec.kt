@@ -1,0 +1,61 @@
+package io.github.dohex.openrose.core
+
+/**
+ * Storage format shared by platform-owned preferences stores. Missing values use product defaults;
+ * an explicitly stored empty trigger value means no automatic triggers.
+ */
+object UserSettingsCodec {
+    fun encode(settings: UserSettings): Map<String, String> = mapOf(
+        "interface_style" to when (settings.interfaceStyle) {
+            InterfaceStyle.MIUIX -> "miuix"
+            InterfaceStyle.MATERIAL3 -> "material3"
+        },
+        "appearance" to when (settings.appearance) {
+            Appearance.SYSTEM -> "system"
+            Appearance.LIGHT -> "light"
+            Appearance.DARK -> "dark"
+        },
+        "island_mode" to when (settings.islandMode) {
+            IslandMode.OFF -> "off"
+            IslandMode.OFFICIAL -> "official"
+            IslandMode.MODULE -> "module"
+        },
+        "focus_notification_enabled" to settings.focusNotificationEnabled.toString(),
+        "island_triggers" to settings.islandTriggers.map {
+            when (it) {
+                IslandTrigger.CONNECTION -> "connection"
+            }
+        }.sorted().joinToString(","),
+    )
+
+    fun decode(values: Map<String, String>): UserSettings {
+        val defaults = UserSettings()
+        return UserSettings(
+            interfaceStyle = when (values["interface_style"]) {
+                "miuix" -> InterfaceStyle.MIUIX
+                "material3" -> InterfaceStyle.MATERIAL3
+                else -> defaults.interfaceStyle
+            },
+            appearance = when (values["appearance"]) {
+                "system" -> Appearance.SYSTEM
+                "light" -> Appearance.LIGHT
+                "dark" -> Appearance.DARK
+                else -> defaults.appearance
+            },
+            islandMode = when (values["island_mode"]) {
+                "off" -> IslandMode.OFF
+                "official" -> IslandMode.OFFICIAL
+                "module" -> IslandMode.MODULE
+                else -> defaults.islandMode
+            },
+            focusNotificationEnabled = values["focus_notification_enabled"]
+                ?.toBooleanStrictOrNull() ?: defaults.focusNotificationEnabled,
+            islandTriggers = values["island_triggers"]?.split(',')?.mapNotNull {
+                when (it) {
+                    "connection" -> IslandTrigger.CONNECTION
+                    else -> null
+                }
+            }?.toSet() ?: defaults.islandTriggers,
+        )
+    }
+}
