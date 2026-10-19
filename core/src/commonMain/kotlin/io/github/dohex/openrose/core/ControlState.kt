@@ -83,6 +83,7 @@ data class DeviceCapabilities(
     val readableFields: Set<DeviceField>,
     val writableSettings: Set<DeviceSetting> = emptySet(),
     val noiseControl: NoiseControlCapabilities? = null,
+    val equalizer: EqualizerCapabilities? = null,
 )
 
 data class DeviceState(

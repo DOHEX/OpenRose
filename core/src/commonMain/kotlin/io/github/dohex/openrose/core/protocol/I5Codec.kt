@@ -25,6 +25,16 @@ internal class I5Codec : ProtocolCodec {
                 val flags = (expected as FieldValue.NoiseCycle).flags
                 Triple("0685", "0605", listOf("normal", "transparency", "wind", "anc").map { if (flags.getValue(it) == true) 1.toByte() else 0.toByte() }.toByteArray())
             }
+            DeviceSetting.EQ -> {
+                require(value is FieldValue.Text) { "均衡器需要预设名称" }
+                val preset = listOf("pop", "hifi", "rock", "light").indexOf(value.value)
+                if (preset < 0) throw UnsupportedOperationException("i5 不支持该均衡器预设")
+                Triple("0281", "0201", byteArrayOf(preset.toByte()))
+            }
+            DeviceSetting.GAME_MODE -> {
+                require(value is FieldValue.Toggle) { "游戏模式需要明确开关" }
+                Triple("0683", "0603", byteArrayOf(if (value.value) 0 else 1))
+            }
             else -> throw UnsupportedOperationException("i5 不支持此设置")
         }
         return ProtocolSetting(

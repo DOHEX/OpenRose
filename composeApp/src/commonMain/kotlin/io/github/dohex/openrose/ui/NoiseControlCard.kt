@@ -20,6 +20,7 @@ import io.github.dohex.openrose.core.TransportAvailability
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.FieldReading
 import io.github.dohex.openrose.core.protocol.FieldValue
+import io.github.dohex.openrose.core.protocol.ModelProfile
 
 /** Choices always come from device capabilities; selected values always come from device replies. */
 @Composable
@@ -30,14 +31,8 @@ internal fun NoiseControlCard(
 ) {
     val capabilities = device.capabilities.noiseControl ?: return
     val writable = device.capabilities.writableSettings
-    val connection = state.connection as? ConnectionState.Connected
-    val ready = connection?.phase == ConnectionPhase.READY &&
-        connection.deviceId == device.deviceId && connection.sessionId == device.sessionId &&
-        state.platform.transport == TransportAvailability.Available &&
-        state.platform.permission in setOf(PermissionState.GRANTED, PermissionState.NOT_REQUIRED)
-    val pending = state.settingOperations.any {
-        it.sessionId == device.sessionId && it.stage in pendingSettingStages
-    }
+    val ready = state.isReady(device)
+    val pending = state.hasPendingSetting(device)
     val enabled = ready && !pending
     AppCard {
         AppText("降噪控制", title = true)
@@ -140,11 +135,11 @@ internal fun NoiseControlCard(
 }
 
 @Composable
-private fun ConfirmedSettingLabel(label: String, field: DeviceField, device: DeviceState) {
+internal fun ConfirmedSettingLabel(label: String, field: DeviceField, device: DeviceState) {
     AppText(label)
     AppText(
         when (val reading = device.fields[field]) {
-            is FieldReading.Known -> "设备已确认：${displayFieldValue(field, reading.value)}"
+            is FieldReading.Known -> "设备已确认：${displayFieldValue(field, reading.value, device.profile)}"
             is FieldReading.Unknown -> "当前状态：未知"
             is FieldReading.NotProvided -> "当前状态：设备未提供"
             FieldReading.Loading, null -> "当前状态：尚未读取"
@@ -168,10 +163,11 @@ internal fun SettingOperationsCard(state: ControlState) {
         Spacer(Modifier.height(8.dp))
         AppText("请求值与已确认设备状态分别显示。", secondary = true)
         operations.forEach { operation ->
+            val profile = state.device?.takeIf { it.sessionId == operation.sessionId && operation.sessionId == sessionId }?.profile
             Spacer(Modifier.height(16.dp))
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 AppText("请求 #${operation.id}：${operation.setting.displayName()}")
-                AppText("请求值：${operation.requestedValueText()}", secondary = true)
+                AppText("请求值：${operation.requestedValueText(profile)}", secondary = true)
                 AppText(operation.stage.displayText())
                 operation.error?.let { AppText(it.message, secondary = true) }
                 if (operation.sessionId != sessionId) {
@@ -182,24 +178,40 @@ internal fun SettingOperationsCard(state: ControlState) {
     }
 }
 
-private fun DeviceState.knownValue(field: DeviceField): FieldValue? =
+internal fun DeviceState.knownValue(field: DeviceField): FieldValue? =
     (fields[field] as? FieldReading.Known)?.value
 
 private val pendingSettingStages = setOf(SettingStage.SUBMITTED, SettingStage.WRITTEN)
+
+internal fun ControlState.isReady(device: DeviceState): Boolean {
+    val connection = connection as? ConnectionState.Connected ?: return false
+    return connection.phase == ConnectionPhase.READY &&
+        connection.deviceId == device.deviceId && connection.sessionId == device.sessionId &&
+        platform.transport == TransportAvailability.Available &&
+        platform.permission in setOf(PermissionState.GRANTED, PermissionState.NOT_REQUIRED)
+}
+
+internal fun ControlState.hasPendingSetting(device: DeviceState): Boolean = settingOperations.any {
+    it.sessionId == device.sessionId && it.stage in pendingSettingStages
+}
 
 private fun DeviceSetting.displayName(): String = when (this) {
     DeviceSetting.NOISE_MODE -> "降噪模式"
     DeviceSetting.ANC_LEVEL -> "降噪档位"
     DeviceSetting.TRANSPARENCY_LEVEL -> "通透档位"
     DeviceSetting.NOISE_CYCLE -> "降噪轮换"
+    DeviceSetting.EQ -> "预设 EQ"
+    DeviceSetting.GAME_MODE -> "游戏模式"
     else -> name
 }
 
-private fun SettingOperation.requestedValueText(): String = when (setting) {
+private fun SettingOperation.requestedValueText(profile: ModelProfile?): String = when (setting) {
     DeviceSetting.NOISE_MODE -> displayFieldValue(DeviceField.NOISE_MODE, requestedValue)
     DeviceSetting.ANC_LEVEL -> displayFieldValue(DeviceField.ANC_LEVEL, requestedValue)
     DeviceSetting.TRANSPARENCY_LEVEL -> displayFieldValue(DeviceField.TRANSPARENCY_LEVEL, requestedValue)
     DeviceSetting.NOISE_CYCLE -> displayFieldValue(DeviceField.NOISE_CYCLE, requestedValue)
+    DeviceSetting.EQ -> displayFieldValue(DeviceField.EQ, requestedValue, profile)
+    DeviceSetting.GAME_MODE -> displayFieldValue(DeviceField.GAME_MODE, requestedValue)
     else -> requestedValue.displayText
 }
 

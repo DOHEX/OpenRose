@@ -30,6 +30,7 @@ import io.github.dohex.openrose.core.TransportAvailability
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.FieldReading
 import io.github.dohex.openrose.core.protocol.FieldValue
+import io.github.dohex.openrose.core.protocol.ModelProfile
 import io.github.dohex.openrose.core.transport.DeviceId
 
 @Composable
@@ -97,6 +98,7 @@ internal fun DevicePanel(
         }
         val device = state.device?.takeIf { state.connection.matches(it) }
         device?.let { NoiseControlCard(state, it, onSet) }
+        device?.let { EqualizerControlCard(state, it, onSet) }
         SettingOperationsCard(state)
         device?.let { DeviceReadings(it, state.connection.phaseOrNull() == ConnectionPhase.INITIALIZING) }
     }
@@ -149,7 +151,7 @@ private fun DeviceReadings(device: DeviceState, initializing: Boolean) {
         AppText(if (initializing) "正在读取设备状态…" else "按设备实际返回的状态显示。", secondary = true)
         Spacer(Modifier.height(16.dp))
         device.capabilities.readableFields.sortedBy { it.ordinal }.forEach { field ->
-            FieldRow(field.displayName, readingText(field, device.fields[field], initializing, device.fieldErrors[field]))
+            FieldRow(field.displayName, readingText(field, device.fields[field], initializing, device.fieldErrors[field], device.profile))
         }
         if (device.capabilities.writableSettings.isEmpty()) {
             Spacer(Modifier.height(12.dp))
@@ -201,6 +203,7 @@ private fun readingText(
     reading: FieldReading?,
     initializing: Boolean,
     error: ControlError?,
+    profile: ModelProfile,
 ): String = when (reading) {
     null, FieldReading.Loading -> when {
         error?.code == ControlErrorCode.TIMEOUT -> "读取超时"
@@ -210,7 +213,7 @@ private fun readingText(
     }
     is FieldReading.NotProvided -> "设备未提供"
     is FieldReading.Unknown -> "未知"
-    is FieldReading.Known -> displayFieldValue(field, reading.value)
+    is FieldReading.Known -> displayFieldValue(field, reading.value, profile)
 }
 
 private fun ConnectionState.phaseOrNull(): ConnectionPhase? = when (this) {

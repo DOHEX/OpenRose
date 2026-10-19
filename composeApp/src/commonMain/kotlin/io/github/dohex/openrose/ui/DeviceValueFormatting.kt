@@ -2,9 +2,10 @@ package io.github.dohex.openrose.ui
 
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.FieldValue
+import io.github.dohex.openrose.core.protocol.ModelProfile
 
 /** Presentation labels only; protocol numeric values and capability decisions stay in the core. */
-internal fun displayFieldValue(field: DeviceField, value: FieldValue): String = when (value) {
+internal fun displayFieldValue(field: DeviceField, value: FieldValue, profile: ModelProfile? = null): String = when (value) {
     is FieldValue.Number -> if (field in batteryFields) "${value.value}%" else value.displayText
     is FieldValue.Toggle -> when (field) {
         DeviceField.LEFT_CHARGING, DeviceField.RIGHT_CHARGING -> if (value.value) "充电中" else "未充电"
@@ -12,7 +13,7 @@ internal fun displayFieldValue(field: DeviceField, value: FieldValue): String = 
         DeviceField.CASE_FLAG -> if (value.value) "已置位" else "未置位"
         else -> value.displayText
     }
-    is FieldValue.Text -> semanticLabel(value.value)
+    is FieldValue.Text -> if (field == DeviceField.EQ) equalizerLabel(value.value, profile) else semanticLabel(value.value)
     is FieldValue.TouchKeys -> value.bindings.joinToString("\n") { binding ->
         val side = when (binding.side) { "left" -> "左耳"; "right" -> "右耳"; else -> binding.side }
         val gesture = when (binding.gesture) {
@@ -31,6 +32,36 @@ internal fun displayFieldValue(field: DeviceField, value: FieldValue): String = 
 }
 
 private val batteryFields = setOf(DeviceField.LEFT_BATTERY, DeviceField.RIGHT_BATTERY, DeviceField.CASE_BATTERY)
+
+internal fun equalizerLabel(preset: String, profile: ModelProfile?): String {
+    val code = when (preset) {
+        "pop" -> "POP"
+        "hifi" -> "HIFI"
+        "rock" -> "ROCK"
+        "light" -> "LIGHT"
+        "eap" -> "EAP"
+        else -> return semanticLabel(preset)
+    }
+    val label = when (profile) {
+        ModelProfile.I5_ZT -> when (preset) {
+            "pop" -> "弱水经典"
+            "hifi" -> "日系柔情"
+            "rock" -> "乐器大师"
+            "light" -> "清新空灵"
+            else -> null
+        }
+        ModelProfile.I7_RS_V2 -> when (preset) {
+            "pop" -> "弱水经典"
+            "hifi" -> "原声再现"
+            "rock" -> "古典乐器"
+            "light" -> "日系甜美"
+            "eap" -> "欧美流行"
+            else -> null
+        }
+        null -> null
+    }
+    return if (label == null) code else "$label · $code"
+}
 
 internal fun semanticLabel(value: String): String = when (value) {
     "anc" -> "主动降噪"

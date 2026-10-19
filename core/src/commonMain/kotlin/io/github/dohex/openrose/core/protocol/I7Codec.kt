@@ -1,6 +1,7 @@
 package io.github.dohex.openrose.core.protocol
 
 import io.github.dohex.openrose.core.DeviceSetting
+import io.github.dohex.openrose.core.equalizerCapabilities
 
 internal class I7Codec : ProtocolCodec {
     override val profile = ModelProfile.I7_RS_V2
@@ -25,6 +26,18 @@ internal class I7Codec : ProtocolCodec {
             DeviceSetting.NOISE_CYCLE -> {
                 val flags = (expected as FieldValue.NoiseCycle).flags
                 0x36.toByte() to listOf("anc", "wind", "normal", "transparency").map { if (flags.getValue(it) == true) 1.toByte() else 0.toByte() }.toByteArray()
+            }
+            DeviceSetting.EQ -> {
+                require(value is FieldValue.Text) { "均衡器需要预设名称" }
+                if (value.value !in equalizerCapabilities(profile, firmware).presets) {
+                    throw UnsupportedOperationException("i7 当前固件不支持该均衡器预设")
+                }
+                val preset = mapOf("hifi" to 0, "pop" to 1, "rock" to 2, "light" to 3, "eap" to 6).getValue(value.value)
+                0x2a.toByte() to byteArrayOf(preset.toByte())
+            }
+            DeviceSetting.GAME_MODE -> {
+                require(value is FieldValue.Toggle) { "游戏模式需要明确开关" }
+                0x0e.toByte() to byteArrayOf(if (value.value) 1 else 0)
             }
             else -> throw UnsupportedOperationException("i7 不支持此设置")
         }

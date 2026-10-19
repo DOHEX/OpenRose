@@ -162,7 +162,7 @@ class ControlSession(
                 return failure(ControlError(ControlErrorCode.UNSUPPORTED, "${setting.name} 尚不支持写入"))
             }
             // Validate before submission without allocating codec sequence numbers.
-            validateNoiseSetting(requireNotNull(attempt.candidate.profile), setting, snapshot)?.let { return failure(it) }
+            validateSetting(requireNotNull(attempt.candidate.profile), setting, snapshot)?.let { return failure(it) }
             if (attempt.pending.size >= 32) return failure(ControlError(ControlErrorCode.NOT_READY, "设置队列已满"))
             val operation = SettingOperation(++operationId, attempt.id, setting, snapshot, SettingStage.SUBMITTED)
             val next = SettingRequest(operation, CompletableDeferred())
@@ -174,9 +174,16 @@ class ControlSession(
         return request.result.await()
     }
 
-    private fun validateNoiseSetting(profile: ModelProfile, setting: DeviceSetting, value: FieldValue): ControlError? {
+    private fun validateSetting(profile: ModelProfile, setting: DeviceSetting, value: FieldValue): ControlError? {
         val noise = noiseControlCapabilities(profile, firmware())
         val valid = when (setting) {
+            DeviceSetting.GAME_MODE -> value is FieldValue.Toggle
+            DeviceSetting.EQ -> {
+                if (value is FieldValue.Text && value.value !in equalizerCapabilities(profile, firmware()).presets) {
+                    return ControlError(ControlErrorCode.UNSUPPORTED, "该型号与固件不支持 ${value.value} EQ")
+                }
+                value is FieldValue.Text
+            }
             DeviceSetting.NOISE_MODE -> {
                 if (value is FieldValue.Text && value.value !in noise.modes) {
                     return ControlError(ControlErrorCode.UNSUPPORTED, "该型号不支持 ${value.value} 模式")
@@ -304,8 +311,9 @@ class ControlSession(
 
     private fun capabilities(profile: ModelProfile, firmware: FieldValue.Firmware?) = DeviceCapabilities(
         profile.supportedFields,
-        setOf(DeviceSetting.NOISE_MODE, DeviceSetting.ANC_LEVEL, DeviceSetting.TRANSPARENCY_LEVEL, DeviceSetting.NOISE_CYCLE),
+        setOf(DeviceSetting.NOISE_MODE, DeviceSetting.ANC_LEVEL, DeviceSetting.TRANSPARENCY_LEVEL, DeviceSetting.NOISE_CYCLE, DeviceSetting.EQ, DeviceSetting.GAME_MODE),
         noiseControlCapabilities(profile, firmware),
+        equalizerCapabilities(profile, firmware),
     )
 
     private fun FieldValue.snapshot(): FieldValue = when (this) {

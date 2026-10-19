@@ -1,6 +1,6 @@
 # i5 / i7 读取协议与证据
 
-读取实现日期：2026-10-18。读取范围为 [#3](https://github.com/DOHEX/OpenRose/issues/3) 和 [#4](https://github.com/DOHEX/OpenRose/issues/4)。2026-10-19 新增 [#5](https://github.com/DOHEX/OpenRose/issues/5)、[#6](https://github.com/DOHEX/OpenRose/issues/6) 的降噪设置协议，见文末。`core.protocol.ProtocolCodec` 是纯 Kotlin 会话实例；平台传输负责扫描、GATT、订阅和串行写入，协议负责识别、初始化报文和状态解析。没有 OTA 发送入口。
+读取实现日期：2026-10-18。读取范围为 [#3](https://github.com/DOHEX/OpenRose/issues/3) 和 [#4](https://github.com/DOHEX/OpenRose/issues/4)。2026-10-19 新增 [#5](https://github.com/DOHEX/OpenRose/issues/5)、[#6](https://github.com/DOHEX/OpenRose/issues/6) 的降噪设置及 [#7](https://github.com/DOHEX/OpenRose/issues/7)、[#8](https://github.com/DOHEX/OpenRose/issues/8) 的预设 EQ / 游戏模式，见文末。`core.protocol.ProtocolCodec` 是纯 Kotlin 会话实例；平台传输负责扫描、GATT、订阅和串行写入，协议负责识别、初始化报文和状态解析。没有 OTA 发送入口。
 
 ## 来源与实测边界
 
@@ -51,7 +51,7 @@ RX 为 `DD opaqueHH [L T V...]... CS AA`，`L=1+V长度`。接受研究中看到
 
 游戏和多点 `1` 开 / `0` 关；触摸与检测功能相反。ANC / 通透线上等级直接为 `1/3/5`。EQ 单字节 00/01 为 HIFI/POP，双字节 00/01 为 POP/HIFI，原始格式保留。自定义 EQ 为十个符号位加绝对值编码的整数，范围 −6..6。触摸是八个必需 slot 的 `(id,action)` 对，重复 slot 以后者覆盖；轮换顺序为 ANC / 抗风 / 普通 / 通透。
 
-`supportedFields` 仅声明当前读者理解的字段，不能用于显示写入能力。未来设置能力必须按本型号与已读取固件判断：EAP 门槛 152，增益 / 听力保护门槛 213，提示音关闭门槛 304。固件未知时不启用受限设置。共享初始化 ID 不证明额外硬件能力。
+`supportedFields` 仅声明当前读者理解的字段，不能用于显示写入能力。设置能力必须按本型号与已读取固件判断：EAP 门槛 152，增益 / 听力保护门槛 213，提示音关闭门槛 304。固件未知时不启用受限设置。共享初始化 ID 不证明额外硬件能力。
 
 ## 字段可用性与请求匹配
 
@@ -79,3 +79,41 @@ i7 自动与动态 ANC 作为模式选择。离开自动模式时明确发送用
 所有参数检查都发生在构造设置帧前；非法类型、档位或轮换参数抛出 `IllegalArgumentException`，不支持的设置或模式抛出 `UnsupportedOperationException`，由会话转换为明确的公开操作结果。i7 初始化、设置及读取确认共用同一个编解码器序号；无效请求不消耗序号，断开重置仍从 `00` 开始。i5 最大设置帧 14 字节，i7 轮换设置最大 10 字节，不分割完整设置帧。
 
 `NoiseProtocolTest` 使用上述独立 APK 提取的完整固定 TX 字面值，以及研究参考测试和已恢复参数映射的独立动态例子。覆盖四种 i5 模式、六种 i7 模式、各档位、型号轮换线序、确认查询、非法参数、未知轮换、不支持选项、输入快照、序号连续 / 回绕 / 重置；RX 示例明确为合成数据。实际设置回包时序、持久化、自动模式表现与固件矩阵未获得本次实机证据。用户当前无法提供 i5 / 小米 14（HyperOS 4），本次继续实现与离线验证；已有 i5 初始化读取记录不扩大为设置验收通过，i7 仍无设备实测。
+
+## 预设 EQ 与游戏模式（#7 / #8）
+
+两类设置沿用同一个 `prepareSetting` 和会话确认流程。EQ 使用归一化的 `FieldValue.Text("pop" / "hifi" / "rock" / "light" / "eap")`；游戏使用明确的 `FieldValue.Toggle`。`EqualizerCapabilities.presets` 表示当前型号和固件可写预设；游戏写入能力由 `writableSettings` 表达。i5 不开放自定义 EQ；本阶段的 i7 预设入口也不把 custom、custom slot 或共享游戏 EQ 当成预设选项。
+
+| 归一化预设 | i5 中文标签 / `0281` payload | i7 中文标签 / `2A` payload |
+| --- | --- | --- |
+| `pop` | 弱水经典 / `00` | 弱水经典 / `01` |
+| `hifi` | 日系柔情 / `01` | 原声再现 / `00` |
+| `rock` | 乐器大师 / `02` | 古典乐器 / `02` |
+| `light` | 清新空灵 / `03` | 日系甜美 / `03` |
+| `eap` | 不支持 | 欧美流行 / `06`，固件比较整数 ≥152 |
+
+标签是原 App 的型号配置与中文资源文案，不表示实测频响、声学效果或通用流派定义。i5 型号配置使用对象池 `pp.txt:8781` 的四项列表，具体中文标题位于 `objs.txt:1745..1766`；`device_eq_panel_item.dart:29..64` 在中文下优先使用这些自定义标题。i7 列表在 `pp.txt:8369`，中文资源位于 `localization/language/zh_cn.dart:2549..2625`。i7 的 POP/HIFI 界面序号与发送值相反，不能将界面位置当作线值。
+
+| 功能 | i5 ZT | i7 RS V2 |
+| --- | --- | --- |
+| EQ 确认查询 | `0201`，完整 TX `08ee00000002010a0003` | `FA2A`，seq00 完整 TX `ff0002fa2a25aa` |
+| 游戏开 / 关 | `0683 00 / 01` | `0E 01 / 00` |
+| 游戏确认查询 | `0603`，完整 TX `08ee00000006030a0009` | 客户端 `FA0E` 单字段查询，seq00 完整例 `ff0002fa0e09aa` |
+
+i5 EQ、游戏设置和查询的完整 TX 来自 `analysis/i5_fixed_sender_commands.json:155..225`，对应 `zt_sender.dart:2256..2731`。i7 五种预设、游戏开关及 `getEq` 来自 `analysis/i7_sender_commands.json:830..869`、`:1190..1309`，对应 `rs_common_v2_sender.dart:3213`、`:3252`、`:4312..4515`。这些是独立于 OpenRose 编码器的 APK 提取向量；实际队列使用当前会话序号并重算 i7 校验。i7 的 `FA0E` 是根据已观察的 `FA ID` 单字段查询与 `getInfo` 中的 `0E` 作出的客户端补读选择，不是独立恢复的专用 `getGameMode` 方法；设备接纳仍待实测（`i7_sender_commands.json:2157..2162`）。
+
+### EAP 的固件比较域
+
+EAP 是 EQ 选项，不是独立功能开关。`objs.txt:1707..1712` 的 EAP 对象包含 `EarVersionCheck`，Dart 标记整数 `0x130` 解码为 **152**。`device_eq_panel_item.dart:1418..1446` 按该检查筛选预设；`constant/ear_version_check.dart:41..66` 将设备固件文本按十进制整数解析，失败按 0，再执行 ≥152 比较。该数字不是 RoseLink 的版本号，也不是语义化版本比较。
+
+i7 RX `0D` 取前三个完整无符号字节，各自转为十进制文本并直接连接：`01 05 02` → `[1,5,2]` → `"152"` → 152。不是低半字节、字节拼成的大端整数或固定 `major*100+minor*10+patch`。例如 `[0,15,1]` → `"0151"` → 151，不开放；`[0,15,2]` → 152，开放；`[0,16,0]` → `"0160"` → 160，开放；`[1,4,255]` → 14255，亦满足该比较规则。这些用于核对原比较域，不代表这些固件实际存在或已验证。原始转换位于 `rs_common_v2_receiver.dart:17498..17616`，无分隔插值位于 `:17703..17719`，设备固件状态写入位于 `rs_common_v2_receive_handler.dart:5658..5665`。
+
+OpenRose 从有效的 `FieldValue.Firmware.parts` 重建该整数，要求恰好三个 `0..255` 值，不信任可单独传入的 `displayText`。未知或无效固件不开放 EAP；基础四项仍可用。固件门槛同时用于显示能力和协议准备，不能绕过界面直接发送不受支持的 EAP。已经读到的 EAP 状态仍按实际字段显示，不因固件未知伪造另一个预设。
+
+### EQ / 游戏验证证据
+
+`EqualizerProtocolTest` 以独立 TX 字面值覆盖全部可写预设、EAP 门槛、相反的游戏极性和确认查询；另覆盖非法类型、未知预设、自定义 / 槽位名称、被拒绝请求不消耗序号，以及 EQ / 游戏 / ANC / 初始化共用序号。
+
+合成 i5 RX 如 `000000000002010000a0`（POP）、`000000000006030000a0`（游戏开）只验证已恢复偏移与低半字节规则；不假定 RX 总帧校验。合成 i7 RX 如 `dd00022a0009aa`（单字节 HIFI）、`dd00032a00000aaa`（双字节 POP）、`dd00020e01eeaa`（游戏开）与 `dd00040d010502f6aa`（固件 152）按独立 LTV / 整帧前缀校验例构造，均不是抓包。i7 EQ 单字节 `00/01` 为 HIFI/POP，双字节 `00/01` 为 POP/HIFI，保留格式与原始值；不得按发送表统一覆盖（`analysis/i7_receiver_findings.md:80..89`）。
+
+另外保留实际 i5 初始化读取 `09ff00000102010b000118`（HIFI）与 `09ff00000106030b00011e`（游戏关），来源 `analysis/i5_live_read_2026-10-18.jsonl:8,10`，固件 125。这两条只支持读取解析；本次没有设备，未验收预设或游戏切换、设置后的回读、声学 / 延迟效果或持久化。i7 全部设置与 RX 仍为离线验证。

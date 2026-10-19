@@ -93,7 +93,7 @@ class ControlSessionBehaviorTest {
         assertEquals(listOf("08ee00000001010a0002", "08ee00000006020a0008", "08ee00000002010a0003", "08ee00000006030a0009", "08ee00000008010a0009", "08ee0000000d010a000e", "08ee00000004010a0005", "08ee0000000a010a000b", "08ee00000006050a000b", "08ee0000000c010a000d", "08ee00000006070a000d", "08ee00000006040a000a", "08ee0000000e030a0011"), connection.writes)
         assertTrue(device.fields.values.none { it is FieldReading.Loading })
         assertTrue(connection.writeTimes.zipWithNext().all { (before, after) -> after - before >= 100 })
-        assertEquals(ControlErrorCode.UNSUPPORTED, assertIs<OperationResult.Failure>(session.set(DeviceSetting.GAME_MODE, FieldValue.Toggle(true))).error.code)
+        assertEquals(ControlErrorCode.UNSUPPORTED, assertIs<OperationResult.Failure>(session.set(DeviceSetting.AUDIO_MODE, FieldValue.Text("ldac"))).error.code)
         session.disconnect()
         assertTrue(connection.closed)
         assertEquals(ConnectionState.Disconnected, session.state.value.connection)

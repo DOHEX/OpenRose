@@ -111,7 +111,7 @@ class NoiseProtocolTest {
                 assertFailsWith<IllegalArgumentException>("$profile $kind $value") { codec.prepareSetting(kind, value) }
             }
             assertFailsWith<UnsupportedOperationException> { codec.prepareSetting(DeviceSetting.NOISE_MODE, FieldValue.Text("deep")) }
-            assertFailsWith<UnsupportedOperationException> { codec.prepareSetting(DeviceSetting.EQ, FieldValue.Text("pop")) }
+            assertFailsWith<UnsupportedOperationException> { codec.prepareSetting(DeviceSetting.AUDIO_MODE, FieldValue.Text("aac_sbc")) }
             if (profile == ModelProfile.I5_ZT) {
                 assertFailsWith<UnsupportedOperationException> { codec.prepareSetting(DeviceSetting.NOISE_MODE, FieldValue.Text("auto")) }
                 assertFailsWith<UnsupportedOperationException> { codec.prepareSetting(DeviceSetting.NOISE_MODE, FieldValue.Text("dynamic")) }
