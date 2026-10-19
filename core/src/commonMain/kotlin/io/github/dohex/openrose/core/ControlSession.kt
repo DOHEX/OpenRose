@@ -241,8 +241,9 @@ class ControlSession(
             attempt.progress.first { progress ->
                 progress.ended || (prepared.readback.responseKeys.all { (progress.keyRevisions[it] ?: 0) > (baseline.keyRevisions[it] ?: 0) } &&
                     prepared.expectedValues.keys.all { field ->
+                        val value = (state.value.device?.fields?.get(field) as? FieldReading.Known)?.value
                         (progress.fieldRevisions[field] ?: 0) > (baseline.fieldRevisions[field] ?: 0) &&
-                            state.value.device?.fields?.get(field) is FieldReading.Known
+                            value != null && (value !is FieldValue.NoiseCycle || value.flags.values.all { it != null })
                     })
             }
         }

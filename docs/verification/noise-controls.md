@@ -25,7 +25,21 @@
 - 独立 `.scratch/anc-ui-smoke.sh` 在离屏 Compose 中实际点击真实 `OpenRoseApp`。传输边界重放 i5 13 项原有 Linux RX，设置回复明确为合成数据；没有给产品添加演示开关或假设备。
 - UI 测试验证：在 WRITTEN 阶段切换 Miuix → Material 3，仍保留旧的已确认模式，控件禁用、会话标识不变；合成读回后才显示新模式与确认结果；再次设置超时，没有自动重放。总发送量为 13 条初始化 + 2 条设置 + 2 条回读 = 17。
 - 受控界面截图、语义树、完整 TX 与结果保存在任务本地 `.scratch/anc-ui-smoke/`。此结果是共享 UI / 会话集成测试，不是 Bluetooth、Android 手机或耳机实测。
-- 全部现有测试、Android / 桌面构建、离线重复检查及双轴代码审查：最终结果待补充。
+- 修复审查问题后，JVM 与 Android host JVM 各执行 65 项测试，均为零失败；其中公开会话设置场景为 22 项。Android host JVM 不是手机设备测试。
+- `check offlineCheck :androidApp:assembleDebug :desktopApp:createDistributable` 全部通过，共 122 项任务；额外的 `--offline offlineCheck` 通过。检查涵盖 Android lint、两平台共享编译及 Linux 桌面分发构建，不等于 Windows 启动或真实传输验证。
+
+## 独立双轴审查
+
+审查范围：`1f9ed60` 起的降噪控制实现（首轮提交 `3d68a98`）。两个独立审查分别检查仓库规范与 #1、#5、#6 的规格。
+
+- **Standards**：未发现可执行的规范问题。平台宿主持有会话、协议实例与队列，两套风格共享状态和操作；符合 ADR 0001 / 0002。
+- **Spec**：发现并修复一项 P2：轮换字段外层是 Known，但内部某个开关可能未知，此时不能立即报告设备回读不同。修复要求全部轮换开关已知后再比较；新增两型号共 6 例回归，覆盖等待后完整确认、持续未知超时、完整已知但不同。红阶段 4 例暴露缺陷、2 例验证原有不一致行为；绿阶段 22 项设置场景全部通过。原审查者定向复核后确认问题解决，无新增发现。选项、编码、固件边界和未实测声明符合本阶段规格。
+
+## Android 安装与启动
+
+Android 8.0 / API 26 x86_64 模拟器可安装并启动本阶段 APK。模拟器没有 BLE 硬件，界面显示真实的“此设备没有 BLE 硬件”，扫描按钮禁用，无虚构已连接耳机、已确认字段或降噪控件；崩溃日志为空。这只覆盖最低版本的安装与启动，不能证明手机 BLE 或耳机设置成功。
+
+截图、界面树和崩溃日志保存在任务本地 `.scratch/emulator/anc-final*` 与 `.scratch/emulator/logs/anc-final-crash.txt`。修复后重新安装并启动的 APK SHA-256：`63e5848056e1ba254ae432c0a83477d59de7af7c30e7aa8ad8402a4ded72245a`。
 
 协议来源与独立报文见 [protocols.md](../protocols.md)。
 
