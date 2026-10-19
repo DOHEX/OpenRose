@@ -1,6 +1,6 @@
 # Android i5 / i7 读取链路实现与验证
 
-日期：2026-10-18（Asia/Shanghai）。范围：[i5 读取 #3](https://github.com/DOHEX/OpenRose/issues/3) 与 [i7 BLE 读取 #4](https://github.com/DOHEX/OpenRose/issues/4)。两票均保留实际 Android 耳机验收未完成；用户确认当前硬件不可用，继续实现和离线验证。完整首版 #1 未完成。
+实现：2026-10-18；最终回归检查：2026-10-19（Asia/Shanghai）。范围：[i5 读取 #3](https://github.com/DOHEX/OpenRose/issues/3) 与 [i7 BLE 读取 #4](https://github.com/DOHEX/OpenRose/issues/4)。两票均保留实际 Android 耳机验收未完成；用户确认当前硬件不可用，继续实现和离线验证。完整首版 #1 未完成。
 
 ## 已实现
 
@@ -17,11 +17,11 @@
 
 ## 公开测试与构建
 
-- 新增 12 项公开会话行为测试；仅替代系统传输与时钟，真实型号识别、协议、状态和会话逻辑均参与。测试验证设备端外部可观察的完整字节和状态；不会将 fake 结果记为硬件已支持。
-- 新增 10 项纯协议测试；i5 TX 来自独立常量提取、RX 来自原有 Linux 实际记录，i7 RX 全部标记为合成数据。包括序号回绕、截断 / 损坏数据、嵌入 AA / DD、分包 / 合包、缺失盒数据及接收状态重置。
-- 既有 10 项公开会话 / 偏好测试继续运行。合计 32 项场景，JVM 与 Android host JVM 分别执行；Android host JVM 不是设备测试。
-- `check offlineCheck :androidApp:assembleDebug :desktopApp:createDistributable`：待最终结果。
-- `--offline offlineCheck`：待最终结果。
+- 新增 14 项公开会话行为测试；仅替代系统传输与时钟，真实型号识别、协议、状态和会话逻辑均参与。测试验证设备端外部可观察的完整字节和状态；不会将 fake 结果记为硬件已支持。
+- 新增 11 项纯协议测试；i5 TX 来自独立常量提取、RX 来自原有 Linux 实际记录，i7 RX 全部标记为合成数据。包括序号回绕、截断 / 损坏数据、嵌入 AA / DD、分包 / 合包、缺失盒数据及接收状态重置。
+- 既有 10 项公开会话 / 偏好测试继续运行。合计 35 项场景，JVM 与 Android host JVM 分别执行；Android host JVM 不是设备测试。
+- `check offlineCheck :androidApp:assembleDebug :desktopApp:createDistributable`：通过（122 个任务，JVM 与 Android host JVM 各 35 项测试无失败）。
+- `--offline offlineCheck`：2026-10-19 复验通过。
 
 ## Android API 26 冒烟检查
 
@@ -33,6 +33,14 @@ Android 权限依据：[Android 官方蓝牙权限文档](https://developer.andr
 
 ## 审查与未完成验收
 
-双轴审查：待最终记录。
+### Standards
+
+发现 2 项 P2，均已修复并复查：取消一个调用者只能结束该调用者的等待，不能取消所有入口共用的连接；获取链路时将句柄赋值放在超时块内部，保证超时竞争下的已打开链路仍可清理。两项公开回归均先观察到失败，再修复通过。
+
+### Spec
+
+发现 1 项 P2，已修复并复查：i7 不完整外层帧的未知 V 内可能包含完整 DD 帧样式字节，不能将其当作新状态。回归向量 `dd000899dd00020901e9aafaaa` 对完整输入、原有问题切分和所有字节边界切分结果一致；只保留未知字段，不建立协议就绪。恢复限制见协议记录。
+
+最终 Standards 0 项、Spec 0 项未解决。
 
 待真实 i5 + 小米14 HyperOS4 验证权限、识别、GATT、13 项读取、固件和正常断开；i7 与其他平台的实际结果分别记录。型号设置的参数范围、设备确认、恢复、系统模块和全部首版组合尚未验收，不能据此关闭完整首版 spec。

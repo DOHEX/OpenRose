@@ -16,6 +16,11 @@ import kotlin.test.assertTrue
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.FlowCollector
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.awaitCancellation
@@ -298,6 +303,63 @@ class ControlSessionBehaviorTest {
         scans.last().emit(Advertisement(DeviceId("fresh"), "new scan"))
 
         assertEquals(listOf(DeviceId("fresh")), session.state.value.candidates.map { it.deviceId })
+    }
+
+    @Test
+    fun cancellingOneEntrypointDoesNotCancelTheSharedConnection() = runTest {
+        val advertisements = MutableSharedFlow<Advertisement>(extraBufferCapacity = 1)
+        val openGate = CompletableDeferred<Unit>()
+        val link = RecordedConnection(i5Replies)
+        val transport = object : ControlTransport {
+            override fun scan(): Flow<Advertisement> = advertisements
+            override suspend fun connect(deviceId: DeviceId, endpoint: TransportEndpoint, onPhase: (ConnectionPhase) -> Unit): ControlConnection {
+                onPhase(ConnectionPhase.DISCOVERING)
+                openGate.await()
+                return link
+            }
+        }
+        val session = ControlSession(PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
+            transport = transport, scope = backgroundScope)
+        session.startScan()
+        advertisements.emit(i5Advertisement)
+        runCurrent()
+        val firstEntrypoint = async { session.connect(i5Advertisement.deviceId) }
+        runCurrent()
+        val secondEntrypoint = async { session.connect(i5Advertisement.deviceId) }
+        runCurrent()
+
+        firstEntrypoint.cancelAndJoin()
+        openGate.complete(Unit)
+
+        assertEquals(OperationResult.Success, secondEntrypoint.await())
+        assertIs<ConnectionState.Connected>(session.state.value.connection)
+        assertEquals(13, link.writes.size)
+        session.disconnect()
+    }
+
+    @Test
+    fun anOpenedLinkIsClosedWhenConnectionAcquisitionLosesToItsDeadline() = runTest {
+        val advertisements = MutableSharedFlow<Advertisement>(extraBufferCapacity = 1)
+        val link = RecordedConnection(i5Replies)
+        val transport = object : ControlTransport {
+            override fun scan(): Flow<Advertisement> = advertisements
+            override suspend fun connect(deviceId: DeviceId, endpoint: TransportEndpoint, onPhase: (ConnectionPhase) -> Unit): ControlConnection =
+                withContext(NonCancellable) {
+                    delay(20)
+                    link
+                }
+        }
+        val session = ControlSession(PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
+            transport = transport, scope = backgroundScope, timing = SessionTiming(connectTimeoutMillis = 10))
+        session.startScan()
+        advertisements.emit(i5Advertisement)
+        runCurrent()
+
+        val result = session.connect(i5Advertisement.deviceId)
+
+        assertEquals(ControlErrorCode.TIMEOUT, assertIs<OperationResult.Failure>(result).error.code)
+        assertEquals(ConnectionState.Disconnected, session.state.value.connection)
+        assertTrue(link.closed)
     }
 
     private class RecordedTransport(var connection: RecordedConnection) : ControlTransport {

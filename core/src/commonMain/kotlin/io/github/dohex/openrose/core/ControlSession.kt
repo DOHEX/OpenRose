@@ -123,10 +123,7 @@ class ControlSession(
         return try {
             attempt.task.await()
         } catch (cancelled: CancellationException) {
-            if (!currentCoroutineContext().isActive) {
-                attempt.task.cancel()
-                throw cancelled
-            }
+            if (!currentCoroutineContext().isActive) throw cancelled
             // Disconnect cancels the owned operation, without cancelling another caller's scope.
             OperationResult.Failure(ControlError(ControlErrorCode.DISCONNECTED, "连接会话已结束"))
         }
@@ -154,17 +151,19 @@ class ControlSession(
         var ready = false
         try {
             val gatt = profile.gatt
-            connection = withTimeout(timing.connectTimeoutMillis) {
-                requireNotNull(transport).connect(candidate.deviceId, TransportEndpoint.BleGatt(gatt.serviceUuid, gatt.writeUuid, gatt.notifyUuid)) { phase ->
+            withTimeout(timing.connectTimeoutMillis) {
+                // Keep an acquired handle visible to cleanup even if timeout wins result delivery.
+                connection = requireNotNull(transport).connect(candidate.deviceId, TransportEndpoint.BleGatt(gatt.serviceUuid, gatt.writeUuid, gatt.notifyUuid)) { phase ->
                     phase(attempt, phase)
                 }
             }
+            val opened = requireNotNull(connection)
             lifecycle.withLock {
                 if (active !== attempt) throw CancellationException("Stale connection")
-                attempt.connection = connection
+                attempt.connection = opened
             }
             val progress = MutableStateFlow(ReadProgress())
-            val link = connection
+            val link = opened
             attempt.observer = scope.launch(start = CoroutineStart.UNDISPATCHED) {
                 var error = ControlError(ControlErrorCode.DISCONNECTED, "设备已断开")
                 try {
@@ -199,13 +198,13 @@ class ControlSession(
                 }
             }
             phase(attempt, ConnectionPhase.SUBSCRIBING)
-            withTimeout(timing.connectTimeoutMillis) { connection.subscribe() }
+            withTimeout(timing.connectTimeoutMillis) { opened.subscribe() }
             phase(attempt, ConnectionPhase.INITIALIZING)
-            val queries = codec.initQueries(connection.maxWriteSize)
+            val queries = codec.initQueries(opened.maxWriteSize)
             for ((index, query) in queries.withIndex()) {
-                check(query.bytes.size <= connection.maxWriteSize) { "完整协议查询超出传输写入容量" }
+                check(query.bytes.size <= opened.maxWriteSize) { "完整协议查询超出传输写入容量" }
                 if (index > 0) delay(if (profile == ModelProfile.I5_ZT) timing.i5WriteIntervalMillis else timing.i7WriteIntervalMillis)
-                withTimeout(timing.queryTimeoutMillis) { connection.write(query.bytes.copyOf()) }
+                withTimeout(timing.queryTimeoutMillis) { opened.write(query.bytes.copyOf()) }
                 val observed = withTimeoutOrNull(timing.queryTimeoutMillis) {
                     progress.first { it.ended || it.keys.containsAll(query.responseKeys) }
                 }
@@ -232,7 +231,11 @@ class ControlSession(
             if (!ready) throw LinkEnded()
             return OperationResult.Success
         } catch (cancelled: CancellationException) {
-            if (cancelled !is TimeoutCancellationException) throw cancelled
+            if (cancelled !is TimeoutCancellationException) {
+                updateAttempt(attempt) { it.copy(connection = ConnectionState.Disconnected, device = null,
+                    lastError = ControlError(ControlErrorCode.DISCONNECTED, "控制会话已结束")) }
+                throw cancelled
+            }
             val error = ControlError(ControlErrorCode.TIMEOUT, "蓝牙连接或读取超时")
             updateAttempt(attempt) { it.copy(connection = ConnectionState.Disconnected, lastError = error) }
             return OperationResult.Failure(error)

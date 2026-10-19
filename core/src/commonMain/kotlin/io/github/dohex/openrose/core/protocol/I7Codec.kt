@@ -45,18 +45,10 @@ internal class I7Codec : ProtocolCodec {
                 buffer = buffer.copyOfRange(end, buffer.size)
                 continue
             }
-            // Recover after a malformed leading frame only when a later full valid frame exists.
-            var recovered = false
-            for (offset in 1 until buffer.size) {
-                if (buffer[offset].u() != 0xdd) continue
-                val later = findComplete(offset) ?: continue
-                replies += ProtocolReply(buffer.copyOfRange(0, offset).hex(), warnings = listOf("丢弃无效接收前缀"))
-                replies += later.second
-                buffer = buffer.copyOfRange(later.first, buffer.size)
-                recovered = true
-                break
-            }
-            if (!recovered) break
+            // There is no total frame length. A later DD may be opaque bytes inside an
+            // incomplete declared V, even if those bytes resemble a checksummed frame.
+            // Retain the leading frame until complete; reset/buffer limit handles corruption.
+            break
         }
         return replies
     }

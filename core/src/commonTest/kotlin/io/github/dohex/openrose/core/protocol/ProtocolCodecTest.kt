@@ -10,6 +10,27 @@ import kotlin.test.assertFailsWith
 
 class ProtocolCodecTest {
     @Test
+    fun fragmentedUnknownPayloadCannotBecomeAnInnerKnownFrame() {
+        // Synthetic independent example: type99 contains a complete DD/09 frame as opaque V.
+        val whole = createProtocolCodec(ModelProfile.I7_RS_V2)
+            .feedNotification("dd000899dd00020901e9aafaaa".bytes())
+        val split = createProtocolCodec(ModelProfile.I7_RS_V2)
+        val first = split.feedNotification("dd000899dd00020901e9aa".bytes())
+        val rest = split.feedNotification("faaa".bytes())
+
+        assertTrue(first.isEmpty())
+        assertEquals(whole, first + rest)
+        assertTrue((first + rest).none { it.accepted })
+        assertTrue((first + rest).none { DeviceField.NOISE_MODE in it.readings })
+        val frame = "dd000899dd00020901e9aafaaa".bytes()
+        for (cut in 1 until frame.size) {
+            val codec = createProtocolCodec(ModelProfile.I7_RS_V2)
+            assertEquals(whole, codec.feedNotification(frame.copyOfRange(0, cut)) +
+                codec.feedNotification(frame.copyOfRange(cut, frame.size)), "cut=$cut")
+        }
+    }
+
+    @Test
     fun manufacturerEvidenceIdentifiesTheConfigurationWithoutAName() {
         assertEquals(ModelProfile.I5_ZT, ModelIdentification.identify(mapOf(0x5352 to hex("0001000199"))))
         assertEquals(ModelProfile.I7_RS_V2, ModelIdentification.identify(mapOf(0xe5b8 to hex("290f0100"))))
