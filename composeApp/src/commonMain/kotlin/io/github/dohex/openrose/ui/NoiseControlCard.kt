@@ -202,7 +202,12 @@ private fun DeviceSetting.displayName(): String = when (this) {
     DeviceSetting.NOISE_CYCLE -> "降噪轮换"
     DeviceSetting.EQ -> "预设 EQ"
     DeviceSetting.GAME_MODE -> "游戏模式"
-    else -> name
+    DeviceSetting.TOUCH_BINDING -> "触控绑定"
+    DeviceSetting.TOUCH_ENABLED -> "触控总开关"
+    DeviceSetting.EAR_DETECTION -> "佩戴检测功能"
+    DeviceSetting.AUDIO_MODE -> "音频模式"
+    DeviceSetting.MULTIPOINT -> "多点连接"
+    DeviceSetting.PROMPT_VOLUME -> "提示音音量"
 }
 
 private fun SettingOperation.requestedValueText(profile: ModelProfile?): String = when (setting) {
@@ -212,7 +217,12 @@ private fun SettingOperation.requestedValueText(profile: ModelProfile?): String 
     DeviceSetting.NOISE_CYCLE -> displayFieldValue(DeviceField.NOISE_CYCLE, requestedValue)
     DeviceSetting.EQ -> displayFieldValue(DeviceField.EQ, requestedValue, profile)
     DeviceSetting.GAME_MODE -> displayFieldValue(DeviceField.GAME_MODE, requestedValue)
-    else -> requestedValue.displayText
+    DeviceSetting.TOUCH_BINDING -> displayFieldValue(DeviceField.TOUCH_KEYS, requestedValue)
+    DeviceSetting.TOUCH_ENABLED -> displayFieldValue(DeviceField.TOUCH_ENABLED, requestedValue)
+    DeviceSetting.EAR_DETECTION -> displayFieldValue(DeviceField.EAR_DETECTION, requestedValue)
+    DeviceSetting.AUDIO_MODE -> displayFieldValue(DeviceField.AUDIO_MODE, requestedValue)
+    DeviceSetting.MULTIPOINT -> displayFieldValue(DeviceField.MULTIPOINT, requestedValue)
+    DeviceSetting.PROMPT_VOLUME -> displayFieldValue(DeviceField.PROMPT_VOLUME, requestedValue)
 }
 
 private fun SettingStage.displayText(): String = when (this) {

@@ -15,16 +15,10 @@ internal fun displayFieldValue(field: DeviceField, value: FieldValue, profile: M
     }
     is FieldValue.Text -> if (field == DeviceField.EQ) equalizerLabel(value.value, profile) else semanticLabel(value.value)
     is FieldValue.TouchKeys -> value.bindings.joinToString("\n") { binding ->
-        val side = when (binding.side) { "left" -> "左耳"; "right" -> "右耳"; else -> binding.side }
-        val gesture = when (binding.gesture) {
-            "single" -> "单击"
-            "double" -> "双击"
-            "triple" -> "三击"
-            "long" -> "长按"
-            else -> binding.gesture
-        }
-        "$side$gesture：${binding.action?.let(::semanticLabel) ?: "未知操作（${binding.rawAction}）"}"
+        "${touchSideLabel(binding.side)}${touchGestureLabel(binding.gesture)}：${binding.action?.let(::semanticLabel) ?: "未知操作（${binding.rawAction}）"}"
     }
+    is FieldValue.TouchAssignment ->
+        "${touchSideLabel(value.side)}${touchGestureLabel(value.gesture)}绑定为${semanticLabel(value.action)}"
     is FieldValue.NoiseCycle -> value.flags.entries.joinToString("\n") { (mode, enabled) ->
         "${semanticLabel(mode)}：${when (enabled) { true -> "开启"; false -> "关闭"; null -> "未知" }}"
     }
@@ -32,6 +26,20 @@ internal fun displayFieldValue(field: DeviceField, value: FieldValue, profile: M
 }
 
 private val batteryFields = setOf(DeviceField.LEFT_BATTERY, DeviceField.RIGHT_BATTERY, DeviceField.CASE_BATTERY)
+
+internal fun touchSideLabel(side: String): String = when (side) {
+    "left" -> "左耳"
+    "right" -> "右耳"
+    else -> side
+}
+
+internal fun touchGestureLabel(gesture: String): String = when (gesture) {
+    "single" -> "单击"
+    "double" -> "双击"
+    "triple" -> "三击"
+    "long" -> "长按"
+    else -> gesture
+}
 
 internal fun equalizerLabel(preset: String, profile: ModelProfile?): String {
     val code = when (preset) {

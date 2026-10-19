@@ -177,7 +177,21 @@ class ControlSession(
     private fun validateSetting(profile: ModelProfile, setting: DeviceSetting, value: FieldValue): ControlError? {
         val noise = noiseControlCapabilities(profile, firmware())
         val valid = when (setting) {
-            DeviceSetting.GAME_MODE -> value is FieldValue.Toggle
+            DeviceSetting.PROMPT_VOLUME -> value is FieldValue.Number && value.value in promptVolumeLevels(profile)
+            DeviceSetting.TOUCH_BINDING -> {
+                if (value !is FieldValue.TouchAssignment) return ControlError(ControlErrorCode.INVALID_ARGUMENT, "触控绑定需要作用耳、手势和动作")
+                val touch = touchControlCapabilities(profile)
+                if (TouchSlot(value.side, value.gesture) !in touch.slots) return ControlError(ControlErrorCode.INVALID_ARGUMENT, "触控作用耳或手势无效")
+                if (value.action !in touch.actions) return ControlError(ControlErrorCode.UNSUPPORTED, "该型号不支持 ${value.action} 触控动作")
+                true
+            }
+            DeviceSetting.GAME_MODE, DeviceSetting.MULTIPOINT, DeviceSetting.TOUCH_ENABLED, DeviceSetting.EAR_DETECTION -> value is FieldValue.Toggle
+            DeviceSetting.AUDIO_MODE -> {
+                if (value is FieldValue.Text && value.value !in audioControlCapabilities(profile).modes) {
+                    return ControlError(ControlErrorCode.UNSUPPORTED, "该型号不支持 ${value.value} 音频配置")
+                }
+                value is FieldValue.Text
+            }
             DeviceSetting.EQ -> {
                 if (value is FieldValue.Text && value.value !in equalizerCapabilities(profile, firmware()).presets) {
                     return ControlError(ControlErrorCode.UNSUPPORTED, "该型号与固件不支持 ${value.value} EQ")
@@ -247,10 +261,9 @@ class ControlSession(
         val observed = withTimeoutOrNull(timing.queryTimeoutMillis) {
             attempt.progress.first { progress ->
                 progress.ended || (prepared.readback.responseKeys.all { (progress.keyRevisions[it] ?: 0) > (baseline.keyRevisions[it] ?: 0) } &&
-                    prepared.expectedValues.keys.all { field ->
-                        val value = (state.value.device?.fields?.get(field) as? FieldReading.Known)?.value
+                    prepared.expectedValues.all { (field, expected) ->
                         (progress.fieldRevisions[field] ?: 0) > (baseline.fieldRevisions[field] ?: 0) &&
-                            value != null && (value !is FieldValue.NoiseCycle || value.flags.values.all { it != null })
+                            confirmationValue(state.value.device?.fields?.get(field), expected) != null
                     })
             }
         }
@@ -258,10 +271,25 @@ class ControlSession(
         ensureActive(attempt)
         if (observed == null) return settingFailure(attempt, request, ControlError(ControlErrorCode.TIMEOUT, "未收到有效的设置回读"), SettingStage.TIMED_OUT)
         val actual = requireNotNull(state.value.device).fields
-        return if (prepared.expectedValues.all { (field, expected) -> (actual[field] as? FieldReading.Known)?.value == expected }) {
+        return if (prepared.expectedValues.all { (field, expected) -> confirmationValue(actual[field], expected) == expected }) {
             settingStage(attempt, request, SettingStage.CONFIRMED)
             OperationResult.Success
         } else settingFailure(attempt, request, ControlError(ControlErrorCode.NOT_APPLIED, "设备回读与请求不一致"), SettingStage.NOT_APPLIED)
+    }
+
+    /** A touch assignment confirms only its target; the device still retains its full bindings. */
+    private fun confirmationValue(reading: FieldReading?, expected: FieldValue): FieldValue? {
+        val actual = (reading as? FieldReading.Known)?.value ?: return null
+        return when {
+            expected is FieldValue.TouchAssignment -> {
+                val binding = (actual as? FieldValue.TouchKeys)?.bindings?.firstOrNull {
+                    it.side == expected.side && it.gesture == expected.gesture
+                }
+                binding?.action?.let { expected.copy(action = it) }
+            }
+            actual is FieldValue.NoiseCycle && actual.flags.values.any { it == null } -> null
+            else -> actual
+        }
     }
 
     private fun ensureActive(attempt: Attempt) {
@@ -310,10 +338,15 @@ class ControlSession(
     private fun firmware(): FieldValue.Firmware? = (state.value.device?.fields?.get(DeviceField.FIRMWARE) as? FieldReading.Known)?.value as? FieldValue.Firmware
 
     private fun capabilities(profile: ModelProfile, firmware: FieldValue.Firmware?) = DeviceCapabilities(
-        profile.supportedFields,
-        setOf(DeviceSetting.NOISE_MODE, DeviceSetting.ANC_LEVEL, DeviceSetting.TRANSPARENCY_LEVEL, DeviceSetting.NOISE_CYCLE, DeviceSetting.EQ, DeviceSetting.GAME_MODE),
-        noiseControlCapabilities(profile, firmware),
-        equalizerCapabilities(profile, firmware),
+        readableFields = profile.supportedFields,
+        writableSettings = setOf(DeviceSetting.NOISE_MODE, DeviceSetting.ANC_LEVEL, DeviceSetting.TRANSPARENCY_LEVEL,
+            DeviceSetting.NOISE_CYCLE, DeviceSetting.EQ, DeviceSetting.GAME_MODE, DeviceSetting.AUDIO_MODE, DeviceSetting.MULTIPOINT, DeviceSetting.TOUCH_BINDING, DeviceSetting.TOUCH_ENABLED, DeviceSetting.EAR_DETECTION) +
+            (if (profile == ModelProfile.I5_ZT) setOf(DeviceSetting.PROMPT_VOLUME) else emptySet()),
+        noiseControl = noiseControlCapabilities(profile, firmware),
+        equalizer = equalizerCapabilities(profile, firmware),
+        touchControl = touchControlCapabilities(profile),
+        audioControl = audioControlCapabilities(profile),
+        promptVolumeLevels = promptVolumeLevels(profile),
     )
 
     private fun FieldValue.snapshot(): FieldValue = when (this) {

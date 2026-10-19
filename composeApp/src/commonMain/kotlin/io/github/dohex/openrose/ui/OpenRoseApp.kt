@@ -24,6 +24,10 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
@@ -39,6 +43,7 @@ import io.github.dohex.openrose.core.ModuleAvailability
 import io.github.dohex.openrose.core.PermissionState
 import io.github.dohex.openrose.core.PlatformState
 import io.github.dohex.openrose.core.TransportAvailability
+import io.github.dohex.openrose.core.TouchSlot
 import io.github.dohex.openrose.core.UserSettings
 import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.dohex.openrose.core.transport.DeviceId
@@ -69,8 +74,9 @@ fun OpenRoseApp(
         Appearance.LIGHT -> false
         Appearance.DARK -> true
     }
-    // Retain scroll position outside the style branch as well as the externally owned session.
+    // Keep UI navigation outside the style branch; the control session is externally owned.
     val scrollState = rememberScrollState()
+    var selectedTouchSlot by remember(state.device?.sessionId) { mutableStateOf<TouchSlot?>(null) }
     val content: @Composable () -> Unit = {
         Box(
             modifier.fillMaxSize().background(pageBackground()).safeDrawingPadding(),
@@ -89,7 +95,10 @@ fun OpenRoseApp(
                     if (maxWidth >= 800.dp) {
                         Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
                             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(20.dp)) {
-                                DevicePanel(state, onStartScan, onStopScan, onConnect, onDisconnect, onSet)
+                                DevicePanel(
+                                    state, onStartScan, onStopScan, onConnect, onDisconnect, onSet,
+                                    selectedTouchSlot, { selectedTouchSlot = it },
+                                )
                                 PlatformCard(state.platform, onRequestPermission, onOpenSystemSettings)
                             }
                             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(20.dp)) {
@@ -99,7 +108,10 @@ fun OpenRoseApp(
                         }
                     } else {
                         Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
-                            DevicePanel(state, onStartScan, onStopScan, onConnect, onDisconnect, onSet)
+                            DevicePanel(
+                                state, onStartScan, onStopScan, onConnect, onDisconnect, onSet,
+                                selectedTouchSlot, { selectedTouchSlot = it },
+                            )
                             PlatformCard(state.platform, onRequestPermission, onOpenSystemSettings)
                             AppearanceCard(settings, onSettingsChange)
                             IntegrationCard(settings, state.platform.module, onSettingsChange)

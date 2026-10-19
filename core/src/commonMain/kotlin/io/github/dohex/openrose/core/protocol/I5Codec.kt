@@ -35,12 +35,46 @@ internal class I5Codec : ProtocolCodec {
                 require(value is FieldValue.Toggle) { "游戏模式需要明确开关" }
                 Triple("0683", "0603", byteArrayOf(if (value.value) 0 else 1))
             }
+            DeviceSetting.AUDIO_MODE -> {
+                require(value is FieldValue.Text) { "音频模式需要配置名称" }
+                val mode = listOf("aac_sbc", "ldac").indexOf(value.value)
+                if (mode < 0) throw UnsupportedOperationException("i5 不支持该音频配置")
+                Triple("0881", "0801", byteArrayOf(mode.toByte()))
+            }
+            DeviceSetting.MULTIPOINT -> {
+                require(value is FieldValue.Toggle) { "多点连接需要明确开关" }
+                Triple("0881", "0801", byteArrayOf(if (value.value) 0 else 1))
+            }
+            DeviceSetting.TOUCH_ENABLED, DeviceSetting.EAR_DETECTION -> {
+                require(value is FieldValue.Toggle) { "触控和检测功能需要明确开关" }
+                val payload = byteArrayOf(if (value.value) 0 else 1)
+                if (setting == DeviceSetting.TOUCH_ENABLED) Triple("0a81", "0a01", payload)
+                else Triple("0c81", "0c01", payload)
+            }
+            DeviceSetting.TOUCH_BINDING -> {
+                val binding = validatedTouchAssignment(value, profile)
+                val side = if (binding.side == "left") 0 else 1
+                val gesture = listOf("single", "double", "triple", "long").indexOf(binding.gesture)
+                val action = listOf("volume_up", "volume_down", "previous_track", "next_track", "voice_assistant", "play_pause", "none", "noise_cycle").indexOf(binding.action)
+                Triple("0481", "0401", byteArrayOf(side.toByte(), gesture.toByte(), action.toByte()))
+            }
+            DeviceSetting.PROMPT_VOLUME -> {
+                require(value is FieldValue.Number && value.value in 1..5) { "i5 提示音仅支持 1～5 档" }
+                Triple("0e83", "0e03", byteArrayOf((value.value - 1).toByte()))
+            }
             else -> throw UnsupportedOperationException("i5 不支持此设置")
         }
+        val expectedValues = if (readKey == "0801") {
+            val multipoint = payload.single().u() == 0
+            mapOf(
+                DeviceField.AUDIO_MODE to FieldValue.Text(if (multipoint) "aac_sbc" else "ldac"),
+                DeviceField.MULTIPOINT to FieldValue.Toggle(multipoint),
+            )
+        } else mapOf(i5Fields.getValue(readKey).single() to expected)
         return ProtocolSetting(
             listOf(frame(writeKey, payload)),
             query(readKey),
-            mapOf(i5Fields.getValue(readKey).single() to expected),
+            expectedValues,
         )
     }
 

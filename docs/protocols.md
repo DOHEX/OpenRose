@@ -1,6 +1,6 @@
 # i5 / i7 读取协议与证据
 
-读取实现日期：2026-10-18。读取范围为 [#3](https://github.com/DOHEX/OpenRose/issues/3) 和 [#4](https://github.com/DOHEX/OpenRose/issues/4)。2026-10-19 新增 [#5](https://github.com/DOHEX/OpenRose/issues/5)、[#6](https://github.com/DOHEX/OpenRose/issues/6) 的降噪设置及 [#7](https://github.com/DOHEX/OpenRose/issues/7)、[#8](https://github.com/DOHEX/OpenRose/issues/8) 的预设 EQ / 游戏模式，见文末。`core.protocol.ProtocolCodec` 是纯 Kotlin 会话实例；平台传输负责扫描、GATT、订阅和串行写入，协议负责识别、初始化报文和状态解析。没有 OTA 发送入口。
+读取实现日期：2026-10-18。读取范围为 [#3](https://github.com/DOHEX/OpenRose/issues/3) 和 [#4](https://github.com/DOHEX/OpenRose/issues/4)。2026-10-19 新增 [#5](https://github.com/DOHEX/OpenRose/issues/5)、[#6](https://github.com/DOHEX/OpenRose/issues/6) 的降噪设置、[#7](https://github.com/DOHEX/OpenRose/issues/7)、[#8](https://github.com/DOHEX/OpenRose/issues/8) 的预设 EQ / 游戏模式，以及 [#9](https://github.com/DOHEX/OpenRose/issues/9) 至 [#12](https://github.com/DOHEX/OpenRose/issues/12) 的触控、检测、i5 提示音和音频 / 多点设置，见文末。`core.protocol.ProtocolCodec` 是纯 Kotlin 会话实例；平台传输负责扫描、GATT、订阅和串行写入，协议负责识别、初始化报文和状态解析。没有 OTA 发送入口。
 
 ## 来源与实测边界
 
@@ -117,3 +117,53 @@ OpenRose 从有效的 `FieldValue.Firmware.parts` 重建该整数，要求恰好
 合成 i5 RX 如 `000000000002010000a0`（POP）、`000000000006030000a0`（游戏开）只验证已恢复偏移与低半字节规则；不假定 RX 总帧校验。合成 i7 RX 如 `dd00022a0009aa`（单字节 HIFI）、`dd00032a00000aaa`（双字节 POP）、`dd00020e01eeaa`（游戏开）与 `dd00040d010502f6aa`（固件 152）按独立 LTV / 整帧前缀校验例构造，均不是抓包。i7 EQ 单字节 `00/01` 为 HIFI/POP，双字节 `00/01` 为 POP/HIFI，保留格式与原始值；不得按发送表统一覆盖（`analysis/i7_receiver_findings.md:80..89`）。
 
 另外保留实际 i5 初始化读取 `09ff00000102010b000118`（HIFI）与 `09ff00000106030b00011e`（游戏关），来源 `analysis/i5_live_read_2026-10-18.jsonl:8,10`，固件 125。这两条只支持读取解析；本次没有设备，未验收预设或游戏切换、设置后的回读、声学 / 延迟效果或持久化。i7 全部设置与 RX 仍为离线验证。
+
+## 触控、检测、i5 提示音与音频 / 多点（#9～#12）
+
+### 单槽触控绑定
+
+两型号当前配置均提供左右耳各单击、双击、三击和长按共八个槽位，每个槽位可选择该型号完整动作表。`TouchControlCapabilities` 提供槽位集合和动作集合；没有把其他型号的额外动作或推测的固件门槛加入此配置。i5 使用 `earfreeI5TouchList` 与 `typeFull`（`earfree_i5_device_config.dart:672..702`、`device_type_config/touch_info.dart:60..64`）；i7 使用 `rsCommonV2TouchList` 与 `typeFull`（`earfeel_i7_device_config.dart:951..985`、`touch_info.dart:36..40`）。实际动作对象分别为 `pp.txt:8785`、`:8377` 指向的 `objs.txt:999..1122`。
+
+| 归一化动作 | i5 线值 | i7 线值 |
+| --- | --- | --- |
+| `none`（无功能） | `06` | `00` |
+| `play_pause`（播放 / 暂停） | `05` | `01` |
+| `previous_track`（上一曲） | `02` | `02` |
+| `next_track`（下一曲） | `03` | `03` |
+| `volume_up`（音量增加） | `00` | `04` |
+| `volume_down`（音量降低） | `01` | `05` |
+| `voice_assistant`（语音助手） | `04` | `07` |
+| `noise_cycle`（降噪轮换） | `07` | `08` |
+| `game_mode`（游戏模式） | 不支持 | `06` |
+
+i5 发送 `0481 [side][gesture][action]`，`side=00/01` 分别为左 / 右，`gesture=00/01/02/03` 分别为单 / 双 / 三 / 长。i7 发送 `01 [slot][action]`，左侧四个 slot 为 `01/02/03/04`，右侧为 `11/12/13/14`。每次只发送目标槽位配置，不重写其他七槽，也不执行所绑定的播放、音量或降噪动作。发送证据为 `zt_sender.dart:1472..1935`、`rs_common_v2_sender.dart:2459..2698`；独立动态例包括 i5 左双击播放暂停 `08ee00000004810d000001058e` 和 i7 右长按降噪轮换 `ff00030114081faa`（seq00），见独立参考 `tests/test_i5_protocol.py`、`tests/test_i7_protocol.py`。
+
+请求值 `FieldValue.TouchAssignment(side, gesture, action)` 不接受原始动作码；读取值仍是包含八个 `TouchBinding` 的 `FieldValue.TouchKeys`，原始动作码与未知动作均保留。设置后的 i5 查询为 `0401`（完整 TX `08ee00000004010a0005`）；i7 为客户端 `FA01` 补读。`expectedValues[TOUCH_KEYS]` 保存单槽请求投影，会话只比较该槽：目标动作未知时继续等有效回读，目标已知且不同为未应用，目标相同为已确认。其他槽的未知动作不阻碍目标确认。仍要求已恢复的完整 RX 结构：i5 八个槽位字节齐全，i7 八个 slot ID 齐全；没有据此放宽为接收只含目标槽的短包。槽位、动作与类型检查都在构帧和消耗序号前完成。
+
+### 触控与检测功能开关、i5 提示音
+
+| 设置 | i5 ZT | i7 RS V2 | 归一化参数 |
+| --- | --- | --- | --- |
+| 触控总开关 | `0A81 00/01` 开 / 关，读取 `0A01` | `07 00/01` 开 / 关，补读 `FA07` | `FieldValue.Toggle` |
+| 检测功能开关 | `0C81 00/01` 开 / 关，读取 `0C01` | `08 00/01` 开 / 关，补读 `FA08` | `FieldValue.Toggle` |
+| 提示音音量 | `0E83 00..04`，读取 `0E03` | 本阶段未开放 | `FieldValue.Number(1..5)` |
+
+触控与检测开关均为 `00` 开、`01` 关，不能复用 i7 游戏 / 多点的相反极性。检测功能开关不产生佩戴、摘下或入盒事件。固定 TX 常量来源为 `analysis/i5_fixed_sender_commands.json` 中 `setEarDetection*`、`setTouch*` 及读取方法，i7 对应 `analysis/i7_sender_commands.json` 的同名方法；原始发送函数在 `zt_sender.dart:1070..1407` 与 `rs_common_v2_sender.dart:2073..2114`、`:2379..2420`。
+
+i5 提示音仅接受界面 1～5 档，减一后为 `00..04`，不提供静音 0。`zt_sender.dart:4663..4718` 明确校验 1..5 并执行减一；应使用本型号 `Zt229Sender.getDingLevel` 的 `0E03`（完整 TX `08ee0000000e030a0011`，`:4736`），不能套用共享父类 `0E06`。独立第 5 档例为 `08ee0000000e830b000496`。后续 i7 提示音由 #14 处理：基础 1..5 直接写 `2E`，仅静音 0 的入口要求固件比较整数 ≥304；该比较域与 EAP 相同，可复用有效三字节十进制拼接规则，不能把 304 当作整个音量功能的门槛（`device_ding_level_panel_item.dart:900..994`、`earfeel_i7_device_config.dart:809..840`）。本阶段 `promptVolumeLevels(i7)` 为空。
+
+### 音频与多点
+
+`AudioControlCapabilities` 将可选配置与联动规则分别表达。i5 只有 `aac_sbc`、`ldac`，`multipointCoupled=true`；i7 只有 `aac_sbc`、`ldac`、`lhdc`、`lc3`，`multipointCoupled=false`。当前恢复的这些基础型号配置未发现独立固件门槛，不借用 EQ、增益或提示音静音门槛。实际系统是否协商到某种 codec、所有固件 / 平台组合是否接纳配置，仍需链路与硬件证据。
+
+i5 音频与多点共用 `0881`：`00` 同时表示 AAC/SBC 配置与多点开，完整 TX `08ee00000008810b00008a`；`01` 同时表示 LDAC 配置与多点关，完整 TX `08ee00000008810b00018b`。两类公开操作都补读 `0801`（完整 TX `08ee00000008010a0009`），`expectedValues` 同时包含 `AUDIO_MODE` 和 `MULTIPOINT`，只有两字段都取得一致新回读才确认，不能制造 LDAC 与多点同时开启的已确认状态。
+
+耦合证据在 i5 配置 `earfree_i5_device_config.dart:221..242`：`useAudioModeNotMulDeviceMode=true`，多点对应音频值 0，非多点对应 1。`ZtSender.setAudioAacSbc`（`:2131..2144`）调用父类 `setConnectMulOn`（`:2932`）生成 `0881 00`；父类 `setConnectMulOff`（`:2216..2228`）调用去重标签为 `Zt231Sender.setAudioLdac`（`:3749`）的共享函数生成 `0881 01`。独立固定提取中也存在 `0882` 的共享变体，不能据此替换 i5 的 `0881` 或开放 i5 的 LHDC / LC3。
+
+i7 分别发送 `2B 00/01/02/03` 对应 AAC/SBC、LDAC、LHDC、LC3；多点为 `32 01/00` 开 / 关，固定向量见 `rs_common_v2_sender.dart:2840..3002`、`:5009` 与 `analysis/i7_sender_commands.json`。分别补读 `FA2B`、`FA32`，只要求各自目标字段的新回读，不把 i5 联动或互斥规则套入 i7，也不让另一未返回字段阻碍目标确认。其他字段只按真实收到的数据更新。客户端单字段补读规则同前，独立参考 `examples/i7_ble_client.py:16..21` 也分别查询这两个字段；这不证明实际所有音频 / 多点组合均能工作。
+
+### 本阶段验证范围
+
+`DeviceControlProtocolTest` 将独立 APK 固定 TX、从独立发送参数推导的完整动态例、实际读取样本和合成 RX 明确区分。覆盖八槽地址、两型号全部动作码及全部允许槽位 / 动作组合、单槽期望投影、全部音频选项、i5 双字段联动、开关极性、五档提示音、非法参数与不支持选项，以及初始化 / 触控 / 检测 / 音频共享 i7 序号。没有在测试中调用本客户端构造器生成预期字节。
+
+合成 RX 例 `0000000000040100000f050f0f0f0f0f0f` 仅左双击动作已知，其余为未知；`dd00110101ff02ff03ff04ff11ff12ff13ff140844aa` 仅右长按已知，八个 i7 slot ID 均存在。它们只验证结构与字段语义，不是抓包。另保留固件 125 的实际 i5 初始化读取：触控绑定、触控开、检测关、提示音 2 档、LDAC 配置，来源 `analysis/i5_live_read_2026-10-18.jsonl:12,17,19,23,29`；这不能扩大为设置、触控实际触发范围、提示音响度、系统 codec 协商或持久化已验收。本次硬件仍不可用，i7 无实测。寻机、语言设置和 OTA 没有新增可执行入口。

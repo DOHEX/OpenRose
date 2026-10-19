@@ -39,6 +39,27 @@ internal class I7Codec : ProtocolCodec {
                 require(value is FieldValue.Toggle) { "游戏模式需要明确开关" }
                 0x0e.toByte() to byteArrayOf(if (value.value) 1 else 0)
             }
+            DeviceSetting.AUDIO_MODE -> {
+                require(value is FieldValue.Text) { "音频模式需要配置名称" }
+                val mode = listOf("aac_sbc", "ldac", "lhdc", "lc3").indexOf(value.value)
+                if (mode < 0) throw UnsupportedOperationException("i7 不支持该音频配置")
+                0x2b.toByte() to byteArrayOf(mode.toByte())
+            }
+            DeviceSetting.MULTIPOINT -> {
+                require(value is FieldValue.Toggle) { "多点连接需要明确开关" }
+                0x32.toByte() to byteArrayOf(if (value.value) 1 else 0)
+            }
+            DeviceSetting.TOUCH_ENABLED, DeviceSetting.EAR_DETECTION -> {
+                require(value is FieldValue.Toggle) { "触控和检测功能需要明确开关" }
+                (if (setting == DeviceSetting.TOUCH_ENABLED) 7 else 8).toByte() to byteArrayOf(if (value.value) 0 else 1)
+            }
+            DeviceSetting.TOUCH_BINDING -> {
+                val binding = validatedTouchAssignment(value, profile)
+                val gesture = listOf("single", "double", "triple", "long").indexOf(binding.gesture)
+                val slot = gesture + 1 + if (binding.side == "right") 0x10 else 0
+                val action = listOf("none", "play_pause", "previous_track", "next_track", "volume_up", "volume_down", "game_mode", "voice_assistant", "noise_cycle").indexOf(binding.action)
+                1.toByte() to byteArrayOf(slot.toByte(), action.toByte())
+            }
             else -> throw UnsupportedOperationException("i7 不支持此设置")
         }
         // Validation precedes both sequence allocations, so rejected settings consume no sequence.

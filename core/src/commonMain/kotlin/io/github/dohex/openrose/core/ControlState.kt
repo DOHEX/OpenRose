@@ -65,7 +65,7 @@ sealed interface OperationResult {
     data class Failure(val error: ControlError) : OperationResult
 }
 
-enum class DeviceSetting { NOISE_MODE, ANC_LEVEL, TRANSPARENCY_LEVEL, NOISE_CYCLE, EQ, GAME_MODE, AUDIO_MODE, MULTIPOINT, TOUCH_ENABLED, EAR_DETECTION }
+enum class DeviceSetting { NOISE_MODE, ANC_LEVEL, TRANSPARENCY_LEVEL, NOISE_CYCLE, EQ, GAME_MODE, AUDIO_MODE, MULTIPOINT, TOUCH_ENABLED, EAR_DETECTION, TOUCH_BINDING, PROMPT_VOLUME }
 
 /** Transport acceptance and device state confirmation are separate facts. */
 enum class SettingStage { SUBMITTED, WRITTEN, CONFIRMED, NOT_APPLIED, TIMED_OUT, DISCONNECTED, FAILED }
@@ -84,6 +84,9 @@ data class DeviceCapabilities(
     val writableSettings: Set<DeviceSetting> = emptySet(),
     val noiseControl: NoiseControlCapabilities? = null,
     val equalizer: EqualizerCapabilities? = null,
+    val touchControl: TouchControlCapabilities? = null,
+    val audioControl: AudioControlCapabilities? = null,
+    val promptVolumeLevels: Set<Int> = emptySet(),
 )
 
 data class DeviceState(

@@ -27,6 +27,7 @@ import io.github.dohex.openrose.core.DeviceSetting
 import io.github.dohex.openrose.core.PermissionState
 import io.github.dohex.openrose.core.ScanState
 import io.github.dohex.openrose.core.TransportAvailability
+import io.github.dohex.openrose.core.TouchSlot
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.FieldReading
 import io.github.dohex.openrose.core.protocol.FieldValue
@@ -41,6 +42,8 @@ internal fun DevicePanel(
     onConnect: (DeviceId) -> Unit,
     onDisconnect: () -> Unit,
     onSet: (DeviceSetting, FieldValue) -> Unit,
+    selectedTouchSlot: TouchSlot?,
+    onTouchSlotChange: (TouchSlot) -> Unit,
 ) {
     val canScan = state.platform.transport == TransportAvailability.Available &&
         state.platform.permission in setOf(PermissionState.GRANTED, PermissionState.NOT_REQUIRED)
@@ -99,6 +102,8 @@ internal fun DevicePanel(
         val device = state.device?.takeIf { state.connection.matches(it) }
         device?.let { NoiseControlCard(state, it, onSet) }
         device?.let { EqualizerControlCard(state, it, onSet) }
+        device?.let { TouchControlCard(state, it, selectedTouchSlot, onTouchSlotChange, onSet) }
+        device?.let { DeviceControlCard(state, it, onSet) }
         SettingOperationsCard(state)
         device?.let { DeviceReadings(it, state.connection.phaseOrNull() == ConnectionPhase.INITIALIZING) }
     }

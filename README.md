@@ -2,9 +2,24 @@
 
 ROSE / ROSESELSA 耳机控制客户端，采用 Kotlin Multiplatform 共享核心和 Compose Multiplatform 界面。
 
-产品规格：[首版 spec #1](https://github.com/DOHEX/OpenRose/issues/1)。已建立 [工程初始化 #2](https://github.com/DOHEX/OpenRose/issues/2)，并推进 [i5 读取 #3](https://github.com/DOHEX/OpenRose/issues/3) / [i7 读取 #4](https://github.com/DOHEX/OpenRose/issues/4)：可构建的 Android 客户端、Linux / Windows 共享桌面入口、界面外持有的公开控制会话、内置 Miuix / Material 3 组件，以及 Android 原生 BLE 发现、识别和状态读取链路；降噪设置 [#5](https://github.com/DOHEX/OpenRose/issues/5) / [#6](https://github.com/DOHEX/OpenRose/issues/6)、预设 EQ 与游戏模式 [#7](https://github.com/DOHEX/OpenRose/issues/7) / [#8](https://github.com/DOHEX/OpenRose/issues/8) 使用同一权威会话、串行队列和设备确认结果。
+产品规格：[首版 spec #1](https://github.com/DOHEX/OpenRose/issues/1)。当前工程提供可构建的 Android 客户端、Linux / Windows 共享桌面入口、界面外持有的公开控制会话、内置 Miuix / Material 3 组件，以及 Android 原生 BLE 发现、识别和状态读取链路。各型号设置使用同一权威会话、串行队列和设备回读确认。
 
-**Android 真实耳机验收尚未完成；已接入 i5 / i7 降噪、档位、轮换、预设 EQ 与游戏模式设置及设备回读确认，尚未实现 HyperOS Hook、跨进程桥接、系统超级岛或融合设备中心。** i7 的 EAP 按已知固件整数 152 门槛开放，未知固件不启用；自定义 EQ 尚未提供。Android BLE 传输已实现并接入共享会话；协议测试重放 i5 独立 Linux 读取样本，i7 RX 仅使用明确标注的合成缓冲区。设置测试的 RX 也使用明确标注的合成数据，这些结果不代表 Android 真实耳机已支持。界面仅显示实际权限、扫描结果和设备返回值，没有演示设备或虚构电量。系统呈现设置目前仅保存偏好，不产生系统展示；阶段实现不等于首版验收完成。
+**Android 真实耳机验收尚未完成；尚未实现 HyperOS Hook、跨进程桥接、系统超级岛或融合设备中心。** 协议测试重放 i5 独立 Linux 读取样本，i7 RX 和设置测试的回复使用明确标注的合成数据，这些结果不代表 Android 真实耳机已通过验收。界面仅显示实际权限、扫描结果和设备返回值，没有演示设备或虚构电量。系统呈现设置目前仅保存偏好，不产生系统展示；阶段实现不等于首版验收完成。
+
+## 当前控制范围
+
+下表记录实现与离线验证范围，所有设置仍待真实耳机验收。
+
+| 功能 | i5 ZT | i7 RS Common V2 |
+| --- | --- | --- |
+| 识别与状态读取 | 已接入 Android BLE，保留已有 Linux 读取样本 | 已接入 Android BLE，RX 为合成测试 |
+| 降噪 | 普通 / 通透 / 抗风 / ANC，档位与轮换 | 另有自动 / 动态模式，档位与轮换 |
+| 预设 EQ / 游戏 | 四套预设及游戏开关 | 四套基础预设；EAP 需已知固件整数 ≥152；游戏开关 |
+| 触控 / 检测 | 左右四种手势、八种动作、触控及检测功能开关 | 左右四种手势、九种动作、触控及检测功能开关 |
+| 提示音 | 五档 | 设置入口待实现 |
+| 音频 / 多点 | AAC/SBC 与多点开启、LDAC 与多点关闭联动 | AAC/SBC / LDAC / LHDC / LC3 与多点分别设置 |
+
+未知固件不开放受限功能。自定义 EQ 尚未提供；触控绑定不立即执行动作，检测功能开关不代表真实佩戴事件，音频配置也不代表系统链路已完成对应 codec 协商。
 
 ## 构建
 
@@ -42,4 +57,4 @@ Android APK：`androidApp/build/outputs/apk/debug/androidApp-debug.apk`。桌面
 
 ## 版本与验证
 
-固定依赖见 `gradle/libs.versions.toml`；初始化构建与平台验证记录见 [docs/verification/bootstrap.md](docs/verification/bootstrap.md)，读取协议来源与限制见 [docs/protocols.md](docs/protocols.md)，降噪验证见 [docs/verification/noise-controls.md](docs/verification/noise-controls.md)，预设 EQ / 游戏验证见 [docs/verification/equalizer-game.md](docs/verification/equalizer-game.md)。领域约束见 [GLOSSARY.md](GLOSSARY.md) 和 [docs/adr](docs/adr)。
+固定依赖见 `gradle/libs.versions.toml`；初始化构建与平台验证记录见 [docs/verification/bootstrap.md](docs/verification/bootstrap.md)，读取协议来源与限制见 [docs/protocols.md](docs/protocols.md)，降噪验证见 [docs/verification/noise-controls.md](docs/verification/noise-controls.md)，预设 EQ / 游戏验证见 [docs/verification/equalizer-game.md](docs/verification/equalizer-game.md)，触控与音频验证见 [docs/verification/device-controls.md](docs/verification/device-controls.md)。领域约束见 [GLOSSARY.md](GLOSSARY.md) 和 [docs/adr](docs/adr)。

@@ -1,6 +1,8 @@
 package io.github.dohex.openrose.core.protocol
 
 import io.github.dohex.openrose.core.DeviceSetting
+import io.github.dohex.openrose.core.TouchSlot
+import io.github.dohex.openrose.core.touchControlCapabilities
 
 data class GattProfile(val serviceUuid: String, val writeUuid: String, val notifyUuid: String)
 
@@ -70,6 +72,10 @@ sealed interface FieldValue {
     data class TouchKeys(val bindings: List<TouchBinding>) : FieldValue {
         override val displayText get() = bindings.joinToString("；") { "${it.side}/${it.gesture}: ${it.action ?: "未知(${it.rawAction})"}" }
     }
+    /** One requested slot assignment; the device still reports its complete TouchKeys value. */
+    data class TouchAssignment(val side: String, val gesture: String, val action: String) : FieldValue {
+        override val displayText get() = "$side/$gesture: $action"
+    }
     data class NoiseCycle(val flags: Map<String, Boolean?>) : FieldValue {
         override val displayText get() = flags.entries.joinToString("，") { "${it.key}: ${when(it.value) { true -> "开"; false -> "关"; null -> "未知" }}" }
     }
@@ -129,6 +135,14 @@ internal fun validatedNoiseCycle(value: FieldValue): FieldValue.NoiseCycle {
     require(flags.keys == setOf("normal", "transparency", "wind", "anc")) { "轮换必须包含普通、通透、抗风和 ANC 四项" }
     require(flags.values.all { it != null }) { "轮换不能包含未知开关" }
     return FieldValue.NoiseCycle(flags)
+}
+
+internal fun validatedTouchAssignment(value: FieldValue, profile: ModelProfile): FieldValue.TouchAssignment {
+    require(value is FieldValue.TouchAssignment) { "触控绑定需要单个耳侧、手势和动作" }
+    val capabilities = touchControlCapabilities(profile)
+    require(TouchSlot(value.side, value.gesture) in capabilities.slots) { "该触控槽位无效" }
+    if (value.action !in capabilities.actions) throw UnsupportedOperationException("该型号不支持此触控动作")
+    return value
 }
 
 internal val i5Fields = linkedMapOf(
