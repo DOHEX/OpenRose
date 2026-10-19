@@ -77,6 +77,7 @@ fun OpenRoseApp(
     // Keep UI navigation outside the style branch; the control session is externally owned.
     val scrollState = rememberScrollState()
     var selectedTouchSlot by remember(state.device?.sessionId) { mutableStateOf<TouchSlot?>(null) }
+    var customEqualizerDraft by remember(state.device?.sessionId) { mutableStateOf<List<Int>?>(null) }
     val content: @Composable () -> Unit = {
         Box(
             modifier.fillMaxSize().background(pageBackground()).safeDrawingPadding(),
@@ -98,6 +99,7 @@ fun OpenRoseApp(
                                 DevicePanel(
                                     state, onStartScan, onStopScan, onConnect, onDisconnect, onSet,
                                     selectedTouchSlot, { selectedTouchSlot = it },
+                                    customEqualizerDraft, { customEqualizerDraft = it },
                                 )
                                 PlatformCard(state.platform, onRequestPermission, onOpenSystemSettings)
                             }
@@ -111,6 +113,7 @@ fun OpenRoseApp(
                             DevicePanel(
                                 state, onStartScan, onStopScan, onConnect, onDisconnect, onSet,
                                 selectedTouchSlot, { selectedTouchSlot = it },
+                                customEqualizerDraft, { customEqualizerDraft = it },
                             )
                             PlatformCard(state.platform, onRequestPermission, onOpenSystemSettings)
                             AppearanceCard(settings, onSettingsChange)

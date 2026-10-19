@@ -15,11 +15,13 @@ ROSE / ROSESELSA 耳机控制客户端，采用 Kotlin Multiplatform 共享核�
 | 识别与状态读取 | 已接入 Android BLE，保留已有 Linux 读取样本 | 已接入 Android BLE，RX 为合成测试 |
 | 降噪 | 普通 / 通透 / 抗风 / ANC，档位与轮换 | 另有自动 / 动态模式，档位与轮换 |
 | 预设 EQ / 游戏 | 四套预设及游戏开关 | 四套基础预设；EAP 需已知固件整数 ≥152；游戏开关 |
+| 自定义 EQ | 不提供 | 十段整数草稿，两步发送，分别确认模式和曲线 |
 | 触控 / 检测 | 左右四种手势、八种动作、触控及检测功能开关 | 左右四种手势、九种动作、触控及检测功能开关 |
-| 提示音 | 五档 | 设置入口待实现 |
+| 提示音 | 五档 | 基础五档；关闭需已知固件整数 ≥304 |
+| 增益 / 保护 | 不提供 | 已知固件整数 ≥213 时提供型号档位及阈值标签 |
 | 音频 / 多点 | AAC/SBC 与多点开启、LDAC 与多点关闭联动 | AAC/SBC / LDAC / LHDC / LC3 与多点分别设置 |
 
-未知固件不开放受限功能。自定义 EQ 尚未提供；触控绑定不立即执行动作，检测功能开关不代表真实佩戴事件，音频配置也不代表系统链路已完成对应 codec 协商。
+未知固件不开放受限功能。自定义 EQ 的草稿、发送进度和设备确认分开显示，部分完成与失败保留各自事实；触控绑定不立即执行动作，检测功能开关不代表真实佩戴事件，音频配置也不代表系统链路已完成对应 codec 协商。
 
 ## 构建
 
@@ -57,4 +59,4 @@ Android APK：`androidApp/build/outputs/apk/debug/androidApp-debug.apk`。桌面
 
 ## 版本与验证
 
-固定依赖见 `gradle/libs.versions.toml`；初始化构建与平台验证记录见 [docs/verification/bootstrap.md](docs/verification/bootstrap.md)，读取协议来源与限制见 [docs/protocols.md](docs/protocols.md)，降噪验证见 [docs/verification/noise-controls.md](docs/verification/noise-controls.md)，预设 EQ / 游戏验证见 [docs/verification/equalizer-game.md](docs/verification/equalizer-game.md)，触控与音频验证见 [docs/verification/device-controls.md](docs/verification/device-controls.md)。领域约束见 [GLOSSARY.md](GLOSSARY.md) 和 [docs/adr](docs/adr)。
+固定依赖见 `gradle/libs.versions.toml`；初始化构建与平台验证记录见 [docs/verification/bootstrap.md](docs/verification/bootstrap.md)，读取协议来源与限制见 [docs/protocols.md](docs/protocols.md)，降噪验证见 [docs/verification/noise-controls.md](docs/verification/noise-controls.md)，预设 EQ / 游戏验证见 [docs/verification/equalizer-game.md](docs/verification/equalizer-game.md)，触控与音频验证见 [docs/verification/device-controls.md](docs/verification/device-controls.md)，十段 EQ 与固件能力验证见 [docs/verification/advanced-audio.md](docs/verification/advanced-audio.md)。领域约束见 [GLOSSARY.md](GLOSSARY.md) 和 [docs/adr](docs/adr)。

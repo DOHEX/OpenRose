@@ -17,6 +17,7 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -92,9 +93,12 @@ internal fun AppButton(
     selected: Boolean = false,
     choice: Boolean = false,
     enabled: Boolean = true,
+    contentDescription: String? = null,
 ) {
     val modifier = Modifier.heightIn(min = 48.dp).then(
         if (choice) Modifier.semantics { this.selected = selected } else Modifier,
+    ).then(
+        if (contentDescription != null) Modifier.semantics { this.contentDescription = contentDescription } else Modifier,
     )
     when (LocalInterfaceStyle.current) {
         InterfaceStyle.MIUIX -> MiuixTextButton(

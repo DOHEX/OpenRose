@@ -93,7 +93,10 @@ data class ProtocolSetting(
     val writeFrames: List<ByteArray>,
     val readback: ProtocolQuery,
     val expectedValues: Map<DeviceField, FieldValue>,
-)
+    val additionalReadbacks: List<ProtocolQuery> = emptyList(),
+) {
+    val readbacks: List<ProtocolQuery> get() = listOf(readback) + additionalReadbacks
+}
 
 data class ProtocolReply(
     val rawHex: String,

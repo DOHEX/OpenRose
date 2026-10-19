@@ -1,5 +1,6 @@
 package io.github.dohex.openrose.core
 
+import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.dohex.openrose.core.protocol.ModelProfile
 
 data class TouchSlot(val side: String, val gesture: String)
@@ -19,8 +20,13 @@ fun audioControlCapabilities(profile: ModelProfile): AudioControlCapabilities = 
     ModelProfile.I7_RS_V2 -> AudioControlCapabilities(setOf("aac_sbc", "ldac", "lhdc", "lc3"), multipointCoupled = false)
 }
 
-/** i7 prompt volume belongs to its later firmware-gated controls slice. */
-fun promptVolumeLevels(profile: ModelProfile): Set<Int> = when (profile) {
+fun gainLevels(profile: ModelProfile, firmware: FieldValue.Firmware? = null): Set<Int> =
+    if (profile == ModelProfile.I7_RS_V2 && (firmwareComparisonInteger(firmware) ?: 0) >= 213) (0..2).toSet() else emptySet()
+
+fun hearingProtectionLevels(profile: ModelProfile, firmware: FieldValue.Firmware? = null): Set<Int> =
+    if (profile == ModelProfile.I7_RS_V2 && (firmwareComparisonInteger(firmware) ?: 0) >= 213) (0..6).toSet() else emptySet()
+
+fun promptVolumeLevels(profile: ModelProfile, firmware: FieldValue.Firmware? = null): Set<Int> = when (profile) {
     ModelProfile.I5_ZT -> (1..5).toSet()
-    ModelProfile.I7_RS_V2 -> emptySet()
+    ModelProfile.I7_RS_V2 -> if ((firmwareComparisonInteger(firmware) ?: 0) >= 304) (0..5).toSet() else (1..5).toSet()
 }

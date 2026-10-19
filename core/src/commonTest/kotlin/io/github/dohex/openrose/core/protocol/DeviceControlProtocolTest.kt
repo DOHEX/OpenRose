@@ -28,7 +28,7 @@ class DeviceControlProtocolTest {
         assertEquals(AudioControlCapabilities(setOf("aac_sbc", "ldac"), true), audioControlCapabilities(ModelProfile.I5_ZT))
         assertEquals(AudioControlCapabilities(setOf("aac_sbc", "ldac", "lhdc", "lc3"), false), audioControlCapabilities(ModelProfile.I7_RS_V2))
         assertEquals(setOf(1, 2, 3, 4, 5), promptVolumeLevels(ModelProfile.I5_ZT))
-        assertEquals(emptySet(), promptVolumeLevels(ModelProfile.I7_RS_V2))
+        assertEquals(setOf(1, 2, 3, 4, 5), promptVolumeLevels(ModelProfile.I7_RS_V2))
     }
 
     @Test
@@ -134,9 +134,21 @@ class DeviceControlProtocolTest {
             assertEquals(setOf("0e03"), setting.readback.responseKeys)
             assertEquals(mapOf(DeviceField.PROMPT_VOLUME to FieldValue.Number(level)), setting.expectedValues)
         }
-        // i7 prompt volume is intentionally outside this stage's implemented setting surface.
+        // i7 sends the UI level directly; only its mute value requires firmware 304.
+        for ((level, tx) in listOf(
+            1 to "ff00022e0130aa", 2 to "ff00022e0231aa", 3 to "ff00022e0332aa",
+            4 to "ff00022e0433aa", 5 to "ff00022e0534aa",
+        )) {
+            val setting = createProtocolCodec(ModelProfile.I7_RS_V2).prepareSetting(
+                DeviceSetting.PROMPT_VOLUME, FieldValue.Number(level),
+            )
+            assertEquals(tx, setting.writeFrames.single().hex())
+            assertEquals("ff0102fa2e2aaa", setting.readback.bytes.hex())
+            assertEquals(setOf("2e"), setting.readback.responseKeys)
+            assertEquals(mapOf(DeviceField.PROMPT_VOLUME to FieldValue.Number(level)), setting.expectedValues)
+        }
         assertFailsWith<UnsupportedOperationException> {
-            createProtocolCodec(ModelProfile.I7_RS_V2).prepareSetting(DeviceSetting.PROMPT_VOLUME, FieldValue.Number(1))
+            createProtocolCodec(ModelProfile.I7_RS_V2).prepareSetting(DeviceSetting.PROMPT_VOLUME, FieldValue.Number(0))
         }
     }
 
@@ -224,8 +236,9 @@ class DeviceControlProtocolTest {
                     assertFailsWith<IllegalArgumentException> { codec.prepareSetting(DeviceSetting.PROMPT_VOLUME, value) }
                 }
             } else {
-                for (level in listOf(0, 1, 5)) {
-                    assertFailsWith<UnsupportedOperationException> { codec.prepareSetting(DeviceSetting.PROMPT_VOLUME, FieldValue.Number(level)) }
+                assertFailsWith<UnsupportedOperationException> { codec.prepareSetting(DeviceSetting.PROMPT_VOLUME, FieldValue.Number(0)) }
+                for (level in listOf(-1, 6)) {
+                    assertFailsWith<IllegalArgumentException> { codec.prepareSetting(DeviceSetting.PROMPT_VOLUME, FieldValue.Number(level)) }
                 }
                 assertEquals("ff0002320134aa", codec.prepareSetting(DeviceSetting.MULTIPOINT, FieldValue.Toggle(true)).writeFrames.single().hex())
             }

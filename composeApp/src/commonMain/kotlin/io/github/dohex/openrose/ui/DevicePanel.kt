@@ -44,6 +44,8 @@ internal fun DevicePanel(
     onSet: (DeviceSetting, FieldValue) -> Unit,
     selectedTouchSlot: TouchSlot?,
     onTouchSlotChange: (TouchSlot) -> Unit,
+    customEqualizerDraft: List<Int>?,
+    onCustomEqualizerDraftChange: (List<Int>) -> Unit,
 ) {
     val canScan = state.platform.transport == TransportAvailability.Available &&
         state.platform.permission in setOf(PermissionState.GRANTED, PermissionState.NOT_REQUIRED)
@@ -102,6 +104,7 @@ internal fun DevicePanel(
         val device = state.device?.takeIf { state.connection.matches(it) }
         device?.let { NoiseControlCard(state, it, onSet) }
         device?.let { EqualizerControlCard(state, it, onSet) }
+        device?.let { CustomEqualizerCard(state, it, customEqualizerDraft, onCustomEqualizerDraftChange, onSet) }
         device?.let { TouchControlCard(state, it, selectedTouchSlot, onTouchSlotChange, onSet) }
         device?.let { DeviceControlCard(state, it, onSet) }
         SettingOperationsCard(state)

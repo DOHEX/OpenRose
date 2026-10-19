@@ -6,7 +6,13 @@ import io.github.dohex.openrose.core.protocol.ModelProfile
 
 /** Presentation labels only; protocol numeric values and capability decisions stay in the core. */
 internal fun displayFieldValue(field: DeviceField, value: FieldValue, profile: ModelProfile? = null): String = when (value) {
-    is FieldValue.Number -> if (field in batteryFields) "${value.value}%" else value.displayText
+    is FieldValue.Number -> when {
+        field in batteryFields -> "${value.value}%"
+        field == DeviceField.PROMPT_VOLUME && value.value == 0 -> "关闭"
+        field == DeviceField.GAIN -> gainLevelLabel(value.value)
+        field == DeviceField.HEARING_PROTECTION -> hearingProtectionLabel(value.value)
+        else -> value.displayText
+    }
     is FieldValue.Toggle -> when (field) {
         DeviceField.LEFT_CHARGING, DeviceField.RIGHT_CHARGING -> if (value.value) "充电中" else "未充电"
         DeviceField.LEFT_IN_CASE, DeviceField.RIGHT_IN_CASE -> if (value.value) "在盒内" else "不在盒内"
@@ -26,6 +32,19 @@ internal fun displayFieldValue(field: DeviceField, value: FieldValue, profile: M
 }
 
 private val batteryFields = setOf(DeviceField.LEFT_BATTERY, DeviceField.RIGHT_BATTERY, DeviceField.CASE_BATTERY)
+
+internal fun gainLevelLabel(level: Int): String = when (level) {
+    0 -> "低"
+    1 -> "中"
+    2 -> "高"
+    else -> "未知（$level）"
+}
+
+internal fun hearingProtectionLabel(level: Int): String = when (level) {
+    0 -> "关闭"
+    in 1..6 -> "${70 + level * 5} dB"
+    else -> "未知（$level）"
+}
 
 internal fun touchSideLabel(side: String): String = when (side) {
     "left" -> "左耳"

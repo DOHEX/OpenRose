@@ -169,6 +169,19 @@ internal fun SettingOperationsCard(state: ControlState) {
                 AppText("请求 #${operation.id}：${operation.setting.displayName()}")
                 AppText("请求值：${operation.requestedValueText(profile)}", secondary = true)
                 AppText(operation.stage.displayText())
+                if (operation.setting == DeviceSetting.CUSTOM_EQ) {
+                    if (operation.totalFrames > 0) {
+                        AppText("发送进度：${operation.writtenFrames}/${operation.totalFrames} 步", secondary = true)
+                    }
+                    val modeConfirmed = DeviceField.EQ in operation.confirmedFields
+                    val curveConfirmed = DeviceField.CUSTOM_EQ in operation.confirmedFields
+                    AppText(when {
+                        modeConfirmed && curveConfirmed -> "模式与曲线均已确认"
+                        modeConfirmed -> "模式已确认，曲线尚未确认"
+                        curveConfirmed -> "曲线已确认，模式尚未确认"
+                        else -> "模式与曲线尚未确认"
+                    }, secondary = true)
+                }
                 operation.error?.let { AppText(it.message, secondary = true) }
                 if (operation.sessionId != sessionId) {
                     AppText("已结束会话 ${operation.sessionId} 的操作记录", secondary = true)
@@ -181,7 +194,7 @@ internal fun SettingOperationsCard(state: ControlState) {
 internal fun DeviceState.knownValue(field: DeviceField): FieldValue? =
     (fields[field] as? FieldReading.Known)?.value
 
-private val pendingSettingStages = setOf(SettingStage.SUBMITTED, SettingStage.WRITTEN)
+private val pendingSettingStages = setOf(SettingStage.SUBMITTED, SettingStage.PARTIALLY_WRITTEN, SettingStage.WRITTEN)
 
 internal fun ControlState.isReady(device: DeviceState): Boolean {
     val connection = connection as? ConnectionState.Connected ?: return false
@@ -208,6 +221,9 @@ private fun DeviceSetting.displayName(): String = when (this) {
     DeviceSetting.AUDIO_MODE -> "音频模式"
     DeviceSetting.MULTIPOINT -> "多点连接"
     DeviceSetting.PROMPT_VOLUME -> "提示音音量"
+    DeviceSetting.CUSTOM_EQ -> "自定义 EQ"
+    DeviceSetting.GAIN -> "增益档位"
+    DeviceSetting.HEARING_PROTECTION -> "听力保护阈值"
 }
 
 private fun SettingOperation.requestedValueText(profile: ModelProfile?): String = when (setting) {
@@ -223,14 +239,18 @@ private fun SettingOperation.requestedValueText(profile: ModelProfile?): String 
     DeviceSetting.AUDIO_MODE -> displayFieldValue(DeviceField.AUDIO_MODE, requestedValue)
     DeviceSetting.MULTIPOINT -> displayFieldValue(DeviceField.MULTIPOINT, requestedValue)
     DeviceSetting.PROMPT_VOLUME -> displayFieldValue(DeviceField.PROMPT_VOLUME, requestedValue)
+    DeviceSetting.CUSTOM_EQ -> displayFieldValue(DeviceField.CUSTOM_EQ, requestedValue)
+    DeviceSetting.GAIN -> displayFieldValue(DeviceField.GAIN, requestedValue)
+    DeviceSetting.HEARING_PROTECTION -> displayFieldValue(DeviceField.HEARING_PROTECTION, requestedValue)
 }
 
 private fun SettingStage.displayText(): String = when (this) {
     SettingStage.SUBMITTED -> "已提交 · 等待写入"
+    SettingStage.PARTIALLY_WRITTEN -> "部分命令已发送 · 等待剩余发送与设备确认"
     SettingStage.WRITTEN -> "底层写入完成 · 等待设备确认"
     SettingStage.CONFIRMED -> "设备已确认"
     SettingStage.NOT_APPLIED -> "设备回读与请求不一致 · 已显示实际返回状态"
-    SettingStage.TIMED_OUT -> "设置超时 · 未获设备确认"
-    SettingStage.DISCONNECTED -> "连接已断开 · 请求未获确认"
+    SettingStage.TIMED_OUT -> "设置超时 · 未获完整设备确认"
+    SettingStage.DISCONNECTED -> "连接已断开 · 请求未获完整确认"
     SettingStage.FAILED -> "设置失败"
 }

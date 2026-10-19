@@ -25,7 +25,11 @@ internal fun DeviceControlCard(
     val hasMultipoint = DeviceSetting.MULTIPOINT in writable
     val volumeLevels = device.capabilities.promptVolumeLevels
     val hasVolume = DeviceSetting.PROMPT_VOLUME in writable && volumeLevels.isNotEmpty()
-    if (!hasAudio && !hasMultipoint && !hasVolume) return
+    val gainLevels = device.capabilities.gainLevels
+    val hasGain = DeviceSetting.GAIN in writable && gainLevels.isNotEmpty()
+    val protectionLevels = device.capabilities.hearingProtectionLevels
+    val hasProtection = DeviceSetting.HEARING_PROTECTION in writable && protectionLevels.isNotEmpty()
+    if (!hasAudio && !hasMultipoint && !hasVolume && !hasGain && !hasProtection) return
     val enabled = state.isReady(device) && !state.hasPendingSetting(device)
     AppCard {
         AppText("音频与提示音", title = true)
@@ -79,7 +83,7 @@ internal fun DeviceControlCard(
             ) {
                 volumeLevels.sorted().forEach { level ->
                     AppButton(
-                        "$level 档",
+                        if (level == 0) "关闭" else "$level 档",
                         { if (level != selected) onSet(DeviceSetting.PROMPT_VOLUME, FieldValue.Number(level)) },
                         selected = level == selected,
                         choice = true,
@@ -87,6 +91,48 @@ internal fun DeviceControlCard(
                     )
                 }
             }
+        }
+        if (hasGain) {
+            Spacer(Modifier.height(20.dp))
+            ConfirmedSettingLabel("增益档位", DeviceField.GAIN, device)
+            Spacer(Modifier.height(8.dp))
+            val selected = (device.knownValue(DeviceField.GAIN) as? FieldValue.Number)?.value
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                gainLevels.sorted().forEach { level ->
+                    AppButton(
+                        gainLevelLabel(level),
+                        { if (level != selected) onSet(DeviceSetting.GAIN, FieldValue.Number(level)) },
+                        selected = level == selected,
+                        choice = true,
+                        enabled = enabled,
+                    )
+                }
+            }
+        }
+        if (hasProtection) {
+            Spacer(Modifier.height(20.dp))
+            ConfirmedSettingLabel("听力保护阈值", DeviceField.HEARING_PROTECTION, device)
+            Spacer(Modifier.height(8.dp))
+            val selected = (device.knownValue(DeviceField.HEARING_PROTECTION) as? FieldValue.Number)?.value
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                protectionLevels.sorted().forEach { level ->
+                    AppButton(
+                        hearingProtectionLabel(level),
+                        { if (level != selected) onSet(DeviceSetting.HEARING_PROTECTION, FieldValue.Number(level)) },
+                        selected = level == selected,
+                        choice = true,
+                        enabled = enabled,
+                    )
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+            AppText("这是耳机提供的阈值标签，不表示测得的声压或保护效果。", secondary = true)
         }
     }
 }

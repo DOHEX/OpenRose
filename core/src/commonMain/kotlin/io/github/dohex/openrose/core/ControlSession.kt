@@ -1,6 +1,7 @@
 package io.github.dohex.openrose.core
 
 import io.github.dohex.openrose.core.protocol.DeviceField
+import io.github.dohex.openrose.core.protocol.ProtocolQuery
 import io.github.dohex.openrose.core.protocol.ProtocolCodec
 import io.github.dohex.openrose.core.protocol.FieldReading
 import io.github.dohex.openrose.core.protocol.FieldValue
@@ -177,7 +178,20 @@ class ControlSession(
     private fun validateSetting(profile: ModelProfile, setting: DeviceSetting, value: FieldValue): ControlError? {
         val noise = noiseControlCapabilities(profile, firmware())
         val valid = when (setting) {
-            DeviceSetting.PROMPT_VOLUME -> value is FieldValue.Number && value.value in promptVolumeLevels(profile)
+            DeviceSetting.CUSTOM_EQ -> {
+                val custom = equalizerCapabilities(profile, firmware()).custom
+                    ?: return ControlError(ControlErrorCode.UNSUPPORTED, "该型号不支持自定义均衡器")
+                value is FieldValue.IntegerList && value.values.size == custom.bandsHz.size && value.values.all { it in custom.minGain..custom.maxGain }
+            }
+            DeviceSetting.GAIN -> value is FieldValue.Number && value.value in gainLevels(profile, firmware())
+            DeviceSetting.HEARING_PROTECTION -> value is FieldValue.Number && value.value in hearingProtectionLevels(profile, firmware())
+            DeviceSetting.PROMPT_VOLUME -> {
+                val levels = promptVolumeLevels(profile, firmware())
+                if (profile == ModelProfile.I7_RS_V2 && value is FieldValue.Number && value.value == 0 && value.value !in levels) {
+                    return ControlError(ControlErrorCode.UNSUPPORTED, "当前固件不支持关闭提示音")
+                }
+                value is FieldValue.Number && value.value in levels
+            }
             DeviceSetting.TOUCH_BINDING -> {
                 if (value !is FieldValue.TouchAssignment) return ControlError(ControlErrorCode.INVALID_ARGUMENT, "触控绑定需要作用耳、手势和动作")
                 val touch = touchControlCapabilities(profile)
@@ -207,7 +221,6 @@ class ControlSession(
             DeviceSetting.ANC_LEVEL, DeviceSetting.TRANSPARENCY_LEVEL -> value is FieldValue.Number && value.value in noise.levels
             DeviceSetting.NOISE_CYCLE -> value is FieldValue.NoiseCycle && value.flags.keys == noise.cycleModes &&
                 value.flags.values.all { it != null } && value.flags.values.count { it == true } >= noise.minimumCycleSelections
-            else -> return ControlError(ControlErrorCode.UNSUPPORTED, "${setting.name} 尚不支持写入")
         }
         return if (valid) null else ControlError(ControlErrorCode.INVALID_ARGUMENT, "${setting.name} 参数无效")
     }
@@ -248,30 +261,51 @@ class ControlSession(
         val link = attempt.connection ?: throw LinkEnded()
         val operation = request.operation
         val prepared = attempt.codec.prepareSetting(operation.setting, operation.requestedValue, firmware())
-        if ((prepared.writeFrames + listOf(prepared.readback.bytes)).any { it.size > link.maxWriteSize }) {
+        settingStage(attempt, request, SettingStage.SUBMITTED, totalFrames = prepared.writeFrames.size)
+        if ((prepared.writeFrames + prepared.readbacks.map { it.bytes }).any { it.size > link.maxWriteSize }) {
             throw UnsupportedOperationException("完整协议设置或回读超出传输写入容量")
         }
-        for (frame in prepared.writeFrames) writePaced(attempt, link, frame)
-        settingStage(attempt, request, SettingStage.WRITTEN)
-        // Take the baseline after pacing so a setter ACK cannot satisfy the readback.
-        pace(attempt)
-        ensureActive(attempt)
-        val baseline = attempt.progress.value
-        withTimeout(timing.queryTimeoutMillis) { link.write(prepared.readback.bytes.copyOf()) }
-        val observed = withTimeoutOrNull(timing.queryTimeoutMillis) {
-            attempt.progress.first { progress ->
-                progress.ended || (prepared.readback.responseKeys.all { (progress.keyRevisions[it] ?: 0) > (baseline.keyRevisions[it] ?: 0) } &&
-                    prepared.expectedValues.all { (field, expected) ->
-                        (progress.fieldRevisions[field] ?: 0) > (baseline.fieldRevisions[field] ?: 0) &&
-                            confirmationValue(state.value.device?.fields?.get(field), expected) != null
-                    })
-            }
+        for ((index, frame) in prepared.writeFrames.withIndex()) {
+            writePaced(attempt, link, frame)
+            settingStage(attempt, request,
+                if (index == prepared.writeFrames.lastIndex) SettingStage.WRITTEN else SettingStage.PARTIALLY_WRITTEN,
+                writtenFrames = index + 1)
         }
-        if (observed?.ended == true) throw LinkEnded()
-        ensureActive(attempt)
-        if (observed == null) return settingFailure(attempt, request, ControlError(ControlErrorCode.TIMEOUT, "未收到有效的设置回读"), SettingStage.TIMED_OUT)
-        val actual = requireNotNull(state.value.device).fields
-        return if (prepared.expectedValues.all { (field, expected) -> confirmationValue(actual[field], expected) == expected }) {
+        val baselines = mutableListOf<Pair<ProtocolQuery, ReadProgress>>()
+        var actualValues = emptyMap<DeviceField, FieldValue>()
+        for (query in prepared.readbacks) {
+            // A later field query gets its own baseline; earlier unsolicited data cannot confirm it.
+            pace(attempt)
+            ensureActive(attempt)
+            baselines += query to attempt.progress.value
+            withTimeout(timing.queryTimeoutMillis) { link.write(query.bytes.copyOf()) }
+            val observed = withTimeoutOrNull(timing.queryTimeoutMillis) {
+                attempt.progress.first { progress ->
+                    if (progress.ended) true else {
+                        val fields = state.value.device?.fields.orEmpty()
+                        val values = prepared.expectedValues.mapNotNull { (field, expected) ->
+                            val reading = baselines.lastOrNull { field in it.first.expectedFields } ?: return@mapNotNull null
+                            val (readback, baseline) = reading
+                            val fresh = (progress.fieldRevisions[field] ?: 0) > (baseline.fieldRevisions[field] ?: 0) &&
+                                readback.responseKeys.all { (progress.keyRevisions[it] ?: 0) > (baseline.keyRevisions[it] ?: 0) }
+                            if (fresh) confirmationValue(fields[field], expected)?.let { field to it } else null
+                        }.toMap()
+                        val confirmed = values.filter { (field, value) -> value == prepared.expectedValues[field] }.keys.toSet()
+                        settingStage(attempt, request, SettingStage.WRITTEN, confirmedFields = confirmed)
+                        val required = baselines.flatMap { it.first.expectedFields }.filter { it in prepared.expectedValues }.toSet()
+                        if (values.keys.containsAll(required)) {
+                            actualValues = values
+                            true
+                        } else false
+                    }
+                }
+            }
+            if (observed?.ended == true) throw LinkEnded()
+            ensureActive(attempt)
+            if (observed == null) return settingFailure(attempt, request,
+                ControlError(ControlErrorCode.TIMEOUT, "未收到有效的设置回读"), SettingStage.TIMED_OUT)
+        }
+        return if (prepared.expectedValues.all { (field, expected) -> actualValues[field] == expected }) {
             settingStage(attempt, request, SettingStage.CONFIRMED)
             OperationResult.Success
         } else settingFailure(attempt, request, ControlError(ControlErrorCode.NOT_APPLIED, "设备回读与请求不一致"), SettingStage.NOT_APPLIED)
@@ -308,11 +342,21 @@ class ControlSession(
         withTimeout(timing.queryTimeoutMillis) { link.write(bytes.copyOf()) }
     }
 
-    private fun settingStage(attempt: Attempt, request: SettingRequest, stage: SettingStage, error: ControlError? = null) {
+    private fun settingStage(
+        attempt: Attempt,
+        request: SettingRequest,
+        stage: SettingStage,
+        error: ControlError? = null,
+        writtenFrames: Int? = null,
+        totalFrames: Int? = null,
+        confirmedFields: Set<DeviceField>? = null,
+    ) {
         mutableState.update { current ->
             if (current.device?.sessionId != attempt.id || request.result.isCompleted) current
             else current.copy(settingOperations = current.settingOperations.map {
-                if (it.id == request.operation.id) it.copy(stage = stage, error = error) else it
+                if (it.id == request.operation.id) it.copy(stage = stage, error = error,
+                    writtenFrames = writtenFrames ?: it.writtenFrames, totalFrames = totalFrames ?: it.totalFrames,
+                    confirmedFields = confirmedFields ?: it.confirmedFields) else it
             }, lastError = error)
         }
     }
@@ -341,12 +385,17 @@ class ControlSession(
         readableFields = profile.supportedFields,
         writableSettings = setOf(DeviceSetting.NOISE_MODE, DeviceSetting.ANC_LEVEL, DeviceSetting.TRANSPARENCY_LEVEL,
             DeviceSetting.NOISE_CYCLE, DeviceSetting.EQ, DeviceSetting.GAME_MODE, DeviceSetting.AUDIO_MODE, DeviceSetting.MULTIPOINT, DeviceSetting.TOUCH_BINDING, DeviceSetting.TOUCH_ENABLED, DeviceSetting.EAR_DETECTION) +
-            (if (profile == ModelProfile.I5_ZT) setOf(DeviceSetting.PROMPT_VOLUME) else emptySet()),
+            setOf(DeviceSetting.PROMPT_VOLUME) +
+            (if (profile == ModelProfile.I7_RS_V2) setOf(DeviceSetting.CUSTOM_EQ) else emptySet()) +
+            (if (gainLevels(profile, firmware).isNotEmpty()) setOf(DeviceSetting.GAIN) else emptySet()) +
+            (if (hearingProtectionLevels(profile, firmware).isNotEmpty()) setOf(DeviceSetting.HEARING_PROTECTION) else emptySet()),
         noiseControl = noiseControlCapabilities(profile, firmware),
         equalizer = equalizerCapabilities(profile, firmware),
         touchControl = touchControlCapabilities(profile),
         audioControl = audioControlCapabilities(profile),
-        promptVolumeLevels = promptVolumeLevels(profile),
+        promptVolumeLevels = promptVolumeLevels(profile, firmware),
+        gainLevels = gainLevels(profile, firmware),
+        hearingProtectionLevels = hearingProtectionLevels(profile, firmware),
     )
 
     private fun FieldValue.snapshot(): FieldValue = when (this) {

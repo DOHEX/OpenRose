@@ -2,6 +2,9 @@ package io.github.dohex.openrose.core.protocol
 
 import io.github.dohex.openrose.core.DeviceSetting
 import io.github.dohex.openrose.core.equalizerCapabilities
+import io.github.dohex.openrose.core.gainLevels
+import io.github.dohex.openrose.core.hearingProtectionLevels
+import io.github.dohex.openrose.core.promptVolumeLevels
 
 internal class I7Codec : ProtocolCodec {
     override val profile = ModelProfile.I7_RS_V2
@@ -10,6 +13,21 @@ internal class I7Codec : ProtocolCodec {
     private val infoTypes = "010708090c0d0e122a2b2c2d2e2f313233363738393a3b3c3d3f454649".bytes()
 
     override fun prepareSetting(setting: DeviceSetting, value: FieldValue, firmware: FieldValue.Firmware?): ProtocolSetting {
+        if (setting == DeviceSetting.CUSTOM_EQ) {
+            require(value is FieldValue.IntegerList) { "自定义均衡器需要十段整数曲线" }
+            val gains = value.values.toList()
+            require(gains.size == 10 && gains.all { it in -6..6 }) { "自定义均衡器需要十段 -6..6 的整数" }
+            // Validate and snapshot the whole curve before allocating either write or read sequence.
+            val payload = gains.map { if (it < 0) 0x80 or -it else it }.map { it.toByte() }.toByteArray()
+            val writes = listOf(frame(byteArrayOf(0x2a, 4)), frame(byteArrayOf(0x3e) + payload))
+            val modeReadback = query(byteArrayOf(0x2a))
+            val curveReadback = query(byteArrayOf(0x3e))
+            return ProtocolSetting(
+                writes, modeReadback,
+                mapOf(DeviceField.EQ to FieldValue.Text("custom"), DeviceField.CUSTOM_EQ to FieldValue.IntegerList(gains)),
+                listOf(curveReadback),
+            )
+        }
         val expected = if (setting == DeviceSetting.NOISE_CYCLE) validatedNoiseCycle(value) else value
         val (type, payload) = when (setting) {
             DeviceSetting.NOISE_MODE -> {
@@ -34,6 +52,30 @@ internal class I7Codec : ProtocolCodec {
                 }
                 val preset = mapOf("hifi" to 0, "pop" to 1, "rock" to 2, "light" to 3, "eap" to 6).getValue(value.value)
                 0x2a.toByte() to byteArrayOf(preset.toByte())
+            }
+            DeviceSetting.GAIN -> {
+                require(value is FieldValue.Number) { "增益需要档位整数" }
+                require(value.value in 0..2) { "i7 增益档位仅支持 0～2" }
+                if (value.value !in gainLevels(profile, firmware)) {
+                    throw UnsupportedOperationException("i7 当前固件不支持增益设置")
+                }
+                0x45.toByte() to byteArrayOf(value.value.toByte())
+            }
+            DeviceSetting.HEARING_PROTECTION -> {
+                require(value is FieldValue.Number) { "听力保护需要档位整数" }
+                require(value.value in 0..6) { "i7 听力保护档位仅支持 0～6" }
+                if (value.value !in hearingProtectionLevels(profile, firmware)) {
+                    throw UnsupportedOperationException("i7 当前固件不支持听力保护设置")
+                }
+                0x46.toByte() to byteArrayOf(value.value.toByte())
+            }
+            DeviceSetting.PROMPT_VOLUME -> {
+                require(value is FieldValue.Number) { "提示音需要档位整数" }
+                require(value.value in 0..5) { "i7 提示音仅支持 0～5 档" }
+                if (value.value !in promptVolumeLevels(profile, firmware)) {
+                    throw UnsupportedOperationException("i7 当前固件不支持此提示音档位")
+                }
+                0x2e.toByte() to byteArrayOf(value.value.toByte())
             }
             DeviceSetting.GAME_MODE -> {
                 require(value is FieldValue.Toggle) { "游戏模式需要明确开关" }
@@ -60,7 +102,6 @@ internal class I7Codec : ProtocolCodec {
                 val action = listOf("none", "play_pause", "previous_track", "next_track", "volume_up", "volume_down", "game_mode", "voice_assistant", "noise_cycle").indexOf(binding.action)
                 1.toByte() to byteArrayOf(slot.toByte(), action.toByte())
             }
-            else -> throw UnsupportedOperationException("i7 不支持此设置")
         }
         // Validation precedes both sequence allocations, so rejected settings consume no sequence.
         val key = byteArrayOf(type).hex()

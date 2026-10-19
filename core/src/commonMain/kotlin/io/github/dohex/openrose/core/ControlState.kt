@@ -65,10 +65,10 @@ sealed interface OperationResult {
     data class Failure(val error: ControlError) : OperationResult
 }
 
-enum class DeviceSetting { NOISE_MODE, ANC_LEVEL, TRANSPARENCY_LEVEL, NOISE_CYCLE, EQ, GAME_MODE, AUDIO_MODE, MULTIPOINT, TOUCH_ENABLED, EAR_DETECTION, TOUCH_BINDING, PROMPT_VOLUME }
+enum class DeviceSetting { NOISE_MODE, ANC_LEVEL, TRANSPARENCY_LEVEL, NOISE_CYCLE, EQ, GAME_MODE, AUDIO_MODE, MULTIPOINT, TOUCH_ENABLED, EAR_DETECTION, TOUCH_BINDING, PROMPT_VOLUME, CUSTOM_EQ, GAIN, HEARING_PROTECTION }
 
 /** Transport acceptance and device state confirmation are separate facts. */
-enum class SettingStage { SUBMITTED, WRITTEN, CONFIRMED, NOT_APPLIED, TIMED_OUT, DISCONNECTED, FAILED }
+enum class SettingStage { SUBMITTED, PARTIALLY_WRITTEN, WRITTEN, CONFIRMED, NOT_APPLIED, TIMED_OUT, DISCONNECTED, FAILED }
 
 data class SettingOperation(
     val id: Long,
@@ -77,6 +77,9 @@ data class SettingOperation(
     val requestedValue: FieldValue,
     val stage: SettingStage,
     val error: ControlError? = null,
+    val writtenFrames: Int = 0,
+    val totalFrames: Int = 0,
+    val confirmedFields: Set<DeviceField> = emptySet(),
 )
 
 data class DeviceCapabilities(
@@ -87,6 +90,8 @@ data class DeviceCapabilities(
     val touchControl: TouchControlCapabilities? = null,
     val audioControl: AudioControlCapabilities? = null,
     val promptVolumeLevels: Set<Int> = emptySet(),
+    val gainLevels: Set<Int> = emptySet(),
+    val hearingProtectionLevels: Set<Int> = emptySet(),
 )
 
 data class DeviceState(
