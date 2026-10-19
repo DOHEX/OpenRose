@@ -31,6 +31,7 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.dp
 import io.github.dohex.openrose.core.Appearance
 import io.github.dohex.openrose.core.ControlState
+import io.github.dohex.openrose.core.DeviceSetting
 import io.github.dohex.openrose.core.InterfaceStyle
 import io.github.dohex.openrose.core.IslandMode
 import io.github.dohex.openrose.core.IslandTrigger
@@ -39,6 +40,7 @@ import io.github.dohex.openrose.core.PermissionState
 import io.github.dohex.openrose.core.PlatformState
 import io.github.dohex.openrose.core.TransportAvailability
 import io.github.dohex.openrose.core.UserSettings
+import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.dohex.openrose.core.transport.DeviceId
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.theme.darkColorScheme as miuixDarkColorScheme
@@ -58,6 +60,7 @@ fun OpenRoseApp(
     onStopScan: () -> Unit,
     onConnect: (DeviceId) -> Unit,
     onDisconnect: () -> Unit,
+    onSet: (DeviceSetting, FieldValue) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val settings = state.settings
@@ -86,7 +89,7 @@ fun OpenRoseApp(
                     if (maxWidth >= 800.dp) {
                         Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
                             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(20.dp)) {
-                                DevicePanel(state, onStartScan, onStopScan, onConnect, onDisconnect)
+                                DevicePanel(state, onStartScan, onStopScan, onConnect, onDisconnect, onSet)
                                 PlatformCard(state.platform, onRequestPermission, onOpenSystemSettings)
                             }
                             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(20.dp)) {
@@ -96,7 +99,7 @@ fun OpenRoseApp(
                         }
                     } else {
                         Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
-                            DevicePanel(state, onStartScan, onStopScan, onConnect, onDisconnect)
+                            DevicePanel(state, onStartScan, onStopScan, onConnect, onDisconnect, onSet)
                             PlatformCard(state.platform, onRequestPermission, onOpenSystemSettings)
                             AppearanceCard(settings, onSettingsChange)
                             IntegrationCard(settings, state.platform.module, onSettingsChange)

@@ -9,6 +9,8 @@ import android.content.IntentFilter
 import android.os.Build
 import android.location.LocationManager
 import io.github.dohex.openrose.core.ControlSession
+import io.github.dohex.openrose.core.DeviceSetting
+import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.dohex.openrose.core.UserSettings
 import io.github.dohex.openrose.core.UserSettingsCodec
 import io.github.dohex.openrose.core.transport.DeviceId
@@ -55,6 +57,9 @@ class OpenRoseApplication : Application() {
     fun stopScan() { controlScope.launch { session.stopScan() } }
     fun connect(deviceId: DeviceId) { controlScope.launch { session.connect(deviceId) } }
     fun disconnect() { controlScope.launch { session.disconnect() } }
+    fun applySetting(setting: DeviceSetting, value: FieldValue) {
+        controlScope.launch { session.set(setting, value) }
+    }
 
     fun updateSettings(settings: UserSettings) {
         session.updateSettings(settings)

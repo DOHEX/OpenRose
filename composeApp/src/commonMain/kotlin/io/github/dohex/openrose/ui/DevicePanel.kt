@@ -23,11 +23,13 @@ import io.github.dohex.openrose.core.ControlError
 import io.github.dohex.openrose.core.ControlErrorCode
 import io.github.dohex.openrose.core.DeviceCandidate
 import io.github.dohex.openrose.core.DeviceState
+import io.github.dohex.openrose.core.DeviceSetting
 import io.github.dohex.openrose.core.PermissionState
 import io.github.dohex.openrose.core.ScanState
 import io.github.dohex.openrose.core.TransportAvailability
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.FieldReading
+import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.dohex.openrose.core.transport.DeviceId
 
 @Composable
@@ -37,6 +39,7 @@ internal fun DevicePanel(
     onStopScan: () -> Unit,
     onConnect: (DeviceId) -> Unit,
     onDisconnect: () -> Unit,
+    onSet: (DeviceSetting, FieldValue) -> Unit,
 ) {
     val canScan = state.platform.transport == TransportAvailability.Available &&
         state.platform.permission in setOf(PermissionState.GRANTED, PermissionState.NOT_REQUIRED)
@@ -92,9 +95,10 @@ internal fun DevicePanel(
                 }
             }
         }
-        state.device?.takeIf { device -> state.connection.matches(device) }?.let { device ->
-            DeviceReadings(device, state.connection.phaseOrNull() == ConnectionPhase.INITIALIZING)
-        }
+        val device = state.device?.takeIf { state.connection.matches(it) }
+        device?.let { NoiseControlCard(state, it, onSet) }
+        SettingOperationsCard(state)
+        device?.let { DeviceReadings(it, state.connection.phaseOrNull() == ConnectionPhase.INITIALIZING) }
     }
 }
 
@@ -226,5 +230,5 @@ private fun ConnectionPhase.displayText(): String = when (this) {
     ConnectionPhase.DISCOVERING -> "正在发现耳机服务…"
     ConnectionPhase.SUBSCRIBING -> "正在订阅状态通知…"
     ConnectionPhase.INITIALIZING -> "正在初始化并读取状态…"
-    ConnectionPhase.READY -> "已连接 · 可以读取状态"
+    ConnectionPhase.READY -> "已连接 · 控制会话已就绪"
 }

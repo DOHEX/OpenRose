@@ -1,5 +1,7 @@
 package io.github.dohex.openrose.core
 
+import io.github.dohex.openrose.core.protocol.DeviceField
+import io.github.dohex.openrose.core.protocol.ProtocolCodec
 import io.github.dohex.openrose.core.protocol.FieldReading
 import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.dohex.openrose.core.protocol.ModelIdentification
@@ -9,6 +11,8 @@ import io.github.dohex.openrose.core.transport.ControlConnection
 import io.github.dohex.openrose.core.transport.ControlTransport
 import io.github.dohex.openrose.core.transport.DeviceId
 import io.github.dohex.openrose.core.transport.TransportEndpoint
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
@@ -60,13 +64,22 @@ class ControlSession(
     private val scanEpoch = MutableStateFlow(0L)
     private var scanJob: Job? = null
     private var generation = 0L
+    private var operationId = 0L
     private var active: Attempt? = null
 
     private class Attempt(val id: Long, val candidate: DeviceCandidate) {
         lateinit var task: Deferred<OperationResult>
         var connection: ControlConnection? = null
         var observer: Job? = null
+        val codec: ProtocolCodec = createProtocolCodec(requireNotNull(candidate.profile))
+        val progress = MutableStateFlow(ReadProgress())
+        val commands = Channel<SettingRequest>(32)
+        val pending = linkedMapOf<Long, SettingRequest>()
+        var commandWorker: Job? = null
+        var hasWritten = false
     }
+
+    private data class SettingRequest(val operation: SettingOperation, val result: CompletableDeferred<OperationResult>)
 
     suspend fun startScan(): OperationResult = scanLifecycle.withLock {
         platformError()?.let { return@withLock failure(it) }
@@ -112,7 +125,7 @@ class ControlSession(
             val profile = requireNotNull(candidate.profile)
             mutableState.update {
                 it.copy(connection = ConnectionState.Connecting(deviceId, next.id, ConnectionPhase.CONNECTING),
-                    device = DeviceState(deviceId, next.id, profile, DeviceCapabilities(profile.supportedFields), profile.supportedFields.associateWith { FieldReading.Loading }),
+                    device = DeviceState(deviceId, next.id, profile, capabilities(profile, null), profile.supportedFields.associateWith { FieldReading.Loading }),
                     lastError = null)
             }
             active = next
@@ -136,17 +149,176 @@ class ControlSession(
         }
     }
 
-    /** Writes are exposed only once their model-specific device confirmation behavior exists. */
+    /** A caller owns its wait; the platform session owns the queued operation. */
     suspend fun set(setting: DeviceSetting, value: FieldValue): OperationResult {
         platformError()?.let { return failure(it) }
-        if (state.value.connection !is ConnectionState.Connected) return failure(ControlError(ControlErrorCode.NOT_READY, "设备尚未就绪"))
-        return failure(ControlError(ControlErrorCode.UNSUPPORTED, "${setting.name} 的写入与设备确认尚未实现"))
+        val snapshot = value.snapshot()
+        val request = lifecycle.withLock {
+            val attempt = active
+            if (attempt == null || state.value.connection !is ConnectionState.Connected) {
+                return failure(ControlError(ControlErrorCode.NOT_READY, "设备尚未就绪"))
+            }
+            if (setting !in requireNotNull(state.value.device).capabilities.writableSettings) {
+                return failure(ControlError(ControlErrorCode.UNSUPPORTED, "${setting.name} 尚不支持写入"))
+            }
+            // Validate before submission without allocating codec sequence numbers.
+            validateNoiseSetting(requireNotNull(attempt.candidate.profile), setting, snapshot)?.let { return failure(it) }
+            if (attempt.pending.size >= 32) return failure(ControlError(ControlErrorCode.NOT_READY, "设置队列已满"))
+            val operation = SettingOperation(++operationId, attempt.id, setting, snapshot, SettingStage.SUBMITTED)
+            val next = SettingRequest(operation, CompletableDeferred())
+            attempt.pending[operation.id] = next
+            mutableState.update { it.copy(settingOperations = (it.settingOperations + operation).takeLast(64), lastError = null) }
+            check(attempt.commands.trySend(next).isSuccess)
+            next
+        }
+        return request.result.await()
+    }
+
+    private fun validateNoiseSetting(profile: ModelProfile, setting: DeviceSetting, value: FieldValue): ControlError? {
+        val noise = noiseControlCapabilities(profile, firmware())
+        val valid = when (setting) {
+            DeviceSetting.NOISE_MODE -> {
+                if (value is FieldValue.Text && value.value !in noise.modes) {
+                    return ControlError(ControlErrorCode.UNSUPPORTED, "该型号不支持 ${value.value} 模式")
+                }
+                value is FieldValue.Text
+            }
+            DeviceSetting.ANC_LEVEL, DeviceSetting.TRANSPARENCY_LEVEL -> value is FieldValue.Number && value.value in noise.levels
+            DeviceSetting.NOISE_CYCLE -> value is FieldValue.NoiseCycle && value.flags.keys == noise.cycleModes &&
+                value.flags.values.all { it != null } && value.flags.values.count { it == true } >= noise.minimumCycleSelections
+            else -> return ControlError(ControlErrorCode.UNSUPPORTED, "${setting.name} 尚不支持写入")
+        }
+        return if (valid) null else ControlError(ControlErrorCode.INVALID_ARGUMENT, "${setting.name} 参数无效")
+    }
+
+    private suspend fun runSettings(attempt: Attempt) {
+        for (request in attempt.commands) {
+            if (request.result.isCompleted) continue
+            val result = try {
+                applySetting(attempt, request)
+            } catch (cancelled: CancellationException) {
+                if (cancelled !is TimeoutCancellationException) throw cancelled
+                settingFailure(attempt, request, ControlError(ControlErrorCode.TIMEOUT, "设置或设备回读超时"), SettingStage.TIMED_OUT)
+            } catch (cause: Exception) {
+                val code = when (cause) {
+                    is LinkEnded -> ControlErrorCode.DISCONNECTED
+                    is UnsupportedOperationException -> ControlErrorCode.UNSUPPORTED
+                    is IllegalArgumentException -> ControlErrorCode.INVALID_ARGUMENT
+                    else -> ControlErrorCode.FAILED
+                }
+                settingFailure(attempt, request, ControlError(code, cause.message ?: "设置失败"),
+                    if (code == ControlErrorCode.DISCONNECTED) SettingStage.DISCONNECTED else SettingStage.FAILED)
+            }
+            lifecycle.withLock {
+                attempt.pending.remove(request.operation.id)
+                request.result.complete(result)
+                val error = (result as? OperationResult.Failure)?.error
+                if (active === attempt && error?.code in setOf(ControlErrorCode.TIMEOUT, ControlErrorCode.FAILED)) {
+                    // Neither protocol correlates a late readback with a transaction. End this
+                    // link before another setting can consume an old response or native write.
+                    clearActive()
+                    mutableState.update { it.copy(lastError = error) }
+                }
+            }
+        }
+    }
+
+    private suspend fun applySetting(attempt: Attempt, request: SettingRequest): OperationResult {
+        val link = attempt.connection ?: throw LinkEnded()
+        val operation = request.operation
+        val prepared = attempt.codec.prepareSetting(operation.setting, operation.requestedValue, firmware())
+        if ((prepared.writeFrames + listOf(prepared.readback.bytes)).any { it.size > link.maxWriteSize }) {
+            throw UnsupportedOperationException("完整协议设置或回读超出传输写入容量")
+        }
+        for (frame in prepared.writeFrames) writePaced(attempt, link, frame)
+        settingStage(attempt, request, SettingStage.WRITTEN)
+        // Take the baseline after pacing so a setter ACK cannot satisfy the readback.
+        pace(attempt)
+        ensureActive(attempt)
+        val baseline = attempt.progress.value
+        withTimeout(timing.queryTimeoutMillis) { link.write(prepared.readback.bytes.copyOf()) }
+        val observed = withTimeoutOrNull(timing.queryTimeoutMillis) {
+            attempt.progress.first { progress ->
+                progress.ended || (prepared.readback.responseKeys.all { (progress.keyRevisions[it] ?: 0) > (baseline.keyRevisions[it] ?: 0) } &&
+                    prepared.expectedValues.keys.all { field ->
+                        (progress.fieldRevisions[field] ?: 0) > (baseline.fieldRevisions[field] ?: 0) &&
+                            state.value.device?.fields?.get(field) is FieldReading.Known
+                    })
+            }
+        }
+        if (observed?.ended == true) throw LinkEnded()
+        ensureActive(attempt)
+        if (observed == null) return settingFailure(attempt, request, ControlError(ControlErrorCode.TIMEOUT, "未收到有效的设置回读"), SettingStage.TIMED_OUT)
+        val actual = requireNotNull(state.value.device).fields
+        return if (prepared.expectedValues.all { (field, expected) -> (actual[field] as? FieldReading.Known)?.value == expected }) {
+            settingStage(attempt, request, SettingStage.CONFIRMED)
+            OperationResult.Success
+        } else settingFailure(attempt, request, ControlError(ControlErrorCode.NOT_APPLIED, "设备回读与请求不一致"), SettingStage.NOT_APPLIED)
+    }
+
+    private fun ensureActive(attempt: Attempt) {
+        if (state.value.device?.sessionId != attempt.id || state.value.connection is ConnectionState.Disconnected || attempt.progress.value.ended) throw LinkEnded()
+    }
+
+    private suspend fun pace(attempt: Attempt) {
+        if (attempt.hasWritten) delay(if (attempt.candidate.profile == ModelProfile.I5_ZT) timing.i5WriteIntervalMillis else timing.i7WriteIntervalMillis)
+        attempt.hasWritten = true
+    }
+
+    private suspend fun writePaced(attempt: Attempt, link: ControlConnection, bytes: ByteArray) {
+        check(bytes.size <= link.maxWriteSize) { "完整协议报文超出传输写入容量" }
+        pace(attempt)
+        ensureActive(attempt)
+        withTimeout(timing.queryTimeoutMillis) { link.write(bytes.copyOf()) }
+    }
+
+    private fun settingStage(attempt: Attempt, request: SettingRequest, stage: SettingStage, error: ControlError? = null) {
+        mutableState.update { current ->
+            if (current.device?.sessionId != attempt.id || request.result.isCompleted) current
+            else current.copy(settingOperations = current.settingOperations.map {
+                if (it.id == request.operation.id) it.copy(stage = stage, error = error) else it
+            }, lastError = error)
+        }
+    }
+
+    private fun settingFailure(attempt: Attempt, request: SettingRequest, error: ControlError, stage: SettingStage): OperationResult.Failure {
+        settingStage(attempt, request, stage, error)
+        return OperationResult.Failure(error)
+    }
+
+    /** Caller holds lifecycle; complete every waiter before cancelling the owned worker. */
+    private fun endSettings(attempt: Attempt) {
+        val error = ControlError(ControlErrorCode.DISCONNECTED, "连接会话已结束")
+        val ids = attempt.pending.keys.toSet()
+        mutableState.update { current -> current.copy(settingOperations = current.settingOperations.map {
+            if (it.id in ids) it.copy(stage = SettingStage.DISCONNECTED, error = error) else it
+        }) }
+        attempt.pending.values.forEach { it.result.complete(OperationResult.Failure(error)) }
+        attempt.pending.clear()
+        attempt.commands.close()
+        attempt.commandWorker?.cancel()
+    }
+
+    private fun firmware(): FieldValue.Firmware? = (state.value.device?.fields?.get(DeviceField.FIRMWARE) as? FieldReading.Known)?.value as? FieldValue.Firmware
+
+    private fun capabilities(profile: ModelProfile, firmware: FieldValue.Firmware?) = DeviceCapabilities(
+        profile.supportedFields,
+        setOf(DeviceSetting.NOISE_MODE, DeviceSetting.ANC_LEVEL, DeviceSetting.TRANSPARENCY_LEVEL, DeviceSetting.NOISE_CYCLE),
+        noiseControlCapabilities(profile, firmware),
+    )
+
+    private fun FieldValue.snapshot(): FieldValue = when (this) {
+        is FieldValue.NoiseCycle -> copy(flags = flags.toMap())
+        is FieldValue.IntegerList -> copy(values = values.toList())
+        is FieldValue.Firmware -> copy(parts = parts.toList())
+        is FieldValue.TouchKeys -> copy(bindings = bindings.toList())
+        else -> this
     }
 
     private suspend fun openAndRead(attempt: Attempt): OperationResult {
         val candidate = attempt.candidate
         val profile = requireNotNull(candidate.profile)
-        val codec = createProtocolCodec(profile)
+        val codec = attempt.codec
         var connection: ControlConnection? = null
         var ready = false
         try {
@@ -162,7 +334,7 @@ class ControlSession(
                 if (active !== attempt) throw CancellationException("Stale connection")
                 attempt.connection = opened
             }
-            val progress = MutableStateFlow(ReadProgress())
+            val progress = attempt.progress
             val link = opened
             attempt.observer = scope.launch(start = CoroutineStart.UNDISPATCHED) {
                 var error = ControlError(ControlErrorCode.DISCONNECTED, "设备已断开")
@@ -172,13 +344,21 @@ class ControlSession(
                         updateAttempt(attempt) { current ->
                             val old = requireNotNull(current.device)
                             val readings = parsed.flatMap { it.readings.entries }.associate { it.toPair() }
+                            val firmware = ((readings[DeviceField.FIRMWARE] ?: old.fields[DeviceField.FIRMWARE]) as? FieldReading.Known)?.value as? FieldValue.Firmware
                             current.copy(device = old.copy(fields = old.fields + readings,
+                                capabilities = capabilities(profile, firmware),
                                 fieldErrors = old.fieldErrors - readings.keys,
                                 rawNotifications = (old.rawNotifications + bytes.hex()).takeLast(128),
                                 unknownNotifications = (old.unknownNotifications + parsed.filter { !it.accepted }.map { it.rawHex }).takeLast(128),
                                 warnings = (old.warnings + parsed.flatMap { it.warnings }).takeLast(128)))
                         }
-                        progress.update { previous -> previous.copy(keys = previous.keys + parsed.flatMap { it.responseKeys }, meaningful = previous.meaningful || parsed.any { it.accepted }) }
+                        progress.update { previous ->
+                            val keys = parsed.flatMap { it.responseKeys }.toSet()
+                            val fields = parsed.flatMap { it.readings.keys }.toSet()
+                            previous.copy(keys = previous.keys + keys, meaningful = previous.meaningful || parsed.any { it.accepted },
+                                keyRevisions = previous.keyRevisions + keys.associateWith { (previous.keyRevisions[it] ?: 0) + 1 },
+                                fieldRevisions = previous.fieldRevisions + fields.associateWith { (previous.fieldRevisions[it] ?: 0) + 1 })
+                        }
                     }
                 } catch (cancelled: CancellationException) {
                     throw cancelled
@@ -189,6 +369,7 @@ class ControlSession(
                     withContext(NonCancellable) {
                         lifecycle.withLock {
                             if (active === attempt) {
+                                endSettings(attempt)
                                 active = null
                                 updateAttempt(attempt) { if (it.connection is ConnectionState.Disconnected) it else it.copy(connection = ConnectionState.Disconnected, device = null, lastError = error) }
                             }
@@ -201,10 +382,8 @@ class ControlSession(
             withTimeout(timing.connectTimeoutMillis) { opened.subscribe() }
             phase(attempt, ConnectionPhase.INITIALIZING)
             val queries = codec.initQueries(opened.maxWriteSize)
-            for ((index, query) in queries.withIndex()) {
-                check(query.bytes.size <= opened.maxWriteSize) { "完整协议查询超出传输写入容量" }
-                if (index > 0) delay(if (profile == ModelProfile.I5_ZT) timing.i5WriteIntervalMillis else timing.i7WriteIntervalMillis)
-                withTimeout(timing.queryTimeoutMillis) { opened.write(query.bytes.copyOf()) }
+            for (query in queries) {
+                writePaced(attempt, opened, query.bytes)
                 val observed = withTimeoutOrNull(timing.queryTimeoutMillis) {
                     progress.first { it.ended || it.keys.containsAll(query.responseKeys) }
                 }
@@ -229,6 +408,7 @@ class ControlSession(
             updateAttempt(attempt) { it.copy(connection = ConnectionState.Connected(candidate.deviceId, attempt.id, profile)) }
             ready = (state.value.connection as? ConnectionState.Connected)?.sessionId == attempt.id
             if (!ready) throw LinkEnded()
+            attempt.commandWorker = scope.launch { runSettings(attempt) }
             return OperationResult.Success
         } catch (cancelled: CancellationException) {
             if (cancelled !is TimeoutCancellationException) {
@@ -253,7 +433,13 @@ class ControlSession(
         }
     }
 
-    private data class ReadProgress(val keys: Set<String> = emptySet(), val meaningful: Boolean = false, val ended: Boolean = false)
+    private data class ReadProgress(
+        val keys: Set<String> = emptySet(),
+        val meaningful: Boolean = false,
+        val ended: Boolean = false,
+        val keyRevisions: Map<String, Long> = emptyMap(),
+        val fieldRevisions: Map<DeviceField, Long> = emptyMap(),
+    )
 
     private class LinkEnded : Exception("设备连接已结束")
 
@@ -276,6 +462,7 @@ class ControlSession(
         active = null
         generation++
         mutableState.update { it.copy(connection = ConnectionState.Disconnected, device = null) }
+        previous?.let { endSettings(it) }
         previous?.task?.cancel()
         previous?.observer?.cancel()
         previous?.connection?.let { closeSafely(it) }

@@ -1,15 +1,50 @@
 package io.github.dohex.openrose.core.protocol
 
+import io.github.dohex.openrose.core.DeviceSetting
+
 internal class I5Codec : ProtocolCodec {
     override val profile = ModelProfile.I5_ZT
 
+    override fun prepareSetting(setting: DeviceSetting, value: FieldValue, firmware: FieldValue.Firmware?): ProtocolSetting {
+        val expected = if (setting == DeviceSetting.NOISE_CYCLE) validatedNoiseCycle(value) else value
+        val (writeKey, readKey, payload) = when (setting) {
+            DeviceSetting.NOISE_MODE -> {
+                require(value is FieldValue.Text) { "降噪模式需要模式名称" }
+                val mode = mapOf("anc" to "01000000", "normal" to "00010000", "wind" to "00000100", "transparency" to "00000001")[value.value]
+                    ?: throw UnsupportedOperationException("i5 不支持该降噪模式")
+                Triple("0682", "0602", mode.bytes())
+            }
+            DeviceSetting.ANC_LEVEL, DeviceSetting.TRANSPARENCY_LEVEL -> {
+                require(value is FieldValue.Number) { "档位需要整数" }
+                val level = listOf(1, 3, 5).indexOf(value.value)
+                require(level >= 0) { "i5 档位仅支持 1、3、5" }
+                if (setting == DeviceSetting.ANC_LEVEL) Triple("0687", "0607", byteArrayOf(level.toByte()))
+                else Triple("0684", "0604", byteArrayOf(level.toByte()))
+            }
+            DeviceSetting.NOISE_CYCLE -> {
+                val flags = (expected as FieldValue.NoiseCycle).flags
+                Triple("0685", "0605", listOf("normal", "transparency", "wind", "anc").map { if (flags.getValue(it) == true) 1.toByte() else 0.toByte() }.toByteArray())
+            }
+            else -> throw UnsupportedOperationException("i5 不支持此设置")
+        }
+        return ProtocolSetting(
+            listOf(frame(writeKey, payload)),
+            query(readKey),
+            mapOf(i5Fields.getValue(readKey).single() to expected),
+        )
+    }
+
+    private fun frame(key: String, payload: ByteArray = byteArrayOf()): ByteArray {
+        val length = payload.size + 10
+        val prefix = "08ee000000$key".bytes() + byteArrayOf(length.toByte(), (length shr 8).toByte()) + payload
+        return prefix + byteArrayOf((prefix.sumOf { it.u() } and 255).toByte())
+    }
+
+    private fun query(key: String) = ProtocolQuery(key, frame(key), setOf(key), i5Fields.getValue(key))
+
     override fun initQueries(maxWriteSize: Int): List<ProtocolQuery> {
         require(maxWriteSize >= 10) { "i5 queries require a 10-byte write capacity" }
-        return i5Fields.map { (key, fields) ->
-            val prefix = "08ee000000${key}0a00".bytes()
-            val packet = prefix + byteArrayOf((prefix.sumOf { it.u() } and 255).toByte())
-            ProtocolQuery(key, packet, setOf(key), fields)
-        }
+        return i5Fields.keys.map(::query)
     }
 
     override fun feedNotification(bytes: ByteArray): List<ProtocolReply> {

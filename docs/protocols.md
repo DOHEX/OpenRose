@@ -1,6 +1,6 @@
 # i5 / i7 读取协议与证据
 
-实现日期：2026-10-18。范围为 [#3](https://github.com/DOHEX/OpenRose/issues/3) 和 [#4](https://github.com/DOHEX/OpenRose/issues/4) 的读取协议边界。`core.protocol.ProtocolCodec` 是纯 Kotlin 会话实例；平台传输负责扫描、GATT、订阅和串行写入，协议负责识别、初始化报文和状态解析。本实现没有设置或 OTA 发送入口。
+读取实现日期：2026-10-18。读取范围为 [#3](https://github.com/DOHEX/OpenRose/issues/3) 和 [#4](https://github.com/DOHEX/OpenRose/issues/4)。2026-10-19 新增 [#5](https://github.com/DOHEX/OpenRose/issues/5)、[#6](https://github.com/DOHEX/OpenRose/issues/6) 的降噪设置协议，见文末。`core.protocol.ProtocolCodec` 是纯 Kotlin 会话实例；平台传输负责扫描、GATT、订阅和串行写入，协议负责识别、初始化报文和状态解析。没有 OTA 发送入口。
 
 ## 来源与实测边界
 
@@ -58,3 +58,24 @@ RX 为 `DD opaqueHH [L T V...]... CS AA`，`L=1+V长度`。接受研究中看到
 `Loading`、`Known`、`Unknown` 和 `NotProvided` 分开表达。每个回包保留完整 rawHex，每个读取项保留自己的原始字节。字段未知、长度错误和未提供均不会变成默认关闭或默认数值。仅得到 NotProvided 或电池原始标志不能建立协议就绪。
 
 i5 请求按命令键匹配；i7 按实际收到的可识别记录类型集合匹配，发送序号和 RX HH 不参与业务确认。共享未知 ID 不被当作必须返回的本型号字段。平台层负责单一所有者、串行请求、超时、断开清理和会话标识隔离；编解码器不会自行假定 GATT 写完成等于状态已读。
+
+## 降噪设置协议（#5 / #6）
+
+`prepareSetting(setting, value, firmware)` 返回有序 `writeFrames`、独立的 `readback` 查询以及 `expectedValues`。它只构造协议计划，不修改已确认设备状态。会话在同一发送队列中执行设置和读取；底层写入完成不等于设备确认。i5 仅把已知读取命令当作状态来源，不把 `0682` 等设置操作码清除 `80` 后当成确认。i7 仍按收到的字段类型和真实值确认，不使用 opaque HH。
+
+| 设置 | i5 ZT | i7 RS V2 | 读取确认 |
+| --- | --- | --- | --- |
+| 降噪模式 | `0682` + ANC `01000000`、普通 `00010000`、抗风 `00000100`、通透 `00000001` | `09` + ANC `01`、普通 `02`、通透 `03`、抗风 `04`、自动 `05`、动态 `07` | i5 `0602`；i7 `FA09` |
+| ANC 档位 | `0687` + `00/01/02` 对应界面 `1/3/5` | `2C` + `01/03/05` | i5 `0607`；i7 `FA2C` |
+| 通透档位 | `0684` + `00/01/02` 对应界面 `1/3/5` | `2D` + `01/03/05` | i5 `0604`；i7 `FA2D` |
+| 触摸降噪轮换 | `0685` + 普通 / 通透 / 抗风 / ANC 四个 `00/01` | `36` + ANC / 抗风 / 普通 / 通透 四个 `00/01` | i5 `0605`；i7 `FA36` |
+
+`NoiseControlCapabilities` 将型号设置能力与 `supportedFields` 分开。i5 不开放共享发送器的自动 ANC；i7 不开放共享深度 ANC `06`。已恢复 i7 型号配置在 `0x681fd4..0x682010` 创建自动与动态 ANC 控件，没有这些控件的固件门槛；因此未知固件不单独关闭这两项，也不借用 EAP 的 152 或增益的 213 门槛。这只描述 RoseLink 3.8.0 的型号配置，不证明所有硬件固件组合均已验证。相关来源为 `rose_reverse/docs/earfeel-i7-protocol.md` 第 1、4.5 节，以及 `analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/earfeel_i7_device_config.dart`。
+
+轮换输入必须明确包含四种常规模式和四个非未知布尔值，拒绝遗漏、额外模式和未知开关。恢复的公共轮换 UI 在 `0xb8c758..0xb8ca0c` 先建立四个 `0`，把选中项改为 `1`，随后直接调用 `setAncLine`，发送器也没有最小选中数检查；客户端因此不额外发明至少选一项或两项的规则，`minimumCycleSelections=0`。空轮换的设备接纳与实际触摸效果仍待实测。来源为 `analysis/blutter/asm/roselink/modules/device_control/widget/device_anc_line_panel_item.dart` 与两个发送器的 `setAncLine`。
+
+i7 自动与动态 ANC 作为模式选择。离开自动模式时明确发送用户选择的目标模式，并保留设备读回的实际状态；不复制厂商关闭开关发送抗风 `0904` 却立刻乐观显示 ANC 的行为。若读回结果与目标不同，会话可记录未应用，而不能把目标值写入已确认状态。
+
+所有参数检查都发生在构造设置帧前；非法类型、档位或轮换参数抛出 `IllegalArgumentException`，不支持的设置或模式抛出 `UnsupportedOperationException`，由会话转换为明确的公开操作结果。i7 初始化、设置及读取确认共用同一个编解码器序号；无效请求不消耗序号，断开重置仍从 `00` 开始。i5 最大设置帧 14 字节，i7 轮换设置最大 10 字节，不分割完整设置帧。
+
+`NoiseProtocolTest` 使用上述独立 APK 提取的完整固定 TX 字面值，以及研究参考测试和已恢复参数映射的独立动态例子。覆盖四种 i5 模式、六种 i7 模式、各档位、型号轮换线序、确认查询、非法参数、未知轮换、不支持选项、输入快照、序号连续 / 回绕 / 重置；RX 示例明确为合成数据。实际设置回包时序、持久化、自动模式表现与固件矩阵未获得本次实机证据。用户当前无法提供 i5 / 小米 14（HyperOS 4），本次继续实现与离线验证；已有 i5 初始化读取记录不扩大为设置验收通过，i7 仍无设备实测。

@@ -1,9 +1,11 @@
 package io.github.dohex.openrose.core.protocol
 
+import io.github.dohex.openrose.core.DeviceSetting
+
 data class GattProfile(val serviceUuid: String, val writeUuid: String, val notifyUuid: String)
 
 enum class ModelProfile(val displayName: String, val manufacturerPrefix: String, val gatt: GattProfile) {
-    I5_ZT("EarFeel i5", "525300010001", GattProfile(
+    I5_ZT("EarFree i5", "525300010001", GattProfile(
         "011bf5da-0000-1000-8000-00805f9b34fb",
         "00007777-0000-1000-8000-00805f9b34fb", "00008888-0000-1000-8000-00805f9b34fb",
     )),
@@ -80,6 +82,13 @@ data class ProtocolQuery(
     val expectedFields: Set<DeviceField>,
 )
 
+/** A write plan and the independent state read used to confirm its result. */
+data class ProtocolSetting(
+    val writeFrames: List<ByteArray>,
+    val readback: ProtocolQuery,
+    val expectedValues: Map<DeviceField, FieldValue>,
+)
+
 data class ProtocolReply(
     val rawHex: String,
     val responseKeys: Set<String> = emptySet(),
@@ -99,6 +108,8 @@ private val batteryFlags = setOf(DeviceField.LEFT_CHARGING, DeviceField.RIGHT_CH
 interface ProtocolCodec {
     val profile: ModelProfile
     fun initQueries(maxWriteSize: Int): List<ProtocolQuery>
+    fun prepareSetting(setting: DeviceSetting, value: FieldValue, firmware: FieldValue.Firmware? = null): ProtocolSetting =
+        throw UnsupportedOperationException("该型号尚未实现此设置")
     fun feedNotification(bytes: ByteArray): List<ProtocolReply>
     fun reset()
 }
@@ -111,6 +122,14 @@ fun createProtocolCodec(profile: ModelProfile): ProtocolCodec = when (profile) {
 internal fun ByteArray.hex(): String = joinToString("") { it.u().toString(16).padStart(2, '0') }
 internal fun Byte.u(): Int = toInt() and 255
 internal fun String.bytes(): ByteArray = chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+
+internal fun validatedNoiseCycle(value: FieldValue): FieldValue.NoiseCycle {
+    require(value is FieldValue.NoiseCycle) { "轮换需要四种模式的明确开关" }
+    val flags = value.flags.toMap()
+    require(flags.keys == setOf("normal", "transparency", "wind", "anc")) { "轮换必须包含普通、通透、抗风和 ANC 四项" }
+    require(flags.values.all { it != null }) { "轮换不能包含未知开关" }
+    return FieldValue.NoiseCycle(flags)
+}
 
 internal val i5Fields = linkedMapOf(
     "0101" to setOf(DeviceField.LEFT_BATTERY, DeviceField.RIGHT_BATTERY, DeviceField.CASE_BATTERY, DeviceField.LEFT_CHARGING, DeviceField.RIGHT_CHARGING),

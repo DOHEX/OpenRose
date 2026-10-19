@@ -32,7 +32,7 @@ internal fun displayFieldValue(field: DeviceField, value: FieldValue): String = 
 
 private val batteryFields = setOf(DeviceField.LEFT_BATTERY, DeviceField.RIGHT_BATTERY, DeviceField.CASE_BATTERY)
 
-private fun semanticLabel(value: String): String = when (value) {
+internal fun semanticLabel(value: String): String = when (value) {
     "anc" -> "主动降噪"
     "normal" -> "标准模式"
     "wind" -> "抗风噪"

@@ -47,6 +47,7 @@ fun main() {
                 onStopScan = {},
                 onConnect = {},
                 onDisconnect = {},
+                onSet = { _, _ -> },
             )
         }
     }

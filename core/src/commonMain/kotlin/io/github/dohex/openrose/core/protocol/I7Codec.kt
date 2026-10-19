@@ -1,22 +1,57 @@
 package io.github.dohex.openrose.core.protocol
 
+import io.github.dohex.openrose.core.DeviceSetting
+
 internal class I7Codec : ProtocolCodec {
     override val profile = ModelProfile.I7_RS_V2
     private var sequence = 0
     private var buffer = byteArrayOf()
     private val infoTypes = "010708090c0d0e122a2b2c2d2e2f313233363738393a3b3c3d3f454649".bytes()
 
+    override fun prepareSetting(setting: DeviceSetting, value: FieldValue, firmware: FieldValue.Firmware?): ProtocolSetting {
+        val expected = if (setting == DeviceSetting.NOISE_CYCLE) validatedNoiseCycle(value) else value
+        val (type, payload) = when (setting) {
+            DeviceSetting.NOISE_MODE -> {
+                require(value is FieldValue.Text) { "降噪模式需要模式名称" }
+                val mode = mapOf("anc" to 1, "normal" to 2, "transparency" to 3, "wind" to 4, "auto" to 5, "dynamic" to 7)[value.value]
+                    ?: throw UnsupportedOperationException("i7 不支持该降噪模式")
+                9.toByte() to byteArrayOf(mode.toByte())
+            }
+            DeviceSetting.ANC_LEVEL, DeviceSetting.TRANSPARENCY_LEVEL -> {
+                require(value is FieldValue.Number) { "档位需要整数" }
+                require(value.value in setOf(1, 3, 5)) { "i7 档位仅支持 1、3、5" }
+                (if (setting == DeviceSetting.ANC_LEVEL) 0x2c else 0x2d).toByte() to byteArrayOf(value.value.toByte())
+            }
+            DeviceSetting.NOISE_CYCLE -> {
+                val flags = (expected as FieldValue.NoiseCycle).flags
+                0x36.toByte() to listOf("anc", "wind", "normal", "transparency").map { if (flags.getValue(it) == true) 1.toByte() else 0.toByte() }.toByteArray()
+            }
+            else -> throw UnsupportedOperationException("i7 不支持此设置")
+        }
+        // Validation precedes both sequence allocations, so rejected settings consume no sequence.
+        val key = byteArrayOf(type).hex()
+        return ProtocolSetting(
+            listOf(frame(byteArrayOf(type) + payload)),
+            query(byteArrayOf(type)),
+            mapOf(i7Fields.getValue(key).single() to expected),
+        )
+    }
+
+    private fun frame(body: ByteArray): ByteArray {
+        val prefix = byteArrayOf(0xff.toByte(), sequence.toByte(), body.size.toByte()) + body
+        sequence = (sequence + 1) and 255
+        return prefix + byteArrayOf((prefix.sumOf { it.u() } and 255).toByte(), 0xaa.toByte())
+    }
+
+    private fun query(ids: ByteArray): ProtocolQuery {
+        val keys = ids.map { byteArrayOf(it).hex() }.filter { it in i7Fields }.toSet()
+        return ProtocolQuery("fa" + ids.hex(), frame(byteArrayOf(0xfa.toByte()) + ids), keys, keys.flatMap { i7Fields.getValue(it) }.toSet())
+    }
+
     override fun initQueries(maxWriteSize: Int): List<ProtocolQuery> {
         require(maxWriteSize >= 7) { "i7 queries require at least a 7-byte write capacity" }
         val groups = infoTypes.toList().chunked(maxWriteSize - 6)
-        return (groups + listOf(listOf(0x3e.toByte()))).map { ids ->
-            val body = byteArrayOf(0xfa.toByte()) + ids.toByteArray()
-            val prefix = byteArrayOf(0xff.toByte(), sequence.toByte(), body.size.toByte()) + body
-            val packet = prefix + byteArrayOf((prefix.sumOf { it.u() } and 255).toByte(), 0xaa.toByte())
-            sequence = (sequence + 1) and 255
-            val keys = ids.map { byteArrayOf(it).hex() }.filter { it in i7Fields }.toSet()
-            ProtocolQuery("fa" + ids.toByteArray().hex(), packet, keys, keys.flatMap { i7Fields.getValue(it) }.toSet())
-        }
+        return (groups + listOf(listOf(0x3e.toByte()))).map { query(it.toByteArray()) }
     }
 
     override fun feedNotification(bytes: ByteArray): List<ProtocolReply> {

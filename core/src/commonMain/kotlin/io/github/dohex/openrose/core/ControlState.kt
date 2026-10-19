@@ -1,6 +1,7 @@
 package io.github.dohex.openrose.core
 
 import io.github.dohex.openrose.core.protocol.DeviceField
+import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.dohex.openrose.core.protocol.FieldReading
 import io.github.dohex.openrose.core.protocol.ModelProfile
 import io.github.dohex.openrose.core.transport.DeviceId
@@ -54,7 +55,7 @@ data class DeviceCandidate(
 )
 
 enum class ControlErrorCode {
-    PERMISSION_REQUIRED, TRANSPORT_UNAVAILABLE, NOT_READY, UNSUPPORTED, TIMEOUT, DISCONNECTED, FAILED,
+    PERMISSION_REQUIRED, TRANSPORT_UNAVAILABLE, NOT_READY, UNSUPPORTED, INVALID_ARGUMENT, NOT_APPLIED, TIMEOUT, DISCONNECTED, FAILED,
 }
 
 data class ControlError(val code: ControlErrorCode, val message: String)
@@ -64,12 +65,24 @@ sealed interface OperationResult {
     data class Failure(val error: ControlError) : OperationResult
 }
 
-/** Setting support remains empty until a model's write and confirmation behavior is implemented. */
-enum class DeviceSetting { NOISE_MODE, EQ, GAME_MODE, AUDIO_MODE, MULTIPOINT, TOUCH_ENABLED, EAR_DETECTION }
+enum class DeviceSetting { NOISE_MODE, ANC_LEVEL, TRANSPARENCY_LEVEL, NOISE_CYCLE, EQ, GAME_MODE, AUDIO_MODE, MULTIPOINT, TOUCH_ENABLED, EAR_DETECTION }
+
+/** Transport acceptance and device state confirmation are separate facts. */
+enum class SettingStage { SUBMITTED, WRITTEN, CONFIRMED, NOT_APPLIED, TIMED_OUT, DISCONNECTED, FAILED }
+
+data class SettingOperation(
+    val id: Long,
+    val sessionId: Long,
+    val setting: DeviceSetting,
+    val requestedValue: FieldValue,
+    val stage: SettingStage,
+    val error: ControlError? = null,
+)
 
 data class DeviceCapabilities(
     val readableFields: Set<DeviceField>,
     val writableSettings: Set<DeviceSetting> = emptySet(),
+    val noiseControl: NoiseControlCapabilities? = null,
 )
 
 data class DeviceState(
@@ -93,4 +106,6 @@ data class ControlState(
     val candidates: List<DeviceCandidate> = emptyList(),
     val device: DeviceState? = null,
     val lastError: ControlError? = null,
+    /** Recent operations, including terminal outcomes across a disconnect. */
+    val settingOperations: List<SettingOperation> = emptyList(),
 )

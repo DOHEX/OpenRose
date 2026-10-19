@@ -51,6 +51,7 @@ class MainActivity : ComponentActivity() {
                 onStopScan = owner::stopScan,
                 onConnect = owner::connect,
                 onDisconnect = owner::disconnect,
+                onSet = owner::applySetting,
             )
         }
     }
