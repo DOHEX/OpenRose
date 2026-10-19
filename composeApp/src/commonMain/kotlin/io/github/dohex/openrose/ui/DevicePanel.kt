@@ -33,6 +33,8 @@ import io.github.dohex.openrose.core.protocol.FieldReading
 import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.dohex.openrose.core.protocol.ModelProfile
 import io.github.dohex.openrose.core.transport.DeviceId
+import io.github.dohex.openrose.core.transport.TransportEndpoint
+import io.github.dohex.openrose.core.transport.TransportSelectionReason
 
 @Composable
 internal fun DevicePanel(
@@ -93,6 +95,22 @@ internal fun DevicePanel(
                     Spacer(Modifier.height(16.dp))
                     AppButton("断开连接", onDisconnect)
                 }
+            }
+            state.transportSelection?.let { selection ->
+                Spacer(Modifier.height(12.dp))
+                AppText(when (selection.endpoint) {
+                    is TransportEndpoint.BleGatt -> "控制连接：BLE"
+                    is TransportEndpoint.SppRfcomm -> "控制连接：蓝牙串口（SPP）"
+                })
+                AppText(when (selection.reason) {
+                    TransportSelectionReason.MODEL_BLE_ONLY -> "此型号使用 BLE 控制"
+                    TransportSelectionReason.FORCED_BLE -> "本次连接使用强制 BLE 偏好"
+                    TransportSelectionReason.SPP_UNAVAILABLE -> "当前平台未提供蓝牙串口控制"
+                    TransportSelectionReason.CLASSIC_ADDRESS_UNAVAILABLE -> "尚无可用的蓝牙串口地址"
+                    TransportSelectionReason.AUDIO_PROFILE_UNKNOWN -> "无法确认音频连接类型，使用 BLE"
+                    TransportSelectionReason.LE_AUDIO -> "已检测到 LE Audio 音频连接，使用 BLE"
+                    TransportSelectionReason.CLASSIC_AUDIO -> "已确认传统蓝牙音频连接，可使用串口控制"
+                }, secondary = true)
             }
             state.lastError?.let { error ->
                 if ((state.scan as? ScanState.Failed)?.error != error) {

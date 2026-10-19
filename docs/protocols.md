@@ -187,3 +187,15 @@ i7 的 `EqualizerCapabilities.custom` 提供界面所列频段 `20/100/300/500/1
 TX 字面值取自独立静态提取 `analysis/i7_sender_commands.json` 和其对应汇编 Sender；当前不具备 i7 实机，不能称设置写入或回读已通过硬件验收。实现不增加提示音语言切换或 OTA 入口。
 
 `AdvancedAudioProtocolTest` 用独立 TX 字面值检查两条 EQ 写入、`FA2A` / `FA3E` 和 45/46/2E 各值；另验证整条计划无效时不分配序号、固件门槛和 raw-preserving RX。custom、custom_slot 与曲线接收例均为合成缓冲区，不是实机抓包。
+
+## i7 控制传输选择（#15）
+
+广播规范化沿用排序后先拼所有 company ID（LE16）、再拼所有 payload 的规则。只有已识别的 i7、规范化十六进制串长度至少 34，且 `H[14:16] == "01"`，才使用 `H[22:34]` 作为 BR 地址；六个字节按原顺序转为大写冒号格式，不倒序。全零、全 FF 不提供地址。扫描 `DeviceId` 保持原身份，BLE 使用扫描标识，SPP 使用单独的 BR 地址，不把任意发现 ID 当作蓝牙 MAC。该广播尚未经过实机确认，也没有已知校验和或认证机制。
+
+来源为 `/home/dohex/Projects/rose_reverse/docs/earfeel-i7-protocol.md` 第 2 节，及其中记录的 `base_device_config.dart:451..685`、`r_ble_scanner.dart:3737`。`ConnectManager._shouldUseSppControl`（`connect_manager.dart:4614`）要求平台 SPP 可用、型号支持、未强制 BLE、音频 profile 非 LE Audio。`A2dpManager.prefersBleControl` 使用每设备已连接的音频 profile；同一设备出现 LE Audio 时优先该类型，不查询当前 codec 或是否正在播放。因此配置值 LC3、设备名称、设备 type 和 A2DP 是否播放均不能替代音频链路证据。
+
+OpenRose 保留 `UNKNOWN / CLASSIC / LE_AUDIO` 三种平台事实。仅 i7、有可用 BR 地址、SPP 可用、未强制 BLE，且有肯定的传统音频连接证据时选 SPP；其它条件均使用 BLE。Android 查询 A2DP、HEADSET 和 API 33+ 的公开 LE Audio profile；Android 12 / 12L（API 31–32）缺少同一公开 [LE_AUDIO 常量](https://developer.android.com/reference/android/bluetooth/BluetoothProfile#LE_AUDIO)，保守返回未知并使用 BLE，不填入隐藏 profile ID。所需代理未就绪、查询失败、没有目标音频连接或无法按地址关联时保守使用未知。查询结果只用于一次连接的选择；界面设置变化不重新选择当前连接。选择结果及原因公开给状态消费者。
+
+普通控制 UUID 为 **`0cf12d31-fac3-4553-bd80-d6832e7b3931`**，不是标准串口 `1101`，也不是 OTA 的 `66666666-6666-6666-6666-666666666666`。SPP 在同一 socket 读写相同 RS Common V2 控制帧，接收仍按协议流处理分段 / 合并，发送仍由共享队列在本地写完成后间隔 100ms 并等待设备回读。流传输可容纳 35 字节初始化完整帧；BLE 容量不足时继续采用已有完整 FA 查询降级，不随意拆 TX。一次会话只创建一种控制连接；SPP 失败不会在后台自动另开 BLE、重放设置或并发抢占。
+
+Android 使用公开 RFCOMM 接口，连接前取消 discovery，后台执行阻塞连接 / 流读写；取消时关闭 socket，解除阻塞。公开接口依据：[音频 profile 代理](https://developer.android.com/reference/android/bluetooth/BluetoothAdapter#getProfileProxy(android.content.Context,%20android.bluetooth.BluetoothProfile.ServiceListener,%20int))、[LE Audio 已连接设备](https://developer.android.com/reference/android/bluetooth/BluetoothLeAudio#getConnectedDevices())、[BluetoothSocket 的连接与关闭](https://developer.android.com/reference/android/bluetooth/BluetoothSocket)。这些文档支持平台资源处理方式，不构成 i7 实测证据。双传输的离线行为及真实链路边界另见验证记录。

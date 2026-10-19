@@ -38,6 +38,16 @@ object ModelIdentification {
         val normalized = normalizedHex(manufacturerData)
         return ModelProfile.entries.firstOrNull { normalized.startsWith(it.manufacturerPrefix) }
     }
+
+    fun classicAddress(normalizedManufacturerDataHex: String, profile: ModelProfile?): String? {
+        if (profile != ModelProfile.I7_RS_V2 || normalizedManufacturerDataHex.length < 34) return null
+        val normalized = normalizedManufacturerDataHex.uppercase()
+        if (normalized.any { it !in '0'..'9' && it !in 'A'..'F' }) return null
+        if (normalized.substring(14, 16) != "01") return null
+        val octets = normalized.substring(22, 34).chunked(2)
+        if (octets.all { it == "00" } || octets.all { it == "FF" }) return null
+        return octets.joinToString(":")
+    }
 }
 
 enum class DeviceField(val displayName: String) {

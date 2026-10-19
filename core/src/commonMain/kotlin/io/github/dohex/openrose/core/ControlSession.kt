@@ -12,6 +12,10 @@ import io.github.dohex.openrose.core.transport.ControlConnection
 import io.github.dohex.openrose.core.transport.ControlTransport
 import io.github.dohex.openrose.core.transport.DeviceId
 import io.github.dohex.openrose.core.transport.TransportEndpoint
+import io.github.dohex.openrose.core.transport.TransportFacts
+import io.github.dohex.openrose.core.transport.TransportSelection
+import io.github.dohex.openrose.core.transport.TransportSelectionReason
+import io.github.dohex.openrose.core.transport.AudioProfileEvidence
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.CancellationException
@@ -68,7 +72,7 @@ class ControlSession(
     private var operationId = 0L
     private var active: Attempt? = null
 
-    private class Attempt(val id: Long, val candidate: DeviceCandidate) {
+    private class Attempt(val id: Long, val candidate: DeviceCandidate, val forceBle: Boolean) {
         lateinit var task: Deferred<OperationResult>
         var connection: ControlConnection? = null
         var observer: Job? = null
@@ -91,8 +95,10 @@ class ControlSession(
         scanJob = scope.launch(start = CoroutineStart.UNDISPATCHED) {
             try {
                 requireNotNull(transport).scan().collect { advertisement ->
+                    val manufacturerDataHex = ModelIdentification.normalizedHex(advertisement.manufacturerData)
+                    val profile = ModelIdentification.identify(advertisement.manufacturerData)
                     val candidate = DeviceCandidate(advertisement.deviceId, advertisement.name, advertisement.rssi,
-                        ModelIdentification.identify(advertisement.manufacturerData), ModelIdentification.normalizedHex(advertisement.manufacturerData))
+                        profile, manufacturerDataHex, ModelIdentification.classicAddress(manufacturerDataHex, profile))
                     mutableState.update { old -> if (scanEpoch.value == epoch) old.copy(candidates = old.candidates.filterNot { it.deviceId == candidate.deviceId } + candidate) else old }
                 }
                 mutableState.update { if (scanEpoch.value == epoch) it.copy(scan = ScanState.Idle) else it }
@@ -122,12 +128,12 @@ class ControlSession(
         val attempt = lifecycle.withLock {
             active?.takeIf { it.candidate.deviceId == deviceId && state.value.connection !is ConnectionState.Disconnected }?.let { return@withLock it }
             clearActive()
-            val next = Attempt(++generation, candidate)
+            val next = Attempt(++generation, candidate, state.value.settings.forceBle)
             val profile = requireNotNull(candidate.profile)
             mutableState.update {
                 it.copy(connection = ConnectionState.Connecting(deviceId, next.id, ConnectionPhase.CONNECTING),
                     device = DeviceState(deviceId, next.id, profile, capabilities(profile, null), profile.supportedFields.associateWith { FieldReading.Loading }),
-                    lastError = null)
+                    lastError = null, transportSelection = null)
             }
             active = next
             next.task = scope.async(start = CoroutineStart.LAZY) { openAndRead(next) }
@@ -413,10 +419,11 @@ class ControlSession(
         var connection: ControlConnection? = null
         var ready = false
         try {
-            val gatt = profile.gatt
+            val selection = selectTransport(attempt)
+            updateAttempt(attempt) { it.copy(transportSelection = selection) }
             withTimeout(timing.connectTimeoutMillis) {
                 // Keep an acquired handle visible to cleanup even if timeout wins result delivery.
-                connection = requireNotNull(transport).connect(candidate.deviceId, TransportEndpoint.BleGatt(gatt.serviceUuid, gatt.writeUuid, gatt.notifyUuid)) { phase ->
+                connection = requireNotNull(transport).connect(candidate.deviceId, selection.endpoint) { phase ->
                     phase(attempt, phase)
                 }
             }
@@ -462,7 +469,7 @@ class ControlSession(
                             if (active === attempt) {
                                 endSettings(attempt)
                                 active = null
-                                updateAttempt(attempt) { if (it.connection is ConnectionState.Disconnected) it else it.copy(connection = ConnectionState.Disconnected, device = null, lastError = error) }
+                                updateAttempt(attempt) { if (it.connection is ConnectionState.Disconnected) it else it.copy(connection = ConnectionState.Disconnected, device = null, lastError = error, transportSelection = null) }
                             }
                         }
                     }
@@ -493,7 +500,7 @@ class ControlSession(
             if (device == null || state.value.connection is ConnectionState.Disconnected) throw LinkEnded()
             if (!progress.value.meaningful) {
                 val error = ControlError(ControlErrorCode.TIMEOUT, "没有收到可用的设备状态")
-                updateAttempt(attempt) { it.copy(connection = ConnectionState.Disconnected, lastError = error) }
+                updateAttempt(attempt) { it.copy(connection = ConnectionState.Disconnected, lastError = error, transportSelection = null) }
                 return OperationResult.Failure(error)
             }
             updateAttempt(attempt) { it.copy(connection = ConnectionState.Connected(candidate.deviceId, attempt.id, profile)) }
@@ -504,23 +511,59 @@ class ControlSession(
         } catch (cancelled: CancellationException) {
             if (cancelled !is TimeoutCancellationException) {
                 updateAttempt(attempt) { it.copy(connection = ConnectionState.Disconnected, device = null,
-                    lastError = ControlError(ControlErrorCode.DISCONNECTED, "控制会话已结束")) }
+                    lastError = ControlError(ControlErrorCode.DISCONNECTED, "控制会话已结束"), transportSelection = null) }
                 throw cancelled
             }
             val error = ControlError(ControlErrorCode.TIMEOUT, "蓝牙连接或读取超时")
-            updateAttempt(attempt) { it.copy(connection = ConnectionState.Disconnected, lastError = error) }
+            updateAttempt(attempt) { it.copy(connection = ConnectionState.Disconnected, lastError = error, transportSelection = null) }
             return OperationResult.Failure(error)
         } catch (cause: Exception) {
             val code = when (cause) { is IllegalArgumentException -> ControlErrorCode.UNSUPPORTED; else -> ControlErrorCode.DISCONNECTED }
             val error = ControlError(code, cause.message ?: "设备连接已结束")
-            updateAttempt(attempt) { it.copy(connection = ConnectionState.Disconnected, lastError = error) }
+            updateAttempt(attempt) { it.copy(connection = ConnectionState.Disconnected, lastError = error, transportSelection = null) }
             return OperationResult.Failure(error)
         } finally {
             if (!ready) {
                 attempt.observer?.cancel()
                 connection?.let { closeSafely(it) }
-                withContext(NonCancellable) { lifecycle.withLock { if (active === attempt) active = null } }
+                withContext(NonCancellable) {
+                    lifecycle.withLock {
+                        if (active === attempt) {
+                            active = null
+                            mutableState.update { it.copy(transportSelection = null) }
+                        }
+                    }
+                }
             }
+        }
+    }
+
+    private suspend fun selectTransport(attempt: Attempt): TransportSelection {
+        val profile = requireNotNull(attempt.candidate.profile)
+        val gatt = profile.gatt
+        val ble = TransportEndpoint.BleGatt(gatt.serviceUuid, gatt.writeUuid, gatt.notifyUuid)
+        if (profile != ModelProfile.I7_RS_V2) return TransportSelection(ble, TransportSelectionReason.MODEL_BLE_ONLY)
+        if (attempt.forceBle) return TransportSelection(ble, TransportSelectionReason.FORCED_BLE)
+        val address = attempt.candidate.classicAddress
+            ?: return TransportSelection(ble, TransportSelectionReason.CLASSIC_ADDRESS_UNAVAILABLE)
+
+        val facts = try {
+            withTimeout(timing.connectTimeoutMillis) {
+                requireNotNull(transport).connectionFacts(attempt.candidate.deviceId, address)
+            }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            TransportFacts()
+        }
+        if (!facts.sppAvailable) return TransportSelection(ble, TransportSelectionReason.SPP_UNAVAILABLE)
+        return when (facts.audioProfile) {
+            AudioProfileEvidence.UNKNOWN ->
+                TransportSelection(ble, TransportSelectionReason.AUDIO_PROFILE_UNKNOWN)
+            AudioProfileEvidence.LE_AUDIO ->
+                TransportSelection(ble, TransportSelectionReason.LE_AUDIO)
+            AudioProfileEvidence.CLASSIC ->
+                TransportSelection(TransportEndpoint.SppRfcomm(address, I7_CONTROL_SPP_UUID), TransportSelectionReason.CLASSIC_AUDIO)
         }
     }
 
@@ -552,7 +595,7 @@ class ControlSession(
         val previous = active
         active = null
         generation++
-        mutableState.update { it.copy(connection = ConnectionState.Disconnected, device = null) }
+        mutableState.update { it.copy(connection = ConnectionState.Disconnected, device = null, transportSelection = null) }
         previous?.let { endSettings(it) }
         previous?.task?.cancel()
         previous?.observer?.cancel()
@@ -587,4 +630,8 @@ class ControlSession(
 
     private fun UserSettings.snapshot(): UserSettings = copy(islandTriggers = islandTriggers.toSet())
     private fun ByteArray.hex() = joinToString("") { (it.toInt() and 255).toString(16).padStart(2, '0') }
+
+    private companion object {
+        const val I7_CONTROL_SPP_UUID = "0cf12d31-fac3-4553-bd80-d6832e7b3931"
+    }
 }

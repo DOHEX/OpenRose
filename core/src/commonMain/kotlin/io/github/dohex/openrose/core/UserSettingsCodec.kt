@@ -21,6 +21,7 @@ object UserSettingsCodec {
             IslandMode.MODULE -> "module"
         },
         "focus_notification_enabled" to settings.focusNotificationEnabled.toString(),
+        "force_ble" to settings.forceBle.toString(),
         "island_triggers" to settings.islandTriggers.map {
             when (it) {
                 IslandTrigger.CONNECTION -> "connection"
@@ -50,6 +51,7 @@ object UserSettingsCodec {
             },
             focusNotificationEnabled = values["focus_notification_enabled"]
                 ?.toBooleanStrictOrNull() ?: defaults.focusNotificationEnabled,
+            forceBle = values["force_ble"]?.toBooleanStrictOrNull() ?: defaults.forceBle,
             islandTriggers = values["island_triggers"]?.split(',')?.mapNotNull {
                 when (it) {
                     "connection" -> IslandTrigger.CONNECTION

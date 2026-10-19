@@ -5,6 +5,7 @@ import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.dohex.openrose.core.protocol.FieldReading
 import io.github.dohex.openrose.core.protocol.ModelProfile
 import io.github.dohex.openrose.core.transport.DeviceId
+import io.github.dohex.openrose.core.transport.TransportSelection
 
 /** Facts supplied by the platform adapter, independent of a UI component library. */
 data class PlatformState(
@@ -52,6 +53,7 @@ data class DeviceCandidate(
     val rssi: Int?,
     val profile: ModelProfile?,
     val manufacturerDataHex: String,
+    val classicAddress: String? = null,
 )
 
 enum class ControlErrorCode {
@@ -117,4 +119,5 @@ data class ControlState(
     val lastError: ControlError? = null,
     /** Recent operations, including terminal outcomes across a disconnect. */
     val settingOperations: List<SettingOperation> = emptyList(),
+    val transportSelection: TransportSelection? = null,
 )

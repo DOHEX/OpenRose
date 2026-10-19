@@ -30,4 +30,5 @@ data class UserSettings(
     val islandMode: IslandMode = IslandMode.OFFICIAL,
     val focusNotificationEnabled: Boolean = true,
     val islandTriggers: Set<IslandTrigger> = setOf(IslandTrigger.CONNECTION),
+    val forceBle: Boolean = false,
 )

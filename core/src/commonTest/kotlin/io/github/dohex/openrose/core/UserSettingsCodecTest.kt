@@ -46,6 +46,7 @@ class UserSettingsCodecTest {
                 islandMode = IslandMode.MODULE,
                 focusNotificationEnabled = false,
                 islandTriggers = emptySet(),
+                forceBle = true,
             ),
         )
 
@@ -55,10 +56,18 @@ class UserSettingsCodecTest {
                 "appearance" to "light",
                 "island_mode" to "module",
                 "focus_notification_enabled" to "false",
+                "force_ble" to "true",
                 "island_triggers" to "",
             ),
             stored,
         )
+    }
+
+    @Test
+    fun missingOrMalformedForceBleUsesTheSafeDefault() {
+        assertEquals(false, UserSettingsCodec.decode(emptyMap()).forceBle)
+        assertEquals(false, UserSettingsCodec.decode(mapOf("force_ble" to "maybe")).forceBle)
+        assertEquals(true, UserSettingsCodec.decode(mapOf("force_ble" to "true")).forceBle)
     }
 
     @Test

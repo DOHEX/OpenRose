@@ -13,14 +13,38 @@ data class Advertisement(
     val manufacturerData: Map<Int, ByteArray> = emptyMap(),
 )
 
+enum class AudioProfileEvidence { UNKNOWN, CLASSIC, LE_AUDIO }
+
+data class TransportFacts(
+    val sppAvailable: Boolean = false,
+    val audioProfile: AudioProfileEvidence = AudioProfileEvidence.UNKNOWN,
+)
+
 /** Protocol endpoints remain independent of any platform Bluetooth library. */
 sealed interface TransportEndpoint {
     data class BleGatt(val serviceUuid: String, val writeUuid: String, val notifyUuid: String) : TransportEndpoint
+    data class SppRfcomm(val address: String, val serviceUuid: String) : TransportEndpoint
 }
+
+enum class TransportSelectionReason {
+    MODEL_BLE_ONLY,
+    FORCED_BLE,
+    SPP_UNAVAILABLE,
+    CLASSIC_ADDRESS_UNAVAILABLE,
+    AUDIO_PROFILE_UNKNOWN,
+    LE_AUDIO,
+    CLASSIC_AUDIO,
+}
+
+data class TransportSelection(
+    val endpoint: TransportEndpoint,
+    val reason: TransportSelectionReason,
+)
 
 interface ControlTransport {
     /** Completes when scanning stops; failures are reported through the flow. */
     fun scan(): Flow<Advertisement>
+    suspend fun connectionFacts(deviceId: DeviceId, classicAddress: String?): TransportFacts = TransportFacts()
     suspend fun connect(
         deviceId: DeviceId,
         endpoint: TransportEndpoint,

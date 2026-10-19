@@ -29,7 +29,7 @@ class OpenRoseApplication : Application() {
         super.onCreate()
         session = ControlSession(
             initialPlatformState = readPlatformState(permissionRequested()),
-            transport = AndroidBleTransport(applicationContext),
+            transport = AndroidControlTransport(applicationContext),
             scope = controlScope,
             initialSettings = UserSettingsCodec.decode(preferences().all.mapNotNull { (key, value) ->
                 (value as? String)?.let { key to it }

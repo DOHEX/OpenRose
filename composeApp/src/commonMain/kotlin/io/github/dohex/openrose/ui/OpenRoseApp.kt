@@ -104,6 +104,7 @@ fun OpenRoseApp(
                                 PlatformCard(state.platform, onRequestPermission, onOpenSystemSettings)
                             }
                             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(20.dp)) {
+                                ConnectionPreferencesCard(settings, onSettingsChange)
                                 AppearanceCard(settings, onSettingsChange)
                                 IntegrationCard(settings, state.platform.module, onSettingsChange)
                             }
@@ -116,6 +117,7 @@ fun OpenRoseApp(
                                 customEqualizerDraft, { customEqualizerDraft = it },
                             )
                             PlatformCard(state.platform, onRequestPermission, onOpenSystemSettings)
+                            ConnectionPreferencesCard(settings, onSettingsChange)
                             AppearanceCard(settings, onSettingsChange)
                             IntegrationCard(settings, state.platform.module, onSettingsChange)
                         }
@@ -186,6 +188,20 @@ private fun PlatformCard(
             },
             secondary = true,
         )
+    }
+}
+
+@Composable
+private fun ConnectionPreferencesCard(settings: UserSettings, onChange: (UserSettings) -> Unit) {
+    AppCard {
+        AppText("连接方式", title = true)
+        Spacer(Modifier.height(16.dp))
+        ToggleRow("强制使用 BLE", "仅影响下次连接", settings.forceBle) {
+            onChange(settings.copy(forceBle = it))
+        }
+        Spacer(Modifier.height(8.dp))
+        AppText("默认自动选择适用的连接方式；无法确认连接条件时使用 BLE。", secondary = true)
+        AppText("更改此项会保留当前连接和正在执行的设置。", secondary = true)
     }
 }
 
