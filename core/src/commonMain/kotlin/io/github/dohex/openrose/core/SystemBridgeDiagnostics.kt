@@ -12,6 +12,8 @@ data class SystemBridgeDiagnostics(
     val ipc: BridgeIpcState = BridgeIpcState.DISCONNECTED,
     val session: BridgeSessionState = BridgeSessionState.NONE,
     val detail: String? = null,
+    /** Target-process calls and compatibility failures; these never assert visible SystemUI output. */
+    val presentation: Map<String, String> = emptyMap(),
 )
 
 enum class BridgeIpcState { DISCONNECTED, WAITING, AUTHENTICATED, TARGET_INCOMPATIBLE, REJECTED }

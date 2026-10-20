@@ -214,6 +214,22 @@ private fun PlatformCard(
             if (platform.module == ModuleAvailability.Available) {
                 bridge.detail?.let { AppText(it, secondary = true) }
             }
+            bridge.presentation.forEach { (feature, result) ->
+                val label = when (feature) {
+                    "OFFICIAL_CONNECTION" -> "官方连接提示"
+                    "MODULE_CONNECTION" -> "模块连接提示"
+                    "STATUS_NOTIFICATION" -> "耳机状态通知"
+                    else -> feature
+                }
+                val status = when (result.substringBefore(" · ")) {
+                    "CALLED" -> "已请求系统呈现，实际显示待验收"
+                    "UNAVAILABLE" -> if (feature == "OFFICIAL_CONNECTION") "系统资源与限定撤销方式尚未核实" else "当前系统路径不可用"
+                    "WITHDRAWN" -> "已请求撤销"
+                    "ACTION_FAILED" -> if (result.contains("control_receiver_unavailable")) "通知查看可用，系统控制入口不可用" else "操作失败，请查看连接与设备状态"
+                    else -> "等待确认"
+                }
+                AppText("$label：$status", secondary = true)
+            }
         }
     }
 }

@@ -4,7 +4,7 @@ ROSE / ROSESELSA 耳机控制客户端，采用 Kotlin Multiplatform 共享核�
 
 产品规格：[首版 spec #1](https://github.com/DOHEX/OpenRose/issues/1)。当前工程提供可构建的 Android 客户端、Linux / Windows 共享桌面入口、界面外持有的公开控制会话、内置 Miuix / Material 3 组件，以及 Android 原生 BLE 发现、识别和状态读取链路；i7 在已确认的条件下使用专用 SPP 串口控制。各型号设置使用同一权威会话、串行队列和设备回读确认。
 
-**Android 真实耳机验收尚未完成。现已实现初始蓝牙进程 Hook 与受校验的只读桥接；兼容框架中的正向读取仍待验收，系统超级岛、状态通知和融合设备中心尚未实现。** 协议测试重放 i5 独立 Linux 读取样本，i7 RX 和设置测试的回复使用明确标注的合成数据，这些结果不代表 Android 真实耳机已通过验收。界面仅显示实际权限、扫描结果和设备返回值，没有演示设备或虚构电量。系统呈现设置目前仅保存偏好，不产生系统展示；阶段实现不等于首版验收完成。
+**首版尚未完成，Android 真实耳机验收仍待设备。** 已实现初始蓝牙进程 Hook、受校验的会话桥接，以及连接提示策略、模块岛模板和独立状态通知适配；系统操作回到同一控制队列。兼容框架中的正向调用及 HyperOS 实际展示尚未验收。官方提示所需 OEM 资源和限定撤销范围未核实，目前明确报告不可用；融合设备中心尚未实现。协议测试重放 i5 独立 Linux 读取样本，i7 RX 和设置测试使用明确标注的合成数据。界面只显示实际权限、扫描结果和设备返回值；离线验证不代表 Android 真实耳机或系统展示已通过验收。
 
 ## 当前控制范围
 
@@ -64,4 +64,4 @@ Android APK：`androidApp/build/outputs/apk/debug/androidApp-debug.apk`。桌面
 
 ## 版本与验证
 
-固定依赖见 `gradle/libs.versions.toml`；初始化构建与平台验证记录见 [docs/verification/bootstrap.md](docs/verification/bootstrap.md)，读取协议来源与限制见 [docs/protocols.md](docs/protocols.md)，降噪验证见 [docs/verification/noise-controls.md](docs/verification/noise-controls.md)，预设 EQ / 游戏验证见 [docs/verification/equalizer-game.md](docs/verification/equalizer-game.md)，触控与音频验证见 [docs/verification/device-controls.md](docs/verification/device-controls.md)，十段 EQ 与固件能力验证见 [docs/verification/advanced-audio.md](docs/verification/advanced-audio.md)。i7 传输选择见 [docs/verification/i7-transports.md](docs/verification/i7-transports.md)。连接恢复见 [docs/verification/connection-recovery.md](docs/verification/connection-recovery.md)。双风格控制与桌面输入见 [docs/verification/interface-styles.md](docs/verification/interface-styles.md)。系统会话桥接见 [docs/verification/system-bridge.md](docs/verification/system-bridge.md)。领域约束见 [GLOSSARY.md](GLOSSARY.md) 和 [docs/adr](docs/adr)。
+固定依赖见 `gradle/libs.versions.toml`；初始化构建与平台验证记录见 [docs/verification/bootstrap.md](docs/verification/bootstrap.md)，读取协议来源与限制见 [docs/protocols.md](docs/protocols.md)，降噪验证见 [docs/verification/noise-controls.md](docs/verification/noise-controls.md)，预设 EQ / 游戏验证见 [docs/verification/equalizer-game.md](docs/verification/equalizer-game.md)，触控与音频验证见 [docs/verification/device-controls.md](docs/verification/device-controls.md)，十段 EQ 与固件能力验证见 [docs/verification/advanced-audio.md](docs/verification/advanced-audio.md)。i7 传输选择见 [docs/verification/i7-transports.md](docs/verification/i7-transports.md)。连接恢复见 [docs/verification/connection-recovery.md](docs/verification/connection-recovery.md)。双风格控制与桌面输入见 [docs/verification/interface-styles.md](docs/verification/interface-styles.md)。系统会话桥接见 [docs/verification/system-bridge.md](docs/verification/system-bridge.md)。系统展示策略与通知见 [docs/verification/system-presentation.md](docs/verification/system-presentation.md)。领域约束见 [GLOSSARY.md](GLOSSARY.md) 和 [docs/adr](docs/adr)。

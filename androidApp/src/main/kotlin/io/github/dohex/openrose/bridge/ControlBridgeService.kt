@@ -25,6 +25,18 @@ class ControlBridgeService : Service() {
 
         override fun close(leaseId: String) =
             host.close(leaseId, Binder.getCallingUid(), Binder.getCallingPid())
+
+        override fun watch(request: Bundle, observer: IControlObserver): Bundle =
+            host.watch(request, observer, Binder.getCallingUid(), Binder.getCallingPid())
+
+        override fun claimPrompt(request: Bundle): Bundle =
+            host.claimPrompt(request, Binder.getCallingUid(), Binder.getCallingPid())
+
+        override fun setNoise(request: Bundle): Bundle =
+            host.setNoise(request, Binder.getCallingUid(), Binder.getCallingPid())
+
+        override fun reportPresentation(report: Bundle): Bundle =
+            host.reportPresentation(report, Binder.getCallingUid(), Binder.getCallingPid())
     }
 
     override fun onBind(intent: Intent): IBinder? = if (canonicalIntent(intent)) endpoint else null

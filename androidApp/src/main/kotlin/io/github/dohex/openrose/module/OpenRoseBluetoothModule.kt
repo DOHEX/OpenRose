@@ -14,7 +14,11 @@ import android.os.IBinder
 import android.os.Process
 import android.util.Log
 import io.github.dohex.openrose.bridge.BridgeWire
+import io.github.dohex.openrose.bridge.BridgePresentationWire
 import io.github.dohex.openrose.bridge.IControlBridge
+import io.github.dohex.openrose.bridge.IControlObserver
+import io.github.dohex.openrose.presentation.SystemPresentationRenderer
+import io.github.dohex.openrose.presentation.PresentationCallbacks
 import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedModule
 import io.github.libxposed.api.XposedModuleInterface.HotReloadedParam
@@ -485,6 +489,12 @@ class OpenRoseBluetoothModule : XposedModule() {
                 }
                 binding.leaseId = lease
                 binding.lastReadIdentity = null
+                val watched = bridge.watch(binding.request(), binding.observer)
+                if (!hasWireVersion(watched) || watched.getString(STATUS) != STATUS_OK) {
+                    closeLease(binding, bridge)
+                    recordBridgeStatus(binding, "watch_unavailable")
+                    return
+                }
                 recordBridgeStatus(binding, "authenticated")
             }
 
@@ -496,6 +506,7 @@ class OpenRoseBluetoothModule : XposedModule() {
                 log(Log.ERROR, TAG, "bridge_request_rejected", failure)
             }
         } catch (failure: Throwable) {
+            binding.renderer?.clear()
             if (recordBridgeStatus(binding, "request_failed_${failure.javaClass.simpleName}")) {
                 log(Log.WARN, TAG, "bridge_request_failed", failure)
             }
@@ -508,16 +519,19 @@ class OpenRoseBluetoothModule : XposedModule() {
         val lease = binding.leaseId ?: return
         val current = bridge.currentSession(lease)
         if (!hasWireVersion(current)) {
+            binding.renderer?.clear()
             recordBridgeStatus(binding, "session_invalid_version")
             return
         }
         val currentStatus = current.getString(STATUS) ?: STATUS_MISSING
         if (currentStatus == STATUS_NO_SESSION) {
+            binding.renderer?.clear()
             binding.lastReadIdentity = null
             recordBridgeStatus(binding, "no_session")
             return
         }
         if (currentStatus != STATUS_OK) {
+            binding.renderer?.clear()
             if (currentStatus == STATUS_STALE_HOST || currentStatus == STATUS_STALE_SESSION) {
                 closeLease(binding, bridge)
             }
@@ -529,6 +543,7 @@ class OpenRoseBluetoothModule : XposedModule() {
         val deviceId = current.getString(DEVICE_ID)
         val sessionId = current.getLong(SESSION_ID, INVALID_SESSION_ID)
         if (currentEpoch != hostEpoch || deviceId.isNullOrBlank() || sessionId == INVALID_SESSION_ID) {
+            binding.renderer?.clear()
             recordBridgeStatus(binding, "session_identity_mismatch")
             return
         }
@@ -542,11 +557,13 @@ class OpenRoseBluetoothModule : XposedModule() {
         }
         val response = bridge.read(request)
         if (!hasWireVersion(response)) {
+            binding.renderer?.clear()
             recordBridgeStatus(binding, "read_invalid_version")
             return
         }
         val responseStatus = response.getString(STATUS) ?: STATUS_MISSING
         if (responseStatus != STATUS_OK) {
+            binding.renderer?.clear()
             if (responseStatus == STATUS_STALE_HOST || responseStatus == STATUS_STALE_SESSION) {
                 closeLease(binding, bridge)
             }
@@ -562,6 +579,7 @@ class OpenRoseBluetoothModule : XposedModule() {
             snapshot.getString(DEVICE_ID) != deviceId ||
             snapshot.getLong(SESSION_ID, INVALID_SESSION_ID) != sessionId
         ) {
+            binding.renderer?.clear()
             recordBridgeStatus(binding, "snapshot_identity_mismatch")
             return
         }
@@ -581,6 +599,7 @@ class OpenRoseBluetoothModule : XposedModule() {
         }
         val acknowledged = bridge.acknowledge(receipt)
         if (!hasWireVersion(acknowledged) || acknowledged.getString(STATUS) != STATUS_OK) {
+            binding.renderer?.clear()
             binding.lastReadIdentity = null
             val ackStatus = if (hasWireVersion(acknowledged)) {
                 acknowledged.getString(STATUS) ?: STATUS_MISSING
@@ -596,7 +615,54 @@ class OpenRoseBluetoothModule : XposedModule() {
             log(Log.INFO, TAG, "snapshot_acknowledged session=$sessionId")
             binding.lastReadIdentity = identity
         }
+        if (!isCurrentBinding(binding)) return
+        val renderer = binding.renderer ?: SystemPresentationRenderer(
+            binding.context,
+            checkNotNull(readerHandler),
+            object : PresentationCallbacks {
+                override fun claimPrompt(snapshot: Bundle, promptId: String): Boolean {
+                    val request = binding.request(snapshot) ?: return false
+                    val endpoint = binding.remoteBridge ?: return false
+                    request.putString(BridgePresentationWire.PROMPT_ID, promptId)
+                    val result = endpoint.claimPrompt(request)
+                    return hasWireVersion(result) && result.getString(STATUS) == STATUS_OK
+                }
+
+                override fun setNoise(snapshot: Bundle, mode: String): Bundle {
+                    val request = binding.request(snapshot) ?: return BridgeWire.response(STATUS_STALE_SESSION)
+                    val endpoint = binding.remoteBridge ?: return BridgeWire.response(STATUS_STALE_SESSION)
+                    request.putString(BridgePresentationWire.NOISE_MODE, mode)
+                    val result = endpoint.setNoise(request)
+                    schedulePoll(binding)
+                    return result
+                }
+
+                override fun report(snapshot: Bundle, feature: String, status: String, detail: String) {
+                    val report = binding.request(snapshot) ?: return
+                    val endpoint = binding.remoteBridge ?: return
+                    report.putString(BridgePresentationWire.FEATURE, feature)
+                    report.putString(STATUS, status)
+                    report.putString(BridgePresentationWire.DETAIL, detail.take(512))
+                    endpoint.reportPresentation(report)
+                }
+            },
+        ).also { binding.renderer = it }
+        renderer.render(snapshot)
         recordBridgeStatus(binding, "snapshot_acknowledged")
+    }
+
+    private fun BridgeBinding.request(): Bundle = Bundle().apply {
+        putInt(VERSION, BridgeWire.VERSION)
+        putString(LEASE_ID, leaseId)
+        putString(BridgeWire.HOST_EPOCH, hostEpoch)
+    }
+
+    private fun BridgeBinding.request(snapshot: Bundle): Bundle? {
+        if (!isCurrentBinding(this) || leaseId == null || snapshot.getString(BridgeWire.HOST_EPOCH) != hostEpoch) return null
+        return request().apply {
+            putString(DEVICE_ID, snapshot.getString(DEVICE_ID))
+            putLong(SESSION_ID, snapshot.getLong(SESSION_ID, INVALID_SESSION_ID))
+        }
     }
 
     private fun reportResolution(
@@ -665,6 +731,7 @@ class OpenRoseBluetoothModule : XposedModule() {
     }
 
     private fun closeLease(binding: BridgeBinding, bridge: IControlBridge?) {
+        binding.renderer?.clear()
         val lease = binding.leaseId
         binding.leaseId = null
         binding.lastReadIdentity = null
@@ -722,10 +789,7 @@ class OpenRoseBluetoothModule : XposedModule() {
             val completed = CountDownLatch(1)
             val posted = handler.post {
                 try {
-                    binding?.let {
-                        closeLease(it, it.remoteBridge)
-                        detachPreferencesListener(it)
-                    }
+                    binding?.let(::closeBindingResources)
                 } catch (failure: Throwable) {
                     cleanupComplete = false
                     log(Log.ERROR, TAG, "hot_reload_worker_cleanup_failed", failure)
@@ -752,10 +816,7 @@ class OpenRoseBluetoothModule : XposedModule() {
             cleanupComplete = cleanupComplete && threadStopped
         } else {
             try {
-                binding?.let {
-                    closeLease(it, it.remoteBridge)
-                    detachPreferencesListener(it)
-                }
+                binding?.let(::closeBindingResources)
             } catch (failure: Throwable) {
                 cleanupComplete = false
                 log(Log.ERROR, TAG, "hot_reload_cleanup_failed", failure)
@@ -774,6 +835,17 @@ class OpenRoseBluetoothModule : XposedModule() {
             "hot_reload_cleanup_complete=$cleanupComplete",
         )
         return cleanupComplete
+    }
+
+    private fun closeBindingResources(binding: BridgeBinding) {
+        closeLease(binding, binding.remoteBridge)
+        val renderer = binding.renderer
+        renderer?.close()
+        binding.renderer = null
+        detachPreferencesListener(binding)
+        check(renderer == null || renderer.awaitActionTermination(1_000)) {
+            "Presentation action worker has not stopped; hot reload cannot be confirmed"
+        }
     }
 
     private fun detachPreferencesListener(binding: BridgeBinding) {
@@ -817,14 +889,21 @@ class OpenRoseBluetoothModule : XposedModule() {
     ) : ServiceConnection {
         val clientToken = Binder()
         val pollRunnable = Runnable { pollBridge(this) }
+        val observer = object : IControlObserver.Stub() {
+            override fun onChanged(identity: Bundle) {
+                if (hasWireVersion(identity) && identity.getString(BridgeWire.HOST_EPOCH) == hostEpoch &&
+                    identity.getString(LEASE_ID) == leaseId) schedulePoll(this@BridgeBinding)
+            }
+        }
+        var renderer: SystemPresentationRenderer? = null
         @Volatile var remoteBridge: IControlBridge? = null
         var isBound: Boolean = false
-        var isClosed: Boolean = false
+        @Volatile var isClosed: Boolean = false
         var remotePreferences: SharedPreferences? = null
         var preferencesListener: SharedPreferences.OnSharedPreferenceChangeListener? = null
-        var hostEpoch: String? = null
+        @Volatile var hostEpoch: String? = null
         var proofKey: String? = null
-        var leaseId: String? = null
+        @Volatile var leaseId: String? = null
         var rejectedCredential: String? = null
         var reportCompleted: Boolean = false
         var lastReadIdentity: String? = null
@@ -840,6 +919,7 @@ class OpenRoseBluetoothModule : XposedModule() {
         override fun onServiceDisconnected(name: ComponentName) {
             if (!isCurrentBinding(this)) return
             remoteBridge = null
+            readerHandler?.post { renderer?.clear() }
             recordBridgeStatus(this, "service_disconnected")
             log(Log.WARN, TAG, "bridge_service_disconnected component=${name.flattenToShortString()}")
         }
@@ -847,6 +927,7 @@ class OpenRoseBluetoothModule : XposedModule() {
         override fun onBindingDied(name: ComponentName) {
             if (!isCurrentBinding(this)) return
             log(Log.ERROR, TAG, "bridge_binding_died component=${name.flattenToShortString()}")
+            readerHandler?.post { renderer?.close(); renderer = null }
             val shouldRetry = synchronized(bindingLock) {
                 if (currentBinding !== this || isClosed) false else {
                     currentBinding = null
@@ -863,6 +944,7 @@ class OpenRoseBluetoothModule : XposedModule() {
         override fun onNullBinding(name: ComponentName) {
             if (!isCurrentBinding(this)) return
             log(Log.ERROR, TAG, "bridge_null_binding component=${name.flattenToShortString()}")
+            readerHandler?.post { renderer?.close(); renderer = null }
             synchronized(bindingLock) {
                 if (currentBinding === this) currentBinding = null
                 isClosed = true

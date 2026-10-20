@@ -10,11 +10,14 @@ import io.github.dohex.openrose.core.BridgeIpcState
 import io.github.dohex.openrose.core.BridgeSessionState
 import io.github.dohex.openrose.core.ConnectionState
 import io.github.dohex.openrose.core.ControlSession
+import io.github.dohex.openrose.core.DeviceSetting
 import io.github.dohex.openrose.core.ModuleAvailability
+import io.github.dohex.openrose.core.OperationResult
 import io.github.dohex.openrose.core.SessionReference
 import io.github.dohex.openrose.core.SessionSnapshotResult
 import io.github.dohex.openrose.core.SystemBridgeDiagnostics
 import io.github.dohex.openrose.core.transport.DeviceId
+import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.libxposed.service.XposedService
 import io.github.libxposed.service.XposedServiceHelper
 import java.security.MessageDigest
@@ -25,6 +28,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 
 /** Authentication and leases are local; all device truth is read from the existing authority. */
 class ControlBridgeHost(
@@ -50,11 +56,24 @@ class ControlBridgeHost(
         var touchedAt: Long,
         var awaiting: PendingRead? = null,
         var acknowledged: SessionReference? = null,
+        var observer: IControlObserver? = null,
     )
 
     private data class PendingRead(val reference: SessionReference, val sequence: Long)
 
     fun start() {
+        worker.launch {
+            session.state.map { it.connection to it.presentation }.distinctUntilChanged().collect {
+                val reference = session.state.value.presentation.reference
+                synchronized(lock) {
+                    if (reportedReference != reference) {
+                        reportedReference = reference
+                        updateFacts { facts -> facts.copy(presentation = emptyMap()) }
+                    }
+                }
+                notifyReaders()
+            }
+        }
         XposedServiceHelper.registerListener(object : XposedServiceHelper.OnServiceListener {
             override fun onServiceBind(service: XposedService) { worker.launch { frameworkBound(service) } }
             override fun onServiceDied(service: XposedService) { worker.launch { frameworkDied(service) } }
@@ -221,7 +240,9 @@ class ControlBridgeHost(
                             detail = "已生成当前会话快照，等待目标进程确认收到") }
                     }
                     BridgeWire.response(BridgeWire.STATUS_OK).apply {
-                        putBundle(BridgeWire.SNAPSHOT, result.device.toBridgeSnapshot(hostEpoch, sequence))
+                        putBundle(BridgeWire.SNAPSHOT, result.device.toBridgeSnapshot(hostEpoch, sequence).apply {
+                            putBundle(BridgePresentationWire.PRESENTATION, result.presentation.toBridgePresentation())
+                        })
                     }
                 }
                 is SessionSnapshotResult.Failure -> {
@@ -256,6 +277,86 @@ class ControlBridgeHost(
         synchronized(lock) {
             authenticate(leaseId, uid, pid)
             readerDied(leaseId)
+        }
+    }
+
+    internal fun watch(request: Bundle, observer: IControlObserver, uid: Int, pid: Int): Bundle = synchronized(lock) {
+        val lease = authenticateRequest(request, uid, pid)
+        lease.observer = observer
+        BridgeWire.response(BridgeWire.STATUS_OK)
+    }
+
+    internal fun claimPrompt(request: Bundle, uid: Int, pid: Int): Bundle {
+        val reference = synchronized(lock) {
+            authenticateRequest(request, uid, pid)
+            request.reference() ?: return BridgeWire.response(BridgeWire.STATUS_INVALID_ARGUMENT)
+        }
+        val id = request.getString(BridgePresentationWire.PROMPT_ID)?.takeIf { it.length in 1..128 }
+            ?: return BridgeWire.response(BridgeWire.STATUS_INVALID_ARGUMENT)
+        val claimed = runBlocking { session.claimConnectionPrompt(reference, id) }
+        return BridgeWire.response(if (claimed) BridgeWire.STATUS_OK else "STALE_PROMPT")
+    }
+
+    internal fun setNoise(request: Bundle, uid: Int, pid: Int): Bundle {
+        val reference = synchronized(lock) {
+            authenticateRequest(request, uid, pid)
+            request.reference() ?: return BridgeWire.response(BridgeWire.STATUS_INVALID_ARGUMENT)
+        }
+        val mode = request.getString(BridgePresentationWire.NOISE_MODE)?.takeIf { it.length in 1..64 }
+            ?: return BridgeWire.response(BridgeWire.STATUS_INVALID_ARGUMENT)
+        // Validation and enqueue share the authority's lifecycle lock. A stale notification cannot
+        // write to a subsequent connection, even if the device address is the same.
+        return when (val result = runBlocking { session.set(reference, DeviceSetting.NOISE_MODE, FieldValue.Text(mode)) }) {
+            OperationResult.Success -> BridgeWire.response(BridgeWire.STATUS_OK)
+            is OperationResult.Failure -> BridgeWire.response(result.error.code.name, result.error.message)
+        }
+    }
+
+    private var reportedReference: SessionReference? = null
+
+    internal fun reportPresentation(report: Bundle, uid: Int, pid: Int): Bundle = synchronized(lock) {
+        authenticateRequest(report, uid, pid)
+        val reference = report.reference() ?: return@synchronized BridgeWire.response(BridgeWire.STATUS_INVALID_ARGUMENT)
+        if (session.readSession(reference) !is SessionSnapshotResult.Available) {
+            return@synchronized BridgeWire.response(BridgeWire.STATUS_STALE_SESSION)
+        }
+        val feature = report.getString(BridgePresentationWire.FEATURE)?.takeIf { it in BridgePresentationWire.FEATURES }
+            ?: return@synchronized BridgeWire.response(BridgeWire.STATUS_INVALID_ARGUMENT)
+        val status = report.getString(BridgeWire.STATUS)?.takeIf { it in BridgePresentationWire.STATUSES }
+            ?: return@synchronized BridgeWire.response(BridgeWire.STATUS_INVALID_ARGUMENT)
+        val detail = report.getString(BridgePresentationWire.DETAIL)?.takeIf { it.length <= 512 }
+            ?: return@synchronized BridgeWire.response(BridgeWire.STATUS_INVALID_ARGUMENT)
+        if (reportedReference != reference) {
+            reportedReference = reference
+            updateFacts { it.copy(presentation = emptyMap()) }
+        }
+        updateFacts { it.copy(presentation = it.presentation + (feature to "$status · $detail")) }
+        BridgeWire.response(BridgeWire.STATUS_OK)
+    }
+
+    private fun authenticateRequest(request: Bundle, uid: Int, pid: Int): Lease {
+        val lease = authenticate(request.getString(BridgeWire.LEASE_ID) ?: "", uid, pid)
+        if (request.getInt(BridgeWire.KEY_VERSION) != BridgeWire.VERSION || request.getString(BridgeWire.HOST_EPOCH) != hostEpoch) {
+            throw SecurityException("展示请求版本或宿主代际不匹配")
+        }
+        return lease
+    }
+
+    private fun Bundle.reference(): SessionReference? {
+        val id = getString(BridgeWire.DEVICE_ID)?.takeIf { it.length in 1..128 } ?: return null
+        val sessionId = getLong(BridgeWire.SESSION_ID, -1).takeIf { it > 0 } ?: return null
+        return SessionReference(DeviceId(id), sessionId)
+    }
+
+    private fun notifyReaders() {
+        // Never invoke a remote Binder while holding the lease lock.
+        val targets = synchronized(lock) { leases.values.mapNotNull { lease -> lease.observer?.let { lease.id to it } } }
+        targets.forEach { (leaseId, observer) ->
+            runCatching { observer.onChanged(Bundle().apply {
+                putInt(BridgeWire.KEY_VERSION, BridgeWire.VERSION)
+                putString(BridgeWire.HOST_EPOCH, hostEpoch)
+                putString(BridgeWire.LEASE_ID, leaseId)
+            }) }
         }
     }
 

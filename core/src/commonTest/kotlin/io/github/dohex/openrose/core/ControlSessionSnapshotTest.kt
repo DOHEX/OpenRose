@@ -43,9 +43,17 @@ class ControlSessionSnapshotTest {
             val device = requireNotNull(session.state.value.device)
             val reference = SessionReference(device.deviceId, device.sessionId)
             val writesBeforeRead = transport.links.single().writes.toList()
-            val snapshot = assertIs<SessionSnapshotResult.Available>(session.readSession(reference)).device
+            val available = assertIs<SessionSnapshotResult.Available>(session.readSession(reference))
+            val snapshot = available.device
 
             assertEquals(device, snapshot)
+            assertEquals(session.state.value.presentation, available.presentation)
+            assertEquals(reference, available.presentation.reference)
+            assertEquals(PresentationReading.Known(100), available.presentation.battery?.left)
+            assertEquals(PresentationReading.Known(if (profile == ModelProfile.I5_ZT) 98 else 50), available.presentation.battery?.right)
+            assertEquals(if (profile == ModelProfile.I5_ZT) PresentationReading.NotProvided else PresentationReading.Known(80), available.presentation.battery?.case)
+            assertEquals(PresentationReading.Known("wind"), available.presentation.noise?.mode)
+            assertEquals(device.capabilities.writableSettings, available.presentation.actions)
             assertEquals(writesBeforeRead, transport.links.single().writes)
             if (profile == ModelProfile.I5_ZT) {
                 assertEquals(FieldReading.NotProvided("ff"), snapshot.fields[DeviceField.CASE_BATTERY])
@@ -109,6 +117,22 @@ class ControlSessionSnapshotTest {
         assertEquals(initialWrites + 2, link.writes.size)
         assertFalse(pending.isCompleted)
 
+        session.updateSettings(session.state.value.settings.copy(islandMode = IslandMode.OFF, focusNotificationEnabled = false))
+        val hidden = assertIs<SessionSnapshotResult.Available>(session.readSession(reference))
+        assertFalse(hidden.presentation.showStatusNotification)
+        assertEquals(null, hidden.presentation.connectionPrompt)
+        assertEquals(SettingStage.WRITTEN, session.state.value.settingOperations.last().stage)
+        assertEquals(beforeConfirmation, hidden.device)
+        assertEquals(initialWrites + 2, link.writes.size)
+        assertFalse(pending.isCompleted)
+
+        session.updateSettings(session.state.value.settings.copy(islandMode = IslandMode.MODULE, focusNotificationEnabled = true))
+        val switched = assertIs<SessionSnapshotResult.Available>(session.readSession(reference))
+        assertEquals(null, switched.presentation.connectionPrompt, "Mode changes must not replay the connection event")
+        assertEquals(beforeConfirmation, switched.device)
+        assertEquals(initialWrites + 2, link.writes.size)
+        assertFalse(pending.isCompleted)
+
         link.deviceReply("09ff00000106020e000001000020")
         runCurrent()
         assertEquals(OperationResult.Success, pending.await())
@@ -127,7 +151,13 @@ class ControlSessionSnapshotTest {
         connect(session, transport, profile, id)
         val original = requireNotNull(session.state.value.device)
         val reference = SessionReference(original.deviceId, original.sessionId)
-        val snapshot = assertIs<SessionSnapshotResult.Available>(session.readSession(reference)).device
+        val available = assertIs<SessionSnapshotResult.Available>(session.readSession(reference))
+        val snapshot = available.device
+
+        @Suppress("UNCHECKED_CAST")
+        val detachedActions = available.presentation.actions as MutableSet<DeviceSetting>
+        detachedActions.clear()
+        assertEquals(original.capabilities.writableSettings, session.state.value.presentation.actions)
 
         @Suppress("UNCHECKED_CAST")
         val detachedFields = snapshot.fields as MutableMap<DeviceField, FieldReading>

@@ -53,8 +53,12 @@ data class SessionTiming(
     val queryTimeoutMillis: Long = 1_500,
     val i5WriteIntervalMillis: Long = 100,
     val i7WriteIntervalMillis: Long = 100,
+    val connectionPromptDurationMillis: Long = 5_000,
 ) {
-    init { require(connectTimeoutMillis > 0 && queryTimeoutMillis > 0 && i5WriteIntervalMillis >= 0 && i7WriteIntervalMillis >= 0) }
+    init {
+        require(connectTimeoutMillis > 0 && queryTimeoutMillis > 0 && i5WriteIntervalMillis >= 0 &&
+            i7WriteIntervalMillis >= 0 && connectionPromptDurationMillis > 0)
+    }
 }
 
 /** Platform-owned authority. Replacing a page or its interface style never replaces this owner. */
@@ -65,7 +69,9 @@ class ControlSession(
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
     private val timing: SessionTiming = SessionTiming(),
 ) {
-    private val mutableState = MutableStateFlow(ControlState(platform = initialPlatformState, settings = initialSettings.snapshot()))
+    private val mutableState = MutableStateFlow(
+        ControlState(platform = initialPlatformState, settings = initialSettings.snapshot()).withSystemPresentation(),
+    )
     val state: StateFlow<ControlState> = mutableState.asStateFlow()
     private val lifecycle = Mutex()
     private val scanLifecycle = Mutex()
@@ -90,6 +96,8 @@ class ControlSession(
         var hasWritten = false
         var recoveryUsed = false
         var ready = false
+        var connectionPromptConsumed = false
+        var connectionPromptExpiry: Job? = null
     }
 
     private data class SettingRequest(val operation: SettingOperation, val result: CompletableDeferred<OperationResult>)
@@ -99,7 +107,7 @@ class ControlSession(
         if (scanJob?.isActive == true) return@withLock OperationResult.Success
         val epoch = scanEpoch.value + 1
         scanEpoch.value = epoch
-        mutableState.update { it.copy(scan = ScanState.Scanning, candidates = emptyList(), lastError = null) }
+        updateState { it.copy(scan = ScanState.Scanning, candidates = emptyList(), lastError = null) }
         scanJob = scope.launch(start = CoroutineStart.UNDISPATCHED) {
             try {
                 requireNotNull(transport).scan().collect { advertisement ->
@@ -107,14 +115,14 @@ class ControlSession(
                     val profile = ModelIdentification.identify(advertisement.manufacturerData)
                     val candidate = DeviceCandidate(advertisement.deviceId, advertisement.name, advertisement.rssi,
                         profile, manufacturerDataHex, ModelIdentification.classicAddress(manufacturerDataHex, profile))
-                    mutableState.update { old -> if (scanEpoch.value == epoch) old.copy(candidates = old.candidates.filterNot { it.deviceId == candidate.deviceId } + candidate) else old }
+                    updateState { old -> if (scanEpoch.value == epoch) old.copy(candidates = old.candidates.filterNot { it.deviceId == candidate.deviceId } + candidate) else old }
                 }
-                mutableState.update { if (scanEpoch.value == epoch) it.copy(scan = ScanState.Idle) else it }
+                updateState { if (scanEpoch.value == epoch) it.copy(scan = ScanState.Idle) else it }
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (cause: Exception) {
                 val error = ControlError(ControlErrorCode.FAILED, cause.message ?: "扫描失败")
-                mutableState.update { if (scanEpoch.value == epoch) it.copy(scan = ScanState.Failed(error), lastError = error) else it }
+                updateState { if (scanEpoch.value == epoch) it.copy(scan = ScanState.Failed(error), lastError = error) else it }
             }
         }
         val failed = state.value.scan as? ScanState.Failed
@@ -125,7 +133,7 @@ class ControlSession(
         scanEpoch.value++
         scanJob?.cancelAndJoin()
         scanJob = null
-        mutableState.update { it.copy(scan = ScanState.Idle) }
+        updateState { it.copy(scan = ScanState.Idle) }
     }
 
     suspend fun connect(deviceId: DeviceId): OperationResult {
@@ -138,7 +146,7 @@ class ControlSession(
             clearActive()
             val next = Attempt(++generation, candidate, state.value.settings.forceBle)
             val profile = requireNotNull(candidate.profile)
-            mutableState.update {
+            updateState {
                 it.copy(connection = ConnectionState.Connecting(deviceId, next.id, ConnectionPhase.CONNECTING),
                     device = DeviceState(deviceId, next.id, profile, capabilities(profile, null), profile.supportedFields.associateWith { FieldReading.Loading }),
                     lastError = null, transportSelection = null, connectionRecovery = null)
@@ -160,7 +168,7 @@ class ControlSession(
     suspend fun disconnect() {
         lifecycle.withLock {
             clearActive()
-            mutableState.update { it.copy(connection = ConnectionState.Disconnected, device = null, lastError = null, connectionRecovery = null) }
+            updateState { it.copy(connection = ConnectionState.Disconnected, device = null, lastError = null, connectionRecovery = null) }
         }
     }
 
@@ -177,15 +185,52 @@ class ControlSession(
         if (reference.deviceId != connection.deviceId || reference.sessionId != connection.sessionId) {
             return SessionSnapshotResult.Failure(ControlError(ControlErrorCode.DISCONNECTED, "请求的设备会话已结束或已被替换"))
         }
-        return SessionSnapshotResult.Available(device.snapshot())
+        return SessionSnapshotResult.Available(device.snapshot(), captured.presentation.snapshot())
+    }
+
+    /** The first current renderer to claim an active prompt becomes its sole trigger owner. */
+    suspend fun claimConnectionPrompt(reference: SessionReference, promptId: String): Boolean = lifecycle.withLock {
+        val attempt = active ?: return@withLock false
+        if (!attempt.ready || attempt.id != reference.sessionId || attempt.candidate.deviceId != reference.deviceId) {
+            return@withLock false
+        }
+        var claimed = false
+        mutableState.update { current ->
+            val connection = current.connection as? ConnectionState.Connected
+            val prompt = current.presentation.connectionPrompt
+            val canClaim = connection != null && connection.deviceId == reference.deviceId &&
+                connection.sessionId == reference.sessionId && current.presentation.reference == reference &&
+                prompt?.id == promptId && prompt.reference == reference && !prompt.claimed &&
+                prompt.mode == current.settings.islandMode && current.settings.allowsConnectionPrompt()
+            claimed = canClaim
+            if (canClaim) {
+                current.copy(presentation = current.presentation.copy(connectionPrompt = requireNotNull(prompt).copy(claimed = true)))
+                    .withSystemPresentation()
+            } else current.withSystemPresentation()
+        }
+        claimed
     }
 
     /** A caller owns its wait; the platform session owns the queued operation. */
-    suspend fun set(setting: DeviceSetting, value: FieldValue): OperationResult {
-        platformError()?.let { return failure(it) }
+    suspend fun set(setting: DeviceSetting, value: FieldValue): OperationResult = enqueueSetting(null, setting, value)
+
+    /** Queues a setting only when this caller's device and session reference is still current. */
+    suspend fun set(reference: SessionReference, setting: DeviceSetting, value: FieldValue): OperationResult =
+        enqueueSetting(reference, setting, value)
+
+    private suspend fun enqueueSetting(reference: SessionReference?, setting: DeviceSetting, value: FieldValue): OperationResult {
         val snapshot = value.snapshot()
         val request = lifecycle.withLock {
             val attempt = active
+            if (reference != null) {
+                val connection = state.value.connection as? ConnectionState.Connected
+                if (attempt == null || connection == null || attempt.id != reference.sessionId ||
+                    attempt.candidate.deviceId != reference.deviceId || connection.deviceId != reference.deviceId ||
+                    connection.sessionId != reference.sessionId) {
+                    return OperationResult.Failure(ControlError(ControlErrorCode.DISCONNECTED, "请求的设备会话已结束或已被替换"))
+                }
+            }
+            platformError()?.let { return failure(it) }
             if (attempt == null || state.value.connection !is ConnectionState.Connected) {
                 return failure(ControlError(ControlErrorCode.NOT_READY, "设备尚未就绪"))
             }
@@ -198,7 +243,7 @@ class ControlSession(
             val operation = SettingOperation(++operationId, attempt.id, setting, snapshot, SettingStage.SUBMITTED)
             val next = SettingRequest(operation, CompletableDeferred())
             attempt.pending[operation.id] = next
-            mutableState.update { it.copy(settingOperations = (it.settingOperations + operation).takeLast(64), lastError = null) }
+            updateState { it.copy(settingOperations = (it.settingOperations + operation).takeLast(64), lastError = null) }
             check(attempt.commands.trySend(next).isSuccess)
             next
         }
@@ -281,7 +326,7 @@ class ControlSession(
                     // Neither protocol correlates a late readback with a transaction. End this
                     // link before another setting can consume an old response or native write.
                     clearActive()
-                    mutableState.update { it.copy(lastError = error) }
+                    updateState { it.copy(lastError = error) }
                 }
             }
         }
@@ -381,7 +426,7 @@ class ControlSession(
         totalFrames: Int? = null,
         confirmedFields: Set<DeviceField>? = null,
     ) {
-        mutableState.update { current ->
+        updateState { current ->
             if (current.device?.sessionId != attempt.id || request.result.isCompleted) current
             else current.copy(settingOperations = current.settingOperations.map {
                 if (it.id == request.operation.id) it.copy(stage = stage, error = error,
@@ -400,7 +445,7 @@ class ControlSession(
     private fun endSettings(attempt: Attempt) {
         val error = ControlError(ControlErrorCode.DISCONNECTED, "连接会话已结束")
         val ids = attempt.pending.keys.toSet()
-        mutableState.update { current -> current.copy(settingOperations = current.settingOperations.map {
+        updateState { current -> current.copy(settingOperations = current.settingOperations.map {
             if (it.id in ids) it.copy(stage = SettingStage.DISCONNECTED, error = error) else it
         }) }
         attempt.pending.values.forEach { it.result.complete(OperationResult.Failure(error)) }
@@ -518,7 +563,7 @@ class ControlSession(
                     lifecycle.withLock {
                         if (active === attempt) {
                             active = null
-                            mutableState.update { it.copy(transportSelection = null) }
+                            updateState { it.copy(transportSelection = null) }
                         }
                     }
                 }
@@ -561,16 +606,21 @@ class ControlSession(
                 link.notifications.collect { bytes ->
                     if (attempt.linkEpoch.value != epoch) return@collect
                     val parsed = codec.feedNotification(bytes.copyOf())
-                    updateLinkAttempt(attempt, epoch) { current ->
-                        val old = requireNotNull(current.device)
-                        val readings = parsed.flatMap { it.readings.entries }.associate { it.toPair() }
-                        val firmware = ((readings[DeviceField.FIRMWARE] ?: old.fields[DeviceField.FIRMWARE]) as? FieldReading.Known)?.value as? FieldValue.Firmware
-                        current.copy(device = old.copy(fields = old.fields + readings,
-                            capabilities = capabilities(profile, firmware),
-                            fieldErrors = old.fieldErrors - readings.keys,
-                            rawNotifications = (old.rawNotifications + bytes.hex()).takeLast(128),
-                            unknownNotifications = (old.unknownNotifications + parsed.filter { !it.accepted }.map { it.rawHex }).takeLast(128),
-                            warnings = (old.warnings + parsed.flatMap { it.warnings }).takeLast(128)))
+                    val readings = parsed.flatMap { it.readings.entries }.associate { it.toPair() }
+                    lifecycle.withLock {
+                        updateLinkAttempt(attempt, epoch) { current ->
+                            val old = requireNotNull(current.device)
+                            val firmware = ((readings[DeviceField.FIRMWARE] ?: old.fields[DeviceField.FIRMWARE]) as? FieldReading.Known)?.value as? FieldValue.Firmware
+                            current.copy(device = old.copy(fields = old.fields + readings,
+                                capabilities = capabilities(profile, firmware),
+                                fieldErrors = old.fieldErrors - readings.keys,
+                                rawNotifications = (old.rawNotifications + bytes.hex()).takeLast(128),
+                                unknownNotifications = (old.unknownNotifications + parsed.filter { !it.accepted }.map { it.rawHex }).takeLast(128),
+                                warnings = (old.warnings + parsed.flatMap { it.warnings }).takeLast(128)))
+                        }
+                        if (readings.keys.any { it == DeviceField.LEFT_BATTERY || it == DeviceField.RIGHT_BATTERY }) {
+                            consumeConnectionPromptIfReady(attempt)
+                        }
                     }
                     progress.update { previous ->
                         val keys = parsed.flatMap { it.responseKeys }.toSet()
@@ -600,6 +650,7 @@ class ControlSession(
                                 selection.endpoint is TransportEndpoint.BleGatt
                             if (!setupRecovery) {
                                 endSettings(attempt)
+                                attempt.connectionPromptExpiry?.cancel()
                                 active = null
                                 updateLinkAttempt(attempt, epoch) {
                                     if (it.connection is ConnectionState.Disconnected) it
@@ -654,8 +705,9 @@ class ControlSession(
                 state.value.device?.sessionId != attempt.id || state.value.connection is ConnectionState.Disconnected) {
                 false
             } else {
-                mutableState.update { it.copy(connection = ConnectionState.Connected(candidate.deviceId, attempt.id, profile)) }
+                updateState { it.copy(connection = ConnectionState.Connected(candidate.deviceId, attempt.id, profile)) }
                 attempt.ready = (state.value.connection as? ConnectionState.Connected)?.sessionId == attempt.id
+                if (attempt.ready) consumeConnectionPromptIfReady(attempt)
                 attempt.ready
             }
         }
@@ -747,7 +799,7 @@ class ControlSession(
             attempt.initializationQueryIndex = null
             attempt.ready = false
             val profile = requireNotNull(attempt.candidate.profile)
-            mutableState.update { current ->
+            updateState { current ->
                 if (current.device?.sessionId != attempt.id || current.connection is ConnectionState.Disconnected) current
                 else current.copy(
                     connection = ConnectionState.Connecting(attempt.candidate.deviceId, attempt.id, ConnectionPhase.CONNECTING),
@@ -822,14 +874,14 @@ class ControlSession(
         } else it
     }
 
-    private inline fun updateLinkAttempt(attempt: Attempt, epoch: Long, update: (ControlState) -> ControlState) {
-        mutableState.update {
+    private fun updateLinkAttempt(attempt: Attempt, epoch: Long, update: (ControlState) -> ControlState) {
+        updateState {
             if (attempt.linkEpoch.value == epoch && it.device?.sessionId == attempt.id && it.connection !is ConnectionState.Disconnected) update(it) else it
         }
     }
 
-    private inline fun updateAttempt(attempt: Attempt, update: (ControlState) -> ControlState) {
-        mutableState.update {
+    private fun updateAttempt(attempt: Attempt, update: (ControlState) -> ControlState) {
+        updateState {
             if (it.device?.sessionId == attempt.id && it.connection !is ConnectionState.Disconnected) update(it) else it
         }
     }
@@ -839,8 +891,11 @@ class ControlSession(
         val previous = active
         active = null
         generation++
-        previous?.let { it.linkEpoch.value += 1 }
-        mutableState.update { it.copy(connection = ConnectionState.Disconnected, device = null, transportSelection = null) }
+        previous?.let {
+            it.linkEpoch.value += 1
+            it.connectionPromptExpiry?.cancel()
+        }
+        updateState { it.copy(connection = ConnectionState.Disconnected, device = null, transportSelection = null) }
         previous?.let { endSettings(it) }
         previous?.task?.cancel()
         previous?.observer?.cancel()
@@ -860,17 +915,82 @@ class ControlSession(
     }
 
     private fun failure(error: ControlError): OperationResult.Failure {
-        mutableState.update { it.copy(lastError = error) }
+        updateState { it.copy(lastError = error) }
         return OperationResult.Failure(error)
     }
 
     fun updateSettings(settings: UserSettings) {
         val snapshot = settings.snapshot()
-        mutableState.update { it.copy(settings = snapshot) }
+        var promptToCancel: ConnectionPrompt? = null
+        updateState { current ->
+            val clearsPrompt = current.settings.islandMode != snapshot.islandMode || !snapshot.allowsConnectionPrompt()
+            promptToCancel = if (clearsPrompt) current.presentation.connectionPrompt else null
+            val presentation = if (clearsPrompt) {
+                current.presentation.copy(connectionPrompt = null)
+            } else current.presentation
+            current.copy(settings = snapshot, presentation = presentation)
+        }
+        promptToCancel?.let { prompt ->
+            active?.takeIf { it.id == prompt.reference.sessionId && it.candidate.deviceId == prompt.reference.deviceId }
+                ?.connectionPromptExpiry?.cancel()
+        }
     }
 
     fun updatePlatformState(platformState: PlatformState) {
-        mutableState.update { it.copy(platform = platformState) }
+        updateState { it.copy(platform = platformState) }
+    }
+
+    private inline fun updateState(crossinline update: (ControlState) -> ControlState) {
+        mutableState.update { update(it).withSystemPresentation() }
+    }
+
+    /** Caller holds lifecycle; the connection event is consumed once even when display is disabled. */
+    private fun consumeConnectionPromptIfReady(attempt: Attempt) {
+        if (attempt.connectionPromptConsumed || !attempt.ready) return
+        val captured = state.value
+        val connection = captured.connection as? ConnectionState.Connected ?: return
+        val device = captured.device ?: return
+        if (connection.deviceId != device.deviceId || connection.sessionId != device.sessionId ||
+            device.deviceId != attempt.candidate.deviceId || device.sessionId != attempt.id ||
+            !device.hasTrustedEarBattery()) return
+
+        attempt.connectionPromptConsumed = true
+        val mode = captured.settings.islandMode
+        if (!captured.settings.allowsConnectionPrompt()) return
+
+        val reference = SessionReference(device.deviceId, device.sessionId)
+        val prompt = ConnectionPrompt(
+            id = "${device.deviceId.value}:${attempt.id}:connection",
+            mode = mode,
+            reference = reference,
+            durationMillis = timing.connectionPromptDurationMillis,
+        )
+        var installed = false
+        updateState { current ->
+            val currentConnection = current.connection as? ConnectionState.Connected
+            val matches = active === attempt && currentConnection?.deviceId == reference.deviceId &&
+                currentConnection.sessionId == reference.sessionId && current.device?.sessionId == reference.sessionId &&
+                current.settings.islandMode == mode && current.settings.allowsConnectionPrompt()
+            installed = matches
+            if (matches) current.copy(presentation = current.presentation.copy(connectionPrompt = prompt)) else current
+        }
+        if (!installed || state.value.presentation.connectionPrompt?.id != prompt.id) return
+
+        attempt.connectionPromptExpiry = scope.launch {
+            delay(timing.connectionPromptDurationMillis)
+            lifecycle.withLock {
+                val currentPrompt = state.value.presentation.connectionPrompt
+                if (active === attempt && currentPrompt?.id == prompt.id && currentPrompt.reference == reference) {
+                    updateState { current -> current.copy(presentation = current.presentation.copy(connectionPrompt = null)) }
+                }
+            }
+            attempt.connectionPromptExpiry = null
+        }
+    }
+
+    private fun DeviceState.hasTrustedEarBattery(): Boolean = listOf(DeviceField.LEFT_BATTERY, DeviceField.RIGHT_BATTERY).any { field ->
+        val value = (fields[field] as? FieldReading.Known)?.value as? FieldValue.Number
+        value?.value in 0..100
     }
 
     private fun UserSettings.snapshot(): UserSettings = copy(islandTriggers = islandTriggers.toSet())

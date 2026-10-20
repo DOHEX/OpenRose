@@ -115,7 +115,10 @@ data class SessionReference(val deviceId: DeviceId, val sessionId: Long)
 
 /** A defensive read of the state for one specific control session. */
 sealed interface SessionSnapshotResult {
-    data class Available(val device: DeviceState) : SessionSnapshotResult
+    data class Available(
+        val device: DeviceState,
+        val presentation: SystemPresentationState = SystemPresentationState(),
+    ) : SessionSnapshotResult
     data class Failure(val error: ControlError) : SessionSnapshotResult
 }
 
@@ -131,6 +134,7 @@ data class ControlState(
     val settingOperations: List<SettingOperation> = emptyList(),
     val transportSelection: TransportSelection? = null,
     val connectionRecovery: ConnectionRecovery? = null,
+    val presentation: SystemPresentationState = SystemPresentationState(),
 )
 
 data class ConnectionRecovery(
