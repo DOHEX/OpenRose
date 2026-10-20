@@ -12,6 +12,7 @@ data class PlatformState(
     val permission: PermissionState,
     val transport: TransportAvailability = TransportAvailability.Unavailable("平台传输尚未实现"),
     val module: ModuleAvailability = ModuleAvailability.Unavailable("尚未检测系统模块"),
+    val bridge: SystemBridgeDiagnostics? = null,
 )
 
 enum class PermissionState { NOT_REQUIRED, REQUIRED, GRANTED, DENIED }
@@ -108,6 +109,15 @@ data class DeviceState(
     val unknownNotifications: List<String> = emptyList(),
     val warnings: List<String> = emptyList(),
 )
+
+/** Opaque reference to the device session a caller is allowed to inspect. */
+data class SessionReference(val deviceId: DeviceId, val sessionId: Long)
+
+/** A defensive read of the state for one specific control session. */
+sealed interface SessionSnapshotResult {
+    data class Available(val device: DeviceState) : SessionSnapshotResult
+    data class Failure(val error: ControlError) : SessionSnapshotResult
+}
 
 data class ControlState(
     val platform: PlatformState,

@@ -19,7 +19,10 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    buildFeatures { compose = true }
+    buildFeatures {
+        compose = true
+        aidl = true
+    }
 }
 kotlin {
     jvmToolchain(21)
@@ -28,4 +31,6 @@ kotlin {
 dependencies {
     implementation(project(":composeApp"))
     implementation(libs.activity.compose)
+    compileOnly(libs.libxposed.api)
+    implementation(libs.libxposed.service)
 }

@@ -44,7 +44,7 @@ internal fun Context.readPlatformState(permissionRequested: Boolean): PlatformSt
     return PlatformState(
         permission = permission,
         transport = transport,
-        module = ModuleAvailability.Unavailable("系统模块尚未接入，普通客户端可独立运行"),
+        module = ModuleAvailability.Unavailable("尚未收到兼容框架服务，普通客户端可独立运行"),
     )
 }
 

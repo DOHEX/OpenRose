@@ -34,6 +34,8 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.dp
 import io.github.dohex.openrose.core.Appearance
+import io.github.dohex.openrose.core.BridgeIpcState
+import io.github.dohex.openrose.core.BridgeSessionState
 import io.github.dohex.openrose.core.ControlState
 import io.github.dohex.openrose.core.DeviceSetting
 import io.github.dohex.openrose.core.InterfaceStyle
@@ -188,6 +190,31 @@ private fun PlatformCard(
             },
             secondary = true,
         )
+        platform.bridge?.let { bridge ->
+            Spacer(Modifier.height(12.dp))
+            bridge.frameworkName?.let { name ->
+                AppText("框架：$name ${bridge.frameworkVersion.orEmpty()} · API ${bridge.frameworkApi}", secondary = true)
+            }
+            bridge.targetProcess?.let { AppText("目标进程：$it", secondary = true) }
+            bridge.componentVersion?.let { AppText("蓝牙组件版本：$it", secondary = true) }
+            bridge.componentMatch?.let { AppText("匹配依据：$it", secondary = true) }
+            AppText("跨进程通道：" + when (bridge.ipc) {
+                BridgeIpcState.DISCONNECTED -> "未连接"
+                BridgeIpcState.WAITING -> "等待目标进程"
+                BridgeIpcState.AUTHENTICATED -> "已通过身份校验"
+                BridgeIpcState.TARGET_INCOMPATIBLE -> "目标组件不匹配"
+                BridgeIpcState.REJECTED -> "请求未通过校验"
+            }, secondary = true)
+            AppText("系统入口读取：" + when (bridge.session) {
+                BridgeSessionState.NONE -> "没有就绪设备会话"
+                BridgeSessionState.WAITING_CONFIRMATION -> "已生成读取结果，等待目标进程确认"
+                BridgeSessionState.READY -> "已读取当前会话"
+                BridgeSessionState.STALE -> "旧引用已拒绝，等待当前会话"
+            }, secondary = true)
+            if (platform.module == ModuleAvailability.Available) {
+                bridge.detail?.let { AppText(it, secondary = true) }
+            }
+        }
     }
 }
 

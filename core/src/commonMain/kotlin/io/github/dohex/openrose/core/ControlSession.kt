@@ -164,6 +164,22 @@ class ControlSession(
         }
     }
 
+    /** Reads a detached snapshot only when the reference still identifies the ready device session. */
+    fun readSession(reference: SessionReference): SessionSnapshotResult {
+        val captured = mutableState.value
+        val connection = captured.connection as? ConnectionState.Connected
+            ?: return SessionSnapshotResult.Failure(ControlError(ControlErrorCode.NOT_READY, "设备会话尚未就绪"))
+        val device = captured.device
+        if (device == null || device.deviceId != connection.deviceId || device.sessionId != connection.sessionId ||
+            device.profile != connection.profile) {
+            return SessionSnapshotResult.Failure(ControlError(ControlErrorCode.NOT_READY, "当前设备状态与连接会话不一致"))
+        }
+        if (reference.deviceId != connection.deviceId || reference.sessionId != connection.sessionId) {
+            return SessionSnapshotResult.Failure(ControlError(ControlErrorCode.DISCONNECTED, "请求的设备会话已结束或已被替换"))
+        }
+        return SessionSnapshotResult.Available(device.snapshot())
+    }
+
     /** A caller owns its wait; the platform session owns the queued operation. */
     suspend fun set(setting: DeviceSetting, value: FieldValue): OperationResult {
         platformError()?.let { return failure(it) }
@@ -419,6 +435,44 @@ class ControlSession(
         is FieldValue.TouchKeys -> copy(bindings = bindings.toList())
         else -> this
     }
+
+    private fun DeviceState.snapshot() = copy(
+        capabilities = capabilities.snapshot(),
+        fields = fields.mapValues { (_, reading) -> reading.snapshot() },
+        fieldErrors = fieldErrors.toMap(),
+        rawNotifications = rawNotifications.toList(),
+        unknownNotifications = unknownNotifications.toList(),
+        warnings = warnings.toList(),
+    )
+
+    private fun FieldReading.snapshot(): FieldReading = when (this) {
+        FieldReading.Loading -> this
+        is FieldReading.NotProvided -> copy()
+        is FieldReading.Unknown -> copy()
+        is FieldReading.Known -> copy(value = value.snapshot())
+    }
+
+    private fun DeviceCapabilities.snapshot() = copy(
+        readableFields = readableFields.toSet(),
+        writableSettings = writableSettings.toSet(),
+        noiseControl = noiseControl?.copy(
+            modes = noiseControl.modes.toSet(),
+            levels = noiseControl.levels.toSet(),
+            cycleModes = noiseControl.cycleModes.toSet(),
+        ),
+        equalizer = equalizer?.copy(
+            presets = equalizer.presets.toSet(),
+            custom = equalizer.custom?.copy(bandsHz = equalizer.custom.bandsHz.toList()),
+        ),
+        touchControl = touchControl?.copy(
+            slots = touchControl.slots.toSet(),
+            actions = touchControl.actions.toSet(),
+        ),
+        audioControl = audioControl?.copy(modes = audioControl.modes.toSet()),
+        promptVolumeLevels = promptVolumeLevels.toSet(),
+        gainLevels = gainLevels.toSet(),
+        hearingProtectionLevels = hearingProtectionLevels.toSet(),
+    )
 
     private suspend fun openAndRead(attempt: Attempt): OperationResult {
         try {

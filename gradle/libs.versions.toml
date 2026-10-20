@@ -6,6 +6,8 @@ material3 = "1.12.0-alpha03"
 miuix = "0.9.4"
 coroutines = "1.11.0"
 activity = "1.13.0"
+libxposed-api = "102.0.0"
+libxposed-service = "102.0.0"
 
 [libraries]
 compose-runtime = { module = "org.jetbrains.compose.runtime:runtime", version.ref = "compose" }
@@ -16,6 +18,8 @@ coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", ve
 material3 = { module = "org.jetbrains.compose.material3:material3", version.ref = "material3" }
 miuix-ui = { module = "top.yukonga.miuix.kmp:miuix-ui", version.ref = "miuix" }
 activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activity" }
+libxposed-api = { module = "io.github.libxposed:api", version.ref = "libxposed-api" }
+libxposed-service = { module = "io.github.libxposed:service", version.ref = "libxposed-service" }
 
 [plugins]
 kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
