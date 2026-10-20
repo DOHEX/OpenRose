@@ -36,6 +36,29 @@ enum class TransportSelectionReason {
     CLASSIC_AUDIO,
 }
 
+/** Failures that make a single setup retry on a fresh BLE connection worthwhile. */
+enum class TransportRecoveryReason {
+    SERVICE_DISCOVERY,
+    SERVICES_UNAVAILABLE,
+    SUBSCRIPTION,
+    WRITE_FAILED,
+    NO_INITIAL_RESPONSE,
+    SERVICES_CHANGED,
+}
+
+/** A platform adapter uses this only for a setup failure it has classified as recoverable. */
+class RecoverableTransportException(
+    val reason: TransportRecoveryReason,
+    message: String,
+    cause: Throwable? = null,
+) : Exception(message, cause)
+
+/** A transport fault explicitly classified by the adapter as terminal for this attempt. */
+class TerminalTransportException(
+    message: String,
+    cause: Throwable? = null,
+) : Exception(message, cause)
+
 data class TransportSelection(
     val endpoint: TransportEndpoint,
     val reason: TransportSelectionReason,
@@ -44,6 +67,8 @@ data class TransportSelection(
 interface ControlTransport {
     /** Completes when scanning stops; failures are reported through the flow. */
     fun scan(): Flow<Advertisement>
+    /** Unclassified setup timeouts may be retried only when the adapter explicitly supports it. */
+    val supportsInitializationRecovery: Boolean get() = false
     suspend fun connectionFacts(deviceId: DeviceId, classicAddress: String?): TransportFacts = TransportFacts()
     suspend fun connect(
         deviceId: DeviceId,

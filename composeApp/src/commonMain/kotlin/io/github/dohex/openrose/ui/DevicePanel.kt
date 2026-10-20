@@ -35,6 +35,7 @@ import io.github.dohex.openrose.core.protocol.ModelProfile
 import io.github.dohex.openrose.core.transport.DeviceId
 import io.github.dohex.openrose.core.transport.TransportEndpoint
 import io.github.dohex.openrose.core.transport.TransportSelectionReason
+import io.github.dohex.openrose.core.transport.TransportRecoveryReason
 
 @Composable
 internal fun DevicePanel(
@@ -110,6 +111,22 @@ internal fun DevicePanel(
                     TransportSelectionReason.AUDIO_PROFILE_UNKNOWN -> "无法确认音频连接类型，使用 BLE"
                     TransportSelectionReason.LE_AUDIO -> "已检测到 LE Audio 音频连接，使用 BLE"
                     TransportSelectionReason.CLASSIC_AUDIO -> "已确认传统蓝牙音频连接，可使用串口控制"
+                }, secondary = true)
+            }
+            state.connectionRecovery?.let { recovery ->
+                Spacer(Modifier.height(12.dp))
+                AppText(when (state.connection) {
+                    is ConnectionState.Connecting -> "正在恢复连接（${recovery.attempt}/1）"
+                    is ConnectionState.Connected -> "本次连接经过 ${recovery.attempt} 次恢复"
+                    ConnectionState.Disconnected -> "本次连接已尝试恢复 ${recovery.attempt} 次"
+                })
+                AppText(when (recovery.reason) {
+                    TransportRecoveryReason.SERVICE_DISCOVERY -> "蓝牙服务发现暂不可用"
+                    TransportRecoveryReason.SERVICES_UNAVAILABLE -> "耳机控制服务尚未就绪"
+                    TransportRecoveryReason.SUBSCRIPTION -> "设备状态订阅未完成"
+                    TransportRecoveryReason.WRITE_FAILED -> "首次状态读取发送未完成"
+                    TransportRecoveryReason.NO_INITIAL_RESPONSE -> "首次读取尚未收到可用状态"
+                    TransportRecoveryReason.SERVICES_CHANGED -> "耳机的蓝牙服务已变化"
                 }, secondary = true)
             }
             state.lastError?.let { error ->

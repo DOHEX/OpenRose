@@ -26,6 +26,8 @@ ROSE / ROSESELSA 耳机控制客户端，采用 Kotlin Multiplatform 共享核�
 
 i7 只有在广播提供可用 BR 地址、平台支持串口，并确认连接的是传统音频 profile 时才选 SPP；LE Audio 或音频类型未知时使用 BLE。两种控制连接复用同一协议、队列和确认流程。“强制使用 BLE”保存为偏好，仅影响下次连接，不切断当前连接或重放设置。SPP 的系统配对、真实连接选择和控制仍待 i7 实机验证。
 
+Android BLE 初始化阶段遇到明确的服务、订阅或首次读取故障时，至多关闭旧链路并恢复一次，重新读取可信状态。已就绪后的断连由用户重新连接，旧队列和设置不会自动重放。恢复次数及原因在界面显示；真实手机的服务缓存、延迟发布和断连恢复仍待实机验证。
+
 ## 构建
 
 需要 JDK 21、Android SDK Platform 37 和 Build Tools 37.0.0。Android 客户端最低 API 26（Android 8.0），targetSdk 36。项目使用 JVM 17 字节码。
@@ -62,4 +64,4 @@ Android APK：`androidApp/build/outputs/apk/debug/androidApp-debug.apk`。桌面
 
 ## 版本与验证
 
-固定依赖见 `gradle/libs.versions.toml`；初始化构建与平台验证记录见 [docs/verification/bootstrap.md](docs/verification/bootstrap.md)，读取协议来源与限制见 [docs/protocols.md](docs/protocols.md)，降噪验证见 [docs/verification/noise-controls.md](docs/verification/noise-controls.md)，预设 EQ / 游戏验证见 [docs/verification/equalizer-game.md](docs/verification/equalizer-game.md)，触控与音频验证见 [docs/verification/device-controls.md](docs/verification/device-controls.md)，十段 EQ 与固件能力验证见 [docs/verification/advanced-audio.md](docs/verification/advanced-audio.md)。i7 传输选择见 [docs/verification/i7-transports.md](docs/verification/i7-transports.md)。领域约束见 [GLOSSARY.md](GLOSSARY.md) 和 [docs/adr](docs/adr)。
+固定依赖见 `gradle/libs.versions.toml`；初始化构建与平台验证记录见 [docs/verification/bootstrap.md](docs/verification/bootstrap.md)，读取协议来源与限制见 [docs/protocols.md](docs/protocols.md)，降噪验证见 [docs/verification/noise-controls.md](docs/verification/noise-controls.md)，预设 EQ / 游戏验证见 [docs/verification/equalizer-game.md](docs/verification/equalizer-game.md)，触控与音频验证见 [docs/verification/device-controls.md](docs/verification/device-controls.md)，十段 EQ 与固件能力验证见 [docs/verification/advanced-audio.md](docs/verification/advanced-audio.md)。i7 传输选择见 [docs/verification/i7-transports.md](docs/verification/i7-transports.md)。连接恢复见 [docs/verification/connection-recovery.md](docs/verification/connection-recovery.md)。领域约束见 [GLOSSARY.md](GLOSSARY.md) 和 [docs/adr](docs/adr)。

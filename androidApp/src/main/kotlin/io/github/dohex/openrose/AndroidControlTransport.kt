@@ -24,6 +24,8 @@ internal class AndroidControlTransport(context: Context) : ControlTransport {
     private val audioProfiles = AndroidAudioProfiles(context)
     private val appContext = context.applicationContext
 
+    override val supportsInitializationRecovery: Boolean = true
+
     override fun scan(): Flow<Advertisement> = ble.scan()
 
     override suspend fun connectionFacts(deviceId: DeviceId, classicAddress: String?): TransportFacts =

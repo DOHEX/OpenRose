@@ -120,4 +120,11 @@ data class ControlState(
     /** Recent operations, including terminal outcomes across a disconnect. */
     val settingOperations: List<SettingOperation> = emptyList(),
     val transportSelection: TransportSelection? = null,
+    val connectionRecovery: ConnectionRecovery? = null,
+)
+
+data class ConnectionRecovery(
+    val sessionId: Long,
+    val reason: io.github.dohex.openrose.core.transport.TransportRecoveryReason,
+    val attempt: Int = 1,
 )

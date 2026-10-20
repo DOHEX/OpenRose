@@ -16,6 +16,9 @@ import io.github.dohex.openrose.core.transport.TransportFacts
 import io.github.dohex.openrose.core.transport.TransportSelection
 import io.github.dohex.openrose.core.transport.TransportSelectionReason
 import io.github.dohex.openrose.core.transport.AudioProfileEvidence
+import io.github.dohex.openrose.core.transport.RecoverableTransportException
+import io.github.dohex.openrose.core.transport.TransportRecoveryReason
+import io.github.dohex.openrose.core.transport.TerminalTransportException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.CancellationException
@@ -76,12 +79,17 @@ class ControlSession(
         lateinit var task: Deferred<OperationResult>
         var connection: ControlConnection? = null
         var observer: Job? = null
-        val codec: ProtocolCodec = createProtocolCodec(requireNotNull(candidate.profile))
-        val progress = MutableStateFlow(ReadProgress())
+        var codec: ProtocolCodec = createProtocolCodec(requireNotNull(candidate.profile))
+        var progress = MutableStateFlow(ReadProgress())
+        val linkEpoch = MutableStateFlow(0L)
+        var selection: TransportSelection? = null
+        var initializationQueryIndex: Int? = null
         val commands = Channel<SettingRequest>(32)
         val pending = linkedMapOf<Long, SettingRequest>()
         var commandWorker: Job? = null
         var hasWritten = false
+        var recoveryUsed = false
+        var ready = false
     }
 
     private data class SettingRequest(val operation: SettingOperation, val result: CompletableDeferred<OperationResult>)
@@ -133,7 +141,7 @@ class ControlSession(
             mutableState.update {
                 it.copy(connection = ConnectionState.Connecting(deviceId, next.id, ConnectionPhase.CONNECTING),
                     device = DeviceState(deviceId, next.id, profile, capabilities(profile, null), profile.supportedFields.associateWith { FieldReading.Loading }),
-                    lastError = null, transportSelection = null)
+                    lastError = null, transportSelection = null, connectionRecovery = null)
             }
             active = next
             next.task = scope.async(start = CoroutineStart.LAZY) { openAndRead(next) }
@@ -152,7 +160,7 @@ class ControlSession(
     suspend fun disconnect() {
         lifecycle.withLock {
             clearActive()
-            mutableState.update { it.copy(connection = ConnectionState.Disconnected, device = null, lastError = null) }
+            mutableState.update { it.copy(connection = ConnectionState.Disconnected, device = null, lastError = null, connectionRecovery = null) }
         }
     }
 
@@ -413,101 +421,19 @@ class ControlSession(
     }
 
     private suspend fun openAndRead(attempt: Attempt): OperationResult {
-        val candidate = attempt.candidate
-        val profile = requireNotNull(candidate.profile)
-        val codec = attempt.codec
-        var connection: ControlConnection? = null
-        var ready = false
         try {
-            val selection = selectTransport(attempt)
-            updateAttempt(attempt) { it.copy(transportSelection = selection) }
-            withTimeout(timing.connectTimeoutMillis) {
-                // Keep an acquired handle visible to cleanup even if timeout wins result delivery.
-                connection = requireNotNull(transport).connect(candidate.deviceId, selection.endpoint) { phase ->
-                    phase(attempt, phase)
-                }
-            }
-            val opened = requireNotNull(connection)
-            lifecycle.withLock {
-                if (active !== attempt) throw CancellationException("Stale connection")
-                attempt.connection = opened
-            }
-            val progress = attempt.progress
-            val link = opened
-            attempt.observer = scope.launch(start = CoroutineStart.UNDISPATCHED) {
-                var error = ControlError(ControlErrorCode.DISCONNECTED, "设备已断开")
+            val selected = attempt.selection ?: selectTransport(attempt).also { attempt.selection = it }
+            updateAttempt(attempt) { it.copy(transportSelection = selected) }
+            while (true) {
+                val epoch = beginLink(attempt)
                 try {
-                    link.notifications.collect { bytes ->
-                        val parsed = codec.feedNotification(bytes.copyOf())
-                        updateAttempt(attempt) { current ->
-                            val old = requireNotNull(current.device)
-                            val readings = parsed.flatMap { it.readings.entries }.associate { it.toPair() }
-                            val firmware = ((readings[DeviceField.FIRMWARE] ?: old.fields[DeviceField.FIRMWARE]) as? FieldReading.Known)?.value as? FieldValue.Firmware
-                            current.copy(device = old.copy(fields = old.fields + readings,
-                                capabilities = capabilities(profile, firmware),
-                                fieldErrors = old.fieldErrors - readings.keys,
-                                rawNotifications = (old.rawNotifications + bytes.hex()).takeLast(128),
-                                unknownNotifications = (old.unknownNotifications + parsed.filter { !it.accepted }.map { it.rawHex }).takeLast(128),
-                                warnings = (old.warnings + parsed.flatMap { it.warnings }).takeLast(128)))
-                        }
-                        progress.update { previous ->
-                            val keys = parsed.flatMap { it.responseKeys }.toSet()
-                            val fields = parsed.flatMap { it.readings.keys }.toSet()
-                            previous.copy(keys = previous.keys + keys, meaningful = previous.meaningful || parsed.any { it.accepted },
-                                keyRevisions = previous.keyRevisions + keys.associateWith { (previous.keyRevisions[it] ?: 0) + 1 },
-                                fieldRevisions = previous.fieldRevisions + fields.associateWith { (previous.fieldRevisions[it] ?: 0) + 1 })
-                        }
-                    }
-                } catch (cancelled: CancellationException) {
-                    throw cancelled
-                } catch (cause: Exception) {
-                    error = ControlError(ControlErrorCode.DISCONNECTED, cause.message ?: "设备已断开")
-                } finally {
-                    progress.update { it.copy(ended = true) }
-                    withContext(NonCancellable) {
-                        lifecycle.withLock {
-                            if (active === attempt) {
-                                endSettings(attempt)
-                                active = null
-                                updateAttempt(attempt) { if (it.connection is ConnectionState.Disconnected) it else it.copy(connection = ConnectionState.Disconnected, device = null, lastError = error, transportSelection = null) }
-                            }
-                        }
-                    }
-                    closeSafely(link)
+                    return openAndReadLink(attempt, selected, epoch)
+                } catch (cause: RecoverableTransportException) {
+                    if (attempt.recoveryUsed || !canRetry(attempt, selected, cause)) throw cause
+                    attempt.recoveryUsed = true
+                    prepareRecovery(attempt, selected, cause, epoch)
                 }
             }
-            phase(attempt, ConnectionPhase.SUBSCRIBING)
-            withTimeout(timing.connectTimeoutMillis) { opened.subscribe() }
-            phase(attempt, ConnectionPhase.INITIALIZING)
-            val queries = codec.initQueries(opened.maxWriteSize)
-            for (query in queries) {
-                writePaced(attempt, opened, query.bytes)
-                val observed = withTimeoutOrNull(timing.queryTimeoutMillis) {
-                    progress.first { it.ended || it.keys.containsAll(query.responseKeys) }
-                }
-                if (observed?.ended == true) throw LinkEnded()
-                val completed = observed != null
-                if (!completed) {
-                    val error = ControlError(ControlErrorCode.TIMEOUT, "${query.key} 部分字段读取超时")
-                    updateAttempt(attempt) { current ->
-                        val old = requireNotNull(current.device)
-                        val missing = query.expectedFields.filter { old.fields[it] is FieldReading.Loading }.toSet()
-                        current.copy(device = old.copy(fieldErrors = old.fieldErrors + missing.associateWith { error }), lastError = error)
-                    }
-                }
-            }
-            val device = state.value.device?.takeIf { it.sessionId == attempt.id }
-            if (device == null || state.value.connection is ConnectionState.Disconnected) throw LinkEnded()
-            if (!progress.value.meaningful) {
-                val error = ControlError(ControlErrorCode.TIMEOUT, "没有收到可用的设备状态")
-                updateAttempt(attempt) { it.copy(connection = ConnectionState.Disconnected, lastError = error, transportSelection = null) }
-                return OperationResult.Failure(error)
-            }
-            updateAttempt(attempt) { it.copy(connection = ConnectionState.Connected(candidate.deviceId, attempt.id, profile)) }
-            ready = (state.value.connection as? ConnectionState.Connected)?.sessionId == attempt.id
-            if (!ready) throw LinkEnded()
-            attempt.commandWorker = scope.launch { runSettings(attempt) }
-            return OperationResult.Success
         } catch (cancelled: CancellationException) {
             if (cancelled !is TimeoutCancellationException) {
                 updateAttempt(attempt) { it.copy(connection = ConnectionState.Disconnected, device = null,
@@ -518,14 +444,22 @@ class ControlSession(
             updateAttempt(attempt) { it.copy(connection = ConnectionState.Disconnected, lastError = error, transportSelection = null) }
             return OperationResult.Failure(error)
         } catch (cause: Exception) {
-            val code = when (cause) { is IllegalArgumentException -> ControlErrorCode.UNSUPPORTED; else -> ControlErrorCode.DISCONNECTED }
+            val code = when {
+                cause is UnsupportedOperationException || cause is IllegalArgumentException -> ControlErrorCode.UNSUPPORTED
+                cause is SecurityException -> ControlErrorCode.PERMISSION_REQUIRED
+                cause is RecoverableTransportException && cause.cause is UnsupportedOperationException -> ControlErrorCode.UNSUPPORTED
+                cause is RecoverableTransportException && cause.cause is IllegalArgumentException -> ControlErrorCode.UNSUPPORTED
+                cause is RecoverableTransportException && cause.cause is SecurityException -> ControlErrorCode.PERMISSION_REQUIRED
+                cause is RecoverableTransportException && cause.reason == TransportRecoveryReason.NO_INITIAL_RESPONSE -> ControlErrorCode.TIMEOUT
+                cause is RecoverableTransportException && cause.cause is TimeoutCancellationException -> ControlErrorCode.TIMEOUT
+                else -> ControlErrorCode.DISCONNECTED
+            }
             val error = ControlError(code, cause.message ?: "设备连接已结束")
             updateAttempt(attempt) { it.copy(connection = ConnectionState.Disconnected, lastError = error, transportSelection = null) }
             return OperationResult.Failure(error)
         } finally {
-            if (!ready) {
-                attempt.observer?.cancel()
-                connection?.let { closeSafely(it) }
+            if (!attempt.ready) {
+                closeAttemptLink(attempt)
                 withContext(NonCancellable) {
                     lifecycle.withLock {
                         if (active === attempt) {
@@ -536,6 +470,255 @@ class ControlSession(
                 }
             }
         }
+    }
+
+    private suspend fun beginLink(attempt: Attempt): Long = lifecycle.withLock {
+        if (active !== attempt) throw CancellationException("Stale connection")
+        attempt.linkEpoch.value += 1
+        attempt.codec = createProtocolCodec(requireNotNull(attempt.candidate.profile))
+        attempt.progress = MutableStateFlow(ReadProgress())
+        attempt.hasWritten = false
+        attempt.initializationQueryIndex = null
+        attempt.connection = null
+        attempt.observer = null
+        attempt.ready = false
+        attempt.linkEpoch.value
+    }
+
+    private suspend fun openAndReadLink(attempt: Attempt, selection: TransportSelection, epoch: Long): OperationResult {
+        val candidate = attempt.candidate
+        val profile = requireNotNull(candidate.profile)
+        val codec = attempt.codec
+        val progress = attempt.progress
+        val opened = withTimeout(timing.connectTimeoutMillis) {
+            requireNotNull(transport).connect(candidate.deviceId, selection.endpoint) { nextPhase ->
+                phase(attempt, epoch, nextPhase)
+            }.also { attempt.connection = it }
+        }
+        lifecycle.withLock {
+            if (active !== attempt || attempt.linkEpoch.value != epoch) throw CancellationException("Stale connection")
+            attempt.connection = opened
+        }
+        val link = opened
+        attempt.observer = scope.launch(start = CoroutineStart.UNDISPATCHED) {
+            var failure: Throwable? = null
+            var error = ControlError(ControlErrorCode.DISCONNECTED, "设备已断开")
+            try {
+                link.notifications.collect { bytes ->
+                    if (attempt.linkEpoch.value != epoch) return@collect
+                    val parsed = codec.feedNotification(bytes.copyOf())
+                    updateLinkAttempt(attempt, epoch) { current ->
+                        val old = requireNotNull(current.device)
+                        val readings = parsed.flatMap { it.readings.entries }.associate { it.toPair() }
+                        val firmware = ((readings[DeviceField.FIRMWARE] ?: old.fields[DeviceField.FIRMWARE]) as? FieldReading.Known)?.value as? FieldValue.Firmware
+                        current.copy(device = old.copy(fields = old.fields + readings,
+                            capabilities = capabilities(profile, firmware),
+                            fieldErrors = old.fieldErrors - readings.keys,
+                            rawNotifications = (old.rawNotifications + bytes.hex()).takeLast(128),
+                            unknownNotifications = (old.unknownNotifications + parsed.filter { !it.accepted }.map { it.rawHex }).takeLast(128),
+                            warnings = (old.warnings + parsed.flatMap { it.warnings }).takeLast(128)))
+                    }
+                    progress.update { previous ->
+                        val keys = parsed.flatMap { it.responseKeys }.toSet()
+                        val fields = parsed.flatMap { it.readings.keys }.toSet()
+                        previous.copy(keys = previous.keys + keys, meaningful = previous.meaningful || parsed.any { it.accepted },
+                            keyRevisions = previous.keyRevisions + keys.associateWith { (previous.keyRevisions[it] ?: 0) + 1 },
+                            fieldRevisions = previous.fieldRevisions + fields.associateWith { (previous.fieldRevisions[it] ?: 0) + 1 })
+                    }
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (cause: Exception) {
+                failure = cause
+                error = when (cause) {
+                    is UnsupportedOperationException, is IllegalArgumentException -> ControlError(ControlErrorCode.UNSUPPORTED, cause.message ?: "不支持该连接")
+                    is SecurityException -> ControlError(ControlErrorCode.PERMISSION_REQUIRED, cause.message ?: "蓝牙权限不足")
+                    else -> ControlError(ControlErrorCode.DISCONNECTED, cause.message ?: "设备已断开")
+                }
+            } finally {
+                withContext(NonCancellable) {
+                    lifecycle.withLock {
+                        // Publish link termination under the same lock as the READY commit so a
+                        // final notification cannot race into a dead Connected state.
+                        progress.update { it.copy(ended = true, failure = failure) }
+                        if (active === attempt && attempt.linkEpoch.value == epoch) {
+                            val setupRecovery = failure is RecoverableTransportException && !attempt.ready &&
+                                selection.endpoint is TransportEndpoint.BleGatt
+                            if (!setupRecovery) {
+                                endSettings(attempt)
+                                active = null
+                                updateLinkAttempt(attempt, epoch) {
+                                    if (it.connection is ConnectionState.Disconnected) it
+                                    else it.copy(connection = ConnectionState.Disconnected, device = null, lastError = error, transportSelection = null)
+                                }
+                            }
+                        }
+                    }
+                }
+                closeSafely(link)
+            }
+        }
+        phase(attempt, epoch, ConnectionPhase.SUBSCRIBING)
+        withTimeout(timing.connectTimeoutMillis) { opened.subscribe() }
+        throwProgressFailure(progress)
+        phase(attempt, epoch, ConnectionPhase.INITIALIZING)
+        val queries = codec.initQueries(opened.maxWriteSize)
+        for ((index, query) in queries.withIndex()) {
+            attempt.initializationQueryIndex = index
+            throwProgressFailure(progress)
+            writeInitialQuery(attempt, selection, opened, query.bytes, index)
+            val waitForMeaningfulState = index == 0 && selection.endpoint is TransportEndpoint.BleGatt &&
+                requireNotNull(transport).supportsInitializationRecovery
+            val observed = withTimeoutOrNull(timing.queryTimeoutMillis) {
+                progress.first {
+                    it.ended || (it.keys.containsAll(query.responseKeys) && (!waitForMeaningfulState || it.meaningful))
+                }
+            }
+            if (observed?.ended == true) throw observed.failure ?: LinkEnded()
+            if (observed == null) {
+                if (index == 0 && !progress.value.meaningful && selection.endpoint is TransportEndpoint.BleGatt &&
+                    requireNotNull(transport).supportsInitializationRecovery) {
+                    throw RecoverableTransportException(TransportRecoveryReason.NO_INITIAL_RESPONSE, "首条初始化读取没有收到有效设备状态")
+                }
+                val timeout = ControlError(ControlErrorCode.TIMEOUT, "${query.key} 部分字段读取超时")
+                updateLinkAttempt(attempt, epoch) { current ->
+                    val old = requireNotNull(current.device)
+                    val missing = query.expectedFields.filter { old.fields[it] is FieldReading.Loading }.toSet()
+                    current.copy(device = old.copy(fieldErrors = old.fieldErrors + missing.associateWith { timeout }), lastError = timeout)
+                }
+            }
+        }
+        val device = state.value.device?.takeIf { it.sessionId == attempt.id }
+        if (device == null || state.value.connection is ConnectionState.Disconnected) throw LinkEnded()
+        if (!progress.value.meaningful) {
+            val timeout = ControlError(ControlErrorCode.TIMEOUT, "没有收到可用的设备状态")
+            updateLinkAttempt(attempt, epoch) { it.copy(connection = ConnectionState.Disconnected, lastError = timeout, transportSelection = null) }
+            return OperationResult.Failure(timeout)
+        }
+        val committedReady = lifecycle.withLock {
+            if (active !== attempt || attempt.linkEpoch.value != epoch || progress.value.ended ||
+                state.value.device?.sessionId != attempt.id || state.value.connection is ConnectionState.Disconnected) {
+                false
+            } else {
+                mutableState.update { it.copy(connection = ConnectionState.Connected(candidate.deviceId, attempt.id, profile)) }
+                attempt.ready = (state.value.connection as? ConnectionState.Connected)?.sessionId == attempt.id
+                attempt.ready
+            }
+        }
+        if (!committedReady) throw progress.value.failure ?: LinkEnded()
+        attempt.commandWorker = scope.launch { runSettings(attempt) }
+        return OperationResult.Success
+    }
+
+    private suspend fun writeInitialQuery(
+        attempt: Attempt,
+        selection: TransportSelection,
+        connection: ControlConnection,
+        bytes: ByteArray,
+        queryIndex: Int,
+    ) {
+        try {
+            writePaced(attempt, connection, bytes)
+        } catch (cause: CancellationException) {
+            if (cause is TimeoutCancellationException && currentCoroutineContext().isActive &&
+                queryIndex == 0 && canRecoverUnclassified(attempt, selection)) {
+                throw RecoverableTransportException(TransportRecoveryReason.WRITE_FAILED, "首条初始化读取写入超时", cause)
+            }
+            throw cause
+        } catch (cause: Exception) {
+            if (queryIndex == 0 && canRecoverUnclassified(attempt, selection) && cause !is SecurityException &&
+                cause !is IllegalArgumentException && cause !is UnsupportedOperationException && cause !is LinkEnded &&
+                cause !is RecoverableTransportException && cause !is TerminalTransportException) {
+                throw RecoverableTransportException(TransportRecoveryReason.WRITE_FAILED, "首条初始化读取写入失败", cause)
+            }
+            throw cause
+        }
+    }
+
+    private fun canRecoverUnclassified(attempt: Attempt, selection: TransportSelection): Boolean =
+        selection.endpoint is TransportEndpoint.BleGatt && requireNotNull(transport).supportsInitializationRecovery
+
+    private fun canRetry(
+        attempt: Attempt,
+        selection: TransportSelection,
+        failure: RecoverableTransportException,
+    ): Boolean {
+        if (selection.endpoint !is TransportEndpoint.BleGatt) return false
+        if (failure.cause is SecurityException || failure.cause is IllegalArgumentException ||
+            failure.cause is UnsupportedOperationException || failure.cause is TerminalTransportException) return false
+        return when (failure.reason) {
+            TransportRecoveryReason.WRITE_FAILED, TransportRecoveryReason.NO_INITIAL_RESPONSE ->
+                attempt.initializationQueryIndex == 0 && canRecoverUnclassified(attempt, selection)
+            TransportRecoveryReason.SERVICE_DISCOVERY,
+            TransportRecoveryReason.SERVICES_UNAVAILABLE,
+            TransportRecoveryReason.SUBSCRIPTION,
+            TransportRecoveryReason.SERVICES_CHANGED -> true
+        }
+    }
+
+    private fun throwProgressFailure(progress: MutableStateFlow<ReadProgress>) {
+        val current = progress.value
+        if (current.ended) throw current.failure ?: LinkEnded()
+    }
+
+    private suspend fun prepareRecovery(
+        attempt: Attempt,
+        selection: TransportSelection,
+        failure: RecoverableTransportException,
+        failedEpoch: Long,
+    ) {
+        val (oldConnection, oldObserver) = lifecycle.withLock {
+            if (active !== attempt || attempt.linkEpoch.value != failedEpoch) throw CancellationException("Stale recovery")
+            // Invalidate callbacks before cancellation so an old finally cannot clear the new link.
+            attempt.linkEpoch.value += 1
+            val oldConnection = attempt.connection
+            val oldObserver = attempt.observer
+            attempt.connection = null
+            attempt.observer = null
+            oldConnection to oldObserver
+        }
+        withContext(NonCancellable) {
+            oldObserver?.cancel()
+            try {
+                oldConnection?.close()
+            } finally {
+                oldObserver?.join()
+            }
+        }
+        lifecycle.withLock {
+            if (active !== attempt) throw CancellationException("Stale recovery")
+            attempt.codec = createProtocolCodec(requireNotNull(attempt.candidate.profile))
+            attempt.progress = MutableStateFlow(ReadProgress())
+            attempt.hasWritten = false
+            attempt.initializationQueryIndex = null
+            attempt.ready = false
+            val profile = requireNotNull(attempt.candidate.profile)
+            mutableState.update { current ->
+                if (current.device?.sessionId != attempt.id || current.connection is ConnectionState.Disconnected) current
+                else current.copy(
+                    connection = ConnectionState.Connecting(attempt.candidate.deviceId, attempt.id, ConnectionPhase.CONNECTING),
+                    device = DeviceState(attempt.candidate.deviceId, attempt.id, profile, capabilities(profile, null),
+                        profile.supportedFields.associateWith { FieldReading.Loading }),
+                    lastError = null,
+                    transportSelection = selection,
+                    connectionRecovery = ConnectionRecovery(attempt.id, failure.reason),
+                )
+            }
+        }
+    }
+
+    private suspend fun closeAttemptLink(attempt: Attempt) = withContext(NonCancellable) {
+        val (oldConnection, oldObserver) = lifecycle.withLock {
+            attempt.linkEpoch.value += 1
+            val oldConnection = attempt.connection
+            val oldObserver = attempt.observer
+            attempt.connection = null
+            attempt.observer = null
+            oldConnection to oldObserver
+        }
+        oldObserver?.cancel()
+        oldConnection?.let { closeSafely(it) }
+        oldObserver?.join()
     }
 
     private suspend fun selectTransport(attempt: Attempt): TransportSelection {
@@ -573,15 +756,22 @@ class ControlSession(
         val ended: Boolean = false,
         val keyRevisions: Map<String, Long> = emptyMap(),
         val fieldRevisions: Map<DeviceField, Long> = emptyMap(),
+        val failure: Throwable? = null,
     )
 
     private class LinkEnded : Exception("设备连接已结束")
 
-    private fun phase(attempt: Attempt, phase: ConnectionPhase) = updateAttempt(attempt) {
+    private fun phase(attempt: Attempt, epoch: Long, phase: ConnectionPhase) = updateLinkAttempt(attempt, epoch) {
         val current = it.connection as? ConnectionState.Connecting
         if (current != null && phase != ConnectionPhase.READY && phase.ordinal >= current.phase.ordinal) {
             it.copy(connection = current.copy(phase = phase))
         } else it
+    }
+
+    private inline fun updateLinkAttempt(attempt: Attempt, epoch: Long, update: (ControlState) -> ControlState) {
+        mutableState.update {
+            if (attempt.linkEpoch.value == epoch && it.device?.sessionId == attempt.id && it.connection !is ConnectionState.Disconnected) update(it) else it
+        }
     }
 
     private inline fun updateAttempt(attempt: Attempt, update: (ControlState) -> ControlState) {
@@ -595,6 +785,7 @@ class ControlSession(
         val previous = active
         active = null
         generation++
+        previous?.let { it.linkEpoch.value += 1 }
         mutableState.update { it.copy(connection = ConnectionState.Disconnected, device = null, transportSelection = null) }
         previous?.let { endSettings(it) }
         previous?.task?.cancel()
