@@ -1,0 +1,10 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="io.github.dohex.openrose.nativeprobe">
+    <application android:label="OpenRose native snapshot probe" android:debuggable="true" android:theme="@android:style/Theme.Material.Light.NoActionBar">
+        <activity android:name=".NativeSnapshotProbeActivity" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

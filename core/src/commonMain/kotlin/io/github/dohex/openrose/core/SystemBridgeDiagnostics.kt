@@ -14,6 +14,16 @@ data class SystemBridgeDiagnostics(
     val detail: String? = null,
     /** Target-process calls and compatibility failures; these never assert visible SystemUI output. */
     val presentation: Map<String, String> = emptyMap(),
+    val endpoints: Map<String, SystemEndpointDiagnostics> = emptyMap(),
+)
+
+data class SystemEndpointDiagnostics(
+    val targetPackage: String,
+    val targetProcess: String,
+    val componentVersion: String,
+    val entryMatch: String,
+    val ipc: BridgeIpcState,
+    val features: Map<String, String> = emptyMap(),
 )
 
 enum class BridgeIpcState { DISCONNECTED, WAITING, AUTHENTICATED, TARGET_INCOMPATIBLE, REJECTED }

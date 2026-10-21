@@ -195,9 +195,11 @@ private fun PlatformCard(
             bridge.frameworkName?.let { name ->
                 AppText("框架：$name ${bridge.frameworkVersion.orEmpty()} · API ${bridge.frameworkApi}", secondary = true)
             }
-            bridge.targetProcess?.let { AppText("目标进程：$it", secondary = true) }
-            bridge.componentVersion?.let { AppText("蓝牙组件版本：$it", secondary = true) }
-            bridge.componentMatch?.let { AppText("匹配依据：$it", secondary = true) }
+            if (bridge.endpoints.isEmpty()) {
+                bridge.targetProcess?.let { AppText("目标进程：$it", secondary = true) }
+                bridge.componentVersion?.let { AppText("系统组件版本：$it", secondary = true) }
+                bridge.componentMatch?.let { AppText("匹配依据：$it", secondary = true) }
+            }
             AppText("跨进程通道：" + when (bridge.ipc) {
                 BridgeIpcState.DISCONNECTED -> "未连接"
                 BridgeIpcState.WAITING -> "等待目标进程"
@@ -214,6 +216,50 @@ private fun PlatformCard(
             if (platform.module == ModuleAvailability.Available) {
                 bridge.detail?.let { AppText(it, secondary = true) }
             }
+            bridge.endpoints.values.forEach { endpoint ->
+                Spacer(Modifier.height(8.dp))
+                val name = when (endpoint.targetPackage) {
+                    "com.android.bluetooth" -> "蓝牙服务"
+                    "com.xiaomi.bluetooth" -> "小米蓝牙"
+                    "com.milink.service" -> "融合设备中心"
+                    "android" -> "系统提示服务"
+                    else -> endpoint.targetPackage
+                }
+                AppText("$name：" + when (endpoint.ipc) {
+                    BridgeIpcState.AUTHENTICATED -> "已通过身份校验"
+                    BridgeIpcState.DISCONNECTED -> "未连接"
+                    BridgeIpcState.WAITING -> "等待连接"
+                    BridgeIpcState.TARGET_INCOMPATIBLE -> "组件不匹配"
+                    BridgeIpcState.REJECTED -> "请求未通过校验"
+                }, secondary = true)
+                AppText("${endpoint.targetProcess} · ${endpoint.componentVersion}", secondary = true)
+                AppText("入口依据：${endpoint.entryMatch}", secondary = true)
+                endpoint.features.forEach { (feature, result) ->
+                    val label = when (feature) {
+                        "SYSTEM_HEADSET" -> "原生耳机接入"
+                        "FUSION_CENTER" -> "融合状态与操作"
+                        "OFFICIAL_GUARD" -> "提示归属保护"
+                        "OFFICIAL_CONNECTION" -> "官方连接提示"
+                        else -> feature
+                    }
+                    val status = when (result.substringBefore(" · ")) {
+                        "RESOLVED" -> "已定位入口，实际行为待验收"
+                        "IDENTIFIED" -> "已匹配当前设备"
+                        "SUBMITTED" -> "已提交操作，等待设备确认"
+                        "CONFIRMED" -> "设备已确认操作"
+                        "CALLED" -> "已调用接口，实际行为待验收"
+                        "REJECTED" -> "请求已拒绝"
+                        "UNSUPPORTED" -> "缺少已核实的能力映射"
+                        "UNAVAILABLE" -> "当前系统路径不可用"
+                        "ACTION_FAILED" -> "操作失败"
+                        else -> "等待确认"
+                    }
+                    AppText("$label：$status", secondary = true)
+                    result.substringAfter(" · ", "").takeIf { it.isNotBlank() }?.let {
+                        AppText("依据：$it", secondary = true)
+                    }
+                }
+            }
             bridge.presentation.forEach { (feature, result) ->
                 val label = when (feature) {
                     "OFFICIAL_CONNECTION" -> "官方连接提示"
@@ -223,7 +269,7 @@ private fun PlatformCard(
                 }
                 val status = when (result.substringBefore(" · ")) {
                     "CALLED" -> "已请求系统呈现，实际显示待验收"
-                    "UNAVAILABLE" -> if (feature == "OFFICIAL_CONNECTION") "系统资源与限定撤销方式尚未核实" else "当前系统路径不可用"
+                    "UNAVAILABLE" -> "当前系统路径不可用"
                     "WITHDRAWN" -> "已请求撤销"
                     "ACTION_FAILED" -> if (result.contains("control_receiver_unavailable")) "通知查看可用，系统控制入口不可用" else "操作失败，请查看连接与设备状态"
                     else -> "等待确认"

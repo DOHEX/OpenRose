@@ -293,6 +293,9 @@ internal class SystemPresentationRenderer(
         ) {
             cancelActivePrompt("prompt_or_mode_changed")
         }
+        // Clean up our previous module prompt before handing the new policy to its owner.
+        // Official prompts are claimed only by the separate Xiaomi Bluetooth consumer.
+        if (promptMode == BridgePresentationWire.OFFICIAL) return
         if (!islandAllowed || prompt == null || promptId == null || promptMode == null || promptMode != snapshot.mode ||
             promptMode == BridgePresentationWire.OFF || promptMode !in PROMPT_MODES
         ) return
@@ -315,17 +318,7 @@ internal class SystemPresentationRenderer(
         // snapshot still says unclaimed; the host's atomic claim prevents duplicate publication.
         if (!claimed) return
 
-        when (promptMode) {
-            BridgePresentationWire.MODULE -> publishModulePrompt(snapshot, promptId, prompt)
-            BridgePresentationWire.OFFICIAL -> {
-                // The fixed OppoPods tree has no official clip files and this module cannot provide
-                // Xiaomi's provider URI/grant. Do not call the global hide action or fall back.
-                processedPrompts += key
-                reportOnce(snapshot.wire, BridgePresentationWire.OFFICIAL_CONNECTION,
-                    BridgePresentationWire.UNAVAILABLE,
-                    "official_clip_resource_and_systemui_uri_grant_unavailable")
-            }
-        }
+        publishModulePrompt(snapshot, promptId, prompt)
     }
 
     private fun publishModulePrompt(snapshot: RenderedSnapshot, promptId: String, prompt: Bundle) {

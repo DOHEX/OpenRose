@@ -16,6 +16,9 @@ import io.github.dohex.openrose.core.OperationResult
 import io.github.dohex.openrose.core.SessionReference
 import io.github.dohex.openrose.core.SessionSnapshotResult
 import io.github.dohex.openrose.core.SystemBridgeDiagnostics
+import io.github.dohex.openrose.core.SystemEndpointDiagnostics
+import io.github.dohex.openrose.core.IslandMode
+import io.github.dohex.openrose.presentation.OfficialToastWire
 import io.github.dohex.openrose.core.transport.DeviceId
 import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.libxposed.service.XposedService
@@ -46,29 +49,38 @@ class ControlBridgeHost(
     private var proofKey: String? = null
     private var facts = SystemBridgeDiagnostics(detail = "尚未收到兼容框架服务")
     private val leases = mutableMapOf<String, Lease>()
+    private var toastGuard: Pair<String, IStrongToastGuard>? = null
 
     private data class Lease(
         val id: String,
         val uid: Int,
         val pid: Int,
+        val target: BridgeTarget,
+        val processName: String,
         val client: IBinder,
         val death: IBinder.DeathRecipient,
         var touchedAt: Long,
         var awaiting: PendingRead? = null,
         var acknowledged: SessionReference? = null,
         var observer: IControlObserver? = null,
+        var officialTicket: Bundle? = null,
     )
 
     private data class PendingRead(val reference: SessionReference, val sequence: Long)
 
     fun start() {
         worker.launch {
-            session.state.map { it.connection to it.presentation }.distinctUntilChanged().collect {
-                val reference = session.state.value.presentation.reference
+            session.state.map { it.connection to it.presentation }.distinctUntilChanged().collect { (_, presentation) ->
+                val reference = presentation.reference
                 synchronized(lock) {
                     if (reportedReference != reference) {
                         reportedReference = reference
                         updateFacts { facts -> facts.copy(presentation = emptyMap()) }
+                    }
+                    if (presentation.connectionPrompt?.mode == IslandMode.OFFICIAL &&
+                        leases.values.none { it.target == BridgeTarget.XIAOMI_BLUETOOTH }) {
+                        updateFacts { facts -> facts.copy(presentation = facts.presentation +
+                            (BridgePresentationWire.OFFICIAL_CONNECTION to "UNAVAILABLE · official_target_not_connected")) }
                     }
                 }
                 notifyReaders()
@@ -146,39 +158,55 @@ class ControlBridgeHost(
             detail = "框架服务已断开，普通客户端可继续使用") }
     }
 
-    internal fun open(proof: Bundle, client: IBinder, uid: Int, pid: Int): Bundle = synchronized(lock) {
+    internal fun open(proof: Bundle, client: IBinder, uid: Int, pid: Int): Bundle {
         try {
-            val key = proofKey ?: throw SecurityException("框架认证通道未就绪")
-            requireIdentity(proof, key, uid, pid)
-            val info = context.packageManager.getPackageInfo(BridgeWire.TARGET_PACKAGE, 0)
-            @Suppress("DEPRECATION")
-            val version = if (Build.VERSION.SDK_INT >= 28) info.longVersionCode else info.versionCode.toLong()
-            val resolution = requireNotNull(proof.getString(BridgeWire.RESOLUTION))
-            if (resolution != BridgeWire.RESOLUTION_MATCHED) {
-                if (leases.isNotEmpty()) return@synchronized BridgeWire.response(BridgeWire.STATUS_STALE_REPORT)
-                updateFacts { it.copy(
-                    targetPackage = BridgeWire.TARGET_PACKAGE, targetProcess = BridgeWire.TARGET_PROCESS,
-                    componentVersion = "${info.versionName ?: "未知"} ($version)",
-                    componentMatch = "${BridgeWire.COMPONENT_MATCH} · $resolution",
-                    ipc = BridgeIpcState.TARGET_INCOMPATIBLE, session = BridgeSessionState.NONE,
-                    detail = "目标模块已报告组件入口不可用：$resolution",
-                ) }
-                return@synchronized BridgeWire.response(BridgeWire.STATUS_TARGET_INCOMPATIBLE)
+            val (target, key) = synchronized(lock) {
+                val key = proofKey ?: throw SecurityException("框架认证通道未就绪")
+                requireIdentity(proof, key, uid, pid) to key
             }
-            leases.values.filter { it.uid == uid && it.pid == pid }.toList().forEach { removeLease(it.id) }
-            if (leases.size >= 4) throw SecurityException("桥接读取端数量已达上限")
-            val id = UUID.randomUUID().toString()
-            val death = IBinder.DeathRecipient { readerDied(id) }
-            client.linkToDeath(death, 0)
-            leases[id] = Lease(id, uid, pid, client, death, SystemClock.elapsedRealtime())
-            updateFacts { it.copy(
-                targetPackage = BridgeWire.TARGET_PACKAGE, targetProcess = BridgeWire.TARGET_PROCESS,
-                componentVersion = "${info.versionName ?: "未知"} ($version)", componentMatch = BridgeWire.COMPONENT_MATCH,
-                ipc = BridgeIpcState.AUTHENTICATED, detail = "目标模块已通过身份校验；尚未读取设备状态",
-            ) }
-            BridgeWire.response(BridgeWire.STATUS_OK).apply {
-                putString(BridgeWire.LEASE_ID, id)
-                putString(BridgeWire.HOST_EPOCH, hostEpoch)
+            // PackageManager crosses Binder. Authenticate the proof before querying it, and never
+            // block other readers while resolving package ownership or version information.
+            if (context.packageManager.getPackageUid(target.packageName, 0) != uid) {
+                throw SecurityException("读取端 UID 不匹配")
+            }
+            val info = context.packageManager.getPackageInfo(target.packageName, 0)
+            return synchronized(lock) {
+                if (proofKey != key) throw SecurityException("框架凭据已经更换")
+                val processName = requireNotNull(proof.getString(BridgeWire.PROCESS))
+                val endpointKey = "${target.packageName}@$processName"
+                @Suppress("DEPRECATION")
+                val version = if (Build.VERSION.SDK_INT >= 28) info.longVersionCode else info.versionCode.toLong()
+                val resolution = requireNotNull(proof.getString(BridgeWire.RESOLUTION))
+                if (resolution != BridgeWire.RESOLUTION_MATCHED) {
+                    if (leases.values.any { it.target == target && it.processName == processName }) return@synchronized BridgeWire.response(BridgeWire.STATUS_STALE_REPORT)
+                    updateFacts { it.copy(
+                        targetPackage = target.packageName, targetProcess = processName,
+                        componentVersion = "${info.versionName ?: "未知"} ($version)",
+                        componentMatch = "${target.componentMatch} · $resolution",
+                        ipc = if (leases.isEmpty()) BridgeIpcState.TARGET_INCOMPATIBLE else BridgeIpcState.AUTHENTICATED,
+                        detail = "目标模块已报告组件入口不可用：$resolution",
+                        endpoints = it.endpoints + (endpointKey to SystemEndpointDiagnostics(target.packageName, processName,
+                            "${info.versionName ?: "未知"} ($version)", "${target.componentMatch} · $resolution", BridgeIpcState.TARGET_INCOMPATIBLE)),
+                    ) }
+                    return@synchronized BridgeWire.response(BridgeWire.STATUS_TARGET_INCOMPATIBLE)
+                }
+                leases.values.filter { it.uid == uid && it.pid == pid }.toList().forEach { removeLease(it.id) }
+                if (leases.size >= 12) throw SecurityException("桥接读取端数量已达上限")
+                val id = UUID.randomUUID().toString()
+                val death = IBinder.DeathRecipient { readerDied(id) }
+                client.linkToDeath(death, 0)
+                leases[id] = Lease(id, uid, pid, target, processName, client, death, SystemClock.elapsedRealtime())
+                updateFacts { it.copy(
+                    targetPackage = target.packageName, targetProcess = processName,
+                    componentVersion = "${info.versionName ?: "未知"} ($version)", componentMatch = target.componentMatch,
+                    ipc = BridgeIpcState.AUTHENTICATED, detail = "目标模块已通过身份校验；尚未读取设备状态",
+                    endpoints = it.endpoints + (endpointKey to SystemEndpointDiagnostics(target.packageName, processName,
+                        "${info.versionName ?: "未知"} ($version)", target.componentMatch, BridgeIpcState.AUTHENTICATED)),
+                ) }
+                BridgeWire.response(BridgeWire.STATUS_OK).apply {
+                    putString(BridgeWire.LEASE_ID, id)
+                    putString(BridgeWire.HOST_EPOCH, hostEpoch)
+                }
             }
         } catch (_: Exception) {
             // An untrusted caller cannot publish target/component or device/session facts.
@@ -188,20 +216,21 @@ class ControlBridgeHost(
         }
     }
 
-    private fun requireIdentity(proof: Bundle, key: String, uid: Int, pid: Int) {
+    private fun requireIdentity(proof: Bundle, key: String, uid: Int, pid: Int): BridgeTarget {
+        val processName = proof.getString(BridgeWire.PROCESS)
+        val target = BridgeTarget.resolve(proof.getString(BridgeWire.PACKAGE), processName)
+            ?: throw SecurityException("目标包或运行进程不在模块范围")
         if (proof.getInt(BridgeWire.KEY_VERSION) != BridgeWire.VERSION || proof.getString(BridgeWire.HOST_EPOCH) != hostEpoch ||
-            proof.getString(BridgeWire.PACKAGE) != BridgeWire.TARGET_PACKAGE || proof.getString(BridgeWire.PROCESS) != BridgeWire.TARGET_PROCESS ||
-            proof.getString(BridgeWire.COMPONENT_MATCH_KEY) != BridgeWire.COMPONENT_MATCH ||
+            proof.getString(BridgeWire.COMPONENT_MATCH_KEY) != target.componentMatch ||
             proof.getInt(BridgeWire.UID, -1) != uid || proof.getInt(BridgeWire.PID, -1) != pid || pid <= 0) {
             throw SecurityException("读取端身份不匹配")
         }
-        val targetUid = context.packageManager.getPackageUid(BridgeWire.TARGET_PACKAGE, 0)
-        if (targetUid != uid) throw SecurityException("读取端 UID 不匹配")
         val signature = BridgeWire.decodeSignature(proof.getString(BridgeWire.SIGNATURE)) ?: throw SecurityException("缺少有效证明")
         val resolution = proof.getString(BridgeWire.RESOLUTION)?.takeIf { it in BridgeWire.RESOLUTIONS }
             ?: throw SecurityException("缺少有效组件解析结果")
-        val expected = BridgeWire.signature(key, hostEpoch, BridgeWire.TARGET_PROCESS, uid, pid, resolution)
+        val expected = BridgeWire.signature(key, hostEpoch, requireNotNull(processName), uid, pid, resolution, target)
         if (!MessageDigest.isEqual(signature, expected)) throw SecurityException("模块证明不匹配")
+        return target
     }
 
     internal fun currentSession(leaseId: String, uid: Int, pid: Int): Bundle {
@@ -212,12 +241,15 @@ class ControlBridgeHost(
             val device = state.device
             if (connection == null || device == null || device.deviceId != connection.deviceId || device.sessionId != connection.sessionId) {
                 updateFacts { it.copy(session = BridgeSessionState.NONE, detail = "桥接已认证，当前没有就绪设备会话") }
-                return BridgeWire.response(BridgeWire.STATUS_NO_SESSION)
+                return BridgeWire.response(BridgeWire.STATUS_NO_SESSION).apply {
+                    putBoolean(BridgePresentationWire.OFFICIAL_GUARD_READY, toastGuard != null)
+                }
             }
             return BridgeWire.response(BridgeWire.STATUS_OK).apply {
                 putString(BridgeWire.HOST_EPOCH, hostEpoch)
                 putString(BridgeWire.DEVICE_ID, connection.deviceId.value)
                 putLong(BridgeWire.SESSION_ID, connection.sessionId)
+                putBoolean(BridgePresentationWire.OFFICIAL_GUARD_READY, toastGuard != null)
             }
         }
     }
@@ -288,7 +320,12 @@ class ControlBridgeHost(
 
     internal fun claimPrompt(request: Bundle, uid: Int, pid: Int): Bundle {
         val reference = synchronized(lock) {
-            authenticateRequest(request, uid, pid)
+            val lease = authenticateRequest(request, uid, pid)
+            val mode = session.state.value.settings.islandMode
+            if ((mode == IslandMode.MODULE && lease.target != BridgeTarget.BLUETOOTH) ||
+                (mode == IslandMode.OFFICIAL && lease.target != BridgeTarget.XIAOMI_BLUETOOTH) || mode == IslandMode.OFF) {
+                return BridgeWire.response(BridgeWire.STATUS_UNAVAILABLE, "该系统入口不拥有当前提示策略")
+            }
             request.reference() ?: return BridgeWire.response(BridgeWire.STATUS_INVALID_ARGUMENT)
         }
         val id = request.getString(BridgePresentationWire.PROMPT_ID)?.takeIf { it.length in 1..128 }
@@ -299,7 +336,9 @@ class ControlBridgeHost(
 
     internal fun setNoise(request: Bundle, uid: Int, pid: Int): Bundle {
         val reference = synchronized(lock) {
-            authenticateRequest(request, uid, pid)
+            if (authenticateRequest(request, uid, pid).target == BridgeTarget.SYSTEM_SERVER) {
+                throw SecurityException("系统呈现代理不能提交耳机设置")
+            }
             request.reference() ?: return BridgeWire.response(BridgeWire.STATUS_INVALID_ARGUMENT)
         }
         val mode = request.getString(BridgePresentationWire.NOISE_MODE)?.takeIf { it.length in 1..64 }
@@ -313,6 +352,86 @@ class ControlBridgeHost(
     }
 
     private var reportedReference: SessionReference? = null
+
+    internal fun reportComponent(report: Bundle, uid: Int, pid: Int): Bundle = synchronized(lock) {
+        val lease = authenticateRequest(report, uid, pid)
+        val feature = report.getString(BridgePresentationWire.FEATURE)?.takeIf { it in BridgePresentationWire.FEATURES }
+            ?: return@synchronized BridgeWire.response(BridgeWire.STATUS_INVALID_ARGUMENT)
+        val allowed = when (lease.target) {
+            BridgeTarget.SYSTEM_SERVER -> setOf(BridgePresentationWire.OFFICIAL_GUARD)
+            BridgeTarget.MILINK -> setOf(BridgePresentationWire.FUSION_CENTER)
+            else -> setOf(BridgePresentationWire.SYSTEM_HEADSET, BridgePresentationWire.OFFICIAL_CONNECTION)
+        }
+        if (feature !in allowed) throw SecurityException("系统入口不能代其他组件报告状态")
+        val status = report.getString(BridgeWire.STATUS)?.takeIf { it in BridgePresentationWire.COMPONENT_STATUSES }
+            ?: return@synchronized BridgeWire.response(BridgeWire.STATUS_INVALID_ARGUMENT)
+        val detail = report.getString(BridgePresentationWire.DETAIL)?.takeIf { it.length <= 512 }
+            ?: return@synchronized BridgeWire.response(BridgeWire.STATUS_INVALID_ARGUMENT)
+        val endpointKey = "${lease.target.packageName}@${lease.processName}"
+        updateFacts { current ->
+            val endpoint = current.endpoints[endpointKey] ?: return@updateFacts current
+            current.copy(endpoints = current.endpoints + (endpointKey to endpoint.copy(features = endpoint.features + (feature to "$status · $detail"))))
+        }
+        BridgeWire.response(BridgeWire.STATUS_OK)
+    }
+
+    internal fun registerToastGuard(request: Bundle, guard: IStrongToastGuard, uid: Int, pid: Int): Bundle = synchronized(lock) {
+        val lease = authenticateRequest(request, uid, pid)
+        if (lease.target != BridgeTarget.SYSTEM_SERVER) throw SecurityException("仅系统呈现代理可以注册强提示守卫")
+        toastGuard = lease.id to guard
+        worker.launch { notifyReaders() }
+        BridgeWire.response(BridgeWire.STATUS_OK)
+    }
+
+    internal fun postOfficial(request: Bundle, uid: Int, pid: Int): Bundle = officialRelay(request, uid, pid, withdraw = false)
+    internal fun withdrawOfficial(request: Bundle, uid: Int, pid: Int): Bundle = officialRelay(request, uid, pid, withdraw = true)
+
+    private fun officialRelay(request: Bundle, uid: Int, pid: Int, withdraw: Boolean): Bundle {
+        val invocation = synchronized(lock) {
+            val lease = authenticateRequest(request, uid, pid)
+            if (lease.target != BridgeTarget.XIAOMI_BLUETOOTH) throw SecurityException("仅已认证的官方呈现入口可以调用强提示")
+            val envelope = OfficialToastWire.readEnvelope(request) ?: return BridgeWire.response(BridgeWire.STATUS_INVALID_ARGUMENT)
+            val reference = request.reference() ?: return BridgeWire.response(BridgeWire.STATUS_INVALID_ARGUMENT)
+            if (envelope.hostEpoch != hostEpoch || envelope.deviceId != reference.deviceId.value ||
+                envelope.sessionId != reference.sessionId || envelope.sourceUid != uid ||
+                envelope.operation != (if (withdraw) OfficialToastWire.OPERATION_WITHDRAW else OfficialToastWire.OPERATION_SHOW) ||
+                !OfficialToastWire.verify(envelope, proofKey ?: throw SecurityException("宿主认证已失效"))) {
+                throw SecurityException("官方提示票据与调用者不匹配")
+            }
+            if (withdraw) {
+                val posted = lease.officialTicket?.let(OfficialToastWire::readEnvelope)
+                    ?: return BridgeWire.response(BridgeWire.STATUS_STALE_SESSION)
+                if (posted.ticket != envelope.ticket || posted.deviceId != envelope.deviceId ||
+                    posted.sessionId != envelope.sessionId || posted.promptId != envelope.promptId) {
+                    return BridgeWire.response(BridgeWire.STATUS_STALE_SESSION)
+                }
+            } else {
+                val captured = session.readSession(reference) as? SessionSnapshotResult.Available
+                    ?: return BridgeWire.response(BridgeWire.STATUS_STALE_SESSION)
+                val prompt = captured.presentation.connectionPrompt
+                if (prompt == null || prompt.mode != IslandMode.OFFICIAL || !prompt.claimed || prompt.id != envelope.promptId) {
+                    return BridgeWire.response(BridgeWire.STATUS_STALE_SESSION)
+                }
+            }
+            val guard = toastGuard?.takeIf { leases.containsKey(it.first) }?.second
+                ?: return BridgeWire.response(BridgeWire.STATUS_UNAVAILABLE, "系统强提示守卫尚未就绪")
+            val payload = Bundle(request).apply {
+                listOf(BridgeWire.KEY_VERSION, BridgeWire.LEASE_ID, BridgeWire.HOST_EPOCH, BridgeWire.DEVICE_ID,
+                    BridgeWire.SESSION_ID, BridgePresentationWire.PROMPT_ID, "prompt_id").forEach(::remove)
+            }
+            Triple(lease, guard, payload)
+        }
+        // The server serializes ownership checks and actual setStatus forwarding. Never hold our
+        // lease lock across a remote Binder call; a dead/replaced guard fails closed.
+        val result = runCatching { if (withdraw) invocation.second.withdraw(invocation.third) else invocation.second.post(invocation.third) }
+            .getOrElse { return BridgeWire.response(BridgeWire.STATUS_UNAVAILABLE, "系统强提示守卫已失效") }
+        synchronized(lock) {
+            if (leases[invocation.first.id] === invocation.first && result.getString(BridgeWire.STATUS) == BridgeWire.STATUS_OK) {
+                invocation.first.officialTicket = if (withdraw) null else Bundle(invocation.third)
+            }
+        }
+        return result
+    }
 
     internal fun reportPresentation(report: Bundle, uid: Int, pid: Int): Bundle = synchronized(lock) {
         authenticateRequest(report, uid, pid)
@@ -387,6 +506,12 @@ class ControlBridgeHost(
 
     private fun removeLease(id: String): Boolean = leases.remove(id)?.let {
         runCatching { it.client.unlinkToDeath(it.death, 0) }
+        if (toastGuard?.first == id) { toastGuard = null; worker.launch { notifyReaders() } }
+        val key = "${it.target.packageName}@${it.processName}"
+        updateFacts { current ->
+            val endpoint = current.endpoints[key] ?: return@updateFacts current
+            current.copy(endpoints = current.endpoints + (key to endpoint.copy(ipc = BridgeIpcState.DISCONNECTED)))
+        }
         true
     } ?: false
 

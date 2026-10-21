@@ -108,6 +108,8 @@ data class DeviceState(
     val rawNotifications: List<String> = emptyList(),
     val unknownNotifications: List<String> = emptyList(),
     val warnings: List<String> = emptyList(),
+    /** An independently identified BR/EDR address, when the model advertisement provides it. */
+    val classicAddress: String? = null,
 )
 
 /** Opaque reference to the device session a caller is allowed to inspect. */

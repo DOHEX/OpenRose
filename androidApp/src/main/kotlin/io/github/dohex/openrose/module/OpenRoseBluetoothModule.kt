@@ -1,990 +1,291 @@
 package io.github.dohex.openrose.module
 
 import android.app.Application
-import android.content.ComponentName
 import android.content.Context
-import android.content.Intent
-import android.content.ServiceConnection
-import android.content.SharedPreferences
-import android.os.Binder
 import android.os.Bundle
-import android.os.Handler
-import android.os.HandlerThread
-import android.os.IBinder
-import android.os.Process
 import android.util.Log
-import io.github.dohex.openrose.bridge.BridgeWire
 import io.github.dohex.openrose.bridge.BridgePresentationWire
-import io.github.dohex.openrose.bridge.IControlBridge
-import io.github.dohex.openrose.bridge.IControlObserver
-import io.github.dohex.openrose.presentation.SystemPresentationRenderer
+import io.github.dohex.openrose.bridge.BridgeTarget
+import io.github.dohex.openrose.bridge.BridgeWire
+import io.github.dohex.openrose.bridge.IStrongToastGuard
+import io.github.dohex.openrose.integration.AuthenticatedNativeHeadsetCallbacks
+import io.github.dohex.openrose.integration.MiLinkNativeHeadsetAdapter
+import io.github.dohex.openrose.integration.NativeHeadsetBinderAdapter
+import io.github.dohex.openrose.integration.NativeHeadsetSnapshot
+import io.github.dohex.openrose.presentation.OfficialConnectionPresenter
+import io.github.dohex.openrose.presentation.OfficialStrongToastOwnershipGuard
+import io.github.dohex.openrose.presentation.OfficialToastGuardCredentials
+import io.github.dohex.openrose.presentation.OfficialToastRelayCallbacks
+import io.github.dohex.openrose.presentation.OfficialToastWire
 import io.github.dohex.openrose.presentation.PresentationCallbacks
+import io.github.dohex.openrose.presentation.SystemPresentationRenderer
 import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedModule
 import io.github.libxposed.api.XposedModuleInterface.HotReloadedParam
 import io.github.libxposed.api.XposedModuleInterface.HotReloadingParam
 import io.github.libxposed.api.XposedModuleInterface.ModuleLoadedParam
 import io.github.libxposed.api.XposedModuleInterface.PackageReadyParam
-import java.lang.reflect.Executable
+import io.github.libxposed.api.XposedModuleInterface.SystemServerStartingParam
 import java.lang.reflect.Method
-import java.lang.reflect.Modifier
-import java.util.concurrent.CountDownLatch
+import java.util.concurrent.SynchronousQueue
+import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 
-/**
- * The only initial system hook: attach the application-owned bridge after Android Bluetooth's
- * AdapterService has completed creation. This module never creates or controls a ControlSession.
- */
+/** Scoped system consumers of the one application-owned control session. No Bluetooth is opened here. */
 class OpenRoseBluetoothModule : XposedModule() {
-    private val bindingLock = Any()
-    @Volatile private var loadedProcessName: String? = null
-    private var acceptingBindings = true
-    private var currentBinding: BridgeBinding? = null
+    private val lifecycle = Any()
+    private val entryHooks = mutableListOf<XposedInterface.HookHandle>()
+    private val pendingReports = linkedMapOf<String, Pair<String, String>>()
+    private val consumedOfficialPrompts = mutableSetOf<String>()
+    private val actions = ThreadPoolExecutor(0, 4, 30, TimeUnit.SECONDS, SynchronousQueue<Runnable>()) { task ->
+        Thread(task, "OpenRose-system-action").apply { isDaemon = true }
+    }
+    @Volatile private var retired = false
+    @Volatile private var processName: String? = null
+    @Volatile private var target: BridgeTarget? = null
     @Volatile private var targetContext: Context? = null
-    private var readerThread: HandlerThread? = null
-    private var readerHandler: Handler? = null
-    private var activeHookCalls = 0
-    private var hookDrain = CountDownLatch(0)
+    @Volatile private var client: AuthenticatedBridgeClient? = null
+    @Volatile private var nativeSnapshot: NativeHeadsetSnapshot? = null
+    private var binderAdapter: NativeHeadsetBinderAdapter? = null
+    private var fusionAdapter: MiLinkNativeHeadsetAdapter? = null
+    private var renderer: SystemPresentationRenderer? = null
+    private var official: OfficialConnectionPresenter? = null
+    private var guard: OfficialStrongToastOwnershipGuard? = null
+    private var guardEndpoint: IStrongToastGuard? = null
+    private var lastOfficialIdentity: String? = null
+    private var entryResolution = BridgeWire.RESOLUTION_MATCHED
 
     override fun onModuleLoaded(param: ModuleLoadedParam) {
-        loadedProcessName = param.processName
+        processName = param.processName
         log(Log.INFO, TAG, "module_loaded process=${param.processName} api=$apiVersion")
     }
 
     override fun onPackageReady(param: PackageReadyParam) {
-        if (param.packageName != TARGET_PACKAGE) return
-
-        val processName = loadedProcessName
-        if (processName != TARGET_PROCESS) {
-            log(
-                Log.WARN,
-                TAG,
-                "hook_skipped package=${param.packageName} process=${processName ?: "unknown"}; " +
-                    "expected_main_process=$TARGET_PROCESS",
-            )
+        val actualProcess = processName ?: return
+        val selected = BridgeTarget.resolve(param.packageName, actualProcess) ?: return
+        if (selected == BridgeTarget.SYSTEM_SERVER || retired) return
+        synchronized(lifecycle) {
+            if (target != null) return
+            target = selected
+        }
+        installNativeAdapters(selected, param.classLoader)
+        val entry = if (selected == BridgeTarget.BLUETOOTH) {
+            val type = runCatching { param.classLoader.loadClass(BridgeWire.TARGET_COMPONENT_CLASS) }.getOrNull()
+            entryResolution = if (type == null) BridgeWire.RESOLUTION_CLASS_MISSING else BridgeWire.RESOLUTION_METHOD_MISSING
+            runCatching { type?.getDeclaredMethod("onCreate") }.getOrNull()
+                ?.takeIf { it.returnType == Void.TYPE && it.parameterTypes.isEmpty() }
+        } else {
+            Application::class.java.getDeclaredMethod("attach", Context::class.java)
+        }
+        if (entry == null) {
+            log(Log.WARN, TAG, "entry_unavailable target=$selected process=$actualProcess")
+            installEntry(Application::class.java.getDeclaredMethod("attach", Context::class.java), selected, contextArgument = true)
             return
         }
+        entryResolution = BridgeWire.RESOLUTION_MATCHED
+        installEntry(entry, selected)
+    }
 
-        val adapterService = try {
-            param.classLoader.loadClass(ADAPTER_SERVICE_CLASS)
-        } catch (failure: Throwable) {
-            log(Log.WARN, TAG, "target_class_unavailable class=$ADAPTER_SERVICE_CLASS", failure)
-            installAttachDiagnosticHook(RESOLUTION_CLASS_MISSING)
-            return
-        }
+    override fun onSystemServerStarting(param: SystemServerStartingParam) {
+        if (processName != "system_server" || retired) return
+        target = BridgeTarget.SYSTEM_SERVER
+        startSystemGuard(param.classLoader, systemContext())
+    }
 
-        val onCreate = resolveOnCreate(adapterService)
-        if (onCreate == null) {
-            installAttachDiagnosticHook(RESOLUTION_METHOD_MISSING)
-            return
-        }
+    private fun installEntry(method: Method, selected: BridgeTarget, contextArgument: Boolean = selected != BridgeTarget.BLUETOOTH) {
         try {
-            hook(onCreate)
-                .setId(HOOK_ID)
-                .setExceptionMode(XposedInterface.ExceptionMode.PROTECTIVE)
-                .intercept(::afterAdapterServiceCreate)
-            log(
-                Log.INFO,
-                TAG,
-                "hook_installed class=${onCreate.declaringClass.name} method=${onCreate.name} " +
-                    "process=$processName",
-            )
+            val handle = hook(method).setId("openrose.entry.${selected.name}")
+                .setExceptionMode(XposedInterface.ExceptionMode.PROTECTIVE).intercept { chain ->
+                    val result = chain.proceed()
+                    if (!retired) {
+                        val context = if (contextArgument) chain.getArg(0) as? Context else chain.thisObject as? Context
+                        if (context?.packageName == selected.packageName) attach(context, selected)
+                    }
+                    result
+                }
+            synchronized(lifecycle) { entryHooks += handle }
         } catch (failure: Throwable) {
-            log(Log.ERROR, TAG, "hook_install_failed class=$ADAPTER_SERVICE_CLASS method=onCreate", failure)
-            installAttachDiagnosticHook(RESOLUTION_HOOK_FAILED)
+            log(Log.ERROR, TAG, "entry_hook_failed target=$selected", failure)
         }
+    }
+
+    private fun installNativeAdapters(selected: BridgeTarget, loader: ClassLoader) {
+        val callbacks = object : AuthenticatedNativeHeadsetCallbacks {
+            override fun submitNoise(snapshot: NativeHeadsetSnapshot, mode: String): Boolean {
+                if (retired || !snapshot.isFresh() || !snapshot.supportsNoise(mode) || nativeSnapshot?.reference != snapshot.reference) return false
+                val connectedClient = client ?: return false
+                val frame = latestFrame ?: return false
+                return runCatching {
+                    actions.execute {
+                        if (retired || nativeSnapshot?.reference != snapshot.reference) return@execute
+                        val result = connectedClient.setNoise(frame, mode)
+                        if (!retired && nativeSnapshot?.reference == snapshot.reference) {
+                            val succeeded = result.getString(BridgeWire.STATUS) == BridgeWire.STATUS_OK
+                            componentReport(featureFor(selected), if (succeeded) "CONFIRMED" else BridgePresentationWire.ACTION_FAILED,
+                                if (succeeded) "ROSE device confirmed $mode" else result.getString(BridgeWire.MESSAGE) ?: "control rejected: ${result.getString(BridgeWire.STATUS)}")
+                        }
+                    }
+                    true
+                }.getOrDefault(false)
+            }
+            override fun report(feature: String, status: String, detail: String) = componentReport(featureFor(selected), status, detail)
+        }
+        when (selected) {
+            BridgeTarget.BLUETOOTH, BridgeTarget.XIAOMI_BLUETOOTH -> {
+                binderAdapter = NativeHeadsetBinderAdapter(this, loader, callbacks).also { it.install() }
+            }
+            BridgeTarget.MILINK -> fusionAdapter = MiLinkNativeHeadsetAdapter(this, loader, callbacks).also { it.install() }
+            BridgeTarget.SYSTEM_SERVER -> Unit
+        }
+    }
+
+    @Volatile private var latestFrame: Bundle? = null
+
+    private fun attach(context: Context, selected: BridgeTarget) {
+        synchronized(lifecycle) {
+            if (retired || client != null || target != selected) return
+            targetContext = context.applicationContext ?: context
+            val actualProcess = processName ?: return
+            val created = AuthenticatedBridgeClient(this, context, selected, actualProcess,
+                onSnapshot = ::publish,
+                onClear = ::clearConsumers,
+                onAuthenticated = { authenticated ->
+                    val reports = synchronized(pendingReports) { pendingReports.toMap() }
+                    reports.forEach { (feature, value) -> authenticated.reportComponent(feature, value.first, value.second) }
+                    guardEndpoint?.let { authenticated.registerToastGuard(it) }
+                },
+                onClosing = ::closeConsumers,
+                resolution = entryResolution,
+            )
+            client = created
+            created.start()
+        }
+    }
+
+    private fun presentationCallbacks(connected: AuthenticatedBridgeClient) = object : PresentationCallbacks {
+        override fun claimPrompt(snapshot: Bundle, promptId: String): Boolean = connected.claimPrompt(snapshot, promptId)
+        override fun setNoise(snapshot: Bundle, mode: String): Bundle = connected.setNoise(snapshot, mode)
+        override fun report(snapshot: Bundle, feature: String, status: String, detail: String) =
+            connected.reportPresentation(snapshot, feature, status, detail)
+    }
+
+    private fun publish(snapshot: Bundle) {
+        if (retired) return
+        val connected = client ?: return
+        val context = targetContext ?: return
+        val native = NativeHeadsetSnapshot.fromBundle(snapshot)
+        nativeSnapshot = native
+        latestFrame = Bundle(snapshot)
+        binderAdapter?.publish(native)
+        fusionAdapter?.publish(native)
+        when (target) {
+            BridgeTarget.BLUETOOTH -> {
+                val output = renderer ?: SystemPresentationRenderer(context, connected.handler, presentationCallbacks(connected))
+                    .also { renderer = it }
+                output.render(snapshot)
+            }
+            BridgeTarget.XIAOMI_BLUETOOTH -> {
+                val output = official ?: OfficialConnectionPresenter(context, connected.handler, presentationCallbacks(connected),
+                    object : OfficialToastRelayCallbacks {
+                        override fun postOfficial(request: Bundle): Bundle = connected.postOfficial(toastReference(request), request.getString(OfficialToastWire.GUARD_PROMPT_ID) ?: "", request)
+                        override fun withdrawOfficial(request: Bundle): Bundle = connected.withdrawOfficial(toastReference(request), request.getString(OfficialToastWire.GUARD_PROMPT_ID), request)
+                    }, OfficialToastGuardCredentials(getRemotePreferences(BridgeWire.PREFERENCES_GROUP)) { connected.guardReady })
+                    .also { official = it }
+                val spec = snapshot.getBundle(BridgePresentationWire.PRESENTATION)
+                val prompt = spec?.getBundle(BridgePresentationWire.PROMPT)
+                val id = prompt?.getString(BridgePresentationWire.PROMPT_ID)
+                val identity = "${snapshot.getString(BridgeWire.HOST_EPOCH)}:${snapshot.getString(BridgeWire.DEVICE_ID)}:${snapshot.getLong(BridgeWire.SESSION_ID)}"
+                if (lastOfficialIdentity != identity) { output.clear(); consumedOfficialPrompts.clear(); lastOfficialIdentity = identity }
+                if (spec?.getString(BridgePresentationWire.MODE) != BridgePresentationWire.OFFICIAL ||
+                    !spec.getBoolean(BridgePresentationWire.ALLOW_ISLAND_FIELDS) || id == null) {
+                    output.clear()
+                    return
+                }
+                if (id !in consumedOfficialPrompts) {
+                    if (prompt.getBoolean(BridgePresentationWire.CLAIMED)) consumedOfficialPrompts += id
+                    else if (connected.claimPrompt(snapshot, id)) { consumedOfficialPrompts += id; output.show(snapshot, id) }
+                }
+            }
+            else -> Unit
+        }
+    }
+
+    private fun clearConsumers() {
+        nativeSnapshot = null
+        latestFrame = null
+        binderAdapter?.publish(null)
+        fusionAdapter?.publish(null)
+        renderer?.clear()
+        official?.clear()
+    }
+
+    private fun toastReference(request: Bundle) = Bundle().apply {
+        putInt(BridgeWire.KEY_VERSION, BridgeWire.VERSION)
+        putString(BridgeWire.HOST_EPOCH, request.getString(OfficialToastWire.GUARD_HOST_EPOCH))
+        putString(BridgeWire.DEVICE_ID, request.getString(OfficialToastWire.GUARD_DEVICE_ID))
+        putLong(BridgeWire.SESSION_ID, request.getLong(OfficialToastWire.GUARD_SESSION_ID, -1))
+    }
+
+    private fun componentReport(feature: String, status: String, detail: String) {
+        synchronized(pendingReports) { pendingReports[feature] = status to detail.take(512) }
+        val connected = client ?: return
+        connected.handler.post { if (!retired) connected.reportComponent(feature, status, detail.take(512)) }
+    }
+
+    private fun startSystemGuard(loader: ClassLoader, context: Context?) {
+        val ownedGuard = OfficialStrongToastOwnershipGuard(this, { endpoint ->
+            guardEndpoint = endpoint
+            if (endpoint != null && !retired && client == null) systemContext()?.let { attach(it, BridgeTarget.SYSTEM_SERVER) }
+            val connected = client
+            if (endpoint != null && connected != null) connected.handler.post { connected.registerToastGuard(endpoint) }
+        })
+        guard = ownedGuard
+        val ready = ownedGuard.install(loader, context)
+        componentReport(BridgePresentationWire.OFFICIAL_GUARD, if (ready) "RESOLVED" else BridgePresentationWire.UNAVAILABLE,
+            ownedGuard.unavailableReason ?: "waiting for statusbar registration")
+        if (context != null) attach(context, BridgeTarget.SYSTEM_SERVER)
+    }
+
+    private fun closeConsumers(): Boolean {
+        clearConsumers()
+        binderAdapter?.close(); binderAdapter = null
+        fusionAdapter?.close(); fusionAdapter = null
+        val output = renderer
+        output?.close(); renderer = null
+        official?.close(); official = null
+        guard?.close(); guard = null; guardEndpoint = null
+        actions.shutdownNow()
+        return (output == null || output.awaitActionTermination(1_000)) && try {
+            actions.awaitTermination(1_000, TimeUnit.MILLISECONDS)
+        } catch (_: InterruptedException) { Thread.currentThread().interrupt(); false }
     }
 
     override fun onHotReloading(param: HotReloadingParam): Boolean {
-        val drain = synchronized(bindingLock) {
-            acceptingBindings = false
-            if (activeHookCalls == 0) null else hookDrain
-        }
-        val hooksStopped = try {
-            drain == null || drain.await(RELOAD_CLEANUP_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)
-        } catch (failure: InterruptedException) {
-            Thread.currentThread().interrupt()
-            false
-        }
-        val context = targetContext?.let { it.applicationContext ?: it }
-        if (context != null) {
-            if (context.packageName != TARGET_PACKAGE || context.javaClass.classLoader === javaClass.classLoader) {
-                log(Log.ERROR, TAG, "hot_reload_context_rejected package=${context.packageName}")
-                param.setSavedInstanceState(null)
-            } else {
-                param.setSavedInstanceState(context)
-            }
-        } else {
-            param.setSavedInstanceState(null)
-        }
-        val resourcesStopped = closeModuleResources()
-        return hooksStopped && resourcesStopped
+        retired = true
+        // Only framework/target-owned values cross the generation boundary.
+        targetContext?.let { param.setSavedInstanceState(it) }
+        synchronized(lifecycle) { entryHooks.forEach { runCatching { it.unhook() } }; entryHooks.clear() }
+        return client?.close() ?: closeConsumers()
     }
 
     override fun onHotReloaded(param: HotReloadedParam) {
-        val processName = param.processName
-        val savedContext = param.savedInstanceState as? Context
-        val oldHandles = param.oldHookHandles
-        synchronized(bindingLock) {
-            loadedProcessName = processName
-            acceptingBindings = processName == TARGET_PROCESS
-            targetContext = null
-        }
-
-        val validSavedContext = savedContext?.takeIf {
-            it.packageName == TARGET_PACKAGE && it.javaClass.classLoader !== javaClass.classLoader
-        }
-        val targetOnCreate = when {
-            processName != TARGET_PROCESS -> null
-            validSavedContext != null -> resolveOnCreateFrom(validSavedContext)
-            savedContext == null -> oldHandles
-                .asSequence()
-                .mapNotNull { it.executable as? Method }
-                .firstOrNull(::isAdapterServiceOnCreate)
-                ?.let { resolveOnCreate(it.declaringClass) }
-            else -> null
-        }
-        val attachMethod = if (processName == TARGET_PROCESS) resolveApplicationAttach() else null
-
-        var replacedMatchedHook = false
-        var replacedDiagnosticResolution: String? = null
-        for (oldHandle in oldHandles) {
-            val executable = oldHandle.executable
-            if (processName == TARGET_PROCESS && targetOnCreate != null &&
-                isAdapterServiceOnCreate(executable) && executable == targetOnCreate
-            ) {
-                try {
-                    oldHandle.replaceHook(::afterAdapterServiceCreate)
-                    replacedMatchedHook = true
-                } catch (failure: Throwable) {
-                    oldHandle.unhook()
-                    log(Log.ERROR, TAG, "hot_reload_hook_replace_failed", failure)
-                }
-            } else if (processName == TARGET_PROCESS && attachMethod != null && executable == attachMethod) {
-                val resolution = resolutionForDiagnosticHook(executable, oldHandle.id)
-                if (resolution == null) {
-                    oldHandle.unhook()
-                    log(Log.ERROR, TAG, "hot_reload_diagnostic_hook_identity_unavailable")
-                    continue
-                }
-                try {
-                    oldHandle.replaceHook { chain -> afterApplicationAttach(chain, resolution) }
-                    replacedDiagnosticResolution = resolution
-                } catch (failure: Throwable) {
-                    oldHandle.unhook()
-                    log(Log.ERROR, TAG, "hot_reload_diagnostic_hook_replace_failed", failure)
-                }
-            } else {
-                oldHandle.unhook()
-            }
-        }
-
-        if (replacedMatchedHook && replacedDiagnosticResolution == null && validSavedContext != null) {
-            targetContext = validSavedContext
-            bindControlBridge(validSavedContext, bindingAttempt = 0)
-            log(Log.INFO, TAG, "hot_reload_bridge_rebound process=$processName")
-        } else if (replacedMatchedHook && replacedDiagnosticResolution == null) {
-            log(Log.INFO, TAG, "hot_reload_hook_replaced awaiting_adapter_service_onCreate")
-        } else if (replacedDiagnosticResolution != null && validSavedContext != null) {
-            targetContext = validSavedContext
-            bindControlBridge(
-                validSavedContext,
-                bindingAttempt = 0,
-                resolution = replacedDiagnosticResolution,
-                reportOnly = true,
-            )
-            log(Log.INFO, TAG, "hot_reload_diagnostic_rebound resolution=$replacedDiagnosticResolution")
-        } else if (replacedDiagnosticResolution != null) {
-            log(Log.INFO, TAG, "hot_reload_diagnostic_hook_replaced awaiting_application_attach")
-        } else {
-            log(
-                Log.WARN,
-                TAG,
-                "hot_reload_hook_unavailable process=$processName " +
-                    "matched_replaced=$replacedMatchedHook diagnostic=$replacedDiagnosticResolution " +
-                    "context_available=${savedContext != null}; package_lifecycle_is_not_replayed",
-            )
-        }
+        processName = param.processName
+        param.oldHookHandles.forEach { runCatching { it.unhook() } }
+        val context = param.savedInstanceState as? Context ?: systemContext().takeIf { param.processName == "system_server" }
+        if (context == null) { log(Log.WARN, TAG, "hot_reload_context_unavailable"); return }
+        val selected = BridgeTarget.resolve(context.packageName, param.processName) ?: return
+        target = selected
+        if (selected == BridgeTarget.SYSTEM_SERVER) startSystemGuard(context.classLoader, context)
+        else { installNativeAdapters(selected, context.classLoader); attach(context, selected) }
     }
 
-    private fun resolveOnCreateFrom(context: Context): Method? {
-        val targetClass = try {
-            context.classLoader.loadClass(ADAPTER_SERVICE_CLASS)
-        } catch (failure: Throwable) {
-            log(Log.WARN, TAG, "hot_reload_target_class_unavailable class=$ADAPTER_SERVICE_CLASS", failure)
-            return null
-        }
-        return resolveOnCreate(targetClass)
-    }
+    private fun systemContext(): Context? = runCatching {
+        val activityThread = Class.forName("android.app.ActivityThread")
+        val current = activityThread.getDeclaredMethod("currentActivityThread").invoke(null) ?: return@runCatching null
+        activityThread.getDeclaredMethod("getSystemContext").invoke(current) as? Context
+    }.getOrNull()
 
-    private fun installAttachDiagnosticHook(resolution: String) {
-        if (resolution == RESOLUTION_MATCHED || resolution !in BridgeWire.RESOLUTIONS) return
-        val attach = resolveApplicationAttach() ?: run {
-            return
-        }
-        try {
-            hook(attach)
-                .setId(diagnosticHookId(resolution))
-                .setExceptionMode(XposedInterface.ExceptionMode.PROTECTIVE)
-                .intercept { chain -> afterApplicationAttach(chain, resolution) }
-            log(Log.INFO, TAG, "diagnostic_hook_installed resolution=$resolution")
-        } catch (failure: Throwable) {
-            log(Log.ERROR, TAG, "diagnostic_hook_install_failed resolution=$resolution", failure)
-        }
-    }
+    private fun featureFor(selected: BridgeTarget): String = if (selected == BridgeTarget.MILINK) BridgePresentationWire.FUSION_CENTER else BridgePresentationWire.SYSTEM_HEADSET
 
-    private fun resolveApplicationAttach(): Method? {
-        val attach = try {
-            Application::class.java.getDeclaredMethod("attach", Context::class.java)
-        } catch (failure: Throwable) {
-            log(Log.ERROR, TAG, "diagnostic_hook_unavailable method=Application.attach(Context)", failure)
-            return null
-        }
-        if (!isApplicationAttach(attach)) {
-            log(Log.ERROR, TAG, "diagnostic_hook_signature_mismatch method=Application.attach(Context)")
-            return null
-        }
-        return attach
-    }
-
-    private fun isApplicationAttach(executable: Executable): Boolean =
-        executable is Method &&
-            executable.declaringClass == Application::class.java &&
-            executable.name == "attach" &&
-            executable.parameterTypes.contentEquals(arrayOf(Context::class.java)) &&
-            executable.returnType == Void.TYPE &&
-            !Modifier.isStatic(executable.modifiers)
-
-    private fun resolutionForDiagnosticHook(executable: Executable, hookId: String?): String? {
-        if (!isApplicationAttach(executable)) return null
-        val resolution = hookId?.removePrefix(DIAGNOSTIC_HOOK_ID_PREFIX) ?: return null
-        return resolution.takeIf { it in BridgeWire.RESOLUTIONS && it != RESOLUTION_MATCHED }
-    }
-
-    private fun diagnosticHookId(resolution: String): String = "$DIAGNOSTIC_HOOK_ID_PREFIX$resolution"
-
-    private fun resolveOnCreate(adapterService: Class<*>): Method? {
-        val method = try {
-            adapterService.getDeclaredMethod(BridgeWire.TARGET_COMPONENT_METHOD)
-        } catch (failure: Throwable) {
-            log(
-                Log.WARN,
-                TAG,
-                "target_method_unavailable class=${adapterService.name} method=onCreate()",
-                failure,
-            )
-            return null
-        }
-
-        if (!isAdapterServiceOnCreate(method)) {
-            log(
-                Log.WARN,
-                TAG,
-                "target_method_signature_mismatch class=${method.declaringClass.name} " +
-                    "method=${method.name} params=${method.parameterTypes.contentToString()} " +
-                    "return=${method.returnType.name}",
-            )
-            return null
-        }
-        log(Log.INFO, TAG, "target_method_resolved class=${adapterService.name} method=onCreate()")
-        return method
-    }
-
-    private fun isAdapterServiceOnCreate(executable: Executable): Boolean =
-        executable is Method &&
-            executable.declaringClass.name == ADAPTER_SERVICE_CLASS &&
-            executable.name == "onCreate" &&
-            executable.parameterTypes.isEmpty() &&
-            executable.returnType == Void.TYPE &&
-            !Modifier.isStatic(executable.modifiers)
-
-    private fun afterAdapterServiceCreate(chain: XposedInterface.Chain): Any? {
-        val tracked = beginTrackedHookCall()
-        try {
-            val result = chain.proceed()
-            if (tracked) {
-                val serviceContext = chain.thisObject as? Context
-                if (serviceContext == null || serviceContext.packageName != TARGET_PACKAGE) {
-                    log(
-                        Log.ERROR,
-                        TAG,
-                        "bridge_bind_skipped reason=unexpected_service_context " +
-                            "package=${serviceContext?.packageName ?: "unknown"}",
-                    )
-                } else {
-                    targetContext = serviceContext
-                    bindControlBridge(serviceContext, bindingAttempt = 0)
-                }
-            }
-            return result
-        } finally {
-            if (tracked) endTrackedHookCall()
-        }
-    }
-
-    private fun afterApplicationAttach(chain: XposedInterface.Chain, resolution: String): Any? {
-        val tracked = beginTrackedHookCall()
-        try {
-            val result = chain.proceed()
-            if (!tracked) return result
-
-            val context = chain.getArg(0) as? Context
-            if (context == null || context.packageName != TARGET_PACKAGE ||
-                context.javaClass.classLoader === javaClass.classLoader ||
-                loadedProcessName != TARGET_PROCESS
-            ) {
-                log(
-                    Log.ERROR,
-                    TAG,
-                    "diagnostic_report_skipped reason=unexpected_application_context " +
-                        "package=${context?.packageName ?: "unknown"} process=${loadedProcessName ?: "unknown"}",
-                )
-                return result
-            }
-            targetContext = context.applicationContext ?: context
-            bindControlBridge(context, bindingAttempt = 0, resolution = resolution, reportOnly = true)
-            return result
-        } finally {
-            if (tracked) endTrackedHookCall()
-        }
-    }
-
-    private fun beginTrackedHookCall(): Boolean = synchronized(bindingLock) {
-        if (!acceptingBindings) {
-            false
-        } else {
-            if (activeHookCalls == 0) hookDrain = CountDownLatch(1)
-            activeHookCalls += 1
-            true
-        }
-    }
-
-    private fun endTrackedHookCall() {
-        synchronized(bindingLock) {
-            activeHookCalls -= 1
-            if (activeHookCalls == 0) hookDrain.countDown()
-        }
-    }
-
-    private fun bindControlBridge(
-        serviceContext: Context,
-        bindingAttempt: Int,
-        resolution: String = RESOLUTION_MATCHED,
-        reportOnly: Boolean = resolution != RESOLUTION_MATCHED,
-    ) {
-        val binding: BridgeBinding
-        synchronized(bindingLock) {
-            if (!acceptingBindings || loadedProcessName != TARGET_PROCESS) {
-                log(Log.INFO, TAG, "bridge_bind_skipped reason=module_generation_inactive")
-                return
-            }
-            if (currentBinding != null) return
-            binding = BridgeBinding(serviceContext, bindingAttempt, resolution, reportOnly)
-            currentBinding = binding
-            readerHandlerLocked().post(binding.pollRunnable)
-        }
-
-        val intent = Intent().setComponent(
-            ComponentName(BridgeWire.APP_PACKAGE, BridgeWire.SERVICE_CLASS),
-        )
-        val bound = try {
-            serviceContext.bindService(intent, binding, Context.BIND_AUTO_CREATE)
-        } catch (failure: Throwable) {
-            log(Log.ERROR, TAG, "bridge_bind_failed component=${BridgeWire.SERVICE_CLASS}", failure)
-            false
-        }
-
-        var unbind = false
-        synchronized(bindingLock) {
-            binding.isBound = bound
-            if (!bound) {
-                if (currentBinding === binding) currentBinding = null
-                binding.isClosed = true
-            } else if (binding.isClosed || currentBinding !== binding) {
-                binding.isClosed = true
-                binding.isBound = false
-                unbind = true
-            }
-        }
-
-        if (unbind) unbindQuietly(binding)
-        if (bound && !unbind) {
-            log(Log.INFO, TAG, "bridge_binding_requested component=${BridgeWire.SERVICE_CLASS}")
-        } else if (!bound) {
-            log(Log.WARN, TAG, "bridge_bind_unavailable component=${BridgeWire.SERVICE_CLASS}")
-        }
-    }
-
-    private fun readerHandlerLocked(): Handler {
-        readerHandler?.let { return it }
-        val thread = HandlerThread(READER_THREAD_NAME).apply { start() }
-        readerThread = thread
-        return Handler(thread.looper).also { readerHandler = it }
-    }
-
-    private fun schedulePoll(binding: BridgeBinding, delayMillis: Long = 0) {
-        synchronized(bindingLock) {
-            if (!acceptingBindings || currentBinding !== binding || binding.isClosed) return
-            val handler = readerHandler ?: return
-            handler.removeCallbacks(binding.pollRunnable)
-            handler.postDelayed(binding.pollRunnable, delayMillis)
-        }
-    }
-
-    private fun pollBridge(binding: BridgeBinding) {
-        try {
-            if (!isCurrentBinding(binding)) return
-            val bridge = binding.remoteBridge ?: return
-            val preferences = getRemotePreferences(BridgeWire.PREFERENCES_GROUP)
-            attachPreferencesListener(binding, preferences)
-
-            val hostEpoch = preferences.getString(BridgeWire.HOST_EPOCH, null)
-            val proofKey = preferences.getString(BridgeWire.PROOF_KEY, null)
-            if (hostEpoch.isNullOrBlank() || proofKey.isNullOrBlank()) {
-                forgetCredentials(binding, bridge)
-                recordBridgeStatus(binding, "waiting_for_host_credentials")
-                return
-            }
-            if (hostEpoch.length > 64 || proofKey.length != 64 || !proofKey.all { it.isHexDigit() }) {
-                forgetCredentials(binding, bridge)
-                recordBridgeStatus(binding, "invalid_host_credentials")
-                return
-            }
-
-            if (binding.hostEpoch != hostEpoch || binding.proofKey != proofKey) {
-                closeLease(binding, bridge)
-                binding.hostEpoch = hostEpoch
-                binding.proofKey = proofKey
-                binding.rejectedCredential = null
-                binding.reportCompleted = false
-            }
-
-            if (binding.reportOnly) {
-                reportResolution(binding, bridge, hostEpoch, proofKey)
-                return
-            }
-
-            if (binding.leaseId == null) {
-                val fingerprint = "$hostEpoch:$proofKey"
-                if (binding.rejectedCredential == fingerprint) return
-                val proof = BridgeWire.proof(
-                    keyHex = proofKey,
-                    hostEpoch = hostEpoch,
-                    processName = TARGET_PROCESS,
-                    uid = Process.myUid(),
-                    pid = Process.myPid(),
-                    resolution = binding.resolution,
-                )
-                val opened = bridge.open(proof, binding.clientToken)
-                val status = opened.getString(STATUS) ?: STATUS_MISSING
-                val lease = opened.getString(LEASE_ID)
-                val openedEpoch = opened.getString(BridgeWire.HOST_EPOCH)
-                if (!hasWireVersion(opened) || status != STATUS_OK || lease.isNullOrBlank() || openedEpoch != hostEpoch) {
-                    if (!lease.isNullOrBlank()) runCatching { bridge.close(lease) }
-                    if (status == STATUS_STALE_HOST || openedEpoch != hostEpoch) {
-                        binding.rejectedCredential = fingerprint
-                    }
-                    recordBridgeStatus(binding, if (hasWireVersion(opened)) "open_$status" else "open_invalid_version")
-                    return
-                }
-                binding.leaseId = lease
-                binding.lastReadIdentity = null
-                val watched = bridge.watch(binding.request(), binding.observer)
-                if (!hasWireVersion(watched) || watched.getString(STATUS) != STATUS_OK) {
-                    closeLease(binding, bridge)
-                    recordBridgeStatus(binding, "watch_unavailable")
-                    return
-                }
-                recordBridgeStatus(binding, "authenticated")
-            }
-
-            readCurrentSnapshot(binding, bridge, hostEpoch)
-        } catch (failure: SecurityException) {
-            binding.rejectedCredential = binding.hostEpoch?.let { "$it:${binding.proofKey}" }
-            closeLease(binding, binding.remoteBridge)
-            if (recordBridgeStatus(binding, "rejected_by_host")) {
-                log(Log.ERROR, TAG, "bridge_request_rejected", failure)
-            }
-        } catch (failure: Throwable) {
-            binding.renderer?.clear()
-            if (recordBridgeStatus(binding, "request_failed_${failure.javaClass.simpleName}")) {
-                log(Log.WARN, TAG, "bridge_request_failed", failure)
-            }
-        } finally {
-            schedulePoll(binding, POLL_INTERVAL_MILLIS)
-        }
-    }
-
-    private fun readCurrentSnapshot(binding: BridgeBinding, bridge: IControlBridge, hostEpoch: String) {
-        val lease = binding.leaseId ?: return
-        val current = bridge.currentSession(lease)
-        if (!hasWireVersion(current)) {
-            binding.renderer?.clear()
-            recordBridgeStatus(binding, "session_invalid_version")
-            return
-        }
-        val currentStatus = current.getString(STATUS) ?: STATUS_MISSING
-        if (currentStatus == STATUS_NO_SESSION) {
-            binding.renderer?.clear()
-            binding.lastReadIdentity = null
-            recordBridgeStatus(binding, "no_session")
-            return
-        }
-        if (currentStatus != STATUS_OK) {
-            binding.renderer?.clear()
-            if (currentStatus == STATUS_STALE_HOST || currentStatus == STATUS_STALE_SESSION) {
-                closeLease(binding, bridge)
-            }
-            recordBridgeStatus(binding, "session_$currentStatus")
-            return
-        }
-
-        val currentEpoch = current.getString(BridgeWire.HOST_EPOCH)
-        val deviceId = current.getString(DEVICE_ID)
-        val sessionId = current.getLong(SESSION_ID, INVALID_SESSION_ID)
-        if (currentEpoch != hostEpoch || deviceId.isNullOrBlank() || sessionId == INVALID_SESSION_ID) {
-            binding.renderer?.clear()
-            recordBridgeStatus(binding, "session_identity_mismatch")
-            return
-        }
-
-        val request = Bundle().apply {
-            putInt(VERSION, BridgeWire.VERSION)
-            putString(LEASE_ID, lease)
-            putString(BridgeWire.HOST_EPOCH, hostEpoch)
-            putString(DEVICE_ID, deviceId)
-            putLong(SESSION_ID, sessionId)
-        }
-        val response = bridge.read(request)
-        if (!hasWireVersion(response)) {
-            binding.renderer?.clear()
-            recordBridgeStatus(binding, "read_invalid_version")
-            return
-        }
-        val responseStatus = response.getString(STATUS) ?: STATUS_MISSING
-        if (responseStatus != STATUS_OK) {
-            binding.renderer?.clear()
-            if (responseStatus == STATUS_STALE_HOST || responseStatus == STATUS_STALE_SESSION) {
-                closeLease(binding, bridge)
-            }
-            recordBridgeStatus(binding, "read_$responseStatus")
-            return
-        }
-
-        val snapshot = response.getBundle(SNAPSHOT)
-        if (
-            snapshot == null ||
-            !hasWireVersion(snapshot) ||
-            snapshot.getString(BridgeWire.HOST_EPOCH) != hostEpoch ||
-            snapshot.getString(DEVICE_ID) != deviceId ||
-            snapshot.getLong(SESSION_ID, INVALID_SESSION_ID) != sessionId
-        ) {
-            binding.renderer?.clear()
-            recordBridgeStatus(binding, "snapshot_identity_mismatch")
-            return
-        }
-
-        val readSequence = snapshot.getLong(READ_SEQUENCE, INVALID_READ_SEQUENCE)
-        if (readSequence <= 0) {
-            recordBridgeStatus(binding, "snapshot_read_sequence_missing")
-            return
-        }
-        val receipt = Bundle().apply {
-            putInt(VERSION, BridgeWire.VERSION)
-            putString(LEASE_ID, lease)
-            putString(BridgeWire.HOST_EPOCH, hostEpoch)
-            putString(DEVICE_ID, deviceId)
-            putLong(SESSION_ID, sessionId)
-            putLong(READ_SEQUENCE, readSequence)
-        }
-        val acknowledged = bridge.acknowledge(receipt)
-        if (!hasWireVersion(acknowledged) || acknowledged.getString(STATUS) != STATUS_OK) {
-            binding.renderer?.clear()
-            binding.lastReadIdentity = null
-            val ackStatus = if (hasWireVersion(acknowledged)) {
-                acknowledged.getString(STATUS) ?: STATUS_MISSING
-            } else {
-                "INVALID_VERSION"
-            }
-            recordBridgeStatus(binding, "ack_$ackStatus")
-            return
-        }
-
-        val identity = "$hostEpoch:$deviceId:$sessionId"
-        if (binding.lastReadIdentity != identity) {
-            log(Log.INFO, TAG, "snapshot_acknowledged session=$sessionId")
-            binding.lastReadIdentity = identity
-        }
-        if (!isCurrentBinding(binding)) return
-        val renderer = binding.renderer ?: SystemPresentationRenderer(
-            binding.context,
-            checkNotNull(readerHandler),
-            object : PresentationCallbacks {
-                override fun claimPrompt(snapshot: Bundle, promptId: String): Boolean {
-                    val request = binding.request(snapshot) ?: return false
-                    val endpoint = binding.remoteBridge ?: return false
-                    request.putString(BridgePresentationWire.PROMPT_ID, promptId)
-                    val result = endpoint.claimPrompt(request)
-                    return hasWireVersion(result) && result.getString(STATUS) == STATUS_OK
-                }
-
-                override fun setNoise(snapshot: Bundle, mode: String): Bundle {
-                    val request = binding.request(snapshot) ?: return BridgeWire.response(STATUS_STALE_SESSION)
-                    val endpoint = binding.remoteBridge ?: return BridgeWire.response(STATUS_STALE_SESSION)
-                    request.putString(BridgePresentationWire.NOISE_MODE, mode)
-                    val result = endpoint.setNoise(request)
-                    schedulePoll(binding)
-                    return result
-                }
-
-                override fun report(snapshot: Bundle, feature: String, status: String, detail: String) {
-                    val report = binding.request(snapshot) ?: return
-                    val endpoint = binding.remoteBridge ?: return
-                    report.putString(BridgePresentationWire.FEATURE, feature)
-                    report.putString(STATUS, status)
-                    report.putString(BridgePresentationWire.DETAIL, detail.take(512))
-                    endpoint.reportPresentation(report)
-                }
-            },
-        ).also { binding.renderer = it }
-        renderer.render(snapshot)
-        recordBridgeStatus(binding, "snapshot_acknowledged")
-    }
-
-    private fun BridgeBinding.request(): Bundle = Bundle().apply {
-        putInt(VERSION, BridgeWire.VERSION)
-        putString(LEASE_ID, leaseId)
-        putString(BridgeWire.HOST_EPOCH, hostEpoch)
-    }
-
-    private fun BridgeBinding.request(snapshot: Bundle): Bundle? {
-        if (!isCurrentBinding(this) || leaseId == null || snapshot.getString(BridgeWire.HOST_EPOCH) != hostEpoch) return null
-        return request().apply {
-            putString(DEVICE_ID, snapshot.getString(DEVICE_ID))
-            putLong(SESSION_ID, snapshot.getLong(SESSION_ID, INVALID_SESSION_ID))
-        }
-    }
-
-    private fun reportResolution(
-        binding: BridgeBinding,
-        bridge: IControlBridge,
-        hostEpoch: String,
-        proofKey: String,
-    ) {
-        if (binding.reportCompleted) return
-        val fingerprint = "$hostEpoch:$proofKey"
-        if (binding.rejectedCredential == fingerprint) return
-        val proof = BridgeWire.proof(
-            keyHex = proofKey,
-            hostEpoch = hostEpoch,
-            processName = TARGET_PROCESS,
-            uid = Process.myUid(),
-            pid = Process.myPid(),
-            resolution = binding.resolution,
-        )
-        val response = bridge.open(proof, binding.clientToken)
-        val status = response.getString(STATUS) ?: STATUS_MISSING
-        if (!hasWireVersion(response)) {
-            binding.reportCompleted = true
-            recordBridgeStatus(binding, "diagnostic_invalid_response_version")
-            return
-        }
-        when (status) {
-            STATUS_TARGET_INCOMPATIBLE -> {
-                binding.reportCompleted = true
-                recordBridgeStatus(binding, "target_incompatibility_reported_${binding.resolution}")
-            }
-            STATUS_STALE_REPORT -> {
-                binding.reportCompleted = true
-                recordBridgeStatus(binding, "diagnostic_report_blocked_by_active_reader")
-            }
-            STATUS_OK -> {
-                response.getString(LEASE_ID)?.let { runCatching { bridge.close(it) } }
-                binding.reportCompleted = true
-                recordBridgeStatus(binding, "diagnostic_unexpected_lease")
-            }
-            STATUS_STALE_HOST -> {
-                binding.rejectedCredential = fingerprint
-                recordBridgeStatus(binding, "diagnostic_waiting_for_current_host")
-            }
-            else -> {
-                binding.rejectedCredential = fingerprint
-                recordBridgeStatus(binding, "diagnostic_report_$status")
-            }
-        }
-    }
-
-    private fun attachPreferencesListener(binding: BridgeBinding, preferences: SharedPreferences) {
-        if (binding.remotePreferences === preferences) return
-        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-            if (key == null || key == BridgeWire.HOST_EPOCH || key == BridgeWire.PROOF_KEY) {
-                schedulePoll(binding)
-            }
-        }
-        binding.remotePreferences?.let { old ->
-            binding.preferencesListener?.let(old::unregisterOnSharedPreferenceChangeListener)
-        }
-        binding.remotePreferences = preferences
-        binding.preferencesListener = listener
-        runCatching { preferences.registerOnSharedPreferenceChangeListener(listener) }
-            .onFailure { log(Log.WARN, TAG, "remote_preferences_listener_unavailable", it) }
-    }
-
-    private fun closeLease(binding: BridgeBinding, bridge: IControlBridge?) {
-        binding.renderer?.clear()
-        val lease = binding.leaseId
-        binding.leaseId = null
-        binding.lastReadIdentity = null
-        if (lease != null && bridge != null) {
-            try {
-                bridge.close(lease)
-                log(Log.INFO, TAG, "bridge_lease_closed")
-            } catch (failure: Throwable) {
-                log(Log.WARN, TAG, "bridge_lease_close_failed", failure)
-            }
-        }
-    }
-
-    private fun forgetCredentials(binding: BridgeBinding, bridge: IControlBridge) {
-        closeLease(binding, bridge)
-        binding.hostEpoch = null
-        binding.proofKey = null
-        binding.rejectedCredential = null
-        binding.reportCompleted = false
-    }
-
-    private fun recordBridgeStatus(binding: BridgeBinding, status: String): Boolean {
-        if (binding.lastStatus == status) return false
-        binding.lastStatus = status
-        log(Log.INFO, TAG, "bridge_status=$status")
-        return true
-    }
-
-    private fun hasWireVersion(bundle: Bundle): Boolean =
-        bundle.getInt(VERSION, INVALID_WIRE_VERSION) == BridgeWire.VERSION
-
-    private fun isCurrentBinding(binding: BridgeBinding): Boolean = synchronized(bindingLock) {
-        acceptingBindings && currentBinding === binding && !binding.isClosed
-    }
-
-    private fun Char.isHexDigit(): Boolean =
-        this in '0'..'9' || this in 'a'..'f' || this in 'A'..'F'
-
-    private fun closeModuleResources(): Boolean {
-        val binding: BridgeBinding?
-        val handler: Handler?
-        val thread: HandlerThread?
-        synchronized(bindingLock) {
-            acceptingBindings = false
-            binding = currentBinding
-            currentBinding = null
-            binding?.isClosed = true
-            handler = readerHandler
-            thread = readerThread
-        }
-
-        var cleanupComplete = true
-        if (handler != null && thread != null) {
-            handler.removeCallbacksAndMessages(null)
-            val completed = CountDownLatch(1)
-            val posted = handler.post {
-                try {
-                    binding?.let(::closeBindingResources)
-                } catch (failure: Throwable) {
-                    cleanupComplete = false
-                    log(Log.ERROR, TAG, "hot_reload_worker_cleanup_failed", failure)
-                } finally {
-                    completed.countDown()
-                }
-            }
-            val workerCleanupFinished = try {
-                posted && completed.await(RELOAD_CLEANUP_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)
-            } catch (failure: InterruptedException) {
-                Thread.currentThread().interrupt()
-                false
-            }
-            cleanupComplete = cleanupComplete && workerCleanupFinished
-            handler.removeCallbacksAndMessages(null)
-            thread.quitSafely()
-            val threadStopped = try {
-                if (Thread.currentThread() !== thread) thread.join(RELOAD_CLEANUP_TIMEOUT_MILLIS)
-                !thread.isAlive
-            } catch (failure: InterruptedException) {
-                Thread.currentThread().interrupt()
-                false
-            }
-            cleanupComplete = cleanupComplete && threadStopped
-        } else {
-            try {
-                binding?.let(::closeBindingResources)
-            } catch (failure: Throwable) {
-                cleanupComplete = false
-                log(Log.ERROR, TAG, "hot_reload_cleanup_failed", failure)
-            }
-        }
-
-        binding?.let { unbindQuietly(it) }
-        synchronized(bindingLock) {
-            readerHandler = null
-            readerThread = null
-            targetContext = null
-        }
-        log(
-            if (cleanupComplete) Log.INFO else Log.ERROR,
-            TAG,
-            "hot_reload_cleanup_complete=$cleanupComplete",
-        )
-        return cleanupComplete
-    }
-
-    private fun closeBindingResources(binding: BridgeBinding) {
-        closeLease(binding, binding.remoteBridge)
-        val renderer = binding.renderer
-        renderer?.close()
-        binding.renderer = null
-        detachPreferencesListener(binding)
-        check(renderer == null || renderer.awaitActionTermination(1_000)) {
-            "Presentation action worker has not stopped; hot reload cannot be confirmed"
-        }
-    }
-
-    private fun detachPreferencesListener(binding: BridgeBinding) {
-        val preferences = binding.remotePreferences
-        val listener = binding.preferencesListener
-        var detached = true
-        if (preferences != null && listener != null) {
-            runCatching { preferences.unregisterOnSharedPreferenceChangeListener(listener) }
-                .onFailure {
-                    detached = false
-                    log(Log.WARN, TAG, "remote_preferences_listener_remove_failed", it)
-                }
-        }
-        binding.remotePreferences = null
-        binding.preferencesListener = null
-        if (!detached) throw IllegalStateException("Could not remove remote preferences listener")
-    }
-
-    private fun unbindQuietly(binding: BridgeBinding) {
-        val shouldUnbind = synchronized(bindingLock) {
-            if (!binding.isBound) false else {
-                binding.isBound = false
-                true
-            }
-        }
-        if (!shouldUnbind) return
-        try {
-            binding.context.unbindService(binding)
-        } catch (failure: IllegalArgumentException) {
-            log(Log.WARN, TAG, "bridge_unbind_failed reason=not_registered", failure)
-        } catch (failure: Throwable) {
-            log(Log.ERROR, TAG, "bridge_unbind_failed", failure)
-        }
-    }
-
-    private inner class BridgeBinding(
-        val context: Context,
-        val bindingAttempt: Int,
-        val resolution: String,
-        val reportOnly: Boolean,
-    ) : ServiceConnection {
-        val clientToken = Binder()
-        val pollRunnable = Runnable { pollBridge(this) }
-        val observer = object : IControlObserver.Stub() {
-            override fun onChanged(identity: Bundle) {
-                if (hasWireVersion(identity) && identity.getString(BridgeWire.HOST_EPOCH) == hostEpoch &&
-                    identity.getString(LEASE_ID) == leaseId) schedulePoll(this@BridgeBinding)
-            }
-        }
-        var renderer: SystemPresentationRenderer? = null
-        @Volatile var remoteBridge: IControlBridge? = null
-        var isBound: Boolean = false
-        @Volatile var isClosed: Boolean = false
-        var remotePreferences: SharedPreferences? = null
-        var preferencesListener: SharedPreferences.OnSharedPreferenceChangeListener? = null
-        @Volatile var hostEpoch: String? = null
-        var proofKey: String? = null
-        @Volatile var leaseId: String? = null
-        var rejectedCredential: String? = null
-        var reportCompleted: Boolean = false
-        var lastReadIdentity: String? = null
-        var lastStatus: String? = null
-
-        override fun onServiceConnected(name: ComponentName, service: IBinder) {
-            if (!isCurrentBinding(this)) return
-            remoteBridge = IControlBridge.Stub.asInterface(service)
-            log(Log.INFO, TAG, "bridge_service_connected component=${name.flattenToShortString()}")
-            schedulePoll(this)
-        }
-
-        override fun onServiceDisconnected(name: ComponentName) {
-            if (!isCurrentBinding(this)) return
-            remoteBridge = null
-            readerHandler?.post { renderer?.clear() }
-            recordBridgeStatus(this, "service_disconnected")
-            log(Log.WARN, TAG, "bridge_service_disconnected component=${name.flattenToShortString()}")
-        }
-
-        override fun onBindingDied(name: ComponentName) {
-            if (!isCurrentBinding(this)) return
-            log(Log.ERROR, TAG, "bridge_binding_died component=${name.flattenToShortString()}")
-            readerHandler?.post { renderer?.close(); renderer = null }
-            val shouldRetry = synchronized(bindingLock) {
-                if (currentBinding !== this || isClosed) false else {
-                    currentBinding = null
-                    isClosed = true
-                    true
-                }
-            }
-            unbindQuietly(this)
-            if (shouldRetry && bindingAttempt < MAX_BINDING_RETRIES) {
-                bindControlBridge(context, bindingAttempt + 1, resolution, reportOnly)
-            }
-        }
-
-        override fun onNullBinding(name: ComponentName) {
-            if (!isCurrentBinding(this)) return
-            log(Log.ERROR, TAG, "bridge_null_binding component=${name.flattenToShortString()}")
-            readerHandler?.post { renderer?.close(); renderer = null }
-            synchronized(bindingLock) {
-                if (currentBinding === this) currentBinding = null
-                isClosed = true
-            }
-            unbindQuietly(this)
-        }
-    }
-
-    private companion object {
-        const val TAG = "OpenRoseBluetoothModule"
-        const val TARGET_PACKAGE = BridgeWire.TARGET_PACKAGE
-        const val TARGET_PROCESS = BridgeWire.TARGET_PROCESS
-        const val ADAPTER_SERVICE_CLASS = BridgeWire.TARGET_COMPONENT_CLASS
-        const val HOOK_ID = "openrose.bluetooth.AdapterService.onCreate"
-        const val DIAGNOSTIC_HOOK_ID_PREFIX = "openrose.bluetooth.Application.attach."
-        const val READER_THREAD_NAME = "OpenRoseBridgeReader"
-        const val POLL_INTERVAL_MILLIS = 1_000L
-        const val RELOAD_CLEANUP_TIMEOUT_MILLIS = 3_000L
-        const val MAX_BINDING_RETRIES = 1
-
-        const val VERSION = BridgeWire.KEY_VERSION
-        const val STATUS = BridgeWire.STATUS
-        const val STATUS_OK = BridgeWire.STATUS_OK
-        const val STATUS_NO_SESSION = BridgeWire.STATUS_NO_SESSION
-        const val STATUS_TARGET_INCOMPATIBLE = BridgeWire.STATUS_TARGET_INCOMPATIBLE
-        const val STATUS_STALE_REPORT = BridgeWire.STATUS_STALE_REPORT
-        const val STATUS_STALE_HOST = BridgeWire.STATUS_STALE_HOST
-        const val STATUS_STALE_SESSION = BridgeWire.STATUS_STALE_SESSION
-        const val STATUS_MISSING = "MISSING_STATUS"
-        const val LEASE_ID = BridgeWire.LEASE_ID
-        const val SNAPSHOT = BridgeWire.SNAPSHOT
-        const val DEVICE_ID = BridgeWire.DEVICE_ID
-        const val SESSION_ID = BridgeWire.SESSION_ID
-        const val READ_SEQUENCE = BridgeWire.READ_SEQUENCE
-        const val INVALID_WIRE_VERSION = -1
-        const val INVALID_READ_SEQUENCE = -1L
-        const val INVALID_SESSION_ID = Long.MIN_VALUE
-        const val RESOLUTION_MATCHED = BridgeWire.RESOLUTION_MATCHED
-        const val RESOLUTION_CLASS_MISSING = BridgeWire.RESOLUTION_CLASS_MISSING
-        const val RESOLUTION_METHOD_MISSING = BridgeWire.RESOLUTION_METHOD_MISSING
-        const val RESOLUTION_HOOK_FAILED = BridgeWire.RESOLUTION_HOOK_FAILED
-    }
+    private companion object { const val TAG = "OpenRoseSystemModule" }
 }

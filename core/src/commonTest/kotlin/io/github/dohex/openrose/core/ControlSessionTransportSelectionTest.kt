@@ -89,6 +89,9 @@ class ControlSessionTransportSelectionTest {
         assertEquals(listOf<TransportEndpoint>(expectedEndpoint), transport.endpoints)
         assertEquals(1, transport.factCalls)
         assertEquals("A1:B2:C3:D4:E5:F6", transport.lastFactsAddress)
+        val connected = assertIs<ConnectionState.Connected>(session.state.value.connection)
+        val reference = SessionReference(connected.deviceId, connected.sessionId)
+        assertEquals("A1:B2:C3:D4:E5:F6", assertIs<SessionSnapshotResult.Available>(session.readSession(reference)).device.classicAddress)
         assertEquals(TransportSelection(expectedEndpoint, TransportSelectionReason.CLASSIC_AUDIO), session.state.value.transportSelection)
         assertEquals(2, transport.link.writes.size)
         assertEquals(FieldValue.Number(100), assertIs<FieldReading.Known>(session.state.value.device?.fields?.get(DeviceField.LEFT_BATTERY)).value)
@@ -143,6 +146,10 @@ class ControlSessionTransportSelectionTest {
             assertEquals(listOf<TransportEndpoint>(ble), transport.endpoints, "scenario=$index")
             assertEquals(TransportSelection(ble, scenario.reason), session.state.value.transportSelection, "scenario=$index")
             assertEquals(scenario.expectedFactsCalls, transport.factCalls, "scenario=$index")
+            val connected = assertIs<ConnectionState.Connected>(session.state.value.connection)
+            val reference = SessionReference(connected.deviceId, connected.sessionId)
+            assertEquals(session.state.value.candidates.single().classicAddress,
+                assertIs<SessionSnapshotResult.Available>(session.readSession(reference)).device.classicAddress, "scenario=$index")
             session.disconnect()
         }
     }

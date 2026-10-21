@@ -11,6 +11,8 @@ internal fun DeviceState.toBridgeSnapshot(hostEpoch: String, readSequence: Long)
     putInt(BridgeWire.KEY_VERSION, BridgeWire.VERSION)
     putString(BridgeWire.HOST_EPOCH, hostEpoch)
     putString(BridgeWire.DEVICE_ID, deviceId.value)
+    deviceId.value.takeIf { it.matches(Regex("[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){5}")) }?.let { putString("device_address", it.uppercase()) }
+    classicAddress?.takeIf { it.matches(Regex("[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){5}")) }?.let { putString("classic_address", it.uppercase()) }
     putLong(BridgeWire.SESSION_ID, sessionId)
     putLong(BridgeWire.READ_SEQUENCE, readSequence)
     putLong("captured_elapsed_millis", SystemClock.elapsedRealtime())

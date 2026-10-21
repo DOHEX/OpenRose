@@ -8,7 +8,7 @@ import javax.crypto.spec.SecretKeySpec
 
 /** Versioned app/module wire format; it never contains protocol commands or a second session. */
 internal object BridgeWire {
-    const val VERSION = 1
+    const val VERSION = 2
     const val KEY_VERSION = "version"
     const val STATUS = "status"
     const val MESSAGE = "message"
@@ -34,6 +34,8 @@ internal object BridgeWire {
     const val STATUS_INVALID_ARGUMENT = "INVALID_ARGUMENT"
     const val STATUS_NO_PENDING_READ = "NO_PENDING_READ"
     const val STATUS_STALE_RECEIPT = "STALE_RECEIPT"
+    const val STATUS_UNAVAILABLE = "UNAVAILABLE"
+    const val STATUS_ACTION_FAILED = "ACTION_FAILED"
     const val RESOLUTION_MATCHED = "MATCHED"
     const val RESOLUTION_CLASS_MISSING = "CLASS_MISSING"
     const val RESOLUTION_METHOD_MISSING = "METHOD_MISSING"
@@ -45,24 +47,26 @@ internal object BridgeWire {
     const val TARGET_COMPONENT_CLASS = "com.android.bluetooth.btservice.AdapterService"
     const val TARGET_COMPONENT_METHOD = "onCreate"
     const val COMPONENT_MATCH = "$TARGET_COMPONENT_CLASS#$TARGET_COMPONENT_METHOD():void"
-    const val PREFERENCES_GROUP = "control_bridge_v1"
+    const val PREFERENCES_GROUP = "control_bridge_v2"
     const val HOST_EPOCH = "host_epoch"
     const val PROOF_KEY = "proof_key"
     val RESOLUTIONS = setOf(RESOLUTION_MATCHED, RESOLUTION_CLASS_MISSING, RESOLUTION_METHOD_MISSING, RESOLUTION_HOOK_FAILED)
 
-    fun proof(keyHex: String, hostEpoch: String, processName: String, uid: Int, pid: Int, resolution: String = RESOLUTION_MATCHED): Bundle = Bundle().apply {
+    fun proof(keyHex: String, hostEpoch: String, processName: String, uid: Int, pid: Int, resolution: String = RESOLUTION_MATCHED,
+              target: BridgeTarget = BridgeTarget.BLUETOOTH): Bundle = Bundle().apply {
         putInt(KEY_VERSION, VERSION)
         putString(HOST_EPOCH, hostEpoch)
-        putString(PACKAGE, TARGET_PACKAGE)
+        putString(PACKAGE, target.packageName)
         putString(PROCESS, processName)
         putInt(UID, uid)
         putInt(PID, pid)
-        putString(COMPONENT_MATCH_KEY, COMPONENT_MATCH)
+        putString(COMPONENT_MATCH_KEY, target.componentMatch)
         putString(RESOLUTION, resolution)
-        putString(SIGNATURE, signature(keyHex, hostEpoch, processName, uid, pid, resolution).hex())
+        putString(SIGNATURE, signature(keyHex, hostEpoch, processName, uid, pid, resolution, target).hex())
     }
 
-    fun signature(keyHex: String, hostEpoch: String, processName: String, uid: Int, pid: Int, resolution: String): ByteArray {
+    fun signature(keyHex: String, hostEpoch: String, processName: String, uid: Int, pid: Int, resolution: String,
+                  target: BridgeTarget = BridgeTarget.BLUETOOTH): ByteArray {
         require(keyHex.length == 64 && keyHex.all { it.isHexDigit() })
         require(hostEpoch.length in 1..64 && processName.length in 1..128)
         require(resolution in RESOLUTIONS)
@@ -70,11 +74,11 @@ internal object BridgeWire {
             DataOutputStream(buffer).use { out ->
                 out.writeInt(VERSION)
                 out.writeUTF(hostEpoch)
-                out.writeUTF(TARGET_PACKAGE)
+                out.writeUTF(target.packageName)
                 out.writeUTF(processName)
                 out.writeInt(uid)
                 out.writeInt(pid)
-                out.writeUTF(COMPONENT_MATCH)
+                out.writeUTF(target.componentMatch)
                 out.writeUTF(resolution)
             }
             buffer.toByteArray()

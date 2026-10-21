@@ -148,7 +148,7 @@ class ControlSession(
             val profile = requireNotNull(candidate.profile)
             updateState {
                 it.copy(connection = ConnectionState.Connecting(deviceId, next.id, ConnectionPhase.CONNECTING),
-                    device = DeviceState(deviceId, next.id, profile, capabilities(profile, null), profile.supportedFields.associateWith { FieldReading.Loading }),
+                    device = DeviceState(deviceId, next.id, profile, capabilities(profile, null), profile.supportedFields.associateWith { FieldReading.Loading }, classicAddress = candidate.classicAddress),
                     lastError = null, transportSelection = null, connectionRecovery = null)
             }
             active = next
@@ -804,7 +804,7 @@ class ControlSession(
                 else current.copy(
                     connection = ConnectionState.Connecting(attempt.candidate.deviceId, attempt.id, ConnectionPhase.CONNECTING),
                     device = DeviceState(attempt.candidate.deviceId, attempt.id, profile, capabilities(profile, null),
-                        profile.supportedFields.associateWith { FieldReading.Loading }),
+                        profile.supportedFields.associateWith { FieldReading.Loading }, classicAddress = attempt.candidate.classicAddress),
                     lastError = null,
                     transportSelection = selection,
                     connectionRecovery = ConnectionRecovery(attempt.id, failure.reason),
