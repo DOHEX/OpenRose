@@ -53,6 +53,16 @@ Windows 使用 `gradlew.bat`。桌面入口共用于 Windows / Linux；发行包
 
 Android APK：`androidApp/build/outputs/apk/debug/androidApp-debug.apk`。桌面发行目录：`desktopApp/build/compose/binaries/main/app/`。
 
+Linux 图形桌面建议通过仓库中的启动入口运行：
+
+```bash
+./run-linux.sh
+# 从源码启动；后续参数传给 Gradle
+./run-linux.sh --dev --offline
+```
+
+默认使用已构建且包含 Java 运行时的发行目录。niri 的 Wayland 会话下，入口只为当前客户端进程设置 Java AWT 非重设父窗口兼容变量，修复窗口已放大而内容仍停留在初始尺寸的黑区；不修改 niri 配置、显示缩放或渲染后端。直接运行发行目录里的二进制时，niri 用户需在命令前加 `_JAVA_AWT_WM_NONREPARENTING=1`。其他桌面环境不自动设置该变量。验证边界与复现方式见 [Linux 窗口绘制记录](docs/verification/linux-window-rendering.md)。
+
 ## 工程边界
 
 - `core`：公开 `ControlSession` 提供扫描、连接、状态观察、能力查询、断开与明确的不可用结果；纯 Kotlin i5 ZT / i7 RS Common V2 编解码与平台传输分开。测试从公开会话和独立协议向量读取可观察结果。
