@@ -1,0 +1,12 @@
+style	check	result
+MIUIX	Tab/Shift+Tab	passed
+MIUIX	Enter/Escape menu	passed
+MIUIX	Escape page	passed
+MIUIX	Space switch	passed
+MIUIX	Enter noise radio callback only	passed
+MATERIAL3	Tab/Shift+Tab	passed
+MATERIAL3	Enter/Escape menu	passed
+MATERIAL3	Escape page	passed
+MATERIAL3	Space switch	passed
+MATERIAL3	Enter radio callback only	passed
+MATERIAL3	Enter noise radio callback only	passed
