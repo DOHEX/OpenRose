@@ -16,7 +16,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import io.github.dohex.openrose.core.*
@@ -39,6 +38,11 @@ internal fun ControlState.controlTransportLabel(): String = when (transportSelec
 internal fun HeadphonesPage(
     state: ControlState,
     onNavigate: (AppPage) -> Unit,
+    onRequestPermission: () -> Unit,
+    onOpenSystemSettings: () -> Unit,
+    onStartScan: () -> Unit,
+    onStopScan: () -> Unit,
+    onConnect: (DeviceId) -> Unit,
     onDisconnect: () -> Unit,
     onSet: (DeviceSetting, FieldValue) -> Unit,
 ) {
@@ -48,36 +52,7 @@ internal fun HeadphonesPage(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         if (device == null) {
-            val connecting = state.connection as? ConnectionState.Connecting
-            AppDashboardCard {
-                Column(
-                    Modifier.fillMaxWidth(),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    EarbudsArtwork(Modifier.fillMaxWidth().height(140.dp))
-                    AppText(
-                        if (connecting != null) "正在连接耳机" else "连接你的 ROSE 耳机",
-                        role = AppTextRole.Title,
-                    )
-                    AppText(
-                        connecting?.phase?.displayText() ?: "扫描附近设备，连接已识别的型号配置。",
-                        role = AppTextRole.Summary,
-                    )
-                    AppButton(
-                        text = if (connecting != null) "取消连接" else "添加耳机",
-                        onClick = if (connecting != null) onDisconnect else {
-                            { onNavigate(AppPage.ADD_DEVICE) }
-                        },
-                        kind = if (connecting != null) AppButtonKind.Secondary else AppButtonKind.Primary,
-                        modifier = if (connecting == null) {
-                            Modifier.semantics { contentDescription = "添加耳机" }
-                        } else {
-                            Modifier
-                        },
-                    )
-                }
-            }
+            AppText("连接你的 ROSE 耳机", role = AppTextRole.Title)
             val reason = when (val transport = state.platform.transport) {
                 TransportAvailability.Available ->
                     if (state.platform.permission in setOf(PermissionState.REQUIRED, PermissionState.DENIED)) {
@@ -88,6 +63,15 @@ internal fun HeadphonesPage(
                 TransportAvailability.Disabled -> "系统蓝牙已关闭"
                 is TransportAvailability.Unavailable -> transport.reason
             }
+            NearbyDevicesPanel(
+                state,
+                onRequestPermission,
+                onOpenSystemSettings,
+                onStartScan,
+                onStopScan,
+                onConnect,
+                onDisconnect,
+            )
             AppGroup {
                 AppArrowRow(
                     title = "连接与运行状态",
@@ -95,11 +79,6 @@ internal fun HeadphonesPage(
                     icon = RoseIcon.BLUETOOTH,
                     onClick = { onNavigate(AppPage.DIAGNOSTICS) },
                 )
-            }
-            state.lastError?.let { error ->
-                AppDashboardCard {
-                    AppText(error.message, color = appColor(AppColorRole.Error))
-                }
             }
             SettingOperationsCard(state)
             return@Column
@@ -347,6 +326,27 @@ private fun NoiseQuickCard(
 
 @Composable
 internal fun AddDevicePage(
+    state: ControlState,
+    onRequestPermission: () -> Unit,
+    onOpenSystemSettings: () -> Unit,
+    onStartScan: () -> Unit,
+    onStopScan: () -> Unit,
+    onConnect: (DeviceId) -> Unit,
+    onDisconnect: () -> Unit,
+) {
+    NearbyDevicesPanel(
+        state,
+        onRequestPermission,
+        onOpenSystemSettings,
+        onStartScan,
+        onStopScan,
+        onConnect,
+        onDisconnect,
+    )
+}
+
+@Composable
+private fun NearbyDevicesPanel(
     state: ControlState,
     onRequestPermission: () -> Unit,
     onOpenSystemSettings: () -> Unit,
