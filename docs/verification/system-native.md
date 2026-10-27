@@ -67,7 +67,9 @@
 
 公开会话 / Parcel 探针的可重建绿版源码与入口保存于 [tools/android-native-probe](../../tools/android-native-probe/README.md)。新增入口已完成本机构建与签名验证；它的输出没有再次在模拟器运行，50 项运行结果属于上述原始 scratch fixture。构建只输出独立 APK，不自动连接或选择设备，手工运行必须显式给出 ADB 端口和设备序号。
 
-最终 Android 调试包为 `androidApp/build/outputs/apk/debug/androidApp-debug.apk`，SHA-256 `b62a3beff3386bc83972a6c620ade491de45f3c77782eacc01897f6ce593ec50`。Linux 发行目录为 `desktopApp/build/compose/binaries/main/app`；生成成功不代表桌面蓝牙或 Windows 运行通过。最终 APK 安装、启动及清理后的页面记录位于 `.scratch/emulator/native-final.xml` / `native-final.png`，崩溃缓冲区记录为 `logs/native-final-crash.txt`。真实 HyperOS / Xposed / 蓝牙和 SystemUI 验收仍未执行。
+2026-10-22 的档位能力修正将 wire 升至 3，分别传递 ANC 与通透档位的可选值和显示模式；生产 parser、状态比较与可重建探针已同步更新。新版探针新增旧 wire=1/2 拒绝、两组能力独立、缺失能力和抗风模式保留档位读数等断言，并已完成本机构建与签名验证，本轮未在模拟器运行。上表的 wire=2 和 50 项断言保留为历史结果，不表示新版 wire=3 已通过 Android Parcel 运行验证。
+
+上述历史阶段的 Android 调试包为 `androidApp/build/outputs/apk/debug/androidApp-debug.apk`，SHA-256 `b62a3beff3386bc83972a6c620ade491de45f3c77782eacc01897f6ce593ec50`。Linux 发行目录为 `desktopApp/build/compose/binaries/main/app`；生成成功不代表桌面蓝牙或 Windows 运行通过。该阶段 APK 安装、启动及清理后的页面记录位于 `.scratch/emulator/native-final.xml` / `native-final.png`，崩溃缓冲区记录为 `logs/native-final-crash.txt`。真实 HyperOS / Xposed / 蓝牙和 SystemUI 验收仍未执行。
 
 ## Standards
 

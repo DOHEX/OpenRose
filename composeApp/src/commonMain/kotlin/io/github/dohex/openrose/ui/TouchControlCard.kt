@@ -1,109 +1,127 @@
 package io.github.dohex.openrose.ui
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import io.github.dohex.openrose.core.ControlState
 import io.github.dohex.openrose.core.DeviceSetting
 import io.github.dohex.openrose.core.DeviceState
 import io.github.dohex.openrose.core.TouchSlot
 import io.github.dohex.openrose.core.protocol.DeviceField
+import io.github.dohex.openrose.core.protocol.FieldReading
 import io.github.dohex.openrose.core.protocol.FieldValue
+import io.github.dohex.openrose.core.protocol.TouchBinding
 
 @Composable
 internal fun TouchControlCard(
     state: ControlState,
     device: DeviceState,
     selectedSlot: TouchSlot?,
-    onSlotChange: (TouchSlot) -> Unit,
+    onSlotChange: (TouchSlot?) -> Unit,
     onSet: (DeviceSetting, FieldValue) -> Unit,
+    selectedSide: String? = null,
+    onSideChange: (String) -> Unit = {},
 ) {
     val writable = device.capabilities.writableSettings
     val touch = device.capabilities.touchControl
-    val hasBindings = DeviceSetting.TOUCH_BINDING in writable && touch != null &&
-        touch.slots.isNotEmpty() && touch.actions.isNotEmpty()
+    val touchActions = touch?.actions.orEmpty()
+    val slots = touch?.slots.orEmpty().sortedWith(
+        compareBy<TouchSlot>({ touchSideOrder(it.side) }, { touchGestureOrder(it.gesture) }, { it.gesture }),
+    )
+    val hasBindings = DeviceSetting.TOUCH_BINDING in writable && slots.isNotEmpty() && touchActions.isNotEmpty()
     val hasTouchSwitch = DeviceSetting.TOUCH_ENABLED in writable
     val hasDetection = DeviceSetting.EAR_DETECTION in writable
     if (!hasBindings && !hasTouchSwitch && !hasDetection) return
+
     val enabled = state.isReady(device) && !state.hasPendingSetting(device)
-    AppCard {
-        AppText("触控与检测", title = true)
-        Spacer(Modifier.height(8.dp))
-        SettingControlsSummary(state, device)
-        if (hasBindings) {
-            val slot = selectedSlot?.takeIf { it in touch.slots } ?: touch.slots.first()
-            val binding = (device.knownValue(DeviceField.TOUCH_KEYS) as? FieldValue.TouchKeys)?.bindings
-                ?.firstOrNull { it.side == slot.side && it.gesture == slot.gesture }
-            Spacer(Modifier.height(20.dp))
-            AppText("触控绑定")
-            Spacer(Modifier.height(8.dp))
-            AppText("以下操作修改触控绑定，点击动作不会立即执行播放或调音量。", secondary = true)
-            Spacer(Modifier.height(12.dp))
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                touch.slots.map { it.side }.distinct().forEach { side ->
-                    AppButton(
-                        touchSideLabel(side),
-                        {
-                            onSlotChange(
-                                touch.slots.firstOrNull { it.side == side && it.gesture == slot.gesture }
-                                    ?: touch.slots.first { it.side == side },
-                            )
-                        },
-                        selected = side == slot.side,
-                        choice = true,
-                        enabled = enabled,
-                    )
-                }
+    val knownBindings = device.knownValue(DeviceField.TOUCH_KEYS) as? FieldValue.TouchKeys
+    val availableSides = slots.map { it.side }.distinct()
+    val side = selectedSide?.takeIf { it in availableSides } ?: availableSides.firstOrNull()
+
+    if (hasTouchSwitch || hasDetection) {
+        AppGroup(
+            title = "功能开关",
+            footnote = if (hasDetection) "这里只配置检测功能，不代表当前佩戴、摘下或入盒状态。" else null,
+        ) {
+            if (hasTouchSwitch) {
+                SettingToggleChoices("触控总开关", DeviceField.TOUCH_ENABLED, DeviceSetting.TOUCH_ENABLED, device, enabled, onSet)
             }
-            Spacer(Modifier.height(8.dp))
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                touch.slots.filter { it.side == slot.side }.forEach { target ->
-                    AppButton(
-                        touchGestureLabel(target.gesture),
-                        { onSlotChange(target) },
-                        selected = target == slot,
-                        choice = true,
-                        enabled = enabled,
-                    )
-                }
+            if (hasDetection) {
+                SettingToggleChoices("佩戴检测功能", DeviceField.EAR_DETECTION, DeviceSetting.EAR_DETECTION, device, enabled, onSet)
             }
-            Spacer(Modifier.height(12.dp))
-            val action = binding?.action
-            AppText(
-                if (action == null) "${touchSideLabel(slot.side)}${touchGestureLabel(slot.gesture)}：当前绑定未知，可选择动作后等待设备确认。"
-                else "设备已确认：${touchSideLabel(slot.side)}${touchGestureLabel(slot.gesture)}绑定为${semanticLabel(action)}",
-                secondary = true,
-            )
-            Spacer(Modifier.height(8.dp))
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                touch.actions.forEach { requested ->
-                    AppButton(
-                        semanticLabel(requested),
-                        {
-                            if (requested != action) {
-                                onSet(DeviceSetting.TOUCH_BINDING, FieldValue.TouchAssignment(slot.side, slot.gesture, requested))
-                            }
-                        },
-                        selected = requested == action,
-                        choice = true,
-                        enabled = enabled,
-                    )
-                }
-            }
-        }
-        if (hasTouchSwitch) {
-            Spacer(Modifier.height(20.dp))
-            SettingToggleChoices("触控总开关", DeviceField.TOUCH_ENABLED, DeviceSetting.TOUCH_ENABLED, device, enabled, onSet)
-        }
-        if (hasDetection) {
-            Spacer(Modifier.height(20.dp))
-            SettingToggleChoices("佩戴检测功能", DeviceField.EAR_DETECTION, DeviceSetting.EAR_DETECTION, device, enabled, onSet)
-            Spacer(Modifier.height(8.dp))
-            AppText("此开关仅配置检测功能，不表示当前佩戴、摘下或入盒状态。", secondary = true)
         }
     }
+
+    if (hasBindings && side != null) {
+        val sideSlots = slots.filter { it.side == side }
+        AppGroup(
+            title = "左右耳手势",
+            footnote = "修改的是触控绑定，不会立即执行播放、切歌或调节音量。",
+        ) {
+            AppViewTabs(
+                tabs = availableSides.map(::touchSideLabel),
+                index = availableSides.indexOf(side).coerceAtLeast(0),
+                onSelect = { index ->
+                    availableSides.getOrNull(index)?.let { newSide ->
+                        onSlotChange(null)
+                        onSideChange(newSide)
+                    }
+                },
+            )
+            sideSlots.forEach { slot ->
+                val binding = knownBindings?.bindings?.firstOrNull {
+                    it.side == slot.side && it.gesture == slot.gesture
+                }
+                val valueText = touchBindingStatus(device.fields[DeviceField.TOUCH_KEYS], binding)
+                val confirmedAction = binding?.action
+                AppChoiceRow(
+                    title = touchGestureLabel(slot.gesture),
+                    valueText = valueText,
+                    options = touchActions.sortedBy(::semanticLabel)
+                        .map { action -> AppOption(action, semanticLabel(action)) },
+                    selected = confirmedAction,
+                    enabled = enabled,
+                    onSelect = { action ->
+                        if (enabled && action != confirmedAction) {
+                            onSet(DeviceSetting.TOUCH_BINDING, FieldValue.TouchAssignment(slot.side, slot.gesture, action))
+                        }
+                        onSlotChange(null)
+                    },
+                    id = "${slot.side}:${slot.gesture}",
+                    open = selectedSlot == slot,
+                    onOpenChange = { open ->
+                        onSlotChange(
+                            when {
+                                open -> slot
+                                selectedSlot == slot -> null
+                                else -> selectedSlot
+                            },
+                        )
+                    },
+                )
+            }
+        }
+    }
+}
+
+private fun touchBindingStatus(
+    reading: FieldReading?,
+    binding: TouchBinding?,
+): String = when {
+    reading !is FieldReading.Known -> "当前绑定未知"
+    binding == null -> "设备未返回此手势"
+    binding.action == null -> "未知动作（${binding.rawAction}）"
+    else -> binding.action?.let(::semanticLabel) ?: "当前绑定未知"
+}
+
+private fun touchSideOrder(side: String): Int = when (side) {
+    "left" -> 0
+    "right" -> 1
+    else -> 2
+}
+
+private fun touchGestureOrder(gesture: String): Int = when (gesture) {
+    "single" -> 0
+    "double" -> 1
+    "triple" -> 2
+    "long" -> 3
+    else -> 4
 }

@@ -2,7 +2,6 @@ package io.github.dohex.openrose.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.Composable
@@ -34,118 +33,104 @@ internal fun NoiseControlCard(
     val ready = state.isReady(device)
     val pending = state.hasPendingSetting(device)
     val enabled = ready && !pending
-    AppCard {
-        AppText("降噪控制", title = true)
-        Spacer(Modifier.height(8.dp))
-        AppText(
-            when {
-                !ready -> "控制会话尚未就绪，暂不能设置。"
-                pending -> "正在处理设置请求，当前选择保留设备已确认的状态。"
-                else -> "选择反映设备已确认的状态，设置结果由设备回报确认。"
-            },
-            secondary = true,
-        )
-        if (DeviceSetting.NOISE_MODE in writable && capabilities.modes.isNotEmpty()) {
-            Spacer(Modifier.height(20.dp))
-            ConfirmedSettingLabel("模式", DeviceField.NOISE_MODE, device)
-            Spacer(Modifier.height(8.dp))
-            val selected = (device.knownValue(DeviceField.NOISE_MODE) as? FieldValue.Text)?.value
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                capabilities.modes.forEach { mode ->
-                    AppButton(
-                        semanticLabel(mode),
-                        { if (mode != selected) onSet(DeviceSetting.NOISE_MODE, FieldValue.Text(mode)) },
-                        selected = mode == selected,
-                        choice = true,
-                        enabled = enabled,
-                    )
-                }
-            }
-        }
-        listOf(
-            Triple(DeviceSetting.ANC_LEVEL, DeviceField.ANC_LEVEL, "降噪档位"),
-            Triple(DeviceSetting.TRANSPARENCY_LEVEL, DeviceField.TRANSPARENCY_LEVEL, "通透档位"),
-        ).forEach { (setting, field, label) ->
-            if (setting in writable && capabilities.levels.isNotEmpty()) {
-                Spacer(Modifier.height(20.dp))
-                ConfirmedSettingLabel(label, field, device)
-                Spacer(Modifier.height(8.dp))
-                val selected = (device.knownValue(field) as? FieldValue.Number)?.value
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    capabilities.levels.sorted().forEach { level ->
-                        AppButton(
-                            "$level 档",
-                            { if (level != selected) onSet(setting, FieldValue.Number(level)) },
-                            selected = level == selected,
-                            choice = true,
-                            enabled = enabled,
-                        )
-                    }
-                }
-            }
-        }
-        if (DeviceSetting.NOISE_CYCLE in writable && capabilities.cycleModes.isNotEmpty()) {
-            Spacer(Modifier.height(20.dp))
-            AppText("降噪轮换")
-            val flags = (device.knownValue(DeviceField.NOISE_CYCLE) as? FieldValue.NoiseCycle)?.flags
-            val cycleKnown = flags != null && capabilities.cycleModes.all { flags[it] != null }
-            val selectedCount = capabilities.cycleModes.count { flags?.get(it) == true }
-            Spacer(Modifier.height(8.dp))
-            AppText(
-                when {
-                    !cycleKnown -> "尚无完整的设备轮换状态，读取确认后才能调整。"
-                    capabilities.minimumCycleSelections > 0 ->
-                        "按已确认的选择调整轮换，至少保留 ${capabilities.minimumCycleSelections} 项。"
-                    else -> "按已确认的选择调整轮换，可清空全部选项。"
+    val confirmedMode = (device.knownValue(DeviceField.NOISE_MODE) as? FieldValue.Text)?.value
+
+    if (DeviceSetting.NOISE_MODE in writable && capabilities.modes.isNotEmpty()) {
+        AppGroup(
+            title = "降噪模式",
+            footnote = confirmedSettingStatus(DeviceField.NOISE_MODE, device),
+        ) {
+            val options = capabilities.modes
+                .sortedWith(compareBy({ noiseModeOrder(it) }, { it }))
+                .map { mode -> AppOption(mode, semanticLabel(mode)) }
+            AppRadioGroup(
+                options = options,
+                selected = confirmedMode,
+                enabled = enabled,
+                onSelect = { mode ->
+                    if (mode != confirmedMode) onSet(DeviceSetting.NOISE_MODE, FieldValue.Text(mode))
                 },
-                secondary = true,
             )
-            Spacer(Modifier.height(8.dp))
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                capabilities.cycleModes.forEach { mode ->
+        }
+    }
+
+    listOf(
+        Triple(DeviceSetting.ANC_LEVEL, "降噪档位", capabilities.levelCapabilities(DeviceSetting.ANC_LEVEL)),
+        Triple(DeviceSetting.TRANSPARENCY_LEVEL, "通透档位", capabilities.levelCapabilities(DeviceSetting.TRANSPARENCY_LEVEL)),
+    ).forEach { (setting, title, levelCapabilities) ->
+        if (setting in writable && levelCapabilities?.isVisibleIn(confirmedMode) == true) {
+            val field = when (setting) {
+                DeviceSetting.ANC_LEVEL -> DeviceField.ANC_LEVEL
+                else -> DeviceField.TRANSPARENCY_LEVEL
+            }
+            val selected = (device.knownValue(field) as? FieldValue.Number)?.value
+            AppGroup(title = title) {
+                AppSegmented(
+                    options = levelCapabilities.levels.sorted().map { level -> AppOption(level, "$level 档") },
+                    selected = selected,
+                    enabled = enabled,
+                    onSelect = { level ->
+                        if (level != selected) onSet(setting, FieldValue.Number(level))
+                    },
+                )
+            }
+        }
+    }
+
+    if (DeviceSetting.NOISE_CYCLE in writable && capabilities.cycleModes.isNotEmpty()) {
+        val flags = (device.knownValue(DeviceField.NOISE_CYCLE) as? FieldValue.NoiseCycle)?.flags
+        val cycleKnown = flags != null && capabilities.cycleModes.all { flags[it] != null }
+        val selectedCount = capabilities.cycleModes.count { flags?.get(it) == true }
+        val footnote = when {
+            !cycleKnown -> "尚无完整状态"
+            capabilities.minimumCycleSelections > 0 ->
+                "按已确认的选择调整轮换，至少保留 ${capabilities.minimumCycleSelections} 项。"
+            else -> "按已确认的选择调整轮换，可清空全部选项。"
+        }
+        AppGroup(title = "降噪轮换", footnote = footnote) {
+            AppCheckGroup(
+                options = capabilities.cycleModes.map { mode -> AppOption(mode, semanticLabel(mode)) },
+                checked = capabilities.cycleModes.filterTo(mutableSetOf()) { flags?.get(it) == true },
+                enabledFor = { mode ->
                     val checked = flags?.get(mode) == true
                     val canRemove = !checked || selectedCount > capabilities.minimumCycleSelections
-                    AppButton(
-                        semanticLabel(mode),
-                        {
-                            if (cycleKnown && canRemove) {
-                                val requested = capabilities.cycleModes.associateWith { option ->
-                                    if (option == mode) !checked else flags[option] == true
-                                }
-                                onSet(DeviceSetting.NOISE_CYCLE, FieldValue.NoiseCycle(requested))
-                            }
-                        },
-                        selected = checked,
-                        choice = true,
-                        enabled = enabled && cycleKnown && canRemove,
-                    )
-                }
-            }
+                    enabled && cycleKnown && canRemove
+                },
+                onToggle = { mode ->
+                    val checked = flags?.get(mode) == true
+                    val canRemove = !checked || selectedCount > capabilities.minimumCycleSelections
+                    if (enabled && cycleKnown && canRemove) {
+                        val requested = capabilities.cycleModes.associateWith { option ->
+                            if (option == mode) !checked else flags?.get(option) == true
+                        }
+                        onSet(DeviceSetting.NOISE_CYCLE, FieldValue.NoiseCycle(requested))
+                    }
+                },
+            )
         }
     }
 }
 
+private fun noiseModeOrder(mode: String): Int = when (mode) {
+    "normal" -> 0
+    "anc" -> 1
+    "transparency" -> 2
+    "wind" -> 3
+    "auto" -> 4
+    "dynamic" -> 5
+    else -> 6
+}
+
+internal fun confirmedSettingStatus(field: DeviceField, device: DeviceState): String = when (val reading = device.fields[field]) {
+    is FieldReading.Known -> "设备已确认：${displayFieldValue(field, reading.value, device.profile)}"
+    is FieldReading.Unknown -> "当前状态：未知"
+    is FieldReading.NotProvided -> "当前状态：设备未提供"
+    FieldReading.Loading, null -> "当前状态：尚未读取"
+}
+
 @Composable
 internal fun ConfirmedSettingLabel(label: String, field: DeviceField, device: DeviceState) {
-    AppText(label)
-    AppText(
-        when (val reading = device.fields[field]) {
-            is FieldReading.Known -> "设备已确认：${displayFieldValue(field, reading.value, device.profile)}"
-            is FieldReading.Unknown -> "当前状态：未知"
-            is FieldReading.NotProvided -> "当前状态：设备未提供"
-            FieldReading.Loading, null -> "当前状态：尚未读取"
-        },
-        secondary = true,
-    )
+    AppInfoRow(label, confirmedSettingStatus(field, device))
 }
 
 /** Kept outside the connected device card so a disconnected request still has a visible result. */
@@ -158,35 +143,38 @@ internal fun SettingOperationsCard(state: ControlState) {
         is ConnectionState.Connected -> connection.sessionId
         ConnectionState.Disconnected -> null
     }
-    AppCard {
-        AppText("设置操作", title = true)
-        Spacer(Modifier.height(8.dp))
-        AppText("请求值与已确认设备状态分别显示。", secondary = true)
-        operations.forEach { operation ->
-            val profile = state.device?.takeIf { it.sessionId == operation.sessionId && operation.sessionId == sessionId }?.profile
-            Spacer(Modifier.height(16.dp))
+    AppGroup(title = "设置操作", footnote = "请求值与已确认设备状态分别显示。") {
+        operations.forEachIndexed { index, operation ->
+            val profile = state.device
+                ?.takeIf { it.sessionId == operation.sessionId && operation.sessionId == sessionId }
+                ?.profile
+            if (index > 0) AppDivider()
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                AppText("请求 #${operation.id}：${operation.setting.displayName()}")
-                AppText("请求值：${operation.requestedValueText(profile)}", secondary = true)
+                AppText("请求 #${operation.id}：${operation.setting.displayName()}", role = AppTextRole.Title)
+                AppText("请求值：${operation.requestedValueText(profile)}", role = AppTextRole.Summary)
                 AppText(operation.stage.displayText())
                 if (operation.setting == DeviceSetting.CUSTOM_EQ) {
                     if (operation.totalFrames > 0) {
-                        AppText("发送进度：${operation.writtenFrames}/${operation.totalFrames} 步", secondary = true)
+                        AppText("发送进度：${operation.writtenFrames}/${operation.totalFrames} 步", role = AppTextRole.Summary)
                     }
                     val modeConfirmed = DeviceField.EQ in operation.confirmedFields
                     val curveConfirmed = DeviceField.CUSTOM_EQ in operation.confirmedFields
-                    AppText(when {
-                        modeConfirmed && curveConfirmed -> "模式与曲线均已确认"
-                        modeConfirmed -> "模式已确认，曲线尚未确认"
-                        curveConfirmed -> "曲线已确认，模式尚未确认"
-                        else -> "模式与曲线尚未确认"
-                    }, secondary = true)
+                    AppText(
+                        when {
+                            modeConfirmed && curveConfirmed -> "模式与曲线均已确认"
+                            modeConfirmed -> "模式已确认，曲线尚未确认"
+                            curveConfirmed -> "曲线已确认，模式尚未确认"
+                            else -> "模式与曲线尚未确认"
+                        },
+                        role = AppTextRole.Summary,
+                    )
                 }
-                operation.error?.let { AppText(it.message, secondary = true) }
+                operation.error?.let { AppText(it.message, role = AppTextRole.Summary) }
                 if (operation.sessionId != sessionId) {
-                    AppText("已结束会话 ${operation.sessionId} 的操作记录", secondary = true)
+                    AppText("已结束会话 ${operation.sessionId} 的操作记录", role = AppTextRole.Summary)
                 }
             }
+            if (index < operations.lastIndex) Spacer(Modifier.height(8.dp))
         }
     }
 }
@@ -221,9 +209,9 @@ private fun DeviceSetting.displayName(): String = when (this) {
     DeviceSetting.AUDIO_MODE -> "音频模式"
     DeviceSetting.MULTIPOINT -> "多点连接"
     DeviceSetting.PROMPT_VOLUME -> "提示音音量"
-    DeviceSetting.CUSTOM_EQ -> "自定义 EQ"
     DeviceSetting.GAIN -> "增益档位"
     DeviceSetting.HEARING_PROTECTION -> "听力保护阈值"
+    DeviceSetting.CUSTOM_EQ -> "自定义 EQ"
 }
 
 private fun SettingOperation.requestedValueText(profile: ModelProfile?): String = when (setting) {

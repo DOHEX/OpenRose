@@ -1,0 +1,45 @@
+package io.github.dohex.openrose.ui
+
+import androidx.compose.foundation.ScrollState
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.unit.dp
+import top.yukonga.miuix.kmp.basic.*
+
+@Composable
+internal fun MiuixAppShell(backStack: List<AppPage>, page: AppPage, wide: Boolean,
+    onNavigate: (AppPage) -> Unit, onBack: () -> Unit, scrollState: ScrollState,
+    pageContent: @Composable () -> Unit) {
+    Row(Modifier.fillMaxSize()) {
+        if (wide) NavigationRail(header = { AppIcon(RoseIcon.HEADPHONES, Modifier.padding(12.dp), contentDescription = "OpenRose") }) {
+            mainPages.forEach { destination ->
+                NavigationRailItem(selected = backStack.first() == destination && page != AppPage.DIAGNOSTICS,
+                    onClick = { onNavigate(destination) }, icon = RoseIcons[destination.icon], label = destination.title)
+            }
+            Spacer(Modifier.weight(1f))
+            NavigationRailItem(selected = page == AppPage.DIAGNOSTICS, onClick = { onNavigate(AppPage.DIAGNOSTICS) },
+                icon = RoseIcons[RoseIcon.LOG], label = AppPage.DIAGNOSTICS.title)
+        }
+        val scrollBehavior = MiuixScrollBehavior()
+        val title = if (page == AppPage.HEADPHONES && !wide) "OpenRose" else page.title
+        Scaffold(modifier = Modifier.weight(1f).nestedScroll(scrollBehavior.nestedScrollConnection),
+            topBar = {
+                TopAppBar(title = title, largeTitle = title, scrollBehavior = scrollBehavior,
+                    navigationIcon = { if (backStack.size > 1) IconButton(onClick = onBack) { Icon(RoseIcons.Back, "返回") } },
+                    actions = { if (page == AppPage.HEADPHONES) IconButton(onClick = { onNavigate(AppPage.ADD_DEVICE) }) { Icon(RoseIcons.Plus, "添加耳机") } })
+            },
+            bottomBar = {
+                if (!wide && page in mainPages) NavigationBar {
+                    mainPages.forEach { destination -> NavigationBarItem(selected = page == destination,
+                        onClick = { onNavigate(destination) }, icon = RoseIcons[destination.icon], label = destination.navigationLabel) }
+                }
+            }) { padding ->
+            Column(Modifier.fillMaxSize().verticalScroll(scrollState)) {
+                ShellPageContent(page, padding, pageContent)
+            }
+        }
+    }
+}

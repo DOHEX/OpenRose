@@ -1,16 +1,11 @@
 package io.github.dohex.openrose.ui
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import io.github.dohex.openrose.core.ControlState
 import io.github.dohex.openrose.core.DeviceSetting
 import io.github.dohex.openrose.core.DeviceState
 import io.github.dohex.openrose.core.protocol.DeviceField
+import io.github.dohex.openrose.core.protocol.FieldReading
 import io.github.dohex.openrose.core.protocol.FieldValue
 
 @Composable
@@ -30,123 +25,99 @@ internal fun DeviceControlCard(
     val protectionLevels = device.capabilities.hearingProtectionLevels
     val hasProtection = DeviceSetting.HEARING_PROTECTION in writable && protectionLevels.isNotEmpty()
     if (!hasAudio && !hasMultipoint && !hasVolume && !hasGain && !hasProtection) return
+
     val enabled = state.isReady(device) && !state.hasPendingSetting(device)
-    AppCard {
-        AppText("音频与提示音", title = true)
-        Spacer(Modifier.height(8.dp))
-        SettingControlsSummary(state, device)
-        if (hasAudio) {
-            Spacer(Modifier.height(20.dp))
-            ConfirmedSettingLabel("音频模式", DeviceField.AUDIO_MODE, device)
-            Spacer(Modifier.height(8.dp))
-            val selected = (device.knownValue(DeviceField.AUDIO_MODE) as? FieldValue.Text)?.value
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                audio.modes.forEach { mode ->
-                    AppButton(
-                        semanticLabel(mode),
-                        { if (mode != selected) onSet(DeviceSetting.AUDIO_MODE, FieldValue.Text(mode)) },
-                        selected = mode == selected,
-                        choice = true,
-                        enabled = enabled,
-                    )
-                }
+
+    if (hasAudio || hasMultipoint) {
+        val footnote = buildList {
+            if (hasAudio) add("这里只设置耳机音频偏好；实际编码以系统连接协商为准。")
+            if (hasAudio && hasMultipoint) {
+                add(
+                    if (audio?.multipointCoupled == true) {
+                        "该型号的 LDAC 与多点连接互斥；切换多点时设备会改用 AAC / SBC。"
+                    } else {
+                        "音频模式与多点连接分别设置，可用组合仍由耳机与连接设备决定。"
+                    },
+                )
             }
-            Spacer(Modifier.height(8.dp))
-            AppText("这里只设置耳机音频偏好，不表示系统音频链路已协商该编码。", secondary = true)
+        }.joinToString(" ").takeIf { it.isNotEmpty() }
+        AppGroup(title = "音频", footnote = footnote) {
+            if (hasAudio) {
+                val confirmed = (device.knownValue(DeviceField.AUDIO_MODE) as? FieldValue.Text)?.value
+                AppChoiceRow(
+                    title = "音频模式",
+                    valueText = confirmedChoiceValue(DeviceField.AUDIO_MODE, device),
+                    options = audio!!.modes.sortedBy(::semanticLabel)
+                        .map { mode -> AppOption(mode, semanticLabel(mode)) },
+                    selected = confirmed,
+                    enabled = enabled,
+                    onSelect = { mode ->
+                        if (mode != confirmed) onSet(DeviceSetting.AUDIO_MODE, FieldValue.Text(mode))
+                    },
+                )
+            }
+            if (hasMultipoint) {
+                SettingToggleChoices("多点连接", DeviceField.MULTIPOINT, DeviceSetting.MULTIPOINT, device, enabled, onSet)
+            }
         }
-        if (hasMultipoint) {
-            Spacer(Modifier.height(20.dp))
-            SettingToggleChoices("多点连接", DeviceField.MULTIPOINT, DeviceSetting.MULTIPOINT, device, enabled, onSet)
-        }
-        if (hasAudio && hasMultipoint) {
-            Spacer(Modifier.height(8.dp))
-            AppText(
-                if (audio.multipointCoupled) {
-                    "选择 LDAC 会关闭多点连接；开启多点连接会切换到 AAC / SBC。"
-                } else {
-                    "音频模式与多点连接分别设置，实际可用组合以耳机与连接设备为准。"
+    }
+
+    if (hasVolume) {
+        val confirmed = (device.knownValue(DeviceField.PROMPT_VOLUME) as? FieldValue.Number)?.value
+        AppGroup(title = "提示与音量") {
+            AppChoiceRow(
+                title = "提示音音量",
+                valueText = confirmedChoiceValue(DeviceField.PROMPT_VOLUME, device),
+                options = volumeLevels.sorted().map { level -> AppOption(level, if (level == 0) "关闭" else "$level 档") },
+                selected = confirmed,
+                enabled = enabled,
+                onSelect = { level ->
+                    if (level != confirmed) onSet(DeviceSetting.PROMPT_VOLUME, FieldValue.Number(level))
                 },
-                secondary = true,
             )
         }
-        if (hasVolume) {
-            Spacer(Modifier.height(20.dp))
-            ConfirmedSettingLabel("提示音音量", DeviceField.PROMPT_VOLUME, device)
-            Spacer(Modifier.height(8.dp))
-            val selected = (device.knownValue(DeviceField.PROMPT_VOLUME) as? FieldValue.Number)?.value
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                volumeLevels.sorted().forEach { level ->
-                    AppButton(
-                        if (level == 0) "关闭" else "$level 档",
-                        { if (level != selected) onSet(DeviceSetting.PROMPT_VOLUME, FieldValue.Number(level)) },
-                        selected = level == selected,
-                        choice = true,
-                        enabled = enabled,
-                    )
-                }
+    }
+
+    if (hasGain || hasProtection) {
+        AppGroup(
+            title = "输出与保护",
+            footnote = if (hasProtection) "阈值显示型号提供的选项，不表示测得声压或实际保护效果。" else null,
+        ) {
+            if (hasGain) {
+                val confirmed = (device.knownValue(DeviceField.GAIN) as? FieldValue.Number)?.value
+                AppChoiceRow(
+                    title = "增益档位",
+                    valueText = confirmedChoiceValue(DeviceField.GAIN, device),
+                    options = gainLevels.sorted().map { level -> AppOption(level, gainLevelLabel(level)) },
+                    selected = confirmed,
+                    enabled = enabled,
+                    onSelect = { level ->
+                        if (level != confirmed) onSet(DeviceSetting.GAIN, FieldValue.Number(level))
+                    },
+                )
             }
-        }
-        if (hasGain) {
-            Spacer(Modifier.height(20.dp))
-            ConfirmedSettingLabel("增益档位", DeviceField.GAIN, device)
-            Spacer(Modifier.height(8.dp))
-            val selected = (device.knownValue(DeviceField.GAIN) as? FieldValue.Number)?.value
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                gainLevels.sorted().forEach { level ->
-                    AppButton(
-                        gainLevelLabel(level),
-                        { if (level != selected) onSet(DeviceSetting.GAIN, FieldValue.Number(level)) },
-                        selected = level == selected,
-                        choice = true,
-                        enabled = enabled,
-                    )
-                }
+            if (hasProtection) {
+                val confirmed = (device.knownValue(DeviceField.HEARING_PROTECTION) as? FieldValue.Number)?.value
+                AppChoiceRow(
+                    title = "听力保护阈值",
+                    valueText = confirmedChoiceValue(DeviceField.HEARING_PROTECTION, device),
+                    options = protectionLevels.sorted().map { level -> AppOption(level, hearingProtectionLabel(level)) },
+                    selected = confirmed,
+                    enabled = enabled,
+                    onSelect = { level ->
+                        if (level != confirmed) onSet(DeviceSetting.HEARING_PROTECTION, FieldValue.Number(level))
+                    },
+                )
             }
-        }
-        if (hasProtection) {
-            Spacer(Modifier.height(20.dp))
-            ConfirmedSettingLabel("听力保护阈值", DeviceField.HEARING_PROTECTION, device)
-            Spacer(Modifier.height(8.dp))
-            val selected = (device.knownValue(DeviceField.HEARING_PROTECTION) as? FieldValue.Number)?.value
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                protectionLevels.sorted().forEach { level ->
-                    AppButton(
-                        hearingProtectionLabel(level),
-                        { if (level != selected) onSet(DeviceSetting.HEARING_PROTECTION, FieldValue.Number(level)) },
-                        selected = level == selected,
-                        choice = true,
-                        enabled = enabled,
-                    )
-                }
-            }
-            Spacer(Modifier.height(8.dp))
-            AppText("这是耳机提供的阈值标签，不表示测得的声压或保护效果。", secondary = true)
         }
     }
 }
 
-@Composable
-internal fun SettingControlsSummary(state: ControlState, device: DeviceState) {
-    AppText(
-        when {
-            !state.isReady(device) -> "控制会话尚未就绪，暂不能设置。"
-            state.hasPendingSetting(device) -> "正在处理设置请求，当前选择保留设备已确认的状态。"
-            else -> "选择反映设备已确认的状态，设置结果由设备回报确认。"
-        },
-        secondary = true,
-    )
+private fun confirmedChoiceValue(field: DeviceField, device: DeviceState): String = when (val reading = device.fields[field]) {
+    is FieldReading.Known -> displayFieldValue(field, reading.value, device.profile)
+    is FieldReading.Unknown -> "当前状态未知"
+    is FieldReading.NotProvided -> "设备未提供"
+    FieldReading.Loading, null -> readingText(field, reading, false, device.fieldErrors[field], device.profile)
 }
 
 @Composable
@@ -158,21 +129,31 @@ internal fun SettingToggleChoices(
     enabled: Boolean,
     onSet: (DeviceSetting, FieldValue) -> Unit,
 ) {
-    ConfirmedSettingLabel(label, field, device)
-    Spacer(Modifier.height(8.dp))
     val selected = (device.knownValue(field) as? FieldValue.Toggle)?.value
-    FlowRow(
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        listOf(true, false).forEach { requested ->
-            AppButton(
-                if (requested) "开启" else "关闭",
-                { if (requested != selected) onSet(setting, FieldValue.Toggle(requested)) },
-                selected = requested == selected,
-                choice = true,
-                enabled = enabled,
-            )
+    val summary = when (selected) {
+        true -> "设备已确认：开启"
+        false -> "设备已确认：关闭"
+        null -> when (device.fields[field]) {
+            is FieldReading.Known, is FieldReading.Unknown -> "当前状态未知"
+            else -> readingText(field, device.fields[field], false, device.fieldErrors[field], device.profile)
         }
+    }
+    if (selected != null) {
+        AppSwitchRow(
+            title = label,
+            summary = summary,
+            checked = selected,
+            enabled = enabled,
+            onChange = { requested ->
+                if (requested != selected) onSet(setting, FieldValue.Toggle(requested))
+            },
+        )
+    } else {
+        AppUnknownToggleRow(
+            title = label,
+            summary = summary,
+            enabled = enabled,
+            onRequest = { requested -> onSet(setting, FieldValue.Toggle(requested)) },
+        )
     }
 }

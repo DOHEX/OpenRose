@@ -2,7 +2,9 @@ package io.github.dohex.openrose.bridge
 
 import android.os.Bundle
 import android.os.SystemClock
+import io.github.dohex.openrose.core.DeviceSetting
 import io.github.dohex.openrose.core.DeviceState
+import io.github.dohex.openrose.core.NoiseLevelCapabilities
 import io.github.dohex.openrose.core.protocol.FieldReading
 import io.github.dohex.openrose.core.protocol.FieldValue
 
@@ -31,7 +33,10 @@ internal fun DeviceState.toBridgeSnapshot(hostEpoch: String, readSequence: Long)
         putStringArrayList("writable_settings", ArrayList(capabilities.writableSettings.map { it.name }.sorted()))
         capabilities.noiseControl?.let { noise -> putBundle("noise", Bundle().apply {
             putStringArrayList("modes", ArrayList(noise.modes.sorted()))
-            putIntegerArrayList("levels", ArrayList(noise.levels.sorted()))
+            noise.levelCapabilities(DeviceSetting.ANC_LEVEL)?.let { level -> putBundle("anc_level", level.toBridgeCapability()) }
+            noise.levelCapabilities(DeviceSetting.TRANSPARENCY_LEVEL)?.let { level ->
+                putBundle("transparency_level", level.toBridgeCapability())
+            }
             putStringArrayList("cycle_modes", ArrayList(noise.cycleModes.sorted()))
             putInt("minimum_cycle_selections", noise.minimumCycleSelections)
         }) }
@@ -58,6 +63,11 @@ internal fun DeviceState.toBridgeSnapshot(hostEpoch: String, readSequence: Long)
         putIntegerArrayList("gain_levels", ArrayList(capabilities.gainLevels.sorted()))
         putIntegerArrayList("hearing_protection_levels", ArrayList(capabilities.hearingProtectionLevels.sorted()))
     })
+}
+
+private fun NoiseLevelCapabilities.toBridgeCapability(): Bundle = Bundle().apply {
+    putIntegerArrayList("levels", ArrayList(levels.sorted()))
+    putStringArrayList("visible_modes", ArrayList(visibleModes.sorted()))
 }
 
 private fun FieldReading.toBridgeReading(): Bundle = Bundle().apply {

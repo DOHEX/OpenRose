@@ -1,12 +1,16 @@
 package io.github.dohex.openrose.core.protocol
 
 import io.github.dohex.openrose.core.DeviceSetting
+import io.github.dohex.openrose.core.NoiseLevelCapabilities
 import io.github.dohex.openrose.core.noiseControlCapabilities
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class NoiseProtocolTest {
     @Test
@@ -37,6 +41,59 @@ class NoiseProtocolTest {
     }
 
     @Test
+    fun levelControlsHaveIndependentOptionsAndVisibleNoiseModes() {
+        for (profile in ModelProfile.entries) {
+            val noise = noiseControlCapabilities(profile)
+            val anc = assertNotNull(noise.levelCapabilities(DeviceSetting.ANC_LEVEL), "$profile ANC levels")
+            val transparency = assertNotNull(
+                noise.levelCapabilities(DeviceSetting.TRANSPARENCY_LEVEL),
+                "$profile transparency levels",
+            )
+
+            assertEquals(setOf(1, 3, 5), anc.levels, "$profile ANC options")
+            assertEquals(setOf("anc"), anc.visibleModes, "$profile ANC visibility")
+            assertEquals(setOf(1, 3, 5), transparency.levels, "$profile transparency options")
+            assertEquals(setOf("transparency"), transparency.visibleModes, "$profile transparency visibility")
+
+            assertTrue(anc.isVisibleIn("anc"), "$profile ANC should be visible in ANC mode")
+            assertFalse(anc.isVisibleIn("normal"), "$profile ANC should be hidden in normal mode")
+            assertFalse(anc.isVisibleIn("wind"), "$profile ANC should be hidden in wind mode")
+            assertFalse(transparency.isVisibleIn("wind"), "$profile transparency should be hidden in wind mode")
+            assertFalse(transparency.isVisibleIn("anc"), "$profile transparency should be hidden in ANC mode")
+            assertFalse(anc.isVisibleIn(null), "$profile ANC should be hidden while mode is unknown")
+            assertFalse(transparency.isVisibleIn("unrecognized"), "$profile transparency should be hidden for an unknown mode")
+        }
+
+        val i7 = noiseControlCapabilities(ModelProfile.I7_RS_V2)
+        assertFalse(assertNotNull(i7.levelCapabilities(DeviceSetting.ANC_LEVEL)).isVisibleIn("auto"))
+        assertFalse(assertNotNull(i7.levelCapabilities(DeviceSetting.ANC_LEVEL)).isVisibleIn("dynamic"))
+        assertFalse(assertNotNull(i7.levelCapabilities(DeviceSetting.TRANSPARENCY_LEVEL)).isVisibleIn("auto"))
+        assertFalse(assertNotNull(i7.levelCapabilities(DeviceSetting.TRANSPARENCY_LEVEL)).isVisibleIn("dynamic"))
+    }
+
+    @Test
+    fun levelCapabilityCanRepresentDifferentRangesAndUnsupportedControls() {
+        // The recovered CERAMICS-U config has ANC low/medium/high but only low/high transparency.
+        val fixture = noiseControlCapabilities(ModelProfile.I5_ZT).copy(
+            ancLevel = NoiseLevelCapabilities(setOf(1, 3, 5), setOf("anc")),
+            transparencyLevel = NoiseLevelCapabilities(setOf(1, 5), setOf("transparency")),
+        )
+
+        assertEquals(setOf(1, 3, 5), fixture.levelCapabilities(DeviceSetting.ANC_LEVEL)?.levels)
+        assertEquals(setOf(1, 5), fixture.levelCapabilities(DeviceSetting.TRANSPARENCY_LEVEL)?.levels)
+
+        val withoutAncLevels = fixture.copy(ancLevel = null)
+        assertNull(withoutAncLevels.levelCapabilities(DeviceSetting.ANC_LEVEL))
+        assertNotNull(withoutAncLevels.levelCapabilities(DeviceSetting.TRANSPARENCY_LEVEL))
+        assertNull(fixture.levelCapabilities(DeviceSetting.NOISE_MODE))
+
+        val withoutAncOptions = fixture.copy(
+            ancLevel = NoiseLevelCapabilities(emptySet(), setOf("anc")),
+        )
+        assertFalse(assertNotNull(withoutAncOptions.levelCapabilities(DeviceSetting.ANC_LEVEL)).isVisibleIn("anc"))
+    }
+
+    @Test
     fun i7ModesMatchIndependentSenderLiteralsAndReadActualMode() {
         for ((mode, literal) in listOf(
             "anc" to "ff000209010baa", "normal" to "ff000209020caa",
@@ -63,7 +120,7 @@ class NoiseProtocolTest {
             Triple(ModelProfile.I7_RS_V2, DeviceSetting.TRANSPARENCY_LEVEL, listOf("ff00022d012faa", "ff00022d0331aa", "ff00022d0533aa")),
         )
         for ((profile, kind, literals) in vectors) {
-            assertEquals(setOf(1, 3, 5), noiseControlCapabilities(profile).levels)
+            assertEquals(setOf(1, 3, 5), noiseControlCapabilities(profile).levelCapabilities(kind)?.levels)
             for ((index, level) in listOf(1, 3, 5).withIndex()) {
                 val setting = createProtocolCodec(profile).prepareSetting(kind, FieldValue.Number(level))
                 assertEquals(literals[index], setting.writeFrames.single().hex(), "$profile $kind $level")

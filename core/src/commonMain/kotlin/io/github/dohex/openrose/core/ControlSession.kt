@@ -293,7 +293,12 @@ class ControlSession(
                 }
                 value is FieldValue.Text
             }
-            DeviceSetting.ANC_LEVEL, DeviceSetting.TRANSPARENCY_LEVEL -> value is FieldValue.Number && value.value in noise.levels
+            DeviceSetting.ANC_LEVEL, DeviceSetting.TRANSPARENCY_LEVEL -> {
+                val level = noise.levelCapabilities(setting)
+                    ?: return ControlError(ControlErrorCode.UNSUPPORTED, "该型号不支持此档位设置")
+                // The original sender has no mode precondition; visibility is a separate rule.
+                value is FieldValue.Number && value.value in level.levels
+            }
             DeviceSetting.NOISE_CYCLE -> value is FieldValue.NoiseCycle && value.flags.keys == noise.cycleModes &&
                 value.flags.values.all { it != null } && value.flags.values.count { it == true } >= noise.minimumCycleSelections
         }
@@ -456,22 +461,26 @@ class ControlSession(
 
     private fun firmware(): FieldValue.Firmware? = (state.value.device?.fields?.get(DeviceField.FIRMWARE) as? FieldReading.Known)?.value as? FieldValue.Firmware
 
-    private fun capabilities(profile: ModelProfile, firmware: FieldValue.Firmware?) = DeviceCapabilities(
-        readableFields = profile.supportedFields,
-        writableSettings = setOf(DeviceSetting.NOISE_MODE, DeviceSetting.ANC_LEVEL, DeviceSetting.TRANSPARENCY_LEVEL,
-            DeviceSetting.NOISE_CYCLE, DeviceSetting.EQ, DeviceSetting.GAME_MODE, DeviceSetting.AUDIO_MODE, DeviceSetting.MULTIPOINT, DeviceSetting.TOUCH_BINDING, DeviceSetting.TOUCH_ENABLED, DeviceSetting.EAR_DETECTION) +
-            setOf(DeviceSetting.PROMPT_VOLUME) +
-            (if (profile == ModelProfile.I7_RS_V2) setOf(DeviceSetting.CUSTOM_EQ) else emptySet()) +
-            (if (gainLevels(profile, firmware).isNotEmpty()) setOf(DeviceSetting.GAIN) else emptySet()) +
-            (if (hearingProtectionLevels(profile, firmware).isNotEmpty()) setOf(DeviceSetting.HEARING_PROTECTION) else emptySet()),
-        noiseControl = noiseControlCapabilities(profile, firmware),
-        equalizer = equalizerCapabilities(profile, firmware),
-        touchControl = touchControlCapabilities(profile),
-        audioControl = audioControlCapabilities(profile),
-        promptVolumeLevels = promptVolumeLevels(profile, firmware),
-        gainLevels = gainLevels(profile, firmware),
-        hearingProtectionLevels = hearingProtectionLevels(profile, firmware),
-    )
+    private fun capabilities(profile: ModelProfile, firmware: FieldValue.Firmware?): DeviceCapabilities {
+        val noise = noiseControlCapabilities(profile, firmware)
+        return DeviceCapabilities(
+            readableFields = profile.supportedFields,
+            writableSettings = setOf(DeviceSetting.NOISE_MODE,
+                DeviceSetting.NOISE_CYCLE, DeviceSetting.EQ, DeviceSetting.GAME_MODE, DeviceSetting.AUDIO_MODE, DeviceSetting.MULTIPOINT, DeviceSetting.TOUCH_BINDING, DeviceSetting.TOUCH_ENABLED, DeviceSetting.EAR_DETECTION) +
+                listOf(DeviceSetting.ANC_LEVEL, DeviceSetting.TRANSPARENCY_LEVEL).filter { noise.levelCapabilities(it)?.levels?.isNotEmpty() == true } +
+                setOf(DeviceSetting.PROMPT_VOLUME) +
+                (if (profile == ModelProfile.I7_RS_V2) setOf(DeviceSetting.CUSTOM_EQ) else emptySet()) +
+                (if (gainLevels(profile, firmware).isNotEmpty()) setOf(DeviceSetting.GAIN) else emptySet()) +
+                (if (hearingProtectionLevels(profile, firmware).isNotEmpty()) setOf(DeviceSetting.HEARING_PROTECTION) else emptySet()),
+            noiseControl = noise,
+            equalizer = equalizerCapabilities(profile, firmware),
+            touchControl = touchControlCapabilities(profile),
+            audioControl = audioControlCapabilities(profile),
+            promptVolumeLevels = promptVolumeLevels(profile, firmware),
+            gainLevels = gainLevels(profile, firmware),
+            hearingProtectionLevels = hearingProtectionLevels(profile, firmware),
+        )
+    }
 
     private fun FieldValue.snapshot(): FieldValue = when (this) {
         is FieldValue.NoiseCycle -> copy(flags = flags.toMap())
@@ -502,8 +511,9 @@ class ControlSession(
         writableSettings = writableSettings.toSet(),
         noiseControl = noiseControl?.copy(
             modes = noiseControl.modes.toSet(),
-            levels = noiseControl.levels.toSet(),
             cycleModes = noiseControl.cycleModes.toSet(),
+            ancLevel = noiseControl.ancLevel?.snapshot(),
+            transparencyLevel = noiseControl.transparencyLevel?.snapshot(),
         ),
         equalizer = equalizer?.copy(
             presets = equalizer.presets.toSet(),
@@ -518,6 +528,8 @@ class ControlSession(
         gainLevels = gainLevels.toSet(),
         hearingProtectionLevels = hearingProtectionLevels.toSet(),
     )
+
+    private fun NoiseLevelCapabilities.snapshot() = copy(levels = levels.toSet(), visibleModes = visibleModes.toSet())
 
     private suspend fun openAndRead(attempt: Attempt): OperationResult {
         try {

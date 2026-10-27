@@ -13,12 +13,15 @@ kotlin {
         jvmMain.dependencies {
             implementation(project(":composeApp"))
             implementation(compose.desktop.currentOs)
+            implementation(libs.nucleus.application)
+            implementation(libs.nucleus.tao)
         }
     }
 }
 compose.desktop {
     application {
         mainClass = "io.github.dohex.openrose.desktop.MainKt"
+        jvmArgs += "--enable-native-access=ALL-UNNAMED"
         nativeDistributions {
             targetFormats(TargetFormat.Deb, TargetFormat.Msi)
             packageName = "OpenRose"

@@ -158,6 +158,63 @@ class ControlSessionSettingTest {
     }
 
     @Test
+    fun i5NoiseLevelWritesRemainIndependentOfCurrentModeAndOtherConfirmedLevel() = runTest {
+        val (session, link) = ready()
+        assertEquals(
+            FieldValue.Text("wind"),
+            assertIs<FieldReading.Known>(session.state.value.device?.fields?.get(DeviceField.NOISE_MODE)).value,
+        )
+
+        val anc = async { session.set(DeviceSetting.ANC_LEVEL, FieldValue.Number(3)) }
+        runCurrent()
+        assertEquals(
+            listOf("08ee00000006870b00018f", "08ee00000006070a000d"),
+            link.writes.drop(13),
+        )
+        link.incoming.send("09ff00000106070b000122".bytes())
+        runCurrent()
+        assertEquals(OperationResult.Success, anc.await())
+        assertEquals(
+            FieldValue.Text("wind"),
+            assertIs<FieldReading.Known>(session.state.value.device?.fields?.get(DeviceField.NOISE_MODE)).value,
+        )
+        assertEquals(
+            FieldValue.Number(3),
+            assertIs<FieldReading.Known>(session.state.value.device?.fields?.get(DeviceField.ANC_LEVEL)).value,
+        )
+        assertEquals(
+            FieldValue.Number(1),
+            assertIs<FieldReading.Known>(session.state.value.device?.fields?.get(DeviceField.TRANSPARENCY_LEVEL)).value,
+        )
+
+        val transparency = async { session.set(DeviceSetting.TRANSPARENCY_LEVEL, FieldValue.Number(3)) }
+        runCurrent()
+        assertEquals(
+            listOf(
+                "08ee00000006870b00018f", "08ee00000006070a000d",
+                "08ee00000006840b00018c", "08ee00000006040a000a",
+            ),
+            link.writes.drop(13),
+        )
+        link.incoming.send("09ff00000106040b00011f".bytes())
+        runCurrent()
+        assertEquals(OperationResult.Success, transparency.await())
+        assertEquals(
+            FieldValue.Text("wind"),
+            assertIs<FieldReading.Known>(session.state.value.device?.fields?.get(DeviceField.NOISE_MODE)).value,
+        )
+        assertEquals(
+            FieldValue.Number(3),
+            assertIs<FieldReading.Known>(session.state.value.device?.fields?.get(DeviceField.ANC_LEVEL)).value,
+        )
+        assertEquals(
+            FieldValue.Number(3),
+            assertIs<FieldReading.Known>(session.state.value.device?.fields?.get(DeviceField.TRANSPARENCY_LEVEL)).value,
+        )
+        session.disconnect()
+    }
+
+    @Test
     fun simultaneousSettingsStayFifoEvenWhenOneCallerCancelsAndStyleChanges() = runTest {
         val (session, link) = ready()
         val first = async { session.set(DeviceSetting.NOISE_MODE, FieldValue.Text("anc")) }
@@ -285,12 +342,25 @@ class ControlSessionSettingTest {
     @Test
     fun i7LevelsUseDirectWireValuesAndCycleOrderIsModelSpecific() = runTest {
         val (session, link) = ready(profile = ModelProfile.I7_RS_V2)
+        assertEquals(
+            FieldValue.Text("auto"),
+            assertIs<FieldReading.Known>(session.state.value.device?.fields?.get(DeviceField.NOISE_MODE)).value,
+        )
         val level = async { session.set(DeviceSetting.ANC_LEVEL, FieldValue.Number(3)) }
         runCurrent()
         assertEquals(listOf("ff04022c0334aa", "ff0502fa2c2caa"), link.writes.drop(4))
         link.incoming.send("dd00022c030eaa".bytes())
         runCurrent()
         assertEquals(OperationResult.Success, level.await())
+        assertEquals(
+            FieldValue.Text("auto"),
+            assertIs<FieldReading.Known>(session.state.value.device?.fields?.get(DeviceField.NOISE_MODE)).value,
+            "The independent ANC level readback must not replace the current automatic mode",
+        )
+        assertEquals(
+            FieldValue.Number(3),
+            assertIs<FieldReading.Known>(session.state.value.device?.fields?.get(DeviceField.ANC_LEVEL)).value,
+        )
         val cycle = async { session.set(DeviceSetting.NOISE_CYCLE, FieldValue.NoiseCycle(mapOf("normal" to true, "transparency" to true, "wind" to false, "anc" to true))) }
         runCurrent()
         assertEquals(listOf("ff0605360100010143aa", "ff0702fa3638aa"), link.writes.takeLast(2))

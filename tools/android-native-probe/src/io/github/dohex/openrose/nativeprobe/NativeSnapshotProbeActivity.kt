@@ -9,6 +9,8 @@ import io.github.dohex.openrose.core.ConnectionPhase
 import io.github.dohex.openrose.core.ConnectionState
 import io.github.dohex.openrose.core.ControlErrorCode
 import io.github.dohex.openrose.core.ControlSession
+import io.github.dohex.openrose.core.DeviceSetting
+import io.github.dohex.openrose.core.DeviceState
 import io.github.dohex.openrose.core.OperationResult
 import io.github.dohex.openrose.core.PermissionState
 import io.github.dohex.openrose.core.PlatformState
@@ -107,8 +109,46 @@ class NativeSnapshotProbeActivity : Activity() {
             val wire = deviceState.toBridgeSnapshot(hostEpoch = "native-probe-${profile.name.lowercase()}", readSequence = 7L)
             val parcelBytes = parcelRoundTrip(wire)
             val native = NativeHeadsetSnapshot.fromBundle(parcelBytes)
+            expect(wire.getInt("version") == 3, "production bridge emits split-capability wire version 3")
             expect(native != null, "native consumer accepts production wire version ${wire.getInt("version")}")
             val snapshot = requireNotNull(native)
+
+            for (oldVersion in listOf(1, 2)) {
+                val oldWire = Bundle(wire).apply { putInt("version", oldVersion) }
+                expect(NativeHeadsetSnapshot.fromBundle(oldWire) == null, "native consumer rejects old wire version $oldVersion")
+            }
+
+            val noiseCapabilities = requireNotNull(deviceState.capabilities.noiseControl)
+            val unsupportedAncDevice = deviceState.copy(
+                capabilities = deviceState.capabilities.copy(
+                    writableSettings = deviceState.capabilities.writableSettings - DeviceSetting.ANC_LEVEL,
+                    noiseControl = noiseCapabilities.copy(ancLevel = null),
+                ),
+            )
+            val unsupportedAncWire = unsupportedAncDevice.toBridgeSnapshot(
+                hostEpoch = "native-probe-${profile.name.lowercase()}",
+                readSequence = 7L,
+            )
+            val unsupportedAnc = NativeHeadsetSnapshot.fromBundle(parcelRoundTrip(unsupportedAncWire))
+            expect(unsupportedAnc?.ancLevel == null, "unsupported ANC capability remains absent after wire and Parcel")
+            expect(unsupportedAnc != null && "ANC_LEVEL" !in unsupportedAnc.writableSettings, "unsupported ANC setting is absent from writable settings")
+            expect(unsupportedAnc?.transparencyLevel?.levels == setOf(1, 3, 5), "unsupported ANC does not merge into transparency choices")
+
+            val differentRangeDevice = deviceState.copy(
+                capabilities = deviceState.capabilities.copy(
+                    noiseControl = noiseCapabilities.copy(
+                        ancLevel = requireNotNull(noiseCapabilities.ancLevel).copy(levels = setOf(1, 3)),
+                    ),
+                ),
+            )
+            val differentRangeWire = differentRangeDevice.toBridgeSnapshot(
+                hostEpoch = "native-probe-${profile.name.lowercase()}",
+                readSequence = 7L,
+            )
+            val differentRange = NativeHeadsetSnapshot.fromBundle(parcelRoundTrip(differentRangeWire))
+            expect(differentRange?.ancLevel?.levels == setOf(1, 3), "ANC range survives independently from transparency range")
+            expect(differentRange?.transparencyLevel?.levels == setOf(1, 3, 5), "different ANC range leaves transparency choices unchanged")
+            expect(differentRange != null && !snapshot.sameReportedState(differentRange), "setting capability changes are part of native snapshot state")
 
             expect(snapshot.sessionId == device.sessionId, "session reference survives wire and Parcel")
             expect(snapshot.profile == profile.name, "model configuration survives wire and Parcel")
@@ -121,7 +161,10 @@ class NativeSnapshotProbeActivity : Activity() {
                 setOf("normal", "transparency", "wind", "anc", "auto", "dynamic")
             }
             expect(snapshot.noiseModes == expectedModes, "${profile.name} available noise options survive wire and Parcel")
-            expect(snapshot.noiseLevels == setOf(1, 3, 5), "${profile.name} available noise levels survive wire and Parcel")
+            expect(snapshot.ancLevel?.levels == setOf(1, 3, 5), "${profile.name} ANC level choices survive wire and Parcel")
+            expect(snapshot.ancLevel?.visibleModes == setOf("anc"), "${profile.name} ANC visibility modes survive wire and Parcel")
+            expect(snapshot.transparencyLevel?.levels == setOf(1, 3, 5), "${profile.name} transparency choices survive wire and Parcel")
+            expect(snapshot.transparencyLevel?.visibleModes == setOf("transparency"), "${profile.name} transparency visibility modes survive wire and Parcel")
             expect(snapshot.supportsNoise("wind"), "supported noise option is actionable")
             expect(snapshot.supportsNoise("auto") == (profile == ModelProfile.I7_RS_V2), "unsupported/available model-specific noise option stays distinct")
 
@@ -132,6 +175,10 @@ class NativeSnapshotProbeActivity : Activity() {
                 expect(snapshot.knownNumber("CASE_BATTERY") == null, "i5 case FF has no numeric percentage")
                 expect(snapshot.fields["GAME_MODE"] == NativeFieldReading.Unknown, "unknown protocol field remains unknown in native snapshot")
                 expect(snapshot.knownText("NOISE_MODE") == "wind", "known noise mode survives wire and Parcel")
+                expect(snapshot.knownNumber("ANC_LEVEL") == 5, "i5 ANC level reading survives while current wind mode hides its control")
+                expect(snapshot.knownNumber("TRANSPARENCY_LEVEL") == 1, "i5 transparency reading survives while current wind mode hides its control")
+                expect(snapshot.ancLevel?.isVisibleIn("wind") == false, "i5 ANC control is hidden in the original wind mode")
+                expect(snapshot.transparencyLevel?.isVisibleIn("wind") == false, "i5 transparency control is hidden in the original wind mode")
             } else {
                 expect(device.classicAddress == I7_BR_ADDRESS, "public i7 model identification yields independent BR address")
                 expect(snapshot.addresses == setOf(I7_BLE_ADDRESS, I7_BR_ADDRESS), "i7 native snapshot carries BLE and BR addresses independently")

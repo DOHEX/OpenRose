@@ -1,62 +1,36 @@
 package io.github.dohex.openrose.ui
 
-import androidx.compose.foundation.background
+import androidx.compose.foundation.ScrollState
+import androidx.compose.foundation.focusable
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawingPadding
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.selection.toggleable
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.lightColorScheme
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
+import androidx.compose.foundation.layout.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.input.key.*
 import androidx.compose.ui.unit.dp
-import io.github.dohex.openrose.core.Appearance
-import io.github.dohex.openrose.core.BridgeIpcState
-import io.github.dohex.openrose.core.BridgeSessionState
-import io.github.dohex.openrose.core.ControlState
-import io.github.dohex.openrose.core.DeviceSetting
-import io.github.dohex.openrose.core.InterfaceStyle
-import io.github.dohex.openrose.core.IslandMode
-import io.github.dohex.openrose.core.IslandTrigger
-import io.github.dohex.openrose.core.ModuleAvailability
-import io.github.dohex.openrose.core.PermissionState
-import io.github.dohex.openrose.core.PlatformState
-import io.github.dohex.openrose.core.TransportAvailability
-import io.github.dohex.openrose.core.TouchSlot
-import io.github.dohex.openrose.core.UserSettings
+import io.github.dohex.openrose.core.*
 import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.dohex.openrose.core.transport.DeviceId
-import top.yukonga.miuix.kmp.theme.MiuixTheme
-import top.yukonga.miuix.kmp.theme.darkColorScheme as miuixDarkColorScheme
-import top.yukonga.miuix.kmp.theme.lightColorScheme as miuixLightColorScheme
 
-/**
- * Renders an externally owned control session. This function never creates a session or transport;
- * replacing a component style cannot restart connections or replay commands.
- */
+internal enum class AppPage(val title: String, val icon: RoseIcon) {
+    HEADPHONES("我的耳机", RoseIcon.HEADPHONES),
+    SYSTEM("系统集成", RoseIcon.SYSTEM),
+    SETTINGS("设置", RoseIcon.SETTINGS),
+    ADD_DEVICE("添加耳机", RoseIcon.PLUS),
+    NOISE("降噪控制", RoseIcon.NOISE),
+    EQUALIZER("均衡器", RoseIcon.EQUALIZER),
+    TOUCH("触控操作", RoseIcon.TOUCH),
+    AUDIO("音频与设备", RoseIcon.AUDIO),
+    DETAILS("设备详情", RoseIcon.INFO),
+    DIAGNOSTICS("诊断与记录", RoseIcon.LOG),
+}
+
+internal val mainPages = listOf(AppPage.HEADPHONES, AppPage.SYSTEM, AppPage.SETTINGS)
+
+/** Navigation, scroll positions and drafts survive replacement of either component style.
+ * The host remains the sole owner of the control session and transport. */
 @Composable
 fun OpenRoseApp(
     state: ControlState,
@@ -70,328 +44,127 @@ fun OpenRoseApp(
     onSet: (DeviceSetting, FieldValue) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val settings = state.settings
-    val dark = when (settings.appearance) {
+    val dark = when (state.settings.appearance) {
         Appearance.SYSTEM -> isSystemInDarkTheme()
         Appearance.LIGHT -> false
         Appearance.DARK -> true
     }
-    // Keep UI navigation outside the style branch; the control session is externally owned.
-    val scrollState = rememberScrollState()
+    var backStack by remember { mutableStateOf(listOf(AppPage.HEADPHONES)) }
+    val page = backStack.last()
+    val scrollStates = remember { AppPage.entries.associateWith { ScrollState(0) } }
     var selectedTouchSlot by remember(state.device?.sessionId) { mutableStateOf<TouchSlot?>(null) }
     var customEqualizerDraft by remember(state.device?.sessionId) { mutableStateOf<List<Int>?>(null) }
-    val content: @Composable () -> Unit = {
-        Box(
-            modifier.fillMaxSize().background(pageBackground()).safeDrawingPadding(),
-            contentAlignment = Alignment.TopCenter,
-        ) {
-            Column(
-                Modifier.widthIn(max = 1080.dp).fillMaxSize()
-                    .verticalScroll(scrollState).padding(24.dp),
-                verticalArrangement = Arrangement.spacedBy(24.dp),
-            ) {
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    AppText("OpenRose", large = true)
-                    AppText("ROSE / ROSESELSA 耳机控制", secondary = true)
+    var customEqualizerView by remember(state.device?.sessionId) { mutableStateOf(false) }
+    val rootFocusRequester = remember { FocusRequester() }
+    val choiceDialog = remember(state.device?.sessionId) { mutableStateOf<String?>(null) }
+    var selectedTouchSide by remember(state.device?.sessionId) { mutableStateOf<String?>(null) }
+    fun navigate(destination: AppPage) {
+        if (destination != backStack.last()) {
+            choiceDialog.value = null
+            selectedTouchSlot = null
+            backStack = backStack + destination
+        }
+    }
+    fun back() {
+        when {
+            selectedTouchSlot != null -> selectedTouchSlot = null
+            choiceDialog.value != null -> choiceDialog.value = null
+            backStack.size > 1 -> backStack = backStack.dropLast(1)
+        }
+    }
+    PlatformBackHandler(backStack.size > 1 || choiceDialog.value != null || selectedTouchSlot != null, ::back)
+    LaunchedEffect(state.connection, page) {
+        val connection = state.connection as? ConnectionState.Connected
+        if (page == AppPage.ADD_DEVICE && connection?.phase == ConnectionPhase.READY) {
+            backStack = listOf(AppPage.HEADPHONES)
+        }
+    }
+    CompositionLocalProvider(LocalChoiceDialog provides choiceDialog) {
+        ProvideInterfaceStyle(state.settings.interfaceStyle, dark) {
+            LaunchedEffect(page, choiceDialog.value, selectedTouchSlot) {
+                if (choiceDialog.value == null && selectedTouchSlot == null) rootFocusRequester.requestFocus()
+            }
+            BoxWithConstraints(modifier.fillMaxSize().focusRequester(rootFocusRequester).onPreviewKeyEvent {
+                if (it.type == KeyEventType.KeyUp && it.key == Key.Escape && (backStack.size > 1 || choiceDialog.value != null || selectedTouchSlot != null)) {
+                    back(); true
+                } else false
+            }.focusable()) {
+                val wide = maxWidth >= 900.dp
+                val onNavigate: (AppPage) -> Unit = { destination ->
+                    if (destination in mainPages) {
+                        choiceDialog.value = null
+                        selectedTouchSlot = null
+                        backStack = listOf(destination)
+                    } else navigate(destination)
                 }
-                BoxWithConstraints(Modifier.fillMaxWidth()) {
-                    if (maxWidth >= 800.dp) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(20.dp)) {
-                                DevicePanel(
-                                    state, onStartScan, onStopScan, onConnect, onDisconnect, onSet,
-                                    selectedTouchSlot, { selectedTouchSlot = it },
-                                    customEqualizerDraft, { customEqualizerDraft = it },
-                                )
-                                PlatformCard(state.platform, onRequestPermission, onOpenSystemSettings)
-                            }
-                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(20.dp)) {
-                                ConnectionPreferencesCard(settings, onSettingsChange)
-                                AppearanceCard(settings, onSettingsChange)
-                                IntegrationCard(settings, state.platform.module, onSettingsChange)
-                            }
+                val pageContent: @Composable () -> Unit = {
+                    val device = state.activeDevice()
+                    when (page) {
+                        AppPage.HEADPHONES -> HeadphonesPage(state, onNavigate, onDisconnect, onSet)
+                        AppPage.ADD_DEVICE -> AddDevicePage(state, onRequestPermission, onOpenSystemSettings,
+                            onStartScan, onStopScan, onConnect, onDisconnect)
+                        AppPage.SYSTEM -> SystemIntegrationPage(state, onSettingsChange) { navigate(AppPage.DIAGNOSTICS) }
+                        AppPage.SETTINGS -> PreferencesPage(state, onSettingsChange) { navigate(AppPage.DIAGNOSTICS) }
+                        AppPage.DIAGNOSTICS -> {
+                            PlatformDiagnosticsCard(state.platform, onRequestPermission, onOpenSystemSettings)
+                            ConnectionDetailsCard(state, onDisconnect)
+                            SettingOperationsCard(state)
+                            device?.let { DeviceReadings(it, state.connection.phaseOrNull() == ConnectionPhase.INITIALIZING) }
                         }
-                    } else {
-                        Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
-                            DevicePanel(
-                                state, onStartScan, onStopScan, onConnect, onDisconnect, onSet,
-                                selectedTouchSlot, { selectedTouchSlot = it },
-                                customEqualizerDraft, { customEqualizerDraft = it },
-                            )
-                            PlatformCard(state.platform, onRequestPermission, onOpenSystemSettings)
-                            ConnectionPreferencesCard(settings, onSettingsChange)
-                            AppearanceCard(settings, onSettingsChange)
-                            IntegrationCard(settings, state.platform.module, onSettingsChange)
+                        else -> if (device != null) {
+                            val controlPage = page in listOf(AppPage.NOISE, AppPage.EQUALIZER, AppPage.TOUCH, AppPage.AUDIO)
+                            if (controlPage) SettingPageBanner(state, device)
+                            when (page) {
+                                AppPage.NOISE -> NoiseControlCard(state, device, onSet)
+                                AppPage.EQUALIZER -> {
+                                    val hasCustom = device.capabilities.equalizer?.custom != null &&
+                                        DeviceSetting.CUSTOM_EQ in device.capabilities.writableSettings
+                                    if (hasCustom) AppViewTabs(listOf("预设", "自定义"), if (customEqualizerView) 1 else 0) { customEqualizerView = it == 1 }
+                                    if (hasCustom && customEqualizerView) CustomEqualizerCard(state, device, customEqualizerDraft,
+                                        { customEqualizerDraft = it }, onSet)
+                                    else EqualizerControlCard(state, device, onSet)
+                                }
+                                AppPage.TOUCH -> TouchControlCard(state, device, selectedTouchSlot,
+                                    { selectedTouchSlot = it }, onSet, selectedTouchSide, { selectedTouchSide = it })
+                                AppPage.AUDIO -> {
+                                    DeviceControlCard(state, device, onSet)
+                                    AppGroup {
+                                        AppArrowRow("设备详情", value = device.profile.configurationLabel, icon = RoseIcon.INFO) { navigate(AppPage.DETAILS) }
+                                        AppArrowRow("连接方式", value = state.controlTransportLabel(), icon = RoseIcon.BLUETOOTH) { navigate(AppPage.DIAGNOSTICS) }
+                                    }
+                                    AppButton("断开连接", onDisconnect, modifier = Modifier.padding(horizontal = 16.dp), kind = AppButtonKind.Secondary)
+                                }
+                                AppPage.DETAILS -> {
+                                    ConnectionDetailsCard(state, onDisconnect)
+                                    DeviceReadings(device, state.connection.phaseOrNull() == ConnectionPhase.INITIALIZING)
+                                }
+                                else -> Unit
+                            }
+                            if (controlPage) {
+                                AppText("选择表示设备已确认的状态；提交后等待设备回报确认。", Modifier.padding(horizontal = 16.dp), AppTextRole.Footnote)
+                                SettingOperationsCard(state)
+                            }
+                        } else {
+                            AppGroup {
+                                AppInfoRow("耳机已断开", "连接耳机后，可查看和调整当前型号支持的功能。")
+                                AppButton("添加耳机", { navigate(AppPage.ADD_DEVICE) })
+                            }
+                            SettingOperationsCard(state)
                         }
                     }
                 }
-                AppText("系统适配与各型号实机验证进度分别记录。", secondary = true)
-            }
-        }
-    }
-    CompositionLocalProvider(LocalInterfaceStyle provides settings.interfaceStyle) {
-        when (settings.interfaceStyle) {
-            InterfaceStyle.MIUIX -> MiuixTheme(
-                colors = if (dark) miuixDarkColorScheme() else miuixLightColorScheme(),
-                content = content,
-            )
-            InterfaceStyle.MATERIAL3 -> MaterialTheme(
-                colorScheme = if (dark) darkColorScheme() else lightColorScheme(),
-                content = content,
-            )
-        }
-    }
-}
-
-@Composable
-private fun PlatformCard(
-    platform: PlatformState,
-    onRequestPermission: () -> Unit,
-    onOpenSystemSettings: () -> Unit,
-) {
-    AppCard {
-        AppText("运行状态", title = true)
-        Spacer(Modifier.height(20.dp))
-        AppText("蓝牙权限")
-        AppText(
-            when (platform.permission) {
-                PermissionState.NOT_REQUIRED -> "此平台无需应用内授权"
-                PermissionState.GRANTED -> "已授权"
-                PermissionState.REQUIRED -> "需要授权后才能使用蓝牙"
-                PermissionState.DENIED -> "未获得蓝牙权限"
-            },
-            secondary = true,
-        )
-        if (platform.permission == PermissionState.REQUIRED || platform.permission == PermissionState.DENIED) {
-            Spacer(Modifier.height(8.dp))
-            AppButton("授予蓝牙权限", onRequestPermission)
-        }
-        Spacer(Modifier.height(20.dp))
-        AppText("蓝牙传输")
-        AppText(
-            when (val transport = platform.transport) {
-                TransportAvailability.Available -> "可用"
-                TransportAvailability.Disabled -> "系统蓝牙已关闭"
-                is TransportAvailability.Unavailable -> transport.reason
-            },
-            secondary = true,
-        )
-        if (platform.transport == TransportAvailability.Disabled) {
-            Spacer(Modifier.height(8.dp))
-            AppButton("打开蓝牙设置", onOpenSystemSettings)
-        }
-        Spacer(Modifier.height(20.dp))
-        AppText("系统模块")
-        AppText(
-            when (val module = platform.module) {
-                ModuleAvailability.Available -> "已连接系统模块"
-                ModuleAvailability.NotEnabled -> "系统模块未启用"
-                is ModuleAvailability.Unavailable -> module.reason
-            },
-            secondary = true,
-        )
-        platform.bridge?.let { bridge ->
-            Spacer(Modifier.height(12.dp))
-            bridge.frameworkName?.let { name ->
-                AppText("框架：$name ${bridge.frameworkVersion.orEmpty()} · API ${bridge.frameworkApi}", secondary = true)
-            }
-            if (bridge.endpoints.isEmpty()) {
-                bridge.targetProcess?.let { AppText("目标进程：$it", secondary = true) }
-                bridge.componentVersion?.let { AppText("系统组件版本：$it", secondary = true) }
-                bridge.componentMatch?.let { AppText("匹配依据：$it", secondary = true) }
-            }
-            AppText("跨进程通道：" + when (bridge.ipc) {
-                BridgeIpcState.DISCONNECTED -> "未连接"
-                BridgeIpcState.WAITING -> "等待目标进程"
-                BridgeIpcState.AUTHENTICATED -> "已通过身份校验"
-                BridgeIpcState.TARGET_INCOMPATIBLE -> "目标组件不匹配"
-                BridgeIpcState.REJECTED -> "请求未通过校验"
-            }, secondary = true)
-            AppText("系统入口读取：" + when (bridge.session) {
-                BridgeSessionState.NONE -> "没有就绪设备会话"
-                BridgeSessionState.WAITING_CONFIRMATION -> "已生成读取结果，等待目标进程确认"
-                BridgeSessionState.READY -> "已读取当前会话"
-                BridgeSessionState.STALE -> "旧引用已拒绝，等待当前会话"
-            }, secondary = true)
-            if (platform.module == ModuleAvailability.Available) {
-                bridge.detail?.let { AppText(it, secondary = true) }
-            }
-            bridge.endpoints.values.forEach { endpoint ->
-                Spacer(Modifier.height(8.dp))
-                val name = when (endpoint.targetPackage) {
-                    "com.android.bluetooth" -> "蓝牙服务"
-                    "com.xiaomi.bluetooth" -> "小米蓝牙"
-                    "com.milink.service" -> "融合设备中心"
-                    "android" -> "系统提示服务"
-                    else -> endpoint.targetPackage
-                }
-                AppText("$name：" + when (endpoint.ipc) {
-                    BridgeIpcState.AUTHENTICATED -> "已通过身份校验"
-                    BridgeIpcState.DISCONNECTED -> "未连接"
-                    BridgeIpcState.WAITING -> "等待连接"
-                    BridgeIpcState.TARGET_INCOMPATIBLE -> "组件不匹配"
-                    BridgeIpcState.REJECTED -> "请求未通过校验"
-                }, secondary = true)
-                AppText("${endpoint.targetProcess} · ${endpoint.componentVersion}", secondary = true)
-                AppText("入口依据：${endpoint.entryMatch}", secondary = true)
-                endpoint.features.forEach { (feature, result) ->
-                    val label = when (feature) {
-                        "SYSTEM_HEADSET" -> "原生耳机接入"
-                        "FUSION_CENTER" -> "融合状态与操作"
-                        "OFFICIAL_GUARD" -> "提示归属保护"
-                        "OFFICIAL_CONNECTION" -> "官方连接提示"
-                        else -> feature
-                    }
-                    val status = when (result.substringBefore(" · ")) {
-                        "RESOLVED" -> "已定位入口，实际行为待验收"
-                        "IDENTIFIED" -> "已匹配当前设备"
-                        "SUBMITTED" -> "已提交操作，等待设备确认"
-                        "CONFIRMED" -> "设备已确认操作"
-                        "CALLED" -> "已调用接口，实际行为待验收"
-                        "REJECTED" -> "请求已拒绝"
-                        "UNSUPPORTED" -> "缺少已核实的能力映射"
-                        "UNAVAILABLE" -> "当前系统路径不可用"
-                        "ACTION_FAILED" -> "操作失败"
-                        else -> "等待确认"
-                    }
-                    AppText("$label：$status", secondary = true)
-                    result.substringAfter(" · ", "").takeIf { it.isNotBlank() }?.let {
-                        AppText("依据：$it", secondary = true)
-                    }
+                when (state.settings.interfaceStyle) {
+                    InterfaceStyle.MIUIX -> MiuixAppShell(backStack, page, wide, onNavigate, ::back, scrollStates.getValue(page), pageContent)
+                    InterfaceStyle.MATERIAL3 -> MaterialAppShell(backStack, page, wide, onNavigate, ::back, scrollStates.getValue(page), pageContent)
                 }
             }
-            bridge.presentation.forEach { (feature, result) ->
-                val label = when (feature) {
-                    "OFFICIAL_CONNECTION" -> "官方连接提示"
-                    "MODULE_CONNECTION" -> "模块连接提示"
-                    "STATUS_NOTIFICATION" -> "耳机状态通知"
-                    else -> feature
-                }
-                val status = when (result.substringBefore(" · ")) {
-                    "CALLED" -> "已请求系统呈现，实际显示待验收"
-                    "UNAVAILABLE" -> "当前系统路径不可用"
-                    "WITHDRAWN" -> "已请求撤销"
-                    "ACTION_FAILED" -> if (result.contains("control_receiver_unavailable")) "通知查看可用，系统控制入口不可用" else "操作失败，请查看连接与设备状态"
-                    else -> "等待确认"
-                }
-                AppText("$label：$status", secondary = true)
-            }
         }
     }
 }
 
-@Composable
-private fun ConnectionPreferencesCard(settings: UserSettings, onChange: (UserSettings) -> Unit) {
-    AppCard {
-        AppText("连接方式", title = true)
-        Spacer(Modifier.height(16.dp))
-        ToggleRow("强制使用 BLE", "仅影响下次连接", settings.forceBle) {
-            onChange(settings.copy(forceBle = it))
-        }
-        Spacer(Modifier.height(8.dp))
-        AppText("默认自动选择适用的连接方式；无法确认连接条件时使用 BLE。", secondary = true)
-        AppText("更改此项会保留当前连接和正在执行的设置。", secondary = true)
+internal val AppPage.navigationLabel: String
+    get() = when (this) {
+        AppPage.HEADPHONES -> "耳机"
+        AppPage.SYSTEM -> "系统"
+        else -> title
     }
-}
-
-@Composable
-private fun AppearanceCard(settings: UserSettings, onChange: (UserSettings) -> Unit) {
-    AppCard {
-        AppText("界面", title = true)
-        Spacer(Modifier.height(16.dp))
-        AppText("界面风格")
-        Spacer(Modifier.height(8.dp))
-        Choices(
-            InterfaceStyle.entries,
-            settings.interfaceStyle,
-            { if (it == InterfaceStyle.MIUIX) "Miuix" else "Material 3" },
-        ) { onChange(settings.copy(interfaceStyle = it)) }
-        Spacer(Modifier.height(8.dp))
-        AppText("即时切换组件风格，控制会话保持不变。", secondary = true)
-        Spacer(Modifier.height(20.dp))
-        AppText("显示模式")
-        Spacer(Modifier.height(8.dp))
-        Choices(Appearance.entries, settings.appearance, {
-            when (it) {
-                Appearance.SYSTEM -> "跟随系统"
-                Appearance.LIGHT -> "浅色"
-                Appearance.DARK -> "深色"
-            }
-        }) { onChange(settings.copy(appearance = it)) }
-    }
-}
-
-@Composable
-private fun IntegrationCard(
-    settings: UserSettings,
-    module: ModuleAvailability,
-    onChange: (UserSettings) -> Unit,
-) {
-    AppCard {
-        AppText("系统呈现", title = true)
-        Spacer(Modifier.height(8.dp))
-        if (module != ModuleAvailability.Available) {
-            AppText("系统集成未就绪，以下偏好尚不产生系统展示。", secondary = true)
-            Spacer(Modifier.height(16.dp))
-        }
-        AppText("超级岛")
-        Spacer(Modifier.height(8.dp))
-        Choices(IslandMode.entries, settings.islandMode, {
-            when (it) {
-                IslandMode.OFF -> "不显示"
-                IslandMode.OFFICIAL -> "官方"
-                IslandMode.MODULE -> "模块"
-            }
-        }) { onChange(settings.copy(islandMode = it)) }
-        Spacer(Modifier.height(8.dp))
-        AppText("官方沿用系统耳机呈现，模块使用 OpenRose 样式；均由系统超级岛展示。", secondary = true)
-        Spacer(Modifier.height(20.dp))
-        ToggleRow("焦点通知", "连接期间保留耳机状态通知", settings.focusNotificationEnabled) {
-            onChange(settings.copy(focusNotificationEnabled = it))
-        }
-        if (settings.islandMode == IslandMode.MODULE) {
-            Spacer(Modifier.height(20.dp))
-            AppText("超级岛显示时机")
-            Spacer(Modifier.height(8.dp))
-            ToggleRow("连接时", "新连接会话开始时提示", IslandTrigger.CONNECTION in settings.islandTriggers) { enabled ->
-                val triggers = if (enabled) settings.islandTriggers + IslandTrigger.CONNECTION
-                else settings.islandTriggers - IslandTrigger.CONNECTION
-                onChange(settings.copy(islandTriggers = triggers))
-            }
-            if (settings.islandTriggers.isEmpty()) {
-                Spacer(Modifier.height(8.dp))
-                AppText("未选择显示时机，不自动触发。", secondary = true)
-            }
-            Spacer(Modifier.height(12.dp))
-            AppText("佩戴、摘下与入盒事件尚无可用型号支持，暂不开放。", secondary = true)
-        }
-    }
-}
-
-@Composable
-private fun ToggleRow(label: String, summary: String, checked: Boolean, onChange: (Boolean) -> Unit) {
-    Row(
-        Modifier.fillMaxWidth().heightIn(min = 48.dp)
-            .toggleable(value = checked, role = Role.Switch, onValueChange = onChange),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(Modifier.weight(1f).padding(end = 12.dp)) {
-            AppText(label)
-            AppText(summary, secondary = true)
-        }
-        // The entire labelled row is the input target, including keyboard and accessibility input.
-        AppSwitch(checked, null, Modifier.clearAndSetSemantics {})
-    }
-}
-
-@Composable
-private fun <T> Choices(options: List<T>, selected: T, label: (T) -> String, onChange: (T) -> Unit) {
-    FlowRow(
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        options.forEach { option ->
-            AppButton(label(option), { onChange(option) }, selected = option == selected, choice = true)
-        }
-    }
-}

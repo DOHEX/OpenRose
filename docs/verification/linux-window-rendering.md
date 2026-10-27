@@ -1,4 +1,44 @@
-# niri 下 Linux 客户端窗口黑区
+# Linux 桌面窗口与原生 Wayland
+
+## Tao 迁移（2026-10-26）
+
+桌面入口明确使用 Nucleus 2.5.18 的 `NucleusBackend.Tao`。共享界面与窗口标题栏跟随同一明暗外观设置；控制会话仍在窗口创建前建立，偏好继续使用原有 Java Preferences 节点。只接入 Nucleus 的应用和 Tao 运行时，构建与打包继续由既有 Compose Gradle 插件负责。
+
+开发启动为 `./gradlew :desktopApp:run`；发行目录为 `./gradlew :desktopApp:createDistributable`，随后可直接运行 `desktopApp/build/compose/binaries/main/app/OpenRose/bin/OpenRose`。已删除仓库的 Linux 启动包装脚本。Wayland 会话直接创建 Wayland 窗口，无 Wayland 时可使用 X11；Tao 不依赖原来的 AWT 非重设父窗口兼容变量。
+
+GTK 仍尊重 `GDK_BACKEND`。本次执行环境原先显式设置了 `GDK_BACKEND=x11`，该配置会使 Tao 使用 XWayland。移除此覆盖、保留 `DISPLAY` 的对照也通过原生 Wayland 检查。用户若需要覆盖启动环境，可为单次命令设置 `GDK_BACKEND=wayland`，不修改桌面会话或全局配置。
+
+热重载仍使用 `:desktopApp:hotRunJvm --auto`。`compose.reload.devToolsHeadless=true` 使附带的 Swing 开发工具窗口保持无界面模式；应用窗口继续由 Tao 呈现，重新编译与热重载仍启用。
+
+手动窗口验证使用隔离偏好，移除子进程的 `DISPLAY` 和旧 AWT 兼容变量，设置 `GDK_BACKEND=wayland` 并记录 `WAYLAND_DEBUG=client`。同时要求窗口正常显示、日志含 `get_xdg_surface`、调整尺寸后内容边缘正常绘制，避免只根据会话环境变量判断窗口后端。Tao 的 GTK 阴影包含透明外沿，像素采样在非透明内容边界内进行。
+
+```bash
+./gradlew :desktopApp:createDistributable
+python3 tools/verify-linux-window.py --resize
+python3 tools/verify-linux-window.py --style material3 --resize
+python3 tools/verify-linux-window.py --appearance dark --resize
+python3 tools/verify-linux-window.py --dev --resize
+python3 tools/verify-linux-window.py --hot-reload --resize
+env -u GDK_BACKEND python3 tools/verify-linux-window.py --session-defaults --resize
+```
+
+探针只调整并关闭本次新建的窗口，偏好与日志写入 `.scratch/linux-window-probe/tao-*`。需要 Python Pillow、niri 与正常的 Wayland 图形会话；niri 窗口截图动作会更新剪贴板。
+
+### 本次验证结果
+
+- `check offlineCheck :androidApp:assembleDebug` 通过，共 123 项任务；核心 JVM 与 Android host JVM 各 176 项测试、共享界面 JVM 8 项测试，失败 / 错误 / 跳过均为 0。日志为 `.scratch/tao-migration-cjzp9gmk/check.log`。Android host JVM 测试不代表手机实测。
+- `:desktopApp:createDistributable` 与收尾的 `--offline offlineCheck :desktopApp:createDistributable` 均通过，继续生成原有自带 Java 运行时的发行目录。日志分别为 `.scratch/tao-migration-cjzp9gmk/package.log`、`final-offline.log`。
+- 打包客户端的 Miuix 浅色、Material 3 浅色和 Miuix 深色，在移除 `DISPLAY` 后均创建了原生 Wayland 窗口；放大到 1012×1102 逻辑尺寸后边缘正常绘制。证据分别位于 `.scratch/linux-window-probe/tao-jy7wx8m0/`、`tao-frgu8ms0/`、`tao-g07v8pcd/`。
+- `:desktopApp:run` 在相同的无 X11 环境中通过窗口与缩放检查，证据为 `.scratch/linux-window-probe/tao-dev-p3oys0ty/`。去掉强制 X11 的 `GDK_BACKEND`、保留 `DISPLAY` 的默认选择也使用原生 Wayland，证据为 `tao-g1yug3lm/`。显式 `GDK_BACKEND=x11` 的对照可正常绘制，但被探针正确判为非原生 Wayland，证据为 `tao-eqhqv0i9/`。
+- `:desktopApp:hotRunJvm --auto` 在无 `DISPLAY` 环境中通过。额外临时修改标题栏文字、等待自动编译和热重载，再恢复源码：同一个窗口 ID 48 更新并恢复了文字，标题区 1471 个像素发生变化；最终源码与验证前一致，关闭窗口后 Gradle 正常退出。截图、协议日志与 `hot-reload.json` 位于 `.scratch/linux-window-probe/tao-hot-3lsiwccp/`。
+
+这些结果验证 Linux / niri 上的窗口创建、绘制、缩放、两套组件风格、明暗外观及热重载。Windows 运行与发行包、中文输入法交互、真实蓝牙和 HyperOS 系统集成仍需各自环境验收。
+
+依赖兼容与 API 来源：[Nucleus 兼容表](https://nucleusframework.dev/en/docs/start/install/#compatibility)、[Tao 窗口](https://nucleusframework.dev/en/docs/tao/decorated-window/)、[原生 Wayland](https://nucleusframework.dev/en/docs/tao/wayland/)。
+
+## AWT 历史记录（2026-10-21）
+
+以下保留迁移前的故障与验证证据，其中的脚本命令仅用于描述历史行为，现行入口以上述 Gradle 命令为准。
 
 2026-10-21，修复基线 `21fe307`。用户报告启动后只绘制左上角，窗口右侧及下方为黑区。已在同一 niri / XWayland 会话、125% 显示缩放下复现，并验证 Linux 启动入口的修复；没有更改用户已有窗口、niri 配置或显示缩放。
 

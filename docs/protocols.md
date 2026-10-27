@@ -80,6 +80,29 @@ i7 自动与动态 ANC 作为模式选择。离开自动模式时明确发送用
 
 `NoiseProtocolTest` 使用上述独立 APK 提取的完整固定 TX 字面值，以及研究参考测试和已恢复参数映射的独立动态例子。覆盖四种 i5 模式、六种 i7 模式、各档位、型号轮换线序、确认查询、非法参数、未知轮换、不支持选项、输入快照、序号连续 / 回绕 / 重置；RX 示例明确为合成数据。实际设置回包时序、持久化、自动模式表现与固件矩阵未获得本次实机证据。用户当前无法提供 i5 / 小米 14（HyperOS 4），本次继续实现与离线验证；已有 i5 初始化读取记录不扩大为设置验收通过，i7 仍无设备实测。
 
+### 原始 App 的模式与档位显示（2026-10-22 核对）
+
+本次直接核对 RoseLink 3.8.0 的既有 Blutter 静态反汇编产物，并复核上述 APK SHA-256。以下是原始客户端的配置、显示和指令构造证据，不是厂商公开协议规范或本次硬件实测。
+
+i5 的 `EarfreeI5DeviceConfig` 分别启用 ANC 档位和通透档位，并为两者分别配置三项 `NoiseLevelType` 列表；它们是两个独立的能力开关和两组可选值。见 [i5 型号配置](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/zt/earfree_i5_device_config.dart:130)，赋值地址为 `0x68da48..0x68da6c`。
+
+原始 `NoiseType` 枚举为 `normal=0`、`trans=1`、`wind=2`、`anc=3`，见 [枚举对象](/home/dohex/Projects/rose_reverse/analysis/blutter/objs.txt:40317)。这些是应用内部索引，不能当作两类协议共用的线上模式值。原始档位控件由当前降噪状态取得模式值，再按该值选择显示内容：
+
+| i5 当前模式 | 原始 App 显示的档位 |
+| --- | --- |
+| 主动降噪 `anc` | ANC 档位，界面值 `1/3/5` |
+| 通透 `trans` | 通透档位，界面值 `1/3/5` |
+| 抗风噪 `wind` | 两组均隐藏 |
+| 标准 `normal` | 两组均隐藏 |
+
+模式传入档位控件的路径见 [当前状态到控件](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/widgets/device_widgets/device_anc.dart:1947)。`_RAncModeCtlLevelBarState::build` 在 `0xb3746c` 比较模式是否为 `3`，命中才构造 `noise-anc-level`；在 `0xb379d8` 比较是否为 `1`，命中才构造 `noise-trans-level`。其余分支使用空组件，见 [ANC 显示分支](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/widgets/device_widgets/device_anc.dart:112) 和 [通透显示分支](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/widgets/device_widgets/device_anc.dart:610)。因此原始 App 将通透档位归于通透模式，未归于抗风噪模式。
+
+指令层仍分别处理模式和档位：i5 `Zt229Sender::setAncLevel`（`0x80b81c`）构造 `0687`，`setTransLevel`（`0x80b3a0`）构造 `0684`，二者均将 `1/3/5` 映射为 `0/1/2`，不携带模式参数，也未在这些构造函数中检查当前模式。见 [ANC 档位发送器](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart:4523) 和 [通透档位发送器](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart:4383)。已检查的 `RCommander` 两个档位入口也直接构造并发送指令，见 [命令入口](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/r_commander.dart:1781)。这些证据确立了客户端显示条件，但不能证明耳机固件在其他模式下接受或拒绝档位写入。
+
+已有 i5 实机初始化读取也体现了当前模式与档位读数的独立性：模式为 `wind` 时，仍读到 ANC 档位 `5` 和通透档位 `1`，见 [原始模式回包](/home/dohex/Projects/rose_reverse/analysis/i5_live_read_2026-10-18.jsonl:6)、[ANC 档位回包](/home/dohex/Projects/rose_reverse/analysis/i5_live_read_2026-10-18.jsonl:25) 和 [通透档位回包](/home/dohex/Projects/rose_reverse/analysis/i5_live_read_2026-10-18.jsonl:27)。这只验证该副设备能在抗风模式读取两组值，不能证明两组参数当时均影响声音，或断电后持久化、跨模式写入的行为。
+
+OpenRose 已据此将两组档位分别建模为可选的 `NoiseLevelCapabilities`，各自声明 `levels` 与 `visibleModes`；缺失的能力不开放对应档位设置。i5 和 i7 分别声明 ANC 档位只在 `anc` 显示、通透档位只在 `transparency` 显示。i7 自动与动态模式的原始 controller 值为 `4`、`6`，同样不匹配档位控件的 `3`、`1` 分支，见 [i7 接收处理依据](/home/dohex/Projects/rose_reverse/analysis/i7_receiver_findings.md:120)。两套界面风格都使用已确认模式决定显示；模式尚未读到、未知或未提供时隐藏两组档位，待处理的切换请求不提前改变显示区域。档位读数继续保留，参数校验采用每组自己的取值范围，显示条件不作为协议写入前置条件。
+
 ## 预设 EQ 与游戏模式（#7 / #8）
 
 两类设置沿用同一个 `prepareSetting` 和会话确认流程。EQ 使用归一化的 `FieldValue.Text("pop" / "hifi" / "rock" / "light" / "eap")`；游戏使用明确的 `FieldValue.Toggle`。`EqualizerCapabilities.presets` 表示当前型号和固件可写预设；游戏写入能力由 `writableSettings` 表达。i5 不开放自定义 EQ；本阶段的 i7 预设入口也不把 custom、custom slot 或共享游戏 EQ 当成预设选项。

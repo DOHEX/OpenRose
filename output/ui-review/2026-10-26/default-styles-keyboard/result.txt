@@ -1,0 +1,7 @@
+PASS controlled desktop keyboard smoke
+Covered Miuix and Material 3 using actual Compose sendKeyEvent input for Tab, Shift+Tab, Space, Enter and Escape.
+Responsive home boundary: 679dp single column / 680dp two columns.
+Navigation boundary: 899dp narrow / 900dp sidebar; secondary-page Escape returns.
+Both styles accepted Space and Enter on a switch and a radio selection.
+The controlled i5 ControlSession remained at sessionId=2 with exactly 13 initialization writes; no setting command was issued.
+This is synthetic desktop evidence and does not establish real headset or HyperOS behavior.

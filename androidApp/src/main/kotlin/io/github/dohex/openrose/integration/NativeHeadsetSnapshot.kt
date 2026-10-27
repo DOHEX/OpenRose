@@ -17,7 +17,10 @@ data class NativeHeadsetSnapshot(
     val writableSettings: Set<String>,
     val readableFields: Set<String>,
     val noiseModes: Set<String>,
-    val noiseLevels: Set<Int>,
+    /** Null means the model does not expose this setting as a capability. */
+    val ancLevel: NativeNoiseLevelCapabilities?,
+    /** Null means the model does not expose this setting as a capability. */
+    val transparencyLevel: NativeNoiseLevelCapabilities?,
     val fields: Map<String, NativeFieldReading>,
 ) {
     val reference: NativeSessionReference
@@ -54,7 +57,8 @@ data class NativeHeadsetSnapshot(
     fun sameReportedState(other: NativeHeadsetSnapshot): Boolean =
         hostEpoch == other.hostEpoch && deviceId == other.deviceId && sessionId == other.sessionId &&
             addresses == other.addresses && profile == other.profile && writableSettings == other.writableSettings &&
-            readableFields == other.readableFields && noiseModes == other.noiseModes && noiseLevels == other.noiseLevels &&
+            readableFields == other.readableFields && noiseModes == other.noiseModes && ancLevel == other.ancLevel &&
+            transparencyLevel == other.transparencyLevel &&
             fields == other.fields
 
     /**
@@ -117,8 +121,17 @@ data class NativeHeadsetSnapshot(
                 readableFields = stringValues(capabilities, "readable_fields")
                     .filterTo(linkedSetOf()) { it.length <= 64 }.toSet(),
                 noiseModes = stringValues(noise, "modes").mapNotNull(::normalizeNoiseMode).toSet(),
-                noiseLevels = integerValues(noise, "levels").filterTo(linkedSetOf()) { it in 0..100 }.toSet(),
+                ancLevel = parseNoiseLevelCapabilities(noise, "anc_level"),
+                transparencyLevel = parseNoiseLevelCapabilities(noise, "transparency_level"),
                 fields = fields.toMap(),
+            )
+        }
+
+        private fun parseNoiseLevelCapabilities(noise: Bundle?, key: String): NativeNoiseLevelCapabilities? {
+            val capability = runCatching { noise?.getBundle(key) }.getOrNull() ?: return null
+            return NativeNoiseLevelCapabilities(
+                levels = integerValues(capability, "levels").filterTo(linkedSetOf()) { it in 0..100 }.toSet(),
+                visibleModes = stringValues(capability, "visible_modes").mapNotNull(::normalizeNoiseMode).toSet(),
             )
         }
 
@@ -173,6 +186,15 @@ data class NativeHeadsetSnapshot(
         private fun normalizeNoiseMode(mode: String): String? =
             mode.trim().lowercase(Locale.ROOT).takeIf { it.length in 1..32 }
     }
+}
+
+/** A copied, setting-specific noise-level capability from the authenticated bridge snapshot. */
+data class NativeNoiseLevelCapabilities(
+    val levels: Set<Int>,
+    val visibleModes: Set<String>,
+) {
+    fun isVisibleIn(mode: String?): Boolean =
+        levels.isNotEmpty() && mode?.trim()?.lowercase(Locale.ROOT)?.let(visibleModes::contains) == true
 }
 
 data class NativeSessionReference(

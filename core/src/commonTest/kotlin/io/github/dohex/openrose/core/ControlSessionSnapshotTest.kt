@@ -169,10 +169,29 @@ class ControlSessionSnapshotTest {
         @Suppress("UNCHECKED_CAST")
         val detachedCapabilities = snapshot.capabilities.readableFields as MutableSet<DeviceField>
         detachedCapabilities.clear()
+        val snapshotNoise = requireNotNull(snapshot.capabilities.noiseControl)
+        val snapshotAncLevels = requireNotNull(snapshotNoise.ancLevel)
+        @Suppress("UNCHECKED_CAST")
+        val detachedAncOptions = snapshotAncLevels.levels as MutableSet<Int>
+        tryClearSnapshotCollection(detachedAncOptions)
+        @Suppress("UNCHECKED_CAST")
+        val detachedAncModes = snapshotAncLevels.visibleModes as MutableSet<String>
+        tryClearSnapshotCollection(detachedAncModes)
+        val snapshotTransparencyLevels = requireNotNull(snapshotNoise.transparencyLevel)
+        @Suppress("UNCHECKED_CAST")
+        val detachedTransparencyOptions = snapshotTransparencyLevels.levels as MutableSet<Int>
+        tryClearSnapshotCollection(detachedTransparencyOptions)
+        @Suppress("UNCHECKED_CAST")
+        val detachedTransparencyModes = snapshotTransparencyLevels.visibleModes as MutableSet<String>
+        tryClearSnapshotCollection(detachedTransparencyModes)
 
         val current = requireNotNull(session.state.value.device)
         assertEquals(original.fields, current.fields)
         assertEquals(original.capabilities.readableFields, current.capabilities.readableFields)
+        assertEquals(setOf(1, 3, 5), current.capabilities.noiseControl?.ancLevel?.levels)
+        assertEquals(setOf("anc"), current.capabilities.noiseControl?.ancLevel?.visibleModes)
+        assertEquals(setOf(1, 3, 5), current.capabilities.noiseControl?.transparencyLevel?.levels)
+        assertEquals(setOf("transparency"), current.capabilities.noiseControl?.transparencyLevel?.visibleModes)
         assertEquals(FieldReading.NotProvided("ff"), current.fields[DeviceField.CASE_BATTERY])
         assertEquals(
             (original.fields[DeviceField.FIRMWARE] as FieldReading.Known).value,
@@ -208,6 +227,14 @@ class ControlSessionSnapshotTest {
 
     private fun assertFailure(code: ControlErrorCode, result: SessionSnapshotResult) {
         assertEquals(code, assertIs<SessionSnapshotResult.Failure>(result).error.code)
+    }
+
+    private fun <T> tryClearSnapshotCollection(collection: MutableSet<T>) {
+        try {
+            collection.clear()
+        } catch (_: UnsupportedOperationException) {
+            // Immutable copied sets are safe too; the live session must remain unchanged either way.
+        }
     }
 
     private class SnapshotTransport(private val profile: ModelProfile) : ControlTransport {

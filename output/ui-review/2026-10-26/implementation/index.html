@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>OpenRose · 界面实现预览</title>
+<style>
+:root{font-family:Inter,"MiSans","Noto Sans CJK SC",system-ui,sans-serif;color:#20232e;background:#f4f5f8;font-synthesis:none}*{box-sizing:border-box}body{margin:0}header,main{max-width:1440px;margin:auto;padding:36px 32px}header{padding-bottom:20px}.eyebrow{color:#66708a;font-size:13px;letter-spacing:.12em}h1{font-size:clamp(28px,4vw,44px);font-weight:650;letter-spacing:-.03em;margin:12px 0}p{color:#697184;line-height:1.8;margin:8px 0}.controls{display:flex;gap:10px;margin-top:24px;align-items:center;flex-wrap:wrap}button,a{font:inherit}button{cursor:pointer;border:0;border-radius:12px;padding:12px 18px;background:#e9ecf3;color:#4b5263}button.active{background:#4d64eb;color:white}.spacer{flex:1}.link{color:#4d64eb;text-decoration:none;font-size:14px}.notice{font-size:13px}.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:24px}figure{margin:0;border:1px solid #e2e5ed;background:#fff;border-radius:20px;overflow:hidden;box-shadow:0 5px 20px #1b243707}figure.desktop{grid-column:span 3}.preview{display:block;width:100%;padding:0;border-radius:0;background:#eceef4;overflow:hidden;position:relative}.preview img{display:block;width:100%;height:auto;transition:transform .25s}.preview:hover img{transform:scale(1.015)}figcaption{padding:18px 20px 22px}.number{font-size:12px;color:#858da0;letter-spacing:.08em}h2{margin:5px 0;font-weight:600;font-size:19px}figcaption p{font-size:13px;margin:0;line-height:1.7}.open{display:inline-block;margin-top:10px;font-size:12px;color:#4d64eb;text-decoration:none}.hidden{display:none!important}.footer{padding-top:32px;font-size:13px;color:#858da0}dialog{border:0;border-radius:20px;padding:0;background:#f4f5f8;max-width:96vw;width:min(1200px,96vw);height:94vh;max-height:94vh;color:#20232e;box-shadow:0 20px 100px #0006}dialog::backdrop{background:#111725cc;backdrop-filter:blur(6px)}.dialogbar{height:68px;padding:12px 18px;display:flex;align-items:center;gap:12px;border-bottom:1px solid #e1e4ed;background:#fff}.dialogtitle{font-size:16px;font-weight:600;flex:1}.dialogbar button{padding:10px 14px}.dialogbody{height:calc(100% - 68px);overflow:auto;padding:24px;text-align:center;background:#e8ebf1}.dialogbody img{height:100%;max-width:100%;object-fit:contain;cursor:zoom-in;background:#fff;box-shadow:0 10px 50px #0002}.dialogbody.zoom img{height:auto;width:auto;max-width:100%;cursor:zoom-out}.zoomhelp{font-size:12px;color:#7b8394}@media(min-width:1100px){figure:not(.desktop) .preview{height:680px}figure:not(.desktop) .preview img{height:100%;object-fit:contain}}@media(max-width:900px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}figure.desktop{grid-column:span 2}}@media(max-width:600px){header,main{padding:24px 18px}.grid{grid-template-columns:1fr;gap:20px}figure.desktop{grid-column:span 1}.zoomhelp{display:none}.dialogbar{gap:6px;padding:10px}.dialogbar button{padding:10px}.dialogtitle{font-size:13px}.dialogbody{padding:12px}}
+</style>
+<header>
+  <div class="eyebrow">OPENROSE / IMPLEMENTATION / 2026.10.26</div>
+  <h1>OpenRose 界面实现预览</h1>
+  <p>12 张真实 Compose 渲染截图，覆盖手机功能页、Material 3、深色桌面与窄屏断连布局。</p>
+  <p class="notice">截图来自共享应用界面；耳机、平台、扫描结果和电量均为受控合成数据，仅供布局检查。Android APK 与 Linux 桌面包已构建，真实耳机和 HyperOS 展示仍待实机验收。</p>
+  <nav class="controls" aria-label="筛选设计稿"><button class="active" data-filter="all">全部 12 张</button><button data-filter="mobile">手机 11 张</button><button data-filter="desktop">桌面 1 张</button><span class="spacer"></span><a class="link" href="README.md">设计说明</a><a class="link" href="../index.html">原始设计稿</a></nav>
+</header>
+<main><div class="grid" id="gallery"></div><p class="footer">审阅时可按编号反馈：布局、视觉风格、信息密度、控件和文案。点击页面放大，左右方向键切换，Esc 关闭。</p></main>
+<dialog id="viewer" aria-label="设计稿大图"><div class="dialogbar"><span class="dialogtitle" id="dialogtitle"></span><span class="zoomhelp">点击图片切换原尺寸</span><button id="prev" aria-label="上一张">←</button><button id="next" aria-label="下一张">→</button><button id="close" aria-label="关闭">关闭</button></div><div class="dialogbody" id="dialogbody"><img id="fullimage" alt=""></div></dialog>
+<script>
+const pages=[
+  [
+    "01",
+    "耳机首页",
+    "synthetic-01-home-light-420x900.png",
+    "420 × 900 · Miuix 浅色",
+    "mobile"
+  ],
+  [
+    "02",
+    "添加耳机",
+    "synthetic-02-add-device-light-420x900.png",
+    "扫描、型号识别与连接入口",
+    "mobile"
+  ],
+  [
+    "03",
+    "降噪控制",
+    "synthetic-03-noise-light-420x900.png",
+    "能力驱动的模式、档位与轮换",
+    "mobile"
+  ],
+  [
+    "04",
+    "均衡器 · 自定义",
+    "synthetic-04-equalizer-light-420x900.png",
+    "独立草稿、整数滑杆与曲线",
+    "mobile"
+  ],
+  [
+    "05",
+    "触控操作",
+    "synthetic-05-touch-light-420x900.png",
+    "左右耳手势和已确认的开关状态",
+    "mobile"
+  ],
+  [
+    "06",
+    "音频与设备",
+    "synthetic-06-audio-light-420x900.png",
+    "音频、多点、提示音和保护阈值",
+    "mobile"
+  ],
+  [
+    "07",
+    "系统集成",
+    "synthetic-07-system-light-420x900.png",
+    "超级岛、焦点通知、连接触发分别设置",
+    "mobile"
+  ],
+  [
+    "08",
+    "设置",
+    "synthetic-08-settings-light-420x900.png",
+    "界面风格、外观与连接偏好",
+    "mobile"
+  ],
+  [
+    "09",
+    "诊断与记录",
+    "synthetic-09-diagnostics-light-420x900.png",
+    "平台事实、连接信息和操作确认",
+    "mobile"
+  ],
+  [
+    "10",
+    "桌面深色",
+    "synthetic-10-desktop-dark-1280x900.png",
+    "1280 × 900 · 自适应侧栏与双列",
+    "desktop"
+  ],
+  [
+    "11",
+    "窄屏断连",
+    "synthetic-11-disconnected-narrow-360x900.png",
+    "360 × 900 · 未连接状态",
+    "mobile"
+  ],
+  [
+    "12",
+    "Material 3 首页",
+    "synthetic-12-home-material3-light-420x900.png",
+    "420 × 900 · 第二套真实组件风格",
+    "mobile"
+  ]
+];
+const gallery=document.querySelector('#gallery');
+pages.forEach((p,i)=>{const figure=document.createElement('figure');figure.className=p[4];figure.dataset.type=p[4];figure.innerHTML=`<button class="preview" aria-label="放大 ${p[0]} ${p[1]}"><img src="${p[2]}" alt="${p[0]} ${p[1]}设计稿" loading="lazy"></button><figcaption><div class="number">${p[0]} / ${p[4]==='mobile'?'MOBILE':'DESKTOP'}</div><h2>${p[1]}</h2><p>${p[3]}</p><a class="open" href="${p[2]}" target="_blank" rel="noopener">打开原图 ↗</a></figcaption>`;figure.querySelector('button').onclick=()=>show(i);gallery.append(figure)});
+document.querySelectorAll('[data-filter]').forEach(button=>button.onclick=()=>{document.querySelectorAll('[data-filter]').forEach(b=>b.classList.toggle('active',b===button));document.querySelectorAll('figure').forEach(f=>f.classList.toggle('hidden',button.dataset.filter!=='all'&&f.dataset.type!==button.dataset.filter))});
+const viewer=document.querySelector('#viewer'),body=document.querySelector('#dialogbody'),img=document.querySelector('#fullimage');let selected=0;
+function show(i){selected=(i+pages.length)%pages.length;const p=pages[selected];document.querySelector('#dialogtitle').textContent=p[0]+' · '+p[1];img.src=p[2];img.alt=p[1]+'设计稿';body.classList.remove('zoom');body.scrollTop=0;if(!viewer.open)viewer.showModal()}
+document.querySelector('#close').onclick=()=>viewer.close();document.querySelector('#prev').onclick=()=>show(selected-1);document.querySelector('#next').onclick=()=>show(selected+1);img.onclick=()=>body.classList.toggle('zoom');viewer.onclick=e=>{if(e.target===viewer)viewer.close()};document.addEventListener('keydown',e=>{if(!viewer.open)return;if(e.key==='ArrowLeft')show(selected-1);if(e.key==='ArrowRight')show(selected+1)});
+</script>
+</html>

@@ -1,0 +1,58 @@
+{
+  "tool": "built-in image_gen.imagegen",
+  "date": "2026-10-26",
+  "kind": "concept-review",
+  "files": [
+    {
+      "id": "01",
+      "file": "01-headphones.png",
+      "source": "/home/dohex/.codex/generated_images/01a1766d-a855-76b3-b799-af8c07e5fe92/exec-8c039f2f-6e64-4398-b482-7bc53dcb6a21.png"
+    },
+    {
+      "id": "02",
+      "file": "02-add-device.png",
+      "source": "/home/dohex/.codex/generated_images/01a1766d-a855-76b3-b799-af8c07e5fe92/exec-0b41b084-968d-42f9-9e82-a0c149853970.png"
+    },
+    {
+      "id": "03",
+      "file": "03-noise-control.png",
+      "source": "/home/dohex/.codex/generated_images/01a1766d-a855-76b3-b799-af8c07e5fe92/exec-5a9aa378-1d5d-4c8a-8f98-f98a139e8026.png"
+    },
+    {
+      "id": "04",
+      "file": "04-equalizer.png",
+      "source": "/home/dohex/.codex/generated_images/01a1766d-a855-76b3-b799-af8c07e5fe92/exec-5ac16469-5c76-479f-85f1-5a8721d7f115.png"
+    },
+    {
+      "id": "05",
+      "file": "05-touch-controls.png",
+      "source": "/home/dohex/.codex/generated_images/01a1766d-a855-76b3-b799-af8c07e5fe92/exec-34655afa-2fb7-413b-96f6-996814c66e07.png"
+    },
+    {
+      "id": "06",
+      "file": "06-audio-device.png",
+      "source": "/home/dohex/.codex/generated_images/01a1766d-a855-76b3-b799-af8c07e5fe92/exec-869b37ed-980d-433c-b266-f3bfdeb7bce8.png",
+      "revision": 2
+    },
+    {
+      "id": "07",
+      "file": "07-system-integration.png",
+      "source": "/home/dohex/.codex/generated_images/01a1766d-a855-76b3-b799-af8c07e5fe92/exec-2faba188-8c60-413c-bf98-c919d5e94b09.png"
+    },
+    {
+      "id": "08",
+      "file": "08-app-settings.png",
+      "source": "/home/dohex/.codex/generated_images/01a1766d-a855-76b3-b799-af8c07e5fe92/exec-1b9e3a4b-74d6-436c-8e8b-2ebd8864532b.png"
+    },
+    {
+      "id": "09",
+      "file": "09-diagnostics.png",
+      "source": "/home/dohex/.codex/generated_images/01a1766d-a855-76b3-b799-af8c07e5fe92/exec-df388eef-6fb8-4a2a-83e5-022c7f13a9f9.png"
+    },
+    {
+      "id": "10",
+      "file": "10-desktop-dark.png",
+      "source": "/home/dohex/.codex/generated_images/01a1766d-a855-76b3-b799-af8c07e5fe92/exec-155ea7a2-48df-4fc5-ae4f-920d942187d6.png"
+    }
+  ]
+}

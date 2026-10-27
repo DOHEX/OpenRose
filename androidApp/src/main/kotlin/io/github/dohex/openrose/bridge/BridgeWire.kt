@@ -8,7 +8,7 @@ import javax.crypto.spec.SecretKeySpec
 
 /** Versioned app/module wire format; it never contains protocol commands or a second session. */
 internal object BridgeWire {
-    const val VERSION = 2
+    const val VERSION = 3
     const val KEY_VERSION = "version"
     const val STATUS = "status"
     const val MESSAGE = "message"

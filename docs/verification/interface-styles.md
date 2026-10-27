@@ -4,7 +4,7 @@
 
 ## 组件和配置
 
-`StyleComponents.kt` 分别调用 Miuix 与 Material 3 的真实文字、卡片、按钮和开关组件。当前界面没有弹窗，不用改变颜色冒充组件切换，也不为验证额外加入弹窗。两套组件均随应用打包。
+`StyleComponents.kt` 分别调用 Miuix 与 Material 3 的真实文字、卡片、按钮和开关组件。两套组件均随应用打包。2026-10-26 的默认样式改版加入真实选择弹层：Miuix 使用 OverlayDropdownPreference / OverlayDialog，Material 3 使用 AlertDialog；实现与新增验证见 [默认样式验证记录](ui-default-styles.md)。
 
 界面风格和显示模式分别设置，显示模式包含跟随系统、浅色、深色。`UserSettingsCodec` 分别编码这些偏好；Android SharedPreferences 与桌面 Java Preferences 保存同一格式。既有 Android / Linux 重启验证见 [bootstrap.md](bootstrap.md)。本阶段没有新增强调色选择器。
 

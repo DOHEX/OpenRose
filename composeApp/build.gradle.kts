@@ -17,13 +17,31 @@ kotlin {
     }
     jvm { compilerOptions { jvmTarget.set(JvmTarget.JVM_17) } }
     sourceSets {
+        androidMain.dependencies {
+            implementation(libs.activity.compose)
+        }
         commonMain.dependencies {
             api(project(":core"))
             implementation(libs.compose.runtime)
             implementation(libs.compose.foundation)
             implementation(libs.compose.ui)
+            implementation(compose.components.resources)
             implementation(libs.material3)
             implementation(libs.miuix.ui)
+            implementation(libs.miuix.preference)
+            implementation(libs.miuix.icons)
+        }
+        jvmTest.dependencies {
+            implementation(kotlin("test"))
+            implementation(compose.desktop.currentOs)
         }
     }
+}
+
+compose.resources {
+    packageOfResClass = "io.github.dohex.openrose.ui.resources"
+}
+
+tasks.withType<org.gradle.api.tasks.testing.Test>().configureEach {
+    systemProperty("java.awt.headless", "true")
 }

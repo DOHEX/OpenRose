@@ -53,15 +53,9 @@ Windows 使用 `gradlew.bat`。桌面入口共用于 Windows / Linux；发行包
 
 Android APK：`androidApp/build/outputs/apk/debug/androidApp-debug.apk`。桌面发行目录：`desktopApp/build/compose/binaries/main/app/`。
 
-Linux 图形桌面建议通过仓库中的启动入口运行：
+桌面窗口使用 Nucleus 2.5.18 的 Tao 后端，开发时直接运行上述 Gradle 任务。Linux 的 Wayland 会话默认使用原生 Wayland 窗口，无 Wayland 会话时可使用 X11；不再需要 Linux 启动包装脚本或 AWT 非重设父窗口兼容变量。发行目录构建后可直接启动 `desktopApp/build/compose/binaries/main/app/OpenRose/bin/OpenRose`。桌面依赖 GTK 3、EGL 等平台运行库。
 
-```bash
-./run-linux.sh
-# 从源码启动；后续参数传给 Gradle
-./run-linux.sh --dev --offline
-```
-
-默认使用已构建且包含 Java 运行时的发行目录。niri 的 Wayland 会话下，入口只为当前客户端进程设置 Java AWT 非重设父窗口兼容变量，修复窗口已放大而内容仍停留在初始尺寸的黑区；不修改 niri 配置、显示缩放或渲染后端。直接运行发行目录里的二进制时，niri 用户需在命令前加 `_JAVA_AWT_WM_NONREPARENTING=1`。其他桌面环境不自动设置该变量。验证边界与复现方式见 [Linux 窗口绘制记录](docs/verification/linux-window-rendering.md)。
+GTK 会尊重已有的 `GDK_BACKEND` 配置。如果启动环境显式设置了 `GDK_BACKEND=x11`，应用会使用 X11 / XWayland；可只为本次进程使用 `GDK_BACKEND=wayland ./gradlew :desktopApp:run`。共享 UI 热重载使用 `./gradlew :desktopApp:hotRunJvm --auto`；开发工具窗口设为无界面模式，以支持没有 X11 `DISPLAY` 的环境。验证方式与平台边界见 [Linux 窗口绘制记录](docs/verification/linux-window-rendering.md)。
 
 ## 工程边界
 
@@ -73,5 +67,7 @@ Linux 图形桌面建议通过仓库中的启动入口运行：
 超级岛默认“官方”、焦点通知默认开启，二者独立；模块触发默认“连接”，显式空集合保留。尚无可靠型号事件时不提供佩戴、摘下或入盒选项。界面风格与浅色 / 深色外观分别设置。设置和组件切换不创建新的控制会话。请求值和已确认设备状态分别显示，提交或底层写入完成均不视为成功；超时保留明确结果并结束旧链路，重新连接不重放设置。连接期间的风格切换、实际字段语义和设备返回结果仍需真实 Android 耳机验收。
 
 ## 版本与验证
+
+共享界面采用 Miuix / Material 3 各自的默认主题、导航外壳和设置组件，支持手机底部导航、宽屏侧栏与独立功能页。默认样式、选择器、状态保持、构建结果和截图见 [默认样式验证记录](docs/verification/ui-default-styles.md)；分页改版的前期记录见 [界面重设计记录](docs/verification/ui-redesign.md)。
 
 固定依赖见 `gradle/libs.versions.toml`；初始化构建与平台验证记录见 [docs/verification/bootstrap.md](docs/verification/bootstrap.md)，读取协议来源与限制见 [docs/protocols.md](docs/protocols.md)，降噪验证见 [docs/verification/noise-controls.md](docs/verification/noise-controls.md)，预设 EQ / 游戏验证见 [docs/verification/equalizer-game.md](docs/verification/equalizer-game.md)，触控与音频验证见 [docs/verification/device-controls.md](docs/verification/device-controls.md)，十段 EQ 与固件能力验证见 [docs/verification/advanced-audio.md](docs/verification/advanced-audio.md)。i7 传输选择见 [docs/verification/i7-transports.md](docs/verification/i7-transports.md)。连接恢复见 [docs/verification/connection-recovery.md](docs/verification/connection-recovery.md)。双风格控制与桌面输入见 [docs/verification/interface-styles.md](docs/verification/interface-styles.md)。系统会话桥接见 [docs/verification/system-bridge.md](docs/verification/system-bridge.md)。系统展示策略与通知见 [docs/verification/system-presentation.md](docs/verification/system-presentation.md)。原生入口和剩余兼容缺口见 [docs/verification/system-native.md](docs/verification/system-native.md)，逐票完成条件见 [docs/verification/spec-acceptance.md](docs/verification/spec-acceptance.md)。领域约束见 [GLOSSARY.md](GLOSSARY.md) 和 [docs/adr](docs/adr)。

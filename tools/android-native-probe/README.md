@@ -2,7 +2,7 @@
 
 This fixture checks the handoff from the public `ControlSession` API through the production Android bridge snapshot and native snapshot parser. It runs i5 and i7 sessions over a controlled transport with fixed literal RX replies, calls public `readSession`, serializes the production `Bundle` through Android `Parcel` bytes, and passes the received `Bundle` to `NativeHeadsetSnapshot.fromBundle`.
 
-The fixture preserves the boundary exercised by the earlier scratch run: i5 `CASE_BATTERY=ff` stays not-provided, known and unknown readings remain distinct, model-specific noise choices and writable capability survive, i7 BLE and BR addresses remain separate, and old session references are rejected after disconnect and reconnect.
+The fixture preserves the boundary exercised by the earlier scratch run: i5 `CASE_BATTERY=ff` stays not-provided, known and unknown readings remain distinct, model-specific noise choices and writable capability survive, ANC and transparency level choices retain separate visibility modes, i7 BLE and BR addresses remain separate, and old session references are rejected after disconnect and reconnect. It also verifies that the v3 native parser rejects legacy v1 and v2 snapshots.
 
 ## Prerequisites
 
