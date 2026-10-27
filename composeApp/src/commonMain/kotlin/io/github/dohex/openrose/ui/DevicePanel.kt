@@ -71,6 +71,7 @@ internal fun HeadphonesPage(
                 onStopScan,
                 onConnect,
                 onDisconnect,
+                onDiagnostics = { onNavigate(AppPage.DIAGNOSTICS) },
             )
             AppGroup {
                 AppArrowRow(
@@ -80,7 +81,6 @@ internal fun HeadphonesPage(
                     onClick = { onNavigate(AppPage.DIAGNOSTICS) },
                 )
             }
-            SettingOperationsCard(state)
             return@Column
         }
 
@@ -165,26 +165,7 @@ internal fun HeadphonesPage(
                             onClick = { onNavigate(AppPage.DETAILS) },
                         )
                     }
-                    state.lastError?.let { error ->
-                        AppDashboardCard {
-                            AppText(error.message, color = appColor(AppColorRole.Error))
-                        }
-                    }
-                    if (state.settingOperations.isNotEmpty()) {
-                        val operation = state.settingOperations.last()
-                        AppGroup {
-                            AppArrowRow(
-                                title = "最近设置操作",
-                                value = if (operation.stage == SettingStage.CONFIRMED) {
-                                    "设备已确认"
-                                } else {
-                                    "查看请求与确认状态"
-                                },
-                                icon = if (operation.stage == SettingStage.CONFIRMED) RoseIcon.CHECK else RoseIcon.CLOCK,
-                                onClick = { onNavigate(AppPage.DIAGNOSTICS) },
-                            )
-                        }
-                    }
+                    SettingFeedback(state, device) { onNavigate(AppPage.DIAGNOSTICS) }
                 }
             }
             if (wide) {
@@ -333,6 +314,7 @@ internal fun AddDevicePage(
     onStopScan: () -> Unit,
     onConnect: (DeviceId) -> Unit,
     onDisconnect: () -> Unit,
+    onDiagnostics: () -> Unit,
 ) {
     NearbyDevicesPanel(
         state,
@@ -342,6 +324,7 @@ internal fun AddDevicePage(
         onStopScan,
         onConnect,
         onDisconnect,
+        onDiagnostics,
     )
 }
 
@@ -354,6 +337,7 @@ private fun NearbyDevicesPanel(
     onStopScan: () -> Unit,
     onConnect: (DeviceId) -> Unit,
     onDisconnect: () -> Unit,
+    onDiagnostics: () -> Unit,
 ) {
     val canScan = state.platform.transport == TransportAvailability.Available &&
         state.platform.permission in setOf(PermissionState.GRANTED, PermissionState.NOT_REQUIRED)
@@ -449,14 +433,15 @@ private fun NearbyDevicesPanel(
             }
         }
 
-        failure?.let {
+        val visibleError = state.lastError ?: failure?.error
+        visibleError?.let { error ->
+            val scanFailure = failure?.error == error
             AppDashboardCard {
-                AppText("扫描未完成：${it.error.message}", color = appColor(AppColorRole.Error))
-            }
-        }
-        state.lastError?.takeIf { it != failure?.error }?.let { error ->
-            AppDashboardCard {
-                AppText(error.message, color = appColor(AppColorRole.Error))
+                AppText(
+                    if (scanFailure) "扫描未完成：${error.message}" else error.message,
+                    color = appColor(AppColorRole.Error),
+                )
+                AppButton("查看详情", onDiagnostics, kind = AppButtonKind.Secondary)
             }
         }
 

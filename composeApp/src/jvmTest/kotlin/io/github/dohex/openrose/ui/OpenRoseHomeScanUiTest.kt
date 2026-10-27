@@ -172,6 +172,13 @@ class OpenRoseHomeScanUiTest {
                 )
                 harness.render()
                 assertTrue(harness.hasText("耳机服务发现失败"))
+                assertEquals(1, harness.countText("耳机服务发现失败"), "connection failure appears once")
+                assertTrue(harness.hasClickableText("查看详情"))
+                harness.clickText("查看详情")
+                harness.render()
+                assertTrue(harness.hasText("当前连接"), "home error opens diagnostics")
+                harness.clickTab("耳机")
+                harness.render()
                 harness.clickText("扫描耳机")
                 assertEquals(1, harness.startScans.size)
 
@@ -179,6 +186,13 @@ class OpenRoseHomeScanUiTest {
                 harness.state.value = harness.state.value.copy(scan = ScanState.Failed(scanFailure), lastError = scanFailure)
                 harness.render()
                 assertTrue(harness.hasText("扫描未完成：附近设备扫描超时"))
+                assertEquals(1, harness.countText("扫描未完成：附近设备扫描超时"), "scan failure appears once")
+                assertTrue(harness.hasClickableText("查看详情"))
+                harness.clickText("查看详情")
+                harness.render()
+                assertTrue(harness.hasText("当前连接"), "scan failure opens diagnostics")
+                harness.clickTab("耳机")
+                harness.render()
                 harness.clickText("重新扫描")
                 assertEquals(2, harness.startScans.size)
             } finally {
@@ -310,6 +324,10 @@ class OpenRoseHomeScanUiTest {
         }
 
         fun hasText(expected: String): Boolean = nodes().any { node ->
+            node.config.getOrNull(SemanticsProperties.Text).orEmpty().any { it.text == expected }
+        }
+
+        fun countText(expected: String): Int = nodes().count { node ->
             node.config.getOrNull(SemanticsProperties.Text).orEmpty().any { it.text == expected }
         }
 
