@@ -297,20 +297,22 @@ when (style) {
 
 ### 6.8 系统集成
 
-1. 就绪状态卡（保留，改用 `AppInfoRow` 加 tone）。
-2. `AppGroup("超级岛", footnote = "官方沿用系统耳机呈现，模块使用 OpenRose 样式；两者都由系统超级岛展示。")`：`AppRadioGroup(不显示 / 官方 / 模块)`。**删除 `IslandPreview` 伪预览。**
-3. `AppGroup`：`AppSwitchRow("焦点通知", "连接期间保留耳机状态通知")`；页脚 `此开关只控制耳机状态通知，与超级岛显示模式分别设置。`
-4. 模块模式下显示 `AppGroup("模块显示时机")`：用 `AppCheckGroup` 呈现"连接时"（这是集合多选，所以用复选框）；集合为空时显示提示；页脚保留"佩戴、摘下与入盒暂不开放"。
-5. `AppGroup { AppArrowRow("运行状态与诊断", value = 查看 / 待就绪) }`。
-6. **删除** `CurrentConnectionCard`（与首页重复）。
+> 页面归属已由规格 #33 / 实施票 #37 更新：本节只记录系统页职责。超级岛、焦点通知及模块触发设置移至设置页。
+
+1. 系统页只显示本平台状态摘要和适用 HyperOS 的集成就绪情况；不放应用偏好或系统集成配置控件。
+2. `PlatformDiagnosticsCard` 的固定入口只在系统页提供，点击后打开完整诊断。设置页和宽屏侧栏不重复提供该入口。
+3. 适用 HyperOS 且集成未就绪时，系统页说明当前就绪状态与原因；保存偏好或调用系统路径不作为实际系统展示成功。
+4. **删除** `CurrentConnectionCard`（与首页重复）。
 
 ### 6.9 设置
 
 1. `AppGroup("界面风格", footnote = "切换组件风格时，当前耳机控制会话保持运行。")`：`AppChoiceRow` 或 `AppRadioGroup`，标题为 `组件风格`，选项 `Miuix` / `Material 3`。**删除 `ComponentStylePreview`。**
 2. `AppGroup("显示模式")`：标题 `明暗模式`，选项 跟随系统 / 浅色 / 深色。
 3. `AppGroup("连接偏好", footnote = 现有说明)`：`AppSwitchRow("强制使用 BLE", "仅影响下一次连接")`。
-4. `AppGroup("状态与信息")`：`AppArrowRow("运行状态与诊断")`、`AppInfoRow("关于 OpenRose", "ROSE / ROSESELSA 耳机控制")`。
-5. **删除**底部的连接状态卡（与首页重复）。
+4. 仅在 HyperOS 系统集成适用时，提供超级岛模式、独立焦点通知开关及模块模式下的可靠显示时机。默认值与显式空触发集合沿用既有语义。
+5. 集成暂未就绪时，设置仍可保存，并反馈“偏好已保存，待系统就绪后生效”；系统就绪本身不等于某项系统呈现已实际生效。
+6. `AppInfoRow("关于 OpenRose", "ROSE / ROSESELSA 耳机控制")` 位于设置页底部；不再放固定诊断入口。
+7. **删除**底部的连接状态卡（与首页重复）。
 
 ---
 

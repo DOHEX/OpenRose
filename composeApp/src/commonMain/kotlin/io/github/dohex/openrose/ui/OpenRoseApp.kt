@@ -131,12 +131,11 @@ fun OpenRoseApp(
                         }
                         AppPage.SYSTEM -> SystemIntegrationPage(
                             state = state,
-                            onChange = onSettingsChange,
                             onRequestPermission = onRequestPermission,
                             onOpenSystemSettings = onOpenSystemSettings,
                             onDiagnostics = { navigate(AppPage.DIAGNOSTICS) },
                         )
-                        AppPage.SETTINGS -> PreferencesPage(state, onSettingsChange) { navigate(AppPage.DIAGNOSTICS) }
+                        AppPage.SETTINGS -> PreferencesPage(state, onSettingsChange)
                         AppPage.DIAGNOSTICS -> {
                             PlatformDiagnosticsCard(state.platform, onRequestPermission, onOpenSystemSettings)
                             ConnectionDetailsCard(state, onDisconnect)

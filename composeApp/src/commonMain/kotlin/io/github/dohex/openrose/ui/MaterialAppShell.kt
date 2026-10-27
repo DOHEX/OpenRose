@@ -24,12 +24,9 @@ internal fun MaterialAppShell(backStack: List<AppPage>, page: AppPage, wide: Boo
     Row(Modifier.fillMaxSize()) {
         if (wide) NavigationRail(header = { AppIcon(RoseIcon.HEADPHONES, Modifier.padding(12.dp), contentDescription = "OpenRose") }) {
             mainPages.forEach { destination ->
-                NavigationRailItem(selected = backStack.first() == destination && page != AppPage.DIAGNOSTICS,
+                NavigationRailItem(selected = backStack.first() == destination,
                     onClick = { onNavigate(destination) }, icon = { AppIcon(destination.icon) }, label = { Text(destination.title) })
             }
-            Spacer(Modifier.weight(1f))
-            NavigationRailItem(selected = page == AppPage.DIAGNOSTICS, onClick = { onNavigate(AppPage.DIAGNOSTICS) },
-                icon = { AppIcon(RoseIcon.LOG) }, label = { Text(AppPage.DIAGNOSTICS.title) })
         }
         val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
         val title = if (page == AppPage.HEADPHONES && !wide) "OpenRose" else page.title

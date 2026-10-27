@@ -55,6 +55,7 @@ class PlatformApplicabilityUiTest {
                 harness.clickTab("设置")
                 harness.render()
                 assertFalse(harness.hasText("超级岛"), "unverified integration applicability does not expose HyperOS controls in $style")
+                assertFalse(harness.hasText("焦点通知"), "unverified integration applicability does not expose focus notification in $style")
                 assertTrue(harness.hasText("强制使用 BLE"), "known Android transport applicability remains independent in $style")
 
                 harness.clickTab("系统集成")
@@ -101,6 +102,7 @@ class PlatformApplicabilityUiTest {
                     harness.clickTab("设置")
                     harness.render()
                     assertFalse(harness.hasText("超级岛"), "$platformLabel must hide HyperOS settings in $style")
+                    assertFalse(harness.hasText("焦点通知"), "$platformLabel must hide HyperOS notification settings in Settings in $style")
                     assertFalse(harness.hasText("强制使用 BLE"), "$platformLabel has no implemented control transport in $style")
 
                     harness.clickTab("系统集成")
@@ -154,6 +156,7 @@ class PlatformApplicabilityUiTest {
                 harness.render()
 
                 assertFalse(harness.hasText("超级岛"), "ordinary Android must not show HyperOS settings in $style")
+                assertFalse(harness.hasText("焦点通知"), "ordinary Android must not show HyperOS notification settings in Settings in $style")
                 assertFalse(harness.hasText("模块显示时机"), "ordinary Android must not show module timing in $style")
                 assertTrue(harness.hasText("强制使用 BLE"), "Android transport preference visibility is independent of HyperOS in $style")
 
@@ -199,6 +202,7 @@ class PlatformApplicabilityUiTest {
                 harness.render()
 
                 assertTrue(harness.hasText("超级岛"), "HyperOS settings remain visible while integration is unready in $style")
+                assertTrue(harness.hasText("焦点通知"), "HyperOS focus notification remains in Settings while unready in $style")
                 assertTrue(harness.hasText("模块显示时机"), "the saved module mode controls its applicable settings in $style")
                 assertTrue(harness.hasText("未选择显示时机，不自动触发。"), "an explicit empty trigger set remains visible in $style")
                 assertTrue(harness.hasText("强制使用 BLE"), "the Android host exposes its supported transport preference in $style")
@@ -238,6 +242,7 @@ class PlatformApplicabilityUiTest {
                 )
                 harness.render()
                 assertTrue(harness.hasText("超级岛"), "settings return when the host becomes applicable again in $style")
+                assertTrue(harness.hasText("焦点通知"), "focus notification returns with HyperOS applicability in $style")
                 assertTrue(harness.hasText("不显示"), "the saved mode is restored when settings reappear in $style")
                 assertEquals(savedSettings, harness.state.value.settings)
                 assertEquals(1, harness.settingsChanges.size, "visibility changes do not save settings in $style")

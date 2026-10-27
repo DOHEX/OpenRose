@@ -23,12 +23,9 @@ internal fun MiuixAppShell(backStack: List<AppPage>, page: AppPage, wide: Boolea
     Row(Modifier.fillMaxSize()) {
         if (wide) NavigationRail(header = { AppIcon(RoseIcon.HEADPHONES, Modifier.padding(12.dp), contentDescription = "OpenRose") }) {
             mainPages.forEach { destination ->
-                NavigationRailItem(selected = backStack.first() == destination && page != AppPage.DIAGNOSTICS,
+                NavigationRailItem(selected = backStack.first() == destination,
                     onClick = { onNavigate(destination) }, icon = RoseIcons[destination.icon], label = destination.title)
             }
-            Spacer(Modifier.weight(1f))
-            NavigationRailItem(selected = page == AppPage.DIAGNOSTICS, onClick = { onNavigate(AppPage.DIAGNOSTICS) },
-                icon = RoseIcons[RoseIcon.LOG], label = AppPage.DIAGNOSTICS.title)
         }
         val scrollBehavior = MiuixScrollBehavior()
         val title = if (page == AppPage.HEADPHONES && !wide) "OpenRose" else page.title
