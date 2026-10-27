@@ -100,7 +100,17 @@ fun OpenRoseApp(
                 val pageContent: @Composable () -> Unit = {
                     val device = state.activeDevice()
                     when (page) {
-                        AppPage.HEADPHONES -> HeadphonesPage(state, onNavigate, onDisconnect, onSet)
+                        AppPage.HEADPHONES -> HeadphonesPage(
+                            state,
+                            onNavigate,
+                            onRequestPermission,
+                            onOpenSystemSettings,
+                            onStartScan,
+                            onStopScan,
+                            onConnect,
+                            onDisconnect,
+                            onSet,
+                        )
                         AppPage.ADD_DEVICE -> AddDevicePage(state, onRequestPermission, onOpenSystemSettings,
                             onStartScan, onStopScan, onConnect, onDisconnect)
                         AppPage.SYSTEM -> SystemIntegrationPage(state, onSettingsChange) { navigate(AppPage.DIAGNOSTICS) }

@@ -72,11 +72,13 @@ class OpenRoseNavigationUiTest {
     }
 
     @Test
-    fun narrowNavigationCanOpenAddDeviceAndReturn() = runBlocking {
+    fun narrowHomeShowsNearbyDevicesAndAddRouteCanReturn() = runBlocking {
         val harness = createHarness(width = 420, height = 900, initialState = state(connected = false))
         try {
             harness.render()
             assertTrue(harness.hasText("连接你的 ROSE 耳机"))
+            assertTrue(harness.hasText("附近设备"))
+            assertTrue(harness.hasText("扫描耳机"))
 
             harness.clickContentDescription("添加耳机")
             harness.render()
@@ -86,7 +88,7 @@ class OpenRoseNavigationUiTest {
             harness.clickContentDescription("返回")
             harness.render()
             assertTrue(harness.hasText("连接你的 ROSE 耳机"))
-            assertFalse(harness.hasText("附近设备"))
+            assertTrue(harness.hasText("附近设备"))
         } finally {
             harness.close()
         }
