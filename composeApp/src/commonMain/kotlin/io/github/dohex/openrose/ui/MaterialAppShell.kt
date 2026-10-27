@@ -7,8 +7,17 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.unit.dp
 
@@ -21,6 +30,7 @@ internal fun MaterialAppShell(backStack: List<AppPage>, page: AppPage, wide: Boo
     onMenuExpandedChange: (Boolean) -> Unit = {},
     onDisconnect: () -> Unit = {},
 ) {
+    val menuFocusRequester = remember { FocusRequester() }
     Row(Modifier.fillMaxSize()) {
         if (wide) NavigationRail(header = { AppIcon(RoseIcon.HEADPHONES, Modifier.padding(12.dp), contentDescription = "OpenRose") }) {
             mainPages.forEach { destination ->
@@ -49,7 +59,18 @@ internal fun MaterialAppShell(backStack: List<AppPage>, page: AppPage, wide: Boo
                         expanded = connectedHome && menuExpanded,
                         onDismissRequest = { onMenuExpandedChange(false) },
                     ) {
+                        LaunchedEffect(menuExpanded) {
+                            if (menuExpanded) menuFocusRequester.requestFocus()
+                        }
                         DropdownMenuItem(
+                            modifier = Modifier.focusRequester(menuFocusRequester).onPreviewKeyEvent { event ->
+                                if (event.type == KeyEventType.KeyUp && event.key == Key.Escape) {
+                                    onMenuExpandedChange(false)
+                                    true
+                                } else {
+                                    false
+                                }
+                            },
                             text = { Text("断开控制连接") },
                             onClick = {
                                 onMenuExpandedChange(false)

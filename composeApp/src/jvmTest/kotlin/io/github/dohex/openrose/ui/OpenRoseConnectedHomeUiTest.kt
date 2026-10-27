@@ -1,16 +1,11 @@
-@file:OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+@file:OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class, androidx.compose.ui.InternalComposeUiApi::class)
 
 package io.github.dohex.openrose.ui
 
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.ImageComposeScene
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.SemanticsActions
-import androidx.compose.ui.semantics.SemanticsNode
-import androidx.compose.ui.semantics.SemanticsProperties
-import androidx.compose.ui.semantics.getOrNull
-import androidx.compose.ui.unit.Density
+import androidx.compose.ui.input.key.Key
 import io.github.dohex.openrose.core.ConnectionPhase
 import io.github.dohex.openrose.core.ConnectionState
 import io.github.dohex.openrose.core.ControlState
@@ -31,7 +26,6 @@ import io.github.dohex.openrose.core.protocol.FieldReading
 import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.dohex.openrose.core.protocol.ModelProfile
 import io.github.dohex.openrose.core.transport.DeviceId
-import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -73,6 +67,25 @@ class OpenRoseConnectedHomeUiTest {
                     harness.close()
                 }
             }
+        }
+    }
+
+    @Test
+    fun materialMenuClosesWhenEscapeFollowsKeyboardActivation() = runBlocking {
+        val harness = createHarness(420, 900, connectedState(InterfaceStyle.MATERIAL3))
+        try {
+            harness.render()
+            harness.focus("耳机菜单")
+            harness.sendKey(Key.Enter)
+            harness.render()
+            assertTrue(harness.hasText("断开控制连接"), "Enter opens the connected-headphones menu")
+
+            harness.sendKey(Key.Escape)
+            harness.render()
+            assertFalse(harness.hasText("断开控制连接"), "Escape closes the Material 3 menu after keyboard activation")
+            assertTrue(harness.disconnects.isEmpty(), "closing the menu does not disconnect the control session")
+        } finally {
+            harness.close()
         }
     }
 
@@ -259,12 +272,7 @@ class OpenRoseConnectedHomeUiTest {
         val connects = mutableListOf<DeviceId>()
         val startScans = mutableListOf<Unit>()
         val settingWrites = mutableListOf<Pair<DeviceSetting, FieldValue>>()
-        val scene = ImageComposeScene(
-            width = width,
-            height = height,
-            density = Density(1f),
-            coroutineContext = currentCoroutineContext(),
-        ) {
+        val scene = createOpenRoseUiTestScene(width, height) {
             OpenRoseApp(
                 state = state.value,
                 onSettingsChange = { settings -> state.value = state.value.copy(settings = settings) },
@@ -281,108 +289,13 @@ class OpenRoseConnectedHomeUiTest {
     }
 
     private class ConnectedHomeHarness(
-        private val scene: ImageComposeScene,
+        scene: ImageComposeScene,
         val state: MutableState<ControlState>,
         val disconnects: MutableList<Unit>,
         val connects: MutableList<DeviceId>,
         val startScans: MutableList<Unit>,
         val settingWrites: MutableList<Pair<DeviceSetting, FieldValue>>,
-    ) {
-        private var nextFrameTimeNanos = 0L
-
-        suspend fun render() {
-            repeat(8) {
-                kotlinx.coroutines.delay(35)
-                scene.render(nextFrameTimeNanos).close()
-                nextFrameTimeNanos += 35_000_000L
-            }
-        }
-
-        fun close() = scene.close()
-
-        fun nodes(): List<SemanticsNode> {
-            val result = mutableListOf<SemanticsNode>()
-            fun collect(node: SemanticsNode) {
-                result += node
-                node.children.forEach(::collect)
-            }
-            scene.semanticsOwners.forEach { collect(it.rootSemanticsNode) }
-            return result
-        }
-
-        fun hasText(expected: String): Boolean = nodes().any { node ->
-            node.config.getOrNull(SemanticsProperties.Text).orEmpty().any { it.text == expected }
-        }
-
-        fun hasSelectedText(expected: String): Boolean = nodes().any { node ->
-            if (node.config.getOrNull(SemanticsProperties.Text).orEmpty().none { it.text == expected }) {
-                false
-            } else {
-                var current: SemanticsNode? = node
-                var selected = false
-                while (current != null && !selected) {
-                    selected = current.config.getOrNull(SemanticsProperties.Role) == Role.RadioButton &&
-                        current.config.getOrNull(SemanticsProperties.Selected) == true
-                    current = current.parent
-                }
-                selected
-            }
-        }
-
-        fun hasDisabledText(expected: String): Boolean {
-            var found = false
-            fun collect(node: SemanticsNode, inheritedDisabled: Boolean = false) {
-                val disabled = inheritedDisabled || node.config.contains(SemanticsProperties.Disabled)
-                val texts = node.config.getOrNull(SemanticsProperties.Text).orEmpty().map { it.text }
-                if (disabled && expected in texts) found = true
-                node.children.forEach { collect(it, disabled) }
-            }
-            nodes().forEach { collect(it) }
-            return found
-        }
-
-        fun hasContentDescription(expected: String): Boolean = nodes().any { node ->
-            node.config.getOrNull(SemanticsProperties.ContentDescription).orEmpty().contains(expected)
-        }
-
-        fun clickContentDescription(expected: String) {
-            val node = nodes().firstOrNull { semantics ->
-                semantics.config.getOrNull(SemanticsProperties.ContentDescription).orEmpty().contains(expected)
-            } ?: error("No node found with content description '$expected'")
-            invokeClick(node)
-        }
-
-        fun clickText(text: String) {
-            val matching = nodes().filter { node ->
-                node.config.getOrNull(SemanticsProperties.Text).orEmpty().any { it.text == text }
-            }
-            for (textNode in matching) {
-                var current: SemanticsNode? = textNode
-                while (current != null) {
-                    val action = current.config.getOrNull(SemanticsActions.OnClick)?.action
-                    if (action != null) {
-                        check(action()) { "Click action for '$text' returned false" }
-                        return
-                    }
-                    current = current.parent
-                }
-            }
-            error("No clickable node found for text '$text'")
-        }
-
-        private fun invokeClick(node: SemanticsNode) {
-            var current: SemanticsNode? = node
-            while (current != null) {
-                val action = current.config.getOrNull(SemanticsActions.OnClick)?.action
-                if (action != null) {
-                    check(action()) { "Click action returned false" }
-                    return
-                }
-                current = current.parent
-            }
-            error("No clickable node found for content description")
-        }
-    }
+    ) : OpenRoseUiTestHarness(scene)
 
     private companion object {
         const val SESSION_ID = 36L

@@ -4,13 +4,6 @@ package io.github.dohex.openrose.ui
 
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.ui.ImageComposeScene
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.SemanticsActions
-import androidx.compose.ui.semantics.SemanticsNode
-import androidx.compose.ui.semantics.SemanticsProperties
-import androidx.compose.ui.semantics.getOrNull
-import androidx.compose.ui.unit.Density
 import io.github.dohex.openrose.core.ConnectionPhase
 import io.github.dohex.openrose.core.ConnectionState
 import io.github.dohex.openrose.core.ControlError
@@ -33,7 +26,6 @@ import io.github.dohex.openrose.core.protocol.FieldReading
 import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.dohex.openrose.core.protocol.ModelProfile
 import io.github.dohex.openrose.core.transport.DeviceId
-import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -251,12 +243,7 @@ class OpenRoseFeedbackUiTest {
     private suspend fun createHarness(initialState: ControlState): FeedbackHarness {
         val state = mutableStateOf(initialState)
         val settingWrites = mutableListOf<Pair<DeviceSetting, FieldValue>>()
-        val scene = ImageComposeScene(
-            width = 1200,
-            height = 1400,
-            density = Density(1f),
-            coroutineContext = currentCoroutineContext(),
-        ) {
+        val scene = createOpenRoseUiTestScene(1200, 1400) {
             OpenRoseApp(
                 state = state.value,
                 onSettingsChange = { settings -> state.value = state.value.copy(settings = settings) },
@@ -305,67 +292,10 @@ class OpenRoseFeedbackUiTest {
     }
 
     private class FeedbackHarness(
-        private val scene: ImageComposeScene,
+        scene: androidx.compose.ui.ImageComposeScene,
         val state: MutableState<ControlState>,
         val settingWrites: MutableList<Pair<DeviceSetting, FieldValue>>,
-    ) {
-        private var nextFrameTimeNanos = 0L
-
-        suspend fun render() {
-            repeat(10) {
-                kotlinx.coroutines.delay(35)
-                scene.render(nextFrameTimeNanos).close()
-                nextFrameTimeNanos += 35_000_000L
-            }
-        }
-
-        fun close() = scene.close()
-
-        fun nodes(): List<SemanticsNode> {
-            val result = mutableListOf<SemanticsNode>()
-            fun collect(node: SemanticsNode) {
-                result += node
-                node.children.forEach(::collect)
-            }
-            scene.semanticsOwners.forEach { collect(it.rootSemanticsNode) }
-            return result
-        }
-
-        fun hasText(expected: String): Boolean = nodes().any { node ->
-            node.config.getOrNull(SemanticsProperties.Text).orEmpty().any { it.text == expected }
-        }
-
-        fun hasDisabledText(expected: String): Boolean = nodes().any { node ->
-            val containsText = node.config.getOrNull(SemanticsProperties.Text).orEmpty().any { it.text == expected }
-            if (!containsText) return@any false
-            var current: SemanticsNode? = node
-            while (current != null) {
-                if (current.config.contains(SemanticsProperties.Disabled)) return@any true
-                current = current.parent
-            }
-            false
-        }
-
-        fun clickTab(text: String) = clickText(text, expectedRole = Role.Tab)
-
-        fun clickText(text: String, expectedRole: Role? = null) {
-            for (textNode in nodes().filter { node ->
-                node.config.getOrNull(SemanticsProperties.Text).orEmpty().any { it.text == text }
-            }) {
-                var current: SemanticsNode? = textNode
-                while (current != null) {
-                    val role = current.config.getOrNull(SemanticsProperties.Role)
-                    val action = current.config.getOrNull(SemanticsActions.OnClick)?.action
-                    if ((expectedRole == null || role == expectedRole) && action != null) {
-                        check(action()) { "Click action for '$text' returned false" }
-                        return
-                    }
-                    current = current.parent
-                }
-            }
-            error("No clickable node found for '$text'")
-        }
-    }
+    ) : OpenRoseUiTestHarness(scene)
 
     private companion object {
         const val SESSION_ID = 38L

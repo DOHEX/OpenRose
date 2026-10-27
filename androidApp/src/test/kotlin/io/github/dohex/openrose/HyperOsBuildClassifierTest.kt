@@ -21,6 +21,10 @@ class HyperOsBuildClassifierTest {
         )
         assertEquals(
             PlatformApplicability.NOT_APPLICABLE,
+            classifyHyperOsBuild("Xiaomi", "Xiaomi", "OS1.0.1.0.WMUMIXM"),
+        )
+        assertEquals(
+            PlatformApplicability.NOT_APPLICABLE,
             classifyHyperOsBuild("Xiaomi", "Redmi", "V14.0.4.0.TMOMIXM"),
         )
         assertEquals(
@@ -38,6 +42,28 @@ class HyperOsBuildClassifierTest {
         assertEquals(
             PlatformApplicability.UNKNOWN,
             classifyHyperOsBuild("", "", "OS3.0.1.0"),
+        )
+    }
+
+    @Test
+    fun unrecognizedXiaomiBuildFormatsAndAndroidUnknownMarkerStayUnknown() {
+        listOf(
+            "V15.0.1.0.TMOMIXM",
+            "MIUI-14",
+            "OS3",
+            "unknown",
+            "UNKNOWN",
+        ).forEach { version ->
+            assertEquals(
+                PlatformApplicability.UNKNOWN,
+                classifyHyperOsBuild("Xiaomi", "Redmi", version),
+                "unrecognized build identity '$version' must not be treated as unsupported",
+            )
+        }
+        assertEquals(
+            PlatformApplicability.UNKNOWN,
+            classifyHyperOsBuild("unknown", "unknown", "OS3.0.1.0.WOBCNXM"),
+            "Android Build.UNKNOWN manufacturer and brand markers do not establish Xiaomi identity",
         )
     }
 }
