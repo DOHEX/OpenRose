@@ -13,7 +13,18 @@ data class PlatformState(
     val transport: TransportAvailability = TransportAvailability.Unavailable("平台传输尚未实现"),
     val module: ModuleAvailability = ModuleAvailability.Unavailable("尚未检测系统模块"),
     val bridge: SystemBridgeDiagnostics? = null,
+    /** The host identity is a platform fact, separate from the current module or transport state. */
+    val hostPlatform: HostPlatform = HostPlatform.UNKNOWN,
+    /** Whether HyperOS system integration applies on this host, independent of integration readiness. */
+    val systemIntegrationApplicability: PlatformApplicability = PlatformApplicability.UNKNOWN,
+    /** Whether this host has an implemented control transport where a transport preference has effect. */
+    val controlTransportApplicability: PlatformApplicability = PlatformApplicability.UNKNOWN,
 )
+
+enum class HostPlatform { UNKNOWN, ANDROID, WINDOWS, LINUX }
+
+/** Explicitly keeps unknown platform facts separate from supported and unsupported features. */
+enum class PlatformApplicability { UNKNOWN, NOT_APPLICABLE, APPLICABLE }
 
 enum class PermissionState { NOT_REQUIRED, REQUIRED, GRANTED, DENIED }
 

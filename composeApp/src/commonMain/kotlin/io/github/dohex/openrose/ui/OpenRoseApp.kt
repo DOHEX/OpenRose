@@ -103,7 +103,13 @@ fun OpenRoseApp(
                         AppPage.HEADPHONES -> HeadphonesPage(state, onNavigate, onDisconnect, onSet)
                         AppPage.ADD_DEVICE -> AddDevicePage(state, onRequestPermission, onOpenSystemSettings,
                             onStartScan, onStopScan, onConnect, onDisconnect)
-                        AppPage.SYSTEM -> SystemIntegrationPage(state, onSettingsChange) { navigate(AppPage.DIAGNOSTICS) }
+                        AppPage.SYSTEM -> SystemIntegrationPage(
+                            state = state,
+                            onChange = onSettingsChange,
+                            onRequestPermission = onRequestPermission,
+                            onOpenSystemSettings = onOpenSystemSettings,
+                            onDiagnostics = { navigate(AppPage.DIAGNOSTICS) },
+                        )
                         AppPage.SETTINGS -> PreferencesPage(state, onSettingsChange) { navigate(AppPage.DIAGNOSTICS) }
                         AppPage.DIAGNOSTICS -> {
                             PlatformDiagnosticsCard(state.platform, onRequestPermission, onOpenSystemSettings)

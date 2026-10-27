@@ -8,7 +8,9 @@ import android.os.Build
 import android.location.LocationManager
 import android.provider.Settings
 import io.github.dohex.openrose.core.ModuleAvailability
+import io.github.dohex.openrose.core.HostPlatform
 import io.github.dohex.openrose.core.PermissionState
+import io.github.dohex.openrose.core.PlatformApplicability
 import io.github.dohex.openrose.core.PlatformState
 import io.github.dohex.openrose.core.TransportAvailability
 
@@ -45,6 +47,16 @@ internal fun Context.readPlatformState(permissionRequested: Boolean): PlatformSt
         permission = permission,
         transport = transport,
         module = ModuleAvailability.Unavailable("尚未收到兼容框架服务，普通客户端可独立运行"),
+        hostPlatform = HostPlatform.ANDROID,
+        systemIntegrationApplicability = classifyHyperOsBuild(
+            manufacturer = Build.MANUFACTURER,
+            brand = Build.BRAND,
+            incrementalVersion = Build.VERSION.INCREMENTAL,
+        ),
+        controlTransportApplicability = if (
+            packageManager.hasSystemFeature(PackageManager.FEATURE_BLUETOOTH_LE) &&
+            packageManager.hasSystemFeature(PackageManager.FEATURE_BLUETOOTH)
+        ) PlatformApplicability.APPLICABLE else PlatformApplicability.NOT_APPLICABLE,
     )
 }
 

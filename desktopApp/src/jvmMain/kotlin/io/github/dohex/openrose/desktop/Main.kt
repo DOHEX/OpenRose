@@ -17,8 +17,10 @@ import dev.nucleusframework.window.TitleBar
 import dev.nucleusframework.window.styling.LocalTitleBarStyle
 import io.github.dohex.openrose.core.Appearance
 import io.github.dohex.openrose.core.ControlSession
+import io.github.dohex.openrose.core.HostPlatform
 import io.github.dohex.openrose.core.ModuleAvailability
 import io.github.dohex.openrose.core.PermissionState
+import io.github.dohex.openrose.core.PlatformApplicability
 import io.github.dohex.openrose.core.PlatformState
 import io.github.dohex.openrose.core.TransportAvailability
 import io.github.dohex.openrose.core.UserSettingsCodec
@@ -29,6 +31,11 @@ import java.util.prefs.Preferences
 fun main() {
     val preferences = Preferences.userRoot().node("io/github/dohex/openrose")
     val platform = System.getProperty("os.name")
+    val hostPlatform = when {
+        platform.contains("windows", ignoreCase = true) -> HostPlatform.WINDOWS
+        platform.contains("linux", ignoreCase = true) -> HostPlatform.LINUX
+        else -> HostPlatform.UNKNOWN
+    }
     // Created before composition: window/style changes cannot create another control owner.
     val session = ControlSession(
         initialSettings = UserSettingsCodec.decode(preferences.keys().associateWith { preferences.get(it, "") }),
@@ -36,6 +43,9 @@ fun main() {
             permission = PermissionState.NOT_REQUIRED,
             transport = TransportAvailability.Unavailable("$platform 控制传输尚未实现"),
             module = ModuleAvailability.Unavailable("HyperOS 系统集成仅适用于 Android"),
+            hostPlatform = hostPlatform,
+            systemIntegrationApplicability = PlatformApplicability.NOT_APPLICABLE,
+            controlTransportApplicability = PlatformApplicability.NOT_APPLICABLE,
         ),
     )
     nucleusApplication(backend = NucleusBackend.Tao, enableSingleInstance = false) {

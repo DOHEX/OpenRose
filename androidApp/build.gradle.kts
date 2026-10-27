@@ -33,4 +33,5 @@ dependencies {
     implementation(libs.activity.compose)
     compileOnly(libs.libxposed.api)
     implementation(libs.libxposed.service)
+    testImplementation(kotlin("test-junit"))
 }

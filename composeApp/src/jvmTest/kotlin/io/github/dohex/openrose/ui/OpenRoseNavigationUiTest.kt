@@ -19,8 +19,10 @@ import io.github.dohex.openrose.core.DeviceCapabilities
 import io.github.dohex.openrose.core.DeviceSetting
 import io.github.dohex.openrose.core.DeviceState
 import io.github.dohex.openrose.core.InterfaceStyle
+import io.github.dohex.openrose.core.HostPlatform
 import io.github.dohex.openrose.core.ModuleAvailability
 import io.github.dohex.openrose.core.PermissionState
+import io.github.dohex.openrose.core.PlatformApplicability
 import io.github.dohex.openrose.core.PlatformState
 import io.github.dohex.openrose.core.SettingOperation
 import io.github.dohex.openrose.core.SettingStage
@@ -260,6 +262,9 @@ class OpenRoseNavigationUiTest {
                 permission = PermissionState.GRANTED,
                 transport = TransportAvailability.Available,
                 module = ModuleAvailability.NotEnabled,
+                hostPlatform = HostPlatform.ANDROID,
+                systemIntegrationApplicability = PlatformApplicability.APPLICABLE,
+                controlTransportApplicability = PlatformApplicability.APPLICABLE,
             ),
             connection = if (connected) {
                 ConnectionState.Connected(deviceId, SESSION_ID, profile, ConnectionPhase.READY)

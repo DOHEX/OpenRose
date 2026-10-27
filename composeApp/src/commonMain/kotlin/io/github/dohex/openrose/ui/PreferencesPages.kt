@@ -12,11 +12,13 @@ import io.github.dohex.openrose.core.Appearance
 import io.github.dohex.openrose.core.BridgeIpcState
 import io.github.dohex.openrose.core.BridgeSessionState
 import io.github.dohex.openrose.core.ControlState
+import io.github.dohex.openrose.core.HostPlatform
 import io.github.dohex.openrose.core.InterfaceStyle
 import io.github.dohex.openrose.core.IslandMode
 import io.github.dohex.openrose.core.IslandTrigger
 import io.github.dohex.openrose.core.ModuleAvailability
 import io.github.dohex.openrose.core.PermissionState
+import io.github.dohex.openrose.core.PlatformApplicability
 import io.github.dohex.openrose.core.PlatformState
 import io.github.dohex.openrose.core.TransportAvailability
 import io.github.dohex.openrose.core.UserSettings
@@ -59,65 +61,73 @@ internal fun PreferencesPage(
             )
         }
 
-        AppGroup(
-            title = "系统呈现",
-            footnote = "官方沿用系统耳机呈现，模块使用 OpenRose 样式；两者都由系统超级岛展示。",
-        ) {
-            AppChoiceRow(
-                title = "超级岛",
-                valueText = islandModeLabel(settings.islandMode),
-                options = IslandMode.entries.map { AppOption(it, islandModeLabel(it)) },
-                selected = settings.islandMode,
-                onSelect = { onChange(settings.copy(islandMode = it)) },
-            )
-        }
-
-        if (settings.islandMode == IslandMode.MODULE) {
+        if (state.platform.hyperOsIntegrationApplicable) {
             AppGroup(
-                title = "模块显示时机",
-                footnote = "普通电量刷新不会重复触发。佩戴、摘下与入盒暂不开放。",
+                title = "系统呈现",
+                footnote = "官方沿用系统耳机呈现，模块使用 OpenRose 样式；两者都由系统超级岛展示。",
             ) {
-                if (settings.islandTriggers.isEmpty()) {
-                    AppText("未选择显示时机，不自动触发。", role = AppTextRole.Summary)
-                }
-                AppCheckGroup(
-                    options = listOf(
-                        AppOption(
-                            value = IslandTrigger.CONNECTION,
-                            label = "连接时",
-                            contentDescription = "新连接会话开始时显示连接提示",
-                        ),
-                    ),
-                    checked = settings.islandTriggers,
-                    enabledFor = { true },
-                    onToggle = { trigger ->
-                        val triggers = if (trigger in settings.islandTriggers) {
-                            settings.islandTriggers - trigger
-                        } else {
-                            settings.islandTriggers + trigger
-                        }
-                        onChange(settings.copy(islandTriggers = triggers))
-                    },
+                AppChoiceRow(
+                    title = "超级岛",
+                    valueText = islandModeLabel(settings.islandMode),
+                    options = IslandMode.entries.map { AppOption(it, islandModeLabel(it)) },
+                    selected = settings.islandMode,
+                    onSelect = { onChange(settings.copy(islandMode = it)) },
                 )
+            }
+
+            if (settings.islandMode == IslandMode.MODULE) {
+                AppGroup(
+                    title = "模块显示时机",
+                    footnote = "普通电量刷新不会重复触发。佩戴、摘下与入盒暂不开放。",
+                ) {
+                    if (settings.islandTriggers.isEmpty()) {
+                        AppText("未选择显示时机，不自动触发。", role = AppTextRole.Summary)
+                    }
+                    AppCheckGroup(
+                        options = listOf(
+                            AppOption(
+                                value = IslandTrigger.CONNECTION,
+                                label = "连接时",
+                                contentDescription = "新连接会话开始时显示连接提示",
+                            ),
+                        ),
+                        checked = settings.islandTriggers,
+                        enabledFor = { true },
+                        onToggle = { trigger ->
+                            val triggers = if (trigger in settings.islandTriggers) {
+                                settings.islandTriggers - trigger
+                            } else {
+                                settings.islandTriggers + trigger
+                            }
+                            onChange(settings.copy(islandTriggers = triggers))
+                        },
+                    )
+                }
             }
         }
 
-        AppGroup(
-            title = "连接偏好",
-            footnote = "默认自动选择适用的连接方式；无法确认连接条件时使用 BLE。当前连接和正在执行的设置会保留。",
-        ) {
-            AppSwitchRow(
-                title = "强制使用 BLE",
-                summary = "仅影响下一次连接",
-                checked = settings.forceBle,
-                onChange = { onChange(settings.copy(forceBle = it)) },
-            )
+        if (state.platform.controlTransportApplicability == PlatformApplicability.APPLICABLE) {
+            AppGroup(
+                title = "连接偏好",
+                footnote = "默认自动选择适用的连接方式；无法确认连接条件时使用 BLE。当前连接和正在执行的设置会保留。",
+            ) {
+                AppSwitchRow(
+                    title = "强制使用 BLE",
+                    summary = "仅影响下一次连接",
+                    checked = settings.forceBle,
+                    onChange = { onChange(settings.copy(forceBle = it)) },
+                )
+            }
         }
 
         AppGroup(title = "状态与信息") {
             AppArrowRow(
                 title = "运行状态与诊断",
-                summary = "查看蓝牙权限、系统模块与桥接状态",
+                summary = if (state.platform.hyperOsIntegrationApplicable) {
+                    "查看本平台蓝牙、系统模块与桥接状态"
+                } else {
+                    "查看本平台蓝牙与运行状态"
+                },
                 icon = RoseIcon.LOG,
                 onClick = onDiagnostics,
             )
@@ -129,36 +139,49 @@ internal fun PreferencesPage(
     }
 }
 
-/** System-integration status and retained notification preferences. */
+/** Current platform status, applicable system-integration status, and diagnostics entry. */
 @Composable
 internal fun SystemIntegrationPage(
     state: ControlState,
     onChange: (UserSettings) -> Unit,
+    onRequestPermission: () -> Unit,
+    onOpenSystemSettings: () -> Unit,
     onDiagnostics: () -> Unit,
 ) {
     val settings = state.settings
+    val hyperOsApplicable = state.platform.hyperOsIntegrationApplicable
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        IntegrationReadinessCard(state.platform.module)
+        AppGroup(title = "系统状态") {
+            PlatformStatusRows(state.platform, onRequestPermission, onOpenSystemSettings)
+        }
 
-        AppGroup(
-            footnote = "此开关只控制耳机状态通知，与超级岛显示模式分别设置。",
-        ) {
-            AppSwitchRow(
-                title = "焦点通知",
-                summary = "连接期间保留耳机状态通知",
-                checked = settings.focusNotificationEnabled,
-                onChange = { onChange(settings.copy(focusNotificationEnabled = it)) },
-            )
+        if (hyperOsApplicable) {
+            IntegrationReadinessCard(state.platform.module)
+
+            AppGroup(
+                footnote = "此开关只控制耳机状态通知，与超级岛显示模式分别设置。",
+            ) {
+                AppSwitchRow(
+                    title = "焦点通知",
+                    summary = "连接期间保留耳机状态通知",
+                    checked = settings.focusNotificationEnabled,
+                    onChange = { onChange(settings.copy(focusNotificationEnabled = it)) },
+                )
+            }
         }
 
         AppGroup {
             AppArrowRow(
                 title = "运行状态与诊断",
-                summary = "系统入口、跨进程通道与呈现记录",
-                value = if (state.platform.module == ModuleAvailability.Available) "查看" else "待就绪",
+                summary = if (hyperOsApplicable) {
+                    "系统入口、跨进程通道与呈现记录"
+                } else {
+                    "查看本平台状态与诊断信息"
+                },
+                value = if (!hyperOsApplicable || state.platform.module == ModuleAvailability.Available) "查看" else "待就绪",
                 icon = RoseIcon.LOG,
                 onClick = onDiagnostics,
             )
@@ -178,112 +201,130 @@ internal fun PlatformDiagnosticsCard(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         AppGroup(title = "系统状态") {
-            val permissionValue = when (platform.permission) {
-                PermissionState.NOT_REQUIRED -> "此平台无需应用内授权"
-                PermissionState.GRANTED -> "已授权"
-                PermissionState.REQUIRED -> "需要授权后才能使用蓝牙"
-                PermissionState.DENIED -> "未获得蓝牙权限"
+            PlatformStatusRows(platform, onRequestPermission, onOpenSystemSettings)
+            if (platform.hyperOsIntegrationApplicable) {
+                val moduleValue = when (val module = platform.module) {
+                    ModuleAvailability.Available -> "已连接系统模块"
+                    ModuleAvailability.NotEnabled -> "系统模块未启用"
+                    is ModuleAvailability.Unavailable -> module.reason
+                }
+                val moduleTone = when (platform.module) {
+                    ModuleAvailability.Available -> StatusTone.GOOD
+                    ModuleAvailability.NotEnabled -> StatusTone.CAUTION
+                    is ModuleAvailability.Unavailable -> StatusTone.NEUTRAL
+                }
+                ToneInfoRow("系统模块", moduleValue, moduleTone)
             }
-            val permissionTone = when (platform.permission) {
-                PermissionState.NOT_REQUIRED -> StatusTone.NEUTRAL
-                PermissionState.GRANTED -> StatusTone.GOOD
-                PermissionState.REQUIRED -> StatusTone.CAUTION
-                PermissionState.DENIED -> StatusTone.ERROR
-            }
-            ToneInfoRow("蓝牙权限", permissionValue, permissionTone)
-            if (platform.permission == PermissionState.REQUIRED || platform.permission == PermissionState.DENIED) {
-                AppButton(
-                    text = "授予蓝牙权限",
-                    onClick = onRequestPermission,
-                    modifier = Modifier.padding(start = 16.dp),
-                )
-            }
-
-            val transportValue = when (val transport = platform.transport) {
-                TransportAvailability.Available -> "可用"
-                TransportAvailability.Disabled -> "系统蓝牙已关闭"
-                is TransportAvailability.Unavailable -> transport.reason
-            }
-            val transportTone = when (platform.transport) {
-                TransportAvailability.Available -> StatusTone.GOOD
-                TransportAvailability.Disabled -> StatusTone.CAUTION
-                is TransportAvailability.Unavailable -> StatusTone.NEUTRAL
-            }
-            ToneInfoRow("蓝牙传输", transportValue, transportTone)
-            if (platform.transport == TransportAvailability.Disabled) {
-                AppButton(
-                    text = "打开蓝牙设置",
-                    onClick = onOpenSystemSettings,
-                    modifier = Modifier.padding(start = 16.dp),
-                )
-            }
-
-            val moduleValue = when (val module = platform.module) {
-                ModuleAvailability.Available -> "已连接系统模块"
-                ModuleAvailability.NotEnabled -> "系统模块未启用"
-                is ModuleAvailability.Unavailable -> module.reason
-            }
-            val moduleTone = when (platform.module) {
-                ModuleAvailability.Available -> StatusTone.GOOD
-                ModuleAvailability.NotEnabled -> StatusTone.CAUTION
-                is ModuleAvailability.Unavailable -> StatusTone.NEUTRAL
-            }
-            ToneInfoRow("系统模块", moduleValue, moduleTone)
         }
 
-        val bridge = platform.bridge
-        if (bridge == null) {
-            AppGroup(title = "系统桥接") {
-                AppText("尚无系统桥接诊断数据。", role = AppTextRole.Summary)
-            }
-        } else {
-            AppGroup(
-                title = "系统桥接",
-                footnote = "桥接诊断描述已观察到的系统入口和调用状态，不代表系统界面已实际显示。",
-            ) {
-                bridge.frameworkName?.let { AppInfoRow("框架", it) }
-                bridge.frameworkVersion?.let { AppInfoRow("框架版本", it) }
-                bridge.frameworkApi?.let { AppInfoRow("框架 API", it.toString()) }
-                bridge.targetPackage?.let { AppInfoRow("目标包", it) }
-                bridge.targetProcess?.let { AppInfoRow("目标进程", it) }
-                bridge.componentVersion?.let { AppInfoRow("系统组件版本", it) }
-                bridge.componentMatch?.let { AppInfoRow("匹配依据", it) }
-                AppInfoRow("跨进程通道", bridgeIpcLabel(bridge.ipc))
-                AppInfoRow("系统入口读取", bridgeSessionLabel(bridge.session))
-                bridge.detail?.let { AppInfoRow("详情", it) }
-            }
-
-            bridge.endpoints.values.forEach { endpoint ->
-                val endpointName = when (endpoint.targetPackage) {
-                    "com.android.bluetooth" -> "蓝牙服务"
-                    "com.xiaomi.bluetooth" -> "小米蓝牙"
-                    "com.milink.service" -> "融合设备中心"
-                    "android" -> "系统提示服务"
-                    else -> endpoint.targetPackage
+        if (platform.hyperOsIntegrationApplicable) {
+            val bridge = platform.bridge
+            if (bridge == null) {
+                AppGroup(title = "系统桥接") {
+                    AppText("尚无系统桥接诊断数据。", role = AppTextRole.Summary)
                 }
-                AppGroup(title = endpointName) {
-                    AppInfoRow("目标包", endpoint.targetPackage)
-                    AppInfoRow("目标进程", endpoint.targetProcess)
-                    AppInfoRow("组件版本", endpoint.componentVersion)
-                    AppInfoRow("入口依据", endpoint.entryMatch)
-                    AppInfoRow("跨进程通道", bridgeIpcLabel(endpoint.ipc))
-                    endpoint.features.forEach { (feature, result) ->
-                        DiagnosticResultRow(featureLabel(feature), result)
-                    }
-                }
-            }
-
-            bridge.presentation.takeIf { it.isNotEmpty() }?.let { presentation ->
+            } else {
                 AppGroup(
-                    title = "系统呈现记录",
-                    footnote = "记录表示已请求的系统操作，不代表屏幕上的实际效果已通过验收。",
+                    title = "系统桥接",
+                    footnote = "桥接诊断描述已观察到的系统入口和调用状态，不代表系统界面已实际显示。",
                 ) {
-                    presentation.entries.forEach { (feature, result) ->
-                        DiagnosticPresentationRow(presentationLabel(feature), result)
+                    bridge.frameworkName?.let { AppInfoRow("框架", it) }
+                    bridge.frameworkVersion?.let { AppInfoRow("框架版本", it) }
+                    bridge.frameworkApi?.let { AppInfoRow("框架 API", it.toString()) }
+                    bridge.targetPackage?.let { AppInfoRow("目标包", it) }
+                    bridge.targetProcess?.let { AppInfoRow("目标进程", it) }
+                    bridge.componentVersion?.let { AppInfoRow("系统组件版本", it) }
+                    bridge.componentMatch?.let { AppInfoRow("匹配依据", it) }
+                    AppInfoRow("跨进程通道", bridgeIpcLabel(bridge.ipc))
+                    AppInfoRow("系统入口读取", bridgeSessionLabel(bridge.session))
+                    bridge.detail?.let { AppInfoRow("详情", it) }
+                }
+
+                bridge.endpoints.values.forEach { endpoint ->
+                    val endpointName = when (endpoint.targetPackage) {
+                        "com.android.bluetooth" -> "蓝牙服务"
+                        "com.xiaomi.bluetooth" -> "小米蓝牙"
+                        "com.milink.service" -> "融合设备中心"
+                        "android" -> "系统提示服务"
+                        else -> endpoint.targetPackage
+                    }
+                    AppGroup(title = endpointName) {
+                        AppInfoRow("目标包", endpoint.targetPackage)
+                        AppInfoRow("目标进程", endpoint.targetProcess)
+                        AppInfoRow("组件版本", endpoint.componentVersion)
+                        AppInfoRow("入口依据", endpoint.entryMatch)
+                        AppInfoRow("跨进程通道", bridgeIpcLabel(endpoint.ipc))
+                        endpoint.features.forEach { (feature, result) ->
+                            DiagnosticResultRow(featureLabel(feature), result)
+                        }
+                    }
+                }
+
+                bridge.presentation.takeIf { it.isNotEmpty() }?.let { presentation ->
+                    AppGroup(
+                        title = "系统呈现记录",
+                        footnote = "记录表示已请求的系统操作，不代表屏幕上的实际效果已通过验收。",
+                    ) {
+                        presentation.entries.forEach { (feature, result) ->
+                            DiagnosticPresentationRow(presentationLabel(feature), result)
+                        }
                     }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun PlatformStatusRows(
+    platform: PlatformState,
+    onRequestPermission: () -> Unit,
+    onOpenSystemSettings: () -> Unit,
+) {
+    AppInfoRow("当前平台", hostPlatformLabel(platform.hostPlatform))
+    if (platform.hostPlatform == HostPlatform.ANDROID) {
+        val permissionValue = when (platform.permission) {
+            PermissionState.NOT_REQUIRED -> "无需应用内授权"
+            PermissionState.GRANTED -> "已授权"
+            PermissionState.REQUIRED -> "需要授权后才能使用蓝牙"
+            PermissionState.DENIED -> "未获得蓝牙权限"
+        }
+        val permissionTone = when (platform.permission) {
+            PermissionState.NOT_REQUIRED -> StatusTone.NEUTRAL
+            PermissionState.GRANTED -> StatusTone.GOOD
+            PermissionState.REQUIRED -> StatusTone.CAUTION
+            PermissionState.DENIED -> StatusTone.ERROR
+        }
+        ToneInfoRow("蓝牙权限", permissionValue, permissionTone)
+        if (platform.permission == PermissionState.REQUIRED || platform.permission == PermissionState.DENIED) {
+            AppButton(
+                text = "授予蓝牙权限",
+                onClick = onRequestPermission,
+                modifier = Modifier.padding(start = 16.dp),
+            )
+        }
+        if (platform.systemIntegrationApplicability == PlatformApplicability.UNKNOWN) {
+            ToneInfoRow("系统集成适用性", "尚未核实", StatusTone.CAUTION)
+        }
+    }
+
+    val transportValue = when (val transport = platform.transport) {
+        TransportAvailability.Available -> "可用"
+        TransportAvailability.Disabled -> "系统蓝牙已关闭"
+        is TransportAvailability.Unavailable -> transport.reason
+    }
+    val transportTone = when (platform.transport) {
+        TransportAvailability.Available -> StatusTone.GOOD
+        TransportAvailability.Disabled -> StatusTone.CAUTION
+        is TransportAvailability.Unavailable -> StatusTone.NEUTRAL
+    }
+    ToneInfoRow("蓝牙传输", transportValue, transportTone)
+    if (platform.hostPlatform == HostPlatform.ANDROID && platform.transport == TransportAvailability.Disabled) {
+        AppButton(
+            text = "打开蓝牙设置",
+            onClick = onOpenSystemSettings,
+            modifier = Modifier.padding(start = 16.dp),
+        )
     }
 }
 
@@ -386,6 +427,17 @@ private fun interfaceStyleLabel(style: InterfaceStyle): String = when (style) {
     InterfaceStyle.MIUIX -> "Miuix"
     InterfaceStyle.MATERIAL3 -> "Material 3"
 }
+
+private fun hostPlatformLabel(platform: HostPlatform): String = when (platform) {
+    HostPlatform.UNKNOWN -> "平台未核实"
+    HostPlatform.ANDROID -> "Android"
+    HostPlatform.WINDOWS -> "Windows"
+    HostPlatform.LINUX -> "Linux"
+}
+
+private val PlatformState.hyperOsIntegrationApplicable: Boolean
+    get() = hostPlatform == HostPlatform.ANDROID &&
+        systemIntegrationApplicability == PlatformApplicability.APPLICABLE
 
 private fun appearanceLabel(appearance: Appearance): String = when (appearance) {
     Appearance.SYSTEM -> "跟随系统"
