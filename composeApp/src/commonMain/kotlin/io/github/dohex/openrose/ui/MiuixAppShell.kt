@@ -5,14 +5,21 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.unit.dp
+import top.yukonga.miuix.kmp.overlay.OverlayListPopup
 import top.yukonga.miuix.kmp.basic.*
 
 @Composable
 internal fun MiuixAppShell(backStack: List<AppPage>, page: AppPage, wide: Boolean,
     onNavigate: (AppPage) -> Unit, onBack: () -> Unit, scrollState: ScrollState,
-    pageContent: @Composable () -> Unit) {
+    pageContent: @Composable () -> Unit,
+    connectedHome: Boolean = false,
+    menuExpanded: Boolean = false,
+    onMenuExpandedChange: (Boolean) -> Unit = {},
+    onDisconnect: () -> Unit = {},
+) {
     Row(Modifier.fillMaxSize()) {
         if (wide) NavigationRail(header = { AppIcon(RoseIcon.HEADPHONES, Modifier.padding(12.dp), contentDescription = "OpenRose") }) {
             mainPages.forEach { destination ->
@@ -29,7 +36,39 @@ internal fun MiuixAppShell(backStack: List<AppPage>, page: AppPage, wide: Boolea
             topBar = {
                 TopAppBar(title = title, largeTitle = title, scrollBehavior = scrollBehavior,
                     navigationIcon = { if (backStack.size > 1) IconButton(onClick = onBack) { Icon(RoseIcons.Back, "返回") } },
-                    actions = { if (page == AppPage.HEADPHONES) IconButton(onClick = { onNavigate(AppPage.ADD_DEVICE) }) { Icon(RoseIcons.Plus, "添加耳机") } })
+                    actions = {
+                        if (page == AppPage.HEADPHONES) {
+                            Box {
+                                if (connectedHome) {
+                                    IconButton(onClick = { onMenuExpandedChange(true) }) {
+                                        Icon(RoseIcons[RoseIcon.MORE], "耳机菜单")
+                                    }
+                                } else {
+                                    IconButton(onClick = { onNavigate(AppPage.ADD_DEVICE) }) {
+                                        Icon(RoseIcons.Plus, "添加耳机")
+                                    }
+                                }
+                                OverlayListPopup(
+                                    show = connectedHome && menuExpanded,
+                                    popupPositionProvider = ListPopupDefaults.ContextMenuPositionProvider,
+                                    alignment = PopupPositionProvider.Align.TopEnd,
+                                    enableWindowDim = false,
+                                    onDismissRequest = { onMenuExpandedChange(false) },
+                                ) {
+                                    ListPopupColumn {
+                                        BasicComponent(
+                                            title = "断开控制连接",
+                                            onClick = {
+                                                onMenuExpandedChange(false)
+                                                onDisconnect()
+                                            },
+                                            role = Role.Button,
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    })
             },
             bottomBar = {
                 if (!wide && page in mainPages) NavigationBar {

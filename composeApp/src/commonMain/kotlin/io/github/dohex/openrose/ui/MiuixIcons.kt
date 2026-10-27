@@ -10,6 +10,7 @@ import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.icon.extended.ChevronForward
 import top.yukonga.miuix.kmp.icon.extended.Info
 import top.yukonga.miuix.kmp.icon.extended.Layers
+import top.yukonga.miuix.kmp.icon.extended.More
 import top.yukonga.miuix.kmp.icon.extended.Recent
 import top.yukonga.miuix.kmp.icon.extended.Settings
 import top.yukonga.miuix.kmp.icon.extended.Tune
@@ -21,6 +22,7 @@ internal fun miuixIcon(icon: RoseIcon): ImageVector = when (icon) {
     RoseIcon.SYSTEM -> MiuixIcons.Layers
     RoseIcon.SETTINGS -> MiuixIcons.Settings
     RoseIcon.PLUS -> MiuixIcons.Add
+    RoseIcon.MORE -> MiuixIcons.More
     RoseIcon.BACK -> MiuixIcons.Back
     RoseIcon.CHEVRON -> MiuixIcons.ChevronForward
     RoseIcon.NOISE -> materialIcon(icon)

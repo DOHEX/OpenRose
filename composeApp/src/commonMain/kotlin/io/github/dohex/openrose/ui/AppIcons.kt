@@ -10,6 +10,7 @@ internal enum class RoseIcon {
     SYSTEM,
     SETTINGS,
     PLUS,
+    MORE,
     BACK,
     CHEVRON,
     NOISE,

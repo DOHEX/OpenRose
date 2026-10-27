@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -88,25 +89,30 @@ internal fun HeadphonesPage(
             val wide = maxWidth >= 680.dp
             val deviceCard: @Composable () -> Unit = {
                 AppDashboardCard {
-                    Column(
+                    Row(
                         Modifier.fillMaxWidth(),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(if (wide) 10.dp else 6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        EarbudsArtwork(Modifier.fillMaxWidth().height(if (wide) 260.dp else 140.dp))
-                        AppText(device.profile.shortLabel, role = AppTextRole.Display)
-                        AppText(device.profile.configurationLabel, role = AppTextRole.Summary)
-                        AppText(
-                            state.connection.phaseOrNull()?.displayText() ?: "未连接",
-                            role = AppTextRole.Summary,
-                            color = if (state.isReady(device)) {
-                                appColor(AppColorRole.Primary)
-                            } else {
-                                appColor(AppColorRole.Summary)
-                            },
-                        )
+                        EarbudsArtwork(Modifier.size(if (wide) 84.dp else 68.dp), compact = true)
+                        Column(
+                            Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            AppText(device.profile.shortLabel, role = AppTextRole.Title)
+                            AppText("控制连接", role = AppTextRole.Footnote)
+                            AppText(
+                                state.connection.phaseOrNull()?.displayText() ?: "未连接",
+                                role = AppTextRole.Summary,
+                                color = if (state.isReady(device)) {
+                                    appColor(AppColorRole.Primary)
+                                } else {
+                                    appColor(AppColorRole.Summary)
+                                },
+                            )
+                        }
                     }
-                    Spacer(Modifier.height(if (wide) 24.dp else 16.dp))
+                    Spacer(Modifier.height(12.dp))
                     BatteryStrip(
                         device = device,
                         initializing = state.connection.phaseOrNull() == ConnectionPhase.INITIALIZING,
@@ -160,7 +166,6 @@ internal fun HeadphonesPage(
                         }
                         AppArrowRow(
                             title = "设备详情",
-                            value = device.profile.configurationLabel,
                             icon = RoseIcon.INFO,
                             onClick = { onNavigate(AppPage.DETAILS) },
                         )

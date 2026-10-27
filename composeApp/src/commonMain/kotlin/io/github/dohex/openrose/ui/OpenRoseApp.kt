@@ -55,11 +55,13 @@ fun OpenRoseApp(
     var selectedTouchSlot by remember(state.device?.sessionId) { mutableStateOf<TouchSlot?>(null) }
     var customEqualizerDraft by remember(state.device?.sessionId) { mutableStateOf<List<Int>?>(null) }
     var customEqualizerView by remember(state.device?.sessionId) { mutableStateOf(false) }
+    var headphoneMenuExpanded by remember { mutableStateOf(false) }
     val rootFocusRequester = remember { FocusRequester() }
     val choiceDialog = remember(state.device?.sessionId) { mutableStateOf<String?>(null) }
     var selectedTouchSide by remember(state.device?.sessionId) { mutableStateOf<String?>(null) }
     fun navigate(destination: AppPage) {
         if (destination != backStack.last()) {
+            headphoneMenuExpanded = false
             choiceDialog.value = null
             selectedTouchSlot = null
             backStack = backStack + destination
@@ -67,13 +69,20 @@ fun OpenRoseApp(
     }
     fun back() {
         when {
+            headphoneMenuExpanded -> headphoneMenuExpanded = false
             selectedTouchSlot != null -> selectedTouchSlot = null
             choiceDialog.value != null -> choiceDialog.value = null
             backStack.size > 1 -> backStack = backStack.dropLast(1)
         }
     }
-    PlatformBackHandler(backStack.size > 1 || choiceDialog.value != null || selectedTouchSlot != null, ::back)
+    PlatformBackHandler(
+        backStack.size > 1 || choiceDialog.value != null || selectedTouchSlot != null || headphoneMenuExpanded,
+        ::back,
+    )
     LaunchedEffect(state.connection, page) {
+        if (page != AppPage.HEADPHONES || state.activeDevice() == null) {
+            headphoneMenuExpanded = false
+        }
         val connection = state.connection as? ConnectionState.Connected
         if (page == AppPage.ADD_DEVICE && connection?.phase == ConnectionPhase.READY) {
             backStack = listOf(AppPage.HEADPHONES)
@@ -81,17 +90,22 @@ fun OpenRoseApp(
     }
     CompositionLocalProvider(LocalChoiceDialog provides choiceDialog) {
         ProvideInterfaceStyle(state.settings.interfaceStyle, dark) {
-            LaunchedEffect(page, choiceDialog.value, selectedTouchSlot) {
-                if (choiceDialog.value == null && selectedTouchSlot == null) rootFocusRequester.requestFocus()
+            LaunchedEffect(page, choiceDialog.value, selectedTouchSlot, headphoneMenuExpanded) {
+                if (choiceDialog.value == null && selectedTouchSlot == null && !headphoneMenuExpanded) {
+                    rootFocusRequester.requestFocus()
+                }
             }
             BoxWithConstraints(modifier.fillMaxSize().focusRequester(rootFocusRequester).onPreviewKeyEvent {
-                if (it.type == KeyEventType.KeyUp && it.key == Key.Escape && (backStack.size > 1 || choiceDialog.value != null || selectedTouchSlot != null)) {
+                if (it.type == KeyEventType.KeyUp && it.key == Key.Escape &&
+                    (backStack.size > 1 || choiceDialog.value != null || selectedTouchSlot != null || headphoneMenuExpanded)
+                ) {
                     back(); true
                 } else false
             }.focusable()) {
                 val wide = maxWidth >= 900.dp
                 val onNavigate: (AppPage) -> Unit = { destination ->
                     if (destination in mainPages) {
+                        headphoneMenuExpanded = false
                         choiceDialog.value = null
                         selectedTouchSlot = null
                         backStack = listOf(destination)
@@ -150,13 +164,16 @@ fun OpenRoseApp(
                                 AppPage.AUDIO -> {
                                     DeviceControlCard(state, device, onSet)
                                     AppGroup {
-                                        AppArrowRow("设备详情", value = device.profile.configurationLabel, icon = RoseIcon.INFO) { navigate(AppPage.DETAILS) }
+                                        AppArrowRow("设备详情", icon = RoseIcon.INFO) { navigate(AppPage.DETAILS) }
                                         AppArrowRow("连接方式", value = state.controlTransportLabel(), icon = RoseIcon.BLUETOOTH) { navigate(AppPage.DIAGNOSTICS) }
                                     }
                                     AppButton("断开连接", onDisconnect, modifier = Modifier.padding(horizontal = 16.dp), kind = AppButtonKind.Secondary)
                                 }
                                 AppPage.DETAILS -> {
                                     ConnectionDetailsCard(state, onDisconnect)
+                                    AppGroup(title = "设备标识") {
+                                        AppInfoRow("型号配置", device.profile.configurationLabel)
+                                    }
                                     DeviceReadings(device, state.connection.phaseOrNull() == ConnectionPhase.INITIALIZING)
                                 }
                                 else -> Unit
@@ -174,8 +191,32 @@ fun OpenRoseApp(
                     }
                 }
                 when (state.settings.interfaceStyle) {
-                    InterfaceStyle.MIUIX -> MiuixAppShell(backStack, page, wide, onNavigate, ::back, scrollStates.getValue(page), pageContent)
-                    InterfaceStyle.MATERIAL3 -> MaterialAppShell(backStack, page, wide, onNavigate, ::back, scrollStates.getValue(page), pageContent)
+                    InterfaceStyle.MIUIX -> MiuixAppShell(
+                        backStack = backStack,
+                        page = page,
+                        wide = wide,
+                        onNavigate = onNavigate,
+                        onBack = ::back,
+                        scrollState = scrollStates.getValue(page),
+                        connectedHome = state.activeDevice() != null,
+                        menuExpanded = headphoneMenuExpanded,
+                        onMenuExpandedChange = { headphoneMenuExpanded = it },
+                        onDisconnect = onDisconnect,
+                        pageContent = pageContent,
+                    )
+                    InterfaceStyle.MATERIAL3 -> MaterialAppShell(
+                        backStack = backStack,
+                        page = page,
+                        wide = wide,
+                        onNavigate = onNavigate,
+                        onBack = ::back,
+                        scrollState = scrollStates.getValue(page),
+                        connectedHome = state.activeDevice() != null,
+                        menuExpanded = headphoneMenuExpanded,
+                        onMenuExpandedChange = { headphoneMenuExpanded = it },
+                        onDisconnect = onDisconnect,
+                        pageContent = pageContent,
+                    )
                 }
             }
         }

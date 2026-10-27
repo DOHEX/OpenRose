@@ -15,7 +15,12 @@ import androidx.compose.ui.unit.dp
 @Composable
 internal fun MaterialAppShell(backStack: List<AppPage>, page: AppPage, wide: Boolean,
     onNavigate: (AppPage) -> Unit, onBack: () -> Unit, scrollState: ScrollState,
-    pageContent: @Composable () -> Unit) {
+    pageContent: @Composable () -> Unit,
+    connectedHome: Boolean = false,
+    menuExpanded: Boolean = false,
+    onMenuExpandedChange: (Boolean) -> Unit = {},
+    onDisconnect: () -> Unit = {},
+) {
     Row(Modifier.fillMaxSize()) {
         if (wide) NavigationRail(header = { AppIcon(RoseIcon.HEADPHONES, Modifier.padding(12.dp), contentDescription = "OpenRose") }) {
             mainPages.forEach { destination ->
@@ -32,7 +37,31 @@ internal fun MaterialAppShell(backStack: List<AppPage>, page: AppPage, wide: Boo
             if (backStack.size > 1) IconButton(onClick = onBack) { Icon(RoseIcons.Back, "返回") }
         }
         val actions: @Composable RowScope.() -> Unit = {
-            if (page == AppPage.HEADPHONES) IconButton(onClick = { onNavigate(AppPage.ADD_DEVICE) }) { Icon(RoseIcons.Plus, "添加耳机") }
+            if (page == AppPage.HEADPHONES) {
+                Box {
+                    if (connectedHome) {
+                        IconButton(onClick = { onMenuExpandedChange(true) }) {
+                            Icon(RoseIcons[RoseIcon.MORE], contentDescription = "耳机菜单")
+                        }
+                    } else {
+                        IconButton(onClick = { onNavigate(AppPage.ADD_DEVICE) }) {
+                            Icon(RoseIcons.Plus, contentDescription = "添加耳机")
+                        }
+                    }
+                    DropdownMenu(
+                        expanded = connectedHome && menuExpanded,
+                        onDismissRequest = { onMenuExpandedChange(false) },
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("断开控制连接") },
+                            onClick = {
+                                onMenuExpandedChange(false)
+                                onDisconnect()
+                            },
+                        )
+                    }
+                }
+            }
         }
         Scaffold(modifier = Modifier.weight(1f).nestedScroll(scrollBehavior.nestedScrollConnection),
             topBar = {

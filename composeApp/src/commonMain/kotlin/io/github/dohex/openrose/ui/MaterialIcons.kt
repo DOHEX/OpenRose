@@ -12,6 +12,7 @@ internal fun materialIcon(icon: RoseIcon): ImageVector = vectorResource(when (ic
     RoseIcon.SYSTEM -> Res.drawable.msr_extension
     RoseIcon.SETTINGS -> Res.drawable.msr_settings
     RoseIcon.PLUS -> Res.drawable.msr_add
+    RoseIcon.MORE -> Res.drawable.msr_more_vert
     RoseIcon.BACK -> Res.drawable.msr_arrow_back
     RoseIcon.CHEVRON -> Res.drawable.msr_chevron_right
     RoseIcon.NOISE -> Res.drawable.msr_noise_control_off
