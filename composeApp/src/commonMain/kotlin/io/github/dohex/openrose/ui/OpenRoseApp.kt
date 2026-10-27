@@ -113,7 +113,10 @@ fun OpenRoseApp(
                         }
                         else -> if (device != null) {
                             val controlPage = page in listOf(AppPage.NOISE, AppPage.EQUALIZER, AppPage.TOUCH, AppPage.AUDIO)
-                            if (controlPage) SettingPageBanner(state, device)
+                            if (controlPage) {
+                                SettingPageBanner(state, device)
+                                SettingFeedback(state, device) { navigate(AppPage.DIAGNOSTICS) }
+                            }
                             when (page) {
                                 AppPage.NOISE -> NoiseControlCard(state, device, onSet)
                                 AppPage.EQUALIZER -> {
@@ -142,14 +145,13 @@ fun OpenRoseApp(
                             }
                             if (controlPage) {
                                 AppText("选择表示设备已确认的状态；提交后等待设备回报确认。", Modifier.padding(horizontal = 16.dp), AppTextRole.Footnote)
-                                SettingOperationsCard(state)
                             }
                         } else {
                             AppGroup {
                                 AppInfoRow("耳机已断开", "连接耳机后，可查看和调整当前型号支持的功能。")
                                 AppButton("添加耳机", { navigate(AppPage.ADD_DEVICE) })
                             }
-                            SettingOperationsCard(state)
+                            SettingFeedback(state, null) { navigate(AppPage.DIAGNOSTICS) }
                         }
                     }
                 }

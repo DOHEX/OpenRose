@@ -393,11 +393,8 @@ internal fun AppCandidateRow(title: String, summary: String, onConnect: (() -> U
 
 @Composable
 internal fun SettingPageBanner(state: io.github.dohex.openrose.core.ControlState, device: io.github.dohex.openrose.core.DeviceState) {
-    val message = when {
-        !state.isReady(device) -> "控制会话尚未就绪，暂不能设置。"
-        state.hasPendingSetting(device) -> "正在处理设置请求，控件仍显示设备已确认的状态。"
-        else -> return
-    }
+    if (state.isReady(device)) return
+    val message = "控制会话尚未就绪，暂不能设置。"
     when (LocalInterfaceStyle.current) {
         InterfaceStyle.MIUIX -> AppGroup { BasicComponent(title = message) }
         InterfaceStyle.MATERIAL3 -> Card(Modifier.fillMaxWidth().padding(horizontal = 16.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)) {

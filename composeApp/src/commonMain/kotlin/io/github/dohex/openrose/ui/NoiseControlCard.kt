@@ -133,7 +133,7 @@ internal fun ConfirmedSettingLabel(label: String, field: DeviceField, device: De
     AppInfoRow(label, confirmedSettingStatus(field, device))
 }
 
-/** Kept outside the connected device card so a disconnected request still has a visible result. */
+/** Detailed request and session history is shown only on the diagnostics page. */
 @Composable
 internal fun SettingOperationsCard(state: ControlState) {
     val operations = state.settingOperations.takeLast(4).asReversed()

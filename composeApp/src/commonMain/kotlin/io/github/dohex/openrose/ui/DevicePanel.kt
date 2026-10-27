@@ -96,12 +96,7 @@ internal fun HeadphonesPage(
                     onClick = { onNavigate(AppPage.DIAGNOSTICS) },
                 )
             }
-            state.lastError?.let { error ->
-                AppDashboardCard {
-                    AppText(error.message, color = appColor(AppColorRole.Error))
-                }
-            }
-            SettingOperationsCard(state)
+            SettingFeedback(state, null) { onNavigate(AppPage.DIAGNOSTICS) }
             return@Column
         }
 
@@ -186,26 +181,7 @@ internal fun HeadphonesPage(
                             onClick = { onNavigate(AppPage.DETAILS) },
                         )
                     }
-                    state.lastError?.let { error ->
-                        AppDashboardCard {
-                            AppText(error.message, color = appColor(AppColorRole.Error))
-                        }
-                    }
-                    if (state.settingOperations.isNotEmpty()) {
-                        val operation = state.settingOperations.last()
-                        AppGroup {
-                            AppArrowRow(
-                                title = "最近设置操作",
-                                value = if (operation.stage == SettingStage.CONFIRMED) {
-                                    "设备已确认"
-                                } else {
-                                    "查看请求与确认状态"
-                                },
-                                icon = if (operation.stage == SettingStage.CONFIRMED) RoseIcon.CHECK else RoseIcon.CLOCK,
-                                onClick = { onNavigate(AppPage.DIAGNOSTICS) },
-                            )
-                        }
-                    }
+                    SettingFeedback(state, device) { onNavigate(AppPage.DIAGNOSTICS) }
                 }
             }
             if (wide) {

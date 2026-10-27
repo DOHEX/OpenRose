@@ -219,13 +219,15 @@ when (style) {
 
 ### 6.0 页面级状态横幅（新增，替代各卡片里重复的 `SettingControlsSummary`）
 
-在设备设置页（降噪、均衡器、触控、音频与设备）的顶部，**只在以下情况**显示一条：
+在设备设置页（降噪、均衡器、触控、音频与设备）的顶部，显示未就绪提示或当前会话最新设置结果：
 
 - 未就绪：`控制会话尚未就绪，暂不能设置。`
-- 有待确认设置：`正在处理设置请求，控件仍显示设备已确认的状态。`
+- 等待设备确认：简短显示正在处理设置，并保留设备已确认的控件值。
+- 设备已确认：简短显示确认结果。
+- 失败、超时或连接中断：就近显示结果和原因，并提供 `查看详情` 进入诊断。
 
-样式：Miuix 用一张只含 `BasicComponent` 的 Card；M3 用 `Card(colors = cardColors(containerColor = secondaryContainer))`，这是 M3 默认的角色色，可以使用。正常状态下不显示。
-另在页面底部放一条页脚：`选择表示设备已确认的状态；提交后等待设备回报确认。`
+完整请求值、请求编号、阶段、分步确认和已结束会话记录仅在诊断页显示；普通页面不显示操作历史块。样式沿用 Miuix 与 Material 3 默认组件。
+页面底部保留一条页脚：`选择表示设备已确认的状态；提交后等待设备回报确认。`
 
 ### 6.1 我的耳机（首页）
 
@@ -234,12 +236,11 @@ when (style) {
 1. `AppDashboardCard`（设备卡）：`EarbudsArtwork`（高 140dp）→ 型号短名（`Display`）→ 型号配置（`Summary`）→ 连接阶段（就绪时用 `Primary`，否则 `Summary`）→ 电量三列：标签、数值、`AppProgress`。盒电量未知时只显示"未知"，不画进度条。
 2. `AppDashboardCard`（降噪快捷）：标题行"降噪模式"，右侧摘要 `已确认：X` 或 `等待设备确认`；`AppSegmented(标准/降噪/通透)`，只列出能力中存在的模式；确认模式为 ANC 或通透、且档位可写时，下方再放一行 `AppSegmented` 档位（文字 `1`/`3`/`5`，contentDescription 为 `降噪档位 3 档`）；最后一行 `AppArrowRow("更多降噪设置")`。
 3. `AppGroup`（功能）：`AppArrowRow` 依次为 均衡器（值为当前预设名）、触控操作、音频与设备（值为音频模式）、设备详情（值为型号配置）。显示条件与现在相同。**取代现在两列小卡片**，解决"左右耳独立设置"换行的问题。
-4. 有 `lastError` 时显示错误卡片。
-5. 有设置操作时显示 `AppArrowRow("最近设置操作", value = 设备已确认 / 查看请求与确认状态)`，点击进入诊断。
+4. 当前会话最新设置仅显示简短等待或结果反馈；错误旁提供 `查看详情` 进入诊断。普通首页不展示请求编号或操作历史块。
 
 **已连接，宽屏（内容宽度 ≥ 680dp）**：左列设备卡（插图高 260dp），右列放 2–3 项；两列比例 0.9 : 1.1，与现状一致。
 
-**未连接**：设备卡显示插图、`连接你的 ROSE 耳机` 或 `正在连接耳机`、摘要；按钮为 Primary `添加耳机`，连接中改为 Secondary `取消连接`。其下 `AppGroup { AppArrowRow("连接与运行状态", value = 原因) }`，再往下是错误信息和 `SettingOperationsCard`。
+**未连接**：设备卡显示插图、`连接你的 ROSE 耳机` 或 `正在连接耳机`、摘要；按钮为 Primary `添加耳机`，连接中改为 Secondary `取消连接`。其下 `AppGroup { AppArrowRow("连接与运行状态", value = 原因) }`，再往下只显示当前错误及其诊断入口，不展示旧会话操作记录。
 
 ### 6.2 添加耳机
 
@@ -258,7 +259,7 @@ when (style) {
 1. `AppGroup("降噪模式")`：`AppRadioGroup`，选项按 `noiseModeOrder` 排序，选中值为确认模式；页脚 `设备已确认：X`。
 2. `AppGroup("降噪档位")` / `AppGroup("通透档位")`：显示条件不变（`isVisibleIn(confirmedMode)`）。内容为 `AppSegmented`，文字 `N 档`。
 3. `AppGroup("降噪轮换")`：`AppCheckGroup`。单项的 enabled 为 `enabled && cycleKnown && canRemove`；页脚说明最少保留项数，或"尚无完整状态"。
-4. 底部 `SettingOperationsCard`。
+4. 页面顶部显示当前设置的简短等待、确认或失败结果；完整操作记录只在诊断页显示。
 
 ### 6.4 均衡器
 
@@ -277,7 +278,7 @@ when (style) {
    - 删除这一页的插图，删除 `TouchGestureRow` 的展开式按钮墙。
    - "触控槽选择"的状态改为表示"哪个手势的选择器打开"，并保留在外部。
    - 页脚 `修改的是触控绑定，不会立即执行播放、切歌或调节音量。`
-3. `SettingOperationsCard`。
+3. 页面顶部显示当前设置的简短等待、确认或失败结果；完整操作记录只在诊断页显示。
 
 ### 6.6 音频与设备
 
@@ -285,14 +286,14 @@ when (style) {
 2. `AppGroup("提示与音量")`：`AppChoiceRow("提示音音量")`，0 档显示为"关闭"。
 3. `AppGroup("输出与保护")`：`AppChoiceRow("增益档位")`、`AppChoiceRow("听力保护阈值")`；页脚 `阈值显示型号提供的选项，不表示测得声压或实际保护效果。`
 4. `AppGroup { AppArrowRow("设备详情") ; AppArrowRow("连接方式") }`。
-5. `AppButton("断开连接", Secondary)`，然后是 `SettingOperationsCard`。
+5. `AppButton("断开连接", Secondary)`。当前设置的简短反馈显示在页面顶部，完整操作记录只在诊断页显示。
 
 ### 6.7 设备详情 / 诊断与记录
 
 - `ConnectionDetailsCard` 改为 `AppGroup("当前连接")`，内含若干 `AppInfoRow`；选择原因和恢复信息放在页脚，或作为 `AppInfoRow` 的 summary。
 - `DeviceReadings` 改为 `AppGroup("设备状态")`，内含若干 `AppInfoRow`；"查看原始记录"改为 `AppArrowRow`，点击展开或收起（展开状态按会话保存，与现状一致）；原始记录保留 `SelectionContainer`。
 - `PlatformDiagnosticsCard` 改为 `AppGroup("系统状态")`：每项一个 `AppInfoRow`，状态文字使用 4.1 的 tone 映射；需要操作时，在该行下方放一个 `AppButton`。系统桥接、系统呈现记录同样改为分组加信息行，原有字段**一项都不能删**。
-- `SettingOperationsCard` 改为 `AppGroup("设置操作")`：每条操作一个块，标题为 `请求 #N：设置名`，summary 依次列出请求值、阶段、EQ 分步确认、错误、"已结束会话…"，文案不变。
+- `SettingOperationsCard` 仅在诊断页显示：每条操作一个块，标题为 `请求 #N：设置名`，summary 依次列出请求值、阶段、EQ 分步确认、错误和 `已结束会话…`。设备断开或连接新会话后，旧操作仍可追溯，且不得显示为当前会话的确认结果。
 
 ### 6.8 系统集成
 
