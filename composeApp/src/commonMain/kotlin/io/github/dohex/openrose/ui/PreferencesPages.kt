@@ -5,6 +5,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
@@ -28,9 +33,20 @@ import io.github.dohex.openrose.core.UserSettings
 internal fun PreferencesPage(
     state: ControlState,
     onChange: (UserSettings) -> Unit,
-    onDiagnostics: () -> Unit,
 ) {
     val settings = state.settings
+    var systemPreferenceFeedback by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(state.platform.systemIntegrationApplicability, state.platform.module) {
+        systemPreferenceFeedback = null
+    }
+    val saveSystemPreference: (UserSettings) -> Unit = { nextSettings ->
+        onChange(nextSettings)
+        systemPreferenceFeedback = if (state.platform.module == ModuleAvailability.Available) {
+            "偏好已保存。系统状态请查看系统页。"
+        } else {
+            "偏好已保存，待系统就绪后生效。"
+        }
+    }
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -71,7 +87,13 @@ internal fun PreferencesPage(
                     valueText = islandModeLabel(settings.islandMode),
                     options = IslandMode.entries.map { AppOption(it, islandModeLabel(it)) },
                     selected = settings.islandMode,
-                    onSelect = { onChange(settings.copy(islandMode = it)) },
+                    onSelect = { saveSystemPreference(settings.copy(islandMode = it)) },
+                )
+                AppSwitchRow(
+                    title = "焦点通知",
+                    summary = "连接期间保留耳机状态通知",
+                    checked = settings.focusNotificationEnabled,
+                    onChange = { saveSystemPreference(settings.copy(focusNotificationEnabled = it)) },
                 )
             }
 
@@ -99,9 +121,15 @@ internal fun PreferencesPage(
                             } else {
                                 settings.islandTriggers + trigger
                             }
-                            onChange(settings.copy(islandTriggers = triggers))
+                            saveSystemPreference(settings.copy(islandTriggers = triggers))
                         },
                     )
+                }
+            }
+
+            systemPreferenceFeedback?.let { message ->
+                AppGroup {
+                    AppText(message, role = AppTextRole.Summary)
                 }
             }
         }
@@ -120,17 +148,7 @@ internal fun PreferencesPage(
             }
         }
 
-        AppGroup(title = "状态与信息") {
-            AppArrowRow(
-                title = "运行状态与诊断",
-                summary = if (state.platform.hyperOsIntegrationApplicable) {
-                    "查看本平台蓝牙、系统模块与桥接状态"
-                } else {
-                    "查看本平台蓝牙与运行状态"
-                },
-                icon = RoseIcon.LOG,
-                onClick = onDiagnostics,
-            )
+        AppGroup(title = "关于") {
             AppInfoRow(
                 label = "关于 OpenRose",
                 value = "ROSE / ROSESELSA 耳机控制",
@@ -143,12 +161,10 @@ internal fun PreferencesPage(
 @Composable
 internal fun SystemIntegrationPage(
     state: ControlState,
-    onChange: (UserSettings) -> Unit,
     onRequestPermission: () -> Unit,
     onOpenSystemSettings: () -> Unit,
     onDiagnostics: () -> Unit,
 ) {
-    val settings = state.settings
     val hyperOsApplicable = state.platform.hyperOsIntegrationApplicable
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -160,17 +176,6 @@ internal fun SystemIntegrationPage(
 
         if (hyperOsApplicable) {
             IntegrationReadinessCard(state.platform.module)
-
-            AppGroup(
-                footnote = "此开关只控制耳机状态通知，与超级岛显示模式分别设置。",
-            ) {
-                AppSwitchRow(
-                    title = "焦点通知",
-                    summary = "连接期间保留耳机状态通知",
-                    checked = settings.focusNotificationEnabled,
-                    onChange = { onChange(settings.copy(focusNotificationEnabled = it)) },
-                )
-            }
         }
 
         AppGroup {
@@ -338,12 +343,12 @@ private fun IntegrationReadinessCard(module: ModuleAvailability) {
         )
         ModuleAvailability.NotEnabled -> Triple(
             "系统集成未就绪",
-            "偏好已保存，暂不产生系统展示。",
+            "系统模块尚未启用。",
             StatusTone.CAUTION,
         )
         is ModuleAvailability.Unavailable -> Triple(
             "系统集成未就绪",
-            "偏好已保存，暂不产生系统展示。${module.reason}",
+            "系统集成暂不可用。${module.reason}",
             StatusTone.CAUTION,
         )
     }

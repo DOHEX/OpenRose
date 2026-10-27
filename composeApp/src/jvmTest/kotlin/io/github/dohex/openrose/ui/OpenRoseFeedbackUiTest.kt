@@ -65,7 +65,9 @@ class OpenRoseFeedbackUiTest {
                 assertTrue(harness.hasText("正在处理设置，等待设备确认"), "control page feedback in $style")
                 assertFalse(harness.hasText("请求 #42：降噪模式"), "control pages must not show diagnostic records in $style")
 
-                harness.clickTab("诊断与记录")
+                harness.clickTab("系统集成")
+                harness.render()
+                harness.clickText("运行状态与诊断")
                 harness.render()
                 assertTrue(harness.hasText("请求 #42：降噪模式"), "diagnostics retain the request identity in $style")
                 assertTrue(harness.hasText("请求值：抗风噪"), "diagnostics retain the requested value in $style")
@@ -232,7 +234,9 @@ class OpenRoseFeedbackUiTest {
                 assertFalse(harness.hasText("设备已确认设置"), "the prior session must not become a new confirmation in $style")
                 assertFalse(harness.hasText("请求 #44：自定义 EQ"), "prior requests stay off the new session's home in $style")
 
-                harness.clickTab("诊断与记录")
+                harness.clickTab("系统集成")
+                harness.render()
+                harness.clickText("运行状态与诊断")
                 harness.render()
                 assertTrue(harness.hasText("请求 #44：自定义 EQ"), "diagnostics retain the old operation in $style")
                 assertTrue(harness.hasText("发送进度：2/2 步"), "diagnostics retain EQ write progress in $style")

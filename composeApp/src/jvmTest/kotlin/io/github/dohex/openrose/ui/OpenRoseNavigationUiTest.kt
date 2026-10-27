@@ -106,11 +106,14 @@ class OpenRoseNavigationUiTest {
             assertTrue(harness.hasText("组件风格"))
             assertTrue(harness.hasText("强制使用 BLE"))
             assertTrue(harness.hasText("超级岛"))
+            assertTrue(harness.hasText("焦点通知"))
+            assertFalse(harness.hasText("运行状态与诊断"))
 
             harness.clickTab("系统集成")
             harness.render()
             assertFalse(harness.hasText("超级岛"))
-            assertTrue(harness.hasText("焦点通知"))
+            assertFalse(harness.hasText("焦点通知"))
+            assertTrue(harness.hasText("运行状态与诊断"))
 
             harness.clickTab("设置")
             harness.render()
@@ -187,7 +190,9 @@ class OpenRoseNavigationUiTest {
             assertFalse(harness.hasText("设备状态"))
             assertFalse(harness.hasText("均衡器 / 音效"))
 
-            harness.clickTab("诊断与记录")
+            harness.clickTab("系统集成")
+            harness.render()
+            harness.clickText("运行状态与诊断")
             harness.render()
             assertTrue(harness.hasText("请求 #41：降噪模式"))
             assertTrue(harness.hasText("已结束会话 $SESSION_ID 的操作记录"))
