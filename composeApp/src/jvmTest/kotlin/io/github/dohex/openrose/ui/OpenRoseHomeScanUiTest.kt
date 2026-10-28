@@ -6,6 +6,7 @@ import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.ImageComposeScene
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.unit.Constraints
 import io.github.dohex.openrose.core.Appearance
 import io.github.dohex.openrose.core.ConnectionPhase
 import io.github.dohex.openrose.core.ConnectionState
@@ -32,6 +33,30 @@ import kotlin.test.assertTrue
 import kotlin.math.abs
 
 class OpenRoseHomeScanUiTest {
+    @Test
+    fun resizingDisconnectedHomeDoesNotEmitCallbacks() = runBlocking {
+        for (style in InterfaceStyle.entries) {
+            val harness = createHarness(1280, 1000, state(style))
+            try {
+                harness.render()
+                for (width in listOf(420, 1280)) {
+                    harness.resize(width, 1000)
+                    harness.render()
+                    assertTrue(harness.hasTab(if (width < 900) "耳机" else "我的耳机"),
+                        "navigation should reflect the resized width in $style")
+                    assertTrue(harness.permissionRequests.isEmpty(), "resizing must not request permission in $style")
+                    assertTrue(harness.systemSettingsOpens.isEmpty(), "resizing must not open settings in $style")
+                    assertTrue(harness.startScans.isEmpty() && harness.stopScans.isEmpty(), "resizing must not change scanning in $style")
+                    assertTrue(harness.connects.isEmpty() && harness.disconnects.isEmpty(), "resizing must not change connection in $style")
+                    assertTrue(harness.settingWrites.isEmpty(), "resizing must not send device settings in $style")
+                    assertTrue(harness.settingsChanges.isEmpty(), "resizing must not save preferences in $style")
+                }
+            } finally {
+                harness.close()
+            }
+        }
+    }
+
     @Test
     fun emptyNearbyMessageUsesThePageSurface() = runBlocking {
         for (style in InterfaceStyle.entries) {
@@ -451,10 +476,14 @@ class OpenRoseHomeScanUiTest {
         val connects = mutableListOf<DeviceId>()
         val disconnects = mutableListOf<Unit>()
         val settingWrites = mutableListOf<Pair<io.github.dohex.openrose.core.DeviceSetting, FieldValue>>()
+        val settingsChanges = mutableListOf<UserSettings>()
         val scene = createOpenRoseUiTestScene(width, height) {
             OpenRoseApp(
                 state = state.value,
-                onSettingsChange = { settings -> state.value = state.value.copy(settings = settings) },
+                onSettingsChange = { settings ->
+                    settingsChanges += settings
+                    state.value = state.value.copy(settings = settings)
+                },
                 onRequestPermission = { permissionRequests += Unit },
                 onOpenSystemSettings = { systemSettingsOpens += Unit },
                 onStartScan = { startScans += Unit },
@@ -474,6 +503,7 @@ class OpenRoseHomeScanUiTest {
             connects,
             disconnects,
             settingWrites,
+            settingsChanges,
         )
     }
 
@@ -492,7 +522,12 @@ class OpenRoseHomeScanUiTest {
         val connects: MutableList<DeviceId>,
         val disconnects: MutableList<Unit>,
         val settingWrites: MutableList<Pair<io.github.dohex.openrose.core.DeviceSetting, FieldValue>>,
-    ) : OpenRoseUiTestHarness(scene)
+        val settingsChanges: MutableList<UserSettings>,
+    ) : OpenRoseUiTestHarness(scene) {
+        fun resize(width: Int, height: Int) {
+            scene.constraints = Constraints.fixed(width, height)
+        }
+    }
 
     private companion object {
         const val SESSION_ID = 35L
