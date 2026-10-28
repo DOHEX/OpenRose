@@ -200,7 +200,7 @@ internal fun AppUnknownToggleRow(title: String, summary: String = "当前状态�
 }
 
 @Composable
-internal fun <T> AppRadioGroup(options: List<AppOption<T>>, selected: T?, enabled: Boolean = true, onSelect: (T) -> Unit) {
+internal fun <T> AppRadioGroup(options: List<AppOption<T>>, selected: T?, enabled: Boolean = true, transparentContainer: Boolean = false, onSelect: (T) -> Unit) {
     Column(Modifier.selectableGroup()) {
         options.forEach { option ->
             val optionModifier = Modifier.semantics {
@@ -213,7 +213,8 @@ internal fun <T> AppRadioGroup(options: List<AppOption<T>>, selected: T?, enable
                     onClick = { if (enabled) onSelect(option.value) }, modifier = optionModifier, enabled = enabled)
                 InterfaceStyle.MATERIAL3 -> ListItem(headlineContent = { Text(option.label) },
                     leadingContent = { RadioButton(selected != null && option.value == selected, onClick = null, enabled = enabled) },
-                    modifier = optionModifier.selectable(selected != null && option.value == selected, enabled, Role.RadioButton) { onSelect(option.value) }, colors = rowColors())
+                    modifier = optionModifier.selectable(selected != null && option.value == selected, enabled, Role.RadioButton) { onSelect(option.value) },
+                    colors = if (transparentContainer) ListItemDefaults.colors(containerColor = Color.Transparent) else rowColors())
             }
         }
     }
@@ -258,7 +259,7 @@ internal fun <T> AppChoiceRow(title: String, valueText: String, options: List<Ap
                 ArrowPreference(title, summary = valueText, enabled = enabled, onClick = { setOpen(true) })
                 OverlayDialog(show = isOpen, title = title, onDismissRequest = { setOpen(false) }) {
                     Column(Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState())) {
-                        AppRadioGroup(options, selected, enabled, select)
+                        AppRadioGroup(options, selected, enabled, onSelect = select)
                     }
                     AppButton("取消", { setOpen(false) }, kind = AppButtonKind.Secondary)
                 }
@@ -275,7 +276,7 @@ internal fun <T> AppChoiceRow(title: String, valueText: String, options: List<Ap
             }.focusable(), title = { Text(title) },
                 text = {
                     LaunchedEffect(Unit) { dialogFocusRequester.requestFocus() }
-                    Column(Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState())) { AppRadioGroup(options, selected, enabled, select) }
+                    Column(Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState())) { AppRadioGroup(options, selected, enabled, transparentContainer = true, onSelect = select) }
                 },
                 confirmButton = {}, dismissButton = { TextButton(onClick = { setOpen(false) }) { Text("取消") } })
         }
