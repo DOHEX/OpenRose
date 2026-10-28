@@ -15,9 +15,6 @@ import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.dohex.openrose.core.protocol.ModelProfile
 import io.github.dohex.openrose.core.transport.DeviceId
 import kotlinx.coroutines.runBlocking
-import java.awt.image.BufferedImage
-import java.io.ByteArrayInputStream
-import javax.imageio.ImageIO
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -30,7 +27,7 @@ class OpenRoseChoiceDialogUiTest {
         val scene = createOpenRoseUiTestScene(420, 900) {
             OpenRoseApp(state.value, { state.value = state.value.copy(settings = it) }, {}, {}, {}, {}, {}, {}, { _, _ -> })
         }
-        val harness = DialogHarness(scene)
+        val harness = OpenRoseUiTestHarness(scene)
         try {
             harness.render()
             harness.clickTab("设置")
@@ -41,7 +38,7 @@ class OpenRoseChoiceDialogUiTest {
                 node.config.getOrNull(SemanticsProperties.Role) == Role.RadioButton &&
                     node.config.getOrNull(SemanticsProperties.Text).orEmpty().any { it.text == "Miuix" }
             }.boundsInWindow
-            val image = harness.capture()
+            val image = harness.snapshot()
             val y = firstOption.top.toInt() + 4
             assertEquals(
                 image.getRGB(firstOption.left.toInt() - 2, y),
@@ -197,16 +194,5 @@ class OpenRoseChoiceDialogUiTest {
         fun focusedText(): String = nodes().lastOrNull {
             it.config.getOrNull(SemanticsProperties.Focused) == true
         }?.config?.getOrNull(SemanticsProperties.Text).orEmpty().joinToString(" ") { it.text }
-    }
-
-    private class DialogHarness(private val imageScene: ImageComposeScene) : OpenRoseUiTestHarness(imageScene) {
-        fun capture(): BufferedImage {
-            val image = imageScene.render(10_000_000_000L)
-            return try {
-                ImageIO.read(ByteArrayInputStream(image.encodeToData()!!.bytes))
-            } finally {
-                image.close()
-            }
-        }
     }
 }

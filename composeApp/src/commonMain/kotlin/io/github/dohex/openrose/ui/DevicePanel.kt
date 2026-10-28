@@ -67,6 +67,16 @@ internal fun HeadphonesPage(
                         onClick = { onNavigate(AppPage.DIAGNOSTICS) },
                     )
                 }
+                if (state.scan == ScanState.Scanning) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        AppBusyIndicator()
+                        AppText("正在寻找耳机…", role = AppTextRole.Summary)
+                    }
+                    AppButton("停止扫描", onStopScan, kind = AppButtonKind.Primary)
+                }
                 return@Column
             }
             val reason = when {
