@@ -4,6 +4,7 @@ package io.github.dohex.openrose.ui
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.ImageComposeScene
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
@@ -15,6 +16,9 @@ import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.unit.Density
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import java.awt.image.BufferedImage
+import java.io.ByteArrayInputStream
+import javax.imageio.ImageIO
 
 /** Common ImageComposeScene setup for public OpenRoseApp interaction tests. */
 internal suspend fun createOpenRoseUiTestScene(
@@ -69,6 +73,29 @@ internal open class OpenRoseUiTestHarness(protected val scene: ImageComposeScene
     fun hasClickableText(expected: String): Boolean = textNodes(expected).any { node ->
         node.hasAncestorOrSelf { it.config.getOrNull(SemanticsActions.OnClick) != null }
     }
+
+    fun clickableBounds(expected: String): Rect = textNodes(expected).firstNotNullOfOrNull { node ->
+        node.findAncestorOrSelf { it.config.getOrNull(SemanticsActions.OnClick) != null }
+    }?.boundsInRoot ?: error("No clickable node found for '$expected'")
+
+    fun textBounds(expected: String): Rect = textNodes(expected).firstOrNull()?.boundsInRoot
+        ?: error("No text node found for '$expected'")
+
+    fun snapshot(): BufferedImage {
+        val image = scene.render(nextFrameTimeNanos)
+        val data = requireNotNull(image.encodeToData())
+        return try {
+            ImageIO.read(ByteArrayInputStream(data.bytes))
+        } finally {
+            data.close()
+            image.close()
+        }
+    }
+
+    fun clickableContentDescriptionBounds(expected: String): Rect = nodes().firstOrNull {
+        it.config.getOrNull(SemanticsProperties.ContentDescription).orEmpty().contains(expected)
+    }?.findAncestorOrSelf { it.config.getOrNull(SemanticsActions.OnClick) != null }?.boundsInRoot
+        ?: error("No clickable node found for content description '$expected'")
 
     fun hasDisabledText(expected: String): Boolean = textNodes(expected).any { node ->
         node.hasAncestorOrSelf { it.config.contains(SemanticsProperties.Disabled) }

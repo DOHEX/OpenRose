@@ -17,10 +17,51 @@ import io.github.dohex.openrose.core.TransportAvailability
 import io.github.dohex.openrose.core.UserSettings
 import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class SystemSettingsOwnershipUiTest {
+    @Test
+    fun systemReadinessExplanationAlignsWithItsStatus() = runBlocking {
+        for (style in InterfaceStyle.entries) {
+            val harness = createHarness(1200, style, module = ModuleAvailability.NotEnabled)
+            try {
+                harness.render()
+                harness.clickTab("系统集成")
+                harness.render()
+                val status = harness.textBounds("就绪状态")
+                val explanation = harness.textBounds("系统模块尚未启用。")
+                assertTrue(explanation.left >= status.left && explanation.left < status.right,
+                    "the readiness explanation should align with its status in $style: $status $explanation")
+            } finally {
+                harness.close()
+            }
+        }
+    }
+
+    @Test
+    fun savedPreferenceMessageUsesThePageSurface() = runBlocking {
+        for (style in InterfaceStyle.entries) {
+            val harness = createHarness(1200, style)
+            try {
+                harness.render()
+                harness.clickTab("设置")
+                harness.render()
+                harness.clickText("焦点通知")
+                harness.render()
+                val message = harness.textBounds("偏好已保存，待系统就绪后生效。")
+                val control = harness.clickableBounds("焦点通知")
+                val image = harness.snapshot()
+                val y = message.center.y.toInt()
+                assertEquals(image.getRGB(control.right.toInt() + 24, y), image.getRGB(control.right.toInt() - 24, y),
+                    "the saved preference message should use the surrounding page surface in $style")
+            } finally {
+                harness.close()
+            }
+        }
+    }
+
     @Test
     fun hyperOsPreferencesLiveInSettingsAndDiagnosticsIsReachedOnlyFromSystem() = runBlocking {
         for (style in InterfaceStyle.entries) {

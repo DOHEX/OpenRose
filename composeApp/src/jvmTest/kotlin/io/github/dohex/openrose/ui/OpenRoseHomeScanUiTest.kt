@@ -6,6 +6,7 @@ import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.ImageComposeScene
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.unit.Constraints
 import io.github.dohex.openrose.core.Appearance
 import io.github.dohex.openrose.core.ConnectionPhase
 import io.github.dohex.openrose.core.ConnectionState
@@ -29,8 +30,105 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import kotlin.math.abs
 
 class OpenRoseHomeScanUiTest {
+    @Test
+    fun resizingDisconnectedHomeDoesNotEmitCallbacks() = runBlocking {
+        for (style in InterfaceStyle.entries) {
+            val harness = createHarness(1280, 1000, state(style))
+            try {
+                harness.render()
+                for (width in listOf(420, 1280)) {
+                    harness.resize(width, 1000)
+                    harness.render()
+                    assertTrue(harness.hasTab(if (width < 900) "耳机" else "我的耳机"),
+                        "navigation should reflect the resized width in $style")
+                    assertTrue(harness.permissionRequests.isEmpty(), "resizing must not request permission in $style")
+                    assertTrue(harness.systemSettingsOpens.isEmpty(), "resizing must not open settings in $style")
+                    assertTrue(harness.startScans.isEmpty() && harness.stopScans.isEmpty(), "resizing must not change scanning in $style")
+                    assertTrue(harness.connects.isEmpty() && harness.disconnects.isEmpty(), "resizing must not change connection in $style")
+                    assertTrue(harness.settingWrites.isEmpty(), "resizing must not send device settings in $style")
+                    assertTrue(harness.settingsChanges.isEmpty(), "resizing must not save preferences in $style")
+                }
+            } finally {
+                harness.close()
+            }
+        }
+    }
+
+    @Test
+    fun emptyNearbyMessageUsesThePageSurface() = runBlocking {
+        for (style in InterfaceStyle.entries) {
+            val harness = createHarness(1280, 1000, state(style))
+            try {
+                harness.render()
+                val message = harness.textBounds("还没有发现耳机。请确认耳机已开启并在附近。")
+                val details = harness.clickableBounds("连接与运行状态")
+                val image = harness.snapshot()
+                val y = message.center.y.toInt()
+                assertEquals(image.getRGB(details.right.toInt() + 24, y), image.getRGB(details.right.toInt() - 24, y),
+                    "the empty message should use the surrounding page surface in $style")
+            } finally {
+                harness.close()
+            }
+        }
+    }
+
+    @Test
+    fun disconnectedHomeStartsNearTheTopBar() = runBlocking {
+        for (style in InterfaceStyle.entries) {
+            val harness = createHarness(1280, 1000, state(style))
+            try {
+                harness.render()
+                val action = harness.clickableContentDescriptionBounds("添加耳机")
+                val title = harness.textBounds("连接你的 ROSE 耳机")
+                assertTrue(title.top - action.bottom < action.height,
+                    "home content should begin near the top bar in $style: action=$action title=$title")
+            } finally {
+                harness.close()
+            }
+        }
+    }
+
+    @Test
+    fun disconnectedHomeKeepsACompactCenteredColumnOnWideScreens() = runBlocking {
+        for (style in InterfaceStyle.entries) {
+            val harness = createHarness(1280, 1000, state(style))
+            try {
+                harness.render()
+                val title = harness.textBounds("连接你的 ROSE 耳机")
+                val instruction = harness.textBounds("让耳机保持开启，并靠近手机")
+                val nearby = harness.textBounds("附近设备")
+                val scan = harness.clickableBounds("扫描耳机")
+                val details = harness.clickableBounds("连接与运行状态")
+                assertTrue(details.width < 1280f * 2 / 3, "content should stay compact in $style: $details")
+                assertTrue(abs(details.center.x - 1280f / 2) < 1280f / 10, "content should be centered in $style: $details")
+                assertTrue(listOf(instruction.left, nearby.left, scan.left).all { abs(it - title.left) < 32f },
+                    "the column should read from a common left edge in $style")
+                assertTrue(title.top < instruction.top && instruction.top < nearby.top && nearby.top < scan.top,
+                    "instruction, nearby devices and scan should follow the title in $style")
+            } finally {
+                harness.close()
+            }
+        }
+    }
+
+    @Test
+    fun disconnectedHomeUsesARegularWidthScanActionOnWideScreens() = runBlocking {
+        for (style in InterfaceStyle.entries) {
+            val harness = createHarness(1280, 1000, state(style))
+            try {
+                harness.render()
+                val scan = harness.clickableBounds("扫描耳机")
+                assertTrue(scan.width < 1280f / 3, "scan action should not span the wide content area in $style: $scan")
+            } finally {
+                harness.close()
+            }
+        }
+    }
+
+
     @Test
     fun unavailableTransportShowsReasonAndDetailsWithoutConnectionEntrances() = runBlocking {
         for (style in InterfaceStyle.entries) {
@@ -378,10 +476,14 @@ class OpenRoseHomeScanUiTest {
         val connects = mutableListOf<DeviceId>()
         val disconnects = mutableListOf<Unit>()
         val settingWrites = mutableListOf<Pair<io.github.dohex.openrose.core.DeviceSetting, FieldValue>>()
+        val settingsChanges = mutableListOf<UserSettings>()
         val scene = createOpenRoseUiTestScene(width, height) {
             OpenRoseApp(
                 state = state.value,
-                onSettingsChange = { settings -> state.value = state.value.copy(settings = settings) },
+                onSettingsChange = { settings ->
+                    settingsChanges += settings
+                    state.value = state.value.copy(settings = settings)
+                },
                 onRequestPermission = { permissionRequests += Unit },
                 onOpenSystemSettings = { systemSettingsOpens += Unit },
                 onStartScan = { startScans += Unit },
@@ -401,6 +503,7 @@ class OpenRoseHomeScanUiTest {
             connects,
             disconnects,
             settingWrites,
+            settingsChanges,
         )
     }
 
@@ -419,7 +522,12 @@ class OpenRoseHomeScanUiTest {
         val connects: MutableList<DeviceId>,
         val disconnects: MutableList<Unit>,
         val settingWrites: MutableList<Pair<io.github.dohex.openrose.core.DeviceSetting, FieldValue>>,
-    ) : OpenRoseUiTestHarness(scene)
+        val settingsChanges: MutableList<UserSettings>,
+    ) : OpenRoseUiTestHarness(scene) {
+        fun resize(width: Int, height: Int) {
+            scene.constraints = Constraints.fixed(width, height)
+        }
+    }
 
     private companion object {
         const val SESSION_ID = 35L

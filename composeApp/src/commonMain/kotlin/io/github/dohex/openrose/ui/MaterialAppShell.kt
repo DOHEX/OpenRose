@@ -84,7 +84,7 @@ internal fun MaterialAppShell(backStack: List<AppPage>, page: AppPage, wide: Boo
         }
         Scaffold(modifier = Modifier.weight(1f).nestedScroll(scrollBehavior.nestedScrollConnection),
             topBar = {
-                if (page in mainPages) LargeTopAppBar(title = { Text(title) }, navigationIcon = navigation, actions = actions, scrollBehavior = scrollBehavior)
+                if (page in mainPages && !(page == AppPage.HEADPHONES && !connectedHome)) LargeTopAppBar(title = { Text(title) }, navigationIcon = navigation, actions = actions, scrollBehavior = scrollBehavior)
                 else TopAppBar(title = { Text(title) }, navigationIcon = navigation, actions = actions)
             },
             bottomBar = {
@@ -94,16 +94,18 @@ internal fun MaterialAppShell(backStack: List<AppPage>, page: AppPage, wide: Boo
                 }
             }) { padding ->
             Column(Modifier.fillMaxSize().verticalScroll(scrollState)) {
-                ShellPageContent(page, padding, pageContent)
+                ShellPageContent(page, padding, compactHome = page == AppPage.HEADPHONES && !connectedHome, pageContent)
             }
         }
     }
 }
 
 @Composable
-internal fun ShellPageContent(page: AppPage, padding: PaddingValues, pageContent: @Composable () -> Unit) {
+internal fun ShellPageContent(page: AppPage, padding: PaddingValues, compactHome: Boolean, pageContent: @Composable () -> Unit) {
     Column(Modifier.fillMaxWidth().padding(padding).consumeWindowInsets(padding), horizontalAlignment = Alignment.CenterHorizontally) {
-        Column(Modifier.widthIn(max = if (page == AppPage.HEADPHONES) 1120.dp else 800.dp).fillMaxWidth().padding(vertical = 12.dp),
+        val maxWidth = if (compactHome) 600.dp else if (page == AppPage.HEADPHONES) 1120.dp else 800.dp
+        Column(Modifier.widthIn(max = maxWidth).fillMaxWidth()
+            .padding(horizontal = if (compactHome) 16.dp else 0.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)) {
             pageContent()
         }
