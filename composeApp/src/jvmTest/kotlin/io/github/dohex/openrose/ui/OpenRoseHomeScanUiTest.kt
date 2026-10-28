@@ -22,6 +22,7 @@ import io.github.dohex.openrose.core.PlatformState
 import io.github.dohex.openrose.core.ScanState
 import io.github.dohex.openrose.core.TransportAvailability
 import io.github.dohex.openrose.core.UserSettings
+import io.github.dohex.openrose.core.protocol.FieldReading
 import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.dohex.openrose.core.protocol.ModelProfile
 import io.github.dohex.openrose.core.transport.DeviceId
@@ -146,15 +147,64 @@ class OpenRoseHomeScanUiTest {
                 assertFalse(harness.hasText("附近设备"))
                 assertFalse(harness.hasText("还没有发现耳机。请确认耳机已开启并在附近。"))
                 assertFalse(harness.hasText("扫描耳机"))
+                assertFalse(harness.hasText("停止扫描"))
 
                 harness.state.value = harness.state.value.copy(
-                    scan = ScanState.Scanning,
                     candidates = listOf(recognizedCandidate(DeviceId("previously-discovered"))),
                 )
                 harness.render()
                 assertFalse(harness.hasText("ROSE i5"))
                 assertFalse(harness.hasText("停止扫描"))
                 assertTrue(harness.stopScans.isEmpty())
+            } finally {
+                harness.close()
+            }
+        }
+    }
+
+    @Test
+    fun activeScanCanBeStoppedWhenTransportBecomesUnavailable() = runBlocking {
+        for (style in InterfaceStyle.entries) {
+            val harness = createHarness(420, 900, state(style))
+            try {
+                harness.render()
+                harness.clickText("扫描耳机")
+                assertEquals(1, harness.startScans.size)
+                harness.state.value = harness.state.value.copy(
+                    scan = ScanState.Scanning,
+                    candidates = listOf(recognizedCandidate(DeviceId("previously-discovered"))),
+                )
+                harness.render()
+
+                val reason = "蓝牙扫描所需的定位服务已关闭"
+                harness.state.value = harness.state.value.copy(
+                    platform = PlatformState(PermissionState.GRANTED, TransportAvailability.Unavailable(reason)),
+                )
+                harness.render()
+                assertTrue(harness.hasText(reason))
+                assertTrue(harness.hasText("正在寻找耳机…"))
+                assertTrue(harness.hasClickableText("停止扫描"))
+                assertFalse(harness.hasContentDescription("添加耳机"))
+                assertFalse(harness.hasText("附近设备"))
+                assertFalse(harness.hasText("ROSE i5"))
+                assertFalse(harness.hasText("扫描耳机"))
+                assertFalse(harness.hasText("重新扫描"))
+                assertEquals(1, harness.startScans.size)
+                assertTrue(harness.permissionRequests.isEmpty())
+                assertTrue(harness.systemSettingsOpens.isEmpty())
+                assertTrue(harness.connects.isEmpty())
+                assertTrue(harness.disconnects.isEmpty())
+                assertTrue(harness.settingWrites.isEmpty())
+                assertTrue(harness.stopScans.isEmpty())
+
+                harness.clickText("停止扫描")
+                assertEquals(1, harness.stopScans.size)
+                assertEquals(1, harness.startScans.size)
+                harness.state.value = harness.state.value.copy(scan = ScanState.Idle)
+                harness.render()
+                assertFalse(harness.hasText("停止扫描"))
+                assertFalse(harness.hasText("正在寻找耳机…"))
+                assertTrue(harness.hasClickableText("查看连接与运行状态"))
             } finally {
                 harness.close()
             }
@@ -378,18 +428,35 @@ class OpenRoseHomeScanUiTest {
                 assertEquals(listOf(id), harness.connects)
                 assertTrue(harness.settingWrites.isEmpty())
 
+                val profile = requireNotNull(candidate.profile)
                 harness.state.value = harness.state.value.copy(
                     connection = ConnectionState.Connecting(id, SESSION_ID, ConnectionPhase.DISCOVERING),
+                    device = DeviceState(
+                        deviceId = id,
+                        sessionId = SESSION_ID,
+                        profile = profile,
+                        capabilities = DeviceCapabilities(readableFields = profile.supportedFields),
+                        fields = profile.supportedFields.associateWith { FieldReading.Loading },
+                    ),
                 )
                 harness.render()
                 assertTrue(harness.hasText("正在发现耳机服务…"))
-                assertTrue(harness.hasText("取消连接"))
-                harness.clickText("取消连接")
+                assertFalse(harness.hasText("附近设备"))
+                harness.state.value = harness.state.value.copy(
+                    connection = ConnectionState.Connecting(id, SESSION_ID, ConnectionPhase.INITIALIZING),
+                )
+                harness.render()
+                assertTrue(harness.hasText("正在初始化并读取状态…"))
+                assertTrue(harness.hasText("读取中…"))
+                harness.clickContentDescription("耳机菜单")
+                harness.render()
+                harness.clickText("断开控制连接")
                 assertEquals(1, harness.disconnects.size)
                 assertEquals(listOf(id), harness.connects, "rendering the in-progress state must not reconnect")
 
                 harness.state.value = harness.state.value.copy(
                     connection = ConnectionState.Disconnected,
+                    device = null,
                     lastError = ControlError(ControlErrorCode.FAILED, "耳机服务发现失败"),
                 )
                 harness.render()
