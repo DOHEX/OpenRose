@@ -16,6 +16,7 @@ internal fun MiuixAppShell(backStack: List<AppPage>, page: AppPage, wide: Boolea
     onNavigate: (AppPage) -> Unit, onBack: () -> Unit, scrollState: ScrollState,
     pageContent: @Composable () -> Unit,
     connectedHome: Boolean = false,
+    showAddDeviceAction: Boolean = true,
     menuExpanded: Boolean = false,
     onMenuExpandedChange: (Boolean) -> Unit = {},
     onDisconnect: () -> Unit = {},
@@ -39,7 +40,7 @@ internal fun MiuixAppShell(backStack: List<AppPage>, page: AppPage, wide: Boolea
                         IconButton(onClick = { onMenuExpandedChange(true) }) {
                             Icon(RoseIcons[RoseIcon.MORE], "耳机菜单")
                         }
-                    } else {
+                    } else if (showAddDeviceAction) {
                         IconButton(onClick = { onNavigate(AppPage.ADD_DEVICE) }) {
                             Icon(RoseIcons.Plus, "添加耳机")
                         }

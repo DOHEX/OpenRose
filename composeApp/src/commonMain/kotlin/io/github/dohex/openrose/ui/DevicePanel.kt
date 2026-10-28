@@ -24,6 +24,9 @@ import io.github.dohex.openrose.core.protocol.*
 import io.github.dohex.openrose.core.transport.*
 
 internal fun ControlState.activeDevice(): DeviceState? = device?.takeIf { connection.matches(it) }
+internal fun PlatformState.transportUnavailableForHome(): Boolean =
+    permission in setOf(PermissionState.GRANTED, PermissionState.NOT_REQUIRED) &&
+        transport is TransportAvailability.Unavailable
 internal val ModelProfile.configurationLabel: String
     get() = when (this) { ModelProfile.I5_ZT -> "ZT"; ModelProfile.I7_RS_V2 -> "RS Common V2" }
 internal val ModelProfile.shortLabel: String
@@ -54,15 +57,22 @@ internal fun HeadphonesPage(
     ) {
         if (device == null) {
             AppText("连接你的 ROSE 耳机", role = AppTextRole.Title)
-            val reason = when (val transport = state.platform.transport) {
-                TransportAvailability.Available ->
-                    if (state.platform.permission in setOf(PermissionState.REQUIRED, PermissionState.DENIED)) {
-                        "需要蓝牙权限"
-                    } else {
-                        "等待连接耳机"
-                    }
-                TransportAvailability.Disabled -> "系统蓝牙已关闭"
-                is TransportAvailability.Unavailable -> transport.reason
+            if (state.platform.transportUnavailableForHome()) {
+                val transport = state.platform.transport as TransportAvailability.Unavailable
+                AppGroup {
+                    AppArrowRow(
+                        title = "查看连接与运行状态",
+                        summary = transport.reason,
+                        icon = RoseIcon.BLUETOOTH,
+                        onClick = { onNavigate(AppPage.DIAGNOSTICS) },
+                    )
+                }
+                return@Column
+            }
+            val reason = when {
+                state.platform.permission in setOf(PermissionState.REQUIRED, PermissionState.DENIED) -> "需要蓝牙权限"
+                state.platform.transport == TransportAvailability.Disabled -> "系统蓝牙已关闭"
+                else -> "等待连接耳机"
             }
             NearbyDevicesPanel(
                 state,

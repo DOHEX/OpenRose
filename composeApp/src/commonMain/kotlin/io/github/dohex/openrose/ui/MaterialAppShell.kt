@@ -26,6 +26,7 @@ internal fun MaterialAppShell(backStack: List<AppPage>, page: AppPage, wide: Boo
     onNavigate: (AppPage) -> Unit, onBack: () -> Unit, scrollState: ScrollState,
     pageContent: @Composable () -> Unit,
     connectedHome: Boolean = false,
+    showAddDeviceAction: Boolean = true,
     menuExpanded: Boolean = false,
     onMenuExpandedChange: (Boolean) -> Unit = {},
     onDisconnect: () -> Unit = {},
@@ -50,7 +51,7 @@ internal fun MaterialAppShell(backStack: List<AppPage>, page: AppPage, wide: Boo
                         IconButton(onClick = { onMenuExpandedChange(true) }) {
                             Icon(RoseIcons[RoseIcon.MORE], contentDescription = "耳机菜单")
                         }
-                    } else {
+                    } else if (showAddDeviceAction) {
                         IconButton(onClick = { onNavigate(AppPage.ADD_DEVICE) }) {
                             Icon(RoseIcons.Plus, contentDescription = "添加耳机")
                         }
