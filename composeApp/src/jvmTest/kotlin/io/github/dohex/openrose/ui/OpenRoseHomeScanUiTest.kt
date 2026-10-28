@@ -5,6 +5,7 @@ package io.github.dohex.openrose.ui
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.ImageComposeScene
+import androidx.compose.ui.input.key.Key
 import io.github.dohex.openrose.core.Appearance
 import io.github.dohex.openrose.core.ConnectionPhase
 import io.github.dohex.openrose.core.ConnectionState
@@ -30,6 +31,66 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class OpenRoseHomeScanUiTest {
+    @Test
+    fun unavailableTransportShowsReasonAndDetailsWithoutConnectionEntrances() = runBlocking {
+        for (style in InterfaceStyle.entries) {
+            val reason = "此平台没有耳机控制传输"
+            val harness = createHarness(
+                420,
+                900,
+                state(style).copy(platform = PlatformState(PermissionState.NOT_REQUIRED, TransportAvailability.Unavailable(reason))),
+            )
+            try {
+                harness.render()
+                assertTrue(harness.hasText(reason), "the host's reason should be visible in $style")
+                assertTrue(harness.hasClickableText("查看连接与运行状态"))
+                assertFalse(harness.hasContentDescription("添加耳机"))
+                assertFalse(harness.hasText("附近设备"))
+                assertFalse(harness.hasText("还没有发现耳机。请确认耳机已开启并在附近。"))
+                assertFalse(harness.hasText("扫描耳机"))
+
+                harness.state.value = harness.state.value.copy(
+                    scan = ScanState.Scanning,
+                    candidates = listOf(recognizedCandidate(DeviceId("previously-discovered"))),
+                )
+                harness.render()
+                assertFalse(harness.hasText("ROSE i5"))
+                assertFalse(harness.hasText("停止扫描"))
+                assertTrue(harness.stopScans.isEmpty())
+            } finally {
+                harness.close()
+            }
+        }
+    }
+
+    @Test
+    fun missingPermissionTakesPrecedenceOverAnUnavailableTransport() = runBlocking {
+        for (style in InterfaceStyle.entries) {
+            for (permission in listOf(PermissionState.REQUIRED, PermissionState.DENIED)) {
+                val reason = "授予权限后才能检查传输"
+                val harness = createHarness(
+                    420,
+                    900,
+                    state(style).copy(platform = PlatformState(permission, TransportAvailability.Unavailable(reason))),
+                )
+                try {
+                    harness.render()
+                    assertTrue(harness.hasText("需要蓝牙权限"))
+                    assertTrue(harness.hasClickableText("授予蓝牙权限"))
+                    assertTrue(harness.hasContentDescription("添加耳机"))
+                    assertTrue(harness.hasText("附近设备"))
+                    assertTrue(harness.hasDisabledButton("扫描耳机"))
+                    assertFalse(harness.hasText(reason), "the permission recovery is the current reason in $style")
+                    harness.clickText("授予蓝牙权限")
+                    assertEquals(1, harness.permissionRequests.size)
+                    assertTrue(harness.startScans.isEmpty())
+                } finally {
+                    harness.close()
+                }
+            }
+        }
+    }
+
     @Test
     fun disconnectedHomeShowsManualScanAndCanStopItInBothStylesAndLayouts() = runBlocking {
         for (style in InterfaceStyle.entries) {
@@ -105,9 +166,79 @@ class OpenRoseHomeScanUiTest {
                 )
                 harness.render()
                 assertTrue(harness.hasText(unavailableReason))
-                assertTrue(harness.hasDisabledButton("扫描耳机"))
+                assertFalse(harness.hasContentDescription("添加耳机"))
+                assertFalse(harness.hasText("附近设备"))
+                assertFalse(harness.hasText("还没有发现耳机。请确认耳机已开启并在附近。"))
+                assertFalse(harness.hasText("扫描耳机"))
                 assertEquals(1, harness.permissionRequests.size)
                 assertEquals(1, harness.systemSettingsOpens.size)
+            } finally {
+                harness.close()
+            }
+        }
+    }
+
+    @Test
+    fun unavailableHomeOpensDetailsAndRestoresManualActionsWhenTransportBecomesAvailable() = runBlocking {
+        for (style in InterfaceStyle.entries) {
+            val reason = "主机报告的实际传输原因"
+            val harness = createHarness(
+                420,
+                900,
+                state(style).copy(platform = PlatformState(PermissionState.GRANTED, TransportAvailability.Unavailable(reason))),
+            )
+            try {
+                harness.render()
+                harness.focus("查看连接与运行状态")
+                harness.sendKey(Key.Enter)
+                harness.render()
+                assertTrue(harness.hasText("当前连接"), "the visible action opens existing diagnostics in $style")
+                assertTrue(harness.hasText(reason))
+                harness.sendKey(Key.Escape)
+                harness.render()
+                assertTrue(harness.hasText("查看连接与运行状态"))
+
+                harness.clickTab("设置")
+                harness.render()
+                harness.clickText("组件风格")
+                harness.render()
+                harness.clickText(if (style == InterfaceStyle.MIUIX) "Material 3" else "Miuix")
+                harness.render()
+                harness.clickTab("耳机")
+                harness.render()
+                assertTrue(harness.hasText(reason))
+                assertFalse(harness.hasContentDescription("添加耳机"))
+                assertFalse(harness.hasText("附近设备"))
+
+                harness.state.value = harness.state.value.copy(
+                    platform = PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
+                )
+                harness.render()
+                assertTrue(harness.hasContentDescription("添加耳机"))
+                assertTrue(harness.hasText("附近设备"))
+                assertTrue(harness.hasClickableText("扫描耳机"))
+                assertTrue(harness.permissionRequests.isEmpty())
+                assertTrue(harness.systemSettingsOpens.isEmpty())
+                assertTrue(harness.startScans.isEmpty())
+                assertTrue(harness.connects.isEmpty())
+                assertTrue(harness.settingWrites.isEmpty())
+                harness.clickText("扫描耳机")
+                assertEquals(1, harness.startScans.size)
+
+                harness.focus("添加耳机")
+                harness.state.value = harness.state.value.copy(
+                    platform = PlatformState(PermissionState.GRANTED, TransportAvailability.Unavailable(reason)),
+                )
+                harness.render()
+                assertFalse(harness.hasContentDescription("添加耳机"))
+                harness.focus("查看连接与运行状态")
+                harness.sendKey(Key.Tab, shift = true)
+                harness.sendKey(Key.Tab)
+                harness.sendKey(Key.Spacebar)
+                harness.render()
+                assertTrue(harness.hasText("当前连接"), "the remaining action is reachable by keyboard in $style")
+                assertEquals(1, harness.startScans.size)
+                assertTrue(harness.connects.isEmpty())
             } finally {
                 harness.close()
             }
