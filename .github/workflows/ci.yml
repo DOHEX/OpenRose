@@ -1,0 +1,156 @@
+name: CI / Release
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref_type != 'tag' }}
+
+jobs:
+  build:
+    name: Build (${{ matrix.platform }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            platform: linux-x64
+          - os: windows-2025
+            platform: windows-x64
+    defaults:
+      run:
+        shell: bash
+    env:
+      SKIKO_RENDER_API: SOFTWARE
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Configure release version
+        if: github.ref_type == 'tag'
+        run: |
+          if [[ ! "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Release tags must use vMAJOR.MINOR.PATCH, for example v0.1.0."
+            exit 1
+          fi
+          echo "ORG_GRADLE_PROJECT_releaseVersion=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
+          echo "ORG_GRADLE_PROJECT_releaseVersionCode=$GITHUB_RUN_NUMBER" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21.0.11+10'
+
+      - uses: android-actions/setup-android@v4
+        with:
+          packages: 'platform-tools platforms;android-37.0 build-tools;37.0.0'
+
+      - uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
+
+      - name: Install Linux runtime libraries
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes libgtk-3-0t64 libegl1 libgl1 libfontconfig1
+
+      - name: Run checks and build applications
+        run: >-
+          ./gradlew --no-daemon --stacktrace
+          check offlineCheck
+          :androidApp:assembleDebug
+          :desktopApp:createDistributable
+
+      - name: Build signed Android release
+        if: github.ref_type == 'tag' && runner.os == 'Linux'
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          OPENROSE_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          OPENROSE_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          OPENROSE_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          : "${ANDROID_KEYSTORE_BASE64:?Set the ANDROID_KEYSTORE_BASE64 repository secret}"
+          : "${OPENROSE_KEYSTORE_PASSWORD:?Set the ANDROID_KEYSTORE_PASSWORD repository secret}"
+          : "${OPENROSE_KEY_ALIAS:?Set the ANDROID_KEY_ALIAS repository secret}"
+          : "${OPENROSE_KEY_PASSWORD:?Set the ANDROID_KEY_PASSWORD repository secret}"
+          export OPENROSE_KEYSTORE_PATH="$RUNNER_TEMP/openrose-release.jks"
+          trap 'rm -f "$OPENROSE_KEYSTORE_PATH"' EXIT
+          umask 077
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$OPENROSE_KEYSTORE_PATH"
+          ./gradlew --no-daemon --stacktrace :androidApp:assembleRelease
+          "$ANDROID_HOME/build-tools/37.0.0/apksigner" verify androidApp/build/outputs/apk/release/androidApp-release.apk
+
+      - name: Archive Linux application and Android APK
+        if: runner.os == 'Linux'
+        run: |
+          mkdir -p dist
+          tar -czf dist/OpenRose-linux-x64.tar.gz -C desktopApp/build/compose/binaries/main/app OpenRose
+          if [[ "$GITHUB_REF_TYPE" == tag ]]; then
+            cp androidApp/build/outputs/apk/release/androidApp-release.apk dist/OpenRose-android.apk
+          else
+            cp androidApp/build/outputs/apk/debug/androidApp-debug.apk dist/OpenRose-android-debug.apk
+          fi
+
+      - name: Archive Windows application
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Compress-Archive -Path desktopApp/build/compose/binaries/main/app/OpenRose -DestinationPath dist/OpenRose-windows-x64.zip
+
+      - name: Upload application packages
+        uses: actions/upload-artifact@v7
+        with:
+          name: packages-${{ matrix.platform }}
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+
+      - name: Upload test and lint reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: reports-${{ matrix.platform }}
+          path: |
+            **/build/reports/tests/**
+            **/build/test-results/**
+            **/build/reports/lint-results*
+          if-no-files-found: ignore
+          retention-days: 14
+
+  release:
+    name: Create draft release
+    if: github.event_name == 'push' && github.ref_type == 'tag'
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: packages-*
+          path: dist
+          merge-multiple: true
+
+      - name: Create draft release with verified packages
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: >-
+          gh release create "$GITHUB_REF_NAME" dist/*
+          --verify-tag --draft --generate-notes
+          --title "OpenRose $GITHUB_REF_NAME"

@@ -25,7 +25,7 @@ compose.desktop {
         nativeDistributions {
             targetFormats(TargetFormat.Deb, TargetFormat.Msi)
             packageName = "OpenRose"
-            packageVersion = "0.1.0"
+            packageVersion = providers.gradleProperty("releaseVersion").getOrElse("0.1.0")
         }
     }
 }

@@ -12,8 +12,8 @@ android {
         applicationId = "io.github.dohex.openrose"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0-dev"
+        versionCode = providers.gradleProperty("releaseVersionCode").map(String::toInt).getOrElse(1)
+        versionName = providers.gradleProperty("releaseVersion").getOrElse("0.1.0-dev")
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -22,6 +22,21 @@ android {
     buildFeatures {
         compose = true
         aidl = true
+    }
+    providers.environmentVariable("OPENROSE_KEYSTORE_PATH").orNull?.let { keystorePath ->
+        signingConfigs {
+            create("release") {
+                storeFile = file(keystorePath)
+                storePassword = providers.environmentVariable("OPENROSE_KEYSTORE_PASSWORD").get()
+                keyAlias = providers.environmentVariable("OPENROSE_KEY_ALIAS").get()
+                keyPassword = providers.environmentVariable("OPENROSE_KEY_PASSWORD").get()
+            }
+        }
+        buildTypes {
+            getByName("release") {
+                signingConfig = signingConfigs.getByName("release")
+            }
+        }
     }
 }
 kotlin {

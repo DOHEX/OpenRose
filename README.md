@@ -57,6 +57,10 @@ Android APK：`androidApp/build/outputs/apk/debug/androidApp-debug.apk`。桌面
 
 GTK 会尊重已有的 `GDK_BACKEND` 配置。如果启动环境显式设置了 `GDK_BACKEND=x11`，应用会使用 X11 / XWayland；可只为本次进程使用 `GDK_BACKEND=wayland ./gradlew :desktopApp:run`。共享 UI 热重载使用 `./gradlew :desktopApp:hotRunJvm --auto`；开发工具窗口设为无界面模式，以支持没有 X11 `DISPLAY` 的环境。验证方式与平台边界见 [Linux 窗口绘制记录](docs/verification/linux-window-rendering.md)。
 
+## CI / CD
+
+GitHub Actions 在拉取请求、`main` 推送、标签推送和手动运行时检查并构建 Android、Linux 和 Windows 产物。版本标签通过检查后会创建 Release 草稿；签名配置、产物和发布步骤见 [CI / CD 说明](docs/ci-cd.md)。
+
 ## 工程边界
 
 - `core`：公开 `ControlSession` 提供扫描、连接、状态观察、能力查询、断开与明确的不可用结果；纯 Kotlin i5 ZT / i7 RS Common V2 编解码与平台传输分开。测试从公开会话和独立协议向量读取可观察结果。
