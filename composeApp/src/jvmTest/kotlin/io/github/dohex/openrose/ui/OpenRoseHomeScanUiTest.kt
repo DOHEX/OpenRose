@@ -28,8 +28,80 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import kotlin.math.abs
 
 class OpenRoseHomeScanUiTest {
+    @Test
+    fun emptyNearbyMessageUsesThePageSurface() = runBlocking {
+        for (style in InterfaceStyle.entries) {
+            val harness = createHarness(1280, 1000, state(style))
+            try {
+                harness.render()
+                val message = harness.textBounds("还没有发现耳机。请确认耳机已开启并在附近。")
+                val details = harness.clickableBounds("连接与运行状态")
+                val image = harness.snapshot()
+                val y = message.center.y.toInt()
+                assertEquals(image.getRGB(details.right.toInt() + 24, y), image.getRGB(details.right.toInt() - 24, y),
+                    "the empty message should use the surrounding page surface in $style")
+            } finally {
+                harness.close()
+            }
+        }
+    }
+
+    @Test
+    fun disconnectedHomeStartsNearTheTopBar() = runBlocking {
+        for (style in InterfaceStyle.entries) {
+            val harness = createHarness(1280, 1000, state(style))
+            try {
+                harness.render()
+                val action = harness.clickableContentDescriptionBounds("添加耳机")
+                val title = harness.textBounds("连接你的 ROSE 耳机")
+                assertTrue(title.top - action.bottom < action.height,
+                    "home content should begin near the top bar in $style: action=$action title=$title")
+            } finally {
+                harness.close()
+            }
+        }
+    }
+
+    @Test
+    fun disconnectedHomeKeepsACompactCenteredColumnOnWideScreens() = runBlocking {
+        for (style in InterfaceStyle.entries) {
+            val harness = createHarness(1280, 1000, state(style))
+            try {
+                harness.render()
+                val title = harness.textBounds("连接你的 ROSE 耳机")
+                val instruction = harness.textBounds("让耳机保持开启，并靠近手机")
+                val nearby = harness.textBounds("附近设备")
+                val scan = harness.clickableBounds("扫描耳机")
+                val details = harness.clickableBounds("连接与运行状态")
+                assertTrue(details.width < 1280f * 2 / 3, "content should stay compact in $style: $details")
+                assertTrue(abs(details.center.x - 1280f / 2) < 1280f / 10, "content should be centered in $style: $details")
+                assertTrue(listOf(instruction.left, nearby.left, scan.left).all { abs(it - title.left) < 32f },
+                    "the column should read from a common left edge in $style")
+                assertTrue(title.top < instruction.top && instruction.top < nearby.top && nearby.top < scan.top,
+                    "instruction, nearby devices and scan should follow the title in $style")
+            } finally {
+                harness.close()
+            }
+        }
+    }
+
+    @Test
+    fun disconnectedHomeUsesARegularWidthScanActionOnWideScreens() = runBlocking {
+        for (style in InterfaceStyle.entries) {
+            val harness = createHarness(1280, 1000, state(style))
+            try {
+                harness.render()
+                val scan = harness.clickableBounds("扫描耳机")
+                assertTrue(scan.width < 1280f / 3, "scan action should not span the wide content area in $style: $scan")
+            } finally {
+                harness.close()
+            }
+        }
+    }
+
     @Test
     fun disconnectedHomeShowsManualScanAndCanStopItInBothStylesAndLayouts() = runBlocking {
         for (style in InterfaceStyle.entries) {

@@ -111,7 +111,7 @@ internal fun AppText(text: String, modifier: Modifier = Modifier, role: AppTextR
 }
 
 @Composable
-internal fun AppGroup(title: String? = null, footnote: String? = null, titleTrailing: (@Composable () -> Unit)? = null, content: @Composable ColumnScope.() -> Unit) {
+internal fun AppGroup(title: String? = null, footnote: String? = null, titleTrailing: (@Composable () -> Unit)? = null, plain: Boolean = false, content: @Composable ColumnScope.() -> Unit) {
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         when (LocalInterfaceStyle.current) {
             InterfaceStyle.MIUIX -> {
@@ -121,7 +121,8 @@ internal fun AppGroup(title: String? = null, footnote: String? = null, titleTrai
                         titleTrailing?.let { Box(Modifier.padding(end = 16.dp)) { it() } }
                     }
                 }
-                MiuixCard(Modifier.fillMaxWidth().padding(horizontal = 12.dp), content = content)
+                if (plain) Column(Modifier.fillMaxWidth().padding(start = 28.dp), content = content)
+                else MiuixCard(Modifier.fillMaxWidth().padding(horizontal = 12.dp), content = content)
             }
             InterfaceStyle.MATERIAL3 -> {
                 title?.let { label ->
@@ -130,7 +131,7 @@ internal fun AppGroup(title: String? = null, footnote: String? = null, titleTrai
                         titleTrailing?.invoke()
                     }
                 }
-                Column(Modifier.fillMaxWidth(), content = content)
+                Column(Modifier.fillMaxWidth().padding(start = if (plain) 16.dp else 0.dp), content = content)
             }
         }
         footnote?.let { AppText(it, Modifier.padding(horizontal = 16.dp), role = AppTextRole.Footnote) }

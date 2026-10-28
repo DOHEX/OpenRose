@@ -401,13 +401,13 @@ private fun NearbyDevicesPanel(
             }
         }
 
+        val candidates = state.candidates.sortedWith(
+            compareByDescending<DeviceCandidate> { it.profile != null }
+                .thenBy { it.deviceId.value },
+        )
         AppGroup(title = "附近设备", titleTrailing = {
             if (state.scan == ScanState.Scanning) AppBusyIndicator()
-        }) {
-            val candidates = state.candidates.sortedWith(
-                compareByDescending<DeviceCandidate> { it.profile != null }
-                    .thenBy { it.deviceId.value },
-            )
+        }, plain = candidates.isEmpty()) {
             if (candidates.isEmpty()) {
                 AppText(
                     if (state.scan == ScanState.Scanning) {
@@ -460,7 +460,6 @@ private fun NearbyDevicesPanel(
             },
             onClick = if (state.scan == ScanState.Scanning) onStopScan else onStartScan,
             enabled = if (state.scan == ScanState.Scanning) true else canScan && idle,
-            modifier = Modifier.fillMaxWidth(),
             kind = AppButtonKind.Primary,
         )
     }
