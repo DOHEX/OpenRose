@@ -80,6 +80,54 @@ class ControlSession(
     private var generation = 0L
     private var operationId = 0L
     private var active: Attempt? = null
+    private var audioDrivenSessionDeviceId: DeviceId? = null
+    private var autoConnectJob: Job? = null
+
+    init {
+        if (transport != null) {
+            scope.launch(start = CoroutineStart.UNDISPATCHED) {
+                transport.audioConnectedDevice.collect { audioDeviceId ->
+                    handleAudioConnectedDevice(audioDeviceId)
+                }
+            }
+        }
+    }
+
+    private suspend fun handleAudioConnectedDevice(audioDeviceId: DeviceId?) {
+        if (audioDeviceId == null) {
+            if (audioDrivenSessionDeviceId != null) {
+                disconnect()
+            }
+        } else {
+            if (audioDrivenSessionDeviceId != null && audioDrivenSessionDeviceId != audioDeviceId) {
+                disconnect()
+            }
+            if (state.value.connection is ConnectionState.Disconnected) {
+                val candidate = findCandidate(audioDeviceId)
+                if (candidate?.profile != null) {
+                    audioDrivenSessionDeviceId = audioDeviceId
+                    autoConnectJob?.cancel()
+                    autoConnectJob = scope.launch {
+                        connectInternal(audioDeviceId, isAudioDriven = true)
+                    }
+                }
+            }
+        }
+    }
+
+    private suspend fun findCandidate(deviceId: DeviceId): DeviceCandidate? {
+        state.value.candidates.firstOrNull { it.deviceId == deviceId }?.let { return it }
+        val bonded = runCatching { transport?.bondedDevices()?.firstOrNull { it.deviceId == deviceId } }.getOrNull()
+        if (bonded != null) {
+            updateState { old ->
+                if (old.candidates.none { it.deviceId == bonded.deviceId }) {
+                    old.copy(candidates = old.candidates + bonded)
+                } else old
+            }
+            return bonded
+        }
+        return null
+    }
 
     private class Attempt(val id: Long, val candidate: DeviceCandidate, val forceBle: Boolean) {
         lateinit var task: Deferred<OperationResult>
@@ -136,14 +184,21 @@ class ControlSession(
         updateState { it.copy(scan = ScanState.Idle) }
     }
 
-    suspend fun connect(deviceId: DeviceId): OperationResult {
+    suspend fun connect(deviceId: DeviceId): OperationResult = connectInternal(deviceId, isAudioDriven = false)
+
+    private suspend fun connectInternal(deviceId: DeviceId, isAudioDriven: Boolean): OperationResult {
         platformError()?.let { return failure(it) }
-        val candidate = state.value.candidates.firstOrNull { it.deviceId == deviceId }
+        val candidate = findCandidate(deviceId)
         if (candidate?.profile == null) return failure(ControlError(ControlErrorCode.UNSUPPORTED, "没有受支持的型号识别证据"))
         stopScan()
+        if (!isAudioDriven) {
+            autoConnectJob?.cancel()
+            autoConnectJob = null
+        }
         val attempt = lifecycle.withLock {
             active?.takeIf { it.candidate.deviceId == deviceId && state.value.connection !is ConnectionState.Disconnected }?.let { return@withLock it }
             clearActive()
+            audioDrivenSessionDeviceId = if (isAudioDriven) deviceId else null
             val next = Attempt(++generation, candidate, state.value.settings.forceBle)
             val profile = requireNotNull(candidate.profile)
             updateState {
@@ -156,16 +211,23 @@ class ControlSession(
             next
         }
         attempt.task.start()
-        return try {
+        val result = try {
             attempt.task.await()
         } catch (cancelled: CancellationException) {
             if (!currentCoroutineContext().isActive) throw cancelled
             // Disconnect cancels the owned operation, without cancelling another caller's scope.
             OperationResult.Failure(ControlError(ControlErrorCode.DISCONNECTED, "连接会话已结束"))
         }
+        if (result !is OperationResult.Success && audioDrivenSessionDeviceId == deviceId) {
+            audioDrivenSessionDeviceId = null
+        }
+        return result
     }
 
     suspend fun disconnect() {
+        audioDrivenSessionDeviceId = null
+        autoConnectJob?.cancel()
+        autoConnectJob = null
         lifecycle.withLock {
             clearActive()
             updateState { it.copy(connection = ConnectionState.Disconnected, device = null, lastError = null, connectionRecovery = null) }

@@ -1,7 +1,9 @@
 package io.github.dohex.openrose.core.transport
 
 import io.github.dohex.openrose.core.ConnectionPhase
+import io.github.dohex.openrose.core.DeviceCandidate
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emptyFlow
 
 @JvmInline
 value class DeviceId(val value: String)
@@ -70,6 +72,8 @@ interface ControlTransport {
     /** Unclassified setup timeouts may be retried only when the adapter explicitly supports it. */
     val supportsInitializationRecovery: Boolean get() = false
     suspend fun connectionFacts(deviceId: DeviceId, classicAddress: String?): TransportFacts = TransportFacts()
+    suspend fun bondedDevices(): List<DeviceCandidate> = emptyList()
+    val audioConnectedDevice: Flow<DeviceId?> get() = emptyFlow()
     suspend fun connect(
         deviceId: DeviceId,
         endpoint: TransportEndpoint,
