@@ -226,6 +226,8 @@ fun OpenRoseApp(
                 }
                 val renderShell: @Composable (AppPage, Boolean) -> Unit = { targetPage, isSecondary ->
                     ProvideInterfaceStyle(state.settings.interfaceStyle, dark) {
+                        val activeMainTab = (navBackStack.firstOrNull() as? Route.Main)?.tab ?: AppPage.HEADPHONES
+                        val currentBackStack = if (isSecondary) listOf(activeMainTab, targetPage) else listOf(targetPage)
                         val showBottomBar = !wide && !isSecondary && navBackStack.size == 1 && targetPage in mainPages
                         val shellContent: @Composable () -> Unit = { pageContentFor(targetPage) }
                         val shellFeedback: @Composable () -> Unit = { feedbackContentFor(targetPage) }
@@ -235,6 +237,7 @@ fun OpenRoseApp(
 
                         when (state.settings.interfaceStyle) {
                             InterfaceStyle.MIUIX -> MiuixAppShell(
+                                backStack = currentBackStack,
                                 page = targetPage,
                                 wide = wide,
                                 onNavigate = onNavigate,
@@ -251,6 +254,7 @@ fun OpenRoseApp(
                                 feedbackContent = shellFeedback,
                             )
                             InterfaceStyle.MATERIAL3 -> MaterialAppShell(
+                                backStack = currentBackStack,
                                 page = targetPage,
                                 wide = wide,
                                 onNavigate = onNavigate,
