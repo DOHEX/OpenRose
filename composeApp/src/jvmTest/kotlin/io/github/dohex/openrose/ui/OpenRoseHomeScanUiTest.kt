@@ -35,6 +35,31 @@ import kotlin.math.abs
 
 class OpenRoseHomeScanUiTest {
     @Test
+    fun crowdedDiscoveryNamesRecognizedHeadsetsAndKeepsScanActionsAheadOfTheList() = runBlocking {
+        for (style in InterfaceStyle.entries) {
+            val headset = recognizedCandidate(DeviceId("recognized-i5")).copy(name = null)
+            val others = (1..30).map { index ->
+                headset.copy(deviceId = DeviceId("other-$index"), name = "其他设备 $index", profile = null)
+            }
+            val harness = createHarness(420, 900, state(style).copy(candidates = others + headset))
+            try {
+                harness.render()
+                assertTrue(harness.hasText("EarFree i5"), "identified headsets need a readable fallback name in $style")
+                assertFalse(harness.hasText("未知型号配置，无法连接"), "unrelated devices start collapsed in $style")
+                assertTrue(harness.clickableBounds("扫描耳机").bottom < harness.textBounds("附近设备").top)
+                assertTrue(harness.clickableBounds("连接与运行状态").bottom < harness.textBounds("附近设备").top)
+                harness.clickText("显示其他设备（30）")
+                harness.render()
+                assertTrue(harness.hasText("未知型号配置，无法连接"))
+                assertEquals(1, harness.countText("连接"), "only the recognized headset can connect")
+                assertTrue(harness.startScans.isEmpty() && harness.connects.isEmpty())
+            } finally {
+                harness.close()
+            }
+        }
+    }
+
+    @Test
     fun resizingDisconnectedHomeDoesNotEmitCallbacks() = runBlocking {
         for (style in InterfaceStyle.entries) {
             val harness = createHarness(1280, 1000, state(style))
@@ -107,8 +132,8 @@ class OpenRoseHomeScanUiTest {
                 assertTrue(abs(details.center.x - 1280f / 2) < 1280f / 10, "content should be centered in $style: $details")
                 assertTrue(listOf(instruction.left, nearby.left, scan.left).all { abs(it - title.left) < 32f },
                     "the column should read from a common left edge in $style")
-                assertTrue(title.top < instruction.top && instruction.top < nearby.top && nearby.top < scan.top,
-                    "instruction, nearby devices and scan should follow the title in $style")
+                assertTrue(title.top < instruction.top && instruction.top < scan.top && scan.top < nearby.top,
+                    "scan actions should precede nearby devices in $style")
             } finally {
                 harness.close()
             }
@@ -405,6 +430,9 @@ class OpenRoseHomeScanUiTest {
             )
             val harness = createHarness(420, 900, state(style).copy(candidates = listOf(candidate)))
             try {
+                harness.render()
+                assertFalse(harness.hasText("未知型号配置，无法连接"))
+                harness.clickText("显示其他设备（1）")
                 harness.render()
                 assertTrue(harness.hasText("未知型号配置，无法连接"))
                 assertFalse(harness.hasClickableText("连接"))

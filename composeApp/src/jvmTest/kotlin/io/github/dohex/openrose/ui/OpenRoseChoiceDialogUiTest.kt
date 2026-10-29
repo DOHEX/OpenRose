@@ -62,6 +62,10 @@ class OpenRoseChoiceDialogUiTest {
                     harness.render()
                     harness.clickText("音频与设备")
                     harness.render()
+                    if (style == InterfaceStyle.MIUIX && reading is FieldReading.Known) {
+                        assertEquals(1, harness.countText("1 档"), "the current choice is displayed once")
+                        assertFalse(harness.hasText("1"), "the raw value is not repeated as a summary")
+                    }
                     harness.clickText("提示音音量")
                     harness.render()
                     if (reading is FieldReading.Unknown) {

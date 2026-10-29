@@ -34,6 +34,88 @@ import kotlin.test.assertTrue
 
 class OpenRoseConnectedHomeUiTest {
     @Test
+    fun notificationNavigationReturnsToHeadphonesWithoutChangingTheControlSession() = runBlocking {
+        for (style in InterfaceStyle.entries) {
+            val initial = connectedState(style)
+            val harness = createHarness(420, 900, initial)
+            try {
+                harness.render()
+                harness.clickTab("设置")
+                harness.render()
+                harness.clickText("组件风格")
+                harness.render()
+                harness.homeNavigationRequest.value++
+                harness.render()
+                assertTrue(harness.hasContentDescription("耳机菜单"))
+                assertTrue(harness.hasText("已连接 · 控制会话已就绪"))
+                assertFalse(harness.hasText("组件风格"))
+                assertEquals(initial.connection, harness.state.value.connection)
+                assertTrue(harness.connects.isEmpty() && harness.disconnects.isEmpty())
+                assertTrue(harness.settingWrites.isEmpty() && harness.startScans.isEmpty())
+            } finally {
+                harness.close()
+            }
+        }
+    }
+
+    @Test
+    fun i7QuickModesIncludeAutomaticAndDynamicNoiseControl() = runBlocking {
+        for (style in InterfaceStyle.entries) {
+            val initial = connectedState(style)
+            val device = requireNotNull(initial.device)
+            val profile = ModelProfile.I7_RS_V2
+            val harness = createHarness(420, 900, initial.copy(
+                connection = ConnectionState.Connected(device.deviceId, SESSION_ID, profile, ConnectionPhase.READY),
+                device = device.copy(profile = profile, capabilities = device.capabilities.copy(
+                    noiseControl = noiseControlCapabilities(profile),
+                ), fields = device.fields + (DeviceField.NOISE_MODE to FieldReading.Known(FieldValue.Text("auto"), "auto"))),
+            ))
+            try {
+                harness.render()
+                assertTrue(harness.hasSelectedText("自动"))
+                assertTrue(harness.hasClickableText("动态降噪"))
+                harness.clickText("动态降噪")
+                assertEquals(DeviceSetting.NOISE_MODE, harness.settingWrites.single().first)
+                assertEquals(FieldValue.Text("dynamic"), harness.settingWrites.single().second)
+                assertTrue(harness.hasSelectedText("自动"))
+            } finally {
+                harness.close()
+            }
+        }
+    }
+
+    @Test
+    fun windQuickModeKeepsItsConfirmedSelectionUntilTheDeviceReportsAnotherMode() = runBlocking {
+        for (style in InterfaceStyle.entries) {
+            val initial = connectedState(style)
+            val device = requireNotNull(initial.device)
+            val harness = createHarness(420, 900, initial.copy(
+                device = device.copy(fields = device.fields +
+                    (DeviceField.NOISE_MODE to FieldReading.Known(FieldValue.Text("wind"), "wind"))),
+            ))
+            try {
+                harness.render()
+                assertTrue(harness.hasSelectedText("抗风噪"))
+                harness.clickText("通透")
+                val expectedWrites: List<Pair<DeviceSetting, FieldValue>> =
+                    listOf(DeviceSetting.NOISE_MODE to FieldValue.Text("transparency"))
+                assertEquals(expectedWrites, harness.settingWrites)
+                harness.render()
+                assertTrue(harness.hasSelectedText("抗风噪"), "a click alone does not confirm a new mode in $style")
+                val current = requireNotNull(harness.state.value.device)
+                harness.state.value = harness.state.value.copy(
+                    device = current.copy(fields = current.fields +
+                        (DeviceField.NOISE_MODE to FieldReading.Known(FieldValue.Text("transparency"), "transparency"))),
+                )
+                harness.render()
+                assertTrue(harness.hasSelectedText("通透"))
+            } finally {
+                harness.close()
+            }
+        }
+    }
+
+    @Test
     fun connectedHomeDisconnectMenuReturnsToNearbyDevicesWithoutOtherCommands() = runBlocking {
         for (style in InterfaceStyle.entries) {
             for ((width, height) in listOf(420 to 900, 1200 to 1000)) {
@@ -268,6 +350,7 @@ class OpenRoseConnectedHomeUiTest {
 
     private suspend fun createHarness(width: Int, height: Int, initialState: ControlState): ConnectedHomeHarness {
         val state = mutableStateOf(initialState)
+        val homeNavigationRequest = mutableStateOf(0L)
         val disconnects = mutableListOf<Unit>()
         val connects = mutableListOf<DeviceId>()
         val startScans = mutableListOf<Unit>()
@@ -283,9 +366,10 @@ class OpenRoseConnectedHomeUiTest {
                 onConnect = { connects += it },
                 onDisconnect = { disconnects += Unit },
                 onSet = { setting, value -> settingWrites += setting to value },
+                homeNavigationRequest = homeNavigationRequest.value,
             )
         }
-        return ConnectedHomeHarness(scene, state, disconnects, connects, startScans, settingWrites)
+        return ConnectedHomeHarness(scene, state, disconnects, connects, startScans, settingWrites, homeNavigationRequest)
     }
 
     private class ConnectedHomeHarness(
@@ -295,6 +379,7 @@ class OpenRoseConnectedHomeUiTest {
         val connects: MutableList<DeviceId>,
         val startScans: MutableList<Unit>,
         val settingWrites: MutableList<Pair<DeviceSetting, FieldValue>>,
+        val homeNavigationRequest: MutableState<Long>,
     ) : OpenRoseUiTestHarness(scene)
 
     private companion object {

@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.dp
 internal fun MaterialAppShell(backStack: List<AppPage>, page: AppPage, wide: Boolean,
     onNavigate: (AppPage) -> Unit, onBack: () -> Unit, scrollState: ScrollState,
     pageContent: @Composable () -> Unit,
+    feedbackContent: @Composable () -> Unit = {},
     connectedHome: Boolean = false,
     showAddDeviceAction: Boolean = true,
     menuExpanded: Boolean = false,
@@ -93,10 +94,22 @@ internal fun MaterialAppShell(backStack: List<AppPage>, page: AppPage, wide: Boo
                         onClick = { onNavigate(destination) }, icon = { AppIcon(destination.icon) }, label = { Text(destination.navigationLabel) }) }
                 }
             }) { padding ->
-            Column(Modifier.fillMaxSize().verticalScroll(scrollState)) {
-                ShellPageContent(page, padding, compactHome = page == AppPage.HEADPHONES && !connectedHome, pageContent)
+            Box(Modifier.fillMaxSize()) {
+                Column(Modifier.fillMaxSize().verticalScroll(scrollState)) {
+                    ShellPageContent(page, padding, compactHome = page == AppPage.HEADPHONES && !connectedHome, pageContent)
+                }
+                ShellFeedback(padding, feedbackContent)
             }
         }
+    }
+}
+
+@Composable
+internal fun BoxScope.ShellFeedback(padding: PaddingValues, content: @Composable () -> Unit) {
+    Box(Modifier.align(Alignment.BottomCenter)
+        .padding(bottom = padding.calculateBottomPadding())
+        .widthIn(max = 600.dp).fillMaxWidth().padding(16.dp)) {
+        content()
     }
 }
 

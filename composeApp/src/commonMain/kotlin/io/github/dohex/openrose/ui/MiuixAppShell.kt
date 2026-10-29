@@ -15,6 +15,7 @@ import top.yukonga.miuix.kmp.basic.*
 internal fun MiuixAppShell(backStack: List<AppPage>, page: AppPage, wide: Boolean,
     onNavigate: (AppPage) -> Unit, onBack: () -> Unit, scrollState: ScrollState,
     pageContent: @Composable () -> Unit,
+    feedbackContent: @Composable () -> Unit = {},
     connectedHome: Boolean = false,
     showAddDeviceAction: Boolean = true,
     menuExpanded: Boolean = false,
@@ -80,8 +81,11 @@ internal fun MiuixAppShell(backStack: List<AppPage>, page: AppPage, wide: Boolea
                         onClick = { onNavigate(destination) }, icon = RoseIcons[destination.icon], label = destination.navigationLabel) }
                 }
             }) { padding ->
-            Column(Modifier.fillMaxSize().verticalScroll(scrollState)) {
-                ShellPageContent(page, padding, compactHome = page == AppPage.HEADPHONES && !connectedHome, pageContent)
+            Box(Modifier.fillMaxSize()) {
+                Column(Modifier.fillMaxSize().verticalScroll(scrollState)) {
+                    ShellPageContent(page, padding, compactHome = page == AppPage.HEADPHONES && !connectedHome, pageContent)
+                }
+                ShellFeedback(padding, feedbackContent)
             }
         }
     }

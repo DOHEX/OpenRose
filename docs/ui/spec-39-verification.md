@@ -1,5 +1,37 @@
 # 规格 #39：集成验收记录
 
+## 2026-10-29 真机体验修复
+
+在原有规格布局上补充真机发现的体验修复：识别到型号但广播名称缺失时显示型号名，扫描与停止入口位于候选列表前，其他设备默认折叠；首页展示型号允许的全部降噪模式；操作反馈覆盖在内容区底部，成功后显示 3 秒，跨页不重播；Miuix 选择器只显示一次选中值。控制连接操作统一写为“断开控制连接”。
+
+耳机状态通知增加 Activity PendingIntent 和 BigTextStyle。点击通知返回耳机页并关闭选择弹窗，复用当前 Activity 与控制会话；保留原有通知控制动作、会话校验和设备回报确认。
+
+本地完整命令 `mise exec -- ./gradlew --console=plain check offlineCheck :androidApp:assembleDebug :desktopApp:createDistributable` 成功，Android lint 和两项分发构建通过。共 409 项测试通过：core JVM 与 Android host 各 176 项、共享 UI 55 项、Android unit 2 项。新增回归覆盖拥挤扫描列表、型号名称回退、其他设备展开、反馈位置与消退、历史确认不重播、i5/i7 模式入口、Miuix 选中值单次展示，以及通知导航不重连或重发命令。
+
+逐图查看 12 张离屏截图：两套风格下 360dp 浅色的扫描页、i5 首页、设置页及降噪反馈，另有 400dp 深色 i7 首页。i7 模式和深色布局的证据限于合成状态，没有 i7 真机验收。
+
+真机环境为小米 14、Android 17、HyperOS `OS4.0.0.27.XNCCNXM` 和 EarFree i5（ZT）。以下结果来自实际操作：
+
+- 发现 43 台其他设备时，i5 型号名与连接按钮清楚可见，其他设备保持折叠。
+- Miuix 与 Material 3 首页都显示抗风噪入口和设备确认后的选中态；风格切换后控制连接正常。
+- 发送降噪模式设置时，反馈出现在内容区底部，模式标题及四个选项的位置不变；成功提示随后消退，进入音频页没有残留。
+- Miuix 设置页只显示一次选中值；音频页提示音音量显示一次“2 档”，断开按钮使用“断开控制连接”。
+- 从设置页点击状态通知，实际返回耳机页。该 ROM 需要双指向外展开通知卡片，展开后可见“降噪关闭／降噪／通透”三个动作。
+- 点击通知的“降噪”，设备回报主动降噪，通知与应用均更新；随后在应用恢复抗风噪并收到设备确认。
+- 断开控制连接后状态通知撤销，系统 A2DP 与 HFP 音频连接仍保持活动；随后重新连接控制会话。
+
+复验结束恢复 Miuix、跟随系统和抗风噪。均衡器为“日系柔情 · HIFI”，LDAC、多点关闭、提示音音量 2 档均保持原值。
+
+| 真机复核对象 | 截图 |
+| --- | --- |
+| 扫描入口、型号名及折叠设备 | [扫描页](images/spec-39/phone-discovery.png) |
+| Miuix 首页及抗风噪选中态 | [首页](images/spec-39/phone-home.png) |
+| Material 3 首页及抗风噪选中态 | [首页](images/spec-39/phone-material3.png) |
+| 底部操作反馈 | [反馈](images/spec-39/phone-feedback.png) |
+| Miuix 选中值单次展示 | [设置页](images/spec-39/phone-settings.png) |
+
+上述本地命令与手机安装包来自包含既有系统模块和构建工具调整的工作区；这些原有调整单独留在本地。本分支提交范围是界面与通知体验修复，独立提交结果另由 PR 的 Linux/Windows CI 验证。真机结果不作为官方连接提示、超级岛、i7 或 HyperOS 3 的新增验收证据。
+
 2026-10-28。集成分支为 `codex/spec-39-ui`，基线为 `355a318`。规格与子票：[#39](https://github.com/DOHEX/OpenRose/issues/39)、[#40](https://github.com/DOHEX/OpenRose/issues/40)、[#41](https://github.com/DOHEX/OpenRose/issues/41)、[#42](https://github.com/DOHEX/OpenRose/issues/42)。
 
 ## 实现规则

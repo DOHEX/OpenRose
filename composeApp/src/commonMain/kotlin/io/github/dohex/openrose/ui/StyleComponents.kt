@@ -252,7 +252,7 @@ internal fun <T> AppChoiceRow(title: String, valueText: String, options: List<Ap
             if (selected != null && selectedIndex >= 0 && (!isOpen || dropdownOpenedHere)) {
                 key(dropdownGeneration) {
                     OverlayDropdownPreference(items = options.map { it.label }, selectedIndex = selectedIndex, title = title,
-                        summary = valueText, enabled = enabled,
+                        enabled = enabled,
                         onExpandedChange = { dropdownOpenedHere = it; setOpen(it) },
                         onSelectedIndexChange = { select(options[it].value) })
                 }
