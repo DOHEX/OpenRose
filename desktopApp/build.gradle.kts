@@ -8,7 +8,7 @@ plugins {
 }
 kotlin {
     jvmToolchain(21)
-    jvm { compilerOptions { jvmTarget.set(JvmTarget.JVM_17) } }
+    jvm { compilerOptions { jvmTarget.set(JvmTarget.JVM_21) } }
     sourceSets {
         jvmMain.dependencies {
             implementation(project(":composeApp"))

@@ -20,6 +20,7 @@ material3 = { module = "org.jetbrains.compose.material3:material3", version.ref 
 miuix-preference = { module = "top.yukonga.miuix.kmp:miuix-preference", version.ref = "miuix" }
 miuix-ui = { module = "top.yukonga.miuix.kmp:miuix-ui", version.ref = "miuix" }
 miuix-icons = { module = "top.yukonga.miuix.kmp:miuix-icons", version.ref = "miuix" }
+miuix-nav = { module = "top.yukonga.miuix.kmp:miuix-nav", version.ref = "miuix" }
 activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activity" }
 libxposed-api = { module = "io.github.libxposed:api", version.ref = "libxposed-api" }
 libxposed-service = { module = "io.github.libxposed:service", version.ref = "libxposed-service" }
@@ -32,3 +33,4 @@ android-library = { id = "com.android.kotlin.multiplatform.library", version.ref
 android-application = { id = "com.android.application", version.ref = "agp" }
 compose-multiplatform = { id = "org.jetbrains.compose", version.ref = "compose" }
 compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
