@@ -85,12 +85,21 @@ class ControlSession(
 
     init {
         if (transport != null) {
+            scope.launch {
+                refreshBondedDevices()
+            }
             scope.launch(start = CoroutineStart.UNDISPATCHED) {
                 transport.audioConnectedDevice.collect { audioDeviceId ->
+                    refreshBondedDevices()
                     handleAudioConnectedDevice(audioDeviceId)
                 }
             }
         }
+    }
+
+    suspend fun refreshBondedDevices() {
+        val bonded = runCatching { transport?.bondedDevices() }.getOrNull() ?: emptyList()
+        updateState { it.copy(bondedDevices = bonded) }
     }
 
     private suspend fun handleAudioConnectedDevice(audioDeviceId: DeviceId?) {

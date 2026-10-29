@@ -79,18 +79,41 @@ internal fun HeadphonesPage(
                 }
                 return@Column
             }
-            val reason = when {
-                state.platform.permission in setOf(PermissionState.REQUIRED, PermissionState.DENIED) -> "需要蓝牙权限"
-                state.platform.transport == TransportAvailability.Disabled -> "系统蓝牙已关闭"
-                else -> "等待连接耳机"
-            }
-            AppGroup {
-                AppArrowRow(
-                    title = "连接与运行状态",
-                    value = reason,
-                    icon = RoseIcon.BLUETOOTH,
-                    onClick = { onNavigate(AppPage.DIAGNOSTICS) },
-                )
+            val bondedRose = state.bondedDevices.filter { it.profile != null }
+            if (bondedRose.isNotEmpty()) {
+                AppGroup(title = "已配对设备") {
+                    val connecting = state.connection as? ConnectionState.Connecting
+                    bondedRose.forEach { paired ->
+                        val isConnecting = connecting?.deviceId == paired.deviceId
+                        AppDashboardCard {
+                            Row(
+                                Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.weight(1f),
+                                ) {
+                                    AppIcon(RoseIcon.HEADPHONES)
+                                    Column {
+                                        AppText(paired.name?.takeIf(String::isNotBlank) ?: paired.profile!!.displayName)
+                                        paired.profile?.let {
+                                            AppText(it.configurationLabel, role = AppTextRole.Summary)
+                                        }
+                                    }
+                                }
+                                AppButton(
+                                    text = if (isConnecting) "连接中…" else "连接",
+                                    onClick = { onConnect(paired.deviceId) },
+                                    enabled = connecting == null,
+                                    kind = AppButtonKind.Primary,
+                                )
+                            }
+                        }
+                    }
+                }
             }
             NearbyDevicesPanel(
                 state,
@@ -445,17 +468,20 @@ private fun NearbyDevicesPanel(
             }
         }
 
+        val hasBondedRose = state.bondedDevices.any { it.profile != null }
         AppButton(
             text = if (state.scan == ScanState.Scanning) {
                 "停止扫描"
             } else if (failure != null) {
                 "重新扫描"
+            } else if (hasBondedRose) {
+                "扫描新设备"
             } else {
                 "扫描耳机"
             },
             onClick = if (state.scan == ScanState.Scanning) onStopScan else onStartScan,
             enabled = if (state.scan == ScanState.Scanning) true else canScan && idle,
-            kind = AppButtonKind.Primary,
+            kind = if (hasBondedRose && state.scan != ScanState.Scanning) AppButtonKind.Secondary else AppButtonKind.Primary,
         )
 
         val candidates = state.candidates.filter { it.profile != null }.sortedBy { it.deviceId.value }

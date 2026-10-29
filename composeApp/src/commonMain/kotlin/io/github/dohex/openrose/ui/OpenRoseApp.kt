@@ -192,7 +192,6 @@ fun OpenRoseApp(
                                         AppArrowRow("设备详情", icon = RoseIcon.INFO) { navigate(AppPage.DETAILS) }
                                         AppArrowRow("连接方式", value = state.controlTransportLabel(), icon = RoseIcon.BLUETOOTH) { navigate(AppPage.DIAGNOSTICS) }
                                     }
-                                    AppButton("断开控制连接", onDisconnect, modifier = Modifier.padding(horizontal = 16.dp), kind = AppButtonKind.Secondary)
                                 }
                                 AppPage.DETAILS -> {
                                     ConnectionDetailsCard(state, onDisconnect)
@@ -233,7 +232,7 @@ fun OpenRoseApp(
                             onBack = ::back,
                             scrollState = scrollStates.getValue(targetPage),
                             connectedHome = state.activeDevice() != null,
-                            showAddDeviceAction = !state.platform.transportUnavailableForHome(),
+                            showAddDeviceAction = (state.activeDevice() != null) && !state.platform.transportUnavailableForHome(),
                             menuExpanded = headphoneMenuExpanded,
                             onMenuExpandedChange = { headphoneMenuExpanded = it },
                             onDisconnect = onDisconnect,
@@ -249,7 +248,7 @@ fun OpenRoseApp(
                             onBack = ::back,
                             scrollState = scrollStates.getValue(targetPage),
                             connectedHome = state.activeDevice() != null,
-                            showAddDeviceAction = !state.platform.transportUnavailableForHome(),
+                            showAddDeviceAction = (state.activeDevice() != null) && !state.platform.transportUnavailableForHome(),
                             menuExpanded = headphoneMenuExpanded,
                             onMenuExpandedChange = { headphoneMenuExpanded = it },
                             onDisconnect = onDisconnect,
