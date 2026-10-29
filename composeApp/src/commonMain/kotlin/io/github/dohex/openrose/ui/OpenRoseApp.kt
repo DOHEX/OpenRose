@@ -55,9 +55,10 @@ fun OpenRoseApp(
         Appearance.DARK -> true
     }
     val navBackStack = rememberNavBackStack<Route>(Route.Main(AppPage.HEADPHONES))
+    val mainTabsPagerState = rememberMainTabsPagerState(initialPage = 0)
     val currentRoute = (navBackStack.lastOrNull() as? Route) ?: Route.Main(AppPage.HEADPHONES)
     val page = when (currentRoute) {
-        is Route.Main -> currentRoute.tab
+        is Route.Main -> mainPages.getOrElse(mainTabsPagerState.selectedPage) { AppPage.HEADPHONES }
         else -> currentRoute.toAppPage()
     }
     val scrollStates = remember { AppPage.entries.associateWith { ScrollState(0) } }
@@ -73,7 +74,7 @@ fun OpenRoseApp(
             while (navBackStack.size > 1) {
                 navBackStack.removeLastOrNull()
             }
-            navBackStack[0] = Route.Main(AppPage.HEADPHONES)
+            mainTabsPagerState.selectPage(0, animated = false)
             headphoneMenuExpanded = false
             choiceDialog.value = null
             selectedTouchSlot = null
@@ -87,7 +88,10 @@ fun OpenRoseApp(
             while (navBackStack.size > 1) {
                 navBackStack.removeLastOrNull()
             }
-            navBackStack[0] = Route.Main(destination)
+            val targetIndex = mainPages.indexOf(destination)
+            if (targetIndex >= 0) {
+                mainTabsPagerState.selectPage(targetIndex, animated = state.settings.pageTransition != PageTransition.NONE)
+            }
         } else {
             val target = destination.toRoute()
             if (navBackStack.lastOrNull() != target) {
@@ -101,8 +105,8 @@ fun OpenRoseApp(
             selectedTouchSlot != null -> selectedTouchSlot = null
             choiceDialog.value != null -> choiceDialog.value = null
             navBackStack.size > 1 -> navBackStack.removeLastOrNull()
-            currentRoute is Route.Main && currentRoute.tab != AppPage.HEADPHONES -> {
-                navBackStack[0] = Route.Main(AppPage.HEADPHONES)
+            mainTabsPagerState.selectedPage != 0 -> {
+                mainTabsPagerState.selectPage(0, animated = state.settings.pageTransition != PageTransition.NONE)
             }
         }
     }
@@ -110,7 +114,7 @@ fun OpenRoseApp(
         selectedTouchSlot != null ||
         choiceDialog.value != null ||
         navBackStack.size > 1 ||
-        (currentRoute is Route.Main && currentRoute.tab != AppPage.HEADPHONES)
+        (currentRoute is Route.Main && mainTabsPagerState.selectedPage != 0)
     PlatformBackHandler(
         canGoBack,
         ::back,
@@ -124,7 +128,7 @@ fun OpenRoseApp(
             while (navBackStack.size > 1) {
                 navBackStack.removeLastOrNull()
             }
-            navBackStack[0] = Route.Main(AppPage.HEADPHONES)
+            mainTabsPagerState.selectPage(0, animated = false)
         }
     }
     CompositionLocalProvider(LocalChoiceDialog provides choiceDialog) {
@@ -226,7 +230,7 @@ fun OpenRoseApp(
                 }
                 val renderShell: @Composable (AppPage, Boolean) -> Unit = { targetPage, isSecondary ->
                     ProvideInterfaceStyle(state.settings.interfaceStyle, dark) {
-                        val activeMainTab = (navBackStack.firstOrNull() as? Route.Main)?.tab ?: AppPage.HEADPHONES
+                        val activeMainTab = mainPages.getOrElse(mainTabsPagerState.selectedPage) { AppPage.HEADPHONES }
                         val currentBackStack = if (isSecondary) listOf(activeMainTab, targetPage) else listOf(targetPage)
                         val showBottomBar = !wide && !isSecondary && navBackStack.size == 1 && targetPage in mainPages
                         val shellContent: @Composable () -> Unit = { pageContentFor(targetPage) }
@@ -273,15 +277,54 @@ fun OpenRoseApp(
                         }
                     }
                 }
+                val renderMainShell: @Composable () -> Unit = {
+                    ProvideInterfaceStyle(state.settings.interfaceStyle, dark) {
+                        val isConnectedHome = state.activeDevice() != null
+                        val showAdd = isConnectedHome && !state.platform.transportUnavailableForHome()
+                        val animatedTabTransition = state.settings.pageTransition != PageTransition.NONE
+                        val onNavigate: (AppPage) -> Unit = { navigate(it) }
+
+                        when (state.settings.interfaceStyle) {
+                            InterfaceStyle.MIUIX -> MiuixMainShell(
+                                pagerState = mainTabsPagerState,
+                                wide = wide,
+                                onNavigate = onNavigate,
+                                scrollStates = scrollStates,
+                                pageContentFor = { targetPage -> pageContentFor(targetPage) },
+                                pageFeedbackFor = { targetPage -> feedbackContentFor(targetPage) },
+                                connectedHome = isConnectedHome,
+                                showAddDeviceAction = showAdd,
+                                menuExpanded = headphoneMenuExpanded,
+                                onMenuExpandedChange = { headphoneMenuExpanded = it },
+                                onDisconnect = onDisconnect,
+                                animatedTabTransition = animatedTabTransition,
+                            )
+                            InterfaceStyle.MATERIAL3 -> MaterialMainShell(
+                                pagerState = mainTabsPagerState,
+                                wide = wide,
+                                onNavigate = onNavigate,
+                                scrollStates = scrollStates,
+                                pageContentFor = { targetPage -> pageContentFor(targetPage) },
+                                pageFeedbackFor = { targetPage -> feedbackContentFor(targetPage) },
+                                connectedHome = isConnectedHome,
+                                showAddDeviceAction = showAdd,
+                                menuExpanded = headphoneMenuExpanded,
+                                onMenuExpandedChange = { headphoneMenuExpanded = it },
+                                onDisconnect = onDisconnect,
+                                animatedTabTransition = animatedTabTransition,
+                            )
+                        }
+                    }
+                }
                 NavDisplay(
                     backStack = navBackStack,
                     transition = pageTransitionOf(state.settings.pageTransition),
                     onBack = ::back,
                     modifier = Modifier.fillMaxSize(),
                 ) {
-                    entry<Route.Main> { mainRoute ->
+                    entry<Route.Main> {
                         Box(if (currentRoute is Route.Main) Modifier.fillMaxSize() else Modifier.fillMaxSize().clearAndSetSemantics { }) {
-                            renderShell(mainRoute.tab, false)
+                            renderMainShell()
                         }
                     }
                     entry<Route.Noise>(swipeDismiss = NavSwipeDirection.LeftToRight) {
