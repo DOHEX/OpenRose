@@ -8,6 +8,7 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
 import io.github.dohex.openrose.core.ConnectionPhase
+import io.github.dohex.openrose.core.DeviceCandidate
 import io.github.dohex.openrose.core.transport.Advertisement
 import io.github.dohex.openrose.core.transport.ControlConnection
 import io.github.dohex.openrose.core.transport.ControlTransport
@@ -30,6 +31,10 @@ internal class AndroidControlTransport(context: Context) : ControlTransport {
 
     override suspend fun connectionFacts(deviceId: DeviceId, classicAddress: String?): TransportFacts =
         audioProfiles.connectionFacts(deviceId, classicAddress)
+    override val audioConnectedDevice: Flow<DeviceId?> = audioProfiles.audioConnectedDevice
+
+    override suspend fun bondedDevices(): List<DeviceCandidate> = audioProfiles.bondedDevices()
+
 
     @SuppressLint("MissingPermission") // SPP verifies runtime permission before accessing adapter state.
     override suspend fun connect(
