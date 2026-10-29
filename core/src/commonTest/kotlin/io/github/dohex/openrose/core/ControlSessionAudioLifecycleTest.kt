@@ -267,18 +267,44 @@ class ControlSessionAudioLifecycleTest {
     fun modelProfileMatchRecognizesRoseDeviceNames() {
         assertEquals(ModelProfile.I5_ZT, ModelProfile.match("EarFree i5"))
         assertEquals(ModelProfile.I5_ZT, ModelProfile.match("ROSE i5"))
-        assertEquals(ModelProfile.I5_ZT, ModelProfile.match("i5"))
         assertEquals(ModelProfile.I5_ZT, ModelProfile.match("EARFREE I5"))
 
         assertEquals(ModelProfile.I7_RS_V2, ModelProfile.match("EarFeel i7"))
         assertEquals(ModelProfile.I7_RS_V2, ModelProfile.match("ROSE i7"))
-        assertEquals(ModelProfile.I7_RS_V2, ModelProfile.match("i7"))
         assertEquals(ModelProfile.I7_RS_V2, ModelProfile.match("EARFEEL I7"))
 
+        assertEquals(null, ModelProfile.match("iPhone 15"))
+        assertEquals(null, ModelProfile.match("ThinkPad i7"))
         assertEquals(null, ModelProfile.match("Sony WH-1000XM4"))
         assertEquals(null, ModelProfile.match("AirPods Pro"))
         assertEquals(null, ModelProfile.match(null))
         assertEquals(null, ModelProfile.match(""))
+    }
+
+    @Test
+    fun nonRoseAudioDeviceConnectionDoesNotDisconnectActiveRoseSession() = runTest {
+        val i5 = DeviceCandidate(DeviceId("i5-mac"), "EarFree i5", -50, ModelProfile.I5_ZT, "")
+        val transport = TestAudioTransport(TestAudioConnection(i5Replies), bondedList = listOf(i5))
+        val session = ControlSession(
+            initialPlatformState = PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
+            transport = transport,
+            scope = backgroundScope,
+            timing = SessionTiming(i5WriteIntervalMillis = 0),
+        )
+
+        // Auto-connects to i5
+        transport.audioDeviceFlow.emit(DeviceId("i5-mac"))
+        runCurrent()
+        advanceUntilIdle()
+        assertIs<ConnectionState.Connected>(session.state.value.connection)
+
+        // Non-ROSE audio device connects (e.g. car bluetooth, external speaker)
+        transport.audioDeviceFlow.emit(DeviceId("car-bluetooth"))
+        runCurrent()
+        advanceUntilIdle()
+        // Active ROSE session must NOT be disconnected!
+        assertIs<ConnectionState.Connected>(session.state.value.connection)
+        assertEquals(DeviceId("i5-mac"), (session.state.value.connection as ConnectionState.Connected).deviceId)
     }
 
     private class TestAudioTransport(

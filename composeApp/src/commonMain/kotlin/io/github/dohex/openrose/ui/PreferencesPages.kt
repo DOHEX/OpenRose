@@ -82,12 +82,7 @@ internal fun PreferencesPage(
             AppChoiceRow(
                 title = "转场动效",
                 valueText = pageTransitionLabel(settings.pageTransition),
-                options = listOf(
-                    AppOption(PageTransition.MIUIX_SPRING, "Miuix 弹性滑动"),
-                    AppOption(PageTransition.SLIDE, "标准平移"),
-                    AppOption(PageTransition.FADE, "淡入淡出"),
-                    AppOption(PageTransition.NONE, "关闭动效"),
-                ),
+                options = PageTransition.entries.map { AppOption(it, pageTransitionLabel(it)) },
                 selected = settings.pageTransition,
                 onSelect = { onChange(settings.copy(pageTransition = it)) },
             )
