@@ -22,6 +22,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import io.github.dohex.openrose.MainActivity
 import io.github.dohex.openrose.bridge.BridgePresentationWire
 import io.github.dohex.openrose.bridge.BridgeWire
 import org.json.JSONObject
@@ -239,6 +240,16 @@ internal class SystemPresentationRenderer(
                 .setSmallIcon(android.R.drawable.stat_sys_data_bluetooth)
                 .setContentTitle(title)
                 .setContentText(body)
+                .setStyle(Notification.BigTextStyle().bigText(body))
+                .setContentIntent(PendingIntent.getActivity(
+                    appContext,
+                    STATUS_NOTIFICATION_ID,
+                    Intent(MainActivity.ACTION_SHOW_HEADPHONES).apply {
+                        setClassName(BridgeWire.APP_PACKAGE, "${BridgeWire.APP_PACKAGE}.MainActivity")
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                    },
+                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+                ))
                 .setWhen(0L)
                 .setShowWhen(false)
                 .setOnlyAlertOnce(true)

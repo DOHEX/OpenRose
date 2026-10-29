@@ -196,7 +196,7 @@ internal fun ControlState.hasPendingSetting(device: DeviceState): Boolean = sett
     it.sessionId == device.sessionId && it.stage in pendingSettingStages
 }
 
-private fun DeviceSetting.displayName(): String = when (this) {
+internal fun DeviceSetting.displayName(): String = when (this) {
     DeviceSetting.NOISE_MODE -> "降噪模式"
     DeviceSetting.ANC_LEVEL -> "降噪档位"
     DeviceSetting.TRANSPARENCY_LEVEL -> "通透档位"

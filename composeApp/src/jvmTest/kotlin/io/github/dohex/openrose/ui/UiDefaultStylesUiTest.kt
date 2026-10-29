@@ -27,6 +27,9 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class UiDefaultStylesUiTest {
+    private fun rowValueLabel(style: InterfaceStyle, value: String?): String =
+        if (style == InterfaceStyle.MIUIX && value != null) "选项 $value" else confirmedLabel(value)
+
     @Test
     fun unknownChoiceHasNoSelectedRadioAndKeepsDeviceValueUntilExternalConfirmation() = runBlocking {
         for (style in InterfaceStyle.entries) {
@@ -50,7 +53,7 @@ class UiDefaultStylesUiTest {
 
                 harness.selected.value = "B"
                 harness.render()
-                assertTrue(harness.hasText("设备已确认：B"))
+                assertTrue(harness.hasText(rowValueLabel(style, "B")))
             } finally {
                 harness.close()
             }
@@ -68,10 +71,10 @@ class UiDefaultStylesUiTest {
                 harness.clickText("选项 B")
                 harness.render()
                 assertEquals(listOf("B"), harness.requests)
-                assertTrue(harness.hasText("设备已确认：A"))
+                assertTrue(harness.hasText(rowValueLabel(style, "A")))
                 harness.selected.value = "B"
                 harness.render()
-                assertTrue(harness.hasText("设备已确认：B"))
+                assertTrue(harness.hasText(rowValueLabel(style, "B")))
             } finally {
                 harness.close()
             }
@@ -126,13 +129,13 @@ class UiDefaultStylesUiTest {
                     harness.render()
                     assertEquals(listOf("B"), harness.requests)
                     assertTrue(
-                        harness.hasText(confirmedLabel(initialSelection)),
+                        harness.hasText(rowValueLabel(harness.style.value, initialSelection)),
                         "a request must leave the displayed value unchanged until device confirmation",
                     )
 
                     harness.selected.value = "B"
                     harness.render()
-                    assertTrue(harness.hasText("设备已确认：B"))
+                    assertTrue(harness.hasText(rowValueLabel(harness.style.value, "B")))
                 } finally {
                     harness.close()
                 }

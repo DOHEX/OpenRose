@@ -24,6 +24,9 @@ import io.github.dohex.openrose.core.protocol.*
 import io.github.dohex.openrose.core.transport.*
 
 internal fun ControlState.activeDevice(): DeviceState? = device?.takeIf { connection.matches(it) }
+internal fun PlatformState.transportUnavailableForHome(): Boolean =
+    permission in setOf(PermissionState.GRANTED, PermissionState.NOT_REQUIRED) &&
+        transport is TransportAvailability.Unavailable
 internal val ModelProfile.configurationLabel: String
     get() = when (this) { ModelProfile.I5_ZT -> "ZT"; ModelProfile.I7_RS_V2 -> "RS Common V2" }
 internal val ModelProfile.shortLabel: String
@@ -54,15 +57,40 @@ internal fun HeadphonesPage(
     ) {
         if (device == null) {
             AppText("连接你的 ROSE 耳机", role = AppTextRole.Title)
-            val reason = when (val transport = state.platform.transport) {
-                TransportAvailability.Available ->
-                    if (state.platform.permission in setOf(PermissionState.REQUIRED, PermissionState.DENIED)) {
-                        "需要蓝牙权限"
-                    } else {
-                        "等待连接耳机"
+            if (state.platform.transportUnavailableForHome()) {
+                val transport = state.platform.transport as TransportAvailability.Unavailable
+                AppGroup {
+                    AppArrowRow(
+                        title = "查看连接与运行状态",
+                        summary = transport.reason,
+                        icon = RoseIcon.BLUETOOTH,
+                        onClick = { onNavigate(AppPage.DIAGNOSTICS) },
+                    )
+                }
+                if (state.scan == ScanState.Scanning) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        AppBusyIndicator()
+                        AppText("正在寻找耳机…", role = AppTextRole.Summary)
                     }
-                TransportAvailability.Disabled -> "系统蓝牙已关闭"
-                is TransportAvailability.Unavailable -> transport.reason
+                    AppButton("停止扫描", onStopScan, kind = AppButtonKind.Primary)
+                }
+                return@Column
+            }
+            val reason = when {
+                state.platform.permission in setOf(PermissionState.REQUIRED, PermissionState.DENIED) -> "需要蓝牙权限"
+                state.platform.transport == TransportAvailability.Disabled -> "系统蓝牙已关闭"
+                else -> "等待连接耳机"
+            }
+            AppGroup {
+                AppArrowRow(
+                    title = "连接与运行状态",
+                    value = reason,
+                    icon = RoseIcon.BLUETOOTH,
+                    onClick = { onNavigate(AppPage.DIAGNOSTICS) },
+                )
             }
             NearbyDevicesPanel(
                 state,
@@ -74,14 +102,6 @@ internal fun HeadphonesPage(
                 onDisconnect,
                 onDiagnostics = { onNavigate(AppPage.DIAGNOSTICS) },
             )
-            AppGroup {
-                AppArrowRow(
-                    title = "连接与运行状态",
-                    value = reason,
-                    icon = RoseIcon.BLUETOOTH,
-                    onClick = { onNavigate(AppPage.DIAGNOSTICS) },
-                )
-            }
             return@Column
         }
 
@@ -170,7 +190,6 @@ internal fun HeadphonesPage(
                             onClick = { onNavigate(AppPage.DETAILS) },
                         )
                     }
-                    SettingFeedback(state, device) { onNavigate(AppPage.DIAGNOSTICS) }
                 }
             }
             if (wide) {
@@ -234,7 +253,7 @@ private fun NoiseQuickCard(
     val confirmed = (device.knownValue(DeviceField.NOISE_MODE) as? FieldValue.Text)?.value
     val hasPendingSetting = state.hasPendingSetting(device)
     val enabled = state.isReady(device) && !hasPendingSetting
-    val modeOptions = listOf("normal", "anc", "transparency")
+    val modeOptions = listOf("normal", "anc", "transparency", "wind", "auto", "dynamic")
         .filter { it in capabilities.modes }
         .map { mode ->
             AppOption(
@@ -242,7 +261,8 @@ private fun NoiseQuickCard(
                 label = when (mode) {
                     "normal" -> "标准"
                     "anc" -> "降噪"
-                    else -> "通透"
+                    "transparency" -> "通透"
+                    else -> semanticLabel(mode)
                 },
             )
         }
@@ -262,14 +282,25 @@ private fun NoiseQuickCard(
                 role = AppTextRole.Summary,
             )
         }
-        AppSegmented(
-            options = modeOptions,
-            selected = confirmed,
-            enabled = enabled && DeviceSetting.NOISE_MODE in device.capabilities.writableSettings,
-            onSelect = { mode ->
-                if (confirmed != mode) onSet(DeviceSetting.NOISE_MODE, FieldValue.Text(mode))
-            },
-        )
+        BoxWithConstraints(Modifier.fillMaxWidth()) {
+            val columns = when {
+                modeOptions.size <= 3 -> 3
+                modeOptions.size == 4 -> if (maxWidth >= 480.dp) 4 else 2
+                else -> if (maxWidth >= 360.dp) 3 else 2
+            }
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                modeOptions.chunked(columns).forEach { options ->
+                    AppSegmented(
+                        options = options,
+                        selected = confirmed,
+                        enabled = enabled && DeviceSetting.NOISE_MODE in device.capabilities.writableSettings,
+                        onSelect = { mode ->
+                            if (confirmed != mode) onSet(DeviceSetting.NOISE_MODE, FieldValue.Text(mode))
+                        },
+                    )
+                }
+            }
+        }
         val levelSetting = when (confirmed) {
             "anc" -> DeviceSetting.ANC_LEVEL
             "transparency" -> DeviceSetting.TRANSPARENCY_LEVEL
@@ -350,6 +381,7 @@ private fun NearbyDevicesPanel(
     val connected = state.connection as? ConnectionState.Connected
     val idle = connecting == null && connected == null
     val failure = state.scan as? ScanState.Failed
+    var showOtherDevices by remember { mutableStateOf(false) }
 
     Column(
         Modifier.fillMaxWidth(),
@@ -394,47 +426,10 @@ private fun NearbyDevicesPanel(
                     connecting?.phase?.displayText() ?: connected!!.phase.displayText(),
                 )
                 AppButton(
-                    text = if (connecting != null) "取消连接" else "断开连接",
+                    text = if (connecting != null) "取消连接" else "断开控制连接",
                     onClick = onDisconnect,
                     kind = AppButtonKind.Secondary,
                 )
-            }
-        }
-
-        AppGroup(title = "附近设备", titleTrailing = {
-            if (state.scan == ScanState.Scanning) AppBusyIndicator()
-        }) {
-            val candidates = state.candidates.sortedWith(
-                compareByDescending<DeviceCandidate> { it.profile != null }
-                    .thenBy { it.deviceId.value },
-            )
-            if (candidates.isEmpty()) {
-                AppText(
-                    if (state.scan == ScanState.Scanning) {
-                        "正在寻找耳机…"
-                    } else {
-                        "还没有发现耳机。请确认耳机已开启并在附近。"
-                    },
-                    role = AppTextRole.Summary,
-                )
-            } else {
-                candidates.forEach { candidate ->
-                    val summary = candidate.profile?.let { profile ->
-                        buildList {
-                            add("已识别")
-                            add(profile.configurationLabel)
-                            candidate.rssi?.let { add("$it dBm") }
-                        }.joinToString(" · ")
-                    } ?: "未知型号配置，无法连接"
-                    AppCandidateRow(
-                        title = candidate.name?.takeIf(String::isNotBlank) ?: "未命名蓝牙设备",
-                        summary = summary,
-                        onConnect = candidate.profile?.let {
-                            { onConnect(candidate.deviceId) }
-                        },
-                        enabled = canScan && idle,
-                    )
-                }
             }
         }
 
@@ -460,9 +455,62 @@ private fun NearbyDevicesPanel(
             },
             onClick = if (state.scan == ScanState.Scanning) onStopScan else onStartScan,
             enabled = if (state.scan == ScanState.Scanning) true else canScan && idle,
-            modifier = Modifier.fillMaxWidth(),
             kind = AppButtonKind.Primary,
         )
+
+        val candidates = state.candidates.filter { it.profile != null }.sortedBy { it.deviceId.value }
+        val otherDevices = state.candidates.filter { it.profile == null }.sortedBy { it.deviceId.value }
+        AppGroup(title = "附近设备", titleTrailing = {
+            if (state.scan == ScanState.Scanning) AppBusyIndicator()
+        }, plain = candidates.isEmpty()) {
+            if (candidates.isEmpty()) {
+                AppText(
+                    if (state.scan == ScanState.Scanning) {
+                        "正在寻找耳机…"
+                    } else {
+                        "还没有发现耳机。请确认耳机已开启并在附近。"
+                    },
+                    role = AppTextRole.Summary,
+                )
+            } else {
+                candidates.forEach { candidate ->
+                    val summary = candidate.profile?.let { profile ->
+                        buildList {
+                            add("已识别")
+                            add(profile.configurationLabel)
+                            candidate.rssi?.let { add("$it dBm") }
+                        }.joinToString(" · ")
+                    } ?: "未知型号配置，无法连接"
+                    AppCandidateRow(
+                        title = candidate.name?.takeIf(String::isNotBlank) ?: candidate.profile!!.displayName,
+                        summary = summary,
+                        onConnect = candidate.profile?.let {
+                            { onConnect(candidate.deviceId) }
+                        },
+                        enabled = canScan && idle,
+                    )
+                }
+            }
+        }
+
+        if (otherDevices.isNotEmpty()) {
+            AppButton(
+                text = if (showOtherDevices) "隐藏其他设备" else "显示其他设备（${otherDevices.size}）",
+                onClick = { showOtherDevices = !showOtherDevices },
+                kind = AppButtonKind.Secondary,
+            )
+            if (showOtherDevices) {
+                AppGroup(title = "其他蓝牙设备") {
+                    otherDevices.forEach { candidate ->
+                        AppCandidateRow(
+                            title = candidate.name?.takeIf(String::isNotBlank) ?: "未命名蓝牙设备",
+                            summary = "未知型号配置，无法连接",
+                            onConnect = null,
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -502,7 +550,7 @@ internal fun ConnectionDetailsCard(state: ControlState, onDisconnect: () -> Unit
         AppInfoRow("控制连接", state.controlTransportLabel())
         if (state.connection != ConnectionState.Disconnected) {
             AppButton(
-                text = if (state.connection is ConnectionState.Connecting) "取消连接" else "断开连接",
+                text = if (state.connection is ConnectionState.Connecting) "取消连接" else "断开控制连接",
                 onClick = onDisconnect,
                 kind = AppButtonKind.Secondary,
             )

@@ -25,7 +25,9 @@ import androidx.compose.ui.unit.dp
 internal fun MaterialAppShell(backStack: List<AppPage>, page: AppPage, wide: Boolean,
     onNavigate: (AppPage) -> Unit, onBack: () -> Unit, scrollState: ScrollState,
     pageContent: @Composable () -> Unit,
+    feedbackContent: @Composable () -> Unit = {},
     connectedHome: Boolean = false,
+    showAddDeviceAction: Boolean = true,
     menuExpanded: Boolean = false,
     onMenuExpandedChange: (Boolean) -> Unit = {},
     onDisconnect: () -> Unit = {},
@@ -50,7 +52,7 @@ internal fun MaterialAppShell(backStack: List<AppPage>, page: AppPage, wide: Boo
                         IconButton(onClick = { onMenuExpandedChange(true) }) {
                             Icon(RoseIcons[RoseIcon.MORE], contentDescription = "耳机菜单")
                         }
-                    } else {
+                    } else if (showAddDeviceAction) {
                         IconButton(onClick = { onNavigate(AppPage.ADD_DEVICE) }) {
                             Icon(RoseIcons.Plus, contentDescription = "添加耳机")
                         }
@@ -83,7 +85,7 @@ internal fun MaterialAppShell(backStack: List<AppPage>, page: AppPage, wide: Boo
         }
         Scaffold(modifier = Modifier.weight(1f).nestedScroll(scrollBehavior.nestedScrollConnection),
             topBar = {
-                if (page in mainPages) LargeTopAppBar(title = { Text(title) }, navigationIcon = navigation, actions = actions, scrollBehavior = scrollBehavior)
+                if (page in mainPages && !(page == AppPage.HEADPHONES && !connectedHome)) LargeTopAppBar(title = { Text(title) }, navigationIcon = navigation, actions = actions, scrollBehavior = scrollBehavior)
                 else TopAppBar(title = { Text(title) }, navigationIcon = navigation, actions = actions)
             },
             bottomBar = {
@@ -92,17 +94,31 @@ internal fun MaterialAppShell(backStack: List<AppPage>, page: AppPage, wide: Boo
                         onClick = { onNavigate(destination) }, icon = { AppIcon(destination.icon) }, label = { Text(destination.navigationLabel) }) }
                 }
             }) { padding ->
-            Column(Modifier.fillMaxSize().verticalScroll(scrollState)) {
-                ShellPageContent(page, padding, pageContent)
+            Box(Modifier.fillMaxSize()) {
+                Column(Modifier.fillMaxSize().verticalScroll(scrollState)) {
+                    ShellPageContent(page, padding, compactHome = page == AppPage.HEADPHONES && !connectedHome, pageContent)
+                }
+                ShellFeedback(padding, feedbackContent)
             }
         }
     }
 }
 
 @Composable
-internal fun ShellPageContent(page: AppPage, padding: PaddingValues, pageContent: @Composable () -> Unit) {
+internal fun BoxScope.ShellFeedback(padding: PaddingValues, content: @Composable () -> Unit) {
+    Box(Modifier.align(Alignment.BottomCenter)
+        .padding(bottom = padding.calculateBottomPadding())
+        .widthIn(max = 600.dp).fillMaxWidth().padding(16.dp)) {
+        content()
+    }
+}
+
+@Composable
+internal fun ShellPageContent(page: AppPage, padding: PaddingValues, compactHome: Boolean, pageContent: @Composable () -> Unit) {
     Column(Modifier.fillMaxWidth().padding(padding).consumeWindowInsets(padding), horizontalAlignment = Alignment.CenterHorizontally) {
-        Column(Modifier.widthIn(max = if (page == AppPage.HEADPHONES) 1120.dp else 800.dp).fillMaxWidth().padding(vertical = 12.dp),
+        val maxWidth = if (compactHome) 600.dp else if (page == AppPage.HEADPHONES) 1120.dp else 800.dp
+        Column(Modifier.widthIn(max = maxWidth).fillMaxWidth()
+            .padding(horizontal = if (compactHome) 16.dp else 0.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)) {
             pageContent()
         }

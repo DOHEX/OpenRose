@@ -3,13 +3,13 @@ package io.github.dohex.openrose.ui
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.unit.dp
 import io.github.dohex.openrose.core.ControlState
 import io.github.dohex.openrose.core.DeviceState
-import io.github.dohex.openrose.core.SettingOperation
 import io.github.dohex.openrose.core.SettingStage
+import kotlinx.coroutines.delay
 
 /** Shows the current session's outcome without exposing the operation record kept in diagnostics. */
 @Composable
@@ -23,37 +23,59 @@ internal fun SettingFeedback(
     }
     val operationError = operation?.error
     val otherError = state.lastError?.takeIf { it != operationError }
-
-    operation?.let {
-        val failure = it.stage in settingFailureStages || operationError != null
-        AppDashboardCard {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                if (it.stage in settingPendingStages) AppBusyIndicator()
-                AppText(
-                    it.stage.feedbackMessage(),
-                    color = when {
-                        failure -> appColor(AppColorRole.Error)
-                        it.stage == SettingStage.CONFIRMED -> appColor(AppColorRole.Primary)
-                        else -> null
-                    },
-                )
-            }
-            operationError?.let { error ->
-                AppText(error.message, role = AppTextRole.Summary, color = appColor(AppColorRole.Error))
-            }
-            if (failure) {
-                AppButton("查看详情", onViewDetails, kind = AppButtonKind.Secondary)
+    var observedPendingId by remember(device?.sessionId) { mutableStateOf<Long?>(null) }
+    var showConfirmation by remember(device?.sessionId) { mutableStateOf(false) }
+    LaunchedEffect(operation?.id, operation?.stage) {
+        showConfirmation = false
+        when {
+            operation == null -> observedPendingId = null
+            operation.stage in settingPendingStages -> observedPendingId = operation.id
+            operation.stage == SettingStage.CONFIRMED && observedPendingId == operation.id -> {
+                showConfirmation = true
+                delay(3_000)
+                showConfirmation = false
+                observedPendingId = null
             }
         }
     }
+    val visibleOperation = operation?.takeIf {
+        it.stage in settingPendingStages || it.stage in settingFailureStages || operationError != null || showConfirmation
+    }
+    if (visibleOperation == null && otherError == null) return
 
-    otherError?.let { error ->
-        AppDashboardCard {
-            AppText(error.message, color = appColor(AppColorRole.Error))
-            AppButton("查看详情", onViewDetails, kind = AppButtonKind.Secondary)
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        visibleOperation?.let {
+            val failure = it.stage in settingFailureStages || operationError != null
+            AppDashboardCard {
+                AppText(it.setting.displayName(), role = AppTextRole.Footnote)
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    if (it.stage in settingPendingStages) AppBusyIndicator()
+                    AppText(
+                        it.stage.feedbackMessage(),
+                        color = when {
+                            failure -> appColor(AppColorRole.Error)
+                            it.stage == SettingStage.CONFIRMED -> appColor(AppColorRole.Primary)
+                            else -> null
+                        },
+                    )
+                }
+                operationError?.let { error ->
+                    AppText(error.message, role = AppTextRole.Summary, color = appColor(AppColorRole.Error))
+                }
+                if (failure) {
+                    AppButton("查看详情", onViewDetails, kind = AppButtonKind.Secondary)
+                }
+            }
+        }
+
+        otherError?.let { error ->
+            AppDashboardCard {
+                AppText(error.message, color = appColor(AppColorRole.Error))
+                AppButton("查看详情", onViewDetails, kind = AppButtonKind.Secondary)
+            }
         }
     }
 }
