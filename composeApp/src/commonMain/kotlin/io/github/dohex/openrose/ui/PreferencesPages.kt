@@ -248,7 +248,6 @@ internal fun PlatformDiagnosticsCard(
                         "com.android.bluetooth" -> "蓝牙服务"
                         "com.xiaomi.bluetooth" -> "小米蓝牙"
                         "com.milink.service" -> "融合设备中心"
-                        "android" -> "系统提示服务"
                         else -> endpoint.targetPackage
                     }
                     AppGroup(title = endpointName) {
@@ -472,7 +471,6 @@ private fun bridgeSessionLabel(state: BridgeSessionState): String = when (state)
 private fun featureLabel(feature: String): String = when (feature) {
     "SYSTEM_HEADSET" -> "原生耳机接入"
     "FUSION_CENTER" -> "融合状态与操作"
-    "OFFICIAL_GUARD" -> "提示归属保护"
     "OFFICIAL_CONNECTION" -> "官方连接提示"
     else -> feature
 }

@@ -40,15 +40,6 @@ class ControlBridgeService : Service() {
 
         override fun reportComponent(report: Bundle): Bundle =
             host.reportComponent(report, Binder.getCallingUid(), Binder.getCallingPid())
-
-        override fun registerToastGuard(request: Bundle, guard: IStrongToastGuard): Bundle =
-            host.registerToastGuard(request, guard, Binder.getCallingUid(), Binder.getCallingPid())
-
-        override fun postOfficial(request: Bundle): Bundle =
-            host.postOfficial(request, Binder.getCallingUid(), Binder.getCallingPid())
-
-        override fun withdrawOfficial(request: Bundle): Bundle =
-            host.withdrawOfficial(request, Binder.getCallingUid(), Binder.getCallingPid())
     }
 
     override fun onBind(intent: Intent): IBinder? = if (canonicalIntent(intent)) endpoint else null

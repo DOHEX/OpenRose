@@ -34,7 +34,7 @@ OpenRose 首版在 HyperOS 3、4 提供与 OppoPods 类似的超级岛配置和�
 
 ### 官方与模块两种模式
 
-- **官方模式**：沿用系统耳机呈现方式，结合原生通知输入修补与必要的主动触发。参考 `showOfficialConnectToast()` 构造 `param`、`island_param` 和 `notifyId=headset_wear_notification`，通过 `STATUS_BAR_SERVICE.setStatus(1, "strong_toast_action", bundle)` 显示约 5 秒的提示；不能将此模式描述为完全不主动构造数据。
+- **官方模式**：沿用系统耳机呈现方式，结合原生通知输入修补与必要的主动触发。参考 `showOfficialConnectToast()` 构造 `param`、`island_param` 和 `notifyId=headset_wear_notification`，在小米蓝牙进程通过 `STATUS_BAR_SERVICE.setStatus(1, "strong_toast_action", bundle)` 显示约 5 秒的提示；不能将此模式描述为完全不主动构造数据。发送及提前撤销直接使用该进程的系统服务，不 Hook `android`，具体取舍见 [ADR 0004](0004-official-prompts-without-system-server-hooks.md)。
 - **模块模式**：参考 `FocusIslandUtil.showBatteryIsland()`，由 OpenRose 定义内容与触发时机，构造焦点通知模板交给 SystemUI 呈现；它不是模块自绘悬浮窗。
 - **耳机状态通知**：单独参考 `MiBluetoothToastHook.createPodsNotification()` 的发布、更新与撤销机制，根据焦点通知开关与超级岛模式组合决定输出，避免关闭超级岛后仍从状态通知意外触发岛展示。
 
@@ -43,11 +43,11 @@ OpenRose 首版在 HyperOS 3、4 提供与 OppoPods 类似的超级岛配置和�
 ## 共同约束与验证边界
 
 - 两种模式都消费同一权威控制会话提供的状态；跨进程桥接需校验调用者和会话。i5 盒电量 `FF` 不转换为百分比，佩戴检测功能开关不作为实时佩戴事件，也不以连接状态假造入耳状态。
-- 所有展示、撤销、定时器与去重按设备和会话隔离，仅作用于 OpenRose 管理的设备；不能全局拦截其他耳机的提示，也不能用过期回调撤销新会话的展示。某一模式不可用时明确记录，不静默切换到另一模式。
+- 展示、撤销、定时器与去重的本地状态按设备和会话隔离；不能全局拦截其他耳机的提示，也不能用过期回调撤销 OpenRose 新会话的展示。官方提示沿用参考项目的立即隐藏调用，不观察外部强提示覆盖；系统隐藏接口没有设备与会话标识，无法保证不会撤销随后覆盖它的其他提示，此边界按 [ADR 0004](0004-official-prompts-without-system-server-hooks.md) 记录并在目标 ROM 验证。某一模式不可用时明确记录，不静默切换到另一模式。
 - OppoPods 快照 `c201e251e68b59d46b6bc2758146b2c7f13ca2a1` 同时包含这两类路径。其 `BluetoothUpstreamHeadsetHook` 处理识别、能力、状态回调及原生提示 Bundle；主动构造路径则在其他通知工具与 Hook 中。不能将参考项目笼统描述为纯粹的任一种实现。
 - 上游设置中的“超级岛”是“不显示／官方／模块”三选一，默认“官方”；另有默认开启的“焦点通知”开关。官方模式仍调用 `showOfficialConnectToast()` 主动构造并发送数据，模块模式调用 `FocusIslandUtil.showBatteryIsland()`，因此这组模式不等价于“纯原生接管／主动构造”的技术路线单选。两项设置在界面上分开呈现，但关闭焦点通知会影响通知 Hook 的安装，不能假定运行时完全互不影响。
 - 参考项目的“模块超级岛”分支也使用通知扩展并由 SystemUI 渲染，不是自绘悬浮窗。它的命名不能用来判断通知是否由系统原生耳机业务生成。
-- 当前尚未为 OpenRose 实现或实测上述调用。首验环境为 i5、小米 14（HyperOS 4）；需验证识别、真实状态、岛展示、通知更新、控制闭环和断开撤销。i7 与 HyperOS 3 的结果另行记录。
+- OpenRose 已有官方提示、模块提示与耳机状态通知的调用实现，尚未在目标 HyperOS 实机验收。首验环境为 i5、小米 14（HyperOS 4）；需验证识别、真实状态、岛展示、通知更新、控制闭环和断开撤销。i7 与 HyperOS 3 的结果另行记录。
 - 系统类与方法、资源、Provider 和 URI 授权需按目标组件版本验证，不将上游的混淆类名和资源名视为稳定接口。
 
 ## 来源

@@ -8,7 +8,6 @@ import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import android.os.Process
 import android.os.SystemClock
 import android.util.Log
 import io.github.dohex.openrose.bridge.BridgePresentationWire
@@ -19,24 +18,16 @@ import java.io.FileOutputStream
 import java.security.MessageDigest
 import java.util.UUID
 
-/** Relays a source-shaped strong-toast request through the authenticated Host and SystemServer guard. */
-internal interface OfficialToastRelayCallbacks {
-    fun postOfficial(request: Bundle): Bundle
-    fun withdrawOfficial(request: Bundle): Bundle
-}
-
 /**
  * Constructs the official HyperOS connection-toast payload inside com.xiaomi.bluetooth, where its
- * FileProvider can serve media to SystemUI. This class never calls StatusBarManager directly: the
- * authenticated relay and SystemServer guard own caller checks, slot ownership, and stale-hide
- * rejection. A returned CALLED status only records a guarded method call, not a displayed island.
+ * FileProvider can serve media to SystemUI, and calls that process's StatusBarManager directly.
+ * Prompt claiming and local session identity reject stale OpenRose work; external strong-toast
+ * replacement is not observed. CALLED records a system call, not a displayed island.
  */
 internal class OfficialConnectionPresenter(
     context: Context,
     private val handler: Handler,
     private val callbacks: PresentationCallbacks,
-    private val relay: OfficialToastRelayCallbacks,
-    private val guardCredentials: OfficialToastGuardCredentials,
 ) : AutoCloseable {
     private val targetContext = context.applicationContext ?: context
     private val assetLock = Any()
@@ -44,7 +35,7 @@ internal class OfficialConnectionPresenter(
     private var active: ActiveToast? = null
     @Volatile private var closed = false
 
-    /** Call after the host has atomically claimed this ready session's connection prompt. */
+    /** Prepares media, then atomically claims the current prompt immediately before submission. */
     fun show(snapshot: Bundle, promptId: String) {
         dispatchOnHandler {
             if (!closed) showOnHandler(Bundle(snapshot), promptId)
@@ -110,67 +101,37 @@ internal class OfficialConnectionPresenter(
         }
 
         val payload = buildShowBundle(clips, request)
-        val payloadHash = runCatching { OfficialToastWire.payloadHash(payload) }.getOrElse { failure ->
+        if (!callbacks.claimPrompt(snapshot, promptId)) {
             revokeAssets(clips)
+            return
+        }
+        val failure = runCatching { setStatus(payload) }.exceptionOrNull()
+        if (failure != null) {
+            revokeAssetsAfter(clips, OFFICIAL_DURATION_MILLIS + URI_RELEASE_GRACE_MILLIS)
             report(snapshot, BridgePresentationWire.UNAVAILABLE,
-                "official_payload_validation_failed:${failure.javaClass.simpleName}")
-            return
-        }
-        val expiry = SystemClock.elapsedRealtime() + OFFICIAL_DURATION_MILLIS
-        val signedRequest = runCatching { guardCredentials.sign(
-            snapshot = snapshot,
-            promptId = promptId,
-            operation = OfficialToastWire.OPERATION_SHOW,
-            ticket = token,
-            sourceUid = Process.myUid(),
-            expiresAtElapsed = expiry,
-            payloadHash = payloadHash,
-            payload = payload,
-        ) }.getOrNull()
-        if (signedRequest == null) {
-            revokeAssets(clips)
-            report(snapshot, BridgePresentationWire.UNAVAILABLE, "authenticated_systemserver_guard_unavailable")
+                "official_set_status_failed:${failure.cause?.javaClass?.simpleName ?: failure.javaClass.simpleName}")
             return
         }
 
-        val result = runCatching { relay.postOfficial(signedRequest) }
-        val response = result.getOrNull()
-        if (response?.getString(BridgeWire.STATUS) != BridgeWire.STATUS_OK) {
-            if (result.isFailure) {
-                active = activateToast(request, token, expiry, payloadHash, clips, snapshot)
-                report(snapshot, BridgePresentationWire.UNAVAILABLE, "official_guard_post_result_unknown")
-                return
-            }
-            revokeAssetsAfter(clips, OFFICIAL_DURATION_MILLIS)
-            val detail = response?.getString(BridgeWire.MESSAGE)
-                ?: result.exceptionOrNull()?.javaClass?.simpleName
-                ?: "official_guard_rejected_post"
-            report(snapshot, BridgePresentationWire.UNAVAILABLE, "official_guard_post_failed:$detail")
-            return
-        }
-
-        active = activateToast(request, token, expiry, payloadHash, clips, snapshot)
+        active = activateToast(request, clips, snapshot)
         report(snapshot, BridgePresentationWire.CALLED,
-            "authenticated_guard_set_status_returned;provider_and_uri_grant_probed;systemui_display_unverified")
+            "xiaomi_bluetooth_set_status_returned;provider_and_uri_grant_probed;systemui_display_unverified")
     }
 
     private fun activateToast(
         request: PromptRequest,
-        ticket: String,
-        expiresAtElapsed: Long,
-        payloadHash: String,
         clips: List<PreparedClip>,
         snapshot: Bundle,
     ): ActiveToast {
-        val record = ActiveToast(request, ticket, expiresAtElapsed, payloadHash, clips, Bundle(snapshot))
+        val record = ActiveToast(request, SystemClock.elapsedRealtime() + OFFICIAL_DURATION_MILLIS, clips, Bundle(snapshot))
         record.timeout = Runnable {
             if (active === record) {
-                // Leave a little time before the signed lease expires so the guard can still
-                // withdraw this exact owned slot. A competing toast clears guard ownership first.
-                withdrawActive(record, "official_duration_elapsed", report = false)
+                // SystemUI owns the display duration. Expiry only releases this prompt's media.
+                active = null
+                revokeAssetsAfter(record.clips, URI_RELEASE_GRACE_MILLIS, preserveReadGrace = true)
             }
         }
-        handler.postDelayed(record.timeout!!, OFFICIAL_TIMEOUT_WITHDRAW_MILLIS)
+        handler.postDelayed(record.timeout!!, OFFICIAL_DURATION_MILLIS)
         return record
     }
 
@@ -188,7 +149,7 @@ internal class OfficialConnectionPresenter(
 
         val left = record.expiresAtElapsed - SystemClock.elapsedRealtime()
         if (left <= 0L) {
-            revokeAssetsAfter(record.clips, URI_RELEASE_GRACE_MILLIS)
+            revokeAssetsAfter(record.clips, URI_RELEASE_GRACE_MILLIS, preserveReadGrace = true)
             return
         }
 
@@ -196,39 +157,28 @@ internal class OfficialConnectionPresenter(
             putString(KEY_PACKAGE_NAME, TARGET_PACKAGE)
             putString(KEY_STATUS_BAR_STRONG_TOAST, HIDE_STRONG_TOAST)
         }
-        val signedRequest = runCatching { guardCredentials.sign(
-            snapshot = record.snapshot,
-            promptId = record.request.promptId,
-            operation = OfficialToastWire.OPERATION_WITHDRAW,
-            ticket = record.ticket,
-            sourceUid = Process.myUid(),
-            expiresAtElapsed = record.expiresAtElapsed,
-            payloadHash = record.payloadHash,
-            payload = payload,
-        ) }.getOrNull()
-        if (signedRequest == null) {
-            revokeAssetsAfter(record.clips, left)
-            if (report) report(record.snapshot, BridgePresentationWire.ACTION_FAILED,
-                "official_guard_unavailable_hide_skipped:$reason")
-            return
-        }
-
-        val result = runCatching { relay.withdrawOfficial(signedRequest) }
-        val response = result.getOrNull()
-        if (response?.getString(BridgeWire.STATUS) == BridgeWire.STATUS_OK) {
+        // Match OppoPods' immediate hide behavior. Only local OpenRose ownership is known here.
+        val failure = runCatching { setStatus(payload) }.exceptionOrNull()
+        if (failure == null) {
             revokeAssetsAfter(record.clips, URI_RELEASE_GRACE_MILLIS, preserveReadGrace = true)
             if (report) report(record.snapshot, BridgePresentationWire.WITHDRAWN,
-                "authenticated_guard_hide_set_status_returned;systemui_withdrawal_unverified:$reason")
+                "xiaomi_bluetooth_hide_set_status_returned;systemui_withdrawal_unverified:$reason")
         } else {
-            revokeAssetsAfter(record.clips, left)
+            revokeAssetsAfter(record.clips, left + URI_RELEASE_GRACE_MILLIS, preserveReadGrace = true)
             if (report) {
-                val detail = response?.getString(BridgeWire.MESSAGE)
-                    ?: result.exceptionOrNull()?.javaClass?.simpleName
-                    ?: "official_guard_rejected_withdrawal"
+                val detail = failure.cause?.javaClass?.simpleName ?: failure.javaClass.simpleName
                 report(record.snapshot, BridgePresentationWire.ACTION_FAILED,
-                    "official_guard_withdraw_failed:$detail:$reason")
+                    "official_hide_failed:$detail:$reason")
             }
         }
+    }
+
+    private fun setStatus(payload: Bundle) {
+        val service = targetContext.getSystemService("statusbar")
+            ?: throw IllegalStateException("statusbar_service_missing")
+        service.javaClass.getMethod(
+            "setStatus", Int::class.javaPrimitiveType, String::class.java, Bundle::class.java,
+        ).invoke(service, 1, "strong_toast_action", payload)
     }
 
     private fun decodeRequest(snapshot: Bundle, promptId: String): PromptRequest? {
@@ -464,7 +414,7 @@ internal class OfficialConnectionPresenter(
         }
     }
 
-    /** Cancels this presenter's delayed closures and releases only its tracked ticket assets. */
+    /** Cancels this presenter's delayed closures and releases only its tracked media. */
     private fun cleanupAllAssets() {
         val (assets, callbacks, graceDeadline) = synchronized(assetLock) {
             val current = ownedAssets.values.toList()
@@ -509,9 +459,7 @@ internal class OfficialConnectionPresenter(
     )
     private data class ActiveToast(
         val request: PromptRequest,
-        val ticket: String,
         val expiresAtElapsed: Long,
-        val payloadHash: String,
         val clips: List<PreparedClip>,
         val snapshot: Bundle,
         var timeout: Runnable? = null,
@@ -519,27 +467,27 @@ internal class OfficialConnectionPresenter(
 
     companion object {
         private const val TAG = "OpenRoseOfficialToast"
-        private const val TARGET_PACKAGE = OfficialToastWire.TARGET_PACKAGE
-        private const val SYSTEM_UI_PACKAGE = OfficialToastWire.SYSTEM_UI_PACKAGE
-        private const val FILE_PROVIDER_AUTHORITY = OfficialToastWire.FILE_PROVIDER_AUTHORITY
-        private const val SHOW_CUSTOM_STRONG_TOAST = OfficialToastWire.SHOW_ACTION
-        private const val HIDE_STRONG_TOAST = OfficialToastWire.HIDE_ACTION
-        private const val VIDEO_TEXT_TEXT_VIDEO = OfficialToastWire.CATEGORY
+        private const val TARGET_PACKAGE = "com.xiaomi.bluetooth"
+        private const val SYSTEM_UI_PACKAGE = "com.android.systemui"
+        private const val FILE_PROVIDER_AUTHORITY = "com.xiaomi.bluetooth.fileprovider"
+        private const val SHOW_CUSTOM_STRONG_TOAST = "show_custom_strong_toast"
+        private const val HIDE_STRONG_TOAST = "hide_strong_toast"
+        private const val VIDEO_TEXT_TEXT_VIDEO = "video_text_text_video"
         private const val RAW_CATEGORY = "raw"
         private const val MP4_FILE_TYPE = "mp4"
-        private const val HEADSET_NOTIFY_ID = OfficialToastWire.NOTIFY_ID
-        private const val KEY_PACKAGE_NAME = OfficialToastWire.KEY_PACKAGE_NAME
-        private const val KEY_STRONG_TOAST_CATEGORY = OfficialToastWire.KEY_STRONG_TOAST_CATEGORY
-        private const val KEY_TARGET = OfficialToastWire.KEY_TARGET
-        private const val KEY_PARAM = OfficialToastWire.KEY_PARAM
-        private const val KEY_ISLAND_PARAM = OfficialToastWire.KEY_ISLAND_PARAM
-        private const val KEY_NOTIFY_ID = OfficialToastWire.KEY_NOTIFY_ID
-        private const val KEY_DURATION = OfficialToastWire.KEY_DURATION
-        private const val KEY_LEVEL = OfficialToastWire.KEY_LEVEL
-        private const val KEY_RAPID_RATE = OfficialToastWire.KEY_RAPID_RATE
-        private const val KEY_CHARGE = OfficialToastWire.KEY_CHARGE
-        private const val KEY_CHARGE_FLAG = OfficialToastWire.KEY_CHARGE_FLAG
-        private const val KEY_STATUS_BAR_STRONG_TOAST = OfficialToastWire.KEY_STATUS_BAR_STRONG_TOAST
+        private const val HEADSET_NOTIFY_ID = "headset_wear_notification"
+        private const val KEY_PACKAGE_NAME = "package_name"
+        private const val KEY_STRONG_TOAST_CATEGORY = "strong_toast_category"
+        private const val KEY_TARGET = "target"
+        private const val KEY_PARAM = "param"
+        private const val KEY_ISLAND_PARAM = "island_param"
+        private const val KEY_NOTIFY_ID = "notifyId"
+        private const val KEY_DURATION = "duration"
+        private const val KEY_LEVEL = "level"
+        private const val KEY_RAPID_RATE = "rapid_rate"
+        private const val KEY_CHARGE = "charge"
+        private const val KEY_CHARGE_FLAG = "string_toast_charge_flag"
+        private const val KEY_STATUS_BAR_STRONG_TOAST = "status_bar_strong_toast"
         private const val LEFT_BATTERY = "LEFT_BATTERY"
         private const val RIGHT_BATTERY = "RIGHT_BATTERY"
         private const val LEFT_CHARGING = "LEFT_CHARGING"
@@ -550,8 +498,7 @@ internal class OfficialConnectionPresenter(
         private const val INVALID_SESSION_ID = Long.MIN_VALUE
         private const val INVALID_BATTERY = -1
         private const val LOW_BATTERY_THRESHOLD = 20
-        private const val OFFICIAL_DURATION_MILLIS = OfficialToastWire.DURATION_MILLIS
-        private const val OFFICIAL_TIMEOUT_WITHDRAW_MILLIS = OFFICIAL_DURATION_MILLIS - 500L
+        private const val OFFICIAL_DURATION_MILLIS = 5_000L
         private const val URI_RELEASE_GRACE_MILLIS = 750L
         private const val MODULE_LEFT_RAW = "openrose_earbud_left"
         private const val MODULE_RIGHT_RAW = "openrose_earbud_right"

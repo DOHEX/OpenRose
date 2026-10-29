@@ -18,10 +18,7 @@ import io.github.dohex.openrose.bridge.BridgeTarget
 import io.github.dohex.openrose.bridge.BridgeWire
 import io.github.dohex.openrose.bridge.IControlBridge
 import io.github.dohex.openrose.bridge.IControlObserver
-import io.github.dohex.openrose.bridge.IStrongToastGuard
-import io.github.dohex.openrose.presentation.OfficialToastWire
 import io.github.libxposed.api.XposedModule
-import java.util.LinkedHashMap
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
@@ -44,8 +41,6 @@ internal class AuthenticatedBridgeClient(
 ) {
     private val context = context.applicationContext ?: context
     private val lock = Any()
-    private val ticketLock = Any()
-    private val ticketReferences = LinkedHashMap<String, SessionReference>()
     private val readerThread = HandlerThread(READER_THREAD_NAME).apply { start() }
 
     internal val handler: Handler = Handler(readerThread.looper)
@@ -61,10 +56,6 @@ internal class AuthenticatedBridgeClient(
     @Volatile private var currentSnapshot: Bundle? = null
     @Volatile private var lastRejectedCredential: String? = null
     @Volatile private var targetBridge: IControlBridge? = null
-
-    @Volatile
-    var guardReady: Boolean = false
-        private set
 
     @Volatile private var currentBinding: BridgeBinding? = null
     private var remotePreferences: SharedPreferences? = null
@@ -219,17 +210,15 @@ internal class AuthenticatedBridgeClient(
         val current = bridge.currentSession(lease)
         if (!hasWireVersion(current)) {
             clearSnapshot()
-            guardReady = false
             recordStatus("session_invalid_version")
             return
         }
 
-        guardReady = current.getBoolean(BridgePresentationWire.OFFICIAL_GUARD_READY, false)
         val sessionStatus = current.getString(BridgeWire.STATUS) ?: STATUS_MISSING
         if (sessionStatus == BridgeWire.STATUS_NO_SESSION) {
             clearSnapshot()
             recordStatus("no_session")
-            return // The authenticated lease remains active for component reports and guard calls.
+            return // The authenticated lease remains active for component reports.
         }
         if (sessionStatus != BridgeWire.STATUS_OK) {
             clearSnapshot()
@@ -343,15 +332,13 @@ internal class AuthenticatedBridgeClient(
 
     private fun closeLease(binding: BridgeBinding?, bridge: IControlBridge?) {
         val lease = leaseId
-        // Withdraw any renderer-owned prompt while the lease and endpoint are still usable.
+        // Clear the target-process presentation before releasing its authenticated lease.
         clearDeliveredSnapshot()
         leaseId = null
         authenticatedLease = null
         targetBridge = null
-        guardReady = false
         currentReference = null
         currentSnapshot = null
-        synchronized(ticketLock) { ticketReferences.clear() }
         if (lease != null && bridge != null) {
             runCatching { bridge.close(lease) }
                 .onFailure { Log.w(TAG, "bridge_lease_close_failed target=$target", it) }
@@ -410,7 +397,7 @@ internal class AuthenticatedBridgeClient(
         }
 
     private fun snapshotRequest(snapshot: Bundle, requireCurrentReference: Boolean): Bundle? {
-        if (!isLeaseUsable(allowClosing = false)) return null
+        if (!isLeaseUsable()) return null
         val epoch = hostEpoch ?: return null
         val lease = leaseId ?: return null
         val snapshotEpoch = snapshot.getString(BridgeWire.HOST_EPOCH) ?: return null
@@ -425,8 +412,8 @@ internal class AuthenticatedBridgeClient(
         return sessionRequest(lease, epoch, deviceId, sessionId)
     }
 
-    private fun isLeaseUsable(allowClosing: Boolean): Boolean =
-        started && !closed && (!closing || allowClosing) && leaseId != null && targetBridge != null
+    private fun isLeaseUsable(): Boolean =
+        started && !closed && !closing && leaseId != null && targetBridge != null
 
     /** Atomically claims the current connection prompt for this authenticated session. */
     fun claimPrompt(snapshot: Bundle, promptId: String): Boolean {
@@ -472,98 +459,8 @@ internal class AuthenticatedBridgeClient(
         callRemote(request) { bridge, call -> bridge.reportComponent(call) }
     }
 
-    /** Registers a system-server-owned toast guard against this exact authenticated lease. */
-    fun registerToastGuard(guard: IStrongToastGuard): Bundle {
-        val request = currentLeaseRequest() ?: return BridgeWire.response(BridgeWire.STATUS_STALE_HOST)
-        val response = callRemote(request) { bridge, call -> bridge.registerToastGuard(call, guard) }
-            ?: return BridgeWire.response(BridgeWire.STATUS_STALE_HOST)
-        if (hasWireVersion(response) && response.getString(BridgeWire.STATUS) == BridgeWire.STATUS_OK) {
-            currentBinding?.let { schedulePoll(it) }
-        }
-        return response
-    }
-
-    /** Publishes a signed, exact-ticket strong-toast request through the authenticated host. */
-    fun postOfficial(snapshot: Bundle, promptId: String, request: Bundle): Bundle {
-        if (promptId.isBlank() || promptId.length > MAX_PROMPT_ID_LENGTH) {
-            return BridgeWire.response(BridgeWire.STATUS_INVALID_ARGUMENT)
-        }
-        val ticket = request.getString(OfficialToastWire.GUARD_TICKET)?.takeIf { it.length in MIN_TICKET_LENGTH..MAX_TICKET_LENGTH }
-            ?: return BridgeWire.response(BridgeWire.STATUS_INVALID_ARGUMENT)
-        val envelope = snapshotRequest(snapshot, requireCurrentReference = true)
-            ?: return BridgeWire.response(BridgeWire.STATUS_STALE_SESSION)
-        envelope.putAll(Bundle(request))
-        envelope.putInt(BridgeWire.KEY_VERSION, BridgeWire.VERSION)
-        envelope.putString(BridgeWire.LEASE_ID, leaseId)
-        envelope.putString(BridgeWire.HOST_EPOCH, hostEpoch)
-        envelope.putString(BridgeWire.DEVICE_ID, snapshot.getString(BridgeWire.DEVICE_ID))
-        envelope.putLong(BridgeWire.SESSION_ID, snapshot.getLong(BridgeWire.SESSION_ID, INVALID_SESSION_ID))
-        envelope.putString(BridgePresentationWire.PROMPT_ID, promptId)
-
-        val response = callRemote(envelope) { bridge, call -> bridge.postOfficial(call) }
-            ?: return BridgeWire.response(BridgeWire.STATUS_STALE_SESSION)
-        if (hasWireVersion(response) && response.getString(BridgeWire.STATUS) == BridgeWire.STATUS_OK) {
-            synchronized(ticketLock) {
-                ticketReferences[ticket] = SessionReference(
-                    snapshot.getString(BridgeWire.DEVICE_ID).orEmpty(),
-                    snapshot.getLong(BridgeWire.SESSION_ID, INVALID_SESSION_ID),
-                )
-                while (ticketReferences.size > MAX_OWNED_TICKETS) {
-                    ticketReferences.remove(ticketReferences.keys.first())
-                }
-            }
-        }
-        return response
-    }
-
-    /**
-     * Withdraws only a ticket this lease successfully posted. The snapshot may refer to an ended
-     * session: stale sessions must still be able to revoke their own live SystemUI toast.
-     */
-    fun withdrawOfficial(snapshot: Bundle, promptId: String?, request: Bundle): Bundle {
-        val ticket = request.getString(OfficialToastWire.GUARD_TICKET)?.takeIf { it.length in MIN_TICKET_LENGTH..MAX_TICKET_LENGTH }
-            ?: return BridgeWire.response(BridgeWire.STATUS_INVALID_ARGUMENT)
-        val epoch = hostEpoch ?: return BridgeWire.response(BridgeWire.STATUS_STALE_HOST)
-        val lease = leaseId ?: return BridgeWire.response(BridgeWire.STATUS_STALE_HOST)
-        if (!isLeaseUsable(allowClosing = true) || snapshot.getInt(BridgeWire.KEY_VERSION, INVALID_WIRE_VERSION) != BridgeWire.VERSION ||
-            snapshot.getString(BridgeWire.HOST_EPOCH) != epoch
-        ) return BridgeWire.response(BridgeWire.STATUS_STALE_HOST)
-
-        val deviceId = snapshot.getString(BridgeWire.DEVICE_ID)?.takeIf {
-            it.isNotBlank() && it.length <= MAX_DEVICE_ID_LENGTH
-        } ?: return BridgeWire.response(BridgeWire.STATUS_INVALID_ARGUMENT)
-        val sessionId = snapshot.getLong(BridgeWire.SESSION_ID, INVALID_SESSION_ID)
-            .takeIf { it > 0L } ?: return BridgeWire.response(BridgeWire.STATUS_INVALID_ARGUMENT)
-        val ownedReference = synchronized(ticketLock) { ticketReferences[ticket] }
-            ?: return BridgeWire.response(BridgeWire.STATUS_STALE_SESSION)
-        if (ownedReference != SessionReference(deviceId, sessionId)) {
-            return BridgeWire.response(BridgeWire.STATUS_STALE_SESSION)
-        }
-
-        val envelope = leaseRequest(lease, epoch).apply {
-            putString(BridgeWire.DEVICE_ID, deviceId)
-            putLong(BridgeWire.SESSION_ID, sessionId)
-            putAll(Bundle(request))
-            // The host-owned lease and the exact historical session must not be overridable by an
-            // arbitrary field inside the opaque signed request.
-            putInt(BridgeWire.KEY_VERSION, BridgeWire.VERSION)
-            putString(BridgeWire.LEASE_ID, lease)
-            putString(BridgeWire.HOST_EPOCH, epoch)
-            putString(BridgeWire.DEVICE_ID, deviceId)
-            putLong(BridgeWire.SESSION_ID, sessionId)
-            promptId?.takeIf { it.isNotBlank() && it.length <= MAX_PROMPT_ID_LENGTH }
-                ?.let { putString(BridgePresentationWire.PROMPT_ID, it) }
-        }
-        val response = callRemote(envelope, allowClosing = true) { bridge, call -> bridge.withdrawOfficial(call) }
-            ?: return BridgeWire.response(BridgeWire.STATUS_STALE_HOST)
-        if (hasWireVersion(response) && response.getString(BridgeWire.STATUS) == BridgeWire.STATUS_OK) {
-            synchronized(ticketLock) { ticketReferences.remove(ticket) }
-        }
-        return response
-    }
-
     private fun currentLeaseRequest(): Bundle? {
-        if (!isLeaseUsable(allowClosing = false)) return null
+        if (!isLeaseUsable()) return null
         val lease = leaseId ?: return null
         val epoch = hostEpoch ?: return null
         if (authenticatedLease != lease) return null
@@ -572,10 +469,9 @@ internal class AuthenticatedBridgeClient(
 
     private fun callRemote(
         request: Bundle,
-        allowClosing: Boolean = false,
         call: (IControlBridge, Bundle) -> Bundle,
     ): Bundle? {
-        if (!isLeaseUsable(allowClosing = allowClosing)) return null
+        if (!isLeaseUsable()) return null
         val lease = leaseId ?: return null
         val epoch = hostEpoch ?: return null
         if (request.getString(BridgeWire.LEASE_ID) != lease || request.getString(BridgeWire.HOST_EPOCH) != epoch) return null
@@ -667,8 +563,6 @@ internal class AuthenticatedBridgeClient(
         hostEpoch = null
         proofKey = null
         lastRejectedCredential = null
-        guardReady = false
-        synchronized(ticketLock) { ticketReferences.clear() }
         started = false
         return clean
     }
@@ -713,8 +607,6 @@ internal class AuthenticatedBridgeClient(
         targetBridge = null
         currentReference = null
         currentSnapshot = null
-        guardReady = false
-        synchronized(ticketLock) { ticketReferences.clear() }
     }
 
     private fun detachPreferencesListener(binding: BridgeBinding?) {
@@ -810,9 +702,6 @@ internal class AuthenticatedBridgeClient(
         const val MAX_FEATURE_LENGTH = 64
         const val MAX_STATUS_LENGTH = 64
         const val MAX_DETAIL_LENGTH = 512
-        const val MIN_TICKET_LENGTH = 16
-        const val MAX_TICKET_LENGTH = 64
-        const val MAX_OWNED_TICKETS = 16
         const val STATUS_MISSING = "MISSING_STATUS"
         const val INVALID_WIRE_VERSION = -1
         const val INVALID_READ_SEQUENCE = -1L
