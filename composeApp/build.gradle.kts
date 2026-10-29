@@ -5,6 +5,7 @@ plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.compose.multiplatform)
     alias(libs.plugins.compose.compiler)
+    alias(libs.plugins.kotlin.serialization)
 }
 kotlin {
     jvmToolchain(21)
@@ -12,10 +13,10 @@ kotlin {
         namespace = "io.github.dohex.openrose.ui"
         compileSdk = 37
         minSdk = 26
-        compilerOptions { jvmTarget.set(JvmTarget.JVM_17) }
+        compilerOptions { jvmTarget.set(JvmTarget.JVM_21) }
         androidResources.enable = true
     }
-    jvm { compilerOptions { jvmTarget.set(JvmTarget.JVM_17) } }
+    jvm { compilerOptions { jvmTarget.set(JvmTarget.JVM_21) } }
     sourceSets {
         androidMain.dependencies {
             implementation(libs.activity.compose)
@@ -30,6 +31,7 @@ kotlin {
             implementation(libs.miuix.ui)
             implementation(libs.miuix.preference)
             implementation(libs.miuix.icons)
+            implementation(libs.miuix.nav)
         }
         jvmTest.dependencies {
             implementation(kotlin("test"))
