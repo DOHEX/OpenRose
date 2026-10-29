@@ -27,6 +27,7 @@ class UserSettingsCodecTest {
                 "island_mode" to "future-mode",
                 "focus_notification_enabled" to "maybe",
                 "island_triggers" to "wear,case-entry",
+                "page_transition" to "future-transition",
             ),
         )
 
@@ -35,6 +36,7 @@ class UserSettingsCodecTest {
         assertEquals(IslandMode.OFFICIAL, restored.islandMode)
         assertEquals(true, restored.focusNotificationEnabled)
         assertEquals(emptySet(), restored.islandTriggers)
+        assertEquals(PageTransition.MIUIX_SPRING, restored.pageTransition)
     }
 
     @Test
@@ -47,6 +49,7 @@ class UserSettingsCodecTest {
                 focusNotificationEnabled = false,
                 islandTriggers = emptySet(),
                 forceBle = true,
+                pageTransition = PageTransition.FADE,
             ),
         )
 
@@ -58,6 +61,7 @@ class UserSettingsCodecTest {
                 "focus_notification_enabled" to "false",
                 "force_ble" to "true",
                 "island_triggers" to "",
+                "page_transition" to "fade",
             ),
             stored,
         )
@@ -68,6 +72,29 @@ class UserSettingsCodecTest {
         assertEquals(false, UserSettingsCodec.decode(emptyMap()).forceBle)
         assertEquals(false, UserSettingsCodec.decode(mapOf("force_ble" to "maybe")).forceBle)
         assertEquals(true, UserSettingsCodec.decode(mapOf("force_ble" to "true")).forceBle)
+    }
+
+    @Test
+    fun pageTransitionEncodesAndDecodesAllSupportedValues() {
+        for (transition in PageTransition.entries) {
+            val encoded = UserSettingsCodec.encode(UserSettings(pageTransition = transition))
+            val expectedString = when (transition) {
+                PageTransition.MIUIX_SPRING -> "miuix_spring"
+                PageTransition.SLIDE -> "slide"
+                PageTransition.FADE -> "fade"
+                PageTransition.NONE -> "none"
+            }
+            assertEquals(expectedString, encoded["page_transition"])
+            val decoded = UserSettingsCodec.decode(mapOf("page_transition" to expectedString))
+            assertEquals(transition, decoded.pageTransition)
+        }
+    }
+
+    @Test
+    fun missingOrUnknownPageTransitionFallsBackToDefault() {
+        assertEquals(PageTransition.MIUIX_SPRING, UserSettingsCodec.decode(emptyMap()).pageTransition)
+        assertEquals(PageTransition.MIUIX_SPRING, UserSettingsCodec.decode(mapOf("page_transition" to "unknown")).pageTransition)
+        assertEquals(PageTransition.MIUIX_SPRING, UserSettingsCodec.decode(mapOf("page_transition" to "")).pageTransition)
     }
 
     @Test
