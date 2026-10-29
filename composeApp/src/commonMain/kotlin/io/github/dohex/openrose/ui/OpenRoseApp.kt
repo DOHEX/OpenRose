@@ -8,6 +8,7 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.unit.dp
 import io.github.dohex.openrose.core.*
@@ -69,8 +70,10 @@ fun OpenRoseApp(
     var selectedTouchSide by remember(state.device?.sessionId) { mutableStateOf<String?>(null) }
     LaunchedEffect(homeNavigationRequest) {
         if (homeNavigationRequest != 0L) {
-            navBackStack.clear()
-            navBackStack.add(Route.Main(AppPage.HEADPHONES))
+            while (navBackStack.size > 1) {
+                navBackStack.removeLastOrNull()
+            }
+            navBackStack[0] = Route.Main(AppPage.HEADPHONES)
             headphoneMenuExpanded = false
             choiceDialog.value = null
             selectedTouchSlot = null
@@ -81,8 +84,10 @@ fun OpenRoseApp(
         choiceDialog.value = null
         selectedTouchSlot = null
         if (destination in mainPages) {
-            navBackStack.clear()
-            navBackStack.add(Route.Main(destination))
+            while (navBackStack.size > 1) {
+                navBackStack.removeLastOrNull()
+            }
+            navBackStack[0] = Route.Main(destination)
         } else {
             val target = destination.toRoute()
             if (navBackStack.lastOrNull() != target) {
@@ -97,8 +102,7 @@ fun OpenRoseApp(
             choiceDialog.value != null -> choiceDialog.value = null
             navBackStack.size > 1 -> navBackStack.removeLastOrNull()
             currentRoute is Route.Main && currentRoute.tab != AppPage.HEADPHONES -> {
-                navBackStack.clear()
-                navBackStack.add(Route.Main(AppPage.HEADPHONES))
+                navBackStack[0] = Route.Main(AppPage.HEADPHONES)
             }
         }
     }
@@ -117,22 +121,23 @@ fun OpenRoseApp(
         }
         val connection = state.connection as? ConnectionState.Connected
         if (page == AppPage.ADD_DEVICE && connection?.phase == ConnectionPhase.READY) {
-            navBackStack.clear()
-            navBackStack.add(Route.Main(AppPage.HEADPHONES))
+            while (navBackStack.size > 1) {
+                navBackStack.removeLastOrNull()
+            }
+            navBackStack[0] = Route.Main(AppPage.HEADPHONES)
         }
     }
     CompositionLocalProvider(LocalChoiceDialog provides choiceDialog) {
-        ProvideInterfaceStyle(state.settings.interfaceStyle, dark) {
-            LaunchedEffect(page, choiceDialog.value, selectedTouchSlot, headphoneMenuExpanded) {
-                if (choiceDialog.value == null && selectedTouchSlot == null && !headphoneMenuExpanded) {
-                    rootFocusRequester.requestFocus()
-                }
+        LaunchedEffect(page, choiceDialog.value, selectedTouchSlot, headphoneMenuExpanded) {
+            if (choiceDialog.value == null && selectedTouchSlot == null && !headphoneMenuExpanded) {
+                rootFocusRequester.requestFocus()
             }
-            BoxWithConstraints(modifier.fillMaxSize().focusRequester(rootFocusRequester).onPreviewKeyEvent {
-                if (it.type == KeyEventType.KeyUp && it.key == Key.Escape && canGoBack) {
-                    back(); true
-                } else false
-            }.focusable()) {
+        }
+        BoxWithConstraints(modifier.fillMaxSize().focusRequester(rootFocusRequester).onPreviewKeyEvent {
+            if (it.type == KeyEventType.KeyUp && it.key == Key.Escape && canGoBack) {
+                back(); true
+            } else false
+        }.focusable()) {
                 val wide = maxWidth >= 900.dp
                 val onNavigate: (AppPage) -> Unit = ::navigate
                 val pageContentFor: @Composable (AppPage) -> Unit = { targetPage ->
@@ -220,46 +225,48 @@ fun OpenRoseApp(
                     }
                 }
                 val renderShell: @Composable (AppPage, Boolean) -> Unit = { targetPage, isSecondary ->
-                    val showBottomBar = !wide && !isSecondary && navBackStack.size == 1 && targetPage in mainPages
-                    val shellContent: @Composable () -> Unit = { pageContentFor(targetPage) }
-                    val shellFeedback: @Composable () -> Unit = { feedbackContentFor(targetPage) }
-                    val isConnectedHome = state.activeDevice() != null
-                    val showAdd = isConnectedHome && !state.platform.transportUnavailableForHome()
-                    val scrollState = scrollStates.getValue(targetPage)
+                    ProvideInterfaceStyle(state.settings.interfaceStyle, dark) {
+                        val showBottomBar = !wide && !isSecondary && navBackStack.size == 1 && targetPage in mainPages
+                        val shellContent: @Composable () -> Unit = { pageContentFor(targetPage) }
+                        val shellFeedback: @Composable () -> Unit = { feedbackContentFor(targetPage) }
+                        val isConnectedHome = state.activeDevice() != null
+                        val showAdd = isConnectedHome && !state.platform.transportUnavailableForHome()
+                        val scrollState = scrollStates.getValue(targetPage)
 
-                    when (state.settings.interfaceStyle) {
-                        InterfaceStyle.MIUIX -> MiuixAppShell(
-                            page = targetPage,
-                            wide = wide,
-                            onNavigate = onNavigate,
-                            onBack = ::back,
-                            scrollState = scrollState,
-                            connectedHome = isConnectedHome,
-                            showAddDeviceAction = showAdd,
-                            menuExpanded = headphoneMenuExpanded,
-                            onMenuExpandedChange = { headphoneMenuExpanded = it },
-                            onDisconnect = onDisconnect,
-                            isSecondary = isSecondary,
-                            showBottomBar = showBottomBar,
-                            pageContent = shellContent,
-                            feedbackContent = shellFeedback,
-                        )
-                        InterfaceStyle.MATERIAL3 -> MaterialAppShell(
-                            page = targetPage,
-                            wide = wide,
-                            onNavigate = onNavigate,
-                            onBack = ::back,
-                            scrollState = scrollState,
-                            connectedHome = isConnectedHome,
-                            showAddDeviceAction = showAdd,
-                            menuExpanded = headphoneMenuExpanded,
-                            onMenuExpandedChange = { headphoneMenuExpanded = it },
-                            onDisconnect = onDisconnect,
-                            isSecondary = isSecondary,
-                            showBottomBar = showBottomBar,
-                            pageContent = shellContent,
-                            feedbackContent = shellFeedback,
-                        )
+                        when (state.settings.interfaceStyle) {
+                            InterfaceStyle.MIUIX -> MiuixAppShell(
+                                page = targetPage,
+                                wide = wide,
+                                onNavigate = onNavigate,
+                                onBack = ::back,
+                                scrollState = scrollState,
+                                connectedHome = isConnectedHome,
+                                showAddDeviceAction = showAdd,
+                                menuExpanded = headphoneMenuExpanded,
+                                onMenuExpandedChange = { headphoneMenuExpanded = it },
+                                onDisconnect = onDisconnect,
+                                isSecondary = isSecondary,
+                                showBottomBar = showBottomBar,
+                                pageContent = shellContent,
+                                feedbackContent = shellFeedback,
+                            )
+                            InterfaceStyle.MATERIAL3 -> MaterialAppShell(
+                                page = targetPage,
+                                wide = wide,
+                                onNavigate = onNavigate,
+                                onBack = ::back,
+                                scrollState = scrollState,
+                                connectedHome = isConnectedHome,
+                                showAddDeviceAction = showAdd,
+                                menuExpanded = headphoneMenuExpanded,
+                                onMenuExpandedChange = { headphoneMenuExpanded = it },
+                                onDisconnect = onDisconnect,
+                                isSecondary = isSecondary,
+                                showBottomBar = showBottomBar,
+                                pageContent = shellContent,
+                                feedbackContent = shellFeedback,
+                            )
+                        }
                     }
                 }
                 NavDisplay(
@@ -269,7 +276,9 @@ fun OpenRoseApp(
                     modifier = Modifier.fillMaxSize(),
                 ) {
                     entry<Route.Main> { mainRoute ->
-                        renderShell(mainRoute.tab, false)
+                        Box(if (currentRoute is Route.Main) Modifier.fillMaxSize() else Modifier.fillMaxSize().clearAndSetSemantics { }) {
+                            renderShell(mainRoute.tab, false)
+                        }
                     }
                     entry<Route.Noise>(swipeDismiss = NavSwipeDirection.LeftToRight) {
                         renderShell(AppPage.NOISE, true)
@@ -296,7 +305,6 @@ fun OpenRoseApp(
             }
         }
     }
-}
 
 internal val AppPage.navigationLabel: String
     get() = when (this) {

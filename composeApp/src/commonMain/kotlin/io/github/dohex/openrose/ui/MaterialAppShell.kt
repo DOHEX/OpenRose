@@ -41,7 +41,7 @@ internal fun MaterialAppShell(
 ) {
     val menuFocusRequester = remember { FocusRequester() }
     Row(Modifier.fillMaxSize()) {
-        if (wide && !isSecondary) NavigationRail(header = { AppIcon(RoseIcon.HEADPHONES, Modifier.padding(12.dp), contentDescription = "OpenRose") }) {
+        if (wide) NavigationRail(header = { AppIcon(RoseIcon.HEADPHONES, Modifier.padding(12.dp), contentDescription = "OpenRose") }) {
             mainPages.forEach { destination ->
                 val isSelected = if (backStack.isNotEmpty()) backStack.first() == destination else page == destination
                 NavigationRailItem(selected = isSelected,
