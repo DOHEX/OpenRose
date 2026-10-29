@@ -22,8 +22,13 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.unit.dp
 
 @Composable
-internal fun MaterialAppShell(backStack: List<AppPage>, page: AppPage, wide: Boolean,
-    onNavigate: (AppPage) -> Unit, onBack: () -> Unit, scrollState: ScrollState,
+internal fun MaterialAppShell(
+    backStack: List<AppPage> = emptyList(),
+    page: AppPage,
+    wide: Boolean,
+    onNavigate: (AppPage) -> Unit,
+    onBack: () -> Unit,
+    scrollState: ScrollState,
     pageContent: @Composable () -> Unit,
     feedbackContent: @Composable () -> Unit = {},
     connectedHome: Boolean = false,
@@ -31,19 +36,22 @@ internal fun MaterialAppShell(backStack: List<AppPage>, page: AppPage, wide: Boo
     menuExpanded: Boolean = false,
     onMenuExpandedChange: (Boolean) -> Unit = {},
     onDisconnect: () -> Unit = {},
+    isSecondary: Boolean = backStack.size > 1 || page !in mainPages,
+    showBottomBar: Boolean = !wide && !isSecondary && page in mainPages,
 ) {
     val menuFocusRequester = remember { FocusRequester() }
     Row(Modifier.fillMaxSize()) {
         if (wide) NavigationRail(header = { AppIcon(RoseIcon.HEADPHONES, Modifier.padding(12.dp), contentDescription = "OpenRose") }) {
             mainPages.forEach { destination ->
-                NavigationRailItem(selected = backStack.first() == destination,
+                val isSelected = if (backStack.isNotEmpty()) backStack.first() == destination else page == destination
+                NavigationRailItem(selected = isSelected,
                     onClick = { onNavigate(destination) }, icon = { AppIcon(destination.icon) }, label = { Text(destination.title) })
             }
         }
         val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
         val title = if (page == AppPage.HEADPHONES && !wide) "OpenRose" else page.title
         val navigation: @Composable () -> Unit = {
-            if (backStack.size > 1) IconButton(onClick = onBack) { Icon(RoseIcons.Back, "返回") }
+            if (isSecondary) IconButton(onClick = onBack) { Icon(RoseIcons.Back, "返回") }
         }
         val actions: @Composable RowScope.() -> Unit = {
             if (page == AppPage.HEADPHONES) {
@@ -89,7 +97,7 @@ internal fun MaterialAppShell(backStack: List<AppPage>, page: AppPage, wide: Boo
                 else TopAppBar(title = { Text(title) }, navigationIcon = navigation, actions = actions)
             },
             bottomBar = {
-                if (!wide && page in mainPages) NavigationBar {
+                if (showBottomBar) NavigationBar {
                     mainPages.forEach { destination -> NavigationBarItem(selected = page == destination,
                         onClick = { onNavigate(destination) }, icon = { AppIcon(destination.icon) }, label = { Text(destination.navigationLabel) }) }
                 }

@@ -81,16 +81,7 @@ class OpenRoseNavigationUiTest {
             assertTrue(harness.hasText("连接你的 ROSE 耳机"))
             assertTrue(harness.hasText("附近设备"))
             assertTrue(harness.hasText("扫描耳机"))
-
-            harness.clickContentDescription("添加耳机")
-            harness.render()
-            assertTrue(harness.hasText("附近设备"))
-            assertTrue(harness.hasText("扫描耳机"))
-
-            harness.clickContentDescription("返回")
-            harness.render()
-            assertTrue(harness.hasText("连接你的 ROSE 耳机"))
-            assertTrue(harness.hasText("附近设备"))
+            assertFalse(harness.nodes().any { it.config.getOrNull(SemanticsProperties.ContentDescription).orEmpty().contains("添加耳机") }, "top bar + button must be hidden when disconnected")
         } finally {
             harness.close()
         }

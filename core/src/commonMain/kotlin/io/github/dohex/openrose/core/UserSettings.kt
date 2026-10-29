@@ -12,6 +12,14 @@ enum class Appearance {
     DARK,
 }
 
+/** Page transition animation options, independent of component style. */
+enum class PageTransition {
+    MIUIX_SPRING,
+    SLIDE,
+    FADE,
+    NONE,
+}
+
 /** Both supported island presentation modes are rendered by the system. */
 enum class IslandMode {
     OFF,
@@ -31,4 +39,5 @@ data class UserSettings(
     val focusNotificationEnabled: Boolean = true,
     val islandTriggers: Set<IslandTrigger> = setOf(IslandTrigger.CONNECTION),
     val forceBle: Boolean = false,
+    val pageTransition: PageTransition = PageTransition.MIUIX_SPRING,
 )

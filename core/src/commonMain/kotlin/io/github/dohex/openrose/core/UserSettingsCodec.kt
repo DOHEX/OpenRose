@@ -27,6 +27,12 @@ object UserSettingsCodec {
                 IslandTrigger.CONNECTION -> "connection"
             }
         }.sorted().joinToString(","),
+        "page_transition" to when (settings.pageTransition) {
+            PageTransition.MIUIX_SPRING -> "miuix_spring"
+            PageTransition.SLIDE -> "slide"
+            PageTransition.FADE -> "fade"
+            PageTransition.NONE -> "none"
+        },
     )
 
     fun decode(values: Map<String, String>): UserSettings {
@@ -58,6 +64,13 @@ object UserSettingsCodec {
                     else -> null
                 }
             }?.toSet() ?: defaults.islandTriggers,
+            pageTransition = when (values["page_transition"]) {
+                "miuix_spring" -> PageTransition.MIUIX_SPRING
+                "slide" -> PageTransition.SLIDE
+                "fade" -> PageTransition.FADE
+                "none" -> PageTransition.NONE
+                else -> defaults.pageTransition
+            },
         )
     }
 }
