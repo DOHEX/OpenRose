@@ -14,10 +14,13 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.setValue
 import io.github.dohex.openrose.ui.OpenRoseApp
 import io.github.dohex.openrose.core.Appearance
 
 class MainActivity : ComponentActivity() {
+    private var homeNavigationRequest by mutableLongStateOf(0L)
     private val owner get() = application as OpenRoseApplication
     private val permissionRequest = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
         owner.refreshPlatform()
@@ -25,6 +28,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        handleNavigationIntent(intent)
         enableEdgeToEdge()
         setContent {
             val state by owner.session.state.collectAsState()
@@ -52,8 +56,19 @@ class MainActivity : ComponentActivity() {
                 onConnect = owner::connect,
                 onDisconnect = owner::disconnect,
                 onSet = owner::applySetting,
+                homeNavigationRequest = homeNavigationRequest,
             )
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleNavigationIntent(intent)
+    }
+
+    private fun handleNavigationIntent(intent: Intent) {
+        if (intent.action == ACTION_SHOW_HEADPHONES) homeNavigationRequest++
     }
 
     override fun onResume() {
@@ -79,5 +94,9 @@ class MainActivity : ComponentActivity() {
             owner.markPermissionRequested()
             permissionRequest.launch(bluetoothPermissions())
         }
+    }
+
+    companion object {
+        const val ACTION_SHOW_HEADPHONES = "io.github.dohex.openrose.SHOW_HEADPHONES"
     }
 }

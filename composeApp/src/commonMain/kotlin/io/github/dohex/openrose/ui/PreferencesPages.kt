@@ -128,9 +128,7 @@ internal fun PreferencesPage(
             }
 
             systemPreferenceFeedback?.let { message ->
-                AppGroup {
-                    AppText(message, role = AppTextRole.Summary)
-                }
+                AppText(message, Modifier.padding(horizontal = 16.dp), role = AppTextRole.Summary)
             }
         }
 
@@ -354,7 +352,7 @@ private fun IntegrationReadinessCard(module: ModuleAvailability) {
     }
     AppGroup {
         ToneInfoRow("就绪状态", title, tone)
-        AppText(summary, role = AppTextRole.Summary)
+        AppText(summary, Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp), role = AppTextRole.Summary)
     }
 }
 

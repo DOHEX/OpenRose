@@ -34,6 +34,57 @@ import kotlin.test.assertTrue
 
 class OpenRoseFeedbackUiTest {
     @Test
+    fun pendingFeedbackDoesNotMoveTheNoiseControls() = runBlocking {
+        for (style in InterfaceStyle.entries) {
+            val operation = SettingOperation(
+                id = 60, sessionId = SESSION_ID, setting = DeviceSetting.NOISE_MODE,
+                requestedValue = FieldValue.Text("wind"), stage = SettingStage.SUBMITTED,
+            )
+            val harness = createHarness(state(operation, style).copy(settingOperations = emptyList()))
+            try {
+                harness.render()
+                harness.clickText("更多降噪设置")
+                harness.render()
+                val before = harness.textBounds("降噪模式")
+                harness.state.value = harness.state.value.copy(settingOperations = listOf(operation))
+                harness.render()
+                assertEquals(before, harness.textBounds("降噪模式"), "feedback must not shift the control being used in $style")
+                assertTrue(harness.hasText("正在处理设置，等待设备确认"))
+                harness.state.value = harness.state.value.copy(settingOperations = listOf(operation.copy(
+                    stage = SettingStage.CONFIRMED, confirmedFields = setOf(DeviceField.NOISE_MODE),
+                )))
+                harness.render()
+                assertTrue(harness.hasText("设备已确认设置"))
+                kotlinx.coroutines.delay(3_100)
+                harness.render()
+                assertFalse(harness.hasText("设备已确认设置"), "success feedback expires in $style")
+            } finally {
+                harness.close()
+            }
+        }
+    }
+
+    @Test
+    fun anExistingConfirmationDoesNotReappearOnUnrelatedControlPages() = runBlocking {
+        for (style in InterfaceStyle.entries) {
+            val operation = SettingOperation(
+                id = 61, sessionId = SESSION_ID, setting = DeviceSetting.NOISE_MODE,
+                requestedValue = FieldValue.Text("anc"), stage = SettingStage.CONFIRMED,
+                confirmedFields = setOf(DeviceField.NOISE_MODE),
+            )
+            val harness = createHarness(state(operation, style))
+            try {
+                harness.render()
+                harness.clickText("更多降噪设置")
+                harness.render()
+                assertFalse(harness.hasText("设备已确认设置"), "a historical confirmation is not feedback for this page in $style")
+            } finally {
+                harness.close()
+            }
+        }
+    }
+
+    @Test
     fun pendingSettingShowsConciseFeedbackAndItsFullRecordOnlyInDiagnostics() = runBlocking {
         for (style in InterfaceStyle.entries) {
             val operation = SettingOperation(
@@ -78,7 +129,7 @@ class OpenRoseFeedbackUiTest {
                 )
                 harness.clickTab("我的耳机")
                 harness.render()
-                assertTrue(harness.hasText("设备已确认设置"), "confirmation feedback follows the device readback in $style")
+                assertFalse(harness.hasText("设备已确认设置"), "a completed operation is not replayed when returning home in $style")
                 assertTrue(harness.hasText("已确认：抗风噪"), "the current mode comes from device state in $style")
                 assertFalse(harness.hasText("请求 #42：降噪模式"), "a confirmed operation is still not history on home in $style")
             } finally {

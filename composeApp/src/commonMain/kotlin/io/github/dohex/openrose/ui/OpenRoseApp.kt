@@ -43,6 +43,7 @@ fun OpenRoseApp(
     onDisconnect: () -> Unit,
     onSet: (DeviceSetting, FieldValue) -> Unit,
     modifier: Modifier = Modifier,
+    homeNavigationRequest: Long = 0L,
 ) {
     val dark = when (state.settings.appearance) {
         Appearance.SYSTEM -> isSystemInDarkTheme()
@@ -59,6 +60,14 @@ fun OpenRoseApp(
     val rootFocusRequester = remember { FocusRequester() }
     val choiceDialog = remember(state.device?.sessionId) { mutableStateOf<String?>(null) }
     var selectedTouchSide by remember(state.device?.sessionId) { mutableStateOf<String?>(null) }
+    LaunchedEffect(homeNavigationRequest) {
+        if (homeNavigationRequest != 0L) {
+            backStack = listOf(AppPage.HEADPHONES)
+            headphoneMenuExpanded = false
+            choiceDialog.value = null
+            selectedTouchSlot = null
+        }
+    }
     fun navigate(destination: AppPage) {
         if (destination != backStack.last()) {
             headphoneMenuExpanded = false
@@ -146,7 +155,6 @@ fun OpenRoseApp(
                             val controlPage = page in listOf(AppPage.NOISE, AppPage.EQUALIZER, AppPage.TOUCH, AppPage.AUDIO)
                             if (controlPage) {
                                 SettingPageBanner(state, device)
-                                SettingFeedback(state, device) { navigate(AppPage.DIAGNOSTICS) }
                             }
                             when (page) {
                                 AppPage.NOISE -> NoiseControlCard(state, device, onSet)
@@ -166,7 +174,7 @@ fun OpenRoseApp(
                                         AppArrowRow("设备详情", icon = RoseIcon.INFO) { navigate(AppPage.DETAILS) }
                                         AppArrowRow("连接方式", value = state.controlTransportLabel(), icon = RoseIcon.BLUETOOTH) { navigate(AppPage.DIAGNOSTICS) }
                                     }
-                                    AppButton("断开连接", onDisconnect, modifier = Modifier.padding(horizontal = 16.dp), kind = AppButtonKind.Secondary)
+                                    AppButton("断开控制连接", onDisconnect, modifier = Modifier.padding(horizontal = 16.dp), kind = AppButtonKind.Secondary)
                                 }
                                 AppPage.DETAILS -> {
                                     ConnectionDetailsCard(state, onDisconnect)
@@ -185,7 +193,15 @@ fun OpenRoseApp(
                                 AppInfoRow("耳机已断开", "连接耳机后，可查看和调整当前型号支持的功能。")
                                 AppButton("添加耳机", { navigate(AppPage.ADD_DEVICE) })
                             }
-                            SettingFeedback(state, null) { navigate(AppPage.DIAGNOSTICS) }
+                        }
+                    }
+                }
+                val feedbackContent: @Composable () -> Unit = {
+                    val device = state.activeDevice()
+                    if ((page == AppPage.HEADPHONES && device != null) ||
+                        page in listOf(AppPage.NOISE, AppPage.EQUALIZER, AppPage.TOUCH, AppPage.AUDIO)) {
+                        key(page) {
+                            SettingFeedback(state, device) { navigate(AppPage.DIAGNOSTICS) }
                         }
                     }
                 }
@@ -198,10 +214,12 @@ fun OpenRoseApp(
                         onBack = ::back,
                         scrollState = scrollStates.getValue(page),
                         connectedHome = state.activeDevice() != null,
+                        showAddDeviceAction = !state.platform.transportUnavailableForHome(),
                         menuExpanded = headphoneMenuExpanded,
                         onMenuExpandedChange = { headphoneMenuExpanded = it },
                         onDisconnect = onDisconnect,
                         pageContent = pageContent,
+                        feedbackContent = feedbackContent,
                     )
                     InterfaceStyle.MATERIAL3 -> MaterialAppShell(
                         backStack = backStack,
@@ -211,10 +229,12 @@ fun OpenRoseApp(
                         onBack = ::back,
                         scrollState = scrollStates.getValue(page),
                         connectedHome = state.activeDevice() != null,
+                        showAddDeviceAction = !state.platform.transportUnavailableForHome(),
                         menuExpanded = headphoneMenuExpanded,
                         onMenuExpandedChange = { headphoneMenuExpanded = it },
                         onDisconnect = onDisconnect,
                         pageContent = pageContent,
+                        feedbackContent = feedbackContent,
                     )
                 }
             }
