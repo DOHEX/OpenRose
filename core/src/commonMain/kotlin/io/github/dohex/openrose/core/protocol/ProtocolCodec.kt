@@ -22,6 +22,23 @@ enum class ModelProfile(val displayName: String, val manufacturerPrefix: String,
             I5_ZT -> i5Fields.values.flatten().toSet()
             I7_RS_V2 -> i7Fields.values.flatten().toSet()
         }
+
+    companion object {
+        fun match(name: String?): ModelProfile? {
+            if (name == null) return null
+            val normalized = name.trim().lowercase()
+            val isRose = normalized.startsWith("rose") ||
+                normalized.startsWith("roseselsa") ||
+                normalized.contains("earfeel") ||
+                normalized.contains("earfree")
+            if (!isRose) return null
+            return when {
+                normalized.contains("earfeel") || normalized.contains("i7") -> I7_RS_V2
+                normalized.contains("earfree") || normalized.contains("i5") -> I5_ZT
+                else -> null
+            }
+        }
+    }
 }
 
 object ModelIdentification {

@@ -21,6 +21,7 @@ import io.github.dohex.openrose.core.HostPlatform
 import io.github.dohex.openrose.core.InterfaceStyle
 import io.github.dohex.openrose.core.IslandMode
 import io.github.dohex.openrose.core.IslandTrigger
+import io.github.dohex.openrose.core.PageTransition
 import io.github.dohex.openrose.core.ModuleAvailability
 import io.github.dohex.openrose.core.PermissionState
 import io.github.dohex.openrose.core.PlatformApplicability
@@ -74,6 +75,16 @@ internal fun PreferencesPage(
                 options = Appearance.entries.map { AppOption(it, appearanceLabel(it)) },
                 selected = settings.appearance,
                 onSelect = { onChange(settings.copy(appearance = it)) },
+            )
+        }
+
+        AppGroup(title = "动效") {
+            AppChoiceRow(
+                title = "转场动效",
+                valueText = pageTransitionLabel(settings.pageTransition),
+                options = PageTransition.entries.map { AppOption(it, pageTransitionLabel(it)) },
+                selected = settings.pageTransition,
+                onSelect = { onChange(settings.copy(pageTransition = it)) },
             )
         }
 
@@ -446,6 +457,13 @@ private fun appearanceLabel(appearance: Appearance): String = when (appearance) 
     Appearance.SYSTEM -> "跟随系统"
     Appearance.LIGHT -> "浅色"
     Appearance.DARK -> "深色"
+}
+
+private fun pageTransitionLabel(transition: PageTransition): String = when (transition) {
+    PageTransition.MIUIX_SPRING -> "Miuix 弹性滑动"
+    PageTransition.SLIDE -> "标准平移"
+    PageTransition.FADE -> "淡入淡出"
+    PageTransition.NONE -> "关闭动效"
 }
 
 private fun islandModeLabel(mode: IslandMode): String = when (mode) {

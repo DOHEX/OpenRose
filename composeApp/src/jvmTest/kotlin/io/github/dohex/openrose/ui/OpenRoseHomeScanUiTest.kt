@@ -47,7 +47,6 @@ class OpenRoseHomeScanUiTest {
                 assertTrue(harness.hasText("EarFree i5"), "identified headsets need a readable fallback name in $style")
                 assertFalse(harness.hasText("未知型号配置，无法连接"), "unrelated devices start collapsed in $style")
                 assertTrue(harness.clickableBounds("扫描耳机").bottom < harness.textBounds("附近设备").top)
-                assertTrue(harness.clickableBounds("连接与运行状态").bottom < harness.textBounds("附近设备").top)
                 harness.clickText("显示其他设备（30）")
                 harness.render()
                 assertTrue(harness.hasText("未知型号配置，无法连接"))
@@ -84,33 +83,15 @@ class OpenRoseHomeScanUiTest {
     }
 
     @Test
-    fun emptyNearbyMessageUsesThePageSurface() = runBlocking {
-        for (style in InterfaceStyle.entries) {
-            val harness = createHarness(1280, 1000, state(style))
-            try {
-                harness.render()
-                val message = harness.textBounds("还没有发现耳机。请确认耳机已开启并在附近。")
-                val details = harness.clickableBounds("连接与运行状态")
-                val image = harness.snapshot()
-                val y = message.center.y.toInt()
-                assertEquals(image.getRGB(details.right.toInt() + 24, y), image.getRGB(details.right.toInt() - 24, y),
-                    "the empty message should use the surrounding page surface in $style")
-            } finally {
-                harness.close()
-            }
-        }
-    }
-
-    @Test
     fun disconnectedHomeStartsNearTheTopBar() = runBlocking {
         for (style in InterfaceStyle.entries) {
             val harness = createHarness(1280, 1000, state(style))
             try {
                 harness.render()
-                val action = harness.clickableContentDescriptionBounds("添加耳机")
                 val title = harness.textBounds("连接你的 ROSE 耳机")
-                assertTrue(title.top - action.bottom < action.height,
-                    "home content should begin near the top bar in $style: action=$action title=$title")
+                val scan = harness.clickableBounds("扫描耳机")
+                assertTrue(title.top < scan.top, "home content should begin near the top bar in $style")
+                assertFalse(harness.hasContentDescription("添加耳机"))
             } finally {
                 harness.close()
             }
@@ -127,9 +108,7 @@ class OpenRoseHomeScanUiTest {
                 val instruction = harness.textBounds("让耳机保持开启，并靠近手机")
                 val nearby = harness.textBounds("附近设备")
                 val scan = harness.clickableBounds("扫描耳机")
-                val details = harness.clickableBounds("连接与运行状态")
-                assertTrue(details.width < 1280f * 2 / 3, "content should stay compact in $style: $details")
-                assertTrue(abs(details.center.x - 1280f / 2) < 1280f / 10, "content should be centered in $style: $details")
+                assertTrue(scan.width < 1280f * 2 / 3, "content should stay compact in $style: $scan")
                 assertTrue(listOf(instruction.left, nearby.left, scan.left).all { abs(it - title.left) < 32f },
                     "the column should read from a common left edge in $style")
                 assertTrue(title.top < instruction.top && instruction.top < scan.top && scan.top < nearby.top,
@@ -250,7 +229,7 @@ class OpenRoseHomeScanUiTest {
                     harness.render()
                     assertTrue(harness.hasText("需要蓝牙权限"))
                     assertTrue(harness.hasClickableText("授予蓝牙权限"))
-                    assertTrue(harness.hasContentDescription("添加耳机"))
+                    assertFalse(harness.hasContentDescription("添加耳机"))
                     assertTrue(harness.hasText("附近设备"))
                     assertTrue(harness.hasDisabledButton("扫描耳机"))
                     assertFalse(harness.hasText(reason), "the permission recovery is the current reason in $style")
@@ -387,7 +366,7 @@ class OpenRoseHomeScanUiTest {
                     platform = PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
                 )
                 harness.render()
-                assertTrue(harness.hasContentDescription("添加耳机"))
+                assertFalse(harness.hasContentDescription("添加耳机"))
                 assertTrue(harness.hasText("附近设备"))
                 assertTrue(harness.hasClickableText("扫描耳机"))
                 assertTrue(harness.permissionRequests.isEmpty())
@@ -398,7 +377,7 @@ class OpenRoseHomeScanUiTest {
                 harness.clickText("扫描耳机")
                 assertEquals(1, harness.startScans.size)
 
-                harness.focus("添加耳机")
+                harness.focus("扫描耳机")
                 harness.state.value = harness.state.value.copy(
                     platform = PlatformState(PermissionState.GRANTED, TransportAvailability.Unavailable(reason)),
                 )

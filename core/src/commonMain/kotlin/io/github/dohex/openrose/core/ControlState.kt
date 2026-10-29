@@ -141,6 +141,7 @@ data class ControlState(
     val settings: UserSettings = UserSettings(),
     val scan: ScanState = ScanState.Idle,
     val candidates: List<DeviceCandidate> = emptyList(),
+    val bondedDevices: List<DeviceCandidate> = emptyList(),
     val device: DeviceState? = null,
     val lastError: ControlError? = null,
     /** Recent operations, including terminal outcomes across a disconnect. */

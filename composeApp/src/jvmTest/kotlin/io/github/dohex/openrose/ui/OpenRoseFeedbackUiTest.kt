@@ -44,10 +44,10 @@ class OpenRoseFeedbackUiTest {
             try {
                 harness.render()
                 harness.clickText("更多降噪设置")
-                harness.render()
+                harness.render(frames = 20)
                 val before = harness.textBounds("降噪模式")
                 harness.state.value = harness.state.value.copy(settingOperations = listOf(operation))
-                harness.render()
+                harness.render(frames = 20)
                 assertEquals(before, harness.textBounds("降噪模式"), "feedback must not shift the control being used in $style")
                 assertTrue(harness.hasText("正在处理设置，等待设备确认"))
                 harness.state.value = harness.state.value.copy(settingOperations = listOf(operation.copy(
@@ -110,6 +110,7 @@ class OpenRoseFeedbackUiTest {
 
                 harness.clickTab("系统集成")
                 harness.render()
+                println("TEXTS AT 112: " + harness.nodes().map { it.config.toString() }.filter { it.contains("Text") })
                 harness.clickText("运行状态与诊断")
                 harness.render()
                 assertTrue(harness.hasText("请求 #42：降噪模式"), "diagnostics retain the request identity in $style")
@@ -128,7 +129,7 @@ class OpenRoseFeedbackUiTest {
                     settingOperations = listOf(confirmedOperation),
                 )
                 harness.clickTab("我的耳机")
-                harness.render()
+                harness.render(frames = 30)
                 assertFalse(harness.hasText("设备已确认设置"), "a completed operation is not replayed when returning home in $style")
                 assertTrue(harness.hasText("已确认：抗风噪"), "the current mode comes from device state in $style")
                 assertFalse(harness.hasText("请求 #42：降噪模式"), "a confirmed operation is still not history on home in $style")

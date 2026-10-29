@@ -16,8 +16,8 @@ android {
         versionName = providers.gradleProperty("releaseVersion").getOrElse("0.1.0-dev")
     }
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
+        sourceCompatibility = JavaVersion.VERSION_21
+        targetCompatibility = JavaVersion.VERSION_21
     }
     buildFeatures {
         compose = true
@@ -41,7 +41,7 @@ android {
 }
 kotlin {
     jvmToolchain(21)
-    compilerOptions { jvmTarget.set(JvmTarget.JVM_17) }
+    compilerOptions { jvmTarget.set(JvmTarget.JVM_21) }
 }
 dependencies {
     implementation(project(":composeApp"))
