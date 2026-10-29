@@ -54,10 +54,9 @@ fun OpenRoseApp(
         Appearance.DARK -> true
     }
     val navBackStack = rememberNavBackStack<Route>(Route.Main(AppPage.HEADPHONES))
-    var activeTab by remember { mutableStateOf(AppPage.HEADPHONES) }
-    val currentRoute = (navBackStack.lastOrNull() as? Route) ?: Route.Main(activeTab)
+    val currentRoute = (navBackStack.lastOrNull() as? Route) ?: Route.Main(AppPage.HEADPHONES)
     val page = when (currentRoute) {
-        is Route.Main -> activeTab
+        is Route.Main -> currentRoute.tab
         else -> currentRoute.toAppPage()
     }
     val scrollStates = remember { AppPage.entries.associateWith { ScrollState(0) } }
@@ -72,7 +71,6 @@ fun OpenRoseApp(
         if (homeNavigationRequest != 0L) {
             navBackStack.clear()
             navBackStack.add(Route.Main(AppPage.HEADPHONES))
-            activeTab = AppPage.HEADPHONES
             headphoneMenuExpanded = false
             choiceDialog.value = null
             selectedTouchSlot = null
@@ -83,11 +81,8 @@ fun OpenRoseApp(
         choiceDialog.value = null
         selectedTouchSlot = null
         if (destination in mainPages) {
-            if (navBackStack.size > 1) {
-                navBackStack.clear()
-                navBackStack.add(Route.Main(destination))
-            }
-            activeTab = destination
+            navBackStack.clear()
+            navBackStack.add(Route.Main(destination))
         } else {
             val target = destination.toRoute()
             if (navBackStack.lastOrNull() != target) {
@@ -101,14 +96,17 @@ fun OpenRoseApp(
             selectedTouchSlot != null -> selectedTouchSlot = null
             choiceDialog.value != null -> choiceDialog.value = null
             navBackStack.size > 1 -> navBackStack.removeLastOrNull()
-            activeTab != AppPage.HEADPHONES -> activeTab = AppPage.HEADPHONES
+            currentRoute is Route.Main && currentRoute.tab != AppPage.HEADPHONES -> {
+                navBackStack.clear()
+                navBackStack.add(Route.Main(AppPage.HEADPHONES))
+            }
         }
     }
     val canGoBack = headphoneMenuExpanded ||
         selectedTouchSlot != null ||
         choiceDialog.value != null ||
         navBackStack.size > 1 ||
-        activeTab != AppPage.HEADPHONES
+        (currentRoute is Route.Main && currentRoute.tab != AppPage.HEADPHONES)
     PlatformBackHandler(
         canGoBack,
         ::back,
@@ -121,7 +119,6 @@ fun OpenRoseApp(
         if (page == AppPage.ADD_DEVICE && connection?.phase == ConnectionPhase.READY) {
             navBackStack.clear()
             navBackStack.add(Route.Main(AppPage.HEADPHONES))
-            activeTab = AppPage.HEADPHONES
         }
     }
     CompositionLocalProvider(LocalChoiceDialog provides choiceDialog) {
@@ -224,38 +221,44 @@ fun OpenRoseApp(
                 }
                 val renderShell: @Composable (AppPage, Boolean) -> Unit = { targetPage, isSecondary ->
                     val showBottomBar = !wide && !isSecondary && navBackStack.size == 1 && targetPage in mainPages
+                    val shellContent: @Composable () -> Unit = { pageContentFor(targetPage) }
+                    val shellFeedback: @Composable () -> Unit = { feedbackContentFor(targetPage) }
+                    val isConnectedHome = state.activeDevice() != null
+                    val showAdd = isConnectedHome && !state.platform.transportUnavailableForHome()
+                    val scrollState = scrollStates.getValue(targetPage)
+
                     when (state.settings.interfaceStyle) {
                         InterfaceStyle.MIUIX -> MiuixAppShell(
                             page = targetPage,
                             wide = wide,
                             onNavigate = onNavigate,
                             onBack = ::back,
-                            scrollState = scrollStates.getValue(targetPage),
-                            connectedHome = state.activeDevice() != null,
-                            showAddDeviceAction = (state.activeDevice() != null) && !state.platform.transportUnavailableForHome(),
+                            scrollState = scrollState,
+                            connectedHome = isConnectedHome,
+                            showAddDeviceAction = showAdd,
                             menuExpanded = headphoneMenuExpanded,
                             onMenuExpandedChange = { headphoneMenuExpanded = it },
                             onDisconnect = onDisconnect,
                             isSecondary = isSecondary,
                             showBottomBar = showBottomBar,
-                            pageContent = { pageContentFor(targetPage) },
-                            feedbackContent = { feedbackContentFor(targetPage) },
+                            pageContent = shellContent,
+                            feedbackContent = shellFeedback,
                         )
                         InterfaceStyle.MATERIAL3 -> MaterialAppShell(
                             page = targetPage,
                             wide = wide,
                             onNavigate = onNavigate,
                             onBack = ::back,
-                            scrollState = scrollStates.getValue(targetPage),
-                            connectedHome = state.activeDevice() != null,
-                            showAddDeviceAction = (state.activeDevice() != null) && !state.platform.transportUnavailableForHome(),
+                            scrollState = scrollState,
+                            connectedHome = isConnectedHome,
+                            showAddDeviceAction = showAdd,
                             menuExpanded = headphoneMenuExpanded,
                             onMenuExpandedChange = { headphoneMenuExpanded = it },
                             onDisconnect = onDisconnect,
                             isSecondary = isSecondary,
                             showBottomBar = showBottomBar,
-                            pageContent = { pageContentFor(targetPage) },
-                            feedbackContent = { feedbackContentFor(targetPage) },
+                            pageContent = shellContent,
+                            feedbackContent = shellFeedback,
                         )
                     }
                 }
@@ -265,8 +268,8 @@ fun OpenRoseApp(
                     onBack = ::back,
                     modifier = Modifier.fillMaxSize(),
                 ) {
-                    entry<Route.Main> {
-                        renderShell(activeTab, false)
+                    entry<Route.Main> { mainRoute ->
+                        renderShell(mainRoute.tab, false)
                     }
                     entry<Route.Noise>(swipeDismiss = NavSwipeDirection.LeftToRight) {
                         renderShell(AppPage.NOISE, true)

@@ -108,17 +108,19 @@ class ControlSession(
                 disconnect()
             }
         } else {
+            val candidate = findCandidate(audioDeviceId)
+            if (candidate?.profile == null) {
+                // Connected audio device is not an authorized ROSE model; do not drop existing session
+                return
+            }
             if (audioDrivenSessionDeviceId != null && audioDrivenSessionDeviceId != audioDeviceId) {
                 disconnect()
             }
             if (state.value.connection is ConnectionState.Disconnected) {
-                val candidate = findCandidate(audioDeviceId)
-                if (candidate?.profile != null) {
-                    audioDrivenSessionDeviceId = audioDeviceId
-                    autoConnectJob?.cancel()
-                    autoConnectJob = scope.launch {
-                        connectInternal(audioDeviceId, isAudioDriven = true)
-                    }
+                audioDrivenSessionDeviceId = audioDeviceId
+                autoConnectJob?.cancel()
+                autoConnectJob = scope.launch {
+                    connectInternal(audioDeviceId, isAudioDriven = true)
                 }
             }
         }
@@ -126,11 +128,12 @@ class ControlSession(
 
     private suspend fun findCandidate(deviceId: DeviceId): DeviceCandidate? {
         state.value.candidates.firstOrNull { it.deviceId == deviceId }?.let { return it }
+        state.value.bondedDevices.firstOrNull { it.deviceId == deviceId }?.let { return it }
         val bonded = runCatching { transport?.bondedDevices()?.firstOrNull { it.deviceId == deviceId } }.getOrNull()
         if (bonded != null) {
             updateState { old ->
-                if (old.candidates.none { it.deviceId == bonded.deviceId }) {
-                    old.copy(candidates = old.candidates + bonded)
+                if (old.bondedDevices.none { it.deviceId == bonded.deviceId }) {
+                    old.copy(bondedDevices = old.bondedDevices + bonded)
                 } else old
             }
             return bonded

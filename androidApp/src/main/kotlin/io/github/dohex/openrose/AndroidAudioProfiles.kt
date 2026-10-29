@@ -79,34 +79,60 @@ internal class AndroidAudioProfiles(private val context: Context) {
 
     val audioConnectedDevice: Flow<DeviceId?> = callbackFlow {
         var currentConnected: DeviceId? = null
+        val a2dpConnected = mutableSetOf<String>()
+        val hfpConnected = mutableSetOf<String>()
+
+        @SuppressLint("MissingPermission")
+        fun activeRoseDevice(adapter: BluetoothAdapter?): DeviceId? {
+            val allConnected = a2dpConnected + hfpConnected
+            if (allConnected.isEmpty()) return null
+            val bonded = try {
+                adapter?.bondedDevices?.filter { ModelProfile.match(it.name) != null }
+                    ?.mapNotNull { normalizedAddress(it.address) }?.toSet()
+            } catch (_: SecurityException) {
+                null
+            } ?: emptySet()
+            val matched = allConnected.firstOrNull { it in bonded }
+            return matched?.let(::DeviceId)
+        }
 
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(receiverContext: Context, intent: Intent) {
+                val adapter = receiverContext.getSystemService(BluetoothManager::class.java)?.adapter
                 when (intent.action) {
-                    BluetoothA2dp.ACTION_CONNECTION_STATE_CHANGED,
+                    BluetoothA2dp.ACTION_CONNECTION_STATE_CHANGED -> {
+                        val state = intent.getIntExtra(BluetoothProfile.EXTRA_STATE, BluetoothProfile.STATE_DISCONNECTED)
+                        val device = getDeviceExtra(intent)
+                        val address = device?.address?.let(::normalizedAddress)
+                        if (address != null) {
+                            if (state == BluetoothProfile.STATE_CONNECTED) a2dpConnected += address
+                            else if (state == BluetoothProfile.STATE_DISCONNECTED) a2dpConnected -= address
+                            val next = activeRoseDevice(adapter)
+                            if (next != currentConnected) {
+                                currentConnected = next
+                                trySend(next)
+                            }
+                        }
+                    }
                     BluetoothHeadset.ACTION_CONNECTION_STATE_CHANGED -> {
                         val state = intent.getIntExtra(BluetoothProfile.EXTRA_STATE, BluetoothProfile.STATE_DISCONNECTED)
-                        val device = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                            intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE, BluetoothDevice::class.java)
-                        } else {
-                            @Suppress("DEPRECATION")
-                            intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE)
-                        }
+                        val device = getDeviceExtra(intent)
                         val address = device?.address?.let(::normalizedAddress)
-                        if (state == BluetoothProfile.STATE_CONNECTED && address != null) {
-                            val newId = DeviceId(address)
-                            currentConnected = newId
-                            trySend(newId)
-                        } else if (state == BluetoothProfile.STATE_DISCONNECTED && address != null) {
-                            if (currentConnected?.value == address) {
-                                currentConnected = null
-                                trySend(null)
+                        if (address != null) {
+                            if (state == BluetoothProfile.STATE_CONNECTED) hfpConnected += address
+                            else if (state == BluetoothProfile.STATE_DISCONNECTED) hfpConnected -= address
+                            val next = activeRoseDevice(adapter)
+                            if (next != currentConnected) {
+                                currentConnected = next
+                                trySend(next)
                             }
                         }
                     }
                     BluetoothAdapter.ACTION_STATE_CHANGED -> {
                         val state = intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR)
                         if (state == BluetoothAdapter.STATE_TURNING_OFF || state == BluetoothAdapter.STATE_OFF) {
+                            a2dpConnected.clear()
+                            hfpConnected.clear()
                             currentConnected = null
                             trySend(null)
                         }
@@ -143,16 +169,28 @@ internal class AndroidAudioProfiles(private val context: Context) {
         }
     }.distinctUntilChanged()
 
+    private fun getDeviceExtra(intent: Intent): BluetoothDevice? =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE, BluetoothDevice::class.java)
+        } else {
+            @Suppress("DEPRECATION")
+            intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE)
+        }
+
     @SuppressLint("MissingPermission")
-    private suspend fun findInitialConnectedAudioDevice(adapter: BluetoothAdapter): DeviceId? {
+    private suspend fun findInitialConnectedAudioDevice(adapter: BluetoothAdapter): DeviceId? = withTimeoutOrNull(PROFILE_PROBE_TIMEOUT_MILLIS) {
+        val bondedRoseAddresses = runCatching {
+            adapter.bondedDevices?.filter { ModelProfile.match(it.name) != null }
+                ?.mapNotNull { normalizedAddress(it.address) }?.toSet()
+        }.getOrNull() ?: emptySet()
         val a2dpLease = requestProfileProxy(adapter, BluetoothProfile.A2DP)
         val headsetLease = requestProfileProxy(adapter, BluetoothProfile.HEADSET)
         try {
-            val a2dpAddress = a2dpLease?.connectedDeviceAddresses()?.firstOrNull()
-            if (a2dpAddress != null) return DeviceId(a2dpAddress)
-            val headsetAddress = headsetLease?.connectedDeviceAddresses()?.firstOrNull()
-            if (headsetAddress != null) return DeviceId(headsetAddress)
-            return null
+            val a2dpAddress = a2dpLease?.connectedDeviceAddresses()?.firstOrNull { it in bondedRoseAddresses }
+            if (a2dpAddress != null) return@withTimeoutOrNull DeviceId(a2dpAddress)
+            val headsetAddress = headsetLease?.connectedDeviceAddresses()?.firstOrNull { it in bondedRoseAddresses }
+            if (headsetAddress != null) return@withTimeoutOrNull DeviceId(headsetAddress)
+            return@withTimeoutOrNull null
         } finally {
             a2dpLease?.close()
             headsetLease?.close()

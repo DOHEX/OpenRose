@@ -27,9 +27,14 @@ enum class ModelProfile(val displayName: String, val manufacturerPrefix: String,
         fun match(name: String?): ModelProfile? {
             if (name == null) return null
             val normalized = name.trim().lowercase()
+            val isRose = normalized.startsWith("rose") ||
+                normalized.startsWith("roseselsa") ||
+                normalized.contains("earfeel") ||
+                normalized.contains("earfree")
+            if (!isRose) return null
             return when {
-                normalized.contains("i7") || normalized.contains("earfeel") -> I7_RS_V2
-                normalized.contains("i5") || normalized.contains("earfree") -> I5_ZT
+                normalized.contains("earfeel") || normalized.contains("i7") -> I7_RS_V2
+                normalized.contains("earfree") || normalized.contains("i5") -> I5_ZT
                 else -> null
             }
         }
