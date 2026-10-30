@@ -232,16 +232,28 @@ class UiDefaultStylesUiTest {
                 try {
                     harness.render()
                     val withoutIcon = harness.snapshot()
+                    assertTrue(harness.hasText("功能选择"))
+                    assertTrue(harness.hasText(rowValueLabel(style, selected)))
                     harness.icon.value = RoseIcon.EQUALIZER
                     harness.render()
                     val withIcon = harness.snapshot()
+                    assertTrue(harness.hasText("功能选择"), "the row retains its accessible title in $style")
+                    assertTrue(harness.hasText(rowValueLabel(style, selected)), "the row retains its value in $style")
+                    val titleNode = harness.nodes().first { node ->
+                        node.config.getOrNull(SemanticsProperties.Text).orEmpty().any { it.text == "功能选择" }
+                    }
                     assertTrue(
-                        (0 until withoutIcon.height).any { y ->
-                            (0 until withoutIcon.width).any { x ->
+                        titleNode.config.getOrNull(SemanticsProperties.ContentDescription).isNullOrEmpty(),
+                        "the decorative icon must not add a redundant description in $style",
+                    )
+                    val bounds = titleNode.boundsInRoot
+                    assertTrue(
+                        (bounds.top.toInt().coerceAtLeast(0) until bounds.bottom.toInt().coerceAtMost(withIcon.height)).any { y ->
+                            (bounds.left.toInt().coerceAtLeast(0) until (bounds.left.toInt() + 100).coerceAtMost(withIcon.width)).any { x ->
                                 withoutIcon.getRGB(x, y) != withIcon.getRGB(x, y)
                             }
                         },
-                        "the equalizer icon should change the rendered row in $style with selection $selected",
+                        "the leading area of the choice row should render the icon in $style with selection $selected",
                     )
                     harness.clickText("功能选择")
                     harness.render()

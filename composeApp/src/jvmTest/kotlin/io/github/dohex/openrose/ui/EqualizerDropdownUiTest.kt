@@ -71,6 +71,23 @@ class EqualizerDropdownUiTest {
                 harness.clickText("原声再现 · HIFI")
                 harness.render()
                 assertEquals(1, harness.writes.size, "confirmed selection is not sent again")
+                for (nextStyle in listOf(
+                    if (style == InterfaceStyle.MIUIX) InterfaceStyle.MATERIAL3 else InterfaceStyle.MIUIX,
+                    style,
+                )) {
+                    harness.state.value = harness.state.value.copy(
+                        settings = harness.state.value.settings.copy(interfaceStyle = nextStyle),
+                    )
+                    harness.render()
+                    assertTrue(harness.hasText("原声再现 · HIFI"), "confirmed preset should remain visible in $nextStyle")
+                    assertEquals(1, harness.writes.size, "switching to $nextStyle must not write a preset")
+                    harness.clickText("均衡器")
+                    harness.render()
+                    assertTrue(harness.hasSelectedText("原声再现 · HIFI"), "confirmed preset should stay selected in $nextStyle")
+                    harness.clickText("原声再现 · HIFI")
+                    harness.render()
+                    assertEquals(1, harness.writes.size, "reselecting the confirmed preset must not write in $nextStyle")
+                }
             } finally { harness.close() }
         }
     }
