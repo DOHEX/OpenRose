@@ -46,10 +46,7 @@ internal fun CustomEqualizerCard(
     val bandCount = capabilities.bandsHz.size
     val title = if (bandCount == 10) "自定义十段 EQ" else "自定义 EQ · $bandCount 段"
 
-    AppGroup(
-        title = title,
-        footnote = "草稿只保存在当前控制会话。应用时设备会分别回读确认 EQ 模式和曲线。",
-    ) {
+    AppGroup(title = title) {
         AppInfoRow("设备均衡器模式", confirmedSettingStatus(DeviceField.EQ, device))
         AppInfoRow("设备曲线", confirmedSettingStatus(DeviceField.CUSTOM_EQ, device))
         AppDivider()

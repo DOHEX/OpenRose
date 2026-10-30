@@ -73,7 +73,7 @@ fun OpenRoseApp(
             while (navBackStack.size > 1) {
                 navBackStack.removeLastOrNull()
             }
-            mainTabsPagerState.selectPage(0, animated = false)
+            mainTabsPagerState.selectPage(0, transition = PageTransition.NONE)
             headphoneMenuExpanded = false
             choiceDialog.value = null
             selectedTouchSlot = null
@@ -89,7 +89,7 @@ fun OpenRoseApp(
             }
             val targetIndex = mainPages.indexOf(destination)
             if (targetIndex >= 0) {
-                mainTabsPagerState.selectPage(targetIndex, animated = state.settings.pageTransition != PageTransition.NONE)
+                mainTabsPagerState.selectPage(targetIndex, transition = state.settings.pageTransition)
             }
         } else {
             val target = destination.toRoute()
@@ -105,7 +105,7 @@ fun OpenRoseApp(
             choiceDialog.value != null -> choiceDialog.value = null
             navBackStack.size > 1 -> navBackStack.removeLastOrNull()
             mainTabsPagerState.selectedPage != 0 -> {
-                mainTabsPagerState.selectPage(0, animated = state.settings.pageTransition != PageTransition.NONE)
+                mainTabsPagerState.selectPage(0, transition = state.settings.pageTransition)
             }
         }
     }
@@ -212,9 +212,6 @@ fun OpenRoseApp(
                                 }
                                 else -> Unit
                             }
-                            if (controlPage) {
-                                AppText("选择表示设备已确认的状态；提交后等待设备回报确认。", Modifier.padding(horizontal = 16.dp), AppTextRole.Footnote)
-                            }
                         } else {
                             AppGroup {
                                 AppInfoRow("耳机已断开", "连接耳机后，可查看和调整当前型号支持的功能。")
@@ -285,7 +282,7 @@ fun OpenRoseApp(
                     ProvideInterfaceStyle(state.settings.interfaceStyle, dark) {
                         val isConnectedHome = state.activeDevice() != null
                         val showAdd = !state.platform.transportUnavailableForHome()
-                        val animatedTabTransition = state.settings.pageTransition != PageTransition.NONE
+                        val pageTransition = state.settings.pageTransition
                         val onNavigate: (AppPage) -> Unit = { navigate(it) }
 
                         when (state.settings.interfaceStyle) {
@@ -301,7 +298,7 @@ fun OpenRoseApp(
                                 menuExpanded = headphoneMenuExpanded,
                                 onMenuExpandedChange = { headphoneMenuExpanded = it },
                                 onDisconnect = onDisconnect,
-                                animatedTabTransition = animatedTabTransition,
+                                pageTransition = pageTransition,
                             )
                             InterfaceStyle.MATERIAL3 -> MaterialMainShell(
                                 pagerState = mainTabsPagerState,
@@ -315,7 +312,7 @@ fun OpenRoseApp(
                                 menuExpanded = headphoneMenuExpanded,
                                 onMenuExpandedChange = { headphoneMenuExpanded = it },
                                 onDisconnect = onDisconnect,
-                                animatedTabTransition = animatedTabTransition,
+                                pageTransition = pageTransition,
                             )
                         }
                     }

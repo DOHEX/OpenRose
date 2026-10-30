@@ -23,6 +23,9 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.unit.dp
 import top.yukonga.miuix.kmp.overlay.OverlayListPopup
 import top.yukonga.miuix.kmp.basic.*
+import io.github.dohex.openrose.core.PageTransition
+import top.yukonga.miuix.kmp.utils.PagerGestureNestedScrollConnection
+import top.yukonga.miuix.kmp.utils.pagerGestureOverride
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.blur.Backdrop
 import top.yukonga.miuix.kmp.blur.ProgressiveBlur
@@ -141,7 +144,7 @@ internal fun MiuixMainShell(
     menuExpanded: Boolean = false,
     onMenuExpandedChange: (Boolean) -> Unit = {},
     onDisconnect: () -> Unit = {},
-    animatedTabTransition: Boolean = true,
+    pageTransition: PageTransition = PageTransition.MIUIX_SPRING,
 ) {
     LaunchedEffect(pagerState.pagerState.currentPage) {
         pagerState.syncPage()
@@ -156,7 +159,7 @@ internal fun MiuixMainShell(
                     NavigationRailItem(
                         selected = isSelected,
                         onClick = {
-                            pagerState.selectPage(index, animated = animatedTabTransition)
+                            pagerState.selectPage(index, transition = pageTransition)
                             onNavigate(destination)
                         },
                         icon = RoseIcons[destination.icon],
@@ -174,7 +177,7 @@ internal fun MiuixMainShell(
                             NavigationBarItem(
                                 selected = currentTab == destination,
                                 onClick = {
-                                    pagerState.selectPage(index, animated = animatedTabTransition)
+                                    pagerState.selectPage(index, transition = pageTransition)
                                     onNavigate(destination)
                                 },
                                 icon = RoseIcons[destination.icon],
@@ -189,9 +192,14 @@ internal fun MiuixMainShell(
                 state = pagerState.pagerState,
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(bottom = outerPadding.calculateBottomPadding()),
+                    .padding(bottom = outerPadding.calculateBottomPadding())
+                    .pagerGestureOverride(
+                        pagerState = pagerState.pagerState,
+                        enabled = !wide,
+                    ),
                 beyondViewportPageCount = 1,
-                userScrollEnabled = !wide,
+                userScrollEnabled = false,
+                pageNestedScrollConnection = PagerGestureNestedScrollConnection,
                 key = { index -> mainPages[index] },
             ) { pageIndex ->
                 val page = mainPages[pageIndex]

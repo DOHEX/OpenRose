@@ -2,6 +2,7 @@
 
 package io.github.dohex.openrose.ui
 
+import io.github.dohex.openrose.core.PageTransition
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.foundation.pager.HorizontalPager
@@ -178,7 +179,7 @@ internal fun MaterialMainShell(
     menuExpanded: Boolean = false,
     onMenuExpandedChange: (Boolean) -> Unit = {},
     onDisconnect: () -> Unit = {},
-    animatedTabTransition: Boolean = true,
+    pageTransition: PageTransition = PageTransition.MIUIX_SPRING,
 ) {
     LaunchedEffect(pagerState.pagerState.currentPage) {
         pagerState.syncPage()
@@ -194,7 +195,7 @@ internal fun MaterialMainShell(
                     NavigationRailItem(
                         selected = isSelected,
                         onClick = {
-                            pagerState.selectPage(index, animated = animatedTabTransition)
+                            pagerState.selectPage(index, transition = pageTransition)
                             onNavigate(destination)
                         },
                         icon = { AppIcon(destination.icon) },
@@ -212,7 +213,7 @@ internal fun MaterialMainShell(
                             NavigationBarItem(
                                 selected = currentTab == destination,
                                 onClick = {
-                                    pagerState.selectPage(index, animated = animatedTabTransition)
+                                    pagerState.selectPage(index, transition = pageTransition)
                                     onNavigate(destination)
                                 },
                                 icon = { AppIcon(destination.icon) },

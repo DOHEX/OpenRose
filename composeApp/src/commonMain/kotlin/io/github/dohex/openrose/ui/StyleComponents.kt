@@ -121,7 +121,15 @@ internal fun AppText(text: String, modifier: Modifier = Modifier, role: AppTextR
 }
 
 @Composable
-internal fun AppGroup(title: String? = null, footnote: String? = null, titleTrailing: (@Composable () -> Unit)? = null, plain: Boolean = false, content: @Composable ColumnScope.() -> Unit) {
+internal fun AppGroup(
+    title: String? = null,
+    header: (@Composable () -> Unit)? = null,
+    footnote: String? = null,
+    footnoteIcon: RoseIcon? = null,
+    titleTrailing: (@Composable () -> Unit)? = null,
+    plain: Boolean = false,
+    content: @Composable ColumnScope.() -> Unit,
+) {
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         when (LocalInterfaceStyle.current) {
             InterfaceStyle.MIUIX -> {
@@ -129,6 +137,11 @@ internal fun AppGroup(title: String? = null, footnote: String? = null, titleTrai
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         SmallTitle(label, Modifier.weight(1f).semantics { heading() })
                         titleTrailing?.let { Box(Modifier.padding(end = 16.dp)) { it() } }
+                    }
+                }
+                header?.let {
+                    Box(Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
+                        it()
                     }
                 }
                 if (plain) Column(Modifier.fillMaxWidth().padding(start = 28.dp), content = content)
@@ -141,10 +154,32 @@ internal fun AppGroup(title: String? = null, footnote: String? = null, titleTrai
                         titleTrailing?.invoke()
                     }
                 }
+                header?.let {
+                    Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+                        it()
+                    }
+                }
                 Column(Modifier.fillMaxWidth().padding(start = if (plain) 16.dp else 0.dp), content = content)
             }
         }
-        footnote?.let { AppText(it, Modifier.padding(horizontal = 16.dp), role = AppTextRole.Footnote) }
+        footnote?.let { text ->
+            if (footnoteIcon != null) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.Top,
+                ) {
+                    AppIcon(
+                        icon = footnoteIcon,
+                        modifier = Modifier.padding(top = 2.dp).size(14.dp),
+                        tint = appColor(AppColorRole.Summary),
+                    )
+                    AppText(text, role = AppTextRole.Footnote)
+                }
+            } else {
+                AppText(text, Modifier.padding(horizontal = 16.dp), role = AppTextRole.Footnote)
+            }
+        }
         if (LocalInterfaceStyle.current == InterfaceStyle.MATERIAL3) AppDivider()
     }
 }
@@ -408,17 +443,17 @@ internal fun <T> AppMultiChoiceRow(
 }
 
 @Composable
-internal fun <T> AppSegmented(options: List<AppOption<T>>, selected: T?, enabled: Boolean = true, onSelect: (T) -> Unit) {
+internal fun <T> AppSegmented(options: List<AppOption<T>>, selected: T?, enabled: Boolean = true, modifier: Modifier = Modifier, onSelect: (T) -> Unit) {
     if (options.isEmpty()) return
     when (LocalInterfaceStyle.current) {
-        InterfaceStyle.MIUIX -> Row(Modifier.fillMaxWidth().selectableGroup(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        InterfaceStyle.MIUIX -> Row(modifier.fillMaxWidth().selectableGroup(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             options.forEach { option ->
                 MiuixTextButton(option.label, onClick = { if (option.value != selected) onSelect(option.value) }, enabled = enabled,
                     modifier = Modifier.weight(1f).semantics { this.selected = option.value == selected; role = Role.RadioButton; option.contentDescription?.let { contentDescription = it } },
                     colors = if (option.value == selected) MiuixButtonDefaults.textButtonColorsPrimary() else MiuixButtonDefaults.textButtonColors())
             }
         }
-        InterfaceStyle.MATERIAL3 -> SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+        InterfaceStyle.MATERIAL3 -> SingleChoiceSegmentedButtonRow(modifier.fillMaxWidth()) {
             options.forEachIndexed { i, option ->
                 SegmentedButton(selected = selected != null && option.value == selected, onClick = { if (option.value != selected) onSelect(option.value) },
                     shape = SegmentedButtonDefaults.itemShape(i, options.size), enabled = enabled,
@@ -429,10 +464,10 @@ internal fun <T> AppSegmented(options: List<AppOption<T>>, selected: T?, enabled
 }
 
 @Composable
-internal fun AppViewTabs(tabs: List<String>, index: Int, onSelect: (Int) -> Unit) {
+internal fun AppViewTabs(tabs: List<String>, index: Int, modifier: Modifier = Modifier, onSelect: (Int) -> Unit) {
     when (LocalInterfaceStyle.current) {
-        InterfaceStyle.MIUIX -> TabRowWithContour(tabs, index, onSelect)
-        InterfaceStyle.MATERIAL3 -> AppSegmented(tabs.mapIndexed { i, label -> AppOption(i, label) }, index, onSelect = onSelect)
+        InterfaceStyle.MIUIX -> TabRowWithContour(tabs, index, onSelect, modifier = modifier)
+        InterfaceStyle.MATERIAL3 -> AppSegmented(tabs.mapIndexed { i, label -> AppOption(i, label) }, index, modifier = modifier, onSelect = onSelect)
     }
 }
 

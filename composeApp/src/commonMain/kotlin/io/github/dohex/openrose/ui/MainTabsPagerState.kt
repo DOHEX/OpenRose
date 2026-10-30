@@ -5,6 +5,8 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
+import io.github.dohex.openrose.core.PageTransition
+import top.yukonga.miuix.kmp.utils.springAnimateToPage
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -30,13 +32,13 @@ internal class MainTabsPagerState(
 
     private var navJob: Job? = null
 
-    fun selectPage(targetPage: Int, animated: Boolean = true) {
+    fun selectPage(targetPage: Int, transition: PageTransition = PageTransition.MIUIX_SPRING) {
         if (targetPage == selectedPage) return
 
         navJob?.cancel()
         selectedPage = targetPage
 
-        if (!animated) {
+        if (transition == PageTransition.NONE) {
             coroutineScope.launch {
                 pagerState.scrollToPage(targetPage)
             }
@@ -49,10 +51,14 @@ internal class MainTabsPagerState(
         navJob = coroutineScope.launch {
             val currentJob = coroutineContext.job
             try {
-                pagerState.animateScrollToPage(
-                    page = targetPage,
-                    animationSpec = tween(easing = EaseInOut, durationMillis = duration),
-                )
+                if (transition == PageTransition.MIUIX_SPRING) {
+                    pagerState.springAnimateToPage(targetPage)
+                } else {
+                    pagerState.animateScrollToPage(
+                        page = targetPage,
+                        animationSpec = tween(easing = EaseInOut, durationMillis = duration),
+                    )
+                }
             } finally {
                 if (navJob == currentJob) {
                     isNavigating = false
@@ -60,6 +66,10 @@ internal class MainTabsPagerState(
                 }
             }
         }
+    }
+
+    fun selectPage(targetPage: Int, animated: Boolean) {
+        selectPage(targetPage, if (animated) PageTransition.MIUIX_SPRING else PageTransition.NONE)
     }
 
     fun syncPage() {

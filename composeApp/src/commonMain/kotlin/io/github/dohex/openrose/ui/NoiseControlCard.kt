@@ -221,7 +221,7 @@ internal fun SettingOperationsCard(state: ControlState) {
         is ConnectionState.Connected -> connection.sessionId
         ConnectionState.Disconnected -> null
     }
-    AppGroup(title = "设置操作", footnote = "请求值与已确认设备状态分别显示。") {
+    AppGroup(title = "设置操作") {
         operations.forEachIndexed { index, operation ->
             val profile = state.device
                 ?.takeIf { it.sessionId == operation.sessionId && operation.sessionId == sessionId }
