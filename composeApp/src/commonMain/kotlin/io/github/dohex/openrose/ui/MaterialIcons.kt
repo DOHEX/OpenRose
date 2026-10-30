@@ -31,4 +31,5 @@ internal fun materialIcon(icon: RoseIcon): ImageVector = vectorResource(when (ic
     RoseIcon.LOG -> Res.drawable.msr_list_alt
     RoseIcon.DEVICE -> Res.drawable.msr_earbuds
     RoseIcon.CLOSE -> Res.drawable.msr_close
+    RoseIcon.GAME -> Res.drawable.msr_sports_esports
 })

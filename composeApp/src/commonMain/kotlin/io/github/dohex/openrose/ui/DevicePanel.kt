@@ -108,10 +108,11 @@ internal fun HeadphonesPage(
                         NoiseControlCard(state, device, onSet)
                     }
                     if (DeviceSetting.GAME_MODE in device.capabilities.writableSettings) {
-                        AppDashboardCard {
+                        AppDashboardCard(compact = true) {
                             SettingToggleChoices(
                                 "游戏模式", DeviceField.GAME_MODE, DeviceSetting.GAME_MODE,
                                 device, state.isReady(device) && !state.hasPendingSetting(device), onSet,
+                                icon = RoseIcon.GAME,
                             )
                         }
                     }

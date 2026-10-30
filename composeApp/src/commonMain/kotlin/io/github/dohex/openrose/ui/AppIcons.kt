@@ -30,6 +30,7 @@ internal enum class RoseIcon {
     LOG,
     DEVICE,
     CLOSE,
+    GAME,
 }
 
 /** Resolves the same action to the active interface style's official icon set. */
