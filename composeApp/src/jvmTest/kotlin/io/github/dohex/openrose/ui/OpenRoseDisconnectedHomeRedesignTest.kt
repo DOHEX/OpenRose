@@ -23,7 +23,7 @@ import kotlin.test.assertTrue
 class OpenRoseDisconnectedHomeRedesignTest {
 
     @Test
-    fun disconnectedHomeHidesTopPlusButtonAndMisleadingDiagnosticsCard() = runBlocking {
+    fun disconnectedHomeShowsTopPlusButtonAndMisleadingDiagnosticsCardIsRemoved() = runBlocking {
         for (style in InterfaceStyle.entries) {
             val initial = state(connected = false).copy(
                 settings = UserSettings(interfaceStyle = style),
@@ -31,14 +31,14 @@ class OpenRoseDisconnectedHomeRedesignTest {
             val harness = createHarness(420, 900, initial)
             try {
                 harness.render()
-                // Top bar "+" action must NOT be present when disconnected
-                assertFalse(harness.hasContentDescription("添加耳机"), "Top bar + button must be hidden when disconnected in $style")
+                // Top bar "+" action must be present when disconnected per ADR 0008
+                assertTrue(harness.hasContentDescription("添加耳机"), "Top bar + button must be present when disconnected in $style")
 
                 // Misleading "连接与运行状态" card must NOT be present
                 assertFalse(harness.hasText("连接与运行状态"), "Misleading connection status card must be removed in $style")
 
-                // Title must be present
-                assertTrue(harness.hasText("连接你的 ROSE 耳机"))
+                // Empty state title must be present
+                assertTrue(harness.hasText("添加你的 ROSE 耳机"))
             } finally {
                 harness.close()
             }
@@ -63,7 +63,7 @@ class OpenRoseDisconnectedHomeRedesignTest {
             try {
                 harness.render()
                 // Paired devices section and device name
-                assertTrue(harness.hasText("已配对设备"), "Should display 已配对设备 header in $style")
+                assertTrue(harness.hasText("未连接 · 耳机开盖后将自动连接"), "Should display auto-connect hint in $style")
                 assertTrue(harness.hasText("ROSE EarFree i5"), "Should display paired device name in $style")
                 assertTrue(harness.hasText("ZT"), "Should display model configuration in $style")
 
@@ -75,7 +75,7 @@ class OpenRoseDisconnectedHomeRedesignTest {
                 assertEquals(listOf(DeviceId("paired-i5-1")), harness.connectRequests)
 
                 // Secondary scan action changes to 扫描新设备 when paired devices exist
-                assertTrue(harness.hasText("扫描新设备"), "Scan action should be secondary 扫描新设备 in $style")
+                assertTrue(harness.hasText("配对新耳机"), "Should provide 配对新耳机 entrance in $style")
             } finally {
                 harness.close()
             }
@@ -168,6 +168,7 @@ class OpenRoseDisconnectedHomeRedesignTest {
                 onConnect = { connectRequests += it },
                 onDisconnect = { disconnectCount++ },
                 onSet = { _, _ -> },
+                onAddDeviceConnect = { error("Unexpected add-device connection in this scenario") },
             )
         }
         return DisconnectedHomeHarness(scene, state, connectRequests) { disconnectCount }

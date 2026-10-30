@@ -50,6 +50,7 @@ class UserSettingsCodecTest {
                 islandTriggers = emptySet(),
                 forceBle = true,
                 pageTransition = PageTransition.FADE,
+                backgroundBlurEnabled = false,
             ),
         )
 
@@ -62,6 +63,7 @@ class UserSettingsCodecTest {
                 "force_ble" to "true",
                 "island_triggers" to "",
                 "page_transition" to "fade",
+                "background_blur_enabled" to "false",
             ),
             stored,
         )
@@ -96,6 +98,21 @@ class UserSettingsCodecTest {
         assertEquals(PageTransition.MIUIX_SPRING, UserSettingsCodec.decode(mapOf("page_transition" to "unknown")).pageTransition)
         assertEquals(PageTransition.MIUIX_SPRING, UserSettingsCodec.decode(mapOf("page_transition" to "")).pageTransition)
     }
+    @Test
+    fun backgroundBlurEnabledEncodesAndDecodesCorrectly() {
+        val defaultSettings = UserSettingsCodec.decode(emptyMap())
+        assertEquals(true, defaultSettings.backgroundBlurEnabled)
+
+        val disabled = UserSettingsCodec.decode(mapOf("background_blur_enabled" to "false"))
+        assertEquals(false, disabled.backgroundBlurEnabled)
+
+        val invalid = UserSettingsCodec.decode(mapOf("background_blur_enabled" to "not-a-boolean"))
+        assertEquals(true, invalid.backgroundBlurEnabled)
+
+        val encoded = UserSettingsCodec.encode(UserSettings(backgroundBlurEnabled = true))
+        assertEquals("true", encoded["background_blur_enabled"])
+    }
+
 
     @Test
     fun restoredSettingsPreserveAnExplicitlyEmptyTriggerSet() {

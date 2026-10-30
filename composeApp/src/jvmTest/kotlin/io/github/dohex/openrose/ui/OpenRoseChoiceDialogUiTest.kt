@@ -25,7 +25,8 @@ class OpenRoseChoiceDialogUiTest {
     fun materialStyleChoiceRowsShareTheDialogSurface() = runBlocking {
         val state = mutableStateOf(ControlState(platform = PlatformState(PermissionState.GRANTED), settings = UserSettings(interfaceStyle = InterfaceStyle.MATERIAL3, appearance = Appearance.LIGHT)))
         val scene = createOpenRoseUiTestScene(420, 900) {
-            OpenRoseApp(state.value, { state.value = state.value.copy(settings = it) }, {}, {}, {}, {}, {}, {}, { _, _ -> })
+            OpenRoseApp(state.value, { state.value = state.value.copy(settings = it) }, {}, {}, {}, {}, {}, {}, { _, _ -> },
+                onAddDeviceConnect = { error("Unexpected add-device connection in this scenario") })
         }
         val harness = OpenRoseUiTestHarness(scene)
         try {
@@ -180,7 +181,8 @@ class OpenRoseChoiceDialogUiTest {
         val scene = createOpenRoseUiTestScene(420, 900) {
             OpenRoseApp(state.value, { settingsWrites += it; state.value = state.value.copy(settings = it) },
                 { otherActions++ }, { otherActions++ }, { otherActions++ }, { otherActions++ },
-                { otherActions++ }, { otherActions++ }, { setting, value -> settingWrites += setting to value })
+                { otherActions++ }, { otherActions++ }, { setting, value -> settingWrites += setting to value },
+                onAddDeviceConnect = { error("Unexpected add-device connection in this scenario") })
         }
         return ConnectedHarness(scene, state, settingsWrites, settingWrites, id) { otherActions }
     }

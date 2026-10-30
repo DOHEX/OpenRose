@@ -1,11 +1,25 @@
 package io.github.dohex.openrose.ui
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import io.github.dohex.openrose.core.ConnectionPhase
 import io.github.dohex.openrose.core.ConnectionState
@@ -30,85 +44,149 @@ internal fun NoiseControlCard(
 ) {
     val capabilities = device.capabilities.noiseControl ?: return
     val writable = device.capabilities.writableSettings
-    val ready = state.isReady(device)
     val pending = state.hasPendingSetting(device)
-    val enabled = ready && !pending
+    val enabled = state.isReady(device) && !pending
     val confirmedMode = (device.knownValue(DeviceField.NOISE_MODE) as? FieldValue.Text)?.value
 
-    if (DeviceSetting.NOISE_MODE in writable && capabilities.modes.isNotEmpty()) {
-        AppGroup(
-            title = "降噪模式",
-            footnote = confirmedSettingStatus(DeviceField.NOISE_MODE, device),
-        ) {
-            val options = capabilities.modes
-                .sortedWith(compareBy({ noiseModeOrder(it) }, { it }))
-                .map { mode -> AppOption(mode, semanticLabel(mode)) }
-            AppRadioGroup(
-                options = options,
-                selected = confirmedMode,
-                enabled = enabled,
-                onSelect = { mode ->
-                    if (mode != confirmedMode) onSet(DeviceSetting.NOISE_MODE, FieldValue.Text(mode))
-                },
+    val modes = remember(capabilities.modes) {
+        capabilities.modes.sortedWith(compareBy({ noiseModeOrder(it) }, { it }))
+            .map { mode -> AppOption(mode, noiseModeLabel(mode)) }
+    }
+    AppDashboardCard {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            AppText("降噪模式", Modifier.weight(1f), role = AppTextRole.Title)
+            AppText(
+                if (pending) "等待设备确认"
+                else confirmedMode?.let { "已确认：${semanticLabel(it)}" } ?: "当前状态未知",
+                role = AppTextRole.Summary,
             )
         }
-    }
-
-    listOf(
-        Triple(DeviceSetting.ANC_LEVEL, "降噪档位", capabilities.levelCapabilities(DeviceSetting.ANC_LEVEL)),
-        Triple(DeviceSetting.TRANSPARENCY_LEVEL, "通透档位", capabilities.levelCapabilities(DeviceSetting.TRANSPARENCY_LEVEL)),
-    ).forEach { (setting, title, levelCapabilities) ->
-        if (setting in writable && levelCapabilities?.isVisibleIn(confirmedMode) == true) {
-            val field = when (setting) {
-                DeviceSetting.ANC_LEVEL -> DeviceField.ANC_LEVEL
-                else -> DeviceField.TRANSPARENCY_LEVEL
-            }
-            val selected = (device.knownValue(field) as? FieldValue.Number)?.value
-            AppGroup(title = title) {
-                AppSegmented(
-                    options = levelCapabilities.levels.sorted().map { level -> AppOption(level, "$level 档") },
-                    selected = selected,
-                    enabled = enabled,
-                    onSelect = { level ->
-                        if (level != selected) onSet(setting, FieldValue.Number(level))
-                    },
-                )
+        NoiseModeChoices(modes, confirmedMode, enabled && DeviceSetting.NOISE_MODE in writable) { mode ->
+            if (mode != confirmedMode) onSet(DeviceSetting.NOISE_MODE, FieldValue.Text(mode))
+        }
+        val levelControls = remember(capabilities) {
+            listOf(
+                Triple(DeviceSetting.ANC_LEVEL, "降噪档位", capabilities.ancLevel),
+                Triple(DeviceSetting.TRANSPARENCY_LEVEL, "通透档位", capabilities.transparencyLevel),
+            )
+        }
+        levelControls.forEach { (setting, title, levelCapabilities) ->
+            if (setting in writable && levelCapabilities?.isVisibleIn(confirmedMode) == true) {
+                val field = if (setting == DeviceSetting.ANC_LEVEL) DeviceField.ANC_LEVEL else DeviceField.TRANSPARENCY_LEVEL
+                val selected = (device.knownValue(field) as? FieldValue.Number)?.value
+                val levels = remember(levelCapabilities.levels) {
+                    levelCapabilities.levels.sorted().map { level -> AppOption(level, "$level 档") }
+                }
+                AppText(title, role = AppTextRole.Summary)
+                AppSegmented(levels, selected, enabled) { level ->
+                    if (level != selected) onSet(setting, FieldValue.Number(level))
+                }
             }
         }
     }
+}
 
-    if (DeviceSetting.NOISE_CYCLE in writable && capabilities.cycleModes.isNotEmpty()) {
-        val flags = (device.knownValue(DeviceField.NOISE_CYCLE) as? FieldValue.NoiseCycle)?.flags
-        val cycleKnown = flags != null && capabilities.cycleModes.all { flags[it] != null }
-        val selectedCount = capabilities.cycleModes.count { flags?.get(it) == true }
-        val footnote = when {
-            !cycleKnown -> "尚无完整状态"
-            capabilities.minimumCycleSelections > 0 ->
-                "按已确认的选择调整轮换，至少保留 ${capabilities.minimumCycleSelections} 项。"
-            else -> "按已确认的选择调整轮换，可清空全部选项。"
+@Composable
+internal fun NoiseCycleRow(
+    state: ControlState,
+    device: DeviceState,
+    onSet: (DeviceSetting, FieldValue) -> Unit,
+) {
+    val capabilities = device.capabilities.noiseControl ?: return
+    if (DeviceSetting.NOISE_CYCLE !in device.capabilities.writableSettings || capabilities.cycleModes.isEmpty()) return
+    val enabled = state.isReady(device) && !state.hasPendingSetting(device)
+    val flags = (device.knownValue(DeviceField.NOISE_CYCLE) as? FieldValue.NoiseCycle)?.flags
+    val cycleKnown = flags != null && capabilities.cycleModes.all { flags[it] != null }
+    val cycleOptions = remember(capabilities.cycleModes) {
+        capabilities.cycleModes.sortedWith(compareBy({ noiseModeOrder(it) }, { it }))
+            .map { mode -> AppOption(mode, noiseModeLabel(mode)) }
+    }
+    val checked = remember(cycleOptions, flags) {
+        cycleOptions.mapNotNullTo(mutableSetOf()) { it.value.takeIf { mode -> flags?.get(mode) == true } }
+    }
+    val summary = remember(cycleKnown, cycleOptions, checked) {
+        when {
+            !cycleKnown -> "尚未读取完整状态"
+            checked.isEmpty() -> "未选择轮换模式"
+            else -> cycleOptions.filter { it.value in checked }.joinToString("、") { it.label }
         }
-        AppGroup(title = "降噪轮换", footnote = footnote) {
-            AppCheckGroup(
-                options = capabilities.cycleModes.map { mode -> AppOption(mode, semanticLabel(mode)) },
-                checked = capabilities.cycleModes.filterTo(mutableSetOf()) { flags?.get(it) == true },
-                enabledFor = { mode ->
-                    val checked = flags?.get(mode) == true
-                    val canRemove = !checked || selectedCount > capabilities.minimumCycleSelections
-                    enabled && cycleKnown && canRemove
-                },
-                onToggle = { mode ->
-                    val checked = flags?.get(mode) == true
-                    val canRemove = !checked || selectedCount > capabilities.minimumCycleSelections
-                    if (enabled && cycleKnown && canRemove) {
-                        val requested = capabilities.cycleModes.associateWith { option ->
-                            if (option == mode) !checked else flags?.get(option) == true
+    }
+    AppMultiChoiceRow(
+        title = "降噪轮换",
+        summary = summary,
+        options = cycleOptions,
+        checked = checked,
+        enabled = enabled && cycleKnown,
+        enabledFor = { mode -> mode !in checked || checked.size > capabilities.minimumCycleSelections },
+        onToggle = { mode ->
+            if (enabled && cycleKnown && (mode !in checked || checked.size > capabilities.minimumCycleSelections)) {
+                val requested = capabilities.cycleModes.associateWith { option ->
+                    if (option == mode) option !in checked else option in checked
+                }
+                onSet(DeviceSetting.NOISE_CYCLE, FieldValue.NoiseCycle(requested))
+            }
+        },
+    )
+}
+
+@Composable
+private fun NoiseModeChoices(
+    options: List<AppOption<String>>,
+    selected: String?,
+    enabled: Boolean,
+    onSelect: (String) -> Unit,
+) {
+    val columns = if (options.size <= 4) options.size.coerceAtLeast(1) else 3
+    val rows = remember(options, columns) { options.chunked(columns) }
+    Column(Modifier.fillMaxWidth().selectableGroup(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        rows.forEach { row ->
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                row.forEach { option ->
+                    val isSelected = option.value == selected
+                    val contentColor = appColor(when {
+                        !enabled -> AppColorRole.DisabledContent
+                        isSelected -> AppColorRole.SelectedContent
+                        else -> AppColorRole.Summary
+                    })
+                    Column(
+                        modifier = Modifier.weight(1f).clip(CircleShape)
+                            .selectable(isSelected, enabled, Role.RadioButton) { onSelect(option.value) }
+                            .padding(vertical = 8.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Box(
+                            Modifier.size(48.dp).background(
+                                if (isSelected) appColor(AppColorRole.SelectedContainer) else Color.Transparent,
+                                CircleShape,
+                            ),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            AppIcon(noiseModeIcon(option.value), Modifier.size(24.dp), tint = contentColor)
                         }
-                        onSet(DeviceSetting.NOISE_CYCLE, FieldValue.NoiseCycle(requested))
+                        AppText(option.label, role = AppTextRole.Footnote, color = contentColor)
                     }
-                },
-            )
+                }
+                repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
+            }
         }
     }
+}
+
+private fun noiseModeLabel(mode: String): String = when (mode) {
+    "normal" -> "标准"
+    "anc" -> "降噪"
+    else -> semanticLabel(mode)
+}
+
+private fun noiseModeIcon(mode: String): RoseIcon = when (mode) {
+    "normal" -> RoseIcon.HEADPHONES
+    "anc" -> RoseIcon.NOISE
+    "transparency" -> RoseIcon.TRANSPARENCY
+    "wind" -> RoseIcon.WIND
+    "auto" -> RoseIcon.AUTO
+    "dynamic" -> RoseIcon.EQUALIZER
+    else -> RoseIcon.NOISE
 }
 
 private fun noiseModeOrder(mode: String): Int = when (mode) {

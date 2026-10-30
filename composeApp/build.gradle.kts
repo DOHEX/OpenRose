@@ -32,10 +32,12 @@ kotlin {
             implementation(libs.miuix.preference)
             implementation(libs.miuix.icons)
             implementation(libs.miuix.nav)
+            implementation(libs.miuix.blur)
         }
         jvmTest.dependencies {
             implementation(kotlin("test"))
             implementation(compose.desktop.currentOs)
+            implementation(libs.coroutines.test)
         }
     }
 }

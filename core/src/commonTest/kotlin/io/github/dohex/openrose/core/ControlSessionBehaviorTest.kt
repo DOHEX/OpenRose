@@ -362,6 +362,81 @@ class ControlSessionBehaviorTest {
         assertTrue(link.closed)
     }
 
+    @Test
+    fun repeatedAdvertisementsUpdateInPlaceWithoutChangingDiscoveryOrder() = runTest {
+        val transport = RecordedTransport(RecordedConnection(emptyMap()))
+        val session = ControlSession(PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
+            transport = transport, scope = backgroundScope)
+        session.startScan()
+        runCurrent()
+        transport.advertisements.emit(i5Advertisement)
+        transport.advertisements.emit(i5Advertisement.copy(deviceId = DeviceId("second")))
+        transport.advertisements.emit(i5Advertisement.copy(name = "Updated name", rssi = -25))
+        runCurrent()
+
+        assertEquals(listOf(i5Advertisement.deviceId, DeviceId("second")), session.state.value.candidates.map { it.deviceId })
+        assertEquals("Updated name", session.state.value.candidates.first().name)
+        assertEquals(-25, session.state.value.candidates.first().rssi)
+        session.stopScan()
+    }
+
+    @Test
+    fun cancellingAddingFlowClosesItsUnfinishedLinkAndStopsInitialization() = runTest {
+        val link = RecordedConnection(emptyMap())
+        val transport = RecordedTransport(link)
+        val session = ControlSession(PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
+            transport = transport, scope = backgroundScope)
+        session.startScan()
+        runCurrent()
+        transport.advertisements.emit(i5Advertisement)
+        runCurrent()
+        val adding = async { session.connectForAddDevice(i5Advertisement.deviceId) }
+        runCurrent()
+        assertEquals(ConnectionPhase.INITIALIZING, assertIs<ConnectionState.Connecting>(session.state.value.connection).phase)
+        val writesBeforeCancel = link.writes.toList()
+
+        adding.cancelAndJoin()
+        advanceTimeBy(20_000)
+        runCurrent()
+
+        assertEquals(ConnectionState.Disconnected, session.state.value.connection)
+        assertEquals(null, session.state.value.device)
+        assertTrue(link.closed)
+        assertEquals(writesBeforeCancel, link.writes)
+    }
+
+    @Test
+    fun cancellingAddingFlowDoesNotCancelAnExistingSharedConnection() = runTest {
+        val advertisements = MutableSharedFlow<Advertisement>(extraBufferCapacity = 1)
+        val openGate = CompletableDeferred<Unit>()
+        val link = RecordedConnection(i5Replies)
+        val transport = object : ControlTransport {
+            override fun scan(): Flow<Advertisement> = advertisements
+            override suspend fun connect(deviceId: DeviceId, endpoint: TransportEndpoint, onPhase: (ConnectionPhase) -> Unit): ControlConnection {
+                onPhase(ConnectionPhase.DISCOVERING)
+                openGate.await()
+                return link
+            }
+        }
+        val session = ControlSession(PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
+            transport = transport, scope = backgroundScope)
+        session.startScan()
+        advertisements.emit(i5Advertisement)
+        runCurrent()
+        val original = async { session.connect(i5Advertisement.deviceId) }
+        runCurrent()
+        val adding = async { session.connectForAddDevice(i5Advertisement.deviceId) }
+        runCurrent()
+
+        adding.cancelAndJoin()
+        openGate.complete(Unit)
+
+        assertEquals(OperationResult.Success, original.await())
+        assertIs<ConnectionState.Connected>(session.state.value.connection)
+        assertEquals(false, link.closed)
+        session.disconnect()
+    }
+
     private class RecordedTransport(var connection: RecordedConnection) : ControlTransport {
         val advertisements = MutableSharedFlow<Advertisement>(extraBufferCapacity = 8)
         var lastPhaseCallback: ((ConnectionPhase) -> Unit)? = null

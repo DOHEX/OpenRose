@@ -6,6 +6,9 @@ import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.ImageComposeScene
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
+import androidx.compose.ui.state.ToggleableState
 import io.github.dohex.openrose.core.ConnectionPhase
 import io.github.dohex.openrose.core.ConnectionState
 import io.github.dohex.openrose.core.ControlState
@@ -142,8 +145,7 @@ class OpenRoseConnectedHomeUiTest {
 
                     harness.state.value = harness.state.value.copy(connection = ConnectionState.Disconnected)
                     harness.render()
-                    assertTrue(harness.hasText("附近设备"))
-                    assertTrue(harness.hasText("扫描耳机"))
+                    assertTrue(harness.hasText("搜索并添加耳机"))
                     assertFalse(harness.hasText("设备详情"))
                 } finally {
                     harness.close()
@@ -301,7 +303,8 @@ class OpenRoseConnectedHomeUiTest {
                     )),
                 )
                 harness.render()
-                assertTrue(harness.hasText("均衡器"))
+                assertTrue(harness.hasText("游戏模式"))
+                assertFalse(harness.hasText("均衡器"), "game-only capability has its own home control in $style")
                 assertTrue(harness.hasText("触控操作"))
                 assertTrue(harness.hasText("音频与设备"))
                 assertTrue(harness.hasText("设备详情"))
@@ -312,6 +315,73 @@ class OpenRoseConnectedHomeUiTest {
         }
     }
 
+    @Test
+    fun gameModeCardRendersCompactSwitchWithGamepadIconAndHandlesToggling() = runBlocking {
+        for (style in InterfaceStyle.entries) {
+            val baseState = connectedState(style)
+            val baseDevice = requireNotNull(baseState.device)
+            val gameDevice = baseDevice.copy(
+                capabilities = baseDevice.capabilities.copy(
+                    writableSettings = baseDevice.capabilities.writableSettings + DeviceSetting.GAME_MODE,
+                ),
+                fields = baseDevice.fields + (DeviceField.GAME_MODE to FieldReading.Known(FieldValue.Toggle(false), "00")),
+            )
+            val harness = createHarness(420, 900, baseState.copy(device = gameDevice))
+            try {
+                harness.render()
+                // Game mode card should render single-line title without "设备已确认" subtitle
+                assertTrue(harness.hasText("游戏模式"), "game mode switch must be visible in $style")
+                assertFalse(harness.hasText("设备已确认：关闭"), "confirmed game mode subtitle must not be present in $style")
+                assertFalse(harness.hasText("设备已确认：开启"), "confirmed game mode subtitle must not be present in $style")
+
+                // Click to toggle game mode
+                assertTrue(harness.hasClickableText("游戏模式"), "game mode row should be clickable in $style")
+                harness.clickText("游戏模式")
+                harness.render()
+                assertEquals(
+                    listOf<Pair<DeviceSetting, FieldValue>>(DeviceSetting.GAME_MODE to FieldValue.Toggle(true)),
+                    harness.settingWrites,
+                    "toggling game mode dispatches setting command in $style",
+                )
+
+                // When pending operation is in flight, toggle is disabled and pending feedback is shown
+                val pendingOp = SettingOperation(
+                    id = 101,
+                    sessionId = gameDevice.sessionId,
+                    setting = DeviceSetting.GAME_MODE,
+                    requestedValue = FieldValue.Toggle(true),
+                    stage = SettingStage.WRITTEN,
+                )
+                harness.state.value = harness.state.value.copy(
+                    settingOperations = listOf(pendingOp),
+                )
+                harness.render()
+                assertTrue(
+                    harness.nodes().any {
+                        it.config.contains(SemanticsProperties.Disabled) &&
+                            it.config.getOrNull(SemanticsProperties.ToggleableState) != null
+                    },
+                    "game mode toggle must be disabled during pending setting in $style",
+                )
+
+                // When operation confirms, state updates silently without blocking banner
+                harness.state.value = harness.state.value.copy(
+                    device = gameDevice.copy(
+                        fields = gameDevice.fields + (DeviceField.GAME_MODE to FieldReading.Known(FieldValue.Toggle(true), "01")),
+                    ),
+                    settingOperations = listOf(
+                        pendingOp.copy(stage = SettingStage.CONFIRMED, confirmedFields = setOf(DeviceField.GAME_MODE)),
+                    ),
+                )
+                harness.render()
+                assertFalse(harness.hasText("设备已确认设置"), "confirmation of game mode must be silent without banner in $style")
+                assertFalse(harness.hasText("正在处理设置，等待设备确认"), "pending banner disappears after confirmation in $style")
+                assertFalse(harness.hasText("设备已确认：开启"), "no redundant subtitle after confirmation in $style")
+            } finally {
+                harness.close()
+            }
+        }
+    }
     private fun connectedState(style: InterfaceStyle): ControlState {
         val profile = ModelProfile.I5_ZT
         val id = DeviceId("connected-home-i5")
@@ -366,6 +436,7 @@ class OpenRoseConnectedHomeUiTest {
                 onConnect = { connects += it },
                 onDisconnect = { disconnects += Unit },
                 onSet = { setting, value -> settingWrites += setting to value },
+                onAddDeviceConnect = { error("Unexpected add-device connection in this scenario") },
                 homeNavigationRequest = homeNavigationRequest.value,
             )
         }

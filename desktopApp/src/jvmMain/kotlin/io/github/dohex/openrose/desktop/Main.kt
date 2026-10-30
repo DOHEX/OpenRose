@@ -87,6 +87,7 @@ fun main() {
                     onConnect = {},
                     onDisconnect = {},
                     onSet = { _, _ -> },
+                    onAddDeviceConnect = session::connectForAddDevice,
                 )
             }
         }

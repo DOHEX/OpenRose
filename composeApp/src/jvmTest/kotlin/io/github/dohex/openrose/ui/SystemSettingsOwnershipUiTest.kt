@@ -217,6 +217,7 @@ class SystemSettingsOwnershipUiTest {
                 onConnect = {},
                 onDisconnect = {},
                 onSet = { setting, value -> settingWrites += setting to value },
+                onAddDeviceConnect = { error("Unexpected add-device connection in this scenario") },
             )
         }
         return Harness(scene, state, settingsChanges, settingWrites)

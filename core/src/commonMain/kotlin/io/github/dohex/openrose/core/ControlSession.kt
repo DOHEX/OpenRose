@@ -175,7 +175,15 @@ class ControlSession(
                     val profile = ModelIdentification.identify(advertisement.manufacturerData)
                     val candidate = DeviceCandidate(advertisement.deviceId, advertisement.name, advertisement.rssi,
                         profile, manufacturerDataHex, ModelIdentification.classicAddress(manufacturerDataHex, profile))
-                    updateState { old -> if (scanEpoch.value == epoch) old.copy(candidates = old.candidates.filterNot { it.deviceId == candidate.deviceId } + candidate) else old }
+                    updateState { old ->
+                        if (scanEpoch.value != epoch) old else {
+                            val index = old.candidates.indexOfFirst { it.deviceId == candidate.deviceId }
+                            val candidates = if (index < 0) old.candidates + candidate else {
+                                old.candidates.toMutableList().apply { this[index] = candidate }
+                            }
+                            old.copy(candidates = candidates)
+                        }
+                    }
                 }
                 updateState { if (scanEpoch.value == epoch) it.copy(scan = ScanState.Idle) else it }
             } catch (cancelled: CancellationException) {
@@ -198,7 +206,15 @@ class ControlSession(
 
     suspend fun connect(deviceId: DeviceId): OperationResult = connectInternal(deviceId, isAudioDriven = false)
 
-    private suspend fun connectInternal(deviceId: DeviceId, isAudioDriven: Boolean): OperationResult {
+    /** Cancelling the adding flow releases only the unfinished attempt it created. */
+    suspend fun connectForAddDevice(deviceId: DeviceId): OperationResult =
+        connectInternal(deviceId, isAudioDriven = false, cancelWithCaller = true)
+
+    private suspend fun connectInternal(
+        deviceId: DeviceId,
+        isAudioDriven: Boolean,
+        cancelWithCaller: Boolean = false,
+    ): OperationResult {
         platformError()?.let { return failure(it) }
         val candidate = findCandidate(deviceId)
         if (candidate?.profile == null) return failure(ControlError(ControlErrorCode.UNSUPPORTED, "没有受支持的型号识别证据"))
@@ -207,11 +223,13 @@ class ControlSession(
             autoConnectJob?.cancel()
             autoConnectJob = null
         }
+        var ownsAttempt = false
         val attempt = lifecycle.withLock {
             active?.takeIf { it.candidate.deviceId == deviceId && state.value.connection !is ConnectionState.Disconnected }?.let { return@withLock it }
             clearActive()
             audioDrivenSessionDeviceId = if (isAudioDriven) deviceId else null
             val next = Attempt(++generation, candidate, state.value.settings.forceBle)
+            ownsAttempt = true
             val profile = requireNotNull(candidate.profile)
             updateState {
                 it.copy(connection = ConnectionState.Connecting(deviceId, next.id, ConnectionPhase.CONNECTING),
@@ -226,12 +244,33 @@ class ControlSession(
         val result = try {
             attempt.task.await()
         } catch (cancelled: CancellationException) {
-            if (!currentCoroutineContext().isActive) throw cancelled
+            if (!currentCoroutineContext().isActive) {
+                if (cancelWithCaller && ownsAttempt) {
+                    withContext(NonCancellable) {
+                        lifecycle.withLock {
+                            if (active === attempt && !attempt.ready) {
+                                audioDrivenSessionDeviceId = null
+                                clearActive()
+                                updateState { it.copy(lastError = null, connectionRecovery = null) }
+                            }
+                        }
+                    }
+                }
+                throw cancelled
+            }
             // Disconnect cancels the owned operation, without cancelling another caller's scope.
             OperationResult.Failure(ControlError(ControlErrorCode.DISCONNECTED, "连接会话已结束"))
         }
         if (result !is OperationResult.Success && audioDrivenSessionDeviceId == deviceId) {
             audioDrivenSessionDeviceId = null
+        }
+        if (cancelWithCaller && result is OperationResult.Success) {
+            return lifecycle.withLock {
+                val current = state.value.connection as? ConnectionState.Connected
+                if (active === attempt && attempt.ready && current?.deviceId == deviceId &&
+                    current.sessionId == attempt.id && current.phase == ConnectionPhase.READY
+                ) result else OperationResult.Failure(ControlError(ControlErrorCode.DISCONNECTED, "本次连接已被替换"))
+            }
         }
         return result
     }

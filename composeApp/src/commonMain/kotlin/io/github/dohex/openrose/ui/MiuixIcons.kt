@@ -41,4 +41,5 @@ internal fun miuixIcon(icon: RoseIcon): ImageVector = when (icon) {
     RoseIcon.LOG -> MiuixIcons.Recent
     RoseIcon.DEVICE -> materialIcon(icon)
     RoseIcon.CLOSE -> MiuixIcons.Basic.Close
+    RoseIcon.GAME -> materialIcon(icon)
 }

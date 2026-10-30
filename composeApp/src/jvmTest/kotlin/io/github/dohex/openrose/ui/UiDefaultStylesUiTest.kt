@@ -186,6 +186,42 @@ class UiDefaultStylesUiTest {
         }
     }
 
+    @Test
+    fun compactDashboardCardAndSwitchRowWithIconRenderAcrossStyles() = runBlocking {
+        for (style in InterfaceStyle.entries) {
+            val styleState = mutableStateOf(style)
+            val scrollState = ScrollState(0)
+            val toggled = mutableStateOf(false)
+            val scene = createShellScene(
+                style = styleState,
+                width = 420,
+                height = 900,
+                wide = false,
+                scrollState = scrollState,
+                pageContent = {
+                    AppDashboardCard(compact = true) {
+                        AppSwitchRow(
+                            title = "紧凑开关",
+                            checked = toggled.value,
+                            icon = RoseIcon.CHEVRON,
+                            onChange = { toggled.value = it },
+                        )
+                    }
+                },
+            )
+            val harness = ShellHarness(scene, styleState, scrollState)
+            try {
+                harness.render()
+                assertTrue(harness.hasText("紧凑开关"), "compact switch row title should render in $style")
+                harness.clickText("紧凑开关")
+                harness.render()
+                assertTrue(toggled.value, "clicking compact switch row toggles state in $style")
+            } finally {
+                harness.close()
+            }
+        }
+    }
+
     private suspend fun createChoiceHarness(
         initialStyle: InterfaceStyle,
         selectedValue: String?,

@@ -11,6 +11,7 @@ import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.state.ToggleableState
 import io.github.dohex.openrose.core.Appearance
 import io.github.dohex.openrose.core.ConnectionPhase
 import io.github.dohex.openrose.core.ConnectionState
@@ -48,7 +49,7 @@ import kotlin.test.assertTrue
 
 class OpenRoseNavigationUiTest {
     @Test
-    fun unknownToggleRequiresAnExplicitChoiceWithoutClaimingItIsOff() = runBlocking {
+    fun unknownToggleRendersDisabledSwitchWithoutInventingConfirmation() = runBlocking {
         for (style in InterfaceStyle.entries) {
             val base = state(connected = true)
             val device = requireNotNull(base.device)
@@ -57,16 +58,31 @@ class OpenRoseNavigationUiTest {
             val harness = createHarness(420, 900, initial.copy(settings = initial.settings.copy(interfaceStyle = style)))
             try {
                 harness.render()
-                harness.clickText("均衡器")
-                harness.render()
-                assertTrue(harness.hasText("当前状态未知"))
-                assertFalse(harness.nodes().any { it.config.contains(SemanticsProperties.ToggleableState) },
-                    "an unread game setting must not announce an on/off switch state in $style")
+                assertTrue(harness.hasText("游戏模式"))
+                assertFalse(harness.hasText("当前状态未知"), "game mode toggle must not show unknown status text in $style")
+                assertFalse(harness.hasText("设备已确认：开启"), "unconfirmed toggle must not claim confirmed in $style")
+                assertFalse(harness.hasText("设备已确认：关闭"), "unconfirmed toggle must not claim confirmed in $style")
+                assertTrue(
+                    harness.nodes().any {
+                        it.config.contains(SemanticsProperties.Disabled) &&
+                            it.config.getOrNull(SemanticsProperties.ToggleableState) == ToggleableState.Off
+                    },
+                    "an unread game mode toggle must be disabled with off state in $style",
+                )
                 assertTrue(harness.settingWrites.isEmpty())
-                harness.clickText("关闭")
+
+                // When the device reports known state, switch enables and clean single-line displays
+                val knownDevice = device.copy(fields = device.fields +
+                    (DeviceField.GAME_MODE to FieldReading.Known(FieldValue.Toggle(false), "00")))
+                harness.state.value = harness.state.value.copy(device = knownDevice)
                 harness.render()
-                assertEquals(listOf<Pair<DeviceSetting, FieldValue>>(DeviceSetting.GAME_MODE to FieldValue.Toggle(false)), harness.settingWrites)
-                assertFalse(harness.hasText("设备已确认：关闭"), "a request must not invent device confirmation")
+
+                assertTrue(harness.hasText("游戏模式"))
+                assertFalse(harness.hasText("设备已确认：关闭"), "confirmed state must not show redundant subtitle in $style")
+                assertTrue(harness.hasClickableText("游戏模式"), "known game setting must be clickable in $style")
+                harness.clickText("游戏模式")
+                harness.render()
+                assertEquals(listOf<Pair<DeviceSetting, FieldValue>>(DeviceSetting.GAME_MODE to FieldValue.Toggle(true)), harness.settingWrites)
             } finally {
                 harness.close()
             }
@@ -74,14 +90,18 @@ class OpenRoseNavigationUiTest {
     }
 
     @Test
-    fun narrowHomeShowsNearbyDevicesAndAddRouteCanReturn() = runBlocking {
+    fun narrowHomeOpensAvailableDiscoveryAndCanReturn() = runBlocking {
         val harness = createHarness(width = 420, height = 900, initialState = state(connected = false))
         try {
             harness.render()
-            assertTrue(harness.hasText("连接你的 ROSE 耳机"))
+            assertTrue(harness.hasText("添加你的 ROSE 耳机"))
+            assertTrue(harness.hasContentDescription("添加耳机"))
+            harness.clickContentDescription("添加耳机")
+            harness.render()
             assertTrue(harness.hasText("附近设备"))
-            assertTrue(harness.hasText("扫描耳机"))
-            assertFalse(harness.nodes().any { it.config.getOrNull(SemanticsProperties.ContentDescription).orEmpty().contains("添加耳机") }, "top bar + button must be hidden when disconnected")
+            harness.clickContentDescription("返回")
+            harness.render()
+            assertTrue(harness.hasText("添加你的 ROSE 耳机"))
         } finally {
             harness.close()
         }
@@ -215,11 +235,16 @@ class OpenRoseNavigationUiTest {
                 },
                 onRequestPermission = {},
                 onOpenSystemSettings = {},
-                onStartScan = {},
-                onStopScan = {},
+                onStartScan = { state.value = state.value.copy(scan = io.github.dohex.openrose.core.ScanState.Scanning) },
+                onStopScan = { state.value = state.value.copy(scan = io.github.dohex.openrose.core.ScanState.Idle) },
                 onConnect = {},
                 onDisconnect = {},
                 onSet = { setting, value -> settingWrites += setting to value },
+                onAddDeviceConnect = {
+                    io.github.dohex.openrose.core.OperationResult.Failure(
+                        io.github.dohex.openrose.core.ControlError(io.github.dohex.openrose.core.ControlErrorCode.FAILED, "测试连接失败"),
+                    )
+                },
             )
         }
         return NavigationHarness(scene, state, settingsChanges, settingWrites)
@@ -285,83 +310,11 @@ class OpenRoseNavigationUiTest {
     }
 
     private class NavigationHarness(
-        val scene: ImageComposeScene,
+        scene: ImageComposeScene,
         val state: MutableState<ControlState>,
         val settingsChanges: MutableList<UserSettings>,
         val settingWrites: MutableList<Pair<DeviceSetting, FieldValue>>,
-    ) {
-        private var nextFrameTimeNanos = 0L
-
-        suspend fun render() {
-            repeat(10) {
-                kotlinx.coroutines.delay(35)
-                scene.render(nextFrameTimeNanos).close()
-                nextFrameTimeNanos += 35_000_000L
-            }
-        }
-
-        fun close() = scene.close()
-
-        fun nodes(): List<SemanticsNode> {
-            val result = mutableListOf<SemanticsNode>()
-            fun collect(node: SemanticsNode) {
-                result += node
-                node.children.forEach(::collect)
-            }
-            scene.semanticsOwners.forEach { collect(it.rootSemanticsNode) }
-            return result
-        }
-
-        fun hasText(expected: String): Boolean = nodes().any { node ->
-            node.config.getOrNull(SemanticsProperties.Text).orEmpty().any { it.text == expected }
-        }
-
-        fun clickContentDescription(expected: String) {
-            val node = nodes().firstOrNull { semantics ->
-                semantics.config.getOrNull(SemanticsProperties.ContentDescription).orEmpty().contains(expected)
-            } ?: error("No node found with content description '$expected'")
-            invokeClick(node)
-        }
-
-        fun clickTab(text: String) = clickText(text, expectedRole = Role.Tab)
-
-        fun clickText(text: String, expectedRole: Role? = null) {
-            val textNodes = nodes().filter { node ->
-                node.config.getOrNull(SemanticsProperties.Text).orEmpty().any { it.text == text }
-            }
-            for (textNode in textNodes) {
-                var current: SemanticsNode? = textNode
-                while (current != null) {
-                    val role = current.config.getOrNull(SemanticsProperties.Role)
-                    if (expectedRole == null || role == expectedRole) {
-                        val action = current.config.getOrNull(SemanticsActions.OnClick)?.action
-                        if (action != null) {
-                            check(action()) { "Click action for '$text' returned false" }
-                            return
-                        }
-                    }
-                    current = current.parent
-                }
-            }
-            error("No clickable node found for text '$text'")
-        }
-
-        private fun invokeClick(node: SemanticsNode, expectedRole: Role? = null) {
-            var current: SemanticsNode? = node
-            while (current != null) {
-                val role = current.config.getOrNull(SemanticsProperties.Role)
-                if (expectedRole == null || role == expectedRole) {
-                    val action = current.config.getOrNull(SemanticsActions.OnClick)?.action
-                    if (action != null) {
-                        check(action()) { "Click action returned false" }
-                        return
-                    }
-                }
-                current = current.parent
-            }
-            error("No clickable node found for the requested content description")
-        }
-
+    ) : OpenRoseUiTestHarness(scene) {
         fun setProgress(description: String, value: Float) {
             val node = nodes().firstOrNull { semantics ->
                 semantics.config.getOrNull(SemanticsProperties.ContentDescription).orEmpty().contains(description)
