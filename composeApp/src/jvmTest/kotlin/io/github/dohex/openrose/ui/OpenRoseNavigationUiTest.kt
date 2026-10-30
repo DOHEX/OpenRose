@@ -310,100 +310,11 @@ class OpenRoseNavigationUiTest {
     }
 
     private class NavigationHarness(
-        val scene: ImageComposeScene,
+        scene: ImageComposeScene,
         val state: MutableState<ControlState>,
         val settingsChanges: MutableList<UserSettings>,
         val settingWrites: MutableList<Pair<DeviceSetting, FieldValue>>,
-    ) {
-        private var nextFrameTimeNanos = 0L
-
-        suspend fun render() {
-            repeat(10) {
-                kotlinx.coroutines.delay(35)
-                scene.render(nextFrameTimeNanos).close()
-                nextFrameTimeNanos += 35_000_000L
-            }
-        }
-
-        fun close() = scene.close()
-
-        fun nodes(): List<SemanticsNode> {
-            val result = mutableListOf<SemanticsNode>()
-            fun collect(node: SemanticsNode) {
-                result += node
-                node.children.forEach(::collect)
-            }
-            scene.semanticsOwners.forEach { collect(it.rootSemanticsNode) }
-            return result
-        }
-
-        fun hasText(expected: String): Boolean = nodes().any { node ->
-            node.config.getOrNull(SemanticsProperties.Text).orEmpty().any { it.text == expected }
-        }
-        fun hasContentDescription(expected: String): Boolean = nodes().any { node ->
-            node.config.getOrNull(SemanticsProperties.ContentDescription).orEmpty().contains(expected)
-        }
-
-        fun hasClickableText(expected: String): Boolean {
-            val textNodes = nodes().filter { node ->
-                node.config.getOrNull(SemanticsProperties.Text).orEmpty().any { it.text == expected }
-            }
-            for (textNode in textNodes) {
-                var current: SemanticsNode? = textNode
-                while (current != null) {
-                    if (current.config.getOrNull(SemanticsActions.OnClick) != null) return true
-                    current = current.parent
-                }
-            }
-            return false
-        }
-
-        fun clickContentDescription(expected: String) {
-            val node = nodes().firstOrNull { semantics ->
-                semantics.config.getOrNull(SemanticsProperties.ContentDescription).orEmpty().contains(expected)
-            } ?: error("No node found with content description '$expected'")
-            invokeClick(node)
-        }
-
-        fun clickTab(text: String) = clickText(text, expectedRole = Role.Tab)
-
-        fun clickText(text: String, expectedRole: Role? = null) {
-            val textNodes = nodes().filter { node ->
-                node.config.getOrNull(SemanticsProperties.Text).orEmpty().any { it.text == text }
-            }
-            for (textNode in textNodes) {
-                var current: SemanticsNode? = textNode
-                while (current != null) {
-                    val role = current.config.getOrNull(SemanticsProperties.Role)
-                    if (expectedRole == null || role == expectedRole) {
-                        val action = current.config.getOrNull(SemanticsActions.OnClick)?.action
-                        if (action != null) {
-                            check(action()) { "Click action for '$text' returned false" }
-                            return
-                        }
-                    }
-                    current = current.parent
-                }
-            }
-            error("No clickable node found for text '$text'")
-        }
-
-        private fun invokeClick(node: SemanticsNode, expectedRole: Role? = null) {
-            var current: SemanticsNode? = node
-            while (current != null) {
-                val role = current.config.getOrNull(SemanticsProperties.Role)
-                if (expectedRole == null || role == expectedRole) {
-                    val action = current.config.getOrNull(SemanticsActions.OnClick)?.action
-                    if (action != null) {
-                        check(action()) { "Click action returned false" }
-                        return
-                    }
-                }
-                current = current.parent
-            }
-            error("No clickable node found for the requested content description")
-        }
-
+    ) : OpenRoseUiTestHarness(scene) {
         fun setProgress(description: String, value: Float) {
             val node = nodes().firstOrNull { semantics ->
                 semantics.config.getOrNull(SemanticsProperties.ContentDescription).orEmpty().contains(description)
