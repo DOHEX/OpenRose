@@ -39,12 +39,12 @@ class OpenRoseNavDisplayTest {
                 assertTrue(harness.hasText("系统"), "Main tab should have 系统 navigation tab in $style")
                 assertTrue(harness.hasText("设置"), "Main tab should have 设置 navigation tab in $style")
 
-                // Push secondary route: 均衡器
-                harness.clickText("均衡器")
+                // Push a remaining secondary route.
+                harness.clickText("触控操作")
                 harness.render()
 
                 // Inside secondary route: title and back button exist, bottom navigation tabs are HIDDEN
-                assertTrue(harness.hasText("均衡器"))
+                assertTrue(harness.hasText("触控操作"))
                 assertTrue(harness.hasContentDescription("返回"))
                 assertFalse(harness.hasText("系统"), "Bottom navigation bar must be hidden in secondary route in $style")
                 assertFalse(harness.hasText("设置"), "Bottom navigation bar must be hidden in secondary route in $style")
@@ -94,9 +94,9 @@ class OpenRoseNavDisplayTest {
         val harness = createHarness(420, 900, initial)
         try {
             harness.render()
-            harness.clickText("均衡器")
+            harness.clickText("触控操作")
             harness.render()
-            assertTrue(harness.hasText("均衡器"))
+            assertTrue(harness.hasText("触控操作"))
 
             // Switch interface style while on secondary route
             harness.state.value = harness.state.value.copy(
@@ -105,7 +105,7 @@ class OpenRoseNavDisplayTest {
             harness.render()
 
             // Still on secondary route
-            assertTrue(harness.hasText("均衡器"))
+            assertTrue(harness.hasText("触控操作"))
             assertTrue(harness.hasContentDescription("返回"))
 
             // Can still navigate back in Material 3
@@ -126,9 +126,9 @@ class OpenRoseNavDisplayTest {
             val harness = createHarness(420, 900, initial)
             try {
                 harness.render()
-                harness.clickText("均衡器")
+                harness.clickText("触控操作")
                 harness.render()
-                assertTrue(harness.hasText("均衡器"), "Navigation should work for transition $transition")
+                assertTrue(harness.hasText("触控操作"), "Navigation should work for transition $transition")
                 harness.clickContentDescription("返回")
                 harness.render()
                 assertTrue(harness.hasText("均衡器"))

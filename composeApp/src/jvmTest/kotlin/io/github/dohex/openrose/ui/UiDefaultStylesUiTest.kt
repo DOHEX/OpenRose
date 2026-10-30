@@ -329,11 +329,11 @@ class UiDefaultStylesUiTest {
         coroutineContext = currentCoroutineContext(),
     ) {
         ProvideInterfaceStyle(style.value, dark = false) {
-            val backStack = listOf(AppPage.HEADPHONES, AppPage.EQUALIZER)
+            val backStack = listOf(AppPage.HEADPHONES, AppPage.AUDIO)
             when (style.value) {
                 InterfaceStyle.MIUIX -> MiuixAppShell(
                     backStack = backStack,
-                    page = AppPage.EQUALIZER,
+                    page = AppPage.AUDIO,
                     wide = wide,
                     onNavigate = {},
                     onBack = {},
@@ -342,7 +342,7 @@ class UiDefaultStylesUiTest {
                 )
                 InterfaceStyle.MATERIAL3 -> MaterialAppShell(
                     backStack = backStack,
-                    page = AppPage.EQUALIZER,
+                    page = AppPage.AUDIO,
                     wide = wide,
                     onNavigate = {},
                     onBack = {},

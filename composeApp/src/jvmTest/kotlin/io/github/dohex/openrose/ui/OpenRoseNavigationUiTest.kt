@@ -135,7 +135,7 @@ class OpenRoseNavigationUiTest {
     }
 
     @Test
-    fun equalizerDraftSurvivesNavigationAndStyleChangesAndDisconnectClearsControls() = runBlocking {
+    fun styleChangesPreserveSessionAndDisconnectClearsControls() = runBlocking {
         val operation = SettingOperation(
             id = 41,
             sessionId = SESSION_ID,
@@ -151,19 +151,6 @@ class OpenRoseNavigationUiTest {
         )
         try {
             harness.render()
-            harness.clickText("均衡器")
-            harness.render()
-            harness.clickText("自定义")
-            harness.render()
-            assertTrue(harness.hasText("自定义十段 EQ"))
-            assertTrue(harness.hasText("创建平直曲线草稿"))
-
-            harness.clickText("创建平直曲线草稿")
-            harness.render()
-            harness.setProgress("20 Hz 草稿增益", 4f)
-            harness.render()
-            assertProgress(harness, "20 Hz 草稿增益", 4f)
-            assertTrue(harness.settingWrites.isEmpty(), "editing a draft must not send a device setting")
 
             harness.clickTab("设置")
             harness.render()
@@ -183,12 +170,8 @@ class OpenRoseNavigationUiTest {
 
             harness.clickTab("我的耳机")
             harness.render()
-            harness.clickText("均衡器")
-            harness.render()
-            assertProgress(harness, "20 Hz 草稿增益", 4f)
+            assertTrue(harness.hasText("均衡器"))
 
-            harness.clickTab("我的耳机")
-            harness.render()
             harness.clickText("设备详情")
             harness.render()
             assertTrue(harness.hasText("当前连接"))
