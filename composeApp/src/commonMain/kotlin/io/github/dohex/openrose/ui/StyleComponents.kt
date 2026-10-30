@@ -246,7 +246,7 @@ internal fun <T> AppRadioGroup(options: List<AppOption<T>>, selected: T?, enable
 
 @Composable
 internal fun <T> AppChoiceRow(title: String, valueText: String, options: List<AppOption<T>>, selected: T?, enabled: Boolean = true,
-    id: String = title, open: Boolean? = null, onOpenChange: ((Boolean) -> Unit)? = null, onSelect: (T) -> Unit) {
+    id: String = title, open: Boolean? = null, onOpenChange: ((Boolean) -> Unit)? = null, icon: RoseIcon? = null, onSelect: (T) -> Unit) {
     val shared = LocalChoiceDialog.current
     val local = remember { mutableStateOf<String?>(null) }
     val owner = shared ?: local
@@ -277,12 +277,12 @@ internal fun <T> AppChoiceRow(title: String, valueText: String, options: List<Ap
             if (selected != null && selectedIndex >= 0 && (!isOpen || dropdownOpenedHere)) {
                 key(dropdownGeneration) {
                     OverlayDropdownPreference(items = options.map { it.label }, selectedIndex = selectedIndex, title = title,
-                        enabled = enabled,
+                        enabled = enabled, startAction = icon?.let { { AppIcon(it) } },
                         onExpandedChange = { dropdownOpenedHere = it; setOpen(it) },
                         onSelectedIndexChange = { select(options[it].value) })
                 }
             } else {
-                ArrowPreference(title, summary = valueText, enabled = enabled, onClick = { setOpen(true) })
+                ArrowPreference(title, summary = valueText, enabled = enabled, startAction = icon?.let { { AppIcon(it) } }, onClick = { setOpen(true) })
                 OverlayDialog(show = isOpen, title = title, onDismissRequest = { setOpen(false) }) {
                     Column(Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState())) {
                         AppRadioGroup(options, selected, enabled, onSelect = select)
@@ -293,6 +293,7 @@ internal fun <T> AppChoiceRow(title: String, valueText: String, options: List<Ap
         }
         InterfaceStyle.MATERIAL3 -> {
             ListItem(headlineContent = { Text(title) }, supportingContent = { Text(valueText) },
+                leadingContent = icon?.let { { AppIcon(it) } },
                 modifier = Modifier.clickable(enabled, role = Role.Button) { setOpen(true) }, colors = rowColors())
             if (isOpen) AlertDialog(
                 onDismissRequest = { setOpen(false) },
@@ -325,6 +326,7 @@ internal fun <T> AppMultiChoiceRow(
     checked: Set<T>,
     enabled: Boolean,
     enabledFor: (T) -> Boolean,
+    icon: RoseIcon? = null,
     onToggle: (T) -> Unit,
 ) {
     val local = remember { mutableStateOf<String?>(null) }
@@ -362,12 +364,13 @@ internal fun <T> AppMultiChoiceRow(
                         summary = summary,
                         showValue = false,
                         enabled = enabled,
+                        startAction = icon?.let { { AppIcon(it) } },
                         collapseOnSelection = false,
                         onExpandedChange = { dropdownOpenedHere = it; setOpen(it) },
                     )
                 }
             } else {
-                ArrowPreference(title, summary = summary, enabled = enabled, onClick = { setOpen(true) })
+                ArrowPreference(title, summary = summary, enabled = enabled, startAction = icon?.let { { AppIcon(it) } }, onClick = { setOpen(true) })
                 OverlayDialog(show = true, title = title, onDismissRequest = { setOpen(false) }) {
                     AppCheckGroup(options, checked, canToggle, toggle)
                     AppButton("关闭", { setOpen(false) }, kind = AppButtonKind.Secondary)
@@ -378,6 +381,7 @@ internal fun <T> AppMultiChoiceRow(
             ListItem(
                 headlineContent = { Text(title) },
                 supportingContent = { Text(summary) },
+                leadingContent = icon?.let { { AppIcon(it) } },
                 trailingContent = { AppIcon(RoseIcon.CHEVRON) },
                 modifier = Modifier.clickable(enabled, role = Role.Button) { setOpen(true) },
                 colors = rowColors(),

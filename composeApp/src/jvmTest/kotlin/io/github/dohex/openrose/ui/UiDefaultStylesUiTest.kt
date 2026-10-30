@@ -21,6 +21,8 @@ import androidx.compose.ui.unit.dp
 import io.github.dohex.openrose.core.InterfaceStyle
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.runBlocking
+import java.io.ByteArrayInputStream
+import javax.imageio.ImageIO
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -222,6 +224,35 @@ class UiDefaultStylesUiTest {
         }
     }
 
+    @Test
+    fun choiceIconRendersForKnownAndUnknownValuesAcrossStyles() = runBlocking {
+        for (style in InterfaceStyle.entries) {
+            for (selected in listOf<String?>("A", null)) {
+                val harness = createChoiceHarness(style, selected)
+                try {
+                    harness.render()
+                    val withoutIcon = harness.snapshot()
+                    harness.icon.value = RoseIcon.EQUALIZER
+                    harness.render()
+                    val withIcon = harness.snapshot()
+                    assertTrue(
+                        (0 until withoutIcon.height).any { y ->
+                            (0 until withoutIcon.width).any { x ->
+                                withoutIcon.getRGB(x, y) != withIcon.getRGB(x, y)
+                            }
+                        },
+                        "the equalizer icon should change the rendered row in $style with selection $selected",
+                    )
+                    harness.clickText("功能选择")
+                    harness.render()
+                    assertTrue(harness.pickerOpen.value, "the row remains clickable in $style")
+                } finally {
+                    harness.close()
+                }
+            }
+        }
+    }
+
     private suspend fun createChoiceHarness(
         initialStyle: InterfaceStyle,
         selectedValue: String?,
@@ -230,6 +261,7 @@ class UiDefaultStylesUiTest {
         val selected = mutableStateOf(selectedValue)
         val pickerOpen = mutableStateOf(false)
         val requests = mutableListOf<String>()
+        val icon = mutableStateOf<RoseIcon?>(null)
         val scrollState = ScrollState(0)
         val scene = createShellScene(
             style = style,
@@ -244,6 +276,7 @@ class UiDefaultStylesUiTest {
                     options = OPTIONS,
                     selected = selected.value,
                     enabled = true,
+                    icon = icon.value,
                     id = "ui-default-styles-test-choice",
                     open = pickerOpen.value,
                     onOpenChange = { pickerOpen.value = it },
@@ -251,7 +284,7 @@ class UiDefaultStylesUiTest {
                 )
             },
         )
-        return ChoiceHarness(scene, style, selected, pickerOpen, requests, scrollState)
+        return ChoiceHarness(scene, style, selected, pickerOpen, requests, scrollState, icon)
     }
 
     private suspend fun createShellHarness(
@@ -330,6 +363,7 @@ class UiDefaultStylesUiTest {
         val pickerOpen: MutableState<Boolean>,
         val requests: MutableList<String>,
         scrollState: ScrollState,
+        val icon: MutableState<RoseIcon?>,
     ) : ShellHarness(scene, style, scrollState)
 
     private open class ShellHarness(
@@ -348,6 +382,17 @@ class UiDefaultStylesUiTest {
         }
 
         fun close() = scene.close()
+        fun snapshot(): java.awt.image.BufferedImage {
+            val image = scene.render(nextFrameTimeNanos)
+            val data = requireNotNull(image.encodeToData())
+            return try {
+                ImageIO.read(ByteArrayInputStream(data.bytes))
+            } finally {
+                data.close()
+                image.close()
+            }
+        }
+
 
         fun nodes(): List<SemanticsNode> {
             val result = mutableListOf<SemanticsNode>()
