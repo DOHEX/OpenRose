@@ -128,32 +128,20 @@ internal fun SettingToggleChoices(
     device: DeviceState,
     enabled: Boolean,
     onSet: (DeviceSetting, FieldValue) -> Unit,
+    icon: RoseIcon? = null,
 ) {
     val selected = (device.knownValue(field) as? FieldValue.Toggle)?.value
-    val summary = when (selected) {
-        true -> "设备已确认：开启"
-        false -> "设备已确认：关闭"
-        null -> when (device.fields[field]) {
-            is FieldReading.Known, is FieldReading.Unknown -> "当前状态未知"
-            else -> readingText(field, device.fields[field], false, device.fieldErrors[field], device.profile)
-        }
-    }
-    if (selected != null) {
-        AppSwitchRow(
-            title = label,
-            summary = summary,
-            checked = selected,
-            enabled = enabled,
-            onChange = { requested ->
-                if (requested != selected) onSet(setting, FieldValue.Toggle(requested))
-            },
-        )
-    } else {
-        AppUnknownToggleRow(
-            title = label,
-            summary = summary,
-            enabled = enabled,
-            onRequest = { requested -> onSet(setting, FieldValue.Toggle(requested)) },
-        )
-    }
+    val isKnown = selected != null
+    AppSwitchRow(
+        title = label,
+        summary = null,
+        checked = selected ?: false,
+        enabled = enabled && isKnown,
+        icon = icon,
+        onChange = { requested ->
+            if (isKnown && requested != selected) {
+                onSet(setting, FieldValue.Toggle(requested))
+            }
+        },
+    )
 }

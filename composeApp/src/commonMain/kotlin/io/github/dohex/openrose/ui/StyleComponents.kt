@@ -150,14 +150,20 @@ internal fun AppGroup(title: String? = null, footnote: String? = null, titleTrai
 }
 
 @Composable
-internal fun AppDashboardCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
+internal fun AppDashboardCard(
+    modifier: Modifier = Modifier,
+    compact: Boolean = false,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    val padding = if (compact) 0.dp else 16.dp
+    val spacing = if (compact) 0.dp else 12.dp
     CompositionLocalProvider(LocalInDashboardCard provides true) {
         when (LocalInterfaceStyle.current) {
             InterfaceStyle.MIUIX -> MiuixCard(modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp), content = content)
+                Column(Modifier.padding(padding), verticalArrangement = Arrangement.spacedBy(spacing), content = content)
             }
             InterfaceStyle.MATERIAL3 -> ElevatedCard(modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp), content = content)
+                Column(Modifier.padding(padding), verticalArrangement = Arrangement.spacedBy(spacing), content = content)
             }
         }
     }
@@ -189,24 +195,31 @@ internal fun AppInfoRow(label: String, value: String, valueColor: Color? = null)
 }
 
 @Composable
-internal fun AppSwitchRow(title: String, summary: String? = null, checked: Boolean, enabled: Boolean = true, onChange: (Boolean) -> Unit) {
+internal fun AppSwitchRow(
+    title: String,
+    summary: String? = null,
+    checked: Boolean,
+    enabled: Boolean = true,
+    icon: RoseIcon? = null,
+    onChange: (Boolean) -> Unit,
+) {
     when (LocalInterfaceStyle.current) {
-        InterfaceStyle.MIUIX -> SwitchPreference(checked, onChange, title, summary = summary, enabled = enabled)
-        InterfaceStyle.MATERIAL3 -> ListItem(headlineContent = { Text(title) }, supportingContent = summary?.let { { Text(it) } },
+        InterfaceStyle.MIUIX -> SwitchPreference(
+            checked = checked,
+            onCheckedChange = onChange,
+            title = title,
+            summary = summary,
+            startAction = icon?.let { { AppIcon(it) } },
+            enabled = enabled,
+        )
+        InterfaceStyle.MATERIAL3 -> ListItem(
+            headlineContent = { Text(title) },
+            supportingContent = summary?.let { { Text(it) } },
+            leadingContent = icon?.let { { AppIcon(it) } },
             trailingContent = { Switch(checked, onCheckedChange = null, enabled = enabled) },
-            modifier = Modifier.toggleable(checked, enabled = enabled, role = Role.Switch, onValueChange = onChange), colors = rowColors())
-    }
-}
-
-@Composable
-internal fun AppUnknownToggleRow(title: String, summary: String = "当前状态未知", enabled: Boolean = true, onRequest: (Boolean) -> Unit) {
-    val actions: @Composable RowScope.() -> Unit = {
-        AppButton("开启", { onRequest(true) }, enabled, kind = AppButtonKind.Secondary)
-        AppButton("关闭", { onRequest(false) }, enabled, kind = AppButtonKind.Secondary)
-    }
-    when (LocalInterfaceStyle.current) {
-        InterfaceStyle.MIUIX -> BasicComponent(title = title, summary = summary, endActions = actions)
-        InterfaceStyle.MATERIAL3 -> ListItem(headlineContent = { Text(title) }, supportingContent = { Text(summary) }, trailingContent = { Row(content = actions) }, colors = rowColors())
+            modifier = Modifier.toggleable(checked, enabled = enabled, role = Role.Switch, onValueChange = onChange),
+            colors = rowColors(),
+        )
     }
 }
 

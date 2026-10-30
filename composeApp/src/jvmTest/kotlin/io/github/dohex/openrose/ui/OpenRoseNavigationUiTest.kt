@@ -11,6 +11,7 @@ import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.state.ToggleableState
 import io.github.dohex.openrose.core.Appearance
 import io.github.dohex.openrose.core.ConnectionPhase
 import io.github.dohex.openrose.core.ConnectionState
@@ -48,7 +49,7 @@ import kotlin.test.assertTrue
 
 class OpenRoseNavigationUiTest {
     @Test
-    fun unknownToggleRequiresAnExplicitChoiceWithoutClaimingItIsOff() = runBlocking {
+    fun unknownToggleRendersDisabledSwitchWithoutInventingConfirmation() = runBlocking {
         for (style in InterfaceStyle.entries) {
             val base = state(connected = true)
             val device = requireNotNull(base.device)
@@ -57,14 +58,31 @@ class OpenRoseNavigationUiTest {
             val harness = createHarness(420, 900, initial.copy(settings = initial.settings.copy(interfaceStyle = style)))
             try {
                 harness.render()
-                assertTrue(harness.hasText("当前状态未知"))
-                assertFalse(harness.nodes().any { it.config.contains(SemanticsProperties.ToggleableState) },
-                    "an unread game setting must not announce an on/off switch state in $style")
+                assertTrue(harness.hasText("游戏模式"))
+                assertFalse(harness.hasText("当前状态未知"), "game mode toggle must not show unknown status text in $style")
+                assertFalse(harness.hasText("设备已确认：开启"), "unconfirmed toggle must not claim confirmed in $style")
+                assertFalse(harness.hasText("设备已确认：关闭"), "unconfirmed toggle must not claim confirmed in $style")
+                assertTrue(
+                    harness.nodes().any {
+                        it.config.contains(SemanticsProperties.Disabled) &&
+                            it.config.getOrNull(SemanticsProperties.ToggleableState) == ToggleableState.Off
+                    },
+                    "an unread game mode toggle must be disabled with off state in $style",
+                )
                 assertTrue(harness.settingWrites.isEmpty())
-                harness.clickText("关闭")
+
+                // When the device reports known state, switch enables and clean single-line displays
+                val knownDevice = device.copy(fields = device.fields +
+                    (DeviceField.GAME_MODE to FieldReading.Known(FieldValue.Toggle(false), "00")))
+                harness.state.value = harness.state.value.copy(device = knownDevice)
                 harness.render()
-                assertEquals(listOf<Pair<DeviceSetting, FieldValue>>(DeviceSetting.GAME_MODE to FieldValue.Toggle(false)), harness.settingWrites)
-                assertFalse(harness.hasText("设备已确认：关闭"), "a request must not invent device confirmation")
+
+                assertTrue(harness.hasText("游戏模式"))
+                assertFalse(harness.hasText("设备已确认：关闭"), "confirmed state must not show redundant subtitle in $style")
+                assertTrue(harness.hasClickableText("游戏模式"), "known game setting must be clickable in $style")
+                harness.clickText("游戏模式")
+                harness.render()
+                assertEquals(listOf<Pair<DeviceSetting, FieldValue>>(DeviceSetting.GAME_MODE to FieldValue.Toggle(true)), harness.settingWrites)
             } finally {
                 harness.close()
             }
@@ -326,6 +344,19 @@ class OpenRoseNavigationUiTest {
             node.config.getOrNull(SemanticsProperties.ContentDescription).orEmpty().contains(expected)
         }
 
+        fun hasClickableText(expected: String): Boolean {
+            val textNodes = nodes().filter { node ->
+                node.config.getOrNull(SemanticsProperties.Text).orEmpty().any { it.text == expected }
+            }
+            for (textNode in textNodes) {
+                var current: SemanticsNode? = textNode
+                while (current != null) {
+                    if (current.config.getOrNull(SemanticsActions.OnClick) != null) return true
+                    current = current.parent
+                }
+            }
+            return false
+        }
 
         fun clickContentDescription(expected: String) {
             val node = nodes().firstOrNull { semantics ->
