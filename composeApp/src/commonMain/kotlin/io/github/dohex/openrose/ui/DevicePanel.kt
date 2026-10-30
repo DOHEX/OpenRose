@@ -116,7 +116,6 @@ internal fun HeadphonesPage(
                             )
                         }
                     }
-                    val hasEqualizer = device.capabilities.equalizer != null
                     val hasTouch = device.capabilities.touchControl != null ||
                         DeviceSetting.TOUCH_ENABLED in device.capabilities.writableSettings ||
                         DeviceSetting.EAR_DETECTION in device.capabilities.writableSettings
@@ -130,15 +129,7 @@ internal fun HeadphonesPage(
                         )
                     }
                     AppGroup(title = "功能") {
-                        if (hasEqualizer) {
-                            AppArrowRow(
-                                title = "均衡器",
-                                value = (device.knownValue(DeviceField.EQ) as? FieldValue.Text)
-                                    ?.value?.let { equalizerLabel(it, device.profile) },
-                                icon = RoseIcon.EQUALIZER,
-                                onClick = { onNavigate(AppPage.EQUALIZER) },
-                            )
-                        }
+                        EqualizerRow(state, device, onSet)
                         if (hasTouch) {
                             AppArrowRow(
                                 title = "触控操作",
@@ -181,6 +172,34 @@ internal fun HeadphonesPage(
             }
         }
     }
+}
+
+@Composable
+private fun EqualizerRow(state: ControlState, device: DeviceState, onSet: (DeviceSetting, FieldValue) -> Unit) {
+    val presets = device.capabilities.equalizer?.presets ?: return
+    if (presets.isEmpty() || DeviceSetting.EQ !in device.capabilities.writableSettings) return
+    val confirmed = (device.knownValue(DeviceField.EQ) as? FieldValue.Text)?.value
+    AppChoiceRow(
+        title = "均衡器",
+        valueText = confirmedChoiceValue(DeviceField.EQ, device),
+        options = presets.sortedWith(compareBy({ equalizerPresetOrder(it) }, { it }))
+            .map { AppOption(it, equalizerLabel(it, device.profile)) },
+        selected = confirmed,
+        enabled = state.isReady(device) && !state.hasPendingSetting(device),
+        icon = RoseIcon.EQUALIZER,
+        onSelect = { preset ->
+            if (preset != confirmed) onSet(DeviceSetting.EQ, FieldValue.Text(preset))
+        },
+    )
+}
+
+private fun equalizerPresetOrder(preset: String): Int = when (preset) {
+    "pop" -> 0
+    "hifi" -> 1
+    "rock" -> 2
+    "light" -> 3
+    "eap" -> 4
+    else -> 5
 }
 
 @Composable

@@ -172,13 +172,15 @@ internal fun AppDashboardCard(
 @Composable
 private fun rowColors(): ListItemColors = if (LocalInDashboardCard.current) ListItemDefaults.colors(containerColor = Color.Transparent) else ListItemDefaults.colors()
 
+private fun iconAction(icon: RoseIcon?): (@Composable () -> Unit)? = icon?.let { { AppIcon(it) } }
+
 @Composable
 internal fun AppArrowRow(title: String, summary: String? = null, value: String? = null, icon: RoseIcon? = null, onClick: () -> Unit) {
     when (LocalInterfaceStyle.current) {
-        InterfaceStyle.MIUIX -> ArrowPreference(title, summary = summary, startAction = icon?.let { { AppIcon(it) } }, endActions = { value?.let { AppText(it, role = AppTextRole.Summary) } }, onClick = onClick)
+        InterfaceStyle.MIUIX -> ArrowPreference(title, summary = summary, startAction = iconAction(icon), endActions = { value?.let { AppText(it, role = AppTextRole.Summary) } }, onClick = onClick)
         InterfaceStyle.MATERIAL3 -> ListItem(
             headlineContent = { Text(title) }, supportingContent = summary?.let { { Text(it) } },
-            leadingContent = icon?.let { { AppIcon(it) } }, trailingContent = { Row(verticalAlignment = Alignment.CenterVertically) { value?.let { Text(it) }; AppIcon(RoseIcon.CHEVRON) } },
+            leadingContent = iconAction(icon), trailingContent = { Row(verticalAlignment = Alignment.CenterVertically) { value?.let { Text(it) }; AppIcon(RoseIcon.CHEVRON) } },
             modifier = Modifier.clickable(role = Role.Button, onClick = onClick), colors = rowColors(),
         )
     }
@@ -209,13 +211,13 @@ internal fun AppSwitchRow(
             onCheckedChange = onChange,
             title = title,
             summary = summary,
-            startAction = icon?.let { { AppIcon(it) } },
+            startAction = iconAction(icon),
             enabled = enabled,
         )
         InterfaceStyle.MATERIAL3 -> ListItem(
             headlineContent = { Text(title) },
             supportingContent = summary?.let { { Text(it) } },
-            leadingContent = icon?.let { { AppIcon(it) } },
+            leadingContent = iconAction(icon),
             trailingContent = { Switch(checked, onCheckedChange = null, enabled = enabled) },
             modifier = Modifier.toggleable(checked, enabled = enabled, role = Role.Switch, onValueChange = onChange),
             colors = rowColors(),
@@ -246,7 +248,7 @@ internal fun <T> AppRadioGroup(options: List<AppOption<T>>, selected: T?, enable
 
 @Composable
 internal fun <T> AppChoiceRow(title: String, valueText: String, options: List<AppOption<T>>, selected: T?, enabled: Boolean = true,
-    id: String = title, open: Boolean? = null, onOpenChange: ((Boolean) -> Unit)? = null, onSelect: (T) -> Unit) {
+    id: String = title, open: Boolean? = null, onOpenChange: ((Boolean) -> Unit)? = null, icon: RoseIcon? = null, onSelect: (T) -> Unit) {
     val shared = LocalChoiceDialog.current
     val local = remember { mutableStateOf<String?>(null) }
     val owner = shared ?: local
@@ -277,12 +279,12 @@ internal fun <T> AppChoiceRow(title: String, valueText: String, options: List<Ap
             if (selected != null && selectedIndex >= 0 && (!isOpen || dropdownOpenedHere)) {
                 key(dropdownGeneration) {
                     OverlayDropdownPreference(items = options.map { it.label }, selectedIndex = selectedIndex, title = title,
-                        enabled = enabled,
+                        enabled = enabled, startAction = iconAction(icon),
                         onExpandedChange = { dropdownOpenedHere = it; setOpen(it) },
                         onSelectedIndexChange = { select(options[it].value) })
                 }
             } else {
-                ArrowPreference(title, summary = valueText, enabled = enabled, onClick = { setOpen(true) })
+                ArrowPreference(title, summary = valueText, enabled = enabled, startAction = iconAction(icon), onClick = { setOpen(true) })
                 OverlayDialog(show = isOpen, title = title, onDismissRequest = { setOpen(false) }) {
                     Column(Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState())) {
                         AppRadioGroup(options, selected, enabled, onSelect = select)
@@ -293,6 +295,7 @@ internal fun <T> AppChoiceRow(title: String, valueText: String, options: List<Ap
         }
         InterfaceStyle.MATERIAL3 -> {
             ListItem(headlineContent = { Text(title) }, supportingContent = { Text(valueText) },
+                leadingContent = iconAction(icon),
                 modifier = Modifier.clickable(enabled, role = Role.Button) { setOpen(true) }, colors = rowColors())
             if (isOpen) AlertDialog(
                 onDismissRequest = { setOpen(false) },

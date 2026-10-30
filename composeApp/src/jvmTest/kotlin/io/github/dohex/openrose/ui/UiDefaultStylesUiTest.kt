@@ -21,6 +21,8 @@ import androidx.compose.ui.unit.dp
 import io.github.dohex.openrose.core.InterfaceStyle
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.runBlocking
+import java.io.ByteArrayInputStream
+import javax.imageio.ImageIO
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -222,6 +224,47 @@ class UiDefaultStylesUiTest {
         }
     }
 
+    @Test
+    fun choiceIconRendersForKnownAndUnknownValuesAcrossStyles() = runBlocking {
+        for (style in InterfaceStyle.entries) {
+            for (selected in listOf<String?>("A", null)) {
+                val harness = createChoiceHarness(style, selected)
+                try {
+                    harness.render()
+                    val withoutIcon = harness.snapshot()
+                    assertTrue(harness.hasText("功能选择"))
+                    assertTrue(harness.hasText(rowValueLabel(style, selected)))
+                    harness.icon.value = RoseIcon.EQUALIZER
+                    harness.render()
+                    val withIcon = harness.snapshot()
+                    assertTrue(harness.hasText("功能选择"), "the row retains its accessible title in $style")
+                    assertTrue(harness.hasText(rowValueLabel(style, selected)), "the row retains its value in $style")
+                    val titleNode = harness.nodes().first { node ->
+                        node.config.getOrNull(SemanticsProperties.Text).orEmpty().any { it.text == "功能选择" }
+                    }
+                    assertTrue(
+                        titleNode.config.getOrNull(SemanticsProperties.ContentDescription).isNullOrEmpty(),
+                        "the decorative icon must not add a redundant description in $style",
+                    )
+                    val bounds = titleNode.boundsInRoot
+                    assertTrue(
+                        (bounds.top.toInt().coerceAtLeast(0) until bounds.bottom.toInt().coerceAtMost(withIcon.height)).any { y ->
+                            (bounds.left.toInt().coerceAtLeast(0) until (bounds.left.toInt() + 100).coerceAtMost(withIcon.width)).any { x ->
+                                withoutIcon.getRGB(x, y) != withIcon.getRGB(x, y)
+                            }
+                        },
+                        "the leading area of the choice row should render the icon in $style with selection $selected",
+                    )
+                    harness.clickText("功能选择")
+                    harness.render()
+                    assertTrue(harness.pickerOpen.value, "the row remains clickable in $style")
+                } finally {
+                    harness.close()
+                }
+            }
+        }
+    }
+
     private suspend fun createChoiceHarness(
         initialStyle: InterfaceStyle,
         selectedValue: String?,
@@ -230,6 +273,7 @@ class UiDefaultStylesUiTest {
         val selected = mutableStateOf(selectedValue)
         val pickerOpen = mutableStateOf(false)
         val requests = mutableListOf<String>()
+        val icon = mutableStateOf<RoseIcon?>(null)
         val scrollState = ScrollState(0)
         val scene = createShellScene(
             style = style,
@@ -244,6 +288,7 @@ class UiDefaultStylesUiTest {
                     options = OPTIONS,
                     selected = selected.value,
                     enabled = true,
+                    icon = icon.value,
                     id = "ui-default-styles-test-choice",
                     open = pickerOpen.value,
                     onOpenChange = { pickerOpen.value = it },
@@ -251,7 +296,7 @@ class UiDefaultStylesUiTest {
                 )
             },
         )
-        return ChoiceHarness(scene, style, selected, pickerOpen, requests, scrollState)
+        return ChoiceHarness(scene, style, selected, pickerOpen, requests, scrollState, icon)
     }
 
     private suspend fun createShellHarness(
@@ -296,11 +341,11 @@ class UiDefaultStylesUiTest {
         coroutineContext = currentCoroutineContext(),
     ) {
         ProvideInterfaceStyle(style.value, dark = false) {
-            val backStack = listOf(AppPage.HEADPHONES, AppPage.EQUALIZER)
+            val backStack = listOf(AppPage.HEADPHONES, AppPage.AUDIO)
             when (style.value) {
                 InterfaceStyle.MIUIX -> MiuixAppShell(
                     backStack = backStack,
-                    page = AppPage.EQUALIZER,
+                    page = AppPage.AUDIO,
                     wide = wide,
                     onNavigate = {},
                     onBack = {},
@@ -309,7 +354,7 @@ class UiDefaultStylesUiTest {
                 )
                 InterfaceStyle.MATERIAL3 -> MaterialAppShell(
                     backStack = backStack,
-                    page = AppPage.EQUALIZER,
+                    page = AppPage.AUDIO,
                     wide = wide,
                     onNavigate = {},
                     onBack = {},
@@ -330,6 +375,7 @@ class UiDefaultStylesUiTest {
         val pickerOpen: MutableState<Boolean>,
         val requests: MutableList<String>,
         scrollState: ScrollState,
+        val icon: MutableState<RoseIcon?>,
     ) : ShellHarness(scene, style, scrollState)
 
     private open class ShellHarness(
@@ -348,6 +394,17 @@ class UiDefaultStylesUiTest {
         }
 
         fun close() = scene.close()
+        fun snapshot(): java.awt.image.BufferedImage {
+            val image = scene.render(nextFrameTimeNanos)
+            val data = requireNotNull(image.encodeToData())
+            return try {
+                ImageIO.read(ByteArrayInputStream(data.bytes))
+            } finally {
+                data.close()
+                image.close()
+            }
+        }
+
 
         fun nodes(): List<SemanticsNode> {
             val result = mutableListOf<SemanticsNode>()

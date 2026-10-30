@@ -23,7 +23,6 @@ internal enum class AppPage(val title: String, val icon: RoseIcon) {
     SYSTEM("系统集成", RoseIcon.SYSTEM),
     SETTINGS("设置", RoseIcon.SETTINGS),
     ADD_DEVICE("添加耳机", RoseIcon.PLUS),
-    EQUALIZER("均衡器", RoseIcon.EQUALIZER),
     TOUCH("触控操作", RoseIcon.TOUCH),
     AUDIO("音频与设备", RoseIcon.AUDIO),
     DETAILS("设备详情", RoseIcon.INFO),
@@ -65,8 +64,6 @@ fun OpenRoseApp(
     }
     val scrollStates = remember { AppPage.entries.associateWith { ScrollState(0) } }
     var selectedTouchSlot by remember(state.device?.sessionId) { mutableStateOf<TouchSlot?>(null) }
-    var customEqualizerDraft by remember(state.device?.sessionId) { mutableStateOf<List<Int>?>(null) }
-    var customEqualizerView by remember(state.device?.sessionId) { mutableStateOf(false) }
     var headphoneMenuExpanded by remember { mutableStateOf(false) }
     val rootFocusRequester = remember { FocusRequester() }
     val choiceDialog = remember(state.device?.sessionId) { mutableStateOf<String?>(null) }
@@ -192,19 +189,11 @@ fun OpenRoseApp(
                             device?.let { DeviceReadings(it, state.connection.phaseOrNull() == ConnectionPhase.INITIALIZING) }
                         }
                         else -> if (device != null) {
-                            val controlPage = targetPage in listOf(AppPage.EQUALIZER, AppPage.TOUCH, AppPage.AUDIO)
+                            val controlPage = targetPage in listOf(AppPage.TOUCH, AppPage.AUDIO)
                             if (controlPage) {
                                 SettingPageBanner(state, device)
                             }
                             when (targetPage) {
-                                AppPage.EQUALIZER -> {
-                                    val hasCustom = device.capabilities.equalizer?.custom != null &&
-                                        DeviceSetting.CUSTOM_EQ in device.capabilities.writableSettings
-                                    if (hasCustom) AppViewTabs(listOf("预设", "自定义"), if (customEqualizerView) 1 else 0) { customEqualizerView = it == 1 }
-                                    if (hasCustom && customEqualizerView) CustomEqualizerCard(state, device, customEqualizerDraft,
-                                        { customEqualizerDraft = it }, onSet)
-                                    else EqualizerControlCard(state, device, onSet)
-                                }
                                 AppPage.TOUCH -> TouchControlCard(state, device, selectedTouchSlot,
                                     { selectedTouchSlot = it }, onSet, selectedTouchSide, { selectedTouchSide = it })
                                 AppPage.AUDIO -> {
@@ -237,7 +226,7 @@ fun OpenRoseApp(
                 val feedbackContentFor: @Composable (AppPage) -> Unit = { targetPage ->
                     val device = state.activeDevice()
                     if ((targetPage == AppPage.HEADPHONES && device != null) ||
-                        targetPage in listOf(AppPage.EQUALIZER, AppPage.TOUCH, AppPage.AUDIO)) {
+                        targetPage in listOf(AppPage.TOUCH, AppPage.AUDIO)) {
                         key(targetPage) {
                             SettingFeedback(state, device) { navigate(AppPage.DIAGNOSTICS) }
                         }
@@ -341,9 +330,6 @@ fun OpenRoseApp(
                         Box(if (currentRoute is Route.Main) Modifier.fillMaxSize() else Modifier.fillMaxSize().clearAndSetSemantics { }) {
                             renderMainShell()
                         }
-                    }
-                    entry<Route.Equalizer>(swipeDismiss = NavSwipeDirection.LeftToRight) {
-                        renderShell(AppPage.EQUALIZER, true)
                     }
                     entry<Route.Touch>(swipeDismiss = NavSwipeDirection.LeftToRight) {
                         renderShell(AppPage.TOUCH, true)

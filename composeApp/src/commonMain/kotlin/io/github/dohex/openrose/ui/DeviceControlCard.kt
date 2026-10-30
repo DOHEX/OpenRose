@@ -113,7 +113,7 @@ internal fun DeviceControlCard(
     }
 }
 
-private fun confirmedChoiceValue(field: DeviceField, device: DeviceState): String = when (val reading = device.fields[field]) {
+internal fun confirmedChoiceValue(field: DeviceField, device: DeviceState): String = when (val reading = device.fields[field]) {
     is FieldReading.Known -> displayFieldValue(field, reading.value, device.profile)
     is FieldReading.Unknown -> "当前状态未知"
     is FieldReading.NotProvided -> "设备未提供"
