@@ -52,10 +52,8 @@ class OpenRoseFeedbackUiTest {
                     stage = SettingStage.CONFIRMED, confirmedFields = setOf(DeviceField.NOISE_MODE),
                 )))
                 harness.render()
-                assertTrue(harness.hasText("设备已确认设置"))
-                kotlinx.coroutines.delay(3_100)
-                harness.render()
-                assertFalse(harness.hasText("设备已确认设置"), "success feedback expires in $style")
+                assertFalse(harness.hasText("设备已确认设置"), "confirmed settings must apply silently without bottom banner in $style")
+                assertFalse(harness.hasText("正在处理设置，等待设备确认"), "pending feedback disappears once confirmed in $style")
             } finally {
                 harness.close()
             }
@@ -163,6 +161,37 @@ class OpenRoseFeedbackUiTest {
     }
 
     @Test
+    fun abnormalSettingStagesShowErrorCardAndDiagnosticsLink() = runBlocking {
+        for (style in InterfaceStyle.entries) {
+            val stages = listOf(
+                SettingStage.NOT_APPLIED to "设备状态与请求不一致",
+                SettingStage.DISCONNECTED to "控制连接已断开，设置未获完整确认",
+                SettingStage.FAILED to "设置失败",
+            )
+            for ((stage, expectedMessage) in stages) {
+                val operation = SettingOperation(
+                    id = 70,
+                    sessionId = SESSION_ID,
+                    setting = DeviceSetting.NOISE_MODE,
+                    requestedValue = FieldValue.Text("wind"),
+                    stage = stage,
+                )
+                val harness = createHarness(state(operation, style))
+                try {
+                    harness.render()
+                    assertTrue(harness.hasText(expectedMessage), "abnormal stage $stage shows message in $style")
+                    assertTrue(harness.hasText("查看详情"), "abnormal stage $stage shows diagnostics button in $style")
+                    harness.clickText("查看详情")
+                    harness.render()
+                    assertTrue(harness.hasText("请求 #70：降噪模式"), "diagnostics opened from $stage in $style")
+                } finally {
+                    harness.close()
+                }
+            }
+        }
+    }
+
+    @Test
     fun settingSubmissionWaitsForDeviceConfirmationAndStyleSwitchDoesNotResend() = runBlocking {
         for (style in InterfaceStyle.entries) {
             val confirmed = SettingOperation(
@@ -223,6 +252,7 @@ class OpenRoseFeedbackUiTest {
                 )
                 harness.render()
                 assertTrue(harness.hasSelectedText("通透"), "the control selection changes after device confirmation in $style")
+                assertFalse(harness.hasText("设备已确认设置"), "confirmed settings apply silently without bottom banner in $style")
                 assertEquals(1, harness.settingWrites.size, "device confirmation does not issue another setting in $style")
             } finally {
                 harness.close()

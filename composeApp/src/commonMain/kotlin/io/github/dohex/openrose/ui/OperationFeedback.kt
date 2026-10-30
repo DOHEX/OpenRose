@@ -3,13 +3,12 @@ package io.github.dohex.openrose.ui
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.unit.dp
 import io.github.dohex.openrose.core.ControlState
 import io.github.dohex.openrose.core.DeviceState
 import io.github.dohex.openrose.core.SettingStage
-import kotlinx.coroutines.delay
 
 /** Shows the current session's outcome without exposing the operation record kept in diagnostics. */
 @Composable
@@ -23,23 +22,8 @@ internal fun SettingFeedback(
     }
     val operationError = operation?.error
     val otherError = state.lastError?.takeIf { it != operationError }
-    var observedPendingId by remember(device?.sessionId) { mutableStateOf<Long?>(null) }
-    var showConfirmation by remember(device?.sessionId) { mutableStateOf(false) }
-    LaunchedEffect(operation?.id, operation?.stage) {
-        showConfirmation = false
-        when {
-            operation == null -> observedPendingId = null
-            operation.stage in settingPendingStages -> observedPendingId = operation.id
-            operation.stage == SettingStage.CONFIRMED && observedPendingId == operation.id -> {
-                showConfirmation = true
-                delay(3_000)
-                showConfirmation = false
-                observedPendingId = null
-            }
-        }
-    }
     val visibleOperation = operation?.takeIf {
-        it.stage in settingPendingStages || it.stage in settingFailureStages || operationError != null || showConfirmation
+        it.stage in settingPendingStages || it.stage in settingFailureStages || operationError != null
     }
     if (visibleOperation == null && otherError == null) return
 
@@ -57,7 +41,6 @@ internal fun SettingFeedback(
                         it.stage.feedbackMessage(),
                         color = when {
                             failure -> appColor(AppColorRole.Error)
-                            it.stage == SettingStage.CONFIRMED -> appColor(AppColorRole.Primary)
                             else -> null
                         },
                     )
