@@ -142,8 +142,7 @@ class OpenRoseConnectedHomeUiTest {
 
                     harness.state.value = harness.state.value.copy(connection = ConnectionState.Disconnected)
                     harness.render()
-                    assertTrue(harness.hasText("附近设备"))
-                    assertTrue(harness.hasText("扫描耳机"))
+                    assertTrue(harness.hasText("搜索并添加耳机"))
                     assertFalse(harness.hasText("设备详情"))
                 } finally {
                     harness.close()
@@ -301,7 +300,8 @@ class OpenRoseConnectedHomeUiTest {
                     )),
                 )
                 harness.render()
-                assertTrue(harness.hasText("均衡器"))
+                assertTrue(harness.hasText("游戏模式"))
+                assertFalse(harness.hasText("均衡器"), "game-only capability has its own home control in $style")
                 assertTrue(harness.hasText("触控操作"))
                 assertTrue(harness.hasText("音频与设备"))
                 assertTrue(harness.hasText("设备详情"))
@@ -366,6 +366,7 @@ class OpenRoseConnectedHomeUiTest {
                 onConnect = { connects += it },
                 onDisconnect = { disconnects += Unit },
                 onSet = { setting, value -> settingWrites += setting to value },
+                onAddDeviceConnect = { error("Unexpected add-device connection in this scenario") },
                 homeNavigationRequest = homeNavigationRequest.value,
             )
         }

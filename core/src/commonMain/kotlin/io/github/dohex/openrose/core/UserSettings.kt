@@ -40,4 +40,5 @@ data class UserSettings(
     val islandTriggers: Set<IslandTrigger> = setOf(IslandTrigger.CONNECTION),
     val forceBle: Boolean = false,
     val pageTransition: PageTransition = PageTransition.MIUIX_SPRING,
+    val backgroundBlurEnabled: Boolean = true,
 )

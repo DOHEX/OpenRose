@@ -164,6 +164,7 @@ class OpenRoseNavDisplayTest {
                 onConnect = {},
                 onDisconnect = {},
                 onSet = { _, _ -> },
+                onAddDeviceConnect = { error("Unexpected add-device connection in this scenario") },
             )
         }
         return NavTestHarness(scene, state, settingsChanges)

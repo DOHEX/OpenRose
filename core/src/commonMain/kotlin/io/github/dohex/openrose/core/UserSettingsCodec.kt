@@ -33,6 +33,7 @@ object UserSettingsCodec {
             PageTransition.FADE -> "fade"
             PageTransition.NONE -> "none"
         },
+        "background_blur_enabled" to settings.backgroundBlurEnabled.toString(),
     )
 
     fun decode(values: Map<String, String>): UserSettings {
@@ -71,6 +72,8 @@ object UserSettingsCodec {
                 "none" -> PageTransition.NONE
                 else -> defaults.pageTransition
             },
+            backgroundBlurEnabled = values["background_blur_enabled"]
+                ?.toBooleanStrictOrNull() ?: defaults.backgroundBlurEnabled,
         )
     }
 }

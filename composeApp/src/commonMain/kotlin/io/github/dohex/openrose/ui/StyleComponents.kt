@@ -10,6 +10,7 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -22,12 +23,15 @@ import androidx.compose.ui.semantics.*
 import androidx.compose.ui.unit.dp
 import io.github.dohex.openrose.core.InterfaceStyle
 import top.yukonga.miuix.kmp.basic.BasicComponent
+import top.yukonga.miuix.kmp.basic.DropdownEntry
+import top.yukonga.miuix.kmp.basic.DropdownItem
 import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.basic.TabRowWithContour
 import top.yukonga.miuix.kmp.basic.ButtonDefaults as MiuixButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card as MiuixCard
 import top.yukonga.miuix.kmp.basic.Text as MiuixText
 import top.yukonga.miuix.kmp.basic.TextButton as MiuixTextButton
+import top.yukonga.miuix.kmp.layout.DialogDefaults
 import top.yukonga.miuix.kmp.overlay.OverlayDialog
 import top.yukonga.miuix.kmp.preference.*
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -38,7 +42,7 @@ internal val LocalInterfaceStyle = staticCompositionLocalOf { InterfaceStyle.MIU
 // Owned above the style branch so an open picker survives component replacement.
 internal val LocalChoiceDialog = staticCompositionLocalOf<MutableState<String?>?> { null }
 private val LocalInDashboardCard = staticCompositionLocalOf { false }
-internal enum class AppColorRole { Primary, OnSurface, Summary, Error, Divider }
+internal enum class AppColorRole { Primary, OnSurface, Summary, Error, Divider, SelectedContainer, SelectedContent, DisabledContent }
 internal enum class AppTextRole { Display, Title, Body, Summary, Footnote }
 internal enum class AppButtonKind { Primary, Secondary }
 internal data class AppOption<T>(val value: T, val label: String, val contentDescription: String? = null)
@@ -52,6 +56,9 @@ internal fun appColor(role: AppColorRole): Color = when (LocalInterfaceStyle.cur
             AppColorRole.Summary -> onSurfaceVariantSummary
             AppColorRole.Error -> error
             AppColorRole.Divider -> dividerLine
+            AppColorRole.SelectedContainer -> tertiaryContainer
+            AppColorRole.SelectedContent -> onTertiaryContainer
+            AppColorRole.DisabledContent -> disabledOnSurface
         }
     }
     InterfaceStyle.MATERIAL3 -> with(MaterialTheme.colorScheme) {
@@ -61,6 +68,9 @@ internal fun appColor(role: AppColorRole): Color = when (LocalInterfaceStyle.cur
             AppColorRole.Summary -> onSurfaceVariant
             AppColorRole.Error -> error
             AppColorRole.Divider -> outlineVariant
+            AppColorRole.SelectedContainer -> secondaryContainer
+            AppColorRole.SelectedContent -> onSecondaryContainer
+            AppColorRole.DisabledContent -> onSurface.copy(alpha = 0.38f)
         }
     }
 }
@@ -240,6 +250,8 @@ internal fun <T> AppChoiceRow(title: String, valueText: String, options: List<Ap
     var dropdownOpenedHere by remember { mutableStateOf(false) }
     var dropdownGeneration by remember { mutableIntStateOf(0) }
     val dialogFocusRequester = remember { FocusRequester() }
+    val backdropActive = LocalBackdropBlurActive.current
+    val backdrop = LocalAppBackdrop.current
     LaunchedEffect(isOpen) {
         if (!isOpen && dropdownOpenedHere) {
             dropdownOpenedHere = false
@@ -269,17 +281,112 @@ internal fun <T> AppChoiceRow(title: String, valueText: String, options: List<Ap
         InterfaceStyle.MATERIAL3 -> {
             ListItem(headlineContent = { Text(title) }, supportingContent = { Text(valueText) },
                 modifier = Modifier.clickable(enabled, role = Role.Button) { setOpen(true) }, colors = rowColors())
-            if (isOpen) AlertDialog(onDismissRequest = { setOpen(false) }, modifier = Modifier.focusRequester(dialogFocusRequester).onPreviewKeyEvent {
-                if (it.type == KeyEventType.KeyUp && it.key == Key.Escape) {
-                    setOpen(false)
-                    true
-                } else false
-            }.focusable(), title = { Text(title) },
+            if (isOpen) AlertDialog(
+                onDismissRequest = { setOpen(false) },
+                modifier = Modifier
+                    .focusRequester(dialogFocusRequester)
+                    .onPreviewKeyEvent {
+                        if (it.type == KeyEventType.KeyUp && it.key == Key.Escape) {
+                            setOpen(false)
+                            true
+                        } else false
+                    }
+                    .focusable(),
+                title = { Text(title) },
                 text = {
                     LaunchedEffect(Unit) { dialogFocusRequester.requestFocus() }
                     Column(Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState())) { AppRadioGroup(options, selected, enabled, transparentContainer = true, onSelect = select) }
                 },
-                confirmButton = {}, dismissButton = { TextButton(onClick = { setOpen(false) }) { Text("取消") } })
+                confirmButton = {},
+                dismissButton = { TextButton(onClick = { setOpen(false) }) { Text("取消") } },
+            )
+        }
+    }
+}
+
+@Composable
+internal fun <T> AppMultiChoiceRow(
+    title: String,
+    summary: String,
+    options: List<AppOption<T>>,
+    checked: Set<T>,
+    enabled: Boolean,
+    enabledFor: (T) -> Boolean,
+    onToggle: (T) -> Unit,
+) {
+    val local = remember { mutableStateOf<String?>(null) }
+    val owner = LocalChoiceDialog.current ?: local
+    val isOpen = owner.value == title
+    fun setOpen(open: Boolean) { owner.value = if (open) title else null }
+    val canToggle: (T) -> Boolean = { enabled && enabledFor(it) }
+    val toggle: (T) -> Unit = { if (canToggle(it)) onToggle(it) }
+    // Like AppChoiceRow, restore an open picker as a controlled dialog after a style change.
+    var dropdownOpenedHere by remember { mutableStateOf(false) }
+    var dropdownGeneration by remember { mutableIntStateOf(0) }
+    LaunchedEffect(isOpen) {
+        if (!isOpen && dropdownOpenedHere) {
+            dropdownOpenedHere = false
+            dropdownGeneration++
+        }
+    }
+    when (LocalInterfaceStyle.current) {
+        InterfaceStyle.MIUIX -> {
+            if (!isOpen || dropdownOpenedHere) {
+                val entry = remember(options, checked, enabled, enabledFor, onToggle) {
+                    DropdownEntry(options.map { option ->
+                        DropdownItem(
+                            text = option.label,
+                            selected = option.value in checked,
+                            enabled = canToggle(option.value),
+                            onClick = { toggle(option.value) },
+                        )
+                    })
+                }
+                key(dropdownGeneration) {
+                    OverlayDropdownPreference(
+                        entry = entry,
+                        title = title,
+                        summary = summary,
+                        showValue = false,
+                        enabled = enabled,
+                        collapseOnSelection = false,
+                        onExpandedChange = { dropdownOpenedHere = it; setOpen(it) },
+                    )
+                }
+            } else {
+                ArrowPreference(title, summary = summary, enabled = enabled, onClick = { setOpen(true) })
+                OverlayDialog(show = true, title = title, onDismissRequest = { setOpen(false) }) {
+                    AppCheckGroup(options, checked, canToggle, toggle)
+                    AppButton("关闭", { setOpen(false) }, kind = AppButtonKind.Secondary)
+                }
+            }
+        }
+        InterfaceStyle.MATERIAL3 -> {
+            ListItem(
+                headlineContent = { Text(title) },
+                supportingContent = { Text(summary) },
+                trailingContent = { AppIcon(RoseIcon.CHEVRON) },
+                modifier = Modifier.clickable(enabled, role = Role.Button) { setOpen(true) },
+                colors = rowColors(),
+            )
+            if (isOpen) {
+                val focusRequester = remember { FocusRequester() }
+                AlertDialog(
+                    onDismissRequest = { setOpen(false) },
+                    modifier = Modifier.focusRequester(focusRequester).onPreviewKeyEvent {
+                        if (it.type == KeyEventType.KeyUp && it.key == Key.Escape) {
+                            setOpen(false)
+                            true
+                        } else false
+                    }.focusable(),
+                    title = { Text(title) },
+                    text = {
+                        LaunchedEffect(Unit) { focusRequester.requestFocus() }
+                        AppCheckGroup(options, checked, canToggle, toggle)
+                    },
+                    confirmButton = { TextButton(onClick = { setOpen(false) }) { Text("关闭") } },
+                )
+            }
         }
     }
 }

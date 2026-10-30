@@ -57,8 +57,6 @@ class OpenRoseNavigationUiTest {
             val harness = createHarness(420, 900, initial.copy(settings = initial.settings.copy(interfaceStyle = style)))
             try {
                 harness.render()
-                harness.clickText("均衡器")
-                harness.render()
                 assertTrue(harness.hasText("当前状态未知"))
                 assertFalse(harness.nodes().any { it.config.contains(SemanticsProperties.ToggleableState) },
                     "an unread game setting must not announce an on/off switch state in $style")
@@ -74,14 +72,18 @@ class OpenRoseNavigationUiTest {
     }
 
     @Test
-    fun narrowHomeShowsNearbyDevicesAndAddRouteCanReturn() = runBlocking {
+    fun narrowHomeOpensAvailableDiscoveryAndCanReturn() = runBlocking {
         val harness = createHarness(width = 420, height = 900, initialState = state(connected = false))
         try {
             harness.render()
-            assertTrue(harness.hasText("连接你的 ROSE 耳机"))
+            assertTrue(harness.hasText("添加你的 ROSE 耳机"))
+            assertTrue(harness.hasContentDescription("添加耳机"))
+            harness.clickContentDescription("添加耳机")
+            harness.render()
             assertTrue(harness.hasText("附近设备"))
-            assertTrue(harness.hasText("扫描耳机"))
-            assertFalse(harness.nodes().any { it.config.getOrNull(SemanticsProperties.ContentDescription).orEmpty().contains("添加耳机") }, "top bar + button must be hidden when disconnected")
+            harness.clickContentDescription("返回")
+            harness.render()
+            assertTrue(harness.hasText("添加你的 ROSE 耳机"))
         } finally {
             harness.close()
         }
@@ -215,11 +217,16 @@ class OpenRoseNavigationUiTest {
                 },
                 onRequestPermission = {},
                 onOpenSystemSettings = {},
-                onStartScan = {},
-                onStopScan = {},
+                onStartScan = { state.value = state.value.copy(scan = io.github.dohex.openrose.core.ScanState.Scanning) },
+                onStopScan = { state.value = state.value.copy(scan = io.github.dohex.openrose.core.ScanState.Idle) },
                 onConnect = {},
                 onDisconnect = {},
                 onSet = { setting, value -> settingWrites += setting to value },
+                onAddDeviceConnect = {
+                    io.github.dohex.openrose.core.OperationResult.Failure(
+                        io.github.dohex.openrose.core.ControlError(io.github.dohex.openrose.core.ControlErrorCode.FAILED, "测试连接失败"),
+                    )
+                },
             )
         }
         return NavigationHarness(scene, state, settingsChanges, settingWrites)
@@ -315,6 +322,10 @@ class OpenRoseNavigationUiTest {
         fun hasText(expected: String): Boolean = nodes().any { node ->
             node.config.getOrNull(SemanticsProperties.Text).orEmpty().any { it.text == expected }
         }
+        fun hasContentDescription(expected: String): Boolean = nodes().any { node ->
+            node.config.getOrNull(SemanticsProperties.ContentDescription).orEmpty().contains(expected)
+        }
+
 
         fun clickContentDescription(expected: String) {
             val node = nodes().firstOrNull { semantics ->

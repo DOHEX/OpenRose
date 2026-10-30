@@ -68,7 +68,10 @@ internal fun PreferencesPage(
             )
         }
 
-        AppGroup(title = "显示模式") {
+        AppGroup(
+            title = "显示模式",
+            footnote = "背景模糊仅在 Android 13+、桌面端及非省电模式下生效，其余环境平滑回退为实体底色。",
+        ) {
             AppChoiceRow(
                 title = "明暗模式",
                 valueText = appearanceLabel(settings.appearance),
@@ -76,8 +79,13 @@ internal fun PreferencesPage(
                 selected = settings.appearance,
                 onSelect = { onChange(settings.copy(appearance = it)) },
             )
+            AppSwitchRow(
+                title = "背景模糊",
+                summary = "顶栏、底栏及浮层启用毛玻璃透视效果",
+                checked = settings.backgroundBlurEnabled,
+                onChange = { onChange(settings.copy(backgroundBlurEnabled = it)) },
+            )
         }
-
         AppGroup(title = "动效") {
             AppChoiceRow(
                 title = "转场动效",

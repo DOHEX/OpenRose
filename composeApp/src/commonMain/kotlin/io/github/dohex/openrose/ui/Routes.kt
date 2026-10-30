@@ -9,9 +9,6 @@ internal sealed interface Route : NavKey {
     data class Main(val tab: AppPage = AppPage.HEADPHONES) : Route
 
     @Serializable
-    data object Noise : Route
-
-    @Serializable
     data object Equalizer : Route
 
     @Serializable
@@ -34,7 +31,6 @@ internal fun AppPage.toRoute(): Route = when (this) {
     AppPage.HEADPHONES -> Route.Main(AppPage.HEADPHONES)
     AppPage.SYSTEM -> Route.Main(AppPage.SYSTEM)
     AppPage.SETTINGS -> Route.Main(AppPage.SETTINGS)
-    AppPage.NOISE -> Route.Noise
     AppPage.EQUALIZER -> Route.Equalizer
     AppPage.TOUCH -> Route.Touch
     AppPage.AUDIO -> Route.Audio
@@ -45,7 +41,6 @@ internal fun AppPage.toRoute(): Route = when (this) {
 
 internal fun Route.toAppPage(): AppPage = when (this) {
     is Route.Main -> tab
-    Route.Noise -> AppPage.NOISE
     Route.Equalizer -> AppPage.EQUALIZER
     Route.Touch -> AppPage.TOUCH
     Route.Audio -> AppPage.AUDIO

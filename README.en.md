@@ -15,8 +15,8 @@ OpenRose separates device protocols, control sessions, and the application UI. I
 ## Features
 
 - View earphone battery levels, firmware versions, and device state.
-- Switch noise control modes, adjust ANC and transparency levels independently, and configure the noise control modes cycled by touch gestures.
-- Change EQ presets, game mode, touch bindings, touch and detection switches, and prompt volume.
+- Switch noise control modes using home-screen icons: four in one row for i5, six in two rows for i7. Adjust ANC and transparency levels independently and configure touch-cycle participants through a dedicated multi-select picker.
+- Toggle game mode on the home screen. Change EQ presets, touch bindings, touch and detection switches, and prompt volume on their respective feature pages.
 - Select audio configurations and multipoint connectivity according to model capabilities. The i7 also offers a custom ten-band EQ and firmware-dependent settings such as gain and hearing protection.
 - Switch between Miuix and Material 3, with light and dark appearance options. Changing interface style preserves the control connection and device state.
 - Android system integration includes the HyperOS system island (超级岛), focus notifications, and Fusion Device Center (融合设备中心), targeting HyperOS 3 and 4.

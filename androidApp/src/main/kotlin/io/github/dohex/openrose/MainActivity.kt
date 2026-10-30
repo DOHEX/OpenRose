@@ -56,6 +56,7 @@ class MainActivity : ComponentActivity() {
                 onConnect = owner::connect,
                 onDisconnect = owner::disconnect,
                 onSet = owner::applySetting,
+                onAddDeviceConnect = owner.session::connectForAddDevice,
                 homeNavigationRequest = homeNavigationRequest,
             )
         }

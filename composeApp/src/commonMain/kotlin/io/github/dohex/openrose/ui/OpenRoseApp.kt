@@ -23,7 +23,6 @@ internal enum class AppPage(val title: String, val icon: RoseIcon) {
     SYSTEM("系统集成", RoseIcon.SYSTEM),
     SETTINGS("设置", RoseIcon.SETTINGS),
     ADD_DEVICE("添加耳机", RoseIcon.PLUS),
-    NOISE("降噪控制", RoseIcon.NOISE),
     EQUALIZER("均衡器", RoseIcon.EQUALIZER),
     TOUCH("触控操作", RoseIcon.TOUCH),
     AUDIO("音频与设备", RoseIcon.AUDIO),
@@ -46,6 +45,7 @@ fun OpenRoseApp(
     onConnect: (DeviceId) -> Unit,
     onDisconnect: () -> Unit,
     onSet: (DeviceSetting, FieldValue) -> Unit,
+    onAddDeviceConnect: suspend (DeviceId) -> OperationResult,
     modifier: Modifier = Modifier,
     homeNavigationRequest: Long = 0L,
 ) {
@@ -54,9 +54,11 @@ fun OpenRoseApp(
         Appearance.LIGHT -> false
         Appearance.DARK -> true
     }
+    val backdropActive = rememberBackdropBlurActive(state.settings)
     val navBackStack = rememberNavBackStack<Route>(Route.Main(AppPage.HEADPHONES))
     val mainTabsPagerState = rememberMainTabsPagerState(initialPage = 0)
     val currentRoute = (navBackStack.lastOrNull() as? Route) ?: Route.Main(AppPage.HEADPHONES)
+    val latestRoute by rememberUpdatedState(currentRoute)
     val page = when (currentRoute) {
         is Route.Main -> mainPages.getOrElse(mainTabsPagerState.selectedPage) { AppPage.HEADPHONES }
         else -> currentRoute.toAppPage()
@@ -119,19 +121,23 @@ fun OpenRoseApp(
         canGoBack,
         ::back,
     )
+    val addDeviceFlow = rememberAddDeviceFlow(
+        active = currentRoute is Route.AddDevice,
+        state = state,
+        onStartScan = onStartScan,
+        onStopScan = onStopScan,
+        onConnect = onAddDeviceConnect,
+        onReady = { navigate(AppPage.HEADPHONES) },
+    )
     LaunchedEffect(state.connection, page) {
         if (page != AppPage.HEADPHONES || state.activeDevice() == null) {
             headphoneMenuExpanded = false
         }
-        val connection = state.connection as? ConnectionState.Connected
-        if (page == AppPage.ADD_DEVICE && connection?.phase == ConnectionPhase.READY) {
-            while (navBackStack.size > 1) {
-                navBackStack.removeLastOrNull()
-            }
-            mainTabsPagerState.selectPage(0, animated = false)
-        }
     }
-    CompositionLocalProvider(LocalChoiceDialog provides choiceDialog) {
+    CompositionLocalProvider(
+        LocalChoiceDialog provides choiceDialog,
+        LocalBackdropBlurActive provides backdropActive,
+    ) {
         LaunchedEffect(page, choiceDialog.value, selectedTouchSlot, headphoneMenuExpanded) {
             if (choiceDialog.value == null && selectedTouchSlot == null && !headphoneMenuExpanded) {
                 rootFocusRequester.requestFocus()
@@ -158,10 +164,20 @@ fun OpenRoseApp(
                             onDisconnect,
                             onSet,
                         )
-                        AppPage.ADD_DEVICE -> AddDevicePage(state, onRequestPermission, onOpenSystemSettings,
-                            onStartScan, onStopScan, onConnect, onDisconnect) {
-                            navigate(AppPage.DIAGNOSTICS)
-                        }
+                        AppPage.ADD_DEVICE -> AddDeviceContent(
+                            state = state,
+                            canScan = state.canSearchForHeadphones(),
+                            selectedDeviceId = addDeviceFlow.selectedDeviceId,
+                            connectionPhase = addDeviceFlow.phase(state.connection),
+                            connectionError = addDeviceFlow.connectionError,
+                            onRequestPermission = onRequestPermission,
+                            onOpenSystemSettings = onOpenSystemSettings,
+                            onStartScan = addDeviceFlow::startSearch,
+                            onStopScan = addDeviceFlow::stopSearch,
+                            onConnect = addDeviceFlow::connect,
+                            onCancelConnection = addDeviceFlow::cancelConnection,
+                            onDiagnostics = { navigate(AppPage.DIAGNOSTICS) },
+                        )
                         AppPage.SYSTEM -> SystemIntegrationPage(
                             state = state,
                             onRequestPermission = onRequestPermission,
@@ -176,12 +192,11 @@ fun OpenRoseApp(
                             device?.let { DeviceReadings(it, state.connection.phaseOrNull() == ConnectionPhase.INITIALIZING) }
                         }
                         else -> if (device != null) {
-                            val controlPage = targetPage in listOf(AppPage.NOISE, AppPage.EQUALIZER, AppPage.TOUCH, AppPage.AUDIO)
+                            val controlPage = targetPage in listOf(AppPage.EQUALIZER, AppPage.TOUCH, AppPage.AUDIO)
                             if (controlPage) {
                                 SettingPageBanner(state, device)
                             }
                             when (targetPage) {
-                                AppPage.NOISE -> NoiseControlCard(state, device, onSet)
                                 AppPage.EQUALIZER -> {
                                     val hasCustom = device.capabilities.equalizer?.custom != null &&
                                         DeviceSetting.CUSTOM_EQ in device.capabilities.writableSettings
@@ -222,7 +237,7 @@ fun OpenRoseApp(
                 val feedbackContentFor: @Composable (AppPage) -> Unit = { targetPage ->
                     val device = state.activeDevice()
                     if ((targetPage == AppPage.HEADPHONES && device != null) ||
-                        targetPage in listOf(AppPage.NOISE, AppPage.EQUALIZER, AppPage.TOUCH, AppPage.AUDIO)) {
+                        targetPage in listOf(AppPage.EQUALIZER, AppPage.TOUCH, AppPage.AUDIO)) {
                         key(targetPage) {
                             SettingFeedback(state, device) { navigate(AppPage.DIAGNOSTICS) }
                         }
@@ -236,14 +251,14 @@ fun OpenRoseApp(
                         val shellContent: @Composable () -> Unit = { pageContentFor(targetPage) }
                         val shellFeedback: @Composable () -> Unit = { feedbackContentFor(targetPage) }
                         val isConnectedHome = state.activeDevice() != null
-                        val showAdd = isConnectedHome && !state.platform.transportUnavailableForHome()
+                        val showAdd = !state.platform.transportUnavailableForHome()
                         val scrollState = scrollStates.getValue(targetPage)
 
                         when (state.settings.interfaceStyle) {
                             InterfaceStyle.MIUIX -> MiuixAppShell(
                                 backStack = currentBackStack,
                                 page = targetPage,
-                                wide = wide,
+                                wide = wide && targetPage != AppPage.ADD_DEVICE,
                                 onNavigate = onNavigate,
                                 onBack = ::back,
                                 scrollState = scrollState,
@@ -260,7 +275,7 @@ fun OpenRoseApp(
                             InterfaceStyle.MATERIAL3 -> MaterialAppShell(
                                 backStack = currentBackStack,
                                 page = targetPage,
-                                wide = wide,
+                                wide = wide && targetPage != AppPage.ADD_DEVICE,
                                 onNavigate = onNavigate,
                                 onBack = ::back,
                                 scrollState = scrollState,
@@ -280,7 +295,7 @@ fun OpenRoseApp(
                 val renderMainShell: @Composable () -> Unit = {
                     ProvideInterfaceStyle(state.settings.interfaceStyle, dark) {
                         val isConnectedHome = state.activeDevice() != null
-                        val showAdd = isConnectedHome && !state.platform.transportUnavailableForHome()
+                        val showAdd = !state.platform.transportUnavailableForHome()
                         val animatedTabTransition = state.settings.pageTransition != PageTransition.NONE
                         val onNavigate: (AppPage) -> Unit = { navigate(it) }
 
@@ -327,9 +342,6 @@ fun OpenRoseApp(
                             renderMainShell()
                         }
                     }
-                    entry<Route.Noise>(swipeDismiss = NavSwipeDirection.LeftToRight) {
-                        renderShell(AppPage.NOISE, true)
-                    }
                     entry<Route.Equalizer>(swipeDismiss = NavSwipeDirection.LeftToRight) {
                         renderShell(AppPage.EQUALIZER, true)
                     }
@@ -346,7 +358,12 @@ fun OpenRoseApp(
                         renderShell(AppPage.DIAGNOSTICS, true)
                     }
                     entry<Route.AddDevice>(swipeDismiss = NavSwipeDirection.LeftToRight) {
-                        renderShell(AppPage.ADD_DEVICE, true)
+                        // Popped entries retain their registration while animating out.
+                        if (latestRoute is Route.AddDevice || state.settings.pageTransition != PageTransition.NONE) {
+                            Box(if (latestRoute is Route.AddDevice) Modifier.fillMaxSize() else Modifier.fillMaxSize().clearAndSetSemantics { }) {
+                                renderShell(AppPage.ADD_DEVICE, true)
+                            }
+                        }
                     }
                 }
             }

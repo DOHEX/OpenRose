@@ -43,12 +43,10 @@ class OpenRoseFeedbackUiTest {
             val harness = createHarness(state(operation, style).copy(settingOperations = emptyList()))
             try {
                 harness.render()
-                harness.clickText("更多降噪设置")
-                harness.render(frames = 20)
-                val before = harness.textBounds("降噪模式")
+                val before = harness.clickableBounds("通透")
                 harness.state.value = harness.state.value.copy(settingOperations = listOf(operation))
                 harness.render(frames = 20)
-                assertEquals(before, harness.textBounds("降噪模式"), "feedback must not shift the control being used in $style")
+                assertEquals(before, harness.clickableBounds("通透"), "feedback must not shift the control being used in $style")
                 assertTrue(harness.hasText("正在处理设置，等待设备确认"))
                 harness.state.value = harness.state.value.copy(settingOperations = listOf(operation.copy(
                     stage = SettingStage.CONFIRMED, confirmedFields = setOf(DeviceField.NOISE_MODE),
@@ -75,7 +73,7 @@ class OpenRoseFeedbackUiTest {
             val harness = createHarness(state(operation, style))
             try {
                 harness.render()
-                harness.clickText("更多降噪设置")
+                harness.clickText("设备详情")
                 harness.render()
                 assertFalse(harness.hasText("设备已确认设置"), "a historical confirmation is not feedback for this page in $style")
             } finally {
@@ -102,15 +100,8 @@ class OpenRoseFeedbackUiTest {
                 assertFalse(harness.hasText("请求 #42：降噪模式"), "request identifiers stay in diagnostics in $style")
                 assertFalse(harness.hasText("请求值：抗风噪"), "request values stay in diagnostics in $style")
 
-                harness.clickText("更多降噪设置")
-                harness.render()
-                assertTrue(harness.hasText("设备已确认：主动降噪"), "pending requests must preserve the confirmed mode in $style")
-                assertTrue(harness.hasText("正在处理设置，等待设备确认"), "control page feedback in $style")
-                assertFalse(harness.hasText("请求 #42：降噪模式"), "control pages must not show diagnostic records in $style")
-
                 harness.clickTab("系统集成")
                 harness.render()
-                println("TEXTS AT 112: " + harness.nodes().map { it.config.toString() }.filter { it.contains("Text") })
                 harness.clickText("运行状态与诊断")
                 harness.render()
                 assertTrue(harness.hasText("请求 #42：降噪模式"), "diagnostics retain the request identity in $style")
@@ -185,8 +176,6 @@ class OpenRoseFeedbackUiTest {
             val harness = createHarness(state(confirmed, style))
             try {
                 harness.render()
-                harness.clickText("更多降噪设置")
-                harness.render()
                 harness.clickText("通透")
 
                 assertEquals(
@@ -203,7 +192,7 @@ class OpenRoseFeedbackUiTest {
                 )
                 harness.state.value = harness.state.value.copy(settingOperations = listOf(submitted))
                 harness.render()
-                assertTrue(harness.hasText("设备已确认：主动降噪"), "submission keeps the prior confirmed mode in $style")
+                assertTrue(harness.hasSelectedText("降噪"), "submission keeps the prior confirmed mode in $style")
                 assertTrue(harness.hasText("正在处理设置，等待设备确认"), "submission shows a waiting result in $style")
                 assertTrue(harness.hasDisabledText("通透"), "pending settings keep the existing disabled-control rule in $style")
 
@@ -219,9 +208,7 @@ class OpenRoseFeedbackUiTest {
 
                 harness.clickTab("我的耳机")
                 harness.render()
-                harness.clickText("更多降噪设置")
-                harness.render()
-                assertTrue(harness.hasText("设备已确认：主动降噪"), "navigation preserves the confirmed value in $style")
+                assertTrue(harness.hasSelectedText("降噪"), "navigation preserves the confirmed value in $style")
                 assertEquals(1, harness.settingWrites.size, "navigation and rendering do not resubmit settings in $style")
 
                 val current = harness.state.value
@@ -235,7 +222,7 @@ class OpenRoseFeedbackUiTest {
                     )),
                 )
                 harness.render()
-                assertTrue(harness.hasText("设备已确认：通透"), "the control selection changes after device confirmation in $style")
+                assertTrue(harness.hasSelectedText("通透"), "the control selection changes after device confirmation in $style")
                 assertEquals(1, harness.settingWrites.size, "device confirmation does not issue another setting in $style")
             } finally {
                 harness.close()
@@ -260,7 +247,7 @@ class OpenRoseFeedbackUiTest {
             val harness = createHarness(initial)
             try {
                 harness.render()
-                assertTrue(harness.hasText("连接你的 ROSE 耳机"), "disconnect returns home without old device controls in $style")
+                assertTrue(harness.hasText("添加你的 ROSE 耳机"), "disconnect returns home without old device controls in $style")
                 assertFalse(harness.hasText("请求 #44：自定义 EQ"), "ended session detail stays off home in $style")
                 assertFalse(harness.hasText("模式已确认，曲线尚未确认"), "partial EQ confirmation stays in diagnostics in $style")
 
@@ -306,6 +293,7 @@ class OpenRoseFeedbackUiTest {
                 onConnect = {},
                 onDisconnect = {},
                 onSet = { setting, value -> settingWrites += setting to value },
+                onAddDeviceConnect = { error("Unexpected add-device connection in this scenario") },
             )
         }
         return FeedbackHarness(scene, state, settingWrites)

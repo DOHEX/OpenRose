@@ -42,6 +42,7 @@ class PageTransitionUiTest {
                     onConnect = {},
                     onDisconnect = {},
                     onSet = { _, _ -> },
+                    onAddDeviceConnect = { error("Unexpected add-device connection in this scenario") },
                 )
             }
             val harness = OpenRoseUiTestHarness(scene)

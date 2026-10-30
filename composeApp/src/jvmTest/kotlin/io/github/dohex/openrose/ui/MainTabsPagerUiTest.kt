@@ -125,6 +125,7 @@ class MainTabsPagerUiTest {
                 onConnect = {},
                 onDisconnect = {},
                 onSet = { _, _ -> },
+                onAddDeviceConnect = { error("Unexpected add-device connection in this scenario") },
             )
         }
         return PagerTestHarness(scene, state)

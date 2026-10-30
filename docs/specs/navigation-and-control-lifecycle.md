@@ -43,8 +43,16 @@
   - The ad-hoc mutable list backstack in the application root is replaced by `top.yukonga.miuix.kmp:miuix-nav`.
   - A root `NavDisplay` manages all full-screen entries.
   - The root entry is `Route.Main(tab: AppPage)`, containing the persistent scaffold, app bar, and bottom navigation bar (or navigation rail in wide mode).
-  - Secondary pages (`Route.Noise`, `Route.Equalizer`, `Route.Touch`, `Route.Audio`, `Route.Details`, `Route.Diagnostics`, `Route.AddDevice`) are declared as serializable `NavKey` implementations and pushed onto the root stack.
+  - Secondary pages (`Route.Equalizer`, `Route.Touch`, `Route.Audio`, `Route.Details`, `Route.Diagnostics`, `Route.AddDevice`) are declared as serializable `NavKey` implementations and pushed onto the root stack.
   - Secondary entries configure `swipeDismiss = NavSwipeDirection.LeftToRight` to enable native predictive back and swipe dismissal.
+
+- **Homepage Noise and Game Controls (2026-10-30)**:
+  - The shared homepage renders noise modes from model capabilities, using icons above labels: four in one row for i5 and six in two rows of three for i7.
+  - ANC and transparency levels remain on the homepage and follow the confirmed current mode. Automatic and dynamic modes do not display either manual level control.
+  - The former `Route.Noise` page is removed. The low-frequency noise-cycle row sits near the bottom of the homepage feature list, after equalizer, touch, and audio settings and before device details. It opens a multi-select picker directly; Miuix uses `OverlayDropdownPreference`, and Material 3 uses a multi-select dialog.
+  - Cycle participants come from the separate cycle capability; both current models offer four regular modes, excluding i7 automatic and dynamic modes. Each change submits immediately, permits an empty selection, and waits for device confirmation without closing the picker or changing the current noise mode.
+  - Game mode has its own homepage switch when writable and is removed from the equalizer page. A game-only device capability does not create an equalizer entry.
+  - Open cycle pickers survive interface-style replacement, and dismissal does not resend or undo submitted settings. Missing cycle state and pending operations prevent edits.
 
 - **Configurable Transitions**:
   - The core user settings schema is expanded to include a `PageTransition` enumeration with options: `MIUIX_SPRING`, `SLIDE`, `FADE`, `NONE`.
