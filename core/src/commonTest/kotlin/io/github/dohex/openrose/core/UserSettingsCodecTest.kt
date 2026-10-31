@@ -28,6 +28,7 @@ class UserSettingsCodecTest {
                 "focus_notification_enabled" to "maybe",
                 "island_triggers" to "wear,case-entry",
                 "page_transition" to "future-transition",
+                "bottom_bar_style" to "future-style",
             ),
         )
 
@@ -37,6 +38,7 @@ class UserSettingsCodecTest {
         assertEquals(true, restored.focusNotificationEnabled)
         assertEquals(emptySet(), restored.islandTriggers)
         assertEquals(PageTransition.MIUIX_SPRING, restored.pageTransition)
+        assertEquals(BottomBarStyle.FIXED, restored.bottomBarStyle)
     }
 
     @Test
@@ -51,6 +53,7 @@ class UserSettingsCodecTest {
                 forceBle = true,
                 pageTransition = PageTransition.FADE,
                 backgroundBlurEnabled = false,
+                bottomBarStyle = BottomBarStyle.FLOATING,
             ),
         )
 
@@ -64,6 +67,7 @@ class UserSettingsCodecTest {
                 "island_triggers" to "",
                 "page_transition" to "fade",
                 "background_blur_enabled" to "false",
+                "bottom_bar_style" to "floating",
             ),
             stored,
         )
@@ -111,6 +115,27 @@ class UserSettingsCodecTest {
 
         val encoded = UserSettingsCodec.encode(UserSettings(backgroundBlurEnabled = true))
         assertEquals("true", encoded["background_blur_enabled"])
+    }
+
+    @Test
+    fun bottomBarStyleEncodesAndDecodesAllSupportedValues() {
+        for (style in BottomBarStyle.entries) {
+            val encoded = UserSettingsCodec.encode(UserSettings(bottomBarStyle = style))
+            val expectedString = when (style) {
+                BottomBarStyle.FIXED -> "fixed"
+                BottomBarStyle.FLOATING -> "floating"
+            }
+            assertEquals(expectedString, encoded["bottom_bar_style"])
+            val decoded = UserSettingsCodec.decode(mapOf("bottom_bar_style" to expectedString))
+            assertEquals(style, decoded.bottomBarStyle)
+        }
+    }
+
+    @Test
+    fun missingOrUnknownBottomBarStyleFallsBackToDefault() {
+        assertEquals(BottomBarStyle.FIXED, UserSettingsCodec.decode(emptyMap()).bottomBarStyle)
+        assertEquals(BottomBarStyle.FIXED, UserSettingsCodec.decode(mapOf("bottom_bar_style" to "unknown")).bottomBarStyle)
+        assertEquals(BottomBarStyle.FIXED, UserSettingsCodec.decode(mapOf("bottom_bar_style" to "")).bottomBarStyle)
     }
 
 

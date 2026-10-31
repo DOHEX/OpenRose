@@ -14,6 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import io.github.dohex.openrose.core.Appearance
+import io.github.dohex.openrose.core.BottomBarStyle
 import io.github.dohex.openrose.core.BridgeIpcState
 import io.github.dohex.openrose.core.BridgeSessionState
 import io.github.dohex.openrose.core.ControlState
@@ -72,6 +73,13 @@ internal fun PreferencesPage(
                 options = Appearance.entries.map { AppOption(it, appearanceLabel(it)) },
                 selected = settings.appearance,
                 onSelect = { onChange(settings.copy(appearance = it)) },
+            )
+            AppChoiceRow(
+                title = "底栏样式",
+                valueText = bottomBarStyleLabel(settings.bottomBarStyle),
+                options = BottomBarStyle.entries.map { AppOption(it, bottomBarStyleLabel(it)) },
+                selected = settings.bottomBarStyle,
+                onSelect = { onChange(settings.copy(bottomBarStyle = it)) },
             )
             AppSwitchRow(
                 title = "背景模糊",
@@ -443,6 +451,11 @@ private fun appearanceLabel(appearance: Appearance): String = when (appearance) 
     Appearance.SYSTEM -> "跟随系统"
     Appearance.LIGHT -> "浅色"
     Appearance.DARK -> "深色"
+}
+
+internal fun bottomBarStyleLabel(style: BottomBarStyle): String = when (style) {
+    BottomBarStyle.FIXED -> "标准固定"
+    BottomBarStyle.FLOATING -> "悬浮胶囊"
 }
 
 private fun pageTransitionLabel(transition: PageTransition): String = when (transition) {

@@ -34,6 +34,10 @@ object UserSettingsCodec {
             PageTransition.NONE -> "none"
         },
         "background_blur_enabled" to settings.backgroundBlurEnabled.toString(),
+        "bottom_bar_style" to when (settings.bottomBarStyle) {
+            BottomBarStyle.FIXED -> "fixed"
+            BottomBarStyle.FLOATING -> "floating"
+        },
     )
 
     fun decode(values: Map<String, String>): UserSettings {
@@ -74,6 +78,11 @@ object UserSettingsCodec {
             },
             backgroundBlurEnabled = values["background_blur_enabled"]
                 ?.toBooleanStrictOrNull() ?: defaults.backgroundBlurEnabled,
+            bottomBarStyle = when (values["bottom_bar_style"]) {
+                "fixed" -> BottomBarStyle.FIXED
+                "floating" -> BottomBarStyle.FLOATING
+                else -> defaults.bottomBarStyle
+            },
         )
     }
 }
