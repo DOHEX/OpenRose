@@ -20,6 +20,12 @@ enum class PageTransition {
     NONE,
 }
 
+/** Bottom navigation bar presentation style, independent of component style. */
+enum class BottomBarStyle {
+    FIXED,
+    FLOATING,
+}
+
 /** Both supported island presentation modes are rendered by the system. */
 enum class IslandMode {
     OFF,
@@ -41,4 +47,5 @@ data class UserSettings(
     val forceBle: Boolean = false,
     val pageTransition: PageTransition = PageTransition.MIUIX_SPRING,
     val backgroundBlurEnabled: Boolean = true,
+    val bottomBarStyle: BottomBarStyle = BottomBarStyle.FIXED,
 )

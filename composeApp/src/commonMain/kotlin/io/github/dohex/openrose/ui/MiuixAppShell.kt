@@ -23,6 +23,10 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.unit.dp
 import top.yukonga.miuix.kmp.overlay.OverlayListPopup
 import top.yukonga.miuix.kmp.basic.*
+import io.github.dohex.openrose.core.PageTransition
+import io.github.dohex.openrose.core.BottomBarStyle
+import top.yukonga.miuix.kmp.utils.PagerGestureNestedScrollConnection
+import top.yukonga.miuix.kmp.utils.pagerGestureOverride
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.blur.Backdrop
 import top.yukonga.miuix.kmp.blur.ProgressiveBlur
@@ -119,9 +123,9 @@ internal fun MiuixAppShell(
             }) { padding ->
             Box(Modifier.fillMaxSize()) {
                 Column(Modifier.fillMaxSize().appBackdropContent(backdrop, backdropActive).verticalScroll(scrollState)) {
-                    ShellPageContent(page, padding, compactHome = page == AppPage.HEADPHONES && !connectedHome, pageContent)
+                    ShellPageContent(page, padding, compactHome = page == AppPage.HEADPHONES && !connectedHome, pageContent = pageContent)
                 }
-                ShellFeedback(padding, feedbackContent)
+                ShellFeedback(padding, content = feedbackContent)
             }
         }
         }
@@ -132,6 +136,7 @@ internal fun MiuixAppShell(
 internal fun MiuixMainShell(
     pagerState: MainTabsPagerState,
     wide: Boolean,
+    bottomBarStyle: BottomBarStyle = BottomBarStyle.FIXED,
     onNavigate: (AppPage) -> Unit,
     scrollStates: Map<AppPage, ScrollState>,
     pageContentFor: @Composable (AppPage) -> Unit,
@@ -141,7 +146,7 @@ internal fun MiuixMainShell(
     menuExpanded: Boolean = false,
     onMenuExpandedChange: (Boolean) -> Unit = {},
     onDisconnect: () -> Unit = {},
-    animatedTabTransition: Boolean = true,
+    pageTransition: PageTransition = PageTransition.MIUIX_SPRING,
 ) {
     LaunchedEffect(pagerState.pagerState.currentPage) {
         pagerState.syncPage()
@@ -156,7 +161,7 @@ internal fun MiuixMainShell(
                     NavigationRailItem(
                         selected = isSelected,
                         onClick = {
-                            pagerState.selectPage(index, animated = animatedTabTransition)
+                            pagerState.selectPage(index, transition = pageTransition)
                             onNavigate(destination)
                         },
                         icon = RoseIcons[destination.icon],
@@ -169,29 +174,58 @@ internal fun MiuixMainShell(
             modifier = Modifier.weight(1f),
             bottomBar = {
                 if (!wide) {
-                    NavigationBar {
-                        mainPages.forEachIndexed { index, destination ->
-                            NavigationBarItem(
-                                selected = currentTab == destination,
-                                onClick = {
-                                    pagerState.selectPage(index, animated = animatedTabTransition)
-                                    onNavigate(destination)
-                                },
-                                icon = RoseIcons[destination.icon],
-                                label = destination.navigationLabel,
-                            )
+                    if (bottomBarStyle == BottomBarStyle.FLOATING) {
+                        val floatingBarColor = if (backdropActive) {
+                            MiuixTheme.colorScheme.surfaceContainer.copy(alpha = 0.85f)
+                        } else {
+                            MiuixTheme.colorScheme.surfaceContainer
+                        }
+                        FloatingNavigationBar(color = floatingBarColor) {
+                            mainPages.forEachIndexed { index, destination ->
+                                FloatingNavigationBarItem(
+                                    selected = currentTab == destination,
+                                    onClick = {
+                                        pagerState.selectPage(index, transition = pageTransition)
+                                        onNavigate(destination)
+                                    },
+                                    icon = RoseIcons[destination.icon],
+                                    label = destination.navigationLabel,
+                                )
+                            }
+                        }
+                    } else {
+                        NavigationBar {
+                            mainPages.forEachIndexed { index, destination ->
+                                NavigationBarItem(
+                                    selected = currentTab == destination,
+                                    onClick = {
+                                        pagerState.selectPage(index, transition = pageTransition)
+                                        onNavigate(destination)
+                                    },
+                                    icon = RoseIcons[destination.icon],
+                                    label = destination.navigationLabel,
+                                )
+                            }
                         }
                     }
                 }
             },
         ) { outerPadding ->
+            val isFloating = !wide && bottomBarStyle == BottomBarStyle.FLOATING
+            val pagerBottomPadding = if (isFloating) 0.dp else outerPadding.calculateBottomPadding()
+            val trailingBottomPadding = if (isFloating) outerPadding.calculateBottomPadding() else 0.dp
             HorizontalPager(
                 state = pagerState.pagerState,
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(bottom = outerPadding.calculateBottomPadding()),
+                    .padding(bottom = pagerBottomPadding)
+                    .pagerGestureOverride(
+                        pagerState = pagerState.pagerState,
+                        enabled = !wide,
+                    ),
                 beyondViewportPageCount = 1,
-                userScrollEnabled = !wide,
+                userScrollEnabled = false,
+                pageNestedScrollConnection = PagerGestureNestedScrollConnection,
                 key = { index -> mainPages[index] },
             ) { pageIndex ->
                 val page = mainPages[pageIndex]
@@ -257,11 +291,16 @@ internal fun MiuixMainShell(
                     Box(Modifier.fillMaxSize()) {
                         val scrollState = scrollStates.getValue(page)
                         Column(Modifier.fillMaxSize().appBackdropContent(pageBackdrop, backdropActive).verticalScroll(scrollState)) {
-                            ShellPageContent(page, pagePadding, compactHome = page == AppPage.HEADPHONES && !connectedHome) {
+                            ShellPageContent(
+                                page = page,
+                                padding = pagePadding,
+                                compactHome = page == AppPage.HEADPHONES && !connectedHome,
+                                bottomClearance = trailingBottomPadding,
+                            ) {
                                 pageContentFor(page)
                             }
                         }
-                        ShellFeedback(pagePadding) {
+                        ShellFeedback(pagePadding, bottomClearance = trailingBottomPadding) {
                             if (isSelected) {
                                 pageFeedbackFor(page)
                             }

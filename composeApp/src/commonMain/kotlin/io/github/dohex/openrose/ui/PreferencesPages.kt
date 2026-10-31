@@ -14,6 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import io.github.dohex.openrose.core.Appearance
+import io.github.dohex.openrose.core.BottomBarStyle
 import io.github.dohex.openrose.core.BridgeIpcState
 import io.github.dohex.openrose.core.BridgeSessionState
 import io.github.dohex.openrose.core.ControlState
@@ -52,10 +53,7 @@ internal fun PreferencesPage(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        AppGroup(
-            title = "界面风格",
-            footnote = "切换组件风格时，当前耳机控制会话保持运行。",
-        ) {
+        AppGroup(title = "界面风格") {
             AppChoiceRow(
                 title = "组件风格",
                 valueText = interfaceStyleLabel(settings.interfaceStyle),
@@ -68,16 +66,20 @@ internal fun PreferencesPage(
             )
         }
 
-        AppGroup(
-            title = "显示模式",
-            footnote = "背景模糊仅在 Android 13+、桌面端及非省电模式下生效，其余环境平滑回退为实体底色。",
-        ) {
+        AppGroup(title = "显示模式") {
             AppChoiceRow(
                 title = "明暗模式",
                 valueText = appearanceLabel(settings.appearance),
                 options = Appearance.entries.map { AppOption(it, appearanceLabel(it)) },
                 selected = settings.appearance,
                 onSelect = { onChange(settings.copy(appearance = it)) },
+            )
+            AppChoiceRow(
+                title = "底栏样式",
+                valueText = bottomBarStyleLabel(settings.bottomBarStyle),
+                options = BottomBarStyle.entries.map { AppOption(it, bottomBarStyleLabel(it)) },
+                selected = settings.bottomBarStyle,
+                onSelect = { onChange(settings.copy(bottomBarStyle = it)) },
             )
             AppSwitchRow(
                 title = "背景模糊",
@@ -97,10 +99,7 @@ internal fun PreferencesPage(
         }
 
         if (state.platform.hyperOsIntegrationApplicable) {
-            AppGroup(
-                title = "系统呈现",
-                footnote = "官方沿用系统耳机呈现，模块使用 OpenRose 样式；两者都由系统超级岛展示。",
-            ) {
+            AppGroup(title = "系统呈现") {
                 AppChoiceRow(
                     title = "超级岛",
                     valueText = islandModeLabel(settings.islandMode),
@@ -117,10 +116,7 @@ internal fun PreferencesPage(
             }
 
             if (settings.islandMode == IslandMode.MODULE) {
-                AppGroup(
-                    title = "模块显示时机",
-                    footnote = "普通电量刷新不会重复触发。佩戴、摘下与入盒暂不开放。",
-                ) {
+                AppGroup(title = "模块显示时机") {
                     if (settings.islandTriggers.isEmpty()) {
                         AppText("未选择显示时机，不自动触发。", role = AppTextRole.Summary)
                     }
@@ -152,10 +148,7 @@ internal fun PreferencesPage(
         }
 
         if (state.platform.controlTransportApplicability == PlatformApplicability.APPLICABLE) {
-            AppGroup(
-                title = "连接偏好",
-                footnote = "默认自动选择适用的连接方式；无法确认连接条件时使用 BLE。当前连接和正在执行的设置会保留。",
-            ) {
+            AppGroup(title = "连接偏好") {
                 AppSwitchRow(
                     title = "强制使用 BLE",
                     summary = "仅影响下一次连接",
@@ -246,10 +239,7 @@ internal fun PlatformDiagnosticsCard(
                     AppText("尚无系统桥接诊断数据。", role = AppTextRole.Summary)
                 }
             } else {
-                AppGroup(
-                    title = "系统桥接",
-                    footnote = "桥接诊断描述已观察到的系统入口和调用状态，不代表系统界面已实际显示。",
-                ) {
+                AppGroup(title = "系统桥接") {
                     bridge.frameworkName?.let { AppInfoRow("框架", it) }
                     bridge.frameworkVersion?.let { AppInfoRow("框架版本", it) }
                     bridge.frameworkApi?.let { AppInfoRow("框架 API", it.toString()) }
@@ -282,10 +272,7 @@ internal fun PlatformDiagnosticsCard(
                 }
 
                 bridge.presentation.takeIf { it.isNotEmpty() }?.let { presentation ->
-                    AppGroup(
-                        title = "系统呈现记录",
-                        footnote = "记录表示已请求的系统操作，不代表屏幕上的实际效果已通过验收。",
-                    ) {
+                    AppGroup(title = "系统呈现记录") {
                         presentation.entries.forEach { (feature, result) ->
                             DiagnosticPresentationRow(presentationLabel(feature), result)
                         }
@@ -464,6 +451,11 @@ private fun appearanceLabel(appearance: Appearance): String = when (appearance) 
     Appearance.SYSTEM -> "跟随系统"
     Appearance.LIGHT -> "浅色"
     Appearance.DARK -> "深色"
+}
+
+internal fun bottomBarStyleLabel(style: BottomBarStyle): String = when (style) {
+    BottomBarStyle.FIXED -> "标准固定"
+    BottomBarStyle.FLOATING -> "悬浮胶囊"
 }
 
 private fun pageTransitionLabel(transition: PageTransition): String = when (transition) {

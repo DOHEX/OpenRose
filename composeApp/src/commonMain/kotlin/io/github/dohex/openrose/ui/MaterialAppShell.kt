@@ -2,8 +2,18 @@
 
 package io.github.dohex.openrose.ui
 
+import io.github.dohex.openrose.core.PageTransition
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.ui.focus.focusProperties
+import androidx.compose.foundation.background
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.Role
+import io.github.dohex.openrose.core.BottomBarStyle
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.layout.*
@@ -28,6 +38,7 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
 import top.yukonga.miuix.kmp.blur.Backdrop
 import top.yukonga.miuix.kmp.blur.ProgressiveBlur
 
@@ -135,9 +146,9 @@ internal fun MaterialAppShell(
             }) { padding ->
             Box(Modifier.fillMaxSize()) {
                 Column(Modifier.fillMaxSize().appBackdropContent(backdrop, backdropActive).verticalScroll(scrollState)) {
-                    ShellPageContent(page, padding, compactHome = page == AppPage.HEADPHONES && !connectedHome, pageContent)
+                    ShellPageContent(page, padding, compactHome = page == AppPage.HEADPHONES && !connectedHome, pageContent = pageContent)
                 }
-                ShellFeedback(padding, feedbackContent)
+                ShellFeedback(padding, content = feedbackContent)
             }
         }
         }
@@ -145,22 +156,39 @@ internal fun MaterialAppShell(
 }
 
 @Composable
-internal fun BoxScope.ShellFeedback(padding: PaddingValues, content: @Composable () -> Unit) {
+internal fun BoxScope.ShellFeedback(
+    padding: PaddingValues,
+    bottomClearance: Dp = 0.dp,
+    content: @Composable () -> Unit,
+) {
     Box(Modifier.align(Alignment.BottomCenter)
-        .padding(bottom = padding.calculateBottomPadding())
+        .padding(bottom = padding.calculateBottomPadding() + bottomClearance)
         .widthIn(max = 600.dp).fillMaxWidth().padding(16.dp)) {
         content()
     }
 }
 
 @Composable
-internal fun ShellPageContent(page: AppPage, padding: PaddingValues, compactHome: Boolean, pageContent: @Composable () -> Unit) {
+internal fun ShellPageContent(
+    page: AppPage,
+    padding: PaddingValues,
+    compactHome: Boolean,
+    bottomClearance: Dp = 0.dp,
+    pageContent: @Composable () -> Unit,
+) {
     Column(Modifier.fillMaxWidth().padding(padding).consumeWindowInsets(padding), horizontalAlignment = Alignment.CenterHorizontally) {
         val maxWidth = if (compactHome) 680.dp else if (page == AppPage.HEADPHONES) 1120.dp else 800.dp
         Column(Modifier.widthIn(max = maxWidth).fillMaxWidth()
             .padding(horizontal = 0.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)) {
             pageContent()
+            if (bottomClearance > 0.dp) {
+                Spacer(
+                    Modifier
+                        .height(bottomClearance)
+                        .clearAndSetSemantics { contentDescription = "ShellBottomClearance" },
+                )
+            }
         }
     }
 }
@@ -169,6 +197,7 @@ internal fun ShellPageContent(page: AppPage, padding: PaddingValues, compactHome
 internal fun MaterialMainShell(
     pagerState: MainTabsPagerState,
     wide: Boolean,
+    bottomBarStyle: BottomBarStyle = BottomBarStyle.FIXED,
     onNavigate: (AppPage) -> Unit,
     scrollStates: Map<AppPage, ScrollState>,
     pageContentFor: @Composable (AppPage) -> Unit,
@@ -178,7 +207,7 @@ internal fun MaterialMainShell(
     menuExpanded: Boolean = false,
     onMenuExpandedChange: (Boolean) -> Unit = {},
     onDisconnect: () -> Unit = {},
-    animatedTabTransition: Boolean = true,
+    pageTransition: PageTransition = PageTransition.MIUIX_SPRING,
 ) {
     LaunchedEffect(pagerState.pagerState.currentPage) {
         pagerState.syncPage()
@@ -194,7 +223,7 @@ internal fun MaterialMainShell(
                     NavigationRailItem(
                         selected = isSelected,
                         onClick = {
-                            pagerState.selectPage(index, animated = animatedTabTransition)
+                            pagerState.selectPage(index, transition = pageTransition)
                             onNavigate(destination)
                         },
                         icon = { AppIcon(destination.icon) },
@@ -207,27 +236,94 @@ internal fun MaterialMainShell(
             modifier = Modifier.weight(1f),
             bottomBar = {
                 if (!wide) {
-                    NavigationBar {
-                        mainPages.forEachIndexed { index, destination ->
-                            NavigationBarItem(
-                                selected = currentTab == destination,
-                                onClick = {
-                                    pagerState.selectPage(index, animated = animatedTabTransition)
-                                    onNavigate(destination)
-                                },
-                                icon = { AppIcon(destination.icon) },
-                                label = { Text(destination.navigationLabel) },
-                            )
+                    if (bottomBarStyle == BottomBarStyle.FLOATING) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .navigationBarsPadding()
+                                .padding(bottom = 16.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            HorizontalFloatingToolbar(
+                                expanded = true,
+                                colors = FloatingToolbarDefaults.standardFloatingToolbarColors(
+                                    toolbarContainerColor = if (backdropActive) {
+                                        MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.85f)
+                                    } else {
+                                        MaterialTheme.colorScheme.surfaceContainer
+                                    },
+                                ),
+                            ) {
+                                mainPages.forEachIndexed { index, destination ->
+                                    val isSelected = currentTab == destination
+                                    val containerColor by animateColorAsState(
+                                        targetValue = if (isSelected) {
+                                            MaterialTheme.colorScheme.secondaryContainer
+                                        } else {
+                                            MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0f)
+                                        },
+                                        animationSpec = tween(durationMillis = 200),
+                                        label = "tabContainerColor",
+                                    )
+                                    val iconTint by animateColorAsState(
+                                        targetValue = if (isSelected) {
+                                            MaterialTheme.colorScheme.onSecondaryContainer
+                                        } else {
+                                            MaterialTheme.colorScheme.onSurfaceVariant
+                                        },
+                                        animationSpec = tween(durationMillis = 200),
+                                        label = "tabIconTint",
+                                    )
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(CircleShape)
+                                            .background(containerColor)
+                                            .selectable(
+                                                selected = isSelected,
+                                                role = Role.Tab,
+                                                onClick = {
+                                                    pagerState.selectPage(index, transition = pageTransition)
+                                                    onNavigate(destination)
+                                                },
+                                            )
+                                            .size(48.dp),
+                                        contentAlignment = Alignment.Center,
+                                    ) {
+                                        AppIcon(
+                                            destination.icon,
+                                            contentDescription = destination.navigationLabel,
+                                            tint = iconTint,
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        NavigationBar {
+                            mainPages.forEachIndexed { index, destination ->
+                                NavigationBarItem(
+                                    selected = currentTab == destination,
+                                    onClick = {
+                                        pagerState.selectPage(index, transition = pageTransition)
+                                        onNavigate(destination)
+                                    },
+                                    icon = { AppIcon(destination.icon) },
+                                    label = { Text(destination.navigationLabel) },
+                                )
+                            }
                         }
                     }
                 }
             },
         ) { outerPadding ->
+            val isFloating = !wide && bottomBarStyle == BottomBarStyle.FLOATING
+            val pagerBottomPadding = if (isFloating) 0.dp else outerPadding.calculateBottomPadding()
+            val trailingBottomPadding = if (isFloating) outerPadding.calculateBottomPadding() else 0.dp
             HorizontalPager(
                 state = pagerState.pagerState,
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(bottom = outerPadding.calculateBottomPadding()),
+                    .padding(bottom = pagerBottomPadding),
                 beyondViewportPageCount = 1,
                 userScrollEnabled = !wide,
                 key = { index -> mainPages[index] },
@@ -305,11 +401,16 @@ internal fun MaterialMainShell(
                     Box(Modifier.fillMaxSize()) {
                         val scrollState = scrollStates.getValue(page)
                         Column(Modifier.fillMaxSize().appBackdropContent(pageBackdrop, backdropActive).verticalScroll(scrollState)) {
-                            ShellPageContent(page, pagePadding, compactHome = page == AppPage.HEADPHONES && !connectedHome) {
+                            ShellPageContent(
+                                page = page,
+                                padding = pagePadding,
+                                compactHome = page == AppPage.HEADPHONES && !connectedHome,
+                                bottomClearance = trailingBottomPadding,
+                            ) {
                                 pageContentFor(page)
                             }
                         }
-                        ShellFeedback(pagePadding) {
+                        ShellFeedback(pagePadding, bottomClearance = trailingBottomPadding) {
                             if (isSelected) {
                                 pageFeedbackFor(page)
                             }

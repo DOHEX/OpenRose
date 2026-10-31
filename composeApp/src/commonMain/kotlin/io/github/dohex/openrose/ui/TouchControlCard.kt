@@ -1,6 +1,19 @@
 package io.github.dohex.openrose.ui
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
 import io.github.dohex.openrose.core.ControlState
 import io.github.dohex.openrose.core.DeviceSetting
 import io.github.dohex.openrose.core.DeviceState
@@ -37,10 +50,7 @@ internal fun TouchControlCard(
     val side = selectedSide?.takeIf { it in availableSides } ?: availableSides.firstOrNull()
 
     if (hasTouchSwitch || hasDetection) {
-        AppGroup(
-            title = "功能开关",
-            footnote = if (hasDetection) "这里只配置检测功能，不代表当前佩戴、摘下或入盒状态。" else null,
-        ) {
+        AppGroup(title = "功能开关") {
             if (hasTouchSwitch) {
                 SettingToggleChoices("触控总开关", DeviceField.TOUCH_ENABLED, DeviceSetting.TOUCH_ENABLED, device, enabled, onSet)
             }
@@ -51,52 +61,78 @@ internal fun TouchControlCard(
     }
 
     if (hasBindings && side != null) {
-        val sideSlots = slots.filter { it.side == side }
         AppGroup(
             title = "左右耳手势",
-            footnote = "修改的是触控绑定，不会立即执行播放、切歌或调节音量。",
-        ) {
-            AppViewTabs(
-                tabs = availableSides.map(::touchSideLabel),
-                index = availableSides.indexOf(side).coerceAtLeast(0),
-                onSelect = { index ->
-                    availableSides.getOrNull(index)?.let { newSide ->
-                        onSlotChange(null)
-                        onSideChange(newSide)
-                    }
-                },
-            )
-            sideSlots.forEach { slot ->
-                val binding = knownBindings?.bindings?.firstOrNull {
-                    it.side == slot.side && it.gesture == slot.gesture
+            header = if (availableSides.size > 1) {
+                {
+                    AppViewTabs(
+                        tabs = availableSides.map(::touchSideLabel),
+                        index = availableSides.indexOf(side).coerceAtLeast(0),
+                        onSelect = { index ->
+                            availableSides.getOrNull(index)?.let { newSide ->
+                                onSlotChange(null)
+                                onSideChange(newSide)
+                            }
+                        },
+                    )
                 }
-                val valueText = touchBindingStatus(device.fields[DeviceField.TOUCH_KEYS], binding)
-                val confirmedAction = binding?.action
-                AppChoiceRow(
-                    title = touchGestureLabel(slot.gesture),
-                    valueText = valueText,
-                    options = touchActions.sortedBy(::semanticLabel)
-                        .map { action -> AppOption(action, semanticLabel(action)) },
-                    selected = confirmedAction,
-                    enabled = enabled,
-                    onSelect = { action ->
-                        if (enabled && action != confirmedAction) {
-                            onSet(DeviceSetting.TOUCH_BINDING, FieldValue.TouchAssignment(slot.side, slot.gesture, action))
+            } else null,
+        ) {
+            AnimatedContent(
+                targetState = side,
+                transitionSpec = {
+                    val targetIndex = availableSides.indexOf(targetState)
+                    val initialIndex = availableSides.indexOf(initialState)
+                    val direction = if (targetIndex >= initialIndex) 1 else -1
+                    val slideSpring = spring<IntOffset>(
+                        dampingRatio = 0.82f,
+                        stiffness = 380f,
+                    )
+                    val fadeSpring = spring<Float>(
+                        stiffness = Spring.StiffnessMediumLow,
+                    )
+                    (slideInHorizontally(slideSpring) { width -> direction * width / 5 } + fadeIn(fadeSpring))
+                        .togetherWith(
+                            slideOutHorizontally(slideSpring) { width -> -direction * width / 5 } + fadeOut(fadeSpring)
+                        ).using(SizeTransform(clip = false))
+                },
+                modifier = Modifier.fillMaxWidth(),
+            ) { currentSide ->
+                val currentSlots = slots.filter { it.side == currentSide }
+                Column(Modifier.fillMaxWidth()) {
+                    currentSlots.forEach { slot ->
+                        val binding = knownBindings?.bindings?.firstOrNull {
+                            it.side == slot.side && it.gesture == slot.gesture
                         }
-                        onSlotChange(null)
-                    },
-                    id = "${slot.side}:${slot.gesture}",
-                    open = selectedSlot == slot,
-                    onOpenChange = { open ->
-                        onSlotChange(
-                            when {
-                                open -> slot
-                                selectedSlot == slot -> null
-                                else -> selectedSlot
+                        val valueText = touchBindingStatus(device.fields[DeviceField.TOUCH_KEYS], binding)
+                        val confirmedAction = binding?.action
+                        AppChoiceRow(
+                            title = touchGestureLabel(slot.gesture),
+                            valueText = valueText,
+                            options = touchActions.sortedBy(::semanticLabel)
+                                .map { action -> AppOption(action, semanticLabel(action)) },
+                            selected = confirmedAction,
+                            enabled = enabled,
+                            onSelect = { action ->
+                                if (enabled && action != confirmedAction) {
+                                    onSet(DeviceSetting.TOUCH_BINDING, FieldValue.TouchAssignment(slot.side, slot.gesture, action))
+                                }
+                                onSlotChange(null)
+                            },
+                            id = "${slot.side}:${slot.gesture}",
+                            open = selectedSlot == slot,
+                            onOpenChange = { open ->
+                                onSlotChange(
+                                    when {
+                                        open -> slot
+                                        selectedSlot == slot -> null
+                                        else -> selectedSlot
+                                    },
+                                )
                             },
                         )
-                    },
-                )
+                    }
+                }
             }
         }
     }

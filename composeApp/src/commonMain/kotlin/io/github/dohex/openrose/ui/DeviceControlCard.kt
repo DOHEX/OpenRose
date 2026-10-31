@@ -29,25 +29,20 @@ internal fun DeviceControlCard(
     val enabled = state.isReady(device) && !state.hasPendingSetting(device)
 
     if (hasAudio || hasMultipoint) {
-        val footnote = buildList {
-            if (hasAudio) add("这里只设置耳机音频偏好；实际编码以系统连接协商为准。")
-            if (hasAudio && hasMultipoint) {
-                add(
-                    if (audio?.multipointCoupled == true) {
-                        "该型号的 LDAC 与多点连接互斥；切换多点时设备会改用 AAC / SBC。"
-                    } else {
-                        "音频模式与多点连接分别设置，可用组合仍由耳机与连接设备决定。"
-                    },
-                )
-            }
-        }.joinToString(" ").takeIf { it.isNotEmpty() }
-        AppGroup(title = "音频", footnote = footnote) {
+        val coupledFootnote = if (hasAudio && hasMultipoint && audio.multipointCoupled) {
+            "该型号的 LDAC 与多点连接互斥；切换多点时设备会改用 AAC / SBC。"
+        } else null
+        AppGroup(
+            title = "音频",
+            footnote = coupledFootnote,
+            footnoteIcon = if (coupledFootnote != null) RoseIcon.INFO else null,
+        ) {
             if (hasAudio) {
                 val confirmed = (device.knownValue(DeviceField.AUDIO_MODE) as? FieldValue.Text)?.value
                 AppChoiceRow(
                     title = "音频模式",
                     valueText = confirmedChoiceValue(DeviceField.AUDIO_MODE, device),
-                    options = audio!!.modes.sortedBy(::semanticLabel)
+                    options = audio.modes.sortedBy(::semanticLabel)
                         .map { mode -> AppOption(mode, semanticLabel(mode)) },
                     selected = confirmed,
                     enabled = enabled,
@@ -79,10 +74,7 @@ internal fun DeviceControlCard(
     }
 
     if (hasGain || hasProtection) {
-        AppGroup(
-            title = "输出与保护",
-            footnote = if (hasProtection) "阈值显示型号提供的选项，不表示测得声压或实际保护效果。" else null,
-        ) {
+        AppGroup(title = "输出与保护") {
             if (hasGain) {
                 val confirmed = (device.knownValue(DeviceField.GAIN) as? FieldValue.Number)?.value
                 AppChoiceRow(
