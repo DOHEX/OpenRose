@@ -21,7 +21,7 @@ OpenRose separates device protocols, control sessions, and the application UI. I
 - Switch between Miuix and Material 3, with light and dark appearance options. Changing interface style preserves the control connection and device state.
 - Android system integration includes the HyperOS system island (超级岛), focus notifications, and Fusion Device Center (融合设备中心), targeting HyperOS 3 and 4.
 
-Available controls depend on the specific model profile and the firmware reported by the device. See the [protocol documentation](docs/protocols.md) for protocol details and validation records.
+Available controls depend on the specific model profile and the firmware reported by the device. See the [protocol documentation directory](docs/protocols/) for model protocol specifications and capability research, and [protocol implementation & evidence](docs/protocols.md) for current i5/i7 client details.
 
 ## Current status
 
@@ -39,6 +39,8 @@ The project is under active development and hardware validation.
 | EarFeel i7 | RS Common V2 / BLE, SPP | Protocol implementation and hardware-independent tests are available; no hardware validation yet. |
 
 The same retail name may refer to different hardware variants. Only the model profiles listed above are currently implemented. The first HyperOS integration validation target is an i5 with a Xiaomi 14 running HyperOS 4.
+
+In addition to i5 and i7, reverse engineering has documented protocol specifications for BudsFeel MK2, OpenFeel MK2, Swift 2, Jasmine, and a 43-model capability matrix; see the [protocol documentation directory](docs/protocols/).
 
 ## Using OpenRose on Android
 
@@ -105,10 +107,10 @@ The desktop app currently lets you explore the UI and change application prefere
 | `composeApp/` | Shared UI, Miuix / Material 3 components, and UI tests |
 | `androidApp/` | Android entry point, BLE / SPP transports, libxposed module, and HyperOS system bridge |
 | `desktopApp/` | Windows / Linux desktop entry point, windows, and preferences |
-| `docs/` | Protocol documentation, architecture decisions, and collaboration conventions |
+| `docs/` | Protocol research & model specifications (`docs/protocols/`), implementation evidence (`docs/protocols.md`), architecture decisions, and specifications |
 
 ## Contributing and feedback
 
 Feature requests, bugs, and compatibility reports are tracked in [GitHub Issues](https://github.com/DOHEX/OpenRose/issues). For device issues, include the exact earphone model and firmware, phone model and system version, OpenRose version, and reproduction steps. For system integration issues, also include the framework version and bridge status.
 
-Before contributing, read the [domain glossary](GLOSSARY.md), [architecture decisions](docs/adr/), and [protocol documentation](docs/protocols.md). When adding a model or system adapter, record protocol evidence, hardware-independent test results, and hardware validation results separately.
+Before contributing, read the [domain glossary](GLOSSARY.md), [architecture decisions](docs/adr/), [protocol documentation](docs/protocols/), and [implementation evidence](docs/protocols.md). When adding a model or system adapter, record protocol evidence, hardware-independent test results, and hardware validation results separately.

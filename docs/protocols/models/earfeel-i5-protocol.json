@@ -1,0 +1,945 @@
+{
+  "schema_version": 1,
+  "model": "EarFeel-i5",
+  "internal_name": "EARFREE-i5",
+  "source_apk": {
+    "name": "RoseLink_3.8.0.apk",
+    "package": "cn.ikaile.ruoshui.client",
+    "version": "3.8.0",
+    "version_code": 5310,
+    "sha256": "83cdd7e3e7f6e7d61a26dc6a8fab65f183d5a18a66a70f64a17f69d93e58e40b"
+  },
+  "evidence_type": "static Flutter AOT",
+  "hardware_validated": false,
+  "transport": {
+    "type": "BLE GATT",
+    "manufacturer_prefix": "525300010001",
+    "spp_configured": false,
+    "service": "011bf5da-0000-1000-8000-00805f9b34fb",
+    "write": "00007777-0000-1000-8000-00805f9b34fb",
+    "notify": "00008888-0000-1000-8000-00805f9b34fb",
+    "write_without_response_when_supported": true,
+    "normal_gap_ms": 100,
+    "ota_service": "65786365-6c70-6f69-6e74-2e636f6d0000",
+    "ota_characteristic": "65786365-6c70-6f69-6e74-2e636f6d0001"
+  },
+  "tx_layout": {
+    "constant_prefix": "08 ee 00 00 00",
+    "group_offset": 5,
+    "operation_offset": 6,
+    "total_length_le16_offset": 7,
+    "payload_offset": 9,
+    "checksum": "sum(all preceding bytes) & 0xff"
+  },
+  "rx_layout": {
+    "command_offsets": [
+      5,
+      6
+    ],
+    "payload_offset": 9,
+    "prefix_length_checksum_semantics": "not established",
+    "notification_reassembly": "not implemented by observed ZTReceiver path"
+  },
+  "init_queries": [
+    "getInfo",
+    "getAnc",
+    "getEq",
+    "getGameMode",
+    "getAudioLdac",
+    "getVersion",
+    "getKey",
+    "getTouch",
+    "getAncList",
+    "getEarDetection",
+    "getAncLevel",
+    "getAncTransLevel",
+    "getDingLevel"
+  ],
+  "fixed_commands": [
+    {
+      "name": "getInfo",
+      "args": {},
+      "tx_hex": "08 ee 00 00 00 01 01 0a 00 02",
+      "reply_command": "0101",
+      "evidence": [
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart",
+          "line": 2861,
+          "address": "0xdfa7a8",
+          "function": "getInfo",
+          "class": "abstract class ZtSender"
+        }
+      ]
+    },
+    {
+      "name": "getAnc",
+      "args": {},
+      "tx_hex": "08 ee 00 00 00 06 02 0a 00 08",
+      "reply_command": "0602",
+      "evidence": [
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart",
+          "line": 801,
+          "address": "0x81b120",
+          "function": "getAnc",
+          "class": "abstract class ZtSender"
+        }
+      ]
+    },
+    {
+      "name": "getEq",
+      "args": {},
+      "tx_hex": "08 ee 00 00 00 02 01 0a 00 03",
+      "reply_command": "0201",
+      "evidence": [
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart",
+          "line": 2731,
+          "address": "0xdfa110",
+          "function": "getEq",
+          "class": "abstract class ZtSender"
+        }
+      ]
+    },
+    {
+      "name": "getGameMode",
+      "args": {},
+      "tx_hex": "08 ee 00 00 00 06 03 0a 00 09",
+      "reply_command": "0603",
+      "evidence": [
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart",
+          "line": 2392,
+          "address": "0xc78fd4",
+          "function": "getGameMode",
+          "class": "abstract class ZtSender"
+        }
+      ]
+    },
+    {
+      "name": "getAudioLdac",
+      "args": {},
+      "tx_hex": "08 ee 00 00 00 08 01 0a 00 09",
+      "reply_command": "0801",
+      "evidence": [
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart",
+          "line": 2151,
+          "address": "0xc6e364",
+          "function": "getAudioLdac",
+          "class": "abstract class ZtSender"
+        }
+      ]
+    },
+    {
+      "name": "getVersion",
+      "args": {},
+      "tx_hex": "08 ee 00 00 00 0d 01 0a 00 0e",
+      "reply_command": "0d01",
+      "evidence": [
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart",
+          "line": 2796,
+          "address": "0xdfa494",
+          "function": "getVersion",
+          "class": "abstract class ZtSender"
+        }
+      ]
+    },
+    {
+      "name": "getKey",
+      "args": {},
+      "tx_hex": "08 ee 00 00 00 04 01 0a 00 05",
+      "reply_command": "0401",
+      "evidence": [
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart",
+          "line": 1936,
+          "address": "0xc6d5a8",
+          "function": "getKey",
+          "class": "abstract class ZtSender"
+        }
+      ]
+    },
+    {
+      "name": "getTouch",
+      "args": {},
+      "tx_hex": "08 ee 00 00 00 0a 01 0a 00 0b",
+      "reply_command": "0a01",
+      "evidence": [
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart",
+          "line": 1407,
+          "address": "0xb6de90",
+          "function": "getTouch",
+          "class": "abstract class ZtSender"
+        }
+      ]
+    },
+    {
+      "name": "getAncList",
+      "args": {},
+      "tx_hex": "08 ee 00 00 00 06 05 0a 00 0b",
+      "reply_command": "0605",
+      "evidence": [
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart",
+          "line": 866,
+          "address": "0x81e480",
+          "function": "getAncList",
+          "class": "abstract class ZtSender"
+        }
+      ]
+    },
+    {
+      "name": "getEarDetection",
+      "args": {},
+      "tx_hex": "08 ee 00 00 00 0c 01 0a 00 0d",
+      "reply_command": "0c01",
+      "evidence": [
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart",
+          "line": 1206,
+          "address": "0x830d58",
+          "function": "getEarDetection",
+          "class": "abstract class ZtSender"
+        }
+      ]
+    },
+    {
+      "name": "getAncLevel",
+      "args": {},
+      "tx_hex": "08 ee 00 00 00 06 07 0a 00 0d",
+      "reply_command": "0607",
+      "evidence": [
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart",
+          "line": 4598,
+          "address": "0x80d754",
+          "function": "getAncLevel",
+          "class": "class Zt229Sender"
+        }
+      ]
+    },
+    {
+      "name": "getAncTransLevel",
+      "args": {},
+      "tx_hex": "08 ee 00 00 00 06 04 0a 00 0a",
+      "reply_command": "0604",
+      "evidence": [
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart",
+          "line": 4458,
+          "address": "0x80b5a0",
+          "function": "getAncTransLevel",
+          "class": "class Zt229Sender"
+        }
+      ]
+    },
+    {
+      "name": "getDingLevel",
+      "args": {},
+      "tx_hex": "08 ee 00 00 00 0e 03 0a 00 11",
+      "reply_command": "0e03",
+      "evidence": [
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart",
+          "line": 4736,
+          "address": "0x823770",
+          "function": "getDingLevel",
+          "class": "class Zt229Sender"
+        }
+      ]
+    },
+    {
+      "name": "getConnectMul",
+      "args": {},
+      "tx_hex": "08 ee 00 00 00 08 01 0a 00 09",
+      "reply_command": "0801",
+      "evidence": [
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart",
+          "line": 2151,
+          "address": "0xc6e364",
+          "function": "getAudioLdac",
+          "class": "abstract class ZtSender"
+        }
+      ]
+    },
+    {
+      "name": "set_noise_mode",
+      "args": {
+        "mode": "anc"
+      },
+      "tx_hex": "08 ee 00 00 00 06 82 0e 00 01 00 00 00 8d",
+      "evidence": [
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart",
+          "line": 726,
+          "address": "0x81a494",
+          "function": "setNoiseModeAnc",
+          "class": "abstract class ZtSender"
+        }
+      ]
+    },
+    {
+      "name": "set_noise_mode",
+      "args": {
+        "mode": "normal"
+      },
+      "tx_hex": "08 ee 00 00 00 06 82 0e 00 00 01 00 00 8d",
+      "evidence": [
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart",
+          "line": 576,
+          "address": "0x815924",
+          "function": "setNoiseModeNormal",
+          "class": "abstract class ZtSender"
+        }
+      ]
+    },
+    {
+      "name": "set_noise_mode",
+      "args": {
+        "mode": "wind"
+      },
+      "tx_hex": "08 ee 00 00 00 06 82 0e 00 00 00 01 00 8d",
+      "evidence": [
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart",
+          "line": 651,
+          "address": "0x815fe8",
+          "function": "setNoiseModeWind",
+          "class": "abstract class ZtSender"
+        }
+      ]
+    },
+    {
+      "name": "set_noise_mode",
+      "args": {
+        "mode": "transparency"
+      },
+      "tx_hex": "08 ee 00 00 00 06 82 0e 00 00 00 00 01 8d",
+      "evidence": [
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart",
+          "line": 501,
+          "address": "0x80d9b0",
+          "function": "setNoiseModeTrans",
+          "class": "abstract class ZtSender"
+        }
+      ]
+    },
+    {
+      "name": "set_eq",
+      "args": {
+        "preset": "pop"
+      },
+      "tx_hex": "08 ee 00 00 00 02 81 0b 00 00 84",
+      "evidence": [
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart",
+          "line": 2664,
+          "address": "0xdf57f8",
+          "function": "setEqPop",
+          "class": "abstract class ZtSender"
+        }
+      ]
+    },
+    {
+      "name": "set_eq",
+      "args": {
+        "preset": "hifi"
+      },
+      "tx_hex": "08 ee 00 00 00 02 81 0b 00 01 85",
+      "evidence": [
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart",
+          "line": 2595,
+          "address": "0xcd3c94",
+          "function": "setEqHifi",
+          "class": "abstract class ZtSender"
+        }
+      ]
+    },
+    {
+      "name": "set_eq",
+      "args": {
+        "preset": "rock"
+      },
+      "tx_hex": "08 ee 00 00 00 02 81 0b 00 02 86",
+      "evidence": [
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart",
+          "line": 2526,
+          "address": "0xcbfe48",
+          "function": "setEqRock",
+          "class": "abstract class ZtSender"
+        }
+      ]
+    },
+    {
+      "name": "set_eq",
+      "args": {
+        "preset": "light"
+      },
+      "tx_hex": "08 ee 00 00 00 02 81 0b 00 03 87",
+      "evidence": [
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart",
+          "line": 2457,
+          "address": "0xcbfc78",
+          "function": "setEqLight",
+          "class": "abstract class ZtSender"
+        }
+      ]
+    },
+    {
+      "name": "set_game_mode",
+      "args": {
+        "enabled": true
+      },
+      "tx_hex": "08 ee 00 00 00 06 83 0b 00 00 8a",
+      "evidence": [
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart",
+          "line": 2325,
+          "address": "0xc78e44",
+          "function": "setGameModeOn",
+          "class": "abstract class ZtSender"
+        }
+      ]
+    },
+    {
+      "name": "set_game_mode",
+      "args": {
+        "enabled": false
+      },
+      "tx_hex": "08 ee 00 00 00 06 83 0b 00 01 8b",
+      "evidence": [
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart",
+          "line": 2256,
+          "address": "0xc78c78",
+          "function": "setGameModeOff",
+          "class": "abstract class ZtSender"
+        }
+      ]
+    },
+    {
+      "name": "set_ear_detection",
+      "args": {
+        "enabled": true
+      },
+      "tx_hex": "08 ee 00 00 00 0c 81 0b 00 00 8e",
+      "evidence": [
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart",
+          "line": 1139,
+          "address": "0x82854c",
+          "function": "setEarDetectionOn",
+          "class": "abstract class ZtSender"
+        }
+      ]
+    },
+    {
+      "name": "set_ear_detection",
+      "args": {
+        "enabled": false
+      },
+      "tx_hex": "08 ee 00 00 00 0c 81 0b 00 01 8f",
+      "evidence": [
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart",
+          "line": 1070,
+          "address": "0x82699c",
+          "function": "setEarDetectionOff",
+          "class": "abstract class ZtSender"
+        }
+      ]
+    },
+    {
+      "name": "set_touch_enabled",
+      "args": {
+        "enabled": true
+      },
+      "tx_hex": "08 ee 00 00 00 0a 81 0b 00 00 8c",
+      "evidence": [
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart",
+          "line": 1340,
+          "address": "0x90fd5c",
+          "function": "setTouchOn",
+          "class": "abstract class ZtSender"
+        }
+      ]
+    },
+    {
+      "name": "set_touch_enabled",
+      "args": {
+        "enabled": false
+      },
+      "tx_hex": "08 ee 00 00 00 0a 81 0b 00 01 8d",
+      "evidence": [
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart",
+          "line": 1271,
+          "address": "0x8e8824",
+          "function": "setTouchOff",
+          "class": "abstract class ZtSender"
+        }
+      ]
+    },
+    {
+      "name": "set_multipoint",
+      "args": {
+        "enabled": true
+      },
+      "tx_hex": "08 ee 00 00 00 08 81 0b 00 00 8a",
+      "evidence": [
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart",
+          "line": 2932,
+          "address": "0xe34340",
+          "function": "setConnectMulOn",
+          "class": "abstract class ZtSender"
+        }
+      ]
+    },
+    {
+      "name": "set_audio_mode",
+      "args": {
+        "mode": "ldac"
+      },
+      "tx_hex": "08 ee 00 00 00 08 81 0b 00 01 8b",
+      "evidence": [
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart",
+          "line": 2216,
+          "address": "0xc77d10",
+          "function": "setConnectMulOff",
+          "class": "abstract class ZtSender"
+        },
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart",
+          "line": 3749,
+          "address": "0xc6e104",
+          "function": "setAudioLdac",
+          "class": "class Zt231Sender"
+        }
+      ]
+    },
+    {
+      "name": "set_multipoint",
+      "args": {
+        "enabled": false
+      },
+      "tx_hex": "08 ee 00 00 00 08 81 0b 00 01 8b",
+      "evidence": [
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart",
+          "line": 2216,
+          "address": "0xc77d10",
+          "function": "setConnectMulOff",
+          "class": "abstract class ZtSender"
+        },
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart",
+          "line": 3749,
+          "address": "0xc6e104",
+          "function": "setAudioLdac",
+          "class": "class Zt231Sender"
+        }
+      ]
+    },
+    {
+      "name": "set_audio_mode",
+      "args": {
+        "mode": "aac_sbc"
+      },
+      "tx_hex": "08 ee 00 00 00 08 81 0b 00 00 8a",
+      "evidence": [
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart",
+          "line": 2131,
+          "address": "0xc6e2c8",
+          "function": "setAudioAacSbc",
+          "class": "abstract class ZtSender"
+        },
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart",
+          "line": 2932,
+          "address": "0xe34340",
+          "function": "setConnectMulOn",
+          "class": "abstract class ZtSender"
+        }
+      ]
+    }
+  ],
+  "setter_families": [
+    {
+      "name": "set_noise_mode",
+      "group": 6,
+      "operation": 130,
+      "payload": "anc=01 00 00 00; normal=00 01 00 00; wind=00 00 01 00; transparency=00 00 00 01",
+      "reply_command": "0602",
+      "evidence": [
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart",
+          "line": 726,
+          "address": "0x81a494",
+          "function": "setNoiseModeAnc",
+          "class": "abstract class ZtSender"
+        }
+      ]
+    },
+    {
+      "name": "set_eq",
+      "group": 2,
+      "operation": 129,
+      "payload": "00 POP; 01 HIFI; 02 ROCK; 03 LIGHT",
+      "reply_command": "0201",
+      "evidence": [
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart",
+          "line": 2664,
+          "address": "0xdf57f8",
+          "function": "setEqPop",
+          "class": "abstract class ZtSender"
+        }
+      ]
+    },
+    {
+      "name": "set_game_mode",
+      "group": 6,
+      "operation": 131,
+      "payload": "00 enabled; 01 disabled",
+      "reply_command": "0603",
+      "evidence": [
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart",
+          "line": 2325,
+          "address": "0xc78e44",
+          "function": "setGameModeOn",
+          "class": "abstract class ZtSender"
+        }
+      ]
+    },
+    {
+      "name": "set_ear_detection",
+      "group": 12,
+      "operation": 129,
+      "payload": "00 enabled; 01 disabled",
+      "reply_command": "0c01",
+      "evidence": [
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart",
+          "line": 1139,
+          "address": "0x82854c",
+          "function": "setEarDetectionOn",
+          "class": "abstract class ZtSender"
+        }
+      ]
+    },
+    {
+      "name": "set_touch_enabled",
+      "group": 10,
+      "operation": 129,
+      "payload": "00 enabled; 01 disabled",
+      "reply_command": "0a01",
+      "evidence": [
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart",
+          "line": 1340,
+          "address": "0x90fd5c",
+          "function": "setTouchOn",
+          "class": "abstract class ZtSender"
+        }
+      ]
+    },
+    {
+      "name": "set_audio_mode",
+      "group": 8,
+      "operation": 129,
+      "payload": "00 AAC/SBC + multipoint; 01 LDAC + single-point",
+      "reply_command": "0801",
+      "evidence": [
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart",
+          "line": 2131,
+          "address": "0xc6e2c8",
+          "function": "setAudioAacSbc",
+          "class": "abstract class ZtSender"
+        },
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart",
+          "line": 2216,
+          "address": "0xc77d10",
+          "function": "setConnectMulOff",
+          "class": "abstract class ZtSender"
+        }
+      ]
+    },
+    {
+      "name": "set_multipoint",
+      "group": 8,
+      "operation": 129,
+      "payload": "00 enabled; 01 disabled (also changes audio mode)",
+      "reply_command": "0801",
+      "evidence": [
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart",
+          "line": 2932,
+          "address": "0xe34340",
+          "function": "setConnectMulOn",
+          "class": "abstract class ZtSender"
+        },
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart",
+          "line": 2216,
+          "address": "0xc77d10",
+          "function": "setConnectMulOff",
+          "class": "abstract class ZtSender"
+        }
+      ]
+    },
+    {
+      "name": "set_anc_level",
+      "group": 6,
+      "operation": 135,
+      "payload": "00 UI1; 01 UI3; 02 UI5",
+      "reply_command": "0607",
+      "evidence": [
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart",
+          "line": 4523,
+          "address": "0x80b81c",
+          "function": "setAncLevel",
+          "class": "class Zt229Sender"
+        }
+      ]
+    },
+    {
+      "name": "set_transparency_level",
+      "group": 6,
+      "operation": 132,
+      "payload": "00 UI1; 01 UI3; 02 UI5",
+      "reply_command": "0604",
+      "evidence": [
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart",
+          "line": 4383,
+          "address": "0x80b3a0",
+          "function": "setTransLevel",
+          "class": "class Zt229Sender"
+        }
+      ]
+    },
+    {
+      "name": "set_prompt_volume",
+      "group": 14,
+      "operation": 131,
+      "payload": "UI1..5 -> 00..04",
+      "reply_command": "0e03",
+      "evidence": [
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart",
+          "line": 4663,
+          "address": "0x8232d4",
+          "function": "setDingLevel",
+          "class": "class Zt229Sender"
+        }
+      ]
+    },
+    {
+      "name": "set_touch_key",
+      "group": 4,
+      "operation": 129,
+      "payload": "[side:00left/01right] [gesture:00single/01double/02triple/03long] [action:00..07]",
+      "reply_command": "0401",
+      "evidence": [
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart",
+          "line": 1878,
+          "address": "0xc6d0ac",
+          "function": "setLeftTouchOne",
+          "class": "abstract class ZtSender"
+        },
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart",
+          "line": 1472,
+          "address": "0xb87f44",
+          "function": "setRightTouchLong",
+          "class": "abstract class ZtSender"
+        }
+      ]
+    },
+    {
+      "name": "set_noise_cycle",
+      "group": 6,
+      "operation": 133,
+      "payload": "[normal] [transparency] [wind] [anc], each 00/01",
+      "reply_command": "0605",
+      "evidence": [
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart",
+          "line": 10,
+          "address": "0x7959fc",
+          "function": "setAncLine",
+          "class": "abstract class ZtSender"
+        }
+      ]
+    },
+    {
+      "name": "set_find",
+      "group": 14,
+      "operation": 130,
+      "payload": "left/both:00 01; right:01 01; stop:03 00",
+      "reply_command": "0e02",
+      "evidence": [
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart",
+          "line": 208,
+          "address": "0x7bb2b4",
+          "function": "setFindDeviceLeft",
+          "class": "abstract class ZtSender"
+        },
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart",
+          "line": 140,
+          "address": "0x7bb16c",
+          "function": "setFindDeviceRight",
+          "class": "abstract class ZtSender"
+        },
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart",
+          "line": 120,
+          "address": "0x7b3c14",
+          "function": "setFindDeviceBoth",
+          "class": "abstract class ZtSender"
+        },
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart",
+          "line": 4349,
+          "address": "0x7b394c",
+          "function": "setFindOff",
+          "class": "class Zt229Sender"
+        }
+      ]
+    }
+  ],
+  "touch_actions": [
+    "volume_up",
+    "volume_down",
+    "previous_track",
+    "next_track",
+    "voice_assistant",
+    "play_pause",
+    "none",
+    "noise_cycle"
+  ],
+  "notifications": [
+    {
+      "command": "0101",
+      "kind": "battery",
+      "minimum_parse_bytes": 16,
+      "layout": "byte11:left percent; byte12:right percent; byte13!=0:left charging; byte14!=0:right charging; byte15:case percent (FF absent)"
+    },
+    {
+      "command": "0d01",
+      "kind": "firmware",
+      "minimum_parse_bytes": 13,
+      "layout": "low nibble of bytes9,10,11 -> hexadecimal integers -> concatenate decimal representations"
+    },
+    {
+      "command": "0201",
+      "kind": "eq",
+      "minimum_parse_bytes": 10,
+      "layout": "byte9 & 0F: 00POP/01HIFI/02ROCK/03LIGHT"
+    },
+    {
+      "command": "0401",
+      "kind": "touch_keys",
+      "minimum_parse_bytes": 17,
+      "layout": "bytes9..16 & 0F: Lsingle,Ldouble,Ltriple,Llong,Rsingle,Rdouble,Rtriple,Rlong"
+    },
+    {
+      "command": "0602",
+      "kind": "noise_mode",
+      "minimum_parse_bytes": 14,
+      "layout": "entire byte9..end hex: 0100000020 ANC; 0001000020 normal; 0000010020 wind; 0000000120 trans; 0200000021 auto (not i5 UI)"
+    },
+    {
+      "command": "0603",
+      "kind": "game_mode",
+      "minimum_parse_bytes": 10,
+      "layout": "byte9 & 0F: 0 enabled, 1 disabled"
+    },
+    {
+      "command": "0604",
+      "kind": "transparency_level",
+      "minimum_parse_bytes": 10,
+      "layout": "full byte9: 0/1/2 -> UI1/3/5"
+    },
+    {
+      "command": "0605",
+      "kind": "noise_cycle",
+      "minimum_parse_bytes": 13,
+      "layout": "bytes9..12 & 0F: normal/transparency/wind/anc flags"
+    },
+    {
+      "command": "0607",
+      "kind": "anc_level",
+      "minimum_parse_bytes": 10,
+      "layout": "full byte9: 0/1/2 -> UI1/3/5"
+    },
+    {
+      "command": "0801",
+      "kind": "audio_mode",
+      "minimum_parse_bytes": 10,
+      "layout": "byte9 & 0F: 0 AAC/SBC + multipoint; 1 LDAC + single-point"
+    },
+    {
+      "command": "0a01",
+      "kind": "touch_enabled",
+      "minimum_parse_bytes": 10,
+      "layout": "byte9 & 0F: 0 enabled, 1 disabled"
+    },
+    {
+      "command": "0c01",
+      "kind": "ear_detection",
+      "minimum_parse_bytes": 10,
+      "layout": "byte9 & 0F: 0 enabled, 1 disabled"
+    },
+    {
+      "command": "0e02",
+      "kind": "find",
+      "minimum_parse_bytes": 11,
+      "layout": "byte9 direction 0left/1right/2both; byte10 status0/1; preserve App cross-side state updates"
+    },
+    {
+      "command": "0e03",
+      "kind": "prompt_volume",
+      "minimum_parse_bytes": 10,
+      "layout": "byte9 & 0F + 1 -> UI1..5"
+    }
+  ],
+  "shared_receiver_extra": {
+    "0802": "low nibble byte9:1 multipoint on;0 off; no independent i5 init query"
+  },
+  "known_quirks": [
+    "Find both aliases left; no invented direction02 start command",
+    "Noise mode and noise-cycle flags have different order",
+    "Audio mode and multipoint are coupled",
+    "Firmware display concatenates decimal low nibbles without separators"
+  ],
+  "out_of_scope_shared_commands": [
+    "LHDC",
+    "custom EQ",
+    "gain",
+    "0802 independent multipoint writes",
+    "0d81 direct voice language",
+    "auto ANC setting"
+  ],
+  "ota_status": "static state machine recovered; anonymous metadata (data.otaUrl renamed to internal otaContent), resource HEAD and 64-byte prefixes verified on 2026-10-14; full firmware, E2 offset units and device behavior remain unverified"
+}

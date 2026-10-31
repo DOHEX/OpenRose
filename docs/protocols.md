@@ -1,5 +1,7 @@
 # i5 / i7 读取协议与证据
 
+> **协议文档索引**：RoseLink 全型号协议研究总览、43 款型号能力清单及最新整理的型号协议（BudsFeel MK2、OpenFeel MK2、Swift 2、Jasmine 等）请参阅 [RoseLink 协议研究与型号文档](protocols/README.md)。本文档记录 OpenRose 针对 i5 / i7 的具体工程实现、测试向量与实测证据。
+
 读取实现日期：2026-10-18。读取范围为 [#3](https://github.com/DOHEX/OpenRose/issues/3) 和 [#4](https://github.com/DOHEX/OpenRose/issues/4)。2026-10-19 新增 [#5](https://github.com/DOHEX/OpenRose/issues/5)、[#6](https://github.com/DOHEX/OpenRose/issues/6) 的降噪设置、[#7](https://github.com/DOHEX/OpenRose/issues/7)、[#8](https://github.com/DOHEX/OpenRose/issues/8) 的预设 EQ / 游戏模式，以及 [#9](https://github.com/DOHEX/OpenRose/issues/9) 至 [#12](https://github.com/DOHEX/OpenRose/issues/12) 的触控、检测、i5 提示音和音频 / 多点设置，见文末。`core.protocol.ProtocolCodec` 是纯 Kotlin 会话实例；平台传输负责扫描、GATT、订阅和串行写入，协议负责识别、初始化报文和状态解析。没有 OTA 发送入口。
 
 ## 来源与实测边界

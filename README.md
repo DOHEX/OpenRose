@@ -21,7 +21,7 @@ OpenRose 将耳机协议、控制会话和应用界面分开，提供 Miuix 与 
 - 切换 Miuix / Material 3、浅色 / 深色外观；界面风格切换保持控制连接和设备状态。
 - Android 系统集成包含超级岛、焦点通知和融合设备中心适配，目标为 HyperOS 3、4。
 
-控制项按具体型号配置和已读取的固件开放。完整协议说明与验证记录见 [协议文档](docs/protocols.md)。
+控制项按具体型号配置和已读取的固件开放。全型号协议研究与规范见 [协议文档目录](docs/protocols/)，当前客户端 i5 / i7 的工程实现与实测证据见 [协议实现文档](docs/protocols.md)。
 
 ## 当前状态
 
@@ -39,6 +39,8 @@ OpenRose 将耳机协议、控制会话和应用界面分开，提供 Miuix 与 
 | EarFeel i7 | RS Common V2 / BLE、SPP | 已有协议实现和离线测试，尚无实机验证 |
 
 同一零售名称下可能存在不同硬件分支，目前仅实现上述型号配置。HyperOS 集成的首验目标为 i5 + 小米 14（HyperOS 4）。
+
+除了已接入客户端的 i5 与 i7 之外，逆向研究已整理出 BudsFeel MK2、OpenFeel MK2、踏浪 Swift 2、Jasmine 等型号的协议规范及 43 款型号能力清单，详见 [协议文档目录](docs/protocols/)。
 
 ## Android 使用
 
@@ -105,10 +107,10 @@ cd OpenRose
 | `composeApp/` | 共享界面、Miuix / Material 3 组件与界面测试 |
 | `androidApp/` | Android 入口、BLE / SPP 传输、libxposed 模块与 HyperOS 系统桥接 |
 | `desktopApp/` | Windows / Linux 桌面入口、窗口与偏好设置 |
-| `docs/` | 协议说明、架构决策与协作约定 |
+| `docs/` | 协议研究与型号规范（`docs/protocols/`）、工程实现证据（`docs/protocols.md`）、架构决策与规范 |
 
 ## 参与与反馈
 
 功能需求、问题和适配反馈统一记录在 [GitHub Issues](https://github.com/DOHEX/OpenRose/issues)。反馈设备问题时，请附上具体耳机型号与固件、手机和系统版本、OpenRose 版本、复现步骤；涉及系统集成时，也请附上框架版本与桥接状态。
 
-参与开发前，可先阅读 [领域词汇表](GLOSSARY.md)、[架构决策](docs/adr/) 和 [协议文档](docs/protocols.md)。新增型号或系统适配时，请分别记录协议证据、离线测试和实机结果。
+参与开发前，可先阅读 [领域词汇表](GLOSSARY.md)、[架构决策](docs/adr/)、[协议文档目录](docs/protocols/) 与 [协议实现证据](docs/protocols.md)。新增型号或系统适配时，请分别记录协议证据、离线测试和实机结果。

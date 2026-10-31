@@ -1,0 +1,2371 @@
+{
+  "schema_version": 1,
+  "schema_origin": "researcher-defined; not an original official App file",
+  "model": "EarFeel i7",
+  "internal_name": "earfeel-i7",
+  "analysis_date": "2026-10-14",
+  "source_apk": {
+    "name": "RoseLink_3.8.0.apk",
+    "package": "cn.ikaile.ruoshui.client",
+    "version": "3.8.0",
+    "version_code": 5310,
+    "sha256": "83cdd7e3e7f6e7d61a26dc6a8fab65f183d5a18a66a70f64a17f69d93e58e40b"
+  },
+  "evidence_type": "static Flutter AOT; native supplement for omitted mixins",
+  "hardware_validated": false,
+  "configuration_source": "analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/earfeel_i7_device_config.dart",
+  "transport": {
+    "ble": {
+      "service": "000000fe-0000-1000-8000-00805f9b34fb",
+      "write": "000000f1-0000-1000-8000-00805f9b34fb",
+      "notify": "000000f2-0000-1000-8000-00805f9b34fb"
+    },
+    "spp": {
+      "supported_in_model_config": true,
+      "control_uuid": "0cf12d31-fac3-4553-bd80-d6832e7b3931",
+      "ota_uuid": "66666666-6666-6666-6666-666666666666"
+    },
+    "manufacturer_prefix": "b8e5290f",
+    "write_without_response_when_supported": true,
+    "normal_gap_ms": 100,
+    "app_mtu_request": 512,
+    "ota": {
+      "type": "BES",
+      "ble_service": "66666666-6666-6666-6666-666666666666",
+      "ble_write_and_notify": "77777777-7777-7777-7777-777777777777"
+    }
+  },
+  "tx_layout": {
+    "start": 255,
+    "end": 170,
+    "sequence_offset": 1,
+    "body_length_u8_offset": 2,
+    "body_offset": 3,
+    "checksum": "sum(start,sequence,body_length,all_body_bytes) & 0xff",
+    "body_length_includes": "command and parameters; excludes start/seq/length/checksum/end",
+    "total_frame_length": "body_length+5",
+    "sequence": "initial0; each transform increments once; if previous field >255 reset before use; equivalent wrap modulo256",
+    "evidence": [
+      {
+        "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart",
+        "line": 4750,
+        "address": "0xdfa838",
+        "function": "transform",
+        "class": "RsCommonV2Sender"
+      },
+      {
+        "path": "analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/earfeel_i7_device_config.dart",
+        "line": 49,
+        "address": "0x681848",
+        "note": "sender sequence field7 is initialized to0"
+      },
+      {
+        "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/command_util.dart",
+        "line": 189,
+        "address": "0x795b24",
+        "function": "checkSum"
+      },
+      {
+        "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/command_util.dart",
+        "line": 454,
+        "address": "0x796258",
+        "function": "checkSum reducer adds BigInts"
+      }
+    ]
+  },
+  "rx_layout": {
+    "layout": [
+      "DD",
+      "header_byte",
+      "LTV...",
+      "CS",
+      "AA"
+    ],
+    "header_byte": "opaque in RX parser",
+    "normal_L": "1+len(V)",
+    "record_bytes": "1+L",
+    "checksum_acceptance": [
+      "sum(frame[:-2]) &255",
+      "sum(frame[2:-2]) &255"
+    ],
+    "zero_length": "L00 consumes rest of context except terminal CS as single V; _parseLTVPacket shortcut bypasses checksum validation",
+    "ignored_type": "fe",
+    "prefix_caveat": "receiver _hasPrefix accepts DD orFF but CommandUtil.splitData searches DD only; isolatedFF packet is ignored by official path"
+  },
+  "rx_stream_app_behavior": {
+    "first_fragment": "startsDD/FF, lacksAA; replaces prior incomplete buffer",
+    "middle": "appends only if stored buffer startsDD/FF",
+    "last": "endsAA, appends then recurses and clearsbuffer",
+    "complete": "splitData extracts complete DD frames by LTV lengths and validateschecksum; return true if at least one recognized field handled",
+    "partial_batch_caveat": "a notification that startsDD and endsAA causes complete branch regardless of any prior buffer",
+    "no_timeout_visible": "receiver fragment buffer has no timer/size limit in this class; recommend own boundedbuffer"
+  },
+  "fixed_commands": [
+    {
+      "name": "setFindOff",
+      "body_hex": "2f 04",
+      "body_bytes": [
+        47,
+        4
+      ],
+      "example_seq": 0,
+      "example_tx_hex": "ff 00 02 2f 04 34 aa",
+      "applicability": "i7_configured",
+      "evidence": [
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart",
+          "line": 1166,
+          "address": "0x7b38f4",
+          "function": "setFindOff",
+          "class": "RsCommonV2Sender"
+        }
+      ]
+    },
+    {
+      "name": "setFindDeviceBoth",
+      "body_hex": "2f 03",
+      "body_bytes": [
+        47,
+        3
+      ],
+      "example_seq": 0,
+      "example_tx_hex": "ff 00 02 2f 03 33 aa",
+      "applicability": "i7_configured",
+      "evidence": [
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart",
+          "line": 1207,
+          "address": "0x7b3b64",
+          "function": "setFindDeviceBoth",
+          "class": "RsCommonV2Sender"
+        },
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart",
+          "line": 1229,
+          "address": "0x7b3b94",
+          "function": "setFindDevice",
+          "class": "RsCommonV2Sender"
+        }
+      ]
+    },
+    {
+      "name": "setFindDeviceRight",
+      "body_hex": "2f 02",
+      "body_bytes": [
+        47,
+        2
+      ],
+      "example_seq": 0,
+      "example_tx_hex": "ff 00 02 2f 02 32 aa",
+      "applicability": "i7_configured",
+      "evidence": [
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart",
+          "line": 1283,
+          "address": "0x7bb13c",
+          "function": "setFindDeviceRight",
+          "class": "RsCommonV2Sender"
+        },
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart",
+          "line": 1229,
+          "address": "0x7b3b94",
+          "function": "setFindDevice",
+          "class": "RsCommonV2Sender"
+        }
+      ]
+    },
+    {
+      "name": "setFindDeviceLeft",
+      "body_hex": "2f 01",
+      "body_bytes": [
+        47,
+        1
+      ],
+      "example_seq": 0,
+      "example_tx_hex": "ff 00 02 2f 01 31 aa",
+      "applicability": "i7_configured",
+      "evidence": [
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart",
+          "line": 1305,
+          "address": "0x7bb284",
+          "function": "setFindDeviceLeft",
+          "class": "RsCommonV2Sender"
+        },
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart",
+          "line": 1229,
+          "address": "0x7b3b94",
+          "function": "setFindDevice",
+          "class": "RsCommonV2Sender"
+        }
+      ]
+    },
+    {
+      "name": "setAncAutoDynamicOn",
+      "body_hex": "09 07",
+      "body_bytes": [
+        9,
+        7
+      ],
+      "example_seq": 0,
+      "example_tx_hex": "ff 00 02 09 07 11 aa",
+      "applicability": "i7_configured",
+      "evidence": [
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart",
+          "line": 1368,
+          "address": "0x80a748",
+          "function": "setAncAutoDynamicOn",
+          "class": "RsCommonV2Sender"
+        }
+      ]
+    },
+    {
+      "name": "setAncAutoOn",
+      "body_hex": "09 05",
+      "body_bytes": [
+        9,
+        5
+      ],
+      "example_seq": 0,
+      "example_tx_hex": "ff 00 02 09 05 0f aa",
+      "applicability": "i7_configured",
+      "evidence": [
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart",
+          "line": 1409,
+          "address": "0x80a7a0",
+          "function": "setAncAutoOn",
+          "class": "RsCommonV2Sender"
+        }
+      ]
+    },
+    {
+      "name": "setNoiseModeTrans",
+      "body_hex": "09 03",
+      "body_bytes": [
+        9,
+        3
+      ],
+      "example_seq": 0,
+      "example_tx_hex": "ff 00 02 09 03 0d aa",
+      "applicability": "i7_configured",
+      "evidence": [
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart",
+          "line": 1570,
+          "address": "0x80d8c0",
+          "function": "setNoiseModeTrans",
+          "class": "RsCommonV2Sender"
+        }
+      ]
+    },
+    {
+      "name": "setNoiseModeNormal",
+      "body_hex": "09 02",
+      "body_bytes": [
+        9,
+        2
+      ],
+      "example_seq": 0,
+      "example_tx_hex": "ff 00 02 09 02 0c aa",
+      "applicability": "i7_configured",
+      "evidence": [
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart",
+          "line": 1611,
+          "address": "0x815834",
+          "function": "setNoiseModeNormal",
+          "class": "RsCommonV2Sender"
+        }
+      ]
+    },
+    {
+      "name": "setNoiseModeWind",
+      "body_hex": "09 04",
+      "body_bytes": [
+        9,
+        4
+      ],
+      "example_seq": 0,
+      "example_tx_hex": "ff 00 02 09 04 0e aa",
+      "applicability": "i7_configured",
+      "evidence": [
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart",
+          "line": 1652,
+          "address": "0x815f64",
+          "function": "setNoiseModeWind",
+          "class": "RsCommonV2Sender"
+        }
+      ]
+    },
+    {
+      "name": "setNoiseModeAnc",
+      "body_hex": "09 01",
+      "body_bytes": [
+        9,
+        1
+      ],
+      "example_seq": 0,
+      "example_tx_hex": "ff 00 02 09 01 0b aa",
+      "applicability": "i7_configured",
+      "evidence": [
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart",
+          "line": 1693,
+          "address": "0x81a3a4",
+          "function": "setNoiseModeAnc",
+          "class": "RsCommonV2Sender"
+        }
+      ]
+    },
+    {
+      "name": "getGainLevel",
+      "body_hex": "fa 45",
+      "body_bytes": [
+        250,
+        69
+      ],
+      "example_seq": 0,
+      "example_tx_hex": "ff 00 02 fa 45 40 aa",
+      "applicability": "i7_configured",
+      "evidence": [
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart",
+          "line": 1973,
+          "address": "0x822c3c",
+          "function": "getGainLevel",
+          "class": "RsCommonV2Sender"
+        }
+      ]
+    },
+    {
+      "name": "setEarDetectionOff",
+      "body_hex": "08 01",
+      "body_bytes": [
+        8,
+        1
+      ],
+      "example_seq": 0,
+      "example_tx_hex": "ff 00 02 08 01 0a aa",
+      "applicability": "i7_configured",
+      "evidence": [
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart",
+          "line": 2073,
+          "address": "0x826944",
+          "function": "setEarDetectionOff",
+          "class": "RsCommonV2Sender"
+        }
+      ]
+    },
+    {
+      "name": "setEarDetectionOn",
+      "body_hex": "08 00",
+      "body_bytes": [
+        8,
+        0
+      ],
+      "example_seq": 0,
+      "example_tx_hex": "ff 00 02 08 00 09 aa",
+      "applicability": "i7_configured",
+      "evidence": [
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart",
+          "line": 2114,
+          "address": "0x8284f8",
+          "function": "setEarDetectionOn",
+          "class": "RsCommonV2Sender"
+        }
+      ]
+    },
+    {
+      "name": "setTouchOff",
+      "body_hex": "07 01",
+      "body_bytes": [
+        7,
+        1
+      ],
+      "example_seq": 0,
+      "example_tx_hex": "ff 00 02 07 01 09 aa",
+      "applicability": "i7_configured",
+      "evidence": [
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart",
+          "line": 2379,
+          "address": "0x8e87cc",
+          "function": "setTouchOff",
+          "class": "RsCommonV2Sender"
+        }
+      ]
+    },
+    {
+      "name": "setTouchOn",
+      "body_hex": "07 00",
+      "body_bytes": [
+        7,
+        0
+      ],
+      "example_seq": 0,
+      "example_tx_hex": "ff 00 02 07 00 08 aa",
+      "applicability": "i7_configured",
+      "evidence": [
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart",
+          "line": 2420,
+          "address": "0x90fd08",
+          "function": "setTouchOn",
+          "class": "RsCommonV2Sender"
+        }
+      ]
+    },
+    {
+      "name": "setAudioLc3",
+      "body_hex": "2b 03",
+      "body_bytes": [
+        43,
+        3
+      ],
+      "example_seq": 0,
+      "example_tx_hex": "ff 00 02 2b 03 2f aa",
+      "applicability": "i7_configured",
+      "evidence": [
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart",
+          "line": 2840,
+          "address": "0xc6dd34",
+          "function": "setAudioLc3",
+          "class": "RsCommonV2Sender"
+        }
+      ]
+    },
+    {
+      "name": "setAudioLhdc",
+      "body_hex": "2b 02",
+      "body_bytes": [
+        43,
+        2
+      ],
+      "example_seq": 0,
+      "example_tx_hex": "ff 00 02 2b 02 2e aa",
+      "applicability": "i7_configured",
+      "evidence": [
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart",
+          "line": 2881,
+          "address": "0xc6de70",
+          "function": "setAudioLhdc",
+          "class": "RsCommonV2Sender"
+        }
+      ]
+    },
+    {
+      "name": "setAudioLdac",
+      "body_hex": "2b 01",
+      "body_bytes": [
+        43,
+        1
+      ],
+      "example_seq": 0,
+      "example_tx_hex": "ff 00 02 2b 01 2d aa",
+      "applicability": "i7_configured",
+      "evidence": [
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart",
+          "line": 2922,
+          "address": "0xc6e0ac",
+          "function": "setAudioLdac",
+          "class": "RsCommonV2Sender"
+        }
+      ]
+    },
+    {
+      "name": "setAudioAacSbc",
+      "body_hex": "2b 00",
+      "body_bytes": [
+        43,
+        0
+      ],
+      "example_seq": 0,
+      "example_tx_hex": "ff 00 02 2b 00 2c aa",
+      "applicability": "i7_configured",
+      "evidence": [
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart",
+          "line": 2963,
+          "address": "0xc6e274",
+          "function": "setAudioAacSbc",
+          "class": "RsCommonV2Sender"
+        }
+      ]
+    },
+    {
+      "name": "setConnectMulOff",
+      "body_hex": "32 00",
+      "body_bytes": [
+        50,
+        0
+      ],
+      "example_seq": 0,
+      "example_tx_hex": "ff 00 02 32 00 33 aa",
+      "applicability": "i7_configured",
+      "evidence": [
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart",
+          "line": 3002,
+          "address": "0xc77cbc",
+          "function": "setConnectMulOff",
+          "class": "RsCommonV2Sender"
+        }
+      ]
+    },
+    {
+      "name": "setGameModeOff",
+      "body_hex": "0e 00",
+      "body_bytes": [
+        14,
+        0
+      ],
+      "example_seq": 0,
+      "example_tx_hex": "ff 00 02 0e 00 0f aa",
+      "applicability": "i7_configured",
+      "evidence": [
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart",
+          "line": 3213,
+          "address": "0xc78c24",
+          "function": "setGameModeOff",
+          "class": "RsCommonV2Sender"
+        }
+      ]
+    },
+    {
+      "name": "setGameModeOn",
+      "body_hex": "0e 01",
+      "body_bytes": [
+        14,
+        1
+      ],
+      "example_seq": 0,
+      "example_tx_hex": "ff 00 02 0e 01 10 aa",
+      "applicability": "i7_configured",
+      "evidence": [
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart",
+          "line": 3252,
+          "address": "0xc78dec",
+          "function": "setGameModeOn",
+          "class": "RsCommonV2Sender"
+        }
+      ]
+    },
+    {
+      "name": "getCustomEq",
+      "body_hex": "fa 3e",
+      "body_bytes": [
+        250,
+        62
+      ],
+      "example_seq": 0,
+      "example_tx_hex": "ff 00 02 fa 3e 39 aa",
+      "applicability": "i7_configured",
+      "evidence": [
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart",
+          "line": 3962,
+          "address": "0xc87f48",
+          "function": "getCustomEq",
+          "class": "RsCommonV2Sender"
+        }
+      ]
+    },
+    {
+      "name": "setEqCustom",
+      "body_hex": "2a 04",
+      "body_bytes": [
+        42,
+        4
+      ],
+      "example_seq": 0,
+      "example_tx_hex": "ff 00 02 2a 04 2f aa",
+      "applicability": "i7_configured",
+      "evidence": [
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart",
+          "line": 4003,
+          "address": "0xc87fd4",
+          "function": "setEqCustom",
+          "class": "RsCommonV2Sender"
+        }
+      ]
+    },
+    {
+      "name": "setEqEap",
+      "body_hex": "2a 06",
+      "body_bytes": [
+        42,
+        6
+      ],
+      "example_seq": 0,
+      "example_tx_hex": "ff 00 02 2a 06 31 aa",
+      "applicability": "i7_configured",
+      "evidence": [
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart",
+          "line": 4312,
+          "address": "0xcb322c",
+          "function": "setEqEap",
+          "class": "RsCommonV2Sender"
+        }
+      ]
+    },
+    {
+      "name": "setEqLight",
+      "body_hex": "2a 03",
+      "body_bytes": [
+        42,
+        3
+      ],
+      "example_seq": 0,
+      "example_tx_hex": "ff 00 02 2a 03 2e aa",
+      "applicability": "i7_configured",
+      "evidence": [
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart",
+          "line": 4353,
+          "address": "0xcbfc20",
+          "function": "setEqLight",
+          "class": "RsCommonV2Sender"
+        }
+      ]
+    },
+    {
+      "name": "setEqRock",
+      "body_hex": "2a 02",
+      "body_bytes": [
+        42,
+        2
+      ],
+      "example_seq": 0,
+      "example_tx_hex": "ff 00 02 2a 02 2d aa",
+      "applicability": "i7_configured",
+      "evidence": [
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart",
+          "line": 4394,
+          "address": "0xcbfdf0",
+          "function": "setEqRock",
+          "class": "RsCommonV2Sender"
+        }
+      ]
+    },
+    {
+      "name": "setEqHifi",
+      "body_hex": "2a 00",
+      "body_bytes": [
+        42,
+        0
+      ],
+      "example_seq": 0,
+      "example_tx_hex": "ff 00 02 2a 00 2b aa",
+      "applicability": "i7_configured",
+      "evidence": [
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart",
+          "line": 4435,
+          "address": "0xcd3c40",
+          "function": "setEqHifi",
+          "class": "RsCommonV2Sender"
+        }
+      ]
+    },
+    {
+      "name": "setEqPop",
+      "body_hex": "2a 01",
+      "body_bytes": [
+        42,
+        1
+      ],
+      "example_seq": 0,
+      "example_tx_hex": "ff 00 02 2a 01 2c aa",
+      "applicability": "i7_configured",
+      "evidence": [
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart",
+          "line": 4474,
+          "address": "0xdf57a0",
+          "function": "setEqPop",
+          "class": "RsCommonV2Sender"
+        }
+      ]
+    },
+    {
+      "name": "getEq",
+      "body_hex": "fa 2a",
+      "body_bytes": [
+        250,
+        42
+      ],
+      "example_seq": 0,
+      "example_tx_hex": "ff 00 02 fa 2a 25 aa",
+      "applicability": "i7_configured",
+      "evidence": [
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart",
+          "line": 4515,
+          "address": "0xdfa0b8",
+          "function": "getEq",
+          "class": "RsCommonV2Sender"
+        }
+      ]
+    },
+    {
+      "name": "getEarMac",
+      "body_hex": "fe 34",
+      "body_bytes": [
+        254,
+        52
+      ],
+      "example_seq": 0,
+      "example_tx_hex": "ff 00 02 fe 34 33 aa",
+      "applicability": "i7_configured",
+      "evidence": [
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart",
+          "line": 4556,
+          "address": "0xdfa274",
+          "function": "getEarMac",
+          "class": "RsCommonV2Sender"
+        }
+      ]
+    },
+    {
+      "name": "getInfo",
+      "body_hex": "fa 01 07 08 09 0c 0d 0e 12 2a 2b 2c 2d 2e 2f 31 32 33 36 37 38 39 3a 3b 3c 3d 3f 45 46 49",
+      "body_bytes": [
+        250,
+        1,
+        7,
+        8,
+        9,
+        12,
+        13,
+        14,
+        18,
+        42,
+        43,
+        44,
+        45,
+        46,
+        47,
+        49,
+        50,
+        51,
+        54,
+        55,
+        56,
+        57,
+        58,
+        59,
+        60,
+        61,
+        63,
+        69,
+        70,
+        73
+      ],
+      "example_seq": 0,
+      "example_tx_hex": "ff 00 1e fa 01 07 08 09 0c 0d 0e 12 2a 2b 2c 2d 2e 2f 31 32 33 36 37 38 39 3a 3b 3c 3d 3f 45 46 49 e9 aa",
+      "applicability": "i7_configured",
+      "evidence": [
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart",
+          "line": 4597,
+          "address": "0xdfa670",
+          "function": "getInfo",
+          "class": "RsCommonV2Sender"
+        }
+      ]
+    },
+    {
+      "name": "setConnectMulOn",
+      "body_hex": "32 01",
+      "body_bytes": [
+        50,
+        1
+      ],
+      "example_seq": 0,
+      "example_tx_hex": "ff 00 02 32 01 34 aa",
+      "applicability": "i7_configured",
+      "evidence": [
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart",
+          "line": 5009,
+          "address": "0xe342e8",
+          "function": "setConnectMulOn",
+          "class": "RsCommonV2Sender"
+        }
+      ]
+    }
+  ],
+  "setter_families": [
+    {
+      "name": "setAncLevel",
+      "command": 44,
+      "command_hex": "2c",
+      "body_template": [
+        "2c",
+        "value"
+      ],
+      "wire_values_accepted_by_sender": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "i7_ui_values": [
+        1,
+        3,
+        5
+      ],
+      "parameter_encoding": "one byte; sender does not remap",
+      "applicability": "i7_configured",
+      "examples": [
+        {
+          "value": 1,
+          "seq": 0,
+          "tx_hex": "ff 00 02 2c 01 2e aa"
+        },
+        {
+          "value": 2,
+          "seq": 0,
+          "tx_hex": "ff 00 02 2c 02 2f aa"
+        },
+        {
+          "value": 3,
+          "seq": 0,
+          "tx_hex": "ff 00 02 2c 03 30 aa"
+        },
+        {
+          "value": 4,
+          "seq": 0,
+          "tx_hex": "ff 00 02 2c 04 31 aa"
+        },
+        {
+          "value": 5,
+          "seq": 0,
+          "tx_hex": "ff 00 02 2c 05 32 aa"
+        }
+      ],
+      "evidence": [
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart",
+          "line": 1510,
+          "address": "0x80b788",
+          "function": "setAncLevel",
+          "class": "RsCommonV2Sender"
+        }
+      ]
+    },
+    {
+      "name": "setTransLevel",
+      "command": 45,
+      "command_hex": "2d",
+      "body_template": [
+        "2d",
+        "value"
+      ],
+      "wire_values_accepted_by_sender": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "i7_ui_values": [
+        1,
+        3,
+        5
+      ],
+      "parameter_encoding": "one byte; sender does not remap",
+      "applicability": "i7_configured",
+      "examples": [
+        {
+          "value": 1,
+          "seq": 0,
+          "tx_hex": "ff 00 02 2d 01 2f aa"
+        },
+        {
+          "value": 2,
+          "seq": 0,
+          "tx_hex": "ff 00 02 2d 02 30 aa"
+        },
+        {
+          "value": 3,
+          "seq": 0,
+          "tx_hex": "ff 00 02 2d 03 31 aa"
+        },
+        {
+          "value": 4,
+          "seq": 0,
+          "tx_hex": "ff 00 02 2d 04 32 aa"
+        },
+        {
+          "value": 5,
+          "seq": 0,
+          "tx_hex": "ff 00 02 2d 05 33 aa"
+        }
+      ],
+      "evidence": [
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart",
+          "line": 1450,
+          "address": "0x80b30c",
+          "function": "setTransLevel",
+          "class": "RsCommonV2Sender"
+        }
+      ]
+    },
+    {
+      "name": "setDingLevel",
+      "command": 46,
+      "command_hex": "2e",
+      "body_template": [
+        "2e",
+        "value"
+      ],
+      "wire_values_accepted_by_sender": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "i7_ui_values": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "parameter_encoding": "one byte; sender does not remap",
+      "applicability": "i7_configured",
+      "examples": [
+        {
+          "value": 0,
+          "seq": 0,
+          "tx_hex": "ff 00 02 2e 00 2f aa"
+        },
+        {
+          "value": 1,
+          "seq": 0,
+          "tx_hex": "ff 00 02 2e 01 30 aa"
+        },
+        {
+          "value": 2,
+          "seq": 0,
+          "tx_hex": "ff 00 02 2e 02 31 aa"
+        },
+        {
+          "value": 3,
+          "seq": 0,
+          "tx_hex": "ff 00 02 2e 03 32 aa"
+        },
+        {
+          "value": 4,
+          "seq": 0,
+          "tx_hex": "ff 00 02 2e 04 33 aa"
+        },
+        {
+          "value": 5,
+          "seq": 0,
+          "tx_hex": "ff 00 02 2e 05 34 aa"
+        }
+      ],
+      "evidence": [
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart",
+          "line": 2014,
+          "address": "0x823184",
+          "function": "setDingLevel",
+          "class": "RsCommonV2Sender"
+        },
+        {
+          "path": "analysis/blutter/asm/roselink/modules/device_control/widget/device_ding_level_panel_item.dart",
+          "line": 900,
+          "address": "0xb9022c",
+          "function": "_canShowSupportClose",
+          "note": "UI parse firmware text as int (fallback0), compare >=304; model.field27 Smi608=304"
+        }
+      ],
+      "i7_ui_mute_value": 0,
+      "mute_ui_requires_firmware_integer_at_least": 304
+    },
+    {
+      "name": "setGainLevel",
+      "command": 69,
+      "command_hex": "45",
+      "body_template": [
+        "45",
+        "value"
+      ],
+      "wire_values_accepted_by_sender": [
+        0,
+        1,
+        2
+      ],
+      "i7_ui_values": [
+        0,
+        1,
+        2
+      ],
+      "parameter_encoding": "one byte; sender does not remap",
+      "applicability": "i7_configured",
+      "examples": [
+        {
+          "value": 0,
+          "seq": 0,
+          "tx_hex": "ff 00 02 45 00 46 aa"
+        },
+        {
+          "value": 1,
+          "seq": 0,
+          "tx_hex": "ff 00 02 45 01 47 aa"
+        },
+        {
+          "value": 2,
+          "seq": 0,
+          "tx_hex": "ff 00 02 45 02 48 aa"
+        }
+      ],
+      "evidence": [
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart",
+          "line": 1914,
+          "address": "0x82189c",
+          "function": "setGainLevel",
+          "class": "RsCommonV2Sender"
+        }
+      ],
+      "display_labels": {
+        "0": "low",
+        "1": "medium",
+        "2": "high"
+      },
+      "label_semantics": "three UI positions; no numeric dB gain established"
+    },
+    {
+      "name": "setHearingProtection",
+      "command": 70,
+      "command_hex": "46",
+      "body_template": [
+        "46",
+        "value"
+      ],
+      "wire_values_accepted_by_sender": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "i7_ui_values": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "parameter_encoding": "one byte; sender does not remap",
+      "applicability": "i7_configured",
+      "examples": [
+        {
+          "value": 0,
+          "seq": 0,
+          "tx_hex": "ff 00 02 46 00 47 aa"
+        },
+        {
+          "value": 1,
+          "seq": 0,
+          "tx_hex": "ff 00 02 46 01 48 aa"
+        },
+        {
+          "value": 2,
+          "seq": 0,
+          "tx_hex": "ff 00 02 46 02 49 aa"
+        },
+        {
+          "value": 3,
+          "seq": 0,
+          "tx_hex": "ff 00 02 46 03 4a aa"
+        },
+        {
+          "value": 4,
+          "seq": 0,
+          "tx_hex": "ff 00 02 46 04 4b aa"
+        },
+        {
+          "value": 5,
+          "seq": 0,
+          "tx_hex": "ff 00 02 46 05 4c aa"
+        },
+        {
+          "value": 6,
+          "seq": 0,
+          "tx_hex": "ff 00 02 46 06 4d aa"
+        }
+      ],
+      "evidence": [
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart",
+          "line": 1855,
+          "address": "0x820f64",
+          "function": "setHearingProtection",
+          "class": "RsCommonV2Sender"
+        },
+        {
+          "path": "analysis/blutter/asm/roselink/modules/device_control/widget/device_hearing_protection_slider.dart",
+          "line": 1313,
+          "note": "const[null,75,80,85,90,95,100],0=hearing-protection-off"
+        }
+      ],
+      "display_labels": {
+        "0": "off",
+        "1": "75 dB",
+        "2": "80 dB",
+        "3": "85 dB",
+        "4": "90 dB",
+        "5": "95 dB",
+        "6": "100 dB"
+      },
+      "label_semantics": "UI threshold labels only; measured SPL and exposure duration not established"
+    },
+    {
+      "name": "setFindDevice",
+      "command": 47,
+      "command_hex": "2f",
+      "body_template": [
+        "2f",
+        "value"
+      ],
+      "wire_values_accepted_by_sender": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "i7_ui_values": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "parameter_encoding": "one byte; sender does not remap",
+      "applicability": "i7_configured",
+      "examples": [
+        {
+          "value": 1,
+          "seq": 0,
+          "tx_hex": "ff 00 02 2f 01 31 aa"
+        },
+        {
+          "value": 2,
+          "seq": 0,
+          "tx_hex": "ff 00 02 2f 02 32 aa"
+        },
+        {
+          "value": 3,
+          "seq": 0,
+          "tx_hex": "ff 00 02 2f 03 33 aa"
+        },
+        {
+          "value": 4,
+          "seq": 0,
+          "tx_hex": "ff 00 02 2f 04 34 aa"
+        }
+      ],
+      "evidence": [
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart",
+          "line": 1229,
+          "address": "0x7b3b94",
+          "function": "setFindDevice",
+          "class": "RsCommonV2Sender"
+        }
+      ]
+    },
+    {
+      "name": "setAncLine",
+      "command": 54,
+      "command_hex": "36",
+      "body_template": [
+        "36",
+        "anc",
+        "wind",
+        "normal",
+        "transparency"
+      ],
+      "parameter_encoding": "each flag true=1 false=0",
+      "wire_flag_order": [
+        "ANC",
+        "wind",
+        "normal",
+        "transparency"
+      ],
+      "i7_ui_option_order": [
+        "normal",
+        "transparency",
+        "wind",
+        "ANC"
+      ],
+      "sender_parameter_order": [
+        "r2=ANC",
+        "r6=wind",
+        "r3=normal",
+        "r5=transparency"
+      ],
+      "applicability": "i7_configured",
+      "example": {
+        "args": {
+          "anc": true,
+          "wind": false,
+          "normal": true,
+          "transparency": true
+        },
+        "seq": 0,
+        "tx_hex": "ff 00 05 36 01 00 01 01 3d aa"
+      },
+      "evidence": [
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart",
+          "line": 945,
+          "address": "0x7957cc",
+          "function": "setAncLine",
+          "class": "RsCommonV2Sender"
+        },
+        {
+          "path": "analysis/blutter/asm/roselink/modules/device_control/widget/device_anc_line_panel_item.dart",
+          "line": 812,
+          "address": "0xb8c96c",
+          "note": "list[0]→r3, list[1]→r5, list[2]→r6, list[3]→r2; i7 options pp+b218/objs d8b371..d8b341 normal/trans/wind/ANC"
+        }
+      ]
+    },
+    {
+      "name": "touch_key",
+      "command": 1,
+      "command_hex": "01",
+      "body_template": [
+        "01",
+        "slot",
+        "action"
+      ],
+      "slots": {
+        "setLeftTouchOne": 1,
+        "setLeftTouchTwo": 2,
+        "setLeftTouchThree": 3,
+        "setLeftTouchLong": 4,
+        "setRightTouchOne": 17,
+        "setRightTouchTwo": 18,
+        "setRightTouchThree": 19,
+        "setRightTouchLong": 20
+      },
+      "actions": {
+        "0": "none",
+        "1": "play_pause",
+        "2": "previous_track",
+        "3": "next_track",
+        "4": "volume_up",
+        "5": "volume_down",
+        "6": "game_mode",
+        "7": "assistant",
+        "8": "anc_cycle"
+      },
+      "sender_range_validation": "none; i7 UI action list is 0..8",
+      "applicability": "i7_configured",
+      "examples": [
+        {
+          "name": "setLeftTouchOne",
+          "action": 1,
+          "seq": 0,
+          "tx_hex": "ff 00 03 01 01 01 05 aa"
+        },
+        {
+          "name": "setLeftTouchTwo",
+          "action": 1,
+          "seq": 0,
+          "tx_hex": "ff 00 03 01 02 01 06 aa"
+        },
+        {
+          "name": "setLeftTouchThree",
+          "action": 1,
+          "seq": 0,
+          "tx_hex": "ff 00 03 01 03 01 07 aa"
+        },
+        {
+          "name": "setLeftTouchLong",
+          "action": 1,
+          "seq": 0,
+          "tx_hex": "ff 00 03 01 04 01 08 aa"
+        },
+        {
+          "name": "setRightTouchOne",
+          "action": 1,
+          "seq": 0,
+          "tx_hex": "ff 00 03 01 11 01 15 aa"
+        },
+        {
+          "name": "setRightTouchTwo",
+          "action": 1,
+          "seq": 0,
+          "tx_hex": "ff 00 03 01 12 01 16 aa"
+        },
+        {
+          "name": "setRightTouchThree",
+          "action": 1,
+          "seq": 0,
+          "tx_hex": "ff 00 03 01 13 01 17 aa"
+        },
+        {
+          "name": "setRightTouchLong",
+          "action": 1,
+          "seq": 0,
+          "tx_hex": "ff 00 03 01 14 01 18 aa"
+        }
+      ],
+      "evidence": [
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart",
+          "line": 2482,
+          "address": "0xb87ebc",
+          "function": "_setTouchKey",
+          "class": "RsCommonV2Sender"
+        },
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart",
+          "line": 2674,
+          "address": "0xc6d078",
+          "function": "setLeftTouchOne",
+          "class": "RsCommonV2Sender"
+        },
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart",
+          "line": 2651,
+          "address": "0xc6ceac",
+          "function": "setLeftTouchTwo",
+          "class": "RsCommonV2Sender"
+        },
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart",
+          "line": 2628,
+          "address": "0xc6b8b8",
+          "function": "setLeftTouchThree",
+          "class": "RsCommonV2Sender"
+        },
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart",
+          "line": 2605,
+          "address": "0xc6b6ec",
+          "function": "setLeftTouchLong",
+          "class": "RsCommonV2Sender"
+        },
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart",
+          "line": 2582,
+          "address": "0xc6b520",
+          "function": "setRightTouchOne",
+          "class": "RsCommonV2Sender"
+        },
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart",
+          "line": 2559,
+          "address": "0xb8b074",
+          "function": "setRightTouchTwo",
+          "class": "RsCommonV2Sender"
+        },
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart",
+          "line": 2536,
+          "address": "0xb89be4",
+          "function": "setRightTouchThree",
+          "class": "RsCommonV2Sender"
+        },
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart",
+          "line": 2459,
+          "address": "0xb87e88",
+          "function": "setRightTouchLong",
+          "class": "RsCommonV2Sender"
+        },
+        {
+          "path": "analysis/blutter/objs.txt",
+          "line": 998,
+          "note": "IntValueModel objects d8a251..d8a351 map action labels to actual integer values; pp+b228 lists all9"
+        }
+      ]
+    },
+    {
+      "name": "setEqCustomData",
+      "command": 62,
+      "command_hex": "3e",
+      "body_template": [
+        "3e",
+        "band0",
+        "band1",
+        "band2",
+        "band3",
+        "band4",
+        "band5",
+        "band6",
+        "band7",
+        "band8",
+        "band9"
+      ],
+      "parameter_encoding": "double.toInt() (truncate towards zero), then sign-magnitude byte = abs(integer) | (0x80 if integer<0 else 0)",
+      "i7_ui_band_labels": [
+        "20",
+        "100",
+        "300",
+        "500",
+        "1k",
+        "2k",
+        "3k",
+        "5k",
+        "8k",
+        "15k"
+      ],
+      "i7_ui_gain_range": [
+        -6,
+        6
+      ],
+      "frequency_semantics": "UI labels only; acoustic filter center frequencies were not verified",
+      "sender_count_validation": "none; third-party client should enforce10 based on i7 UI/receiver shape",
+      "applicability": "i7_configured",
+      "workflow": [
+        "setEqCustom body2a04",
+        "setEqCustomData body3e +10gainbytes"
+      ],
+      "example": {
+        "gain_values": [
+          -6,
+          -3,
+          -1,
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6
+        ],
+        "encoded_gain_hex": "86 83 81 00 01 02 03 04 05 06",
+        "seq": 0,
+        "tx_hex": "ff 00 0b 3e 86 83 81 00 01 02 03 04 05 06 e7 aa"
+      },
+      "evidence": [
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart",
+          "line": 3656,
+          "address": "0xc86e10",
+          "function": "setEqCustomData",
+          "class": "RsCommonV2Sender"
+        },
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart",
+          "line": 3735,
+          "address": "0xc86ed8",
+          "function": "intToEqList",
+          "class": "RsCommonV2Sender"
+        },
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart",
+          "line": 3929,
+          "address": "0xc870e8",
+          "function": "setEqCustomData anonymous closure (double→int)"
+        },
+        {
+          "path": "analysis/blutter/asm/roselink/modules/device_control/widget/device_custom_eq_panel.dart",
+          "line": 2404,
+          "address": "0xb792cc",
+          "function": "_DeviceCustomEqPanelState (axes/band labels)"
+        },
+        {
+          "path": "analysis/blutter/asm/roselink/modules/device_control/widget/device_custom_eq_session.dart",
+          "line": 450,
+          "address": "0xab4030",
+          "function": "_applyCustomEqPreset (setEqCustom then data)"
+        }
+      ]
+    }
+  ],
+  "notifications": [
+    {
+      "type_hex": "01",
+      "name": "key_bindings",
+      "value_bytes": {
+        "min": 16,
+        "multiple_of": 2,
+        "extra_pairs": "allowed"
+      },
+      "encoding": "byte_pairs",
+      "details": {
+        "pairs": "(key_id, action_id)",
+        "required_ids": [
+          1,
+          2,
+          3,
+          4,
+          17,
+          18,
+          19,
+          20
+        ],
+        "id_meaning": {
+          "01": "left.single",
+          "02": "left.double",
+          "03": "left.triple",
+          "04": "left.long",
+          "11": "right.single",
+          "12": "right.double",
+          "13": "right.triple",
+          "14": "right.long"
+        },
+        "duplicate": "last value wins",
+        "missing_key": "official handler rejects whole TLV",
+        "actions": {
+          "00": "none",
+          "01": "play_pause",
+          "02": "previous_track",
+          "03": "next_track",
+          "04": "volume_up",
+          "05": "volume_down",
+          "06": "game",
+          "07": "assistant",
+          "08": "anc_cycle"
+        }
+      },
+      "scope": "i7_control_or_config_evidenced",
+      "evidence": [
+        {
+          "path": "/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/receiver/rs_common_v2_receiver.dart",
+          "line": 18065,
+          "address": "0xe4fe9c"
+        },
+        {
+          "path": "/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/receiver/rs_common_v2_receiver.dart",
+          "line": 15105,
+          "address": "0xe4df38"
+        },
+        {
+          "path": "/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/earfeel_i7_device_config.dart",
+          "line": 982,
+          "address": "0x682238"
+        }
+      ]
+    },
+    {
+      "type_hex": "07",
+      "name": "touch_enabled",
+      "value_bytes": 1,
+      "encoding": "exact_bool",
+      "details": {
+        "00": true,
+        "01": false,
+        "invalid": "skip"
+      },
+      "scope": "i7_control_or_config_evidenced",
+      "evidence": [
+        {
+          "path": "/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/receiver/rs_common_v2_receiver.dart",
+          "line": 17906,
+          "address": "0xe4fce8"
+        }
+      ]
+    },
+    {
+      "type_hex": "08",
+      "name": "wear_detection_enabled",
+      "value_bytes": 1,
+      "encoding": "exact_bool",
+      "details": {
+        "00": true,
+        "01": false,
+        "invalid": "skip"
+      },
+      "scope": "i7_control_or_config_evidenced",
+      "evidence": [
+        {
+          "path": "/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/receiver/rs_common_v2_receiver.dart",
+          "line": 17747,
+          "address": "0xe4fb34"
+        }
+      ]
+    },
+    {
+      "type_hex": "09",
+      "name": "noise_mode",
+      "value_bytes": 1,
+      "encoding": "exact_enum",
+      "details": {
+        "01": {
+          "controller": 3,
+          "meaning": "anc"
+        },
+        "02": {
+          "controller": 0,
+          "meaning": "normal"
+        },
+        "03": {
+          "controller": 1,
+          "meaning": "transparency"
+        },
+        "04": {
+          "controller": 2,
+          "meaning": "wind_reduction"
+        },
+        "05": {
+          "controller": 4,
+          "meaning": "auto_anc"
+        },
+        "06": {
+          "controller": 5,
+          "meaning": "deep_anc_shared_not_i7_UI"
+        },
+        "07": {
+          "controller": 6,
+          "meaning": "dynamic_anc"
+        },
+        "invalid": "skip"
+      },
+      "scope": "i7_control_or_config_evidenced",
+      "evidence": [
+        {
+          "path": "/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/receiver/rs_common_v2_receiver.dart",
+          "line": 18660,
+          "address": "0xe504b8"
+        },
+        {
+          "path": "/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/receive_handler/rs_common_v2/rs_common_v2_receive_handler.dart",
+          "line": 5931,
+          "address": "0xe35514"
+        },
+        {
+          "path": "/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/modules/device_control/widget/device_auto_noise_anc_panel_item.dart",
+          "line": 80,
+          "address": "0xb8f9bc"
+        },
+        {
+          "path": "/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/modules/device_control/widget/device_limit_noise_anc_panel_item.dart",
+          "line": 134,
+          "address": "0xb9263c"
+        },
+        {
+          "path": "/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/modules/device_control/widget/device_auto_noise_anc_dynamic_panel_item.dart",
+          "line": 80,
+          "address": "0xb8f678"
+        }
+      ]
+    },
+    {
+      "type_hex": "0c",
+      "name": "battery",
+      "value_bytes": {
+        "min": 3,
+        "trailing": "ignored"
+      },
+      "encoding": "packed_battery",
+      "details": {
+        "order": [
+          "left",
+          "right",
+          "case"
+        ],
+        "percent": "b & 0x7f",
+        "flags": "bool(b & 0x80)",
+        "left_right_flag": "in_case (receiver log explicitly names 入仓)",
+        "case_flag": "boolean retained; charging semantics inferred only",
+        "raw_ff": "left/right unavailable special case, low7 produces127",
+        "official_percent_display": "valid only 1..100; 0 and >100 shown as dash"
+      },
+      "scope": "i7_control_or_config_evidenced",
+      "evidence": [
+        {
+          "path": "/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/receiver/rs_common_v2_receiver.dart",
+          "line": 18197,
+          "address": "0xe4fff4"
+        },
+        {
+          "path": "/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/receive_handler/rs_common_v2/rs_common_v2_receive_handler.dart",
+          "line": 6079,
+          "address": "0xe40bbc"
+        }
+      ]
+    },
+    {
+      "type_hex": "0d",
+      "name": "firmware_version",
+      "value_bytes": {
+        "min": 3
+      },
+      "encoding": "unsigned_byte_triplet",
+      "details": {
+        "bytes": "first 3 bytes",
+        "legacy_display": "str(b0)+str(b1)+str(b2), no separator",
+        "trailing": "ignored",
+        "invalid": "value shorter than3 skipped"
+      },
+      "scope": "i7_control_or_config_evidenced",
+      "evidence": [
+        {
+          "path": "/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/receiver/rs_common_v2_receiver.dart",
+          "line": 17477,
+          "address": "0xe4f868"
+        },
+        {
+          "path": "/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/receive_handler/rs_common_v2/rs_common_v2_receive_handler.dart",
+          "line": 5585,
+          "address": "0xe33ccc"
+        }
+      ]
+    },
+    {
+      "type_hex": "0e",
+      "name": "game_enabled",
+      "value_bytes": 1,
+      "encoding": "exact_bool",
+      "details": {
+        "01": true,
+        "00": false,
+        "invalid": "skip"
+      },
+      "scope": "i7_control_or_config_evidenced",
+      "evidence": [
+        {
+          "path": "/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/receiver/rs_common_v2_receiver.dart",
+          "line": 17317,
+          "address": "0xe4f6b0"
+        }
+      ]
+    },
+    {
+      "type_hex": "2a",
+      "name": "eq_mode",
+      "value_bytes": {
+        "allowed": [
+          1,
+          2
+        ]
+      },
+      "encoding": "enum_with_optional_slot",
+      "details": {
+        "one_byte": "wire0→controller1, wire1→controller0, others unchanged",
+        "two_bytes": "controller=V[0], no0/1swap; ifcontroller5, V[1]→custom_slot",
+        "config_labels": {
+          "0": "POPS",
+          "1": "HIFI",
+          "2": "ROCK",
+          "3": "LIGHT",
+          "5": "custom",
+          "6": "EAP"
+        },
+        "invalid_size": "skip",
+        "out_of_range_numeric": "passed to controller, not range checked"
+      },
+      "scope": "i7_control_or_config_evidenced",
+      "evidence": [
+        {
+          "path": "/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/receiver/rs_common_v2_receiver.dart",
+          "line": 18872,
+          "address": "0xe506cc"
+        },
+        {
+          "path": "/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/receive_handler/rs_common_v2/rs_common_v2_receive_handler.dart",
+          "line": 5980,
+          "address": "0xe35f14"
+        },
+        {
+          "path": "/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/earfeel_i7_device_config.dart",
+          "line": 279,
+          "address": "0x681ac4"
+        }
+      ]
+    },
+    {
+      "type_hex": "2b",
+      "name": "audio_mode",
+      "value_bytes": {
+        "nominal": 1,
+        "official_constraint": "int.parse entire hex text; no explicit size check"
+      },
+      "encoding": "decimal_parse_of_hex_text",
+      "details": {
+        "parser": "int.parse(hex(V)) with default radix10; 0A..0F would throw and be skipped",
+        "nominal_values": "use sender/config mapping; no range check in shared RX"
+      },
+      "scope": "i7_control_or_config_evidenced",
+      "evidence": [
+        {
+          "path": "/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/receiver/rs_common_v2_receiver.dart",
+          "line": 1750,
+          "address": "0xe44d24"
+        },
+        {
+          "path": "/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/receiver/f8_receiver.dart",
+          "line": 882,
+          "address": "0xe424a4"
+        }
+      ]
+    },
+    {
+      "type_hex": "2c",
+      "name": "anc_level",
+      "value_bytes": {
+        "nominal": 1,
+        "official_constraint": "int.parse entire hex text; no explicit size check"
+      },
+      "encoding": "decimal_parse_of_hex_text",
+      "details": {
+        "parser": "int.parse(hex(V)), no normalization",
+        "controller": "raw parsed integer stored",
+        "range": "use i7 config/UI or sender, shared RX no range check"
+      },
+      "scope": "i7_control_or_config_evidenced",
+      "evidence": [
+        {
+          "path": "/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/receiver/rs_common_v2_receiver.dart",
+          "line": 1778,
+          "address": "0xe44d78"
+        },
+        {
+          "path": "/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/receiver/f8_receiver.dart",
+          "line": 694,
+          "address": "0xe422b4"
+        },
+        {
+          "path": "/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/receive_handler/rs_common_v2/rs_common_v2_receive_handler.dart",
+          "line": 5536,
+          "address": "0xe2f618"
+        }
+      ]
+    },
+    {
+      "type_hex": "2d",
+      "name": "transparency_level",
+      "value_bytes": {
+        "nominal": 1,
+        "official_constraint": "int.parse entire hex text; no explicit size check"
+      },
+      "encoding": "decimal_parse_of_hex_text",
+      "details": {
+        "parser": "int.parse(hex(V)), no normalization",
+        "controller": "raw parsed integer stored"
+      },
+      "scope": "i7_control_or_config_evidenced",
+      "evidence": [
+        {
+          "path": "/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/receiver/rs_common_v2_receiver.dart",
+          "line": 1793,
+          "address": "0xe44da4"
+        },
+        {
+          "path": "/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/receiver/f8_receiver.dart",
+          "line": 600,
+          "address": "0xe421bc"
+        },
+        {
+          "path": "/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/receive_handler/rs_common_v2/rs_common_v2_receive_handler.dart",
+          "line": 5487,
+          "address": "0xdffc7c"
+        }
+      ]
+    },
+    {
+      "type_hex": "2e",
+      "name": "prompt_tone_level",
+      "value_bytes": {
+        "nominal": 1,
+        "official_constraint": "int.parse entire hex text; no explicit size check"
+      },
+      "encoding": "decimal_parse_of_hex_text",
+      "details": {
+        "parser": "int.parse(hex(V)), no normalization"
+      },
+      "scope": "i7_control_or_config_evidenced",
+      "evidence": [
+        {
+          "path": "/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/receiver/rs_common_v2_receiver.dart",
+          "line": 1808,
+          "address": "0xe44dd0"
+        },
+        {
+          "path": "/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/receiver/f8_receiver.dart",
+          "line": 507,
+          "address": "0xe420c8"
+        }
+      ]
+    },
+    {
+      "type_hex": "2f",
+      "name": "find_earbuds",
+      "value_bytes": 1,
+      "encoding": "exact_enum",
+      "details": {
+        "01": "set left=true only",
+        "02": "set right=true only",
+        "03": "set left/right/both=true",
+        "04": "set left/right/both=false",
+        "05": "set left=false only",
+        "06": "set right=false only",
+        "other": "no controller change"
+      },
+      "scope": "i7_control_or_config_evidenced",
+      "evidence": [
+        {
+          "path": "/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/receiver/rs_common_v2_receiver.dart",
+          "line": 16222,
+          "address": "0xe4eb04"
+        },
+        {
+          "path": "/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/receive_handler/rs_common_v2/rs_common_v2_receive_handler.dart",
+          "line": 5107,
+          "address": "0xd15d74"
+        }
+      ]
+    },
+    {
+      "type_hex": "31",
+      "name": "prompt_language",
+      "value_bytes": {
+        "nominal": 1,
+        "official_constraint": "int.parse entire hex text; no explicit size check"
+      },
+      "encoding": "decimal_parse_of_hex_text",
+      "details": {
+        "parser": "int.parse(hex(V)), no range check",
+        "i7": "language widget absent; shared decoder only"
+      },
+      "scope": "shared_extension_not_i7_capability",
+      "evidence": [
+        {
+          "path": "/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/receiver/rs_common_v2_receiver.dart",
+          "line": 16128,
+          "address": "0xe4ea0c"
+        },
+        {
+          "path": "/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/receive_handler/rs_common_v2/rs_common_v2_receive_handler.dart",
+          "line": 5058,
+          "address": "0xd12adc"
+        }
+      ]
+    },
+    {
+      "type_hex": "32",
+      "name": "multipoint_enabled",
+      "value_bytes": 1,
+      "encoding": "exact_bool",
+      "details": {
+        "01": true,
+        "00": false,
+        "invalid": "skip"
+      },
+      "scope": "i7_control_or_config_evidenced",
+      "evidence": [
+        {
+          "path": "/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/receiver/rs_common_v2_receiver.dart",
+          "line": 17157,
+          "address": "0xe4f4f8"
+        }
+      ]
+    },
+    {
+      "type_hex": "34",
+      "name": "earbud_macs",
+      "value_bytes": 12,
+      "encoding": "mac_pair",
+      "details": {
+        "order": [
+          "main",
+          "sub"
+        ],
+        "format": "6 bytes each, same order, colon separated",
+        "semantics": "main/sub, not proven left/right"
+      },
+      "scope": "shared_infrastructure",
+      "evidence": [
+        {
+          "path": "/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/receiver/rs_common_v2_receiver.dart",
+          "line": 16654,
+          "address": "0xe4ef9c"
+        },
+        {
+          "path": "/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/receive_handler/rs_common_v2/rs_common_v2_receive_handler.dart",
+          "line": 4630,
+          "address": "0xc6d8fc"
+        }
+      ]
+    },
+    {
+      "type_hex": "35",
+      "name": "time_sync_request",
+      "value_bytes": null,
+      "encoding": "ignored_value",
+      "details": {
+        "action": "callback timeSyncReceived; V ignored",
+        "i7": "not an enabled i7 UI capability"
+      },
+      "scope": "shared_infrastructure",
+      "evidence": [
+        {
+          "path": "/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/receiver/rs_common_v2_receiver.dart",
+          "line": 16590,
+          "address": "0xe4eefc"
+        },
+        {
+          "path": "/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/receive_handler/rs_common_v2/rs_common_v2_receive_handler.dart",
+          "line": 4594,
+          "address": "0xb8b5f4"
+        }
+      ]
+    },
+    {
+      "type_hex": "36",
+      "name": "anc_cycle_members",
+      "value_bytes": {
+        "min": 4,
+        "trailing": "ignored"
+      },
+      "encoding": "four_bytes",
+      "details": {
+        "order": [
+          "anc",
+          "wind_reduction",
+          "normal",
+          "transparency"
+        ],
+        "included": "exactly 1 means add controller mode to list",
+        "other_values": "not added",
+        "controller_behavior": "adds entries; no clear shown in handler"
+      },
+      "scope": "i7_control_or_config_evidenced",
+      "evidence": [
+        {
+          "path": "/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/receiver/rs_common_v2_receiver.dart",
+          "line": 16305,
+          "address": "0xe4ebd8"
+        },
+        {
+          "path": "/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/receive_handler/rs_common_v2/rs_common_v2_receive_handler.dart",
+          "line": 5329,
+          "address": "0xdf5884"
+        }
+      ]
+    },
+    {
+      "type_hex": "3e",
+      "name": "custom_eq_gains",
+      "value_bytes": null,
+      "encoding": "sign_magnitude_byte_array",
+      "details": {
+        "decode": "float(-(b & 0x7f) if (b & 0x80) else (b & 0x7f))",
+        "scale": "1 raw unit per displayed double; no division in EqData.fromFormat",
+        "frequency_order": "not encoded in response; requires i7 config/sender UI table",
+        "slot": "not encoded by EqData.fromFormat; selected slot comes from2A",
+        "negative_zero": "80 maps to0"
+      },
+      "scope": "i7_control_or_config_evidenced",
+      "evidence": [
+        {
+          "path": "/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/receiver/rs_common_v2_receiver.dart",
+          "line": 14647,
+          "address": "0xe4da84"
+        },
+        {
+          "path": "/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/receiver/r_receive_handler.dart",
+          "line": 894,
+          "address": "0xb1a368"
+        }
+      ]
+    },
+    {
+      "type_hex": "45",
+      "name": "gain_level",
+      "value_bytes": 1,
+      "encoding": "unsigned_byte_enum",
+      "details": {
+        "allowed": [
+          0,
+          1,
+          2
+        ],
+        "invalid": "skip"
+      },
+      "scope": "i7_control_or_config_evidenced",
+      "evidence": [
+        {
+          "path": "/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/receiver/rs_common_v2_receiver.dart",
+          "line": 14194,
+          "address": "0xe4d5d8"
+        }
+      ]
+    },
+    {
+      "type_hex": "46",
+      "name": "hearing_protection",
+      "value_bytes": 1,
+      "encoding": "unsigned_byte_enum",
+      "details": {
+        "allowed": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6
+        ],
+        "invalid": "skip"
+      },
+      "scope": "i7_control_or_config_evidenced",
+      "evidence": [
+        {
+          "path": "/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/receiver/rs_common_v2_receiver.dart",
+          "line": 14011,
+          "address": "0xe4d3f8"
+        },
+        {
+          "path": "/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/receive_handler/rs_common_v2/rs_common_v2_receive_handler.dart",
+          "line": 4898,
+          "address": "0xc867a0"
+        }
+      ]
+    }
+  ],
+  "receiver_evidence": [
+    {
+      "path": "/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/receiver/rs_common_v2_receiver.dart",
+      "line": 739,
+      "address": "0xe4423c"
+    },
+    {
+      "path": "/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/receiver/rs_common_v2_receiver.dart",
+      "line": 1212,
+      "address": "0xe44738"
+    },
+    {
+      "path": "/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/receiver/rs_common_v2_receiver.dart",
+      "line": 1255,
+      "address": "0xe447a0"
+    },
+    {
+      "path": "/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/receiver/rs_common_v2_receiver.dart",
+      "line": 1628,
+      "address": "0xe44bb8"
+    },
+    {
+      "path": "/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/command_util.dart",
+      "line": 831,
+      "address": "0xe509c4"
+    },
+    {
+      "path": "/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/command_util.dart",
+      "line": 973,
+      "address": "0xe50b68"
+    },
+    {
+      "path": "/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/command_util.dart",
+      "line": 1553,
+      "address": "0xe511c8"
+    }
+  ],
+  "eq_wire_mapping": {
+    "0": "HIFI",
+    "1": "POP",
+    "2": "ROCK",
+    "3": "LIGHT",
+    "4": "custom",
+    "6": "EAP"
+  },
+  "eq_ui_index_to_wire": {
+    "0": 1,
+    "1": 0,
+    "2": 2,
+    "3": 3,
+    "4": 4,
+    "6": 6
+  },
+  "query_notes": {
+    "standard_query_prefix": "fa",
+    "getEarMac_exception": "fe34",
+    "getInfo_is_shared_bulk_query_not_proof_of_all_i7_capabilities": true,
+    "getInfo_body_hex": "fa 01 07 08 09 0c 0d 0e 12 2a 2b 2c 2d 2e 2f 31 32 33 36 37 38 39 3a 3b 3c 3d 3f 45 46 49",
+    "single_query_for_observed_id": "body fa ID; synthetic generic query construction is an inference from getEq/getGainLevel/getCustomEq/getEarLanguage, not a recovered app method per every ID"
+  },
+  "initialization": {
+    "reference_client_sequence": [
+      "getInfo",
+      "getCustomEq"
+    ],
+    "app_sequence": [
+      "getInfo"
+    ],
+    "origin": "GDT+0xd8ba cid523 ->0x8e2444 only getInfo; reference client additionally reads custom EQ",
+    "small_mtu_fallback": "split FA bulk IDs into separate complete query frames; client generalization, not raw fragments"
+  },
+  "feature_gates": {
+    "eap": {
+      "firmware_display_integer_min": 152,
+      "status": "confirmed model EarVersionCheck"
+    },
+    "gain_and_hearing": {
+      "firmware_display_integer_min": 213,
+      "status": "confirmed GDT+0x127bd returns field7; Smi426->213; common EarVersionCheck"
+    },
+    "mute_prompt": {
+      "firmware_display_integer_min": 304,
+      "status": "confirmed _canShowSupportClose; base volume1..5 remains available"
+    },
+    "ai_entry": {
+      "firmware_display_integer_min": 300,
+      "status": "configured sinceVersion; SDK internals unresolved"
+    }
+  },
+  "ui_quirks": {
+    "auto_off_body": "09 04",
+    "dynamic_off_body": "09 04",
+    "optimistic_app_mode": "ANC",
+    "wire_mode": "wind; use RX final state"
+  },
+  "hearing_protection_ui_db_labels": [
+    null,
+    75,
+    80,
+    85,
+    90,
+    95,
+    100
+  ],
+  "custom_eq": {
+    "ui_band_labels": [
+      "20",
+      "100",
+      "300",
+      "500",
+      "1k",
+      "2k",
+      "3k",
+      "5k",
+      "8k",
+      "15k"
+    ],
+    "ui_gain_range": [
+      -6,
+      6
+    ],
+    "ui_step": 1,
+    "wire_encoding": "sign-magnitude byte, truncate towards zero; no fractional scaling",
+    "apply_sequence": [
+      "2a04",
+      "3e +10 gains"
+    ]
+  },
+  "shared_commands_not_proven_i7": [
+    "setHeadMoveModeOff",
+    "setHeadMoveModeOn",
+    "setEarLanguageEnglish",
+    "setEarLanguageChinese",
+    "getEarLanguage",
+    "setDeepAncOn",
+    "setEarAdaptiveOff",
+    "setEarAdaptiveOn",
+    "setEarTipFitTest",
+    "setTapOff",
+    "setTapOn",
+    "setAudioAptxAdaptive",
+    "setAudioAptxHd",
+    "setAudioAptx",
+    "setIndependentMicModeActivateOff",
+    "setIndependentMicModeActivateOn",
+    "setIndependentMicModeOff",
+    "setIndependentMicModeOn",
+    "setSpatialAudioMusicModeGame",
+    "setSpatialAudioMusicModeMovie",
+    "setSpatialAudioMusicModeMusic",
+    "setSpatialAudioMusicModeTV",
+    "setSpatialAudioModeOff",
+    "setSpatialAudioModeFixed",
+    "setSpatialAudioModeHead",
+    "setSpatialAudioSwitchOff",
+    "setSpatialAudioSwitchOn",
+    "setEqGame5",
+    "setEqGame4",
+    "setEqGame3",
+    "setEqGame2",
+    "setEqGame1"
+  ],
+  "opaque_business_extensions": [
+    {
+      "name": "setStarburstSdk",
+      "body_template": [
+        "41",
+        "44",
+        "42",
+        "41",
+        "4f",
+        "sdk_bytes..."
+      ],
+      "prefix_ascii": "ADBAO",
+      "applicability": "i7_business_entry_since_firmware300",
+      "unresolved": "SDK-specific bytes, semantics and replies require additional recovery/runtime evidence",
+      "evidence": [
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart",
+          "line": 66,
+          "address": "0x7860d8",
+          "function": "setStarburstSdk",
+          "class": "RsCommonV2Sender"
+        }
+      ]
+    },
+    {
+      "name": "setAiPageState",
+      "body_template": [
+        "72",
+        "ai_page_id",
+        "active"
+      ],
+      "active_values": {
+        "false": 0,
+        "true": 1
+      },
+      "applicability": "i7_business_entry_since_firmware300",
+      "unresolved": "AiPageEnum IDs and third-party AI business use not established in this sender-only study",
+      "evidence": [
+        {
+          "path": "analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart",
+          "line": 10,
+          "address": "0x78604c",
+          "function": "setAiPageState",
+          "class": "RsCommonV2Sender"
+        }
+      ]
+    }
+  ],
+  "reference_client_differences": [
+    "bounded byte-aligned stream parser; AA candidates validated by LTV and either checksum",
+    "L00 uses stronger checksum validation than official fast path",
+    "malformed LTV rejects candidate frame instead of partial update",
+    "unknown enum and cycle flags retained; FE reported as ignored_by_app",
+    "case raw/freshness retained; no historical cache automatically mixed in"
+  ],
+  "ota_status": "BES static frame/state machine recovered; anonymous metadata (data.otaUrl renamed to internal otaContent), resource HEAD and 64-byte prefixes verified on 2026-10-14; full firmware compatibility, roles, receive assembly and hardware restart not validated",
+  "ota_research": "analysis/i7_config_ota_findings.md"
+}
