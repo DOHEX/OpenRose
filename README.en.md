@@ -51,6 +51,8 @@ In addition to i5 and i7, reverse engineering has documented protocol specificat
 
 Island presentation offers Off, Official, and Module modes. Focus notifications are configured separately. Both island presentation modes are rendered by the system UI. Regular Bluetooth control works without enabling the module.
 
+On Android, the System Integration page offers a restart action for the three integration scopes. After confirmation it requests Root; Bluetooth may disconnect, and stopped targets are not started. “Executed” reports the command, not that the process recovered or the module loaded. Root and process behavior still require validation on the target device.
+
 OpenRose manages its **control connection** separately from the system audio connection used for playback and calls. “Disconnect control connection” in the app ends only the OpenRose control connection.
 
 ## Building from source

@@ -14,6 +14,8 @@ import androidx.compose.ui.unit.dp
 import io.github.dohex.openrose.core.*
 import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.dohex.openrose.core.transport.DeviceId
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.nav.core.NavDisplay
 import top.yukonga.miuix.kmp.nav.core.rememberNavBackStack
 import top.yukonga.miuix.kmp.nav.transition.NavSwipeDirection
@@ -47,6 +49,11 @@ fun OpenRoseApp(
     onAddDeviceConnect: suspend (DeviceId) -> OperationResult,
     modifier: Modifier = Modifier,
     homeNavigationRequest: Long = 0L,
+    onRestartIntegrationScopes: suspend () -> List<ScopeRestartResult> = {
+        listOf("com.android.bluetooth", "com.xiaomi.bluetooth", "com.milink.service").map {
+            ScopeRestartResult(it, ScopeRestartStatus.FAILED, "平台操作不可用")
+        }
+    },
 ) {
     val dark = when (state.settings.appearance) {
         Appearance.SYSTEM -> isSystemInDarkTheme()
@@ -67,6 +74,10 @@ fun OpenRoseApp(
     var headphoneMenuExpanded by remember { mutableStateOf(false) }
     val rootFocusRequester = remember { FocusRequester() }
     val choiceDialog = remember(state.device?.sessionId) { mutableStateOf<String?>(null) }
+    val restartScope = rememberCoroutineScope()
+    var restartConfirming by remember { mutableStateOf(false) }
+    var restartRunning by remember { mutableStateOf(false) }
+    var restartResults by remember { mutableStateOf<List<ScopeRestartResult>?>(null) }
     var selectedTouchSide by remember(state.device?.sessionId) { mutableStateOf<String?>(null) }
     LaunchedEffect(homeNavigationRequest) {
         if (homeNavigationRequest != 0L) {
@@ -284,6 +295,37 @@ fun OpenRoseApp(
                         val showAdd = !state.platform.transportUnavailableForHome()
                         val pageTransition = state.settings.pageTransition
                         val onNavigate: (AppPage) -> Unit = { navigate(it) }
+                        val scopeRestartAction: @Composable () -> Unit = {
+                            if (state.platform.hostPlatform == HostPlatform.ANDROID) {
+                                ScopeRestartAction(
+                                    running = restartRunning,
+                                    confirming = restartConfirming,
+                                    results = restartResults,
+                                    onOpen = { restartResults = null; restartConfirming = true },
+                                    onCancel = { restartConfirming = false },
+                                    onConfirm = {
+                                        if (!restartRunning) {
+                                            restartConfirming = false
+                                            restartRunning = true
+                                            restartScope.launch {
+                                                try {
+                                                    restartResults = onRestartIntegrationScopes()
+                                                } catch (cancelled: CancellationException) {
+                                                    throw cancelled
+                                                } catch (failure: Exception) {
+                                                    restartResults = listOf("com.android.bluetooth", "com.xiaomi.bluetooth", "com.milink.service").map {
+                                                        ScopeRestartResult(it, ScopeRestartStatus.FAILED, failure.message ?: "操作失败")
+                                                    }
+                                                } finally {
+                                                    restartRunning = false
+                                                }
+                                            }
+                                        }
+                                    },
+                                    onCloseResults = { restartResults = null },
+                                )
+                            }
+                        }
 
                         when (state.settings.interfaceStyle) {
                             InterfaceStyle.MIUIX -> MiuixMainShell(
@@ -299,6 +341,7 @@ fun OpenRoseApp(
                                 menuExpanded = headphoneMenuExpanded,
                                 onMenuExpandedChange = { headphoneMenuExpanded = it },
                                 onDisconnect = onDisconnect,
+                                scopeRestartAction = scopeRestartAction,
                                 pageTransition = pageTransition,
                             )
                             InterfaceStyle.MATERIAL3 -> MaterialMainShell(
@@ -314,6 +357,7 @@ fun OpenRoseApp(
                                 menuExpanded = headphoneMenuExpanded,
                                 onMenuExpandedChange = { headphoneMenuExpanded = it },
                                 onDisconnect = onDisconnect,
+                                scopeRestartAction = scopeRestartAction,
                                 pageTransition = pageTransition,
                             )
                         }

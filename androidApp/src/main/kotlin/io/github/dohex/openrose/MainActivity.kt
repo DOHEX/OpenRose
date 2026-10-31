@@ -22,6 +22,7 @@ import io.github.dohex.openrose.core.Appearance
 class MainActivity : ComponentActivity() {
     private var homeNavigationRequest by mutableLongStateOf(0L)
     private val owner get() = application as OpenRoseApplication
+    private val scopeRestarter = IntegrationScopeRestarter()
     private val permissionRequest = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
         owner.refreshPlatform()
     }
@@ -58,6 +59,7 @@ class MainActivity : ComponentActivity() {
                 onSet = owner::applySetting,
                 onAddDeviceConnect = owner.session::connectForAddDevice,
                 homeNavigationRequest = homeNavigationRequest,
+                onRestartIntegrationScopes = scopeRestarter::restart,
             )
         }
     }

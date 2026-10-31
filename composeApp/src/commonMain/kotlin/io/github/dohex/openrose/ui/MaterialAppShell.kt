@@ -207,6 +207,7 @@ internal fun MaterialMainShell(
     menuExpanded: Boolean = false,
     onMenuExpandedChange: (Boolean) -> Unit = {},
     onDisconnect: () -> Unit = {},
+    scopeRestartAction: @Composable () -> Unit = {},
     pageTransition: PageTransition = PageTransition.MIUIX_SPRING,
 ) {
     LaunchedEffect(pagerState.pagerState.currentPage) {
@@ -344,6 +345,7 @@ internal fun MaterialMainShell(
                     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
                     val title = page.title
                     val actions: @Composable RowScope.() -> Unit = {
+                        if (page == AppPage.SYSTEM && isSelected) scopeRestartAction()
                         if (page == AppPage.HEADPHONES && isSelected) {
                             Box {
                             if (connectedHome) {
