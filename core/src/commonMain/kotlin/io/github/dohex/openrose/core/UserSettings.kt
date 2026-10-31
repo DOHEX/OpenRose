@@ -38,6 +38,12 @@ enum class IslandTrigger {
     CONNECTION,
 }
 
+/** Destination when clicking additional settings in Fusion Device Center. */
+enum class FusionSettingsDestination {
+    SYSTEM,
+    OPENROSE,
+}
+
 data class UserSettings(
     val interfaceStyle: InterfaceStyle = InterfaceStyle.MIUIX,
     val appearance: Appearance = Appearance.SYSTEM,
@@ -48,4 +54,5 @@ data class UserSettings(
     val pageTransition: PageTransition = PageTransition.MIUIX_SPRING,
     val backgroundBlurEnabled: Boolean = true,
     val bottomBarStyle: BottomBarStyle = BottomBarStyle.FIXED,
+    val fusionSettingsDestination: FusionSettingsDestination = FusionSettingsDestination.SYSTEM,
 )

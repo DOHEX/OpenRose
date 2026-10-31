@@ -39,6 +39,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.updateAndGet
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -82,7 +83,9 @@ class ControlSession(
     private var active: Attempt? = null
     private var audioDrivenSessionDeviceId: DeviceId? = null
     private var autoConnectJob: Job? = null
-
+    private var systemPinnedDeviceId: DeviceId? = null
+    private data class TargetIntent(val epoch: Long, val deviceId: DeviceId?)
+    private val targetIntent = MutableStateFlow(TargetIntent(0L, null))
     init {
         if (transport != null) {
             scope.launch {
@@ -107,21 +110,35 @@ class ControlSession(
             if (audioDrivenSessionDeviceId != null) {
                 disconnect()
             }
-        } else {
-            val candidate = findCandidate(audioDeviceId)
-            if (candidate?.profile == null) {
-                // Connected audio device is not an authorized ROSE model; do not drop existing session
-                return
-            }
-            if (audioDrivenSessionDeviceId != null && audioDrivenSessionDeviceId != audioDeviceId) {
-                disconnect()
-            }
-            if (state.value.connection is ConnectionState.Disconnected) {
-                audioDrivenSessionDeviceId = audioDeviceId
-                autoConnectJob?.cancel()
-                autoConnectJob = scope.launch {
-                    connectInternal(audioDeviceId, isAudioDriven = true)
-                }
+            return
+        }
+        if (systemPinnedDeviceId != null) {
+            return
+        }
+        val requestEpoch = targetIntent.updateAndGet { current ->
+            if (current.deviceId == audioDeviceId && current.epoch > 0) current
+            else TargetIntent(current.epoch + 1, audioDeviceId)
+        }.epoch
+        val candidate = findCandidate(audioDeviceId)
+        if (isRequestSuperseded(requestEpoch, isAudioDriven = true)) {
+            return
+        }
+        if (candidate?.profile == null) {
+            // Connected audio device is not an authorized ROSE model; do not drop existing session
+            return
+        }
+        if (audioDrivenSessionDeviceId != null && audioDrivenSessionDeviceId != audioDeviceId) {
+            disconnect()
+        }
+        if (state.value.connection is ConnectionState.Disconnected && systemPinnedDeviceId == null) {
+            val autoEpoch = targetIntent.updateAndGet { current ->
+                if (current.deviceId == audioDeviceId && current.epoch > 0) current
+                else TargetIntent(current.epoch + 1, audioDeviceId)
+            }.epoch
+            audioDrivenSessionDeviceId = audioDeviceId
+            autoConnectJob?.cancel()
+            autoConnectJob = scope.launch {
+                connectInternal(audioDeviceId, isAudioDriven = true, requestEpoch = autoEpoch)
             }
         }
     }
@@ -138,7 +155,44 @@ class ControlSession(
             }
             return bonded
         }
+        state.value.device?.takeIf { it.deviceId == deviceId }?.let {
+            return DeviceCandidate(
+                deviceId = it.deviceId,
+                name = null,
+                rssi = null,
+                profile = it.profile,
+                manufacturerDataHex = "",
+                classicAddress = it.classicAddress,
+            )
+        }
+        state.value.connectionTarget?.takeIf { it.deviceId == deviceId && it.profile != null }?.let {
+            return it
+        }
         return null
+    }
+
+    private fun resolveTargetSynchronous(deviceId: DeviceId): DeviceCandidate {
+        val current = state.value
+        current.candidates.firstOrNull { it.deviceId == deviceId }?.let { return it }
+        current.bondedDevices.firstOrNull { it.deviceId == deviceId }?.let { return it }
+        current.connectionTarget?.takeIf { it.deviceId == deviceId }?.let { return it }
+        current.device?.takeIf { it.deviceId == deviceId }?.let {
+            return DeviceCandidate(
+                deviceId = it.deviceId,
+                name = null,
+                rssi = null,
+                profile = it.profile,
+                manufacturerDataHex = "",
+                classicAddress = it.classicAddress,
+            )
+        }
+        return DeviceCandidate(
+            deviceId = deviceId,
+            name = null,
+            rssi = null,
+            profile = null,
+            manufacturerDataHex = "",
+        )
     }
 
     private class Attempt(val id: Long, val candidate: DeviceCandidate, val forceBle: Boolean) {
@@ -204,27 +258,87 @@ class ControlSession(
         updateState { it.copy(scan = ScanState.Idle) }
     }
 
-    suspend fun connect(deviceId: DeviceId): OperationResult = connectInternal(deviceId, isAudioDriven = false)
+    suspend fun connect(deviceId: DeviceId): OperationResult {
+        val requestEpoch = targetIntent.updateAndGet { current ->
+            if (current.deviceId == deviceId && current.epoch > 0) current
+            else TargetIntent(current.epoch + 1, deviceId)
+        }.epoch
+        if (systemPinnedDeviceId != null) {
+            systemPinnedDeviceId = deviceId
+        }
+        val target = resolveTargetSynchronous(deviceId)
+        updateState { it.copy(connectionTarget = target) }
+        return connectInternal(deviceId, isAudioDriven = false, requestEpoch = requestEpoch)
+    }
+
+    suspend fun connectFromSystem(deviceId: DeviceId): OperationResult {
+        val requestEpoch = targetIntent.updateAndGet { current ->
+            if (current.deviceId == deviceId && current.epoch > 0) current
+            else TargetIntent(current.epoch + 1, deviceId)
+        }.epoch
+        systemPinnedDeviceId = deviceId
+        val target = resolveTargetSynchronous(deviceId)
+        updateState { it.copy(connectionTarget = target) }
+        return connectInternal(deviceId, isAudioDriven = false, requestEpoch = requestEpoch)
+    }
 
     /** Cancelling the adding flow releases only the unfinished attempt it created. */
-    suspend fun connectForAddDevice(deviceId: DeviceId): OperationResult =
-        connectInternal(deviceId, isAudioDriven = false, cancelWithCaller = true)
+    suspend fun connectForAddDevice(deviceId: DeviceId): OperationResult {
+        val requestEpoch = targetIntent.updateAndGet { current ->
+            if (current.deviceId == deviceId && current.epoch > 0) current
+            else TargetIntent(current.epoch + 1, deviceId)
+        }.epoch
+        if (systemPinnedDeviceId != null) {
+            systemPinnedDeviceId = deviceId
+        }
+        val target = resolveTargetSynchronous(deviceId)
+        updateState { it.copy(connectionTarget = target) }
+        return connectInternal(deviceId, isAudioDriven = false, cancelWithCaller = true, requestEpoch = requestEpoch)
+    }
+
+    private fun isRequestSuperseded(requestEpoch: Long, isAudioDriven: Boolean, deviceId: DeviceId? = null): Boolean {
+        val current = targetIntent.value
+        if (requestEpoch != current.epoch) return true
+        if (isAudioDriven && systemPinnedDeviceId != null) return true
+        if (deviceId != null && systemPinnedDeviceId != null && systemPinnedDeviceId != deviceId) return true
+        return false
+    }
 
     private suspend fun connectInternal(
         deviceId: DeviceId,
         isAudioDriven: Boolean,
         cancelWithCaller: Boolean = false,
+        requestEpoch: Long,
     ): OperationResult {
+        if (isRequestSuperseded(requestEpoch, isAudioDriven)) {
+            return OperationResult.Failure(ControlError(ControlErrorCode.DISCONNECTED, "连接请求已被替换"))
+        }
         platformError()?.let { return failure(it) }
         val candidate = findCandidate(deviceId)
+        if (isRequestSuperseded(requestEpoch, isAudioDriven)) {
+            return OperationResult.Failure(ControlError(ControlErrorCode.DISCONNECTED, "连接请求已被替换"))
+        }
+        if (candidate != null) {
+            if (state.value.connectionTarget?.deviceId == deviceId || (isAudioDriven && systemPinnedDeviceId == null)) {
+                if (state.value.connectionTarget != candidate) {
+                    updateState { it.copy(connectionTarget = candidate) }
+                }
+            }
+        }
         if (candidate?.profile == null) return failure(ControlError(ControlErrorCode.UNSUPPORTED, "没有受支持的型号识别证据"))
         stopScan()
+        if (isRequestSuperseded(requestEpoch, isAudioDriven)) {
+            return OperationResult.Failure(ControlError(ControlErrorCode.DISCONNECTED, "连接请求已被替换"))
+        }
         if (!isAudioDriven) {
             autoConnectJob?.cancel()
             autoConnectJob = null
         }
         var ownsAttempt = false
         val attempt = lifecycle.withLock {
+            if (isRequestSuperseded(requestEpoch, isAudioDriven, deviceId)) {
+                return@withLock null
+            }
             active?.takeIf { it.candidate.deviceId == deviceId && state.value.connection !is ConnectionState.Disconnected }?.let { return@withLock it }
             clearActive()
             audioDrivenSessionDeviceId = if (isAudioDriven) deviceId else null
@@ -239,8 +353,7 @@ class ControlSession(
             active = next
             next.task = scope.async(start = CoroutineStart.LAZY) { openAndRead(next) }
             next
-        }
-        attempt.task.start()
+        } ?: return OperationResult.Failure(ControlError(ControlErrorCode.DISCONNECTED, "连接请求已被替换"))
         val result = try {
             attempt.task.await()
         } catch (cancelled: CancellationException) {
@@ -276,6 +389,9 @@ class ControlSession(
     }
 
     suspend fun disconnect() {
+        targetIntent.updateAndGet { current ->
+            TargetIntent(current.epoch + 1, null)
+        }
         audioDrivenSessionDeviceId = null
         autoConnectJob?.cancel()
         autoConnectJob = null

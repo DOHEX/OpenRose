@@ -5,6 +5,11 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import io.github.dohex.openrose.bridge.BridgePresentationWire
+import android.content.Context
+import android.content.Intent
+import io.github.dohex.openrose.bridge.BridgeWire
+import org.json.JSONObject
+import java.util.Locale
 import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedModule
 import java.lang.ref.WeakReference
@@ -23,6 +28,7 @@ class MiLinkNativeHeadsetAdapter(
     private val classLoader: ClassLoader,
     private val callbacks: AuthenticatedNativeHeadsetCallbacks,
     private val reportFeature: String = BridgePresentationWire.FUSION_CENTER,
+    private val contextSupplier: (() -> Context?)? = null,
 ) {
     init {
         require(reportFeature == BridgePresentationWire.FUSION_CENTER || reportFeature == BridgePresentationWire.SYSTEM_HEADSET)
@@ -164,6 +170,9 @@ class MiLinkNativeHeadsetAdapter(
             snapshotForAddress(chain.args.getOrNull(0) as? String) ?: return@hook HookDecision.Proceed
             // Hide the unsupported find-device entry for this exact managed address only.
             HookDecision.Return(false)
+        }
+        hook(target, "switchToHeadsetActivity", arrayOf(bluetoothDevice), Void.TYPE) { chain ->
+            handleSwitchToHeadsetActivity(chain)
         }
 
     }
@@ -360,24 +369,19 @@ class MiLinkNativeHeadsetAdapter(
     }
 
     private fun batteryCache(snapshot: NativeHeadsetSnapshot): List<Int>? {
-        val left = snapshot.knownNumber("LEFT_BATTERY")
-        val right = snapshot.knownNumber("RIGHT_BATTERY")
-        val case = snapshot.knownNumber("CASE_BATTERY")
-        val leftCharging = snapshot.knownToggle("LEFT_CHARGING")
-        val rightCharging = snapshot.knownToggle("RIGHT_CHARGING")
-        val caseCharging = snapshot.knownToggle("CASE_CHARGING")
-        // The fixed MiLink list includes case charging, but the current core wire does not provide
-        // CASE_CHARGING. Do not turn that missing fact into the source's 0 (not charging).
-        if (caseCharging == null || leftCharging == null || rightCharging == null) return null
-        if (left == null || right == null || case == null) return null
-        if (left !in 0..100 || right !in 0..100 || case !in 0..100) return null
+        val left = snapshot.knownNumber("LEFT_BATTERY")?.takeIf { it in 0..100 } ?: -1
+        val right = snapshot.knownNumber("RIGHT_BATTERY")?.takeIf { it in 0..100 } ?: -1
+        val case = snapshot.knownNumber("CASE_BATTERY")?.takeIf { it in 0..100 } ?: -1
+        if (left == -1 && right == -1 && case == -1) return null
+        // MiLink uses -1 for an unavailable battery and the reference uses 0 when
+        // charging state is unavailable; the latter does not establish that it is not charging.
         return listOf(
             case,
             left,
             right,
-            if (caseCharging) 1 else 0,
-            if (leftCharging) 1 else 0,
-            if (rightCharging) 1 else 0,
+            if (snapshot.knownToggle("CASE_CHARGING") == true) 1 else 0,
+            if (snapshot.knownToggle("LEFT_CHARGING") == true) 1 else 0,
+            if (snapshot.knownToggle("RIGHT_CHARGING") == true) 1 else 0,
         )
     }
 
@@ -397,6 +401,67 @@ class MiLinkNativeHeadsetAdapter(
     private fun shouldSuppressManagedAction(address: String?): Boolean =
         managedAddresses.contains(address) && snapshotForAddress(address) == null
 
+
+    private fun handleSwitchToHeadsetActivity(chain: XposedInterface.Chain): HookDecision {
+        val device = chain.args.getOrNull(0) as? BluetoothDevice ?: return HookDecision.Proceed
+        val normalizedAddress = runCatching { device.address }
+            .getOrNull()
+            ?.let(NativeHeadsetSnapshot::normalizeBluetoothAddress)
+            ?: return HookDecision.Proceed
+
+        val preferences = runCatching { module.getRemotePreferences(BridgeWire.PREFERENCES_GROUP) }.getOrNull()
+        val destination = preferences?.getString(BridgeWire.FUSION_SETTINGS_DESTINATION, BridgeWire.DESTINATION_SYSTEM)
+        if (destination != BridgeWire.DESTINATION_OPENROSE) {
+            return HookDecision.Proceed
+        }
+
+        val mappingJson = preferences.getString(BridgeWire.FUSION_DEVICE_MAPPING, null)
+        val canonicalDeviceId = resolveCanonicalDeviceId(normalizedAddress, mappingJson)
+            ?: return HookDecision.Proceed
+
+        val context = contextSupplier?.invoke()
+            ?: resolveContext(chain.thisObject)
+            ?: run {
+                module.log(Log.WARN, TAG, "switchToHeadsetActivity context resolution failed for $canonicalDeviceId")
+                return HookDecision.Proceed
+            }
+
+        val launchIntent = Intent(BridgeWire.ACTION_SHOW_HEADPHONES).apply {
+            setClassName(BridgeWire.APP_PACKAGE, "${BridgeWire.APP_PACKAGE}.MainActivity")
+            putExtra(BridgeWire.EXTRA_HEADPHONE_ADDRESS, canonicalDeviceId)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        }
+
+        return try {
+            context.startActivity(launchIntent)
+            module.log(Log.INFO, TAG, "switchToHeadsetActivity redirected to OpenRose target=$canonicalDeviceId")
+            report(FEATURE, "CONFIRMED", "switchToHeadsetActivity redirected to OpenRose for $canonicalDeviceId")
+            HookDecision.Return(null)
+        } catch (failure: Throwable) {
+            module.log(Log.WARN, TAG, "switchToHeadsetActivity failed to launch OpenRose for $canonicalDeviceId", failure)
+            report(FEATURE, "ACTION_FAILED", "switchToHeadsetActivity launch failed for $canonicalDeviceId: ${failure.message}")
+            HookDecision.Proceed
+        }
+    }
+
+    private fun resolveCanonicalDeviceId(normalizedAddress: String, mappingJson: String?): String? {
+        if (mappingJson.isNullOrBlank()) return null
+        return runCatching {
+            val json = JSONObject(mappingJson)
+            json.optString(normalizedAddress)
+                .takeIf { it.isNotBlank() }
+                ?.let(NativeHeadsetSnapshot::normalizeBluetoothAddress)
+        }.getOrNull()
+    }
+
+    private fun resolveContext(obj: Any?): Context? {
+        if (obj == null) return null
+        if (obj is Context) return obj
+        return runCatching {
+            val field = obj.javaClass.getDeclaredField("mContext").apply { isAccessible = true }
+            field.get(obj) as? Context
+        }.getOrNull()
+    }
     private fun headsetInfoAddress(info: Any?): String? {
         if (info == null) return null
         for (name in listOf("getAddress", "component1")) {
@@ -566,7 +631,9 @@ class MiLinkNativeHeadsetAdapter(
         "openrose.native_headset.milink.${method.declaringClass.name}.${method.name}".replace('-', '_')
 
     private fun miLinkModeFromRose(mode: String): Int? = when (mode.trim().lowercase()) {
-        "normal" -> 0
+        // MiLink has no wind-reduction mode. As in the reference adapter, expose its
+        // off selection so the user can still switch to a supported mode.
+        "normal", "wind" -> 0
         "anc" -> 1
         "transparency" -> 2
         else -> null

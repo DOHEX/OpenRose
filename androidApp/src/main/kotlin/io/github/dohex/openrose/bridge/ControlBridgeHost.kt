@@ -18,6 +18,11 @@ import io.github.dohex.openrose.core.SessionSnapshotResult
 import io.github.dohex.openrose.core.SystemBridgeDiagnostics
 import io.github.dohex.openrose.core.SystemEndpointDiagnostics
 import io.github.dohex.openrose.core.IslandMode
+import io.github.dohex.openrose.core.ControlState
+import io.github.dohex.openrose.core.FusionSettingsDestination
+import io.github.dohex.openrose.integration.NativeHeadsetSnapshot
+import org.json.JSONObject
+import java.util.Locale
 import io.github.dohex.openrose.core.transport.DeviceId
 import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.libxposed.service.XposedService
@@ -83,6 +88,27 @@ class ControlBridgeHost(
                 notifyReaders()
             }
         }
+        worker.launch {
+            session.state.map { state ->
+                FusionStateSnapshot(
+                    destination = state.settings.fusionSettingsDestination,
+                    activeDeviceId = state.device?.deviceId?.value,
+                    activeClassicAddress = state.device?.classicAddress,
+                    targetDeviceId = state.connectionTarget?.takeIf { it.profile != null }?.deviceId?.value,
+                    targetClassicAddress = state.connectionTarget?.takeIf { it.profile != null }?.classicAddress,
+                    candidateAddresses = state.candidates.filter { it.profile != null }
+                        .map { it.deviceId.value to it.classicAddress },
+                    bondedAddresses = state.bondedDevices.filter { it.profile != null }
+                        .map { it.deviceId.value to it.classicAddress },
+                )
+            }.distinctUntilChanged().collect { snapshot ->
+                try {
+                    publishFusionPreferences(snapshot = snapshot)
+                } catch (failure: Throwable) {
+                    android.util.Log.w(TAG, "Failed to publish fusion preferences", failure)
+                }
+            }
+        }
         XposedServiceHelper.registerListener(object : XposedServiceHelper.OnServiceListener {
             override fun onServiceBind(service: XposedService) { worker.launch { frameworkBound(service) } }
             override fun onServiceDied(service: XposedService) { worker.launch { frameworkDied(service) } }
@@ -91,7 +117,10 @@ class ControlBridgeHost(
 
     fun onUserUnlocked() { worker.launch {
         val service = synchronized(lock) { framework } ?: return@launch
-        try { publishCredentials(service) } catch (_: Exception) { frameworkDied(service) }
+        try {
+            publishCredentials(service)
+            publishFusionPreferences(service = service)
+        } catch (_: Exception) { frameworkDied(service) }
     } }
 
     fun diagnostics(): SystemBridgeDiagnostics = synchronized(lock) { facts }
@@ -116,7 +145,10 @@ class ControlBridgeHost(
                 ipc = BridgeIpcState.WAITING,
                 detail = if (api >= 102) "等待目标进程的受校验读取" else "框架服务 API 低于 102",
             ) }
-            if (api >= 102) publishCredentials(service)
+            if (api >= 102) {
+                publishCredentials(service)
+                publishFusionPreferences(service = service)
+            }
         } catch (_: Exception) {
             frameworkDied(service)
         }
@@ -143,6 +175,86 @@ class ControlBridgeHost(
             updateFacts { it.copy(ipc = BridgeIpcState.DISCONNECTED, detail = "框架凭据发布失败") }
         }
     }
+
+    private fun publishFusionPreferences(
+        snapshot: FusionStateSnapshot? = null,
+        service: XposedService? = null,
+    ) {
+        if (!context.getSystemService(UserManager::class.java).isUserUnlocked) {
+            return
+        }
+        val activeService = service ?: synchronized(lock) { framework } ?: return
+        if (activeService.apiVersion < 102) return
+        val current = snapshot ?: run {
+            val state = session.state.value
+            FusionStateSnapshot(
+                destination = state.settings.fusionSettingsDestination,
+                activeDeviceId = state.device?.deviceId?.value,
+                activeClassicAddress = state.device?.classicAddress,
+                targetDeviceId = state.connectionTarget?.takeIf { it.profile != null }?.deviceId?.value,
+                targetClassicAddress = state.connectionTarget?.takeIf { it.profile != null }?.classicAddress,
+                candidateAddresses = state.candidates.filter { it.profile != null }
+                    .map { it.deviceId.value to it.classicAddress },
+                bondedAddresses = state.bondedDevices.filter { it.profile != null }
+                    .map { it.deviceId.value to it.classicAddress },
+            )
+        }
+        val mappingJson = buildDeviceAddressMapping(current)
+        val stored = runCatching {
+            activeService.getRemotePreferences(BridgeWire.PREFERENCES_GROUP).edit()
+                .putString(BridgeWire.FUSION_SETTINGS_DESTINATION, current.destination.name)
+                .putString(BridgeWire.FUSION_DEVICE_MAPPING, mappingJson)
+                .commit()
+        }.getOrDefault(false)
+        if (!stored) {
+            android.util.Log.w(TAG, "RemotePreferences commit returned false for fusion preferences")
+        }
+    }
+
+    private fun buildDeviceAddressMapping(snapshot: FusionStateSnapshot): String {
+        val mapping = mutableMapOf<String, String>()
+        fun register(rawAddress: String?, canonicalRaw: String?) {
+            val key = NativeHeadsetSnapshot.normalizeBluetoothAddress(rawAddress) ?: return
+            val canonical = NativeHeadsetSnapshot.normalizeBluetoothAddress(canonicalRaw) ?: return
+            if (!mapping.containsKey(key)) {
+                mapping[key] = canonical
+            }
+        }
+
+        snapshot.activeDeviceId?.let { canonical ->
+            register(canonical, canonical)
+            snapshot.activeClassicAddress?.let { register(it, canonical) }
+        }
+
+        snapshot.targetDeviceId?.let { canonical ->
+            register(canonical, canonical)
+            snapshot.targetClassicAddress?.let { register(it, canonical) }
+        }
+
+        snapshot.candidateAddresses.forEach { (deviceId, classicAddress) ->
+            register(deviceId, deviceId)
+            classicAddress?.let { register(it, deviceId) }
+        }
+
+        snapshot.bondedAddresses.forEach { (deviceId, classicAddress) ->
+            register(deviceId, deviceId)
+            classicAddress?.let { register(it, deviceId) }
+        }
+
+        val json = JSONObject()
+        mapping.forEach { (key, value) -> json.put(key, value) }
+        return json.toString()
+    }
+
+    private data class FusionStateSnapshot(
+        val destination: FusionSettingsDestination,
+        val activeDeviceId: String?,
+        val activeClassicAddress: String?,
+        val targetDeviceId: String?,
+        val targetClassicAddress: String?,
+        val candidateAddresses: List<Pair<String, String?>>,
+        val bondedAddresses: List<Pair<String, String?>>,
+    )
 
     private fun frameworkDied(service: XposedService) {
         synchronized(lock) {
@@ -452,5 +564,9 @@ class ControlBridgeHost(
     private fun updateFacts(change: (SystemBridgeDiagnostics) -> SystemBridgeDiagnostics) {
         val changed = synchronized(lock) { val next = change(facts); (next != facts).also { facts = next } }
         if (changed) onChanged()
+    }
+
+    private companion object {
+        const val TAG = "ControlBridgeHost"
     }
 }

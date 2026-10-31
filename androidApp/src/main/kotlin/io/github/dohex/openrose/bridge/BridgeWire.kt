@@ -50,6 +50,12 @@ internal object BridgeWire {
     const val PREFERENCES_GROUP = "control_bridge_v2"
     const val HOST_EPOCH = "host_epoch"
     const val PROOF_KEY = "proof_key"
+    const val FUSION_SETTINGS_DESTINATION = "fusion_settings_destination"
+    const val FUSION_DEVICE_MAPPING = "fusion_device_mapping"
+    const val DESTINATION_SYSTEM = "SYSTEM"
+    const val DESTINATION_OPENROSE = "OPENROSE"
+    const val ACTION_SHOW_HEADPHONES = "io.github.dohex.openrose.SHOW_HEADPHONES"
+    const val EXTRA_HEADPHONE_ADDRESS = "io.github.dohex.openrose.extra.HEADPHONE_ADDRESS"
     val RESOLUTIONS = setOf(RESOLUTION_MATCHED, RESOLUTION_CLASS_MISSING, RESOLUTION_METHOD_MISSING, RESOLUTION_HOOK_FAILED)
 
     fun proof(keyHex: String, hostEpoch: String, processName: String, uid: Int, pid: Int, resolution: String = RESOLUTION_MATCHED,

@@ -1,5 +1,6 @@
 package io.github.dohex.openrose
 
+import android.bluetooth.BluetoothAdapter
 import android.content.Intent
 import android.content.res.Configuration
 import android.graphics.Color
@@ -18,6 +19,9 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.setValue
 import io.github.dohex.openrose.ui.OpenRoseApp
 import io.github.dohex.openrose.core.Appearance
+import io.github.dohex.openrose.core.transport.DeviceId
+import io.github.dohex.openrose.bridge.BridgeWire
+import java.util.Locale
 
 class MainActivity : ComponentActivity() {
     private var homeNavigationRequest by mutableLongStateOf(0L)
@@ -71,7 +75,13 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun handleNavigationIntent(intent: Intent) {
-        if (intent.action == ACTION_SHOW_HEADPHONES) homeNavigationRequest++
+        if (intent.action != BridgeWire.ACTION_SHOW_HEADPHONES) return
+        val address = intent.getStringExtra(BridgeWire.EXTRA_HEADPHONE_ADDRESS)?.uppercase(Locale.ROOT)
+            ?.takeIf(BluetoothAdapter::checkBluetoothAddress)
+        // Consume the request so Activity recreation does not retry a failed connection.
+        intent.removeExtra(BridgeWire.EXTRA_HEADPHONE_ADDRESS)
+        address?.let { owner.connectFromSystem(DeviceId(it)) }
+        homeNavigationRequest++
     }
 
     override fun onResume() {
@@ -97,9 +107,5 @@ class MainActivity : ComponentActivity() {
             owner.markPermissionRequested()
             permissionRequest.launch(bluetoothPermissions())
         }
-    }
-
-    companion object {
-        const val ACTION_SHOW_HEADPHONES = "io.github.dohex.openrose.SHOW_HEADPHONES"
     }
 }

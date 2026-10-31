@@ -23,7 +23,10 @@ import io.github.dohex.openrose.core.*
 import io.github.dohex.openrose.core.protocol.*
 import io.github.dohex.openrose.core.transport.*
 
-internal fun ControlState.activeDevice(): DeviceState? = device?.takeIf { connection.matches(it) }
+internal fun ControlState.activeDevice(): DeviceState? {
+    val targetId = connectionTarget?.deviceId
+    return device?.takeIf { connection.matches(it) && (targetId == null || targetId == it.deviceId) }
+}
 internal fun PlatformState.transportUnavailableForHome(): Boolean =
     permission in setOf(PermissionState.GRANTED, PermissionState.NOT_REQUIRED) &&
         transport is TransportAvailability.Unavailable
@@ -212,7 +215,7 @@ private fun UnconnectedHeadphonesDashboard(
     onDisconnect: () -> Unit,
     onStopScan: () -> Unit,
 ) {
-    if (state.platform.transportUnavailableForHome()) {
+    if (state.connectionTarget == null && state.platform.transportUnavailableForHome()) {
         val transport = state.platform.transport as TransportAvailability.Unavailable
         AppGroup {
             AppArrowRow(
@@ -244,7 +247,7 @@ private fun UnconnectedHeadphonesDashboard(
 
 
     val bondedRose = state.bondedDevices.filter { it.profile != null }
-    if (bondedRose.isEmpty()) {
+    if (bondedRose.isEmpty() && state.connectionTarget == null) {
         AppDashboardCard {
             Column(
                 Modifier.fillMaxWidth().padding(vertical = 16.dp, horizontal = 8.dp),
@@ -282,12 +285,17 @@ private fun UnconnectedHeadphonesDashboard(
     }
 
     var selectedDeviceId by remember(bondedRose) {
-        mutableStateOf(bondedRose.first().deviceId)
+        mutableStateOf(bondedRose.firstOrNull()?.deviceId)
     }
-    val primaryDevice = bondedRose.firstOrNull { it.deviceId == selectedDeviceId } ?: bondedRose.first()
+    val primaryDevice = state.connectionTarget
+        ?: bondedRose.firstOrNull { it.deviceId == selectedDeviceId }
+        ?: bondedRose.first()
     val otherBonded = bondedRose.filter { it.deviceId != primaryDevice.deviceId }
     val connecting = state.connection as? ConnectionState.Connecting
     val isConnecting = connecting?.deviceId == primaryDevice.deviceId
+    val permissionRequired = state.platform.permission != PermissionState.GRANTED &&
+        state.platform.permission != PermissionState.NOT_REQUIRED
+    val unavailableTransport = state.platform.transport as? TransportAvailability.Unavailable
 
     AppDashboardCard {
         Column(
@@ -305,7 +313,8 @@ private fun UnconnectedHeadphonesDashboard(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     AppText(
-                        primaryDevice.name?.takeIf(String::isNotBlank) ?: primaryDevice.profile!!.displayName,
+                        primaryDevice.name?.takeIf(String::isNotBlank)
+                            ?: primaryDevice.profile?.displayName ?: primaryDevice.deviceId.value,
                         role = AppTextRole.Title,
                     )
                     primaryDevice.profile?.let {
@@ -324,6 +333,10 @@ private fun UnconnectedHeadphonesDashboard(
                         AppBusyIndicator()
                         AppText("正在连接…", role = AppTextRole.Summary, color = appColor(AppColorRole.Primary))
                     }
+                } else if (permissionRequired) {
+                    AppText("需要蓝牙权限才能连接这副耳机", role = AppTextRole.Summary)
+                } else if (unavailableTransport != null) {
+                    AppText(unavailableTransport.reason, role = AppTextRole.Summary)
                 } else if (visibleError != null) {
                     AppText("连接未成功 · 请确认耳机已开盖并在附近", role = AppTextRole.Summary, color = appColor(AppColorRole.Error))
                 } else {
@@ -341,6 +354,20 @@ private fun UnconnectedHeadphonesDashboard(
                         kind = AppButtonKind.Secondary,
                         modifier = Modifier.fillMaxWidth(),
                     )
+                } else if (permissionRequired) {
+                    AppButton(
+                        text = "授予蓝牙权限",
+                        onClick = onRequestPermission,
+                        kind = AppButtonKind.Primary,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                } else if (unavailableTransport != null) {
+                    AppButton(
+                        text = "打开系统蓝牙设置",
+                        onClick = onOpenSystemSettings,
+                        kind = AppButtonKind.Primary,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
                 } else {
                     AppButton(
                         text = if (visibleError != null) "重试连接" else "连接",
@@ -349,7 +376,7 @@ private fun UnconnectedHeadphonesDashboard(
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }
-                if (visibleError != null) {
+                if (visibleError != null && !permissionRequired && unavailableTransport == null) {
                     AppButton(
                         text = "无法连接？打开系统蓝牙设置",
                         onClick = onOpenSystemSettings,

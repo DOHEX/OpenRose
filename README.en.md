@@ -23,6 +23,12 @@ OpenRose separates device protocols, control sessions, and the application UI. I
 
 Available controls depend on the specific model profile and the firmware reported by the device. See the [protocol documentation directory](docs/protocols/) for model protocol specifications and capability research, and [protocol implementation & evidence](docs/protocols.md) for current i5/i7 client details.
 
+Fusion Device Center displays available earbud and case battery levels. Unknown charging states appear as not charging. The system offers only off, noise cancellation, and transparency: wind reduction appears as off without changing the actual earphone mode, which remains visible in OpenRose.
+
+On applicable HyperOS devices, choose the system earphone details page (default) or the OpenRose headphones home under Settings → Fusion Device Center → Additional settings destination. Choosing OpenRose makes the device card's Additional Settings open the headphones home and attempt a control connection to that card's earphones. Connection failures retain the target and reason for troubleshooting or retry. Preferences can be saved before the module is ready and apply to subsequent clicks once it is ready, without restarting the integration scopes. The entry requires the corresponding system component and a loaded module.
+
+This entry has been exercised with an i5 and Xiaomi 14 running OS4.0.0.27.XNCCNXM, MiLink 18.2.2.0.2609141543, and LSPosed 2.2.0-it / API 102: OpenRose redirection, the original system destination, and applying a changed preference on the next click were verified. This entry has not yet been exercised with an i7 or HyperOS 3.
+
 ## Current status
 
 The project is under active development and hardware validation.

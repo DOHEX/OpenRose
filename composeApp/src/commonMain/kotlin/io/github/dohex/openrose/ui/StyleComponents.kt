@@ -130,7 +130,7 @@ internal fun AppGroup(
     plain: Boolean = false,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(Modifier.fillMaxWidth()) {
         when (LocalInterfaceStyle.current) {
             InterfaceStyle.MIUIX -> {
                 title?.let { label ->
@@ -140,7 +140,7 @@ internal fun AppGroup(
                     }
                 }
                 header?.let {
-                    Box(Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
+                    Box(Modifier.fillMaxWidth().padding(horizontal = 12.dp).padding(bottom = 8.dp)) {
                         it()
                     }
                 }
@@ -149,13 +149,13 @@ internal fun AppGroup(
             }
             InterfaceStyle.MATERIAL3 -> {
                 title?.let { label ->
-                    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                         Text(label, Modifier.weight(1f).semantics { heading() }, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.titleSmall)
                         titleTrailing?.invoke()
                     }
                 }
                 header?.let {
-                    Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+                    Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 8.dp)) {
                         it()
                     }
                 }
@@ -163,6 +163,7 @@ internal fun AppGroup(
             }
         }
         footnote?.let { text ->
+            Spacer(Modifier.height(8.dp))
             if (footnoteIcon != null) {
                 Row(
                     modifier = Modifier.padding(horizontal = 16.dp),
@@ -180,7 +181,10 @@ internal fun AppGroup(
                 AppText(text, Modifier.padding(horizontal = 16.dp), role = AppTextRole.Footnote)
             }
         }
-        if (LocalInterfaceStyle.current == InterfaceStyle.MATERIAL3) AppDivider()
+        if (LocalInterfaceStyle.current == InterfaceStyle.MATERIAL3) {
+            Spacer(Modifier.height(12.dp))
+            AppDivider()
+        }
     }
 }
 
