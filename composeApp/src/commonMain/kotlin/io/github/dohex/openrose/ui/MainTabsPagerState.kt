@@ -68,9 +68,6 @@ internal class MainTabsPagerState(
         }
     }
 
-    fun selectPage(targetPage: Int, animated: Boolean) {
-        selectPage(targetPage, if (animated) PageTransition.MIUIX_SPRING else PageTransition.NONE)
-    }
 
     fun syncPage() {
         if (!isNavigating && selectedPage != pagerState.currentPage) {

@@ -125,7 +125,7 @@ internal fun MiuixAppShell(
                 Column(Modifier.fillMaxSize().appBackdropContent(backdrop, backdropActive).verticalScroll(scrollState)) {
                     ShellPageContent(page, padding, compactHome = page == AppPage.HEADPHONES && !connectedHome, pageContent = pageContent)
                 }
-                ShellFeedback(padding, feedbackContent)
+                ShellFeedback(padding, content = feedbackContent)
             }
         }
         }
@@ -175,7 +175,12 @@ internal fun MiuixMainShell(
             bottomBar = {
                 if (!wide) {
                     if (bottomBarStyle == BottomBarStyle.FLOATING) {
-                        FloatingNavigationBar {
+                        val floatingBarColor = if (backdropActive) {
+                            MiuixTheme.colorScheme.surfaceContainer.copy(alpha = 0.85f)
+                        } else {
+                            MiuixTheme.colorScheme.surfaceContainer
+                        }
+                        FloatingNavigationBar(color = floatingBarColor) {
                             mainPages.forEachIndexed { index, destination ->
                                 FloatingNavigationBarItem(
                                     selected = currentTab == destination,
@@ -208,7 +213,7 @@ internal fun MiuixMainShell(
         ) { outerPadding ->
             val isFloating = !wide && bottomBarStyle == BottomBarStyle.FLOATING
             val pagerBottomPadding = if (isFloating) 0.dp else outerPadding.calculateBottomPadding()
-            val bottomClearance = if (isFloating) outerPadding.calculateBottomPadding() else 0.dp
+            val trailingBottomPadding = if (isFloating) outerPadding.calculateBottomPadding() else 0.dp
             HorizontalPager(
                 state = pagerState.pagerState,
                 modifier = Modifier
@@ -290,12 +295,12 @@ internal fun MiuixMainShell(
                                 page = page,
                                 padding = pagePadding,
                                 compactHome = page == AppPage.HEADPHONES && !connectedHome,
-                                bottomClearance = bottomClearance,
+                                bottomClearance = trailingBottomPadding,
                             ) {
                                 pageContentFor(page)
                             }
                         }
-                        ShellFeedback(pagePadding) {
+                        ShellFeedback(pagePadding, bottomClearance = trailingBottomPadding) {
                             if (isSelected) {
                                 pageFeedbackFor(page)
                             }

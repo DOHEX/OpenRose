@@ -3,6 +3,8 @@
 package io.github.dohex.openrose.ui
 
 import io.github.dohex.openrose.core.PageTransition
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.foundation.background
 import androidx.compose.foundation.selection.selectable
@@ -146,7 +148,7 @@ internal fun MaterialAppShell(
                 Column(Modifier.fillMaxSize().appBackdropContent(backdrop, backdropActive).verticalScroll(scrollState)) {
                     ShellPageContent(page, padding, compactHome = page == AppPage.HEADPHONES && !connectedHome, pageContent = pageContent)
                 }
-                ShellFeedback(padding, feedbackContent)
+                ShellFeedback(padding, content = feedbackContent)
             }
         }
         }
@@ -154,9 +156,13 @@ internal fun MaterialAppShell(
 }
 
 @Composable
-internal fun BoxScope.ShellFeedback(padding: PaddingValues, content: @Composable () -> Unit) {
+internal fun BoxScope.ShellFeedback(
+    padding: PaddingValues,
+    bottomClearance: Dp = 0.dp,
+    content: @Composable () -> Unit,
+) {
     Box(Modifier.align(Alignment.BottomCenter)
-        .padding(bottom = padding.calculateBottomPadding())
+        .padding(bottom = padding.calculateBottomPadding() + bottomClearance)
         .widthIn(max = 600.dp).fillMaxWidth().padding(16.dp)) {
         content()
     }
@@ -240,17 +246,38 @@ internal fun MaterialMainShell(
                         ) {
                             HorizontalFloatingToolbar(
                                 expanded = true,
-                                colors = FloatingToolbarDefaults.standardFloatingToolbarColors(),
+                                colors = FloatingToolbarDefaults.standardFloatingToolbarColors(
+                                    toolbarContainerColor = if (backdropActive) {
+                                        MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.85f)
+                                    } else {
+                                        MaterialTheme.colorScheme.surfaceContainer
+                                    },
+                                ),
                             ) {
                                 mainPages.forEachIndexed { index, destination ->
                                     val isSelected = currentTab == destination
+                                    val containerColor by animateColorAsState(
+                                        targetValue = if (isSelected) {
+                                            MaterialTheme.colorScheme.secondaryContainer
+                                        } else {
+                                            MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0f)
+                                        },
+                                        animationSpec = tween(durationMillis = 200),
+                                        label = "tabContainerColor",
+                                    )
+                                    val iconTint by animateColorAsState(
+                                        targetValue = if (isSelected) {
+                                            MaterialTheme.colorScheme.onSecondaryContainer
+                                        } else {
+                                            MaterialTheme.colorScheme.onSurfaceVariant
+                                        },
+                                        animationSpec = tween(durationMillis = 200),
+                                        label = "tabIconTint",
+                                    )
                                     Box(
                                         modifier = Modifier
                                             .clip(CircleShape)
-                                            .background(
-                                                if (isSelected) MaterialTheme.colorScheme.secondaryContainer
-                                                else Color.Transparent,
-                                            )
+                                            .background(containerColor)
                                             .selectable(
                                                 selected = isSelected,
                                                 role = Role.Tab,
@@ -265,8 +292,7 @@ internal fun MaterialMainShell(
                                         AppIcon(
                                             destination.icon,
                                             contentDescription = destination.navigationLabel,
-                                            tint = if (isSelected) MaterialTheme.colorScheme.onSecondaryContainer
-                                            else MaterialTheme.colorScheme.onSurfaceVariant,
+                                            tint = iconTint,
                                         )
                                     }
                                 }
@@ -292,7 +318,7 @@ internal fun MaterialMainShell(
         ) { outerPadding ->
             val isFloating = !wide && bottomBarStyle == BottomBarStyle.FLOATING
             val pagerBottomPadding = if (isFloating) 0.dp else outerPadding.calculateBottomPadding()
-            val bottomClearance = if (isFloating) outerPadding.calculateBottomPadding() else 0.dp
+            val trailingBottomPadding = if (isFloating) outerPadding.calculateBottomPadding() else 0.dp
             HorizontalPager(
                 state = pagerState.pagerState,
                 modifier = Modifier
@@ -379,12 +405,12 @@ internal fun MaterialMainShell(
                                 page = page,
                                 padding = pagePadding,
                                 compactHome = page == AppPage.HEADPHONES && !connectedHome,
-                                bottomClearance = bottomClearance,
+                                bottomClearance = trailingBottomPadding,
                             ) {
                                 pageContentFor(page)
                             }
                         }
-                        ShellFeedback(pagePadding) {
+                        ShellFeedback(pagePadding, bottomClearance = trailingBottomPadding) {
                             if (isSelected) {
                                 pageFeedbackFor(page)
                             }

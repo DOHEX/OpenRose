@@ -3,6 +3,9 @@
 package io.github.dohex.openrose.ui
 
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.foundation.ScrollState
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.material3.Text
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -319,6 +322,97 @@ class MaterialFloatingToolbarUiTest {
             } finally {
                 harness.close()
             }
+        }
+    }
+
+    @Test
+    fun feedbackOverlayAppliesFloatingBottomClearanceInFloatingMode() = runBlocking {
+        val operation = SettingOperation(
+            id = 100,
+            sessionId = 1L,
+            setting = DeviceSetting.NOISE_MODE,
+            requestedValue = FieldValue.Text("anc"),
+            stage = SettingStage.SUBMITTED,
+        )
+        val state = mutableStateOf(
+            state(style = InterfaceStyle.MATERIAL3, bottomBarStyle = BottomBarStyle.FLOATING).copy(
+                settingOperations = listOf(operation),
+            ),
+        )
+        val scene = createOpenRoseUiTestScene(420, 900) {
+            OpenRoseApp(
+                state = state.value,
+                onSettingsChange = { next -> state.value = state.value.copy(settings = next) },
+                onRequestPermission = {},
+                onOpenSystemSettings = {},
+                onStartScan = {},
+                onStopScan = {},
+                onConnect = {},
+                onDisconnect = {},
+                onSet = { _, _ -> },
+                onAddDeviceConnect = { error("Unexpected add-device connection") },
+            )
+        }
+        val harness = OpenRoseUiTestHarness(scene)
+        try {
+            harness.render()
+            val feedbackNode = harness.nodes().firstOrNull { node ->
+                node.config.getOrNull(SemanticsProperties.Text).orEmpty().any { it.text.contains("正在处理设置") }
+            }
+            assertTrue(feedbackNode != null, "Feedback banner must be rendered")
+
+            val floatingBar = harness.nodes().first { node ->
+                node.children.any { it.config.getOrNull(SemanticsProperties.Role) == Role.Tab }
+            }
+
+            // In floating mode, feedback overlay must have clearance applied so its bottom edge
+            // sits above the floating bar without being obscured
+            assertTrue(
+                feedbackNode.boundsInRoot.bottom <= floatingBar.boundsInRoot.top,
+                "Feedback overlay bottom (${feedbackNode.boundsInRoot.bottom}) must be <= floating bar top (${floatingBar.boundsInRoot.top})",
+            )
+        } finally {
+            harness.close()
+        }
+    }
+
+    @Test
+    fun pagerPageChangeSynchronizesActiveTabInFloatingMode() = runBlocking {
+        var mainTabsPagerState: MainTabsPagerState? = null
+        val scrollStates = mainPages.associateWith { ScrollState(0) }
+        val scene = createOpenRoseUiTestScene(420, 900) {
+            val tabsState = rememberMainTabsPagerState()
+            mainTabsPagerState = tabsState
+            MaterialMainShell(
+                pagerState = tabsState,
+                wide = false,
+                bottomBarStyle = BottomBarStyle.FLOATING,
+                onNavigate = {},
+                scrollStates = scrollStates,
+                pageContentFor = { page -> Text(page.title) },
+            )
+        }
+        val harness = OpenRoseUiTestHarness(scene)
+        try {
+            harness.render()
+            fun selectedTabIndex(): Int {
+                val tabs = harness.nodes().filter { it.config.getOrNull(SemanticsProperties.Role) == Role.Tab }
+                return tabs.indexOfFirst { it.config.getOrNull(SemanticsProperties.Selected) == true }
+            }
+
+            assertEquals(0, selectedTabIndex(), "Headphones tab initially selected")
+
+            // Simulate pager swiping / page change to page 1 ("系统")
+            mainTabsPagerState!!.pagerState.scrollToPage(1)
+            harness.render()
+            assertEquals(1, selectedTabIndex(), "System tab selected after page change to 1")
+
+            // Simulate pager swiping / page change to page 2 ("设置")
+            mainTabsPagerState!!.pagerState.scrollToPage(2)
+            harness.render()
+            assertEquals(2, selectedTabIndex(), "Settings tab selected after page change to 2")
+        } finally {
+            harness.close()
         }
     }
 
