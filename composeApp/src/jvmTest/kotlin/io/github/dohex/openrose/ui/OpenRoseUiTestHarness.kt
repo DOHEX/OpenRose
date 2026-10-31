@@ -111,15 +111,32 @@ internal open class OpenRoseUiTestHarness(protected val scene: ImageComposeScene
     }
 
     fun hasTab(expected: String): Boolean = nodes().any { node ->
-        node.config.getOrNull(SemanticsProperties.Role) == Role.Tab && hasText(node, expected)
+        node.config.getOrNull(SemanticsProperties.Role) == Role.Tab &&
+            (hasText(node, expected) || node.children.any { hasText(it, expected) || it.config.getOrNull(SemanticsProperties.ContentDescription).orEmpty().contains(expected) })
     }
 
     fun hasSelectedTab(expected: String): Boolean = nodes().any { node ->
         node.config.getOrNull(SemanticsProperties.Role) == Role.Tab &&
-            hasText(node, expected) && node.config.getOrNull(SemanticsProperties.Selected) == true
+            (hasText(node, expected) || node.children.any { hasText(it, expected) || it.config.getOrNull(SemanticsProperties.ContentDescription).orEmpty().contains(expected) }) &&
+            node.config.getOrNull(SemanticsProperties.Selected) == true
     }
 
-    fun clickTab(text: String) = clickText(text, expectedRole = Role.Tab)
+    fun clickTab(text: String) {
+        val clickNode = nodes().firstOrNull { node ->
+            val hasMatchingText = hasText(node, text)
+            val hasMatchingDesc = node.config.getOrNull(SemanticsProperties.ContentDescription).orEmpty().contains(text)
+            (hasMatchingText || hasMatchingDesc) && node.hasAncestorOrSelf { candidate ->
+                candidate.config.getOrNull(SemanticsActions.OnClick) != null &&
+                    candidate.config.getOrNull(SemanticsProperties.Role) == Role.Tab
+            }
+        }?.findAncestorOrSelf { it.config.getOrNull(SemanticsActions.OnClick) != null && it.config.getOrNull(SemanticsProperties.Role) == Role.Tab }
+            ?: nodes().firstOrNull { candidate ->
+                candidate.config.getOrNull(SemanticsProperties.Role) == Role.Tab &&
+                    candidate.config.getOrNull(SemanticsActions.OnClick) != null &&
+                    (hasText(candidate, text) || candidate.children.any { hasText(it, text) || it.config.getOrNull(SemanticsProperties.ContentDescription).orEmpty().contains(text) })
+            } ?: error("No clickable tab found for '$text'")
+        invokeClick(clickNode, text)
+    }
 
     fun clickText(text: String, expectedRole: Role? = null) {
         val clickNode = textNodes(text).firstNotNullOfOrNull { node ->

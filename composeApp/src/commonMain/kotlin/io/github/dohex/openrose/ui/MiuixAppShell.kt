@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import top.yukonga.miuix.kmp.overlay.OverlayListPopup
 import top.yukonga.miuix.kmp.basic.*
 import io.github.dohex.openrose.core.PageTransition
+import io.github.dohex.openrose.core.BottomBarStyle
 import top.yukonga.miuix.kmp.utils.PagerGestureNestedScrollConnection
 import top.yukonga.miuix.kmp.utils.pagerGestureOverride
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -122,7 +123,7 @@ internal fun MiuixAppShell(
             }) { padding ->
             Box(Modifier.fillMaxSize()) {
                 Column(Modifier.fillMaxSize().appBackdropContent(backdrop, backdropActive).verticalScroll(scrollState)) {
-                    ShellPageContent(page, padding, compactHome = page == AppPage.HEADPHONES && !connectedHome, pageContent)
+                    ShellPageContent(page, padding, compactHome = page == AppPage.HEADPHONES && !connectedHome, pageContent = pageContent)
                 }
                 ShellFeedback(padding, feedbackContent)
             }
@@ -135,6 +136,7 @@ internal fun MiuixAppShell(
 internal fun MiuixMainShell(
     pagerState: MainTabsPagerState,
     wide: Boolean,
+    bottomBarStyle: BottomBarStyle = BottomBarStyle.FIXED,
     onNavigate: (AppPage) -> Unit,
     scrollStates: Map<AppPage, ScrollState>,
     pageContentFor: @Composable (AppPage) -> Unit,
@@ -172,27 +174,46 @@ internal fun MiuixMainShell(
             modifier = Modifier.weight(1f),
             bottomBar = {
                 if (!wide) {
-                    NavigationBar {
-                        mainPages.forEachIndexed { index, destination ->
-                            NavigationBarItem(
-                                selected = currentTab == destination,
-                                onClick = {
-                                    pagerState.selectPage(index, transition = pageTransition)
-                                    onNavigate(destination)
-                                },
-                                icon = RoseIcons[destination.icon],
-                                label = destination.navigationLabel,
-                            )
+                    if (bottomBarStyle == BottomBarStyle.FLOATING) {
+                        FloatingNavigationBar {
+                            mainPages.forEachIndexed { index, destination ->
+                                FloatingNavigationBarItem(
+                                    selected = currentTab == destination,
+                                    onClick = {
+                                        pagerState.selectPage(index, transition = pageTransition)
+                                        onNavigate(destination)
+                                    },
+                                    icon = RoseIcons[destination.icon],
+                                    label = destination.navigationLabel,
+                                )
+                            }
+                        }
+                    } else {
+                        NavigationBar {
+                            mainPages.forEachIndexed { index, destination ->
+                                NavigationBarItem(
+                                    selected = currentTab == destination,
+                                    onClick = {
+                                        pagerState.selectPage(index, transition = pageTransition)
+                                        onNavigate(destination)
+                                    },
+                                    icon = RoseIcons[destination.icon],
+                                    label = destination.navigationLabel,
+                                )
+                            }
                         }
                     }
                 }
             },
         ) { outerPadding ->
+            val isFloating = !wide && bottomBarStyle == BottomBarStyle.FLOATING
+            val pagerBottomPadding = if (isFloating) 0.dp else outerPadding.calculateBottomPadding()
+            val bottomClearance = if (isFloating) outerPadding.calculateBottomPadding() else 0.dp
             HorizontalPager(
                 state = pagerState.pagerState,
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(bottom = outerPadding.calculateBottomPadding())
+                    .padding(bottom = pagerBottomPadding)
                     .pagerGestureOverride(
                         pagerState = pagerState.pagerState,
                         enabled = !wide,
@@ -265,7 +286,12 @@ internal fun MiuixMainShell(
                     Box(Modifier.fillMaxSize()) {
                         val scrollState = scrollStates.getValue(page)
                         Column(Modifier.fillMaxSize().appBackdropContent(pageBackdrop, backdropActive).verticalScroll(scrollState)) {
-                            ShellPageContent(page, pagePadding, compactHome = page == AppPage.HEADPHONES && !connectedHome) {
+                            ShellPageContent(
+                                page = page,
+                                padding = pagePadding,
+                                compactHome = page == AppPage.HEADPHONES && !connectedHome,
+                                bottomClearance = bottomClearance,
+                            ) {
                                 pageContentFor(page)
                             }
                         }

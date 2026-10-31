@@ -289,6 +289,7 @@ fun OpenRoseApp(
                             InterfaceStyle.MIUIX -> MiuixMainShell(
                                 pagerState = mainTabsPagerState,
                                 wide = wide,
+                                bottomBarStyle = state.settings.bottomBarStyle,
                                 onNavigate = onNavigate,
                                 scrollStates = scrollStates,
                                 pageContentFor = { targetPage -> pageContentFor(targetPage) },

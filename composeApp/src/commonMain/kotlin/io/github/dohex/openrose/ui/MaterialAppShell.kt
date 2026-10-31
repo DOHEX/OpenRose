@@ -5,6 +5,7 @@ package io.github.dohex.openrose.ui
 import io.github.dohex.openrose.core.PageTransition
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.layout.*
@@ -29,6 +30,7 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
 import top.yukonga.miuix.kmp.blur.Backdrop
 import top.yukonga.miuix.kmp.blur.ProgressiveBlur
 
@@ -136,7 +138,7 @@ internal fun MaterialAppShell(
             }) { padding ->
             Box(Modifier.fillMaxSize()) {
                 Column(Modifier.fillMaxSize().appBackdropContent(backdrop, backdropActive).verticalScroll(scrollState)) {
-                    ShellPageContent(page, padding, compactHome = page == AppPage.HEADPHONES && !connectedHome, pageContent)
+                    ShellPageContent(page, padding, compactHome = page == AppPage.HEADPHONES && !connectedHome, pageContent = pageContent)
                 }
                 ShellFeedback(padding, feedbackContent)
             }
@@ -155,13 +157,26 @@ internal fun BoxScope.ShellFeedback(padding: PaddingValues, content: @Composable
 }
 
 @Composable
-internal fun ShellPageContent(page: AppPage, padding: PaddingValues, compactHome: Boolean, pageContent: @Composable () -> Unit) {
+internal fun ShellPageContent(
+    page: AppPage,
+    padding: PaddingValues,
+    compactHome: Boolean,
+    bottomClearance: Dp = 0.dp,
+    pageContent: @Composable () -> Unit,
+) {
     Column(Modifier.fillMaxWidth().padding(padding).consumeWindowInsets(padding), horizontalAlignment = Alignment.CenterHorizontally) {
         val maxWidth = if (compactHome) 680.dp else if (page == AppPage.HEADPHONES) 1120.dp else 800.dp
         Column(Modifier.widthIn(max = maxWidth).fillMaxWidth()
             .padding(horizontal = 0.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)) {
             pageContent()
+            if (bottomClearance > 0.dp) {
+                Spacer(
+                    Modifier
+                        .height(bottomClearance)
+                        .clearAndSetSemantics { contentDescription = "ShellBottomClearance" },
+                )
+            }
         }
     }
 }
