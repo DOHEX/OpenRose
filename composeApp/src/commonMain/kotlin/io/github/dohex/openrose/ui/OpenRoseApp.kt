@@ -304,6 +304,7 @@ fun OpenRoseApp(
                             InterfaceStyle.MATERIAL3 -> MaterialMainShell(
                                 pagerState = mainTabsPagerState,
                                 wide = wide,
+                                bottomBarStyle = state.settings.bottomBarStyle,
                                 onNavigate = onNavigate,
                                 scrollStates = scrollStates,
                                 pageContentFor = { targetPage -> pageContentFor(targetPage) },

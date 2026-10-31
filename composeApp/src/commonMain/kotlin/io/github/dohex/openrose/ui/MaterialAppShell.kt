@@ -4,6 +4,12 @@ package io.github.dohex.openrose.ui
 
 import io.github.dohex.openrose.core.PageTransition
 import androidx.compose.ui.focus.focusProperties
+import androidx.compose.foundation.background
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.Role
+import io.github.dohex.openrose.core.BottomBarStyle
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.foundation.pager.HorizontalPager
@@ -185,6 +191,7 @@ internal fun ShellPageContent(
 internal fun MaterialMainShell(
     pagerState: MainTabsPagerState,
     wide: Boolean,
+    bottomBarStyle: BottomBarStyle = BottomBarStyle.FIXED,
     onNavigate: (AppPage) -> Unit,
     scrollStates: Map<AppPage, ScrollState>,
     pageContentFor: @Composable (AppPage) -> Unit,
@@ -223,27 +230,74 @@ internal fun MaterialMainShell(
             modifier = Modifier.weight(1f),
             bottomBar = {
                 if (!wide) {
-                    NavigationBar {
-                        mainPages.forEachIndexed { index, destination ->
-                            NavigationBarItem(
-                                selected = currentTab == destination,
-                                onClick = {
-                                    pagerState.selectPage(index, transition = pageTransition)
-                                    onNavigate(destination)
-                                },
-                                icon = { AppIcon(destination.icon) },
-                                label = { Text(destination.navigationLabel) },
-                            )
+                    if (bottomBarStyle == BottomBarStyle.FLOATING) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .navigationBarsPadding()
+                                .padding(bottom = 16.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            HorizontalFloatingToolbar(
+                                expanded = true,
+                                colors = FloatingToolbarDefaults.standardFloatingToolbarColors(),
+                            ) {
+                                mainPages.forEachIndexed { index, destination ->
+                                    val isSelected = currentTab == destination
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(CircleShape)
+                                            .background(
+                                                if (isSelected) MaterialTheme.colorScheme.secondaryContainer
+                                                else Color.Transparent,
+                                            )
+                                            .selectable(
+                                                selected = isSelected,
+                                                role = Role.Tab,
+                                                onClick = {
+                                                    pagerState.selectPage(index, transition = pageTransition)
+                                                    onNavigate(destination)
+                                                },
+                                            )
+                                            .size(48.dp),
+                                        contentAlignment = Alignment.Center,
+                                    ) {
+                                        AppIcon(
+                                            destination.icon,
+                                            contentDescription = destination.navigationLabel,
+                                            tint = if (isSelected) MaterialTheme.colorScheme.onSecondaryContainer
+                                            else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        NavigationBar {
+                            mainPages.forEachIndexed { index, destination ->
+                                NavigationBarItem(
+                                    selected = currentTab == destination,
+                                    onClick = {
+                                        pagerState.selectPage(index, transition = pageTransition)
+                                        onNavigate(destination)
+                                    },
+                                    icon = { AppIcon(destination.icon) },
+                                    label = { Text(destination.navigationLabel) },
+                                )
+                            }
                         }
                     }
                 }
             },
         ) { outerPadding ->
+            val isFloating = !wide && bottomBarStyle == BottomBarStyle.FLOATING
+            val pagerBottomPadding = if (isFloating) 0.dp else outerPadding.calculateBottomPadding()
+            val bottomClearance = if (isFloating) outerPadding.calculateBottomPadding() else 0.dp
             HorizontalPager(
                 state = pagerState.pagerState,
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(bottom = outerPadding.calculateBottomPadding()),
+                    .padding(bottom = pagerBottomPadding),
                 beyondViewportPageCount = 1,
                 userScrollEnabled = !wide,
                 key = { index -> mainPages[index] },
@@ -321,7 +375,12 @@ internal fun MaterialMainShell(
                     Box(Modifier.fillMaxSize()) {
                         val scrollState = scrollStates.getValue(page)
                         Column(Modifier.fillMaxSize().appBackdropContent(pageBackdrop, backdropActive).verticalScroll(scrollState)) {
-                            ShellPageContent(page, pagePadding, compactHome = page == AppPage.HEADPHONES && !connectedHome) {
+                            ShellPageContent(
+                                page = page,
+                                padding = pagePadding,
+                                compactHome = page == AppPage.HEADPHONES && !connectedHome,
+                                bottomClearance = bottomClearance,
+                            ) {
                                 pageContentFor(page)
                             }
                         }
