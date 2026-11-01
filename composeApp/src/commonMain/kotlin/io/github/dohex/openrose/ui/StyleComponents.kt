@@ -41,7 +41,7 @@ import top.yukonga.miuix.kmp.theme.lightColorScheme as miuixLightColorScheme
 internal val LocalInterfaceStyle = staticCompositionLocalOf { InterfaceStyle.MIUIX }
 // Owned above the style branch so an open picker survives component replacement.
 internal val LocalChoiceDialog = staticCompositionLocalOf<MutableState<String?>?> { null }
-private val LocalInDashboardCard = staticCompositionLocalOf { false }
+internal val LocalInDashboardCard = staticCompositionLocalOf { false }
 internal enum class AppColorRole { Primary, OnSurface, Summary, Error, Divider, SelectedContainer, SelectedContent, DisabledContent }
 internal enum class AppTextRole { Display, Title, Body, Summary, Footnote }
 internal enum class AppButtonKind { Primary, Secondary }
