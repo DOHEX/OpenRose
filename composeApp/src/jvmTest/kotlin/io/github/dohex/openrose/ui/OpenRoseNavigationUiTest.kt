@@ -156,7 +156,7 @@ class OpenRoseNavigationUiTest {
             harness.render()
             harness.clickText("组件风格")
             harness.render()
-            harness.clickText("Material 3")
+            harness.clickText("Material 3 Expressive")
             harness.render()
             harness.clickText("明暗模式")
             harness.render()

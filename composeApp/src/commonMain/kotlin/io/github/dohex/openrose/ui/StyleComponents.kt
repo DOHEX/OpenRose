@@ -1,8 +1,12 @@
-@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@file:OptIn(
+    androidx.compose.material3.ExperimentalMaterial3Api::class,
+    androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class,
+)
 
 package io.github.dohex.openrose.ui
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -41,7 +45,7 @@ import top.yukonga.miuix.kmp.theme.lightColorScheme as miuixLightColorScheme
 internal val LocalInterfaceStyle = staticCompositionLocalOf { InterfaceStyle.MIUIX }
 // Owned above the style branch so an open picker survives component replacement.
 internal val LocalChoiceDialog = staticCompositionLocalOf<MutableState<String?>?> { null }
-private val LocalInDashboardCard = staticCompositionLocalOf { false }
+internal val LocalInDashboardCard = staticCompositionLocalOf { false }
 internal enum class AppColorRole { Primary, OnSurface, Summary, Error, Divider, SelectedContainer, SelectedContent, DisabledContent }
 internal enum class AppTextRole { Display, Title, Body, Summary, Footnote }
 internal enum class AppButtonKind { Primary, Secondary }
@@ -80,7 +84,7 @@ internal fun ProvideInterfaceStyle(style: InterfaceStyle, dark: Boolean, content
     CompositionLocalProvider(LocalInterfaceStyle provides style) {
         when (style) {
             InterfaceStyle.MIUIX -> MiuixTheme(colors = miuixColors(dark), content = content)
-            InterfaceStyle.MATERIAL3 -> MaterialTheme(colorScheme = materialColors(dark), content = content)
+            InterfaceStyle.MATERIAL3 -> MaterialTheme(colorScheme = materialColors(dark), motionScheme = MotionScheme.expressive(), content = content)
         }
     }
 }
@@ -92,7 +96,23 @@ fun interfaceBackgroundColor(style: InterfaceStyle, dark: Boolean): Color = when
 }
 
 private fun miuixColors(dark: Boolean) = if (dark) miuixDarkColorScheme() else miuixLightColorScheme()
-private fun materialColors(dark: Boolean) = if (dark) darkColorScheme() else lightColorScheme()
+private fun materialColors(dark: Boolean) = if (dark) {
+    darkColorScheme(
+        surfaceContainerLowest = Color(0xFF0F0D13),
+        surfaceContainerLow = Color(0xFF1D1B20),
+        surfaceContainer = Color(0xFF211F26),
+        surfaceContainerHigh = Color(0xFF2B2930),
+        surfaceContainerHighest = Color(0xFF36343B),
+    )
+} else {
+    lightColorScheme(
+        surfaceContainerLowest = Color(0xFFFFFFFF),
+        surfaceContainerLow = Color(0xFFF7F2FA),
+        surfaceContainer = Color(0xFFF3EDF7),
+        surfaceContainerHigh = Color(0xFFECE6F0),
+        surfaceContainerHighest = Color(0xFFE6E0E9),
+    )
+}
 
 @Composable
 internal fun AppText(text: String, modifier: Modifier = Modifier, role: AppTextRole = AppTextRole.Body, color: Color? = null) {
@@ -130,7 +150,7 @@ internal fun AppGroup(
     plain: Boolean = false,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(Modifier.fillMaxWidth()) {
         when (LocalInterfaceStyle.current) {
             InterfaceStyle.MIUIX -> {
                 title?.let { label ->
@@ -140,7 +160,7 @@ internal fun AppGroup(
                     }
                 }
                 header?.let {
-                    Box(Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
+                    Box(Modifier.fillMaxWidth().padding(horizontal = 12.dp).padding(bottom = 8.dp)) {
                         it()
                     }
                 }
@@ -149,13 +169,13 @@ internal fun AppGroup(
             }
             InterfaceStyle.MATERIAL3 -> {
                 title?.let { label ->
-                    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                         Text(label, Modifier.weight(1f).semantics { heading() }, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.titleSmall)
                         titleTrailing?.invoke()
                     }
                 }
                 header?.let {
-                    Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+                    Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 8.dp)) {
                         it()
                     }
                 }
@@ -163,6 +183,7 @@ internal fun AppGroup(
             }
         }
         footnote?.let { text ->
+            Spacer(Modifier.height(8.dp))
             if (footnoteIcon != null) {
                 Row(
                     modifier = Modifier.padding(horizontal = 16.dp),
@@ -180,7 +201,10 @@ internal fun AppGroup(
                 AppText(text, Modifier.padding(horizontal = 16.dp), role = AppTextRole.Footnote)
             }
         }
-        if (LocalInterfaceStyle.current == InterfaceStyle.MATERIAL3) AppDivider()
+        if (LocalInterfaceStyle.current == InterfaceStyle.MATERIAL3) {
+            Spacer(Modifier.height(12.dp))
+            AppDivider()
+        }
     }
 }
 
@@ -197,7 +221,13 @@ internal fun AppDashboardCard(
             InterfaceStyle.MIUIX -> MiuixCard(modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
                 Column(Modifier.padding(padding), verticalArrangement = Arrangement.spacedBy(spacing), content = content)
             }
-            InterfaceStyle.MATERIAL3 -> ElevatedCard(modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+            InterfaceStyle.MATERIAL3 -> Card(
+                modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+                elevation = CardDefaults.elevatedCardElevation(),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
+            ) {
                 Column(Modifier.padding(padding), verticalArrangement = Arrangement.spacedBy(spacing), content = content)
             }
         }
@@ -510,8 +540,8 @@ internal fun AppButton(text: String, onClick: () -> Unit, enabled: Boolean = tru
     when (LocalInterfaceStyle.current) {
         InterfaceStyle.MIUIX -> if (kind == AppButtonKind.Primary) MiuixTextButton(text, onClick, modifier = modifier, enabled = enabled, colors = MiuixButtonDefaults.textButtonColorsPrimary())
             else MiuixTextButton(text, onClick, modifier = modifier, enabled = enabled)
-        InterfaceStyle.MATERIAL3 -> if (kind == AppButtonKind.Primary) Button(onClick, modifier, enabled) { Text(text) }
-            else OutlinedButton(onClick, modifier, enabled) { Text(text) }
+        InterfaceStyle.MATERIAL3 -> if (kind == AppButtonKind.Primary) Button(onClick, modifier, enabled, shape = RoundedCornerShape(16.dp)) { Text(text) }
+            else OutlinedButton(onClick, modifier, enabled, shape = RoundedCornerShape(16.dp)) { Text(text) }
     }
 }
 

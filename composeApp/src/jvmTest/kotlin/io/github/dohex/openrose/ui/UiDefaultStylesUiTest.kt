@@ -264,6 +264,40 @@ class UiDefaultStylesUiTest {
             }
         }
     }
+    @Test
+    fun appGroupTitleToCardSpacingIsCompactAcrossStyles() = runBlocking {
+        for (style in InterfaceStyle.entries) {
+            val styleState = mutableStateOf(style)
+            val scrollState = ScrollState(0)
+            val scene = createShellScene(
+                style = styleState,
+                width = 420,
+                height = 900,
+                wide = false,
+                scrollState = scrollState,
+                pageContent = {
+                    AppGroup(title = "小标题") {
+                        AppInfoRow("卡片行", "值")
+                    }
+                },
+            )
+            val harness = ShellHarness(scene, styleState, scrollState)
+            try {
+                harness.render()
+                val titleNode = harness.nodes().first { node ->
+                    node.config.getOrNull(SemanticsProperties.Text).orEmpty().any { it.text == "小标题" }
+                }
+                val rowNode = harness.nodes().first { node ->
+                    node.config.getOrNull(SemanticsProperties.Text).orEmpty().any { it.text == "卡片行" }
+                }
+                val gap = rowNode.boundsInRoot.top - titleNode.boundsInRoot.bottom
+                assertTrue(gap in 0f..25f, "title to card row gap in $style should be compact (was $gap)")
+            } finally {
+                harness.close()
+            }
+        }
+    }
+
 
     private suspend fun createChoiceHarness(
         initialStyle: InterfaceStyle,

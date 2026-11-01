@@ -120,7 +120,9 @@ class OpenRoseBluetoothModule : XposedModule() {
             BridgeTarget.BLUETOOTH, BridgeTarget.XIAOMI_BLUETOOTH -> {
                 binderAdapter = NativeHeadsetBinderAdapter(this, loader, callbacks).also { it.install() }
             }
-            BridgeTarget.MILINK -> fusionAdapter = MiLinkNativeHeadsetAdapter(this, loader, callbacks).also { it.install() }
+            BridgeTarget.MILINK -> fusionAdapter = MiLinkNativeHeadsetAdapter(
+                this, loader, callbacks, contextSupplier = { targetContext },
+            ).also { it.install() }
         }
     }
 

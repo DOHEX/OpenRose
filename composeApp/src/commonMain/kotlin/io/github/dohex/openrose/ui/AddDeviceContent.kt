@@ -1,13 +1,25 @@
 package io.github.dohex.openrose.ui
 
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.draw.clip
+import io.github.dohex.openrose.core.InterfaceStyle
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
@@ -162,28 +174,82 @@ internal fun AddDeviceContent(
 
 @Composable
 private fun AddDeviceHero(scanning: Boolean) {
+    val isMaterial3 = LocalInterfaceStyle.current == InterfaceStyle.MATERIAL3
     Box(Modifier.fillMaxWidth().height(190.dp), contentAlignment = Alignment.Center) {
         if (scanning) {
-            val transition = rememberInfiniteTransition(label = "earbud search")
-            val pulse = transition.animateFloat(
-                initialValue = 0f,
-                targetValue = 1f,
-                animationSpec = infiniteRepeatable(tween(2400, easing = LinearEasing), RepeatMode.Restart),
-                label = "search pulse",
-            )
-            val primary = appColor(AppColorRole.Primary)
-            Canvas(Modifier.size(184.dp)) {
-                val progress = pulse.value
-                drawCircle(
-                    color = primary.copy(alpha = 0.18f * (1f - progress)),
-                    radius = size.minDimension * (0.30f + progress * 0.19f),
-                    style = Stroke(width = 2.dp.toPx()),
+            if (isMaterial3) {
+                val pulse1 = remember { Animatable(0f) }
+                val pulse2 = remember { Animatable(0f) }
+                LaunchedEffect(Unit) {
+                    launch {
+                        while (isActive) {
+                            pulse1.snapTo(0f)
+                            pulse1.animateTo(
+                                targetValue = 1f,
+                                 animationSpec = spring(
+                                    dampingRatio = Spring.DampingRatioNoBouncy,
+                                    stiffness = Spring.StiffnessVeryLow,
+                                    visibilityThreshold = 0.001f,
+                                ),
+                            )
+                        }
+                    }
+                    launch {
+                        delay(650)
+                        while (isActive) {
+                            pulse2.snapTo(0f)
+                            pulse2.animateTo(
+                                targetValue = 1f,
+                                animationSpec = spring(
+                                    dampingRatio = Spring.DampingRatioNoBouncy,
+                                    stiffness = Spring.StiffnessVeryLow,
+                                    visibilityThreshold = 0.001f,
+                                ),
+                            )
+                        }
+                    }
+                }
+                val primary = MaterialTheme.colorScheme.primary
+                Canvas(Modifier.size(200.dp)) {
+                    val p1 = pulse1.value.coerceIn(0f, 1f)
+                    val p2 = pulse2.value.coerceIn(0f, 1f)
+                    drawCircle(
+                        color = primary.copy(alpha = 0.28f * (1f - p1)),
+                        radius = size.minDimension * (0.28f + p1 * 0.22f),
+                        style = Stroke(width = 2.5.dp.toPx()),
+                    )
+                    drawCircle(
+                        color = primary.copy(alpha = 0.18f * (1f - p2)),
+                        radius = size.minDimension * (0.28f + p2 * 0.22f),
+                        style = Stroke(width = 1.5.dp.toPx()),
+                    )
+                    drawCircle(
+                        color = primary.copy(alpha = 0.08f * (1f - p1 * 0.4f)),
+                        radius = size.minDimension * 0.33f,
+                    )
+                }
+            } else {
+                val transition = rememberInfiniteTransition(label = "earbud search")
+                val pulse = transition.animateFloat(
+                    initialValue = 0f,
+                    targetValue = 1f,
+                    animationSpec = infiniteRepeatable(tween(2400, easing = LinearEasing), RepeatMode.Restart),
+                    label = "search pulse",
                 )
-                drawCircle(
-                    color = primary.copy(alpha = 0.08f),
-                    radius = size.minDimension * 0.34f,
-                    style = Stroke(width = 1.dp.toPx()),
-                )
+                val primary = appColor(AppColorRole.Primary)
+                Canvas(Modifier.size(184.dp)) {
+                    val progress = pulse.value
+                    drawCircle(
+                        color = primary.copy(alpha = 0.18f * (1f - progress)),
+                        radius = size.minDimension * (0.30f + progress * 0.19f),
+                        style = Stroke(width = 2.dp.toPx()),
+                    )
+                    drawCircle(
+                        color = primary.copy(alpha = 0.08f),
+                        radius = size.minDimension * 0.34f,
+                        style = Stroke(width = 1.dp.toPx()),
+                    )
+                }
             }
         }
         EarbudsArtwork(Modifier.widthIn(max = 340.dp))
@@ -229,12 +295,31 @@ private fun AddDeviceCandidateCard(
     onConnect: () -> Unit,
     onCancelConnection: () -> Unit,
 ) {
+    val isMaterial3 = LocalInterfaceStyle.current == InterfaceStyle.MATERIAL3
     AppDashboardCard {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.width(88.dp).height(88.dp), contentAlignment = Alignment.Center) {
+            val artworkModifier = if (isMaterial3) {
+                Modifier
+                    .size(88.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(MaterialTheme.colorScheme.surfaceContainerLowest)
+                    .border(
+                        width = 1.dp,
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
+                        shape = RoundedCornerShape(16.dp),
+                    )
+            } else {
+                Modifier.width(88.dp).height(88.dp)
+            }
+            Box(artworkModifier, contentAlignment = Alignment.Center) {
                 EarbudsArtwork(Modifier.fillMaxWidth().height(88.dp), compact = true)
             }
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .then(if (isMaterial3) Modifier.padding(start = 12.dp) else Modifier),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
                 AppText(candidate.addDeviceName(), role = AppTextRole.Title)
                 if (distinguishName) {
                     AppText("地址末位 ${candidate.deviceId.value.takeLast(8)}", role = AppTextRole.Footnote)
@@ -242,12 +327,38 @@ private fun AddDeviceCandidateCard(
             }
         }
         if (phase != null) {
-            AppText(phase.displayText(), Modifier.semantics { liveRegion = LiveRegionMode.Polite }, role = AppTextRole.Summary)
+            if (isMaterial3) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(MaterialTheme.colorScheme.surfaceContainer)
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                ) {
+                    AppText(phase.displayText(), Modifier.semantics { liveRegion = LiveRegionMode.Polite }, role = AppTextRole.Summary)
+                }
+            } else {
+                AppText(phase.displayText(), Modifier.semantics { liveRegion = LiveRegionMode.Polite }, role = AppTextRole.Summary)
+            }
             AppButton("取消连接", onCancelConnection, kind = AppButtonKind.Secondary)
         } else {
             error?.let {
-                AppText("连接失败", role = AppTextRole.Title)
-                AppText(it.message, Modifier.semantics { liveRegion = LiveRegionMode.Polite }, color = appColor(AppColorRole.Error))
+                if (isMaterial3) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.35f))
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        AppText("连接失败", role = AppTextRole.Title, color = MaterialTheme.colorScheme.onErrorContainer)
+                        AppText(it.message, Modifier.semantics { liveRegion = LiveRegionMode.Polite }, color = MaterialTheme.colorScheme.onErrorContainer)
+                    }
+                } else {
+                    AppText("连接失败", role = AppTextRole.Title)
+                    AppText(it.message, Modifier.semantics { liveRegion = LiveRegionMode.Polite }, color = appColor(AppColorRole.Error))
+                }
             }
             AppButton(if (error == null) "连接" else "重试", onConnect, enabled = canConnect)
         }

@@ -17,6 +17,7 @@ import io.github.dohex.openrose.core.UserSettingsCodec
 import io.github.dohex.openrose.core.transport.DeviceId
 import io.github.dohex.openrose.bridge.ControlBridgeHost
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
@@ -70,6 +71,9 @@ class OpenRoseApplication : Application() {
     fun startScan() { controlScope.launch { session.startScan() } }
     fun stopScan() { controlScope.launch { session.stopScan() } }
     fun connect(deviceId: DeviceId) { controlScope.launch { session.connect(deviceId) } }
+    fun connectFromSystem(deviceId: DeviceId) {
+        controlScope.launch(start = CoroutineStart.UNDISPATCHED) { session.connectFromSystem(deviceId) }
+    }
     fun disconnect() { controlScope.launch { session.disconnect() } }
     fun applySetting(setting: DeviceSetting, value: FieldValue) {
         controlScope.launch { session.set(setting, value) }

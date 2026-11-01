@@ -38,6 +38,10 @@ object UserSettingsCodec {
             BottomBarStyle.FIXED -> "fixed"
             BottomBarStyle.FLOATING -> "floating"
         },
+        "fusion_settings_destination" to when (settings.fusionSettingsDestination) {
+            FusionSettingsDestination.SYSTEM -> "system"
+            FusionSettingsDestination.OPENROSE -> "openrose"
+        },
     )
 
     fun decode(values: Map<String, String>): UserSettings {
@@ -82,6 +86,11 @@ object UserSettingsCodec {
                 "fixed" -> BottomBarStyle.FIXED
                 "floating" -> BottomBarStyle.FLOATING
                 else -> defaults.bottomBarStyle
+            },
+            fusionSettingsDestination = when (values["fusion_settings_destination"]?.lowercase()) {
+                "system" -> FusionSettingsDestination.SYSTEM
+                "openrose" -> FusionSettingsDestination.OPENROSE
+                else -> defaults.fusionSettingsDestination
             },
         )
     }

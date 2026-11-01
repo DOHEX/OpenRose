@@ -2,6 +2,7 @@ package io.github.dohex.openrose.ui
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
@@ -9,11 +10,23 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
-import androidx.compose.ui.unit.IntOffset
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.dp
+import io.github.dohex.openrose.core.InterfaceStyle
 import io.github.dohex.openrose.core.ControlState
 import io.github.dohex.openrose.core.DeviceSetting
 import io.github.dohex.openrose.core.DeviceState
@@ -61,6 +74,7 @@ internal fun TouchControlCard(
     }
 
     if (hasBindings && side != null) {
+        val isMaterial3 = LocalInterfaceStyle.current == InterfaceStyle.MATERIAL3
         AppGroup(
             title = "左右耳手势",
             header = if (availableSides.size > 1) {
@@ -85,10 +99,11 @@ internal fun TouchControlCard(
                     val initialIndex = availableSides.indexOf(initialState)
                     val direction = if (targetIndex >= initialIndex) 1 else -1
                     val slideSpring = spring<IntOffset>(
-                        dampingRatio = 0.82f,
+                        dampingRatio = if (isMaterial3) 0.75f else 0.82f,
                         stiffness = 380f,
                     )
                     val fadeSpring = spring<Float>(
+                        dampingRatio = Spring.DampingRatioNoBouncy,
                         stiffness = Spring.StiffnessMediumLow,
                     )
                     (slideInHorizontally(slideSpring) { width -> direction * width / 5 } + fadeIn(fadeSpring))
@@ -99,38 +114,79 @@ internal fun TouchControlCard(
                 modifier = Modifier.fillMaxWidth(),
             ) { currentSide ->
                 val currentSlots = slots.filter { it.side == currentSide }
-                Column(Modifier.fillMaxWidth()) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .then(if (isMaterial3) Modifier.padding(horizontal = 16.dp) else Modifier),
+                    verticalArrangement = if (isMaterial3) Arrangement.spacedBy(8.dp) else Arrangement.spacedBy(0.dp),
+                ) {
                     currentSlots.forEach { slot ->
                         val binding = knownBindings?.bindings?.firstOrNull {
                             it.side == slot.side && it.gesture == slot.gesture
                         }
                         val valueText = touchBindingStatus(device.fields[DeviceField.TOUCH_KEYS], binding)
                         val confirmedAction = binding?.action
-                        AppChoiceRow(
-                            title = touchGestureLabel(slot.gesture),
-                            valueText = valueText,
-                            options = touchActions.sortedBy(::semanticLabel)
-                                .map { action -> AppOption(action, semanticLabel(action)) },
-                            selected = confirmedAction,
-                            enabled = enabled,
-                            onSelect = { action ->
-                                if (enabled && action != confirmedAction) {
-                                    onSet(DeviceSetting.TOUCH_BINDING, FieldValue.TouchAssignment(slot.side, slot.gesture, action))
+                        val isOpen = selectedSlot == slot
+
+                        val rowContent: @Composable () -> Unit = {
+                            AppChoiceRow(
+                                title = touchGestureLabel(slot.gesture),
+                                valueText = valueText,
+                                options = touchActions.sortedBy(::semanticLabel)
+                                    .map { action -> AppOption(action, semanticLabel(action)) },
+                                selected = confirmedAction,
+                                enabled = enabled,
+                                onSelect = { action ->
+                                    if (enabled && action != confirmedAction) {
+                                        onSet(DeviceSetting.TOUCH_BINDING, FieldValue.TouchAssignment(slot.side, slot.gesture, action))
+                                    }
+                                    onSlotChange(null)
+                                },
+                                id = "${slot.side}:${slot.gesture}",
+                                open = isOpen,
+                                onOpenChange = { open ->
+                                    onSlotChange(
+                                        when {
+                                            open -> slot
+                                            selectedSlot == slot -> null
+                                            else -> selectedSlot
+                                        },
+                                    )
+                                },
+                            )
+                        }
+
+                        if (isMaterial3) {
+                            val containerColor by animateColorAsState(
+                                targetValue = if (isOpen) {
+                                    MaterialTheme.colorScheme.surfaceContainerHigh
+                                } else {
+                                    MaterialTheme.colorScheme.surfaceContainer
+                                },
+                                animationSpec = spring(
+                                    dampingRatio = Spring.DampingRatioNoBouncy,
+                                    stiffness = Spring.StiffnessMedium,
+                                ),
+                                label = "slotContainerColor",
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .background(containerColor)
+                                    .border(
+                                        width = 1.dp,
+                                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = if (isOpen) 0.5f else 0.25f),
+                                        shape = RoundedCornerShape(16.dp),
+                                    ),
+                            ) {
+                                CompositionLocalProvider(LocalInDashboardCard provides true) {
+                                    rowContent()
                                 }
-                                onSlotChange(null)
-                            },
-                            id = "${slot.side}:${slot.gesture}",
-                            open = selectedSlot == slot,
-                            onOpenChange = { open ->
-                                onSlotChange(
-                                    when {
-                                        open -> slot
-                                        selectedSlot == slot -> null
-                                        else -> selectedSlot
-                                    },
-                                )
-                            },
-                        )
+                            }
+                        } else {
+                            rowContent()
+                        }
                     }
                 }
             }

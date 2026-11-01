@@ -18,6 +18,7 @@ import io.github.dohex.openrose.core.BottomBarStyle
 import io.github.dohex.openrose.core.BridgeIpcState
 import io.github.dohex.openrose.core.BridgeSessionState
 import io.github.dohex.openrose.core.ControlState
+import io.github.dohex.openrose.core.FusionSettingsDestination
 import io.github.dohex.openrose.core.HostPlatform
 import io.github.dohex.openrose.core.InterfaceStyle
 import io.github.dohex.openrose.core.IslandMode
@@ -59,7 +60,7 @@ internal fun PreferencesPage(
                 valueText = interfaceStyleLabel(settings.interfaceStyle),
                 options = listOf(
                     AppOption(InterfaceStyle.MIUIX, "Miuix"),
-                    AppOption(InterfaceStyle.MATERIAL3, "Material 3"),
+                    AppOption(InterfaceStyle.MATERIAL3, "Material 3 Expressive"),
                 ),
                 selected = settings.interfaceStyle,
                 onSelect = { onChange(settings.copy(interfaceStyle = it)) },
@@ -140,6 +141,21 @@ internal fun PreferencesPage(
                         },
                     )
                 }
+            }
+
+            AppGroup(
+                title = "融合设备中心",
+                footnote = "选择 OpenRose 后，点击设备卡片的 Additional Settings 会打开耳机主页并尝试连接该耳机。",
+            ) {
+                AppChoiceRow(
+                    title = "附加设置入口",
+                    valueText = fusionSettingsDestinationLabel(settings.fusionSettingsDestination),
+                    options = FusionSettingsDestination.entries.map {
+                        AppOption(it, fusionSettingsDestinationLabel(it))
+                    },
+                    selected = settings.fusionSettingsDestination,
+                    onSelect = { saveSystemPreference(settings.copy(fusionSettingsDestination = it)) },
+                )
             }
 
             systemPreferenceFeedback?.let { message ->
@@ -433,7 +449,7 @@ private enum class StatusTone {
 
 private fun interfaceStyleLabel(style: InterfaceStyle): String = when (style) {
     InterfaceStyle.MIUIX -> "Miuix"
-    InterfaceStyle.MATERIAL3 -> "Material 3"
+    InterfaceStyle.MATERIAL3 -> "Material 3 Expressive"
 }
 
 private fun hostPlatformLabel(platform: HostPlatform): String = when (platform) {
@@ -469,6 +485,11 @@ private fun islandModeLabel(mode: IslandMode): String = when (mode) {
     IslandMode.OFF -> "不显示"
     IslandMode.OFFICIAL -> "官方"
     IslandMode.MODULE -> "模块"
+}
+
+private fun fusionSettingsDestinationLabel(destination: FusionSettingsDestination): String = when (destination) {
+    FusionSettingsDestination.SYSTEM -> "系统耳机详情页"
+    FusionSettingsDestination.OPENROSE -> "OpenRose 耳机主页"
 }
 
 private fun bridgeIpcLabel(state: BridgeIpcState): String = when (state) {

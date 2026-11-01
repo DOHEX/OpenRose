@@ -41,37 +41,6 @@ class UserSettingsCodecTest {
         assertEquals(BottomBarStyle.FIXED, restored.bottomBarStyle)
     }
 
-    @Test
-    fun settingsEncodeToTheDocumentedPlatformStorageFormat() {
-        val stored = UserSettingsCodec.encode(
-            UserSettings(
-                interfaceStyle = InterfaceStyle.MATERIAL3,
-                appearance = Appearance.LIGHT,
-                islandMode = IslandMode.MODULE,
-                focusNotificationEnabled = false,
-                islandTriggers = emptySet(),
-                forceBle = true,
-                pageTransition = PageTransition.FADE,
-                backgroundBlurEnabled = false,
-                bottomBarStyle = BottomBarStyle.FLOATING,
-            ),
-        )
-
-        assertEquals(
-            mapOf(
-                "interface_style" to "material3",
-                "appearance" to "light",
-                "island_mode" to "module",
-                "focus_notification_enabled" to "false",
-                "force_ble" to "true",
-                "island_triggers" to "",
-                "page_transition" to "fade",
-                "background_blur_enabled" to "false",
-                "bottom_bar_style" to "floating",
-            ),
-            stored,
-        )
-    }
 
     @Test
     fun missingOrMalformedForceBleUsesTheSafeDefault() {

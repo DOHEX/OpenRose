@@ -5,4 +5,7 @@ local.properties
 .idea/
 *.iml
 .scratch/
-.agents/
+.agents/*
+!.agents/skills/
+.agents/skills/*
+!.agents/skills/md3e/

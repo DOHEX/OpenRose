@@ -126,7 +126,7 @@ class BottomBarStyleUiTest {
             // Switch to Material 3
             harness.clickText("组件风格")
             harness.render()
-            harness.clickText("Material 3")
+            harness.clickText("Material 3 Expressive")
             harness.render()
 
             assertEquals(InterfaceStyle.MATERIAL3, state.value.settings.interfaceStyle)

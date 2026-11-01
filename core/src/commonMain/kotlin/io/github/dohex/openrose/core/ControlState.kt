@@ -149,6 +149,7 @@ data class ControlState(
     val transportSelection: TransportSelection? = null,
     val connectionRecovery: ConnectionRecovery? = null,
     val presentation: SystemPresentationState = SystemPresentationState(),
+    val connectionTarget: DeviceCandidate? = null,
 )
 
 data class ConnectionRecovery(
