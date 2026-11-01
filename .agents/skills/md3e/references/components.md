@@ -68,7 +68,7 @@ fun <T> ConnectedButtonGroup(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .height(44.dp)
+            .height(40.dp)
             .selectableGroup(),
         horizontalArrangement = Arrangement.spacedBy(2.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -80,11 +80,11 @@ fun <T> ConnectedButtonGroup(
 
             // 动态弹性形变：未选中时保持组合拓扑，选中时弹变为完整独立胶囊
             val innerCorner by animateDpAsState(
-                targetValue = if (isSelected) 22.dp else 6.dp,
+                targetValue = if (isSelected) 20.dp else 8.dp,
                 animationSpec = spring(dampingRatio = 0.6f, stiffness = 800f),
                 label = "connectedInnerCorner",
             )
-            val outerCorner = 22.dp
+            val outerCorner = 20.dp
 
             val itemShape = RoundedCornerShape(
                 topStart = if (isFirst || isSelected) outerCorner else innerCorner,
@@ -116,7 +116,7 @@ fun <T> ConnectedButtonGroup(
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .height(44.dp)
+                    .height(40.dp)
                     .clip(itemShape)
                     .background(backgroundColor, itemShape)
                     .semantics {
@@ -263,7 +263,7 @@ fun ExpressiveNavigationRail(
                 icon = { Icon(item.icon, contentDescription = item.label) },
                 label = { Text(item.label) },
                 colors = NavigationRailItemDefaults.colors(
-                    selectedIndicatorColor = MaterialTheme.colorScheme.primaryContainer,
+                    indicatorColor = MaterialTheme.colorScheme.primaryContainer,
                     selectedIconColor = MaterialTheme.colorScheme.onPrimaryContainer,
                     unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

@@ -1,6 +1,7 @@
 package io.github.dohex.openrose.ui
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -189,12 +190,24 @@ private fun NoiseModeChoices(
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                         row.forEachIndexed { index, option ->
                             val isSelected = option.value == selected
-                            val shape = when {
-                                row.size == 1 -> RoundedCornerShape(16.dp)
-                                index == 0 -> RoundedCornerShape(topStart = 16.dp, bottomStart = 16.dp, topEnd = 4.dp, bottomEnd = 4.dp)
-                                index == row.size - 1 -> RoundedCornerShape(topStart = 4.dp, bottomStart = 4.dp, topEnd = 16.dp, bottomEnd = 16.dp)
-                                else -> RoundedCornerShape(4.dp)
-                            }
+                            val targetStartCorner = if (isSelected || index == 0) 16.dp else 8.dp
+                            val targetEndCorner = if (isSelected || index == row.size - 1) 16.dp else 8.dp
+                            val startCorner by animateDpAsState(
+                                targetValue = targetStartCorner,
+                                animationSpec = spring(dampingRatio = 0.75f, stiffness = 500f),
+                                label = "modeStartCorner",
+                            )
+                            val endCorner by animateDpAsState(
+                                targetValue = targetEndCorner,
+                                animationSpec = spring(dampingRatio = 0.75f, stiffness = 500f),
+                                label = "modeEndCorner",
+                            )
+                            val shape = RoundedCornerShape(
+                                topStart = startCorner,
+                                bottomStart = startCorner,
+                                topEnd = endCorner,
+                                bottomEnd = endCorner,
+                            )
                             val containerColor by animateColorAsState(
                                 targetValue = when {
                                     isSelected -> MaterialTheme.colorScheme.secondaryContainer
@@ -205,7 +218,7 @@ private fun NoiseModeChoices(
                             )
                             val iconScale by animateFloatAsState(
                                 targetValue = if (isSelected) 1.05f else 1.0f,
-                                animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+                                animationSpec = spring(dampingRatio = 0.75f, stiffness = 600f),
                                 label = "modeIconScale",
                             )
                             val contentColor by animateColorAsState(
