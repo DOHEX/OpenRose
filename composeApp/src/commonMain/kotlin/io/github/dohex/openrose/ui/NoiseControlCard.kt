@@ -1,5 +1,9 @@
 package io.github.dohex.openrose.ui
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -13,12 +17,16 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import io.github.dohex.openrose.core.ConnectionPhase
@@ -26,6 +34,7 @@ import io.github.dohex.openrose.core.ConnectionState
 import io.github.dohex.openrose.core.ControlState
 import io.github.dohex.openrose.core.DeviceSetting
 import io.github.dohex.openrose.core.DeviceState
+import io.github.dohex.openrose.core.InterfaceStyle
 import io.github.dohex.openrose.core.PermissionState
 import io.github.dohex.openrose.core.SettingOperation
 import io.github.dohex.openrose.core.SettingStage
@@ -138,40 +147,109 @@ private fun NoiseModeChoices(
 ) {
     val columns = if (options.size <= 4) options.size.coerceAtLeast(1) else 3
     val rows = remember(options, columns) { options.chunked(columns) }
-    Column(Modifier.fillMaxWidth().selectableGroup(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        rows.forEach { row ->
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                row.forEach { option ->
-                    val isSelected = option.value == selected
-                    val contentColor = appColor(when {
-                        !enabled -> AppColorRole.DisabledContent
-                        isSelected -> AppColorRole.SelectedContent
-                        else -> AppColorRole.Summary
-                    })
-                    Column(
-                        modifier = Modifier.weight(1f).clip(CircleShape)
-                            .selectable(isSelected, enabled, Role.RadioButton) { onSelect(option.value) }
-                            .padding(vertical = 8.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        Box(
-                            Modifier.size(48.dp).background(
-                                if (isSelected) appColor(AppColorRole.SelectedContainer) else Color.Transparent,
-                                CircleShape,
-                            ),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            AppIcon(noiseModeIcon(option.value), Modifier.size(24.dp), tint = contentColor)
+    when (LocalInterfaceStyle.current) {
+        InterfaceStyle.MIUIX -> {
+            Column(Modifier.fillMaxWidth().selectableGroup(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                rows.forEach { row ->
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        row.forEach { option ->
+                            val isSelected = option.value == selected
+                            val contentColor = appColor(when {
+                                !enabled -> AppColorRole.DisabledContent
+                                isSelected -> AppColorRole.SelectedContent
+                                else -> AppColorRole.Summary
+                            })
+                            Column(
+                                modifier = Modifier.weight(1f).clip(CircleShape)
+                                    .selectable(isSelected, enabled, Role.RadioButton) { onSelect(option.value) }
+                                    .padding(vertical = 8.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                Box(
+                                    Modifier.size(48.dp).background(
+                                        if (isSelected) appColor(AppColorRole.SelectedContainer) else Color.Transparent,
+                                        CircleShape,
+                                    ),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    AppIcon(noiseModeIcon(option.value), Modifier.size(24.dp), tint = contentColor)
+                                }
+                                AppText(option.label, role = AppTextRole.Footnote, color = contentColor)
+                            }
                         }
-                        AppText(option.label, role = AppTextRole.Footnote, color = contentColor)
+                        repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
                     }
                 }
-                repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
+            }
+        }
+        InterfaceStyle.MATERIAL3 -> {
+            Column(Modifier.fillMaxWidth().selectableGroup(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                rows.forEach { row ->
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                        row.forEachIndexed { index, option ->
+                            val isSelected = option.value == selected
+                            val shape = when {
+                                row.size == 1 -> RoundedCornerShape(16.dp)
+                                index == 0 -> RoundedCornerShape(topStart = 16.dp, bottomStart = 16.dp, topEnd = 4.dp, bottomEnd = 4.dp)
+                                index == row.size - 1 -> RoundedCornerShape(topStart = 4.dp, bottomStart = 4.dp, topEnd = 16.dp, bottomEnd = 16.dp)
+                                else -> RoundedCornerShape(4.dp)
+                            }
+                            val containerColor by animateColorAsState(
+                                targetValue = when {
+                                    isSelected -> MaterialTheme.colorScheme.secondaryContainer
+                                    else -> MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.5f)
+                                },
+                                animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium),
+                                label = "modeContainerColor",
+                            )
+                            val iconScale by animateFloatAsState(
+                                targetValue = if (isSelected) 1.05f else 1.0f,
+                                animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+                                label = "modeIconScale",
+                            )
+                            val contentColor by animateColorAsState(
+                                targetValue = when {
+                                    !enabled -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                                    isSelected -> MaterialTheme.colorScheme.onSecondaryContainer
+                                    else -> MaterialTheme.colorScheme.onSurfaceVariant
+                                },
+                                animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium),
+                                label = "modeContentColor",
+                            )
+                            Column(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(shape)
+                                    .background(containerColor)
+                                    .selectable(
+                                        selected = isSelected,
+                                        enabled = enabled,
+                                        role = Role.RadioButton,
+                                        onClick = { onSelect(option.value) },
+                                    )
+                                    .padding(vertical = 10.dp, horizontal = 4.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(4.dp),
+                            ) {
+                                AppIcon(
+                                    noiseModeIcon(option.value),
+                                    modifier = Modifier
+                                        .size(24.dp)
+                                        .graphicsLayer(scaleX = iconScale, scaleY = iconScale),
+                                    tint = contentColor,
+                                )
+                                AppText(option.label, role = AppTextRole.Footnote, color = contentColor)
+                            }
+                        }
+                        repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
+                    }
+                }
             }
         }
     }
 }
+
 
 private fun noiseModeLabel(mode: String): String = when (mode) {
     "normal" -> "标准"
