@@ -1,10 +1,15 @@
-@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class, androidx.compose.ui.ExperimentalComposeUiApi::class)
+@file:OptIn(
+    androidx.compose.material3.ExperimentalMaterial3Api::class,
+    androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class,
+    androidx.compose.ui.ExperimentalComposeUiApi::class,
+)
 
 package io.github.dohex.openrose.ui
 
 import io.github.dohex.openrose.core.PageTransition
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.foundation.background
 import androidx.compose.foundation.selection.selectable
@@ -65,11 +70,34 @@ internal fun MaterialAppShell(
     val menuFocusRequester = remember { FocusRequester() }
     CompositionLocalProvider(LocalAppBackdrop provides backdrop) {
         Row(Modifier.fillMaxSize()) {
-        if (wide) NavigationRail(header = { AppIcon(RoseIcon.HEADPHONES, Modifier.padding(12.dp), contentDescription = "OpenRose") }) {
+        if (wide) NavigationRail(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
+            header = {
+                Box(
+                    modifier = Modifier
+                        .padding(top = 8.dp, bottom = 16.dp)
+                        .size(48.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    AppIcon(RoseIcon.HEADPHONES, contentDescription = "OpenRose")
+                }
+            },
+        ) {
             mainPages.forEach { destination ->
                 val isSelected = if (backStack.isNotEmpty()) backStack.first() == destination else page == destination
-                NavigationRailItem(selected = isSelected,
-                    onClick = { onNavigate(destination) }, icon = { AppIcon(destination.icon) }, label = { Text(destination.title) })
+                NavigationRailItem(
+                    selected = isSelected,
+                    onClick = { onNavigate(destination) },
+                    icon = { AppIcon(destination.icon) },
+                    label = { Text(destination.title) },
+                    colors = NavigationRailItemDefaults.colors(
+                        indicatorColor = MaterialTheme.colorScheme.secondaryContainer,
+                        selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                    ),
+                    modifier = Modifier.padding(vertical = 4.dp),
+                )
             }
         }
         val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
@@ -137,10 +165,20 @@ internal fun MaterialAppShell(
                         surfaceColor = MaterialTheme.colorScheme.surfaceContainer,
                         active = backdropActive,
                     )
-                    val bottomBarColor = if (backdropActive) Color.Transparent else NavigationBarDefaults.containerColor
+                    val bottomBarColor = if (backdropActive) Color.Transparent else MaterialTheme.colorScheme.surfaceContainer
                     NavigationBar(modifier = bottomBarModifier, containerColor = bottomBarColor) {
-                        mainPages.forEach { destination -> NavigationBarItem(selected = page == destination,
-                            onClick = { onNavigate(destination) }, icon = { AppIcon(destination.icon) }, label = { Text(destination.navigationLabel) }) }
+                        mainPages.forEach { destination ->
+                            NavigationBarItem(
+                                selected = page == destination,
+                                onClick = { onNavigate(destination) },
+                                icon = { AppIcon(destination.icon) },
+                                label = { Text(destination.navigationLabel) },
+                                colors = NavigationBarItemDefaults.colors(
+                                    indicatorColor = MaterialTheme.colorScheme.secondaryContainer,
+                                    selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                                ),
+                            )
+                        }
                     }
                 }
             }) { padding ->
@@ -218,7 +256,21 @@ internal fun MaterialMainShell(
     val menuFocusRequester = remember { FocusRequester() }
     Row(Modifier.fillMaxSize()) {
         if (wide) {
-            NavigationRail(header = { AppIcon(RoseIcon.HEADPHONES, Modifier.padding(12.dp), contentDescription = "OpenRose") }) {
+            NavigationRail(
+                containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
+                header = {
+                    Box(
+                        modifier = Modifier
+                            .padding(top = 8.dp, bottom = 16.dp)
+                            .size(48.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        AppIcon(RoseIcon.HEADPHONES, contentDescription = "OpenRose")
+                    }
+                },
+            ) {
                 mainPages.forEachIndexed { index, destination ->
                     val isSelected = currentTab == destination
                     NavigationRailItem(
@@ -229,6 +281,11 @@ internal fun MaterialMainShell(
                         },
                         icon = { AppIcon(destination.icon) },
                         label = { Text(destination.title) },
+                        colors = NavigationRailItemDefaults.colors(
+                            indicatorColor = MaterialTheme.colorScheme.secondaryContainer,
+                            selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                        ),
+                        modifier = Modifier.padding(vertical = 4.dp),
                     )
                 }
             }
@@ -263,7 +320,10 @@ internal fun MaterialMainShell(
                                         } else {
                                             MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0f)
                                         },
-                                        animationSpec = tween(durationMillis = 200),
+                                        animationSpec = spring(
+                                            dampingRatio = Spring.DampingRatioNoBouncy,
+                                            stiffness = Spring.StiffnessMedium,
+                                        ),
                                         label = "tabContainerColor",
                                     )
                                     val iconTint by animateColorAsState(
@@ -272,7 +332,10 @@ internal fun MaterialMainShell(
                                         } else {
                                             MaterialTheme.colorScheme.onSurfaceVariant
                                         },
-                                        animationSpec = tween(durationMillis = 200),
+                                        animationSpec = spring(
+                                            dampingRatio = Spring.DampingRatioNoBouncy,
+                                            stiffness = Spring.StiffnessMedium,
+                                        ),
                                         label = "tabIconTint",
                                     )
                                     Box(
@@ -300,7 +363,8 @@ internal fun MaterialMainShell(
                             }
                         }
                     } else {
-                        NavigationBar {
+                        val bottomBarColor = if (backdropActive) Color.Transparent else MaterialTheme.colorScheme.surfaceContainer
+                        NavigationBar(containerColor = bottomBarColor) {
                             mainPages.forEachIndexed { index, destination ->
                                 NavigationBarItem(
                                     selected = currentTab == destination,
@@ -310,6 +374,10 @@ internal fun MaterialMainShell(
                                     },
                                     icon = { AppIcon(destination.icon) },
                                     label = { Text(destination.navigationLabel) },
+                                    colors = NavigationBarItemDefaults.colors(
+                                        indicatorColor = MaterialTheme.colorScheme.secondaryContainer,
+                                        selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                                    ),
                                 )
                             }
                         }
