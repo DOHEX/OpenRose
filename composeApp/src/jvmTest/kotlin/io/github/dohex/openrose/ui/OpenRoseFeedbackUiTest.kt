@@ -230,7 +230,7 @@ class OpenRoseFeedbackUiTest {
                 harness.clickText("组件风格")
                 harness.render()
                 val nextStyle = if (style == InterfaceStyle.MIUIX) InterfaceStyle.MATERIAL3 else InterfaceStyle.MIUIX
-                harness.clickText(if (nextStyle == InterfaceStyle.MIUIX) "Miuix" else "Material 3")
+                harness.clickText(if (nextStyle == InterfaceStyle.MIUIX) "Miuix" else "Material 3 Expressive")
                 harness.render()
                 assertEquals(nextStyle, harness.state.value.settings.interfaceStyle)
                 assertEquals(1, harness.settingWrites.size, "style changes do not resubmit settings in $style")

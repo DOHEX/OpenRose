@@ -92,7 +92,23 @@ fun interfaceBackgroundColor(style: InterfaceStyle, dark: Boolean): Color = when
 }
 
 private fun miuixColors(dark: Boolean) = if (dark) miuixDarkColorScheme() else miuixLightColorScheme()
-private fun materialColors(dark: Boolean) = if (dark) darkColorScheme() else lightColorScheme()
+private fun materialColors(dark: Boolean) = if (dark) {
+    darkColorScheme(
+        surfaceContainerLowest = Color(0xFF0F0D13),
+        surfaceContainerLow = Color(0xFF1D1B20),
+        surfaceContainer = Color(0xFF211F26),
+        surfaceContainerHigh = Color(0xFF2B2930),
+        surfaceContainerHighest = Color(0xFF36343B),
+    )
+} else {
+    lightColorScheme(
+        surfaceContainerLowest = Color(0xFFFFFFFF),
+        surfaceContainerLow = Color(0xFFF7F2FA),
+        surfaceContainer = Color(0xFFF3EDF7),
+        surfaceContainerHigh = Color(0xFFECE6F0),
+        surfaceContainerHighest = Color(0xFFE6E0E9),
+    )
+}
 
 @Composable
 internal fun AppText(text: String, modifier: Modifier = Modifier, role: AppTextRole = AppTextRole.Body, color: Color? = null) {
@@ -201,7 +217,11 @@ internal fun AppDashboardCard(
             InterfaceStyle.MIUIX -> MiuixCard(modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
                 Column(Modifier.padding(padding), verticalArrangement = Arrangement.spacedBy(spacing), content = content)
             }
-            InterfaceStyle.MATERIAL3 -> ElevatedCard(modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+            InterfaceStyle.MATERIAL3 -> ElevatedCard(
+                modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+            ) {
                 Column(Modifier.padding(padding), verticalArrangement = Arrangement.spacedBy(spacing), content = content)
             }
         }
@@ -514,8 +534,8 @@ internal fun AppButton(text: String, onClick: () -> Unit, enabled: Boolean = tru
     when (LocalInterfaceStyle.current) {
         InterfaceStyle.MIUIX -> if (kind == AppButtonKind.Primary) MiuixTextButton(text, onClick, modifier = modifier, enabled = enabled, colors = MiuixButtonDefaults.textButtonColorsPrimary())
             else MiuixTextButton(text, onClick, modifier = modifier, enabled = enabled)
-        InterfaceStyle.MATERIAL3 -> if (kind == AppButtonKind.Primary) Button(onClick, modifier, enabled) { Text(text) }
-            else OutlinedButton(onClick, modifier, enabled) { Text(text) }
+        InterfaceStyle.MATERIAL3 -> if (kind == AppButtonKind.Primary) Button(onClick, modifier, enabled, shape = RoundedCornerShape(16.dp)) { Text(text) }
+            else OutlinedButton(onClick, modifier, enabled, shape = RoundedCornerShape(16.dp)) { Text(text) }
     }
 }
 

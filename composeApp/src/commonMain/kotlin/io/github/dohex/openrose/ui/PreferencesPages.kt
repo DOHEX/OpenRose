@@ -60,7 +60,7 @@ internal fun PreferencesPage(
                 valueText = interfaceStyleLabel(settings.interfaceStyle),
                 options = listOf(
                     AppOption(InterfaceStyle.MIUIX, "Miuix"),
-                    AppOption(InterfaceStyle.MATERIAL3, "Material 3"),
+                    AppOption(InterfaceStyle.MATERIAL3, "Material 3 Expressive"),
                 ),
                 selected = settings.interfaceStyle,
                 onSelect = { onChange(settings.copy(interfaceStyle = it)) },
@@ -449,7 +449,7 @@ private enum class StatusTone {
 
 private fun interfaceStyleLabel(style: InterfaceStyle): String = when (style) {
     InterfaceStyle.MIUIX -> "Miuix"
-    InterfaceStyle.MATERIAL3 -> "Material 3"
+    InterfaceStyle.MATERIAL3 -> "Material 3 Expressive"
 }
 
 private fun hostPlatformLabel(platform: HostPlatform): String = when (platform) {
