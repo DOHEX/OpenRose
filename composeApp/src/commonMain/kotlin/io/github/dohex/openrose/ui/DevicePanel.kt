@@ -1,6 +1,9 @@
 package io.github.dohex.openrose.ui
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -9,7 +12,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.draw.clip
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -237,24 +243,48 @@ private fun UnconnectedHeadphonesDashboard(
         }
         return
     }
+    val isMaterial3 = LocalInterfaceStyle.current == InterfaceStyle.MATERIAL3
     val visibleError = state.lastError
     visibleError?.let { error ->
-        AppDashboardCard {
+        AppDashboardCard(
+            modifier = if (isMaterial3) Modifier.border(
+                width = 1.dp,
+                color = MaterialTheme.colorScheme.error.copy(alpha = 0.35f),
+                shape = RoundedCornerShape(20.dp),
+            ) else Modifier,
+        ) {
             AppText(error.message, color = appColor(AppColorRole.Error))
             AppButton("查看详情", { onNavigate(AppPage.DIAGNOSTICS) }, kind = AppButtonKind.Secondary)
         }
     }
 
-
     val bondedRose = state.bondedDevices.filter { it.profile != null }
     if (bondedRose.isEmpty() && state.connectionTarget == null) {
-        AppDashboardCard {
+        AppDashboardCard(
+            modifier = if (isMaterial3) Modifier.border(
+                width = 1.dp,
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
+                shape = RoundedCornerShape(20.dp),
+            ) else Modifier,
+        ) {
             Column(
                 Modifier.fillMaxWidth().padding(vertical = 16.dp, horizontal = 8.dp),
                 horizontalAlignment = Alignment.Start,
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
-                EarbudsArtwork(compact = false)
+                if (isMaterial3) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(MaterialTheme.colorScheme.surfaceContainerLowest)
+                            .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f), RoundedCornerShape(16.dp))
+                            .padding(12.dp),
+                    ) {
+                        EarbudsArtwork(compact = false)
+                    }
+                } else {
+                    EarbudsArtwork(compact = false)
+                }
                 Column(
                     horizontalAlignment = Alignment.Start,
                     verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -297,16 +327,35 @@ private fun UnconnectedHeadphonesDashboard(
         state.platform.permission != PermissionState.NOT_REQUIRED
     val unavailableTransport = state.platform.transport as? TransportAvailability.Unavailable
 
-    AppDashboardCard {
+    AppDashboardCard(
+        modifier = if (isMaterial3) Modifier.border(
+            width = 1.dp,
+            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
+            shape = RoundedCornerShape(20.dp),
+        ) else Modifier,
+    ) {
         Column(
             Modifier.fillMaxWidth().padding(vertical = 8.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            EarbudsArtwork(compact = false)
+            if (isMaterial3) {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(MaterialTheme.colorScheme.surfaceContainerLowest)
+                        .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f), RoundedCornerShape(16.dp))
+                        .padding(12.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    EarbudsArtwork(compact = false)
+                }
+            } else {
+                EarbudsArtwork(compact = false)
+            }
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(4.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -325,22 +374,37 @@ private fun UnconnectedHeadphonesDashboard(
                         )
                     }
                 }
-                if (isConnecting) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                        AppBusyIndicator()
-                        AppText("正在连接…", role = AppTextRole.Summary, color = appColor(AppColorRole.Primary))
+                val statusContent: @Composable () -> Unit = {
+                    if (isConnecting) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            AppBusyIndicator()
+                            AppText("正在连接…", role = AppTextRole.Summary, color = appColor(AppColorRole.Primary))
+                        }
+                    } else if (permissionRequired) {
+                        AppText("需要蓝牙权限才能连接这副耳机", role = AppTextRole.Summary)
+                    } else if (unavailableTransport != null) {
+                        AppText(unavailableTransport.reason, role = AppTextRole.Summary)
+                    } else if (visibleError != null) {
+                        AppText("连接未成功 · 请确认耳机已开盖并在附近", role = AppTextRole.Summary, color = appColor(AppColorRole.Error))
+                    } else {
+                        AppText("未连接 · 耳机开盖后将自动连接", role = AppTextRole.Summary)
                     }
-                } else if (permissionRequired) {
-                    AppText("需要蓝牙权限才能连接这副耳机", role = AppTextRole.Summary)
-                } else if (unavailableTransport != null) {
-                    AppText(unavailableTransport.reason, role = AppTextRole.Summary)
-                } else if (visibleError != null) {
-                    AppText("连接未成功 · 请确认耳机已开盖并在附近", role = AppTextRole.Summary, color = appColor(AppColorRole.Error))
+                }
+                if (isMaterial3) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(MaterialTheme.colorScheme.surfaceContainer)
+                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        statusContent()
+                    }
                 } else {
-                    AppText("未连接 · 耳机开盖后将自动连接", role = AppTextRole.Summary)
+                    statusContent()
                 }
             }
             Column(
@@ -391,7 +455,13 @@ private fun UnconnectedHeadphonesDashboard(
     if (otherBonded.isNotEmpty()) {
         AppGroup(title = "其他已配对设备") {
             otherBonded.forEach { paired ->
-                AppDashboardCard {
+                AppDashboardCard(
+                    modifier = if (isMaterial3) Modifier.border(
+                        width = 1.dp,
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
+                        shape = RoundedCornerShape(20.dp),
+                    ) else Modifier,
+                ) {
                     Row(
                         Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -402,7 +472,19 @@ private fun UnconnectedHeadphonesDashboard(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.weight(1f),
                         ) {
-                            AppIcon(RoseIcon.HEADPHONES)
+                            if (isMaterial3) {
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(MaterialTheme.colorScheme.surfaceContainer)
+                                        .padding(8.dp),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    AppIcon(RoseIcon.HEADPHONES)
+                                }
+                            } else {
+                                AppIcon(RoseIcon.HEADPHONES)
+                            }
                             Column {
                                 AppText(paired.name?.takeIf(String::isNotBlank) ?: paired.profile!!.displayName)
                                 paired.profile?.let {
@@ -435,9 +517,10 @@ private fun UnconnectedHeadphonesDashboard(
 }
 @Composable
 private fun BatteryStrip(device: DeviceState, initializing: Boolean) {
+    val isMaterial3 = LocalInterfaceStyle.current == InterfaceStyle.MATERIAL3
     Row(
         Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(if (isMaterial3) 8.dp else 12.dp),
     ) {
         listOf(
             "左耳" to DeviceField.LEFT_BATTERY,
@@ -446,8 +529,22 @@ private fun BatteryStrip(device: DeviceState, initializing: Boolean) {
         ).forEach { (label, field) ->
             val percent = (device.knownValue(field) as? FieldValue.Number)
                 ?.value?.takeIf { it in 0..100 }
+            val itemModifier = if (isMaterial3) {
+                Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.surfaceContainer)
+                    .border(
+                        width = 1.dp,
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
+                        shape = RoundedCornerShape(12.dp),
+                    )
+                    .padding(horizontal = 10.dp, vertical = 8.dp)
+            } else {
+                Modifier.weight(1f)
+            }
             Column(
-                Modifier.weight(1f),
+                modifier = itemModifier,
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 AppText(label, role = AppTextRole.Footnote)
