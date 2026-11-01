@@ -1,12 +1,17 @@
 package io.github.dohex.openrose.ui
 
-import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -172,31 +177,42 @@ private fun AddDeviceHero(scanning: Boolean) {
     val isMaterial3 = LocalInterfaceStyle.current == InterfaceStyle.MATERIAL3
     Box(Modifier.fillMaxWidth().height(190.dp), contentAlignment = Alignment.Center) {
         if (scanning) {
-            val transition = rememberInfiniteTransition(label = "earbud search")
             if (isMaterial3) {
-                val expressiveEasing = CubicBezierEasing(0.1f, 0.7f, 0.1f, 1.0f)
-                val pulse1 = transition.animateFloat(
-                    initialValue = 0f,
-                    targetValue = 1f,
-                    animationSpec = infiniteRepeatable(
-                        animation = tween(2200, easing = expressiveEasing),
-                        repeatMode = RepeatMode.Restart,
-                    ),
-                    label = "search pulse 1",
-                )
-                val pulse2 = transition.animateFloat(
-                    initialValue = 0f,
-                    targetValue = 1f,
-                    animationSpec = infiniteRepeatable(
-                        animation = tween(2200, delayMillis = 650, easing = expressiveEasing),
-                        repeatMode = RepeatMode.Restart,
-                    ),
-                    label = "search pulse 2",
-                )
+                val pulse1 = remember { Animatable(0f) }
+                val pulse2 = remember { Animatable(0f) }
+                LaunchedEffect(Unit) {
+                    launch {
+                        while (isActive) {
+                            pulse1.snapTo(0f)
+                            pulse1.animateTo(
+                                targetValue = 1f,
+                                 animationSpec = spring(
+                                    dampingRatio = Spring.DampingRatioNoBouncy,
+                                    stiffness = Spring.StiffnessVeryLow,
+                                    visibilityThreshold = 0.001f,
+                                ),
+                            )
+                        }
+                    }
+                    launch {
+                        delay(650)
+                        while (isActive) {
+                            pulse2.snapTo(0f)
+                            pulse2.animateTo(
+                                targetValue = 1f,
+                                animationSpec = spring(
+                                    dampingRatio = Spring.DampingRatioNoBouncy,
+                                    stiffness = Spring.StiffnessVeryLow,
+                                    visibilityThreshold = 0.001f,
+                                ),
+                            )
+                        }
+                    }
+                }
                 val primary = MaterialTheme.colorScheme.primary
                 Canvas(Modifier.size(200.dp)) {
-                    val p1 = pulse1.value
-                    val p2 = pulse2.value
+                    val p1 = pulse1.value.coerceIn(0f, 1f)
+                    val p2 = pulse2.value.coerceIn(0f, 1f)
                     drawCircle(
                         color = primary.copy(alpha = 0.28f * (1f - p1)),
                         radius = size.minDimension * (0.28f + p1 * 0.22f),
@@ -213,6 +229,7 @@ private fun AddDeviceHero(scanning: Boolean) {
                     )
                 }
             } else {
+                val transition = rememberInfiniteTransition(label = "earbud search")
                 val pulse = transition.animateFloat(
                     initialValue = 0f,
                     targetValue = 1f,
@@ -279,13 +296,7 @@ private fun AddDeviceCandidateCard(
     onCancelConnection: () -> Unit,
 ) {
     val isMaterial3 = LocalInterfaceStyle.current == InterfaceStyle.MATERIAL3
-    AppDashboardCard(
-        modifier = if (isMaterial3) Modifier.border(
-            width = 1.dp,
-            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
-            shape = RoundedCornerShape(20.dp),
-        ) else Modifier,
-    ) {
+    AppDashboardCard {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             val artworkModifier = if (isMaterial3) {
                 Modifier

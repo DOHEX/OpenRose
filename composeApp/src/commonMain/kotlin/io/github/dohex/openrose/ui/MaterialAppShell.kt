@@ -8,6 +8,7 @@ package io.github.dohex.openrose.ui
 
 import io.github.dohex.openrose.core.PageTransition
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.ui.focus.focusProperties
@@ -48,6 +49,20 @@ import top.yukonga.miuix.kmp.blur.Backdrop
 import top.yukonga.miuix.kmp.blur.ProgressiveBlur
 
 @Composable
+private fun MaterialRailHeader() {
+    Box(
+        modifier = Modifier
+            .padding(top = 8.dp, bottom = 16.dp)
+            .size(48.dp)
+            .clip(CircleShape)
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+        contentAlignment = Alignment.Center,
+    ) {
+        AppIcon(RoseIcon.HEADPHONES, contentDescription = "OpenRose")
+    }
+}
+
+@Composable
 internal fun MaterialAppShell(
     backStack: List<AppPage> = emptyList(),
     page: AppPage,
@@ -72,18 +87,7 @@ internal fun MaterialAppShell(
         Row(Modifier.fillMaxSize()) {
         if (wide) NavigationRail(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
-            header = {
-                Box(
-                    modifier = Modifier
-                        .padding(top = 8.dp, bottom = 16.dp)
-                        .size(48.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.surfaceContainerHigh),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    AppIcon(RoseIcon.HEADPHONES, contentDescription = "OpenRose")
-                }
-            },
+            header = { MaterialRailHeader() },
         ) {
             mainPages.forEach { destination ->
                 val isSelected = if (backStack.isNotEmpty()) backStack.first() == destination else page == destination
@@ -258,18 +262,7 @@ internal fun MaterialMainShell(
         if (wide) {
             NavigationRail(
                 containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
-                header = {
-                    Box(
-                        modifier = Modifier
-                            .padding(top = 8.dp, bottom = 16.dp)
-                            .size(48.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.surfaceContainerHigh),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        AppIcon(RoseIcon.HEADPHONES, contentDescription = "OpenRose")
-                    }
-                },
+                header = { MaterialRailHeader() },
             ) {
                 mainPages.forEachIndexed { index, destination ->
                     val isSelected = currentTab == destination
@@ -314,6 +307,14 @@ internal fun MaterialMainShell(
                             ) {
                                 mainPages.forEachIndexed { index, destination ->
                                     val isSelected = currentTab == destination
+                                    val indicatorWidth by animateDpAsState(
+                                        targetValue = if (isSelected) 56.dp else 48.dp,
+                                        animationSpec = spring(
+                                            dampingRatio = 0.75f,
+                                            stiffness = 400f,
+                                        ),
+                                        label = "tabIndicatorWidth",
+                                    )
                                     val containerColor by animateColorAsState(
                                         targetValue = if (isSelected) {
                                             MaterialTheme.colorScheme.secondaryContainer
@@ -350,7 +351,7 @@ internal fun MaterialMainShell(
                                                     onNavigate(destination)
                                                 },
                                             )
-                                            .size(48.dp),
+                                            .size(width = indicatorWidth, height = 48.dp),
                                         contentAlignment = Alignment.Center,
                                     ) {
                                         AppIcon(

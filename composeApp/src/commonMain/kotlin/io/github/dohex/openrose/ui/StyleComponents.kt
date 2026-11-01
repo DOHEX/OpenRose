@@ -1,8 +1,12 @@
-@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@file:OptIn(
+    androidx.compose.material3.ExperimentalMaterial3Api::class,
+    androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class,
+)
 
 package io.github.dohex.openrose.ui
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -80,7 +84,7 @@ internal fun ProvideInterfaceStyle(style: InterfaceStyle, dark: Boolean, content
     CompositionLocalProvider(LocalInterfaceStyle provides style) {
         when (style) {
             InterfaceStyle.MIUIX -> MiuixTheme(colors = miuixColors(dark), content = content)
-            InterfaceStyle.MATERIAL3 -> MaterialTheme(colorScheme = materialColors(dark), content = content)
+            InterfaceStyle.MATERIAL3 -> MaterialTheme(colorScheme = materialColors(dark), motionScheme = MotionScheme.expressive(), content = content)
         }
     }
 }
@@ -217,10 +221,12 @@ internal fun AppDashboardCard(
             InterfaceStyle.MIUIX -> MiuixCard(modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
                 Column(Modifier.padding(padding), verticalArrangement = Arrangement.spacedBy(spacing), content = content)
             }
-            InterfaceStyle.MATERIAL3 -> ElevatedCard(
+            InterfaceStyle.MATERIAL3 -> Card(
                 modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp),
                 shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+                elevation = CardDefaults.elevatedCardElevation(),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
             ) {
                 Column(Modifier.padding(padding), verticalArrangement = Arrangement.spacedBy(spacing), content = content)
             }

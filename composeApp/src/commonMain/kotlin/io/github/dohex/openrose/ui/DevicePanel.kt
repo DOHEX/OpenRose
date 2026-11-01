@@ -246,13 +246,7 @@ private fun UnconnectedHeadphonesDashboard(
     val isMaterial3 = LocalInterfaceStyle.current == InterfaceStyle.MATERIAL3
     val visibleError = state.lastError
     visibleError?.let { error ->
-        AppDashboardCard(
-            modifier = if (isMaterial3) Modifier.border(
-                width = 1.dp,
-                color = MaterialTheme.colorScheme.error.copy(alpha = 0.35f),
-                shape = RoundedCornerShape(20.dp),
-            ) else Modifier,
-        ) {
+        AppDashboardCard {
             AppText(error.message, color = appColor(AppColorRole.Error))
             AppButton("查看详情", { onNavigate(AppPage.DIAGNOSTICS) }, kind = AppButtonKind.Secondary)
         }
@@ -260,13 +254,7 @@ private fun UnconnectedHeadphonesDashboard(
 
     val bondedRose = state.bondedDevices.filter { it.profile != null }
     if (bondedRose.isEmpty() && state.connectionTarget == null) {
-        AppDashboardCard(
-            modifier = if (isMaterial3) Modifier.border(
-                width = 1.dp,
-                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
-                shape = RoundedCornerShape(20.dp),
-            ) else Modifier,
-        ) {
+        AppDashboardCard {
             Column(
                 Modifier.fillMaxWidth().padding(vertical = 16.dp, horizontal = 8.dp),
                 horizontalAlignment = Alignment.Start,
@@ -327,13 +315,7 @@ private fun UnconnectedHeadphonesDashboard(
         state.platform.permission != PermissionState.NOT_REQUIRED
     val unavailableTransport = state.platform.transport as? TransportAvailability.Unavailable
 
-    AppDashboardCard(
-        modifier = if (isMaterial3) Modifier.border(
-            width = 1.dp,
-            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
-            shape = RoundedCornerShape(20.dp),
-        ) else Modifier,
-    ) {
+    AppDashboardCard {
         Column(
             Modifier.fillMaxWidth().padding(vertical = 8.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -455,13 +437,7 @@ private fun UnconnectedHeadphonesDashboard(
     if (otherBonded.isNotEmpty()) {
         AppGroup(title = "其他已配对设备") {
             otherBonded.forEach { paired ->
-                AppDashboardCard(
-                    modifier = if (isMaterial3) Modifier.border(
-                        width = 1.dp,
-                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
-                        shape = RoundedCornerShape(20.dp),
-                    ) else Modifier,
-                ) {
+                AppDashboardCard {
                     Row(
                         Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
