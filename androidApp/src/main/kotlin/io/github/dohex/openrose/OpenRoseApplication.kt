@@ -9,6 +9,9 @@ import android.content.IntentFilter
 import android.os.Build
 import android.os.UserManager
 import android.location.LocationManager
+import io.github.dohex.openrose.core.BackgroundControlBlock
+import io.github.dohex.openrose.core.BackgroundControlStatus
+import io.github.dohex.openrose.core.BackgroundServiceFact
 import io.github.dohex.openrose.core.ControlRuntime
 import io.github.dohex.openrose.core.DeviceSetting
 import io.github.dohex.openrose.core.LocalControlRuntime
@@ -23,7 +26,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 
-/** One owner for the process. Activities and interface styles only use this control runtime. */
+/**
+ * Builds the one ordinary control runtime of this process. Activities, interface styles and
+ * [ControlService] only use or observe it, so an interface closing or a task being removed never
+ * decides the control connection's lifetime; the optional background-control service does.
+ */
 class OpenRoseApplication : Application() {
     private val controlScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     lateinit var runtime: ControlRuntime
@@ -31,6 +38,7 @@ class OpenRoseApplication : Application() {
     lateinit var bridge: ControlBridgeHost
         private set
     private var preferencesLoaded = false
+    private var backgroundService: BackgroundServiceFact = BackgroundServiceFact.NotRunning
 
     override fun onCreate() {
         super.onCreate()
@@ -82,13 +90,53 @@ class OpenRoseApplication : Application() {
 
     fun updateSettings(settings: UserSettings) {
         if (!userUnlocked()) return
+        val backgroundIntentChanged = runtime.state.value.settings.backgroundControlEnabled != settings.backgroundControlEnabled
         runtime.updateSettings(settings)
-        preferences().edit().also { editor ->
-            UserSettingsCodec.encode(settings).forEach { (key, value) -> editor.putString(key, value) }
-        }.apply()
+        val editor = preferences().edit()
+        UserSettingsCodec.encode(settings).forEach { (key, value) -> editor.putString(key, value) }
+        // A stop choice must not be lost to a process kill right after the user disables background control.
+        if (backgroundIntentChanged) editor.commit() else editor.apply()
+        if (settings.backgroundControlEnabled) startBackgroundControlFromUserEntry()
     }
 
-    fun refreshPlatform() = runtime.updatePlatformState(readPlatformState(permissionRequested()).copy(
+    fun setBackgroundControlEnabled(enabled: Boolean) {
+        updateSettings(runtime.state.value.settings.copy(backgroundControlEnabled = enabled))
+    }
+
+    /**
+     * Starts the foreground service for the saved background-control intent. Only called from entries the
+     * user is looking at (toggle, opening the app, a permission result), where the platform allows a
+     * foreground start; it is never a retry loop and never a wake-up after the process is gone.
+     */
+    fun startBackgroundControlFromUserEntry() {
+        val status = runtime.state.value.backgroundControl
+        val startable = status == BackgroundControlStatus.NotRunning ||
+            (status is BackgroundControlStatus.Blocked && status.reason != BackgroundControlBlock.BLUETOOTH_PERMISSION)
+        if (!startable || !userUnlocked()) return
+        updateBackgroundService(BackgroundServiceFact.NotRunning)
+        try {
+            startForegroundService(Intent(this, ControlService::class.java))
+        } catch (denied: SecurityException) {
+            backgroundServiceRejected(BackgroundControlBlock.SERVICE_START_REFUSED)
+        } catch (restricted: IllegalStateException) {
+            backgroundServiceRejected(BackgroundControlBlock.BACKGROUND_START_RESTRICTED)
+        }
+    }
+
+    fun backgroundServiceRunning() = updateBackgroundService(BackgroundServiceFact.Running)
+    fun backgroundServiceRejected(reason: BackgroundControlBlock) =
+        updateBackgroundService(BackgroundServiceFact.StartRejected(reason))
+    /** A rejected start keeps its reason; only a service that had been running becomes "not running". */
+    fun backgroundServiceStopped() {
+        if (backgroundService == BackgroundServiceFact.Running) updateBackgroundService(BackgroundServiceFact.NotRunning)
+    }
+
+    private fun updateBackgroundService(fact: BackgroundServiceFact) {
+        backgroundService = fact
+        refreshPlatform()
+    }
+
+    fun refreshPlatform() = runtime.updatePlatformState(readPlatformState(permissionRequested(), backgroundService).copy(
         module = bridge.availability(), bridge = bridge.diagnostics(),
     ))
 

@@ -42,6 +42,7 @@ object UserSettingsCodec {
             FusionSettingsDestination.SYSTEM -> "system"
             FusionSettingsDestination.OPENROSE -> "openrose"
         },
+        "background_control_enabled" to settings.backgroundControlEnabled.toString(),
     )
 
     fun decode(values: Map<String, String>): UserSettings {
@@ -92,6 +93,8 @@ object UserSettingsCodec {
                 "openrose" -> FusionSettingsDestination.OPENROSE
                 else -> defaults.fusionSettingsDestination
             },
+            backgroundControlEnabled = values["background_control_enabled"]
+                ?.toBooleanStrictOrNull() ?: defaults.backgroundControlEnabled,
         )
     }
 }

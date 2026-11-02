@@ -7,6 +7,9 @@
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" android:maxSdkVersion="30" />
     <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <queries>
         <package android:name="com.android.bluetooth" />
         <package android:name="com.xiaomi.bluetooth" />
@@ -28,6 +31,12 @@
             android:name=".bridge.ControlBridgeService"
             android:exported="true"
             android:directBootAware="true"
+            android:stopWithTask="false" />
+        <!-- Ordinary background control: a connected-device foreground service, never exported. -->
+        <service
+            android:name=".ControlService"
+            android:exported="false"
+            android:foregroundServiceType="connectedDevice"
             android:stopWithTask="false" />
         <activity android:name=".MainActivity" android:exported="true">
             <intent-filter>

@@ -36,6 +36,8 @@ import io.github.dohex.openrose.core.UserSettings
 internal fun PreferencesPage(
     state: ControlState,
     onChange: (UserSettings) -> Unit,
+    onRequestPermission: () -> Unit = {},
+    onRequestNotificationPermission: () -> Unit = {},
 ) {
     val settings = state.settings
     var systemPreferenceFeedback by remember { mutableStateOf<String?>(null) }
@@ -172,6 +174,10 @@ internal fun PreferencesPage(
                     onChange = { onChange(settings.copy(forceBle = it)) },
                 )
             }
+        }
+
+        if (state.backgroundControlApplicable()) {
+            BackgroundControlGroup(state, onChange, onRequestPermission, onRequestNotificationPermission)
         }
 
         AppGroup(title = "关于") {
@@ -378,7 +384,7 @@ private fun IntegrationReadinessCard(module: ModuleAvailability) {
 }
 
 @Composable
-private fun ToneInfoRow(label: String, value: String, tone: StatusTone) {
+internal fun ToneInfoRow(label: String, value: String, tone: StatusTone) {
     AppInfoRow(label = label, value = value, valueColor = tone.color())
 }
 
@@ -431,7 +437,7 @@ private fun DiagnosticPresentationRow(label: String, result: String) {
     detail?.let { AppInfoRow("依据", it) }
 }
 
-private enum class StatusTone {
+internal enum class StatusTone {
     NEUTRAL,
     GOOD,
     CAUTION,
