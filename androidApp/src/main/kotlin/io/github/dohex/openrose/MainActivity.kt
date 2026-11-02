@@ -15,6 +15,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
@@ -37,6 +38,10 @@ class MainActivity : ComponentActivity() {
     }
     private val notificationRequest = registerForActivityResult(ActivityResultContracts.RequestPermission()) {
         owner.refreshPlatform()
+    }
+    private val associationChooser = registerForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) {
+        // Whether the user confirmed or cancelled, the platform facts are re-read from the system.
+        owner.syncWakeObservation()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -73,6 +78,8 @@ class MainActivity : ComponentActivity() {
                 homeNavigationRequest = homeNavigationRequest,
                 onRestartIntegrationScopes = scopeRestarter::restart,
                 onRequestNotificationPermission = ::requestNotificationPermission,
+                onRequestAssociation = ::requestAssociation,
+                onOpenAppSettings = ::openAppSettings,
                 onSelectControlWay = owner::selectControlWay,
                 onDisableModuleControl = owner::disableModuleControl,
             )
@@ -105,6 +112,19 @@ class MainActivity : ComponentActivity() {
         super.onStop()
         // Discovery is a foreground interaction; control ownership and active links stay in the host.
         owner.stopScan()
+    }
+
+    /** The system shows its own chooser; the association is the user's explicit consent, never created silently. */
+    private fun requestAssociation() {
+        owner.requestCompanionAssociation(
+            onChooser = { associationChooser.launch(IntentSenderRequest.Builder(it).build()) },
+            onFailure = { owner.syncWakeObservation() },
+        )
+    }
+
+    /** Autostart and battery limits cannot be queried, so the user is sent to the app's system page. */
+    private fun openAppSettings() {
+        startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName")))
     }
 
     private fun requestNotificationPermission() {

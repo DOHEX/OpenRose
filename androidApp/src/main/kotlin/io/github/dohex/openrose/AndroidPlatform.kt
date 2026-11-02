@@ -9,6 +9,7 @@ import android.location.LocationManager
 import android.provider.Settings
 import android.app.NotificationManager
 import io.github.dohex.openrose.core.BackgroundServiceFact
+import io.github.dohex.openrose.core.WakeFacts
 import io.github.dohex.openrose.core.BackgroundServiceFacts
 import io.github.dohex.openrose.core.RunningNotification
 import io.github.dohex.openrose.core.ModuleAvailability
@@ -28,6 +29,8 @@ internal fun bluetoothPermissions(): Array<String> =
 internal fun Context.readPlatformState(
     permissionRequested: Boolean,
     backgroundService: BackgroundServiceFact = BackgroundServiceFact.NotRunning,
+    wake: WakeFacts = WakeFacts(),
+    userUnlocked: Boolean = true,
 ): PlatformState {
     val granted = bluetoothPermissions().all { checkSelfPermission(it) == PackageManager.PERMISSION_GRANTED }
     val permission = when {
@@ -64,7 +67,8 @@ internal fun Context.readPlatformState(
             packageManager.hasSystemFeature(PackageManager.FEATURE_BLUETOOTH_LE) &&
             packageManager.hasSystemFeature(PackageManager.FEATURE_BLUETOOTH)
         ) PlatformApplicability.APPLICABLE else PlatformApplicability.NOT_APPLICABLE,
-        backgroundService = BackgroundServiceFacts(backgroundService, runningNotification()),
+        backgroundService = BackgroundServiceFacts(backgroundService, runningNotification(), wake),
+        userUnlocked = userUnlocked,
     )
 }
 
