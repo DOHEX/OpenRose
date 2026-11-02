@@ -137,6 +137,9 @@ class ModuleControlHost(
         val current = currentOwner(generation)
         if (current is OwnerCheck.Rejected) return HostCallResult.Rejected(current.rejection, current.message)
         val active = (current as OwnerCheck.Current).owner
+        if (command is HostCommand.ClaimPrompt && !lease.role.presents(active.runtime.state.value.settings.islandMode)) {
+            return HostCallResult.Rejected(HostRejection.FORBIDDEN, "该系统入口不拥有当前提示策略")
+        }
         return try {
             // Running under the owner's job lets a release cancel and join this very command first.
             withContext(active.job) { dispatch(active.runtime, command) }
