@@ -1,29 +1,32 @@
 package io.github.dohex.openrose.bridge
 
 import android.os.Bundle
-import java.io.ByteArrayOutputStream
-import java.io.DataOutputStream
-import javax.crypto.Mac
-import javax.crypto.spec.SecretKeySpec
 
-/** Versioned app/module wire format; it never contains protocol commands or a second session. */
+/**
+ * Versioned wire constants for the module host's authenticated endpoint. There is no shared secret:
+ * the host authorises each caller from the Binder uid and package, so nothing here is a credential.
+ * Protocol commands and device state travel as the core module's rendered wire text in [PAYLOAD].
+ */
 internal object BridgeWire {
-    const val VERSION = 3
+    const val VERSION = 4
     const val KEY_VERSION = "version"
     const val STATUS = "status"
     const val MESSAGE = "message"
     const val PACKAGE = "package"
     const val PROCESS = "process"
-    const val UID = "uid"
-    const val PID = "pid"
     const val COMPONENT_MATCH_KEY = "component_match"
     const val RESOLUTION = "resolution"
-    const val SIGNATURE = "signature"
     const val LEASE_ID = "lease_id"
     const val SNAPSHOT = "snapshot"
     const val DEVICE_ID = "device_id"
     const val SESSION_ID = "session_id"
     const val READ_SEQUENCE = "read_sequence"
+    /** Rendered core wire text: a command, request, result, status or frame. */
+    const val PAYLOAD = "payload"
+    /** The owner generation (incarnation#sequence) a request was issued for. */
+    const val GENERATION = "generation"
+    /** On `open` replies: the host incarnation. On every session-scoped request/reply: the owner generation. */
+    const val HOST_EPOCH = "host_epoch"
     const val STATUS_OK = "OK"
     const val STATUS_NO_SESSION = "NO_SESSION"
     const val STATUS_TARGET_INCOMPATIBLE = "TARGET_INCOMPATIBLE"
@@ -36,20 +39,30 @@ internal object BridgeWire {
     const val STATUS_STALE_RECEIPT = "STALE_RECEIPT"
     const val STATUS_UNAVAILABLE = "UNAVAILABLE"
     const val STATUS_ACTION_FAILED = "ACTION_FAILED"
+    const val STATUS_UNAUTHORIZED = "UNAUTHORIZED"
     const val RESOLUTION_MATCHED = "MATCHED"
     const val RESOLUTION_CLASS_MISSING = "CLASS_MISSING"
     const val RESOLUTION_METHOD_MISSING = "METHOD_MISSING"
     const val RESOLUTION_HOOK_FAILED = "HOOK_FAILED"
     const val APP_PACKAGE = "io.github.dohex.openrose"
-    const val SERVICE_CLASS = "$APP_PACKAGE.bridge.ControlBridgeService"
     const val TARGET_PACKAGE = "com.android.bluetooth"
     const val TARGET_PROCESS = TARGET_PACKAGE
     const val TARGET_COMPONENT_CLASS = "com.android.bluetooth.btservice.AdapterService"
     const val TARGET_COMPONENT_METHOD = "onCreate"
     const val COMPONENT_MATCH = "$TARGET_COMPONENT_CLASS#$TARGET_COMPONENT_METHOD():void"
+
+    /**
+     * Discovery: an existing service in the host process hands out the endpoint Binder for this action.
+     * Reaching it is not authorisation; [IControlBridge.open] verifies the caller.
+     */
+    const val ACTION_CONTROL_HOST = "io.github.dohex.openrose.action.CONTROL_HOST"
+    const val HOST_SERVICE_CLASS = "com.android.bluetooth.ble.app.headset.BluetoothHeadsetService"
+
+    /** Persisted user intent the application mirrors for the host (read-only in the host process). */
     const val PREFERENCES_GROUP = "control_bridge_v2"
-    const val HOST_EPOCH = "host_epoch"
-    const val PROOF_KEY = "proof_key"
+    /** Settings the application mirrors for the host, in the core settings codec's own keys. */
+    const val CONFIG_GROUP = "module_config"
+    const val CONFIG_REVISION = "config_revision"
     const val FUSION_SETTINGS_DESTINATION = "fusion_settings_destination"
     const val FUSION_DEVICE_MAPPING = "fusion_device_mapping"
     const val DESTINATION_SYSTEM = "SYSTEM"
@@ -58,46 +71,15 @@ internal object BridgeWire {
     const val EXTRA_HEADPHONE_ADDRESS = "io.github.dohex.openrose.extra.HEADPHONE_ADDRESS"
     val RESOLUTIONS = setOf(RESOLUTION_MATCHED, RESOLUTION_CLASS_MISSING, RESOLUTION_METHOD_MISSING, RESOLUTION_HOOK_FAILED)
 
-    fun proof(keyHex: String, hostEpoch: String, processName: String, uid: Int, pid: Int, resolution: String = RESOLUTION_MATCHED,
-              target: BridgeTarget = BridgeTarget.BLUETOOTH): Bundle = Bundle().apply {
+    fun hello(processName: String?, target: BridgeTarget?, resolution: String = RESOLUTION_MATCHED): Bundle = Bundle().apply {
         putInt(KEY_VERSION, VERSION)
-        putString(HOST_EPOCH, hostEpoch)
-        putString(PACKAGE, target.packageName)
-        putString(PROCESS, processName)
-        putInt(UID, uid)
-        putInt(PID, pid)
-        putString(COMPONENT_MATCH_KEY, target.componentMatch)
+        target?.let {
+            putString(PACKAGE, it.packageName)
+            putString(COMPONENT_MATCH_KEY, it.componentMatch)
+        }
+        processName?.let { putString(PROCESS, it) }
         putString(RESOLUTION, resolution)
-        putString(SIGNATURE, signature(keyHex, hostEpoch, processName, uid, pid, resolution, target).hex())
     }
-
-    fun signature(keyHex: String, hostEpoch: String, processName: String, uid: Int, pid: Int, resolution: String,
-                  target: BridgeTarget = BridgeTarget.BLUETOOTH): ByteArray {
-        require(keyHex.length == 64 && keyHex.all { it.isHexDigit() })
-        require(hostEpoch.length in 1..64 && processName.length in 1..128)
-        require(resolution in RESOLUTIONS)
-        val bytes = ByteArrayOutputStream().use { buffer ->
-            DataOutputStream(buffer).use { out ->
-                out.writeInt(VERSION)
-                out.writeUTF(hostEpoch)
-                out.writeUTF(target.packageName)
-                out.writeUTF(processName)
-                out.writeInt(uid)
-                out.writeInt(pid)
-                out.writeUTF(target.componentMatch)
-                out.writeUTF(resolution)
-            }
-            buffer.toByteArray()
-        }
-        return Mac.getInstance("HmacSHA256").run {
-            init(SecretKeySpec(keyHex.chunked(2).map { it.toInt(16).toByte() }.toByteArray(), "HmacSHA256"))
-            doFinal(bytes)
-        }
-    }
-
-    fun decodeSignature(value: String?): ByteArray? = value?.takeIf {
-        it.length == 64 && it.all { char -> char.isHexDigit() }
-    }?.chunked(2)?.map { it.toInt(16).toByte() }?.toByteArray()
 
     fun response(status: String, message: String? = null): Bundle = Bundle().apply {
         putInt(KEY_VERSION, VERSION)
@@ -105,6 +87,5 @@ internal object BridgeWire {
         message?.let { putString(MESSAGE, it) }
     }
 
-    private fun Char.isHexDigit(): Boolean = this in '0'..'9' || this in 'a'..'f' || this in 'A'..'F'
-    private fun ByteArray.hex(): String = joinToString("") { (it.toInt() and 255).toString(16).padStart(2, '0') }
+    fun payload(status: String, text: String): Bundle = response(status).apply { putString(PAYLOAD, text) }
 }

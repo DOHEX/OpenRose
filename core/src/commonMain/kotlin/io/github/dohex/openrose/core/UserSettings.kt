@@ -44,6 +44,19 @@ enum class FusionSettingsDestination {
     OPENROSE,
 }
 
+/**
+ * The user's chosen host for the one authoritative control session (ADR 0011). It states intent only;
+ * whether that owner is ready and whether earphones are connected are separate facts.
+ */
+enum class ControlWay {
+    /** The OpenRose application hosts the session. */
+    ORDINARY,
+    /** The system Bluetooth host (`com.android.bluetooth`) hosts the session through the module. */
+    MODULE,
+    /** Module control was explicitly disabled; no owner is active and ordinary control is not enabled either. */
+    NONE,
+}
+
 data class UserSettings(
     val interfaceStyle: InterfaceStyle = InterfaceStyle.MIUIX,
     val appearance: Appearance = Appearance.SYSTEM,
@@ -57,4 +70,5 @@ data class UserSettings(
     val fusionSettingsDestination: FusionSettingsDestination = FusionSettingsDestination.SYSTEM,
     /** Ordinary control only: keep the control connection available while the interface is closed. Off until the user opts in. */
     val backgroundControlEnabled: Boolean = false,
+    val controlWay: ControlWay = ControlWay.ORDINARY,
 )

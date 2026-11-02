@@ -158,6 +158,8 @@ data class ControlState(
     val connectionRecovery: ConnectionRecovery? = null,
     val presentation: SystemPresentationState = SystemPresentationState(),
     val connectionTarget: DeviceCandidate? = null,
+    /** Selected control way, whether its owner is ready, and who actually holds the session. */
+    val owner: OwnerState = OwnerState(),
 ) {
     /** Derived from the saved intent plus platform facts; a saved preference alone is never "ready". */
     val backgroundControl: BackgroundControlStatus get() = deriveBackgroundControl()

@@ -23,6 +23,7 @@ import io.github.dohex.openrose.core.HostPlatform
 import io.github.dohex.openrose.core.InterfaceStyle
 import io.github.dohex.openrose.core.IslandMode
 import io.github.dohex.openrose.core.IslandTrigger
+import io.github.dohex.openrose.core.ControlWay
 import io.github.dohex.openrose.core.PageTransition
 import io.github.dohex.openrose.core.ModuleAvailability
 import io.github.dohex.openrose.core.PermissionState
@@ -200,6 +201,8 @@ internal fun SystemIntegrationPage(
     onRequestPermission: () -> Unit,
     onOpenSystemSettings: () -> Unit,
     onDiagnostics: () -> Unit,
+    onSelectControlWay: (ControlWay) -> Unit = {},
+    onDisableModuleControl: () -> Unit = {},
 ) {
     val hyperOsApplicable = state.platform.hyperOsIntegrationApplicable
     Column(
@@ -213,6 +216,8 @@ internal fun SystemIntegrationPage(
         if (hyperOsApplicable) {
             IntegrationReadinessCard(state.platform.module)
         }
+
+        ControlWayCard(state, onSelectControlWay, onDisableModuleControl)
 
         AppGroup {
             AppArrowRow(

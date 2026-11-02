@@ -100,7 +100,8 @@ internal fun ControlState.deriveBackgroundControl(): BackgroundControlStatus {
     if (platform.hostPlatform == HostPlatform.WINDOWS || platform.hostPlatform == HostPlatform.LINUX) {
         return BackgroundControlStatus.Unsupported
     }
-    if (!settings.backgroundControlEnabled) return BackgroundControlStatus.Disabled
+    // Background control belongs to ordinary control; the saved intent is kept but not in force under another way.
+    if (!settings.backgroundControlEnabled || owner.selected != ControlWay.ORDINARY) return BackgroundControlStatus.Disabled
     if (platform.permission == PermissionState.REQUIRED || platform.permission == PermissionState.DENIED) {
         return BackgroundControlStatus.Blocked(BackgroundControlBlock.BLUETOOTH_PERMISSION)
     }
@@ -139,5 +140,6 @@ internal fun ControlState.deriveBackgroundRecovery(): BackgroundRecovery {
  * missing association never blocks the attempt, because the system's refusal is then reported as it is.
  */
 internal fun ControlState.deriveMayStartBackgroundService(): Boolean =
-    platform.hasBackgroundService() && platform.userUnlocked && settings.backgroundControlEnabled &&
+    owner.selected == ControlWay.ORDINARY && platform.hasBackgroundService() && platform.userUnlocked &&
+        settings.backgroundControlEnabled &&
         !platform.bluetoothPermissionMissing()

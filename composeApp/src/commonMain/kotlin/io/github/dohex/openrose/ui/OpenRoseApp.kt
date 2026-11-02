@@ -57,6 +57,8 @@ fun OpenRoseApp(
             ScopeRestartResult(it, ScopeRestartStatus.FAILED, "平台操作不可用")
         }
     },
+    onSelectControlWay: (ControlWay) -> Unit = {},
+    onDisableModuleControl: () -> Unit = {},
 ) {
     val dark = when (state.settings.appearance) {
         Appearance.SYSTEM -> isSystemInDarkTheme()
@@ -194,6 +196,8 @@ fun OpenRoseApp(
                             onRequestPermission = onRequestPermission,
                             onOpenSystemSettings = onOpenSystemSettings,
                             onDiagnostics = { navigate(AppPage.DIAGNOSTICS) },
+                            onSelectControlWay = onSelectControlWay,
+                            onDisableModuleControl = onDisableModuleControl,
                         )
                         AppPage.SETTINGS -> PreferencesPage(
                             state,

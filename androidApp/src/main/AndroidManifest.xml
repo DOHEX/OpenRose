@@ -32,11 +32,6 @@
             android:authorities="${applicationId}.XposedService"
             android:directBootAware="true"
             android:exported="true" />
-        <service
-            android:name=".bridge.ControlBridgeService"
-            android:exported="true"
-            android:directBootAware="true"
-            android:stopWithTask="false" />
         <!-- Ordinary background control: a connected-device foreground service, never exported. -->
         <service
             android:name=".ControlService"

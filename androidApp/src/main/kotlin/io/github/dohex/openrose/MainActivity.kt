@@ -80,6 +80,8 @@ class MainActivity : ComponentActivity() {
                 onRequestNotificationPermission = ::requestNotificationPermission,
                 onRequestAssociation = ::requestAssociation,
                 onOpenAppSettings = ::openAppSettings,
+                onSelectControlWay = owner::selectControlWay,
+                onDisableModuleControl = owner::disableModuleControl,
             )
         }
     }

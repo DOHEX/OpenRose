@@ -25,7 +25,11 @@ import java.util.concurrent.SynchronousQueue
 import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 
-/** Scoped system consumers of the one application-owned control session. No Bluetooth is opened here. */
+/**
+ * Scoped system module. In `com.android.bluetooth` it hosts the single module-controlled session
+ * ([ModuleHostRuntime]); every scoped target, including that one, consumes it through the
+ * authorised bridge client. No Bluetooth control connection is opened by the consumers.
+ */
 class OpenRoseBluetoothModule : XposedModule() {
     private val lifecycle = Any()
     private val entryHooks = mutableListOf<XposedInterface.HookHandle>()
@@ -46,6 +50,8 @@ class OpenRoseBluetoothModule : XposedModule() {
     private var official: OfficialConnectionPresenter? = null
     private var lastOfficialIdentity: String? = null
     private var entryResolution = BridgeWire.RESOLUTION_MATCHED
+    @Volatile private var hostRuntime: ModuleHostRuntime? = null
+    private var hostStarted = false
 
     override fun onModuleLoaded(param: ModuleLoadedParam) {
         processName = param.processName
@@ -59,6 +65,10 @@ class OpenRoseBluetoothModule : XposedModule() {
         synchronized(lifecycle) {
             if (target != null) return
             target = selected
+        }
+        if (selected == BridgeTarget.BLUETOOTH) {
+            // Discovery must exist before the entry hook can start the host owner.
+            hostRuntime = ModuleHostRuntime(this, param.classLoader).also { it.installDiscovery() }
         }
         installNativeAdapters(selected, param.classLoader)
         val entry = if (selected == BridgeTarget.BLUETOOTH) {
@@ -133,7 +143,8 @@ class OpenRoseBluetoothModule : XposedModule() {
             if (retired || client != null || target != selected) return
             targetContext = context.applicationContext ?: context
             val actualProcess = processName ?: return
-            val created = AuthenticatedBridgeClient(this, context, selected, actualProcess,
+            if (selected == BridgeTarget.BLUETOOTH) startHost(context)
+            val created = AuthenticatedBridgeClient(context, selected, actualProcess,
                 onSnapshot = ::publish,
                 onClear = ::clearConsumers,
                 onAuthenticated = { authenticated ->
@@ -146,6 +157,14 @@ class OpenRoseBluetoothModule : XposedModule() {
             client = created
             created.start()
         }
+    }
+
+    /** Starts the host owner once per runtime, before the in-process consumer client exists. */
+    private fun startHost(context: Context) {
+        if (hostStarted) return
+        val runtime = hostRuntime ?: return
+        hostStarted = true
+        runtime.start(context)
     }
 
     private fun presentationCallbacks(connected: AuthenticatedBridgeClient) = object : PresentationCallbacks {
@@ -221,11 +240,14 @@ class OpenRoseBluetoothModule : XposedModule() {
     }
 
     override fun onHotReloading(param: HotReloadingParam): Boolean {
+        // Release the host owner first so no consumer outlives or races its source.
+        val hostClosed = hostRuntime?.close() ?: true
+        hostRuntime = null
         retired = true
         // Only framework/target-owned values cross the generation boundary.
         targetContext?.let { param.setSavedInstanceState(it) }
         synchronized(lifecycle) { entryHooks.forEach { runCatching { it.unhook() } }; entryHooks.clear() }
-        return client?.close() ?: closeConsumers()
+        return (client?.close() ?: closeConsumers()) && hostClosed
     }
 
     override fun onHotReloaded(param: HotReloadedParam) {
@@ -235,6 +257,13 @@ class OpenRoseBluetoothModule : XposedModule() {
         if (context == null) { log(Log.WARN, TAG, "hot_reload_context_unavailable"); return }
         val selected = BridgeTarget.resolve(context.packageName, param.processName) ?: return
         target = selected
+        if (selected == BridgeTarget.BLUETOOTH) {
+            val runtime = ModuleHostRuntime(this, context.classLoader)
+            hostRuntime = runtime
+            hostStarted = false
+            runtime.installDiscovery()
+            startHost(context)
+        }
         installNativeAdapters(selected, context.classLoader)
         attach(context, selected)
     }

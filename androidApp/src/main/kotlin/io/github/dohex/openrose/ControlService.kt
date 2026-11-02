@@ -12,6 +12,7 @@ import android.os.Build
 import android.os.IBinder
 import io.github.dohex.openrose.core.BackgroundControlBlock
 import io.github.dohex.openrose.core.ConnectionState
+import io.github.dohex.openrose.core.ControlWay
 import io.github.dohex.openrose.core.ControlState
 import io.github.dohex.openrose.core.TransportAvailability
 import kotlinx.coroutines.CoroutineScope
@@ -47,10 +48,16 @@ class ControlService : Service() {
         }
         // Every start request must reach startForeground, including repeated ones.
         if (!enterForeground(notification(app.runtime.state.value))) return START_NOT_STICKY
+        if (!app.ordinaryControlSelected()) {
+            leaveForeground()
+            return START_NOT_STICKY
+        }
         app.backgroundServiceRunning()
         if (observer == null) {
             observer = scope.launch {
-                app.runtime.state.map { it.settings.backgroundControlEnabled to notificationText(it) }
+                // Background control exists only while ordinary control is the saved choice; module control
+                // (or none) ends it without touching the saved intent.
+                app.runtime.state.map { (it.settings.backgroundControlEnabled && it.owner.selected == ControlWay.ORDINARY) to notificationText(it) }
                     .distinctUntilChanged()
                     .collect { (enabled, _) ->
                         if (!enabled) {
