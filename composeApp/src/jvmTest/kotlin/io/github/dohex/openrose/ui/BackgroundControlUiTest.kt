@@ -17,11 +17,17 @@ import io.github.dohex.openrose.core.PlatformState
 import io.github.dohex.openrose.core.RunningNotification
 import io.github.dohex.openrose.core.TransportAvailability
 import io.github.dohex.openrose.core.UserSettings
+import io.github.dohex.openrose.core.CompanionAssociation
+import io.github.dohex.openrose.core.PresenceObservation
+import io.github.dohex.openrose.core.WakeBand
+import io.github.dohex.openrose.core.WakeFacts
 import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+
+private const val ARMED_TEXT = "系统条件已配置；自启动和省电限制无法检测，是否真正唤起需以实际表现为准"
 
 class BackgroundControlUiTest {
     @Test
@@ -39,7 +45,7 @@ class BackgroundControlUiTest {
                 harness.render()
 
                 assertTrue(harness.settingsChanges.single().backgroundControlEnabled, "intent crosses the public callback in $style")
-                assertTrue(harness.hasText("已启用，尚未运行；打开 OpenRose 后启动"), "saved intent is not ready in $style")
+                assertTrue(harness.hasText("已启用，尚未运行；耳机下次音频连接或打开 OpenRose 时启动"), "saved intent is not ready in $style")
                 assertFalse(harness.hasText("运行中"), "saving never reads as running in $style")
 
                 harness.update { it.copy(platform = it.platform.copy(backgroundService = BackgroundServiceFacts(BackgroundServiceFact.Running))) }
@@ -105,6 +111,58 @@ class BackgroundControlUiTest {
     }
 
     @Test
+    fun aMissingAssociationIsExplainedPerAndroidVersionAndNeverShownAsReady() = runBlocking {
+        for (style in InterfaceStyle.entries) {
+            val harness = createHarness(style, settings = UserSettings(interfaceStyle = style, backgroundControlEnabled = true))
+            try {
+                harness.render()
+                harness.clickTab("设置")
+                harness.update {
+                    it.copy(platform = it.platform.copy(backgroundService = BackgroundServiceFacts(
+                        wake = WakeFacts(WakeBand.ANDROID_14_PLUS, CompanionAssociation.MISSING, PresenceObservation.NOT_OBSERVING),
+                    )))
+                }
+                harness.render()
+                assertTrue(harness.hasText("尚未关联耳机或关联已被取消，进程被回收或手机重启后不会自动恢复"), "gap is stated in $style")
+                assertFalse(harness.hasText(ARMED_TEXT), "incomplete never reads as ready in $style")
+                harness.clickText("关联耳机")
+                assertEquals(1, harness.associationRequests, "association action reaches the host in $style")
+
+                harness.update {
+                    it.copy(platform = it.platform.copy(backgroundService = BackgroundServiceFacts(
+                        wake = WakeFacts(WakeBand.ANDROID_14_PLUS, CompanionAssociation.ACTIVE, PresenceObservation.OBSERVING),
+                    )))
+                }
+                harness.render()
+                assertTrue(harness.hasText(ARMED_TEXT), "completed prerequisites are reported in $style")
+                assertFalse(harness.hasText("尚未关联耳机或关联已被取消，进程被回收或手机重启后不会自动恢复"))
+                harness.clickText("应用设置（自启动、电量）")
+                assertEquals(1, harness.appSettingsOpened, "autostart guidance reaches the host in $style")
+            } finally {
+                harness.close()
+            }
+        }
+    }
+
+    @Test
+    fun androidEightToElevenNeedsNoAssociationButStillDisclosesAutostart() = runBlocking {
+        val harness = createHarness(InterfaceStyle.MIUIX, settings = UserSettings(backgroundControlEnabled = true))
+        try {
+            harness.render()
+            harness.clickTab("设置")
+            harness.update {
+                it.copy(platform = it.platform.copy(backgroundService = BackgroundServiceFacts(wake = WakeFacts(WakeBand.ANDROID_8_11))))
+            }
+            harness.render()
+            assertFalse(harness.hasText("关联耳机"), "no association is requested before Android 12")
+            assertTrue(harness.hasText(ARMED_TEXT))
+            assertTrue(harness.hasText("应用设置（自启动、电量）"), "autostart guidance stays reachable")
+        } finally {
+            harness.close()
+        }
+    }
+
+    @Test
     fun hostsWithoutBackgroundServicesOfferNoSwitch() = runBlocking {
         for (style in InterfaceStyle.entries) {
             val harness = createHarness(style, host = HostPlatform.LINUX)
@@ -148,6 +206,8 @@ class BackgroundControlUiTest {
                 },
                 onRequestPermission = { harness.permissionRequests++ },
                 onRequestNotificationPermission = { harness.notificationRequests++ },
+                onRequestAssociation = { harness.associationRequests++ },
+                onOpenAppSettings = { harness.appSettingsOpened++ },
                 onOpenSystemSettings = {},
                 onStartScan = {},
                 onStopScan = {},
@@ -168,6 +228,8 @@ class BackgroundControlUiTest {
     ) : OpenRoseUiTestHarness(scene) {
         var permissionRequests = 0
         var notificationRequests = 0
+        var associationRequests = 0
+        var appSettingsOpened = 0
         fun update(transform: (ControlState) -> ControlState) { state.value = transform(state.value) }
     }
 }

@@ -86,6 +86,8 @@ internal class ControlSession(
     private var active: Attempt? = null
     private var audioDrivenSessionDeviceId: DeviceId? = null
     private var autoConnectJob: Job? = null
+    /** The newest audio-connection fact, kept while automatic control must wait for first unlock. */
+    private var latestAudioDevice: DeviceId? = null
     private var systemPinnedDeviceId: DeviceId? = null
     private data class TargetIntent(val epoch: Long, val deviceId: DeviceId?)
     private val targetIntent = MutableStateFlow(TargetIntent(0L, null))
@@ -96,8 +98,9 @@ internal class ControlSession(
             }
             scope.launch(start = CoroutineStart.UNDISPATCHED) {
                 transport.audioConnectedDevice.collect { audioDeviceId ->
+                    latestAudioDevice = audioDeviceId
                     refreshBondedDevices()
-                    handleAudioConnectedDevice(audioDeviceId)
+                    if (state.value.platform.userUnlocked) handleAudioConnectedDevice(audioDeviceId)
                 }
             }
         }
@@ -1181,7 +1184,13 @@ internal class ControlSession(
     }
 
     override fun updatePlatformState(platformState: PlatformState) {
+        val unlocking = !state.value.platform.userUnlocked && platformState.userUnlocked
         updateState { it.copy(platform = platformState) }
+        // The audio connection may predate this owner or the unlock; only the current one is resumed.
+        val audioDevice = latestAudioDevice
+        if (unlocking && audioDevice != null && transport != null) {
+            scope.launch { handleAudioConnectedDevice(audioDevice) }
+        }
     }
 
     private inline fun updateState(crossinline update: (ControlState) -> ControlState) {
