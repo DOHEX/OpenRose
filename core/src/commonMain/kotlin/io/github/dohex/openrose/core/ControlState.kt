@@ -150,6 +150,8 @@ data class ControlState(
     val connectionRecovery: ConnectionRecovery? = null,
     val presentation: SystemPresentationState = SystemPresentationState(),
     val connectionTarget: DeviceCandidate? = null,
+    /** Selected control way, whether its owner is ready, and who actually holds the session. */
+    val owner: OwnerState = OwnerState(),
 )
 
 data class ConnectionRecovery(

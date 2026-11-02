@@ -24,11 +24,6 @@
             android:authorities="${applicationId}.XposedService"
             android:directBootAware="true"
             android:exported="true" />
-        <service
-            android:name=".bridge.ControlBridgeService"
-            android:exported="true"
-            android:directBootAware="true"
-            android:stopWithTask="false" />
         <activity android:name=".MainActivity" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

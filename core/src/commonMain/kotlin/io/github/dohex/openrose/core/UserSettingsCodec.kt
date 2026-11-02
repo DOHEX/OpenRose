@@ -42,6 +42,11 @@ object UserSettingsCodec {
             FusionSettingsDestination.SYSTEM -> "system"
             FusionSettingsDestination.OPENROSE -> "openrose"
         },
+        "control_way" to when (settings.controlWay) {
+            ControlWay.ORDINARY -> "ordinary"
+            ControlWay.MODULE -> "module"
+            ControlWay.NONE -> "none"
+        },
     )
 
     fun decode(values: Map<String, String>): UserSettings {
@@ -91,6 +96,12 @@ object UserSettingsCodec {
                 "system" -> FusionSettingsDestination.SYSTEM
                 "openrose" -> FusionSettingsDestination.OPENROSE
                 else -> defaults.fusionSettingsDestination
+            },
+            controlWay = when (values["control_way"]) {
+                "ordinary" -> ControlWay.ORDINARY
+                "module" -> ControlWay.MODULE
+                "none" -> ControlWay.NONE
+                else -> defaults.controlWay
             },
         )
     }

@@ -64,6 +64,8 @@ class MainActivity : ComponentActivity() {
                 onAddDeviceConnect = owner.runtime::connectForAddDevice,
                 homeNavigationRequest = homeNavigationRequest,
                 onRestartIntegrationScopes = scopeRestarter::restart,
+                onSelectControlWay = owner::selectControlWay,
+                onDisableModuleControl = owner::disableModuleControl,
             )
         }
     }
