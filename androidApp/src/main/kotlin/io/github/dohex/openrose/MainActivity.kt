@@ -36,7 +36,7 @@ class MainActivity : ComponentActivity() {
         handleNavigationIntent(intent)
         enableEdgeToEdge()
         setContent {
-            val state by owner.session.state.collectAsState()
+            val state by owner.runtime.state.collectAsState()
             val dark = when (state.settings.appearance) {
                 Appearance.SYSTEM -> resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK ==
                     Configuration.UI_MODE_NIGHT_YES
@@ -61,7 +61,7 @@ class MainActivity : ComponentActivity() {
                 onConnect = owner::connect,
                 onDisconnect = owner::disconnect,
                 onSet = owner::applySetting,
-                onAddDeviceConnect = owner.session::connectForAddDevice,
+                onAddDeviceConnect = owner.runtime::connectForAddDevice,
                 homeNavigationRequest = homeNavigationRequest,
                 onRestartIntegrationScopes = scopeRestarter::restart,
             )

@@ -9,7 +9,7 @@ import android.os.UserManager
 import io.github.dohex.openrose.core.BridgeIpcState
 import io.github.dohex.openrose.core.BridgeSessionState
 import io.github.dohex.openrose.core.ConnectionState
-import io.github.dohex.openrose.core.ControlSession
+import io.github.dohex.openrose.core.ControlRuntime
 import io.github.dohex.openrose.core.DeviceSetting
 import io.github.dohex.openrose.core.ModuleAvailability
 import io.github.dohex.openrose.core.OperationResult
@@ -42,7 +42,7 @@ import kotlinx.coroutines.flow.map
 /** Authentication and leases are local; all device truth is read from the existing authority. */
 class ControlBridgeHost(
     private val context: Context,
-    private val session: ControlSession,
+    private val runtime: ControlRuntime,
     private val onChanged: () -> Unit,
 ) {
     private val lock = Any()
@@ -72,7 +72,7 @@ class ControlBridgeHost(
 
     fun start() {
         worker.launch {
-            session.state.map { it.connection to it.presentation }.distinctUntilChanged().collect { (_, presentation) ->
+            runtime.state.map { it.connection to it.presentation }.distinctUntilChanged().collect { (_, presentation) ->
                 val reference = presentation.reference
                 synchronized(lock) {
                     if (reportedReference != reference) {
@@ -89,7 +89,7 @@ class ControlBridgeHost(
             }
         }
         worker.launch {
-            session.state.map { state ->
+            runtime.state.map { state ->
                 FusionStateSnapshot(
                     destination = state.settings.fusionSettingsDestination,
                     activeDeviceId = state.device?.deviceId?.value,
@@ -186,7 +186,7 @@ class ControlBridgeHost(
         val activeService = service ?: synchronized(lock) { framework } ?: return
         if (activeService.apiVersion < 102) return
         val current = snapshot ?: run {
-            val state = session.state.value
+            val state = runtime.state.value
             FusionStateSnapshot(
                 destination = state.settings.fusionSettingsDestination,
                 activeDeviceId = state.device?.deviceId?.value,
@@ -345,7 +345,7 @@ class ControlBridgeHost(
     internal fun currentSession(leaseId: String, uid: Int, pid: Int): Bundle {
         synchronized(lock) {
             authenticate(leaseId, uid, pid)
-            val state = session.state.value
+            val state = runtime.state.value
             val connection = state.connection as? ConnectionState.Connected
             val device = state.device
             if (connection == null || device == null || device.deviceId != connection.deviceId || device.sessionId != connection.sessionId) {
@@ -367,7 +367,7 @@ class ControlBridgeHost(
             if (request.getString(BridgeWire.HOST_EPOCH) != hostEpoch) return BridgeWire.response(BridgeWire.STATUS_STALE_HOST)
             val deviceId = request.getString(BridgeWire.DEVICE_ID)?.takeIf { it.isNotEmpty() && it.length <= 128 }
                 ?: return BridgeWire.response(BridgeWire.STATUS_INVALID_ARGUMENT)
-            val result = session.readSession(SessionReference(DeviceId(deviceId), request.getLong(BridgeWire.SESSION_ID, -1)))
+            val result = runtime.readSession(SessionReference(DeviceId(deviceId), request.getLong(BridgeWire.SESSION_ID, -1)))
             return when (result) {
                 is SessionSnapshotResult.Available -> {
                     val sequence = reads.incrementAndGet()
@@ -402,7 +402,7 @@ class ControlBridgeHost(
             return@synchronized BridgeWire.response(BridgeWire.STATUS_STALE_RECEIPT)
         }
         lease.awaiting = null
-        if (session.readSession(pending.reference) !is SessionSnapshotResult.Available) {
+        if (runtime.readSession(pending.reference) !is SessionSnapshotResult.Available) {
             updateFacts { it.copy(session = BridgeSessionState.STALE, detail = "目标确认的会话已经结束") }
             return@synchronized BridgeWire.response(BridgeWire.STATUS_STALE_SESSION)
         }
@@ -427,7 +427,7 @@ class ControlBridgeHost(
     internal fun claimPrompt(request: Bundle, uid: Int, pid: Int): Bundle {
         val reference = synchronized(lock) {
             val lease = authenticateRequest(request, uid, pid)
-            val mode = session.state.value.settings.islandMode
+            val mode = runtime.state.value.settings.islandMode
             if ((mode == IslandMode.MODULE && lease.target != BridgeTarget.BLUETOOTH) ||
                 (mode == IslandMode.OFFICIAL && lease.target != BridgeTarget.XIAOMI_BLUETOOTH) || mode == IslandMode.OFF) {
                 return BridgeWire.response(BridgeWire.STATUS_UNAVAILABLE, "该系统入口不拥有当前提示策略")
@@ -436,7 +436,7 @@ class ControlBridgeHost(
         }
         val id = request.getString(BridgePresentationWire.PROMPT_ID)?.takeIf { it.length in 1..128 }
             ?: return BridgeWire.response(BridgeWire.STATUS_INVALID_ARGUMENT)
-        val claimed = runBlocking { session.claimConnectionPrompt(reference, id) }
+        val claimed = runBlocking { runtime.claimConnectionPrompt(reference, id) }
         return BridgeWire.response(if (claimed) BridgeWire.STATUS_OK else "STALE_PROMPT")
     }
 
@@ -449,7 +449,7 @@ class ControlBridgeHost(
             ?: return BridgeWire.response(BridgeWire.STATUS_INVALID_ARGUMENT)
         // Validation and enqueue share the authority's lifecycle lock. A stale notification cannot
         // write to a subsequent connection, even if the device address is the same.
-        return when (val result = runBlocking { session.set(reference, DeviceSetting.NOISE_MODE, FieldValue.Text(mode)) }) {
+        return when (val result = runBlocking { runtime.set(reference, DeviceSetting.NOISE_MODE, FieldValue.Text(mode)) }) {
             OperationResult.Success -> BridgeWire.response(BridgeWire.STATUS_OK)
             is OperationResult.Failure -> BridgeWire.response(result.error.code.name, result.error.message)
         }
@@ -481,7 +481,7 @@ class ControlBridgeHost(
     internal fun reportPresentation(report: Bundle, uid: Int, pid: Int): Bundle = synchronized(lock) {
         authenticateRequest(report, uid, pid)
         val reference = report.reference() ?: return@synchronized BridgeWire.response(BridgeWire.STATUS_INVALID_ARGUMENT)
-        if (session.readSession(reference) !is SessionSnapshotResult.Available) {
+        if (runtime.readSession(reference) !is SessionSnapshotResult.Available) {
             return@synchronized BridgeWire.response(BridgeWire.STATUS_STALE_SESSION)
         }
         val feature = report.getString(BridgePresentationWire.FEATURE)?.takeIf { it in BridgePresentationWire.FEATURES }

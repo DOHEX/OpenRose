@@ -111,7 +111,7 @@ The desktop app currently lets you explore the UI and change application prefere
 
 | Directory | Responsibility |
 | --- | --- |
-| `core/` | Model capabilities, protocol codecs, control sessions, state, and user settings |
+| `core/` | Model capabilities, protocol codecs, control sessions, the unified control entry (`ControlRuntime`), state, and user settings |
 | `composeApp/` | Shared UI, Miuix / Material 3 components, and UI tests |
 | `androidApp/` | Android entry point, BLE / SPP transports, libxposed module, and HyperOS system bridge |
 | `desktopApp/` | Windows / Linux desktop entry point, windows, and preferences |

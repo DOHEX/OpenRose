@@ -111,7 +111,7 @@ cd OpenRose
 
 | 目录 | 职责 |
 | --- | --- |
-| `core/` | 型号能力、协议编解码、控制会话、状态与用户设置 |
+| `core/` | 型号能力、协议编解码、控制会话、统一控制入口（`ControlRuntime`）、状态与用户设置 |
 | `composeApp/` | 共享界面、Miuix / Material 3 组件与界面测试 |
 | `androidApp/` | Android 入口、BLE / SPP 传输、libxposed 模块与 HyperOS 系统桥接 |
 | `desktopApp/` | Windows / Linux 桌面入口、窗口与偏好设置 |
