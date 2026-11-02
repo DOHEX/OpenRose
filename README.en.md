@@ -57,6 +57,8 @@ In addition to i5 and i7, reverse engineering has documented protocol specificat
 
 Island presentation offers Off, Official, and Module modes. Focus notifications are configured separately. Both island presentation modes are rendered by the system UI. Regular Bluetooth control works without enabling the module.
 
+**Control way (ordinary or module).** The System Integration page lets you choose between ordinary control (default) and module control, and shows three separate facts: the chosen way, whether its owner is ready (ready, starting, unavailable with the failing stage, or switch blocked), and the earphone control connection. Module control runs the shared control session inside `com.android.bluetooth`; the OpenRose interface is an authenticated client of it, and opening or closing the interface does not change that session. A switch releases the previous owner first and, if that release cannot be confirmed, does not take over and explains why. “Disable module control” only stops the module and never turns ordinary control on. This path has not been validated on a device yet.
+
 On Android, the System Integration page offers a restart action for the three integration scopes. After confirmation it requests Root; Bluetooth may disconnect, and stopped targets are not started. “Executed” reports the command, not that the process recovered or the module loaded. Root and process behavior still require validation on the target device.
 
 OpenRose manages its **control connection** separately from the system audio connection used for playback and calls. “Disconnect control connection” in the app ends only the OpenRose control connection.

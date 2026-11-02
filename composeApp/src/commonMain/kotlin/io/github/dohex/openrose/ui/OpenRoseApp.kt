@@ -49,6 +49,7 @@ fun OpenRoseApp(
     onAddDeviceConnect: suspend (DeviceId) -> OperationResult,
     modifier: Modifier = Modifier,
     homeNavigationRequest: Long = 0L,
+    onRequestNotificationPermission: () -> Unit = {},
     onRestartIntegrationScopes: suspend () -> List<ScopeRestartResult> = {
         listOf("com.android.bluetooth", "com.xiaomi.bluetooth", "com.milink.service").map {
             ScopeRestartResult(it, ScopeRestartStatus.FAILED, "平台操作不可用")
@@ -196,7 +197,12 @@ fun OpenRoseApp(
                             onSelectControlWay = onSelectControlWay,
                             onDisableModuleControl = onDisableModuleControl,
                         )
-                        AppPage.SETTINGS -> PreferencesPage(state, onSettingsChange)
+                        AppPage.SETTINGS -> PreferencesPage(
+                            state,
+                            onSettingsChange,
+                            onRequestPermission,
+                            onRequestNotificationPermission,
+                        )
                         AppPage.DIAGNOSTICS -> {
                             PlatformDiagnosticsCard(state.platform, onRequestPermission, onOpenSystemSettings)
                             ConnectionDetailsCard(state, onDisconnect)

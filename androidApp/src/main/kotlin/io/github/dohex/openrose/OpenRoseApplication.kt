@@ -12,6 +12,9 @@ import android.os.UserManager
 import android.location.LocationManager
 import io.github.dohex.openrose.bridge.FrameworkLink
 import io.github.dohex.openrose.bridge.ModuleHostBinderLink
+import io.github.dohex.openrose.core.BackgroundControlBlock
+import io.github.dohex.openrose.core.BackgroundControlStatus
+import io.github.dohex.openrose.core.BackgroundServiceFact
 import io.github.dohex.openrose.core.ControlWay
 import io.github.dohex.openrose.core.DeviceSetting
 import io.github.dohex.openrose.core.LocalControlRuntime
@@ -31,10 +34,10 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 /**
- * Hosts the application's side of control. Activities and interface styles only use [runtime], which
- * routes to exactly one owner: the ordinary session this process creates while ordinary control is the
- * saved choice, or the module host in the system Bluetooth process. Opening or closing the interface
- * never decides whether a control session exists.
+ * Hosts the application's side of control. Activities, interface styles and [ControlService] only use or
+ * observe [runtime], which routes to exactly one owner: the ordinary session this process creates while
+ * ordinary control is the saved choice, or the module host in the system Bluetooth process. An interface
+ * closing or a task being removed never decides whether a control session exists.
  */
 class OpenRoseApplication : Application() {
     private val controlScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -43,6 +46,7 @@ class OpenRoseApplication : Application() {
     lateinit var framework: FrameworkLink
         private set
     private var preferencesLoaded = false
+    private var backgroundService: BackgroundServiceFact = BackgroundServiceFact.NotRunning
 
     override fun onCreate() {
         super.onCreate()
@@ -121,23 +125,68 @@ class OpenRoseApplication : Application() {
     /** Stops module control without enabling ordinary control. */
     fun disableModuleControl() { controlScope.launch { runtime.disableModuleControl() } }
 
-    /** True while the saved choice is ordinary control, i.e. while this process may host a session. */
+    /**
+     * True while the saved choice is ordinary control, i.e. while this process may host a session. Services
+     * and wake-ups for ordinary background control check this; they never create a session themselves.
+     */
     fun ordinaryControlSelected(): Boolean = runtime.state.value.owner.selected == ControlWay.ORDINARY
 
     fun updateSettings(settings: UserSettings) {
         if (!userUnlocked()) return
+        val backgroundIntentChanged = runtime.state.value.settings.backgroundControlEnabled != settings.backgroundControlEnabled
         // The control way only ever changes through an explicit handoff, never through a preference update.
         runtime.updateSettings(settings)
         val effective = runtime.state.value.settings
-        preferences().edit().also { editor ->
-            UserSettingsCodec.encode(effective).forEach { (key, value) -> editor.putString(key, value) }
-        }.apply()
+        val editor = preferences().edit()
+        UserSettingsCodec.encode(effective).forEach { (key, value) -> editor.putString(key, value) }
+        // A stop choice must not be lost to a process kill right after the user disables background control.
+        if (backgroundIntentChanged) editor.commit() else editor.apply()
         if (effective.controlWay != ControlWay.ORDINARY) {
             controlScope.launch(Dispatchers.IO) { framework.publishConfig(runtime.state.value.settings) }
         }
+        if (effective.backgroundControlEnabled) startBackgroundControlFromUserEntry()
     }
 
-    fun refreshPlatform() = runtime.updatePlatformState(readPlatformState(permissionRequested()).copy(
+    fun setBackgroundControlEnabled(enabled: Boolean) {
+        updateSettings(runtime.state.value.settings.copy(backgroundControlEnabled = enabled))
+    }
+
+    /**
+     * Starts the foreground service for the saved background-control intent. Only called from entries the
+     * user is looking at (toggle, opening the app, a permission result), where the platform allows a
+     * foreground start; it is never a retry loop and never a wake-up after the process is gone. It does
+     * nothing unless ordinary control is the saved choice.
+     */
+    fun startBackgroundControlFromUserEntry() {
+        if (!ordinaryControlSelected()) return
+        val status = runtime.state.value.backgroundControl
+        val startable = status == BackgroundControlStatus.NotRunning ||
+            (status is BackgroundControlStatus.Blocked && status.reason != BackgroundControlBlock.BLUETOOTH_PERMISSION)
+        if (!startable || !userUnlocked()) return
+        updateBackgroundService(BackgroundServiceFact.NotRunning)
+        try {
+            startForegroundService(Intent(this, ControlService::class.java))
+        } catch (denied: SecurityException) {
+            backgroundServiceRejected(BackgroundControlBlock.SERVICE_START_REFUSED)
+        } catch (restricted: IllegalStateException) {
+            backgroundServiceRejected(BackgroundControlBlock.BACKGROUND_START_RESTRICTED)
+        }
+    }
+
+    fun backgroundServiceRunning() = updateBackgroundService(BackgroundServiceFact.Running)
+    fun backgroundServiceRejected(reason: BackgroundControlBlock) =
+        updateBackgroundService(BackgroundServiceFact.StartRejected(reason))
+    /** A rejected start keeps its reason; only a service that had been running becomes "not running". */
+    fun backgroundServiceStopped() {
+        if (backgroundService == BackgroundServiceFact.Running) updateBackgroundService(BackgroundServiceFact.NotRunning)
+    }
+
+    private fun updateBackgroundService(fact: BackgroundServiceFact) {
+        backgroundService = fact
+        refreshPlatform()
+    }
+
+    fun refreshPlatform() = runtime.updatePlatformState(readPlatformState(permissionRequested(), backgroundService).copy(
         module = framework.availability(), bridge = framework.diagnostics(),
     ))
 

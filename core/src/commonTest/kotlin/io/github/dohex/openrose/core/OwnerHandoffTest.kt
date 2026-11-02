@@ -348,6 +348,26 @@ class OwnerHandoffTest {
         assertEquals(OwnerReadiness.Ready, plain.state.value.owner.readiness)
     }
 
+    @Test
+    fun ordinaryBackgroundControlIsNotInForceUnderModuleControlAndKeepsItsSavedIntent() = runTest {
+        val rig = OwnerRig(this)
+        rig.bootHost()
+        val runtime = rig.newRuntime()
+        runCurrent()
+        runtime.updateSettings(runtime.state.value.settings.copy(backgroundControlEnabled = true))
+        assertEquals(BackgroundControlStatus.NotRunning, runtime.state.value.backgroundControl)
+
+        runtime.selectControlWay(ControlWay.MODULE)
+        runCurrent()
+
+        assertEquals(BackgroundControlStatus.Disabled, runtime.state.value.backgroundControl)
+        assertTrue(runtime.state.value.settings.backgroundControlEnabled)
+
+        runtime.selectControlWay(ControlWay.ORDINARY)
+        runCurrent()
+        assertEquals(BackgroundControlStatus.NotRunning, runtime.state.value.backgroundControl)
+    }
+
     private suspend fun leaseOf(rig: OwnerRig): String =
         (rig.host.open(appIdentity) as HostOpenResult.Opened).lease.id
 

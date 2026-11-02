@@ -19,6 +19,8 @@ data class PlatformState(
     val systemIntegrationApplicability: PlatformApplicability = PlatformApplicability.UNKNOWN,
     /** Whether this host has an implemented control transport where a transport preference has effect. */
     val controlTransportApplicability: PlatformApplicability = PlatformApplicability.UNKNOWN,
+    /** Facts about the ordinary background-control service, separate from the saved intent in settings. */
+    val backgroundService: BackgroundServiceFacts = BackgroundServiceFacts(),
 )
 
 enum class HostPlatform { UNKNOWN, ANDROID, WINDOWS, LINUX }
@@ -152,7 +154,10 @@ data class ControlState(
     val connectionTarget: DeviceCandidate? = null,
     /** Selected control way, whether its owner is ready, and who actually holds the session. */
     val owner: OwnerState = OwnerState(),
-)
+) {
+    /** Derived from the saved intent plus platform facts; a saved preference alone is never "ready". */
+    val backgroundControl: BackgroundControlStatus get() = deriveBackgroundControl()
+}
 
 data class ConnectionRecovery(
     val sessionId: Long,

@@ -42,6 +42,7 @@ object UserSettingsCodec {
             FusionSettingsDestination.SYSTEM -> "system"
             FusionSettingsDestination.OPENROSE -> "openrose"
         },
+        "background_control_enabled" to settings.backgroundControlEnabled.toString(),
         "control_way" to when (settings.controlWay) {
             ControlWay.ORDINARY -> "ordinary"
             ControlWay.MODULE -> "module"
@@ -97,6 +98,8 @@ object UserSettingsCodec {
                 "openrose" -> FusionSettingsDestination.OPENROSE
                 else -> defaults.fusionSettingsDestination
             },
+            backgroundControlEnabled = values["background_control_enabled"]
+                ?.toBooleanStrictOrNull() ?: defaults.backgroundControlEnabled,
             controlWay = when (values["control_way"]) {
                 "ordinary" -> ControlWay.ORDINARY
                 "module" -> ControlWay.MODULE
