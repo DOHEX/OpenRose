@@ -205,7 +205,7 @@ data class NativeSessionReference(
 
 /** Retains exact managed addresses until unhook, so elapsed time never reopens an OEM action path. */
 internal class NativeManagedAddressTombstones {
-    // These addresses come only from authenticated, ready ControlSession snapshots. Keeping the
+    // These addresses come only from authenticated, ready control session snapshots. Keeping the
     // small history for this module generation avoids a TTL or eviction admitting a stale action.
     private val addresses = linkedSetOf<String>()
 

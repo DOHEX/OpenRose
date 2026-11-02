@@ -21,7 +21,7 @@ import java.util.concurrent.CopyOnWriteArrayList
  *
  * This class never opens Bluetooth, sends a broadcast, or keeps a second device state. The module
  * publishes snapshots from its existing authenticated bridge reader and supplies the callback
- * which queues a mode request into the same ControlSession.
+ * which queues a mode request into the same control runtime.
  */
 class MiLinkNativeHeadsetAdapter(
     private val module: XposedModule,

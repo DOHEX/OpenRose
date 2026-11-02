@@ -62,18 +62,21 @@ data class SessionTiming(
     }
 }
 
-/** Platform-owned authority. Replacing a page or its interface style never replaces this owner. */
-class ControlSession(
+/**
+ * Platform-owned authority behind [ControlRuntime]. Replacing a page or its interface style never
+ * replaces this owner; callers outside the core module can only reach it through the runtime.
+ */
+internal class ControlSession(
     initialPlatformState: PlatformState,
     initialSettings: UserSettings = UserSettings(),
     private val transport: ControlTransport? = null,
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
     private val timing: SessionTiming = SessionTiming(),
-) {
+) : ControlRuntime {
     private val mutableState = MutableStateFlow(
         ControlState(platform = initialPlatformState, settings = initialSettings.snapshot()).withSystemPresentation(),
     )
-    val state: StateFlow<ControlState> = mutableState.asStateFlow()
+    override val state: StateFlow<ControlState> = mutableState.asStateFlow()
     private val lifecycle = Mutex()
     private val scanLifecycle = Mutex()
     private val scanEpoch = MutableStateFlow(0L)
@@ -100,7 +103,7 @@ class ControlSession(
         }
     }
 
-    suspend fun refreshBondedDevices() {
+    override suspend fun refreshBondedDevices() {
         val bonded = runCatching { transport?.bondedDevices() }.getOrNull() ?: emptyList()
         updateState { it.copy(bondedDevices = bonded) }
     }
@@ -216,7 +219,7 @@ class ControlSession(
 
     private data class SettingRequest(val operation: SettingOperation, val result: CompletableDeferred<OperationResult>)
 
-    suspend fun startScan(): OperationResult = scanLifecycle.withLock {
+    override suspend fun startScan(): OperationResult = scanLifecycle.withLock {
         platformError()?.let { return@withLock failure(it) }
         if (scanJob?.isActive == true) return@withLock OperationResult.Success
         val epoch = scanEpoch.value + 1
@@ -251,14 +254,14 @@ class ControlSession(
         failed?.let { OperationResult.Failure(it.error) } ?: OperationResult.Success
     }
 
-    suspend fun stopScan() = scanLifecycle.withLock {
+    override suspend fun stopScan() = scanLifecycle.withLock {
         scanEpoch.value++
         scanJob?.cancelAndJoin()
         scanJob = null
         updateState { it.copy(scan = ScanState.Idle) }
     }
 
-    suspend fun connect(deviceId: DeviceId): OperationResult {
+    override suspend fun connect(deviceId: DeviceId): OperationResult {
         val requestEpoch = targetIntent.updateAndGet { current ->
             if (current.deviceId == deviceId && current.epoch > 0) current
             else TargetIntent(current.epoch + 1, deviceId)
@@ -271,7 +274,7 @@ class ControlSession(
         return connectInternal(deviceId, isAudioDriven = false, requestEpoch = requestEpoch)
     }
 
-    suspend fun connectFromSystem(deviceId: DeviceId): OperationResult {
+    override suspend fun connectFromSystem(deviceId: DeviceId): OperationResult {
         val requestEpoch = targetIntent.updateAndGet { current ->
             if (current.deviceId == deviceId && current.epoch > 0) current
             else TargetIntent(current.epoch + 1, deviceId)
@@ -283,7 +286,7 @@ class ControlSession(
     }
 
     /** Cancelling the adding flow releases only the unfinished attempt it created. */
-    suspend fun connectForAddDevice(deviceId: DeviceId): OperationResult {
+    override suspend fun connectForAddDevice(deviceId: DeviceId): OperationResult {
         val requestEpoch = targetIntent.updateAndGet { current ->
             if (current.deviceId == deviceId && current.epoch > 0) current
             else TargetIntent(current.epoch + 1, deviceId)
@@ -388,7 +391,7 @@ class ControlSession(
         return result
     }
 
-    suspend fun disconnect() {
+    override suspend fun disconnect() {
         targetIntent.updateAndGet { current ->
             TargetIntent(current.epoch + 1, null)
         }
@@ -402,7 +405,7 @@ class ControlSession(
     }
 
     /** Reads a detached snapshot only when the reference still identifies the ready device session. */
-    fun readSession(reference: SessionReference): SessionSnapshotResult {
+    override fun readSession(reference: SessionReference): SessionSnapshotResult {
         val captured = mutableState.value
         val connection = captured.connection as? ConnectionState.Connected
             ?: return SessionSnapshotResult.Failure(ControlError(ControlErrorCode.NOT_READY, "设备会话尚未就绪"))
@@ -418,7 +421,7 @@ class ControlSession(
     }
 
     /** The first current renderer to claim an active prompt becomes its sole trigger owner. */
-    suspend fun claimConnectionPrompt(reference: SessionReference, promptId: String): Boolean = lifecycle.withLock {
+    override suspend fun claimConnectionPrompt(reference: SessionReference, promptId: String): Boolean = lifecycle.withLock {
         val attempt = active ?: return@withLock false
         if (!attempt.ready || attempt.id != reference.sessionId || attempt.candidate.deviceId != reference.deviceId) {
             return@withLock false
@@ -441,10 +444,10 @@ class ControlSession(
     }
 
     /** A caller owns its wait; the platform session owns the queued operation. */
-    suspend fun set(setting: DeviceSetting, value: FieldValue): OperationResult = enqueueSetting(null, setting, value)
+    override suspend fun set(setting: DeviceSetting, value: FieldValue): OperationResult = enqueueSetting(null, setting, value)
 
     /** Queues a setting only when this caller's device and session reference is still current. */
-    suspend fun set(reference: SessionReference, setting: DeviceSetting, value: FieldValue): OperationResult =
+    override suspend fun set(reference: SessionReference, setting: DeviceSetting, value: FieldValue): OperationResult =
         enqueueSetting(reference, setting, value)
 
     private suspend fun enqueueSetting(reference: SessionReference?, setting: DeviceSetting, value: FieldValue): OperationResult {
@@ -1160,7 +1163,7 @@ class ControlSession(
         return OperationResult.Failure(error)
     }
 
-    fun updateSettings(settings: UserSettings) {
+    override fun updateSettings(settings: UserSettings) {
         val snapshot = settings.snapshot()
         var promptToCancel: ConnectionPrompt? = null
         updateState { current ->
@@ -1177,7 +1180,7 @@ class ControlSession(
         }
     }
 
-    fun updatePlatformState(platformState: PlatformState) {
+    override fun updatePlatformState(platformState: PlatformState) {
         updateState { it.copy(platform = platformState) }
     }
 

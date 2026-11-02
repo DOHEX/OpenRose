@@ -31,7 +31,7 @@ import java.util.concurrent.SynchronousQueue
 import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 
-/** IPC operations stay with the application's existing ControlSession owner. */
+/** IPC operations stay with the application's control runtime owner. */
 internal interface PresentationCallbacks {
     fun claimPrompt(snapshot: Bundle, promptId: String): Boolean
     fun setNoise(snapshot: Bundle, mode: String): Bundle

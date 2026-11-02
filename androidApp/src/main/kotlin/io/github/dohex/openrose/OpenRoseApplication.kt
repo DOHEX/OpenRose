@@ -9,8 +9,9 @@ import android.content.IntentFilter
 import android.os.Build
 import android.os.UserManager
 import android.location.LocationManager
-import io.github.dohex.openrose.core.ControlSession
+import io.github.dohex.openrose.core.ControlRuntime
 import io.github.dohex.openrose.core.DeviceSetting
+import io.github.dohex.openrose.core.LocalControlRuntime
 import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.dohex.openrose.core.UserSettings
 import io.github.dohex.openrose.core.UserSettingsCodec
@@ -22,10 +23,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 
-/** One owner for the process. Activities and interface styles only observe this session. */
+/** One owner for the process. Activities and interface styles only use this control runtime. */
 class OpenRoseApplication : Application() {
     private val controlScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
-    lateinit var session: ControlSession
+    lateinit var runtime: ControlRuntime
         private set
     lateinit var bridge: ControlBridgeHost
         private set
@@ -34,14 +35,14 @@ class OpenRoseApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         val unlocked = userUnlocked()
-        session = ControlSession(
+        runtime = LocalControlRuntime(
             initialPlatformState = readPlatformState(permissionRequested()),
             transport = AndroidControlTransport(applicationContext),
             scope = controlScope,
             initialSettings = if (unlocked) loadSettings() else UserSettings(),
         )
         preferencesLoaded = unlocked
-        bridge = ControlBridgeHost(applicationContext, session) {
+        bridge = ControlBridgeHost(applicationContext, runtime) {
             controlScope.launch { refreshPlatform() }
         }
         bridge.start()
@@ -68,26 +69,26 @@ class OpenRoseApplication : Application() {
         loadUnlockedSettings()
     }
 
-    fun startScan() { controlScope.launch { session.startScan() } }
-    fun stopScan() { controlScope.launch { session.stopScan() } }
-    fun connect(deviceId: DeviceId) { controlScope.launch { session.connect(deviceId) } }
+    fun startScan() { controlScope.launch { runtime.startScan() } }
+    fun stopScan() { controlScope.launch { runtime.stopScan() } }
+    fun connect(deviceId: DeviceId) { controlScope.launch { runtime.connect(deviceId) } }
     fun connectFromSystem(deviceId: DeviceId) {
-        controlScope.launch(start = CoroutineStart.UNDISPATCHED) { session.connectFromSystem(deviceId) }
+        controlScope.launch(start = CoroutineStart.UNDISPATCHED) { runtime.connectFromSystem(deviceId) }
     }
-    fun disconnect() { controlScope.launch { session.disconnect() } }
+    fun disconnect() { controlScope.launch { runtime.disconnect() } }
     fun applySetting(setting: DeviceSetting, value: FieldValue) {
-        controlScope.launch { session.set(setting, value) }
+        controlScope.launch { runtime.set(setting, value) }
     }
 
     fun updateSettings(settings: UserSettings) {
         if (!userUnlocked()) return
-        session.updateSettings(settings)
+        runtime.updateSettings(settings)
         preferences().edit().also { editor ->
             UserSettingsCodec.encode(settings).forEach { (key, value) -> editor.putString(key, value) }
         }.apply()
     }
 
-    fun refreshPlatform() = session.updatePlatformState(readPlatformState(permissionRequested()).copy(
+    fun refreshPlatform() = runtime.updatePlatformState(readPlatformState(permissionRequested()).copy(
         module = bridge.availability(), bridge = bridge.diagnostics(),
     ))
 
@@ -99,7 +100,7 @@ class OpenRoseApplication : Application() {
     private fun permissionRequested() = userUnlocked() && preferences().getBoolean("permissionRequested", false)
     private fun loadUnlockedSettings() {
         if (preferencesLoaded || !userUnlocked()) return
-        session.updateSettings(loadSettings())
+        runtime.updateSettings(loadSettings())
         preferencesLoaded = true
         bridge.onUserUnlocked()
         refreshPlatform()
