@@ -38,6 +38,8 @@ internal fun PreferencesPage(
     onChange: (UserSettings) -> Unit,
     onRequestPermission: () -> Unit = {},
     onRequestNotificationPermission: () -> Unit = {},
+    onRequestAssociation: () -> Unit = {},
+    onOpenAppSettings: () -> Unit = {},
 ) {
     val settings = state.settings
     var systemPreferenceFeedback by remember { mutableStateOf<String?>(null) }
@@ -177,7 +179,9 @@ internal fun PreferencesPage(
         }
 
         if (state.backgroundControlApplicable()) {
-            BackgroundControlGroup(state, onChange, onRequestPermission, onRequestNotificationPermission)
+            BackgroundControlGroup(
+                state, onChange, onRequestPermission, onRequestNotificationPermission, onRequestAssociation, onOpenAppSettings,
+            )
         }
 
         AppGroup(title = "关于") {

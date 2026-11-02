@@ -21,6 +21,12 @@ data class PlatformState(
     val controlTransportApplicability: PlatformApplicability = PlatformApplicability.UNKNOWN,
     /** Facts about the ordinary background-control service, separate from the saved intent in settings. */
     val backgroundService: BackgroundServiceFacts = BackgroundServiceFacts(),
+    /**
+     * True once the saved user settings are restored after first unlock. Until then the runtime
+     * observes audio connections but starts no automatic control, and the connection that
+     * predates this fact is connected as soon as it turns true.
+     */
+    val userUnlocked: Boolean = true,
 )
 
 enum class HostPlatform { UNKNOWN, ANDROID, WINDOWS, LINUX }
@@ -155,6 +161,12 @@ data class ControlState(
 ) {
     /** Derived from the saved intent plus platform facts; a saved preference alone is never "ready". */
     val backgroundControl: BackgroundControlStatus get() = deriveBackgroundControl()
+
+    /** Whether unattended revival after process loss or restart is actually prepared, never implied by the saved intent. */
+    val backgroundRecovery: BackgroundRecovery get() = deriveBackgroundRecovery()
+
+    /** Whether a trigger may start the background service now; false for disabled, locked, or permission-less states. */
+    val mayStartBackgroundService: Boolean get() = deriveMayStartBackgroundService()
 }
 
 data class ConnectionRecovery(

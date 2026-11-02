@@ -10,6 +10,10 @@ import io.github.dohex.openrose.core.ControlState
 import io.github.dohex.openrose.core.HostPlatform
 import io.github.dohex.openrose.core.PlatformApplicability
 import io.github.dohex.openrose.core.UserSettings
+import io.github.dohex.openrose.core.PresenceObservation
+import io.github.dohex.openrose.core.WakeBand
+import io.github.dohex.openrose.core.WakePrerequisite
+import io.github.dohex.openrose.core.BackgroundRecovery
 
 /** Ordinary background control applies wherever Android hosts the control runtime. */
 internal fun ControlState.backgroundControlApplicable(): Boolean =
@@ -27,13 +31,16 @@ internal fun BackgroundControlGroup(
     onChange: (UserSettings) -> Unit,
     onRequestPermission: () -> Unit,
     onRequestNotificationPermission: () -> Unit,
+    onRequestAssociation: () -> Unit = {},
+    onOpenAppSettings: () -> Unit = {},
 ) {
     val settings = state.settings
     AppGroup(
         title = "后台控制",
-        footnote = "无需 root 或模块。系统不允许后台运行时，应用无法自行绕过；" +
-            "部分系统还需在系统设置中允许 OpenRose 自启动并取消电量限制，这些设置无法被检测。" +
-            "在系统中强制停止 OpenRose 会结束后台控制。",
+        footnote = wakeGuidance(state.platform.backgroundService.wake.band) +
+            "系统不允许后台运行时，应用无法自行绕过；自启动和省电限制无法被检测，" +
+            "请在系统设置中允许 OpenRose 自启动并取消电量限制。" +
+            "在系统中强制停止 OpenRose 会结束后台控制，直到你再次打开它。",
     ) {
         AppSwitchRow(
             title = "后台控制",
@@ -44,7 +51,7 @@ internal fun BackgroundControlGroup(
         when (val status = state.backgroundControl) {
             BackgroundControlStatus.Unsupported, BackgroundControlStatus.Disabled -> Unit
             BackgroundControlStatus.NotRunning ->
-                ToneInfoRow("后台状态", "已启用，尚未运行；打开 OpenRose 后启动", StatusTone.CAUTION)
+                ToneInfoRow("后台状态", "已启用，尚未运行；耳机下次音频连接或打开 OpenRose 时启动", StatusTone.CAUTION)
             is BackgroundControlStatus.Running -> {
                 ToneInfoRow("后台状态", "运行中", StatusTone.GOOD)
                 if (!status.notificationVisible) {
@@ -75,5 +82,54 @@ internal fun BackgroundControlGroup(
                 }
             }
         }
+        if (settings.backgroundControlEnabled) {
+            RecoveryRows(state.backgroundRecovery, state, onRequestAssociation, onOpenAppSettings)
+        }
     }
+}
+
+/** What the Android version really offers; the mechanisms differ per version band and are never presented as one. */
+private fun wakeGuidance(band: WakeBand?): String = when (band) {
+    WakeBand.ANDROID_8_11 -> "Android 8–11：耳机音频连接时由系统广播唤起，无需关联耳机。"
+    WakeBand.ANDROID_12_13 -> "Android 12–13：需先在系统中关联耳机，关联后耳机出现时系统会唤起 OpenRose。"
+    WakeBand.ANDROID_14_PLUS -> "Android 14 及以上：需先在系统中关联耳机，并保持蓝牙权限已授予，后台服务才可被唤起。"
+    null -> ""
+}
+
+/** Automatic revival readiness; "configured" never claims the ROM will actually wake the app. */
+@Composable
+private fun RecoveryRows(
+    recovery: BackgroundRecovery,
+    state: ControlState,
+    onRequestAssociation: () -> Unit,
+    onOpenAppSettings: () -> Unit,
+) {
+    when (recovery) {
+        BackgroundRecovery.Unsupported, BackgroundRecovery.Disabled, BackgroundRecovery.WaitingForUnlock -> return
+        is BackgroundRecovery.Incomplete -> {
+            if (WakePrerequisite.COMPANION_ASSOCIATION in recovery.missing) {
+                ToneInfoRow("自动唤起", "尚未关联耳机或关联已被取消，进程被回收或手机重启后不会自动恢复", StatusTone.CAUTION)
+                AppButton(text = "关联耳机", onClick = onRequestAssociation, modifier = Modifier.padding(start = 16.dp))
+            } else if (WakePrerequisite.PRESENCE_OBSERVATION in recovery.missing) {
+                val refused = state.platform.backgroundService.wake.presence == PresenceObservation.REFUSED
+                ToneInfoRow(
+                    "自动唤起",
+                    if (refused) "系统拒绝了设备在线监听，请检查应用权限后重新关联" else "设备在线监听尚未生效，打开 OpenRose 后建立",
+                    if (refused) StatusTone.ERROR else StatusTone.CAUTION,
+                )
+                if (refused) {
+                    AppButton(text = "重新关联耳机", onClick = onRequestAssociation, modifier = Modifier.padding(start = 16.dp))
+                }
+            }
+            // A missing Bluetooth permission is already explained by the background status above.
+        }
+        is BackgroundRecovery.Armed -> {
+            ToneInfoRow(
+                "自动唤起",
+                "系统条件已配置；自启动和省电限制无法检测，是否真正唤起需以实际表现为准",
+                StatusTone.CAUTION,
+            )
+        }
+    }
+    AppButton(text = "应用设置（自启动、电量）", onClick = onOpenAppSettings, modifier = Modifier.padding(start = 16.dp))
 }

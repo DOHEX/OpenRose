@@ -37,19 +37,20 @@ class OpenRoseApplication : Application() {
         private set
     lateinit var bridge: ControlBridgeHost
         private set
+    private val companionWake by lazy { CompanionWake(this) }
     private var preferencesLoaded = false
     private var backgroundService: BackgroundServiceFact = BackgroundServiceFact.NotRunning
 
     override fun onCreate() {
         super.onCreate()
         val unlocked = userUnlocked()
+        preferencesLoaded = unlocked
         runtime = LocalControlRuntime(
-            initialPlatformState = readPlatformState(permissionRequested()),
+            initialPlatformState = readPlatformState(permissionRequested(), wake = companionWake.facts(), userUnlocked = unlocked),
             transport = AndroidControlTransport(applicationContext),
             scope = controlScope,
             initialSettings = if (unlocked) loadSettings() else UserSettings(),
         )
-        preferencesLoaded = unlocked
         bridge = ControlBridgeHost(applicationContext, runtime) {
             controlScope.launch { refreshPlatform() }
         }
@@ -96,6 +97,7 @@ class OpenRoseApplication : Application() {
         UserSettingsCodec.encode(settings).forEach { (key, value) -> editor.putString(key, value) }
         // A stop choice must not be lost to a process kill right after the user disables background control.
         if (backgroundIntentChanged) editor.commit() else editor.apply()
+        syncWakeObservation()
         if (settings.backgroundControlEnabled) startBackgroundControlFromUserEntry()
     }
 
@@ -104,15 +106,27 @@ class OpenRoseApplication : Application() {
     }
 
     /**
-     * Starts the foreground service for the saved background-control intent. Only called from entries the
-     * user is looking at (toggle, opening the app, a permission result), where the platform allows a
-     * foreground start; it is never a retry loop and never a wake-up after the process is gone.
+     * Starts the foreground service for the saved background-control intent from an entry the user is
+     * looking at (toggle, opening the app, a permission result). It is never a retry loop.
      */
-    fun startBackgroundControlFromUserEntry() {
-        val status = runtime.state.value.backgroundControl
-        val startable = status == BackgroundControlStatus.NotRunning ||
-            (status is BackgroundControlStatus.Blocked && status.reason != BackgroundControlBlock.BLUETOOTH_PERMISSION)
-        if (!startable || !userUnlocked()) return
+    fun startBackgroundControlFromUserEntry() = startBackgroundService()
+
+    /**
+     * Entry of the system-delivered wake-ups (first unlock of a boot, an audio connection while the
+     * process was gone, device presence). It only starts the service when the restored saved intent,
+     * first unlock and Bluetooth permission allow it, so a disabled or locked state is never revived,
+     * and it never connects anything itself: the runtime's audio lifecycle does that once the
+     * process hosts it.
+     */
+    fun wakeOrdinaryControl() {
+        loadUnlockedSettings()
+        syncWakeObservation()
+        startBackgroundService()
+    }
+
+    private fun startBackgroundService() {
+        val state = runtime.state.value
+        if (!state.mayStartBackgroundService || state.backgroundControl is BackgroundControlStatus.Running) return
         updateBackgroundService(BackgroundServiceFact.NotRunning)
         try {
             startForegroundService(Intent(this, ControlService::class.java))
@@ -122,6 +136,16 @@ class OpenRoseApplication : Application() {
             backgroundServiceRejected(BackgroundControlBlock.BACKGROUND_START_RESTRICTED)
         }
     }
+
+    /** Presence observation follows the saved intent: observed while enabled and after unlock, withdrawn otherwise. */
+    fun syncWakeObservation() {
+        if (!preferencesLoaded) return
+        companionWake.syncObservation(runtime.state.value.settings.backgroundControlEnabled)
+        refreshPlatform()
+    }
+
+    fun requestCompanionAssociation(onChooser: (android.content.IntentSender) -> Unit, onFailure: () -> Unit) =
+        companionWake.requestAssociation(onChooser, onFailure)
 
     fun backgroundServiceRunning() = updateBackgroundService(BackgroundServiceFact.Running)
     fun backgroundServiceRejected(reason: BackgroundControlBlock) =
@@ -136,9 +160,11 @@ class OpenRoseApplication : Application() {
         refreshPlatform()
     }
 
-    fun refreshPlatform() = runtime.updatePlatformState(readPlatformState(permissionRequested(), backgroundService).copy(
-        module = bridge.availability(), bridge = bridge.diagnostics(),
-    ))
+    fun refreshPlatform() = runtime.updatePlatformState(
+        readPlatformState(permissionRequested(), backgroundService, companionWake.facts(), preferencesLoaded).copy(
+            module = bridge.availability(), bridge = bridge.diagnostics(),
+        ),
+    )
 
     fun markPermissionRequested() {
         if (!userUnlocked()) return
@@ -152,6 +178,7 @@ class OpenRoseApplication : Application() {
         preferencesLoaded = true
         bridge.onUserUnlocked()
         refreshPlatform()
+        syncWakeObservation()
     }
     private fun userUnlocked() = getSystemService(UserManager::class.java).isUserUnlocked
     private fun loadSettings() = UserSettingsCodec.decode(preferences().all.mapNotNull { (key, value) ->
