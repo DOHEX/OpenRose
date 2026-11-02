@@ -55,4 +55,6 @@ data class UserSettings(
     val backgroundBlurEnabled: Boolean = true,
     val bottomBarStyle: BottomBarStyle = BottomBarStyle.FIXED,
     val fusionSettingsDestination: FusionSettingsDestination = FusionSettingsDestination.SYSTEM,
+    /** Ordinary control only: keep the control connection available while the interface is closed. Off until the user opts in. */
+    val backgroundControlEnabled: Boolean = false,
 )

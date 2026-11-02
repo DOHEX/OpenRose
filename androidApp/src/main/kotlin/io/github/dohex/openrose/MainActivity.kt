@@ -6,6 +6,10 @@ import android.content.res.Configuration
 import android.graphics.Color
 import android.net.Uri
 import android.os.Bundle
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import io.github.dohex.openrose.core.UserSettings
 import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
@@ -28,6 +32,10 @@ class MainActivity : ComponentActivity() {
     private val owner get() = application as OpenRoseApplication
     private val scopeRestarter = IntegrationScopeRestarter()
     private val permissionRequest = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
+        owner.refreshPlatform()
+        owner.startBackgroundControlFromUserEntry()
+    }
+    private val notificationRequest = registerForActivityResult(ActivityResultContracts.RequestPermission()) {
         owner.refreshPlatform()
     }
 
@@ -53,7 +61,7 @@ class MainActivity : ComponentActivity() {
             }
             OpenRoseApp(
                 state = state,
-                onSettingsChange = owner::updateSettings,
+                onSettingsChange = ::onSettingsChanged,
                 onRequestPermission = ::requestBluetoothPermission,
                 onOpenSystemSettings = { startActivity(Intent(Settings.ACTION_BLUETOOTH_SETTINGS)) },
                 onStartScan = owner::startScan,
@@ -64,6 +72,7 @@ class MainActivity : ComponentActivity() {
                 onAddDeviceConnect = owner.runtime::connectForAddDevice,
                 homeNavigationRequest = homeNavigationRequest,
                 onRestartIntegrationScopes = scopeRestarter::restart,
+                onRequestNotificationPermission = ::requestNotificationPermission,
             )
         }
     }
@@ -87,12 +96,40 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         owner.refreshPlatform()
+        owner.startBackgroundControlFromUserEntry()
     }
 
     override fun onStop() {
         super.onStop()
         // Discovery is a foreground interaction; control ownership and active links stay in the host.
         owner.stopScan()
+    }
+
+    private fun requestNotificationPermission() {
+        val prefs = getSharedPreferences("openrose", MODE_PRIVATE)
+        val askable = Build.VERSION.SDK_INT >= 33 &&
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED &&
+            (!prefs.getBoolean("notificationRequested", false) ||
+                shouldShowRequestPermissionRationale(Manifest.permission.POST_NOTIFICATIONS))
+        if (askable) {
+            prefs.edit().putBoolean("notificationRequested", true).apply()
+            notificationRequest.launch(Manifest.permission.POST_NOTIFICATIONS)
+        } else {
+            startActivity(
+                Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, packageName),
+            )
+        }
+    }
+
+    /** Enabling background control asks for the notification permission once, in context. */
+    private fun onSettingsChanged(settings: UserSettings) {
+        val enabling = settings.backgroundControlEnabled && !owner.runtime.state.value.settings.backgroundControlEnabled
+        owner.updateSettings(settings)
+        val prefs = getSharedPreferences("openrose", MODE_PRIVATE)
+        if (enabling && Build.VERSION.SDK_INT >= 33 &&
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED &&
+            !prefs.getBoolean("notificationRequested", false)
+        ) requestNotificationPermission()
     }
 
     private fun requestBluetoothPermission() {
