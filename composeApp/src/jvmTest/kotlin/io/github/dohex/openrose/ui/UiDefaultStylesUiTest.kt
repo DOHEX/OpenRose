@@ -12,8 +12,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.ImageComposeScene
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.SemanticsActions
-import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.unit.Density
@@ -21,8 +19,6 @@ import androidx.compose.ui.unit.dp
 import io.github.dohex.openrose.core.InterfaceStyle
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.runBlocking
-import java.io.ByteArrayInputStream
-import javax.imageio.ImageIO
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -188,117 +184,6 @@ class UiDefaultStylesUiTest {
         }
     }
 
-    @Test
-    fun compactDashboardCardAndSwitchRowWithIconRenderAcrossStyles() = runBlocking {
-        for (style in InterfaceStyle.entries) {
-            val styleState = mutableStateOf(style)
-            val scrollState = ScrollState(0)
-            val toggled = mutableStateOf(false)
-            val scene = createShellScene(
-                style = styleState,
-                width = 420,
-                height = 900,
-                wide = false,
-                scrollState = scrollState,
-                pageContent = {
-                    AppDashboardCard(compact = true) {
-                        AppSwitchRow(
-                            title = "紧凑开关",
-                            checked = toggled.value,
-                            icon = RoseIcon.CHEVRON,
-                            onChange = { toggled.value = it },
-                        )
-                    }
-                },
-            )
-            val harness = ShellHarness(scene, styleState, scrollState)
-            try {
-                harness.render()
-                assertTrue(harness.hasText("紧凑开关"), "compact switch row title should render in $style")
-                harness.clickText("紧凑开关")
-                harness.render()
-                assertTrue(toggled.value, "clicking compact switch row toggles state in $style")
-            } finally {
-                harness.close()
-            }
-        }
-    }
-
-    @Test
-    fun choiceIconRendersForKnownAndUnknownValuesAcrossStyles() = runBlocking {
-        for (style in InterfaceStyle.entries) {
-            for (selected in listOf<String?>("A", null)) {
-                val harness = createChoiceHarness(style, selected)
-                try {
-                    harness.render()
-                    val withoutIcon = harness.snapshot()
-                    assertTrue(harness.hasText("功能选择"))
-                    assertTrue(harness.hasText(rowValueLabel(style, selected)))
-                    harness.icon.value = RoseIcon.EQUALIZER
-                    harness.render()
-                    val withIcon = harness.snapshot()
-                    assertTrue(harness.hasText("功能选择"), "the row retains its accessible title in $style")
-                    assertTrue(harness.hasText(rowValueLabel(style, selected)), "the row retains its value in $style")
-                    val titleNode = harness.nodes().first { node ->
-                        node.config.getOrNull(SemanticsProperties.Text).orEmpty().any { it.text == "功能选择" }
-                    }
-                    assertTrue(
-                        titleNode.config.getOrNull(SemanticsProperties.ContentDescription).isNullOrEmpty(),
-                        "the decorative icon must not add a redundant description in $style",
-                    )
-                    val bounds = titleNode.boundsInRoot
-                    assertTrue(
-                        (bounds.top.toInt().coerceAtLeast(0) until bounds.bottom.toInt().coerceAtMost(withIcon.height)).any { y ->
-                            (bounds.left.toInt().coerceAtLeast(0) until (bounds.left.toInt() + 100).coerceAtMost(withIcon.width)).any { x ->
-                                withoutIcon.getRGB(x, y) != withIcon.getRGB(x, y)
-                            }
-                        },
-                        "the leading area of the choice row should render the icon in $style with selection $selected",
-                    )
-                    harness.clickText("功能选择")
-                    harness.render()
-                    assertTrue(harness.pickerOpen.value, "the row remains clickable in $style")
-                } finally {
-                    harness.close()
-                }
-            }
-        }
-    }
-    @Test
-    fun appGroupTitleToCardSpacingIsCompactAcrossStyles() = runBlocking {
-        for (style in InterfaceStyle.entries) {
-            val styleState = mutableStateOf(style)
-            val scrollState = ScrollState(0)
-            val scene = createShellScene(
-                style = styleState,
-                width = 420,
-                height = 900,
-                wide = false,
-                scrollState = scrollState,
-                pageContent = {
-                    AppGroup(title = "小标题") {
-                        AppInfoRow("卡片行", "值")
-                    }
-                },
-            )
-            val harness = ShellHarness(scene, styleState, scrollState)
-            try {
-                harness.render()
-                val titleNode = harness.nodes().first { node ->
-                    node.config.getOrNull(SemanticsProperties.Text).orEmpty().any { it.text == "小标题" }
-                }
-                val rowNode = harness.nodes().first { node ->
-                    node.config.getOrNull(SemanticsProperties.Text).orEmpty().any { it.text == "卡片行" }
-                }
-                val gap = rowNode.boundsInRoot.top - titleNode.boundsInRoot.bottom
-                assertTrue(gap in 0f..25f, "title to card row gap in $style should be compact (was $gap)")
-            } finally {
-                harness.close()
-            }
-        }
-    }
-
-
     private suspend fun createChoiceHarness(
         initialStyle: InterfaceStyle,
         selectedValue: String?,
@@ -307,7 +192,6 @@ class UiDefaultStylesUiTest {
         val selected = mutableStateOf(selectedValue)
         val pickerOpen = mutableStateOf(false)
         val requests = mutableListOf<String>()
-        val icon = mutableStateOf<RoseIcon?>(null)
         val scrollState = ScrollState(0)
         val scene = createShellScene(
             style = style,
@@ -322,7 +206,6 @@ class UiDefaultStylesUiTest {
                     options = OPTIONS,
                     selected = selected.value,
                     enabled = true,
-                    icon = icon.value,
                     id = "ui-default-styles-test-choice",
                     open = pickerOpen.value,
                     onOpenChange = { pickerOpen.value = it },
@@ -330,7 +213,7 @@ class UiDefaultStylesUiTest {
                 )
             },
         )
-        return ChoiceHarness(scene, style, selected, pickerOpen, requests, scrollState, icon)
+        return ChoiceHarness(scene, style, selected, pickerOpen, requests, scrollState)
     }
 
     private suspend fun createShellHarness(
@@ -409,76 +292,16 @@ class UiDefaultStylesUiTest {
         val pickerOpen: MutableState<Boolean>,
         val requests: MutableList<String>,
         scrollState: ScrollState,
-        val icon: MutableState<RoseIcon?>,
     ) : ShellHarness(scene, style, scrollState)
 
     private open class ShellHarness(
-        private val scene: ImageComposeScene,
+        scene: ImageComposeScene,
         val style: MutableState<InterfaceStyle>,
         val scrollState: ScrollState,
-    ) {
-        private var nextFrameTimeNanos = 0L
-
-        suspend fun render() {
-            repeat(10) {
-                kotlinx.coroutines.delay(35)
-                scene.render(nextFrameTimeNanos).close()
-                nextFrameTimeNanos += 35_000_000L
-            }
-        }
-
-        fun close() = scene.close()
-        fun snapshot(): java.awt.image.BufferedImage {
-            val image = scene.render(nextFrameTimeNanos)
-            val data = requireNotNull(image.encodeToData())
-            return try {
-                ImageIO.read(ByteArrayInputStream(data.bytes))
-            } finally {
-                data.close()
-                image.close()
-            }
-        }
-
-
-        fun nodes(): List<SemanticsNode> {
-            val result = mutableListOf<SemanticsNode>()
-            fun collect(node: SemanticsNode) {
-                result += node
-                node.children.forEach(::collect)
-            }
-            scene.semanticsOwners.forEach { collect(it.rootSemanticsNode) }
-            return result
-        }
-
-        fun hasText(expected: String): Boolean = nodes().any { node ->
-            node.config.getOrNull(SemanticsProperties.Text).orEmpty().any { it.text == expected }
-        }
-
-        fun hasRole(expected: Role): Boolean = nodes().any { node ->
-            node.config.getOrNull(SemanticsProperties.Role) == expected
-        }
-
+    ) : OpenRoseUiTestHarness(scene) {
         fun hasSelectedRadio(): Boolean = nodes().any { node ->
             node.config.getOrNull(SemanticsProperties.Role) == Role.RadioButton &&
                 node.config.getOrNull(SemanticsProperties.Selected) == true
-        }
-
-        fun clickText(text: String) {
-            val textNodes = nodes().filter { node ->
-                node.config.getOrNull(SemanticsProperties.Text).orEmpty().any { it.text == text }
-            }
-            for (textNode in textNodes) {
-                var current: SemanticsNode? = textNode
-                while (current != null) {
-                    val action = current.config.getOrNull(SemanticsActions.OnClick)?.action
-                    if (action != null) {
-                        check(action()) { "click on '$text' was rejected" }
-                        return
-                    }
-                    current = current.parent
-                }
-            }
-            error("no clickable node found for '$text': " + nodes().joinToString(" | ") { node -> "text=${node.config.getOrNull(SemanticsProperties.Text)} click=${node.config.contains(SemanticsActions.OnClick)} role=${node.config.getOrNull(SemanticsProperties.Role)}" })
         }
     }
 
