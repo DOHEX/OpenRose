@@ -31,6 +31,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -127,22 +128,17 @@ internal class ModuleHostRuntime(
         }
     }
 
+    /**
+     * The persisted choice is read fresh every time the host is reconfigured, never cached from an earlier
+     * moment: unlock, adapter state or a saved change each re-read it. Until the framework serves the
+     * preferences the host stays on its default (no owner), and keeps asking, so the saved module path is
+     * restored as soon as it is readable without any help from the OpenRose application.
+     */
     private fun watchConfiguration(appContext: Context, hostScope: CoroutineScope, created: ModuleControlHost) {
-        val prefs = runCatching { module.getRemotePreferences(BridgeWire.CONFIG_GROUP) }.getOrNull()
-        config = prefs
-        fun reconfigure() {
-            hostScope.launch {
-                val unlocked = appContext.getSystemService(UserManager::class.java).isUserUnlocked
-                created.updatePlatform(appContext.readPlatformState(permissionRequested = true))
-                created.configure(HostConfiguration(unlocked, readSettings(prefs)))
-            }
-        }
-        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, _ -> reconfigure() }
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, _ -> reconfigure(appContext, hostScope, created) }
         configListener = listener
-        runCatching { prefs?.registerOnSharedPreferenceChangeListener(listener) }
-            .onFailure { module.log(Log.WARN, TAG, "config_listener_unavailable", it) }
         val unlockReceiver = object : BroadcastReceiver() {
-            override fun onReceive(context: Context, intent: Intent) = reconfigure()
+            override fun onReceive(context: Context, intent: Intent) = reconfigure(appContext, hostScope, created)
         }
         receiver = unlockReceiver
         val filter = IntentFilter(Intent.ACTION_USER_UNLOCKED).apply { addAction(BluetoothAdapter.ACTION_STATE_CHANGED) }
@@ -152,7 +148,35 @@ internal class ModuleHostRuntime(
             appContext.registerReceiver(unlockReceiver, filter)
         }
         // Unlock may complete between the module loading and the receiver registration.
-        reconfigure()
+        reconfigure(appContext, hostScope, created)
+    }
+
+    private fun reconfigure(appContext: Context, hostScope: CoroutineScope, created: ModuleControlHost) {
+        hostScope.launch {
+            created.updatePlatform(appContext.readPlatformState(permissionRequested = true))
+            // Read after the last suspension so a later reconfiguration always carries the later facts.
+            val unlocked = appContext.getSystemService(UserManager::class.java).isUserUnlocked
+            val prefs = openConfig()
+            created.configure(HostConfiguration(unlocked, readSettings(prefs)))
+            if (prefs == null || !unlocked) {
+                delay(CONFIG_RETRY_MILLIS)
+                reconfigure(appContext, hostScope, created)
+            }
+        }
+    }
+
+    /** Opens the module's remote preferences once they can be served, and starts listening to them. */
+    private fun openConfig(): SharedPreferences? = synchronized(lifecycle) {
+        if (closed) return null
+        config ?: runCatching { module.getRemotePreferences(BridgeWire.CONFIG_GROUP) }
+            .onFailure { module.log(Log.WARN, TAG, "config_unavailable", it) }.getOrNull()
+            ?.also { prefs ->
+                config = prefs
+                configListener?.let { listener ->
+                    runCatching { prefs.registerOnSharedPreferenceChangeListener(listener) }
+                        .onFailure { module.log(Log.WARN, TAG, "config_listener_unavailable", it) }
+                }
+            }
     }
 
     private fun readSettings(prefs: SharedPreferences?): UserSettings {
@@ -178,7 +202,7 @@ internal class ModuleHostRuntime(
             configListener = null
             host to scope
         }
-        val released = current == null || runBlocking { withTimeoutOrNull(CLOSE_TIMEOUT_MILLIS) { current.stop() } != null }
+        val released = current == null || runBlocking { withTimeoutOrNull(CLOSE_TIMEOUT_MILLIS) { current.stop() } } == true
         endpoint?.shutdown()
         endpoint = null
         hostScope?.cancel()
@@ -188,5 +212,6 @@ internal class ModuleHostRuntime(
     private companion object {
         const val TAG = "OpenRoseModuleHost"
         const val CLOSE_TIMEOUT_MILLIS = 2_000L
+        const val CONFIG_RETRY_MILLIS = 5_000L
     }
 }
