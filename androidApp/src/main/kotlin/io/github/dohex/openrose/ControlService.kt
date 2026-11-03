@@ -12,6 +12,7 @@ import android.os.Build
 import android.os.IBinder
 import io.github.dohex.openrose.core.BackgroundControlBlock
 import io.github.dohex.openrose.core.ConnectionState
+import io.github.dohex.openrose.core.OrdinarySessionHold
 import io.github.dohex.openrose.core.ControlWay
 import io.github.dohex.openrose.core.ControlState
 import io.github.dohex.openrose.core.TransportAvailability
@@ -25,16 +26,18 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 /**
- * The foreground host of ordinary background control (`connectedDevice`). It keeps the process, and
- * therefore the one control runtime owned by [OpenRoseApplication], eligible to run while no
- * interface is open. It never creates, replaces or disconnects a control session: audio-driven
- * connection, release and manual operations stay entirely in the runtime. It stops when the user
- * turns the intent off and is not restarted by the system after the process is gone (that needs a
- * separate, user-visible wake-up path and never bypasses a force stop).
+ * The foreground host of ordinary background control (`connectedDevice`). It holds the ordinary session
+ * of the one control runtime owned by [OpenRoseApplication] while it runs, so background control keeps
+ * the session without any interface and the session ends with the service (unless the interface is open).
+ * It never replaces or disconnects a session itself: audio-driven connection, release and manual
+ * operations stay entirely in the runtime. It stops when the user turns the intent off and is not
+ * restarted by the system after the process is gone (that needs a separate, user-visible wake-up path and
+ * never bypasses a force stop).
  */
 class ControlService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var observer: Job? = null
+    private var sessionHold: OrdinarySessionHold? = null
     private val app get() = application as OpenRoseApplication
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -53,6 +56,7 @@ class ControlService : Service() {
             return START_NOT_STICKY
         }
         app.backgroundServiceRunning()
+        if (sessionHold == null) sessionHold = app.runtime.holdOrdinarySession()
         if (observer == null) {
             observer = scope.launch {
                 // Background control exists only while ordinary control is the saved choice; module control
@@ -98,12 +102,19 @@ class ControlService : Service() {
     private fun leaveForeground() {
         observer?.cancel()
         observer = null
+        releaseSession()
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
     }
 
+    private fun releaseSession() {
+        sessionHold?.release()
+        sessionHold = null
+    }
+
     override fun onDestroy() {
         scope.cancel()
+        releaseSession()
         app.backgroundServiceStopped()
         super.onDestroy()
     }

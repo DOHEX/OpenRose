@@ -31,7 +31,7 @@ import java.util.concurrent.SynchronousQueue
 import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 
-/** IPC operations stay with the application's control runtime owner. */
+/** Actions go back to the module host's single owner through this entry's authorised lease; nothing is queued or connected here. */
 internal interface PresentationCallbacks {
     fun claimPrompt(snapshot: Bundle, promptId: String): Boolean
     fun setNoise(snapshot: Bundle, mode: String): Bundle
@@ -39,7 +39,7 @@ internal interface PresentationCallbacks {
 }
 
 /**
- * Renders the trusted application snapshot in com.android.bluetooth.
+ * Renders the module owner's trusted snapshot in com.android.bluetooth, the host process itself.
  *
  * The status notification deliberately has no MIUI focus extras. Module islands use a separate,
  * prompt-scoped notification so ordinary battery refreshes cannot retrigger an island and OFF can

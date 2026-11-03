@@ -302,7 +302,8 @@ internal class OwnerRig(
     /** A scope standing for one application process; cancelling it is that process disappearing. */
     fun newAppProcess() = CoroutineScope(test.backgroundScope.coroutineContext + SupervisorJob(test.backgroundScope.coroutineContext[Job]))
 
-    fun newRuntime(userUnlocked: Boolean = true, process: CoroutineScope = test.backgroundScope): SwitchingControlRuntime = SwitchingControlRuntime(
+    /** [interfaceOpen] stands for the visible interface, which holds the ordinary session like the real one does. */
+    fun newRuntime(userUnlocked: Boolean = true, process: CoroutineScope = test.backgroundScope, interfaceOpen: Boolean = true): SwitchingControlRuntime = SwitchingControlRuntime(
         initialPlatformState = platform,
         initialSettings = UserSettings(),
         store = store,
@@ -313,7 +314,7 @@ internal class OwnerRig(
         newId = { ids.next() },
         timing = clientTiming,
         userUnlocked = userUnlocked,
-    )
+    ).also { if (interfaceOpen) it.holdOrdinarySession() }
 
     fun settle() = test.runCurrent()
 }
