@@ -16,7 +16,7 @@ import dev.nucleusframework.window.NucleusDecoratedWindowTheme
 import dev.nucleusframework.window.TitleBar
 import dev.nucleusframework.window.styling.LocalTitleBarStyle
 import io.github.dohex.openrose.core.Appearance
-import io.github.dohex.openrose.core.ControlSession
+import io.github.dohex.openrose.core.LocalControlRuntime
 import io.github.dohex.openrose.core.HostPlatform
 import io.github.dohex.openrose.core.ModuleAvailability
 import io.github.dohex.openrose.core.PermissionState
@@ -37,7 +37,7 @@ fun main() {
         else -> HostPlatform.UNKNOWN
     }
     // Created before composition: window/style changes cannot create another control owner.
-    val session = ControlSession(
+    val runtime = LocalControlRuntime(
         initialSettings = UserSettingsCodec.decode(preferences.keys().associateWith { preferences.get(it, "") }),
         initialPlatformState = PlatformState(
             permission = PermissionState.NOT_REQUIRED,
@@ -49,7 +49,7 @@ fun main() {
         ),
     )
     nucleusApplication(backend = NucleusBackend.Tao, enableSingleInstance = false) {
-        val state by session.state.collectAsState()
+        val state by runtime.state.collectAsState()
         val dark = when (state.settings.appearance) {
             Appearance.SYSTEM -> isSystemInDarkTheme()
             Appearance.LIGHT -> false
@@ -77,7 +77,7 @@ fun main() {
                 OpenRoseApp(
                     state = state,
                     onSettingsChange = { settings ->
-                        session.updateSettings(settings)
+                        runtime.updateSettings(settings)
                         UserSettingsCodec.encode(settings).forEach { (key, value) -> preferences.put(key, value) }
                     },
                     onRequestPermission = {},
@@ -87,7 +87,7 @@ fun main() {
                     onConnect = {},
                     onDisconnect = {},
                     onSet = { _, _ -> },
-                    onAddDeviceConnect = session::connectForAddDevice,
+                    onAddDeviceConnect = runtime::connectForAddDevice,
                 )
             }
         }

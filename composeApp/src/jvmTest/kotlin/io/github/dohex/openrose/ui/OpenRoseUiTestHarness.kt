@@ -275,6 +275,46 @@ internal open class OpenRoseUiTestHarness(protected val scene: ImageComposeScene
             node.config.getOrNull(SemanticsProperties.ContentDescription).orEmpty().joinToString(" ")
     }.orEmpty()
 
+    private fun taggedNodes(tag: String): List<SemanticsNode> =
+        nodes().filter { it.config.getOrNull(SemanticsProperties.TestTag) == tag }
+
+    private fun SemanticsNode.subtree(): List<SemanticsNode> = listOf(this) + children.flatMap { it.subtree() }
+
+    /** Whether production exposed a node under [tag]; tags carry state names, never wording. */
+    fun hasTag(tag: String): Boolean = taggedNodes(tag).isNotEmpty()
+
+    fun hasTagWithPrefix(prefix: String): Boolean = nodes().any {
+        it.config.getOrNull(SemanticsProperties.TestTag)?.startsWith(prefix) == true
+    }
+
+    /** The radio option publishes Selected on its tagged node; a component may also publish it on a child. */
+    fun isTagSelected(tag: String): Boolean = taggedNodes(tag).any { node ->
+        node.subtree().any { it.config.getOrNull(SemanticsProperties.Selected) == true }
+    }
+
+    fun isTagDisabled(tag: String): Boolean = taggedNodes(tag).any { node ->
+        node.subtree().any { it.config.contains(SemanticsProperties.Disabled) } ||
+            node.hasAncestorOrSelf { it.config.contains(SemanticsProperties.Disabled) }
+    }
+
+    private fun clickNodeFor(tag: String): SemanticsNode? = taggedNodes(tag).firstNotNullOfOrNull { node ->
+        node.subtree().firstOrNull { it.config.getOrNull(SemanticsActions.OnClick) != null }
+            ?: node.findAncestorOrSelf { it.config.getOrNull(SemanticsActions.OnClick) != null }
+    }
+
+    /** A disabled control is not tappable, as with a real touch: the semantic action alone must not bypass it. */
+    fun isTagClickable(tag: String): Boolean = clickNodeFor(tag) != null && !isTagDisabled(tag)
+
+    fun clickTag(tag: String) {
+        check(!isTagDisabled(tag)) { "Tag '$tag' is disabled and takes no taps" }
+        invokeClick(clickNodeFor(tag) ?: error("No clickable node found for tag '$tag'"), tag)
+    }
+
+    /** Text rendered under [tag]; callers compare it with text their own fixture supplied. */
+    fun tagTexts(tag: String): List<String> = taggedNodes(tag).flatMap { node ->
+        node.subtree().flatMap { it.config.getOrNull(SemanticsProperties.Text).orEmpty().map { text -> text.text } }
+    }
+
     private fun textNodes(expected: String): List<SemanticsNode> = nodes().filter { hasText(it, expected) }
 
     private fun hasText(node: SemanticsNode, expected: String): Boolean =

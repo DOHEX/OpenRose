@@ -23,6 +23,7 @@ import io.github.dohex.openrose.core.HostPlatform
 import io.github.dohex.openrose.core.InterfaceStyle
 import io.github.dohex.openrose.core.IslandMode
 import io.github.dohex.openrose.core.IslandTrigger
+import io.github.dohex.openrose.core.ControlWay
 import io.github.dohex.openrose.core.PageTransition
 import io.github.dohex.openrose.core.ModuleAvailability
 import io.github.dohex.openrose.core.PermissionState
@@ -36,6 +37,10 @@ import io.github.dohex.openrose.core.UserSettings
 internal fun PreferencesPage(
     state: ControlState,
     onChange: (UserSettings) -> Unit,
+    onRequestPermission: () -> Unit = {},
+    onRequestNotificationPermission: () -> Unit = {},
+    onRequestAssociation: () -> Unit = {},
+    onOpenAppSettings: () -> Unit = {},
 ) {
     val settings = state.settings
     var systemPreferenceFeedback by remember { mutableStateOf<String?>(null) }
@@ -174,6 +179,12 @@ internal fun PreferencesPage(
             }
         }
 
+        if (state.backgroundControlApplicable()) {
+            BackgroundControlGroup(
+                state, onChange, onRequestPermission, onRequestNotificationPermission, onRequestAssociation, onOpenAppSettings,
+            )
+        }
+
         AppGroup(title = "关于") {
             AppInfoRow(
                 label = "关于 OpenRose",
@@ -190,6 +201,8 @@ internal fun SystemIntegrationPage(
     onRequestPermission: () -> Unit,
     onOpenSystemSettings: () -> Unit,
     onDiagnostics: () -> Unit,
+    onSelectControlWay: ((ControlWay) -> Unit)? = null,
+    onDisableModuleControl: (() -> Unit)? = null,
 ) {
     val hyperOsApplicable = state.platform.hyperOsIntegrationApplicable
     Column(
@@ -202,6 +215,10 @@ internal fun SystemIntegrationPage(
 
         if (hyperOsApplicable) {
             IntegrationReadinessCard(state.platform.module)
+        }
+
+        if (state.controlWayApplicable() && onSelectControlWay != null && onDisableModuleControl != null) {
+            ControlWayCard(state, onSelectControlWay, onDisableModuleControl)
         }
 
         AppGroup {
@@ -234,11 +251,7 @@ internal fun PlatformDiagnosticsCard(
         AppGroup(title = "系统状态") {
             PlatformStatusRows(platform, onRequestPermission, onOpenSystemSettings)
             if (platform.hyperOsIntegrationApplicable) {
-                val moduleValue = when (val module = platform.module) {
-                    ModuleAvailability.Available -> "已连接系统模块"
-                    ModuleAvailability.NotEnabled -> "系统模块未启用"
-                    is ModuleAvailability.Unavailable -> module.reason
-                }
+                val moduleValue = platform.module.unreadyClause() ?: "已连接系统模块"
                 val moduleTone = when (platform.module) {
                     ModuleAvailability.Available -> StatusTone.GOOD
                     ModuleAvailability.NotEnabled -> StatusTone.CAUTION
@@ -354,22 +367,11 @@ private fun PlatformStatusRows(
 
 @Composable
 private fun IntegrationReadinessCard(module: ModuleAvailability) {
-    val (title, summary, tone) = when (module) {
-        ModuleAvailability.Available -> Triple(
-            "系统集成已连接",
-            "状态来自当前系统适配器。",
-            StatusTone.GOOD,
-        )
-        ModuleAvailability.NotEnabled -> Triple(
-            "系统集成未就绪",
-            "系统模块尚未启用。",
-            StatusTone.CAUTION,
-        )
-        is ModuleAvailability.Unavailable -> Triple(
-            "系统集成未就绪",
-            "系统集成暂不可用。${module.reason}",
-            StatusTone.CAUTION,
-        )
+    val clause = module.unreadyClause()
+    val (title, summary, tone) = if (clause == null) {
+        Triple("系统集成已连接", "状态来自当前系统适配器。", StatusTone.GOOD)
+    } else {
+        Triple("系统集成未就绪", "$clause。", StatusTone.CAUTION)
     }
     AppGroup {
         ToneInfoRow("就绪状态", title, tone)
@@ -378,7 +380,7 @@ private fun IntegrationReadinessCard(module: ModuleAvailability) {
 }
 
 @Composable
-private fun ToneInfoRow(label: String, value: String, tone: StatusTone) {
+internal fun ToneInfoRow(label: String, value: String, tone: StatusTone) {
     AppInfoRow(label = label, value = value, valueColor = tone.color())
 }
 
@@ -431,7 +433,7 @@ private fun DiagnosticPresentationRow(label: String, result: String) {
     detail?.let { AppInfoRow("依据", it) }
 }
 
-private enum class StatusTone {
+internal enum class StatusTone {
     NEUTRAL,
     GOOD,
     CAUTION,

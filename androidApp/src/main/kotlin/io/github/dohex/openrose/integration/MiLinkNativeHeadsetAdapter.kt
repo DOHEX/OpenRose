@@ -8,8 +8,8 @@ import io.github.dohex.openrose.bridge.BridgePresentationWire
 import android.content.Context
 import android.content.Intent
 import io.github.dohex.openrose.bridge.BridgeWire
-import org.json.JSONObject
-import java.util.Locale
+import io.github.dohex.openrose.core.SystemHeadsetMapping
+import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedModule
 import java.lang.ref.WeakReference
@@ -21,7 +21,7 @@ import java.util.concurrent.CopyOnWriteArrayList
  *
  * This class never opens Bluetooth, sends a broadcast, or keeps a second device state. The module
  * publishes snapshots from its existing authenticated bridge reader and supplies the callback
- * which queues a mode request into the same ControlSession.
+ * which queues a mode request into the same control runtime.
  */
 class MiLinkNativeHeadsetAdapter(
     private val module: XposedModule,
@@ -82,13 +82,13 @@ class MiLinkNativeHeadsetAdapter(
         val address = lastAncDevice?.let { runCatching { it.address }.getOrNull() }
         if (!fresh.matchesAddress(address)) return
 
-        val noiseChanged = previous.fields["NOISE_MODE"] != fresh.fields["NOISE_MODE"]
+        val noiseChanged = previous.fields[DeviceField.NOISE_MODE] != fresh.fields[DeviceField.NOISE_MODE]
         val batteryChanged = BATTERY_STATE_FIELDS.any { field -> previous.fields[field] != fresh.fields[field] }
-        val canUpdateBattery = hasSummaryBattery(fresh)
+        val canUpdateBattery = SystemHeadsetMapping.miLinkSummaryBattery(fresh.fields) != null
         val controller = lastAncController?.get()
         val device = lastAncDevice
         if (noiseChanged) {
-            if (fresh.knownText("NOISE_MODE")?.let(::miLinkModeFromRose) != null) {
+            if (SystemHeadsetMapping.miLinkAncState(fresh.fields) != null) {
                 notifyHeadsetPropertyChanged(controller, device, UPDATE_ANC_STATE)
                 if (canUpdateBattery) notifyHeadsetPropertyChanged(controller, device, UPDATE_HEADSET_PROPERTY)
             } else {
@@ -139,7 +139,7 @@ class MiLinkNativeHeadsetAdapter(
         }
         hook(target, "getAncState", arrayOf(bluetoothDevice), Int::class.javaPrimitiveType!!) { chain ->
             val snapshot = snapshotForDevice(chain.args.getOrNull(0)) ?: return@hook HookDecision.Proceed
-            val mode = snapshot.knownText("NOISE_MODE")?.let(::miLinkModeFromRose)
+            val mode = SystemHeadsetMapping.miLinkAncState(snapshot.fields)
             if (mode == null) {
                 reportUnknown("noise_state_unrepresentable", snapshot)
                 return@hook HookDecision.Proceed
@@ -185,7 +185,7 @@ class MiLinkNativeHeadsetAdapter(
         }
         hook(target, "getBatteryLevel", arrayOf(BluetoothDevice::class.java), List::class.java) { chain ->
             val snapshot = snapshotForDevice(chain.args.getOrNull(0)) ?: return@hook HookDecision.Proceed
-            val levels = batteryCache(snapshot)
+            val levels = SystemHeadsetMapping.miLinkBattery(snapshot.fields)
             if (levels == null) {
                 reportUnknown("battery_cache_unrepresentable", snapshot)
                 return@hook HookDecision.Proceed
@@ -204,7 +204,7 @@ class MiLinkNativeHeadsetAdapter(
         hook(target, "getAncState", arrayOf(device), Int::class.javaPrimitiveType!!) { chain ->
             val snapshot = snapshotForDevice(chain.args.getOrNull(0)) ?: return@hook HookDecision.Proceed
             rememberAncController(chain, snapshot)
-            val mode = snapshot.knownText("NOISE_MODE")?.let(::miLinkModeFromRose)
+            val mode = SystemHeadsetMapping.miLinkAncState(snapshot.fields)
             if (mode == null) {
                 reportUnknown("noise_state_unrepresentable", snapshot)
                 return@hook HookDecision.Proceed
@@ -214,7 +214,7 @@ class MiLinkNativeHeadsetAdapter(
         hook(target, "getBatteryLevelCache", arrayOf(device), List::class.java) { chain ->
             val snapshot = snapshotForDevice(chain.args.getOrNull(0)) ?: return@hook HookDecision.Proceed
             rememberAncController(chain, snapshot)
-            val levels = batteryCache(snapshot)
+            val levels = SystemHeadsetMapping.miLinkBattery(snapshot.fields)
             if (levels == null) {
                 reportUnknown("battery_cache_unrepresentable", snapshot)
                 return@hook HookDecision.Proceed
@@ -224,13 +224,12 @@ class MiLinkNativeHeadsetAdapter(
         hook(target, "getHeadsetPropertyBlock", arrayOf(device), Int::class.javaPrimitiveType!!) { chain ->
             val snapshot = snapshotForDevice(chain.args.getOrNull(0)) ?: return@hook HookDecision.Proceed
             rememberAncController(chain, snapshot)
-            val left = snapshot.knownNumber("LEFT_BATTERY")?.takeIf { it in 0..100 }
-            val right = snapshot.knownNumber("RIGHT_BATTERY")?.takeIf { it in 0..100 }
-            if (left == null || right == null) {
+            val summary = SystemHeadsetMapping.miLinkSummaryBattery(snapshot.fields)
+            if (summary == null) {
                 reportUnknown("ear_battery_unavailable", snapshot)
                 return@hook HookDecision.Proceed
             }
-            HookDecision.Return(minOf(left, right))
+            HookDecision.Return(summary)
         }
         hook(target, "getFindRingState", arrayOf(device), Int::class.javaPrimitiveType!!) { chain ->
             snapshotForDevice(chain.args.getOrNull(0)) ?: return@hook HookDecision.Proceed
@@ -252,12 +251,12 @@ class MiLinkNativeHeadsetAdapter(
                 return@hook HookDecision.Proceed
             }
             rememberAncController(chain, snapshot)
-            val requestedMode = (chain.args.getOrNull(1) as? Int)?.let(::roseModeFromMiLink)
+            val requestedMode = (chain.args.getOrNull(1) as? Int)?.let(SystemHeadsetMapping::noiseModeFromSystem)
             if (requestedMode == null) {
                 report(FEATURE, "UNSUPPORTED", "setAncStateBlock received an unmapped MiLink mode")
-                return@hook HookDecision.Return(snapshot.knownText("NOISE_MODE")?.let(::miLinkModeFromRose) ?: -1)
+                return@hook HookDecision.Return(SystemHeadsetMapping.miLinkAncState(snapshot.fields) ?: -1)
             }
-            val confirmedMode = snapshot.knownText("NOISE_MODE")?.let(::miLinkModeFromRose) ?: -1
+            val confirmedMode = SystemHeadsetMapping.miLinkAncState(snapshot.fields) ?: -1
             submit(snapshot, requestedMode, address)
             // This setter returns a state code in the pinned source. Keep it at the last confirmed
             // mode; the app's device reply updates it through the next published snapshot.
@@ -274,16 +273,16 @@ class MiLinkNativeHeadsetAdapter(
             NativeHeadsetSnapshot.MILINK_COMPATIBILITY_DEVICE_ID
         }
         hookNoArg(target, "getPowers", List::class.java) { snapshot ->
-            batteryCache(snapshot)
+            SystemHeadsetMapping.miLinkBattery(snapshot.fields)
         }
         hookNoArg(target, "component4", List::class.java) { snapshot ->
-            batteryCache(snapshot)
+            SystemHeadsetMapping.miLinkBattery(snapshot.fields)
         }
         hookNoArg(target, "getMode", Int::class.javaPrimitiveType!!) { snapshot ->
-            snapshot.knownText("NOISE_MODE")?.let(::miLinkModeFromRose)
+            SystemHeadsetMapping.miLinkAncState(snapshot.fields)
         }
         hookNoArg(target, "component5", Int::class.javaPrimitiveType!!) { snapshot ->
-            snapshot.knownText("NOISE_MODE")?.let(::miLinkModeFromRose)
+            SystemHeadsetMapping.miLinkAncState(snapshot.fields)
         }
         hookNoArg(target, "getSwitchState", Int::class.javaPrimitiveType!!) { 0 }
         hookNoArg(target, "component8", Int::class.javaPrimitiveType!!) { 0 }
@@ -368,23 +367,6 @@ class MiLinkNativeHeadsetAdapter(
         return result != NativeNoiseRequestGate.Result.REJECTED
     }
 
-    private fun batteryCache(snapshot: NativeHeadsetSnapshot): List<Int>? {
-        val left = snapshot.knownNumber("LEFT_BATTERY")?.takeIf { it in 0..100 } ?: -1
-        val right = snapshot.knownNumber("RIGHT_BATTERY")?.takeIf { it in 0..100 } ?: -1
-        val case = snapshot.knownNumber("CASE_BATTERY")?.takeIf { it in 0..100 } ?: -1
-        if (left == -1 && right == -1 && case == -1) return null
-        // MiLink uses -1 for an unavailable battery and the reference uses 0 when
-        // charging state is unavailable; the latter does not establish that it is not charging.
-        return listOf(
-            case,
-            left,
-            right,
-            if (snapshot.knownToggle("CASE_CHARGING") == true) 1 else 0,
-            if (snapshot.knownToggle("LEFT_CHARGING") == true) 1 else 0,
-            if (snapshot.knownToggle("RIGHT_CHARGING") == true) 1 else 0,
-        )
-    }
-
     private fun snapshotForDevice(value: Any?): NativeHeadsetSnapshot? =
         (value as? BluetoothDevice)?.let { device ->
             runCatching { snapshotForAddress(device.address) }.getOrNull()
@@ -409,15 +391,9 @@ class MiLinkNativeHeadsetAdapter(
             ?.let(NativeHeadsetSnapshot::normalizeBluetoothAddress)
             ?: return HookDecision.Proceed
 
-        val preferences = runCatching { module.getRemotePreferences(BridgeWire.PREFERENCES_GROUP) }.getOrNull()
-        val destination = preferences?.getString(BridgeWire.FUSION_SETTINGS_DESTINATION, BridgeWire.DESTINATION_SYSTEM)
-        if (destination != BridgeWire.DESTINATION_OPENROSE) {
-            return HookDecision.Proceed
-        }
-
-        val mappingJson = preferences.getString(BridgeWire.FUSION_DEVICE_MAPPING, null)
-        val canonicalDeviceId = resolveCanonicalDeviceId(normalizedAddress, mappingJson)
-            ?: return HookDecision.Proceed
+        // The module host decides from its own persisted destination and the earphones it owns; the answer
+        // never depends on the application process. Any doubt leaves the system's own settings page alone.
+        val canonicalDeviceId = callbacks.fusionEntryDevice(normalizedAddress) ?: return HookDecision.Proceed
 
         val context = contextSupplier?.invoke()
             ?: resolveContext(chain.thisObject)
@@ -442,16 +418,6 @@ class MiLinkNativeHeadsetAdapter(
             report(FEATURE, "ACTION_FAILED", "switchToHeadsetActivity launch failed for $canonicalDeviceId: ${failure.message}")
             HookDecision.Proceed
         }
-    }
-
-    private fun resolveCanonicalDeviceId(normalizedAddress: String, mappingJson: String?): String? {
-        if (mappingJson.isNullOrBlank()) return null
-        return runCatching {
-            val json = JSONObject(mappingJson)
-            json.optString(normalizedAddress)
-                .takeIf { it.isNotBlank() }
-                ?.let(NativeHeadsetSnapshot::normalizeBluetoothAddress)
-        }.getOrNull()
     }
 
     private fun resolveContext(obj: Any?): Context? {
@@ -555,10 +521,6 @@ class MiLinkNativeHeadsetAdapter(
         report(FEATURE, "UNAVAILABLE", "$reason session=${snapshot.sessionId}")
     }
 
-    private fun hasSummaryBattery(snapshot: NativeHeadsetSnapshot): Boolean =
-        snapshot.knownNumber("LEFT_BATTERY")?.let { it in 0..100 } == true &&
-            snapshot.knownNumber("RIGHT_BATTERY")?.let { it in 0..100 } == true
-
     private fun rememberAncController(chain: XposedInterface.Chain, snapshot: NativeHeadsetSnapshot) {
         val controller = chain.thisObject ?: return
         val device = chain.args.firstOrNull() as? BluetoothDevice ?: return
@@ -630,22 +592,6 @@ class MiLinkNativeHeadsetAdapter(
     private fun hookId(method: Method): String =
         "openrose.native_headset.milink.${method.declaringClass.name}.${method.name}".replace('-', '_')
 
-    private fun miLinkModeFromRose(mode: String): Int? = when (mode.trim().lowercase()) {
-        // MiLink has no wind-reduction mode. As in the reference adapter, expose its
-        // off selection so the user can still switch to a supported mode.
-        "normal", "wind" -> 0
-        "anc" -> 1
-        "transparency" -> 2
-        else -> null
-    }
-
-    private fun roseModeFromMiLink(mode: Int): String? = when (mode) {
-        0 -> "normal"
-        1 -> "anc"
-        2 -> "transparency"
-        else -> null
-    }
-
     private sealed interface HookDecision {
         data object Proceed : HookDecision
         data class Return(val value: Any?) : HookDecision
@@ -656,6 +602,8 @@ class MiLinkNativeHeadsetAdapter(
         const val FEATURE = "FUSION_CENTER"
         const val UPDATE_ANC_STATE = 8
         const val UPDATE_HEADSET_PROPERTY = 4
-        val BATTERY_STATE_FIELDS = setOf("LEFT_BATTERY", "RIGHT_BATTERY", "CASE_BATTERY", "LEFT_CHARGING", "RIGHT_CHARGING")
+        val BATTERY_STATE_FIELDS = setOf(
+            DeviceField.LEFT_BATTERY, DeviceField.RIGHT_BATTERY, DeviceField.CASE_BATTERY, DeviceField.LEFT_CHARGING, DeviceField.RIGHT_CHARGING,
+        )
     }
 }

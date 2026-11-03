@@ -4,32 +4,35 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
-import android.content.SharedPreferences
 import android.os.Binder
 import android.os.Bundle
 import android.os.Handler
 import android.os.HandlerThread
 import android.os.IBinder
 import android.os.Looper
-import android.os.Process
 import android.util.Log
 import io.github.dohex.openrose.bridge.BridgePresentationWire
 import io.github.dohex.openrose.bridge.BridgeTarget
 import io.github.dohex.openrose.bridge.BridgeWire
 import io.github.dohex.openrose.bridge.IControlBridge
 import io.github.dohex.openrose.bridge.IControlObserver
-import io.github.libxposed.api.XposedModule
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
 /**
- * Authenticated reader for an application-owned control session in a target process.
+ * Consumer of the module host's single control session, running in a target process.
  *
- * This class never creates a ControlSession or transport. The snapshot callback is invoked only
- * after the target has validated its identity and the host has acknowledged the exact read.
+ * The host lives in `com.android.bluetooth`; this client discovers its endpoint by binding an
+ * existing exported service there and is authorised by the host from the Binder caller's uid, so it
+ * holds no credential. This class never creates a ControlSession or transport. The snapshot callback
+ * is invoked only after the host has authorised this client, confirmed the current owner generation
+ * and acknowledged the exact read.
+ *
+ * Two epochs exist and must not be mixed: the `open` reply's [BridgeWire.HOST_EPOCH] is the host
+ * incarnation (diagnostics only), while `currentSession` reports the current owner generation, which
+ * every later request carries and every snapshot echoes.
  */
 internal class AuthenticatedBridgeClient(
-    private val module: XposedModule,
     context: Context,
     private val target: BridgeTarget,
     private val processName: String,
@@ -49,19 +52,20 @@ internal class AuthenticatedBridgeClient(
     @Volatile private var closing = false
     @Volatile private var closed = false
     @Volatile private var closeResult: Boolean? = null
-    @Volatile private var hostEpoch: String? = null
-    @Volatile private var proofKey: String? = null
+    /** Host incarnation from `open`; diagnostics only, never sent back. */
+    @Volatile private var hostIncarnation: String? = null
+    /** The owner generation last confirmed by `currentSession`; the only epoch commands may carry. */
+    @Volatile private var generation: String? = null
     @Volatile private var leaseId: String? = null
     @Volatile private var currentReference: SessionReference? = null
     @Volatile private var currentSnapshot: Bundle? = null
-    @Volatile private var lastRejectedCredential: String? = null
     @Volatile private var targetBridge: IControlBridge? = null
 
     @Volatile private var currentBinding: BridgeBinding? = null
-    private var remotePreferences: SharedPreferences? = null
-    private var preferencesListener: SharedPreferences.OnSharedPreferenceChangeListener? = null
     private var authenticatedLease: String? = null
+    private var watchedGeneration: String? = null
     private var deliveredSnapshot = false
+    private val rebindRunnable = Runnable { bindControlBridge() }
 
     init {
         require(processName.isNotBlank() && processName.length <= 128)
@@ -74,174 +78,159 @@ internal class AuthenticatedBridgeClient(
         }
     }
 
-    /** Binds the canonical explicit AIDL service and starts one serialized reader loop. */
+    /** Binds the host discovery service and starts one serialized reader loop. */
     fun start() {
         synchronized(lock) {
             if (started || closing || closed) return
             started = true
         }
-        handler.post { bindControlBridge(attempt = 0) }
+        handler.post { bindControlBridge() }
     }
 
-    private fun bindControlBridge(attempt: Int) {
+    private fun bindControlBridge() {
         if (!canRun()) return
         if (currentBinding != null) return
 
-        val binding = BridgeBinding(attempt)
+        val binding = BridgeBinding()
         currentBinding = binding
-        val intent = Intent().setComponent(ComponentName(BridgeWire.APP_PACKAGE, BridgeWire.SERVICE_CLASS))
+        val intent = Intent(BridgeWire.ACTION_CONTROL_HOST)
+            .setComponent(ComponentName(BridgeWire.TARGET_PACKAGE, BridgeWire.HOST_SERVICE_CLASS))
         val bound = try {
-            context.bindService(intent, binding, Context.BIND_AUTO_CREATE)
+            val accepted = context.bindService(intent, binding, Context.BIND_AUTO_CREATE)
+            // A connection registered with a failed bind must still be unbound.
+            binding.isBound = true
+            accepted
         } catch (failure: Throwable) {
             Log.w(TAG, "bridge_bind_failed target=$target", failure)
             false
         }
-        binding.isBound = bound
         if (currentBinding !== binding || closing || closed) {
-            if (bound) unbindQuietly(binding)
+            unbindQuietly(binding)
             return
         }
         if (!bound) {
+            recordStatus("bind_failed")
             currentBinding = null
             clearSnapshot()
-            if (attempt < MAX_BINDING_RETRIES) {
-                handler.postDelayed({ bindControlBridge(attempt + 1) }, BIND_RETRY_MILLIS)
-            } else {
-                Log.w(TAG, "bridge_bind_unavailable target=$target")
-            }
+            unbindQuietly(binding)
+            scheduleRebind()
             return
         }
         schedulePoll(binding)
     }
 
+    private fun scheduleRebind() {
+        if (!canRun()) return
+        handler.removeCallbacks(rebindRunnable)
+        handler.postDelayed(rebindRunnable, REBIND_BACKOFF_MILLIS)
+    }
+
     private fun pollBridge(binding: BridgeBinding) {
+        var nextDelay = POLL_INTERVAL_MILLIS
         try {
             if (!isCurrentBinding(binding)) return
             val bridge = binding.bridge ?: return
-            val preferences = module.getRemotePreferences(BridgeWire.PREFERENCES_GROUP)
-            attachPreferencesListener(binding, preferences)
-
-            val epoch = preferences.getString(BridgeWire.HOST_EPOCH, null)
-            val key = preferences.getString(BridgeWire.PROOF_KEY, null)
-            if (epoch.isNullOrBlank() || key.isNullOrBlank()) {
-                forgetCredentials(binding, bridge)
-                recordStatus("waiting_for_host_credentials")
-                return
-            }
-            if (epoch.length > MAX_EPOCH_LENGTH || key.length != PROOF_KEY_LENGTH || !key.all { it.isHexDigit() }) {
-                forgetCredentials(binding, bridge)
-                recordStatus("invalid_host_credentials")
-                return
-            }
-
-            if (hostEpoch != epoch || proofKey != key) {
-                closeLease(binding, bridge)
-                hostEpoch = epoch
-                proofKey = key
-                lastRejectedCredential = null
-            }
 
             if (leaseId == null) {
-                val fingerprint = "$epoch:$key"
-                if (lastRejectedCredential == fingerprint) return
-                val proof = BridgeWire.proof(
-                    keyHex = key,
-                    hostEpoch = epoch,
-                    processName = processName,
-                    uid = Process.myUid(),
-                    pid = Process.myPid(),
-                    resolution = resolution,
-                    target = target,
-                )
-                val opened = bridge.open(proof, binding.clientToken)
+                val opened = bridge.open(BridgeWire.hello(processName, target, resolution), binding.clientToken)
                 val openedStatus = opened.getString(BridgeWire.STATUS) ?: STATUS_MISSING
                 val openedLease = opened.getString(BridgeWire.LEASE_ID)
-                val openedEpoch = opened.getString(BridgeWire.HOST_EPOCH)
-                if (!hasWireVersion(opened) || openedStatus != BridgeWire.STATUS_OK ||
-                    openedLease.isNullOrBlank() || openedEpoch != epoch
-                ) {
+                if (!hasWireVersion(opened) || openedStatus != BridgeWire.STATUS_OK || openedLease.isNullOrBlank()) {
                     if (!openedLease.isNullOrBlank()) runCatching { bridge.close(openedLease) }
                     clearSnapshot()
-                    if (openedStatus == BridgeWire.STATUS_STALE_HOST || openedEpoch != epoch ||
-                        openedStatus == BridgeWire.STATUS_TARGET_INCOMPATIBLE
-                    ) lastRejectedCredential = fingerprint
-                    recordStatus(if (hasWireVersion(opened)) "open_$openedStatus" else "open_invalid_version")
+                    if (hasWireVersion(opened) && openedStatus == BridgeWire.STATUS_UNAUTHORIZED) {
+                        nextDelay = REJECTED_RETRY_MILLIS
+                        if (recordStatus("rejected_by_host")) Log.w(TAG, "bridge_open_unauthorized target=$target")
+                    } else {
+                        recordStatus(if (hasWireVersion(opened)) "open_$openedStatus" else "open_invalid_version")
+                    }
                     return
                 }
 
                 leaseId = openedLease
                 targetBridge = bridge
+                hostIncarnation = opened.getString(BridgeWire.HOST_EPOCH)
+                generation = null
+                watchedGeneration = null
                 currentReference = null
-                authenticatedLease = null
-                val watched = bridge.watch(leaseRequest(openedLease, epoch), binding.observer)
-                if (!hasWireVersion(watched) || watched.getString(BridgeWire.STATUS) != BridgeWire.STATUS_OK) {
-                    closeLease(binding, bridge)
-                    recordStatus("watch_unavailable")
-                    return
-                }
-                if (!isCurrentBinding(binding) || leaseId != openedLease || hostEpoch != epoch) return
                 authenticatedLease = openedLease
-                recordStatus("authenticated target=$target")
+                recordStatus("authenticated target=$target host=${hostIncarnation ?: "unknown"}")
                 runCatching { onAuthenticated(this) }
                     .onFailure { Log.w(TAG, "authenticated_callback_failed target=$target", it) }
             }
 
-            readCurrentSnapshot(binding, bridge, epoch)
+            readCurrentSnapshot(binding, bridge)
         } catch (failure: SecurityException) {
-            val epoch = hostEpoch
-            val key = proofKey
-            if (epoch != null && key != null) lastRejectedCredential = "$epoch:$key"
-            closeLease(binding, binding.bridge)
-            if (recordStatus("rejected_by_host")) Log.e(TAG, "bridge_request_rejected target=$target", failure)
+            nextDelay = REJECTED_RETRY_MILLIS
+            closeLease(binding.bridge)
+            if (recordStatus("rejected_by_host")) Log.w(TAG, "bridge_request_rejected target=$target", failure)
         } catch (failure: Throwable) {
             clearSnapshot()
             if (recordStatus("request_failed_${failure.javaClass.simpleName}")) {
                 Log.w(TAG, "bridge_request_failed target=$target", failure)
             }
         } finally {
-            schedulePoll(binding, POLL_INTERVAL_MILLIS)
+            schedulePoll(binding, nextDelay)
         }
     }
 
-    private fun readCurrentSnapshot(binding: BridgeBinding, bridge: IControlBridge, epoch: String) {
+    private fun readCurrentSnapshot(binding: BridgeBinding, bridge: IControlBridge) {
         val lease = leaseId ?: return
-        if (!isCurrentBinding(binding) || hostEpoch != epoch) return
+        if (!isCurrentBinding(binding)) return
 
         val current = bridge.currentSession(lease)
         if (!hasWireVersion(current)) {
-            clearSnapshot()
+            unconfirm()
             recordStatus("session_invalid_version")
             return
         }
 
         val sessionStatus = current.getString(BridgeWire.STATUS) ?: STATUS_MISSING
         if (sessionStatus == BridgeWire.STATUS_NO_SESSION) {
+            // No owner or no ready device: revoke consumers, keep the lease for component reports.
             clearSnapshot()
+            confirmGeneration(generationOf(current))
             recordStatus("no_session")
-            return // The authenticated lease remains active for component reports.
+            return
         }
         if (sessionStatus != BridgeWire.STATUS_OK) {
-            clearSnapshot()
-            if (sessionStatus == BridgeWire.STATUS_STALE_HOST || sessionStatus == BridgeWire.STATUS_STALE_SESSION) {
-                closeLease(binding, bridge)
-            }
+            unconfirm()
+            if (sessionStatus == BridgeWire.STATUS_STALE_HOST || sessionStatus == BridgeWire.STATUS_STALE_SESSION ||
+                sessionStatus == BridgeWire.STATUS_UNAUTHORIZED
+            ) closeLease(bridge)
             recordStatus("session_$sessionStatus")
             return
         }
 
-        val currentEpoch = current.getString(BridgeWire.HOST_EPOCH)
+        val ownerGeneration = generationOf(current)
         val deviceId = current.getString(BridgeWire.DEVICE_ID)
         val sessionId = current.getLong(BridgeWire.SESSION_ID, INVALID_SESSION_ID)
-        if (currentEpoch != epoch || deviceId.isNullOrBlank() || deviceId.length > MAX_DEVICE_ID_LENGTH ||
+        if (ownerGeneration == null || deviceId.isNullOrBlank() || deviceId.length > MAX_DEVICE_ID_LENGTH ||
             sessionId <= 0L
         ) {
-            clearSnapshot()
+            unconfirm()
             recordStatus("session_identity_mismatch")
             return
         }
+        // A different generation revokes everything delivered for the previous one before any read.
+        confirmGeneration(ownerGeneration)
 
-        val request = sessionRequest(lease, epoch, deviceId, sessionId)
-        val response = bridge.read(request)
+        if (watchedGeneration != ownerGeneration) {
+            val watched = bridge.watch(leaseRequest(lease, ownerGeneration), binding.observer)
+            val watchStatus = if (hasWireVersion(watched)) watched.getString(BridgeWire.STATUS) ?: STATUS_MISSING else "INVALID_VERSION"
+            if (watchStatus != BridgeWire.STATUS_OK) {
+                unconfirm()
+                if (watchStatus != BridgeWire.STATUS_STALE_HOST && watchStatus != BridgeWire.STATUS_STALE_SESSION) {
+                    closeLease(bridge)
+                }
+                recordStatus("watch_$watchStatus")
+                return
+            }
+            watchedGeneration = ownerGeneration
+            if (!isCurrentBinding(binding) || leaseId != lease || generation != ownerGeneration) return
+        }
+
+        val response = bridge.read(sessionRequest(lease, ownerGeneration, deviceId, sessionId))
         if (!hasWireVersion(response)) {
             clearSnapshot()
             recordStatus("read_invalid_version")
@@ -249,17 +238,14 @@ internal class AuthenticatedBridgeClient(
         }
         val readStatus = response.getString(BridgeWire.STATUS) ?: STATUS_MISSING
         if (readStatus != BridgeWire.STATUS_OK) {
-            clearSnapshot()
-            if (readStatus == BridgeWire.STATUS_STALE_HOST || readStatus == BridgeWire.STATUS_STALE_SESSION) {
-                closeLease(binding, bridge)
-            }
+            failRequest(bridge, readStatus)
             recordStatus("read_$readStatus")
             return
         }
 
         val snapshot = response.getBundle(BridgeWire.SNAPSHOT)
         if (snapshot == null || !hasWireVersion(snapshot) ||
-            snapshot.getString(BridgeWire.HOST_EPOCH) != epoch ||
+            snapshot.getString(BridgeWire.HOST_EPOCH) != ownerGeneration ||
             snapshot.getString(BridgeWire.DEVICE_ID) != deviceId ||
             snapshot.getLong(BridgeWire.SESSION_ID, INVALID_SESSION_ID) != sessionId
         ) {
@@ -274,30 +260,25 @@ internal class AuthenticatedBridgeClient(
             return
         }
 
-        val receipt = sessionRequest(lease, epoch, deviceId, sessionId).apply {
+        val receipt = sessionRequest(lease, ownerGeneration, deviceId, sessionId).apply {
             putLong(BridgeWire.READ_SEQUENCE, sequence)
         }
         val acknowledged = bridge.acknowledge(receipt)
-        if (!hasWireVersion(acknowledged) || acknowledged.getString(BridgeWire.STATUS) != BridgeWire.STATUS_OK) {
-            clearSnapshot()
-            val ackStatus = if (hasWireVersion(acknowledged)) {
-                acknowledged.getString(BridgeWire.STATUS) ?: STATUS_MISSING
-            } else {
-                "INVALID_VERSION"
-            }
-            if (ackStatus == BridgeWire.STATUS_STALE_HOST || ackStatus == BridgeWire.STATUS_STALE_SESSION) {
-                closeLease(binding, bridge)
-            }
+        val ackStatus = if (hasWireVersion(acknowledged)) {
+            acknowledged.getString(BridgeWire.STATUS) ?: STATUS_MISSING
+        } else {
+            "INVALID_VERSION"
+        }
+        if (ackStatus != BridgeWire.STATUS_OK) {
+            failRequest(bridge, ackStatus)
             recordStatus("ack_$ackStatus")
             return
         }
 
-        if (!isCurrentBinding(binding) || leaseId != lease || hostEpoch != epoch) return
-        val acknowledgedReference = SessionReference(deviceId, sessionId)
-        currentReference = acknowledgedReference
+        if (!isCurrentBinding(binding) || leaseId != lease || generation != ownerGeneration) return
+        currentReference = SessionReference(deviceId, sessionId)
         currentSnapshot = Bundle(snapshot)
         deliveredSnapshot = true
-        if (!isCurrentBinding(binding)) return
         try {
             onSnapshot(Bundle(snapshot))
             recordStatus("snapshot_acknowledged session=$sessionId")
@@ -307,43 +288,46 @@ internal class AuthenticatedBridgeClient(
         }
     }
 
-    private fun attachPreferencesListener(binding: BridgeBinding, preferences: SharedPreferences) {
-        if (binding.preferences === preferences) return
-        detachPreferencesListener(binding)
-        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-            if (key == null || key == BridgeWire.HOST_EPOCH || key == BridgeWire.PROOF_KEY) {
-                schedulePoll(binding)
-            }
+    /** A rejected read or acknowledgement revokes consumers; the next poll re-confirms the generation. */
+    private fun failRequest(bridge: IControlBridge, status: String) {
+        unconfirm()
+        if (status == BridgeWire.STATUS_UNAUTHORIZED) closeLease(bridge)
+    }
+
+    private fun generationOf(bundle: Bundle): String? =
+        bundle.getString(BridgeWire.HOST_EPOCH)?.takeIf { it.isNotBlank() && it.length <= MAX_GENERATION_LENGTH }
+
+    /**
+     * Adopts the owner generation reported by `currentSession`. A change revokes every consumer of
+     * the previous generation and invalidates its watch; the new generation is then re-announced so
+     * pending component reports reach the new owner.
+     */
+    private fun confirmGeneration(confirmed: String?) {
+        if (generation == confirmed) return
+        clearSnapshot()
+        generation = confirmed
+        watchedGeneration = null
+        if (confirmed != null && authenticatedLease != null) {
+            runCatching { onAuthenticated(this) }
+                .onFailure { Log.w(TAG, "authenticated_callback_failed target=$target", it) }
         }
-        binding.preferences = preferences
-        binding.preferencesListener = listener
-        remotePreferences = preferences
-        preferencesListener = listener
-        runCatching { preferences.registerOnSharedPreferenceChangeListener(listener) }
-            .onFailure { Log.w(TAG, "remote_preferences_listener_unavailable target=$target", it) }
     }
 
-    private fun forgetCredentials(binding: BridgeBinding, bridge: IControlBridge?) {
-        closeLease(binding, bridge)
-        hostEpoch = null
-        proofKey = null
-        lastRejectedCredential = null
+    /** No generation is confirmed any more: consumers are revoked and commands are refused. */
+    private fun unconfirm() {
+        clearSnapshot()
+        confirmGeneration(null)
     }
 
-    private fun closeLease(binding: BridgeBinding?, bridge: IControlBridge?) {
+    private fun closeLease(bridge: IControlBridge?) {
         val lease = leaseId
         // Clear the target-process presentation before releasing its authenticated lease.
-        clearDeliveredSnapshot()
-        leaseId = null
-        authenticatedLease = null
-        targetBridge = null
-        currentReference = null
-        currentSnapshot = null
+        clearSnapshot()
+        invalidateLeaseLocal()
         if (lease != null && bridge != null) {
             runCatching { bridge.close(lease) }
                 .onFailure { Log.w(TAG, "bridge_lease_close_failed target=$target", it) }
         }
-        if (binding != null && !isCurrentBinding(binding)) return
     }
 
     /** Clear on the reader looper only; a stale binding can never clear a newer target adapter. */
@@ -382,40 +366,42 @@ internal class AuthenticatedBridgeClient(
     private fun hasWireVersion(bundle: Bundle): Boolean =
         bundle.getInt(BridgeWire.KEY_VERSION, INVALID_WIRE_VERSION) == BridgeWire.VERSION
 
-    private fun Char.isHexDigit(): Boolean = this in '0'..'9' || this in 'a'..'f' || this in 'A'..'F'
-
-    private fun leaseRequest(lease: String, epoch: String): Bundle = Bundle().apply {
+    private fun leaseRequest(lease: String, ownerGeneration: String?): Bundle = Bundle().apply {
         putInt(BridgeWire.KEY_VERSION, BridgeWire.VERSION)
         putString(BridgeWire.LEASE_ID, lease)
-        putString(BridgeWire.HOST_EPOCH, epoch)
+        ownerGeneration?.let { putString(BridgeWire.HOST_EPOCH, it) }
     }
 
-    private fun sessionRequest(lease: String, epoch: String, deviceId: String, sessionId: Long): Bundle =
-        leaseRequest(lease, epoch).apply {
+    private fun sessionRequest(lease: String, ownerGeneration: String, deviceId: String, sessionId: Long): Bundle =
+        leaseRequest(lease, ownerGeneration).apply {
             putString(BridgeWire.DEVICE_ID, deviceId)
             putLong(BridgeWire.SESSION_ID, sessionId)
         }
 
+    /**
+     * A command may only address the snapshot it was built from, and only while that snapshot's
+     * generation is still the one `currentSession` last confirmed.
+     */
     private fun snapshotRequest(snapshot: Bundle, requireCurrentReference: Boolean): Bundle? {
         if (!isLeaseUsable()) return null
-        val epoch = hostEpoch ?: return null
+        val confirmed = generation ?: return null
         val lease = leaseId ?: return null
-        val snapshotEpoch = snapshot.getString(BridgeWire.HOST_EPOCH) ?: return null
+        val snapshotGeneration = snapshot.getString(BridgeWire.HOST_EPOCH) ?: return null
         val deviceId = snapshot.getString(BridgeWire.DEVICE_ID)?.takeIf {
             it.isNotBlank() && it.length <= MAX_DEVICE_ID_LENGTH
         } ?: return null
         val sessionId = snapshot.getLong(BridgeWire.SESSION_ID, INVALID_SESSION_ID)
             .takeIf { it > 0L } ?: return null
         if (snapshot.getInt(BridgeWire.KEY_VERSION, INVALID_WIRE_VERSION) != BridgeWire.VERSION ||
-            snapshotEpoch != epoch || (requireCurrentReference && currentReference != SessionReference(deviceId, sessionId))
+            snapshotGeneration != confirmed || (requireCurrentReference && currentReference != SessionReference(deviceId, sessionId))
         ) return null
-        return sessionRequest(lease, epoch, deviceId, sessionId)
+        return sessionRequest(lease, confirmed, deviceId, sessionId)
     }
 
     private fun isLeaseUsable(): Boolean =
         started && !closed && !closing && leaseId != null && targetBridge != null
 
-    /** Atomically claims the current connection prompt for this authenticated session. */
+    /** Atomically claims the current connection prompt for this authorised session. */
     fun claimPrompt(snapshot: Bundle, promptId: String): Boolean {
         if (promptId.isBlank() || promptId.length > MAX_PROMPT_ID_LENGTH) return false
         val request = snapshotRequest(snapshot, requireCurrentReference = true) ?: return false
@@ -447,7 +433,10 @@ internal class AuthenticatedBridgeClient(
         callRemote(request) { bridge, call -> bridge.reportPresentation(call) }
     }
 
-    /** Component capability reports are lease-scoped and remain available with no ready session. */
+    /**
+     * Component capability reports are lease-scoped and remain available with no ready session; they
+     * carry the owner generation only while one is confirmed.
+     */
     fun reportComponent(feature: String, status: String, detail: String) {
         if (feature.isBlank() || feature.length > MAX_FEATURE_LENGTH ||
             status.isBlank() || status.length > MAX_STATUS_LENGTH
@@ -459,12 +448,25 @@ internal class AuthenticatedBridgeClient(
         callRemote(request) { bridge, call -> bridge.reportComponent(call) }
     }
 
+    /**
+     * Asks the host whether the fusion center's settings entry for [address] belongs to OpenRose. Returns the
+     * control device to open, or null when the system's own entry must run (no owner, system chosen, unknown
+     * address, or any failure). A blocking Binder call: use it from the bounded action executor.
+     */
+    fun fusionEntryDevice(address: String): String? {
+        val request = currentLeaseRequest() ?: return null
+        request.putString(BridgeWire.FUSION_ADDRESS, address)
+        val response = callRemote(request) { bridge, call -> bridge.fusionEntry(call) } ?: return null
+        if (!hasWireVersion(response) || response.getString(BridgeWire.STATUS) != BridgeWire.STATUS_OK ||
+            response.getString(BridgeWire.FUSION_DECISION) != BridgeWire.FUSION_OPENROSE) return null
+        return response.getString(BridgeWire.DEVICE_ID)?.takeIf { it.isNotBlank() && it.length <= MAX_DEVICE_ID_LENGTH }
+    }
+
     private fun currentLeaseRequest(): Bundle? {
         if (!isLeaseUsable()) return null
         val lease = leaseId ?: return null
-        val epoch = hostEpoch ?: return null
         if (authenticatedLease != lease) return null
-        return leaseRequest(lease, epoch)
+        return leaseRequest(lease, generation)
     }
 
     private fun callRemote(
@@ -473,12 +475,19 @@ internal class AuthenticatedBridgeClient(
     ): Bundle? {
         if (!isLeaseUsable()) return null
         val lease = leaseId ?: return null
-        val epoch = hostEpoch ?: return null
-        if (request.getString(BridgeWire.LEASE_ID) != lease || request.getString(BridgeWire.HOST_EPOCH) != epoch) return null
+        // The generation may have moved since the request was built; never send an old one.
+        if (request.getString(BridgeWire.LEASE_ID) != lease || request.getString(BridgeWire.HOST_EPOCH) != generation) return null
         val bridge = targetBridge ?: return null
-        return runCatching { call(bridge, Bundle(request)) }
-            .onFailure { Log.w(TAG, "bridge_call_failed target=$target", it) }
-            .getOrNull()
+        return try {
+            call(bridge, Bundle(request))
+        } catch (failure: SecurityException) {
+            // A refusal by the host is an answer, not a missing one: callers must be able to tell it from a lost link.
+            Log.w(TAG, "bridge_call_unauthorized target=$target", failure)
+            BridgeWire.response(BridgeWire.STATUS_UNAUTHORIZED, failure.message)
+        } catch (failure: Throwable) {
+            Log.w(TAG, "bridge_call_failed target=$target", failure)
+            null
+        }
     }
 
     fun close(): Boolean {
@@ -544,6 +553,7 @@ internal class AuthenticatedBridgeClient(
 
     private fun cleanupOnReaderThread(): Boolean {
         var clean = true
+        handler.removeCallbacks(rebindRunnable)
         currentBinding?.pollRunnable?.let(handler::removeCallbacks)
         clearSnapshot()
         if (!runCatching(onClosing).onFailure {
@@ -553,75 +563,40 @@ internal class AuthenticatedBridgeClient(
         ) clean = false
 
         val binding = currentBinding
-        val bridge = binding?.bridge ?: targetBridge
-        closeLease(binding, bridge)
-        detachPreferencesListener(binding)
+        closeLease(binding?.bridge ?: targetBridge)
         if (binding != null) {
             currentBinding = null
             unbindQuietly(binding)
         }
-        hostEpoch = null
-        proofKey = null
-        lastRejectedCredential = null
         started = false
         return clean
     }
 
-    private fun handleServiceDisconnected(binding: BridgeBinding) {
+    /**
+     * The host connection was lost: consumers are revoked at once and a fresh bind is scheduled with a
+     * fixed backoff for as long as this client is open, because the host may start (or restart) later.
+     */
+    private fun dropBinding(binding: BridgeBinding, status: String) {
         if (currentBinding !== binding || closing || closed) return
-        binding.bridge = null
-        targetBridge = null
-        invalidateLeaseLocal()
-        detachPreferencesListener(binding)
-        clearSnapshot()
-        recordStatus("service_disconnected")
-    }
-
-    private fun handleBindingDied(binding: BridgeBinding) {
-        if (currentBinding !== binding || closing || closed) return
-        val retry = binding.attempt < MAX_BINDING_RETRIES
+        recordStatus(status)
         currentBinding = null
         binding.bridge = null
-        invalidateLeaseLocal()
-        detachPreferencesListener(binding)
+        handler.removeCallbacks(binding.pollRunnable)
         clearSnapshot()
-        unbindQuietly(binding)
-        if (retry) bindControlBridge(binding.attempt + 1)
-        else recordStatus("binding_died")
-    }
-
-    private fun handleNullBinding(binding: BridgeBinding) {
-        if (currentBinding !== binding || closing || closed) return
-        currentBinding = null
-        binding.bridge = null
         invalidateLeaseLocal()
-        detachPreferencesListener(binding)
-        clearSnapshot()
         unbindQuietly(binding)
-        recordStatus("null_binding")
+        scheduleRebind()
     }
 
     private fun invalidateLeaseLocal() {
         leaseId = null
         authenticatedLease = null
         targetBridge = null
+        hostIncarnation = null
+        generation = null
+        watchedGeneration = null
         currentReference = null
         currentSnapshot = null
-    }
-
-    private fun detachPreferencesListener(binding: BridgeBinding?) {
-        val preferences = binding?.preferences ?: remotePreferences
-        val listener = binding?.preferencesListener ?: preferencesListener
-        if (preferences != null && listener != null) {
-            runCatching { preferences.unregisterOnSharedPreferenceChangeListener(listener) }
-                .onFailure { Log.w(TAG, "remote_preferences_listener_remove_failed target=$target", it) }
-        }
-        if (binding != null) {
-            binding.preferences = null
-            binding.preferencesListener = null
-        }
-        if (remotePreferences === preferences) remotePreferences = null
-        if (preferencesListener === listener) preferencesListener = null
     }
 
     private fun unbindQuietly(binding: BridgeBinding) {
@@ -636,13 +611,14 @@ internal class AuthenticatedBridgeClient(
         }
     }
 
-    private inner class BridgeBinding(val attempt: Int) : ServiceConnection {
+    private inner class BridgeBinding : ServiceConnection {
         val clientToken = Binder()
         val pollRunnable = Runnable { pollBridge(this) }
         val observer = object : IControlObserver.Stub() {
             override fun onChanged(identity: Bundle) {
+                // The generation in the notice is not trusted; any valid notice for this lease only
+                // prompts a re-read, which re-confirms the generation through currentSession.
                 if (identity.getInt(BridgeWire.KEY_VERSION, INVALID_WIRE_VERSION) != BridgeWire.VERSION ||
-                    identity.getString(BridgeWire.HOST_EPOCH) != hostEpoch ||
                     identity.getString(BridgeWire.LEASE_ID) != leaseId
                 ) return
                 schedulePoll(this@BridgeBinding)
@@ -651,8 +627,6 @@ internal class AuthenticatedBridgeClient(
 
         @Volatile var bridge: IControlBridge? = null
         @Volatile var isBound: Boolean = false
-        var preferences: SharedPreferences? = null
-        var preferencesListener: SharedPreferences.OnSharedPreferenceChangeListener? = null
         var lastStatus: String? = null
 
         override fun onServiceConnected(name: ComponentName, service: IBinder) {
@@ -669,19 +643,19 @@ internal class AuthenticatedBridgeClient(
         override fun onServiceDisconnected(name: ComponentName) {
             bridge = null
             if (currentBinding === this) targetBridge = null
-            handler.post { handleServiceDisconnected(this) }
+            handler.post { dropBinding(this, "service_disconnected") }
         }
 
         override fun onBindingDied(name: ComponentName) {
             bridge = null
             if (currentBinding === this) targetBridge = null
-            handler.post { handleBindingDied(this) }
+            handler.post { dropBinding(this, "binding_died") }
         }
 
         override fun onNullBinding(name: ComponentName) {
             bridge = null
             if (currentBinding === this) targetBridge = null
-            handler.post { handleNullBinding(this) }
+            handler.post { dropBinding(this, "null_binding") }
         }
     }
 
@@ -691,11 +665,10 @@ internal class AuthenticatedBridgeClient(
         const val TAG = "OpenRoseBridgeClient"
         const val READER_THREAD_NAME = "OpenRoseAuthenticatedBridge"
         const val POLL_INTERVAL_MILLIS = 1_000L
-        const val BIND_RETRY_MILLIS = 1_000L
+        const val REBIND_BACKOFF_MILLIS = 5_000L
+        const val REJECTED_RETRY_MILLIS = 5_000L
         const val CLOSE_TIMEOUT_MILLIS = 3_000L
-        const val MAX_BINDING_RETRIES = 1
-        const val MAX_EPOCH_LENGTH = 64
-        const val PROOF_KEY_LENGTH = 64
+        const val MAX_GENERATION_LENGTH = 64
         const val MAX_DEVICE_ID_LENGTH = 128
         const val MAX_PROMPT_ID_LENGTH = 128
         const val MAX_NOISE_MODE_LENGTH = 64

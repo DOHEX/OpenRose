@@ -38,6 +38,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.getAndUpdate
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.flow.updateAndGet
 import kotlinx.coroutines.flow.first
@@ -62,27 +63,36 @@ data class SessionTiming(
     }
 }
 
-/** Platform-owned authority. Replacing a page or its interface style never replaces this owner. */
-class ControlSession(
+/**
+ * Platform-owned authority behind [ControlRuntime]. Replacing a page or its interface style never
+ * replaces this owner; callers outside the core module can only reach it through the runtime.
+ */
+internal class ControlSession(
     initialPlatformState: PlatformState,
     initialSettings: UserSettings = UserSettings(),
     private val transport: ControlTransport? = null,
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
     private val timing: SessionTiming = SessionTiming(),
-) {
+    /** Device session ids count up from here, so a reference from another owner instance never matches. */
+    sessionIdBase: Long = 0L,
+) : ControlRuntime {
     private val mutableState = MutableStateFlow(
         ControlState(platform = initialPlatformState, settings = initialSettings.snapshot()).withSystemPresentation(),
     )
-    val state: StateFlow<ControlState> = mutableState.asStateFlow()
+    override val state: StateFlow<ControlState> = mutableState.asStateFlow()
     private val lifecycle = Mutex()
     private val scanLifecycle = Mutex()
     private val scanEpoch = MutableStateFlow(0L)
     private var scanJob: Job? = null
-    private var generation = 0L
+    private var generation = sessionIdBase
+    /** Connections whose close the platform refused; retried by every [clearActive]. */
+    private val unclosed = MutableStateFlow<List<ControlConnection>>(emptyList())
     private var operationId = 0L
     private var active: Attempt? = null
     private var audioDrivenSessionDeviceId: DeviceId? = null
     private var autoConnectJob: Job? = null
+    /** The newest audio-connection fact, kept while automatic control must wait for first unlock. */
+    private var latestAudioDevice: DeviceId? = null
     private var systemPinnedDeviceId: DeviceId? = null
     private data class TargetIntent(val epoch: Long, val deviceId: DeviceId?)
     private val targetIntent = MutableStateFlow(TargetIntent(0L, null))
@@ -93,14 +103,15 @@ class ControlSession(
             }
             scope.launch(start = CoroutineStart.UNDISPATCHED) {
                 transport.audioConnectedDevice.collect { audioDeviceId ->
+                    latestAudioDevice = audioDeviceId
                     refreshBondedDevices()
-                    handleAudioConnectedDevice(audioDeviceId)
+                    if (state.value.platform.userUnlocked) handleAudioConnectedDevice(audioDeviceId)
                 }
             }
         }
     }
 
-    suspend fun refreshBondedDevices() {
+    override suspend fun refreshBondedDevices() {
         val bonded = runCatching { transport?.bondedDevices() }.getOrNull() ?: emptyList()
         updateState { it.copy(bondedDevices = bonded) }
     }
@@ -216,7 +227,7 @@ class ControlSession(
 
     private data class SettingRequest(val operation: SettingOperation, val result: CompletableDeferred<OperationResult>)
 
-    suspend fun startScan(): OperationResult = scanLifecycle.withLock {
+    override suspend fun startScan(): OperationResult = scanLifecycle.withLock {
         platformError()?.let { return@withLock failure(it) }
         if (scanJob?.isActive == true) return@withLock OperationResult.Success
         val epoch = scanEpoch.value + 1
@@ -251,14 +262,14 @@ class ControlSession(
         failed?.let { OperationResult.Failure(it.error) } ?: OperationResult.Success
     }
 
-    suspend fun stopScan() = scanLifecycle.withLock {
+    override suspend fun stopScan() = scanLifecycle.withLock {
         scanEpoch.value++
         scanJob?.cancelAndJoin()
         scanJob = null
         updateState { it.copy(scan = ScanState.Idle) }
     }
 
-    suspend fun connect(deviceId: DeviceId): OperationResult {
+    override suspend fun connect(deviceId: DeviceId): OperationResult {
         val requestEpoch = targetIntent.updateAndGet { current ->
             if (current.deviceId == deviceId && current.epoch > 0) current
             else TargetIntent(current.epoch + 1, deviceId)
@@ -271,7 +282,7 @@ class ControlSession(
         return connectInternal(deviceId, isAudioDriven = false, requestEpoch = requestEpoch)
     }
 
-    suspend fun connectFromSystem(deviceId: DeviceId): OperationResult {
+    override suspend fun connectFromSystem(deviceId: DeviceId): OperationResult {
         val requestEpoch = targetIntent.updateAndGet { current ->
             if (current.deviceId == deviceId && current.epoch > 0) current
             else TargetIntent(current.epoch + 1, deviceId)
@@ -283,7 +294,7 @@ class ControlSession(
     }
 
     /** Cancelling the adding flow releases only the unfinished attempt it created. */
-    suspend fun connectForAddDevice(deviceId: DeviceId): OperationResult {
+    override suspend fun connectForAddDevice(deviceId: DeviceId): OperationResult {
         val requestEpoch = targetIntent.updateAndGet { current ->
             if (current.deviceId == deviceId && current.epoch > 0) current
             else TargetIntent(current.epoch + 1, deviceId)
@@ -388,21 +399,22 @@ class ControlSession(
         return result
     }
 
-    suspend fun disconnect() {
+    override suspend fun disconnect(): Boolean {
         targetIntent.updateAndGet { current ->
             TargetIntent(current.epoch + 1, null)
         }
         audioDrivenSessionDeviceId = null
         autoConnectJob?.cancel()
         autoConnectJob = null
-        lifecycle.withLock {
-            clearActive()
+        return lifecycle.withLock {
+            val closed = clearActive()
             updateState { it.copy(connection = ConnectionState.Disconnected, device = null, lastError = null, connectionRecovery = null) }
+            closed
         }
     }
 
     /** Reads a detached snapshot only when the reference still identifies the ready device session. */
-    fun readSession(reference: SessionReference): SessionSnapshotResult {
+    override fun readSession(reference: SessionReference): SessionSnapshotResult {
         val captured = mutableState.value
         val connection = captured.connection as? ConnectionState.Connected
             ?: return SessionSnapshotResult.Failure(ControlError(ControlErrorCode.NOT_READY, "设备会话尚未就绪"))
@@ -418,7 +430,7 @@ class ControlSession(
     }
 
     /** The first current renderer to claim an active prompt becomes its sole trigger owner. */
-    suspend fun claimConnectionPrompt(reference: SessionReference, promptId: String): Boolean = lifecycle.withLock {
+    override suspend fun claimConnectionPrompt(reference: SessionReference, promptId: String): Boolean = lifecycle.withLock {
         val attempt = active ?: return@withLock false
         if (!attempt.ready || attempt.id != reference.sessionId || attempt.candidate.deviceId != reference.deviceId) {
             return@withLock false
@@ -441,10 +453,10 @@ class ControlSession(
     }
 
     /** A caller owns its wait; the platform session owns the queued operation. */
-    suspend fun set(setting: DeviceSetting, value: FieldValue): OperationResult = enqueueSetting(null, setting, value)
+    override suspend fun set(setting: DeviceSetting, value: FieldValue): OperationResult = enqueueSetting(null, setting, value)
 
     /** Queues a setting only when this caller's device and session reference is still current. */
-    suspend fun set(reference: SessionReference, setting: DeviceSetting, value: FieldValue): OperationResult =
+    override suspend fun set(reference: SessionReference, setting: DeviceSetting, value: FieldValue): OperationResult =
         enqueueSetting(reference, setting, value)
 
     private suspend fun enqueueSetting(reference: SessionReference?, setting: DeviceSetting, value: FieldValue): OperationResult {
@@ -901,7 +913,7 @@ class ControlSession(
                         }
                     }
                 }
-                closeSafely(link)
+                closeOrRemember(link)
             }
         }
         phase(attempt, epoch, ConnectionPhase.SUBSCRIBING)
@@ -1064,7 +1076,7 @@ class ControlSession(
             oldConnection to oldObserver
         }
         oldObserver?.cancel()
-        oldConnection?.let { closeSafely(it) }
+        oldConnection?.let { closeOrRemember(it) }
         oldObserver?.join()
     }
 
@@ -1127,8 +1139,12 @@ class ControlSession(
         }
     }
 
-    /** Caller holds lifecycle. Invalidate before closing so old callbacks cannot update a new session. */
-    private suspend fun clearActive() {
+    /**
+     * Caller holds lifecycle. Invalidate before closing so old callbacks cannot update a new session. Returns
+     * whether every connection this session ever opened is confirmed closed: a close the platform refused is
+     * remembered and tried again on the next call instead of being forgotten.
+     */
+    private suspend fun clearActive(): Boolean {
         val previous = active
         active = null
         generation++
@@ -1140,12 +1156,26 @@ class ControlSession(
         previous?.let { endSettings(it) }
         previous?.task?.cancel()
         previous?.observer?.cancel()
-        previous?.connection?.let { closeSafely(it) }
+        previous?.connection?.let { connection -> unclosed.update { if (connection in it) it else it + connection } }
+        unclosed.getAndUpdate { emptyList() }.forEach { closeOrRemember(it) }
+        return unclosed.value.isEmpty()
     }
 
-    private suspend fun closeSafely(connection: ControlConnection) {
-        withContext(NonCancellable) { try { connection.close() } catch (_: Exception) { /* State already records the connection outcome. */ } }
+    private suspend fun closeOrRemember(connection: ControlConnection): Boolean {
+        val closed = closeSafely(connection)
+        if (!closed) unclosed.update { if (connection in it) it else it + connection }
+        return closed
     }
+
+    private suspend fun closeSafely(connection: ControlConnection): Boolean =
+        withContext(NonCancellable) {
+            try {
+                connection.close()
+                true
+            } catch (_: Exception) {
+                false
+            }
+        }
 
     private fun platformError(): ControlError? = when {
         state.value.platform.permission in setOf(PermissionState.REQUIRED, PermissionState.DENIED) ->
@@ -1160,7 +1190,7 @@ class ControlSession(
         return OperationResult.Failure(error)
     }
 
-    fun updateSettings(settings: UserSettings) {
+    override fun updateSettings(settings: UserSettings) {
         val snapshot = settings.snapshot()
         var promptToCancel: ConnectionPrompt? = null
         updateState { current ->
@@ -1177,8 +1207,14 @@ class ControlSession(
         }
     }
 
-    fun updatePlatformState(platformState: PlatformState) {
+    override fun updatePlatformState(platformState: PlatformState) {
+        val unlocking = !state.value.platform.userUnlocked && platformState.userUnlocked
         updateState { it.copy(platform = platformState) }
+        // The audio connection may predate this owner or the unlock; only the current one is resumed.
+        val audioDevice = latestAudioDevice
+        if (unlocking && audioDevice != null && transport != null) {
+            scope.launch { handleAudioConnectedDevice(audioDevice) }
+        }
     }
 
     private inline fun updateState(crossinline update: (ControlState) -> ControlState) {

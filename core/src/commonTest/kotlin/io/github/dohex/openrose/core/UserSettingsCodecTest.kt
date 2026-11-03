@@ -121,3 +121,28 @@ class UserSettingsCodecTest {
         )
     }
 }
+
+class ControlWayCodecTest {
+    @Test
+    fun missingOrUnknownControlWayIsOrdinaryControl() {
+        assertEquals(ControlWay.ORDINARY, UserSettings().controlWay)
+        assertEquals(ControlWay.ORDINARY, UserSettingsCodec.decode(emptyMap()).controlWay)
+        assertEquals(ControlWay.ORDINARY, UserSettingsCodec.decode(mapOf("control_way" to "future")).controlWay)
+    }
+
+    @Test
+    fun everyControlWayRoundTripsWithoutChangingOtherPreferences() {
+        for (way in ControlWay.entries) {
+            val settings = UserSettings(controlWay = way, forceBle = true, interfaceStyle = InterfaceStyle.MATERIAL3)
+            assertEquals(settings, UserSettingsCodec.decode(UserSettingsCodec.encode(settings)))
+        }
+    }
+
+    @Test
+    fun preferencesStoredBeforeControlWayExistedStayOrdinary() {
+        val legacy = UserSettingsCodec.encode(UserSettings(forceBle = true)) - "control_way"
+        val restored = UserSettingsCodec.decode(legacy)
+        assertEquals(ControlWay.ORDINARY, restored.controlWay)
+        assertEquals(true, restored.forceBle)
+    }
+}

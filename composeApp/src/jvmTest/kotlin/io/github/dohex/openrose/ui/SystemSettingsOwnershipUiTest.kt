@@ -31,7 +31,7 @@ class SystemSettingsOwnershipUiTest {
                 harness.clickTab("系统集成")
                 harness.render()
                 val status = harness.textBounds("就绪状态")
-                val explanation = harness.textBounds("系统模块尚未启用。")
+                val explanation = harness.textBounds("${ModuleAvailability.NotEnabled.unreadyClause()}。")
                 assertTrue(explanation.left >= status.left && explanation.left < status.right,
                     "the readiness explanation should align with its status in $style: $status $explanation")
             } finally {
