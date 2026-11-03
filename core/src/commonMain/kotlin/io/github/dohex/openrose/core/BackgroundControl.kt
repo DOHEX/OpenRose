@@ -123,7 +123,8 @@ internal fun ControlState.deriveBackgroundRecovery(): BackgroundRecovery {
     val band = wake.band
     if (!platform.hasBackgroundService() || band == null) return BackgroundRecovery.Unsupported
     if (!platform.userUnlocked) return BackgroundRecovery.WaitingForUnlock
-    if (!settings.backgroundControlEnabled) return BackgroundRecovery.Disabled
+    // Like the background control status: the saved intent is kept but not in force under another control way.
+    if (!settings.backgroundControlEnabled || owner.selected != ControlWay.ORDINARY) return BackgroundRecovery.Disabled
     val missing = buildList {
         if (platform.bluetoothPermissionMissing()) add(WakePrerequisite.BLUETOOTH_PERMISSION)
         if (wake.association == CompanionAssociation.MISSING) add(WakePrerequisite.COMPANION_ASSOCIATION)

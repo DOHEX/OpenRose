@@ -47,14 +47,21 @@ internal class AndroidOwnerStore(
         val selectionChanged = previous.selected != record.selected
         if (!write(record)) return false
         if (selectionChanged && involvesModule) {
-            val published = framework.publishConfig(currentSettings().copy(controlWay = record.selected))
-            if (!published) {
+            if (!publishConfig()) {
                 write(previous)
+                // A concurrent preference publication may have carried the rejected choice meanwhile.
+                publishConfig()
                 return false
             }
         }
         return true
     }
+
+    /**
+     * Publishes the current settings to the host with the control way read from this store at the moment
+     * of the write. Every host-config writer goes through here, so the last write is the newest truth.
+     */
+    fun publishConfig(): Boolean = framework.publishConfig { currentSettings().copy(controlWay = load().selected) }
 
     private fun write(record: OwnerRecord): Boolean {
         val editor = preferences().edit()

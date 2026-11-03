@@ -63,7 +63,7 @@ class SwitchingControlRuntime(
     initialPlatformState: PlatformState,
     initialSettings: UserSettings,
     private val store: OwnerSelectionStore,
-    private val ordinaryFactory: (CoroutineScope, UserSettings, PlatformState) -> ControlRuntime,
+    private val ordinaryFactory: (CoroutineScope, UserSettings, PlatformState, Long) -> ControlRuntime,
     moduleLink: ModuleHostLink,
     private val scope: CoroutineScope,
     private val local: LocalOwnerIdentity,
@@ -141,7 +141,7 @@ class SwitchingControlRuntime(
     private fun startup() {
         when {
             record.selected == ControlWay.ORDINARY && record.moduleRelease == null -> startOrdinary()
-            record.selected == ControlWay.ORDINARY -> resumeModuleRelease()
+            record.selected != ControlWay.MODULE && record.moduleRelease != null -> resumeModuleRelease()
             record.selected == ControlWay.MODULE -> client.start()
         }
     }
@@ -180,24 +180,14 @@ class SwitchingControlRuntime(
         // connection is open it is closed first; in every other direction the intent is made durable first,
         // so a restarted module host never reclaims what the user left.
         val closeFirst = target == ControlWay.MODULE && ordinary != null
-        if (closeFirst) {
-            ordinary?.let { current ->
-                if (!stopOrdinary(current)) {
-                    return finish(HandoffOutcome.Blocked(request, OwnerFailureStage.RELEASE, "普通控制连接未能确认关闭"))
-                }
-            }
-        }
+        if (closeFirst) closeOrdinary(request)?.let { return it }
         if (saves && !store.save(next)) {
             if (closeFirst) startOrdinary()
             return finish(HandoffOutcome.Blocked(request, OwnerFailureStage.SELECTION_PERSISTENCE, "无法保存控制方式，未做任何切换"))
         }
         record = next
         settings = settings.copy(controlWay = target)
-        ordinary?.let { current ->
-            if (!stopOrdinary(current)) {
-                return finish(HandoffOutcome.Blocked(request, OwnerFailureStage.RELEASE, "普通控制连接未能确认关闭"))
-            }
-        }
+        closeOrdinary(request)?.let { return it }
         return when (target) {
             ControlWay.MODULE -> establishModule(request)
             ControlWay.ORDINARY -> returnToOrdinary(request)
@@ -235,11 +225,13 @@ class SwitchingControlRuntime(
 
     private suspend fun disableModule(request: SwitchRequest): HandoffOutcome {
         if (record.moduleRelease != null) {
-            when (client.release(request.copy(fromGeneration = record.moduleRelease?.generation ?: request.fromGeneration))) {
+            when (val proof = client.release(request.copy(fromGeneration = record.moduleRelease?.generation ?: request.fromGeneration))) {
                 is ReleaseProof.Unproven -> {
-                    // Disabling takes nothing over, so it stands; the host sees the saved choice when reachable.
+                    // The disable stays saved so the host never reclaims, but it is not done while the module owner
+                    // may still hold the connection: keep asking until proven, and never start ordinary control.
                     client.stop()
-                    return finish(HandoffOutcome.Completed(request))
+                    releaseRetry = scope.launch { retryModuleRelease() }
+                    return finish(HandoffOutcome.Blocked(request, proof.stage, proof.reason))
                 }
                 is ReleaseProof.Receipt, is ReleaseProof.ProcessEnded -> clearModuleRelease()
             }
@@ -254,16 +246,26 @@ class SwitchingControlRuntime(
         store.save(record)
     }
 
-    /** Ordinary control stays blocked until the module owner is proven released; keeps asking while selected. */
+    /** Ordinary control stays blocked until the module owner is proven released; keeps asking while module control is not selected. */
     private fun resumeModuleRelease() {
-        val request = SwitchRequest(newId(), ControlWay.MODULE, ControlWay.ORDINARY, record.moduleRelease?.generation)
+        val request = SwitchRequest(newId(), ControlWay.MODULE, record.selected, record.moduleRelease?.generation)
         blocked = OwnerReadiness.SwitchBlocked(request, OwnerFailureStage.RELEASE, "尚未确认模块已释放控制连接")
         releaseRetry = scope.launch { retryModuleRelease() }
     }
 
+    /** The owner the host last reported is the one a release must name; it is recorded, then asked for explicitly. */
+    private fun adoptObservedOwner() {
+        val observed = client.lastObservedGeneration ?: return
+        val pending = record.moduleRelease ?: return
+        if (pending.generation == observed) return
+        record = record.copy(moduleRelease = pending.copy(generation = observed))
+        store.save(record)
+    }
+
     private suspend fun retryModuleRelease() {
-        while (scope.isActive && record.selected == ControlWay.ORDINARY && record.moduleRelease != null) {
-            val request = SwitchRequest(newId(), ControlWay.MODULE, ControlWay.ORDINARY, record.moduleRelease?.generation)
+        while (scope.isActive && record.selected != ControlWay.MODULE && record.moduleRelease != null) {
+            adoptObservedOwner()
+            val request = SwitchRequest(newId(), ControlWay.MODULE, record.selected, record.moduleRelease?.generation)
             when (val proof = client.release(request)) {
                 is ReleaseProof.Unproven -> {
                     blocked = OwnerReadiness.SwitchBlocked(request, proof.stage, proof.reason)
@@ -272,9 +274,10 @@ class SwitchingControlRuntime(
                 }
                 is ReleaseProof.Receipt, is ReleaseProof.ProcessEnded -> {
                     switchLock.withLock {
-                        if (record.selected == ControlWay.ORDINARY) {
+                        if (record.selected != ControlWay.MODULE) {
                             clearModuleRelease()
                             blocked = null
+                            lastHandoff = HandoffOutcome.Completed(request)
                             startOrdinary()
                         }
                     }
@@ -299,19 +302,25 @@ class SwitchingControlRuntime(
         localSequence += 1
         val generation = OwnerGeneration(localIncarnation, localSequence)
         val job = SupervisorJob(scope.coroutineContext[Job])
-        val runtime = ordinaryFactory(CoroutineScope(scope.coroutineContext + job), settings, platform)
+        val runtime = ordinaryFactory(CoroutineScope(scope.coroutineContext + job), settings, platform, SessionIdBase.ordinary(localSequence))
         ordinary = Ordinary(generation, job, runtime)
         scope.launch(job) { runtime.state.collect { refresh() } }
     }
 
-    /** Cancels and joins everything the ordinary owner started, then closes its connection. */
+    /** Cancels and joins everything the ordinary owner started, then closes its connection; false if the close is unconfirmed. */
     private suspend fun stopOrdinary(current: Ordinary): Boolean {
         current.job.cancelAndJoin()
-        current.runtime.disconnect()
-        if (current.runtime.state.value.connection != ConnectionState.Disconnected) return false
+        if (!current.runtime.disconnect()) return false
         ordinary = null
         refresh()
         return true
+    }
+
+    /** Null once no ordinary connection remains; otherwise the handoff is blocked because its close was not confirmed. */
+    private suspend fun closeOrdinary(request: SwitchRequest): HandoffOutcome? {
+        val current = ordinary ?: return null
+        return if (stopOrdinary(current)) null
+        else finish(HandoffOutcome.Blocked(request, OwnerFailureStage.RELEASE, "普通控制连接未能确认关闭"))
     }
 
     private fun refresh() {
@@ -431,8 +440,10 @@ class SwitchingControlRuntime(
     override suspend fun connectForAddDevice(deviceId: DeviceId) =
         route({ it.connectForAddDevice(deviceId) }, HostCommand.ConnectForAddDevice(deviceId))
 
-    override suspend fun disconnect() {
-        route({ it.disconnect(); OperationResult.Success }, HostCommand.Disconnect)
+    override suspend fun disconnect(): Boolean {
+        ordinary?.let { return it.runtime.disconnect() }
+        // With no owner there is no control connection to close.
+        return record.selected != ControlWay.MODULE || module(HostCommand.Disconnect) == OperationResult.Success
     }
 
     override suspend fun set(setting: DeviceSetting, value: FieldValue) =

@@ -108,12 +108,13 @@ internal class ModuleHostRuntime(
                 processName = runCatching { Application.getProcessName() }.getOrDefault(appContext.packageName),
                 incarnation = UUID.randomUUID().toString(),
                 authority = AndroidCallerAuthority(appContext),
-                runtimeFactory = { runtimeScope, settings, platform ->
+                runtimeFactory = { runtimeScope, settings, platform, sessionIdBase ->
                     LocalControlRuntime(
                         initialPlatformState = platform,
                         initialSettings = settings,
                         transport = AndroidControlTransport(appContext),
                         scope = runtimeScope,
+                        sessionIdBase = sessionIdBase,
                     )
                 },
                 parentScope = hostScope,
@@ -187,12 +188,18 @@ internal class ModuleHostRuntime(
     }
 
     /**
-     * Releases the owner and withdraws the endpoint. Returns whether the owner was confirmed released in
-     * time; a replacement instance reads the persisted intent and owns with a new generation.
+     * Releases the owner and, only once that release is confirmed, withdraws the endpoint, discovery and
+     * scope. When the release cannot be confirmed in time nothing is torn down and false is returned: the
+     * host keeps serving and keeps owning the connection, and [close] may be called again to retry. A
+     * replacement instance reads the persisted intent and owns with a new generation.
      */
     fun close(): Boolean {
         val (current, hostScope) = synchronized(lifecycle) {
             if (closed) return true
+            host to scope
+        }
+        if (current != null && runBlocking { withTimeoutOrNull(CLOSE_TIMEOUT_MILLIS) { current.stop() } } != true) return false
+        synchronized(lifecycle) {
             closed = true
             hooks.forEach { runCatching { it.unhook() } }
             hooks.clear()
@@ -200,13 +207,11 @@ internal class ModuleHostRuntime(
             receiver = null
             configListener?.let { l -> runCatching { config?.unregisterOnSharedPreferenceChangeListener(l) } }
             configListener = null
-            host to scope
         }
-        val released = current == null || runBlocking { withTimeoutOrNull(CLOSE_TIMEOUT_MILLIS) { current.stop() } } == true
         endpoint?.shutdown()
         endpoint = null
         hostScope?.cancel()
-        return released
+        return true
     }
 
     private companion object {

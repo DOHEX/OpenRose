@@ -49,7 +49,7 @@ class ModuleControlHost(
     private val processName: String,
     private val incarnation: String,
     private val authority: CallerAuthority,
-    private val runtimeFactory: (CoroutineScope, UserSettings, PlatformState) -> ControlRuntime,
+    private val runtimeFactory: (CoroutineScope, UserSettings, PlatformState, Long) -> ControlRuntime,
     parentScope: CoroutineScope,
     private val newId: () -> String,
     private val uid: Int? = null,
@@ -103,13 +103,22 @@ class ModuleControlHost(
     /**
      * Ends this host instance, e.g. on module hot reload: the owner is released like any other release
      * and the instance never owns again. A replacement instance starts from the persisted intent. Returns
-     * whether no owner remains because its connection was confirmed closed; later [open] calls are refused.
+     * whether no owner remains because its connection was confirmed closed. Only then is the instance
+     * retired (later [open] calls are refused and every lease stops meaning anything); when the close cannot
+     * be confirmed the instance keeps serving and keeps the connection owned, so it is never left without
+     * an owner, and a later [stop], release or configuration closes it again.
      */
     suspend fun stop(): Boolean = ownership.withLock {
-        retired.value = true
         stopped = true
-        reconcile()
-        owner.value == null
+        var released = false
+        try {
+            reconcile()
+            released = owner.value == null
+        } finally {
+            if (released) retired.value = true else stopped = false
+            publishStatus()
+        }
+        released
     }
 
     /** Verifies the caller and issues a lease. Reaching this endpoint alone grants nothing. */
@@ -223,9 +232,12 @@ class ModuleControlHost(
             val current = owner.value
             val named = request.fromGeneration
             if (current != null) {
-                if (named != null && named != current.generation) {
+                // A proof must cover the owner that really holds the session; an unnamed or other generation proves nothing.
+                if (named != current.generation) {
                     return@withLock ReleaseResult.Refused(
-                        HostRejection.STALE_GENERATION, "请求引用的所有者代际已过期", status.value,
+                        HostRejection.STALE_GENERATION,
+                        if (named == null) "请求未指明所有者代际" else "请求引用的所有者代际已过期",
+                        status.value,
                     )
                 }
                 held = request.id
@@ -287,7 +299,7 @@ class ModuleControlHost(
     }
 
     private fun leaseFor(caller: CallerIdentity, leaseId: String): Lease? =
-        leases.value[leaseId]?.takeIf { it.caller == caller && authority.roleOf(caller) == it.role }
+        leases.value[leaseId]?.takeIf { !retired.value && it.caller == caller && authority.roleOf(caller) == it.role }
 
     private suspend fun dispatch(runtime: ControlRuntime, command: HostCommand): HostCallResult = when (command) {
         HostCommand.RefreshBondedDevices -> { runtime.refreshBondedDevices(); HostCallResult.Operation(OperationResult.Success) }
@@ -296,7 +308,10 @@ class ModuleControlHost(
         is HostCommand.Connect -> HostCallResult.Operation(runtime.connect(command.deviceId))
         is HostCommand.ConnectFromSystem -> HostCallResult.Operation(runtime.connectFromSystem(command.deviceId))
         is HostCommand.ConnectForAddDevice -> HostCallResult.Operation(runtime.connectForAddDevice(command.deviceId))
-        HostCommand.Disconnect -> { runtime.disconnect(); HostCallResult.Operation(OperationResult.Success) }
+        HostCommand.Disconnect -> HostCallResult.Operation(
+            if (runtime.disconnect()) OperationResult.Success
+            else OperationResult.Failure(ControlError(ControlErrorCode.FAILED, "无法确认控制连接已关闭")),
+        )
         is HostCommand.Set -> HostCallResult.Operation(
             command.reference?.let { runtime.set(it, command.setting, command.value) } ?: runtime.set(command.setting, command.value),
         )
@@ -314,6 +329,8 @@ class ModuleControlHost(
 
     /** Caller holds [ownership]. */
     private suspend fun reconcile() {
+        // An owner whose close was refused earlier is closed again before anything else is decided.
+        owner.value?.takeIf { it.job.isCancelled }?.let { if (!stop(it)) { publishStatus(); return } }
         val wanted = !stopped && configuration.userUnlocked && configuration.settings.controlWay == ControlWay.MODULE && held == null
         val current = owner.value
         when {
@@ -330,7 +347,7 @@ class ModuleControlHost(
         val generation = OwnerGeneration(incarnation, sequence)
         val job = SupervisorJob(hostContext[Job])
         val scope = CoroutineScope(hostContext + job)
-        val runtime = runtimeFactory(scope, configuration.settings, platform)
+        val runtime = runtimeFactory(scope, configuration.settings, platform, SessionIdBase.module(sequence))
         val holder = OwnerHolder(ControlWay.MODULE, generation, packageName, processName, uid, pid)
         owner.value = Owner(generation, holder, job, runtime)
     }
@@ -341,8 +358,7 @@ class ModuleControlHost(
      */
     private suspend fun stop(current: Owner): Boolean {
         current.job.cancelAndJoin()
-        current.runtime.disconnect()
-        if (current.runtime.state.value.connection != ConnectionState.Disconnected) return false
+        if (!current.runtime.disconnect()) return false
         lastGeneration = current.generation
         owner.value = null
         current.ended.complete(Unit)

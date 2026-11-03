@@ -101,7 +101,7 @@ class OwnerHandoffTest {
         assertEquals(0, rig.headset.opens("ordinary"))
         assertEquals(ControlWay.ORDINARY, runtime.state.value.owner.selected)
         assertIs<OwnerReadiness.SwitchBlocked>(runtime.state.value.owner.readiness)
-        assertEquals(OperationResult.Failure(ControlError(ControlErrorCode.NOT_READY, "当前没有就绪的控制所有者")), runtime.connect(rig.earphones.deviceId))
+        assertEquals(ControlErrorCode.NOT_READY, assertIs<OperationResult.Failure>(runtime.connect(rig.earphones.deviceId)).error.code)
 
         // Once the host can answer, the saved choice completes without another user action.
         rig.link.releaseHangs = false
@@ -171,7 +171,7 @@ class OwnerHandoffTest {
         runCurrent()
         val owner = runtime.state.value.owner
         assertEquals(ControlWay.MODULE, owner.selected)
-        assertEquals(OwnerReadiness.Unavailable(OwnerFailureStage.DISCOVERY, "找不到模块控制宿主"), owner.readiness)
+        assertEquals(OwnerFailureStage.DISCOVERY, assertIs<OwnerReadiness.Unavailable>(owner.readiness).stage)
         assertNull(owner.holder)
         assertTrue(rig.appTransport.links.isEmpty())
 
@@ -355,17 +355,272 @@ class OwnerHandoffTest {
         val runtime = rig.newRuntime()
         runCurrent()
         runtime.updateSettings(runtime.state.value.settings.copy(backgroundControlEnabled = true))
+        runtime.updatePlatformState(
+            PlatformState(
+                PermissionState.GRANTED, TransportAvailability.Available, hostPlatform = HostPlatform.ANDROID,
+                backgroundService = BackgroundServiceFacts(
+                    wake = WakeFacts(WakeBand.ANDROID_8_11, CompanionAssociation.NOT_REQUIRED, PresenceObservation.NOT_REQUIRED),
+                ),
+            ),
+        )
         assertEquals(BackgroundControlStatus.NotRunning, runtime.state.value.backgroundControl)
+        assertEquals(BackgroundRecovery.Armed(WakeBand.ANDROID_8_11), runtime.state.value.backgroundRecovery)
 
         runtime.selectControlWay(ControlWay.MODULE)
         runCurrent()
 
         assertEquals(BackgroundControlStatus.Disabled, runtime.state.value.backgroundControl)
+        assertEquals(BackgroundRecovery.Disabled, runtime.state.value.backgroundRecovery)
+        assertFalse(runtime.state.value.mayStartBackgroundService)
         assertTrue(runtime.state.value.settings.backgroundControlEnabled)
 
         runtime.selectControlWay(ControlWay.ORDINARY)
         runCurrent()
         assertEquals(BackgroundControlStatus.NotRunning, runtime.state.value.backgroundControl)
+        assertEquals(BackgroundRecovery.Armed(WakeBand.ANDROID_8_11), runtime.state.value.backgroundRecovery)
+    }
+
+    @Test
+    fun disablingWithAnUnprovenReleaseKeepsTheIntentIsNotCompletedAndNeverStartsOrdinary() = runTest {
+        val rig = OwnerRig(this)
+        rig.bootHost()
+        val runtime = rig.newRuntime()
+        runCurrent()
+        runtime.selectControlWay(ControlWay.MODULE)
+        runCurrent()
+        assertEquals(OperationResult.Success, runtime.connectFromSystem(rig.earphones.deviceId))
+        runCurrent()
+        rig.link.releaseHangs = true
+
+        val blocked = assertIs<HandoffOutcome.Blocked>(runtime.disableModuleControl())
+
+        assertEquals(OwnerFailureStage.RELEASE, blocked.stage)
+        assertEquals(ControlWay.NONE, rig.store.record.selected)
+        assertNotNull(rig.store.record.moduleRelease)
+        assertIs<OwnerReadiness.SwitchBlocked>(runtime.state.value.owner.readiness)
+        assertEquals(0, rig.headset.opens("ordinary"))
+
+        // Once the host can answer, the saved disable completes by itself and still takes nothing over.
+        rig.link.releaseHangs = false
+        advanceTimeBy(rig.clientTiming.retryMillis * 3)
+        runCurrent()
+
+        assertIs<OwnerReadiness.Idle>(runtime.state.value.owner.readiness)
+        assertEquals(ControlWay.NONE, runtime.state.value.owner.selected)
+        assertNull(rig.store.record.moduleRelease)
+        assertEquals(listOf("module:open", "module:close"), rig.headset.events)
+        assertTrue(rig.appTransport.links.isEmpty())
+    }
+
+    @Test
+    fun aRestartedDisabledChoiceWithAnUnprovenReleaseKeepsAskingAndNeverStartsOrdinary() = runTest {
+        val rig = OwnerRig(this, initial = OwnerRecord(ControlWay.NONE, PendingModuleRelease("r", OwnerGeneration("host-0", 3))))
+        rig.bootHost()
+        rig.link.reachable = false
+        val runtime = rig.newRuntime()
+        runCurrent()
+        advanceTimeBy(rig.clientTiming.retryMillis * 2)
+
+        assertIs<OwnerReadiness.SwitchBlocked>(runtime.state.value.owner.readiness)
+
+        rig.link.reachable = true
+        advanceTimeBy(rig.clientTiming.retryMillis * 2)
+        runCurrent()
+
+        assertIs<OwnerReadiness.Idle>(runtime.state.value.owner.readiness)
+        assertNull(rig.store.record.moduleRelease)
+        assertEquals(ControlWay.NONE, rig.store.record.selected)
+        assertTrue(rig.appTransport.links.isEmpty())
+    }
+
+    @Test
+    fun aReceiptForAnotherRequestIsNotProofAndOrdinaryControlWaitsForARealOne() = runTest {
+        val rig = OwnerRig(this)
+        rig.bootHost()
+        val runtime = rig.newRuntime()
+        runCurrent()
+        runtime.selectControlWay(ControlWay.MODULE)
+        runCurrent()
+        rig.link.tamperReceipt = { it.copy(requestId = "someone-else") }
+
+        val blocked = assertIs<HandoffOutcome.Blocked>(runtime.selectControlWay(ControlWay.ORDINARY))
+
+        assertEquals(OwnerFailureStage.RELEASE, blocked.stage)
+        assertTrue(rig.appTransport.links.isEmpty())
+        assertNotNull(rig.store.record.moduleRelease)
+        assertIs<OwnerReadiness.SwitchBlocked>(runtime.state.value.owner.readiness)
+
+        rig.link.tamperReceipt = { it }
+        advanceTimeBy(rig.clientTiming.retryMillis * 3)
+        runCurrent()
+        assertEquals(OwnerReadiness.Ready, runtime.state.value.owner.readiness)
+        assertEquals(ControlWay.ORDINARY, runtime.state.value.owner.holder?.way)
+        assertNull(rig.store.record.moduleRelease)
+    }
+
+    @Test
+    fun aReceiptForAnotherOwnerGenerationIsNotProof() = runTest {
+        val rig = OwnerRig(this)
+        rig.bootHost()
+        val runtime = rig.newRuntime()
+        runCurrent()
+        runtime.selectControlWay(ControlWay.MODULE)
+        runCurrent()
+        rig.link.tamperReceipt = { it.copy(generation = OwnerGeneration(it.incarnation, 99)) }
+
+        val blocked = assertIs<HandoffOutcome.Blocked>(runtime.selectControlWay(ControlWay.ORDINARY))
+
+        assertEquals(OwnerFailureStage.RELEASE, blocked.stage)
+        assertTrue(rig.appTransport.links.isEmpty())
+        assertNotNull(rig.store.record.moduleRelease)
+
+        rig.link.tamperReceipt = { it }
+        advanceTimeBy(rig.clientTiming.retryMillis * 3)
+        runCurrent()
+        assertEquals(ControlWay.ORDINARY, runtime.state.value.owner.holder?.way)
+    }
+
+    @Test
+    fun aStaleNamedGenerationIsNeverSilentlyRetargetedWithinTheSameRequest() = runTest {
+        val rig = OwnerRig(this, initial = OwnerRecord(ControlWay.MODULE, PendingModuleRelease("r", OwnerGeneration("host-1", 7))))
+        rig.bootHost()
+        rig.hostTransport.audioDevice.emit(rig.earphones.deviceId)
+        val runtime = rig.newRuntime()
+        runCurrent()
+        advanceTimeBy(1)
+        runCurrent()
+        assertEquals(listOf("module:open"), rig.headset.events)
+
+        val blocked = assertIs<HandoffOutcome.Blocked>(runtime.selectControlWay(ControlWay.ORDINARY))
+
+        // The request named an owner generation the host never had, so its answer proved nothing about the owner
+        // that really held the connection, and ordinary control must not start on it.
+        assertEquals(OwnerFailureStage.RELEASE, blocked.stage)
+        assertTrue(rig.appTransport.links.isEmpty())
+        assertIs<OwnerReadiness.SwitchBlocked>(runtime.state.value.owner.readiness)
+        assertNotNull(rig.store.record.moduleRelease)
+
+        // The owner the host reported is then named explicitly, and its receipt is checked against that name.
+        advanceTimeBy(rig.clientTiming.retryMillis * 3)
+        runCurrent()
+        assertEquals(listOf("module:open", "module:close"), rig.headset.events)
+        assertEquals(OwnerReadiness.Ready, runtime.state.value.owner.readiness)
+        assertNull(rig.store.record.moduleRelease)
+    }
+
+    @Test
+    fun theEndOfAnotherHostIncarnationDoesNotProveTheNamedOwnerGone() = runTest {
+        val rig = OwnerRig(this, initial = OwnerRecord(ControlWay.ORDINARY, PendingModuleRelease("r", OwnerGeneration("host-0", 4))))
+        rig.bootHost()
+        rig.link.releaseKillsHostProcess = true
+        val runtime = rig.newRuntime()
+        runCurrent()
+        advanceTimeBy(rig.clientTiming.retryMillis * 3)
+        runCurrent()
+
+        assertIs<OwnerReadiness.SwitchBlocked>(runtime.state.value.owner.readiness)
+        assertTrue(rig.appTransport.links.isEmpty())
+        assertNotNull(rig.store.record.moduleRelease)
+
+        // A later host incarnation that holds nothing is proof the earlier named owner is gone.
+        rig.link.releaseKillsHostProcess = false
+        advanceTimeBy(rig.clientTiming.retryMillis * 3)
+        runCurrent()
+        assertEquals(OwnerReadiness.Ready, runtime.state.value.owner.readiness)
+        assertNull(rig.store.record.moduleRelease)
+    }
+
+    @Test
+    fun repeatedSwitchingNeverOverlapsAndEveryRoundEndsWithOneOwner() = runTest {
+        val rig = OwnerRig(this)
+        rig.bootHost()
+        val runtime = rig.newRuntime()
+        runCurrent()
+        val id = rig.earphones.deviceId
+        val generations = mutableListOf<Long>()
+
+        repeat(3) {
+            assertIs<HandoffOutcome.Completed>(runtime.selectControlWay(ControlWay.MODULE))
+            runCurrent()
+            advanceTimeBy(1)
+            runCurrent()
+            assertEquals(OperationResult.Success, runtime.connectFromSystem(id))
+            runCurrent()
+            assertEquals(ControlWay.MODULE, runtime.state.value.owner.holder?.way)
+            generations += (rig.host.status.value as HostStatus.Active).generation.sequence
+
+            assertIs<HandoffOutcome.Completed>(runtime.selectControlWay(ControlWay.ORDINARY))
+            runCurrent()
+            assertEquals(OperationResult.Success, runtime.connectFromSystem(id))
+            runCurrent()
+            assertEquals(ControlWay.ORDINARY, runtime.state.value.owner.holder?.way)
+            assertIs<HostStatus.Inactive>(rig.host.status.value)
+        }
+
+        val expected = buildList {
+            add("module:open"); add("module:close"); add("ordinary:open")
+            repeat(2) { add("ordinary:close"); add("module:open"); add("module:close"); add("ordinary:open") }
+        }
+        assertEquals(expected, rig.headset.events)
+        assertEquals(0, rig.headset.overlappingOpens)
+        assertEquals(listOf(1L, 2L, 3L), generations)
+        assertNull(rig.store.record.moduleRelease)
+    }
+
+    @Test
+    fun anOrdinaryConnectionThatCannotBeConfirmedClosedBlocksTheTakeoverUntilItCloses() = runTest {
+        val rig = OwnerRig(this)
+        rig.bootHost()
+        val runtime = rig.newRuntime()
+        runCurrent()
+        assertEquals(OperationResult.Success, runtime.connectFromSystem(rig.earphones.deviceId))
+        rig.appTransport.closeFails = true
+
+        val blocked = assertIs<HandoffOutcome.Blocked>(runtime.selectControlWay(ControlWay.MODULE))
+
+        assertEquals(OwnerFailureStage.RELEASE, blocked.stage)
+        assertEquals(0, rig.headset.opens("module"))
+        assertEquals(ControlWay.ORDINARY, rig.store.record.selected)
+        assertEquals(ControlWay.ORDINARY, runtime.state.value.owner.selected)
+
+        rig.appTransport.closeFails = false
+        assertIs<HandoffOutcome.Completed>(runtime.selectControlWay(ControlWay.MODULE))
+        runCurrent()
+        advanceTimeBy(1)
+        runCurrent()
+        assertEquals(OperationResult.Success, runtime.connectFromSystem(rig.earphones.deviceId))
+        runCurrent()
+        assertEquals(listOf("ordinary:open", "ordinary:close", "module:open"), rig.headset.events)
+        assertEquals(0, rig.headset.overlappingOpens)
+    }
+
+    @Test
+    fun bothModelsHandOffThroughTheSameContract() = runTest {
+        for (profile in listOf(ModelProfile.I5_ZT, ModelProfile.I7_RS_V2)) {
+            val rig = OwnerRig(this, earphones = rosePair("rose-${profile.name}", profile))
+            rig.bootHost()
+            val runtime = rig.newRuntime()
+            runCurrent()
+            val id = rig.earphones.deviceId
+            assertEquals(OperationResult.Success, runtime.connectFromSystem(id), profile.name)
+
+            assertIs<HandoffOutcome.Completed>(runtime.selectControlWay(ControlWay.MODULE))
+            runCurrent()
+            assertEquals(OperationResult.Success, runtime.connectFromSystem(id), profile.name)
+            runCurrent()
+            val device = requireNotNull(runtime.state.value.device)
+            assertEquals(profile, device.profile)
+            assertEquals(ControlWay.MODULE, runtime.state.value.owner.holder?.way)
+            assertIs<FieldReading.Known>(device.fields[DeviceField.LEFT_BATTERY], profile.name)
+
+            assertIs<HandoffOutcome.Completed>(runtime.selectControlWay(ControlWay.ORDINARY))
+            runCurrent()
+            assertEquals(OperationResult.Success, runtime.connectFromSystem(id), profile.name)
+            runCurrent()
+            assertEquals(listOf("ordinary:open", "ordinary:close", "module:open", "module:close", "ordinary:open"), rig.headset.events, profile.name)
+            assertEquals(0, rig.headset.overlappingOpens, profile.name)
+            assertEquals(profile, runtime.state.value.device?.profile)
+        }
     }
 
     private suspend fun leaseOf(rig: OwnerRig): String =

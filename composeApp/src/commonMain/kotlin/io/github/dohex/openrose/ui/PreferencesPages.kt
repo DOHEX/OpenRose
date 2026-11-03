@@ -201,8 +201,8 @@ internal fun SystemIntegrationPage(
     onRequestPermission: () -> Unit,
     onOpenSystemSettings: () -> Unit,
     onDiagnostics: () -> Unit,
-    onSelectControlWay: (ControlWay) -> Unit = {},
-    onDisableModuleControl: () -> Unit = {},
+    onSelectControlWay: ((ControlWay) -> Unit)? = null,
+    onDisableModuleControl: (() -> Unit)? = null,
 ) {
     val hyperOsApplicable = state.platform.hyperOsIntegrationApplicable
     Column(
@@ -217,7 +217,9 @@ internal fun SystemIntegrationPage(
             IntegrationReadinessCard(state.platform.module)
         }
 
-        ControlWayCard(state, onSelectControlWay, onDisableModuleControl)
+        if (state.controlWayApplicable() && onSelectControlWay != null && onDisableModuleControl != null) {
+            ControlWayCard(state, onSelectControlWay, onDisableModuleControl)
+        }
 
         AppGroup {
             AppArrowRow(
@@ -249,11 +251,7 @@ internal fun PlatformDiagnosticsCard(
         AppGroup(title = "系统状态") {
             PlatformStatusRows(platform, onRequestPermission, onOpenSystemSettings)
             if (platform.hyperOsIntegrationApplicable) {
-                val moduleValue = when (val module = platform.module) {
-                    ModuleAvailability.Available -> "已连接系统模块"
-                    ModuleAvailability.NotEnabled -> "系统模块未启用"
-                    is ModuleAvailability.Unavailable -> module.reason
-                }
+                val moduleValue = platform.module.unreadyClause() ?: "已连接系统模块"
                 val moduleTone = when (platform.module) {
                     ModuleAvailability.Available -> StatusTone.GOOD
                     ModuleAvailability.NotEnabled -> StatusTone.CAUTION
@@ -369,22 +367,11 @@ private fun PlatformStatusRows(
 
 @Composable
 private fun IntegrationReadinessCard(module: ModuleAvailability) {
-    val (title, summary, tone) = when (module) {
-        ModuleAvailability.Available -> Triple(
-            "系统集成已连接",
-            "状态来自当前系统适配器。",
-            StatusTone.GOOD,
-        )
-        ModuleAvailability.NotEnabled -> Triple(
-            "系统集成未就绪",
-            "系统模块尚未启用。",
-            StatusTone.CAUTION,
-        )
-        is ModuleAvailability.Unavailable -> Triple(
-            "系统集成未就绪",
-            "系统集成暂不可用。${module.reason}",
-            StatusTone.CAUTION,
-        )
+    val clause = module.unreadyClause()
+    val (title, summary, tone) = if (clause == null) {
+        Triple("系统集成已连接", "状态来自当前系统适配器。", StatusTone.GOOD)
+    } else {
+        Triple("系统集成未就绪", "$clause。", StatusTone.CAUTION)
     }
     AppGroup {
         ToneInfoRow("就绪状态", title, tone)

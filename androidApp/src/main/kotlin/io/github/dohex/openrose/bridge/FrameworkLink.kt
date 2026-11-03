@@ -18,6 +18,7 @@ class FrameworkLink(
 ) {
     private val lock = Any()
     private var framework: XposedService? = null
+    private val publisher = SerializedPublisher(::commitConfig)
 
     fun start() {
         XposedServiceHelper.registerListener(object : XposedServiceHelper.OnServiceListener {
@@ -55,10 +56,15 @@ class FrameworkLink(
     }
 
     /**
-     * Persists the settings, including the saved control way, where the host reads them. Returns whether
-     * the framework acknowledged the write, which is the only time the host can be said to know it.
+     * Persists the settings, including the saved control way, where the host reads them. [settings] is
+     * evaluated while the single writer is held, so it must read the newest persisted truth at that
+     * moment (the saved control way included) and a late caller can never write an older snapshot over a
+     * newer one. Returns whether the framework acknowledged the write, which is the only time the host
+     * can be said to know it.
      */
-    fun publishConfig(settings: UserSettings): Boolean {
+    fun publishConfig(settings: () -> UserSettings): Boolean = publisher.publish(settings)
+
+    private fun commitConfig(settings: UserSettings): Boolean {
         val service = synchronized(lock) { framework } ?: return false
         if (service.apiVersion < 102) return false
         return runCatching {

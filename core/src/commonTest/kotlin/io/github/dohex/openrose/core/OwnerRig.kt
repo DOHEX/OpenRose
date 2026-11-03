@@ -65,13 +65,16 @@ internal class HeadsetTransport(
     /** Closing a real link takes time; the owner is not released before it has actually finished. */
     var closeDelayMillis = 0L
 
+    /** The platform could not close the link: it stays open at the earphones although the owner gave it up. */
+    var closeFails = false
+
     override val audioConnectedDevice: Flow<DeviceId?> get() = audioDevice
     override suspend fun bondedDevices(): List<DeviceCandidate> = bonded
     override fun scan(): Flow<Advertisement> = emptyFlow()
 
     override suspend fun connect(deviceId: DeviceId, endpoint: TransportEndpoint, onPhase: (ConnectionPhase) -> Unit): ControlConnection {
         headset.opened(owner)
-        return HeadsetConnection(owner, headset, profile) { closeDelayMillis }.also(links::add)
+        return HeadsetConnection(owner, headset, profile, { closeDelayMillis }, { closeFails }).also(links::add)
     }
 }
 
@@ -80,6 +83,7 @@ internal class HeadsetConnection(
     private val headset: SharedHeadset,
     private val profile: ModelProfile,
     private val closeDelayMillis: () -> Long = { 0L },
+    private val closeFails: () -> Boolean = { false },
 ) : ControlConnection {
     override val maxWriteSize = 20
     private val incoming = Channel<ByteArray>(Channel.UNLIMITED)
@@ -104,6 +108,7 @@ internal class HeadsetConnection(
     override suspend fun close() {
         if (closed) return
         closeDelayMillis().takeIf { it > 0 }?.let { kotlinx.coroutines.delay(it) }
+        if (closeFails()) throw IllegalStateException("the platform could not close the link")
         closed = true
         initializing = false
         incoming.close()
@@ -152,6 +157,9 @@ internal class InProcessHostLink(
     var reachable = true
     var releaseHangs = false
     var releaseKillsHostProcess = false
+
+    /** Rewrites the receipt the host issued on its way back, as a faulty or hostile link could. */
+    var tamperReceipt: (ReleaseReceipt) -> ReleaseReceipt = { it }
     val connections = mutableListOf<Connection>()
 
     override suspend fun open(): LinkOpenResult {
@@ -199,7 +207,8 @@ internal class InProcessHostLink(
             if (releaseHangs) awaitCancellation()
             val sent = HostWire.decodeRequest(parseWire(HostWire.encode(request).render()))
             val result = host.release(identity, lease.id, sent)
-            return HostWire.decodeReleaseResult(parseWire(HostWire.encode(result).render()))
+            val delivered = HostWire.decodeReleaseResult(parseWire(HostWire.encode(result).render()))
+            return if (delivered is ReleaseResult.Released) ReleaseResult.Released(tamperReceipt(delivered.receipt)) else delivered
         }
 
         override suspend fun acquire(request: SwitchRequest, settings: UserSettings): AcquireResult {
@@ -245,7 +254,7 @@ internal class OwnerRig(
     var host = newHost()
         private set
     val link = InProcessHostLink(host, test.backgroundScope)
-    val clientTiming = ClientTiming(retryMillis = 1_000, statusPollMillis = 500, releaseTimeoutMillis = 5_000, commandTimeoutMillis = 20_000)
+    val clientTiming = ClientTiming(retryMillis = 1_000, statusPollMillis = 500, releaseTimeoutMillis = 5_000, acquireTimeoutMillis = 5_000, commandTimeoutMillis = 20_000)
 
     private fun newHostScope() = CoroutineScope(test.backgroundScope.coroutineContext + SupervisorJob(test.backgroundScope.coroutineContext[Job]))
 
@@ -254,7 +263,7 @@ internal class OwnerRig(
         return ModuleControlHost(
             packageName = HOST_PACKAGE, processName = HOST_PACKAGE, incarnation = "host-$hostCount",
             authority = testAuthority,
-            runtimeFactory = { scope, settings, state -> LocalControlRuntime(state, settings, hostTransport, scope, sessionTiming) },
+            runtimeFactory = { scope, settings, state, base -> LocalControlRuntime(state, settings, hostTransport, scope, sessionTiming, base) },
             parentScope = hostScope, newId = { "lease-${ids.next()}" }, uid = 1002, pid = 777 + hostCount,
         )
     }
@@ -264,17 +273,19 @@ internal class OwnerRig(
      * it. A killed process takes its connection and every link to it down without any release; a hot
      * reload releases first and then withdraws the endpoint.
      */
-    suspend fun replaceHost(processDied: Boolean) {
+    suspend fun replaceHost(processDied: Boolean): Boolean {
         if (processDied) {
             hostScope.cancel()
             hostTransport.links.filter { !it.closed }.forEach { it.close() }
             hostScope = newHostScope()
-        } else {
-            host.stop()
+        } else if (!host.stop()) {
+            // An unconfirmed release refuses the reload: the old host keeps serving and nothing is withdrawn.
+            return false
         }
         link.connections.filter { it.isOpen }.forEach { it.sever(processDied) }
         host = newHost()
         link.host = host
+        return true
     }
 
     /** Mirrors the saved choice to the host the way the framework's remote preferences do, asynchronously. */
@@ -307,7 +318,7 @@ internal class OwnerRig(
         initialPlatformState = platform,
         initialSettings = UserSettings(),
         store = store,
-        ordinaryFactory = { scope, settings, state -> LocalControlRuntime(state, settings, appTransport, scope, sessionTiming) },
+        ordinaryFactory = { scope, settings, state, base -> LocalControlRuntime(state, settings, appTransport, scope, sessionTiming, base) },
         moduleLink = link,
         scope = process,
         local = LocalOwnerIdentity(APP_PACKAGE, APP_PACKAGE, 10_123, 4_321),

@@ -5,11 +5,13 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import io.github.dohex.openrose.core.ConnectionPhase
 import io.github.dohex.openrose.core.ConnectionState
 import io.github.dohex.openrose.core.ControlState
+import io.github.dohex.openrose.core.HostPlatform
 import io.github.dohex.openrose.core.ControlWay
 import io.github.dohex.openrose.core.HandoffOutcome
 import io.github.dohex.openrose.core.ModuleAvailability
@@ -18,9 +20,46 @@ import io.github.dohex.openrose.core.OwnerHolder
 import io.github.dohex.openrose.core.OwnerReadiness
 
 private val controlWayOptions = listOf(
-    AppOption(ControlWay.ORDINARY, "普通控制"),
-    AppOption(ControlWay.MODULE, "模块控制"),
+    AppOption(ControlWay.ORDINARY, "普通控制", testTag = ControlWayTags.option(ControlWay.ORDINARY)),
+    AppOption(ControlWay.MODULE, "模块控制", testTag = ControlWayTags.option(ControlWay.MODULE)),
 )
+
+/** The ordinary/module choice exists only where Android hosts the control runtime. */
+internal fun ControlState.controlWayApplicable(): Boolean = platform.hostPlatform == HostPlatform.ANDROID
+
+/**
+ * Test tags of the control-way card. Tags that report state carry the state's name, so tests
+ * assert the state itself and never the wording shown for it.
+ */
+internal object ControlWayTags {
+    /** Every control-way tag starts with this, so a host without the choice can be shown to expose none. */
+    const val PREFIX = "control-way."
+    const val CARD = "${PREFIX}card"
+    const val MODULE_NOTE = "${PREFIX}module-note"
+    const val NONE_NOTICE = "${PREFIX}none-notice"
+    const val DISABLE_MODULE = "${PREFIX}disable-module"
+    const val SWITCH_BLOCKED_NOTICE = "${PREFIX}switch-blocked-notice"
+    const val LAST_HANDOFF = "${PREFIX}last-handoff"
+    const val HOLDER = "${PREFIX}holder"
+
+    fun option(way: ControlWay) = "${PREFIX}option.${way.name}"
+    fun failureStage(stage: OwnerFailureStage) = "${PREFIX}stage.${stage.name}"
+
+    fun readiness(readiness: OwnerReadiness) = "${PREFIX}readiness." + when (readiness) {
+        OwnerReadiness.Ready -> "Ready"
+        OwnerReadiness.Starting -> "Starting"
+        is OwnerReadiness.Idle -> "Idle"
+        is OwnerReadiness.Unavailable -> "Unavailable"
+        is OwnerReadiness.Switching -> "Switching"
+        is OwnerReadiness.SwitchBlocked -> "SwitchBlocked"
+    }
+
+    fun connection(connection: ConnectionState) = "${PREFIX}connection." + when (connection) {
+        ConnectionState.Disconnected -> "Disconnected"
+        is ConnectionState.Connecting -> "Connecting"
+        is ConnectionState.Connected -> "Connected"
+    }
+}
 
 /**
  * Chooses between 普通控制 and 模块控制 and reports three separate facts: the saved selection,
@@ -36,7 +75,7 @@ internal fun ControlWayCard(
     val readiness = owner.readiness
     val switching = readiness is OwnerReadiness.Switching
     Column(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().testTag(ControlWayTags.CARD),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         AppGroup(title = "控制方式") {
@@ -48,17 +87,21 @@ internal fun ControlWayCard(
                 if (way != owner.selected) onSelectControlWay(way)
             }
             moduleAvailabilityNote(state.platform.module)?.let {
-                AppText(it, Modifier.controlWayTextPadding(), role = AppTextRole.Summary)
+                AppText(it, Modifier.controlWayTextPadding().testTag(ControlWayTags.MODULE_NOTE), role = AppTextRole.Summary)
             }
             if (owner.selected == ControlWay.NONE) {
-                AppText("模块控制已停用，未启用普通控制", Modifier.controlWayTextPadding(), role = AppTextRole.Summary)
+                AppText(
+                    "模块控制已停用，未启用普通控制",
+                    Modifier.controlWayTextPadding().testTag(ControlWayTags.NONE_NOTICE),
+                    role = AppTextRole.Summary,
+                )
             }
             if (owner.selected == ControlWay.MODULE) {
                 AppButton(
                     text = "停用模块控制",
                     onClick = onDisableModuleControl,
                     enabled = !switching,
-                    modifier = Modifier.padding(start = 16.dp, bottom = 12.dp),
+                    modifier = Modifier.padding(start = 16.dp, bottom = 12.dp).testTag(ControlWayTags.DISABLE_MODULE),
                     kind = AppButtonKind.Secondary,
                 )
             }
@@ -71,36 +114,48 @@ internal fun ControlWayCard(
                 is OwnerReadiness.Unavailable, is OwnerReadiness.SwitchBlocked -> appColor(AppColorRole.Error)
                 else -> appColor(AppColorRole.Summary)
             }
-            AppInfoRow("所有者状态", readinessLabel(readiness), readinessColor)
+            Tagged(ControlWayTags.readiness(readiness)) {
+                AppInfoRow("所有者状态", readinessLabel(readiness), readinessColor)
+            }
             when (readiness) {
                 OwnerReadiness.Ready, OwnerReadiness.Starting -> Unit
                 is OwnerReadiness.Idle -> AppInfoRow("原因", readiness.reason)
                 is OwnerReadiness.Unavailable -> {
-                    AppInfoRow("失败阶段", stageLabel(readiness.stage))
+                    Tagged(ControlWayTags.failureStage(readiness.stage)) {
+                        AppInfoRow("失败阶段", stageLabel(readiness.stage))
+                    }
                     AppInfoRow("原因", readiness.reason)
                 }
                 is OwnerReadiness.Switching -> AppInfoRow("切换目标", wayLabel(readiness.request.to))
                 is OwnerReadiness.SwitchBlocked -> {
-                    AppInfoRow("失败阶段", stageLabel(readiness.stage))
+                    Tagged(ControlWayTags.failureStage(readiness.stage)) {
+                        AppInfoRow("失败阶段", stageLabel(readiness.stage))
+                    }
                     AppInfoRow("原因", readiness.reason)
                     AppText(
                         "无法确认上一个所有者已释放控制连接，为避免两个所有者同时连接，没有进行接管。",
-                        Modifier.controlWayTextPadding(),
+                        Modifier.controlWayTextPadding().testTag(ControlWayTags.SWITCH_BLOCKED_NOTICE),
                         role = AppTextRole.Summary,
                     )
                 }
             }
-            AppInfoRow("耳机控制连接", connectionLabel(state.connection))
+            Tagged(ControlWayTags.connection(state.connection)) {
+                AppInfoRow("耳机控制连接", connectionLabel(state.connection))
+            }
         }
 
-        owner.holder?.let { OwnerHolderGroup(it) }
+        owner.holder?.let { Tagged(ControlWayTags.HOLDER) { OwnerHolderGroup(it) } }
 
         val handoff = owner.lastHandoff
         if (handoff is HandoffOutcome.Blocked && !handoff.duplicatesReadiness(readiness)) {
-            AppGroup(title = "上次切换") {
-                AppInfoRow("切换结果", "未完成：${wayLabel(handoff.request.from)} → ${wayLabel(handoff.request.to)}")
-                AppInfoRow("未完成阶段", stageLabel(handoff.stage))
-                AppInfoRow("未完成原因", handoff.reason)
+            Tagged(ControlWayTags.LAST_HANDOFF) {
+                AppGroup(title = "上次切换") {
+                    AppInfoRow("切换结果", "未完成：${wayLabel(handoff.request.from)} → ${wayLabel(handoff.request.to)}")
+                    Tagged(ControlWayTags.failureStage(handoff.stage)) {
+                        AppInfoRow("未完成阶段", stageLabel(handoff.stage))
+                    }
+                    AppInfoRow("未完成原因", handoff.reason)
+                }
             }
         }
     }
@@ -124,11 +179,9 @@ private fun HandoffOutcome.Blocked.duplicatesReadiness(readiness: OwnerReadiness
     readiness is OwnerReadiness.SwitchBlocked && readiness.request.id == request.id &&
         readiness.stage == stage && readiness.reason == reason
 
-private fun moduleAvailabilityNote(module: ModuleAvailability): String? = when (module) {
-    ModuleAvailability.Available -> null
-    ModuleAvailability.NotEnabled -> "系统模块未启用。仍可选择模块控制，但模块启用前无法接管控制。"
-    is ModuleAvailability.Unavailable -> "系统模块暂不可用：${module.reason}。仍可选择模块控制，但模块可用前无法接管控制。"
-}
+/** The module cannot take over until it is available, whichever way it is unavailable. */
+private fun moduleAvailabilityNote(module: ModuleAvailability): String? =
+    module.unreadyClause()?.let { "$it。仍可选择模块控制，但模块可用前无法接管控制。" }
 
 private fun wayLabel(way: ControlWay): String = when (way) {
     ControlWay.ORDINARY -> "普通控制"

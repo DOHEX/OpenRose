@@ -163,16 +163,18 @@ internal class HostEndpoint(
             }
         }
         val death = IBinder.DeathRecipient { clientDied(opened.lease.id) }
-        try {
-            clientToken.linkToDeath(death, 0)
-        } catch (failure: Exception) {
-            host.close(caller, opened.lease.id)
-            return BridgeWire.response(BridgeWire.STATUS_UNAVAILABLE, "调用者已不存在")
-        }
+        // The lease is registered before the death link, so a death in between finds and drops it.
         synchronized(lock) {
             // One lease per caller process; a reconnecting client replaces its earlier lease.
             leases.values.filter { it.caller == caller }.map { it.id }.forEach { dropLease(it) }
             leases[opened.lease.id] = EndpointLease(opened.lease.id, caller, role, target, processName, clientToken, death)
+        }
+        try {
+            clientToken.linkToDeath(death, 0)
+        } catch (failure: Exception) {
+            // Drops the endpoint lease and closes the host lease.
+            synchronized(lock) { dropLease(opened.lease.id) }
+            return BridgeWire.response(BridgeWire.STATUS_UNAVAILABLE, "调用者已不存在")
         }
         if (target != null && processName != null) recordEndpoint(target, processName, BridgeIpcState.AUTHENTICATED, target.componentMatch)
         return BridgeWire.response(BridgeWire.STATUS_OK).apply {
@@ -383,14 +385,24 @@ internal class HostEndpoint(
     override fun reportPresentation(report: Bundle): Bundle {
         val lease = consumerLease(report.getString(BridgeWire.LEASE_ID))
         requireVersion(report)
+        val feature = report.getString(BridgePresentationWire.FEATURE)?.takeIf { it in BridgePresentationWire.FEATURES }
+            ?: return BridgeWire.response(BridgeWire.STATUS_INVALID_ARGUMENT)
+        // Each entry reports only the presentation features it renders itself: the host's own renderer the
+        // status notification and the connection prompts, the Xiaomi system app only the official prompt.
+        val allowed = when (lease.target) {
+            BridgeTarget.BLUETOOTH -> setOf(
+                BridgePresentationWire.STATUS_NOTIFICATION, BridgePresentationWire.MODULE_CONNECTION, BridgePresentationWire.OFFICIAL_CONNECTION,
+            )
+            BridgeTarget.XIAOMI_BLUETOOTH -> setOf(BridgePresentationWire.OFFICIAL_CONNECTION)
+            else -> emptySet()
+        }
+        if (feature !in allowed) throw SecurityException("系统入口不能代其他组件报告展示状态")
         val generation = generation(report) ?: return BridgeWire.response(BridgeWire.STATUS_STALE_HOST)
         val reference = report.reference() ?: return BridgeWire.response(BridgeWire.STATUS_INVALID_ARGUMENT)
         val read = runBlocking { host.readSession(lease.caller, lease.id, generation, reference) }
         if ((read as? HostReadResult.Available)?.snapshot !is SessionSnapshotResult.Available) {
             return BridgeWire.response(BridgeWire.STATUS_STALE_SESSION)
         }
-        val feature = report.getString(BridgePresentationWire.FEATURE)?.takeIf { it in BridgePresentationWire.FEATURES }
-            ?: return BridgeWire.response(BridgeWire.STATUS_INVALID_ARGUMENT)
         val status = report.getString(BridgeWire.STATUS)?.takeIf { it in BridgePresentationWire.STATUSES }
             ?: return BridgeWire.response(BridgeWire.STATUS_INVALID_ARGUMENT)
         val detail = report.getString(BridgePresentationWire.DETAIL)?.takeIf { it.length <= 512 }

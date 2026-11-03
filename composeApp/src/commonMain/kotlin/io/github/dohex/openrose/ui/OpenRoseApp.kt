@@ -57,8 +57,9 @@ fun OpenRoseApp(
             ScopeRestartResult(it, ScopeRestartStatus.FAILED, "平台操作不可用")
         }
     },
-    onSelectControlWay: (ControlWay) -> Unit = {},
-    onDisableModuleControl: () -> Unit = {},
+    // Null on hosts without an ordinary/module choice: the control-way card is then absent instead of inert.
+    onSelectControlWay: ((ControlWay) -> Unit)? = null,
+    onDisableModuleControl: (() -> Unit)? = null,
 ) {
     val dark = when (state.settings.appearance) {
         Appearance.SYSTEM -> isSystemInDarkTheme()

@@ -33,8 +33,11 @@ interface ControlRuntime {
     /** Cancelling the adding flow releases only the unfinished attempt it created. */
     suspend fun connectForAddDevice(deviceId: DeviceId): OperationResult
 
-    /** Ends only the control connection; the system audio connection is untouched. */
-    suspend fun disconnect()
+    /**
+     * Ends only the control connection; the system audio connection is untouched. Returns whether the
+     * connection is confirmed closed, so a handoff never counts an owner as released on the strength of a failed close.
+     */
+    suspend fun disconnect(): Boolean
 
     /** A setting succeeds only after the earphones confirm it, never when the write is accepted. */
     suspend fun set(setting: DeviceSetting, value: FieldValue): OperationResult
@@ -59,4 +62,5 @@ fun LocalControlRuntime(
     transport: ControlTransport? = null,
     scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
     timing: SessionTiming = SessionTiming(),
-): ControlRuntime = ControlSession(initialPlatformState, initialSettings, transport, scope, timing)
+    sessionIdBase: Long = 0L,
+): ControlRuntime = ControlSession(initialPlatformState, initialSettings, transport, scope, timing, sessionIdBase)

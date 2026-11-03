@@ -53,7 +53,7 @@ enum class ControlWay {
     ORDINARY,
     /** The system Bluetooth host (`com.android.bluetooth`) hosts the session through the module. */
     MODULE,
-    /** Module control was explicitly disabled; no owner is active and ordinary control is not enabled either. */
+    /** 已停用模块控制 (GLOSSARY 控制方式): no owner is active and ordinary control is not enabled either. */
     NONE,
 }
 
