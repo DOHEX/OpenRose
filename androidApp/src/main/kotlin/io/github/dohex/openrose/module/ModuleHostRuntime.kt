@@ -108,12 +108,13 @@ internal class ModuleHostRuntime(
                 processName = runCatching { Application.getProcessName() }.getOrDefault(appContext.packageName),
                 incarnation = UUID.randomUUID().toString(),
                 authority = AndroidCallerAuthority(appContext),
-                runtimeFactory = { runtimeScope, settings, platform ->
+                runtimeFactory = { runtimeScope, settings, platform, sessionIdBase ->
                     LocalControlRuntime(
                         initialPlatformState = platform,
                         initialSettings = settings,
                         transport = AndroidControlTransport(appContext),
                         scope = runtimeScope,
+                        sessionIdBase = sessionIdBase,
                     )
                 },
                 parentScope = hostScope,

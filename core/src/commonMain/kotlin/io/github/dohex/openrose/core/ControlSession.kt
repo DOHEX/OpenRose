@@ -73,6 +73,8 @@ internal class ControlSession(
     private val transport: ControlTransport? = null,
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
     private val timing: SessionTiming = SessionTiming(),
+    /** Device session ids count up from here, so a reference from another owner instance never matches. */
+    sessionIdBase: Long = 0L,
 ) : ControlRuntime {
     private val mutableState = MutableStateFlow(
         ControlState(platform = initialPlatformState, settings = initialSettings.snapshot()).withSystemPresentation(),
@@ -82,7 +84,7 @@ internal class ControlSession(
     private val scanLifecycle = Mutex()
     private val scanEpoch = MutableStateFlow(0L)
     private var scanJob: Job? = null
-    private var generation = 0L
+    private var generation = sessionIdBase
     /** Connections whose close the platform refused; retried by every [clearActive]. */
     private val unclosed = MutableStateFlow<List<ControlConnection>>(emptyList())
     private var operationId = 0L

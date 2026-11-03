@@ -63,7 +63,7 @@ class SwitchingControlRuntime(
     initialPlatformState: PlatformState,
     initialSettings: UserSettings,
     private val store: OwnerSelectionStore,
-    private val ordinaryFactory: (CoroutineScope, UserSettings, PlatformState) -> ControlRuntime,
+    private val ordinaryFactory: (CoroutineScope, UserSettings, PlatformState, Long) -> ControlRuntime,
     moduleLink: ModuleHostLink,
     private val scope: CoroutineScope,
     private val local: LocalOwnerIdentity,
@@ -302,7 +302,7 @@ class SwitchingControlRuntime(
         localSequence += 1
         val generation = OwnerGeneration(localIncarnation, localSequence)
         val job = SupervisorJob(scope.coroutineContext[Job])
-        val runtime = ordinaryFactory(CoroutineScope(scope.coroutineContext + job), settings, platform)
+        val runtime = ordinaryFactory(CoroutineScope(scope.coroutineContext + job), settings, platform, SessionIdBase.ordinary(localSequence))
         ordinary = Ordinary(generation, job, runtime)
         scope.launch(job) { runtime.state.collect { refresh() } }
     }

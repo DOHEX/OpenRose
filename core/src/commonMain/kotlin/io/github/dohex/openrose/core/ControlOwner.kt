@@ -9,6 +9,18 @@ data class OwnerGeneration(val incarnation: String, val sequence: Long) {
     override fun toString() = "$incarnation#$sequence"
 }
 
+/**
+ * Where an owner instance's device session ids start. Every ordinary session and every module owner
+ * counts up from its own base, so a [SessionReference] taken from one owner instance is never equal to
+ * a reference into another, whether it is the next ordinary session or the other control way.
+ */
+internal object SessionIdBase {
+    private const val MODULE_BAND = 1L shl 62
+
+    fun ordinary(sequence: Long): Long = sequence shl 32
+    fun module(sequence: Long): Long = MODULE_BAND or (sequence shl 32)
+}
+
 /** A user request to move control authority from [from] to [to]; receipts must echo [id]. */
 data class SwitchRequest(
     val id: String,

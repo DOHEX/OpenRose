@@ -49,7 +49,7 @@ class ModuleControlHost(
     private val processName: String,
     private val incarnation: String,
     private val authority: CallerAuthority,
-    private val runtimeFactory: (CoroutineScope, UserSettings, PlatformState) -> ControlRuntime,
+    private val runtimeFactory: (CoroutineScope, UserSettings, PlatformState, Long) -> ControlRuntime,
     parentScope: CoroutineScope,
     private val newId: () -> String,
     private val uid: Int? = null,
@@ -347,7 +347,7 @@ class ModuleControlHost(
         val generation = OwnerGeneration(incarnation, sequence)
         val job = SupervisorJob(hostContext[Job])
         val scope = CoroutineScope(hostContext + job)
-        val runtime = runtimeFactory(scope, configuration.settings, platform)
+        val runtime = runtimeFactory(scope, configuration.settings, platform, SessionIdBase.module(sequence))
         val holder = OwnerHolder(ControlWay.MODULE, generation, packageName, processName, uid, pid)
         owner.value = Owner(generation, holder, job, runtime)
     }

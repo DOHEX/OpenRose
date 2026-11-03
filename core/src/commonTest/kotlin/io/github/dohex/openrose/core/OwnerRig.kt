@@ -263,7 +263,7 @@ internal class OwnerRig(
         return ModuleControlHost(
             packageName = HOST_PACKAGE, processName = HOST_PACKAGE, incarnation = "host-$hostCount",
             authority = testAuthority,
-            runtimeFactory = { scope, settings, state -> LocalControlRuntime(state, settings, hostTransport, scope, sessionTiming) },
+            runtimeFactory = { scope, settings, state, base -> LocalControlRuntime(state, settings, hostTransport, scope, sessionTiming, base) },
             parentScope = hostScope, newId = { "lease-${ids.next()}" }, uid = 1002, pid = 777 + hostCount,
         )
     }
@@ -318,7 +318,7 @@ internal class OwnerRig(
         initialPlatformState = platform,
         initialSettings = UserSettings(),
         store = store,
-        ordinaryFactory = { scope, settings, state -> LocalControlRuntime(state, settings, appTransport, scope, sessionTiming) },
+        ordinaryFactory = { scope, settings, state, base -> LocalControlRuntime(state, settings, appTransport, scope, sessionTiming, base) },
         moduleLink = link,
         scope = process,
         local = LocalOwnerIdentity(APP_PACKAGE, APP_PACKAGE, 10_123, 4_321),

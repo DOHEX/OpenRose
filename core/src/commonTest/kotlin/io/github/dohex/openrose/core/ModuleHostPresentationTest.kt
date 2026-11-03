@@ -48,10 +48,10 @@ class ModuleHostPresentationTest {
         val host = ModuleControlHost(
             packageName = HOST_PACKAGE, processName = HOST_PACKAGE, incarnation = "host-1",
             authority = presentationAuthority,
-            runtimeFactory = { scope, saved, platform ->
+            runtimeFactory = { scope, saved, platform, base ->
                 LocalControlRuntime(
                     platform, saved, transport, scope,
-                    SessionTiming(queryTimeoutMillis = 50, i5WriteIntervalMillis = 0, i7WriteIntervalMillis = 0),
+                    SessionTiming(queryTimeoutMillis = 50, i5WriteIntervalMillis = 0, i7WriteIntervalMillis = 0), base,
                 )
             },
             parentScope = test.backgroundScope, newId = { ids.next() }, uid = 1_002, pid = 777,

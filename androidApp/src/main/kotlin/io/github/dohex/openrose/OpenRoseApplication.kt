@@ -65,12 +65,13 @@ class OpenRoseApplication : Application() {
             initialPlatformState = readPlatformState(permissionRequested(), wake = companionWake.facts(), userUnlocked = unlocked),
             initialSettings = if (unlocked) loadSettings() else UserSettings(),
             store = ownerStore,
-            ordinaryFactory = { scope, settings, platform ->
+            ordinaryFactory = { scope, settings, platform, sessionIdBase ->
                 LocalControlRuntime(
                     initialPlatformState = platform,
                     initialSettings = settings,
                     transport = AndroidControlTransport(applicationContext),
                     scope = scope,
+                    sessionIdBase = sessionIdBase,
                 )
             },
             moduleLink = ModuleHostBinderLink(applicationContext),

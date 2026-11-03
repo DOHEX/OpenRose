@@ -62,4 +62,5 @@ fun LocalControlRuntime(
     transport: ControlTransport? = null,
     scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
     timing: SessionTiming = SessionTiming(),
-): ControlRuntime = ControlSession(initialPlatformState, initialSettings, transport, scope, timing)
+    sessionIdBase: Long = 0L,
+): ControlRuntime = ControlSession(initialPlatformState, initialSettings, transport, scope, timing, sessionIdBase)
