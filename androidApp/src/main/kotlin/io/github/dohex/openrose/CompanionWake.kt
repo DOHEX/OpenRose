@@ -10,6 +10,7 @@ import android.content.Context
 import android.content.IntentSender
 import android.content.pm.PackageManager
 import android.os.Build
+import androidx.annotation.RequiresApi
 import io.github.dohex.openrose.core.CompanionAssociation
 import io.github.dohex.openrose.core.PresenceObservation
 import io.github.dohex.openrose.core.WakeBand
@@ -59,7 +60,8 @@ internal class CompanionWake(private val context: Context) {
      * control is enabled, withdrawn when the user disables it. Repeating it is harmless.
      */
     fun syncObservation(enabled: Boolean) {
-        if (band == WakeBand.ANDROID_8_11 || !supported) return
+        // The same boundary as WakeBand.ANDROID_8_11, written as an SDK check so lint sees the API 31 guard.
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S || !supported) return
         val associated = associations()
         if (associated.isEmpty()) {
             presence = PresenceObservation.NOT_OBSERVING
@@ -129,6 +131,7 @@ internal class CompanionWake(private val context: Context) {
         }
     }
 
+    @RequiresApi(Build.VERSION_CODES.S)
     @Suppress("DEPRECATION")
     private fun startObserving(association: Association) {
         val manager = requireNotNull(manager)
@@ -141,6 +144,7 @@ internal class CompanionWake(private val context: Context) {
         }
     }
 
+    @RequiresApi(Build.VERSION_CODES.S)
     @Suppress("DEPRECATION")
     private fun stopObserving(association: Association) {
         val manager = requireNotNull(manager)

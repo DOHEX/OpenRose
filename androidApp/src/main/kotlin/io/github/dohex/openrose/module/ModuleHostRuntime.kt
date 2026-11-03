@@ -105,7 +105,7 @@ internal class ModuleHostRuntime(
             val facts = MutableStateFlow(HostFacts())
             val created = ModuleControlHost(
                 packageName = appContext.packageName,
-                processName = runCatching { Application.getProcessName() }.getOrDefault(appContext.packageName),
+                processName = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) Application.getProcessName() else appContext.packageName,
                 incarnation = UUID.randomUUID().toString(),
                 authority = AndroidCallerAuthority(appContext),
                 runtimeFactory = { runtimeScope, settings, platform, sessionIdBase ->
