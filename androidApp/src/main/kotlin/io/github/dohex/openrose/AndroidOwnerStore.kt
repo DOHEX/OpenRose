@@ -33,9 +33,17 @@ internal class AndroidOwnerStore(
         return OwnerRecord(selected, release)
     }
 
+    override fun canSave(record: OwnerRecord): Boolean {
+        val previous = load()
+        return !involvesModule(previous, record) || previous.selected == record.selected || framework.canPublish()
+    }
+
+    private fun involvesModule(previous: OwnerRecord, record: OwnerRecord) =
+        previous.selected != ControlWay.ORDINARY || record.selected != ControlWay.ORDINARY
+
     override fun save(record: OwnerRecord): Boolean {
         val previous = load()
-        val involvesModule = previous.selected != ControlWay.ORDINARY || record.selected != ControlWay.ORDINARY
+        val involvesModule = involvesModule(previous, record)
         val selectionChanged = previous.selected != record.selected
         if (!write(record)) return false
         if (selectionChanged && involvesModule) {

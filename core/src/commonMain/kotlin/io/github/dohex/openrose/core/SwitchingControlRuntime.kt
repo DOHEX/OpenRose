@@ -32,6 +32,9 @@ interface OwnerSelectionStore {
 
     /** True only when the record is durable and visible to the module host; false changes nothing. */
     fun save(record: OwnerRecord): Boolean
+
+    /** Whether [save] could succeed now, so a handoff can refuse before it closes anything. */
+    fun canSave(record: OwnerRecord): Boolean = true
 }
 
 /** Who the local application owner is, for diagnostics. */
@@ -165,12 +168,27 @@ class SwitchingControlRuntime(
         switching = request
         blocked = null
         refresh()
-        // The intent is made durable first, so a restarted module host never reclaims what the user left.
         val next = OwnerRecord(
             selected = target,
             moduleRelease = if (target == ControlWay.MODULE) previous.moduleRelease ?: PendingModuleRelease(request.id, null) else previous.moduleRelease,
         )
-        if (next != previous && !store.save(next)) {
+        val saves = next != previous
+        if (saves && !store.canSave(next)) {
+            return finish(HandoffOutcome.Blocked(request, OwnerFailureStage.SELECTION_PERSISTENCE, "无法保存控制方式，未做任何切换"))
+        }
+        // Saving module control tells the module host, which then connects by itself. So while an ordinary
+        // connection is open it is closed first; in every other direction the intent is made durable first,
+        // so a restarted module host never reclaims what the user left.
+        val closeFirst = target == ControlWay.MODULE && ordinary != null
+        if (closeFirst) {
+            ordinary?.let { current ->
+                if (!stopOrdinary(current)) {
+                    return finish(HandoffOutcome.Blocked(request, OwnerFailureStage.RELEASE, "普通控制连接未能确认关闭"))
+                }
+            }
+        }
+        if (saves && !store.save(next)) {
+            if (closeFirst) startOrdinary()
             return finish(HandoffOutcome.Blocked(request, OwnerFailureStage.SELECTION_PERSISTENCE, "无法保存控制方式，未做任何切换"))
         }
         record = next
