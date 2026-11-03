@@ -90,6 +90,8 @@ internal class AndroidAudioProfiles(private val context: Context) {
         val a2dpConnected = mutableSetOf<String>()
         val hfpConnected = mutableSetOf<String>()
         val changedSinceProbe = mutableSetOf<String>()
+        // Advanced whenever Bluetooth turns off; a probe result belongs only to the epoch it started in.
+        var probeEpoch = 0
 
         @SuppressLint("MissingPermission")
         fun activeRoseDevice(adapter: BluetoothAdapter?): DeviceId? {
@@ -116,10 +118,14 @@ internal class AndroidAudioProfiles(private val context: Context) {
         }
 
         fun probeExisting(adapter: BluetoothAdapter) {
-            synchronized(lock) { changedSinceProbe.clear() }
+            val epoch = synchronized(lock) {
+                changedSinceProbe.clear()
+                probeEpoch
+            }
             launch {
                 val found = findConnectedRoseAudio(adapter)
                 synchronized(lock) {
+                    if (epoch != probeEpoch) return@synchronized
                     found?.first?.filter { it !in changedSinceProbe }?.let { a2dpConnected += it }
                     found?.second?.filter { it !in changedSinceProbe }?.let { hfpConnected += it }
                     publish(adapter)
@@ -145,6 +151,8 @@ internal class AndroidAudioProfiles(private val context: Context) {
                     BluetoothAdapter.ACTION_STATE_CHANGED -> {
                         when (intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR)) {
                             BluetoothAdapter.STATE_TURNING_OFF, BluetoothAdapter.STATE_OFF -> synchronized(lock) {
+                                // A probe that began before this transition must not re-add what it clears.
+                                probeEpoch++
                                 a2dpConnected.clear()
                                 hfpConnected.clear()
                                 changedSinceProbe.clear()

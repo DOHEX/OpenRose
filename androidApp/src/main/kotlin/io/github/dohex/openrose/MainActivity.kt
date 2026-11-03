@@ -128,13 +128,13 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun requestNotificationPermission() {
-        val prefs = getSharedPreferences("openrose", MODE_PRIVATE)
+        val prefs = getSharedPreferences(AppPreferences.FILE, MODE_PRIVATE)
         val askable = Build.VERSION.SDK_INT >= 33 &&
             checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED &&
-            (!prefs.getBoolean("notificationRequested", false) ||
+            (!prefs.getBoolean(AppPreferences.NOTIFICATION_REQUESTED, false) ||
                 shouldShowRequestPermissionRationale(Manifest.permission.POST_NOTIFICATIONS))
         if (askable) {
-            prefs.edit().putBoolean("notificationRequested", true).apply()
+            prefs.edit().putBoolean(AppPreferences.NOTIFICATION_REQUESTED, true).apply()
             notificationRequest.launch(Manifest.permission.POST_NOTIFICATIONS)
         } else {
             startActivity(
@@ -147,15 +147,15 @@ class MainActivity : ComponentActivity() {
     private fun onSettingsChanged(settings: UserSettings) {
         val enabling = settings.backgroundControlEnabled && !owner.runtime.state.value.settings.backgroundControlEnabled
         owner.updateSettings(settings)
-        val prefs = getSharedPreferences("openrose", MODE_PRIVATE)
+        val prefs = getSharedPreferences(AppPreferences.FILE, MODE_PRIVATE)
         if (enabling && Build.VERSION.SDK_INT >= 33 &&
             checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED &&
-            !prefs.getBoolean("notificationRequested", false)
+            !prefs.getBoolean(AppPreferences.NOTIFICATION_REQUESTED, false)
         ) requestNotificationPermission()
     }
 
     private fun requestBluetoothPermission() {
-        val requested = getSharedPreferences("openrose", MODE_PRIVATE).getBoolean("permissionRequested", false)
+        val requested = getSharedPreferences(AppPreferences.FILE, MODE_PRIVATE).getBoolean(AppPreferences.PERMISSION_REQUESTED, false)
         val permanentlyDenied = requested && bluetoothPermissions().any {
             checkSelfPermission(it) != android.content.pm.PackageManager.PERMISSION_GRANTED &&
                 !shouldShowRequestPermissionRationale(it)

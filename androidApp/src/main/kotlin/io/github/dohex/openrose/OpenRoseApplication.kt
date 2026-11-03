@@ -31,6 +31,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 
+/** The names of the application's own preference file and its flags, shared by every reader and writer. */
+internal object AppPreferences {
+    const val FILE = "openrose"
+    const val PERMISSION_REQUESTED = "permissionRequested"
+    const val NOTIFICATION_REQUESTED = "notificationRequested"
+}
+
 /**
  * Hosts the application's side of control. Activities, interface styles and [ControlService] only use or
  * observe [runtime], which routes to exactly one owner: the ordinary session this process creates while
@@ -44,6 +51,7 @@ class OpenRoseApplication : Application() {
         private set
     lateinit var framework: FrameworkLink
         private set
+    private lateinit var ownerStore: AndroidOwnerStore
     private val companionWake by lazy { CompanionWake(this) }
     private var preferencesLoaded = false
     private var backgroundService: BackgroundServiceFact = BackgroundServiceFact.NotRunning
@@ -52,10 +60,11 @@ class OpenRoseApplication : Application() {
         super.onCreate()
         val unlocked = userUnlocked()
         framework = FrameworkLink { controlScope.launch { refreshPlatform() } }
+        ownerStore = AndroidOwnerStore({ preferences() }, framework) { runtime.state.value.settings }
         runtime = SwitchingControlRuntime(
             initialPlatformState = readPlatformState(permissionRequested(), wake = companionWake.facts(), userUnlocked = unlocked),
             initialSettings = if (unlocked) loadSettings() else UserSettings(),
-            store = AndroidOwnerStore({ preferences() }, framework) { runtime.state.value.settings },
+            store = ownerStore,
             ordinaryFactory = { scope, settings, platform ->
                 LocalControlRuntime(
                     initialPlatformState = platform,
@@ -119,11 +128,36 @@ class OpenRoseApplication : Application() {
         controlScope.launch { runtime.set(setting, value) }
     }
 
-    /** Moves the single control session to [way]; the outcome is visible in the runtime state's owner. */
-    fun selectControlWay(way: ControlWay) { controlScope.launch { runtime.selectControlWay(way) } }
+    /**
+     * Moves the single control session to [way]; the outcome is visible in the runtime state's owner.
+     * Whatever the outcome, wake-up observation and the background service follow the saved choice after.
+     */
+    fun selectControlWay(way: ControlWay) {
+        controlScope.launch {
+            runtime.selectControlWay(way)
+            followSavedControlWay()
+        }
+    }
 
     /** Stops module control without enabling ordinary control. */
-    fun disableModuleControl() { controlScope.launch { runtime.disableModuleControl() } }
+    fun disableModuleControl() {
+        controlScope.launch {
+            runtime.disableModuleControl()
+            followSavedControlWay()
+        }
+    }
+
+    /**
+     * After a handoff: presence observation is withdrawn when ordinary control is no longer the saved
+     * choice, and the stopped service is started again (a user-initiated action) when it is and background
+     * control is enabled.
+     */
+    private fun followSavedControlWay() {
+        syncWakeObservation()
+        if (ordinaryControlSelected() && runtime.state.value.settings.backgroundControlEnabled) {
+            startBackgroundControlFromUserEntry()
+        }
+    }
 
     /**
      * True while the saved choice is ordinary control, i.e. while this process may host a session. Services
@@ -142,7 +176,8 @@ class OpenRoseApplication : Application() {
         // A stop choice must not be lost to a process kill right after the user disables background control.
         if (backgroundIntentChanged) editor.commit() else editor.apply()
         if (effective.controlWay != ControlWay.ORDINARY) {
-            controlScope.launch(Dispatchers.IO) { framework.publishConfig(runtime.state.value.settings) }
+            // The single host-config writer derives the control way from the persisted record at write time.
+            controlScope.launch(Dispatchers.IO) { ownerStore.publishConfig() }
         }
         syncWakeObservation()
         if (effective.backgroundControlEnabled) startBackgroundControlFromUserEntry()
@@ -221,10 +256,10 @@ class OpenRoseApplication : Application() {
 
     fun markPermissionRequested() {
         if (!userUnlocked()) return
-        preferences().edit().putBoolean("permissionRequested", true).apply()
+        preferences().edit().putBoolean(AppPreferences.PERMISSION_REQUESTED, true).apply()
     }
 
-    private fun permissionRequested() = userUnlocked() && preferences().getBoolean("permissionRequested", false)
+    private fun permissionRequested() = userUnlocked() && preferences().getBoolean(AppPreferences.PERMISSION_REQUESTED, false)
     private fun loadUnlockedSettings() {
         if (preferencesLoaded || !userUnlocked()) return
         preferencesLoaded = true
@@ -236,5 +271,5 @@ class OpenRoseApplication : Application() {
     private fun loadSettings() = UserSettingsCodec.decode(preferences().all.mapNotNull { (key, value) ->
         (value as? String)?.let { key to it }
     }.toMap())
-    private fun preferences() = getSharedPreferences("openrose", MODE_PRIVATE)
+    private fun preferences() = getSharedPreferences(AppPreferences.FILE, MODE_PRIVATE)
 }

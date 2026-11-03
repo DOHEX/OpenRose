@@ -5,8 +5,10 @@ import io.github.dohex.openrose.core.protocol.FieldReading
 import io.github.dohex.openrose.core.protocol.FieldValue
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
+import kotlin.test.assertSame
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlinx.coroutines.cancel
@@ -176,7 +178,7 @@ class ModuleAutonomyTest {
         rig.replaceHost(processDied = true)
         runCurrent()
         // Until the new instance is told the saved choice nothing owns the session and nothing claims a release.
-        assertEquals(OwnerReadiness.Unavailable(OwnerFailureStage.CONNECTION, "与模块宿主的连接已断开"), runtime.state.value.owner.readiness.takeIf { it is OwnerReadiness.Unavailable })
+        assertEquals(OwnerFailureStage.CONNECTION, assertIs<OwnerReadiness.Unavailable>(runtime.state.value.owner.readiness).stage)
         assertEquals(0, rig.headset.opens("ordinary"))
 
         rig.bootHost()
@@ -194,13 +196,13 @@ class ModuleAutonomyTest {
         assertEquals(0, rig.headset.opens("ordinary"))
         // The old lease, generation and session mean nothing to the new owner.
         assertEquals(
-            HostCallResult.Rejected(HostRejection.INVALID_LEASE, "控制宿主授权无效或已过期"),
-            rig.host.execute(appIdentity, oldLease, newGeneration, HostCommand.StartScan),
+            HostRejection.INVALID_LEASE,
+            assertIs<HostCallResult.Rejected>(rig.host.execute(appIdentity, oldLease, newGeneration, HostCommand.StartScan)).rejection,
         )
         val fresh = (rig.host.open(appIdentity) as HostOpenResult.Opened).lease.id
         assertEquals(
-            HostCallResult.Rejected(HostRejection.STALE_GENERATION, "所有者代际已过期"),
-            rig.host.execute(appIdentity, fresh, oldGeneration, HostCommand.StartScan),
+            HostRejection.STALE_GENERATION,
+            assertIs<HostCallResult.Rejected>(rig.host.execute(appIdentity, fresh, oldGeneration, HostCommand.StartScan)).rejection,
         )
         // Every read names the generation it was issued for, so a pre-restart reference cannot reach the new owner.
         assertIs<HostReadResult.Rejected>(rig.host.readSession(appIdentity, fresh, oldGeneration, oldReference))
@@ -280,7 +282,7 @@ class ModuleAutonomyTest {
         }
         assertEquals(0, rig.headset.overlappingOpens)
         assertEquals(3, rig.headset.opens("module"))
-        assertEquals(1, listOf(rig.headset.openOwner).count { it != null })
+        assertEquals("module", rig.headset.openOwner)
     }
 
     @Test
@@ -326,12 +328,50 @@ class ModuleAutonomyTest {
 
         // A client that still holds the old endpoint cannot attach to an instance that will never own again.
         assertIs<HostOpenResult.Refused>(old.open(appIdentity))
+        // Leases die with the instance that issued them, whatever the owner state is.
         assertEquals(
-            HostCallResult.Rejected(HostRejection.NO_OWNER, "当前没有控制所有者"),
-            old.execute(appIdentity, lease, generation, HostCommand.StartScan),
+            HostRejection.INVALID_LEASE,
+            assertIs<HostCallResult.Rejected>(old.execute(appIdentity, lease, generation, HostCommand.StartScan)).rejection,
         )
         old.configure(HostConfiguration(true, UserSettings(controlWay = ControlWay.MODULE)))
         assertIs<HostStatus.Inactive>(old.status.value)
         assertEquals(listOf("module:open", "module:close"), rig.headset.events)
+    }
+
+    @Test
+    fun aHotReloadThatCannotConfirmTheReleaseIsRefusedAndTheOldHostKeepsServing() = runTest {
+        val rig = OwnerRig(this, initial = saved)
+        rig.bootHost()
+        rig.hostTransport.audioDevice.emit(rig.earphones.deviceId)
+        val runtime = rig.newRuntime()
+        runCurrent()
+        advanceTimeBy(1)
+        runCurrent()
+        val old = rig.host
+        val generation = (old.status.value as HostStatus.Active).generation
+        rig.hostTransport.closeFails = true
+
+        assertFalse(rig.replaceHost(processDied = false))
+
+        // Nothing was withdrawn: the connection is still owned by the old host, which still takes new leases.
+        assertSame(old, rig.host)
+        assertEquals("module", rig.headset.openOwner)
+        assertEquals(generation, (old.status.value as HostStatus.Active).generation)
+        assertIs<HostOpenResult.Opened>(old.open(appIdentity))
+        assertEquals(1, rig.link.connections.count { it.isOpen })
+        assertEquals(0, rig.headset.opens("ordinary"))
+
+        // Once the close can be confirmed the reload goes ahead and the replacement owns with a new generation.
+        rig.hostTransport.closeFails = false
+        assertTrue(rig.replaceHost(processDied = false))
+        rig.bootHost()
+        rig.hostTransport.audioDevice.emit(rig.earphones.deviceId)
+        runCurrent()
+        advanceTimeBy(rig.clientTiming.retryMillis * 2)
+        runCurrent()
+        assertEquals(OwnerReadiness.Ready, runtime.state.value.owner.readiness)
+        assertNotEquals(generation, runtime.state.value.owner.holder?.generation)
+        assertEquals(listOf("module:open", "module:close", "module:open"), rig.headset.events)
+        assertEquals(0, rig.headset.overlappingOpens)
     }
 }

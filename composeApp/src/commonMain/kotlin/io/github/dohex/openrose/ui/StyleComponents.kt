@@ -17,6 +17,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -49,7 +50,7 @@ internal val LocalInDashboardCard = staticCompositionLocalOf { false }
 internal enum class AppColorRole { Primary, OnSurface, Summary, Error, Divider, SelectedContainer, SelectedContent, DisabledContent }
 internal enum class AppTextRole { Display, Title, Body, Summary, Footnote }
 internal enum class AppButtonKind { Primary, Secondary }
-internal data class AppOption<T>(val value: T, val label: String, val contentDescription: String? = null)
+internal data class AppOption<T>(val value: T, val label: String, val contentDescription: String? = null, val testTag: String? = null)
 
 @Composable
 internal fun appColor(role: AppColorRole): Color = when (LocalInterfaceStyle.current) {
@@ -298,7 +299,7 @@ internal fun <T> AppRadioGroup(options: List<AppOption<T>>, selected: T?, enable
                 this.selected = selected != null && option.value == selected
                 option.contentDescription?.let { contentDescription = it }
                 if (!enabled) disabled()
-            }
+            }.let { base -> option.testTag?.let { base.testTag(it) } ?: base }
             when (LocalInterfaceStyle.current) {
                 InterfaceStyle.MIUIX -> RadioButtonPreference(option.label, selected != null && option.value == selected,
                     onClick = { if (enabled) onSelect(option.value) }, modifier = optionModifier, enabled = enabled)
@@ -543,6 +544,12 @@ internal fun AppButton(text: String, onClick: () -> Unit, enabled: Boolean = tru
         InterfaceStyle.MATERIAL3 -> if (kind == AppButtonKind.Primary) Button(onClick, modifier, enabled, shape = RoundedCornerShape(16.dp)) { Text(text) }
             else OutlinedButton(onClick, modifier, enabled, shape = RoundedCornerShape(16.dp)) { Text(text) }
     }
+}
+
+/** Makes a row observable by tag, so tests can assert the state it reports instead of its wording. */
+@Composable
+internal fun Tagged(tag: String, content: @Composable () -> Unit) {
+    Box(Modifier.fillMaxWidth().testTag(tag)) { content() }
 }
 
 @Composable

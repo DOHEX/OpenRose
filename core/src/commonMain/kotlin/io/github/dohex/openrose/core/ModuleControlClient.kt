@@ -22,6 +22,7 @@ data class ClientTiming(
     val retryMillis: Long = 3_000,
     val statusPollMillis: Long = 2_000,
     val releaseTimeoutMillis: Long = 10_000,
+    val acquireTimeoutMillis: Long = 10_000,
     /** Must outlast the owner's own connect and confirmation deadlines. */
     val commandTimeoutMillis: Long = 45_000,
 )
@@ -44,8 +45,8 @@ sealed interface ReleaseProof {
     /** The owner confirmed this exact request after closing its connection. */
     data class Receipt(val receipt: ReleaseReceipt) : ReleaseProof
 
-    /** The host process that held [generation] ended, which closes every connection it owned. */
-    data class ProcessEnded(val generation: OwnerGeneration) : ReleaseProof
+    /** The host process of [incarnation] ended, which closes every connection it owned. */
+    data class ProcessEnded(val incarnation: String) : ReleaseProof
 
     /** A timeout, lost link or unknown remote state is not proof. */
     data class Unproven(val stage: OwnerFailureStage, val reason: String) : ReleaseProof
@@ -107,45 +108,43 @@ class ModuleControlClient(
     }
 
     /**
-     * Asks the module owner to release for [request]. Only the owner's matching receipt, or the
-     * observed end of the process that held the named owner, counts; everything else is [ReleaseProof.Unproven].
+     * Asks the module owner to release for [request]. Only the owner's receipt for exactly this request and
+     * the exact owner generation the request names, or the observed end of the process that held that owner,
+     * counts; everything else is [ReleaseProof.Unproven]. A refusal never makes the client name another
+     * generation by itself: the owner the host reports is remembered in [lastObservedGeneration] and the
+     * caller must ask again naming it.
      */
     suspend fun release(request: SwitchRequest): ReleaseProof =
         withConnection({ ReleaseProof.Unproven(it.stage, it.reason) }) { connection ->
-        var current = request
-        repeat(2) {
             val result = try {
-                withTimeout(timing.releaseTimeoutMillis) { connection.release(current) }
+                withTimeout(timing.releaseTimeoutMillis) { connection.release(request) }
             } catch (e: TimeoutCancellationException) {
                 return@withConnection ReleaseProof.Unproven(OwnerFailureStage.RELEASE, "模块宿主未在期限内确认释放")
             } catch (e: HostLinkException) {
-                return@withConnection lostLinkProof(connection, current, e.message)
+                return@withConnection lostLinkProof(connection, request, e.message)
             }
             when (result) {
-                is ReleaseResult.Released -> {
-                    val receipt = result.receipt
-                    if (receipt.requestId != current.id || receipt.incarnation != connection.incarnation) {
-                        return@withConnection ReleaseProof.Unproven(OwnerFailureStage.RELEASE, "释放回执与本次切换请求不匹配")
-                    }
-                    return@withConnection ReleaseProof.Receipt(receipt)
-                }
+                is ReleaseResult.Released -> receiptProof(connection, request, result.receipt)
                 is ReleaseResult.Refused -> {
-                    // A stale named generation is refreshed from an authorised status, then asked once more.
-                    val status = result.current
-                    if (result.rejection != HostRejection.STALE_GENERATION || status == null) {
-                        return@withConnection ReleaseProof.Unproven(OwnerFailureStage.RELEASE, result.message)
-                    }
-                    current = current.copy(fromGeneration = (status as? HostStatus.Active)?.generation)
+                    (result.current as? HostStatus.Active)?.let { lastObservedGeneration = it.generation }
+                    ReleaseProof.Unproven(OwnerFailureStage.RELEASE, result.message)
                 }
             }
         }
-        ReleaseProof.Unproven(OwnerFailureStage.RELEASE, "模块所有者代际持续变化，无法确认已释放")
+
+    private fun receiptProof(connection: HostConnection, request: SwitchRequest, receipt: ReleaseReceipt): ReleaseProof {
+        val named = request.fromGeneration
+        val coversNamedOwner = receipt.generation == named ||
+            (receipt.predecessorEnded && receipt.generation == null && named != null && named.incarnation != receipt.incarnation)
+        val matches = receipt.requestId == request.id && receipt.incarnation == connection.incarnation && coversNamedOwner
+        return if (matches) ReleaseProof.Receipt(receipt)
+        else ReleaseProof.Unproven(OwnerFailureStage.RELEASE, "释放回执与本次切换请求或所有者代际不匹配")
     }
 
     suspend fun acquire(request: SwitchRequest, settings: UserSettings): AcquireOutcome =
         withConnection({ AcquireOutcome.Failed(it.stage, it.reason) }) { connection ->
             try {
-                when (val result = withTimeout(timing.releaseTimeoutMillis) { connection.acquire(request, settings) }) {
+                when (val result = withTimeout(timing.acquireTimeoutMillis) { connection.acquire(request, settings) }) {
                     is AcquireResult.Acquired -> {
                         lastObservedGeneration = result.generation
                         AcquireOutcome.Acquired(result.generation, result.holder)
@@ -161,8 +160,10 @@ class ModuleControlClient(
 
     private fun lostLinkProof(connection: HostConnection, request: SwitchRequest, detail: String?): ReleaseProof {
         val end = connection.ended.takeIf { it.isCompleted }?.getCompleted()
-        if (end != null && end.processDied) {
-            return ReleaseProof.ProcessEnded(request.fromGeneration ?: lastObservedGeneration ?: OwnerGeneration(connection.incarnation, 0))
+        val named = request.fromGeneration
+        // The death of a process only proves the owners that process held, so it must be the one the request names.
+        if (end != null && end.processDied && (named == null || named.incarnation == connection.incarnation)) {
+            return ReleaseProof.ProcessEnded(connection.incarnation)
         }
         return ReleaseProof.Unproven(OwnerFailureStage.CONNECTION, detail ?: "与模块宿主失联，无法确认已释放")
     }

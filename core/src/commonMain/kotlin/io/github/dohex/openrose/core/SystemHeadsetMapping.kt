@@ -29,17 +29,25 @@ object SystemHeadsetMapping {
     fun miLinkAncState(fields: Map<DeviceField, FieldReading>): Int? = text(fields, DeviceField.NOISE_MODE)?.let(::miLinkMode)
 
     /**
-     * MiLink's `[case, left, right, caseCharging, leftCharging, rightCharging]`. -1 is its own "unavailable"; a
-     * charging flag it cannot mark unknown stays 0 and is never claimed as a reading (the case has no charging
-     * reading at all). Null when no battery is real.
+     * MiLink's `[case, left, right, caseCharging, leftCharging, rightCharging]`. -1 is its own "unavailable".
+     * The list has no unknown slot for charging, so an ear whose battery is real but whose charging state is
+     * not is a reading that cannot be represented: the whole list is withheld (null) rather than sending 0
+     * as "not charging", as the headset Binder path does. The case has no charging reading at all, so a real
+     * case battery is withheld too (-1). Null when no battery is left to show.
      */
     fun miLinkBattery(fields: Map<DeviceField, FieldReading>): List<Int>? {
-        val left = battery(fields, DeviceField.LEFT_BATTERY) ?: -1
-        val right = battery(fields, DeviceField.RIGHT_BATTERY) ?: -1
-        val case = battery(fields, DeviceField.CASE_BATTERY) ?: -1
-        if (left == -1 && right == -1 && case == -1) return null
-        fun charging(field: DeviceField) = if (toggle(fields, field) == true) 1 else 0
-        return listOf(case, left, right, 0, charging(DeviceField.LEFT_CHARGING), charging(DeviceField.RIGHT_CHARGING))
+        val left = battery(fields, DeviceField.LEFT_BATTERY)
+        val right = battery(fields, DeviceField.RIGHT_BATTERY)
+        if (left == null && right == null) return null
+        val leftCharging = miLinkCharging(fields, left, DeviceField.LEFT_CHARGING) ?: return null
+        val rightCharging = miLinkCharging(fields, right, DeviceField.RIGHT_CHARGING) ?: return null
+        return listOf(-1, left ?: -1, right ?: -1, 0, leftCharging, rightCharging)
+    }
+
+    /** The slot for an ear: its real charging flag, a placeholder where the ear has no battery to describe, null if unknown. */
+    private fun miLinkCharging(fields: Map<DeviceField, FieldReading>, battery: Int?, field: DeviceField): Int? {
+        if (battery == null) return 0
+        return toggle(fields, field)?.let { if (it) 1 else 0 }
     }
 
     /** MiLink's summary battery: the lower real ear, only when both ears are real. */

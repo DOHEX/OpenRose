@@ -9,27 +9,41 @@
 - 系统音频连接驱动自动建立和释放控制连接，保留显式手动连接。见 [ADR 0005](../adr/0005-miuix-nav-and-audio-bound-control-lifecycle.md)。
 - 官方提示继续由小米蓝牙进程直接调用系统服务，不增加 `android` / `system_server` Hook。见 [ADR 0004](../adr/0004-official-prompts-without-system-server-hooks.md)。
 
+## 调研基线（已被取代的旧实现）
+
+调研时的实现把应用进程当作唯一所有者：
+
+- 控制会话在 OpenRose 自身进程的 `OpenRoseApplication.onCreate()` 创建，不是在 `MainActivity` 创建。
+- 应用内的 `ControlBridgeService`（bound Service）向 Hook 宿主提供 AIDL，自身不另建会话；Hook 模块在 `com.android.bluetooth`、`com.xiaomi.bluetooth`、`com.milink.service` 适配系统入口，但不在宿主开启蓝牙控制客户端。
+- Hook 客户端以显式组件及 `BIND_AUTO_CREATE` 绑定该 Service，初次绑定失败和 binding died 只有有限重试（`MAX_BINDING_RETRIES = 1`）；绑定后还须取得由应用发布、经框架 RemotePreferences 传递的 HMAC 会话凭据并通过身份、会话和快照校验。
+- 融合设备中心的电量与降噪适配只消费经过认证的新鲜快照，命令经桥接送回应用进程的会话。
+- Manifest 只有桥接 bound Service，没有前台控制服务、伴生设备服务或开机广播接收器。
+
+这一设计的问题在于：模块系统入口的可用性取决于应用进程是否存在、能否被绑定以及应用是否已发布凭据。该路径（`ControlBridgeService`、`ControlBridgeHost` 与 HMAC 凭据发布和校验）已在 #77 删除，下一节是取代它的当前设计，二者不再并存。当时尚无确定的故障根因：“只有打开 Activity 才能创建会话”与源码不符，也不能把故障归因于应用进程被回收。
+
 ## OpenRose 当前实现
 
-1. 控制会话在 OpenRose 自身进程的 `OpenRoseApplication.onCreate()` 创建，使用该进程的 `AndroidControlTransport` 和应用权限；不是在 `MainActivity` 创建。见 [OpenRoseApplication.kt](../../androidApp/src/main/kotlin/io/github/dohex/openrose/OpenRoseApplication.kt#L25-L48)。
-2. `ControlBridgeService` 是同一进程内的 bound Service，向 Hook 宿主提供 AIDL；服务自身不另建控制会话。见 [ControlBridgeService.kt](../../androidApp/src/main/kotlin/io/github/dohex/openrose/bridge/ControlBridgeService.kt#L10-L45)。
-3. Hook 模块在 `com.android.bluetooth`、`com.xiaomi.bluetooth`、`com.milink.service` 适配系统入口；当前实现明确不在宿主开启蓝牙控制客户端。MiLink 和小米蓝牙允许匹配包内子进程。见 [OpenRoseBluetoothModule.kt](../../androidApp/src/main/kotlin/io/github/dohex/openrose/module/OpenRoseBluetoothModule.kt#L28-L147) 和 [BridgeTarget.kt](../../androidApp/src/main/kotlin/io/github/dohex/openrose/bridge/BridgeTarget.kt#L4-L18)。
-4. Hook 客户端启动时以显式组件及 `BIND_AUTO_CREATE` 绑定应用的 Service，因此代码已包含无需打开 Activity 的服务创建路径。初次绑定失败和 binding died 只有有限重试，`MAX_BINDING_RETRIES = 1`。见 [AuthenticatedBridgeClient.kt](../../androidApp/src/main/kotlin/io/github/dohex/openrose/module/AuthenticatedBridgeClient.kt#L77-L115)、[恢复处理](../../androidApp/src/main/kotlin/io/github/dohex/openrose/module/AuthenticatedBridgeClient.kt#L570-L601) 及 [常量](../../androidApp/src/main/kotlin/io/github/dohex/openrose/module/AuthenticatedBridgeClient.kt#L690-L696)。这不等于已经确定本次故障发生于绑定失败。
-5. 绑定后仍须取得框架 RemotePreferences 中的当前宿主凭据并通过身份、会话和快照校验；应用侧在用户解锁且框架服务已交付后发布凭据。见 [客户端认证](../../androidApp/src/main/kotlin/io/github/dohex/openrose/module/AuthenticatedBridgeClient.kt#L117-L176)、[应用侧凭据发布](../../androidApp/src/main/kotlin/io/github/dohex/openrose/bridge/ControlBridgeHost.kt#L112-L176)。
-6. `ControlSession` 初始化订阅音频连接流；Android 传输注册动态广播，并在初始化时查询现有 A2DP/HFP 连接。控制会话创建、权限可用、识别到已连接耳机以及控制就绪，是不同阶段。见 [ControlSession.kt](../../core/src/commonMain/kotlin/io/github/dohex/openrose/core/ControlSession.kt#L89-L143) 和 [AndroidAudioProfiles.kt](../../androidApp/src/main/kotlin/io/github/dohex/openrose/AndroidAudioProfiles.kt#L80-L198)。
-7. 融合设备中心的电量与降噪适配只消费经过认证的新鲜快照。无快照时不能提供真实电量，也不能把降噪操作当作已成功；命令经桥接送回上述会话，之后由耳机确认状态。见 [MiLinkNativeHeadsetAdapter.kt](../../androidApp/src/main/kotlin/io/github/dohex/openrose/integration/MiLinkNativeHeadsetAdapter.kt#L64-L103)、[降噪入口](../../androidApp/src/main/kotlin/io/github/dohex/openrose/integration/MiLinkNativeHeadsetAdapter.kt#L244-L264) 和 [命令转发](../../androidApp/src/main/kotlin/io/github/dohex/openrose/module/OpenRoseBluetoothModule.kt#L98-L115)。
-8. 源码 Manifest 只有桥接 bound Service，没有应用自己的前台控制服务、伴生设备服务或开机广播接收器；蓝牙权限由普通客户端申请。见 [AndroidManifest.xml](../../androidApp/src/main/AndroidManifest.xml)。
+完整约束与交接规则见 [ADR 0011](../adr/0011-dual-host-single-control-session.md)；这里只列与本研究相关的代码事实。
 
-## 本次设备只读观察
+1. 同一设备只有一个所有者，由已保存的控制方式选择：普通控制由应用进程内按需创建的 `ControlSession` 承载，模块控制由 `com.android.bluetooth` 内的 `ModuleControlHost` 承载。应用侧入口是 `core` 中的 `SwitchingControlRuntime`，在 [OpenRoseApplication.kt](../../androidApp/src/main/kotlin/io/github/dohex/openrose/OpenRoseApplication.kt) 创建。见 [SwitchingControlRuntime.kt](../../core/src/commonMain/kotlin/io/github/dohex/openrose/core/SwitchingControlRuntime.kt) 与 [ModuleControlHost.kt](../../core/src/commonMain/kotlin/io/github/dohex/openrose/core/ModuleControlHost.kt)。
+2. 模块宿主由 [ModuleHostRuntime.kt](../../androidApp/src/main/kotlin/io/github/dohex/openrose/module/ModuleHostRuntime.kt) 在蓝牙进程内创建，使用宿主自己的 Context、UID 与权限，从模块持久化配置和用户解锁状态启动并读取现有音频连接；不依赖 OpenRose Activity、`Application`、应用 Service 或应用发布的凭据，因此不存在 HMAC 会话凭据。
+3. 宿主经 [HostEndpoint.kt](../../androidApp/src/main/kotlin/io/github/dohex/openrose/bridge/HostEndpoint.kt) 暴露 Binder 端点：端点由宿主进程内已有服务按 `ACTION_CONTROL_HOST` 交出，找到端点不等于授权；授权是单独的 `open`，角色只来自 Binder 调用者 UID 及其所属包，之后每次调用校验租约、调用者与所有者代际。
+4. 应用经 [ModuleHostBinderLink.kt](../../androidApp/src/main/kotlin/io/github/dohex/openrose/bridge/ModuleHostBinderLink.kt) 绑定并使用宿主，`SwitchingControlRuntime` 通过它读取状态、提交设置并请求释放；仅有释放回执或观察到宿主进程死亡才算释放证明，解绑、超时与失联都不算。
+5. 三个系统集成作用域内的消费者由 [OpenRoseBluetoothModule.kt](../../androidApp/src/main/kotlin/io/github/dohex/openrose/module/OpenRoseBluetoothModule.kt) 经 [AuthenticatedBridgeClient.kt](../../androidApp/src/main/kotlin/io/github/dohex/openrose/module/AuthenticatedBridgeClient.kt) 使用同一个宿主租约；目标进程由 [BridgeTarget.kt](../../androidApp/src/main/kotlin/io/github/dohex/openrose/bridge/BridgeTarget.kt) 显式列出，MiLink 与小米蓝牙允许匹配包内子进程。它们不创建传输，也不连接耳机。
+6. 融合设备中心的电量与降噪适配只消费宿主经租约交出的状态，无状态时不能提供真实电量，降噪命令经租约进入宿主并以耳机回包确认。见 [MiLinkNativeHeadsetAdapter.kt](../../androidApp/src/main/kotlin/io/github/dohex/openrose/integration/MiLinkNativeHeadsetAdapter.kt)。
+7. 普通控制的后台运行由 [ControlService.kt](../../androidApp/src/main/kotlin/io/github/dohex/openrose/ControlService.kt)（`connectedDevice` 前台服务）持有会话；进程消失后的唤起使用清单接收器与伴生设备服务（`OrdinaryWakeReceiver`、`OpenRoseCompanionService`），见 [AndroidManifest.xml](../../androidApp/src/main/AndroidManifest.xml)。唤起只请求启动该服务。
+8. `ControlSession` 初始化订阅音频连接流；Android 传输注册动态广播，并在初始化时查询现有 A2DP/HFP 连接。控制会话创建、权限可用、识别到已连接耳机以及控制就绪，是不同阶段。见 [ControlSession.kt](../../core/src/commonMain/kotlin/io/github/dohex/openrose/core/ControlSession.kt) 和 [AndroidAudioProfiles.kt](../../androidApp/src/main/kotlin/io/github/dohex/openrose/AndroidAudioProfiles.kt)。
 
-执行了 `adb devices -l`、`adb shell dumpsys activity services io.github.dohex.openrose`、`adb shell dumpsys package io.github.dohex.openrose`，未启动 Activity、强停应用、切换蓝牙或发送耳机控制命令。
+## 基线设备只读观察（旧实现）
+
+以下观察采集于上述旧实现，早于 #77 之后的双承载设计，不描述当前代码。执行了 `adb devices -l`、`adb shell dumpsys activity services io.github.dohex.openrose`、`adb shell dumpsys package io.github.dohex.openrose`，未启动 Activity、强停应用、切换蓝牙或发送耳机控制命令。
 
 - 已连接设备为小米 14（`houji`）。已装 OpenRose 为 `0.1.0-dev`、target SDK 36，蓝牙扫描与连接权限已授予，包状态 `stopped=false`。
-- 采样时 `ControlBridgeService` 存在，运行在 OpenRose 应用进程；绑定者包含 `com.android.bluetooth`、`com.milink.service:audio`、`:core`、`:ui`。
+- 采样时旧的 `ControlBridgeService` 存在，运行在 OpenRose 应用进程；绑定者包含 `com.android.bluetooth`、`com.milink.service:audio`、`:core`、`:ui`。
 - 当时 `startForegroundCount=0`。此观察不等于服务必须作为前台服务运行，也不证明跨进程认证及耳机控制连接已就绪。
-- 定向读取现有 OpenRose 桥接与 MiLink 日志的命令未返回日志，未据此推断成功或失败。
+- 定向读取旧桥接与 MiLink 日志的命令未返回日志，未据此推断成功或失败。
 
-这些是当前采样状态，不能重建用户所述故障发生时的时序，也不能用来否定用户报告。当前尚无确定根因；“只有打开 Activity 才能创建会话”与源码不符。
+这些是当时的采样状态，不能重建用户所述故障发生时的时序，也不能用来否定用户报告。
 
 ## OppoPods 固定参考实现
 
@@ -76,6 +90,6 @@
 - **Q8，普通控制期间的系统集成范围**：普通控制提供应用及可选后台控制，暂停模块提供的融合设备中心和系统耳机提示等增强功能；不保留应用会话向这些系统入口转发的另一条路径。
 - **Q9，开机恢复的起点**：模块控制及免 root 后台控制均从本次开机首次解锁后开始自动恢复；首次解锁后无需打开 OpenRose，首次解锁前的自动控制不列入本次目标。
 
-设计树的九项产品与架构取舍及整体共同理解均已由用户确认，无剩余分支。完整架构、交接约束与验收条件见已接受的 [ADR 0011](../adr/0011-dual-host-single-control-session.md)；运行时代码迁移尚未实施。
+设计树的九项产品与架构取舍及整体共同理解均已由用户确认，无剩余分支。完整架构、交接约束与验收条件见已接受的 [ADR 0011](../adr/0011-dual-host-single-control-session.md)。运行时代码迁移已在代码中完成（上文“OpenRose 当前实现”），但各步骤只有离线契约测试，真机行为尚未验收。
 
 

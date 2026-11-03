@@ -255,14 +255,16 @@ class OpenRoseBluetoothModule : XposedModule() {
     }
 
     override fun onHotReloading(param: HotReloadingParam): Boolean {
-        // Release the host owner first so no consumer outlives or races its source.
-        val hostClosed = hostRuntime?.close() ?: true
+        // Release the host owner first so no consumer outlives or races its source. When the release is
+        // unconfirmed the reload is refused before anything changes: the old instance keeps serving and
+        // keeps its hooks, host and consumers, and the framework may retry the reload.
+        if (hostRuntime?.close() == false) return false
         hostRuntime = null
         retired = true
         // Only framework/target-owned values cross the generation boundary.
         targetContext?.let { param.setSavedInstanceState(it) }
         synchronized(lifecycle) { entryHooks.forEach { runCatching { it.unhook() } }; entryHooks.clear() }
-        return (client?.close() ?: closeConsumers()) && hostClosed
+        return client?.close() ?: closeConsumers()
     }
 
     override fun onHotReloaded(param: HotReloadedParam) {

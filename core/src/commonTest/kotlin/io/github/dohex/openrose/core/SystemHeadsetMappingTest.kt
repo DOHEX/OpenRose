@@ -71,7 +71,10 @@ class SystemHeadsetMappingTest {
         assertNull(SystemHeadsetMapping.miLinkAncState(unknownEars))
         assertNull(SystemHeadsetMapping.miLinkAncState(emptyMap()))
 
-        val oneEar = mapOf(DeviceField.LEFT_BATTERY to FieldReading.Known(FieldValue.Number(40), "28"))
+        val oneEar = mapOf(
+            DeviceField.LEFT_BATTERY to FieldReading.Known(FieldValue.Number(40), "28"),
+            DeviceField.LEFT_CHARGING to FieldReading.Known(FieldValue.Toggle(false), "00"),
+        )
         assertEquals(listOf(-1, 40, -1, 0, 0, 0), SystemHeadsetMapping.miLinkBattery(oneEar))
         assertNull(SystemHeadsetMapping.miLinkSummaryBattery(oneEar))
 
@@ -83,16 +86,29 @@ class SystemHeadsetMappingTest {
     }
 
     @Test
-    fun unknownChargingIsNotReportedAsChargingOrAsNotCharging() {
+    fun unknownChargingIsNeverSentToEitherSystemEntryAsAReading() {
         val chargingUnknown = mapOf(
             DeviceField.LEFT_BATTERY to FieldReading.Known(FieldValue.Number(60), "3c"),
             DeviceField.RIGHT_BATTERY to FieldReading.Known(FieldValue.Number(61), "3d"),
             DeviceField.LEFT_CHARGING to FieldReading.Unknown("02"),
         )
-        // MiLink's list has no unknown slot: 0 is its default and is not claimed as a reading.
-        assertEquals(listOf(-1, 60, 61, 0, 0, 0), SystemHeadsetMapping.miLinkBattery(chargingUnknown))
+        // MiLink's list has no unknown slot for charging, so the whole list is withheld rather than sending 0.
+        assertNull(SystemHeadsetMapping.miLinkBattery(chargingUnknown))
         // The headset Binder encodes charging in the battery byte, so an unknown flag cannot be sent at all.
         assertEquals(SystemHeadsetMapping.BinderStatus.Unrepresentable, SystemHeadsetMapping.binderStatus(chargingUnknown))
+    }
+
+    @Test
+    fun realChargingIsCarriedAndAKnownCaseBatteryIsWithheldFromMiLinkLikeFromTheBinder() {
+        val fields = mapOf(
+            DeviceField.LEFT_BATTERY to FieldReading.Known(FieldValue.Number(90), "5a"),
+            DeviceField.RIGHT_BATTERY to FieldReading.Known(FieldValue.Number(80), "50"),
+            DeviceField.LEFT_CHARGING to FieldReading.Known(FieldValue.Toggle(true), "01"),
+            DeviceField.RIGHT_CHARGING to FieldReading.Known(FieldValue.Toggle(false), "00"),
+            DeviceField.CASE_BATTERY to FieldReading.Known(FieldValue.Number(70), "46"),
+        )
+        // There is no case charging reading, so the case battery is unavailable (-1) instead of paired with a guess.
+        assertEquals(listOf(-1, 90, 80, 0, 1, 0), SystemHeadsetMapping.miLinkBattery(fields))
     }
 
     @Test

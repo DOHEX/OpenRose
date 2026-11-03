@@ -38,6 +38,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.getAndUpdate
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.flow.updateAndGet
 import kotlinx.coroutines.flow.first
@@ -82,6 +83,8 @@ internal class ControlSession(
     private val scanEpoch = MutableStateFlow(0L)
     private var scanJob: Job? = null
     private var generation = 0L
+    /** Connections whose close the platform refused; retried by every [clearActive]. */
+    private val unclosed = MutableStateFlow<List<ControlConnection>>(emptyList())
     private var operationId = 0L
     private var active: Attempt? = null
     private var audioDrivenSessionDeviceId: DeviceId? = null
@@ -394,16 +397,17 @@ internal class ControlSession(
         return result
     }
 
-    override suspend fun disconnect() {
+    override suspend fun disconnect(): Boolean {
         targetIntent.updateAndGet { current ->
             TargetIntent(current.epoch + 1, null)
         }
         audioDrivenSessionDeviceId = null
         autoConnectJob?.cancel()
         autoConnectJob = null
-        lifecycle.withLock {
-            clearActive()
+        return lifecycle.withLock {
+            val closed = clearActive()
             updateState { it.copy(connection = ConnectionState.Disconnected, device = null, lastError = null, connectionRecovery = null) }
+            closed
         }
     }
 
@@ -907,7 +911,7 @@ internal class ControlSession(
                         }
                     }
                 }
-                closeSafely(link)
+                closeOrRemember(link)
             }
         }
         phase(attempt, epoch, ConnectionPhase.SUBSCRIBING)
@@ -1070,7 +1074,7 @@ internal class ControlSession(
             oldConnection to oldObserver
         }
         oldObserver?.cancel()
-        oldConnection?.let { closeSafely(it) }
+        oldConnection?.let { closeOrRemember(it) }
         oldObserver?.join()
     }
 
@@ -1133,8 +1137,12 @@ internal class ControlSession(
         }
     }
 
-    /** Caller holds lifecycle. Invalidate before closing so old callbacks cannot update a new session. */
-    private suspend fun clearActive() {
+    /**
+     * Caller holds lifecycle. Invalidate before closing so old callbacks cannot update a new session. Returns
+     * whether every connection this session ever opened is confirmed closed: a close the platform refused is
+     * remembered and tried again on the next call instead of being forgotten.
+     */
+    private suspend fun clearActive(): Boolean {
         val previous = active
         active = null
         generation++
@@ -1146,12 +1154,26 @@ internal class ControlSession(
         previous?.let { endSettings(it) }
         previous?.task?.cancel()
         previous?.observer?.cancel()
-        previous?.connection?.let { closeSafely(it) }
+        previous?.connection?.let { connection -> unclosed.update { if (connection in it) it else it + connection } }
+        unclosed.getAndUpdate { emptyList() }.forEach { closeOrRemember(it) }
+        return unclosed.value.isEmpty()
     }
 
-    private suspend fun closeSafely(connection: ControlConnection) {
-        withContext(NonCancellable) { try { connection.close() } catch (_: Exception) { /* State already records the connection outcome. */ } }
+    private suspend fun closeOrRemember(connection: ControlConnection): Boolean {
+        val closed = closeSafely(connection)
+        if (!closed) unclosed.update { if (connection in it) it else it + connection }
+        return closed
     }
+
+    private suspend fun closeSafely(connection: ControlConnection): Boolean =
+        withContext(NonCancellable) {
+            try {
+                connection.close()
+                true
+            } catch (_: Exception) {
+                false
+            }
+        }
 
     private fun platformError(): ControlError? = when {
         state.value.platform.permission in setOf(PermissionState.REQUIRED, PermissionState.DENIED) ->
