@@ -36,8 +36,9 @@ import kotlinx.coroutines.launch
 /**
  * Hosts the application's side of control. Activities, interface styles and [ControlService] only use or
  * observe [runtime], which routes to exactly one owner: the ordinary session this process creates while
- * ordinary control is the saved choice, or the module host in the system Bluetooth process. An interface
- * closing or a task being removed never decides whether a control session exists.
+ * ordinary control is the saved choice, or the module host in the system Bluetooth process. The ordinary
+ * session exists only while it is held: by the started interface ([VisibleInterfaceHold]) or by
+ * [ControlService]. A task being removed never decides whether a control session exists.
  */
 class OpenRoseApplication : Application() {
     private val controlScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -75,6 +76,7 @@ class OpenRoseApplication : Application() {
             userUnlocked = unlocked,
         )
         preferencesLoaded = unlocked
+        registerActivityLifecycleCallbacks(VisibleInterfaceHold(runtime, controlScope))
         framework.start()
         refreshPlatform()
         // The fusion device center reads these from the framework; they follow whichever owner's state is mirrored here.
@@ -113,7 +115,16 @@ class OpenRoseApplication : Application() {
     fun stopScan() { controlScope.launch { runtime.stopScan() } }
     fun connect(deviceId: DeviceId) { controlScope.launch { runtime.connect(deviceId) } }
     fun connectFromSystem(deviceId: DeviceId) {
-        controlScope.launch(start = CoroutineStart.UNDISPATCHED) { runtime.connectFromSystem(deviceId) }
+        controlScope.launch(start = CoroutineStart.UNDISPATCHED) {
+            // The request arrives while the launching activity is not started yet; the claim bridges that gap
+            // and ends with the call, by which time the started interface holds the session itself.
+            val hold = runtime.holdOrdinarySession()
+            try {
+                runtime.connectFromSystem(deviceId)
+            } finally {
+                hold.release()
+            }
+        }
     }
     fun disconnect() { controlScope.launch { runtime.disconnect() } }
     fun applySetting(setting: DeviceSetting, value: FieldValue) {
@@ -163,7 +174,8 @@ class OpenRoseApplication : Application() {
      * Entry of the system-delivered wake-ups (first unlock of a boot, an audio connection while the
      * process was gone, device presence). It only starts the service when ordinary control is the saved
      * choice and the restored saved intent, first unlock and Bluetooth permission allow it, so a disabled,
-     * locked or module-controlled state is never revived, and it never connects anything itself.
+     * locked or module-controlled state is never revived. It creates no session itself: the service it
+     * starts holds the ordinary session, and the session ends when the service does.
      */
     fun wakeOrdinaryControl() {
         loadUnlockedSettings()

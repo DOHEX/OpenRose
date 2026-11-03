@@ -255,7 +255,8 @@ internal class OwnerRig(
         host.configure(HostConfiguration(unlocked, UserSettings(controlWay = store.record.selected)))
     }
 
-    fun newRuntime(userUnlocked: Boolean = true): SwitchingControlRuntime = SwitchingControlRuntime(
+    /** [interfaceOpen] stands for the visible interface, which holds the ordinary session like the real one does. */
+    fun newRuntime(userUnlocked: Boolean = true, interfaceOpen: Boolean = true): SwitchingControlRuntime = SwitchingControlRuntime(
         initialPlatformState = platform,
         initialSettings = UserSettings(),
         store = store,
@@ -266,7 +267,7 @@ internal class OwnerRig(
         newId = { ids.next() },
         timing = clientTiming,
         userUnlocked = userUnlocked,
-    )
+    ).also { if (interfaceOpen) it.holdOrdinarySession() }
 
     fun settle() = test.runCurrent()
 }
