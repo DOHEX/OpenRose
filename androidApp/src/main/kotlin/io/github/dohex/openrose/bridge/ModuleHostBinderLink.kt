@@ -99,6 +99,11 @@ class ModuleHostBinderLink(
             runCatching { context.unbindService(binding) }
             return LinkOpenResult.Failed(OwnerFailureStage.AUTHORIZATION, opened.getString(BridgeWire.MESSAGE) ?: "宿主拒绝了此调用者")
         }
+        if (status == BridgeWire.STATUS_UNAVAILABLE) {
+            // A reloaded or stopped host instance still answers on its old Binder; rebind to find the new one.
+            runCatching { context.unbindService(binding) }
+            return LinkOpenResult.Failed(OwnerFailureStage.CONNECTION, opened.getString(BridgeWire.MESSAGE) ?: "宿主暂不可用，等待重新发现")
+        }
         val result = try {
             if (status != BridgeWire.STATUS_OK) null
             else HostWire.decodeOpenResult(parseWire(opened.getString(BridgeWire.PAYLOAD).orEmpty()))

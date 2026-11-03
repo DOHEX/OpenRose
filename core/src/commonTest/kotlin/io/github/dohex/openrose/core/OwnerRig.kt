@@ -12,6 +12,9 @@ import io.github.dohex.openrose.core.wire.HostWire
 import io.github.dohex.openrose.core.wire.parseWire
 import io.github.dohex.openrose.core.wire.render
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.awaitCancellation
@@ -59,13 +62,16 @@ internal class HeadsetTransport(
     val audioDevice = MutableSharedFlow<DeviceId?>(replay = 1, extraBufferCapacity = 8)
     val links = mutableListOf<HeadsetConnection>()
 
+    /** Closing a real link takes time; the owner is not released before it has actually finished. */
+    var closeDelayMillis = 0L
+
     override val audioConnectedDevice: Flow<DeviceId?> get() = audioDevice
     override suspend fun bondedDevices(): List<DeviceCandidate> = bonded
     override fun scan(): Flow<Advertisement> = emptyFlow()
 
     override suspend fun connect(deviceId: DeviceId, endpoint: TransportEndpoint, onPhase: (ConnectionPhase) -> Unit): ControlConnection {
         headset.opened(owner)
-        return HeadsetConnection(owner, headset, profile).also(links::add)
+        return HeadsetConnection(owner, headset, profile) { closeDelayMillis }.also(links::add)
     }
 }
 
@@ -73,6 +79,7 @@ internal class HeadsetConnection(
     private val owner: String,
     private val headset: SharedHeadset,
     private val profile: ModelProfile,
+    private val closeDelayMillis: () -> Long = { 0L },
 ) : ControlConnection {
     override val maxWriteSize = 20
     private val incoming = Channel<ByteArray>(Channel.UNLIMITED)
@@ -96,6 +103,7 @@ internal class HeadsetConnection(
 
     override suspend fun close() {
         if (closed) return
+        closeDelayMillis().takeIf { it > 0 }?.let { kotlinx.coroutines.delay(it) }
         closed = true
         initializing = false
         incoming.close()
@@ -111,6 +119,8 @@ internal class MemoryOwnerStore(var record: OwnerRecord = OwnerRecord()) : Owner
     var onSaved: (OwnerRecord) -> Unit = {}
 
     override fun load() = record
+
+    override fun canSave(record: OwnerRecord) = !failSaves
 
     override fun save(record: OwnerRecord): Boolean {
         if (failSaves) return false
@@ -135,7 +145,7 @@ internal val testAuthority = CallerAuthority { identity ->
 
 /** Binds the app-side client to a host in the same JVM, carrying every message through the wire codec. */
 internal class InProcessHostLink(
-    private val host: ModuleControlHost,
+    var host: ModuleControlHost,
     private val scope: CoroutineScope,
     var identity: CallerIdentity = appIdentity,
 ) : ModuleHostLink {
@@ -229,21 +239,50 @@ internal class OwnerRig(
     private val sessionTiming = SessionTiming(queryTimeoutMillis = 50, i5WriteIntervalMillis = 0, i7WriteIntervalMillis = 0)
     private val platform = PlatformState(PermissionState.GRANTED, TransportAvailability.Available)
 
-    val host = ModuleControlHost(
-        packageName = HOST_PACKAGE, processName = HOST_PACKAGE, incarnation = "host-1",
-        authority = testAuthority,
-        runtimeFactory = { scope, settings, state -> LocalControlRuntime(state, settings, hostTransport, scope, sessionTiming) },
-        parentScope = test.backgroundScope, newId = { "lease-${ids.next()}" }, uid = 1002, pid = 777,
-    )
+    /** The module host process: everything it started stops with it, like a process that was killed. */
+    private var hostScope: CoroutineScope = newHostScope()
+    private var hostCount = 0
+    var host = newHost()
+        private set
     val link = InProcessHostLink(host, test.backgroundScope)
     val clientTiming = ClientTiming(retryMillis = 1_000, statusPollMillis = 500, releaseTimeoutMillis = 5_000, commandTimeoutMillis = 20_000)
+
+    private fun newHostScope() = CoroutineScope(test.backgroundScope.coroutineContext + SupervisorJob(test.backgroundScope.coroutineContext[Job]))
+
+    private fun newHost(): ModuleControlHost {
+        hostCount += 1
+        return ModuleControlHost(
+            packageName = HOST_PACKAGE, processName = HOST_PACKAGE, incarnation = "host-$hostCount",
+            authority = testAuthority,
+            runtimeFactory = { scope, settings, state -> LocalControlRuntime(state, settings, hostTransport, scope, sessionTiming) },
+            parentScope = hostScope, newId = { "lease-${ids.next()}" }, uid = 1002, pid = 777 + hostCount,
+        )
+    }
+
+    /**
+     * Replaces the host with a fresh instance of a new incarnation, which knows only what [bootHost] tells
+     * it. A killed process takes its connection and every link to it down without any release; a hot
+     * reload releases first and then withdraws the endpoint.
+     */
+    suspend fun replaceHost(processDied: Boolean) {
+        if (processDied) {
+            hostScope.cancel()
+            hostTransport.links.filter { !it.closed }.forEach { it.close() }
+            hostScope = newHostScope()
+        } else {
+            host.stop()
+        }
+        link.connections.filter { it.isOpen }.forEach { it.sever(processDied) }
+        host = newHost()
+        link.host = host
+    }
 
     /** Mirrors the saved choice to the host the way the framework's remote preferences do, asynchronously. */
     private var hostUnlocked = true
 
     init {
         store.onSaved = { record ->
-            test.backgroundScope.launch {
+            test.backgroundScope.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
                 host.configure(HostConfiguration(hostUnlocked, UserSettings(controlWay = record.selected)))
             }
         }
@@ -254,14 +293,22 @@ internal class OwnerRig(
         host.updatePlatform(platform)
         host.configure(HostConfiguration(unlocked, UserSettings(controlWay = store.record.selected)))
     }
+    /** The first unlock of a boot, as the host learns it. */
+    suspend fun unlockHost() {
+        hostUnlocked = true
+        host.configure(HostConfiguration(true, UserSettings(controlWay = store.record.selected)))
+    }
 
-    fun newRuntime(userUnlocked: Boolean = true): SwitchingControlRuntime = SwitchingControlRuntime(
+    /** A scope standing for one application process; cancelling it is that process disappearing. */
+    fun newAppProcess() = CoroutineScope(test.backgroundScope.coroutineContext + SupervisorJob(test.backgroundScope.coroutineContext[Job]))
+
+    fun newRuntime(userUnlocked: Boolean = true, process: CoroutineScope = test.backgroundScope): SwitchingControlRuntime = SwitchingControlRuntime(
         initialPlatformState = platform,
         initialSettings = UserSettings(),
         store = store,
         ordinaryFactory = { scope, settings, state -> LocalControlRuntime(state, settings, appTransport, scope, sessionTiming) },
         moduleLink = link,
-        scope = test.backgroundScope,
+        scope = process,
         local = LocalOwnerIdentity(APP_PACKAGE, APP_PACKAGE, 10_123, 4_321),
         newId = { ids.next() },
         timing = clientTiming,

@@ -19,6 +19,7 @@ import io.github.dohex.openrose.core.HostCallResult
 import io.github.dohex.openrose.core.HostCommand
 import io.github.dohex.openrose.core.HostFacts
 import io.github.dohex.openrose.core.HostOpenResult
+import io.github.dohex.openrose.core.HostRejection
 import io.github.dohex.openrose.core.HostReadResult
 import io.github.dohex.openrose.core.HostStatus
 import io.github.dohex.openrose.core.IslandMode
@@ -128,8 +129,11 @@ internal class HostEndpoint(
         if (hello.getInt(BridgeWire.KEY_VERSION) != BridgeWire.VERSION) return BridgeWire.response(BridgeWire.STATUS_UNSUPPORTED_VERSION)
         val opened = host.open(caller)
         if (opened !is HostOpenResult.Opened) {
-            Log.w(TAG, "open_refused uid=${caller.uid} ${(opened as HostOpenResult.Refused).rejection}")
-            return BridgeWire.response(BridgeWire.STATUS_UNAUTHORIZED, opened.message)
+            val refused = opened as HostOpenResult.Refused
+            Log.w(TAG, "open_refused uid=${caller.uid} ${refused.rejection}")
+            // A retired instance (module hot reload) is not an authorisation failure: the client must rediscover.
+            val status = if (refused.rejection == HostRejection.UNAUTHORIZED) BridgeWire.STATUS_UNAUTHORIZED else BridgeWire.STATUS_UNAVAILABLE
+            return BridgeWire.response(status, refused.message)
         }
         val role = opened.lease.role
         val target = when (role) {

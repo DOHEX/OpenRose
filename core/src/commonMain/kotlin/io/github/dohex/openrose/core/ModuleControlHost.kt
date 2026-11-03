@@ -75,6 +75,7 @@ class ModuleControlHost(
     private var platform = PlatformState(PermissionState.NOT_REQUIRED)
     private var held: String? = null
     private var stopped = false
+    private val retired = MutableStateFlow(false)
     private var lastGeneration: OwnerGeneration? = null
     private var sequence = 0L
     private val mutableStatus = MutableStateFlow<HostStatus>(HostStatus.Inactive(incarnation, null, "尚未配置"))
@@ -101,15 +102,19 @@ class ModuleControlHost(
 
     /**
      * Ends this host instance, e.g. on module hot reload: the owner is released like any other release
-     * and the instance never owns again. A replacement instance starts from the persisted intent.
+     * and the instance never owns again. A replacement instance starts from the persisted intent. Returns
+     * whether no owner remains because its connection was confirmed closed; later [open] calls are refused.
      */
-    suspend fun stop() = ownership.withLock {
+    suspend fun stop(): Boolean = ownership.withLock {
+        retired.value = true
         stopped = true
         reconcile()
+        owner.value == null
     }
 
     /** Verifies the caller and issues a lease. Reaching this endpoint alone grants nothing. */
     fun open(caller: CallerIdentity): HostOpenResult {
+        if (retired.value) return HostOpenResult.Refused(HostRejection.INVALID_REQUEST, "控制宿主已停止，请重新发现")
         val role = authority.roleOf(caller)
             ?: return HostOpenResult.Refused(HostRejection.UNAUTHORIZED, "调用者未被授权使用控制宿主")
         var refused = false
