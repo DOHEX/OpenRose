@@ -43,9 +43,20 @@ fun ClientRole.allows(command: HostCommand): Boolean = when (this) {
     ClientRole.APP -> true
     ClientRole.MILINK, ClientRole.XIAOMI_BLUETOOTH, ClientRole.HOST_PRESENTATION -> when (command) {
         is HostCommand.Set -> command.reference != null && command.setting == DeviceSetting.NOISE_MODE
-        is HostCommand.ClaimPrompt -> true
+        is HostCommand.ClaimPrompt -> this != ClientRole.MILINK
         else -> false
     }
+}
+
+/**
+ * Whether this role renders the connection prompt of [mode]: the module's own SystemUI presentation in the
+ * host process for [IslandMode.MODULE], the Xiaomi Bluetooth process for [IslandMode.OFFICIAL], nobody for
+ * [IslandMode.OFF]. The island mode is a presentation setting and has nothing to do with the control way.
+ */
+fun ClientRole.presents(mode: IslandMode): Boolean = when (mode) {
+    IslandMode.MODULE -> this == ClientRole.HOST_PRESENTATION
+    IslandMode.OFFICIAL -> this == ClientRole.XIAOMI_BLUETOOTH
+    IslandMode.OFF -> false
 }
 
 enum class HostRejection {

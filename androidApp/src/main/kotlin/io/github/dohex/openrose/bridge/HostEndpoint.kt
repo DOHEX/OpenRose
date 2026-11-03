@@ -20,6 +20,7 @@ import io.github.dohex.openrose.core.HostCommand
 import io.github.dohex.openrose.core.HostFacts
 import io.github.dohex.openrose.core.HostOpenResult
 import io.github.dohex.openrose.core.HostReadResult
+import io.github.dohex.openrose.core.HostRejection
 import io.github.dohex.openrose.core.HostStatus
 import io.github.dohex.openrose.core.IslandMode
 import io.github.dohex.openrose.core.FusionEntry
@@ -294,18 +295,17 @@ internal class HostEndpoint(
         val lease = consumerLease(request.getString(BridgeWire.LEASE_ID))
         requireVersion(request)
         val generation = generation(request) ?: return BridgeWire.response(BridgeWire.STATUS_STALE_HOST)
-        val view = host.view(lease.caller, lease.id)
-        val mode = view?.state?.settings?.islandMode ?: return BridgeWire.response(BridgeWire.STATUS_STALE_HOST)
-        if ((mode == IslandMode.MODULE && lease.target != BridgeTarget.BLUETOOTH) ||
-            (mode == IslandMode.OFFICIAL && lease.target != BridgeTarget.XIAOMI_BLUETOOTH) || mode == IslandMode.OFF) {
-            return BridgeWire.response(BridgeWire.STATUS_UNAVAILABLE, "该系统入口不拥有当前提示策略")
-        }
         val reference = request.reference() ?: return BridgeWire.response(BridgeWire.STATUS_INVALID_ARGUMENT)
         val id = request.getString(BridgePresentationWire.PROMPT_ID)?.takeIf { it.length in 1..128 }
             ?: return BridgeWire.response(BridgeWire.STATUS_INVALID_ARGUMENT)
         return when (val result = runBlocking { host.execute(lease.caller, lease.id, generation, HostCommand.ClaimPrompt(reference, id)) }) {
             is HostCallResult.Flag -> BridgeWire.response(if (result.value) BridgeWire.STATUS_OK else "STALE_PROMPT")
-            is HostCallResult.Rejected -> BridgeWire.response(BridgeWire.STATUS_STALE_HOST, result.message)
+            // The host decides which entry presents the saved island mode; a refusal is not a stale generation.
+            is HostCallResult.Rejected -> if (result.rejection == HostRejection.FORBIDDEN) {
+                BridgeWire.response(BridgeWire.STATUS_UNAVAILABLE, result.message)
+            } else {
+                BridgeWire.response(BridgeWire.STATUS_STALE_HOST, result.message)
+            }
             is HostCallResult.Operation -> BridgeWire.response(BridgeWire.STATUS_ACTION_FAILED)
         }
     }
