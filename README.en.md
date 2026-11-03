@@ -39,10 +39,16 @@ One retail name can cover several hardware revisions. OpenRose currently impleme
 - Miuix or Material 3 Expressive styles; switching keeps the earphones connected
 - Light / dark, standard or floating bottom bar, background blur, page transitions
 
+**Background control** (no root needed, see [below](#background-control))
+
+- Keeps the control connection after you close the app, with a running notification
+- Restores control when the earphones reconnect after the app process was reclaimed or the phone restarted
+
 **HyperOS integration** (requires an Xposed framework, see [below](#hyperos-integration))
 
+- Two control ways: ordinary control, where the OpenRose app connects to the earphones; module control, where the system Bluetooth process connects and OpenRose does not need to be open
 - Connection prompt and status notification, shown through the system island / focus notifications
-- Earbud and case battery in Fusion Device Center, plus noise mode switching from there
+- Earbud battery in Fusion Device Center, plus noise mode switching from there
 - Fusion Device Center's "Additional Settings" can open OpenRose directly
 
 ## Getting started
@@ -56,6 +62,31 @@ Requires Android 8.0 (API 26) or later. The app UI is currently Chinese only, so
 
 OpenRose's **control connection** is separate from the **audio connection** the system uses for music and calls. "Disconnect control connection" (断开控制连接) in the app only disconnects OpenRose; playback is not affected.
 
+## Background control
+
+Skip this section if you only use OpenRose while it is open. Background control is part of ordinary control and needs neither root nor the module.
+
+The Background control (后台控制) switch on the Settings page is off by default. When on, OpenRose runs as a foreground service (type `connectedDevice`): after you close the app or swipe away its task, the control connection stays open and a running notification is shown, from which you can turn background control off.
+
+- The running notification has its own notification channel, independent of the focus notification and island settings. On Android 13 and later without notification permission, the notification is hidden but the service keeps running, and the Settings page offers an Allow notifications (允许通知) action.
+- When the Bluetooth permission is missing, the system restricts background starts, or the foreground service is refused, the Settings page shows the reason and never shows the switch as running.
+- Turning the switch off ends background operation and the running notification. It does not disconnect system audio or a control connection you are using. With background control off, the control connection ends when you leave the app.
+- Force-stopping OpenRose in system settings ends background control, and OpenRose does not restart itself. HyperOS and some other systems also require allowing autostart and removing battery restrictions by hand; OpenRose cannot detect either.
+
+**Automatic recovery after the process is reclaimed or the phone restarts**
+
+| Android version | How OpenRose is woken |
+| --- | --- |
+| 8–11 | No extra setup. Earphone audio connection (A2DP / HFP) and boot broadcasts wake OpenRose |
+| 12–13 | Tap Associate earphones (关联耳机) on the Settings page; the system companion-device mechanism wakes OpenRose when the earphones appear, and the association also allows starting the foreground service from the background |
+| 14 and later | Same as 12–13, and the Bluetooth permission must be granted |
+
+- After a restart nothing is controlled before the first unlock; after it, control resumes from the saved settings, and earphones already connected before the unlock are recognized.
+- With background control off, boot, audio connection, and device presence events no longer start the service.
+- If the association is cancelled, a permission is missing, or the system refuses, the Settings page shows automatic wake-up (自动唤起) as not ready, and control still works while the app is open. "System conditions configured" (系统条件已配置) only means the checkable conditions are met; it does not guarantee the ROM will wake OpenRose.
+
+**Testing status**: background control and automatic wake-up have only offline tests with simulated events. They have not been verified on a device, and behavior on each Android version is untested.
+
 ## HyperOS integration
 
 Skip this section if you only need Bluetooth controls.
@@ -68,6 +99,13 @@ Skip this section if you only need Bluetooth controls.
 
 Then check the System Integration (系统集成) page in OpenRose to confirm that the module and system bridge are ready.
 
+**Control way** (控制方式, on the Settings page; ordinary control by default)
+
+- **Ordinary control** (普通控制): the OpenRose app connects to the earphones itself and needs no module. The module's island, status notification, and Fusion Device Center controls are paused, and anything OpenRose published there is withdrawn.
+- **Module control** (模块控制): the module connects to the earphones inside the system Bluetooth process (`com.android.bluetooth`). It works from the first unlock after boot without opening OpenRose, and closing the app, the app being reclaimed, or force-stopping it does not affect it. When you open OpenRose, the app uses the module's connection, with the same full model controls as ordinary control.
+
+A switch closes the old control connection before the new side connects and does not interrupt playback or calls. If OpenRose cannot confirm that the old side has disconnected, the switch does not complete and the app explains why. Disable module control (停用模块控制) only stops the module and never switches to ordinary control on its own. When the module is temporarily unavailable, the app says so and does not fall back to ordinary control; once you choose ordinary control, the module coming back or reloading does not take control back.
+
 **Settings** (on the Settings (设置) page)
 
 | Setting | Options | What it does |
@@ -76,13 +114,15 @@ Then check the System Integration (系统集成) page in OpenRose to confirm tha
 | Focus notification (焦点通知) | On / Off | Keeps an earphone status notification while connected |
 | Additional settings destination (附加设置入口) | System details page / OpenRose | With OpenRose selected, the Additional Settings button on the Fusion Device Center card opens OpenRose and connects to those earphones |
 
+The island, focus notification, and control way do not affect each other: hiding the island or turning off focus notifications only withdraws that display; it does not stop module control or Fusion Device Center and does not reconnect the earphones.
+
 **Known limitations**
 
 - The system only knows Off / ANC / Transparency. When the earphones are in wind-noise reduction, Fusion Device Center shows Off; the real mode is unchanged and visible in OpenRose.
-- If the earphones do not report charging state, the system shows them as not charging.
+- When an earbud's battery is known but its charging state is unknown, Fusion Device Center does not show that battery rather than showing it as not charging. The case battery is not shown either, because the system interface cannot represent whether the case is charging.
 - The top-right action on the System Integration page uses Root to restart the three scoped processes so the module reloads. Bluetooth may drop briefly; processes that were not running are not started. "Executed" only means the command was sent.
 
-**Testing status**: the Fusion Device Center Additional Settings redirect has been verified on an i5 with a Xiaomi 14 (OS4.0.0.27.XNCCNXM, MiLink 18.2.2.0.2609141543, LSPosed 2.2.0-it / API 102). The island, focus notifications, the i7, and HyperOS 3 have not been fully tested on hardware.
+**Testing status**: the Fusion Device Center Additional Settings redirect has been verified on an i5 with a Xiaomi 14 (OS4.0.0.27.XNCCNXM, MiLink 18.2.2.0.2609141543, LSPosed 2.2.0-it / API 102). Module control, switching control ways, module autonomy (recovery after boot, force-stop, host reload), the island, and focus notifications have only offline tests, and the i7 and HyperOS 3 have not been fully tested on hardware.
 
 ## Platform support
 
@@ -140,11 +180,11 @@ CI builds and tests on Linux and Windows and publishes an Android APK, a Windows
 
 | Directory | Contents |
 | --- | --- |
-| `core/` | Platform-independent core: model capabilities, protocol codecs, control session, user settings |
-| `composeApp/` | Shared UI (Miuix / Material 3) and UI tests |
-| `androidApp/` | Android entry point, BLE / SPP transports, Xposed module, HyperOS system bridge |
-| `desktopApp/` | Windows / Linux entry point |
-| `docs/` | Protocol documentation and architecture decision records |
+| `core/` | Model capabilities, protocol codecs, control sessions, the unified control entry (`ControlRuntime`), state, and user settings |
+| `composeApp/` | Shared UI, Miuix / Material 3 components, and UI tests |
+| `androidApp/` | Android entry point, BLE / SPP transports, libxposed module, and HyperOS system bridge |
+| `desktopApp/` | Windows / Linux desktop entry point, windows, and preferences |
+| `docs/` | Protocol research & model specifications (`docs/protocols/`), implementation evidence (`docs/protocols.md`), architecture decisions, and specifications |
 
 ## Documentation
 

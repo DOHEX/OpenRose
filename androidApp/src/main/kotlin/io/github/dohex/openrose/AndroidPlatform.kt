@@ -7,6 +7,11 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.location.LocationManager
 import android.provider.Settings
+import android.app.NotificationManager
+import io.github.dohex.openrose.core.BackgroundServiceFact
+import io.github.dohex.openrose.core.WakeFacts
+import io.github.dohex.openrose.core.BackgroundServiceFacts
+import io.github.dohex.openrose.core.RunningNotification
 import io.github.dohex.openrose.core.ModuleAvailability
 import io.github.dohex.openrose.core.HostPlatform
 import io.github.dohex.openrose.core.PermissionState
@@ -21,7 +26,12 @@ internal fun bluetoothPermissions(): Array<String> =
         arrayOf(Manifest.permission.ACCESS_FINE_LOCATION)
     }
 
-internal fun Context.readPlatformState(permissionRequested: Boolean): PlatformState {
+internal fun Context.readPlatformState(
+    permissionRequested: Boolean,
+    backgroundService: BackgroundServiceFact = BackgroundServiceFact.NotRunning,
+    wake: WakeFacts = WakeFacts(),
+    userUnlocked: Boolean = true,
+): PlatformState {
     val granted = bluetoothPermissions().all { checkSelfPermission(it) == PackageManager.PERMISSION_GRANTED }
     val permission = when {
         granted -> PermissionState.GRANTED
@@ -57,7 +67,16 @@ internal fun Context.readPlatformState(permissionRequested: Boolean): PlatformSt
             packageManager.hasSystemFeature(PackageManager.FEATURE_BLUETOOTH_LE) &&
             packageManager.hasSystemFeature(PackageManager.FEATURE_BLUETOOTH)
         ) PlatformApplicability.APPLICABLE else PlatformApplicability.NOT_APPLICABLE,
+        backgroundService = BackgroundServiceFacts(backgroundService, runningNotification(), wake),
+        userUnlocked = userUnlocked,
     )
+}
+
+/** The required service notification is independent of the focus notification setting and has its own channel. */
+private fun Context.runningNotification(): RunningNotification {
+    val manager = getSystemService(NotificationManager::class.java) ?: return RunningNotification.UNKNOWN
+    val channelBlocked = manager.getNotificationChannel(ControlService.CHANNEL_ID)?.importance == NotificationManager.IMPORTANCE_NONE
+    return if (manager.areNotificationsEnabled() && !channelBlocked) RunningNotification.VISIBLE else RunningNotification.HIDDEN
 }
 
 private fun Context.locationServicesEnabled(): Boolean = if (Build.VERSION.SDK_INT >= 28) {

@@ -6,11 +6,16 @@ import android.content.res.Configuration
 import android.graphics.Color
 import android.net.Uri
 import android.os.Bundle
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import io.github.dohex.openrose.core.UserSettings
 import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
@@ -29,6 +34,14 @@ class MainActivity : ComponentActivity() {
     private val scopeRestarter = IntegrationScopeRestarter()
     private val permissionRequest = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
         owner.refreshPlatform()
+        owner.startBackgroundControlFromUserEntry()
+    }
+    private val notificationRequest = registerForActivityResult(ActivityResultContracts.RequestPermission()) {
+        owner.refreshPlatform()
+    }
+    private val associationChooser = registerForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) {
+        // Whether the user confirmed or cancelled, the platform facts are re-read from the system.
+        owner.syncWakeObservation()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -36,7 +49,7 @@ class MainActivity : ComponentActivity() {
         handleNavigationIntent(intent)
         enableEdgeToEdge()
         setContent {
-            val state by owner.session.state.collectAsState()
+            val state by owner.runtime.state.collectAsState()
             val dark = when (state.settings.appearance) {
                 Appearance.SYSTEM -> resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK ==
                     Configuration.UI_MODE_NIGHT_YES
@@ -53,7 +66,7 @@ class MainActivity : ComponentActivity() {
             }
             OpenRoseApp(
                 state = state,
-                onSettingsChange = owner::updateSettings,
+                onSettingsChange = ::onSettingsChanged,
                 onRequestPermission = ::requestBluetoothPermission,
                 onOpenSystemSettings = { startActivity(Intent(Settings.ACTION_BLUETOOTH_SETTINGS)) },
                 onStartScan = owner::startScan,
@@ -61,9 +74,14 @@ class MainActivity : ComponentActivity() {
                 onConnect = owner::connect,
                 onDisconnect = owner::disconnect,
                 onSet = owner::applySetting,
-                onAddDeviceConnect = owner.session::connectForAddDevice,
+                onAddDeviceConnect = owner.runtime::connectForAddDevice,
                 homeNavigationRequest = homeNavigationRequest,
                 onRestartIntegrationScopes = scopeRestarter::restart,
+                onRequestNotificationPermission = ::requestNotificationPermission,
+                onRequestAssociation = ::requestAssociation,
+                onOpenAppSettings = ::openAppSettings,
+                onSelectControlWay = owner::selectControlWay,
+                onDisableModuleControl = owner::disableModuleControl,
             )
         }
     }
@@ -87,6 +105,7 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         owner.refreshPlatform()
+        owner.startBackgroundControlFromUserEntry()
     }
 
     override fun onStop() {
@@ -95,8 +114,48 @@ class MainActivity : ComponentActivity() {
         owner.stopScan()
     }
 
+    /** The system shows its own chooser; the association is the user's explicit consent, never created silently. */
+    private fun requestAssociation() {
+        owner.requestCompanionAssociation(
+            onChooser = { associationChooser.launch(IntentSenderRequest.Builder(it).build()) },
+            onFailure = { owner.syncWakeObservation() },
+        )
+    }
+
+    /** Autostart and battery limits cannot be queried, so the user is sent to the app's system page. */
+    private fun openAppSettings() {
+        startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName")))
+    }
+
+    private fun requestNotificationPermission() {
+        val prefs = getSharedPreferences(AppPreferences.FILE, MODE_PRIVATE)
+        val askable = Build.VERSION.SDK_INT >= 33 &&
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED &&
+            (!prefs.getBoolean(AppPreferences.NOTIFICATION_REQUESTED, false) ||
+                shouldShowRequestPermissionRationale(Manifest.permission.POST_NOTIFICATIONS))
+        if (askable) {
+            prefs.edit().putBoolean(AppPreferences.NOTIFICATION_REQUESTED, true).apply()
+            notificationRequest.launch(Manifest.permission.POST_NOTIFICATIONS)
+        } else {
+            startActivity(
+                Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, packageName),
+            )
+        }
+    }
+
+    /** Enabling background control asks for the notification permission once, in context. */
+    private fun onSettingsChanged(settings: UserSettings) {
+        val enabling = settings.backgroundControlEnabled && !owner.runtime.state.value.settings.backgroundControlEnabled
+        owner.updateSettings(settings)
+        val prefs = getSharedPreferences(AppPreferences.FILE, MODE_PRIVATE)
+        if (enabling && Build.VERSION.SDK_INT >= 33 &&
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED &&
+            !prefs.getBoolean(AppPreferences.NOTIFICATION_REQUESTED, false)
+        ) requestNotificationPermission()
+    }
+
     private fun requestBluetoothPermission() {
-        val requested = getSharedPreferences("openrose", MODE_PRIVATE).getBoolean("permissionRequested", false)
+        val requested = getSharedPreferences(AppPreferences.FILE, MODE_PRIVATE).getBoolean(AppPreferences.PERMISSION_REQUESTED, false)
         val permanentlyDenied = requested && bluetoothPermissions().any {
             checkSelfPermission(it) != android.content.pm.PackageManager.PERMISSION_GRANTED &&
                 !shouldShowRequestPermissionRationale(it)

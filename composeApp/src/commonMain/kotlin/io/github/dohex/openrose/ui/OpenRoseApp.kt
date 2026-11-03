@@ -49,11 +49,17 @@ fun OpenRoseApp(
     onAddDeviceConnect: suspend (DeviceId) -> OperationResult,
     modifier: Modifier = Modifier,
     homeNavigationRequest: Long = 0L,
+    onRequestNotificationPermission: () -> Unit = {},
+    onRequestAssociation: () -> Unit = {},
+    onOpenAppSettings: () -> Unit = {},
     onRestartIntegrationScopes: suspend () -> List<ScopeRestartResult> = {
         listOf("com.android.bluetooth", "com.xiaomi.bluetooth", "com.milink.service").map {
             ScopeRestartResult(it, ScopeRestartStatus.FAILED, "平台操作不可用")
         }
     },
+    // Null on hosts without an ordinary/module choice: the control-way card is then absent instead of inert.
+    onSelectControlWay: ((ControlWay) -> Unit)? = null,
+    onDisableModuleControl: (() -> Unit)? = null,
 ) {
     val dark = when (state.settings.appearance) {
         Appearance.SYSTEM -> isSystemInDarkTheme()
@@ -191,8 +197,17 @@ fun OpenRoseApp(
                             onRequestPermission = onRequestPermission,
                             onOpenSystemSettings = onOpenSystemSettings,
                             onDiagnostics = { navigate(AppPage.DIAGNOSTICS) },
+                            onSelectControlWay = onSelectControlWay,
+                            onDisableModuleControl = onDisableModuleControl,
                         )
-                        AppPage.SETTINGS -> PreferencesPage(state, onSettingsChange)
+                        AppPage.SETTINGS -> PreferencesPage(
+                            state,
+                            onSettingsChange,
+                            onRequestPermission,
+                            onRequestNotificationPermission,
+                            onRequestAssociation,
+                            onOpenAppSettings,
+                        )
                         AppPage.DIAGNOSTICS -> {
                             PlatformDiagnosticsCard(state.platform, onRequestPermission, onOpenSystemSettings)
                             ConnectionDetailsCard(state, onDisconnect)
