@@ -38,6 +38,20 @@ interface OwnerSelectionStore {
 data class LocalOwnerIdentity(val packageName: String, val processName: String, val uid: Int? = null, val pid: Int? = null)
 
 /**
+ * One claim on the ordinary control session. The session exists while at least one claim is open and
+ * ends, closing its control connection, when the last one is released. Releasing twice is harmless.
+ */
+class OrdinarySessionHold internal constructor(private val onRelease: () -> Unit) {
+    private var released = false
+
+    fun release() {
+        if (released) return
+        released = true
+        onRelease()
+    }
+}
+
+/**
  * The runtime the application's interface uses. It routes to exactly one owner: the ordinary session
  * built in this process, or the module host reached through [moduleLink]. A switch first releases the
  * old owner (with proof) and only then establishes the new one, so there is never a second owner.
@@ -65,6 +79,7 @@ class SwitchingControlRuntime(
     private var settings = initialSettings.copy(controlWay = record.selected)
     private var platform = initialPlatformState
     private var ordinary: Ordinary? = null
+    private var holds = 0
     private var switching: SwitchRequest? = null
     private var blocked: OwnerReadiness.SwitchBlocked? = null
     private var lastHandoff: HandoffOutcome? = null
@@ -77,6 +92,34 @@ class SwitchingControlRuntime(
         scope.launch { client.view.collect { refresh() } }
         if (unlocked) startup()
         refresh()
+    }
+
+    /**
+     * Claims the ordinary session for the caller: the visible interface and the background-control
+     * service each take one. The session is created by a claim only while ordinary control is the saved
+     * choice and the user has unlocked, and ends when the last claim is released, so a cached process
+     * with no interface and no service keeps no control connection. Module control never creates it.
+     * Call from the runtime's dispatcher like every other member.
+     */
+    fun holdOrdinarySession(): OrdinarySessionHold {
+        holds += 1
+        startOrdinary()
+        refresh()
+        return OrdinarySessionHold(::releaseHold)
+    }
+
+    private fun releaseHold() {
+        holds -= 1
+        refresh()
+        if (holds > 0) return
+        scope.launch {
+            switchLock.withLock {
+                // A claim taken again before this ran keeps the session; a failed close leaves it as a handoff would.
+                if (holds == 0) ordinary?.let { stopOrdinary(it) }
+                // A claim taken while the session was closing found it still present and could not start one.
+                startOrdinary()
+            }
+        }
     }
 
     /**
@@ -233,7 +276,8 @@ class SwitchingControlRuntime(
     }
 
     private fun startOrdinary() {
-        if (ordinary != null) return
+        if (ordinary != null || holds == 0 || !unlocked) return
+        if (record.selected != ControlWay.ORDINARY || record.moduleRelease != null) return
         localSequence += 1
         val generation = OwnerGeneration(localIncarnation, localSequence)
         val job = SupervisorJob(scope.coroutineContext[Job])
@@ -266,7 +310,11 @@ class SwitchingControlRuntime(
         val activeBlock = blocked?.takeUnless { selected == ControlWay.MODULE && it.request.to == ControlWay.MODULE }
         val readiness = if (!unlocked) OwnerReadiness.Idle("用户解锁后才会控制耳机") else
             switching?.let { OwnerReadiness.Switching(it) } ?: activeBlock ?: when (selected) {
-            ControlWay.ORDINARY -> if (ordinary != null) OwnerReadiness.Ready else OwnerReadiness.Starting
+            ControlWay.ORDINARY -> when {
+                ordinary != null -> OwnerReadiness.Ready
+                holds == 0 -> OwnerReadiness.Idle("没有界面或后台控制服务需要控制会话")
+                else -> OwnerReadiness.Starting
+            }
             ControlWay.MODULE -> when (view) {
                 is ModuleView.Active -> OwnerReadiness.Ready
                 ModuleView.Stopped, ModuleView.Connecting -> OwnerReadiness.Starting
