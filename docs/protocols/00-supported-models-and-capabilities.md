@@ -2,7 +2,7 @@
 
 分析日期：2026-10-13。包名 `cn.ikaile.ruoshui.client`，版本 `3.8.0`，版本码 `5310`。
 
-输入：[RoseLink_3.8.0.apk](/home/dohex/Projects/rose_reverse/RoseLink_3.8.0.apk)。SHA-256：`83cdd7e3e7f6e7d61a26dc6a8fab65f183d5a18a66a70f64a17f69d93e58e40b`。
+输入：`rose_reverse/RoseLink_3.8.0.apk`。SHA-256：`83cdd7e3e7f6e7d61a26dc6a8fab65f183d5a18a66a70f64a17f69d93e58e40b`。
 
 本轮先完成型号与能力盘点：APK 注册了 **43 个具体耳机配置项**（34 个 `tws`、9 个 `head`），另有 AURAMIC 麦克风及 3 个未知/通用类型。43 包含同名硬件变体，不能解释为 43 个互不重复的零售产品；`head` 是程序分类，也不能单凭它断言佩戴形态。
 
@@ -31,49 +31,49 @@
 
 | 型号 / 硬件分支 | 识别前缀 | 控制报文族 | 电量显示 | 控制传输配置 | 直接证据 |
 |---|---|---|---|---|---|
-| CERAMICS | `18840100`、`18840103` | f8 | 左、右 | BLE；未启用 SPP | [配置](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/f8/ceramics_device_config.dart:10) |
-| CERAMICS-X | `18840109` | f8 | 左、右、盒 | BLE；未启用 SPP | [配置](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/f8/ceramics_x_device_config.dart:10) |
-| CERAMICS-X [7034] | `18840112` | f8 | 左、右、盒 | BLE；配置允许 SPP | [配置](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/f8/ceramics_x_7034_device_config.dart:10) |
-| CERAMICS-MK2 | `0b0e0a0c` | rs_common_v2 | 左、右、盒 | BLE；配置允许 SPP | [配置](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/ceramics_mk2_device_config.dart:10) |
-| CERAMICS-MK2 [8912F] | `0b0e208b` | rs_common_v2 | 左、右、盒 | BLE；配置允许 SPP | [配置](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/ceramics_mk2_8912f_device_config.dart:10) |
-| CERAMICS-MK2 [5736] | `45d7b286` | rs_common_v2 | 左、右 | BLE；配置允许 SPP | [配置](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/ceramics_mk2_5736_device_config.dart:10) |
-| CERAMICS-U | `0b0d0a0b` | rs_common_v2 | 左、右、盒 | BLE；配置允许 SPP | [配置](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/ceramics_u_device_config.dart:10) |
-| CERAMICS-U [HSC-2710] | `0b137957` | rs_common_v2 | 左、右、盒 | BLE；配置允许 SPP | [配置](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/ceramics_u_hsc_2710_device_config.dart:10) |
-| AGATE | `18840505` | f8 | 左、右 | BLE；未启用 SPP | [配置](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/f8/agate_device_config.dart:10) |
-| AGATE X | `18840506` | f8 | 左、右 | BLE；未启用 SPP | [配置](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/f8/agate_x_device_config.dart:10) |
-| EXPLORER | `18840107` | f8 | 左、右、盒 | BLE；配置允许 SPP | [配置](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/f8/explorer_device_config.dart:10) |
-| EarFeel-i5 | `525300010001` | zt | 左、右、盒 | BLE；未启用 SPP | [配置](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/zt/earfree_i5_device_config.dart:10) |
-| HeadFeel | `525300020002` | zt | 单体（复用 charge 槽） | BLE；配置允许 SPP | [配置](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/zt/headfree_device_config.dart:10) |
-| EarFree-i3 | `f10203`、`010203` | zt | 左、右、盒 | BLE；未启用 SPP | [配置](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/zt/earfree_i3_device_config.dart:10) |
-| BudsFree i | `12cc3e4c` | rs_common | 左、右 | BLE；未启用 SPP | [配置](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common/budsfree_device_config.dart:10) |
-| SWIFT | `0b0b0a0b` | rs_common | 单体（复用 charge 槽） | BLE；未启用 SPP | [配置](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common/swift_device_config.dart:10) |
-| Cambrian | `0b0c0a0c` | rs_common | 单体（复用 charge 槽） | BLE；配置允许 SPP | [配置](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common/cambrian_device_config.dart:10) |
-| OpenFun | `0b0a0a0e`、`0b0a0a10` | rs_common | 左、右 | BLE；配置允许 SPP | [配置](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common/openfun_device_config.dart:10) |
-| SportFeel | `0b0a0a0f` | rs_common | 左、右 | BLE；配置允许 SPP | [配置](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common/sportfree_device_config.dart:10) |
-| OpenFeel | `0b0a0a0b`、`0b0a0a0c`、`0b0a0a0d` | rs_common | 左、右、盒 | BLE；未启用 SPP | [配置](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common/openfree_device_config.dart:10) |
-| OpenFeel MK2 | `0b0eb657` | rs_common_v2 | 左、右、盒 | BLE；配置允许 SPP | [配置](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/openfeel_mk2_device_config.dart:10) |
-| SpeakFeel [speakfree] | `0b0f0a0b` | rs_common_v2 | 单体（复用 charge 槽） | BLE；配置允许 SPP | [配置](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/speakfree_device_config.dart:10) |
-| Magician | `0b0e0a0d` | rs_common_v2 | 单体（复用 charge 槽） | BLE；配置允许 SPP | [配置](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/magician_device_config.dart:10) |
-| FURINA | `0b110a0c` | rs_common_v2 | 左、右、盒 | BLE；配置允许 SPP | [配置](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/furina_device_config.dart:10) |
-| Zircon | `0b110a0b` | rs_common_v2 | 左、右、盒 | BLE；配置允许 SPP | [配置](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/zircon_device_config.dart:10) |
-| Hyacinth | `0b120a0b` | rs_common_v2 | 左、右、盒 | BLE；配置允许 SPP | [配置](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/hyacinth_device_config.dart:10) |
-| Jasmine | `0b0a0a11` | rs_common_v2 | 左、右 | BLE；配置允许 SPP | [配置](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/jasmine_device_config.dart:10) |
-| Astro X | `0b0e0a0b` | rs_common_v2 | 左、右、盒 | BLE；配置允许 SPP | [配置](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/astro_x_device_config.dart:10) |
-| Opal | `0b0a0a12` | rs_common_v2 | 左、右、盒 | BLE；配置允许 SPP | [配置](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/opal_device_config.dart:10) |
-| Mirror | `0b0a0a13` | rs_common_v2 | 左、右、盒 | BLE；配置允许 SPP | [配置](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/mirror_device_config.dart:10) |
-| KY01 | `0a0b0a0d` | rs_common_v2 | 左、右、盒 | BLE；配置允许 SPP | [配置](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/ky01_device_config.dart:10) |
-| Coral | `0b0e0a0e` | rs_common_v2 | 左、右、盒 | BLE；配置允许 SPP | [配置](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/coral_device_config.dart:10) |
-| BudsFeel MK2 | `0b150a0b` | rs_common_v2 | 左、右、盒 | BLE；配置允许 SPP | [配置](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/budsfeel_mk2_device_config.dart:10) |
-| SWIFT 2 | `5999064c` | rs_common_v2 | 单体（复用 charge 槽） | BLE；配置允许 SPP | [配置](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/swift2_device_config.dart:10) |
-| Patamon | `0b0ae916` | rs_common_v2 | 左、右 | BLE；配置允许 SPP | [配置](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/luminous_patamon_device_config.dart:10) |
-| Tailmon | `0b0a941f` | rs_common_v2 | 左、右 | BLE；配置允许 SPP | [配置](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/luminous_tailmon_device_config.dart:10) |
-| Gabumon | `0b0a2aed` | rs_common_v2 | 左、右 | BLE；配置允许 SPP | [配置](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/luminous_gabumon_device_config.dart:10) |
-| Agumon | `0b0a34fd` | rs_common_v2 | 左、右 | BLE；配置允许 SPP | [配置](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/luminous_agumon_device_config.dart:10) |
-| EarFeel i7 | `b8e5290f` | rs_common_v2 | 左、右、盒 | BLE；配置允许 SPP | [配置](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/earfeel_i7_device_config.dart:10) |
-| SPEAKFEEL [speakfeel2] | `0b0e3ce6` | rs_common_v2 | 单体（复用 charge 槽） | BLE；配置允许 SPP | [配置](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/speakfeel2_device_config.dart:10) |
-| OpenFeel L | `45d7cbed` | rs_common_v2 | 左、右、盒 | BLE；配置允许 SPP | [配置](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/openfeel_l_device_config.dart:10) |
-| FIRST ANGEL | `0b0e64be` | rs_common_v2 | 单体（复用 charge 槽） | BLE；配置允许 SPP | [配置](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/first_angel_device_config.dart:12) |
-| MOKA | `68f5b8eb` | rs_common_v2 | 单体（复用 charge 槽） | BLE；配置允许 SPP | [配置](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/moka_device_config.dart:12) |
+| CERAMICS | `18840100`、`18840103` | f8 | 左、右 | BLE；未启用 SPP | 配置（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/f8/ceramics_device_config.dart:10`） |
+| CERAMICS-X | `18840109` | f8 | 左、右、盒 | BLE；未启用 SPP | 配置（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/f8/ceramics_x_device_config.dart:10`） |
+| CERAMICS-X [7034] | `18840112` | f8 | 左、右、盒 | BLE；配置允许 SPP | 配置（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/f8/ceramics_x_7034_device_config.dart:10`） |
+| CERAMICS-MK2 | `0b0e0a0c` | rs_common_v2 | 左、右、盒 | BLE；配置允许 SPP | 配置（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/ceramics_mk2_device_config.dart:10`） |
+| CERAMICS-MK2 [8912F] | `0b0e208b` | rs_common_v2 | 左、右、盒 | BLE；配置允许 SPP | 配置（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/ceramics_mk2_8912f_device_config.dart:10`） |
+| CERAMICS-MK2 [5736] | `45d7b286` | rs_common_v2 | 左、右 | BLE；配置允许 SPP | 配置（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/ceramics_mk2_5736_device_config.dart:10`） |
+| CERAMICS-U | `0b0d0a0b` | rs_common_v2 | 左、右、盒 | BLE；配置允许 SPP | 配置（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/ceramics_u_device_config.dart:10`） |
+| CERAMICS-U [HSC-2710] | `0b137957` | rs_common_v2 | 左、右、盒 | BLE；配置允许 SPP | 配置（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/ceramics_u_hsc_2710_device_config.dart:10`） |
+| AGATE | `18840505` | f8 | 左、右 | BLE；未启用 SPP | 配置（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/f8/agate_device_config.dart:10`） |
+| AGATE X | `18840506` | f8 | 左、右 | BLE；未启用 SPP | 配置（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/f8/agate_x_device_config.dart:10`） |
+| EXPLORER | `18840107` | f8 | 左、右、盒 | BLE；配置允许 SPP | 配置（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/f8/explorer_device_config.dart:10`） |
+| EarFeel-i5 | `525300010001` | zt | 左、右、盒 | BLE；未启用 SPP | 配置（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/zt/earfree_i5_device_config.dart:10`） |
+| HeadFeel | `525300020002` | zt | 单体（复用 charge 槽） | BLE；配置允许 SPP | 配置（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/zt/headfree_device_config.dart:10`） |
+| EarFree-i3 | `f10203`、`010203` | zt | 左、右、盒 | BLE；未启用 SPP | 配置（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/zt/earfree_i3_device_config.dart:10`） |
+| BudsFree i | `12cc3e4c` | rs_common | 左、右 | BLE；未启用 SPP | 配置（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common/budsfree_device_config.dart:10`） |
+| SWIFT | `0b0b0a0b` | rs_common | 单体（复用 charge 槽） | BLE；未启用 SPP | 配置（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common/swift_device_config.dart:10`） |
+| Cambrian | `0b0c0a0c` | rs_common | 单体（复用 charge 槽） | BLE；配置允许 SPP | 配置（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common/cambrian_device_config.dart:10`） |
+| OpenFun | `0b0a0a0e`、`0b0a0a10` | rs_common | 左、右 | BLE；配置允许 SPP | 配置（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common/openfun_device_config.dart:10`） |
+| SportFeel | `0b0a0a0f` | rs_common | 左、右 | BLE；配置允许 SPP | 配置（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common/sportfree_device_config.dart:10`） |
+| OpenFeel | `0b0a0a0b`、`0b0a0a0c`、`0b0a0a0d` | rs_common | 左、右、盒 | BLE；未启用 SPP | 配置（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common/openfree_device_config.dart:10`） |
+| OpenFeel MK2 | `0b0eb657` | rs_common_v2 | 左、右、盒 | BLE；配置允许 SPP | 配置（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/openfeel_mk2_device_config.dart:10`） |
+| SpeakFeel [speakfree] | `0b0f0a0b` | rs_common_v2 | 单体（复用 charge 槽） | BLE；配置允许 SPP | 配置（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/speakfree_device_config.dart:10`） |
+| Magician | `0b0e0a0d` | rs_common_v2 | 单体（复用 charge 槽） | BLE；配置允许 SPP | 配置（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/magician_device_config.dart:10`） |
+| FURINA | `0b110a0c` | rs_common_v2 | 左、右、盒 | BLE；配置允许 SPP | 配置（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/furina_device_config.dart:10`） |
+| Zircon | `0b110a0b` | rs_common_v2 | 左、右、盒 | BLE；配置允许 SPP | 配置（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/zircon_device_config.dart:10`） |
+| Hyacinth | `0b120a0b` | rs_common_v2 | 左、右、盒 | BLE；配置允许 SPP | 配置（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/hyacinth_device_config.dart:10`） |
+| Jasmine | `0b0a0a11` | rs_common_v2 | 左、右 | BLE；配置允许 SPP | 配置（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/jasmine_device_config.dart:10`） |
+| Astro X | `0b0e0a0b` | rs_common_v2 | 左、右、盒 | BLE；配置允许 SPP | 配置（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/astro_x_device_config.dart:10`） |
+| Opal | `0b0a0a12` | rs_common_v2 | 左、右、盒 | BLE；配置允许 SPP | 配置（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/opal_device_config.dart:10`） |
+| Mirror | `0b0a0a13` | rs_common_v2 | 左、右、盒 | BLE；配置允许 SPP | 配置（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/mirror_device_config.dart:10`） |
+| KY01 | `0a0b0a0d` | rs_common_v2 | 左、右、盒 | BLE；配置允许 SPP | 配置（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/ky01_device_config.dart:10`） |
+| Coral | `0b0e0a0e` | rs_common_v2 | 左、右、盒 | BLE；配置允许 SPP | 配置（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/coral_device_config.dart:10`） |
+| BudsFeel MK2 | `0b150a0b` | rs_common_v2 | 左、右、盒 | BLE；配置允许 SPP | 配置（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/budsfeel_mk2_device_config.dart:10`） |
+| SWIFT 2 | `5999064c` | rs_common_v2 | 单体（复用 charge 槽） | BLE；配置允许 SPP | 配置（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/swift2_device_config.dart:10`） |
+| Patamon | `0b0ae916` | rs_common_v2 | 左、右 | BLE；配置允许 SPP | 配置（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/luminous_patamon_device_config.dart:10`） |
+| Tailmon | `0b0a941f` | rs_common_v2 | 左、右 | BLE；配置允许 SPP | 配置（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/luminous_tailmon_device_config.dart:10`） |
+| Gabumon | `0b0a2aed` | rs_common_v2 | 左、右 | BLE；配置允许 SPP | 配置（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/luminous_gabumon_device_config.dart:10`） |
+| Agumon | `0b0a34fd` | rs_common_v2 | 左、右 | BLE；配置允许 SPP | 配置（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/luminous_agumon_device_config.dart:10`） |
+| EarFeel i7 | `b8e5290f` | rs_common_v2 | 左、右、盒 | BLE；配置允许 SPP | 配置（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/earfeel_i7_device_config.dart:10`） |
+| SPEAKFEEL [speakfeel2] | `0b0e3ce6` | rs_common_v2 | 单体（复用 charge 槽） | BLE；配置允许 SPP | 配置（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/speakfeel2_device_config.dart:10`） |
+| OpenFeel L | `45d7cbed` | rs_common_v2 | 左、右、盒 | BLE；配置允许 SPP | 配置（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/openfeel_l_device_config.dart:10`） |
+| FIRST ANGEL | `0b0e64be` | rs_common_v2 | 单体（复用 charge 槽） | BLE；配置允许 SPP | 配置（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/first_angel_device_config.dart:12`） |
+| MOKA | `68f5b8eb` | rs_common_v2 | 单体（复用 charge 槽） | BLE；配置允许 SPP | 配置（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/moka_device_config.dart:12`） |
 
 
 F8 6 项、ZT 3 项、RS Common 6 项、RS Common V2 28 项。SPP 是否实际选用还取决于平台、强制 BLE 设置与当前音频 Profile；LE Audio 场景优先 BLE。部分型号另有 USB HID 控制或 OTA，见能力表及连接层证据。
@@ -99,7 +99,7 @@ F8 6 项、ZT 3 项、RS Common 6 项、RS Common V2 28 项。SPP 是否实际�
 | SWIFT | RS Common / RsCommonSender | 单体（复用 charge 槽） | — | — | 单击、双击、三击 | ✓ | — | — | — | ✓ | — | — |
 
 
-HeadFeel、Cambrian、SWIFT 的 `charge` 电量槽表示单体电量，不是充电盒。该组详细 Sender/Receiver/Handler、等级开关及型号证据见 [legacy_capabilities.md](/home/dohex/Projects/rose_reverse/analysis/legacy_capabilities.md)。
+HeadFeel、Cambrian、SWIFT 的 `charge` 电量槽表示单体电量，不是充电盒。该组详细 Sender/Receiver/Handler、等级开关及型号证据见 `rose_reverse/analysis/legacy_capabilities.md`。
 
 ## RS Common V2：逐型号能力
 
@@ -137,7 +137,7 @@ HeadFeel、Cambrian、SWIFT 的 `charge` 电量槽表示单体电量，不是充
 | Zircon | ANC/正常/通透/抗风噪 | POP/HIFI/ROCK | 无显式启用 | 有 | AAC/SBC/LDAC/LHDC/LC3 | 有 | 有 | AB | 深度 ANC；ANC 循环配置；提示音语言；录音入口（固件 ≥ 30）；ANC 3 档、通透 3 档 |
 
 
-Luminous 系列当前 App 展示名分别为 Agumon、Gabumon、Patamon、Tailmon。SpeakFeel `[speakfree]` 与 SPEAKFEEL `[speakfeel2]` 是不同注册分支，不能只忽略大小写后按展示名合并。详细枚举、触控动作值、模块行号和地址见 [v2_capabilities.md](/home/dohex/Projects/rose_reverse/analysis/v2_capabilities.md)。录音、AI/星芒入口只证明 App 暴露服务入口，尚不能视为硬件内置功能或可离线实现的设备协议。
+Luminous 系列当前 App 展示名分别为 Agumon、Gabumon、Patamon、Tailmon。SpeakFeel `[speakfree]` 与 SPEAKFEEL `[speakfeel2]` 是不同注册分支，不能只忽略大小写后按展示名合并。详细枚举、触控动作值、模块行号和地址见 `rose_reverse/analysis/v2_capabilities.md`。录音、AI/星芒入口只证明 App 暴露服务入口，尚不能视为硬件内置功能或可离线实现的设备协议。
 
 ## 第三方客户端必须保留的型号差异
 
@@ -155,15 +155,15 @@ AURAMIC 的 `earType=mic`，使用 RS Common V2 的麦克风分支，含收发�
 
 ## 连接层现有结论与协议文档完成条件
 
-四族已有 GATT 服务/读写特征、SPP 选择和型号覆写证据，见 [transport_findings.md](/home/dohex/Projects/rose_reverse/analysis/transport_findings.md)。控制族与 BLE/SPP/USB 传输分开建模；不能对所有 SPP 设备固定使用标准串口 UUID。
+四族已有 GATT 服务/读写特征、SPP 选择和型号覆写证据，见 `rose_reverse/analysis/transport_findings.md`。控制族与 BLE/SPP/USB 传输分开建模；不能对所有 SPP 设备固定使用标准串口 UUID。
 
 要达到可据文档实现客户端的完整度，后续必须按每款型号补齐：广播字段及偏移、连接/配对与订阅、帧结构与校验、命令和回包字段、初始化及能力发现、参数范围/枚举、状态联动/互斥、分包/队列/超时/重试、固件门槛、OTA 子协议，并附逐条十六进制样例及验证状态。当前阶段只完成型号与能力，连接参数已初步分析；这些命令级项目仍未完成。
 
 ## 可复核证据与结构化清单
 
-- [型号注册与名称证据](/home/dohex/Projects/rose_reverse/analysis/model_registry.md)；[注册 JSON](/home/dohex/Projects/rose_reverse/analysis/model_registry.json) / [CSV](/home/dohex/Projects/rose_reverse/analysis/model_registry.csv)。
+- 型号注册与名称证据（`rose_reverse/analysis/model_registry.md`）；注册 JSON（`rose_reverse/analysis/model_registry.json`） / CSV（`rose_reverse/analysis/model_registry.csv`）。
 - [统一型号与能力 JSON](supported-devices.json)。
-- [Manifest 身份](/home/dohex/Projects/rose_reverse/analysis/assets_inventory/manifest_identity.json)。
-- [Dart 对象池](/home/dohex/Projects/rose_reverse/analysis/blutter/objs.txt) 与 [Pool 引用表](/home/dohex/Projects/rose_reverse/analysis/blutter/pp.txt)。
+- Manifest 身份（`rose_reverse/analysis/assets_inventory/manifest_identity.json`）。
+- Dart 对象池（`rose_reverse/analysis/blutter/objs.txt`） 与 Pool 引用表（`rose_reverse/analysis/blutter/pp.txt`）。
 
 REA Android 入口缺少 JADX MCP JAR，本轮未获得该工具的代码 Evidence；代码证据来自已安装 Blutter 对 Dart 3.11.4 AOT 的本地静态解析。文档中的行号为生成的汇编文本行号，地址为 `libapp.so` AOT 虚拟地址，不是蓝牙命令码。未执行 APK，未访问其云服务，原 APK 的 SHA-256 已再次核对。

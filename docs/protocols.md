@@ -1,228 +1,556 @@
-# i5 / i7 读取协议与证据
+# i5 / i7 协议实现说明
 
-> **协议文档索引**：RoseLink 全型号协议研究总览、43 款型号能力清单及最新整理的型号协议（BudsFeel MK2、OpenFeel MK2、Swift 2、Jasmine 等）请参阅 [RoseLink 协议研究与型号文档](protocols/README.md)。本文档记录 OpenRose 针对 i5 / i7 的具体工程实现、测试向量与实测证据。
+本文说明 OpenRose 如何实现 EarFree i5（ZT 协议）和 EarFeel i7（RS Common V2 协议）的控制：帧格式、字段编码、设置命令、确认机制、测试覆盖，以及哪些行为还没有在真机上验证。
 
-读取实现日期：2026-10-18。读取范围为 [#3](https://github.com/DOHEX/OpenRose/issues/3) 和 [#4](https://github.com/DOHEX/OpenRose/issues/4)。2026-10-19 新增 [#5](https://github.com/DOHEX/OpenRose/issues/5)、[#6](https://github.com/DOHEX/OpenRose/issues/6) 的降噪设置、[#7](https://github.com/DOHEX/OpenRose/issues/7)、[#8](https://github.com/DOHEX/OpenRose/issues/8) 的预设 EQ / 游戏模式，以及 [#9](https://github.com/DOHEX/OpenRose/issues/9) 至 [#12](https://github.com/DOHEX/OpenRose/issues/12) 的触控、检测、i5 提示音和音频 / 多点设置，见文末。`core.protocol.ProtocolCodec` 是纯 Kotlin 会话实例；平台传输负责扫描、GATT、订阅和串行写入，协议负责识别、初始化报文和状态解析。没有 OTA 发送入口。
+协议本身的逆向研究（包括其他型号和 OTA）见 [docs/protocols/](protocols/README.md)。本文只讲 OpenRose 实际怎么做，以及和官方 App 不同的地方。
 
-## 来源与实测边界
+## 目录
 
-共同原始来源是 RoseLink 3.8.0 / versionCode 5310，APK SHA-256 为 `83cdd7e3e7f6e7d61a26dc6a8fab65f183d5a18a66a70f64a17f69d93e58e40b`。研究者恢复的目录和 Python 参考 API 不属于厂商公开规范。
+- [代码位置](#代码位置)
+- [证据与验证状态](#证据与验证状态)
+- [通用机制](#通用机制)
+- [i5：ZT 协议](#i5zt-协议)
+- [i7：RS Common V2 协议](#i7rs-common-v2-协议)
+- [设置命令](#设置命令)
+- [型号能力与固件门槛](#型号能力与固件门槛)
+- [i7 控制通道选择（BLE / SPP）](#i7-控制通道选择ble--spp)
+- [测试覆盖](#测试覆盖)
+- [待真机验证](#待真机验证)
+- [附录：Issue 对照与证据索引](#附录issue-对照与证据索引)
 
-| 证据 | 来源 | SHA-256 |
+## 代码位置
+
+| 内容 | 位置 |
+| --- | --- |
+| 型号配置、广播识别、字段模型 | `core/.../protocol/ProtocolCodec.kt` |
+| i5 编解码 | `core/.../protocol/I5Codec.kt` |
+| i7 编解码 | `core/.../protocol/I7Codec.kt` |
+| 型号能力（降噪、EQ、触控、音频等） | `core/.../NoiseControl.kt`、`EqualizerCapabilities.kt`、`DeviceControlCapabilities.kt` |
+| 控制会话（发送队列、设置确认、连接生命周期） | `core/.../ControlSession.kt` |
+| Android BLE / SPP 传输、音频 profile 查询 | `androidApp/.../AndroidBleTransport.kt`、`AndroidSppConnection.kt`、`AndroidAudioProfiles.kt` |
+
+`core/...` 即 `core/src/commonMain/kotlin/io/github/dohex/openrose/core`。编解码器是纯 Kotlin 对象，只负责识别、构帧和解析；扫描、GATT、订阅和串行写入由平台传输层负责。OpenRose 不提供 OTA 入口。
+
+## 证据与验证状态
+
+所有协议依据都来自官方 App **RoseLink 3.8.0（versionCode 5310）**，APK SHA-256 为 `83cdd7e3e7f6e7d61a26dc6a8fab65f183d5a18a66a70f64a17f69d93e58e40b`。这些是逆向得出的结论，不是厂商公开的规范。
+
+文中 `rose_reverse/...` 指作者本地的逆向研究工作区（反汇编产物、提取脚本、实机记录），没有随本仓库发布。测试使用的关键数据文件如下：
+
+| 数据 | 文件 | SHA-256 |
 | --- | --- | --- |
-| i5 独立 TX 常量提取 | `rose_reverse/analysis/i5_fixed_sender_commands.json` | `40ea600ec08358140c45f0dcff893807262273f6db9506eb7e17519f17dc6a87` |
-| i5 实际 RX 读取记录 | `rose_reverse/analysis/i5_live_read_2026-10-18.jsonl` | `a2cf839f3d35795203310dfc6f145b5e4e7fb3f326466bd7c27c8728186d3aa4` |
-| i7 独立 TX 常量提取 | `rose_reverse/analysis/i7_sender_commands.json` | `10f4722e1f77f3c0493b8720fb6928b8019a08522a6d5756b7df775b7fdb399d` |
-| i5 独立离线参考测试 | `rose_reverse/tests/test_i5_protocol.py` | `8e50403bb0bc6ad5f5f139a9947a4c4a6b47d6a182ee543e73b06e8fefda50ca` |
-| i7 独立离线参考测试 | `rose_reverse/tests/test_i7_protocol.py` | `831c61151b456f69c21617c902b72ce7171f2787b646bda96403183e22da296b` |
+| i5 发送命令常量（独立提取） | `rose_reverse/analysis/i5_fixed_sender_commands.json` | `40ea600ec08358140c45f0dcff893807262273f6db9506eb7e17519f17dc6a87` |
+| i5 实机读取记录 | `rose_reverse/analysis/i5_live_read_2026-10-18.jsonl` | `a2cf839f3d35795203310dfc6f145b5e4e7fb3f326466bd7c27c8728186d3aa4` |
+| i7 发送命令常量（独立提取） | `rose_reverse/analysis/i7_sender_commands.json` | `10f4722e1f77f3c0493b8720fb6928b8019a08522a6d5756b7df775b7fdb399d` |
+| i5 参考测试（Python） | `rose_reverse/tests/test_i5_protocol.py` | `8e50403bb0bc6ad5f5f139a9947a4c4a6b47d6a182ee543e73b06e8fefda50ca` |
+| i7 参考测试（Python） | `rose_reverse/tests/test_i7_protocol.py` | `831c61151b456f69c21617c902b72ce7171f2787b646bda96403183e22da296b` |
 
-本工作区研究目录为 `/home/dohex/Projects/rose_reverse`。可追溯说明见其 `docs/earfeel-i5-protocol.md`、`docs/earfeel-i7-protocol.md`、`analysis/i5_hardware_validation.md` 和 `analysis/i7_receiver_findings.md`。
+**真机数据只有一份**：一副 i5（固件 `125`）在 Linux / BlueZ 5.87 / Bleak 3.0.2 下完成的 13 项初始化读取。测试里凡是 i5 的真实接收报文都出自这份记录。
 
-i5 实际样本仅覆盖单副设备在 Linux / BlueZ 5.87 / Bleak 3.0.2 上的 13 项初始化读取，固件读数 `125`。本项目测试使用其中的原始 RX 字面值；这不代表 Android、小米 14、HyperOS 4 或设置命令已通过实机验收。i7 没有实际 RX 抓包或耳机实测；所有 i7 RX 测试数据均为明确标注的合成缓冲区。测试数和上游研究状态不等同于实机通过。
+**i7 没有任何真机数据**。测试中所有 i7 接收报文都是按协议规则构造的合成数据。
 
-## 识别与 GATT
+因此，下文描述的设置写入、回读时序和持久化行为，在两个型号上都还没有经过真机验证。测试通过只说明实现符合逆向得出的规则。
 
-识别使用 manufacturer data：按 company ID 数值排序，先拼接所有 ID 的 LE16，再拼接同序的全部 payload，最后与具体型号配置前缀匹配。不可按名称识别，也不能逐项交错拼 ID / payload。`525300010001` 对应 i5 ZT；`b8e5290f` 对应 i7 RS Common V2。测试的单 company 广播示例来自静态算法推导，并非广告抓包。连接使用操作系统扫描对象的 ID，前缀不是蓝牙地址。
+## 通用机制
 
-| 型号配置 | 服务 | 写 | 通知 |
+### 设备识别
+
+扫描时用 BLE 广播里的 manufacturer data 识别型号，不看设备名：
+
+1. 按 company ID 从小到大排序；
+2. 先拼接所有 company ID（各 2 字节，小端），再按同样顺序拼接所有 payload；
+3. 转成十六进制，与型号前缀比较。
+
+注意是"全部 ID 在前、全部 payload 在后"，不是每项 ID 和 payload 交替拼接。
+
+| 型号配置 | 前缀 |
+| --- | --- |
+| i5 ZT | `525300010001` |
+| i7 RS Common V2 | `b8e5290f` |
+
+前缀只用来识别型号，不是蓝牙地址。连接时使用系统扫描结果给出的设备 ID。测试中的单 company 广播样例是按算法推导的，不是抓包数据。
+
+另有一条按名称匹配的路径（`ModelProfile.match`）：读取系统**已配对设备列表**、以及观察系统音频连接时，没有广播数据可用，只能按设备名（包含 `earfree` / `earfeel` / `i5` / `i7` 等）判断是否为 ROSE 耳机。
+
+### GATT 与发送队列
+
+| 型号配置 | 服务 | 写特征 | 通知特征 |
 | --- | --- | --- | --- |
 | i5 ZT | `011bf5da-0000-1000-8000-00805f9b34fb` | `00007777-0000-1000-8000-00805f9b34fb` | `00008888-0000-1000-8000-00805f9b34fb` |
 | i7 RS V2 | `000000fe-0000-1000-8000-00805f9b34fb` | `000000f1-0000-1000-8000-00805f9b34fb` | `000000f2-0000-1000-8000-00805f9b34fb` |
 
-平台发现同一服务内的写与通知特征，按实际属性优先无响应写，否则有响应写。先完成通知注册与 CCCD，再发送初始化读取。每条写入完成后间隔 100 ms；此间隔不是业务回复超时。连接、服务发现、通知订阅、收到可信协议字段和逐字段读取完成分别表示。原始数据、未知字段和未提供字段均保留。
+- 在同一服务内找写特征和通知特征。写特征支持无响应写入就用无响应写入，否则用有响应写入。
+- 先完成通知订阅（含 CCCD），再发初始化查询。
+- 所有写入走同一个串行队列，每次写入完成后间隔 100 ms 再发下一条。这个间隔不是等待回复的超时。
+- 连接、服务发现、通知订阅、收到第一条可信字段、所有字段读取完成，是分开记录的几个阶段。
 
-## i5 ZT
+### 字段状态
 
-TX 为 `08 EE 00 00 00 group op lengthLE16 payload sum8`，长度包含整帧，校验是此前所有字节之和低 8 位。13 条初始化查询顺序为 `0101, 0602, 0201, 0603, 0801, 0d01, 0401, 0a01, 0605, 0c01, 0607, 0604, 0e03`。测试逐条对比独立提取的完整 TX 字面值。普通报文最多 14 字节，读取无需依赖较大 MTU。
+每个字段的读数是以下四种之一：
 
-RX 仅按照一次完整通知内的已知偏移解析。没有推断 RX 前缀、整体长度、校验规则或跨通知拼接。命令在字节 5/6，字段从字节 9 起；各命令先检查最小字段长度。降噪模式按整个已知尾部匹配，其中 `0000010020` 是抗风；尾部最后的 `20` 不被另行假定为通用校验字节。
-
-电量来自字节 11/12/15，左右充电标志在 13/14。实际电量样本 `09ff00000101011100000164620000ffe2` 表示左 100%、右 98%、充电均关闭、盒值 `FF`。`FF` 使用 `NotProvided(rawHex="ff")`，不会变为 0。已知可显示百分比为 1..100；原始 0 保留为 `Unknown("00")`，与 FF 区分，这不表示硬件物理上不可能是 0%。盒当前值还需至少一耳正在充电，否则保留原值并标为未知，不能显示为刚取得的有效盒电量。固件为字节 9/10/11 的低半字节十进制拼接，实际 `[1,2,5]` 展示 `125`。
-
-游戏、触摸和检测功能低半字节 `0` 开 / `1` 关。音频 `0` 为 AAC/SBC 且多点开，`1` 为 LDAC 且多点关，不能给 i5 套用独立 `0802` 查询。ANC 与通透等级全字节 `0/1/2` 映射 `1/3/5`；提示音低半字节 `0..4` 映射 `1..5`。轮换顺序为普通 / 通透 / 抗风 / ANC，触摸动作表保留 i5 专属映射。
-
-## i7 RS Common V2
-
-TX 为 `FF sequence bodyLength body checksum AA`。序号从 0 开始并以 256 回绕；长度只含 body；校验为从 FF 到 body 的和低 8 位。序号属于协议会话实例，断开重置。RX 的第二头字节保持 opaque，不用作业务 ACK 或发送序号关联。
-
-官方初始化只有 `getInfo`，完整 35 字节 TX 为 `ff001efa010708090c0d0e122a2b2c2d2e2f313233363738393a3b3c3d3f454649e9aa`。实现另加完整 `FA 3E` 查询读取曲线，此补读是客户端选择。默认 ATT MTU 23 只有 20 字节值容量；容量不足时按每条 `capacity-6` 个 ID 分组为多条完整 FA 查询，每条使用新序号和校验，不任意切开完整命令。容量 20 时产生三条信息查询，再加一条曲线查询；第三条仅含共享 ID49，没有本型号已知字段可等待。这种 FA 分组来自已观察的多 ID / 单 ID 查询归纳，设备接受情况待实测。
-
-RX 为 `DD opaqueHH [L T V...]... CS AA`，`L=1+V长度`。接受研究中看到的两种 CS：整帧前缀之和或仅 LTV 内容之和，均取低 8 位。按 LTV 和 CS 验证 AA 候选，支持分包、合包和 V 中的 AA / DD。缓冲区上限 8192 字节，断开清空。没有总帧长时，不在尚未完成的前帧内部搜索新的 DD 来恢复；V 中即使出现一条校验正确的内嵌帧也保持不透明。无法与缺失分片区分的损坏前缀会等待后续字节、读取超时或缓冲区上限 / 会话重置，而不会从其内部构造已知状态。`L00` 吸收余下内容作为最后一条字段，本客户端仍验证 CS，比原 App 的 L00 快速分支更严格。候选帧的 LTV 布局不完整时拒绝整帧，不像原 App 可能已更新较早字段；这是客户端的完整性选择。FE 和未知记录保留原帧并记录原因，不建立协议就绪。
-
-电量低 7 位表示百分比，已知可显示范围为 1..100；原始 0 作为未知保留，不与 FF 混同。左右 bit7 是盒内标志，耳值 FF 的标志仍为未知；盒 bit7 仅保留原始标志，不能标为充电。盒当前值需 1..100 且至少一个盒内耳的 raw 不为 FF，否则当前盒值保留为 Unknown，只有 FF 为 NotProvided。本实现不将历史缓存伪装为当前读数。固件使用前三个完整无符号字节十进制拼接。
-
-游戏和多点 `1` 开 / `0` 关；触摸与检测功能相反。ANC / 通透线上等级直接为 `1/3/5`。EQ 单字节 00/01 为 HIFI/POP，双字节 00/01 为 POP/HIFI，原始格式保留。自定义 EQ 为十个符号位加绝对值编码的整数，范围 −6..6。触摸是八个必需 slot 的 `(id,action)` 对，重复 slot 以后者覆盖；轮换顺序为 ANC / 抗风 / 普通 / 通透。
-
-`supportedFields` 仅声明当前读者理解的字段，不能用于显示写入能力。设置能力必须按本型号与已读取固件判断：EAP 门槛 152，增益 / 听力保护门槛 213，提示音关闭门槛 304。固件未知时不启用受限设置。共享初始化 ID 不证明额外硬件能力。
-
-## 字段可用性与请求匹配
-
-`Loading`、`Known`、`Unknown` 和 `NotProvided` 分开表达。每个回包保留完整 rawHex，每个读取项保留自己的原始字节。字段未知、长度错误和未提供均不会变成默认关闭或默认数值。仅得到 NotProvided 或电池原始标志不能建立协议就绪。
-
-i5 请求按命令键匹配；i7 按实际收到的可识别记录类型集合匹配，发送序号和 RX HH 不参与业务确认。共享未知 ID 不被当作必须返回的本型号字段。平台层负责单一所有者、串行请求、超时、断开清理和会话标识隔离；编解码器不会自行假定 GATT 写完成等于状态已读。
-
-## 降噪设置协议（#5 / #6）
-
-`prepareSetting(setting, value, firmware)` 返回有序 `writeFrames`、独立的 `readback` 查询以及 `expectedValues`。它只构造协议计划，不修改已确认设备状态。会话在同一发送队列中执行设置和读取；底层写入完成不等于设备确认。i5 仅把已知读取命令当作状态来源，不把 `0682` 等设置操作码清除 `80` 后当成确认。i7 仍按收到的字段类型和真实值确认，不使用 opaque HH。
-
-| 设置 | i5 ZT | i7 RS V2 | 读取确认 |
-| --- | --- | --- | --- |
-| 降噪模式 | `0682` + ANC `01000000`、普通 `00010000`、抗风 `00000100`、通透 `00000001` | `09` + ANC `01`、普通 `02`、通透 `03`、抗风 `04`、自动 `05`、动态 `07` | i5 `0602`；i7 `FA09` |
-| ANC 档位 | `0687` + `00/01/02` 对应界面 `1/3/5` | `2C` + `01/03/05` | i5 `0607`；i7 `FA2C` |
-| 通透档位 | `0684` + `00/01/02` 对应界面 `1/3/5` | `2D` + `01/03/05` | i5 `0604`；i7 `FA2D` |
-| 触摸降噪轮换 | `0685` + 普通 / 通透 / 抗风 / ANC 四个 `00/01` | `36` + ANC / 抗风 / 普通 / 通透 四个 `00/01` | i5 `0605`；i7 `FA36` |
-
-`NoiseControlCapabilities` 将型号设置能力与 `supportedFields` 分开。i5 不开放共享发送器的自动 ANC；i7 不开放共享深度 ANC `06`。已恢复 i7 型号配置在 `0x681fd4..0x682010` 创建自动与动态 ANC 控件，没有这些控件的固件门槛；因此未知固件不单独关闭这两项，也不借用 EAP 的 152 或增益的 213 门槛。这只描述 RoseLink 3.8.0 的型号配置，不证明所有硬件固件组合均已验证。相关来源为 `rose_reverse/docs/earfeel-i7-protocol.md` 第 1、4.5 节，以及 `analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/earfeel_i7_device_config.dart`。
-
-轮换输入必须明确包含四种常规模式和四个非未知布尔值，拒绝遗漏、额外模式和未知开关。恢复的公共轮换 UI 在 `0xb8c758..0xb8ca0c` 先建立四个 `0`，把选中项改为 `1`，随后直接调用 `setAncLine`，发送器也没有最小选中数检查；客户端因此不额外发明至少选一项或两项的规则，`minimumCycleSelections=0`。空轮换的设备接纳与实际触摸效果仍待实测。来源为 `analysis/blutter/asm/roselink/modules/device_control/widget/device_anc_line_panel_item.dart` 与两个发送器的 `setAncLine`。
-
-i7 自动与动态 ANC 作为模式选择。离开自动模式时明确发送用户选择的目标模式，并保留设备读回的实际状态；不复制厂商关闭开关发送抗风 `0904` 却立刻乐观显示 ANC 的行为。若读回结果与目标不同，会话可记录未应用，而不能把目标值写入已确认状态。
-
-所有参数检查都发生在构造设置帧前；非法类型、档位或轮换参数抛出 `IllegalArgumentException`，不支持的设置或模式抛出 `UnsupportedOperationException`，由会话转换为明确的公开操作结果。i7 初始化、设置及读取确认共用同一个编解码器序号；无效请求不消耗序号，断开重置仍从 `00` 开始。i5 最大设置帧 14 字节，i7 轮换设置最大 10 字节，不分割完整设置帧。
-
-`NoiseProtocolTest` 使用上述独立 APK 提取的完整固定 TX 字面值，以及研究参考测试和已恢复参数映射的独立动态例子。覆盖四种 i5 模式、六种 i7 模式、各档位、型号轮换线序、确认查询、非法参数、未知轮换、不支持选项、输入快照、序号连续 / 回绕 / 重置；RX 示例明确为合成数据。实际设置回包时序、持久化、自动模式表现与固件矩阵未获得本次实机证据。用户当前无法提供 i5 / 小米 14（HyperOS 4），本次继续实现与离线验证；已有 i5 初始化读取记录不扩大为设置验收通过，i7 仍无设备实测。
-
-### 原始 App 的模式与档位显示（2026-10-22 核对）
-
-本次直接核对 RoseLink 3.8.0 的既有 Blutter 静态反汇编产物，并复核上述 APK SHA-256。以下是原始客户端的配置、显示和指令构造证据，不是厂商公开协议规范或本次硬件实测。
-
-i5 的 `EarfreeI5DeviceConfig` 分别启用 ANC 档位和通透档位，并为两者分别配置三项 `NoiseLevelType` 列表；它们是两个独立的能力开关和两组可选值。见 [i5 型号配置](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/zt/earfree_i5_device_config.dart:130)，赋值地址为 `0x68da48..0x68da6c`。
-
-原始 `NoiseType` 枚举为 `normal=0`、`trans=1`、`wind=2`、`anc=3`，见 [枚举对象](/home/dohex/Projects/rose_reverse/analysis/blutter/objs.txt:40317)。这些是应用内部索引，不能当作两类协议共用的线上模式值。原始档位控件由当前降噪状态取得模式值，再按该值选择显示内容：
-
-| i5 当前模式 | 原始 App 显示的档位 |
+| 状态 | 含义 |
 | --- | --- |
-| 主动降噪 `anc` | ANC 档位，界面值 `1/3/5` |
-| 通透 `trans` | 通透档位，界面值 `1/3/5` |
-| 抗风噪 `wind` | 两组均隐藏 |
-| 标准 `normal` | 两组均隐藏 |
+| `Loading` | 还没读到 |
+| `Known` | 读到并解析成功 |
+| `Unknown` | 读到了，但值无法识别或长度不对 |
+| `NotProvided` | 设备明确表示没有这个值（例如电量 `FF`） |
 
-模式传入档位控件的路径见 [当前状态到控件](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/widgets/device_widgets/device_anc.dart:1947)。`_RAncModeCtlLevelBarState::build` 在 `0xb3746c` 比较模式是否为 `3`，命中才构造 `noise-anc-level`；在 `0xb379d8` 比较是否为 `1`，命中才构造 `noise-trans-level`。其余分支使用空组件，见 [ANC 显示分支](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/widgets/device_widgets/device_anc.dart:112) 和 [通透显示分支](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/widgets/device_widgets/device_anc.dart:610)。因此原始 App 将通透档位归于通透模式，未归于抗风噪模式。
+每个读数都保留原始字节（`rawHex`）。未知、长度错误、未提供的字段**不会**被当成"关闭"或 0。
 
-指令层仍分别处理模式和档位：i5 `Zt229Sender::setAncLevel`（`0x80b81c`）构造 `0687`，`setTransLevel`（`0x80b3a0`）构造 `0684`，二者均将 `1/3/5` 映射为 `0/1/2`，不携带模式参数，也未在这些构造函数中检查当前模式。见 [ANC 档位发送器](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart:4523) 和 [通透档位发送器](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart:4383)。已检查的 `RCommander` 两个档位入口也直接构造并发送指令，见 [命令入口](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/r_commander.dart:1781)。这些证据确立了客户端显示条件，但不能证明耳机固件在其他模式下接受或拒绝档位写入。
+只有收到至少一个有意义的 `Known` 字段，才算协议就绪。只收到 `NotProvided` 或电池原始标志位不算。
 
-已有 i5 实机初始化读取也体现了当前模式与档位读数的独立性：模式为 `wind` 时，仍读到 ANC 档位 `5` 和通透档位 `1`，见 [原始模式回包](/home/dohex/Projects/rose_reverse/analysis/i5_live_read_2026-10-18.jsonl:6)、[ANC 档位回包](/home/dohex/Projects/rose_reverse/analysis/i5_live_read_2026-10-18.jsonl:25) 和 [通透档位回包](/home/dohex/Projects/rose_reverse/analysis/i5_live_read_2026-10-18.jsonl:27)。这只验证该副设备能在抗风模式读取两组值，不能证明两组参数当时均影响声音，或断电后持久化、跨模式写入的行为。
+### 请求与回复的匹配
 
-OpenRose 已据此将两组档位分别建模为可选的 `NoiseLevelCapabilities`，各自声明 `levels` 与 `visibleModes`；缺失的能力不开放对应档位设置。i5 和 i7 分别声明 ANC 档位只在 `anc` 显示、通透档位只在 `transparency` 显示。i7 自动与动态模式的原始 controller 值为 `4`、`6`，同样不匹配档位控件的 `3`、`1` 分支，见 [i7 接收处理依据](/home/dohex/Projects/rose_reverse/analysis/i7_receiver_findings.md:120)。两套界面风格都使用已确认模式决定显示；模式尚未读到、未知或未提供时隐藏两组档位，待处理的切换请求不提前改变显示区域。档位读数继续保留，参数校验采用每组自己的取值范围，显示条件不作为协议写入前置条件。
+- i5：按命令字匹配回复。
+- i7：按回复中出现的字段类型集合匹配。发送序号和接收帧第二字节都不参与匹配。
+- 初始化查询里的共享未知 ID，不要求设备一定回复。
 
-## 预设 EQ 与游戏模式（#7 / #8）
+平台层保证同一时刻只有一个连接所有者、请求串行发送、超时和断开时清理状态、不同会话之间互不干扰。编解码器不会把"GATT 写入完成"当作"状态已读到"。
 
-两类设置沿用同一个 `prepareSetting` 和会话确认流程。EQ 使用归一化的 `FieldValue.Text("pop" / "hifi" / "rock" / "light" / "eap")`；游戏使用明确的 `FieldValue.Toggle`。`EqualizerCapabilities.presets` 表示当前型号和固件可写预设；游戏写入能力由 `writableSettings` 表达。i5 不开放自定义 EQ；本阶段的 i7 预设入口也不把 custom、custom slot 或共享游戏 EQ 当成预设选项。
+### 设置流程
 
-| 归一化预设 | i5 中文标签 / `0281` payload | i7 中文标签 / `2A` payload |
+所有设置都走同一个流程：
+
+1. 会话调用 `prepareSetting(setting, value, firmware)`，得到：
+   - `writeFrames`：要依次写入的帧；
+   - `readback`（以及可能的 `additionalReadbacks`）：写入后用来确认的查询；
+   - `expectedValues`：期望回读到的字段值。
+2. 参数检查全部在构帧之前完成。非法参数抛 `IllegalArgumentException`，型号不支持的设置或选项抛 `UnsupportedOperationException`，会话把它们转成明确的失败结果。被拒绝的请求不消耗 i7 序号。
+3. 写入帧和回读查询在同一个发送队列里执行。写入完成只代表数据发出去了，不代表设备已执行。
+4. 根据回读结果确定设置状态：
+
+| 回读情况 | 结果 |
+| --- | --- |
+| 目标字段读到，值与期望一致 | `CONFIRMED` |
+| 目标字段读到，值与期望不同 | `NOT_APPLIED` |
+| 目标字段仍未知 | 继续等待，超时则 `TIMED_OUT` |
+
+`prepareSetting` 不修改已确认的设备状态；界面始终显示设备回读的值，而不是用户刚选的值。完整的设置帧不会被拆分发送（i5 最长 14 字节，i7 降噪轮换设置最长 10 字节）。
+
+## i5：ZT 协议
+
+### 发送帧
+
+```text
+08 EE 00 00 00 [group] [op] [lengthLE16] [payload...] [sum8]
+```
+
+- `length` 为整帧长度（含自身和校验）。
+- `sum8` 为前面所有字节之和的低 8 位。
+- 普通报文最长 14 字节，写入容量至少 10 字节即可，不依赖大 MTU。
+
+初始化依次发送 13 条查询：
+
+```text
+0101 0602 0201 0603 0801 0d01 0401 0a01 0605 0c01 0607 0604 0e03
+```
+
+测试逐条比对独立提取的完整发送报文。
+
+### 接收解析
+
+只在**单条完整通知**内按已知偏移解析，不推断接收帧的前缀、总长度、校验规则，也不跨通知拼包。
+
+- 命令字在第 5、6 字节，字段从第 9 字节开始；每条命令先检查最小字段长度。
+- 降噪模式按整段已知尾部匹配，例如 `0000010020` 表示抗风噪。末尾的 `20` 不当作通用校验字节。
+
+### 字段编码
+
+| 字段 | 编码 |
+| --- | --- |
+| 电量 | 第 11、12、15 字节分别为左耳、右耳、充电盒；第 13、14 字节为左右耳充电标志 |
+| 固件 | 第 9、10、11 字节各取低半字节，按十进制拼接。实测 `[1,2,5]` 显示为 `125` |
+| 游戏模式、触控开关、检测开关 | 低半字节 `0` 开，`1` 关 |
+| 音频 / 多点 | `0` = AAC/SBC 且多点开；`1` = LDAC 且多点关。i5 没有独立的 `0802` 多点查询 |
+| ANC 档位、通透档位 | 整字节 `0/1/2` 对应界面 `1/3/5` |
+| 提示音音量 | 低半字节 `0..4` 对应界面 `1..5` |
+| 降噪轮换 | 顺序为 标准 / 通透 / 抗风 / ANC |
+
+电量规则：
+
+- `FF` 记为 `NotProvided`，不显示为 0%。
+- 可显示的百分比为 1–100。原始值 0 记为 `Unknown`，与 `FF` 区分（这不代表硬件不可能是 0%）。
+- 充电盒电量只有在至少一只耳机正在充电时才视为当前值，否则记为 `Unknown`，不显示成刚读到的有效电量。
+
+实测样例：`09ff00000101011100000164620000ffe2` 表示左耳 100%、右耳 98%、均未充电、充电盒 `FF`。
+
+## i7：RS Common V2 协议
+
+### 发送帧
+
+```text
+FF [seq] [bodyLength] [body...] [sum8] AA
+```
+
+- `seq` 从 0 开始，到 255 后回绕。序号属于编解码器会话，初始化、设置和回读共用，断开后重置为 0。
+- `bodyLength` 只计 body。
+- `sum8` 为从 `FF` 到 body 末尾所有字节之和的低 8 位。
+
+### 初始化与 MTU
+
+官方初始化只发一条 `getInfo`，完整 35 字节：
+
+```text
+ff001efa010708090c0d0e122a2b2c2d2e2f313233363738393a3b3c3d3f454649e9aa
+```
+
+OpenRose 另外发一条 `FA 3E` 查询读取自定义 EQ 曲线，这是客户端自己的选择。
+
+默认 ATT MTU 为 23 时，每次写入只能放 20 字节，装不下 35 字节的 `getInfo`。这时 OpenRose 把查询拆成多条**各自完整**的 `FA` 查询，每条最多放 `容量 - 6` 个 ID，每条使用新序号并重新计算校验，而不是把一条帧切成几段写。容量为 20 时会产生三条信息查询加一条曲线查询，第三条只含共享 ID `49`（本型号没有对应字段）。
+
+这种拆分方式是根据官方 App 中已出现的多 ID / 单 ID 查询归纳出来的，设备是否接受还没有实测。
+
+### 接收帧
+
+```text
+DD [HH] [L T V...]... [CS] AA
+```
+
+- `HH` 视为不透明字节，不用于确认或序号关联。
+- `L = 1 + V 的长度`。
+- `CS` 接受两种算法：从 `DD` 到 CS 之前所有字节之和，或仅 LTV 部分之和，均取低 8 位。
+
+解析器的处理规则：
+
+- 通过 LTV 结构和 CS 校验来确认 `AA` 是否为帧尾，因此支持分包、合包，以及 V 中出现 `AA` / `DD` 的情况。
+- 接收缓冲区上限 8192 字节，超出清空；断开时也清空。
+- 协议没有总长度字段，所以不会在一条未完成的帧内部搜索新的 `DD` 来重新同步。V 中即使嵌着一段校验正确的帧，也当作普通数据。
+- 损坏的前缀和"还没收完"的帧无法区分，此时等待更多数据，直到读取超时、缓冲区满或会话重置。
+- `L = 00` 表示吸收剩余内容作为最后一个字段，但仍校验 CS（官方 App 在这种情况下走快速分支，不校验）。
+- LTV 结构不完整时整帧丢弃（官方 App 可能已经更新了前面的字段）。
+- `FE` 记录和未知记录保留原始数据并记录原因，不能用来建立协议就绪。
+
+### 字段编码
+
+| 字段 | 编码 |
+| --- | --- |
+| 电量 | 低 7 位为百分比，可显示范围 1–100；原始 0 记为 `Unknown`，与 `FF` 区分 |
+| 入盒标志 | 左右耳 bit7 为入盒标志；耳机值为 `FF` 时标志也记为未知。充电盒的 bit7 只保留原始值，不解释为充电 |
+| 固件 | 前三个字节各按无符号十进制转成文字后直接拼接（见[固件门槛](#固件门槛)） |
+| 游戏模式、多点 | `1` 开，`0` 关 |
+| 触控开关、检测开关 | `00` 开，`01` 关（与游戏模式相反） |
+| ANC 档位、通透档位 | 线上值直接为 `1/3/5` |
+| EQ 预设 | 单字节 `00/01` 为 HIFI / POP；双字节 `00/01` 为 POP / HIFI。保留原始格式 |
+| 自定义 EQ | 十个整数，范围 −6..6，符号位加绝对值编码 |
+| 触控绑定 | 八个必需的 `(slot, action)` 对，同一 slot 重复出现时以后者为准 |
+| 降噪轮换 | 顺序为 ANC / 抗风 / 标准 / 通透 |
+
+充电盒电量只有在值为 1–100、且至少一只在盒内的耳机原始值不是 `FF` 时才算当前值，否则记为 `Unknown`；只有 `FF` 记为 `NotProvided`。不会用历史缓存冒充当前读数。
+
+## 设置命令
+
+下表中 i5 列为 `group op` + payload，i7 列为 body。i7 的"补读"指 OpenRose 自己选择发送的单字段 `FA xx` 查询：它符合已观察到的 `FA ID` 查询规律，但不是官方 App 里对应的专用方法，设备是否接受待实测。
+
+### 降噪
+
+| 设置 | i5 | i7 | 回读 |
+| --- | --- | --- | --- |
+| 降噪模式 | `0682` + ANC `01000000`、标准 `00010000`、抗风 `00000100`、通透 `00000001` | `09` + ANC `01`、标准 `02`、通透 `03`、抗风 `04`、自动 `05`、动态 `07` | i5 `0602`；i7 `FA09` |
+| ANC 档位 | `0687` + `00/01/02`（界面 1/3/5） | `2C` + `01/03/05` | i5 `0607`；i7 `FA2C` |
+| 通透档位 | `0684` + `00/01/02`（界面 1/3/5） | `2D` + `01/03/05` | i5 `0604`；i7 `FA2D` |
+| 降噪轮换 | `0685` + 标准 / 通透 / 抗风 / ANC 四个 `00/01` | `36` + ANC / 抗风 / 标准 / 通透 四个 `00/01` | i5 `0605`；i7 `FA36` |
+
+说明：
+
+- i5 不开放共享发送器里的自动 ANC；i7 不开放共享的深度 ANC（`06`）。
+- i7 的自动、动态 ANC 作为普通模式选择。官方 App 的 i7 型号配置为这两项创建控件时没有固件门槛，所以 OpenRose 在固件未知时也不单独关闭它们，不借用 EAP（152）或增益（213）的门槛。
+- 离开自动模式时，OpenRose 明确发送用户选的目标模式，并以设备回读为准。官方 App 关闭自动模式时会发送抗风 `0904`，却立刻显示 ANC；OpenRose 不照搬这一行为。
+- i5 只把已知的读取命令当作状态来源。设置命令字（如 `0682`）去掉 `0x80` 位后看起来像读取命令，但不会被当作确认。
+- 降噪轮换必须明确给出四种常规模式各自的开关，不接受遗漏、多余或未知的值。官方 App 没有"至少选一项"的限制，所以 OpenRose 也不加（`minimumCycleSelections = 0`）。全部关闭时设备如何响应，待实测。
+
+### EQ 与游戏模式
+
+| 设置 | i5 | i7 | 回读 |
+| --- | --- | --- | --- |
+| EQ 预设 | `0281` + 预设值（见下表） | `2A` + 预设值（见下表） | i5 `0201`（`08ee00000002010a0003`）；i7 `FA2A`（seq 0 时为 `ff0002fa2a25aa`） |
+| 游戏模式 开 / 关 | `0683 00` / `01` | `0E 01` / `00` | i5 `0603`（`08ee00000006030a0009`）；i7 补读 `FA0E`（`ff0002fa0e09aa`） |
+
+| 预设 | i5 标签 / 值 | i7 标签 / 值 |
 | --- | --- | --- |
 | `pop` | 弱水经典 / `00` | 弱水经典 / `01` |
 | `hifi` | 日系柔情 / `01` | 原声再现 / `00` |
 | `rock` | 乐器大师 / `02` | 古典乐器 / `02` |
 | `light` | 清新空灵 / `03` | 日系甜美 / `03` |
-| `eap` | 不支持 | 欧美流行 / `06`，固件比较整数 ≥152 |
+| `eap` | 不支持 | 欧美流行 / `06`，需固件 ≥ 152 |
 
-标签是原 App 的型号配置与中文资源文案，不表示实测频响、声学效果或通用流派定义。i5 型号配置使用对象池 `pp.txt:8781` 的四项列表，具体中文标题位于 `objs.txt:1745..1766`；`device_eq_panel_item.dart:29..64` 在中文下优先使用这些自定义标题。i7 列表在 `pp.txt:8369`，中文资源位于 `localization/language/zh_cn.dart:2549..2625`。i7 的 POP/HIFI 界面序号与发送值相反，不能将界面位置当作线值。
+- 标签取自官方 App 的中文文案，不代表实测频响。
+- i7 的 POP / HIFI 在界面上的顺序与线上值相反，不能用界面位置当线上值。
+- 耳机主页按 POP、HIFI、ROCK、LIGHT、EAP 的顺序列出当前型号和固件可写的预设。i5 没有自定义 EQ；i7 的预设列表不包含 custom、custom slot 等非预设项。
 
-耳机主页直接提供预设选择，选项按 POP、HIFI、ROCK、LIGHT、EAP 排列；仅显示型号与固件支持的可写预设。界面显示设备确认的值，设置提交后等待设备回读；连接未就绪或设置进行中时不能修改。自定义 EQ 的组件与协议实现保留，但主页不提供自定义入口。
+### 自定义 EQ（仅 i7）
 
-| 功能 | i5 ZT | i7 RS V2 |
+- 频段标签为 20 / 100 / 300 / 500 / 1k / 2k / 3k / 5k / 8k / 15k Hz，每段为 −6..6 的整数。频率只是界面标签，不是实测的滤波器中心频率。
+- 曲线必须恰好十个整数，缺项、多项或越界都在构帧前拒绝。
+- 应用曲线时依次写入 `2A 04`（切到自定义）和 `3E` + 十个值。负数用最高位作符号位加绝对值，例如 −6 = `86`、−1 = `81`，不是补码。
+  - 例：曲线 `-6,-3,-1,0,1,2,3,4,5,6` → `ff00022a042faa`、`ff000b3e86838100010203040506e7aa`（seq 0）。运行时两条共用会话序号，各自重算校验。
+- 写入后分别用 `FA 2A` 回读 EQ 模式、`FA 3E` 回读曲线，两项都与请求一致才算确认。
+- 读取时，单字节 `2A 04` 表示 `custom`（索引 4 来自 i7 配置的 `getCustomIndex`）；双字节 `2A 05 [slot]` 表示 `custom_slot`，保留槽位和原始值，不当作曲线已应用。
+
+### 触控绑定
+
+两款耳机都有八个槽位：左右耳各有单击、双击、三击、长按。每个槽位可选该型号的全部动作。
+
+| 动作 | i5 值 | i7 值 |
 | --- | --- | --- |
-| EQ 确认查询 | `0201`，完整 TX `08ee00000002010a0003` | `FA2A`，seq00 完整 TX `ff0002fa2a25aa` |
-| 游戏开 / 关 | `0683 00 / 01` | `0E 01 / 00` |
-| 游戏确认查询 | `0603`，完整 TX `08ee00000006030a0009` | 客户端 `FA0E` 单字段查询，seq00 完整例 `ff0002fa0e09aa` |
+| `none` 无功能 | `06` | `00` |
+| `play_pause` 播放 / 暂停 | `05` | `01` |
+| `previous_track` 上一曲 | `02` | `02` |
+| `next_track` 下一曲 | `03` | `03` |
+| `volume_up` 音量加 | `00` | `04` |
+| `volume_down` 音量减 | `01` | `05` |
+| `voice_assistant` 语音助手 | `04` | `07` |
+| `noise_cycle` 降噪轮换 | `07` | `08` |
+| `game_mode` 游戏模式 | 不支持 | `06` |
 
-i5 EQ、游戏设置和查询的完整 TX 来自 `analysis/i5_fixed_sender_commands.json:155..225`，对应 `zt_sender.dart:2256..2731`。i7 五种预设、游戏开关及 `getEq` 来自 `analysis/i7_sender_commands.json:830..869`、`:1190..1309`，对应 `rs_common_v2_sender.dart:3213`、`:3252`、`:4312..4515`。这些是独立于 OpenRose 编码器的 APK 提取向量；实际队列使用当前会话序号并重算 i7 校验。i7 的 `FA0E` 是根据已观察的 `FA ID` 单字段查询与 `getInfo` 中的 `0E` 作出的客户端补读选择，不是独立恢复的专用 `getGameMode` 方法；设备接纳仍待实测（`i7_sender_commands.json:2157..2162`）。
+- i5 发送 `0481 [side] [gesture] [action]`：side `00` 左、`01` 右；gesture `00/01/02/03` 为单击 / 双击 / 三击 / 长按。回读 `0401`（`08ee00000004010a0005`）。
+  - 例：左耳双击设为播放 / 暂停 → `08ee00000004810d000001058e`
+- i7 发送 `01 [slot] [action]`：左耳 slot `01–04`，右耳 `11–14`。回读为补读 `FA01`。
+  - 例：右耳长按设为降噪轮换 → `ff00030114081faa`（seq 0）
+- 每次只写目标槽位，不重写其余七个，也不会触发所绑定的动作。
+- 请求值为 `FieldValue.TouchAssignment(side, gesture, action)`，不接受原始动作码；读取值是包含八个 `TouchBinding` 的 `FieldValue.TouchKeys`，保留原始码和未知动作。
+- 确认时只比较目标槽位，其他槽位是未知动作也不影响。但回读仍需完整结构：i5 八个槽位字节齐全，i7 八个 slot ID 齐全。
 
-### EAP 的固件比较域
+### 触控开关、检测开关、提示音
 
-EAP 是 EQ 选项，不是独立功能开关。`objs.txt:1707..1712` 的 EAP 对象包含 `EarVersionCheck`，Dart 标记整数 `0x130` 解码为 **152**。`device_eq_panel_item.dart:1418..1446` 按该检查筛选预设；`constant/ear_version_check.dart:41..66` 将设备固件文本按十进制整数解析，失败按 0，再执行 ≥152 比较。该数字不是 RoseLink 的版本号，也不是语义化版本比较。
-
-i7 RX `0D` 取前三个完整无符号字节，各自转为十进制文本并直接连接：`01 05 02` → `[1,5,2]` → `"152"` → 152。不是低半字节、字节拼成的大端整数或固定 `major*100+minor*10+patch`。例如 `[0,15,1]` → `"0151"` → 151，不开放；`[0,15,2]` → 152，开放；`[0,16,0]` → `"0160"` → 160，开放；`[1,4,255]` → 14255，亦满足该比较规则。这些用于核对原比较域，不代表这些固件实际存在或已验证。原始转换位于 `rs_common_v2_receiver.dart:17498..17616`，无分隔插值位于 `:17703..17719`，设备固件状态写入位于 `rs_common_v2_receive_handler.dart:5658..5665`。
-
-OpenRose 从有效的 `FieldValue.Firmware.parts` 重建该整数，要求恰好三个 `0..255` 值，不信任可单独传入的 `displayText`。未知或无效固件不开放 EAP；基础四项仍可用。固件门槛同时用于显示能力和协议准备，不能绕过界面直接发送不受支持的 EAP。已经读到的 EAP 状态仍按实际字段显示，不因固件未知伪造另一个预设。
-
-### EQ / 游戏验证证据
-
-`EqualizerProtocolTest` 以独立 TX 字面值覆盖全部可写预设、EAP 门槛、相反的游戏极性和确认查询；另覆盖非法类型、未知预设、自定义 / 槽位名称、被拒绝请求不消耗序号，以及 EQ / 游戏 / ANC / 初始化共用序号。
-
-合成 i5 RX 如 `000000000002010000a0`（POP）、`000000000006030000a0`（游戏开）只验证已恢复偏移与低半字节规则；不假定 RX 总帧校验。合成 i7 RX 如 `dd00022a0009aa`（单字节 HIFI）、`dd00032a00000aaa`（双字节 POP）、`dd00020e01eeaa`（游戏开）与 `dd00040d010502f6aa`（固件 152）按独立 LTV / 整帧前缀校验例构造，均不是抓包。i7 EQ 单字节 `00/01` 为 HIFI/POP，双字节 `00/01` 为 POP/HIFI，保留格式与原始值；不得按发送表统一覆盖（`analysis/i7_receiver_findings.md:80..89`）。
-
-另外保留实际 i5 初始化读取 `09ff00000102010b000118`（HIFI）与 `09ff00000106030b00011e`（游戏关），来源 `analysis/i5_live_read_2026-10-18.jsonl:8,10`，固件 125。这两条只支持读取解析；本次没有设备，未验收预设或游戏切换、设置后的回读、声学 / 延迟效果或持久化。i7 全部设置与 RX 仍为离线验证。
-
-## 触控、检测、i5 提示音与音频 / 多点（#9～#12）
-
-### 单槽触控绑定
-
-两型号当前配置均提供左右耳各单击、双击、三击和长按共八个槽位，每个槽位可选择该型号完整动作表。`TouchControlCapabilities` 提供槽位集合和动作集合；没有把其他型号的额外动作或推测的固件门槛加入此配置。i5 使用 `earfreeI5TouchList` 与 `typeFull`（`earfree_i5_device_config.dart:672..702`、`device_type_config/touch_info.dart:60..64`）；i7 使用 `rsCommonV2TouchList` 与 `typeFull`（`earfeel_i7_device_config.dart:951..985`、`touch_info.dart:36..40`）。实际动作对象分别为 `pp.txt:8785`、`:8377` 指向的 `objs.txt:999..1122`。
-
-| 归一化动作 | i5 线值 | i7 线值 |
-| --- | --- | --- |
-| `none`（无功能） | `06` | `00` |
-| `play_pause`（播放 / 暂停） | `05` | `01` |
-| `previous_track`（上一曲） | `02` | `02` |
-| `next_track`（下一曲） | `03` | `03` |
-| `volume_up`（音量增加） | `00` | `04` |
-| `volume_down`（音量降低） | `01` | `05` |
-| `voice_assistant`（语音助手） | `04` | `07` |
-| `noise_cycle`（降噪轮换） | `07` | `08` |
-| `game_mode`（游戏模式） | 不支持 | `06` |
-
-i5 发送 `0481 [side][gesture][action]`，`side=00/01` 分别为左 / 右，`gesture=00/01/02/03` 分别为单 / 双 / 三 / 长。i7 发送 `01 [slot][action]`，左侧四个 slot 为 `01/02/03/04`，右侧为 `11/12/13/14`。每次只发送目标槽位配置，不重写其他七槽，也不执行所绑定的播放、音量或降噪动作。发送证据为 `zt_sender.dart:1472..1935`、`rs_common_v2_sender.dart:2459..2698`；独立动态例包括 i5 左双击播放暂停 `08ee00000004810d000001058e` 和 i7 右长按降噪轮换 `ff00030114081faa`（seq00），见独立参考 `tests/test_i5_protocol.py`、`tests/test_i7_protocol.py`。
-
-请求值 `FieldValue.TouchAssignment(side, gesture, action)` 不接受原始动作码；读取值仍是包含八个 `TouchBinding` 的 `FieldValue.TouchKeys`，原始动作码与未知动作均保留。设置后的 i5 查询为 `0401`（完整 TX `08ee00000004010a0005`）；i7 为客户端 `FA01` 补读。`expectedValues[TOUCH_KEYS]` 保存单槽请求投影，会话只比较该槽：目标动作未知时继续等有效回读，目标已知且不同为未应用，目标相同为已确认。其他槽的未知动作不阻碍目标确认。仍要求已恢复的完整 RX 结构：i5 八个槽位字节齐全，i7 八个 slot ID 齐全；没有据此放宽为接收只含目标槽的短包。槽位、动作与类型检查都在构帧和消耗序号前完成。
-
-### 触控与检测功能开关、i5 提示音
-
-| 设置 | i5 ZT | i7 RS V2 | 归一化参数 |
+| 设置 | i5 | i7 | 参数 |
 | --- | --- | --- | --- |
-| 触控总开关 | `0A81 00/01` 开 / 关，读取 `0A01` | `07 00/01` 开 / 关，补读 `FA07` | `FieldValue.Toggle` |
-| 检测功能开关 | `0C81 00/01` 开 / 关，读取 `0C01` | `08 00/01` 开 / 关，补读 `FA08` | `FieldValue.Toggle` |
-| 提示音音量 | `0E83 00..04`，读取 `0E03` | 见下文 #13～#14：`2E 01..05`，`00` 受固件门槛限制 | `FieldValue.Number(1..5)`（i7 另含符合条件时的 0） |
+| 触控总开关 | `0A81 00/01`（开 / 关），回读 `0A01` | `07 00/01`（开 / 关），补读 `FA07` | `Toggle` |
+| 检测功能开关 | `0C81 00/01`（开 / 关），回读 `0C01` | `08 00/01`（开 / 关），补读 `FA08` | `Toggle` |
+| 提示音音量 | `0E83 00..04`，回读 `0E03` | `2E 01..05`；静音 `2E 00` 需固件 ≥ 304 | `Number(1..5)`，i7 符合条件时可为 0 |
 
-触控与检测开关均为 `00` 开、`01` 关，不能复用 i7 游戏 / 多点的相反极性。检测功能开关不产生佩戴、摘下或入盒事件。固定 TX 常量来源为 `analysis/i5_fixed_sender_commands.json` 中 `setEarDetection*`、`setTouch*` 及读取方法，i7 对应 `analysis/i7_sender_commands.json` 的同名方法；原始发送函数在 `zt_sender.dart:1070..1407` 与 `rs_common_v2_sender.dart:2073..2114`、`:2379..2420`。
-
-i5 提示音仅接受界面 1～5 档，减一后为 `00..04`，不提供静音 0。`zt_sender.dart:4663..4718` 明确校验 1..5 并执行减一；应使用本型号 `Zt229Sender.getDingLevel` 的 `0E03`（完整 TX `08ee0000000e030a0011`，`:4736`），不能套用共享父类 `0E06`。独立第 5 档例为 `08ee0000000e830b000496`。i7 的档位直接编码为 `2E 01..05`；仅静音 `2E 00` 需要固件比较整数 ≥304，不能把 304 当作整个音量功能的门槛（`device_ding_level_panel_item.dart:900..994`、`earfeel_i7_device_config.dart:809..840`）。完整门槛、回读和证据见下文 #13～#14。
+- 两款耳机的触控和检测开关都是 `00` 开、`01` 关，与 i7 游戏模式 / 多点的极性相反。
+- 检测功能开关只是开关，不会产生佩戴、摘下或入盒事件。
+- i5 提示音只有 1–5 档，发送时减 1，没有静音。必须用 i5 自己的 `0E03` 查询（`08ee0000000e030a0011`），不能用共享父类的 `0E06`。第 5 档的完整帧为 `08ee0000000e830b000496`。
+- i7 的 304 门槛只限制静音这一档，不限制整个音量功能。
 
 ### 音频与多点
 
-`AudioControlCapabilities` 将可选配置与联动规则分别表达。i5 只有 `aac_sbc`、`ldac`，`multipointCoupled=true`；i7 只有 `aac_sbc`、`ldac`、`lhdc`、`lc3`，`multipointCoupled=false`。当前恢复的这些基础型号配置未发现独立固件门槛，不借用 EQ、增益或提示音静音门槛。实际系统是否协商到某种 codec、所有固件 / 平台组合是否接纳配置，仍需链路与硬件证据。
+**i5**：音频和多点共用 `0881`，两者联动。
 
-i5 音频与多点共用 `0881`：`00` 同时表示 AAC/SBC 配置与多点开，完整 TX `08ee00000008810b00008a`；`01` 同时表示 LDAC 配置与多点关，完整 TX `08ee00000008810b00018b`。两类公开操作都补读 `0801`（完整 TX `08ee00000008010a0009`），`expectedValues` 同时包含 `AUDIO_MODE` 和 `MULTIPOINT`，只有两字段都取得一致新回读才确认，不能制造 LDAC 与多点同时开启的已确认状态。
+| 值 | 含义 | 完整帧 |
+| --- | --- | --- |
+| `00` | AAC/SBC，多点开 | `08ee00000008810b00008a` |
+| `01` | LDAC，多点关 | `08ee00000008810b00018b` |
 
-耦合证据在 i5 配置 `earfree_i5_device_config.dart:221..242`：`useAudioModeNotMulDeviceMode=true`，多点对应音频值 0，非多点对应 1。`ZtSender.setAudioAacSbc`（`:2131..2144`）调用父类 `setConnectMulOn`（`:2932`）生成 `0881 00`；父类 `setConnectMulOff`（`:2216..2228`）调用去重标签为 `Zt231Sender.setAudioLdac`（`:3749`）的共享函数生成 `0881 01`。独立固定提取中也存在 `0882` 的共享变体，不能据此替换 i5 的 `0881` 或开放 i5 的 LHDC / LC3。
+两类操作都回读 `0801`（`08ee00000008010a0009`），`expectedValues` 同时包含音频模式和多点，两者都对上才算确认。不存在"LDAC + 多点开"的组合。官方发送器里还有一个 `0882` 共享变体，不能用它替换 i5 的 `0881`，也不能据此给 i5 开放 LHDC / LC3。
 
-i7 分别发送 `2B 00/01/02/03` 对应 AAC/SBC、LDAC、LHDC、LC3；多点为 `32 01/00` 开 / 关，固定向量见 `rs_common_v2_sender.dart:2840..3002`、`:5009` 与 `analysis/i7_sender_commands.json`。分别补读 `FA2B`、`FA32`，只要求各自目标字段的新回读，不把 i5 联动或互斥规则套入 i7，也不让另一未返回字段阻碍目标确认。其他字段只按真实收到的数据更新。客户端单字段补读规则同前，独立参考 `examples/i7_ble_client.py:16..21` 也分别查询这两个字段；这不证明实际所有音频 / 多点组合均能工作。
+**i7**：音频和多点相互独立。
 
-### 本阶段验证范围
+| 设置 | body | 回读 |
+| --- | --- | --- |
+| 音频 | `2B 00/01/02/03` = AAC/SBC、LDAC、LHDC、LC3 | `FA2B` |
+| 多点 | `32 01/00` = 开 / 关 | `FA32` |
 
-`DeviceControlProtocolTest` 将独立 APK 固定 TX、从独立发送参数推导的完整动态例、实际读取样本和合成 RX 明确区分。覆盖八槽地址、两型号全部动作码及全部允许槽位 / 动作组合、单槽期望投影、全部音频选项、i5 双字段联动、开关极性、两型号的提示音档位、非法参数与不支持选项，以及初始化 / 触控 / 检测 / 音频共享 i7 序号。没有在测试中调用本客户端构造器生成预期字节。
+各自只等待目标字段的回读，不套用 i5 的联动规则。
 
-合成 RX 例 `0000000000040100000f050f0f0f0f0f0f` 仅左双击动作已知，其余为未知；`dd00110101ff02ff03ff04ff11ff12ff13ff140844aa` 仅右长按已知，八个 i7 slot ID 均存在。它们只验证结构与字段语义，不是抓包。另保留固件 125 的实际 i5 初始化读取：触控绑定、触控开、检测关、提示音 2 档、LDAC 配置，来源 `analysis/i5_live_read_2026-10-18.jsonl:12,17,19,23,29`；这不能扩大为设置、触控实际触发范围、提示音响度、系统 codec 协商或持久化已验收。本次硬件仍不可用，i7 无实测。寻机、语言设置和 OTA 没有新增可执行入口。
+这里的"音频模式"是耳机端的配置项，系统最终协商到哪种编码还取决于手机。
 
-## i7 自定义 EQ 与音频设置（#13～#14）
+### 增益与听力保护（仅 i7）
 
-### 自定义十段 EQ
+| 设置 | body | 范围 | 门槛 |
+| --- | --- | --- | --- |
+| 增益 | `45 00..02` | 低 / 中 / 高 | 固件 ≥ 213 |
+| 听力保护 | `46 00..06` | 0 关闭；1–6 对应界面标签 75 / 80 / 85 / 90 / 95 / 100 dB | 固件 ≥ 213 |
 
-i7 的 `EqualizerCapabilities.custom` 提供界面所列频段 `20/100/300/500/1000/2000/3000/5000/8000/15000 Hz` 和整数范围 `-6..6`。频率是应用界面标签，不代表已测得的滤波器中心频率。曲线必须恰好包含十个整数；缺项、增项和越界值在构帧及序号分配前拒绝。
+增益没有可靠的 dB 对应关系；听力保护的 dB 数值只是界面标签，没有验证实际声压。`FA45` 回读在官方发送器里有对应方法；`FA46`、`FA2E` 是补读。
 
-应用曲线按同一会话序号依次写入 `2A 04`（进入 custom）和 `3E` 加十个值。负值使用最高位符号标志加绝对值，例如 `-6=86`、`-1=81`，不是补码；正值原样写入。独立例 `-6,-3,-1,0,1,2,3,4,5,6` 的固定 `2A 04` 向量为 `ff00022a042faa`，独立 `3E` 动态向量为 `ff000b3e86838100010203040506e7aa`；运行时两次写入共用会话序号并各自重算校验。之后分别使用 `FA 2A` 回读 EQ 模式和 `FA 3E` 回读曲线；客户端将第二条查询保留为额外回读，只有两项都得到与请求一致的新值才确认整条曲线。
+## 型号能力与固件门槛
 
-读取时，单字节 `2A 04` 表示 `custom`。这个自定义索引 4 来自 i7 配置的 `getCustomIndex`，不是把自定义预设与槽位值假定成同一语义。双字节 `2A 05 [slot]` 表示 `custom_slot` 并保留槽位及原始值，不能当作 custom 曲线已成功应用。查询 `FA2A`、`FA3E` 和设置 `2A04` 是 RoseLink Sender 的独立方法 / 向量；RX 测试使用合成 LTV 缓冲区，不是设备抓包。来源为 `analysis/i7_sender_commands.json`、`docs/earfeel-i7-protocol.md` 第 4.4～4.5 节及 `analysis/i7_eq_findings.md`。
+### 能力模型
 
-### 增益、听力保护和提示音
+界面只显示当前型号和固件实际可写的设置，由以下能力对象决定：
 
-增益 `45 00..02` 对应低 / 中 / 高三个界面档位；没有可依据的 dB 增益映射。听力保护 `46 00..06` 中 0 表示关闭，1～6 对应界面标记 75/80/85/90/95/100 dB；这些是标签，未证明实际声压、暴露剂量或医学效果。两项只有固件比较整数 ≥213 时开放。提示音 `2E 01..05` 直接对应 1～5 档，不依赖 304；`2E 00` 静音入口仅在固件比较整数 ≥304 时开放。i5 仍只支持提示音 1～5 档并将其映射至 `0E83 00..04`。
+| 能力 | 内容 |
+| --- | --- |
+| `NoiseControlCapabilities` | 可选降噪模式；ANC / 通透档位各自的 `levels` 与 `visibleModes`；轮换最少选择数 |
+| `EqualizerCapabilities` | 可写预设（`presets`）；自定义 EQ 频段与范围（`custom`，仅 i7） |
+| `TouchControlCapabilities` | 槽位集合与动作集合 |
+| `AudioControlCapabilities` | 音频选项；`multipointCoupled`（i5 为 true，i7 为 false） |
 
-固件门槛从恰好三个 `0..255` 的完整固件字节分别转成十进制文本并无分隔拼接，再转成整数比较；例如 `[2,1,3] → 213`。无效或未知固件不开放增益 / 听力保护及静音 0，提示音基础 1～5 档仍可用。不信任单独提供的固件展示文字。协议写入分别使用 `45`、`46`、`2E`，并按字段单独回读；`FA45` 有独立 Sender 查询证据，`FA46`、`FA2E` 单 ID 查询是基于 `FA ID` 规律采用的客户端补读，仍需实机确认设备是否接纳。
+`ModelProfile.supportedFields` 只表示解析器认识哪些字段，**不能**用来判断能否写入。初始化查询里包含某个共享 ID，也不说明该型号支持对应功能。
 
-TX 字面值取自独立静态提取 `analysis/i7_sender_commands.json` 和其对应汇编 Sender；当前不具备 i7 实机，不能称设置写入或回读已通过硬件验收。实现不增加提示音语言切换或 OTA 入口。
+### 档位的显示条件
 
-`AdvancedAudioProtocolTest` 用独立 TX 字面值检查两条 EQ 写入、`FA2A` / `FA3E` 和 45/46/2E 各值；另验证整条计划无效时不分配序号、固件门槛和 raw-preserving RX。custom、custom_slot 与曲线接收例均为合成缓冲区，不是实机抓包。
+官方 App 只在当前模式为 ANC 时显示 ANC 档位，为通透时显示通透档位；抗风噪、标准、i7 的自动和动态模式下两组都不显示。OpenRose 采用同样的规则：
 
-## i7 控制传输选择（#15）
+- 模式还没读到、未知或未提供时，两组档位都隐藏。
+- 用户点了切换但设备还没确认时，档位区域不提前变化。
+- 这只是显示条件。两组档位的读数一直保留，写入时也不检查当前模式。
 
-广播规范化沿用排序后先拼所有 company ID（LE16）、再拼所有 payload 的规则。只有已识别的 i7、规范化十六进制串长度至少 34，且 `H[14:16] == "01"`，才使用 `H[22:34]` 作为 BR 地址；六个字节按原顺序转为大写冒号格式，不倒序。全零、全 FF 不提供地址。扫描 `DeviceId` 保持原身份，BLE 使用扫描标识，SPP 使用单独的 BR 地址，不把任意发现 ID 当作蓝牙 MAC。该广播尚未经过实机确认，也没有已知校验和或认证机制。
+真机记录显示，i5 在抗风噪模式下仍能读到 ANC 档位 5 和通透档位 1，说明档位读数与当前模式相互独立。但这不能说明这两组参数在该模式下是否影响声音。
 
-来源为 `/home/dohex/Projects/rose_reverse/docs/earfeel-i7-protocol.md` 第 2 节，及其中记录的 `base_device_config.dart:451..685`、`r_ble_scanner.dart:3737`。`ConnectManager._shouldUseSppControl`（`connect_manager.dart:4614`）要求平台 SPP 可用、型号支持、未强制 BLE、音频 profile 非 LE Audio。`A2dpManager.prefersBleControl` 使用每设备已连接的音频 profile；同一设备出现 LE Audio 时优先该类型，不查询当前 codec 或是否正在播放。因此配置值 LC3、设备名称、设备 type 和 A2DP 是否播放均不能替代音频链路证据。
+官方 App 的指令层同样不绑定模式：i5 的 `setAncLevel`（`0687`）和 `setTransLevel`（`0684`）都不带模式参数，也不检查当前模式。固件在其他模式下是否接受档位写入，尚无证据。
 
-OpenRose 保留 `UNKNOWN / CLASSIC / LE_AUDIO` 三种平台事实。仅 i7、有可用 BR 地址、SPP 可用、未强制 BLE，且有肯定的传统音频连接证据时选 SPP；其它条件均使用 BLE。Android 查询 A2DP、HEADSET 和 API 33+ 的公开 LE Audio profile；Android 12 / 12L（API 31–32）缺少同一公开 [LE_AUDIO 常量](https://developer.android.com/reference/android/bluetooth/BluetoothProfile#LE_AUDIO)，保守返回未知并使用 BLE，不填入隐藏 profile ID。所需代理未就绪、查询失败、没有目标音频连接或无法按地址关联时保守使用未知。查询结果只用于一次连接的选择；界面设置变化不重新选择当前连接。选择结果及原因公开给状态消费者。
+### 固件门槛
 
-普通控制 UUID 为 **`0cf12d31-fac3-4553-bd80-d6832e7b3931`**，不是标准串口 `1101`，也不是 OTA 的 `66666666-6666-6666-6666-666666666666`。SPP 在同一 socket 读写相同 RS Common V2 控制帧，接收仍按协议流处理分段 / 合并，发送仍由共享队列在本地写完成后间隔 100ms 并等待设备回读。流传输可容纳 35 字节初始化完整帧；BLE 容量不足时继续采用已有完整 FA 查询降级，不随意拆 TX。一次会话只创建一种控制连接；SPP 失败不会在后台自动另开 BLE、重放设置或并发抢占。
+i7 的固件门槛不是语义化版本比较。官方 App 的算法是：
 
-Android 使用公开 RFCOMM 接口，连接前取消 discovery，后台执行阻塞连接 / 流读写；取消时关闭 socket，解除阻塞。公开接口依据：[音频 profile 代理](https://developer.android.com/reference/android/bluetooth/BluetoothAdapter#getProfileProxy(android.content.Context,%20android.bluetooth.BluetoothProfile.ServiceListener,%20int))、[LE Audio 已连接设备](https://developer.android.com/reference/android/bluetooth/BluetoothLeAudio#getConnectedDevices())、[BluetoothSocket 的连接与关闭](https://developer.android.com/reference/android/bluetooth/BluetoothSocket)。这些文档支持平台资源处理方式，不构成 i7 实测证据。双传输的离线行为及真实链路边界另见验证记录。
+1. 取 `0D` 字段的前三个字节；
+2. 每个字节按无符号十进制转成文字，**不加分隔符**直接拼接；
+3. 把拼接结果当十进制整数，与门槛比较。解析失败按 0 处理。
+
+| 字节 | 拼接 | 整数 | ≥ 152？ |
+| --- | --- | --- | --- |
+| `01 05 02` | `"152"` | 152 | 是 |
+| `00 0F 01` | `"0151"` | 151 | 否 |
+| `00 0F 02` | `"0152"` | 152 | 是 |
+| `00 10 00` | `"0160"` | 160 | 是 |
+| `01 04 FF` | `"14255"` | 14255 | 是 |
+
+（以上用于说明比较规则，不代表这些固件真实存在。）
+
+| 功能 | 门槛 |
+| --- | --- |
+| EQ 预设 EAP | ≥ 152 |
+| 增益、听力保护 | ≥ 213 |
+| 提示音静音 | ≥ 304 |
+
+OpenRose 从 `FieldValue.Firmware.parts` 重新计算这个整数，要求恰好三个 0–255 的值，不信任单独传入的显示文字。固件未知或无效时，所有受门槛限制的选项都不开放，基础功能照常可用。门槛同时作用于界面和 `prepareSetting`，绕过界面也发不出不支持的命令。已经读到的 EAP 状态照常显示。
+
+i5 的固件显示用低半字节拼接（见上文），目前没有 i5 功能依赖固件门槛。
+
+## i7 控制通道选择（BLE / SPP）
+
+i7 支持 BLE 和传统蓝牙 SPP 两种控制通道。每次连接前选一次，之后不变。
+
+### 从广播取传统蓝牙地址
+
+用前文的规则规范化 manufacturer data 得到十六进制串 `H`。只有满足以下条件才提取地址：
+
+- 已识别为 i7；
+- `H` 长度至少 34；
+- `H[14:16] == "01"`。
+
+地址取 `H[22:34]`，六个字节按原顺序转成大写冒号格式（不倒序）。全 `00` 或全 `FF` 视为没有地址。
+
+扫描得到的设备 ID 保持不变：BLE 用扫描 ID，SPP 用单独提取的 BR 地址。这条广播规则还没有在真机上确认，广播本身也没有校验或认证。
+
+### 选择规则
+
+官方 App 的规则（`ConnectManager._shouldUseSppControl`）：平台支持 SPP、型号支持、没有强制 BLE、音频 profile 不是 LE Audio，就用 SPP。它看的是每台设备已连接的音频 profile，不看当前编码或是否在播放。所以设置里选了 LC3、设备名、设备类型、A2DP 是否在播放，都不能替代实际的音频连接证据。
+
+OpenRose 把音频连接事实分为 `UNKNOWN` / `CLASSIC` / `LE_AUDIO` 三种，只有同时满足以下条件才用 SPP，否则一律用 BLE：
+
+- 型号为 i7，且有可用的 BR 地址；
+- 平台 SPP 可用；
+- 用户没有打开"强制使用 BLE"；
+- 有明确证据表明耳机通过传统蓝牙连接了音频（`CLASSIC`）。
+
+Android 上通过公开 API 查询 A2DP、HEADSET，以及 API 33+ 的 LE Audio profile。Android 12 / 12L（API 31–32）没有公开的 [`LE_AUDIO`](https://developer.android.com/reference/android/bluetooth/BluetoothProfile#LE_AUDIO) 常量，无法排除 LE Audio，所以返回 `UNKNOWN` 并使用 BLE，不使用隐藏的 profile ID。profile 代理未就绪、查询失败、没有目标音频连接或无法按地址关联时，同样返回 `UNKNOWN`。
+
+选择结果和原因会暴露给状态消费者。修改"强制使用 BLE"只影响下一次连接。
+
+### SPP 连接
+
+- 控制 UUID 为 `0cf12d31-fac3-4553-bd80-d6832e7b3931`。不是标准串口 `1101`，也不是 OTA 用的 `66666666-6666-6666-6666-666666666666`。
+- SPP 上收发与 BLE 相同的 RS Common V2 帧。接收端按字节流处理分包、合包；发送端同样走共享队列，每次写完间隔 100 ms 并等待回读。
+- SPP 可以一次写完 35 字节的初始化帧；BLE 容量不足时按前文方式拆分查询。
+- 一次会话只建立一种控制连接。SPP 失败后不会在后台自动改用 BLE、重放设置或同时尝试两种连接。
+- Android 使用公开的 RFCOMM 接口：连接前取消设备发现，在后台线程执行阻塞的连接和读写，取消时关闭 socket 以解除阻塞。参考：[`getProfileProxy`](https://developer.android.com/reference/android/bluetooth/BluetoothAdapter#getProfileProxy(android.content.Context,%20android.bluetooth.BluetoothProfile.ServiceListener,%20int))、[`BluetoothLeAudio.getConnectedDevices`](https://developer.android.com/reference/android/bluetooth/BluetoothLeAudio#getConnectedDevices())、[`BluetoothSocket`](https://developer.android.com/reference/android/bluetooth/BluetoothSocket)。
+
+## 测试覆盖
+
+测试位于 `core/src/commonTest/kotlin/io/github/dohex/openrose/core/protocol/`。预期发送报文都取自独立提取的数据，测试不调用 OpenRose 自己的构帧代码来生成预期值。
+
+| 测试 | 覆盖内容 |
+| --- | --- |
+| `ProtocolCodecTest` | 广播识别；两型号的初始化查询（含 i7 小 MTU 拆分）；i5 实机读取样本；i7 分包、校验算法和字段极性；未知 / 截断报文不能建立就绪；电量 `0` 与 `FF` 的区分；i7 序号回绕 |
+| `NoiseProtocolTest` | i5 四种、i7 六种降噪模式；各档位；两型号的轮换顺序；回读查询；非法参数、未知轮换值、不支持的选项；序号连续、回绕和重置 |
+| `EqualizerProtocolTest` | 全部可写预设；EAP 门槛；两型号相反的游戏模式极性；回读查询；未知预设、自定义 / 槽位名称；被拒请求不消耗序号；EQ、游戏、ANC、初始化共用序号 |
+| `DeviceControlProtocolTest` | 八个触控槽位地址、两型号全部动作码和所有槽位 / 动作组合；单槽期望值；全部音频选项；i5 音频 / 多点联动；开关极性；提示音档位；初始化、触控、检测、音频共用 i7 序号 |
+| `AdvancedAudioProtocolTest` | i7 自定义 EQ 的两条写入与 `FA2A` / `FA3E` 回读；`45` / `46` / `2E` 各值；整条计划无效时不分配序号；固件门槛；接收时保留原始数据 |
+
+会话层的行为（设置确认、断开清理、通道选择等）在 `core/src/commonTest/.../core/ControlSession*Test.kt` 中测试。
+
+### 测试数据的来源
+
+| 类型 | 说明 | 例子 |
+| --- | --- | --- |
+| 固定发送报文 | 从 APK 独立提取 | `08ee00000002010a0003`（i5 EQ 查询） |
+| 动态发送报文 | 用独立提取的参数推导 | `ff00030114081faa`（i7 右耳长按设为降噪轮换） |
+| i5 实机接收 | 来自 `i5_live_read_2026-10-18.jsonl`，固件 125 | `09ff00000102010b000118`（EQ = HIFI）、`09ff00000106030b00011e`（游戏模式关） |
+| 合成接收 | 按协议规则构造，**不是抓包** | i5 `000000000002010000a0`（POP）；i7 `dd00022a0009aa`（单字节 HIFI）、`dd00040d010502f6aa`（固件 152） |
+
+i5 实机记录还覆盖了：触控绑定、触控开、检测关、提示音 2 档、LDAC 配置，以及抗风噪模式下的 ANC / 通透档位读数。这些只能证明读取解析正确。
+
+## 待真机验证
+
+以下行为目前只有静态分析或离线测试支持：
+
+**i5**
+
+- 所有设置命令的写入、回读时序和断电后是否保留
+- Android（小米 14 / HyperOS 4）上的控制连接
+- 降噪轮换全部关闭时设备的反应
+- 非当前模式下写入档位是否生效
+- 触控绑定的实际触发、提示音实际响度、系统编码协商结果
+
+**i7**
+
+- 所有接收解析（目前没有任何真实报文）
+- MTU 不足时拆分的 `FA` 查询，以及 `FA0E`、`FA01`、`FA07`、`FA08`、`FA46`、`FA2E` 等补读查询是否被设备接受
+- 广播中 BR 地址的提取规则
+- SPP 控制通道
+- 自动 / 动态 ANC 的实际表现
+- 各固件版本与功能门槛的对应关系
+
+OpenRose 没有实现寻机、提示音语言切换和 OTA。
+
+## 附录：Issue 对照与证据索引
+
+### Issue 对照
+
+| 功能 | Issue |
+| --- | --- |
+| 初始化读取 | [#3](https://github.com/DOHEX/OpenRose/issues/3)、[#4](https://github.com/DOHEX/OpenRose/issues/4) |
+| 降噪模式、档位、轮换 | [#5](https://github.com/DOHEX/OpenRose/issues/5)、[#6](https://github.com/DOHEX/OpenRose/issues/6) |
+| EQ 预设、游戏模式 | [#7](https://github.com/DOHEX/OpenRose/issues/7)、[#8](https://github.com/DOHEX/OpenRose/issues/8) |
+| 触控绑定、触控 / 检测开关、提示音、音频 / 多点 | [#9](https://github.com/DOHEX/OpenRose/issues/9)–[#12](https://github.com/DOHEX/OpenRose/issues/12) |
+| i7 自定义 EQ、增益、听力保护、提示音静音 | [#13](https://github.com/DOHEX/OpenRose/issues/13)、[#14](https://github.com/DOHEX/OpenRose/issues/14) |
+| i7 BLE / SPP 通道选择 | [#15](https://github.com/DOHEX/OpenRose/issues/15) |
+
+### 证据索引
+
+以下路径均位于 `rose_reverse/`。反汇编文件在 `analysis/blutter/asm/` 下，下表省略这一前缀；`roselink/` 与 `roselink_bluetooth/` 是官方 App 的两个 Dart 包。
+
+**协议研究文档**
+
+- `docs/earfeel-i5-protocol.md`、`docs/earfeel-i7-protocol.md`（本仓库中的副本见 [docs/protocols/models/](protocols/models/)）
+- `analysis/i5_hardware_validation.md`：i5 实机验证记录
+- `analysis/i7_receiver_findings.md`：i7 接收处理分析
+- `analysis/i7_eq_findings.md`：i7 EQ 分析
+
+**型号配置**
+
+| 内容 | 位置 |
+| --- | --- |
+| i5 型号配置（ANC / 通透档位能力、音频与多点联动 `useAudioModeNotMulDeviceMode`） | `roselink/rose_bluetooth/config/zt/earfree_i5_device_config.dart:130`（`0x68da48..0x68da6c`）、`:221..242` |
+| i7 型号配置（自动 / 动态 ANC 控件 `0x681fd4..0x682010`、提示音） | `roselink/rose_bluetooth/config/rs_common_v2/earfeel_i7_device_config.dart`、`:809..840` |
+| 触控槽位与动作表 | i5 `earfree_i5_device_config.dart:672..702`；i7 `earfeel_i7_device_config.dart:951..985`；`device_type_config/touch_info.dart:36..40`、`:60..64`；动作对象 `objs.txt:999..1122`（`pp.txt:8785`、`:8377`） |
+| EQ 预设列表与中文标签 | i5 `pp.txt:8781`、`objs.txt:1745..1766`；i7 `pp.txt:8369`、`localization/language/zh_cn.dart:2549..2625`；`device_eq_panel_item.dart:29..64` |
+| `NoiseType` 枚举（`normal=0, trans=1, wind=2, anc=3`，App 内部索引，不是线上值） | `analysis/blutter/objs.txt:40317` |
+
+**界面逻辑**
+
+| 内容 | 位置 |
+| --- | --- |
+| 档位显示条件（`_RAncModeCtlLevelBarState::build`，`0xb3746c` 判断 ANC、`0xb379d8` 判断通透） | `roselink/widgets/device_widgets/device_anc.dart:112`、`:610`、`:1947` |
+| 降噪轮换无最少选择数（`0xb8c758..0xb8ca0c`） | `roselink/modules/device_control/widget/device_anc_line_panel_item.dart` |
+| EAP 门槛（`EarVersionCheck`，Dart 标记整数 `0x130` = 152） | `objs.txt:1707..1712`；`device_eq_panel_item.dart:1418..1446`；`constant/ear_version_check.dart:41..66` |
+| 提示音静音门槛 | `device_ding_level_panel_item.dart:900..994` |
+
+**发送与接收**
+
+| 内容 | 位置 |
+| --- | --- |
+| i5 发送器（EQ / 游戏 `:2256..2731`；触控绑定 `:1472..1935`；触控 / 检测 `:1070..1407`；音频 / 多点 `:2131..2144`、`:2216..2228`、`:2932`、`:3749`；档位 `:4383`、`:4523`；提示音 `:4663..4718`、`:4736`） | `roselink_bluetooth/commander/sender/zt_sender.dart` |
+| i7 发送器（触控绑定 `:2459..2698`；触控 / 检测 `:2073..2114`、`:2379..2420`；音频 / 多点 `:2840..3002`、`:5009`；EQ / 游戏 `:3213`、`:3252`、`:4312..4515`） | `roselink_bluetooth/commander/sender/rs_common_v2_sender.dart` |
+| 档位命令入口 | `roselink_bluetooth/commander/r_commander.dart:1781` |
+| i7 固件字段转换（`:17498..17616`，无分隔拼接 `:17703..17719`） | `rs_common_v2_receiver.dart` |
+| i7 固件状态写入 | `rs_common_v2_receive_handler.dart:5658..5665` |
+| 广播规范化 | `roselink_bluetooth/scanner/r_ble_scanner.dart:3737` |
+| BR 地址提取 | `base_device_config.dart:451..685` |
+| SPP 选择 | `connect_manager.dart:4614`（`_shouldUseSppControl`） |
+| 提取的发送常量 | i5 `analysis/i5_fixed_sender_commands.json:155..225`；i7 `analysis/i7_sender_commands.json:830..869`、`:1190..1309`、`:2157..2162` |
+| 参考客户端 | `examples/i7_ble_client.py:16..21` |
+| i5 实机记录行号 | 抗风模式 `:6`、ANC 档位 `:25`、通透档位 `:27`、EQ `:8`、游戏 `:10`、触控等 `:12,17,19,23,29` |

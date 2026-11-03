@@ -10,10 +10,10 @@
 
 | 型号 | 固件版本 | 请求语言 | 资源大小（字节） | 下载 | 原始响应 |
 |---|---|---|---:|---|---|
-| i5 | 125 | `zh` | 1,120,750 | [官方更新包](https://gd2-cdn.rosetechnic.com/data/2024-12-08/125.bin.txt-8faff4e5-8e81-4b8f-83d1-f341b769318b..webp?e=1792049966&token=xW4-x9hAIcl3ByVaqk_SB-aMIgvJL9jgmFeB11tI:XJ_wAmf8nHoyEmxvatcxAIUO3Ns=) | [查询与资源检查](/home/dohex/Projects/rose_reverse/analysis/ota_links/i5-zh-client5310.json) |
-| i5 | 125 | `en` | 1,115,428 | [官方更新包](https://gd2-cdn.rosetechnic.com/data/2024-12-08/en-125.bin.txt-363d0e40-726b-4ec2-a512-116575382f83..webp?e=1792049966&token=xW4-x9hAIcl3ByVaqk_SB-aMIgvJL9jgmFeB11tI:rKpmb_Cw--B-DO3aWYR1NBYGXbo=) | [查询与资源检查](/home/dohex/Projects/rose_reverse/analysis/ota_links/i5-en-client5310.json) |
-| i7 | 3.0.4 | `zh` | 2,793,010 | [官方更新包](https://gd2-cdn.rosetechnic.com/data/2026-08-14/ZT239_BES2700IH_OTA_LDAC_LHDC_AI_V3.0.4_20260813-e5e1afb5-d2ce-4787-8ff5-9592067bf29e.txt?e=1792049966&token=xW4-x9hAIcl3ByVaqk_SB-aMIgvJL9jgmFeB11tI:7srdcqW1xmQBVnFGJaWTjXW7J_A=) | [查询与资源检查](/home/dohex/Projects/rose_reverse/analysis/ota_links/i7-zh-client5310.json) |
-| i7 | 3.0.4 | `en` | 2,793,010 | [官方更新包](https://gd2-cdn.rosetechnic.com/data/2026-08-14/ZT239_BES2700IH_OTA_LDAC_LHDC_AI_V3.0.4_20260813-9049cc98-b7fc-4dbc-b80a-04743d9e82ae.txt?e=1792049966&token=xW4-x9hAIcl3ByVaqk_SB-aMIgvJL9jgmFeB11tI:jyeuiXgGjJPHfdEa3ByFZUNxgDE=) | [查询与资源检查](/home/dohex/Projects/rose_reverse/analysis/ota_links/i7-en-client5310.json) |
+| i5 | 125 | `zh` | 1,120,750 | [官方更新包](https://gd2-cdn.rosetechnic.com/data/2024-12-08/125.bin.txt-8faff4e5-8e81-4b8f-83d1-f341b769318b..webp?e=1792049966&token=xW4-x9hAIcl3ByVaqk_SB-aMIgvJL9jgmFeB11tI:XJ_wAmf8nHoyEmxvatcxAIUO3Ns=) | 查询与资源检查（`rose_reverse/analysis/ota_links/i5-zh-client5310.json`） |
+| i5 | 125 | `en` | 1,115,428 | [官方更新包](https://gd2-cdn.rosetechnic.com/data/2024-12-08/en-125.bin.txt-363d0e40-726b-4ec2-a512-116575382f83..webp?e=1792049966&token=xW4-x9hAIcl3ByVaqk_SB-aMIgvJL9jgmFeB11tI:rKpmb_Cw--B-DO3aWYR1NBYGXbo=) | 查询与资源检查（`rose_reverse/analysis/ota_links/i5-en-client5310.json`） |
+| i7 | 3.0.4 | `zh` | 2,793,010 | [官方更新包](https://gd2-cdn.rosetechnic.com/data/2026-08-14/ZT239_BES2700IH_OTA_LDAC_LHDC_AI_V3.0.4_20260813-e5e1afb5-d2ce-4787-8ff5-9592067bf29e.txt?e=1792049966&token=xW4-x9hAIcl3ByVaqk_SB-aMIgvJL9jgmFeB11tI:7srdcqW1xmQBVnFGJaWTjXW7J_A=) | 查询与资源检查（`rose_reverse/analysis/ota_links/i7-zh-client5310.json`） |
+| i7 | 3.0.4 | `en` | 2,793,010 | [官方更新包](https://gd2-cdn.rosetechnic.com/data/2026-08-14/ZT239_BES2700IH_OTA_LDAC_LHDC_AI_V3.0.4_20260813-9049cc98-b7fc-4dbc-b80a-04743d9e82ae.txt?e=1792049966&token=xW4-x9hAIcl3ByVaqk_SB-aMIgvJL9jgmFeB11tI:jyeuiXgGjJPHfdEa3ByFZUNxgDE=) | 查询与资源检查（`rose_reverse/analysis/ota_links/i7-en-client5310.json`） |
 
 i7 的服务端版本整数为 `304`，文件名明确包含 `V3.0.4`；i5 的服务端整数和文件名均为 `125`，本索引保留该写法，没有自行补成带点版本。
 
@@ -70,14 +70,14 @@ curl --fail-with-body --connect-timeout 10 --max-time 30 \
 
 注意官方 App 的两层命名：云端字段为 **`otaUrl`**；`DeviceService._buildOtaResult` 把该 URL 放进 App 内部 Map 的 **`otaContent`**。之后 `getOtaContent` 再通过静态资源客户端执行 GET 下载文本。`otaContent` 不是本次服务端响应的 URL 字段名。
 
-已附只查询元数据的 [获取脚本](/home/dohex/Projects/rose_reverse/examples/fetch_ota_links.py)，仅需 Python 标准库，JSON 输出包含原始响应、完整链接与签名到期时间：
+已附只查询元数据的 获取脚本（`rose_reverse/examples/fetch_ota_links.py`），仅需 Python 标准库，JSON 输出包含原始响应、完整链接与签名到期时间：
 
 ```sh
 # 默认获取 i5/i7 的 zh/en 四条当前记录
-python3 /home/dohex/Projects/rose_reverse/examples/fetch_ota_links.py
+python3 rose_reverse/examples/fetch_ota_links.py
 
 # 只查询 i7 中文记录
-python3 /home/dohex/Projects/rose_reverse/examples/fetch_ota_links.py i7 --lang zh
+python3 rose_reverse/examples/fetch_ota_links.py i7 --lang zh
 ```
 
 该脚本不下载固件，也不连接耳机。网络错误、业务 code 失败或缺少 otaUrl 时会保留已取得的响应并以状态码 2 退出。重新查询只能取得服务器当时选择的候选包；即使记录旧 fileId/路径，也没有证明能重新签发该旧文件的 URL。
@@ -88,9 +88,9 @@ python3 /home/dohex/Projects/rose_reverse/examples/fetch_ota_links.py i7 --lang 
 
 | i7 / zh 实测 App 构建号 | 返回结果 | 对历史版本的含义 | 原始响应 |
 |---|---|---|---|
-| 5310 | version=304，有 otaUrl | 当前候选包 | [响应](/home/dohex/Projects/rose_reverse/analysis/ota_links/i7-zh-client5310.json) |
-| 4150 | version=304，与 5310 相同 fileId | 兼容边界仍返回当前包 | [响应](/home/dohex/Projects/rose_reverse/analysis/ota_links/i7-zh-client4150.json) |
-| 4149 | version=1，说明 `Client Version is too low`，无 otaUrl | App 过旧提示；不是可下载的“固件版本 1” | [响应](/home/dohex/Projects/rose_reverse/analysis/ota_links/i7-zh-client4149.json) |
+| 5310 | version=304，有 otaUrl | 当前候选包 | 响应（`rose_reverse/analysis/ota_links/i7-zh-client5310.json`） |
+| 4150 | version=304，与 5310 相同 fileId | 兼容边界仍返回当前包 | 响应（`rose_reverse/analysis/ota_links/i7-zh-client4150.json`） |
+| 4149 | version=1，说明 `Client Version is too low`，无 otaUrl | App 过旧提示；不是可下载的“固件版本 1” | 响应（`rose_reverse/analysis/ota_links/i7-zh-client4149.json`） |
 
 另一个路径 `/app/ota/v2/check-type` 被 App 用于调音社区的 `earTypeId` → `resourceName` 字符串补全，不是版本列表。`ota-beta` 是检查 `versionDescribe` 是否含标记后跳过主动更新提醒；没有找到独立 beta 渠道查询入口。此结论限定于本 APK 观察到的接口，不代表厂商服务端一定不存在内部历史接口。
 
@@ -98,9 +98,9 @@ python3 /home/dohex/Projects/rose_reverse/examples/fetch_ota_links.py i7 --lang 
 
 ## 4. 证据与协议关联
 
-- [请求构造、匿名鉴权与下载封装](/home/dohex/Projects/rose_reverse/analysis/ota_request_findings.md)
-- [历史接口静态调查与参数证据](/home/dohex/Projects/rose_reverse/analysis/ota_history_api_findings.md)
-- [官方 fetchDeviceOtaByKeyId 的恢复代码](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/core/api/service/api_device_service.dart:476)
-- [otaUrl → 内部 otaContent 的字段映射](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/core/services/device/device_service.dart:10882)
+- 请求构造、匿名鉴权与下载封装（`rose_reverse/analysis/ota_request_findings.md`）
+- 历史接口静态调查与参数证据（`rose_reverse/analysis/ota_history_api_findings.md`）
+- 官方 fetchDeviceOtaByKeyId 的恢复代码（`rose_reverse/analysis/blutter/asm/roselink/core/api/service/api_device_service.dart:476`）
+- otaUrl → 内部 otaContent 的字段映射（`rose_reverse/analysis/blutter/asm/roselink/core/services/device/device_service.dart:10882`）
 - [i5 协议与 WQ OTA](models/earfeel-i5-protocol.md)
 - [i7 协议与 BES OTA](models/earfeel-i7-protocol.md#378)
