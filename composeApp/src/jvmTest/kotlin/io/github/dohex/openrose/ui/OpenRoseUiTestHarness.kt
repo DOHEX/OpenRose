@@ -3,6 +3,8 @@
 package io.github.dohex.openrose.ui
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.ImageComposeScene
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.input.key.Key
@@ -14,6 +16,9 @@ import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.unit.Density
+import io.github.dohex.openrose.core.*
+import io.github.dohex.openrose.core.protocol.*
+import io.github.dohex.openrose.core.transport.DeviceId
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import java.awt.image.BufferedImage
@@ -32,6 +37,94 @@ internal suspend fun createOpenRoseUiTestScene(
     coroutineContext = currentCoroutineContext(),
 ) {
     content()
+}
+
+/** OpenRoseApp with recording callbacks; scenarios that need custom callbacks build their own scene. */
+internal class OpenRoseAppHarness(
+    scene: ImageComposeScene,
+    val state: MutableState<ControlState>,
+    val settingsChanges: List<UserSettings>,
+    val settingWrites: List<Pair<DeviceSetting, FieldValue>>,
+    val connectRequests: List<DeviceId>,
+    private val disconnects: () -> Int,
+) : OpenRoseUiTestHarness(scene) {
+    val disconnectCount: Int get() = disconnects()
+}
+
+internal suspend fun createOpenRoseAppHarness(
+    initialState: ControlState,
+    width: Int = 420,
+    height: Int = 900,
+): OpenRoseAppHarness {
+    val state = mutableStateOf(initialState)
+    val settingsChanges = mutableListOf<UserSettings>()
+    val settingWrites = mutableListOf<Pair<DeviceSetting, FieldValue>>()
+    val connectRequests = mutableListOf<DeviceId>()
+    var disconnectCount = 0
+    val scene = createOpenRoseUiTestScene(width, height) {
+        OpenRoseApp(
+            state = state.value,
+            onSettingsChange = { next ->
+                settingsChanges += next
+                state.value = state.value.copy(settings = next)
+            },
+            onRequestPermission = {},
+            onOpenSystemSettings = {},
+            onStartScan = {},
+            onStopScan = {},
+            onConnect = { connectRequests += it },
+            onDisconnect = { disconnectCount++ },
+            onSet = { setting, value -> settingWrites += setting to value },
+            onAddDeviceConnect = { error("Unexpected add-device connection in this scenario") },
+        )
+    }
+    return OpenRoseAppHarness(scene, state, settingsChanges, settingWrites, connectRequests) { disconnectCount }
+}
+
+private val androidPlatform = PlatformState(
+    permission = PermissionState.GRANTED,
+    transport = TransportAvailability.Available,
+    module = ModuleAvailability.NotEnabled,
+    hostPlatform = HostPlatform.ANDROID,
+    systemIntegrationApplicability = PlatformApplicability.APPLICABLE,
+    controlTransportApplicability = PlatformApplicability.APPLICABLE,
+)
+
+/** Android host with no control connection. */
+internal fun disconnectedAndroidState(settings: UserSettings = UserSettings()): ControlState =
+    ControlState(platform = androidPlatform, settings = settings)
+
+/** Android host with a ready I7 control connection and a fully readable device. */
+internal fun connectedI7State(settings: UserSettings = UserSettings()): ControlState {
+    val profile = ModelProfile.I7_RS_V2
+    val deviceId = DeviceId("test-i7")
+    return ControlState(
+        platform = androidPlatform,
+        connection = ConnectionState.Connected(deviceId, 1L, profile, ConnectionPhase.READY),
+        settings = settings,
+        device = DeviceState(
+            deviceId = deviceId,
+            sessionId = 1L,
+            profile = profile,
+            capabilities = DeviceCapabilities(
+                readableFields = DeviceField.entries.toSet(),
+                writableSettings = DeviceSetting.entries.toSet(),
+                noiseControl = noiseControlCapabilities(profile),
+                equalizer = equalizerCapabilities(profile),
+                touchControl = touchControlCapabilities(profile),
+                audioControl = audioControlCapabilities(profile),
+                promptVolumeLevels = promptVolumeLevels(profile),
+                gainLevels = setOf(0, 1, 2),
+                hearingProtectionLevels = (0..6).toSet(),
+            ),
+            fields = mapOf(
+                DeviceField.LEFT_BATTERY to FieldReading.Known(FieldValue.Number(90), "90"),
+                DeviceField.RIGHT_BATTERY to FieldReading.Known(FieldValue.Number(90), "90"),
+                DeviceField.CASE_BATTERY to FieldReading.Known(FieldValue.Number(80), "80"),
+                DeviceField.NOISE_MODE to FieldReading.Known(FieldValue.Text("anc"), "anc"),
+            ),
+        ),
+    )
 }
 
 /** Shared rendering and semantics operations; each test keeps its own state and callbacks. */
@@ -64,6 +157,10 @@ internal open class OpenRoseUiTestHarness(protected val scene: ImageComposeScene
 
     fun countText(expected: String): Int = nodes().count { node ->
         node.config.getOrNull(SemanticsProperties.Text).orEmpty().any { it.text == expected }
+    }
+
+    fun hasRole(expected: Role): Boolean = nodes().any { node ->
+        node.config.getOrNull(SemanticsProperties.Role) == expected
     }
 
     fun hasContentDescription(expected: String): Boolean = nodes().any { node ->

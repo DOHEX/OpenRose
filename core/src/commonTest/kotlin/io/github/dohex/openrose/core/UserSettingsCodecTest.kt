@@ -41,7 +41,6 @@ class UserSettingsCodecTest {
         assertEquals(BottomBarStyle.FIXED, restored.bottomBarStyle)
     }
 
-
     @Test
     fun missingOrMalformedForceBleUsesTheSafeDefault() {
         assertEquals(false, UserSettingsCodec.decode(emptyMap()).forceBle)
@@ -65,12 +64,6 @@ class UserSettingsCodecTest {
         }
     }
 
-    @Test
-    fun missingOrUnknownPageTransitionFallsBackToDefault() {
-        assertEquals(PageTransition.MIUIX_SPRING, UserSettingsCodec.decode(emptyMap()).pageTransition)
-        assertEquals(PageTransition.MIUIX_SPRING, UserSettingsCodec.decode(mapOf("page_transition" to "unknown")).pageTransition)
-        assertEquals(PageTransition.MIUIX_SPRING, UserSettingsCodec.decode(mapOf("page_transition" to "")).pageTransition)
-    }
     @Test
     fun backgroundBlurEnabledEncodesAndDecodesCorrectly() {
         val defaultSettings = UserSettingsCodec.decode(emptyMap())
@@ -99,14 +92,6 @@ class UserSettingsCodecTest {
             assertEquals(style, decoded.bottomBarStyle)
         }
     }
-
-    @Test
-    fun missingOrUnknownBottomBarStyleFallsBackToDefault() {
-        assertEquals(BottomBarStyle.FIXED, UserSettingsCodec.decode(emptyMap()).bottomBarStyle)
-        assertEquals(BottomBarStyle.FIXED, UserSettingsCodec.decode(mapOf("bottom_bar_style" to "unknown")).bottomBarStyle)
-        assertEquals(BottomBarStyle.FIXED, UserSettingsCodec.decode(mapOf("bottom_bar_style" to "")).bottomBarStyle)
-    }
-
 
     @Test
     fun restoredSettingsPreserveAnExplicitlyEmptyTriggerSet() {

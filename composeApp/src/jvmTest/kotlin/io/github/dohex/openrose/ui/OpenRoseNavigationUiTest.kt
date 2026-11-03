@@ -5,9 +5,6 @@ package io.github.dohex.openrose.ui
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.ImageComposeScene
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.SemanticsActions
-import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.unit.Density
@@ -297,16 +294,7 @@ class OpenRoseNavigationUiTest {
         val state: MutableState<ControlState>,
         val settingsChanges: MutableList<UserSettings>,
         val settingWrites: MutableList<Pair<DeviceSetting, FieldValue>>,
-    ) : OpenRoseUiTestHarness(scene) {
-        fun setProgress(description: String, value: Float) {
-            val node = nodes().firstOrNull { semantics ->
-                semantics.config.getOrNull(SemanticsProperties.ContentDescription).orEmpty().contains(description)
-            } ?: error("No slider found with content description '$description'")
-            val action = node.config.getOrNull(SemanticsActions.SetProgress)?.action
-                ?: error("Slider '$description' has no set-progress action")
-            check(action(value)) { "Slider '$description' rejected progress $value" }
-        }
-    }
+    ) : OpenRoseUiTestHarness(scene)
 
     private companion object {
         const val SESSION_ID = 17L
