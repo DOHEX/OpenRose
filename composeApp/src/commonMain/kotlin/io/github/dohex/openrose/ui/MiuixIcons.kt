@@ -19,7 +19,7 @@ import top.yukonga.miuix.kmp.icon.extended.VolumeUp
 @Composable
 internal fun miuixIcon(icon: RoseIcon): ImageVector = when (icon) {
     RoseIcon.HEADPHONES -> materialIcon(icon)
-    RoseIcon.SYSTEM -> MiuixIcons.Layers
+    RoseIcon.STATUS -> MiuixIcons.Layers
     RoseIcon.SETTINGS -> MiuixIcons.Settings
     RoseIcon.PLUS -> MiuixIcons.Add
     RoseIcon.MORE -> MiuixIcons.More

@@ -2,6 +2,7 @@ package io.github.dohex.openrose.bridge
 
 import android.util.Log
 import io.github.dohex.openrose.core.ModuleAvailability
+import io.github.dohex.openrose.core.ModuleUnavailableCause
 import io.github.dohex.openrose.core.SystemBridgeDiagnostics
 import io.github.dohex.openrose.core.UserSettings
 import io.github.dohex.openrose.core.UserSettingsCodec
@@ -40,8 +41,8 @@ class FrameworkLink(
     fun availability(): ModuleAvailability = synchronized(lock) {
         val service = framework
         when {
-            service == null -> ModuleAvailability.Unavailable("尚未收到兼容框架服务，普通控制可独立运行")
-            service.apiVersion < 102 -> ModuleAvailability.Unavailable("框架服务 API 低于 102")
+            service == null -> ModuleAvailability.Unavailable("尚未收到兼容框架服务，普通控制可独立运行", ModuleUnavailableCause.FRAMEWORK_MISSING)
+            service.apiVersion < 102 -> ModuleAvailability.Unavailable("框架服务 API 低于 102", ModuleUnavailableCause.FRAMEWORK_OUTDATED)
             else -> ModuleAvailability.Available
         }
     }

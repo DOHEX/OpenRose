@@ -56,7 +56,7 @@ internal object BridgeWire {
      * Reaching it is not authorisation; [IControlBridge.open] verifies the caller.
      */
     const val ACTION_CONTROL_HOST = "io.github.dohex.openrose.action.CONTROL_HOST"
-    const val HOST_SERVICE_CLASS = "com.android.bluetooth.ble.app.headset.BluetoothHeadsetService"
+    const val HOST_SERVICE_CLASS = "com.android.bluetooth.agClient.BluetoothAgClientService"
 
     /** Settings the application mirrors for the host, in the core settings codec's own keys. */
     const val CONFIG_GROUP = "module_config"

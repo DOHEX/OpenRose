@@ -63,8 +63,6 @@ internal fun BackgroundControlGroup(
     AppGroup(
         title = "后台控制",
         footnote = wakeGuidance(state.platform.backgroundService.wake.band) +
-            "系统不允许后台运行时，应用无法自行绕过；自启动和省电限制无法被检测，" +
-            "请在系统设置中允许 OpenRose 自启动并取消电量限制。" +
             "在系统中强制停止 OpenRose 会结束后台控制，直到你再次打开它。",
     ) {
         Tagged(BackgroundControlTags.SWITCH) {

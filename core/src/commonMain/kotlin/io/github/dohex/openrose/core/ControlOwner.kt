@@ -96,7 +96,4 @@ data class OwnerState(
 interface ControlOwnerSwitching {
     /** Moves the single control session to [way]; the previous owner is released first. */
     suspend fun selectControlWay(way: ControlWay): HandoffOutcome
-
-    /** Stops module control without enabling ordinary control. */
-    suspend fun disableModuleControl(): HandoffOutcome
 }

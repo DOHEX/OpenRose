@@ -26,7 +26,7 @@ internal sealed interface Route : NavKey {
 
 internal fun AppPage.toRoute(): Route = when (this) {
     AppPage.HEADPHONES -> Route.Main(AppPage.HEADPHONES)
-    AppPage.SYSTEM -> Route.Main(AppPage.SYSTEM)
+    AppPage.STATUS -> Route.Main(AppPage.STATUS)
     AppPage.SETTINGS -> Route.Main(AppPage.SETTINGS)
     AppPage.TOUCH -> Route.Touch
     AppPage.AUDIO -> Route.Audio

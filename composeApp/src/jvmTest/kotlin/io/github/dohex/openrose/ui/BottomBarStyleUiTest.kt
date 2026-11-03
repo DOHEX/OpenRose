@@ -100,7 +100,7 @@ class BottomBarStyleUiTest {
                 harness.render()
                 val tabs = harness.tabs()
                 assertEquals(3, tabs.size, "Must have 3 bottom bar tabs in $style")
-                for (label in listOf("耳机", "系统", "设置")) {
+                for (label in listOf("耳机", "状态", "设置")) {
                     assertTrue(tabs.any { it.hasText(label) }, "Fixed tab '$label' must show its label in $style")
                 }
 

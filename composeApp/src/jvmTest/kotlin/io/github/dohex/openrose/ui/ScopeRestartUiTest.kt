@@ -19,11 +19,11 @@ class ScopeRestartUiTest {
             val harness = createHarness(style, HostPlatform.ANDROID, width) { requests++; result.await() }
             try {
                 harness.render()
-                harness.clickTab(if (width < 900) "系统" else "系统集成")
+                harness.clickTab("状态")
                 harness.render()
                 harness.clickContentDescription("重启作用域")
                 harness.render()
-                assertTrue(harness.hasText("蓝牙连接可能中断。确认后将请求 Root 权限。"))
+                assertTrue(harness.hasText("将重启以下进程：\ncom.android.bluetooth\ncom.xiaomi.bluetooth\ncom.milink.service\n\n蓝牙连接可能中断。确认后将请求 Root 权限。"))
                 harness.clickText("取消")
                 harness.render()
                 assertEquals(0, requests)
@@ -55,7 +55,7 @@ class ScopeRestartUiTest {
             val harness = createHarness(style, HostPlatform.LINUX, 1200) { error("unexpected restart") }
             try {
                 harness.render()
-                harness.clickTab("系统集成")
+                harness.clickTab("状态")
                 harness.render()
                 assertFalse(harness.hasContentDescription("重启作用域"))
             } finally {

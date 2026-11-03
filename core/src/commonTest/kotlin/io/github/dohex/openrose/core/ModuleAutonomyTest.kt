@@ -55,26 +55,24 @@ class ModuleAutonomyTest {
     }
 
     @Test
-    fun ordinaryOrDisabledChoicesAreNeverTakenOverByTheHostWhateverStartsOrReturns() = runTest {
-        for (choice in listOf(ControlWay.ORDINARY, ControlWay.NONE)) {
-            val rig = OwnerRig(this, initial = OwnerRecord(choice))
-            rig.bootHost()
-            rig.hostTransport.audioDevice.emit(rig.earphones.deviceId)
-            runCurrent()
-            // The module becoming available again, a hot reload and a killed host all start from the saved choice.
-            rig.replaceHost(processDied = false)
-            rig.bootHost()
-            rig.replaceHost(processDied = true)
-            rig.bootHost()
-            rig.hostTransport.audioDevice.emit(rig.earphones.deviceId)
-            rig.unlockHost()
-            runCurrent()
-            advanceTimeBy(60_000)
-            runCurrent()
+    fun theOrdinaryChoiceIsNeverTakenOverByTheHostWhateverStartsOrReturns() = runTest {
+        val rig = OwnerRig(this, initial = OwnerRecord(ControlWay.ORDINARY))
+        rig.bootHost()
+        rig.hostTransport.audioDevice.emit(rig.earphones.deviceId)
+        runCurrent()
+        // The module becoming available again, a hot reload and a killed host all start from the saved choice.
+        rig.replaceHost(processDied = false)
+        rig.bootHost()
+        rig.replaceHost(processDied = true)
+        rig.bootHost()
+        rig.hostTransport.audioDevice.emit(rig.earphones.deviceId)
+        rig.unlockHost()
+        runCurrent()
+        advanceTimeBy(60_000)
+        runCurrent()
 
-            assertTrue(rig.headset.events.isEmpty(), "$choice: ${rig.headset.events}")
-            assertIs<HostStatus.Inactive>(rig.host.status.value)
-        }
+        assertTrue(rig.headset.events.isEmpty(), "${rig.headset.events}")
+        assertIs<HostStatus.Inactive>(rig.host.status.value)
     }
 
     @Test
@@ -109,32 +107,6 @@ class ModuleAutonomyTest {
         assertEquals(generation, (rig.host.status.value as HostStatus.Active).generation)
         assertEquals(listOf("module:open"), rig.headset.events)
         assertEquals(0, rig.appTransport.links.size)
-    }
-
-    @Test
-    fun explicitlyDisablingReleasesTheConnectionAndKeepsTheHostFromComingBackAfterRestarts() = runTest {
-        val rig = OwnerRig(this, initial = saved)
-        rig.bootHost()
-        rig.hostTransport.audioDevice.emit(rig.earphones.deviceId)
-        val runtime = rig.newRuntime()
-        runCurrent()
-        advanceTimeBy(1)
-        runCurrent()
-        assertEquals(listOf("module:open"), rig.headset.events)
-
-        assertIs<HandoffOutcome.Completed>(runtime.disableModuleControl())
-        runCurrent()
-        assertEquals(listOf("module:open", "module:close"), rig.headset.events)
-
-        rig.replaceHost(processDied = true)
-        rig.bootHost()
-        rig.hostTransport.audioDevice.emit(rig.earphones.deviceId)
-        runCurrent()
-        advanceTimeBy(60_000)
-        runCurrent()
-        assertEquals(listOf("module:open", "module:close"), rig.headset.events)
-        assertEquals(0, rig.headset.opens("ordinary"))
-        assertEquals(ControlWay.NONE, rig.store.record.selected)
     }
 
     @Test

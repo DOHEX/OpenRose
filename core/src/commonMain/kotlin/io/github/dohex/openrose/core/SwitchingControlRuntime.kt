@@ -154,12 +154,6 @@ class SwitchingControlRuntime(
         switchTo(way)
     }
 
-    override suspend fun disableModuleControl(): HandoffOutcome = switchLock.withLock {
-        if (record.selected != ControlWay.MODULE) {
-            HandoffOutcome.Completed(SwitchRequest(newId(), record.selected, record.selected, record.moduleRelease?.generation))
-        } else switchTo(ControlWay.NONE)
-    }
-
     private suspend fun switchTo(target: ControlWay): HandoffOutcome {
         val previous = record
         val request = SwitchRequest(newId(), previous.selected, target, previous.moduleRelease?.generation ?: client.lastObservedGeneration)
@@ -191,7 +185,6 @@ class SwitchingControlRuntime(
         return when (target) {
             ControlWay.MODULE -> establishModule(request)
             ControlWay.ORDINARY -> returnToOrdinary(request)
-            ControlWay.NONE -> disableModule(request)
         }
     }
 
@@ -220,23 +213,6 @@ class SwitchingControlRuntime(
             }
         }
         startOrdinary()
-        return finish(HandoffOutcome.Completed(request))
-    }
-
-    private suspend fun disableModule(request: SwitchRequest): HandoffOutcome {
-        if (record.moduleRelease != null) {
-            when (val proof = client.release(request.copy(fromGeneration = record.moduleRelease?.generation ?: request.fromGeneration))) {
-                is ReleaseProof.Unproven -> {
-                    // The disable stays saved so the host never reclaims, but it is not done while the module owner
-                    // may still hold the connection: keep asking until proven, and never start ordinary control.
-                    client.stop()
-                    releaseRetry = scope.launch { retryModuleRelease() }
-                    return finish(HandoffOutcome.Blocked(request, proof.stage, proof.reason))
-                }
-                is ReleaseProof.Receipt, is ReleaseProof.ProcessEnded -> clearModuleRelease()
-            }
-        }
-        client.stop()
         return finish(HandoffOutcome.Completed(request))
     }
 
@@ -347,8 +323,8 @@ class SwitchingControlRuntime(
                 ModuleView.Stopped, ModuleView.Connecting -> OwnerReadiness.Starting
                 is ModuleView.Unavailable -> OwnerReadiness.Unavailable(view.stage, view.reason)
                 is ModuleView.Inactive -> OwnerReadiness.Unavailable(OwnerFailureStage.ACTIVATION, view.status.reason)
+                ModuleView.Unresponsive -> OwnerReadiness.Unavailable(OwnerFailureStage.CONNECTION, UNRESPONSIVE_REASON)
             }
-            ControlWay.NONE -> OwnerReadiness.Idle("模块控制已停用")
         }
         return OwnerState(selected, readiness, if (selected == ControlWay.MODULE) moduleHolder else localHolder, lastHandoff)
     }
@@ -389,16 +365,28 @@ class SwitchingControlRuntime(
             bridge = SystemBridgeDiagnostics(ipc = BridgeIpcState.AUTHENTICATED, detail = view.status.reason),
         )
         is ModuleView.Unavailable -> base.copy(
-            module = ModuleAvailability.Unavailable(view.reason),
+            module = ModuleAvailability.Unavailable(view.reason, view.stage.unavailableCause()),
             bridge = SystemBridgeDiagnostics(
                 ipc = if (view.stage == OwnerFailureStage.AUTHORIZATION) BridgeIpcState.REJECTED else BridgeIpcState.DISCONNECTED,
                 detail = "${view.stage}: ${view.reason}",
             ),
         )
+        ModuleView.Unresponsive -> base.copy(
+            module = ModuleAvailability.Unresponsive,
+            bridge = SystemBridgeDiagnostics(ipc = BridgeIpcState.AUTHENTICATED, detail = UNRESPONSIVE_REASON),
+        )
         ModuleView.Connecting, ModuleView.Stopped -> base.copy(
             module = ModuleAvailability.Unavailable("正在连接模块控制宿主"),
             bridge = SystemBridgeDiagnostics(ipc = BridgeIpcState.WAITING, detail = "正在连接模块控制宿主"),
         )
+    }
+
+    private fun OwnerFailureStage.unavailableCause(): ModuleUnavailableCause? = when (this) {
+        OwnerFailureStage.DISCOVERY -> ModuleUnavailableCause.HOST_NOT_FOUND
+        OwnerFailureStage.AUTHORIZATION -> ModuleUnavailableCause.AUTHORIZATION_REFUSED
+        OwnerFailureStage.CONNECTION -> ModuleUnavailableCause.LINK_LOST
+        OwnerFailureStage.SELECTION_PERSISTENCE, OwnerFailureStage.RELEASE,
+        OwnerFailureStage.ACTIVATION, OwnerFailureStage.OWNER_RUNTIME -> null
     }
 
     private fun noOwner() = OperationResult.Failure(ControlError(ControlErrorCode.NOT_READY, "当前没有就绪的控制所有者"))

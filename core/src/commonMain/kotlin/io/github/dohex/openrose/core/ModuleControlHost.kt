@@ -1,5 +1,6 @@
 package io.github.dohex.openrose.core
 
+import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.dohex.openrose.core.wire.HostPlatformFacts
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
@@ -156,10 +157,22 @@ class ModuleControlHost(
         }
         return try {
             // Running under the owner's job lets a release cancel and join this very command first.
-            withContext(active.job) { dispatch(active.runtime, command) }
+            withContext(active.job) { dispatch(active.runtime, systemRouted(lease.role, active.runtime, command)) }
         } catch (e: CancellationException) {
             if (active.job.isCancelled) HostCallResult.Rejected(HostRejection.NO_OWNER, "控制所有者已释放") else throw e
         }
+    }
+
+    /** A system entry's "off" tap follows the user's choice of writing wind reduction (see [UserSettings.fusionOffAsWind]). */
+    private fun systemRouted(role: ClientRole, runtime: ControlRuntime, command: HostCommand): HostCommand {
+        if (role != ClientRole.MILINK && role != ClientRole.XIAOMI_BLUETOOTH) return command
+        if (command !is HostCommand.Set || command.setting != DeviceSetting.NOISE_MODE || command.reference == null) return command
+        val requested = (command.value as? FieldValue.Text)?.value ?: return command
+        if (!runtime.state.value.settings.fusionOffAsWind) return command
+        val modes = (runtime.readSession(command.reference) as? SessionSnapshotResult.Available)
+            ?.device?.capabilities?.noiseControl?.modes ?: return command
+        val mode = SystemHeadsetMapping.requestedMode(requested, offAsWind = true, supportedModes = modes)
+        return if (mode == requested) command else command.copy(value = FieldValue.Text(mode))
     }
 
     /** Reads a detached snapshot, only for the named owner generation and a still-current device session. */

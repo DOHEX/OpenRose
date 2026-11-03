@@ -60,6 +60,15 @@ class SystemHeadsetMappingTest {
     }
 
     @Test
+    fun offWritesWindOnlyWhenChosenAndTheModelHasIt() {
+        val withWind = setOf("normal", "anc", "transparency", "wind")
+        assertEquals("wind", SystemHeadsetMapping.requestedMode("normal", offAsWind = true, supportedModes = withWind))
+        assertEquals("normal", SystemHeadsetMapping.requestedMode("normal", offAsWind = false, supportedModes = withWind))
+        assertEquals("normal", SystemHeadsetMapping.requestedMode("normal", offAsWind = true, supportedModes = setOf("normal", "anc")))
+        assertEquals("anc", SystemHeadsetMapping.requestedMode("anc", offAsWind = true, supportedModes = withWind))
+    }
+
+    @Test
     fun unknownAndMissingReadingsAreNotFabricatedAsBatteryOrMode() {
         val unknownEars = mapOf(
             DeviceField.LEFT_BATTERY to FieldReading.Unknown("00"),

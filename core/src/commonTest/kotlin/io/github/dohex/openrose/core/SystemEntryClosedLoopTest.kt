@@ -155,4 +155,27 @@ class SystemEntryClosedLoopTest {
         assertEquals(2, entry.rig.hostTransport.links.size, "the new owner opened its own link")
         assertTrue(device.fields.containsKey(DeviceField.LEFT_BATTERY))
     }
+
+    private suspend fun TestScope.frameWritten(offAsWind: Boolean, mode: String): String {
+        val entry = connectedEntry()
+        entry.rig.host.configure(HostConfiguration(true, UserSettings(controlWay = ControlWay.MODULE, fusionOffAsWind = offAsWind)))
+        runCurrent()
+        val link = entry.rig.hostTransport.links.single()
+        val before = link.writes.size
+        val tap = async { entry.rig.host.execute(milinkIdentity, entry.lease, entry.generation, entry.noise(mode)) }
+        runCurrent()
+        testScheduler.advanceUntilIdle()
+        tap.await()
+        return link.writes.drop(before).first()
+    }
+
+    @Test
+    fun anOffTapWritesWindReductionOnlyWhenTheUserChoseIt() = runTest {
+        val wind = frameWritten(offAsWind = false, mode = "wind")
+        val normal = frameWritten(offAsWind = false, mode = "normal")
+        assertNotEquals(wind, normal)
+
+        assertEquals(wind, frameWritten(offAsWind = true, mode = "normal"))
+        assertEquals(frameWritten(offAsWind = false, mode = "anc"), frameWritten(offAsWind = true, mode = "anc"))
+    }
 }

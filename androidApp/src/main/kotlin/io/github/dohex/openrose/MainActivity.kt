@@ -81,7 +81,6 @@ class MainActivity : ComponentActivity() {
                 onRequestAssociation = ::requestAssociation,
                 onOpenAppSettings = ::openAppSettings,
                 onSelectControlWay = owner::selectControlWay,
-                onDisableModuleControl = owner::disableModuleControl,
             )
         }
     }

@@ -180,7 +180,7 @@ class BackgroundControlUiTest {
     }
 
     @Test
-    fun moduleOrDisabledControlNeverShowsArmedAutomaticRecovery() = runBlocking {
+    fun moduleControlNeverShowsArmedAutomaticRecovery() = runBlocking {
         val armed = BackgroundServiceFacts(
             wake = WakeFacts(WakeBand.ANDROID_14_PLUS, CompanionAssociation.ACTIVE, PresenceObservation.OBSERVING),
         )
@@ -198,10 +198,6 @@ class BackgroundControlUiTest {
                 assertFalse(harness.hasTag(BackgroundControlTags.RECOVERY_ARMED), "module control is not ordinary recovery in $style")
                 assertFalse(harness.hasTagWithPrefix(BackgroundControlTags.STATUS_PREFIX), "background control is not in force under module control in $style")
                 assertTrue(harness.state.value.settings.backgroundControlEnabled, "the saved intent is kept in $style")
-
-                harness.update { it.copy(owner = OwnerState(selected = ControlWay.NONE, readiness = OwnerReadiness.Idle("fixture: disabled"))) }
-                harness.render()
-                assertFalse(harness.hasTag(BackgroundControlTags.RECOVERY_ARMED), "no selected way means no recovery in $style")
 
                 harness.update { it.copy(owner = OwnerState(selected = ControlWay.ORDINARY, readiness = OwnerReadiness.Ready)) }
                 harness.render()

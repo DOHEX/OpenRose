@@ -157,7 +157,7 @@ class UiDefaultStylesUiTest {
             try {
                 wide.render()
                 assertTrue(wide.hasText("二级测试页"))
-                assertTrue(wide.hasText("系统集成"))
+                assertTrue(wide.hasText("状态"))
                 assertTrue(wide.hasText("设置"))
                 assertTrue(wide.hasRole(Role.Tab), "wide secondary pages must keep the sidebar in $style")
             } finally {
@@ -258,10 +258,10 @@ class UiDefaultStylesUiTest {
         coroutineContext = currentCoroutineContext(),
     ) {
         ProvideInterfaceStyle(style.value, dark = false) {
-            val backStack = listOf(AppPage.HEADPHONES, AppPage.AUDIO)
+            val parentTab = AppPage.HEADPHONES
             when (style.value) {
                 InterfaceStyle.MIUIX -> MiuixAppShell(
-                    backStack = backStack,
+                    parentTab = parentTab,
                     page = AppPage.AUDIO,
                     wide = wide,
                     onNavigate = {},
@@ -270,7 +270,7 @@ class UiDefaultStylesUiTest {
                     pageContent = pageContent,
                 )
                 InterfaceStyle.MATERIAL3 -> MaterialAppShell(
-                    backStack = backStack,
+                    parentTab = parentTab,
                     page = AppPage.AUDIO,
                     wide = wide,
                     onNavigate = {},

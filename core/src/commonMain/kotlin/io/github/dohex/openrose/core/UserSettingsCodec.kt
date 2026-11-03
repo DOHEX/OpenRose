@@ -42,11 +42,11 @@ object UserSettingsCodec {
             FusionSettingsDestination.SYSTEM -> "system"
             FusionSettingsDestination.OPENROSE -> "openrose"
         },
+        "fusion_off_as_wind" to settings.fusionOffAsWind.toString(),
         "background_control_enabled" to settings.backgroundControlEnabled.toString(),
         "control_way" to when (settings.controlWay) {
             ControlWay.ORDINARY -> "ordinary"
             ControlWay.MODULE -> "module"
-            ControlWay.NONE -> "none"
         },
     )
 
@@ -98,12 +98,12 @@ object UserSettingsCodec {
                 "openrose" -> FusionSettingsDestination.OPENROSE
                 else -> defaults.fusionSettingsDestination
             },
+            fusionOffAsWind = values["fusion_off_as_wind"]?.toBooleanStrictOrNull() ?: defaults.fusionOffAsWind,
             backgroundControlEnabled = values["background_control_enabled"]
                 ?.toBooleanStrictOrNull() ?: defaults.backgroundControlEnabled,
             controlWay = when (values["control_way"]) {
                 "ordinary" -> ControlWay.ORDINARY
                 "module" -> ControlWay.MODULE
-                "none" -> ControlWay.NONE
                 else -> defaults.controlWay
             },
         )

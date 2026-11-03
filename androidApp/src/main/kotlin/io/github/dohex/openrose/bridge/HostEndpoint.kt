@@ -50,14 +50,21 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 
 /**
- * Who may use the host. Roles come from the verified Binder uid and the packages that own it; nothing
- * the caller says about itself (package, process, resolution) can raise its role, and the application
- * needs no cooperation from anything running in its process.
+ * Who may use the host. Roles come from the verified Binder uid/pid and the packages that own the uid;
+ * nothing the caller says about itself (package, process, resolution) can raise its role, and the
+ * application needs no cooperation from anything running in its process.
+ *
+ * com.xiaomi.bluetooth shares android.uid.bluetooth (uid 1002) with the host's com.android.bluetooth, so
+ * the uid alone cannot tell the host's own presentation code from the Xiaomi Bluetooth process; the pid does.
  */
-internal class AndroidCallerAuthority(private val context: Context, private val hostUid: Int = Process.myUid()) : CallerAuthority {
+internal class AndroidCallerAuthority(
+    private val context: Context,
+    private val hostUid: Int = Process.myUid(),
+    private val hostPid: Int = Process.myPid(),
+) : CallerAuthority {
     override fun roleOf(identity: CallerIdentity): ClientRole? = when {
-        // The module's own presentation code runs in the host process and therefore under the host uid.
-        identity.uid == hostUid -> ClientRole.HOST_PRESENTATION
+        // The module's own presentation code runs in the host process: same uid and same pid.
+        identity.uid == hostUid && identity.pid == hostPid -> ClientRole.HOST_PRESENTATION
         BridgeWire.APP_PACKAGE in identity.packages -> ClientRole.APP
         BridgeTarget.MILINK.packageName in identity.packages && isSystemApp(BridgeTarget.MILINK.packageName) -> ClientRole.MILINK
         BridgeTarget.XIAOMI_BLUETOOTH.packageName in identity.packages && isSystemApp(BridgeTarget.XIAOMI_BLUETOOTH.packageName) ->

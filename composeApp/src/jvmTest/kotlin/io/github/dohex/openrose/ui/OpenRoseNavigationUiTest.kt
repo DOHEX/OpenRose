@@ -117,7 +117,7 @@ class OpenRoseNavigationUiTest {
             assertTrue(harness.hasText("焦点通知"))
             assertFalse(harness.hasText("运行状态与诊断"))
 
-            harness.clickTab("系统集成")
+            harness.clickTab("状态")
             harness.render()
             assertFalse(harness.hasText("超级岛"))
             assertFalse(harness.hasText("焦点通知"))
@@ -181,7 +181,7 @@ class OpenRoseNavigationUiTest {
             assertFalse(harness.hasText("设备状态"))
             assertFalse(harness.hasText("均衡器 / 音效"))
 
-            harness.clickTab("系统集成")
+            harness.clickTab("状态")
             harness.render()
             harness.clickText("运行状态与诊断")
             harness.render()

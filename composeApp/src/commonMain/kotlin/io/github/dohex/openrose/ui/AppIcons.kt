@@ -8,7 +8,7 @@ import io.github.dohex.openrose.core.InterfaceStyle
 
 internal enum class RoseIcon {
     HEADPHONES,
-    SYSTEM,
+    STATUS,
     SETTINGS,
     PLUS,
     MORE,

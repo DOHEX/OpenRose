@@ -2,8 +2,9 @@ package io.github.dohex.openrose.ui
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
@@ -21,6 +22,11 @@ import top.yukonga.miuix.kmp.overlay.OverlayDialog
 enum class ScopeRestartStatus { EXECUTED, NOT_RUNNING, FAILED }
 data class ScopeRestartResult(val target: String, val status: ScopeRestartStatus, val detail: String? = null)
 
+internal val INTEGRATION_SCOPE_PACKAGES = listOf("com.android.bluetooth", "com.xiaomi.bluetooth", "com.milink.service")
+
+private val SCOPE_RESTART_CONFIRMATION =
+    "将重启以下进程：\n${INTEGRATION_SCOPE_PACKAGES.joinToString("\n")}\n\n蓝牙连接可能中断。确认后将请求 Root 权限。"
+
 @Composable
 internal fun ScopeRestartAction(
     running: Boolean,
@@ -37,11 +43,16 @@ internal fun ScopeRestartAction(
             top.yukonga.miuix.kmp.basic.IconButton(onClick = onOpen, enabled = !running) {
                 top.yukonga.miuix.kmp.basic.Icon(restartIcon, contentDescription = "重启作用域")
             }
-            OverlayDialog(show = confirming, title = "重启系统集成作用域？", onDismissRequest = onCancel) {
-                AppText("蓝牙连接可能中断。确认后将请求 Root 权限。")
-                Row(Modifier.fillMaxWidth().padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    AppButton("取消", onCancel, kind = AppButtonKind.Secondary)
-                    AppButton("重启", onConfirm)
+            OverlayDialog(
+                show = confirming,
+                title = "重启系统集成作用域？",
+                summary = SCOPE_RESTART_CONFIRMATION,
+                onDismissRequest = onCancel,
+            ) {
+                Row(Modifier.fillMaxWidth()) {
+                    AppButton("取消", onCancel, modifier = Modifier.weight(1f), kind = AppButtonKind.Secondary)
+                    Spacer(Modifier.width(20.dp))
+                    AppButton("重启", onConfirm, modifier = Modifier.weight(1f))
                 }
             }
             OverlayDialog(show = running || results != null, title = "重启作用域", onDismissRequest = { if (!running) onCloseResults() }) {
@@ -56,7 +67,7 @@ internal fun ScopeRestartAction(
             if (confirming) AlertDialog(
                 onDismissRequest = onCancel,
                 title = { Text("重启系统集成作用域？") },
-                text = { Text("蓝牙连接可能中断。确认后将请求 Root 权限。") },
+                text = { Text(SCOPE_RESTART_CONFIRMATION) },
                 dismissButton = { TextButton(onClick = onCancel) { Text("取消") } },
                 confirmButton = { TextButton(onClick = onConfirm) { Text("重启") } },
             )

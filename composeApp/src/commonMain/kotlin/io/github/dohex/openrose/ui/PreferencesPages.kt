@@ -41,6 +41,7 @@ internal fun PreferencesPage(
     onRequestNotificationPermission: () -> Unit = {},
     onRequestAssociation: () -> Unit = {},
     onOpenAppSettings: () -> Unit = {},
+    onSelectControlWay: ((ControlWay) -> Unit)? = null,
 ) {
     val settings = state.settings
     var systemPreferenceFeedback by remember { mutableStateOf<String?>(null) }
@@ -50,7 +51,7 @@ internal fun PreferencesPage(
     val saveSystemPreference: (UserSettings) -> Unit = { nextSettings ->
         onChange(nextSettings)
         systemPreferenceFeedback = if (state.platform.module == ModuleAvailability.Available) {
-            "偏好已保存。系统状态请查看系统页。"
+            "偏好已保存。系统状态请查看状态页。"
         } else {
             "偏好已保存，待系统就绪后生效。"
         }
@@ -104,6 +105,27 @@ internal fun PreferencesPage(
             )
         }
 
+        if (state.controlWayApplicable() && onSelectControlWay != null) {
+            ControlWayGroup(state, onSelectControlWay)
+        }
+
+        if (state.platform.controlTransportApplicability == PlatformApplicability.APPLICABLE) {
+            AppGroup(title = "连接偏好") {
+                AppSwitchRow(
+                    title = "强制使用 BLE",
+                    summary = "仅影响下一次连接",
+                    checked = settings.forceBle,
+                    onChange = { onChange(settings.copy(forceBle = it)) },
+                )
+            }
+        }
+
+        if (state.backgroundControlApplicable()) {
+            BackgroundControlGroup(
+                state, onChange, onRequestPermission, onRequestNotificationPermission, onRequestAssociation, onOpenAppSettings,
+            )
+        }
+
         if (state.platform.hyperOsIntegrationApplicable) {
             AppGroup(title = "系统呈现") {
                 AppChoiceRow(
@@ -148,10 +170,7 @@ internal fun PreferencesPage(
                 }
             }
 
-            AppGroup(
-                title = "融合设备中心",
-                footnote = "选择 OpenRose 后，点击设备卡片的 Additional Settings 会打开耳机主页并尝试连接该耳机。",
-            ) {
+            AppGroup(title = "融合设备中心") {
                 AppChoiceRow(
                     title = "附加设置入口",
                     valueText = fusionSettingsDestinationLabel(settings.fusionSettingsDestination),
@@ -161,28 +180,17 @@ internal fun PreferencesPage(
                     selected = settings.fusionSettingsDestination,
                     onSelect = { saveSystemPreference(settings.copy(fusionSettingsDestination = it)) },
                 )
+                AppSwitchRow(
+                    title = "关闭降噪使用抗风噪",
+                    summary = "点“关闭”时改用抗风噪模式；仅支持抗风噪的型号生效，其余仍为标准模式",
+                    checked = settings.fusionOffAsWind,
+                    onChange = { saveSystemPreference(settings.copy(fusionOffAsWind = it)) },
+                )
             }
 
             systemPreferenceFeedback?.let { message ->
                 AppText(message, Modifier.padding(horizontal = 16.dp), role = AppTextRole.Summary)
             }
-        }
-
-        if (state.platform.controlTransportApplicability == PlatformApplicability.APPLICABLE) {
-            AppGroup(title = "连接偏好") {
-                AppSwitchRow(
-                    title = "强制使用 BLE",
-                    summary = "仅影响下一次连接",
-                    checked = settings.forceBle,
-                    onChange = { onChange(settings.copy(forceBle = it)) },
-                )
-            }
-        }
-
-        if (state.backgroundControlApplicable()) {
-            BackgroundControlGroup(
-                state, onChange, onRequestPermission, onRequestNotificationPermission, onRequestAssociation, onOpenAppSettings,
-            )
         }
 
         AppGroup(title = "关于") {
@@ -194,31 +202,29 @@ internal fun PreferencesPage(
     }
 }
 
-/** Current platform status, applicable system-integration status, and diagnostics entry. */
+/** Read-only status: only what is wrong or needs attention, plus the conclusions. Preferences live in Settings. */
 @Composable
-internal fun SystemIntegrationPage(
+internal fun StatusPage(
     state: ControlState,
     onRequestPermission: () -> Unit,
     onOpenSystemSettings: () -> Unit,
     onDiagnostics: () -> Unit,
-    onSelectControlWay: ((ControlWay) -> Unit)? = null,
-    onDisableModuleControl: (() -> Unit)? = null,
 ) {
     val hyperOsApplicable = state.platform.hyperOsIntegrationApplicable
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        AppGroup(title = "系统状态") {
-            PlatformStatusRows(state.platform, onRequestPermission, onOpenSystemSettings)
+        AppGroup(title = "蓝牙") {
+            PlatformAttentionRows(state.platform, onRequestPermission, onOpenSystemSettings)
         }
 
         if (hyperOsApplicable) {
             IntegrationReadinessCard(state.platform.module)
         }
 
-        if (state.controlWayApplicable() && onSelectControlWay != null && onDisableModuleControl != null) {
-            ControlWayCard(state, onSelectControlWay, onDisableModuleControl)
+        if (state.controlWayApplicable()) {
+            ControlStatusGroup(state)
         }
 
         AppGroup {
@@ -255,6 +261,7 @@ internal fun PlatformDiagnosticsCard(
                 val moduleTone = when (platform.module) {
                     ModuleAvailability.Available -> StatusTone.GOOD
                     ModuleAvailability.NotEnabled -> StatusTone.CAUTION
+                    ModuleAvailability.Unresponsive -> StatusTone.ERROR
                     is ModuleAvailability.Unavailable -> StatusTone.NEUTRAL
                 }
                 ToneInfoRow("系统模块", moduleValue, moduleTone)
@@ -345,6 +352,39 @@ private fun PlatformStatusRows(
         }
     }
 
+    TransportRow(platform, onOpenSystemSettings)
+}
+
+/** Status-page subset of [PlatformStatusRows]: permission only while it needs action; the transport row always states the verdict. */
+@Composable
+private fun PlatformAttentionRows(
+    platform: PlatformState,
+    onRequestPermission: () -> Unit,
+    onOpenSystemSettings: () -> Unit,
+) {
+    if (platform.hostPlatform == HostPlatform.ANDROID) {
+        if (platform.permission == PermissionState.REQUIRED || platform.permission == PermissionState.DENIED) {
+            val denied = platform.permission == PermissionState.DENIED
+            ToneInfoRow(
+                "蓝牙权限",
+                if (denied) "未获得蓝牙权限" else "需要授权后才能使用蓝牙",
+                if (denied) StatusTone.ERROR else StatusTone.CAUTION,
+            )
+            AppButton(
+                text = "授予蓝牙权限",
+                onClick = onRequestPermission,
+                modifier = Modifier.padding(start = 16.dp),
+            )
+        }
+        if (platform.systemIntegrationApplicability == PlatformApplicability.UNKNOWN) {
+            ToneInfoRow("系统集成适用性", "尚未核实", StatusTone.CAUTION)
+        }
+    }
+    TransportRow(platform, onOpenSystemSettings)
+}
+
+@Composable
+private fun TransportRow(platform: PlatformState, onOpenSystemSettings: () -> Unit) {
     val transportValue = when (val transport = platform.transport) {
         TransportAvailability.Available -> "可用"
         TransportAvailability.Disabled -> "系统蓝牙已关闭"
@@ -368,14 +408,11 @@ private fun PlatformStatusRows(
 @Composable
 private fun IntegrationReadinessCard(module: ModuleAvailability) {
     val clause = module.unreadyClause()
-    val (title, summary, tone) = if (clause == null) {
-        Triple("系统集成已连接", "状态来自当前系统适配器。", StatusTone.GOOD)
-    } else {
-        Triple("系统集成未就绪", "$clause。", StatusTone.CAUTION)
-    }
-    AppGroup {
-        ToneInfoRow("就绪状态", title, tone)
-        AppText(summary, Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp), role = AppTextRole.Summary)
+    when {
+        clause == null -> AppStatusCard(AppStatusKind.Good, RoseIcon.CHECK, "系统集成已连接", null, null)
+        module == ModuleAvailability.Unresponsive ->
+            AppStatusCard(AppStatusKind.Error, RoseIcon.CLOSE, "系统集成无响应", "$clause。", module.nextStep())
+        else -> AppStatusCard(AppStatusKind.Caution, RoseIcon.INFO, "系统集成未就绪", "$clause。", module.nextStep())
     }
 }
 

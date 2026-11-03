@@ -140,14 +140,6 @@ class OpenRoseApplication : Application() {
         }
     }
 
-    /** Stops module control without enabling ordinary control. */
-    fun disableModuleControl() {
-        controlScope.launch {
-            runtime.disableModuleControl()
-            followSavedControlWay()
-        }
-    }
-
     /**
      * After a handoff: presence observation is withdrawn when ordinary control is no longer the saved
      * choice, and the stopped service is started again (a user-initiated action) when it is and background

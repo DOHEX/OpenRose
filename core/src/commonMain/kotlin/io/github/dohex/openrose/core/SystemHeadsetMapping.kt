@@ -26,6 +26,13 @@ object SystemHeadsetMapping {
         else -> null
     }
 
+    /**
+     * The mode a system entry's "off" selection writes. With [offAsWind] and a model that offers wind reduction
+     * it is wind; otherwise the request is unchanged, so a model without wind keeps a working off.
+     */
+    fun requestedMode(requested: String, offAsWind: Boolean, supportedModes: Set<String>): String =
+        if (offAsWind && requested == "normal" && "wind" in supportedModes) "wind" else requested
+
     fun miLinkAncState(fields: Map<DeviceField, FieldReading>): Int? = text(fields, DeviceField.NOISE_MODE)?.let(::miLinkMode)
 
     /**

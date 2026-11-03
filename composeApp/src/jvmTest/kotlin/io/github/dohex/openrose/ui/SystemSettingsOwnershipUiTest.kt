@@ -14,28 +14,62 @@ import io.github.dohex.openrose.core.PermissionState
 import io.github.dohex.openrose.core.PlatformApplicability
 import io.github.dohex.openrose.core.PlatformState
 import io.github.dohex.openrose.core.TransportAvailability
+import io.github.dohex.openrose.core.ModuleUnavailableCause
 import io.github.dohex.openrose.core.UserSettings
 import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class SystemSettingsOwnershipUiTest {
     @Test
-    fun systemReadinessExplanationAlignsWithItsStatus() = runBlocking {
+    fun statusPageSeparatesAnUnresponsiveModuleFromAnUnreadyOne() = runBlocking {
+        val verdicts = listOf(
+            ModuleAvailability.Available to "系统集成已连接",
+            ModuleAvailability.NotEnabled to "系统集成未就绪",
+            ModuleAvailability.Unresponsive to "系统集成无响应",
+        )
         for (style in InterfaceStyle.entries) {
-            val harness = createHarness(1200, style, module = ModuleAvailability.NotEnabled)
-            try {
-                harness.render()
-                harness.clickTab("系统集成")
-                harness.render()
-                val status = harness.textBounds("就绪状态")
-                val explanation = harness.textBounds("${ModuleAvailability.NotEnabled.unreadyClause()}。")
-                assertTrue(explanation.left >= status.left && explanation.left < status.right,
-                    "the readiness explanation should align with its status in $style: $status $explanation")
-            } finally {
-                harness.close()
+            for ((module, verdict) in verdicts) {
+                val harness = createHarness(1200, style, module = module)
+                try {
+                    harness.render()
+                    harness.clickTab("状态")
+                    harness.render()
+                    assertTrue(harness.hasText(verdict), "$module is stated as \"$verdict\" in $style")
+                    for ((_, other) in verdicts.filter { it.second != verdict }) {
+                        assertFalse(harness.hasText(other), "$module is not also stated as \"$other\" in $style")
+                    }
+                } finally {
+                    harness.close()
+                }
+            }
+        }
+    }
+
+    @Test
+    fun statusPageSaysWhatToDoOnlyWhereTheCauseIsKnown() = runBlocking {
+        val advised = ModuleUnavailableCause.entries.map { ModuleAvailability.Unavailable("fixture", it) } +
+            listOf(ModuleAvailability.NotEnabled, ModuleAvailability.Unresponsive)
+        val advice = advised.map { requireNotNull(it.nextStep()) { "$it has no advice" } }
+        assertEquals(advice.size, advice.toSet().size, "each cause is told apart: $advice")
+        assertNull(ModuleAvailability.Available.nextStep())
+        assertNull(ModuleAvailability.Unavailable("fixture").nextStep(), "an unexplained failure gets no invented advice")
+
+        for (style in InterfaceStyle.entries) {
+            for (module in advised + ModuleAvailability.Unavailable("fixture")) {
+                val harness = createHarness(1200, style, module = module)
+                try {
+                    harness.render()
+                    harness.clickTab("状态")
+                    harness.render()
+                    module.nextStep()?.let { assertTrue(harness.hasText(it), "$module shows its advice in $style") }
+                    assertTrue(harness.hasText("${module.unreadyClause()}。"), "$module keeps its reason in $style")
+                } finally {
+                    harness.close()
+                }
             }
         }
     }
@@ -43,7 +77,7 @@ class SystemSettingsOwnershipUiTest {
     @Test
     fun savedPreferenceMessageUsesThePageSurface() = runBlocking {
         for (style in InterfaceStyle.entries) {
-            val harness = createHarness(1200, style)
+            val harness = createHarness(1200, style, height = 1800)
             try {
                 harness.render()
                 harness.clickTab("设置")
@@ -63,7 +97,7 @@ class SystemSettingsOwnershipUiTest {
     }
 
     @Test
-    fun hyperOsPreferencesLiveInSettingsAndDiagnosticsIsReachedOnlyFromSystem() = runBlocking {
+    fun hyperOsPreferencesLiveInSettingsAndDiagnosticsIsReachedOnlyFromStatus() = runBlocking {
         for (style in InterfaceStyle.entries) {
             for (width in listOf(420, 1200)) {
                 val harness = createHarness(width, style)
@@ -86,22 +120,22 @@ class SystemSettingsOwnershipUiTest {
                     assertTrue(harness.hasText("偏好已保存，待系统就绪后生效。"), "unready integrations report a saved pending preference in $style")
                     assertFalse(harness.hasText("功能已生效"), "a save callback does not claim system presentation is active in $style")
 
-                    harness.clickTab(if (width >= 900) "系统集成" else "系统")
+                    harness.clickTab("状态")
                     harness.render()
-                    assertFalse(harness.hasText("超级岛"), "System contains no preferences for $style at ${width}dp")
-                    assertFalse(harness.hasText("焦点通知"), "System contains no notification control for $style at ${width}dp")
-                    assertFalse(harness.hasText("强制使用 BLE"), "System contains no connection preference for $style at ${width}dp")
-                    assertFalse(harness.hasText("模块显示时机"), "System contains no module timing control for $style at ${width}dp")
-                    assertTrue(harness.hasText("系统集成未就绪"), "System keeps the real readiness state for $style at ${width}dp")
-                    assertTrue(harness.hasText("运行状态与诊断"), "System owns the fixed diagnostics entry for $style at ${width}dp")
+                    assertFalse(harness.hasText("超级岛"), "Status contains no preferences for $style at ${width}dp")
+                    assertFalse(harness.hasText("焦点通知"), "Status contains no notification control for $style at ${width}dp")
+                    assertFalse(harness.hasText("强制使用 BLE"), "Status contains no connection preference for $style at ${width}dp")
+                    assertFalse(harness.hasText("模块显示时机"), "Status contains no module timing control for $style at ${width}dp")
+                    assertTrue(harness.hasText("系统集成未就绪"), "Status keeps the real readiness state for $style at ${width}dp")
+                    assertTrue(harness.hasText("运行状态与诊断"), "Status owns the fixed diagnostics entry for $style at ${width}dp")
                     assertFalse(harness.hasTab("诊断与记录"), "the navigation rail has no diagnostics item for $style at ${width}dp")
 
                     harness.clickText("运行状态与诊断")
                     harness.render()
-                    assertTrue(harness.hasText("系统模块"), "diagnostics remain reachable from System for $style at ${width}dp")
+                    assertTrue(harness.hasText("系统模块"), "diagnostics remain reachable from Status for $style at ${width}dp")
                     assertFalse(harness.hasTab("诊断与记录"), "the diagnostics route is not a sidebar destination for $style at ${width}dp")
                     if (width >= 900) {
-                        assertTrue(harness.hasSelectedTab("系统集成"), "System remains selected while its diagnostics are open in $style")
+                        assertTrue(harness.hasSelectedTab("状态"), "Status remains selected while its diagnostics are open in $style")
                     }
                     assertTrue(harness.settingWrites.isEmpty())
                 } finally {
@@ -172,7 +206,7 @@ class SystemSettingsOwnershipUiTest {
                 harness.clickText("焦点通知")
                 harness.render()
 
-                assertTrue(harness.hasText("偏好已保存。系统状态请查看系统页。"), "ready integrations report save without claiming effect in $style")
+                assertTrue(harness.hasText("偏好已保存。系统状态请查看状态页。"), "ready integrations report save without claiming effect in $style")
                 assertFalse(harness.hasText("功能已生效"), "module readiness alone does not prove system presentation in $style")
                 assertFalse(harness.hasText("偏好已保存，待系统就绪后生效。"), "ready integrations do not report a pending readiness state in $style")
                 assertTrue(harness.state.value.settings.focusNotificationEnabled.not())
@@ -187,6 +221,7 @@ class SystemSettingsOwnershipUiTest {
         style: InterfaceStyle,
         settings: UserSettings = UserSettings(interfaceStyle = style, focusNotificationEnabled = true),
         module: ModuleAvailability = ModuleAvailability.Unavailable("兼容框架服务尚未连接"),
+        height: Int = 1000,
     ): Harness {
         val settingsChanges = mutableListOf<UserSettings>()
         val state = mutableStateOf(
@@ -203,7 +238,7 @@ class SystemSettingsOwnershipUiTest {
             ),
         )
         val settingWrites = mutableListOf<Pair<io.github.dohex.openrose.core.DeviceSetting, io.github.dohex.openrose.core.protocol.FieldValue>>()
-        val scene = createOpenRoseUiTestScene(width, 1000) {
+        val scene = createOpenRoseUiTestScene(width, height) {
             OpenRoseApp(
                 state = state.value,
                 onSettingsChange = { nextSettings ->

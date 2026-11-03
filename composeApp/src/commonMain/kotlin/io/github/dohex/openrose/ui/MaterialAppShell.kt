@@ -29,9 +29,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -45,8 +43,6 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
-import top.yukonga.miuix.kmp.blur.Backdrop
-import top.yukonga.miuix.kmp.blur.ProgressiveBlur
 
 @Composable
 private fun MaterialRailHeader() {
@@ -62,9 +58,10 @@ private fun MaterialRailHeader() {
     }
 }
 
+/** Renders a pushed (secondary) page; main tabs live in [MaterialMainShell]. [parentTab] is the tab the rail highlights. */
 @Composable
 internal fun MaterialAppShell(
-    backStack: List<AppPage> = emptyList(),
+    parentTab: AppPage,
     page: AppPage,
     wide: Boolean,
     onNavigate: (AppPage) -> Unit,
@@ -72,17 +69,9 @@ internal fun MaterialAppShell(
     scrollState: ScrollState,
     pageContent: @Composable () -> Unit,
     feedbackContent: @Composable () -> Unit = {},
-    connectedHome: Boolean = false,
-    showAddDeviceAction: Boolean = true,
-    menuExpanded: Boolean = false,
-    onMenuExpandedChange: (Boolean) -> Unit = {},
-    onDisconnect: () -> Unit = {},
-    isSecondary: Boolean = backStack.size > 1 || page !in mainPages,
-    showBottomBar: Boolean = !wide && !isSecondary && page in mainPages,
 ) {
     val backdropActive = LocalBackdropBlurActive.current
     val backdrop = rememberAppBackdrop(MaterialTheme.colorScheme.surface, backdropActive)
-    val menuFocusRequester = remember { FocusRequester() }
     CompositionLocalProvider(LocalAppBackdrop provides backdrop) {
         Row(Modifier.fillMaxSize()) {
         if (wide) NavigationRail(
@@ -90,9 +79,8 @@ internal fun MaterialAppShell(
             header = { MaterialRailHeader() },
         ) {
             mainPages.forEach { destination ->
-                val isSelected = if (backStack.isNotEmpty()) backStack.first() == destination else page == destination
                 NavigationRailItem(
-                    selected = isSelected,
+                    selected = destination == parentTab,
                     onClick = { onNavigate(destination) },
                     icon = { AppIcon(destination.icon) },
                     label = { Text(destination.title) },
@@ -104,50 +92,8 @@ internal fun MaterialAppShell(
                 )
             }
         }
-        val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
         val title = page.title
-        val navigation: @Composable () -> Unit = {
-            if (isSecondary) IconButton(onClick = onBack) { Icon(RoseIcons.Back, "返回") }
-        }
-        val actions: @Composable RowScope.() -> Unit = {
-            if (page == AppPage.HEADPHONES) {
-                Box {
-                    if (connectedHome) {
-                        IconButton(onClick = { onMenuExpandedChange(true) }) {
-                            Icon(RoseIcons[RoseIcon.MORE], contentDescription = "耳机菜单")
-                        }
-                    } else if (showAddDeviceAction) {
-                        IconButton(onClick = { onNavigate(AppPage.ADD_DEVICE) }) {
-                            Icon(RoseIcons.Plus, contentDescription = "添加耳机")
-                        }
-                    }
-                    DropdownMenu(
-                        expanded = connectedHome && menuExpanded,
-                        onDismissRequest = { onMenuExpandedChange(false) },
-                    ) {
-                        LaunchedEffect(menuExpanded) {
-                            if (menuExpanded) menuFocusRequester.requestFocus()
-                        }
-                        DropdownMenuItem(
-                            modifier = Modifier.focusRequester(menuFocusRequester).onPreviewKeyEvent { event ->
-                                if (event.type == KeyEventType.KeyUp && event.key == Key.Escape) {
-                                    onMenuExpandedChange(false)
-                                    true
-                                } else {
-                                    false
-                                }
-                            },
-                            text = { Text("断开控制连接") },
-                            onClick = {
-                                onMenuExpandedChange(false)
-                                onDisconnect()
-                            },
-                        )
-                    }
-                }
-            }
-        }
-        Scaffold(modifier = Modifier.weight(1f).nestedScroll(scrollBehavior.nestedScrollConnection),
+        Scaffold(modifier = Modifier.weight(1f),
             topBar = {
                 val topBarModifier = Modifier.appBarBackdropBlur(
                     backdrop = backdrop,
@@ -155,44 +101,67 @@ internal fun MaterialAppShell(
                     active = backdropActive,
                 )
                 val topBarColors = if (backdropActive) TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent) else TopAppBarDefaults.topAppBarColors()
-                val largeTopBarColors = if (backdropActive) TopAppBarDefaults.largeTopAppBarColors(containerColor = Color.Transparent) else TopAppBarDefaults.largeTopAppBarColors()
-                if (page in mainPages) {
-                    LargeTopAppBar(title = { Text(title) }, modifier = topBarModifier, navigationIcon = navigation, actions = actions, scrollBehavior = scrollBehavior, colors = largeTopBarColors)
-                } else {
-                    TopAppBar(title = { Text(title) }, modifier = topBarModifier, navigationIcon = navigation, actions = actions, colors = topBarColors)
-                }
-            },
-            bottomBar = {
-                if (showBottomBar) {
-                    val bottomBarModifier = Modifier.appBarBackdropBlur(
-                        backdrop = backdrop,
-                        surfaceColor = MaterialTheme.colorScheme.surfaceContainer,
-                        active = backdropActive,
-                    )
-                    val bottomBarColor = if (backdropActive) Color.Transparent else MaterialTheme.colorScheme.surfaceContainer
-                    NavigationBar(modifier = bottomBarModifier, containerColor = bottomBarColor) {
-                        mainPages.forEach { destination ->
-                            NavigationBarItem(
-                                selected = page == destination,
-                                onClick = { onNavigate(destination) },
-                                icon = { AppIcon(destination.icon) },
-                                label = { Text(destination.navigationLabel) },
-                                colors = NavigationBarItemDefaults.colors(
-                                    indicatorColor = MaterialTheme.colorScheme.secondaryContainer,
-                                    selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                                ),
-                            )
-                        }
-                    }
-                }
+                TopAppBar(
+                    title = { Text(title) },
+                    modifier = topBarModifier,
+                    navigationIcon = { IconButton(onClick = onBack) { Icon(RoseIcons.Back, "返回") } },
+                    colors = topBarColors,
+                )
             }) { padding ->
             Box(Modifier.fillMaxSize()) {
                 Column(Modifier.fillMaxSize().appBackdropContent(backdrop, backdropActive).verticalScroll(scrollState)) {
-                    ShellPageContent(page, padding, compactHome = page == AppPage.HEADPHONES && !connectedHome, pageContent = pageContent)
+                    ShellPageContent(page, padding, compactHome = false, pageContent = pageContent)
                 }
                 ShellFeedback(padding, content = feedbackContent)
             }
         }
+        }
+    }
+}
+
+/** Top-bar actions of the headphones tab: overflow menu while connected, add-device button otherwise. */
+@Composable
+private fun MaterialHeadphoneActions(
+    connectedHome: Boolean,
+    showAddDeviceAction: Boolean,
+    menuExpanded: Boolean,
+    onMenuExpandedChange: (Boolean) -> Unit,
+    onAddDevice: () -> Unit,
+    onDisconnect: () -> Unit,
+) {
+    val menuFocusRequester = remember { FocusRequester() }
+    Box {
+        if (connectedHome) {
+            IconButton(onClick = { onMenuExpandedChange(true) }) {
+                Icon(RoseIcons[RoseIcon.MORE], contentDescription = "耳机菜单")
+            }
+        } else if (showAddDeviceAction) {
+            IconButton(onClick = onAddDevice) {
+                Icon(RoseIcons.Plus, contentDescription = "添加耳机")
+            }
+        }
+        DropdownMenu(
+            expanded = connectedHome && menuExpanded,
+            onDismissRequest = { onMenuExpandedChange(false) },
+        ) {
+            LaunchedEffect(menuExpanded) {
+                if (menuExpanded) menuFocusRequester.requestFocus()
+            }
+            DropdownMenuItem(
+                modifier = Modifier.focusRequester(menuFocusRequester).onPreviewKeyEvent { event ->
+                    if (event.type == KeyEventType.KeyUp && event.key == Key.Escape) {
+                        onMenuExpandedChange(false)
+                        true
+                    } else {
+                        false
+                    }
+                },
+                text = { Text("断开控制连接") },
+                onClick = {
+                    onMenuExpandedChange(false)
+                    onDisconnect()
+                },
+            )
         }
     }
 }
@@ -256,8 +225,11 @@ internal fun MaterialMainShell(
         pagerState.syncPage()
     }
     val backdropActive = LocalBackdropBlurActive.current
+    val floatingBackdrop = rememberAppBackdrop(
+        MaterialTheme.colorScheme.surface,
+        backdropActive && !wide && bottomBarStyle == BottomBarStyle.FLOATING,
+    )
     val currentTab = mainPages.getOrElse(pagerState.selectedPage) { AppPage.HEADPHONES }
-    val menuFocusRequester = remember { FocusRequester() }
     Row(Modifier.fillMaxSize()) {
         if (wide) {
             NavigationRail(
@@ -297,12 +269,14 @@ internal fun MaterialMainShell(
                         ) {
                             HorizontalFloatingToolbar(
                                 expanded = true,
+                                modifier = Modifier.appPopupBackdropBlur(
+                                    backdrop = floatingBackdrop,
+                                    shape = CircleShape,
+                                    surfaceColor = MaterialTheme.colorScheme.surfaceContainer,
+                                    active = backdropActive,
+                                ),
                                 colors = FloatingToolbarDefaults.standardFloatingToolbarColors(
-                                    toolbarContainerColor = if (backdropActive) {
-                                        MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.85f)
-                                    } else {
-                                        MaterialTheme.colorScheme.surfaceContainer
-                                    },
+                                    toolbarContainerColor = Color.Transparent,
                                 ),
                             ) {
                                 mainPages.forEachIndexed { index, destination ->
@@ -393,6 +367,7 @@ internal fun MaterialMainShell(
                 state = pagerState.pagerState,
                 modifier = Modifier
                     .fillMaxSize()
+                    .appBackdropContent(floatingBackdrop, backdropActive)
                     .padding(bottom = pagerBottomPadding),
                 beyondViewportPageCount = 1,
                 userScrollEnabled = !wide,
@@ -414,44 +389,18 @@ internal fun MaterialMainShell(
                     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
                     val title = page.title
                     val actions: @Composable RowScope.() -> Unit = {
-                        if (page == AppPage.SYSTEM && isSelected) scopeRestartAction()
-                        if (page == AppPage.HEADPHONES && isSelected) {
-                            Box {
-                            if (connectedHome) {
-                                IconButton(onClick = { onMenuExpandedChange(true) }) {
-                                    Icon(RoseIcons[RoseIcon.MORE], contentDescription = "耳机菜单")
-                                }
-                            } else if (showAddDeviceAction) {
-                                IconButton(onClick = { onNavigate(AppPage.ADD_DEVICE) }) {
-                                    Icon(RoseIcons.Plus, contentDescription = "添加耳机")
-                                }
-                            }
-                            DropdownMenu(
-                                expanded = connectedHome && menuExpanded,
-                                onDismissRequest = { onMenuExpandedChange(false) },
-                            ) {
-                                LaunchedEffect(menuExpanded) {
-                                    if (menuExpanded) menuFocusRequester.requestFocus()
-                                }
-                                DropdownMenuItem(
-                                    modifier = Modifier.focusRequester(menuFocusRequester).onPreviewKeyEvent { event ->
-                                        if (event.type == KeyEventType.KeyUp && event.key == Key.Escape) {
-                                            onMenuExpandedChange(false)
-                                            true
-                                        } else {
-                                            false
-                                        }
-                                    },
-                                    text = { Text("断开控制连接") },
-                                    onClick = {
-                                        onMenuExpandedChange(false)
-                                        onDisconnect()
-                                    },
-                                )
-                            }
+                        if (page == AppPage.STATUS) scopeRestartAction()
+                        if (page == AppPage.HEADPHONES) {
+                            MaterialHeadphoneActions(
+                                connectedHome = connectedHome,
+                                showAddDeviceAction = showAddDeviceAction,
+                                menuExpanded = menuExpanded,
+                                onMenuExpandedChange = onMenuExpandedChange,
+                                onAddDevice = { onNavigate(AppPage.ADD_DEVICE) },
+                                onDisconnect = onDisconnect,
+                            )
                         }
                     }
-                }
                 Scaffold(
                     modifier = Modifier.fillMaxSize().nestedScroll(scrollBehavior.nestedScrollConnection),
                     topBar = {
@@ -482,9 +431,7 @@ internal fun MaterialMainShell(
                             }
                         }
                         ShellFeedback(pagePadding, bottomClearance = trailingBottomPadding) {
-                            if (isSelected) {
-                                pageFeedbackFor(page)
-                            }
+                            pageFeedbackFor(page)
                         }
                     }
                 }

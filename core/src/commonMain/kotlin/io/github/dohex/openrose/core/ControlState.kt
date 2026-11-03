@@ -45,7 +45,29 @@ sealed interface TransportAvailability {
 sealed interface ModuleAvailability {
     data object Available : ModuleAvailability
     data object NotEnabled : ModuleAvailability
-    data class Unavailable(val reason: String) : ModuleAvailability
+    /** [reason] is for display; [cause] is what a surface may branch on, null when no next step is known. */
+    data class Unavailable(val reason: String, val cause: ModuleUnavailableCause? = null) : ModuleAvailability
+
+    /** Authorised and reachable, but the host stopped answering; unlike [Unavailable] a process that is merely absent is not meant. */
+    data object Unresponsive : ModuleAvailability
+}
+
+/** Why the system module cannot act, where the application can tell the user what to do about it. */
+enum class ModuleUnavailableCause {
+    /** No Xposed framework service has reached the application. */
+    FRAMEWORK_MISSING,
+
+    /** The framework service speaks an API older than the module needs. */
+    FRAMEWORK_OUTDATED,
+
+    /** No module host answered where the module should have loaded it. */
+    HOST_NOT_FOUND,
+
+    /** The host refused this application's authorisation. */
+    AUTHORIZATION_REFUSED,
+
+    /** A working link to the host ended. */
+    LINK_LOST,
 }
 
 enum class ConnectionPhase { CONNECTING, DISCOVERING, SUBSCRIBING, INITIALIZING, READY }

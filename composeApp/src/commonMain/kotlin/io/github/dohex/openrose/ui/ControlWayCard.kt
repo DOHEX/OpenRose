@@ -14,7 +14,6 @@ import io.github.dohex.openrose.core.ControlState
 import io.github.dohex.openrose.core.HostPlatform
 import io.github.dohex.openrose.core.ControlWay
 import io.github.dohex.openrose.core.HandoffOutcome
-import io.github.dohex.openrose.core.ModuleAvailability
 import io.github.dohex.openrose.core.OwnerFailureStage
 import io.github.dohex.openrose.core.OwnerHolder
 import io.github.dohex.openrose.core.OwnerReadiness
@@ -35,9 +34,7 @@ internal object ControlWayTags {
     /** Every control-way tag starts with this, so a host without the choice can be shown to expose none. */
     const val PREFIX = "control-way."
     const val CARD = "${PREFIX}card"
-    const val MODULE_NOTE = "${PREFIX}module-note"
-    const val NONE_NOTICE = "${PREFIX}none-notice"
-    const val DISABLE_MODULE = "${PREFIX}disable-module"
+    const val SWITCH_FEEDBACK = "${PREFIX}switch-feedback"
     const val SWITCH_BLOCKED_NOTICE = "${PREFIX}switch-blocked-notice"
     const val LAST_HANDOFF = "${PREFIX}last-handoff"
     const val HOLDER = "${PREFIX}holder"
@@ -62,92 +59,92 @@ internal object ControlWayTags {
 }
 
 /**
- * Chooses between 普通控制 and 模块控制 and reports three separate facts: the saved selection,
- * whether its owner is ready, and the earphone 控制连接. Selecting never implies the owner exists.
+ * Settings side of the control way: the saved choice only. Whether its owner is ready and the
+ * earphone 控制连接 are reported by [ControlStatusGroup]; selecting never implies the owner exists.
  */
 @Composable
-internal fun ControlWayCard(
+internal fun ControlWayGroup(
     state: ControlState,
     onSelectControlWay: (ControlWay) -> Unit,
-    onDisableModuleControl: () -> Unit,
 ) {
     val owner = state.owner
     val readiness = owner.readiness
     val switching = readiness is OwnerReadiness.Switching
-    Column(
-        modifier = Modifier.fillMaxWidth().testTag(ControlWayTags.CARD),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
+    Column(Modifier.fillMaxWidth().testTag(ControlWayTags.CARD)) {
         AppGroup(title = "控制方式") {
             AppRadioGroup(
                 options = controlWayOptions,
-                selected = owner.selected.takeIf { it != ControlWay.NONE },
+                selected = owner.selected,
                 enabled = !switching,
             ) { way ->
                 if (way != owner.selected) onSelectControlWay(way)
             }
-            moduleAvailabilityNote(state.platform.module)?.let {
-                AppText(it, Modifier.controlWayTextPadding().testTag(ControlWayTags.MODULE_NOTE), role = AppTextRole.Summary)
+            switchFeedback(readiness)?.let {
+                AppText(it, Modifier.controlWayTextPadding().testTag(ControlWayTags.SWITCH_FEEDBACK), role = AppTextRole.Summary)
             }
-            if (owner.selected == ControlWay.NONE) {
+        }
+    }
+}
+
+/** One line for a handoff in flight or stuck; stage and reason are shown on the status page only. */
+private fun switchFeedback(readiness: OwnerReadiness): String? = when (readiness) {
+    is OwnerReadiness.Switching -> "正在切换到${wayLabel(readiness.request.to)}…"
+    is OwnerReadiness.SwitchBlocked -> "切换未完成，详情见状态页。"
+    else -> null
+}
+
+/** Status side of the control way: the saved selection, whether its owner is ready, and the earphone 控制连接. */
+@Composable
+internal fun ControlStatusGroup(state: ControlState) {
+    val owner = state.owner
+    val readiness = owner.readiness
+    AppGroup(title = "控制状态") {
+        AppInfoRow("已选择方式", wayLabel(owner.selected))
+        val readinessColor = when (readiness) {
+            OwnerReadiness.Ready -> appColor(AppColorRole.Primary)
+            is OwnerReadiness.Unavailable, is OwnerReadiness.SwitchBlocked -> appColor(AppColorRole.Error)
+            else -> appColor(AppColorRole.Summary)
+        }
+        Tagged(ControlWayTags.readiness(readiness)) {
+            AppInfoRow("所有者状态", readinessLabel(readiness), readinessColor)
+        }
+        when (readiness) {
+            OwnerReadiness.Ready, OwnerReadiness.Starting -> Unit
+            is OwnerReadiness.Idle -> AppInfoRow("原因", readiness.reason)
+            is OwnerReadiness.Unavailable -> {
+                Tagged(ControlWayTags.failureStage(readiness.stage)) {
+                    AppInfoRow("失败阶段", stageLabel(readiness.stage))
+                }
+                AppInfoRow("原因", readiness.reason)
+            }
+            is OwnerReadiness.Switching -> AppInfoRow("切换目标", wayLabel(readiness.request.to))
+            is OwnerReadiness.SwitchBlocked -> {
+                Tagged(ControlWayTags.failureStage(readiness.stage)) {
+                    AppInfoRow("失败阶段", stageLabel(readiness.stage))
+                }
+                AppInfoRow("原因", readiness.reason)
                 AppText(
-                    "模块控制已停用，未启用普通控制",
-                    Modifier.controlWayTextPadding().testTag(ControlWayTags.NONE_NOTICE),
+                    "无法确认上一个所有者已释放控制连接，为避免两个所有者同时连接，没有进行接管。",
+                    Modifier.controlWayTextPadding().testTag(ControlWayTags.SWITCH_BLOCKED_NOTICE),
                     role = AppTextRole.Summary,
                 )
             }
-            if (owner.selected == ControlWay.MODULE) {
-                AppButton(
-                    text = "停用模块控制",
-                    onClick = onDisableModuleControl,
-                    enabled = !switching,
-                    modifier = Modifier.padding(start = 16.dp, bottom = 12.dp).testTag(ControlWayTags.DISABLE_MODULE),
-                    kind = AppButtonKind.Secondary,
-                )
-            }
         }
-
-        AppGroup(title = "控制状态") {
-            AppInfoRow("已选择方式", selectedLabel(owner.selected))
-            val readinessColor = when (readiness) {
-                OwnerReadiness.Ready -> appColor(AppColorRole.Primary)
-                is OwnerReadiness.Unavailable, is OwnerReadiness.SwitchBlocked -> appColor(AppColorRole.Error)
-                else -> appColor(AppColorRole.Summary)
-            }
-            Tagged(ControlWayTags.readiness(readiness)) {
-                AppInfoRow("所有者状态", readinessLabel(readiness), readinessColor)
-            }
-            when (readiness) {
-                OwnerReadiness.Ready, OwnerReadiness.Starting -> Unit
-                is OwnerReadiness.Idle -> AppInfoRow("原因", readiness.reason)
-                is OwnerReadiness.Unavailable -> {
-                    Tagged(ControlWayTags.failureStage(readiness.stage)) {
-                        AppInfoRow("失败阶段", stageLabel(readiness.stage))
-                    }
-                    AppInfoRow("原因", readiness.reason)
-                }
-                is OwnerReadiness.Switching -> AppInfoRow("切换目标", wayLabel(readiness.request.to))
-                is OwnerReadiness.SwitchBlocked -> {
-                    Tagged(ControlWayTags.failureStage(readiness.stage)) {
-                        AppInfoRow("失败阶段", stageLabel(readiness.stage))
-                    }
-                    AppInfoRow("原因", readiness.reason)
-                    AppText(
-                        "无法确认上一个所有者已释放控制连接，为避免两个所有者同时连接，没有进行接管。",
-                        Modifier.controlWayTextPadding().testTag(ControlWayTags.SWITCH_BLOCKED_NOTICE),
-                        role = AppTextRole.Summary,
-                    )
-                }
-            }
-            Tagged(ControlWayTags.connection(state.connection)) {
-                AppInfoRow("耳机控制连接", connectionLabel(state.connection))
-            }
+        Tagged(ControlWayTags.connection(state.connection)) {
+            AppInfoRow("耳机控制连接", connectionLabel(state.connection))
         }
+    }
+}
 
+/** Developer-grade owner facts for the diagnostics page: who holds the connection and the last blocked handoff. */
+@Composable
+internal fun ControlOwnerDiagnostics(state: ControlState) {
+    val owner = state.owner
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         owner.holder?.let { Tagged(ControlWayTags.HOLDER) { OwnerHolderGroup(it) } }
 
         val handoff = owner.lastHandoff
-        if (handoff is HandoffOutcome.Blocked && !handoff.duplicatesReadiness(readiness)) {
+        if (handoff is HandoffOutcome.Blocked && !handoff.duplicatesReadiness(owner.readiness)) {
             Tagged(ControlWayTags.LAST_HANDOFF) {
                 AppGroup(title = "上次切换") {
                     AppInfoRow("切换结果", "未完成：${wayLabel(handoff.request.from)} → ${wayLabel(handoff.request.to)}")
@@ -179,19 +176,9 @@ private fun HandoffOutcome.Blocked.duplicatesReadiness(readiness: OwnerReadiness
     readiness is OwnerReadiness.SwitchBlocked && readiness.request.id == request.id &&
         readiness.stage == stage && readiness.reason == reason
 
-/** The module cannot take over until it is available, whichever way it is unavailable. */
-private fun moduleAvailabilityNote(module: ModuleAvailability): String? =
-    module.unreadyClause()?.let { "$it。仍可选择模块控制，但模块可用前无法接管控制。" }
-
 private fun wayLabel(way: ControlWay): String = when (way) {
     ControlWay.ORDINARY -> "普通控制"
     ControlWay.MODULE -> "模块控制"
-    ControlWay.NONE -> "未启用"
-}
-
-private fun selectedLabel(way: ControlWay): String = when (way) {
-    ControlWay.NONE -> "无（模块控制已停用）"
-    else -> wayLabel(way)
 }
 
 private fun readinessLabel(readiness: OwnerReadiness): String = when (readiness) {

@@ -5,6 +5,7 @@
 
 package io.github.dohex.openrose.ui
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.focusable
@@ -21,6 +22,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.key.*
@@ -230,6 +232,46 @@ internal fun AppDashboardCard(
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
             ) {
                 Column(Modifier.padding(padding), verticalArrangement = Arrangement.spacedBy(spacing), content = content)
+            }
+        }
+    }
+}
+
+internal enum class AppStatusKind { Good, Caution, Error }
+
+@Composable
+private fun statusAccent(kind: AppStatusKind): Color = when (kind) {
+    AppStatusKind.Good -> appColor(AppColorRole.Primary)
+    AppStatusKind.Error -> appColor(AppColorRole.Error)
+    // Neither theme has a warning role; the amber follows the surface's brightness so it stays legible in both.
+    AppStatusKind.Caution -> if (appColor(AppColorRole.OnSurface).luminance() > 0.5f) Color(0xFFFFB74D) else Color(0xFFB26A00)
+}
+
+/**
+ * One glanceable verdict: a card tinted with its status colour, an icon, the verdict, why, and what to do next.
+ * Both interface styles share this body so the verdict reads the same in either.
+ */
+@Composable
+internal fun AppStatusCard(
+    kind: AppStatusKind,
+    icon: RoseIcon,
+    title: String,
+    summary: String?,
+    nextStep: String?,
+    modifier: Modifier = Modifier,
+) {
+    val accent = statusAccent(kind)
+    AppDashboardCard(modifier, compact = true) {
+        Row(
+            Modifier.fillMaxWidth().background(accent.copy(alpha = 0.14f)).padding(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            AppIcon(icon, Modifier.size(36.dp), tint = accent)
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                AppText(title, role = AppTextRole.Title)
+                summary?.let { AppText(it, role = AppTextRole.Summary, color = if (kind == AppStatusKind.Good) null else accent) }
+                nextStep?.let { AppText(it, role = AppTextRole.Summary) }
             }
         }
     }

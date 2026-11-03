@@ -53,8 +53,6 @@ enum class ControlWay {
     ORDINARY,
     /** The system Bluetooth host (`com.android.bluetooth`) hosts the session through the module. */
     MODULE,
-    /** 已停用模块控制 (GLOSSARY 控制方式): no owner is active and ordinary control is not enabled either. */
-    NONE,
 }
 
 data class UserSettings(
@@ -68,6 +66,11 @@ data class UserSettings(
     val backgroundBlurEnabled: Boolean = true,
     val bottomBarStyle: BottomBarStyle = BottomBarStyle.FIXED,
     val fusionSettingsDestination: FusionSettingsDestination = FusionSettingsDestination.SYSTEM,
+    /**
+     * Fusion device center and system headset entries: a tap on "off" writes wind reduction instead of normal
+     * when the model has it. Wind already reads back as off there, so the displayed selection does not change.
+     */
+    val fusionOffAsWind: Boolean = false,
     /** Ordinary control only: keep the control connection available while the interface is closed. Off until the user opts in. */
     val backgroundControlEnabled: Boolean = false,
     val controlWay: ControlWay = ControlWay.ORDINARY,

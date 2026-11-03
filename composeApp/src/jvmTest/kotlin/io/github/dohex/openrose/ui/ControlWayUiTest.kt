@@ -35,19 +35,10 @@ class ControlWayUiTest {
     private val moduleUnavailable = ModuleAvailability.Unavailable("兼容框架服务尚未连接")
 
     @Test
-    fun defaultStateShowsOrdinaryControlSelectedAndNotesAnUnavailableModule() = runBlocking {
+    fun defaultStateShowsOrdinaryControlSelected() = runBlocking {
         forEachStyle(ControlState(platform = platform(ModuleAvailability.NotEnabled))) { harness ->
             assertTrue(harness.isTagSelected(ControlWayTags.option(ControlWay.ORDINARY)))
             assertFalse(harness.isTagSelected(ControlWayTags.option(ControlWay.MODULE)))
-            assertTrue(harness.hasTag(ControlWayTags.MODULE_NOTE))
-            assertFalse(harness.hasTag(ControlWayTags.DISABLE_MODULE))
-        }
-    }
-
-    @Test
-    fun anAvailableModuleNeedsNoNote() = runBlocking {
-        forEachStyle(ControlState(platform = platform(ModuleAvailability.Available))) { harness ->
-            assertFalse(harness.hasTag(ControlWayTags.MODULE_NOTE))
         }
     }
 
@@ -58,13 +49,15 @@ class ControlWayUiTest {
             owner = OwnerState(selected = ControlWay.ORDINARY, readiness = OwnerReadiness.Starting),
         )
         forEachStyle(starting) { harness ->
+            harness.openTab("状态")
+            assertTrue(harness.hasText("系统集成未就绪"), "the unready module is reported on the status page")
             assertTrue(harness.hasTag(ControlWayTags.readiness(OwnerReadiness.Starting)))
             assertFalse(harness.hasTag(ControlWayTags.readiness(OwnerReadiness.Ready)))
-            assertTrue(harness.tagTexts(ControlWayTags.MODULE_NOTE).any { moduleUnavailable.reason in it })
         }
         val moduleStarting = starting.copy(owner = OwnerState(selected = ControlWay.MODULE, readiness = OwnerReadiness.Starting))
         forEachStyle(moduleStarting) { harness ->
             assertTrue(harness.isTagSelected(ControlWayTags.option(ControlWay.MODULE)))
+            harness.openTab("状态")
             assertFalse(harness.hasTag(ControlWayTags.readiness(OwnerReadiness.Ready)))
         }
     }
@@ -79,6 +72,7 @@ class ControlWayUiTest {
         )
         forEachStyle(state) { harness ->
             assertTrue(harness.isTagSelected(ControlWayTags.option(ControlWay.MODULE)))
+            harness.openTab("状态")
             assertTrue(harness.hasTag(ControlWayTags.readiness(unavailable)))
             assertTrue(harness.hasTag(ControlWayTags.failureStage(OwnerFailureStage.DISCOVERY)))
             assertTrue(harness.hasText(reason))
@@ -88,7 +82,7 @@ class ControlWayUiTest {
     }
 
     @Test
-    fun readyConnectedModuleShowsSelectionOwnerAndConnectionAsSeparateFactsAndTheRealHolder() = runBlocking {
+    fun readyConnectedModuleShowsSelectionOwnerAndConnectionAsSeparateFactsAndTheHolderOnlyInDiagnostics() = runBlocking {
         val holder = OwnerHolder(
             way = ControlWay.MODULE,
             generation = OwnerGeneration("boot-7", 3),
@@ -105,8 +99,12 @@ class ControlWayUiTest {
         )
         forEachStyle(state) { harness ->
             assertTrue(harness.isTagSelected(ControlWayTags.option(ControlWay.MODULE)))
+            harness.openTab("状态")
             assertTrue(harness.hasTag(ControlWayTags.readiness(OwnerReadiness.Ready)))
             assertTrue(harness.hasTag(ControlWayTags.connection(connection)))
+            assertFalse(harness.hasTag(ControlWayTags.HOLDER), "holder details stay off the status page")
+            harness.clickText("运行状态与诊断")
+            harness.render()
             val shown = harness.tagTexts(ControlWayTags.HOLDER)
             for (fact in listOf(holder.packageName, holder.processName, holder.generation.toString(), "1002", "4321")) {
                 assertTrue(shown.any { fact in it }, "the holder shows $fact")
@@ -122,7 +120,7 @@ class ControlWayUiTest {
             connection = connection,
             owner = OwnerState(selected = ControlWay.ORDINARY, readiness = OwnerReadiness.Ready),
         )
-        forEachStyle(state) { harness ->
+        forEachStyle(state, page = "状态") { harness ->
             assertTrue(harness.hasTag(ControlWayTags.readiness(OwnerReadiness.Ready)))
             assertTrue(harness.hasTag(ControlWayTags.connection(connection)))
             assertFalse(harness.hasTag(ControlWayTags.connection(ConnectionState.Disconnected)))
@@ -146,28 +144,8 @@ class ControlWayUiTest {
             assertEquals(ControlWay.MODULE, harness.host.state.value.owner.selected)
             assertTrue(harness.isTagSelected(ControlWayTags.option(ControlWay.MODULE)))
             assertFalse(harness.isTagSelected(ControlWayTags.option(ControlWay.ORDINARY)))
+            harness.openTab("状态")
             assertTrue(harness.hasTag(ControlWayTags.readiness(OwnerReadiness.Starting)))
-        }
-    }
-
-    @Test
-    fun disableModuleControlIsOfferedOnlyWhileModuleControlIsSelected() = runBlocking {
-        val ordinary = ControlState(platform = platform(ModuleAvailability.Available))
-        forEachStyle(ordinary) { harness -> assertFalse(harness.hasTag(ControlWayTags.DISABLE_MODULE)) }
-
-        val none = ordinary.copy(owner = OwnerState(selected = ControlWay.NONE, readiness = OwnerReadiness.Idle("fixture: disabled")))
-        forEachStyle(none) { harness -> assertFalse(harness.hasTag(ControlWayTags.DISABLE_MODULE)) }
-
-        val module = ordinary.copy(owner = OwnerState(selected = ControlWay.MODULE, readiness = OwnerReadiness.Ready))
-        forEachStyle(module) { harness ->
-            assertTrue(harness.isTagClickable(ControlWayTags.DISABLE_MODULE))
-            harness.clickTag(ControlWayTags.DISABLE_MODULE)
-            harness.render()
-            assertEquals(ControlWay.NONE, harness.host.state.value.owner.selected)
-            assertFalse(harness.isTagSelected(ControlWayTags.option(ControlWay.MODULE)))
-            assertFalse(harness.isTagSelected(ControlWayTags.option(ControlWay.ORDINARY)))
-            assertFalse(harness.hasTag(ControlWayTags.DISABLE_MODULE))
-            assertTrue(harness.hasTag(ControlWayTags.NONE_NOTICE))
         }
     }
 
@@ -181,18 +159,21 @@ class ControlWayUiTest {
             owner = OwnerState(selected = ControlWay.ORDINARY, readiness = blocked),
         )
         forEachStyle(state) { harness ->
+            assertTrue(harness.hasTag(ControlWayTags.SWITCH_FEEDBACK), "settings points at the status page")
+            assertTrue(harness.isTagClickable(ControlWayTags.option(ControlWay.ORDINARY)))
+            assertTrue(harness.isTagClickable(ControlWayTags.option(ControlWay.MODULE)))
+            assertFalse(harness.hasText(reason), "settings does not repeat the failure reason")
+            harness.openTab("状态")
             assertTrue(harness.hasTag(ControlWayTags.readiness(blocked)))
             assertTrue(harness.hasTag(ControlWayTags.failureStage(OwnerFailureStage.RELEASE)))
             assertTrue(harness.hasText(reason))
             assertTrue(harness.hasTag(ControlWayTags.SWITCH_BLOCKED_NOTICE))
-            assertTrue(harness.isTagClickable(ControlWayTags.option(ControlWay.ORDINARY)))
-            assertTrue(harness.isTagClickable(ControlWayTags.option(ControlWay.MODULE)))
             assertFalse(harness.hasTag(ControlWayTags.readiness(OwnerReadiness.Ready)))
         }
     }
 
     @Test
-    fun blockedHandoffShowsItsStageAndReason() = runBlocking {
+    fun blockedHandoffShowsItsStageAndReasonOnlyInDiagnostics() = runBlocking {
         val request = SwitchRequest("req-2", ControlWay.ORDINARY, ControlWay.MODULE)
         val reason = "fixture: the selection could not be saved"
         val state = ControlState(
@@ -203,7 +184,10 @@ class ControlWayUiTest {
                 lastHandoff = HandoffOutcome.Blocked(request, OwnerFailureStage.SELECTION_PERSISTENCE, reason),
             ),
         )
-        forEachStyle(state) { harness ->
+        forEachStyle(state, page = "状态") { harness ->
+            assertFalse(harness.hasTag(ControlWayTags.LAST_HANDOFF), "the status page does not list past handoffs")
+            harness.clickText("运行状态与诊断")
+            harness.render()
             assertTrue(harness.hasTag(ControlWayTags.LAST_HANDOFF))
             assertTrue(harness.hasTag(ControlWayTags.failureStage(OwnerFailureStage.SELECTION_PERSISTENCE)))
             assertTrue(harness.hasText(reason))
@@ -221,7 +205,11 @@ class ControlWayUiTest {
                 lastHandoff = HandoffOutcome.Completed(request),
             ),
         )
-        forEachStyle(state) { harness -> assertFalse(harness.hasTag(ControlWayTags.LAST_HANDOFF)) }
+        forEachStyle(state, page = "状态") { harness ->
+            harness.clickText("运行状态与诊断")
+            harness.render()
+            assertFalse(harness.hasTag(ControlWayTags.LAST_HANDOFF))
+        }
     }
 
     @Test
@@ -233,35 +221,15 @@ class ControlWayUiTest {
             owner = OwnerState(selected = ControlWay.ORDINARY, readiness = switching),
         )
         forEachStyle(state) { harness ->
-            assertTrue(harness.hasTag(ControlWayTags.readiness(switching)))
+            assertTrue(harness.hasTag(ControlWayTags.SWITCH_FEEDBACK))
             assertTrue(harness.isTagDisabled(ControlWayTags.option(ControlWay.ORDINARY)))
             assertTrue(harness.isTagDisabled(ControlWayTags.option(ControlWay.MODULE)))
-            assertFalse(harness.hasTag(ControlWayTags.readiness(OwnerReadiness.Ready)))
             assertFalse(harness.isTagClickable(ControlWayTags.option(ControlWay.MODULE)))
             assertFalse(harness.isTagClickable(ControlWayTags.option(ControlWay.ORDINARY)))
             assertEquals(ControlWay.ORDINARY, harness.host.state.value.owner.selected, "a disabled choice selects nothing")
-        }
-    }
-
-    @Test
-    fun disabledModuleControlSaysSoAndStillOffersBothChoices() = runBlocking {
-        val state = ControlState(
-            platform = platform(ModuleAvailability.Available),
-            owner = OwnerState(selected = ControlWay.NONE, readiness = OwnerReadiness.Idle("fixture: disabled")),
-        )
-        forEachStyle(state) { harness ->
-            assertTrue(harness.hasTag(ControlWayTags.NONE_NOTICE))
-            assertFalse(harness.isTagSelected(ControlWayTags.option(ControlWay.ORDINARY)))
-            assertFalse(harness.isTagSelected(ControlWayTags.option(ControlWay.MODULE)))
-            harness.clickTag(ControlWayTags.option(ControlWay.ORDINARY))
-            harness.render()
-            assertEquals(ControlWay.ORDINARY, harness.host.state.value.owner.selected)
-            assertTrue(harness.isTagSelected(ControlWayTags.option(ControlWay.ORDINARY)))
-            assertFalse(harness.hasTag(ControlWayTags.NONE_NOTICE))
-            harness.clickTag(ControlWayTags.option(ControlWay.MODULE))
-            harness.render()
-            assertEquals(ControlWay.MODULE, harness.host.state.value.owner.selected)
-            assertTrue(harness.isTagSelected(ControlWayTags.option(ControlWay.MODULE)))
+            harness.openTab("状态")
+            assertTrue(harness.hasTag(ControlWayTags.readiness(switching)))
+            assertFalse(harness.hasTag(ControlWayTags.readiness(OwnerReadiness.Ready)))
         }
     }
 
@@ -272,7 +240,9 @@ class ControlWayUiTest {
             // The callbacks are wired on purpose: only the host's capability may hide the card.
             val desktop = ControlState(platform = desktopPlatform(host), owner = moduleSelected)
             forEachStyle(desktop) { harness ->
-                assertFalse(harness.hasTagWithPrefix(ControlWayTags.PREFIX), "no control-way node on $host")
+                assertFalse(harness.hasTagWithPrefix(ControlWayTags.PREFIX), "no control-way node in Settings on $host")
+                harness.openTab("状态")
+                assertFalse(harness.hasTagWithPrefix(ControlWayTags.PREFIX), "no control-way node in Status on $host")
                 assertEquals(moduleSelected, harness.host.state.value.owner, "no control-way input reached the owner on $host")
             }
         }
@@ -286,7 +256,9 @@ class ControlWayUiTest {
     fun aHostThatCannotActOnTheChoiceNeverShowsAnInertCard() = runBlocking {
         val android = ControlState(platform = platform(ModuleAvailability.Available))
         forEachStyle(android, wired = false) { harness ->
-            assertFalse(harness.hasTagWithPrefix(ControlWayTags.PREFIX))
+            assertFalse(harness.hasTagWithPrefix(ControlWayTags.PREFIX), "no inert choice in Settings")
+            harness.openTab("状态")
+            assertTrue(harness.hasTag(ControlWayTags.connection(ConnectionState.Disconnected)), "Status still reports the connection")
         }
     }
 
@@ -308,13 +280,12 @@ class ControlWayUiTest {
         controlTransportApplicability = PlatformApplicability.NOT_APPLICABLE,
     )
 
-    private suspend fun forEachStyle(base: ControlState, wired: Boolean = true, check: suspend (Harness) -> Unit) {
+    private suspend fun forEachStyle(base: ControlState, wired: Boolean = true, page: String = "设置", check: suspend (Harness) -> Unit) {
         for (style in InterfaceStyle.entries) {
             val harness = createHarness(base.copy(settings = UserSettings(interfaceStyle = style)), wired)
             try {
                 harness.render()
-                harness.clickTab("系统集成")
-                harness.render()
+                harness.openTab(page)
                 check(harness)
             } catch (failure: Throwable) {
                 throw AssertionError("style $style: ${failure.message}", failure)
@@ -339,7 +310,6 @@ class ControlWayUiTest {
                 onSet = { _, _ -> },
                 onAddDeviceConnect = { error("Unexpected add-device connection in this scenario") },
                 onSelectControlWay = if (wired) host::selectControlWay else null,
-                onDisableModuleControl = if (wired) host::disableModuleControl else null,
             )
         }
         return Harness(scene, host)
@@ -347,7 +317,7 @@ class ControlWayUiTest {
 
     /**
      * Stands in for the application's owner: a selection starts the new owner, which is not ready
-     * yet, and disabling leaves no control way selected. Tests read the resulting state.
+     * yet. Tests read the resulting state.
      */
     private class FakeOwnerHost(initial: ControlState) {
         val state = mutableStateOf(initial)
@@ -355,13 +325,12 @@ class ControlWayUiTest {
         fun selectControlWay(way: ControlWay) {
             state.value = state.value.copy(owner = OwnerState(selected = way, readiness = OwnerReadiness.Starting))
         }
-
-        fun disableModuleControl() {
-            state.value = state.value.copy(
-                owner = OwnerState(selected = ControlWay.NONE, readiness = OwnerReadiness.Idle("fixture: module control disabled")),
-            )
-        }
     }
 
     private class Harness(scene: ImageComposeScene, val host: FakeOwnerHost) : OpenRoseUiTestHarness(scene)
+}
+
+private suspend fun OpenRoseUiTestHarness.openTab(label: String) {
+    clickTab(label)
+    render()
 }

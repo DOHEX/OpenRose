@@ -172,6 +172,7 @@ class OwnerHandoffTest {
         val owner = runtime.state.value.owner
         assertEquals(ControlWay.MODULE, owner.selected)
         assertEquals(OwnerFailureStage.DISCOVERY, assertIs<OwnerReadiness.Unavailable>(owner.readiness).stage)
+        assertEquals(ModuleUnavailableCause.HOST_NOT_FOUND, assertIs<ModuleAvailability.Unavailable>(runtime.state.value.platform.module).cause)
         assertNull(owner.holder)
         assertTrue(rig.appTransport.links.isEmpty())
 
@@ -181,30 +182,6 @@ class OwnerHandoffTest {
         assertEquals(OwnerReadiness.Ready, runtime.state.value.owner.readiness)
         assertEquals(ControlWay.MODULE, runtime.state.value.owner.selected)
         assertEquals(0, rig.headset.opens("ordinary"))
-    }
-
-    @Test
-    fun disablingModuleControlDoesNotEnableOrdinaryControl() = runTest {
-        val rig = OwnerRig(this)
-        rig.bootHost()
-        val runtime = rig.newRuntime()
-        runCurrent()
-        runtime.selectControlWay(ControlWay.MODULE)
-        runCurrent()
-        assertEquals(OperationResult.Success, runtime.connectFromSystem(rig.earphones.deviceId))
-        runCurrent()
-
-        val outcome = runtime.disableModuleControl()
-        runCurrent()
-
-        assertIs<HandoffOutcome.Completed>(outcome)
-        assertEquals(ControlWay.NONE, runtime.state.value.owner.selected)
-        assertIs<OwnerReadiness.Idle>(runtime.state.value.owner.readiness)
-        assertEquals(ControlWay.NONE, rig.store.record.selected)
-        assertEquals(listOf("module:open", "module:close"), rig.headset.events)
-        assertEquals(0, rig.headset.opens("ordinary"))
-        assertIs<HostStatus.Inactive>(rig.host.status.value)
-        assertEquals(ControlErrorCode.NOT_READY, assertIs<OperationResult.Failure>(runtime.connect(rig.earphones.deviceId)).error.code)
     }
 
     @Test
@@ -232,14 +209,6 @@ class OwnerHandoffTest {
         runCurrent()
         assertTrue(module.appTransport.links.isEmpty())
         assertEquals(0, module.headset.opens("ordinary"))
-
-        val disabled = OwnerRig(this, initial = OwnerRecord(ControlWay.NONE))
-        disabled.bootHost()
-        val noOwner = disabled.newRuntime()
-        runCurrent()
-        assertIs<OwnerReadiness.Idle>(noOwner.state.value.owner.readiness)
-        assertEquals(ControlErrorCode.NOT_READY, assertIs<OperationResult.Failure>(noOwner.connectFromSystem(disabled.earphones.deviceId)).error.code)
-        assertIs<HostStatus.Inactive>(disabled.host.status.value)
 
         val fresh = OwnerRig(this)
         fresh.bootHost()
@@ -310,7 +279,7 @@ class OwnerHandoffTest {
         runtime.updateSettings(UserSettings(controlWay = ControlWay.ORDINARY))
         advanceUntilIdle()
         val forged = rig.host.execute(
-            appIdentity, leaseOf(rig), generation, HostCommand.UpdateSettings(UserSettings(controlWay = ControlWay.NONE)),
+            appIdentity, leaseOf(rig), generation, HostCommand.UpdateSettings(UserSettings(controlWay = ControlWay.ORDINARY)),
         )
 
         assertEquals(HostCallResult.Operation(OperationResult.Success), forged)
@@ -378,59 +347,6 @@ class OwnerHandoffTest {
         runCurrent()
         assertEquals(BackgroundControlStatus.NotRunning, runtime.state.value.backgroundControl)
         assertEquals(BackgroundRecovery.Armed(WakeBand.ANDROID_8_11), runtime.state.value.backgroundRecovery)
-    }
-
-    @Test
-    fun disablingWithAnUnprovenReleaseKeepsTheIntentIsNotCompletedAndNeverStartsOrdinary() = runTest {
-        val rig = OwnerRig(this)
-        rig.bootHost()
-        val runtime = rig.newRuntime()
-        runCurrent()
-        runtime.selectControlWay(ControlWay.MODULE)
-        runCurrent()
-        assertEquals(OperationResult.Success, runtime.connectFromSystem(rig.earphones.deviceId))
-        runCurrent()
-        rig.link.releaseHangs = true
-
-        val blocked = assertIs<HandoffOutcome.Blocked>(runtime.disableModuleControl())
-
-        assertEquals(OwnerFailureStage.RELEASE, blocked.stage)
-        assertEquals(ControlWay.NONE, rig.store.record.selected)
-        assertNotNull(rig.store.record.moduleRelease)
-        assertIs<OwnerReadiness.SwitchBlocked>(runtime.state.value.owner.readiness)
-        assertEquals(0, rig.headset.opens("ordinary"))
-
-        // Once the host can answer, the saved disable completes by itself and still takes nothing over.
-        rig.link.releaseHangs = false
-        advanceTimeBy(rig.clientTiming.retryMillis * 3)
-        runCurrent()
-
-        assertIs<OwnerReadiness.Idle>(runtime.state.value.owner.readiness)
-        assertEquals(ControlWay.NONE, runtime.state.value.owner.selected)
-        assertNull(rig.store.record.moduleRelease)
-        assertEquals(listOf("module:open", "module:close"), rig.headset.events)
-        assertTrue(rig.appTransport.links.isEmpty())
-    }
-
-    @Test
-    fun aRestartedDisabledChoiceWithAnUnprovenReleaseKeepsAskingAndNeverStartsOrdinary() = runTest {
-        val rig = OwnerRig(this, initial = OwnerRecord(ControlWay.NONE, PendingModuleRelease("r", OwnerGeneration("host-0", 3))))
-        rig.bootHost()
-        rig.link.reachable = false
-        val runtime = rig.newRuntime()
-        runCurrent()
-        advanceTimeBy(rig.clientTiming.retryMillis * 2)
-
-        assertIs<OwnerReadiness.SwitchBlocked>(runtime.state.value.owner.readiness)
-
-        rig.link.reachable = true
-        advanceTimeBy(rig.clientTiming.retryMillis * 2)
-        runCurrent()
-
-        assertIs<OwnerReadiness.Idle>(runtime.state.value.owner.readiness)
-        assertNull(rig.store.record.moduleRelease)
-        assertEquals(ControlWay.NONE, rig.store.record.selected)
-        assertTrue(rig.appTransport.links.isEmpty())
     }
 
     @Test

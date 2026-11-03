@@ -97,14 +97,14 @@ Skip this section if you only need Bluetooth controls.
 - A framework supporting libxposed API 102 (for example LSPosed 2.2.0 or later)
 - The OpenRose module enabled in the framework, scoped to `com.android.bluetooth`, `com.xiaomi.bluetooth`, and `com.milink.service`
 
-Then check the System Integration (系统集成) page in OpenRose to confirm that the module and system bridge are ready.
+Then check the Status (状态) page in OpenRose to confirm that the module is ready; open diagnostics from there to see the system bridge.
 
 **Control way** (控制方式, on the Settings page; ordinary control by default)
 
 - **Ordinary control** (普通控制): the OpenRose app connects to the earphones itself and needs no module. The module's island, status notification, and Fusion Device Center controls are paused, and anything OpenRose published there is withdrawn.
 - **Module control** (模块控制): the module connects to the earphones inside the system Bluetooth process (`com.android.bluetooth`). It works from the first unlock after boot without opening OpenRose, and closing the app, the app being reclaimed, or force-stopping it does not affect it. When you open OpenRose, the app uses the module's connection, with the same full model controls as ordinary control.
 
-A switch closes the old control connection before the new side connects and does not interrupt playback or calls. If OpenRose cannot confirm that the old side has disconnected, the switch does not complete and the app explains why. Disable module control (停用模块控制) only stops the module and never switches to ordinary control on its own. When the module is temporarily unavailable, the app says so and does not fall back to ordinary control; once you choose ordinary control, the module coming back or reloading does not take control back.
+A switch closes the old control connection before the new side connects and does not interrupt playback or calls. If OpenRose cannot confirm that the old side has disconnected, the switch does not complete; the Settings page says it is unfinished and the Status page explains why. When the module is temporarily unavailable, the app says so and does not fall back to ordinary control; once you choose ordinary control, the module coming back or reloading does not take control back.
 
 **Settings** (on the Settings (设置) page)
 
@@ -113,14 +113,16 @@ A switch closes the old control connection before the new side connects and does
 | Island (超级岛) | Off / Official / Module | Official reuses Xiaomi's earphone connection prompt; Module uses OpenRose's own style and triggers. Both are rendered by the system island |
 | Focus notification (焦点通知) | On / Off | Keeps an earphone status notification while connected |
 | Additional settings destination (附加设置入口) | System details page / OpenRose | With OpenRose selected, the Additional Settings button on the Fusion Device Center card opens OpenRose and connects to those earphones |
+| Off uses wind-noise reduction (关闭降噪使用抗风噪) | On / Off (default Off) | Tapping Off in Fusion Device Center or the system headset UI writes wind-noise reduction instead of normal mode, on models that have it; other models keep normal mode. Wind-noise reduction already shows as Off there |
 
 The island, focus notification, and control way do not affect each other: hiding the island or turning off focus notifications only withdraws that display; it does not stop module control or Fusion Device Center and does not reconnect the earphones.
 
 **Known limitations**
 
-- The system only knows Off / ANC / Transparency. When the earphones are in wind-noise reduction, Fusion Device Center shows Off; the real mode is unchanged and visible in OpenRose.
+- The system only knows Off / ANC / Transparency. When the earphones are in wind-noise reduction, Fusion Device Center shows Off; the real mode is unchanged and visible in OpenRose. Tapping Off writes normal mode unless "Off uses wind-noise reduction" is on.
 - When an earbud's battery is known but its charging state is unknown, Fusion Device Center does not show that battery rather than showing it as not charging. The case battery is not shown either, because the system interface cannot represent whether the case is charging.
-- The top-right action on the System Integration page uses Root to restart the three scoped processes so the module reloads. Bluetooth may drop briefly; processes that were not running are not started. "Executed" only means the command was sent.
+- The top-right action on the Status page uses Root to restart the three scoped processes so the module reloads. Bluetooth may drop briefly; processes that were not running are not started. "Executed" only means the command was sent.
+- While module control is chosen, the app asks the system Bluetooth host for its status every 5 seconds. After 3 consecutive probes with no answer within 2 seconds, the Status page shows "System integration unresponsive" and withdraws the earbud readings instead of showing the old ones as current. When the host answers again, the readings are fetched afresh. This check has only offline tests and has not been verified on hardware.
 
 **Testing status**: the Fusion Device Center Additional Settings redirect has been verified on an i5 with a Xiaomi 14 (OS4.0.0.27.XNCCNXM, MiLink 18.2.2.0.2609141543, LSPosed 2.2.0-it / API 102). Module control, switching control ways, module autonomy (recovery after boot, force-stop, host reload), the island, and focus notifications have only offline tests, and the i7 and HyperOS 3 have not been fully tested on hardware.
 
@@ -205,7 +207,7 @@ Report bugs and request features in [GitHub Issues](https://github.com/DOHEX/Ope
 - Phone model and OS version
 - OpenRose version
 - Steps to reproduce
-- For system integration problems, the Xposed framework version and the bridge status shown on the System Integration page
+- For system integration problems, the Xposed framework version and the bridge status shown in diagnostics (reached from the Status page)
 
 Before contributing, read the [glossary](GLOSSARY.md) and [architecture decisions](docs/adr/). When adding a model or system integration, record the protocol evidence, offline test results, and hardware test results separately.
 

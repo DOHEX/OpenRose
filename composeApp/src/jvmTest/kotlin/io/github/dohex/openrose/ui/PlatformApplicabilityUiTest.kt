@@ -51,7 +51,7 @@ class PlatformApplicabilityUiTest {
                 assertFalse(harness.hasText("焦点通知"), "unverified integration applicability does not expose focus notification in $style")
                 assertTrue(harness.hasText("强制使用 BLE"), "known Android transport applicability remains independent in $style")
 
-                harness.clickTab("系统集成")
+                harness.clickTab("状态")
                 harness.render()
                 assertTrue(harness.hasText("系统集成适用性"), "unknown applicability is reported separately in $style")
                 assertTrue(harness.hasText("尚未核实"), "unknown is not described as unsupported or unready in $style")
@@ -98,9 +98,9 @@ class PlatformApplicabilityUiTest {
                     assertFalse(harness.hasText("焦点通知"), "$platformLabel must hide HyperOS notification settings in Settings in $style")
                     assertFalse(harness.hasText("强制使用 BLE"), "$platformLabel has no implemented control transport in $style")
 
-                    harness.clickTab("系统集成")
+                    harness.clickTab("状态")
                     harness.render()
-                    assertTrue(harness.hasText(platformLabel), "$platformLabel status is identified in $style")
+                    assertTrue(harness.hasText("$platformLabel 控制传输尚未实现"), "$platformLabel explains why it cannot control in $style")
                     assertTrue(harness.hasText("蓝牙传输"), "$platformLabel reports its transport state in $style")
                     assertFalse(harness.hasText("蓝牙权限"), "$platformLabel must not show Android permission items in $style")
                     assertFalse(harness.hasText("系统模块"), "$platformLabel must not expose HyperOS module state in $style")
@@ -153,11 +153,11 @@ class PlatformApplicabilityUiTest {
                 assertFalse(harness.hasText("模块显示时机"), "ordinary Android must not show module timing in $style")
                 assertTrue(harness.hasText("强制使用 BLE"), "Android transport preference visibility is independent of HyperOS in $style")
 
-                harness.clickTab("系统集成")
+                harness.clickTab("状态")
                 harness.render()
                 assertFalse(harness.hasText("焦点通知"), "ordinary Android must not show HyperOS notification settings in $style")
                 assertFalse(harness.hasText("已连接系统模块"), "a module state cannot make HyperOS applicable in $style")
-                assertTrue(harness.hasText("蓝牙权限"), "Android system status retains the permission row in $style")
+                assertFalse(harness.hasText("蓝牙权限"), "a granted permission is not listed on the status page in $style")
                 assertTrue(harness.hasText("蓝牙传输"), "Android system status retains the transport row in $style")
                 assertTrue(harness.settingsChanges.isEmpty())
                 assertTrue(harness.settingWrites.isEmpty())
@@ -199,6 +199,8 @@ class PlatformApplicabilityUiTest {
                 assertTrue(harness.hasText("模块显示时机"), "the saved module mode controls its applicable settings in $style")
                 assertTrue(harness.hasText("未选择显示时机，不自动触发。"), "an explicit empty trigger set remains visible in $style")
                 assertTrue(harness.hasText("强制使用 BLE"), "the Android host exposes its supported transport preference in $style")
+                assertTrue(harness.hasText("附加设置入口"), "fusion settings destination entry remains in Settings while unready in $style")
+                assertFalse(harness.hasText("选择 OpenRose 后"), "footnote text below additional settings entry is removed in $style")
 
                 harness.clickText("超级岛")
                 harness.render()
@@ -209,7 +211,7 @@ class PlatformApplicabilityUiTest {
                 assertEquals(io.github.dohex.openrose.core.IslandMode.OFF, harness.state.value.settings.islandMode)
                 assertEquals(emptySet(), harness.state.value.settings.islandTriggers)
                 assertTrue(harness.settingWrites.isEmpty(), "saving an integration preference must not send a device setting")
-                harness.clickTab("系统集成")
+                harness.clickTab("状态")
                 harness.render()
                 assertTrue(harness.hasText("系统集成未就绪"), "readiness is reported separately from applicability in $style")
 

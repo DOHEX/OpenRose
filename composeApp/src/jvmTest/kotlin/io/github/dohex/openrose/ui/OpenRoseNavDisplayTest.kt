@@ -18,7 +18,7 @@ class OpenRoseNavDisplayTest {
             try {
                 harness.render()
                 // On root main tab: bottom navigation bar tabs exist
-                assertTrue(harness.hasText("系统"), "Main tab should have 系统 navigation tab in $style")
+                assertTrue(harness.hasText("状态"), "Main tab should have 状态 navigation tab in $style")
                 assertTrue(harness.hasText("设置"), "Main tab should have 设置 navigation tab in $style")
 
                 // Push a remaining secondary route.
@@ -28,7 +28,7 @@ class OpenRoseNavDisplayTest {
                 // Inside secondary route: title and back button exist, bottom navigation tabs are HIDDEN
                 assertTrue(harness.hasText("触控操作"))
                 assertTrue(harness.hasContentDescription("返回"))
-                assertFalse(harness.hasText("系统"), "Bottom navigation bar must be hidden in secondary route in $style")
+                assertFalse(harness.hasText("状态"), "Bottom navigation bar must be hidden in secondary route in $style")
                 assertFalse(harness.hasText("设置"), "Bottom navigation bar must be hidden in secondary route in $style")
 
                 // Click back button: pops secondary route, restores root main tab with bottom bar
@@ -36,7 +36,7 @@ class OpenRoseNavDisplayTest {
                 harness.render()
 
                 assertTrue(harness.hasText("均衡器"), "Home card should be visible")
-                assertTrue(harness.hasText("系统"), "Bottom navigation bar must be restored on returning to main in $style")
+                assertTrue(harness.hasText("状态"), "Bottom navigation bar must be restored on returning to main in $style")
                 assertTrue(harness.hasText("设置"), "Bottom navigation bar must be restored on returning to main in $style")
             } finally {
                 harness.close()

@@ -10,12 +10,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
@@ -28,11 +25,11 @@ import io.github.dohex.openrose.core.BottomBarStyle
 import top.yukonga.miuix.kmp.utils.PagerGestureNestedScrollConnection
 import top.yukonga.miuix.kmp.utils.pagerGestureOverride
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import top.yukonga.miuix.kmp.blur.Backdrop
-import top.yukonga.miuix.kmp.blur.ProgressiveBlur
+
+/** Renders a pushed (secondary) page; main tabs live in [MiuixMainShell]. [parentTab] is the tab the rail highlights. */
 @Composable
 internal fun MiuixAppShell(
-    backStack: List<AppPage> = emptyList(),
+    parentTab: AppPage,
     page: AppPage,
     wide: Boolean,
     onNavigate: (AppPage) -> Unit,
@@ -40,13 +37,6 @@ internal fun MiuixAppShell(
     scrollState: ScrollState,
     pageContent: @Composable () -> Unit,
     feedbackContent: @Composable () -> Unit = {},
-    connectedHome: Boolean = false,
-    showAddDeviceAction: Boolean = true,
-    menuExpanded: Boolean = false,
-    onMenuExpandedChange: (Boolean) -> Unit = {},
-    onDisconnect: () -> Unit = {},
-    isSecondary: Boolean = backStack.size > 1 || page !in mainPages,
-    showBottomBar: Boolean = !wide && !isSecondary && page in mainPages,
 ) {
     val backdropActive = LocalBackdropBlurActive.current
     val backdrop = rememberAppBackdrop(MiuixTheme.colorScheme.surface, backdropActive)
@@ -54,49 +44,12 @@ internal fun MiuixAppShell(
         Row(Modifier.fillMaxSize()) {
         if (wide) NavigationRail(header = { AppIcon(RoseIcon.HEADPHONES, Modifier.padding(12.dp), contentDescription = "OpenRose") }) {
             mainPages.forEach { destination ->
-                val isSelected = if (backStack.isNotEmpty()) backStack.first() == destination else page == destination
-                NavigationRailItem(selected = isSelected,
+                NavigationRailItem(selected = destination == parentTab,
                     onClick = { onNavigate(destination) }, icon = RoseIcons[destination.icon], label = destination.title)
             }
         }
         val scrollBehavior = MiuixScrollBehavior()
         val title = page.title
-        val navigation: @Composable () -> Unit = {
-            if (isSecondary) IconButton(onClick = onBack) { Icon(RoseIcons.Back, "返回") }
-        }
-        val actions: @Composable RowScope.() -> Unit = {
-            if (page == AppPage.HEADPHONES) {
-                Box {
-                    if (connectedHome) {
-                        IconButton(onClick = { onMenuExpandedChange(true) }) {
-                            Icon(RoseIcons[RoseIcon.MORE], "耳机菜单")
-                        }
-                    } else if (showAddDeviceAction) {
-                        IconButton(onClick = { onNavigate(AppPage.ADD_DEVICE) }) {
-                            Icon(RoseIcons.Plus, "添加耳机")
-                        }
-                    }
-                    OverlayListPopup(
-                        show = connectedHome && menuExpanded,
-                        popupPositionProvider = ListPopupDefaults.ContextMenuPositionProvider,
-                        alignment = PopupPositionProvider.Align.TopEnd,
-                        enableWindowDim = false,
-                        onDismissRequest = { onMenuExpandedChange(false) },
-                    ) {
-                        ListPopupColumn {
-                            BasicComponent(
-                                title = "断开控制连接",
-                                onClick = {
-                                    onMenuExpandedChange(false)
-                                    onDisconnect()
-                                },
-                                role = Role.Button,
-                            )
-                        }
-                    }
-                }
-            }
-        }
         Scaffold(modifier = Modifier.weight(1f).nestedScroll(scrollBehavior.nestedScrollConnection),
             topBar = {
                 val topBarModifier = Modifier.appBarBackdropBlur(
@@ -105,29 +58,63 @@ internal fun MiuixAppShell(
                     active = backdropActive,
                 )
                 val topBarColor = if (backdropActive) Color.Transparent else MiuixTheme.colorScheme.surface
-                TopAppBar(title = title, largeTitle = title, modifier = topBarModifier, color = topBarColor, scrollBehavior = scrollBehavior, navigationIcon = navigation, actions = actions)
-            },
-            bottomBar = {
-                if (showBottomBar) {
-                    val bottomBarModifier = Modifier.appBarBackdropBlur(
-                        backdrop = backdrop,
-                        surfaceColor = MiuixTheme.colorScheme.surface,
-                        active = backdropActive,
-                    )
-                    val bottomBarColor = if (backdropActive) Color.Transparent else MiuixTheme.colorScheme.surface
-                    NavigationBar(modifier = bottomBarModifier, color = bottomBarColor) {
-                        mainPages.forEach { destination -> NavigationBarItem(selected = page == destination,
-                            onClick = { onNavigate(destination) }, icon = RoseIcons[destination.icon], label = destination.navigationLabel) }
-                    }
-                }
+                TopAppBar(
+                    title = title,
+                    largeTitle = title,
+                    modifier = topBarModifier,
+                    color = topBarColor,
+                    scrollBehavior = scrollBehavior,
+                    navigationIcon = { IconButton(onClick = onBack) { Icon(RoseIcons.Back, "返回") } },
+                )
             }) { padding ->
             Box(Modifier.fillMaxSize()) {
                 Column(Modifier.fillMaxSize().appBackdropContent(backdrop, backdropActive).verticalScroll(scrollState)) {
-                    ShellPageContent(page, padding, compactHome = page == AppPage.HEADPHONES && !connectedHome, pageContent = pageContent)
+                    ShellPageContent(page, padding, compactHome = false, pageContent = pageContent)
                 }
                 ShellFeedback(padding, content = feedbackContent)
             }
         }
+        }
+    }
+}
+
+/** Top-bar actions of the headphones tab: overflow menu while connected, add-device button otherwise. */
+@Composable
+private fun MiuixHeadphoneActions(
+    connectedHome: Boolean,
+    showAddDeviceAction: Boolean,
+    menuExpanded: Boolean,
+    onMenuExpandedChange: (Boolean) -> Unit,
+    onAddDevice: () -> Unit,
+    onDisconnect: () -> Unit,
+) {
+    Box {
+        if (connectedHome) {
+            IconButton(onClick = { onMenuExpandedChange(true) }) {
+                Icon(RoseIcons[RoseIcon.MORE], "耳机菜单")
+            }
+        } else if (showAddDeviceAction) {
+            IconButton(onClick = onAddDevice) {
+                Icon(RoseIcons.Plus, "添加耳机")
+            }
+        }
+        OverlayListPopup(
+            show = connectedHome && menuExpanded,
+            popupPositionProvider = ListPopupDefaults.ContextMenuPositionProvider,
+            alignment = PopupPositionProvider.Align.TopEnd,
+            enableWindowDim = false,
+            onDismissRequest = { onMenuExpandedChange(false) },
+        ) {
+            ListPopupColumn {
+                BasicComponent(
+                    title = "断开控制连接",
+                    onClick = {
+                        onMenuExpandedChange(false)
+                        onDisconnect()
+                    },
+                    role = Role.Button,
+                )
+            }
         }
     }
 }
@@ -153,6 +140,10 @@ internal fun MiuixMainShell(
         pagerState.syncPage()
     }
     val backdropActive = LocalBackdropBlurActive.current
+    val floatingBackdrop = rememberAppBackdrop(
+        MiuixTheme.colorScheme.surface,
+        backdropActive && !wide && bottomBarStyle == BottomBarStyle.FLOATING,
+    )
     val currentTab = mainPages.getOrElse(pagerState.selectedPage) { AppPage.HEADPHONES }
     Row(Modifier.fillMaxSize()) {
         if (wide) {
@@ -176,12 +167,15 @@ internal fun MiuixMainShell(
             bottomBar = {
                 if (!wide) {
                     if (bottomBarStyle == BottomBarStyle.FLOATING) {
-                        val floatingBarColor = if (backdropActive) {
-                            MiuixTheme.colorScheme.surfaceContainer.copy(alpha = 0.85f)
-                        } else {
-                            MiuixTheme.colorScheme.surfaceContainer
-                        }
-                        FloatingNavigationBar(color = floatingBarColor) {
+                        FloatingNavigationBar(
+                            modifier = Modifier.appPopupBackdropBlur(
+                                backdrop = floatingBackdrop,
+                                shape = CircleShape,
+                                surfaceColor = MiuixTheme.colorScheme.surfaceContainer,
+                                active = backdropActive,
+                            ),
+                            color = Color.Transparent,
+                        ) {
                             mainPages.forEachIndexed { index, destination ->
                                 FloatingNavigationBarItem(
                                     selected = currentTab == destination,
@@ -219,6 +213,7 @@ internal fun MiuixMainShell(
                 state = pagerState.pagerState,
                 modifier = Modifier
                     .fillMaxSize()
+                    .appBackdropContent(floatingBackdrop, backdropActive)
                     .padding(bottom = pagerBottomPadding)
                     .pagerGestureOverride(
                         pagerState = pagerState.pagerState,
@@ -245,39 +240,18 @@ internal fun MiuixMainShell(
                     val scrollBehavior = MiuixScrollBehavior()
                     val title = page.title
                     val actions: @Composable RowScope.() -> Unit = {
-                        if (page == AppPage.SYSTEM && isSelected) scopeRestartAction()
-                        if (page == AppPage.HEADPHONES && isSelected) {
-                            Box {
-                            if (connectedHome) {
-                                IconButton(onClick = { onMenuExpandedChange(true) }) {
-                                    Icon(RoseIcons[RoseIcon.MORE], "耳机菜单")
-                                }
-                            } else if (showAddDeviceAction) {
-                                IconButton(onClick = { onNavigate(AppPage.ADD_DEVICE) }) {
-                                    Icon(RoseIcons.Plus, "添加耳机")
-                                }
-                            }
-                            OverlayListPopup(
-                                show = connectedHome && menuExpanded,
-                                popupPositionProvider = ListPopupDefaults.ContextMenuPositionProvider,
-                                alignment = PopupPositionProvider.Align.TopEnd,
-                                enableWindowDim = false,
-                                onDismissRequest = { onMenuExpandedChange(false) },
-                            ) {
-                                ListPopupColumn {
-                                    BasicComponent(
-                                        title = "断开控制连接",
-                                        onClick = {
-                                            onMenuExpandedChange(false)
-                                            onDisconnect()
-                                        },
-                                        role = Role.Button,
-                                    )
-                                }
-                            }
+                        if (page == AppPage.STATUS) scopeRestartAction()
+                        if (page == AppPage.HEADPHONES) {
+                            MiuixHeadphoneActions(
+                                connectedHome = connectedHome,
+                                showAddDeviceAction = showAddDeviceAction,
+                                menuExpanded = menuExpanded,
+                                onMenuExpandedChange = onMenuExpandedChange,
+                                onAddDevice = { onNavigate(AppPage.ADD_DEVICE) },
+                                onDisconnect = onDisconnect,
+                            )
                         }
                     }
-                }
                 Scaffold(
                     modifier = Modifier.fillMaxSize().nestedScroll(scrollBehavior.nestedScrollConnection),
                     topBar = {
@@ -303,9 +277,7 @@ internal fun MiuixMainShell(
                             }
                         }
                         ShellFeedback(pagePadding, bottomClearance = trailingBottomPadding) {
-                            if (isSelected) {
-                                pageFeedbackFor(page)
-                            }
+                            pageFeedbackFor(page)
                         }
                     }
                 }

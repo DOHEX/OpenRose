@@ -6,7 +6,8 @@ import io.github.dohex.openrose.core.transport.DeviceId
 /**
  * Who is calling the module host, derived from the verified caller and never from what a payload claims.
  * [HOST_PRESENTATION] is the module's own presentation code inside the host process, identified by the
- * host's uid; the other roles are other processes verified by uid and package.
+ * host's uid and pid (other processes may share the uid); the other roles are other processes verified
+ * by uid and package.
  */
 enum class ClientRole { APP, MILINK, XIAOMI_BLUETOOTH, HOST_PRESENTATION }
 

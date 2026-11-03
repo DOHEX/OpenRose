@@ -20,6 +20,12 @@ import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 
+/**
+ * [selectedPage] flips the instant a tab is chosen, while [pagerState] still animates towards it, so the
+ * two disagree during every transition. Use [selectedPage] only for navigation chrome (bar highlight,
+ * back handling) and for semantics/focus isolation. NEVER gate visible page content (top-bar actions,
+ * feedback) on it: that content would vanish while its page is still sliding on screen.
+ */
 internal class MainTabsPagerState(
     val pagerState: PagerState,
     private val coroutineScope: CoroutineScope,

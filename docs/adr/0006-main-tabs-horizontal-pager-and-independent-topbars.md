@@ -4,6 +4,8 @@ status: accepted
 
 # 主页面 HorizontalPager 容器与独立 TopAppBar 架构
 
+> 注：主页面“系统集成”已更名为“状态”，只读展示运行状态，偏好统一在“设置”；下文沿用原页名。
+
 ## 背景
 
 在 ADR 0005 中，应用根路由 `Route.Main` 承载常驻 Scaffold，底部 Tab 切换在原地直接替换页面内容。用户期望能够在三大主页面（“我的耳机”、“系统集成”、“设置”）之间通过水平手势流畅滑动切换（类似 OppoPods 的多标签滑动体验）。
@@ -26,10 +28,12 @@ status: accepted
    - 将 `TopAppBar` 与独立的 `MiuixScrollBehavior`（或 Material 3 滚动行为）移入各个主页面自身的内部 Scaffold；
    - 横向滑动时，各页面的顶栏标题、动作按钮与页面卡片一同平滑横移进出屏幕；
    - 各页面的垂直滚动进度（`ScrollState`）与大标题折叠量完全隔离，互不污染。
+   - 顶栏动作按钮（添加/更多菜单、状态页重启作用域）与页面反馈条只取决于页面自身，不取决于 `MainTabsPagerState.selectedPage`：后者在点击标签的瞬间即变化，若以它控制可见性，切页动画期间动作按钮会在页面仍在屏幕上时提前消失。`selectedPage` 仅用于导航栏高亮、返回键判断以及非选中页的语义/焦点隔离。
 
 3. **双界面风格（Miuix / Material 3）对称实现**：
    - Miuix 与 Material 3 分别提供对应的 `MainShell` 实现，两者保持完全对称的 Pager 容器与顶底栏拓扑；
    - 共享统一的 `MainTabsPagerState` 与标签生命周期，风格切换时保持当前激活主页面连续。
+   - 手势接线是库层面的有意差异：Miuix 用 `userScrollEnabled = false` 加 `pagerGestureOverride`（宽屏关闭）接管手势；Material 3 使用 Pager 原生滑动（`userScrollEnabled = !wide`）。两者拓扑与可见行为一致。
 
 4. **导航与返回栈保真**：
    - 继续严格保持 ADR 0005 的回退准则：非耳机主页（系统集成、设置）按下系统返回时平滑滚回“我的耳机”，在耳机主页返回时退出应用；

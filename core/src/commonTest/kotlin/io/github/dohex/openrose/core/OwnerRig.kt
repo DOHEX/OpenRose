@@ -158,6 +158,9 @@ internal class InProcessHostLink(
     var releaseHangs = false
     var releaseKillsHostProcess = false
 
+    /** The host process is alive and the link open, but it never answers a status call. */
+    var statusHangs = false
+
     /** Rewrites the receipt the host issued on its way back, as a faulty or hostile link could. */
     var tamperReceipt: (ReleaseReceipt) -> ReleaseReceipt = { it }
     val connections = mutableListOf<Connection>()
@@ -187,6 +190,7 @@ internal class InProcessHostLink(
 
         override suspend fun status(): HostStatus {
             ensureOpen()
+            if (statusHangs) awaitCancellation()
             return host.status.value
         }
 

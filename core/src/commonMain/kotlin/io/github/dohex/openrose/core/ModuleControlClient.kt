@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeout
 
@@ -25,6 +26,11 @@ data class ClientTiming(
     val acquireTimeoutMillis: Long = 10_000,
     /** Must outlast the owner's own connect and confirmation deadlines. */
     val commandTimeoutMillis: Long = 45_000,
+    /** How often an owned host is asked for its status; frames follow device changes, so their silence proves nothing. */
+    val probeIntervalMillis: Long = 5_000,
+    val probeTimeoutMillis: Long = 2_000,
+    /** Consecutive unanswered probes after which the host counts as unresponsive. */
+    val probeMisses: Int = 3,
 )
 
 /** What the application knows about the module owner right now; never more than the host has told it. */
@@ -38,7 +44,12 @@ sealed interface ModuleView {
 
     /** The host owner holds the session; [frame] is its latest published state. */
     data class Active(val frame: HostFrame) : ModuleView
+
+    /** The host process is reachable but stopped answering; its last reading is withdrawn rather than shown as current. */
+    data object Unresponsive : ModuleView
 }
+
+internal const val UNRESPONSIVE_REASON = "模块宿主未响应"
 
 /** What may be relied on to say the module owner no longer holds the session. */
 sealed interface ReleaseProof {
@@ -215,11 +226,8 @@ class ModuleControlClient(
                 while (true) {
                     when (status) {
                         is HostStatus.Active -> {
-                            val generation = status.generation
-                            lastObservedGeneration = generation
-                            connection.frames(generation).collect { frame ->
-                                if (frame.generation == generation) mutableView.value = ModuleView.Active(frame)
-                            }
+                            lastObservedGeneration = status.generation
+                            observeActive(connection, status.generation)
                             // The generation ended: nothing from it is current any more.
                             mutableView.value = ModuleView.Connecting
                         }
@@ -237,5 +245,41 @@ class ModuleControlClient(
         } catch (e: HostLinkException) {
             return
         }
+    }
+
+    /**
+     * Mirrors the owner's frames until the generation ends while probing the host. A host that stops
+     * answering [HostConnection.status] withdraws the reading; once it answers again the frames are
+     * subscribed afresh, so nothing published before the stall is shown as current.
+     */
+    private suspend fun observeActive(connection: HostConnection, generation: OwnerGeneration) = coroutineScope {
+        val mirroring = launch {
+            connection.frames(generation).collect { frame ->
+                if (frame.generation == generation) mutableView.value = ModuleView.Active(frame)
+            }
+        }
+        val probing = launch {
+            var misses = 0
+            while (true) {
+                delay(timing.probeIntervalMillis)
+                val answered = try {
+                    withTimeout(timing.probeTimeoutMillis) { connection.status() }
+                    true
+                } catch (e: TimeoutCancellationException) {
+                    false
+                }
+                if (answered) {
+                    misses = 0
+                    if (mutableView.value == ModuleView.Unresponsive) {
+                        mirroring.cancel()
+                        return@launch
+                    }
+                } else if (++misses >= timing.probeMisses) {
+                    mutableView.update { if (it is ModuleView.Active) ModuleView.Unresponsive else it }
+                }
+            }
+        }
+        mirroring.join()
+        probing.cancel()
     }
 }

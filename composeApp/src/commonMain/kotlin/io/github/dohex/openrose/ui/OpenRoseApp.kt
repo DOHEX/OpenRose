@@ -22,7 +22,7 @@ import top.yukonga.miuix.kmp.nav.transition.NavSwipeDirection
 
 internal enum class AppPage(val title: String, val icon: RoseIcon) {
     HEADPHONES("我的耳机", RoseIcon.HEADPHONES),
-    SYSTEM("系统集成", RoseIcon.SYSTEM),
+    STATUS("状态", RoseIcon.STATUS),
     SETTINGS("设置", RoseIcon.SETTINGS),
     ADD_DEVICE("添加耳机", RoseIcon.PLUS),
     TOUCH("触控操作", RoseIcon.TOUCH),
@@ -31,7 +31,7 @@ internal enum class AppPage(val title: String, val icon: RoseIcon) {
     DIAGNOSTICS("诊断与记录", RoseIcon.LOG),
 }
 
-internal val mainPages = listOf(AppPage.HEADPHONES, AppPage.SYSTEM, AppPage.SETTINGS)
+internal val mainPages = listOf(AppPage.HEADPHONES, AppPage.STATUS, AppPage.SETTINGS)
 
 /** Navigation, scroll positions and drafts survive replacement of either component style.
  * The host remains the sole owner of the control session and transport. */
@@ -53,13 +53,12 @@ fun OpenRoseApp(
     onRequestAssociation: () -> Unit = {},
     onOpenAppSettings: () -> Unit = {},
     onRestartIntegrationScopes: suspend () -> List<ScopeRestartResult> = {
-        listOf("com.android.bluetooth", "com.xiaomi.bluetooth", "com.milink.service").map {
+        INTEGRATION_SCOPE_PACKAGES.map {
             ScopeRestartResult(it, ScopeRestartStatus.FAILED, "平台操作不可用")
         }
     },
     // Null on hosts without an ordinary/module choice: the control-way card is then absent instead of inert.
     onSelectControlWay: ((ControlWay) -> Unit)? = null,
-    onDisableModuleControl: (() -> Unit)? = null,
 ) {
     val dark = when (state.settings.appearance) {
         Appearance.SYSTEM -> isSystemInDarkTheme()
@@ -192,13 +191,11 @@ fun OpenRoseApp(
                             onCancelConnection = addDeviceFlow::cancelConnection,
                             onDiagnostics = { navigate(AppPage.DIAGNOSTICS) },
                         )
-                        AppPage.SYSTEM -> SystemIntegrationPage(
+                        AppPage.STATUS -> StatusPage(
                             state = state,
                             onRequestPermission = onRequestPermission,
                             onOpenSystemSettings = onOpenSystemSettings,
                             onDiagnostics = { navigate(AppPage.DIAGNOSTICS) },
-                            onSelectControlWay = onSelectControlWay,
-                            onDisableModuleControl = onDisableModuleControl,
                         )
                         AppPage.SETTINGS -> PreferencesPage(
                             state,
@@ -207,9 +204,11 @@ fun OpenRoseApp(
                             onRequestNotificationPermission,
                             onRequestAssociation,
                             onOpenAppSettings,
+                            onSelectControlWay = onSelectControlWay,
                         )
                         AppPage.DIAGNOSTICS -> {
                             PlatformDiagnosticsCard(state.platform, onRequestPermission, onOpenSystemSettings)
+                            if (state.controlWayApplicable()) ControlOwnerDiagnostics(state)
                             ConnectionDetailsCard(state, onDisconnect)
                             SettingOperationsCard(state)
                             device?.let { DeviceReadings(it, state.connection.phaseOrNull() == ConnectionPhase.INITIALIZING) }
@@ -255,49 +254,31 @@ fun OpenRoseApp(
                         }
                     }
                 }
-                val renderShell: @Composable (AppPage, Boolean) -> Unit = { targetPage, isSecondary ->
+                val renderShell: @Composable (AppPage) -> Unit = { targetPage ->
                     ProvideInterfaceStyle(state.settings.interfaceStyle, dark) {
-                        val activeMainTab = mainPages.getOrElse(mainTabsPagerState.selectedPage) { AppPage.HEADPHONES }
-                        val currentBackStack = if (isSecondary) listOf(activeMainTab, targetPage) else listOf(targetPage)
-                        val showBottomBar = !wide && !isSecondary && navBackStack.size == 1 && targetPage in mainPages
+                        val parentTab = mainPages.getOrElse(mainTabsPagerState.selectedPage) { AppPage.HEADPHONES }
                         val shellContent: @Composable () -> Unit = { pageContentFor(targetPage) }
                         val shellFeedback: @Composable () -> Unit = { feedbackContentFor(targetPage) }
-                        val isConnectedHome = state.activeDevice() != null
-                        val showAdd = !state.platform.transportUnavailableForHome()
-                        val scrollState = scrollStates.getValue(targetPage)
+                        val shellWide = wide && targetPage != AppPage.ADD_DEVICE
 
                         when (state.settings.interfaceStyle) {
                             InterfaceStyle.MIUIX -> MiuixAppShell(
-                                backStack = currentBackStack,
+                                parentTab = parentTab,
                                 page = targetPage,
-                                wide = wide && targetPage != AppPage.ADD_DEVICE,
+                                wide = shellWide,
                                 onNavigate = onNavigate,
                                 onBack = ::back,
-                                scrollState = scrollState,
-                                connectedHome = isConnectedHome,
-                                showAddDeviceAction = showAdd,
-                                menuExpanded = headphoneMenuExpanded,
-                                onMenuExpandedChange = { headphoneMenuExpanded = it },
-                                onDisconnect = onDisconnect,
-                                isSecondary = isSecondary,
-                                showBottomBar = showBottomBar,
+                                scrollState = scrollStates.getValue(targetPage),
                                 pageContent = shellContent,
                                 feedbackContent = shellFeedback,
                             )
                             InterfaceStyle.MATERIAL3 -> MaterialAppShell(
-                                backStack = currentBackStack,
+                                parentTab = parentTab,
                                 page = targetPage,
-                                wide = wide && targetPage != AppPage.ADD_DEVICE,
+                                wide = shellWide,
                                 onNavigate = onNavigate,
                                 onBack = ::back,
-                                scrollState = scrollState,
-                                connectedHome = isConnectedHome,
-                                showAddDeviceAction = showAdd,
-                                menuExpanded = headphoneMenuExpanded,
-                                onMenuExpandedChange = { headphoneMenuExpanded = it },
-                                onDisconnect = onDisconnect,
-                                isSecondary = isSecondary,
-                                showBottomBar = showBottomBar,
+                                scrollState = scrollStates.getValue(targetPage),
                                 pageContent = shellContent,
                                 feedbackContent = shellFeedback,
                             )
@@ -328,7 +309,7 @@ fun OpenRoseApp(
                                                 } catch (cancelled: CancellationException) {
                                                     throw cancelled
                                                 } catch (failure: Exception) {
-                                                    restartResults = listOf("com.android.bluetooth", "com.xiaomi.bluetooth", "com.milink.service").map {
+                                                    restartResults = INTEGRATION_SCOPE_PACKAGES.map {
                                                         ScopeRestartResult(it, ScopeRestartStatus.FAILED, failure.message ?: "操作失败")
                                                     }
                                                 } finally {
@@ -390,22 +371,22 @@ fun OpenRoseApp(
                         }
                     }
                     entry<Route.Touch>(swipeDismiss = NavSwipeDirection.LeftToRight) {
-                        renderShell(AppPage.TOUCH, true)
+                        renderShell(AppPage.TOUCH)
                     }
                     entry<Route.Audio>(swipeDismiss = NavSwipeDirection.LeftToRight) {
-                        renderShell(AppPage.AUDIO, true)
+                        renderShell(AppPage.AUDIO)
                     }
                     entry<Route.Details>(swipeDismiss = NavSwipeDirection.LeftToRight) {
-                        renderShell(AppPage.DETAILS, true)
+                        renderShell(AppPage.DETAILS)
                     }
                     entry<Route.Diagnostics>(swipeDismiss = NavSwipeDirection.LeftToRight) {
-                        renderShell(AppPage.DIAGNOSTICS, true)
+                        renderShell(AppPage.DIAGNOSTICS)
                     }
                     entry<Route.AddDevice>(swipeDismiss = NavSwipeDirection.LeftToRight) {
                         // Popped entries retain their registration while animating out.
                         if (latestRoute is Route.AddDevice || state.settings.pageTransition != PageTransition.NONE) {
                             Box(if (latestRoute is Route.AddDevice) Modifier.fillMaxSize() else Modifier.fillMaxSize().clearAndSetSemantics { }) {
-                                renderShell(AppPage.ADD_DEVICE, true)
+                                renderShell(AppPage.ADD_DEVICE)
                             }
                         }
                     }
@@ -417,6 +398,5 @@ fun OpenRoseApp(
 internal val AppPage.navigationLabel: String
     get() = when (this) {
         AppPage.HEADPHONES -> "耳机"
-        AppPage.SYSTEM -> "系统"
         else -> title
     }
