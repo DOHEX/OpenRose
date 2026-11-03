@@ -25,7 +25,6 @@ import io.github.dohex.openrose.core.HostStatus
 import io.github.dohex.openrose.core.IslandMode
 import io.github.dohex.openrose.core.FusionEntry
 import io.github.dohex.openrose.core.FusionEntryDecision
-import io.github.dohex.openrose.core.HostRejection
 import io.github.dohex.openrose.core.ModuleControlHost
 import io.github.dohex.openrose.core.OperationResult
 import io.github.dohex.openrose.core.OwnerGeneration
