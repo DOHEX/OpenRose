@@ -3,6 +3,10 @@ package io.github.dohex.openrose.integration
 import android.os.Bundle
 import android.os.SystemClock
 import io.github.dohex.openrose.bridge.BridgeWire
+import io.github.dohex.openrose.core.SystemRequestGate
+import io.github.dohex.openrose.core.protocol.DeviceField
+import io.github.dohex.openrose.core.protocol.FieldReading
+import io.github.dohex.openrose.core.protocol.FieldValue
 import java.util.Locale
 import java.util.concurrent.atomic.AtomicLong
 
@@ -21,7 +25,7 @@ data class NativeHeadsetSnapshot(
     val ancLevel: NativeNoiseLevelCapabilities?,
     /** Null means the model does not expose this setting as a capability. */
     val transparencyLevel: NativeNoiseLevelCapabilities?,
-    val fields: Map<String, NativeFieldReading>,
+    val fields: Map<DeviceField, FieldReading>,
 ) {
     val reference: NativeSessionReference
         get() = NativeSessionReference(hostEpoch, deviceId, sessionId)
@@ -44,15 +48,6 @@ data class NativeHeadsetSnapshot(
 
     fun supportsNoise(mode: String): Boolean =
         supportsNoiseMode && mode in noiseModes && "NOISE_MODE" in writableSettings
-
-    fun knownText(field: String): String? =
-        (fields[field] as? NativeFieldReading.Known)?.value?.let { it as? NativeFieldValue.Text }?.value
-
-    fun knownNumber(field: String): Int? =
-        (fields[field] as? NativeFieldReading.Known)?.value?.let { it as? NativeFieldValue.Number }?.value
-
-    fun knownToggle(field: String): Boolean? =
-        (fields[field] as? NativeFieldReading.Known)?.value?.let { it as? NativeFieldValue.Toggle }?.value
 
     fun sameReportedState(other: NativeHeadsetSnapshot): Boolean =
         hostEpoch == other.hostEpoch && deviceId == other.deviceId && sessionId == other.sessionId &&
@@ -101,12 +96,10 @@ data class NativeHeadsetSnapshot(
             val noise = capabilities.getBundle("noise")
             val fieldsBundle = bundle.getBundle("fields") ?: return null
 
-            val fields = linkedMapOf<String, NativeFieldReading>()
-            fieldsBundle.keySet().forEach { field ->
-                if (field.length > 64) return@forEach
-                fieldsBundle.getBundle(field)?.let { reading ->
-                    parseReading(reading)?.let { fields[field] = it }
-                }
+            val fields = linkedMapOf<DeviceField, FieldReading>()
+            fieldsBundle.keySet().forEach { name ->
+                val field = DeviceField.entries.firstOrNull { it.name == name } ?: return@forEach
+                fieldsBundle.getBundle(name)?.let { reading -> parseReading(reading)?.let { fields[field] = it } }
             }
 
             return NativeHeadsetSnapshot(
@@ -145,26 +138,22 @@ data class NativeHeadsetSnapshot(
                 ?.mapNotNull { it as? Int }
                 .orEmpty()
 
-        private fun parseReading(bundle: Bundle): NativeFieldReading? {
-            val status = bundle.getString("status") ?: return null
-            return when (status) {
-                "LOADING" -> NativeFieldReading.Loading
-                "UNKNOWN" -> NativeFieldReading.Unknown
-                "NOT_PROVIDED" -> NativeFieldReading.NotProvided
+        private fun parseReading(bundle: Bundle): FieldReading? {
+            // The wire carries values only; the raw device bytes never reach a system entry.
+            return when (bundle.getString("status") ?: return null) {
+                "LOADING" -> FieldReading.Loading
+                "UNKNOWN" -> FieldReading.Unknown("")
+                "NOT_PROVIDED" -> FieldReading.NotProvided("")
                 "KNOWN" -> {
-                    val value = bundle.getBundle("value") ?: return NativeFieldReading.Unknown
-                    val type = value.getString("type") ?: return NativeFieldReading.Unknown
+                    val value = bundle.getBundle("value") ?: return FieldReading.Unknown("")
+                    val type = value.getString("type") ?: return FieldReading.Unknown("")
                     val primitive = runCatching { value.get("value") }.getOrNull()
                     when (type) {
-                        "NUMBER" -> (primitive as? Int)?.let { NativeFieldReading.Known(NativeFieldValue.Number(it)) }
-                            ?: NativeFieldReading.Unknown
-                        "TOGGLE" -> (primitive as? Boolean)?.let { NativeFieldReading.Known(NativeFieldValue.Toggle(it)) }
-                            ?: NativeFieldReading.Unknown
-                        "TEXT" -> (primitive as? String)?.takeIf { it.length <= 128 }
-                            ?.let { NativeFieldReading.Known(NativeFieldValue.Text(it)) }
-                            ?: NativeFieldReading.Unknown
-                        else -> NativeFieldReading.Unknown
-                    }
+                        "NUMBER" -> (primitive as? Int)?.let { FieldReading.Known(FieldValue.Number(it), "") }
+                        "TOGGLE" -> (primitive as? Boolean)?.let { FieldReading.Known(FieldValue.Toggle(it), "") }
+                        "TEXT" -> (primitive as? String)?.takeIf { it.length <= 128 }?.let { FieldReading.Known(FieldValue.Text(it), "") }
+                        else -> null
+                    } ?: FieldReading.Unknown("")
                 }
                 else -> null
             }
@@ -221,19 +210,6 @@ internal class NativeManagedAddressTombstones {
     fun clear() { addresses.clear() }
 }
 
-sealed interface NativeFieldReading {
-    data object Loading : NativeFieldReading
-    data object Unknown : NativeFieldReading
-    data object NotProvided : NativeFieldReading
-    data class Known(val value: NativeFieldValue) : NativeFieldReading
-}
-
-sealed interface NativeFieldValue {
-    data class Number(val value: Int) : NativeFieldValue
-    data class Toggle(val value: Boolean) : NativeFieldValue
-    data class Text(val value: String) : NativeFieldValue
-}
-
 /** Callbacks are supplied by the authenticated reader lease in the target process. */
 interface AuthenticatedNativeHeadsetCallbacks {
     /**
@@ -247,45 +223,26 @@ interface AuthenticatedNativeHeadsetCallbacks {
      * bounded, and this callback must enqueue locally without waiting for Binder IPC.
      */
     fun report(feature: String, status: String, detail: String)
+
+    /**
+     * The control device the fusion center's settings entry for [address] should open in OpenRose, decided by
+     * the module host from its own state, or null when the system's own entry must run. Waits a bounded time.
+     */
+    fun fusionEntryDevice(address: String): String?
 }
 
 /** Coalesces two synchronous vendor entry points for one UI tap without owning a command queue. */
 internal object NativeNoiseRequestGate {
-    private const val DEDUPE_WINDOW_MILLIS = 250L
-    private val lock = Any()
-    private val sequence = AtomicLong()
-    private val reservations = mutableMapOf<RequestKey, Reservation>()
+    private val gate = SystemRequestGate({ SystemClock.elapsedRealtime() })
 
-    fun submit(snapshot: NativeHeadsetSnapshot, mode: String, enqueue: () -> Boolean): Result {
-        val now = SystemClock.elapsedRealtime()
-        val key = RequestKey(snapshot.hostEpoch, snapshot.deviceId, snapshot.sessionId, mode)
-        val token = synchronized(lock) {
-            reservations.entries.removeAll { it.value.expiresAt <= now }
-            if (key in reservations) return Result.DUPLICATE
-            val reservation = sequence.incrementAndGet()
-            reservations[key] = Reservation(reservation, Long.MAX_VALUE)
-            reservation
+    fun submit(snapshot: NativeHeadsetSnapshot, mode: String, enqueue: () -> Boolean): Result =
+        when (gate.submit(Key(snapshot.hostEpoch, snapshot.deviceId, snapshot.sessionId, mode), enqueue)) {
+            SystemRequestGate.Result.ACCEPTED -> Result.ACCEPTED
+            SystemRequestGate.Result.DUPLICATE -> Result.DUPLICATE
+            SystemRequestGate.Result.REJECTED -> Result.REJECTED
         }
-
-        val accepted = runCatching(enqueue).getOrDefault(false)
-        synchronized(lock) {
-            val reservation = reservations[key]
-            if (reservation?.token == token) {
-                if (accepted) reservation.expiresAt = SystemClock.elapsedRealtime() + DEDUPE_WINDOW_MILLIS
-                else reservations.remove(key)
-            }
-        }
-        return if (accepted) Result.ACCEPTED else Result.REJECTED
-    }
 
     enum class Result { ACCEPTED, DUPLICATE, REJECTED }
 
-    private data class RequestKey(
-        val hostEpoch: String,
-        val deviceId: String,
-        val sessionId: Long,
-        val mode: String,
-    )
-
-    private data class Reservation(val token: Long, var expiresAt: Long)
+    private data class Key(val hostEpoch: String, val deviceId: String, val sessionId: Long, val mode: String)
 }

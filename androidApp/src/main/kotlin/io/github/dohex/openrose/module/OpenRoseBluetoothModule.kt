@@ -13,6 +13,7 @@ import io.github.dohex.openrose.integration.NativeHeadsetBinderAdapter
 import io.github.dohex.openrose.integration.NativeHeadsetSnapshot
 import io.github.dohex.openrose.presentation.OfficialConnectionPresenter
 import io.github.dohex.openrose.presentation.PresentationCallbacks
+import io.github.dohex.openrose.core.SystemHeadsetMapping
 import io.github.dohex.openrose.presentation.SystemPresentationRenderer
 import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedModule
@@ -116,15 +117,29 @@ class OpenRoseBluetoothModule : XposedModule() {
                         if (retired || nativeSnapshot?.reference != snapshot.reference) return@execute
                         val result = connectedClient.setNoise(frame, mode)
                         if (!retired && nativeSnapshot?.reference == snapshot.reference) {
-                            val succeeded = result.getString(BridgeWire.STATUS) == BridgeWire.STATUS_OK
-                            componentReport(featureFor(selected), if (succeeded) "CONFIRMED" else BridgePresentationWire.ACTION_FAILED,
-                                if (succeeded) "ROSE device confirmed $mode" else result.getString(BridgeWire.MESSAGE) ?: "control rejected: ${result.getString(BridgeWire.STATUS)}")
+                            // Only the earphones' confirmation is a success; every refusal keeps its own status.
+                            val outcome = SystemHeadsetMapping.commandReport(
+                                mode, result.getString(BridgeWire.STATUS), result.getString(BridgeWire.MESSAGE),
+                            )
+                            componentReport(featureFor(selected), outcome.status, outcome.detail)
                         }
                     }
                     true
                 }.getOrDefault(false)
             }
             override fun report(feature: String, status: String, detail: String) = componentReport(featureFor(selected), status, detail)
+            override fun fusionEntryDevice(address: String): String? {
+                val connectedClient = client?.takeIf { !retired } ?: return null
+                val ask = java.util.concurrent.FutureTask { connectedClient.fusionEntryDevice(address) }
+                return try {
+                    actions.execute(ask)
+                    ask.get(FUSION_ENTRY_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)
+                } catch (failure: Throwable) {
+                    ask.cancel(true)
+                    if (failure is InterruptedException) Thread.currentThread().interrupt()
+                    null
+                }
+            }
         }
         when (selected) {
             BridgeTarget.BLUETOOTH, BridgeTarget.XIAOMI_BLUETOOTH -> {
@@ -270,5 +285,9 @@ class OpenRoseBluetoothModule : XposedModule() {
 
     private fun featureFor(selected: BridgeTarget): String = if (selected == BridgeTarget.MILINK) BridgePresentationWire.FUSION_CENTER else BridgePresentationWire.SYSTEM_HEADSET
 
-    private companion object { const val TAG = "OpenRoseSystemModule" }
+    private companion object {
+        const val TAG = "OpenRoseSystemModule"
+        /** A settings-entry tap waits this long for the host before the system's own page runs. */
+        const val FUSION_ENTRY_TIMEOUT_MILLIS = 750L
+    }
 }

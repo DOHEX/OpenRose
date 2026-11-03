@@ -58,15 +58,14 @@ internal object BridgeWire {
     const val ACTION_CONTROL_HOST = "io.github.dohex.openrose.action.CONTROL_HOST"
     const val HOST_SERVICE_CLASS = "com.android.bluetooth.ble.app.headset.BluetoothHeadsetService"
 
-    /** Persisted user intent the application mirrors for the host (read-only in the host process). */
-    const val PREFERENCES_GROUP = "control_bridge_v2"
     /** Settings the application mirrors for the host, in the core settings codec's own keys. */
     const val CONFIG_GROUP = "module_config"
     const val CONFIG_REVISION = "config_revision"
-    const val FUSION_SETTINGS_DESTINATION = "fusion_settings_destination"
-    const val FUSION_DEVICE_MAPPING = "fusion_device_mapping"
-    const val DESTINATION_SYSTEM = "SYSTEM"
-    const val DESTINATION_OPENROSE = "OPENROSE"
+    /** Request: the Bluetooth address the fusion center asked about. Reply: [FUSION_DECISION] and, for OpenRose, [DEVICE_ID]. */
+    const val FUSION_ADDRESS = "fusion_address"
+    const val FUSION_DECISION = "fusion_decision"
+    const val FUSION_SYSTEM = "SYSTEM"
+    const val FUSION_OPENROSE = "OPENROSE"
     const val ACTION_SHOW_HEADPHONES = "io.github.dohex.openrose.SHOW_HEADPHONES"
     const val EXTRA_HEADPHONE_ADDRESS = "io.github.dohex.openrose.extra.HEADPHONE_ADDRESS"
     val RESOLUTIONS = setOf(RESOLUTION_MATCHED, RESOLUTION_CLASS_MISSING, RESOLUTION_METHOD_MISSING, RESOLUTION_HOOK_FAILED)

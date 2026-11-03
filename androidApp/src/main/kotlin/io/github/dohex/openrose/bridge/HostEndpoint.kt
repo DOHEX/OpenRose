@@ -23,6 +23,8 @@ import io.github.dohex.openrose.core.HostReadResult
 import io.github.dohex.openrose.core.HostRejection
 import io.github.dohex.openrose.core.HostStatus
 import io.github.dohex.openrose.core.IslandMode
+import io.github.dohex.openrose.core.FusionEntry
+import io.github.dohex.openrose.core.FusionEntryDecision
 import io.github.dohex.openrose.core.ModuleControlHost
 import io.github.dohex.openrose.core.OperationResult
 import io.github.dohex.openrose.core.OwnerGeneration
@@ -326,8 +328,33 @@ internal class HostEndpoint(
                 OperationResult.Success -> BridgeWire.response(BridgeWire.STATUS_OK)
                 is OperationResult.Failure -> BridgeWire.response(outcome.error.code.name, outcome.error.message)
             }
-            is HostCallResult.Rejected -> BridgeWire.response(BridgeWire.STATUS_STALE_HOST, result.message)
+            is HostCallResult.Rejected -> when (result.rejection) {
+                HostRejection.FORBIDDEN, HostRejection.INVALID_LEASE -> BridgeWire.response(BridgeWire.STATUS_UNAUTHORIZED, result.message)
+                else -> BridgeWire.response(BridgeWire.STATUS_STALE_HOST, result.message)
+            }
             is HostCallResult.Flag -> BridgeWire.response(BridgeWire.STATUS_ACTION_FAILED)
+        }
+    }
+
+    /**
+     * The fusion device center's additional settings entry. Decided only from the owner's own state (the user's
+     * persisted destination and the earphones it knows), so it needs nothing from the application process and
+     * never names a device the owner does not know.
+     */
+    override fun fusionEntry(request: Bundle): Bundle {
+        val lease = consumerLease(request.getString(BridgeWire.LEASE_ID))
+        requireVersion(request)
+        if (lease.target != BridgeTarget.MILINK) throw SecurityException("仅融合设备中心可查询附加设置入口")
+        val address = request.getString(BridgeWire.FUSION_ADDRESS)?.takeIf { it.length <= 64 }
+            ?: return BridgeWire.response(BridgeWire.STATUS_INVALID_ARGUMENT)
+        return BridgeWire.response(BridgeWire.STATUS_OK).apply {
+            when (val decision = FusionEntry.resolve(host.view(lease.caller, lease.id)?.state, address)) {
+                FusionEntryDecision.System -> putString(BridgeWire.FUSION_DECISION, BridgeWire.FUSION_SYSTEM)
+                is FusionEntryDecision.OpenRose -> {
+                    putString(BridgeWire.FUSION_DECISION, BridgeWire.FUSION_OPENROSE)
+                    putString(BridgeWire.DEVICE_ID, decision.deviceId.value)
+                }
+            }
         }
     }
 

@@ -32,4 +32,8 @@ interface IControlBridge {
     Bundle acquire(in Bundle request);
     /** Streams the owner's published state for one generation. */
     Bundle watchFrames(in Bundle request, IControlFrames frames);
+
+    // System entry role (fusion device center), appended after the application surface.
+    /** Decides the fusion device center's additional settings entry for one Bluetooth address from the owner's own state. */
+    Bundle fusionEntry(in Bundle request);
 }

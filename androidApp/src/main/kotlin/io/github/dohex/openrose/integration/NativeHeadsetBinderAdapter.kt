@@ -8,6 +8,7 @@ import android.os.Looper
 import android.os.Parcel
 import android.util.Log
 import io.github.dohex.openrose.bridge.BridgePresentationWire
+import io.github.dohex.openrose.core.SystemHeadsetMapping
 import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedModule
 import java.lang.reflect.Method
@@ -80,15 +81,15 @@ class NativeHeadsetBinderAdapter(
         lastReportedSnapshot = fresh
         val targets = registeredCallbacks.values.filter { it.address in fresh.addresses && it.reference == fresh.reference }
         if (targets.isEmpty()) return
-        val payload = statusPayload(fresh)
-        if (payload == null) {
+        val status = SystemHeadsetMapping.binderStatus(fresh.fields) as? SystemHeadsetMapping.BinderStatus.Payload
+        if (status == null) {
             report(FEATURE, "UNAVAILABLE", "status payload contains fields the current core snapshot cannot represent")
             return
         }
-        if (fresh.knownNumber("CASE_BATTERY") != null) {
-            report(FEATURE, "UNAVAILABLE", "case battery omitted because CASE_CHARGING is not in the core snapshot")
+        if (status.caseOmitted) {
+            report(FEATURE, "UNAVAILABLE", "case battery omitted because its charging state is not in the core snapshot")
         }
-        targets.forEach { target -> sendRefresh(target, fresh, payload) }
+        targets.forEach { target -> sendRefresh(target, fresh, status.text) }
     }
 
     /** Release API 102 hook handles, callback registrations, and the local snapshot on shutdown. */
@@ -179,7 +180,7 @@ class NativeHeadsetBinderAdapter(
                 }
                 return@hook HookDecision.Proceed
             }
-            val requestedMode = (chain.args.getOrNull(0) as? Int)?.let(::roseModeFromBinder)
+            val requestedMode = (chain.args.getOrNull(0) as? Int)?.let(SystemHeadsetMapping::noiseModeFromSystem)
             if (requestedMode == null) {
                 report(FEATURE, "UNSUPPORTED", "changeAncMode received an unmapped native mode")
             } else {
@@ -319,7 +320,7 @@ class NativeHeadsetBinderAdapter(
                         reply.writeNoException()
                         handled = true
                     } else {
-                        roseModeFromBinder(requested)?.let { submit(snapshot, it, bluetoothAddress(targetDevice)) }
+                        SystemHeadsetMapping.noiseModeFromSystem(requested)?.let { submit(snapshot, it, bluetoothAddress(targetDevice)) }
                             ?: report(FEATURE, "UNSUPPORTED", "changeAncMode transaction received an unmapped native mode")
                         reply.writeNoException()
                         handled = true
@@ -439,49 +440,8 @@ class NativeHeadsetBinderAdapter(
         }
     }
 
-    private fun statusPayload(snapshot: NativeHeadsetSnapshot): String? {
-        val left = encodeBattery(snapshot, "LEFT_BATTERY", "LEFT_CHARGING")
-        val right = encodeBattery(snapshot, "RIGHT_BATTERY", "RIGHT_CHARGING")
-        val caseReading = snapshot.fields["CASE_BATTERY"]
-        val caseValue = when (caseReading) {
-            NativeFieldReading.Loading, NativeFieldReading.Unknown, NativeFieldReading.NotProvided, null -> UNKNOWN_BATTERY.toString()
-            is NativeFieldReading.Known -> {
-                val value = (caseReading.value as? NativeFieldValue.Number)?.value ?: return null
-                if (value !in 0..100) return null
-                // OpenRose currently has no case-charging field. The source payload sets the
-                // high bit from that fact, so omit this known case value rather than implying
-                // that it is not charging.
-                ""
-            }
-        }
-        if (left == null || right == null) return null
-        if (left == UNKNOWN_BATTERY && right == UNKNOWN_BATTERY) return null
-
-        val values = MutableList(16) { "" }
-        values[0] = left.toString()
-        values[1] = right.toString()
-        values[2] = caseValue
-        values[7] = when (snapshot.knownText("NOISE_MODE")?.trim()?.lowercase()) {
-            "transparency" -> "0200"
-            // The pinned payload returns 0000 for both its normal and basic-ANC states, so it
-            // cannot distinguish either one; keep those mode fields empty.
-            else -> ""
-        }
-        // All other payload positions are deliberately empty. In particular, index 8 is wear state.
-        return values.joinToString(",")
-    }
-
-    private fun encodeBattery(snapshot: NativeHeadsetSnapshot, field: String, chargingField: String): Int? {
-        return when (val reading = snapshot.fields[field]) {
-            NativeFieldReading.Loading, NativeFieldReading.Unknown, NativeFieldReading.NotProvided, null -> UNKNOWN_BATTERY
-            is NativeFieldReading.Known -> {
-                val battery = (reading.value as? NativeFieldValue.Number)?.value?.takeIf { it in 0..100 }
-                    ?: return null
-                val charging = snapshot.knownToggle(chargingField) ?: return null
-                battery or if (charging) CHARGING_FLAG else 0
-            }
-        }
-    }
+    private fun statusPayload(snapshot: NativeHeadsetSnapshot): String? =
+        (SystemHeadsetMapping.binderStatus(snapshot.fields) as? SystemHeadsetMapping.BinderStatus.Payload)?.text
 
     private fun snapshotForDevice(value: Any?): NativeHeadsetSnapshot? =
         (value as? BluetoothDevice)?.let { device -> runCatching { snapshotForAddress(device.address) }.getOrNull() }
@@ -711,13 +671,6 @@ class NativeHeadsetBinderAdapter(
     private fun hookId(method: Method): String =
         "openrose.native_headset.binder.${method.declaringClass.name}.${method.name}".replace('-', '_')
 
-    private fun roseModeFromBinder(mode: Int): String? = when (mode) {
-        0 -> "normal"
-        1 -> "anc"
-        2 -> "transparency"
-        else -> null
-    }
-
     private data class RegisteredCallback(
         val callback: Any,
         val binder: IBinder,
@@ -752,7 +705,5 @@ class NativeHeadsetBinderAdapter(
         const val TRANSACTION_IS_SUPPORT_AUDIO_SWITCH = 20
         const val TRANSACTION_GET_RING_FIND_STATE = 24
         const val TRANSACTION_REGISTER_CALLBACK_DEVICE = 16
-        const val UNKNOWN_BATTERY = 255
-        const val CHARGING_FLAG = 128
     }
 }
