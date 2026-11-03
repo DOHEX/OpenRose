@@ -29,8 +29,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 /**
@@ -52,7 +50,7 @@ class OpenRoseApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         val unlocked = userUnlocked()
-        framework = FrameworkLink(applicationContext) { controlScope.launch { refreshPlatform() } }
+        framework = FrameworkLink { controlScope.launch { refreshPlatform() } }
         runtime = SwitchingControlRuntime(
             initialPlatformState = readPlatformState(permissionRequested(), wake = companionWake.facts(), userUnlocked = unlocked),
             initialSettings = if (unlocked) loadSettings() else UserSettings(),
@@ -77,16 +75,6 @@ class OpenRoseApplication : Application() {
         preferencesLoaded = unlocked
         framework.start()
         refreshPlatform()
-        // The fusion device center reads these from the framework; they follow whichever owner's state is mirrored here.
-        controlScope.launch(Dispatchers.IO) {
-            runtime.state.map { state ->
-                listOf(
-                    state.settings.fusionSettingsDestination, state.device?.deviceId, state.device?.classicAddress,
-                    state.connectionTarget?.deviceId, state.candidates.map { it.deviceId to it.classicAddress },
-                    state.bondedDevices.map { it.deviceId to it.classicAddress },
-                )
-            }.distinctUntilChanged().collect { framework.publishFusion(runtime.state.value) }
-        }
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context, intent: Intent) {
                 if (intent.action == Intent.ACTION_USER_UNLOCKED) loadUnlockedSettings()

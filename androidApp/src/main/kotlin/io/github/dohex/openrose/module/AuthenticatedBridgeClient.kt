@@ -448,6 +448,20 @@ internal class AuthenticatedBridgeClient(
         callRemote(request) { bridge, call -> bridge.reportComponent(call) }
     }
 
+    /**
+     * Asks the host whether the fusion center's settings entry for [address] belongs to OpenRose. Returns the
+     * control device to open, or null when the system's own entry must run (no owner, system chosen, unknown
+     * address, or any failure). A blocking Binder call: use it from the bounded action executor.
+     */
+    fun fusionEntryDevice(address: String): String? {
+        val request = currentLeaseRequest() ?: return null
+        request.putString(BridgeWire.FUSION_ADDRESS, address)
+        val response = callRemote(request) { bridge, call -> bridge.fusionEntry(call) } ?: return null
+        if (!hasWireVersion(response) || response.getString(BridgeWire.STATUS) != BridgeWire.STATUS_OK ||
+            response.getString(BridgeWire.FUSION_DECISION) != BridgeWire.FUSION_OPENROSE) return null
+        return response.getString(BridgeWire.DEVICE_ID)?.takeIf { it.isNotBlank() && it.length <= MAX_DEVICE_ID_LENGTH }
+    }
+
     private fun currentLeaseRequest(): Bundle? {
         if (!isLeaseUsable()) return null
         val lease = leaseId ?: return null
@@ -464,9 +478,16 @@ internal class AuthenticatedBridgeClient(
         // The generation may have moved since the request was built; never send an old one.
         if (request.getString(BridgeWire.LEASE_ID) != lease || request.getString(BridgeWire.HOST_EPOCH) != generation) return null
         val bridge = targetBridge ?: return null
-        return runCatching { call(bridge, Bundle(request)) }
-            .onFailure { Log.w(TAG, "bridge_call_failed target=$target", it) }
-            .getOrNull()
+        return try {
+            call(bridge, Bundle(request))
+        } catch (failure: SecurityException) {
+            // A refusal by the host is an answer, not a missing one: callers must be able to tell it from a lost link.
+            Log.w(TAG, "bridge_call_unauthorized target=$target", failure)
+            BridgeWire.response(BridgeWire.STATUS_UNAUTHORIZED, failure.message)
+        } catch (failure: Throwable) {
+            Log.w(TAG, "bridge_call_failed target=$target", failure)
+            null
+        }
     }
 
     fun close(): Boolean {
