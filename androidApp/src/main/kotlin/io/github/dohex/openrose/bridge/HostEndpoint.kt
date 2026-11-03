@@ -19,7 +19,6 @@ import io.github.dohex.openrose.core.HostCallResult
 import io.github.dohex.openrose.core.HostCommand
 import io.github.dohex.openrose.core.HostFacts
 import io.github.dohex.openrose.core.HostOpenResult
-import io.github.dohex.openrose.core.HostRejection
 import io.github.dohex.openrose.core.HostReadResult
 import io.github.dohex.openrose.core.HostRejection
 import io.github.dohex.openrose.core.HostStatus
