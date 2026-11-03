@@ -68,6 +68,8 @@ flowchart TD
 
 拒绝继续以应用进程作为模块控制的必需承载，因为它不满足已确认的模块自治目标；也拒绝每个 Hook 宿主各建连接。独立 root 控制进程增加部署、Android 蓝牙接入与生命周期成本，当前没有必要为此新增一套运行环境。代价是需要维护两种承载及其交接，但协议与控制状态机只维护一套。
 
+（2026-11 补注：[ADR 0012](0012-shared-multiplatform-architecture.md) 将 `SwitchingControlRuntime`、`ModuleControlHost`、连接提示判定及其余 Android 集成逻辑移出 `core`，归入 `:androidIntegration`；系统入口改经集成层核对会话引用后调用同一控制入口。本决策的承载、所有权与交接约束不变；下文实施记录中的 `core` 位置描述的是迁移前的代码。）
+
 ## 实施验收与当前证据
 
 验收须分别覆盖普通控制、免 root 后台唤起和模块控制，不能以编译、离线测试或一次打开应用后的连接成功替代。
