@@ -3,122 +3,172 @@
 [![GitHub Actions](https://img.shields.io/badge/CI-GitHub_Actions-2088FF?logo=githubactions&logoColor=white)](https://github.com/DOHEX/OpenRose/actions/workflows/ci.yml)
 [![Kotlin Multiplatform](https://img.shields.io/badge/Kotlin-Multiplatform-7F52FF?logo=kotlin&logoColor=white)](gradle/libs.versions.toml)
 [![Compose Multiplatform](https://img.shields.io/badge/Compose-Multiplatform-4285F4?logo=jetpackcompose&logoColor=white)](composeApp/build.gradle.kts)
-[![Android 8.0+](https://img.shields.io/badge/Android-8.0%2B-3DDC84?logo=android&logoColor=white)](#using-openrose-on-android)
-[![Status: In development](https://img.shields.io/badge/status-in%20development-orange)](#current-status)
+[![Android 8.0+](https://img.shields.io/badge/Android-8.0%2B-3DDC84?logo=android&logoColor=white)](#getting-started)
+[![Status: In development](https://img.shields.io/badge/status-in%20development-orange)](#supported-earphones)
 
 [简体中文](README.md) | **English**
 
-A control client for ROSE / ROSESELSA earphones, built with Kotlin Multiplatform and Compose Multiplatform.
+OpenRose is an unofficial control app for ROSE / ROSESELSA (弱水时砂) earphones and a replacement for the official RoseLink app for everyday settings. On HyperOS it can also plug the earphones into the system island, focus notifications, and Fusion Device Center, so they behave much like Xiaomi's own earbuds.
 
-OpenRose separates device protocols, control sessions, and the application UI. It offers Miuix and Material 3 interface styles and integrates with HyperOS system earphone features on Android. Android is the primary development platform; Windows and Linux have desktop UI entry points.
+It is built with Kotlin Multiplatform and Compose Multiplatform and ships two interface styles, Miuix and Material 3. Android is the main platform. The Windows / Linux desktop builds have the UI only and cannot control earphones yet.
+
+> [!WARNING]
+> OpenRose is under active development and most features have not been fully tested on real hardware. See [Supported earphones](#supported-earphones) for details, and please [report problems](#feedback-and-contributing).
+
+## Supported earphones
+
+| Earphones | Protocol / control channel | Tested on hardware |
+| --- | --- | --- |
+| EarFree i5 (EarFeel i5) | ZT / BLE | Status reads work on a real device; settings writes not yet tested on Android |
+| EarFeel i7 | RS Common V2 / BLE or SPP | Protocol and offline tests done; not yet tried on a real device |
+
+One retail name can cover several hardware revisions. OpenRose currently implements only the two model profiles above. Protocol research for other models (BudsFeel MK2, OpenFeel MK2, Swift 2, Jasmine, and a capability list of 43 models) lives in [docs/protocols/](docs/protocols/) but is not wired into the app yet.
 
 ## Features
 
-- View earphone battery levels, firmware versions, and device state.
-- Switch noise control modes using home-screen icons: four in one row for i5, six in two rows for i7. Adjust ANC and transparency levels independently and configure touch-cycle participants through a dedicated multi-select picker.
-- Toggle game mode on the home screen. Change EQ presets, touch bindings, touch and detection switches, and prompt volume on their respective feature pages.
-- Select audio configurations and multipoint connectivity according to model capabilities. The i7 also offers a custom ten-band EQ and firmware-dependent settings such as gain and hearing protection.
-- Switch between Miuix and Material 3, with light and dark appearance options. Changing interface style preserves the control connection and device state.
-- Android system integration includes the HyperOS system island (超级岛), focus notifications, and Fusion Device Center (融合设备中心), targeting HyperOS 3 and 4.
+**Earphone controls** (what you see depends on the model and firmware)
 
-Available controls depend on the specific model profile and the firmware reported by the device. See the [protocol documentation directory](docs/protocols/) for model protocol specifications and capability research, and [protocol implementation & evidence](docs/protocols.md) for current i5/i7 client details.
+- Battery for each earbud and the case; firmware version
+- Noise control mode, with separate ANC and transparency levels; choose which modes the touch gesture cycles through
+- Game mode, EQ presets, touch bindings, touch on/off, wear detection on/off, prompt volume
+- Audio codec preference and multipoint (linked to each other on the i5)
+- i7 only: custom 10-band EQ; gain and hearing protection on supported firmware
 
-Fusion Device Center displays available earbud and case battery levels. Unknown charging states appear as not charging. The system offers only off, noise cancellation, and transparency: wind reduction appears as off without changing the actual earphone mode, which remains visible in OpenRose.
+**Appearance**
 
-On applicable HyperOS devices, choose the system earphone details page (default) or the OpenRose headphones home under Settings → Fusion Device Center → Additional settings destination. Choosing OpenRose makes the device card's Additional Settings open the headphones home and attempt a control connection to that card's earphones. Connection failures retain the target and reason for troubleshooting or retry. Preferences can be saved before the module is ready and apply to subsequent clicks once it is ready, without restarting the integration scopes. The entry requires the corresponding system component and a loaded module.
+- Miuix or Material 3 Expressive styles; switching keeps the earphones connected
+- Light / dark, standard or floating bottom bar, background blur, page transitions
 
-This entry has been exercised with an i5 and Xiaomi 14 running OS4.0.0.27.XNCCNXM, MiLink 18.2.2.0.2609141543, and LSPosed 2.2.0-it / API 102: OpenRose redirection, the original system destination, and applying a changed preference on the next click were verified. This entry has not yet been exercised with an i7 or HyperOS 3.
+**HyperOS integration** (requires an Xposed framework, see [below](#hyperos-integration))
 
-## Current status
+- Connection prompt and status notification, shown through the system island / focus notifications
+- Earbud and case battery in Fusion Device Center, plus noise mode switching from there
+- Fusion Device Center's "Additional Settings" can open OpenRose directly
 
-The project is under active development and hardware validation.
+## Getting started
 
-| Platform | Current implementation |
-| --- | --- |
-| Android 8.0+ (API 26+) | Bluetooth scanning, BLE control, and conditional i7 SPP control are implemented. The regular client runs independently. |
-| HyperOS 3 / 4 | System bridge and presentation adapters are included. They require a framework supporting modern libxposed API 102; the complete system integration still needs hardware validation. |
-| Windows / Linux | Shared UI, windows, and preferences are implemented. Bluetooth control transports are not yet implemented. |
+Requires Android 8.0 (API 26) or later. The app UI is currently Chinese only, so UI labels below include the Chinese text you will see.
 
-| Model profile | Protocol and transport | Hardware validation |
+1. Download the APK from [Releases](https://github.com/DOHEX/OpenRose/releases). Development builds are available as artifacts on [GitHub Actions](https://github.com/DOHEX/OpenRose/actions/workflows/ci.yml) (GitHub sign-in required).
+2. Pair and connect the earphones in the **system Bluetooth settings** first. OpenRose does not handle audio pairing.
+3. Open OpenRose and grant Bluetooth permissions. On Android 8–11, Bluetooth scanning also needs location permission with system location services turned on.
+4. Paired earphones show up on the My Earphones (我的耳机) page. When they connect to system audio, OpenRose opens its control connection automatically; you can also tap Connect (连接). To add new earphones, tap **+** in the top bar.
+
+OpenRose's **control connection** is separate from the **audio connection** the system uses for music and calls. "Disconnect control connection" (断开控制连接) in the app only disconnects OpenRose; playback is not affected.
+
+## HyperOS integration
+
+Skip this section if you only need Bluetooth controls.
+
+**Requirements**
+
+- HyperOS 3 or 4
+- A framework supporting libxposed API 102 (for example LSPosed 2.2.0 or later)
+- The OpenRose module enabled in the framework, scoped to `com.android.bluetooth`, `com.xiaomi.bluetooth`, and `com.milink.service`
+
+Then check the System Integration (系统集成) page in OpenRose to confirm that the module and system bridge are ready.
+
+**Settings** (on the Settings (设置) page)
+
+| Setting | Options | What it does |
 | --- | --- | --- |
-| EarFree i5 | ZT / BLE | Records cover 13 initialization reads from one device on Linux. Android control and settings writes await validation. |
-| EarFeel i7 | RS Common V2 / BLE, SPP | Protocol implementation and hardware-independent tests are available; no hardware validation yet. |
+| Island (超级岛) | Off / Official / Module | Official reuses Xiaomi's earphone connection prompt; Module uses OpenRose's own style and triggers. Both are rendered by the system island |
+| Focus notification (焦点通知) | On / Off | Keeps an earphone status notification while connected |
+| Additional settings destination (附加设置入口) | System details page / OpenRose | With OpenRose selected, the Additional Settings button on the Fusion Device Center card opens OpenRose and connects to those earphones |
 
-The same retail name may refer to different hardware variants. Only the model profiles listed above are currently implemented. The first HyperOS integration validation target is an i5 with a Xiaomi 14 running HyperOS 4.
+**Known limitations**
 
-In addition to i5 and i7, reverse engineering has documented protocol specifications for BudsFeel MK2, OpenFeel MK2, Swift 2, Jasmine, and a 43-model capability matrix; see the [protocol documentation directory](docs/protocols/).
+- The system only knows Off / ANC / Transparency. When the earphones are in wind-noise reduction, Fusion Device Center shows Off; the real mode is unchanged and visible in OpenRose.
+- If the earphones do not report charging state, the system shows them as not charging.
+- The top-right action on the System Integration page uses Root to restart the three scoped processes so the module reloads. Bluetooth may drop briefly; processes that were not running are not started. "Executed" only means the command was sent.
 
-## Using OpenRose on Android
+**Testing status**: the Fusion Device Center Additional Settings redirect has been verified on an i5 with a Xiaomi 14 (OS4.0.0.27.XNCCNXM, MiLink 18.2.2.0.2609141543, LSPosed 2.2.0-it / API 102). The island, focus notifications, the i7, and HyperOS 3 have not been fully tested on hardware.
 
-1. Install the APK, enable Bluetooth, and pair and connect your earphones for audio in the system Bluetooth settings.
-2. Open OpenRose and grant the requested Bluetooth permissions. Android 8–11 also requires location permission and enabled system location services for Bluetooth scanning.
-3. Scan for devices in the app, select a recognized pair of earphones, and wait for device state to load before using the controls.
-4. For HyperOS system integration, enable the OpenRose module in a compatible framework, then check the module and system bridge status in the app settings.
+## Platform support
 
-Island presentation offers Off, Official, and Module modes. Focus notifications are configured separately. Both island presentation modes are rendered by the system UI. Regular Bluetooth control works without enabling the module.
-
-On Android, the System Integration page offers a restart action for the three integration scopes. After confirmation it requests Root; Bluetooth may disconnect, and stopped targets are not started. “Executed” reports the command, not that the process recovered or the module loaded. Root and process behavior still require validation on the target device.
-
-OpenRose manages its **control connection** separately from the system audio connection used for playback and calls. “Disconnect control connection” in the app ends only the OpenRose control connection.
+| Platform | Status |
+| --- | --- |
+| Android 8.0+ | Bluetooth scanning, BLE control, and SPP control for the i7 are implemented |
+| HyperOS 3 / 4 | Integration code is complete; awaiting hardware testing |
+| Windows / Linux | UI and preferences work; Bluetooth control is not implemented |
 
 ## Building from source
 
-### Prerequisites
+**Requirements**
 
-- JDK 21. The repository's `.mise.toml` includes a Temurin version configuration.
-- Android SDK Platform 37 and Build Tools 37.0.0.
-- Set `ANDROID_HOME`, or add `sdk.dir=/path/to/android-sdk` to an untracked `local.properties` file.
-- The Linux desktop app also needs GTK 3, EGL / OpenGL, and fontconfig. See the [CI configuration](.github/workflows/ci.yml) for an installation example.
+- JDK 21 (`.mise.toml` pins a Temurin version you can install with [mise](https://mise.jdx.dev/))
+- Android SDK Platform 37 and Build Tools 37.0.0
+- `ANDROID_HOME` set, or `sdk.dir=/path/to/android-sdk` in `local.properties`
+- On Linux, the desktop app also needs GTK 3, EGL / OpenGL, and fontconfig; see the [CI configuration](.github/workflows/ci.yml) for the install command
 
-The repository includes the Gradle Wrapper, so a separate Gradle installation is unnecessary. The first build needs internet access to download dependencies. On Windows, replace `./gradlew` in the commands below with `.\gradlew.bat`.
+The Gradle Wrapper is included. On Windows, replace `./gradlew` with `.\gradlew.bat`.
 
 ```bash
 git clone https://github.com/DOHEX/OpenRose.git
 cd OpenRose
 ```
 
-### Build the Android APK
+Build the Android APK (output: `androidApp/build/outputs/apk/debug/androidApp-debug.apk`):
 
 ```bash
 ./gradlew :androidApp:assembleDebug
 ```
 
-The APK is written to `androidApp/build/outputs/apk/debug/androidApp-debug.apk`.
-
-### Run the desktop app
+Run the desktop app:
 
 ```bash
 ./gradlew :desktopApp:run
 ```
 
-The desktop app currently lets you explore the UI and change application preferences. Earphone control requires the Android app.
-
-### Checks and tests
+Run the tests that need no earphone hardware (protocol, control session, and shared UI tests, plus Android / desktop compilation):
 
 ```bash
-# Protocol and control session tests, shared UI tests, and Android / desktop compilation
 ./gradlew offlineCheck
+```
 
-# Full checks, including Android unit tests and Lint
+Run the full check, which adds Android unit tests and Lint:
+
+```bash
 ./gradlew check offlineCheck
 ```
 
-`offlineCheck` runs checks that do not require earphone hardware. It still requires the Android SDK. Once dependencies are cached, add `--offline` to prevent Gradle from accessing the network.
+`offlineCheck` still needs the Android SDK. Once dependencies are downloaded, add `--offline` to run without network access.
 
-[GitHub Actions](https://github.com/DOHEX/OpenRose/actions/workflows/ci.yml) is configured to build and check the project on Windows and Linux. Successful builds upload an Android APK, a Windows ZIP, and a Linux tar.gz. Development build artifacts are retained for 14 days.
+CI builds and tests on Linux and Windows and publishes an Android APK, a Windows ZIP, and a Linux tar.gz, kept for 14 days. Pushing a `vX.Y.Z` tag creates a draft release with a signed APK.
 
-## Project structure
+## Project layout
 
-| Directory | Responsibility |
+| Directory | Contents |
 | --- | --- |
-| `core/` | Model capabilities, protocol codecs, control sessions, state, and user settings |
-| `composeApp/` | Shared UI, Miuix / Material 3 components, and UI tests |
-| `androidApp/` | Android entry point, BLE / SPP transports, libxposed module, and HyperOS system bridge |
-| `desktopApp/` | Windows / Linux desktop entry point, windows, and preferences |
-| `docs/` | Protocol research & model specifications (`docs/protocols/`), implementation evidence (`docs/protocols.md`), architecture decisions, and specifications |
+| `core/` | Platform-independent core: model capabilities, protocol codecs, control session, user settings |
+| `composeApp/` | Shared UI (Miuix / Material 3) and UI tests |
+| `androidApp/` | Android entry point, BLE / SPP transports, Xposed module, HyperOS system bridge |
+| `desktopApp/` | Windows / Linux entry point |
+| `docs/` | Protocol documentation and architecture decision records |
 
-## Contributing and feedback
+## Documentation
 
-Feature requests, bugs, and compatibility reports are tracked in [GitHub Issues](https://github.com/DOHEX/OpenRose/issues). For device issues, include the exact earphone model and firmware, phone model and system version, OpenRose version, and reproduction steps. For system integration issues, also include the framework version and bridge status.
+Most documentation is in Chinese.
 
-Before contributing, read the [domain glossary](GLOSSARY.md), [architecture decisions](docs/adr/), [protocol documentation](docs/protocols/), and [implementation evidence](docs/protocols.md). When adding a model or system adapter, record protocol evidence, hardware-independent test results, and hardware validation results separately.
+| Document | Contents |
+| --- | --- |
+| [Protocol implementation](docs/protocols.md) | How OpenRose implements the i5 / i7 protocols: frame formats, field encodings, setting commands, test coverage |
+| [Protocol research](docs/protocols/) | Protocol specs for all models, capability list, and OTA research, reverse-engineered from the official RoseLink app |
+| [Architecture decisions](docs/adr/) | Key design decisions and their reasoning |
+| [Glossary](GLOSSARY.md) | Domain terms used across the project |
+
+## Feedback and contributing
+
+Report bugs and request features in [GitHub Issues](https://github.com/DOHEX/OpenRose/issues). For device problems, please include:
+
+- Earphone model and firmware version
+- Phone model and OS version
+- OpenRose version
+- Steps to reproduce
+- For system integration problems, the Xposed framework version and the bridge status shown on the System Integration page
+
+Before contributing, read the [glossary](GLOSSARY.md) and [architecture decisions](docs/adr/). When adding a model or system integration, record the protocol evidence, offline test results, and hardware test results separately.
+
+## Acknowledgements
+
+The HyperOS integration draws on ideas from [OppoPods](https://github.com/1812z/OppoPods).

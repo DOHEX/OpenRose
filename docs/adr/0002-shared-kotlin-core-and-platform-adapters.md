@@ -29,9 +29,9 @@ OpenRose 以 Android 为首个交付平台，Windows、Linux 分阶段验收。�
 
 ## 来源
 
-- [型号与能力盘点](/home/dohex/Projects/rose_reverse/docs/00-supported-models-and-capabilities.md)
-- [i5 实机验证](/home/dohex/Projects/rose_reverse/analysis/i5_hardware_validation.md)
-- [i7 协议与验证边界](/home/dohex/Projects/rose_reverse/docs/models/earfeel-i7-protocol.md)
+- 型号与能力盘点（`rose_reverse/docs/00-supported-models-and-capabilities.md`）
+- i5 实机验证（`rose_reverse/analysis/i5_hardware_validation.md`）
+- i7 协议与验证边界（`rose_reverse/docs/models/earfeel-i7-protocol.md`）
 - [OppoPods 固定快照 README](https://github.com/1812z/OppoPods/blob/c201e251e68b59d46b6bc2758146b2c7f13ca2a1/README.md)
 - [OppoPods v2.1.0 发布记录](https://github.com/1812z/OppoPods/releases/tag/v2.1.0)
 - [libxposed API 正式发布](https://central.sonatype.com/artifact/io.github.libxposed/api)

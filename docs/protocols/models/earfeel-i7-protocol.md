@@ -8,7 +8,7 @@
 
 协议目录 [earfeel-i7-protocol.json](earfeel-i7-protocol.json) 的**结构由本次研究定义**，不是官方App自带的JSON或官方公开规范。内容的来源为官方App代码，`evidence`记录代码路径、行号和地址。客户端的缓存、超时和输入限制是参考实现的选择。
 
-- APK：[RoseLink_3.8.0.apk](/home/dohex/Projects/rose_reverse/RoseLink_3.8.0.apk)
+- APK：`rose_reverse/RoseLink_3.8.0.apk`
 - 包名：`cn.ikaile.ruoshui.client`；SHA256：`83cdd7e3e7f6e7d61a26dc6a8fab65f183d5a18a66a70f64a17f69d93e58e40b`。
 - 配置：`EarfeelI7DeviceConfig extends BaseDeviceConfig`，class id523；不直接继承 `RsCommonV2DeviceConfig`。
 - Sender：`RsCommonV2Sender`；Receiver：`RsCommonV2Receiver`；handler：`RsCommonV2ReceiveHandler`。
@@ -41,7 +41,7 @@
 
 增益/听力的213已通过GDT getter返回field7直接确认；不是仅凭字段位置推断。原App关闭自动/动态ANC时发送**抗风模式`09 04`**，同时乐观显示ANC；客户端应以通知回包更新最终状态。
 
-证据：[i7配置](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/earfeel_i7_device_config.dart:10)、[EAP模型](/home/dohex/Projects/rose_reverse/analysis/blutter/objs.txt:1705)、[门槛/初始化GDT补核](/home/dohex/Projects/rose_reverse/analysis/i7_dispatch_findings.md)、[提示音关闭判定](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/modules/device_control/widget/device_ding_level_panel_item.dart:900)、[自动关闭native核对](/home/dohex/Projects/rose_reverse/analysis/i7_config_ota_findings.md)。
+证据：i7配置（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/earfeel_i7_device_config.dart:10`）、EAP模型（`rose_reverse/analysis/blutter/objs.txt:1705`）、门槛/初始化GDT补核（`rose_reverse/analysis/i7_dispatch_findings.md`）、提示音关闭判定（`rose_reverse/analysis/blutter/asm/roselink/modules/device_control/widget/device_ding_level_panel_item.dart:900`）、自动关闭native核对（`rose_reverse/analysis/i7_config_ota_findings.md`）。
 
 ## 2. 发现、地址和传输
 
@@ -61,10 +61,10 @@ Base `getInfoFromRawData @0x748ddc` 的 rs_common_v2 分支，对规范化后的
 
 field `4b=bleAddress`、`4f=btAddress`，实际字段名称见 EarObject.toMap。BLE 连接仍使用 OS 扫描对象的 address/remoteId；SPP 可使用广播的 BR/EDR 地址，不能用 discovery ID 当 MAC。广播 H 中 bytes 4..5、8..10 的语义此路径未读，不补猜测。
 
-- [manufacturer 规范化:3737](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/scanner/r_ble_scanner.dart:3737)
-- [前缀识别:191](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/constant/device_config.dart:191)
-- [V2 广播解析:451 起，0x749298](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/base_device_config.dart:451)
-- [MAC 格式化:685，0x74953c](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/base_device_config.dart:685)
+- manufacturer 规范化:3737（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/scanner/r_ble_scanner.dart:3737`）
+- 前缀识别:191（`rose_reverse/analysis/blutter/asm/roselink/constant/device_config.dart:191`）
+- V2 广播解析:451 起，0x749298（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/base_device_config.dart:451`）
+- MAC 格式化:685，0x74953c（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/base_device_config.dart:685`）
 
 ### 2.2 传输选择
 
@@ -72,10 +72,10 @@ field `4b=bleAddress`、`4f=btAddress`，实际字段名称见 EarObject.toMap�
 
 普通 BLE 流程复用 i5 已核的 BleConnector：connect、discoverServices、匹配 00fe/00f1/00f2、注册 onValueReceived、setNotifyValue(true)，writeWithoutResponse 属性优先，否则有响应写；请求 MTU512。普通队列等待 write Future 完成后间隔100ms；OHOS BLE 特殊间隔350ms。**业务应答不是 GATT write Future**。SPP 将同一 V2 控制字节帧发往自己的 socket；BES OTA 则独立 socket/channel。
 
-- [控制选择:4614，0xa009fc](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/connector/connect_manager.dart:4614)
-- [SPP 操作系统与强制BLE/LEAudio条件:95，0x9ecb04](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/src/roselink_platform.dart:95)
-- [BtConnector SPP连接:41，0x9f4270；控制 UUID 取对象field33](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/connector/bt_connector.dart:41)
-- [BLE 请求MTU:9320，0xe555b4](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/connector/ble_connector.dart:9320)
+- 控制选择:4614，0xa009fc（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/connector/connect_manager.dart:4614`）
+- SPP 操作系统与强制BLE/LEAudio条件:95，0x9ecb04（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/src/roselink_platform.dart:95`）
+- BtConnector SPP连接:41，0x9f4270；控制 UUID 取对象field33（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/connector/bt_connector.dart:41`）
+- BLE 请求MTU:9320，0xe555b4（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/connector/ble_connector.dart:9320`）
 
 ### 2.3 通道表和连接步骤
 
@@ -96,13 +96,13 @@ field `4b=bleAddress`、`4f=btAddress`，实际字段名称见 EarObject.toMap�
 
 正常i7单值设置7字节，触摸设置8字节，ANC循环10字节，自定义EQ数据16字节。没有额外业务帧分片参数出现在这些命令里。普通控制序列和BES OTA序列分别维护。
 
-通道证据：[型号定制](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/earfeel_i7_device_config.dart:1024)、[默认BLE配置](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/base_device_config.dart:993)、[SPP选择](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/connector/connect_manager.dart:4614)、[普通写属性](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/connector/ble_connector.dart:5921)、[公共队列](/home/dohex/Projects/rose_reverse/analysis/i5_queue_protocol.md)。本研究没有发现正常控制的自定义登录token/密码握手；系统配对要求仍取决于设备/平台，不能据此声明所有固件均无需配对。
+通道证据：型号定制（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/earfeel_i7_device_config.dart:1024`）、默认BLE配置（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/base_device_config.dart:993`）、SPP选择（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/connector/connect_manager.dart:4614`）、普通写属性（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/connector/ble_connector.dart:5921`）、公共队列（`rose_reverse/analysis/i5_queue_protocol.md`）。本研究没有发现正常控制的自定义登录token/密码握手；系统配对要求仍取决于设备/平台，不能据此声明所有固件均无需配对。
 
 ## 3. 正常发送帧
 
 `FF SS LL BODY... CC AA`。`SS` 为 1 字节序号，i7 Sender 构造时为 0；每次 transform 使用当前值再加 1，下一次若超过 255 先归零。`LL=len(BODY)`，包括命令及参数，不包括帧头、序号、长度、校验与结尾；全帧长 `LL+5`。`CC=sum(FF SS LL BODY...) & 0xff`，并非 CRC。尾字节固定 `AA`。
 
-证据：[transform](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart:4750)（0xdfa838），[i7 Sender 初值](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/earfeel_i7_device_config.dart:49)（0x681848），[CommandUtil.checkSum](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/command_util.dart:189) 与 [加法 reducer](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/command_util.dart:454)。
+证据：transform（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart:4750`）（0xdfa838），i7 Sender 初值（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/earfeel_i7_device_config.dart:49`）（0x681848），CommandUtil.checkSum（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/command_util.dart:189`） 与 加法 reducer（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/command_util.dart:454`）。
 
 以下完整帧样例全使用 `SS=00`，实际串行发送时必须使用当前序号并重新求和。把同一完整样例反复写入会重复序号。初始化查询长 35 字节，超过默认 ATT MTU 23 的单次值容量，须按 BLE transport 的能力处理；普通单值设置只有 7 字节，自定义 EQ 16 字节。
 
@@ -134,45 +134,45 @@ ff 00 1e fa 01 07 08 09 0c 0d 0e 12 2a 2b 2c 2d 2e 2f 31 32 33 36 37 38 39 3a 3b
 
 已补核GlobalController的GDT+0xd8ba：i7配置cid523→表index60101→0x8e2444。目标函数仅调用`RCommander.getInfo`。AOT输出把该共享代码标为Sportfree匿名closure，并不表示i7使用SportFree型号配置。
 
-因此官方i7初始化只包含`getInfo`；**不含自定义EQ数据3E**。参考客户端用`getInfo → getCustomEq`填充普通状态和当前曲线。这是新增补读选择，有意与官方实际初始化区分。[GDT证据](/home/dohex/Projects/rose_reverse/analysis/i7_dispatch_findings.md)
+因此官方i7初始化只包含`getInfo`；**不含自定义EQ数据3E**。参考客户端用`getInfo → getCustomEq`填充普通状态和当前曲线。这是新增补读选择，有意与官方实际初始化区分。GDT证据（`rose_reverse/analysis/i7_dispatch_findings.md`）
 
 ## 4. 设置命令与参数
 
 | 方法 | BODY | seq=00 完整帧 | 证据 |
 |---|---|---|---|
-| `setFindOff` | `2f 04` | `ff 00 02 2f 04 34 aa` | [setFindOff](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart:1166) / 0x7b38f4 |
-| `setFindDeviceBoth` | `2f 03` | `ff 00 02 2f 03 33 aa` | [setFindDeviceBoth](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart:1207) / 0x7b3b64 |
-| `setFindDeviceRight` | `2f 02` | `ff 00 02 2f 02 32 aa` | [setFindDeviceRight](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart:1283) / 0x7bb13c |
-| `setFindDeviceLeft` | `2f 01` | `ff 00 02 2f 01 31 aa` | [setFindDeviceLeft](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart:1305) / 0x7bb284 |
-| `setAncAutoDynamicOn` | `09 07` | `ff 00 02 09 07 11 aa` | [setAncAutoDynamicOn](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart:1368) / 0x80a748 |
-| `setAncAutoOn` | `09 05` | `ff 00 02 09 05 0f aa` | [setAncAutoOn](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart:1409) / 0x80a7a0 |
-| `setNoiseModeTrans` | `09 03` | `ff 00 02 09 03 0d aa` | [setNoiseModeTrans](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart:1570) / 0x80d8c0 |
-| `setNoiseModeNormal` | `09 02` | `ff 00 02 09 02 0c aa` | [setNoiseModeNormal](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart:1611) / 0x815834 |
-| `setNoiseModeWind` | `09 04` | `ff 00 02 09 04 0e aa` | [setNoiseModeWind](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart:1652) / 0x815f64 |
-| `setNoiseModeAnc` | `09 01` | `ff 00 02 09 01 0b aa` | [setNoiseModeAnc](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart:1693) / 0x81a3a4 |
-| `getGainLevel` | `fa 45` | `ff 00 02 fa 45 40 aa` | [getGainLevel](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart:1973) / 0x822c3c |
-| `setEarDetectionOff` | `08 01` | `ff 00 02 08 01 0a aa` | [setEarDetectionOff](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart:2073) / 0x826944 |
-| `setEarDetectionOn` | `08 00` | `ff 00 02 08 00 09 aa` | [setEarDetectionOn](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart:2114) / 0x8284f8 |
-| `setTouchOff` | `07 01` | `ff 00 02 07 01 09 aa` | [setTouchOff](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart:2379) / 0x8e87cc |
-| `setTouchOn` | `07 00` | `ff 00 02 07 00 08 aa` | [setTouchOn](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart:2420) / 0x90fd08 |
-| `setAudioLc3` | `2b 03` | `ff 00 02 2b 03 2f aa` | [setAudioLc3](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart:2840) / 0xc6dd34 |
-| `setAudioLhdc` | `2b 02` | `ff 00 02 2b 02 2e aa` | [setAudioLhdc](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart:2881) / 0xc6de70 |
-| `setAudioLdac` | `2b 01` | `ff 00 02 2b 01 2d aa` | [setAudioLdac](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart:2922) / 0xc6e0ac |
-| `setAudioAacSbc` | `2b 00` | `ff 00 02 2b 00 2c aa` | [setAudioAacSbc](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart:2963) / 0xc6e274 |
-| `setConnectMulOff` | `32 00` | `ff 00 02 32 00 33 aa` | [setConnectMulOff](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart:3002) / 0xc77cbc |
-| `setGameModeOff` | `0e 00` | `ff 00 02 0e 00 0f aa` | [setGameModeOff](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart:3213) / 0xc78c24 |
-| `setGameModeOn` | `0e 01` | `ff 00 02 0e 01 10 aa` | [setGameModeOn](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart:3252) / 0xc78dec |
-| `getCustomEq` | `fa 3e` | `ff 00 02 fa 3e 39 aa` | [getCustomEq](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart:3962) / 0xc87f48 |
-| `setEqCustom` | `2a 04` | `ff 00 02 2a 04 2f aa` | [setEqCustom](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart:4003) / 0xc87fd4 |
-| `setEqEap` | `2a 06` | `ff 00 02 2a 06 31 aa` | [setEqEap](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart:4312) / 0xcb322c |
-| `setEqLight` | `2a 03` | `ff 00 02 2a 03 2e aa` | [setEqLight](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart:4353) / 0xcbfc20 |
-| `setEqRock` | `2a 02` | `ff 00 02 2a 02 2d aa` | [setEqRock](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart:4394) / 0xcbfdf0 |
-| `setEqHifi` | `2a 00` | `ff 00 02 2a 00 2b aa` | [setEqHifi](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart:4435) / 0xcd3c40 |
-| `setEqPop` | `2a 01` | `ff 00 02 2a 01 2c aa` | [setEqPop](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart:4474) / 0xdf57a0 |
-| `getEq` | `fa 2a` | `ff 00 02 fa 2a 25 aa` | [getEq](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart:4515) / 0xdfa0b8 |
-| `getEarMac` | `fe 34` | `ff 00 02 fe 34 33 aa` | [getEarMac](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart:4556) / 0xdfa274 |
-| `getInfo` | `fa 01 07 08 09 0c 0d 0e 12 2a 2b 2c 2d 2e 2f 31 32 33 36 37 38 39 3a 3b 3c 3d 3f 45 46 49` | `ff 00 1e fa 01 07 08 09 0c 0d 0e 12 2a 2b 2c 2d 2e 2f 31 32 33 36 37 38 39 3a 3b 3c 3d 3f 45 46 49 e9 aa` | [getInfo](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart:4597) / 0xdfa670 |
-| `setConnectMulOn` | `32 01` | `ff 00 02 32 01 34 aa` | [setConnectMulOn](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart:5009) / 0xe342e8 |
+| `setFindOff` | `2f 04` | `ff 00 02 2f 04 34 aa` | setFindOff（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart:1166`） / 0x7b38f4 |
+| `setFindDeviceBoth` | `2f 03` | `ff 00 02 2f 03 33 aa` | setFindDeviceBoth（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart:1207`） / 0x7b3b64 |
+| `setFindDeviceRight` | `2f 02` | `ff 00 02 2f 02 32 aa` | setFindDeviceRight（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart:1283`） / 0x7bb13c |
+| `setFindDeviceLeft` | `2f 01` | `ff 00 02 2f 01 31 aa` | setFindDeviceLeft（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart:1305`） / 0x7bb284 |
+| `setAncAutoDynamicOn` | `09 07` | `ff 00 02 09 07 11 aa` | setAncAutoDynamicOn（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart:1368`） / 0x80a748 |
+| `setAncAutoOn` | `09 05` | `ff 00 02 09 05 0f aa` | setAncAutoOn（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart:1409`） / 0x80a7a0 |
+| `setNoiseModeTrans` | `09 03` | `ff 00 02 09 03 0d aa` | setNoiseModeTrans（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart:1570`） / 0x80d8c0 |
+| `setNoiseModeNormal` | `09 02` | `ff 00 02 09 02 0c aa` | setNoiseModeNormal（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart:1611`） / 0x815834 |
+| `setNoiseModeWind` | `09 04` | `ff 00 02 09 04 0e aa` | setNoiseModeWind（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart:1652`） / 0x815f64 |
+| `setNoiseModeAnc` | `09 01` | `ff 00 02 09 01 0b aa` | setNoiseModeAnc（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart:1693`） / 0x81a3a4 |
+| `getGainLevel` | `fa 45` | `ff 00 02 fa 45 40 aa` | getGainLevel（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart:1973`） / 0x822c3c |
+| `setEarDetectionOff` | `08 01` | `ff 00 02 08 01 0a aa` | setEarDetectionOff（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart:2073`） / 0x826944 |
+| `setEarDetectionOn` | `08 00` | `ff 00 02 08 00 09 aa` | setEarDetectionOn（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart:2114`） / 0x8284f8 |
+| `setTouchOff` | `07 01` | `ff 00 02 07 01 09 aa` | setTouchOff（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart:2379`） / 0x8e87cc |
+| `setTouchOn` | `07 00` | `ff 00 02 07 00 08 aa` | setTouchOn（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart:2420`） / 0x90fd08 |
+| `setAudioLc3` | `2b 03` | `ff 00 02 2b 03 2f aa` | setAudioLc3（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart:2840`） / 0xc6dd34 |
+| `setAudioLhdc` | `2b 02` | `ff 00 02 2b 02 2e aa` | setAudioLhdc（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart:2881`） / 0xc6de70 |
+| `setAudioLdac` | `2b 01` | `ff 00 02 2b 01 2d aa` | setAudioLdac（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart:2922`） / 0xc6e0ac |
+| `setAudioAacSbc` | `2b 00` | `ff 00 02 2b 00 2c aa` | setAudioAacSbc（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart:2963`） / 0xc6e274 |
+| `setConnectMulOff` | `32 00` | `ff 00 02 32 00 33 aa` | setConnectMulOff（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart:3002`） / 0xc77cbc |
+| `setGameModeOff` | `0e 00` | `ff 00 02 0e 00 0f aa` | setGameModeOff（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart:3213`） / 0xc78c24 |
+| `setGameModeOn` | `0e 01` | `ff 00 02 0e 01 10 aa` | setGameModeOn（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart:3252`） / 0xc78dec |
+| `getCustomEq` | `fa 3e` | `ff 00 02 fa 3e 39 aa` | getCustomEq（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart:3962`） / 0xc87f48 |
+| `setEqCustom` | `2a 04` | `ff 00 02 2a 04 2f aa` | setEqCustom（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart:4003`） / 0xc87fd4 |
+| `setEqEap` | `2a 06` | `ff 00 02 2a 06 31 aa` | setEqEap（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart:4312`） / 0xcb322c |
+| `setEqLight` | `2a 03` | `ff 00 02 2a 03 2e aa` | setEqLight（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart:4353`） / 0xcbfc20 |
+| `setEqRock` | `2a 02` | `ff 00 02 2a 02 2d aa` | setEqRock（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart:4394`） / 0xcbfdf0 |
+| `setEqHifi` | `2a 00` | `ff 00 02 2a 00 2b aa` | setEqHifi（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart:4435`） / 0xcd3c40 |
+| `setEqPop` | `2a 01` | `ff 00 02 2a 01 2c aa` | setEqPop（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart:4474`） / 0xdf57a0 |
+| `getEq` | `fa 2a` | `ff 00 02 fa 2a 25 aa` | getEq（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart:4515`） / 0xdfa0b8 |
+| `getEarMac` | `fe 34` | `ff 00 02 fe 34 33 aa` | getEarMac（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart:4556`） / 0xdfa274 |
+| `getInfo` | `fa 01 07 08 09 0c 0d 0e 12 2a 2b 2c 2d 2e 2f 31 32 33 36 37 38 39 3a 3b 3c 3d 3f 45 46 49` | `ff 00 1e fa 01 07 08 09 0c 0d 0e 12 2a 2b 2c 2d 2e 2f 31 32 33 36 37 38 39 3a 3b 3c 3d 3f 45 46 49 e9 aa` | getInfo（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart:4597`） / 0xdfa670 |
+| `setConnectMulOn` | `32 01` | `ff 00 02 32 01 34 aa` | setConnectMulOn（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart:5009`） / 0xe342e8 |
 
 ANC 发送线值为 `09 01` ANC、`09 02` 普通、`09 03` 通透、`09 04` 抗风、`09 05` 自适应、`09 07` 动态自适应。共享的 `09 06` 是 `setDeepAncOn`，i7 未配置深度 ANC UI，不应据此增加能力。接收研究已用 UI 互证 RX 05 自适应、06 深度、07 动态自适应与 TX 一致；对应App内部状态4、5、6不是NoiseType枚举0..3之一。
 
@@ -186,12 +186,12 @@ EQ 线值 `2A 00` HIFI、`2A 01` POP、`2A 02` ROCK、`2A 03` LIGHT、`2A 04` cu
 
 | BODY | Sender 接受值 | i7 UI/语义 | 证据 |
 |---|---|---|
-| `2c value` | `[1, 2, 3, 4, 5]` | ANC 等级；i7 low/medium/high 对应1/3/5 | [setAncLevel](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart:1510) / 0x80b788 |
-| `2d value` | `[1, 2, 3, 4, 5]` | 通透等级；i7 low/medium/high 对应1/3/5 | [setTransLevel](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart:1450) / 0x80b30c |
-| `2e value` | `[0, 1, 2, 3, 4, 5]` | 提示音1..5；0静音入口要求固件整数>=304 | [setDingLevel](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart:2014) / 0x823184 |
-| `45 value` | `[0, 1, 2]` | 增益低/中/高三档0/1/2，无具体dB量化证据 | [setGainLevel](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart:1914) / 0x82189c |
-| `46 value` | `[0, 1, 2, 3, 4, 5, 6]` | 听力保护0关，1..6显示75/80/85/90/95/100 dB（UI阈值标签，未测量SPL） | [setHearingProtection](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart:1855) / 0x820f64 |
-| `2f value` | `[1, 2, 3, 4]` | 1左、2右、3双耳、4停 | [setFindDevice](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart:1229) / 0x7b3b94 |
+| `2c value` | `[1, 2, 3, 4, 5]` | ANC 等级；i7 low/medium/high 对应1/3/5 | setAncLevel（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart:1510`） / 0x80b788 |
+| `2d value` | `[1, 2, 3, 4, 5]` | 通透等级；i7 low/medium/high 对应1/3/5 | setTransLevel（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart:1450`） / 0x80b30c |
+| `2e value` | `[0, 1, 2, 3, 4, 5]` | 提示音1..5；0静音入口要求固件整数>=304 | setDingLevel（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart:2014`） / 0x823184 |
+| `45 value` | `[0, 1, 2]` | 增益低/中/高三档0/1/2，无具体dB量化证据 | setGainLevel（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart:1914`） / 0x82189c |
+| `46 value` | `[0, 1, 2, 3, 4, 5, 6]` | 听力保护0关，1..6显示75/80/85/90/95/100 dB（UI阈值标签，未测量SPL） | setHearingProtection（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart:1855`） / 0x820f64 |
+| `2f value` | `[1, 2, 3, 4]` | 1左、2右、3双耳、4停 | setFindDevice（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart:1229`） / 0x7b3b94 |
 
 这些函数直接把参数放入1字节，没有 i5 那种 1/3/5→0/1/2 的等级换算。值越界时返回空列表，RCommander 的正常路径不会生成控制帧。
 
@@ -199,13 +199,13 @@ EQ 线值 `2A 00` HIFI、`2A 01` POP、`2A 02` ROCK、`2A 03` LIGHT、`2A 04` cu
 
 `36 [ANC] [wind] [normal] [transparency]`，四标志 true=1/false=0。线上顺序与 i7 UI 列表 normal/trans/wind/ANC 不同。Sender 参数线序是 r2、r6、r3、r5；公共 UI caller 的列表 0→r3、1→r5、2→r6、3→r2，且 i7 模型 `pp+b218` 按 normal/trans/wind/ANC 定义。
 
-证据：[setAncLine](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart:945)；[公共 UI caller](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/modules/device_control/widget/device_anc_line_panel_item.dart:798)；[i7 配置](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/earfeel_i7_device_config.dart:873)；[模型枚举](/home/dohex/Projects/rose_reverse/analysis/blutter/objs.txt:1849)。另用 `llvm-objdump -D --triple=aarch64 --start-address=0x756cb8 --stop-address=0x756f08` 可恢复 Blutter 省略的 mixin：r3加入PP1a298 normal，r5加入PP11fb8 trans，r6加入PP11fc0 wind，r2加入PP11fc8 ANC，互相吻合。
+证据：setAncLine（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart:945`）；公共 UI caller（`rose_reverse/analysis/blutter/asm/roselink/modules/device_control/widget/device_anc_line_panel_item.dart:798`）；i7 配置（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/earfeel_i7_device_config.dart:873`）；模型枚举（`rose_reverse/analysis/blutter/objs.txt:1849`）。另用 `llvm-objdump -D --triple=aarch64 --start-address=0x756cb8 --stop-address=0x756f08` 可恢复 Blutter 省略的 mixin：r3加入PP1a298 normal，r5加入PP11fb8 trans，r6加入PP11fc0 wind，r2加入PP11fc8 ANC，互相吻合。
 
 ### 4.3 触摸动作
 
 `01 slot action`：左耳单击/双击/三击/长按 slot 为 `01/02/03/04`，右耳为 `11/12/13/14`。动作 0 无，1 播放暂停，2 上一首，3 下一首，4 音量+，5 音量−，6 游戏模式，7 语音助手，8 ANC循环。Sender不校验action，但i7配置仅允许0..8。这个 action 码表与 i5 完全不同。
 
-证据：[_setTouchKey](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart:2482) 与其8个wrapper；[值模型](/home/dohex/Projects/rose_reverse/analysis/blutter/objs.txt:998)及`pp+b228`。
+证据：_setTouchKey（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart:2482`） 与其8个wrapper；值模型（`rose_reverse/analysis/blutter/objs.txt:998`）及`pp+b228`。
 
 ### 4.4 个性化EQ
 
@@ -219,13 +219,13 @@ ff 00 0b 3e 86 83 81 00 01 02 03 04 05 06 e7 aa
 
 上例对应 −6、−3、−1、0、1、2、3、4、5、6，seq=00。
 
-证据：[setEqCustomData](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart:3656)、[intToEqList](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart:3735)、[double截断](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart:3929)；[EQ轴及频段](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/modules/device_control/widget/device_custom_eq_panel.dart:2404)；[setEqCustom后发数据](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/modules/device_control/widget/device_custom_eq_session.dart:450)。
+证据：setEqCustomData（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart:3656`）、intToEqList（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart:3735`）、double截断（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/rs_common_v2_sender.dart:3929`）；EQ轴及频段（`rose_reverse/analysis/blutter/asm/roselink/modules/device_control/widget/device_custom_eq_panel.dart:2404`）；setEqCustom后发数据（`rose_reverse/analysis/blutter/asm/roselink/modules/device_control/widget/device_custom_eq_session.dart:450`）。
 
 ### 4.5 自定义曲线工作流、门槛和自动模式关闭
 
 10段顺序：**20/100/300/500/1k/2k/3k/5k/8k/15k**。滑块范围−6..+6、步长1；发送器对double向0截断，整数原样编码。负数是高bit符号+低7bit绝对值，不是补码，不乘10、不乘2。UI标签没有提供滤波器Q/类型，也没有实测中心频率证据。
 
-应用曲线：先发送`2A 04`进入custom，再发送`3E`加10个gain，两条不同序号的完整帧；最后分别读取EQ模式和曲线。命名preset保存/删除发生在App本地session/服务中，不能把本地名字或数据库id直接写入耳机报文。原App恢复内建模式时有先写custom零曲线再恢复目标模式的路径，不代表所有内建模式必须经过零曲线才能切换。[EQ UI/工作流笔记](/home/dohex/Projects/rose_reverse/analysis/i7_eq_findings.md)
+应用曲线：先发送`2A 04`进入custom，再发送`3E`加10个gain，两条不同序号的完整帧；最后分别读取EQ模式和曲线。命名preset保存/删除发生在App本地session/服务中，不能把本地名字或数据库id直接写入耳机报文。原App恢复内建模式时有先写custom零曲线再恢复目标模式的路径，不代表所有内建模式必须经过零曲线才能切换。EQ UI/工作流笔记（`rose_reverse/analysis/i7_eq_findings.md`）
 
 增益线值0/1/2只代表3档，建议显示档位1/2/3并保留raw；本次没有具体增益dB对应。听力保护线值0关闭，1..6对应UI阈值75/80/85/90/95/100 dB。提示音线值1..5直接对应档位，0是关闭；0的UI条件>=304，基础档位不是全部受304限制。
 
@@ -360,7 +360,7 @@ case_pct in1..100 and
 
 ### 5.10 接收证据索引
 
-[完整通知研究与51条证据](/home/dohex/Projects/rose_reverse/analysis/i7_receiver_findings.md) 和 [机器字段布局](/home/dohex/Projects/rose_reverse/analysis/i7_receiver_layouts.json) 保留各字段具体函数/地址/长度与原App更新逻辑。主分派：[RsCommonV2Receiver.process](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/receiver/rs_common_v2_receiver.dart:739)，拆包：[CommandUtil.splitData](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/command_util.dart:831)，校验：[CommandUtil._isValidPacket](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/command_util.dart:1553)。所有偏移从0开始，区间为半开；LTV表描述的是V，不含帧头/长度/类型/CS/AA。
+完整通知研究与51条证据（`rose_reverse/analysis/i7_receiver_findings.md`） 和 机器字段布局（`rose_reverse/analysis/i7_receiver_layouts.json`） 保留各字段具体函数/地址/长度与原App更新逻辑。主分派：RsCommonV2Receiver.process（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/receiver/rs_common_v2_receiver.dart:739`），拆包：CommandUtil.splitData（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/command_util.dart:831`），校验：CommandUtil._isValidPacket（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/command_util.dart:1553`）。所有偏移从0开始，区间为半开；LTV表描述的是V，不含帧头/长度/类型/CS/AA。
 
 ## 6. 客户端状态和异常处理
 
@@ -424,19 +424,19 @@ tx = bytes([0x86]) + LE32(92) + config
 
 证据：
 
-- [直写OTA:111/375，0xac1a20/0xac1ce0](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/modules/device_ota/plan/bes.dart:111)
-- [99:691，0xac203c](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/modules/device_ota/plan/bes.dart:691)
-- [97:12，0xac1934](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/modules/device_ota/plan/bes.dart:12)
-- [8E:7182，0xac68d0](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/modules/device_ota/plan/bes.dart:7182)
-- [9D/9B/7B:6892，0xac6638/0xac66d0/0xac6798](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/modules/device_ota/plan/bes.dart:6892)
-- [8C:6558，0xac62b8](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/modules/device_ota/plan/bes.dart:6558)
-- [80:6281，0xac5fec](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/modules/device_ota/plan/bes.dart:6281)
-- [86:5624，0xac58b8](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/modules/device_ota/plan/bes.dart:5624)
-- [85分片:3270，0xac3b54；LE长度ByteData4:3385](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/modules/device_ota/plan/bes.dart:3270)
-- [82:4078，0xac43a8](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/modules/device_ota/plan/bes.dart:4078)
-- [88:5234，0xac532c](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/modules/device_ota/plan/bes.dart:5234)
-- [92:5472，0xac573c](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/modules/device_ota/plan/bes.dart:5472)
-- [CRC实现:163，0xac50fc](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/lib/crc.dart:163)
+- 直写OTA:111/375，0xac1a20/0xac1ce0（`rose_reverse/analysis/blutter/asm/roselink/modules/device_ota/plan/bes.dart:111`）
+- 99:691，0xac203c（`rose_reverse/analysis/blutter/asm/roselink/modules/device_ota/plan/bes.dart:691`）
+- 97:12，0xac1934（`rose_reverse/analysis/blutter/asm/roselink/modules/device_ota/plan/bes.dart:12`）
+- 8E:7182，0xac68d0（`rose_reverse/analysis/blutter/asm/roselink/modules/device_ota/plan/bes.dart:7182`）
+- 9D/9B/7B:6892，0xac6638/0xac66d0/0xac6798（`rose_reverse/analysis/blutter/asm/roselink/modules/device_ota/plan/bes.dart:6892`）
+- 8C:6558，0xac62b8（`rose_reverse/analysis/blutter/asm/roselink/modules/device_ota/plan/bes.dart:6558`）
+- 80:6281，0xac5fec（`rose_reverse/analysis/blutter/asm/roselink/modules/device_ota/plan/bes.dart:6281`）
+- 86:5624，0xac58b8（`rose_reverse/analysis/blutter/asm/roselink/modules/device_ota/plan/bes.dart:5624`）
+- 85分片:3270，0xac3b54；LE长度ByteData4:3385（`rose_reverse/analysis/blutter/asm/roselink/modules/device_ota/plan/bes.dart:3270`）
+- 82:4078，0xac43a8（`rose_reverse/analysis/blutter/asm/roselink/modules/device_ota/plan/bes.dart:4078`）
+- 88:5234，0xac532c（`rose_reverse/analysis/blutter/asm/roselink/modules/device_ota/plan/bes.dart:5234`）
+- 92:5472，0xac573c（`rose_reverse/analysis/blutter/asm/roselink/modules/device_ota/plan/bes.dart:5472`）
+- CRC实现:163，0xac50fc（`rose_reverse/analysis/blutter/asm/roselink/lib/crc.dart:163`）
 
 ### 7.2 传输窗口、分段与ACK
 
@@ -450,13 +450,13 @@ tx = bytes([0x86]) + LE32(92) + config
 
 段全部确认后发88进入whole-image CRC期；84状态01→92并本地标记成功，不另等92成功回包。84只在整镜像期消费；某些设备用87状态01给最终成功，App在whole期也支持这个分支。覆盖后重启/重新连接与固件验签仍需设备验证。
 
-- [包大小:1042，0xac23b4](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/modules/device_ota/plan/bes.dart:1042)
-- [段算法/发送:2664，0xac3500](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/modules/device_ota/plan/bes.dart:2664)
-- [write串行await:4875，0xac4be8](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/modules/device_ota/plan/bes.dart:4875)
-- [NACK整段重发:2214，0xac306c](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/modules/device_ota/plan/bes.dart:2214)
-- [ACK计时器:4463，0xac47a0](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/modules/device_ota/plan/bes.dart:4463)
-- [超时/仅82重发:4586，0xac48d0](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/modules/device_ota/plan/bes.dart:4586)
-- [5秒对象:49140](/home/dohex/Projects/rose_reverse/analysis/blutter/objs.txt:49140)
+- 包大小:1042，0xac23b4（`rose_reverse/analysis/blutter/asm/roselink/modules/device_ota/plan/bes.dart:1042`）
+- 段算法/发送:2664，0xac3500（`rose_reverse/analysis/blutter/asm/roselink/modules/device_ota/plan/bes.dart:2664`）
+- write串行await:4875，0xac4be8（`rose_reverse/analysis/blutter/asm/roselink/modules/device_ota/plan/bes.dart:4875`）
+- NACK整段重发:2214，0xac306c（`rose_reverse/analysis/blutter/asm/roselink/modules/device_ota/plan/bes.dart:2214`）
+- ACK计时器:4463，0xac47a0（`rose_reverse/analysis/blutter/asm/roselink/modules/device_ota/plan/bes.dart:4463`）
+- 超时/仅82重发:4586，0xac48d0（`rose_reverse/analysis/blutter/asm/roselink/modules/device_ota/plan/bes.dart:4586`）
+- 5秒对象:49140（`rose_reverse/analysis/blutter/objs.txt:49140`）
 
 ### 7.3 OTA状态机
 
@@ -477,10 +477,10 @@ tx = bytes([0x86]) + LE32(92) + config
 
 普通内容相同的回复会被去重，83允许重复进入以pending判定，whole期成功84也允许重复进入；一旦已overwrite有防重标志。第三方应采用明确阶段与pending匹配，保留raw未知帧。不能套用控制协议长度、CRC或opcode分类来解析BES。
 
-- [BES页面启动:586，0xac16d4](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/modules/device_ota/view/bes_ota_page.dart:586)
-- [startOta获取固件:803，0xac2134](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/modules/device_ota/plan/bes.dart:803)
-- [接收与状态机:1377，0xac2720](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/modules/device_ota/plan/bes.dart:1377)
-- [ensure通道ready:6，0xac69e0](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/modules/device_ota/controller/ota_transport.dart:6)
+- BES页面启动:586，0xac16d4（`rose_reverse/analysis/blutter/asm/roselink/modules/device_ota/view/bes_ota_page.dart:586`）
+- startOta获取固件:803，0xac2134（`rose_reverse/analysis/blutter/asm/roselink/modules/device_ota/plan/bes.dart:803`）
+- 接收与状态机:1377，0xac2720（`rose_reverse/analysis/blutter/asm/roselink/modules/device_ota/plan/bes.dart:1377`）
+- ensure通道ready:6，0xac69e0（`rose_reverse/analysis/blutter/asm/roselink/modules/device_ota/controller/ota_transport.dart:6`）
 
 ### 7.4 固件来源、完整性与缺口
 
@@ -488,28 +488,28 @@ BES与i5共用 getOtaContent→DeviceService→ApiDeviceService→StaticResource
 
 元数据共用 `POST /app/ota/v2/get-by-key-id-and-tag`：keyId=`earfeel-i7`（custom内部名本已小写，trackingName继续lowercase）；pid空串；自身目标tag1；clientVersion=`5310`；lang由调用init/checkOtaNewVersion的参数传给fetchDeviceOtaMsg，而非i7 BLE广播。默认base URL是 `https://api-internal.rosetechnic.com`。服务端链接字段为 **`data.otaUrl`**；`ApiClient._processResponse` 先取 `data`，`DeviceService._buildOtaResult @0xacc120` 将其中的 `otaUrl` 重命名为 App 内部的 **`otaContent`**，控制器再保存 URL。这一步不下载固件；之后 `getOtaContent` 才下载 hex 文本。完整固件格式/签名与兼容硬件仍未验证。
 
-2026-10-14 以 `keyId="earfeel-i7"`、`pid=""`、`tag=1`、`clientVersion="5310"` 匿名请求，`lang="zh"` / `"en"` 均成功返回版本 304（资源文件名含 V3.0.4）与不同 `fileId`/URL。响应中的 `data.keyId="115"` 是服务端记录字段，不应替换请求的型号名称。两资源 HEAD 均为 200；`bytes=0-63` Range 均为 206，前 64 字节全部为 ASCII hex。这个采样证明资源可访问与文本前缀形式，不代表已下载/校验完整固件或实际升级。签名 URL 有时效，应在需要时重新请求元数据；当前链接、时效和响应见 [OTA 更新包链接](../ota-package-links.md)、[中文响应](/home/dohex/Projects/rose_reverse/analysis/ota_links/i7-zh-client5310.json)、[英文响应](/home/dohex/Projects/rose_reverse/analysis/ota_links/i7-en-client5310.json)。
+2026-10-14 以 `keyId="earfeel-i7"`、`pid=""`、`tag=1`、`clientVersion="5310"` 匿名请求，`lang="zh"` / `"en"` 均成功返回版本 304（资源文件名含 V3.0.4）与不同 `fileId`/URL。响应中的 `data.keyId="115"` 是服务端记录字段，不应替换请求的型号名称。两资源 HEAD 均为 200；`bytes=0-63` Range 均为 206，前 64 字节全部为 ASCII hex。这个采样证明资源可访问与文本前缀形式，不代表已下载/校验完整固件或实际升级。签名 URL 有时效，应在需要时重新请求元数据；当前链接、时效和响应见 [OTA 更新包链接](../ota-package-links.md)、中文响应（`rose_reverse/analysis/ota_links/i7-zh-client5310.json`）、英文响应（`rose_reverse/analysis/ota_links/i7-en-client5310.json`）。
 
-另以 App 构建号 `clientVersion="4150"` 请求仍得到版本 304；`"4149"` 则得到 `version=1`、`versionDescribe="Client Version is too low"` 和空 `otaUrl`。因此这里的构建号门槛不能当成固件历史版本选择器，低版本失败响应中的 `version=1` 也不是已取得的历史升级包。来源：[4150 响应](/home/dohex/Projects/rose_reverse/analysis/ota_links/i7-zh-client4150.json)、[4149 响应](/home/dohex/Projects/rose_reverse/analysis/ota_links/i7-zh-client4149.json)。
+另以 App 构建号 `clientVersion="4150"` 请求仍得到版本 304；`"4149"` 则得到 `version=1`、`versionDescribe="Client Version is too low"` 和空 `otaUrl`。因此这里的构建号门槛不能当成固件历史版本选择器，低版本失败响应中的 `version=1` 也不是已取得的历史升级包。来源：4150 响应（`rose_reverse/analysis/ota_links/i7-zh-client4150.json`）、4149 响应（`rose_reverse/analysis/ota_links/i7-zh-client4149.json`）。
 
 i7配置没有独立LangItem，也没有ota_upgrade_language_switch，BES页没有WQ页的en/zh切换回调。共享Sender具备language方法并不意味着i7固件/UI支持该功能；普通控制语言能力由主任务根据实际模块/命令再界定。
 
-- [BES版本检查传deviceLang参数:7678，0xe29e78](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/modules/device_ota/plan/bes.dart:7678)
-- [共用getOtaContent:1666](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/modules/device_ota/controller/ota_controller.dart:1666)
-- [恒true校验hook:1723](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/modules/device_ota/controller/ota_controller.dart:1723)
-- [元数据API:476/650，0xacc6d4](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/core/api/service/api_device_service.dart:476)
-- [服务端 otaUrl → 内部 otaContent:10882，0xacc5ec](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/core/services/device/device_service.dart:10882)
-- [下载HTTP/UTF8:642](/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/core/api/static_resource_client.dart:642)
+- BES版本检查传deviceLang参数:7678，0xe29e78（`rose_reverse/analysis/blutter/asm/roselink/modules/device_ota/plan/bes.dart:7678`）
+- 共用getOtaContent:1666（`rose_reverse/analysis/blutter/asm/roselink/modules/device_ota/controller/ota_controller.dart:1666`）
+- 恒true校验hook:1723（`rose_reverse/analysis/blutter/asm/roselink/modules/device_ota/controller/ota_controller.dart:1723`）
+- 元数据API:476/650，0xacc6d4（`rose_reverse/analysis/blutter/asm/roselink/core/api/service/api_device_service.dart:476`）
+- 服务端 otaUrl → 内部 otaContent:10882，0xacc5ec（`rose_reverse/analysis/blutter/asm/roselink/core/services/device/device_service.dart:10882`）
+- 下载HTTP/UTF8:642（`rose_reverse/analysis/blutter/asm/roselink/core/api/static_resource_client.dart:642`）
 
 待实机核实：SPP连接实际UUID与配对流程、广播多项规范化与BR/EDR地址；固件兼容/签名/尾部3字节含义；BES所有opcode未知回包格式与长度、GATT/流式跨帧拼接；断点/左右耳角色和7B side语义；OTA后复位/重连与电源中断恢复。当前恢复可以复现官方App已观察到的静态打包/状态机，不能声称OTA已实测。
 
 ## 8. 参考代码与离线校验
 
 - [JSON协议目录](earfeel-i7-protocol.json)：自定义schema；33个确认适用固定变体、9类参数、21类通知布局、发现/通道、固件门槛和证据。
-- [正常控制编解码](/home/dohex/Projects/rose_reverse/examples/i7_protocol.py)：序号、求和、参数、manufacturer识别、RX重组/字段。
-- [BLE集成参考](/home/dohex/Projects/rose_reverse/examples/i7_ble_client.py)：扫描、订阅、串行队列、初始化、EQ两步设置、设置后补读、MTU小容量下完整查询分组和断连。
-- [BES离线包构造](/home/dohex/Projects/rose_reverse/examples/i7_bes_ota_codec.py)：80/86/85/82等包、CRC端序、纯hex输入验证；**不含OTA写入或升级会话**。
-- [12项离线测试](/home/dohex/Projects/rose_reverse/tests/test_i7_protocol.py)：APK常量逐字节核对、序号回绕、参数帧、两种RX校验、嵌入AA/DD、分包/合包、EQ格式、键映射、freshness、BES标准CRC测试向量和小MTU查询组。
+- 正常控制编解码（`rose_reverse/examples/i7_protocol.py`）：序号、求和、参数、manufacturer识别、RX重组/字段。
+- BLE集成参考（`rose_reverse/examples/i7_ble_client.py`）：扫描、订阅、串行队列、初始化、EQ两步设置、设置后补读、MTU小容量下完整查询分组和断连。
+- BES离线包构造（`rose_reverse/examples/i7_bes_ota_codec.py`）：80/86/85/82等包、CRC端序、纯hex输入验证；**不含OTA写入或升级会话**。
+- 12项离线测试（`rose_reverse/tests/test_i7_protocol.py`）：APK常量逐字节核对、序号回绕、参数帧、两种RX校验、嵌入AA/DD、分包/合包、EQ格式、键映射、freshness、BES标准CRC测试向量和小MTU查询组。
 
 正常控制示例的公开API名称是研究者定义的snake_case；`getInfo`等原App方法名也保留。例子：
 
