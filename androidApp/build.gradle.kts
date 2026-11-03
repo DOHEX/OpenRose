@@ -1,23 +1,13 @@
-import org.jetbrains.kotlin.gradle.dsl.JvmTarget
-
 plugins {
-    alias(libs.plugins.android.application)
+    alias(libs.plugins.openrose.android.application)
     alias(libs.plugins.compose.compiler)
 }
 android {
     namespace = "io.github.dohex.openrose"
-    compileSdk = 37
-    buildToolsVersion = "37.0.0"
     defaultConfig {
         applicationId = "io.github.dohex.openrose"
-        minSdk = 26
-        targetSdk = 36
         versionCode = providers.gradleProperty("releaseVersionCode").map(String::toInt).getOrElse(1)
         versionName = providers.gradleProperty("releaseVersion").getOrElse("0.1.0-dev")
-    }
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_21
-        targetCompatibility = JavaVersion.VERSION_21
     }
     buildFeatures {
         compose = true
@@ -39,12 +29,8 @@ android {
         }
     }
 }
-kotlin {
-    jvmToolchain(21)
-    compilerOptions { jvmTarget.set(JvmTarget.JVM_21) }
-}
 dependencies {
-    implementation(project(":composeApp"))
+    implementation(projects.sharedUI)
     implementation(libs.activity.compose)
     compileOnly(libs.libxposed.api)
     implementation(libs.libxposed.service)

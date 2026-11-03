@@ -1,31 +1,28 @@
-import org.jetbrains.compose.desktop.application.dsl.TargetFormat
-import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import dev.nucleusframework.desktop.application.dsl.TargetFormat
 
 plugins {
-    alias(libs.plugins.kotlin.multiplatform)
-    alias(libs.plugins.compose.multiplatform)
-    alias(libs.plugins.compose.compiler)
+    alias(libs.plugins.openrose.desktop.application)
 }
-kotlin {
-    jvmToolchain(21)
-    jvm { compilerOptions { jvmTarget.set(JvmTarget.JVM_21) } }
-    sourceSets {
-        jvmMain.dependencies {
-            implementation(project(":composeApp"))
-            implementation(compose.desktop.currentOs)
-            implementation(libs.nucleus.application)
-            implementation(libs.nucleus.tao)
-        }
-    }
+dependencies {
+    implementation(projects.sharedUI)
+    implementation(compose.desktop.currentOs)
+    implementation(libs.nucleus.application)
+    implementation(libs.nucleus.tao)
 }
-compose.desktop {
+nucleus {
     application {
         mainClass = "io.github.dohex.openrose.desktop.MainKt"
         jvmArgs += "--enable-native-access=ALL-UNNAMED"
         nativeDistributions {
-            targetFormats(TargetFormat.Deb, TargetFormat.Msi)
+            // Each host builds only its own formats: Linux x64 the four packages, Windows the MSI.
+            targetFormats(TargetFormat.Deb, TargetFormat.Rpm, TargetFormat.Pacman, TargetFormat.AppImage, TargetFormat.Msi)
             packageName = "OpenRose"
             packageVersion = providers.gradleProperty("releaseVersion").getOrElse("0.1.0")
+            homepage = "https://github.com/DOHEX/OpenRose"
+            linux {
+                packageName = "openrose"
+                debMaintainer = "DOHEX <53633138+DOHEX@users.noreply.github.com>"
+            }
         }
     }
 }

@@ -8,8 +8,8 @@ version: 1.0.0
 
 > **Compose Multiplatform 1.12 硬性兼容约束 (CMP 1.12 Boundaries)**:
 > 
-> 1. **依赖与运行环境**：本技能包所有规范与代码示例严格基于 `org.jetbrains.compose.material3:material3:1.12.0-alpha03`（对应 Compose Multiplatform 1.12.0），目标平台包括 Desktop (JVM) 与 Android，代码编写位置为共享模块 `composeApp/src/commonMain/`。
-> 2. **桌面端 JVM 对齐（Desktop JVM Parity）**：严禁在 `commonMain` 中引用任何 Android 专有类或 API（如 `android.content.Context`、`LocalContext.current`、`dynamicLightColorScheme(context)`、`android.view.*`、`HapticFeedbackConstants`）。所有颜色、动效与组件必须在纯 JVM 无头测试（`ImageComposeScene`）与桌面应用中完全自洽、无缝编译运行。
+> 1. **依赖与运行环境**：本技能包所有规范与代码示例严格基于 `org.jetbrains.compose.material3:material3:1.12.0-alpha03`（对应 Compose Multiplatform 1.12.0），目标平台包括 Desktop (JVM) 与 Android，代码编写位置为共享模块 `sharedUI/src/commonMain/`。
+> 2. **桌面端 JVM 对齐（Desktop JVM Parity）**：严禁在 `commonMain` 中引用任何 Android 专有类或 API（如 `android.content.Context`、`LocalContext.current`、`dynamicLightColorScheme(context)`、`android.view.*`、`HapticFeedbackConstants`）。所有颜色、动效与组件必须在纯 JVM 无头测试（`runDesktopComposeUiTest`）与桌面应用中完全自洽、无缝编译运行。
 > 3. **实验性注解要求（Opt-In Policy）**：MD3E 新增组件（如 `ButtonGroup`、`FloatingToolbar`、`SplitButton`、`MaterialExpressiveTheme`）处于 `@ExperimentalMaterial3ExpressiveApi` 注解保护下。调用处或文件头必须显式声明 `@OptIn(ExperimentalMaterial3ExpressiveApi::class)`。
 > 4. **物理弹簧全局统一（Spring MotionScheme）**：全面废弃硬编码时长曲线（`tween`），统一使用 `MaterialTheme.motionScheme` 或直接基于 Spring 物理参数的 `spring(...)` 规范。空间位移采用欠阻尼弹性弹簧（Damping 0.6f–0.8f），色彩/透明度采用临界阻尼弹簧（Damping 1.0f）。
 > 5. **零兼容层与干净切换（Clean Cutover, Zero Shims）**：演进升级必须全量原地替换，严禁保留废弃代码分支、垫片封装（Shims）或 `if (legacy)` 运行时开关；必须严格继承原有组件的标准 Compose 语义节点（`Role.RadioButton`、`Role.Switch`、`Role.Tab`、`selected`、`disabled`、文本），确保跨样式无头自动化测试矩阵零回归通过。
@@ -43,8 +43,8 @@ MD3E 弱化了传统的强阴影高度（Shadow Elevation），引入了 5 级�
 MD3E 扩展了圆角阶梯，为组件赋予饱满有机的“果冻感”与层次分明的情感化外观：
 - `None` (0.dp)、`ExtraSmall` (4.dp)、`Small` (8.dp)、`Medium` (12.dp)、`Large` (16.dp)、`LargeIncreased` (20.dp / 24.dp)、`ExtraLarge` (28.dp)、`ExtraLargeIncreased` (32.dp)、`ExtraExtraLarge` (48.dp)、`Full` (CircleShape / 50% 胶囊)。
 
-### 5. 跨平台边界与无头测试 (Desktop JVM & ImageComposeScene)
-OpenRose 的双样式与无头测试运行于 Desktop JVM 上的 `ImageComposeScene`。所有 Expressive 改造必须满足：
+### 5. 跨平台边界与无头测试 (Desktop JVM & runComposeUiTest)
+OpenRose 的双样式与无头测试运行于 Desktop JVM 上，基于官方 `runDesktopComposeUiTest` 与虚拟时钟（`sharedUI/src/jvmTest`）。所有 Expressive 改造必须满足：
 - 渲染管线由纯 Kotlin / Skiko 驱动，不依赖 Android `Canvas` 特殊着色器。
 - 组件必须正确处理 `Modifier.selectableGroup()`、`Modifier.toggleable()`、`Role.RadioButton` 等语义，确保无头断言框架（`onNodeWithTag`、`onNodeWithText`、`assertIsSelected`）直接生效。
 

@@ -2,7 +2,7 @@
 
 [![GitHub Actions](https://img.shields.io/badge/CI-GitHub_Actions-2088FF?logo=githubactions&logoColor=white)](https://github.com/DOHEX/OpenRose/actions/workflows/ci.yml)
 [![Kotlin Multiplatform](https://img.shields.io/badge/Kotlin-Multiplatform-7F52FF?logo=kotlin&logoColor=white)](gradle/libs.versions.toml)
-[![Compose Multiplatform](https://img.shields.io/badge/Compose-Multiplatform-4285F4?logo=jetpackcompose&logoColor=white)](composeApp/build.gradle.kts)
+[![Compose Multiplatform](https://img.shields.io/badge/Compose-Multiplatform-4285F4?logo=jetpackcompose&logoColor=white)](sharedUI/build.gradle.kts)
 [![Android 8.0+](https://img.shields.io/badge/Android-8.0%2B-3DDC84?logo=android&logoColor=white)](#getting-started)
 [![Status: In development](https://img.shields.io/badge/status-in%20development-orange)](#supported-earphones)
 
@@ -176,16 +176,25 @@ Run the full check, which adds Android unit tests and Lint:
 
 `offlineCheck` still needs the Android SDK. Once dependencies are downloaded, add `--offline` to run without network access.
 
-CI builds and tests on Linux and Windows and publishes an Android APK, a Windows ZIP, and a Linux tar.gz, kept for 14 days. Pushing a `vX.Y.Z` tag creates a draft release with a signed APK.
+UI tests run on a virtual clock, with test classes in parallel (half the available cores as forks).
+
+Package the desktop app. Linux produces DEB, RPM, Pacman and AppImage (x64) and Windows produces an MSI; each host builds only the formats it supports, into `desktopApp/build/compose/binaries/main/`:
+
+```bash
+./gradlew :desktopApp:packageDistributionForCurrentOS
+```
+
+CI runs the tests on Linux only. Linux publishes the Android APK and the four Linux packages, Windows the MSI, kept for 14 days. Pushing a `vX.Y.Z` tag creates a draft release with a signed APK.
 
 ## Project layout
 
 | Directory | Contents |
 | --- | --- |
 | `core/` | Model capabilities, protocol codecs, control sessions, the unified control entry (`ControlRuntime`), state, and user settings |
-| `composeApp/` | Shared UI, Miuix / Material 3 components, and UI tests |
+| `sharedUI/` | Shared UI, Miuix / Material 3 components, and UI tests |
 | `androidApp/` | Android entry point, BLE / SPP transports, libxposed module, and HyperOS system bridge |
 | `desktopApp/` | Windows / Linux desktop entry point, windows, and preferences |
+| `build-logic/` | Gradle convention plugins shared by the modules: toolchain, JVM bytecode target, Android and desktop packaging setup |
 | `docs/` | Protocol research & model specifications (`docs/protocols/`), implementation evidence (`docs/protocols.md`), architecture decisions, and specifications |
 
 ## Documentation

@@ -1,6 +1,6 @@
 # Compose Multiplatform 1.12 跨平台边界与兼容约束 (CMP 1.12 Boundaries)
 
-本规范阐明在 `composeApp/src/commonMain/` 中实施 Material Design 3 Expressive (MD3E) 时，必须严格遵守的 Compose Multiplatform 1.12 (`org.jetbrains.compose.material3:1.12.0-alpha03`) 跨平台边界、Desktop JVM 无头测试要求以及平台专有 API 绝对禁令。
+本规范阐明在 `sharedUI/src/commonMain/` 中实施 Material Design 3 Expressive (MD3E) 时，必须严格遵守的 Compose Multiplatform 1.12 (`org.jetbrains.compose.material3:1.12.0-alpha03`) 跨平台边界、Desktop JVM 无头测试要求以及平台专有 API 绝对禁令。
 
 ---
 
@@ -20,9 +20,9 @@ OpenRose 工程依赖配置如下（定义于 `gradle/libs.versions.toml`）：
 
 ---
 
-## 2. 桌面端对齐与无头测试约束 (Desktop JVM & ImageComposeScene)
+## 2. 桌面端对齐与无头测试约束 (Desktop JVM & runComposeUiTest)
 
-OpenRose 采用纯 JVM 无头测试架构（`jvmTest`）。通过 `ImageComposeScene` 或 `runComposeUiTest` 进行每秒数十次的组件渲染、布局测量与语义树验证。
+OpenRose 采用纯 JVM 无头测试架构（`sharedUI/src/jvmTest`）。测试工具基于官方 `runDesktopComposeUiTest`，场景时钟为虚拟时间，只在测试渲染或推进时间时前进；在此之上进行组件渲染、布局测量与语义树验证。
 
 ### 2.1 无头环境运行准则
 1. **纯 Kotlin/Skiko 渲染**：
@@ -38,7 +38,7 @@ OpenRose 采用纯 JVM 无头测试架构（`jvmTest`）。通过 `ImageComposeS
 
 ## 3. Android 专有 API 绝对禁令 (Android-Exclusive Prohibitions)
 
-在 `composeApp/src/commonMain/` 中，任何涉及以下平台专有类的代码都将导致 Desktop JVM 编译直接报错或测试崩溃，**严禁引入**：
+在 `sharedUI/src/commonMain/` 中，任何涉及以下平台专有类的代码都将导致 Desktop JVM 编译直接报错或测试崩溃，**严禁引入**：
 
 | 禁止引用的 Android 专有 API | 危害与问题 | CMP 规范替代方案 |
 |---|---|---|
@@ -76,6 +76,7 @@ OpenRose 采用纯 JVM 无头测试架构（`jvmTest`）。通过 `ImageComposeS
 ```
 
 该检查包含：
-- `composeApp:compileKotlinJvm`：验证桌面端 JVM 编译干净无 Android 污染。
-- `composeApp:compileDebugKotlinAndroid`：验证 Android 平台编译兼容。
-- `composeApp:jvmTest`：执行所有无头界面与领域逻辑回归测试。
+- `:sharedUI:jvmTest`：执行所有无头界面回归测试（包含 `:sharedUI` 的 JVM 编译，验证桌面端无 Android 污染）。
+- `:core:jvmTest`：执行领域逻辑测试。
+- `:desktopApp:compileKotlin`：验证桌面入口编译。
+- `:androidApp:compileDebugKotlin`：验证 Android 平台编译兼容（经依赖编译 `:sharedUI` 的 Android 目标）。

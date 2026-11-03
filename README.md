@@ -2,7 +2,7 @@
 
 [![GitHub Actions](https://img.shields.io/badge/CI-GitHub_Actions-2088FF?logo=githubactions&logoColor=white)](https://github.com/DOHEX/OpenRose/actions/workflows/ci.yml)
 [![Kotlin Multiplatform](https://img.shields.io/badge/Kotlin-Multiplatform-7F52FF?logo=kotlin&logoColor=white)](gradle/libs.versions.toml)
-[![Compose Multiplatform](https://img.shields.io/badge/Compose-Multiplatform-4285F4?logo=jetpackcompose&logoColor=white)](composeApp/build.gradle.kts)
+[![Compose Multiplatform](https://img.shields.io/badge/Compose-Multiplatform-4285F4?logo=jetpackcompose&logoColor=white)](sharedUI/build.gradle.kts)
 [![Android 8.0+](https://img.shields.io/badge/Android-8.0%2B-3DDC84?logo=android&logoColor=white)](#安装与使用)
 [![Status: In development](https://img.shields.io/badge/status-in%20development-orange)](#支持的耳机)
 
@@ -176,16 +176,25 @@ cd OpenRose
 
 `offlineCheck` 仍然需要 Android SDK。依赖下载完后，可以加 `--offline` 离线运行。
 
-CI 在 Linux 和 Windows 上构建并测试，产出 Android APK、Windows ZIP 和 Linux tar.gz，保留 14 天。推送 `vX.Y.Z` 标签会生成签名的正式版草稿 Release。
+界面测试跑在虚拟时钟上，按测试类并行（分叉数为可用核数的一半）。
+
+打包桌面版。Linux 产出 DEB、RPM、Pacman 与 AppImage（x64），Windows 产出 MSI，各平台只构建本机支持的格式，产物在 `desktopApp/build/compose/binaries/main/`：
+
+```bash
+./gradlew :desktopApp:packageDistributionForCurrentOS
+```
+
+CI 只在 Linux 上运行测试；Linux 产出 Android APK 与上述 4 种 Linux 包，Windows 产出 MSI，保留 14 天。推送 `vX.Y.Z` 标签会生成签名的正式版草稿 Release。
 
 ## 项目结构
 
 | 目录 | 内容 |
 | --- | --- |
 | `core/` | 型号能力、协议编解码、控制会话、统一控制入口（`ControlRuntime`）、状态与用户设置 |
-| `composeApp/` | 共享界面、Miuix / Material 3 组件与界面测试 |
+| `sharedUI/` | 共享界面、Miuix / Material 3 组件与界面测试 |
 | `androidApp/` | Android 入口、BLE / SPP 传输、libxposed 模块与 HyperOS 系统桥接 |
 | `desktopApp/` | Windows / Linux 桌面入口、窗口与偏好设置 |
+| `build-logic/` | 各模块共用的 Gradle 约定插件：工具链、JVM 字节码目标、Android 与桌面打包配置 |
 | `docs/` | 协议研究与型号规范（`docs/protocols/`）、工程实现证据（`docs/protocols.md`）、架构决策与规范 |
 
 ## 文档

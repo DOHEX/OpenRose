@@ -52,26 +52,46 @@ jobs:
           distribution: temurin
           java-version: '21.0.11+10'
 
-      - uses: android-actions/setup-android@v4
+      # Nucleus drives electron-builder to turn the jpackage image into installers.
+      - uses: actions/setup-node@v7
         with:
-          packages: 'platform-tools platforms;android-37.0 build-tools;37.0.0'
+          node-version: '24'
+
+      - name: Read Android SDK versions from the version catalog
+        if: runner.os == 'Linux'
+        id: android-sdk
+        run: |
+          version() { sed -n "s/^$1 = \"\(.*\)\"$/\1/p" gradle/libs.versions.toml; }
+          echo "platform=$(version android-compileSdk)" >> "$GITHUB_OUTPUT"
+          echo "build-tools=$(version android-buildTools)" >> "$GITHUB_OUTPUT"
+
+      - uses: android-actions/setup-android@v4
+        if: runner.os == 'Linux'
+        with:
+          packages: 'platform-tools platforms;android-${{ steps.android-sdk.outputs.platform }}.0 build-tools;${{ steps.android-sdk.outputs.build-tools }}'
 
       - uses: gradle/actions/setup-gradle@v6
         with:
           cache-read-only: ${{ github.ref != 'refs/heads/main' }}
 
-      - name: Install Linux runtime libraries
+      - name: Install Linux runtime libraries and packaging tools
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install --yes libgtk-3-0t64 libegl1 libgl1 libfontconfig1
+          sudo apt-get install --yes libgtk-3-0t64 libegl1 libgl1 libfontconfig1 rpm libarchive-tools
 
-      - name: Run checks and build applications
+      # Tests run once, on Linux; each host packages only the formats it supports.
+      - name: Run checks and build Android and Linux packages
+        if: runner.os == 'Linux'
         run: >-
           ./gradlew --no-daemon --stacktrace
           check offlineCheck
           :androidApp:assembleDebug
-          :desktopApp:createDistributable
+          :desktopApp:packageDistributionForCurrentOS
+
+      - name: Build Windows installer
+        if: runner.os == 'Windows'
+        run: ./gradlew --no-daemon --stacktrace :desktopApp:packageDistributionForCurrentOS
 
       - name: Build signed Android release
         if: github.ref_type == 'tag' && runner.os == 'Linux'
@@ -80,6 +100,7 @@ jobs:
           OPENROSE_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           OPENROSE_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           OPENROSE_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          BUILD_TOOLS: ${{ steps.android-sdk.outputs.build-tools }}
         run: |
           : "${ANDROID_KEYSTORE_BASE64:?Set the ANDROID_KEYSTORE_BASE64 repository secret}"
           : "${OPENROSE_KEYSTORE_PASSWORD:?Set the ANDROID_KEYSTORE_PASSWORD repository secret}"
@@ -90,25 +111,31 @@ jobs:
           umask 077
           printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$OPENROSE_KEYSTORE_PATH"
           ./gradlew --no-daemon --stacktrace :androidApp:assembleRelease
-          "$ANDROID_HOME/build-tools/37.0.0/apksigner" verify androidApp/build/outputs/apk/release/androidApp-release.apk
+          "$ANDROID_HOME/build-tools/$BUILD_TOOLS/apksigner" verify androidApp/build/outputs/apk/release/androidApp-release.apk
 
-      - name: Archive Linux application and Android APK
-        if: runner.os == 'Linux'
+      - name: Collect packages
         run: |
           mkdir -p dist
-          tar -czf dist/OpenRose-linux-x64.tar.gz -C desktopApp/build/compose/binaries/main/app OpenRose
-          if [[ "$GITHUB_REF_TYPE" == tag ]]; then
-            cp androidApp/build/outputs/apk/release/androidApp-release.apk dist/OpenRose-android.apk
+          collect() {
+            local found
+            found=$(find desktopApp/build/compose/binaries/main -mindepth 2 -maxdepth 2 -type f -name "$1")
+            if [[ -z "$found" ]]; then
+              echo "::error::No $1 package was built"
+              exit 1
+            fi
+            cp $found dist/
+          }
+          if [[ "$RUNNER_OS" == Linux ]]; then
+            for pattern in '*.deb' '*.rpm' '*.pacman' '*.AppImage'; do collect "$pattern"; done
+            if [[ "$GITHUB_REF_TYPE" == tag ]]; then
+              cp androidApp/build/outputs/apk/release/androidApp-release.apk dist/OpenRose-android.apk
+            else
+              cp androidApp/build/outputs/apk/debug/androidApp-debug.apk dist/OpenRose-android-debug.apk
+            fi
           else
-            cp androidApp/build/outputs/apk/debug/androidApp-debug.apk dist/OpenRose-android-debug.apk
+            collect '*.msi'
           fi
-
-      - name: Archive Windows application
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force dist | Out-Null
-          Compress-Archive -Path desktopApp/build/compose/binaries/main/app/OpenRose -DestinationPath dist/OpenRose-windows-x64.zip
+          ls -l dist
 
       - name: Upload application packages
         uses: actions/upload-artifact@v7
@@ -120,7 +147,7 @@ jobs:
           compression-level: 0
 
       - name: Upload test and lint reports
-        if: always()
+        if: always() && runner.os == 'Linux'
         uses: actions/upload-artifact@v7
         with:
           name: reports-${{ matrix.platform }}
