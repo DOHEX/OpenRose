@@ -8,7 +8,7 @@ import io.github.dohex.openrose.bridge.BridgePresentationWire
 import android.content.Context
 import android.content.Intent
 import io.github.dohex.openrose.bridge.BridgeWire
-import io.github.dohex.openrose.core.SystemHeadsetMapping
+import io.github.dohex.openrose.androidintegration.SystemHeadsetMapping
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedModule

@@ -22,7 +22,7 @@ class OpenRoseChoiceDialogUiTest {
         val state = mutableStateOf(ControlState(platform = PlatformState(PermissionState.GRANTED), settings = UserSettings(interfaceStyle = InterfaceStyle.MATERIAL3, appearance = Appearance.LIGHT)))
         runOpenRoseUiTest(420, 900) {
             setContent {
-                OpenRoseApp(state.value, { state.value = state.value.copy(settings = it) }, {}, {}, {}, {}, {}, {}, { _, _ -> },
+                OpenRoseApp(state.value, null, { state.value = state.value.copy(settings = it) }, {}, {}, {}, {}, {}, {}, { _, _ -> },
                     onAddDeviceConnect = { error("Unexpected add-device connection in this scenario") })
             }
             val harness = OpenRoseUiTestHarness(this)
@@ -175,7 +175,7 @@ class OpenRoseChoiceDialogUiTest {
         val settingWrites = mutableListOf<Pair<DeviceSetting, FieldValue>>()
         var otherActions = 0
         setContent {
-            OpenRoseApp(state.value, { settingsWrites += it; state.value = state.value.copy(settings = it) },
+            OpenRoseApp(state.value, null, { settingsWrites += it; state.value = state.value.copy(settings = it) },
                 { otherActions++ }, { otherActions++ }, { otherActions++ }, { otherActions++ },
                 { otherActions++ }, { otherActions++ }, { setting, value -> settingWrites += setting to value },
                 onAddDeviceConnect = { error("Unexpected add-device connection in this scenario") })

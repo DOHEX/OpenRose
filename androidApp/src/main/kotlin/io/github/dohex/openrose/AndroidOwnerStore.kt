@@ -3,10 +3,10 @@ package io.github.dohex.openrose
 import android.content.SharedPreferences
 import io.github.dohex.openrose.bridge.FrameworkLink
 import io.github.dohex.openrose.core.ControlWay
-import io.github.dohex.openrose.core.OwnerGeneration
-import io.github.dohex.openrose.core.OwnerRecord
-import io.github.dohex.openrose.core.OwnerSelectionStore
-import io.github.dohex.openrose.core.PendingModuleRelease
+import io.github.dohex.openrose.androidintegration.OwnerGeneration
+import io.github.dohex.openrose.androidintegration.OwnerRecord
+import io.github.dohex.openrose.androidintegration.OwnerSelectionStore
+import io.github.dohex.openrose.androidintegration.PendingModuleRelease
 import io.github.dohex.openrose.core.UserSettings
 import io.github.dohex.openrose.core.UserSettingsCodec
 

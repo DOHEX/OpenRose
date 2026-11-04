@@ -50,6 +50,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             val state by owner.runtime.state.collectAsState()
+            val integration by owner.runtime.integration.collectAsState()
             val dark = when (state.settings.appearance) {
                 Appearance.SYSTEM -> resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK ==
                     Configuration.UI_MODE_NIGHT_YES
@@ -66,6 +67,7 @@ class MainActivity : ComponentActivity() {
             }
             OpenRoseApp(
                 state = state,
+                integration = integration,
                 onSettingsChange = ::onSettingsChanged,
                 onRequestPermission = ::requestBluetoothPermission,
                 onOpenSystemSettings = { startActivity(Intent(Settings.ACTION_BLUETOOTH_SETTINGS)) },

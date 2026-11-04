@@ -13,7 +13,7 @@ import io.github.dohex.openrose.integration.NativeHeadsetBinderAdapter
 import io.github.dohex.openrose.integration.NativeHeadsetSnapshot
 import io.github.dohex.openrose.presentation.OfficialConnectionPresenter
 import io.github.dohex.openrose.presentation.PresentationCallbacks
-import io.github.dohex.openrose.core.SystemHeadsetMapping
+import io.github.dohex.openrose.androidintegration.SystemHeadsetMapping
 import io.github.dohex.openrose.presentation.SystemPresentationRenderer
 import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedModule

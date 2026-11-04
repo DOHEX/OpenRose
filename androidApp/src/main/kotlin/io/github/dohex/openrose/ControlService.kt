@@ -10,9 +10,9 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
-import io.github.dohex.openrose.core.BackgroundControlBlock
+import io.github.dohex.openrose.androidintegration.BackgroundControlBlock
 import io.github.dohex.openrose.core.ConnectionState
-import io.github.dohex.openrose.core.OrdinarySessionHold
+import io.github.dohex.openrose.androidintegration.OrdinarySessionHold
 import io.github.dohex.openrose.core.ControlWay
 import io.github.dohex.openrose.core.ControlState
 import io.github.dohex.openrose.core.TransportAvailability
@@ -21,8 +21,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 /**
@@ -61,7 +61,9 @@ class ControlService : Service() {
             observer = scope.launch {
                 // Background control exists only while ordinary control is the saved choice; module control
                 // (or none) ends it without touching the saved intent.
-                app.runtime.state.map { (it.settings.backgroundControlEnabled && it.owner.selected == ControlWay.ORDINARY) to notificationText(it) }
+                combine(app.runtime.state, app.runtime.integration) { state, integration ->
+                    (state.settings.backgroundControlEnabled && integration.owner.selected == ControlWay.ORDINARY) to notificationText(state)
+                }
                     .distinctUntilChanged()
                     .collect { (enabled, _) ->
                         if (!enabled) {

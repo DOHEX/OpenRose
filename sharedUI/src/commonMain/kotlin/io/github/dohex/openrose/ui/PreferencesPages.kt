@@ -13,10 +13,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import io.github.dohex.openrose.androidintegration.BridgeIpcState
+import io.github.dohex.openrose.androidintegration.BridgeSessionState
+import io.github.dohex.openrose.androidintegration.IntegrationPlatformState
+import io.github.dohex.openrose.androidintegration.IntegrationState
+import io.github.dohex.openrose.androidintegration.ModuleAvailability
 import io.github.dohex.openrose.core.Appearance
 import io.github.dohex.openrose.core.BottomBarStyle
-import io.github.dohex.openrose.core.BridgeIpcState
-import io.github.dohex.openrose.core.BridgeSessionState
 import io.github.dohex.openrose.core.ControlState
 import io.github.dohex.openrose.core.FusionSettingsDestination
 import io.github.dohex.openrose.core.HostPlatform
@@ -25,7 +28,6 @@ import io.github.dohex.openrose.core.IslandMode
 import io.github.dohex.openrose.core.IslandTrigger
 import io.github.dohex.openrose.core.ControlWay
 import io.github.dohex.openrose.core.PageTransition
-import io.github.dohex.openrose.core.ModuleAvailability
 import io.github.dohex.openrose.core.PermissionState
 import io.github.dohex.openrose.core.PlatformApplicability
 import io.github.dohex.openrose.core.PlatformState
@@ -36,6 +38,7 @@ import io.github.dohex.openrose.core.UserSettings
 @Composable
 internal fun PreferencesPage(
     state: ControlState,
+    integration: IntegrationState,
     onChange: (UserSettings) -> Unit,
     onRequestPermission: () -> Unit = {},
     onRequestNotificationPermission: () -> Unit = {},
@@ -45,12 +48,12 @@ internal fun PreferencesPage(
 ) {
     val settings = state.settings
     var systemPreferenceFeedback by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(state.platform.systemIntegrationApplicability, state.platform.module) {
+    LaunchedEffect(integration.platform.systemIntegrationApplicability, integration.platform.module) {
         systemPreferenceFeedback = null
     }
     val saveSystemPreference: (UserSettings) -> Unit = { nextSettings ->
         onChange(nextSettings)
-        systemPreferenceFeedback = if (state.platform.module == ModuleAvailability.Available) {
+        systemPreferenceFeedback = if (integration.platform.module == ModuleAvailability.Available) {
             "偏好已保存。系统状态请查看状态页。"
         } else {
             "偏好已保存，待系统就绪后生效。"
@@ -106,7 +109,7 @@ internal fun PreferencesPage(
         }
 
         if (state.controlWayApplicable() && onSelectControlWay != null) {
-            ControlWayGroup(state, onSelectControlWay)
+            ControlWayGroup(integration, onSelectControlWay)
         }
 
         if (state.platform.controlTransportApplicability == PlatformApplicability.APPLICABLE) {
@@ -120,13 +123,13 @@ internal fun PreferencesPage(
             }
         }
 
-        if (state.backgroundControlApplicable()) {
+        if (state.backgroundControlApplicable(integration)) {
             BackgroundControlGroup(
-                state, onChange, onRequestPermission, onRequestNotificationPermission, onRequestAssociation, onOpenAppSettings,
+                state, integration, onChange, onRequestPermission, onRequestNotificationPermission, onRequestAssociation, onOpenAppSettings,
             )
         }
 
-        if (state.platform.hyperOsIntegrationApplicable) {
+        if (hyperOsIntegrationApplicable(state.platform, integration.platform)) {
             AppGroup(title = "系统呈现") {
                 AppChoiceRow(
                     title = "超级岛",
@@ -206,25 +209,26 @@ internal fun PreferencesPage(
 @Composable
 internal fun StatusPage(
     state: ControlState,
+    integration: IntegrationState,
     onRequestPermission: () -> Unit,
     onOpenSystemSettings: () -> Unit,
     onDiagnostics: () -> Unit,
 ) {
-    val hyperOsApplicable = state.platform.hyperOsIntegrationApplicable
+    val hyperOsApplicable = hyperOsIntegrationApplicable(state.platform, integration.platform)
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         AppGroup(title = "蓝牙") {
-            PlatformAttentionRows(state.platform, onRequestPermission, onOpenSystemSettings)
+            PlatformAttentionRows(state.platform, integration.platform, onRequestPermission, onOpenSystemSettings)
         }
 
         if (hyperOsApplicable) {
-            IntegrationReadinessCard(state.platform.module)
+            IntegrationReadinessCard(integration.platform.module)
         }
 
         if (state.controlWayApplicable()) {
-            ControlStatusGroup(state)
+            ControlStatusGroup(state, integration)
         }
 
         AppGroup {
@@ -235,7 +239,7 @@ internal fun StatusPage(
                 } else {
                     "查看本平台状态与诊断信息"
                 },
-                value = if (!hyperOsApplicable || state.platform.module == ModuleAvailability.Available) "查看" else "待就绪",
+                value = if (!hyperOsApplicable || integration.platform.module == ModuleAvailability.Available) "查看" else "待就绪",
                 icon = RoseIcon.LOG,
                 onClick = onDiagnostics,
             )
@@ -247,6 +251,7 @@ internal fun StatusPage(
 @Composable
 internal fun PlatformDiagnosticsCard(
     platform: PlatformState,
+    integration: IntegrationPlatformState,
     onRequestPermission: () -> Unit,
     onOpenSystemSettings: () -> Unit,
 ) {
@@ -255,10 +260,10 @@ internal fun PlatformDiagnosticsCard(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         AppGroup(title = "系统状态") {
-            PlatformStatusRows(platform, onRequestPermission, onOpenSystemSettings)
-            if (platform.hyperOsIntegrationApplicable) {
-                val moduleValue = platform.module.unreadyClause() ?: "已连接系统模块"
-                val moduleTone = when (platform.module) {
+            PlatformStatusRows(platform, integration, onRequestPermission, onOpenSystemSettings)
+            if (hyperOsIntegrationApplicable(platform, integration)) {
+                val moduleValue = integration.module.unreadyClause() ?: "已连接系统模块"
+                val moduleTone = when (integration.module) {
                     ModuleAvailability.Available -> StatusTone.GOOD
                     ModuleAvailability.NotEnabled -> StatusTone.CAUTION
                     ModuleAvailability.Unresponsive -> StatusTone.ERROR
@@ -268,8 +273,8 @@ internal fun PlatformDiagnosticsCard(
             }
         }
 
-        if (platform.hyperOsIntegrationApplicable) {
-            val bridge = platform.bridge
+        if (hyperOsIntegrationApplicable(platform, integration)) {
+            val bridge = integration.bridge
             if (bridge == null) {
                 AppGroup(title = "系统桥接") {
                     AppText("尚无系统桥接诊断数据。", role = AppTextRole.Summary)
@@ -322,6 +327,7 @@ internal fun PlatformDiagnosticsCard(
 @Composable
 private fun PlatformStatusRows(
     platform: PlatformState,
+    integration: IntegrationPlatformState,
     onRequestPermission: () -> Unit,
     onOpenSystemSettings: () -> Unit,
 ) {
@@ -347,7 +353,7 @@ private fun PlatformStatusRows(
                 modifier = Modifier.padding(start = 16.dp),
             )
         }
-        if (platform.systemIntegrationApplicability == PlatformApplicability.UNKNOWN) {
+        if (integration.systemIntegrationApplicability == PlatformApplicability.UNKNOWN) {
             ToneInfoRow("系统集成适用性", "尚未核实", StatusTone.CAUTION)
         }
     }
@@ -359,6 +365,7 @@ private fun PlatformStatusRows(
 @Composable
 private fun PlatformAttentionRows(
     platform: PlatformState,
+    integration: IntegrationPlatformState,
     onRequestPermission: () -> Unit,
     onOpenSystemSettings: () -> Unit,
 ) {
@@ -376,7 +383,7 @@ private fun PlatformAttentionRows(
                 modifier = Modifier.padding(start = 16.dp),
             )
         }
-        if (platform.systemIntegrationApplicability == PlatformApplicability.UNKNOWN) {
+        if (integration.systemIntegrationApplicability == PlatformApplicability.UNKNOWN) {
             ToneInfoRow("系统集成适用性", "尚未核实", StatusTone.CAUTION)
         }
     }
@@ -498,9 +505,9 @@ private fun hostPlatformLabel(platform: HostPlatform): String = when (platform) 
     HostPlatform.LINUX -> "Linux"
 }
 
-private val PlatformState.hyperOsIntegrationApplicable: Boolean
-    get() = hostPlatform == HostPlatform.ANDROID &&
-        systemIntegrationApplicability == PlatformApplicability.APPLICABLE
+private fun hyperOsIntegrationApplicable(platform: PlatformState, integration: IntegrationPlatformState): Boolean =
+    platform.hostPlatform == HostPlatform.ANDROID &&
+        integration.systemIntegrationApplicability == PlatformApplicability.APPLICABLE
 
 private fun appearanceLabel(appearance: Appearance): String = when (appearance) {
     Appearance.SYSTEM -> "跟随系统"

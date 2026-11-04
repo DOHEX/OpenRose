@@ -5,16 +5,19 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import io.github.dohex.openrose.core.BackgroundControlBlock
-import io.github.dohex.openrose.core.BackgroundControlStatus
+import io.github.dohex.openrose.androidintegration.BackgroundControlBlock
+import io.github.dohex.openrose.androidintegration.BackgroundControlStatus
+import io.github.dohex.openrose.androidintegration.BackgroundRecovery
+import io.github.dohex.openrose.androidintegration.IntegrationState
+import io.github.dohex.openrose.androidintegration.PresenceObservation
+import io.github.dohex.openrose.androidintegration.WakeBand
+import io.github.dohex.openrose.androidintegration.WakePrerequisite
+import io.github.dohex.openrose.androidintegration.backgroundControl
+import io.github.dohex.openrose.androidintegration.backgroundRecovery
 import io.github.dohex.openrose.core.ControlState
 import io.github.dohex.openrose.core.HostPlatform
 import io.github.dohex.openrose.core.PlatformApplicability
 import io.github.dohex.openrose.core.UserSettings
-import io.github.dohex.openrose.core.PresenceObservation
-import io.github.dohex.openrose.core.WakeBand
-import io.github.dohex.openrose.core.WakePrerequisite
-import io.github.dohex.openrose.core.BackgroundRecovery
 
 /**
  * Test tags of the background-control group. Rows report their state through the tag, so tests
@@ -41,10 +44,10 @@ internal object BackgroundControlTags {
 }
 
 /** Ordinary background control applies wherever Android hosts the control runtime. */
-internal fun ControlState.backgroundControlApplicable(): Boolean =
+internal fun ControlState.backgroundControlApplicable(integration: IntegrationState): Boolean =
     platform.hostPlatform == HostPlatform.ANDROID &&
         platform.controlTransportApplicability == PlatformApplicability.APPLICABLE &&
-        backgroundControl != BackgroundControlStatus.Unsupported
+        integration.backgroundControl(this) != BackgroundControlStatus.Unsupported
 
 /**
  * The switch only stores the user's intent. The status rows below it report what the platform
@@ -53,6 +56,7 @@ internal fun ControlState.backgroundControlApplicable(): Boolean =
 @Composable
 internal fun BackgroundControlGroup(
     state: ControlState,
+    integration: IntegrationState,
     onChange: (UserSettings) -> Unit,
     onRequestPermission: () -> Unit,
     onRequestNotificationPermission: () -> Unit,
@@ -62,7 +66,7 @@ internal fun BackgroundControlGroup(
     val settings = state.settings
     AppGroup(
         title = "后台控制",
-        footnote = wakeGuidance(state.platform.backgroundService.wake.band) +
+        footnote = wakeGuidance(integration.platform.backgroundService.wake.band) +
             "在系统中强制停止 OpenRose 会结束后台控制，直到你再次打开它。",
     ) {
         Tagged(BackgroundControlTags.SWITCH) {
@@ -73,7 +77,7 @@ internal fun BackgroundControlGroup(
                 onChange = { onChange(settings.copy(backgroundControlEnabled = it)) },
             )
         }
-        when (val status = state.backgroundControl) {
+        when (val status = integration.backgroundControl(state)) {
             BackgroundControlStatus.Unsupported, BackgroundControlStatus.Disabled -> Unit
             BackgroundControlStatus.NotRunning -> Tagged(BackgroundControlTags.STATUS_NOT_RUNNING) {
                 ToneInfoRow("后台状态", "已启用，尚未运行；耳机下次音频连接或打开 OpenRose 时启动", StatusTone.CAUTION)
@@ -111,7 +115,7 @@ internal fun BackgroundControlGroup(
             }
         }
         if (settings.backgroundControlEnabled) {
-            RecoveryRows(state.backgroundRecovery, state, onRequestAssociation, onOpenAppSettings)
+            RecoveryRows(integration.backgroundRecovery(state), integration, onRequestAssociation, onOpenAppSettings)
         }
     }
 }
@@ -128,7 +132,7 @@ private fun wakeGuidance(band: WakeBand?): String = when (band) {
 @Composable
 private fun RecoveryRows(
     recovery: BackgroundRecovery,
-    state: ControlState,
+    integration: IntegrationState,
     onRequestAssociation: () -> Unit,
     onOpenAppSettings: () -> Unit,
 ) {
@@ -145,7 +149,7 @@ private fun RecoveryRows(
                     modifier = Modifier.padding(start = 16.dp).testTag(BackgroundControlTags.ASSOCIATE),
                 )
             } else if (WakePrerequisite.PRESENCE_OBSERVATION in recovery.missing) {
-                val refused = state.platform.backgroundService.wake.presence == PresenceObservation.REFUSED
+                val refused = integration.platform.backgroundService.wake.presence == PresenceObservation.REFUSED
                 Tagged(
                     if (refused) BackgroundControlTags.RECOVERY_PRESENCE_REFUSED else BackgroundControlTags.RECOVERY_PRESENCE_PENDING,
                 ) {

@@ -1,7 +1,7 @@
 package io.github.dohex.openrose.ui
 
-import io.github.dohex.openrose.core.ModuleAvailability
-import io.github.dohex.openrose.core.ModuleUnavailableCause
+import io.github.dohex.openrose.androidintegration.ModuleAvailability
+import io.github.dohex.openrose.androidintegration.ModuleUnavailableCause
 
 /**
  * Why the system module cannot act now, or null when it can. Every surface that explains the module

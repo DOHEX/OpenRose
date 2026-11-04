@@ -11,6 +11,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.unit.dp
+import io.github.dohex.openrose.androidintegration.IntegrationPlatformState
+import io.github.dohex.openrose.androidintegration.IntegrationState
+import io.github.dohex.openrose.androidintegration.ModuleAvailability
 import io.github.dohex.openrose.core.*
 import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.dohex.openrose.core.transport.DeviceId
@@ -31,6 +34,14 @@ internal enum class AppPage(val title: String, val icon: RoseIcon) {
     DIAGNOSTICS("诊断与记录", RoseIcon.LOG),
 }
 
+/** What a host without Android integration (desktop) reports: no system module, integration not applicable. */
+private val NoAndroidIntegration = IntegrationState(
+    platform = IntegrationPlatformState(
+        module = ModuleAvailability.Unavailable("HyperOS 系统集成仅适用于 Android"),
+        systemIntegrationApplicability = PlatformApplicability.NOT_APPLICABLE,
+    ),
+)
+
 internal val mainPages = listOf(AppPage.HEADPHONES, AppPage.STATUS, AppPage.SETTINGS)
 
 /** Navigation, scroll positions and drafts survive replacement of either component style.
@@ -38,6 +49,8 @@ internal val mainPages = listOf(AppPage.HEADPHONES, AppPage.STATUS, AppPage.SETT
 @Composable
 fun OpenRoseApp(
     state: ControlState,
+    /** Null on hosts without Android integration. */
+    integration: IntegrationState? = null,
     onSettingsChange: (UserSettings) -> Unit,
     onRequestPermission: () -> Unit,
     onOpenSystemSettings: () -> Unit,
@@ -60,6 +73,7 @@ fun OpenRoseApp(
     // Null on hosts without an ordinary/module choice: the control-way card is then absent instead of inert.
     onSelectControlWay: ((ControlWay) -> Unit)? = null,
 ) {
+    val integrationState = integration ?: NoAndroidIntegration
     val dark = when (state.settings.appearance) {
         Appearance.SYSTEM -> isSystemInDarkTheme()
         Appearance.LIGHT -> false
@@ -193,12 +207,14 @@ fun OpenRoseApp(
                         )
                         AppPage.STATUS -> StatusPage(
                             state = state,
+                            integration = integrationState,
                             onRequestPermission = onRequestPermission,
                             onOpenSystemSettings = onOpenSystemSettings,
                             onDiagnostics = { navigate(AppPage.DIAGNOSTICS) },
                         )
                         AppPage.SETTINGS -> PreferencesPage(
                             state,
+                            integrationState,
                             onSettingsChange,
                             onRequestPermission,
                             onRequestNotificationPermission,
@@ -207,8 +223,8 @@ fun OpenRoseApp(
                             onSelectControlWay = onSelectControlWay,
                         )
                         AppPage.DIAGNOSTICS -> {
-                            PlatformDiagnosticsCard(state.platform, onRequestPermission, onOpenSystemSettings)
-                            if (state.controlWayApplicable()) ControlOwnerDiagnostics(state)
+                            PlatformDiagnosticsCard(state.platform, integrationState.platform, onRequestPermission, onOpenSystemSettings)
+                            if (state.controlWayApplicable()) ControlOwnerDiagnostics(integrationState)
                             ConnectionDetailsCard(state, onDisconnect)
                             SettingOperationsCard(state)
                             device?.let { DeviceReadings(it, state.connection.phaseOrNull() == ConnectionPhase.INITIALIZING) }

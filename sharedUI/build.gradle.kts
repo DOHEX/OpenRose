@@ -13,6 +13,8 @@ kotlin {
         }
         commonMain.dependencies {
             api(projects.core)
+            // Transitional until the Android sections move to :androidIntegrationUI (#89).
+            api(projects.androidIntegration)
             implementation(libs.compose.runtime)
             implementation(libs.compose.foundation)
             implementation(libs.compose.ui)

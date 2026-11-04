@@ -8,7 +8,7 @@ import android.os.Looper
 import android.os.Parcel
 import android.util.Log
 import io.github.dohex.openrose.bridge.BridgePresentationWire
-import io.github.dohex.openrose.core.SystemHeadsetMapping
+import io.github.dohex.openrose.androidintegration.SystemHeadsetMapping
 import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedModule
 import java.lang.reflect.Method

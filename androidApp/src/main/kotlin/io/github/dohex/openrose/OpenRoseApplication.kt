@@ -10,16 +10,18 @@ import android.os.Build
 import android.os.Process
 import android.os.UserManager
 import android.location.LocationManager
+import io.github.dohex.openrose.androidintegration.BackgroundControlBlock
+import io.github.dohex.openrose.androidintegration.BackgroundControlStatus
+import io.github.dohex.openrose.androidintegration.BackgroundServiceFact
+import io.github.dohex.openrose.androidintegration.LocalOwnerIdentity
+import io.github.dohex.openrose.androidintegration.SwitchingControlRuntime
+import io.github.dohex.openrose.androidintegration.backgroundControl
+import io.github.dohex.openrose.androidintegration.mayStartBackgroundService
 import io.github.dohex.openrose.bridge.FrameworkLink
 import io.github.dohex.openrose.bridge.ModuleHostBinderLink
-import io.github.dohex.openrose.core.BackgroundControlBlock
-import io.github.dohex.openrose.core.BackgroundControlStatus
-import io.github.dohex.openrose.core.BackgroundServiceFact
 import io.github.dohex.openrose.core.ControlWay
 import io.github.dohex.openrose.core.DeviceSetting
 import io.github.dohex.openrose.core.LocalControlRuntime
-import io.github.dohex.openrose.core.LocalOwnerIdentity
-import io.github.dohex.openrose.core.SwitchingControlRuntime
 import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.dohex.openrose.core.UserSettings
 import io.github.dohex.openrose.core.UserSettingsCodec
@@ -62,7 +64,8 @@ class OpenRoseApplication : Application() {
         framework = FrameworkLink { controlScope.launch { refreshPlatform() } }
         ownerStore = AndroidOwnerStore({ preferences() }, framework) { runtime.state.value.settings }
         runtime = SwitchingControlRuntime(
-            initialPlatformState = readPlatformState(permissionRequested(), wake = companionWake.facts(), userUnlocked = unlocked),
+            initialPlatformState = readPlatformState(permissionRequested(), userUnlocked = unlocked),
+            initialIntegrationPlatform = readIntegrationPlatform(wake = companionWake.facts()),
             initialSettings = if (unlocked) loadSettings() else UserSettings(),
             store = ownerStore,
             ordinaryFactory = { scope, settings, platform, sessionIdBase ->
@@ -156,7 +159,7 @@ class OpenRoseApplication : Application() {
      * True while the saved choice is ordinary control, i.e. while this process may host a session. Services
      * and wake-ups for ordinary background control check this; they never create a session themselves.
      */
-    fun ordinaryControlSelected(): Boolean = runtime.state.value.owner.selected == ControlWay.ORDINARY
+    fun ordinaryControlSelected(): Boolean = runtime.integration.value.owner.selected == ControlWay.ORDINARY
 
     fun updateSettings(settings: UserSettings) {
         if (!userUnlocked()) return
@@ -202,8 +205,10 @@ class OpenRoseApplication : Application() {
 
     private fun startBackgroundService() {
         val state = runtime.state.value
+        val integration = runtime.integration.value
         // mayStartBackgroundService is false unless ordinary control is the saved choice.
-        if (!state.mayStartBackgroundService || state.backgroundControl is BackgroundControlStatus.Running) return
+        if (!integration.mayStartBackgroundService(state) ||
+            integration.backgroundControl(state) is BackgroundControlStatus.Running) return
         updateBackgroundService(BackgroundServiceFact.NotRunning)
         try {
             startForegroundService(Intent(this, ControlService::class.java))
@@ -221,7 +226,9 @@ class OpenRoseApplication : Application() {
     fun syncWakeObservation() {
         if (!preferencesLoaded) return
         val state = runtime.state.value
-        companionWake.syncObservation(state.settings.backgroundControlEnabled && state.owner.selected == ControlWay.ORDINARY)
+        companionWake.syncObservation(
+            state.settings.backgroundControlEnabled && runtime.integration.value.owner.selected == ControlWay.ORDINARY,
+        )
         refreshPlatform()
     }
 
@@ -241,11 +248,14 @@ class OpenRoseApplication : Application() {
         refreshPlatform()
     }
 
-    fun refreshPlatform() = runtime.updatePlatformState(
-        readPlatformState(permissionRequested(), backgroundService, companionWake.facts(), preferencesLoaded).copy(
-            module = framework.availability(), bridge = framework.diagnostics(),
-        ),
-    )
+    fun refreshPlatform() {
+        runtime.updatePlatformState(readPlatformState(permissionRequested(), preferencesLoaded))
+        runtime.updateIntegrationPlatform(
+            readIntegrationPlatform(backgroundService, companionWake.facts()).copy(
+                module = framework.availability(), bridge = framework.diagnostics(),
+            ),
+        )
+    }
 
     fun markPermissionRequested() {
         if (!userUnlocked()) return

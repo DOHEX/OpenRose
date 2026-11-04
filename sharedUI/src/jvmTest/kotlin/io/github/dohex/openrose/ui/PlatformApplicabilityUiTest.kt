@@ -2,10 +2,12 @@ package io.github.dohex.openrose.ui
 
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
+import io.github.dohex.openrose.androidintegration.IntegrationPlatformState
+import io.github.dohex.openrose.androidintegration.IntegrationState
+import io.github.dohex.openrose.androidintegration.ModuleAvailability
 import io.github.dohex.openrose.core.ControlState
 import io.github.dohex.openrose.core.HostPlatform
 import io.github.dohex.openrose.core.InterfaceStyle
-import io.github.dohex.openrose.core.ModuleAvailability
 import io.github.dohex.openrose.core.PermissionState
 import io.github.dohex.openrose.core.PlatformApplicability
 import io.github.dohex.openrose.core.PlatformState
@@ -25,9 +27,7 @@ class PlatformApplicabilityUiTest {
                     platform = PlatformState(
                         permission = PermissionState.GRANTED,
                         transport = TransportAvailability.Available,
-                        module = ModuleAvailability.Available,
                         hostPlatform = HostPlatform.ANDROID,
-                        systemIntegrationApplicability = PlatformApplicability.UNKNOWN,
                         controlTransportApplicability = PlatformApplicability.APPLICABLE,
                     ),
                     settings = UserSettings(
@@ -36,6 +36,12 @@ class PlatformApplicabilityUiTest {
                         focusNotificationEnabled = true,
                         islandTriggers = emptySet(),
                         forceBle = true,
+                    ),
+                ),
+                initialIntegration = IntegrationState(
+                    platform = IntegrationPlatformState(
+                        module = ModuleAvailability.Available,
+                        systemIntegrationApplicability = PlatformApplicability.UNKNOWN,
                     ),
                 ),
             ) { harness ->
@@ -66,9 +72,7 @@ class PlatformApplicabilityUiTest {
                 val platform = PlatformState(
                     permission = PermissionState.NOT_REQUIRED,
                     transport = TransportAvailability.Unavailable("$platformLabel 控制传输尚未实现"),
-                    module = ModuleAvailability.Available,
                     hostPlatform = hostPlatform,
-                    systemIntegrationApplicability = PlatformApplicability.NOT_APPLICABLE,
                     controlTransportApplicability = PlatformApplicability.NOT_APPLICABLE,
                 )
                 withHarness(
@@ -80,6 +84,12 @@ class PlatformApplicabilityUiTest {
                             focusNotificationEnabled = true,
                             islandTriggers = emptySet(),
                             forceBle = true,
+                        ),
+                    ),
+                    initialIntegration = IntegrationState(
+                        platform = IntegrationPlatformState(
+                            module = ModuleAvailability.Available,
+                            systemIntegrationApplicability = PlatformApplicability.NOT_APPLICABLE,
                         ),
                     ),
                 ) { harness ->
@@ -116,9 +126,7 @@ class PlatformApplicabilityUiTest {
             val platform = PlatformState(
                 permission = PermissionState.GRANTED,
                 transport = TransportAvailability.Available,
-                module = ModuleAvailability.Available,
                 hostPlatform = HostPlatform.ANDROID,
-                systemIntegrationApplicability = PlatformApplicability.NOT_APPLICABLE,
                 controlTransportApplicability = PlatformApplicability.APPLICABLE,
             )
             withHarness(
@@ -130,6 +138,12 @@ class PlatformApplicabilityUiTest {
                         focusNotificationEnabled = true,
                         islandTriggers = emptySet(),
                         forceBle = true,
+                    ),
+                ),
+                initialIntegration = IntegrationState(
+                    platform = IntegrationPlatformState(
+                        module = ModuleAvailability.Available,
+                        systemIntegrationApplicability = PlatformApplicability.NOT_APPLICABLE,
                     ),
                 ),
             ) { harness ->
@@ -168,13 +182,17 @@ class PlatformApplicabilityUiTest {
             val platform = PlatformState(
                 permission = PermissionState.GRANTED,
                 transport = TransportAvailability.Available,
-                module = ModuleAvailability.Unavailable("兼容框架服务尚未连接"),
                 hostPlatform = HostPlatform.ANDROID,
-                systemIntegrationApplicability = PlatformApplicability.APPLICABLE,
                 controlTransportApplicability = PlatformApplicability.APPLICABLE,
             )
             withHarness(
                 initialState = ControlState(platform = platform, settings = initialSettings),
+                initialIntegration = IntegrationState(
+                    platform = IntegrationPlatformState(
+                        module = ModuleAvailability.Unavailable("兼容框架服务尚未连接"),
+                        systemIntegrationApplicability = PlatformApplicability.APPLICABLE,
+                    ),
+                ),
             ) { harness ->
                 harness.render()
                 harness.clickTab("设置")
@@ -202,8 +220,8 @@ class PlatformApplicabilityUiTest {
                 assertTrue(harness.hasText("系统集成未就绪"), "readiness is reported separately from applicability in $style")
 
                 val savedSettings = harness.state.value.settings
-                harness.state.value = harness.state.value.copy(
-                    platform = harness.state.value.platform.copy(
+                harness.integration.value = harness.integration.value.copy(
+                    platform = harness.integration.value.platform.copy(
                         systemIntegrationApplicability = PlatformApplicability.NOT_APPLICABLE,
                     ),
                 )
@@ -216,8 +234,8 @@ class PlatformApplicabilityUiTest {
                 assertFalse(harness.hasText("超级岛"), "HyperOS controls are hidden while inapplicable in $style")
                 assertEquals(savedSettings, harness.state.value.settings)
 
-                harness.state.value = harness.state.value.copy(
-                    platform = harness.state.value.platform.copy(
+                harness.integration.value = harness.integration.value.copy(
+                    platform = harness.integration.value.platform.copy(
                         systemIntegrationApplicability = PlatformApplicability.APPLICABLE,
                     ),
                 )
@@ -233,14 +251,20 @@ class PlatformApplicabilityUiTest {
         }
     }
 
-    private fun withHarness(initialState: ControlState, block: suspend (Harness) -> Unit) = runOpenRoseUiTest(1200, 1000) {
+    private fun withHarness(
+        initialState: ControlState,
+        initialIntegration: IntegrationState,
+        block: suspend (Harness) -> Unit,
+    ) = runOpenRoseUiTest(1200, 1000) {
         val state = mutableStateOf(initialState)
+        val integration = mutableStateOf(initialIntegration)
         val settingsChanges = mutableListOf<UserSettings>()
         val settingWrites = mutableListOf<Pair<io.github.dohex.openrose.core.DeviceSetting, io.github.dohex.openrose.core.protocol.FieldValue>>()
         val transportActions = mutableListOf<String>()
         setContent {
             OpenRoseApp(
                 state = state.value,
+                integration = integration.value,
                 onSettingsChange = { settings ->
                     settingsChanges += settings
                     state.value = state.value.copy(settings = settings)
@@ -255,12 +279,13 @@ class PlatformApplicabilityUiTest {
                 onAddDeviceConnect = { error("Unexpected add-device connection in this scenario") },
             )
         }
-        block(Harness(this, state, settingsChanges, settingWrites, transportActions))
+        block(Harness(this, state, integration, settingsChanges, settingWrites, transportActions))
     }
 
     private class Harness(
         scene: OpenRoseUiTestScene,
         val state: MutableState<ControlState>,
+        val integration: MutableState<IntegrationState>,
         val settingsChanges: MutableList<UserSettings>,
         val settingWrites: MutableList<Pair<io.github.dohex.openrose.core.DeviceSetting, io.github.dohex.openrose.core.protocol.FieldValue>>,
         val transportActions: MutableList<String>,

@@ -14,7 +14,6 @@ import io.github.dohex.openrose.core.DeviceSetting
 import io.github.dohex.openrose.core.DeviceState
 import io.github.dohex.openrose.core.InterfaceStyle
 import io.github.dohex.openrose.core.HostPlatform
-import io.github.dohex.openrose.core.ModuleAvailability
 import io.github.dohex.openrose.core.PermissionState
 import io.github.dohex.openrose.core.PlatformApplicability
 import io.github.dohex.openrose.core.PlatformState
@@ -187,6 +186,7 @@ class OpenRoseNavigationUiTest {
         setContent {
             OpenRoseApp(
                 state = state.value,
+                integration = androidIntegration,
                 onSettingsChange = { settings ->
                     settingsChanges += settings
                     state.value = state.value.copy(settings = settings)
@@ -242,9 +242,7 @@ class OpenRoseNavigationUiTest {
             platform = PlatformState(
                 permission = PermissionState.GRANTED,
                 transport = TransportAvailability.Available,
-                module = ModuleAvailability.NotEnabled,
                 hostPlatform = HostPlatform.ANDROID,
-                systemIntegrationApplicability = PlatformApplicability.APPLICABLE,
                 controlTransportApplicability = PlatformApplicability.APPLICABLE,
             ),
             connection = if (connected) {

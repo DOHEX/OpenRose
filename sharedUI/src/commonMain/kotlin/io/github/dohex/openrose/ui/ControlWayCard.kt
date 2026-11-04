@@ -8,15 +8,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import io.github.dohex.openrose.androidintegration.HandoffOutcome
+import io.github.dohex.openrose.androidintegration.IntegrationState
+import io.github.dohex.openrose.androidintegration.OwnerFailureStage
+import io.github.dohex.openrose.androidintegration.OwnerHolder
+import io.github.dohex.openrose.androidintegration.OwnerReadiness
 import io.github.dohex.openrose.core.ConnectionPhase
 import io.github.dohex.openrose.core.ConnectionState
 import io.github.dohex.openrose.core.ControlState
 import io.github.dohex.openrose.core.HostPlatform
 import io.github.dohex.openrose.core.ControlWay
-import io.github.dohex.openrose.core.HandoffOutcome
-import io.github.dohex.openrose.core.OwnerFailureStage
-import io.github.dohex.openrose.core.OwnerHolder
-import io.github.dohex.openrose.core.OwnerReadiness
 
 private val controlWayOptions = listOf(
     AppOption(ControlWay.ORDINARY, "普通控制", testTag = ControlWayTags.option(ControlWay.ORDINARY)),
@@ -64,10 +65,10 @@ internal object ControlWayTags {
  */
 @Composable
 internal fun ControlWayGroup(
-    state: ControlState,
+    integration: IntegrationState,
     onSelectControlWay: (ControlWay) -> Unit,
 ) {
-    val owner = state.owner
+    val owner = integration.owner
     val readiness = owner.readiness
     val switching = readiness is OwnerReadiness.Switching
     Column(Modifier.fillMaxWidth().testTag(ControlWayTags.CARD)) {
@@ -95,8 +96,8 @@ private fun switchFeedback(readiness: OwnerReadiness): String? = when (readiness
 
 /** Status side of the control way: the saved selection, whether its owner is ready, and the earphone 控制连接. */
 @Composable
-internal fun ControlStatusGroup(state: ControlState) {
-    val owner = state.owner
+internal fun ControlStatusGroup(state: ControlState, integration: IntegrationState) {
+    val owner = integration.owner
     val readiness = owner.readiness
     AppGroup(title = "控制状态") {
         AppInfoRow("已选择方式", wayLabel(owner.selected))
@@ -138,8 +139,8 @@ internal fun ControlStatusGroup(state: ControlState) {
 
 /** Developer-grade owner facts for the diagnostics page: who holds the connection and the last blocked handoff. */
 @Composable
-internal fun ControlOwnerDiagnostics(state: ControlState) {
-    val owner = state.owner
+internal fun ControlOwnerDiagnostics(integration: IntegrationState) {
+    val owner = integration.owner
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         owner.holder?.let { Tagged(ControlWayTags.HOLDER) { OwnerHolderGroup(it) } }
 

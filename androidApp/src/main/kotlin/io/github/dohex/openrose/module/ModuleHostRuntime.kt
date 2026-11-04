@@ -16,10 +16,10 @@ import io.github.dohex.openrose.AndroidControlTransport
 import io.github.dohex.openrose.bridge.AndroidCallerAuthority
 import io.github.dohex.openrose.bridge.BridgeWire
 import io.github.dohex.openrose.bridge.HostEndpoint
-import io.github.dohex.openrose.core.HostConfiguration
-import io.github.dohex.openrose.core.HostFacts
+import io.github.dohex.openrose.androidintegration.HostConfiguration
+import io.github.dohex.openrose.androidintegration.HostFacts
 import io.github.dohex.openrose.core.LocalControlRuntime
-import io.github.dohex.openrose.core.ModuleControlHost
+import io.github.dohex.openrose.androidintegration.ModuleControlHost
 import io.github.dohex.openrose.core.UserSettings
 import io.github.dohex.openrose.core.UserSettingsCodec
 import io.github.dohex.openrose.readPlatformState

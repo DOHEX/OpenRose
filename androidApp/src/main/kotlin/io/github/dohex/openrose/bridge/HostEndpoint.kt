@@ -8,36 +8,36 @@ import android.os.Bundle
 import android.os.IBinder
 import android.os.Process
 import android.util.Log
-import io.github.dohex.openrose.core.BridgeIpcState
-import io.github.dohex.openrose.core.CallerAuthority
-import io.github.dohex.openrose.core.CallerIdentity
-import io.github.dohex.openrose.core.ClientRole
+import io.github.dohex.openrose.androidintegration.BridgeIpcState
+import io.github.dohex.openrose.androidintegration.CallerAuthority
+import io.github.dohex.openrose.androidintegration.CallerIdentity
+import io.github.dohex.openrose.androidintegration.ClientRole
 import io.github.dohex.openrose.core.ConnectionState
 import io.github.dohex.openrose.core.ControlWay
 import io.github.dohex.openrose.core.DeviceSetting
-import io.github.dohex.openrose.core.HostCallResult
-import io.github.dohex.openrose.core.HostCommand
-import io.github.dohex.openrose.core.HostFacts
-import io.github.dohex.openrose.core.HostOpenResult
-import io.github.dohex.openrose.core.HostReadResult
-import io.github.dohex.openrose.core.HostRejection
-import io.github.dohex.openrose.core.HostStatus
+import io.github.dohex.openrose.androidintegration.HostCallResult
+import io.github.dohex.openrose.androidintegration.HostCommand
+import io.github.dohex.openrose.androidintegration.HostFacts
+import io.github.dohex.openrose.androidintegration.HostOpenResult
+import io.github.dohex.openrose.androidintegration.HostReadResult
+import io.github.dohex.openrose.androidintegration.HostRejection
+import io.github.dohex.openrose.androidintegration.HostStatus
 import io.github.dohex.openrose.core.IslandMode
-import io.github.dohex.openrose.core.FusionEntry
-import io.github.dohex.openrose.core.FusionEntryDecision
-import io.github.dohex.openrose.core.ModuleControlHost
+import io.github.dohex.openrose.androidintegration.FusionEntry
+import io.github.dohex.openrose.androidintegration.FusionEntryDecision
+import io.github.dohex.openrose.androidintegration.ModuleControlHost
 import io.github.dohex.openrose.core.OperationResult
-import io.github.dohex.openrose.core.OwnerGeneration
+import io.github.dohex.openrose.androidintegration.OwnerGeneration
 import io.github.dohex.openrose.core.SessionReference
-import io.github.dohex.openrose.core.SessionSnapshotResult
-import io.github.dohex.openrose.core.SystemEndpointDiagnostics
+import io.github.dohex.openrose.androidintegration.SessionSnapshotResult
+import io.github.dohex.openrose.androidintegration.SystemEndpointDiagnostics
 import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.dohex.openrose.core.transport.DeviceId
-import io.github.dohex.openrose.core.wire.HostWire
-import io.github.dohex.openrose.core.wire.WireFormatException
-import io.github.dohex.openrose.core.wire.asStr
-import io.github.dohex.openrose.core.wire.parseWire
-import io.github.dohex.openrose.core.wire.render
+import io.github.dohex.openrose.androidintegration.wire.HostWire
+import io.github.dohex.openrose.androidintegration.wire.WireFormatException
+import io.github.dohex.openrose.androidintegration.wire.asStr
+import io.github.dohex.openrose.androidintegration.wire.parseWire
+import io.github.dohex.openrose.androidintegration.wire.render
 import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -118,7 +118,7 @@ internal class HostEndpoint(
         }
         scope.launch {
             host.ownerView.collect { view ->
-                val prompt = view?.state?.presentation?.connectionPrompt
+                val prompt = view?.presentation?.connectionPrompt
                 if (prompt?.mode == IslandMode.OFFICIAL && synchronized(lock) { leases.values.none { it.target == BridgeTarget.XIAOMI_BLUETOOTH } }) {
                     facts.update { it.copy(presentation = it.presentation +
                         (BridgePresentationWire.OFFICIAL_CONNECTION to "UNAVAILABLE · official_target_not_connected")) }

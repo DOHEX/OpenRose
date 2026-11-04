@@ -14,5 +14,8 @@ plugins {
 tasks.register("offlineCheck") {
     group = "verification"
     description = "Run hardware-independent checks (add --offline after dependencies are cached)."
-    dependsOn(":core:jvmTest", ":sharedUI:jvmTest", ":desktopApp:compileKotlin", ":androidApp:compileDebugKotlin")
+    dependsOn(
+        ":core:jvmTest", ":androidIntegration:jvmTest", ":sharedUI:jvmTest",
+        ":desktopApp:compileKotlin", ":androidApp:compileDebugKotlin",
+    )
 }

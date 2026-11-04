@@ -42,7 +42,7 @@ class ControlSessionTargetedConnectionTest {
         var targetObservedImmediately: DeviceCandidate? = null
         backgroundScope.launch(start = CoroutineStart.UNDISPATCHED) {
             val launchJob = launch(start = CoroutineStart.UNDISPATCHED) {
-                session.connectFromSystem(idA)
+                session.connect(idA, pinned = true)
             }
             targetObservedImmediately = session.state.value.connectionTarget
             launchJob.join()
@@ -74,7 +74,7 @@ class ControlSessionTargetedConnectionTest {
             scope = backgroundScope,
             timing = SessionTiming(i5WriteIntervalMillis = 0),
         )
-        val resultDenied = sessionWithPermissionDenied.connectFromSystem(idA)
+        val resultDenied = sessionWithPermissionDenied.connect(idA, pinned = true)
         val failureDenied = assertIs<OperationResult.Failure>(resultDenied)
         assertEquals(ControlErrorCode.PERMISSION_REQUIRED, failureDenied.error.code)
         assertEquals(idA, sessionWithPermissionDenied.state.value.connectionTarget?.deviceId)
@@ -89,7 +89,7 @@ class ControlSessionTargetedConnectionTest {
             scope = backgroundScope,
             timing = SessionTiming(i5WriteIntervalMillis = 0),
         )
-        val resultUnsupported = session.connectFromSystem(unknownId)
+        val resultUnsupported = session.connect(unknownId, pinned = true)
         val failureUnsupported = assertIs<OperationResult.Failure>(resultUnsupported)
         assertEquals(ControlErrorCode.UNSUPPORTED, failureUnsupported.error.code)
         assertEquals(unknownId, session.state.value.connectionTarget?.deviceId)
@@ -127,7 +127,7 @@ class ControlSessionTargetedConnectionTest {
             timing = SessionTiming(connectTimeoutMillis = 100, queryTimeoutMillis = 50, i5WriteIntervalMillis = 0),
         )
 
-        val result = session.connectFromSystem(idA)
+        val result = session.connect(idA, pinned = true)
         val failure = assertIs<OperationResult.Failure>(result)
         assertEquals(ControlErrorCode.TIMEOUT, failure.error.code)
         assertEquals(ConnectionState.Disconnected, session.state.value.connection)
@@ -166,13 +166,13 @@ class ControlSessionTargetedConnectionTest {
 
         try {
             // In-flight reuse: first call suspends at connectGate
-            val firstAttempt = async { session.connectFromSystem(idA) }
+            val firstAttempt = async { session.connect(idA, pinned = true) }
             runCurrent()
             assertEquals(ConnectionPhase.DISCOVERING, (session.state.value.connection as? ConnectionState.Connecting)?.phase)
             assertEquals(1, transport.connectCalls)
 
             // Second call while in-flight: reuses in-flight attempt without extra connect call
-            val secondAttempt = async { session.connectFromSystem(idA) }
+            val secondAttempt = async { session.connect(idA, pinned = true) }
             runCurrent()
             assertEquals(1, transport.connectCalls)
 
@@ -187,7 +187,7 @@ class ControlSessionTargetedConnectionTest {
             assertEquals(1, transport.connectCalls)
 
             // Ready reuse: third call when already Connected
-            val thirdResult = session.connectFromSystem(idA)
+            val thirdResult = session.connect(idA, pinned = true)
             assertEquals(OperationResult.Success, thirdResult)
             assertIs<ConnectionState.Connected>(session.state.value.connection)
             assertEquals(1, transport.connectCalls)
@@ -213,15 +213,15 @@ class ControlSessionTargetedConnectionTest {
         )
 
         // Connect to A
-        val resA = session.connectFromSystem(idA)
+        val resA = session.connect(idA, pinned = true)
         assertEquals(OperationResult.Success, resA)
         assertEquals(idA, (session.state.value.connection as ConnectionState.Connected).deviceId)
         assertEquals(candidateA, session.state.value.connectionTarget)
         val connA = transport.openConnections[0]
         assertFalse(connA.closed)
 
-        // Switch to B via connectFromSystem
-        val resB = session.connectFromSystem(idB)
+        // Switch to B via a pinned connection
+        val resB = session.connect(idB, pinned = true)
         assertEquals(OperationResult.Success, resB)
         assertTrue(connA.closed) // Old connection to A was closed
         assertEquals(idB, (session.state.value.connection as ConnectionState.Connected).deviceId)
@@ -260,9 +260,9 @@ class ControlSessionTargetedConnectionTest {
             transport.audioDeviceFlow.emit(idB)
             runCurrent()
 
-            // User explicitly targets A via connectFromSystem while B lookup is suspended.
+            // User explicitly targets A via a pinned connection while B lookup is suspended.
             // A is already recognized in bondedDevices, so it connects without delay.
-            val targetResult = session.connectFromSystem(idA)
+            val targetResult = session.connect(idA, pinned = true)
             assertEquals(OperationResult.Success, targetResult)
             val connected = assertIs<ConnectionState.Connected>(session.state.value.connection)
             assertEquals(idA, connected.deviceId)
@@ -306,13 +306,13 @@ class ControlSessionTargetedConnectionTest {
 
         try {
             // Start connect to A; suspends at gateA
-            val attemptA = async { session.connectFromSystem(idA) }
+            val attemptA = async { session.connect(idA, pinned = true) }
             runCurrent()
             assertEquals(idA, (session.state.value.connection as? ConnectionState.Connecting)?.deviceId)
 
-            // Before A finishes, connectFromSystem for B is invoked with connectGate cleared
+            // Before A finishes, a pinned connection for B is requested with connectGate cleared
             transport.connectGate = null
-            val attemptB = async { session.connectFromSystem(idB) }
+            val attemptB = async { session.connect(idB, pinned = true) }
             runCurrent()
             advanceUntilIdle()
 
@@ -359,7 +359,7 @@ class ControlSessionTargetedConnectionTest {
         advanceUntilIdle()
 
         try {
-            val attemptA = async { session.connectFromSystem(idA) }
+            val attemptA = async { session.connect(idA, pinned = true) }
             runCurrent()
             assertEquals(idA, (session.state.value.connection as? ConnectionState.Connecting)?.deviceId)
 
@@ -399,7 +399,7 @@ class ControlSessionTargetedConnectionTest {
         )
 
         // Connect to A
-        session.connectFromSystem(idA)
+        session.connect(idA, pinned = true)
         assertEquals(idA, session.state.value.connectionTarget?.deviceId)
 
         // Manual connect to B replaces pin and connects to B
@@ -448,7 +448,7 @@ class ControlSessionTargetedConnectionTest {
         assertEquals(idA, (session.state.value.connection as ConnectionState.Connected).deviceId)
 
         // System entry reuses ready A session
-        val result = session.connectFromSystem(idA)
+        val result = session.connect(idA, pinned = true)
         assertEquals(OperationResult.Success, result)
         assertEquals(1, transport.connectCalls)
         assertEquals(idA, session.state.value.connectionTarget?.deviceId)

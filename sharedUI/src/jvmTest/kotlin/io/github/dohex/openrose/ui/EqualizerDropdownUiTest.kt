@@ -159,7 +159,7 @@ class EqualizerDropdownUiTest {
         val writes = mutableListOf<Pair<DeviceSetting, FieldValue>>()
         runOpenRoseUiTest(420, 900) {
             setContent {
-                OpenRoseApp(state.value, {}, {}, {}, {}, {}, {}, {}, { setting, value -> writes += setting to value },
+                OpenRoseApp(state.value, null, {}, {}, {}, {}, {}, {}, {}, { setting, value -> writes += setting to value },
                     onAddDeviceConnect = { error("Unexpected connection") })
             }
             block(EqHarness(this, state, writes))

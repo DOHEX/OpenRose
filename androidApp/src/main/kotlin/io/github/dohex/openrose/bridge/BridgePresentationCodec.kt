@@ -1,7 +1,7 @@
 package io.github.dohex.openrose.bridge
 
 import android.os.Bundle
-import io.github.dohex.openrose.core.SystemPresentationState
+import io.github.dohex.openrose.androidintegration.SystemPresentationState
 
 /** Encoded from the same authority capture as the device fields in its enclosing snapshot. */
 internal fun SystemPresentationState.toBridgePresentation(): Bundle = Bundle().apply {

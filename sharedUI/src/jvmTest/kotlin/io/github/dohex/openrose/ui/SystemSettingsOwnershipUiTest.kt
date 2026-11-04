@@ -2,16 +2,18 @@ package io.github.dohex.openrose.ui
 
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
+import io.github.dohex.openrose.androidintegration.IntegrationPlatformState
+import io.github.dohex.openrose.androidintegration.IntegrationState
+import io.github.dohex.openrose.androidintegration.ModuleAvailability
+import io.github.dohex.openrose.androidintegration.ModuleUnavailableCause
 import io.github.dohex.openrose.core.ControlState
 import io.github.dohex.openrose.core.HostPlatform
 import io.github.dohex.openrose.core.InterfaceStyle
 import io.github.dohex.openrose.core.IslandMode
-import io.github.dohex.openrose.core.ModuleAvailability
 import io.github.dohex.openrose.core.PermissionState
 import io.github.dohex.openrose.core.PlatformApplicability
 import io.github.dohex.openrose.core.PlatformState
 import io.github.dohex.openrose.core.TransportAvailability
-import io.github.dohex.openrose.core.ModuleUnavailableCause
 import io.github.dohex.openrose.core.UserSettings
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -208,18 +210,23 @@ class SystemSettingsOwnershipUiTest {
                 platform = PlatformState(
                     permission = PermissionState.GRANTED,
                     transport = TransportAvailability.Available,
-                    module = module,
                     hostPlatform = HostPlatform.ANDROID,
-                    systemIntegrationApplicability = PlatformApplicability.APPLICABLE,
                     controlTransportApplicability = PlatformApplicability.APPLICABLE,
                 ),
                 settings = settings,
+            ),
+        )
+        val integration = IntegrationState(
+            platform = IntegrationPlatformState(
+                module = module,
+                systemIntegrationApplicability = PlatformApplicability.APPLICABLE,
             ),
         )
         val settingWrites = mutableListOf<Pair<io.github.dohex.openrose.core.DeviceSetting, io.github.dohex.openrose.core.protocol.FieldValue>>()
         setContent {
             OpenRoseApp(
                 state = state.value,
+                integration = integration,
                 onSettingsChange = { nextSettings ->
                     settingsChanges += nextSettings
                     state.value = state.value.copy(settings = nextSettings)

@@ -30,6 +30,7 @@ android {
     }
 }
 dependencies {
+    implementation(projects.androidIntegration)
     implementation(projects.sharedUI)
     implementation(libs.activity.compose)
     compileOnly(libs.libxposed.api)

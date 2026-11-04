@@ -11,10 +11,10 @@ import android.content.IntentSender
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.annotation.RequiresApi
-import io.github.dohex.openrose.core.CompanionAssociation
-import io.github.dohex.openrose.core.PresenceObservation
-import io.github.dohex.openrose.core.WakeBand
-import io.github.dohex.openrose.core.WakeFacts
+import io.github.dohex.openrose.androidintegration.CompanionAssociation
+import io.github.dohex.openrose.androidintegration.PresenceObservation
+import io.github.dohex.openrose.androidintegration.WakeBand
+import io.github.dohex.openrose.androidintegration.WakeFacts
 import java.util.regex.Pattern
 
 /**

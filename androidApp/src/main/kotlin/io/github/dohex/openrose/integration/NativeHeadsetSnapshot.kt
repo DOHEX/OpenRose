@@ -3,7 +3,7 @@ package io.github.dohex.openrose.integration
 import android.os.Bundle
 import android.os.SystemClock
 import io.github.dohex.openrose.bridge.BridgeWire
-import io.github.dohex.openrose.core.SystemRequestGate
+import io.github.dohex.openrose.androidintegration.SystemRequestGate
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.FieldReading
 import io.github.dohex.openrose.core.protocol.FieldValue

@@ -2,6 +2,9 @@
 
 package io.github.dohex.openrose.ui
 
+import io.github.dohex.openrose.androidintegration.IntegrationPlatformState
+import io.github.dohex.openrose.androidintegration.IntegrationState
+import io.github.dohex.openrose.androidintegration.ModuleAvailability
 import io.github.dohex.openrose.core.*
 import kotlinx.coroutines.CompletableDeferred
 import kotlin.test.Test
@@ -68,13 +71,12 @@ class ScopeRestartUiTest {
             platform = PlatformState(
                 permission = PermissionState.GRANTED,
                 transport = TransportAvailability.Available,
-                module = ModuleAvailability.NotEnabled,
                 hostPlatform = host,
             ),
             settings = UserSettings(interfaceStyle = style, pageTransition = PageTransition.NONE),
         )
         setContent {
-            OpenRoseApp(state, {}, {}, {}, {}, {}, {}, {}, { _, _ -> },
+            OpenRoseApp(state, IntegrationState(platform = IntegrationPlatformState(module = ModuleAvailability.NotEnabled)), {}, {}, {}, {}, {}, {}, {}, { _, _ -> },
                 onAddDeviceConnect = { error("unexpected connection") },
                 onRestartIntegrationScopes = restart)
         }

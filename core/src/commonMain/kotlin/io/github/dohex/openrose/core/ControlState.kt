@@ -11,16 +11,10 @@ import io.github.dohex.openrose.core.transport.TransportSelection
 data class PlatformState(
     val permission: PermissionState,
     val transport: TransportAvailability = TransportAvailability.Unavailable("平台传输尚未实现"),
-    val module: ModuleAvailability = ModuleAvailability.Unavailable("尚未检测系统模块"),
-    val bridge: SystemBridgeDiagnostics? = null,
-    /** The host identity is a platform fact, separate from the current module or transport state. */
+    /** The host identity is a platform fact, separate from the transport state. */
     val hostPlatform: HostPlatform = HostPlatform.UNKNOWN,
-    /** Whether HyperOS system integration applies on this host, independent of integration readiness. */
-    val systemIntegrationApplicability: PlatformApplicability = PlatformApplicability.UNKNOWN,
     /** Whether this host has an implemented control transport where a transport preference has effect. */
     val controlTransportApplicability: PlatformApplicability = PlatformApplicability.UNKNOWN,
-    /** Facts about the ordinary background-control service, separate from the saved intent in settings. */
-    val backgroundService: BackgroundServiceFacts = BackgroundServiceFacts(),
     /**
      * True once the saved user settings are restored after first unlock. Until then the runtime
      * observes audio connections but starts no automatic control, and the connection that
@@ -40,34 +34,6 @@ sealed interface TransportAvailability {
     data object Available : TransportAvailability
     data object Disabled : TransportAvailability
     data class Unavailable(val reason: String) : TransportAvailability
-}
-
-sealed interface ModuleAvailability {
-    data object Available : ModuleAvailability
-    data object NotEnabled : ModuleAvailability
-    /** [reason] is for display; [cause] is what a surface may branch on, null when no next step is known. */
-    data class Unavailable(val reason: String, val cause: ModuleUnavailableCause? = null) : ModuleAvailability
-
-    /** Authorised and reachable, but the host stopped answering; unlike [Unavailable] a process that is merely absent is not meant. */
-    data object Unresponsive : ModuleAvailability
-}
-
-/** Why the system module cannot act, where the application can tell the user what to do about it. */
-enum class ModuleUnavailableCause {
-    /** No Xposed framework service has reached the application. */
-    FRAMEWORK_MISSING,
-
-    /** The framework service speaks an API older than the module needs. */
-    FRAMEWORK_OUTDATED,
-
-    /** No module host answered where the module should have loaded it. */
-    HOST_NOT_FOUND,
-
-    /** The host refused this application's authorisation. */
-    AUTHORIZATION_REFUSED,
-
-    /** A working link to the host ended. */
-    LINK_LOST,
 }
 
 enum class ConnectionPhase { CONNECTING, DISCOVERING, SUBSCRIBING, INITIALIZING, READY }
@@ -153,17 +119,8 @@ data class DeviceState(
     val classicAddress: String? = null,
 )
 
-/** Opaque reference to the device session a caller is allowed to inspect. */
+/** Opaque reference to one device session; a caller holding one may address that session and no other. */
 data class SessionReference(val deviceId: DeviceId, val sessionId: Long)
-
-/** A defensive read of the state for one specific control session. */
-sealed interface SessionSnapshotResult {
-    data class Available(
-        val device: DeviceState,
-        val presentation: SystemPresentationState = SystemPresentationState(),
-    ) : SessionSnapshotResult
-    data class Failure(val error: ControlError) : SessionSnapshotResult
-}
 
 data class ControlState(
     val platform: PlatformState,
@@ -178,19 +135,17 @@ data class ControlState(
     val settingOperations: List<SettingOperation> = emptyList(),
     val transportSelection: TransportSelection? = null,
     val connectionRecovery: ConnectionRecovery? = null,
-    val presentation: SystemPresentationState = SystemPresentationState(),
     val connectionTarget: DeviceCandidate? = null,
-    /** Selected control way, whether its owner is ready, and who actually holds the session. */
-    val owner: OwnerState = OwnerState(),
 ) {
-    /** Derived from the saved intent plus platform facts; a saved preference alone is never "ready". */
-    val backgroundControl: BackgroundControlStatus get() = deriveBackgroundControl()
-
-    /** Whether unattended revival after process loss or restart is actually prepared, never implied by the saved intent. */
-    val backgroundRecovery: BackgroundRecovery get() = deriveBackgroundRecovery()
-
-    /** Whether a trigger may start the background service now; false for disabled, locked, or permission-less states. */
-    val mayStartBackgroundService: Boolean get() = deriveMayStartBackgroundService()
+    /** The ready device session, present only while the connection and the device state agree on it. */
+    val readySession: SessionReference?
+        get() {
+            val connected = connection as? ConnectionState.Connected ?: return null
+            val current = device ?: return null
+            if (current.deviceId != connected.deviceId || current.sessionId != connected.sessionId ||
+                current.profile != connected.profile) return null
+            return SessionReference(current.deviceId, current.sessionId)
+        }
 }
 
 data class ConnectionRecovery(

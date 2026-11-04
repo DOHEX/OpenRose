@@ -1,9 +1,9 @@
 package io.github.dohex.openrose.bridge
 
 import android.util.Log
-import io.github.dohex.openrose.core.ModuleAvailability
-import io.github.dohex.openrose.core.ModuleUnavailableCause
-import io.github.dohex.openrose.core.SystemBridgeDiagnostics
+import io.github.dohex.openrose.androidintegration.ModuleAvailability
+import io.github.dohex.openrose.androidintegration.ModuleUnavailableCause
+import io.github.dohex.openrose.androidintegration.SystemBridgeDiagnostics
 import io.github.dohex.openrose.core.UserSettings
 import io.github.dohex.openrose.core.UserSettingsCodec
 import io.github.libxposed.service.XposedService

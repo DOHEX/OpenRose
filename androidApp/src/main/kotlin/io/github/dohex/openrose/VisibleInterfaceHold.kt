@@ -3,8 +3,8 @@ package io.github.dohex.openrose
 import android.app.Activity
 import android.app.Application
 import android.os.Bundle
-import io.github.dohex.openrose.core.OrdinarySessionHold
-import io.github.dohex.openrose.core.SwitchingControlRuntime
+import io.github.dohex.openrose.androidintegration.OrdinarySessionHold
+import io.github.dohex.openrose.androidintegration.SwitchingControlRuntime
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay

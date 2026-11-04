@@ -27,6 +27,9 @@ import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.v2.runDesktopComposeUiTest
 import androidx.compose.ui.unit.IntSize
+import io.github.dohex.openrose.androidintegration.IntegrationPlatformState
+import io.github.dohex.openrose.androidintegration.IntegrationState
+import io.github.dohex.openrose.androidintegration.ModuleAvailability
 import io.github.dohex.openrose.core.*
 import io.github.dohex.openrose.core.protocol.*
 import io.github.dohex.openrose.core.transport.DeviceId
@@ -96,6 +99,7 @@ internal class OpenRoseUiTestScene(private val test: DesktopComposeUiTest) {
 internal class OpenRoseAppHarness(
     scene: OpenRoseUiTestScene,
     val state: MutableState<ControlState>,
+    val integration: MutableState<IntegrationState>,
     val settingsChanges: List<UserSettings>,
     val settingWrites: List<Pair<DeviceSetting, FieldValue>>,
     val connectRequests: List<DeviceId>,
@@ -106,11 +110,13 @@ internal class OpenRoseAppHarness(
 
 internal fun withOpenRoseAppHarness(
     initialState: ControlState,
+    initialIntegration: IntegrationState = androidIntegration,
     width: Int = 420,
     height: Int = 900,
     block: suspend (OpenRoseAppHarness) -> Unit,
 ) = runOpenRoseUiTest(width, height) {
     val state = mutableStateOf(initialState)
+    val integration = mutableStateOf(initialIntegration)
     val settingsChanges = mutableListOf<UserSettings>()
     val settingWrites = mutableListOf<Pair<DeviceSetting, FieldValue>>()
     val connectRequests = mutableListOf<DeviceId>()
@@ -118,6 +124,7 @@ internal fun withOpenRoseAppHarness(
     setContent {
         OpenRoseApp(
             state = state.value,
+            integration = integration.value,
             onSettingsChange = { next ->
                 settingsChanges += next
                 state.value = state.value.copy(settings = next)
@@ -132,15 +139,21 @@ internal fun withOpenRoseAppHarness(
             onAddDeviceConnect = { error("Unexpected add-device connection in this scenario") },
         )
     }
-    block(OpenRoseAppHarness(this, state, settingsChanges, settingWrites, connectRequests) { disconnectCount })
+    block(OpenRoseAppHarness(this, state, integration, settingsChanges, settingWrites, connectRequests) { disconnectCount })
 }
+
+/** Integration facts of an Android host whose system module is not enabled. */
+internal val androidIntegration = IntegrationState(
+    platform = IntegrationPlatformState(
+        module = ModuleAvailability.NotEnabled,
+        systemIntegrationApplicability = PlatformApplicability.APPLICABLE,
+    ),
+)
 
 private val androidPlatform = PlatformState(
     permission = PermissionState.GRANTED,
     transport = TransportAvailability.Available,
-    module = ModuleAvailability.NotEnabled,
     hostPlatform = HostPlatform.ANDROID,
-    systemIntegrationApplicability = PlatformApplicability.APPLICABLE,
     controlTransportApplicability = PlatformApplicability.APPLICABLE,
 )
 

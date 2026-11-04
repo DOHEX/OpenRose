@@ -191,6 +191,7 @@ CI 只在 Linux 上运行测试；Linux 产出 Android APK 与上述 4 种 Linux
 | 目录 | 内容 |
 | --- | --- |
 | `core/` | 型号能力、协议编解码、控制会话、统一控制入口（`ControlRuntime`）、状态与用户设置 |
+| `androidIntegration/` | Android 集成（纯 Kotlin，在 JVM 上测试）：控制方式与所有者交接、模块宿主与客户端、IPC 编码、系统入口、系统呈现（超级岛、焦点通知、连接提示）、融合设备中心映射与后台控制状态 |
 | `sharedUI/` | 共享界面、Miuix / Material 3 组件与界面测试 |
 | `androidApp/` | Android 入口、BLE / SPP 传输、libxposed 模块与 HyperOS 系统桥接 |
 | `desktopApp/` | Windows / Linux 桌面入口、窗口与偏好设置 |

@@ -191,6 +191,7 @@ CI runs the tests on Linux only. Linux publishes the Android APK and the four Li
 | Directory | Contents |
 | --- | --- |
 | `core/` | Model capabilities, protocol codecs, control sessions, the unified control entry (`ControlRuntime`), state, and user settings |
+| `androidIntegration/` | Android integration (pure Kotlin, tested on the JVM): control way and owner handoff, module host and client, IPC encoding, system entries, system presentation (island, focus notification, connection prompt), fusion device center mapping, and background control state |
 | `sharedUI/` | Shared UI, Miuix / Material 3 components, and UI tests |
 | `androidApp/` | Android entry point, BLE / SPP transports, libxposed module, and HyperOS system bridge |
 | `desktopApp/` | Windows / Linux desktop entry point, windows, and preferences |

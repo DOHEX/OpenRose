@@ -4,25 +4,27 @@ package io.github.dohex.openrose.ui
 
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
-import io.github.dohex.openrose.core.BackgroundControlBlock
-import io.github.dohex.openrose.core.BackgroundServiceFact
-import io.github.dohex.openrose.core.BackgroundServiceFacts
-import io.github.dohex.openrose.core.CompanionAssociation
+import io.github.dohex.openrose.androidintegration.BackgroundControlBlock
+import io.github.dohex.openrose.androidintegration.BackgroundServiceFact
+import io.github.dohex.openrose.androidintegration.BackgroundServiceFacts
+import io.github.dohex.openrose.androidintegration.CompanionAssociation
+import io.github.dohex.openrose.androidintegration.IntegrationPlatformState
+import io.github.dohex.openrose.androidintegration.IntegrationState
+import io.github.dohex.openrose.androidintegration.OwnerReadiness
+import io.github.dohex.openrose.androidintegration.OwnerState
+import io.github.dohex.openrose.androidintegration.PresenceObservation
+import io.github.dohex.openrose.androidintegration.RunningNotification
+import io.github.dohex.openrose.androidintegration.WakeBand
+import io.github.dohex.openrose.androidintegration.WakeFacts
 import io.github.dohex.openrose.core.ControlState
 import io.github.dohex.openrose.core.ControlWay
 import io.github.dohex.openrose.core.HostPlatform
 import io.github.dohex.openrose.core.InterfaceStyle
-import io.github.dohex.openrose.core.OwnerReadiness
-import io.github.dohex.openrose.core.OwnerState
 import io.github.dohex.openrose.core.PermissionState
 import io.github.dohex.openrose.core.PlatformApplicability
 import io.github.dohex.openrose.core.PlatformState
-import io.github.dohex.openrose.core.PresenceObservation
-import io.github.dohex.openrose.core.RunningNotification
 import io.github.dohex.openrose.core.TransportAvailability
 import io.github.dohex.openrose.core.UserSettings
-import io.github.dohex.openrose.core.WakeBand
-import io.github.dohex.openrose.core.WakeFacts
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -46,7 +48,7 @@ class BackgroundControlUiTest {
                 assertTrue(harness.hasTag(BackgroundControlTags.STATUS_NOT_RUNNING), "saved intent is not ready in $style")
                 assertFalse(harness.hasTag(BackgroundControlTags.STATUS_RUNNING), "saving never reads as running in $style")
 
-                harness.update { it.copy(platform = it.platform.copy(backgroundService = BackgroundServiceFacts(BackgroundServiceFact.Running))) }
+                harness.updateIntegration { it.copy(platform = it.platform.copy(backgroundService = BackgroundServiceFacts(BackgroundServiceFact.Running))) }
                 harness.render()
                 assertTrue(harness.hasTag(BackgroundControlTags.STATUS_RUNNING), "platform fact shows running in $style")
                 assertFalse(harness.hasTag(BackgroundControlTags.STATUS_NOT_RUNNING))
@@ -85,7 +87,7 @@ class BackgroundControlUiTest {
             withHarness(style, settings = UserSettings(interfaceStyle = style, backgroundControlEnabled = true)) { harness ->
                 harness.render()
                 harness.clickTab("设置")
-                harness.update {
+                harness.updateIntegration {
                     it.copy(platform = it.platform.copy(backgroundService = BackgroundServiceFacts(
                         BackgroundServiceFact.StartRejected(BackgroundControlBlock.BACKGROUND_START_RESTRICTED),
                     )))
@@ -96,7 +98,7 @@ class BackgroundControlUiTest {
                     "restriction is shown in $style",
                 )
 
-                harness.update {
+                harness.updateIntegration {
                     it.copy(platform = it.platform.copy(backgroundService = BackgroundServiceFacts(
                         BackgroundServiceFact.Running, RunningNotification.HIDDEN,
                     )))
@@ -107,7 +109,7 @@ class BackgroundControlUiTest {
                 harness.render()
                 assertEquals(
                     RunningNotification.VISIBLE,
-                    harness.state.value.platform.backgroundService.notification,
+                    harness.integration.value.platform.backgroundService.notification,
                     "the request reaches the host in $style",
                 )
                 assertFalse(harness.hasTag(BackgroundControlTags.NOTIFICATION_HIDDEN), "the disclosure ends once the host reports it visible in $style")
@@ -122,7 +124,7 @@ class BackgroundControlUiTest {
             withHarness(style, settings = UserSettings(interfaceStyle = style, backgroundControlEnabled = true)) { harness ->
                 harness.render()
                 harness.clickTab("设置")
-                harness.update {
+                harness.updateIntegration {
                     it.copy(platform = it.platform.copy(backgroundService = BackgroundServiceFacts(
                         wake = WakeFacts(WakeBand.ANDROID_14_PLUS, CompanionAssociation.MISSING, PresenceObservation.NOT_OBSERVING),
                     )))
@@ -135,7 +137,7 @@ class BackgroundControlUiTest {
                 harness.render()
                 assertEquals(
                     CompanionAssociation.ACTIVE,
-                    harness.state.value.platform.backgroundService.wake.association,
+                    harness.integration.value.platform.backgroundService.wake.association,
                     "the association request reaches the host in $style",
                 )
                 assertTrue(harness.hasTag(BackgroundControlTags.RECOVERY_ARMED), "completed prerequisites are reported in $style")
@@ -152,7 +154,7 @@ class BackgroundControlUiTest {
         withHarness(InterfaceStyle.MIUIX, settings = UserSettings(backgroundControlEnabled = true)) { harness ->
             harness.render()
             harness.clickTab("设置")
-            harness.update {
+            harness.updateIntegration {
                 it.copy(platform = it.platform.copy(backgroundService = BackgroundServiceFacts(wake = WakeFacts(WakeBand.ANDROID_8_11))))
             }
             harness.render()
@@ -175,13 +177,13 @@ class BackgroundControlUiTest {
             ) { harness ->
                 harness.render()
                 harness.clickTab("设置")
-                harness.update { it.copy(platform = it.platform.copy(backgroundService = armed)) }
+                harness.updateIntegration { it.copy(platform = it.platform.copy(backgroundService = armed)) }
                 harness.render()
                 assertFalse(harness.hasTag(BackgroundControlTags.RECOVERY_ARMED), "module control is not ordinary recovery in $style")
                 assertFalse(harness.hasTagWithPrefix(BackgroundControlTags.STATUS_PREFIX), "background control is not in force under module control in $style")
                 assertTrue(harness.state.value.settings.backgroundControlEnabled, "the saved intent is kept in $style")
 
-                harness.update { it.copy(owner = OwnerState(selected = ControlWay.ORDINARY, readiness = OwnerReadiness.Ready)) }
+                harness.updateIntegration { it.copy(owner = OwnerState(selected = ControlWay.ORDINARY, readiness = OwnerReadiness.Ready)) }
                 harness.render()
                 assertTrue(harness.hasTag(BackgroundControlTags.RECOVERY_ARMED), "the same facts arm recovery under ordinary control in $style")
             }
@@ -214,17 +216,22 @@ class BackgroundControlUiTest {
                     permission = permission,
                     transport = TransportAvailability.Available,
                     hostPlatform = host,
-                    systemIntegrationApplicability = PlatformApplicability.NOT_APPLICABLE,
                     controlTransportApplicability = PlatformApplicability.APPLICABLE,
                 ),
                 settings = settings,
+            ),
+        )
+        val integration = mutableStateOf(
+            IntegrationState(
+                platform = IntegrationPlatformState(systemIntegrationApplicability = PlatformApplicability.NOT_APPLICABLE),
                 owner = owner,
             ),
         )
-        val fake = FakeBackgroundHost(state)
+        val fake = FakeBackgroundHost(state, integration)
         setContent {
             OpenRoseApp(
                 state = state.value,
+                integration = integration.value,
                 onSettingsChange = { next -> state.value = state.value.copy(settings = next) },
                 onRequestPermission = fake::grantBluetoothPermission,
                 onRequestNotificationPermission = fake::showRunningNotification,
@@ -239,11 +246,14 @@ class BackgroundControlUiTest {
                 onAddDeviceConnect = { error("Unexpected add-device connection in this scenario") },
             )
         }
-        block(Harness(this, state, fake))
+        block(Harness(this, state, integration, fake))
     }
 
     /** A host that answers each request the way the platform would, so tests read the resulting facts. */
-    private class FakeBackgroundHost(private val state: MutableState<ControlState>) {
+    private class FakeBackgroundHost(
+        private val state: MutableState<ControlState>,
+        private val integration: MutableState<IntegrationState>,
+    ) {
         var appSettingsShown = false
             private set
 
@@ -262,16 +272,17 @@ class BackgroundControlUiTest {
         }
 
         private fun updateService(transform: (BackgroundServiceFacts) -> BackgroundServiceFacts) {
-            val platform = state.value.platform
-            state.value = state.value.copy(platform = platform.copy(backgroundService = transform(platform.backgroundService)))
+            val platform = integration.value.platform
+            integration.value = integration.value.copy(platform = platform.copy(backgroundService = transform(platform.backgroundService)))
         }
     }
 
     private class Harness(
         scene: OpenRoseUiTestScene,
         val state: MutableState<ControlState>,
+        val integration: MutableState<IntegrationState>,
         val host: FakeBackgroundHost,
     ) : OpenRoseUiTestHarness(scene) {
-        fun update(transform: (ControlState) -> ControlState) { state.value = transform(state.value) }
+        fun updateIntegration(transform: (IntegrationState) -> IntegrationState) { integration.value = transform(integration.value) }
     }
 }

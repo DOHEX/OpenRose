@@ -17,7 +17,6 @@ class ControlSessionTest {
             initialPlatformState = PlatformState(
                 permission = PermissionState.NOT_REQUIRED,
                 transport = TransportAvailability.Unavailable("Linux transport is not implemented"),
-                module = ModuleAvailability.Unavailable("System integration is Android only"),
             ),
         )
 
@@ -27,10 +26,6 @@ class ControlSessionTest {
         assertEquals(
             TransportAvailability.Unavailable("Linux transport is not implemented"),
             state.platform.transport,
-        )
-        assertEquals(
-            ModuleAvailability.Unavailable("System integration is Android only"),
-            state.platform.module,
         )
     }
 
@@ -92,7 +87,6 @@ class ControlSessionTest {
             PlatformState(
                 permission = PermissionState.DENIED,
                 transport = TransportAvailability.Disabled,
-                module = ModuleAvailability.NotEnabled,
             ),
         )
         observation.join()
@@ -100,7 +94,6 @@ class ControlSessionTest {
         assertEquals(PermissionState.REQUIRED, states.first().platform.permission)
         assertEquals(PermissionState.DENIED, states.last().platform.permission)
         assertEquals(TransportAvailability.Disabled, states.last().platform.transport)
-        assertEquals(ModuleAvailability.NotEnabled, states.last().platform.module)
         assertEquals(ConnectionState.Disconnected, states.last().connection)
     }
 

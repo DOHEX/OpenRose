@@ -11,7 +11,9 @@ import io.github.dohex.openrose.core.DeviceCapabilities
 import io.github.dohex.openrose.core.DeviceSetting
 import io.github.dohex.openrose.core.DeviceState
 import io.github.dohex.openrose.core.InterfaceStyle
-import io.github.dohex.openrose.core.ModuleAvailability
+import io.github.dohex.openrose.androidintegration.IntegrationPlatformState
+import io.github.dohex.openrose.androidintegration.IntegrationState
+import io.github.dohex.openrose.androidintegration.ModuleAvailability
 import io.github.dohex.openrose.core.PermissionState
 import io.github.dohex.openrose.core.PlatformState
 import io.github.dohex.openrose.core.SettingOperation
@@ -291,6 +293,7 @@ class OpenRoseFeedbackUiTest {
         setContent {
             OpenRoseApp(
                 state = state.value,
+                integration = IntegrationState(platform = IntegrationPlatformState(module = ModuleAvailability.NotEnabled)),
                 onSettingsChange = { settings -> state.value = state.value.copy(settings = settings) },
                 onRequestPermission = {},
                 onOpenSystemSettings = {},
@@ -327,7 +330,6 @@ class OpenRoseFeedbackUiTest {
             platform = PlatformState(
                 permission = PermissionState.GRANTED,
                 transport = TransportAvailability.Available,
-                module = ModuleAvailability.NotEnabled,
             ),
             connection = ConnectionState.Connected(deviceId, SESSION_ID, profile, ConnectionPhase.READY),
             settings = UserSettings(interfaceStyle = style),

@@ -18,7 +18,6 @@ import dev.nucleusframework.window.styling.LocalTitleBarStyle
 import io.github.dohex.openrose.core.Appearance
 import io.github.dohex.openrose.core.LocalControlRuntime
 import io.github.dohex.openrose.core.HostPlatform
-import io.github.dohex.openrose.core.ModuleAvailability
 import io.github.dohex.openrose.core.PermissionState
 import io.github.dohex.openrose.core.PlatformApplicability
 import io.github.dohex.openrose.core.PlatformState
@@ -42,9 +41,7 @@ fun main() {
         initialPlatformState = PlatformState(
             permission = PermissionState.NOT_REQUIRED,
             transport = TransportAvailability.Unavailable("$platform 控制传输尚未实现"),
-            module = ModuleAvailability.Unavailable("HyperOS 系统集成仅适用于 Android"),
             hostPlatform = hostPlatform,
-            systemIntegrationApplicability = PlatformApplicability.NOT_APPLICABLE,
             controlTransportApplicability = PlatformApplicability.NOT_APPLICABLE,
         ),
     )
