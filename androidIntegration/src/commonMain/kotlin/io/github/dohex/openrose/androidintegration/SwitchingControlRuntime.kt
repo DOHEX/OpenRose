@@ -1,6 +1,5 @@
 package io.github.dohex.openrose.androidintegration
 
-import io.github.dohex.openrose.core.ConnectionState
 import io.github.dohex.openrose.core.ControlError
 import io.github.dohex.openrose.core.ControlErrorCode
 import io.github.dohex.openrose.core.ControlRuntime
@@ -70,7 +69,7 @@ class OrdinarySessionHold internal constructor(private val onRelease: () -> Unit
  * built in this process, or the module host reached through [moduleLink]. A switch first releases the
  * old owner (with proof) and only then establishes the new one, so there is never a second owner.
  * [state] is the owner's control state; [integration] says who that owner is, how the system module
- * stands and what the system presentation of the ordinary session shows.
+ * stands and what the current owner's system presentation shows.
  */
 class SwitchingControlRuntime(
     initialPlatformState: PlatformState,
@@ -374,7 +373,9 @@ class SwitchingControlRuntime(
             // While module control is chosen the module/bridge facts are the live host link, not a guess.
             platform = if (record.selected == ControlWay.MODULE) moduleFacts(integrationPlatform, view) else integrationPlatform,
             owner = ownerState(view),
-            presentation = ordinary?.runtime?.presentation?.value ?: SystemPresentationState(),
+            presentation = ordinary?.runtime?.presentation?.value
+                ?: if (record.selected == ControlWay.MODULE && view is ModuleView.Active) view.frame.presentation
+                else SystemPresentationState(),
         )
     }
 
@@ -465,18 +466,23 @@ class SwitchingControlRuntime(
         return record.selected != ControlWay.MODULE || module(HostCommand.Disconnect) == OperationResult.Success
     }
 
-    override suspend fun set(setting: DeviceSetting, value: FieldValue, session: SessionReference?) =
-        route({ it.set(setting, value, session) }, HostCommand.Set(session, setting, value))
+    override suspend fun set(setting: DeviceSetting, value: FieldValue, expectedSessionId: Long?): OperationResult {
+        if (expectedSessionId == null) {
+            return route({ it.set(setting, value) }, HostCommand.Set(null, setting, value))
+        }
+        val reference = state.value.readySession?.takeIf { it.sessionId == expectedSessionId }
+            ?: return OperationResult.Failure(ControlError(ControlErrorCode.DISCONNECTED, "请求的设备会话已结束或已被替换"))
+        return set(reference, setting, value)
+    }
 
     override suspend fun set(reference: SessionReference, setting: DeviceSetting, value: FieldValue) =
-        set(setting, value, reference)
+        route({ it.set(reference, setting, value) }, HostCommand.Set(reference, setting, value))
 
     override fun readSession(reference: SessionReference): SessionSnapshotResult {
         ordinary?.let { return it.runtime.readSession(reference) }
-        val device = (client.view.value as? ModuleView.Active)?.frame?.state?.device
-        val connected = (client.view.value as? ModuleView.Active)?.frame?.state?.connection as? ConnectionState.Connected
-        return if (device != null && connected != null && device.deviceId == reference.deviceId && device.sessionId == reference.sessionId) {
-            SessionSnapshotResult.Available(device)
+        val frame = (client.view.value as? ModuleView.Active)?.frame
+        return if (record.selected == ControlWay.MODULE && frame?.state?.readySession == reference) {
+            SessionSnapshotResult.Available(requireNotNull(frame.state.device), frame.presentation)
         } else {
             SessionSnapshotResult.Failure(ControlError(ControlErrorCode.NOT_READY, "设备会话已结束或尚未就绪"))
         }

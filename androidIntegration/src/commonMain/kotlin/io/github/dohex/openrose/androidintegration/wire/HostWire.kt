@@ -3,6 +3,7 @@ package io.github.dohex.openrose.androidintegration.wire
 import io.github.dohex.openrose.androidintegration.AcquireResult
 import io.github.dohex.openrose.androidintegration.BridgeIpcState
 import io.github.dohex.openrose.androidintegration.ClientRole
+import io.github.dohex.openrose.androidintegration.ConnectionPrompt
 import io.github.dohex.openrose.androidintegration.HostCallResult
 import io.github.dohex.openrose.androidintegration.HostCommand
 import io.github.dohex.openrose.androidintegration.HostFacts
@@ -13,10 +14,14 @@ import io.github.dohex.openrose.androidintegration.HostRejection
 import io.github.dohex.openrose.androidintegration.HostStatus
 import io.github.dohex.openrose.androidintegration.OwnerGeneration
 import io.github.dohex.openrose.androidintegration.OwnerHolder
+import io.github.dohex.openrose.androidintegration.PresentationReading
 import io.github.dohex.openrose.androidintegration.ReleaseReceipt
 import io.github.dohex.openrose.androidintegration.ReleaseResult
 import io.github.dohex.openrose.androidintegration.SwitchRequest
+import io.github.dohex.openrose.androidintegration.SystemBatteryState
 import io.github.dohex.openrose.androidintegration.SystemEndpointDiagnostics
+import io.github.dohex.openrose.androidintegration.SystemNoiseState
+import io.github.dohex.openrose.androidintegration.SystemPresentationState
 import io.github.dohex.openrose.core.ControlWay
 import io.github.dohex.openrose.core.DeviceSetting
 import io.github.dohex.openrose.core.UserSettings
@@ -131,6 +136,7 @@ object HostWire {
     fun encode(frame: HostFrame): Wire = obj(
         "generation" to encode(frame.generation), "holder" to encode(frame.holder),
         "owned" to ControlWire.encodeOwned(frame.platform, frame.state),
+        "presentation" to encodePresentation(frame.presentation),
         "facts" to encode(frame.facts),
     )
 
@@ -139,8 +145,65 @@ object HostWire {
         val owned = ControlWire.decodeOwned(node.field("owned"))
         return HostFrame(
             decodeGeneration(node.field("generation")), decodeHolder(node.field("holder")), owned.platform, owned.state,
-            decodeFacts(node.field("facts")),
+            decodePresentation(node.field("presentation")), decodeFacts(node.field("facts")),
         )
+    }
+
+    private fun encodePresentation(state: SystemPresentationState): Wire = obj(
+        "reference" to state.reference?.let(ControlWire::encode), "tag" to state.notificationTag?.let(::str),
+        "mode" to Wire.Str(state.islandMode.name), "focus" to bool(state.focusNotificationEnabled),
+        "islandFields" to bool(state.allowIslandFields),
+        "battery" to state.battery?.let { battery ->
+            obj("left" to encodeReading(battery.left, ::num), "right" to encodeReading(battery.right, ::num),
+                "case" to encodeReading(battery.case, ::num))
+        },
+        "noise" to state.noise?.let { noise ->
+            obj("mode" to encodeReading(noise.mode, ::str), "anc" to encodeReading(noise.ancLevel, ::num),
+                "transparency" to encodeReading(noise.transparencyLevel, ::num))
+        },
+        "actions" to arr(state.actions.map { Wire.Str(it.name) }),
+        "prompt" to state.connectionPrompt?.let { prompt ->
+            obj("id" to str(prompt.id), "mode" to Wire.Str(prompt.mode.name), "reference" to ControlWire.encode(prompt.reference),
+                "claimed" to bool(prompt.claimed), "duration" to num(prompt.durationMillis))
+        },
+    )
+
+    private fun decodePresentation(wire: Wire): SystemPresentationState = wire.asObj().let { node ->
+        SystemPresentationState(
+            reference = node.optional("reference")?.let(ControlWire::decodeReference),
+            notificationTag = node.optional("tag")?.asStr(), islandMode = node.field("mode").asEnum(),
+            focusNotificationEnabled = node.bool("focus"), allowIslandFields = node.bool("islandFields"),
+            battery = node.optional("battery")?.asObj()?.let {
+                SystemBatteryState(decodeReading(it.field("left"), Wire::asInt), decodeReading(it.field("right"), Wire::asInt),
+                    decodeReading(it.field("case"), Wire::asInt))
+            },
+            noise = node.optional("noise")?.asObj()?.let {
+                SystemNoiseState(decodeReading(it.field("mode"), Wire::asStr), decodeReading(it.field("anc"), Wire::asInt),
+                    decodeReading(it.field("transparency"), Wire::asInt))
+            },
+            actions = node.arr("actions").map { it.asEnum<DeviceSetting>() }.toSet(),
+            connectionPrompt = node.optional("prompt")?.asObj()?.let {
+                ConnectionPrompt(it.str("id"), it.field("mode").asEnum(), ControlWire.decodeReference(it.field("reference")),
+                    it.bool("claimed"), it.long("duration"))
+            },
+        )
+    }
+
+    private fun <T> encodeReading(reading: PresentationReading<T>, encode: (T) -> Wire): Wire = when (reading) {
+        PresentationReading.Loading -> obj("t" to str("loading"))
+        PresentationReading.Unknown -> obj("t" to str("unknown"))
+        PresentationReading.NotProvided -> obj("t" to str("none"))
+        is PresentationReading.Known -> obj("t" to str("known"), "v" to encode(reading.value))
+    }
+
+    private fun <T> decodeReading(wire: Wire, decode: (Wire) -> T): PresentationReading<T> = wire.asObj().let {
+        when (val kind = it.str("t")) {
+            "loading" -> PresentationReading.Loading
+            "unknown" -> PresentationReading.Unknown
+            "none" -> PresentationReading.NotProvided
+            "known" -> PresentationReading.Known(decode(it.field("v")))
+            else -> throw WireFormatException("未知呈现读数 $kind")
+        }
     }
 
     private fun encode(facts: HostFacts): Wire = obj(

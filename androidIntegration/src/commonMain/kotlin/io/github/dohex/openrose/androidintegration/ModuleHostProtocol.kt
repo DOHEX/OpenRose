@@ -153,6 +153,7 @@ data class HostFrame(
     val holder: OwnerHolder,
     val platform: HostPlatformFacts,
     val state: ControlState,
+    val presentation: SystemPresentationState,
     val facts: HostFacts = HostFacts(),
 )
 

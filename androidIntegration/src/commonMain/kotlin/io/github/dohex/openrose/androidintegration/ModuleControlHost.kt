@@ -232,10 +232,10 @@ class ModuleControlHost(
         if (lease == null || lease.role != ClientRole.APP || active == null) return callbackFlow { close(); awaitClose() }
         return callbackFlow {
             val collector = launch {
-                combine(active.runtime.state, facts) { state, reported ->
+                combine(active.runtime.state, active.runtime.presentation, facts) { state, presentation, reported ->
                     HostFrame(
                         active.generation, active.holder, HostPlatformFacts(state.platform.permission, state.platform.transport),
-                        state, reported,
+                        state, presentation, reported,
                     )
                 }.collect { send(it) }
             }
@@ -336,7 +336,10 @@ class ModuleControlHost(
             if (runtime.disconnect()) OperationResult.Success
             else OperationResult.Failure(ControlError(ControlErrorCode.FAILED, "无法确认控制连接已关闭")),
         )
-        is HostCommand.Set -> HostCallResult.Operation(runtime.set(command.setting, command.value, command.reference))
+        is HostCommand.Set -> HostCallResult.Operation(
+            if (command.reference == null) runtime.set(command.setting, command.value)
+            else runtime.set(command.reference, command.setting, command.value),
+        )
         is HostCommand.UpdateSettings -> {
             // A preference change never moves the owner; only an explicit handoff changes the way.
             val settings = command.settings.copy(controlWay = ControlWay.MODULE)
