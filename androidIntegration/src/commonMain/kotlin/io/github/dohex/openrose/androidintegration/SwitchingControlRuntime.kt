@@ -465,11 +465,11 @@ class SwitchingControlRuntime(
         return record.selected != ControlWay.MODULE || module(HostCommand.Disconnect) == OperationResult.Success
     }
 
-    override suspend fun set(setting: DeviceSetting, value: FieldValue) =
-        route({ it.set(setting, value) }, HostCommand.Set(null, setting, value))
+    override suspend fun set(setting: DeviceSetting, value: FieldValue, session: SessionReference?) =
+        route({ it.set(setting, value, session) }, HostCommand.Set(session, setting, value))
 
     override suspend fun set(reference: SessionReference, setting: DeviceSetting, value: FieldValue) =
-        route({ it.set(reference, setting, value) }, HostCommand.Set(reference, setting, value))
+        set(setting, value, reference)
 
     override fun readSession(reference: SessionReference): SessionSnapshotResult {
         ordinary?.let { return it.runtime.readSession(reference) }

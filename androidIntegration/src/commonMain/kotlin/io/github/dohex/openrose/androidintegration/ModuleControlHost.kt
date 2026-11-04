@@ -336,9 +336,7 @@ class ModuleControlHost(
             if (runtime.disconnect()) OperationResult.Success
             else OperationResult.Failure(ControlError(ControlErrorCode.FAILED, "无法确认控制连接已关闭")),
         )
-        is HostCommand.Set -> HostCallResult.Operation(
-            command.reference?.let { runtime.set(it, command.setting, command.value) } ?: runtime.set(command.setting, command.value),
-        )
+        is HostCommand.Set -> HostCallResult.Operation(runtime.set(command.setting, command.value, command.reference))
         is HostCommand.UpdateSettings -> {
             // A preference change never moves the owner; only an explicit handoff changes the way.
             val settings = command.settings.copy(controlWay = ControlWay.MODULE)

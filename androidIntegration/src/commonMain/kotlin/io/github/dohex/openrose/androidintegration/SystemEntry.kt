@@ -100,10 +100,8 @@ class SystemEntryRuntime(
         return SessionSnapshotResult.Available(requireNotNull(captured.device).detached(), present(captured).detached())
     }
 
-    override suspend fun set(reference: SessionReference, setting: DeviceSetting, value: FieldValue): OperationResult {
-        if (control.state.value.readySession != reference) return OperationResult.Failure(STALE_REFERENCE)
-        return control.set(setting, value)
-    }
+    override suspend fun set(reference: SessionReference, setting: DeviceSetting, value: FieldValue): OperationResult =
+        control.set(setting, value, reference)
 
     override suspend fun claimConnectionPrompt(reference: SessionReference, promptId: String): Boolean {
         advance()

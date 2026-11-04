@@ -397,10 +397,19 @@ internal class ControlSession(
     }
 
     /** A caller owns its wait; the platform session owns the queued operation. */
-    override suspend fun set(setting: DeviceSetting, value: FieldValue): OperationResult {
+    override suspend fun set(setting: DeviceSetting, value: FieldValue, session: SessionReference?): OperationResult {
         val snapshot = value.snapshot()
         val request = lifecycle.withLock {
             val attempt = active
+            if (session != null) {
+                // Checked under the same lock as admission, so a session replaced meanwhile never receives the write.
+                val connection = state.value.connection as? ConnectionState.Connected
+                if (attempt == null || connection == null || attempt.id != session.sessionId ||
+                    attempt.candidate.deviceId != session.deviceId || connection.deviceId != session.deviceId ||
+                    connection.sessionId != session.sessionId) {
+                    return OperationResult.Failure(ControlError(ControlErrorCode.DISCONNECTED, "请求的设备会话已结束或已被替换"))
+                }
+            }
             platformError()?.let { return failure(it) }
             if (attempt == null || state.value.connection !is ConnectionState.Connected) {
                 return failure(ControlError(ControlErrorCode.NOT_READY, "设备尚未就绪"))

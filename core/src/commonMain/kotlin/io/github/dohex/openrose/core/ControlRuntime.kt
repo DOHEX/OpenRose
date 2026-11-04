@@ -41,8 +41,12 @@ interface ControlRuntime {
      */
     suspend fun disconnect(): Boolean
 
-    /** A setting succeeds only after the earphones confirm it, never when the write is accepted. */
-    suspend fun set(setting: DeviceSetting, value: FieldValue): OperationResult
+    /**
+     * A setting succeeds only after the earphones confirm it, never when the write is accepted. With [session]
+     * the setting is admitted only while that session is still the current one; a replaced session or another
+     * device is refused without writing anything.
+     */
+    suspend fun set(setting: DeviceSetting, value: FieldValue, session: SessionReference? = null): OperationResult
 
     fun updateSettings(settings: UserSettings)
     fun updatePlatformState(platformState: PlatformState)
