@@ -21,6 +21,7 @@ import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.ExperimentalForInheritanceCoroutinesApi
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.FlowCollector
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -86,6 +87,16 @@ class SystemEntryRuntime(
         // Each session's connection event is consumed when it happens, whether or not anyone is reading.
         scope.launch(start = CoroutineStart.UNDISPATCHED) { control.state.collect { advance() } }
     }
+
+    /** Control and system presentation from one capture, so a replacement never mixes two sessions. */
+    internal fun view(generation: OwnerGeneration): OwnerView {
+        val captured = control.state.value
+        return OwnerView(generation, captured, present(captured))
+    }
+
+    /** Prompt claims and expiry wake readers without combining independently derived session views. */
+    internal fun views(generation: OwnerGeneration): Flow<OwnerView> =
+        combine(control.state, prompts) { _, _ -> view(generation) }.distinctUntilChanged()
 
     override suspend fun connectFromSystem(deviceId: DeviceId): OperationResult = control.connect(deviceId, pinned = true)
 

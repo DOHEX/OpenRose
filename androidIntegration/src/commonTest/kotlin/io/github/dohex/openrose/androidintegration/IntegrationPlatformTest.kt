@@ -15,6 +15,7 @@ import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -90,5 +91,37 @@ class IntegrationPlatformTest {
         runCurrent()
         assertNull(runtime.integration.value.presentation.reference)
         assertNull(runtime.integration.value.presentation.connectionPrompt)
+    }
+
+    @Test
+    fun moduleSessionSnapshotsNeverMixPresentationAcrossReconnects() = runTest {
+        val rig = OwnerRig(this, initial = OwnerRecord(ControlWay.MODULE))
+        rig.bootHost()
+        val runtime = rig.newRuntime()
+        runCurrent()
+        val snapshots = mutableListOf<SessionSnapshotResult.Available>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            runtime.state.collect { state ->
+                state.readySession?.let { reference ->
+                    val snapshot = runtime.readSession(reference)
+                    if (snapshot is SessionSnapshotResult.Available) snapshots += snapshot
+                }
+            }
+        }
+
+        assertEquals(OperationResult.Success, runtime.connectFromSystem(rig.earphones.deviceId))
+        runCurrent()
+        val first = assertNotNull(runtime.state.value.readySession)
+        assertTrue(runtime.disconnect())
+        runCurrent()
+        assertEquals(OperationResult.Success, runtime.connectFromSystem(rig.earphones.deviceId))
+        runCurrent()
+        val second = assertNotNull(runtime.state.value.readySession)
+
+        assertEquals(setOf(first, second), snapshots.map { SessionReference(it.device.deviceId, it.device.sessionId) }.toSet())
+        snapshots.forEach { snapshot ->
+            assertEquals(SessionReference(snapshot.device.deviceId, snapshot.device.sessionId), snapshot.presentation.reference)
+        }
+        assertTrue(runtime.disconnect())
     }
 }

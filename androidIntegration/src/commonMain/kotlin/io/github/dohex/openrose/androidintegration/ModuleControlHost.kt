@@ -204,7 +204,7 @@ class ModuleControlHost(
     fun view(caller: CallerIdentity, leaseId: String): OwnerView? {
         leaseFor(caller, leaseId) ?: return null
         val active = owner.value ?: return null
-        return OwnerView(active.generation, active.runtime.state.value, active.runtime.presentation.value)
+        return active.runtime.view(active.generation)
     }
 
     /**
@@ -232,10 +232,10 @@ class ModuleControlHost(
         if (lease == null || lease.role != ClientRole.APP || active == null) return callbackFlow { close(); awaitClose() }
         return callbackFlow {
             val collector = launch {
-                combine(active.runtime.state, active.runtime.presentation, facts) { state, presentation, reported ->
+                combine(active.runtime.views(active.generation), facts) { view, reported ->
                     HostFrame(
-                        active.generation, active.holder, HostPlatformFacts(state.platform.permission, state.platform.transport),
-                        state, presentation, reported,
+                        view.generation, active.holder, HostPlatformFacts(view.state.platform.permission, view.state.platform.transport),
+                        view.state, view.presentation, reported,
                     )
                 }.collect { send(it) }
             }
@@ -407,6 +407,3 @@ class ModuleControlHost(
     }
 }
 
-/** The owner's state together with the presentation derived from it, so a presentation change wakes readers too. */
-private fun SystemEntryRuntime.views(generation: OwnerGeneration): Flow<OwnerView> =
-    combine(state, presentation) { state, presentation -> OwnerView(generation, state, presentation) }
