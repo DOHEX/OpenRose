@@ -163,9 +163,9 @@ internal fun PreferencesPage(
                         enabledFor = { true },
                         onToggle = { trigger ->
                             val triggers = if (trigger in settings.islandTriggers) {
-                                settings.islandTriggers - trigger
+                                settings.islandTriggers.remove(trigger)
                             } else {
-                                settings.islandTriggers + trigger
+                                settings.islandTriggers.add(trigger)
                             }
                             saveSystemPreference(settings.copy(islandTriggers = triggers))
                         },

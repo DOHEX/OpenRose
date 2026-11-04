@@ -1,5 +1,6 @@
 package io.github.dohex.openrose.core
 
+import kotlinx.collections.immutable.persistentSetOf
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.FieldReading
 import io.github.dohex.openrose.core.protocol.FieldValue
@@ -333,8 +334,8 @@ class ControlSessionDeviceControlsTest {
                 assertEquals(ControlErrorCode.UNSUPPORTED, assertIs<OperationResult.Failure>(session.set(DeviceSetting.HEARING_PROTECTION, FieldValue.Number(1))).error.code)
                 assertEquals(ControlErrorCode.UNSUPPORTED, assertIs<OperationResult.Failure>(session.set(DeviceSetting.PROMPT_VOLUME, FieldValue.Number(0))).error.code)
                 assertEquals(ControlErrorCode.INVALID_ARGUMENT, assertIs<OperationResult.Failure>(session.set(DeviceSetting.PROMPT_VOLUME, FieldValue.Number(6))).error.code)
-                assertEquals(emptySet(), session.state.value.device?.capabilities?.gainLevels)
-                assertEquals(setOf(1, 2, 3, 4, 5), session.state.value.device?.capabilities?.promptVolumeLevels)
+                assertEquals(persistentSetOf(), session.state.value.device?.capabilities?.gainLevels)
+                assertEquals(persistentSetOf(1, 2, 3, 4, 5), session.state.value.device?.capabilities?.promptVolumeLevels)
             }
             assertEquals(count, link.writes.size)
             assertTrue(session.state.value.settingOperations.isEmpty())

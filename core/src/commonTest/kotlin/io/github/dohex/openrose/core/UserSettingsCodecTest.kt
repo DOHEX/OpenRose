@@ -1,5 +1,7 @@
 package io.github.dohex.openrose.core
 
+import kotlinx.collections.immutable.persistentSetOf
+
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -12,7 +14,7 @@ class UserSettingsCodecTest {
                 appearance = Appearance.SYSTEM,
                 islandMode = IslandMode.OFFICIAL,
                 focusNotificationEnabled = true,
-                islandTriggers = setOf(IslandTrigger.CONNECTION),
+                islandTriggers = persistentSetOf(IslandTrigger.CONNECTION),
             ),
             UserSettingsCodec.decode(emptyMap()),
         )
@@ -115,7 +117,7 @@ class UserSettingsCodecTest {
                 appearance = Appearance.DARK,
                 islandMode = IslandMode.OFF,
                 focusNotificationEnabled = false,
-                islandTriggers = emptySet(),
+                islandTriggers = persistentSetOf(),
             ),
             session.state.value.settings,
         )

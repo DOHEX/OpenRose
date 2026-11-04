@@ -5,10 +5,8 @@ import io.github.dohex.openrose.core.ControlError
 import io.github.dohex.openrose.core.ControlErrorCode
 import io.github.dohex.openrose.core.ControlRuntime
 import io.github.dohex.openrose.core.ControlState
-import io.github.dohex.openrose.core.DeviceCapabilities
 import io.github.dohex.openrose.core.DeviceSetting
 import io.github.dohex.openrose.core.DeviceState
-import io.github.dohex.openrose.core.NoiseLevelCapabilities
 import io.github.dohex.openrose.core.OperationResult
 import io.github.dohex.openrose.core.SessionReference
 import io.github.dohex.openrose.core.UserSettings
@@ -108,7 +106,7 @@ class SystemEntryRuntime(
         val current = captured.readySession
             ?: return SessionSnapshotResult.Failure(ControlError(ControlErrorCode.NOT_READY, "当前设备状态与连接会话不一致"))
         if (reference != current) return SessionSnapshotResult.Failure(STALE_REFERENCE)
-        return SessionSnapshotResult.Available(requireNotNull(captured.device).detached(), present(captured).detached())
+        return SessionSnapshotResult.Available(requireNotNull(captured.device), present(captured).detached())
     }
 
     override suspend fun set(reference: SessionReference, setting: DeviceSetting, value: FieldValue): OperationResult {
@@ -201,50 +199,3 @@ private fun DeviceState.hasTrustedEarBattery(): Boolean = listOf(DeviceField.LEF
     value?.value in 0..100
 }
 
-/** A copy that shares no collection with the session's own state, so a consumer cannot change it. */
-private fun DeviceState.detached() = copy(
-    capabilities = capabilities.detached(),
-    fields = fields.mapValues { (_, reading) -> reading.detached() },
-    fieldErrors = fieldErrors.toMap(),
-    rawNotifications = rawNotifications.toList(),
-    unknownNotifications = unknownNotifications.toList(),
-    warnings = warnings.toList(),
-)
-
-private fun FieldReading.detached(): FieldReading = when (this) {
-    FieldReading.Loading -> this
-    is FieldReading.NotProvided -> copy()
-    is FieldReading.Unknown -> copy()
-    is FieldReading.Known -> copy(value = value.detached())
-}
-
-private fun FieldValue.detached(): FieldValue = when (this) {
-    is FieldValue.NoiseCycle -> copy(flags = flags.toMap())
-    is FieldValue.IntegerList -> copy(values = values.toList())
-    is FieldValue.Firmware -> copy(parts = parts.toList())
-    is FieldValue.TouchKeys -> copy(bindings = bindings.toList())
-    else -> this
-}
-
-private fun DeviceCapabilities.detached() = copy(
-    readableFields = readableFields.toSet(),
-    writableSettings = writableSettings.toSet(),
-    noiseControl = noiseControl?.let { noise ->
-        noise.copy(
-            modes = noise.modes.toSet(),
-            cycleModes = noise.cycleModes.toSet(),
-            ancLevel = noise.ancLevel?.detached(),
-            transparencyLevel = noise.transparencyLevel?.detached(),
-        )
-    },
-    equalizer = equalizer?.let { eq ->
-        eq.copy(presets = eq.presets.toSet(), custom = eq.custom?.let { it.copy(bandsHz = it.bandsHz.toList()) })
-    },
-    touchControl = touchControl?.let { it.copy(slots = it.slots.toSet(), actions = it.actions.toSet()) },
-    audioControl = audioControl?.let { it.copy(modes = it.modes.toSet()) },
-    promptVolumeLevels = promptVolumeLevels.toSet(),
-    gainLevels = gainLevels.toSet(),
-    hearingProtectionLevels = hearingProtectionLevels.toSet(),
-)
-
-private fun NoiseLevelCapabilities.detached() = copy(levels = levels.toSet(), visibleModes = visibleModes.toSet())

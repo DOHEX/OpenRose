@@ -1,5 +1,7 @@
 package io.github.dohex.openrose.androidintegration
 
+import kotlinx.collections.immutable.persistentSetOf
+
 import io.github.dohex.openrose.core.Appearance
 import io.github.dohex.openrose.core.ConnectionPhase
 import io.github.dohex.openrose.core.ConnectionState
@@ -145,14 +147,14 @@ class SystemPresentationTest {
     @Test
     fun anEmptyModuleTriggerSetDoesNotReplayTheConnectionAfterSettingsChange() = runTest {
         val transport = PresentationTransport(PresentationConnection(i5Replies))
-        val session = newSession(transport, UserSettings(islandMode = IslandMode.MODULE, islandTriggers = emptySet()))
+        val session = newSession(transport, UserSettings(islandMode = IslandMode.MODULE, islandTriggers = persistentSetOf()))
         connect(session, transport, DeviceId("i5"))
 
         assertNull(session.presentation.value.connectionPrompt)
         assertFalse(session.presentation.value.allowIslandFields)
         assertTrue(session.presentation.value.showStatusNotification)
 
-        session.updateSettings(session.state.value.settings.copy(islandTriggers = setOf(IslandTrigger.CONNECTION)))
+        session.updateSettings(session.state.value.settings.copy(islandTriggers = persistentSetOf(IslandTrigger.CONNECTION)))
         assertNull(session.presentation.value.connectionPrompt)
         assertTrue(session.presentation.value.allowIslandFields)
         session.disconnect()

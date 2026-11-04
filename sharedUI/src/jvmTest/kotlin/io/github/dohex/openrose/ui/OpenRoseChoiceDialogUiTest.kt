@@ -1,5 +1,8 @@
 package io.github.dohex.openrose.ui
 
+import kotlinx.collections.immutable.persistentMapOf
+import kotlinx.collections.immutable.persistentSetOf
+import kotlinx.collections.immutable.plus
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.semantics.Role
@@ -160,11 +163,11 @@ class OpenRoseChoiceDialogUiTest {
         val device = DeviceState(
             deviceId = id, sessionId = 42L, profile = profile,
             capabilities = DeviceCapabilities(
-                readableFields = setOf(DeviceField.PROMPT_VOLUME),
-                writableSettings = setOf(DeviceSetting.PROMPT_VOLUME),
-                promptVolumeLevels = setOf(0, 1, 2),
+                readableFields = persistentSetOf(DeviceField.PROMPT_VOLUME),
+                writableSettings = persistentSetOf(DeviceSetting.PROMPT_VOLUME),
+                promptVolumeLevels = persistentSetOf(0, 1, 2),
             ),
-            fields = mapOf(DeviceField.PROMPT_VOLUME to reading),
+            fields = persistentMapOf(DeviceField.PROMPT_VOLUME to reading),
         )
         val state = mutableStateOf(ControlState(
             platform = PlatformState(PermissionState.GRANTED, TransportAvailability.Available),

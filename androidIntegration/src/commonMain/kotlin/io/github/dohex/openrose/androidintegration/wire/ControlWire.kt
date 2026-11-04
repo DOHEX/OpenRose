@@ -34,6 +34,9 @@ import io.github.dohex.openrose.core.transport.TransportEndpoint
 import io.github.dohex.openrose.core.transport.TransportRecoveryReason
 import io.github.dohex.openrose.core.transport.TransportSelection
 import io.github.dohex.openrose.core.transport.TransportSelectionReason
+import kotlinx.collections.immutable.toPersistentList
+import kotlinx.collections.immutable.toPersistentMap
+import kotlinx.collections.immutable.toPersistentSet
 
 /** Facts about the host's own Bluetooth platform that the application mirrors, never re-derives. */
 data class HostPlatformFacts(val permission: PermissionState, val transport: TransportAvailability)
@@ -66,11 +69,11 @@ object ControlWire {
                 platform = io.github.dohex.openrose.core.PlatformState(PermissionState.NOT_REQUIRED),
                 connection = decodeConnection(node.field("connection")),
                 scan = decodeScan(node.field("scan")),
-                candidates = node.arr("candidates").map(::decodeCandidate),
-                bondedDevices = node.arr("bonded").map(::decodeCandidate),
+                candidates = node.arr("candidates").map(::decodeCandidate).toPersistentList(),
+                bondedDevices = node.arr("bonded").map(::decodeCandidate).toPersistentList(),
                 device = node.optional("device")?.let(::decodeDevice),
                 lastError = node.optional("error")?.let(::decodeError),
-                settingOperations = node.arr("operations").map(::decodeOperation),
+                settingOperations = node.arr("operations").map(::decodeOperation).toPersistentList(),
                 transportSelection = node.optional("selection")?.let(::decodeSelection),
                 connectionRecovery = node.optional("recovery")?.let(::decodeRecovery),
                 connectionTarget = node.optional("target")?.let(::decodeCandidate),
@@ -233,12 +236,12 @@ object ControlWire {
             profile = node.field("profile").asEnum(), capabilities = decodeCapabilities(node.field("capabilities")),
             fields = node.arr("fields").associate {
                 val entry = it.asObj(); entry.field("f").asEnum<DeviceField>() to decodeReading(entry.field("reading"))
-            },
+            }.toPersistentMap(),
             fieldErrors = node.arr("fieldErrors").associate {
                 val entry = it.asObj(); entry.field("f").asEnum<DeviceField>() to decodeError(entry.field("error"))
-            },
-            rawNotifications = node.arr("raw").map { it.asStr() }, unknownNotifications = node.arr("unknown").map { it.asStr() },
-            warnings = node.arr("warnings").map { it.asStr() }, classicAddress = node.optional("classic")?.asStr(),
+            }.toPersistentMap(),
+            rawNotifications = node.arr("raw").map { it.asStr() }.toPersistentList(), unknownNotifications = node.arr("unknown").map { it.asStr() }.toPersistentList(),
+            warnings = node.arr("warnings").map { it.asStr() }.toPersistentList(), classicAddress = node.optional("classic")?.asStr(),
         )
     }
 
@@ -261,22 +264,22 @@ object ControlWire {
 
     private fun decodeCapabilities(wire: Wire): DeviceCapabilities = wire.asObj().let { node ->
         DeviceCapabilities(
-            readableFields = node.arr("readable").map { it.asEnum<DeviceField>() }.toSet(),
-            writableSettings = node.arr("writable").map { it.asEnum<DeviceSetting>() }.toSet(),
+            readableFields = node.arr("readable").map { it.asEnum<DeviceField>() }.toPersistentSet(),
+            writableSettings = node.arr("writable").map { it.asEnum<DeviceSetting>() }.toPersistentSet(),
             noiseControl = node.optional("noise")?.let(::decodeNoise),
             equalizer = node.optional("equalizer")?.let(::decodeEqualizer),
             touchControl = node.optional("touch")?.asObj()?.let { touch ->
                 TouchControlCapabilities(
-                    touch.arr("slots").map { it.asObj().let { slot -> TouchSlot(slot.str("side"), slot.str("gesture")) } }.toSet(),
-                    touch.arr("actions").map { it.asStr() }.toSet(),
+                    touch.arr("slots").map { it.asObj().let { slot -> TouchSlot(slot.str("side"), slot.str("gesture")) } }.toPersistentSet(),
+                    touch.arr("actions").map { it.asStr() }.toPersistentSet(),
                 )
             },
             audioControl = node.optional("audio")?.asObj()?.let { audio ->
-                AudioControlCapabilities(audio.arr("modes").map { it.asStr() }.toSet(), audio.bool("coupled"))
+                AudioControlCapabilities(audio.arr("modes").map { it.asStr() }.toPersistentSet(), audio.bool("coupled"))
             },
-            promptVolumeLevels = node.arr("promptVolume").map { it.asInt() }.toSet(),
-            gainLevels = node.arr("gain").map { it.asInt() }.toSet(),
-            hearingProtectionLevels = node.arr("hearingProtection").map { it.asInt() }.toSet(),
+            promptVolumeLevels = node.arr("promptVolume").map { it.asInt() }.toPersistentSet(),
+            gainLevels = node.arr("gain").map { it.asInt() }.toPersistentSet(),
+            hearingProtectionLevels = node.arr("hearingProtection").map { it.asInt() }.toPersistentSet(),
         )
     }
 
@@ -290,12 +293,12 @@ object ControlWire {
         obj("levels" to arr(levels.levels.map(::num)), "modes" to arr(levels.visibleModes.map(::str)))
 
     private fun decodeLevels(wire: Wire): NoiseLevelCapabilities = wire.asObj().let {
-        NoiseLevelCapabilities(it.arr("levels").map { level -> level.asInt() }.toSet(), it.arr("modes").map { mode -> mode.asStr() }.toSet())
+        NoiseLevelCapabilities(it.arr("levels").map { level -> level.asInt() }.toPersistentSet(), it.arr("modes").map { mode -> mode.asStr() }.toPersistentSet())
     }
 
     private fun decodeNoise(wire: Wire): NoiseControlCapabilities = wire.asObj().let {
         NoiseControlCapabilities(
-            modes = it.arr("modes").map { mode -> mode.asStr() }.toSet(), cycleModes = it.arr("cycle").map { mode -> mode.asStr() }.toSet(),
+            modes = it.arr("modes").map { mode -> mode.asStr() }.toPersistentSet(), cycleModes = it.arr("cycle").map { mode -> mode.asStr() }.toPersistentSet(),
             ancLevel = it.optional("anc")?.let(::decodeLevels), transparencyLevel = it.optional("transparency")?.let(::decodeLevels),
             minimumCycleSelections = it.int("minimumCycle"),
         )
@@ -310,9 +313,9 @@ object ControlWire {
 
     private fun decodeEqualizer(wire: Wire): EqualizerCapabilities = wire.asObj().let { node ->
         EqualizerCapabilities(
-            node.arr("presets").map { it.asStr() }.toSet(),
+            node.arr("presets").map { it.asStr() }.toPersistentSet(),
             node.optional("custom")?.asObj()?.let { custom ->
-                CustomEqualizerCapabilities(custom.arr("bands").map { it.asInt() }, custom.int("min"), custom.int("max"))
+                CustomEqualizerCapabilities(custom.arr("bands").map { it.asInt() }.toPersistentList(), custom.int("min"), custom.int("max"))
             },
         )
     }
@@ -329,7 +332,7 @@ object ControlWire {
             id = node.long("id"), sessionId = node.long("session"), setting = node.field("setting").asEnum(),
             requestedValue = decodeValue(node.field("value")), stage = node.field("stage").asEnum<SettingStage>(),
             error = node.optional("error")?.let(::decodeError), writtenFrames = node.int("written"), totalFrames = node.int("total"),
-            confirmedFields = node.arr("confirmed").map { it.asEnum<DeviceField>() }.toSet(),
+            confirmedFields = node.arr("confirmed").map { it.asEnum<DeviceField>() }.toPersistentSet(),
         )
     }
 

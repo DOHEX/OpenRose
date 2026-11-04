@@ -2,6 +2,10 @@
 
 package io.github.dohex.openrose.ui
 
+import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.persistentMapOf
+import kotlinx.collections.immutable.persistentSetOf
+import kotlinx.collections.immutable.plus
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -104,7 +108,7 @@ class EqualizerDropdownUiTest {
                     harness.render()
                     assertFalse(harness.hasText("日系柔情 · HIFI"), "initializing in $style")
                 }
-                harness.state.value = ready.copy(settingOperations = listOf(SettingOperation(
+                harness.state.value = ready.copy(settingOperations = persistentListOf(SettingOperation(
                     id = 1, sessionId = 42L, setting = DeviceSetting.EQ,
                     requestedValue = FieldValue.Text("hifi"), stage = SettingStage.SUBMITTED,
                 )))
@@ -128,8 +132,8 @@ class EqualizerDropdownUiTest {
                 val device = requireNotNull(harness.state.value.device)
                 for (capabilities in listOf(
                     device.capabilities.copy(equalizer = null),
-                    device.capabilities.copy(equalizer = EqualizerCapabilities(emptySet())),
-                    device.capabilities.copy(writableSettings = emptySet()),
+                    device.capabilities.copy(equalizer = EqualizerCapabilities(persistentSetOf())),
+                    device.capabilities.copy(writableSettings = persistentSetOf()),
                 )) {
                     harness.state.value = harness.state.value.copy(device = device.copy(capabilities = capabilities))
                     harness.render()
@@ -148,9 +152,9 @@ class EqualizerDropdownUiTest {
         val id = DeviceId("eq-test")
         val firmware = FieldValue.Firmware(parts, parts.joinToString(""))
         val device = DeviceState(id, 42L, profile, DeviceCapabilities(
-            readableFields = setOf(DeviceField.EQ), writableSettings = setOf(DeviceSetting.EQ),
+            readableFields = persistentSetOf(DeviceField.EQ), writableSettings = persistentSetOf(DeviceSetting.EQ),
             equalizer = equalizerCapabilities(profile, firmware),
-        ), fields = mapOf(DeviceField.EQ to FieldReading.Known(FieldValue.Text("pop"), "00")))
+        ), fields = persistentMapOf(DeviceField.EQ to FieldReading.Known(FieldValue.Text("pop"), "00")))
         val state = mutableStateOf(ControlState(
             platform = PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
             connection = ConnectionState.Connected(id, 42L, profile, ConnectionPhase.READY),

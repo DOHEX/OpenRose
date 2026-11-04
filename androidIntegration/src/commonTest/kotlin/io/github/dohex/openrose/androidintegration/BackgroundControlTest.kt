@@ -1,5 +1,7 @@
 package io.github.dohex.openrose.androidintegration
 
+import kotlinx.collections.immutable.persistentSetOf
+
 import io.github.dohex.openrose.core.Appearance
 import io.github.dohex.openrose.core.BottomBarStyle
 import io.github.dohex.openrose.core.ConnectionPhase
@@ -70,7 +72,7 @@ class BackgroundControlTest {
                 appearance = Appearance.DARK,
                 islandMode = IslandMode.MODULE,
                 focusNotificationEnabled = false,
-                islandTriggers = emptySet(),
+                islandTriggers = persistentSetOf(),
                 forceBle = true,
                 pageTransition = PageTransition.FADE,
                 backgroundBlurEnabled = false,

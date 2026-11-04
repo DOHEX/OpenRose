@@ -1,5 +1,6 @@
 package io.github.dohex.openrose.ui
 
+import kotlinx.collections.immutable.persistentListOf
 import androidx.compose.ui.input.key.Key
 import io.github.dohex.openrose.core.*
 import io.github.dohex.openrose.core.transport.DeviceId
@@ -78,7 +79,7 @@ class AddDeviceLifecycleUiTest {
                 val deadline = harness.scanStartTimes.single() + 20_000
                 harness.advanceTimeBy(10_000)
                 harness.state.value = harness.state.value.copy(
-                    candidates = listOf(addDeviceCandidate.copy(rssi = -31)),
+                    candidates = persistentListOf(addDeviceCandidate.copy(rssi = -31)),
                     settings = harness.state.value.settings.copy(
                         interfaceStyle = if (style == InterfaceStyle.MIUIX) InterfaceStyle.MATERIAL3 else InterfaceStyle.MIUIX,
                     ),

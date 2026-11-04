@@ -14,6 +14,9 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Runnable
+import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
@@ -469,6 +472,49 @@ class ControlSessionTargetedConnectionTest {
         assertEquals(ConnectionState.Disconnected, session.state.value.connection)
         assertEquals(idA, session.state.value.connectionTarget?.deviceId)
         assertEquals(1, transport.connectCalls)
+    }
+
+    @Test
+    fun replacedAddCompletionKeepsNewAudioSessionBoundToAudioDisconnect() = runTest {
+        val id = DeviceId("bonded-i5")
+        val candidate = DeviceCandidate(id, "EarFree i5", null, ModelProfile.I5_ZT, "")
+        val transport = TargetedAudioTransport(bondedList = listOf(candidate))
+        val session = ControlSession(
+            PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
+            transport = transport,
+            scope = backgroundScope,
+            timing = SessionTiming(i5WriteIntervalMillis = 0),
+        )
+        runCurrent()
+
+        // Hold the add caller's continuation after its session-owned connection succeeds.
+        val addContinuations = ArrayDeque<Runnable>()
+        val addDispatcher = object : CoroutineDispatcher() {
+            override fun dispatch(context: CoroutineContext, block: Runnable) {
+                addContinuations.addLast(block)
+            }
+        }
+        val adding = async(addDispatcher) { session.connectForAddDevice(id) }
+        addContinuations.removeFirst().run()
+        runCurrent()
+        val original = assertIs<ConnectionState.Connected>(session.state.value.connection)
+        assertFalse(adding.isCompleted)
+
+        session.disconnect()
+        transport.audioDeviceFlow.emit(id)
+        runCurrent()
+        val replacement = assertIs<ConnectionState.Connected>(session.state.value.connection)
+        assertTrue(replacement.sessionId > original.sessionId)
+        assertTrue(transport.openConnections.first().closed)
+
+        addContinuations.removeFirst().run()
+        assertEquals(ControlErrorCode.DISCONNECTED, assertIs<OperationResult.Failure>(adding.await()).error.code)
+        assertEquals(replacement, session.state.value.connection)
+
+        transport.audioDeviceFlow.emit(null)
+        runCurrent()
+        assertEquals(ConnectionState.Disconnected, session.state.value.connection)
+        assertTrue(transport.openConnections.last().closed)
     }
 
     private class TargetedAudioTransport(

@@ -1,5 +1,8 @@
 package io.github.dohex.openrose.core
 
+import kotlinx.collections.immutable.PersistentSet
+import kotlinx.collections.immutable.persistentSetOf
+
 /** Component style is independent from light/dark appearance. */
 enum class InterfaceStyle {
     MIUIX,
@@ -60,7 +63,7 @@ data class UserSettings(
     val appearance: Appearance = Appearance.SYSTEM,
     val islandMode: IslandMode = IslandMode.OFFICIAL,
     val focusNotificationEnabled: Boolean = true,
-    val islandTriggers: Set<IslandTrigger> = setOf(IslandTrigger.CONNECTION),
+    val islandTriggers: PersistentSet<IslandTrigger> = persistentSetOf(IslandTrigger.CONNECTION),
     val forceBle: Boolean = false,
     val pageTransition: PageTransition = PageTransition.MIUIX_SPRING,
     val backgroundBlurEnabled: Boolean = true,

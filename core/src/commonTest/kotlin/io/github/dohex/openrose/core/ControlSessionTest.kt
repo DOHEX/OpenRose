@@ -1,5 +1,8 @@
 package io.github.dohex.openrose.core
 
+import kotlinx.collections.immutable.persistentSetOf
+import kotlinx.collections.immutable.toPersistentSet
+
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -65,7 +68,7 @@ class ControlSessionTest {
     fun anExplicitEmptyTriggerSetSurvivesLoadingAndFurtherSettingsChanges() {
         val session = ControlSession(
             initialPlatformState = PlatformState(permission = PermissionState.REQUIRED),
-            initialSettings = UserSettings(islandTriggers = emptySet()),
+            initialSettings = UserSettings(islandTriggers = persistentSetOf()),
         )
 
         assertEquals(emptySet(), session.state.value.settings.islandTriggers)
@@ -102,15 +105,15 @@ class ControlSessionTest {
         val triggers = mutableSetOf(IslandTrigger.CONNECTION)
         val session = ControlSession(
             initialPlatformState = PlatformState(permission = PermissionState.NOT_REQUIRED),
-            initialSettings = UserSettings(islandTriggers = triggers),
+            initialSettings = UserSettings(islandTriggers = triggers.toPersistentSet()),
         )
 
         triggers.clear()
         assertEquals(setOf(IslandTrigger.CONNECTION), session.state.value.settings.islandTriggers)
 
-        session.updateSettings(UserSettings(islandTriggers = emptySet()))
+        session.updateSettings(UserSettings(islandTriggers = persistentSetOf()))
         val updatedTriggers = mutableSetOf(IslandTrigger.CONNECTION)
-        session.updateSettings(UserSettings(islandTriggers = updatedTriggers))
+        session.updateSettings(UserSettings(islandTriggers = updatedTriggers.toPersistentSet()))
         updatedTriggers.clear()
         assertEquals(setOf(IslandTrigger.CONNECTION), session.state.value.settings.islandTriggers)
     }

@@ -1,5 +1,10 @@
 package io.github.dohex.openrose.ui
 
+import kotlinx.collections.immutable.persistentMapOf
+import kotlinx.collections.immutable.persistentSetOf
+import kotlinx.collections.immutable.plus
+import kotlinx.collections.immutable.toPersistentList
+import kotlinx.collections.immutable.toPersistentSet
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -123,7 +128,7 @@ class OpenRoseNavigationUiTest {
             setting = DeviceSetting.NOISE_MODE,
             requestedValue = FieldValue.Text("anc"),
             stage = SettingStage.CONFIRMED,
-            confirmedFields = setOf(DeviceField.NOISE_MODE),
+            confirmedFields = persistentSetOf(DeviceField.NOISE_MODE),
         )
         withHarness(
             width = 1200,
@@ -219,17 +224,17 @@ class OpenRoseNavigationUiTest {
             sessionId = SESSION_ID,
             profile = profile,
             capabilities = DeviceCapabilities(
-                readableFields = DeviceField.entries.toSet(),
-                writableSettings = DeviceSetting.entries.toSet(),
+                readableFields = DeviceField.entries.toPersistentSet(),
+                writableSettings = DeviceSetting.entries.toPersistentSet(),
                 noiseControl = noiseControlCapabilities(profile),
                 equalizer = equalizerCapabilities(profile),
                 touchControl = touchControlCapabilities(profile),
                 audioControl = audioControlCapabilities(profile),
                 promptVolumeLevels = promptVolumeLevels(profile),
-                gainLevels = setOf(0, 1, 2),
-                hearingProtectionLevels = (0..6).toSet(),
+                gainLevels = persistentSetOf(0, 1, 2),
+                hearingProtectionLevels = (0..6).toPersistentSet(),
             ),
-            fields = mapOf(
+            fields = persistentMapOf(
                 DeviceField.LEFT_BATTERY to FieldReading.Known(FieldValue.Number(86), "56"),
                 DeviceField.RIGHT_BATTERY to FieldReading.Known(FieldValue.Number(82), "52"),
                 DeviceField.CASE_BATTERY to FieldReading.Known(FieldValue.Number(67), "43"),
@@ -252,7 +257,7 @@ class OpenRoseNavigationUiTest {
             },
             settings = UserSettings(interfaceStyle = InterfaceStyle.MIUIX, appearance = Appearance.SYSTEM),
             device = device,
-            settingOperations = operations,
+            settingOperations = operations.toPersistentList(),
         )
     }
 

@@ -1,5 +1,8 @@
 package io.github.dohex.openrose.ui
 
+import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.persistentMapOf
+import kotlinx.collections.immutable.persistentSetOf
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.snapshotFlow
@@ -19,7 +22,7 @@ internal fun withAddDeviceHarness(
     initial: ControlState = ControlState(
         platform = PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
         settings = UserSettings(appearance = Appearance.LIGHT, interfaceStyle = style, pageTransition = PageTransition.NONE),
-        candidates = listOf(addDeviceCandidate),
+        candidates = persistentListOf(addDeviceCandidate),
     ),
     width: Int = 420,
     height: Int = 1000,
@@ -80,7 +83,7 @@ internal class AddDeviceUiTestHarness(
             scan = ScanState.Idle,
             lastError = null,
             connection = ConnectionState.Connecting(deviceId, sessionId, ConnectionPhase.CONNECTING),
-            device = DeviceState(deviceId, sessionId, profile, DeviceCapabilities(emptySet()), emptyMap()),
+            device = DeviceState(deviceId, sessionId, profile, DeviceCapabilities(persistentSetOf()), persistentMapOf()),
         )
     }
 

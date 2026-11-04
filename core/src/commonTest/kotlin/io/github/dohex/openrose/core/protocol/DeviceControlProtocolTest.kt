@@ -6,6 +6,7 @@ import io.github.dohex.openrose.core.TouchSlot
 import io.github.dohex.openrose.core.audioControlCapabilities
 import io.github.dohex.openrose.core.promptVolumeLevels
 import io.github.dohex.openrose.core.touchControlCapabilities
+import kotlinx.collections.immutable.persistentSetOf
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -25,8 +26,8 @@ class DeviceControlProtocolTest {
         assertEquals(slots, touchControlCapabilities(ModelProfile.I7_RS_V2).slots)
         assertEquals(i5Actions, touchControlCapabilities(ModelProfile.I5_ZT).actions)
         assertEquals(i5Actions + "game_mode", touchControlCapabilities(ModelProfile.I7_RS_V2).actions)
-        assertEquals(AudioControlCapabilities(setOf("aac_sbc", "ldac"), true), audioControlCapabilities(ModelProfile.I5_ZT))
-        assertEquals(AudioControlCapabilities(setOf("aac_sbc", "ldac", "lhdc", "lc3"), false), audioControlCapabilities(ModelProfile.I7_RS_V2))
+        assertEquals(AudioControlCapabilities(persistentSetOf("aac_sbc", "ldac"), true), audioControlCapabilities(ModelProfile.I5_ZT))
+        assertEquals(AudioControlCapabilities(persistentSetOf("aac_sbc", "ldac", "lhdc", "lc3"), false), audioControlCapabilities(ModelProfile.I7_RS_V2))
         assertEquals(setOf(1, 2, 3, 4, 5), promptVolumeLevels(ModelProfile.I5_ZT))
         assertEquals(setOf(1, 2, 3, 4, 5), promptVolumeLevels(ModelProfile.I7_RS_V2))
     }

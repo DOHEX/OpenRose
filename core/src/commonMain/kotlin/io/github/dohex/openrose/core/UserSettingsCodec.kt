@@ -1,5 +1,7 @@
 package io.github.dohex.openrose.core
 
+import kotlinx.collections.immutable.toPersistentSet
+
 /**
  * Storage format shared by platform-owned preferences stores. Missing values use product defaults;
  * an explicitly stored empty trigger value means no automatic triggers.
@@ -78,7 +80,7 @@ object UserSettingsCodec {
                     "connection" -> IslandTrigger.CONNECTION
                     else -> null
                 }
-            }?.toSet() ?: defaults.islandTriggers,
+            }?.toPersistentSet() ?: defaults.islandTriggers,
             pageTransition = when (values["page_transition"]) {
                 "miuix_spring" -> PageTransition.MIUIX_SPRING
                 "slide" -> PageTransition.SLIDE

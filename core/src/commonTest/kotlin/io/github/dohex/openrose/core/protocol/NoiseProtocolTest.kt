@@ -3,6 +3,7 @@ package io.github.dohex.openrose.core.protocol
 import io.github.dohex.openrose.core.DeviceSetting
 import io.github.dohex.openrose.core.NoiseLevelCapabilities
 import io.github.dohex.openrose.core.noiseControlCapabilities
+import kotlinx.collections.immutable.persistentSetOf
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -75,12 +76,12 @@ class NoiseProtocolTest {
     fun levelCapabilityCanRepresentDifferentRangesAndUnsupportedControls() {
         // The recovered CERAMICS-U config has ANC low/medium/high but only low/high transparency.
         val fixture = noiseControlCapabilities(ModelProfile.I5_ZT).copy(
-            ancLevel = NoiseLevelCapabilities(setOf(1, 3, 5), setOf("anc")),
-            transparencyLevel = NoiseLevelCapabilities(setOf(1, 5), setOf("transparency")),
+            ancLevel = NoiseLevelCapabilities(persistentSetOf(1, 3, 5), persistentSetOf("anc")),
+            transparencyLevel = NoiseLevelCapabilities(persistentSetOf(1, 5), persistentSetOf("transparency")),
         )
 
-        assertEquals(setOf(1, 3, 5), fixture.levelCapabilities(DeviceSetting.ANC_LEVEL)?.levels)
-        assertEquals(setOf(1, 5), fixture.levelCapabilities(DeviceSetting.TRANSPARENCY_LEVEL)?.levels)
+        assertEquals(persistentSetOf(1, 3, 5), fixture.levelCapabilities(DeviceSetting.ANC_LEVEL)?.levels)
+        assertEquals(persistentSetOf(1, 5), fixture.levelCapabilities(DeviceSetting.TRANSPARENCY_LEVEL)?.levels)
 
         val withoutAncLevels = fixture.copy(ancLevel = null)
         assertNull(withoutAncLevels.levelCapabilities(DeviceSetting.ANC_LEVEL))
@@ -88,7 +89,7 @@ class NoiseProtocolTest {
         assertNull(fixture.levelCapabilities(DeviceSetting.NOISE_MODE))
 
         val withoutAncOptions = fixture.copy(
-            ancLevel = NoiseLevelCapabilities(emptySet(), setOf("anc")),
+            ancLevel = NoiseLevelCapabilities(persistentSetOf(), persistentSetOf("anc")),
         )
         assertFalse(assertNotNull(withoutAncOptions.levelCapabilities(DeviceSetting.ANC_LEVEL)).isVisibleIn("anc"))
     }
@@ -120,7 +121,7 @@ class NoiseProtocolTest {
             Triple(ModelProfile.I7_RS_V2, DeviceSetting.TRANSPARENCY_LEVEL, listOf("ff00022d012faa", "ff00022d0331aa", "ff00022d0533aa")),
         )
         for ((profile, kind, literals) in vectors) {
-            assertEquals(setOf(1, 3, 5), noiseControlCapabilities(profile).levelCapabilities(kind)?.levels)
+            assertEquals(persistentSetOf(1, 3, 5), noiseControlCapabilities(profile).levelCapabilities(kind)?.levels)
             for ((index, level) in listOf(1, 3, 5).withIndex()) {
                 val setting = createProtocolCodec(profile).prepareSetting(kind, FieldValue.Number(level))
                 assertEquals(literals[index], setting.writeFrames.single().hex(), "$profile $kind $level")

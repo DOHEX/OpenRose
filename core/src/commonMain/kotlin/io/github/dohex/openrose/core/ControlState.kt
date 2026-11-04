@@ -6,6 +6,12 @@ import io.github.dohex.openrose.core.protocol.FieldReading
 import io.github.dohex.openrose.core.protocol.ModelProfile
 import io.github.dohex.openrose.core.transport.DeviceId
 import io.github.dohex.openrose.core.transport.TransportSelection
+import kotlinx.collections.immutable.PersistentList
+import kotlinx.collections.immutable.PersistentMap
+import kotlinx.collections.immutable.PersistentSet
+import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.persistentMapOf
+import kotlinx.collections.immutable.persistentSetOf
 
 /** Facts supplied by the platform adapter, independent of a UI component library. */
 data class PlatformState(
@@ -89,19 +95,19 @@ data class SettingOperation(
     val error: ControlError? = null,
     val writtenFrames: Int = 0,
     val totalFrames: Int = 0,
-    val confirmedFields: Set<DeviceField> = emptySet(),
+    val confirmedFields: PersistentSet<DeviceField> = persistentSetOf(),
 )
 
 data class DeviceCapabilities(
-    val readableFields: Set<DeviceField>,
-    val writableSettings: Set<DeviceSetting> = emptySet(),
+    val readableFields: PersistentSet<DeviceField>,
+    val writableSettings: PersistentSet<DeviceSetting> = persistentSetOf(),
     val noiseControl: NoiseControlCapabilities? = null,
     val equalizer: EqualizerCapabilities? = null,
     val touchControl: TouchControlCapabilities? = null,
     val audioControl: AudioControlCapabilities? = null,
-    val promptVolumeLevels: Set<Int> = emptySet(),
-    val gainLevels: Set<Int> = emptySet(),
-    val hearingProtectionLevels: Set<Int> = emptySet(),
+    val promptVolumeLevels: PersistentSet<Int> = persistentSetOf(),
+    val gainLevels: PersistentSet<Int> = persistentSetOf(),
+    val hearingProtectionLevels: PersistentSet<Int> = persistentSetOf(),
 )
 
 data class DeviceState(
@@ -109,12 +115,12 @@ data class DeviceState(
     val sessionId: Long,
     val profile: ModelProfile,
     val capabilities: DeviceCapabilities,
-    val fields: Map<DeviceField, FieldReading>,
-    val fieldErrors: Map<DeviceField, ControlError> = emptyMap(),
+    val fields: PersistentMap<DeviceField, FieldReading>,
+    val fieldErrors: PersistentMap<DeviceField, ControlError> = persistentMapOf(),
     /** Recent transport payloads, retained for diagnosis rather than interpreted as confirmed fields. */
-    val rawNotifications: List<String> = emptyList(),
-    val unknownNotifications: List<String> = emptyList(),
-    val warnings: List<String> = emptyList(),
+    val rawNotifications: PersistentList<String> = persistentListOf(),
+    val unknownNotifications: PersistentList<String> = persistentListOf(),
+    val warnings: PersistentList<String> = persistentListOf(),
     /** An independently identified BR/EDR address, when the model advertisement provides it. */
     val classicAddress: String? = null,
 )
@@ -127,12 +133,12 @@ data class ControlState(
     val connection: ConnectionState = ConnectionState.Disconnected,
     val settings: UserSettings = UserSettings(),
     val scan: ScanState = ScanState.Idle,
-    val candidates: List<DeviceCandidate> = emptyList(),
-    val bondedDevices: List<DeviceCandidate> = emptyList(),
+    val candidates: PersistentList<DeviceCandidate> = persistentListOf(),
+    val bondedDevices: PersistentList<DeviceCandidate> = persistentListOf(),
     val device: DeviceState? = null,
     val lastError: ControlError? = null,
     /** Recent operations, including terminal outcomes across a disconnect. */
-    val settingOperations: List<SettingOperation> = emptyList(),
+    val settingOperations: PersistentList<SettingOperation> = persistentListOf(),
     val transportSelection: TransportSelection? = null,
     val connectionRecovery: ConnectionRecovery? = null,
     val connectionTarget: DeviceCandidate? = null,

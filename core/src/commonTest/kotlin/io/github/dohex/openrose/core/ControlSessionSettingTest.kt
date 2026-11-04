@@ -1,5 +1,6 @@
 package io.github.dohex.openrose.core
 
+import kotlinx.collections.immutable.persistentSetOf
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.FieldReading
 import io.github.dohex.openrose.core.protocol.FieldValue
@@ -153,7 +154,7 @@ class ControlSessionSettingTest {
         assertEquals(ControlErrorCode.UNSUPPORTED, assertIs<OperationResult.Failure>(session.set(DeviceSetting.NOISE_MODE, FieldValue.Text("auto"))).error.code)
         assertEquals(13, link.writes.size)
         assertTrue(session.state.value.settingOperations.isEmpty())
-        assertEquals(setOf("normal", "transparency", "wind", "anc"), session.state.value.device?.capabilities?.noiseControl?.modes)
+        assertEquals(persistentSetOf("normal", "transparency", "wind", "anc"), session.state.value.device?.capabilities?.noiseControl?.modes)
         session.disconnect()
     }
 
@@ -317,7 +318,7 @@ class ControlSessionSettingTest {
     fun i7UsesTheSameSequenceAcrossInitializationAutomaticModeAndExitReadback() = runTest {
         val (session, link) = ready(profile = ModelProfile.I7_RS_V2)
         assertEquals(ControlErrorCode.UNSUPPORTED, assertIs<OperationResult.Failure>(session.set(DeviceSetting.NOISE_MODE, FieldValue.Text("deep"))).error.code)
-        assertEquals(setOf("normal", "transparency", "wind", "anc", "auto", "dynamic"), session.state.value.device?.capabilities?.noiseControl?.modes)
+        assertEquals(persistentSetOf("normal", "transparency", "wind", "anc", "auto", "dynamic"), session.state.value.device?.capabilities?.noiseControl?.modes)
         val first = async { session.set(DeviceSetting.NOISE_MODE, FieldValue.Text("dynamic")) }
         runCurrent()
         // Independently worked sender sequence04/05 after four capacity20 initialization reads.

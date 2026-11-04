@@ -1,5 +1,7 @@
 package io.github.dohex.openrose.androidintegration
 
+import kotlinx.collections.immutable.persistentSetOf
+
 import io.github.dohex.openrose.core.ConnectionState
 import io.github.dohex.openrose.core.ControlErrorCode
 import io.github.dohex.openrose.core.ControlState
@@ -228,7 +230,7 @@ class ModuleHostPresentationTest {
 
     @Test
     fun leavingModuleControlWithdrawsEveryEntryAndTheOldGenerationCannotActOnTheNextSession() = runTest {
-        val saved = UserSettings(islandMode = IslandMode.MODULE, focusNotificationEnabled = false, islandTriggers = setOf(IslandTrigger.CONNECTION))
+        val saved = UserSettings(islandMode = IslandMode.MODULE, focusNotificationEnabled = false, islandTriggers = persistentSetOf(IslandTrigger.CONNECTION))
         val rig = Rig(this, saved)
         rig.start()
         val old = rig.generation

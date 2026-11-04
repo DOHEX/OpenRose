@@ -1,5 +1,9 @@
 package io.github.dohex.openrose.ui
 
+import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.persistentMapOf
+import kotlinx.collections.immutable.persistentSetOf
+import kotlinx.collections.immutable.toPersistentList
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.input.key.Key
@@ -34,7 +38,7 @@ class OpenRoseHomeScanUiTest {
             val others = (1..30).map { index ->
                 headset.copy(deviceId = DeviceId("other-$index"), name = "其他设备 $index", profile = null)
             }
-            withHarness(420, 1200, state(style).copy(candidates = others + headset)) { harness ->
+            withHarness(420, 1200, state(style).copy(candidates = (others + headset).toPersistentList())) { harness ->
                 harness.render()
                 harness.openAddDevice()
                 assertTrue(harness.hasText("EarFree i5"))
@@ -89,7 +93,7 @@ class OpenRoseHomeScanUiTest {
                 assertFalse(harness.hasText("停止扫描"))
 
                 harness.state.value = harness.state.value.copy(
-                    candidates = listOf(recognizedCandidate(DeviceId("previously-discovered"))),
+                    candidates = persistentListOf(recognizedCandidate(DeviceId("previously-discovered"))),
                 )
                 harness.render()
                 assertFalse(harness.hasText("ROSE i5"))
@@ -106,7 +110,7 @@ class OpenRoseHomeScanUiTest {
                 harness.render()
                 harness.state.value = harness.state.value.copy(
                     scan = ScanState.Scanning,
-                    candidates = listOf(recognizedCandidate(DeviceId("previously-discovered"))),
+                    candidates = persistentListOf(recognizedCandidate(DeviceId("previously-discovered"))),
                 )
                 harness.render()
 
@@ -319,7 +323,7 @@ class OpenRoseHomeScanUiTest {
                 profile = null,
                 manufacturerDataHex = "",
             )
-            withHarness(420, 900, state(style).copy(candidates = listOf(candidate))) { harness ->
+            withHarness(420, 900, state(style).copy(candidates = persistentListOf(candidate))) { harness ->
                 harness.render()
                 harness.openAddDevice()
                 assertFalse(harness.hasText("Nearby headset"))
@@ -344,10 +348,10 @@ class OpenRoseHomeScanUiTest {
                 deviceId = id,
                 sessionId = SESSION_ID,
                 profile = profile,
-                capabilities = DeviceCapabilities(readableFields = emptySet()),
-                fields = emptyMap(),
+                capabilities = DeviceCapabilities(readableFields = persistentSetOf()),
+                fields = persistentMapOf(),
             )
-            withHarness(420, 900, state(style).copy(candidates = listOf(recognizedCandidate(id)))) { harness ->
+            withHarness(420, 900, state(style).copy(candidates = persistentListOf(recognizedCandidate(id)))) { harness ->
                 harness.render()
                 harness.state.value = harness.state.value.copy(
                     connection = ConnectionState.Connected(id, SESSION_ID, profile, ConnectionPhase.READY),

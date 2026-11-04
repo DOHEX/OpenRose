@@ -2,6 +2,9 @@
 
 package io.github.dohex.openrose.ui
 
+import kotlinx.collections.immutable.persistentMapOf
+import kotlinx.collections.immutable.persistentSetOf
+import kotlinx.collections.immutable.toPersistentList
 import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
@@ -79,7 +82,7 @@ class NoiseControlCardUiTest {
     @Test
     fun eachLevelRowUsesItsOwnOptionsAndIsOmittedWhenUnsupported() {
         val ancOnlyCapabilities = noiseControlCapabilities(ModelProfile.I5_ZT).copy(
-            ancLevel = NoiseLevelCapabilities(levels = setOf(2), visibleModes = setOf("anc")),
+            ancLevel = NoiseLevelCapabilities(levels = persistentSetOf(2), visibleModes = persistentSetOf("anc")),
             transparencyLevel = null,
         )
         val transparencyUnsupportedNodes = renderNodes(
@@ -98,7 +101,7 @@ class NoiseControlCardUiTest {
 
         val transparencyOnlyCapabilities = noiseControlCapabilities(ModelProfile.I5_ZT).copy(
             ancLevel = null,
-            transparencyLevel = NoiseLevelCapabilities(levels = setOf(2, 4), visibleModes = setOf("transparency")),
+            transparencyLevel = NoiseLevelCapabilities(levels = persistentSetOf(2, 4), visibleModes = persistentSetOf("transparency")),
         )
         val transparencyNodes = renderNodes(
             state(mode = knownMode("transparency"), noiseCapabilities = transparencyOnlyCapabilities),
@@ -174,11 +177,11 @@ class NoiseControlCardUiTest {
             sessionId = SESSION_ID,
             profile = profile,
             capabilities = DeviceCapabilities(
-                readableFields = setOf(DeviceField.NOISE_MODE, DeviceField.ANC_LEVEL, DeviceField.TRANSPARENCY_LEVEL),
-                writableSettings = setOf(DeviceSetting.NOISE_MODE, DeviceSetting.ANC_LEVEL, DeviceSetting.TRANSPARENCY_LEVEL),
+                readableFields = persistentSetOf(DeviceField.NOISE_MODE, DeviceField.ANC_LEVEL, DeviceField.TRANSPARENCY_LEVEL),
+                writableSettings = persistentSetOf(DeviceSetting.NOISE_MODE, DeviceSetting.ANC_LEVEL, DeviceSetting.TRANSPARENCY_LEVEL),
                 noiseControl = noiseCapabilities ?: noiseControlCapabilities(profile),
             ),
-            fields = mapOf(
+            fields = persistentMapOf(
                 DeviceField.NOISE_MODE to mode,
                 // Retain both cached values across modes; only the active capability is rendered.
                 DeviceField.ANC_LEVEL to FieldReading.Known(FieldValue.Number(5), "02"),
@@ -189,7 +192,7 @@ class NoiseControlCardUiTest {
             platform = PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
             connection = ConnectionState.Connected(deviceId, SESSION_ID, profile, ConnectionPhase.READY),
             device = device,
-            settingOperations = operations,
+            settingOperations = operations.toPersistentList(),
         )
     }
 

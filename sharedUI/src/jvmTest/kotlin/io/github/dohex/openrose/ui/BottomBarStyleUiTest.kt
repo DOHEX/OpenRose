@@ -2,6 +2,7 @@
 
 package io.github.dohex.openrose.ui
 
+import kotlinx.collections.immutable.persistentListOf
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.ui.semantics.Role
@@ -155,7 +156,7 @@ class BottomBarStyleUiTest {
         )
         for (style in InterfaceStyle.entries) {
             withOpenRoseAppHarness(
-                connectedI7State(settings(style, BottomBarStyle.FLOATING)).copy(settingOperations = listOf(operation)),
+                connectedI7State(settings(style, BottomBarStyle.FLOATING)).copy(settingOperations = persistentListOf(operation)),
             ) { harness ->
                 harness.render()
                 val feedback = assertNotNull(

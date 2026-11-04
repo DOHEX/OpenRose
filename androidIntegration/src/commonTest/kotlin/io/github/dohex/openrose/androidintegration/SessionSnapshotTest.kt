@@ -158,63 +158,6 @@ class SessionSnapshotTest {
         session.disconnect()
     }
 
-    @Test
-    fun mutatingReturnedCollectionsCannotChangeSessionAuthority() = runTest {
-        val profile = ModelProfile.I5_ZT
-        val transport = SnapshotTransport(profile)
-        val session = newSession(transport)
-        val id = DeviceId("i5")
-        connect(session, transport, profile, id)
-        val original = requireNotNull(session.state.value.device)
-        val reference = SessionReference(original.deviceId, original.sessionId)
-        val available = assertIs<SessionSnapshotResult.Available>(session.readSession(reference))
-        val snapshot = available.device
-
-        @Suppress("UNCHECKED_CAST")
-        val detachedActions = available.presentation.actions as MutableSet<DeviceSetting>
-        detachedActions.clear()
-        assertEquals(original.capabilities.writableSettings, session.presentation.value.actions)
-
-        @Suppress("UNCHECKED_CAST")
-        val detachedFields = snapshot.fields as MutableMap<DeviceField, FieldReading>
-        detachedFields[DeviceField.LEFT_BATTERY] = FieldReading.Unknown("mutated")
-        val firmware = assertIs<FieldReading.Known>(snapshot.fields[DeviceField.FIRMWARE])
-        @Suppress("UNCHECKED_CAST")
-        val detachedParts = (firmware.value as FieldValue.Firmware).parts as MutableList<Int>
-        detachedParts[0] = 99
-        @Suppress("UNCHECKED_CAST")
-        val detachedCapabilities = snapshot.capabilities.readableFields as MutableSet<DeviceField>
-        detachedCapabilities.clear()
-        val snapshotNoise = requireNotNull(snapshot.capabilities.noiseControl)
-        val snapshotAncLevels = requireNotNull(snapshotNoise.ancLevel)
-        @Suppress("UNCHECKED_CAST")
-        val detachedAncOptions = snapshotAncLevels.levels as MutableSet<Int>
-        tryClearSnapshotCollection(detachedAncOptions)
-        @Suppress("UNCHECKED_CAST")
-        val detachedAncModes = snapshotAncLevels.visibleModes as MutableSet<String>
-        tryClearSnapshotCollection(detachedAncModes)
-        val snapshotTransparencyLevels = requireNotNull(snapshotNoise.transparencyLevel)
-        @Suppress("UNCHECKED_CAST")
-        val detachedTransparencyOptions = snapshotTransparencyLevels.levels as MutableSet<Int>
-        tryClearSnapshotCollection(detachedTransparencyOptions)
-        @Suppress("UNCHECKED_CAST")
-        val detachedTransparencyModes = snapshotTransparencyLevels.visibleModes as MutableSet<String>
-        tryClearSnapshotCollection(detachedTransparencyModes)
-
-        val current = requireNotNull(session.state.value.device)
-        assertEquals(original.fields, current.fields)
-        assertEquals(original.capabilities.readableFields, current.capabilities.readableFields)
-        assertEquals(setOf(1, 3, 5), current.capabilities.noiseControl?.ancLevel?.levels)
-        assertEquals(setOf("anc"), current.capabilities.noiseControl?.ancLevel?.visibleModes)
-        assertEquals(setOf(1, 3, 5), current.capabilities.noiseControl?.transparencyLevel?.levels)
-        assertEquals(setOf("transparency"), current.capabilities.noiseControl?.transparencyLevel?.visibleModes)
-        assertEquals(FieldReading.NotProvided("ff"), current.fields[DeviceField.CASE_BATTERY])
-        assertEquals(
-            (original.fields[DeviceField.FIRMWARE] as FieldReading.Known).value,
-            (current.fields[DeviceField.FIRMWARE] as FieldReading.Known).value,
-        )
-        session.disconnect()
-    }
 
     private fun advertisement(profile: ModelProfile, id: DeviceId) = when (profile) {
         ModelProfile.I5_ZT -> Advertisement(id, "i5", manufacturerData = mapOf(0x5352 to byteArrayOf(0, 1, 0, 1)))
@@ -246,14 +189,6 @@ class SessionSnapshotTest {
 
     private fun assertFailure(code: ControlErrorCode, result: SessionSnapshotResult) {
         assertEquals(code, assertIs<SessionSnapshotResult.Failure>(result).error.code)
-    }
-
-    private fun <T> tryClearSnapshotCollection(collection: MutableSet<T>) {
-        try {
-            collection.clear()
-        } catch (_: UnsupportedOperationException) {
-            // Immutable copied sets are safe too; the live session must remain unchanged either way.
-        }
     }
 
     private class SnapshotTransport(private val profile: ModelProfile) : ControlTransport {

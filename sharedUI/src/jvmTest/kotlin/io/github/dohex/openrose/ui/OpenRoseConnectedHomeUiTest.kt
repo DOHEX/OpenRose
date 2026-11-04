@@ -2,6 +2,10 @@
 
 package io.github.dohex.openrose.ui
 
+import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.persistentMapOf
+import kotlinx.collections.immutable.persistentSetOf
+import kotlinx.collections.immutable.plus
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.input.key.Key
@@ -246,7 +250,7 @@ class OpenRoseConnectedHomeUiTest {
                     ),
                     device = pendingDevice.copy(fields = pendingDevice.fields +
                         (DeviceField.NOISE_MODE to FieldReading.Known(FieldValue.Text("anc"), "anc"))),
-                    settingOperations = listOf(pending),
+                    settingOperations = persistentListOf(pending),
                 )
                 harness.render()
                 assertTrue(harness.hasText("等待设备确认"), "pending status remains visible in $style")
@@ -272,7 +276,7 @@ class OpenRoseConnectedHomeUiTest {
 
                 harness.state.value = state.copy(
                     device = device.copy(capabilities = device.capabilities.copy(
-                        writableSettings = setOf(
+                        writableSettings = persistentSetOf(
                             DeviceSetting.NOISE_MODE,
                             DeviceSetting.GAME_MODE,
                             DeviceSetting.TOUCH_ENABLED,
@@ -328,7 +332,7 @@ class OpenRoseConnectedHomeUiTest {
                     stage = SettingStage.WRITTEN,
                 )
                 harness.state.value = harness.state.value.copy(
-                    settingOperations = listOf(pendingOp),
+                    settingOperations = persistentListOf(pendingOp),
                 )
                 harness.render()
                 assertTrue(
@@ -344,8 +348,8 @@ class OpenRoseConnectedHomeUiTest {
                     device = gameDevice.copy(
                         fields = gameDevice.fields + (DeviceField.GAME_MODE to FieldReading.Known(FieldValue.Toggle(true), "01")),
                     ),
-                    settingOperations = listOf(
-                        pendingOp.copy(stage = SettingStage.CONFIRMED, confirmedFields = setOf(DeviceField.GAME_MODE)),
+                    settingOperations = persistentListOf(
+                        pendingOp.copy(stage = SettingStage.CONFIRMED, confirmedFields = persistentSetOf(DeviceField.GAME_MODE)),
                     ),
                 )
                 harness.render()
@@ -363,16 +367,16 @@ class OpenRoseConnectedHomeUiTest {
             sessionId = SESSION_ID,
             profile = profile,
             capabilities = DeviceCapabilities(
-                readableFields = setOf(
+                readableFields = persistentSetOf(
                     DeviceField.LEFT_BATTERY,
                     DeviceField.RIGHT_BATTERY,
                     DeviceField.CASE_BATTERY,
                     DeviceField.NOISE_MODE,
                 ),
-                writableSettings = setOf(DeviceSetting.NOISE_MODE),
+                writableSettings = persistentSetOf(DeviceSetting.NOISE_MODE),
                 noiseControl = noiseControlCapabilities(profile),
             ),
-            fields = mapOf(
+            fields = persistentMapOf(
                 DeviceField.LEFT_BATTERY to FieldReading.Known(FieldValue.Number(86), "56"),
                 DeviceField.RIGHT_BATTERY to FieldReading.Known(FieldValue.Number(82), "52"),
                 DeviceField.CASE_BATTERY to FieldReading.Known(FieldValue.Number(67), "43"),

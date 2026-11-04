@@ -1,5 +1,6 @@
 package io.github.dohex.openrose.ui
 
+import kotlinx.collections.immutable.persistentSetOf
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import io.github.dohex.openrose.androidintegration.IntegrationPlatformState
@@ -141,7 +142,7 @@ class SystemSettingsOwnershipUiTest {
                     interfaceStyle = style,
                     islandMode = IslandMode.OFF,
                     focusNotificationEnabled = true,
-                    islandTriggers = emptySet(),
+                    islandTriggers = persistentSetOf(),
                 ),
             ) { harness ->
                 harness.render()

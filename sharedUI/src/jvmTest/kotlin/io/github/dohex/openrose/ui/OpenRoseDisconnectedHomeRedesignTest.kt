@@ -2,6 +2,7 @@
 
 package io.github.dohex.openrose.ui
 
+import kotlinx.collections.immutable.persistentListOf
 import io.github.dohex.openrose.core.*
 import io.github.dohex.openrose.core.protocol.ModelProfile
 import io.github.dohex.openrose.core.transport.DeviceId
@@ -23,7 +24,7 @@ class OpenRoseDisconnectedHomeRedesignTest {
                 manufacturerDataHex = "",
             )
             withOpenRoseAppHarness(
-                disconnectedAndroidState(UserSettings(interfaceStyle = style)).copy(bondedDevices = listOf(pairedDevice)),
+                disconnectedAndroidState(UserSettings(interfaceStyle = style)).copy(bondedDevices = persistentListOf(pairedDevice)),
             ) { harness ->
                 harness.render()
                 // Paired devices section and device name
@@ -60,7 +61,7 @@ class OpenRoseDisconnectedHomeRedesignTest {
             profile = ModelProfile.I7_RS_V2,
             manufacturerDataHex = "",
         )
-        withOpenRoseAppHarness(disconnectedAndroidState().copy(bondedDevices = listOf(paired1, paired2))) { harness ->
+        withOpenRoseAppHarness(disconnectedAndroidState().copy(bondedDevices = persistentListOf(paired1, paired2))) { harness ->
             harness.render()
             assertTrue(harness.hasText("My i5 Earbuds"))
             assertTrue(harness.hasText("ZT"))

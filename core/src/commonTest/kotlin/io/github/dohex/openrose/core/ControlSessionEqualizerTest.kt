@@ -1,5 +1,6 @@
 package io.github.dohex.openrose.core
 
+import kotlinx.collections.immutable.persistentSetOf
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.FieldReading
 import io.github.dohex.openrose.core.protocol.FieldValue
@@ -72,7 +73,7 @@ class ControlSessionEqualizerTest {
     @Test
     fun allFourI5PresetsMatchIndependentCommandsAndDeviceReadbacks() = runTest {
         val (session, link) = ready(ModelProfile.I5_ZT)
-        assertEquals(setOf("pop", "hifi", "rock", "light"), session.state.value.device?.capabilities?.equalizer?.presets)
+        assertEquals(persistentSetOf("pop", "hifi", "rock", "light"), session.state.value.device?.capabilities?.equalizer?.presets)
         for ((preset, literal, reply) in listOf(
             Triple("pop", "08ee00000002810b000084", "09ff00000102010b000017"),
             Triple("hifi", "08ee00000002810b000185", "09ff00000102010b000118"),
@@ -96,7 +97,7 @@ class ControlSessionEqualizerTest {
     @Test
     fun allFiveI7PresetsShareTheSessionSequenceAndNormalizeBothEqReplyLayouts() = runTest {
         val (session, link) = ready(ModelProfile.I7_RS_V2)
-        assertEquals(setOf("pop", "hifi", "rock", "light", "eap"), session.state.value.device?.capabilities?.equalizer?.presets)
+        assertEquals(persistentSetOf("pop", "hifi", "rock", "light", "eap"), session.state.value.device?.capabilities?.equalizer?.presets)
         // Independently worked seq04..0d after four complete initialization queries.
         // Single-byte 00/01 are HIFI/POP; the two-byte 00/01 records reverse that order.
         for ((preset, write, query, reply) in listOf(
@@ -171,7 +172,7 @@ class ControlSessionEqualizerTest {
     @Test
     fun observedFirmwareChangesRefreshEapCapabilityWithoutInventingADeviceEq() = runTest {
         val (session, link) = ready(ModelProfile.I7_RS_V2, firmwareReply = null)
-        assertEquals(setOf("pop", "hifi", "rock", "light"), session.state.value.device?.capabilities?.equalizer?.presets)
+        assertEquals(persistentSetOf("pop", "hifi", "rock", "light"), session.state.value.device?.capabilities?.equalizer?.presets)
         link.incoming.send("dd00040d010501f5aa".bytes())
         runCurrent()
         assertFalse("eap" in requireNotNull(session.state.value.device?.capabilities?.equalizer).presets)

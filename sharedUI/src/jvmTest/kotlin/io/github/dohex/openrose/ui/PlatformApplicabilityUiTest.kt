@@ -1,5 +1,6 @@
 package io.github.dohex.openrose.ui
 
+import kotlinx.collections.immutable.persistentSetOf
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import io.github.dohex.openrose.androidintegration.IntegrationPlatformState
@@ -34,7 +35,7 @@ class PlatformApplicabilityUiTest {
                         interfaceStyle = style,
                         islandMode = io.github.dohex.openrose.core.IslandMode.MODULE,
                         focusNotificationEnabled = true,
-                        islandTriggers = emptySet(),
+                        islandTriggers = persistentSetOf(),
                         forceBle = true,
                     ),
                 ),
@@ -82,7 +83,7 @@ class PlatformApplicabilityUiTest {
                             interfaceStyle = style,
                             islandMode = io.github.dohex.openrose.core.IslandMode.MODULE,
                             focusNotificationEnabled = true,
-                            islandTriggers = emptySet(),
+                            islandTriggers = persistentSetOf(),
                             forceBle = true,
                         ),
                     ),
@@ -136,7 +137,7 @@ class PlatformApplicabilityUiTest {
                         interfaceStyle = style,
                         islandMode = io.github.dohex.openrose.core.IslandMode.MODULE,
                         focusNotificationEnabled = true,
-                        islandTriggers = emptySet(),
+                        islandTriggers = persistentSetOf(),
                         forceBle = true,
                     ),
                 ),
@@ -176,7 +177,7 @@ class PlatformApplicabilityUiTest {
                 interfaceStyle = style,
                 islandMode = io.github.dohex.openrose.core.IslandMode.MODULE,
                 focusNotificationEnabled = true,
-                islandTriggers = emptySet(),
+                islandTriggers = persistentSetOf(),
                 forceBle = true,
             )
             val platform = PlatformState(

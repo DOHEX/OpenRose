@@ -3,6 +3,10 @@ package io.github.dohex.openrose.core.protocol
 import io.github.dohex.openrose.core.DeviceSetting
 import io.github.dohex.openrose.core.TouchSlot
 import io.github.dohex.openrose.core.touchControlCapabilities
+import kotlinx.collections.immutable.PersistentList
+import kotlinx.collections.immutable.PersistentMap
+import kotlinx.collections.immutable.toPersistentList
+import kotlinx.collections.immutable.toPersistentMap
 
 data class GattProfile(val serviceUuid: String, val writeUuid: String, val notifyUuid: String)
 
@@ -94,16 +98,23 @@ sealed interface FieldValue {
     data class Number(val value: Int) : FieldValue { override val displayText get() = value.toString() }
     data class Toggle(val value: Boolean) : FieldValue { override val displayText get() = if (value) "开启" else "关闭" }
     data class Text(val value: String) : FieldValue { override val displayText get() = value }
-    data class IntegerList(val values: List<Int>) : FieldValue { override val displayText get() = values.joinToString(", ") }
-    data class Firmware(val parts: List<Int>, override val displayText: String) : FieldValue
-    data class TouchKeys(val bindings: List<TouchBinding>) : FieldValue {
+    data class IntegerList(val values: PersistentList<Int>) : FieldValue {
+        constructor(values: List<Int>) : this(values.toPersistentList())
+        override val displayText get() = values.joinToString(", ")
+    }
+    data class Firmware(val parts: PersistentList<Int>, override val displayText: String) : FieldValue {
+        constructor(parts: List<Int>, displayText: String) : this(parts.toPersistentList(), displayText)
+    }
+    data class TouchKeys(val bindings: PersistentList<TouchBinding>) : FieldValue {
+        constructor(bindings: List<TouchBinding>) : this(bindings.toPersistentList())
         override val displayText get() = bindings.joinToString("；") { "${it.side}/${it.gesture}: ${it.action ?: "未知(${it.rawAction})"}" }
     }
     /** One requested slot assignment; the device still reports its complete TouchKeys value. */
     data class TouchAssignment(val side: String, val gesture: String, val action: String) : FieldValue {
         override val displayText get() = "$side/$gesture: $action"
     }
-    data class NoiseCycle(val flags: Map<String, Boolean?>) : FieldValue {
+    data class NoiseCycle(val flags: PersistentMap<String, Boolean?>) : FieldValue {
+        constructor(flags: Map<String, Boolean?>) : this(flags.toPersistentMap())
         override val displayText get() = flags.entries.joinToString("，") { "${it.key}: ${when(it.value) { true -> "开"; false -> "关"; null -> "未知" }}" }
     }
 }

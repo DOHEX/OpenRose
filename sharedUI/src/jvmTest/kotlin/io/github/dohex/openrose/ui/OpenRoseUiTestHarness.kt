@@ -2,6 +2,9 @@
 
 package io.github.dohex.openrose.ui
 
+import kotlinx.collections.immutable.persistentMapOf
+import kotlinx.collections.immutable.persistentSetOf
+import kotlinx.collections.immutable.toPersistentSet
 import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.MutableState
@@ -174,17 +177,17 @@ internal fun connectedI7State(settings: UserSettings = UserSettings()): ControlS
             sessionId = 1L,
             profile = profile,
             capabilities = DeviceCapabilities(
-                readableFields = DeviceField.entries.toSet(),
-                writableSettings = DeviceSetting.entries.toSet(),
+                readableFields = DeviceField.entries.toPersistentSet(),
+                writableSettings = DeviceSetting.entries.toPersistentSet(),
                 noiseControl = noiseControlCapabilities(profile),
                 equalizer = equalizerCapabilities(profile),
                 touchControl = touchControlCapabilities(profile),
                 audioControl = audioControlCapabilities(profile),
                 promptVolumeLevels = promptVolumeLevels(profile),
-                gainLevels = setOf(0, 1, 2),
-                hearingProtectionLevels = (0..6).toSet(),
+                gainLevels = persistentSetOf(0, 1, 2),
+                hearingProtectionLevels = (0..6).toPersistentSet(),
             ),
-            fields = mapOf(
+            fields = persistentMapOf(
                 DeviceField.LEFT_BATTERY to FieldReading.Known(FieldValue.Number(90), "90"),
                 DeviceField.RIGHT_BATTERY to FieldReading.Known(FieldValue.Number(90), "90"),
                 DeviceField.CASE_BATTERY to FieldReading.Known(FieldValue.Number(80), "80"),
