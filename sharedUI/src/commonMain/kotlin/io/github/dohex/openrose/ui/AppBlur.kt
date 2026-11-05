@@ -9,7 +9,6 @@ import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import io.github.dohex.openrose.core.UserSettings
 import top.yukonga.miuix.kmp.blur.Backdrop
 import top.yukonga.miuix.kmp.blur.LayerBackdrop
 import top.yukonga.miuix.kmp.blur.ProgressiveBlur
@@ -23,7 +22,7 @@ internal val LocalAppBackdrop = compositionLocalOf<Backdrop?> { null }
 internal val LocalBackdropBlurActive = compositionLocalOf { false }
 
 @Composable
-internal fun rememberBackdropBlurActive(settings: UserSettings): Boolean {
+internal fun rememberBackdropBlurActive(settings: UiSettings): Boolean {
     val powerSave = isPlatformPowerSaveMode()
     return settings.backgroundBlurEnabled && !powerSave && isRuntimeShaderSupported()
 }

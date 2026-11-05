@@ -10,14 +10,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.state.ToggleableState
-import io.github.dohex.openrose.core.Appearance
 import io.github.dohex.openrose.core.ConnectionPhase
 import io.github.dohex.openrose.core.ConnectionState
 import io.github.dohex.openrose.core.ControlState
 import io.github.dohex.openrose.core.DeviceCapabilities
 import io.github.dohex.openrose.core.DeviceSetting
 import io.github.dohex.openrose.core.DeviceState
-import io.github.dohex.openrose.core.InterfaceStyle
 import io.github.dohex.openrose.core.HostPlatform
 import io.github.dohex.openrose.core.PermissionState
 import io.github.dohex.openrose.core.PlatformApplicability
@@ -25,7 +23,6 @@ import io.github.dohex.openrose.core.PlatformState
 import io.github.dohex.openrose.core.SettingOperation
 import io.github.dohex.openrose.core.SettingStage
 import io.github.dohex.openrose.core.TransportAvailability
-import io.github.dohex.openrose.core.UserSettings
 import io.github.dohex.openrose.core.audioControlCapabilities
 import io.github.dohex.openrose.core.equalizerCapabilities
 import io.github.dohex.openrose.core.noiseControlCapabilities
@@ -50,7 +47,7 @@ class OpenRoseNavigationUiTest {
             val device = requireNotNull(base.device)
             val initial = base.copy(device = device.copy(fields = device.fields +
                 (DeviceField.GAME_MODE to FieldReading.Unknown("ff"))))
-            withHarness(420, 900, initial.copy(settings = initial.settings.copy(interfaceStyle = style))) { harness ->
+            withHarness(420, 900, initial, style) { harness ->
                 harness.render()
                 assertTrue(harness.hasText("游戏模式"))
                 assertFalse(harness.hasText("当前状态未知"), "game mode toggle must not show unknown status text in $style")
@@ -147,8 +144,8 @@ class OpenRoseNavigationUiTest {
             harness.render()
             harness.clickText("深色")
             harness.render()
-            assertEquals(InterfaceStyle.MATERIAL3, harness.state.value.settings.interfaceStyle)
-            assertEquals(Appearance.DARK, harness.state.value.settings.appearance)
+            assertEquals(InterfaceStyle.MATERIAL3, harness.uiSettings.value.interfaceStyle)
+            assertEquals(Appearance.DARK, harness.uiSettings.value.appearance)
             assertTrue(harness.settingsChanges.any { it.interfaceStyle == InterfaceStyle.MATERIAL3 })
             assertTrue(harness.settingsChanges.any { it.appearance == Appearance.DARK })
             assertTrue(harness.settingWrites.isEmpty(), "style and appearance changes must not call onSet")
@@ -183,19 +180,23 @@ class OpenRoseNavigationUiTest {
         width: Int,
         height: Int,
         initialState: ControlState,
+        style: InterfaceStyle = InterfaceStyle.MIUIX,
         block: suspend (NavigationHarness) -> Unit,
     ) = runOpenRoseUiTest(width, height) {
         val state = mutableStateOf(initialState)
-        val settingsChanges = mutableListOf<UserSettings>()
+        val uiSettings = mutableStateOf(UiSettings(interfaceStyle = style, appearance = Appearance.SYSTEM))
+        val settingsChanges = mutableListOf<UiSettings>()
         val settingWrites = mutableListOf<Pair<DeviceSetting, FieldValue>>()
         setContent {
             OpenRoseApp(
                 state = state.value,
                 integration = androidIntegration,
-                onSettingsChange = { settings ->
+                uiSettings = uiSettings.value,
+                onUiSettingsChange = { settings ->
                     settingsChanges += settings
-                    state.value = state.value.copy(settings = settings)
+                    uiSettings.value = settings
                 },
+                onSettingsChange = { settings -> state.value = state.value.copy(settings = settings) },
                 onRequestPermission = {},
                 onOpenSystemSettings = {},
                 onStartScan = { state.value = state.value.copy(scan = io.github.dohex.openrose.core.ScanState.Scanning) },
@@ -210,7 +211,7 @@ class OpenRoseNavigationUiTest {
                 },
             )
         }
-        block(NavigationHarness(this, state, settingsChanges, settingWrites))
+        block(NavigationHarness(this, state, uiSettings, settingsChanges, settingWrites))
     }
 
     private fun state(
@@ -255,7 +256,6 @@ class OpenRoseNavigationUiTest {
             } else {
                 ConnectionState.Disconnected
             },
-            settings = UserSettings(interfaceStyle = InterfaceStyle.MIUIX, appearance = Appearance.SYSTEM),
             device = device,
             settingOperations = operations.toPersistentList(),
         )
@@ -273,7 +273,8 @@ class OpenRoseNavigationUiTest {
     private class NavigationHarness(
         scene: OpenRoseUiTestScene,
         val state: MutableState<ControlState>,
-        val settingsChanges: MutableList<UserSettings>,
+        val uiSettings: MutableState<UiSettings>,
+        val settingsChanges: MutableList<UiSettings>,
         val settingWrites: MutableList<Pair<DeviceSetting, FieldValue>>,
     ) : OpenRoseUiTestHarness(scene)
 

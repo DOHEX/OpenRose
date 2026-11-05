@@ -2,25 +2,17 @@ package io.github.dohex.openrose.androidintegration
 
 import kotlinx.collections.immutable.persistentSetOf
 
-import io.github.dohex.openrose.core.Appearance
-import io.github.dohex.openrose.core.BottomBarStyle
 import io.github.dohex.openrose.core.ConnectionPhase
 import io.github.dohex.openrose.core.ConnectionState
-import io.github.dohex.openrose.core.ControlRuntime
 import io.github.dohex.openrose.core.DeviceCandidate
-import io.github.dohex.openrose.core.FusionSettingsDestination
 import io.github.dohex.openrose.core.HostPlatform
-import io.github.dohex.openrose.core.InterfaceStyle
-import io.github.dohex.openrose.core.IslandMode
 import io.github.dohex.openrose.core.LocalControlRuntime
 import io.github.dohex.openrose.core.OperationResult
 import io.github.dohex.openrose.core.PermissionState
-import io.github.dohex.openrose.core.PageTransition
 import io.github.dohex.openrose.core.PlatformState
 import io.github.dohex.openrose.core.SessionTiming
 import io.github.dohex.openrose.core.TransportAvailability
 import io.github.dohex.openrose.core.UserSettings
-import io.github.dohex.openrose.core.UserSettingsCodec
 import io.github.dohex.openrose.core.protocol.ModelProfile
 import io.github.dohex.openrose.core.transport.Advertisement
 import io.github.dohex.openrose.core.transport.ControlConnection
@@ -50,51 +42,43 @@ import kotlinx.coroutines.test.runTest
 class BackgroundControlTest {
     @Test
     fun missingPreferenceNeverEnablesBackgroundControlAndKeepsEveryExistingPreference() {
-        val upgraded = UserSettingsCodec.decode(
+        val upgraded = HostSettingsCodec.decode(
             mapOf(
-                "interface_style" to "material3",
-                "appearance" to "dark",
-                "island_mode" to "module",
-                "focus_notification_enabled" to "false",
-                "force_ble" to "true",
-                "island_triggers" to "",
-                "page_transition" to "fade",
-                "background_blur_enabled" to "false",
-                "bottom_bar_style" to "floating",
-                "fusion_settings_destination" to "openrose",
+                "androidIntegration.island_mode" to "module",
+                "androidIntegration.focus_notification_enabled" to "false",
+                "core.force_ble" to "true",
+                "androidIntegration.island_triggers" to "",
+                "androidIntegration.fusion_settings_destination" to "openrose",
             ),
         )
 
-        assertFalse(upgraded.backgroundControlEnabled)
+        assertFalse(upgraded.integration.backgroundControlEnabled)
         assertEquals(
-            UserSettings(
-                interfaceStyle = InterfaceStyle.MATERIAL3,
-                appearance = Appearance.DARK,
-                islandMode = IslandMode.MODULE,
-                focusNotificationEnabled = false,
-                islandTriggers = persistentSetOf(),
-                forceBle = true,
-                pageTransition = PageTransition.FADE,
-                backgroundBlurEnabled = false,
-                bottomBarStyle = BottomBarStyle.FLOATING,
-                fusionSettingsDestination = FusionSettingsDestination.OPENROSE,
+            HostSettings(
+                control = UserSettings(forceBle = true),
+                integration = IntegrationSettings(
+                    islandMode = IslandMode.MODULE,
+                    focusNotificationEnabled = false,
+                    islandTriggers = persistentSetOf(),
+                    fusionSettingsDestination = FusionSettingsDestination.OPENROSE,
+                ),
             ),
             upgraded,
         )
-        assertFalse(UserSettingsCodec.decode(mapOf("background_control_enabled" to "yes")).backgroundControlEnabled)
-        assertFalse(UserSettingsCodec.decode(mapOf("background_control_enabled" to "")).backgroundControlEnabled)
+        assertFalse(IntegrationSettingsCodec.decode(mapOf("androidIntegration.background_control_enabled" to "yes")).backgroundControlEnabled)
+        assertFalse(IntegrationSettingsCodec.decode(mapOf("androidIntegration.background_control_enabled" to "")).backgroundControlEnabled)
     }
 
     @Test
     fun theEnabledIntentSurvivesPersistenceAndRebuildingTheRuntime() = runTest {
-        val enabled = UserSettings(backgroundControlEnabled = true)
-        val restored = UserSettingsCodec.decode(UserSettingsCodec.encode(enabled))
-        assertEquals("true", UserSettingsCodec.encode(enabled)["background_control_enabled"])
-        assertEquals("false", UserSettingsCodec.encode(UserSettings())["background_control_enabled"])
+        val enabled = IntegrationSettings(backgroundControlEnabled = true)
+        val restored = IntegrationSettingsCodec.decode(IntegrationSettingsCodec.encode(enabled))
+        assertEquals("true", IntegrationSettingsCodec.encode(enabled)["androidIntegration.background_control_enabled"])
+        assertEquals("false", IntegrationSettingsCodec.encode(IntegrationSettings())["androidIntegration.background_control_enabled"])
 
         val runtime = newRuntime(RoseTransport(), settings = restored)
 
-        assertTrue(runtime.state.value.settings.backgroundControlEnabled)
+        assertTrue(runtime.settings.backgroundControlEnabled)
     }
 
     @Test
@@ -102,14 +86,14 @@ class BackgroundControlTest {
         val runtime = newRuntime(RoseTransport())
         assertEquals(BackgroundControlStatus.Disabled, status(runtime))
 
-        runtime.updateSettings(runtime.state.value.settings.copy(backgroundControlEnabled = true))
+        runtime.updateIntegrationSettings(runtime.settings.copy(backgroundControlEnabled = true))
         // Preference saved, nothing running yet: the host still has to start the service.
         assertEquals(BackgroundControlStatus.NotRunning, status(runtime))
 
         runtime.updatePlatformState(androidPlatform())
         assertEquals(BackgroundControlStatus.Running(notificationVisible = true), status(runtime, BackgroundServiceFact.Running))
 
-        runtime.updateSettings(runtime.state.value.settings.copy(backgroundControlEnabled = false))
+        runtime.updateIntegrationSettings(runtime.settings.copy(backgroundControlEnabled = false))
         runtime.updatePlatformState(androidPlatform())
         assertEquals(BackgroundControlStatus.Disabled, status(runtime, BackgroundServiceFact.NotRunning))
     }
@@ -117,7 +101,7 @@ class BackgroundControlTest {
     @Test
     fun aMissingBluetoothPermissionIsReportedAsTheReasonNeverAsReady() = runTest {
         for (permission in listOf(PermissionState.REQUIRED, PermissionState.DENIED)) {
-            val runtime = newRuntime(RoseTransport(), settings = UserSettings(backgroundControlEnabled = true))
+            val runtime = newRuntime(RoseTransport(), settings = IntegrationSettings(backgroundControlEnabled = true))
             runtime.updatePlatformState(androidPlatform(permission = permission))
 
             assertEquals(
@@ -127,7 +111,7 @@ class BackgroundControlTest {
         }
 
         // Granting the permission later makes the pending start possible again.
-        val runtime = newRuntime(RoseTransport(), settings = UserSettings(backgroundControlEnabled = true))
+        val runtime = newRuntime(RoseTransport(), settings = IntegrationSettings(backgroundControlEnabled = true))
         runtime.updatePlatformState(androidPlatform(permission = PermissionState.DENIED))
         runtime.updatePlatformState(androidPlatform(permission = PermissionState.GRANTED))
         assertEquals(BackgroundControlStatus.NotRunning, status(runtime))
@@ -135,7 +119,7 @@ class BackgroundControlTest {
 
     @Test
     fun aRejectedServiceStartIsReportedWithItsReason() = runTest {
-        val runtime = newRuntime(RoseTransport(), settings = UserSettings(backgroundControlEnabled = true))
+        val runtime = newRuntime(RoseTransport(), settings = IntegrationSettings(backgroundControlEnabled = true))
 
         runtime.updatePlatformState(androidPlatform())
 
@@ -147,7 +131,7 @@ class BackgroundControlTest {
 
     @Test
     fun aHiddenRunningNotificationIsDisclosedWhileControlStillRuns() = runTest {
-        val runtime = newRuntime(RoseTransport(), settings = UserSettings(backgroundControlEnabled = true))
+        val runtime = newRuntime(RoseTransport(), settings = IntegrationSettings(backgroundControlEnabled = true))
 
         runtime.updatePlatformState(androidPlatform())
 
@@ -159,7 +143,7 @@ class BackgroundControlTest {
 
     @Test
     fun desktopHostsHaveNoBackgroundControl() = runTest {
-        val runtime = newRuntime(RoseTransport(), settings = UserSettings(backgroundControlEnabled = true))
+        val runtime = newRuntime(RoseTransport(), settings = IntegrationSettings(backgroundControlEnabled = true))
         runtime.updatePlatformState(androidPlatform().copy(hostPlatform = HostPlatform.LINUX))
 
         assertEquals(BackgroundControlStatus.Unsupported, status(runtime))
@@ -167,24 +151,24 @@ class BackgroundControlTest {
 
     @Test
     fun focusNotificationAndIslandPresentationDoNotChangeBackgroundControl() = runTest {
-        val runtime = newRuntime(RoseTransport(), settings = UserSettings(backgroundControlEnabled = true))
+        val runtime = newRuntime(RoseTransport(), settings = IntegrationSettings(backgroundControlEnabled = true))
         runtime.updatePlatformState(androidPlatform())
         val running = status(runtime, BackgroundServiceFact.Running)
 
         for (islandMode in IslandMode.entries) {
             for (focus in listOf(false, true)) {
-                runtime.updateSettings(
-                    runtime.state.value.settings.copy(islandMode = islandMode, focusNotificationEnabled = focus),
+                runtime.updateIntegrationSettings(
+                    runtime.settings.copy(islandMode = islandMode, focusNotificationEnabled = focus),
                 )
                 assertEquals(running, status(runtime, BackgroundServiceFact.Running))
-                assertTrue(runtime.state.value.settings.backgroundControlEnabled)
+                assertTrue(runtime.settings.backgroundControlEnabled)
             }
         }
         // And the reverse: turning background control off leaves the presentation choices alone.
-        val presentation = runtime.state.value.settings.copy(backgroundControlEnabled = false)
-        runtime.updateSettings(presentation)
-        assertEquals(IslandMode.MODULE, runtime.state.value.settings.islandMode)
-        assertTrue(runtime.state.value.settings.focusNotificationEnabled)
+        val presentation = runtime.settings.copy(backgroundControlEnabled = false)
+        runtime.updateIntegrationSettings(presentation)
+        assertEquals(IslandMode.MODULE, runtime.settings.islandMode)
+        assertTrue(runtime.settings.focusNotificationEnabled)
     }
 
     @Test
@@ -198,10 +182,10 @@ class BackgroundControlTest {
         val before = assertIs<ConnectionState.Connected>(runtime.state.value.connection)
 
         repeat(3) {
-            runtime.updateSettings(runtime.state.value.settings.copy(backgroundControlEnabled = true))
+            runtime.updateIntegrationSettings(runtime.settings.copy(backgroundControlEnabled = true))
             runtime.updatePlatformState(androidPlatform())
         }
-        runtime.updateSettings(runtime.state.value.settings.copy(backgroundControlEnabled = false))
+        runtime.updateIntegrationSettings(runtime.settings.copy(backgroundControlEnabled = false))
         runtime.updatePlatformState(androidPlatform())
 
         // The interface closing is no event at all for the runtime; the one session just stays.
@@ -215,7 +199,7 @@ class BackgroundControlTest {
     fun audioDisconnectReleasesTheAutomaticConnectionButKeepsBackgroundControlOn() = runTest {
         val rose = rosePair()
         val transport = RoseTransport(bonded = listOf(rose))
-        val runtime = newRuntime(transport, settings = UserSettings(backgroundControlEnabled = true))
+        val runtime = newRuntime(transport, settings = IntegrationSettings(backgroundControlEnabled = true))
         runtime.updatePlatformState(androidPlatform())
 
         transport.audioDevice.emit(rose.deviceId)
@@ -229,7 +213,7 @@ class BackgroundControlTest {
 
         assertEquals(ConnectionState.Disconnected, runtime.state.value.connection)
         assertTrue(transport.links.single().closed)
-        assertTrue(runtime.state.value.settings.backgroundControlEnabled)
+        assertTrue(runtime.settings.backgroundControlEnabled)
         assertEquals(BackgroundControlStatus.Running(notificationVisible = true), status(runtime, BackgroundServiceFact.Running))
 
         // A later audio connection restores control in the same running owner.
@@ -245,10 +229,10 @@ class BackgroundControlTest {
     fun disablingBackgroundControlDoesNotDisconnectAManualConnection() = runTest {
         val rose = rosePair()
         val transport = RoseTransport(bonded = listOf(rose))
-        val runtime = newRuntime(transport, settings = UserSettings(backgroundControlEnabled = true))
+        val runtime = newRuntime(transport, settings = IntegrationSettings(backgroundControlEnabled = true))
         assertEquals(OperationResult.Success, runtime.connect(rose.deviceId))
 
-        runtime.updateSettings(runtime.state.value.settings.copy(backgroundControlEnabled = false))
+        runtime.updateIntegrationSettings(runtime.settings.copy(backgroundControlEnabled = false))
         advanceUntilIdle()
 
         assertIs<ConnectionState.Connected>(runtime.state.value.connection)
@@ -266,20 +250,24 @@ class BackgroundControlTest {
 
     /** The background status the integration derives from the control state plus the service facts the platform reports. */
     private fun status(
-        runtime: ControlRuntime,
+        runtime: SystemEntryRuntime,
         service: BackgroundServiceFact = BackgroundServiceFact.NotRunning,
         notifications: RunningNotification = RunningNotification.VISIBLE,
     ): BackgroundControlStatus = IntegrationState(
+        settings = runtime.settings,
         platform = IntegrationPlatformState(backgroundService = BackgroundServiceFacts(service, notifications)),
     ).backgroundControl(runtime.state.value)
 
-    private fun TestScope.newRuntime(transport: RoseTransport, settings: UserSettings = UserSettings()): ControlRuntime =
-        LocalControlRuntime(
-            initialPlatformState = androidPlatform(),
-            initialSettings = settings,
-            transport = transport,
+    private fun TestScope.newRuntime(transport: RoseTransport, settings: IntegrationSettings = IntegrationSettings()): SystemEntryRuntime =
+        SystemEntryRuntime(
+            control = LocalControlRuntime(
+                initialPlatformState = androidPlatform(),
+                transport = transport,
+                scope = backgroundScope,
+                timing = SessionTiming(queryTimeoutMillis = 50, i5WriteIntervalMillis = 0, i7WriteIntervalMillis = 0),
+            ),
             scope = backgroundScope,
-            timing = SessionTiming(queryTimeoutMillis = 50, i5WriteIntervalMillis = 0, i7WriteIntervalMillis = 0),
+            initialIntegrationSettings = settings,
         )
 
     private class RoseTransport(private val bonded: List<DeviceCandidate> = emptyList()) : ControlTransport {

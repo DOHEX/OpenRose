@@ -36,4 +36,5 @@ dependencies {
     compileOnly(libs.libxposed.api)
     implementation(libs.libxposed.service)
     testImplementation(kotlin("test-junit"))
+    testImplementation(libs.coroutines.test)
 }

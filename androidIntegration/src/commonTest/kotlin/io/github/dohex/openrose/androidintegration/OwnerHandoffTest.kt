@@ -2,14 +2,11 @@ package io.github.dohex.openrose.androidintegration
 
 import io.github.dohex.openrose.core.ConnectionState
 import io.github.dohex.openrose.core.ControlErrorCode
-import io.github.dohex.openrose.core.ControlWay
 import io.github.dohex.openrose.core.HostPlatform
-import io.github.dohex.openrose.core.InterfaceStyle
 import io.github.dohex.openrose.core.OperationResult
 import io.github.dohex.openrose.core.PermissionState
 import io.github.dohex.openrose.core.PlatformState
 import io.github.dohex.openrose.core.TransportAvailability
-import io.github.dohex.openrose.core.UserSettings
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.FieldReading
 import io.github.dohex.openrose.core.protocol.FieldValue
@@ -262,7 +259,8 @@ class OwnerHandoffTest {
 
         repeat(3) {
             val observer = async { runtime.state.value }
-            runtime.updateSettings(runtime.state.value.settings.copy(interfaceStyle = InterfaceStyle.MATERIAL3, forceBle = true))
+            runtime.updateSettings(runtime.state.value.settings.copy(forceBle = true))
+            runtime.updateIntegrationSettings(runtime.integration.value.settings.copy(fusionOffAsWind = true))
             runtime.refreshBondedDevices()
             runCurrent()
             observer.await()
@@ -272,8 +270,9 @@ class OwnerHandoffTest {
         assertEquals(1, rig.headset.opens("module"))
         assertEquals(connectionBefore, runtime.state.value.connection)
         assertEquals(1, rig.link.connections.count { it.isOpen })
-        assertEquals(ControlWay.MODULE, runtime.state.value.settings.controlWay)
-        assertEquals(InterfaceStyle.MATERIAL3, runtime.state.value.settings.interfaceStyle)
+        assertEquals(ControlWay.MODULE, runtime.integration.value.settings.controlWay)
+        assertTrue(runtime.state.value.settings.forceBle)
+        assertTrue(runtime.integration.value.settings.fusionOffAsWind)
     }
 
     @Test
@@ -286,10 +285,13 @@ class OwnerHandoffTest {
         runCurrent()
         val generation = (rig.host.status.value as HostStatus.Active).generation
 
-        runtime.updateSettings(UserSettings(controlWay = ControlWay.ORDINARY))
-        advanceUntilIdle()
+        runtime.updateIntegrationSettings(IntegrationSettings(controlWay = ControlWay.ORDINARY, islandMode = IslandMode.OFF))
+        runCurrent()
+        val hostView = requireNotNull(rig.host.view(appIdentity, leaseOf(rig)))
+        assertEquals(IslandMode.OFF, hostView.settings.islandMode)
+        assertEquals(ControlWay.MODULE, hostView.settings.controlWay)
         val forged = rig.host.execute(
-            appIdentity, leaseOf(rig), generation, HostCommand.UpdateSettings(UserSettings(controlWay = ControlWay.ORDINARY)),
+            appIdentity, leaseOf(rig), generation, HostCommand.UpdateSettings(HostSettings(integration = IntegrationSettings(controlWay = ControlWay.ORDINARY))),
         )
 
         assertEquals(HostCallResult.Operation(OperationResult.Success), forged)
@@ -310,7 +312,7 @@ class OwnerHandoffTest {
         assertIs<HandoffOutcome.Blocked>(runtime.selectControlWay(ControlWay.ORDINARY))
         assertEquals(ControlWay.MODULE, rig.store.record.selected)
 
-        runtime.onUserUnlocked(UserSettings())
+        runtime.onUserUnlocked(HostSettings())
         advanceTimeBy(1)
         runCurrent()
 
@@ -322,7 +324,7 @@ class OwnerHandoffTest {
         val plain = ordinary.newRuntime(userUnlocked = false)
         runCurrent()
         assertTrue(ordinary.appTransport.links.isEmpty())
-        plain.onUserUnlocked(UserSettings())
+        plain.onUserUnlocked(HostSettings())
         runCurrent()
         assertEquals(OwnerReadiness.Ready, plain.integration.value.owner.readiness)
     }
@@ -333,7 +335,7 @@ class OwnerHandoffTest {
         rig.bootHost()
         val runtime = rig.newRuntime()
         runCurrent()
-        runtime.updateSettings(runtime.state.value.settings.copy(backgroundControlEnabled = true))
+        runtime.updateIntegrationSettings(runtime.integration.value.settings.copy(backgroundControlEnabled = true))
         runtime.updatePlatformState(PlatformState(PermissionState.GRANTED, TransportAvailability.Available, hostPlatform = HostPlatform.ANDROID))
         runtime.updateIntegrationPlatform(
             IntegrationPlatformState(
@@ -351,7 +353,7 @@ class OwnerHandoffTest {
         assertEquals(BackgroundControlStatus.Disabled, runtime.integration.value.backgroundControl(runtime.state.value))
         assertEquals(BackgroundRecovery.Disabled, runtime.integration.value.backgroundRecovery(runtime.state.value))
         assertFalse(runtime.integration.value.mayStartBackgroundService(runtime.state.value))
-        assertTrue(runtime.state.value.settings.backgroundControlEnabled)
+        assertTrue(runtime.integration.value.settings.backgroundControlEnabled)
 
         runtime.selectControlWay(ControlWay.ORDINARY)
         runCurrent()

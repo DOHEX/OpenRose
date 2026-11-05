@@ -4,7 +4,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.Color
-import io.github.dohex.openrose.core.InterfaceStyle
 
 internal enum class RoseIcon {
     HEADPHONES,

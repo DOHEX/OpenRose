@@ -221,7 +221,7 @@ internal class InProcessHostLink(
             return if (delivered is ReleaseResult.Released) ReleaseResult.Released(tamperReceipt(delivered.receipt)) else delivered
         }
 
-        override suspend fun acquire(request: SwitchRequest, settings: UserSettings): AcquireResult {
+        override suspend fun acquire(request: SwitchRequest, settings: HostSettings): AcquireResult {
             ensureOpen()
             val sent = HostWire.decodeRequest(parseWire(HostWire.encode(request).render()))
             val result = host.acquire(identity, lease.id, sent, HostWire.decodeSettings(parseWire(HostWire.encode(settings).render())))
@@ -304,7 +304,7 @@ internal class OwnerRig(
     init {
         store.onSaved = { record ->
             test.backgroundScope.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
-                host.configure(HostConfiguration(hostUnlocked, UserSettings(controlWay = record.selected)))
+                host.configure(HostConfiguration(hostUnlocked, HostSettings(integration = IntegrationSettings(controlWay = record.selected))))
             }
         }
     }
@@ -312,12 +312,12 @@ internal class OwnerRig(
     suspend fun bootHost(unlocked: Boolean = true) {
         hostUnlocked = unlocked
         host.updatePlatform(platform)
-        host.configure(HostConfiguration(unlocked, UserSettings(controlWay = store.record.selected)))
+        host.configure(HostConfiguration(unlocked, HostSettings(integration = IntegrationSettings(controlWay = store.record.selected))))
     }
     /** The first unlock of a boot, as the host learns it. */
     suspend fun unlockHost() {
         hostUnlocked = true
-        host.configure(HostConfiguration(true, UserSettings(controlWay = store.record.selected)))
+        host.configure(HostConfiguration(true, HostSettings(integration = IntegrationSettings(controlWay = store.record.selected))))
     }
 
     /** A scope standing for one application process; cancelling it is that process disappearing. */
@@ -329,9 +329,10 @@ internal class OwnerRig(
         process: CoroutineScope = test.backgroundScope,
         interfaceOpen: Boolean = true,
         integrationPlatform: IntegrationPlatformState = IntegrationPlatformState(),
+        settings: HostSettings = HostSettings(),
     ): SwitchingControlRuntime = SwitchingControlRuntime(
         initialPlatformState = platform,
-        initialSettings = UserSettings(),
+        initialSettings = settings.control,
         store = store,
         ordinaryFactory = { scope, settings, state, base -> LocalControlRuntime(state, settings, appTransport, scope, sessionTiming, base) },
         moduleLink = link,
@@ -341,6 +342,7 @@ internal class OwnerRig(
         timing = clientTiming,
         userUnlocked = userUnlocked,
         initialIntegrationPlatform = integrationPlatform,
+        initialIntegrationSettings = settings.integration,
     ).also { if (interfaceOpen) it.holdOrdinarySession() }
 
     fun settle() = test.runCurrent()

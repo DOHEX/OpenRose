@@ -15,14 +15,12 @@ import dev.nucleusframework.window.DecoratedWindowDefaults
 import dev.nucleusframework.window.NucleusDecoratedWindowTheme
 import dev.nucleusframework.window.TitleBar
 import dev.nucleusframework.window.styling.LocalTitleBarStyle
-import io.github.dohex.openrose.core.Appearance
-import io.github.dohex.openrose.core.LocalControlRuntime
+import io.github.dohex.openrose.ui.Appearance
 import io.github.dohex.openrose.core.HostPlatform
 import io.github.dohex.openrose.core.PermissionState
 import io.github.dohex.openrose.core.PlatformApplicability
 import io.github.dohex.openrose.core.PlatformState
 import io.github.dohex.openrose.core.TransportAvailability
-import io.github.dohex.openrose.core.UserSettingsCodec
 import io.github.dohex.openrose.ui.OpenRoseApp
 import io.github.dohex.openrose.ui.interfaceBackgroundColor
 import java.util.prefs.Preferences
@@ -36,9 +34,9 @@ fun main() {
         else -> HostPlatform.UNKNOWN
     }
     // Created before composition: window/style changes cannot create another control owner.
-    val runtime = LocalControlRuntime(
-        initialSettings = UserSettingsCodec.decode(preferences.keys().associateWith { preferences.get(it, "") }),
-        initialPlatformState = PlatformState(
+    val runtime = DesktopRuntime(
+        preferences = preferences,
+        platform = PlatformState(
             permission = PermissionState.NOT_REQUIRED,
             transport = TransportAvailability.Unavailable("$platform 控制传输尚未实现"),
             hostPlatform = hostPlatform,
@@ -46,13 +44,14 @@ fun main() {
         ),
     )
     nucleusApplication(backend = NucleusBackend.Tao, enableSingleInstance = false) {
-        val state by runtime.state.collectAsState()
-        val dark = when (state.settings.appearance) {
+        val state by runtime.control.state.collectAsState()
+        val uiSettings by runtime.uiSettings.collectAsState()
+        val dark = when (uiSettings.appearance) {
             Appearance.SYSTEM -> isSystemInDarkTheme()
             Appearance.LIGHT -> false
             Appearance.DARK -> true
         }
-        val background = interfaceBackgroundColor(state.settings.interfaceStyle, dark)
+        val background = interfaceBackgroundColor(uiSettings.interfaceStyle, dark)
         val titleBarStyle = if (dark) DecoratedWindowDefaults.darkTitleBarStyle() else DecoratedWindowDefaults.lightTitleBarStyle()
         NucleusDecoratedWindowTheme(
             isDark = dark,
@@ -73,10 +72,9 @@ fun main() {
                 }
                 OpenRoseApp(
                     state = state,
-                    onSettingsChange = { settings ->
-                        runtime.updateSettings(settings)
-                        UserSettingsCodec.encode(settings).forEach { (key, value) -> preferences.put(key, value) }
-                    },
+                    uiSettings = uiSettings,
+                    onUiSettingsChange = runtime::updateUiSettings,
+                    onSettingsChange = runtime::updateSettings,
                     onRequestPermission = {},
                     onOpenSystemSettings = {},
                     onStartScan = {},
@@ -84,7 +82,7 @@ fun main() {
                     onConnect = {},
                     onDisconnect = {},
                     onSet = { _, _ -> },
-                    onAddDeviceConnect = runtime::connectForAddDevice,
+                    onAddDeviceConnect = runtime.control::connectForAddDevice,
                 )
             }
         }

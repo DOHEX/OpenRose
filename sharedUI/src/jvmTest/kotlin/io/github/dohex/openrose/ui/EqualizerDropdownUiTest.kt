@@ -76,9 +76,7 @@ class EqualizerDropdownUiTest {
                     if (style == InterfaceStyle.MIUIX) InterfaceStyle.MATERIAL3 else InterfaceStyle.MIUIX,
                     style,
                 )) {
-                    harness.state.value = harness.state.value.copy(
-                        settings = harness.state.value.settings.copy(interfaceStyle = nextStyle),
-                    )
+                    harness.uiSettings.value = harness.uiSettings.value.copy(interfaceStyle = nextStyle)
                     harness.render()
                     assertTrue(harness.hasText("原声再现 · HIFI"), "confirmed preset should remain visible in $nextStyle")
                     assertEquals(1, harness.writes.size, "switching to $nextStyle must not write a preset")
@@ -158,21 +156,26 @@ class EqualizerDropdownUiTest {
         val state = mutableStateOf(ControlState(
             platform = PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
             connection = ConnectionState.Connected(id, 42L, profile, ConnectionPhase.READY),
-            settings = UserSettings(interfaceStyle = style), device = device,
+            device = device,
         ))
+        val uiSettings = mutableStateOf(UiSettings(interfaceStyle = style))
         val writes = mutableListOf<Pair<DeviceSetting, FieldValue>>()
         runOpenRoseUiTest(420, 900) {
             setContent {
-                OpenRoseApp(state.value, null, {}, {}, {}, {}, {}, {}, {}, { setting, value -> writes += setting to value },
+                OpenRoseApp(state = state.value, uiSettings = uiSettings.value, onUiSettingsChange = { uiSettings.value = it },
+                    integration = null, onSettingsChange = {}, onRequestPermission = {}, onOpenSystemSettings = {},
+                    onStartScan = {}, onStopScan = {}, onConnect = {}, onDisconnect = {},
+                    onSet = { setting, value -> writes += setting to value },
                     onAddDeviceConnect = { error("Unexpected connection") })
             }
-            block(EqHarness(this, state, writes))
+            block(EqHarness(this, state, uiSettings, writes))
         }
     }
 
     private class EqHarness(
         scene: OpenRoseUiTestScene,
         val state: androidx.compose.runtime.MutableState<ControlState>,
+        val uiSettings: androidx.compose.runtime.MutableState<UiSettings>,
         val writes: MutableList<Pair<DeviceSetting, FieldValue>>,
     ) : OpenRoseUiTestHarness(scene)
 }

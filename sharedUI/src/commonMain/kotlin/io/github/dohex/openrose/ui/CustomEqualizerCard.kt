@@ -24,7 +24,6 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.dp
-import io.github.dohex.openrose.core.InterfaceStyle
 import androidx.compose.runtime.Composable
 import io.github.dohex.openrose.core.ControlState
 import io.github.dohex.openrose.core.DeviceSetting

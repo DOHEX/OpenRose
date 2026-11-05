@@ -225,14 +225,13 @@ class ControlSessionAdvancedAudioTest {
     }
 
     @Test
-    fun queuedCurveOperationsKeepFifoOrderAcrossAStyleSwitch() = runTest {
+    fun queuedCurveOperationsKeepFifoOrder() = runTest {
         val (session, link) = ready()
         val first = async { session.set(DeviceSetting.CUSTOM_EQ, curve) }
         runCurrent()
         val second = async { session.set(DeviceSetting.CUSTOM_EQ, curve) }
         runCurrent()
         assertEquals(listOf(SettingStage.WRITTEN, SettingStage.SUBMITTED), session.state.value.settingOperations.map { it.stage })
-        session.updateSettings(session.state.value.settings.copy(interfaceStyle = InterfaceStyle.MATERIAL3))
 
         link.incoming.send("dd00022a040daa".bytes())
         runCurrent()

@@ -142,58 +142,6 @@ class ControlSessionAudioLifecycleTest {
     }
 
     @Test
-    fun sessionContinuityAcrossStyleSwitches() = runTest {
-        val connection = TestAudioConnection(i5Replies)
-        val bondedCandidate = DeviceCandidate(
-            deviceId = DeviceId("bonded-i5"),
-            name = "EarFree i5",
-            rssi = null,
-            profile = ModelProfile.I5_ZT,
-            manufacturerDataHex = "",
-            classicAddress = "11:22:33:44:55:66",
-        )
-        val transport = TestAudioTransport(
-            connection = connection,
-            bondedList = listOf(bondedCandidate),
-        )
-
-        val session = ControlSession(
-            initialPlatformState = PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
-            transport = transport,
-            scope = backgroundScope,
-            timing = SessionTiming(i5WriteIntervalMillis = 0),
-        )
-
-        // Auto connect
-        transport.audioDeviceFlow.emit(DeviceId("bonded-i5"))
-        runCurrent()
-        advanceUntilIdle()
-        val connected = assertIs<ConnectionState.Connected>(session.state.value.connection)
-        val initialSessionId = connected.sessionId
-        val writesCountBefore = connection.writes.size
-
-        // Switch interface style from MIUIX to MATERIAL3
-        assertEquals(InterfaceStyle.MIUIX, session.state.value.settings.interfaceStyle)
-        session.updateSettings(session.state.value.settings.copy(interfaceStyle = InterfaceStyle.MATERIAL3))
-        runCurrent()
-
-        // Session must be continuous, no reconnect, no extra writes
-        val stillConnected = assertIs<ConnectionState.Connected>(session.state.value.connection)
-        assertEquals(initialSessionId, stillConnected.sessionId)
-        assertEquals(InterfaceStyle.MATERIAL3, session.state.value.settings.interfaceStyle)
-        assertEquals(writesCountBefore, connection.writes.size)
-        assertFalse(connection.closed)
-
-        // Switch back to MIUIX
-        session.updateSettings(session.state.value.settings.copy(interfaceStyle = InterfaceStyle.MIUIX))
-        runCurrent()
-        val stillConnected2 = assertIs<ConnectionState.Connected>(session.state.value.connection)
-        assertEquals(initialSessionId, stillConnected2.sessionId)
-        assertEquals(InterfaceStyle.MIUIX, session.state.value.settings.interfaceStyle)
-        assertFalse(connection.closed)
-    }
-
-    @Test
     fun nonRoseAudioDeviceDoesNotTriggerAutoConnect() = runTest {
         val connection = TestAudioConnection(i5Replies)
         val unrelatedBonded = DeviceCandidate(

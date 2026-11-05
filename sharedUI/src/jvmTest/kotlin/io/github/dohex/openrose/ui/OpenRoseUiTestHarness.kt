@@ -103,7 +103,9 @@ internal class OpenRoseAppHarness(
     scene: OpenRoseUiTestScene,
     val state: MutableState<ControlState>,
     val integration: MutableState<IntegrationState>,
-    val settingsChanges: List<UserSettings>,
+    val uiSettings: MutableState<UiSettings>,
+    val settingsChanges: List<UiSettings>,
+    val controlSettingsChanges: List<UserSettings>,
     val settingWrites: List<Pair<DeviceSetting, FieldValue>>,
     val connectRequests: List<DeviceId>,
     private val disconnects: () -> Int,
@@ -114,13 +116,16 @@ internal class OpenRoseAppHarness(
 internal fun withOpenRoseAppHarness(
     initialState: ControlState,
     initialIntegration: IntegrationState = androidIntegration,
+    initialUiSettings: UiSettings = UiSettings(),
     width: Int = 420,
     height: Int = 900,
     block: suspend (OpenRoseAppHarness) -> Unit,
 ) = runOpenRoseUiTest(width, height) {
     val state = mutableStateOf(initialState)
     val integration = mutableStateOf(initialIntegration)
-    val settingsChanges = mutableListOf<UserSettings>()
+    val uiSettings = mutableStateOf(initialUiSettings)
+    val settingsChanges = mutableListOf<UiSettings>()
+    val controlSettingsChanges = mutableListOf<UserSettings>()
     val settingWrites = mutableListOf<Pair<DeviceSetting, FieldValue>>()
     val connectRequests = mutableListOf<DeviceId>()
     var disconnectCount = 0
@@ -128,8 +133,14 @@ internal fun withOpenRoseAppHarness(
         OpenRoseApp(
             state = state.value,
             integration = integration.value,
-            onSettingsChange = { next ->
+            uiSettings = uiSettings.value,
+            onUiSettingsChange = { next ->
                 settingsChanges += next
+                uiSettings.value = next
+            },
+            onIntegrationSettingsChange = { next -> integration.value = integration.value.copy(settings = next) },
+            onSettingsChange = { next ->
+                controlSettingsChanges += next
                 state.value = state.value.copy(settings = next)
             },
             onRequestPermission = {},
@@ -142,7 +153,7 @@ internal fun withOpenRoseAppHarness(
             onAddDeviceConnect = { error("Unexpected add-device connection in this scenario") },
         )
     }
-    block(OpenRoseAppHarness(this, state, integration, settingsChanges, settingWrites, connectRequests) { disconnectCount })
+    block(OpenRoseAppHarness(this, state, integration, uiSettings, settingsChanges, controlSettingsChanges, settingWrites, connectRequests) { disconnectCount })
 }
 
 /** Integration facts of an Android host whose system module is not enabled. */
@@ -161,17 +172,16 @@ private val androidPlatform = PlatformState(
 )
 
 /** Android host with no control connection. */
-internal fun disconnectedAndroidState(settings: UserSettings = UserSettings()): ControlState =
-    ControlState(platform = androidPlatform, settings = settings)
+internal fun disconnectedAndroidState(): ControlState =
+    ControlState(platform = androidPlatform)
 
 /** Android host with a ready I7 control connection and a fully readable device. */
-internal fun connectedI7State(settings: UserSettings = UserSettings()): ControlState {
+internal fun connectedI7State(): ControlState {
     val profile = ModelProfile.I7_RS_V2
     val deviceId = DeviceId("test-i7")
     return ControlState(
         platform = androidPlatform,
         connection = ConnectionState.Connected(deviceId, 1L, profile, ConnectionPhase.READY),
-        settings = settings,
         device = DeviceState(
             deviceId = deviceId,
             sessionId = 1L,

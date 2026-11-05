@@ -4,6 +4,7 @@ package io.github.dohex.openrose.ui
 
 import androidx.compose.runtime.mutableStateOf
 import io.github.dohex.openrose.androidintegration.HandoffOutcome
+import io.github.dohex.openrose.androidintegration.ControlWay
 import io.github.dohex.openrose.androidintegration.IntegrationPlatformState
 import io.github.dohex.openrose.androidintegration.IntegrationState
 import io.github.dohex.openrose.androidintegration.ModuleAvailability
@@ -16,14 +17,11 @@ import io.github.dohex.openrose.androidintegration.SwitchRequest
 import io.github.dohex.openrose.core.ConnectionPhase
 import io.github.dohex.openrose.core.ConnectionState
 import io.github.dohex.openrose.core.ControlState
-import io.github.dohex.openrose.core.ControlWay
 import io.github.dohex.openrose.core.HostPlatform
-import io.github.dohex.openrose.core.InterfaceStyle
 import io.github.dohex.openrose.core.PermissionState
 import io.github.dohex.openrose.core.PlatformApplicability
 import io.github.dohex.openrose.core.PlatformState
 import io.github.dohex.openrose.core.TransportAvailability
-import io.github.dohex.openrose.core.UserSettings
 import io.github.dohex.openrose.core.protocol.ModelProfile
 import io.github.dohex.openrose.core.transport.DeviceId
 import kotlin.test.Test
@@ -307,7 +305,7 @@ class ControlWayUiTest {
 
     private fun forEachStyle(base: Scenario, wired: Boolean = true, page: String = "设置", check: suspend (Harness) -> Unit) {
         for (style in InterfaceStyle.entries) {
-            withHarness(base.copy(control = base.control.copy(settings = UserSettings(interfaceStyle = style))), wired) { harness ->
+            withHarness(base, style, wired) { harness ->
                 try {
                     harness.render()
                     harness.openTab(page)
@@ -319,11 +317,14 @@ class ControlWayUiTest {
         }
     }
 
-    private fun withHarness(initial: Scenario, wired: Boolean, block: suspend (Harness) -> Unit) = runOpenRoseUiTest(1200, 1000) {
+    private fun withHarness(initial: Scenario, style: InterfaceStyle, wired: Boolean, block: suspend (Harness) -> Unit) = runOpenRoseUiTest(1200, 1000) {
         val host = FakeOwnerHost(initial)
         setContent {
             OpenRoseApp(
                 state = host.state.value,
+                uiSettings = UiSettings(interfaceStyle = style),
+                onUiSettingsChange = {},
+                onIntegrationSettingsChange = { host.integration.value = host.integration.value.copy(settings = it) },
                 integration = host.integration.value,
                 onSettingsChange = {},
                 onRequestPermission = {},

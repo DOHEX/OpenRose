@@ -3,11 +3,8 @@
 package io.github.dohex.openrose.ui
 
 import io.github.dohex.openrose.core.ControlState
-import io.github.dohex.openrose.core.InterfaceStyle
-import io.github.dohex.openrose.core.PageTransition
 import io.github.dohex.openrose.core.PermissionState
 import io.github.dohex.openrose.core.PlatformState
-import io.github.dohex.openrose.core.UserSettings
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -19,8 +16,8 @@ class PageTransitionUiTest {
             withOpenRoseAppHarness(
                 ControlState(
                     platform = PlatformState(permission = PermissionState.GRANTED),
-                    settings = UserSettings(interfaceStyle = style, pageTransition = PageTransition.MIUIX_SPRING),
                 ),
+                initialUiSettings = UiSettings(interfaceStyle = style, pageTransition = PageTransition.MIUIX_SPRING),
             ) { harness ->
                 harness.render()
                 harness.clickTab("设置")

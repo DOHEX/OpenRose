@@ -1,7 +1,6 @@
 package io.github.dohex.openrose.androidintegration
 
 import io.github.dohex.openrose.core.ConnectionState
-import io.github.dohex.openrose.core.ControlWay
 import io.github.dohex.openrose.core.SessionReference
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.FieldReading

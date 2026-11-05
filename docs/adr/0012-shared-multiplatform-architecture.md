@@ -30,8 +30,11 @@ status: accepted
 
 [ADR 0011](0011-dual-host-single-control-session.md) 的决策不变，其实施记录中 `SwitchingControlRuntime`、`ModuleControlHost` 与连接提示判定的位置改为 `:androidIntegration`。Android 的 BLE 路径迁到共享 GATT 层后，须在 Android 实机冒烟。
 
-实施（#87）：Android 集成已归入独立的 `:androidIntegration` KMP 模块，生产代码与离线测试分别位于 `commonMain`、`commonTest`。`ControlState`／`PlatformState` 只保留共有控制状态与平台事实，应用同时观察 `SwitchingControlRuntime.integration`；所有者视图从同一次控制状态捕获派生系统呈现，再通过 `HostFrame` 发布，提示过期与领取也会更新订阅，断开或失联后撤销。系统入口在集成层核对设备与会话引用，再调用同一控制入口；`ControlRuntime.set` 的可选 `expectedSessionId` 仅为各平台共用的入队前置条件，在会话锁内原子检查，避免核对后发生的会话替换将设置写到另一会话。设置字段及其类型暂留 `:core`，由 #92 拆分；`:sharedUI` 暂时依赖 `:androidIntegration`，由 #89 移出 Android 界面段落。本次不增加 Android 实机验收结论。
+实施（#87）：Android 集成已归入独立的 `:androidIntegration` KMP 模块，生产代码与离线测试分别位于 `commonMain`、`commonTest`。`ControlState`／`PlatformState` 只保留共有控制状态与平台事实，应用同时观察 `SwitchingControlRuntime.integration`；所有者视图从同一次控制状态捕获派生系统呈现，再通过 `HostFrame` 发布，提示过期与领取也会更新订阅，断开或失联后撤销。系统入口在集成层核对设备与会话引用，再调用同一控制入口；`ControlRuntime.set` 的可选 `expectedSessionId` 仅为各平台共用的入队前置条件，在会话锁内原子检查，避免核对后发生的会话替换将设置写到另一会话。设置字段及其类型随后由 #92 按归属层拆分（见下文）；`:sharedUI` 暂时依赖 `:androidIntegration`，由 #89 移出 Android 界面段落。本次不增加 Android 实机验收结论。
 
 实施（#88）：`ControlSession` 只持有权威状态流并实现 `ControlRuntime` 门面；`ConnectionTargeting` 仲裁手动、系统固定目标、添加耳机与音频驱动的连接意图，`DeviceDiscovery` 管理扫描、已配对设备与候选解析。`ControlLink` 集中单次连接尝试的端点选择、打开、订阅、初始化、恢复、关闭与未确认关闭的重试，作为 #90 接入共享 GATT 层的位置；`SettingQueue` 管理校验、队列、写入节流与新鲜读回确认，并与连接生命周期共用锁来原子核对会话及入队。型号能力由纯函数 `deviceCapabilities` 推导。控制状态及其嵌套的设置、能力、协议字段值均使用 `kotlinx.collections.immutable` 持久集合，构造时接纳外部集合，删除会话与系统读取入口对控制状态的防御性拷贝。保留原有 `ControlSession*Test` 的断言语义，只调整集合构造；离线运行另覆盖订阅恢复、设置确认、界面风格切换连续性与失败关闭重试，本次不增加实机验收结论。
 
 添加耳机的连接尝试结果先完成失败清理，再核对该流程是否仍对应当前就绪会话，保持拆分前的顺序。旧添加流程在成功后被同设备的新音频会话取代时，只拒绝旧调用，不清除新会话的音频归属；新增门面回归测试和独立运行冒烟均验证随后音频断开会关闭新控制连接。
+
+实施（#92）：`core.UserSettings` 只保留 `forceBle`；`sharedUI.UiSettings` 持有界面风格、明暗模式、转场动效、背景模糊和底栏样式；`androidIntegration.IntegrationSettings` 持有超级岛、焦点通知、触发条件、融合设备中心偏好、后台控制及控制方式。各层编解码只读取自己的 `core.`、`sharedUI.`、`androidIntegration.` 前缀键，旧键作废且不迁移；显式空触发条件仍表示不自动提示，缺失或未知值回到默认值。`HostSettings` 只组合控制与集成设置，应用从持久化存储在发布锁内读取最新配置，模块宿主与 IPC 共用该编解码。控制入口的设置更新只接收控制设置，系统呈现与融合设备中心从集成层读取偏好，外观变化独立于控制状态。离线测试覆盖三层编解码、应用发布与宿主读回一致性，以及 Android / 桌面存储重新打开后重建运行时；未增加 Android 实机验收结论。
+

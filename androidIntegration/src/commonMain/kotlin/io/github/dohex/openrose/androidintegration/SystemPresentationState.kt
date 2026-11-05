@@ -2,10 +2,7 @@ package io.github.dohex.openrose.androidintegration
 
 import io.github.dohex.openrose.core.ControlState
 import io.github.dohex.openrose.core.DeviceSetting
-import io.github.dohex.openrose.core.IslandMode
-import io.github.dohex.openrose.core.IslandTrigger
 import io.github.dohex.openrose.core.SessionReference
-import io.github.dohex.openrose.core.UserSettings
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.FieldReading
 import io.github.dohex.openrose.core.protocol.FieldValue
@@ -58,7 +55,7 @@ data class SystemPresentationState(
 }
 
 /** The system view of one ControlState capture, showing [prompt] only while it belongs to that capture's ready session. */
-internal fun ControlState.systemPresentation(prompt: ConnectionPrompt?): SystemPresentationState {
+internal fun ControlState.systemPresentation(settings: IntegrationSettings, prompt: ConnectionPrompt?): SystemPresentationState {
     val reference = readySession
     val mode = settings.islandMode
     val allowIslandFields = mode != IslandMode.OFF &&
@@ -93,9 +90,9 @@ internal fun ControlState.systemPresentation(prompt: ConnectionPrompt?): SystemP
 internal fun SystemPresentationState.detached() = copy(actions = actions.toSet())
 
 /** Whether this prompt may still show under [settings]: its mode is the saved one and that mode prompts. */
-internal fun ConnectionPrompt.appliesTo(settings: UserSettings): Boolean = mode == settings.islandMode && settings.allowsConnectionPrompt()
+internal fun ConnectionPrompt.appliesTo(settings: IntegrationSettings): Boolean = mode == settings.islandMode && settings.allowsConnectionPrompt()
 
-internal fun UserSettings.allowsConnectionPrompt(): Boolean = when (islandMode) {
+internal fun IntegrationSettings.allowsConnectionPrompt(): Boolean = when (islandMode) {
     IslandMode.OFF -> false
     IslandMode.OFFICIAL -> true
     IslandMode.MODULE -> IslandTrigger.CONNECTION in islandTriggers

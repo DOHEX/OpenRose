@@ -162,13 +162,13 @@ Run the desktop app:
 ./gradlew :desktopApp:run
 ```
 
-Run the tests that need no earphone hardware (protocol, control session, and shared UI tests, plus Android / desktop compilation):
+Run the tests that need no earphone hardware (protocol, control session, shared UI, and Android / desktop preference persistence tests, plus compilation for both platforms):
 
 ```bash
 ./gradlew offlineCheck
 ```
 
-Run the full check, which adds Android unit tests and Lint:
+Run the full check, which also includes Android Lint:
 
 ```bash
 ./gradlew check offlineCheck
@@ -190,13 +190,15 @@ CI runs the tests on Linux only. Linux publishes the Android APK and the four Li
 
 | Directory | Contents |
 | --- | --- |
-| `core/` | Model capabilities, protocol codecs, control sessions, the unified control entry (`ControlRuntime`), state, and user settings |
-| `androidIntegration/` | Android integration (pure Kotlin, tested on the JVM): control way and owner handoff, module host and client, IPC encoding, system entries, system presentation (island, focus notification, connection prompt), fusion device center mapping, and background control state |
-| `sharedUI/` | Shared UI, Miuix / Material 3 components, and UI tests |
+| `core/` | Model capabilities, protocol codecs, control sessions, the unified control entry (`ControlRuntime`), state, and control settings (force BLE) |
+| `androidIntegration/` | Android integration (pure Kotlin, tested on the JVM): control way and owner handoff, module host and client, IPC encoding, system entries, system presentation, Fusion Device Center mapping, background control, and their settings |
+| `sharedUI/` | Shared UI, Miuix / Material 3 components, appearance settings, and UI tests |
 | `androidApp/` | Android entry point, BLE / SPP transports, libxposed module, and HyperOS system bridge |
 | `desktopApp/` | Windows / Linux desktop entry point, windows, and preferences |
 | `build-logic/` | Gradle convention plugins shared by the modules: toolchain, JVM bytecode target, Android and desktop packaging setup |
 | `docs/` | Protocol research & model specifications (`docs/protocols/`), implementation evidence (`docs/protocols.md`), architecture decisions, and specifications |
+
+Each layer owns its settings codec and shares the platform's key-value store: control keys use `core.`, appearance keys use `sharedUI.`, and Android integration keys use `androidIntegration.`. The module host receives only control and integration settings. Old unprefixed keys are ignored without migration; preferences must be selected again when using this version.
 
 ## Documentation
 

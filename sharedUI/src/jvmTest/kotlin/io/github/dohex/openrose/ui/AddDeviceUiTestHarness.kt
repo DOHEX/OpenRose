@@ -21,18 +21,19 @@ internal fun withAddDeviceHarness(
     style: InterfaceStyle = InterfaceStyle.MIUIX,
     initial: ControlState = ControlState(
         platform = PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
-        settings = UserSettings(appearance = Appearance.LIGHT, interfaceStyle = style, pageTransition = PageTransition.NONE),
         candidates = persistentListOf(addDeviceCandidate),
     ),
     width: Int = 420,
     height: Int = 1000,
     block: suspend (AddDeviceUiTestHarness) -> Unit,
 ) = runOpenRoseUiTest(width, height) {
-    val harness = AddDeviceUiTestHarness(this, mutableStateOf(initial))
+    val harness = AddDeviceUiTestHarness(this, mutableStateOf(initial), mutableStateOf(UiSettings(appearance = Appearance.LIGHT, interfaceStyle = style, pageTransition = PageTransition.NONE)))
     val state = harness.state
     setContent {
         OpenRoseApp(
             state = state.value,
+            uiSettings = harness.uiSettings.value,
+            onUiSettingsChange = { harness.uiSettings.value = it },
             onSettingsChange = { state.value = state.value.copy(settings = it) },
             onRequestPermission = {},
             onOpenSystemSettings = {},
@@ -60,6 +61,7 @@ internal fun withAddDeviceHarness(
 internal class AddDeviceUiTestHarness(
     scene: OpenRoseUiTestScene,
     val state: MutableState<ControlState>,
+    val uiSettings: MutableState<UiSettings>,
 ) : OpenRoseUiTestHarness(scene) {
     var scanStarts = 0
     var scanStops = 0

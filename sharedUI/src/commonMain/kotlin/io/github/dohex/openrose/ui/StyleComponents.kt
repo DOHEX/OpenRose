@@ -28,7 +28,6 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.unit.dp
-import io.github.dohex.openrose.core.InterfaceStyle
 import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.basic.DropdownEntry
 import top.yukonga.miuix.kmp.basic.DropdownItem

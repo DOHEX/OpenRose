@@ -210,7 +210,7 @@ class ControlSessionEqualizerTest {
     }
 
     @Test
-    fun queuedEapRechecksFirmwareBeforeSendingAndSharesTheGameSequenceAcrossStyleChanges() = runTest {
+    fun queuedEapRechecksFirmwareBeforeSendingAndSharesTheGameSequence() = runTest {
         val (session, link) = ready(ModelProfile.I7_RS_V2)
         val game = async { session.set(DeviceSetting.GAME_MODE, FieldValue.Toggle(true)) }
         runCurrent()
@@ -218,7 +218,6 @@ class ControlSessionEqualizerTest {
         runCurrent()
         assertEquals(listOf(SettingStage.WRITTEN, SettingStage.SUBMITTED), session.state.value.settingOperations.map { it.stage })
         assertEquals(6, link.writes.size)
-        session.updateSettings(session.state.value.settings.copy(interfaceStyle = InterfaceStyle.MATERIAL3))
         link.incoming.send("dd00040d010501f5aa".bytes())
         runCurrent()
         assertEquals(6, link.writes.size)
@@ -234,7 +233,6 @@ class ControlSessionEqualizerTest {
         link.incoming.send("dd00022a010aaa".bytes())
         runCurrent()
         assertEquals(OperationResult.Success, pop.await())
-        assertEquals(InterfaceStyle.MATERIAL3, session.state.value.settings.interfaceStyle)
         session.disconnect()
     }
 

@@ -6,7 +6,6 @@ import io.github.dohex.openrose.core.ControlErrorCode
 import io.github.dohex.openrose.core.ControlRuntime
 import io.github.dohex.openrose.core.DeviceCandidate
 import io.github.dohex.openrose.core.DeviceSetting
-import io.github.dohex.openrose.core.InterfaceStyle
 import io.github.dohex.openrose.core.LocalControlRuntime
 import io.github.dohex.openrose.core.OperationResult
 import io.github.dohex.openrose.core.PermissionState
@@ -186,14 +185,14 @@ class SystemEntryRuntimeTest {
     }
 
     @Test
-    fun anInterfaceStyleChangeKeepsTheSameConnectionAndSession() = runTest {
+    fun aControlSettingsChangeKeepsTheSameConnectionAndSession() = runTest {
         val transport = RuntimeTransport(ModelProfile.I5_ZT)
         val runtime = newRuntime(transport)
         connectByScan(runtime, transport, ModelProfile.I5_ZT, DeviceId("i5"))
         val before = assertIs<ConnectionState.Connected>(runtime.state.value.connection)
 
-        runtime.updateSettings(runtime.state.value.settings.copy(interfaceStyle = InterfaceStyle.MATERIAL3))
-        runtime.updateSettings(runtime.state.value.settings.copy(interfaceStyle = InterfaceStyle.MIUIX))
+        runtime.updateSettings(runtime.state.value.settings.copy(forceBle = true))
+        runtime.updateSettings(runtime.state.value.settings.copy(forceBle = false))
 
         assertEquals(before, runtime.state.value.connection)
         assertEquals(1, transport.links.size)

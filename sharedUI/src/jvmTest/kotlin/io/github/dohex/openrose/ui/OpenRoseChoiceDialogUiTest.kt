@@ -22,10 +22,13 @@ import kotlin.test.assertTrue
 class OpenRoseChoiceDialogUiTest {
     @Test
     fun materialStyleChoiceRowsShareTheDialogSurface() {
-        val state = mutableStateOf(ControlState(platform = PlatformState(PermissionState.GRANTED), settings = UserSettings(interfaceStyle = InterfaceStyle.MATERIAL3, appearance = Appearance.LIGHT)))
+        val state = mutableStateOf(ControlState(platform = PlatformState(PermissionState.GRANTED)))
+        val uiSettings = mutableStateOf(UiSettings(interfaceStyle = InterfaceStyle.MATERIAL3, appearance = Appearance.LIGHT))
         runOpenRoseUiTest(420, 900) {
             setContent {
-                OpenRoseApp(state.value, null, { state.value = state.value.copy(settings = it) }, {}, {}, {}, {}, {}, {}, { _, _ -> },
+                OpenRoseApp(state = state.value, uiSettings = uiSettings.value, onUiSettingsChange = { uiSettings.value = it },
+                    integration = null, onSettingsChange = {}, onRequestPermission = {}, onOpenSystemSettings = {},
+                    onStartScan = {}, onStopScan = {}, onConnect = {}, onDisconnect = {}, onSet = { _, _ -> },
                     onAddDeviceConnect = { error("Unexpected add-device connection in this scenario") })
             }
             val harness = OpenRoseUiTestHarness(this)
@@ -117,7 +120,7 @@ class OpenRoseChoiceDialogUiTest {
                 harness.render()
                 harness.clickTab("设置")
                 harness.render()
-                val originalSettings = harness.state.value.settings
+                val originalSettings = harness.uiSettings.value
                 harness.focus("组件风格")
                 harness.sendKey(Key.Enter)
                 harness.render()
@@ -143,7 +146,7 @@ class OpenRoseChoiceDialogUiTest {
                 harness.sendKey(Key.Enter)
                 harness.render()
                 val next = if (style == InterfaceStyle.MIUIX) InterfaceStyle.MATERIAL3 else InterfaceStyle.MIUIX
-                assertEquals(next, harness.state.value.settings.interfaceStyle)
+                assertEquals(next, harness.uiSettings.value.interfaceStyle)
                 assertEquals(listOf(originalSettings.copy(interfaceStyle = next)), harness.settingsWrites)
                 assertTrue(harness.settingWrites.isEmpty())
                 assertEquals(ConnectionState.Connected(harness.deviceId, 42L, ModelProfile.I7_RS_V2, ConnectionPhase.READY),
@@ -172,24 +175,30 @@ class OpenRoseChoiceDialogUiTest {
         val state = mutableStateOf(ControlState(
             platform = PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
             connection = ConnectionState.Connected(id, 42L, profile, ConnectionPhase.READY),
-            settings = UserSettings(interfaceStyle = style), device = device,
+            device = device,
         ))
-        val settingsWrites = mutableListOf<UserSettings>()
+        val uiSettings = mutableStateOf(UiSettings(interfaceStyle = style))
+        val settingsWrites = mutableListOf<UiSettings>()
         val settingWrites = mutableListOf<Pair<DeviceSetting, FieldValue>>()
         var otherActions = 0
         setContent {
-            OpenRoseApp(state.value, null, { settingsWrites += it; state.value = state.value.copy(settings = it) },
-                { otherActions++ }, { otherActions++ }, { otherActions++ }, { otherActions++ },
-                { otherActions++ }, { otherActions++ }, { setting, value -> settingWrites += setting to value },
+            OpenRoseApp(state = state.value, uiSettings = uiSettings.value,
+                onUiSettingsChange = { settingsWrites += it; uiSettings.value = it },
+                integration = null, onSettingsChange = { otherActions++ },
+                onRequestPermission = { otherActions++ }, onOpenSystemSettings = { otherActions++ },
+                onStartScan = { otherActions++ }, onStopScan = { otherActions++ },
+                onConnect = { otherActions++ }, onDisconnect = { otherActions++ },
+                onSet = { setting, value -> settingWrites += setting to value },
                 onAddDeviceConnect = { error("Unexpected add-device connection in this scenario") })
         }
-        block(ConnectedHarness(this, state, settingsWrites, settingWrites, id) { otherActions })
+        block(ConnectedHarness(this, state, uiSettings, settingsWrites, settingWrites, id) { otherActions })
     }
 
     private class ConnectedHarness(
         scene: OpenRoseUiTestScene,
         val state: androidx.compose.runtime.MutableState<ControlState>,
-        val settingsWrites: MutableList<UserSettings>,
+        val uiSettings: androidx.compose.runtime.MutableState<UiSettings>,
+        val settingsWrites: MutableList<UiSettings>,
         val settingWrites: MutableList<Pair<DeviceSetting, FieldValue>>,
         val deviceId: DeviceId,
         private val actionCount: () -> Int,

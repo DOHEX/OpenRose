@@ -80,9 +80,9 @@ class AddDeviceLifecycleUiTest {
                 harness.advanceTimeBy(10_000)
                 harness.state.value = harness.state.value.copy(
                     candidates = persistentListOf(addDeviceCandidate.copy(rssi = -31)),
-                    settings = harness.state.value.settings.copy(
-                        interfaceStyle = if (style == InterfaceStyle.MIUIX) InterfaceStyle.MATERIAL3 else InterfaceStyle.MIUIX,
-                    ),
+                )
+                harness.uiSettings.value = harness.uiSettings.value.copy(
+                    interfaceStyle = if (style == InterfaceStyle.MIUIX) InterfaceStyle.MATERIAL3 else InterfaceStyle.MIUIX,
                 )
                 harness.render()
                 assertTrue(harness.hasContentDescription("返回"))

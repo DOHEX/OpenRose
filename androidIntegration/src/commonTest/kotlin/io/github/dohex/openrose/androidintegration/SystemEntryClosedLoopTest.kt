@@ -2,11 +2,9 @@ package io.github.dohex.openrose.androidintegration
 
 import io.github.dohex.openrose.core.ConnectionState
 import io.github.dohex.openrose.core.ControlErrorCode
-import io.github.dohex.openrose.core.ControlWay
 import io.github.dohex.openrose.core.DeviceSetting
 import io.github.dohex.openrose.core.OperationResult
 import io.github.dohex.openrose.core.SessionReference
-import io.github.dohex.openrose.core.UserSettings
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.FieldValue
 import kotlin.test.Test
@@ -139,7 +137,7 @@ class SystemEntryClosedLoopTest {
             entry.rig.host.readSession(milinkIdentity, entry.lease, entry.generation, entry.reference),
         ).rejection)
 
-        val acquired = entry.rig.host.acquire(appIdentity, app, SwitchRequest("to-module", ControlWay.ORDINARY, ControlWay.MODULE), UserSettings())
+        val acquired = entry.rig.host.acquire(appIdentity, app, SwitchRequest("to-module", ControlWay.ORDINARY, ControlWay.MODULE), HostSettings())
         val next = assertIs<AcquireResult.Acquired>(acquired).generation
         runCurrent()
         testScheduler.advanceUntilIdle()
@@ -165,7 +163,7 @@ class SystemEntryClosedLoopTest {
 
     private suspend fun TestScope.frameWritten(offAsWind: Boolean, mode: String): String {
         val entry = connectedEntry()
-        entry.rig.host.configure(HostConfiguration(true, UserSettings(controlWay = ControlWay.MODULE, fusionOffAsWind = offAsWind)))
+        entry.rig.host.configure(HostConfiguration(true, HostSettings(integration = IntegrationSettings(controlWay = ControlWay.MODULE, fusionOffAsWind = offAsWind))))
         runCurrent()
         val link = entry.rig.hostTransport.links.single()
         val before = link.writes.size

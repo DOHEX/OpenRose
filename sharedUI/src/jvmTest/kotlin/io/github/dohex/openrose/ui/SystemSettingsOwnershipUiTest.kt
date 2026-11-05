@@ -4,18 +4,17 @@ import kotlinx.collections.immutable.persistentSetOf
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import io.github.dohex.openrose.androidintegration.IntegrationPlatformState
+import io.github.dohex.openrose.androidintegration.IntegrationSettings
+import io.github.dohex.openrose.androidintegration.IslandMode
 import io.github.dohex.openrose.androidintegration.IntegrationState
 import io.github.dohex.openrose.androidintegration.ModuleAvailability
 import io.github.dohex.openrose.androidintegration.ModuleUnavailableCause
 import io.github.dohex.openrose.core.ControlState
 import io.github.dohex.openrose.core.HostPlatform
-import io.github.dohex.openrose.core.InterfaceStyle
-import io.github.dohex.openrose.core.IslandMode
 import io.github.dohex.openrose.core.PermissionState
 import io.github.dohex.openrose.core.PlatformApplicability
 import io.github.dohex.openrose.core.PlatformState
 import io.github.dohex.openrose.core.TransportAvailability
-import io.github.dohex.openrose.core.UserSettings
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -104,7 +103,7 @@ class SystemSettingsOwnershipUiTest {
 
                     harness.clickText("焦点通知")
                     harness.render()
-                    assertFalse(harness.state.value.settings.focusNotificationEnabled, "the moved switch still saves its setting in $style")
+                    assertFalse(harness.integration.value.settings.focusNotificationEnabled, "the moved switch still saves its setting in $style")
                     assertTrue(harness.settingsChanges.any { !it.focusNotificationEnabled }, "the preference crosses the public callback in $style")
                     assertTrue(harness.hasText("偏好已保存，待系统就绪后生效。"), "unready integrations report a saved pending preference in $style")
                     assertFalse(harness.hasText("功能已生效"), "a save callback does not claim system presentation is active in $style")
@@ -138,8 +137,7 @@ class SystemSettingsOwnershipUiTest {
             withHarness(
                 width = 1200,
                 style = style,
-                settings = UserSettings(
-                    interfaceStyle = style,
+                settings = IntegrationSettings(
                     islandMode = IslandMode.OFF,
                     focusNotificationEnabled = true,
                     islandTriggers = persistentSetOf(),
@@ -156,14 +154,14 @@ class SystemSettingsOwnershipUiTest {
                 harness.render()
                 assertTrue(harness.hasText("模块显示时机"), "trigger settings appear in module mode in $style")
                 assertTrue(harness.hasText("未选择显示时机，不自动触发。"), "an empty trigger set stays explicit in $style")
-                assertTrue(harness.state.value.settings.islandTriggers.isEmpty())
+                assertTrue(harness.integration.value.settings.islandTriggers.isEmpty())
 
                 harness.clickText("超级岛")
                 harness.render()
                 harness.clickText("不显示")
                 harness.render()
                 assertFalse(harness.hasText("模块显示时机"))
-                assertTrue(harness.state.value.settings.islandTriggers.isEmpty(), "hiding trigger settings does not reset values in $style")
+                assertTrue(harness.integration.value.settings.islandTriggers.isEmpty(), "hiding trigger settings does not reset values in $style")
 
                 harness.clickText("超级岛")
                 harness.render()
@@ -192,7 +190,7 @@ class SystemSettingsOwnershipUiTest {
                 assertTrue(harness.hasText("偏好已保存。系统状态请查看状态页。"), "ready integrations report save without claiming effect in $style")
                 assertFalse(harness.hasText("功能已生效"), "module readiness alone does not prove system presentation in $style")
                 assertFalse(harness.hasText("偏好已保存，待系统就绪后生效。"), "ready integrations do not report a pending readiness state in $style")
-                assertTrue(harness.state.value.settings.focusNotificationEnabled.not())
+                assertTrue(harness.integration.value.settings.focusNotificationEnabled.not())
             }
         }
     }
@@ -200,12 +198,12 @@ class SystemSettingsOwnershipUiTest {
     private fun withHarness(
         width: Int,
         style: InterfaceStyle,
-        settings: UserSettings = UserSettings(interfaceStyle = style, focusNotificationEnabled = true),
+        settings: IntegrationSettings = IntegrationSettings(focusNotificationEnabled = true),
         module: ModuleAvailability = ModuleAvailability.Unavailable("兼容框架服务尚未连接"),
         height: Int = 1000,
         block: suspend (Harness) -> Unit,
     ) = runOpenRoseUiTest(width, height) {
-        val settingsChanges = mutableListOf<UserSettings>()
+        val settingsChanges = mutableListOf<IntegrationSettings>()
         val state = mutableStateOf(
             ControlState(
                 platform = PlatformState(
@@ -214,24 +212,27 @@ class SystemSettingsOwnershipUiTest {
                     hostPlatform = HostPlatform.ANDROID,
                     controlTransportApplicability = PlatformApplicability.APPLICABLE,
                 ),
-                settings = settings,
             ),
         )
-        val integration = IntegrationState(
+        val integration = mutableStateOf(IntegrationState(
+            settings = settings,
             platform = IntegrationPlatformState(
                 module = module,
                 systemIntegrationApplicability = PlatformApplicability.APPLICABLE,
             ),
-        )
+        ))
         val settingWrites = mutableListOf<Pair<io.github.dohex.openrose.core.DeviceSetting, io.github.dohex.openrose.core.protocol.FieldValue>>()
         setContent {
             OpenRoseApp(
                 state = state.value,
-                integration = integration,
-                onSettingsChange = { nextSettings ->
+                uiSettings = UiSettings(interfaceStyle = style),
+                onUiSettingsChange = {},
+                integration = integration.value,
+                onIntegrationSettingsChange = { nextSettings ->
                     settingsChanges += nextSettings
-                    state.value = state.value.copy(settings = nextSettings)
+                    integration.value = integration.value.copy(settings = nextSettings)
                 },
+                onSettingsChange = { state.value = state.value.copy(settings = it) },
                 onRequestPermission = {},
                 onOpenSystemSettings = {},
                 onStartScan = {},
@@ -242,13 +243,13 @@ class SystemSettingsOwnershipUiTest {
                 onAddDeviceConnect = { error("Unexpected add-device connection in this scenario") },
             )
         }
-        block(Harness(this, state, settingsChanges, settingWrites))
+        block(Harness(this, integration, settingsChanges, settingWrites))
     }
 
     private class Harness(
         scene: OpenRoseUiTestScene,
-        val state: MutableState<ControlState>,
-        val settingsChanges: List<UserSettings>,
+        val integration: MutableState<IntegrationState>,
+        val settingsChanges: List<IntegrationSettings>,
         val settingWrites: List<Pair<io.github.dohex.openrose.core.DeviceSetting, io.github.dohex.openrose.core.protocol.FieldValue>>,
     ) : OpenRoseUiTestHarness(scene)
 }

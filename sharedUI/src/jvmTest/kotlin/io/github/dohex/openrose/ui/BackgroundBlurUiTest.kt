@@ -15,11 +15,11 @@ class BackgroundBlurUiTest {
             withOpenRoseAppHarness(
                 ControlState(
                     platform = PlatformState(PermissionState.GRANTED),
-                    settings = UserSettings(
-                        interfaceStyle = style,
-                        appearance = Appearance.LIGHT,
-                        backgroundBlurEnabled = true,
-                    ),
+                ),
+                initialUiSettings = UiSettings(
+                    interfaceStyle = style,
+                    appearance = Appearance.LIGHT,
+                    backgroundBlurEnabled = true,
                 ),
             ) { harness ->
                 harness.render()
@@ -31,11 +31,11 @@ class BackgroundBlurUiTest {
 
                 harness.clickText("背景模糊")
                 harness.render()
-                assertFalse(harness.state.value.settings.backgroundBlurEnabled, "Toggling must disable background blur in $style")
+                assertFalse(harness.uiSettings.value.backgroundBlurEnabled, "Toggling must disable background blur in $style")
 
                 harness.clickText("背景模糊")
                 harness.render()
-                assertTrue(harness.state.value.settings.backgroundBlurEnabled, "Toggling again must re-enable background blur in $style")
+                assertTrue(harness.uiSettings.value.backgroundBlurEnabled, "Toggling again must re-enable background blur in $style")
             }
         }
     }

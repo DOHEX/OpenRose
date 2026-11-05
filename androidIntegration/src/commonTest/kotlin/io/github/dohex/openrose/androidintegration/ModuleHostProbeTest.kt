@@ -1,6 +1,5 @@
 package io.github.dohex.openrose.androidintegration
 
-import io.github.dohex.openrose.core.ControlWay
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs

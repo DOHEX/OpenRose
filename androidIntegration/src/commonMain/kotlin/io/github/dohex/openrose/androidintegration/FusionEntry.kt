@@ -1,7 +1,6 @@
 package io.github.dohex.openrose.androidintegration
 
 import io.github.dohex.openrose.core.ControlState
-import io.github.dohex.openrose.core.FusionSettingsDestination
 import io.github.dohex.openrose.core.transport.DeviceId
 
 /** What the fusion device center's additional settings entry does for one Bluetooth address. */
@@ -19,9 +18,9 @@ sealed interface FusionEntryDecision {
  * owner, or for any address that is not a known ROSE device, the system's entry is left alone.
  */
 object FusionEntry {
-    fun resolve(state: ControlState?, address: String): FusionEntryDecision {
+    fun resolve(state: ControlState?, settings: IntegrationSettings, address: String): FusionEntryDecision {
         state ?: return FusionEntryDecision.System
-        if (state.settings.fusionSettingsDestination != FusionSettingsDestination.OPENROSE) return FusionEntryDecision.System
+        if (settings.fusionSettingsDestination != FusionSettingsDestination.OPENROSE) return FusionEntryDecision.System
         val wanted = normalizeAddress(address) ?: return FusionEntryDecision.System
         val known = buildList {
             state.device?.let { add(it.deviceId to it.classicAddress) }

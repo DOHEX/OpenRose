@@ -1,7 +1,6 @@
 package io.github.dohex.openrose.androidintegration
 
 import io.github.dohex.openrose.core.ControlRuntime
-import io.github.dohex.openrose.core.ControlWay
 import io.github.dohex.openrose.core.SessionReference
 
 /**

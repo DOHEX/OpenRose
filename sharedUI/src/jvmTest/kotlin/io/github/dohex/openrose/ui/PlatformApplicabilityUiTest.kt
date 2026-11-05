@@ -4,11 +4,12 @@ import kotlinx.collections.immutable.persistentSetOf
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import io.github.dohex.openrose.androidintegration.IntegrationPlatformState
+import io.github.dohex.openrose.androidintegration.IntegrationSettings
+import io.github.dohex.openrose.androidintegration.IslandMode
 import io.github.dohex.openrose.androidintegration.IntegrationState
 import io.github.dohex.openrose.androidintegration.ModuleAvailability
 import io.github.dohex.openrose.core.ControlState
 import io.github.dohex.openrose.core.HostPlatform
-import io.github.dohex.openrose.core.InterfaceStyle
 import io.github.dohex.openrose.core.PermissionState
 import io.github.dohex.openrose.core.PlatformApplicability
 import io.github.dohex.openrose.core.PlatformState
@@ -31,15 +32,15 @@ class PlatformApplicabilityUiTest {
                         hostPlatform = HostPlatform.ANDROID,
                         controlTransportApplicability = PlatformApplicability.APPLICABLE,
                     ),
-                    settings = UserSettings(
-                        interfaceStyle = style,
-                        islandMode = io.github.dohex.openrose.core.IslandMode.MODULE,
+                    settings = UserSettings(forceBle = true),
+                ),
+                initialUiSettings = UiSettings(interfaceStyle = style),
+                initialIntegration = IntegrationState(
+                    settings = IntegrationSettings(
+                        islandMode = IslandMode.MODULE,
                         focusNotificationEnabled = true,
                         islandTriggers = persistentSetOf(),
-                        forceBle = true,
                     ),
-                ),
-                initialIntegration = IntegrationState(
                     platform = IntegrationPlatformState(
                         module = ModuleAvailability.Available,
                         systemIntegrationApplicability = PlatformApplicability.UNKNOWN,
@@ -79,15 +80,15 @@ class PlatformApplicabilityUiTest {
                 withHarness(
                     initialState = ControlState(
                         platform = platform,
-                        settings = UserSettings(
-                            interfaceStyle = style,
-                            islandMode = io.github.dohex.openrose.core.IslandMode.MODULE,
+                        settings = UserSettings(forceBle = true),
+                    ),
+                    initialUiSettings = UiSettings(interfaceStyle = style),
+                    initialIntegration = IntegrationState(
+                        settings = IntegrationSettings(
+                            islandMode = IslandMode.MODULE,
                             focusNotificationEnabled = true,
                             islandTriggers = persistentSetOf(),
-                            forceBle = true,
                         ),
-                    ),
-                    initialIntegration = IntegrationState(
                         platform = IntegrationPlatformState(
                             module = ModuleAvailability.Available,
                             systemIntegrationApplicability = PlatformApplicability.NOT_APPLICABLE,
@@ -133,15 +134,15 @@ class PlatformApplicabilityUiTest {
             withHarness(
                 initialState = ControlState(
                     platform = platform,
-                    settings = UserSettings(
-                        interfaceStyle = style,
-                        islandMode = io.github.dohex.openrose.core.IslandMode.MODULE,
+                    settings = UserSettings(forceBle = true),
+                ),
+                initialUiSettings = UiSettings(interfaceStyle = style),
+                initialIntegration = IntegrationState(
+                    settings = IntegrationSettings(
+                        islandMode = IslandMode.MODULE,
                         focusNotificationEnabled = true,
                         islandTriggers = persistentSetOf(),
-                        forceBle = true,
                     ),
-                ),
-                initialIntegration = IntegrationState(
                     platform = IntegrationPlatformState(
                         module = ModuleAvailability.Available,
                         systemIntegrationApplicability = PlatformApplicability.NOT_APPLICABLE,
@@ -173,12 +174,10 @@ class PlatformApplicabilityUiTest {
     @Test
     fun applicableHyperOsKeepsIntegrationSettingsAvailableUntilTheModuleIsReady() {
         for (style in InterfaceStyle.entries) {
-            val initialSettings = UserSettings(
-                interfaceStyle = style,
-                islandMode = io.github.dohex.openrose.core.IslandMode.MODULE,
+            val initialSettings = IntegrationSettings(
+                islandMode = IslandMode.MODULE,
                 focusNotificationEnabled = true,
                 islandTriggers = persistentSetOf(),
-                forceBle = true,
             )
             val platform = PlatformState(
                 permission = PermissionState.GRANTED,
@@ -187,8 +186,10 @@ class PlatformApplicabilityUiTest {
                 controlTransportApplicability = PlatformApplicability.APPLICABLE,
             )
             withHarness(
-                initialState = ControlState(platform = platform, settings = initialSettings),
+                initialState = ControlState(platform = platform, settings = UserSettings(forceBle = true)),
+                initialUiSettings = UiSettings(interfaceStyle = style),
                 initialIntegration = IntegrationState(
+                    settings = initialSettings,
                     platform = IntegrationPlatformState(
                         module = ModuleAvailability.Unavailable("兼容框架服务尚未连接"),
                         systemIntegrationApplicability = PlatformApplicability.APPLICABLE,
@@ -213,14 +214,14 @@ class PlatformApplicabilityUiTest {
                 harness.render()
 
                 assertEquals(1, harness.settingsChanges.size, "an applicable but unready integration setting can still be saved in $style")
-                assertEquals(io.github.dohex.openrose.core.IslandMode.OFF, harness.state.value.settings.islandMode)
-                assertEquals(emptySet(), harness.state.value.settings.islandTriggers)
+                assertEquals(IslandMode.OFF, harness.integration.value.settings.islandMode)
+                assertEquals(emptySet(), harness.integration.value.settings.islandTriggers)
                 assertTrue(harness.settingWrites.isEmpty(), "saving an integration preference must not send a device setting")
                 harness.clickTab("状态")
                 harness.render()
                 assertTrue(harness.hasText("系统集成未就绪"), "readiness is reported separately from applicability in $style")
 
-                val savedSettings = harness.state.value.settings
+                val savedSettings = harness.integration.value.settings
                 harness.integration.value = harness.integration.value.copy(
                     platform = harness.integration.value.platform.copy(
                         systemIntegrationApplicability = PlatformApplicability.NOT_APPLICABLE,
@@ -228,12 +229,12 @@ class PlatformApplicabilityUiTest {
                 )
                 harness.render()
                 assertFalse(harness.hasText("焦点通知"), "settings are hidden when the host becomes inapplicable in $style")
-                assertEquals(savedSettings, harness.state.value.settings, "hiding settings leaves saved values unchanged in $style")
+                assertEquals(savedSettings, harness.integration.value.settings, "hiding settings leaves saved values unchanged in $style")
 
                 harness.clickTab("设置")
                 harness.render()
                 assertFalse(harness.hasText("超级岛"), "HyperOS controls are hidden while inapplicable in $style")
-                assertEquals(savedSettings, harness.state.value.settings)
+                assertEquals(savedSettings, harness.integration.value.settings)
 
                 harness.integration.value = harness.integration.value.copy(
                     platform = harness.integration.value.platform.copy(
@@ -244,7 +245,7 @@ class PlatformApplicabilityUiTest {
                 assertTrue(harness.hasText("超级岛"), "settings return when the host becomes applicable again in $style")
                 assertTrue(harness.hasText("焦点通知"), "focus notification returns with HyperOS applicability in $style")
                 assertTrue(harness.hasText("不显示"), "the saved mode is restored when settings reappear in $style")
-                assertEquals(savedSettings, harness.state.value.settings)
+                assertEquals(savedSettings, harness.integration.value.settings)
                 assertEquals(1, harness.settingsChanges.size, "visibility changes do not save settings in $style")
                 assertTrue(harness.settingWrites.isEmpty(), "visibility changes do not send device settings in $style")
                 assertTrue(harness.transportActions.isEmpty(), "visibility changes do not reconnect or scan in $style")
@@ -254,22 +255,27 @@ class PlatformApplicabilityUiTest {
 
     private fun withHarness(
         initialState: ControlState,
+        initialUiSettings: UiSettings,
         initialIntegration: IntegrationState,
         block: suspend (Harness) -> Unit,
     ) = runOpenRoseUiTest(1200, 1000) {
         val state = mutableStateOf(initialState)
+        val uiSettings = mutableStateOf(initialUiSettings)
         val integration = mutableStateOf(initialIntegration)
-        val settingsChanges = mutableListOf<UserSettings>()
+        val settingsChanges = mutableListOf<IntegrationSettings>()
         val settingWrites = mutableListOf<Pair<io.github.dohex.openrose.core.DeviceSetting, io.github.dohex.openrose.core.protocol.FieldValue>>()
         val transportActions = mutableListOf<String>()
         setContent {
             OpenRoseApp(
                 state = state.value,
-                integration = integration.value,
-                onSettingsChange = { settings ->
+                uiSettings = uiSettings.value,
+                onUiSettingsChange = { uiSettings.value = it },
+                onIntegrationSettingsChange = { settings ->
                     settingsChanges += settings
-                    state.value = state.value.copy(settings = settings)
+                    integration.value = integration.value.copy(settings = settings)
                 },
+                integration = integration.value,
+                onSettingsChange = { state.value = state.value.copy(settings = it) },
                 onRequestPermission = {},
                 onOpenSystemSettings = {},
                 onStartScan = { transportActions += "start scan" },
@@ -287,7 +293,7 @@ class PlatformApplicabilityUiTest {
         scene: OpenRoseUiTestScene,
         val state: MutableState<ControlState>,
         val integration: MutableState<IntegrationState>,
-        val settingsChanges: MutableList<UserSettings>,
+        val settingsChanges: MutableList<IntegrationSettings>,
         val settingWrites: MutableList<Pair<io.github.dohex.openrose.core.DeviceSetting, io.github.dohex.openrose.core.protocol.FieldValue>>,
         val transportActions: MutableList<String>,
     ) : OpenRoseUiTestHarness(scene)

@@ -13,7 +13,7 @@ class OpenRoseNavDisplayTest {
     @Test
     fun secondaryRoutesPushFullScreenAndHideBottomBar() {
         for (style in InterfaceStyle.entries) {
-            withOpenRoseAppHarness(connectedI7State(UserSettings(interfaceStyle = style))) { harness ->
+            withOpenRoseAppHarness(connectedI7State(), initialUiSettings = UiSettings(interfaceStyle = style)) { harness ->
                 harness.render()
                 // On root main tab: bottom navigation bar tabs exist
                 assertTrue(harness.hasText("状态"), "Main tab should have 状态 navigation tab in $style")
@@ -49,9 +49,7 @@ class OpenRoseNavDisplayTest {
             assertTrue(harness.hasText("触控操作"))
 
             // Switch interface style while on secondary route
-            harness.state.value = harness.state.value.copy(
-                settings = harness.state.value.settings.copy(interfaceStyle = InterfaceStyle.MATERIAL3),
-            )
+            harness.uiSettings.value = harness.uiSettings.value.copy(interfaceStyle = InterfaceStyle.MATERIAL3)
             harness.render()
 
             // Still on secondary route
@@ -68,7 +66,7 @@ class OpenRoseNavDisplayTest {
     @Test
     fun pageTransitionPreferencesApplyCleanly() {
         for (transition in PageTransition.entries) {
-            withOpenRoseAppHarness(connectedI7State(UserSettings(pageTransition = transition))) { harness ->
+            withOpenRoseAppHarness(connectedI7State(), initialUiSettings = UiSettings(pageTransition = transition)) { harness ->
                 harness.render()
                 harness.clickText("触控操作")
                 harness.render()

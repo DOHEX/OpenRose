@@ -19,6 +19,7 @@ data class IntegrationPlatformState(
  * system-facing view of the current device session.
  */
 data class IntegrationState(
+    val settings: IntegrationSettings = IntegrationSettings(),
     val platform: IntegrationPlatformState = IntegrationPlatformState(),
     /** Selected control way, whether its owner is ready, and who actually holds the session. */
     val owner: OwnerState = OwnerState(),

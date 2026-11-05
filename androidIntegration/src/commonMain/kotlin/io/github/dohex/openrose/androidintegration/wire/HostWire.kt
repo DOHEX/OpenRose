@@ -22,10 +22,10 @@ import io.github.dohex.openrose.androidintegration.SystemBatteryState
 import io.github.dohex.openrose.androidintegration.SystemEndpointDiagnostics
 import io.github.dohex.openrose.androidintegration.SystemNoiseState
 import io.github.dohex.openrose.androidintegration.SystemPresentationState
-import io.github.dohex.openrose.core.ControlWay
+import io.github.dohex.openrose.androidintegration.ControlWay
+import io.github.dohex.openrose.androidintegration.HostSettings
+import io.github.dohex.openrose.androidintegration.HostSettingsCodec
 import io.github.dohex.openrose.core.DeviceSetting
-import io.github.dohex.openrose.core.UserSettings
-import io.github.dohex.openrose.core.UserSettingsCodec
 import io.github.dohex.openrose.core.transport.DeviceId
 
 /** Wire form of the module-host protocol. Every IPC binding carries these rendered strings. */
@@ -75,11 +75,11 @@ object HostWire {
         )
     }
 
-    fun encode(settings: UserSettings): Wire =
-        Wire.Obj(UserSettingsCodec.encode(settings).mapValues { (_, value) -> Wire.Str(value) })
+    fun encode(settings: HostSettings): Wire =
+        Wire.Obj(HostSettingsCodec.encode(settings).mapValues { (_, value) -> Wire.Str(value) })
 
-    fun decodeSettings(wire: Wire): UserSettings =
-        UserSettingsCodec.decode(wire.asObj().fields.mapValues { (_, value) -> value.asStr() })
+    fun decodeSettings(wire: Wire): HostSettings =
+        HostSettingsCodec.decode(wire.asObj().fields.mapValues { (_, value) -> value.asStr() })
 
     fun encode(command: HostCommand): Wire = when (command) {
         HostCommand.RefreshBondedDevices -> obj("t" to str("refresh"))
@@ -300,9 +300,9 @@ object HostWire {
     fun decodeCall(wire: Wire): Pair<OwnerGeneration, HostCommand> =
         wire.asObj().let { decodeGeneration(it.field("generation")) to decodeCommand(it.field("command")) }
 
-    fun encodeAcquire(request: SwitchRequest, settings: UserSettings): Wire =
+    fun encodeAcquire(request: SwitchRequest, settings: HostSettings): Wire =
         obj("request" to encode(request), "settings" to encode(settings))
 
-    fun decodeAcquire(wire: Wire): Pair<SwitchRequest, UserSettings> =
+    fun decodeAcquire(wire: Wire): Pair<SwitchRequest, HostSettings> =
         wire.asObj().let { decodeRequest(it.field("request")) to decodeSettings(it.field("settings")) }
 }

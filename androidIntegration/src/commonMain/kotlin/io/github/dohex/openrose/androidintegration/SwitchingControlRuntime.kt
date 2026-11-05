@@ -4,7 +4,6 @@ import io.github.dohex.openrose.core.ControlError
 import io.github.dohex.openrose.core.ControlErrorCode
 import io.github.dohex.openrose.core.ControlRuntime
 import io.github.dohex.openrose.core.ControlState
-import io.github.dohex.openrose.core.ControlWay
 import io.github.dohex.openrose.core.DeviceSetting
 import io.github.dohex.openrose.core.OperationResult
 import io.github.dohex.openrose.core.PlatformState
@@ -83,6 +82,7 @@ class SwitchingControlRuntime(
     private val timing: ClientTiming = ClientTiming(),
     userUnlocked: Boolean = true,
     initialIntegrationPlatform: IntegrationPlatformState = IntegrationPlatformState(),
+    initialIntegrationSettings: IntegrationSettings = IntegrationSettings(),
     private val presentationTiming: PresentationTiming = PresentationTiming(),
 ) : ControlRuntime, ControlOwnerSwitching, SystemEntry {
     private class Ordinary(val generation: OwnerGeneration, val job: Job, val runtime: SystemEntryRuntime)
@@ -93,7 +93,8 @@ class SwitchingControlRuntime(
     private var localSequence = 0L
     private var unlocked = userUnlocked
     private var record = if (userUnlocked) store.load() else OwnerRecord()
-    private var settings = initialSettings.copy(controlWay = record.selected)
+    private var settings = initialSettings
+    private var integrationSettings = initialIntegrationSettings.copy(controlWay = record.selected)
     private var platform = initialPlatformState
     private var integrationPlatform = initialIntegrationPlatform
     private var ordinary: Ordinary? = null
@@ -146,11 +147,12 @@ class SwitchingControlRuntime(
      * Credential-protected preferences exist only after first unlock; until then nothing owns the session.
      * [persisted] are the user's stored settings, whose saved control way decides which owner starts.
      */
-    fun onUserUnlocked(persisted: UserSettings) {
+    fun onUserUnlocked(persisted: HostSettings) {
         if (unlocked) return
         unlocked = true
         record = store.load()
-        settings = persisted.copy(controlWay = record.selected)
+        settings = persisted.control
+        integrationSettings = persisted.integration.copy(controlWay = record.selected)
         startup()
         refresh()
     }
@@ -197,7 +199,7 @@ class SwitchingControlRuntime(
             return finish(HandoffOutcome.Blocked(request, OwnerFailureStage.SELECTION_PERSISTENCE, "无法保存控制方式，未做任何切换"))
         }
         record = next
-        settings = settings.copy(controlWay = target)
+        integrationSettings = integrationSettings.copy(controlWay = target)
         closeOrdinary(request)?.let { return it }
         return when (target) {
             ControlWay.MODULE -> establishModule(request)
@@ -207,7 +209,7 @@ class SwitchingControlRuntime(
 
     private suspend fun establishModule(request: SwitchRequest): HandoffOutcome {
         client.start()
-        return when (val outcome = client.acquire(request, settings)) {
+        return when (val outcome = client.acquire(request, HostSettings(settings, integrationSettings))) {
             is AcquireOutcome.Acquired -> {
                 record = record.copy(moduleRelease = PendingModuleRelease(request.id, outcome.generation))
                 store.save(record)
@@ -297,7 +299,7 @@ class SwitchingControlRuntime(
         val job = SupervisorJob(scope.coroutineContext[Job])
         val ownerScope = CoroutineScope(scope.coroutineContext + job)
         val runtime = SystemEntryRuntime(
-            ordinaryFactory(ownerScope, settings, platform, SessionIdBase.ordinary(localSequence)), ownerScope, presentationTiming,
+            ordinaryFactory(ownerScope, settings, platform, SessionIdBase.ordinary(localSequence)), ownerScope, presentationTiming, integrationSettings,
         )
         ordinary = Ordinary(generation, job, runtime)
         ownerScope.launch { runtime.state.collect { refresh() } }
@@ -370,6 +372,7 @@ class SwitchingControlRuntime(
     private fun composeIntegration(): IntegrationState {
         val view = client.view.value
         return IntegrationState(
+            settings = integrationSettings,
             // While module control is chosen the module/bridge facts are the live host link, not a guess.
             platform = if (record.selected == ControlWay.MODULE) moduleFacts(integrationPlatform, view) else integrationPlatform,
             owner = ownerState(view),
@@ -494,11 +497,16 @@ class SwitchingControlRuntime(
     }
 
     override fun updateSettings(settings: UserSettings) {
-        // A preference change never moves the owner; only an explicit handoff changes the control way.
-        val normalized = settings.copy(controlWay = record.selected)
-        this.settings = normalized
-        ordinary?.runtime?.updateSettings(normalized)
-        if (record.selected == ControlWay.MODULE) scope.launch { client.execute(HostCommand.UpdateSettings(normalized)) }
+        this.settings = settings
+        ordinary?.runtime?.updateSettings(settings)
+        if (record.selected == ControlWay.MODULE) scope.launch { client.execute(HostCommand.UpdateSettings(HostSettings(this@SwitchingControlRuntime.settings, integrationSettings))) }
+        refresh()
+    }
+
+    fun updateIntegrationSettings(settings: IntegrationSettings) {
+        integrationSettings = settings.copy(controlWay = record.selected)
+        ordinary?.runtime?.updateIntegrationSettings(integrationSettings)
+        if (record.selected == ControlWay.MODULE) scope.launch { client.execute(HostCommand.UpdateSettings(HostSettings(this@SwitchingControlRuntime.settings, integrationSettings))) }
         refresh()
     }
 

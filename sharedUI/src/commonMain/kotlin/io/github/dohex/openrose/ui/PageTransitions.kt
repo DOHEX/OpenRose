@@ -2,7 +2,6 @@ package io.github.dohex.openrose.ui
 
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.util.fastRoundToInt
-import io.github.dohex.openrose.core.PageTransition
 import top.yukonga.miuix.kmp.nav.transition.NavSwipeDirection
 import top.yukonga.miuix.kmp.nav.transition.NavTransition
 import top.yukonga.miuix.kmp.nav.transition.NavTransitions

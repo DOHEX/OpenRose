@@ -1,8 +1,5 @@
 package io.github.dohex.openrose.androidintegration
 
-import io.github.dohex.openrose.core.ControlWay
-import io.github.dohex.openrose.core.FusionSettingsDestination
-import io.github.dohex.openrose.core.UserSettings
 import io.github.dohex.openrose.core.transport.DeviceId
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -26,15 +23,17 @@ class FusionEntryTest {
         if (connected) rig.hostTransport.audioDevice.emit(rig.earphones.deviceId)
         rig.bootHost()
         // The user's persisted choice as the host reads it, not anything the application publishes at run time.
-        rig.host.configure(HostConfiguration(true, UserSettings(controlWay = ControlWay.MODULE, fusionSettingsDestination = destination)))
+        rig.host.configure(HostConfiguration(true, HostSettings(integration = IntegrationSettings(controlWay = ControlWay.MODULE, fusionSettingsDestination = destination))))
         runCurrent()
         testScheduler.advanceUntilIdle()
         val lease = (rig.host.open(milinkIdentity) as HostOpenResult.Opened).lease.id
         return rig to lease
     }
 
-    private fun decide(rig: OwnerRig, lease: String, address: String): FusionEntryDecision =
-        FusionEntry.resolve(rig.host.view(milinkIdentity, lease)?.state, address)
+    private fun decide(rig: OwnerRig, lease: String, address: String): FusionEntryDecision {
+        val view = rig.host.view(milinkIdentity, lease)
+        return FusionEntry.resolve(view?.state, view?.settings ?: IntegrationSettings(), address)
+    }
 
     @Test
     fun theClassicAddressTheFusionCenterUsesOpensTheOwnedEarphones() = runTest {

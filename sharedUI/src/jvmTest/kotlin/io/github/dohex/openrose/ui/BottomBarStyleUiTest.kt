@@ -26,8 +26,8 @@ class BottomBarStyleUiTest {
             withOpenRoseAppHarness(
                 ControlState(
                     platform = PlatformState(permission = PermissionState.GRANTED),
-                    settings = UserSettings(interfaceStyle = style, bottomBarStyle = BottomBarStyle.FIXED),
                 ),
+                initialUiSettings = UiSettings(interfaceStyle = style, bottomBarStyle = BottomBarStyle.FIXED),
             ) { harness ->
                 harness.render()
                 harness.clickTab("设置")
@@ -59,8 +59,8 @@ class BottomBarStyleUiTest {
         withOpenRoseAppHarness(
             ControlState(
                 platform = PlatformState(permission = PermissionState.GRANTED),
-                settings = UserSettings(interfaceStyle = InterfaceStyle.MIUIX, bottomBarStyle = BottomBarStyle.FLOATING),
             ),
+            initialUiSettings = UiSettings(interfaceStyle = InterfaceStyle.MIUIX, bottomBarStyle = BottomBarStyle.FLOATING),
         ) { harness ->
             harness.render()
             harness.clickTab("设置")
@@ -71,8 +71,8 @@ class BottomBarStyleUiTest {
             harness.render()
             harness.clickText("Material 3 Expressive")
             harness.render()
-            assertEquals(InterfaceStyle.MATERIAL3, harness.state.value.settings.interfaceStyle)
-            assertEquals(BottomBarStyle.FLOATING, harness.state.value.settings.bottomBarStyle)
+            assertEquals(InterfaceStyle.MATERIAL3, harness.uiSettings.value.interfaceStyle)
+            assertEquals(BottomBarStyle.FLOATING, harness.uiSettings.value.bottomBarStyle)
             assertTrue(harness.hasText("悬浮胶囊"))
             assertTrue(harness.hasText("组件风格"), "Settings page must remain active after style switch")
 
@@ -80,8 +80,9 @@ class BottomBarStyleUiTest {
             harness.render()
             harness.clickText("Miuix")
             harness.render()
-            assertEquals(InterfaceStyle.MIUIX, harness.state.value.settings.interfaceStyle)
-            assertEquals(BottomBarStyle.FLOATING, harness.state.value.settings.bottomBarStyle)
+            assertEquals(InterfaceStyle.MIUIX, harness.uiSettings.value.interfaceStyle)
+            assertEquals(BottomBarStyle.FLOATING, harness.uiSettings.value.bottomBarStyle)
+            assertTrue(harness.controlSettingsChanges.isEmpty(), "Style changes must not update control settings")
             assertTrue(harness.hasText("悬浮胶囊"))
         }
     }
@@ -89,7 +90,7 @@ class BottomBarStyleUiTest {
     @Test
     fun fixedBottomBarRendersLabelledTabsAndNavigates() {
         for (style in InterfaceStyle.entries) {
-            withOpenRoseAppHarness(connectedI7State(settings(style, BottomBarStyle.FIXED))) { harness ->
+            withOpenRoseAppHarness(connectedI7State(), initialUiSettings = settings(style, BottomBarStyle.FIXED)) { harness ->
                 harness.render()
                 val tabs = harness.tabs()
                 assertEquals(3, tabs.size, "Must have 3 bottom bar tabs in $style")
@@ -107,7 +108,7 @@ class BottomBarStyleUiTest {
     @Test
     fun floatingBottomBarRendersIconTabsAndNavigates() {
         for (style in InterfaceStyle.entries) {
-            withOpenRoseAppHarness(connectedI7State(settings(style, BottomBarStyle.FLOATING))) { harness ->
+            withOpenRoseAppHarness(connectedI7State(), initialUiSettings = settings(style, BottomBarStyle.FLOATING)) { harness ->
                 harness.render()
                 val tabs = harness.tabs()
                 assertEquals(3, tabs.size, "Must have 3 floating bottom bar tabs in $style")
@@ -128,7 +129,7 @@ class BottomBarStyleUiTest {
     @Test
     fun onlyFloatingBottomBarReservesTrailingClearance() {
         for (style in InterfaceStyle.entries) {
-            withOpenRoseAppHarness(connectedI7State(settings(style, BottomBarStyle.FLOATING))) { floating ->
+            withOpenRoseAppHarness(connectedI7State(), initialUiSettings = settings(style, BottomBarStyle.FLOATING)) { floating ->
                 floating.render()
                 val clearance = assertNotNull(floating.clearance(), "Trailing clearance must be rendered in $style floating mode")
                 val bar = floating.nodes().first { node -> node.children.any { it.role() == Role.Tab } }
@@ -138,7 +139,7 @@ class BottomBarStyleUiTest {
                 )
             }
 
-            withOpenRoseAppHarness(connectedI7State(settings(style, BottomBarStyle.FIXED))) { fixed ->
+            withOpenRoseAppHarness(connectedI7State(), initialUiSettings = settings(style, BottomBarStyle.FIXED)) { fixed ->
                 fixed.render()
                 assertNull(fixed.clearance(), "Fixed bottom bar must not add trailing clearance in $style")
             }
@@ -156,7 +157,8 @@ class BottomBarStyleUiTest {
         )
         for (style in InterfaceStyle.entries) {
             withOpenRoseAppHarness(
-                connectedI7State(settings(style, BottomBarStyle.FLOATING)).copy(settingOperations = persistentListOf(operation)),
+                connectedI7State().copy(settingOperations = persistentListOf(operation)),
+                initialUiSettings = settings(style, BottomBarStyle.FLOATING),
             ) { harness ->
                 harness.render()
                 val feedback = assertNotNull(
@@ -179,7 +181,8 @@ class BottomBarStyleUiTest {
         for (style in InterfaceStyle.entries) {
             for (bottomBarStyle in BottomBarStyle.entries) {
                 withOpenRoseAppHarness(
-                    connectedI7State(settings(style, bottomBarStyle)),
+                    connectedI7State(),
+                    initialUiSettings = settings(style, bottomBarStyle),
                     width = 1200,
                 ) { harness ->
                     harness.render()
@@ -241,7 +244,7 @@ class BottomBarStyleUiTest {
         }
     }
 
-    private fun settings(style: InterfaceStyle, bottomBarStyle: BottomBarStyle) = UserSettings(
+    private fun settings(style: InterfaceStyle, bottomBarStyle: BottomBarStyle) = UiSettings(
         interfaceStyle = style,
         bottomBarStyle = bottomBarStyle,
         pageTransition = PageTransition.NONE,

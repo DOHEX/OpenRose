@@ -345,7 +345,7 @@ class ControlSessionDeviceControlsTest {
     }
 
     @Test
-    fun styleSwitchKeepsNewControlRequestsAndDisconnectEndsTheWholeQueue() = runTest {
+    fun disconnectEndsTheWholeControlQueue() = runTest {
         val (session, link) = ready(ModelProfile.I5_ZT)
         val touch = async { session.set(DeviceSetting.TOUCH_BINDING, FieldValue.TouchAssignment("left", "single", "play_pause")) }
         runCurrent()
@@ -353,8 +353,6 @@ class ControlSessionDeviceControlsTest {
         val audio = async { session.set(DeviceSetting.MULTIPOINT, FieldValue.Toggle(true)) }
         runCurrent()
         assertEquals(listOf(SettingStage.WRITTEN, SettingStage.SUBMITTED, SettingStage.SUBMITTED), session.state.value.settingOperations.map { it.stage })
-        session.updateSettings(session.state.value.settings.copy(interfaceStyle = InterfaceStyle.MATERIAL3))
-        runCurrent()
         assertEquals(15, link.writes.size)
         session.disconnect()
         runCurrent()

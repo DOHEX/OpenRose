@@ -8,6 +8,8 @@ import io.github.dohex.openrose.androidintegration.BackgroundControlBlock
 import io.github.dohex.openrose.androidintegration.BackgroundServiceFact
 import io.github.dohex.openrose.androidintegration.BackgroundServiceFacts
 import io.github.dohex.openrose.androidintegration.CompanionAssociation
+import io.github.dohex.openrose.androidintegration.IntegrationSettings
+import io.github.dohex.openrose.androidintegration.ControlWay
 import io.github.dohex.openrose.androidintegration.IntegrationPlatformState
 import io.github.dohex.openrose.androidintegration.IntegrationState
 import io.github.dohex.openrose.androidintegration.OwnerReadiness
@@ -17,14 +19,11 @@ import io.github.dohex.openrose.androidintegration.RunningNotification
 import io.github.dohex.openrose.androidintegration.WakeBand
 import io.github.dohex.openrose.androidintegration.WakeFacts
 import io.github.dohex.openrose.core.ControlState
-import io.github.dohex.openrose.core.ControlWay
 import io.github.dohex.openrose.core.HostPlatform
-import io.github.dohex.openrose.core.InterfaceStyle
 import io.github.dohex.openrose.core.PermissionState
 import io.github.dohex.openrose.core.PlatformApplicability
 import io.github.dohex.openrose.core.PlatformState
 import io.github.dohex.openrose.core.TransportAvailability
-import io.github.dohex.openrose.core.UserSettings
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -44,7 +43,7 @@ class BackgroundControlUiTest {
                 harness.clickTag(BackgroundControlTags.SWITCH)
                 harness.render()
 
-                assertTrue(harness.state.value.settings.backgroundControlEnabled, "intent is saved in $style")
+                assertTrue(harness.integration.value.settings.backgroundControlEnabled, "intent is saved in $style")
                 assertTrue(harness.hasTag(BackgroundControlTags.STATUS_NOT_RUNNING), "saved intent is not ready in $style")
                 assertFalse(harness.hasTag(BackgroundControlTags.STATUS_RUNNING), "saving never reads as running in $style")
 
@@ -55,7 +54,7 @@ class BackgroundControlUiTest {
 
                 harness.clickTag(BackgroundControlTags.SWITCH)
                 harness.render()
-                assertFalse(harness.state.value.settings.backgroundControlEnabled, "the same switch disables it in $style")
+                assertFalse(harness.integration.value.settings.backgroundControlEnabled, "the same switch disables it in $style")
                 assertFalse(harness.hasTagWithPrefix(BackgroundControlTags.STATUS_PREFIX), "a disabled intent shows no status again in $style")
             }
         }
@@ -64,7 +63,7 @@ class BackgroundControlUiTest {
     @Test
     fun aMissingBluetoothPermissionIsExplainedWithAGrantActionThatClearsIt() {
         for (style in InterfaceStyle.entries) {
-            withHarness(style, settings = UserSettings(interfaceStyle = style, backgroundControlEnabled = true), permission = PermissionState.DENIED) { harness ->
+            withHarness(style, settings = IntegrationSettings(backgroundControlEnabled = true), permission = PermissionState.DENIED) { harness ->
                 harness.render()
                 harness.clickTab("设置")
                 harness.render()
@@ -84,7 +83,7 @@ class BackgroundControlUiTest {
     @Test
     fun restrictedStartAndHiddenNotificationAreDisclosedHonestly() {
         for (style in InterfaceStyle.entries) {
-            withHarness(style, settings = UserSettings(interfaceStyle = style, backgroundControlEnabled = true)) { harness ->
+            withHarness(style, settings = IntegrationSettings(backgroundControlEnabled = true)) { harness ->
                 harness.render()
                 harness.clickTab("设置")
                 harness.updateIntegration {
@@ -121,7 +120,7 @@ class BackgroundControlUiTest {
     @Test
     fun aMissingAssociationIsOfferedForAssociationAndNeverShownAsReady() {
         for (style in InterfaceStyle.entries) {
-            withHarness(style, settings = UserSettings(interfaceStyle = style, backgroundControlEnabled = true)) { harness ->
+            withHarness(style, settings = IntegrationSettings(backgroundControlEnabled = true)) { harness ->
                 harness.render()
                 harness.clickTab("设置")
                 harness.updateIntegration {
@@ -151,7 +150,7 @@ class BackgroundControlUiTest {
 
     @Test
     fun androidEightToElevenNeedsNoAssociationButStillDisclosesAutostart() {
-        withHarness(InterfaceStyle.MIUIX, settings = UserSettings(backgroundControlEnabled = true)) { harness ->
+        withHarness(InterfaceStyle.MIUIX, settings = IntegrationSettings(backgroundControlEnabled = true)) { harness ->
             harness.render()
             harness.clickTab("设置")
             harness.updateIntegration {
@@ -172,7 +171,7 @@ class BackgroundControlUiTest {
         for (style in InterfaceStyle.entries) {
             withHarness(
                 style,
-                settings = UserSettings(interfaceStyle = style, backgroundControlEnabled = true),
+                settings = IntegrationSettings(backgroundControlEnabled = true),
                 owner = OwnerState(selected = ControlWay.MODULE, readiness = OwnerReadiness.Ready),
             ) { harness ->
                 harness.render()
@@ -181,7 +180,7 @@ class BackgroundControlUiTest {
                 harness.render()
                 assertFalse(harness.hasTag(BackgroundControlTags.RECOVERY_ARMED), "module control is not ordinary recovery in $style")
                 assertFalse(harness.hasTagWithPrefix(BackgroundControlTags.STATUS_PREFIX), "background control is not in force under module control in $style")
-                assertTrue(harness.state.value.settings.backgroundControlEnabled, "the saved intent is kept in $style")
+                assertTrue(harness.integration.value.settings.backgroundControlEnabled, "the saved intent is kept in $style")
 
                 harness.updateIntegration { it.copy(owner = OwnerState(selected = ControlWay.ORDINARY, readiness = OwnerReadiness.Ready)) }
                 harness.render()
@@ -204,7 +203,7 @@ class BackgroundControlUiTest {
 
     private fun withHarness(
         style: InterfaceStyle,
-        settings: UserSettings = UserSettings(interfaceStyle = style),
+        settings: IntegrationSettings = IntegrationSettings(),
         permission: PermissionState = PermissionState.GRANTED,
         host: HostPlatform = HostPlatform.ANDROID,
         owner: OwnerState = OwnerState(),
@@ -218,11 +217,11 @@ class BackgroundControlUiTest {
                     hostPlatform = host,
                     controlTransportApplicability = PlatformApplicability.APPLICABLE,
                 ),
-                settings = settings,
             ),
         )
         val integration = mutableStateOf(
             IntegrationState(
+                settings = settings,
                 platform = IntegrationPlatformState(systemIntegrationApplicability = PlatformApplicability.NOT_APPLICABLE),
                 owner = owner,
             ),
@@ -231,6 +230,9 @@ class BackgroundControlUiTest {
         setContent {
             OpenRoseApp(
                 state = state.value,
+                uiSettings = UiSettings(interfaceStyle = style),
+                onUiSettingsChange = {},
+                onIntegrationSettingsChange = { next -> integration.value = integration.value.copy(settings = next) },
                 integration = integration.value,
                 onSettingsChange = { next -> state.value = state.value.copy(settings = next) },
                 onRequestPermission = fake::grantBluetoothPermission,

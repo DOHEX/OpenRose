@@ -13,7 +13,7 @@ import io.github.dohex.openrose.androidintegration.CallerAuthority
 import io.github.dohex.openrose.androidintegration.CallerIdentity
 import io.github.dohex.openrose.androidintegration.ClientRole
 import io.github.dohex.openrose.core.ConnectionState
-import io.github.dohex.openrose.core.ControlWay
+import io.github.dohex.openrose.androidintegration.ControlWay
 import io.github.dohex.openrose.core.DeviceSetting
 import io.github.dohex.openrose.androidintegration.HostCallResult
 import io.github.dohex.openrose.androidintegration.HostCommand
@@ -22,7 +22,7 @@ import io.github.dohex.openrose.androidintegration.HostOpenResult
 import io.github.dohex.openrose.androidintegration.HostReadResult
 import io.github.dohex.openrose.androidintegration.HostRejection
 import io.github.dohex.openrose.androidintegration.HostStatus
-import io.github.dohex.openrose.core.IslandMode
+import io.github.dohex.openrose.androidintegration.IslandMode
 import io.github.dohex.openrose.androidintegration.FusionEntry
 import io.github.dohex.openrose.androidintegration.FusionEntryDecision
 import io.github.dohex.openrose.androidintegration.ModuleControlHost
@@ -356,8 +356,11 @@ internal class HostEndpoint(
         if (lease.target != BridgeTarget.MILINK) throw SecurityException("仅融合设备中心可查询附加设置入口")
         val address = request.getString(BridgeWire.FUSION_ADDRESS)?.takeIf { it.length <= 64 }
             ?: return BridgeWire.response(BridgeWire.STATUS_INVALID_ARGUMENT)
+        val decision = host.view(lease.caller, lease.id)?.let { view ->
+            FusionEntry.resolve(view.state, view.settings, address)
+        } ?: FusionEntryDecision.System
         return BridgeWire.response(BridgeWire.STATUS_OK).apply {
-            when (val decision = FusionEntry.resolve(host.view(lease.caller, lease.id)?.state, address)) {
+            when (decision) {
                 FusionEntryDecision.System -> putString(BridgeWire.FUSION_DECISION, BridgeWire.FUSION_SYSTEM)
                 is FusionEntryDecision.OpenRose -> {
                     putString(BridgeWire.FUSION_DECISION, BridgeWire.FUSION_OPENROSE)

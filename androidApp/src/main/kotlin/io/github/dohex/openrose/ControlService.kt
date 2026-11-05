@@ -13,7 +13,7 @@ import android.os.IBinder
 import io.github.dohex.openrose.androidintegration.BackgroundControlBlock
 import io.github.dohex.openrose.core.ConnectionState
 import io.github.dohex.openrose.androidintegration.OrdinarySessionHold
-import io.github.dohex.openrose.core.ControlWay
+import io.github.dohex.openrose.androidintegration.ControlWay
 import io.github.dohex.openrose.core.ControlState
 import io.github.dohex.openrose.core.TransportAvailability
 import kotlinx.coroutines.CoroutineScope
@@ -62,7 +62,7 @@ class ControlService : Service() {
                 // Background control exists only while ordinary control is the saved choice; module control
                 // (or none) ends it without touching the saved intent.
                 combine(app.runtime.state, app.runtime.integration) { state, integration ->
-                    (state.settings.backgroundControlEnabled && integration.owner.selected == ControlWay.ORDINARY) to notificationText(state)
+                    (integration.settings.backgroundControlEnabled && integration.owner.selected == ControlWay.ORDINARY) to notificationText(state)
                 }
                     .distinctUntilChanged()
                     .collect { (enabled, _) ->

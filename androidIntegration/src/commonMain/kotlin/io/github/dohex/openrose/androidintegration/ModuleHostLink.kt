@@ -1,6 +1,5 @@
 package io.github.dohex.openrose.androidintegration
 
-import io.github.dohex.openrose.core.UserSettings
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.flow.Flow
 
@@ -36,7 +35,7 @@ interface HostConnection {
     suspend fun status(): HostStatus
     suspend fun execute(generation: OwnerGeneration, command: HostCommand): HostCallResult
     suspend fun release(request: SwitchRequest): ReleaseResult
-    suspend fun acquire(request: SwitchRequest, settings: UserSettings): AcquireResult
+    suspend fun acquire(request: SwitchRequest, settings: HostSettings): AcquireResult
 
     /** The owner's states while [generation] holds control; completes when that generation ends. */
     fun frames(generation: OwnerGeneration): Flow<HostFrame>

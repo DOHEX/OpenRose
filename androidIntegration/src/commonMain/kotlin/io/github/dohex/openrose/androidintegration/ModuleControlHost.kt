@@ -4,7 +4,6 @@ import io.github.dohex.openrose.androidintegration.wire.HostPlatformFacts
 import io.github.dohex.openrose.core.ControlError
 import io.github.dohex.openrose.core.ControlErrorCode
 import io.github.dohex.openrose.core.ControlRuntime
-import io.github.dohex.openrose.core.ControlWay
 import io.github.dohex.openrose.core.DeviceSetting
 import io.github.dohex.openrose.core.OperationResult
 import io.github.dohex.openrose.core.PermissionState
@@ -38,7 +37,7 @@ import kotlinx.coroutines.withContext
 /** What the host knows about the user's persisted intent. Nothing is owned before [userUnlocked]. */
 data class HostConfiguration(
     val userUnlocked: Boolean = false,
-    val settings: UserSettings = UserSettings(),
+    val settings: HostSettings = HostSettings(),
 )
 
 sealed interface HostReadResult {
@@ -163,7 +162,7 @@ class ModuleControlHost(
         val current = currentOwner(generation)
         if (current is OwnerCheck.Rejected) return HostCallResult.Rejected(current.rejection, current.message)
         val active = (current as OwnerCheck.Current).owner
-        if (command is HostCommand.ClaimPrompt && !lease.role.presents(active.runtime.state.value.settings.islandMode)) {
+        if (command is HostCommand.ClaimPrompt && !lease.role.presents(active.runtime.settings.islandMode)) {
             return HostCallResult.Rejected(HostRejection.FORBIDDEN, "该系统入口不拥有当前提示策略")
         }
         return try {
@@ -174,12 +173,12 @@ class ModuleControlHost(
         }
     }
 
-    /** A system entry's "off" tap follows the user's choice of writing wind reduction (see [UserSettings.fusionOffAsWind]). */
+    /** A system entry's "off" tap follows the user's choice of writing wind reduction. */
     private fun systemRouted(role: ClientRole, runtime: SystemEntryRuntime, command: HostCommand): HostCommand {
         if (role != ClientRole.MILINK && role != ClientRole.XIAOMI_BLUETOOTH) return command
         if (command !is HostCommand.Set || command.setting != DeviceSetting.NOISE_MODE || command.reference == null) return command
         val requested = (command.value as? FieldValue.Text)?.value ?: return command
-        if (!runtime.state.value.settings.fusionOffAsWind) return command
+        if (!runtime.settings.fusionOffAsWind) return command
         val modes = (runtime.readSession(command.reference) as? SessionSnapshotResult.Available)
             ?.device?.capabilities?.noiseControl?.modes ?: return command
         val mode = SystemHeadsetMapping.requestedMode(requested, offAsWind = true, supportedModes = modes)
@@ -293,7 +292,7 @@ class ModuleControlHost(
         caller: CallerIdentity,
         leaseId: String,
         request: SwitchRequest,
-        settings: UserSettings,
+        settings: HostSettings,
     ): AcquireResult {
         val lease = leaseFor(caller, leaseId)
             ?: return AcquireResult.Refused(HostRejection.INVALID_LEASE, "控制宿主授权无效或已过期")
@@ -304,7 +303,7 @@ class ModuleControlHost(
                 return@withLock AcquireResult.Refused(HostRejection.INVALID_REQUEST, "用户尚未解锁，模块控制不会启动")
             }
             held = null
-            configuration = configuration.copy(settings = settings.copy(controlWay = ControlWay.MODULE))
+            configuration = configuration.copy(settings = settings.copy(integration = settings.integration.copy(controlWay = ControlWay.MODULE)))
             reconcile()
             owner.value?.let { AcquireResult.Acquired(it.generation, it.holder) }
                 ?: AcquireResult.Refused(HostRejection.INVALID_REQUEST, "模块控制未能启动")
@@ -342,10 +341,10 @@ class ModuleControlHost(
         )
         is HostCommand.UpdateSettings -> {
             // A preference change never moves the owner; only an explicit handoff changes the way.
-            val settings = command.settings.copy(controlWay = ControlWay.MODULE)
+            val settings = command.settings.copy(integration = command.settings.integration.copy(controlWay = ControlWay.MODULE))
             ownership.withLock {
                 configuration = configuration.copy(settings = settings)
-                owner.value?.runtime?.updateSettings(settings)
+                owner.value?.runtime?.let { it.updateSettings(settings.control); it.updateIntegrationSettings(settings.integration) }
             }
             HostCallResult.Operation(OperationResult.Success)
         }
@@ -356,12 +355,12 @@ class ModuleControlHost(
     private suspend fun reconcile() {
         // An owner whose close was refused earlier is closed again before anything else is decided.
         owner.value?.takeIf { it.job.isCancelled }?.let { if (!stop(it)) { publishStatus(); return } }
-        val wanted = !stopped && configuration.userUnlocked && configuration.settings.controlWay == ControlWay.MODULE && held == null
+        val wanted = !stopped && configuration.userUnlocked && configuration.settings.integration.controlWay == ControlWay.MODULE && held == null
         val current = owner.value
         when {
             wanted && current == null -> activate()
             !wanted && current != null -> stop(current)
-            current != null -> current.runtime.updateSettings(configuration.settings)
+            current != null -> { current.runtime.updateSettings(configuration.settings.control); current.runtime.updateIntegrationSettings(configuration.settings.integration) }
         }
         publishStatus()
     }
@@ -373,7 +372,7 @@ class ModuleControlHost(
         val job = SupervisorJob(hostContext[Job])
         val scope = CoroutineScope(hostContext + job)
         val runtime = SystemEntryRuntime(
-            runtimeFactory(scope, configuration.settings, platform, SessionIdBase.module(sequence)), scope, presentationTiming,
+            runtimeFactory(scope, configuration.settings.control, platform, SessionIdBase.module(sequence)), scope, presentationTiming, configuration.settings.integration,
         )
         val holder = OwnerHolder(ControlWay.MODULE, generation, packageName, processName, uid, pid)
         owner.value = Owner(generation, holder, job, runtime)
@@ -400,7 +399,7 @@ class ModuleControlHost(
                 !configuration.userUnlocked -> "用户尚未解锁"
                 stopped -> "宿主已停止"
                 held != null -> "已按切换请求释放"
-                configuration.settings.controlWay != ControlWay.MODULE -> "当前未选择模块控制"
+                configuration.settings.integration.controlWay != ControlWay.MODULE -> "当前未选择模块控制"
                 else -> "模块控制尚未启动"
             },
         )

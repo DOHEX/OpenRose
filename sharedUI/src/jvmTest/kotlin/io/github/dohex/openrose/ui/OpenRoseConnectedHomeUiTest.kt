@@ -18,7 +18,6 @@ import io.github.dohex.openrose.core.ControlState
 import io.github.dohex.openrose.core.DeviceCapabilities
 import io.github.dohex.openrose.core.DeviceState
 import io.github.dohex.openrose.core.DeviceSetting
-import io.github.dohex.openrose.core.InterfaceStyle
 import io.github.dohex.openrose.androidintegration.IntegrationPlatformState
 import io.github.dohex.openrose.androidintegration.IntegrationState
 import io.github.dohex.openrose.androidintegration.ModuleAvailability
@@ -27,7 +26,6 @@ import io.github.dohex.openrose.core.PlatformState
 import io.github.dohex.openrose.core.SettingOperation
 import io.github.dohex.openrose.core.SettingStage
 import io.github.dohex.openrose.core.TransportAvailability
-import io.github.dohex.openrose.core.UserSettings
 import io.github.dohex.openrose.core.noiseControlCapabilities
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.FieldReading
@@ -43,8 +41,8 @@ class OpenRoseConnectedHomeUiTest {
     @Test
     fun notificationNavigationReturnsToHeadphonesWithoutChangingTheControlSession() {
         for (style in InterfaceStyle.entries) {
-            val initial = connectedState(style)
-            withHarness(420, 900, initial) { harness ->
+            val initial = connectedState()
+            withHarness(420, 900, initial, style) { harness ->
                 harness.render()
                 harness.clickTab("设置")
                 harness.render()
@@ -65,7 +63,7 @@ class OpenRoseConnectedHomeUiTest {
     @Test
     fun i7QuickModesIncludeAutomaticAndDynamicNoiseControl() {
         for (style in InterfaceStyle.entries) {
-            val initial = connectedState(style)
+            val initial = connectedState()
             val device = requireNotNull(initial.device)
             val profile = ModelProfile.I7_RS_V2
             withHarness(420, 900, initial.copy(
@@ -73,7 +71,7 @@ class OpenRoseConnectedHomeUiTest {
                 device = device.copy(profile = profile, capabilities = device.capabilities.copy(
                     noiseControl = noiseControlCapabilities(profile),
                 ), fields = device.fields + (DeviceField.NOISE_MODE to FieldReading.Known(FieldValue.Text("auto"), "auto"))),
-            )) { harness ->
+            ), style) { harness ->
                 harness.render()
                 assertTrue(harness.hasSelectedText("自动"))
                 assertTrue(harness.hasClickableText("动态降噪"))
@@ -88,12 +86,12 @@ class OpenRoseConnectedHomeUiTest {
     @Test
     fun windQuickModeKeepsItsConfirmedSelectionUntilTheDeviceReportsAnotherMode() {
         for (style in InterfaceStyle.entries) {
-            val initial = connectedState(style)
+            val initial = connectedState()
             val device = requireNotNull(initial.device)
             withHarness(420, 900, initial.copy(
                 device = device.copy(fields = device.fields +
                     (DeviceField.NOISE_MODE to FieldReading.Known(FieldValue.Text("wind"), "wind"))),
-            )) { harness ->
+            ), style) { harness ->
                 harness.render()
                 assertTrue(harness.hasSelectedText("抗风噪"))
                 harness.clickText("通透")
@@ -117,7 +115,7 @@ class OpenRoseConnectedHomeUiTest {
     fun connectedHomeDisconnectMenuReturnsToNearbyDevicesWithoutOtherCommands() {
         for (style in InterfaceStyle.entries) {
             for ((width, height) in listOf(420 to 900, 1200 to 1000)) {
-                withHarness(width, height, connectedState(style)) { harness ->
+                withHarness(width, height, connectedState(), style) { harness ->
                     harness.render()
                     assertTrue(harness.hasContentDescription("耳机菜单"), "connected home menu in $style at ${width}dp")
                     harness.clickContentDescription("耳机菜单")
@@ -125,9 +123,7 @@ class OpenRoseConnectedHomeUiTest {
                     assertTrue(harness.hasText("断开控制连接"))
 
                     val nextStyle = if (style == InterfaceStyle.MIUIX) InterfaceStyle.MATERIAL3 else InterfaceStyle.MIUIX
-                    harness.state.value = harness.state.value.copy(
-                        settings = harness.state.value.settings.copy(interfaceStyle = nextStyle),
-                    )
+                    harness.uiSettings.value = harness.uiSettings.value.copy(interfaceStyle = nextStyle)
                     harness.render()
                     assertTrue(harness.hasText("断开控制连接"), "the open menu survives style replacement in $style")
 
@@ -148,7 +144,7 @@ class OpenRoseConnectedHomeUiTest {
 
     @Test
     fun materialMenuClosesWhenEscapeFollowsKeyboardActivation() {
-        withHarness(420, 900, connectedState(InterfaceStyle.MATERIAL3)) { harness ->
+        withHarness(420, 900, connectedState(), InterfaceStyle.MATERIAL3) { harness ->
             harness.render()
             harness.focus("耳机菜单")
             harness.sendKey(Key.Enter)
@@ -165,7 +161,7 @@ class OpenRoseConnectedHomeUiTest {
     @Test
     fun connectedHomePrioritizesModelConnectionBatteryNoiseAndDetails() {
         for (style in InterfaceStyle.entries) {
-            withHarness(420, 900, connectedState(style)) { harness ->
+            withHarness(420, 900, connectedState(), style) { harness ->
                 harness.render()
                 assertTrue(harness.hasText("i5"))
                 assertTrue(harness.hasText("控制连接"))
@@ -193,7 +189,7 @@ class OpenRoseConnectedHomeUiTest {
     @Test
     fun connectedHomePreservesUnknownLoadingAndPendingDeviceValues() {
         for (style in InterfaceStyle.entries) {
-            withHarness(420, 900, connectedState(style)) { harness ->
+            withHarness(420, 900, connectedState(), style) { harness ->
                 harness.render()
                 assertTrue(harness.hasText("86%"))
 
@@ -265,9 +261,9 @@ class OpenRoseConnectedHomeUiTest {
     @Test
     fun connectedHomeFeatureEntriesFollowDeviceCapabilities() {
         for (style in InterfaceStyle.entries) {
-            val state = connectedState(style)
+            val state = connectedState()
             val device = requireNotNull(state.device)
-            withHarness(1200, 1000, state) { harness ->
+            withHarness(1200, 1000, state, style) { harness ->
                 harness.render()
                 assertFalse(harness.hasText("均衡器"))
                 assertFalse(harness.hasText("触控操作"))
@@ -298,7 +294,7 @@ class OpenRoseConnectedHomeUiTest {
     @Test
     fun gameModeCardRendersCompactSwitchWithGamepadIconAndHandlesToggling() {
         for (style in InterfaceStyle.entries) {
-            val baseState = connectedState(style)
+            val baseState = connectedState()
             val baseDevice = requireNotNull(baseState.device)
             val gameDevice = baseDevice.copy(
                 capabilities = baseDevice.capabilities.copy(
@@ -306,7 +302,7 @@ class OpenRoseConnectedHomeUiTest {
                 ),
                 fields = baseDevice.fields + (DeviceField.GAME_MODE to FieldReading.Known(FieldValue.Toggle(false), "00")),
             )
-            withHarness(420, 900, baseState.copy(device = gameDevice)) { harness ->
+            withHarness(420, 900, baseState.copy(device = gameDevice), style) { harness ->
                 harness.render()
                 // Game mode card should render single-line title without "设备已确认" subtitle
                 assertTrue(harness.hasText("游戏模式"), "game mode switch must be visible in $style")
@@ -359,7 +355,7 @@ class OpenRoseConnectedHomeUiTest {
             }
         }
     }
-    private fun connectedState(style: InterfaceStyle): ControlState {
+    private fun connectedState(): ControlState {
         val profile = ModelProfile.I5_ZT
         val id = DeviceId("connected-home-i5")
         val device = DeviceState(
@@ -389,7 +385,6 @@ class OpenRoseConnectedHomeUiTest {
                 transport = TransportAvailability.Available,
             ),
             connection = ConnectionState.Connected(id, SESSION_ID, profile, ConnectionPhase.READY),
-            settings = UserSettings(interfaceStyle = style),
             device = device,
         )
     }
@@ -398,9 +393,11 @@ class OpenRoseConnectedHomeUiTest {
         width: Int,
         height: Int,
         initialState: ControlState,
+        style: InterfaceStyle,
         block: suspend (ConnectedHomeHarness) -> Unit,
     ) {
         val state = mutableStateOf(initialState)
+        val uiSettings = mutableStateOf(UiSettings(interfaceStyle = style))
         val homeNavigationRequest = mutableStateOf(0L)
         val disconnects = mutableListOf<Unit>()
         val connects = mutableListOf<DeviceId>()
@@ -411,6 +408,8 @@ class OpenRoseConnectedHomeUiTest {
                 OpenRoseApp(
                     state = state.value,
                     integration = IntegrationState(platform = IntegrationPlatformState(module = ModuleAvailability.NotEnabled)),
+                    uiSettings = uiSettings.value,
+                    onUiSettingsChange = { uiSettings.value = it },
                     onSettingsChange = { settings -> state.value = state.value.copy(settings = settings) },
                     onRequestPermission = {},
                     onOpenSystemSettings = {},
@@ -423,13 +422,14 @@ class OpenRoseConnectedHomeUiTest {
                     homeNavigationRequest = homeNavigationRequest.value,
                 )
             }
-            block(ConnectedHomeHarness(this, state, disconnects, connects, startScans, settingWrites, homeNavigationRequest))
+            block(ConnectedHomeHarness(this, state, uiSettings, disconnects, connects, startScans, settingWrites, homeNavigationRequest))
         }
     }
 
     private class ConnectedHomeHarness(
         scene: OpenRoseUiTestScene,
         val state: MutableState<ControlState>,
+        val uiSettings: MutableState<UiSettings>,
         val disconnects: MutableList<Unit>,
         val connects: MutableList<DeviceId>,
         val startScans: MutableList<Unit>,

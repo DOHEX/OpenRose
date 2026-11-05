@@ -25,7 +25,7 @@ import io.github.dohex.openrose.androidintegration.OwnerFailureStage
 import io.github.dohex.openrose.androidintegration.OwnerGeneration
 import io.github.dohex.openrose.androidintegration.ReleaseResult
 import io.github.dohex.openrose.androidintegration.SwitchRequest
-import io.github.dohex.openrose.core.UserSettings
+import io.github.dohex.openrose.androidintegration.HostSettings
 import io.github.dohex.openrose.androidintegration.wire.HostWire
 import io.github.dohex.openrose.androidintegration.wire.WireFormatException
 import io.github.dohex.openrose.androidintegration.wire.Wire
@@ -172,7 +172,7 @@ class ModuleHostBinderLink(
         override suspend fun release(request: SwitchRequest): ReleaseResult =
             call({ bridge.release(request(HostWire.encode(request))) }, HostWire::decodeReleaseResult)
 
-        override suspend fun acquire(request: SwitchRequest, settings: UserSettings): AcquireResult =
+        override suspend fun acquire(request: SwitchRequest, settings: HostSettings): AcquireResult =
             call({ bridge.acquire(request(HostWire.encodeAcquire(request, settings))) }, HostWire::decodeAcquireResult)
 
         override fun frames(generation: OwnerGeneration): Flow<HostFrame> = callbackFlow {

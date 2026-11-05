@@ -216,7 +216,7 @@ class ControlSessionSettingTest {
     }
 
     @Test
-    fun simultaneousSettingsStayFifoEvenWhenOneCallerCancelsAndStyleChanges() = runTest {
+    fun simultaneousSettingsStayFifoEvenWhenOneCallerCancels() = runTest {
         val (session, link) = ready()
         val first = async { session.set(DeviceSetting.NOISE_MODE, FieldValue.Text("anc")) }
         runCurrent()
@@ -225,7 +225,6 @@ class ControlSessionSettingTest {
         assertEquals(listOf(SettingStage.WRITTEN, SettingStage.SUBMITTED), session.state.value.settingOperations.map { it.stage })
         assertEquals(15, link.writes.size)
         first.cancelAndJoin()
-        session.updateSettings(session.state.value.settings.copy(interfaceStyle = InterfaceStyle.MATERIAL3))
         runCurrent()
         assertEquals(15, link.writes.size)
         link.incoming.send("09ff00000106020e000100000020".bytes())
@@ -236,7 +235,6 @@ class ControlSessionSettingTest {
         runCurrent()
         assertEquals(OperationResult.Success, second.await())
         assertEquals(listOf(SettingStage.CONFIRMED, SettingStage.CONFIRMED), session.state.value.settingOperations.map { it.stage })
-        assertEquals(InterfaceStyle.MATERIAL3, session.state.value.settings.interfaceStyle)
         session.disconnect()
     }
 

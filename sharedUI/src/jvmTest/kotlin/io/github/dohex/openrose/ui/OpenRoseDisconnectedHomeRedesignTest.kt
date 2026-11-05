@@ -24,7 +24,8 @@ class OpenRoseDisconnectedHomeRedesignTest {
                 manufacturerDataHex = "",
             )
             withOpenRoseAppHarness(
-                disconnectedAndroidState(UserSettings(interfaceStyle = style)).copy(bondedDevices = persistentListOf(pairedDevice)),
+                disconnectedAndroidState().copy(bondedDevices = persistentListOf(pairedDevice)),
+                initialUiSettings = UiSettings(interfaceStyle = style),
             ) { harness ->
                 harness.render()
                 // Paired devices section and device name

@@ -9,7 +9,7 @@ import android.os.Bundle
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
-import io.github.dohex.openrose.core.UserSettings
+import io.github.dohex.openrose.androidintegration.IntegrationSettings
 import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
@@ -23,7 +23,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.setValue
 import io.github.dohex.openrose.ui.OpenRoseApp
-import io.github.dohex.openrose.core.Appearance
+import io.github.dohex.openrose.ui.Appearance
 import io.github.dohex.openrose.core.transport.DeviceId
 import io.github.dohex.openrose.bridge.BridgeWire
 import java.util.Locale
@@ -51,7 +51,8 @@ class MainActivity : ComponentActivity() {
         setContent {
             val state by owner.runtime.state.collectAsState()
             val integration by owner.runtime.integration.collectAsState()
-            val dark = when (state.settings.appearance) {
+            val uiSettings by owner.uiSettings.collectAsState()
+            val dark = when (uiSettings.appearance) {
                 Appearance.SYSTEM -> resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK ==
                     Configuration.UI_MODE_NIGHT_YES
                 Appearance.LIGHT -> false
@@ -68,7 +69,10 @@ class MainActivity : ComponentActivity() {
             OpenRoseApp(
                 state = state,
                 integration = integration,
-                onSettingsChange = ::onSettingsChanged,
+                uiSettings = uiSettings,
+                onUiSettingsChange = owner::updateUiSettings,
+                onSettingsChange = owner::updateSettings,
+                onIntegrationSettingsChange = ::onIntegrationSettingsChanged,
                 onRequestPermission = ::requestBluetoothPermission,
                 onOpenSystemSettings = { startActivity(Intent(Settings.ACTION_BLUETOOTH_SETTINGS)) },
                 onStartScan = owner::startScan,
@@ -145,9 +149,9 @@ class MainActivity : ComponentActivity() {
     }
 
     /** Enabling background control asks for the notification permission once, in context. */
-    private fun onSettingsChanged(settings: UserSettings) {
-        val enabling = settings.backgroundControlEnabled && !owner.runtime.state.value.settings.backgroundControlEnabled
-        owner.updateSettings(settings)
+    private fun onIntegrationSettingsChanged(settings: IntegrationSettings) {
+        val enabling = settings.backgroundControlEnabled && !owner.runtime.integration.value.settings.backgroundControlEnabled
+        owner.updateIntegrationSettings(settings)
         val prefs = getSharedPreferences(AppPreferences.FILE, MODE_PRIVATE)
         if (enabling && Build.VERSION.SDK_INT >= 33 &&
             checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED &&

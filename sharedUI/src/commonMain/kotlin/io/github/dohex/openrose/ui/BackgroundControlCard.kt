@@ -17,7 +17,7 @@ import io.github.dohex.openrose.androidintegration.backgroundRecovery
 import io.github.dohex.openrose.core.ControlState
 import io.github.dohex.openrose.core.HostPlatform
 import io.github.dohex.openrose.core.PlatformApplicability
-import io.github.dohex.openrose.core.UserSettings
+import io.github.dohex.openrose.androidintegration.IntegrationSettings
 
 /**
  * Test tags of the background-control group. Rows report their state through the tag, so tests
@@ -57,13 +57,13 @@ internal fun ControlState.backgroundControlApplicable(integration: IntegrationSt
 internal fun BackgroundControlGroup(
     state: ControlState,
     integration: IntegrationState,
-    onChange: (UserSettings) -> Unit,
+    onChange: (IntegrationSettings) -> Unit,
     onRequestPermission: () -> Unit,
     onRequestNotificationPermission: () -> Unit,
     onRequestAssociation: () -> Unit = {},
     onOpenAppSettings: () -> Unit = {},
 ) {
-    val settings = state.settings
+    val settings = integration.settings
     AppGroup(
         title = "后台控制",
         footnote = wakeGuidance(integration.platform.backgroundService.wake.band) +

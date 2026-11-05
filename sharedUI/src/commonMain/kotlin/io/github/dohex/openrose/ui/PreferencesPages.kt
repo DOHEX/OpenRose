@@ -17,17 +17,14 @@ import io.github.dohex.openrose.androidintegration.BridgeIpcState
 import io.github.dohex.openrose.androidintegration.BridgeSessionState
 import io.github.dohex.openrose.androidintegration.IntegrationPlatformState
 import io.github.dohex.openrose.androidintegration.IntegrationState
+import io.github.dohex.openrose.androidintegration.IntegrationSettings
 import io.github.dohex.openrose.androidintegration.ModuleAvailability
-import io.github.dohex.openrose.core.Appearance
-import io.github.dohex.openrose.core.BottomBarStyle
 import io.github.dohex.openrose.core.ControlState
-import io.github.dohex.openrose.core.FusionSettingsDestination
+import io.github.dohex.openrose.androidintegration.FusionSettingsDestination
 import io.github.dohex.openrose.core.HostPlatform
-import io.github.dohex.openrose.core.InterfaceStyle
-import io.github.dohex.openrose.core.IslandMode
-import io.github.dohex.openrose.core.IslandTrigger
-import io.github.dohex.openrose.core.ControlWay
-import io.github.dohex.openrose.core.PageTransition
+import io.github.dohex.openrose.androidintegration.IslandMode
+import io.github.dohex.openrose.androidintegration.IslandTrigger
+import io.github.dohex.openrose.androidintegration.ControlWay
 import io.github.dohex.openrose.core.PermissionState
 import io.github.dohex.openrose.core.PlatformApplicability
 import io.github.dohex.openrose.core.PlatformState
@@ -39,20 +36,23 @@ import io.github.dohex.openrose.core.UserSettings
 internal fun PreferencesPage(
     state: ControlState,
     integration: IntegrationState,
+    uiSettings: UiSettings,
     onChange: (UserSettings) -> Unit,
+    onUiSettingsChange: (UiSettings) -> Unit,
+    onIntegrationSettingsChange: (IntegrationSettings) -> Unit,
     onRequestPermission: () -> Unit = {},
     onRequestNotificationPermission: () -> Unit = {},
     onRequestAssociation: () -> Unit = {},
     onOpenAppSettings: () -> Unit = {},
     onSelectControlWay: ((ControlWay) -> Unit)? = null,
 ) {
-    val settings = state.settings
+    val settings = integration.settings
     var systemPreferenceFeedback by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(integration.platform.systemIntegrationApplicability, integration.platform.module) {
         systemPreferenceFeedback = null
     }
-    val saveSystemPreference: (UserSettings) -> Unit = { nextSettings ->
-        onChange(nextSettings)
+    val saveSystemPreference: (IntegrationSettings) -> Unit = { nextSettings ->
+        onIntegrationSettingsChange(nextSettings)
         systemPreferenceFeedback = if (integration.platform.module == ModuleAvailability.Available) {
             "偏好已保存。系统状态请查看状态页。"
         } else {
@@ -66,45 +66,45 @@ internal fun PreferencesPage(
         AppGroup(title = "界面风格") {
             AppChoiceRow(
                 title = "组件风格",
-                valueText = interfaceStyleLabel(settings.interfaceStyle),
+                valueText = interfaceStyleLabel(uiSettings.interfaceStyle),
                 options = listOf(
                     AppOption(InterfaceStyle.MIUIX, "Miuix"),
                     AppOption(InterfaceStyle.MATERIAL3, "Material 3 Expressive"),
                 ),
-                selected = settings.interfaceStyle,
-                onSelect = { onChange(settings.copy(interfaceStyle = it)) },
+                selected = uiSettings.interfaceStyle,
+                onSelect = { onUiSettingsChange(uiSettings.copy(interfaceStyle = it)) },
             )
         }
 
         AppGroup(title = "显示模式") {
             AppChoiceRow(
                 title = "明暗模式",
-                valueText = appearanceLabel(settings.appearance),
+                valueText = appearanceLabel(uiSettings.appearance),
                 options = Appearance.entries.map { AppOption(it, appearanceLabel(it)) },
-                selected = settings.appearance,
-                onSelect = { onChange(settings.copy(appearance = it)) },
+                selected = uiSettings.appearance,
+                onSelect = { onUiSettingsChange(uiSettings.copy(appearance = it)) },
             )
             AppChoiceRow(
                 title = "底栏样式",
-                valueText = bottomBarStyleLabel(settings.bottomBarStyle),
+                valueText = bottomBarStyleLabel(uiSettings.bottomBarStyle),
                 options = BottomBarStyle.entries.map { AppOption(it, bottomBarStyleLabel(it)) },
-                selected = settings.bottomBarStyle,
-                onSelect = { onChange(settings.copy(bottomBarStyle = it)) },
+                selected = uiSettings.bottomBarStyle,
+                onSelect = { onUiSettingsChange(uiSettings.copy(bottomBarStyle = it)) },
             )
             AppSwitchRow(
                 title = "背景模糊",
                 summary = "顶栏、底栏及浮层启用毛玻璃透视效果",
-                checked = settings.backgroundBlurEnabled,
-                onChange = { onChange(settings.copy(backgroundBlurEnabled = it)) },
+                checked = uiSettings.backgroundBlurEnabled,
+                onChange = { onUiSettingsChange(uiSettings.copy(backgroundBlurEnabled = it)) },
             )
         }
         AppGroup(title = "动效") {
             AppChoiceRow(
                 title = "转场动效",
-                valueText = pageTransitionLabel(settings.pageTransition),
+                valueText = pageTransitionLabel(uiSettings.pageTransition),
                 options = PageTransition.entries.map { AppOption(it, pageTransitionLabel(it)) },
-                selected = settings.pageTransition,
-                onSelect = { onChange(settings.copy(pageTransition = it)) },
+                selected = uiSettings.pageTransition,
+                onSelect = { onUiSettingsChange(uiSettings.copy(pageTransition = it)) },
             )
         }
 
@@ -117,15 +117,15 @@ internal fun PreferencesPage(
                 AppSwitchRow(
                     title = "强制使用 BLE",
                     summary = "仅影响下一次连接",
-                    checked = settings.forceBle,
-                    onChange = { onChange(settings.copy(forceBle = it)) },
+                    checked = state.settings.forceBle,
+                    onChange = { onChange(state.settings.copy(forceBle = it)) },
                 )
             }
         }
 
         if (state.backgroundControlApplicable(integration)) {
             BackgroundControlGroup(
-                state, integration, onChange, onRequestPermission, onRequestNotificationPermission, onRequestAssociation, onOpenAppSettings,
+                state, integration, onIntegrationSettingsChange, onRequestPermission, onRequestNotificationPermission, onRequestAssociation, onOpenAppSettings,
             )
         }
 

@@ -26,7 +26,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import io.github.dohex.openrose.core.InterfaceStyle
 import io.github.dohex.openrose.core.ControlState
 import io.github.dohex.openrose.core.DeviceSetting
 import io.github.dohex.openrose.core.DeviceState

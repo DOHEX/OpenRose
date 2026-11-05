@@ -3,7 +3,6 @@ package io.github.dohex.openrose.androidintegration
 import io.github.dohex.openrose.core.ControlError
 import io.github.dohex.openrose.core.ControlErrorCode
 import io.github.dohex.openrose.core.OperationResult
-import io.github.dohex.openrose.core.UserSettings
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.CoroutineScope
@@ -156,7 +155,7 @@ class ModuleControlClient(
         else ReleaseProof.Unproven(OwnerFailureStage.RELEASE, "释放回执与本次切换请求或所有者代际不匹配")
     }
 
-    suspend fun acquire(request: SwitchRequest, settings: UserSettings): AcquireOutcome =
+    suspend fun acquire(request: SwitchRequest, settings: HostSettings): AcquireOutcome =
         withConnection({ AcquireOutcome.Failed(it.stage, it.reason) }) { connection ->
             try {
                 when (val result = withTimeout(timing.acquireTimeoutMillis) { connection.acquire(request, settings) }) {

@@ -12,7 +12,6 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.unit.dp
-import io.github.dohex.openrose.core.InterfaceStyle
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse

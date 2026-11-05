@@ -2,12 +2,9 @@ package io.github.dohex.openrose.androidintegration
 
 import io.github.dohex.openrose.androidintegration.wire.HostPlatformFacts
 import io.github.dohex.openrose.core.ControlState
-import io.github.dohex.openrose.core.ControlWay
 import io.github.dohex.openrose.core.DeviceSetting
-import io.github.dohex.openrose.core.IslandMode
 import io.github.dohex.openrose.core.OperationResult
 import io.github.dohex.openrose.core.SessionReference
-import io.github.dohex.openrose.core.UserSettings
 import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.dohex.openrose.core.transport.DeviceId
 
@@ -43,7 +40,7 @@ sealed interface HostCommand {
     data object Disconnect : HostCommand
     /** [reference] null targets whatever session is current; non-null is rejected unless it still is. */
     data class Set(val reference: SessionReference?, val setting: DeviceSetting, val value: FieldValue) : HostCommand
-    data class UpdateSettings(val settings: UserSettings) : HostCommand
+    data class UpdateSettings(val settings: HostSettings) : HostCommand
     data class ClaimPrompt(val reference: SessionReference, val promptId: String) : HostCommand
 }
 
@@ -162,4 +159,5 @@ data class OwnerView(
     val generation: OwnerGeneration,
     val state: ControlState,
     val presentation: SystemPresentationState,
+    val settings: IntegrationSettings,
 )

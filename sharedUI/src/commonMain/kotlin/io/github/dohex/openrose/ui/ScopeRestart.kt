@@ -12,7 +12,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import io.github.dohex.openrose.core.InterfaceStyle
 import io.github.dohex.openrose.ui.resources.Res
 import io.github.dohex.openrose.ui.resources.ic_restart_scope
 import org.jetbrains.compose.resources.vectorResource

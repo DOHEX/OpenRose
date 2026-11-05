@@ -35,7 +35,6 @@ import io.github.dohex.openrose.core.ConnectionState
 import io.github.dohex.openrose.core.ControlState
 import io.github.dohex.openrose.core.DeviceSetting
 import io.github.dohex.openrose.core.DeviceState
-import io.github.dohex.openrose.core.InterfaceStyle
 import io.github.dohex.openrose.core.PermissionState
 import io.github.dohex.openrose.core.SettingOperation
 import io.github.dohex.openrose.core.SettingStage

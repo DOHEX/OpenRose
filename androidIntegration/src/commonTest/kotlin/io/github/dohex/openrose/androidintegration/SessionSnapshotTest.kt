@@ -3,8 +3,6 @@ package io.github.dohex.openrose.androidintegration
 import io.github.dohex.openrose.core.ConnectionPhase
 import io.github.dohex.openrose.core.ControlErrorCode
 import io.github.dohex.openrose.core.DeviceSetting
-import io.github.dohex.openrose.core.InterfaceStyle
-import io.github.dohex.openrose.core.IslandMode
 import io.github.dohex.openrose.core.LocalControlRuntime
 import io.github.dohex.openrose.core.OperationResult
 import io.github.dohex.openrose.core.PermissionState
@@ -105,7 +103,7 @@ class SessionSnapshotTest {
     }
 
     @Test
-    fun readDuringPendingSettingAndStyleChangeKeepsTheConfirmedStateAndSession() = runTest {
+    fun readDuringPendingSettingAndSettingsChangeKeepsTheConfirmedStateAndSession() = runTest {
         val profile = ModelProfile.I5_ZT
         val transport = SnapshotTransport(profile)
         val session = newSession(transport)
@@ -126,14 +124,14 @@ class SessionSnapshotTest {
         assertEquals(FieldValue.Text("wind"), (beforeConfirmation.fields[DeviceField.NOISE_MODE] as FieldReading.Known).value)
         assertEquals(initialWrites + 2, link.writes.size)
 
-        session.updateSettings(session.state.value.settings.copy(interfaceStyle = InterfaceStyle.MATERIAL3))
-        val afterStyleChange = assertIs<SessionSnapshotResult.Available>(session.readSession(reference)).device
-        assertEquals(device.sessionId, afterStyleChange.sessionId)
-        assertEquals(FieldValue.Text("wind"), (afterStyleChange.fields[DeviceField.NOISE_MODE] as FieldReading.Known).value)
+        session.updateSettings(session.state.value.settings.copy(forceBle = true))
+        val afterSettingsChange = assertIs<SessionSnapshotResult.Available>(session.readSession(reference)).device
+        assertEquals(device.sessionId, afterSettingsChange.sessionId)
+        assertEquals(FieldValue.Text("wind"), (afterSettingsChange.fields[DeviceField.NOISE_MODE] as FieldReading.Known).value)
         assertEquals(initialWrites + 2, link.writes.size)
         assertFalse(pending.isCompleted)
 
-        session.updateSettings(session.state.value.settings.copy(islandMode = IslandMode.OFF, focusNotificationEnabled = false))
+        session.updateIntegrationSettings(session.settings.copy(islandMode = IslandMode.OFF, focusNotificationEnabled = false))
         val hidden = assertIs<SessionSnapshotResult.Available>(session.readSession(reference))
         assertFalse(hidden.presentation.showStatusNotification)
         assertEquals(null, hidden.presentation.connectionPrompt)
@@ -142,7 +140,7 @@ class SessionSnapshotTest {
         assertEquals(initialWrites + 2, link.writes.size)
         assertFalse(pending.isCompleted)
 
-        session.updateSettings(session.state.value.settings.copy(islandMode = IslandMode.MODULE, focusNotificationEnabled = true))
+        session.updateIntegrationSettings(session.settings.copy(islandMode = IslandMode.MODULE, focusNotificationEnabled = true))
         val switched = assertIs<SessionSnapshotResult.Available>(session.readSession(reference))
         assertEquals(null, switched.presentation.connectionPrompt, "Mode changes must not replay the connection event")
         assertEquals(beforeConfirmation, switched.device)

@@ -6,7 +6,6 @@
 
 package io.github.dohex.openrose.ui
 
-import io.github.dohex.openrose.core.PageTransition
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.Spring
@@ -17,7 +16,6 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
-import io.github.dohex.openrose.core.BottomBarStyle
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.foundation.pager.HorizontalPager

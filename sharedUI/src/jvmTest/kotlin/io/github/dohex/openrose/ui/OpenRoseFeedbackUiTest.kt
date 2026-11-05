@@ -14,7 +14,6 @@ import io.github.dohex.openrose.core.ControlState
 import io.github.dohex.openrose.core.DeviceCapabilities
 import io.github.dohex.openrose.core.DeviceSetting
 import io.github.dohex.openrose.core.DeviceState
-import io.github.dohex.openrose.core.InterfaceStyle
 import io.github.dohex.openrose.androidintegration.IntegrationPlatformState
 import io.github.dohex.openrose.androidintegration.IntegrationState
 import io.github.dohex.openrose.androidintegration.ModuleAvailability
@@ -23,7 +22,6 @@ import io.github.dohex.openrose.core.PlatformState
 import io.github.dohex.openrose.core.SettingOperation
 import io.github.dohex.openrose.core.SettingStage
 import io.github.dohex.openrose.core.TransportAvailability
-import io.github.dohex.openrose.core.UserSettings
 import io.github.dohex.openrose.core.noiseControlCapabilities
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.FieldReading
@@ -43,7 +41,7 @@ class OpenRoseFeedbackUiTest {
                 id = 60, sessionId = SESSION_ID, setting = DeviceSetting.NOISE_MODE,
                 requestedValue = FieldValue.Text("wind"), stage = SettingStage.SUBMITTED,
             )
-            withHarness(state(operation, style).copy(settingOperations = persistentListOf())) { harness ->
+            withHarness(state(operation).copy(settingOperations = persistentListOf()), style) { harness ->
                 harness.render()
                 val before = harness.clickableBounds("通透")
                 harness.state.value = harness.state.value.copy(settingOperations = persistentListOf(operation))
@@ -68,7 +66,7 @@ class OpenRoseFeedbackUiTest {
                 requestedValue = FieldValue.Text("anc"), stage = SettingStage.CONFIRMED,
                 confirmedFields = persistentSetOf(DeviceField.NOISE_MODE),
             )
-            withHarness(state(operation, style)) { harness ->
+            withHarness(state(operation), style) { harness ->
                 harness.render()
                 harness.clickText("设备详情")
                 harness.render()
@@ -87,7 +85,7 @@ class OpenRoseFeedbackUiTest {
                 requestedValue = FieldValue.Text("wind"),
                 stage = SettingStage.WRITTEN,
             )
-            withHarness(state(operation, style)) { harness ->
+            withHarness(state(operation), style) { harness ->
                 harness.render()
                 assertTrue(harness.hasText("正在处理设置，等待设备确认"), "pending feedback in $style")
                 assertFalse(harness.hasText("最近设置操作"), "home must not present an operation-history block in $style")
@@ -134,7 +132,7 @@ class OpenRoseFeedbackUiTest {
                 stage = SettingStage.TIMED_OUT,
                 error = error,
             )
-            withHarness(state(operation, style, lastError = error)) { harness ->
+            withHarness(state(operation, lastError = error), style) { harness ->
                 harness.render()
                 assertTrue(harness.hasText("等待设备确认超时"), "failure summary in $style")
                 assertTrue(harness.hasText(error.message), "failure reason in $style")
@@ -167,7 +165,7 @@ class OpenRoseFeedbackUiTest {
                     requestedValue = FieldValue.Text("wind"),
                     stage = stage,
                 )
-                withHarness(state(operation, style)) { harness ->
+                withHarness(state(operation), style) { harness ->
                     harness.render()
                     assertTrue(harness.hasText(expectedMessage), "abnormal stage $stage shows message in $style")
                     assertTrue(harness.hasText("查看详情"), "abnormal stage $stage shows diagnostics button in $style")
@@ -190,7 +188,7 @@ class OpenRoseFeedbackUiTest {
                 stage = SettingStage.CONFIRMED,
                 confirmedFields = persistentSetOf(DeviceField.NOISE_MODE),
             )
-            withHarness(state(confirmed, style)) { harness ->
+            withHarness(state(confirmed), style) { harness ->
                 harness.render()
                 harness.clickText("通透")
 
@@ -219,7 +217,7 @@ class OpenRoseFeedbackUiTest {
                 val nextStyle = if (style == InterfaceStyle.MIUIX) InterfaceStyle.MATERIAL3 else InterfaceStyle.MIUIX
                 harness.clickText(if (nextStyle == InterfaceStyle.MIUIX) "Miuix" else "Material 3 Expressive")
                 harness.render()
-                assertEquals(nextStyle, harness.state.value.settings.interfaceStyle)
+                assertEquals(nextStyle, harness.uiSettings.value.interfaceStyle)
                 assertEquals(1, harness.settingWrites.size, "style changes do not resubmit settings in $style")
 
                 harness.clickTab("我的耳机")
@@ -258,8 +256,8 @@ class OpenRoseFeedbackUiTest {
                 totalFrames = 2,
                 confirmedFields = persistentSetOf(DeviceField.EQ),
             )
-            val initial = state(operation, style).copy(connection = ConnectionState.Disconnected)
-            withHarness(initial) { harness ->
+            val initial = state(operation).copy(connection = ConnectionState.Disconnected)
+            withHarness(initial, style) { harness ->
                 harness.render()
                 assertTrue(harness.hasText("添加你的 ROSE 耳机"), "disconnect returns home without old device controls in $style")
                 assertFalse(harness.hasText("请求 #44：自定义 EQ"), "ended session detail stays off home in $style")
@@ -291,13 +289,16 @@ class OpenRoseFeedbackUiTest {
         }
     }
 
-    private fun withHarness(initialState: ControlState, block: suspend (FeedbackHarness) -> Unit) = runOpenRoseUiTest(1200, 1400) {
+    private fun withHarness(initialState: ControlState, style: InterfaceStyle, block: suspend (FeedbackHarness) -> Unit) = runOpenRoseUiTest(1200, 1400) {
         val state = mutableStateOf(initialState)
+        val uiSettings = mutableStateOf(UiSettings(interfaceStyle = style))
         val settingWrites = mutableListOf<Pair<DeviceSetting, FieldValue>>()
         setContent {
             OpenRoseApp(
                 state = state.value,
                 integration = IntegrationState(platform = IntegrationPlatformState(module = ModuleAvailability.NotEnabled)),
+                uiSettings = uiSettings.value,
+                onUiSettingsChange = { uiSettings.value = it },
                 onSettingsChange = { settings -> state.value = state.value.copy(settings = settings) },
                 onRequestPermission = {},
                 onOpenSystemSettings = {},
@@ -309,12 +310,11 @@ class OpenRoseFeedbackUiTest {
                 onAddDeviceConnect = { error("Unexpected add-device connection in this scenario") },
             )
         }
-        block(FeedbackHarness(this, state, settingWrites))
+        block(FeedbackHarness(this, state, uiSettings, settingWrites))
     }
 
     private fun state(
         operation: SettingOperation,
-        style: InterfaceStyle,
         lastError: ControlError? = null,
     ): ControlState {
         val profile = ModelProfile.I7_RS_V2
@@ -336,7 +336,6 @@ class OpenRoseFeedbackUiTest {
                 transport = TransportAvailability.Available,
             ),
             connection = ConnectionState.Connected(deviceId, SESSION_ID, profile, ConnectionPhase.READY),
-            settings = UserSettings(interfaceStyle = style),
             device = device,
             lastError = lastError,
             settingOperations = persistentListOf(operation),
@@ -346,6 +345,7 @@ class OpenRoseFeedbackUiTest {
     private class FeedbackHarness(
         scene: OpenRoseUiTestScene,
         val state: MutableState<ControlState>,
+        val uiSettings: MutableState<UiSettings>,
         val settingWrites: MutableList<Pair<DeviceSetting, FieldValue>>,
     ) : OpenRoseUiTestHarness(scene)
 

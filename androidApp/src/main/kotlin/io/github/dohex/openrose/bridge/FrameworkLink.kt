@@ -4,8 +4,7 @@ import android.util.Log
 import io.github.dohex.openrose.androidintegration.ModuleAvailability
 import io.github.dohex.openrose.androidintegration.ModuleUnavailableCause
 import io.github.dohex.openrose.androidintegration.SystemBridgeDiagnostics
-import io.github.dohex.openrose.core.UserSettings
-import io.github.dohex.openrose.core.UserSettingsCodec
+import io.github.dohex.openrose.androidintegration.HostSettings
 import io.github.libxposed.service.XposedService
 import io.github.libxposed.service.XposedServiceHelper
 
@@ -19,7 +18,10 @@ class FrameworkLink(
 ) {
     private val lock = Any()
     private var framework: XposedService? = null
-    private val publisher = SerializedPublisher(::commitConfig)
+    private val publisher = ModuleSettingsPublisher {
+        val service = synchronized(lock) { framework }
+        service?.takeIf { it.apiVersion >= 102 }?.getRemotePreferences(BridgeWire.CONFIG_GROUP)
+    }
 
     fun start() {
         XposedServiceHelper.registerListener(object : XposedServiceHelper.OnServiceListener {
@@ -63,18 +65,8 @@ class FrameworkLink(
      * newer one. Returns whether the framework acknowledged the write, which is the only time the host
      * can be said to know it.
      */
-    fun publishConfig(settings: () -> UserSettings): Boolean = publisher.publish(settings)
-
-    private fun commitConfig(settings: UserSettings): Boolean {
-        val service = synchronized(lock) { framework } ?: return false
-        if (service.apiVersion < 102) return false
-        return runCatching {
-            val editor = service.getRemotePreferences(BridgeWire.CONFIG_GROUP).edit()
-            UserSettingsCodec.encode(settings).forEach { (key, value) -> editor.putString(key, value) }
-            editor.putString(BridgeWire.CONFIG_REVISION, System.nanoTime().toString())
-            editor.commit()
-        }.onFailure { Log.w(TAG, "Failed to publish module configuration", it) }.getOrDefault(false)
-    }
+    fun publishConfig(settings: () -> HostSettings): Boolean = runCatching { publisher.publish(settings) }
+        .onFailure { Log.w(TAG, "Failed to publish module configuration", it) }.getOrDefault(false)
 
     private companion object { const val TAG = "FrameworkLink" }
 }

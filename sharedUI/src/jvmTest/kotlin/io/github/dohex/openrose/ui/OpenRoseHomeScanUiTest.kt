@@ -7,7 +7,6 @@ import kotlinx.collections.immutable.toPersistentList
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.input.key.Key
-import io.github.dohex.openrose.core.Appearance
 import io.github.dohex.openrose.core.ConnectionPhase
 import io.github.dohex.openrose.core.ConnectionState
 import io.github.dohex.openrose.core.ControlError
@@ -16,12 +15,10 @@ import io.github.dohex.openrose.core.ControlState
 import io.github.dohex.openrose.core.DeviceCandidate
 import io.github.dohex.openrose.core.DeviceCapabilities
 import io.github.dohex.openrose.core.DeviceState
-import io.github.dohex.openrose.core.InterfaceStyle
 import io.github.dohex.openrose.core.PermissionState
 import io.github.dohex.openrose.core.PlatformState
 import io.github.dohex.openrose.core.ScanState
 import io.github.dohex.openrose.core.TransportAvailability
-import io.github.dohex.openrose.core.UserSettings
 import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.dohex.openrose.core.protocol.ModelProfile
 import io.github.dohex.openrose.core.transport.DeviceId
@@ -38,7 +35,7 @@ class OpenRoseHomeScanUiTest {
             val others = (1..30).map { index ->
                 headset.copy(deviceId = DeviceId("other-$index"), name = "其他设备 $index", profile = null)
             }
-            withHarness(420, 1200, state(style).copy(candidates = (others + headset).toPersistentList())) { harness ->
+            withHarness(420, 1200, style, state().copy(candidates = (others + headset).toPersistentList())) { harness ->
                 harness.render()
                 harness.openAddDevice()
                 assertTrue(harness.hasText("EarFree i5"))
@@ -56,7 +53,7 @@ class OpenRoseHomeScanUiTest {
     @Test
     fun resizingDisconnectedHomeDoesNotEmitCallbacks() {
         for (style in InterfaceStyle.entries) {
-            withHarness(1280, 1000, state(style)) { harness ->
+            withHarness(1280, 1000, style, state()) { harness ->
                 harness.render()
                 for (width in listOf(420, 1280)) {
                     harness.resize(width, 1000)
@@ -83,7 +80,8 @@ class OpenRoseHomeScanUiTest {
             withHarness(
                 420,
                 900,
-                state(style).copy(platform = PlatformState(PermissionState.NOT_REQUIRED, TransportAvailability.Unavailable(reason))),
+                style,
+                state().copy(platform = PlatformState(PermissionState.NOT_REQUIRED, TransportAvailability.Unavailable(reason))),
             ) { harness ->
                 harness.render()
                 assertTrue(harness.hasText(reason), "the host's reason should be visible in $style")
@@ -106,7 +104,7 @@ class OpenRoseHomeScanUiTest {
     @Test
     fun activeScanCanBeStoppedWhenTransportBecomesUnavailable() {
         for (style in InterfaceStyle.entries) {
-            withHarness(420, 900, state(style)) { harness ->
+            withHarness(420, 900, style, state()) { harness ->
                 harness.render()
                 harness.state.value = harness.state.value.copy(
                     scan = ScanState.Scanning,
@@ -153,7 +151,8 @@ class OpenRoseHomeScanUiTest {
                 withHarness(
                     420,
                     900,
-                    state(style).copy(platform = PlatformState(permission, TransportAvailability.Unavailable(reason))),
+                    style,
+                    state().copy(platform = PlatformState(permission, TransportAvailability.Unavailable(reason))),
                 ) { harness ->
                     harness.render()
                     harness.openAddDevice()
@@ -176,7 +175,7 @@ class OpenRoseHomeScanUiTest {
     fun disconnectedHomeShowsManualScanAndCanStopItInBothStylesAndLayouts() {
         for (style in InterfaceStyle.entries) {
             for ((width, height) in listOf(420 to 900, 1200 to 1000)) {
-                withHarness(width, height, state(style)) { harness ->
+                withHarness(width, height, style, state()) { harness ->
                     harness.render()
 
                     assertTrue(harness.hasText("搜索并添加耳机"))
@@ -214,7 +213,8 @@ class OpenRoseHomeScanUiTest {
             withHarness(
                 420,
                 900,
-                state(style).copy(platform = PlatformState(PermissionState.REQUIRED, TransportAvailability.Available)),
+                style,
+                state().copy(platform = PlatformState(PermissionState.REQUIRED, TransportAvailability.Available)),
             ) { harness ->
                 harness.render()
                 harness.openAddDevice()
@@ -262,7 +262,8 @@ class OpenRoseHomeScanUiTest {
             withHarness(
                 420,
                 900,
-                state(style).copy(platform = PlatformState(PermissionState.GRANTED, TransportAvailability.Unavailable(reason))),
+                style,
+                state().copy(platform = PlatformState(PermissionState.GRANTED, TransportAvailability.Unavailable(reason))),
             ) { harness ->
                 harness.render()
                 harness.focus("查看连接与运行状态")
@@ -323,7 +324,7 @@ class OpenRoseHomeScanUiTest {
                 profile = null,
                 manufacturerDataHex = "",
             )
-            withHarness(420, 900, state(style).copy(candidates = persistentListOf(candidate))) { harness ->
+            withHarness(420, 900, style, state().copy(candidates = persistentListOf(candidate))) { harness ->
                 harness.render()
                 harness.openAddDevice()
                 assertFalse(harness.hasText("Nearby headset"))
@@ -351,7 +352,7 @@ class OpenRoseHomeScanUiTest {
                 capabilities = DeviceCapabilities(readableFields = persistentSetOf()),
                 fields = persistentMapOf(),
             )
-            withHarness(420, 900, state(style).copy(candidates = persistentListOf(recognizedCandidate(id)))) { harness ->
+            withHarness(420, 900, style, state().copy(candidates = persistentListOf(recognizedCandidate(id)))) { harness ->
                 harness.render()
                 harness.state.value = harness.state.value.copy(
                     connection = ConnectionState.Connected(id, SESSION_ID, profile, ConnectionPhase.READY),
@@ -383,10 +384,12 @@ class OpenRoseHomeScanUiTest {
     private fun withHarness(
         width: Int,
         height: Int,
+        style: InterfaceStyle,
         initialState: ControlState,
         block: suspend (ScanHarness) -> Unit,
     ) = runOpenRoseUiTest(width, height) {
         val state = mutableStateOf(initialState)
+        val uiSettings = mutableStateOf(UiSettings(interfaceStyle = style, appearance = Appearance.SYSTEM))
         val startScans = mutableListOf<Unit>()
         val stopScans = mutableListOf<Unit>()
         val permissionRequests = mutableListOf<Unit>()
@@ -394,14 +397,16 @@ class OpenRoseHomeScanUiTest {
         val connects = mutableListOf<DeviceId>()
         val disconnects = mutableListOf<Unit>()
         val settingWrites = mutableListOf<Pair<io.github.dohex.openrose.core.DeviceSetting, FieldValue>>()
-        val settingsChanges = mutableListOf<UserSettings>()
+        val settingsChanges = mutableListOf<UiSettings>()
         setContent {
             OpenRoseApp(
                 state = state.value,
-                onSettingsChange = { settings ->
+                uiSettings = uiSettings.value,
+                onUiSettingsChange = { settings ->
                     settingsChanges += settings
-                    state.value = state.value.copy(settings = settings)
+                    uiSettings.value = settings
                 },
+                onSettingsChange = { settings -> state.value = state.value.copy(settings = settings) },
                 onRequestPermission = { permissionRequests += Unit },
                 onOpenSystemSettings = { systemSettingsOpens += Unit },
                 onStartScan = {
@@ -437,9 +442,8 @@ class OpenRoseHomeScanUiTest {
         )
     }
 
-    private fun state(style: InterfaceStyle) = ControlState(
+    private fun state() = ControlState(
         platform = PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
-        settings = UserSettings(interfaceStyle = style, appearance = Appearance.SYSTEM),
     )
 
     private class ScanHarness(
@@ -452,7 +456,7 @@ class OpenRoseHomeScanUiTest {
         val connects: MutableList<DeviceId>,
         val disconnects: MutableList<Unit>,
         val settingWrites: MutableList<Pair<io.github.dohex.openrose.core.DeviceSetting, FieldValue>>,
-        val settingsChanges: MutableList<UserSettings>,
+        val settingsChanges: MutableList<UiSettings>,
     ) : OpenRoseUiTestHarness(scene) {
         suspend fun openAddDevice() {
             clickContentDescription("添加耳机")

@@ -2,14 +2,10 @@ package io.github.dohex.openrose.androidintegration
 
 import kotlinx.collections.immutable.persistentSetOf
 
-import io.github.dohex.openrose.core.Appearance
 import io.github.dohex.openrose.core.ConnectionPhase
 import io.github.dohex.openrose.core.ConnectionState
 import io.github.dohex.openrose.core.ControlErrorCode
 import io.github.dohex.openrose.core.DeviceSetting
-import io.github.dohex.openrose.core.InterfaceStyle
-import io.github.dohex.openrose.core.IslandMode
-import io.github.dohex.openrose.core.IslandTrigger
 import io.github.dohex.openrose.core.LocalControlRuntime
 import io.github.dohex.openrose.core.OperationResult
 import io.github.dohex.openrose.core.PermissionState
@@ -17,7 +13,6 @@ import io.github.dohex.openrose.core.PlatformState
 import io.github.dohex.openrose.core.SessionReference
 import io.github.dohex.openrose.core.SessionTiming
 import io.github.dohex.openrose.core.TransportAvailability
-import io.github.dohex.openrose.core.UserSettings
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.FieldReading
 import io.github.dohex.openrose.core.protocol.FieldValue
@@ -82,14 +77,10 @@ class SystemPresentationTest {
         (snapshot.presentation.actions as MutableSet<DeviceSetting>).clear()
         assertTrue(DeviceSetting.NOISE_MODE in session.presentation.value.actions)
 
-        val writesBeforeStyleChange = transport.connection.writes.size
-        session.updateSettings(session.state.value.settings.copy(
-            interfaceStyle = InterfaceStyle.MATERIAL3,
-            appearance = Appearance.DARK,
-            forceBle = true,
-        ))
+        val writesBeforeSettingsChange = transport.connection.writes.size
+        session.updateSettings(session.state.value.settings.copy(forceBle = true))
         assertEquals(prompt.id, session.presentation.value.connectionPrompt?.id)
-        assertEquals(writesBeforeStyleChange, transport.connection.writes.size)
+        assertEquals(writesBeforeSettingsChange, transport.connection.writes.size)
 
         val link = transport.connection
         link.deviceReply(i5Replies.getValue("0101").replace("6462", "6410"))
@@ -117,7 +108,7 @@ class SystemPresentationTest {
         )
         for ((mode, focusEnabled) in combinations) {
             val transport = PresentationTransport(PresentationConnection(i5Replies))
-            val settings = UserSettings(islandMode = mode, focusNotificationEnabled = focusEnabled)
+            val settings = IntegrationSettings(islandMode = mode, focusNotificationEnabled = focusEnabled)
             val session = newSession(transport, settings)
             val id = DeviceId("${mode.name.lowercase()}-$focusEnabled")
             connect(session, transport, id)
@@ -131,13 +122,13 @@ class SystemPresentationTest {
             if (mode != IslandMode.OFF) {
                 assertNotNull(presentation.connectionPrompt)
                 val otherMode = if (mode == IslandMode.OFFICIAL) IslandMode.MODULE else IslandMode.OFFICIAL
-                session.updateSettings(session.state.value.settings.copy(islandMode = otherMode))
+                session.updateIntegrationSettings(session.settings.copy(islandMode = otherMode))
                 assertNull(session.presentation.value.connectionPrompt)
-                session.updateSettings(session.state.value.settings.copy(islandMode = mode))
+                session.updateIntegrationSettings(session.settings.copy(islandMode = mode))
                 assertNull(session.presentation.value.connectionPrompt)
             }
 
-            session.updateSettings(session.state.value.settings.copy(focusNotificationEnabled = !focusEnabled))
+            session.updateIntegrationSettings(session.settings.copy(focusNotificationEnabled = !focusEnabled))
             assertEquals(!focusEnabled, session.presentation.value.showStatusNotification)
             assertNull(session.presentation.value.connectionPrompt)
             session.disconnect()
@@ -147,14 +138,14 @@ class SystemPresentationTest {
     @Test
     fun anEmptyModuleTriggerSetDoesNotReplayTheConnectionAfterSettingsChange() = runTest {
         val transport = PresentationTransport(PresentationConnection(i5Replies))
-        val session = newSession(transport, UserSettings(islandMode = IslandMode.MODULE, islandTriggers = persistentSetOf()))
+        val session = newSession(transport, IntegrationSettings(islandMode = IslandMode.MODULE, islandTriggers = persistentSetOf()))
         connect(session, transport, DeviceId("i5"))
 
         assertNull(session.presentation.value.connectionPrompt)
         assertFalse(session.presentation.value.allowIslandFields)
         assertTrue(session.presentation.value.showStatusNotification)
 
-        session.updateSettings(session.state.value.settings.copy(islandTriggers = persistentSetOf(IslandTrigger.CONNECTION)))
+        session.updateIntegrationSettings(session.settings.copy(islandTriggers = persistentSetOf(IslandTrigger.CONNECTION)))
         assertNull(session.presentation.value.connectionPrompt)
         assertTrue(session.presentation.value.allowIslandFields)
         session.disconnect()
@@ -240,18 +231,18 @@ class SystemPresentationTest {
 
     private fun kotlinx.coroutines.test.TestScope.newSession(
         transport: PresentationTransport,
-        settings: UserSettings = UserSettings(),
+        settings: IntegrationSettings = IntegrationSettings(),
         promptDurationMillis: Long = 5_000,
     ) = SystemEntryRuntime(
         LocalControlRuntime(
             PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
-            initialSettings = settings,
             transport = transport,
             scope = backgroundScope,
             timing = SessionTiming(i5WriteIntervalMillis = 0),
         ),
         backgroundScope,
         PresentationTiming(connectionPromptDurationMillis = promptDurationMillis),
+        initialIntegrationSettings = settings,
     )
 
     private suspend fun kotlinx.coroutines.test.TestScope.connect(

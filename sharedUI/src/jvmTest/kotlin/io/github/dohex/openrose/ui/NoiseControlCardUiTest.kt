@@ -14,7 +14,6 @@ import io.github.dohex.openrose.core.ControlState
 import io.github.dohex.openrose.core.DeviceCapabilities
 import io.github.dohex.openrose.core.DeviceSetting
 import io.github.dohex.openrose.core.DeviceState
-import io.github.dohex.openrose.core.InterfaceStyle
 import io.github.dohex.openrose.core.NoiseControlCapabilities
 import io.github.dohex.openrose.core.NoiseLevelCapabilities
 import io.github.dohex.openrose.core.PermissionState

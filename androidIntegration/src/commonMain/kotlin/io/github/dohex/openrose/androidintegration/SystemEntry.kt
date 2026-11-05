@@ -72,11 +72,14 @@ class SystemEntryRuntime(
     private val control: ControlRuntime,
     private val scope: CoroutineScope,
     private val timing: PresentationTiming = PresentationTiming(),
+    initialIntegrationSettings: IntegrationSettings = IntegrationSettings(),
 ) : ControlRuntime by control, SystemEntry {
     /** [consumed] is the session whose connection event was used up; it never prompts again. */
     private data class Prompts(val consumed: SessionReference? = null, val prompt: ConnectionPrompt? = null)
 
     private val prompts = MutableStateFlow(Prompts())
+    private val integrationSettings = MutableStateFlow(initialIntegrationSettings)
+    val settings: IntegrationSettings get() = integrationSettings.value
 
     /** The system view of the current ready session; reading it is always current with [state]. */
     val presentation: StateFlow<SystemPresentationState> = PresentationFlow()
@@ -89,12 +92,13 @@ class SystemEntryRuntime(
     /** Control and system presentation from one capture, so a replacement never mixes two sessions. */
     internal fun view(generation: OwnerGeneration): OwnerView {
         val captured = control.state.value
-        return OwnerView(generation, captured, present(captured))
+        val settings = integrationSettings.value
+        return OwnerView(generation, captured, present(captured, settings), settings)
     }
 
     /** Prompt claims and expiry wake readers without combining independently derived session views. */
     internal fun views(generation: OwnerGeneration): Flow<OwnerView> =
-        combine(control.state, prompts) { _, _ -> view(generation) }.distinctUntilChanged()
+        combine(control.state, prompts, integrationSettings) { _, _, _ -> view(generation) }.distinctUntilChanged()
 
     override suspend fun connectFromSystem(deviceId: DeviceId): OperationResult = control.connect(deviceId, pinned = true)
 
@@ -122,21 +126,20 @@ class SystemEntryRuntime(
         prompts.update { current ->
             val prompt = current.prompt
             claimed = prompt != null && prompt.id == promptId && prompt.reference == reference && !prompt.claimed &&
-                prompt.appliesTo(captured.settings)
+                prompt.appliesTo(settings)
             if (claimed) current.copy(prompt = requireNotNull(prompt).copy(claimed = true)) else current
         }
         return claimed
     }
 
-    override fun updateSettings(settings: UserSettings) {
-        control.updateSettings(settings)
-        // A prompt of a mode that was left, or that the settings no longer allow, ends now and is never replayed.
+    fun updateIntegrationSettings(settings: IntegrationSettings) {
+        integrationSettings.value = settings
         advance()
     }
 
-    private fun present(state: ControlState): SystemPresentationState {
+    private fun present(state: ControlState, settings: IntegrationSettings = integrationSettings.value): SystemPresentationState {
         advance()
-        return state.systemPresentation(prompts.value.prompt)
+        return state.systemPresentation(settings, prompts.value.prompt)
     }
 
     /**
@@ -151,14 +154,14 @@ class SystemEntryRuntime(
             // Read inside the update, so a retry never acts on a state older than the one it replaces.
             val state = control.state.value
             val session = state.readySession
-            val kept = current.prompt?.takeIf { it.reference == session && it.appliesTo(state.settings) }
+            val kept = current.prompt?.takeIf { it.reference == session && it.appliesTo(settings) }
             if (session == null || current.consumed == session || !requireNotNull(state.device).hasTrustedEarBattery()) {
                 if (kept == current.prompt) current else current.copy(prompt = kept)
             } else {
-                val prompt = if (state.settings.allowsConnectionPrompt()) {
+                val prompt = if (settings.allowsConnectionPrompt()) {
                     ConnectionPrompt(
                         id = "${session.deviceId.value}:${session.sessionId}:connection",
-                        mode = state.settings.islandMode,
+                        mode = settings.islandMode,
                         reference = session,
                         durationMillis = timing.connectionPromptDurationMillis,
                     )
@@ -184,7 +187,7 @@ class SystemEntryRuntime(
         override val replayCache: List<SystemPresentationState> get() = listOf(value)
 
         override suspend fun collect(collector: FlowCollector<SystemPresentationState>): Nothing {
-            combine(control.state, prompts) { state, _ -> present(state) }.distinctUntilChanged().collect(collector)
+            combine(control.state, prompts, integrationSettings) { state, _, _ -> present(state) }.distinctUntilChanged().collect(collector)
             awaitCancellation()
         }
     }

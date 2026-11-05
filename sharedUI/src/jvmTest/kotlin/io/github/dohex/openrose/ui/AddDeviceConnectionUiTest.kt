@@ -1,6 +1,5 @@
 package io.github.dohex.openrose.ui
 
-import io.github.dohex.openrose.core.InterfaceStyle
 import kotlin.test.Test
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue

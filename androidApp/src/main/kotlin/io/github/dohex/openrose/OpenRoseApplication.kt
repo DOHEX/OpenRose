@@ -19,18 +19,22 @@ import io.github.dohex.openrose.androidintegration.backgroundControl
 import io.github.dohex.openrose.androidintegration.mayStartBackgroundService
 import io.github.dohex.openrose.bridge.FrameworkLink
 import io.github.dohex.openrose.bridge.ModuleHostBinderLink
-import io.github.dohex.openrose.core.ControlWay
+import io.github.dohex.openrose.androidintegration.ControlWay
+import io.github.dohex.openrose.androidintegration.HostSettings
+import io.github.dohex.openrose.androidintegration.IntegrationSettings
 import io.github.dohex.openrose.core.DeviceSetting
 import io.github.dohex.openrose.core.LocalControlRuntime
 import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.dohex.openrose.core.UserSettings
-import io.github.dohex.openrose.core.UserSettingsCodec
+import io.github.dohex.openrose.ui.UiSettings
 import io.github.dohex.openrose.core.transport.DeviceId
 import java.util.UUID
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 /** The names of the application's own preference file and its flags, shared by every reader and writer. */
@@ -49,6 +53,9 @@ internal object AppPreferences {
  */
 class OpenRoseApplication : Application() {
     private val controlScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private val settingsStore = AndroidSettingsStore(::preferences)
+    private val mutableUiSettings = MutableStateFlow(UiSettings())
+    val uiSettings = mutableUiSettings.asStateFlow()
     lateinit var runtime: SwitchingControlRuntime
         private set
     lateinit var framework: FrameworkLink
@@ -61,12 +68,15 @@ class OpenRoseApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         val unlocked = userUnlocked()
+        val saved = if (unlocked) settingsStore.load() else AppSettings()
+        mutableUiSettings.value = saved.ui
         framework = FrameworkLink { controlScope.launch { refreshPlatform() } }
-        ownerStore = AndroidOwnerStore({ preferences() }, framework) { runtime.state.value.settings }
+        ownerStore = AndroidOwnerStore({ preferences() }, framework)
         runtime = SwitchingControlRuntime(
             initialPlatformState = readPlatformState(permissionRequested(), userUnlocked = unlocked),
             initialIntegrationPlatform = readIntegrationPlatform(wake = companionWake.facts()),
-            initialSettings = if (unlocked) loadSettings() else UserSettings(),
+            initialSettings = saved.host.control,
+            initialIntegrationSettings = saved.host.integration,
             store = ownerStore,
             ordinaryFactory = { scope, settings, platform, sessionIdBase ->
                 LocalControlRuntime(
@@ -150,7 +160,7 @@ class OpenRoseApplication : Application() {
      */
     private fun followSavedControlWay() {
         syncWakeObservation()
-        if (ordinaryControlSelected() && runtime.state.value.settings.backgroundControlEnabled) {
+        if (ordinaryControlSelected() && runtime.integration.value.settings.backgroundControlEnabled) {
             startBackgroundControlFromUserEntry()
         }
     }
@@ -163,24 +173,41 @@ class OpenRoseApplication : Application() {
 
     fun updateSettings(settings: UserSettings) {
         if (!userUnlocked()) return
-        val backgroundIntentChanged = runtime.state.value.settings.backgroundControlEnabled != settings.backgroundControlEnabled
-        // The control way only ever changes through an explicit handoff, never through a preference update.
         runtime.updateSettings(settings)
-        val effective = runtime.state.value.settings
-        val editor = preferences().edit()
-        UserSettingsCodec.encode(effective).forEach { (key, value) -> editor.putString(key, value) }
-        // A stop choice must not be lost to a process kill right after the user disables background control.
-        if (backgroundIntentChanged) editor.commit() else editor.apply()
-        if (effective.controlWay != ControlWay.ORDINARY) {
-            // The single host-config writer derives the control way from the persisted record at write time.
-            controlScope.launch(Dispatchers.IO) { ownerStore.publishConfig() }
-        }
+        settingsStore.saveHost(hostSettings())
+        publishModuleSettings()
+    }
+
+    fun updateUiSettings(settings: UiSettings) {
+        if (!userUnlocked()) return
+        mutableUiSettings.value = settings
+        settingsStore.saveUi(settings)
+    }
+
+    fun updateIntegrationSettings(settings: IntegrationSettings) {
+        if (!userUnlocked()) return
+        val backgroundIntentChanged = runtime.integration.value.settings.backgroundControlEnabled != settings.backgroundControlEnabled
+        // Only the explicit handoff changes the saved control way.
+        runtime.updateIntegrationSettings(settings)
+        val effective = runtime.integration.value.settings
+        // A stop choice must be on disk before the user can leave the application.
+        settingsStore.saveHost(hostSettings(), commit = backgroundIntentChanged)
+        publishModuleSettings()
         syncWakeObservation()
         if (effective.backgroundControlEnabled) startBackgroundControlFromUserEntry()
     }
 
+    private fun hostSettings() = HostSettings(runtime.state.value.settings, runtime.integration.value.settings)
+
+    private fun publishModuleSettings() {
+        if (!ordinaryControlSelected()) {
+            // The single writer reads the persisted values after acquiring its publication lock.
+            controlScope.launch(Dispatchers.IO) { ownerStore.publishConfig() }
+        }
+    }
+
     fun setBackgroundControlEnabled(enabled: Boolean) {
-        updateSettings(runtime.state.value.settings.copy(backgroundControlEnabled = enabled))
+        updateIntegrationSettings(runtime.integration.value.settings.copy(backgroundControlEnabled = enabled))
     }
 
     /**
@@ -225,9 +252,8 @@ class OpenRoseApplication : Application() {
      */
     fun syncWakeObservation() {
         if (!preferencesLoaded) return
-        val state = runtime.state.value
         companionWake.syncObservation(
-            state.settings.backgroundControlEnabled && runtime.integration.value.owner.selected == ControlWay.ORDINARY,
+            runtime.integration.value.settings.backgroundControlEnabled && ordinaryControlSelected(),
         )
         refreshPlatform()
     }
@@ -266,13 +292,12 @@ class OpenRoseApplication : Application() {
     private fun loadUnlockedSettings() {
         if (preferencesLoaded || !userUnlocked()) return
         preferencesLoaded = true
-        runtime.onUserUnlocked(loadSettings())
+        val saved = settingsStore.load()
+        runtime.onUserUnlocked(saved.host)
+        mutableUiSettings.value = saved.ui
         refreshPlatform()
         syncWakeObservation()
     }
     private fun userUnlocked() = getSystemService(UserManager::class.java).isUserUnlocked
-    private fun loadSettings() = UserSettingsCodec.decode(preferences().all.mapNotNull { (key, value) ->
-        (value as? String)?.let { key to it }
-    }.toMap())
     private fun preferences() = getSharedPreferences(AppPreferences.FILE, MODE_PRIVATE)
 }

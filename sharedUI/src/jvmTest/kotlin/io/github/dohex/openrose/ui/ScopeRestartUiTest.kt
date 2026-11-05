@@ -73,10 +73,12 @@ class ScopeRestartUiTest {
                 transport = TransportAvailability.Available,
                 hostPlatform = host,
             ),
-            settings = UserSettings(interfaceStyle = style, pageTransition = PageTransition.NONE),
         )
         setContent {
-            OpenRoseApp(state, IntegrationState(platform = IntegrationPlatformState(module = ModuleAvailability.NotEnabled)), {}, {}, {}, {}, {}, {}, {}, { _, _ -> },
+            OpenRoseApp(state = state, uiSettings = UiSettings(interfaceStyle = style, pageTransition = PageTransition.NONE),
+                onUiSettingsChange = {}, integration = IntegrationState(platform = IntegrationPlatformState(module = ModuleAvailability.NotEnabled)),
+                onSettingsChange = {}, onRequestPermission = {}, onOpenSystemSettings = {}, onStartScan = {}, onStopScan = {},
+                onConnect = {}, onDisconnect = {}, onSet = { _, _ -> },
                 onAddDeviceConnect = { error("unexpected connection") },
                 onRestartIntegrationScopes = restart)
         }

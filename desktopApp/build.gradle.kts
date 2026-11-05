@@ -8,6 +8,8 @@ dependencies {
     implementation(compose.desktop.currentOs)
     implementation(libs.nucleus.application)
     implementation(libs.nucleus.tao)
+    testImplementation(kotlin("test-junit"))
+    testImplementation(libs.coroutines.test)
 }
 nucleus {
     application {

@@ -2,7 +2,6 @@ package io.github.dohex.openrose.androidintegration
 
 import io.github.dohex.openrose.core.ConnectionPhase
 import io.github.dohex.openrose.core.ConnectionState
-import io.github.dohex.openrose.core.ControlRuntime
 import io.github.dohex.openrose.core.DeviceCandidate
 import io.github.dohex.openrose.core.HostPlatform
 import io.github.dohex.openrose.core.LocalControlRuntime
@@ -11,7 +10,6 @@ import io.github.dohex.openrose.core.PlatformState
 import io.github.dohex.openrose.core.SessionTiming
 import io.github.dohex.openrose.core.TransportAvailability
 import io.github.dohex.openrose.core.UserSettings
-import io.github.dohex.openrose.core.UserSettingsCodec
 import io.github.dohex.openrose.core.protocol.ModelProfile
 import io.github.dohex.openrose.core.transport.Advertisement
 import io.github.dohex.openrose.core.transport.ControlConnection
@@ -67,7 +65,8 @@ class OrdinaryRecoveryTest {
         assertTrue(transport.links.isEmpty())
 
         // Settings are restored first, then the platform reports the unlocked storage.
-        runtime.updateSettings(UserSettings(backgroundControlEnabled = true, forceBle = true))
+        runtime.updateSettings(UserSettings(forceBle = true))
+        runtime.updateIntegrationSettings(IntegrationSettings(backgroundControlEnabled = true))
         runtime.updatePlatformState(androidPlatform(unlocked = true))
         runCurrent()
         advanceUntilIdle()
@@ -121,7 +120,9 @@ class OrdinaryRecoveryTest {
     @Test
     fun aRebuiltProcessRestoresControlFromTheSavedSettingsAndTheExistingAudioConnection() = runTest {
         val rose = rosePair()
-        val saved = UserSettingsCodec.encode(UserSettings(backgroundControlEnabled = true, forceBle = true))
+        val saved = HostSettingsCodec.encode(
+            HostSettings(UserSettings(forceBle = true), IntegrationSettings(backgroundControlEnabled = true)),
+        )
         val transport = RoseTransport(bonded = listOf(rose))
         // The headset has been audio-connected the whole time; the new process only replays the current state.
         transport.audioDevice.emit(rose.deviceId)
@@ -129,13 +130,16 @@ class OrdinaryRecoveryTest {
         runCurrent()
         assertTrue(transport.links.isEmpty())
 
-        rebuilt.updateSettings(UserSettingsCodec.decode(saved))
+        val restored = HostSettingsCodec.decode(saved)
+        rebuilt.updateSettings(restored.control)
+        rebuilt.updateIntegrationSettings(restored.integration)
         rebuilt.updatePlatformState(androidPlatform(unlocked = true))
         runCurrent()
         advanceUntilIdle()
 
         assertIs<ConnectionState.Connected>(rebuilt.state.value.connection)
-        assertTrue(rebuilt.state.value.settings.backgroundControlEnabled)
+        assertTrue(rebuilt.settings.backgroundControlEnabled)
+        assertTrue(rebuilt.state.value.settings.forceBle)
         assertEquals(1, transport.links.size)
         rebuilt.disconnect()
     }
@@ -168,18 +172,20 @@ class OrdinaryRecoveryTest {
         assertEquals(BackgroundRecovery.Disabled, integration.backgroundRecovery(runtime.state.value))
         assertFalse(integration.mayStartBackgroundService(runtime.state.value))
 
-        runtime.updateSettings(UserSettings(backgroundControlEnabled = true))
+        runtime.updateIntegrationSettings(IntegrationSettings(backgroundControlEnabled = true))
+        integration = integration.copy(settings = runtime.settings)
         assertEquals(BackgroundRecovery.Armed(WakeBand.ANDROID_12_13), integration.backgroundRecovery(runtime.state.value))
         assertTrue(integration.mayStartBackgroundService(runtime.state.value))
 
-        runtime.updateSettings(UserSettings(backgroundControlEnabled = false))
+        runtime.updateIntegrationSettings(IntegrationSettings(backgroundControlEnabled = false))
+        integration = integration.copy(settings = runtime.settings)
         assertEquals(BackgroundRecovery.Disabled, integration.backgroundRecovery(runtime.state.value))
         assertFalse(integration.mayStartBackgroundService(runtime.state.value))
     }
 
     @Test
     fun noServiceMayStartBeforeUnlockOrWithoutBluetoothPermission() = runTest {
-        val runtime = newRuntime(RoseTransport(), settings = UserSettings(backgroundControlEnabled = true), unlocked = false)
+        val runtime = newRuntime(RoseTransport(), settings = IntegrationSettings(backgroundControlEnabled = true), unlocked = false)
         runtime.report(androidPlatform(unlocked = false), armedWake(WakeBand.ANDROID_8_11))
         assertEquals(BackgroundRecovery.WaitingForUnlock, integration.backgroundRecovery(runtime.state.value))
         assertFalse(integration.mayStartBackgroundService(runtime.state.value))
@@ -194,7 +200,7 @@ class OrdinaryRecoveryTest {
 
     @Test
     fun oldAndroidNeedsNoAssociationButNewerAndroidIsNeverReadyWithoutAnObservedAssociation() = runTest {
-        val runtime = newRuntime(RoseTransport(), settings = UserSettings(backgroundControlEnabled = true))
+        val runtime = newRuntime(RoseTransport(), settings = IntegrationSettings(backgroundControlEnabled = true))
 
         runtime.report(androidPlatform(), WakeFacts(WakeBand.ANDROID_8_11, CompanionAssociation.NOT_REQUIRED, PresenceObservation.NOT_REQUIRED))
         assertEquals(BackgroundRecovery.Armed(WakeBand.ANDROID_8_11), integration.backgroundRecovery(runtime.state.value))
@@ -231,7 +237,7 @@ class OrdinaryRecoveryTest {
     fun anIncompleteWakeStillLetsTheServiceStartFromAUserEntryAndForegroundControlKeepsWorking() = runTest {
         val rose = rosePair()
         val transport = RoseTransport(bonded = listOf(rose))
-        val runtime = newRuntime(transport, settings = UserSettings(backgroundControlEnabled = true))
+        val runtime = newRuntime(transport, settings = IntegrationSettings(backgroundControlEnabled = true))
         runtime.report(androidPlatform(), WakeFacts(WakeBand.ANDROID_14_PLUS, CompanionAssociation.MISSING, PresenceObservation.NOT_OBSERVING))
 
         transport.audioDevice.emit(rose.deviceId)
@@ -247,7 +253,7 @@ class OrdinaryRecoveryTest {
 
     @Test
     fun desktopHostsHaveNoRecovery() = runTest {
-        val runtime = newRuntime(RoseTransport(), settings = UserSettings(backgroundControlEnabled = true))
+        val runtime = newRuntime(RoseTransport(), settings = IntegrationSettings(backgroundControlEnabled = true))
         runtime.report(androidPlatform().copy(hostPlatform = HostPlatform.LINUX))
 
         assertEquals(BackgroundRecovery.Unsupported, integration.backgroundRecovery(runtime.state.value))
@@ -267,8 +273,8 @@ class OrdinaryRecoveryTest {
     )
 
     /** The platform reports its control facts to the runtime and its Android wake facts to the integration state. */
-    private fun ControlRuntime.report(platform: PlatformState, wake: WakeFacts = WakeFacts()) {
-        integration = IntegrationState(platform = IntegrationPlatformState(backgroundService = BackgroundServiceFacts(wake = wake)))
+    private fun SystemEntryRuntime.report(platform: PlatformState, wake: WakeFacts = WakeFacts()) {
+        integration = IntegrationState(settings = settings, platform = IntegrationPlatformState(backgroundService = BackgroundServiceFacts(wake = wake)))
         updatePlatformState(platform)
     }
 
@@ -283,15 +289,21 @@ class OrdinaryRecoveryTest {
 
     private fun TestScope.newRuntime(
         transport: RoseTransport,
-        settings: UserSettings = UserSettings(),
+        settings: IntegrationSettings = IntegrationSettings(),
         unlocked: Boolean = true,
-    ): ControlRuntime = LocalControlRuntime(
-        initialPlatformState = androidPlatform(unlocked = unlocked),
-        initialSettings = settings,
-        transport = transport,
-        scope = backgroundScope,
-        timing = SessionTiming(queryTimeoutMillis = 50, i5WriteIntervalMillis = 0, i7WriteIntervalMillis = 0),
-    )
+    ): SystemEntryRuntime {
+        integration = IntegrationState(settings = settings)
+        return SystemEntryRuntime(
+            control = LocalControlRuntime(
+                initialPlatformState = androidPlatform(unlocked = unlocked),
+                transport = transport,
+                scope = backgroundScope,
+                timing = SessionTiming(queryTimeoutMillis = 50, i5WriteIntervalMillis = 0, i7WriteIntervalMillis = 0),
+            ),
+            scope = backgroundScope,
+            initialIntegrationSettings = settings,
+        )
+    }
 
     private class RoseTransport(private val bonded: List<DeviceCandidate> = emptyList()) : ControlTransport {
         val audioDevice = MutableSharedFlow<DeviceId?>(replay = 1, extraBufferCapacity = 8)

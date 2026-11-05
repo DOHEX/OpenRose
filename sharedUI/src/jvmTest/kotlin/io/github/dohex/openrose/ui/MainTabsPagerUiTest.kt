@@ -13,7 +13,7 @@ class MainTabsPagerUiTest {
     @Test
     fun horizontalPagerNavigatesThroughAllThreeMainTabsUnderBothStyles() {
         for (style in InterfaceStyle.entries) {
-            withOpenRoseAppHarness(connectedI7State(UserSettings(interfaceStyle = style))) { harness ->
+            withOpenRoseAppHarness(connectedI7State(), initialUiSettings = UiSettings(interfaceStyle = style)) { harness ->
                 harness.render()
                 assertTrue(harness.hasText("均衡器"), "Initial tab is Headphones in $style")
                 assertFalse(harness.hasText("组件风格"), "Settings must not be active on startup in $style")
@@ -40,7 +40,7 @@ class MainTabsPagerUiTest {
 
     @Test
     fun nonePageTransitionJumpsImmediatelyWithoutAnimationJitter() {
-        withOpenRoseAppHarness(connectedI7State(UserSettings(pageTransition = PageTransition.NONE))) { harness ->
+        withOpenRoseAppHarness(connectedI7State(), initialUiSettings = UiSettings(pageTransition = PageTransition.NONE)) { harness ->
             harness.render()
             assertTrue(harness.hasText("均衡器"))
 

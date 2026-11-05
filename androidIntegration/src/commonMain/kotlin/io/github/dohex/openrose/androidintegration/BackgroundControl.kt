@@ -1,7 +1,6 @@
 package io.github.dohex.openrose.androidintegration
 
 import io.github.dohex.openrose.core.ControlState
-import io.github.dohex.openrose.core.ControlWay
 import io.github.dohex.openrose.core.HostPlatform
 import io.github.dohex.openrose.core.PermissionState
 import io.github.dohex.openrose.core.PlatformState
@@ -106,7 +105,7 @@ sealed interface BackgroundControlStatus {
 fun IntegrationState.backgroundControl(control: ControlState): BackgroundControlStatus {
     if (!control.platform.hasBackgroundService()) return BackgroundControlStatus.Unsupported
     // Background control belongs to ordinary control; the saved intent is kept but not in force under another way.
-    if (!control.settings.backgroundControlEnabled || owner.selected != ControlWay.ORDINARY) return BackgroundControlStatus.Disabled
+    if (!settings.backgroundControlEnabled || owner.selected != ControlWay.ORDINARY) return BackgroundControlStatus.Disabled
     if (control.platform.bluetoothPermissionMissing()) {
         return BackgroundControlStatus.Blocked(BackgroundControlBlock.BLUETOOTH_PERMISSION)
     }
@@ -130,7 +129,7 @@ fun IntegrationState.backgroundRecovery(control: ControlState): BackgroundRecove
     if (!control.platform.hasBackgroundService() || band == null) return BackgroundRecovery.Unsupported
     if (!control.platform.userUnlocked) return BackgroundRecovery.WaitingForUnlock
     // Like the background control status: the saved intent is kept but not in force under another control way.
-    if (!control.settings.backgroundControlEnabled || owner.selected != ControlWay.ORDINARY) return BackgroundRecovery.Disabled
+    if (!settings.backgroundControlEnabled || owner.selected != ControlWay.ORDINARY) return BackgroundRecovery.Disabled
     val missing = buildList {
         if (control.platform.bluetoothPermissionMissing()) add(WakePrerequisite.BLUETOOTH_PERMISSION)
         if (wake.association == CompanionAssociation.MISSING) add(WakePrerequisite.COMPANION_ASSOCIATION)
@@ -149,5 +148,5 @@ fun IntegrationState.backgroundRecovery(control: ControlState): BackgroundRecove
  */
 fun IntegrationState.mayStartBackgroundService(control: ControlState): Boolean =
     owner.selected == ControlWay.ORDINARY && control.platform.hasBackgroundService() && control.platform.userUnlocked &&
-        control.settings.backgroundControlEnabled &&
+        settings.backgroundControlEnabled &&
         !control.platform.bluetoothPermissionMissing()

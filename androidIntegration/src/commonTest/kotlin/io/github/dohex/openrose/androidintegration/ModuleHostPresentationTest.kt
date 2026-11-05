@@ -5,10 +5,7 @@ import kotlinx.collections.immutable.persistentSetOf
 import io.github.dohex.openrose.core.ConnectionState
 import io.github.dohex.openrose.core.ControlErrorCode
 import io.github.dohex.openrose.core.ControlState
-import io.github.dohex.openrose.core.ControlWay
 import io.github.dohex.openrose.core.DeviceSetting
-import io.github.dohex.openrose.core.IslandMode
-import io.github.dohex.openrose.core.IslandTrigger
 import io.github.dohex.openrose.core.LocalControlRuntime
 import io.github.dohex.openrose.core.OperationResult
 import io.github.dohex.openrose.core.PermissionState
@@ -16,7 +13,6 @@ import io.github.dohex.openrose.core.PlatformState
 import io.github.dohex.openrose.core.SessionReference
 import io.github.dohex.openrose.core.SessionTiming
 import io.github.dohex.openrose.core.TransportAvailability
-import io.github.dohex.openrose.core.UserSettings
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.FieldReading
 import io.github.dohex.openrose.core.protocol.FieldValue
@@ -57,7 +53,7 @@ private const val I5_NOISE_NORMAL = "09ff00000106020e000001000020"
  */
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class ModuleHostPresentationTest {
-    private class Rig(private val test: TestScope, private val settings: UserSettings) {
+    private class Rig(private val test: TestScope, private val settings: IntegrationSettings) {
         val earphones = rosePair("rose-a")
         val headset = SharedHeadset()
         val transport = HeadsetTransport("module", headset, earphones.profile!!, listOf(earphones))
@@ -91,7 +87,7 @@ class ModuleHostPresentationTest {
 
         suspend fun start() {
             host.updatePlatform(PlatformState(PermissionState.GRANTED, TransportAvailability.Available))
-            host.configure(HostConfiguration(true, settings.copy(controlWay = ControlWay.MODULE)))
+            host.configure(HostConfiguration(true, HostSettings(integration = settings.copy(controlWay = ControlWay.MODULE))))
             test.runCurrent()
             connect()
         }
@@ -107,8 +103,9 @@ class ModuleHostPresentationTest {
         suspend fun claim(lease: Lease, at: OwnerGeneration = generation, ref: SessionReference = reference, id: String = prompt.id) =
             execute(lease, HostCommand.ClaimPrompt(ref, id), at)
 
-        suspend fun updateSettings(change: (UserSettings) -> UserSettings) {
-            assertIs<HostCallResult.Operation>(execute(app, HostCommand.UpdateSettings(change(state.settings))))
+        suspend fun updateSettings(change: (IntegrationSettings) -> IntegrationSettings) {
+            val view = requireNotNull(host.view(app.identity, app.id))
+            assertIs<HostCallResult.Operation>(execute(app, HostCommand.UpdateSettings(HostSettings(view.state.settings, change(view.settings)))))
             test.runCurrent()
         }
     }
@@ -116,7 +113,7 @@ class ModuleHostPresentationTest {
     @Test
     fun onlyTheEntryThatOwnsTheSavedIslandModeMayClaimTheConnectionPromptAndOnlyOnce() = runTest {
         for ((mode, owner) in listOf(IslandMode.OFFICIAL to ClientRole.XIAOMI_BLUETOOTH, IslandMode.MODULE to ClientRole.HOST_PRESENTATION)) {
-            val rig = Rig(this, UserSettings(islandMode = mode))
+            val rig = Rig(this, IntegrationSettings(islandMode = mode))
             rig.start()
             val entries = mapOf(
                 ClientRole.XIAOMI_BLUETOOTH to rig.xiaomi, ClientRole.HOST_PRESENTATION to rig.hostUi,
@@ -139,7 +136,7 @@ class ModuleHostPresentationTest {
 
     @Test
     fun hidingTheIslandKeepsNoPromptEntryAndNeverStopsTheModuleOwner() = runTest {
-        val rig = Rig(this, UserSettings(islandMode = IslandMode.OFF))
+        val rig = Rig(this, IntegrationSettings(islandMode = IslandMode.OFF))
         rig.start()
 
         assertNull(rig.presentation.connectionPrompt)
@@ -154,7 +151,7 @@ class ModuleHostPresentationTest {
 
     @Test
     fun everyPresentationChoiceKeepsTheSameOwnerConnectionAndSendsNoCommand() = runTest {
-        val rig = Rig(this, UserSettings())
+        val rig = Rig(this, IntegrationSettings())
         rig.start()
         val generation = rig.generation
         val sessionId = rig.reference.sessionId
@@ -178,7 +175,7 @@ class ModuleHostPresentationTest {
 
     @Test
     fun aConsumedConnectionEventIsNotReplayedByModeChangesOrBatteryRefreshes() = runTest {
-        val rig = Rig(this, UserSettings(islandMode = IslandMode.OFFICIAL))
+        val rig = Rig(this, IntegrationSettings(islandMode = IslandMode.OFFICIAL))
         rig.start()
         val first = rig.prompt
         assertEquals(HostCallResult.Flag(true), rig.claim(rig.xiaomi))
@@ -204,7 +201,7 @@ class ModuleHostPresentationTest {
 
     @Test
     fun aNotificationNoiseActionIsConfirmedByTheEarphonesAndOnlyForTheCurrentSession() = runTest {
-        val rig = Rig(this, UserSettings(islandMode = IslandMode.MODULE))
+        val rig = Rig(this, IntegrationSettings(islandMode = IslandMode.MODULE))
         rig.start()
         rig.link.initializing = false
         val reference = rig.reference
@@ -230,7 +227,7 @@ class ModuleHostPresentationTest {
 
     @Test
     fun leavingModuleControlWithdrawsEveryEntryAndTheOldGenerationCannotActOnTheNextSession() = runTest {
-        val saved = UserSettings(islandMode = IslandMode.MODULE, focusNotificationEnabled = false, islandTriggers = persistentSetOf(IslandTrigger.CONNECTION))
+        val saved = IntegrationSettings(islandMode = IslandMode.MODULE, focusNotificationEnabled = false, islandTriggers = persistentSetOf(IslandTrigger.CONNECTION))
         val rig = Rig(this, saved)
         rig.start()
         val old = rig.generation
@@ -251,7 +248,7 @@ class ModuleHostPresentationTest {
         assertEquals(listOf("module:open", "module:close"), rig.headset.events)
 
         // Back to module control: the saved presentation preferences apply, the old event is not replayed.
-        assertIs<AcquireResult.Acquired>(rig.host.acquire(rig.app.identity, rig.app.id, SwitchRequest("to-module", ControlWay.ORDINARY, ControlWay.MODULE), saved))
+        assertIs<AcquireResult.Acquired>(rig.host.acquire(rig.app.identity, rig.app.id, SwitchRequest("to-module", ControlWay.ORDINARY, ControlWay.MODULE), HostSettings(integration = saved)))
         runCurrent()
         rig.connect()
         val next = rig.generation

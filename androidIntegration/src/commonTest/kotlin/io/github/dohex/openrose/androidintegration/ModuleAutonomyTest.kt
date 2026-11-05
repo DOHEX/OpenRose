@@ -1,8 +1,6 @@
 package io.github.dohex.openrose.androidintegration
 
-import io.github.dohex.openrose.core.ControlWay
 import io.github.dohex.openrose.core.SessionReference
-import io.github.dohex.openrose.core.UserSettings
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.FieldReading
 import io.github.dohex.openrose.core.protocol.FieldValue
@@ -308,7 +306,7 @@ class ModuleAutonomyTest {
             HostRejection.INVALID_LEASE,
             assertIs<HostCallResult.Rejected>(old.execute(appIdentity, lease, generation, HostCommand.StartScan)).rejection,
         )
-        old.configure(HostConfiguration(true, UserSettings(controlWay = ControlWay.MODULE)))
+        old.configure(HostConfiguration(true, HostSettings(integration = IntegrationSettings(controlWay = ControlWay.MODULE))))
         assertIs<HostStatus.Inactive>(old.status.value)
         assertEquals(listOf("module:open", "module:close"), rig.headset.events)
     }

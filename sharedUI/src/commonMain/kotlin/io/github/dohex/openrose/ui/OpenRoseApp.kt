@@ -11,6 +11,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.unit.dp
+import io.github.dohex.openrose.androidintegration.ControlWay
+import io.github.dohex.openrose.androidintegration.IntegrationSettings
 import io.github.dohex.openrose.androidintegration.IntegrationPlatformState
 import io.github.dohex.openrose.androidintegration.IntegrationState
 import io.github.dohex.openrose.androidintegration.ModuleAvailability
@@ -49,6 +51,9 @@ internal val mainPages = listOf(AppPage.HEADPHONES, AppPage.STATUS, AppPage.SETT
 @Composable
 fun OpenRoseApp(
     state: ControlState,
+    uiSettings: UiSettings,
+    onUiSettingsChange: (UiSettings) -> Unit,
+    onIntegrationSettingsChange: (IntegrationSettings) -> Unit = {},
     /** Null on hosts without Android integration. */
     integration: IntegrationState? = null,
     onSettingsChange: (UserSettings) -> Unit,
@@ -74,12 +79,12 @@ fun OpenRoseApp(
     onSelectControlWay: ((ControlWay) -> Unit)? = null,
 ) {
     val integrationState = integration ?: NoAndroidIntegration
-    val dark = when (state.settings.appearance) {
+    val dark = when (uiSettings.appearance) {
         Appearance.SYSTEM -> isSystemInDarkTheme()
         Appearance.LIGHT -> false
         Appearance.DARK -> true
     }
-    val backdropActive = rememberBackdropBlurActive(state.settings)
+    val backdropActive = rememberBackdropBlurActive(uiSettings)
     val navBackStack = rememberNavBackStack<Route>(Route.Main(AppPage.HEADPHONES))
     val mainTabsPagerState = rememberMainTabsPagerState(initialPage = 0)
     val currentRoute = (navBackStack.lastOrNull() as? Route) ?: Route.Main(AppPage.HEADPHONES)
@@ -119,7 +124,7 @@ fun OpenRoseApp(
             }
             val targetIndex = mainPages.indexOf(destination)
             if (targetIndex >= 0) {
-                mainTabsPagerState.selectPage(targetIndex, transition = state.settings.pageTransition)
+                mainTabsPagerState.selectPage(targetIndex, transition = uiSettings.pageTransition)
             }
         } else {
             val target = destination.toRoute()
@@ -135,7 +140,7 @@ fun OpenRoseApp(
             choiceDialog.value != null -> choiceDialog.value = null
             navBackStack.size > 1 -> navBackStack.removeLastOrNull()
             mainTabsPagerState.selectedPage != 0 -> {
-                mainTabsPagerState.selectPage(0, transition = state.settings.pageTransition)
+                mainTabsPagerState.selectPage(0, transition = uiSettings.pageTransition)
             }
         }
     }
@@ -213,13 +218,16 @@ fun OpenRoseApp(
                             onDiagnostics = { navigate(AppPage.DIAGNOSTICS) },
                         )
                         AppPage.SETTINGS -> PreferencesPage(
-                            state,
-                            integrationState,
-                            onSettingsChange,
-                            onRequestPermission,
-                            onRequestNotificationPermission,
-                            onRequestAssociation,
-                            onOpenAppSettings,
+                            state = state,
+                            integration = integrationState,
+                            uiSettings = uiSettings,
+                            onChange = onSettingsChange,
+                            onUiSettingsChange = onUiSettingsChange,
+                            onIntegrationSettingsChange = onIntegrationSettingsChange,
+                            onRequestPermission = onRequestPermission,
+                            onRequestNotificationPermission = onRequestNotificationPermission,
+                            onRequestAssociation = onRequestAssociation,
+                            onOpenAppSettings = onOpenAppSettings,
                             onSelectControlWay = onSelectControlWay,
                         )
                         AppPage.DIAGNOSTICS -> {
@@ -271,13 +279,13 @@ fun OpenRoseApp(
                     }
                 }
                 val renderShell: @Composable (AppPage) -> Unit = { targetPage ->
-                    ProvideInterfaceStyle(state.settings.interfaceStyle, dark) {
+                    ProvideInterfaceStyle(uiSettings.interfaceStyle, dark) {
                         val parentTab = mainPages.getOrElse(mainTabsPagerState.selectedPage) { AppPage.HEADPHONES }
                         val shellContent: @Composable () -> Unit = { pageContentFor(targetPage) }
                         val shellFeedback: @Composable () -> Unit = { feedbackContentFor(targetPage) }
                         val shellWide = wide && targetPage != AppPage.ADD_DEVICE
 
-                        when (state.settings.interfaceStyle) {
+                        when (uiSettings.interfaceStyle) {
                             InterfaceStyle.MIUIX -> MiuixAppShell(
                                 parentTab = parentTab,
                                 page = targetPage,
@@ -302,10 +310,10 @@ fun OpenRoseApp(
                     }
                 }
                 val renderMainShell: @Composable () -> Unit = {
-                    ProvideInterfaceStyle(state.settings.interfaceStyle, dark) {
+                    ProvideInterfaceStyle(uiSettings.interfaceStyle, dark) {
                         val isConnectedHome = state.activeDevice() != null
                         val showAdd = !state.platform.transportUnavailableForHome()
-                        val pageTransition = state.settings.pageTransition
+                        val pageTransition = uiSettings.pageTransition
                         val onNavigate: (AppPage) -> Unit = { navigate(it) }
                         val scopeRestartAction: @Composable () -> Unit = {
                             if (state.platform.hostPlatform == HostPlatform.ANDROID) {
@@ -339,11 +347,11 @@ fun OpenRoseApp(
                             }
                         }
 
-                        when (state.settings.interfaceStyle) {
+                        when (uiSettings.interfaceStyle) {
                             InterfaceStyle.MIUIX -> MiuixMainShell(
                                 pagerState = mainTabsPagerState,
                                 wide = wide,
-                                bottomBarStyle = state.settings.bottomBarStyle,
+                                bottomBarStyle = uiSettings.bottomBarStyle,
                                 onNavigate = onNavigate,
                                 scrollStates = scrollStates,
                                 pageContentFor = { targetPage -> pageContentFor(targetPage) },
@@ -359,7 +367,7 @@ fun OpenRoseApp(
                             InterfaceStyle.MATERIAL3 -> MaterialMainShell(
                                 pagerState = mainTabsPagerState,
                                 wide = wide,
-                                bottomBarStyle = state.settings.bottomBarStyle,
+                                bottomBarStyle = uiSettings.bottomBarStyle,
                                 onNavigate = onNavigate,
                                 scrollStates = scrollStates,
                                 pageContentFor = { targetPage -> pageContentFor(targetPage) },
@@ -377,7 +385,7 @@ fun OpenRoseApp(
                 }
                 NavDisplay(
                     backStack = navBackStack,
-                    transition = pageTransitionOf(state.settings.pageTransition),
+                    transition = pageTransitionOf(uiSettings.pageTransition),
                     onBack = ::back,
                     modifier = Modifier.fillMaxSize(),
                 ) {
@@ -400,7 +408,7 @@ fun OpenRoseApp(
                     }
                     entry<Route.AddDevice>(swipeDismiss = NavSwipeDirection.LeftToRight) {
                         // Popped entries retain their registration while animating out.
-                        if (latestRoute is Route.AddDevice || state.settings.pageTransition != PageTransition.NONE) {
+                        if (latestRoute is Route.AddDevice || uiSettings.pageTransition != PageTransition.NONE) {
                             Box(if (latestRoute is Route.AddDevice) Modifier.fillMaxSize() else Modifier.fillMaxSize().clearAndSetSemantics { }) {
                                 renderShell(AppPage.ADD_DEVICE)
                             }

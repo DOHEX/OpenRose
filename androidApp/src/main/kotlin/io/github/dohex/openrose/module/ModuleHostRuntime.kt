@@ -20,8 +20,8 @@ import io.github.dohex.openrose.androidintegration.HostConfiguration
 import io.github.dohex.openrose.androidintegration.HostFacts
 import io.github.dohex.openrose.core.LocalControlRuntime
 import io.github.dohex.openrose.androidintegration.ModuleControlHost
-import io.github.dohex.openrose.core.UserSettings
-import io.github.dohex.openrose.core.UserSettingsCodec
+import io.github.dohex.openrose.androidintegration.HostSettings
+import io.github.dohex.openrose.androidintegration.HostSettingsCodec
 import io.github.dohex.openrose.readPlatformState
 import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedModule
@@ -158,7 +158,7 @@ internal class ModuleHostRuntime(
             // Read after the last suspension so a later reconfiguration always carries the later facts.
             val unlocked = appContext.getSystemService(UserManager::class.java).isUserUnlocked
             val prefs = openConfig()
-            created.configure(HostConfiguration(unlocked, readSettings(prefs)))
+            created.configure(HostConfiguration(unlocked, readHostSettings(prefs)))
             if (prefs == null || !unlocked) {
                 delay(CONFIG_RETRY_MILLIS)
                 reconfigure(appContext, hostScope, created)
@@ -178,13 +178,6 @@ internal class ModuleHostRuntime(
                         .onFailure { module.log(Log.WARN, TAG, "config_listener_unavailable", it) }
                 }
             }
-    }
-
-    private fun readSettings(prefs: SharedPreferences?): UserSettings {
-        val values = runCatching { prefs?.all }.getOrNull().orEmpty().mapNotNull { (key, value) ->
-            (value as? String)?.let { key to it }
-        }.toMap()
-        return UserSettingsCodec.decode(values)
     }
 
     /**
@@ -219,4 +212,11 @@ internal class ModuleHostRuntime(
         const val CLOSE_TIMEOUT_MILLIS = 2_000L
         const val CONFIG_RETRY_MILLIS = 5_000L
     }
+}
+
+internal fun readHostSettings(prefs: SharedPreferences?): HostSettings {
+    val values = runCatching { prefs?.all }.getOrNull().orEmpty().mapNotNull { (key, value) ->
+        (value as? String)?.let { key to it }
+    }.toMap()
+    return HostSettingsCodec.decode(values)
 }

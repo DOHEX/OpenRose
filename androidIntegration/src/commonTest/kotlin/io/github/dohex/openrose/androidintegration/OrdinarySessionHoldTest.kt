@@ -1,8 +1,6 @@
 package io.github.dohex.openrose.androidintegration
 
 import io.github.dohex.openrose.core.ConnectionState
-import io.github.dohex.openrose.core.ControlWay
-import io.github.dohex.openrose.core.UserSettings
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -60,7 +58,7 @@ class OrdinarySessionHoldTest {
         val rig = OwnerRig(this)
         rig.bootHost()
         val runtime = rig.newRuntime(interfaceOpen = false)
-        runtime.updateSettings(runtime.state.value.settings.copy(backgroundControlEnabled = true))
+        runtime.updateIntegrationSettings(runtime.integration.value.settings.copy(backgroundControlEnabled = true))
         val service = runtime.holdOrdinarySession()
         var ui = runtime.holdOrdinarySession()
         rig.appTransport.audioDevice.emit(rig.earphones.deviceId)
@@ -192,7 +190,7 @@ class OrdinarySessionHoldTest {
         advanceUntilIdle()
         assertTrue(rig.appTransport.links.isEmpty())
 
-        runtime.onUserUnlocked(UserSettings())
+        runtime.onUserUnlocked(HostSettings())
         runCurrent()
         advanceUntilIdle()
 
