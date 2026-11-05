@@ -7,10 +7,13 @@ import io.github.dohex.openrose.core.UserSettings
 import io.github.dohex.openrose.core.UserSettingsCodec
 import io.github.dohex.openrose.ui.UiSettings
 import io.github.dohex.openrose.ui.UiSettingsCodec
+import io.github.dohex.openrose.ui.model.OpenRoseSettingsStore
+import io.github.dohex.openrose.ui.model.RuntimeOpenRoseModel
 import java.util.prefs.Preferences
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -19,28 +22,32 @@ import kotlinx.coroutines.flow.asStateFlow
 internal class DesktopRuntime(
     private val preferences: Preferences,
     platform: PlatformState,
-    scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
+    private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
 ) {
-    val control: ControlRuntime
-    private val mutableUiSettings: MutableStateFlow<UiSettings>
-    val uiSettings: StateFlow<UiSettings>
+    private val control: ControlRuntime
+    val model: RuntimeOpenRoseModel
 
     init {
         val saved = preferences.keys().associateWith { preferences.get(it, "") }
         control = LocalControlRuntime(platform, UserSettingsCodec.decode(saved), scope = scope)
-        mutableUiSettings = MutableStateFlow(UiSettingsCodec.decode(saved))
-        uiSettings = mutableUiSettings.asStateFlow()
+        val store = object : OpenRoseSettingsStore {
+            private val mutableUiSettings = MutableStateFlow(UiSettingsCodec.decode(saved))
+            override val uiSettings: StateFlow<UiSettings> = mutableUiSettings.asStateFlow()
+
+            override fun updateSettings(settings: UserSettings) {
+                control.updateSettings(settings)
+                save(UserSettingsCodec.encode(settings))
+            }
+
+            override fun updateUiSettings(settings: UiSettings) {
+                mutableUiSettings.value = settings
+                save(UiSettingsCodec.encode(settings))
+            }
+        }
+        model = RuntimeOpenRoseModel(control, store, scope)
     }
 
-    fun updateSettings(settings: UserSettings) {
-        control.updateSettings(settings)
-        save(UserSettingsCodec.encode(settings))
-    }
-
-    fun updateUiSettings(settings: UiSettings) {
-        mutableUiSettings.value = settings
-        save(UiSettingsCodec.encode(settings))
-    }
+    fun close() = scope.cancel()
 
     private fun save(values: Map<String, String>) {
         values.forEach { (key, value) -> preferences.put(key, value) }

@@ -5,7 +5,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.Color
 
-internal enum class RoseIcon {
+enum class RoseIcon {
     HEADPHONES,
     STATUS,
     SETTINGS,
@@ -47,7 +47,7 @@ internal object RoseIcons {
 }
 
 @Composable
-internal fun AppIcon(
+fun AppIcon(
     icon: RoseIcon,
     modifier: Modifier = Modifier,
     contentDescription: String? = null,

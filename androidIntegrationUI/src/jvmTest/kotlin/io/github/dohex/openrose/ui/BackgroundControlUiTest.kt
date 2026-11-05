@@ -4,6 +4,7 @@ package io.github.dohex.openrose.ui
 
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
+import kotlinx.coroutines.flow.MutableStateFlow
 import io.github.dohex.openrose.androidintegration.BackgroundControlBlock
 import io.github.dohex.openrose.androidintegration.BackgroundServiceFact
 import io.github.dohex.openrose.androidintegration.BackgroundServiceFacts
@@ -35,7 +36,7 @@ class BackgroundControlUiTest {
         for (style in InterfaceStyle.entries) {
             withHarness(style) { harness ->
                 harness.render()
-                harness.clickTab("设置")
+                harness.openPage("设置")
                 harness.render()
                 assertTrue(harness.hasTag(BackgroundControlTags.SWITCH), "background control is offered in $style")
                 assertFalse(harness.hasTagWithPrefix(BackgroundControlTags.STATUS_PREFIX), "a disabled intent has no status in $style")
@@ -65,7 +66,7 @@ class BackgroundControlUiTest {
         for (style in InterfaceStyle.entries) {
             withHarness(style, settings = IntegrationSettings(backgroundControlEnabled = true), permission = PermissionState.DENIED) { harness ->
                 harness.render()
-                harness.clickTab("设置")
+                harness.openPage("设置")
                 harness.render()
 
                 val blocked = BackgroundControlTags.blocked(BackgroundControlBlock.BLUETOOTH_PERMISSION)
@@ -85,7 +86,7 @@ class BackgroundControlUiTest {
         for (style in InterfaceStyle.entries) {
             withHarness(style, settings = IntegrationSettings(backgroundControlEnabled = true)) { harness ->
                 harness.render()
-                harness.clickTab("设置")
+                harness.openPage("设置")
                 harness.updateIntegration {
                     it.copy(platform = it.platform.copy(backgroundService = BackgroundServiceFacts(
                         BackgroundServiceFact.StartRejected(BackgroundControlBlock.BACKGROUND_START_RESTRICTED),
@@ -122,7 +123,7 @@ class BackgroundControlUiTest {
         for (style in InterfaceStyle.entries) {
             withHarness(style, settings = IntegrationSettings(backgroundControlEnabled = true)) { harness ->
                 harness.render()
-                harness.clickTab("设置")
+                harness.openPage("设置")
                 harness.updateIntegration {
                     it.copy(platform = it.platform.copy(backgroundService = BackgroundServiceFacts(
                         wake = WakeFacts(WakeBand.ANDROID_14_PLUS, CompanionAssociation.MISSING, PresenceObservation.NOT_OBSERVING),
@@ -152,7 +153,7 @@ class BackgroundControlUiTest {
     fun androidEightToElevenNeedsNoAssociationButStillDisclosesAutostart() {
         withHarness(InterfaceStyle.MIUIX, settings = IntegrationSettings(backgroundControlEnabled = true)) { harness ->
             harness.render()
-            harness.clickTab("设置")
+            harness.openPage("设置")
             harness.updateIntegration {
                 it.copy(platform = it.platform.copy(backgroundService = BackgroundServiceFacts(wake = WakeFacts(WakeBand.ANDROID_8_11))))
             }
@@ -175,7 +176,7 @@ class BackgroundControlUiTest {
                 owner = OwnerState(selected = ControlWay.MODULE, readiness = OwnerReadiness.Ready),
             ) { harness ->
                 harness.render()
-                harness.clickTab("设置")
+                harness.openPage("设置")
                 harness.updateIntegration { it.copy(platform = it.platform.copy(backgroundService = armed)) }
                 harness.render()
                 assertFalse(harness.hasTag(BackgroundControlTags.RECOVERY_ARMED), "module control is not ordinary recovery in $style")
@@ -190,13 +191,15 @@ class BackgroundControlUiTest {
     }
 
     @Test
-    fun hostsWithoutBackgroundServicesOfferNoSwitch() {
+    fun basicPlatformsDoNotOfferBackgroundControl() {
         for (style in InterfaceStyle.entries) {
-            withHarness(style, host = HostPlatform.LINUX) { harness ->
+            runOpenRoseUiTest(1200, 1000) {
+                val page = mutableStateOf("设置")
+                val model = FakeOpenRoseModel(mutableUiSettings = mutableStateOf(UiSettings(interfaceStyle = style)))
+                setContent { AndroidTestPage(model, BasicPlatformUi("Linux"), page) }
+                val harness = AndroidPageHarness(this, page)
                 harness.render()
-                harness.clickTab("设置")
-                harness.render()
-                assertFalse(harness.hasTag(BackgroundControlTags.SWITCH), "no background switch on a desktop host in $style")
+                assertFalse(harness.hasTag(BackgroundControlTags.SWITCH))
             }
         }
     }
@@ -219,7 +222,7 @@ class BackgroundControlUiTest {
                 ),
             ),
         )
-        val integration = mutableStateOf(
+        val integration = MutableStateFlow(
             IntegrationState(
                 settings = settings,
                 platform = IntegrationPlatformState(systemIntegrationApplicability = PlatformApplicability.NOT_APPLICABLE),
@@ -227,34 +230,19 @@ class BackgroundControlUiTest {
             ),
         )
         val fake = FakeBackgroundHost(state, integration)
-        setContent {
-            OpenRoseApp(
-                state = state.value,
-                uiSettings = UiSettings(interfaceStyle = style),
-                onUiSettingsChange = {},
-                onIntegrationSettingsChange = { next -> integration.value = integration.value.copy(settings = next) },
-                integration = integration.value,
-                onSettingsChange = { next -> state.value = state.value.copy(settings = next) },
-                onRequestPermission = fake::grantBluetoothPermission,
-                onRequestNotificationPermission = fake::showRunningNotification,
-                onRequestAssociation = fake::associateEarphones,
-                onOpenAppSettings = fake::openAppSettings,
-                onOpenSystemSettings = {},
-                onStartScan = {},
-                onStopScan = {},
-                onConnect = {},
-                onDisconnect = {},
-                onSet = { _, _ -> },
-                onAddDeviceConnect = { error("Unexpected add-device connection in this scenario") },
-            )
-        }
-        block(Harness(this, state, integration, fake))
+        val page = mutableStateOf("设置")
+        val model = FakeOpenRoseModel(state, mutableStateOf(UiSettings(interfaceStyle = style)))
+        val platform = androidTestPlatform(integration, onPermission = fake::grantBluetoothPermission,
+            onNotification = fake::showRunningNotification, onAssociation = fake::associateEarphones,
+            onAppSettings = fake::openAppSettings)
+        setContent { AndroidTestPage(model, platform, page) }
+        block(Harness(this, page, state, integration, fake))
     }
 
     /** A host that answers each request the way the platform would, so tests read the resulting facts. */
     private class FakeBackgroundHost(
         private val state: MutableState<ControlState>,
-        private val integration: MutableState<IntegrationState>,
+        private val integration: MutableStateFlow<IntegrationState>,
     ) {
         var appSettingsShown = false
             private set
@@ -281,10 +269,11 @@ class BackgroundControlUiTest {
 
     private class Harness(
         scene: OpenRoseUiTestScene,
+        page: MutableState<String>,
         val state: MutableState<ControlState>,
-        val integration: MutableState<IntegrationState>,
+        val integration: MutableStateFlow<IntegrationState>,
         val host: FakeBackgroundHost,
-    ) : OpenRoseUiTestHarness(scene) {
+    ) : AndroidPageHarness(scene, page) {
         fun updateIntegration(transform: (IntegrationState) -> IntegrationState) { integration.value = transform(integration.value) }
     }
 }

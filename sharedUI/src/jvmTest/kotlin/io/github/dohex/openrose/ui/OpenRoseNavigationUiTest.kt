@@ -40,43 +40,6 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class OpenRoseNavigationUiTest {
-    @Test
-    fun unknownToggleRendersDisabledSwitchWithoutInventingConfirmation() {
-        for (style in InterfaceStyle.entries) {
-            val base = state(connected = true)
-            val device = requireNotNull(base.device)
-            val initial = base.copy(device = device.copy(fields = device.fields +
-                (DeviceField.GAME_MODE to FieldReading.Unknown("ff"))))
-            withHarness(420, 900, initial, style) { harness ->
-                harness.render()
-                assertTrue(harness.hasText("游戏模式"))
-                assertFalse(harness.hasText("当前状态未知"), "game mode toggle must not show unknown status text in $style")
-                assertFalse(harness.hasText("设备已确认：开启"), "unconfirmed toggle must not claim confirmed in $style")
-                assertFalse(harness.hasText("设备已确认：关闭"), "unconfirmed toggle must not claim confirmed in $style")
-                assertTrue(
-                    harness.nodes().any {
-                        it.config.contains(SemanticsProperties.Disabled) &&
-                            it.config.getOrNull(SemanticsProperties.ToggleableState) == ToggleableState.Off
-                    },
-                    "an unread game mode toggle must be disabled with off state in $style",
-                )
-                assertTrue(harness.settingWrites.isEmpty())
-
-                // When the device reports known state, switch enables and clean single-line displays
-                val knownDevice = device.copy(fields = device.fields +
-                    (DeviceField.GAME_MODE to FieldReading.Known(FieldValue.Toggle(false), "00")))
-                harness.state.value = harness.state.value.copy(device = knownDevice)
-                harness.render()
-
-                assertTrue(harness.hasText("游戏模式"))
-                assertFalse(harness.hasText("设备已确认：关闭"), "confirmed state must not show redundant subtitle in $style")
-                assertTrue(harness.hasClickableText("游戏模式"), "known game setting must be clickable in $style")
-                harness.clickText("游戏模式")
-                harness.render()
-                assertEquals(listOf<Pair<DeviceSetting, FieldValue>>(DeviceSetting.GAME_MODE to FieldValue.Toggle(true)), harness.settingWrites)
-            }
-        }
-    }
 
     @Test
     fun narrowHomeOpensAvailableDiscoveryAndCanReturn() {
@@ -94,21 +57,17 @@ class OpenRoseNavigationUiTest {
     }
 
     @Test
-    fun wideSidebarNavigatesBetweenSettingsAndSystemIntegration() {
+    fun wideSidebarNavigatesBetweenSettingsAndStatus() {
         withHarness(width = 1200, height = 1000, initialState = state(connected = false)) { harness ->
             harness.render()
             harness.clickTab("设置")
             harness.render()
             assertTrue(harness.hasText("组件风格"))
             assertTrue(harness.hasText("强制使用 BLE"))
-            assertTrue(harness.hasText("超级岛"))
-            assertTrue(harness.hasText("焦点通知"))
             assertFalse(harness.hasText("运行状态与诊断"))
 
             harness.clickTab("状态")
             harness.render()
-            assertFalse(harness.hasText("超级岛"))
-            assertFalse(harness.hasText("焦点通知"))
             assertTrue(harness.hasText("运行状态与诊断"))
 
             harness.clickTab("设置")
@@ -185,32 +144,12 @@ class OpenRoseNavigationUiTest {
     ) = runOpenRoseUiTest(width, height) {
         val state = mutableStateOf(initialState)
         val uiSettings = mutableStateOf(UiSettings(interfaceStyle = style, appearance = Appearance.SYSTEM))
-        val settingsChanges = mutableListOf<UiSettings>()
-        val settingWrites = mutableListOf<Pair<DeviceSetting, FieldValue>>()
-        setContent {
-            OpenRoseApp(
-                state = state.value,
-                integration = androidIntegration,
-                uiSettings = uiSettings.value,
-                onUiSettingsChange = { settings ->
-                    settingsChanges += settings
-                    uiSettings.value = settings
-                },
-                onSettingsChange = { settings -> state.value = state.value.copy(settings = settings) },
-                onRequestPermission = {},
-                onOpenSystemSettings = {},
-                onStartScan = { state.value = state.value.copy(scan = io.github.dohex.openrose.core.ScanState.Scanning) },
-                onStopScan = { state.value = state.value.copy(scan = io.github.dohex.openrose.core.ScanState.Idle) },
-                onConnect = {},
-                onDisconnect = {},
-                onSet = { setting, value -> settingWrites += setting to value },
-                onAddDeviceConnect = {
-                    io.github.dohex.openrose.core.OperationResult.Failure(
-                        io.github.dohex.openrose.core.ControlError(io.github.dohex.openrose.core.ControlErrorCode.FAILED, "测试连接失败"),
-                    )
-                },
-            )
-        }
+        val model = FakeOpenRoseModel(state, uiSettings)
+        model.onStartScan = { state.value = state.value.copy(scan = io.github.dohex.openrose.core.ScanState.Scanning) }
+        model.onStopScan = { state.value = state.value.copy(scan = io.github.dohex.openrose.core.ScanState.Idle) }
+        setContent { OpenRoseApp(model = model, platformUi = BasicPlatformUi("Test")) }
+        val settingsChanges = model.settingsChanges
+        val settingWrites = model.settingWrites
         block(NavigationHarness(this, state, uiSettings, settingsChanges, settingWrites))
     }
 

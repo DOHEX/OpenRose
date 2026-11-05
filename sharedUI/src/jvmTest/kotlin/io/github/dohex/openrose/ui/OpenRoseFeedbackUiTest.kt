@@ -4,6 +4,7 @@ import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.persistentMapOf
 import kotlinx.collections.immutable.persistentSetOf
 import kotlinx.collections.immutable.plus
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import io.github.dohex.openrose.core.ConnectionPhase
@@ -14,9 +15,6 @@ import io.github.dohex.openrose.core.ControlState
 import io.github.dohex.openrose.core.DeviceCapabilities
 import io.github.dohex.openrose.core.DeviceSetting
 import io.github.dohex.openrose.core.DeviceState
-import io.github.dohex.openrose.androidintegration.IntegrationPlatformState
-import io.github.dohex.openrose.androidintegration.IntegrationState
-import io.github.dohex.openrose.androidintegration.ModuleAvailability
 import io.github.dohex.openrose.core.PermissionState
 import io.github.dohex.openrose.core.PlatformState
 import io.github.dohex.openrose.core.SettingOperation
@@ -41,7 +39,7 @@ class OpenRoseFeedbackUiTest {
                 id = 60, sessionId = SESSION_ID, setting = DeviceSetting.NOISE_MODE,
                 requestedValue = FieldValue.Text("wind"), stage = SettingStage.SUBMITTED,
             )
-            withHarness(state(operation).copy(settingOperations = persistentListOf()), style) { harness ->
+            withHarness(state(operation).copy(settingOperations = persistentListOf()), style, wholeApp = false) { harness ->
                 harness.render()
                 val before = harness.clickableBounds("通透")
                 harness.state.value = harness.state.value.copy(settingOperations = persistentListOf(operation))
@@ -165,13 +163,12 @@ class OpenRoseFeedbackUiTest {
                     requestedValue = FieldValue.Text("wind"),
                     stage = stage,
                 )
-                withHarness(state(operation), style) { harness ->
+                withHarness(state(operation), style, wholeApp = false) { harness ->
                     harness.render()
                     assertTrue(harness.hasText(expectedMessage), "abnormal stage $stage shows message in $style")
                     assertTrue(harness.hasText("查看详情"), "abnormal stage $stage shows diagnostics button in $style")
                     harness.clickText("查看详情")
-                    harness.render()
-                    assertTrue(harness.hasText("请求 #70：降噪模式"), "diagnostics opened from $stage in $style")
+                    assertEquals(1, harness.diagnosticsRequests.size, "diagnostics requested from $stage in $style")
                 }
             }
         }
@@ -197,7 +194,7 @@ class OpenRoseFeedbackUiTest {
                         DeviceSetting.NOISE_MODE to FieldValue.Text("transparency"),
                     ),
                     harness.settingWrites,
-                    "the user request crosses the public OpenRoseApp callback once in $style",
+                    "the user request reaches the model once in $style",
                 )
                 val submitted = confirmed.copy(
                     requestedValue = FieldValue.Text("transparency"),
@@ -289,28 +286,29 @@ class OpenRoseFeedbackUiTest {
         }
     }
 
-    private fun withHarness(initialState: ControlState, style: InterfaceStyle, block: suspend (FeedbackHarness) -> Unit) = runOpenRoseUiTest(1200, 1400) {
+    private fun withHarness(initialState: ControlState, style: InterfaceStyle, wholeApp: Boolean = true, block: suspend (FeedbackHarness) -> Unit) = runOpenRoseUiTest(1200, 1400) {
         val state = mutableStateOf(initialState)
         val uiSettings = mutableStateOf(UiSettings(interfaceStyle = style))
         val settingWrites = mutableListOf<Pair<DeviceSetting, FieldValue>>()
-        setContent {
-            OpenRoseApp(
-                state = state.value,
-                integration = IntegrationState(platform = IntegrationPlatformState(module = ModuleAvailability.NotEnabled)),
-                uiSettings = uiSettings.value,
-                onUiSettingsChange = { uiSettings.value = it },
-                onSettingsChange = { settings -> state.value = state.value.copy(settings = settings) },
-                onRequestPermission = {},
-                onOpenSystemSettings = {},
-                onStartScan = {},
-                onStopScan = {},
-                onConnect = {},
-                onDisconnect = {},
-                onSet = { setting, value -> settingWrites += setting to value },
-                onAddDeviceConnect = { error("Unexpected add-device connection in this scenario") },
-            )
+        val diagnosticsRequests = mutableListOf<Unit>()
+        val model = FakeOpenRoseModel(state, uiSettings).apply {
+            onSet = { setting, value -> settingWrites += setting to value }
         }
-        block(FeedbackHarness(this, state, uiSettings, settingWrites))
+        setContent {
+            if (wholeApp) {
+                OpenRoseApp(model, BasicPlatformUi("Test"))
+            } else {
+                ProvideInterfaceStyle(uiSettings.value.interfaceStyle, dark = false) {
+                    androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxSize()) {
+                        HeadphonesPage(model, BasicPlatformUi("Test"), {})
+                        androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.align(androidx.compose.ui.Alignment.BottomCenter)) {
+                            SettingFeedback(state.value, state.value.activeDevice()) { diagnosticsRequests += Unit }
+                        }
+                    }
+                }
+            }
+        }
+        block(FeedbackHarness(this, state, uiSettings, settingWrites, diagnosticsRequests))
     }
 
     private fun state(
@@ -347,6 +345,7 @@ class OpenRoseFeedbackUiTest {
         val state: MutableState<ControlState>,
         val uiSettings: MutableState<UiSettings>,
         val settingWrites: MutableList<Pair<DeviceSetting, FieldValue>>,
+        val diagnosticsRequests: List<Unit>,
     ) : OpenRoseUiTestHarness(scene)
 
     private companion object {

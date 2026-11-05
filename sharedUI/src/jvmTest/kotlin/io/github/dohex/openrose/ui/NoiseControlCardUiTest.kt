@@ -71,8 +71,8 @@ class NoiseControlCardUiTest {
             knownMode("auto"),
         )
 
-        for (reading in readings) {
-            val nodes = renderNodes(state(mode = reading))
+        for (style in InterfaceStyle.entries) for (reading in readings) {
+            val nodes = renderNodes(state(mode = reading), style)
             assertFalse(nodes.hasText("降噪档位"), "ANC row for $reading")
             assertFalse(nodes.hasText("通透档位"), "transparency row for $reading")
         }
@@ -80,60 +80,64 @@ class NoiseControlCardUiTest {
 
     @Test
     fun eachLevelRowUsesItsOwnOptionsAndIsOmittedWhenUnsupported() {
-        val ancOnlyCapabilities = noiseControlCapabilities(ModelProfile.I5_ZT).copy(
-            ancLevel = NoiseLevelCapabilities(levels = persistentSetOf(2), visibleModes = persistentSetOf("anc")),
-            transparencyLevel = null,
-        )
-        val transparencyUnsupportedNodes = renderNodes(
-            state(mode = knownMode("transparency"), noiseCapabilities = ancOnlyCapabilities),
-        )
-        assertFalse(transparencyUnsupportedNodes.hasText("通透档位"))
+        for (style in InterfaceStyle.entries) {
+            val ancOnlyCapabilities = noiseControlCapabilities(ModelProfile.I5_ZT).copy(
+                ancLevel = NoiseLevelCapabilities(levels = persistentSetOf(2), visibleModes = persistentSetOf("anc")),
+                transparencyLevel = null,
+            )
+            val transparencyUnsupportedNodes = renderNodes(
+                state(mode = knownMode("transparency"), noiseCapabilities = ancOnlyCapabilities), style,
+            )
+            assertFalse(transparencyUnsupportedNodes.hasText("通透档位"))
 
-        val ancNodes = renderNodes(state(mode = knownMode("anc"), noiseCapabilities = ancOnlyCapabilities))
+            val ancNodes = renderNodes(state(mode = knownMode("anc"), noiseCapabilities = ancOnlyCapabilities), style)
 
-        assertTrue(ancNodes.hasText("降噪档位"))
-        assertFalse(ancNodes.hasText("通透档位"))
-        assertTrue(ancNodes.hasText("2 档"))
-        assertFalse(ancNodes.hasText("1 档"))
-        assertFalse(ancNodes.hasText("3 档"))
-        assertFalse(ancNodes.hasText("5 档"))
+            assertTrue(ancNodes.hasText("降噪档位"))
+            assertFalse(ancNodes.hasText("通透档位"))
+            assertTrue(ancNodes.hasText("2 档"))
+            assertFalse(ancNodes.hasText("1 档"))
+            assertFalse(ancNodes.hasText("3 档"))
+            assertFalse(ancNodes.hasText("5 档"))
 
-        val transparencyOnlyCapabilities = noiseControlCapabilities(ModelProfile.I5_ZT).copy(
-            ancLevel = null,
-            transparencyLevel = NoiseLevelCapabilities(levels = persistentSetOf(2, 4), visibleModes = persistentSetOf("transparency")),
-        )
-        val transparencyNodes = renderNodes(
-            state(mode = knownMode("transparency"), noiseCapabilities = transparencyOnlyCapabilities),
-        )
+            val transparencyOnlyCapabilities = noiseControlCapabilities(ModelProfile.I5_ZT).copy(
+                ancLevel = null,
+                transparencyLevel = NoiseLevelCapabilities(levels = persistentSetOf(2, 4), visibleModes = persistentSetOf("transparency")),
+            )
+            val transparencyNodes = renderNodes(
+                state(mode = knownMode("transparency"), noiseCapabilities = transparencyOnlyCapabilities), style,
+            )
 
-        assertFalse(transparencyNodes.hasText("降噪档位"))
-        assertTrue(transparencyNodes.hasText("通透档位"))
-        assertTrue(transparencyNodes.hasText("2 档"))
-        assertTrue(transparencyNodes.hasText("4 档"))
-        assertFalse(transparencyNodes.hasText("1 档"))
-        assertFalse(transparencyNodes.hasText("3 档"))
-        assertFalse(transparencyNodes.hasText("5 档"))
+            assertFalse(transparencyNodes.hasText("降噪档位"))
+            assertTrue(transparencyNodes.hasText("通透档位"))
+            assertTrue(transparencyNodes.hasText("2 档"))
+            assertTrue(transparencyNodes.hasText("4 档"))
+            assertFalse(transparencyNodes.hasText("1 档"))
+            assertFalse(transparencyNodes.hasText("3 档"))
+            assertFalse(transparencyNodes.hasText("5 档"))
+        }
     }
 
     @Test
     fun pendingModeChangeKeepsOnlyThePreviouslyConfirmedLevelRow() {
-        val pending = SettingOperation(
-            id = 1,
-            sessionId = SESSION_ID,
-            setting = DeviceSetting.NOISE_MODE,
-            requestedValue = FieldValue.Text("wind"),
-            stage = SettingStage.WRITTEN,
-        )
-        val pendingNodes = renderNodes(state(mode = knownMode("anc"), operations = listOf(pending)))
+        for (style in InterfaceStyle.entries) {
+            val pending = SettingOperation(
+                id = 1,
+                sessionId = SESSION_ID,
+                setting = DeviceSetting.NOISE_MODE,
+                requestedValue = FieldValue.Text("wind"),
+                stage = SettingStage.WRITTEN,
+            )
+            val pendingNodes = renderNodes(state(mode = knownMode("anc"), operations = listOf(pending)), style)
 
-        assertTrue(pendingNodes.hasText("降噪档位"))
-        assertFalse(pendingNodes.hasText("通透档位"))
-        assertTrue(pendingNodes.hasDisabledButton("1 档"))
+            assertTrue(pendingNodes.hasText("降噪档位"))
+            assertFalse(pendingNodes.hasText("通透档位"))
+            assertTrue(pendingNodes.hasDisabledButton("1 档"))
 
-        val confirmed = pending.copy(stage = SettingStage.CONFIRMED)
-        val confirmedNodes = renderNodes(state(mode = knownMode("wind"), operations = listOf(confirmed)))
-        assertFalse(confirmedNodes.hasText("降噪档位"))
-        assertFalse(confirmedNodes.hasText("通透档位"))
+            val confirmed = pending.copy(stage = SettingStage.CONFIRMED)
+            val confirmedNodes = renderNodes(state(mode = knownMode("wind"), operations = listOf(confirmed)), style)
+            assertFalse(confirmedNodes.hasText("降噪档位"))
+            assertFalse(confirmedNodes.hasText("通透档位"))
+        }
     }
 
     private fun renderNodes(

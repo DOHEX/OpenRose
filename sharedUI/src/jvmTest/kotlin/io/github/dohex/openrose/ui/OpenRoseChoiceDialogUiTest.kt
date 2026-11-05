@@ -22,18 +22,10 @@ import kotlin.test.assertTrue
 class OpenRoseChoiceDialogUiTest {
     @Test
     fun materialStyleChoiceRowsShareTheDialogSurface() {
-        val state = mutableStateOf(ControlState(platform = PlatformState(PermissionState.GRANTED)))
-        val uiSettings = mutableStateOf(UiSettings(interfaceStyle = InterfaceStyle.MATERIAL3, appearance = Appearance.LIGHT))
-        runOpenRoseUiTest(420, 900) {
-            setContent {
-                OpenRoseApp(state = state.value, uiSettings = uiSettings.value, onUiSettingsChange = { uiSettings.value = it },
-                    integration = null, onSettingsChange = {}, onRequestPermission = {}, onOpenSystemSettings = {},
-                    onStartScan = {}, onStopScan = {}, onConnect = {}, onDisconnect = {}, onSet = { _, _ -> },
-                    onAddDeviceConnect = { error("Unexpected add-device connection in this scenario") })
-            }
-            val harness = OpenRoseUiTestHarness(this)
-            harness.render()
-            harness.clickTab("设置")
+        withPreferencesHarness(
+            ControlState(platform = PlatformState(PermissionState.GRANTED)),
+            UiSettings(interfaceStyle = InterfaceStyle.MATERIAL3, appearance = Appearance.LIGHT),
+        ) { harness ->
             harness.render()
             harness.clickText("组件风格")
             harness.render()
@@ -59,8 +51,6 @@ class OpenRoseChoiceDialogUiTest {
                 FieldReading.Unknown("ff"),
             )) {
                 withConnectedHarness(style, reading) { harness ->
-                    harness.render()
-                    harness.clickText("音频与设备")
                     harness.render()
                     if (style == InterfaceStyle.MIUIX && reading is FieldReading.Known) {
                         assertEquals(1, harness.countText("1 档"), "the current choice is displayed once")
@@ -96,7 +86,7 @@ class OpenRoseChoiceDialogUiTest {
                     } else {
                         assertTrue(harness.hasSelectedText("1 档"), "the previous confirmed option remains selected in $style")
                     }
-                    harness.sendKey(Key.Escape)
+                    harness.clickText(if (reading is FieldReading.Unknown) "取消" else "1 档")
                     harness.render()
                     val device = requireNotNull(harness.state.value.device)
                     harness.state.value = harness.state.value.copy(device = device.copy(fields = device.fields +
@@ -116,9 +106,7 @@ class OpenRoseChoiceDialogUiTest {
     @Test
     fun styleChoiceCanBeDismissedAndSelectedWithKeyboard() {
         for (style in InterfaceStyle.entries) {
-            withConnectedHarness(style, FieldReading.Known(FieldValue.Number(1), "01")) { harness ->
-                harness.render()
-                harness.clickTab("设置")
+            withConnectedHarness(style, FieldReading.Known(FieldValue.Number(1), "01"), preferences = true) { harness ->
                 harness.render()
                 val originalSettings = harness.uiSettings.value
                 harness.focus("组件风格")
@@ -159,6 +147,7 @@ class OpenRoseChoiceDialogUiTest {
     private fun withConnectedHarness(
         style: InterfaceStyle,
         reading: FieldReading,
+        preferences: Boolean = false,
         block: suspend (ConnectedHarness) -> Unit,
     ) = runOpenRoseUiTest(420, 900) {
         val id = DeviceId("dialog-test-i7")
@@ -178,20 +167,30 @@ class OpenRoseChoiceDialogUiTest {
             device = device,
         ))
         val uiSettings = mutableStateOf(UiSettings(interfaceStyle = style))
-        val settingsWrites = mutableListOf<UiSettings>()
-        val settingWrites = mutableListOf<Pair<DeviceSetting, FieldValue>>()
+        val model = FakeOpenRoseModel(state, uiSettings)
         var otherActions = 0
+        model.onStartScan = { otherActions++ }
+        model.onStopScan = { otherActions++ }
+        model.onConnect = { otherActions++ }
+        model.onDisconnect = { otherActions++ }
         setContent {
-            OpenRoseApp(state = state.value, uiSettings = uiSettings.value,
-                onUiSettingsChange = { settingsWrites += it; uiSettings.value = it },
-                integration = null, onSettingsChange = { otherActions++ },
-                onRequestPermission = { otherActions++ }, onOpenSystemSettings = { otherActions++ },
-                onStartScan = { otherActions++ }, onStopScan = { otherActions++ },
-                onConnect = { otherActions++ }, onDisconnect = { otherActions++ },
-                onSet = { setting, value -> settingWrites += setting to value },
-                onAddDeviceConnect = { error("Unexpected add-device connection in this scenario") })
+            if (preferences) {
+                OpenRoseApp(model, BasicPlatformUi("Test"))
+            } else {
+                TestPageContent(uiSettings.value.interfaceStyle) {
+                    DeviceControlCard(state.value, requireNotNull(state.value.device), model::set)
+                }
+            }
         }
-        block(ConnectedHarness(this, state, uiSettings, settingsWrites, settingWrites, id) { otherActions })
+        val harness = ConnectedHarness(this, state, uiSettings, model.settingsChanges, model.settingWrites, id) {
+            otherActions + model.controlSettingsChanges.size
+        }
+        if (preferences) {
+            harness.render()
+            harness.clickTab("设置")
+            harness.render()
+        }
+        block(harness)
     }
 
     private class ConnectedHarness(

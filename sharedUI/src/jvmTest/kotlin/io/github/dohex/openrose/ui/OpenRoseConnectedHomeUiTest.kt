@@ -6,6 +6,7 @@ import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.persistentMapOf
 import kotlinx.collections.immutable.persistentSetOf
 import kotlinx.collections.immutable.plus
+import androidx.compose.foundation.ScrollState
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.input.key.Key
@@ -18,9 +19,6 @@ import io.github.dohex.openrose.core.ControlState
 import io.github.dohex.openrose.core.DeviceCapabilities
 import io.github.dohex.openrose.core.DeviceState
 import io.github.dohex.openrose.core.DeviceSetting
-import io.github.dohex.openrose.androidintegration.IntegrationPlatformState
-import io.github.dohex.openrose.androidintegration.IntegrationState
-import io.github.dohex.openrose.androidintegration.ModuleAvailability
 import io.github.dohex.openrose.core.PermissionState
 import io.github.dohex.openrose.core.PlatformState
 import io.github.dohex.openrose.core.SettingOperation
@@ -42,7 +40,7 @@ class OpenRoseConnectedHomeUiTest {
     fun notificationNavigationReturnsToHeadphonesWithoutChangingTheControlSession() {
         for (style in InterfaceStyle.entries) {
             val initial = connectedState()
-            withHarness(420, 900, initial, style) { harness ->
+            withHarness(420, 900, initial, style, wholeApp = true) { harness ->
                 harness.render()
                 harness.clickTab("设置")
                 harness.render()
@@ -115,7 +113,7 @@ class OpenRoseConnectedHomeUiTest {
     fun connectedHomeDisconnectMenuReturnsToNearbyDevicesWithoutOtherCommands() {
         for (style in InterfaceStyle.entries) {
             for ((width, height) in listOf(420 to 900, 1200 to 1000)) {
-                withHarness(width, height, connectedState(), style) { harness ->
+                withHarness(width, height, connectedState(), style, wholeApp = true) { harness ->
                     harness.render()
                     assertTrue(harness.hasContentDescription("耳机菜单"), "connected home menu in $style at ${width}dp")
                     harness.clickContentDescription("耳机菜单")
@@ -144,7 +142,27 @@ class OpenRoseConnectedHomeUiTest {
 
     @Test
     fun materialMenuClosesWhenEscapeFollowsKeyboardActivation() {
-        withHarness(420, 900, connectedState(), InterfaceStyle.MATERIAL3) { harness ->
+        runOpenRoseUiTest(420, 900) {
+            val state = mutableStateOf(connectedState())
+            val model = FakeOpenRoseModel(state, mutableStateOf(UiSettings(interfaceStyle = InterfaceStyle.MATERIAL3)))
+            val menuExpanded = mutableStateOf(false)
+            val scrollStates = mainPages.associateWith { ScrollState(0) }
+            setContent {
+                ProvideInterfaceStyle(InterfaceStyle.MATERIAL3, dark = false) {
+                    MaterialMainShell(
+                        pagerState = rememberMainTabsPagerState(),
+                        wide = false,
+                        onNavigate = {},
+                        scrollStates = scrollStates,
+                        pageContentFor = {},
+                        connectedHome = true,
+                        menuExpanded = menuExpanded.value,
+                        onMenuExpandedChange = { menuExpanded.value = it },
+                        onDisconnect = model::disconnect,
+                    )
+                }
+            }
+            val harness = OpenRoseUiTestHarness(this)
             harness.render()
             harness.focus("耳机菜单")
             harness.sendKey(Key.Enter)
@@ -154,14 +172,14 @@ class OpenRoseConnectedHomeUiTest {
             harness.sendKey(Key.Escape)
             harness.render()
             assertFalse(harness.hasText("断开控制连接"), "Escape closes the Material 3 menu after keyboard activation")
-            assertTrue(harness.disconnects.isEmpty(), "closing the menu does not disconnect the control session")
+            assertEquals(0, model.disconnectCount, "closing the menu does not disconnect the control session")
         }
     }
 
     @Test
     fun connectedHomePrioritizesModelConnectionBatteryNoiseAndDetails() {
         for (style in InterfaceStyle.entries) {
-            withHarness(420, 900, connectedState(), style) { harness ->
+            withHarness(420, 900, connectedState(), style, wholeApp = true) { harness ->
                 harness.render()
                 assertTrue(harness.hasText("i5"))
                 assertTrue(harness.hasText("控制连接"))
@@ -355,6 +373,42 @@ class OpenRoseConnectedHomeUiTest {
             }
         }
     }
+    @Test
+    fun unknownToggleRendersDisabledSwitchWithoutInventingConfirmation() {
+        for (style in InterfaceStyle.entries) {
+            val base = connectedState()
+            val original = requireNotNull(base.device)
+            val device = original.copy(
+                capabilities = original.capabilities.copy(
+                    writableSettings = original.capabilities.writableSettings + DeviceSetting.GAME_MODE,
+                ),
+                fields = original.fields + (DeviceField.GAME_MODE to FieldReading.Unknown("ff")),
+            )
+            withHarness(420, 900, base.copy(device = device), style) { harness ->
+                harness.render()
+                assertTrue(harness.hasText("游戏模式"))
+                assertFalse(harness.hasText("当前状态未知"))
+                assertFalse(harness.hasText("设备已确认：开启"))
+                assertFalse(harness.hasText("设备已确认：关闭"))
+                assertTrue(harness.nodes().any {
+                    it.config.contains(SemanticsProperties.Disabled) &&
+                        it.config.getOrNull(SemanticsProperties.ToggleableState) == ToggleableState.Off
+                }, "an unread game mode toggle is disabled in $style")
+                assertTrue(harness.settingWrites.isEmpty())
+
+                harness.state.value = harness.state.value.copy(device = device.copy(fields = device.fields +
+                    (DeviceField.GAME_MODE to FieldReading.Known(FieldValue.Toggle(false), "00"))))
+                harness.render()
+                assertTrue(harness.hasText("游戏模式"))
+                assertFalse(harness.hasText("设备已确认：关闭"))
+                assertTrue(harness.hasClickableText("游戏模式"))
+                harness.clickText("游戏模式")
+                harness.render()
+                assertEquals(listOf<Pair<DeviceSetting, FieldValue>>(DeviceSetting.GAME_MODE to FieldValue.Toggle(true)), harness.settingWrites)
+            }
+        }
+    }
+
     private fun connectedState(): ControlState {
         val profile = ModelProfile.I5_ZT
         val id = DeviceId("connected-home-i5")
@@ -394,35 +448,32 @@ class OpenRoseConnectedHomeUiTest {
         height: Int,
         initialState: ControlState,
         style: InterfaceStyle,
+        wholeApp: Boolean = false,
         block: suspend (ConnectedHomeHarness) -> Unit,
     ) {
         val state = mutableStateOf(initialState)
         val uiSettings = mutableStateOf(UiSettings(interfaceStyle = style))
-        val homeNavigationRequest = mutableStateOf(0L)
         val disconnects = mutableListOf<Unit>()
         val connects = mutableListOf<DeviceId>()
         val startScans = mutableListOf<Unit>()
         val settingWrites = mutableListOf<Pair<DeviceSetting, FieldValue>>()
+        val model = FakeOpenRoseModel(state, uiSettings).apply {
+            onDisconnect = { disconnects += Unit }
+            onConnect = { connects += it }
+            onStartScan = { startScans += Unit }
+            onSet = { setting, value -> settingWrites += setting to value }
+        }
         runOpenRoseUiTest(width, height) {
             setContent {
-                OpenRoseApp(
-                    state = state.value,
-                    integration = IntegrationState(platform = IntegrationPlatformState(module = ModuleAvailability.NotEnabled)),
-                    uiSettings = uiSettings.value,
-                    onUiSettingsChange = { uiSettings.value = it },
-                    onSettingsChange = { settings -> state.value = state.value.copy(settings = settings) },
-                    onRequestPermission = {},
-                    onOpenSystemSettings = {},
-                    onStartScan = { startScans += Unit },
-                    onStopScan = {},
-                    onConnect = { connects += it },
-                    onDisconnect = { disconnects += Unit },
-                    onSet = { setting, value -> settingWrites += setting to value },
-                    onAddDeviceConnect = { error("Unexpected add-device connection in this scenario") },
-                    homeNavigationRequest = homeNavigationRequest.value,
-                )
+                if (wholeApp) {
+                    OpenRoseApp(model, BasicPlatformUi("Test"))
+                } else {
+                    ProvideInterfaceStyle(uiSettings.value.interfaceStyle, dark = false) {
+                        HeadphonesPage(model, BasicPlatformUi("Test"), {})
+                    }
+                }
             }
-            block(ConnectedHomeHarness(this, state, uiSettings, disconnects, connects, startScans, settingWrites, homeNavigationRequest))
+            block(ConnectedHomeHarness(this, state, uiSettings, disconnects, connects, startScans, settingWrites, model.homeNavigationRequests))
         }
     }
 
@@ -434,7 +485,7 @@ class OpenRoseConnectedHomeUiTest {
         val connects: MutableList<DeviceId>,
         val startScans: MutableList<Unit>,
         val settingWrites: MutableList<Pair<DeviceSetting, FieldValue>>,
-        val homeNavigationRequest: MutableState<Long>,
+        val homeNavigationRequest: kotlinx.coroutines.flow.MutableStateFlow<Long>,
     ) : OpenRoseUiTestHarness(scene)
 
     private companion object {

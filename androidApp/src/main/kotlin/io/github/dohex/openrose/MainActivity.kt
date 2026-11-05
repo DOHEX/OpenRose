@@ -20,16 +20,15 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableLongStateOf
-import androidx.compose.runtime.setValue
+import androidx.lifecycle.lifecycleScope
 import io.github.dohex.openrose.ui.OpenRoseApp
+import io.github.dohex.openrose.androidintegration.ui.AndroidPlatformUi
 import io.github.dohex.openrose.ui.Appearance
 import io.github.dohex.openrose.core.transport.DeviceId
 import io.github.dohex.openrose.bridge.BridgeWire
 import java.util.Locale
 
 class MainActivity : ComponentActivity() {
-    private var homeNavigationRequest by mutableLongStateOf(0L)
     private val owner get() = application as OpenRoseApplication
     private val scopeRestarter = IntegrationScopeRestarter()
     private val permissionRequest = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
@@ -48,10 +47,20 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         handleNavigationIntent(intent)
         enableEdgeToEdge()
+        val platformUi = AndroidPlatformUi(
+            integration = owner.runtime.integration,
+            onIntegrationSettingsChange = ::onIntegrationSettingsChanged,
+            onSelectControlWay = owner::selectControlWay,
+            requestBluetoothPermission = ::requestBluetoothPermission,
+            openBluetoothSettings = { startActivity(Intent(Settings.ACTION_BLUETOOTH_SETTINGS)) },
+            onRequestNotificationPermission = ::requestNotificationPermission,
+            onRequestAssociation = ::requestAssociation,
+            onOpenAppSettings = ::openAppSettings,
+            onRestartScope = scopeRestarter::restart,
+            restartScope = lifecycleScope,
+        )
         setContent {
-            val state by owner.runtime.state.collectAsState()
-            val integration by owner.runtime.integration.collectAsState()
-            val uiSettings by owner.uiSettings.collectAsState()
+            val uiSettings by owner.model.uiSettings.collectAsState()
             val dark = when (uiSettings.appearance) {
                 Appearance.SYSTEM -> resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK ==
                     Configuration.UI_MODE_NIGHT_YES
@@ -66,28 +75,7 @@ class MainActivity : ComponentActivity() {
                     else SystemBarStyle.light(0xE6FFFFFF.toInt(), 0x801B1B1B.toInt()),
                 )
             }
-            OpenRoseApp(
-                state = state,
-                integration = integration,
-                uiSettings = uiSettings,
-                onUiSettingsChange = owner::updateUiSettings,
-                onSettingsChange = owner::updateSettings,
-                onIntegrationSettingsChange = ::onIntegrationSettingsChanged,
-                onRequestPermission = ::requestBluetoothPermission,
-                onOpenSystemSettings = { startActivity(Intent(Settings.ACTION_BLUETOOTH_SETTINGS)) },
-                onStartScan = owner::startScan,
-                onStopScan = owner::stopScan,
-                onConnect = owner::connect,
-                onDisconnect = owner::disconnect,
-                onSet = owner::applySetting,
-                onAddDeviceConnect = owner.runtime::connectForAddDevice,
-                homeNavigationRequest = homeNavigationRequest,
-                onRestartIntegrationScopes = scopeRestarter::restart,
-                onRequestNotificationPermission = ::requestNotificationPermission,
-                onRequestAssociation = ::requestAssociation,
-                onOpenAppSettings = ::openAppSettings,
-                onSelectControlWay = owner::selectControlWay,
-            )
+            OpenRoseApp(model = owner.model, platformUi = platformUi)
         }
     }
 
@@ -104,7 +92,7 @@ class MainActivity : ComponentActivity() {
         // Consume the request so Activity recreation does not retry a failed connection.
         intent.removeExtra(BridgeWire.EXTRA_HEADPHONE_ADDRESS)
         address?.let { owner.connectFromSystem(DeviceId(it)) }
-        homeNavigationRequest++
+        owner.model.showHeadphones()
     }
 
     override fun onResume() {
@@ -116,7 +104,7 @@ class MainActivity : ComponentActivity() {
     override fun onStop() {
         super.onStop()
         // Discovery is a foreground interaction; control ownership and active links stay in the host.
-        owner.stopScan()
+        owner.model.stopScan()
     }
 
     /** The system shows its own chooser; the association is the user's explicit consent, never created silently. */

@@ -1,5 +1,8 @@
 package io.github.dohex.openrose.ui
 
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.Modifier
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.persistentMapOf
 import kotlinx.collections.immutable.persistentSetOf
@@ -23,37 +26,68 @@ internal fun withAddDeviceHarness(
         platform = PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
         candidates = persistentListOf(addDeviceCandidate),
     ),
+    app: Boolean = false,
     width: Int = 420,
     height: Int = 1000,
     block: suspend (AddDeviceUiTestHarness) -> Unit,
 ) = runOpenRoseUiTest(width, height) {
     val harness = AddDeviceUiTestHarness(this, mutableStateOf(initial), mutableStateOf(UiSettings(appearance = Appearance.LIGHT, interfaceStyle = style, pageTransition = PageTransition.NONE)))
     val state = harness.state
+    val model = FakeOpenRoseModel(state, harness.uiSettings).apply {
+        onStartScan = {
+            harness.scanStarts++
+            harness.scanStartTimes += harness.currentTime
+            state.value = state.value.copy(scan = ScanState.Scanning, lastError = null)
+        }
+        onStopScan = {
+            harness.scanStops++
+            state.value = state.value.copy(scan = ScanState.Idle)
+        }
+        onConnect = { harness.beginConnection(it) }
+        onDisconnect = {
+            harness.disconnects++
+            state.value = state.value.copy(connection = ConnectionState.Disconnected, device = null)
+        }
+        onAddDeviceConnect = { harness.connectForAddDevice(it) }
+    }
+    val platformUi = object : PlatformUi {
+        override val platformName = "Test"
+        override val requestBluetoothPermission: (() -> Unit) = {}
+        override val openBluetoothSettings: (() -> Unit) = {}
+        @androidx.compose.runtime.Composable
+        override fun DiagnosticsEntry(onDiagnostics: () -> Unit) {}
+    }
+    harness.app = app
     setContent {
-        OpenRoseApp(
-            state = state.value,
-            uiSettings = harness.uiSettings.value,
-            onUiSettingsChange = { harness.uiSettings.value = it },
-            onSettingsChange = { state.value = state.value.copy(settings = it) },
-            onRequestPermission = {},
-            onOpenSystemSettings = {},
-            onStartScan = {
-                harness.scanStarts++
-                harness.scanStartTimes += harness.currentTime
-                state.value = state.value.copy(scan = ScanState.Scanning, lastError = null)
-            },
-            onStopScan = {
-                harness.scanStops++
-                state.value = state.value.copy(scan = ScanState.Idle)
-            },
-            onConnect = { harness.beginConnection(it) },
-            onDisconnect = {
-                harness.disconnects++
-                state.value = state.value.copy(connection = ConnectionState.Disconnected, device = null)
-            },
-            onSet = { _, _ -> },
-            onAddDeviceConnect = { harness.connectForAddDevice(it) },
-        )
+        if (app) {
+            OpenRoseApp(model, platformUi)
+        } else {
+            val flow = rememberAddDeviceFlow(
+                active = true,
+                state = state.value,
+                onStartScan = model::startScan,
+                onStopScan = model::stopScan,
+                onConnect = model::connectForAddDevice,
+                onReady = {},
+            )
+            ProvideInterfaceStyle(harness.uiSettings.value.interfaceStyle, dark = false) {
+                AddDeviceContent(
+                    state = state.value,
+                    canScan = state.value.canSearchForHeadphones(),
+                    selectedDeviceId = flow.selectedDeviceId,
+                    connectionPhase = flow.phase(state.value.connection),
+                    connectionError = flow.connectionError,
+                    onRequestPermission = platformUi.requestBluetoothPermission,
+                    onOpenSystemSettings = platformUi.openBluetoothSettings,
+                    onStartScan = flow::startSearch,
+                    onStopScan = flow::stopSearch,
+                    onConnect = flow::connect,
+                    onCancelConnection = flow::cancelConnection,
+                    onDiagnostics = {},
+                    modifier = Modifier.verticalScroll(rememberScrollState()),
+                )
+            }
+        }
     }
     block(harness)
 }
@@ -63,6 +97,7 @@ internal class AddDeviceUiTestHarness(
     val state: MutableState<ControlState>,
     val uiSettings: MutableState<UiSettings>,
 ) : OpenRoseUiTestHarness(scene) {
+    var app = false
     var scanStarts = 0
     var scanStops = 0
     val scanStartTimes = mutableListOf<Long>()
@@ -72,7 +107,7 @@ internal class AddDeviceUiTestHarness(
 
     fun openAddDevice() {
         render()
-        clickContentDescription("添加耳机")
+        if (app) clickContentDescription("添加耳机")
         render()
     }
 

@@ -30,14 +30,14 @@ class DesktopRuntimeTest {
                 backgroundBlurEnabled = false,
                 bottomBarStyle = BottomBarStyle.FLOATING,
             )
-            first.updateSettings(chosenControl)
-            val observed = first.control.state.value
-            first.updateUiSettings(chosenUi)
-            assertEquals(observed, first.control.state.value)
+            first.model.updateSettings(chosenControl)
+            val observed = first.model.state.value
+            first.model.updateUiSettings(chosenUi)
+            assertEquals(observed, first.model.state.value)
 
             val rebuilt = DesktopRuntime(Preferences.userRoot().node(path), platform, backgroundScope)
-            assertEquals(chosenControl, rebuilt.control.state.value.settings)
-            assertEquals(chosenUi, rebuilt.uiSettings.value)
+            assertEquals(chosenControl, rebuilt.model.state.value.settings)
+            assertEquals(chosenUi, rebuilt.model.uiSettings.value)
             assertEquals("true", preferences.get("core.force_ble", null))
             assertEquals("material3", preferences.get("sharedUI.interface_style", null))
         } finally {
@@ -54,8 +54,8 @@ class DesktopRuntimeTest {
             preferences.put("interface_style", "material3")
             preferences.put("appearance", "dark")
             val runtime = DesktopRuntime(preferences, platform, backgroundScope)
-            assertEquals(UserSettings(), runtime.control.state.value.settings)
-            assertEquals(UiSettings(), runtime.uiSettings.value)
+            assertEquals(UserSettings(), runtime.model.state.value.settings)
+            assertEquals(UiSettings(), runtime.model.uiSettings.value)
         } finally {
             preferences.removeNode()
             Preferences.userRoot().flush()

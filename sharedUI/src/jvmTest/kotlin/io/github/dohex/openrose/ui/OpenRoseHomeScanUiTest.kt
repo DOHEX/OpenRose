@@ -1,5 +1,8 @@
 package io.github.dohex.openrose.ui
 
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.Modifier
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.persistentMapOf
 import kotlinx.collections.immutable.persistentSetOf
@@ -35,7 +38,7 @@ class OpenRoseHomeScanUiTest {
             val others = (1..30).map { index ->
                 headset.copy(deviceId = DeviceId("other-$index"), name = "其他设备 $index", profile = null)
             }
-            withHarness(420, 1200, style, state().copy(candidates = (others + headset).toPersistentList())) { harness ->
+            withHarness(420, 1200, style, state().copy(candidates = (others + headset).toPersistentList()), page = AppPage.ADD_DEVICE) { harness ->
                 harness.render()
                 harness.openAddDevice()
                 assertTrue(harness.hasText("EarFree i5"))
@@ -58,8 +61,7 @@ class OpenRoseHomeScanUiTest {
                 for (width in listOf(420, 1280)) {
                     harness.resize(width, 1000)
                     harness.render()
-                    assertTrue(harness.hasTab(if (width < 900) "耳机" else "我的耳机"),
-                        "navigation should reflect the resized width in $style")
+                    assertTrue(harness.hasText("搜索并添加耳机"), "home remains available after resizing in $style")
                     assertTrue(harness.permissionRequests.isEmpty(), "resizing must not request permission in $style")
                     assertTrue(harness.systemSettingsOpens.isEmpty(), "resizing must not open settings in $style")
                     assertTrue(harness.startScans.isEmpty() && harness.stopScans.isEmpty(), "resizing must not change scanning in $style")
@@ -153,6 +155,7 @@ class OpenRoseHomeScanUiTest {
                     900,
                     style,
                     state().copy(platform = PlatformState(permission, TransportAvailability.Unavailable(reason))),
+                    page = AppPage.ADD_DEVICE,
                 ) { harness ->
                     harness.render()
                     harness.openAddDevice()
@@ -175,7 +178,7 @@ class OpenRoseHomeScanUiTest {
     fun disconnectedHomeShowsManualScanAndCanStopItInBothStylesAndLayouts() {
         for (style in InterfaceStyle.entries) {
             for ((width, height) in listOf(420 to 900, 1200 to 1000)) {
-                withHarness(width, height, style, state()) { harness ->
+                withHarness(width, height, style, state(), app = true) { harness ->
                     harness.render()
 
                     assertTrue(harness.hasText("搜索并添加耳机"))
@@ -215,6 +218,7 @@ class OpenRoseHomeScanUiTest {
                 900,
                 style,
                 state().copy(platform = PlatformState(PermissionState.REQUIRED, TransportAvailability.Available)),
+                page = AppPage.ADD_DEVICE,
             ) { harness ->
                 harness.render()
                 harness.openAddDevice()
@@ -264,6 +268,7 @@ class OpenRoseHomeScanUiTest {
                 900,
                 style,
                 state().copy(platform = PlatformState(PermissionState.GRANTED, TransportAvailability.Unavailable(reason))),
+                app = true,
             ) { harness ->
                 harness.render()
                 harness.focus("查看连接与运行状态")
@@ -274,6 +279,12 @@ class OpenRoseHomeScanUiTest {
                 harness.sendKey(Key.Escape)
                 harness.render()
                 assertTrue(harness.hasText("查看连接与运行状态"))
+                assertTrue(harness.hasContentDescription("添加耳机"))
+                harness.openAddDevice()
+                assertTrue(harness.hasText(reason), "the add page explains the unavailable transport in $style")
+                assertTrue(harness.startScans.isEmpty())
+                harness.clickContentDescription("返回")
+                harness.render()
 
                 harness.clickTab("设置")
                 harness.render()
@@ -284,7 +295,7 @@ class OpenRoseHomeScanUiTest {
                 harness.clickTab("耳机")
                 harness.render()
                 assertTrue(harness.hasText(reason))
-                assertFalse(harness.hasContentDescription("添加耳机"))
+                assertTrue(harness.hasContentDescription("添加耳机"))
 
                 harness.state.value = harness.state.value.copy(
                     platform = PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
@@ -301,7 +312,7 @@ class OpenRoseHomeScanUiTest {
                     platform = PlatformState(PermissionState.GRANTED, TransportAvailability.Unavailable(reason)),
                 )
                 harness.render()
-                assertFalse(harness.hasContentDescription("添加耳机"))
+                assertTrue(harness.hasContentDescription("添加耳机"))
                 harness.focus("查看连接与运行状态")
                 harness.sendKey(Key.Tab, shift = true)
                 harness.sendKey(Key.Tab)
@@ -324,7 +335,7 @@ class OpenRoseHomeScanUiTest {
                 profile = null,
                 manufacturerDataHex = "",
             )
-            withHarness(420, 900, style, state().copy(candidates = persistentListOf(candidate))) { harness ->
+            withHarness(420, 900, style, state().copy(candidates = persistentListOf(candidate)), page = AppPage.ADD_DEVICE) { harness ->
                 harness.render()
                 harness.openAddDevice()
                 assertFalse(harness.hasText("Nearby headset"))
@@ -386,6 +397,8 @@ class OpenRoseHomeScanUiTest {
         height: Int,
         style: InterfaceStyle,
         initialState: ControlState,
+        page: AppPage = AppPage.HEADPHONES,
+        app: Boolean = false,
         block: suspend (ScanHarness) -> Unit,
     ) = runOpenRoseUiTest(width, height) {
         val state = mutableStateOf(initialState)
@@ -397,34 +410,64 @@ class OpenRoseHomeScanUiTest {
         val connects = mutableListOf<DeviceId>()
         val disconnects = mutableListOf<Unit>()
         val settingWrites = mutableListOf<Pair<io.github.dohex.openrose.core.DeviceSetting, FieldValue>>()
-        val settingsChanges = mutableListOf<UiSettings>()
+        val model = FakeOpenRoseModel(state, uiSettings).apply {
+            onStartScan = {
+                startScans += Unit
+                state.value = state.value.copy(scan = ScanState.Scanning)
+            }
+            onStopScan = {
+                stopScans += Unit
+                state.value = state.value.copy(scan = ScanState.Idle)
+            }
+            onConnect = { connects += it }
+            onDisconnect = { disconnects += Unit }
+            onSet = { setting, value -> settingWrites += setting to value }
+            onAddDeviceConnect = { id ->
+                connects += id
+                io.github.dohex.openrose.core.OperationResult.Failure(ControlError(ControlErrorCode.FAILED, "测试连接失败"))
+            }
+        }
+        val platformUi = object : PlatformUi {
+            override val platformName = "Test"
+            override val requestBluetoothPermission: (() -> Unit) = { permissionRequests += Unit }
+            override val openBluetoothSettings: (() -> Unit) = { systemSettingsOpens += Unit }
+            @androidx.compose.runtime.Composable
+            override fun DiagnosticsEntry(onDiagnostics: () -> Unit) {}
+        }
         setContent {
-            OpenRoseApp(
-                state = state.value,
-                uiSettings = uiSettings.value,
-                onUiSettingsChange = { settings ->
-                    settingsChanges += settings
-                    uiSettings.value = settings
-                },
-                onSettingsChange = { settings -> state.value = state.value.copy(settings = settings) },
-                onRequestPermission = { permissionRequests += Unit },
-                onOpenSystemSettings = { systemSettingsOpens += Unit },
-                onStartScan = {
-                    startScans += Unit
-                    state.value = state.value.copy(scan = ScanState.Scanning)
-                },
-                onStopScan = {
-                    stopScans += Unit
-                    state.value = state.value.copy(scan = ScanState.Idle)
-                },
-                onConnect = { connects += it },
-                onDisconnect = { disconnects += Unit },
-                onSet = { setting, value -> settingWrites += setting to value },
-                onAddDeviceConnect = { id ->
-                    connects += id
-                    io.github.dohex.openrose.core.OperationResult.Failure(ControlError(ControlErrorCode.FAILED, "测试连接失败"))
-                },
-            )
+            if (app) {
+                OpenRoseApp(model, platformUi)
+            } else {
+                val flow = rememberAddDeviceFlow(
+                    active = page == AppPage.ADD_DEVICE,
+                    state = state.value,
+                    onStartScan = model::startScan,
+                    onStopScan = model::stopScan,
+                    onConnect = model::connectForAddDevice,
+                    onReady = {},
+                )
+                ProvideInterfaceStyle(uiSettings.value.interfaceStyle, dark = false) {
+                    if (page == AppPage.ADD_DEVICE) {
+                        AddDeviceContent(
+                            state = state.value,
+                            canScan = state.value.canSearchForHeadphones(),
+                            selectedDeviceId = flow.selectedDeviceId,
+                            connectionPhase = flow.phase(state.value.connection),
+                            connectionError = flow.connectionError,
+                            onRequestPermission = platformUi.requestBluetoothPermission,
+                            onOpenSystemSettings = platformUi.openBluetoothSettings,
+                            onStartScan = flow::startSearch,
+                            onStopScan = flow::stopSearch,
+                            onConnect = flow::connect,
+                            onCancelConnection = flow::cancelConnection,
+                            onDiagnostics = {},
+                            modifier = Modifier.verticalScroll(rememberScrollState()),
+                        )
+                    } else {
+                        HeadphonesPage(model, platformUi, onNavigate = {})
+                    }
+                }
+            }
         }
         block(
             ScanHarness(
@@ -437,7 +480,8 @@ class OpenRoseHomeScanUiTest {
                 connects,
                 disconnects,
                 settingWrites,
-                settingsChanges,
+                model.settingsChanges,
+                app,
             ),
         )
     }
@@ -457,9 +501,10 @@ class OpenRoseHomeScanUiTest {
         val disconnects: MutableList<Unit>,
         val settingWrites: MutableList<Pair<io.github.dohex.openrose.core.DeviceSetting, FieldValue>>,
         val settingsChanges: MutableList<UiSettings>,
+        val app: Boolean,
     ) : OpenRoseUiTestHarness(scene) {
         suspend fun openAddDevice() {
-            clickContentDescription("添加耳机")
+            if (app) clickContentDescription("添加耳机")
             render()
         }
     }

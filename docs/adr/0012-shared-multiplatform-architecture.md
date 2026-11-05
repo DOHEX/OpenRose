@@ -38,3 +38,9 @@ status: accepted
 
 实施（#92）：`core.UserSettings` 只保留 `forceBle`；`sharedUI.UiSettings` 持有界面风格、明暗模式、转场动效、背景模糊和底栏样式；`androidIntegration.IntegrationSettings` 持有超级岛、焦点通知、触发条件、融合设备中心偏好、后台控制及控制方式。各层编解码只读取自己的 `core.`、`sharedUI.`、`androidIntegration.` 前缀键，旧键作废且不迁移；显式空触发条件仍表示不自动提示，缺失或未知值回到默认值。`HostSettings` 只组合控制与集成设置，应用从持久化存储在发布锁内读取最新配置，模块宿主与 IPC 共用该编解码。控制入口的设置更新只接收控制设置，系统呈现与融合设备中心从集成层读取偏好，外观变化独立于控制状态。离线测试覆盖三层编解码、应用发布与宿主读回一致性，以及 Android / 桌面存储重新打开后重建运行时；未增加 Android 实机验收结论。
 
+实施（#89）：`RuntimeOpenRoseModel` 在宿主作用域中统一暴露控制状态、外观设置与界面意图；两端经由 `OpenRoseApp(model, platformUi)` 组装界面。`PlatformUi` 提供状态、设置、诊断与耳机页段落，以及权限和蓝牙设置动作；共享界面只判断能力和控制事实。Android 段落与作用域重启迁入 KMP Android / JVM 模块 `:androidIntegrationUI`，`:sharedUI` 和桌面运行时依赖图均不含 Android 集成模块。桌面端使用真实控制入口，无传输时显示不可用原因。整应用渲染限于导航、跨页流程、风格切换连续性与主页面滑动，其余在页面或段落级配假模型保留双风格覆盖；本次不增加 Android 实机验收结论。
+
+离线验证（2026-11-05，24 核 Linux）：`./gradlew :sharedUI:jvmTest --rerun :androidIntegrationUI:jvmTest --rerun --console=plain` 强制执行全部 113 个 UI 测试，零失败、零跳过，Gradle 调用墙钟 22.6 s，低于 #86 的 44.2 s 基线。`check offlineCheck :androidApp:assembleDebug` 通过；桌面运行时依赖查询不含 Android 集成模块。
+
+桌面实际窗口冒烟覆盖状态页与添加耳机流程的传输不可用原因、设置对话框和两种界面风格间的切换；构建产物固定后切换正常。Android 未连接设备或模拟器，状态与设置内容由双风格 Compose 页面测试覆盖，不据此宣称 Android 实机通过。
+

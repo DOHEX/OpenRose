@@ -16,16 +16,12 @@ import io.github.dohex.openrose.androidintegration.OwnerReadiness
 import io.github.dohex.openrose.core.ConnectionPhase
 import io.github.dohex.openrose.core.ConnectionState
 import io.github.dohex.openrose.core.ControlState
-import io.github.dohex.openrose.core.HostPlatform
 import io.github.dohex.openrose.androidintegration.ControlWay
 
 private val controlWayOptions = listOf(
     AppOption(ControlWay.ORDINARY, "普通控制", testTag = ControlWayTags.option(ControlWay.ORDINARY)),
     AppOption(ControlWay.MODULE, "模块控制", testTag = ControlWayTags.option(ControlWay.MODULE)),
 )
-
-/** The ordinary/module choice exists only where Android hosts the control runtime. */
-internal fun ControlState.controlWayApplicable(): Boolean = platform.hostPlatform == HostPlatform.ANDROID
 
 /**
  * Test tags of the control-way card. Tags that report state carry the state's name, so tests

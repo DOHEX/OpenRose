@@ -5,6 +5,7 @@ package io.github.dohex.openrose.ui
 import kotlinx.collections.immutable.persistentListOf
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.text.BasicText
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -23,14 +24,12 @@ class BottomBarStyleUiTest {
     @Test
     fun bottomBarStyleChoiceRowRendersUnderDisplayModeAndUpdatesSettings() {
         for (style in InterfaceStyle.entries) {
-            withOpenRoseAppHarness(
+            withPreferencesHarness(
                 ControlState(
                     platform = PlatformState(permission = PermissionState.GRANTED),
                 ),
                 initialUiSettings = UiSettings(interfaceStyle = style, bottomBarStyle = BottomBarStyle.FIXED),
             ) { harness ->
-                harness.render()
-                harness.clickTab("设置")
                 harness.render()
 
                 assertTrue(harness.hasText("显示模式"), "Settings page must render display mode section for $style")
@@ -129,7 +128,7 @@ class BottomBarStyleUiTest {
     @Test
     fun onlyFloatingBottomBarReservesTrailingClearance() {
         for (style in InterfaceStyle.entries) {
-            withOpenRoseAppHarness(connectedI7State(), initialUiSettings = settings(style, BottomBarStyle.FLOATING)) { floating ->
+            withMainShellHarness(style, BottomBarStyle.FLOATING) { floating ->
                 floating.render()
                 val clearance = assertNotNull(floating.clearance(), "Trailing clearance must be rendered in $style floating mode")
                 val bar = floating.nodes().first { node -> node.children.any { it.role() == Role.Tab } }
@@ -139,7 +138,7 @@ class BottomBarStyleUiTest {
                 )
             }
 
-            withOpenRoseAppHarness(connectedI7State(), initialUiSettings = settings(style, BottomBarStyle.FIXED)) { fixed ->
+            withMainShellHarness(style, BottomBarStyle.FIXED) { fixed ->
                 fixed.render()
                 assertNull(fixed.clearance(), "Fixed bottom bar must not add trailing clearance in $style")
             }
@@ -156,9 +155,8 @@ class BottomBarStyleUiTest {
             stage = SettingStage.SUBMITTED,
         )
         for (style in InterfaceStyle.entries) {
-            withOpenRoseAppHarness(
+            withMainShellHarness(style, BottomBarStyle.FLOATING,
                 connectedI7State().copy(settingOperations = persistentListOf(operation)),
-                initialUiSettings = settings(style, BottomBarStyle.FLOATING),
             ) { harness ->
                 harness.render()
                 val feedback = assertNotNull(
@@ -242,6 +240,36 @@ class BottomBarStyleUiTest {
                 assertEquals(2, selectedTabIndex(), "Settings tab selected after page change in $style")
             }
         }
+    }
+
+    private fun withMainShellHarness(
+        style: InterfaceStyle,
+        bottomBarStyle: BottomBarStyle,
+        state: ControlState? = null,
+        block: suspend (OpenRoseUiTestHarness) -> Unit,
+    ) = runOpenRoseUiTest(420, 900) {
+        val scrollStates = mainPages.associateWith { ScrollState(0) }
+        setContent {
+            ProvideInterfaceStyle(style, dark = false) {
+                val pagerState = rememberMainTabsPagerState()
+                val feedback: @Composable (AppPage) -> Unit = {
+                    if (state != null) SettingFeedback(state, state.device) {}
+                }
+                when (style) {
+                    InterfaceStyle.MIUIX -> MiuixMainShell(
+                        pagerState = pagerState, wide = false, bottomBarStyle = bottomBarStyle,
+                        onNavigate = {}, scrollStates = scrollStates,
+                        pageContentFor = { BasicText(it.title) }, pageFeedbackFor = feedback,
+                    )
+                    InterfaceStyle.MATERIAL3 -> MaterialMainShell(
+                        pagerState = pagerState, wide = false, bottomBarStyle = bottomBarStyle,
+                        onNavigate = {}, scrollStates = scrollStates,
+                        pageContentFor = { BasicText(it.title) }, pageFeedbackFor = feedback,
+                    )
+                }
+            }
+        }
+        block(OpenRoseUiTestHarness(this))
     }
 
     private fun settings(style: InterfaceStyle, bottomBarStyle: BottomBarStyle) = UiSettings(

@@ -7,7 +7,6 @@ import kotlinx.collections.immutable.persistentMapOf
 import kotlinx.collections.immutable.persistentSetOf
 import kotlinx.collections.immutable.plus
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import io.github.dohex.openrose.core.*
@@ -60,7 +59,7 @@ class EqualizerDropdownUiTest {
                 harness.clickText("均衡器")
                 harness.render()
                 assertTrue(harness.hasSelectedText("弱水经典 · POP"))
-                harness.sendKey(Key.Escape)
+                harness.clickText("弱水经典 · POP")
                 val device = requireNotNull(harness.state.value.device)
                 harness.state.value = harness.state.value.copy(device = device.copy(fields = device.fields +
                     (DeviceField.EQ to FieldReading.Known(FieldValue.Text("hifi"), "01"))))
@@ -160,13 +159,14 @@ class EqualizerDropdownUiTest {
         ))
         val uiSettings = mutableStateOf(UiSettings(interfaceStyle = style))
         val writes = mutableListOf<Pair<DeviceSetting, FieldValue>>()
+        val model = FakeOpenRoseModel(state, uiSettings).apply {
+            onSet = { setting, value -> writes += setting to value }
+        }
         runOpenRoseUiTest(420, 900) {
             setContent {
-                OpenRoseApp(state = state.value, uiSettings = uiSettings.value, onUiSettingsChange = { uiSettings.value = it },
-                    integration = null, onSettingsChange = {}, onRequestPermission = {}, onOpenSystemSettings = {},
-                    onStartScan = {}, onStopScan = {}, onConnect = {}, onDisconnect = {},
-                    onSet = { setting, value -> writes += setting to value },
-                    onAddDeviceConnect = { error("Unexpected connection") })
+                TestPageContent(uiSettings.value.interfaceStyle) {
+                    HeadphonesPage(model, BasicPlatformUi("Test"), {})
+                }
             }
             block(EqHarness(this, state, uiSettings, writes))
         }

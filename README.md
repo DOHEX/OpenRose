@@ -176,7 +176,7 @@ cd OpenRose
 
 `offlineCheck` 仍然需要 Android SDK。依赖下载完后，可以加 `--offline` 离线运行。
 
-界面测试跑在虚拟时钟上，按测试类并行（分叉数为可用核数的一半）。
+界面测试跑在虚拟时钟上，按测试类并行（分叉数为可用核数的一半）。导航、跨页流程、风格切换连续性和主页面滑动在整应用级验证，其余在页面或段落级配假表现层模型覆盖两种界面风格；Android 专属段落的测试位于 `androidIntegrationUI/`。
 
 打包桌面版。Linux 产出 DEB、RPM、Pacman 与 AppImage（x64），Windows 产出 MSI，各平台只构建本机支持的格式，产物在 `desktopApp/build/compose/binaries/main/`：
 
@@ -192,13 +192,16 @@ CI 只在 Linux 上运行测试；Linux 产出 Android APK 与上述 4 种 Linux
 | --- | --- |
 | `core/` | 型号能力、协议编解码、控制会话、统一控制入口（`ControlRuntime`）、状态与控制设置（强制使用 BLE） |
 | `androidIntegration/` | Android 集成（纯 Kotlin，在 JVM 上测试）：控制方式与所有者交接、模块宿主与客户端、IPC 编码、系统入口、系统呈现、融合设备中心映射、后台控制及其设置 |
-| `sharedUI/` | 共享界面、Miuix / Material 3 组件、外观设置与界面测试 |
+| `sharedUI/` | 共享界面、表现层模型与平台插槽、Miuix / Material 3 组件、外观设置与界面测试 |
+| `androidIntegrationUI/` | Android 专属界面段落：控制方式、后台控制、系统集成状态与诊断、权限和作用域重启；KMP Android / JVM |
 | `androidApp/` | Android 入口、BLE / SPP 传输、libxposed 模块与 HyperOS 系统桥接 |
 | `desktopApp/` | Windows / Linux 桌面入口、窗口与偏好设置 |
 | `build-logic/` | 各模块共用的 Gradle 约定插件：工具链、JVM 字节码目标、Android 与桌面打包配置 |
 | `docs/` | 协议研究与型号规范（`docs/protocols/`）、工程实现证据（`docs/protocols.md`）、架构决策与规范 |
 
 用户设置由归属层分别编解码，共用各平台的键值存储：控制设置用 `core.` 前缀，外观设置用 `sharedUI.`，Android 集成设置用 `androidIntegration.`。模块宿主只接收控制和集成设置。旧的无前缀键不再读取，不做迁移；使用新版本时需重新选择偏好。
+
+两端入口在界面组合外创建 `RuntimeOpenRoseModel`，统一持有控制入口、设置存储和宿主协程作用域，再将模型与 `PlatformUi` 传给 `OpenRoseApp`。平台通过插槽提供段落及系统动作，共享界面不按平台名称分支。桌面端仅依赖共享界面与控制核心，控制传输尚未实现时在状态页和添加耳机流程中显示原因。
 
 ## 文档
 

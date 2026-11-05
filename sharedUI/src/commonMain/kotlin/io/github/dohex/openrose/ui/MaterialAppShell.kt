@@ -121,7 +121,6 @@ internal fun MaterialAppShell(
 @Composable
 private fun MaterialHeadphoneActions(
     connectedHome: Boolean,
-    showAddDeviceAction: Boolean,
     menuExpanded: Boolean,
     onMenuExpandedChange: (Boolean) -> Unit,
     onAddDevice: () -> Unit,
@@ -133,7 +132,7 @@ private fun MaterialHeadphoneActions(
             IconButton(onClick = { onMenuExpandedChange(true) }) {
                 Icon(RoseIcons[RoseIcon.MORE], contentDescription = "耳机菜单")
             }
-        } else if (showAddDeviceAction) {
+        } else {
             IconButton(onClick = onAddDevice) {
                 Icon(RoseIcons.Plus, contentDescription = "添加耳机")
             }
@@ -212,11 +211,10 @@ internal fun MaterialMainShell(
     pageContentFor: @Composable (AppPage) -> Unit,
     pageFeedbackFor: @Composable (AppPage) -> Unit = {},
     connectedHome: Boolean = false,
-    showAddDeviceAction: Boolean = true,
     menuExpanded: Boolean = false,
     onMenuExpandedChange: (Boolean) -> Unit = {},
     onDisconnect: () -> Unit = {},
-    scopeRestartAction: @Composable () -> Unit = {},
+    platformActions: @Composable (AppPage) -> Unit = {},
     pageTransition: PageTransition = PageTransition.MIUIX_SPRING,
 ) {
     LaunchedEffect(pagerState.pagerState.currentPage) {
@@ -387,11 +385,10 @@ internal fun MaterialMainShell(
                     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
                     val title = page.title
                     val actions: @Composable RowScope.() -> Unit = {
-                        if (page == AppPage.STATUS) scopeRestartAction()
+                        platformActions(page)
                         if (page == AppPage.HEADPHONES) {
                             MaterialHeadphoneActions(
                                 connectedHome = connectedHome,
-                                showAddDeviceAction = showAddDeviceAction,
                                 menuExpanded = menuExpanded,
                                 onMenuExpandedChange = onMenuExpandedChange,
                                 onAddDevice = { onNavigate(AppPage.ADD_DEVICE) },

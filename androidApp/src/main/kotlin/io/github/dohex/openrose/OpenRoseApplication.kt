@@ -22,12 +22,12 @@ import io.github.dohex.openrose.bridge.ModuleHostBinderLink
 import io.github.dohex.openrose.androidintegration.ControlWay
 import io.github.dohex.openrose.androidintegration.HostSettings
 import io.github.dohex.openrose.androidintegration.IntegrationSettings
-import io.github.dohex.openrose.core.DeviceSetting
 import io.github.dohex.openrose.core.LocalControlRuntime
-import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.dohex.openrose.core.UserSettings
 import io.github.dohex.openrose.ui.UiSettings
 import io.github.dohex.openrose.core.transport.DeviceId
+import io.github.dohex.openrose.ui.model.OpenRoseSettingsStore
+import io.github.dohex.openrose.ui.model.RuntimeOpenRoseModel
 import java.util.UUID
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
@@ -57,6 +57,8 @@ class OpenRoseApplication : Application() {
     private val mutableUiSettings = MutableStateFlow(UiSettings())
     val uiSettings = mutableUiSettings.asStateFlow()
     lateinit var runtime: SwitchingControlRuntime
+        private set
+    lateinit var model: RuntimeOpenRoseModel
         private set
     lateinit var framework: FrameworkLink
         private set
@@ -96,6 +98,22 @@ class OpenRoseApplication : Application() {
             newId = { UUID.randomUUID().toString() },
             userUnlocked = unlocked,
         )
+        model = RuntimeOpenRoseModel(runtime, object : OpenRoseSettingsStore {
+            override val uiSettings = this@OpenRoseApplication.uiSettings
+
+            override fun updateSettings(settings: UserSettings) {
+                if (!userUnlocked()) return
+                runtime.updateSettings(settings)
+                settingsStore.saveHost(hostSettings())
+                publishModuleSettings()
+            }
+
+            override fun updateUiSettings(settings: UiSettings) {
+                if (!userUnlocked()) return
+                mutableUiSettings.value = settings
+                settingsStore.saveUi(settings)
+            }
+        }, controlScope)
         preferencesLoaded = unlocked
         registerActivityLifecycleCallbacks(VisibleInterfaceHold(runtime, controlScope))
         framework.start()
@@ -122,9 +140,6 @@ class OpenRoseApplication : Application() {
         loadUnlockedSettings()
     }
 
-    fun startScan() { controlScope.launch { runtime.startScan() } }
-    fun stopScan() { controlScope.launch { runtime.stopScan() } }
-    fun connect(deviceId: DeviceId) { controlScope.launch { runtime.connect(deviceId) } }
     fun connectFromSystem(deviceId: DeviceId) {
         controlScope.launch(start = CoroutineStart.UNDISPATCHED) {
             // The request arrives while the launching activity is not started yet; the claim bridges that gap
@@ -136,10 +151,6 @@ class OpenRoseApplication : Application() {
                 hold.release()
             }
         }
-    }
-    fun disconnect() { controlScope.launch { runtime.disconnect() } }
-    fun applySetting(setting: DeviceSetting, value: FieldValue) {
-        controlScope.launch { runtime.set(setting, value) }
     }
 
     /**
@@ -171,18 +182,6 @@ class OpenRoseApplication : Application() {
      */
     fun ordinaryControlSelected(): Boolean = runtime.integration.value.owner.selected == ControlWay.ORDINARY
 
-    fun updateSettings(settings: UserSettings) {
-        if (!userUnlocked()) return
-        runtime.updateSettings(settings)
-        settingsStore.saveHost(hostSettings())
-        publishModuleSettings()
-    }
-
-    fun updateUiSettings(settings: UiSettings) {
-        if (!userUnlocked()) return
-        mutableUiSettings.value = settings
-        settingsStore.saveUi(settings)
-    }
 
     fun updateIntegrationSettings(settings: IntegrationSettings) {
         if (!userUnlocked()) return

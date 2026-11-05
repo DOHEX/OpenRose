@@ -3,6 +3,7 @@ package io.github.dohex.openrose.ui
 import kotlinx.collections.immutable.persistentSetOf
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
+import kotlinx.coroutines.flow.MutableStateFlow
 import io.github.dohex.openrose.androidintegration.IntegrationPlatformState
 import io.github.dohex.openrose.androidintegration.IntegrationSettings
 import io.github.dohex.openrose.androidintegration.IslandMode
@@ -48,13 +49,13 @@ class PlatformApplicabilityUiTest {
                 ),
             ) { harness ->
                 harness.render()
-                harness.clickTab("设置")
+                harness.openPage("设置")
                 harness.render()
                 assertFalse(harness.hasText("超级岛"), "unverified integration applicability does not expose HyperOS controls in $style")
                 assertFalse(harness.hasText("焦点通知"), "unverified integration applicability does not expose focus notification in $style")
                 assertTrue(harness.hasText("强制使用 BLE"), "known Android transport applicability remains independent in $style")
 
-                harness.clickTab("状态")
+                harness.openPage("状态")
                 harness.render()
                 assertTrue(harness.hasText("系统集成适用性"), "unknown applicability is reported separately in $style")
                 assertTrue(harness.hasText("尚未核实"), "unknown is not described as unsupported or unready in $style")
@@ -96,13 +97,13 @@ class PlatformApplicabilityUiTest {
                     ),
                 ) { harness ->
                     harness.render()
-                    harness.clickTab("设置")
+                    harness.openPage("设置")
                     harness.render()
                     assertFalse(harness.hasText("超级岛"), "$platformLabel must hide HyperOS settings in $style")
                     assertFalse(harness.hasText("焦点通知"), "$platformLabel must hide HyperOS notification settings in Settings in $style")
                     assertFalse(harness.hasText("强制使用 BLE"), "$platformLabel has no implemented control transport in $style")
 
-                    harness.clickTab("状态")
+                    harness.openPage("状态")
                     harness.render()
                     assertTrue(harness.hasText("$platformLabel 控制传输尚未实现"), "$platformLabel explains why it cannot control in $style")
                     assertTrue(harness.hasText("蓝牙传输"), "$platformLabel reports its transport state in $style")
@@ -110,7 +111,7 @@ class PlatformApplicabilityUiTest {
                     assertFalse(harness.hasText("系统模块"), "$platformLabel must not expose HyperOS module state in $style")
                     assertFalse(harness.hasText("焦点通知"), "$platformLabel must not show HyperOS notification settings in $style")
 
-                    harness.clickText("运行状态与诊断")
+                    harness.openPage("诊断")
                     harness.render()
                     assertFalse(harness.hasText("蓝牙权限"), "desktop diagnostics must omit Android permissions in $style")
                     assertFalse(harness.hasText("系统模块"), "desktop diagnostics must omit HyperOS module details in $style")
@@ -150,7 +151,7 @@ class PlatformApplicabilityUiTest {
                 ),
             ) { harness ->
                 harness.render()
-                harness.clickTab("设置")
+                harness.openPage("设置")
                 harness.render()
 
                 assertFalse(harness.hasText("超级岛"), "ordinary Android must not show HyperOS settings in $style")
@@ -158,7 +159,7 @@ class PlatformApplicabilityUiTest {
                 assertFalse(harness.hasText("模块显示时机"), "ordinary Android must not show module timing in $style")
                 assertTrue(harness.hasText("强制使用 BLE"), "Android transport preference visibility is independent of HyperOS in $style")
 
-                harness.clickTab("状态")
+                harness.openPage("状态")
                 harness.render()
                 assertFalse(harness.hasText("焦点通知"), "ordinary Android must not show HyperOS notification settings in $style")
                 assertFalse(harness.hasText("已连接系统模块"), "a module state cannot make HyperOS applicable in $style")
@@ -197,7 +198,7 @@ class PlatformApplicabilityUiTest {
                 ),
             ) { harness ->
                 harness.render()
-                harness.clickTab("设置")
+                harness.openPage("设置")
                 harness.render()
 
                 assertTrue(harness.hasText("超级岛"), "HyperOS settings remain visible while integration is unready in $style")
@@ -217,7 +218,7 @@ class PlatformApplicabilityUiTest {
                 assertEquals(IslandMode.OFF, harness.integration.value.settings.islandMode)
                 assertEquals(emptySet(), harness.integration.value.settings.islandTriggers)
                 assertTrue(harness.settingWrites.isEmpty(), "saving an integration preference must not send a device setting")
-                harness.clickTab("状态")
+                harness.openPage("状态")
                 harness.render()
                 assertTrue(harness.hasText("系统集成未就绪"), "readiness is reported separately from applicability in $style")
 
@@ -231,7 +232,7 @@ class PlatformApplicabilityUiTest {
                 assertFalse(harness.hasText("焦点通知"), "settings are hidden when the host becomes inapplicable in $style")
                 assertEquals(savedSettings, harness.integration.value.settings, "hiding settings leaves saved values unchanged in $style")
 
-                harness.clickTab("设置")
+                harness.openPage("设置")
                 harness.render()
                 assertFalse(harness.hasText("超级岛"), "HyperOS controls are hidden while inapplicable in $style")
                 assertEquals(savedSettings, harness.integration.value.settings)
@@ -261,40 +262,37 @@ class PlatformApplicabilityUiTest {
     ) = runOpenRoseUiTest(1200, 1000) {
         val state = mutableStateOf(initialState)
         val uiSettings = mutableStateOf(initialUiSettings)
-        val integration = mutableStateOf(initialIntegration)
+        val integration = MutableStateFlow(initialIntegration)
         val settingsChanges = mutableListOf<IntegrationSettings>()
         val settingWrites = mutableListOf<Pair<io.github.dohex.openrose.core.DeviceSetting, io.github.dohex.openrose.core.protocol.FieldValue>>()
         val transportActions = mutableListOf<String>()
-        setContent {
-            OpenRoseApp(
-                state = state.value,
-                uiSettings = uiSettings.value,
-                onUiSettingsChange = { uiSettings.value = it },
-                onIntegrationSettingsChange = { settings ->
-                    settingsChanges += settings
-                    integration.value = integration.value.copy(settings = settings)
-                },
-                integration = integration.value,
-                onSettingsChange = { state.value = state.value.copy(settings = it) },
-                onRequestPermission = {},
-                onOpenSystemSettings = {},
-                onStartScan = { transportActions += "start scan" },
-                onStopScan = { transportActions += "stop scan" },
-                onConnect = { transportActions += "connect" },
-                onDisconnect = { transportActions += "disconnect" },
-                onSet = { setting, value -> settingWrites += setting to value },
-                onAddDeviceConnect = { error("Unexpected add-device connection in this scenario") },
-            )
+        val page = mutableStateOf("设置")
+        val model = FakeOpenRoseModel(state, uiSettings)
+        model.onStartScan = { transportActions += "start scan" }
+        model.onStopScan = { transportActions += "stop scan" }
+        model.onConnect = { transportActions += "connect" }
+        model.onDisconnect = { transportActions += "disconnect" }
+        model.onSet = { setting, value -> settingWrites += setting to value }
+        val platform: PlatformUi = when (initialState.platform.hostPlatform) {
+            HostPlatform.ANDROID -> androidTestPlatform(integration, onSettings = { settings ->
+                settingsChanges += settings
+                integration.value = integration.value.copy(settings = settings)
+            })
+            HostPlatform.WINDOWS -> BasicPlatformUi("Windows")
+            HostPlatform.LINUX -> BasicPlatformUi("Linux")
+            HostPlatform.UNKNOWN -> BasicPlatformUi("平台未核实")
         }
-        block(Harness(this, state, integration, settingsChanges, settingWrites, transportActions))
+        setContent { AndroidTestPage(model, platform, page) }
+        block(Harness(this, page, state, integration, settingsChanges, settingWrites, transportActions))
     }
 
     private class Harness(
         scene: OpenRoseUiTestScene,
+        page: MutableState<String>,
         val state: MutableState<ControlState>,
-        val integration: MutableState<IntegrationState>,
+        val integration: MutableStateFlow<IntegrationState>,
         val settingsChanges: MutableList<IntegrationSettings>,
         val settingWrites: MutableList<Pair<io.github.dohex.openrose.core.DeviceSetting, io.github.dohex.openrose.core.protocol.FieldValue>>,
         val transportActions: MutableList<String>,
-    ) : OpenRoseUiTestHarness(scene)
+    ) : AndroidPageHarness(scene, page)
 }

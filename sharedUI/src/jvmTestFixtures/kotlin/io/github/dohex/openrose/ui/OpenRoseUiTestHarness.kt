@@ -28,11 +28,10 @@ import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.DesktopComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.isRoot
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.v2.runDesktopComposeUiTest
 import androidx.compose.ui.unit.IntSize
-import io.github.dohex.openrose.androidintegration.IntegrationPlatformState
-import io.github.dohex.openrose.androidintegration.IntegrationState
-import io.github.dohex.openrose.androidintegration.ModuleAvailability
 import io.github.dohex.openrose.core.*
 import io.github.dohex.openrose.core.protocol.*
 import io.github.dohex.openrose.core.transport.DeviceId
@@ -43,7 +42,7 @@ private const val FRAME_MILLIS = 35L
 
 /**
  * Runs [block] against a fresh [width]×[height] scene at density 1. The scene clock is virtual and
- * moves only through [OpenRoseUiTestHarness.render] and [OpenRoseUiTestHarness.advanceTimeBy].
+ * moves through explicit frame advancement and the frames needed by scroll actions.
  */
 internal fun runOpenRoseUiTest(width: Int, height: Int, block: suspend OpenRoseUiTestScene.() -> Unit) =
     runDesktopComposeUiTest(width = width, height = height) {
@@ -91,78 +90,23 @@ internal class OpenRoseUiTestScene(private val test: DesktopComposeUiTest) {
 
     fun capture(): BufferedImage = test.captureToImage().toAwtImage()
 
+    fun scrollToText(text: String) {
+        // Compose's scroll action needs clock frames to complete its animation.
+        val autoAdvance = test.mainClock.autoAdvance
+        test.mainClock.autoAdvance = true
+        try {
+            test.onNodeWithText(text).performScrollTo()
+        } finally {
+            test.mainClock.autoAdvance = autoAdvance
+        }
+    }
+
     fun sendKeyEvent(event: KeyEvent) {
         test.runOnUiThread { test.scene.sendKeyEvent(event) }
     }
 
     fun <T> runOnUiThread(action: () -> T): T = test.runOnUiThread(action)
 }
-
-/** OpenRoseApp with recording callbacks; scenarios that need custom callbacks build their own scene. */
-internal class OpenRoseAppHarness(
-    scene: OpenRoseUiTestScene,
-    val state: MutableState<ControlState>,
-    val integration: MutableState<IntegrationState>,
-    val uiSettings: MutableState<UiSettings>,
-    val settingsChanges: List<UiSettings>,
-    val controlSettingsChanges: List<UserSettings>,
-    val settingWrites: List<Pair<DeviceSetting, FieldValue>>,
-    val connectRequests: List<DeviceId>,
-    private val disconnects: () -> Int,
-) : OpenRoseUiTestHarness(scene) {
-    val disconnectCount: Int get() = disconnects()
-}
-
-internal fun withOpenRoseAppHarness(
-    initialState: ControlState,
-    initialIntegration: IntegrationState = androidIntegration,
-    initialUiSettings: UiSettings = UiSettings(),
-    width: Int = 420,
-    height: Int = 900,
-    block: suspend (OpenRoseAppHarness) -> Unit,
-) = runOpenRoseUiTest(width, height) {
-    val state = mutableStateOf(initialState)
-    val integration = mutableStateOf(initialIntegration)
-    val uiSettings = mutableStateOf(initialUiSettings)
-    val settingsChanges = mutableListOf<UiSettings>()
-    val controlSettingsChanges = mutableListOf<UserSettings>()
-    val settingWrites = mutableListOf<Pair<DeviceSetting, FieldValue>>()
-    val connectRequests = mutableListOf<DeviceId>()
-    var disconnectCount = 0
-    setContent {
-        OpenRoseApp(
-            state = state.value,
-            integration = integration.value,
-            uiSettings = uiSettings.value,
-            onUiSettingsChange = { next ->
-                settingsChanges += next
-                uiSettings.value = next
-            },
-            onIntegrationSettingsChange = { next -> integration.value = integration.value.copy(settings = next) },
-            onSettingsChange = { next ->
-                controlSettingsChanges += next
-                state.value = state.value.copy(settings = next)
-            },
-            onRequestPermission = {},
-            onOpenSystemSettings = {},
-            onStartScan = {},
-            onStopScan = {},
-            onConnect = { connectRequests += it },
-            onDisconnect = { disconnectCount++ },
-            onSet = { setting, value -> settingWrites += setting to value },
-            onAddDeviceConnect = { error("Unexpected add-device connection in this scenario") },
-        )
-    }
-    block(OpenRoseAppHarness(this, state, integration, uiSettings, settingsChanges, controlSettingsChanges, settingWrites, connectRequests) { disconnectCount })
-}
-
-/** Integration facts of an Android host whose system module is not enabled. */
-internal val androidIntegration = IntegrationState(
-    platform = IntegrationPlatformState(
-        module = ModuleAvailability.NotEnabled,
-        systemIntegrationApplicability = PlatformApplicability.APPLICABLE,
-    ),
-)
 
 private val androidPlatform = PlatformState(
     permission = PermissionState.GRANTED,
@@ -206,7 +150,6 @@ internal fun connectedI7State(): ControlState {
         ),
     )
 }
-
 /** Shared rendering and semantics operations; each test keeps its own state and callbacks. */
 internal open class OpenRoseUiTestHarness(protected val scene: OpenRoseUiTestScene) {
     /** Current virtual time of the scene clock, in milliseconds. */
@@ -220,6 +163,8 @@ internal open class OpenRoseUiTestHarness(protected val scene: OpenRoseUiTestSce
 
     /** Lays the scene out at a new size, as a resized window would. */
     fun resize(width: Int, height: Int) = scene.resize(width, height)
+
+    fun scrollToText(text: String) = scene.scrollToText(text)
 
     /** Every merged semantics node, main window first, then popups and dialogs; reading never settles the scene. */
     fun nodes(): List<SemanticsNode> {

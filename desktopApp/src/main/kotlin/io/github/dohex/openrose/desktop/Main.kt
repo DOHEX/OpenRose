@@ -22,6 +22,7 @@ import io.github.dohex.openrose.core.PlatformApplicability
 import io.github.dohex.openrose.core.PlatformState
 import io.github.dohex.openrose.core.TransportAvailability
 import io.github.dohex.openrose.ui.OpenRoseApp
+import io.github.dohex.openrose.ui.BasicPlatformUi
 import io.github.dohex.openrose.ui.interfaceBackgroundColor
 import java.util.prefs.Preferences
 
@@ -43,48 +44,39 @@ fun main() {
             controlTransportApplicability = PlatformApplicability.NOT_APPLICABLE,
         ),
     )
-    nucleusApplication(backend = NucleusBackend.Tao, enableSingleInstance = false) {
-        val state by runtime.control.state.collectAsState()
-        val uiSettings by runtime.uiSettings.collectAsState()
-        val dark = when (uiSettings.appearance) {
-            Appearance.SYSTEM -> isSystemInDarkTheme()
-            Appearance.LIGHT -> false
-            Appearance.DARK -> true
-        }
-        val background = interfaceBackgroundColor(uiSettings.interfaceStyle, dark)
-        val titleBarStyle = if (dark) DecoratedWindowDefaults.darkTitleBarStyle() else DecoratedWindowDefaults.lightTitleBarStyle()
-        NucleusDecoratedWindowTheme(
-            isDark = dark,
-            titleBarStyle = titleBarStyle.copy(colors = titleBarStyle.colors.copy(
-                background = background,
-                inactiveBackground = background,
-                border = Color.Transparent,
-                fullscreenControlButtonsBackground = background,
-            )),
-        ) {
-            DecoratedWindow(
-                title = "OpenRose",
-                onCloseRequest = ::exitApplication,
-                state = rememberWindowState(width = 1180.dp, height = 820.dp),
+    val platformUi = BasicPlatformUi(platform)
+    try {
+        nucleusApplication(backend = NucleusBackend.Tao, enableSingleInstance = false) {
+            val uiSettings by runtime.model.uiSettings.collectAsState()
+            val dark = when (uiSettings.appearance) {
+                Appearance.SYSTEM -> isSystemInDarkTheme()
+                Appearance.LIGHT -> false
+                Appearance.DARK -> true
+            }
+            val background = interfaceBackgroundColor(uiSettings.interfaceStyle, dark)
+            val titleBarStyle = if (dark) DecoratedWindowDefaults.darkTitleBarStyle() else DecoratedWindowDefaults.lightTitleBarStyle()
+            NucleusDecoratedWindowTheme(
+                isDark = dark,
+                titleBarStyle = titleBarStyle.copy(colors = titleBarStyle.colors.copy(
+                    background = background,
+                    inactiveBackground = background,
+                    border = Color.Transparent,
+                    fullscreenControlButtonsBackground = background,
+                )),
             ) {
-                TitleBar {
-                    BasicText("OpenRose", style = TextStyle(color = LocalTitleBarStyle.current.colors.content))
+                DecoratedWindow(
+                    title = "OpenRose",
+                    onCloseRequest = ::exitApplication,
+                    state = rememberWindowState(width = 1180.dp, height = 820.dp),
+                ) {
+                    TitleBar {
+                        BasicText("OpenRose", style = TextStyle(color = LocalTitleBarStyle.current.colors.content))
+                    }
+                    OpenRoseApp(model = runtime.model, platformUi = platformUi)
                 }
-                OpenRoseApp(
-                    state = state,
-                    uiSettings = uiSettings,
-                    onUiSettingsChange = runtime::updateUiSettings,
-                    onSettingsChange = runtime::updateSettings,
-                    onRequestPermission = {},
-                    onOpenSystemSettings = {},
-                    onStartScan = {},
-                    onStopScan = {},
-                    onConnect = {},
-                    onDisconnect = {},
-                    onSet = { _, _ -> },
-                    onAddDeviceConnect = runtime.control::connectForAddDevice,
-                )
             }
         }
+    } finally {
+        runtime.close()
     }
 }

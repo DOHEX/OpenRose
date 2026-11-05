@@ -166,11 +166,8 @@ class UiDefaultStylesUiTest {
         val pickerOpen = mutableStateOf(false)
         val requests = mutableListOf<String>()
         val scrollState = ScrollState(0)
-        setShellContent(
-            style = style,
-            wide = false,
-            scrollState = scrollState,
-            pageContent = {
+        setContent {
+            TestPageContent(style.value) {
                 AppChoiceRow(
                     title = "功能选择",
                     valueText = confirmedLabel(selected.value),
@@ -182,8 +179,8 @@ class UiDefaultStylesUiTest {
                     onOpenChange = { pickerOpen.value = it },
                     onSelect = { requests += it },
                 )
-            },
-        )
+            }
+        }
         block(ChoiceHarness(this, style, selected, pickerOpen, requests, scrollState))
     }
 

@@ -24,7 +24,6 @@ class AddDeviceLifecycleUiTest {
                         harness.clickText("停止搜索")
                     }
                     harness.render()
-                    assertTrue(harness.hasContentDescription("返回"))
                     assertTrue(harness.hasClickableText("重新搜索"))
                     assertTrue(harness.hasClickableText("连接"))
                     assertEquals(failScan, harness.hasText("蓝牙搜索中断"))
@@ -85,7 +84,6 @@ class AddDeviceLifecycleUiTest {
                     interfaceStyle = if (style == InterfaceStyle.MIUIX) InterfaceStyle.MATERIAL3 else InterfaceStyle.MIUIX,
                 )
                 harness.render()
-                assertTrue(harness.hasContentDescription("返回"))
                 assertTrue(harness.hasClickableText("停止搜索"))
                 assertEquals(1, harness.scanStarts)
                 assertEquals(0, harness.scanStops)
@@ -137,7 +135,7 @@ class AddDeviceLifecycleUiTest {
     fun returningFromAddPageStopsItsSearchAndReenteringStartsAgain() {
         for (style in InterfaceStyle.entries) {
             for (keyboardBack in listOf(false, true)) {
-                withAddDeviceHarness(style) { harness ->
+                withAddDeviceHarness(style, app = true) { harness ->
                     harness.openAddDevice()
                     if (keyboardBack) harness.sendKey(Key.Escape) else harness.clickContentDescription("返回")
                     harness.render()
@@ -164,8 +162,6 @@ class AddDeviceLifecycleUiTest {
                 assertTrue(harness.hasClickableText("取消连接"))
                 harness.clickText("取消连接")
                 harness.render()
-                assertTrue(harness.hasContentDescription("返回"))
-                assertFalse(harness.hasTab("耳机"))
                 assertEquals(ConnectionState.Disconnected, harness.state.value.connection)
                 assertTrue(harness.hasText(requireNotNull(addDeviceCandidate.name)))
                 assertTrue(harness.hasClickableText("重新搜索"))
@@ -182,7 +178,7 @@ class AddDeviceLifecycleUiTest {
     @Test
     fun failedConnectionCanRetryInPlaceAndReadyExitPreservesThatSession() {
         for (style in InterfaceStyle.entries) {
-            withAddDeviceHarness(style) { harness ->
+            withAddDeviceHarness(style, app = true) { harness ->
                 harness.openAddDevice()
                 harness.clickText("连接")
                 harness.render()
@@ -220,7 +216,7 @@ class AddDeviceLifecycleUiTest {
     fun backCancelsOnlyTheUnfinishedConnectionStartedOnThisPage() {
         for (style in InterfaceStyle.entries) {
             for (keyboardBack in listOf(false, true)) {
-                withAddDeviceHarness(style) { harness ->
+                withAddDeviceHarness(style, app = true) { harness ->
                     harness.openAddDevice()
                     harness.clickText("连接")
                     harness.render()
@@ -239,7 +235,7 @@ class AddDeviceLifecycleUiTest {
     fun unrelatedReadyAndNewerSameDeviceSessionCannotCompleteOrBeCanceledByTheSelectedAttempt() {
         for (style in InterfaceStyle.entries) {
             for (sameDevice in listOf(false, true)) {
-                withAddDeviceHarness(style) { harness ->
+                withAddDeviceHarness(style, app = true) { harness ->
                     harness.openAddDevice()
                     harness.clickText("连接")
                     harness.render()

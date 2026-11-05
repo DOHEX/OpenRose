@@ -17,6 +17,7 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.draw.clip
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -28,6 +29,7 @@ import androidx.compose.ui.unit.dp
 import io.github.dohex.openrose.core.*
 import io.github.dohex.openrose.core.protocol.*
 import io.github.dohex.openrose.core.transport.*
+import io.github.dohex.openrose.ui.model.OpenRoseModel
 
 internal fun ControlState.activeDevice(): DeviceState? {
     val targetId = connectionTarget?.deviceId
@@ -36,9 +38,9 @@ internal fun ControlState.activeDevice(): DeviceState? {
 internal fun PlatformState.transportUnavailableForHome(): Boolean =
     permission in setOf(PermissionState.GRANTED, PermissionState.NOT_REQUIRED) &&
         transport is TransportAvailability.Unavailable
-internal val ModelProfile.configurationLabel: String
+val ModelProfile.configurationLabel: String
     get() = when (this) { ModelProfile.I5_ZT -> "ZT"; ModelProfile.I7_RS_V2 -> "RS Common V2" }
-internal val ModelProfile.shortLabel: String
+val ModelProfile.shortLabel: String
     get() = when (this) { ModelProfile.I5_ZT -> "i5"; ModelProfile.I7_RS_V2 -> "i7" }
 
 internal fun ControlState.controlTransportLabel(): String = when (transportSelection?.endpoint) {
@@ -49,16 +51,17 @@ internal fun ControlState.controlTransportLabel(): String = when (transportSelec
 
 @Composable
 internal fun HeadphonesPage(
-    state: ControlState,
+    model: OpenRoseModel,
+    platformUi: PlatformUi,
     onNavigate: (AppPage) -> Unit,
-    onRequestPermission: () -> Unit,
-    onOpenSystemSettings: () -> Unit,
-    onStartScan: () -> Unit,
-    onStopScan: () -> Unit,
-    onConnect: (DeviceId) -> Unit,
-    onDisconnect: () -> Unit,
-    onSet: (DeviceSetting, FieldValue) -> Unit,
 ) {
+    val state by model.state.collectAsState()
+    val onRequestPermission = platformUi.requestBluetoothPermission
+    val onOpenSystemSettings = platformUi.openBluetoothSettings
+    val onStopScan = model::stopScan
+    val onConnect = model::connect
+    val onDisconnect = model::disconnect
+    val onSet = model::set
     val device = state.activeDevice()
     Column(
         Modifier.fillMaxWidth(),
@@ -215,8 +218,8 @@ private fun equalizerPresetOrder(preset: String): Int = when (preset) {
 private fun UnconnectedHeadphonesDashboard(
     state: ControlState,
     onNavigate: (AppPage) -> Unit,
-    onRequestPermission: () -> Unit,
-    onOpenSystemSettings: () -> Unit,
+    onRequestPermission: (() -> Unit)?,
+    onOpenSystemSettings: (() -> Unit)?,
     onConnect: (DeviceId) -> Unit,
     onDisconnect: () -> Unit,
     onStopScan: () -> Unit,
@@ -290,12 +293,14 @@ private fun UnconnectedHeadphonesDashboard(
                         kind = AppButtonKind.Primary,
                         modifier = Modifier.fillMaxWidth(),
                     )
-                    AppButton(
-                        text = "打开系统蓝牙设置",
-                        onClick = onOpenSystemSettings,
-                        kind = AppButtonKind.Secondary,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
+                    onOpenSystemSettings?.let { openSettings ->
+                        AppButton(
+                            text = "打开系统蓝牙设置",
+                            onClick = openSettings,
+                            kind = AppButtonKind.Secondary,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
                 }
             }
         }
@@ -401,19 +406,23 @@ private fun UnconnectedHeadphonesDashboard(
                         modifier = Modifier.fillMaxWidth(),
                     )
                 } else if (permissionRequired) {
-                    AppButton(
-                        text = "授予蓝牙权限",
-                        onClick = onRequestPermission,
-                        kind = AppButtonKind.Primary,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
+                    onRequestPermission?.let { requestPermission ->
+                        AppButton(
+                            text = "授予蓝牙权限",
+                            onClick = requestPermission,
+                            kind = AppButtonKind.Primary,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
                 } else if (unavailableTransport != null) {
-                    AppButton(
-                        text = "打开系统蓝牙设置",
-                        onClick = onOpenSystemSettings,
-                        kind = AppButtonKind.Primary,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
+                    onOpenSystemSettings?.let { openSettings ->
+                        AppButton(
+                            text = "打开系统蓝牙设置",
+                            onClick = openSettings,
+                            kind = AppButtonKind.Primary,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
                 } else {
                     AppButton(
                         text = if (visibleError != null) "重试连接" else "连接",
@@ -422,7 +431,7 @@ private fun UnconnectedHeadphonesDashboard(
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }
-                if (visibleError != null && !permissionRequired && unavailableTransport == null) {
+                if (visibleError != null && !permissionRequired && unavailableTransport == null && onOpenSystemSettings != null) {
                     AppButton(
                         text = "无法连接？打开系统蓝牙设置",
                         onClick = onOpenSystemSettings,

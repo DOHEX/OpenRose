@@ -3,6 +3,7 @@
 package io.github.dohex.openrose.ui
 
 import kotlinx.collections.immutable.persistentListOf
+import androidx.compose.runtime.mutableStateOf
 import io.github.dohex.openrose.core.*
 import io.github.dohex.openrose.core.protocol.ModelProfile
 import io.github.dohex.openrose.core.transport.DeviceId
@@ -23,9 +24,9 @@ class OpenRoseDisconnectedHomeRedesignTest {
                 profile = ModelProfile.I5_ZT,
                 manufacturerDataHex = "",
             )
-            withOpenRoseAppHarness(
+            withHomeHarness(
                 disconnectedAndroidState().copy(bondedDevices = persistentListOf(pairedDevice)),
-                initialUiSettings = UiSettings(interfaceStyle = style),
+                style = style,
             ) { harness ->
                 harness.render()
                 // Paired devices section and device name
@@ -62,18 +63,20 @@ class OpenRoseDisconnectedHomeRedesignTest {
             profile = ModelProfile.I7_RS_V2,
             manufacturerDataHex = "",
         )
-        withOpenRoseAppHarness(disconnectedAndroidState().copy(bondedDevices = persistentListOf(paired1, paired2))) { harness ->
-            harness.render()
-            assertTrue(harness.hasText("My i5 Earbuds"))
-            assertTrue(harness.hasText("ZT"))
-            assertTrue(harness.hasText("My i7 Headset"))
-            assertTrue(harness.hasText("RS Common V2"))
+        for (style in InterfaceStyle.entries) {
+            withHomeHarness(disconnectedAndroidState().copy(bondedDevices = persistentListOf(paired1, paired2)), style) { harness ->
+                harness.render()
+                assertTrue(harness.hasText("My i5 Earbuds"))
+                assertTrue(harness.hasText("ZT"))
+                assertTrue(harness.hasText("My i7 Headset"))
+                assertTrue(harness.hasText("RS Common V2"))
+            }
         }
     }
 
     @Test
     fun primaryDashboardHidesSecondaryDisconnectButtonWhileDetailsRetainsIt() {
-        withOpenRoseAppHarness(connectedI7State()) { harness ->
+        for (style in InterfaceStyle.entries) withOpenRoseAppHarness(connectedI7State(), initialUiSettings = UiSettings(interfaceStyle = style)) { harness ->
             harness.render()
             // On primary connected headphones dashboard:
             // "断开控制连接" is NOT present as an explicit button on the main dashboard content
@@ -97,4 +100,23 @@ class OpenRoseDisconnectedHomeRedesignTest {
             assertEquals(1, harness.disconnectCount)
         }
     }
+    private fun withHomeHarness(
+        initialState: ControlState,
+        style: InterfaceStyle,
+        block: suspend (HomeHarness) -> Unit,
+    ) = runOpenRoseUiTest(420, 900) {
+        val state = mutableStateOf(initialState)
+        val settings = mutableStateOf(UiSettings(interfaceStyle = style))
+        val connectRequests = mutableListOf<DeviceId>()
+        val model = FakeOpenRoseModel(state, settings).apply { onConnect = { connectRequests += it } }
+        setContent {
+            ProvideInterfaceStyle(style, dark = false) {
+                HeadphonesPage(model, BasicPlatformUi("Test"), {})
+            }
+        }
+        block(HomeHarness(this, connectRequests))
+    }
+
+    private class HomeHarness(scene: OpenRoseUiTestScene, val connectRequests: List<DeviceId>) :
+        OpenRoseUiTestHarness(scene)
 }

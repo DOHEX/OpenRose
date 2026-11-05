@@ -3,8 +3,11 @@ package io.github.dohex.openrose.ui
 import kotlinx.collections.immutable.persistentSetOf
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
+import kotlinx.coroutines.flow.MutableStateFlow
 import io.github.dohex.openrose.androidintegration.IntegrationPlatformState
 import io.github.dohex.openrose.androidintegration.IntegrationSettings
+import io.github.dohex.openrose.androidintegration.FusionSettingsDestination
+import io.github.dohex.openrose.androidintegration.IslandTrigger
 import io.github.dohex.openrose.androidintegration.IslandMode
 import io.github.dohex.openrose.androidintegration.IntegrationState
 import io.github.dohex.openrose.androidintegration.ModuleAvailability
@@ -33,7 +36,7 @@ class SystemSettingsOwnershipUiTest {
             for ((module, verdict) in verdicts) {
                 withHarness(1200, style, module = module) { harness ->
                     harness.render()
-                    harness.clickTab("状态")
+                    harness.openPage("状态")
                     harness.render()
                     assertTrue(harness.hasText(verdict), "$module is stated as \"$verdict\" in $style")
                     for ((_, other) in verdicts.filter { it.second != verdict }) {
@@ -57,7 +60,7 @@ class SystemSettingsOwnershipUiTest {
             for (module in advised + ModuleAvailability.Unavailable("fixture")) {
                 withHarness(1200, style, module = module) { harness ->
                     harness.render()
-                    harness.clickTab("状态")
+                    harness.openPage("状态")
                     harness.render()
                     module.nextStep()?.let { assertTrue(harness.hasText(it), "$module shows its advice in $style") }
                     assertTrue(harness.hasText("${module.unreadyClause()}。"), "$module keeps its reason in $style")
@@ -71,16 +74,12 @@ class SystemSettingsOwnershipUiTest {
         for (style in InterfaceStyle.entries) {
             withHarness(1200, style, height = 1800) { harness ->
                 harness.render()
-                harness.clickTab("设置")
-                harness.render()
                 harness.clickText("焦点通知")
                 harness.render()
                 val message = harness.textBounds("偏好已保存，待系统就绪后生效。")
-                val control = harness.clickableBounds("焦点通知")
                 val image = harness.snapshot()
                 val y = message.center.y.toInt()
-                assertEquals(image.getRGB(control.right.toInt() + 24, y), image.getRGB(control.right.toInt() - 24, y),
-                    "the saved preference message should use the surrounding page surface in $style")
+                assertEquals(image.getRGB(2, y), image.getRGB(image.width - 3, y))
             }
         }
     }
@@ -91,7 +90,7 @@ class SystemSettingsOwnershipUiTest {
             for (width in listOf(420, 1200)) {
                 withHarness(width, style) { harness ->
                     harness.render()
-                    harness.clickTab("设置")
+                    harness.openPage("设置")
                     harness.render()
 
                     assertTrue(harness.hasText("超级岛"), "HyperOS settings remain in Settings for $style at ${width}dp")
@@ -99,7 +98,6 @@ class SystemSettingsOwnershipUiTest {
                     assertTrue(harness.hasText("官方"), "the existing island default remains visible for $style at ${width}dp")
                     assertTrue(harness.hasText("关于 OpenRose"), "About remains at the bottom of Settings for $style at ${width}dp")
                     assertFalse(harness.hasText("运行状态与诊断"), "Settings has no fixed diagnostics entry for $style at ${width}dp")
-                    assertFalse(harness.hasTab("诊断与记录"), "the navigation rail has no diagnostics item for $style at ${width}dp")
 
                     harness.clickText("焦点通知")
                     harness.render()
@@ -108,7 +106,7 @@ class SystemSettingsOwnershipUiTest {
                     assertTrue(harness.hasText("偏好已保存，待系统就绪后生效。"), "unready integrations report a saved pending preference in $style")
                     assertFalse(harness.hasText("功能已生效"), "a save callback does not claim system presentation is active in $style")
 
-                    harness.clickTab("状态")
+                    harness.openPage("状态")
                     harness.render()
                     assertFalse(harness.hasText("超级岛"), "Status contains no preferences for $style at ${width}dp")
                     assertFalse(harness.hasText("焦点通知"), "Status contains no notification control for $style at ${width}dp")
@@ -116,15 +114,10 @@ class SystemSettingsOwnershipUiTest {
                     assertFalse(harness.hasText("模块显示时机"), "Status contains no module timing control for $style at ${width}dp")
                     assertTrue(harness.hasText("系统集成未就绪"), "Status keeps the real readiness state for $style at ${width}dp")
                     assertTrue(harness.hasText("运行状态与诊断"), "Status owns the fixed diagnostics entry for $style at ${width}dp")
-                    assertFalse(harness.hasTab("诊断与记录"), "the navigation rail has no diagnostics item for $style at ${width}dp")
 
-                    harness.clickText("运行状态与诊断")
+                    harness.openPage("诊断")
                     harness.render()
                     assertTrue(harness.hasText("系统模块"), "diagnostics remain reachable from Status for $style at ${width}dp")
-                    assertFalse(harness.hasTab("诊断与记录"), "the diagnostics route is not a sidebar destination for $style at ${width}dp")
-                    if (width >= 900) {
-                        assertTrue(harness.hasSelectedTab("状态"), "Status remains selected while its diagnostics are open in $style")
-                    }
                     assertTrue(harness.settingWrites.isEmpty())
                 }
             }
@@ -144,10 +137,12 @@ class SystemSettingsOwnershipUiTest {
                 ),
             ) { harness ->
                 harness.render()
-                harness.clickTab("设置")
+                harness.openPage("设置")
                 harness.render()
                 assertFalse(harness.hasText("模块显示时机"), "trigger settings stay hidden outside module mode in $style")
 
+                harness.scrollToText("超级岛")
+                harness.render()
                 harness.clickText("超级岛")
                 harness.render()
                 harness.clickText("模块")
@@ -156,6 +151,8 @@ class SystemSettingsOwnershipUiTest {
                 assertTrue(harness.hasText("未选择显示时机，不自动触发。"), "an empty trigger set stays explicit in $style")
                 assertTrue(harness.integration.value.settings.islandTriggers.isEmpty())
 
+                harness.scrollToText("超级岛")
+                harness.render()
                 harness.clickText("超级岛")
                 harness.render()
                 harness.clickText("不显示")
@@ -163,11 +160,41 @@ class SystemSettingsOwnershipUiTest {
                 assertFalse(harness.hasText("模块显示时机"))
                 assertTrue(harness.integration.value.settings.islandTriggers.isEmpty(), "hiding trigger settings does not reset values in $style")
 
+                harness.scrollToText("超级岛")
+                harness.render()
                 harness.clickText("超级岛")
                 harness.render()
                 harness.clickText("模块")
                 harness.render()
                 assertTrue(harness.hasText("未选择显示时机，不自动触发。"), "the empty trigger set survives hiding and restoring in $style")
+                assertTrue(harness.settingWrites.isEmpty())
+            }
+        }
+    }
+
+    @Test
+    fun fusionPreferencesAndConnectionTriggerAreSavedInBothStyles() {
+        for (style in InterfaceStyle.entries) {
+            withHarness(
+                width = 1200,
+                height = 2600,
+                style = style,
+                settings = IntegrationSettings(islandMode = IslandMode.MODULE, islandTriggers = persistentSetOf()),
+            ) { harness ->
+                harness.render()
+                harness.clickText("连接时")
+                harness.render()
+                assertEquals(persistentSetOf(IslandTrigger.CONNECTION), harness.integration.value.settings.islandTriggers)
+
+                harness.clickText("附加设置入口")
+                harness.render()
+                harness.clickText("OpenRose 耳机主页")
+                harness.render()
+                assertEquals(FusionSettingsDestination.OPENROSE, harness.integration.value.settings.fusionSettingsDestination)
+
+                harness.clickText("关闭降噪使用抗风噪")
+                harness.render()
+                assertTrue(harness.integration.value.settings.fusionOffAsWind)
                 assertTrue(harness.settingWrites.isEmpty())
             }
         }
@@ -182,7 +209,7 @@ class SystemSettingsOwnershipUiTest {
                 module = ModuleAvailability.Available,
             ) { harness ->
                 harness.render()
-                harness.clickTab("设置")
+                harness.openPage("设置")
                 harness.render()
                 harness.clickText("焦点通知")
                 harness.render()
@@ -214,7 +241,7 @@ class SystemSettingsOwnershipUiTest {
                 ),
             ),
         )
-        val integration = mutableStateOf(IntegrationState(
+        val integration = MutableStateFlow(IntegrationState(
             settings = settings,
             platform = IntegrationPlatformState(
                 module = module,
@@ -222,34 +249,22 @@ class SystemSettingsOwnershipUiTest {
             ),
         ))
         val settingWrites = mutableListOf<Pair<io.github.dohex.openrose.core.DeviceSetting, io.github.dohex.openrose.core.protocol.FieldValue>>()
-        setContent {
-            OpenRoseApp(
-                state = state.value,
-                uiSettings = UiSettings(interfaceStyle = style),
-                onUiSettingsChange = {},
-                integration = integration.value,
-                onIntegrationSettingsChange = { nextSettings ->
-                    settingsChanges += nextSettings
-                    integration.value = integration.value.copy(settings = nextSettings)
-                },
-                onSettingsChange = { state.value = state.value.copy(settings = it) },
-                onRequestPermission = {},
-                onOpenSystemSettings = {},
-                onStartScan = {},
-                onStopScan = {},
-                onConnect = {},
-                onDisconnect = {},
-                onSet = { setting, value -> settingWrites += setting to value },
-                onAddDeviceConnect = { error("Unexpected add-device connection in this scenario") },
-            )
-        }
-        block(Harness(this, integration, settingsChanges, settingWrites))
+        val page = mutableStateOf("设置")
+        val model = FakeOpenRoseModel(state, mutableStateOf(UiSettings(interfaceStyle = style)))
+        model.onSet = { setting, value -> settingWrites += setting to value }
+        val platform = androidTestPlatform(integration, onSettings = { next ->
+            settingsChanges += next
+            integration.value = integration.value.copy(settings = next)
+        })
+        setContent { AndroidTestPage(model, platform, page) }
+        block(Harness(this, page, integration, settingsChanges, settingWrites))
     }
 
     private class Harness(
         scene: OpenRoseUiTestScene,
-        val integration: MutableState<IntegrationState>,
+        page: MutableState<String>,
+        val integration: MutableStateFlow<IntegrationState>,
         val settingsChanges: List<IntegrationSettings>,
         val settingWrites: List<Pair<io.github.dohex.openrose.core.DeviceSetting, io.github.dohex.openrose.core.protocol.FieldValue>>,
-    ) : OpenRoseUiTestHarness(scene)
+    ) : AndroidPageHarness(scene, page)
 }

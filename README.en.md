@@ -176,7 +176,7 @@ Run the full check, which also includes Android Lint:
 
 `offlineCheck` still needs the Android SDK. Once dependencies are downloaded, add `--offline` to run without network access.
 
-UI tests run on a virtual clock, with test classes in parallel (half the available cores as forks).
+UI tests run on a virtual clock, with test classes in parallel (half the available cores as forks). Whole-app rendering covers navigation, cross-page flows, style-switch continuity, and main-tab swipes. Other tests render pages or sections with a fake presentation model in both component styles; Android-specific sections are tested in `androidIntegrationUI/`.
 
 Package the desktop app. Linux produces DEB, RPM, Pacman and AppImage (x64) and Windows produces an MSI; each host builds only the formats it supports, into `desktopApp/build/compose/binaries/main/`:
 
@@ -192,13 +192,16 @@ CI runs the tests on Linux only. Linux publishes the Android APK and the four Li
 | --- | --- |
 | `core/` | Model capabilities, protocol codecs, control sessions, the unified control entry (`ControlRuntime`), state, and control settings (force BLE) |
 | `androidIntegration/` | Android integration (pure Kotlin, tested on the JVM): control way and owner handoff, module host and client, IPC encoding, system entries, system presentation, Fusion Device Center mapping, background control, and their settings |
-| `sharedUI/` | Shared UI, Miuix / Material 3 components, appearance settings, and UI tests |
+| `sharedUI/` | Shared UI, presentation model and platform slots, Miuix / Material 3 components, appearance settings, and UI tests |
+| `androidIntegrationUI/` | Android-specific UI sections: control way, background control, integration status and diagnostics, permissions, and scope restart; KMP Android / JVM |
 | `androidApp/` | Android entry point, BLE / SPP transports, libxposed module, and HyperOS system bridge |
 | `desktopApp/` | Windows / Linux desktop entry point, windows, and preferences |
 | `build-logic/` | Gradle convention plugins shared by the modules: toolchain, JVM bytecode target, Android and desktop packaging setup |
 | `docs/` | Protocol research & model specifications (`docs/protocols/`), implementation evidence (`docs/protocols.md`), architecture decisions, and specifications |
 
 Each layer owns its settings codec and shares the platform's key-value store: control keys use `core.`, appearance keys use `sharedUI.`, and Android integration keys use `androidIntegration.`. The module host receives only control and integration settings. Old unprefixed keys are ignored without migration; preferences must be selected again when using this version.
+
+Both entry points create `RuntimeOpenRoseModel` outside composition, holding the control entry, settings store, and host coroutine scope, then pass it and `PlatformUi` to `OpenRoseApp`. Platforms supply sections and system actions through slots; shared UI never branches on platform names. Desktop depends only on shared UI and the control core, and explains the missing control transport on the status page and in the add-earphone flow.
 
 ## Documentation
 

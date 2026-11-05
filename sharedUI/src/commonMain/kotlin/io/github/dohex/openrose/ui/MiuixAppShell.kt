@@ -80,7 +80,6 @@ internal fun MiuixAppShell(
 @Composable
 private fun MiuixHeadphoneActions(
     connectedHome: Boolean,
-    showAddDeviceAction: Boolean,
     menuExpanded: Boolean,
     onMenuExpandedChange: (Boolean) -> Unit,
     onAddDevice: () -> Unit,
@@ -91,7 +90,7 @@ private fun MiuixHeadphoneActions(
             IconButton(onClick = { onMenuExpandedChange(true) }) {
                 Icon(RoseIcons[RoseIcon.MORE], "耳机菜单")
             }
-        } else if (showAddDeviceAction) {
+        } else {
             IconButton(onClick = onAddDevice) {
                 Icon(RoseIcons.Plus, "添加耳机")
             }
@@ -127,11 +126,10 @@ internal fun MiuixMainShell(
     pageContentFor: @Composable (AppPage) -> Unit,
     pageFeedbackFor: @Composable (AppPage) -> Unit = {},
     connectedHome: Boolean = false,
-    showAddDeviceAction: Boolean = true,
     menuExpanded: Boolean = false,
     onMenuExpandedChange: (Boolean) -> Unit = {},
     onDisconnect: () -> Unit = {},
-    scopeRestartAction: @Composable () -> Unit = {},
+    platformActions: @Composable (AppPage) -> Unit = {},
     pageTransition: PageTransition = PageTransition.MIUIX_SPRING,
 ) {
     LaunchedEffect(pagerState.pagerState.currentPage) {
@@ -238,11 +236,10 @@ internal fun MiuixMainShell(
                     val scrollBehavior = MiuixScrollBehavior()
                     val title = page.title
                     val actions: @Composable RowScope.() -> Unit = {
-                        if (page == AppPage.STATUS) scopeRestartAction()
+                        platformActions(page)
                         if (page == AppPage.HEADPHONES) {
                             MiuixHeadphoneActions(
                                 connectedHome = connectedHome,
-                                showAddDeviceAction = showAddDeviceAction,
                                 menuExpanded = menuExpanded,
                                 onMenuExpandedChange = onMenuExpandedChange,
                                 onAddDevice = { onNavigate(AppPage.ADD_DEVICE) },

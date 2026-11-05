@@ -3,6 +3,8 @@
 package io.github.dohex.openrose.ui
 
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.MutableState
+import kotlinx.coroutines.flow.MutableStateFlow
 import io.github.dohex.openrose.androidintegration.HandoffOutcome
 import io.github.dohex.openrose.androidintegration.ControlWay
 import io.github.dohex.openrose.androidintegration.IntegrationPlatformState
@@ -47,7 +49,7 @@ class ControlWayUiTest {
             integration(moduleUnavailable, OwnerState(selected = ControlWay.ORDINARY, readiness = OwnerReadiness.Starting)),
         )
         forEachStyle(starting) { harness ->
-            harness.openTab("状态")
+            harness.openPage("状态")
             assertTrue(harness.hasText("系统集成未就绪"), "the unready module is reported on the status page")
             assertTrue(harness.hasTag(ControlWayTags.readiness(OwnerReadiness.Starting)))
             assertFalse(harness.hasTag(ControlWayTags.readiness(OwnerReadiness.Ready)))
@@ -57,7 +59,7 @@ class ControlWayUiTest {
         )
         forEachStyle(moduleStarting) { harness ->
             assertTrue(harness.isTagSelected(ControlWayTags.option(ControlWay.MODULE)))
-            harness.openTab("状态")
+            harness.openPage("状态")
             assertFalse(harness.hasTag(ControlWayTags.readiness(OwnerReadiness.Ready)))
         }
     }
@@ -72,7 +74,7 @@ class ControlWayUiTest {
         )
         forEachStyle(state) { harness ->
             assertTrue(harness.isTagSelected(ControlWayTags.option(ControlWay.MODULE)))
-            harness.openTab("状态")
+            harness.openPage("状态")
             assertTrue(harness.hasTag(ControlWayTags.readiness(unavailable)))
             assertTrue(harness.hasTag(ControlWayTags.failureStage(OwnerFailureStage.DISCOVERY)))
             assertTrue(harness.hasText(reason))
@@ -101,11 +103,11 @@ class ControlWayUiTest {
         )
         forEachStyle(state) { harness ->
             assertTrue(harness.isTagSelected(ControlWayTags.option(ControlWay.MODULE)))
-            harness.openTab("状态")
+            harness.openPage("状态")
             assertTrue(harness.hasTag(ControlWayTags.readiness(OwnerReadiness.Ready)))
             assertTrue(harness.hasTag(ControlWayTags.connection(connection)))
             assertFalse(harness.hasTag(ControlWayTags.HOLDER), "holder details stay off the status page")
-            harness.clickText("运行状态与诊断")
+            harness.openPage("诊断")
             harness.render()
             val shown = harness.tagTexts(ControlWayTags.HOLDER)
             for (fact in listOf(holder.packageName, holder.processName, holder.generation.toString(), "1002", "4321")) {
@@ -145,7 +147,7 @@ class ControlWayUiTest {
             assertEquals(ControlWay.MODULE, harness.host.integration.value.owner.selected)
             assertTrue(harness.isTagSelected(ControlWayTags.option(ControlWay.MODULE)))
             assertFalse(harness.isTagSelected(ControlWayTags.option(ControlWay.ORDINARY)))
-            harness.openTab("状态")
+            harness.openPage("状态")
             assertTrue(harness.hasTag(ControlWayTags.readiness(OwnerReadiness.Starting)))
         }
     }
@@ -164,7 +166,7 @@ class ControlWayUiTest {
             assertTrue(harness.isTagClickable(ControlWayTags.option(ControlWay.ORDINARY)))
             assertTrue(harness.isTagClickable(ControlWayTags.option(ControlWay.MODULE)))
             assertFalse(harness.hasText(reason), "settings does not repeat the failure reason")
-            harness.openTab("状态")
+            harness.openPage("状态")
             assertTrue(harness.hasTag(ControlWayTags.readiness(blocked)))
             assertTrue(harness.hasTag(ControlWayTags.failureStage(OwnerFailureStage.RELEASE)))
             assertTrue(harness.hasText(reason))
@@ -190,7 +192,7 @@ class ControlWayUiTest {
         )
         forEachStyle(state, page = "状态") { harness ->
             assertFalse(harness.hasTag(ControlWayTags.LAST_HANDOFF), "the status page does not list past handoffs")
-            harness.clickText("运行状态与诊断")
+            harness.openPage("诊断")
             harness.render()
             assertTrue(harness.hasTag(ControlWayTags.LAST_HANDOFF))
             assertTrue(harness.hasTag(ControlWayTags.failureStage(OwnerFailureStage.SELECTION_PERSISTENCE)))
@@ -213,7 +215,7 @@ class ControlWayUiTest {
             ),
         )
         forEachStyle(state, page = "状态") { harness ->
-            harness.clickText("运行状态与诊断")
+            harness.openPage("诊断")
             harness.render()
             assertFalse(harness.hasTag(ControlWayTags.LAST_HANDOFF))
         }
@@ -234,47 +236,25 @@ class ControlWayUiTest {
             assertFalse(harness.isTagClickable(ControlWayTags.option(ControlWay.MODULE)))
             assertFalse(harness.isTagClickable(ControlWayTags.option(ControlWay.ORDINARY)))
             assertEquals(ControlWay.ORDINARY, harness.host.integration.value.owner.selected, "a disabled choice selects nothing")
-            harness.openTab("状态")
+            harness.openPage("状态")
             assertTrue(harness.hasTag(ControlWayTags.readiness(switching)))
             assertFalse(harness.hasTag(ControlWayTags.readiness(OwnerReadiness.Ready)))
         }
     }
 
     @Test
-    fun hostsWithoutAModuleChoiceOfferNoControlWayUiAndNoTapPathToIt() {
-        val moduleSelected = OwnerState(selected = ControlWay.MODULE, readiness = OwnerReadiness.Ready)
-        for (host in listOf(HostPlatform.WINDOWS, HostPlatform.LINUX, HostPlatform.UNKNOWN)) {
-            // The callbacks are wired on purpose: only the host's capability may hide the card.
-            val desktop = Scenario(
-                ControlState(platform = desktopPlatform(host)),
-                IntegrationState(
-                    platform = IntegrationPlatformState(
-                        module = ModuleAvailability.Available,
-                        systemIntegrationApplicability = PlatformApplicability.NOT_APPLICABLE,
-                    ),
-                    owner = moduleSelected,
-                ),
-            )
-            forEachStyle(desktop) { harness ->
-                assertFalse(harness.hasTagWithPrefix(ControlWayTags.PREFIX), "no control-way node in Settings on $host")
-                harness.openTab("状态")
-                assertFalse(harness.hasTagWithPrefix(ControlWayTags.PREFIX), "no control-way node in Status on $host")
-                assertEquals(moduleSelected, harness.host.integration.value.owner, "no control-way input reached the owner on $host")
+    fun basicPlatformsDoNotExposeControlWay() {
+        for (style in InterfaceStyle.entries) {
+            runOpenRoseUiTest(1200, 1000) {
+                val page = mutableStateOf("设置")
+                val model = FakeOpenRoseModel(mutableUiSettings = mutableStateOf(UiSettings(interfaceStyle = style)))
+                setContent { AndroidTestPage(model, BasicPlatformUi("Linux"), page) }
+                val harness = AndroidPageHarness(this, page)
+                harness.render()
+                assertFalse(harness.hasTagWithPrefix(ControlWayTags.PREFIX))
+                harness.openPage("状态")
+                assertFalse(harness.hasTagWithPrefix(ControlWayTags.PREFIX))
             }
-        }
-        val android = Scenario(ControlState(platform = platform()), integration(ModuleAvailability.Available, moduleSelected))
-        forEachStyle(android) { harness ->
-            assertTrue(harness.hasTag(ControlWayTags.CARD), "the same state does offer the choice on Android")
-        }
-    }
-
-    @Test
-    fun aHostThatCannotActOnTheChoiceNeverShowsAnInertCard() {
-        val android = Scenario(ControlState(platform = platform()), integration(ModuleAvailability.Available))
-        forEachStyle(android, wired = false) { harness ->
-            assertFalse(harness.hasTagWithPrefix(ControlWayTags.PREFIX), "no inert choice in Settings")
-            harness.openTab("状态")
-            assertTrue(harness.hasTag(ControlWayTags.connection(ConnectionState.Disconnected)), "Status still reports the connection")
         }
     }
 
@@ -296,19 +276,13 @@ class ControlWayUiTest {
         owner = owner,
     )
 
-    private fun desktopPlatform(host: HostPlatform) = PlatformState(
-        permission = PermissionState.NOT_REQUIRED,
-        transport = TransportAvailability.Unavailable("fixture: no desktop transport"),
-        hostPlatform = host,
-        controlTransportApplicability = PlatformApplicability.NOT_APPLICABLE,
-    )
 
-    private fun forEachStyle(base: Scenario, wired: Boolean = true, page: String = "设置", check: suspend (Harness) -> Unit) {
+    private fun forEachStyle(base: Scenario, page: String = "设置", check: suspend (Harness) -> Unit) {
         for (style in InterfaceStyle.entries) {
-            withHarness(base, style, wired) { harness ->
+            withHarness(base, style) { harness ->
                 try {
                     harness.render()
-                    harness.openTab(page)
+                    harness.openPage(page)
                     check(harness)
                 } catch (failure: Throwable) {
                     throw AssertionError("style $style: ${failure.message}", failure)
@@ -317,28 +291,13 @@ class ControlWayUiTest {
         }
     }
 
-    private fun withHarness(initial: Scenario, style: InterfaceStyle, wired: Boolean, block: suspend (Harness) -> Unit) = runOpenRoseUiTest(1200, 1000) {
+    private fun withHarness(initial: Scenario, style: InterfaceStyle, block: suspend (Harness) -> Unit) = runOpenRoseUiTest(1200, 1000) {
         val host = FakeOwnerHost(initial)
-        setContent {
-            OpenRoseApp(
-                state = host.state.value,
-                uiSettings = UiSettings(interfaceStyle = style),
-                onUiSettingsChange = {},
-                onIntegrationSettingsChange = { host.integration.value = host.integration.value.copy(settings = it) },
-                integration = host.integration.value,
-                onSettingsChange = {},
-                onRequestPermission = {},
-                onOpenSystemSettings = {},
-                onStartScan = {},
-                onStopScan = {},
-                onConnect = {},
-                onDisconnect = {},
-                onSet = { _, _ -> },
-                onAddDeviceConnect = { error("Unexpected add-device connection in this scenario") },
-                onSelectControlWay = if (wired) host::selectControlWay else null,
-            )
-        }
-        block(Harness(this, host))
+        val page = mutableStateOf("设置")
+        val model = FakeOpenRoseModel(host.state, mutableStateOf(UiSettings(interfaceStyle = style)))
+        val platform = androidTestPlatform(host.integration, onSelect = host::selectControlWay)
+        setContent { AndroidTestPage(model, platform, page) }
+        block(Harness(this, page, host))
     }
 
     /**
@@ -347,17 +306,13 @@ class ControlWayUiTest {
      */
     private class FakeOwnerHost(initial: Scenario) {
         val state = mutableStateOf(initial.control)
-        val integration = mutableStateOf(initial.integration)
+        val integration = MutableStateFlow(initial.integration)
 
         fun selectControlWay(way: ControlWay) {
             integration.value = integration.value.copy(owner = OwnerState(selected = way, readiness = OwnerReadiness.Starting))
         }
     }
 
-    private class Harness(scene: OpenRoseUiTestScene, val host: FakeOwnerHost) : OpenRoseUiTestHarness(scene)
+    private class Harness(scene: OpenRoseUiTestScene, page: MutableState<String>, val host: FakeOwnerHost) : AndroidPageHarness(scene, page)
 }
 
-private fun OpenRoseUiTestHarness.openTab(label: String) {
-    clickTab(label)
-    render()
-}

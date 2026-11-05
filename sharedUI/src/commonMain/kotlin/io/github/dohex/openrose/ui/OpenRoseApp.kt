@@ -11,16 +11,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.unit.dp
-import io.github.dohex.openrose.androidintegration.ControlWay
-import io.github.dohex.openrose.androidintegration.IntegrationSettings
-import io.github.dohex.openrose.androidintegration.IntegrationPlatformState
-import io.github.dohex.openrose.androidintegration.IntegrationState
-import io.github.dohex.openrose.androidintegration.ModuleAvailability
 import io.github.dohex.openrose.core.*
-import io.github.dohex.openrose.core.protocol.FieldValue
-import io.github.dohex.openrose.core.transport.DeviceId
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.launch
+import io.github.dohex.openrose.ui.model.OpenRoseModel
 import top.yukonga.miuix.kmp.nav.core.NavDisplay
 import top.yukonga.miuix.kmp.nav.core.rememberNavBackStack
 import top.yukonga.miuix.kmp.nav.transition.NavSwipeDirection
@@ -36,13 +28,6 @@ internal enum class AppPage(val title: String, val icon: RoseIcon) {
     DIAGNOSTICS("诊断与记录", RoseIcon.LOG),
 }
 
-/** What a host without Android integration (desktop) reports: no system module, integration not applicable. */
-private val NoAndroidIntegration = IntegrationState(
-    platform = IntegrationPlatformState(
-        module = ModuleAvailability.Unavailable("HyperOS 系统集成仅适用于 Android"),
-        systemIntegrationApplicability = PlatformApplicability.NOT_APPLICABLE,
-    ),
-)
 
 internal val mainPages = listOf(AppPage.HEADPHONES, AppPage.STATUS, AppPage.SETTINGS)
 
@@ -50,35 +35,15 @@ internal val mainPages = listOf(AppPage.HEADPHONES, AppPage.STATUS, AppPage.SETT
  * The host remains the sole owner of the control session and transport. */
 @Composable
 fun OpenRoseApp(
-    state: ControlState,
-    uiSettings: UiSettings,
-    onUiSettingsChange: (UiSettings) -> Unit,
-    onIntegrationSettingsChange: (IntegrationSettings) -> Unit = {},
-    /** Null on hosts without Android integration. */
-    integration: IntegrationState? = null,
-    onSettingsChange: (UserSettings) -> Unit,
-    onRequestPermission: () -> Unit,
-    onOpenSystemSettings: () -> Unit,
-    onStartScan: () -> Unit,
-    onStopScan: () -> Unit,
-    onConnect: (DeviceId) -> Unit,
-    onDisconnect: () -> Unit,
-    onSet: (DeviceSetting, FieldValue) -> Unit,
-    onAddDeviceConnect: suspend (DeviceId) -> OperationResult,
+    model: OpenRoseModel,
+    platformUi: PlatformUi,
     modifier: Modifier = Modifier,
-    homeNavigationRequest: Long = 0L,
-    onRequestNotificationPermission: () -> Unit = {},
-    onRequestAssociation: () -> Unit = {},
-    onOpenAppSettings: () -> Unit = {},
-    onRestartIntegrationScopes: suspend () -> List<ScopeRestartResult> = {
-        INTEGRATION_SCOPE_PACKAGES.map {
-            ScopeRestartResult(it, ScopeRestartStatus.FAILED, "平台操作不可用")
-        }
-    },
-    // Null on hosts without an ordinary/module choice: the control-way card is then absent instead of inert.
-    onSelectControlWay: ((ControlWay) -> Unit)? = null,
 ) {
-    val integrationState = integration ?: NoAndroidIntegration
+    val state by model.state.collectAsState()
+    val uiSettings by model.uiSettings.collectAsState()
+    val homeNavigationRequest by model.homeNavigationRequest.collectAsState()
+    val onDisconnect = model::disconnect
+    val onSet = model::set
     val dark = when (uiSettings.appearance) {
         Appearance.SYSTEM -> isSystemInDarkTheme()
         Appearance.LIGHT -> false
@@ -98,10 +63,6 @@ fun OpenRoseApp(
     var headphoneMenuExpanded by remember { mutableStateOf(false) }
     val rootFocusRequester = remember { FocusRequester() }
     val choiceDialog = remember(state.device?.sessionId) { mutableStateOf<String?>(null) }
-    val restartScope = rememberCoroutineScope()
-    var restartConfirming by remember { mutableStateOf(false) }
-    var restartRunning by remember { mutableStateOf(false) }
-    var restartResults by remember { mutableStateOf<List<ScopeRestartResult>?>(null) }
     var selectedTouchSide by remember(state.device?.sessionId) { mutableStateOf<String?>(null) }
     LaunchedEffect(homeNavigationRequest) {
         if (homeNavigationRequest != 0L) {
@@ -156,9 +117,9 @@ fun OpenRoseApp(
     val addDeviceFlow = rememberAddDeviceFlow(
         active = currentRoute is Route.AddDevice,
         state = state,
-        onStartScan = onStartScan,
-        onStopScan = onStopScan,
-        onConnect = onAddDeviceConnect,
+        onStartScan = model::startScan,
+        onStopScan = model::stopScan,
+        onConnect = model::connectForAddDevice,
         onReady = { navigate(AppPage.HEADPHONES) },
     )
     LaunchedEffect(state.connection, page) {
@@ -185,25 +146,15 @@ fun OpenRoseApp(
                 val pageContentFor: @Composable (AppPage) -> Unit = { targetPage ->
                     val device = state.activeDevice()
                     when (targetPage) {
-                        AppPage.HEADPHONES -> HeadphonesPage(
-                            state,
-                            onNavigate,
-                            onRequestPermission,
-                            onOpenSystemSettings,
-                            onStartScan,
-                            onStopScan,
-                            onConnect,
-                            onDisconnect,
-                            onSet,
-                        )
+                        AppPage.HEADPHONES -> HeadphonesPage(model, platformUi, onNavigate)
                         AppPage.ADD_DEVICE -> AddDeviceContent(
                             state = state,
                             canScan = state.canSearchForHeadphones(),
                             selectedDeviceId = addDeviceFlow.selectedDeviceId,
                             connectionPhase = addDeviceFlow.phase(state.connection),
                             connectionError = addDeviceFlow.connectionError,
-                            onRequestPermission = onRequestPermission,
-                            onOpenSystemSettings = onOpenSystemSettings,
+                            onRequestPermission = platformUi.requestBluetoothPermission,
+                            onOpenSystemSettings = platformUi.openBluetoothSettings,
                             onStartScan = addDeviceFlow::startSearch,
                             onStopScan = addDeviceFlow::stopSearch,
                             onConnect = addDeviceFlow::connect,
@@ -211,28 +162,13 @@ fun OpenRoseApp(
                             onDiagnostics = { navigate(AppPage.DIAGNOSTICS) },
                         )
                         AppPage.STATUS -> StatusPage(
-                            state = state,
-                            integration = integrationState,
-                            onRequestPermission = onRequestPermission,
-                            onOpenSystemSettings = onOpenSystemSettings,
+                            model = model,
+                            platformUi = platformUi,
                             onDiagnostics = { navigate(AppPage.DIAGNOSTICS) },
                         )
-                        AppPage.SETTINGS -> PreferencesPage(
-                            state = state,
-                            integration = integrationState,
-                            uiSettings = uiSettings,
-                            onChange = onSettingsChange,
-                            onUiSettingsChange = onUiSettingsChange,
-                            onIntegrationSettingsChange = onIntegrationSettingsChange,
-                            onRequestPermission = onRequestPermission,
-                            onRequestNotificationPermission = onRequestNotificationPermission,
-                            onRequestAssociation = onRequestAssociation,
-                            onOpenAppSettings = onOpenAppSettings,
-                            onSelectControlWay = onSelectControlWay,
-                        )
+                        AppPage.SETTINGS -> PreferencesPage(model, platformUi)
                         AppPage.DIAGNOSTICS -> {
-                            PlatformDiagnosticsCard(state.platform, integrationState.platform, onRequestPermission, onOpenSystemSettings)
-                            if (state.controlWayApplicable()) ControlOwnerDiagnostics(integrationState)
+                            PlatformDiagnosticsCard(model, platformUi)
                             ConnectionDetailsCard(state, onDisconnect)
                             SettingOperationsCard(state)
                             device?.let { DeviceReadings(it, state.connection.phaseOrNull() == ConnectionPhase.INITIALIZING) }
@@ -312,38 +248,13 @@ fun OpenRoseApp(
                 val renderMainShell: @Composable () -> Unit = {
                     ProvideInterfaceStyle(uiSettings.interfaceStyle, dark) {
                         val isConnectedHome = state.activeDevice() != null
-                        val showAdd = !state.platform.transportUnavailableForHome()
                         val pageTransition = uiSettings.pageTransition
                         val onNavigate: (AppPage) -> Unit = { navigate(it) }
-                        val scopeRestartAction: @Composable () -> Unit = {
-                            if (state.platform.hostPlatform == HostPlatform.ANDROID) {
-                                ScopeRestartAction(
-                                    running = restartRunning,
-                                    confirming = restartConfirming,
-                                    results = restartResults,
-                                    onOpen = { restartResults = null; restartConfirming = true },
-                                    onCancel = { restartConfirming = false },
-                                    onConfirm = {
-                                        if (!restartRunning) {
-                                            restartConfirming = false
-                                            restartRunning = true
-                                            restartScope.launch {
-                                                try {
-                                                    restartResults = onRestartIntegrationScopes()
-                                                } catch (cancelled: CancellationException) {
-                                                    throw cancelled
-                                                } catch (failure: Exception) {
-                                                    restartResults = INTEGRATION_SCOPE_PACKAGES.map {
-                                                        ScopeRestartResult(it, ScopeRestartStatus.FAILED, failure.message ?: "操作失败")
-                                                    }
-                                                } finally {
-                                                    restartRunning = false
-                                                }
-                                            }
-                                        }
-                                    },
-                                    onCloseResults = { restartResults = null },
-                                )
+                        val platformActions: @Composable (AppPage) -> Unit = { actionPage ->
+                            when (actionPage) {
+                                AppPage.STATUS -> platformUi.StatusActions()
+                                AppPage.HEADPHONES -> platformUi.HeadphoneActions()
+                                else -> Unit
                             }
                         }
 
@@ -357,11 +268,10 @@ fun OpenRoseApp(
                                 pageContentFor = { targetPage -> pageContentFor(targetPage) },
                                 pageFeedbackFor = { targetPage -> feedbackContentFor(targetPage) },
                                 connectedHome = isConnectedHome,
-                                showAddDeviceAction = showAdd,
                                 menuExpanded = headphoneMenuExpanded,
                                 onMenuExpandedChange = { headphoneMenuExpanded = it },
                                 onDisconnect = onDisconnect,
-                                scopeRestartAction = scopeRestartAction,
+                                platformActions = platformActions,
                                 pageTransition = pageTransition,
                             )
                             InterfaceStyle.MATERIAL3 -> MaterialMainShell(
@@ -373,11 +283,10 @@ fun OpenRoseApp(
                                 pageContentFor = { targetPage -> pageContentFor(targetPage) },
                                 pageFeedbackFor = { targetPage -> feedbackContentFor(targetPage) },
                                 connectedHome = isConnectedHome,
-                                showAddDeviceAction = showAdd,
                                 menuExpanded = headphoneMenuExpanded,
                                 onMenuExpandedChange = { headphoneMenuExpanded = it },
                                 onDisconnect = onDisconnect,
-                                scopeRestartAction = scopeRestartAction,
+                                platformActions = platformActions,
                                 pageTransition = pageTransition,
                             )
                         }

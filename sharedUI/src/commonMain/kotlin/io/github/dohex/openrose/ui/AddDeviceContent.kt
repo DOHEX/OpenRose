@@ -45,8 +45,8 @@ internal fun AddDeviceContent(
     selectedDeviceId: DeviceId?,
     connectionPhase: ConnectionPhase?,
     connectionError: ControlError?,
-    onRequestPermission: () -> Unit,
-    onOpenSystemSettings: () -> Unit,
+    onRequestPermission: (() -> Unit)?,
+    onOpenSystemSettings: (() -> Unit)?,
     onStartScan: () -> Unit,
     onStopScan: () -> Unit,
     onConnect: (DeviceId) -> Unit,
@@ -143,7 +143,7 @@ internal fun AddDeviceContent(
                     if (troubleshootingExpanded) {
                         AppText("排查指引", role = AppTextRole.Title)
                         AppText("1. 打开充电盒，确认耳机已开启且有电。\n2. 按耳机说明进入配对模式。\n3. 将耳机靠近当前设备，然后重新搜索。", role = AppTextRole.Summary)
-                        AppButton("打开蓝牙设置", onOpenSystemSettings, kind = AppButtonKind.Secondary)
+                        onOpenSystemSettings?.let { AppButton("打开蓝牙设置", it, kind = AppButtonKind.Secondary) }
                         AppButton("诊断详情", onDiagnostics, kind = AppButtonKind.Secondary)
                         if (canScan && supported.isNotEmpty()) {
                             AppText("设备识别信息", role = AppTextRole.Title)
@@ -258,20 +258,20 @@ private fun AddDeviceHero(scanning: Boolean) {
 @Composable
 private fun AddDevicePrerequisite(
     state: ControlState,
-    onRequestPermission: () -> Unit,
-    onOpenSystemSettings: () -> Unit,
+    onRequestPermission: (() -> Unit)?,
+    onOpenSystemSettings: (() -> Unit)?,
 ) {
     AppDashboardCard {
         when {
             state.platform.permission == PermissionState.REQUIRED || state.platform.permission == PermissionState.DENIED -> {
                 AppText("需要蓝牙权限", role = AppTextRole.Title)
                 AppText("允许访问附近设备后，才能搜索并连接耳机。", role = AppTextRole.Summary)
-                AppButton("授予蓝牙权限", onRequestPermission)
+                onRequestPermission?.let { AppButton("授予蓝牙权限", it) }
             }
             state.platform.transport == TransportAvailability.Disabled -> {
                 AppText("系统蓝牙已关闭", role = AppTextRole.Title)
                 AppText("请先在系统设置中打开蓝牙，再回来搜索耳机。", role = AppTextRole.Summary)
-                AppButton("打开蓝牙设置", onOpenSystemSettings)
+                onOpenSystemSettings?.let { AppButton("打开蓝牙设置", it) }
             }
             else -> {
                 AppText("蓝牙传输不可用", role = AppTextRole.Title)

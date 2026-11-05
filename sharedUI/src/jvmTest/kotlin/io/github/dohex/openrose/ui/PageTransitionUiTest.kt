@@ -13,14 +13,12 @@ class PageTransitionUiTest {
     @Test
     fun pageTransitionChoiceRowAppearsAndDispatchesChanges() {
         for (style in InterfaceStyle.entries) {
-            withOpenRoseAppHarness(
+            withPreferencesHarness(
                 ControlState(
                     platform = PlatformState(permission = PermissionState.GRANTED),
                 ),
                 initialUiSettings = UiSettings(interfaceStyle = style, pageTransition = PageTransition.MIUIX_SPRING),
             ) { harness ->
-                harness.render()
-                harness.clickTab("设置")
                 harness.render()
 
                 assertTrue(harness.hasText("转场动效"), "transition choice row must appear in Settings for $style")

@@ -2,6 +2,11 @@
 
 package io.github.dohex.openrose.ui
 
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.Column
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.Modifier
 import io.github.dohex.openrose.core.*
 import kotlin.test.Test
 import kotlin.test.assertFalse
@@ -12,7 +17,7 @@ class BackgroundBlurUiTest {
     @Test
     fun backgroundBlurSettingRowRendersAndToggles() {
         for (style in InterfaceStyle.entries) {
-            withOpenRoseAppHarness(
+            withPreferencesHarness(
                 ControlState(
                     platform = PlatformState(PermissionState.GRANTED),
                 ),
@@ -22,8 +27,6 @@ class BackgroundBlurUiTest {
                     backgroundBlurEnabled = true,
                 ),
             ) { harness ->
-                harness.render()
-                harness.clickTab("设置")
                 harness.render()
 
                 assertTrue(harness.hasText("背景模糊"), "Settings page must render Background Blur preference in $style")
@@ -39,4 +42,23 @@ class BackgroundBlurUiTest {
             }
         }
     }
+}
+
+internal fun withPreferencesHarness(
+    initialState: ControlState,
+    initialUiSettings: UiSettings = UiSettings(),
+    block: suspend (OpenRoseAppHarness) -> Unit,
+) = runOpenRoseUiTest(420, 900) {
+    val state = mutableStateOf(initialState)
+    val uiSettings = mutableStateOf(initialUiSettings)
+    val model = FakeOpenRoseModel(state, uiSettings)
+    val platformUi = BasicPlatformUi("Test")
+    setContent {
+        TestPageContent(uiSettings.value.interfaceStyle, dark = uiSettings.value.appearance == Appearance.DARK) {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
+                PreferencesPage(model, platformUi)
+            }
+        }
+    }
+    block(OpenRoseAppHarness(this, state, uiSettings, model))
 }

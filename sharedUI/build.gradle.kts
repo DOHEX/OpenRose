@@ -13,8 +13,6 @@ kotlin {
         }
         commonMain.dependencies {
             api(projects.core)
-            // Transitional until the Android sections move to :androidIntegrationUI (#89).
-            api(projects.androidIntegration)
             implementation(libs.compose.runtime)
             implementation(libs.compose.foundation)
             implementation(libs.compose.ui)
@@ -31,14 +29,16 @@ kotlin {
             implementation(libs.coroutines.test)
             implementation(libs.compose.ui.test)
         }
-        jvmTest.dependencies {
-            implementation(compose.desktop.currentOs)
+        jvmTest {
+            kotlin.srcDir("src/jvmTestFixtures/kotlin")
+            dependencies { implementation(compose.desktop.currentOs) }
         }
     }
 }
 
 compose.resources {
     packageOfResClass = "io.github.dohex.openrose.ui.resources"
+    publicResClass = true
 }
 
 tasks.withType<Test>().configureEach {

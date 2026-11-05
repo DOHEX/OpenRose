@@ -44,17 +44,17 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.theme.darkColorScheme as miuixDarkColorScheme
 import top.yukonga.miuix.kmp.theme.lightColorScheme as miuixLightColorScheme
 
-internal val LocalInterfaceStyle = staticCompositionLocalOf { InterfaceStyle.MIUIX }
+val LocalInterfaceStyle = staticCompositionLocalOf { InterfaceStyle.MIUIX }
 // Owned above the style branch so an open picker survives component replacement.
 internal val LocalChoiceDialog = staticCompositionLocalOf<MutableState<String?>?> { null }
 internal val LocalInDashboardCard = staticCompositionLocalOf { false }
-internal enum class AppColorRole { Primary, OnSurface, Summary, Error, Divider, SelectedContainer, SelectedContent, DisabledContent }
-internal enum class AppTextRole { Display, Title, Body, Summary, Footnote }
-internal enum class AppButtonKind { Primary, Secondary }
-internal data class AppOption<T>(val value: T, val label: String, val contentDescription: String? = null, val testTag: String? = null)
+enum class AppColorRole { Primary, OnSurface, Summary, Error, Divider, SelectedContainer, SelectedContent, DisabledContent }
+enum class AppTextRole { Display, Title, Body, Summary, Footnote }
+enum class AppButtonKind { Primary, Secondary }
+data class AppOption<T>(val value: T, val label: String, val contentDescription: String? = null, val testTag: String? = null)
 
 @Composable
-internal fun appColor(role: AppColorRole): Color = when (LocalInterfaceStyle.current) {
+fun appColor(role: AppColorRole): Color = when (LocalInterfaceStyle.current) {
     InterfaceStyle.MIUIX -> with(MiuixTheme.colorScheme) {
         when (role) {
             AppColorRole.Primary -> primary
@@ -82,7 +82,7 @@ internal fun appColor(role: AppColorRole): Color = when (LocalInterfaceStyle.cur
 }
 
 @Composable
-internal fun ProvideInterfaceStyle(style: InterfaceStyle, dark: Boolean, content: @Composable () -> Unit) {
+fun ProvideInterfaceStyle(style: InterfaceStyle, dark: Boolean, content: @Composable () -> Unit) {
     CompositionLocalProvider(LocalInterfaceStyle provides style) {
         when (style) {
             InterfaceStyle.MIUIX -> MiuixTheme(colors = miuixColors(dark), content = content)
@@ -117,7 +117,7 @@ private fun materialColors(dark: Boolean) = if (dark) {
 }
 
 @Composable
-internal fun AppText(text: String, modifier: Modifier = Modifier, role: AppTextRole = AppTextRole.Body, color: Color? = null) {
+fun AppText(text: String, modifier: Modifier = Modifier, role: AppTextRole = AppTextRole.Body, color: Color? = null) {
     val textModifier = if (role == AppTextRole.Display || role == AppTextRole.Title) modifier.semantics { heading() } else modifier
     val textColor = color ?: appColor(if (role == AppTextRole.Summary || role == AppTextRole.Footnote) AppColorRole.Summary else AppColorRole.OnSurface)
     when (LocalInterfaceStyle.current) {
@@ -143,7 +143,7 @@ internal fun AppText(text: String, modifier: Modifier = Modifier, role: AppTextR
 }
 
 @Composable
-internal fun AppGroup(
+fun AppGroup(
     title: String? = null,
     header: (@Composable () -> Unit)? = null,
     footnote: String? = null,
@@ -236,7 +236,7 @@ internal fun AppDashboardCard(
     }
 }
 
-internal enum class AppStatusKind { Good, Caution, Error }
+enum class AppStatusKind { Good, Caution, Error }
 
 @Composable
 private fun statusAccent(kind: AppStatusKind): Color = when (kind) {
@@ -251,7 +251,7 @@ private fun statusAccent(kind: AppStatusKind): Color = when (kind) {
  * Both interface styles share this body so the verdict reads the same in either.
  */
 @Composable
-internal fun AppStatusCard(
+fun AppStatusCard(
     kind: AppStatusKind,
     icon: RoseIcon,
     title: String,
@@ -282,7 +282,7 @@ private fun rowColors(): ListItemColors = if (LocalInDashboardCard.current) List
 private fun iconAction(icon: RoseIcon?): (@Composable () -> Unit)? = icon?.let { { AppIcon(it) } }
 
 @Composable
-internal fun AppArrowRow(title: String, summary: String? = null, value: String? = null, icon: RoseIcon? = null, onClick: () -> Unit) {
+fun AppArrowRow(title: String, summary: String? = null, value: String? = null, icon: RoseIcon? = null, onClick: () -> Unit) {
     when (LocalInterfaceStyle.current) {
         InterfaceStyle.MIUIX -> ArrowPreference(title, summary = summary, startAction = iconAction(icon), endActions = { value?.let { AppText(it, role = AppTextRole.Summary) } }, onClick = onClick)
         InterfaceStyle.MATERIAL3 -> ListItem(
@@ -294,7 +294,7 @@ internal fun AppArrowRow(title: String, summary: String? = null, value: String? 
 }
 
 @Composable
-internal fun AppInfoRow(label: String, value: String, valueColor: Color? = null) {
+fun AppInfoRow(label: String, value: String, valueColor: Color? = null) {
     when (LocalInterfaceStyle.current) {
         InterfaceStyle.MIUIX -> if (valueColor != null) BasicComponent(title = label, bottomAction = { AppText(value, role = AppTextRole.Summary, color = valueColor) })
             else if (value.length > 32 || '\n' in value) BasicComponent(title = label, summary = value)
@@ -304,7 +304,7 @@ internal fun AppInfoRow(label: String, value: String, valueColor: Color? = null)
 }
 
 @Composable
-internal fun AppSwitchRow(
+fun AppSwitchRow(
     title: String,
     summary: String? = null,
     checked: Boolean,
@@ -333,7 +333,7 @@ internal fun AppSwitchRow(
 }
 
 @Composable
-internal fun <T> AppRadioGroup(options: List<AppOption<T>>, selected: T?, enabled: Boolean = true, transparentContainer: Boolean = false, onSelect: (T) -> Unit) {
+fun <T> AppRadioGroup(options: List<AppOption<T>>, selected: T?, enabled: Boolean = true, transparentContainer: Boolean = false, onSelect: (T) -> Unit) {
     Column(Modifier.selectableGroup()) {
         options.forEach { option ->
             val optionModifier = Modifier.semantics {
@@ -354,7 +354,7 @@ internal fun <T> AppRadioGroup(options: List<AppOption<T>>, selected: T?, enable
 }
 
 @Composable
-internal fun <T> AppChoiceRow(title: String, valueText: String, options: List<AppOption<T>>, selected: T?, enabled: Boolean = true,
+fun <T> AppChoiceRow(title: String, valueText: String, options: List<AppOption<T>>, selected: T?, enabled: Boolean = true,
     id: String = title, open: Boolean? = null, onOpenChange: ((Boolean) -> Unit)? = null, icon: RoseIcon? = null, onSelect: (T) -> Unit) {
     val shared = LocalChoiceDialog.current
     val local = remember { mutableStateOf<String?>(null) }
@@ -544,7 +544,7 @@ internal fun AppViewTabs(tabs: List<String>, index: Int, modifier: Modifier = Mo
 }
 
 @Composable
-internal fun <T> AppCheckGroup(options: List<AppOption<T>>, checked: Set<T>, enabledFor: (T) -> Boolean, onToggle: (T) -> Unit) {
+fun <T> AppCheckGroup(options: List<AppOption<T>>, checked: Set<T>, enabledFor: (T) -> Boolean, onToggle: (T) -> Unit) {
     Column {
         options.forEach { option ->
             val enabled = enabledFor(option.value)
@@ -578,7 +578,7 @@ internal fun AppSliderRow(label: String, valueText: String, value: Float, range:
 }
 
 @Composable
-internal fun AppButton(text: String, onClick: () -> Unit, enabled: Boolean = true, modifier: Modifier = Modifier, kind: AppButtonKind = AppButtonKind.Primary) {
+fun AppButton(text: String, onClick: () -> Unit, enabled: Boolean = true, modifier: Modifier = Modifier, kind: AppButtonKind = AppButtonKind.Primary) {
     when (LocalInterfaceStyle.current) {
         InterfaceStyle.MIUIX -> if (kind == AppButtonKind.Primary) MiuixTextButton(text, onClick, modifier = modifier, enabled = enabled, colors = MiuixButtonDefaults.textButtonColorsPrimary())
             else MiuixTextButton(text, onClick, modifier = modifier, enabled = enabled)
@@ -589,7 +589,7 @@ internal fun AppButton(text: String, onClick: () -> Unit, enabled: Boolean = tru
 
 /** Makes a row observable by tag, so tests can assert the state it reports instead of its wording. */
 @Composable
-internal fun Tagged(tag: String, content: @Composable () -> Unit) {
+fun Tagged(tag: String, content: @Composable () -> Unit) {
     Box(Modifier.fillMaxWidth().testTag(tag)) { content() }
 }
 

@@ -8,7 +8,7 @@ class AddDeviceConnectionUiTest {
     @Test
     fun connectingStaysOnAddPageUntilSelectedSessionIsReady() {
         for (style in InterfaceStyle.entries) {
-            withAddDeviceHarness(style) { harness ->
+            withAddDeviceHarness(style, app = true) { harness ->
                 harness.openAddDevice()
                 harness.clickText("连接")
                 harness.render()

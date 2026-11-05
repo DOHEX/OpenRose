@@ -15,7 +15,6 @@ import io.github.dohex.openrose.androidintegration.WakePrerequisite
 import io.github.dohex.openrose.androidintegration.backgroundControl
 import io.github.dohex.openrose.androidintegration.backgroundRecovery
 import io.github.dohex.openrose.core.ControlState
-import io.github.dohex.openrose.core.HostPlatform
 import io.github.dohex.openrose.core.PlatformApplicability
 import io.github.dohex.openrose.androidintegration.IntegrationSettings
 
@@ -45,8 +44,7 @@ internal object BackgroundControlTags {
 
 /** Ordinary background control applies wherever Android hosts the control runtime. */
 internal fun ControlState.backgroundControlApplicable(integration: IntegrationState): Boolean =
-    platform.hostPlatform == HostPlatform.ANDROID &&
-        platform.controlTransportApplicability == PlatformApplicability.APPLICABLE &&
+    platform.controlTransportApplicability == PlatformApplicability.APPLICABLE &&
         integration.backgroundControl(this) != BackgroundControlStatus.Unsupported
 
 /**
