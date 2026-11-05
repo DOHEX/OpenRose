@@ -190,11 +190,11 @@ CI 只在 Linux 上运行测试；Linux 产出 Android APK 与上述 4 种 Linux
 
 | 目录 | 内容 |
 | --- | --- |
-| `core/` | 型号能力、协议编解码、控制会话、统一控制入口（`ControlRuntime`）、状态与控制设置（强制使用 BLE） |
+| `core/` | 型号能力、协议编解码、控制会话、统一控制入口（`ControlRuntime`）、共享 GATT 连接、已配对设备与音频推断、状态与控制设置（强制使用 BLE） |
 | `androidIntegration/` | Android 集成（纯 Kotlin，在 JVM 上测试）：控制方式与所有者交接、模块宿主与客户端、IPC 编码、系统入口、系统呈现、融合设备中心映射、后台控制及其设置 |
 | `sharedUI/` | 共享界面、表现层模型与平台插槽、Miuix / Material 3 组件、外观设置与界面测试 |
 | `androidIntegrationUI/` | Android 专属界面段落：控制方式、后台控制、系统集成状态与诊断、权限和作用域重启；KMP Android / JVM |
-| `androidApp/` | Android 入口、BLE / SPP 传输、libxposed 模块与 HyperOS 系统桥接 |
+| `androidApp/` | Android 入口、GATT 原语驱动与 SPP 传输、音频协议代理与广播、libxposed 模块与 HyperOS 系统桥接 |
 | `desktopApp/` | Windows / Linux 桌面入口、窗口与偏好设置 |
 | `build-logic/` | 各模块共用的 Gradle 约定插件：工具链、JVM 字节码目标、Android 与桌面打包配置 |
 | `docs/` | 协议研究与型号规范（`docs/protocols/`）、工程实现证据（`docs/protocols.md`）、架构决策与规范 |

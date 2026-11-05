@@ -190,11 +190,11 @@ CI runs the tests on Linux only. Linux publishes the Android APK and the four Li
 
 | Directory | Contents |
 | --- | --- |
-| `core/` | Model capabilities, protocol codecs, control sessions, the unified control entry (`ControlRuntime`), state, and control settings (force BLE) |
+| `core/` | Model capabilities, protocol codecs, control sessions, the unified control entry (`ControlRuntime`), shared GATT connections, paired-device and audio inference, state, and control settings (force BLE) |
 | `androidIntegration/` | Android integration (pure Kotlin, tested on the JVM): control way and owner handoff, module host and client, IPC encoding, system entries, system presentation, Fusion Device Center mapping, background control, and their settings |
 | `sharedUI/` | Shared UI, presentation model and platform slots, Miuix / Material 3 components, appearance settings, and UI tests |
 | `androidIntegrationUI/` | Android-specific UI sections: control way, background control, integration status and diagnostics, permissions, and scope restart; KMP Android / JVM |
-| `androidApp/` | Android entry point, BLE / SPP transports, libxposed module, and HyperOS system bridge |
+| `androidApp/` | Android entry point, primitive GATT driver and SPP transport, audio profile proxies and broadcasts, libxposed module, and HyperOS system bridge |
 | `desktopApp/` | Windows / Linux desktop entry point, windows, and preferences |
 | `build-logic/` | Gradle convention plugins shared by the modules: toolchain, JVM bytecode target, Android and desktop packaging setup |
 | `docs/` | Protocol research & model specifications (`docs/protocols/`), implementation evidence (`docs/protocols.md`), architecture decisions, and specifications |

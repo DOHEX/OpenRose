@@ -14,182 +14,62 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.os.Build
-import io.github.dohex.openrose.core.DeviceCandidate
-import io.github.dohex.openrose.core.protocol.ModelProfile
-import io.github.dohex.openrose.core.transport.AudioProfileEvidence
-import io.github.dohex.openrose.core.transport.DeviceId
-import io.github.dohex.openrose.core.transport.TransportFacts
-import java.util.Locale
+import io.github.dohex.openrose.core.transport.AudioConnectionState
+import io.github.dohex.openrose.core.transport.AudioFactsDriver
+import io.github.dohex.openrose.core.transport.AudioProfile
+import io.github.dohex.openrose.core.transport.RawAudioDevice
+import io.github.dohex.openrose.core.transport.RawAudioEvent
+import io.github.dohex.openrose.core.transport.RawAudioSnapshot
+import io.github.dohex.openrose.core.transport.RawProfileSnapshot
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.CancellableContinuation
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.withContext
 import kotlin.coroutines.resume
 
-/** Reads only Android's public connected-profile lists; it does not inspect codecs or UI settings. */
-internal class AndroidAudioProfiles(private val context: Context) {
-    @SuppressLint("MissingPermission") // Permission is checked before accessing adapter/profile state.
-    suspend fun connectionFacts(deviceId: DeviceId, classicAddress: String?): TransportFacts = withContext(Dispatchers.IO) {
-        val adapter = context.getSystemService(BluetoothManager::class.java)?.adapter
-        val permissionGranted = hasBluetoothPermission()
-        val adapterEnabled = adapter != null && permissionGranted && runCatching { adapter.isEnabled }.getOrDefault(false)
-        val sppAvailable = adapterEnabled &&
-            context.packageManager.hasSystemFeature(PackageManager.FEATURE_BLUETOOTH) &&
-            normalizedAddress(classicAddress) != null
-
-        val profileEvidence = when {
-            adapter == null || !adapterEnabled -> AudioProfileEvidence.UNKNOWN
-            Build.VERSION.SDK_INT in Build.VERSION_CODES.S until Build.VERSION_CODES.TIRAMISU ->
-                // API 31–32 lack a public LE_AUDIO profile ID, so classic-only evidence is insufficient.
-                AudioProfileEvidence.UNKNOWN
-            else -> inspectConnectedProfiles(adapter, deviceId, classicAddress)
-        }
-        TransportFacts(sppAvailable = sppAvailable, audioProfile = profileEvidence)
-    }
-
-    @SuppressLint("MissingPermission")
-    suspend fun bondedDevices(): List<DeviceCandidate> = withContext(Dispatchers.IO) {
-        val adapter = context.getSystemService(BluetoothManager::class.java)?.adapter ?: return@withContext emptyList()
-        if (!hasBluetoothPermission() || !runCatching { adapter.isEnabled }.getOrDefault(false)) return@withContext emptyList()
-        try {
-            adapter.bondedDevices?.mapNotNull { device ->
-                val name = device.name
-                val profile = ModelProfile.match(name) ?: return@mapNotNull null
-                val address = normalizedAddress(device.address) ?: return@mapNotNull null
-                DeviceCandidate(
-                    deviceId = DeviceId(address),
-                    name = name,
-                    rssi = null,
-                    profile = profile,
-                    manufacturerDataHex = "",
-                    classicAddress = address,
-                )
-            } ?: emptyList()
-        } catch (_: SecurityException) {
-            emptyList()
-        }
-    }
-
-    /**
-     * The earphone whose audio is connected. Existing connections are read first and later events keep it
-     * current: an event that arrives while the existing connections are still being read wins over what
-     * that read reports for the same address, and a Bluetooth restart (including the adapter coming on
-     * after boot) reads the existing connections again. Runs in the host process too, with its own Context.
-     */
-    val audioConnectedDevice: Flow<DeviceId?> = callbackFlow {
-        val lock = Any()
-        var currentConnected: DeviceId? = null
-        var emitted = false
-        val a2dpConnected = mutableSetOf<String>()
-        val hfpConnected = mutableSetOf<String>()
-        val changedSinceProbe = mutableSetOf<String>()
-        // Advanced whenever Bluetooth turns off; a probe result belongs only to the epoch it started in.
-        var probeEpoch = 0
-
-        @SuppressLint("MissingPermission")
-        fun activeRoseDevice(adapter: BluetoothAdapter?): DeviceId? {
-            val allConnected = a2dpConnected + hfpConnected
-            if (allConnected.isEmpty()) return null
-            val bonded = try {
-                adapter?.bondedDevices?.filter { ModelProfile.match(it.name) != null }
-                    ?.mapNotNull { normalizedAddress(it.address) }?.toSet()
-            } catch (_: SecurityException) {
-                null
-            } ?: emptySet()
-            val matched = allConnected.firstOrNull { it in bonded }
-            return matched?.let(::DeviceId)
-        }
-
-        /** Caller holds [lock]. The first value is always delivered, so a session never waits for one. */
-        fun publish(adapter: BluetoothAdapter?) {
-            val next = activeRoseDevice(adapter)
-            if (!emitted || next != currentConnected) {
-                emitted = true
-                currentConnected = next
-                trySend(next)
-            }
-        }
-
-        fun probeExisting(adapter: BluetoothAdapter) {
-            val epoch = synchronized(lock) {
-                changedSinceProbe.clear()
-                probeEpoch
-            }
-            launch {
-                val found = findConnectedRoseAudio(adapter)
-                synchronized(lock) {
-                    if (epoch != probeEpoch) return@synchronized
-                    found?.first?.filter { it !in changedSinceProbe }?.let { a2dpConnected += it }
-                    found?.second?.filter { it !in changedSinceProbe }?.let { hfpConnected += it }
-                    publish(adapter)
-                }
-            }
-        }
-
+/** Exposes public Android Bluetooth facts; interpretation belongs to the shared core. */
+internal class AndroidAudioProfiles(private val context: Context) : AudioFactsDriver {
+    override val events: Flow<RawAudioEvent> = callbackFlow {
         val receiver = object : BroadcastReceiver() {
+            @SuppressLint("MissingPermission")
             override fun onReceive(receiverContext: Context, intent: Intent) {
-                val adapter = receiverContext.getSystemService(BluetoothManager::class.java)?.adapter
                 when (intent.action) {
                     BluetoothA2dp.ACTION_CONNECTION_STATE_CHANGED, BluetoothHeadset.ACTION_CONNECTION_STATE_CHANGED -> {
-                        val connected = if (intent.action == BluetoothA2dp.ACTION_CONNECTION_STATE_CHANGED) a2dpConnected else hfpConnected
-                        val state = intent.getIntExtra(BluetoothProfile.EXTRA_STATE, BluetoothProfile.STATE_DISCONNECTED)
-                        val address = getDeviceExtra(intent)?.address?.let(::normalizedAddress)
-                        if (address != null) synchronized(lock) {
-                            changedSinceProbe += address
-                            if (state == BluetoothProfile.STATE_CONNECTED) connected += address
-                            else if (state == BluetoothProfile.STATE_DISCONNECTED) connected -= address
-                            publish(adapter)
-                        }
+                        val state = intent.getIntExtra(BluetoothProfile.EXTRA_STATE, -1)
+                        if (state != BluetoothProfile.STATE_CONNECTED && state != BluetoothProfile.STATE_DISCONNECTED) return
+                        val device = getDeviceExtra(intent) ?: return
+                        val event = try {
+                            RawAudioEvent.ProfileChanged(
+                                if (intent.action == BluetoothA2dp.ACTION_CONNECTION_STATE_CHANGED) AudioProfile.A2DP else AudioProfile.HEADSET,
+                                RawAudioDevice(device.name, device.address),
+                                device.bondState == BluetoothDevice.BOND_BONDED,
+                                state == BluetoothProfile.STATE_CONNECTED,
+                            )
+                        } catch (_: SecurityException) { return }
+                        trySend(event)
                     }
-                    BluetoothAdapter.ACTION_STATE_CHANGED -> {
-                        when (intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR)) {
-                            BluetoothAdapter.STATE_TURNING_OFF, BluetoothAdapter.STATE_OFF -> synchronized(lock) {
-                                // A probe that began before this transition must not re-add what it clears.
-                                probeEpoch++
-                                a2dpConnected.clear()
-                                hfpConnected.clear()
-                                changedSinceProbe.clear()
-                                emitted = true
-                                currentConnected = null
-                                trySend(null)
-                            }
-                            BluetoothAdapter.STATE_ON -> if (adapter != null && hasBluetoothPermission()) probeExisting(adapter)
-                        }
+                    BluetoothAdapter.ACTION_STATE_CHANGED -> when (intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR)) {
+                        BluetoothAdapter.STATE_TURNING_OFF, BluetoothAdapter.STATE_OFF -> trySend(RawAudioEvent.AdapterOff)
+                        BluetoothAdapter.STATE_ON -> trySend(RawAudioEvent.AdapterOn)
                     }
                 }
             }
         }
-
         val filter = IntentFilter().apply {
             addAction(BluetoothA2dp.ACTION_CONNECTION_STATE_CHANGED)
             addAction(BluetoothHeadset.ACTION_CONNECTION_STATE_CHANGED)
             addAction(BluetoothAdapter.ACTION_STATE_CHANGED)
         }
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            context.registerReceiver(receiver, filter, Context.RECEIVER_EXPORTED)
-        } else {
-            context.registerReceiver(receiver, filter)
-        }
-
-        val adapter = context.getSystemService(BluetoothManager::class.java)?.adapter
-        if (adapter != null && hasBluetoothPermission() && runCatching { adapter.isEnabled }.getOrDefault(false)) {
-            probeExisting(adapter)
-        } else {
-            synchronized(lock) { emitted = true; trySend(null) }
-        }
-
-        awaitClose {
-            runCatching { context.unregisterReceiver(receiver) }
-        }
-    }.distinctUntilChanged()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) context.registerReceiver(receiver, filter, Context.RECEIVER_EXPORTED)
+        else context.registerReceiver(receiver, filter)
+        trySend(RawAudioEvent.Ready)
+        awaitClose { runCatching { context.unregisterReceiver(receiver) } }
+    }
 
     private fun getDeviceExtra(intent: Intent): BluetoothDevice? =
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -199,74 +79,51 @@ internal class AndroidAudioProfiles(private val context: Context) {
             intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE)
         }
 
-    /** Addresses of bonded ROSE earphones with a connected A2DP and a connected headset profile; null when unreadable. */
     @SuppressLint("MissingPermission")
-    private suspend fun findConnectedRoseAudio(adapter: BluetoothAdapter): Pair<Set<String>, Set<String>>? = withTimeoutOrNull(PROFILE_PROBE_TIMEOUT_MILLIS) {
-        val bondedRoseAddresses = runCatching {
-            adapter.bondedDevices?.filter { ModelProfile.match(it.name) != null }
-                ?.mapNotNull { normalizedAddress(it.address) }?.toSet()
-        }.getOrNull() ?: emptySet()
-        val a2dpLease = requestProfileProxy(adapter, BluetoothProfile.A2DP)
-        val headsetLease = requestProfileProxy(adapter, BluetoothProfile.HEADSET)
-        try {
-            val a2dp = a2dpLease?.connectedDeviceAddresses().orEmpty().filter { it in bondedRoseAddresses }.toSet()
-            val headset = headsetLease?.connectedDeviceAddresses().orEmpty().filter { it in bondedRoseAddresses }.toSet()
-            a2dp to headset
-        } finally {
-            a2dpLease?.close()
-            headsetLease?.close()
+    override suspend fun bondedDevices(): List<RawAudioDevice> = withContext(Dispatchers.IO) {
+        val adapter = context.getSystemService(BluetoothManager::class.java)?.adapter
+        if (adapter == null || !hasBluetoothPermission() || !runCatching { adapter.isEnabled }.getOrDefault(false)) {
+            emptyList()
+        } else {
+            readBondedDevices(adapter)
         }
     }
 
-    private suspend fun inspectConnectedProfiles(
-        adapter: BluetoothAdapter,
-        deviceId: DeviceId,
-        classicAddress: String?,
-    ): AudioProfileEvidence {
-        val targetAddresses = listOfNotNull(normalizedAddress(deviceId.value), normalizedAddress(classicAddress)).toSet()
-        if (targetAddresses.isEmpty()) return AudioProfileEvidence.UNKNOWN
+    @SuppressLint("MissingPermission")
+    private fun readBondedDevices(adapter: BluetoothAdapter): List<RawAudioDevice> = try {
+        adapter.bondedDevices?.map { RawAudioDevice(it.name, it.address) }.orEmpty()
+    } catch (_: SecurityException) { emptyList() }
 
-        return withTimeoutOrNull(PROFILE_PROBE_TIMEOUT_MILLIS) {
-            val profileIds = buildList {
-                add(BluetoothProfile.A2DP)
-                add(BluetoothProfile.HEADSET)
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) add(BluetoothProfile.LE_AUDIO)
+    @SuppressLint("MissingPermission")
+    override suspend fun snapshot(targetAddresses: Set<String>): RawAudioSnapshot = withContext(Dispatchers.IO) {
+        val adapter = context.getSystemService(BluetoothManager::class.java)?.adapter
+        val enabled = adapter != null && hasBluetoothPermission() && runCatching { adapter.isEnabled }.getOrDefault(false)
+        val leObservable = Build.VERSION.SDK_INT !in Build.VERSION_CODES.S until Build.VERSION_CODES.TIRAMISU
+        val spp = context.packageManager.hasSystemFeature(PackageManager.FEATURE_BLUETOOTH)
+        if (!enabled || adapter == null) return@withContext RawAudioSnapshot(false, spp, leObservable, emptyList(), emptyMap())
+        val bonded = readBondedDevices(adapter)
+        val profiles = withTimeoutOrNull(PROFILE_PROBE_TIMEOUT_MILLIS) {
+            val ids = buildMap {
+                put(AudioProfile.A2DP, BluetoothProfile.A2DP)
+                put(AudioProfile.HEADSET, BluetoothProfile.HEADSET)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) put(AudioProfile.LE_AUDIO, BluetoothProfile.LE_AUDIO)
             }
-            val proxies = mutableListOf<ProfileProxyLease?>()
+            val leases = mutableMapOf<AudioProfile, ProfileProxyLease?>()
             try {
-                profileIds.forEach { profileId -> proxies += requestProfileProxy(adapter, profileId) }
-                // An unavailable proxy or any failed query leaves the evidence unknown.
-                if (proxies.any { it == null }) return@withTimeoutOrNull AudioProfileEvidence.UNKNOWN
-                val leases = proxies.map { requireNotNull(it) }
-                val snapshotsByProfile = profileIds.zip(leases).associate { (profileId, lease) ->
-                    val snapshot = lease.snapshot(targetAddresses)
-                        ?: return@withTimeoutOrNull AudioProfileEvidence.UNKNOWN
-                    profileId to snapshot
+                for ((profile, id) in ids) leases[profile] = requestProfileProxy(adapter, id)
+                val results = leases.mapValues { (_, lease) -> lease?.snapshot(targetAddresses) }.toMutableMap()
+                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
+                    results[AudioProfile.LE_AUDIO] = RawProfileSnapshot(emptyList(), targetAddresses.associateWith { AudioConnectionState.DISCONNECTED })
                 }
-                if (leases.any { !it.isValid }) return@withTimeoutOrNull AudioProfileEvidence.UNKNOWN
-
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    val le = snapshotsByProfile[BluetoothProfile.LE_AUDIO] ?: return@withTimeoutOrNull AudioProfileEvidence.UNKNOWN
-                    if (le.targetStates.values.any { it == BluetoothProfile.STATE_CONNECTED }) {
-                        return@withTimeoutOrNull AudioProfileEvidence.LE_AUDIO
-                    }
-                    // A connected LE device whose identity cannot be tied to this scan is ambiguous.
-                    if (le.connectedAddresses.isNotEmpty()) return@withTimeoutOrNull AudioProfileEvidence.UNKNOWN
+                for ((profile, lease) in leases) {
+                    if (lease != null && !lease.isValid) results[profile] = null
                 }
-
-                val classicConnected = listOf(BluetoothProfile.A2DP, BluetoothProfile.HEADSET)
-                    .any { profileId ->
-                        snapshotsByProfile[profileId]?.targetStates?.values?.any { it == BluetoothProfile.STATE_CONNECTED } == true
-                    }
-                if (classicConnected) AudioProfileEvidence.CLASSIC else AudioProfileEvidence.UNKNOWN
-            } catch (_: SecurityException) {
-                AudioProfileEvidence.UNKNOWN
-            } catch (_: RuntimeException) {
-                AudioProfileEvidence.UNKNOWN
+                results
             } finally {
-                proxies.filterNotNull().forEach(ProfileProxyLease::close)
+                leases.values.filterNotNull().forEach(ProfileProxyLease::close)
             }
-        } ?: AudioProfileEvidence.UNKNOWN
+        }.orEmpty()
+        RawAudioSnapshot(true, spp, leObservable, bonded, profiles)
     }
 
     @SuppressLint("MissingPermission") // connectionFacts checks BLUETOOTH_CONNECT (or legacy BLUETOOTH) first.
@@ -368,45 +225,31 @@ internal class AndroidAudioProfiles(private val context: Context) {
         fun owns(other: BluetoothProfile): Boolean = proxy === other
 
         @SuppressLint("MissingPermission") // Only queried after the public Bluetooth permission check.
-        fun snapshot(targetAddresses: Set<String>): ProfileSnapshot? {
+        fun snapshot(targetAddresses: Set<String>): RawProfileSnapshot? {
             if (!isValid) return null
             val connected = try {
-                proxy.connectedDevices.map { device ->
-                    normalizedAddress(device.address) ?: return null
-                }.toSet()
+                proxy.connectedDevices.map { device -> device.address }.toSet()
             } catch (_: SecurityException) {
                 return null
             } catch (_: RuntimeException) {
                 return null
             }
             val states = try {
-                // Other connected Classic devices do not determine this target's audio profile.
                 (targetAddresses + connected).associateWith { address ->
-                    proxy.getConnectionState(adapter.getRemoteDevice(address))
-                        .takeIf { it == BluetoothProfile.STATE_CONNECTED || it == BluetoothProfile.STATE_DISCONNECTED }
-                        ?: return null
+                    when (proxy.getConnectionState(adapter.getRemoteDevice(address))) {
+                        BluetoothProfile.STATE_CONNECTED -> AudioConnectionState.CONNECTED
+                        BluetoothProfile.STATE_DISCONNECTED -> AudioConnectionState.DISCONNECTED
+                        else -> return null
+                    }
                 }
             } catch (_: SecurityException) {
                 return null
             } catch (_: RuntimeException) {
                 return null
             }
-            if (connected.any { address -> states[address] != BluetoothProfile.STATE_CONNECTED }) return null
-            return ProfileSnapshot(connected, states.filterKeys { it in targetAddresses }).takeIf { isValid }
+            return RawProfileSnapshot(connected.toList(), states).takeIf { isValid }
         }
 
-
-        @SuppressLint("MissingPermission")
-        fun connectedDeviceAddresses(): List<String> {
-            if (!isValid) return emptyList()
-            return try {
-                proxy.connectedDevices.mapNotNull { device -> normalizedAddress(device.address) }
-            } catch (_: SecurityException) {
-                emptyList()
-            } catch (_: RuntimeException) {
-                emptyList()
-            }
-        }
         fun invalidate() {
             disconnected.set(true)
         }
@@ -416,17 +259,8 @@ internal class AndroidAudioProfiles(private val context: Context) {
         }
     }
 
-    private data class ProfileSnapshot(
-        val connectedAddresses: Set<String>,
-        val targetStates: Map<String, Int>,
-    )
 
     private companion object {
         const val PROFILE_PROBE_TIMEOUT_MILLIS = 2_500L
-
-        fun normalizedAddress(value: String?): String? {
-            val candidate = value?.trim()?.uppercase(Locale.ROOT) ?: return null
-            return candidate.takeIf(BluetoothAdapter::checkBluetoothAddress)
-        }
     }
 }

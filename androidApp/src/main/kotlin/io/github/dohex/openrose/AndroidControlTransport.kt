@@ -2,7 +2,6 @@ package io.github.dohex.openrose
 
 import android.Manifest
 import android.annotation.SuppressLint
-import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothManager
 import android.content.Context
 import android.content.pm.PackageManager
@@ -10,19 +9,20 @@ import android.os.Build
 import io.github.dohex.openrose.core.ConnectionPhase
 import io.github.dohex.openrose.core.DeviceCandidate
 import io.github.dohex.openrose.core.transport.Advertisement
+import io.github.dohex.openrose.core.transport.AudioFacts
 import io.github.dohex.openrose.core.transport.ControlConnection
 import io.github.dohex.openrose.core.transport.ControlTransport
 import io.github.dohex.openrose.core.transport.DeviceId
 import io.github.dohex.openrose.core.transport.TransportEndpoint
 import io.github.dohex.openrose.core.transport.TransportFacts
+import io.github.dohex.openrose.core.transport.normalizeBluetoothAddress
 import java.io.IOException
-import java.util.Locale
 import kotlinx.coroutines.flow.Flow
 
 /** Routes one session over BLE or RFCOMM while preserving the shared session's single-owner model. */
 internal class AndroidControlTransport(context: Context) : ControlTransport {
     private val ble = AndroidBleTransport(context)
-    private val audioProfiles = AndroidAudioProfiles(context)
+    private val audioProfiles = AudioFacts(AndroidAudioProfiles(context))
     private val appContext = context.applicationContext
 
     override val supportsInitializationRecovery: Boolean = true
@@ -46,7 +46,7 @@ internal class AndroidControlTransport(context: Context) : ControlTransport {
         is TransportEndpoint.SppRfcomm -> {
             val adapter = appContext.getSystemService(BluetoothManager::class.java)?.adapter
                 ?: throw IOException("系统蓝牙适配器不可用")
-            val address = normalizeAddress(endpoint.address)
+            val address = normalizeBluetoothAddress(endpoint.address)
                 ?: throw IOException("SPP 设备地址无效")
             if (!hasBluetoothPermission()) throw IOException("缺少蓝牙连接权限")
             val enabled = try {
@@ -79,10 +79,6 @@ internal class AndroidControlTransport(context: Context) : ControlTransport {
             context.checkSelfPermission(Manifest.permission.BLUETOOTH) == PackageManager.PERMISSION_GRANTED
         }
 
-        fun normalizeAddress(value: String): String? {
-            val candidate = value.trim().uppercase(Locale.ROOT)
-            return candidate.takeIf(BluetoothAdapter::checkBluetoothAddress)
-        }
     }
 
     private fun hasBluetoothPermission(): Boolean = hasBluetoothPermission(appContext)

@@ -44,3 +44,13 @@ status: accepted
 
 桌面实际窗口冒烟覆盖状态页与添加耳机流程的传输不可用原因、设置对话框和两种界面风格间的切换；构建产物固定后切换正常。Android 未连接设备或模拟器，状态与设置内容由双风格 Compose 页面测试覆盖，不据此宣称 Android 实机通过。
 
+实施（#90）：`:core` 的 `GattDriver` 只描述单次原生连接、服务表、协商出的 MTU、本地通知路由、远端订阅、带／不带应答写入、事件与释放；`GattControlConnection` 统一执行首次发现后最多两次重试、MTU 1.5 s 等待与 20 字节回退、`min(MTU - 3, 512)` 容量限制、完整报文校验、订阅与写入串行化、订阅 5 s 超时及远端／本地回滚。原生错误经 `GattException` 分类，只有明确的暂时性错误可恢复；权限、参数、不支持、断开与未知错误保持终止语义。发现中的服务变更使该次服务表失效，发现完成后的变更结束旧连接并交由控制会话重建。Android 仅保留原生句柄、回调关联、CCCD 操作及状态码映射；取消中的操作保留原生回调槽，防止迟到回调完成后续操作，未成功释放的句柄保留以便显式关闭重试。
+
+`AudioFactsDriver` 报告原始配对名称与地址、音频协议快照及广播；`AudioFacts` 统一执行型号匹配、地址规范化与保守的 LE Audio／Classic 推断。先注册事件再查询既有连接，查询完成前按“协议＋地址”合并期间事件；蓝牙关闭使旧查询失效，重新开启后重查。Android 的 `AndroidAudioProfiles` 只持有协议代理租约与广播接收，不再包含这些规则。
+
+审查补充：特征按发现得到的实例标识传递，操作与通知都保留该实例，避免不同服务复用 UUID 时串到另一特征。协议代理失效只使该协议快照不可用，不丢弃仍有效的 A2DP／HFP 连接事实；不可读的初始查询与明确的蓝牙关闭事件分别处理，随后可读的音频广播仍可恢复自动连接，查询期间的广播也不被不可读结果覆盖。
+
+WinRT 原语可实现：[`GattDeviceService`](https://learn.microsoft.com/en-us/uwp/api/windows.devices.bluetooth.genericattributeprofile.gattdeviceservice) 提供服务及特征对象并支持释放；本地注册 `ValueChanged` 后调用 [`WriteClientCharacteristicConfigurationDescriptorAsync`](https://learn.microsoft.com/en-us/uwp/api/windows.devices.bluetooth.genericattributeprofile.gattcharacteristic.writeclientcharacteristicconfigurationdescriptorasync) 设置 Notify／Indicate／None，描述符无需暴露给共享层；[`WriteValueAsync(IBuffer, GattWriteOption)`](https://learn.microsoft.com/en-us/uwp/api/windows.devices.bluetooth.genericattributeprofile.gattcharacteristic.writevalueasync) 支持有／无应答写入；[`GattServicesChanged`](https://learn.microsoft.com/en-us/uwp/api/windows.devices.bluetooth.bluetoothledevice.gattserviceschanged) 对应服务变更事件。Windows 自行协商 MTU，驱动报告 [`GattSession.MaxPduSize`](https://learn.microsoft.com/en-us/uwp/api/windows.devices.bluetooth.genericattributeprofile.gattsession.maxpdusize)，不要求能主动请求指定 MTU。此为文档核对，未实现或实测 Windows 驱动。
+
+可执行离线冒烟使用真实 `ControlSession`、协议编解码、设置队列与共享 GATT，假驱动完成 i5 默认 MTU 下的 13 项初始化读取、修改降噪模式并经合成回读确认、断开释放；冒烟脚本运行后删除。`adb devices -l` 没有设备，小米 14 + i5 普通控制的连接、读取、设置及耳机确认仍需维护者实机验收，不能以本次离线结果替代。
+
