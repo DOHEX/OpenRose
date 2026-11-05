@@ -5,6 +5,7 @@ plugins {
 kotlin {
     android {
         namespace = "io.github.dohex.openrose.androidintegration.ui"
+        androidResources.enable = true
     }
     sourceSets {
         commonMain.dependencies {

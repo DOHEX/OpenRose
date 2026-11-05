@@ -54,3 +54,7 @@ WinRT 原语可实现：[`GattDeviceService`](https://learn.microsoft.com/en-us/
 
 可执行离线冒烟使用真实 `ControlSession`、协议编解码、设置队列与共享 GATT，假驱动完成 i5 默认 MTU 下的 13 项初始化读取、修改降噪模式并经合成回读确认、断开释放；冒烟脚本运行后删除。`adb devices -l` 没有设备，小米 14 + i5 普通控制的连接、读取、设置及耳机确认仍需维护者实机验收，不能以本次离线结果替代。
 
+Android 实机启动补充：连接小米 14 后，已安装 APK 的启动崩溃记录显示 `MissingResourceException`，路径为 `composeResources/io.github.dohex.openrose.androidintegration.ui.resources/drawable/ic_restart_scope.xml`；已安装包与本地旧构建 SHA-256 一致。`:androidIntegrationUI` 补齐与 `:sharedUI` 相同的 `androidResources.enable = true`，使 Android-KMP 目标把 Compose 资源打进 APK。重新构建后核对 APK 内图标存在，保留应用数据覆盖安装，冷启动及耳机／状态／设置页面均正常，新进程无崩溃日志，`check offlineCheck` 通过。状态页另显示普通控制切换未完成，控制宿主已停止、尚未建立耳机控制连接；本次只证明启动与页面资源修复，不构成 #90 的 i5 实机读写验收。
+
+维护者随后确认已测试可用，并要求停止进一步测试；此后不再执行真机操作或验证。
+
