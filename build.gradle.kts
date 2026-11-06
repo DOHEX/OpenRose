@@ -12,6 +12,8 @@ plugins {
     alias(libs.plugins.detekt) apply false
     alias(libs.plugins.spotless)
     alias(libs.plugins.kover)
+    // README.md is the primary text; README.en.md must keep its headings, code blocks, tables, images and links.
+    alias(libs.plugins.openrose.readme.sync)
 }
 
 // ktlint formats every Kotlin source and build script; rules come from .editorconfig.
@@ -56,5 +58,5 @@ tasks.register("offlineCheck") {
         ":androidApp:lintDebug", "spotlessCheck",
         "koverVerify", ":core:koverVerify", ":androidIntegration:koverVerify",
     )
-    dependsOn(subprojects.map { "${it.path}:detekt" })
+    dependsOn(subprojects.map { "${it.path}:detekt" }, "checkReadmeSync")
 }
