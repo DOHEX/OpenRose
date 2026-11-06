@@ -11,6 +11,11 @@ import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.FieldReading
 import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.dohex.openrose.core.protocol.ModelProfile
+import kotlinx.coroutines.async
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -18,11 +23,6 @@ import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
-import kotlinx.coroutines.async
-import kotlinx.coroutines.test.advanceTimeBy
-import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.runCurrent
-import kotlinx.coroutines.test.runTest
 
 /**
  * The unified runtime is the only seam: a real [SwitchingControlRuntime] over a real ordinary
@@ -291,7 +291,10 @@ class OwnerHandoffTest {
         assertEquals(IslandMode.OFF, hostView.settings.islandMode)
         assertEquals(ControlWay.MODULE, hostView.settings.controlWay)
         val forged = rig.host.execute(
-            appIdentity, leaseOf(rig), generation, HostCommand.UpdateSettings(HostSettings(integration = IntegrationSettings(controlWay = ControlWay.ORDINARY))),
+            appIdentity,
+            leaseOf(rig),
+            generation,
+            HostCommand.UpdateSettings(HostSettings(integration = IntegrationSettings(controlWay = ControlWay.ORDINARY))),
         )
 
         assertEquals(HostCallResult.Operation(OperationResult.Success), forged)
@@ -486,8 +489,15 @@ class OwnerHandoffTest {
         }
 
         val expected = buildList {
-            add("module:open"); add("module:close"); add("ordinary:open")
-            repeat(2) { add("ordinary:close"); add("module:open"); add("module:close"); add("ordinary:open") }
+            add("module:open")
+            add("module:close")
+            add("ordinary:open")
+            repeat(2) {
+                add("ordinary:close")
+                add("module:open")
+                add("module:close")
+                add("ordinary:open")
+            }
         }
         assertEquals(expected, rig.headset.events)
         assertEquals(0, rig.headset.overlappingOpens)
@@ -551,8 +561,7 @@ class OwnerHandoffTest {
         }
     }
 
-    private suspend fun leaseOf(rig: OwnerRig): String =
-        (rig.host.open(appIdentity) as HostOpenResult.Opened).lease.id
+    private suspend fun leaseOf(rig: OwnerRig): String = (rig.host.open(appIdentity) as HostOpenResult.Opened).lease.id
 
     private fun assertNotNull(value: Any?) = assertTrue(value != null)
 }

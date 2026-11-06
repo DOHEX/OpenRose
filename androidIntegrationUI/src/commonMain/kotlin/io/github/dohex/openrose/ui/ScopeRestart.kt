@@ -107,7 +107,9 @@ internal fun ScopeRestartAction(
             INTEGRATION_SCOPE_PACKAGES.forEach { target ->
                 val mark = when {
                     selecting -> ScopeRestartMark.CHECKBOX
+
                     target !in targets -> ScopeRestartMark.SKIPPED
+
                     else -> byTarget[target]?.status?.let(ScopeRestartMark::of)
                         ?: if (phase == null || phase == ScopeRestartPhase.Authorizing) ScopeRestartMark.WAITING else ScopeRestartMark.WORKING
                 }
@@ -145,28 +147,40 @@ internal fun ScopeRestartAction(
                 }
             }
         }
+
         InterfaceStyle.MATERIAL3 -> {
             androidx.compose.material3.IconButton(onClick = onOpen, enabled = !running) {
                 androidx.compose.material3.Icon(restartIcon, contentDescription = "重启作用域")
             }
-            if (open) AlertDialog(
-                onDismissRequest = onDismiss,
-                title = { Text("重启作用域") },
-                text = {
-                    Column {
-                        Text(summary, maxLines = 1)
-                        Spacer(Modifier.height(8.dp))
-                        rows()
-                    }
-                },
-                dismissButton = if (stage == ScopeRestartStage.DONE) null else ({
-                    TextButton(onClick = onClose, enabled = selecting) { Text("取消") }
-                }),
-                confirmButton = {
-                    if (stage == ScopeRestartStage.DONE) TextButton(onClick = onClose) { Text("关闭") }
-                    else TextButton(onClick = onConfirm, enabled = selecting && selected.isNotEmpty()) { Text("重启") }
-                },
-            )
+            if (open) {
+                AlertDialog(
+                    onDismissRequest = onDismiss,
+                    title = { Text("重启作用域") },
+                    text = {
+                        Column {
+                            Text(summary, maxLines = 1)
+                            Spacer(Modifier.height(8.dp))
+                            rows()
+                        }
+                    },
+                    dismissButton = if (stage == ScopeRestartStage.DONE) {
+                        null
+                    } else {
+                        (
+                            {
+                                TextButton(onClick = onClose, enabled = selecting) { Text("取消") }
+                            }
+                            )
+                    },
+                    confirmButton = {
+                        if (stage == ScopeRestartStage.DONE) {
+                            TextButton(onClick = onClose) { Text("关闭") }
+                        } else {
+                            TextButton(onClick = onConfirm, enabled = selecting && selected.isNotEmpty()) { Text("重启") }
+                        }
+                    },
+                )
+            }
         }
     }
 }
@@ -179,7 +193,15 @@ private fun phaseText(phase: ScopeRestartPhase): String = when (phase) {
 
 /** The leading mark of a process row: its checkbox while choosing, then its progress or result. */
 private enum class ScopeRestartMark {
-    CHECKBOX, SKIPPED, WAITING, WORKING, RESTARTED, TERMINATED, NOT_RUNNING, FAILED;
+    CHECKBOX,
+    SKIPPED,
+    WAITING,
+    WORKING,
+    RESTARTED,
+    TERMINATED,
+    NOT_RUNNING,
+    FAILED,
+    ;
 
     companion object {
         fun of(status: ScopeRestartStatus) = when (status) {
@@ -215,6 +237,7 @@ private fun ScopeRestartRow(target: String, mark: ScopeRestartMark, checked: Boo
             role = if (selecting) Role.Checkbox else null,
             enabled = !skipped,
         )
+
         InterfaceStyle.MATERIAL3 -> ListItem(
             headlineContent = { Text(target) },
             supportingContent = failure?.let { { AppText(it, role = AppTextRole.Footnote, color = appColor(AppColorRole.Error), maxLines = 2) } },
@@ -237,9 +260,12 @@ private fun ScopeRestartMarkSlot(mark: ScopeRestartMark, checked: Boolean, size:
                     InterfaceStyle.MIUIX -> top.yukonga.miuix.kmp.basic.Checkbox(state = ToggleableState(checked), onClick = null)
                     InterfaceStyle.MATERIAL3 -> Checkbox(checked, onCheckedChange = null)
                 }
+
                 ScopeRestartMark.SKIPPED -> Unit
+
                 ScopeRestartMark.WORKING ->
                     Box(Modifier.size(20.dp).semantics { contentDescription = "正在重启" }) { AppBusyIndicator(size = 20.dp) }
+
                 else -> {
                     val (icon, label, role) = when (shown) {
                         ScopeRestartMark.RESTARTED -> Triple(RoseIcon.CHECK, "已重启", AppColorRole.Primary)

@@ -7,9 +7,9 @@ import androidx.compose.ui.unit.dp
 import io.github.dohex.openrose.androidintegration.*
 import io.github.dohex.openrose.core.*
 import io.github.dohex.openrose.ui.*
-import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
 class AndroidPlatformUi(
@@ -26,6 +26,7 @@ class AndroidPlatformUi(
 ) : PlatformUi {
     override val platformName: String = "Android"
     private var restartRunning by mutableStateOf(false)
+
     // Whether the restart dialog is shown; its content stays until the next opening so the dialog can animate out.
     private var restartDialogOpen by mutableStateOf(false)
     private var restartSelection by mutableStateOf(INTEGRATION_SCOPE_PACKAGES.toSet())
@@ -256,7 +257,11 @@ class AndroidPlatformUi(
             targets = restartTargets,
             phase = restartPhase,
             results = restartResults,
-            onOpen = { restartResults = null; restartSelection = INTEGRATION_SCOPE_PACKAGES.toSet(); restartDialogOpen = true },
+            onOpen = {
+                restartResults = null
+                restartSelection = INTEGRATION_SCOPE_PACKAGES.toSet()
+                restartDialogOpen = true
+            },
             onToggle = { target -> restartSelection = if (target in restartSelection) restartSelection - target else restartSelection + target },
             onConfirm = {
                 val targets = INTEGRATION_SCOPE_PACKAGES.filter { it in restartSelection }
@@ -292,16 +297,17 @@ class AndroidPlatformUi(
     }
 }
 
-private fun hyperOsIntegrationApplicable(integration: IntegrationPlatformState): Boolean =
-    integration.systemIntegrationApplicability == PlatformApplicability.APPLICABLE
+private fun hyperOsIntegrationApplicable(integration: IntegrationPlatformState): Boolean = integration.systemIntegrationApplicability == PlatformApplicability.APPLICABLE
 
 @Composable
 private fun IntegrationReadinessCard(module: ModuleAvailability) {
     val clause = module.unreadyClause()
     when {
         clause == null -> AppStatusCard(AppStatusKind.Good, RoseIcon.CHECK, "系统集成已连接", null, null)
+
         module == ModuleAvailability.Unresponsive ->
             AppStatusCard(AppStatusKind.Error, RoseIcon.CLOSE, "系统集成无响应", "$clause。", module.nextStep())
+
         else -> AppStatusCard(AppStatusKind.Caution, RoseIcon.INFO, "系统集成未就绪", "$clause。", module.nextStep())
     }
 }
@@ -336,13 +342,17 @@ private fun DiagnosticPresentationRow(label: String, result: String) {
     val code = result.substringBefore(" · ")
     val status = when (code) {
         "CALLED" -> "已请求系统呈现，实际显示待验收"
+
         "UNAVAILABLE" -> "当前系统路径不可用"
+
         "WITHDRAWN" -> "已请求撤销"
+
         "ACTION_FAILED" -> if (result.contains("control_receiver_unavailable")) {
             "通知查看可用，系统控制入口不可用"
         } else {
             "操作失败，请查看连接与设备状态"
         }
+
         else -> "等待确认"
     }
     val detail = result.substringAfter(" · ", "").takeIf { it.isNotBlank() }

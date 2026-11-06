@@ -1,8 +1,8 @@
 package io.github.dohex.openrose.ui
 
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
@@ -66,8 +66,11 @@ internal fun NoiseControlCard(
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             AppText("降噪模式", Modifier.weight(1f), role = AppTextRole.Title)
             AppText(
-                if (pending) "等待设备确认"
-                else confirmedMode?.let { "已确认：${semanticLabel(it)}" } ?: "当前状态未知",
+                if (pending) {
+                    "等待设备确认"
+                } else {
+                    confirmedMode?.let { "已确认：${semanticLabel(it)}" } ?: "当前状态未知"
+                },
                 role = AppTextRole.Summary,
             )
         }
@@ -80,16 +83,18 @@ internal fun NoiseControlCard(
                 Triple(DeviceSetting.TRANSPARENCY_LEVEL, "通透档位", capabilities.transparencyLevel),
             )
         }
-        if (showLevelControls) levelControls.forEach { (setting, title, levelCapabilities) ->
-            if (setting in writable && levelCapabilities?.isVisibleIn(confirmedMode) == true) {
-                val field = if (setting == DeviceSetting.ANC_LEVEL) DeviceField.ANC_LEVEL else DeviceField.TRANSPARENCY_LEVEL
-                val selected = (device.knownValue(field) as? FieldValue.Number)?.value
-                val levels = remember(levelCapabilities.levels) {
-                    levelCapabilities.levels.sorted().map { level -> AppOption(level, "$level 档") }
-                }
-                AppText(title, role = AppTextRole.Summary)
-                AppSegmented(levels, selected, enabled) { level ->
-                    if (level != selected) onSet(setting, FieldValue.Number(level))
+        if (showLevelControls) {
+            levelControls.forEach { (setting, title, levelCapabilities) ->
+                if (setting in writable && levelCapabilities?.isVisibleIn(confirmedMode) == true) {
+                    val field = if (setting == DeviceSetting.ANC_LEVEL) DeviceField.ANC_LEVEL else DeviceField.TRANSPARENCY_LEVEL
+                    val selected = (device.knownValue(field) as? FieldValue.Number)?.value
+                    val levels = remember(levelCapabilities.levels) {
+                        levelCapabilities.levels.sorted().map { level -> AppOption(level, "$level 档") }
+                    }
+                    AppText(title, role = AppTextRole.Summary)
+                    AppSegmented(levels, selected, enabled) { level ->
+                        if (level != selected) onSet(setting, FieldValue.Number(level))
+                    }
                 }
             }
         }
@@ -155,11 +160,13 @@ private fun NoiseModeChoices(
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         row.forEach { option ->
                             val isSelected = option.value == selected
-                            val contentColor = appColor(when {
-                                !enabled -> AppColorRole.DisabledContent
-                                isSelected -> AppColorRole.SelectedContent
-                                else -> AppColorRole.Summary
-                            })
+                            val contentColor = appColor(
+                                when {
+                                    !enabled -> AppColorRole.DisabledContent
+                                    isSelected -> AppColorRole.SelectedContent
+                                    else -> AppColorRole.Summary
+                                },
+                            )
                             Column(
                                 modifier = Modifier.weight(1f).clip(CircleShape)
                                     .selectable(isSelected, enabled, Role.RadioButton) { onSelect(option.value) }
@@ -184,6 +191,7 @@ private fun NoiseModeChoices(
                 }
             }
         }
+
         InterfaceStyle.MATERIAL3 -> {
             Column(Modifier.fillMaxWidth().selectableGroup(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 rows.forEach { row ->
@@ -262,7 +270,6 @@ private fun NoiseModeChoices(
         }
     }
 }
-
 
 internal fun noiseModeLabel(mode: String): String = when (mode) {
     "normal" -> "标准"
@@ -348,8 +355,7 @@ internal fun SettingOperationsCard(state: ControlState) {
     }
 }
 
-internal fun DeviceState.knownValue(field: DeviceField): FieldValue? =
-    (fields[field] as? FieldReading.Known)?.value
+internal fun DeviceState.knownValue(field: DeviceField): FieldValue? = (fields[field] as? FieldReading.Known)?.value
 
 private val pendingSettingStages = setOf(SettingStage.SUBMITTED, SettingStage.PARTIALLY_WRITTEN, SettingStage.WRITTEN)
 

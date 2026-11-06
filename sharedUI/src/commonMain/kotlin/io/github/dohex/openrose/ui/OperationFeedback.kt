@@ -79,9 +79,14 @@ private val settingFailureStages = setOf(
 private fun SettingStage.feedbackMessage(): String = when (this) {
     SettingStage.SUBMITTED, SettingStage.PARTIALLY_WRITTEN, SettingStage.WRITTEN ->
         "正在处理设置，等待设备确认"
+
     SettingStage.CONFIRMED -> "设备已确认设置"
+
     SettingStage.NOT_APPLIED -> "设备状态与请求不一致"
+
     SettingStage.TIMED_OUT -> "等待设备确认超时"
+
     SettingStage.DISCONNECTED -> "控制连接已断开，设置未获完整确认"
+
     SettingStage.FAILED -> "设置失败"
 }

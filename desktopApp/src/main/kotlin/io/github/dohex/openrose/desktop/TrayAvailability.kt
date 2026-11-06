@@ -1,6 +1,5 @@
 package io.github.dohex.openrose.desktop
 
-import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -15,6 +14,7 @@ import org.freedesktop.dbus.connections.impl.DBusConnection
 import org.freedesktop.dbus.connections.impl.DBusConnectionBuilder
 import org.freedesktop.dbus.interfaces.DBus
 import org.freedesktop.dbus.interfaces.Properties
+import java.util.concurrent.atomic.AtomicBoolean
 
 /** Whether a tray host currently shows OpenRose's icon, so hiding the window keeps it reachable. */
 internal sealed interface TrayAvailability {
@@ -36,8 +36,7 @@ internal interface TrayMonitor : AutoCloseable {
     fun trayStarted()
 }
 
-internal fun trayMonitor(hostIsLinux: Boolean): TrayMonitor =
-    if (hostIsLinux) StatusNotifierTrayMonitor() else ShellTrayMonitor
+internal fun trayMonitor(hostIsLinux: Boolean): TrayMonitor = if (hostIsLinux) StatusNotifierTrayMonitor() else ShellTrayMonitor
 
 /** Windows' notification area is part of the shell and always present. */
 private object ShellTrayMonitor : TrayMonitor {
@@ -65,10 +64,15 @@ private class StatusNotifierTrayMonitor : TrayMonitor {
         generateSequence(error) { it.cause }.last().message ?: error.toString()
     }
     private val connection: Result<DBusConnection> =
-        if (nativeFailure != null) Result.failure(IllegalStateException(nativeFailure))
-        else runCatching { DBusConnectionBuilder.forSessionBus().build() }
+        if (nativeFailure != null) {
+            Result.failure(IllegalStateException(nativeFailure))
+        } else {
+            runCatching { DBusConnectionBuilder.forSessionBus().build() }
+        }
+
     /** While the item is still registering, interim misses are not published as unavailable. */
     private val registering = AtomicBoolean(false)
+
     @Volatile private var recheck: Job? = null
 
     override val nativeReady = nativeFailure == null
@@ -77,9 +81,11 @@ private class StatusNotifierTrayMonitor : TrayMonitor {
     init {
         when {
             nativeFailure != null -> mutableAvailability.value = TrayAvailability.Unavailable("托盘组件无法加载：$nativeFailure")
+
             connection.isFailure -> mutableAvailability.value = TrayAvailability.Unavailable(
                 "无法连接会话总线：${connection.exceptionOrNull()?.message ?: "未知原因"}",
             )
+
             else -> {
                 connection.getOrThrow().addSigHandler(DBus.NameOwnerChanged::class.java) { signal ->
                     if (signal.name == WATCHER || signal.name == itemName) scheduleRecheck()
@@ -132,8 +138,11 @@ private class StatusNotifierTrayMonitor : TrayMonitor {
             val service = entry.substringBefore('/')
             service == itemName || (owner != null && service == owner)
         }
-        return if (registered) TrayAvailability.Available
-        else TrayAvailability.Unavailable("托盘宿主没有显示 OpenRose 图标")
+        return if (registered) {
+            TrayAvailability.Available
+        } else {
+            TrayAvailability.Unavailable("托盘宿主没有显示 OpenRose 图标")
+        }
     }
 
     private fun scheduleRecheck(delayMs: Long = REREGISTER_DELAY_MS) {

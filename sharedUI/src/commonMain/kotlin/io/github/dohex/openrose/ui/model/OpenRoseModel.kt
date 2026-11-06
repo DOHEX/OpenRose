@@ -52,14 +52,26 @@ class RuntimeOpenRoseModel(
 
     override fun updateUiSettings(settings: UiSettings) = settingsStore.updateUiSettings(settings)
     override fun updateSettings(settings: UserSettings) = settingsStore.updateSettings(settings)
-    override fun startScan() { scope.launch { runtime.startScan() } }
-    override fun stopScan() { scope.launch { runtime.stopScan() } }
-    override fun connect(deviceId: DeviceId) { scope.launch { runtime.connect(deviceId) } }
-    override fun disconnect() { scope.launch { runtime.disconnect() } }
-    override fun set(setting: DeviceSetting, value: FieldValue) { scope.launch { runtime.set(setting, value) } }
+    override fun startScan() {
+        scope.launch { runtime.startScan() }
+    }
+    override fun stopScan() {
+        scope.launch { runtime.stopScan() }
+    }
+    override fun connect(deviceId: DeviceId) {
+        scope.launch { runtime.connect(deviceId) }
+    }
+    override fun disconnect() {
+        scope.launch { runtime.disconnect() }
+    }
+    override fun set(setting: DeviceSetting, value: FieldValue) {
+        scope.launch { runtime.set(setting, value) }
+    }
 
     // The adding flow owns cancellation of its unfinished connection attempt.
     override suspend fun connectForAddDevice(deviceId: DeviceId): OperationResult = runtime.connectForAddDevice(deviceId)
 
-    override fun showHeadphones() { mutableHomeNavigationRequest.update { it + 1L } }
+    override fun showHeadphones() {
+        mutableHomeNavigationRequest.update { it + 1L }
+    }
 }

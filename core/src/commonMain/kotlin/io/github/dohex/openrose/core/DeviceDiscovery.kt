@@ -38,7 +38,9 @@ internal class DeviceDiscovery(
             state.update { old ->
                 if (old.bondedDevices.none { it.deviceId == bonded.deviceId }) {
                     old.copy(bondedDevices = old.bondedDevices.add(bonded))
-                } else old
+                } else {
+                    old
+                }
             }
             return bonded
         }
@@ -96,10 +98,18 @@ internal class DeviceDiscovery(
                 requireNotNull(transport).scan().collect { advertisement ->
                     val manufacturerDataHex = ModelIdentification.normalizedHex(advertisement.manufacturerData)
                     val profile = ModelIdentification.identify(advertisement.manufacturerData)
-                    val candidate = DeviceCandidate(advertisement.deviceId, advertisement.name, advertisement.rssi,
-                        profile, manufacturerDataHex, ModelIdentification.classicAddress(manufacturerDataHex, profile))
+                    val candidate = DeviceCandidate(
+                        advertisement.deviceId,
+                        advertisement.name,
+                        advertisement.rssi,
+                        profile,
+                        manufacturerDataHex,
+                        ModelIdentification.classicAddress(manufacturerDataHex, profile),
+                    )
                     state.update { old ->
-                        if (scanEpoch.value != epoch) old else {
+                        if (scanEpoch.value != epoch) {
+                            old
+                        } else {
                             val index = old.candidates.indexOfFirst { it.deviceId == candidate.deviceId }
                             val candidates = if (index < 0) old.candidates.add(candidate) else old.candidates.set(index, candidate)
                             old.copy(candidates = candidates)

@@ -7,6 +7,10 @@ import io.github.dohex.openrose.core.OperationResult
 import io.github.dohex.openrose.core.SessionReference
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.FieldValue
+import kotlinx.coroutines.async
+import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -14,10 +18,6 @@ import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
-import kotlinx.coroutines.async
-import kotlinx.coroutines.test.TestScope
-import kotlinx.coroutines.test.runCurrent
-import kotlinx.coroutines.test.runTest
 
 /**
  * The fusion device center and the system headset entries as callers of the module host over real earphone
@@ -48,8 +48,7 @@ class SystemEntryClosedLoopTest {
         return SystemHeadsetMapping.miLinkAncState(assertIs<SessionSnapshotResult.Available>(read.snapshot).device.fields)
     }
 
-    private fun failureOf(result: HostCallResult) =
-        assertIs<OperationResult.Failure>(assertIs<HostCallResult.Operation>(result).result).error.code
+    private fun failureOf(result: HostCallResult) = assertIs<OperationResult.Failure>(assertIs<HostCallResult.Operation>(result).result).error.code
 
     @Test
     fun aFusionCenterNoiseTapSucceedsOnlyWhenTheEarphonesConfirmIt() = runTest {
@@ -133,9 +132,12 @@ class SystemEntryClosedLoopTest {
             HostRejection.NO_OWNER,
             assertIs<HostCallResult.Rejected>(entry.rig.host.execute(milinkIdentity, entry.lease, entry.generation, entry.noise("anc"))).rejection,
         )
-        assertEquals(HostRejection.NO_OWNER, assertIs<HostReadResult.Rejected>(
-            entry.rig.host.readSession(milinkIdentity, entry.lease, entry.generation, entry.reference),
-        ).rejection)
+        assertEquals(
+            HostRejection.NO_OWNER,
+            assertIs<HostReadResult.Rejected>(
+                entry.rig.host.readSession(milinkIdentity, entry.lease, entry.generation, entry.reference),
+            ).rejection,
+        )
 
         val acquired = entry.rig.host.acquire(appIdentity, app, SwitchRequest("to-module", ControlWay.ORDINARY, ControlWay.MODULE), HostSettings())
         val next = assertIs<AcquireResult.Acquired>(acquired).generation
@@ -144,9 +146,12 @@ class SystemEntryClosedLoopTest {
 
         assertNotEquals(entry.generation, next)
         // The old generation can never be read or driven again, even though the device is the same.
-        assertEquals(HostRejection.STALE_GENERATION, assertIs<HostReadResult.Rejected>(
-            entry.rig.host.readSession(milinkIdentity, entry.lease, entry.generation, entry.reference),
-        ).rejection)
+        assertEquals(
+            HostRejection.STALE_GENERATION,
+            assertIs<HostReadResult.Rejected>(
+                entry.rig.host.readSession(milinkIdentity, entry.lease, entry.generation, entry.reference),
+            ).rejection,
+        )
         assertEquals(
             HostRejection.STALE_GENERATION,
             assertIs<HostCallResult.Rejected>(entry.rig.host.execute(milinkIdentity, entry.lease, entry.generation, entry.noise("anc"))).rejection,

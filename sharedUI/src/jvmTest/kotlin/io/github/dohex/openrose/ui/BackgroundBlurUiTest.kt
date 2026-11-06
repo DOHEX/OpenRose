@@ -2,9 +2,9 @@
 
 package io.github.dohex.openrose.ui
 
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.layout.Column
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import io.github.dohex.openrose.core.*

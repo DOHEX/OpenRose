@@ -2,13 +2,9 @@ package io.github.dohex.openrose.ui
 
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.ui.Modifier
-import kotlinx.collections.immutable.persistentListOf
-import kotlinx.collections.immutable.persistentMapOf
-import kotlinx.collections.immutable.persistentSetOf
-import kotlinx.collections.immutable.toPersistentList
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.key.Key
 import io.github.dohex.openrose.core.ConnectionPhase
 import io.github.dohex.openrose.core.ConnectionState
@@ -25,6 +21,10 @@ import io.github.dohex.openrose.core.TransportAvailability
 import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.dohex.openrose.core.protocol.ModelProfile
 import io.github.dohex.openrose.core.transport.DeviceId
+import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.persistentMapOf
+import kotlinx.collections.immutable.persistentSetOf
+import kotlinx.collections.immutable.toPersistentList
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -72,8 +72,6 @@ class OpenRoseHomeScanUiTest {
             }
         }
     }
-
-
 
     @Test
     fun unavailableTransportShowsReasonAndDetailsWithoutConnectionEntrances() {
@@ -356,7 +354,6 @@ class OpenRoseHomeScanUiTest {
         }
     }
 
-
     @Test
     fun readyConnectionReplacesNearbyDevicesOnTheSameHomePage() {
         for (style in InterfaceStyle.entries) {
@@ -437,6 +434,7 @@ class OpenRoseHomeScanUiTest {
             override val platformName = "Test"
             override val requestBluetoothPermission: (() -> Unit) = { permissionRequests += Unit }
             override val openBluetoothSettings: (() -> Unit) = { systemSettingsOpens += Unit }
+
             @androidx.compose.runtime.Composable
             override fun DiagnosticsEntry(onDiagnostics: () -> Unit) {}
         }

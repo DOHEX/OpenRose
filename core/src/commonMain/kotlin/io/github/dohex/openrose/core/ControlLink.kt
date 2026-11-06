@@ -57,6 +57,7 @@ internal class ControlLink(
 ) {
     internal val lifecycle = Mutex()
     private var generation = sessionIdBase
+
     /** Connections whose close the platform refused, retried on every release. */
     private val unclosed = MutableStateFlow<PersistentList<ControlConnection>>(persistentListOf())
     internal var active: Attempt? = null
@@ -98,10 +99,17 @@ internal class ControlLink(
             state.update {
                 it.copy(
                     connection = ConnectionState.Connecting(deviceId, next.id, ConnectionPhase.CONNECTING),
-                    device = DeviceState(deviceId, next.id, profile, deviceCapabilities(profile, null),
+                    device = DeviceState(
+                        deviceId,
+                        next.id,
+                        profile,
+                        deviceCapabilities(profile, null),
                         profile.supportedFields.associateWith { FieldReading.Loading }.toPersistentMap(),
-                        classicAddress = candidate.classicAddress),
-                    lastError = null, transportSelection = null, connectionRecovery = null,
+                        classicAddress = candidate.classicAddress,
+                    ),
+                    lastError = null,
+                    transportSelection = null,
+                    connectionRecovery = null,
                 )
             }
             active = next
@@ -134,7 +142,11 @@ internal class ControlLink(
                 val current = state.value.connection as? ConnectionState.Connected
                 if (active === attempt && attempt.ready && current?.deviceId == deviceId &&
                     current.sessionId == attempt.id && current.phase == ConnectionPhase.READY
-                ) result else OperationResult.Failure(ControlError(ControlErrorCode.DISCONNECTED, "本次连接已被替换"))
+                ) {
+                    result
+                } else {
+                    OperationResult.Failure(ControlError(ControlErrorCode.DISCONNECTED, "本次连接已被替换"))
+                }
             }
         }
         return result
@@ -178,8 +190,14 @@ internal class ControlLink(
             }
         } catch (cancelled: CancellationException) {
             if (cancelled !is TimeoutCancellationException) {
-                updateAttempt(attempt) { it.copy(connection = ConnectionState.Disconnected, device = null,
-                    lastError = ControlError(ControlErrorCode.DISCONNECTED, "控制会话已结束"), transportSelection = null) }
+                updateAttempt(attempt) {
+                    it.copy(
+                        connection = ConnectionState.Disconnected,
+                        device = null,
+                        lastError = ControlError(ControlErrorCode.DISCONNECTED, "控制会话已结束"),
+                        transportSelection = null,
+                    )
+                }
                 throw cancelled
             }
             val error = ControlError(ControlErrorCode.TIMEOUT, "蓝牙连接或读取超时")
@@ -254,20 +272,27 @@ internal class ControlLink(
                         updateLinkAttempt(attempt, epoch) { current ->
                             val old = requireNotNull(current.device)
                             val firmware = ((readings[DeviceField.FIRMWARE] ?: old.fields[DeviceField.FIRMWARE]) as? FieldReading.Known)?.value as? FieldValue.Firmware
-                            current.copy(device = old.copy(fields = old.fields.putAll(readings),
-                                capabilities = deviceCapabilities(profile, firmware),
-                                fieldErrors = readings.keys.fold(old.fieldErrors) { errors, field -> errors.remove(field) },
-                                rawNotifications = old.rawNotifications.appendRecent(listOf(bytes.hex())),
-                                unknownNotifications = old.unknownNotifications.appendRecent(parsed.filter { !it.accepted }.map { it.rawHex }),
-                                warnings = old.warnings.appendRecent(parsed.flatMap { it.warnings })))
+                            current.copy(
+                                device = old.copy(
+                                    fields = old.fields.putAll(readings),
+                                    capabilities = deviceCapabilities(profile, firmware),
+                                    fieldErrors = readings.keys.fold(old.fieldErrors) { errors, field -> errors.remove(field) },
+                                    rawNotifications = old.rawNotifications.appendRecent(listOf(bytes.hex())),
+                                    unknownNotifications = old.unknownNotifications.appendRecent(parsed.filter { !it.accepted }.map { it.rawHex }),
+                                    warnings = old.warnings.appendRecent(parsed.flatMap { it.warnings }),
+                                ),
+                            )
                         }
                     }
                     progress.update { previous ->
                         val keys = parsed.flatMap { it.responseKeys }.toSet()
                         val fields = parsed.flatMap { it.readings.keys }.toSet()
-                        previous.copy(keys = previous.keys.addAll(keys), meaningful = previous.meaningful || parsed.any { it.accepted },
+                        previous.copy(
+                            keys = previous.keys.addAll(keys),
+                            meaningful = previous.meaningful || parsed.any { it.accepted },
                             keyRevisions = previous.keyRevisions.mutate { revisions -> keys.forEach { revisions[it] = (revisions[it] ?: 0) + 1 } },
-                            fieldRevisions = previous.fieldRevisions.mutate { revisions -> fields.forEach { revisions[it] = (revisions[it] ?: 0) + 1 } })
+                            fieldRevisions = previous.fieldRevisions.mutate { revisions -> fields.forEach { revisions[it] = (revisions[it] ?: 0) + 1 } },
+                        )
                     }
                 }
             } catch (cancelled: CancellationException) {
@@ -292,8 +317,11 @@ internal class ControlLink(
                                 settings.end(attempt)
                                 active = null
                                 updateLinkAttempt(attempt, epoch) {
-                                    if (it.connection is ConnectionState.Disconnected) it
-                                    else it.copy(connection = ConnectionState.Disconnected, device = null, lastError = error, transportSelection = null)
+                                    if (it.connection is ConnectionState.Disconnected) {
+                                        it
+                                    } else {
+                                        it.copy(connection = ConnectionState.Disconnected, device = null, lastError = error, transportSelection = null)
+                                    }
                                 }
                             }
                         }
@@ -321,7 +349,8 @@ internal class ControlLink(
             if (observed?.ended == true) throw observed.failure ?: LinkEnded()
             if (observed == null) {
                 if (index == 0 && !progress.value.meaningful && selection.endpoint is TransportEndpoint.BleGatt &&
-                    requireNotNull(transport).supportsInitializationRecovery) {
+                    requireNotNull(transport).supportsInitializationRecovery
+                ) {
                     throw RecoverableTransportException(TransportRecoveryReason.NO_INITIAL_RESPONSE, "首条初始化读取没有收到有效设备状态")
                 }
                 val timeout = ControlError(ControlErrorCode.TIMEOUT, "${query.key} 部分字段读取超时")
@@ -341,7 +370,8 @@ internal class ControlLink(
         }
         val committedReady = lifecycle.withLock {
             if (active !== attempt || attempt.linkEpoch.value != epoch || progress.value.ended ||
-                state.value.device?.sessionId != attempt.id || state.value.connection is ConnectionState.Disconnected) {
+                state.value.device?.sessionId != attempt.id || state.value.connection is ConnectionState.Disconnected
+            ) {
                 false
             } else {
                 state.update { it.copy(connection = ConnectionState.Connected(candidate.deviceId, attempt.id, profile)) }
@@ -365,22 +395,23 @@ internal class ControlLink(
             writePaced(attempt, connection, bytes)
         } catch (cause: CancellationException) {
             if (cause is TimeoutCancellationException && currentCoroutineContext().isActive &&
-                queryIndex == 0 && canRecoverUnclassified(attempt, selection)) {
+                queryIndex == 0 && canRecoverUnclassified(attempt, selection)
+            ) {
                 throw RecoverableTransportException(TransportRecoveryReason.WRITE_FAILED, "首条初始化读取写入超时", cause)
             }
             throw cause
         } catch (cause: Exception) {
             if (queryIndex == 0 && canRecoverUnclassified(attempt, selection) && cause !is SecurityException &&
                 cause !is IllegalArgumentException && cause !is UnsupportedOperationException && cause !is LinkEnded &&
-                cause !is RecoverableTransportException && cause !is TerminalTransportException) {
+                cause !is RecoverableTransportException && cause !is TerminalTransportException
+            ) {
                 throw RecoverableTransportException(TransportRecoveryReason.WRITE_FAILED, "首条初始化读取写入失败", cause)
             }
             throw cause
         }
     }
 
-    private fun canRecoverUnclassified(attempt: Attempt, selection: TransportSelection): Boolean =
-        selection.endpoint is TransportEndpoint.BleGatt && requireNotNull(transport).supportsInitializationRecovery
+    private fun canRecoverUnclassified(attempt: Attempt, selection: TransportSelection): Boolean = selection.endpoint is TransportEndpoint.BleGatt && requireNotNull(transport).supportsInitializationRecovery
 
     private fun canRetry(
         attempt: Attempt,
@@ -389,14 +420,19 @@ internal class ControlLink(
     ): Boolean {
         if (selection.endpoint !is TransportEndpoint.BleGatt) return false
         if (failure.cause is SecurityException || failure.cause is IllegalArgumentException ||
-            failure.cause is UnsupportedOperationException || failure.cause is TerminalTransportException) return false
+            failure.cause is UnsupportedOperationException || failure.cause is TerminalTransportException
+        ) {
+            return false
+        }
         return when (failure.reason) {
             TransportRecoveryReason.WRITE_FAILED, TransportRecoveryReason.NO_INITIAL_RESPONSE ->
                 attempt.initializationQueryIndex == 0 && canRecoverUnclassified(attempt, selection)
+
             TransportRecoveryReason.SERVICE_DISCOVERY,
             TransportRecoveryReason.SERVICES_UNAVAILABLE,
             TransportRecoveryReason.SUBSCRIPTION,
-            TransportRecoveryReason.SERVICES_CHANGED -> true
+            TransportRecoveryReason.SERVICES_CHANGED,
+            -> true
         }
     }
 
@@ -438,15 +474,24 @@ internal class ControlLink(
             attempt.ready = false
             val profile = requireNotNull(attempt.candidate.profile)
             state.update { current ->
-                if (current.device?.sessionId != attempt.id || current.connection is ConnectionState.Disconnected) current
-                else current.copy(
-                    connection = ConnectionState.Connecting(attempt.candidate.deviceId, attempt.id, ConnectionPhase.CONNECTING),
-                    device = DeviceState(attempt.candidate.deviceId, attempt.id, profile, deviceCapabilities(profile, null),
-                        profile.supportedFields.associateWith { FieldReading.Loading }.toPersistentMap(), classicAddress = attempt.candidate.classicAddress),
-                    lastError = null,
-                    transportSelection = selection,
-                    connectionRecovery = ConnectionRecovery(attempt.id, failure.reason),
-                )
+                if (current.device?.sessionId != attempt.id || current.connection is ConnectionState.Disconnected) {
+                    current
+                } else {
+                    current.copy(
+                        connection = ConnectionState.Connecting(attempt.candidate.deviceId, attempt.id, ConnectionPhase.CONNECTING),
+                        device = DeviceState(
+                            attempt.candidate.deviceId,
+                            attempt.id,
+                            profile,
+                            deviceCapabilities(profile, null),
+                            profile.supportedFields.associateWith { FieldReading.Loading }.toPersistentMap(),
+                            classicAddress = attempt.candidate.classicAddress,
+                        ),
+                        lastError = null,
+                        transportSelection = selection,
+                        connectionRecovery = ConnectionRecovery(attempt.id, failure.reason),
+                    )
+                }
             }
         }
     }
@@ -487,8 +532,10 @@ internal class ControlLink(
         return when (facts.audioProfile) {
             AudioProfileEvidence.UNKNOWN ->
                 TransportSelection(ble, TransportSelectionReason.AUDIO_PROFILE_UNKNOWN)
+
             AudioProfileEvidence.LE_AUDIO ->
                 TransportSelection(ble, TransportSelectionReason.LE_AUDIO)
+
             AudioProfileEvidence.CLASSIC ->
                 TransportSelection(TransportEndpoint.SppRfcomm(address, I7_CONTROL_SPP_UUID), TransportSelectionReason.CLASSIC_AUDIO)
         }
@@ -509,7 +556,9 @@ internal class ControlLink(
         val current = it.connection as? ConnectionState.Connecting
         if (current != null && phase != ConnectionPhase.READY && phase.ordinal >= current.phase.ordinal) {
             it.copy(connection = current.copy(phase = phase))
-        } else it
+        } else {
+            it
+        }
     }
 
     private fun updateLinkAttempt(attempt: Attempt, epoch: Long, update: (ControlState) -> ControlState) {
@@ -551,18 +600,16 @@ internal class ControlLink(
         return closed
     }
 
-    private suspend fun closeSafely(connection: ControlConnection): Boolean =
-        withContext(NonCancellable) {
-            try {
-                connection.close()
-                true
-            } catch (_: Exception) {
-                false
-            }
+    private suspend fun closeSafely(connection: ControlConnection): Boolean = withContext(NonCancellable) {
+        try {
+            connection.close()
+            true
+        } catch (_: Exception) {
+            false
         }
+    }
 
     internal fun platformError(): ControlError? = platformError(state.value, transport)
-
 
     private fun PersistentList<String>.appendRecent(values: Iterable<String>): PersistentList<String> = mutate {
         it.addAll(values)

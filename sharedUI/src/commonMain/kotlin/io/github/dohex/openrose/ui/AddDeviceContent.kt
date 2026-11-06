@@ -9,20 +9,17 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.launch
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.ui.draw.clip
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
@@ -36,6 +33,9 @@ import io.github.dohex.openrose.core.PermissionState
 import io.github.dohex.openrose.core.ScanState
 import io.github.dohex.openrose.core.TransportAvailability
 import io.github.dohex.openrose.core.transport.DeviceId
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 
 /** Presentation only: the route owns scanning, connection attempts, and their lifetimes. */
 @Composable
@@ -185,7 +185,7 @@ private fun AddDeviceHero(scanning: Boolean) {
                             pulse1.snapTo(0f)
                             pulse1.animateTo(
                                 targetValue = 1f,
-                                 animationSpec = spring(
+                                animationSpec = spring(
                                     dampingRatio = Spring.DampingRatioNoBouncy,
                                     stiffness = Spring.StiffnessVeryLow,
                                     visibilityThreshold = 0.001f,
@@ -268,11 +268,13 @@ private fun AddDevicePrerequisite(
                 AppText("允许访问附近设备后，才能搜索并连接耳机。", role = AppTextRole.Summary)
                 onRequestPermission?.let { AppButton("授予蓝牙权限", it) }
             }
+
             state.platform.transport == TransportAvailability.Disabled -> {
                 AppText("系统蓝牙已关闭", role = AppTextRole.Title)
                 AppText("请先在系统设置中打开蓝牙，再回来搜索耳机。", role = AppTextRole.Summary)
                 onOpenSystemSettings?.let { AppButton("打开蓝牙设置", it) }
             }
+
             else -> {
                 AppText("蓝牙传输不可用", role = AppTextRole.Title)
                 AppText(
@@ -364,5 +366,4 @@ private fun AddDeviceCandidateCard(
     }
 }
 
-private fun DeviceCandidate.addDeviceName(): String =
-    name?.takeIf { it.isNotBlank() } ?: profile?.displayName ?: "ROSE 耳机"
+private fun DeviceCandidate.addDeviceName(): String = name?.takeIf { it.isNotBlank() } ?: profile?.displayName ?: "ROSE 耳机"

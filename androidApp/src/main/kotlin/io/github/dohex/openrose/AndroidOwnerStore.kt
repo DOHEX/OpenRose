@@ -1,13 +1,13 @@
 package io.github.dohex.openrose
 
 import android.content.SharedPreferences
-import io.github.dohex.openrose.bridge.FrameworkLink
 import io.github.dohex.openrose.androidintegration.ControlWay
+import io.github.dohex.openrose.androidintegration.IntegrationSettingsCodec
 import io.github.dohex.openrose.androidintegration.OwnerGeneration
 import io.github.dohex.openrose.androidintegration.OwnerRecord
 import io.github.dohex.openrose.androidintegration.OwnerSelectionStore
 import io.github.dohex.openrose.androidintegration.PendingModuleRelease
-import io.github.dohex.openrose.androidintegration.IntegrationSettingsCodec
+import io.github.dohex.openrose.bridge.FrameworkLink
 
 /**
  * The user's control way and the module-release bookkeeping, durable in the credential-protected
@@ -23,12 +23,16 @@ internal class AndroidOwnerStore(
         val values = preferences().all
         val selected = IntegrationSettingsCodec.decodeControlWay(values[KEY_WAY] as? String)
         val pending = values[KEY_PENDING] as? String
-        val release = if (pending == null) null else PendingModuleRelease(
-            requestId = pending.takeIf { it.isNotEmpty() },
-            generation = (values[KEY_INCARNATION] as? String)?.takeIf { it.isNotEmpty() }?.let { incarnation ->
-                (values[KEY_SEQUENCE] as? String)?.toLongOrNull()?.let { OwnerGeneration(incarnation, it) }
-            },
-        )
+        val release = if (pending == null) {
+            null
+        } else {
+            PendingModuleRelease(
+                requestId = pending.takeIf { it.isNotEmpty() },
+                generation = (values[KEY_INCARNATION] as? String)?.takeIf { it.isNotEmpty() }?.let { incarnation ->
+                    (values[KEY_SEQUENCE] as? String)?.toLongOrNull()?.let { OwnerGeneration(incarnation, it) }
+                },
+            )
+        }
         return OwnerRecord(selected, release)
     }
 
@@ -37,8 +41,7 @@ internal class AndroidOwnerStore(
         return !involvesModule(previous, record) || previous.selected == record.selected || framework.canPublish()
     }
 
-    private fun involvesModule(previous: OwnerRecord, record: OwnerRecord) =
-        previous.selected != ControlWay.ORDINARY || record.selected != ControlWay.ORDINARY
+    private fun involvesModule(previous: OwnerRecord, record: OwnerRecord) = previous.selected != ControlWay.ORDINARY || record.selected != ControlWay.ORDINARY
 
     override fun save(record: OwnerRecord): Boolean {
         val previous = load()

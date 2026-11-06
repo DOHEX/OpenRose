@@ -20,8 +20,7 @@ internal class AndroidSettingsStore(private val preferences: () -> SharedPrefere
         return AppSettings(HostSettingsCodec.decode(snapshot), UiSettingsCodec.decode(snapshot))
     }
 
-    fun saveHost(settings: HostSettings, commit: Boolean = false): Boolean =
-        save(HostSettingsCodec.encode(settings), commit)
+    fun saveHost(settings: HostSettings, commit: Boolean = false): Boolean = save(HostSettingsCodec.encode(settings), commit)
 
     fun saveUi(settings: UiSettings) {
         save(UiSettingsCodec.encode(settings), commit = false)

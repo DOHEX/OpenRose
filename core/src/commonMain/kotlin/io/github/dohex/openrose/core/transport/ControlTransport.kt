@@ -69,6 +69,7 @@ data class TransportSelection(
 interface ControlTransport {
     /** Completes when scanning stops; failures are reported through the flow. */
     fun scan(): Flow<Advertisement>
+
     /** Unclassified setup timeouts may be retried only when the adapter explicitly supports it. */
     val supportsInitializationRecovery: Boolean get() = false
     suspend fun connectionFacts(deviceId: DeviceId, classicAddress: String?): TransportFacts = TransportFacts()
@@ -84,9 +85,11 @@ interface ControlTransport {
 interface ControlConnection {
     /** Collect before subscribe(). Completion or failure means this connection has ended. */
     val notifications: Flow<ByteArray>
+
     /** Maximum complete payload accepted by write(), after transport overhead. */
     val maxWriteSize: Int
     suspend fun subscribe()
+
     /** Completes when the platform accepted the write, not when device state is confirmed. */
     suspend fun write(bytes: ByteArray)
     suspend fun close()

@@ -14,18 +14,17 @@ import io.github.dohex.openrose.core.transport.ControlConnection
 import io.github.dohex.openrose.core.transport.ControlTransport
 import io.github.dohex.openrose.core.transport.DeviceId
 import io.github.dohex.openrose.core.transport.GattControlConnection
-import java.io.IOException
+import io.github.dohex.openrose.core.transport.TransportEndpoint
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
-import io.github.dohex.openrose.core.transport.TransportEndpoint
+import java.io.IOException
 
 /** Native Android BLE only; shared session/protocol code has no Android API dependency. */
 @SuppressLint("MissingPermission") // The public session gates permission; revocation remains an observable failure.
 internal class AndroidBleTransport(private val context: Context) : ControlTransport {
-    private fun adapter(): BluetoothAdapter =
-        context.getSystemService(BluetoothManager::class.java)?.adapter
-            ?: throw IOException("系统蓝牙适配器不可用")
+    private fun adapter(): BluetoothAdapter = context.getSystemService(BluetoothManager::class.java)?.adapter
+        ?: throw IOException("系统蓝牙适配器不可用")
 
     override fun scan(): Flow<Advertisement> = callbackFlow {
         requireBluetoothPermission(scan = true)
@@ -41,12 +40,14 @@ internal class AndroidBleTransport(private val context: Context) : ControlTransp
                         }
                     }
                 }
-                trySend(Advertisement(
-                    deviceId = DeviceId(result.device.address),
-                    name = record?.deviceName,
-                    rssi = result.rssi,
-                    manufacturerData = data,
-                ))
+                trySend(
+                    Advertisement(
+                        deviceId = DeviceId(result.device.address),
+                        name = record?.deviceName,
+                        rssi = result.rssi,
+                        manufacturerData = data,
+                    ),
+                )
             }
 
             override fun onBatchScanResults(results: MutableList<ScanResult>) {
@@ -93,4 +94,3 @@ internal class AndroidBleTransport(private val context: Context) : ControlTransp
         }
     }
 }
-

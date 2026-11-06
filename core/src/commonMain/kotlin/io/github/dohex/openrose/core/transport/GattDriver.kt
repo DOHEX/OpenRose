@@ -34,10 +34,13 @@ interface GattDriver {
     val events: Flow<GattEvent>
     suspend fun connect()
     suspend fun discoverServices(): List<GattService>
+
     /** Null means unavailable; platforms without MTU negotiation report the negotiated MTU. */
     suspend fun requestMtu(preferred: Int): Int?
+
     /** Register/unregister local notification delivery, before/after remote configuration. */
     suspend fun setNotificationRouting(characteristic: GattCharacteristic, enabled: Boolean)
+
     /** Configure the peer subscription; native descriptors stay inside the driver. */
     suspend fun configureSubscription(characteristic: GattCharacteristic, subscription: GattSubscription)
     suspend fun write(characteristic: GattCharacteristic, value: ByteArray, withResponse: Boolean)

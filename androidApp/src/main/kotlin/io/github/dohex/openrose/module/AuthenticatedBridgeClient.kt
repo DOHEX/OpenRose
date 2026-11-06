@@ -49,16 +49,25 @@ internal class AuthenticatedBridgeClient(
     internal val handler: Handler = Handler(readerThread.looper)
 
     @Volatile private var started = false
+
     @Volatile private var closing = false
+
     @Volatile private var closed = false
+
     @Volatile private var closeResult: Boolean? = null
+
     /** Host incarnation from `open`; diagnostics only, never sent back. */
     @Volatile private var hostIncarnation: String? = null
+
     /** The owner generation last confirmed by `currentSession`; the only epoch commands may carry. */
     @Volatile private var generation: String? = null
+
     @Volatile private var leaseId: String? = null
+
     @Volatile private var currentReference: SessionReference? = null
+
     @Volatile private var currentSnapshot: Bundle? = null
+
     @Volatile private var targetBridge: IControlBridge? = null
 
     @Volatile private var currentBinding: BridgeBinding? = null
@@ -197,7 +206,9 @@ internal class AuthenticatedBridgeClient(
             unconfirm()
             if (sessionStatus == BridgeWire.STATUS_STALE_HOST || sessionStatus == BridgeWire.STATUS_STALE_SESSION ||
                 sessionStatus == BridgeWire.STATUS_UNAUTHORIZED
-            ) closeLease(bridge)
+            ) {
+                closeLease(bridge)
+            }
             recordStatus("session_$sessionStatus")
             return
         }
@@ -294,8 +305,7 @@ internal class AuthenticatedBridgeClient(
         if (status == BridgeWire.STATUS_UNAUTHORIZED) closeLease(bridge)
     }
 
-    private fun generationOf(bundle: Bundle): String? =
-        bundle.getString(BridgeWire.HOST_EPOCH)?.takeIf { it.isNotBlank() && it.length <= MAX_GENERATION_LENGTH }
+    private fun generationOf(bundle: Bundle): String? = bundle.getString(BridgeWire.HOST_EPOCH)?.takeIf { it.isNotBlank() && it.length <= MAX_GENERATION_LENGTH }
 
     /**
      * Adopts the owner generation reported by `currentSession`. A change revokes every consumer of
@@ -350,8 +360,7 @@ internal class AuthenticatedBridgeClient(
         handler.postDelayed(binding.pollRunnable, delayMillis)
     }
 
-    private fun isCurrentBinding(binding: BridgeBinding): Boolean =
-        started && !closing && !closed && currentBinding === binding
+    private fun isCurrentBinding(binding: BridgeBinding): Boolean = started && !closing && !closed && currentBinding === binding
 
     private fun canRun(): Boolean = started && !closing && !closed
 
@@ -363,8 +372,7 @@ internal class AuthenticatedBridgeClient(
         return true
     }
 
-    private fun hasWireVersion(bundle: Bundle): Boolean =
-        bundle.getInt(BridgeWire.KEY_VERSION, INVALID_WIRE_VERSION) == BridgeWire.VERSION
+    private fun hasWireVersion(bundle: Bundle): Boolean = bundle.getInt(BridgeWire.KEY_VERSION, INVALID_WIRE_VERSION) == BridgeWire.VERSION
 
     private fun leaseRequest(lease: String, ownerGeneration: String?): Bundle = Bundle().apply {
         putInt(BridgeWire.KEY_VERSION, BridgeWire.VERSION)
@@ -372,11 +380,10 @@ internal class AuthenticatedBridgeClient(
         ownerGeneration?.let { putString(BridgeWire.HOST_EPOCH, it) }
     }
 
-    private fun sessionRequest(lease: String, ownerGeneration: String, deviceId: String, sessionId: Long): Bundle =
-        leaseRequest(lease, ownerGeneration).apply {
-            putString(BridgeWire.DEVICE_ID, deviceId)
-            putLong(BridgeWire.SESSION_ID, sessionId)
-        }
+    private fun sessionRequest(lease: String, ownerGeneration: String, deviceId: String, sessionId: Long): Bundle = leaseRequest(lease, ownerGeneration).apply {
+        putString(BridgeWire.DEVICE_ID, deviceId)
+        putLong(BridgeWire.SESSION_ID, sessionId)
+    }
 
     /**
      * A command may only address the snapshot it was built from, and only while that snapshot's
@@ -394,12 +401,13 @@ internal class AuthenticatedBridgeClient(
             .takeIf { it > 0L } ?: return null
         if (snapshot.getInt(BridgeWire.KEY_VERSION, INVALID_WIRE_VERSION) != BridgeWire.VERSION ||
             snapshotGeneration != confirmed || (requireCurrentReference && currentReference != SessionReference(deviceId, sessionId))
-        ) return null
+        ) {
+            return null
+        }
         return sessionRequest(lease, confirmed, deviceId, sessionId)
     }
 
-    private fun isLeaseUsable(): Boolean =
-        started && !closed && !closing && leaseId != null && targetBridge != null
+    private fun isLeaseUsable(): Boolean = started && !closed && !closing && leaseId != null && targetBridge != null
 
     /** Atomically claims the current connection prompt for this authorised session. */
     fun claimPrompt(snapshot: Bundle, promptId: String): Boolean {
@@ -440,7 +448,9 @@ internal class AuthenticatedBridgeClient(
     fun reportComponent(feature: String, status: String, detail: String) {
         if (feature.isBlank() || feature.length > MAX_FEATURE_LENGTH ||
             status.isBlank() || status.length > MAX_STATUS_LENGTH
-        ) return
+        ) {
+            return
+        }
         val request = currentLeaseRequest() ?: return
         request.putString(BridgePresentationWire.FEATURE, feature)
         request.putString(BridgeWire.STATUS, status)
@@ -458,7 +468,10 @@ internal class AuthenticatedBridgeClient(
         request.putString(BridgeWire.FUSION_ADDRESS, address)
         val response = callRemote(request) { bridge, call -> bridge.fusionEntry(call) } ?: return null
         if (!hasWireVersion(response) || response.getString(BridgeWire.STATUS) != BridgeWire.STATUS_OK ||
-            response.getString(BridgeWire.FUSION_DECISION) != BridgeWire.FUSION_OPENROSE) return null
+            response.getString(BridgeWire.FUSION_DECISION) != BridgeWire.FUSION_OPENROSE
+        ) {
+            return null
+        }
         return response.getString(BridgeWire.DEVICE_ID)?.takeIf { it.isNotBlank() && it.length <= MAX_DEVICE_ID_LENGTH }
     }
 
@@ -560,7 +573,9 @@ internal class AuthenticatedBridgeClient(
                 clean = false
                 Log.e(TAG, "bridge_feature_cleanup_failed target=$target", it)
             }.getOrDefault(false)
-        ) clean = false
+        ) {
+            clean = false
+        }
 
         val binding = currentBinding
         closeLease(binding?.bridge ?: targetBridge)
@@ -620,12 +635,15 @@ internal class AuthenticatedBridgeClient(
                 // prompts a re-read, which re-confirms the generation through currentSession.
                 if (identity.getInt(BridgeWire.KEY_VERSION, INVALID_WIRE_VERSION) != BridgeWire.VERSION ||
                     identity.getString(BridgeWire.LEASE_ID) != leaseId
-                ) return
+                ) {
+                    return
+                }
                 schedulePoll(this@BridgeBinding)
             }
         }
 
         @Volatile var bridge: IControlBridge? = null
+
         @Volatile var isBound: Boolean = false
         var lastStatus: String? = null
 

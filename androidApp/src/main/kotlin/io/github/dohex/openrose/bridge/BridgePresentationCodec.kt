@@ -8,13 +8,23 @@ internal fun SystemPresentationState.toBridgePresentation(): Bundle = Bundle().a
     putString(BridgePresentationWire.MODE, islandMode.name)
     putBoolean(BridgePresentationWire.FOCUS_ENABLED, focusNotificationEnabled)
     putBoolean(BridgePresentationWire.ALLOW_ISLAND_FIELDS, allowIslandFields)
-    if (showStatusNotification) putBundle(BridgePresentationWire.NOTIFICATION, Bundle().apply {
-        putString(BridgePresentationWire.TAG, "openrose:$notificationTag")
-    })
-    connectionPrompt?.let { prompt -> putBundle(BridgePresentationWire.PROMPT, Bundle().apply {
-        putString(BridgePresentationWire.PROMPT_ID, prompt.id)
-        putString(BridgePresentationWire.MODE, prompt.mode.name)
-        putBoolean(BridgePresentationWire.CLAIMED, prompt.claimed)
-        putLong(BridgePresentationWire.DURATION_MILLIS, prompt.durationMillis)
-    }) }
+    if (showStatusNotification) {
+        putBundle(
+            BridgePresentationWire.NOTIFICATION,
+            Bundle().apply {
+                putString(BridgePresentationWire.TAG, "openrose:$notificationTag")
+            },
+        )
+    }
+    connectionPrompt?.let { prompt ->
+        putBundle(
+            BridgePresentationWire.PROMPT,
+            Bundle().apply {
+                putString(BridgePresentationWire.PROMPT_ID, prompt.id)
+                putString(BridgePresentationWire.MODE, prompt.mode.name)
+                putBoolean(BridgePresentationWire.CLAIMED, prompt.claimed)
+                putLong(BridgePresentationWire.DURATION_MILLIS, prompt.durationMillis)
+            },
+        )
+    }
 }

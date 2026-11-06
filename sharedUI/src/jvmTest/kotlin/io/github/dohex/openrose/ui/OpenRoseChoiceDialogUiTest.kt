@@ -1,8 +1,5 @@
 package io.github.dohex.openrose.ui
 
-import kotlinx.collections.immutable.persistentMapOf
-import kotlinx.collections.immutable.persistentSetOf
-import kotlinx.collections.immutable.plus
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.semantics.Role
@@ -14,6 +11,9 @@ import io.github.dohex.openrose.core.protocol.FieldReading
 import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.dohex.openrose.core.protocol.ModelProfile
 import io.github.dohex.openrose.core.transport.DeviceId
+import kotlinx.collections.immutable.persistentMapOf
+import kotlinx.collections.immutable.persistentSetOf
+import kotlinx.collections.immutable.plus
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -59,10 +59,13 @@ class OpenRoseChoiceDialogUiTest {
                     harness.clickText("提示音音量")
                     harness.render()
                     if (reading is FieldReading.Unknown) {
-                        assertFalse(harness.nodes().any { node ->
-                            node.config.getOrNull(SemanticsProperties.Role) == Role.RadioButton &&
-                                node.config.getOrNull(SemanticsProperties.Selected) == true
-                        }, "unknown device state has no selected option in $style")
+                        assertFalse(
+                            harness.nodes().any { node ->
+                                node.config.getOrNull(SemanticsProperties.Role) == Role.RadioButton &&
+                                    node.config.getOrNull(SemanticsProperties.Selected) == true
+                            },
+                            "unknown device state has no selected option in $style",
+                        )
                         harness.clickText("取消")
                         harness.render()
                         assertTrue(harness.settingWrites.isEmpty(), "cancel must not submit an unknown value")
@@ -79,18 +82,25 @@ class OpenRoseChoiceDialogUiTest {
                     harness.clickText("提示音音量")
                     harness.render()
                     if (reading is FieldReading.Unknown) {
-                        assertFalse(harness.nodes().any { node ->
-                            node.config.getOrNull(SemanticsProperties.Role) == Role.RadioButton &&
-                                node.config.getOrNull(SemanticsProperties.Selected) == true
-                        }, "the request is not a confirmation in $style")
+                        assertFalse(
+                            harness.nodes().any { node ->
+                                node.config.getOrNull(SemanticsProperties.Role) == Role.RadioButton &&
+                                    node.config.getOrNull(SemanticsProperties.Selected) == true
+                            },
+                            "the request is not a confirmation in $style",
+                        )
                     } else {
                         assertTrue(harness.hasSelectedText("1 档"), "the previous confirmed option remains selected in $style")
                     }
                     harness.clickText(if (reading is FieldReading.Unknown) "取消" else "1 档")
                     harness.render()
                     val device = requireNotNull(harness.state.value.device)
-                    harness.state.value = harness.state.value.copy(device = device.copy(fields = device.fields +
-                        (DeviceField.PROMPT_VOLUME to FieldReading.Known(FieldValue.Number(2), "02"))))
+                    harness.state.value = harness.state.value.copy(
+                        device = device.copy(
+                            fields = device.fields +
+                                (DeviceField.PROMPT_VOLUME to FieldReading.Known(FieldValue.Number(2), "02")),
+                        ),
+                    )
                     harness.render()
                     harness.clickText("提示音音量")
                     harness.render()
@@ -137,8 +147,10 @@ class OpenRoseChoiceDialogUiTest {
                 assertEquals(next, harness.uiSettings.value.interfaceStyle)
                 assertEquals(listOf(originalSettings.copy(interfaceStyle = next)), harness.settingsWrites)
                 assertTrue(harness.settingWrites.isEmpty())
-                assertEquals(ConnectionState.Connected(harness.deviceId, 42L, ModelProfile.I7_RS_V2, ConnectionPhase.READY),
-                    harness.state.value.connection)
+                assertEquals(
+                    ConnectionState.Connected(harness.deviceId, 42L, ModelProfile.I7_RS_V2, ConnectionPhase.READY),
+                    harness.state.value.connection,
+                )
                 assertEquals(0, harness.otherActions)
             }
         }
@@ -153,7 +165,9 @@ class OpenRoseChoiceDialogUiTest {
         val id = DeviceId("dialog-test-i7")
         val profile = ModelProfile.I7_RS_V2
         val device = DeviceState(
-            deviceId = id, sessionId = 42L, profile = profile,
+            deviceId = id,
+            sessionId = 42L,
+            profile = profile,
             capabilities = DeviceCapabilities(
                 readableFields = persistentSetOf(DeviceField.PROMPT_VOLUME),
                 writableSettings = persistentSetOf(DeviceSetting.PROMPT_VOLUME),
@@ -161,11 +175,13 @@ class OpenRoseChoiceDialogUiTest {
             ),
             fields = persistentMapOf(DeviceField.PROMPT_VOLUME to reading),
         )
-        val state = mutableStateOf(ControlState(
-            platform = PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
-            connection = ConnectionState.Connected(id, 42L, profile, ConnectionPhase.READY),
-            device = device,
-        ))
+        val state = mutableStateOf(
+            ControlState(
+                platform = PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
+                connection = ConnectionState.Connected(id, 42L, profile, ConnectionPhase.READY),
+                device = device,
+            ),
+        )
         val uiSettings = mutableStateOf(UiSettings(interfaceStyle = style))
         val model = FakeOpenRoseModel(state, uiSettings)
         var otherActions = 0

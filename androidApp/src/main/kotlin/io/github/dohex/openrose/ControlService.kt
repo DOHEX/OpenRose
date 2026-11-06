@@ -5,15 +5,15 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
-import android.graphics.drawable.Icon
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.graphics.drawable.Icon
 import android.os.Build
 import android.os.IBinder
 import io.github.dohex.openrose.androidintegration.BackgroundControlBlock
-import io.github.dohex.openrose.core.ConnectionState
-import io.github.dohex.openrose.androidintegration.OrdinarySessionHold
 import io.github.dohex.openrose.androidintegration.ControlWay
+import io.github.dohex.openrose.androidintegration.OrdinarySessionHold
+import io.github.dohex.openrose.core.ConnectionState
 import io.github.dohex.openrose.core.ControlState
 import io.github.dohex.openrose.core.TransportAvailability
 import kotlinx.coroutines.CoroutineScope
@@ -136,10 +136,15 @@ class ControlService : Service() {
     private fun notification(state: ControlState): Notification {
         ensureChannel()
         val open = PendingIntent.getActivity(
-            this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+            this,
+            0,
+            Intent(this, MainActivity::class.java),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
         val disable = PendingIntent.getService(
-            this, 1, Intent(this, ControlService::class.java).setAction(ACTION_DISABLE),
+            this,
+            1,
+            Intent(this, ControlService::class.java).setAction(ACTION_DISABLE),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
         return Notification.Builder(this, CHANNEL_ID)
@@ -162,7 +167,9 @@ class ControlService : Service() {
 
     private fun notificationText(state: ControlState): String = when (val connection = state.connection) {
         is ConnectionState.Connected -> "已连接 ${connection.profile.displayName}"
+
         is ConnectionState.Connecting -> "正在连接耳机"
+
         ConnectionState.Disconnected -> when (val transport = state.platform.transport) {
             TransportAvailability.Available -> "等待耳机音频连接"
             TransportAvailability.Disabled -> "系统蓝牙已关闭"

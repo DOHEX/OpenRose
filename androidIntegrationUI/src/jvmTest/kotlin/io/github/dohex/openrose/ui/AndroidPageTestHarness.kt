@@ -36,7 +36,10 @@ internal open class AndroidPageHarness(
     scene: OpenRoseUiTestScene,
     val page: MutableState<String>,
 ) : OpenRoseUiTestHarness(scene) {
-    fun openPage(label: String) { page.value = label; render() }
+    fun openPage(label: String) {
+        page.value = label
+        render()
+    }
 }
 
 @Composable

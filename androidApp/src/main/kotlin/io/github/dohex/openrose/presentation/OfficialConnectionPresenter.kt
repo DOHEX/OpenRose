@@ -33,6 +33,7 @@ internal class OfficialConnectionPresenter(
     private val assetLock = Any()
     private val ownedAssets = linkedMapOf<Uri, OwnedAsset>()
     private var active: ActiveToast? = null
+
     @Volatile private var closed = false
 
     /** Prepares media, then atomically claims the current prompt immediately before submission. */
@@ -95,8 +96,11 @@ internal class OfficialConnectionPresenter(
         val clips = try {
             prepareClips(request, token)
         } catch (failure: Throwable) {
-            report(snapshot, BridgePresentationWire.UNAVAILABLE,
-                "official_clip_or_provider_probe_failed:${failure.javaClass.simpleName}")
+            report(
+                snapshot,
+                BridgePresentationWire.UNAVAILABLE,
+                "official_clip_or_provider_probe_failed:${failure.javaClass.simpleName}",
+            )
             return
         }
 
@@ -108,14 +112,20 @@ internal class OfficialConnectionPresenter(
         val failure = runCatching { setStatus(payload) }.exceptionOrNull()
         if (failure != null) {
             revokeAssetsAfter(clips, OFFICIAL_DURATION_MILLIS + URI_RELEASE_GRACE_MILLIS)
-            report(snapshot, BridgePresentationWire.UNAVAILABLE,
-                "official_set_status_failed:${failure.cause?.javaClass?.simpleName ?: failure.javaClass.simpleName}")
+            report(
+                snapshot,
+                BridgePresentationWire.UNAVAILABLE,
+                "official_set_status_failed:${failure.cause?.javaClass?.simpleName ?: failure.javaClass.simpleName}",
+            )
             return
         }
 
         active = activateToast(request, clips, snapshot)
-        report(snapshot, BridgePresentationWire.CALLED,
-            "xiaomi_bluetooth_set_status_returned;provider_and_uri_grant_probed;systemui_display_unverified")
+        report(
+            snapshot,
+            BridgePresentationWire.CALLED,
+            "xiaomi_bluetooth_set_status_returned;provider_and_uri_grant_probed;systemui_display_unverified",
+        )
     }
 
     private fun activateToast(
@@ -161,14 +171,22 @@ internal class OfficialConnectionPresenter(
         val failure = runCatching { setStatus(payload) }.exceptionOrNull()
         if (failure == null) {
             revokeAssetsAfter(record.clips, URI_RELEASE_GRACE_MILLIS, preserveReadGrace = true)
-            if (report) report(record.snapshot, BridgePresentationWire.WITHDRAWN,
-                "xiaomi_bluetooth_hide_set_status_returned;systemui_withdrawal_unverified:$reason")
+            if (report) {
+                report(
+                    record.snapshot,
+                    BridgePresentationWire.WITHDRAWN,
+                    "xiaomi_bluetooth_hide_set_status_returned;systemui_withdrawal_unverified:$reason",
+                )
+            }
         } else {
             revokeAssetsAfter(record.clips, left + URI_RELEASE_GRACE_MILLIS, preserveReadGrace = true)
             if (report) {
                 val detail = failure.cause?.javaClass?.simpleName ?: failure.javaClass.simpleName
-                report(record.snapshot, BridgePresentationWire.ACTION_FAILED,
-                    "official_hide_failed:$detail:$reason")
+                report(
+                    record.snapshot,
+                    BridgePresentationWire.ACTION_FAILED,
+                    "official_hide_failed:$detail:$reason",
+                )
             }
         }
     }
@@ -177,7 +195,10 @@ internal class OfficialConnectionPresenter(
         val service = targetContext.getSystemService("statusbar")
             ?: throw IllegalStateException("statusbar_service_missing")
         service.javaClass.getMethod(
-            "setStatus", Int::class.javaPrimitiveType, String::class.java, Bundle::class.java,
+            "setStatus",
+            Int::class.javaPrimitiveType,
+            String::class.java,
+            Bundle::class.java,
         ).invoke(service, 1, "strong_toast_action", payload)
     }
 
@@ -188,11 +209,15 @@ internal class OfficialConnectionPresenter(
         val presentation = snapshot.getBundle(BridgePresentationWire.PRESENTATION) ?: return null
         if (presentation.getString(BridgePresentationWire.MODE) != BridgePresentationWire.OFFICIAL ||
             !presentation.getBoolean(BridgePresentationWire.ALLOW_ISLAND_FIELDS, false)
-        ) return null
+        ) {
+            return null
+        }
         val prompt = presentation.getBundle(BridgePresentationWire.PROMPT) ?: return null
         if (prompt.getString(BridgePresentationWire.PROMPT_ID) != promptId ||
             prompt.getString(BridgePresentationWire.MODE) != BridgePresentationWire.OFFICIAL
-        ) return null
+        ) {
+            return null
+        }
         return PromptRequest(
             identity = identity,
             promptId = promptId,
@@ -342,12 +367,15 @@ internal class OfficialConnectionPresenter(
         // remains useful when charging is unknown and does not claim a false charging flag.
         if (battery != null) {
             val text = JSONObject()
-                .put("text", "${battery}%")
-                .put("textColor", when {
-                    charging == true -> Color.GREEN
-                    battery <= LOW_BATTERY_THRESHOLD -> Color.RED
-                    else -> Color.WHITE
-                })
+                .put("text", "$battery%")
+                .put(
+                    "textColor",
+                    when {
+                        charging == true -> Color.GREEN
+                        battery <= LOW_BATTERY_THRESHOLD -> Color.RED
+                        else -> Color.WHITE
+                    },
+                )
             if (island) text.put("turnAnim", true) else text.put("viewFlags", 0)
             side.put("textParams", text)
         }

@@ -10,8 +10,8 @@ import io.github.dohex.openrose.ui.AppInfoRow
 import io.github.dohex.openrose.ui.AppSwitchRow
 import io.github.dohex.openrose.ui.PlatformSettingsPosition
 import io.github.dohex.openrose.ui.PlatformUi
-import java.io.File
 import kotlinx.coroutines.flow.StateFlow
+import java.io.File
 
 /** Desktop sections: the tray on the status page, 后台控制 and 登录时启动 in settings. */
 internal class DesktopPlatformUi(

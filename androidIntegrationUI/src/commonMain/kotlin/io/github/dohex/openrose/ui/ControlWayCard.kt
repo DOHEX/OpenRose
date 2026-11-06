@@ -5,9 +5,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import io.github.dohex.openrose.androidintegration.ControlWay
 import io.github.dohex.openrose.androidintegration.HandoffOutcome
 import io.github.dohex.openrose.androidintegration.IntegrationState
 import io.github.dohex.openrose.androidintegration.OwnerFailureStage
@@ -16,7 +17,6 @@ import io.github.dohex.openrose.androidintegration.OwnerReadiness
 import io.github.dohex.openrose.core.ConnectionPhase
 import io.github.dohex.openrose.core.ConnectionState
 import io.github.dohex.openrose.core.ControlState
-import io.github.dohex.openrose.androidintegration.ControlWay
 
 private val controlWayOptions = listOf(
     AppOption(ControlWay.ORDINARY, "普通控制", testTag = ControlWayTags.option(ControlWay.ORDINARY)),
@@ -107,14 +107,18 @@ internal fun ControlStatusGroup(state: ControlState, integration: IntegrationSta
         }
         when (readiness) {
             OwnerReadiness.Ready, OwnerReadiness.Starting -> Unit
+
             is OwnerReadiness.Idle -> AppInfoRow("原因", readiness.reason)
+
             is OwnerReadiness.Unavailable -> {
                 Tagged(ControlWayTags.failureStage(readiness.stage)) {
                     AppInfoRow("失败阶段", stageLabel(readiness.stage))
                 }
                 AppInfoRow("原因", readiness.reason)
             }
+
             is OwnerReadiness.Switching -> AppInfoRow("切换目标", wayLabel(readiness.request.to))
+
             is OwnerReadiness.SwitchBlocked -> {
                 Tagged(ControlWayTags.failureStage(readiness.stage)) {
                     AppInfoRow("失败阶段", stageLabel(readiness.stage))
@@ -169,9 +173,8 @@ private fun OwnerHolderGroup(holder: OwnerHolder) {
 
 private fun Modifier.controlWayTextPadding(): Modifier = padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 12.dp)
 
-private fun HandoffOutcome.Blocked.duplicatesReadiness(readiness: OwnerReadiness): Boolean =
-    readiness is OwnerReadiness.SwitchBlocked && readiness.request.id == request.id &&
-        readiness.stage == stage && readiness.reason == reason
+private fun HandoffOutcome.Blocked.duplicatesReadiness(readiness: OwnerReadiness): Boolean = readiness is OwnerReadiness.SwitchBlocked && readiness.request.id == request.id &&
+    readiness.stage == stage && readiness.reason == reason
 
 private fun wayLabel(way: ControlWay): String = when (way) {
     ControlWay.ORDINARY -> "普通控制"
@@ -199,7 +202,9 @@ private fun stageLabel(stage: OwnerFailureStage): String = when (stage) {
 
 private fun connectionLabel(connection: ConnectionState): String = when (connection) {
     ConnectionState.Disconnected -> "未连接"
+
     is ConnectionState.Connecting -> "连接中"
+
     is ConnectionState.Connected -> buildString {
         append("已连接 · ").append(connection.profile.shortLabel).append(' ').append(connection.profile.configurationLabel)
         if (connection.phase != ConnectionPhase.READY) append("（正在读取状态）")

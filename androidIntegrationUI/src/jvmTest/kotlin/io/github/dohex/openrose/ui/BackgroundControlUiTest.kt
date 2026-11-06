@@ -4,14 +4,13 @@ package io.github.dohex.openrose.ui
 
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
-import kotlinx.coroutines.flow.MutableStateFlow
 import io.github.dohex.openrose.androidintegration.BackgroundControlBlock
 import io.github.dohex.openrose.androidintegration.BackgroundServiceFact
 import io.github.dohex.openrose.androidintegration.BackgroundServiceFacts
 import io.github.dohex.openrose.androidintegration.CompanionAssociation
-import io.github.dohex.openrose.androidintegration.IntegrationSettings
 import io.github.dohex.openrose.androidintegration.ControlWay
 import io.github.dohex.openrose.androidintegration.IntegrationPlatformState
+import io.github.dohex.openrose.androidintegration.IntegrationSettings
 import io.github.dohex.openrose.androidintegration.IntegrationState
 import io.github.dohex.openrose.androidintegration.OwnerReadiness
 import io.github.dohex.openrose.androidintegration.OwnerState
@@ -25,6 +24,7 @@ import io.github.dohex.openrose.core.PermissionState
 import io.github.dohex.openrose.core.PlatformApplicability
 import io.github.dohex.openrose.core.PlatformState
 import io.github.dohex.openrose.core.TransportAvailability
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -88,9 +88,13 @@ class BackgroundControlUiTest {
                 harness.render()
                 harness.openPage("设置")
                 harness.updateIntegration {
-                    it.copy(platform = it.platform.copy(backgroundService = BackgroundServiceFacts(
-                        BackgroundServiceFact.StartRejected(BackgroundControlBlock.BACKGROUND_START_RESTRICTED),
-                    )))
+                    it.copy(
+                        platform = it.platform.copy(
+                            backgroundService = BackgroundServiceFacts(
+                                BackgroundServiceFact.StartRejected(BackgroundControlBlock.BACKGROUND_START_RESTRICTED),
+                            ),
+                        ),
+                    )
                 }
                 harness.render()
                 assertTrue(
@@ -99,9 +103,14 @@ class BackgroundControlUiTest {
                 )
 
                 harness.updateIntegration {
-                    it.copy(platform = it.platform.copy(backgroundService = BackgroundServiceFacts(
-                        BackgroundServiceFact.Running, RunningNotification.HIDDEN,
-                    )))
+                    it.copy(
+                        platform = it.platform.copy(
+                            backgroundService = BackgroundServiceFacts(
+                                BackgroundServiceFact.Running,
+                                RunningNotification.HIDDEN,
+                            ),
+                        ),
+                    )
                 }
                 harness.render()
                 assertTrue(harness.hasTag(BackgroundControlTags.NOTIFICATION_HIDDEN), "hidden notification is disclosed in $style")
@@ -125,9 +134,13 @@ class BackgroundControlUiTest {
                 harness.render()
                 harness.openPage("设置")
                 harness.updateIntegration {
-                    it.copy(platform = it.platform.copy(backgroundService = BackgroundServiceFacts(
-                        wake = WakeFacts(WakeBand.ANDROID_14_PLUS, CompanionAssociation.MISSING, PresenceObservation.NOT_OBSERVING),
-                    )))
+                    it.copy(
+                        platform = it.platform.copy(
+                            backgroundService = BackgroundServiceFacts(
+                                wake = WakeFacts(WakeBand.ANDROID_14_PLUS, CompanionAssociation.MISSING, PresenceObservation.NOT_OBSERVING),
+                            ),
+                        ),
+                    )
                 }
                 harness.render()
                 assertTrue(harness.hasTag(BackgroundControlTags.RECOVERY_NEEDS_ASSOCIATION), "gap is stated in $style")
@@ -232,9 +245,13 @@ class BackgroundControlUiTest {
         val fake = FakeBackgroundHost(state, integration)
         val page = mutableStateOf("设置")
         val model = FakeOpenRoseModel(state, mutableStateOf(UiSettings(interfaceStyle = style)))
-        val platform = androidTestPlatform(integration, onPermission = fake::grantBluetoothPermission,
-            onNotification = fake::showRunningNotification, onAssociation = fake::associateEarphones,
-            onAppSettings = fake::openAppSettings)
+        val platform = androidTestPlatform(
+            integration,
+            onPermission = fake::grantBluetoothPermission,
+            onNotification = fake::showRunningNotification,
+            onAssociation = fake::associateEarphones,
+            onAppSettings = fake::openAppSettings,
+        )
         setContent { AndroidTestPage(model, platform, page) }
         block(Harness(this, page, state, integration, fake))
     }
@@ -274,6 +291,8 @@ class BackgroundControlUiTest {
         val integration: MutableStateFlow<IntegrationState>,
         val host: FakeBackgroundHost,
     ) : AndroidPageHarness(scene, page) {
-        fun updateIntegration(transform: (IntegrationState) -> IntegrationState) { integration.value = transform(integration.value) }
+        fun updateIntegration(transform: (IntegrationState) -> IntegrationState) {
+            integration.value = transform(integration.value)
+        }
     }
 }

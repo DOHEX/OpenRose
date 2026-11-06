@@ -1,7 +1,5 @@
 package io.github.dohex.openrose.androidintegration
 
-import kotlinx.collections.immutable.persistentSetOf
-
 import io.github.dohex.openrose.core.ConnectionPhase
 import io.github.dohex.openrose.core.ConnectionState
 import io.github.dohex.openrose.core.DeviceCandidate
@@ -19,11 +17,7 @@ import io.github.dohex.openrose.core.transport.ControlConnection
 import io.github.dohex.openrose.core.transport.ControlTransport
 import io.github.dohex.openrose.core.transport.DeviceId
 import io.github.dohex.openrose.core.transport.TransportEndpoint
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFalse
-import kotlin.test.assertIs
-import kotlin.test.assertTrue
+import kotlinx.collections.immutable.persistentSetOf
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -33,6 +27,11 @@ import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertIs
+import kotlin.test.assertTrue
 
 /**
  * Ordinary background control is an intent the user saves plus platform facts about the service
@@ -258,17 +257,16 @@ class BackgroundControlTest {
         platform = IntegrationPlatformState(backgroundService = BackgroundServiceFacts(service, notifications)),
     ).backgroundControl(runtime.state.value)
 
-    private fun TestScope.newRuntime(transport: RoseTransport, settings: IntegrationSettings = IntegrationSettings()): SystemEntryRuntime =
-        SystemEntryRuntime(
-            control = LocalControlRuntime(
-                initialPlatformState = androidPlatform(),
-                transport = transport,
-                scope = backgroundScope,
-                timing = SessionTiming(queryTimeoutMillis = 50, i5WriteIntervalMillis = 0, i7WriteIntervalMillis = 0),
-            ),
+    private fun TestScope.newRuntime(transport: RoseTransport, settings: IntegrationSettings = IntegrationSettings()): SystemEntryRuntime = SystemEntryRuntime(
+        control = LocalControlRuntime(
+            initialPlatformState = androidPlatform(),
+            transport = transport,
             scope = backgroundScope,
-            initialIntegrationSettings = settings,
-        )
+            timing = SessionTiming(queryTimeoutMillis = 50, i5WriteIntervalMillis = 0, i7WriteIntervalMillis = 0),
+        ),
+        scope = backgroundScope,
+        initialIntegrationSettings = settings,
+    )
 
     private class RoseTransport(private val bonded: List<DeviceCandidate> = emptyList()) : ControlTransport {
         val audioDevice = MutableSharedFlow<DeviceId?>(replay = 1, extraBufferCapacity = 8)
@@ -277,8 +275,7 @@ class BackgroundControlTest {
         override val audioConnectedDevice: Flow<DeviceId?> get() = audioDevice
         override suspend fun bondedDevices(): List<DeviceCandidate> = bonded
         override fun scan(): Flow<Advertisement> = emptyFlow()
-        override suspend fun connect(deviceId: DeviceId, endpoint: TransportEndpoint, onPhase: (ConnectionPhase) -> Unit): ControlConnection =
-            RoseConnection().also(links::add)
+        override suspend fun connect(deviceId: DeviceId, endpoint: TransportEndpoint, onPhase: (ConnectionPhase) -> Unit): ControlConnection = RoseConnection().also(links::add)
     }
 
     private class RoseConnection : ControlConnection {

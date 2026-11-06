@@ -46,18 +46,22 @@ class GattControlConnection private constructor(
                     when (event) {
                         is GattEvent.Notification -> {
                             if (event.characteristic === services.value?.notifier &&
-                                received.trySend(event.value).isFailure) {
+                                received.trySend(event.value).isFailure
+                            ) {
                                 end(TerminalTransportException("通知接收缓冲区已满或已关闭"))
                             }
                         }
+
                         GattEvent.ServicesChanged -> {
                             val invalidated = lifecycle.withLock {
                                 generation++
                                 services.value != null
                             }
-                            if (invalidated) end(RecoverableTransportException(
-                                TransportRecoveryReason.SERVICES_CHANGED, "蓝牙服务数据库已变化；需要重新建立连接"))
+                            if (invalidated) {
+                                end(RecoverableTransportException(TransportRecoveryReason.SERVICES_CHANGED, "蓝牙服务数据库已变化；需要重新建立连接"))
+                            }
                         }
+
                         is GattEvent.Disconnected -> end(classify(event.failure, TransportRecoveryReason.SERVICE_DISCOVERY))
                     }
                 }
@@ -76,8 +80,7 @@ class GattControlConnection private constructor(
     private suspend fun initialize(onPhase: (ConnectionPhase) -> Unit) {
         native(TransportRecoveryReason.SERVICE_DISCOVERY) { driver.connect() }
         onPhase(ConnectionPhase.DISCOVERING)
-        var exhausted: Exception = RecoverableTransportException(
-            TransportRecoveryReason.SERVICES_UNAVAILABLE, "重新发现后仍未找到此型号要求的服务或特征")
+        var exhausted: Exception = RecoverableTransportException(TransportRecoveryReason.SERVICES_UNAVAILABLE, "重新发现后仍未找到此型号要求的服务或特征")
         for (attempt in 0..2) {
             val before = lifecycle.withLock { generation }
             val found = try {
@@ -218,15 +221,22 @@ class GattControlConnection private constructor(
             endpoint: TransportEndpoint.BleGatt,
             onPhase: (ConnectionPhase) -> Unit,
         ): GattControlConnection {
-            val connection = GattControlConnection(driver, endpoint,
-                CoroutineScope(currentCoroutineContext().minusKey(Job) + SupervisorJob()))
+            val connection = GattControlConnection(
+                driver,
+                endpoint,
+                CoroutineScope(currentCoroutineContext().minusKey(Job) + SupervisorJob()),
+            )
             connection.observe()
             try {
                 connection.initialize(onPhase)
                 return connection
             } catch (error: Throwable) {
                 withContext(NonCancellable) {
-                    try { connection.close() } catch (closing: Exception) { error.addSuppressed(closing) }
+                    try {
+                        connection.close()
+                    } catch (closing: Exception) {
+                        error.addSuppressed(closing)
+                    }
                 }
                 throw error
             }

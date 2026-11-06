@@ -88,9 +88,7 @@ data class HostSettings(
 )
 
 object HostSettingsCodec {
-    fun encode(settings: HostSettings): Map<String, String> =
-        UserSettingsCodec.encode(settings.control) + IntegrationSettingsCodec.encode(settings.integration)
+    fun encode(settings: HostSettings): Map<String, String> = UserSettingsCodec.encode(settings.control) + IntegrationSettingsCodec.encode(settings.integration)
 
-    fun decode(values: Map<String, String>): HostSettings =
-        HostSettings(UserSettingsCodec.decode(values), IntegrationSettingsCodec.decode(values))
+    fun decode(values: Map<String, String>): HostSettings = HostSettings(UserSettingsCodec.decode(values), IntegrationSettingsCodec.decode(values))
 }

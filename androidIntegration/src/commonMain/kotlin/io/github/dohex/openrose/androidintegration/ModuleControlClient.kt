@@ -4,8 +4,8 @@ import io.github.dohex.openrose.core.ControlError
 import io.github.dohex.openrose.core.ControlErrorCode
 import io.github.dohex.openrose.core.OperationResult
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.cancel
@@ -15,10 +15,10 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeout
 
@@ -128,49 +128,52 @@ class ModuleControlClient(
      * generation by itself: the owner the host reports is remembered in [lastObservedGeneration] and the
      * caller must ask again naming it.
      */
-    suspend fun release(request: SwitchRequest): ReleaseProof =
-        withConnection({ ReleaseProof.Unproven(it.stage, it.reason) }) { connection ->
-            val result = try {
-                withTimeout(timing.releaseTimeoutMillis) { connection.release(request) }
-            } catch (e: TimeoutCancellationException) {
-                return@withConnection ReleaseProof.Unproven(OwnerFailureStage.RELEASE, "模块宿主未在期限内确认释放")
-            } catch (e: HostLinkException) {
-                return@withConnection lostLinkProof(connection, request, e.message)
-            }
-            when (result) {
-                is ReleaseResult.Released -> receiptProof(connection, request, result.receipt)
-                is ReleaseResult.Refused -> {
-                    (result.current as? HostStatus.Active)?.let { lastObservedGeneration = it.generation }
-                    ReleaseProof.Unproven(OwnerFailureStage.RELEASE, result.message)
-                }
+    suspend fun release(request: SwitchRequest): ReleaseProof = withConnection({ ReleaseProof.Unproven(it.stage, it.reason) }) { connection ->
+        val result = try {
+            withTimeout(timing.releaseTimeoutMillis) { connection.release(request) }
+        } catch (e: TimeoutCancellationException) {
+            return@withConnection ReleaseProof.Unproven(OwnerFailureStage.RELEASE, "模块宿主未在期限内确认释放")
+        } catch (e: HostLinkException) {
+            return@withConnection lostLinkProof(connection, request, e.message)
+        }
+        when (result) {
+            is ReleaseResult.Released -> receiptProof(connection, request, result.receipt)
+
+            is ReleaseResult.Refused -> {
+                (result.current as? HostStatus.Active)?.let { lastObservedGeneration = it.generation }
+                ReleaseProof.Unproven(OwnerFailureStage.RELEASE, result.message)
             }
         }
+    }
 
     private fun receiptProof(connection: HostConnection, request: SwitchRequest, receipt: ReleaseReceipt): ReleaseProof {
         val named = request.fromGeneration
         val coversNamedOwner = receipt.generation == named ||
             (receipt.predecessorEnded && receipt.generation == null && named != null && named.incarnation != receipt.incarnation)
         val matches = receipt.requestId == request.id && receipt.incarnation == connection.incarnation && coversNamedOwner
-        return if (matches) ReleaseProof.Receipt(receipt)
-        else ReleaseProof.Unproven(OwnerFailureStage.RELEASE, "释放回执与本次切换请求或所有者代际不匹配")
+        return if (matches) {
+            ReleaseProof.Receipt(receipt)
+        } else {
+            ReleaseProof.Unproven(OwnerFailureStage.RELEASE, "释放回执与本次切换请求或所有者代际不匹配")
+        }
     }
 
-    suspend fun acquire(request: SwitchRequest, settings: HostSettings): AcquireOutcome =
-        withConnection({ AcquireOutcome.Failed(it.stage, it.reason) }) { connection ->
-            try {
-                when (val result = withTimeout(timing.acquireTimeoutMillis) { connection.acquire(request, settings) }) {
-                    is AcquireResult.Acquired -> {
-                        lastObservedGeneration = result.generation
-                        AcquireOutcome.Acquired(result.generation, result.holder)
-                    }
-                    is AcquireResult.Refused -> AcquireOutcome.Failed(OwnerFailureStage.ACTIVATION, result.message)
+    suspend fun acquire(request: SwitchRequest, settings: HostSettings): AcquireOutcome = withConnection({ AcquireOutcome.Failed(it.stage, it.reason) }) { connection ->
+        try {
+            when (val result = withTimeout(timing.acquireTimeoutMillis) { connection.acquire(request, settings) }) {
+                is AcquireResult.Acquired -> {
+                    lastObservedGeneration = result.generation
+                    AcquireOutcome.Acquired(result.generation, result.holder)
                 }
-            } catch (e: TimeoutCancellationException) {
-                AcquireOutcome.Failed(OwnerFailureStage.ACTIVATION, "模块宿主未在期限内响应")
-            } catch (e: HostLinkException) {
-                AcquireOutcome.Failed(OwnerFailureStage.CONNECTION, e.message ?: "与模块宿主的连接中断")
+
+                is AcquireResult.Refused -> AcquireOutcome.Failed(OwnerFailureStage.ACTIVATION, result.message)
             }
+        } catch (e: TimeoutCancellationException) {
+            AcquireOutcome.Failed(OwnerFailureStage.ACTIVATION, "模块宿主未在期限内响应")
+        } catch (e: HostLinkException) {
+            AcquireOutcome.Failed(OwnerFailureStage.CONNECTION, e.message ?: "与模块宿主的连接中断")
         }
+    }
 
     private fun lostLinkProof(connection: HostConnection, request: SwitchRequest, detail: String?): ReleaseProof {
         val end = connection.ended.takeIf { it.isCompleted }?.getCompleted()
@@ -193,6 +196,7 @@ class ModuleControlClient(
             } finally {
                 if (currentConnection.value !== opened.connection) opened.connection.close()
             }
+
             is LinkOpenResult.Failed -> onFailed(opened)
         }
     }
@@ -202,6 +206,7 @@ class ModuleControlClient(
             mutableView.value = ModuleView.Connecting
             when (val opened = link.open()) {
                 is LinkOpenResult.Failed -> mutableView.value = ModuleView.Unavailable(opened.stage, opened.reason)
+
                 is LinkOpenResult.Open -> {
                     val connection = opened.connection
                     currentConnection.value = connection
@@ -224,7 +229,10 @@ class ModuleControlClient(
     private suspend fun observe(connection: HostConnection) {
         try {
             coroutineScope {
-                launch { connection.ended.await(); this@coroutineScope.cancel(CancellationException("host connection ended")) }
+                launch {
+                    connection.ended.await()
+                    this@coroutineScope.cancel(CancellationException("host connection ended"))
+                }
                 var status = connection.initialStatus
                 while (true) {
                     when (status) {
@@ -234,6 +242,7 @@ class ModuleControlClient(
                             // The generation ended: nothing from it is current any more.
                             mutableView.value = ModuleView.Connecting
                         }
+
                         is HostStatus.Inactive -> {
                             mutableView.value = ModuleView.Inactive(status)
                             delay(timing.statusPollMillis)

@@ -1,13 +1,14 @@
 package io.github.dohex.openrose.ui
 
-import androidx.compose.ui.platform.testTag
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import io.github.dohex.openrose.androidintegration.BackgroundControlBlock
 import io.github.dohex.openrose.androidintegration.BackgroundControlStatus
 import io.github.dohex.openrose.androidintegration.BackgroundRecovery
+import io.github.dohex.openrose.androidintegration.IntegrationSettings
 import io.github.dohex.openrose.androidintegration.IntegrationState
 import io.github.dohex.openrose.androidintegration.PresenceObservation
 import io.github.dohex.openrose.androidintegration.WakeBand
@@ -16,7 +17,6 @@ import io.github.dohex.openrose.androidintegration.backgroundControl
 import io.github.dohex.openrose.androidintegration.backgroundRecovery
 import io.github.dohex.openrose.core.ControlState
 import io.github.dohex.openrose.core.PlatformApplicability
-import io.github.dohex.openrose.androidintegration.IntegrationSettings
 
 /**
  * Test tags of the background-control group. Rows report their state through the tag, so tests
@@ -43,9 +43,8 @@ internal object BackgroundControlTags {
 }
 
 /** Ordinary background control applies wherever Android hosts the control runtime. */
-internal fun ControlState.backgroundControlApplicable(integration: IntegrationState): Boolean =
-    platform.controlTransportApplicability == PlatformApplicability.APPLICABLE &&
-        integration.backgroundControl(this) != BackgroundControlStatus.Unsupported
+internal fun ControlState.backgroundControlApplicable(integration: IntegrationState): Boolean = platform.controlTransportApplicability == PlatformApplicability.APPLICABLE &&
+    integration.backgroundControl(this) != BackgroundControlStatus.Unsupported
 
 /**
  * The switch only stores the user's intent. The status rows below it report what the platform
@@ -77,9 +76,11 @@ internal fun BackgroundControlGroup(
         }
         when (val status = integration.backgroundControl(state)) {
             BackgroundControlStatus.Unsupported, BackgroundControlStatus.Disabled -> Unit
+
             BackgroundControlStatus.NotRunning -> Tagged(BackgroundControlTags.STATUS_NOT_RUNNING) {
                 ToneInfoRow("后台状态", "已启用，尚未运行；耳机下次音频连接或打开 OpenRose 时启动", StatusTone.CAUTION)
             }
+
             is BackgroundControlStatus.Running -> {
                 Tagged(BackgroundControlTags.STATUS_RUNNING) { ToneInfoRow("后台状态", "运行中", StatusTone.GOOD) }
                 if (!status.notificationVisible) {
@@ -93,12 +94,15 @@ internal fun BackgroundControlGroup(
                     )
                 }
             }
+
             is BackgroundControlStatus.Blocked -> {
                 val (message, tone) = when (status.reason) {
                     BackgroundControlBlock.BLUETOOTH_PERMISSION ->
                         "缺少蓝牙权限，后台控制无法运行" to StatusTone.ERROR
+
                     BackgroundControlBlock.BACKGROUND_START_RESTRICTED ->
                         "系统限制了从后台启动，请打开 OpenRose 后重试" to StatusTone.CAUTION
+
                     BackgroundControlBlock.SERVICE_START_REFUSED ->
                         "系统拒绝了前台服务启动，后台控制未运行" to StatusTone.ERROR
                 }
@@ -136,6 +140,7 @@ private fun RecoveryRows(
 ) {
     when (recovery) {
         BackgroundRecovery.Unsupported, BackgroundRecovery.Disabled, BackgroundRecovery.WaitingForUnlock -> return
+
         is BackgroundRecovery.Incomplete -> {
             if (WakePrerequisite.COMPANION_ASSOCIATION in recovery.missing) {
                 Tagged(BackgroundControlTags.RECOVERY_NEEDS_ASSOCIATION) {
@@ -167,6 +172,7 @@ private fun RecoveryRows(
             }
             // A missing Bluetooth permission is already explained by the background status above.
         }
+
         is BackgroundRecovery.Armed -> {
             Tagged(BackgroundControlTags.RECOVERY_ARMED) {
                 ToneInfoRow(

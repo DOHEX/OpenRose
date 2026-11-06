@@ -38,6 +38,7 @@ sealed interface HostCommand {
     data class ConnectFromSystem(val deviceId: DeviceId) : HostCommand
     data class ConnectForAddDevice(val deviceId: DeviceId) : HostCommand
     data object Disconnect : HostCommand
+
     /** [reference] null targets whatever session is current; non-null is rejected unless it still is. */
     data class Set(val reference: SessionReference?, val setting: DeviceSetting, val value: FieldValue) : HostCommand
     data class UpdateSettings(val settings: HostSettings) : HostCommand
@@ -47,6 +48,7 @@ sealed interface HostCommand {
 /** Commands a role may submit. System entries only ever drive noise control and prompt claims. */
 fun ClientRole.allows(command: HostCommand): Boolean = when (this) {
     ClientRole.APP -> true
+
     ClientRole.MILINK, ClientRole.XIAOMI_BLUETOOTH, ClientRole.HOST_PRESENTATION -> when (command) {
         is HostCommand.Set -> command.reference != null && command.setting == DeviceSetting.NOISE_MODE
         is HostCommand.ClaimPrompt -> this != ClientRole.MILINK
@@ -68,16 +70,22 @@ fun ClientRole.presents(mode: IslandMode): Boolean = when (mode) {
 enum class HostRejection {
     /** The caller is not allowed to use the host at all. */
     UNAUTHORIZED,
+
     /** The lease is unknown, expired, or belongs to a different caller. */
     INVALID_LEASE,
+
     /** The caller addressed an owner generation that is not the current one. */
     STALE_GENERATION,
+
     /** The caller's role does not include this operation. */
     FORBIDDEN,
+
     /** No owner is active, so there is nothing to command. */
     NO_OWNER,
+
     /** The owner could not be released, so authority was not given up. */
     RELEASE_FAILED,
+
     /** The request is not valid for the host's current state. */
     INVALID_REQUEST,
 }

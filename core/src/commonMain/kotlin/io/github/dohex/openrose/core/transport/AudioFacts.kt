@@ -46,9 +46,11 @@ interface AudioFactsDriver {
 fun normalizeBluetoothAddress(value: String?): String? {
     val address = value?.trim()?.uppercase() ?: return null
     if (address.length != 17) return null
-    return address.takeIf { text -> text.indices.all { index ->
-        if (index % 3 == 2) text[index] == ':' else text[index] in '0'..'9' || text[index] in 'A'..'F'
-    } }
+    return address.takeIf { text ->
+        text.indices.all { index ->
+            if (index % 3 == 2) text[index] == ':' else text[index] in '0'..'9' || text[index] in 'A'..'F'
+        }
+    }
 }
 
 private fun supportedAudioModel(device: RawAudioDevice): ModelProfile? = ModelProfile.match(device.name)
@@ -70,7 +72,8 @@ fun inferAudioProfile(snapshot: RawAudioSnapshot, targetAddresses: Set<String>):
             (normalizeBluetoothAddress(address) ?: return AudioProfileEvidence.UNKNOWN) to state
         }.toMap()
         if ((targets + connected).any { it !in states } || connected.any { states[it] != AudioConnectionState.CONNECTED } ||
-            states.any { (address, state) -> state == AudioConnectionState.CONNECTED && address !in connected }) {
+            states.any { (address, state) -> state == AudioConnectionState.CONNECTED && address !in connected }
+        ) {
             return AudioProfileEvidence.UNKNOWN
         }
         connected
@@ -79,8 +82,12 @@ fun inferAudioProfile(snapshot: RawAudioSnapshot, targetAddresses: Set<String>):
     if (le.any { it in targets }) return AudioProfileEvidence.LE_AUDIO
     if (le.isNotEmpty()) return AudioProfileEvidence.UNKNOWN
     return if (profiles.getValue(AudioProfile.A2DP).any { it in targets } ||
-        profiles.getValue(AudioProfile.HEADSET).any { it in targets }) AudioProfileEvidence.CLASSIC
-    else AudioProfileEvidence.UNKNOWN
+        profiles.getValue(AudioProfile.HEADSET).any { it in targets }
+    ) {
+        AudioProfileEvidence.CLASSIC
+    } else {
+        AudioProfileEvidence.UNKNOWN
+    }
 }
 
 /** Shared paired-device and audio policy over platform snapshots and broadcasts. */
@@ -90,8 +97,10 @@ class AudioFacts(private val driver: AudioFactsDriver) {
     suspend fun connectionFacts(deviceId: DeviceId, classicAddress: String?): TransportFacts {
         val targets = listOfNotNull(normalizeBluetoothAddress(deviceId.value), normalizeBluetoothAddress(classicAddress)).toSet()
         val snapshot = driver.snapshot(targets)
-        return TransportFacts(snapshot.enabled && snapshot.sppAvailable && normalizeBluetoothAddress(classicAddress) != null,
-            inferAudioProfile(snapshot, targets))
+        return TransportFacts(
+            snapshot.enabled && snapshot.sppAvailable && normalizeBluetoothAddress(classicAddress) != null,
+            inferAudioProfile(snapshot, targets),
+        )
     }
 
     val audioConnectedDevice: Flow<DeviceId?> = channelFlow {
@@ -125,71 +134,77 @@ class AudioFacts(private val driver: AudioFactsDriver) {
             launch { inbox.send(AudioMessage.Result(queryEpoch, driver.snapshot(emptySet()))) }
         }
         launch(start = CoroutineStart.UNDISPATCHED) { driver.events.collect { inbox.send(AudioMessage.Event(it)) } }
-        for (message in inbox) when (message) {
-            is AudioMessage.Result -> {
-                if (message.epoch != epoch || !enabled) continue
-                val snapshot = message.snapshot
-                connected.clear()
-                bonded.clear()
-                if (snapshot.enabled) {
-                    for (profile in listOf(AudioProfile.A2DP, AudioProfile.HEADSET)) {
-                        val addresses = snapshot.profiles[profile]?.connectedAddresses.orEmpty().mapNotNull(::normalizeBluetoothAddress)
-                        connected.getOrPut(profile) { mutableSetOf() }.addAll(addresses)
-                    }
-                    for (device in snapshot.bondedDevices) {
-                        if (supportedAudioModel(device) != null) normalizeBluetoothAddress(device.address)?.let(bonded::add)
-                    }
-                }
-                // An unreadable probe is not an adapter-off event. Readable broadcasts still win.
-                for ((address, device) in eventDevices) {
-                    if (device != null && supportedAudioModel(device) != null) bonded.add(address) else bonded.remove(address)
-                }
-                for ((key, value) in changes) {
-                    val set = connected.getOrPut(key.first) { mutableSetOf() }
-                    if (value) set.add(key.second) else set.remove(key.second)
-                }
-                querying = false
-                publish()
-            }
-            is AudioMessage.Event -> when (val event = message.event) {
-                RawAudioEvent.Ready -> {
-                    if (!ready) {
-                        ready = true
-                        if (enabled) query(resetChanges = false)
-                    }
-                }
-                RawAudioEvent.AdapterOff -> {
-                    epoch++
-                    enabled = false
-                    querying = false
+        for (message in inbox) {
+            when (message) {
+                is AudioMessage.Result -> {
+                    if (message.epoch != epoch || !enabled) continue
+                    val snapshot = message.snapshot
                     connected.clear()
                     bonded.clear()
-                    changes.clear()
-                    eventDevices.clear()
-                    publish()
-                }
-                RawAudioEvent.AdapterOn -> {
-                    epoch++
-                    enabled = true
-                    connected.clear()
-                    bonded.clear()
-                    if (ready) query(resetChanges = true)
-                }
-                is RawAudioEvent.ProfileChanged -> {
-                    if (!enabled || event.profile == AudioProfile.LE_AUDIO) continue
-                    val address = normalizeBluetoothAddress(event.device.address) ?: continue
-                    val device = event.device.takeIf { event.bonded }
-                    val hasIdentity = !event.bonded || event.device.name != null
-                    if (querying) {
-                        changes[event.profile to address] = event.connected
-                        if (hasIdentity) eventDevices[address] = device
+                    if (snapshot.enabled) {
+                        for (profile in listOf(AudioProfile.A2DP, AudioProfile.HEADSET)) {
+                            val addresses = snapshot.profiles[profile]?.connectedAddresses.orEmpty().mapNotNull(::normalizeBluetoothAddress)
+                            connected.getOrPut(profile) { mutableSetOf() }.addAll(addresses)
+                        }
+                        for (device in snapshot.bondedDevices) {
+                            if (supportedAudioModel(device) != null) normalizeBluetoothAddress(device.address)?.let(bonded::add)
+                        }
                     }
-                    if (hasIdentity) {
+                    // An unreadable probe is not an adapter-off event. Readable broadcasts still win.
+                    for ((address, device) in eventDevices) {
                         if (device != null && supportedAudioModel(device) != null) bonded.add(address) else bonded.remove(address)
                     }
-                    val set = connected.getOrPut(event.profile) { mutableSetOf() }
-                    if (event.connected) set.add(address) else set.remove(address)
-                    if (!querying) publish()
+                    for ((key, value) in changes) {
+                        val set = connected.getOrPut(key.first) { mutableSetOf() }
+                        if (value) set.add(key.second) else set.remove(key.second)
+                    }
+                    querying = false
+                    publish()
+                }
+
+                is AudioMessage.Event -> when (val event = message.event) {
+                    RawAudioEvent.Ready -> {
+                        if (!ready) {
+                            ready = true
+                            if (enabled) query(resetChanges = false)
+                        }
+                    }
+
+                    RawAudioEvent.AdapterOff -> {
+                        epoch++
+                        enabled = false
+                        querying = false
+                        connected.clear()
+                        bonded.clear()
+                        changes.clear()
+                        eventDevices.clear()
+                        publish()
+                    }
+
+                    RawAudioEvent.AdapterOn -> {
+                        epoch++
+                        enabled = true
+                        connected.clear()
+                        bonded.clear()
+                        if (ready) query(resetChanges = true)
+                    }
+
+                    is RawAudioEvent.ProfileChanged -> {
+                        if (!enabled || event.profile == AudioProfile.LE_AUDIO) continue
+                        val address = normalizeBluetoothAddress(event.device.address) ?: continue
+                        val device = event.device.takeIf { event.bonded }
+                        val hasIdentity = !event.bonded || event.device.name != null
+                        if (querying) {
+                            changes[event.profile to address] = event.connected
+                            if (hasIdentity) eventDevices[address] = device
+                        }
+                        if (hasIdentity) {
+                            if (device != null && supportedAudioModel(device) != null) bonded.add(address) else bonded.remove(address)
+                        }
+                        val set = connected.getOrPut(event.profile) { mutableSetOf() }
+                        if (event.connected) set.add(address) else set.remove(address)
+                        if (!querying) publish()
+                    }
                 }
             }
         }

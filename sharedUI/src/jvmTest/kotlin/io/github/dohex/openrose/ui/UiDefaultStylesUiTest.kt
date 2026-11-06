@@ -18,8 +18,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class UiDefaultStylesUiTest {
-    private fun rowValueLabel(style: InterfaceStyle, value: String?): String =
-        if (style == InterfaceStyle.MIUIX && value != null) "选项 $value" else confirmedLabel(value)
+    private fun rowValueLabel(style: InterfaceStyle, value: String?): String = if (style == InterfaceStyle.MIUIX && value != null) "选项 $value" else confirmedLabel(value)
 
     @Test
     fun unknownChoiceHasNoSelectedRadioAndKeepsDeviceValueUntilExternalConfirmation() {
@@ -214,6 +213,7 @@ class UiDefaultStylesUiTest {
                     scrollState = scrollState,
                     pageContent = pageContent,
                 )
+
                 InterfaceStyle.MATERIAL3 -> MaterialAppShell(
                     page = AppPage.AUDIO,
                     onBack = {},
@@ -224,8 +224,7 @@ class UiDefaultStylesUiTest {
         }
     }
 
-    private fun confirmedLabel(selected: String?): String =
-        selected?.let { "设备已确认：$it" } ?: "当前状态未知"
+    private fun confirmedLabel(selected: String?): String = selected?.let { "设备已确认：$it" } ?: "当前状态未知"
 
     private class ChoiceHarness(
         scene: OpenRoseUiTestScene,

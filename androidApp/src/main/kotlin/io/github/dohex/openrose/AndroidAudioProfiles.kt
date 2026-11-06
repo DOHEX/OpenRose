@@ -2,11 +2,11 @@ package io.github.dohex.openrose
 
 import android.Manifest
 import android.annotation.SuppressLint
-import android.bluetooth.BluetoothAdapter
-import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothA2dp
+import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothHeadset
+import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothProfile
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -21,15 +21,15 @@ import io.github.dohex.openrose.core.transport.RawAudioDevice
 import io.github.dohex.openrose.core.transport.RawAudioEvent
 import io.github.dohex.openrose.core.transport.RawAudioSnapshot
 import io.github.dohex.openrose.core.transport.RawProfileSnapshot
-import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.CancellableContinuation
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.suspendCancellableCoroutine
-import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.coroutines.resume
 
 /** Exposes public Android Bluetooth facts; interpretation belongs to the shared core. */
@@ -50,9 +50,12 @@ internal class AndroidAudioProfiles(private val context: Context) : AudioFactsDr
                                 device.bondState == BluetoothDevice.BOND_BONDED,
                                 state == BluetoothProfile.STATE_CONNECTED,
                             )
-                        } catch (_: SecurityException) { return }
+                        } catch (_: SecurityException) {
+                            return
+                        }
                         trySend(event)
                     }
+
                     BluetoothAdapter.ACTION_STATE_CHANGED -> when (intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR)) {
                         BluetoothAdapter.STATE_TURNING_OFF, BluetoothAdapter.STATE_OFF -> trySend(RawAudioEvent.AdapterOff)
                         BluetoothAdapter.STATE_ON -> trySend(RawAudioEvent.AdapterOn)
@@ -65,19 +68,21 @@ internal class AndroidAudioProfiles(private val context: Context) : AudioFactsDr
             addAction(BluetoothHeadset.ACTION_CONNECTION_STATE_CHANGED)
             addAction(BluetoothAdapter.ACTION_STATE_CHANGED)
         }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) context.registerReceiver(receiver, filter, Context.RECEIVER_EXPORTED)
-        else context.registerReceiver(receiver, filter)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            context.registerReceiver(receiver, filter, Context.RECEIVER_EXPORTED)
+        } else {
+            context.registerReceiver(receiver, filter)
+        }
         trySend(RawAudioEvent.Ready)
         awaitClose { runCatching { context.unregisterReceiver(receiver) } }
     }
 
-    private fun getDeviceExtra(intent: Intent): BluetoothDevice? =
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE, BluetoothDevice::class.java)
-        } else {
-            @Suppress("DEPRECATION")
-            intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE)
-        }
+    private fun getDeviceExtra(intent: Intent): BluetoothDevice? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE, BluetoothDevice::class.java)
+    } else {
+        @Suppress("DEPRECATION")
+        intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE)
+    }
 
     @SuppressLint("MissingPermission")
     override suspend fun bondedDevices(): List<RawAudioDevice> = withContext(Dispatchers.IO) {
@@ -92,7 +97,9 @@ internal class AndroidAudioProfiles(private val context: Context) : AudioFactsDr
     @SuppressLint("MissingPermission")
     private fun readBondedDevices(adapter: BluetoothAdapter): List<RawAudioDevice> = try {
         adapter.bondedDevices?.map { RawAudioDevice(it.name, it.address) }.orEmpty()
-    } catch (_: SecurityException) { emptyList() }
+    } catch (_: SecurityException) {
+        emptyList()
+    }
 
     @SuppressLint("MissingPermission")
     override suspend fun snapshot(targetAddresses: Set<String>): RawAudioSnapshot = withContext(Dispatchers.IO) {
@@ -166,14 +173,20 @@ internal class AndroidAudioProfiles(private val context: Context) : AudioFactsDr
                         state = State.DELIVERED
                         delivered = lease
                         ServiceArrival.DELIVER
-                    } else ServiceArrival.REJECT
+                    } else {
+                        ServiceArrival.REJECT
+                    }
+
                     State.DELIVERED -> if (delivered?.owns(proxy) == true) ServiceArrival.DUPLICATE else ServiceArrival.REJECT
+
                     State.ABANDONED -> ServiceArrival.REJECT
                 }
             }
             when (action) {
                 ServiceArrival.DELIVER -> continuation.resume(lease) { _, resource, _ -> resource.close() }
+
                 ServiceArrival.DUPLICATE -> Unit
+
                 ServiceArrival.REJECT -> {
                     lease.close()
                     unavailable()
@@ -189,7 +202,9 @@ internal class AndroidAudioProfiles(private val context: Context) : AudioFactsDr
                         state = State.ABANDONED
                         null to true
                     }
+
                     State.DELIVERED -> delivered to false
+
                     State.ABANDONED -> null to false
                 }
             }
@@ -198,7 +213,9 @@ internal class AndroidAudioProfiles(private val context: Context) : AudioFactsDr
 
         fun unavailable() {
             val shouldResume = synchronized(lock) {
-                if (state != State.WAITING) false else {
+                if (state != State.WAITING) {
+                    false
+                } else {
                     state = State.ABANDONED
                     true
                 }
@@ -211,7 +228,6 @@ internal class AndroidAudioProfiles(private val context: Context) : AudioFactsDr
                 if (state == State.WAITING) state = State.ABANDONED
             }
         }
-
     }
 
     private class ProfileProxyLease(
@@ -258,7 +274,6 @@ internal class AndroidAudioProfiles(private val context: Context) : AudioFactsDr
             if (closed.compareAndSet(false, true)) runCatching { adapter.closeProfileProxy(profileId, proxy) }
         }
     }
-
 
     private companion object {
         const val PROFILE_PROBE_TIMEOUT_MILLIS = 2_500L

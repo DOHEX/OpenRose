@@ -1,14 +1,14 @@
 package io.github.dohex.openrose.integration
 
 import android.bluetooth.BluetoothDevice
+import android.content.Context
+import android.content.Intent
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
-import io.github.dohex.openrose.bridge.BridgePresentationWire
-import android.content.Context
-import android.content.Intent
-import io.github.dohex.openrose.bridge.BridgeWire
 import io.github.dohex.openrose.androidintegration.SystemHeadsetMapping
+import io.github.dohex.openrose.bridge.BridgePresentationWire
+import io.github.dohex.openrose.bridge.BridgeWire
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedModule
@@ -38,11 +38,17 @@ class MiLinkNativeHeadsetAdapter(
     private val installedIds = mutableSetOf<String>()
     private val callbackHandler = Handler(Looper.getMainLooper())
     private val managedAddresses = NativeManagedAddressTombstones()
+
     @Volatile private var currentSnapshot: NativeHeadsetSnapshot? = null
+
     @Volatile private var lastAncController: WeakReference<Any>? = null
+
     @Volatile private var lastAncDevice: BluetoothDevice? = null
+
     @Volatile private var lastAncReference: NativeSessionReference? = null
+
     @Volatile private var lastAncAddress: String? = null
+
     @Volatile private var closed = false
 
     val handles: List<XposedInterface.HookHandle>
@@ -174,7 +180,6 @@ class MiLinkNativeHeadsetAdapter(
         hook(target, "switchToHeadsetActivity", arrayOf(bluetoothDevice), Void.TYPE) { chain ->
             handleSwitchToHeadsetActivity(chain)
         }
-
     }
 
     private fun installProfileContext() {
@@ -342,9 +347,9 @@ class MiLinkNativeHeadsetAdapter(
         }
         val normalizedAddress = NativeHeadsetSnapshot.normalizeBluetoothAddress(address)
             ?.takeIf(snapshot.addresses::contains) ?: run {
-                report(FEATURE, "UNAVAILABLE", "mode=$mode request address is not in the authenticated snapshot")
-                return false
-            }
+            report(FEATURE, "UNAVAILABLE", "mode=$mode request address is not in the authenticated snapshot")
+            return false
+        }
         val result = NativeNoiseRequestGate.submit(snapshot, mode) {
             val current = currentSnapshot?.takeIf {
                 !closed && it.isFresh() && it.reference == snapshot.reference &&
@@ -367,22 +372,18 @@ class MiLinkNativeHeadsetAdapter(
         return result != NativeNoiseRequestGate.Result.REJECTED
     }
 
-    private fun snapshotForDevice(value: Any?): NativeHeadsetSnapshot? =
-        (value as? BluetoothDevice)?.let { device ->
-            runCatching { snapshotForAddress(device.address) }.getOrNull()
-        }
+    private fun snapshotForDevice(value: Any?): NativeHeadsetSnapshot? = (value as? BluetoothDevice)?.let { device ->
+        runCatching { snapshotForAddress(device.address) }.getOrNull()
+    }
 
     private fun snapshotForAddress(address: String?): NativeHeadsetSnapshot? {
         val snapshot = currentSnapshot?.takeIf { it.isFresh() } ?: return null
         return snapshot.takeIf { it.matchesAddress(address) }
     }
 
-    private fun bluetoothAddress(value: Any?): String? =
-        (value as? BluetoothDevice)?.let { device -> runCatching { device.address }.getOrNull() }
+    private fun bluetoothAddress(value: Any?): String? = (value as? BluetoothDevice)?.let { device -> runCatching { device.address }.getOrNull() }
 
-    private fun shouldSuppressManagedAction(address: String?): Boolean =
-        managedAddresses.contains(address) && snapshotForAddress(address) == null
-
+    private fun shouldSuppressManagedAction(address: String?): Boolean = managedAddresses.contains(address) && snapshotForAddress(address) == null
 
     private fun handleSwitchToHeadsetActivity(chain: XposedInterface.Chain): HookDecision {
         val device = chain.args.getOrNull(0) as? BluetoothDevice ?: return HookDecision.Proceed
@@ -546,15 +547,20 @@ class MiLinkNativeHeadsetAdapter(
         val expectedReference = lastAncReference ?: return
         if (lastAncAddress != address) return
         if (currentSnapshot?.takeIf {
-            it.isFresh() && it.reference == expectedReference && it.matchesAddress(address)
-        } == null) return
+                it.isFresh() && it.reference == expectedReference && it.matchesAddress(address)
+            } == null
+        ) {
+            return
+        }
         if (lastAncController?.get() !== controller || lastAncDevice !== device) return
         callbackHandler.post {
             val current = currentSnapshot?.takeIf { !closed && it.isFresh() }
             if (current == null || current.reference != expectedReference || !current.matchesAddress(address) ||
                 lastAncReference != expectedReference || lastAncAddress != address ||
                 lastAncController?.get() !== controller || lastAncDevice !== device
-            ) return@post
+            ) {
+                return@post
+            }
             if (NativeHeadsetSnapshot.normalizeBluetoothAddress(runCatching { device.address }.getOrNull()) != address) return@post
             try {
                 val listener = findObjectField(controller, "headsetPropertyChangeListener") ?: return@post
@@ -573,7 +579,12 @@ class MiLinkNativeHeadsetAdapter(
         while (type != null) {
             val current = type
             val field = runCatching { current.getDeclaredField(name) }.getOrNull()
-            if (field != null) return runCatching { field.isAccessible = true; field.get(instance) }.getOrNull()
+            if (field != null) {
+                return runCatching {
+                    field.isAccessible = true
+                    field.get(instance)
+                }.getOrNull()
+            }
             type = type.superclass
         }
         return null
@@ -589,8 +600,7 @@ class MiLinkNativeHeadsetAdapter(
         return null
     }
 
-    private fun hookId(method: Method): String =
-        "openrose.native_headset.milink.${method.declaringClass.name}.${method.name}".replace('-', '_')
+    private fun hookId(method: Method): String = "openrose.native_headset.milink.${method.declaringClass.name}.${method.name}".replace('-', '_')
 
     private sealed interface HookDecision {
         data object Proceed : HookDecision
@@ -603,7 +613,11 @@ class MiLinkNativeHeadsetAdapter(
         const val UPDATE_ANC_STATE = 8
         const val UPDATE_HEADSET_PROPERTY = 4
         val BATTERY_STATE_FIELDS = setOf(
-            DeviceField.LEFT_BATTERY, DeviceField.RIGHT_BATTERY, DeviceField.CASE_BATTERY, DeviceField.LEFT_CHARGING, DeviceField.RIGHT_CHARGING,
+            DeviceField.LEFT_BATTERY,
+            DeviceField.RIGHT_BATTERY,
+            DeviceField.CASE_BATTERY,
+            DeviceField.LEFT_CHARGING,
+            DeviceField.RIGHT_CHARGING,
         )
     }
 }

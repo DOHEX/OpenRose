@@ -19,6 +19,7 @@ internal class ConnectionTargeting(
 ) {
     private var audioDrivenSessionDeviceId: DeviceId? = null
     private var autoConnectJob: Job? = null
+
     /** The newest audio-connection fact, kept while automatic control must wait for first unlock. */
     private var latestAudioDevice: DeviceId? = null
     private var systemPinnedDeviceId: DeviceId? = null
@@ -51,8 +52,11 @@ internal class ConnectionTargeting(
             return
         }
         val requestEpoch = targetIntent.updateAndGet { current ->
-            if (current.deviceId == audioDeviceId && current.epoch > 0) current
-            else TargetIntent(current.epoch + 1, audioDeviceId)
+            if (current.deviceId == audioDeviceId && current.epoch > 0) {
+                current
+            } else {
+                TargetIntent(current.epoch + 1, audioDeviceId)
+            }
         }.epoch
         val candidate = discovery.findCandidate(audioDeviceId)
         if (isRequestSuperseded(requestEpoch, isAudioDriven = true)) {
@@ -67,8 +71,11 @@ internal class ConnectionTargeting(
         }
         if (state.value.connection is ConnectionState.Disconnected && systemPinnedDeviceId == null) {
             val autoEpoch = targetIntent.updateAndGet { current ->
-                if (current.deviceId == audioDeviceId && current.epoch > 0) current
-                else TargetIntent(current.epoch + 1, audioDeviceId)
+                if (current.deviceId == audioDeviceId && current.epoch > 0) {
+                    current
+                } else {
+                    TargetIntent(current.epoch + 1, audioDeviceId)
+                }
             }.epoch
             audioDrivenSessionDeviceId = audioDeviceId
             autoConnectJob?.cancel()
@@ -80,8 +87,11 @@ internal class ConnectionTargeting(
 
     suspend fun connect(deviceId: DeviceId, pinned: Boolean): OperationResult {
         val requestEpoch = targetIntent.updateAndGet { current ->
-            if (current.deviceId == deviceId && current.epoch > 0) current
-            else TargetIntent(current.epoch + 1, deviceId)
+            if (current.deviceId == deviceId && current.epoch > 0) {
+                current
+            } else {
+                TargetIntent(current.epoch + 1, deviceId)
+            }
         }.epoch
         if (pinned || systemPinnedDeviceId != null) {
             systemPinnedDeviceId = deviceId
@@ -94,8 +104,11 @@ internal class ConnectionTargeting(
     /** Cancelling the adding flow releases only the unfinished attempt it created. */
     suspend fun connectForAddDevice(deviceId: DeviceId): OperationResult {
         val requestEpoch = targetIntent.updateAndGet { current ->
-            if (current.deviceId == deviceId && current.epoch > 0) current
-            else TargetIntent(current.epoch + 1, deviceId)
+            if (current.deviceId == deviceId && current.epoch > 0) {
+                current
+            } else {
+                TargetIntent(current.epoch + 1, deviceId)
+            }
         }.epoch
         if (systemPinnedDeviceId != null) {
             systemPinnedDeviceId = deviceId

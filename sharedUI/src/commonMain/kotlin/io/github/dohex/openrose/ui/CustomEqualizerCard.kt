@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
@@ -24,7 +25,6 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.dp
-import androidx.compose.runtime.Composable
 import io.github.dohex.openrose.core.ControlState
 import io.github.dohex.openrose.core.DeviceSetting
 import io.github.dohex.openrose.core.DeviceState
@@ -127,8 +127,8 @@ internal fun CustomEqualizerCard(
                         ) {
                             rowIndices.forEach { index ->
                                 val hz = capabilities.bandsHz[index]
-                                 val frequency = equalizerFrequencyLabel(hz)
-                                 val value = draft[index]
+                                val frequency = equalizerFrequencyLabel(hz)
+                                val value = draft[index]
                                 val sliderTileModifier = if (isMaterial3) {
                                     Modifier
                                         .weight(1f)
@@ -144,26 +144,26 @@ internal fun CustomEqualizerCard(
                                     Modifier.weight(1f)
                                 }
                                 Box(sliderTileModifier) {
-                                     AppSliderRow(
-                                         label = frequency,
-                                         valueText = "${if (value > 0) "+" else ""}$value dB",
-                                         value = value.toFloat(),
-                                         range = capabilities.minGain.toFloat()..capabilities.maxGain.toFloat(),
-                                         steps = (capabilities.maxGain - capabilities.minGain - 1).coerceAtLeast(0),
-                                         enabled = enabled,
-                                         onChange = { changed ->
-                                             val updated = draft.toMutableList()
-                                             updated[index] = changed.roundToInt().coerceIn(capabilities.minGain, capabilities.maxGain)
-                                             onDraftChange(updated)
-                                         },
-                                     )
-                                 }
-                             }
-                             if (rowIndices.size < columns) repeat(columns - rowIndices.size) { Spacer(Modifier.weight(1f)) }
-                         }
-                     }
-                 }
-             }
+                                    AppSliderRow(
+                                        label = frequency,
+                                        valueText = "${if (value > 0) "+" else ""}$value dB",
+                                        value = value.toFloat(),
+                                        range = capabilities.minGain.toFloat()..capabilities.maxGain.toFloat(),
+                                        steps = (capabilities.maxGain - capabilities.minGain - 1).coerceAtLeast(0),
+                                        enabled = enabled,
+                                        onChange = { changed ->
+                                            val updated = draft.toMutableList()
+                                            updated[index] = changed.roundToInt().coerceIn(capabilities.minGain, capabilities.maxGain)
+                                            onDraftChange(updated)
+                                        },
+                                    )
+                                }
+                            }
+                            if (rowIndices.size < columns) repeat(columns - rowIndices.size) { Spacer(Modifier.weight(1f)) }
+                        }
+                    }
+                }
+            }
             AppButton(
                 text = "应用草稿到耳机",
                 onClick = { onSet(DeviceSetting.CUSTOM_EQ, FieldValue.IntegerList(draft.toList())) },

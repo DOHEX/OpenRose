@@ -17,6 +17,7 @@ import kotlinx.coroutines.sync.withLock
 internal sealed interface LoginLaunchState {
     data object Reading : LoginLaunchState
     data class Ready(val enabled: Boolean) : LoginLaunchState
+
     /** The user turned it off in system settings; only they can turn it back on there. */
     data object DisabledByUser : LoginLaunchState
     data class Unsupported(val reason: String) : LoginLaunchState
@@ -54,10 +55,14 @@ internal class LoginLaunch(private val scope: CoroutineScope) {
         if (ExecutableRuntime.isDev()) return LoginLaunchState.Unsupported("仅安装版可设置登录时启动")
         return when (runCatching { AutoLaunch.state() }.getOrDefault(AutoLaunchState.UNSUPPORTED)) {
             AutoLaunchState.ENABLED -> LoginLaunchState.Ready(enabled = true)
+
             AutoLaunchState.DISABLED -> LoginLaunchState.Ready(enabled = false)
+
             AutoLaunchState.DISABLED_BY_USER -> LoginLaunchState.DisabledByUser
+
             AutoLaunchState.ENABLED_BY_POLICY, AutoLaunchState.DISABLED_BY_POLICY ->
                 LoginLaunchState.Unsupported("登录时启动由系统策略控制")
+
             AutoLaunchState.UNSUPPORTED -> LoginLaunchState.Unsupported("当前系统不支持登录时启动")
         }
     }

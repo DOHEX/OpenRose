@@ -21,10 +21,13 @@ internal object BridgeWire {
     const val DEVICE_ID = "device_id"
     const val SESSION_ID = "session_id"
     const val READ_SEQUENCE = "read_sequence"
+
     /** Rendered core wire text: a command, request, result, status or frame. */
     const val PAYLOAD = "payload"
+
     /** The owner generation (incarnation#sequence) a request was issued for. */
     const val GENERATION = "generation"
+
     /** On `open` replies: the host incarnation. On every session-scoped request/reply: the owner generation. */
     const val HOST_EPOCH = "host_epoch"
     const val STATUS_OK = "OK"
@@ -61,6 +64,7 @@ internal object BridgeWire {
     /** Settings the application mirrors for the host, in the core settings codec's own keys. */
     const val CONFIG_GROUP = "module_config"
     const val CONFIG_REVISION = "config_revision"
+
     /** Request: the Bluetooth address the fusion center asked about. Reply: [FUSION_DECISION] and, for OpenRose, [DEVICE_ID]. */
     const val FUSION_ADDRESS = "fusion_address"
     const val FUSION_DECISION = "fusion_decision"

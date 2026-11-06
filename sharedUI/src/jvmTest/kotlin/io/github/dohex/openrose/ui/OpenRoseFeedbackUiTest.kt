@@ -1,9 +1,5 @@
 package io.github.dohex.openrose.ui
 
-import kotlinx.collections.immutable.persistentListOf
-import kotlinx.collections.immutable.persistentMapOf
-import kotlinx.collections.immutable.persistentSetOf
-import kotlinx.collections.immutable.plus
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
@@ -26,6 +22,10 @@ import io.github.dohex.openrose.core.protocol.FieldReading
 import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.dohex.openrose.core.protocol.ModelProfile
 import io.github.dohex.openrose.core.transport.DeviceId
+import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.persistentMapOf
+import kotlinx.collections.immutable.persistentSetOf
+import kotlinx.collections.immutable.plus
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -36,8 +36,11 @@ class OpenRoseFeedbackUiTest {
     fun pendingFeedbackDoesNotMoveTheNoiseControls() {
         for (style in InterfaceStyle.entries) {
             val operation = SettingOperation(
-                id = 60, sessionId = SESSION_ID, setting = DeviceSetting.NOISE_MODE,
-                requestedValue = FieldValue.Text("wind"), stage = SettingStage.SUBMITTED,
+                id = 60,
+                sessionId = SESSION_ID,
+                setting = DeviceSetting.NOISE_MODE,
+                requestedValue = FieldValue.Text("wind"),
+                stage = SettingStage.SUBMITTED,
             )
             withHarness(state(operation).copy(settingOperations = persistentListOf()), style, wholeApp = false) { harness ->
                 harness.render()
@@ -46,9 +49,14 @@ class OpenRoseFeedbackUiTest {
                 harness.render(frames = 20)
                 assertEquals(before, harness.clickableBounds("通透"), "feedback must not shift the control being used in $style")
                 assertTrue(harness.hasText("正在处理设置，等待设备确认"))
-                harness.state.value = harness.state.value.copy(settingOperations = persistentListOf(operation.copy(
-                    stage = SettingStage.CONFIRMED, confirmedFields = persistentSetOf(DeviceField.NOISE_MODE),
-                )))
+                harness.state.value = harness.state.value.copy(
+                    settingOperations = persistentListOf(
+                        operation.copy(
+                            stage = SettingStage.CONFIRMED,
+                            confirmedFields = persistentSetOf(DeviceField.NOISE_MODE),
+                        ),
+                    ),
+                )
                 harness.render()
                 assertFalse(harness.hasText("设备已确认设置"), "confirmed settings must apply silently without bottom banner in $style")
                 assertFalse(harness.hasText("正在处理设置，等待设备确认"), "pending feedback disappears once confirmed in $style")
@@ -60,8 +68,11 @@ class OpenRoseFeedbackUiTest {
     fun anExistingConfirmationDoesNotReappearOnUnrelatedControlPages() {
         for (style in InterfaceStyle.entries) {
             val operation = SettingOperation(
-                id = 61, sessionId = SESSION_ID, setting = DeviceSetting.NOISE_MODE,
-                requestedValue = FieldValue.Text("anc"), stage = SettingStage.CONFIRMED,
+                id = 61,
+                sessionId = SESSION_ID,
+                setting = DeviceSetting.NOISE_MODE,
+                requestedValue = FieldValue.Text("anc"),
+                stage = SettingStage.CONFIRMED,
                 confirmedFields = persistentSetOf(DeviceField.NOISE_MODE),
             )
             withHarness(state(operation), style) { harness ->
@@ -105,8 +116,10 @@ class OpenRoseFeedbackUiTest {
                     confirmedFields = persistentSetOf(DeviceField.NOISE_MODE),
                 )
                 harness.state.value = current.copy(
-                    device = device.copy(fields = device.fields +
-                        (DeviceField.NOISE_MODE to FieldReading.Known(FieldValue.Text("wind"), "wind"))),
+                    device = device.copy(
+                        fields = device.fields +
+                            (DeviceField.NOISE_MODE to FieldReading.Known(FieldValue.Text("wind"), "wind")),
+                    ),
                     settingOperations = persistentListOf(confirmedOperation),
                 )
                 harness.clickTab("我的耳机")
@@ -228,12 +241,16 @@ class OpenRoseFeedbackUiTest {
                 val current = harness.state.value
                 val device = requireNotNull(current.device)
                 harness.state.value = current.copy(
-                    device = device.copy(fields = device.fields +
-                        (DeviceField.NOISE_MODE to FieldReading.Known(FieldValue.Text("transparency"), "transparency"))),
-                    settingOperations = persistentListOf(submitted.copy(
-                        stage = SettingStage.CONFIRMED,
-                        confirmedFields = persistentSetOf(DeviceField.NOISE_MODE),
-                    )),
+                    device = device.copy(
+                        fields = device.fields +
+                            (DeviceField.NOISE_MODE to FieldReading.Known(FieldValue.Text("transparency"), "transparency")),
+                    ),
+                    settingOperations = persistentListOf(
+                        submitted.copy(
+                            stage = SettingStage.CONFIRMED,
+                            confirmedFields = persistentSetOf(DeviceField.NOISE_MODE),
+                        ),
+                    ),
                 )
                 harness.render()
                 assertTrue(harness.hasSelectedText("通透"), "the control selection changes after device confirmation in $style")

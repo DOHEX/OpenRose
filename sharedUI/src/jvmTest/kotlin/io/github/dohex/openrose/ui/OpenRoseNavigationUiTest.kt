@@ -1,10 +1,5 @@
 package io.github.dohex.openrose.ui
 
-import kotlinx.collections.immutable.persistentMapOf
-import kotlinx.collections.immutable.persistentSetOf
-import kotlinx.collections.immutable.plus
-import kotlinx.collections.immutable.toPersistentList
-import kotlinx.collections.immutable.toPersistentSet
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.semantics.Role
@@ -28,12 +23,17 @@ import io.github.dohex.openrose.core.audioControlCapabilities
 import io.github.dohex.openrose.core.equalizerCapabilities
 import io.github.dohex.openrose.core.noiseControlCapabilities
 import io.github.dohex.openrose.core.promptVolumeLevels
-import io.github.dohex.openrose.core.touchControlCapabilities
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.FieldReading
 import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.dohex.openrose.core.protocol.ModelProfile
+import io.github.dohex.openrose.core.touchControlCapabilities
 import io.github.dohex.openrose.core.transport.DeviceId
+import kotlinx.collections.immutable.persistentMapOf
+import kotlinx.collections.immutable.persistentSetOf
+import kotlinx.collections.immutable.plus
+import kotlinx.collections.immutable.toPersistentList
+import kotlinx.collections.immutable.toPersistentSet
 import kotlin.math.abs
 import kotlin.test.Test
 import kotlin.test.assertEquals

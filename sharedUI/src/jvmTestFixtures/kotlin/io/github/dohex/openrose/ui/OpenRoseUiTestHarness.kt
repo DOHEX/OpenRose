@@ -2,9 +2,6 @@
 
 package io.github.dohex.openrose.ui
 
-import kotlinx.collections.immutable.persistentMapOf
-import kotlinx.collections.immutable.persistentSetOf
-import kotlinx.collections.immutable.toPersistentSet
 import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.MutableState
@@ -35,6 +32,9 @@ import androidx.compose.ui.unit.IntSize
 import io.github.dohex.openrose.core.*
 import io.github.dohex.openrose.core.protocol.*
 import io.github.dohex.openrose.core.transport.DeviceId
+import kotlinx.collections.immutable.persistentMapOf
+import kotlinx.collections.immutable.persistentSetOf
+import kotlinx.collections.immutable.toPersistentSet
 import java.awt.image.BufferedImage
 
 /** Virtual time one frame of [OpenRoseUiTestHarness.render] advances. */
@@ -44,11 +44,10 @@ private const val FRAME_MILLIS = 35L
  * Runs [block] against a fresh [width]×[height] scene at density 1. The scene clock is virtual and
  * moves through explicit frame advancement and the frames needed by scroll actions.
  */
-internal fun runOpenRoseUiTest(width: Int, height: Int, block: suspend OpenRoseUiTestScene.() -> Unit) =
-    runDesktopComposeUiTest(width = width, height = height) {
-        mainClock.autoAdvance = false
-        OpenRoseUiTestScene(this).block()
-    }
+internal fun runOpenRoseUiTest(width: Int, height: Int, block: suspend OpenRoseUiTestScene.() -> Unit) = runDesktopComposeUiTest(width = width, height = height) {
+    mainClock.autoAdvance = false
+    OpenRoseUiTestScene(this).block()
+}
 
 /** One official Compose UI test scene; harnesses drive it only through its virtual clock. */
 internal class OpenRoseUiTestScene(private val test: DesktopComposeUiTest) {
@@ -116,8 +115,7 @@ private val androidPlatform = PlatformState(
 )
 
 /** Android host with no control connection. */
-internal fun disconnectedAndroidState(): ControlState =
-    ControlState(platform = androidPlatform)
+internal fun disconnectedAndroidState(): ControlState = ControlState(platform = androidPlatform)
 
 /** Android host with a ready I7 control connection and a fully readable device. */
 internal fun connectedI7State(): ControlState {
@@ -150,6 +148,7 @@ internal fun connectedI7State(): ControlState {
         ),
     )
 }
+
 /** Shared rendering and semantics operations; each test keeps its own state and callbacks. */
 internal open class OpenRoseUiTestHarness(protected val scene: OpenRoseUiTestScene) {
     /** Current virtual time of the scene clock, in milliseconds. */
@@ -302,8 +301,7 @@ internal open class OpenRoseUiTestHarness(protected val scene: OpenRoseUiTestSce
             node.config.getOrNull(SemanticsProperties.ContentDescription).orEmpty().joinToString(" ")
     }.orEmpty()
 
-    private fun taggedNodes(tag: String): List<SemanticsNode> =
-        nodes().filter { it.config.getOrNull(SemanticsProperties.TestTag) == tag }
+    private fun taggedNodes(tag: String): List<SemanticsNode> = nodes().filter { it.config.getOrNull(SemanticsProperties.TestTag) == tag }
 
     private fun SemanticsNode.subtree(): List<SemanticsNode> = listOf(this) + children.flatMap { it.subtree() }
 
@@ -344,8 +342,7 @@ internal open class OpenRoseUiTestHarness(protected val scene: OpenRoseUiTestSce
 
     private fun textNodes(expected: String): List<SemanticsNode> = nodes().filter { hasText(it, expected) }
 
-    private fun hasText(node: SemanticsNode, expected: String): Boolean =
-        node.config.getOrNull(SemanticsProperties.Text).orEmpty().any { it.text == expected }
+    private fun hasText(node: SemanticsNode, expected: String): Boolean = node.config.getOrNull(SemanticsProperties.Text).orEmpty().any { it.text == expected }
 
     private fun invokeClick(node: SemanticsNode, label: String) {
         val action = node.config.getOrNull(SemanticsActions.OnClick)?.action
@@ -363,5 +360,4 @@ private inline fun SemanticsNode.findAncestorOrSelf(predicate: (SemanticsNode) -
     return null
 }
 
-private inline fun SemanticsNode.hasAncestorOrSelf(predicate: (SemanticsNode) -> Boolean): Boolean =
-    findAncestorOrSelf(predicate) != null
+private inline fun SemanticsNode.hasAncestorOrSelf(predicate: (SemanticsNode) -> Boolean): Boolean = findAncestorOrSelf(predicate) != null

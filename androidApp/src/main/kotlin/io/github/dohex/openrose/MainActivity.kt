@@ -1,15 +1,14 @@
 package io.github.dohex.openrose
 
+import android.Manifest
 import android.bluetooth.BluetoothAdapter
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.graphics.Color
 import android.net.Uri
-import android.os.Bundle
-import android.Manifest
-import android.content.pm.PackageManager
 import android.os.Build
-import io.github.dohex.openrose.androidintegration.IntegrationSettings
+import android.os.Bundle
 import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
@@ -21,11 +20,12 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.lifecycleScope
-import io.github.dohex.openrose.ui.OpenRoseApp
+import io.github.dohex.openrose.androidintegration.IntegrationSettings
 import io.github.dohex.openrose.androidintegration.ui.AndroidPlatformUi
-import io.github.dohex.openrose.ui.Appearance
-import io.github.dohex.openrose.core.transport.DeviceId
 import io.github.dohex.openrose.bridge.BridgeWire
+import io.github.dohex.openrose.core.transport.DeviceId
+import io.github.dohex.openrose.ui.Appearance
+import io.github.dohex.openrose.ui.OpenRoseApp
 import java.util.Locale
 
 class MainActivity : ComponentActivity() {
@@ -62,17 +62,26 @@ class MainActivity : ComponentActivity() {
         setContent {
             val uiSettings by owner.model.uiSettings.collectAsState()
             val dark = when (uiSettings.appearance) {
-                Appearance.SYSTEM -> resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK ==
-                    Configuration.UI_MODE_NIGHT_YES
+                Appearance.SYSTEM ->
+                    resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK ==
+                        Configuration.UI_MODE_NIGHT_YES
+
                 Appearance.LIGHT -> false
+
                 Appearance.DARK -> true
             }
             SideEffect {
                 enableEdgeToEdge(
-                    statusBarStyle = if (dark) SystemBarStyle.dark(Color.TRANSPARENT)
-                    else SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT),
-                    navigationBarStyle = if (dark) SystemBarStyle.dark(0x801B1B1B.toInt())
-                    else SystemBarStyle.light(0xE6FFFFFF.toInt(), 0x801B1B1B.toInt()),
+                    statusBarStyle = if (dark) {
+                        SystemBarStyle.dark(Color.TRANSPARENT)
+                    } else {
+                        SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)
+                    },
+                    navigationBarStyle = if (dark) {
+                        SystemBarStyle.dark(0x801B1B1B.toInt())
+                    } else {
+                        SystemBarStyle.light(0xE6FFFFFF.toInt(), 0x801B1B1B.toInt())
+                    },
                 )
             }
             OpenRoseApp(model = owner.model, platformUi = platformUi)
@@ -124,8 +133,10 @@ class MainActivity : ComponentActivity() {
         val prefs = getSharedPreferences(AppPreferences.FILE, MODE_PRIVATE)
         val askable = Build.VERSION.SDK_INT >= 33 &&
             checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED &&
-            (!prefs.getBoolean(AppPreferences.NOTIFICATION_REQUESTED, false) ||
-                shouldShowRequestPermissionRationale(Manifest.permission.POST_NOTIFICATIONS))
+            (
+                !prefs.getBoolean(AppPreferences.NOTIFICATION_REQUESTED, false) ||
+                    shouldShowRequestPermissionRationale(Manifest.permission.POST_NOTIFICATIONS)
+                )
         if (askable) {
             prefs.edit().putBoolean(AppPreferences.NOTIFICATION_REQUESTED, true).apply()
             notificationRequest.launch(Manifest.permission.POST_NOTIFICATIONS)
@@ -144,7 +155,9 @@ class MainActivity : ComponentActivity() {
         if (enabling && Build.VERSION.SDK_INT >= 33 &&
             checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED &&
             !prefs.getBoolean(AppPreferences.NOTIFICATION_REQUESTED, false)
-        ) requestNotificationPermission()
+        ) {
+            requestNotificationPermission()
+        }
     }
 
     private fun requestBluetoothPermission() {

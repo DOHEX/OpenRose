@@ -9,8 +9,8 @@ import io.github.dohex.openrose.androidintegration.ModuleAvailability
 import io.github.dohex.openrose.androidintegration.SystemBridgeDiagnostics
 import io.github.dohex.openrose.androidintegration.SystemEndpointDiagnostics
 import io.github.dohex.openrose.core.PermissionState
-import io.github.dohex.openrose.core.TransportAvailability
 import io.github.dohex.openrose.core.PlatformApplicability
+import io.github.dohex.openrose.core.TransportAvailability
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -26,21 +26,27 @@ class AndroidDiagnosticsUiTest {
                     frameworkVersion = "2.0",
                     ipc = BridgeIpcState.AUTHENTICATED,
                     session = BridgeSessionState.STALE,
-                    endpoints = mapOf("fusion" to SystemEndpointDiagnostics(
-                        targetPackage = "com.milink.service",
-                        targetProcess = "fusion-process",
-                        componentVersion = "1.2",
-                        entryMatch = "matched entry",
-                        ipc = BridgeIpcState.WAITING,
-                        features = mapOf("FUSION_CENTER" to "CONFIRMED · device confirmed"),
-                    )),
+                    endpoints = mapOf(
+                        "fusion" to SystemEndpointDiagnostics(
+                            targetPackage = "com.milink.service",
+                            targetProcess = "fusion-process",
+                            componentVersion = "1.2",
+                            entryMatch = "matched entry",
+                            ipc = BridgeIpcState.WAITING,
+                            features = mapOf("FUSION_CENTER" to "CONFIRMED · device confirmed"),
+                        ),
+                    ),
                     presentation = mapOf("STATUS_NOTIFICATION" to "ACTION_FAILED · control_receiver_unavailable"),
                 )
-                val integration = MutableStateFlow(IntegrationState(platform = IntegrationPlatformState(
-                    module = ModuleAvailability.Available,
-                    systemIntegrationApplicability = PlatformApplicability.APPLICABLE,
-                    bridge = bridge,
-                )))
+                val integration = MutableStateFlow(
+                    IntegrationState(
+                        platform = IntegrationPlatformState(
+                            module = ModuleAvailability.Available,
+                            systemIntegrationApplicability = PlatformApplicability.APPLICABLE,
+                            bridge = bridge,
+                        ),
+                    ),
+                )
                 val page = mutableStateOf("诊断")
                 val model = FakeOpenRoseModel(mutableStateOf(disconnectedAndroidState()), mutableStateOf(UiSettings(interfaceStyle = style)))
                 setContent { AndroidTestPage(model, androidTestPlatform(integration), page) }
@@ -63,10 +69,14 @@ class AndroidDiagnosticsUiTest {
             runOpenRoseUiTest(1200, 1000) {
                 val state = disconnectedAndroidState()
                 val model = FakeOpenRoseModel(
-                    mutableStateOf(state.copy(platform = state.platform.copy(
-                        permission = PermissionState.DENIED,
-                        transport = TransportAvailability.Disabled,
-                    ))),
+                    mutableStateOf(
+                        state.copy(
+                            platform = state.platform.copy(
+                                permission = PermissionState.DENIED,
+                                transport = TransportAvailability.Disabled,
+                            ),
+                        ),
+                    ),
                     mutableStateOf(UiSettings(interfaceStyle = style)),
                 )
                 var permissionRequests = 0

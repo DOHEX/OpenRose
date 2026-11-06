@@ -6,19 +6,11 @@ import io.github.dohex.openrose.core.transport.ControlConnection
 import io.github.dohex.openrose.core.transport.ControlTransport
 import io.github.dohex.openrose.core.transport.DeviceId
 import io.github.dohex.openrose.core.transport.TransportEndpoint
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFalse
-import kotlin.test.assertIs
-import kotlin.test.assertNotNull
-import kotlin.test.assertNull
-import kotlin.test.assertTrue
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineDispatcher
-import kotlinx.coroutines.Runnable
-import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Runnable
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -26,6 +18,14 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import kotlin.coroutines.CoroutineContext
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertIs
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class ControlSessionTargetedConnectionTest {
@@ -559,14 +559,18 @@ class ControlSessionTargetedConnectionTest {
         var closed = false
         val writes = mutableListOf<String>()
 
-        override suspend fun subscribe() { subscribed = true }
+        override suspend fun subscribe() {
+            subscribed = true
+        }
         override suspend fun write(bytes: ByteArray) {
             check(subscribed) { "The earbud requires notifications before its first read" }
             val hex = bytes.hex()
             writes += hex
             replies[hex.substring(10, 14)]?.let { incoming.emit(it.bytes()) }
         }
-        override suspend fun close() { closed = true }
+        override suspend fun close() {
+            closed = true
+        }
     }
 
     companion object {

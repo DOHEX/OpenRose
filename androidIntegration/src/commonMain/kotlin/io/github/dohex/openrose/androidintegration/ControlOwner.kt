@@ -35,7 +35,13 @@ data class SwitchRequest(
 
 /** The stage at which an owner could not be reached, authorised, started or released. */
 enum class OwnerFailureStage {
-    SELECTION_PERSISTENCE, DISCOVERY, AUTHORIZATION, CONNECTION, RELEASE, ACTIVATION, OWNER_RUNTIME,
+    SELECTION_PERSISTENCE,
+    DISCOVERY,
+    AUTHORIZATION,
+    CONNECTION,
+    RELEASE,
+    ACTIVATION,
+    OWNER_RUNTIME,
 }
 
 /** The actual holder of control authority, as reported by that holder itself. */

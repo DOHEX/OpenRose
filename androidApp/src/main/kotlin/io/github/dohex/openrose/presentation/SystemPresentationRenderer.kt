@@ -90,12 +90,16 @@ internal class SystemPresentationRenderer(
             handler.post {
                 if (closed || action == null || action != actionReceiverAction || token == null ||
                     token != actionToken || deviceId == null || hostEpoch == null || targetMode == null
-                ) return@post
+                ) {
+                    return@post
+                }
                 val active = current ?: return@post
                 if (!active.focusEnabled || !statusNotificationActive) return@post
                 if (active.identity.deviceId != deviceId || active.identity.sessionId != sessionId ||
                     active.identity.hostEpoch != hostEpoch
-                ) return@post
+                ) {
+                    return@post
+                }
                 executeNoiseAction(active, token, targetMode)
             }
         }
@@ -195,11 +199,19 @@ internal class SystemPresentationRenderer(
         if (!snapshot.focusEnabled || notificationManager == null || requestedTag == null) {
             withdrawStatusNotification(snapshot.wire)
             if (snapshot.focusEnabled && notificationManager == null) {
-                reportOnce(snapshot.wire, BridgePresentationWire.STATUS_NOTIFICATION,
-                    BridgePresentationWire.UNAVAILABLE, "notification_manager_unavailable")
+                reportOnce(
+                    snapshot.wire,
+                    BridgePresentationWire.STATUS_NOTIFICATION,
+                    BridgePresentationWire.UNAVAILABLE,
+                    "notification_manager_unavailable",
+                )
             } else if (snapshot.focusEnabled && requestedTag == null) {
-                reportOnce(snapshot.wire, BridgePresentationWire.STATUS_NOTIFICATION,
-                    BridgePresentationWire.UNAVAILABLE, "missing_owned_notification_tag")
+                reportOnce(
+                    snapshot.wire,
+                    BridgePresentationWire.STATUS_NOTIFICATION,
+                    BridgePresentationWire.UNAVAILABLE,
+                    "missing_owned_notification_tag",
+                )
             }
             return
         }
@@ -207,8 +219,12 @@ internal class SystemPresentationRenderer(
         if (statusTag != null && statusTag != requestedTag) withdrawStatusNotification(snapshot.wire)
         if (Build.VERSION.SDK_INT >= 33 && appContext.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
             withdrawStatusNotification(snapshot.wire)
-            reportOnce(snapshot.wire, BridgePresentationWire.STATUS_NOTIFICATION,
-                BridgePresentationWire.UNAVAILABLE, "target_process_notification_permission_missing")
+            reportOnce(
+                snapshot.wire,
+                BridgePresentationWire.STATUS_NOTIFICATION,
+                BridgePresentationWire.UNAVAILABLE,
+                "target_process_notification_permission_missing",
+            )
             return
         }
         statusTag = requestedTag
@@ -240,15 +256,17 @@ internal class SystemPresentationRenderer(
                 .setContentTitle(title)
                 .setContentText(body)
                 .setStyle(Notification.BigTextStyle().bigText(body))
-                .setContentIntent(PendingIntent.getActivity(
-                    appContext,
-                    STATUS_NOTIFICATION_ID,
-                    Intent(BridgeWire.ACTION_SHOW_HEADPHONES).apply {
-                        setClassName(BridgeWire.APP_PACKAGE, "${BridgeWire.APP_PACKAGE}.MainActivity")
-                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-                    },
-                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
-                ))
+                .setContentIntent(
+                    PendingIntent.getActivity(
+                        appContext,
+                        STATUS_NOTIFICATION_ID,
+                        Intent(BridgeWire.ACTION_SHOW_HEADPHONES).apply {
+                            setClassName(BridgeWire.APP_PACKAGE, "${BridgeWire.APP_PACKAGE}.MainActivity")
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                        },
+                        PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+                    ),
+                )
                 .setWhen(0L)
                 .setShowWhen(false)
                 .setOnlyAlertOnce(true)
@@ -274,11 +292,19 @@ internal class SystemPresentationRenderer(
             statusTag = requestedTag
             statusFingerprint = fingerprint
             statusNotificationActive = true
-            reportOnce(snapshot.wire, BridgePresentationWire.STATUS_NOTIFICATION,
-                BridgePresentationWire.CALLED, "notification_manager_notify_returned")
+            reportOnce(
+                snapshot.wire,
+                BridgePresentationWire.STATUS_NOTIFICATION,
+                BridgePresentationWire.CALLED,
+                "notification_manager_notify_returned",
+            )
             if (noise != null && canControlNoise(snapshot, noise.mode) && !actionReceiverRegistered) {
-                reportOnce(snapshot.wire, BridgePresentationWire.STATUS_NOTIFICATION,
-                    BridgePresentationWire.ACTION_FAILED, "notification_view_available_but_control_receiver_unavailable")
+                reportOnce(
+                    snapshot.wire,
+                    BridgePresentationWire.STATUS_NOTIFICATION,
+                    BridgePresentationWire.ACTION_FAILED,
+                    "notification_view_available_but_control_receiver_unavailable",
+                )
             }
         } catch (failure: Throwable) {
             Log.w(TAG, "status_notification_failed", failure)
@@ -286,8 +312,12 @@ internal class SystemPresentationRenderer(
             statusTag = null
             statusFingerprint = null
             statusNotificationActive = false
-            reportOnce(snapshot.wire, BridgePresentationWire.STATUS_NOTIFICATION,
-                BridgePresentationWire.UNAVAILABLE, "notification_publish_failed:${failure.javaClass.simpleName}")
+            reportOnce(
+                snapshot.wire,
+                BridgePresentationWire.STATUS_NOTIFICATION,
+                BridgePresentationWire.UNAVAILABLE,
+                "notification_publish_failed:${failure.javaClass.simpleName}",
+            )
         }
     }
 
@@ -297,9 +327,11 @@ internal class SystemPresentationRenderer(
         val promptMode = prompt?.getString(BridgePresentationWire.MODE)
         val pending = activePrompt
         val islandAllowed = snapshot.presentation.getBoolean(BridgePresentationWire.ALLOW_ISLAND_FIELDS, false)
-        if (pending != null && (!islandAllowed || promptId == null || pending.identity != snapshot.identity ||
-                pending.key != promptKey(snapshot.identity, promptId) ||
-                promptId != pending.id || promptMode != pending.mode || snapshot.mode != pending.mode)
+        if (pending != null && (
+                !islandAllowed || promptId == null || pending.identity != snapshot.identity ||
+                    pending.key != promptKey(snapshot.identity, promptId) ||
+                    promptId != pending.id || promptMode != pending.mode || snapshot.mode != pending.mode
+                )
         ) {
             cancelActivePrompt("prompt_or_mode_changed")
         }
@@ -308,7 +340,9 @@ internal class SystemPresentationRenderer(
         if (promptMode == BridgePresentationWire.OFFICIAL) return
         if (!islandAllowed || prompt == null || promptId == null || promptMode == null || promptMode != snapshot.mode ||
             promptMode == BridgePresentationWire.OFF || promptMode !in PROMPT_MODES
-        ) return
+        ) {
+            return
+        }
 
         val key = promptKey(snapshot.identity, promptId)
         if (key in processedPrompts) return
@@ -319,9 +353,12 @@ internal class SystemPresentationRenderer(
         val claimed = runCatching { callbacks.claimPrompt(Bundle(snapshot.wire), promptId) }
             .onFailure {
                 Log.w(TAG, "prompt_claim_failed", it)
-                reportOnce(snapshot.wire,
+                reportOnce(
+                    snapshot.wire,
                     if (promptMode == BridgePresentationWire.MODULE) BridgePresentationWire.MODULE_CONNECTION else BridgePresentationWire.OFFICIAL_CONNECTION,
-                    BridgePresentationWire.UNAVAILABLE, "prompt_claim_temporarily_unavailable")
+                    BridgePresentationWire.UNAVAILABLE,
+                    "prompt_claim_temporarily_unavailable",
+                )
             }
             .getOrDefault(false)
         // A failed RPC may have failed before submission. Retry only while the next authority
@@ -335,8 +372,12 @@ internal class SystemPresentationRenderer(
         val key = promptKey(snapshot.identity, promptId)
         if (Build.VERSION.SDK_INT >= 33 && appContext.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
             processedPrompts += key
-            reportOnce(snapshot.wire, BridgePresentationWire.MODULE_CONNECTION,
-                BridgePresentationWire.UNAVAILABLE, "target_process_notification_permission_missing")
+            reportOnce(
+                snapshot.wire,
+                BridgePresentationWire.MODULE_CONNECTION,
+                BridgePresentationWire.UNAVAILABLE,
+                "target_process_notification_permission_missing",
+            )
             return
         }
         val tag = "$MODULE_TAG_PREFIX${stableDigest(key)}"
@@ -356,8 +397,12 @@ internal class SystemPresentationRenderer(
 
             postNotification(tag, MODULE_PROMPT_NOTIFICATION_ID, notification)
             processedPrompts += key
-            reportOnce(snapshot.wire, BridgePresentationWire.MODULE_CONNECTION,
-                BridgePresentationWire.CALLED, "notification_manager_notify_returned")
+            reportOnce(
+                snapshot.wire,
+                BridgePresentationWire.MODULE_CONNECTION,
+                BridgePresentationWire.CALLED,
+                "notification_manager_notify_returned",
+            )
 
             val record = ActivePrompt(snapshot.identity, promptId, BridgePresentationWire.MODULE, key, tag, snapshot.wire)
             activePrompt = record
@@ -372,8 +417,12 @@ internal class SystemPresentationRenderer(
             Log.w(TAG, "module_prompt_failed", failure)
             runCatching { notificationManager?.cancel(tag, MODULE_PROMPT_NOTIFICATION_ID) }
             processedPrompts += key
-            reportOnce(snapshot.wire, BridgePresentationWire.MODULE_CONNECTION,
-                BridgePresentationWire.UNAVAILABLE, "module_template_or_publish_failed:${failure.javaClass.simpleName}")
+            reportOnce(
+                snapshot.wire,
+                BridgePresentationWire.MODULE_CONNECTION,
+                BridgePresentationWire.UNAVAILABLE,
+                "module_template_or_publish_failed:${failure.javaClass.simpleName}",
+            )
         }
     }
 
@@ -387,9 +436,12 @@ internal class SystemPresentationRenderer(
         fun imageText(type: Int, pictureKey: String, value: Int?): JSONObject = JSONObject()
             .put("type", type)
             .put("picInfo", JSONObject().put("type", 1).put("pic", pictureKey))
-            .put("textInfo", JSONObject()
-                .put("title", value?.toString() ?: UNKNOWN_VALUE)
-                .put("content", if (value == null) "" else "%"))
+            .put(
+                "textInfo",
+                JSONObject()
+                    .put("title", value?.toString() ?: UNKNOWN_VALUE)
+                    .put("content", if (value == null) "" else "%"),
+            )
 
         val shareContent = listOfNotNull(
             left?.let { "L: $it%" },
@@ -399,13 +451,19 @@ internal class SystemPresentationRenderer(
         val island = JSONObject()
             .put("islandProperty", 1)
             .put("islandTimeout", durationSeconds)
-        .put("bigIslandArea", JSONObject()
-                .put("imageTextInfoLeft", imageText(1, leftPicture, left))
-                .put("imageTextInfoRight", imageText(2, rightPicture, right)))
-            .put("shareData", JSONObject()
-                .put("title", "OpenRose")
-                .put("content", shareContent)
-                .put("shareContent", shareContent))
+            .put(
+                "bigIslandArea",
+                JSONObject()
+                    .put("imageTextInfoLeft", imageText(1, leftPicture, left))
+                    .put("imageTextInfoRight", imageText(2, rightPicture, right)),
+            )
+            .put(
+                "shareData",
+                JSONObject()
+                    .put("title", "OpenRose")
+                    .put("content", shareContent)
+                    .put("shareContent", shareContent),
+            )
 
         val template = JSONObject()
             .put("enableFloat", true)
@@ -417,10 +475,13 @@ internal class SystemPresentationRenderer(
 
         return Bundle().apply {
             putString(FOCUS_PARAM, JSONObject().put("param_v2", template).toString())
-            putBundle(FOCUS_PICTURES, Bundle().apply {
-                putParcelable(leftPicture, Icon.createWithBitmap(createEarbudBitmap(leftSide = true)))
-                putParcelable(rightPicture, Icon.createWithBitmap(createEarbudBitmap(leftSide = false)))
-            })
+            putBundle(
+                FOCUS_PICTURES,
+                Bundle().apply {
+                    putParcelable(leftPicture, Icon.createWithBitmap(createEarbudBitmap(leftSide = true)))
+                    putParcelable(rightPicture, Icon.createWithBitmap(createEarbudBitmap(leftSide = false)))
+                },
+            )
         }
     }
 
@@ -515,16 +576,24 @@ internal class SystemPresentationRenderer(
                         val detail = response?.getString(BridgeWire.MESSAGE)
                             ?: result.exceptionOrNull()?.javaClass?.simpleName
                             ?: "noise_action_rejected"
-                        reportOnce(snapshot.wire, BridgePresentationWire.STATUS_NOTIFICATION,
-                            BridgePresentationWire.ACTION_FAILED, "noise_action:$targetMode:$detail")
+                        reportOnce(
+                            snapshot.wire,
+                            BridgePresentationWire.STATUS_NOTIFICATION,
+                            BridgePresentationWire.ACTION_FAILED,
+                            "noise_action:$targetMode:$detail",
+                        )
                     }
                     // State changes only when a later authenticated snapshot reports the device value.
                 }
             }
         } catch (failure: Throwable) {
             pendingNoiseActions.remove(operationKey)
-            reportOnce(snapshot.wire, BridgePresentationWire.STATUS_NOTIFICATION,
-                BridgePresentationWire.ACTION_FAILED, "noise_action_dispatch:${failure.javaClass.simpleName}")
+            reportOnce(
+                snapshot.wire,
+                BridgePresentationWire.STATUS_NOTIFICATION,
+                BridgePresentationWire.ACTION_FAILED,
+                "noise_action_dispatch:${failure.javaClass.simpleName}",
+            )
         }
     }
 
@@ -609,13 +678,23 @@ internal class SystemPresentationRenderer(
             runCatching { notificationManager?.cancel(ownedTag, STATUS_NOTIFICATION_ID) }
                 .onSuccess {
                     if (statusNotificationActive && snapshot != null) {
-                        reportOnce(snapshot, BridgePresentationWire.STATUS_NOTIFICATION,
-                            BridgePresentationWire.WITHDRAWN, "owned_status_notification_cancel_returned")
+                        reportOnce(
+                            snapshot,
+                            BridgePresentationWire.STATUS_NOTIFICATION,
+                            BridgePresentationWire.WITHDRAWN,
+                            "owned_status_notification_cancel_returned",
+                        )
                     }
                 }
                 .onFailure { failure ->
-                    if (snapshot != null) reportOnce(snapshot, BridgePresentationWire.STATUS_NOTIFICATION,
-                        BridgePresentationWire.ACTION_FAILED, "status_notification_cancel:${failure.javaClass.simpleName}")
+                    if (snapshot != null) {
+                        reportOnce(
+                            snapshot,
+                            BridgePresentationWire.STATUS_NOTIFICATION,
+                            BridgePresentationWire.ACTION_FAILED,
+                            "status_notification_cancel:${failure.javaClass.simpleName}",
+                        )
+                    }
                 }
         }
         statusTag = null
@@ -631,12 +710,20 @@ internal class SystemPresentationRenderer(
         if (manager != null) {
             runCatching { manager.cancel(active.tag, MODULE_PROMPT_NOTIFICATION_ID) }
                 .onSuccess {
-                    reportOnce(active.snapshot, BridgePresentationWire.MODULE_CONNECTION,
-                        BridgePresentationWire.WITHDRAWN, "owned_module_prompt_cancel_returned:$reason")
+                    reportOnce(
+                        active.snapshot,
+                        BridgePresentationWire.MODULE_CONNECTION,
+                        BridgePresentationWire.WITHDRAWN,
+                        "owned_module_prompt_cancel_returned:$reason",
+                    )
                 }
                 .onFailure { failure ->
-                    reportOnce(active.snapshot, BridgePresentationWire.MODULE_CONNECTION,
-                        BridgePresentationWire.ACTION_FAILED, "module_prompt_cancel:${failure.javaClass.simpleName}")
+                    reportOnce(
+                        active.snapshot,
+                        BridgePresentationWire.MODULE_CONNECTION,
+                        BridgePresentationWire.ACTION_FAILED,
+                        "module_prompt_cancel:${failure.javaClass.simpleName}",
+                    )
                 }
         }
     }

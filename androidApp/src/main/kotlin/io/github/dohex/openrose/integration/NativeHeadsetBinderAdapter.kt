@@ -7,8 +7,8 @@ import android.os.IBinder
 import android.os.Looper
 import android.os.Parcel
 import android.util.Log
-import io.github.dohex.openrose.bridge.BridgePresentationWire
 import io.github.dohex.openrose.androidintegration.SystemHeadsetMapping
+import io.github.dohex.openrose.bridge.BridgePresentationWire
 import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedModule
 import java.lang.reflect.Method
@@ -36,8 +36,11 @@ class NativeHeadsetBinderAdapter(
     private val managedAddresses = NativeManagedAddressTombstones()
     private val registeredCallbacks = ConcurrentHashMap<IBinder, RegisteredCallback>()
     private val callbackHandler = Handler(Looper.getMainLooper())
+
     @Volatile private var currentSnapshot: NativeHeadsetSnapshot? = null
+
     @Volatile private var lastReportedSnapshot: NativeHeadsetSnapshot? = null
+
     @Volatile private var closed = false
 
     val hookHandles: List<XposedInterface.HookHandle>
@@ -280,6 +283,7 @@ class NativeHeadsetBinderAdapter(
                         report(FEATURE, "UNAVAILABLE", "checkSupport mask semantics are not documented by the pinned source")
                     }
                 }
+
                 TRANSACTION_GET_DEVICE_INFO -> {
                     val address = data.readString()
                     rememberAddress(chain.thisObject, address)
@@ -287,6 +291,7 @@ class NativeHeadsetBinderAdapter(
                         report(FEATURE, "UNAVAILABLE", "getDeviceInfo support mask semantics are not documented by the pinned source")
                     }
                 }
+
                 TRANSACTION_IS_MITWS, TRANSACTION_CHECK_IS_MITWS -> {
                     val address = data.readString()
                     val snapshot = snapshotForAddress(address) ?: return HookDecision.Proceed
@@ -296,6 +301,7 @@ class NativeHeadsetBinderAdapter(
                     report(FEATURE, "IDENTIFIED", "MiLink binder transaction=$code matched ${snapshot.profile}")
                     handled = true
                 }
+
                 TRANSACTION_IS_SUPPORT_AUDIO_SWITCH -> {
                     val address = data.readString()
                     snapshotForAddress(address) ?: return HookDecision.Proceed
@@ -303,6 +309,7 @@ class NativeHeadsetBinderAdapter(
                     reply.writeString("0")
                     handled = true
                 }
+
                 TRANSACTION_GET_RING_FIND_STATE -> {
                     val address = data.readString()
                     snapshotForAddress(address) ?: return HookDecision.Proceed
@@ -310,6 +317,7 @@ class NativeHeadsetBinderAdapter(
                     reply.writeInt(0)
                     handled = true
                 }
+
                 TRANSACTION_CHANGE_ANC_MODE -> {
                     val requested = data.readInt()
                     val targetDevice = data.readDevice()
@@ -326,6 +334,7 @@ class NativeHeadsetBinderAdapter(
                         handled = true
                     }
                 }
+
                 TRANSACTION_CHANGE_ANC_LEVEL -> {
                     val level = data.readString()
                     val targetDevice = data.readDevice()
@@ -341,6 +350,7 @@ class NativeHeadsetBinderAdapter(
                         handled = true
                     }
                 }
+
                 TRANSACTION_REGISTER -> {
                     val binding = synchronized(binderAddress) { binderAddress[chain.thisObject] }
                         ?: return HookDecision.Proceed
@@ -358,6 +368,7 @@ class NativeHeadsetBinderAdapter(
                         handled = true
                     }
                 }
+
                 TRANSACTION_REGISTER_CALLBACK_DEVICE -> {
                     val callback = data.readCallback()
                     val device = data.readDevice() ?: return HookDecision.Proceed
@@ -375,10 +386,12 @@ class NativeHeadsetBinderAdapter(
                         handled = true
                     }
                 }
+
                 TRANSACTION_UNREGISTER -> {
                     val binder = data.readStrongBinder()
                     if (binder != null) removeCallback(binder)
                 }
+
                 else -> Unit
             }
         } catch (failure: Throwable) {
@@ -422,7 +435,9 @@ class NativeHeadsetBinderAdapter(
             val current = currentSnapshot?.takeIf { it.isFresh() }
             if (closed || registeredCallbacks[target.binder] !== target || current == null ||
                 current.reference != target.reference || !current.matchesAddress(target.address)
-            ) return@post
+            ) {
+                return@post
+            }
             try {
                 val method = target.callback.javaClass.methods.firstOrNull { candidate ->
                     candidate.name == "refreshStatus" && candidate.parameterTypes.contentEquals(
@@ -440,11 +455,9 @@ class NativeHeadsetBinderAdapter(
         }
     }
 
-    private fun statusPayload(snapshot: NativeHeadsetSnapshot): String? =
-        (SystemHeadsetMapping.binderStatus(snapshot.fields) as? SystemHeadsetMapping.BinderStatus.Payload)?.text
+    private fun statusPayload(snapshot: NativeHeadsetSnapshot): String? = (SystemHeadsetMapping.binderStatus(snapshot.fields) as? SystemHeadsetMapping.BinderStatus.Payload)?.text
 
-    private fun snapshotForDevice(value: Any?): NativeHeadsetSnapshot? =
-        (value as? BluetoothDevice)?.let { device -> runCatching { snapshotForAddress(device.address) }.getOrNull() }
+    private fun snapshotForDevice(value: Any?): NativeHeadsetSnapshot? = (value as? BluetoothDevice)?.let { device -> runCatching { snapshotForAddress(device.address) }.getOrNull() }
 
     private fun snapshotForAddress(address: String?): NativeHeadsetSnapshot? {
         val snapshot = currentSnapshot?.takeIf { it.isFresh() } ?: return null
@@ -461,8 +474,7 @@ class NativeHeadsetBinderAdapter(
         return snapshot
     }
 
-    private fun bluetoothAddress(value: Any?): String? =
-        (value as? BluetoothDevice)?.let { device -> runCatching { device.address }.getOrNull() }
+    private fun bluetoothAddress(value: Any?): String? = (value as? BluetoothDevice)?.let { device -> runCatching { device.address }.getOrNull() }
 
     private fun snapshotForBoundAddress(owner: Any?): NativeHeadsetSnapshot? {
         val binding = owner?.let { instance -> synchronized(binderAddress) { binderAddress[instance] } } ?: return null
@@ -486,8 +498,10 @@ class NativeHeadsetBinderAdapter(
     private fun rememberAddress(owner: Any?, address: String?) {
         val snapshot = snapshotForAddress(address) ?: return
         val normalized = NativeHeadsetSnapshot.normalizeBluetoothAddress(address) ?: return
-        if (owner != null) synchronized(binderAddress) {
-            binderAddress[owner] = BinderAddress(normalized, snapshot.reference)
+        if (owner != null) {
+            synchronized(binderAddress) {
+                binderAddress[owner] = BinderAddress(normalized, snapshot.reference)
+            }
         }
         report(FEATURE, "IDENTIFIED", "native binder address matched ${snapshot.profile}")
     }
@@ -499,9 +513,9 @@ class NativeHeadsetBinderAdapter(
         }
         val normalizedAddress = NativeHeadsetSnapshot.normalizeBluetoothAddress(address)
             ?.takeIf(snapshot.addresses::contains) ?: run {
-                report(FEATURE, "UNAVAILABLE", "native mode=$mode request address is not in the authenticated snapshot")
-                return
-            }
+            report(FEATURE, "UNAVAILABLE", "native mode=$mode request address is not in the authenticated snapshot")
+            return
+        }
         val result = NativeNoiseRequestGate.submit(snapshot, mode) {
             val current = currentSnapshot?.takeIf {
                 !closed && it.isFresh() && it.reference == snapshot.reference &&
@@ -544,13 +558,11 @@ class NativeHeadsetBinderAdapter(
         runCatching { callback.binder.unlinkToDeath(callback.death, 0) }
     }
 
-    private fun Parcel.readDevice(): BluetoothDevice? {
-        return try {
-            if (readInt() != 0) BluetoothDevice.CREATOR.createFromParcel(this) else null
-        } catch (failure: Throwable) {
-            module.log(Log.WARN, TAG, "parcel_bluetooth_device_read_failed", failure)
-            null
-        }
+    private fun Parcel.readDevice(): BluetoothDevice? = try {
+        if (readInt() != 0) BluetoothDevice.CREATOR.createFromParcel(this) else null
+    } catch (failure: Throwable) {
+        module.log(Log.WARN, TAG, "parcel_bluetooth_device_read_failed", failure)
+        null
     }
 
     private fun Parcel.readCallback(): Any? {
@@ -668,8 +680,7 @@ class NativeHeadsetBinderAdapter(
         }
     }
 
-    private fun hookId(method: Method): String =
-        "openrose.native_headset.binder.${method.declaringClass.name}.${method.name}".replace('-', '_')
+    private fun hookId(method: Method): String = "openrose.native_headset.binder.${method.declaringClass.name}.${method.name}".replace('-', '_')
 
     private data class RegisteredCallback(
         val callback: Any,

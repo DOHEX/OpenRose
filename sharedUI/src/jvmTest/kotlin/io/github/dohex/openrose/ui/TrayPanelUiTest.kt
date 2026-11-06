@@ -15,16 +15,16 @@ import io.github.dohex.openrose.core.protocol.FieldReading
 import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.dohex.openrose.core.protocol.ModelProfile
 import io.github.dohex.openrose.core.transport.DeviceId
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFalse
-import kotlin.test.assertNotNull
-import kotlin.test.assertNotEquals
-import kotlin.test.assertNull
-import kotlin.test.assertTrue
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.persistentMapOf
 import kotlinx.collections.immutable.toPersistentList
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertNotEquals
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class TrayPanelUiTest {
     private val first = candidate("rose-1", ModelProfile.I5_ZT)
@@ -32,12 +32,14 @@ class TrayPanelUiTest {
 
     @Test
     fun connectedPanelShowsBatteryAndNoiseModeWithoutLevelControls() {
-        for (style in InterfaceStyle.entries) withTrayPanel(connectedI7State(), style) { panel ->
-            panel.render()
-            assertTrue(panel.hasText("90%"), "battery readings in $style")
-            assertTrue(panel.hasText("降噪模式"), "noise mode choices in $style")
-            assertFalse(panel.hasText("降噪档位"), "no ANC level in $style")
-            assertFalse(panel.hasText("通透档位"), "no transparency level in $style")
+        for (style in InterfaceStyle.entries) {
+            withTrayPanel(connectedI7State(), style) { panel ->
+                panel.render()
+                assertTrue(panel.hasText("90%"), "battery readings in $style")
+                assertTrue(panel.hasText("降噪模式"), "noise mode choices in $style")
+                assertFalse(panel.hasText("降噪档位"), "no ANC level in $style")
+                assertFalse(panel.hasText("通透档位"), "no transparency level in $style")
+            }
         }
     }
 
@@ -96,12 +98,14 @@ class TrayPanelUiTest {
 
     @Test
     fun withoutBondedDeviceAddHeadphonesShowsThemInTheMainWindow() {
-        for (style in InterfaceStyle.entries) withTrayPanel(disconnectedAndroidState(), style) { panel ->
-            panel.render()
-            assertFalse(panel.hasText("重新连接"), "nothing to reconnect in $style")
-            panel.clickText("添加耳机")
-            assertEquals(1L, panel.model.homeNavigationRequests.value, "showHeadphones in $style")
-            assertEquals(1, panel.openAppCount, "main window opened in $style")
+        for (style in InterfaceStyle.entries) {
+            withTrayPanel(disconnectedAndroidState(), style) { panel ->
+                panel.render()
+                assertFalse(panel.hasText("重新连接"), "nothing to reconnect in $style")
+                panel.clickText("添加耳机")
+                assertEquals(1L, panel.model.homeNavigationRequests.value, "showHeadphones in $style")
+                assertEquals(1, panel.openAppCount, "main window opened in $style")
+            }
         }
     }
 
@@ -272,7 +276,10 @@ class TrayPanelUiTest {
 
         val initializing = connected.copy(
             connection = ConnectionState.Connected(
-                requireNotNull(connected.device).deviceId, 1L, ModelProfile.I7_RS_V2, ConnectionPhase.INITIALIZING,
+                requireNotNull(connected.device).deviceId,
+                1L,
+                ModelProfile.I7_RS_V2,
+                ConnectionPhase.INITIALIZING,
             ),
         )
         val summary = traySummary(initializing, selection)

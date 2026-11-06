@@ -1,13 +1,11 @@
 package io.github.dohex.openrose.ui
 
-import kotlinx.collections.immutable.persistentSetOf
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
-import kotlinx.coroutines.flow.MutableStateFlow
 import io.github.dohex.openrose.androidintegration.IntegrationPlatformState
 import io.github.dohex.openrose.androidintegration.IntegrationSettings
-import io.github.dohex.openrose.androidintegration.IslandMode
 import io.github.dohex.openrose.androidintegration.IntegrationState
+import io.github.dohex.openrose.androidintegration.IslandMode
 import io.github.dohex.openrose.androidintegration.ModuleAvailability
 import io.github.dohex.openrose.core.ControlState
 import io.github.dohex.openrose.core.HostPlatform
@@ -16,6 +14,8 @@ import io.github.dohex.openrose.core.PlatformApplicability
 import io.github.dohex.openrose.core.PlatformState
 import io.github.dohex.openrose.core.TransportAvailability
 import io.github.dohex.openrose.core.UserSettings
+import kotlinx.collections.immutable.persistentSetOf
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -278,8 +278,11 @@ class PlatformApplicabilityUiTest {
                 settingsChanges += settings
                 integration.value = integration.value.copy(settings = settings)
             })
+
             HostPlatform.WINDOWS -> BasicPlatformUi("Windows")
+
             HostPlatform.LINUX -> BasicPlatformUi("Linux")
+
             HostPlatform.UNKNOWN -> BasicPlatformUi("平台未核实")
         }
         setContent { AndroidTestPage(model, platform, page) }

@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.Context
 import android.os.Bundle
 import android.util.Log
+import io.github.dohex.openrose.androidintegration.SystemHeadsetMapping
 import io.github.dohex.openrose.bridge.BridgePresentationWire
 import io.github.dohex.openrose.bridge.BridgeTarget
 import io.github.dohex.openrose.bridge.BridgeWire
@@ -13,7 +14,6 @@ import io.github.dohex.openrose.integration.NativeHeadsetBinderAdapter
 import io.github.dohex.openrose.integration.NativeHeadsetSnapshot
 import io.github.dohex.openrose.presentation.OfficialConnectionPresenter
 import io.github.dohex.openrose.presentation.PresentationCallbacks
-import io.github.dohex.openrose.androidintegration.SystemHeadsetMapping
 import io.github.dohex.openrose.presentation.SystemPresentationRenderer
 import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedModule
@@ -39,11 +39,17 @@ class OpenRoseBluetoothModule : XposedModule() {
     private val actions = ThreadPoolExecutor(0, 4, 30, TimeUnit.SECONDS, SynchronousQueue<Runnable>()) { task ->
         Thread(task, "OpenRose-system-action").apply { isDaemon = true }
     }
+
     @Volatile private var retired = false
+
     @Volatile private var processName: String? = null
+
     @Volatile private var target: BridgeTarget? = null
+
     @Volatile private var targetContext: Context? = null
+
     @Volatile private var client: AuthenticatedBridgeClient? = null
+
     @Volatile private var nativeSnapshot: NativeHeadsetSnapshot? = null
     private var binderAdapter: NativeHeadsetBinderAdapter? = null
     private var fusionAdapter: MiLinkNativeHeadsetAdapter? = null
@@ -51,6 +57,7 @@ class OpenRoseBluetoothModule : XposedModule() {
     private var official: OfficialConnectionPresenter? = null
     private var lastOfficialIdentity: String? = null
     private var entryResolution = BridgeWire.RESOLUTION_MATCHED
+
     @Volatile private var hostRuntime: ModuleHostRuntime? = null
     private var hostStarted = false
 
@@ -119,7 +126,9 @@ class OpenRoseBluetoothModule : XposedModule() {
                         if (!retired && nativeSnapshot?.reference == snapshot.reference) {
                             // Only the earphones' confirmation is a success; every refusal keeps its own status.
                             val outcome = SystemHeadsetMapping.commandReport(
-                                mode, result.getString(BridgeWire.STATUS), result.getString(BridgeWire.MESSAGE),
+                                mode,
+                                result.getString(BridgeWire.STATUS),
+                                result.getString(BridgeWire.MESSAGE),
                             )
                             componentReport(featureFor(selected), outcome.status, outcome.detail)
                         }
@@ -145,8 +154,12 @@ class OpenRoseBluetoothModule : XposedModule() {
             BridgeTarget.BLUETOOTH, BridgeTarget.XIAOMI_BLUETOOTH -> {
                 binderAdapter = NativeHeadsetBinderAdapter(this, loader, callbacks).also { it.install() }
             }
+
             BridgeTarget.MILINK -> fusionAdapter = MiLinkNativeHeadsetAdapter(
-                this, loader, callbacks, contextSupplier = { targetContext },
+                this,
+                loader,
+                callbacks,
+                contextSupplier = { targetContext },
             ).also { it.install() }
         }
     }
@@ -159,7 +172,10 @@ class OpenRoseBluetoothModule : XposedModule() {
             targetContext = context.applicationContext ?: context
             val actualProcess = processName ?: return
             if (selected == BridgeTarget.BLUETOOTH) startHost(context)
-            val created = AuthenticatedBridgeClient(context, selected, actualProcess,
+            val created = AuthenticatedBridgeClient(
+                context,
+                selected,
+                actualProcess,
                 onSnapshot = ::publish,
                 onClear = ::clearConsumers,
                 onAuthenticated = { authenticated ->
@@ -185,8 +201,7 @@ class OpenRoseBluetoothModule : XposedModule() {
     private fun presentationCallbacks(connected: AuthenticatedBridgeClient) = object : PresentationCallbacks {
         override fun claimPrompt(snapshot: Bundle, promptId: String): Boolean = connected.claimPrompt(snapshot, promptId)
         override fun setNoise(snapshot: Bundle, mode: String): Bundle = connected.setNoise(snapshot, mode)
-        override fun report(snapshot: Bundle, feature: String, status: String, detail: String) =
-            connected.reportPresentation(snapshot, feature, status, detail)
+        override fun report(snapshot: Bundle, feature: String, status: String, detail: String) = connected.reportPresentation(snapshot, feature, status, detail)
     }
 
     private fun publish(snapshot: Bundle) {
@@ -204,6 +219,7 @@ class OpenRoseBluetoothModule : XposedModule() {
                     .also { renderer = it }
                 output.render(snapshot)
             }
+
             BridgeTarget.XIAOMI_BLUETOOTH -> {
                 val output = official ?: OfficialConnectionPresenter(context, connected.handler, presentationCallbacks(connected))
                     .also { official = it }
@@ -211,9 +227,14 @@ class OpenRoseBluetoothModule : XposedModule() {
                 val prompt = spec?.getBundle(BridgePresentationWire.PROMPT)
                 val id = prompt?.getString(BridgePresentationWire.PROMPT_ID)
                 val identity = "${snapshot.getString(BridgeWire.HOST_EPOCH)}:${snapshot.getString(BridgeWire.DEVICE_ID)}:${snapshot.getLong(BridgeWire.SESSION_ID)}"
-                if (lastOfficialIdentity != identity) { output.clear(); consumedOfficialPrompts.clear(); lastOfficialIdentity = identity }
+                if (lastOfficialIdentity != identity) {
+                    output.clear()
+                    consumedOfficialPrompts.clear()
+                    lastOfficialIdentity = identity
+                }
                 if (spec?.getString(BridgePresentationWire.MODE) != BridgePresentationWire.OFFICIAL ||
-                    !spec.getBoolean(BridgePresentationWire.ALLOW_ISLAND_FIELDS) || id == null) {
+                    !spec.getBoolean(BridgePresentationWire.ALLOW_ISLAND_FIELDS) || id == null
+                ) {
                     output.clear()
                     return
                 }
@@ -222,6 +243,7 @@ class OpenRoseBluetoothModule : XposedModule() {
                     if (!prompt.getBoolean(BridgePresentationWire.CLAIMED)) output.show(snapshot, id)
                 }
             }
+
             else -> Unit
         }
     }
@@ -243,15 +265,22 @@ class OpenRoseBluetoothModule : XposedModule() {
 
     private fun closeConsumers(): Boolean {
         clearConsumers()
-        binderAdapter?.close(); binderAdapter = null
-        fusionAdapter?.close(); fusionAdapter = null
+        binderAdapter?.close()
+        binderAdapter = null
+        fusionAdapter?.close()
+        fusionAdapter = null
         val output = renderer
-        output?.close(); renderer = null
-        official?.close(); official = null
+        output?.close()
+        renderer = null
+        official?.close()
+        official = null
         actions.shutdownNow()
         return (output == null || output.awaitActionTermination(1_000)) && try {
             actions.awaitTermination(1_000, TimeUnit.MILLISECONDS)
-        } catch (_: InterruptedException) { Thread.currentThread().interrupt(); false }
+        } catch (_: InterruptedException) {
+            Thread.currentThread().interrupt()
+            false
+        }
     }
 
     override fun onHotReloading(param: HotReloadingParam): Boolean {
@@ -263,7 +292,10 @@ class OpenRoseBluetoothModule : XposedModule() {
         retired = true
         // Only framework/target-owned values cross the generation boundary.
         targetContext?.let { param.setSavedInstanceState(it) }
-        synchronized(lifecycle) { entryHooks.forEach { runCatching { it.unhook() } }; entryHooks.clear() }
+        synchronized(lifecycle) {
+            entryHooks.forEach { runCatching { it.unhook() } }
+            entryHooks.clear()
+        }
         return client?.close() ?: closeConsumers()
     }
 
@@ -271,7 +303,10 @@ class OpenRoseBluetoothModule : XposedModule() {
         processName = param.processName
         param.oldHookHandles.forEach { runCatching { it.unhook() } }
         val context = param.savedInstanceState as? Context
-        if (context == null) { log(Log.WARN, TAG, "hot_reload_context_unavailable"); return }
+        if (context == null) {
+            log(Log.WARN, TAG, "hot_reload_context_unavailable")
+            return
+        }
         val selected = BridgeTarget.resolve(context.packageName, param.processName) ?: return
         target = selected
         if (selected == BridgeTarget.BLUETOOTH) {
@@ -289,6 +324,7 @@ class OpenRoseBluetoothModule : XposedModule() {
 
     private companion object {
         const val TAG = "OpenRoseSystemModule"
+
         /** A settings-entry tap waits this long for the host before the system's own page runs. */
         const val FUSION_ENTRY_TIMEOUT_MILLIS = 750L
     }

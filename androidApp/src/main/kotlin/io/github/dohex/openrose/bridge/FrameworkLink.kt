@@ -1,10 +1,10 @@
 package io.github.dohex.openrose.bridge
 
 import android.util.Log
+import io.github.dohex.openrose.androidintegration.HostSettings
 import io.github.dohex.openrose.androidintegration.ModuleAvailability
 import io.github.dohex.openrose.androidintegration.ModuleUnavailableCause
 import io.github.dohex.openrose.androidintegration.SystemBridgeDiagnostics
-import io.github.dohex.openrose.androidintegration.HostSettings
 import io.github.libxposed.service.XposedService
 import io.github.libxposed.service.XposedServiceHelper
 
@@ -51,11 +51,16 @@ class FrameworkLink(
 
     fun diagnostics(): SystemBridgeDiagnostics = synchronized(lock) {
         val service = framework
-        if (service == null) SystemBridgeDiagnostics(detail = "尚未收到兼容框架服务")
-        else SystemBridgeDiagnostics(
-            frameworkName = service.frameworkName, frameworkVersion = service.frameworkVersion, frameworkApi = service.apiVersion,
-            detail = "框架服务已连接；模块增强仅在模块控制下运行",
-        )
+        if (service == null) {
+            SystemBridgeDiagnostics(detail = "尚未收到兼容框架服务")
+        } else {
+            SystemBridgeDiagnostics(
+                frameworkName = service.frameworkName,
+                frameworkVersion = service.frameworkVersion,
+                frameworkApi = service.apiVersion,
+                detail = "框架服务已连接；模块增强仅在模块控制下运行",
+            )
+        }
     }
 
     /**
@@ -68,5 +73,7 @@ class FrameworkLink(
     fun publishConfig(settings: () -> HostSettings): Boolean = runCatching { publisher.publish(settings) }
         .onFailure { Log.w(TAG, "Failed to publish module configuration", it) }.getOrDefault(false)
 
-    private companion object { const val TAG = "FrameworkLink" }
+    private companion object {
+        const val TAG = "FrameworkLink"
+    }
 }

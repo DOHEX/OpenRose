@@ -82,12 +82,10 @@ object ControlWire {
     }
 
     fun encode(reference: SessionReference): Wire = obj("device" to str(reference.deviceId.value), "session" to num(reference.sessionId))
-    fun decodeReference(wire: Wire): SessionReference =
-        wire.asObj().let { SessionReference(DeviceId(it.str("device")), it.long("session")) }
+    fun decodeReference(wire: Wire): SessionReference = wire.asObj().let { SessionReference(DeviceId(it.str("device")), it.long("session")) }
 
     fun encode(error: ControlError): Wire = obj("code" to Wire.Str(error.code.name), "message" to str(error.message))
-    fun decodeError(wire: Wire): ControlError =
-        wire.asObj().let { ControlError(it.field("code").asEnum<ControlErrorCode>(), it.str("message")) }
+    fun decodeError(wire: Wire): ControlError = wire.asObj().let { ControlError(it.field("code").asEnum<ControlErrorCode>(), it.str("message")) }
 
     fun encode(result: OperationResult): Wire = when (result) {
         OperationResult.Success -> obj("ok" to bool(true))
@@ -100,14 +98,26 @@ object ControlWire {
 
     fun encode(value: FieldValue): Wire = when (value) {
         is FieldValue.Number -> obj("t" to str("number"), "v" to num(value.value))
+
         is FieldValue.Toggle -> obj("t" to str("toggle"), "v" to bool(value.value))
+
         is FieldValue.Text -> obj("t" to str("text"), "v" to str(value.value))
+
         is FieldValue.IntegerList -> obj("t" to str("ints"), "v" to arr(value.values.map(::num)))
+
         is FieldValue.Firmware -> obj("t" to str("firmware"), "parts" to arr(value.parts.map(::num)), "text" to str(value.displayText))
-        is FieldValue.TouchKeys -> obj("t" to str("keys"), "v" to arr(value.bindings.map {
-            obj("side" to str(it.side), "gesture" to str(it.gesture), "action" to it.action?.let(::str), "raw" to num(it.rawAction))
-        }))
+
+        is FieldValue.TouchKeys -> obj(
+            "t" to str("keys"),
+            "v" to arr(
+                value.bindings.map {
+                    obj("side" to str(it.side), "gesture" to str(it.gesture), "action" to it.action?.let(::str), "raw" to num(it.rawAction))
+                },
+            ),
+        )
+
         is FieldValue.TouchAssignment -> obj("t" to str("assign"), "side" to str(value.side), "gesture" to str(value.gesture), "action" to str(value.action))
+
         is FieldValue.NoiseCycle -> obj("t" to str("cycle"), "v" to Wire.Obj(value.flags.mapValues { (_, flag) -> flag?.let(::bool) ?: Wire.Null }))
     }
 
@@ -115,18 +125,30 @@ object ControlWire {
         val node = wire.asObj()
         return when (val type = node.str("t")) {
             "number" -> FieldValue.Number(node.int("v"))
+
             "toggle" -> FieldValue.Toggle(node.bool("v"))
+
             "text" -> FieldValue.Text(node.str("v"))
+
             "ints" -> FieldValue.IntegerList(node.arr("v").map { it.asInt() })
+
             "firmware" -> FieldValue.Firmware(node.arr("parts").map { it.asInt() }, node.str("text"))
-            "keys" -> FieldValue.TouchKeys(node.arr("v").map {
-                val binding = it.asObj()
-                TouchBinding(binding.str("side"), binding.str("gesture"), binding.optional("action")?.asStr(), binding.int("raw"))
-            })
+
+            "keys" -> FieldValue.TouchKeys(
+                node.arr("v").map {
+                    val binding = it.asObj()
+                    TouchBinding(binding.str("side"), binding.str("gesture"), binding.optional("action")?.asStr(), binding.int("raw"))
+                },
+            )
+
             "assign" -> FieldValue.TouchAssignment(node.str("side"), node.str("gesture"), node.str("action"))
-            "cycle" -> FieldValue.NoiseCycle(node.field("v").asObj().fields.mapValues { (_, flag) ->
-                if (flag == Wire.Null) null else flag.asBool()
-            })
+
+            "cycle" -> FieldValue.NoiseCycle(
+                node.field("v").asObj().fields.mapValues { (_, flag) ->
+                    if (flag == Wire.Null) null else flag.asBool()
+                },
+            )
+
             else -> throw WireFormatException("未知字段值类型 $type")
         }
     }
@@ -167,13 +189,20 @@ object ControlWire {
 
     private fun encode(connection: ConnectionState): Wire = when (connection) {
         ConnectionState.Disconnected -> obj("t" to str("disconnected"))
+
         is ConnectionState.Connecting -> obj(
-            "t" to str("connecting"), "device" to str(connection.deviceId.value),
-            "session" to num(connection.sessionId), "phase" to Wire.Str(connection.phase.name),
+            "t" to str("connecting"),
+            "device" to str(connection.deviceId.value),
+            "session" to num(connection.sessionId),
+            "phase" to Wire.Str(connection.phase.name),
         )
+
         is ConnectionState.Connected -> obj(
-            "t" to str("connected"), "device" to str(connection.deviceId.value), "session" to num(connection.sessionId),
-            "profile" to Wire.Str(connection.profile.name), "phase" to Wire.Str(connection.phase.name),
+            "t" to str("connected"),
+            "device" to str(connection.deviceId.value),
+            "session" to num(connection.sessionId),
+            "profile" to Wire.Str(connection.profile.name),
+            "phase" to Wire.Str(connection.phase.name),
         )
     }
 
@@ -181,13 +210,20 @@ object ControlWire {
         val node = wire.asObj()
         return when (val kind = node.str("t")) {
             "disconnected" -> ConnectionState.Disconnected
+
             "connecting" -> ConnectionState.Connecting(
-                DeviceId(node.str("device")), node.long("session"), node.field("phase").asEnum<ConnectionPhase>(),
-            )
-            "connected" -> ConnectionState.Connected(
-                DeviceId(node.str("device")), node.long("session"), node.field("profile").asEnum<ModelProfile>(),
+                DeviceId(node.str("device")),
+                node.long("session"),
                 node.field("phase").asEnum<ConnectionPhase>(),
             )
+
+            "connected" -> ConnectionState.Connected(
+                DeviceId(node.str("device")),
+                node.long("session"),
+                node.field("profile").asEnum<ModelProfile>(),
+                node.field("phase").asEnum<ConnectionPhase>(),
+            )
+
             else -> throw WireFormatException("未知连接状态 $kind")
         }
     }
@@ -209,15 +245,22 @@ object ControlWire {
     }
 
     private fun encode(candidate: DeviceCandidate): Wire = obj(
-        "id" to str(candidate.deviceId.value), "name" to candidate.name?.let(::str), "rssi" to candidate.rssi?.let(::num),
-        "profile" to candidate.profile?.let { Wire.Str(it.name) }, "manufacturer" to str(candidate.manufacturerDataHex),
+        "id" to str(candidate.deviceId.value),
+        "name" to candidate.name?.let(::str),
+        "rssi" to candidate.rssi?.let(::num),
+        "profile" to candidate.profile?.let { Wire.Str(it.name) },
+        "manufacturer" to str(candidate.manufacturerDataHex),
         "classic" to candidate.classicAddress?.let(::str),
     )
 
     private fun decodeCandidate(wire: Wire): DeviceCandidate = wire.asObj().let {
         DeviceCandidate(
-            DeviceId(it.str("id")), it.optional("name")?.asStr(), it.optional("rssi")?.asInt(),
-            it.optional("profile")?.asEnum<ModelProfile>(), it.str("manufacturer"), it.optional("classic")?.asStr(),
+            DeviceId(it.str("id")),
+            it.optional("name")?.asStr(),
+            it.optional("rssi")?.asInt(),
+            it.optional("profile")?.asEnum<ModelProfile>(),
+            it.str("manufacturer"),
+            it.optional("classic")?.asStr(),
         )
     }
 
@@ -235,10 +278,12 @@ object ControlWire {
             deviceId = DeviceId(node.str("id")), sessionId = node.long("session"),
             profile = node.field("profile").asEnum(), capabilities = decodeCapabilities(node.field("capabilities")),
             fields = node.arr("fields").associate {
-                val entry = it.asObj(); entry.field("f").asEnum<DeviceField>() to decodeReading(entry.field("reading"))
+                val entry = it.asObj()
+                entry.field("f").asEnum<DeviceField>() to decodeReading(entry.field("reading"))
             }.toPersistentMap(),
             fieldErrors = node.arr("fieldErrors").associate {
-                val entry = it.asObj(); entry.field("f").asEnum<DeviceField>() to decodeError(entry.field("error"))
+                val entry = it.asObj()
+                entry.field("f").asEnum<DeviceField>() to decodeError(entry.field("error"))
             }.toPersistentMap(),
             rawNotifications = node.arr("raw").map { it.asStr() }.toPersistentList(), unknownNotifications = node.arr("unknown").map { it.asStr() }.toPersistentList(),
             warnings = node.arr("warnings").map { it.asStr() }.toPersistentList(), classicAddress = node.optional("classic")?.asStr(),
@@ -251,8 +296,10 @@ object ControlWire {
         "noise" to capabilities.noiseControl?.let(::encode),
         "equalizer" to capabilities.equalizer?.let(::encode),
         "touch" to capabilities.touchControl?.let { touch ->
-            obj("slots" to arr(touch.slots.map { obj("side" to str(it.side), "gesture" to str(it.gesture)) }),
-                "actions" to arr(touch.actions.map(::str)))
+            obj(
+                "slots" to arr(touch.slots.map { obj("side" to str(it.side), "gesture" to str(it.gesture)) }),
+                "actions" to arr(touch.actions.map(::str)),
+            )
         },
         "audio" to capabilities.audioControl?.let { audio ->
             obj("modes" to arr(audio.modes.map(::str)), "coupled" to bool(audio.multipointCoupled))
@@ -284,13 +331,14 @@ object ControlWire {
     }
 
     private fun encode(noise: NoiseControlCapabilities): Wire = obj(
-        "modes" to arr(noise.modes.map(::str)), "cycle" to arr(noise.cycleModes.map(::str)),
-        "anc" to noise.ancLevel?.let(::encode), "transparency" to noise.transparencyLevel?.let(::encode),
+        "modes" to arr(noise.modes.map(::str)),
+        "cycle" to arr(noise.cycleModes.map(::str)),
+        "anc" to noise.ancLevel?.let(::encode),
+        "transparency" to noise.transparencyLevel?.let(::encode),
         "minimumCycle" to num(noise.minimumCycleSelections),
     )
 
-    private fun encode(levels: NoiseLevelCapabilities): Wire =
-        obj("levels" to arr(levels.levels.map(::num)), "modes" to arr(levels.visibleModes.map(::str)))
+    private fun encode(levels: NoiseLevelCapabilities): Wire = obj("levels" to arr(levels.levels.map(::num)), "modes" to arr(levels.visibleModes.map(::str)))
 
     private fun decodeLevels(wire: Wire): NoiseLevelCapabilities = wire.asObj().let {
         NoiseLevelCapabilities(it.arr("levels").map { level -> level.asInt() }.toPersistentSet(), it.arr("modes").map { mode -> mode.asStr() }.toPersistentSet())
@@ -298,8 +346,10 @@ object ControlWire {
 
     private fun decodeNoise(wire: Wire): NoiseControlCapabilities = wire.asObj().let {
         NoiseControlCapabilities(
-            modes = it.arr("modes").map { mode -> mode.asStr() }.toPersistentSet(), cycleModes = it.arr("cycle").map { mode -> mode.asStr() }.toPersistentSet(),
-            ancLevel = it.optional("anc")?.let(::decodeLevels), transparencyLevel = it.optional("transparency")?.let(::decodeLevels),
+            modes = it.arr("modes").map { mode -> mode.asStr() }.toPersistentSet(),
+            cycleModes = it.arr("cycle").map { mode -> mode.asStr() }.toPersistentSet(),
+            ancLevel = it.optional("anc")?.let(::decodeLevels),
+            transparencyLevel = it.optional("transparency")?.let(::decodeLevels),
             minimumCycleSelections = it.int("minimumCycle"),
         )
     }
@@ -340,8 +390,12 @@ object ControlWire {
         "reason" to Wire.Str(selection.reason.name),
         "endpoint" to when (val endpoint = selection.endpoint) {
             is TransportEndpoint.BleGatt -> obj(
-                "t" to str("ble"), "service" to str(endpoint.serviceUuid), "write" to str(endpoint.writeUuid), "notify" to str(endpoint.notifyUuid),
+                "t" to str("ble"),
+                "service" to str(endpoint.serviceUuid),
+                "write" to str(endpoint.writeUuid),
+                "notify" to str(endpoint.notifyUuid),
             )
+
             is TransportEndpoint.SppRfcomm -> obj("t" to str("spp"), "address" to str(endpoint.address), "service" to str(endpoint.serviceUuid))
         },
     )
@@ -358,8 +412,7 @@ object ControlWire {
         )
     }
 
-    private fun encode(recovery: ConnectionRecovery): Wire =
-        obj("session" to num(recovery.sessionId), "reason" to Wire.Str(recovery.reason.name), "attempt" to num(recovery.attempt))
+    private fun encode(recovery: ConnectionRecovery): Wire = obj("session" to num(recovery.sessionId), "reason" to Wire.Str(recovery.reason.name), "attempt" to num(recovery.attempt))
 
     private fun decodeRecovery(wire: Wire): ConnectionRecovery = wire.asObj().let {
         ConnectionRecovery(it.long("session"), it.field("reason").asEnum<TransportRecoveryReason>(), it.int("attempt"))

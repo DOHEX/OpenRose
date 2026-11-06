@@ -4,12 +4,6 @@ import io.github.dohex.openrose.core.ConnectionState
 import io.github.dohex.openrose.core.DeviceSetting
 import io.github.dohex.openrose.core.OperationResult
 import io.github.dohex.openrose.core.SessionReference
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertIs
-import kotlin.test.assertNotNull
-import kotlin.test.assertNull
-import kotlin.test.assertTrue
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.flow.toList
@@ -18,6 +12,12 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertIs
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 /** The system-module facts a platform reports reach the integration state, apart from the control state. */
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)

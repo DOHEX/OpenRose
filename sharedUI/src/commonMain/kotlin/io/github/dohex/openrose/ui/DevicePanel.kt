@@ -15,16 +15,16 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.ui.draw.clip
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import io.github.dohex.openrose.core.*
@@ -36,13 +36,18 @@ internal fun ControlState.activeDevice(): DeviceState? {
     val targetId = connectionTarget?.deviceId
     return device?.takeIf { connection.matches(it) && (targetId == null || targetId == it.deviceId) }
 }
-internal fun PlatformState.transportUnavailableForHome(): Boolean =
-    permission in setOf(PermissionState.GRANTED, PermissionState.NOT_REQUIRED) &&
-        transport is TransportAvailability.Unavailable
+internal fun PlatformState.transportUnavailableForHome(): Boolean = permission in setOf(PermissionState.GRANTED, PermissionState.NOT_REQUIRED) &&
+    transport is TransportAvailability.Unavailable
 val ModelProfile.configurationLabel: String
-    get() = when (this) { ModelProfile.I5_ZT -> "ZT"; ModelProfile.I7_RS_V2 -> "RS Common V2" }
+    get() = when (this) {
+        ModelProfile.I5_ZT -> "ZT"
+        ModelProfile.I7_RS_V2 -> "RS Common V2"
+    }
 val ModelProfile.shortLabel: String
-    get() = when (this) { ModelProfile.I5_ZT -> "i5"; ModelProfile.I7_RS_V2 -> "i7" }
+    get() = when (this) {
+        ModelProfile.I5_ZT -> "i5"
+        ModelProfile.I7_RS_V2 -> "i7"
+    }
 
 internal fun ControlState.controlTransportLabel(): String = when (transportSelection?.endpoint) {
     is TransportEndpoint.BleGatt -> "BLE"
@@ -125,8 +130,12 @@ internal fun HeadphonesPage(
                     if (DeviceSetting.GAME_MODE in device.capabilities.writableSettings) {
                         AppDashboardCard(compact = true) {
                             SettingToggleChoices(
-                                "游戏模式", DeviceField.GAME_MODE, DeviceSetting.GAME_MODE,
-                                device, state.isReady(device) && !state.hasPendingSetting(device), onSet,
+                                "游戏模式",
+                                DeviceField.GAME_MODE,
+                                DeviceSetting.GAME_MODE,
+                                device,
+                                state.isReady(device) && !state.hasPendingSetting(device),
+                                onSet,
                                 icon = RoseIcon.GAME,
                             )
                         }
@@ -501,6 +510,7 @@ private fun UnconnectedHeadphonesDashboard(
         )
     }
 }
+
 @Composable
 internal fun BatteryStrip(device: DeviceState, initializing: Boolean) {
     val isMaterial3 = LocalInterfaceStyle.current == InterfaceStyle.MATERIAL3
@@ -546,8 +556,6 @@ internal fun BatteryStrip(device: DeviceState, initializing: Boolean) {
         }
     }
 }
-
-
 
 @Composable
 internal fun ConnectionDetailsCard(state: ControlState, onDisconnect: () -> Unit) {
@@ -665,8 +673,11 @@ internal fun readingText(
         initializing -> "读取中…"
         else -> "尚未读取"
     }
+
     is FieldReading.NotProvided -> "设备未提供"
+
     is FieldReading.Unknown -> "未知"
+
     is FieldReading.Known -> displayFieldValue(field, reading.value, profile)
 }
 

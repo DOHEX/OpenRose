@@ -61,12 +61,16 @@ class EqualizerProtocolTest {
     fun i7PresetWritesSwapHifiPopAndUseTheEqReadback() {
         // Independent fixed TX extraction: rose_reverse/analysis/i7_sender_commands.json, seq00.
         for ((preset, tx) in listOf(
-            "hifi" to "ff00022a002baa", "pop" to "ff00022a012caa",
-            "rock" to "ff00022a022daa", "light" to "ff00022a032eaa",
+            "hifi" to "ff00022a002baa",
+            "pop" to "ff00022a012caa",
+            "rock" to "ff00022a022daa",
+            "light" to "ff00022a032eaa",
             "eap" to "ff00022a0631aa",
         )) {
             val setting = createProtocolCodec(ModelProfile.I7_RS_V2).prepareSetting(
-                DeviceSetting.EQ, FieldValue.Text(preset), FieldValue.Firmware(listOf(1, 5, 2), "152"),
+                DeviceSetting.EQ,
+                FieldValue.Text(preset),
+                FieldValue.Firmware(listOf(1, 5, 2), "152"),
             )
             assertEquals(tx, setting.writeFrames.single().hex())
             // getEq fixed body FA2A with the next session sequence01, independently worked literal.
@@ -141,8 +145,10 @@ class EqualizerProtocolTest {
         val codec = createProtocolCodec(ModelProfile.I5_ZT)
         // Deliberately synthetic offsets and high-nibble sentinels; no RX framing claim.
         for ((rx, preset) in listOf(
-            "000000000002010000a0" to "pop", "000000000002010000a1" to "hifi",
-            "000000000002010000a2" to "rock", "000000000002010000a3" to "light",
+            "000000000002010000a0" to "pop",
+            "000000000002010000a1" to "hifi",
+            "000000000002010000a2" to "rock",
+            "000000000002010000a3" to "light",
         )) {
             val reply = codec.feedNotification(rx.bytes()).single()
             assertEquals(setOf("0201"), reply.responseKeys)
@@ -176,9 +182,13 @@ class EqualizerProtocolTest {
         val codec = createProtocolCodec(ModelProfile.I7_RS_V2)
         // Whole-prefix checksum synthetic RX examples, hand-worked independently of the codec.
         for ((rx, preset) in listOf(
-            "dd00022a0009aa" to "hifi", "dd00022a010aaa" to "pop",
-            "dd00022a020baa" to "rock", "dd00022a030caa" to "light", "dd00022a060faa" to "eap",
-            "dd00032a00000aaa" to "pop", "dd00032a01000baa" to "hifi",
+            "dd00022a0009aa" to "hifi",
+            "dd00022a010aaa" to "pop",
+            "dd00022a020baa" to "rock",
+            "dd00022a030caa" to "light",
+            "dd00022a060faa" to "eap",
+            "dd00032a00000aaa" to "pop",
+            "dd00032a01000baa" to "hifi",
         )) {
             val reply = codec.feedNotification(rx.bytes()).single()
             assertEquals(setOf("2a"), reply.responseKeys)

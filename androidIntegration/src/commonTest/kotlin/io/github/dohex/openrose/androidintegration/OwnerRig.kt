@@ -18,12 +18,12 @@ import io.github.dohex.openrose.core.transport.ControlTransport
 import io.github.dohex.openrose.core.transport.DeviceId
 import io.github.dohex.openrose.core.transport.TransportEndpoint
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -228,11 +228,10 @@ internal class InProcessHostLink(
             return HostWire.decodeAcquireResult(parseWire(HostWire.encode(result).render()))
         }
 
-        override fun frames(generation: OwnerGeneration): Flow<HostFrame> =
-            host.frames(identity, lease.id, generation).map { frame ->
-                ensureOpen()
-                HostWire.decodeFrame(parseWire(HostWire.encode(frame).render()))
-            }
+        override fun frames(generation: OwnerGeneration): Flow<HostFrame> = host.frames(identity, lease.id, generation).map { frame ->
+            ensureOpen()
+            HostWire.decodeFrame(parseWire(HostWire.encode(frame).render()))
+        }
 
         override fun close() {
             open = false
@@ -241,8 +240,7 @@ internal class InProcessHostLink(
     }
 }
 
-internal fun rosePair(name: String, profile: ModelProfile = ModelProfile.I5_ZT) =
-    DeviceCandidate(DeviceId(name), if (profile == ModelProfile.I5_ZT) "EarFree i5" else "EarFeel i7", null, profile, "", "11:22:33:44:55:66")
+internal fun rosePair(name: String, profile: ModelProfile = ModelProfile.I5_ZT) = DeviceCandidate(DeviceId(name), if (profile == ModelProfile.I5_ZT) "EarFree i5" else "EarFeel i7", null, profile, "", "11:22:33:44:55:66")
 
 /** The application and the module host over one pair of earphones, built the way production wires them. */
 internal class OwnerRig(
@@ -314,6 +312,7 @@ internal class OwnerRig(
         host.updatePlatform(platform)
         host.configure(HostConfiguration(unlocked, HostSettings(integration = IntegrationSettings(controlWay = store.record.selected))))
     }
+
     /** The first unlock of a boot, as the host learns it. */
     suspend fun unlockHost() {
         hostUnlocked = true

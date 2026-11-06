@@ -14,43 +14,57 @@ internal class I5Codec : ProtocolCodec {
                     ?: throw UnsupportedOperationException("i5 不支持该降噪模式")
                 Triple("0682", "0602", mode.bytes())
             }
+
             DeviceSetting.ANC_LEVEL, DeviceSetting.TRANSPARENCY_LEVEL -> {
                 require(value is FieldValue.Number) { "档位需要整数" }
                 val level = listOf(1, 3, 5).indexOf(value.value)
                 require(level >= 0) { "i5 档位仅支持 1、3、5" }
-                if (setting == DeviceSetting.ANC_LEVEL) Triple("0687", "0607", byteArrayOf(level.toByte()))
-                else Triple("0684", "0604", byteArrayOf(level.toByte()))
+                if (setting == DeviceSetting.ANC_LEVEL) {
+                    Triple("0687", "0607", byteArrayOf(level.toByte()))
+                } else {
+                    Triple("0684", "0604", byteArrayOf(level.toByte()))
+                }
             }
+
             DeviceSetting.NOISE_CYCLE -> {
                 val flags = (expected as FieldValue.NoiseCycle).flags
                 Triple("0685", "0605", listOf("normal", "transparency", "wind", "anc").map { if (flags.getValue(it) == true) 1.toByte() else 0.toByte() }.toByteArray())
             }
+
             DeviceSetting.EQ -> {
                 require(value is FieldValue.Text) { "均衡器需要预设名称" }
                 val preset = listOf("pop", "hifi", "rock", "light").indexOf(value.value)
                 if (preset < 0) throw UnsupportedOperationException("i5 不支持该均衡器预设")
                 Triple("0281", "0201", byteArrayOf(preset.toByte()))
             }
+
             DeviceSetting.GAME_MODE -> {
                 require(value is FieldValue.Toggle) { "游戏模式需要明确开关" }
                 Triple("0683", "0603", byteArrayOf(if (value.value) 0 else 1))
             }
+
             DeviceSetting.AUDIO_MODE -> {
                 require(value is FieldValue.Text) { "音频模式需要配置名称" }
                 val mode = listOf("aac_sbc", "ldac").indexOf(value.value)
                 if (mode < 0) throw UnsupportedOperationException("i5 不支持该音频配置")
                 Triple("0881", "0801", byteArrayOf(mode.toByte()))
             }
+
             DeviceSetting.MULTIPOINT -> {
                 require(value is FieldValue.Toggle) { "多点连接需要明确开关" }
                 Triple("0881", "0801", byteArrayOf(if (value.value) 0 else 1))
             }
+
             DeviceSetting.TOUCH_ENABLED, DeviceSetting.EAR_DETECTION -> {
                 require(value is FieldValue.Toggle) { "触控和检测功能需要明确开关" }
                 val payload = byteArrayOf(if (value.value) 0 else 1)
-                if (setting == DeviceSetting.TOUCH_ENABLED) Triple("0a81", "0a01", payload)
-                else Triple("0c81", "0c01", payload)
+                if (setting == DeviceSetting.TOUCH_ENABLED) {
+                    Triple("0a81", "0a01", payload)
+                } else {
+                    Triple("0c81", "0c01", payload)
+                }
             }
+
             DeviceSetting.TOUCH_BINDING -> {
                 val binding = validatedTouchAssignment(value, profile)
                 val side = if (binding.side == "left") 0 else 1
@@ -58,10 +72,12 @@ internal class I5Codec : ProtocolCodec {
                 val action = listOf("volume_up", "volume_down", "previous_track", "next_track", "voice_assistant", "play_pause", "none", "noise_cycle").indexOf(binding.action)
                 Triple("0481", "0401", byteArrayOf(side.toByte(), gesture.toByte(), action.toByte()))
             }
+
             DeviceSetting.PROMPT_VOLUME -> {
                 require(value is FieldValue.Number && value.value in 1..5) { "i5 提示音仅支持 1～5 档" }
                 Triple("0e83", "0e03", byteArrayOf((value.value - 1).toByte()))
             }
+
             else -> throw UnsupportedOperationException("i5 不支持此设置")
         }
         val expectedValues = if (readKey == "0801") {
@@ -70,7 +86,9 @@ internal class I5Codec : ProtocolCodec {
                 DeviceField.AUDIO_MODE to FieldValue.Text(if (multipoint) "aac_sbc" else "ldac"),
                 DeviceField.MULTIPOINT to FieldValue.Toggle(multipoint),
             )
-        } else mapOf(i5Fields.getValue(readKey).single() to expected)
+        } else {
+            mapOf(i5Fields.getValue(readKey).single() to expected)
+        }
         return ProtocolSetting(
             listOf(frame(writeKey, payload)),
             query(readKey),
@@ -130,10 +148,12 @@ internal class I5Codec : ProtocolCodec {
                     known(field, FieldValue.Toggle(raw[offset].u() != 0), byteArrayOf(raw[offset]))
                 }
             }
+
             "0d01" -> {
                 val parts = (9..11).map { raw[it].u() and 15 }
                 known(DeviceField.FIRMWARE, FieldValue.Firmware(parts, parts.joinToString("")), raw.copyOfRange(9, 12))
             }
+
             "0401" -> {
                 val actions = listOf("volume_up", "volume_down", "previous_track", "next_track", "voice_assistant", "play_pause", "none", "noise_cycle")
                 val gestures = listOf("single", "double", "triple", "long")
@@ -143,11 +163,13 @@ internal class I5Codec : ProtocolCodec {
                 }
                 known(DeviceField.TOUCH_KEYS, FieldValue.TouchKeys(bindings), raw.copyOfRange(9, 17))
             }
+
             "0602" -> {
                 val tail = raw.copyOfRange(9, raw.size).hex()
                 val mode = mapOf("0100000020" to "anc", "0001000020" to "normal", "0000010020" to "wind", "0000000120" to "transparency", "0200000021" to "auto")[tail]
                 fields[DeviceField.NOISE_MODE] = mode?.let { FieldReading.Known(FieldValue.Text(it), tail) } ?: FieldReading.Unknown(tail)
             }
+
             "0605" -> {
                 val names = listOf("normal", "transparency", "wind", "anc")
                 val flags = names.mapIndexed { index, name ->
@@ -156,26 +178,40 @@ internal class I5Codec : ProtocolCodec {
                 }.toMap()
                 known(DeviceField.NOISE_CYCLE, FieldValue.NoiseCycle(flags), raw.copyOfRange(9, 13))
             }
+
             "0603", "0c01", "0a01" -> {
                 val field = i5Fields.getValue(command).single()
-                fields[field] = if (nibble in 0..1) FieldReading.Known(FieldValue.Toggle(nibble == 0), byteArrayOf(raw[9]).hex())
-                    else FieldReading.Unknown(byteArrayOf(raw[9]).hex())
+                fields[field] = if (nibble in 0..1) {
+                    FieldReading.Known(FieldValue.Toggle(nibble == 0), byteArrayOf(raw[9]).hex())
+                } else {
+                    FieldReading.Unknown(byteArrayOf(raw[9]).hex())
+                }
             }
+
             "0201" -> choice(DeviceField.EQ, listOf("pop", "hifi", "rock", "light"))
+
             "0801" -> {
                 choice(DeviceField.AUDIO_MODE, listOf("aac_sbc", "ldac"))
-                fields[DeviceField.MULTIPOINT] = if (nibble in 0..1) FieldReading.Known(FieldValue.Toggle(nibble == 0), byteArrayOf(raw[9]).hex())
-                    else FieldReading.Unknown(byteArrayOf(raw[9]).hex())
+                fields[DeviceField.MULTIPOINT] = if (nibble in 0..1) {
+                    FieldReading.Known(FieldValue.Toggle(nibble == 0), byteArrayOf(raw[9]).hex())
+                } else {
+                    FieldReading.Unknown(byteArrayOf(raw[9]).hex())
+                }
             }
+
             "0607", "0604" -> {
                 val field = i5Fields.getValue(command).single()
                 val level = listOf(1, 3, 5).getOrNull(raw[9].u())
                 fields[field] = level?.let { FieldReading.Known(FieldValue.Number(it), byteArrayOf(raw[9]).hex()) }
                     ?: FieldReading.Unknown(byteArrayOf(raw[9]).hex())
             }
+
             "0e03" -> {
-                fields[DeviceField.PROMPT_VOLUME] = if (nibble in 0..4) FieldReading.Known(FieldValue.Number(nibble + 1), byteArrayOf(raw[9]).hex())
-                    else FieldReading.Unknown(byteArrayOf(raw[9]).hex())
+                fields[DeviceField.PROMPT_VOLUME] = if (nibble in 0..4) {
+                    FieldReading.Known(FieldValue.Number(nibble + 1), byteArrayOf(raw[9]).hex())
+                } else {
+                    FieldReading.Unknown(byteArrayOf(raw[9]).hex())
+                }
             }
         }
         return listOf(ProtocolReply(raw.hex(), setOf(command), fields))

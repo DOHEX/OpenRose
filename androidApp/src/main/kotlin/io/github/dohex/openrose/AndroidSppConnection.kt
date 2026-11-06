@@ -6,12 +6,10 @@ import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothSocket
 import io.github.dohex.openrose.core.ConnectionPhase
 import io.github.dohex.openrose.core.transport.ControlConnection
-import java.io.IOException
-import java.util.UUID
-import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.cancelAndJoin
@@ -19,11 +17,13 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import java.io.IOException
+import java.util.UUID
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.coroutines.resume
 
 /** One secure RFCOMM connection carrying the same V2 byte stream as the BLE control service. */
@@ -43,6 +43,7 @@ internal class AndroidSppConnection(
     private val writeLock = Mutex()
 
     @Volatile private var socket: BluetoothSocket? = null
+
     @Volatile private var readerJob: Job? = null
 
     override val notifications: Flow<ByteArray> = flow {

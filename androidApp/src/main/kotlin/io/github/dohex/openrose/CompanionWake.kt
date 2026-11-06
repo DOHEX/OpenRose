@@ -87,18 +87,26 @@ internal class CompanionWake(private val context: Context) {
         val request = associationRequest()
         try {
             if (Build.VERSION.SDK_INT >= 33) {
-                manager.associate(request, context.mainExecutor, object : CompanionDeviceManager.Callback() {
-                    override fun onAssociationPending(intentSender: IntentSender) = onChooser(intentSender)
-                    override fun onAssociationCreated(associationInfo: AssociationInfo) = Unit
-                    override fun onFailure(error: CharSequence?) = onFailure()
-                })
+                manager.associate(
+                    request,
+                    context.mainExecutor,
+                    object : CompanionDeviceManager.Callback() {
+                        override fun onAssociationPending(intentSender: IntentSender) = onChooser(intentSender)
+                        override fun onAssociationCreated(associationInfo: AssociationInfo) = Unit
+                        override fun onFailure(error: CharSequence?) = onFailure()
+                    },
+                )
             } else {
                 @Suppress("DEPRECATION")
-                manager.associate(request, object : CompanionDeviceManager.Callback() {
-                    @Deprecated("Replaced by onAssociationPending on newer Android versions")
-                    override fun onDeviceFound(chooserLauncher: IntentSender) = onChooser(chooserLauncher)
-                    override fun onFailure(error: CharSequence?) = onFailure()
-                }, null)
+                manager.associate(
+                    request,
+                    object : CompanionDeviceManager.Callback() {
+                        @Deprecated("Replaced by onAssociationPending on newer Android versions")
+                        override fun onDeviceFound(chooserLauncher: IntentSender) = onChooser(chooserLauncher)
+                        override fun onFailure(error: CharSequence?) = onFailure()
+                    },
+                    null,
+                )
             }
         } catch (refused: RuntimeException) {
             onFailure()

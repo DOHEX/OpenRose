@@ -34,12 +34,12 @@ import io.github.dohex.openrose.ui.Appearance
 import io.github.dohex.openrose.ui.OpenRoseApp
 import io.github.dohex.openrose.ui.PrimaryDeviceSelection
 import io.github.dohex.openrose.ui.interfaceBackgroundColor
-import java.util.prefs.Preferences
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import java.util.prefs.Preferences
 
 fun main(args: Array<String>) {
     val platform = System.getProperty("os.name")
@@ -63,8 +63,11 @@ fun main(args: Array<String>) {
                         transport = transport?.availability?.value
                             ?: TransportAvailability.Unavailable("$platform 控制传输尚未实现"),
                         hostPlatform = hostPlatform,
-                        controlTransportApplicability = if (transport != null) PlatformApplicability.APPLICABLE
-                            else PlatformApplicability.NOT_APPLICABLE,
+                        controlTransportApplicability = if (transport != null) {
+                            PlatformApplicability.APPLICABLE
+                        } else {
+                            PlatformApplicability.NOT_APPLICABLE
+                        },
                     ),
                     scope = scope,
                     transport = transport,
@@ -133,12 +136,14 @@ fun main(args: Array<String>) {
             val titleBarStyle = if (dark) DecoratedWindowDefaults.darkTitleBarStyle() else DecoratedWindowDefaults.lightTitleBarStyle()
             NucleusDecoratedWindowTheme(
                 isDark = dark,
-                titleBarStyle = titleBarStyle.copy(colors = titleBarStyle.colors.copy(
-                    background = background,
-                    inactiveBackground = background,
-                    border = Color.Transparent,
-                    fullscreenControlButtonsBackground = background,
-                )),
+                titleBarStyle = titleBarStyle.copy(
+                    colors = titleBarStyle.colors.copy(
+                        background = background,
+                        inactiveBackground = background,
+                        border = Color.Transparent,
+                        fullscreenControlButtonsBackground = background,
+                    ),
+                ),
             ) {
                 if (tray.nativeReady) {
                     DesktopTray(

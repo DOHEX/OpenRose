@@ -84,7 +84,9 @@ class SwitchingControlRuntime(
     initialIntegrationPlatform: IntegrationPlatformState = IntegrationPlatformState(),
     initialIntegrationSettings: IntegrationSettings = IntegrationSettings(),
     private val presentationTiming: PresentationTiming = PresentationTiming(),
-) : ControlRuntime, ControlOwnerSwitching, SystemEntry {
+) : ControlRuntime,
+    ControlOwnerSwitching,
+    SystemEntry {
     private class Ordinary(val generation: OwnerGeneration, val job: Job, val runtime: SystemEntryRuntime)
 
     private val client = ModuleControlClient(moduleLink, scope, timing)
@@ -215,6 +217,7 @@ class SwitchingControlRuntime(
                 store.save(record)
                 finish(HandoffOutcome.Completed(request))
             }
+
             // The choice stays module control; the client keeps trying and nothing else takes over.
             is AcquireOutcome.Failed -> finish(HandoffOutcome.Blocked(request, outcome.stage, outcome.reason))
         }
@@ -228,6 +231,7 @@ class SwitchingControlRuntime(
                     releaseRetry = scope.launch { retryModuleRelease() }
                     return finish(HandoffOutcome.Blocked(request, proof.stage, proof.reason))
                 }
+
                 is ReleaseProof.Receipt, is ReleaseProof.ProcessEnded -> clearModuleRelease()
             }
         }
@@ -267,6 +271,7 @@ class SwitchingControlRuntime(
                     refresh()
                     delay(timing.retryMillis)
                 }
+
                 is ReleaseProof.Receipt, is ReleaseProof.ProcessEnded -> {
                     switchLock.withLock {
                         if (record.selected != ControlWay.MODULE) {
@@ -299,7 +304,10 @@ class SwitchingControlRuntime(
         val job = SupervisorJob(scope.coroutineContext[Job])
         val ownerScope = CoroutineScope(scope.coroutineContext + job)
         val runtime = SystemEntryRuntime(
-            ordinaryFactory(ownerScope, settings, platform, SessionIdBase.ordinary(localSequence)), ownerScope, presentationTiming, integrationSettings,
+            ordinaryFactory(ownerScope, settings, platform, SessionIdBase.ordinary(localSequence)),
+            ownerScope,
+            presentationTiming,
+            integrationSettings,
         )
         ordinary = Ordinary(generation, job, runtime)
         ownerScope.launch { runtime.state.collect { refresh() } }
@@ -318,8 +326,11 @@ class SwitchingControlRuntime(
     /** Null once no ordinary connection remains; otherwise the handoff is blocked because its close was not confirmed. */
     private suspend fun closeOrdinary(request: SwitchRequest): HandoffOutcome? {
         val current = ordinary ?: return null
-        return if (stopOrdinary(current)) null
-        else finish(HandoffOutcome.Blocked(request, OwnerFailureStage.RELEASE, "普通控制连接未能确认关闭"))
+        return if (stopOrdinary(current)) {
+            null
+        } else {
+            finish(HandoffOutcome.Blocked(request, OwnerFailureStage.RELEASE, "普通控制连接未能确认关闭"))
+        }
     }
 
     private fun refresh() {
@@ -335,19 +346,23 @@ class SwitchingControlRuntime(
         val moduleHolder = (view as? ModuleView.Active)?.frame?.holder
         // While module control is the saved choice, the live link view is more current than an earlier acquire failure.
         val activeBlock = blocked?.takeUnless { selected == ControlWay.MODULE && it.request.to == ControlWay.MODULE }
-        val readiness = if (!unlocked) OwnerReadiness.Idle("用户解锁后才会控制耳机") else
+        val readiness = if (!unlocked) {
+            OwnerReadiness.Idle("用户解锁后才会控制耳机")
+        } else {
             switching?.let { OwnerReadiness.Switching(it) } ?: activeBlock ?: when (selected) {
-            ControlWay.ORDINARY -> when {
-                ordinary != null -> OwnerReadiness.Ready
-                holds == 0 -> OwnerReadiness.Idle("没有界面或后台控制服务需要控制会话")
-                else -> OwnerReadiness.Starting
-            }
-            ControlWay.MODULE -> when (view) {
-                is ModuleView.Active -> OwnerReadiness.Ready
-                ModuleView.Stopped, ModuleView.Connecting -> OwnerReadiness.Starting
-                is ModuleView.Unavailable -> OwnerReadiness.Unavailable(view.stage, view.reason)
-                is ModuleView.Inactive -> OwnerReadiness.Unavailable(OwnerFailureStage.ACTIVATION, view.status.reason)
-                ModuleView.Unresponsive -> OwnerReadiness.Unavailable(OwnerFailureStage.CONNECTION, UNRESPONSIVE_REASON)
+                ControlWay.ORDINARY -> when {
+                    ordinary != null -> OwnerReadiness.Ready
+                    holds == 0 -> OwnerReadiness.Idle("没有界面或后台控制服务需要控制会话")
+                    else -> OwnerReadiness.Starting
+                }
+
+                ControlWay.MODULE -> when (view) {
+                    is ModuleView.Active -> OwnerReadiness.Ready
+                    ModuleView.Stopped, ModuleView.Connecting -> OwnerReadiness.Starting
+                    is ModuleView.Unavailable -> OwnerReadiness.Unavailable(view.stage, view.reason)
+                    is ModuleView.Inactive -> OwnerReadiness.Unavailable(OwnerFailureStage.ACTIVATION, view.status.reason)
+                    ModuleView.Unresponsive -> OwnerReadiness.Unavailable(OwnerFailureStage.CONNECTION, UNRESPONSIVE_REASON)
+                }
             }
         }
         return OwnerState(selected, readiness, if (selected == ControlWay.MODULE) moduleHolder else localHolder, lastHandoff)
@@ -358,6 +373,7 @@ class SwitchingControlRuntime(
         val local = ordinary
         return when {
             local != null -> local.runtime.state.value.copy(platform = platform, settings = settings)
+
             record.selected == ControlWay.MODULE && view is ModuleView.Active -> {
                 val frame = view.frame
                 frame.state.copy(
@@ -365,6 +381,7 @@ class SwitchingControlRuntime(
                     settings = settings,
                 )
             }
+
             else -> ControlState(platform = platform, settings = settings)
         }
     }
@@ -377,8 +394,11 @@ class SwitchingControlRuntime(
             platform = if (record.selected == ControlWay.MODULE) moduleFacts(integrationPlatform, view) else integrationPlatform,
             owner = ownerState(view),
             presentation = ordinary?.runtime?.presentation?.value
-                ?: if (record.selected == ControlWay.MODULE && view is ModuleView.Active) view.frame.presentation
-                else SystemPresentationState(),
+                ?: if (record.selected == ControlWay.MODULE && view is ModuleView.Active) {
+                    view.frame.presentation
+                } else {
+                    SystemPresentationState()
+                },
         )
     }
 
@@ -386,17 +406,21 @@ class SwitchingControlRuntime(
         is ModuleView.Active -> base.copy(
             module = ModuleAvailability.Available,
             bridge = SystemBridgeDiagnostics(
-                targetPackage = view.frame.holder.packageName, targetProcess = view.frame.holder.processName,
+                targetPackage = view.frame.holder.packageName,
+                targetProcess = view.frame.holder.processName,
                 ipc = BridgeIpcState.AUTHENTICATED,
                 session = if (view.frame.state.device != null) BridgeSessionState.READY else BridgeSessionState.NONE,
                 detail = "模块控制所有者 ${view.frame.generation}",
-                presentation = view.frame.facts.presentation, endpoints = view.frame.facts.endpoints,
+                presentation = view.frame.facts.presentation,
+                endpoints = view.frame.facts.endpoints,
             ),
         )
+
         is ModuleView.Inactive -> base.copy(
             module = ModuleAvailability.Unavailable(view.status.reason),
             bridge = SystemBridgeDiagnostics(ipc = BridgeIpcState.AUTHENTICATED, detail = view.status.reason),
         )
+
         is ModuleView.Unavailable -> base.copy(
             module = ModuleAvailability.Unavailable(view.reason, view.stage.unavailableCause()),
             bridge = SystemBridgeDiagnostics(
@@ -404,10 +428,12 @@ class SwitchingControlRuntime(
                 detail = "${view.stage}: ${view.reason}",
             ),
         )
+
         ModuleView.Unresponsive -> base.copy(
             module = ModuleAvailability.Unresponsive,
             bridge = SystemBridgeDiagnostics(ipc = BridgeIpcState.AUTHENTICATED, detail = UNRESPONSIVE_REASON),
         )
+
         ModuleView.Connecting, ModuleView.Stopped -> base.copy(
             module = ModuleAvailability.Unavailable("正在连接模块控制宿主"),
             bridge = SystemBridgeDiagnostics(ipc = BridgeIpcState.WAITING, detail = "正在连接模块控制宿主"),
@@ -416,10 +442,14 @@ class SwitchingControlRuntime(
 
     private fun OwnerFailureStage.unavailableCause(): ModuleUnavailableCause? = when (this) {
         OwnerFailureStage.DISCOVERY -> ModuleUnavailableCause.HOST_NOT_FOUND
+
         OwnerFailureStage.AUTHORIZATION -> ModuleUnavailableCause.AUTHORIZATION_REFUSED
+
         OwnerFailureStage.CONNECTION -> ModuleUnavailableCause.LINK_LOST
+
         OwnerFailureStage.SELECTION_PERSISTENCE, OwnerFailureStage.RELEASE,
-        OwnerFailureStage.ACTIVATION, OwnerFailureStage.OWNER_RUNTIME -> null
+        OwnerFailureStage.ACTIVATION, OwnerFailureStage.OWNER_RUNTIME,
+        -> null
     }
 
     private fun noOwner() = OperationResult.Failure(ControlError(ControlErrorCode.NOT_READY, "当前没有就绪的控制所有者"))
@@ -443,14 +473,20 @@ class SwitchingControlRuntime(
     }
 
     override suspend fun refreshBondedDevices() {
-        ordinary?.let { it.runtime.refreshBondedDevices(); return }
+        ordinary?.let {
+            it.runtime.refreshBondedDevices()
+            return
+        }
         if (record.selected == ControlWay.MODULE) client.execute(HostCommand.RefreshBondedDevices)
     }
 
     override suspend fun startScan() = route({ it.startScan() }, HostCommand.StartScan)
 
     override suspend fun stopScan() {
-        route({ it.stopScan(); OperationResult.Success }, HostCommand.StopScan)
+        route({
+            it.stopScan()
+            OperationResult.Success
+        }, HostCommand.StopScan)
     }
 
     override suspend fun connect(deviceId: DeviceId, pinned: Boolean) = route(
@@ -460,8 +496,7 @@ class SwitchingControlRuntime(
 
     override suspend fun connectFromSystem(deviceId: DeviceId) = connect(deviceId, pinned = true)
 
-    override suspend fun connectForAddDevice(deviceId: DeviceId) =
-        route({ it.connectForAddDevice(deviceId) }, HostCommand.ConnectForAddDevice(deviceId))
+    override suspend fun connectForAddDevice(deviceId: DeviceId) = route({ it.connectForAddDevice(deviceId) }, HostCommand.ConnectForAddDevice(deviceId))
 
     override suspend fun disconnect(): Boolean {
         ordinary?.let { return it.runtime.disconnect() }
@@ -478,8 +513,7 @@ class SwitchingControlRuntime(
         return set(reference, setting, value)
     }
 
-    override suspend fun set(reference: SessionReference, setting: DeviceSetting, value: FieldValue) =
-        route({ it.set(reference, setting, value) }, HostCommand.Set(reference, setting, value))
+    override suspend fun set(reference: SessionReference, setting: DeviceSetting, value: FieldValue) = route({ it.set(reference, setting, value) }, HostCommand.Set(reference, setting, value))
 
     override fun readSession(reference: SessionReference): SessionSnapshotResult {
         ordinary?.let { return it.runtime.readSession(reference) }

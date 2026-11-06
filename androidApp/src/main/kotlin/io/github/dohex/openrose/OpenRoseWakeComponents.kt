@@ -28,8 +28,10 @@ class OrdinaryWakeReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         when (intent.action) {
             Intent.ACTION_BOOT_COMPLETED -> context.ordinaryOwner().wakeOrdinaryControl()
+
             BluetoothA2dp.ACTION_CONNECTION_STATE_CHANGED,
-            BluetoothHeadset.ACTION_CONNECTION_STATE_CHANGED -> {
+            BluetoothHeadset.ACTION_CONNECTION_STATE_CHANGED,
+            -> {
                 if (intent.getIntExtra(BluetoothProfile.EXTRA_STATE, -1) != BluetoothProfile.STATE_CONNECTED) return
                 if (isSupportedEarphone(context, intent)) context.ordinaryOwner().wakeOrdinaryControl()
             }
@@ -41,7 +43,9 @@ class OrdinaryWakeReceiver : BroadcastReceiver() {
     private fun isSupportedEarphone(context: Context, intent: Intent): Boolean {
         if (Build.VERSION.SDK_INT >= 31 &&
             context.checkSelfPermission(android.Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED
-        ) return false
+        ) {
+            return false
+        }
         val device = if (Build.VERSION.SDK_INT >= 33) {
             intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE, BluetoothDevice::class.java)
         } else {

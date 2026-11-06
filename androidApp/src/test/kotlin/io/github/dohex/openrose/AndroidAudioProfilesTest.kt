@@ -9,9 +9,6 @@ import android.bluetooth.BluetoothProfile
 import android.content.Context
 import io.github.dohex.openrose.core.transport.AudioConnectionState
 import io.github.dohex.openrose.core.transport.AudioProfile
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertNull
 import kotlinx.coroutines.runBlocking
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -21,10 +18,17 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.Implementation
 import org.robolectric.annotation.Implements
 import org.robolectric.shadows.ShadowBluetoothAdapter
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertNull
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [33], manifest = Config.NONE, application = Application::class,
-    shadows = [AndroidAudioProfilesTest.StallingLeAudioAdapter::class])
+@Config(
+    sdk = [33],
+    manifest = Config.NONE,
+    application = Application::class,
+    shadows = [AndroidAudioProfilesTest.StallingLeAudioAdapter::class],
+)
 class AndroidAudioProfilesTest {
     @Test
     fun unavailableLeAudioProxyDoesNotDiscardExistingClassicConnections() = runBlocking {
@@ -53,15 +57,12 @@ class AndroidAudioProfilesTest {
     @Implements(BluetoothAdapter::class)
     class StallingLeAudioAdapter : ShadowBluetoothAdapter() {
         @Implementation
-        public override fun getProfileProxy(context: Context, listener: BluetoothProfile.ServiceListener, profile: Int): Boolean =
-            if (profile == BluetoothProfile.LE_AUDIO) true else super.getProfileProxy(context, listener, profile)
+        public override fun getProfileProxy(context: Context, listener: BluetoothProfile.ServiceListener, profile: Int): Boolean = if (profile == BluetoothProfile.LE_AUDIO) true else super.getProfileProxy(context, listener, profile)
     }
 
     private class ConnectedProfile(private val device: BluetoothDevice) : BluetoothProfile {
         override fun getConnectedDevices(): List<BluetoothDevice> = listOf(device)
-        override fun getConnectionState(candidate: BluetoothDevice): Int =
-            if (candidate == device) BluetoothProfile.STATE_CONNECTED else BluetoothProfile.STATE_DISCONNECTED
-        override fun getDevicesMatchingConnectionStates(states: IntArray): List<BluetoothDevice> =
-            if (BluetoothProfile.STATE_CONNECTED in states) listOf(device) else emptyList()
+        override fun getConnectionState(candidate: BluetoothDevice): Int = if (candidate == device) BluetoothProfile.STATE_CONNECTED else BluetoothProfile.STATE_DISCONNECTED
+        override fun getDevicesMatchingConnectionStates(states: IntArray): List<BluetoothDevice> = if (BluetoothProfile.STATE_CONNECTED in states) listOf(device) else emptyList()
     }
 }

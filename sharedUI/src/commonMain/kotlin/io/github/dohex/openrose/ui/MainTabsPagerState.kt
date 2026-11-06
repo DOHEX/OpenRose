@@ -1,10 +1,8 @@
 package io.github.dohex.openrose.ui
 
-import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
-import top.yukonga.miuix.kmp.utils.springAnimateToPage
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -12,10 +10,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
+import top.yukonga.miuix.kmp.utils.springAnimateToPage
 
 /**
  * [selectedPage] flips the instant a tab is chosen, while [pagerState] still animates towards it, so the
@@ -64,7 +64,6 @@ internal class MainTabsPagerState(
             }
         }
     }
-
 
     fun syncPage() {
         if (!isNavigating && selectedPage != pagerState.currentPage) {

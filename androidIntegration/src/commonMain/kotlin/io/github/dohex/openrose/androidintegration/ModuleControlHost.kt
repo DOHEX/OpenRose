@@ -13,8 +13,8 @@ import io.github.dohex.openrose.core.UserSettings
 import io.github.dohex.openrose.core.protocol.FieldValue
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancelAndJoin
@@ -140,7 +140,12 @@ class ModuleControlHost(
         var refused = false
         val id = newId()
         leases.update { current ->
-            if (current.size >= maxLeases) { refused = true; current } else current + (id to Lease(id, role, caller))
+            if (current.size >= maxLeases) {
+                refused = true
+                current
+            } else {
+                current + (id to Lease(id, role, caller))
+            }
         }
         if (refused) return HostOpenResult.Refused(HostRejection.INVALID_REQUEST, "控制宿主连接数已满")
         return HostOpenResult.Opened(HostLease(id, role, incarnation), status.value)
@@ -213,10 +218,19 @@ class ModuleControlHost(
     fun changes(caller: CallerIdentity, leaseId: String, generation: OwnerGeneration): Flow<OwnerView> {
         val lease = leaseFor(caller, leaseId)
         val active = owner.value?.takeIf { it.generation == generation }
-        if (lease == null || active == null) return callbackFlow { close(); awaitClose() }
+        if (lease == null || active == null) {
+            return callbackFlow {
+                close()
+                awaitClose()
+            }
+        }
         return callbackFlow {
             val collector = launch { active.runtime.views(active.generation).collect { send(it) } }
-            launch { active.ended.await(); collector.cancel(); close() }
+            launch {
+                active.ended.await()
+                collector.cancel()
+                close()
+            }
             awaitClose { collector.cancel() }
         }
     }
@@ -228,17 +242,30 @@ class ModuleControlHost(
     fun frames(caller: CallerIdentity, leaseId: String, generation: OwnerGeneration): Flow<HostFrame> {
         val lease = leaseFor(caller, leaseId)
         val active = owner.value?.takeIf { it.generation == generation }
-        if (lease == null || lease.role != ClientRole.APP || active == null) return callbackFlow { close(); awaitClose() }
+        if (lease == null || lease.role != ClientRole.APP || active == null) {
+            return callbackFlow {
+                close()
+                awaitClose()
+            }
+        }
         return callbackFlow {
             val collector = launch {
                 combine(active.runtime.views(active.generation), facts) { view, reported ->
                     HostFrame(
-                        view.generation, active.holder, HostPlatformFacts(view.state.platform.permission, view.state.platform.transport),
-                        view.state, view.presentation, reported,
+                        view.generation,
+                        active.holder,
+                        HostPlatformFacts(view.state.platform.permission, view.state.platform.transport),
+                        view.state,
+                        view.presentation,
+                        reported,
                     )
                 }.collect { send(it) }
             }
-            launch { active.ended.await(); collector.cancel(); close() }
+            launch {
+                active.ended.await()
+                collector.cancel()
+                close()
+            }
             awaitClose { collector.cancel() }
         }
     }
@@ -279,7 +306,9 @@ class ModuleControlHost(
                 publishStatus()
                 ReleaseResult.Released(
                     ReleaseReceipt(
-                        request.id, incarnation, generation = named?.takeIf { it == lastGeneration },
+                        request.id,
+                        incarnation,
+                        generation = named?.takeIf { it == lastGeneration },
                         predecessorEnded = named != null && named.incarnation != incarnation,
                     ),
                 )
@@ -321,46 +350,79 @@ class ModuleControlHost(
         return OwnerCheck.Current(active)
     }
 
-    private fun leaseFor(caller: CallerIdentity, leaseId: String): Lease? =
-        leases.value[leaseId]?.takeIf { !retired.value && it.caller == caller && authority.roleOf(caller) == it.role }
+    private fun leaseFor(caller: CallerIdentity, leaseId: String): Lease? = leases.value[leaseId]?.takeIf { !retired.value && it.caller == caller && authority.roleOf(caller) == it.role }
 
     private suspend fun dispatch(runtime: SystemEntryRuntime, command: HostCommand): HostCallResult = when (command) {
-        HostCommand.RefreshBondedDevices -> { runtime.refreshBondedDevices(); HostCallResult.Operation(OperationResult.Success) }
+        HostCommand.RefreshBondedDevices -> {
+            runtime.refreshBondedDevices()
+            HostCallResult.Operation(OperationResult.Success)
+        }
+
         HostCommand.StartScan -> HostCallResult.Operation(runtime.startScan())
-        HostCommand.StopScan -> { runtime.stopScan(); HostCallResult.Operation(OperationResult.Success) }
+
+        HostCommand.StopScan -> {
+            runtime.stopScan()
+            HostCallResult.Operation(OperationResult.Success)
+        }
+
         is HostCommand.Connect -> HostCallResult.Operation(runtime.connect(command.deviceId))
+
         is HostCommand.ConnectFromSystem -> HostCallResult.Operation(runtime.connectFromSystem(command.deviceId))
+
         is HostCommand.ConnectForAddDevice -> HostCallResult.Operation(runtime.connectForAddDevice(command.deviceId))
+
         HostCommand.Disconnect -> HostCallResult.Operation(
-            if (runtime.disconnect()) OperationResult.Success
-            else OperationResult.Failure(ControlError(ControlErrorCode.FAILED, "无法确认控制连接已关闭")),
+            if (runtime.disconnect()) {
+                OperationResult.Success
+            } else {
+                OperationResult.Failure(ControlError(ControlErrorCode.FAILED, "无法确认控制连接已关闭"))
+            },
         )
+
         is HostCommand.Set -> HostCallResult.Operation(
-            if (command.reference == null) runtime.set(command.setting, command.value)
-            else runtime.set(command.reference, command.setting, command.value),
+            if (command.reference == null) {
+                runtime.set(command.setting, command.value)
+            } else {
+                runtime.set(command.reference, command.setting, command.value)
+            },
         )
+
         is HostCommand.UpdateSettings -> {
             // A preference change never moves the owner; only an explicit handoff changes the way.
             val settings = command.settings.copy(integration = command.settings.integration.copy(controlWay = ControlWay.MODULE))
             ownership.withLock {
                 configuration = configuration.copy(settings = settings)
-                owner.value?.runtime?.let { it.updateSettings(settings.control); it.updateIntegrationSettings(settings.integration) }
+                owner.value?.runtime?.let {
+                    it.updateSettings(settings.control)
+                    it.updateIntegrationSettings(settings.integration)
+                }
             }
             HostCallResult.Operation(OperationResult.Success)
         }
+
         is HostCommand.ClaimPrompt -> HostCallResult.Flag(runtime.claimConnectionPrompt(command.reference, command.promptId))
     }
 
     /** Caller holds [ownership]. */
     private suspend fun reconcile() {
         // An owner whose close was refused earlier is closed again before anything else is decided.
-        owner.value?.takeIf { it.job.isCancelled }?.let { if (!stop(it)) { publishStatus(); return } }
+        owner.value?.takeIf { it.job.isCancelled }?.let {
+            if (!stop(it)) {
+                publishStatus()
+                return
+            }
+        }
         val wanted = !stopped && configuration.userUnlocked && configuration.settings.integration.controlWay == ControlWay.MODULE && held == null
         val current = owner.value
         when {
             wanted && current == null -> activate()
+
             !wanted && current != null -> stop(current)
-            current != null -> { current.runtime.updateSettings(configuration.settings.control); current.runtime.updateIntegrationSettings(configuration.settings.integration) }
+
+            current != null -> {
+                current.runtime.updateSettings(configuration.settings.control)
+                current.runtime.updateIntegrationSettings(configuration.settings.integration)
+            }
         }
         publishStatus()
     }
@@ -372,7 +434,10 @@ class ModuleControlHost(
         val job = SupervisorJob(hostContext[Job])
         val scope = CoroutineScope(hostContext + job)
         val runtime = SystemEntryRuntime(
-            runtimeFactory(scope, configuration.settings.control, platform, SessionIdBase.module(sequence)), scope, presentationTiming, configuration.settings.integration,
+            runtimeFactory(scope, configuration.settings.control, platform, SessionIdBase.module(sequence)),
+            scope,
+            presentationTiming,
+            configuration.settings.integration,
         )
         val holder = OwnerHolder(ControlWay.MODULE, generation, packageName, processName, uid, pid)
         owner.value = Owner(generation, holder, job, runtime)
@@ -393,16 +458,20 @@ class ModuleControlHost(
 
     private fun publishStatus() {
         val current = owner.value
-        mutableStatus.value = if (current != null) HostStatus.Active(current.generation, current.holder) else HostStatus.Inactive(
-            incarnation, lastGeneration,
-            when {
-                !configuration.userUnlocked -> "用户尚未解锁"
-                stopped -> "宿主已停止"
-                held != null -> "已按切换请求释放"
-                configuration.settings.integration.controlWay != ControlWay.MODULE -> "当前未选择模块控制"
-                else -> "模块控制尚未启动"
-            },
-        )
+        mutableStatus.value = if (current != null) {
+            HostStatus.Active(current.generation, current.holder)
+        } else {
+            HostStatus.Inactive(
+                incarnation,
+                lastGeneration,
+                when {
+                    !configuration.userUnlocked -> "用户尚未解锁"
+                    stopped -> "宿主已停止"
+                    held != null -> "已按切换请求释放"
+                    configuration.settings.integration.controlWay != ControlWay.MODULE -> "当前未选择模块控制"
+                    else -> "模块控制尚未启动"
+                },
+            )
+        }
     }
 }
-

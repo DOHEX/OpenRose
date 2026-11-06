@@ -20,16 +20,16 @@ import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.FieldReading
 import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.dohex.openrose.core.protocol.ModelProfile
+import kotlinx.coroutines.async
+import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
-import kotlinx.coroutines.async
-import kotlinx.coroutines.flow.toList
-import kotlinx.coroutines.test.runCurrent
-import kotlinx.coroutines.test.runTest
 
 /** The host side of the seam: authorisation, owner generations, unlock gating and device-confirmed settings. */
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
@@ -82,8 +82,11 @@ class ModuleControlHostTest {
 
         fun forbidden(command: HostCommand) = HostRejection.FORBIDDEN
         for (command in listOf(
-            HostCommand.Connect(rig.earphones.deviceId), HostCommand.Disconnect, HostCommand.StartScan,
-            HostCommand.UpdateSettings(HostSettings()), HostCommand.Set(null, DeviceSetting.NOISE_MODE, FieldValue.Text("anc")),
+            HostCommand.Connect(rig.earphones.deviceId),
+            HostCommand.Disconnect,
+            HostCommand.StartScan,
+            HostCommand.UpdateSettings(HostSettings()),
+            HostCommand.Set(null, DeviceSetting.NOISE_MODE, FieldValue.Text("anc")),
             HostCommand.Set(reference, DeviceSetting.EQ, FieldValue.Text("pop")),
         )) {
             assertEquals(forbidden(command), assertIs<HostCallResult.Rejected>(rig.host.execute(milinkIdentity, lease, generation, command)).rejection, command.toString())
@@ -265,14 +268,18 @@ class ModuleControlHostTest {
         for (profile in listOf(ModelProfile.I5_ZT, ModelProfile.I7_RS_V2)) {
             val rig = OwnerRig(this, earphones = rosePair("rose-${profile.name}", profile))
             val runtime = LocalControlRuntime(
-                PlatformState(PermissionState.GRANTED, TransportAvailability.Available), UserSettings(),
-                rig.appTransport, backgroundScope, SessionTiming(queryTimeoutMillis = 50, i5WriteIntervalMillis = 0, i7WriteIntervalMillis = 0),
+                PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
+                UserSettings(),
+                rig.appTransport,
+                backgroundScope,
+                SessionTiming(queryTimeoutMillis = 50, i5WriteIntervalMillis = 0, i7WriteIntervalMillis = 0),
             )
             assertEquals(OperationResult.Success, runtime.connect(rig.earphones.deviceId, pinned = true))
             val state = runtime.state.value
 
             val wire = ControlWire.encodeOwned(
-                HostPlatformFacts(state.platform.permission, state.platform.transport), state,
+                HostPlatformFacts(state.platform.permission, state.platform.transport),
+                state,
             ).render()
             val decoded = ControlWire.decodeOwned(parseWire(wire))
 
@@ -285,8 +292,7 @@ class ModuleControlHostTest {
         }
     }
 
-    private fun noiseMode(runtime: ControlRuntime): FieldValue =
-        assertIs<FieldReading.Known>(runtime.state.value.device?.fields?.get(DeviceField.NOISE_MODE)).value
+    private fun noiseMode(runtime: ControlRuntime): FieldValue = assertIs<FieldReading.Known>(runtime.state.value.device?.fields?.get(DeviceField.NOISE_MODE)).value
 
     private fun kotlinx.coroutines.test.TestScope.advanceUntilIdleQuietly() = testScheduler.advanceUntilIdle()
 }

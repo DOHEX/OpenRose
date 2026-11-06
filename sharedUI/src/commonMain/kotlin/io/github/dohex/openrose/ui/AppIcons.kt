@@ -2,8 +2,8 @@ package io.github.dohex.openrose.ui
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 
 enum class RoseIcon {
     HEADPHONES,
@@ -62,6 +62,7 @@ fun AppIcon(
             modifier = modifier,
             tint = tint ?: top.yukonga.miuix.kmp.theme.LocalContentColor.current,
         )
+
         InterfaceStyle.MATERIAL3 -> androidx.compose.material3.Icon(
             imageVector = vector,
             contentDescription = contentDescription,

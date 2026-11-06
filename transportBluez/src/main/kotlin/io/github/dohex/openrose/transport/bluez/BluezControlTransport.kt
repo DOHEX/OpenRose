@@ -19,6 +19,7 @@ class BluezControlTransport private constructor(scope: CoroutineScope, private v
     private val ready = CompletableDeferred<Unit>()
     private val mutableAvailability = MutableStateFlow<TransportAvailability>(TransportAvailability.Unavailable("正在初始化 BlueZ"))
     val availability: StateFlow<TransportAvailability> = mutableAvailability.asStateFlow()
+
     @Volatile private var bus: BluezBus? = null
     private val scanLock = Mutex()
     private val audio = AudioFacts(BluezAudioDriver())
@@ -36,13 +37,20 @@ class BluezControlTransport private constructor(scope: CoroutineScope, private v
                 updateAvailability(current)
                 ready.complete(Unit)
                 observer.join()
-            } catch (error: CancellationException) { throw error }
-            catch (error: LinkageError) { mutableAvailability.value = TransportAvailability.Unavailable("BlueZ 运行环境缺少依赖：${error.message ?: error.javaClass.simpleName}") }
-            catch (error: Exception) { mutableAvailability.value = unavailable(error) }
-            finally { ready.complete(Unit) }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: LinkageError) {
+                mutableAvailability.value = TransportAvailability.Unavailable("BlueZ 运行环境缺少依赖：${error.message ?: error.javaClass.simpleName}")
+            } catch (error: Exception) {
+                mutableAvailability.value = unavailable(error)
+            } finally {
+                ready.complete(Unit)
+            }
         }
     }
-    suspend fun awaitInitialization() { ready.await() }
+    suspend fun awaitInitialization() {
+        ready.await()
+    }
     private suspend fun activeBus(): BluezBus {
         ready.await()
         val current = bus ?: throw IllegalStateException((availability.value as? TransportAvailability.Unavailable)?.reason ?: "BlueZ 不可用")
@@ -60,7 +68,11 @@ class BluezControlTransport private constructor(scope: CoroutineScope, private v
                 adapters.none { it["Powered"] == true } -> TransportAvailability.Unavailable("蓝牙适配器已关闭")
                 else -> TransportAvailability.Available
             }
-        } catch (error: CancellationException) { throw error } catch (error: Exception) { unavailable(error) }
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            unavailable(error)
+        }
     }
     private fun unavailable(error: Exception): TransportAvailability.Unavailable {
         val name = error.javaClass.simpleName
@@ -102,9 +114,13 @@ class BluezControlTransport private constructor(scope: CoroutineScope, private v
                 throw error
             } finally {
                 events.cancel()
-                if (started) withContext(NonCancellable) {
-                    try { current.stopDiscovery(adapter) } catch (cleanup: Exception) {
-                        if (failure != null) failure.addSuppressed(cleanup) else throw cleanup
+                if (started) {
+                    withContext(NonCancellable) {
+                        try {
+                            current.stopDiscovery(adapter)
+                        } catch (cleanup: Exception) {
+                            if (failure != null) failure.addSuppressed(cleanup) else throw cleanup
+                        }
                     }
                 }
             }
@@ -128,10 +144,19 @@ class BluezControlTransport private constructor(scope: CoroutineScope, private v
         mutableAvailability.value = TransportAvailability.Unavailable("BlueZ 传输已关闭")
     }
     private inner class BluezAudioDriver : AudioFactsDriver {
-        override suspend fun bondedDevices(): List<RawAudioDevice> = try { devices(activeBus().objects()) }
-            catch (error: CancellationException) { throw error } catch (_: Exception) { emptyList() }
+        override suspend fun bondedDevices(): List<RawAudioDevice> = try {
+            devices(activeBus().objects())
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Exception) {
+            emptyList()
+        }
         override suspend fun snapshot(targetAddresses: Set<String>): RawAudioSnapshot {
-            val objects = try { activeBus().objects() } catch (error: CancellationException) { throw error } catch (_: Exception) {
+            val objects = try {
+                activeBus().objects()
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
                 return RawAudioSnapshot(false, false, false, emptyList(), AudioProfile.entries.associateWith { null })
             }
             return audioSnapshot(objects, targetAddresses)
@@ -139,39 +164,70 @@ class BluezControlTransport private constructor(scope: CoroutineScope, private v
         override val events: Flow<RawAudioEvent> = channelFlow {
             ready.await()
             val current = bus
-            if (current == null) { send(RawAudioEvent.Ready); awaitCancellation() }
+            if (current == null) {
+                send(RawAudioEvent.Ready)
+                awaitCancellation()
+            }
             val mutex = Mutex(locked = true)
             val previous = mutableMapOf<String, RawAudioDevice>()
             val collector = launch(start = CoroutineStart.UNDISPATCHED) {
                 current.events.collect { signal ->
                     if (!signal.affects(audioInterfaces)) return@collect
                     if (signal is BluezSignal.Changed && signal.interfaceName == DEVICE &&
-                        signal.values.keys.none { it in audioDeviceProperties }) return@collect
+                        signal.values.keys.none { it in audioDeviceProperties }
+                    ) {
+                        return@collect
+                    }
                     mutex.withLock {
                         when (signal) {
-                            is BluezSignal.Owner -> if (!signal.present) { previous.clear(); send(RawAudioEvent.AdapterOff); return@withLock } else send(RawAudioEvent.AdapterOn)
+                            is BluezSignal.Owner -> if (!signal.present) {
+                                previous.clear()
+                                send(RawAudioEvent.AdapterOff)
+                                return@withLock
+                            } else {
+                                send(RawAudioEvent.AdapterOn)
+                            }
+
                             is BluezSignal.Changed -> if (signal.interfaceName == ADAPTER && signal.values.containsKey("Powered")) {
                                 send(if (signal.values["Powered"] == true) RawAudioEvent.AdapterOn else RawAudioEvent.AdapterOff)
                             }
+
                             else -> Unit
                         }
-                        val objects = try { current.objects() } catch (error: CancellationException) { throw error } catch (_: Exception) { return@withLock }
+                        val objects = try {
+                            current.objects()
+                        } catch (error: CancellationException) {
+                            throw error
+                        } catch (_: Exception) {
+                            return@withLock
+                        }
                         val snapshot = audioSnapshot(objects, emptySet())
                         val now = devices(objects).associateBy { it.address }
-                        for ((address, device) in previous) if (address !in now) {
-                            for (profile in listOf(AudioProfile.A2DP, AudioProfile.HEADSET)) send(RawAudioEvent.ProfileChanged(profile, device, false, false))
+                        for ((address, device) in previous) {
+                            if (address !in now) {
+                                for (profile in listOf(AudioProfile.A2DP, AudioProfile.HEADSET)) send(RawAudioEvent.ProfileChanged(profile, device, false, false))
+                            }
                         }
-                        for (device in now.values) for (profile in listOf(AudioProfile.A2DP, AudioProfile.HEADSET)) {
-                            send(RawAudioEvent.ProfileChanged(profile, device, true, device.address in snapshot.profiles[profile]?.connectedAddresses.orEmpty()))
+                        for (device in now.values) {
+                            for (profile in listOf(AudioProfile.A2DP, AudioProfile.HEADSET)) {
+                                send(RawAudioEvent.ProfileChanged(profile, device, true, device.address in snapshot.profiles[profile]?.connectedAddresses.orEmpty()))
+                            }
                         }
-                        previous.clear(); previous.putAll(now)
+                        previous.clear()
+                        previous.putAll(now)
                     }
                 }
             }
             try {
-                try { previous.putAll(devices(current.objects()).associateBy { it.address }) } catch (error: CancellationException) { throw error } catch (_: Exception) { }
+                try {
+                    previous.putAll(devices(current.objects()).associateBy { it.address })
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (_: Exception) { }
                 send(RawAudioEvent.Ready)
-            } finally { mutex.unlock() }
+            } finally {
+                mutex.unlock()
+            }
             collector.join()
         }
     }

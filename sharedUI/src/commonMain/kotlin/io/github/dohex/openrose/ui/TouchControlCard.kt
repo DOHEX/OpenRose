@@ -89,7 +89,9 @@ internal fun TouchControlCard(
                         },
                     )
                 }
-            } else null,
+            } else {
+                null
+            },
         ) {
             AnimatedContent(
                 targetState = side,
@@ -107,7 +109,7 @@ internal fun TouchControlCard(
                     )
                     (slideInHorizontally(slideSpring) { width -> direction * width / 5 } + fadeIn(fadeSpring))
                         .togetherWith(
-                            slideOutHorizontally(slideSpring) { width -> -direction * width / 5 } + fadeOut(fadeSpring)
+                            slideOutHorizontally(slideSpring) { width -> -direction * width / 5 } + fadeOut(fadeSpring),
                         ).using(SizeTransform(clip = false))
                 },
                 modifier = Modifier.fillMaxWidth(),

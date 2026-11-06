@@ -2,7 +2,6 @@
 
 package io.github.dohex.openrose.ui
 
-import kotlinx.collections.immutable.persistentListOf
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
@@ -12,6 +11,7 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import io.github.dohex.openrose.core.*
 import io.github.dohex.openrose.core.protocol.FieldValue
+import kotlinx.collections.immutable.persistentListOf
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -156,7 +156,9 @@ class BottomBarStyleUiTest {
             stage = SettingStage.SUBMITTED,
         )
         for (style in InterfaceStyle.entries) {
-            withMainShellHarness(style, BottomBarStyle.FLOATING,
+            withMainShellHarness(
+                style,
+                BottomBarStyle.FLOATING,
                 connectedI7State().copy(settingOperations = persistentListOf(operation)),
             ) { harness ->
                 harness.render()
@@ -225,6 +227,7 @@ class BottomBarStyleUiTest {
                             scrollStates = scrollStates,
                             pageContentFor = { page -> BasicText(page.title) },
                         )
+
                         InterfaceStyle.MATERIAL3 -> MaterialMainShell(
                             pagerState = tabsState,
                             wide = false,
@@ -268,14 +271,23 @@ class BottomBarStyleUiTest {
                 }
                 when (style) {
                     InterfaceStyle.MIUIX -> MiuixMainShell(
-                        pagerState = pagerState, wide = false, bottomBarStyle = bottomBarStyle,
-                        onNavigate = {}, scrollStates = scrollStates,
-                        pageContentFor = { BasicText(it.title) }, pageFeedbackFor = feedback,
+                        pagerState = pagerState,
+                        wide = false,
+                        bottomBarStyle = bottomBarStyle,
+                        onNavigate = {},
+                        scrollStates = scrollStates,
+                        pageContentFor = { BasicText(it.title) },
+                        pageFeedbackFor = feedback,
                     )
+
                     InterfaceStyle.MATERIAL3 -> MaterialMainShell(
-                        pagerState = pagerState, wide = false, bottomBarStyle = bottomBarStyle,
-                        onNavigate = {}, scrollStates = scrollStates,
-                        pageContentFor = { BasicText(it.title) }, pageFeedbackFor = feedback,
+                        pagerState = pagerState,
+                        wide = false,
+                        bottomBarStyle = bottomBarStyle,
+                        onNavigate = {},
+                        scrollStates = scrollStates,
+                        pageContentFor = { BasicText(it.title) },
+                        pageFeedbackFor = feedback,
                     )
                 }
             }
@@ -302,6 +314,5 @@ class BottomBarStyleUiTest {
 
     private fun SemanticsNode.role(): Role? = config.getOrNull(SemanticsProperties.Role)
 
-    private fun SemanticsNode.hasText(label: String): Boolean =
-        config.getOrNull(SemanticsProperties.Text).orEmpty().any { it.text == label }
+    private fun SemanticsNode.hasText(label: String): Boolean = config.getOrNull(SemanticsProperties.Text).orEmpty().any { it.text == label }
 }

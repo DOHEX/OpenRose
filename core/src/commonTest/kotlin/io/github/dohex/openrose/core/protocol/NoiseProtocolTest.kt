@@ -97,9 +97,12 @@ class NoiseProtocolTest {
     @Test
     fun i7ModesMatchIndependentSenderLiteralsAndReadActualMode() {
         for ((mode, literal) in listOf(
-            "anc" to "ff000209010baa", "normal" to "ff000209020caa",
-            "transparency" to "ff000209030daa", "wind" to "ff000209040eaa",
-            "auto" to "ff000209050faa", "dynamic" to "ff0002090711aa",
+            "anc" to "ff000209010baa",
+            "normal" to "ff000209020caa",
+            "transparency" to "ff000209030daa",
+            "wind" to "ff000209040eaa",
+            "auto" to "ff000209050faa",
+            "dynamic" to "ff0002090711aa",
         )) {
             val codec = createProtocolCodec(ModelProfile.I7_RS_V2)
             val setting = codec.prepareSetting(DeviceSetting.NOISE_MODE, FieldValue.Text(mode))

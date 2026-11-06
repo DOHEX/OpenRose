@@ -7,22 +7,17 @@
 package io.github.dohex.openrose.ui
 
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
-import androidx.compose.ui.focus.focusProperties
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
-import androidx.compose.foundation.selection.selectable
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.clearAndSetSemantics
-import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerScope
 import androidx.compose.foundation.pager.VerticalPager
-import androidx.compose.foundation.ScrollState
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -32,17 +27,22 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 
 @Composable
 private fun MaterialRailHeader() {
@@ -93,7 +93,8 @@ internal fun MaterialAppShell(
     val backdrop = rememberAppBackdrop(MaterialTheme.colorScheme.surface, backdropActive)
     CompositionLocalProvider(LocalAppBackdrop provides backdrop) {
         val title = page.title
-        Scaffold(modifier = Modifier.fillMaxSize(),
+        Scaffold(
+            modifier = Modifier.fillMaxSize(),
             topBar = {
                 val topBarModifier = Modifier.appBarBackdropBlur(
                     backdrop = backdrop,
@@ -107,7 +108,8 @@ internal fun MaterialAppShell(
                     navigationIcon = { IconButton(onClick = onBack) { Icon(RoseIcons.Back, "返回") } },
                     colors = topBarColors,
                 )
-            }) { padding ->
+            },
+        ) { padding ->
             Box(Modifier.fillMaxSize()) {
                 Column(Modifier.fillMaxSize().appBackdropContent(backdrop, backdropActive).verticalScroll(scrollState)) {
                     ShellPageContent(page, padding, compactHome = false, pageContent = pageContent)
@@ -170,9 +172,11 @@ internal fun BoxScope.ShellFeedback(
     bottomClearance: Dp = 0.dp,
     content: @Composable () -> Unit,
 ) {
-    Box(Modifier.align(Alignment.BottomCenter)
-        .padding(bottom = padding.calculateBottomPadding() + bottomClearance)
-        .widthIn(max = 600.dp).fillMaxWidth().padding(16.dp)) {
+    Box(
+        Modifier.align(Alignment.BottomCenter)
+            .padding(bottom = padding.calculateBottomPadding() + bottomClearance)
+            .widthIn(max = 600.dp).fillMaxWidth().padding(16.dp),
+    ) {
         content()
     }
 }
@@ -186,10 +190,18 @@ internal fun ShellPageContent(
     pageContent: @Composable () -> Unit,
 ) {
     Column(Modifier.fillMaxWidth().padding(padding).consumeWindowInsets(padding), horizontalAlignment = Alignment.CenterHorizontally) {
-        val maxWidth = if (compactHome) 680.dp else if (page == AppPage.HEADPHONES) 1120.dp else 800.dp
-        Column(Modifier.widthIn(max = maxWidth).fillMaxWidth()
-            .padding(horizontal = 0.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        val maxWidth = if (compactHome) {
+            680.dp
+        } else if (page == AppPage.HEADPHONES) {
+            1120.dp
+        } else {
+            800.dp
+        }
+        Column(
+            Modifier.widthIn(max = maxWidth).fillMaxWidth()
+                .padding(horizontal = 0.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
             pageContent()
             if (bottomClearance > 0.dp) {
                 Spacer(
@@ -227,131 +239,131 @@ internal fun MaterialMainShell(
         backdropActive && !wide && bottomBarStyle == BottomBarStyle.FLOATING,
     )
     val currentTab = mainPages.getOrElse(pagerState.selectedPage) { AppPage.HEADPHONES }
-        Scaffold(
-            modifier = Modifier.fillMaxSize(),
-            bottomBar = {
-                if (!wide) {
-                    if (bottomBarStyle == BottomBarStyle.FLOATING) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .navigationBarsPadding()
-                                .padding(bottom = 16.dp),
-                            contentAlignment = Alignment.Center,
+    Scaffold(
+        modifier = Modifier.fillMaxSize(),
+        bottomBar = {
+            if (!wide) {
+                if (bottomBarStyle == BottomBarStyle.FLOATING) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .navigationBarsPadding()
+                            .padding(bottom = 16.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        HorizontalFloatingToolbar(
+                            expanded = true,
+                            modifier = Modifier.appPopupBackdropBlur(
+                                backdrop = floatingBackdrop,
+                                shape = CircleShape,
+                                surfaceColor = MaterialTheme.colorScheme.surfaceContainer,
+                                active = backdropActive,
+                            ),
+                            colors = FloatingToolbarDefaults.standardFloatingToolbarColors(
+                                toolbarContainerColor = Color.Transparent,
+                            ),
                         ) {
-                            HorizontalFloatingToolbar(
-                                expanded = true,
-                                modifier = Modifier.appPopupBackdropBlur(
-                                    backdrop = floatingBackdrop,
-                                    shape = CircleShape,
-                                    surfaceColor = MaterialTheme.colorScheme.surfaceContainer,
-                                    active = backdropActive,
-                                ),
-                                colors = FloatingToolbarDefaults.standardFloatingToolbarColors(
-                                    toolbarContainerColor = Color.Transparent,
-                                ),
-                            ) {
-                                mainPages.forEachIndexed { index, destination ->
-                                    val isSelected = currentTab == destination
-                                    val indicatorWidth by animateDpAsState(
-                                        targetValue = if (isSelected) 56.dp else 48.dp,
-                                        animationSpec = spring(
-                                            dampingRatio = 0.75f,
-                                            stiffness = 400f,
-                                        ),
-                                        label = "tabIndicatorWidth",
-                                    )
-                                    val containerColor by animateColorAsState(
-                                        targetValue = if (isSelected) {
-                                            MaterialTheme.colorScheme.secondaryContainer
-                                        } else {
-                                            MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0f)
-                                        },
-                                        animationSpec = spring(
-                                            dampingRatio = Spring.DampingRatioNoBouncy,
-                                            stiffness = Spring.StiffnessMedium,
-                                        ),
-                                        label = "tabContainerColor",
-                                    )
-                                    val iconTint by animateColorAsState(
-                                        targetValue = if (isSelected) {
-                                            MaterialTheme.colorScheme.onSecondaryContainer
-                                        } else {
-                                            MaterialTheme.colorScheme.onSurfaceVariant
-                                        },
-                                        animationSpec = spring(
-                                            dampingRatio = Spring.DampingRatioNoBouncy,
-                                            stiffness = Spring.StiffnessMedium,
-                                        ),
-                                        label = "tabIconTint",
-                                    )
-                                    Box(
-                                        modifier = Modifier
-                                            .clip(CircleShape)
-                                            .background(containerColor)
-                                            .selectable(
-                                                selected = isSelected,
-                                                role = Role.Tab,
-                                                onClick = {
-                                                    pagerState.selectPage(index, animate = animatePageChanges)
-                                                    onNavigate(destination)
-                                                },
-                                            )
-                                            .size(width = indicatorWidth, height = 48.dp),
-                                        contentAlignment = Alignment.Center,
-                                    ) {
-                                        AppIcon(
-                                            destination.icon,
-                                            contentDescription = destination.navigationLabel,
-                                            tint = iconTint,
+                            mainPages.forEachIndexed { index, destination ->
+                                val isSelected = currentTab == destination
+                                val indicatorWidth by animateDpAsState(
+                                    targetValue = if (isSelected) 56.dp else 48.dp,
+                                    animationSpec = spring(
+                                        dampingRatio = 0.75f,
+                                        stiffness = 400f,
+                                    ),
+                                    label = "tabIndicatorWidth",
+                                )
+                                val containerColor by animateColorAsState(
+                                    targetValue = if (isSelected) {
+                                        MaterialTheme.colorScheme.secondaryContainer
+                                    } else {
+                                        MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0f)
+                                    },
+                                    animationSpec = spring(
+                                        dampingRatio = Spring.DampingRatioNoBouncy,
+                                        stiffness = Spring.StiffnessMedium,
+                                    ),
+                                    label = "tabContainerColor",
+                                )
+                                val iconTint by animateColorAsState(
+                                    targetValue = if (isSelected) {
+                                        MaterialTheme.colorScheme.onSecondaryContainer
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                    },
+                                    animationSpec = spring(
+                                        dampingRatio = Spring.DampingRatioNoBouncy,
+                                        stiffness = Spring.StiffnessMedium,
+                                    ),
+                                    label = "tabIconTint",
+                                )
+                                Box(
+                                    modifier = Modifier
+                                        .clip(CircleShape)
+                                        .background(containerColor)
+                                        .selectable(
+                                            selected = isSelected,
+                                            role = Role.Tab,
+                                            onClick = {
+                                                pagerState.selectPage(index, animate = animatePageChanges)
+                                                onNavigate(destination)
+                                            },
                                         )
-                                    }
+                                        .size(width = indicatorWidth, height = 48.dp),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    AppIcon(
+                                        destination.icon,
+                                        contentDescription = destination.navigationLabel,
+                                        tint = iconTint,
+                                    )
                                 }
                             }
                         }
-                    } else {
-                        val bottomBarColor = if (backdropActive) Color.Transparent else MaterialTheme.colorScheme.surfaceContainer
-                        NavigationBar(containerColor = bottomBarColor) {
-                            mainPages.forEachIndexed { index, destination ->
-                                NavigationBarItem(
-                                    selected = currentTab == destination,
-                                    onClick = {
-                                        pagerState.selectPage(index, animate = animatePageChanges)
-                                        onNavigate(destination)
-                                    },
-                                    icon = { AppIcon(destination.icon) },
-                                    label = { Text(destination.navigationLabel) },
-                                    colors = NavigationBarItemDefaults.colors(
-                                        indicatorColor = MaterialTheme.colorScheme.secondaryContainer,
-                                        selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                                    ),
-                                )
-                            }
+                    }
+                } else {
+                    val bottomBarColor = if (backdropActive) Color.Transparent else MaterialTheme.colorScheme.surfaceContainer
+                    NavigationBar(containerColor = bottomBarColor) {
+                        mainPages.forEachIndexed { index, destination ->
+                            NavigationBarItem(
+                                selected = currentTab == destination,
+                                onClick = {
+                                    pagerState.selectPage(index, animate = animatePageChanges)
+                                    onNavigate(destination)
+                                },
+                                icon = { AppIcon(destination.icon) },
+                                label = { Text(destination.navigationLabel) },
+                                colors = NavigationBarItemDefaults.colors(
+                                    indicatorColor = MaterialTheme.colorScheme.secondaryContainer,
+                                    selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                                ),
+                            )
                         }
                     }
                 }
-            },
-        ) { outerPadding ->
-            val isFloating = !wide && bottomBarStyle == BottomBarStyle.FLOATING
-            val pagerBottomPadding = if (isFloating) 0.dp else outerPadding.calculateBottomPadding()
-            val trailingBottomPadding = if (isFloating) outerPadding.calculateBottomPadding() else 0.dp
-            val pagerModifier = Modifier
-                .fillMaxSize()
-                .appBackdropContent(floatingBackdrop, backdropActive)
-                .padding(bottom = pagerBottomPadding)
-            val pageContent: @Composable PagerScope.(Int) -> Unit = { pageIndex ->
-                val page = mainPages[pageIndex]
-                val isSelected = pageIndex == pagerState.selectedPage
-                val pageBackdrop = rememberAppBackdrop(MaterialTheme.colorScheme.surface, backdropActive)
-                val pageModifier = if (isSelected) {
-                    Modifier.fillMaxSize()
-                } else {
-                    Modifier.fillMaxSize().clearAndSetSemantics { }.focusProperties {
-                        canFocus = false
-                        enter = { FocusRequester.Cancel }
-                    }
+            }
+        },
+    ) { outerPadding ->
+        val isFloating = !wide && bottomBarStyle == BottomBarStyle.FLOATING
+        val pagerBottomPadding = if (isFloating) 0.dp else outerPadding.calculateBottomPadding()
+        val trailingBottomPadding = if (isFloating) outerPadding.calculateBottomPadding() else 0.dp
+        val pagerModifier = Modifier
+            .fillMaxSize()
+            .appBackdropContent(floatingBackdrop, backdropActive)
+            .padding(bottom = pagerBottomPadding)
+        val pageContent: @Composable PagerScope.(Int) -> Unit = { pageIndex ->
+            val page = mainPages[pageIndex]
+            val isSelected = pageIndex == pagerState.selectedPage
+            val pageBackdrop = rememberAppBackdrop(MaterialTheme.colorScheme.surface, backdropActive)
+            val pageModifier = if (isSelected) {
+                Modifier.fillMaxSize()
+            } else {
+                Modifier.fillMaxSize().clearAndSetSemantics { }.focusProperties {
+                    canFocus = false
+                    enter = { FocusRequester.Cancel }
                 }
-                CompositionLocalProvider(LocalAppBackdrop provides pageBackdrop) {
+            }
+            CompositionLocalProvider(LocalAppBackdrop provides pageBackdrop) {
                 Box(pageModifier) {
                     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
                     val title = page.title
@@ -367,62 +379,62 @@ internal fun MaterialMainShell(
                             )
                         }
                     }
-                Scaffold(
-                    modifier = Modifier.fillMaxSize().nestedScroll(scrollBehavior.nestedScrollConnection),
-                    topBar = {
-                        val topBarModifier = Modifier.appBarBackdropBlur(
-                            backdrop = pageBackdrop,
-                            surfaceColor = MaterialTheme.colorScheme.surface,
-                            active = backdropActive,
-                        )
-                        val topBarColors = if (backdropActive) TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent) else TopAppBarDefaults.topAppBarColors()
-                        val largeTopBarColors = if (backdropActive) TopAppBarDefaults.largeTopAppBarColors(containerColor = Color.Transparent) else TopAppBarDefaults.largeTopAppBarColors()
-                        if (page in mainPages) {
-                            LargeTopAppBar(title = { Text(title) }, modifier = topBarModifier, actions = actions, scrollBehavior = scrollBehavior, colors = largeTopBarColors)
-                        } else {
-                            TopAppBar(title = { Text(title) }, modifier = topBarModifier, actions = actions, colors = topBarColors)
-                        }
-                    },
-                ) { pagePadding ->
-                    Box(Modifier.fillMaxSize()) {
-                        val scrollState = scrollStates.getValue(page)
-                        Column(Modifier.fillMaxSize().appBackdropContent(pageBackdrop, backdropActive).verticalScroll(scrollState)) {
-                            ShellPageContent(
-                                page = page,
-                                padding = pagePadding,
-                                compactHome = page == AppPage.HEADPHONES && !connectedHome,
-                                bottomClearance = trailingBottomPadding,
-                            ) {
-                                pageContentFor(page)
+                    Scaffold(
+                        modifier = Modifier.fillMaxSize().nestedScroll(scrollBehavior.nestedScrollConnection),
+                        topBar = {
+                            val topBarModifier = Modifier.appBarBackdropBlur(
+                                backdrop = pageBackdrop,
+                                surfaceColor = MaterialTheme.colorScheme.surface,
+                                active = backdropActive,
+                            )
+                            val topBarColors = if (backdropActive) TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent) else TopAppBarDefaults.topAppBarColors()
+                            val largeTopBarColors = if (backdropActive) TopAppBarDefaults.largeTopAppBarColors(containerColor = Color.Transparent) else TopAppBarDefaults.largeTopAppBarColors()
+                            if (page in mainPages) {
+                                LargeTopAppBar(title = { Text(title) }, modifier = topBarModifier, actions = actions, scrollBehavior = scrollBehavior, colors = largeTopBarColors)
+                            } else {
+                                TopAppBar(title = { Text(title) }, modifier = topBarModifier, actions = actions, colors = topBarColors)
                             }
-                        }
-                        ShellFeedback(pagePadding, bottomClearance = trailingBottomPadding) {
-                            pageFeedbackFor(page)
+                        },
+                    ) { pagePadding ->
+                        Box(Modifier.fillMaxSize()) {
+                            val scrollState = scrollStates.getValue(page)
+                            Column(Modifier.fillMaxSize().appBackdropContent(pageBackdrop, backdropActive).verticalScroll(scrollState)) {
+                                ShellPageContent(
+                                    page = page,
+                                    padding = pagePadding,
+                                    compactHome = page == AppPage.HEADPHONES && !connectedHome,
+                                    bottomClearance = trailingBottomPadding,
+                                ) {
+                                    pageContentFor(page)
+                                }
+                            }
+                            ShellFeedback(pagePadding, bottomClearance = trailingBottomPadding) {
+                                pageFeedbackFor(page)
+                            }
                         }
                     }
                 }
-                }
-                }
-            }
-            // Wide pages sit beside the vertical rail, so they travel vertically and only on rail taps.
-            if (wide) {
-                VerticalPager(
-                    state = pagerState.pagerState,
-                    modifier = pagerModifier,
-                    beyondViewportPageCount = 1,
-                    userScrollEnabled = false,
-                    pageNestedScrollConnection = WideMainPagerNestedScrollConnection,
-                    key = { index -> mainPages[index] },
-                    pageContent = pageContent,
-                )
-            } else {
-                HorizontalPager(
-                    state = pagerState.pagerState,
-                    modifier = pagerModifier,
-                    beyondViewportPageCount = 1,
-                    key = { index -> mainPages[index] },
-                    pageContent = pageContent,
-                )
             }
         }
+        // Wide pages sit beside the vertical rail, so they travel vertically and only on rail taps.
+        if (wide) {
+            VerticalPager(
+                state = pagerState.pagerState,
+                modifier = pagerModifier,
+                beyondViewportPageCount = 1,
+                userScrollEnabled = false,
+                pageNestedScrollConnection = WideMainPagerNestedScrollConnection,
+                key = { index -> mainPages[index] },
+                pageContent = pageContent,
+            )
+        } else {
+            HorizontalPager(
+                state = pagerState.pagerState,
+                modifier = pagerModifier,
+                beyondViewportPageCount = 1,
+                key = { index -> mainPages[index] },
+                pageContent = pageContent,
+            )
+        }
+    }
 }

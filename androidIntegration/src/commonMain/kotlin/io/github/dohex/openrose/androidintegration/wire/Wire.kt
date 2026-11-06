@@ -16,8 +16,7 @@ sealed interface Wire {
     data object Null : Wire
 }
 
-fun obj(vararg fields: Pair<String, Wire?>): Wire.Obj =
-    Wire.Obj(fields.mapNotNull { (key, value) -> value?.let { key to it } }.toMap())
+fun obj(vararg fields: Pair<String, Wire?>): Wire.Obj = Wire.Obj(fields.mapNotNull { (key, value) -> value?.let { key to it } }.toMap())
 
 fun str(value: String): Wire = Wire.Str(value)
 fun num(value: Int): Wire = Wire.Num(value.toLong())
@@ -50,19 +49,29 @@ fun Wire.render(): String = buildString { render(this@render) }
 private fun StringBuilder.render(node: Wire) {
     when (node) {
         Wire.Null -> append("null")
+
         is Wire.Bool -> append(node.value)
+
         is Wire.Num -> append(node.value)
+
         is Wire.Str -> renderString(node.value)
+
         is Wire.Arr -> {
             append('[')
-            node.items.forEachIndexed { index, item -> if (index > 0) append(','); render(item) }
+            node.items.forEachIndexed { index, item ->
+                if (index > 0) append(',')
+                render(item)
+            }
             append(']')
         }
+
         is Wire.Obj -> {
             append('{')
             node.fields.entries.forEachIndexed { index, (key, value) ->
                 if (index > 0) append(',')
-                renderString(key); append(':'); render(value)
+                renderString(key)
+                append(':')
+                render(value)
             }
             append('}')
         }
@@ -120,7 +129,10 @@ private class WireParser(private val text: String) {
         index++
         val fields = linkedMapOf<String, Wire>()
         skipWhitespace()
-        if (peek() == '}') { index++; return Wire.Obj(fields) }
+        if (peek() == '}') {
+            index++
+            return Wire.Obj(fields)
+        }
         while (true) {
             skipWhitespace()
             if (peek() != '"') throw WireFormatException("需要字段名")
@@ -141,7 +153,10 @@ private class WireParser(private val text: String) {
         index++
         val items = mutableListOf<Wire>()
         skipWhitespace()
-        if (peek() == ']') { index++; return Wire.Arr(items) }
+        if (peek() == ']') {
+            index++
+            return Wire.Arr(items)
+        }
         while (true) {
             items += value(depth + 1)
             skipWhitespace()
@@ -160,24 +175,35 @@ private class WireParser(private val text: String) {
             if (atEnd) throw WireFormatException("字符串未结束")
             when (val char = text[index++]) {
                 '"' -> return out.toString()
+
                 '\\' -> {
                     if (atEnd) throw WireFormatException("转义未结束")
                     when (val escaped = text[index++]) {
                         '"' -> out.append('"')
+
                         '\\' -> out.append('\\')
+
                         '/' -> out.append('/')
+
                         'n' -> out.append('\n')
+
                         'r' -> out.append('\r')
+
                         't' -> out.append('\t')
+
                         'u' -> {
                             if (index + 4 > text.length) throw WireFormatException("Unicode 转义不完整")
-                            out.append(text.substring(index, index + 4).toIntOrNull(16)?.toChar()
-                                ?: throw WireFormatException("Unicode 转义无效"))
+                            out.append(
+                                text.substring(index, index + 4).toIntOrNull(16)?.toChar()
+                                    ?: throw WireFormatException("Unicode 转义无效"),
+                            )
                             index += 4
                         }
+
                         else -> throw WireFormatException("未知转义 $escaped")
                     }
                 }
+
                 else -> out.append(char)
             }
         }
@@ -199,7 +225,11 @@ private class WireParser(private val text: String) {
 
     private fun peek(): Char? = text.getOrNull(index)
     private fun next(): Char = text.getOrNull(index++) ?: throw WireFormatException("意外结束")
-    private fun expect(char: Char) { if (next() != char) throw WireFormatException("需要 $char") }
+    private fun expect(char: Char) {
+        if (next() != char) throw WireFormatException("需要 $char")
+    }
 
-    private companion object { const val MAX_DEPTH = 64 }
+    private companion object {
+        const val MAX_DEPTH = 64
+    }
 }

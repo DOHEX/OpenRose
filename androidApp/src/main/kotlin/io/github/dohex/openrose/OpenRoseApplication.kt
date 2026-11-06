@@ -6,29 +6,28 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.location.LocationManager
 import android.os.Build
 import android.os.Process
 import android.os.UserManager
-import android.location.LocationManager
 import io.github.dohex.openrose.androidintegration.BackgroundControlBlock
 import io.github.dohex.openrose.androidintegration.BackgroundControlStatus
 import io.github.dohex.openrose.androidintegration.BackgroundServiceFact
+import io.github.dohex.openrose.androidintegration.ControlWay
+import io.github.dohex.openrose.androidintegration.HostSettings
+import io.github.dohex.openrose.androidintegration.IntegrationSettings
 import io.github.dohex.openrose.androidintegration.LocalOwnerIdentity
 import io.github.dohex.openrose.androidintegration.SwitchingControlRuntime
 import io.github.dohex.openrose.androidintegration.backgroundControl
 import io.github.dohex.openrose.androidintegration.mayStartBackgroundService
 import io.github.dohex.openrose.bridge.FrameworkLink
 import io.github.dohex.openrose.bridge.ModuleHostBinderLink
-import io.github.dohex.openrose.androidintegration.ControlWay
-import io.github.dohex.openrose.androidintegration.HostSettings
-import io.github.dohex.openrose.androidintegration.IntegrationSettings
 import io.github.dohex.openrose.core.LocalControlRuntime
 import io.github.dohex.openrose.core.UserSettings
-import io.github.dohex.openrose.ui.UiSettings
 import io.github.dohex.openrose.core.transport.DeviceId
+import io.github.dohex.openrose.ui.UiSettings
 import io.github.dohex.openrose.ui.model.OpenRoseSettingsStore
 import io.github.dohex.openrose.ui.model.RuntimeOpenRoseModel
-import java.util.UUID
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
@@ -36,6 +35,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.util.UUID
 
 /** The names of the application's own preference file and its flags, shared by every reader and writer. */
 internal object AppPreferences {
@@ -92,28 +92,34 @@ class OpenRoseApplication : Application() {
             moduleLink = ModuleHostBinderLink(applicationContext),
             scope = controlScope,
             local = LocalOwnerIdentity(
-                packageName, if (Build.VERSION.SDK_INT >= 28) Application.getProcessName() else packageName,
-                Process.myUid(), Process.myPid(),
+                packageName,
+                if (Build.VERSION.SDK_INT >= 28) Application.getProcessName() else packageName,
+                Process.myUid(),
+                Process.myPid(),
             ),
             newId = { UUID.randomUUID().toString() },
             userUnlocked = unlocked,
         )
-        model = RuntimeOpenRoseModel(runtime, object : OpenRoseSettingsStore {
-            override val uiSettings = this@OpenRoseApplication.uiSettings
+        model = RuntimeOpenRoseModel(
+            runtime,
+            object : OpenRoseSettingsStore {
+                override val uiSettings = this@OpenRoseApplication.uiSettings
 
-            override fun updateSettings(settings: UserSettings) {
-                if (!userUnlocked()) return
-                runtime.updateSettings(settings)
-                settingsStore.saveHost(hostSettings())
-                publishModuleSettings()
-            }
+                override fun updateSettings(settings: UserSettings) {
+                    if (!userUnlocked()) return
+                    runtime.updateSettings(settings)
+                    settingsStore.saveHost(hostSettings())
+                    publishModuleSettings()
+                }
 
-            override fun updateUiSettings(settings: UiSettings) {
-                if (!userUnlocked()) return
-                mutableUiSettings.value = settings
-                settingsStore.saveUi(settings)
-            }
-        }, controlScope)
+                override fun updateUiSettings(settings: UiSettings) {
+                    if (!userUnlocked()) return
+                    mutableUiSettings.value = settings
+                    settingsStore.saveUi(settings)
+                }
+            },
+            controlScope,
+        )
         preferencesLoaded = unlocked
         registerActivityLifecycleCallbacks(VisibleInterfaceHold(runtime, controlScope))
         framework.start()
@@ -123,7 +129,10 @@ class OpenRoseApplication : Application() {
                 if (intent.action == Intent.ACTION_USER_UNLOCKED) loadUnlockedSettings()
                 // Re-read system facts instead of trusting broadcast extras.
                 if (intent.action == BluetoothAdapter.ACTION_STATE_CHANGED ||
-                    intent.action == LocationManager.MODE_CHANGED_ACTION) refreshPlatform()
+                    intent.action == LocationManager.MODE_CHANGED_ACTION
+                ) {
+                    refreshPlatform()
+                }
             }
         }
         val filter = IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED).apply {
@@ -182,7 +191,6 @@ class OpenRoseApplication : Application() {
      */
     fun ordinaryControlSelected(): Boolean = runtime.integration.value.owner.selected == ControlWay.ORDINARY
 
-
     fun updateIntegrationSettings(settings: IntegrationSettings) {
         if (!userUnlocked()) return
         val backgroundIntentChanged = runtime.integration.value.settings.backgroundControlEnabled != settings.backgroundControlEnabled
@@ -234,7 +242,10 @@ class OpenRoseApplication : Application() {
         val integration = runtime.integration.value
         // mayStartBackgroundService is false unless ordinary control is the saved choice.
         if (!integration.mayStartBackgroundService(state) ||
-            integration.backgroundControl(state) is BackgroundControlStatus.Running) return
+            integration.backgroundControl(state) is BackgroundControlStatus.Running
+        ) {
+            return
+        }
         updateBackgroundService(BackgroundServiceFact.NotRunning)
         try {
             startForegroundService(Intent(this, ControlService::class.java))
@@ -257,12 +268,11 @@ class OpenRoseApplication : Application() {
         refreshPlatform()
     }
 
-    fun requestCompanionAssociation(onChooser: (android.content.IntentSender) -> Unit, onFailure: () -> Unit) =
-        companionWake.requestAssociation(onChooser, onFailure)
+    fun requestCompanionAssociation(onChooser: (android.content.IntentSender) -> Unit, onFailure: () -> Unit) = companionWake.requestAssociation(onChooser, onFailure)
 
     fun backgroundServiceRunning() = updateBackgroundService(BackgroundServiceFact.Running)
-    fun backgroundServiceRejected(reason: BackgroundControlBlock) =
-        updateBackgroundService(BackgroundServiceFact.StartRejected(reason))
+    fun backgroundServiceRejected(reason: BackgroundControlBlock) = updateBackgroundService(BackgroundServiceFact.StartRejected(reason))
+
     /** A rejected start keeps its reason; only a service that had been running becomes "not running". */
     fun backgroundServiceStopped() {
         if (backgroundService == BackgroundServiceFact.Running) updateBackgroundService(BackgroundServiceFact.NotRunning)
@@ -277,7 +287,8 @@ class OpenRoseApplication : Application() {
         runtime.updatePlatformState(readPlatformState(permissionRequested(), preferencesLoaded))
         runtime.updateIntegrationPlatform(
             readIntegrationPlatform(backgroundService, companionWake.facts()).copy(
-                module = framework.availability(), bridge = framework.diagnostics(),
+                module = framework.availability(),
+                bridge = framework.diagnostics(),
             ),
         )
     }

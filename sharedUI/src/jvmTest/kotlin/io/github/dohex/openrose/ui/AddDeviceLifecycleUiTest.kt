@@ -1,9 +1,9 @@
 package io.github.dohex.openrose.ui
 
-import kotlinx.collections.immutable.persistentListOf
 import androidx.compose.ui.input.key.Key
 import io.github.dohex.openrose.core.*
 import io.github.dohex.openrose.core.transport.DeviceId
+import kotlinx.collections.immutable.persistentListOf
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -112,9 +112,11 @@ class AddDeviceLifecycleUiTest {
                     assertFalse(harness.hasText("重新搜索"))
                     assertFalse(harness.hasText("附近设备"))
                     assertFalse(harness.hasText("连接"))
-                    assertTrue(harness.hasClickableText(
-                        if (unavailable.permission == PermissionState.DENIED) "授予蓝牙权限" else "打开蓝牙设置",
-                    ))
+                    assertTrue(
+                        harness.hasClickableText(
+                            if (unavailable.permission == PermissionState.DENIED) "授予蓝牙权限" else "打开蓝牙设置",
+                        ),
+                    )
                     harness.advanceTimeBy(30_000)
                     harness.state.value = harness.state.value.copy(
                         platform = PlatformState(PermissionState.GRANTED, TransportAvailability.Available),

@@ -2,10 +2,6 @@
 
 package io.github.dohex.openrose.ui
 
-import kotlinx.collections.immutable.persistentListOf
-import kotlinx.collections.immutable.persistentMapOf
-import kotlinx.collections.immutable.persistentSetOf
-import kotlinx.collections.immutable.plus
 import androidx.compose.foundation.ScrollState
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
@@ -17,8 +13,8 @@ import io.github.dohex.openrose.core.ConnectionPhase
 import io.github.dohex.openrose.core.ConnectionState
 import io.github.dohex.openrose.core.ControlState
 import io.github.dohex.openrose.core.DeviceCapabilities
-import io.github.dohex.openrose.core.DeviceState
 import io.github.dohex.openrose.core.DeviceSetting
+import io.github.dohex.openrose.core.DeviceState
 import io.github.dohex.openrose.core.PermissionState
 import io.github.dohex.openrose.core.PlatformState
 import io.github.dohex.openrose.core.SettingOperation
@@ -30,6 +26,10 @@ import io.github.dohex.openrose.core.protocol.FieldReading
 import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.dohex.openrose.core.protocol.ModelProfile
 import io.github.dohex.openrose.core.transport.DeviceId
+import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.persistentMapOf
+import kotlinx.collections.immutable.persistentSetOf
+import kotlinx.collections.immutable.plus
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -65,12 +65,21 @@ class OpenRoseConnectedHomeUiTest {
             val initial = connectedState()
             val device = requireNotNull(initial.device)
             val profile = ModelProfile.I7_RS_V2
-            withHarness(420, 900, initial.copy(
-                connection = ConnectionState.Connected(device.deviceId, SESSION_ID, profile, ConnectionPhase.READY),
-                device = device.copy(profile = profile, capabilities = device.capabilities.copy(
-                    noiseControl = noiseControlCapabilities(profile),
-                ), fields = device.fields + (DeviceField.NOISE_MODE to FieldReading.Known(FieldValue.Text("auto"), "auto"))),
-            ), style) { harness ->
+            withHarness(
+                420,
+                900,
+                initial.copy(
+                    connection = ConnectionState.Connected(device.deviceId, SESSION_ID, profile, ConnectionPhase.READY),
+                    device = device.copy(
+                        profile = profile,
+                        capabilities = device.capabilities.copy(
+                            noiseControl = noiseControlCapabilities(profile),
+                        ),
+                        fields = device.fields + (DeviceField.NOISE_MODE to FieldReading.Known(FieldValue.Text("auto"), "auto")),
+                    ),
+                ),
+                style,
+            ) { harness ->
                 harness.render()
                 assertTrue(harness.hasSelectedText("自动"))
                 assertTrue(harness.hasClickableText("动态降噪"))
@@ -87,10 +96,17 @@ class OpenRoseConnectedHomeUiTest {
         for (style in InterfaceStyle.entries) {
             val initial = connectedState()
             val device = requireNotNull(initial.device)
-            withHarness(420, 900, initial.copy(
-                device = device.copy(fields = device.fields +
-                    (DeviceField.NOISE_MODE to FieldReading.Known(FieldValue.Text("wind"), "wind"))),
-            ), style) { harness ->
+            withHarness(
+                420,
+                900,
+                initial.copy(
+                    device = device.copy(
+                        fields = device.fields +
+                            (DeviceField.NOISE_MODE to FieldReading.Known(FieldValue.Text("wind"), "wind")),
+                    ),
+                ),
+                style,
+            ) { harness ->
                 harness.render()
                 assertTrue(harness.hasSelectedText("抗风噪"))
                 harness.clickText("通透")
@@ -101,8 +117,10 @@ class OpenRoseConnectedHomeUiTest {
                 assertTrue(harness.hasSelectedText("抗风噪"), "a click alone does not confirm a new mode in $style")
                 val current = requireNotNull(harness.state.value.device)
                 harness.state.value = harness.state.value.copy(
-                    device = current.copy(fields = current.fields +
-                        (DeviceField.NOISE_MODE to FieldReading.Known(FieldValue.Text("transparency"), "transparency"))),
+                    device = current.copy(
+                        fields = current.fields +
+                            (DeviceField.NOISE_MODE to FieldReading.Known(FieldValue.Text("transparency"), "transparency")),
+                    ),
                 )
                 harness.render()
                 assertTrue(harness.hasSelectedText("通透"))
@@ -215,11 +233,13 @@ class OpenRoseConnectedHomeUiTest {
                 val state = harness.state.value
                 val device = requireNotNull(state.device)
                 harness.state.value = state.copy(
-                    device = device.copy(fields = device.fields + mapOf(
-                        DeviceField.LEFT_BATTERY to FieldReading.Unknown("ff"),
-                        DeviceField.CASE_BATTERY to FieldReading.Unknown("ff"),
-                        DeviceField.NOISE_MODE to FieldReading.Unknown("ff"),
-                    )),
+                    device = device.copy(
+                        fields = device.fields + mapOf(
+                            DeviceField.LEFT_BATTERY to FieldReading.Unknown("ff"),
+                            DeviceField.CASE_BATTERY to FieldReading.Unknown("ff"),
+                            DeviceField.NOISE_MODE to FieldReading.Unknown("ff"),
+                        ),
+                    ),
                 )
                 harness.render()
                 assertTrue(harness.hasText("未知"), "unknown battery and mode values remain unknown in $style")
@@ -238,10 +258,12 @@ class OpenRoseConnectedHomeUiTest {
                         loadingDevice.profile,
                         ConnectionPhase.INITIALIZING,
                     ),
-                    device = loadingDevice.copy(fields = loadingDevice.fields + mapOf(
-                        DeviceField.LEFT_BATTERY to FieldReading.Loading,
-                        DeviceField.CASE_BATTERY to FieldReading.Loading,
-                    )),
+                    device = loadingDevice.copy(
+                        fields = loadingDevice.fields + mapOf(
+                            DeviceField.LEFT_BATTERY to FieldReading.Loading,
+                            DeviceField.CASE_BATTERY to FieldReading.Loading,
+                        ),
+                    ),
                 )
                 harness.render()
                 assertTrue(harness.hasText("读取中…"), "battery loading remains distinct from unknown in $style")
@@ -263,8 +285,10 @@ class OpenRoseConnectedHomeUiTest {
                         pendingDevice.profile,
                         ConnectionPhase.READY,
                     ),
-                    device = pendingDevice.copy(fields = pendingDevice.fields +
-                        (DeviceField.NOISE_MODE to FieldReading.Known(FieldValue.Text("anc"), "anc"))),
+                    device = pendingDevice.copy(
+                        fields = pendingDevice.fields +
+                            (DeviceField.NOISE_MODE to FieldReading.Known(FieldValue.Text("anc"), "anc")),
+                    ),
                     settingOperations = persistentListOf(pending),
                 )
                 harness.render()
@@ -290,14 +314,16 @@ class OpenRoseConnectedHomeUiTest {
                 assertTrue(harness.hasText("设备详情"))
 
                 harness.state.value = state.copy(
-                    device = device.copy(capabilities = device.capabilities.copy(
-                        writableSettings = persistentSetOf(
-                            DeviceSetting.NOISE_MODE,
-                            DeviceSetting.GAME_MODE,
-                            DeviceSetting.TOUCH_ENABLED,
-                            DeviceSetting.AUDIO_MODE,
+                    device = device.copy(
+                        capabilities = device.capabilities.copy(
+                            writableSettings = persistentSetOf(
+                                DeviceSetting.NOISE_MODE,
+                                DeviceSetting.GAME_MODE,
+                                DeviceSetting.TOUCH_ENABLED,
+                                DeviceSetting.AUDIO_MODE,
+                            ),
                         ),
-                    )),
+                    ),
                 )
                 harness.render()
                 assertTrue(harness.hasText("游戏模式"))
@@ -374,6 +400,7 @@ class OpenRoseConnectedHomeUiTest {
             }
         }
     }
+
     @Test
     fun unknownToggleRendersDisabledSwitchWithoutInventingConfirmation() {
         for (style in InterfaceStyle.entries) {
@@ -391,14 +418,21 @@ class OpenRoseConnectedHomeUiTest {
                 assertFalse(harness.hasText("当前状态未知"))
                 assertFalse(harness.hasText("设备已确认：开启"))
                 assertFalse(harness.hasText("设备已确认：关闭"))
-                assertTrue(harness.nodes().any {
-                    it.config.contains(SemanticsProperties.Disabled) &&
-                        it.config.getOrNull(SemanticsProperties.ToggleableState) == ToggleableState.Off
-                }, "an unread game mode toggle is disabled in $style")
+                assertTrue(
+                    harness.nodes().any {
+                        it.config.contains(SemanticsProperties.Disabled) &&
+                            it.config.getOrNull(SemanticsProperties.ToggleableState) == ToggleableState.Off
+                    },
+                    "an unread game mode toggle is disabled in $style",
+                )
                 assertTrue(harness.settingWrites.isEmpty())
 
-                harness.state.value = harness.state.value.copy(device = device.copy(fields = device.fields +
-                    (DeviceField.GAME_MODE to FieldReading.Known(FieldValue.Toggle(false), "00"))))
+                harness.state.value = harness.state.value.copy(
+                    device = device.copy(
+                        fields = device.fields +
+                            (DeviceField.GAME_MODE to FieldReading.Known(FieldValue.Toggle(false), "00")),
+                    ),
+                )
                 harness.render()
                 assertTrue(harness.hasText("游戏模式"))
                 assertFalse(harness.hasText("设备已确认：关闭"))

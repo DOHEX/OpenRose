@@ -14,10 +14,14 @@ class StatusPageUiTest {
     fun unavailableDesktopTransportIsExplainedInStatusAndDiagnostics() {
         for (style in InterfaceStyle.entries) {
             val reason = "Desktop Bluetooth transport is unavailable"
-            val state = mutableStateOf(ControlState(platform = PlatformState(
-                permission = PermissionState.NOT_REQUIRED,
-                transport = TransportAvailability.Unavailable(reason),
-            )))
+            val state = mutableStateOf(
+                ControlState(
+                    platform = PlatformState(
+                        permission = PermissionState.NOT_REQUIRED,
+                        transport = TransportAvailability.Unavailable(reason),
+                    ),
+                ),
+            )
             val model = FakeOpenRoseModel(state, mutableStateOf(UiSettings(interfaceStyle = style)))
             val platformUi = BasicPlatformUi("Desktop")
             runOpenRoseUiTest(420, 900) {

@@ -1,13 +1,13 @@
 package io.github.dohex.openrose.androidintegration
 
 import io.github.dohex.openrose.core.transport.DeviceId
+import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertNull
-import kotlinx.coroutines.test.TestScope
-import kotlinx.coroutines.test.runCurrent
-import kotlinx.coroutines.test.runTest
 
 /**
  * The fusion device center's additional settings entry, decided from the module host's own owner state and

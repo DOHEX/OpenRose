@@ -9,26 +9,26 @@ import io.github.dohex.openrose.core.transport.ControlConnection
 import io.github.dohex.openrose.core.transport.ControlTransport
 import io.github.dohex.openrose.core.transport.DeviceId
 import io.github.dohex.openrose.core.transport.TransportEndpoint
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.FlowCollector
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withContext
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
-import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.flow.receiveAsFlow
-import kotlinx.coroutines.flow.FlowCollector
-import kotlinx.coroutines.NonCancellable
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.withContext
-import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.cancelAndJoin
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.awaitCancellation
-import kotlinx.coroutines.test.advanceTimeBy
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.test.runCurrent
-import kotlinx.coroutines.test.runTest
 
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class ControlSessionBehaviorTest {
@@ -36,8 +36,7 @@ class ControlSessionBehaviorTest {
     fun permissionIsRequiredBeforeScanningOrConnecting() = runTest {
         val transport = object : ControlTransport {
             override fun scan(): Flow<Advertisement> = error("Must not scan without permission")
-            override suspend fun connect(deviceId: DeviceId, endpoint: TransportEndpoint, onPhase: (ConnectionPhase) -> Unit): ControlConnection =
-                error("Must not connect without permission")
+            override suspend fun connect(deviceId: DeviceId, endpoint: TransportEndpoint, onPhase: (ConnectionPhase) -> Unit): ControlConnection = error("Must not connect without permission")
         }
         val session = ControlSession(
             PlatformState(PermissionState.DENIED, TransportAvailability.Available),
@@ -49,13 +48,13 @@ class ControlSessionBehaviorTest {
         assertEquals(ControlErrorCode.PERMISSION_REQUIRED, assertIs<OperationResult.Failure>(session.connect(DeviceId("device"))).error.code)
         assertEquals(ConnectionState.Disconnected, session.state.value.connection)
     }
+
     @Test
     fun scanningUsesManufacturerEvidenceAndLeavesSameNameVariantsUnsupported() = runTest {
         val advertisements = MutableSharedFlow<Advertisement>(extraBufferCapacity = 8)
         val transport = object : ControlTransport {
             override fun scan(): Flow<Advertisement> = advertisements
-            override suspend fun connect(deviceId: DeviceId, endpoint: TransportEndpoint, onPhase: (ConnectionPhase) -> Unit): ControlConnection =
-                error("Unknown variants must never receive a connection")
+            override suspend fun connect(deviceId: DeviceId, endpoint: TransportEndpoint, onPhase: (ConnectionPhase) -> Unit): ControlConnection = error("Unknown variants must never receive a connection")
         }
         val session = ControlSession(PlatformState(PermissionState.GRANTED, TransportAvailability.Available), transport = transport, scope = backgroundScope)
         assertEquals(OperationResult.Success, session.startScan())
@@ -103,8 +102,12 @@ class ControlSessionBehaviorTest {
     fun rawI7FlagsWithoutMeaningfulReadingsNeverBecomeProtocolReady() = runTest {
         val connection = RecordedConnection(emptyMap(), repeatedNotifications = listOf("dd00040cffffffea aa".replace(" ", "")))
         val transport = RecordedTransport(connection)
-        val session = ControlSession(PlatformState(PermissionState.GRANTED, TransportAvailability.Available), transport = transport, scope = backgroundScope,
-            timing = SessionTiming(queryTimeoutMillis = 30, i5WriteIntervalMillis = 0))
+        val session = ControlSession(
+            PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
+            transport = transport,
+            scope = backgroundScope,
+            timing = SessionTiming(queryTimeoutMillis = 30, i5WriteIntervalMillis = 0),
+        )
         session.startScan()
         runCurrent()
         transport.advertisements.emit(Advertisement(DeviceId("i7"), manufacturerData = mapOf(0xe5b8 to byteArrayOf(0x29, 0x0f))))
@@ -121,8 +124,12 @@ class ControlSessionBehaviorTest {
     fun partialReadTimeoutKeepsConfirmedFieldsAndReportsTheUnavailableField() = runTest {
         val connection = RecordedConnection(i5Replies - "0d01")
         val transport = RecordedTransport(connection)
-        val session = ControlSession(PlatformState(PermissionState.GRANTED, TransportAvailability.Available), transport = transport, scope = backgroundScope,
-            timing = SessionTiming(queryTimeoutMillis = 30, i5WriteIntervalMillis = 0))
+        val session = ControlSession(
+            PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
+            transport = transport,
+            scope = backgroundScope,
+            timing = SessionTiming(queryTimeoutMillis = 30, i5WriteIntervalMillis = 0),
+        )
         session.startScan()
         runCurrent()
         transport.advertisements.emit(i5Advertisement)
@@ -142,8 +149,12 @@ class ControlSessionBehaviorTest {
     fun remoteDisconnectAllowsAFreshConnectionAndRejectsOldCallbacks() = runTest {
         val first = RecordedConnection(i5Replies)
         val transport = RecordedTransport(first)
-        val session = ControlSession(PlatformState(PermissionState.GRANTED, TransportAvailability.Available), transport = transport, scope = backgroundScope,
-            timing = SessionTiming(queryTimeoutMillis = 30, i5WriteIntervalMillis = 0))
+        val session = ControlSession(
+            PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
+            transport = transport,
+            scope = backgroundScope,
+            timing = SessionTiming(queryTimeoutMillis = 30, i5WriteIntervalMillis = 0),
+        )
         session.startScan()
         runCurrent()
         transport.advertisements.emit(i5Advertisement)
@@ -177,8 +188,12 @@ class ControlSessionBehaviorTest {
     fun concurrentEntrypointsShareOneConnectionAndUnknownNotificationsRemainObservable() = runTest {
         val connection = RecordedConnection(i5Replies)
         val transport = RecordedTransport(connection)
-        val session = ControlSession(PlatformState(PermissionState.GRANTED, TransportAvailability.Available), transport = transport, scope = backgroundScope,
-            timing = SessionTiming(queryTimeoutMillis = 30, i5WriteIntervalMillis = 0))
+        val session = ControlSession(
+            PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
+            transport = transport,
+            scope = backgroundScope,
+            timing = SessionTiming(queryTimeoutMillis = 30, i5WriteIntervalMillis = 0),
+        )
         session.startScan()
         runCurrent()
         transport.advertisements.emit(i5Advertisement)
@@ -202,8 +217,12 @@ class ControlSessionBehaviorTest {
         // Synthetic DD framing around independent research values. Split battery, then coalesced firmware+mode.
         val connection = RecordedConnection(emptyMap(), repeatedNotifications = listOf("dd00040ce4", "325053aa", "dd00040d010502f6aadd00020901020e01faaa"), now = { testScheduler.currentTime })
         val transport = RecordedTransport(connection)
-        val session = ControlSession(PlatformState(PermissionState.GRANTED, TransportAvailability.Available), transport = transport, scope = backgroundScope,
-            timing = SessionTiming(queryTimeoutMillis = 30))
+        val session = ControlSession(
+            PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
+            transport = transport,
+            scope = backgroundScope,
+            timing = SessionTiming(queryTimeoutMillis = 30),
+        )
         session.startScan()
         runCurrent()
         transport.advertisements.emit(Advertisement(DeviceId("i7"), manufacturerData = mapOf(0xe5b8 to byteArrayOf(0x29, 0x0f))))
@@ -227,8 +246,12 @@ class ControlSessionBehaviorTest {
     fun disconnectCancelsPendingReadsAndNeverReplaysThemAfterTheDeadline() = runTest {
         val connection = RecordedConnection(emptyMap())
         val transport = RecordedTransport(connection)
-        val session = ControlSession(PlatformState(PermissionState.GRANTED, TransportAvailability.Available), transport = transport, scope = backgroundScope,
-            timing = SessionTiming(queryTimeoutMillis = 50))
+        val session = ControlSession(
+            PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
+            transport = transport,
+            scope = backgroundScope,
+            timing = SessionTiming(queryTimeoutMillis = 50),
+        )
         session.startScan()
         runCurrent()
         transport.advertisements.emit(i5Advertisement)
@@ -253,8 +276,12 @@ class ControlSessionBehaviorTest {
     fun anUnresponsiveDeviceTimesOutWithoutClaimingProtocolReadiness() = runTest {
         val connection = RecordedConnection(emptyMap())
         val transport = RecordedTransport(connection)
-        val session = ControlSession(PlatformState(PermissionState.GRANTED, TransportAvailability.Available), transport = transport, scope = backgroundScope,
-            timing = SessionTiming(queryTimeoutMillis = 30, i5WriteIntervalMillis = 0))
+        val session = ControlSession(
+            PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
+            transport = transport,
+            scope = backgroundScope,
+            timing = SessionTiming(queryTimeoutMillis = 30, i5WriteIntervalMillis = 0),
+        )
         session.startScan()
         runCurrent()
         transport.advertisements.emit(i5Advertisement)
@@ -318,8 +345,11 @@ class ControlSessionBehaviorTest {
                 return link
             }
         }
-        val session = ControlSession(PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
-            transport = transport, scope = backgroundScope)
+        val session = ControlSession(
+            PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
+            transport = transport,
+            scope = backgroundScope,
+        )
         session.startScan()
         advertisements.emit(i5Advertisement)
         runCurrent()
@@ -343,14 +373,17 @@ class ControlSessionBehaviorTest {
         val link = RecordedConnection(i5Replies)
         val transport = object : ControlTransport {
             override fun scan(): Flow<Advertisement> = advertisements
-            override suspend fun connect(deviceId: DeviceId, endpoint: TransportEndpoint, onPhase: (ConnectionPhase) -> Unit): ControlConnection =
-                withContext(NonCancellable) {
-                    delay(20)
-                    link
-                }
+            override suspend fun connect(deviceId: DeviceId, endpoint: TransportEndpoint, onPhase: (ConnectionPhase) -> Unit): ControlConnection = withContext(NonCancellable) {
+                delay(20)
+                link
+            }
         }
-        val session = ControlSession(PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
-            transport = transport, scope = backgroundScope, timing = SessionTiming(connectTimeoutMillis = 10))
+        val session = ControlSession(
+            PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
+            transport = transport,
+            scope = backgroundScope,
+            timing = SessionTiming(connectTimeoutMillis = 10),
+        )
         session.startScan()
         advertisements.emit(i5Advertisement)
         runCurrent()
@@ -365,8 +398,11 @@ class ControlSessionBehaviorTest {
     @Test
     fun repeatedAdvertisementsUpdateInPlaceWithoutChangingDiscoveryOrder() = runTest {
         val transport = RecordedTransport(RecordedConnection(emptyMap()))
-        val session = ControlSession(PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
-            transport = transport, scope = backgroundScope)
+        val session = ControlSession(
+            PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
+            transport = transport,
+            scope = backgroundScope,
+        )
         session.startScan()
         runCurrent()
         transport.advertisements.emit(i5Advertisement)
@@ -384,8 +420,11 @@ class ControlSessionBehaviorTest {
     fun cancellingAddingFlowClosesItsUnfinishedLinkAndStopsInitialization() = runTest {
         val link = RecordedConnection(emptyMap())
         val transport = RecordedTransport(link)
-        val session = ControlSession(PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
-            transport = transport, scope = backgroundScope)
+        val session = ControlSession(
+            PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
+            transport = transport,
+            scope = backgroundScope,
+        )
         session.startScan()
         runCurrent()
         transport.advertisements.emit(i5Advertisement)
@@ -418,8 +457,11 @@ class ControlSessionBehaviorTest {
                 return link
             }
         }
-        val session = ControlSession(PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
-            transport = transport, scope = backgroundScope)
+        val session = ControlSession(
+            PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
+            transport = transport,
+            scope = backgroundScope,
+        )
         session.startScan()
         advertisements.emit(i5Advertisement)
         runCurrent()
@@ -457,12 +499,16 @@ class ControlSessionBehaviorTest {
                 incoming.receiveAsFlow().collect(collector)
             }
         }
-        suspend fun deliverLate(bytes: ByteArray) { requireNotNull(collector).emit(bytes) }
+        suspend fun deliverLate(bytes: ByteArray) {
+            requireNotNull(collector).emit(bytes)
+        }
         var subscribed = false
         var closed = false
         val writes = mutableListOf<String>()
         val writeTimes = mutableListOf<Long>()
-        override suspend fun subscribe() { subscribed = true }
+        override suspend fun subscribe() {
+            subscribed = true
+        }
         override suspend fun write(bytes: ByteArray) {
             check(subscribed) { "The earbud requires notifications before its first read" }
             val hex = bytes.hex()
@@ -471,13 +517,17 @@ class ControlSessionBehaviorTest {
             replies[hex.substring(10, 14)]?.let { incoming.send(it.bytes()) }
             repeatedNotifications.forEach { incoming.send(it.bytes()) }
         }
-        override suspend fun close() { closed = true; incoming.close() }
+        override suspend fun close() {
+            closed = true
+            incoming.close()
+        }
     }
 
     companion object {
         private fun ByteArray.hex() = joinToString("") { (it.toInt() and 255).toString(16).padStart(2, '0') }
         private fun String.bytes() = chunked(2).map { it.toInt(16).toByte() }.toByteArray()
         private val i5Advertisement = Advertisement(DeviceId("i5"), "name has no authority", -40, mapOf(0x5352 to byteArrayOf(0, 1, 0, 1)))
+
         // Independent real Linux RX capture, rose_reverse/analysis/i5_live_read_2026-10-18.jsonl.
         private val i5Replies = mapOf(
             "0101" to "09ff00000101011100000164620000ffe2",
@@ -495,5 +545,4 @@ class ControlSessionBehaviorTest {
             "0e03" to "09ff0000010e030b000126",
         )
     }
-
 }

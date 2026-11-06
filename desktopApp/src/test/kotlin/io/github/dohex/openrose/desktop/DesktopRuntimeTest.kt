@@ -9,11 +9,11 @@ import io.github.dohex.openrose.ui.BottomBarStyle
 import io.github.dohex.openrose.ui.InterfaceStyle
 import io.github.dohex.openrose.ui.PageTransition
 import io.github.dohex.openrose.ui.UiSettings
+import kotlinx.coroutines.test.runTest
 import java.util.UUID
 import java.util.prefs.Preferences
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlinx.coroutines.test.runTest
 
 class DesktopRuntimeTest {
     @Test

@@ -2,21 +2,25 @@ package io.github.dohex.openrose.ui
 
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.ui.Modifier
-import kotlinx.collections.immutable.persistentListOf
-import kotlinx.collections.immutable.persistentMapOf
-import kotlinx.collections.immutable.persistentSetOf
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.Modifier
 import io.github.dohex.openrose.core.*
 import io.github.dohex.openrose.core.protocol.ModelProfile
 import io.github.dohex.openrose.core.transport.DeviceId
+import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.persistentMapOf
+import kotlinx.collections.immutable.persistentSetOf
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.first
 
 internal val addDeviceCandidate = DeviceCandidate(
-    DeviceId("AA:BB:CC:DD:EE:01"), "ROSE EarFree i5", -50, ModelProfile.I5_ZT, "",
+    DeviceId("AA:BB:CC:DD:EE:01"),
+    "ROSE EarFree i5",
+    -50,
+    ModelProfile.I5_ZT,
+    "",
 )
 
 /** The add-device flow on a fake control entry; each scan start records the virtual time it happened at. */
@@ -54,6 +58,7 @@ internal fun withAddDeviceHarness(
         override val platformName = "Test"
         override val requestBluetoothPermission: (() -> Unit) = {}
         override val openBluetoothSettings: (() -> Unit) = {}
+
         @androidx.compose.runtime.Composable
         override fun DiagnosticsEntry(onDiagnostics: () -> Unit) {}
     }
@@ -131,8 +136,11 @@ internal class AddDeviceUiTestHarness(
             val terminal = snapshotFlow { state.value.connection }.first { connection ->
                 when (connection) {
                     is ConnectionState.Connecting -> connection.deviceId != attempt.deviceId || connection.sessionId != attempt.sessionId
-                    is ConnectionState.Connected -> connection.deviceId != attempt.deviceId ||
-                        connection.sessionId != attempt.sessionId || connection.phase == ConnectionPhase.READY
+
+                    is ConnectionState.Connected ->
+                        connection.deviceId != attempt.deviceId ||
+                            connection.sessionId != attempt.sessionId || connection.phase == ConnectionPhase.READY
+
                     ConnectionState.Disconnected -> true
                 }
             }

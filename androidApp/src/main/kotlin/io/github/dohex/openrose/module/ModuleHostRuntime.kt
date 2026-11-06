@@ -13,20 +13,18 @@ import android.os.Process
 import android.os.UserManager
 import android.util.Log
 import io.github.dohex.openrose.AndroidControlTransport
+import io.github.dohex.openrose.androidintegration.HostConfiguration
+import io.github.dohex.openrose.androidintegration.HostFacts
+import io.github.dohex.openrose.androidintegration.HostSettings
+import io.github.dohex.openrose.androidintegration.HostSettingsCodec
+import io.github.dohex.openrose.androidintegration.ModuleControlHost
 import io.github.dohex.openrose.bridge.AndroidCallerAuthority
 import io.github.dohex.openrose.bridge.BridgeWire
 import io.github.dohex.openrose.bridge.HostEndpoint
-import io.github.dohex.openrose.androidintegration.HostConfiguration
-import io.github.dohex.openrose.androidintegration.HostFacts
 import io.github.dohex.openrose.core.LocalControlRuntime
-import io.github.dohex.openrose.androidintegration.ModuleControlHost
-import io.github.dohex.openrose.androidintegration.HostSettings
-import io.github.dohex.openrose.androidintegration.HostSettingsCodec
 import io.github.dohex.openrose.readPlatformState
 import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedModule
-import java.lang.reflect.Method
-import java.util.UUID
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -36,6 +34,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeoutOrNull
+import java.lang.reflect.Method
+import java.util.UUID
 
 /**
  * Hosts the single control session inside `com.android.bluetooth` with the host's own Context, uid and
@@ -51,6 +51,7 @@ internal class ModuleHostRuntime(
 ) {
     private val lifecycle = Any()
     private val hooks = mutableListOf<XposedInterface.HookHandle>()
+
     @Volatile private var endpoint: HostEndpoint? = null
     private var host: ModuleControlHost? = null
     private var scope: CoroutineScope? = null
@@ -74,8 +75,11 @@ internal class ModuleHostRuntime(
             val handle = module.hook(onBind).setId("openrose.host.discovery")
                 .setExceptionMode(XposedInterface.ExceptionMode.PROTECTIVE).intercept { chain ->
                     val intent = chain.getArg(0) as? Intent
-                    if (intent?.action == BridgeWire.ACTION_CONTROL_HOST) endpoint as IBinder?
-                    else chain.proceed()
+                    if (intent?.action == BridgeWire.ACTION_CONTROL_HOST) {
+                        endpoint as IBinder?
+                    } else {
+                        chain.proceed()
+                    }
                 }
             synchronized(lifecycle) { hooks += handle }
         } catch (failure: Throwable) {

@@ -20,8 +20,11 @@ internal fun ModuleAvailability.unreadyClause(): String? = when (this) {
  */
 internal fun ModuleAvailability.nextStep(): String? = when (this) {
     ModuleAvailability.Available -> null
+
     ModuleAvailability.NotEnabled -> "请在 Xposed 框架中启用 OpenRose 模块。"
+
     ModuleAvailability.Unresponsive -> "宿主进程仍在运行但没有应答。可用右上角的重启作用域按钮让模块重新加载。"
+
     is ModuleAvailability.Unavailable -> when (cause) {
         ModuleUnavailableCause.FRAMEWORK_MISSING -> "请确认 Xposed 框架正在运行，并已在其中启用 OpenRose 模块。"
         ModuleUnavailableCause.FRAMEWORK_OUTDATED -> "请把 Xposed 框架更新到支持 API 102 的版本。"

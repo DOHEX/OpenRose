@@ -1,13 +1,13 @@
 package io.github.dohex.openrose.core
 
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.flow.take
+import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
-import kotlinx.coroutines.CoroutineStart
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.flow.take
-import kotlinx.coroutines.flow.toList
 
 class ControlSessionTest {
     @Test
@@ -49,5 +49,4 @@ class ControlSessionTest {
         assertEquals(TransportAvailability.Disabled, states.last().platform.transport)
         assertEquals(ConnectionState.Disconnected, states.last().connection)
     }
-
 }

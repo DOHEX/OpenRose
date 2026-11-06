@@ -7,16 +7,16 @@ import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.focusable
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.key.*
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.dp
 import io.github.dohex.openrose.core.*
 import io.github.dohex.openrose.ui.model.OpenRoseModel
@@ -35,7 +35,6 @@ internal enum class AppPage(val title: String, val icon: RoseIcon) {
     DIAGNOSTICS("诊断与记录", RoseIcon.LOG),
     PERSONALIZATION("个性化", RoseIcon.PALETTE),
 }
-
 
 internal val mainPages = listOf(AppPage.HEADPHONES, AppPage.STATUS, AppPage.SETTINGS)
 
@@ -106,9 +105,13 @@ fun OpenRoseApp(
     fun back() {
         when {
             headphoneMenuExpanded -> headphoneMenuExpanded = false
+
             selectedTouchSlot != null -> selectedTouchSlot = null
+
             choiceDialog.value != null -> choiceDialog.value = null
+
             navBackStack.size > 1 -> navBackStack.removeLastOrNull()
+
             mainTabsPagerState.selectedPage != 0 -> {
                 mainTabsPagerState.selectPage(0, animate = uiSettings.pageTransition != PageTransition.NONE)
             }
@@ -145,156 +148,180 @@ fun OpenRoseApp(
                 rootFocusRequester.requestFocus()
             }
         }
-        BoxWithConstraints(modifier.fillMaxSize().focusRequester(rootFocusRequester).onPreviewKeyEvent {
-            if (it.type == KeyEventType.KeyUp && it.key == Key.Escape && canGoBack) {
-                back(); true
-            } else false
-        }.focusable()) {
-                val wide = maxWidth >= 900.dp
-                val onNavigate: (AppPage) -> Unit = ::navigate
-                val pageContentFor: @Composable (AppPage) -> Unit = { targetPage ->
-                    val device = state.activeDevice()
-                    when (targetPage) {
-                        AppPage.HEADPHONES -> HeadphonesPage(model, platformUi, onNavigate, primaryDeviceSelection)
-                        AppPage.ADD_DEVICE -> AddDeviceContent(
-                            state = state,
-                            canScan = state.canSearchForHeadphones(),
-                            selectedDeviceId = addDeviceFlow.selectedDeviceId,
-                            connectionPhase = addDeviceFlow.phase(state.connection),
-                            connectionError = addDeviceFlow.connectionError,
-                            onRequestPermission = platformUi.requestBluetoothPermission,
-                            onOpenSystemSettings = platformUi.openBluetoothSettings,
-                            onStartScan = addDeviceFlow::startSearch,
-                            onStopScan = addDeviceFlow::stopSearch,
-                            onConnect = addDeviceFlow::connect,
-                            onCancelConnection = addDeviceFlow::cancelConnection,
-                            onDiagnostics = { navigate(AppPage.DIAGNOSTICS) },
-                        )
-                        AppPage.STATUS -> StatusPage(
-                            model = model,
-                            platformUi = platformUi,
-                            onDiagnostics = { navigate(AppPage.DIAGNOSTICS) },
-                        )
-                        AppPage.SETTINGS -> PreferencesPage(model, platformUi, onPersonalization = { navigate(AppPage.PERSONALIZATION) })
-                        AppPage.PERSONALIZATION -> PersonalizationPage(model, wide = wide)
-                        AppPage.DIAGNOSTICS -> {
-                            PlatformDiagnosticsCard(model, platformUi)
-                            ConnectionDetailsCard(state, onDisconnect)
-                            SettingOperationsCard(state)
-                            device?.let { DeviceReadings(it, state.connection.phaseOrNull() == ConnectionPhase.INITIALIZING) }
-                        }
-                        else -> if (device != null) {
-                            val controlPage = targetPage in listOf(AppPage.TOUCH, AppPage.AUDIO)
-                            if (controlPage) {
-                                SettingPageBanner(state, device)
-                            }
-                            when (targetPage) {
-                                AppPage.TOUCH -> TouchControlCard(state, device, selectedTouchSlot,
-                                    { selectedTouchSlot = it }, onSet, selectedTouchSide, { selectedTouchSide = it })
-                                AppPage.AUDIO -> {
-                                    DeviceControlCard(state, device, onSet)
-                                    AppGroup {
-                                        AppArrowRow("设备详情", icon = RoseIcon.INFO) { navigate(AppPage.DETAILS) }
-                                        AppArrowRow("连接方式", value = state.controlTransportLabel(), icon = RoseIcon.BLUETOOTH) { navigate(AppPage.DIAGNOSTICS) }
-                                    }
-                                }
-                                AppPage.DETAILS -> {
-                                    ConnectionDetailsCard(state, onDisconnect)
-                                    AppGroup(title = "设备标识") {
-                                        AppInfoRow("型号配置", device.profile.configurationLabel)
-                                    }
-                                    DeviceReadings(device, state.connection.phaseOrNull() == ConnectionPhase.INITIALIZING)
-                                }
-                                else -> Unit
-                            }
-                        } else {
-                            AppGroup {
-                                AppInfoRow("耳机已断开", "连接耳机后，可查看和调整当前型号支持的功能。")
-                                AppButton("添加耳机", { navigate(AppPage.ADD_DEVICE) })
-                            }
-                        }
-                    }
+        BoxWithConstraints(
+            modifier.fillMaxSize().focusRequester(rootFocusRequester).onPreviewKeyEvent {
+                if (it.type == KeyEventType.KeyUp && it.key == Key.Escape && canGoBack) {
+                    back()
+                    true
+                } else {
+                    false
                 }
-                val feedbackContentFor: @Composable (AppPage) -> Unit = { targetPage ->
-                    val device = state.activeDevice()
-                    if ((targetPage == AppPage.HEADPHONES && device != null) ||
-                        targetPage in listOf(AppPage.TOUCH, AppPage.AUDIO)) {
-                        key(targetPage) {
-                            SettingFeedback(state, device) { navigate(AppPage.DIAGNOSTICS) }
-                        }
-                    }
-                }
-                val renderShell: @Composable (AppPage) -> Unit = { targetPage ->
-                    ProvideInterfaceStyle(uiSettings.interfaceStyle, dark) {
-                        val shellContent: @Composable () -> Unit = { pageContentFor(targetPage) }
-                        val shellFeedback: @Composable () -> Unit = { feedbackContentFor(targetPage) }
-                        when (uiSettings.interfaceStyle) {
-                            InterfaceStyle.MIUIX -> MiuixAppShell(
-                                page = targetPage,
-                                onBack = ::back,
-                                scrollState = scrollStates.getValue(targetPage),
-                                pageContent = shellContent,
-                                feedbackContent = shellFeedback,
-                            )
-                            InterfaceStyle.MATERIAL3 -> MaterialAppShell(
-                                page = targetPage,
-                                onBack = ::back,
-                                scrollState = scrollStates.getValue(targetPage),
-                                pageContent = shellContent,
-                                feedbackContent = shellFeedback,
-                            )
-                        }
-                    }
-                }
-                val renderMainShell: @Composable () -> Unit = {
-                    ProvideInterfaceStyle(uiSettings.interfaceStyle, dark) {
-                        val isConnectedHome = state.activeDevice() != null
-                        val animatePageChanges = uiSettings.pageTransition != PageTransition.NONE
-                        val onNavigate: (AppPage) -> Unit = { navigate(it) }
-                        val platformActions: @Composable (AppPage) -> Unit = { actionPage ->
-                            when (actionPage) {
-                                AppPage.STATUS -> platformUi.StatusActions()
-                                AppPage.HEADPHONES -> platformUi.HeadphoneActions()
-                                else -> Unit
-                            }
-                        }
+            }.focusable(),
+        ) {
+            val wide = maxWidth >= 900.dp
+            val onNavigate: (AppPage) -> Unit = ::navigate
+            val pageContentFor: @Composable (AppPage) -> Unit = { targetPage ->
+                val device = state.activeDevice()
+                when (targetPage) {
+                    AppPage.HEADPHONES -> HeadphonesPage(model, platformUi, onNavigate, primaryDeviceSelection)
 
-                        when (uiSettings.interfaceStyle) {
-                            InterfaceStyle.MIUIX -> MiuixMainShell(
-                                pagerState = mainTabsPagerState,
-                                wide = wide,
-                                bottomBarStyle = uiSettings.bottomBarStyle,
-                                onNavigate = onNavigate,
-                                scrollStates = scrollStates,
-                                pageContentFor = { targetPage -> pageContentFor(targetPage) },
-                                pageFeedbackFor = { targetPage -> feedbackContentFor(targetPage) },
-                                connectedHome = isConnectedHome,
-                                menuExpanded = headphoneMenuExpanded,
-                                onMenuExpandedChange = { headphoneMenuExpanded = it },
-                                onDisconnect = onDisconnect,
-                                platformActions = platformActions,
-                                animatePageChanges = animatePageChanges,
+                    AppPage.ADD_DEVICE -> AddDeviceContent(
+                        state = state,
+                        canScan = state.canSearchForHeadphones(),
+                        selectedDeviceId = addDeviceFlow.selectedDeviceId,
+                        connectionPhase = addDeviceFlow.phase(state.connection),
+                        connectionError = addDeviceFlow.connectionError,
+                        onRequestPermission = platformUi.requestBluetoothPermission,
+                        onOpenSystemSettings = platformUi.openBluetoothSettings,
+                        onStartScan = addDeviceFlow::startSearch,
+                        onStopScan = addDeviceFlow::stopSearch,
+                        onConnect = addDeviceFlow::connect,
+                        onCancelConnection = addDeviceFlow::cancelConnection,
+                        onDiagnostics = { navigate(AppPage.DIAGNOSTICS) },
+                    )
+
+                    AppPage.STATUS -> StatusPage(
+                        model = model,
+                        platformUi = platformUi,
+                        onDiagnostics = { navigate(AppPage.DIAGNOSTICS) },
+                    )
+
+                    AppPage.SETTINGS -> PreferencesPage(model, platformUi, onPersonalization = { navigate(AppPage.PERSONALIZATION) })
+
+                    AppPage.PERSONALIZATION -> PersonalizationPage(model, wide = wide)
+
+                    AppPage.DIAGNOSTICS -> {
+                        PlatformDiagnosticsCard(model, platformUi)
+                        ConnectionDetailsCard(state, onDisconnect)
+                        SettingOperationsCard(state)
+                        device?.let { DeviceReadings(it, state.connection.phaseOrNull() == ConnectionPhase.INITIALIZING) }
+                    }
+
+                    else -> if (device != null) {
+                        val controlPage = targetPage in listOf(AppPage.TOUCH, AppPage.AUDIO)
+                        if (controlPage) {
+                            SettingPageBanner(state, device)
+                        }
+                        when (targetPage) {
+                            AppPage.TOUCH -> TouchControlCard(
+                                state,
+                                device,
+                                selectedTouchSlot,
+                                { selectedTouchSlot = it },
+                                onSet,
+                                selectedTouchSide,
+                                { selectedTouchSide = it },
                             )
-                            InterfaceStyle.MATERIAL3 -> MaterialMainShell(
-                                pagerState = mainTabsPagerState,
-                                wide = wide,
-                                bottomBarStyle = uiSettings.bottomBarStyle,
-                                onNavigate = onNavigate,
-                                scrollStates = scrollStates,
-                                pageContentFor = { targetPage -> pageContentFor(targetPage) },
-                                pageFeedbackFor = { targetPage -> feedbackContentFor(targetPage) },
-                                connectedHome = isConnectedHome,
-                                menuExpanded = headphoneMenuExpanded,
-                                onMenuExpandedChange = { headphoneMenuExpanded = it },
-                                onDisconnect = onDisconnect,
-                                platformActions = platformActions,
-                                animatePageChanges = animatePageChanges,
-                            )
+
+                            AppPage.AUDIO -> {
+                                DeviceControlCard(state, device, onSet)
+                                AppGroup {
+                                    AppArrowRow("设备详情", icon = RoseIcon.INFO) { navigate(AppPage.DETAILS) }
+                                    AppArrowRow("连接方式", value = state.controlTransportLabel(), icon = RoseIcon.BLUETOOTH) { navigate(AppPage.DIAGNOSTICS) }
+                                }
+                            }
+
+                            AppPage.DETAILS -> {
+                                ConnectionDetailsCard(state, onDisconnect)
+                                AppGroup(title = "设备标识") {
+                                    AppInfoRow("型号配置", device.profile.configurationLabel)
+                                }
+                                DeviceReadings(device, state.connection.phaseOrNull() == ConnectionPhase.INITIALIZING)
+                            }
+
+                            else -> Unit
+                        }
+                    } else {
+                        AppGroup {
+                            AppInfoRow("耳机已断开", "连接耳机后，可查看和调整当前型号支持的功能。")
+                            AppButton("添加耳机", { navigate(AppPage.ADD_DEVICE) })
                         }
                     }
                 }
-                val railTab = mainPages.getOrElse(mainTabsPagerState.selectedPage) { AppPage.HEADPHONES }
-                Row(Modifier.fillMaxSize()) {
+            }
+            val feedbackContentFor: @Composable (AppPage) -> Unit = { targetPage ->
+                val device = state.activeDevice()
+                if ((targetPage == AppPage.HEADPHONES && device != null) ||
+                    targetPage in listOf(AppPage.TOUCH, AppPage.AUDIO)
+                ) {
+                    key(targetPage) {
+                        SettingFeedback(state, device) { navigate(AppPage.DIAGNOSTICS) }
+                    }
+                }
+            }
+            val renderShell: @Composable (AppPage) -> Unit = { targetPage ->
+                ProvideInterfaceStyle(uiSettings.interfaceStyle, dark) {
+                    val shellContent: @Composable () -> Unit = { pageContentFor(targetPage) }
+                    val shellFeedback: @Composable () -> Unit = { feedbackContentFor(targetPage) }
+                    when (uiSettings.interfaceStyle) {
+                        InterfaceStyle.MIUIX -> MiuixAppShell(
+                            page = targetPage,
+                            onBack = ::back,
+                            scrollState = scrollStates.getValue(targetPage),
+                            pageContent = shellContent,
+                            feedbackContent = shellFeedback,
+                        )
+
+                        InterfaceStyle.MATERIAL3 -> MaterialAppShell(
+                            page = targetPage,
+                            onBack = ::back,
+                            scrollState = scrollStates.getValue(targetPage),
+                            pageContent = shellContent,
+                            feedbackContent = shellFeedback,
+                        )
+                    }
+                }
+            }
+            val renderMainShell: @Composable () -> Unit = {
+                ProvideInterfaceStyle(uiSettings.interfaceStyle, dark) {
+                    val isConnectedHome = state.activeDevice() != null
+                    val animatePageChanges = uiSettings.pageTransition != PageTransition.NONE
+                    val onNavigate: (AppPage) -> Unit = { navigate(it) }
+                    val platformActions: @Composable (AppPage) -> Unit = { actionPage ->
+                        when (actionPage) {
+                            AppPage.STATUS -> platformUi.StatusActions()
+                            AppPage.HEADPHONES -> platformUi.HeadphoneActions()
+                            else -> Unit
+                        }
+                    }
+
+                    when (uiSettings.interfaceStyle) {
+                        InterfaceStyle.MIUIX -> MiuixMainShell(
+                            pagerState = mainTabsPagerState,
+                            wide = wide,
+                            bottomBarStyle = uiSettings.bottomBarStyle,
+                            onNavigate = onNavigate,
+                            scrollStates = scrollStates,
+                            pageContentFor = { targetPage -> pageContentFor(targetPage) },
+                            pageFeedbackFor = { targetPage -> feedbackContentFor(targetPage) },
+                            connectedHome = isConnectedHome,
+                            menuExpanded = headphoneMenuExpanded,
+                            onMenuExpandedChange = { headphoneMenuExpanded = it },
+                            onDisconnect = onDisconnect,
+                            platformActions = platformActions,
+                            animatePageChanges = animatePageChanges,
+                        )
+
+                        InterfaceStyle.MATERIAL3 -> MaterialMainShell(
+                            pagerState = mainTabsPagerState,
+                            wide = wide,
+                            bottomBarStyle = uiSettings.bottomBarStyle,
+                            onNavigate = onNavigate,
+                            scrollStates = scrollStates,
+                            pageContentFor = { targetPage -> pageContentFor(targetPage) },
+                            pageFeedbackFor = { targetPage -> feedbackContentFor(targetPage) },
+                            connectedHome = isConnectedHome,
+                            menuExpanded = headphoneMenuExpanded,
+                            onMenuExpandedChange = { headphoneMenuExpanded = it },
+                            onDisconnect = onDisconnect,
+                            platformActions = platformActions,
+                            animatePageChanges = animatePageChanges,
+                        )
+                    }
+                }
+            }
+            val railTab = mainPages.getOrElse(mainTabsPagerState.selectedPage) { AppPage.HEADPHONES }
+            Row(Modifier.fillMaxSize()) {
                 if (wide) {
                     // Beside the route stack, not inside it, so page transitions never carry the rail.
                     // The add-device flow takes the full width, as on narrow screens.
@@ -348,10 +375,10 @@ fun OpenRoseApp(
                         }
                     }
                 }
-                }
             }
         }
     }
+}
 
 internal val AppPage.navigationLabel: String
     get() = when (this) {

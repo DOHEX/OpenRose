@@ -1,6 +1,5 @@
 package io.github.dohex.openrose.core
 
-import kotlinx.collections.immutable.persistentSetOf
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.FieldReading
 import io.github.dohex.openrose.core.protocol.FieldValue
@@ -10,21 +9,22 @@ import io.github.dohex.openrose.core.transport.ControlConnection
 import io.github.dohex.openrose.core.transport.ControlTransport
 import io.github.dohex.openrose.core.transport.DeviceId
 import io.github.dohex.openrose.core.transport.TransportEndpoint
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFalse
-import kotlin.test.assertIs
-import kotlin.test.assertTrue
+import kotlinx.collections.immutable.persistentSetOf
 import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.FlowCollector
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.receiveAsFlow
-import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertIs
+import kotlin.test.assertTrue
 
 /** Session seam with independent TX literals and explicitly synthetic setting RX. */
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
@@ -194,9 +194,13 @@ class ControlSessionEqualizerTest {
             val (session, link) = ready(profile)
             val count = link.writes.size
             for ((setting, value) in listOf(
-                DeviceSetting.EQ to FieldValue.Number(0), DeviceSetting.EQ to FieldValue.Toggle(true),
-                DeviceSetting.GAME_MODE to FieldValue.Text("on"), DeviceSetting.GAME_MODE to FieldValue.Number(1),
-            )) assertEquals(ControlErrorCode.INVALID_ARGUMENT, assertIs<OperationResult.Failure>(session.set(setting, value)).error.code, profile.name)
+                DeviceSetting.EQ to FieldValue.Number(0),
+                DeviceSetting.EQ to FieldValue.Toggle(true),
+                DeviceSetting.GAME_MODE to FieldValue.Text("on"),
+                DeviceSetting.GAME_MODE to FieldValue.Number(1),
+            )) {
+                assertEquals(ControlErrorCode.INVALID_ARGUMENT, assertIs<OperationResult.Failure>(session.set(setting, value)).error.code, profile.name)
+            }
             for (preset in listOf("custom", "custom_slot", "game1", "missing")) {
                 assertEquals(ControlErrorCode.UNSUPPORTED, assertIs<OperationResult.Failure>(session.set(DeviceSetting.EQ, FieldValue.Text(preset))).error.code, profile.name)
             }
@@ -266,12 +270,18 @@ class ControlSessionEqualizerTest {
     private suspend fun TestScope.ready(profile: ModelProfile, firmwareReply: String? = "dd00040d010502f6aa"): Pair<ControlSession, EqualizerLink> {
         val link = EqualizerLink(profile, firmwareReply)
         val transport = EqualizerTransport(link)
-        val session = ControlSession(PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
-            transport = transport, scope = backgroundScope,
-            timing = SessionTiming(queryTimeoutMillis = 50, i5WriteIntervalMillis = 0, i7WriteIntervalMillis = 0))
+        val session = ControlSession(
+            PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
+            transport = transport,
+            scope = backgroundScope,
+            timing = SessionTiming(queryTimeoutMillis = 50, i5WriteIntervalMillis = 0, i7WriteIntervalMillis = 0),
+        )
         session.startScan()
-        val advertisement = if (profile == ModelProfile.I5_ZT) Advertisement(DeviceId("i5"), manufacturerData = mapOf(0x5352 to byteArrayOf(0, 1, 0, 1)))
-            else Advertisement(DeviceId("i7"), manufacturerData = mapOf(0xe5b8 to byteArrayOf(0x29, 0x0f)))
+        val advertisement = if (profile == ModelProfile.I5_ZT) {
+            Advertisement(DeviceId("i5"), manufacturerData = mapOf(0x5352 to byteArrayOf(0, 1, 0, 1)))
+        } else {
+            Advertisement(DeviceId("i7"), manufacturerData = mapOf(0xe5b8 to byteArrayOf(0x29, 0x0f)))
+        }
         transport.advertisements.emit(advertisement)
         runCurrent()
         assertEquals(OperationResult.Success, session.connect(advertisement.deviceId))
@@ -296,21 +306,25 @@ class ControlSessionEqualizerTest {
             val hex = bytes.hex()
             writes += hex
             if (initializing) {
-                if (profile == ModelProfile.I5_ZT) i5Replies[hex.substring(10, 14)]?.let { incoming.send(it.bytes()) }
-                else {
+                if (profile == ModelProfile.I5_ZT) {
+                    i5Replies[hex.substring(10, 14)]?.let { incoming.send(it.bytes()) }
+                } else {
                     // Synthetic i7 mode + game off + single-byte HIFI, then optional firmware.
                     incoming.send("dd00020901e9aadd00020e00edaadd00022a0009aa".bytes())
                     firmwareReply?.let { incoming.send(it.bytes()) }
                 }
             }
         }
-        override suspend fun close() { incoming.close() }
+        override suspend fun close() {
+            incoming.close()
+        }
     }
 
     companion object {
         private fun reading(session: ControlSession, field: DeviceField) = assertIs<FieldReading.Known>(session.state.value.device?.fields?.get(field)).value
         private fun ByteArray.hex() = joinToString("") { (it.toInt() and 255).toString(16).padStart(2, '0') }
         private fun String.bytes() = chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+
         // Independent i5 Linux read capture; setting confirmations below are synthetic.
         private val i5Replies = mapOf(
             "0101" to "09ff00000101011100000164620000ffe2", "0602" to "09ff00000106020e000000010020",

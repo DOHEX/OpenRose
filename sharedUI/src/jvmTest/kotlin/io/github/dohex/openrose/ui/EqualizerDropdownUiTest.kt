@@ -2,16 +2,16 @@
 
 package io.github.dohex.openrose.ui
 
-import kotlinx.collections.immutable.persistentListOf
-import kotlinx.collections.immutable.persistentMapOf
-import kotlinx.collections.immutable.persistentSetOf
-import kotlinx.collections.immutable.plus
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import io.github.dohex.openrose.core.*
 import io.github.dohex.openrose.core.protocol.*
 import io.github.dohex.openrose.core.transport.DeviceId
+import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.persistentMapOf
+import kotlinx.collections.immutable.persistentSetOf
+import kotlinx.collections.immutable.plus
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -25,20 +25,22 @@ class EqualizerDropdownUiTest {
             Triple(ModelProfile.I7_RS_V2, listOf(1, 5, 1), listOf("弱水经典 · POP", "原声再现 · HIFI", "古典乐器 · ROCK", "日系甜美 · LIGHT")),
             Triple(ModelProfile.I7_RS_V2, listOf(1, 5, 2), listOf("弱水经典 · POP", "原声再现 · HIFI", "古典乐器 · ROCK", "日系甜美 · LIGHT", "欧美流行 · EAP")),
         )
-        for (style in InterfaceStyle.entries) for ((profile, firmware, labels) in scenarios) {
-            withHarness(style, profile, firmware) { harness ->
-                harness.render()
-                harness.clickText("均衡器")
-                harness.render()
-                assertTrue(harness.hasText("设备详情"), "picker remains on home in $style")
-                labels.forEach { assertTrue(harness.hasText(it), "$it missing in $style") }
-                assertEquals(labels.size == 5, harness.hasText("欧美流行 · EAP"))
-                val optionTops = labels.map { label ->
-                    harness.nodes().last { node ->
-                        node.config.getOrNull(SemanticsProperties.Text).orEmpty().any { it.text == label }
-                    }.boundsInRoot.top
+        for (style in InterfaceStyle.entries) {
+            for ((profile, firmware, labels) in scenarios) {
+                withHarness(style, profile, firmware) { harness ->
+                    harness.render()
+                    harness.clickText("均衡器")
+                    harness.render()
+                    assertTrue(harness.hasText("设备详情"), "picker remains on home in $style")
+                    labels.forEach { assertTrue(harness.hasText(it), "$it missing in $style") }
+                    assertEquals(labels.size == 5, harness.hasText("欧美流行 · EAP"))
+                    val optionTops = labels.map { label ->
+                        harness.nodes().last { node ->
+                            node.config.getOrNull(SemanticsProperties.Text).orEmpty().any { it.text == label }
+                        }.boundsInRoot.top
+                    }
+                    assertTrue(optionTops.zipWithNext().all { (a, b) -> a < b }, "preset order in $style")
                 }
-                assertTrue(optionTops.zipWithNext().all { (a, b) -> a < b }, "preset order in $style")
             }
         }
     }
@@ -61,8 +63,12 @@ class EqualizerDropdownUiTest {
                 assertTrue(harness.hasSelectedText("弱水经典 · POP"))
                 harness.clickText("弱水经典 · POP")
                 val device = requireNotNull(harness.state.value.device)
-                harness.state.value = harness.state.value.copy(device = device.copy(fields = device.fields +
-                    (DeviceField.EQ to FieldReading.Known(FieldValue.Text("hifi"), "01"))))
+                harness.state.value = harness.state.value.copy(
+                    device = device.copy(
+                        fields = device.fields +
+                            (DeviceField.EQ to FieldReading.Known(FieldValue.Text("hifi"), "01")),
+                    ),
+                )
                 harness.render()
                 assertTrue(harness.hasText("原声再现 · HIFI"))
                 harness.clickText("均衡器")
@@ -105,10 +111,17 @@ class EqualizerDropdownUiTest {
                     harness.render()
                     assertFalse(harness.hasText("日系柔情 · HIFI"), "initializing in $style")
                 }
-                harness.state.value = ready.copy(settingOperations = persistentListOf(SettingOperation(
-                    id = 1, sessionId = 42L, setting = DeviceSetting.EQ,
-                    requestedValue = FieldValue.Text("hifi"), stage = SettingStage.SUBMITTED,
-                )))
+                harness.state.value = ready.copy(
+                    settingOperations = persistentListOf(
+                        SettingOperation(
+                            id = 1,
+                            sessionId = 42L,
+                            setting = DeviceSetting.EQ,
+                            requestedValue = FieldValue.Text("hifi"),
+                            stage = SettingStage.SUBMITTED,
+                        ),
+                    ),
+                )
                 harness.render()
                 if (style == InterfaceStyle.MATERIAL3) {
                     assertTrue(harness.hasDisabledText("均衡器"), "pending in $style")
@@ -148,15 +161,24 @@ class EqualizerDropdownUiTest {
     ) {
         val id = DeviceId("eq-test")
         val firmware = FieldValue.Firmware(parts, parts.joinToString(""))
-        val device = DeviceState(id, 42L, profile, DeviceCapabilities(
-            readableFields = persistentSetOf(DeviceField.EQ), writableSettings = persistentSetOf(DeviceSetting.EQ),
-            equalizer = equalizerCapabilities(profile, firmware),
-        ), fields = persistentMapOf(DeviceField.EQ to FieldReading.Known(FieldValue.Text("pop"), "00")))
-        val state = mutableStateOf(ControlState(
-            platform = PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
-            connection = ConnectionState.Connected(id, 42L, profile, ConnectionPhase.READY),
-            device = device,
-        ))
+        val device = DeviceState(
+            id,
+            42L,
+            profile,
+            DeviceCapabilities(
+                readableFields = persistentSetOf(DeviceField.EQ),
+                writableSettings = persistentSetOf(DeviceSetting.EQ),
+                equalizer = equalizerCapabilities(profile, firmware),
+            ),
+            fields = persistentMapOf(DeviceField.EQ to FieldReading.Known(FieldValue.Text("pop"), "00")),
+        )
+        val state = mutableStateOf(
+            ControlState(
+                platform = PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
+                connection = ConnectionState.Connected(id, 42L, profile, ConnectionPhase.READY),
+                device = device,
+            ),
+        )
         val uiSettings = mutableStateOf(UiSettings(interfaceStyle = style))
         val writes = mutableListOf<Pair<DeviceSetting, FieldValue>>()
         val model = FakeOpenRoseModel(state, uiSettings).apply {

@@ -28,23 +28,19 @@ internal fun rememberBackdropBlurActive(settings: UiSettings): Boolean {
 }
 
 @Composable
-internal fun rememberAppBackdrop(surfaceColor: Color, active: Boolean): Backdrop? {
-    return if (active) {
-        rememberLayerBackdrop {
-            drawRect(surfaceColor)
-            drawContent()
-        }
-    } else {
-        null
+internal fun rememberAppBackdrop(surfaceColor: Color, active: Boolean): Backdrop? = if (active) {
+    rememberLayerBackdrop {
+        drawRect(surfaceColor)
+        drawContent()
     }
+} else {
+    null
 }
 
-internal fun Modifier.appBackdropContent(backdrop: Backdrop?, active: Boolean): Modifier {
-    return if (active && backdrop is LayerBackdrop) {
-        this.layerBackdrop(backdrop)
-    } else {
-        this
-    }
+internal fun Modifier.appBackdropContent(backdrop: Backdrop?, active: Boolean): Modifier = if (active && backdrop is LayerBackdrop) {
+    this.layerBackdrop(backdrop)
+} else {
+    this
 }
 
 internal fun Modifier.appBarBackdropBlur(
@@ -52,18 +48,16 @@ internal fun Modifier.appBarBackdropBlur(
     surfaceColor: Color,
     active: Boolean,
     blurRadius: Float = 25f,
-): Modifier {
-    return if (active && backdrop != null) {
-        this
-            .textureBlur(
-                backdrop = backdrop,
-                shape = RectangleShape,
-                blurRadius = blurRadius,
-            )
-            .background(surfaceColor.copy(alpha = 0.75f))
-    } else {
-        this.background(surfaceColor)
-    }
+): Modifier = if (active && backdrop != null) {
+    this
+        .textureBlur(
+            backdrop = backdrop,
+            shape = RectangleShape,
+            blurRadius = blurRadius,
+        )
+        .background(surfaceColor.copy(alpha = 0.75f))
+} else {
+    this.background(surfaceColor)
 }
 
 internal fun Modifier.appPopupBackdropBlur(
@@ -72,16 +66,14 @@ internal fun Modifier.appPopupBackdropBlur(
     surfaceColor: Color,
     active: Boolean,
     blurRadius: Float = 25f,
-): Modifier {
-    return if (active && backdrop != null) {
-        this
-            .textureBlur(
-                backdrop = backdrop,
-                shape = shape,
-                blurRadius = blurRadius,
-            )
-            .background(surfaceColor.copy(alpha = 0.85f), shape)
-    } else {
-        this.background(surfaceColor, shape)
-    }
+): Modifier = if (active && backdrop != null) {
+    this
+        .textureBlur(
+            backdrop = backdrop,
+            shape = shape,
+            blurRadius = blurRadius,
+        )
+        .background(surfaceColor.copy(alpha = 0.85f), shape)
+} else {
+    this.background(surfaceColor, shape)
 }

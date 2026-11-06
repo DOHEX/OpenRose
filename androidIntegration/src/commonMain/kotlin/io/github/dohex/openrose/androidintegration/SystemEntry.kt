@@ -73,7 +73,8 @@ class SystemEntryRuntime(
     private val scope: CoroutineScope,
     private val timing: PresentationTiming = PresentationTiming(),
     initialIntegrationSettings: IntegrationSettings = IntegrationSettings(),
-) : ControlRuntime by control, SystemEntry {
+) : ControlRuntime by control,
+    SystemEntry {
     /** [consumed] is the session whose connection event was used up; it never prompts again. */
     private data class Prompts(val consumed: SessionReference? = null, val prompt: ConnectionPrompt? = null)
 
@@ -97,8 +98,7 @@ class SystemEntryRuntime(
     }
 
     /** Prompt claims and expiry wake readers without combining independently derived session views. */
-    internal fun views(generation: OwnerGeneration): Flow<OwnerView> =
-        combine(control.state, prompts, integrationSettings) { _, _, _ -> view(generation) }.distinctUntilChanged()
+    internal fun views(generation: OwnerGeneration): Flow<OwnerView> = combine(control.state, prompts, integrationSettings) { _, _, _ -> view(generation) }.distinctUntilChanged()
 
     override suspend fun connectFromSystem(deviceId: DeviceId): OperationResult = control.connect(deviceId, pinned = true)
 
@@ -165,7 +165,9 @@ class SystemEntryRuntime(
                         reference = session,
                         durationMillis = timing.connectionPromptDurationMillis,
                     )
-                } else null
+                } else {
+                    null
+                }
                 installed = prompt
                 Prompts(consumed = session, prompt = prompt)
             }
@@ -201,4 +203,3 @@ private fun DeviceState.hasTrustedEarBattery(): Boolean = listOf(DeviceField.LEF
     val value = (fields[field] as? FieldReading.Known)?.value as? FieldValue.Number
     value?.value in 0..100
 }
-

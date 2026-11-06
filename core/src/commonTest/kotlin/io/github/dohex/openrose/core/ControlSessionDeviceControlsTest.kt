@@ -1,6 +1,5 @@
 package io.github.dohex.openrose.core
 
-import kotlinx.collections.immutable.persistentSetOf
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.FieldReading
 import io.github.dohex.openrose.core.protocol.FieldValue
@@ -10,11 +9,7 @@ import io.github.dohex.openrose.core.transport.ControlConnection
 import io.github.dohex.openrose.core.transport.ControlTransport
 import io.github.dohex.openrose.core.transport.DeviceId
 import io.github.dohex.openrose.core.transport.TransportEndpoint
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFalse
-import kotlin.test.assertIs
-import kotlin.test.assertTrue
+import kotlinx.collections.immutable.persistentSetOf
 import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
@@ -24,6 +19,11 @@ import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertIs
+import kotlin.test.assertTrue
 
 /** Public session with independent sender literals and synthetic device notifications. */
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
@@ -279,17 +279,21 @@ class ControlSessionDeviceControlsTest {
     fun touchAndDetectionSwitchesUseInversePolarityWithoutChangingOtherFacts() = runTest {
         for (profile in ModelProfile.entries) {
             val (session, link) = ready(profile)
-            val vectors = if (profile == ModelProfile.I5_ZT) listOf(
-                SwitchVector(DeviceSetting.TOUCH_ENABLED, false, "08ee0000000a810b00018d", "08ee0000000a010a000b", "09ff0000010a010b000120"),
-                SwitchVector(DeviceSetting.TOUCH_ENABLED, true, "08ee0000000a810b00008c", "08ee0000000a010a000b", "09ff0000010a010b00001f"),
-                SwitchVector(DeviceSetting.EAR_DETECTION, true, "08ee0000000c810b00008e", "08ee0000000c010a000d", "09ff0000010c010b000021"),
-                SwitchVector(DeviceSetting.EAR_DETECTION, false, "08ee0000000c810b00018f", "08ee0000000c010a000d", "09ff0000010c010b000122"),
-            ) else listOf(
-                SwitchVector(DeviceSetting.TOUCH_ENABLED, false, "ff040207010daa", "ff0502fa0707aa", "dd00020701e7aa"),
-                SwitchVector(DeviceSetting.TOUCH_ENABLED, true, "ff060207000eaa", "ff0702fa0709aa", "dd00020700e6aa"),
-                SwitchVector(DeviceSetting.EAR_DETECTION, true, "ff0802080011aa", "ff0902fa080caa", "dd00020800e7aa"),
-                SwitchVector(DeviceSetting.EAR_DETECTION, false, "ff0a02080114aa", "ff0b02fa080eaa", "dd00020801e8aa"),
-            )
+            val vectors = if (profile == ModelProfile.I5_ZT) {
+                listOf(
+                    SwitchVector(DeviceSetting.TOUCH_ENABLED, false, "08ee0000000a810b00018d", "08ee0000000a010a000b", "09ff0000010a010b000120"),
+                    SwitchVector(DeviceSetting.TOUCH_ENABLED, true, "08ee0000000a810b00008c", "08ee0000000a010a000b", "09ff0000010a010b00001f"),
+                    SwitchVector(DeviceSetting.EAR_DETECTION, true, "08ee0000000c810b00008e", "08ee0000000c010a000d", "09ff0000010c010b000021"),
+                    SwitchVector(DeviceSetting.EAR_DETECTION, false, "08ee0000000c810b00018f", "08ee0000000c010a000d", "09ff0000010c010b000122"),
+                )
+            } else {
+                listOf(
+                    SwitchVector(DeviceSetting.TOUCH_ENABLED, false, "ff040207010daa", "ff0502fa0707aa", "dd00020701e7aa"),
+                    SwitchVector(DeviceSetting.TOUCH_ENABLED, true, "ff060207000eaa", "ff0702fa0709aa", "dd00020700e6aa"),
+                    SwitchVector(DeviceSetting.EAR_DETECTION, true, "ff0802080011aa", "ff0902fa080caa", "dd00020800e7aa"),
+                    SwitchVector(DeviceSetting.EAR_DETECTION, false, "ff0a02080114aa", "ff0b02fa080eaa", "dd00020801e8aa"),
+                )
+            }
             for ((setting, enabled, write, query, reply) in vectors) {
                 val field = if (setting == DeviceSetting.TOUCH_ENABLED) DeviceField.TOUCH_ENABLED else DeviceField.EAR_DETECTION
                 val before = requireNotNull(session.state.value.device).fields
@@ -320,7 +324,9 @@ class ControlSessionDeviceControlsTest {
                 DeviceSetting.EAR_DETECTION to FieldValue.Text("on"),
                 DeviceSetting.AUDIO_MODE to FieldValue.Toggle(true),
                 DeviceSetting.MULTIPOINT to FieldValue.Number(1),
-            )) assertEquals(ControlErrorCode.INVALID_ARGUMENT, assertIs<OperationResult.Failure>(session.set(setting, value)).error.code, "$profile/$setting")
+            )) {
+                assertEquals(ControlErrorCode.INVALID_ARGUMENT, assertIs<OperationResult.Failure>(session.set(setting, value)).error.code, "$profile/$setting")
+            }
             assertEquals(ControlErrorCode.UNSUPPORTED, assertIs<OperationResult.Failure>(session.set(DeviceSetting.TOUCH_BINDING, FieldValue.TouchAssignment("left", "single", "find"))).error.code)
             assertEquals(ControlErrorCode.UNSUPPORTED, assertIs<OperationResult.Failure>(session.set(DeviceSetting.AUDIO_MODE, FieldValue.Text("spatial"))).error.code)
             if (profile == ModelProfile.I5_ZT) {
@@ -391,12 +397,18 @@ class ControlSessionDeviceControlsTest {
             override fun scan(): Flow<Advertisement> = advertisements
             override suspend fun connect(deviceId: DeviceId, endpoint: TransportEndpoint, onPhase: (ConnectionPhase) -> Unit): ControlConnection = link
         }
-        val session = ControlSession(PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
-            transport = transport, scope = backgroundScope,
-            timing = SessionTiming(queryTimeoutMillis = 50, i5WriteIntervalMillis = 0, i7WriteIntervalMillis = 0))
+        val session = ControlSession(
+            PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
+            transport = transport,
+            scope = backgroundScope,
+            timing = SessionTiming(queryTimeoutMillis = 50, i5WriteIntervalMillis = 0, i7WriteIntervalMillis = 0),
+        )
         session.startScan()
-        val advertisement = if (profile == ModelProfile.I5_ZT) Advertisement(DeviceId("i5"), manufacturerData = mapOf(0x5352 to byteArrayOf(0, 1, 0, 1)))
-            else Advertisement(DeviceId("i7"), manufacturerData = mapOf(0xe5b8 to byteArrayOf(0x29, 0x0f)))
+        val advertisement = if (profile == ModelProfile.I5_ZT) {
+            Advertisement(DeviceId("i5"), manufacturerData = mapOf(0x5352 to byteArrayOf(0, 1, 0, 1)))
+        } else {
+            Advertisement(DeviceId("i7"), manufacturerData = mapOf(0xe5b8 to byteArrayOf(0x29, 0x0f)))
+        }
         transport.advertisements.emit(advertisement)
         runCurrent()
         assertEquals(OperationResult.Success, session.connect(advertisement.deviceId))
@@ -415,12 +427,21 @@ class ControlSessionDeviceControlsTest {
             val hex = bytes.hex()
             writes += hex
             if (initializing) {
-                if (profile == ModelProfile.I5_ZT) i5Replies[hex.substring(10, 14)]?.let { incoming.send(it.bytes()) }
-                else incoming.send(("dd00020901e9aa" + "dd00022b000aaa" + "dd0002320011aa" +
-                    "dd00020700e6aa" + "dd00020801e8aa" + "dd0011010100020003000400110012001300140043aa").bytes())
+                if (profile == ModelProfile.I5_ZT) {
+                    i5Replies[hex.substring(10, 14)]?.let { incoming.send(it.bytes()) }
+                } else {
+                    incoming.send(
+                        (
+                            "dd00020901e9aa" + "dd00022b000aaa" + "dd0002320011aa" +
+                                "dd00020700e6aa" + "dd00020801e8aa" + "dd0011010100020003000400110012001300140043aa"
+                            ).bytes(),
+                    )
+                }
             }
         }
-        override suspend fun close() { incoming.close() }
+        override suspend fun close() {
+            incoming.close()
+        }
     }
 
     companion object {
@@ -428,6 +449,7 @@ class ControlSessionDeviceControlsTest {
         private fun reading(session: ControlSession, field: DeviceField) = assertIs<FieldReading.Known>(session.state.value.device?.fields?.get(field)).value
         private fun ByteArray.hex() = joinToString("") { (it.toInt() and 255).toString(16).padStart(2, '0') }
         private fun String.bytes() = chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+
         // Independent Linux initialization capture; settings above use synthetic RX.
         private val i5Replies = mapOf(
             "0101" to "09ff00000101011100000164620000ffe2", "0602" to "09ff00000106020e000000010020",

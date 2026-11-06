@@ -150,7 +150,9 @@ internal fun rememberAddDeviceFlow(
     }
     LaunchedEffect(active, canScan) {
         if (active) {
-            if (canScan) flow.startSearch() else {
+            if (canScan) {
+                flow.startSearch()
+            } else {
                 flow.stopSearch()
                 flow.cancelConnection()
             }
@@ -166,7 +168,5 @@ internal fun rememberAddDeviceFlow(
     return flow
 }
 
-internal fun ControlState.canSearchForHeadphones(): Boolean =
-    platform.transport == TransportAvailability.Available &&
-        (platform.permission == PermissionState.GRANTED || platform.permission == PermissionState.NOT_REQUIRED)
-
+internal fun ControlState.canSearchForHeadphones(): Boolean = platform.transport == TransportAvailability.Available &&
+    (platform.permission == PermissionState.GRANTED || platform.permission == PermissionState.NOT_REQUIRED)

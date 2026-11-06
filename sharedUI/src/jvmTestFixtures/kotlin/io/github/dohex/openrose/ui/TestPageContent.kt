@@ -20,6 +20,7 @@ internal fun TestPageContent(
             InterfaceStyle.MIUIX -> Scaffold(Modifier.fillMaxSize()) { padding ->
                 Box(Modifier.fillMaxSize().padding(padding)) { content() }
             }
+
             InterfaceStyle.MATERIAL3 -> Surface(Modifier.fillMaxSize()) { content() }
         }
     }

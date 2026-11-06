@@ -1,7 +1,5 @@
 package io.github.dohex.openrose.androidintegration
 
-import kotlinx.collections.immutable.persistentSetOf
-
 import io.github.dohex.openrose.core.ConnectionState
 import io.github.dohex.openrose.core.ControlErrorCode
 import io.github.dohex.openrose.core.ControlState
@@ -17,6 +15,12 @@ import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.FieldReading
 import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.dohex.openrose.core.transport.DeviceId
+import kotlinx.collections.immutable.persistentSetOf
+import kotlinx.coroutines.async
+import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -24,11 +28,6 @@ import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
-import kotlinx.coroutines.async
-import kotlinx.coroutines.test.TestScope
-import kotlinx.coroutines.test.advanceTimeBy
-import kotlinx.coroutines.test.runCurrent
-import kotlinx.coroutines.test.runTest
 
 private val xiaomiIdentity = CallerIdentity(10_060, 1_001, setOf("com.xiaomi.bluetooth"), "com.xiaomi.bluetooth")
 private val hostUiIdentity = CallerIdentity(1_002, 777, setOf(HOST_PACKAGE), HOST_PACKAGE)
@@ -63,8 +62,12 @@ class ModuleHostPresentationTest {
             authority = presentationAuthority,
             runtimeFactory = { scope, saved, platform, base ->
                 LocalControlRuntime(
-                    platform, saved, transport, scope,
-                    SessionTiming(queryTimeoutMillis = 50, i5WriteIntervalMillis = 0, i7WriteIntervalMillis = 0), base,
+                    platform,
+                    saved,
+                    transport,
+                    scope,
+                    SessionTiming(queryTimeoutMillis = 50, i5WriteIntervalMillis = 0, i7WriteIntervalMillis = 0),
+                    base,
                 )
             },
             parentScope = test.backgroundScope, newId = { ids.next() }, uid = 1_002, pid = 777,
@@ -97,11 +100,9 @@ class ModuleHostPresentationTest {
             test.runCurrent()
         }
 
-        suspend fun execute(lease: Lease, command: HostCommand, at: OwnerGeneration = generation) =
-            host.execute(lease.identity, lease.id, at, command)
+        suspend fun execute(lease: Lease, command: HostCommand, at: OwnerGeneration = generation) = host.execute(lease.identity, lease.id, at, command)
 
-        suspend fun claim(lease: Lease, at: OwnerGeneration = generation, ref: SessionReference = reference, id: String = prompt.id) =
-            execute(lease, HostCommand.ClaimPrompt(ref, id), at)
+        suspend fun claim(lease: Lease, at: OwnerGeneration = generation, ref: SessionReference = reference, id: String = prompt.id) = execute(lease, HostCommand.ClaimPrompt(ref, id), at)
 
         suspend fun updateSettings(change: (IntegrationSettings) -> IntegrationSettings) {
             val view = requireNotNull(host.view(app.identity, app.id))
@@ -116,8 +117,10 @@ class ModuleHostPresentationTest {
             val rig = Rig(this, IntegrationSettings(islandMode = mode))
             rig.start()
             val entries = mapOf(
-                ClientRole.XIAOMI_BLUETOOTH to rig.xiaomi, ClientRole.HOST_PRESENTATION to rig.hostUi,
-                ClientRole.MILINK to rig.milink, ClientRole.APP to rig.app,
+                ClientRole.XIAOMI_BLUETOOTH to rig.xiaomi,
+                ClientRole.HOST_PRESENTATION to rig.hostUi,
+                ClientRole.MILINK to rig.milink,
+                ClientRole.APP to rig.app,
             )
             for ((role, lease) in entries - owner) {
                 assertIs<HostCallResult.Rejected>(rig.claim(lease), "$mode prompt must not be claimable by $role")
@@ -157,19 +160,21 @@ class ModuleHostPresentationTest {
         val sessionId = rig.reference.sessionId
         val writes = rig.link.writes.size
 
-        for (mode in IslandMode.entries) for (focus in listOf(true, false)) {
-            rig.updateSettings { it.copy(islandMode = mode, focusNotificationEnabled = focus) }
+        for (mode in IslandMode.entries) {
+            for (focus in listOf(true, false)) {
+                rig.updateSettings { it.copy(islandMode = mode, focusNotificationEnabled = focus) }
 
-            val presentation = rig.presentation
-            assertEquals(mode, presentation.islandMode)
-            assertEquals(focus, presentation.focusNotificationEnabled)
-            assertEquals(focus, presentation.showStatusNotification, "$mode/$focus status notification follows only the focus switch")
-            assertEquals(mode != IslandMode.OFF, presentation.allowIslandFields, "$mode/$focus island fields follow only the island mode")
-            assertEquals(generation, rig.generation)
-            assertEquals(sessionId, rig.reference.sessionId)
-            assertEquals(writes, rig.link.writes.size, "a presentation preference never reaches the earphones")
-            assertEquals(listOf("module:open"), rig.headset.events)
-            assertIs<ConnectionState.Connected>(rig.state.connection)
+                val presentation = rig.presentation
+                assertEquals(mode, presentation.islandMode)
+                assertEquals(focus, presentation.focusNotificationEnabled)
+                assertEquals(focus, presentation.showStatusNotification, "$mode/$focus status notification follows only the focus switch")
+                assertEquals(mode != IslandMode.OFF, presentation.allowIslandFields, "$mode/$focus island fields follow only the island mode")
+                assertEquals(generation, rig.generation)
+                assertEquals(sessionId, rig.reference.sessionId)
+                assertEquals(writes, rig.link.writes.size, "a presentation preference never reaches the earphones")
+                assertEquals(listOf("module:open"), rig.headset.events)
+                assertIs<ConnectionState.Connected>(rig.state.connection)
+            }
         }
     }
 
@@ -265,6 +270,5 @@ class ModuleHostPresentationTest {
         assertEquals(0, rig.headset.overlappingOpens)
     }
 
-    private fun noiseMode(state: ControlState): FieldValue =
-        assertIs<FieldReading.Known>(state.device?.fields?.get(DeviceField.NOISE_MODE)).value
+    private fun noiseMode(state: ControlState): FieldValue = assertIs<FieldReading.Known>(state.device?.fields?.get(DeviceField.NOISE_MODE)).value
 }

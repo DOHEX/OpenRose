@@ -17,6 +17,7 @@ import io.github.dohex.openrose.androidintegration.HostFrame
 import io.github.dohex.openrose.androidintegration.HostLease
 import io.github.dohex.openrose.androidintegration.HostLinkException
 import io.github.dohex.openrose.androidintegration.HostOpenResult
+import io.github.dohex.openrose.androidintegration.HostSettings
 import io.github.dohex.openrose.androidintegration.HostStatus
 import io.github.dohex.openrose.androidintegration.LinkEnd
 import io.github.dohex.openrose.androidintegration.LinkOpenResult
@@ -25,18 +26,17 @@ import io.github.dohex.openrose.androidintegration.OwnerFailureStage
 import io.github.dohex.openrose.androidintegration.OwnerGeneration
 import io.github.dohex.openrose.androidintegration.ReleaseResult
 import io.github.dohex.openrose.androidintegration.SwitchRequest
-import io.github.dohex.openrose.androidintegration.HostSettings
 import io.github.dohex.openrose.androidintegration.wire.HostWire
-import io.github.dohex.openrose.androidintegration.wire.WireFormatException
 import io.github.dohex.openrose.androidintegration.wire.Wire
+import io.github.dohex.openrose.androidintegration.wire.WireFormatException
 import io.github.dohex.openrose.androidintegration.wire.parseWire
 import io.github.dohex.openrose.androidintegration.wire.render
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
-import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 
@@ -57,12 +57,16 @@ class ModuleHostBinderLink(
         val ended = CompletableDeferred<LinkEnd>()
         val connected = CompletableDeferred<IBinder?>()
         val binding = object : ServiceConnection {
-            override fun onServiceConnected(name: ComponentName, service: IBinder) { connected.complete(service) }
+            override fun onServiceConnected(name: ComponentName, service: IBinder) {
+                connected.complete(service)
+            }
             override fun onServiceDisconnected(name: ComponentName) {
                 // The binding is gone; only a Binder death notification proves the process ended.
                 ended.complete(LinkEnd(processDied = false, reason = "宿主服务绑定已断开"))
             }
-            override fun onNullBinding(name: ComponentName) { connected.complete(null) }
+            override fun onNullBinding(name: ComponentName) {
+                connected.complete(null)
+            }
             override fun onBindingDied(name: ComponentName) {
                 ended.complete(LinkEnd(processDied = false, reason = "宿主服务绑定已失效"))
                 connected.complete(null)
@@ -105,8 +109,11 @@ class ModuleHostBinderLink(
             return LinkOpenResult.Failed(OwnerFailureStage.CONNECTION, opened.getString(BridgeWire.MESSAGE) ?: "宿主暂不可用，等待重新发现")
         }
         val result = try {
-            if (status != BridgeWire.STATUS_OK) null
-            else HostWire.decodeOpenResult(parseWire(opened.getString(BridgeWire.PAYLOAD).orEmpty()))
+            if (status != BridgeWire.STATUS_OK) {
+                null
+            } else {
+                HostWire.decodeOpenResult(parseWire(opened.getString(BridgeWire.PAYLOAD).orEmpty()))
+            }
         } catch (_: WireFormatException) {
             null
         }
@@ -166,14 +173,11 @@ class ModuleHostBinderLink(
 
         override suspend fun status(): HostStatus = call({ bridge.ownerStatus(request()) }, HostWire::decodeStatus)
 
-        override suspend fun execute(generation: OwnerGeneration, command: HostCommand): HostCallResult =
-            call({ bridge.execute(request(HostWire.encodeCall(generation, command))) }, HostWire::decodeCallResult)
+        override suspend fun execute(generation: OwnerGeneration, command: HostCommand): HostCallResult = call({ bridge.execute(request(HostWire.encodeCall(generation, command))) }, HostWire::decodeCallResult)
 
-        override suspend fun release(request: SwitchRequest): ReleaseResult =
-            call({ bridge.release(request(HostWire.encode(request))) }, HostWire::decodeReleaseResult)
+        override suspend fun release(request: SwitchRequest): ReleaseResult = call({ bridge.release(request(HostWire.encode(request))) }, HostWire::decodeReleaseResult)
 
-        override suspend fun acquire(request: SwitchRequest, settings: HostSettings): AcquireResult =
-            call({ bridge.acquire(request(HostWire.encodeAcquire(request, settings))) }, HostWire::decodeAcquireResult)
+        override suspend fun acquire(request: SwitchRequest, settings: HostSettings): AcquireResult = call({ bridge.acquire(request(HostWire.encodeAcquire(request, settings))) }, HostWire::decodeAcquireResult)
 
         override fun frames(generation: OwnerGeneration): Flow<HostFrame> = callbackFlow {
             val receiver = object : IControlFrames.Stub() {
@@ -183,7 +187,9 @@ class ModuleHostBinderLink(
                     if (decoded == null) this@callbackFlow.close() else trySend(decoded)
                 }
 
-                override fun onEnded(end: Bundle) { this@callbackFlow.close() }
+                override fun onEnded(end: Bundle) {
+                    this@callbackFlow.close()
+                }
             }
             val reply = try {
                 withContext(Dispatchers.IO) { bridge.watchFrames(request(HostWire.encode(generation)), receiver) }

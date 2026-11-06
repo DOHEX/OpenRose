@@ -68,12 +68,11 @@ internal enum class TrayPanelHost {
  * xwayland-satellite, TrayApp's override-redirect X11 popup is never presented and wedges the UI loop,
  * so those desktops get a compositor-placed Wayland window instead.
  */
-internal fun trayPanelHost(): TrayPanelHost =
-    if (Platform.Current == Platform.Linux && LinuxDesktopEnvironment.Current == LinuxDesktopEnvironment.Unknown) {
-        TrayPanelHost.WINDOW
-    } else {
-        TrayPanelHost.ANCHORED_POPUP
-    }
+internal fun trayPanelHost(): TrayPanelHost = if (Platform.Current == Platform.Linux && LinuxDesktopEnvironment.Current == LinuxDesktopEnvironment.Unknown) {
+    TrayPanelHost.WINDOW
+} else {
+    TrayPanelHost.ANCHORED_POPUP
+}
 
 /** The tray icon, its 托盘菜单 and 托盘面板; every action goes through the shared model. */
 @Composable
@@ -92,6 +91,7 @@ internal fun NucleusApplicationScope.DesktopTray(
     // The Linux tray fixes the item's Title from the first tooltip it sees, so that one names the app.
     var started by remember { mutableStateOf(false) }
     val tooltip = if (started) listOfNotNull(summary.title, summary.battery).joinToString(" · ") else "OpenRose"
+
     // Native menu callbacks arrive off the UI thread; every action runs on it.
     fun entries(showPanel: () -> Unit) = trayMenuEntries(summary).map { entry ->
         when (entry) {
@@ -99,19 +99,25 @@ internal fun NucleusApplicationScope.DesktopTray(
                 uiScope.launch {
                     when (entry.target) {
                         TrayMenuTarget.RECONNECT -> summary.reconnectTarget?.let(model::connect)
+
                         TrayMenuTarget.ADD_DEVICE -> {
                             model.showHeadphones()
                             onOpenApp()
                         }
+
                         TrayMenuTarget.PANEL -> showPanel()
+
                         TrayMenuTarget.OPEN_APP -> onOpenApp()
+
                         TrayMenuTarget.EXIT -> onExit()
                     }
                 }
             })
+
             is TrayMenuEntry.NoiseMode -> entry.copy(onSelect = {
                 uiScope.launch { model.set(DeviceSetting.NOISE_MODE, FieldValue.Text(entry.mode)) }
             })
+
             else -> entry
         }
     }
@@ -134,6 +140,7 @@ internal fun NucleusApplicationScope.DesktopTray(
                 })
             }
         }
+
         TrayPanelHost.WINDOW -> {
             var panelOpen by remember { mutableStateOf(false) }
             val menu = entries { panelOpen = true }
@@ -254,7 +261,9 @@ internal fun trayMenuEntries(summary: TraySummary): List<TrayMenuEntry> = buildL
 private fun TrayMenuBuilder.render(entries: List<TrayMenuEntry>) = entries.forEach { entry ->
     when (entry) {
         is TrayMenuEntry.Label -> Item(entry.text, isEnabled = false)
+
         TrayMenuEntry.Separator -> Divider()
+
         // Choosing the checked mode again unchecks it natively; only a different mode is written.
         is TrayMenuEntry.NoiseMode -> CheckableItem(
             label = entry.label,
@@ -262,6 +271,7 @@ private fun TrayMenuBuilder.render(entries: List<TrayMenuEntry>) = entries.forEa
             onCheckedChange = { if (!entry.selected) entry.onSelect() },
             isEnabled = entry.enabled,
         )
+
         is TrayMenuEntry.Action -> Item(entry.label, onClick = entry.onClick)
     }
 }
@@ -270,13 +280,16 @@ private fun TrayMenuBuilder.render(entries: List<TrayMenuEntry>) = entries.forEa
 private fun ComposableTrayMenuScope.render(entries: List<TrayMenuEntry>) = entries.forEach { entry ->
     when (entry) {
         is TrayMenuEntry.Label -> Item(entry.text, isEnabled = false)
+
         TrayMenuEntry.Separator -> Divider()
+
         is TrayMenuEntry.NoiseMode -> CheckableItem(
             label = entry.label,
             checked = entry.selected,
             onCheckedChange = { if (!entry.selected) entry.onSelect() },
             isEnabled = entry.enabled,
         )
+
         is TrayMenuEntry.Action -> Item(entry.label, onClick = entry.onClick)
     }
 }

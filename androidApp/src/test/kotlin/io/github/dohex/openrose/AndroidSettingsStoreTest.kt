@@ -4,29 +4,29 @@ import android.content.SharedPreferences
 import io.github.dohex.openrose.androidintegration.*
 import io.github.dohex.openrose.bridge.FrameworkLink
 import io.github.dohex.openrose.bridge.ModuleSettingsPublisher
-import io.github.dohex.openrose.module.readHostSettings
 import io.github.dohex.openrose.core.LocalControlRuntime
 import io.github.dohex.openrose.core.PermissionState
 import io.github.dohex.openrose.core.PlatformState
 import io.github.dohex.openrose.core.UserSettings
+import io.github.dohex.openrose.module.readHostSettings
 import io.github.dohex.openrose.ui.*
-import java.lang.reflect.Proxy
-import java.nio.file.Files
-import java.nio.file.Path
-import kotlin.test.assertTrue
-import java.util.Properties
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertIs
+import kotlinx.collections.immutable.persistentSetOf
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.collections.immutable.persistentSetOf
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import java.lang.reflect.Proxy
+import java.nio.file.Files
+import java.nio.file.Path
+import java.util.Properties
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertIs
+import kotlin.test.assertTrue
 
 class AndroidSettingsStoreTest {
     @Test
@@ -146,14 +146,23 @@ class AndroidSettingsStoreTest {
         val changes = mutableMapOf<String, String?>()
         return Proxy.newProxyInstance(SharedPreferences.Editor::class.java.classLoader, arrayOf(SharedPreferences.Editor::class.java)) { proxy, method, args ->
             when (method.name) {
-                "putString" -> { changes[args[0] as String] = args[1] as String?; proxy }
-                "remove" -> { changes[args[0] as String] = null; proxy }
+                "putString" -> {
+                    changes[args[0] as String] = args[1] as String?
+                    proxy
+                }
+
+                "remove" -> {
+                    changes[args[0] as String] = null
+                    proxy
+                }
+
                 "commit", "apply" -> {
                     val values = load()
                     changes.forEach { (key, value) -> if (value == null) values.remove(key) else values.setProperty(key, value) }
                     Files.newOutputStream(file).use { values.store(it, null) }
                     if (method.name == "commit") true else null
                 }
+
                 else -> error("Unsupported editor operation: ${method.name}")
             }
         } as SharedPreferences.Editor

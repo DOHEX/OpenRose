@@ -12,9 +12,9 @@ import io.github.dohex.openrose.androidintegration.BridgeIpcState
 import io.github.dohex.openrose.androidintegration.CallerAuthority
 import io.github.dohex.openrose.androidintegration.CallerIdentity
 import io.github.dohex.openrose.androidintegration.ClientRole
-import io.github.dohex.openrose.core.ConnectionState
 import io.github.dohex.openrose.androidintegration.ControlWay
-import io.github.dohex.openrose.core.DeviceSetting
+import io.github.dohex.openrose.androidintegration.FusionEntry
+import io.github.dohex.openrose.androidintegration.FusionEntryDecision
 import io.github.dohex.openrose.androidintegration.HostCallResult
 import io.github.dohex.openrose.androidintegration.HostCommand
 import io.github.dohex.openrose.androidintegration.HostFacts
@@ -23,22 +23,21 @@ import io.github.dohex.openrose.androidintegration.HostReadResult
 import io.github.dohex.openrose.androidintegration.HostRejection
 import io.github.dohex.openrose.androidintegration.HostStatus
 import io.github.dohex.openrose.androidintegration.IslandMode
-import io.github.dohex.openrose.androidintegration.FusionEntry
-import io.github.dohex.openrose.androidintegration.FusionEntryDecision
 import io.github.dohex.openrose.androidintegration.ModuleControlHost
-import io.github.dohex.openrose.core.OperationResult
 import io.github.dohex.openrose.androidintegration.OwnerGeneration
-import io.github.dohex.openrose.core.SessionReference
 import io.github.dohex.openrose.androidintegration.SessionSnapshotResult
 import io.github.dohex.openrose.androidintegration.SystemEndpointDiagnostics
-import io.github.dohex.openrose.core.protocol.FieldValue
-import io.github.dohex.openrose.core.transport.DeviceId
 import io.github.dohex.openrose.androidintegration.wire.HostWire
 import io.github.dohex.openrose.androidintegration.wire.WireFormatException
 import io.github.dohex.openrose.androidintegration.wire.asStr
 import io.github.dohex.openrose.androidintegration.wire.parseWire
 import io.github.dohex.openrose.androidintegration.wire.render
-import java.util.concurrent.atomic.AtomicLong
+import io.github.dohex.openrose.core.ConnectionState
+import io.github.dohex.openrose.core.DeviceSetting
+import io.github.dohex.openrose.core.OperationResult
+import io.github.dohex.openrose.core.SessionReference
+import io.github.dohex.openrose.core.protocol.FieldValue
+import io.github.dohex.openrose.core.transport.DeviceId
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -48,6 +47,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import java.util.concurrent.atomic.AtomicLong
 
 /**
  * Who may use the host. Roles come from the verified Binder uid/pid and the packages that own the uid;
@@ -65,10 +65,14 @@ internal class AndroidCallerAuthority(
     override fun roleOf(identity: CallerIdentity): ClientRole? = when {
         // The module's own presentation code runs in the host process: same uid and same pid.
         identity.uid == hostUid && identity.pid == hostPid -> ClientRole.HOST_PRESENTATION
+
         BridgeWire.APP_PACKAGE in identity.packages -> ClientRole.APP
+
         BridgeTarget.MILINK.packageName in identity.packages && isSystemApp(BridgeTarget.MILINK.packageName) -> ClientRole.MILINK
+
         BridgeTarget.XIAOMI_BLUETOOTH.packageName in identity.packages && isSystemApp(BridgeTarget.XIAOMI_BLUETOOTH.packageName) ->
             ClientRole.XIAOMI_BLUETOOTH
+
         else -> null
     }
 
@@ -120,8 +124,12 @@ internal class HostEndpoint(
             host.ownerView.collect { view ->
                 val prompt = view?.presentation?.connectionPrompt
                 if (prompt?.mode == IslandMode.OFFICIAL && synchronized(lock) { leases.values.none { it.target == BridgeTarget.XIAOMI_BLUETOOTH } }) {
-                    facts.update { it.copy(presentation = it.presentation +
-                        (BridgePresentationWire.OFFICIAL_CONNECTION to "UNAVAILABLE · official_target_not_connected")) }
+                    facts.update {
+                        it.copy(
+                            presentation = it.presentation +
+                                (BridgePresentationWire.OFFICIAL_CONNECTION to "UNAVAILABLE · official_target_not_connected"),
+                        )
+                    }
                 }
             }
         }
@@ -197,11 +205,9 @@ internal class HostEndpoint(
             ?: throw SecurityException("读取凭据已失效")
     }
 
-    private fun consumerLease(leaseId: String?): EndpointLease =
-        lease(leaseId).also { if (it.target == null) throw SecurityException("该调用者无权使用系统入口接口") }
+    private fun consumerLease(leaseId: String?): EndpointLease = lease(leaseId).also { if (it.target == null) throw SecurityException("该调用者无权使用系统入口接口") }
 
-    private fun appLease(request: Bundle): EndpointLease =
-        lease(request.getString(BridgeWire.LEASE_ID)).also { if (it.role != ClientRole.APP) throw SecurityException("仅 OpenRose 应用可使用此接口") }
+    private fun appLease(request: Bundle): EndpointLease = lease(request.getString(BridgeWire.LEASE_ID)).also { if (it.role != ClientRole.APP) throw SecurityException("仅 OpenRose 应用可使用此接口") }
 
     override fun currentSession(leaseId: String): Bundle {
         val lease = consumerLease(leaseId)
@@ -218,12 +224,11 @@ internal class HostEndpoint(
         }
     }
 
-    private fun generation(request: Bundle): OwnerGeneration? =
-        request.getString(BridgeWire.HOST_EPOCH)?.let { text ->
-            val split = text.lastIndexOf('#')
-            val sequence = text.substring(split + 1).toLongOrNull()
-            if (split <= 0 || sequence == null) null else OwnerGeneration(text.substring(0, split), sequence)
-        }
+    private fun generation(request: Bundle): OwnerGeneration? = request.getString(BridgeWire.HOST_EPOCH)?.let { text ->
+        val split = text.lastIndexOf('#')
+        val sequence = text.substring(split + 1).toLongOrNull()
+        if (split <= 0 || sequence == null) null else OwnerGeneration(text.substring(0, split), sequence)
+    }
 
     override fun read(request: Bundle): Bundle {
         val lease = consumerLease(request.getString(BridgeWire.LEASE_ID))
@@ -233,17 +238,22 @@ internal class HostEndpoint(
         val result = runBlocking { host.readSession(lease.caller, lease.id, generation, reference) }
         return when (result) {
             is HostReadResult.Rejected -> BridgeWire.response(BridgeWire.STATUS_STALE_HOST, result.message)
+
             is HostReadResult.Available -> when (val snapshot = result.snapshot) {
                 is SessionSnapshotResult.Available -> {
                     val sequence = reads.incrementAndGet()
                     val current = SessionReference(snapshot.device.deviceId, snapshot.device.sessionId)
                     synchronized(lock) { lease.awaiting = PendingRead(current, sequence, generation.toString()) }
                     BridgeWire.response(BridgeWire.STATUS_OK).apply {
-                        putBundle(BridgeWire.SNAPSHOT, snapshot.device.toBridgeSnapshot(generation.toString(), sequence).apply {
-                            putBundle(BridgePresentationWire.PRESENTATION, snapshot.presentation.toBridgePresentation())
-                        })
+                        putBundle(
+                            BridgeWire.SNAPSHOT,
+                            snapshot.device.toBridgeSnapshot(generation.toString(), sequence).apply {
+                                putBundle(BridgePresentationWire.PRESENTATION, snapshot.presentation.toBridgePresentation())
+                            },
+                        )
                     }
                 }
+
                 is SessionSnapshotResult.Failure -> {
                     synchronized(lock) { lease.awaiting = null }
                     BridgeWire.response(BridgeWire.STATUS_STALE_SESSION, snapshot.error.message)
@@ -258,7 +268,8 @@ internal class HostEndpoint(
         if (receipt.getInt(BridgeWire.KEY_VERSION) != BridgeWire.VERSION || receipt.getString(BridgeWire.HOST_EPOCH) != pending.generation ||
             receipt.getString(BridgeWire.DEVICE_ID) != pending.reference.deviceId.value ||
             receipt.getLong(BridgeWire.SESSION_ID, -1) != pending.reference.sessionId ||
-            receipt.getLong(BridgeWire.READ_SEQUENCE, -1) != pending.sequence) {
+            receipt.getLong(BridgeWire.READ_SEQUENCE, -1) != pending.sequence
+        ) {
             return BridgeWire.response(BridgeWire.STATUS_STALE_RECEIPT)
         }
         synchronized(lock) { lease.awaiting = null }
@@ -294,11 +305,13 @@ internal class HostEndpoint(
 
     private fun notify(observer: IControlObserver, leaseId: String, epoch: String?) {
         runCatching {
-            observer.onChanged(Bundle().apply {
-                putInt(BridgeWire.KEY_VERSION, BridgeWire.VERSION)
-                putString(BridgeWire.LEASE_ID, leaseId)
-                epoch?.let { putString(BridgeWire.HOST_EPOCH, it) }
-            })
+            observer.onChanged(
+                Bundle().apply {
+                    putInt(BridgeWire.KEY_VERSION, BridgeWire.VERSION)
+                    putString(BridgeWire.LEASE_ID, leaseId)
+                    epoch?.let { putString(BridgeWire.HOST_EPOCH, it) }
+                },
+            )
         }
     }
 
@@ -311,12 +324,14 @@ internal class HostEndpoint(
             ?: return BridgeWire.response(BridgeWire.STATUS_INVALID_ARGUMENT)
         return when (val result = runBlocking { host.execute(lease.caller, lease.id, generation, HostCommand.ClaimPrompt(reference, id)) }) {
             is HostCallResult.Flag -> BridgeWire.response(if (result.value) BridgeWire.STATUS_OK else "STALE_PROMPT")
+
             // The host decides which entry presents the saved island mode; a refusal is not a stale generation.
             is HostCallResult.Rejected -> if (result.rejection == HostRejection.FORBIDDEN) {
                 BridgeWire.response(BridgeWire.STATUS_UNAVAILABLE, result.message)
             } else {
                 BridgeWire.response(BridgeWire.STATUS_STALE_HOST, result.message)
             }
+
             is HostCallResult.Operation -> BridgeWire.response(BridgeWire.STATUS_ACTION_FAILED)
         }
     }
@@ -330,17 +345,21 @@ internal class HostEndpoint(
             ?: return BridgeWire.response(BridgeWire.STATUS_INVALID_ARGUMENT)
         // The owner validates the generation and session reference under its own lifecycle lock, and the
         // result is the earphones' confirmation, never that this call arrived.
-        return when (val result = runBlocking {
-            host.execute(lease.caller, lease.id, generation, HostCommand.Set(reference, DeviceSetting.NOISE_MODE, FieldValue.Text(mode)))
-        }) {
+        return when (
+            val result = runBlocking {
+                host.execute(lease.caller, lease.id, generation, HostCommand.Set(reference, DeviceSetting.NOISE_MODE, FieldValue.Text(mode)))
+            }
+        ) {
             is HostCallResult.Operation -> when (val outcome = result.result) {
                 OperationResult.Success -> BridgeWire.response(BridgeWire.STATUS_OK)
                 is OperationResult.Failure -> BridgeWire.response(outcome.error.code.name, outcome.error.message)
             }
+
             is HostCallResult.Rejected -> when (result.rejection) {
                 HostRejection.FORBIDDEN, HostRejection.INVALID_LEASE -> BridgeWire.response(BridgeWire.STATUS_UNAUTHORIZED, result.message)
                 else -> BridgeWire.response(BridgeWire.STATUS_STALE_HOST, result.message)
             }
+
             is HostCallResult.Flag -> BridgeWire.response(BridgeWire.STATUS_ACTION_FAILED)
         }
     }
@@ -362,6 +381,7 @@ internal class HostEndpoint(
         return BridgeWire.response(BridgeWire.STATUS_OK).apply {
             when (decision) {
                 FusionEntryDecision.System -> putString(BridgeWire.FUSION_DECISION, BridgeWire.FUSION_SYSTEM)
+
                 is FusionEntryDecision.OpenRose -> {
                     putString(BridgeWire.FUSION_DECISION, BridgeWire.FUSION_OPENROSE)
                     putString(BridgeWire.DEVICE_ID, decision.deviceId.value)
@@ -401,9 +421,13 @@ internal class HostEndpoint(
         // status notification and the connection prompts, the Xiaomi system app only the official prompt.
         val allowed = when (lease.target) {
             BridgeTarget.BLUETOOTH -> setOf(
-                BridgePresentationWire.STATUS_NOTIFICATION, BridgePresentationWire.MODULE_CONNECTION, BridgePresentationWire.OFFICIAL_CONNECTION,
+                BridgePresentationWire.STATUS_NOTIFICATION,
+                BridgePresentationWire.MODULE_CONNECTION,
+                BridgePresentationWire.OFFICIAL_CONNECTION,
             )
+
             BridgeTarget.XIAOMI_BLUETOOTH -> setOf(BridgePresentationWire.OFFICIAL_CONNECTION)
+
             else -> emptySet()
         }
         if (feature !in allowed) throw SecurityException("系统入口不能代其他组件报告展示状态")
@@ -500,13 +524,23 @@ internal class HostEndpoint(
 
     private fun recordEndpoint(target: BridgeTarget, process: String, ipc: BridgeIpcState, entryMatch: String) {
         val info = runCatching { context.packageManager.getPackageInfo(target.packageName, 0) }.getOrNull()
+
         @Suppress("DEPRECATION")
         val version = info?.let { "${it.versionName ?: "未知"} (${if (Build.VERSION.SDK_INT >= 28) it.longVersionCode else it.versionCode.toLong()})" } ?: "未知"
         val key = endpointKey(target, process)
         facts.update { current ->
-            current.copy(endpoints = current.endpoints + (key to SystemEndpointDiagnostics(
-                target.packageName, process, version, entryMatch, ipc, current.endpoints[key]?.features.orEmpty(),
-            )))
+            current.copy(
+                endpoints = current.endpoints + (
+                    key to SystemEndpointDiagnostics(
+                        target.packageName,
+                        process,
+                        version,
+                        entryMatch,
+                        ipc,
+                        current.endpoints[key]?.features.orEmpty(),
+                    )
+                    ),
+            )
         }
     }
 
@@ -528,5 +562,7 @@ internal class HostEndpoint(
         null
     }
 
-    private companion object { const val TAG = "HostEndpoint" }
+    private companion object {
+        const val TAG = "HostEndpoint"
+    }
 }

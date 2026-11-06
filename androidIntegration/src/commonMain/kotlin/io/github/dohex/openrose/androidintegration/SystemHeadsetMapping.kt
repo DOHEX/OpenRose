@@ -30,8 +30,7 @@ object SystemHeadsetMapping {
      * The mode a system entry's "off" selection writes. With [offAsWind] and a model that offers wind reduction
      * it is wind; otherwise the request is unchanged, so a model without wind keeps a working off.
      */
-    fun requestedMode(requested: String, offAsWind: Boolean, supportedModes: Set<String>): String =
-        if (offAsWind && requested == "normal" && "wind" in supportedModes) "wind" else requested
+    fun requestedMode(requested: String, offAsWind: Boolean, supportedModes: Set<String>): String = if (offAsWind && requested == "normal" && "wind" in supportedModes) "wind" else requested
 
     fun miLinkAncState(fields: Map<DeviceField, FieldReading>): Int? = text(fields, DeviceField.NOISE_MODE)?.let(::miLinkMode)
 
@@ -81,6 +80,7 @@ object SystemHeadsetMapping {
         var caseOmitted = false
         val case = when (val reading = fields[DeviceField.CASE_BATTERY]) {
             null, FieldReading.Loading, is FieldReading.Unknown, is FieldReading.NotProvided -> UNKNOWN_BATTERY.toString()
+
             is FieldReading.Known -> {
                 val value = (reading.value as? FieldValue.Number)?.value ?: return BinderStatus.Unrepresentable
                 if (value !in 0..100) return BinderStatus.Unrepresentable
@@ -114,26 +114,23 @@ object SystemHeadsetMapping {
         else -> CommandReport("ACTION_FAILED", message ?: "control rejected: ${wireStatus ?: "no answer"}")
     }
 
-    private fun encodedEar(fields: Map<DeviceField, FieldReading>, field: DeviceField, charging: DeviceField): Int? =
-        when (val reading = fields[field]) {
-            null, FieldReading.Loading, is FieldReading.Unknown, is FieldReading.NotProvided -> UNKNOWN_BATTERY
-            is FieldReading.Known -> {
-                val level = (reading.value as? FieldValue.Number)?.value?.takeIf { it in 0..100 }
-                val isCharging = toggle(fields, charging)
-                if (level == null || isCharging == null) null else level or if (isCharging) CHARGING_FLAG else 0
-            }
+    private fun encodedEar(fields: Map<DeviceField, FieldReading>, field: DeviceField, charging: DeviceField): Int? = when (val reading = fields[field]) {
+        null, FieldReading.Loading, is FieldReading.Unknown, is FieldReading.NotProvided -> UNKNOWN_BATTERY
+
+        is FieldReading.Known -> {
+            val level = (reading.value as? FieldValue.Number)?.value?.takeIf { it in 0..100 }
+            val isCharging = toggle(fields, charging)
+            if (level == null || isCharging == null) null else level or if (isCharging) CHARGING_FLAG else 0
         }
+    }
 
     private fun battery(fields: Map<DeviceField, FieldReading>, field: DeviceField): Int? = number(fields, field)?.takeIf { it in 0..100 }
 
-    private fun number(fields: Map<DeviceField, FieldReading>, field: DeviceField): Int? =
-        ((fields[field] as? FieldReading.Known)?.value as? FieldValue.Number)?.value
+    private fun number(fields: Map<DeviceField, FieldReading>, field: DeviceField): Int? = ((fields[field] as? FieldReading.Known)?.value as? FieldValue.Number)?.value
 
-    private fun text(fields: Map<DeviceField, FieldReading>, field: DeviceField): String? =
-        ((fields[field] as? FieldReading.Known)?.value as? FieldValue.Text)?.value
+    private fun text(fields: Map<DeviceField, FieldReading>, field: DeviceField): String? = ((fields[field] as? FieldReading.Known)?.value as? FieldValue.Text)?.value
 
-    private fun toggle(fields: Map<DeviceField, FieldReading>, field: DeviceField): Boolean? =
-        ((fields[field] as? FieldReading.Known)?.value as? FieldValue.Toggle)?.value
+    private fun toggle(fields: Map<DeviceField, FieldReading>, field: DeviceField): Boolean? = ((fields[field] as? FieldReading.Known)?.value as? FieldValue.Toggle)?.value
 
     private const val UNKNOWN_BATTERY = 255
     private const val CHARGING_FLAG = 128

@@ -31,7 +31,9 @@ internal fun DeviceControlCard(
     if (hasAudio || hasMultipoint) {
         val coupledFootnote = if (hasAudio && hasMultipoint && audio.multipointCoupled) {
             "该型号的 LDAC 与多点连接互斥；切换多点时设备会改用 AAC / SBC。"
-        } else null
+        } else {
+            null
+        }
         AppGroup(
             title = "音频",
             footnote = coupledFootnote,

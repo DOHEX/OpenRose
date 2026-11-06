@@ -1,8 +1,8 @@
 package io.github.dohex.openrose.core
 
 import io.github.dohex.openrose.core.protocol.DeviceField
-import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.dohex.openrose.core.protocol.FieldReading
+import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.dohex.openrose.core.protocol.ModelProfile
 import io.github.dohex.openrose.core.transport.DeviceId
 import io.github.dohex.openrose.core.transport.TransportSelection
@@ -71,7 +71,15 @@ data class DeviceCandidate(
 )
 
 enum class ControlErrorCode {
-    PERMISSION_REQUIRED, TRANSPORT_UNAVAILABLE, NOT_READY, UNSUPPORTED, INVALID_ARGUMENT, NOT_APPLIED, TIMEOUT, DISCONNECTED, FAILED,
+    PERMISSION_REQUIRED,
+    TRANSPORT_UNAVAILABLE,
+    NOT_READY,
+    UNSUPPORTED,
+    INVALID_ARGUMENT,
+    NOT_APPLIED,
+    TIMEOUT,
+    DISCONNECTED,
+    FAILED,
 }
 
 data class ControlError(val code: ControlErrorCode, val message: String)
@@ -149,7 +157,10 @@ data class ControlState(
             val connected = connection as? ConnectionState.Connected ?: return null
             val current = device ?: return null
             if (current.deviceId != connected.deviceId || current.sessionId != connected.sessionId ||
-                current.profile != connected.profile) return null
+                current.profile != connected.profile
+            ) {
+                return null
+            }
             return SessionReference(current.deviceId, current.sessionId)
         }
 }

@@ -68,10 +68,15 @@ internal class SettingQueue(
             val operation = SettingOperation(++operationId, attempt.id, setting, value, SettingStage.SUBMITTED)
             val next = Request(operation, CompletableDeferred())
             attempt.settings.requests[operation.id] = next
-            state.update { it.copy(settingOperations = it.settingOperations.mutate { operations ->
-                operations.add(operation)
-                if (operations.size > 64) operations.removeAt(0)
-            }, lastError = null) }
+            state.update {
+                it.copy(
+                    settingOperations = it.settingOperations.mutate { operations ->
+                        operations.add(operation)
+                        if (operations.size > 64) operations.removeAt(0)
+                    },
+                    lastError = null,
+                )
+            }
             check(attempt.settings.commands.trySend(next).isSuccess)
             next
         }
@@ -86,8 +91,11 @@ internal class SettingQueue(
                     ?: return ControlError(ControlErrorCode.UNSUPPORTED, "该型号不支持自定义均衡器")
                 value is FieldValue.IntegerList && value.values.size == custom.bandsHz.size && value.values.all { it in custom.minGain..custom.maxGain }
             }
+
             DeviceSetting.GAIN -> value is FieldValue.Number && value.value in gainLevels(profile, firmware())
+
             DeviceSetting.HEARING_PROTECTION -> value is FieldValue.Number && value.value in hearingProtectionLevels(profile, firmware())
+
             DeviceSetting.PROMPT_VOLUME -> {
                 val levels = promptVolumeLevels(profile, firmware())
                 if (profile == ModelProfile.I7_RS_V2 && value is FieldValue.Number && value.value == 0 && value.value !in levels) {
@@ -95,6 +103,7 @@ internal class SettingQueue(
                 }
                 value is FieldValue.Number && value.value in levels
             }
+
             DeviceSetting.TOUCH_BINDING -> {
                 if (value !is FieldValue.TouchAssignment) return ControlError(ControlErrorCode.INVALID_ARGUMENT, "触控绑定需要作用耳、手势和动作")
                 val touch = touchControlCapabilities(profile)
@@ -102,33 +111,40 @@ internal class SettingQueue(
                 if (value.action !in touch.actions) return ControlError(ControlErrorCode.UNSUPPORTED, "该型号不支持 ${value.action} 触控动作")
                 true
             }
+
             DeviceSetting.GAME_MODE, DeviceSetting.MULTIPOINT, DeviceSetting.TOUCH_ENABLED, DeviceSetting.EAR_DETECTION -> value is FieldValue.Toggle
+
             DeviceSetting.AUDIO_MODE -> {
                 if (value is FieldValue.Text && value.value !in audioControlCapabilities(profile).modes) {
                     return ControlError(ControlErrorCode.UNSUPPORTED, "该型号不支持 ${value.value} 音频配置")
                 }
                 value is FieldValue.Text
             }
+
             DeviceSetting.EQ -> {
                 if (value is FieldValue.Text && value.value !in equalizerCapabilities(profile, firmware()).presets) {
                     return ControlError(ControlErrorCode.UNSUPPORTED, "该型号与固件不支持 ${value.value} EQ")
                 }
                 value is FieldValue.Text
             }
+
             DeviceSetting.NOISE_MODE -> {
                 if (value is FieldValue.Text && value.value !in noise.modes) {
                     return ControlError(ControlErrorCode.UNSUPPORTED, "该型号不支持 ${value.value} 模式")
                 }
                 value is FieldValue.Text
             }
+
             DeviceSetting.ANC_LEVEL, DeviceSetting.TRANSPARENCY_LEVEL -> {
                 val level = noise.levelCapabilities(setting)
                     ?: return ControlError(ControlErrorCode.UNSUPPORTED, "该型号不支持此档位设置")
                 // The original sender has no mode precondition; visibility is a separate rule.
                 value is FieldValue.Number && value.value in level.levels
             }
-            DeviceSetting.NOISE_CYCLE -> value is FieldValue.NoiseCycle && value.flags.keys == noise.cycleModes &&
-                value.flags.values.all { it != null } && value.flags.values.count { it == true } >= noise.minimumCycleSelections
+
+            DeviceSetting.NOISE_CYCLE ->
+                value is FieldValue.NoiseCycle && value.flags.keys == noise.cycleModes &&
+                    value.flags.values.all { it != null } && value.flags.values.count { it == true } >= noise.minimumCycleSelections
         }
         return if (valid) null else ControlError(ControlErrorCode.INVALID_ARGUMENT, "${setting.name} 参数无效")
     }
@@ -148,8 +164,12 @@ internal class SettingQueue(
                     is IllegalArgumentException -> ControlErrorCode.INVALID_ARGUMENT
                     else -> ControlErrorCode.FAILED
                 }
-                settingFailure(attempt, request, ControlError(code, cause.message ?: "设置失败"),
-                    if (code == ControlErrorCode.DISCONNECTED) SettingStage.DISCONNECTED else SettingStage.FAILED)
+                settingFailure(
+                    attempt,
+                    request,
+                    ControlError(code, cause.message ?: "设置失败"),
+                    if (code == ControlErrorCode.DISCONNECTED) SettingStage.DISCONNECTED else SettingStage.FAILED,
+                )
             }
             link.lifecycle.withLock {
                 attempt.settings.requests.remove(request.operation.id)
@@ -175,9 +195,12 @@ internal class SettingQueue(
         }
         for ((index, frame) in prepared.writeFrames.withIndex()) {
             owner.writePaced(attempt, link, frame)
-            settingStage(attempt, request,
+            settingStage(
+                attempt,
+                request,
                 if (index == prepared.writeFrames.lastIndex) SettingStage.WRITTEN else SettingStage.PARTIALLY_WRITTEN,
-                writtenFrames = index + 1)
+                writtenFrames = index + 1,
+            )
         }
         val baselines = mutableListOf<Pair<ProtocolQuery, ReadProgress>>()
         var actualValues = emptyMap<DeviceField, FieldValue>()
@@ -189,7 +212,9 @@ internal class SettingQueue(
             withTimeout(timing.queryTimeoutMillis) { link.write(query.bytes.copyOf()) }
             val observed = withTimeoutOrNull(timing.queryTimeoutMillis) {
                 attempt.progress.first { progress ->
-                    if (progress.ended) true else {
+                    if (progress.ended) {
+                        true
+                    } else {
                         val fields = state.value.device?.fields.orEmpty()
                         val values = prepared.expectedValues.mapNotNull { (field, expected) ->
                             val reading = baselines.lastOrNull { field in it.first.expectedFields } ?: return@mapNotNull null
@@ -204,19 +229,29 @@ internal class SettingQueue(
                         if (values.keys.containsAll(required)) {
                             actualValues = values
                             true
-                        } else false
+                        } else {
+                            false
+                        }
                     }
                 }
             }
             if (observed?.ended == true) throw LinkEnded()
             owner.ensureActive(attempt)
-            if (observed == null) return settingFailure(attempt, request,
-                ControlError(ControlErrorCode.TIMEOUT, "未收到有效的设置回读"), SettingStage.TIMED_OUT)
+            if (observed == null) {
+                return settingFailure(
+                    attempt,
+                    request,
+                    ControlError(ControlErrorCode.TIMEOUT, "未收到有效的设置回读"),
+                    SettingStage.TIMED_OUT,
+                )
+            }
         }
         return if (prepared.expectedValues.all { (field, expected) -> actualValues[field] == expected }) {
             settingStage(attempt, request, SettingStage.CONFIRMED)
             OperationResult.Success
-        } else settingFailure(attempt, request, ControlError(ControlErrorCode.NOT_APPLIED, "设备回读与请求不一致"), SettingStage.NOT_APPLIED)
+        } else {
+            settingFailure(attempt, request, ControlError(ControlErrorCode.NOT_APPLIED, "设备回读与请求不一致"), SettingStage.NOT_APPLIED)
+        }
     }
 
     /** A touch assignment confirms only its target; the device still retains its full bindings. */
@@ -229,7 +264,9 @@ internal class SettingQueue(
                 }
                 binding?.action?.let { expected.copy(action = it) }
             }
+
             actual is FieldValue.NoiseCycle && actual.flags.values.any { it == null } -> null
+
             else -> actual
         }
     }
@@ -244,17 +281,26 @@ internal class SettingQueue(
         confirmedFields: Set<DeviceField>? = null,
     ) {
         state.update { current ->
-            if (current.device?.sessionId != attempt.id || request.result.isCompleted) current
-            else current.copy(settingOperations = current.settingOperations.mutate { operations ->
-                val index = operations.indexOfFirst { it.id == request.operation.id }
-                if (index >= 0) {
-                    val operation = operations[index]
-                    operations[index] = operation.copy(stage = stage, error = error,
-                        writtenFrames = writtenFrames ?: operation.writtenFrames,
-                        totalFrames = totalFrames ?: operation.totalFrames,
-                        confirmedFields = confirmedFields?.toPersistentSet() ?: operation.confirmedFields)
-                }
-            }, lastError = error)
+            if (current.device?.sessionId != attempt.id || request.result.isCompleted) {
+                current
+            } else {
+                current.copy(
+                    settingOperations = current.settingOperations.mutate { operations ->
+                        val index = operations.indexOfFirst { it.id == request.operation.id }
+                        if (index >= 0) {
+                            val operation = operations[index]
+                            operations[index] = operation.copy(
+                                stage = stage,
+                                error = error,
+                                writtenFrames = writtenFrames ?: operation.writtenFrames,
+                                totalFrames = totalFrames ?: operation.totalFrames,
+                                confirmedFields = confirmedFields?.toPersistentSet() ?: operation.confirmedFields,
+                            )
+                        }
+                    },
+                    lastError = error,
+                )
+            }
         }
     }
 
@@ -267,12 +313,16 @@ internal class SettingQueue(
     fun end(attempt: Attempt) {
         val error = ControlError(ControlErrorCode.DISCONNECTED, "连接会话已结束")
         val ids = attempt.settings.requests.keys.toSet()
-        state.update { current -> current.copy(settingOperations = current.settingOperations.mutate { operations ->
-            for (index in operations.indices) {
-                val operation = operations[index]
-                if (operation.id in ids) operations[index] = operation.copy(stage = SettingStage.DISCONNECTED, error = error)
-            }
-        }) }
+        state.update { current ->
+            current.copy(
+                settingOperations = current.settingOperations.mutate { operations ->
+                    for (index in operations.indices) {
+                        val operation = operations[index]
+                        if (operation.id in ids) operations[index] = operation.copy(stage = SettingStage.DISCONNECTED, error = error)
+                    }
+                },
+            )
+        }
         attempt.settings.requests.values.forEach { it.result.complete(OperationResult.Failure(error)) }
         attempt.settings.requests.clear()
         attempt.settings.commands.close()

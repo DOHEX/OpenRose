@@ -18,12 +18,34 @@ internal class FakeBluezBus : BluezBus {
     var scans = 0
     var scanStops = 0
     var snapshot: BluezObjects = emptyMap()
-    override suspend fun objects(): BluezObjects { objectsFailure?.let { throw it }; return snapshot }
-    override suspend fun connect(path: String) { connects++; connectFailure?.let { throw it }; onConnect(connects) }
-    override suspend fun startNotify(path: String) { notifications.add("start:$path") }
-    override suspend fun stopNotify(path: String) { notifications.add("stop:$path"); onStopNotify(path) }
-    override suspend fun write(path: String, value: ByteArray, withResponse: Boolean) { writes.add(Triple(path, value.copyOf(), withResponse)); onWrite(value) }
-    override suspend fun startDiscovery(path: String) { scans++; discoveryFailure?.let { throw it }; onStartDiscovery() }
-    override suspend fun stopDiscovery(path: String) { scanStops++; stopDiscoveryFailure?.let { throw it } }
+    override suspend fun objects(): BluezObjects {
+        objectsFailure?.let { throw it }
+        return snapshot
+    }
+    override suspend fun connect(path: String) {
+        connects++
+        connectFailure?.let { throw it }
+        onConnect(connects)
+    }
+    override suspend fun startNotify(path: String) {
+        notifications.add("start:$path")
+    }
+    override suspend fun stopNotify(path: String) {
+        notifications.add("stop:$path")
+        onStopNotify(path)
+    }
+    override suspend fun write(path: String, value: ByteArray, withResponse: Boolean) {
+        writes.add(Triple(path, value.copyOf(), withResponse))
+        onWrite(value)
+    }
+    override suspend fun startDiscovery(path: String) {
+        scans++
+        discoveryFailure?.let { throw it }
+        onStartDiscovery()
+    }
+    override suspend fun stopDiscovery(path: String) {
+        scanStops++
+        stopDiscoveryFailure?.let { throw it }
+    }
     override suspend fun close() = Unit
 }

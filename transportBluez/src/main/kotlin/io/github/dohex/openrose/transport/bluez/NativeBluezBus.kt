@@ -1,12 +1,12 @@
 package io.github.dohex.openrose.transport.bluez
 
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.runInterruptible
 import kotlinx.coroutines.withTimeout
 import org.bluez.Adapter1
@@ -15,11 +15,11 @@ import org.bluez.GattCharacteristic1
 import org.freedesktop.dbus.DBusPath
 import org.freedesktop.dbus.connections.impl.DBusConnection
 import org.freedesktop.dbus.connections.impl.DBusConnectionBuilder
+import org.freedesktop.dbus.errors.NoReply
 import org.freedesktop.dbus.interfaces.DBus
 import org.freedesktop.dbus.interfaces.ObjectManager
 import org.freedesktop.dbus.interfaces.Properties
 import org.freedesktop.dbus.types.Variant
-import org.freedesktop.dbus.errors.NoReply
 import java.util.concurrent.CopyOnWriteArrayList
 
 internal class NativeBluezBus private constructor(private val connection: DBusConnection) : BluezBus {
@@ -27,11 +27,17 @@ internal class NativeBluezBus private constructor(private val connection: DBusCo
     override val events: Flow<BluezSignal> = flow {
         val inbox = Channel<BluezSignal>(Channel.UNLIMITED)
         listeners.add(inbox)
-        try { for (signal in inbox) emit(signal) } finally { listeners.remove(inbox); inbox.cancel() }
+        try {
+            for (signal in inbox) emit(signal)
+        } finally {
+            listeners.remove(inbox)
+            inbox.cancel()
+        }
     }
     private fun publish(signal: BluezSignal) {
         listeners.forEach { it.trySend(signal) }
     }
+
     @Volatile private var owner: String? = null
     private val handlers = mutableListOf<AutoCloseable>()
 
@@ -42,7 +48,11 @@ internal class NativeBluezBus private constructor(private val connection: DBusCo
                 publish(BluezSignal.Owner(s.newOwner.isNotEmpty()))
             }
         }
-        owner = try { connection.getRemoteObject("org.freedesktop.DBus", "/org/freedesktop/DBus", DBus::class.java).GetNameOwner("org.bluez") } catch (_: Exception) { null }
+        owner = try {
+            connection.getRemoteObject("org.freedesktop.DBus", "/org/freedesktop/DBus", DBus::class.java).GetNameOwner("org.bluez")
+        } catch (_: Exception) {
+            null
+        }
         handlers += connection.addSigHandler(Properties.PropertiesChanged::class.java) { s ->
             if (s.source == owner) publish(BluezSignal.Changed(s.path, s.interfaceName, s.propertiesChanged.mapValues { unwrap(it.value) } + s.propertiesRemoved.associateWith { null }))
         }
@@ -71,14 +81,22 @@ internal class NativeBluezBus private constructor(private val connection: DBusCo
     }
     override suspend fun stopDiscovery(path: String) = call { connection.getRemoteObject("org.bluez", path, Adapter1::class.java).StopDiscovery() }
     override suspend fun close() {
-        call { handlers.forEach { runCatching { it.close() } }; connection.close() }
+        call {
+            handlers.forEach { runCatching { it.close() } }
+            connection.close()
+        }
         listeners.forEach { it.close() }
     }
 
     companion object {
         suspend fun open(): NativeBluezBus = call {
             val connection = DBusConnectionBuilder.forSystemBus().withShared(false).build()
-            try { NativeBluezBus(connection).also { it.register() } } catch (error: Throwable) { connection.close(); throw error }
+            try {
+                NativeBluezBus(connection).also { it.register() }
+            } catch (error: Throwable) {
+                connection.close()
+                throw error
+            }
         }
         private suspend fun <T> call(block: () -> T): T = try {
             withTimeout(10_000) { runInterruptible(Dispatchers.IO) { block() } }

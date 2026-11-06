@@ -1,6 +1,5 @@
 package io.github.dohex.openrose.core
 
-import kotlinx.collections.immutable.persistentSetOf
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.FieldReading
 import io.github.dohex.openrose.core.protocol.FieldValue
@@ -10,23 +9,24 @@ import io.github.dohex.openrose.core.transport.ControlConnection
 import io.github.dohex.openrose.core.transport.ControlTransport
 import io.github.dohex.openrose.core.transport.DeviceId
 import io.github.dohex.openrose.core.transport.TransportEndpoint
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFalse
-import kotlin.test.assertIs
-import kotlin.test.assertTrue
+import kotlinx.collections.immutable.persistentSetOf
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.async
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.FlowCollector
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.TestScope
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertIs
+import kotlin.test.assertTrue
 
 /** Public session + literal transport vectors, never a replacement codec or confirmation path. */
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
@@ -35,8 +35,12 @@ class ControlSessionSettingTest {
     fun i5SettingWritesThenReadsBeforeConfirmingActualState() = runTest {
         val link = SettingLink()
         val transport = SettingTransport(link)
-        val session = ControlSession(PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
-            transport = transport, scope = backgroundScope, timing = SessionTiming(queryTimeoutMillis = 50, i5WriteIntervalMillis = 0))
+        val session = ControlSession(
+            PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
+            transport = transport,
+            scope = backgroundScope,
+            timing = SessionTiming(queryTimeoutMillis = 50, i5WriteIntervalMillis = 0),
+        )
         session.startScan()
         transport.advertisements.emit(i5Advertisement)
         runCurrent()
@@ -150,7 +154,9 @@ class ControlSessionSettingTest {
             DeviceSetting.NOISE_MODE to FieldValue.Toggle(true),
             DeviceSetting.NOISE_CYCLE to FieldValue.NoiseCycle(mapOf("anc" to true)),
             DeviceSetting.NOISE_CYCLE to FieldValue.NoiseCycle(mapOf("normal" to true, "transparency" to null, "wind" to false, "anc" to true)),
-        )) assertEquals(ControlErrorCode.INVALID_ARGUMENT, assertIs<OperationResult.Failure>(session.set(setting, value)).error.code)
+        )) {
+            assertEquals(ControlErrorCode.INVALID_ARGUMENT, assertIs<OperationResult.Failure>(session.set(setting, value)).error.code)
+        }
         assertEquals(ControlErrorCode.UNSUPPORTED, assertIs<OperationResult.Failure>(session.set(DeviceSetting.NOISE_MODE, FieldValue.Text("auto"))).error.code)
         assertEquals(13, link.writes.size)
         assertTrue(session.state.value.settingOperations.isEmpty())
@@ -192,8 +198,10 @@ class ControlSessionSettingTest {
         runCurrent()
         assertEquals(
             listOf(
-                "08ee00000006870b00018f", "08ee00000006070a000d",
-                "08ee00000006840b00018c", "08ee00000006040a000a",
+                "08ee00000006870b00018f",
+                "08ee00000006070a000d",
+                "08ee00000006840b00018c",
+                "08ee00000006040a000a",
             ),
             link.writes.drop(13),
         )
@@ -476,9 +484,12 @@ class ControlSessionSettingTest {
     private suspend fun TestScope.ready(maxWriteSize: Int = 20, interval: Long = 0, profile: ModelProfile = ModelProfile.I5_ZT): Triple<ControlSession, SettingLink, SettingTransport> {
         val link = SettingLink(maxWriteSize, now = { testScheduler.currentTime }, profile = profile)
         val transport = SettingTransport(link)
-        val session = ControlSession(PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
-            transport = transport, scope = backgroundScope,
-            timing = SessionTiming(queryTimeoutMillis = 50, i5WriteIntervalMillis = interval, i7WriteIntervalMillis = interval))
+        val session = ControlSession(
+            PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
+            transport = transport,
+            scope = backgroundScope,
+            timing = SessionTiming(queryTimeoutMillis = 50, i5WriteIntervalMillis = interval, i7WriteIntervalMillis = interval),
+        )
         session.startScan()
         val advertisement = if (profile == ModelProfile.I5_ZT) i5Advertisement else i7Advertisement
         transport.advertisements.emit(advertisement)
@@ -503,7 +514,9 @@ class ControlSessionSettingTest {
                 incoming.receiveAsFlow().collect(collector)
             }
         }
-        suspend fun deliverLate(hex: String) { requireNotNull(collector).emit(hex.bytes()) }
+        suspend fun deliverLate(hex: String) {
+            requireNotNull(collector).emit(hex.bytes())
+        }
         var initializing = true
         val writes = mutableListOf<String>()
         val writeTimes = mutableListOf<Long>()
@@ -517,22 +530,29 @@ class ControlSessionSettingTest {
             writeGate?.await()
             onWrite(hex)
             if (initializing) {
-                if (profile == ModelProfile.I5_ZT) i5Replies[hex.substring(10, 14)]?.let { incoming.send(it.bytes()) }
-                else incoming.send("dd00020905edaadd00040d010502f6aa".bytes())
+                if (profile == ModelProfile.I5_ZT) {
+                    i5Replies[hex.substring(10, 14)]?.let { incoming.send(it.bytes()) }
+                } else {
+                    incoming.send("dd00020905edaadd00040d010502f6aa".bytes())
+                }
             }
         }
-        override suspend fun close() { incoming.close() }
+        override suspend fun close() {
+            incoming.close()
+        }
     }
 
     companion object {
         private fun ByteArray.hex() = joinToString("") { (it.toInt() and 255).toString(16).padStart(2, '0') }
         private fun String.bytes() = chunked(2).map { it.toInt(16).toByte() }.toByteArray()
         private val requestedCycle = FieldValue.NoiseCycle(mapOf("normal" to true, "transparency" to false, "wind" to false, "anc" to true))
+
         // Synthetic replies preserve i5 normal/transparency/wind/ANC vs i7 ANC/wind/normal/transparency.
         private fun partialCycleReply(profile: ModelProfile) = if (profile == ModelProfile.I5_ZT) "09ff00000106050e0001ff000123" else "dd000536010001ff19aa"
         private fun completeCycleReply(profile: ModelProfile) = if (profile == ModelProfile.I5_ZT) "09ff00000106050e000100000124" else "dd000536010001001aaa"
         private val i5Advertisement = Advertisement(DeviceId("i5"), manufacturerData = mapOf(0x5352 to byteArrayOf(0, 1, 0, 1)))
         private val i7Advertisement = Advertisement(DeviceId("i7"), manufacturerData = mapOf(0xe5b8 to byteArrayOf(0x29, 0x0f)))
+
         // Independent real Linux RX capture; no setting hardware capture exists.
         private val i5Replies = mapOf(
             "0101" to "09ff00000101011100000164620000ffe2", "0602" to "09ff00000106020e000000010020",

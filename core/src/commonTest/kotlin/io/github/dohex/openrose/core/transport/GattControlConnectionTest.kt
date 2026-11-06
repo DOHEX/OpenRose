@@ -2,18 +2,18 @@ package io.github.dohex.openrose.core.transport
 
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
-import kotlinx.coroutines.test.advanceTimeBy
-import kotlinx.coroutines.test.runCurrent
-import kotlin.test.assertFalse
-import kotlin.test.assertIs
-import kotlin.test.assertTrue
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.toList
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertIs
+import kotlin.test.assertTrue
 
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class GattControlConnectionTest {
@@ -94,8 +94,10 @@ class GattControlConnectionTest {
         driver.incoming.send(GattEvent.ServicesChanged)
         runCurrent()
         assertTrue(receiving.isCompleted, "A changed service database must end the old connection")
-        assertEquals(TransportRecoveryReason.SERVICES_CHANGED,
-            assertIs<RecoverableTransportException>(receiving.await().exceptionOrNull()).reason)
+        assertEquals(
+            TransportRecoveryReason.SERVICES_CHANGED,
+            assertIs<RecoverableTransportException>(receiving.await().exceptionOrNull()).reason,
+        )
         val failure = runCatching { connection.write(byteArrayOf(1)) }.exceptionOrNull()
         assertEquals(TransportRecoveryReason.SERVICES_CHANGED, assertIs<RecoverableTransportException>(failure).reason)
         assertEquals(emptyList(), driver.writes)
@@ -141,6 +143,7 @@ class GattControlConnectionTest {
         assertEquals(GattSubscription.NOTIFY, driver.remoteSubscription)
         connection.close()
     }
+
     @Test
     fun serviceChangeDuringPendingWritePreservesTheSharedFailure() = runTest {
         val driver = FakeGattDriver().apply { writeGate = CompletableDeferred() }
@@ -153,6 +156,7 @@ class GattControlConnectionTest {
         assertEquals(TransportRecoveryReason.SERVICES_CHANGED, assertIs<RecoverableTransportException>(failure).reason)
         connection.close()
     }
+
     @Test
     fun notificationsRetainCharacteristicIdentityWhenServicesReuseUuid() = runTest {
         val selected = GattCharacteristic("notify", canNotify = true)
@@ -171,8 +175,6 @@ class GattControlConnectionTest {
         kotlin.test.assertContentEquals(byteArrayOf(0x12), next.await())
         connection.close()
     }
-
-
 
     private class FakeGattDriver : GattDriver {
         val incoming = Channel<GattEvent>(Channel.BUFFERED)
@@ -200,7 +202,9 @@ class GattControlConnectionTest {
             mtuGate?.await()
             return negotiatedMtu
         }
-        override suspend fun setNotificationRouting(characteristic: GattCharacteristic, enabled: Boolean) { routing = enabled }
+        override suspend fun setNotificationRouting(characteristic: GattCharacteristic, enabled: Boolean) {
+            routing = enabled
+        }
         override suspend fun configureSubscription(characteristic: GattCharacteristic, subscription: GattSubscription) {
             check(routing) { "Local routing must precede remote configuration" }
             remoteSubscription = subscription
@@ -220,9 +224,14 @@ class GattControlConnectionTest {
 
     private companion object {
         val endpoint = TransportEndpoint.BleGatt("service", "write", "notify")
-        val services = listOf(GattService("service", listOf(
-            GattCharacteristic("write", canWrite = true),
-            GattCharacteristic("notify", canNotify = true),
-        )))
+        val services = listOf(
+            GattService(
+                "service",
+                listOf(
+                    GattCharacteristic("write", canWrite = true),
+                    GattCharacteristic("notify", canNotify = true),
+                ),
+            ),
+        )
     }
 }

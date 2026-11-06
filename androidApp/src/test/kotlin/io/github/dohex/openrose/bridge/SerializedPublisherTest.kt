@@ -55,7 +55,12 @@ class SerializedPublisherTest {
         assertTrue(firstCommitting.await(10, TimeUnit.SECONDS))
         persisted = "ORDINARY"
         val derivedWhileFirstRunning = CountDownLatch(1)
-        val late = thread { publisher.publish { derivedWhileFirstRunning.countDown(); persisted } }
+        val late = thread {
+            publisher.publish {
+                derivedWhileFirstRunning.countDown()
+                persisted
+            }
+        }
 
         assertFalse(derivedWhileFirstRunning.await(300, TimeUnit.MILLISECONDS))
         releaseFirst.countDown()

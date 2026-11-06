@@ -32,8 +32,10 @@ internal class IntegrationScopeRestarter(
                 runRoot(restartScript(targets, waitSeconds)) { line ->
                     when {
                         line == ROOT_OK -> onUpdate(ScopeRestartPhase.Signalling)
+
                         line.startsWith(WAITING_PREFIX) ->
                             line.removePrefix(WAITING_PREFIX).toIntOrNull()?.let { onUpdate(ScopeRestartPhase.Waiting(it)) }
+
                         else -> parseResult(line, targets)?.let { if (reported.putIfAbsent(it.target, it) == null) onUpdate(it) }
                     }
                 }
@@ -88,10 +90,14 @@ private fun parseResult(line: String, targets: List<String>): ScopeRestartResult
     val status = rest.removePrefix("$target:")
     return when {
         status == "RESTARTED" -> ScopeRestartResult(target, ScopeRestartStatus.RESTARTED)
+
         status == "TERMINATED" -> ScopeRestartResult(target, ScopeRestartStatus.TERMINATED)
+
         status == "NOT_RUNNING" -> ScopeRestartResult(target, ScopeRestartStatus.NOT_RUNNING)
+
         status.startsWith("FAILED:") ->
             ScopeRestartResult(target, ScopeRestartStatus.FAILED, status.removePrefix("FAILED:").ifBlank { "终止一个或多个目标进程失败" })
+
         else -> null
     }
 }

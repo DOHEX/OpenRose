@@ -24,12 +24,6 @@ import io.github.dohex.openrose.core.transport.ControlConnection
 import io.github.dohex.openrose.core.transport.ControlTransport
 import io.github.dohex.openrose.core.transport.DeviceId
 import io.github.dohex.openrose.core.transport.TransportEndpoint
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFalse
-import kotlin.test.assertIs
-import kotlin.test.assertNotEquals
-import kotlin.test.assertTrue
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.async
@@ -41,6 +35,12 @@ import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertIs
+import kotlin.test.assertNotEquals
+import kotlin.test.assertTrue
 
 /**
  * The unified control entry is the only seam the application, the bridge and system entries share.
@@ -229,8 +229,7 @@ class SystemEntryRuntimeTest {
         assertTrue(transport.links.isEmpty())
     }
 
-    private fun noiseMode(runtime: ControlRuntime): FieldValue =
-        assertIs<FieldReading.Known>(runtime.state.value.device?.fields?.get(DeviceField.NOISE_MODE)).value
+    private fun noiseMode(runtime: ControlRuntime): FieldValue = assertIs<FieldReading.Known>(runtime.state.value.device?.fields?.get(DeviceField.NOISE_MODE)).value
 
     private fun rosePair(name: String) = DeviceCandidate(DeviceId(name), "EarFree i5", null, ModelProfile.I5_ZT, "", "11:22:33:44:55:66")
 

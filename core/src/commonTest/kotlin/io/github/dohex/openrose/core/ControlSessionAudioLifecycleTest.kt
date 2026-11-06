@@ -6,16 +6,16 @@ import io.github.dohex.openrose.core.transport.ControlConnection
 import io.github.dohex.openrose.core.transport.ControlTransport
 import io.github.dohex.openrose.core.transport.DeviceId
 import io.github.dohex.openrose.core.transport.TransportEndpoint
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertIs
-import kotlin.test.assertFalse
-import kotlin.test.assertTrue
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertIs
+import kotlin.test.assertTrue
 
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class ControlSessionAudioLifecycleTest {
@@ -282,14 +282,18 @@ class ControlSessionAudioLifecycleTest {
         var closed = false
         val writes = mutableListOf<String>()
 
-        override suspend fun subscribe() { subscribed = true }
+        override suspend fun subscribe() {
+            subscribed = true
+        }
         override suspend fun write(bytes: ByteArray) {
             check(subscribed) { "The earbud requires notifications before its first read" }
             val hex = bytes.hex()
             writes += hex
             replies[hex.substring(10, 14)]?.let { incoming.emit(it.bytes()) }
         }
-        override suspend fun close() { closed = true }
+        override suspend fun close() {
+            closed = true
+        }
     }
 
     companion object {

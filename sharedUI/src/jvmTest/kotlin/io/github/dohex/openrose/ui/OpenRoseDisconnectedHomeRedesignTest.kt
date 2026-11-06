@@ -2,11 +2,11 @@
 
 package io.github.dohex.openrose.ui
 
-import kotlinx.collections.immutable.persistentListOf
 import androidx.compose.runtime.mutableStateOf
 import io.github.dohex.openrose.core.*
 import io.github.dohex.openrose.core.protocol.ModelProfile
 import io.github.dohex.openrose.core.transport.DeviceId
+import kotlinx.collections.immutable.persistentListOf
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -76,28 +76,30 @@ class OpenRoseDisconnectedHomeRedesignTest {
 
     @Test
     fun primaryDashboardHidesSecondaryDisconnectButtonWhileDetailsRetainsIt() {
-        for (style in InterfaceStyle.entries) withOpenRoseAppHarness(connectedI7State(), initialUiSettings = UiSettings(interfaceStyle = style)) { harness ->
-            harness.render()
-            // On primary connected headphones dashboard:
-            // "断开控制连接" is NOT present as an explicit button on the main dashboard content
-            // (It is in the top-bar more menu, but not on the primary surface)
-            assertFalse(harness.hasText("断开控制连接"), "Primary dashboard should not show secondary Disconnect button")
+        for (style in InterfaceStyle.entries) {
+            withOpenRoseAppHarness(connectedI7State(), initialUiSettings = UiSettings(interfaceStyle = style)) { harness ->
+                harness.render()
+                // On primary connected headphones dashboard:
+                // "断开控制连接" is NOT present as an explicit button on the main dashboard content
+                // (It is in the top-bar more menu, but not on the primary surface)
+                assertFalse(harness.hasText("断开控制连接"), "Primary dashboard should not show secondary Disconnect button")
 
-            // Navigate to 音频与设备
-            harness.clickText("音频与设备")
-            harness.render()
-            assertFalse(harness.hasText("断开控制连接"), "Audio page should not show secondary Disconnect button")
+                // Navigate to 音频与设备
+                harness.clickText("音频与设备")
+                harness.render()
+                assertFalse(harness.hasText("断开控制连接"), "Audio page should not show secondary Disconnect button")
 
-            // Navigate to 设备详情
-            harness.clickText("设备详情")
-            harness.render()
+                // Navigate to 设备详情
+                harness.clickText("设备详情")
+                harness.render()
 
-            // In 设备详情: "断开控制连接" IS present in the ConnectionDetailsCard!
-            assertTrue(harness.hasText("断开控制连接"), "Device Details must retain 断开控制连接 button in advanced section")
+                // In 设备详情: "断开控制连接" IS present in the ConnectionDetailsCard!
+                assertTrue(harness.hasText("断开控制连接"), "Device Details must retain 断开控制连接 button in advanced section")
 
-            // Clicking disconnect invokes onDisconnect
-            harness.clickText("断开控制连接")
-            assertEquals(1, harness.disconnectCount)
+                // Clicking disconnect invokes onDisconnect
+                harness.clickText("断开控制连接")
+                assertEquals(1, harness.disconnectCount)
+            }
         }
     }
     private fun withHomeHarness(
@@ -117,6 +119,5 @@ class OpenRoseDisconnectedHomeRedesignTest {
         block(HomeHarness(this, connectRequests))
     }
 
-    private class HomeHarness(scene: OpenRoseUiTestScene, val connectRequests: List<DeviceId>) :
-        OpenRoseUiTestHarness(scene)
+    private class HomeHarness(scene: OpenRoseUiTestScene, val connectRequests: List<DeviceId>) : OpenRoseUiTestHarness(scene)
 }

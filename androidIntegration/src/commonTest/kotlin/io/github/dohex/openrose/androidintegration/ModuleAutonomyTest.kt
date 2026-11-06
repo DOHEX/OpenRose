@@ -4,6 +4,10 @@ import io.github.dohex.openrose.core.SessionReference
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.FieldReading
 import io.github.dohex.openrose.core.protocol.FieldValue
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -12,10 +16,6 @@ import kotlin.test.assertNotEquals
 import kotlin.test.assertNull
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
-import kotlinx.coroutines.cancel
-import kotlinx.coroutines.test.advanceTimeBy
-import kotlinx.coroutines.test.runCurrent
-import kotlinx.coroutines.test.runTest
 
 /**
  * Module control must run without the OpenRose application. These tests drive the module host from the
@@ -145,7 +145,8 @@ class ModuleAutonomyTest {
         val oldGeneration = (old.status.value as HostStatus.Active).generation
         val oldLease = (old.open(appIdentity) as HostOpenResult.Opened).lease.id
         val oldReference = SessionReference(
-            requireNotNull(runtime.state.value.device).deviceId, requireNotNull(runtime.state.value.device).sessionId,
+            requireNotNull(runtime.state.value.device).deviceId,
+            requireNotNull(runtime.state.value.device).sessionId,
         )
 
         rig.replaceHost(processDied = true)

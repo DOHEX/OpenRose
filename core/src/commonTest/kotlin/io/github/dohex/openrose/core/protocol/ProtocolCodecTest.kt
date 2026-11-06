@@ -2,11 +2,11 @@ package io.github.dohex.openrose.core.protocol
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNull
-import kotlin.test.assertFalse
 import kotlin.test.assertTrue
-import kotlin.test.assertFailsWith
 
 class ProtocolCodecTest {
     @Test
@@ -25,8 +25,12 @@ class ProtocolCodecTest {
         val frame = "dd000899dd00020901e9aafaaa".bytes()
         for (cut in 1 until frame.size) {
             val codec = createProtocolCodec(ModelProfile.I7_RS_V2)
-            assertEquals(whole, codec.feedNotification(frame.copyOfRange(0, cut)) +
-                codec.feedNotification(frame.copyOfRange(cut, frame.size)), "cut=$cut")
+            assertEquals(
+                whole,
+                codec.feedNotification(frame.copyOfRange(0, cut)) +
+                    codec.feedNotification(frame.copyOfRange(cut, frame.size)),
+                "cut=$cut",
+            )
         }
     }
 
@@ -43,13 +47,16 @@ class ProtocolCodecTest {
         val codec = createProtocolCodec(ModelProfile.I5_ZT)
         val queries = codec.initQueries(20)
         // Independent APK literal extraction: analysis/i5_fixed_sender_commands.json.
-        assertEquals(listOf(
-            "08ee00000001010a0002", "08ee00000006020a0008", "08ee00000002010a0003",
-            "08ee00000006030a0009", "08ee00000008010a0009", "08ee0000000d010a000e",
-            "08ee00000004010a0005", "08ee0000000a010a000b", "08ee00000006050a000b",
-            "08ee0000000c010a000d", "08ee00000006070a000d", "08ee00000006040a000a",
-            "08ee0000000e030a0011",
-        ), queries.map { it.bytes.toHex() })
+        assertEquals(
+            listOf(
+                "08ee00000001010a0002", "08ee00000006020a0008", "08ee00000002010a0003",
+                "08ee00000006030a0009", "08ee00000008010a0009", "08ee0000000d010a000e",
+                "08ee00000004010a0005", "08ee0000000a010a000b", "08ee00000006050a000b",
+                "08ee0000000c010a000d", "08ee00000006070a000d", "08ee00000006040a000a",
+                "08ee0000000e030a0011",
+            ),
+            queries.map { it.bytes.toHex() },
+        )
         // Actual Linux sample, 2026-10-18, firmware 125. Case FF is missing, not zero.
         val reply = codec.feedNotification(hex("09ff00000101011100000164620000ffe2")).single()
         assertEquals(setOf("0101"), reply.responseKeys)
@@ -82,8 +89,10 @@ class ProtocolCodecTest {
         assertEquals("none", bindings.first().action)
         assertEquals("noise_cycle", bindings.last().action)
         val cycle = codec.feedNotification(hex("09ff00000106050e000101010126")).single()
-        assertEquals(FieldValue.NoiseCycle(mapOf("normal" to true, "transparency" to true, "wind" to true, "anc" to true)),
-            assertIs<FieldReading.Known>(cycle.readings[DeviceField.NOISE_CYCLE]).value)
+        assertEquals(
+            FieldValue.NoiseCycle(mapOf("normal" to true, "transparency" to true, "wind" to true, "anc" to true)),
+            assertIs<FieldReading.Known>(cycle.readings[DeviceField.NOISE_CYCLE]).value,
+        )
     }
 
     @Test
@@ -174,8 +183,10 @@ class ProtocolCodecTest {
         val bindings = assertIs<FieldValue.TouchKeys>(assertIs<FieldReading.Known>(keys.readings[DeviceField.TOUCH_KEYS]).value).bindings
         assertEquals("noise_cycle", bindings.first().action)
         assertEquals("none", bindings.last().action)
-        assertEquals(FieldValue.NoiseCycle(mapOf("anc" to true, "wind" to false, "normal" to true, "transparency" to true)),
-            assertIs<FieldReading.Known>(read(0x36, "01000101").readings[DeviceField.NOISE_CYCLE]).value)
+        assertEquals(
+            FieldValue.NoiseCycle(mapOf("anc" to true, "wind" to false, "normal" to true, "transparency" to true)),
+            assertIs<FieldReading.Known>(read(0x36, "01000101").readings[DeviceField.NOISE_CYCLE]).value,
+        )
     }
 
     @Test
@@ -192,8 +203,7 @@ class ProtocolCodecTest {
         assertTrue(i7.feedNotification(frame.copyOfRange(0, 4)).isEmpty())
         i7.reset()
         assertTrue(i7.feedNotification(frame.copyOfRange(4, frame.size)).none { it.accepted })
-        assertEquals(FieldValue.Text("pop"), assertIs<FieldReading.Known>(
-            i7.feedNotification(hex("dd00002a012baa")).single().readings[DeviceField.EQ]).value)
+        assertEquals(FieldValue.Text("pop"), assertIs<FieldReading.Known>(i7.feedNotification(hex("dd00002a012baa")).single().readings[DeviceField.EQ]).value)
     }
 
     @Test

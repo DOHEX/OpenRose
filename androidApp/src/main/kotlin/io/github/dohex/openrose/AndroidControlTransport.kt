@@ -16,8 +16,8 @@ import io.github.dohex.openrose.core.transport.DeviceId
 import io.github.dohex.openrose.core.transport.TransportEndpoint
 import io.github.dohex.openrose.core.transport.TransportFacts
 import io.github.dohex.openrose.core.transport.normalizeBluetoothAddress
-import java.io.IOException
 import kotlinx.coroutines.flow.Flow
+import java.io.IOException
 
 /** Routes one session over BLE or RFCOMM while preserving the shared session's single-owner model. */
 internal class AndroidControlTransport(context: Context) : ControlTransport {
@@ -29,12 +29,10 @@ internal class AndroidControlTransport(context: Context) : ControlTransport {
 
     override fun scan(): Flow<Advertisement> = ble.scan()
 
-    override suspend fun connectionFacts(deviceId: DeviceId, classicAddress: String?): TransportFacts =
-        audioProfiles.connectionFacts(deviceId, classicAddress)
+    override suspend fun connectionFacts(deviceId: DeviceId, classicAddress: String?): TransportFacts = audioProfiles.connectionFacts(deviceId, classicAddress)
     override val audioConnectedDevice: Flow<DeviceId?> = audioProfiles.audioConnectedDevice
 
     override suspend fun bondedDevices(): List<DeviceCandidate> = audioProfiles.bondedDevices()
-
 
     @SuppressLint("MissingPermission") // SPP verifies runtime permission before accessing adapter state.
     override suspend fun connect(
@@ -43,6 +41,7 @@ internal class AndroidControlTransport(context: Context) : ControlTransport {
         onPhase: (ConnectionPhase) -> Unit,
     ): ControlConnection = when (endpoint) {
         is TransportEndpoint.BleGatt -> ble.connect(deviceId, endpoint, onPhase)
+
         is TransportEndpoint.SppRfcomm -> {
             val adapter = appContext.getSystemService(BluetoothManager::class.java)?.adapter
                 ?: throw IOException("系统蓝牙适配器不可用")
@@ -78,7 +77,6 @@ internal class AndroidControlTransport(context: Context) : ControlTransport {
         } else {
             context.checkSelfPermission(Manifest.permission.BLUETOOTH) == PackageManager.PERMISSION_GRANTED
         }
-
     }
 
     private fun hasBluetoothPermission(): Boolean = hasBluetoothPermission(appContext)

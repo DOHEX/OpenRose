@@ -111,16 +111,17 @@ fun IntegrationState.backgroundControl(control: ControlState): BackgroundControl
     }
     return when (val service = platform.backgroundService.service) {
         BackgroundServiceFact.NotRunning -> BackgroundControlStatus.NotRunning
+
         BackgroundServiceFact.Running ->
             BackgroundControlStatus.Running(platform.backgroundService.notification != RunningNotification.HIDDEN)
+
         is BackgroundServiceFact.StartRejected -> BackgroundControlStatus.Blocked(service.reason)
     }
 }
 
 private fun PlatformState.hasBackgroundService() = hostPlatform != HostPlatform.WINDOWS && hostPlatform != HostPlatform.LINUX
 
-private fun PlatformState.bluetoothPermissionMissing() =
-    permission == PermissionState.REQUIRED || permission == PermissionState.DENIED
+private fun PlatformState.bluetoothPermissionMissing() = permission == PermissionState.REQUIRED || permission == PermissionState.DENIED
 
 /** Whether unattended revival after process loss or restart is actually prepared, never implied by the saved intent. */
 fun IntegrationState.backgroundRecovery(control: ControlState): BackgroundRecovery {
@@ -146,7 +147,6 @@ fun IntegrationState.backgroundRecovery(control: ControlState): BackgroundRecove
  * and the Bluetooth permission decide this; a missing association never blocks the attempt, because the
  * system's refusal is then reported as it is.
  */
-fun IntegrationState.mayStartBackgroundService(control: ControlState): Boolean =
-    owner.selected == ControlWay.ORDINARY && control.platform.hasBackgroundService() && control.platform.userUnlocked &&
-        settings.backgroundControlEnabled &&
-        !control.platform.bluetoothPermissionMissing()
+fun IntegrationState.mayStartBackgroundService(control: ControlState): Boolean = owner.selected == ControlWay.ORDINARY && control.platform.hasBackgroundService() && control.platform.userUnlocked &&
+    settings.backgroundControlEnabled &&
+    !control.platform.bluetoothPermissionMissing()

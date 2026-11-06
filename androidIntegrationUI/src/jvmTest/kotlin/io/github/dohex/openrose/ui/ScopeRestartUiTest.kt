@@ -4,9 +4,9 @@ package io.github.dohex.openrose.ui
 
 import androidx.compose.runtime.mutableStateOf
 import io.github.dohex.openrose.androidintegration.IntegrationState
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.currentCoroutineContext
-import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.yield
 import kotlin.test.Test
@@ -180,7 +180,10 @@ class ScopeRestartUiTest {
     fun restartIsUnavailableWithoutASelectedProcess() = runOpenRoseUiTest(1200, 1000) {
         var requests = 0
         val page = mutableStateOf("操作")
-        val platform = androidTestPlatform(MutableStateFlow(IntegrationState()), restart = { _, _ -> requests++; emptyList() }, scope = CoroutineScope(currentCoroutineContext()))
+        val platform = androidTestPlatform(MutableStateFlow(IntegrationState()), restart = { _, _ ->
+            requests++
+            emptyList()
+        }, scope = CoroutineScope(currentCoroutineContext()))
         setContent { AndroidTestPage(FakeOpenRoseModel(), platform, page) }
         val harness = AndroidPageHarness(this, page)
         harness.render()

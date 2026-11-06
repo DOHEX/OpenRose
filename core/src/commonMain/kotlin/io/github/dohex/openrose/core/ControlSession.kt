@@ -50,8 +50,7 @@ internal class ControlSession(
     override suspend fun connectForAddDevice(deviceId: DeviceId): OperationResult = targeting.connectForAddDevice(deviceId)
     override suspend fun disconnect(): Boolean = targeting.disconnect()
 
-    override suspend fun set(setting: DeviceSetting, value: FieldValue, expectedSessionId: Long?): OperationResult =
-        settings.set(link, setting, value, expectedSessionId)
+    override suspend fun set(setting: DeviceSetting, value: FieldValue, expectedSessionId: Long?): OperationResult = settings.set(link, setting, value, expectedSessionId)
 
     override fun updateSettings(settings: UserSettings) {
         mutableState.update { it.copy(settings = settings) }
@@ -63,7 +62,9 @@ internal class ControlSession(
 internal fun platformError(state: ControlState, transport: ControlTransport?): ControlError? = when {
     state.platform.permission == PermissionState.REQUIRED || state.platform.permission == PermissionState.DENIED ->
         ControlError(ControlErrorCode.PERMISSION_REQUIRED, "需要蓝牙权限")
+
     transport == null || state.platform.transport != TransportAvailability.Available ->
         ControlError(ControlErrorCode.TRANSPORT_UNAVAILABLE, "平台蓝牙传输不可用")
+
     else -> null
 }

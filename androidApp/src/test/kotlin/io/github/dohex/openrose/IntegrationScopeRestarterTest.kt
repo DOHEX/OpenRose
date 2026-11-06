@@ -4,16 +4,16 @@ import io.github.dohex.openrose.ui.ScopeRestartPhase
 import io.github.dohex.openrose.ui.ScopeRestartResult
 import io.github.dohex.openrose.ui.ScopeRestartStatus
 import io.github.dohex.openrose.ui.ScopeRestartUpdate
-import kotlinx.coroutines.async
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
 import org.junit.Assume.assumeTrue
 import org.junit.Test
 import java.nio.file.Files
 import java.nio.file.Path
-import kotlin.test.assertEquals
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class IntegrationScopeRestarterTest {
@@ -168,7 +168,10 @@ class IntegrationScopeRestarterTest {
             env.forEach { (key, value) -> environment()[key] = value }
         }.start()
         val output = StringBuilder()
-        process.inputStream.bufferedReader().forEachLine { output.appendLine(it); onLine(it) }
+        process.inputStream.bufferedReader().forEachLine {
+            output.appendLine(it)
+            onLine(it)
+        }
         RootResult(process.waitFor(), output.toString())
     }
 
@@ -193,7 +196,10 @@ class IntegrationScopeRestarterTest {
         try {
             body(dir, ::start)
         } finally {
-            processes.forEach { it.destroyForcibly(); it.waitFor() }
+            processes.forEach {
+                it.destroyForcibly()
+                it.waitFor()
+            }
             Files.list(dir).use { paths -> paths.forEach { Files.deleteIfExists(it) } }
             Files.deleteIfExists(dir)
         }

@@ -102,8 +102,11 @@ private fun Map<DeviceField, FieldReading>.reading(field: DeviceField): FieldRea
 
 private fun FieldReading.normalizedBattery(): PresentationReading<Int> = when (this) {
     FieldReading.Loading -> PresentationReading.Loading
+
     is FieldReading.NotProvided -> PresentationReading.NotProvided
+
     is FieldReading.Unknown -> PresentationReading.Unknown
+
     is FieldReading.Known -> (value as? FieldValue.Number)?.value
         ?.takeIf { it in 0..100 }
         ?.let { PresentationReading.Known(it) }
@@ -112,8 +115,11 @@ private fun FieldReading.normalizedBattery(): PresentationReading<Int> = when (t
 
 private fun FieldReading.normalizedNumber(): PresentationReading<Int> = when (this) {
     FieldReading.Loading -> PresentationReading.Loading
+
     is FieldReading.NotProvided -> PresentationReading.NotProvided
+
     is FieldReading.Unknown -> PresentationReading.Unknown
+
     is FieldReading.Known -> (value as? FieldValue.Number)?.value
         ?.let { PresentationReading.Known(it) }
         ?: PresentationReading.Unknown
@@ -121,8 +127,11 @@ private fun FieldReading.normalizedNumber(): PresentationReading<Int> = when (th
 
 private fun FieldReading.normalizedText(): PresentationReading<String> = when (this) {
     FieldReading.Loading -> PresentationReading.Loading
+
     is FieldReading.NotProvided -> PresentationReading.NotProvided
+
     is FieldReading.Unknown -> PresentationReading.Unknown
+
     is FieldReading.Known -> (value as? FieldValue.Text)?.value
         ?.let { PresentationReading.Known(it) }
         ?: PresentationReading.Unknown

@@ -28,10 +28,13 @@ class AdvancedAudioProtocolTest {
         assertEquals(setting.readbacks.first(), setting.readback)
         assertEquals(setting.readbacks.drop(1), setting.additionalReadbacks)
         gains[0] = 6
-        assertEquals(mapOf(
-            DeviceField.EQ to FieldValue.Text("custom"),
-            DeviceField.CUSTOM_EQ to FieldValue.IntegerList(listOf(-6, -3, -1, 0, 1, 2, 3, 4, 5, 6)),
-        ), setting.expectedValues)
+        assertEquals(
+            mapOf(
+                DeviceField.EQ to FieldValue.Text("custom"),
+                DeviceField.CUSTOM_EQ to FieldValue.IntegerList(listOf(-6, -3, -1, 0, 1, 2, 3, 4, 5, 6)),
+            ),
+            setting.expectedValues,
+        )
         assertEquals("ff08020e0118aa", codec.prepareSetting(DeviceSetting.GAME_MODE, FieldValue.Toggle(true)).writeFrames.single().hex())
     }
 
@@ -84,7 +87,9 @@ class AdvancedAudioProtocolTest {
         assertEquals("ff0002450248aa", firstValidAfterRejectedWrites.writeFrames.single().hex())
 
         for ((level, tx) in listOf(
-            0 to "ff0002450046aa", 1 to "ff0002450147aa", 2 to "ff0002450248aa",
+            0 to "ff0002450046aa",
+            1 to "ff0002450147aa",
+            2 to "ff0002450248aa",
         )) {
             val setting = createProtocolCodec(ModelProfile.I7_RS_V2)
                 .prepareSetting(DeviceSetting.GAIN, FieldValue.Number(level), fw213)
@@ -94,8 +99,12 @@ class AdvancedAudioProtocolTest {
             assertEquals(mapOf(DeviceField.GAIN to FieldValue.Number(level)), setting.expectedValues)
         }
         for ((level, tx) in listOf(
-            0 to "ff0002460047aa", 1 to "ff0002460148aa", 2 to "ff0002460249aa",
-            3 to "ff000246034aaa", 4 to "ff000246044baa", 5 to "ff000246054caa",
+            0 to "ff0002460047aa",
+            1 to "ff0002460148aa",
+            2 to "ff0002460249aa",
+            3 to "ff000246034aaa",
+            4 to "ff000246044baa",
+            5 to "ff000246054caa",
             6 to "ff000246064daa",
         )) {
             val setting = createProtocolCodec(ModelProfile.I7_RS_V2)
@@ -118,7 +127,9 @@ class AdvancedAudioProtocolTest {
             promptCodec.prepareSetting(DeviceSetting.PROMPT_VOLUME, FieldValue.Number(0), fw213)
         }
         val muted = promptCodec.prepareSetting(
-            DeviceSetting.PROMPT_VOLUME, FieldValue.Number(0), FieldValue.Firmware(listOf(3, 0, 4), "304"),
+            DeviceSetting.PROMPT_VOLUME,
+            FieldValue.Number(0),
+            FieldValue.Firmware(listOf(3, 0, 4), "304"),
         )
         assertEquals("ff00022e002faa", muted.writeFrames.single().hex())
         assertEquals("ff0102fa2e2aaa", muted.readback.bytes.hex())
@@ -129,15 +140,19 @@ class AdvancedAudioProtocolTest {
         val codec = createProtocolCodec(ModelProfile.I7_RS_V2)
         assertFailsWith<UnsupportedOperationException> {
             createProtocolCodec(ModelProfile.I5_ZT).prepareSetting(
-                DeviceSetting.CUSTOM_EQ, FieldValue.IntegerList(List(10) { 0 }),
+                DeviceSetting.CUSTOM_EQ,
+                FieldValue.IntegerList(List(10) { 0 }),
             )
         }
         assertFailsWith<IllegalArgumentException> {
             codec.prepareSetting(DeviceSetting.CUSTOM_EQ, FieldValue.Number(0))
         }
         val invalid = listOf(
-            emptyList(), List(9) { 0 }, List(11) { 0 },
-            List(10) { if (it == 0) -7 else 0 }, List(10) { if (it == 9) 7 else 0 },
+            emptyList(),
+            List(9) { 0 },
+            List(11) { 0 },
+            List(10) { if (it == 0) -7 else 0 },
+            List(10) { if (it == 9) 7 else 0 },
         )
         for (curve in invalid) {
             assertFailsWith<IllegalArgumentException> {

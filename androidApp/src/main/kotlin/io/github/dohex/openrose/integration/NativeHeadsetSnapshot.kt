@@ -2,8 +2,8 @@ package io.github.dohex.openrose.integration
 
 import android.os.Bundle
 import android.os.SystemClock
-import io.github.dohex.openrose.bridge.BridgeWire
 import io.github.dohex.openrose.androidintegration.SystemRequestGate
+import io.github.dohex.openrose.bridge.BridgeWire
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.FieldReading
 import io.github.dohex.openrose.core.protocol.FieldValue
@@ -35,26 +35,23 @@ data class NativeHeadsetSnapshot(
 
     fun isSupportedProfile(): Boolean = profile == "I5_ZT" || profile == "I7_RS_V2"
 
-    fun isFresh(nowElapsedMillis: Long = SystemClock.elapsedRealtime()): Boolean =
-        isSupportedProfile() && hostEpoch.isNotBlank() && deviceId.isNotBlank() && sessionId > 0L && addresses.isNotEmpty() &&
-            addresses.all { normalizeBluetoothAddress(it) == it } &&
-            capturedElapsedMillis > 0L && capturedElapsedMillis <= nowElapsedMillis &&
-            nowElapsedMillis - capturedElapsedMillis <= MAX_AGE_MILLIS
+    fun isFresh(nowElapsedMillis: Long = SystemClock.elapsedRealtime()): Boolean = isSupportedProfile() && hostEpoch.isNotBlank() && deviceId.isNotBlank() && sessionId > 0L && addresses.isNotEmpty() &&
+        addresses.all { normalizeBluetoothAddress(it) == it } &&
+        capturedElapsedMillis > 0L && capturedElapsedMillis <= nowElapsedMillis &&
+        nowElapsedMillis - capturedElapsedMillis <= MAX_AGE_MILLIS
 
     fun matchesAddress(address: String?): Boolean {
         val normalized = normalizeBluetoothAddress(address) ?: return false
         return normalized in addresses
     }
 
-    fun supportsNoise(mode: String): Boolean =
-        supportsNoiseMode && mode in noiseModes && "NOISE_MODE" in writableSettings
+    fun supportsNoise(mode: String): Boolean = supportsNoiseMode && mode in noiseModes && "NOISE_MODE" in writableSettings
 
-    fun sameReportedState(other: NativeHeadsetSnapshot): Boolean =
-        hostEpoch == other.hostEpoch && deviceId == other.deviceId && sessionId == other.sessionId &&
-            addresses == other.addresses && profile == other.profile && writableSettings == other.writableSettings &&
-            readableFields == other.readableFields && noiseModes == other.noiseModes && ancLevel == other.ancLevel &&
-            transparencyLevel == other.transparencyLevel &&
-            fields == other.fields
+    fun sameReportedState(other: NativeHeadsetSnapshot): Boolean = hostEpoch == other.hostEpoch && deviceId == other.deviceId && sessionId == other.sessionId &&
+        addresses == other.addresses && profile == other.profile && writableSettings == other.writableSettings &&
+        readableFields == other.readableFields && noiseModes == other.noiseModes && ancLevel == other.ancLevel &&
+        transparencyLevel == other.transparencyLevel &&
+        fields == other.fields
 
     /**
      * Parse only the primitive bridge wire fields needed by the native adapters. Every nested
@@ -65,8 +62,7 @@ data class NativeHeadsetSnapshot(
         const val MAX_AGE_MILLIS = 3_000L
         const val MILINK_COMPATIBILITY_DEVICE_ID = "01010607"
 
-        fun fromBundle(bundle: Bundle?): NativeHeadsetSnapshot? =
-            runCatching { parseBundle(bundle) }.getOrNull()
+        fun fromBundle(bundle: Bundle?): NativeHeadsetSnapshot? = runCatching { parseBundle(bundle) }.getOrNull()
 
         private fun parseBundle(bundle: Bundle?): NativeHeadsetSnapshot? {
             bundle ?: return null
@@ -128,22 +124,23 @@ data class NativeHeadsetSnapshot(
             )
         }
 
-        private fun stringValues(bundle: Bundle?, key: String): List<String> =
-            (runCatching { bundle?.get(key) }.getOrNull() as? ArrayList<*>)
-                ?.mapNotNull { it as? String }
-                .orEmpty()
+        private fun stringValues(bundle: Bundle?, key: String): List<String> = (runCatching { bundle?.get(key) }.getOrNull() as? ArrayList<*>)
+            ?.mapNotNull { it as? String }
+            .orEmpty()
 
-        private fun integerValues(bundle: Bundle?, key: String): List<Int> =
-            (runCatching { bundle?.get(key) }.getOrNull() as? ArrayList<*>)
-                ?.mapNotNull { it as? Int }
-                .orEmpty()
+        private fun integerValues(bundle: Bundle?, key: String): List<Int> = (runCatching { bundle?.get(key) }.getOrNull() as? ArrayList<*>)
+            ?.mapNotNull { it as? Int }
+            .orEmpty()
 
         private fun parseReading(bundle: Bundle): FieldReading? {
             // The wire carries values only; the raw device bytes never reach a system entry.
             return when (bundle.getString("status") ?: return null) {
                 "LOADING" -> FieldReading.Loading
+
                 "UNKNOWN" -> FieldReading.Unknown("")
+
                 "NOT_PROVIDED" -> FieldReading.NotProvided("")
+
                 "KNOWN" -> {
                     val value = bundle.getBundle("value") ?: return FieldReading.Unknown("")
                     val type = value.getString("type") ?: return FieldReading.Unknown("")
@@ -155,6 +152,7 @@ data class NativeHeadsetSnapshot(
                         else -> null
                     } ?: FieldReading.Unknown("")
                 }
+
                 else -> null
             }
         }
@@ -172,8 +170,7 @@ data class NativeHeadsetSnapshot(
             return value
         }
 
-        private fun normalizeNoiseMode(mode: String): String? =
-            mode.trim().lowercase(Locale.ROOT).takeIf { it.length in 1..32 }
+        private fun normalizeNoiseMode(mode: String): String? = mode.trim().lowercase(Locale.ROOT).takeIf { it.length in 1..32 }
     }
 }
 
@@ -182,8 +179,7 @@ data class NativeNoiseLevelCapabilities(
     val levels: Set<Int>,
     val visibleModes: Set<String>,
 ) {
-    fun isVisibleIn(mode: String?): Boolean =
-        levels.isNotEmpty() && mode?.trim()?.lowercase(Locale.ROOT)?.let(visibleModes::contains) == true
+    fun isVisibleIn(mode: String?): Boolean = levels.isNotEmpty() && mode?.trim()?.lowercase(Locale.ROOT)?.let(visibleModes::contains) == true
 }
 
 data class NativeSessionReference(
@@ -207,7 +203,9 @@ internal class NativeManagedAddressTombstones {
     fun contains(address: String?): Boolean = NativeHeadsetSnapshot.normalizeBluetoothAddress(address) in addresses
 
     @Synchronized
-    fun clear() { addresses.clear() }
+    fun clear() {
+        addresses.clear()
+    }
 }
 
 /** Callbacks are supplied by the authenticated reader lease in the target process. */
@@ -235,12 +233,11 @@ interface AuthenticatedNativeHeadsetCallbacks {
 internal object NativeNoiseRequestGate {
     private val gate = SystemRequestGate({ SystemClock.elapsedRealtime() })
 
-    fun submit(snapshot: NativeHeadsetSnapshot, mode: String, enqueue: () -> Boolean): Result =
-        when (gate.submit(Key(snapshot.hostEpoch, snapshot.deviceId, snapshot.sessionId, mode), enqueue)) {
-            SystemRequestGate.Result.ACCEPTED -> Result.ACCEPTED
-            SystemRequestGate.Result.DUPLICATE -> Result.DUPLICATE
-            SystemRequestGate.Result.REJECTED -> Result.REJECTED
-        }
+    fun submit(snapshot: NativeHeadsetSnapshot, mode: String, enqueue: () -> Boolean): Result = when (gate.submit(Key(snapshot.hostEpoch, snapshot.deviceId, snapshot.sessionId, mode), enqueue)) {
+        SystemRequestGate.Result.ACCEPTED -> Result.ACCEPTED
+        SystemRequestGate.Result.DUPLICATE -> Result.DUPLICATE
+        SystemRequestGate.Result.REJECTED -> Result.REJECTED
+    }
 
     enum class Result { ACCEPTED, DUPLICATE, REJECTED }
 

@@ -2,9 +2,6 @@
 
 package io.github.dohex.openrose.ui
 
-import kotlinx.collections.immutable.persistentMapOf
-import kotlinx.collections.immutable.persistentSetOf
-import kotlinx.collections.immutable.toPersistentList
 import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
@@ -27,6 +24,9 @@ import io.github.dohex.openrose.core.protocol.FieldReading
 import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.dohex.openrose.core.protocol.ModelProfile
 import io.github.dohex.openrose.core.transport.DeviceId
+import kotlinx.collections.immutable.persistentMapOf
+import kotlinx.collections.immutable.persistentSetOf
+import kotlinx.collections.immutable.toPersistentList
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -71,10 +71,12 @@ class NoiseControlCardUiTest {
             knownMode("auto"),
         )
 
-        for (style in InterfaceStyle.entries) for (reading in readings) {
-            val nodes = renderNodes(state(mode = reading), style)
-            assertFalse(nodes.hasText("降噪档位"), "ANC row for $reading")
-            assertFalse(nodes.hasText("通透档位"), "transparency row for $reading")
+        for (style in InterfaceStyle.entries) {
+            for (reading in readings) {
+                val nodes = renderNodes(state(mode = reading), style)
+                assertFalse(nodes.hasText("降噪档位"), "ANC row for $reading")
+                assertFalse(nodes.hasText("通透档位"), "transparency row for $reading")
+            }
         }
     }
 
@@ -86,7 +88,8 @@ class NoiseControlCardUiTest {
                 transparencyLevel = null,
             )
             val transparencyUnsupportedNodes = renderNodes(
-                state(mode = knownMode("transparency"), noiseCapabilities = ancOnlyCapabilities), style,
+                state(mode = knownMode("transparency"), noiseCapabilities = ancOnlyCapabilities),
+                style,
             )
             assertFalse(transparencyUnsupportedNodes.hasText("通透档位"))
 
@@ -104,7 +107,8 @@ class NoiseControlCardUiTest {
                 transparencyLevel = NoiseLevelCapabilities(levels = persistentSetOf(2, 4), visibleModes = persistentSetOf("transparency")),
             )
             val transparencyNodes = renderNodes(
-                state(mode = knownMode("transparency"), noiseCapabilities = transparencyOnlyCapabilities), style,
+                state(mode = knownMode("transparency"), noiseCapabilities = transparencyOnlyCapabilities),
+                style,
             )
 
             assertFalse(transparencyNodes.hasText("降噪档位"))

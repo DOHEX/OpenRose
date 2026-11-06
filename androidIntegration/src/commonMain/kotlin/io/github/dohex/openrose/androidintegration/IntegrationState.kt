@@ -29,6 +29,7 @@ data class IntegrationState(
 sealed interface ModuleAvailability {
     data object Available : ModuleAvailability
     data object NotEnabled : ModuleAvailability
+
     /** [reason] is for display; [cause] is what a surface may branch on, null when no next step is known. */
     data class Unavailable(val reason: String, val cause: ModuleUnavailableCause? = null) : ModuleAvailability
 

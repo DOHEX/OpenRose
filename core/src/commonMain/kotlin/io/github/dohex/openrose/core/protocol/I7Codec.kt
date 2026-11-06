@@ -23,7 +23,8 @@ internal class I7Codec : ProtocolCodec {
             val modeReadback = query(byteArrayOf(0x2a))
             val curveReadback = query(byteArrayOf(0x3e))
             return ProtocolSetting(
-                writes, modeReadback,
+                writes,
+                modeReadback,
                 mapOf(DeviceField.EQ to FieldValue.Text("custom"), DeviceField.CUSTOM_EQ to FieldValue.IntegerList(gains)),
                 listOf(curveReadback),
             )
@@ -36,15 +37,18 @@ internal class I7Codec : ProtocolCodec {
                     ?: throw UnsupportedOperationException("i7 不支持该降噪模式")
                 9.toByte() to byteArrayOf(mode.toByte())
             }
+
             DeviceSetting.ANC_LEVEL, DeviceSetting.TRANSPARENCY_LEVEL -> {
                 require(value is FieldValue.Number) { "档位需要整数" }
                 require(value.value in setOf(1, 3, 5)) { "i7 档位仅支持 1、3、5" }
                 (if (setting == DeviceSetting.ANC_LEVEL) 0x2c else 0x2d).toByte() to byteArrayOf(value.value.toByte())
             }
+
             DeviceSetting.NOISE_CYCLE -> {
                 val flags = (expected as FieldValue.NoiseCycle).flags
                 0x36.toByte() to listOf("anc", "wind", "normal", "transparency").map { if (flags.getValue(it) == true) 1.toByte() else 0.toByte() }.toByteArray()
             }
+
             DeviceSetting.EQ -> {
                 require(value is FieldValue.Text) { "均衡器需要预设名称" }
                 if (value.value !in equalizerCapabilities(profile, firmware).presets) {
@@ -53,6 +57,7 @@ internal class I7Codec : ProtocolCodec {
                 val preset = mapOf("hifi" to 0, "pop" to 1, "rock" to 2, "light" to 3, "eap" to 6).getValue(value.value)
                 0x2a.toByte() to byteArrayOf(preset.toByte())
             }
+
             DeviceSetting.GAIN -> {
                 require(value is FieldValue.Number) { "增益需要档位整数" }
                 require(value.value in 0..2) { "i7 增益档位仅支持 0～2" }
@@ -61,6 +66,7 @@ internal class I7Codec : ProtocolCodec {
                 }
                 0x45.toByte() to byteArrayOf(value.value.toByte())
             }
+
             DeviceSetting.HEARING_PROTECTION -> {
                 require(value is FieldValue.Number) { "听力保护需要档位整数" }
                 require(value.value in 0..6) { "i7 听力保护档位仅支持 0～6" }
@@ -69,6 +75,7 @@ internal class I7Codec : ProtocolCodec {
                 }
                 0x46.toByte() to byteArrayOf(value.value.toByte())
             }
+
             DeviceSetting.PROMPT_VOLUME -> {
                 require(value is FieldValue.Number) { "提示音需要档位整数" }
                 require(value.value in 0..5) { "i7 提示音仅支持 0～5 档" }
@@ -77,24 +84,29 @@ internal class I7Codec : ProtocolCodec {
                 }
                 0x2e.toByte() to byteArrayOf(value.value.toByte())
             }
+
             DeviceSetting.GAME_MODE -> {
                 require(value is FieldValue.Toggle) { "游戏模式需要明确开关" }
                 0x0e.toByte() to byteArrayOf(if (value.value) 1 else 0)
             }
+
             DeviceSetting.AUDIO_MODE -> {
                 require(value is FieldValue.Text) { "音频模式需要配置名称" }
                 val mode = listOf("aac_sbc", "ldac", "lhdc", "lc3").indexOf(value.value)
                 if (mode < 0) throw UnsupportedOperationException("i7 不支持该音频配置")
                 0x2b.toByte() to byteArrayOf(mode.toByte())
             }
+
             DeviceSetting.MULTIPOINT -> {
                 require(value is FieldValue.Toggle) { "多点连接需要明确开关" }
                 0x32.toByte() to byteArrayOf(if (value.value) 1 else 0)
             }
+
             DeviceSetting.TOUCH_ENABLED, DeviceSetting.EAR_DETECTION -> {
                 require(value is FieldValue.Toggle) { "触控和检测功能需要明确开关" }
                 (if (setting == DeviceSetting.TOUCH_ENABLED) 7 else 8).toByte() to byteArrayOf(if (value.value) 0 else 1)
             }
+
             DeviceSetting.TOUCH_BINDING -> {
                 val binding = validatedTouchAssignment(value, profile)
                 val gesture = listOf("single", "double", "triple", "long").indexOf(binding.gesture)
@@ -232,11 +244,13 @@ internal class I7Codec : ProtocolCodec {
                     put(field, if (index < 2 && value[index].u() == 255) null else FieldValue.Toggle(value[index].u() and 128 != 0), byteArrayOf(value[index]))
                 }
             }
+
             0x0d -> {
                 if (value.size < 3) return emptyMap()
                 val parts = value.take(3).map { it.u() }
                 put(DeviceField.FIRMWARE, FieldValue.Firmware(parts, parts.joinToString("")))
             }
+
             0x01 -> {
                 if (value.size < 16 || value.size % 2 != 0) return emptyMap()
                 val pairs = value.toList().chunked(2).associate { it[0].u() to it[1].u() }
@@ -250,21 +264,33 @@ internal class I7Codec : ProtocolCodec {
                 }
                 put(DeviceField.TOUCH_KEYS, FieldValue.TouchKeys(bindings))
             }
+
             0x09 -> {
                 if (value.size != 1) return emptyMap()
                 put(DeviceField.NOISE_MODE, mapOf(1 to "anc", 2 to "normal", 3 to "transparency", 4 to "wind", 5 to "auto", 6 to "deep", 7 to "dynamic")[raw]?.let { FieldValue.Text(it) })
             }
+
             0x07, 0x08, 0x0e, 0x32 -> {
                 if (value.size != 1) return emptyMap()
                 val on = if (type in listOf(7, 8)) 0 else 1
                 put(expected.single(), if (raw in 0..1) FieldValue.Toggle(raw == on) else null)
             }
+
             0x2a -> {
                 if (value.size !in 1..2) return emptyMap()
-                val index = if (value.size == 1) when (raw) { 0 -> 1; 1 -> 0; else -> raw } else raw
+                val index = if (value.size == 1) {
+                    when (raw) {
+                        0 -> 1
+                        1 -> 0
+                        else -> raw
+                    }
+                } else {
+                    raw
+                }
                 put(DeviceField.EQ, mapOf(0 to "pop", 1 to "hifi", 2 to "rock", 3 to "light", 4 to "custom", 5 to "custom_slot", 6 to "eap")[index]?.let { FieldValue.Text(it) })
                 if (value.size == 2 && raw == 5) put(DeviceField.EQ_SLOT, FieldValue.Number(value[1].u()))
             }
+
             0x2b, 0x2c, 0x2d, 0x2e -> {
                 if (value.isEmpty()) return emptyMap()
                 // Observed F8 helpers parse the entire hex text with decimal radix.
@@ -277,6 +303,7 @@ internal class I7Codec : ProtocolCodec {
                 }
                 put(expected.single(), semantic)
             }
+
             0x36 -> {
                 if (value.size < 4) return emptyMap()
                 val flags = listOf("anc", "wind", "normal", "transparency").mapIndexed { index, name ->
@@ -285,15 +312,18 @@ internal class I7Codec : ProtocolCodec {
                 }.toMap()
                 put(DeviceField.NOISE_CYCLE, FieldValue.NoiseCycle(flags))
             }
+
             0x3e -> {
                 val gains = value.map { if (it.u() and 128 != 0) -(it.u() and 127) else it.u() and 127 }
                 put(DeviceField.CUSTOM_EQ, gains.takeIf { it.size == 10 && it.all { gain -> gain in -6..6 } }?.let { FieldValue.IntegerList(it) })
             }
+
             0x45, 0x46 -> {
                 if (value.size != 1) return emptyMap()
                 val max = if (type == 0x45) 2 else 6
                 put(expected.single(), raw?.takeIf { it in 0..max }?.let { FieldValue.Number(it) })
             }
+
             0x2f -> {
                 if (value.size != 1) return emptyMap()
                 put(DeviceField.FIND_STATE, mapOf(1 to "start_left", 2 to "start_right", 3 to "start_both", 4 to "stop_both", 5 to "stop_left", 6 to "stop_right")[raw]?.let { FieldValue.Text(it) })

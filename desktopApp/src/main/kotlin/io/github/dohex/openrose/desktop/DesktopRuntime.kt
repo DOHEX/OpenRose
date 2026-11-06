@@ -11,7 +11,6 @@ import io.github.dohex.openrose.ui.UiSettings
 import io.github.dohex.openrose.ui.UiSettingsCodec
 import io.github.dohex.openrose.ui.model.OpenRoseSettingsStore
 import io.github.dohex.openrose.ui.model.RuntimeOpenRoseModel
-import java.util.prefs.Preferences
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -22,6 +21,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.util.prefs.Preferences
 
 /** Window, tray and appearance changes share this process's single control entry and preference store. */
 internal class DesktopRuntime(
@@ -72,9 +72,11 @@ internal class DesktopRuntime(
 
     suspend fun close() {
         availabilityJob?.cancelAndJoin()
-        control.updatePlatformState(control.state.value.platform.copy(
-            transport = TransportAvailability.Unavailable("应用正在关闭"),
-        ))
+        control.updatePlatformState(
+            control.state.value.platform.copy(
+                transport = TransportAvailability.Unavailable("应用正在关闭"),
+            ),
+        )
         try {
             try {
                 control.stopScan()

@@ -9,7 +9,10 @@ class SystemRequestGateTest {
     private val gate = SystemRequestGate({ now }, windowMillis = 250)
     private val delivered = mutableListOf<Any>()
 
-    private fun submit(key: Any, accept: Boolean = true) = gate.submit(key) { delivered += key; accept }
+    private fun submit(key: Any, accept: Boolean = true) = gate.submit(key) {
+        delivered += key
+        accept
+    }
 
     @Test
     fun theSameOperationReachedTwiceIsHandedOverOnce() {

@@ -59,14 +59,18 @@ fun traySummary(state: ControlState, selection: PrimaryDeviceSelection): TraySum
 
     val title = when {
         ready != null -> "${state.trayDeviceName(ready.deviceId, ready.profile)} · 已连接"
+
         connecting -> {
             val deviceId = checkNotNull(state.connection.deviceIdOrNull())
             val profile = state.device?.takeIf { it.deviceId == deviceId }?.profile
             "${state.trayDeviceName(deviceId, profile)} · 正在连接…"
         }
+
         state.connectionTarget == null && state.platform.transportUnavailableForHome() ->
             checkNotNull(unavailable).reason
+
         primary == null -> "未添加耳机"
+
         else -> "${state.trayDeviceName(primary.deviceId, primary.profile)} · 未连接"
     }
 
@@ -101,9 +105,8 @@ fun traySummary(state: ControlState, selection: PrimaryDeviceSelection): TraySum
     )
 }
 
-private fun PlatformState.transportUsable(): Boolean =
-    permission in setOf(PermissionState.GRANTED, PermissionState.NOT_REQUIRED) &&
-        transport !is TransportAvailability.Unavailable
+private fun PlatformState.transportUsable(): Boolean = permission in setOf(PermissionState.GRANTED, PermissionState.NOT_REQUIRED) &&
+    transport !is TransportAvailability.Unavailable
 
 /** A connection attempt is under way, including a session that is not yet ready for control. */
 private fun ControlState.isConnectingForTray(): Boolean = when (val current = connection) {
@@ -193,16 +196,21 @@ private fun TrayPanelContent(
                     color = appColor(AppColorRole.Primary),
                 )
             }
+
             summary.connected || summary.addDevice -> Unit
+
             permissionRequired -> AppText("需要蓝牙权限才能连接这副耳机", role = AppTextRole.Summary)
+
             // Without a connection target the title already carries the reason.
             unavailableTransport != null ->
                 if (state.connectionTarget != null) AppText(unavailableTransport.reason, role = AppTextRole.Summary)
+
             state.lastError != null -> AppText(
                 "连接未成功 · 请确认耳机已开盖并在附近",
                 role = AppTextRole.Summary,
                 color = appColor(AppColorRole.Error),
             )
+
             else -> AppText("未连接 · 耳机开盖后将自动连接", role = AppTextRole.Summary)
         }
         if (device != null) {

@@ -21,9 +21,9 @@ interface PlatformUi {
 
     @Composable
     fun SettingsSections(state: ControlState, position: PlatformSettingsPosition) {}
+
     @Composable
     fun DiagnosticsStatusRows(state: ControlState) {}
-
 
     @Composable
     fun DiagnosticsSections(state: ControlState) {}

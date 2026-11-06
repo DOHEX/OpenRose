@@ -182,12 +182,12 @@ fun ToneInfoRow(label: String, value: String, tone: StatusTone) {
     AppInfoRow(label = label, value = value, valueColor = tone.color())
 }
 
-
 enum class StatusTone {
     NEUTRAL,
     GOOD,
     CAUTION,
-    ERROR;
+    ERROR,
+    ;
 
     @Composable
     fun color(): Color = appColor(
@@ -221,4 +221,3 @@ private fun pageTransitionLabel(transition: PageTransition): String = when (tran
     PageTransition.FADE -> "淡入淡出"
     PageTransition.NONE -> "关闭动效"
 }
-
