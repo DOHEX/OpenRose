@@ -84,30 +84,35 @@ internal class SettingQueue(
     }
 
     private fun validateSetting(profile: ModelProfile, setting: DeviceSetting, value: FieldValue): ControlError? {
-        val noise = noiseControlCapabilities(profile, firmware())
+        val capabilities = profile.capabilities(firmware())
+        val noise = capabilities.noiseControl
         val valid = when (setting) {
             DeviceSetting.CUSTOM_EQ -> {
-                val custom = equalizerCapabilities(profile, firmware()).custom
-                    ?: return ControlError(ControlErrorCode.UNSUPPORTED, "该型号不支持自定义均衡器")
+                val custom = capabilities.equalizer?.custom ?: return ControlError(ControlErrorCode.UNSUPPORTED, "该型号不支持自定义均衡器")
                 value is FieldValue.IntegerList &&
                     value.values.size == custom.bandsHz.size &&
                     value.values.all { it in custom.minGain..custom.maxGain }
             }
 
-            DeviceSetting.GAIN -> value is FieldValue.Number && value.value in gainLevels(profile, firmware())
+            DeviceSetting.GAIN -> value is FieldValue.Number && value.value in capabilities.gainLevels
 
-            DeviceSetting.HEARING_PROTECTION -> value is FieldValue.Number && value.value in hearingProtectionLevels(profile, firmware())
+            DeviceSetting.HEARING_PROTECTION -> value is FieldValue.Number && value.value in capabilities.hearingProtectionLevels
+
+            DeviceSetting.BASS_BOOST -> value is FieldValue.Number && value.value in capabilities.bassBoostLevels
+
+            DeviceSetting.PROMPT_LANGUAGE -> value is FieldValue.Text && value.value in capabilities.promptLanguages
 
             DeviceSetting.PROMPT_VOLUME -> {
-                val levels = promptVolumeLevels(profile, firmware())
-                if (profile == ModelProfile.I7_RS_V2 && value is FieldValue.Number && value.value == 0 && value.value !in levels) {
-                    return ControlError(ControlErrorCode.UNSUPPORTED, "当前固件不支持关闭提示音")
+                val levels = capabilities.promptVolumeLevels
+                // A level the family can carry but this firmware does not offer is unsupported, not malformed.
+                if (value is FieldValue.Number && value.value !in levels && value.value in profile.family.promptVolumeLevels) {
+                    return ControlError(ControlErrorCode.UNSUPPORTED, if (value.value == 0) "当前固件不支持关闭提示音" else "当前固件不支持此提示音档位")
                 }
                 value is FieldValue.Number && value.value in levels
             }
 
             DeviceSetting.TOUCH_BINDING -> {
-                validateTouchBinding(profile, value)?.let { return it }
+                validateTouchBinding(capabilities.touchControl, value)?.let { return it }
                 true
             }
 
@@ -118,36 +123,37 @@ internal class SettingQueue(
             -> value is FieldValue.Toggle
 
             DeviceSetting.AUDIO_MODE -> {
-                if (value is FieldValue.Text && value.value !in audioControlCapabilities(profile).modes) {
+                if (value is FieldValue.Text && value.value !in capabilities.audioControl?.modes.orEmpty()) {
                     return ControlError(ControlErrorCode.UNSUPPORTED, "该型号不支持 ${value.value} 音频配置")
                 }
                 value is FieldValue.Text
             }
 
             DeviceSetting.EQ -> {
-                if (value is FieldValue.Text && value.value !in equalizerCapabilities(profile, firmware()).presets) {
+                if (value is FieldValue.Text && value.value !in capabilities.equalizer?.presets.orEmpty()) {
                     return ControlError(ControlErrorCode.UNSUPPORTED, "该型号与固件不支持 ${value.value} EQ")
                 }
                 value is FieldValue.Text
             }
 
             DeviceSetting.NOISE_MODE -> {
-                if (value is FieldValue.Text && value.value !in noise.modes) {
+                if (value is FieldValue.Text && value.value !in noise?.modes.orEmpty()) {
                     return ControlError(ControlErrorCode.UNSUPPORTED, "该型号不支持 ${value.value} 模式")
                 }
                 value is FieldValue.Text
             }
 
             DeviceSetting.ANC_LEVEL, DeviceSetting.TRANSPARENCY_LEVEL -> {
-                val level = noise.levelCapabilities(setting)
-                    ?: return ControlError(ControlErrorCode.UNSUPPORTED, "该型号不支持此档位设置")
+                val level = noise?.levelCapabilities(setting) ?: return ControlError(ControlErrorCode.UNSUPPORTED, "该型号不支持此档位设置")
                 // The original sender has no mode precondition; visibility is a separate rule.
                 value is FieldValue.Number && value.value in level.levels
             }
 
-            DeviceSetting.NOISE_CYCLE ->
-                value is FieldValue.NoiseCycle && value.flags.keys == noise.cycleModes &&
-                    value.flags.values.all { it != null } && value.flags.values.count { it == true } >= noise.minimumCycleSelections
+            DeviceSetting.NOISE_CYCLE -> {
+                val cycle = noise ?: return ControlError(ControlErrorCode.UNSUPPORTED, "该型号不支持降噪轮换")
+                value is FieldValue.NoiseCycle && value.flags.keys == cycle.cycleModes &&
+                    value.flags.values.all { it != null } && value.flags.values.count { it == true } >= cycle.minimumCycleSelections
+            }
         }
         return if (valid) null else ControlError(ControlErrorCode.INVALID_ARGUMENT, "${setting.name} 参数无效")
     }
@@ -341,9 +347,9 @@ internal class SettingQueue(
     }
 }
 
-private fun validateTouchBinding(profile: ModelProfile, value: FieldValue): ControlError? {
+private fun validateTouchBinding(touch: TouchControlCapabilities?, value: FieldValue): ControlError? {
     if (value !is FieldValue.TouchAssignment) return ControlError(ControlErrorCode.INVALID_ARGUMENT, "触控绑定需要作用耳、手势和动作")
-    val touch = touchControlCapabilities(profile)
+    if (touch == null) return ControlError(ControlErrorCode.UNSUPPORTED, "该型号不支持触控绑定")
     if (TouchSlot(value.side, value.gesture) !in touch.slots) {
         return ControlError(ControlErrorCode.INVALID_ARGUMENT, "触控作用耳或手势无效")
     }

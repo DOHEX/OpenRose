@@ -1,5 +1,6 @@
 package io.github.dohex.openrose.ui
 
+import io.github.dohex.openrose.core.protocol.BatteryLayout
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.dohex.openrose.core.protocol.ModelProfile
@@ -44,6 +45,19 @@ internal fun displayFieldValue(field: DeviceField, value: FieldValue, profile: M
 
 private val batteryFields = setOf(DeviceField.LEFT_BATTERY, DeviceField.RIGHT_BATTERY, DeviceField.CASE_BATTERY)
 
+/** Battery readings with their labels, in display order; a single unit reports in the case slot. */
+internal fun ModelProfile.batteryReadings(): List<Pair<String, DeviceField>> = when (batteryLayout) {
+    BatteryLayout.EARBUDS_AND_CASE -> listOf(
+        "左耳" to DeviceField.LEFT_BATTERY,
+        "右耳" to DeviceField.RIGHT_BATTERY,
+        "充电盒" to DeviceField.CASE_BATTERY,
+    )
+
+    BatteryLayout.EARBUDS_ONLY -> listOf("左耳" to DeviceField.LEFT_BATTERY, "右耳" to DeviceField.RIGHT_BATTERY)
+
+    BatteryLayout.SINGLE_UNIT -> listOf("电量" to DeviceField.CASE_BATTERY)
+}
+
 internal fun gainLevelLabel(level: Int): String = when (level) {
     0 -> "低"
     1 -> "中"
@@ -80,26 +94,7 @@ internal fun equalizerLabel(preset: String, profile: ModelProfile?): String {
         "eap" -> "EAP"
         else -> return semanticLabel(preset)
     }
-    val label = when (profile) {
-        ModelProfile.I5_ZT -> when (preset) {
-            "pop" -> "弱水经典"
-            "hifi" -> "日系柔情"
-            "rock" -> "乐器大师"
-            "light" -> "清新空灵"
-            else -> null
-        }
-
-        ModelProfile.I7_RS_V2 -> when (preset) {
-            "pop" -> "弱水经典"
-            "hifi" -> "原声再现"
-            "rock" -> "古典乐器"
-            "light" -> "日系甜美"
-            "eap" -> "欧美流行"
-            else -> null
-        }
-
-        null -> null
-    }
+    val label = profile?.equalizerPresetLabel(preset)
     return if (label == null) code else "$label · $code"
 }
 
@@ -115,6 +110,8 @@ internal fun semanticLabel(value: String): String = when (value) {
     "ldac" -> "LDAC"
     "lhdc" -> "LHDC"
     "lc3" -> "LC3"
+    "chinese" -> "中文"
+    "english" -> "英文"
     "pop" -> "流行"
     "hifi" -> "Hi-Fi"
     "rock" -> "摇滚"

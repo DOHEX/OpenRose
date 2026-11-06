@@ -2,7 +2,6 @@ package io.github.dohex.openrose.core.protocol
 
 import io.github.dohex.openrose.core.DeviceSetting
 import io.github.dohex.openrose.core.NoiseLevelCapabilities
-import io.github.dohex.openrose.core.noiseControlCapabilities
 import kotlinx.collections.immutable.persistentSetOf
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -37,14 +36,20 @@ class NoiseProtocolTest {
         )) {
             assertEquals(literal, i5.prepareSetting(DeviceSetting.NOISE_MODE, FieldValue.Text(mode)).writeFrames.single().hex())
         }
-        assertEquals(setOf("normal", "transparency", "wind", "anc"), noiseControlCapabilities(ModelProfile.I5_ZT).modes)
-        assertEquals(setOf("normal", "transparency", "wind", "anc", "auto", "dynamic"), noiseControlCapabilities(ModelProfile.I7_RS_V2).modes)
+        assertEquals(setOf("normal", "transparency", "wind", "anc"), ModelProfile.I5_ZT.capabilities().noiseControl!!.modes)
+        assertEquals(setOf("normal", "transparency", "wind", "anc", "auto", "dynamic"), ModelProfile.I7_RS_V2.capabilities().noiseControl!!.modes)
     }
 
     @Test
     fun levelControlsHaveIndependentOptionsAndVisibleNoiseModes() {
         for (profile in ModelProfile.entries) {
-            val noise = noiseControlCapabilities(profile)
+            if (DeviceSetting.ANC_LEVEL !in profile.capabilities().writableSettings) {
+                assertNull(profile.capabilities().noiseControl?.ancLevel)
+                assertNull(profile.capabilities().noiseControl?.transparencyLevel)
+                assertFalse(DeviceSetting.TRANSPARENCY_LEVEL in profile.capabilities().writableSettings)
+                continue
+            }
+            val noise = assertNotNull(profile.capabilities().noiseControl, "$profile noise control")
             val anc = assertNotNull(noise.levelCapabilities(DeviceSetting.ANC_LEVEL), "$profile ANC levels")
             val transparency = assertNotNull(
                 noise.levelCapabilities(DeviceSetting.TRANSPARENCY_LEVEL),
@@ -65,7 +70,7 @@ class NoiseProtocolTest {
             assertFalse(transparency.isVisibleIn("unrecognized"), "$profile transparency should be hidden for an unknown mode")
         }
 
-        val i7 = noiseControlCapabilities(ModelProfile.I7_RS_V2)
+        val i7 = assertNotNull(ModelProfile.I7_RS_V2.capabilities().noiseControl)
         assertFalse(assertNotNull(i7.levelCapabilities(DeviceSetting.ANC_LEVEL)).isVisibleIn("auto"))
         assertFalse(assertNotNull(i7.levelCapabilities(DeviceSetting.ANC_LEVEL)).isVisibleIn("dynamic"))
         assertFalse(assertNotNull(i7.levelCapabilities(DeviceSetting.TRANSPARENCY_LEVEL)).isVisibleIn("auto"))
@@ -75,7 +80,7 @@ class NoiseProtocolTest {
     @Test
     fun levelCapabilityCanRepresentDifferentRangesAndUnsupportedControls() {
         // The recovered CERAMICS-U config has ANC low/medium/high but only low/high transparency.
-        val fixture = noiseControlCapabilities(ModelProfile.I5_ZT).copy(
+        val fixture = assertNotNull(ModelProfile.I5_ZT.capabilities().noiseControl).copy(
             ancLevel = NoiseLevelCapabilities(persistentSetOf(1, 3, 5), persistentSetOf("anc")),
             transparencyLevel = NoiseLevelCapabilities(persistentSetOf(1, 5), persistentSetOf("transparency")),
         )
@@ -124,7 +129,7 @@ class NoiseProtocolTest {
             Triple(ModelProfile.I7_RS_V2, DeviceSetting.TRANSPARENCY_LEVEL, listOf("ff00022d012faa", "ff00022d0331aa", "ff00022d0533aa")),
         )
         for ((profile, kind, literals) in vectors) {
-            assertEquals(persistentSetOf(1, 3, 5), noiseControlCapabilities(profile).levelCapabilities(kind)?.levels)
+            assertEquals(persistentSetOf(1, 3, 5), profile.capabilities().noiseControl?.levelCapabilities(kind)?.levels)
             for ((index, level) in listOf(1, 3, 5).withIndex()) {
                 val setting = createProtocolCodec(profile).prepareSetting(kind, FieldValue.Number(level))
                 assertEquals(literals[index], setting.writeFrames.single().hex(), "$profile $kind $level")
@@ -149,9 +154,10 @@ class NoiseProtocolTest {
         flags["normal"] = false
         assertEquals(true, (i5.expectedValues.getValue(DeviceField.NOISE_CYCLE) as FieldValue.NoiseCycle).flags["normal"])
         assertEquals(true, (i7.expectedValues.getValue(DeviceField.NOISE_CYCLE) as FieldValue.NoiseCycle).flags["normal"])
-        for (profile in ModelProfile.entries) {
-            assertEquals(0, noiseControlCapabilities(profile).minimumCycleSelections)
-            val none = FieldValue.NoiseCycle(noiseControlCapabilities(profile).cycleModes.associateWith { false })
+        for (profile in ModelProfile.entries.filter { DeviceSetting.NOISE_CYCLE in it.capabilities().writableSettings }) {
+            val noise = assertNotNull(profile.capabilities().noiseControl)
+            assertEquals(0, noise.minimumCycleSelections)
+            val none = FieldValue.NoiseCycle(noise.cycleModes.associateWith { false })
             assertEquals(none, createProtocolCodec(profile).prepareSetting(DeviceSetting.NOISE_CYCLE, none).expectedValues[DeviceField.NOISE_CYCLE])
         }
     }
@@ -169,6 +175,7 @@ class NoiseProtocolTest {
                 DeviceSetting.NOISE_CYCLE to FieldValue.NoiseCycle(mapOf("anc" to null, "normal" to false, "wind" to false, "transparency" to false)),
                 DeviceSetting.NOISE_CYCLE to FieldValue.NoiseCycle(mapOf("anc" to true, "normal" to false, "wind" to false, "transparency" to false, "auto" to true)),
             )) {
+                if (kind !in profile.capabilities().writableSettings) continue
                 assertFailsWith<IllegalArgumentException>("$profile $kind $value") { codec.prepareSetting(kind, value) }
             }
             assertFailsWith<UnsupportedOperationException> { codec.prepareSetting(DeviceSetting.NOISE_MODE, FieldValue.Text("deep")) }
@@ -176,7 +183,7 @@ class NoiseProtocolTest {
             if (profile == ModelProfile.I5_ZT) {
                 assertFailsWith<UnsupportedOperationException> { codec.prepareSetting(DeviceSetting.NOISE_MODE, FieldValue.Text("auto")) }
                 assertFailsWith<UnsupportedOperationException> { codec.prepareSetting(DeviceSetting.NOISE_MODE, FieldValue.Text("dynamic")) }
-            } else {
+            } else if (DeviceSetting.NOISE_MODE in profile.capabilities().writableSettings) {
                 assertEquals("ff000209010baa", codec.prepareSetting(DeviceSetting.NOISE_MODE, FieldValue.Text("anc")).writeFrames.single().hex())
             }
         }

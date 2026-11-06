@@ -190,7 +190,7 @@ class ControlSessionEqualizerTest {
 
     @Test
     fun incorrectEqOrGameTypesAndUnsupportedPresetsProduceNoWireTraffic() = runTest {
-        for (profile in ModelProfile.entries) {
+        for (profile in listOf(ModelProfile.I5_ZT, ModelProfile.I7_RS_V2)) {
             val (session, link) = ready(profile)
             val count = link.writes.size
             for ((setting, value) in listOf(
@@ -242,7 +242,7 @@ class ControlSessionEqualizerTest {
 
     @Test
     fun cachedEqualizerValueWithoutFreshReadbackTimesOutAndEndsQueuedGameSettings() = runTest {
-        for (profile in ModelProfile.entries) {
+        for (profile in listOf(ModelProfile.I5_ZT, ModelProfile.I7_RS_V2)) {
             val (session, link) = ready(profile)
             val initialCount = link.writes.size
             val eq = async { session.set(DeviceSetting.EQ, FieldValue.Text("hifi")) }
@@ -274,7 +274,7 @@ class ControlSessionEqualizerTest {
             PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
             transport = transport,
             scope = backgroundScope,
-            timing = SessionTiming(queryTimeoutMillis = 50, i5WriteIntervalMillis = 0, i7WriteIntervalMillis = 0),
+            timing = SessionTiming(queryTimeoutMillis = 50, writeIntervalMillis = 0),
         )
         session.startScan()
         val advertisement = if (profile == ModelProfile.I5_ZT) {

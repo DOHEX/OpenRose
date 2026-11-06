@@ -43,6 +43,16 @@ cd OpenRose
 | `:transportBluez` | Linux 平台驱动：BlueZ D-Bus GATT 原语、扫描、配对设备与音频事实 |
 | `build-logic/` | 各模块共用的 Gradle 约定插件（独立的 included build） |
 
+## 新增型号
+
+每个型号配置是 `core/.../models/` 下的一个文件（`core/...` 即 `core/src/commonMain/kotlin/io/github/dohex/openrose/core`），集中声明识别前缀、名称规则、协议族、控制传输、电量布局、EQ 预设名称，以及按固件推导的型号能力。新增时：
+
+1. 在 `ModelProfile` 增加枚举项，并在其 `spec` 中映射到新的 `ModelSpec`；缺少映射无法编译。枚举名跨进程传递，确定后不要改名。
+2. 写全 `ModelSpec` 的各项。能力只列有研究证据的设置：未声明的设置不会出现在界面，也不会被写入。
+3. 协议族已有编解码（ZT、RS Common V2）时直接复用；族内型号的帧、字段或枚举有差异时，在 `ModelSpec` 增加对应字段，由该族编解码读取。新协议族需要新增 `ProtocolFamily` 项与编解码。
+4. 单体型号（`BatteryLayout.SINGLE_UNIT`）在应用和托盘里显示一行“电量”；在有实机证据之前，系统超级岛、焦点通知和融合设备中心不发布其电量。
+5. 在 `androidIntegration` 测试夹具的 `initializationReplies`、`roseAdvertisement` 中登记该型号的回包与广播。`ModelProfileTest` 会检查每个型号都能凭自己的广播前缀和名称被识别。
+
 ## 日常命令
 
 | 命令 | 作用 |

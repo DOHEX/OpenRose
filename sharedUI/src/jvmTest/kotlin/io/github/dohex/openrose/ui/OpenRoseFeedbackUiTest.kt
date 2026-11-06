@@ -16,7 +16,6 @@ import io.github.dohex.openrose.core.PlatformState
 import io.github.dohex.openrose.core.SettingOperation
 import io.github.dohex.openrose.core.SettingStage
 import io.github.dohex.openrose.core.TransportAvailability
-import io.github.dohex.openrose.core.noiseControlCapabilities
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.FieldReading
 import io.github.dohex.openrose.core.protocol.FieldValue
@@ -344,7 +343,7 @@ class OpenRoseFeedbackUiTest {
             capabilities = DeviceCapabilities(
                 readableFields = persistentSetOf(DeviceField.NOISE_MODE),
                 writableSettings = persistentSetOf(DeviceSetting.NOISE_MODE),
-                noiseControl = noiseControlCapabilities(profile),
+                noiseControl = profile.capabilities().noiseControl,
             ),
             fields = persistentMapOf(DeviceField.NOISE_MODE to FieldReading.Known(FieldValue.Text("anc"), "anc")),
         )

@@ -68,7 +68,7 @@ class BluezControlTransportTest {
         val transport = BluezControlTransport(scope, bus)
         transport.awaitInitialization()
         val initial = PlatformState(PermissionState.NOT_REQUIRED, TransportAvailability.Unavailable("initializing"))
-        val runtime = LocalControlRuntime(initial, transport = transport, scope = scope, timing = SessionTiming(i5WriteIntervalMillis = 0))
+        val runtime = LocalControlRuntime(initial, transport = transport, scope = scope, timing = SessionTiming(writeIntervalMillis = 0))
         withTimeout(5_000) { runtime.state.first { it.bondedDevices.isNotEmpty() } }
         withTimeout(5_000) { runtime.state.first { it.lastError?.code == ControlErrorCode.TRANSPORT_UNAVAILABLE } }
         val availability = scope.launch { transport.availability.collect { runtime.updatePlatformState(initial.copy(transport = it)) } }

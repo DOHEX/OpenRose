@@ -237,7 +237,7 @@ class SystemPresentationTest {
             PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
             transport = transport,
             scope = backgroundScope,
-            timing = SessionTiming(i5WriteIntervalMillis = 0),
+            timing = SessionTiming(writeIntervalMillis = 0),
         ),
         backgroundScope,
         PresentationTiming(connectionPromptDurationMillis = promptDurationMillis),

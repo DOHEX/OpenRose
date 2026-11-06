@@ -1,5 +1,6 @@
 package io.github.dohex.openrose.androidintegration.wire
 
+import io.github.dohex.openrose.androidintegration.systemFields
 import io.github.dohex.openrose.core.DeviceSetting
 import io.github.dohex.openrose.core.DeviceState
 import io.github.dohex.openrose.core.NoiseLevelCapabilities
@@ -23,7 +24,7 @@ fun DeviceState.toBridgeSnapshot(hostEpoch: String, readSequence: Long, captured
     put(BridgeWire.READ_SEQUENCE, readSequence)
     put("captured_elapsed_millis", capturedElapsedMillis)
     put("profile", profile.name)
-    put("fields", fields.entries.associate { (field, reading) -> field.name to reading.toBridgeReading() })
+    put("fields", systemFields().entries.associate { (field, reading) -> field.name to reading.toBridgeReading() })
     put(
         "field_errors",
         fieldErrors.entries.associate { (field, error) ->
@@ -82,6 +83,8 @@ fun DeviceState.toBridgeSnapshot(hostEpoch: String, readSequence: Long, captured
             put("prompt_volume_levels", capabilities.promptVolumeLevels.sorted())
             put("gain_levels", capabilities.gainLevels.sorted())
             put("hearing_protection_levels", capabilities.hearingProtectionLevels.sorted())
+            put("bass_boost_levels", capabilities.bassBoostLevels.sorted())
+            put("prompt_languages", capabilities.promptLanguages.sorted())
         },
     )
 }

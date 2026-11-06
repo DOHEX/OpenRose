@@ -40,7 +40,7 @@ class ControlSessionAudioLifecycleTest {
             initialPlatformState = PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
             transport = transport,
             scope = backgroundScope,
-            timing = SessionTiming(i5WriteIntervalMillis = 0),
+            timing = SessionTiming(writeIntervalMillis = 0),
         )
 
         // Session starts disconnected
@@ -78,7 +78,7 @@ class ControlSessionAudioLifecycleTest {
             initialPlatformState = PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
             transport = transport,
             scope = backgroundScope,
-            timing = SessionTiming(i5WriteIntervalMillis = 0),
+            timing = SessionTiming(writeIntervalMillis = 0),
         )
 
         // Connect via audio event
@@ -116,7 +116,7 @@ class ControlSessionAudioLifecycleTest {
             initialPlatformState = PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
             transport = transport,
             scope = backgroundScope,
-            timing = SessionTiming(i5WriteIntervalMillis = 0),
+            timing = SessionTiming(writeIntervalMillis = 0),
         )
 
         // Audio is not connected (null)
@@ -160,7 +160,7 @@ class ControlSessionAudioLifecycleTest {
             initialPlatformState = PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
             transport = transport,
             scope = backgroundScope,
-            timing = SessionTiming(i5WriteIntervalMillis = 0),
+            timing = SessionTiming(writeIntervalMillis = 0),
         )
 
         transport.audioDeviceFlow.emit(DeviceId("car-audio"))
@@ -192,7 +192,7 @@ class ControlSessionAudioLifecycleTest {
             initialPlatformState = PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
             transport = transport,
             scope = backgroundScope,
-            timing = SessionTiming(i5WriteIntervalMillis = 0),
+            timing = SessionTiming(writeIntervalMillis = 0),
         )
 
         transport.audioDeviceFlow.emit(DeviceId("bonded-i5"))
@@ -245,7 +245,7 @@ class ControlSessionAudioLifecycleTest {
             initialPlatformState = PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
             transport = transport,
             scope = backgroundScope,
-            timing = SessionTiming(i5WriteIntervalMillis = 0),
+            timing = SessionTiming(writeIntervalMillis = 0),
         )
 
         // Auto-connects to i5

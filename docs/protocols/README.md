@@ -2,7 +2,7 @@
 
 这个目录收录了对官方 App **RoseLink** 的逆向研究：它支持哪些耳机、各型号用什么协议、能控制什么，以及固件 OTA 怎么下发。
 
-这些是官方 App 的行为记录，不是厂商规范，大部分也没有经过真机验证。OpenRose 实际如何实现 i5 / i7，见 [协议实现说明](../protocols.md)。
+这些是官方 App 的行为记录，不是厂商规范，大部分也没有经过真机验证。OpenRose 实际实现的六个型号配置见[协议实现说明](../protocols.md)；新增配置的支持范围与未实现项见[型号适配证据账本](model-adaptation-ledger.md)。
 
 ## 研究基础
 
@@ -30,10 +30,10 @@ RoseLink 支持的 43 个耳机配置使用四种控制协议：
 | --- | --- | --- | --- | --- |
 | EarFeel i5 / EarFree i5 | ZT | 4 种降噪模式，ANC / 通透各 3 档，4 个 EQ 预设，8 个触控槽位，游戏模式，检测开关，AAC / LDAC 与多点联动，WQ OTA | 真机读取已验证；设置和 OTA 未测 | [Markdown](models/earfeel-i5-protocol.md) · [JSON](models/earfeel-i5-protocol.json) |
 | EarFeel i7 | RS Common V2 | 6 种降噪模式（含自动 / 动态），ANC / 通透各 3 档，5 个 EQ 预设，自定义 10 段 EQ，8 个触控槽位，游戏模式，AAC / LDAC / LHDC / LC3，独立多点，增益与听力保护，BES OTA | 仅离线测试 | [Markdown](models/earfeel-i7-protocol.md) · [JSON](models/earfeel-i7-protocol.json) |
-| BudsFeel MK2 | RS Common V2 | 4 种降噪模式与触控轮换，低音增强，触控映射，游戏模式，多点，AAC / SBC / LDAC / LC3，寻机，JL OTA | 仅静态分析 | [Markdown](models/budsfeel-mk2-protocol.md) |
-| OpenFeel MK2 | RS Common V2 | 低音增强，自定义 10 段 EQ，触控映射（无降噪动作），游戏模式，多点，增益与听力保护，AB OTA | 仅静态分析 | [Markdown](models/openfeel-mk2-protocol.md) |
-| 踏浪 Swift 2 | RS Common V2 | 骨传导，单体电量，触控映射，游戏模式，多点，提示音音量，寻机，AB OTA | 仅静态分析 | [Markdown](models/swift2-protocol.md) |
-| Jasmine | RS Common V2 | 左右耳电量，触控开关与映射，游戏模式，多点，提示音语言（中 / 英），寻机，无 OTA | 仅静态分析；是否对应商品"茉莉"未确认 | [Markdown](models/jasmine-protocol.md) |
+| BudsFeel MK2 | RS Common V2 | 4 种降噪模式与触控轮换，低音增强，触控映射，游戏模式，多点，AAC / SBC / LDAC / LC3，寻机，JL OTA | 客户端接入有证据的常规控制；寻机 / OTA 未实现，实机未验证 | [Markdown](models/budsfeel-mk2-protocol.md) |
+| OpenFeel MK2 | RS Common V2 | 低音增强，自定义 10 段 EQ，触控映射（无降噪动作），游戏模式，多点，增益与听力保护，AB OTA | 客户端接入有证据的常规控制；自定义 EQ / 寻机 / OTA 未实现，实机未验证 | [Markdown](models/openfeel-mk2-protocol.md) |
+| 踏浪 Swift 2 | RS Common V2 | 骨传导，单体电量，触控映射，游戏模式，多点，提示音音量，寻机，AB OTA | 客户端接入单体电量与基础控制；按键映射 / 提示音音量 / 寻机 / OTA 未实现，实机未验证 | [Markdown](models/swift2-protocol.md) |
+| Jasmine | RS Common V2 | 左右耳电量，触控开关与映射，游戏模式，多点，提示音语言（中 / 英），寻机，无 OTA | 客户端接入有证据的常规控制；寻机 / 提示音音量未实现，实机未验证；商品“茉莉”对应未确认 | [Markdown](models/jasmine-protocol.md) |
 
 ## 其他资料
 

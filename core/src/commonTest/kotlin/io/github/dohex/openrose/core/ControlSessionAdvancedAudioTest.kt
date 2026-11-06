@@ -3,6 +3,7 @@ package io.github.dohex.openrose.core
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.FieldReading
 import io.github.dohex.openrose.core.protocol.FieldValue
+import io.github.dohex.openrose.core.protocol.ModelProfile
 import io.github.dohex.openrose.core.transport.Advertisement
 import io.github.dohex.openrose.core.transport.ControlConnection
 import io.github.dohex.openrose.core.transport.ControlTransport
@@ -366,7 +367,53 @@ class ControlSessionAdvancedAudioTest {
         }
     }
 
-    private suspend fun TestScope.ready(capacity: Int = 16, firmware: String? = "dd00040d020103f4aa"): Pair<ControlSession, AdvancedLink> {
+    @Test
+    fun bassAndLanguageRequireFreshMatchingReadback() = runTest {
+        for (vector in listOf(
+            CapabilityVector(ModelProfile.BUDSFEEL_MK2_RS_V2, DeviceSetting.BASS_BOOST, FieldValue.Number(1), "dd00032a050110aa"),
+            CapabilityVector(ModelProfile.JASMINE_RS_V2, DeviceSetting.PROMPT_LANGUAGE, FieldValue.Text("english"), "dd0002310111aa"),
+        )) {
+            val (session, link) = ready(profile = vector.profile)
+            // 合成：在提交设置前缓存相同值，不能将它作为本次写入的确认。
+            link.incoming.send(vector.reply.bytes())
+            runCurrent()
+            val pending = async { session.set(vector.setting, vector.requested) }
+            runCurrent()
+            assertFalse(pending.isCompleted)
+            // 合成：普通 EQ 回包既不是低音档位，也不是语言状态。
+            link.incoming.send("dd00022a0009aa".bytes())
+            runCurrent()
+            assertFalse(pending.isCompleted)
+            link.incoming.send(vector.reply.bytes())
+            runCurrent()
+            assertEquals(OperationResult.Success, pending.await())
+            assertEquals(SettingStage.CONFIRMED, session.state.value.settingOperations.single().stage)
+            session.disconnect()
+        }
+    }
+
+    @Test
+    fun newModelLimitsRejectUnsupportedControlsAndMalformedValuesBeforeWriting() = runTest {
+        for (vector in listOf(
+            RejectedCapability(ModelProfile.BUDSFEEL_MK2_RS_V2, DeviceSetting.BASS_BOOST, listOf(FieldValue.Number(-1), FieldValue.Number(5), FieldValue.Toggle(true)), DeviceSetting.PROMPT_LANGUAGE),
+            RejectedCapability(ModelProfile.JASMINE_RS_V2, DeviceSetting.PROMPT_LANGUAGE, listOf(FieldValue.Text("french"), FieldValue.Number(0)), DeviceSetting.BASS_BOOST),
+            RejectedCapability(ModelProfile.OPENFEEL_MK2_RS_V2, DeviceSetting.BASS_BOOST, listOf(FieldValue.Number(5)), DeviceSetting.CUSTOM_EQ),
+            RejectedCapability(ModelProfile.SWIFT2_RS_V2, DeviceSetting.GAME_MODE, listOf(FieldValue.Number(1)), DeviceSetting.TOUCH_BINDING),
+            RejectedCapability(ModelProfile.I7_RS_V2, DeviceSetting.GAIN, listOf(FieldValue.Number(3)), DeviceSetting.BASS_BOOST),
+        )) {
+            val (session, link) = ready(profile = vector.profile)
+            val before = link.writes.toList()
+            for (value in vector.invalid) {
+                assertEquals(ControlErrorCode.INVALID_ARGUMENT, assertIs<OperationResult.Failure>(session.set(vector.setting, value)).error.code)
+            }
+            assertEquals(ControlErrorCode.UNSUPPORTED, assertIs<OperationResult.Failure>(session.set(vector.unsupported, FieldValue.Number(0))).error.code)
+            assertEquals(before, link.writes)
+            assertTrue(session.state.value.settingOperations.isEmpty())
+            session.disconnect()
+        }
+    }
+
+    private suspend fun TestScope.ready(capacity: Int = 16, firmware: String? = "dd00040d020103f4aa", profile: ModelProfile = ModelProfile.I7_RS_V2): Pair<ControlSession, AdvancedLink> {
         val link = AdvancedLink(capacity, firmware)
         val transport = object : ControlTransport {
             val advertisements = MutableSharedFlow<Advertisement>(extraBufferCapacity = 1)
@@ -377,10 +424,12 @@ class ControlSessionAdvancedAudioTest {
             PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
             transport = transport,
             scope = backgroundScope,
-            timing = SessionTiming(queryTimeoutMillis = 50, i7WriteIntervalMillis = 0),
+            timing = SessionTiming(queryTimeoutMillis = 50, writeIntervalMillis = 0),
         )
         session.startScan()
-        transport.advertisements.emit(Advertisement(DeviceId("i7"), manufacturerData = mapOf(0xe5b8 to byteArrayOf(0x29, 0x0f))))
+        val prefix = profile.spec.advertisementPrefixes.first().bytes()
+        val companyId = (prefix[0].toInt() and 255) or ((prefix[1].toInt() and 255) shl 8)
+        transport.advertisements.emit(Advertisement(DeviceId("i7"), manufacturerData = mapOf(companyId to prefix.copyOfRange(2, prefix.size))))
         runCurrent()
         assertEquals(OperationResult.Success, session.connect(DeviceId("i7")))
         link.initializing = false
@@ -409,6 +458,10 @@ class ControlSessionAdvancedAudioTest {
             incoming.close()
         }
     }
+
+    private data class CapabilityVector(val profile: ModelProfile, val setting: DeviceSetting, val requested: FieldValue, val reply: String)
+
+    private data class RejectedCapability(val profile: ModelProfile, val setting: DeviceSetting, val invalid: List<FieldValue>, val unsupported: DeviceSetting)
 
     private data class SettingVector(
         val setting: DeviceSetting,

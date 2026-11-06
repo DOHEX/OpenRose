@@ -3,15 +3,13 @@ package io.github.dohex.openrose.core.protocol
 import io.github.dohex.openrose.core.AudioControlCapabilities
 import io.github.dohex.openrose.core.DeviceSetting
 import io.github.dohex.openrose.core.TouchSlot
-import io.github.dohex.openrose.core.audioControlCapabilities
-import io.github.dohex.openrose.core.promptVolumeLevels
-import io.github.dohex.openrose.core.touchControlCapabilities
 import kotlinx.collections.immutable.persistentSetOf
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertNotNull
 
 class DeviceControlProtocolTest {
     @Test
@@ -28,14 +26,18 @@ class DeviceControlProtocolTest {
             TouchSlot("right", "long"),
         )
         val i5Actions = setOf("volume_up", "volume_down", "previous_track", "next_track", "voice_assistant", "play_pause", "none", "noise_cycle")
-        assertEquals(slots, touchControlCapabilities(ModelProfile.I5_ZT).slots)
-        assertEquals(slots, touchControlCapabilities(ModelProfile.I7_RS_V2).slots)
-        assertEquals(i5Actions, touchControlCapabilities(ModelProfile.I5_ZT).actions)
-        assertEquals(i5Actions + "game_mode", touchControlCapabilities(ModelProfile.I7_RS_V2).actions)
-        assertEquals(AudioControlCapabilities(persistentSetOf("aac_sbc", "ldac"), true), audioControlCapabilities(ModelProfile.I5_ZT))
-        assertEquals(AudioControlCapabilities(persistentSetOf("aac_sbc", "ldac", "lhdc", "lc3"), false), audioControlCapabilities(ModelProfile.I7_RS_V2))
-        assertEquals(setOf(1, 2, 3, 4, 5), promptVolumeLevels(ModelProfile.I5_ZT))
-        assertEquals(setOf(1, 2, 3, 4, 5), promptVolumeLevels(ModelProfile.I7_RS_V2))
+        val i5 = ModelProfile.I5_ZT.capabilities()
+        val i7 = ModelProfile.I7_RS_V2.capabilities()
+        val i5Touch = assertNotNull(i5.touchControl)
+        val i7Touch = assertNotNull(i7.touchControl)
+        assertEquals(slots, i5Touch.slots)
+        assertEquals(slots, i7Touch.slots)
+        assertEquals(i5Actions, i5Touch.actions)
+        assertEquals(i5Actions + "game_mode", i7Touch.actions)
+        assertEquals(AudioControlCapabilities(persistentSetOf("aac_sbc", "ldac"), true), i5.audioControl)
+        assertEquals(AudioControlCapabilities(persistentSetOf("aac_sbc", "ldac", "lhdc", "lc3"), false), i7.audioControl)
+        assertEquals(setOf(1, 2, 3, 4, 5), i5.promptVolumeLevels)
+        assertEquals(setOf(1, 2, 3, 4, 5), i7.promptVolumeLevels)
     }
 
     @Test
@@ -204,12 +206,12 @@ class DeviceControlProtocolTest {
             "ff000301130117aa",
             "ff000301140118aa",
         )
-        for (profile in ModelProfile.entries) {
+        for (profile in ModelProfile.entries.filter { DeviceSetting.TOUCH_BINDING in it.capabilities().writableSettings }) {
             for ((index, slot) in slots.withIndex()) {
                 val request = FieldValue.TouchAssignment(slot.side, slot.gesture, "play_pause")
                 val setting = createProtocolCodec(profile).prepareSetting(DeviceSetting.TOUCH_BINDING, request)
                 assertEquals((if (profile == ModelProfile.I5_ZT) i5Frames else i7Frames)[index], setting.writeFrames.single().hex())
-                for (action in touchControlCapabilities(profile).actions) {
+                for (action in requireNotNull(profile.capabilities().touchControl).actions) {
                     val assignment = FieldValue.TouchAssignment(slot.side, slot.gesture, action)
                     assertEquals(
                         mapOf(DeviceField.TOUCH_KEYS to assignment),
@@ -260,6 +262,7 @@ class DeviceControlProtocolTest {
                 DeviceSetting.TOUCH_BINDING to FieldValue.TouchAssignment("both", "single", "none"),
                 DeviceSetting.TOUCH_BINDING to FieldValue.TouchAssignment("left", "hold", "none"),
             )) {
+                if (kind !in profile.capabilities().writableSettings) continue
                 assertFailsWith<IllegalArgumentException>("$profile $kind $value") { codec.prepareSetting(kind, value) }
             }
             assertFailsWith<UnsupportedOperationException> { codec.prepareSetting(DeviceSetting.AUDIO_MODE, FieldValue.Text("opus")) }

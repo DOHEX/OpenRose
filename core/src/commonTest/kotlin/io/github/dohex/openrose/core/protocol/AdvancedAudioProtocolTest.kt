@@ -1,10 +1,6 @@
 package io.github.dohex.openrose.core.protocol
 
 import io.github.dohex.openrose.core.DeviceSetting
-import io.github.dohex.openrose.core.equalizerCapabilities
-import io.github.dohex.openrose.core.gainLevels
-import io.github.dohex.openrose.core.hearingProtectionLevels
-import io.github.dohex.openrose.core.promptVolumeLevels
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -40,15 +36,15 @@ class AdvancedAudioProtocolTest {
 
     @Test
     fun advancedCapabilitiesUseModelAndCompleteFirmwareBytesForTheirSeparateGates() {
-        assertNull(equalizerCapabilities(ModelProfile.I5_ZT).custom)
-        val custom = equalizerCapabilities(ModelProfile.I7_RS_V2).custom!!
+        assertNull(ModelProfile.I5_ZT.capabilities().equalizer?.custom)
+        val custom = ModelProfile.I7_RS_V2.capabilities().equalizer?.custom!!
         // Original i7 panel frequencies and gain limits; these are UI labels, not measured DSP data.
         assertEquals(listOf(20, 100, 300, 500, 1000, 2000, 3000, 5000, 8000, 15000), custom.bandsHz)
         assertEquals(-6, custom.minGain)
         assertEquals(6, custom.maxGain)
-        assertEquals(emptySet(), gainLevels(ModelProfile.I7_RS_V2))
-        assertEquals(emptySet(), hearingProtectionLevels(ModelProfile.I7_RS_V2))
-        assertEquals(setOf(1, 2, 3, 4, 5), promptVolumeLevels(ModelProfile.I7_RS_V2))
+        assertEquals(emptySet(), ModelProfile.I7_RS_V2.capabilities().gainLevels)
+        assertEquals(emptySet(), ModelProfile.I7_RS_V2.capabilities().hearingProtectionLevels)
+        assertEquals(setOf(1, 2, 3, 4, 5), ModelProfile.I7_RS_V2.capabilities().promptVolumeLevels)
         for ((parts, gainAllowed, muteAllowed) in listOf(
             Triple(listOf(2, 1, 2), false, false), Triple(listOf(2, 1, 3), true, false),
             Triple(listOf(3, 0, 3), true, false), Triple(listOf(3, 0, 4), true, true),
@@ -58,12 +54,14 @@ class AdvancedAudioProtocolTest {
             Triple(listOf(-1, 1, 3), false, false), Triple(listOf(256, 1, 3), false, false),
         )) {
             val firmware = FieldValue.Firmware(parts, "999999")
-            assertEquals(if (gainAllowed) setOf(0, 1, 2) else emptySet(), gainLevels(ModelProfile.I7_RS_V2, firmware), "$parts")
-            assertEquals(if (gainAllowed) setOf(0, 1, 2, 3, 4, 5, 6) else emptySet(), hearingProtectionLevels(ModelProfile.I7_RS_V2, firmware), "$parts")
-            assertEquals(if (muteAllowed) setOf(0, 1, 2, 3, 4, 5) else setOf(1, 2, 3, 4, 5), promptVolumeLevels(ModelProfile.I7_RS_V2, firmware), "$parts")
-            assertEquals(emptySet(), gainLevels(ModelProfile.I5_ZT, firmware))
-            assertEquals(emptySet(), hearingProtectionLevels(ModelProfile.I5_ZT, firmware))
-            assertEquals(setOf(1, 2, 3, 4, 5), promptVolumeLevels(ModelProfile.I5_ZT, firmware))
+            val i7 = ModelProfile.I7_RS_V2.capabilities(firmware)
+            val i5 = ModelProfile.I5_ZT.capabilities(firmware)
+            assertEquals(if (gainAllowed) setOf(0, 1, 2) else emptySet(), i7.gainLevels, "$parts")
+            assertEquals(if (gainAllowed) setOf(0, 1, 2, 3, 4, 5, 6) else emptySet(), i7.hearingProtectionLevels, "$parts")
+            assertEquals(if (muteAllowed) setOf(0, 1, 2, 3, 4, 5) else setOf(1, 2, 3, 4, 5), i7.promptVolumeLevels, "$parts")
+            assertEquals(emptySet(), i5.gainLevels)
+            assertEquals(emptySet(), i5.hearingProtectionLevels)
+            assertEquals(setOf(1, 2, 3, 4, 5), i5.promptVolumeLevels)
         }
     }
 
@@ -198,5 +196,45 @@ class AdvancedAudioProtocolTest {
         assertEquals(FieldReading.Known(FieldValue.Number(6), "06"), reply.readings[DeviceField.HEARING_PROTECTION])
         assertEquals(FieldReading.Known(FieldValue.Number(0), "00"), reply.readings[DeviceField.PROMPT_VOLUME])
         assertEquals(setOf("45", "46", "2e"), reply.responseKeys)
+    }
+
+    @Test
+    fun bassBoostUsesSlotReadbackAndLanguageUsesItsOwnRecord() {
+        for (profile in listOf(ModelProfile.BUDSFEEL_MK2_RS_V2, ModelProfile.OPENFEEL_MK2_RS_V2)) {
+            for ((level, frame) in listOf(
+                0 to "ff00032a050031aa",
+                1 to "ff00032a050132aa",
+                2 to "ff00032a050233aa",
+                3 to "ff00032a050334aa",
+                4 to "ff00032a050435aa",
+            )) {
+                val codec = createProtocolCodec(profile)
+                val setting = codec.prepareSetting(DeviceSetting.BASS_BOOST, FieldValue.Number(level))
+                assertEquals(frame, setting.writeFrames.single().hex())
+                assertEquals("ff0102fa2a26aa", setting.readback.bytes.hex())
+                assertEquals(setOf(DeviceField.EQ_SLOT), setting.readback.expectedFields)
+                assertEquals(mapOf(DeviceField.EQ_SLOT to FieldValue.Number(level)), setting.expectedValues)
+            }
+            assertFailsWith<IllegalArgumentException> {
+                createProtocolCodec(profile).prepareSetting(DeviceSetting.BASS_BOOST, FieldValue.Number(5))
+            }
+        }
+        for ((language, frame) in listOf("chinese" to "ff0002310032aa", "english" to "ff0002310133aa")) {
+            val codec = createProtocolCodec(ModelProfile.JASMINE_RS_V2)
+            val setting = codec.prepareSetting(DeviceSetting.PROMPT_LANGUAGE, FieldValue.Text(language))
+            assertEquals(frame, setting.writeFrames.single().hex())
+            assertEquals("ff0102fa312daa", setting.readback.bytes.hex())
+            assertEquals(mapOf(DeviceField.PROMPT_LANGUAGE to FieldValue.Text(language)), setting.expectedValues)
+        }
+        // Synthetic notifications represent independent language and slot records.
+        val codec = createProtocolCodec(ModelProfile.JASMINE_RS_V2)
+        assertEquals(
+            FieldReading.Known(FieldValue.Text("english"), "01"),
+            codec.feedNotification("dd0002310111aa".bytes()).single().readings[DeviceField.PROMPT_LANGUAGE],
+        )
+        assertEquals(
+            FieldReading.Unknown("02"),
+            codec.feedNotification("dd0002310212aa".bytes()).single().readings[DeviceField.PROMPT_LANGUAGE],
+        )
     }
 }

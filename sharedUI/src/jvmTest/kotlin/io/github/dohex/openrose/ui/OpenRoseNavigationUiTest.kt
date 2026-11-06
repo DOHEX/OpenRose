@@ -19,15 +19,10 @@ import io.github.dohex.openrose.core.PlatformState
 import io.github.dohex.openrose.core.SettingOperation
 import io.github.dohex.openrose.core.SettingStage
 import io.github.dohex.openrose.core.TransportAvailability
-import io.github.dohex.openrose.core.audioControlCapabilities
-import io.github.dohex.openrose.core.equalizerCapabilities
-import io.github.dohex.openrose.core.noiseControlCapabilities
-import io.github.dohex.openrose.core.promptVolumeLevels
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.FieldReading
 import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.dohex.openrose.core.protocol.ModelProfile
-import io.github.dohex.openrose.core.touchControlCapabilities
 import io.github.dohex.openrose.core.transport.DeviceId
 import kotlinx.collections.immutable.persistentMapOf
 import kotlinx.collections.immutable.persistentSetOf
@@ -252,11 +247,11 @@ class OpenRoseNavigationUiTest {
             capabilities = DeviceCapabilities(
                 readableFields = DeviceField.entries.toPersistentSet(),
                 writableSettings = DeviceSetting.entries.toPersistentSet(),
-                noiseControl = noiseControlCapabilities(profile),
-                equalizer = equalizerCapabilities(profile),
-                touchControl = touchControlCapabilities(profile),
-                audioControl = audioControlCapabilities(profile),
-                promptVolumeLevels = promptVolumeLevels(profile),
+                noiseControl = profile.capabilities().noiseControl,
+                equalizer = profile.capabilities().equalizer,
+                touchControl = profile.capabilities().touchControl,
+                audioControl = profile.capabilities().audioControl,
+                promptVolumeLevels = profile.capabilities().promptVolumeLevels,
                 gainLevels = persistentSetOf(0, 1, 2),
                 hearingProtectionLevels = (0..6).toPersistentSet(),
             ),

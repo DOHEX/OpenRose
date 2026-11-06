@@ -16,7 +16,6 @@
     <ID>CyclomaticComplexMethod:DevicePanel.kt:@Composable internal fun ConnectionDetailsCard</ID>
     <ID>CyclomaticComplexMethod:DevicePanel.kt:@Composable private fun UnconnectedHeadphonesDashboard</ID>
     <ID>CyclomaticComplexMethod:DeviceValueFormatting.kt:internal fun displayFieldValue: String</ID>
-    <ID>CyclomaticComplexMethod:DeviceValueFormatting.kt:internal fun equalizerLabel: String</ID>
     <ID>CyclomaticComplexMethod:DeviceValueFormatting.kt:internal fun semanticLabel: String</ID>
     <ID>CyclomaticComplexMethod:MaterialAppShell.kt:@Composable internal fun MaterialMainShell</ID>
     <ID>CyclomaticComplexMethod:MaterialIcons.kt:@Composable internal fun materialIcon: ImageVector</ID>

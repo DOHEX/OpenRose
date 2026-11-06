@@ -104,11 +104,7 @@ internal class HeadsetConnection(
         val hex = bytes.hex()
         writes += hex
         if (!initializing) return
-        if (profile == ModelProfile.I5_ZT) {
-            i5Replies[hex.substring(10, 14)]?.let { incoming.send(it.bytes()) }
-        } else {
-            i7Replies.forEach { incoming.send(it.bytes()) }
-        }
+        initializationReplies(profile, hex).forEach { incoming.send(it.bytes()) }
     }
 
     override suspend fun close() {
@@ -240,7 +236,32 @@ internal class InProcessHostLink(
     }
 }
 
-internal fun rosePair(name: String, profile: ModelProfile = ModelProfile.I5_ZT) = DeviceCandidate(DeviceId(name), if (profile == ModelProfile.I5_ZT) "EarFree i5" else "EarFeel i7", null, profile, "", "11:22:33:44:55:66")
+internal fun rosePair(name: String, profile: ModelProfile = ModelProfile.I5_ZT) = DeviceCandidate(DeviceId(name), profile.displayName, null, profile, "", "11:22:33:44:55:66")
+
+/** An advertisement that identifies [profile] by its manufacturer data. */
+internal fun roseAdvertisement(profile: ModelProfile, id: DeviceId) = when (profile) {
+    ModelProfile.I5_ZT -> Advertisement(id, "i5", manufacturerData = mapOf(0x5352 to byteArrayOf(0, 1, 0, 1)))
+    ModelProfile.I7_RS_V2 -> Advertisement(id, "i7", manufacturerData = mapOf(0xe5b8 to byteArrayOf(0x29, 0x0f)))
+    ModelProfile.BUDSFEEL_MK2_RS_V2 -> Advertisement(id, "BudsFeel MK2", manufacturerData = mapOf(0x150b to byteArrayOf(0x0a, 0x0b)))
+    ModelProfile.OPENFEEL_MK2_RS_V2 -> Advertisement(id, "OpenFeel MK2", manufacturerData = mapOf(0x0e0b to byteArrayOf(0xb6.toByte(), 0x57)))
+    ModelProfile.SWIFT2_RS_V2 -> Advertisement(id, "SWIFT 2", manufacturerData = mapOf(0x9959 to byteArrayOf(0x06, 0x4c)))
+    ModelProfile.JASMINE_RS_V2 -> Advertisement(id, "Jasmine", manufacturerData = mapOf(0x0a0b to byteArrayOf(0x0a, 0x11)))
+}
+
+/** What [profile]'s earphones send back for one initialization write, as hex frames. */
+internal fun initializationReplies(profile: ModelProfile, writtenHex: String): List<String> = when (profile) {
+    // One captured reply per ZT query, keyed by its command.
+    ModelProfile.I5_ZT -> listOfNotNull(i5Replies[writtenHex.substring(10, 14)])
+
+    // Synthetic RS Common V2 state; every record answers any query.
+    ModelProfile.I7_RS_V2 -> i7Replies
+
+    ModelProfile.BUDSFEEL_MK2_RS_V2,
+    ModelProfile.OPENFEEL_MK2_RS_V2,
+    ModelProfile.SWIFT2_RS_V2,
+    ModelProfile.JASMINE_RS_V2,
+    -> i7Replies
+}
 
 /** The application and the module host over one pair of earphones, built the way production wires them. */
 internal class OwnerRig(
@@ -253,7 +274,7 @@ internal class OwnerRig(
     val hostTransport = HeadsetTransport("module", headset, earphones.profile!!, listOf(earphones))
     val store = MemoryOwnerStore(initial)
     private val ids = generateSequence(1) { it + 1 }.map { "id-$it" }.iterator()
-    private val sessionTiming = SessionTiming(queryTimeoutMillis = 50, i5WriteIntervalMillis = 0, i7WriteIntervalMillis = 0)
+    private val sessionTiming = SessionTiming(queryTimeoutMillis = 50, writeIntervalMillis = 0)
     private val platform = PlatformState(PermissionState.GRANTED, TransportAvailability.Available)
 
     /** The module host process: everything it started stops with it, like a process that was killed. */

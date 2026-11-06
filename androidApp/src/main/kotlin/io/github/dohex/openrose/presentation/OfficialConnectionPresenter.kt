@@ -12,6 +12,7 @@ import android.os.SystemClock
 import android.util.Log
 import io.github.dohex.openrose.androidintegration.wire.BridgePresentationWire
 import io.github.dohex.openrose.androidintegration.wire.BridgeWire
+import io.github.dohex.openrose.core.protocol.ModelProfile
 import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
@@ -205,7 +206,7 @@ internal class OfficialConnectionPresenter(
     private fun decodeRequest(snapshot: Bundle, promptId: String): PromptRequest? {
         if (snapshot.getInt(BridgeWire.KEY_VERSION, -1) != BridgeWire.VERSION) return null
         val identity = identityOf(snapshot) ?: return null
-        if (snapshot.getString("profile") !in SUPPORTED_PROFILES) return null
+        if (ModelProfile.fromName(snapshot.getString("profile")) == null) return null
         val presentation = snapshot.getBundle(BridgePresentationWire.PRESENTATION) ?: return null
         if (presentation.getString(BridgePresentationWire.MODE) != BridgePresentationWire.OFFICIAL ||
             !presentation.getBoolean(BridgePresentationWire.ALLOW_ISLAND_FIELDS, false)
@@ -530,7 +531,6 @@ internal class OfficialConnectionPresenter(
         private const val URI_RELEASE_GRACE_MILLIS = 750L
         private const val MODULE_LEFT_RAW = "openrose_earbud_left"
         private const val MODULE_RIGHT_RAW = "openrose_earbud_right"
-        private val SUPPORTED_PROFILES = setOf("I5_ZT", "I7_RS_V2")
     }
 }
 

@@ -386,6 +386,8 @@ internal fun DeviceSetting.displayName(): String = when (this) {
     DeviceSetting.PROMPT_VOLUME -> "提示音音量"
     DeviceSetting.GAIN -> "增益档位"
     DeviceSetting.HEARING_PROTECTION -> "听力保护阈值"
+    DeviceSetting.BASS_BOOST -> "低音增强"
+    DeviceSetting.PROMPT_LANGUAGE -> "提示音语言"
     DeviceSetting.CUSTOM_EQ -> "自定义 EQ"
 }
 
@@ -405,6 +407,8 @@ private fun SettingOperation.requestedValueText(profile: ModelProfile?): String 
     DeviceSetting.CUSTOM_EQ -> displayFieldValue(DeviceField.CUSTOM_EQ, requestedValue)
     DeviceSetting.GAIN -> displayFieldValue(DeviceField.GAIN, requestedValue)
     DeviceSetting.HEARING_PROTECTION -> displayFieldValue(DeviceField.HEARING_PROTECTION, requestedValue)
+    DeviceSetting.BASS_BOOST -> displayFieldValue(DeviceField.EQ_SLOT, requestedValue)
+    DeviceSetting.PROMPT_LANGUAGE -> displayFieldValue(DeviceField.PROMPT_LANGUAGE, requestedValue)
 }
 
 private fun SettingStage.displayText(): String = when (this) {

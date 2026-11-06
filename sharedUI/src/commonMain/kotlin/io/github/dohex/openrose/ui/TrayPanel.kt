@@ -75,11 +75,7 @@ fun traySummary(state: ControlState, selection: PrimaryDeviceSelection): TraySum
     }
 
     val battery = ready?.let { device ->
-        listOf(
-            "左耳" to DeviceField.LEFT_BATTERY,
-            "右耳" to DeviceField.RIGHT_BATTERY,
-            "充电盒" to DeviceField.CASE_BATTERY,
-        ).mapNotNull { (label, field) ->
+        device.profile.batteryReadings().mapNotNull { (label, field) ->
             (device.knownValue(field) as? FieldValue.Number)?.value?.takeIf { it in 0..100 }
                 ?.let { "$label $it%" }
         }.takeIf { it.isNotEmpty() }?.joinToString(" · ")

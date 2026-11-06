@@ -161,7 +161,7 @@ class ControlSessionDeviceControlsTest {
 
     @Test
     fun unknownTargetTouchActionWaitsForItsKnownReadbackInBothModels() = runTest {
-        for (profile in ModelProfile.entries) {
+        for (profile in listOf(ModelProfile.I5_ZT, ModelProfile.I7_RS_V2)) {
             val (session, link) = ready(profile)
             val pending = async { session.set(DeviceSetting.TOUCH_BINDING, FieldValue.TouchAssignment("left", "single", "play_pause")) }
             runCurrent()
@@ -179,7 +179,7 @@ class ControlSessionDeviceControlsTest {
 
     @Test
     fun onlyUnknownTargetTouchActionTimesOutInsteadOfReportingNotApplied() = runTest {
-        for (profile in ModelProfile.entries) {
+        for (profile in listOf(ModelProfile.I5_ZT, ModelProfile.I7_RS_V2)) {
             val (session, link) = ready(profile)
             val pending = async { session.set(DeviceSetting.TOUCH_BINDING, FieldValue.TouchAssignment("left", "single", "play_pause")) }
             runCurrent()
@@ -194,7 +194,7 @@ class ControlSessionDeviceControlsTest {
 
     @Test
     fun knownDifferentTargetTouchActionReportsActualMismatch() = runTest {
-        for (profile in ModelProfile.entries) {
+        for (profile in listOf(ModelProfile.I5_ZT, ModelProfile.I7_RS_V2)) {
             val (session, link) = ready(profile)
             val pending = async { session.set(DeviceSetting.TOUCH_BINDING, FieldValue.TouchAssignment("left", "single", "play_pause")) }
             runCurrent()
@@ -277,7 +277,7 @@ class ControlSessionDeviceControlsTest {
 
     @Test
     fun touchAndDetectionSwitchesUseInversePolarityWithoutChangingOtherFacts() = runTest {
-        for (profile in ModelProfile.entries) {
+        for (profile in listOf(ModelProfile.I5_ZT, ModelProfile.I7_RS_V2)) {
             val (session, link) = ready(profile)
             val vectors = if (profile == ModelProfile.I5_ZT) {
                 listOf(
@@ -313,7 +313,7 @@ class ControlSessionDeviceControlsTest {
 
     @Test
     fun unsupportedOptionsInvalidTouchSlotsAndVolumeBoundariesNeverReachTheWire() = runTest {
-        for (profile in ModelProfile.entries) {
+        for (profile in listOf(ModelProfile.I5_ZT, ModelProfile.I7_RS_V2)) {
             val (session, link) = ready(profile)
             val count = link.writes.size
             for ((setting, value) in listOf(
@@ -401,7 +401,7 @@ class ControlSessionDeviceControlsTest {
             PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
             transport = transport,
             scope = backgroundScope,
-            timing = SessionTiming(queryTimeoutMillis = 50, i5WriteIntervalMillis = 0, i7WriteIntervalMillis = 0),
+            timing = SessionTiming(queryTimeoutMillis = 50, writeIntervalMillis = 0),
         )
         session.startScan()
         val advertisement = if (profile == ModelProfile.I5_ZT) {

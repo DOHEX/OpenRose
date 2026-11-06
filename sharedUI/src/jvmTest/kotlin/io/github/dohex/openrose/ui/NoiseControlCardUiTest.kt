@@ -18,7 +18,6 @@ import io.github.dohex.openrose.core.PlatformState
 import io.github.dohex.openrose.core.SettingOperation
 import io.github.dohex.openrose.core.SettingStage
 import io.github.dohex.openrose.core.TransportAvailability
-import io.github.dohex.openrose.core.noiseControlCapabilities
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.FieldReading
 import io.github.dohex.openrose.core.protocol.FieldValue
@@ -83,7 +82,7 @@ class NoiseControlCardUiTest {
     @Test
     fun eachLevelRowUsesItsOwnOptionsAndIsOmittedWhenUnsupported() {
         for (style in InterfaceStyle.entries) {
-            val ancOnlyCapabilities = noiseControlCapabilities(ModelProfile.I5_ZT).copy(
+            val ancOnlyCapabilities = ModelProfile.I5_ZT.capabilities().noiseControl!!.copy(
                 ancLevel = NoiseLevelCapabilities(levels = persistentSetOf(2), visibleModes = persistentSetOf("anc")),
                 transparencyLevel = null,
             )
@@ -102,7 +101,7 @@ class NoiseControlCardUiTest {
             assertFalse(ancNodes.hasText("3 档"))
             assertFalse(ancNodes.hasText("5 档"))
 
-            val transparencyOnlyCapabilities = noiseControlCapabilities(ModelProfile.I5_ZT).copy(
+            val transparencyOnlyCapabilities = ModelProfile.I5_ZT.capabilities().noiseControl!!.copy(
                 ancLevel = null,
                 transparencyLevel = NoiseLevelCapabilities(levels = persistentSetOf(2, 4), visibleModes = persistentSetOf("transparency")),
             )
@@ -186,7 +185,7 @@ class NoiseControlCardUiTest {
             capabilities = DeviceCapabilities(
                 readableFields = persistentSetOf(DeviceField.NOISE_MODE, DeviceField.ANC_LEVEL, DeviceField.TRANSPARENCY_LEVEL),
                 writableSettings = persistentSetOf(DeviceSetting.NOISE_MODE, DeviceSetting.ANC_LEVEL, DeviceSetting.TRANSPARENCY_LEVEL),
-                noiseControl = noiseCapabilities ?: noiseControlCapabilities(profile),
+                noiseControl = noiseCapabilities ?: profile.capabilities().noiseControl,
             ),
             fields = persistentMapOf(
                 DeviceField.NOISE_MODE to mode,

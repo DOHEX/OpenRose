@@ -3,7 +3,6 @@ package io.github.dohex.openrose.core
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.FieldReading
 import io.github.dohex.openrose.core.protocol.FieldValue
-import io.github.dohex.openrose.core.protocol.ModelProfile
 import io.github.dohex.openrose.core.protocol.ProtocolCodec
 import io.github.dohex.openrose.core.protocol.createProtocolCodec
 import io.github.dohex.openrose.core.transport.AudioProfileEvidence
@@ -95,18 +94,10 @@ internal class ControlLink(
             onStarted()
             val next = Attempt(++generation, candidate, state.value.settings.forceBle)
             ownsAttempt = true
-            val profile = requireNotNull(candidate.profile)
             state.update {
                 it.copy(
                     connection = ConnectionState.Connecting(deviceId, next.id, ConnectionPhase.CONNECTING),
-                    device = DeviceState(
-                        deviceId,
-                        next.id,
-                        profile,
-                        deviceCapabilities(profile, null),
-                        profile.supportedFields.associateWith { FieldReading.Loading }.toPersistentMap(),
-                        classicAddress = candidate.classicAddress,
-                    ),
+                    device = loadingDevice(candidate, next.id),
                     lastError = null,
                     transportSelection = null,
                     connectionRecovery = null,
@@ -167,7 +158,7 @@ internal class ControlLink(
 
     internal suspend fun pace(attempt: Attempt) {
         if (attempt.hasWritten) {
-            delay(if (attempt.candidate.profile == ModelProfile.I5_ZT) timing.i5WriteIntervalMillis else timing.i7WriteIntervalMillis)
+            delay(timing.writeIntervalMillis ?: requireNotNull(attempt.candidate.profile).spec.writeIntervalMillis)
         }
         attempt.hasWritten = true
     }
@@ -289,7 +280,7 @@ internal class ControlLink(
                             current.copy(
                                 device = old.copy(
                                     fields = old.fields.putAll(readings),
-                                    capabilities = deviceCapabilities(profile, firmware),
+                                    capabilities = profile.capabilities(firmware),
                                     fieldErrors = readings.keys.fold(old.fieldErrors) { errors, field -> errors.remove(field) },
                                     rawNotifications = old.rawNotifications.appendRecent(listOf(bytes.hex())),
                                     unknownNotifications = old.unknownNotifications.appendRecent(
@@ -509,21 +500,13 @@ internal class ControlLink(
             attempt.hasWritten = false
             attempt.initializationQueryIndex = null
             attempt.ready = false
-            val profile = requireNotNull(attempt.candidate.profile)
             state.update { current ->
                 if (current.device?.sessionId != attempt.id || current.connection is ConnectionState.Disconnected) {
                     current
                 } else {
                     current.copy(
                         connection = ConnectionState.Connecting(attempt.candidate.deviceId, attempt.id, ConnectionPhase.CONNECTING),
-                        device = DeviceState(
-                            attempt.candidate.deviceId,
-                            attempt.id,
-                            profile,
-                            deviceCapabilities(profile, null),
-                            profile.supportedFields.associateWith { FieldReading.Loading }.toPersistentMap(),
-                            classicAddress = attempt.candidate.classicAddress,
-                        ),
+                        device = loadingDevice(attempt.candidate, attempt.id),
                         lastError = null,
                         transportSelection = selection,
                         connectionRecovery = ConnectionRecovery(attempt.id, failure.reason),
@@ -551,7 +534,7 @@ internal class ControlLink(
         val profile = requireNotNull(attempt.candidate.profile)
         val gatt = profile.gatt
         val ble = TransportEndpoint.BleGatt(gatt.serviceUuid, gatt.writeUuid, gatt.notifyUuid)
-        if (profile != ModelProfile.I7_RS_V2) return TransportSelection(ble, TransportSelectionReason.MODEL_BLE_ONLY)
+        val sppUuid = profile.spec.sppControlUuid ?: return TransportSelection(ble, TransportSelectionReason.MODEL_BLE_ONLY)
         if (attempt.forceBle) return TransportSelection(ble, TransportSelectionReason.FORCED_BLE)
         val address = attempt.candidate.classicAddress
             ?: return TransportSelection(ble, TransportSelectionReason.CLASSIC_ADDRESS_UNAVAILABLE)
@@ -574,8 +557,22 @@ internal class ControlLink(
                 TransportSelection(ble, TransportSelectionReason.LE_AUDIO)
 
             AudioProfileEvidence.CLASSIC ->
-                TransportSelection(TransportEndpoint.SppRfcomm(address, I7_CONTROL_SPP_UUID), TransportSelectionReason.CLASSIC_AUDIO)
+                TransportSelection(TransportEndpoint.SppRfcomm(address, sppUuid), TransportSelectionReason.CLASSIC_AUDIO)
         }
+    }
+
+    /** A fresh device session: capabilities before any firmware read, and every readable field still loading. */
+    private fun loadingDevice(candidate: DeviceCandidate, sessionId: Long): DeviceState {
+        val profile = requireNotNull(candidate.profile)
+        val capabilities = profile.capabilities()
+        return DeviceState(
+            candidate.deviceId,
+            sessionId,
+            profile,
+            capabilities,
+            capabilities.readableFields.associateWith { FieldReading.Loading }.toPersistentMap(),
+            classicAddress = candidate.classicAddress,
+        )
     }
 
     internal data class ReadProgress(
@@ -657,8 +654,4 @@ internal class ControlLink(
     }
 
     private fun ByteArray.hex() = joinToString("") { (it.toInt() and 255).toString(16).padStart(2, '0') }
-
-    private companion object {
-        const val I7_CONTROL_SPP_UUID = "0cf12d31-fac3-4553-bd80-d6832e7b3931"
-    }
 }

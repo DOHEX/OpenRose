@@ -228,7 +228,7 @@ fun OpenRoseApp(
                             AppPage.DETAILS -> {
                                 ConnectionDetailsCard(state, onDisconnect)
                                 AppGroup(title = "设备标识") {
-                                    AppInfoRow("型号配置", device.profile.configurationLabel)
+                                    AppInfoRow("型号配置", device.profile.family.displayName)
                                 }
                                 DeviceReadings(device, state.connection.phaseOrNull() == ConnectionPhase.INITIALIZING)
                             }

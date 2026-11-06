@@ -106,7 +106,7 @@ class ControlSessionBehaviorTest {
             PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
             transport = transport,
             scope = backgroundScope,
-            timing = SessionTiming(queryTimeoutMillis = 30, i5WriteIntervalMillis = 0),
+            timing = SessionTiming(queryTimeoutMillis = 30, writeIntervalMillis = 0),
         )
         session.startScan()
         runCurrent()
@@ -128,7 +128,7 @@ class ControlSessionBehaviorTest {
             PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
             transport = transport,
             scope = backgroundScope,
-            timing = SessionTiming(queryTimeoutMillis = 30, i5WriteIntervalMillis = 0),
+            timing = SessionTiming(queryTimeoutMillis = 30, writeIntervalMillis = 0),
         )
         session.startScan()
         runCurrent()
@@ -153,7 +153,7 @@ class ControlSessionBehaviorTest {
             PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
             transport = transport,
             scope = backgroundScope,
-            timing = SessionTiming(queryTimeoutMillis = 30, i5WriteIntervalMillis = 0),
+            timing = SessionTiming(queryTimeoutMillis = 30, writeIntervalMillis = 0),
         )
         session.startScan()
         runCurrent()
@@ -192,7 +192,7 @@ class ControlSessionBehaviorTest {
             PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
             transport = transport,
             scope = backgroundScope,
-            timing = SessionTiming(queryTimeoutMillis = 30, i5WriteIntervalMillis = 0),
+            timing = SessionTiming(queryTimeoutMillis = 30, writeIntervalMillis = 0),
         )
         session.startScan()
         runCurrent()
@@ -280,7 +280,7 @@ class ControlSessionBehaviorTest {
             PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
             transport = transport,
             scope = backgroundScope,
-            timing = SessionTiming(queryTimeoutMillis = 30, i5WriteIntervalMillis = 0),
+            timing = SessionTiming(queryTimeoutMillis = 30, writeIntervalMillis = 0),
         )
         session.startScan()
         runCurrent()

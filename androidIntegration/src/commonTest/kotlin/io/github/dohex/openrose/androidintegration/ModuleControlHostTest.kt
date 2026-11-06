@@ -272,7 +272,7 @@ class ModuleControlHostTest {
                 UserSettings(),
                 rig.appTransport,
                 backgroundScope,
-                SessionTiming(queryTimeoutMillis = 50, i5WriteIntervalMillis = 0, i7WriteIntervalMillis = 0),
+                SessionTiming(queryTimeoutMillis = 50, writeIntervalMillis = 0),
             )
             assertEquals(OperationResult.Success, runtime.connect(rig.earphones.deviceId, pinned = true))
             val state = runtime.state.value

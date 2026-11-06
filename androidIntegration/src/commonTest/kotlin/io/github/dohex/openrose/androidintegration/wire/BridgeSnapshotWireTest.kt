@@ -29,7 +29,7 @@ class BridgeSnapshotWireTest {
 
         assertEquals(NativeSessionReference(HOST_EPOCH, "aa:bb:cc:dd:ee:01", 7), snapshot.reference)
         assertEquals(setOf("AA:BB:CC:DD:EE:01"), snapshot.addresses)
-        assertEquals("I5_ZT", snapshot.profile)
+        assertEquals(ModelProfile.I5_ZT, snapshot.profile)
         assertEquals(setOf("NOISE_MODE", "ANC_LEVEL"), snapshot.writableSettings)
         assertEquals(setOf("anc", "normal", "transparency"), snapshot.noiseModes)
         assertEquals(NativeNoiseLevelCapabilities(setOf(1, 3, 5), setOf("anc")), snapshot.ancLevel)

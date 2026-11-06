@@ -11,7 +11,6 @@
     <ID>ComplexCondition:ControlLink.kt:ControlLink$index == 0 &amp;&amp; !progress.value.meaningful &amp;&amp; selection.endpoint is TransportEndpoint.BleGatt &amp;&amp; requireNotNull(transport).supportsInitializationRecovery</ID>
     <ID>ComplexCondition:ControlLink.kt:ControlLink$queryIndex == 0 &amp;&amp; canRecoverUnclassified(attempt, selection) &amp;&amp; cause !is SecurityException &amp;&amp; cause !is IllegalArgumentException &amp;&amp; cause !is UnsupportedOperationException &amp;&amp; cause !is LinkEnded &amp;&amp; cause !is RecoverableTransportException &amp;&amp; cause !is TerminalTransportException</ID>
     <ID>ComplexCondition:GattControlConnection.kt:GattControlConnection$(!writer.canWrite &amp;&amp; !writer.canWriteWithoutResponse) || (!notifier.canNotify &amp;&amp; !notifier.canIndicate)</ID>
-    <ID>ComplexCondition:SettingQueue.kt:SettingQueue$profile == ModelProfile.I7_RS_V2 &amp;&amp; value is FieldValue.Number &amp;&amp; value.value == 0 &amp;&amp; value.value !in levels</ID>
     <ID>CyclomaticComplexMethod:AudioFacts.kt:fun inferAudioProfile: AudioProfileEvidence</ID>
     <ID>CyclomaticComplexMethod:ControlLink.kt:ControlLink$private suspend fun openAndRead: OperationResult</ID>
     <ID>CyclomaticComplexMethod:ControlLink.kt:ControlLink$private suspend fun openAndReadLink: OperationResult</ID>
@@ -19,13 +18,13 @@
     <ID>CyclomaticComplexMethod:ControlLink.kt:ControlLink$suspend fun connect: OperationResult</ID>
     <ID>CyclomaticComplexMethod:ControlSessionRecoveryTest.kt:ControlSessionRecoveryTest.RecoveryTransport$override suspend fun connect: ControlConnection</ID>
     <ID>CyclomaticComplexMethod:GattControlConnection.kt:GattControlConnection$private suspend fun initialize</ID>
-    <ID>CyclomaticComplexMethod:I5Codec.kt:I5Codec$override fun feedNotification: List&lt;ProtocolReply&gt;</ID>
-    <ID>CyclomaticComplexMethod:I5Codec.kt:I5Codec$override fun prepareSetting: ProtocolSetting</ID>
-    <ID>CyclomaticComplexMethod:I7Codec.kt:I7Codec$override fun prepareSetting: ProtocolSetting</ID>
-    <ID>CyclomaticComplexMethod:I7Codec.kt:I7Codec$private fun decodeRecord: Map&lt;DeviceField, FieldReading&gt;</ID>
+    <ID>CyclomaticComplexMethod:RsCommonV2Codec.kt:RsCommonV2Codec$override fun prepareSetting: ProtocolSetting</ID>
+    <ID>CyclomaticComplexMethod:RsCommonV2Codec.kt:RsCommonV2Codec$private fun decodeRecord: Map&lt;DeviceField, FieldReading&gt;</ID>
     <ID>CyclomaticComplexMethod:SettingQueue.kt:SettingQueue$private fun validateSetting: ControlError?</ID>
     <ID>CyclomaticComplexMethod:SettingQueue.kt:SettingQueue$private suspend fun applySetting: OperationResult</ID>
     <ID>CyclomaticComplexMethod:SettingQueue.kt:SettingQueue$private suspend fun runSettings</ID>
+    <ID>CyclomaticComplexMethod:ZtCodec.kt:ZtCodec$override fun feedNotification: List&lt;ProtocolReply&gt;</ID>
+    <ID>CyclomaticComplexMethod:ZtCodec.kt:ZtCodec$override fun prepareSetting: ProtocolSetting</ID>
     <ID>DestructuringDeclarationWithTooManyEntries:ControlSessionAdvancedAudioTest.kt:ControlSessionAdvancedAudioTest$(firmware, level, write, reply)</ID>
     <ID>DestructuringDeclarationWithTooManyEntries:ControlSessionAdvancedAudioTest.kt:ControlSessionAdvancedAudioTest$(setting, value, write, query, reply)</ID>
     <ID>DestructuringDeclarationWithTooManyEntries:ControlSessionDeviceControlsTest.kt:ControlSessionDeviceControlsTest$(enabled, write, query, reply)</ID>
@@ -37,28 +36,27 @@
     <ID>DestructuringDeclarationWithTooManyEntries:ControlSessionEqualizerTest.kt:ControlSessionEqualizerTest$(preset, write, query, reply)</ID>
     <ID>LongMethod:AdvancedAudioProtocolTest.kt:AdvancedAudioProtocolTest$@Test fun i7GainProtectionAndPromptSettingsUseTheirIndependentFirmwareGatesAndReadbacks</ID>
     <ID>LongMethod:ControlLink.kt:ControlLink$private suspend fun openAndReadLink: OperationResult</ID>
-    <ID>LongMethod:ControlLink.kt:ControlLink$suspend fun connect: OperationResult</ID>
     <ID>LongMethod:ControlSessionTransportSelectionTest.kt:ControlSessionTransportSelectionTest$@Test fun fallbackReasonsUseOnlyAvailableModelAddressPlatformAndAudioEvidence</ID>
-    <ID>LongMethod:I5Codec.kt:I5Codec$override fun feedNotification: List&lt;ProtocolReply&gt;</ID>
-    <ID>LongMethod:I5Codec.kt:I5Codec$override fun prepareSetting: ProtocolSetting</ID>
-    <ID>LongMethod:I7Codec.kt:I7Codec$override fun prepareSetting: ProtocolSetting</ID>
-    <ID>LongMethod:I7Codec.kt:I7Codec$private fun decodeRecord: Map&lt;DeviceField, FieldReading&gt;</ID>
+    <ID>LongMethod:RsCommonV2Codec.kt:RsCommonV2Codec$override fun prepareSetting: ProtocolSetting</ID>
+    <ID>LongMethod:RsCommonV2Codec.kt:RsCommonV2Codec$private fun decodeRecord: Map&lt;DeviceField, FieldReading&gt;</ID>
     <ID>LongMethod:SettingQueue.kt:SettingQueue$private suspend fun applySetting: OperationResult</ID>
+    <ID>LongMethod:ZtCodec.kt:ZtCodec$override fun feedNotification: List&lt;ProtocolReply&gt;</ID>
+    <ID>LongMethod:ZtCodec.kt:ZtCodec$override fun prepareSetting: ProtocolSetting</ID>
     <ID>LoopWithTooManyJumpStatements:AudioFacts.kt:AudioFacts$for</ID>
-    <ID>LoopWithTooManyJumpStatements:I7Codec.kt:I7Codec$for</ID>
-    <ID>LoopWithTooManyJumpStatements:I7Codec.kt:I7Codec$while</ID>
+    <ID>LoopWithTooManyJumpStatements:RsCommonV2Codec.kt:RsCommonV2Codec$for</ID>
+    <ID>LoopWithTooManyJumpStatements:RsCommonV2Codec.kt:RsCommonV2Codec$while</ID>
     <ID>ReturnCount:ConnectionTargeting.kt:ConnectionTargeting$private suspend fun connectInternal: OperationResult</ID>
     <ID>ReturnCount:ControlLink.kt:ControlLink$private suspend fun openAndRead: OperationResult</ID>
     <ID>ReturnCount:ControlSessionRecoveryTest.kt:ControlSessionRecoveryTest.RecoveryLink$override suspend fun write</ID>
     <ID>ReturnCount:DeviceDiscovery.kt:DeviceDiscovery$fun resolveTarget: DeviceCandidate</ID>
     <ID>ReturnCount:DeviceDiscovery.kt:DeviceDiscovery$suspend fun findCandidate: DeviceCandidate?</ID>
-    <ID>ReturnCount:I7Codec.kt:I7Codec$private fun decodeRecord: Map&lt;DeviceField, FieldReading&gt;</ID>
-    <ID>ReturnCount:I7Codec.kt:I7Codec$private fun parseFrame: ProtocolReply?</ID>
+    <ID>ReturnCount:RsCommonV2Codec.kt:RsCommonV2Codec$private fun decodeRecord: Map&lt;DeviceField, FieldReading&gt;</ID>
+    <ID>ReturnCount:RsCommonV2Codec.kt:RsCommonV2Codec$private fun parseFrame: ProtocolReply?</ID>
     <ID>ThrowsCount:ControlLink.kt:ControlLink$private suspend fun openAndReadLink: OperationResult</ID>
     <ID>ThrowsCount:ControlLink.kt:ControlLink$private suspend fun writeInitialQuery</ID>
-    <ID>ThrowsCount:I5Codec.kt:I5Codec$override fun prepareSetting: ProtocolSetting</ID>
-    <ID>ThrowsCount:I7Codec.kt:I7Codec$override fun prepareSetting: ProtocolSetting</ID>
+    <ID>ThrowsCount:RsCommonV2Codec.kt:RsCommonV2Codec$override fun prepareSetting: ProtocolSetting</ID>
     <ID>ThrowsCount:SettingQueue.kt:SettingQueue$private suspend fun applySetting: OperationResult</ID>
+    <ID>ThrowsCount:ZtCodec.kt:ZtCodec$override fun prepareSetting: ProtocolSetting</ID>
     <ID>TooGenericExceptionCaught:ControlLink.kt:ControlLink$cause: Exception</ID>
     <ID>TooGenericExceptionCaught:DeviceDiscovery.kt:DeviceDiscovery$cause: Exception</ID>
     <ID>TooGenericExceptionCaught:GattControlConnection.kt:GattControlConnection$error: Exception</ID>

@@ -66,7 +66,7 @@ class ModuleHostPresentationTest {
                     saved,
                     transport,
                     scope,
-                    SessionTiming(queryTimeoutMillis = 50, i5WriteIntervalMillis = 0, i7WriteIntervalMillis = 0),
+                    SessionTiming(queryTimeoutMillis = 50, writeIntervalMillis = 0),
                     base,
                 )
             },

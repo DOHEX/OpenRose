@@ -42,7 +42,7 @@ class ControlSessionRecoveryTest {
             PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
             transport = transport,
             scope = backgroundScope,
-            timing = SessionTiming(queryTimeoutMillis = 30, i5WriteIntervalMillis = 0),
+            timing = SessionTiming(queryTimeoutMillis = 30, writeIntervalMillis = 0),
         )
         session.startScan()
         transport.advertisements.emit(i5Advertisement)
@@ -622,6 +622,6 @@ class ControlSessionRecoveryTest {
         initialSettings = UserSettings(forceBle = transport.forceBle),
         transport = transport,
         scope = backgroundScope,
-        timing = SessionTiming(queryTimeoutMillis = queryTimeoutMillis, i5WriteIntervalMillis = 0, i7WriteIntervalMillis = 0),
+        timing = SessionTiming(queryTimeoutMillis = queryTimeoutMillis, writeIntervalMillis = 0),
     )
 }

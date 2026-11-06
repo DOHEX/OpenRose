@@ -15,6 +15,7 @@ import io.github.dohex.openrose.androidintegration.CompanionAssociation
 import io.github.dohex.openrose.androidintegration.PresenceObservation
 import io.github.dohex.openrose.androidintegration.WakeBand
 import io.github.dohex.openrose.androidintegration.WakeFacts
+import io.github.dohex.openrose.core.protocol.ModelProfile
 import java.util.regex.Pattern
 
 /**
@@ -114,8 +115,8 @@ internal class CompanionWake(private val context: Context) {
     }
 
     private fun associationRequest(): AssociationRequest {
-        // Mirrors ModelProfile.match: names starting with "rose" or containing earfeel/earfree.
-        val name = Pattern.compile("(?is)rose.*|.*ear(?:feel|free).*")
+        // The same admission rule as ModelProfile.match, so the system wakes OpenRose for exactly the names it controls.
+        val name = Pattern.compile(ModelProfile.namePattern)
         return AssociationRequest.Builder()
             .addDeviceFilter(BluetoothDeviceFilter.Builder().setNamePattern(name).build())
             .addDeviceFilter(BluetoothLeDeviceFilter.Builder().setNamePattern(name).build())

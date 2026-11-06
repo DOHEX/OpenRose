@@ -168,7 +168,7 @@ class EqualizerDropdownUiTest {
             DeviceCapabilities(
                 readableFields = persistentSetOf(DeviceField.EQ),
                 writableSettings = persistentSetOf(DeviceSetting.EQ),
-                equalizer = equalizerCapabilities(profile, firmware),
+                equalizer = profile.capabilities(firmware).equalizer,
             ),
             fields = persistentMapOf(DeviceField.EQ to FieldReading.Known(FieldValue.Text("pop"), "00")),
         )

@@ -3,6 +3,7 @@ package io.github.dohex.openrose.androidintegration.wire
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.FieldReading
 import io.github.dohex.openrose.core.protocol.FieldValue
+import io.github.dohex.openrose.core.protocol.ModelProfile
 import io.github.dohex.openrose.core.transport.normalizeBluetoothAddress
 
 /** A value copied from the authenticated bridge's latest device snapshot. */
@@ -11,7 +12,7 @@ data class NativeHeadsetSnapshot(
     val deviceId: String,
     val sessionId: Long,
     val addresses: Set<String>,
-    val profile: String,
+    val profile: ModelProfile,
     val capturedElapsedMillis: Long,
     val writableSettings: Set<String>,
     val readableFields: Set<String>,
@@ -28,11 +29,8 @@ data class NativeHeadsetSnapshot(
     val supportsNoiseMode: Boolean
         get() = "NOISE_MODE" in writableSettings && noiseModes.isNotEmpty()
 
-    fun isSupportedProfile(): Boolean = profile == "I5_ZT" || profile == "I7_RS_V2"
-
     /** [nowElapsedMillis] is the reader's elapsed-realtime clock, the same clock the host stamped [capturedElapsedMillis] with. */
-    fun isFresh(nowElapsedMillis: Long): Boolean = isSupportedProfile() &&
-        hostEpoch.isNotBlank() &&
+    fun isFresh(nowElapsedMillis: Long): Boolean = hostEpoch.isNotBlank() &&
         deviceId.isNotBlank() &&
         sessionId > 0L &&
         addresses.isNotEmpty() && addresses.all { normalizeBluetoothAddress(it) == it } &&
@@ -71,8 +69,7 @@ data class NativeHeadsetSnapshot(
             val hostEpoch = wire.string(BridgeWire.HOST_EPOCH)?.takeIf { it.isNotBlank() && it.length <= 64 } ?: return null
             val deviceId = wire.string(BridgeWire.DEVICE_ID)?.takeIf { it.isNotBlank() && it.length <= 128 } ?: return null
             val sessionId = wire.long(BridgeWire.SESSION_ID)?.takeIf { it > 0L } ?: return null
-            val profile = wire.string("profile")?.takeIf { it.isNotBlank() && it.length <= 64 } ?: return null
-            if (profile != "I5_ZT" && profile != "I7_RS_V2") return null
+            val profile = ModelProfile.fromName(wire.string("profile")) ?: return null
 
             val addresses = linkedSetOf<String>()
             normalizeBluetoothAddress(wire.string("device_address"))?.let(addresses::add)

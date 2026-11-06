@@ -15,11 +15,11 @@ import kotlinx.coroutines.flow.update
 data class SessionTiming(
     val connectTimeoutMillis: Long = 15_000,
     val queryTimeoutMillis: Long = 1_500,
-    val i5WriteIntervalMillis: Long = 100,
-    val i7WriteIntervalMillis: Long = 100,
+    /** Overrides every model's own pause between control writes; null keeps each model's interval. */
+    val writeIntervalMillis: Long? = null,
 ) {
     init {
-        require(connectTimeoutMillis > 0 && queryTimeoutMillis > 0 && i5WriteIntervalMillis >= 0 && i7WriteIntervalMillis >= 0)
+        require(connectTimeoutMillis > 0 && queryTimeoutMillis > 0 && (writeIntervalMillis ?: 0) >= 0)
     }
 }
 

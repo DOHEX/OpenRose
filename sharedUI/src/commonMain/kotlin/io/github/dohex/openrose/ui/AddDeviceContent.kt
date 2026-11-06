@@ -151,7 +151,7 @@ internal fun AddDeviceContent(
                                 AppText(candidate.addDeviceName(), role = AppTextRole.Body)
                                 AppText(
                                     listOfNotNull(
-                                        candidate.profile?.configurationLabel,
+                                        candidate.profile?.family?.displayName,
                                         candidate.rssi?.let { "$it dBm" },
                                     ).joinToString(" · "),
                                     role = AppTextRole.Summary,

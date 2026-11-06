@@ -105,6 +105,8 @@ enum class DeviceSetting {
     CUSTOM_EQ,
     GAIN,
     HEARING_PROTECTION,
+    BASS_BOOST,
+    PROMPT_LANGUAGE,
 }
 
 /** Transport acceptance and device state confirmation are separate facts. */
@@ -132,6 +134,8 @@ data class DeviceCapabilities(
     val promptVolumeLevels: PersistentSet<Int> = persistentSetOf(),
     val gainLevels: PersistentSet<Int> = persistentSetOf(),
     val hearingProtectionLevels: PersistentSet<Int> = persistentSetOf(),
+    val bassBoostLevels: PersistentSet<Int> = persistentSetOf(),
+    val promptLanguages: PersistentSet<String> = persistentSetOf(),
 )
 
 data class DeviceState(

@@ -318,6 +318,8 @@ object ControlWire {
         "promptVolume" to arr(capabilities.promptVolumeLevels.map(::num)),
         "gain" to arr(capabilities.gainLevels.map(::num)),
         "hearingProtection" to arr(capabilities.hearingProtectionLevels.map(::num)),
+        "bassBoost" to arr(capabilities.bassBoostLevels.map(::num)),
+        "promptLanguages" to arr(capabilities.promptLanguages.map(::str)),
     )
 
     private fun decodeCapabilities(wire: Wire): DeviceCapabilities = wire.asObj().let { node ->
@@ -340,6 +342,8 @@ object ControlWire {
             promptVolumeLevels = node.arr("promptVolume").map { it.asInt() }.toPersistentSet(),
             gainLevels = node.arr("gain").map { it.asInt() }.toPersistentSet(),
             hearingProtectionLevels = node.arr("hearingProtection").map { it.asInt() }.toPersistentSet(),
+            bassBoostLevels = node.arr("bassBoost").map { it.asInt() }.toPersistentSet(),
+            promptLanguages = node.arr("promptLanguages").map { it.asStr() }.toPersistentSet(),
         )
     }
 

@@ -40,16 +40,6 @@ internal fun PlatformState.transportUnavailableForHome(): Boolean = permission i
     PermissionState.GRANTED,
     PermissionState.NOT_REQUIRED,
 ) && transport is TransportAvailability.Unavailable
-val ModelProfile.configurationLabel: String
-    get() = when (this) {
-        ModelProfile.I5_ZT -> "ZT"
-        ModelProfile.I7_RS_V2 -> "RS Common V2"
-    }
-val ModelProfile.shortLabel: String
-    get() = when (this) {
-        ModelProfile.I5_ZT -> "i5"
-        ModelProfile.I7_RS_V2 -> "i7"
-    }
 
 internal fun ControlState.controlTransportLabel(): String = when (transportSelection?.endpoint) {
     is TransportEndpoint.BleGatt -> "BLE"
@@ -152,6 +142,8 @@ internal fun HeadphonesPage(
                             DeviceSetting.PROMPT_VOLUME,
                             DeviceSetting.GAIN,
                             DeviceSetting.HEARING_PROTECTION,
+                            DeviceSetting.BASS_BOOST,
+                            DeviceSetting.PROMPT_LANGUAGE,
                         )
                     }
                     AppGroup(title = "功能") {
@@ -367,7 +359,7 @@ private fun UnconnectedHeadphonesDashboard(
                     )
                     primaryDevice.profile?.let {
                         AppText(
-                            it.configurationLabel,
+                            it.family.displayName,
                             role = AppTextRole.Footnote,
                             color = appColor(AppColorRole.Primary),
                         )
@@ -485,7 +477,7 @@ private fun UnconnectedHeadphonesDashboard(
                             Column {
                                 AppText(paired.name?.takeIf(String::isNotBlank) ?: paired.profile!!.displayName)
                                 paired.profile?.let {
-                                    AppText(it.configurationLabel, role = AppTextRole.Summary)
+                                    AppText(it.family.displayName, role = AppTextRole.Summary)
                                 }
                             }
                         }
@@ -520,11 +512,7 @@ internal fun BatteryStrip(device: DeviceState, initializing: Boolean) {
         Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(if (isMaterial3) 8.dp else 12.dp),
     ) {
-        listOf(
-            "左耳" to DeviceField.LEFT_BATTERY,
-            "右耳" to DeviceField.RIGHT_BATTERY,
-            "充电盒" to DeviceField.CASE_BATTERY,
-        ).forEach { (label, field) ->
+        device.profile.batteryReadings().forEach { (label, field) ->
             val percent = (device.knownValue(field) as? FieldValue.Number)
                 ?.value?.takeIf { it in 0..100 }
             val itemModifier = if (isMaterial3) {

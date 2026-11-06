@@ -434,7 +434,7 @@ class ControlSessionTransportSelectionTest {
             facts = TransportFacts(sppAvailable = true, audioProfile = AudioProfileEvidence.CLASSIC),
             link = link,
         )
-        val session = session(transport, timing = SessionTiming(connectTimeoutMillis = 1_000, queryTimeoutMillis = 50, i7WriteIntervalMillis = 100))
+        val session = session(transport, timing = SessionTiming(connectTimeoutMillis = 1_000, queryTimeoutMillis = 50, writeIntervalMillis = 100))
         val advertisement = Advertisement(DeviceId("i7-spp-pacing"), manufacturerData = i7Advertisement())
         advertise(session, transport, advertisement)
         assertEquals(OperationResult.Success, session.connect(advertisement.deviceId))
@@ -470,7 +470,7 @@ class ControlSessionTransportSelectionTest {
     private fun TestScope.session(
         transport: SelectionTransport,
         settings: UserSettings = UserSettings(),
-        timing: SessionTiming = SessionTiming(connectTimeoutMillis = 1_000, queryTimeoutMillis = 10, i7WriteIntervalMillis = 0),
+        timing: SessionTiming = SessionTiming(connectTimeoutMillis = 1_000, queryTimeoutMillis = 10, writeIntervalMillis = 0),
     ) = ControlSession(
         PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
         initialSettings = settings,

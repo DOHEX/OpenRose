@@ -2,89 +2,10 @@ package io.github.dohex.openrose.core.protocol
 
 import io.github.dohex.openrose.core.DeviceSetting
 import io.github.dohex.openrose.core.TouchSlot
-import io.github.dohex.openrose.core.touchControlCapabilities
 import kotlinx.collections.immutable.PersistentList
 import kotlinx.collections.immutable.PersistentMap
 import kotlinx.collections.immutable.toPersistentList
 import kotlinx.collections.immutable.toPersistentMap
-
-data class GattProfile(val serviceUuid: String, val writeUuid: String, val notifyUuid: String)
-
-enum class ModelProfile(val displayName: String, val manufacturerPrefix: String, val gatt: GattProfile) {
-    I5_ZT(
-        "EarFree i5",
-        "525300010001",
-        GattProfile(
-            "011bf5da-0000-1000-8000-00805f9b34fb",
-            "00007777-0000-1000-8000-00805f9b34fb",
-            "00008888-0000-1000-8000-00805f9b34fb",
-        ),
-    ),
-    I7_RS_V2(
-        "EarFeel i7",
-        "b8e5290f",
-        GattProfile(
-            "000000fe-0000-1000-8000-00805f9b34fb",
-            "000000f1-0000-1000-8000-00805f9b34fb",
-            "000000f2-0000-1000-8000-00805f9b34fb",
-        ),
-    ),
-    ;
-
-    /** Fields understood by the reader; this is not a list of enabled setting operations. */
-    val supportedFields: Set<DeviceField>
-        get() = when (this) {
-            I5_ZT -> i5Fields.values.flatten().toSet()
-            I7_RS_V2 -> i7Fields.values.flatten().toSet()
-        }
-
-    companion object {
-        fun match(name: String?): ModelProfile? {
-            if (name == null) return null
-            val normalized = name.trim().lowercase()
-            val isRose = normalized.startsWith("rose") ||
-                normalized.startsWith("roseselsa") ||
-                normalized.contains("earfeel") ||
-                normalized.contains("earfree")
-            if (!isRose) return null
-            // The vendor renamed EarFree to EarFeel (an i5 is now shown as "EarFeel-i5"), so the brand word no longer
-            // tells the models apart; the model number decides, and the brand word only when the name has none.
-            return when {
-                normalized.contains("i5") -> I5_ZT
-                normalized.contains("i7") -> I7_RS_V2
-                normalized.contains("earfree") -> I5_ZT
-                normalized.contains("earfeel") -> I7_RS_V2
-                else -> null
-            }
-        }
-    }
-}
-
-object ModelIdentification {
-    /** RoseLink puts every sorted LE company ID before every sorted payload. */
-    fun normalizedHex(manufacturerData: Map<Int, ByteArray>): String {
-        require(manufacturerData.keys.all { it in 0..65535 })
-        val keys = manufacturerData.keys.sorted()
-        val bytes = keys.flatMap { listOf(it.toByte(), (it shr 8).toByte()) } +
-            keys.flatMap { manufacturerData.getValue(it).toList() }
-        return bytes.toByteArray().hex()
-    }
-
-    fun identify(manufacturerData: Map<Int, ByteArray>): ModelProfile? {
-        val normalized = normalizedHex(manufacturerData)
-        return ModelProfile.entries.firstOrNull { normalized.startsWith(it.manufacturerPrefix) }
-    }
-
-    fun classicAddress(normalizedManufacturerDataHex: String, profile: ModelProfile?): String? {
-        if (profile != ModelProfile.I7_RS_V2 || normalizedManufacturerDataHex.length < 34) return null
-        val normalized = normalizedManufacturerDataHex.uppercase()
-        if (normalized.any { it !in '0'..'9' && it !in 'A'..'F' }) return null
-        if (normalized.substring(14, 16) != "01") return null
-        val octets = normalized.substring(22, 34).chunked(2)
-        if (octets.all { it == "00" } || octets.all { it == "FF" }) return null
-        return octets.joinToString(":")
-    }
-}
 
 enum class DeviceField(val displayName: String) {
     LEFT_BATTERY("左耳电量"),
@@ -112,6 +33,7 @@ enum class DeviceField(val displayName: String) {
     CUSTOM_EQ("自定义 EQ"),
     GAIN("增益档位"),
     HEARING_PROTECTION("听力保护档位"),
+    PROMPT_LANGUAGE("提示音语言"),
     FIND_STATE("寻机事件"),
 }
 
@@ -217,9 +139,9 @@ interface ProtocolCodec {
     fun reset()
 }
 
-fun createProtocolCodec(profile: ModelProfile): ProtocolCodec = when (profile) {
-    ModelProfile.I5_ZT -> I5Codec()
-    ModelProfile.I7_RS_V2 -> I7Codec()
+fun createProtocolCodec(profile: ModelProfile): ProtocolCodec = when (profile.family) {
+    ProtocolFamily.ZT -> ZtCodec(profile)
+    ProtocolFamily.RS_COMMON_V2 -> RsCommonV2Codec(profile)
 }
 
 internal fun ByteArray.hex(): String = joinToString("") { it.u().toString(16).padStart(2, '0') }
@@ -236,13 +158,13 @@ internal fun validatedNoiseCycle(value: FieldValue): FieldValue.NoiseCycle {
 
 internal fun validatedTouchAssignment(value: FieldValue, profile: ModelProfile): FieldValue.TouchAssignment {
     require(value is FieldValue.TouchAssignment) { "触控绑定需要单个耳侧、手势和动作" }
-    val capabilities = touchControlCapabilities(profile)
+    val capabilities = profile.capabilities().touchControl ?: throw UnsupportedOperationException("该型号不支持触控绑定")
     require(TouchSlot(value.side, value.gesture) in capabilities.slots) { "该触控槽位无效" }
     if (value.action !in capabilities.actions) throw UnsupportedOperationException("该型号不支持此触控动作")
     return value
 }
 
-internal val i5Fields = linkedMapOf(
+internal val ztFields = linkedMapOf(
     "0101" to setOf(
         DeviceField.LEFT_BATTERY,
         DeviceField.RIGHT_BATTERY,
@@ -258,7 +180,7 @@ internal val i5Fields = linkedMapOf(
     "0604" to setOf(DeviceField.TRANSPARENCY_LEVEL), "0e03" to setOf(DeviceField.PROMPT_VOLUME),
 )
 
-internal val i7Fields = linkedMapOf(
+internal val rsCommonV2Fields = linkedMapOf(
     "01" to setOf(DeviceField.TOUCH_KEYS), "07" to setOf(DeviceField.TOUCH_ENABLED),
     "08" to setOf(DeviceField.EAR_DETECTION), "09" to setOf(DeviceField.NOISE_MODE),
     "0c" to setOf(
@@ -273,6 +195,6 @@ internal val i7Fields = linkedMapOf(
     "2a" to setOf(DeviceField.EQ), "2b" to setOf(DeviceField.AUDIO_MODE),
     "2c" to setOf(DeviceField.ANC_LEVEL), "2d" to setOf(DeviceField.TRANSPARENCY_LEVEL),
     "2e" to setOf(DeviceField.PROMPT_VOLUME), "2f" to setOf(DeviceField.FIND_STATE),
-    "32" to setOf(DeviceField.MULTIPOINT), "36" to setOf(DeviceField.NOISE_CYCLE),
+    "31" to setOf(DeviceField.PROMPT_LANGUAGE), "32" to setOf(DeviceField.MULTIPOINT), "36" to setOf(DeviceField.NOISE_CYCLE),
     "3e" to setOf(DeviceField.CUSTOM_EQ), "45" to setOf(DeviceField.GAIN), "46" to setOf(DeviceField.HEARING_PROTECTION),
 )

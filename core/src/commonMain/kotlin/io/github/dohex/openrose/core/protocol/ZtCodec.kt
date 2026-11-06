@@ -2,9 +2,8 @@ package io.github.dohex.openrose.core.protocol
 
 import io.github.dohex.openrose.core.DeviceSetting
 
-internal class I5Codec : ProtocolCodec {
-    override val profile = ModelProfile.I5_ZT
-
+/** ZT family frames: 08EE requests, fixed command keys and nibble-encoded replies. */
+internal class ZtCodec(override val profile: ModelProfile) : ProtocolCodec {
     override fun prepareSetting(setting: DeviceSetting, value: FieldValue, firmware: FieldValue.Firmware?): ProtocolSetting {
         val expected = if (setting == DeviceSetting.NOISE_CYCLE) validatedNoiseCycle(value) else value
         val (writeKey, readKey, payload) = when (setting) {
@@ -16,14 +15,14 @@ internal class I5Codec : ProtocolCodec {
                     "wind" to "00000100",
                     "transparency" to "00000001",
                 )[value.value]
-                    ?: throw UnsupportedOperationException("i5 不支持该降噪模式")
+                    ?: throw UnsupportedOperationException("该型号不支持该降噪模式")
                 Triple("0682", "0602", mode.bytes())
             }
 
             DeviceSetting.ANC_LEVEL, DeviceSetting.TRANSPARENCY_LEVEL -> {
                 require(value is FieldValue.Number) { "档位需要整数" }
                 val level = listOf(1, 3, 5).indexOf(value.value)
-                require(level >= 0) { "i5 档位仅支持 1、3、5" }
+                require(level >= 0) { "ZT 档位仅支持 1、3、5" }
                 if (setting == DeviceSetting.ANC_LEVEL) {
                     Triple("0687", "0607", byteArrayOf(level.toByte()))
                 } else {
@@ -42,7 +41,7 @@ internal class I5Codec : ProtocolCodec {
             DeviceSetting.EQ -> {
                 require(value is FieldValue.Text) { "均衡器需要预设名称" }
                 val preset = listOf("pop", "hifi", "rock", "light").indexOf(value.value)
-                if (preset < 0) throw UnsupportedOperationException("i5 不支持该均衡器预设")
+                if (preset < 0) throw UnsupportedOperationException("该型号不支持该均衡器预设")
                 Triple("0281", "0201", byteArrayOf(preset.toByte()))
             }
 
@@ -54,7 +53,7 @@ internal class I5Codec : ProtocolCodec {
             DeviceSetting.AUDIO_MODE -> {
                 require(value is FieldValue.Text) { "音频模式需要配置名称" }
                 val mode = listOf("aac_sbc", "ldac").indexOf(value.value)
-                if (mode < 0) throw UnsupportedOperationException("i5 不支持该音频配置")
+                if (mode < 0) throw UnsupportedOperationException("该型号不支持该音频配置")
                 Triple("0881", "0801", byteArrayOf(mode.toByte()))
             }
 
@@ -91,11 +90,11 @@ internal class I5Codec : ProtocolCodec {
             }
 
             DeviceSetting.PROMPT_VOLUME -> {
-                require(value is FieldValue.Number && value.value in 1..5) { "i5 提示音仅支持 1～5 档" }
+                require(value is FieldValue.Number && value.value in ProtocolFamily.ZT.promptVolumeLevels) { "ZT 提示音仅支持 1～5 档" }
                 Triple("0e83", "0e03", byteArrayOf((value.value - 1).toByte()))
             }
 
-            else -> throw UnsupportedOperationException("i5 不支持此设置")
+            else -> throw UnsupportedOperationException("该型号不支持此设置")
         }
         val expectedValues = if (readKey == "0801") {
             val multipoint = payload.single().u() == 0
@@ -104,7 +103,7 @@ internal class I5Codec : ProtocolCodec {
                 DeviceField.MULTIPOINT to FieldValue.Toggle(multipoint),
             )
         } else {
-            mapOf(i5Fields.getValue(readKey).single() to expected)
+            mapOf(ztFields.getValue(readKey).single() to expected)
         }
         return ProtocolSetting(
             listOf(frame(writeKey, payload)),
@@ -119,11 +118,11 @@ internal class I5Codec : ProtocolCodec {
         return prefix + byteArrayOf((prefix.sumOf { it.u() } and 255).toByte())
     }
 
-    private fun query(key: String) = ProtocolQuery(key, frame(key), setOf(key), i5Fields.getValue(key))
+    private fun query(key: String) = ProtocolQuery(key, frame(key), setOf(key), ztFields.getValue(key))
 
     override fun initQueries(maxWriteSize: Int): List<ProtocolQuery> {
-        require(maxWriteSize >= 10) { "i5 queries require a 10-byte write capacity" }
-        return i5Fields.keys.map(::query)
+        require(maxWriteSize >= 10) { "ZT queries require a 10-byte write capacity" }
+        return ztFields.keys.map(::query)
     }
 
     override fun feedNotification(bytes: ByteArray): List<ProtocolReply> {
@@ -135,7 +134,7 @@ internal class I5Codec : ProtocolCodec {
             "0d01", "0605" -> 13
             "0401" -> 17
             "0602" -> 14
-            in i5Fields -> 10
+            in ztFields -> 10
             else -> return listOf(ProtocolReply(raw.hex(), warnings = listOf("未知字段 $command")))
         }
         if (raw.size < minimum) return listOf(ProtocolReply(raw.hex(), warnings = listOf("$command 字段被截断")))
@@ -217,7 +216,7 @@ internal class I5Codec : ProtocolCodec {
             }
 
             "0603", "0c01", "0a01" -> {
-                val field = i5Fields.getValue(command).single()
+                val field = ztFields.getValue(command).single()
                 fields[field] = if (nibble in 0..1) {
                     FieldReading.Known(FieldValue.Toggle(nibble == 0), byteArrayOf(raw[9]).hex())
                 } else {
@@ -237,7 +236,7 @@ internal class I5Codec : ProtocolCodec {
             }
 
             "0607", "0604" -> {
-                val field = i5Fields.getValue(command).single()
+                val field = ztFields.getValue(command).single()
                 val level = listOf(1, 3, 5).getOrNull(raw[9].u())
                 fields[field] = level?.let { FieldReading.Known(FieldValue.Number(it), byteArrayOf(raw[9]).hex()) }
                     ?: FieldReading.Unknown(byteArrayOf(raw[9]).hex())

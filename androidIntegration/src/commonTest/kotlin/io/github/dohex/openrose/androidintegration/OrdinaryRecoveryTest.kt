@@ -298,7 +298,7 @@ class OrdinaryRecoveryTest {
                 initialPlatformState = androidPlatform(unlocked = unlocked),
                 transport = transport,
                 scope = backgroundScope,
-                timing = SessionTiming(queryTimeoutMillis = 50, i5WriteIntervalMillis = 0, i7WriteIntervalMillis = 0),
+                timing = SessionTiming(queryTimeoutMillis = 50, writeIntervalMillis = 0),
             ),
             scope = backgroundScope,
             initialIntegrationSettings = settings,

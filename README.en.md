@@ -21,8 +21,12 @@ It is built with Kotlin Multiplatform and Compose Multiplatform and ships two in
 | --- | --- | --- |
 | EarFree i5 (EarFeel i5) | ZT / BLE | Status reads work on a real device; settings writes not yet tested on Android |
 | EarFeel i7 | RS Common V2 / BLE or SPP | Protocol and offline tests done; not yet tried on a real device |
+| BudsFeel MK2 | RS Common V2 / BLE or SPP | Adapted from static protocol evidence; hardware unverified; capability limits in the ledger |
+| OpenFeel MK2 | RS Common V2 / BLE or SPP | Adapted from static protocol evidence; hardware unverified; capability limits in the ledger |
+| Swift 2 | RS Common V2 / BLE or SPP | Single-unit battery, game mode and multipoint; hardware unverified |
+| Jasmine | RS Common V2 / BLE or SPP | Adapted from static protocol evidence; hardware unverified; Chinese retail name unconfirmed |
 
-One retail name can cover several hardware revisions. OpenRose currently implements only the two model profiles above. Protocol research for other models (BudsFeel MK2, OpenFeel MK2, Swift 2, Jasmine, and a capability list of 43 models) lives in [docs/protocols/](docs/protocols/) but is not wired into the app yet.
+One retail name can cover several hardware revisions. The table represents six model profiles; the remaining 37 branches have capability inventories but insufficient model-specific byte-level evidence and are not adapted. See the [model adaptation evidence ledger](docs/protocols/model-adaptation-ledger.md) for each new profile's sources, omitted controls and reasons, and [docs/protocols/](docs/protocols/) for the full research.
 
 ## Features
 
@@ -32,7 +36,7 @@ One retail name can cover several hardware revisions. OpenRose currently impleme
 - Noise control mode, with separate ANC and transparency levels; choose which modes the touch gesture cycles through
 - Game mode, EQ presets, touch bindings, touch on/off, wear detection on/off, prompt volume
 - Audio codec preference and multipoint (linked to each other on the i5)
-- i7 only: custom 10-band EQ; gain and hearing protection on supported firmware
+- Custom 10-band EQ on the i7; gain and hearing protection on supported i7 firmware and on OpenFeel MK2; bass boost on BudsFeel MK2 / OpenFeel MK2; Chinese / English prompt language on Jasmine
 
 **Appearance**
 
@@ -230,7 +234,7 @@ Most documentation is in Chinese.
 
 | Document | Contents |
 | --- | --- |
-| [Protocol implementation](docs/protocols.md) | How OpenRose implements the i5 / i7 protocols: frame formats, field encodings, setting commands, test coverage |
+| [Protocol implementation](docs/protocols.md) | How OpenRose implements ZT / RS Common V2: model profiles, frame formats, field encodings, setting commands, test coverage |
 | [Protocol research](docs/protocols/) | Protocol specs for all models, capability list, and OTA research, reverse-engineered from the official RoseLink app |
 | [Architecture decisions](docs/adr/) | Key design decisions and their reasoning |
 | [Glossary](GLOSSARY.md) | Domain terms used across the project |

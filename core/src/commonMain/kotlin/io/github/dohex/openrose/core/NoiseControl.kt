@@ -1,9 +1,6 @@
 package io.github.dohex.openrose.core
 
-import io.github.dohex.openrose.core.protocol.FieldValue
-import io.github.dohex.openrose.core.protocol.ModelProfile
 import kotlinx.collections.immutable.PersistentSet
-import kotlinx.collections.immutable.persistentSetOf
 
 /** A supported level control, with its own choices and mode-dependent presentation. */
 data class NoiseLevelCapabilities(
@@ -29,19 +26,4 @@ data class NoiseControlCapabilities(
         DeviceSetting.TRANSPARENCY_LEVEL -> transparencyLevel
         else -> null
     }
-}
-
-/** The recovered i7 configuration does not firmware-gate its automatic ANC modes. */
-@Suppress("UNUSED_PARAMETER")
-fun noiseControlCapabilities(profile: ModelProfile, firmware: FieldValue.Firmware? = null): NoiseControlCapabilities {
-    val basicModes = persistentSetOf("normal", "transparency", "wind", "anc")
-    return NoiseControlCapabilities(
-        modes = when (profile) {
-            ModelProfile.I5_ZT -> basicModes
-            ModelProfile.I7_RS_V2 -> basicModes.addAll(listOf("auto", "dynamic"))
-        },
-        cycleModes = basicModes,
-        ancLevel = NoiseLevelCapabilities(persistentSetOf(1, 3, 5), persistentSetOf("anc")),
-        transparencyLevel = NoiseLevelCapabilities(persistentSetOf(1, 3, 5), persistentSetOf("transparency")),
-    )
 }

@@ -1,22 +1,24 @@
 package io.github.dohex.openrose.core.protocol
 
 import io.github.dohex.openrose.core.DeviceSetting
-import io.github.dohex.openrose.core.equalizerCapabilities
-import io.github.dohex.openrose.core.gainLevels
-import io.github.dohex.openrose.core.hearingProtectionLevels
-import io.github.dohex.openrose.core.promptVolumeLevels
 
-internal class I7Codec : ProtocolCodec {
-    override val profile = ModelProfile.I7_RS_V2
+/** RS Common V2 frames: FF/DD framing, LTV records and a per-session sequence. */
+internal class RsCommonV2Codec(override val profile: ModelProfile) : ProtocolCodec {
     private var sequence = 0
     private var buffer = byteArrayOf()
+
+    /** RoseLink's shared getInfo batch; querying an ID does not mean the model offers that function. */
     private val infoTypes = "010708090c0d0e122a2b2c2d2e2f313233363738393a3b3c3d3f454649".bytes()
 
     override fun prepareSetting(setting: DeviceSetting, value: FieldValue, firmware: FieldValue.Firmware?): ProtocolSetting {
+        val capabilities = profile.capabilities(firmware)
         if (setting == DeviceSetting.CUSTOM_EQ) {
-            require(value is FieldValue.IntegerList) { "自定义均衡器需要十段整数曲线" }
+            require(value is FieldValue.IntegerList) { "自定义均衡器需要整数曲线" }
+            val custom = capabilities.equalizer?.custom ?: throw UnsupportedOperationException("该型号不支持自定义均衡器")
             val gains = value.values.toList()
-            require(gains.size == 10 && gains.all { it in -6..6 }) { "自定义均衡器需要十段 -6..6 的整数" }
+            require(gains.size == custom.bandsHz.size && gains.all { it in custom.minGain..custom.maxGain }) {
+                "自定义均衡器需要 ${custom.bandsHz.size} 段 ${custom.minGain}..${custom.maxGain} 的整数"
+            }
             // Validate and snapshot the whole curve before allocating either write or read sequence.
             val payload = gains.map { if (it < 0) 0x80 or -it else it }.map { it.toByte() }.toByteArray()
             val writes = listOf(frame(byteArrayOf(0x2a, 4)), frame(byteArrayOf(0x3e) + payload))
@@ -34,13 +36,15 @@ internal class I7Codec : ProtocolCodec {
             DeviceSetting.NOISE_MODE -> {
                 require(value is FieldValue.Text) { "降噪模式需要模式名称" }
                 val mode = mapOf("anc" to 1, "normal" to 2, "transparency" to 3, "wind" to 4, "auto" to 5, "dynamic" to 7)[value.value]
-                    ?: throw UnsupportedOperationException("i7 不支持该降噪模式")
+                    ?: throw UnsupportedOperationException("该型号不支持该降噪模式")
                 9.toByte() to byteArrayOf(mode.toByte())
             }
 
             DeviceSetting.ANC_LEVEL, DeviceSetting.TRANSPARENCY_LEVEL -> {
                 require(value is FieldValue.Number) { "档位需要整数" }
-                require(value.value in setOf(1, 3, 5)) { "i7 档位仅支持 1、3、5" }
+                val levels = capabilities.noiseControl?.levelCapabilities(setting)?.levels
+                    ?: throw UnsupportedOperationException("该型号不支持此档位设置")
+                require(value.value in levels) { "档位仅支持 ${levels.sorted().joinToString("、")}" }
                 (if (setting == DeviceSetting.ANC_LEVEL) 0x2c else 0x2d).toByte() to byteArrayOf(value.value.toByte())
             }
 
@@ -54,36 +58,48 @@ internal class I7Codec : ProtocolCodec {
 
             DeviceSetting.EQ -> {
                 require(value is FieldValue.Text) { "均衡器需要预设名称" }
-                if (value.value !in equalizerCapabilities(profile, firmware).presets) {
-                    throw UnsupportedOperationException("i7 当前固件不支持该均衡器预设")
+                if (value.value !in capabilities.equalizer?.presets.orEmpty()) {
+                    throw UnsupportedOperationException("该型号当前固件不支持该均衡器预设")
                 }
                 val preset = mapOf("hifi" to 0, "pop" to 1, "rock" to 2, "light" to 3, "eap" to 6).getValue(value.value)
                 0x2a.toByte() to byteArrayOf(preset.toByte())
             }
 
+            DeviceSetting.BASS_BOOST -> {
+                require(value is FieldValue.Number && value.value in 0..4) { "低音增强仅支持 0～4 档" }
+                if (value.value !in capabilities.bassBoostLevels) throw UnsupportedOperationException("该型号不支持低音增强")
+                0x2a.toByte() to byteArrayOf(5, value.value.toByte())
+            }
+
+            DeviceSetting.PROMPT_LANGUAGE -> {
+                require(value is FieldValue.Text && value.value in listOf("chinese", "english")) { "提示音语言无效" }
+                if (value.value !in capabilities.promptLanguages) throw UnsupportedOperationException("该型号不支持提示音语言")
+                0x31.toByte() to byteArrayOf(if (value.value == "chinese") 0 else 1)
+            }
+
             DeviceSetting.GAIN -> {
                 require(value is FieldValue.Number) { "增益需要档位整数" }
-                require(value.value in 0..2) { "i7 增益档位仅支持 0～2" }
-                if (value.value !in gainLevels(profile, firmware)) {
-                    throw UnsupportedOperationException("i7 当前固件不支持增益设置")
+                require(value.value in 0..2) { "RS Common V2 增益档位仅支持 0～2" }
+                if (value.value !in capabilities.gainLevels) {
+                    throw UnsupportedOperationException("该型号当前固件不支持增益设置")
                 }
                 0x45.toByte() to byteArrayOf(value.value.toByte())
             }
 
             DeviceSetting.HEARING_PROTECTION -> {
                 require(value is FieldValue.Number) { "听力保护需要档位整数" }
-                require(value.value in 0..6) { "i7 听力保护档位仅支持 0～6" }
-                if (value.value !in hearingProtectionLevels(profile, firmware)) {
-                    throw UnsupportedOperationException("i7 当前固件不支持听力保护设置")
+                require(value.value in 0..6) { "RS Common V2 听力保护档位仅支持 0～6" }
+                if (value.value !in capabilities.hearingProtectionLevels) {
+                    throw UnsupportedOperationException("该型号当前固件不支持听力保护设置")
                 }
                 0x46.toByte() to byteArrayOf(value.value.toByte())
             }
 
             DeviceSetting.PROMPT_VOLUME -> {
                 require(value is FieldValue.Number) { "提示音需要档位整数" }
-                require(value.value in 0..5) { "i7 提示音仅支持 0～5 档" }
-                if (value.value !in promptVolumeLevels(profile, firmware)) {
-                    throw UnsupportedOperationException("i7 当前固件不支持此提示音档位")
+                require(value.value in ProtocolFamily.RS_COMMON_V2.promptVolumeLevels) { "RS Common V2 提示音仅支持 0～5 档" }
+                if (value.value !in capabilities.promptVolumeLevels) {
+                    throw UnsupportedOperationException("该型号当前固件不支持此提示音档位")
                 }
                 0x2e.toByte() to byteArrayOf(value.value.toByte())
             }
@@ -96,7 +112,7 @@ internal class I7Codec : ProtocolCodec {
             DeviceSetting.AUDIO_MODE -> {
                 require(value is FieldValue.Text) { "音频模式需要配置名称" }
                 val mode = listOf("aac_sbc", "ldac", "lhdc", "lc3").indexOf(value.value)
-                if (mode < 0) throw UnsupportedOperationException("i7 不支持该音频配置")
+                if (mode < 0) throw UnsupportedOperationException("该型号不支持该音频配置")
                 0x2b.toByte() to byteArrayOf(mode.toByte())
             }
 
@@ -130,10 +146,11 @@ internal class I7Codec : ProtocolCodec {
         }
         // Validation precedes both sequence allocations, so rejected settings consume no sequence.
         val key = byteArrayOf(type).hex()
+        val expectedField = if (setting == DeviceSetting.BASS_BOOST) DeviceField.EQ_SLOT else rsCommonV2Fields.getValue(key).single()
         return ProtocolSetting(
             listOf(frame(byteArrayOf(type) + payload)),
-            query(byteArrayOf(type)),
-            mapOf(i7Fields.getValue(key).single() to expected),
+            query(byteArrayOf(type), setOf(expectedField)),
+            mapOf(expectedField to expected),
         )
     }
 
@@ -143,18 +160,18 @@ internal class I7Codec : ProtocolCodec {
         return prefix + byteArrayOf((prefix.sumOf { it.u() } and 255).toByte(), 0xaa.toByte())
     }
 
-    private fun query(ids: ByteArray): ProtocolQuery {
-        val keys = ids.map { byteArrayOf(it).hex() }.filter { it in i7Fields }.toSet()
+    private fun query(ids: ByteArray, expectedFields: Set<DeviceField>? = null): ProtocolQuery {
+        val keys = ids.map { byteArrayOf(it).hex() }.filter { it in rsCommonV2Fields }.toSet()
         return ProtocolQuery(
             "fa" + ids.hex(),
             frame(byteArrayOf(0xfa.toByte()) + ids),
             keys,
-            keys.flatMap { i7Fields.getValue(it) }.toSet(),
+            expectedFields ?: keys.flatMap { rsCommonV2Fields.getValue(it) }.toSet(),
         )
     }
 
     override fun initQueries(maxWriteSize: Int): List<ProtocolQuery> {
-        require(maxWriteSize >= 7) { "i7 queries require at least a 7-byte write capacity" }
+        require(maxWriteSize >= 7) { "RS Common V2 queries require at least a 7-byte write capacity" }
         val groups = infoTypes.toList().chunked(maxWriteSize - 6)
         return (groups + listOf(listOf(0x3e.toByte()))).map { query(it.toByteArray()) }
     }
@@ -235,7 +252,7 @@ internal class I7Codec : ProtocolCodec {
 
     private fun decodeRecord(type: Int, value: ByteArray): Map<DeviceField, FieldReading> {
         val key = byteArrayOf(type.toByte()).hex()
-        val expected = i7Fields[key] ?: return emptyMap()
+        val expected = rsCommonV2Fields[key] ?: return emptyMap()
         val readings = linkedMapOf<DeviceField, FieldReading>()
         fun put(field: DeviceField, semantic: FieldValue?, source: ByteArray = value) {
             readings[field] = semantic?.let { FieldReading.Known(it, source.hex()) } ?: FieldReading.Unknown(source.hex())
@@ -248,7 +265,10 @@ internal class I7Codec : ProtocolCodec {
                 val right = value[1].u()
                 val case = value[2].u()
                 val caseAvailable = (case and 127) in 1..100 &&
-                    ((left and 128 != 0 && left != 255) || (right and 128 != 0 && right != 255))
+                    (
+                        profile.batteryLayout == BatteryLayout.SINGLE_UNIT ||
+                            (left and 128 != 0 && left != 255) || (right and 128 != 0 && right != 255)
+                        )
                 for ((index, field) in listOf(DeviceField.LEFT_BATTERY, DeviceField.RIGHT_BATTERY, DeviceField.CASE_BATTERY).withIndex()) {
                     val byte = value[index].u()
                     readings[field] = when {
@@ -352,6 +372,11 @@ internal class I7Codec : ProtocolCodec {
                     else -> number?.takeIf { it in 0..5 }?.let { FieldValue.Number(it) }
                 }
                 put(expected.single(), semantic)
+            }
+
+            0x31 -> {
+                if (value.size != 1) return emptyMap()
+                put(DeviceField.PROMPT_LANGUAGE, listOf("chinese", "english").getOrNull(raw ?: -1)?.let { FieldValue.Text(it) })
             }
 
             0x36 -> {

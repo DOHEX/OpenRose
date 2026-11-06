@@ -9,3 +9,4 @@ local.properties
 !.agents/skills/
 .agents/skills/*
 !.agents/skills/md3e/
+!.agents/skills/add-model/

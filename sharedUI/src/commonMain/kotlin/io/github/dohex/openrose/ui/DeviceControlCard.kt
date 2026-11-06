@@ -24,9 +24,62 @@ internal fun DeviceControlCard(
     val hasGain = DeviceSetting.GAIN in writable && gainLevels.isNotEmpty()
     val protectionLevels = device.capabilities.hearingProtectionLevels
     val hasProtection = DeviceSetting.HEARING_PROTECTION in writable && protectionLevels.isNotEmpty()
-    if (!hasAudio && !hasMultipoint && !hasVolume && !hasGain && !hasProtection) return
+    val bassLevels = device.capabilities.bassBoostLevels
+    val hasBass = DeviceSetting.BASS_BOOST in writable && bassLevels.isNotEmpty()
+    val languages = device.capabilities.promptLanguages
+    val hasLanguage = DeviceSetting.PROMPT_LANGUAGE in writable && languages.isNotEmpty()
+    val hasPrompt = hasVolume || hasLanguage
+    val hasAudioControls = hasAudio || hasMultipoint
+    val hasSound = hasGain || hasProtection || hasBass
+    if (!hasPrompt && !hasAudioControls && !hasSound) return
 
     val enabled = state.isReady(device) && !state.hasPendingSetting(device)
+    if (hasPrompt) {
+        AppGroup(title = "提示与音量") {
+            if (hasVolume) {
+                val confirmed = (device.knownValue(DeviceField.PROMPT_VOLUME) as? FieldValue.Number)?.value
+                AppChoiceRow(
+                    title = "提示音音量",
+                    valueText = confirmedChoiceValue(DeviceField.PROMPT_VOLUME, device),
+                    options = volumeLevels.sorted().map { level -> AppOption(level, if (level == 0) "关闭" else "$level 档") },
+                    selected = confirmed,
+                    enabled = enabled,
+                    onSelect = { level -> if (level != confirmed) onSet(DeviceSetting.PROMPT_VOLUME, FieldValue.Number(level)) },
+                )
+            }
+            if (hasLanguage) {
+                val confirmed = (device.knownValue(DeviceField.PROMPT_LANGUAGE) as? FieldValue.Text)?.value
+                AppChoiceRow(
+                    title = "提示音语言",
+                    valueText = confirmedChoiceValue(DeviceField.PROMPT_LANGUAGE, device),
+                    options = languages.sorted().map { AppOption(it, semanticLabel(it)) },
+                    selected = confirmed,
+                    enabled = enabled,
+                    onSelect = { if (it != confirmed) onSet(DeviceSetting.PROMPT_LANGUAGE, FieldValue.Text(it)) },
+                )
+            }
+        }
+    }
+
+    if (hasBass) {
+        val mode = device.fields[DeviceField.EQ] as? FieldReading.Known
+        val slot = device.fields[DeviceField.EQ_SLOT] as? FieldReading.Known
+        val confirmed = if (mode != null && (mode.value as? FieldValue.Text)?.value == "custom_slot" && mode.rawHex == slot?.rawHex) {
+            (slot.value as? FieldValue.Number)?.value
+        } else {
+            null
+        }
+        AppGroup(title = "音效") {
+            AppChoiceRow(
+                title = "低音增强",
+                valueText = confirmed?.let { "$it 档" } ?: "当前状态未知",
+                options = bassLevels.sorted().map { AppOption(it, "$it 档") },
+                selected = confirmed,
+                enabled = enabled,
+                onSelect = { if (it != confirmed) onSet(DeviceSetting.BASS_BOOST, FieldValue.Number(it)) },
+            )
+        }
+    }
 
     if (hasAudio || hasMultipoint) {
         val coupledFootnote = if (hasAudio && hasMultipoint && audio.multipointCoupled) {
@@ -56,22 +109,6 @@ internal fun DeviceControlCard(
             if (hasMultipoint) {
                 SettingToggleChoices("多点连接", DeviceField.MULTIPOINT, DeviceSetting.MULTIPOINT, device, enabled, onSet)
             }
-        }
-    }
-
-    if (hasVolume) {
-        val confirmed = (device.knownValue(DeviceField.PROMPT_VOLUME) as? FieldValue.Number)?.value
-        AppGroup(title = "提示与音量") {
-            AppChoiceRow(
-                title = "提示音音量",
-                valueText = confirmedChoiceValue(DeviceField.PROMPT_VOLUME, device),
-                options = volumeLevels.sorted().map { level -> AppOption(level, if (level == 0) "关闭" else "$level 档") },
-                selected = confirmed,
-                enabled = enabled,
-                onSelect = { level ->
-                    if (level != confirmed) onSet(DeviceSetting.PROMPT_VOLUME, FieldValue.Number(level))
-                },
-            )
         }
     }
 

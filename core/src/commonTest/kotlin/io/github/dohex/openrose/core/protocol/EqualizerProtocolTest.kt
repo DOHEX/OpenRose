@@ -1,7 +1,6 @@
 package io.github.dohex.openrose.core.protocol
 
 import io.github.dohex.openrose.core.DeviceSetting
-import io.github.dohex.openrose.core.equalizerCapabilities
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -41,8 +40,8 @@ class EqualizerProtocolTest {
     @Test
     fun modelPresetCapabilitiesUseSourceFirmwarePartsForThe152Gate() {
         val base = setOf("pop", "hifi", "rock", "light")
-        assertEquals(base, equalizerCapabilities(ModelProfile.I5_ZT).presets)
-        assertEquals(base, equalizerCapabilities(ModelProfile.I7_RS_V2).presets)
+        assertEquals(base, ModelProfile.I5_ZT.capabilities().equalizer!!.presets)
+        assertEquals(base, ModelProfile.I7_RS_V2.capabilities().equalizer!!.presets)
         for ((parts, eap) in listOf(
             listOf(1, 5, 1) to false, listOf(1, 5, 2) to true,
             listOf(0, 15, 1) to false, listOf(0, 15, 2) to true,
@@ -52,8 +51,8 @@ class EqualizerProtocolTest {
         )) {
             // The display label deliberately disagrees with source parts; it is not gate evidence.
             val firmware = FieldValue.Firmware(parts, if (eap) "0" else "999999")
-            assertEquals(base + if (eap) setOf("eap") else emptySet(), equalizerCapabilities(ModelProfile.I7_RS_V2, firmware).presets, "$parts")
-            assertEquals(base, equalizerCapabilities(ModelProfile.I5_ZT, firmware).presets)
+            assertEquals(base + if (eap) setOf("eap") else emptySet(), ModelProfile.I7_RS_V2.capabilities(firmware).equalizer!!.presets, "$parts")
+            assertEquals(base, ModelProfile.I5_ZT.capabilities(firmware).equalizer!!.presets)
         }
     }
 
@@ -119,8 +118,11 @@ class EqualizerProtocolTest {
                 assertFailsWith<UnsupportedOperationException> {
                     codec.prepareSetting(DeviceSetting.EQ, FieldValue.Text("eap"), FieldValue.Firmware(listOf(1, 5, 2), "152"))
                 }
-            } else {
+            } else if (DeviceSetting.EQ in profile.capabilities().writableSettings) {
                 assertEquals("ff00022a002baa", codec.prepareSetting(DeviceSetting.EQ, FieldValue.Text("hifi")).writeFrames.single().hex())
+            } else {
+                assertFailsWith<UnsupportedOperationException> { codec.prepareSetting(DeviceSetting.EQ, FieldValue.Text("hifi")) }
+                assertEquals("ff00020e0110aa", codec.prepareSetting(DeviceSetting.GAME_MODE, FieldValue.Toggle(true)).writeFrames.single().hex())
             }
         }
     }
@@ -207,7 +209,7 @@ class EqualizerProtocolTest {
             val reply = codec.feedNotification(rx.bytes()).single()
             val firmware = assertIs<FieldValue.Firmware>(assertIs<FieldReading.Known>(reply.readings[DeviceField.FIRMWARE]).value)
             assertEquals(text, firmware.displayText)
-            assertEquals(eap, "eap" in equalizerCapabilities(ModelProfile.I7_RS_V2, firmware).presets)
+            assertEquals(eap, "eap" in ModelProfile.I7_RS_V2.capabilities(firmware).equalizer?.presets.orEmpty())
         }
     }
 }

@@ -43,14 +43,14 @@ class SessionSnapshotTest {
                     PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
                     transport = transport,
                     scope = backgroundScope,
-                    timing = SessionTiming(i5WriteIntervalMillis = 0, i7WriteIntervalMillis = 0),
+                    timing = SessionTiming(writeIntervalMillis = 0),
                 ),
                 backgroundScope,
             )
             session.startScan()
             runCurrent()
             val id = if (profile == ModelProfile.I5_ZT) DeviceId("i5") else DeviceId("i7")
-            transport.advertisements.emit(advertisement(profile, id))
+            transport.advertisements.emit(roseAdvertisement(profile, id))
             runCurrent()
             assertEquals(OperationResult.Success, session.connect(id))
 
@@ -156,17 +156,12 @@ class SessionSnapshotTest {
         session.disconnect()
     }
 
-    private fun advertisement(profile: ModelProfile, id: DeviceId) = when (profile) {
-        ModelProfile.I5_ZT -> Advertisement(id, "i5", manufacturerData = mapOf(0x5352 to byteArrayOf(0, 1, 0, 1)))
-        ModelProfile.I7_RS_V2 -> Advertisement(id, "i7", manufacturerData = mapOf(0xe5b8 to byteArrayOf(0x29, 0x0f)))
-    }
-
     private fun kotlinx.coroutines.test.TestScope.newSession(transport: SnapshotTransport) = SystemEntryRuntime(
         LocalControlRuntime(
             PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
             transport = transport,
             scope = backgroundScope,
-            timing = SessionTiming(i5WriteIntervalMillis = 0, i7WriteIntervalMillis = 0),
+            timing = SessionTiming(writeIntervalMillis = 0),
         ),
         backgroundScope,
     )
@@ -179,7 +174,7 @@ class SessionSnapshotTest {
     ) {
         session.startScan()
         runCurrent()
-        transport.advertisements.emit(advertisement(profile, id))
+        transport.advertisements.emit(roseAdvertisement(profile, id))
         runCurrent()
         assertEquals(OperationResult.Success, session.connect(id))
     }
@@ -214,11 +209,7 @@ class SessionSnapshotTest {
             val hex = bytes.toHex()
             writes += hex
             if (!initializing) return
-            if (profile == ModelProfile.I5_ZT) {
-                i5Replies[hex.substring(10, 14)]?.let { incoming.send(it.fromHex()) }
-            } else {
-                i7Replies.forEach { incoming.send(it.fromHex()) }
-            }
+            initializationReplies(profile, hex).forEach { incoming.send(it.fromHex()) }
         }
 
         override suspend fun close() {
@@ -229,44 +220,6 @@ class SessionSnapshotTest {
         suspend fun deviceReply(hex: String) {
             incoming.send(hex.fromHex())
         }
-    }
-
-    private companion object {
-        val i5Replies = mapOf(
-            "0101" to "09ff00000101011100000164620000ffe2",
-            "0602" to "09ff00000106020e000000010020",
-            "0201" to "09ff00000102010b000118",
-            "0603" to "09ff00000106030b00011e",
-            "0801" to "09ff00000108010b00011e",
-            "0d01" to "09ff0000010d010e00010205002d",
-            "0401" to "09ff00000104011200060502040605030746",
-            "0a01" to "09ff0000010a010b00001f",
-            "0605" to "09ff00000106050e000101010126",
-            "0c01" to "09ff0000010c010b000122",
-            "0607" to "09ff00000106070b000223",
-            "0604" to "09ff00000106040b00001e",
-            "0e03" to "09ff0000010e030b000126",
-        )
-        val i7Replies = listOf(
-            "dd0011010100020003000400110012001300140043aa",
-            "dd00020700e6aa",
-            "dd00020801e8aa",
-            "dd00020904ecaa",
-            "dd00040ce4325053aa",
-            "dd00040d020103f4aa",
-            "dd00020e00edaa",
-            "dd00022a0009aa",
-            "dd00022b000aaa",
-            "dd00022c030eaa",
-            "dd00022d030faa",
-            "dd00022e010eaa",
-            "dd00022f000eaa",
-            "dd0002320011aa",
-            "dd0005360000000018aa",
-            "dd000b3e86838100010203040506c5aa",
-            "dd0002450125aa",
-            "dd0002460328aa",
-        )
     }
 }
 

@@ -1,6 +1,6 @@
-# i5 / i7 协议实现说明
+# ZT / RS Common V2 协议实现说明
 
-本文说明 OpenRose 如何实现 EarFree i5（ZT 协议）和 EarFeel i7（RS Common V2 协议）的控制：帧格式、字段编码、设置命令、确认机制、测试覆盖，以及哪些行为还没有在真机上验证。
+本文说明 OpenRose 的 ZT 与 RS Common V2 控制实现：i5、i7，以及新增的 BudsFeel MK2、OpenFeel MK2、Swift 2、Jasmine。内容包括帧格式、字段编码、设置命令、确认机制、测试覆盖，以及尚未经过实机验证的行为。
 
 协议本身的逆向研究（包括其他型号和 OTA）见 [docs/protocols/](protocols/README.md)。本文只讲 OpenRose 实际怎么做，以及和官方 App 不同的地方。
 
@@ -22,10 +22,12 @@
 
 | 内容 | 位置 |
 | --- | --- |
-| 型号配置、广播识别、字段模型 | `core/.../protocol/ProtocolCodec.kt` |
-| i5 编解码 | `core/.../protocol/I5Codec.kt` |
-| i7 编解码 | `core/.../protocol/I7Codec.kt` |
-| 型号能力（降噪、EQ、触控、音频等） | `core/.../NoiseControl.kt`、`EqualizerCapabilities.kt`、`DeviceControlCapabilities.kt` |
+| 型号配置（识别、传输、电量布局、按固件推导的能力） | `core/.../models/` 中每款型号的独立文件；字段定义在 `models/ModelSpec.kt` |
+| 型号入口、协议族、广播识别、名称匹配 | `core/.../protocol/ModelProfile.kt` |
+| 字段模型与编解码接口 | `core/.../protocol/ProtocolCodec.kt` |
+| ZT 编解码（i5） | `core/.../protocol/ZtCodec.kt` |
+| RS Common V2 编解码（i7 与四个新增型号） | `core/.../protocol/RsCommonV2Codec.kt` |
+| 能力类型（降噪、EQ、触控、音频等） | `core/.../NoiseControl.kt`、`EqualizerCapabilities.kt`、`DeviceControlCapabilities.kt` |
 | 控制会话（发送队列、设置确认、连接生命周期） | `core/.../ControlSession.kt` |
 | Android BLE / SPP 传输、音频 profile 查询 | `androidApp/.../AndroidBleTransport.kt`、`AndroidSppConnection.kt`、`AndroidAudioProfiles.kt` |
 
@@ -51,6 +53,25 @@
 
 因此，下文描述的设置写入、回读时序和持久化行为，在两个型号上都还没有经过真机验证。测试通过只说明实现符合逆向得出的规则。
 
+### 新增型号的证据边界
+
+BudsFeel MK2、OpenFeel MK2、Swift 2、Jasmine 的实现依据各自的[型号协议文档](protocols/README.md#型号协议文档)和结构化能力清单；逐列、逐节的依据及 A–D 分类见[适配证据账本](protocols/model-adaptation-ledger.md)。这四款的广播与通知夹具均为合成数据，实机连接、状态读取、设置效果和持久化均未验证。
+
+四款共用 RS Common V2 字段表、发送序号、接收缓冲和 `getInfo` 批量查询。查询中的功能 ID 不决定可写能力；所有控制仍受各自 `ModelSpec.capabilities.writableSettings` 限制。文档没有给出这四款广播中经典地址的偏移，故不复用 i7 的地址解析；SPP 需平台提供已配对设备的经典地址，否则回退 BLE。控制 UUID 与 OTA UUID 分开，新增型号也不开放 OTA。
+
+Swift 2 的电量由 `charge` 槽承载，在应用中显示一行“电量”，不向超级岛、焦点通知或融合设备中心发布电量。Jasmine 只显示左右耳电量；共享解析器即使解析出仓槽值，也不在应用或系统界面显示充电盒电量。
+
+名称识别同时考虑品牌和型号代际，避免 BudsFeel MK2 与 OpenFeel MK2 的 `mk2` 冲突；缺少 MK2 或 Swift 的代际信息时，不把旧款名称当作新款。
+
+| 新控制 | 型号 | 发送 BODY | 回读确认 |
+| --- | --- | --- | --- |
+| 低音增强 | BudsFeel MK2、OpenFeel MK2 | `2A 05 value`，0–4 | 查询 `FA 2A`；只有新鲜的 `2A 05 value` 档位字段才能确认 |
+| 提示音语言 | Jasmine | `31 00` 中文、`31 01` 英文 | 查询 `FA 31`，按新鲜 `31` 状态确认 |
+
+寻机 `2F` 只有局部事件，不能证明查询可返回完整双耳状态，故没有开放写入。OpenFeel MK2 自定义 EQ 缺少型号专属频率和滑块范围，Swift 2 按键映射缺少物理键对应关系，四款提示音音量缺少型号与固件允许档位；这些控制均未启用。完整未实现列表及依据见证据账本。
+
+
+
 ## 通用机制
 
 ### 设备识别
@@ -59,7 +80,7 @@
 
 1. 按 company ID 从小到大排序；
 2. 先拼接所有 company ID（各 2 字节，小端），再按同样顺序拼接所有 payload；
-3. 转成十六进制，与型号前缀比较。
+3. 转成十六进制，依次取前 12、8、6 位查找型号前缀，较长的前缀优先（与 RoseLink 相同）。
 
 注意是"全部 ID 在前、全部 payload 在后"，不是每项 ID 和 payload 交替拼接。
 
@@ -67,10 +88,14 @@
 | --- | --- |
 | i5 ZT | `525300010001` |
 | i7 RS Common V2 | `b8e5290f` |
+| BudsFeel MK2 RS Common V2 | `0b150a0b` |
+| OpenFeel MK2 RS Common V2 | `0b0eb657` |
+| Swift 2 RS Common V2 | `5999064c` |
+| Jasmine RS Common V2 | `0b0a0a11` |
 
 前缀只用来识别型号，不是蓝牙地址。连接时使用系统扫描结果给出的设备 ID。测试中的单 company 广播样例是按算法推导的，不是抓包数据。
 
-另有一条按名称匹配的路径（`ModelProfile.match`）：读取系统**已配对设备列表**、以及观察系统音频连接时，没有广播数据可用，只能按设备名（包含 `earfree` / `earfeel` / `i5` / `i7` 等）判断是否为 ROSE 耳机。
+另有一条按名称匹配的路径（`ModelProfile.match`）：读取系统**已配对设备列表**、以及观察系统音频连接时，没有广播数据可用，只能按设备名（包含 `earfree` / `earfeel` / `i5` / `i7` 等）判断是否为 ROSE 耳机。Android 伴生设备唤醒的名称过滤（`ModelProfile.namePattern`）由同一组品牌词生成，不另行维护。
 
 ### GATT 与发送队列
 
@@ -78,6 +103,8 @@
 | --- | --- | --- | --- |
 | i5 ZT | `011bf5da-0000-1000-8000-00805f9b34fb` | `00007777-0000-1000-8000-00805f9b34fb` | `00008888-0000-1000-8000-00805f9b34fb` |
 | i7 RS V2 | `000000fe-0000-1000-8000-00805f9b34fb` | `000000f1-0000-1000-8000-00805f9b34fb` | `000000f2-0000-1000-8000-00805f9b34fb` |
+
+四个新增型号均使用表中 RS V2 的正常控制 GATT 参数；其 SPP 控制服务为 `0cf12d31-fac3-4553-bd80-d6832e7b3931`，写入间隔为 100 ms。型号配置保留显式传输参数，编解码不按型号枚举分支。
 
 - 在同一服务内找写特征和通知特征。写特征支持无响应写入就用无响应写入，否则用有响应写入。
 - 先完成通知订阅（含 CCCD），再发初始化查询。
@@ -367,7 +394,7 @@ DD [HH] [L T V...]... [CS] AA
 | `TouchControlCapabilities` | 槽位集合与动作集合 |
 | `AudioControlCapabilities` | 音频选项；`multipointCoupled`（i5 为 true，i7 为 false） |
 
-`ModelProfile.supportedFields` 只表示解析器认识哪些字段，**不能**用来判断能否写入。初始化查询里包含某个共享 ID，也不说明该型号支持对应功能。
+`DeviceCapabilities.readableFields` 来自协议族的 `ProtocolFamily.readableFields`，只表示解析器认识哪些字段，**不能**用来判断能否写入；能否写入只看型号配置声明的 `writableSettings`。初始化查询里包含某个共享 ID，也不说明该型号支持对应功能。
 
 ### 档位的显示条件
 

@@ -20,7 +20,6 @@ import io.github.dohex.openrose.core.PlatformState
 import io.github.dohex.openrose.core.SettingOperation
 import io.github.dohex.openrose.core.SettingStage
 import io.github.dohex.openrose.core.TransportAvailability
-import io.github.dohex.openrose.core.noiseControlCapabilities
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.FieldReading
 import io.github.dohex.openrose.core.protocol.FieldValue
@@ -73,7 +72,7 @@ class OpenRoseConnectedHomeUiTest {
                     device = device.copy(
                         profile = profile,
                         capabilities = device.capabilities.copy(
-                            noiseControl = noiseControlCapabilities(profile),
+                            noiseControl = profile.capabilities().noiseControl,
                         ),
                         fields = device.fields + (DeviceField.NOISE_MODE to FieldReading.Known(FieldValue.Text("auto"), "auto")),
                     ),
@@ -459,7 +458,7 @@ class OpenRoseConnectedHomeUiTest {
                     DeviceField.NOISE_MODE,
                 ),
                 writableSettings = persistentSetOf(DeviceSetting.NOISE_MODE),
-                noiseControl = noiseControlCapabilities(profile),
+                noiseControl = profile.capabilities().noiseControl,
             ),
             fields = persistentMapOf(
                 DeviceField.LEFT_BATTERY to FieldReading.Known(FieldValue.Number(86), "56"),

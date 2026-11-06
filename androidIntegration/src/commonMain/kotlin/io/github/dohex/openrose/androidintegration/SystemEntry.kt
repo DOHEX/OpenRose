@@ -201,7 +201,8 @@ class SystemEntryRuntime(
     }
 }
 
-private fun DeviceState.hasTrustedEarBattery(): Boolean = listOf(DeviceField.LEFT_BATTERY, DeviceField.RIGHT_BATTERY).any { field ->
-    val value = (fields[field] as? FieldReading.Known)?.value as? FieldValue.Number
-    value?.value in 0..100
-}
+private fun DeviceState.hasTrustedEarBattery(): Boolean = publishesSystemBattery &&
+    listOf(DeviceField.LEFT_BATTERY, DeviceField.RIGHT_BATTERY).any { field ->
+        val value = (fields[field] as? FieldReading.Known)?.value as? FieldValue.Number
+        value?.value in 0..100
+    }

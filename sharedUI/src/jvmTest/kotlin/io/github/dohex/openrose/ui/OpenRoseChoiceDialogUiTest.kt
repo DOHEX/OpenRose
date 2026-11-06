@@ -156,6 +156,45 @@ class OpenRoseChoiceDialogUiTest {
         }
     }
 
+    @Test
+    fun bassAndLanguageChoicesUseConfirmedValuesInBothStyles() {
+        for (style in InterfaceStyle.entries) {
+            withConnectedHarness(style, FieldReading.Unknown("ff")) { harness ->
+                val device = requireNotNull(harness.state.value.device)
+                harness.state.value = harness.state.value.copy(
+                    device = device.copy(
+                        capabilities = DeviceCapabilities(
+                            readableFields = persistentSetOf(DeviceField.EQ, DeviceField.EQ_SLOT, DeviceField.PROMPT_LANGUAGE),
+                            writableSettings = persistentSetOf(DeviceSetting.BASS_BOOST, DeviceSetting.PROMPT_LANGUAGE),
+                            bassBoostLevels = persistentSetOf(0, 1, 2, 3, 4),
+                            promptLanguages = persistentSetOf("chinese", "english"),
+                        ),
+                        fields = persistentMapOf(
+                            DeviceField.EQ to FieldReading.Known(FieldValue.Text("custom_slot"), "0501"),
+                            DeviceField.EQ_SLOT to FieldReading.Known(FieldValue.Number(1), "0501"),
+                            DeviceField.PROMPT_LANGUAGE to FieldReading.Known(FieldValue.Text("chinese"), "00"),
+                        ),
+                    ),
+                )
+                harness.render()
+                harness.clickText("低音增强")
+                harness.render()
+                assertTrue(harness.hasSelectedText("1 档"))
+                harness.clickText("2 档")
+                harness.render()
+                harness.clickText("提示音语言")
+                harness.render()
+                assertTrue(harness.hasSelectedText("中文"))
+                harness.clickText("英文")
+                harness.render()
+                assertEquals(
+                    listOf(DeviceSetting.BASS_BOOST to FieldValue.Number(2), DeviceSetting.PROMPT_LANGUAGE to FieldValue.Text("english")),
+                    harness.settingWrites,
+                )
+            }
+        }
+    }
+
     private fun withConnectedHarness(
         style: InterfaceStyle,
         reading: FieldReading,

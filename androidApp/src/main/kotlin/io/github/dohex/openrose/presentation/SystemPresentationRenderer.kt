@@ -24,6 +24,7 @@ import android.os.Looper
 import android.util.Log
 import io.github.dohex.openrose.androidintegration.wire.BridgePresentationWire
 import io.github.dohex.openrose.androidintegration.wire.BridgeWire
+import io.github.dohex.openrose.core.protocol.ModelProfile
 import org.json.JSONObject
 import java.security.MessageDigest
 import java.util.UUID
@@ -781,11 +782,7 @@ internal class SystemPresentationRenderer(
         return SessionIdentity(deviceId, sessionId, hostEpoch)
     }
 
-    private fun profileLabel(profile: String?): String = when (profile) {
-        "I5_ZT" -> "EarFree i5"
-        "I7_RS_V2" -> "EarFeel i7"
-        else -> "OpenRose 耳机"
-    }
+    private fun profileLabel(profile: String?): String = ModelProfile.fromName(profile)?.displayName ?: "OpenRose 耳机"
 
     private fun modeLabel(mode: String): String = when (mode) {
         "normal" -> "降噪关闭"

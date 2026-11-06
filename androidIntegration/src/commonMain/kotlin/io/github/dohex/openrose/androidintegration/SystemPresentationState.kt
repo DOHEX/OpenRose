@@ -2,7 +2,9 @@ package io.github.dohex.openrose.androidintegration
 
 import io.github.dohex.openrose.core.ControlState
 import io.github.dohex.openrose.core.DeviceSetting
+import io.github.dohex.openrose.core.DeviceState
 import io.github.dohex.openrose.core.SessionReference
+import io.github.dohex.openrose.core.protocol.BatteryLayout
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.FieldReading
 import io.github.dohex.openrose.core.protocol.FieldValue
@@ -75,8 +77,12 @@ internal fun ControlState.systemPresentation(settings: IntegrationSettings, prom
         battery = SystemBatteryState(
             left = device.fields.reading(DeviceField.LEFT_BATTERY).normalizedBattery(),
             right = device.fields.reading(DeviceField.RIGHT_BATTERY).normalizedBattery(),
-            case = device.fields.reading(DeviceField.CASE_BATTERY).normalizedBattery(),
-        ),
+            case = if (device.profile.batteryLayout == BatteryLayout.EARBUDS_ONLY) {
+                PresentationReading.NotProvided
+            } else {
+                device.fields.reading(DeviceField.CASE_BATTERY).normalizedBattery()
+            },
+        ).takeIf { device.publishesSystemBattery },
         noise = SystemNoiseState(
             mode = device.fields.reading(DeviceField.NOISE_MODE).normalizedText(),
             ancLevel = device.fields.reading(DeviceField.ANC_LEVEL).normalizedNumber(),
@@ -98,6 +104,31 @@ internal fun IntegrationSettings.allowsConnectionPrompt(): Boolean = when (islan
     IslandMode.OFFICIAL -> true
     IslandMode.MODULE -> IslandTrigger.CONNECTION in islandTriggers
 }
+
+/**
+ * System surfaces (MiLink, the island, the status notification) render earbud and case batteries. A single unit has no
+ * evidenced form there yet, so its battery is not published to them.
+ */
+internal val DeviceState.publishesSystemBattery: Boolean
+    get() = profile.batteryLayout != BatteryLayout.SINGLE_UNIT
+
+/** The device fields system surfaces may see. */
+internal fun DeviceState.systemFields(): Map<DeviceField, FieldReading> = when (profile.batteryLayout) {
+    BatteryLayout.EARBUDS_AND_CASE -> fields
+    BatteryLayout.EARBUDS_ONLY -> fields.filterKeys { it != DeviceField.CASE_BATTERY && it != DeviceField.CASE_FLAG }
+    BatteryLayout.SINGLE_UNIT -> fields.filterKeys { it !in batteryStateFields }
+}
+
+private val batteryStateFields = setOf(
+    DeviceField.LEFT_BATTERY,
+    DeviceField.RIGHT_BATTERY,
+    DeviceField.CASE_BATTERY,
+    DeviceField.LEFT_CHARGING,
+    DeviceField.RIGHT_CHARGING,
+    DeviceField.LEFT_IN_CASE,
+    DeviceField.RIGHT_IN_CASE,
+    DeviceField.CASE_FLAG,
+)
 
 private fun Map<DeviceField, FieldReading>.reading(field: DeviceField): FieldReading = this[field] ?: FieldReading.Loading
 

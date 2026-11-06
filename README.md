@@ -21,8 +21,12 @@ OpenRose 是 ROSE / ROSESELSA（弱水时砂）耳机的第三方控制客户端
 | --- | --- | --- |
 | EarFree i5（EarFeel i5） | ZT / BLE | 已在真机上读取状态；设置写入尚未在 Android 上验证 |
 | EarFeel i7 | RS Common V2 / BLE 或 SPP | 协议实现与离线测试完成，尚未接触真机 |
+| BudsFeel MK2 | RS Common V2 / BLE 或 SPP | 依据静态协议适配；实机未验证，能力边界见证据账本 |
+| OpenFeel MK2 | RS Common V2 / BLE 或 SPP | 依据静态协议适配；实机未验证，能力边界见证据账本 |
+| 踏浪 Swift 2 | RS Common V2 / BLE 或 SPP | 单体电量、游戏模式与多点；实机未验证 |
+| Jasmine | RS Common V2 / BLE 或 SPP | 依据静态协议适配；实机未验证，商品中文名未确认 |
 
-同一零售名称下可能有不同的硬件版本，OpenRose 目前只实现了上面两种型号配置。其他型号的协议研究（BudsFeel MK2、OpenFeel MK2、踏浪 Swift 2、Jasmine 等，共 43 款型号的能力清单）见 [docs/protocols/](docs/protocols/)，但客户端还没有接入。
+同一零售名称下可能有不同的硬件版本。上表对应六个型号配置；其余 37 个分支只有能力清单，缺少足够的型号字节级证据，尚未适配。新增配置的逐项依据、未实现能力和原因见[型号适配证据账本](docs/protocols/model-adaptation-ledger.md)，完整研究见 [docs/protocols/](docs/protocols/)。
 
 ## 功能
 
@@ -32,7 +36,7 @@ OpenRose 是 ROSE / ROSESELSA（弱水时砂）耳机的第三方控制客户端
 - 切换降噪模式，分别调节降噪档位和通透档位；设置触控时参与轮换的降噪模式
 - 游戏模式、预设 EQ、触控按键绑定、触控开关、佩戴检测开关、提示音音量
 - 音频编码偏好与多点连接（i5 上这两项是联动的）
-- i7 独有：自定义十段 EQ；固件满足条件时可调增益和听力保护
+- i7 自定义十段 EQ；i7 在固件满足条件时、OpenFeel MK2 可调增益和听力保护；BudsFeel MK2 / OpenFeel MK2 低音增强；Jasmine 中英文提示音语言
 
 **外观**
 
@@ -228,7 +232,7 @@ CI 只在 Linux 上运行测试；Linux 产出 Android APK 与上述 4 种 Linux
 
 | 文档 | 内容 |
 | --- | --- |
-| [协议实现说明](docs/protocols.md) | OpenRose 对 i5 / i7 协议的具体实现：帧格式、字段编码、设置命令和测试覆盖 |
+| [协议实现说明](docs/protocols.md) | OpenRose 对 ZT / RS Common V2 的具体实现：型号配置、帧格式、字段编码、设置命令和测试覆盖 |
 | [协议研究](docs/protocols/) | 基于官方 RoseLink 逆向整理的全型号协议规范、能力清单和 OTA 研究 |
 | [架构决策记录](docs/adr/) | 重要设计决策及其理由 |
 | [术语表](GLOSSARY.md) | 项目中统一使用的领域术语 |

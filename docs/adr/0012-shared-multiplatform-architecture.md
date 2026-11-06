@@ -32,7 +32,7 @@ status: accepted
 
 实施（#87）：Android 集成已归入独立的 `:androidIntegration` KMP 模块，生产代码与离线测试分别位于 `commonMain`、`commonTest`。`ControlState`／`PlatformState` 只保留共有控制状态与平台事实，应用同时观察 `SwitchingControlRuntime.integration`；所有者视图从同一次控制状态捕获派生系统呈现，再通过 `HostFrame` 发布，提示过期与领取也会更新订阅，断开或失联后撤销。系统入口在集成层核对设备与会话引用，再调用同一控制入口；`ControlRuntime.set` 的可选 `expectedSessionId` 仅为各平台共用的入队前置条件，在会话锁内原子检查，避免核对后发生的会话替换将设置写到另一会话。设置字段及其类型随后由 #92 按归属层拆分（见下文）；`:sharedUI` 暂时依赖 `:androidIntegration`，由 #89 移出 Android 界面段落。本次不增加 Android 实机验收结论。
 
-实施（#88）：`ControlSession` 只持有权威状态流并实现 `ControlRuntime` 门面；`ConnectionTargeting` 仲裁手动、系统固定目标、添加耳机与音频驱动的连接意图，`DeviceDiscovery` 管理扫描、已配对设备与候选解析。`ControlLink` 集中单次连接尝试的端点选择、打开、订阅、初始化、恢复、关闭与未确认关闭的重试，作为 #90 接入共享 GATT 层的位置；`SettingQueue` 管理校验、队列、写入节流与新鲜读回确认，并与连接生命周期共用锁来原子核对会话及入队。型号能力由纯函数 `deviceCapabilities` 推导。控制状态及其嵌套的设置、能力、协议字段值均使用 `kotlinx.collections.immutable` 持久集合，构造时接纳外部集合，删除会话与系统读取入口对控制状态的防御性拷贝。保留原有 `ControlSession*Test` 的断言语义，只调整集合构造；离线运行另覆盖订阅恢复、设置确认、界面风格切换连续性与失败关闭重试，本次不增加实机验收结论。
+实施（#88）：`ControlSession` 只持有权威状态流并实现 `ControlRuntime` 门面；`ConnectionTargeting` 仲裁手动、系统固定目标、添加耳机与音频驱动的连接意图，`DeviceDiscovery` 管理扫描、已配对设备与候选解析。`ControlLink` 集中单次连接尝试的端点选择、打开、订阅、初始化、恢复、关闭与未确认关闭的重试，作为 #90 接入共享 GATT 层的位置；`SettingQueue` 管理校验、队列、写入节流与新鲜读回确认，并与连接生命周期共用锁来原子核对会话及入队。型号能力由各型号配置（`core/.../models/`）按固件推导的纯函数给出，经 `ModelProfile.capabilities` 读取。控制状态及其嵌套的设置、能力、协议字段值均使用 `kotlinx.collections.immutable` 持久集合，构造时接纳外部集合，删除会话与系统读取入口对控制状态的防御性拷贝。保留原有 `ControlSession*Test` 的断言语义，只调整集合构造；离线运行另覆盖订阅恢复、设置确认、界面风格切换连续性与失败关闭重试，本次不增加实机验收结论。
 
 添加耳机的连接尝试结果先完成失败清理，再核对该流程是否仍对应当前就绪会话，保持拆分前的顺序。旧添加流程在成功后被同设备的新音频会话取代时，只拒绝旧调用，不清除新会话的音频归属；新增门面回归测试和独立运行冒烟均验证随后音频断开会关闭新控制连接。
 

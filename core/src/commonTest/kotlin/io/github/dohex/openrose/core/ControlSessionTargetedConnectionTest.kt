@@ -39,7 +39,7 @@ class ControlSessionTargetedConnectionTest {
             initialPlatformState = PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
             transport = transport,
             scope = backgroundScope,
-            timing = SessionTiming(i5WriteIntervalMillis = 0),
+            timing = SessionTiming(writeIntervalMillis = 0),
         )
 
         var targetObservedImmediately: DeviceCandidate? = null
@@ -75,7 +75,7 @@ class ControlSessionTargetedConnectionTest {
             initialPlatformState = PlatformState(PermissionState.DENIED, TransportAvailability.Available),
             transport = TargetedAudioTransport(bondedList = listOf(candidateA, candidateB)),
             scope = backgroundScope,
-            timing = SessionTiming(i5WriteIntervalMillis = 0),
+            timing = SessionTiming(writeIntervalMillis = 0),
         )
         val resultDenied = sessionWithPermissionDenied.connect(idA, pinned = true)
         val failureDenied = assertIs<OperationResult.Failure>(resultDenied)
@@ -90,7 +90,7 @@ class ControlSessionTargetedConnectionTest {
             initialPlatformState = PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
             transport = transport,
             scope = backgroundScope,
-            timing = SessionTiming(i5WriteIntervalMillis = 0),
+            timing = SessionTiming(writeIntervalMillis = 0),
         )
         val resultUnsupported = session.connect(unknownId, pinned = true)
         val failureUnsupported = assertIs<OperationResult.Failure>(resultUnsupported)
@@ -127,7 +127,7 @@ class ControlSessionTargetedConnectionTest {
             initialPlatformState = PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
             transport = transport,
             scope = backgroundScope,
-            timing = SessionTiming(connectTimeoutMillis = 100, queryTimeoutMillis = 50, i5WriteIntervalMillis = 0),
+            timing = SessionTiming(connectTimeoutMillis = 100, queryTimeoutMillis = 50, writeIntervalMillis = 0),
         )
 
         val result = session.connect(idA, pinned = true)
@@ -162,7 +162,7 @@ class ControlSessionTargetedConnectionTest {
             initialPlatformState = PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
             transport = transport,
             scope = backgroundScope,
-            timing = SessionTiming(i5WriteIntervalMillis = 0),
+            timing = SessionTiming(writeIntervalMillis = 0),
         )
         runCurrent()
         advanceUntilIdle()
@@ -212,7 +212,7 @@ class ControlSessionTargetedConnectionTest {
             initialPlatformState = PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
             transport = transport,
             scope = backgroundScope,
-            timing = SessionTiming(i5WriteIntervalMillis = 0),
+            timing = SessionTiming(writeIntervalMillis = 0),
         )
 
         // Connect to A
@@ -245,7 +245,7 @@ class ControlSessionTargetedConnectionTest {
             initialPlatformState = PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
             transport = transport,
             scope = backgroundScope,
-            timing = SessionTiming(i5WriteIntervalMillis = 0),
+            timing = SessionTiming(writeIntervalMillis = 0),
         )
         // Prime recognized state for A
         runCurrent()
@@ -302,7 +302,7 @@ class ControlSessionTargetedConnectionTest {
             initialPlatformState = PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
             transport = transport,
             scope = backgroundScope,
-            timing = SessionTiming(i5WriteIntervalMillis = 0),
+            timing = SessionTiming(writeIntervalMillis = 0),
         )
         runCurrent()
         advanceUntilIdle()
@@ -356,7 +356,7 @@ class ControlSessionTargetedConnectionTest {
             initialPlatformState = PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
             transport = transport,
             scope = backgroundScope,
-            timing = SessionTiming(i5WriteIntervalMillis = 0),
+            timing = SessionTiming(writeIntervalMillis = 0),
         )
         runCurrent()
         advanceUntilIdle()
@@ -398,7 +398,7 @@ class ControlSessionTargetedConnectionTest {
             initialPlatformState = PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
             transport = transport,
             scope = backgroundScope,
-            timing = SessionTiming(i5WriteIntervalMillis = 0),
+            timing = SessionTiming(writeIntervalMillis = 0),
         )
 
         // Connect to A
@@ -440,7 +440,7 @@ class ControlSessionTargetedConnectionTest {
             initialPlatformState = PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
             transport = transport,
             scope = backgroundScope,
-            timing = SessionTiming(i5WriteIntervalMillis = 0),
+            timing = SessionTiming(writeIntervalMillis = 0),
         )
 
         // Audio connects to A
@@ -483,7 +483,7 @@ class ControlSessionTargetedConnectionTest {
             PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
             transport = transport,
             scope = backgroundScope,
-            timing = SessionTiming(i5WriteIntervalMillis = 0),
+            timing = SessionTiming(writeIntervalMillis = 0),
         )
         runCurrent()
 

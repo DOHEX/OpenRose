@@ -208,7 +208,7 @@ private fun connectionLabel(connection: ConnectionState): String = when (connect
     is ConnectionState.Connecting -> "连接中"
 
     is ConnectionState.Connected -> buildString {
-        append("已连接 · ").append(connection.profile.shortLabel).append(' ').append(connection.profile.configurationLabel)
+        append("已连接 · ").append(connection.profile.shortLabel).append(' ').append(connection.profile.family.displayName)
         if (connection.phase != ConnectionPhase.READY) append("（正在读取状态）")
     }
 }
