@@ -102,28 +102,28 @@ internal class AndroidAudioProfiles(private val context: Context) : AudioFactsDr
         val spp = context.packageManager.hasSystemFeature(PackageManager.FEATURE_BLUETOOTH)
         if (!enabled || adapter == null) return@withContext RawAudioSnapshot(false, spp, leObservable, emptyList(), emptyMap())
         val bonded = readBondedDevices(adapter)
-        val profiles = withTimeoutOrNull(PROFILE_PROBE_TIMEOUT_MILLIS) {
-            val ids = buildMap {
-                put(AudioProfile.A2DP, BluetoothProfile.A2DP)
-                put(AudioProfile.HEADSET, BluetoothProfile.HEADSET)
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) put(AudioProfile.LE_AUDIO, BluetoothProfile.LE_AUDIO)
-            }
-            val leases = mutableMapOf<AudioProfile, ProfileProxyLease?>()
-            try {
+        val leases = mutableMapOf<AudioProfile, ProfileProxyLease?>()
+        try {
+            withTimeoutOrNull(PROFILE_PROBE_TIMEOUT_MILLIS) {
+                val ids = buildMap {
+                    put(AudioProfile.A2DP, BluetoothProfile.A2DP)
+                    put(AudioProfile.HEADSET, BluetoothProfile.HEADSET)
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) put(AudioProfile.LE_AUDIO, BluetoothProfile.LE_AUDIO)
+                }
                 for ((profile, id) in ids) leases[profile] = requestProfileProxy(adapter, id)
-                val results = leases.mapValues { (_, lease) -> lease?.snapshot(targetAddresses) }.toMutableMap()
-                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
-                    results[AudioProfile.LE_AUDIO] = RawProfileSnapshot(emptyList(), targetAddresses.associateWith { AudioConnectionState.DISCONNECTED })
-                }
-                for ((profile, lease) in leases) {
-                    if (lease != null && !lease.isValid) results[profile] = null
-                }
-                results
-            } finally {
-                leases.values.filterNotNull().forEach(ProfileProxyLease::close)
             }
-        }.orEmpty()
-        RawAudioSnapshot(true, spp, leObservable, bonded, profiles)
+            // A stalled proxy must not discard facts from profiles that already arrived.
+            val profiles = leases.mapValues { (_, lease) -> lease?.snapshot(targetAddresses) }.toMutableMap()
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
+                profiles[AudioProfile.LE_AUDIO] = RawProfileSnapshot(emptyList(), targetAddresses.associateWith { AudioConnectionState.DISCONNECTED })
+            }
+            for ((profile, lease) in leases) {
+                if (lease != null && !lease.isValid) profiles[profile] = null
+            }
+            RawAudioSnapshot(true, spp, leObservable, bonded, profiles)
+        } finally {
+            leases.values.filterNotNull().forEach(ProfileProxyLease::close)
+        }
     }
 
     @SuppressLint("MissingPermission") // connectionFacts checks BLUETOOTH_CONNECT (or legacy BLUETOOTH) first.

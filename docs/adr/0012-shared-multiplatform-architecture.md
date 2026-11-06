@@ -58,3 +58,5 @@ Android 实机启动补充：连接小米 14 后，已安装 APK 的启动崩溃
 
 维护者随后确认已测试可用，并要求停止进一步测试；此后不再执行真机操作或验证。
 
+离线审查补充（#90）：Android 的音频协议探测共用 2.5 s 截止时间；LE Audio 代理迟迟不到时，保留此前取得的 A2DP／HFP 快照，只把未取得的协议视为不可读，最后统一释放已取得的代理。新增 Robolectric Android `snapshot` 边界回归，先观察到 Classic 地址列表丢失，再验证修复后仍报告连接地址与状态。一次性运行冒烟将真实 `AndroidAudioProfiles` 接到共享 `AudioFacts`，确认无新增音频广播时，LE Audio 超时后仍能选中已配对的 EarFree i5；脚本已删除。本次未执行真机验证。
+

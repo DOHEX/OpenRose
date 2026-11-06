@@ -38,4 +38,5 @@ dependencies {
     implementation(libs.libxposed.service)
     testImplementation(kotlin("test-junit"))
     testImplementation(libs.coroutines.test)
+    testImplementation(libs.robolectric)
 }

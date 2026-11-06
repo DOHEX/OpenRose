@@ -16,6 +16,7 @@ activity = "1.13.0"
 libxposed-api = "102.0.0"
 libxposed-service = "102.0.0"
 nucleus = "2.5.18"
+robolectric = "4.17"
 
 [libraries]
 compose-runtime = { module = "org.jetbrains.compose.runtime:runtime", version.ref = "compose" }
@@ -37,6 +38,7 @@ libxposed-api = { module = "io.github.libxposed:api", version.ref = "libxposed-a
 libxposed-service = { module = "io.github.libxposed:service", version.ref = "libxposed-service" }
 nucleus-application = { module = "dev.nucleusframework:nucleus.nucleus-application", version.ref = "nucleus" }
 nucleus-tao = { module = "dev.nucleusframework:nucleus.decorated-window-tao", version.ref = "nucleus" }
+robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
 
 [plugins]
 kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
