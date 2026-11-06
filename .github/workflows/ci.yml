@@ -208,6 +208,9 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: write
+      # Sigstore signing certificate and attestation storage for the build provenance below.
+      id-token: write
+      attestations: write
     env:
       RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || needs.release-please.outputs.tag_name }}
     steps:
@@ -216,6 +219,18 @@ jobs:
           pattern: packages-*
           path: dist
           merge-multiple: true
+
+      # One digest per package; the file ships with the release so downloads can be checked without GitHub.
+      - name: Write SHA256SUMS
+        run: |
+          (cd dist && sha256sum -- * > ../SHA256SUMS)
+          mv SHA256SUMS dist/
+          cat dist/SHA256SUMS
+
+      # Signed SLSA provenance tying each package to this workflow run and commit; check with `gh attestation verify`.
+      - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-checksums: dist/SHA256SUMS
 
       # release-please drafts the release with its changelog; a manually pushed tag gets a new draft.
       - name: Attach verified packages

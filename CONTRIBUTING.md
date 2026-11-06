@@ -86,7 +86,7 @@ Validation: :sharedUI:jvmTest and :desktopApp:test pass; check offlineCheck
 passes. GNOME and KDE are not verified on hardware.
 ```
 
-PR 标题同样遵循这一格式。
+PR 标题同样遵循这一格式，并由 `.github/workflows/pr-title.yml` 检查（类型见 `release-please-config.json`，另允许 `revert`）。PR 以 squash 方式合并，标题会成为 main 上的提交信息，发布内容和版本号都由它决定。
 
 ### 发布
 
@@ -97,6 +97,13 @@ PR 标题同样遵循这一格式。
 3. 标签触发 CI 打包，并生成草稿 GitHub Release。
 
 因此提交类型要如实反映变更性质：`feat` 对应新功能，`fix` 对应缺陷修复。
+
+每个发布附带 `SHA256SUMS`，所有安装包还带有由发布工作流签名的构建来源证明（SLSA provenance）。下载后可以这样校验：
+
+```bash
+sha256sum --check --ignore-missing SHA256SUMS
+gh attestation verify OpenRose-android.apk --repo DOHEX/OpenRose
+```
 
 ## 领域文档
 
