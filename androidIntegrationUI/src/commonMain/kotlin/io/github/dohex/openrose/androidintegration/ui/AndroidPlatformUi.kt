@@ -21,13 +21,17 @@ class AndroidPlatformUi(
     private val onRequestNotificationPermission: () -> Unit,
     private val onRequestAssociation: () -> Unit,
     private val onOpenAppSettings: () -> Unit,
-    private val onRestartScope: suspend () -> List<ScopeRestartResult>,
+    private val onRestartScope: suspend (List<String>, (ScopeRestartUpdate) -> Unit) -> List<ScopeRestartResult>,
     private val restartScope: CoroutineScope,
 ) : PlatformUi {
     override val platformName: String = "Android"
     private var restartRunning by mutableStateOf(false)
-    private var restartConfirming by mutableStateOf(false)
+    // Whether the restart dialog is shown; its content stays until the next opening so the dialog can animate out.
+    private var restartDialogOpen by mutableStateOf(false)
+    private var restartSelection by mutableStateOf(INTEGRATION_SCOPE_PACKAGES.toSet())
+    private var restartTargets by mutableStateOf(emptyList<String>())
     private var restartResults by mutableStateOf<List<ScopeRestartResult>?>(null)
+    private var restartPhase by mutableStateOf<ScopeRestartPhase?>(null)
 
     @Composable
     override fun BluetoothPermissionRows(platform: PlatformState, diagnostics: Boolean) {
@@ -246,31 +250,44 @@ class AndroidPlatformUi(
     @Composable
     override fun StatusActions() {
         ScopeRestartAction(
+            open = restartDialogOpen,
             running = restartRunning,
-            confirming = restartConfirming,
+            selected = restartSelection,
+            targets = restartTargets,
+            phase = restartPhase,
             results = restartResults,
-            onOpen = { restartResults = null; restartConfirming = true },
-            onCancel = { restartConfirming = false },
+            onOpen = { restartResults = null; restartSelection = INTEGRATION_SCOPE_PACKAGES.toSet(); restartDialogOpen = true },
+            onToggle = { target -> restartSelection = if (target in restartSelection) restartSelection - target else restartSelection + target },
             onConfirm = {
-                if (!restartRunning) {
-                    restartConfirming = false
+                val targets = INTEGRATION_SCOPE_PACKAGES.filter { it in restartSelection }
+                if (!restartRunning && targets.isNotEmpty()) {
                     restartRunning = true
+                    restartTargets = targets
+                    restartResults = emptyList()
+                    restartPhase = ScopeRestartPhase.Authorizing
                     restartScope.launch {
                         try {
-                            restartResults = onRestartScope()
+                            restartResults = onRestartScope(targets) { update ->
+                                when (update) {
+                                    is ScopeRestartPhase -> restartPhase = update
+                                    is ScopeRestartResult -> restartResults = restartResults.orEmpty() + update
+                                }
+                            }
                         } catch (cancelled: CancellationException) {
                             throw cancelled
                         } catch (failure: Exception) {
-                            restartResults = INTEGRATION_SCOPE_PACKAGES.map {
-                                ScopeRestartResult(it, ScopeRestartStatus.FAILED, failure.message ?: "操作失败")
+                            val done = restartResults.orEmpty().associateBy { it.target }
+                            restartResults = targets.map {
+                                done[it] ?: ScopeRestartResult(it, ScopeRestartStatus.FAILED, failure.message ?: "操作失败")
                             }
                         } finally {
                             restartRunning = false
+                            restartPhase = null
                         }
                     }
                 }
             },
-            onCloseResults = { restartResults = null },
+            onClose = { restartDialogOpen = false },
         )
     }
 }

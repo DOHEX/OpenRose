@@ -28,7 +28,7 @@ internal fun androidTestPlatform(
     onNotification: () -> Unit = {},
     onAssociation: () -> Unit = {},
     onAppSettings: () -> Unit = {},
-    restart: suspend () -> List<ScopeRestartResult> = { emptyList() },
+    restart: suspend (List<String>, (ScopeRestartUpdate) -> Unit) -> List<ScopeRestartResult> = { _, _ -> emptyList() },
     scope: CoroutineScope = CoroutineScope(Dispatchers.Main),
 ) = AndroidPlatformUi(integration, onSettings, onSelect, onPermission, onBluetoothSettings, onNotification, onAssociation, onAppSettings, restart, scope)
 
@@ -45,7 +45,7 @@ internal fun AndroidTestPage(model: FakeOpenRoseModel, platform: PlatformUi, pag
     TestPageContent(style) {
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
             when (page.value) {
-                "设置" -> PreferencesPage(model, platform)
+                "设置" -> PreferencesPage(model, platform, onPersonalization = {})
                 "状态" -> StatusPage(model, platform) { page.value = "诊断" }
                 "诊断" -> PlatformDiagnosticsCard(model, platform)
                 "操作" -> platform.StatusActions()
