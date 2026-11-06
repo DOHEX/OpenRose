@@ -136,6 +136,23 @@ jobs:
           ./gradlew --no-daemon --stacktrace :androidApp:assembleRelease
           "$ANDROID_HOME/build-tools/$BUILD_TOOLS/apksigner" verify androidApp/build/outputs/apk/release/androidApp-release.apk
 
+      # R8 and the resource shrinker cannot see reflective or by-name use; fail if they dropped any of it.
+      - name: Check what R8 must keep
+        if: env.RELEASE_TAG != '' && runner.os == 'Linux'
+        env:
+          BUILD_TOOLS: ${{ steps.android-sdk.outputs.build-tools }}
+        run: |
+          apk=androidApp/build/outputs/apk/release/androidApp-release.apk
+          tools="$ANDROID_HOME/build-tools/$BUILD_TOOLS"
+          entry=$(unzip -p "$apk" META-INF/xposed/java_init.list)
+          unzip -q -o "$apk" 'classes*.dex' -d "$RUNNER_TEMP/dex"
+          "$tools/dexdump" -l plain "$RUNNER_TEMP"/dex/classes*.dex | grep -qF "'L${entry//.//};'" ||
+            { echo "::error::Xposed entry $entry is missing from the release APK"; exit 1; }
+          for video in openrose_earbud_left openrose_earbud_right; do
+            "$tools/aapt2" dump resources "$apk" | grep -q "raw/$video\$" ||
+              { echo "::error::raw/$video was shrunk out of the release APK"; exit 1; }
+          done
+
       - name: Collect packages
         run: |
           mkdir -p dist

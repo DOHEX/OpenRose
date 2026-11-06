@@ -13,6 +13,14 @@ android {
         compose = true
         aidl = true
     }
+    buildTypes {
+        getByName("release") {
+            // Shrinks code and resources; names stay readable (proguard-rules.pro).
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+        }
+    }
     providers.environmentVariable("OPENROSE_KEYSTORE_PATH").orNull?.let { keystorePath ->
         signingConfigs {
             create("release") {
