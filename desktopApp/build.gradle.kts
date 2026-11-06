@@ -9,6 +9,10 @@ dependencies {
     implementation(compose.desktop.currentOs)
     implementation(libs.nucleus.application)
     implementation(libs.nucleus.tao)
+    implementation(libs.nucleus.autolaunch)
+    implementation(libs.composenativetray.app)
+    implementation(libs.dbus.java.core)
+    runtimeOnly(libs.dbus.java.native.unixsocket)
     testImplementation(kotlin("test-junit"))
     testImplementation(libs.coroutines.test)
 }
@@ -28,9 +32,10 @@ nucleus {
                 packageName = "openrose"
                 debMaintainer = "DOHEX <53633138+DOHEX@users.noreply.github.com>"
                 // Custom lists replace electron-builder defaults; include the JVM/GTK runtime too.
-                debDepends = listOf("bluez", "libgtk-3-0", "libegl1", "libgl1", "libfontconfig1")
-                rpmRequires = listOf("bluez", "gtk3", "mesa-libEGL", "mesa-libGL", "fontconfig")
-                pacmanDepends = listOf("bluez", "gtk3", "libglvnd", "fontconfig")
+                // The tray's native library talks to the tray host through sd-bus (libsystemd.so.0).
+                debDepends = listOf("bluez", "libgtk-3-0", "libegl1", "libgl1", "libfontconfig1", "libsystemd0")
+                rpmRequires = listOf("bluez", "gtk3", "mesa-libEGL", "mesa-libGL", "fontconfig", "systemd-libs")
+                pacmanDepends = listOf("bluez", "gtk3", "libglvnd", "fontconfig", "systemd-libs")
             }
         }
     }

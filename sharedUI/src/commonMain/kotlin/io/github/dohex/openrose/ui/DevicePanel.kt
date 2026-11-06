@@ -18,6 +18,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.draw.clip
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -54,6 +55,7 @@ internal fun HeadphonesPage(
     model: OpenRoseModel,
     platformUi: PlatformUi,
     onNavigate: (AppPage) -> Unit,
+    primaryDeviceSelection: PrimaryDeviceSelection = remember { PrimaryDeviceSelection() },
 ) {
     val state by model.state.collectAsState()
     val onRequestPermission = platformUi.requestBluetoothPermission
@@ -76,6 +78,7 @@ internal fun HeadphonesPage(
                 onConnect = onConnect,
                 onDisconnect = onDisconnect,
                 onStopScan = onStopScan,
+                selection = primaryDeviceSelection,
             )
             return@Column
         }
@@ -117,7 +120,7 @@ internal fun HeadphonesPage(
             val controls: @Composable () -> Unit = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     if (device.capabilities.noiseControl != null) {
-                        NoiseControlCard(state, device, onSet)
+                        NoiseControlCard(state, device, onSet = onSet)
                     }
                     if (DeviceSetting.GAME_MODE in device.capabilities.writableSettings) {
                         AppDashboardCard(compact = true) {
@@ -223,6 +226,7 @@ private fun UnconnectedHeadphonesDashboard(
     onConnect: (DeviceId) -> Unit,
     onDisconnect: () -> Unit,
     onStopScan: () -> Unit,
+    selection: PrimaryDeviceSelection,
 ) {
     if (state.connectionTarget == null && state.platform.transportUnavailableForHome()) {
         val transport = state.platform.transport as TransportAvailability.Unavailable
@@ -255,8 +259,8 @@ private fun UnconnectedHeadphonesDashboard(
         }
     }
 
-    val bondedRose = state.bondedDevices.filter { it.profile != null }
-    if (bondedRose.isEmpty() && state.connectionTarget == null) {
+    val primaryDevice = selection.primary(state)
+    if (primaryDevice == null) {
         AppDashboardCard {
             Column(
                 Modifier.fillMaxWidth().padding(vertical = 16.dp, horizontal = 8.dp),
@@ -307,12 +311,9 @@ private fun UnconnectedHeadphonesDashboard(
         return
     }
 
-    var selectedDeviceId by remember(bondedRose) {
-        mutableStateOf(bondedRose.firstOrNull()?.deviceId)
-    }
-    val primaryDevice = state.connectionTarget
-        ?: bondedRose.firstOrNull { it.deviceId == selectedDeviceId }
-        ?: bondedRose.first()
+    val bondedRose = state.bondedRoseDevices()
+    // The choice lasts only while this dashboard stays composed over an unchanged bonded list.
+    DisposableEffect(selection, bondedRose) { onDispose { selection.clear() } }
     val otherBonded = bondedRose.filter { it.deviceId != primaryDevice.deviceId }
     val connecting = state.connection as? ConnectionState.Connecting
     val isConnecting = connecting?.deviceId == primaryDevice.deviceId
@@ -480,7 +481,7 @@ private fun UnconnectedHeadphonesDashboard(
                         AppButton(
                             text = "切换",
                             onClick = {
-                                selectedDeviceId = paired.deviceId
+                                selection.select(state, paired.deviceId)
                                 onConnect(paired.deviceId)
                             },
                             kind = AppButtonKind.Secondary,
@@ -501,7 +502,7 @@ private fun UnconnectedHeadphonesDashboard(
     }
 }
 @Composable
-private fun BatteryStrip(device: DeviceState, initializing: Boolean) {
+internal fun BatteryStrip(device: DeviceState, initializing: Boolean) {
     val isMaterial3 = LocalInterfaceStyle.current == InterfaceStyle.MATERIAL3
     Row(
         Modifier.fillMaxWidth(),

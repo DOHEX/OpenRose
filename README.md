@@ -135,7 +135,19 @@ OpenRose 与耳机之间的**控制连接**，和系统用来听歌、通话的*
 | Linux x64 | BlueZ BLE 扫描与控制、已配对设备、系统音频驱动控制生命周期；桌面端 i5 完整实机验收待完成 |
 | Windows | 界面和偏好设置可用；蓝牙控制尚未实现 |
 
-Linux 使用系统 BlueZ 和 D-Bus，不申请 Android 式蓝牙权限，也不开关适配器。状态页会说明 BlueZ 缺失、适配器关闭或 D-Bus 拒绝访问的原因；可用时提供“打开蓝牙设置”（依次探测 GNOME、KDE、Blueman）。应用单实例运行，再次启动会唤起已有窗口；关闭窗口会释放控制连接，系统音频连接由系统管理。
+Linux 使用系统 BlueZ 和 D-Bus，不申请 Android 式蓝牙权限，也不开关适配器。状态页会说明 BlueZ 缺失、适配器关闭或 D-Bus 拒绝访问的原因；可用时提供“打开蓝牙设置”（依次探测 GNOME、KDE、Blueman）。应用单实例运行，再次启动会唤起已有窗口；系统音频连接由系统管理。
+
+桌面端提供托盘图标：点击弹出托盘面板，查看控制连接状态与电量、切换降噪模式，未连接时可重新连接；托盘菜单提供同样的快捷控制，以及“托盘面板”“打开 OpenRose”“退出”。设置页的“后台控制”默认开启：托盘可用时关闭窗口只隐藏界面、保留控制连接，从托盘“退出”才结束控制连接；托盘不可用（例如 GNOME 未启用 AppIndicator 扩展）时关闭窗口即退出，状态页说明原因。“登录时启动”默认关闭，开启后台控制且托盘可用时登录后只显示托盘图标。Linux 托盘基于 StatusNotifierItem，需要 `libsystemd`；GNOME 与 KDE 依据库文档支持，未经实机验证。详见 [ADR 0014](docs/adr/0014-desktop-tray-and-background-control.md)。
+
+niri、Hyprland、Sway 等未识别的桌面上，托盘面板是一个由合成器摆放的普通窗口，标题固定为“OpenRose 托盘面板”；鼠标移入后再移出、焦点离开或按 Esc 时收起。可以用窗口规则让它浮动到托盘附近，例如 niri：
+
+```kdl
+window-rule {
+    match title="^OpenRose 托盘面板$"
+    open-floating true
+    default-floating-position x=12 y=12 relative-to="top-right"
+}
+```
 
 Linux 当前只实现 BLE，不含 SPP、OTA 或 Android 系统集成。i5 复用共享协议的 13 项初始化读取及设置回读确认；经典蓝牙已连接但没有 GATT 服务时，补连另一条 BLE 链路并等待服务发布，不删除配对记录。i7 尚无实机验证。离线假 D-Bus 测试覆盖平台事件与错误映射；此前 Linux / Bleak 的 i5 读取证据见[协议说明](docs/protocols/models/earfeel-i5-protocol.md)，不能代替本桌面实现的实测。i5 扫描到控制就绪、13 项读数对照、每项设置回包、音频连接／断开、双模恢复，以及 DEB／RPM／Pacman 在干净系统上的安装运行，仍需维护者验收。
 

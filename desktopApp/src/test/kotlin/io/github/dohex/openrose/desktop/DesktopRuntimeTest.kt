@@ -31,6 +31,7 @@ class DesktopRuntimeTest {
                 bottomBarStyle = BottomBarStyle.FLOATING,
             )
             first.model.updateSettings(chosenControl)
+            first.updateDesktopSettings(DesktopSettings(backgroundControl = false))
             val observed = first.model.state.value
             first.model.updateUiSettings(chosenUi)
             assertEquals(observed, first.model.state.value)
@@ -38,6 +39,8 @@ class DesktopRuntimeTest {
             val rebuilt = DesktopRuntime(Preferences.userRoot().node(path), platform, backgroundScope)
             assertEquals(chosenControl, rebuilt.model.state.value.settings)
             assertEquals(chosenUi, rebuilt.model.uiSettings.value)
+            assertEquals(DesktopSettings(backgroundControl = false), rebuilt.desktopSettings.value)
+            assertEquals("false", preferences.get("desktop.background_control", null))
             assertEquals("true", preferences.get("core.force_ble", null))
             assertEquals("material3", preferences.get("sharedUI.interface_style", null))
         } finally {
@@ -60,6 +63,14 @@ class DesktopRuntimeTest {
             preferences.removeNode()
             Preferences.userRoot().flush()
         }
+    }
+
+    @Test
+    fun missingOrUnknownDesktopValuesKeepBackgroundControlOn() {
+        assertEquals(DesktopSettings(backgroundControl = true), DesktopSettingsCodec.decode(emptyMap()))
+        assertEquals(DesktopSettings(backgroundControl = true), DesktopSettingsCodec.decode(mapOf("desktop.background_control" to "yes")))
+        val off = DesktopSettings(backgroundControl = false)
+        assertEquals(off, DesktopSettingsCodec.decode(DesktopSettingsCodec.encode(off)))
     }
 
     private val platform = PlatformState(permission = PermissionState.NOT_REQUIRED, hostPlatform = HostPlatform.LINUX)

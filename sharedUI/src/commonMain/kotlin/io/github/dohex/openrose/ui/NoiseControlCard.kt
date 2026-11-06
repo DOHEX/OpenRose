@@ -49,6 +49,7 @@ import io.github.dohex.openrose.core.protocol.ModelProfile
 internal fun NoiseControlCard(
     state: ControlState,
     device: DeviceState,
+    showLevelControls: Boolean = true,
     onSet: (DeviceSetting, FieldValue) -> Unit,
 ) {
     val capabilities = device.capabilities.noiseControl ?: return
@@ -79,7 +80,7 @@ internal fun NoiseControlCard(
                 Triple(DeviceSetting.TRANSPARENCY_LEVEL, "通透档位", capabilities.transparencyLevel),
             )
         }
-        levelControls.forEach { (setting, title, levelCapabilities) ->
+        if (showLevelControls) levelControls.forEach { (setting, title, levelCapabilities) ->
             if (setting in writable && levelCapabilities?.isVisibleIn(confirmedMode) == true) {
                 val field = if (setting == DeviceSetting.ANC_LEVEL) DeviceField.ANC_LEVEL else DeviceField.TRANSPARENCY_LEVEL
                 val selected = (device.knownValue(field) as? FieldValue.Number)?.value
@@ -263,7 +264,7 @@ private fun NoiseModeChoices(
 }
 
 
-private fun noiseModeLabel(mode: String): String = when (mode) {
+internal fun noiseModeLabel(mode: String): String = when (mode) {
     "normal" -> "标准"
     "anc" -> "降噪"
     else -> semanticLabel(mode)
@@ -279,7 +280,7 @@ private fun noiseModeIcon(mode: String): RoseIcon = when (mode) {
     else -> RoseIcon.NOISE
 }
 
-private fun noiseModeOrder(mode: String): Int = when (mode) {
+internal fun noiseModeOrder(mode: String): Int = when (mode) {
     "normal" -> 0
     "anc" -> 1
     "transparency" -> 2

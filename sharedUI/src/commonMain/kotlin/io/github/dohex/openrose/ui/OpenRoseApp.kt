@@ -38,6 +38,7 @@ fun OpenRoseApp(
     model: OpenRoseModel,
     platformUi: PlatformUi,
     modifier: Modifier = Modifier,
+    primaryDeviceSelection: PrimaryDeviceSelection = remember { PrimaryDeviceSelection() },
 ) {
     val state by model.state.collectAsState()
     val uiSettings by model.uiSettings.collectAsState()
@@ -146,7 +147,7 @@ fun OpenRoseApp(
                 val pageContentFor: @Composable (AppPage) -> Unit = { targetPage ->
                     val device = state.activeDevice()
                     when (targetPage) {
-                        AppPage.HEADPHONES -> HeadphonesPage(model, platformUi, onNavigate)
+                        AppPage.HEADPHONES -> HeadphonesPage(model, platformUi, onNavigate, primaryDeviceSelection)
                         AppPage.ADD_DEVICE -> AddDeviceContent(
                             state = state,
                             canScan = state.canSearchForHeadphones(),

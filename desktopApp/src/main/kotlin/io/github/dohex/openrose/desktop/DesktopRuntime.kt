@@ -23,7 +23,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-/** Window and appearance changes share this process's single control entry and preference store. */
+/** Window, tray and appearance changes share this process's single control entry and preference store. */
 internal class DesktopRuntime(
     private val preferences: Preferences,
     platform: PlatformState,
@@ -32,11 +32,15 @@ internal class DesktopRuntime(
 ) {
     private val control: ControlRuntime
     private val availabilityJob: Job?
+    private val mutableDesktopSettings: MutableStateFlow<DesktopSettings>
     val model: RuntimeOpenRoseModel
+    val desktopSettings: StateFlow<DesktopSettings>
 
     init {
         val saved = preferences.keys().associateWith { preferences.get(it, "") }
         control = LocalControlRuntime(platform, UserSettingsCodec.decode(saved), transport = transport, scope = scope)
+        mutableDesktopSettings = MutableStateFlow(DesktopSettingsCodec.decode(saved))
+        desktopSettings = mutableDesktopSettings.asStateFlow()
         availabilityJob = transport?.let {
             scope.launch {
                 it.availability.collect { availability ->
@@ -59,6 +63,11 @@ internal class DesktopRuntime(
             }
         }
         model = RuntimeOpenRoseModel(control, store, scope)
+    }
+
+    fun updateDesktopSettings(settings: DesktopSettings) {
+        mutableDesktopSettings.value = settings
+        save(DesktopSettingsCodec.encode(settings))
     }
 
     suspend fun close() {

@@ -135,7 +135,19 @@ The island, focus notification, and control way do not affect each other: hiding
 | Linux x64 | BlueZ BLE scanning and control, paired devices, and control tied to system audio connections; full desktop i5 hardware acceptance is pending |
 | Windows | UI and preferences work; Bluetooth control is not implemented |
 
-Linux uses the system BlueZ service and D-Bus, requires no Android-style permission request, and does not switch the adapter on or off. The Status page explains a missing BlueZ service, a powered-off adapter, or D-Bus access denial. An optional Bluetooth settings action probes GNOME, KDE, then Blueman. Only one application instance runs; launching again brings the existing window forward. Closing the window releases control; the system manages audio connections.
+Linux uses the system BlueZ service and D-Bus, requires no Android-style permission request, and does not switch the adapter on or off. The Status page explains a missing BlueZ service, a powered-off adapter, or D-Bus access denial. An optional Bluetooth settings action probes GNOME, KDE, then Blueman. Only one application instance runs; launching again brings the existing window forward. The system manages audio connections.
+
+The desktop app has a tray icon. Clicking it opens the tray panel, which shows the control connection and battery levels, switches the noise mode, and reconnects when disconnected; the tray menu offers the same quick controls plus Tray panel, Open OpenRose, and Quit. Background control in Settings is on by default: while the tray is available, closing the window only hides it and keeps the control connection, and Quit in the tray ends it. When the tray is unavailable (for example GNOME without the AppIndicator extension), closing the window quits and the Status page explains why. Launch at login is off by default; with background control on and the tray available, a login launch shows only the tray icon. The Linux tray uses StatusNotifierItem and requires `libsystemd`. GNOME and KDE are supported per the library documentation without hardware verification. See [ADR 0014](docs/adr/0014-desktop-tray-and-background-control.md).
+
+On unrecognized desktops such as niri, Hyprland, or Sway, the tray panel is an ordinary window placed by the compositor, titled exactly “OpenRose 托盘面板”; it closes when the pointer leaves it after entering, when focus moves away, or on Esc. A window rule can float it near the tray, for example in niri:
+
+```kdl
+window-rule {
+    match title="^OpenRose 托盘面板$"
+    open-floating true
+    default-floating-position x=12 y=12 relative-to="top-right"
+}
+```
 
 Linux currently supports BLE only, without SPP, OTA, or Android system integration. The i5 uses the shared protocol's 13 initialization reads and setting readback confirmation. When Classic Bluetooth is connected without GATT services, the driver connects the other BLE bearer and waits for services without deleting pairing records. The i7 remains untested on hardware. Offline tests with fake D-Bus objects cover platform events and error mapping. Earlier Linux / Bleak i5 read evidence is documented in the [protocol notes](docs/protocols/models/earfeel-i5-protocol.md) and does not validate this desktop implementation. Maintainer acceptance is still required for i5 scanning through control readiness, comparison of all 13 reads, every setting's reply, audio connection/disconnection, dual-mode recovery, and clean-system DEB/RPM/Pacman installation and launch.
 
