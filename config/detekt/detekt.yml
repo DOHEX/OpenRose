@@ -2,6 +2,11 @@
 style:
   MaxLineLength:
     maxLineLength: 140
+    # Test assertions and fixtures read better on one line; ktlint's wrapping rules still format them.
+    excludes: ['**/src/test/**', '**/src/*Test/**', '**/src/*TestFixtures/**']
+  ReturnCount:
+    # Early returns that validate input are the idiomatic way to write protocol parsers.
+    excludeGuardClauses: true
   MagicNumber:
     # Protocol frames, UI dimensions and tests are full of literal bytes and sizes.
     active: false

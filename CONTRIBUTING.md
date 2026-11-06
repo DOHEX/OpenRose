@@ -62,7 +62,8 @@ cd OpenRose
 
 - Kotlin 编译器警告会使构建失败（`allWarningsAsErrors`），请直接修复警告。
 - Android lint 的警告按错误处理；既有问题冻结在 `androidApp/lint-baseline.xml`。
-- detekt 的既有问题冻结在 `config/detekt/baseline/<module>.xml`。不要为了让检查通过而向基线添加新条目；确有必要时请在 PR 中说明理由。
+- detekt 的既有问题冻结在 `config/detekt/baseline/<module>.xml`，条目总数记录在 `config/detekt/baseline-limit.txt`，`checkDetektBaseline` 要求两者相等。基线只能变少：不要向基线添加新条目，新代码直接修复问题，也尽量不用 `@Suppress`。修掉旧问题后运行 `./gradlew detektBaseline` 重新生成基线，并把 `baseline-limit.txt` 改成新的条目数；基线清空后，删除基线目录、`baseline-limit.txt` 和 `checkDetektBaseline`。
+- detekt 不检查测试源码的行宽（`MaxLineLength`），`ReturnCount` 不计开头的守卫语句；规则见 `config/detekt/detekt.yml`。
 - Spotless 不会把 `.editorconfig` 的改动当作输入变化：修改 `.editorconfig` 后请运行 `./gradlew spotlessApply --rerun-tasks`。
 - 全仓格式化提交记录在 `.git-blame-ignore-revs` 中。GitHub 的 blame 会自动跳过它；本地运行一次 `git config blame.ignoreRevsFile .git-blame-ignore-revs` 即可同样跳过。
 - 增加或升级依赖后，运行 `./gradlew --write-verification-metadata sha256 help`，以及会解析该依赖的任务，然后检查 `gradle/verification-metadata.xml` 的差异再提交。

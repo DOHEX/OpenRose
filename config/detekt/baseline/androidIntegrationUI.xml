@@ -9,27 +9,6 @@
     <ID>LongMethod:PlatformApplicabilityUiTest.kt:PlatformApplicabilityUiTest$@Test fun applicableHyperOsKeepsIntegrationSettingsAvailableUntilTheModuleIsReady</ID>
     <ID>LongMethod:ScopeRestartUiTest.kt:ScopeRestartUiTest$@Test fun progressShowsThePhaseAndStreamsResultsAcrossStyles</ID>
     <ID>MatchingDeclarationName:BackgroundControlCard.kt:BackgroundControlTags</ID>
-    <ID>MaxLineLength:AndroidDiagnosticsUiTest.kt:AndroidDiagnosticsUiTest$val model = FakeOpenRoseModel(mutableStateOf(disconnectedAndroidState()), mutableStateOf(UiSettings(interfaceStyle = style)))</ID>
-    <ID>MaxLineLength:AndroidPageTestHarness.kt:)</ID>
-    <ID>MaxLineLength:AndroidPlatformUi.kt:AndroidPlatformUi$BackgroundControlGroup(state, integration, onIntegrationSettingsChange, requestBluetoothPermission, onRequestNotificationPermission, onRequestAssociation, onOpenAppSettings)</ID>
-    <ID>MaxLineLength:AndroidPlatformUi.kt:AndroidPlatformUi$onToggle = { target -&gt; restartSelection = if (target in restartSelection) restartSelection - target else restartSelection + target }</ID>
-    <ID>MaxLineLength:AndroidPlatformUi.kt:private fun hyperOsIntegrationApplicable: Boolean</ID>
-    <ID>MaxLineLength:BackgroundControlCard.kt:internal</ID>
-    <ID>MaxLineLength:BackgroundControlUiTest.kt:BackgroundControlUiTest$assertFalse(harness.hasTag(BackgroundControlTags.NOTIFICATION_HIDDEN), "the disclosure ends once the host reports it visible in $style")</ID>
-    <ID>MaxLineLength:BackgroundControlUiTest.kt:BackgroundControlUiTest$assertFalse(harness.hasTagWithPrefix(BackgroundControlTags.STATUS_PREFIX), "a disabled intent shows no status again in $style")</ID>
-    <ID>MaxLineLength:BackgroundControlUiTest.kt:BackgroundControlUiTest$assertFalse(harness.hasTagWithPrefix(BackgroundControlTags.STATUS_PREFIX), "background control is not in force under module control in $style")</ID>
-    <ID>MaxLineLength:BackgroundControlUiTest.kt:BackgroundControlUiTest$assertTrue(harness.hasTag(BackgroundControlTags.RECOVERY_ARMED), "the same facts arm recovery under ordinary control in $style")</ID>
-    <ID>MaxLineLength:BackgroundControlUiTest.kt:BackgroundControlUiTest$harness.updateIntegration { it.copy(platform = it.platform.copy(backgroundService = BackgroundServiceFacts(BackgroundServiceFact.Running))) }</ID>
-    <ID>MaxLineLength:BackgroundControlUiTest.kt:BackgroundControlUiTest$withHarness</ID>
-    <ID>MaxLineLength:ControlWayCard.kt:private</ID>
-    <ID>MaxLineLength:PlatformApplicabilityUiTest.kt:PlatformApplicabilityUiTest$val settingWrites = mutableListOf&lt;Pair&lt;io.github.dohex.openrose.core.DeviceSetting, io.github.dohex.openrose.core.protocol.FieldValue&gt;&gt;()</ID>
-    <ID>MaxLineLength:PlatformApplicabilityUiTest.kt:PlatformApplicabilityUiTest.Harness$val settingWrites: MutableList&lt;Pair&lt;io.github.dohex.openrose.core.DeviceSetting, io.github.dohex.openrose.core.protocol.FieldValue&gt;&gt;</ID>
-    <ID>MaxLineLength:ScopeRestart.kt:?:</ID>
-    <ID>MaxLineLength:ScopeRestart.kt:supportingContent = failure?.let { { AppText(it, role = AppTextRole.Footnote, color = appColor(AppColorRole.Error), maxLines = 2) } }</ID>
-    <ID>MaxLineLength:SystemSettingsOwnershipUiTest.kt:SystemSettingsOwnershipUiTest$assertFalse(harness.integration.value.settings.focusNotificationEnabled, "the moved switch still saves its setting in $style")</ID>
-    <ID>MaxLineLength:SystemSettingsOwnershipUiTest.kt:SystemSettingsOwnershipUiTest$assertTrue(harness.integration.value.settings.islandTriggers.isEmpty(), "hiding trigger settings does not reset values in $style")</ID>
-    <ID>MaxLineLength:SystemSettingsOwnershipUiTest.kt:SystemSettingsOwnershipUiTest$assertTrue(harness.settingsChanges.any { !it.focusNotificationEnabled }, "the preference crosses the public callback in $style")</ID>
-    <ID>MaxLineLength:SystemSettingsOwnershipUiTest.kt:SystemSettingsOwnershipUiTest$val settingWrites = mutableListOf&lt;Pair&lt;io.github.dohex.openrose.core.DeviceSetting, io.github.dohex.openrose.core.protocol.FieldValue&gt;&gt;()</ID>
     <ID>TooGenericExceptionCaught:AndroidPlatformUi.kt:AndroidPlatformUi$failure: Exception</ID>
   </CurrentIssues>
 </SmellBaseline>

@@ -40,5 +40,9 @@ gradlePlugin {
             id = libs.plugins.openrose.readme.sync.get().pluginId
             implementationClass = "ReadmeSyncConventionPlugin"
         }
+        register("detektBaseline") {
+            id = libs.plugins.openrose.detekt.baseline.get().pluginId
+            implementationClass = "DetektBaselineConventionPlugin"
+        }
     }
 }
