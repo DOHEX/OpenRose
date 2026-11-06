@@ -221,6 +221,14 @@ class ControlSessionAudioLifecycleTest {
         assertEquals(ModelProfile.I7_RS_V2, ModelProfile.match("ROSE i7"))
         assertEquals(ModelProfile.I7_RS_V2, ModelProfile.match("EARFEEL I7"))
 
+        // The vendor renamed EarFree to EarFeel, so the model number decides before the brand word does.
+        assertEquals(ModelProfile.I5_ZT, ModelProfile.match("EarFeel-i5"))
+        assertEquals(ModelProfile.I5_ZT, ModelProfile.match("EarFeel i5"))
+        assertEquals(ModelProfile.I7_RS_V2, ModelProfile.match("EarFree i7"))
+        // Without a model number the brand word still decides, as before the rename.
+        assertEquals(ModelProfile.I5_ZT, ModelProfile.match("EarFree"))
+        assertEquals(ModelProfile.I7_RS_V2, ModelProfile.match("EarFeel"))
+
         assertEquals(null, ModelProfile.match("iPhone 15"))
         assertEquals(null, ModelProfile.match("ThinkPad i7"))
         assertEquals(null, ModelProfile.match("Sony WH-1000XM4"))

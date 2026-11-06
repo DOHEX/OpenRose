@@ -47,9 +47,13 @@ enum class ModelProfile(val displayName: String, val manufacturerPrefix: String,
                 normalized.contains("earfeel") ||
                 normalized.contains("earfree")
             if (!isRose) return null
+            // The vendor renamed EarFree to EarFeel (an i5 is now shown as "EarFeel-i5"), so the brand word no longer
+            // tells the models apart; the model number decides, and the brand word only when the name has none.
             return when {
-                normalized.contains("earfeel") || normalized.contains("i7") -> I7_RS_V2
-                normalized.contains("earfree") || normalized.contains("i5") -> I5_ZT
+                normalized.contains("i5") -> I5_ZT
+                normalized.contains("i7") -> I7_RS_V2
+                normalized.contains("earfree") -> I5_ZT
+                normalized.contains("earfeel") -> I7_RS_V2
                 else -> null
             }
         }
