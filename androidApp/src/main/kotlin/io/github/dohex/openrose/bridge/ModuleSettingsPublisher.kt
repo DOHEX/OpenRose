@@ -3,6 +3,8 @@ package io.github.dohex.openrose.bridge
 import android.content.SharedPreferences
 import io.github.dohex.openrose.androidintegration.HostSettings
 import io.github.dohex.openrose.androidintegration.HostSettingsCodec
+import io.github.dohex.openrose.androidintegration.SerializedPublisher
+import io.github.dohex.openrose.androidintegration.wire.BridgeWire
 
 /** Serializes writes and derives the current persisted settings only when the writer is held. */
 internal class ModuleSettingsPublisher(preferences: () -> SharedPreferences?) {

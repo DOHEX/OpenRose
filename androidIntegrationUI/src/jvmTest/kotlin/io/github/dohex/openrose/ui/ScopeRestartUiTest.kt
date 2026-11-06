@@ -4,6 +4,9 @@ package io.github.dohex.openrose.ui
 
 import androidx.compose.runtime.mutableStateOf
 import io.github.dohex.openrose.androidintegration.IntegrationState
+import io.github.dohex.openrose.androidintegration.scope.ScopeRestartPhase
+import io.github.dohex.openrose.androidintegration.scope.ScopeRestartResult
+import io.github.dohex.openrose.androidintegration.scope.ScopeRestartStatus
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.currentCoroutineContext

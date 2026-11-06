@@ -14,6 +14,8 @@ import io.github.dohex.openrose.androidintegration.IntegrationPlatformState
 import io.github.dohex.openrose.androidintegration.ModuleAvailability
 import io.github.dohex.openrose.androidintegration.RunningNotification
 import io.github.dohex.openrose.androidintegration.WakeFacts
+import io.github.dohex.openrose.androidintegration.classifyHyperOsBuild
+import io.github.dohex.openrose.androidintegration.runningNotificationVisible
 import io.github.dohex.openrose.core.HostPlatform
 import io.github.dohex.openrose.core.PermissionState
 import io.github.dohex.openrose.core.PlatformApplicability
@@ -89,8 +91,9 @@ internal fun Context.readIntegrationPlatform(
 /** The required service notification is independent of the focus notification setting and has its own channel. */
 private fun Context.runningNotification(): RunningNotification {
     val manager = getSystemService(NotificationManager::class.java) ?: return RunningNotification.UNKNOWN
-    val channelBlocked = manager.getNotificationChannel(ControlService.CHANNEL_ID)?.importance == NotificationManager.IMPORTANCE_NONE
-    return if (manager.areNotificationsEnabled() && !channelBlocked) RunningNotification.VISIBLE else RunningNotification.HIDDEN
+    val importance = manager.getNotificationChannel(ControlService.CHANNEL_ID)?.importance
+    val visible = runningNotificationVisible(manager.areNotificationsEnabled(), importance)
+    return if (visible) RunningNotification.VISIBLE else RunningNotification.HIDDEN
 }
 
 private fun Context.locationServicesEnabled(): Boolean = if (Build.VERSION.SDK_INT >= 28) {

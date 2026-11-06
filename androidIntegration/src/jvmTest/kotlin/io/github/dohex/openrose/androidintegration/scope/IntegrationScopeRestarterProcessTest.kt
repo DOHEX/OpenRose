@@ -1,43 +1,18 @@
-package io.github.dohex.openrose
+package io.github.dohex.openrose.androidintegration.scope
 
-import io.github.dohex.openrose.ui.ScopeRestartPhase
-import io.github.dohex.openrose.ui.ScopeRestartResult
-import io.github.dohex.openrose.ui.ScopeRestartStatus
-import io.github.dohex.openrose.ui.ScopeRestartUpdate
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
 import org.junit.Assume.assumeTrue
-import org.junit.Test
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
-class IntegrationScopeRestarterTest {
-    @Test
-    fun deniedRootReportsFailureForEveryScope() = runBlocking {
-        val reported = mutableListOf<ScopeRestartUpdate>()
-        val results = IntegrationScopeRestarter { _, _ -> RootResult(1, "permission denied") }.restart(onUpdate = { reported += it })
-        assertEquals(3, results.size)
-        assertTrue(results.all { it.status == ScopeRestartStatus.FAILED && it.detail!!.contains("permission denied") })
-        assertEquals<List<ScopeRestartUpdate>>(results, reported)
-    }
-
-    @Test
-    fun restartsOnlyTheChosenScopes() = runBlocking {
-        val results = IntegrationScopeRestarter { _, onLine ->
-            val output = "OPENROSE_ROOT_OK\nOPENROSE_RESULT:com.milink.service:NOT_RUNNING\n"
-            output.lineSequence().filter { it.isNotEmpty() }.forEach(onLine)
-            RootResult(0, output)
-        }.restart(listOf("com.milink.service", "not.a.scope"))
-        assertEquals(listOf("com.milink.service"), results.map { it.target })
-        assertEquals(ScopeRestartStatus.NOT_RUNNING, results.single().status)
-        assertTrue(IntegrationScopeRestarter { _, _ -> error("no Root without a chosen scope") }.restart(emptyList()).isEmpty())
-    }
-
+class IntegrationScopeRestarterProcessTest {
     @Test
     fun resultsAreReportedWhileTheScriptIsStillRunning() = runBlocking {
         val first = CountDownLatch(1)

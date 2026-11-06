@@ -22,8 +22,8 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
-import io.github.dohex.openrose.bridge.BridgePresentationWire
-import io.github.dohex.openrose.bridge.BridgeWire
+import io.github.dohex.openrose.androidintegration.wire.BridgePresentationWire
+import io.github.dohex.openrose.androidintegration.wire.BridgeWire
 import org.json.JSONObject
 import java.security.MessageDigest
 import java.util.UUID

@@ -1,4 +1,4 @@
-package io.github.dohex.openrose.bridge
+package io.github.dohex.openrose.androidintegration
 
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch

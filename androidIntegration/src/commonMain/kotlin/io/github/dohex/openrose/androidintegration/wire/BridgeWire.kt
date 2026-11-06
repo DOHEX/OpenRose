@@ -1,13 +1,11 @@
-package io.github.dohex.openrose.bridge
-
-import android.os.Bundle
+package io.github.dohex.openrose.androidintegration.wire
 
 /**
  * Versioned wire constants for the module host's authenticated endpoint. There is no shared secret:
  * the host authorises each caller from the Binder uid and package, so nothing here is a credential.
  * Protocol commands and device state travel as the core module's rendered wire text in [PAYLOAD].
  */
-internal object BridgeWire {
+object BridgeWire {
     const val VERSION = 4
     const val KEY_VERSION = "version"
     const val STATUS = "status"
@@ -56,7 +54,7 @@ internal object BridgeWire {
 
     /**
      * Discovery: an existing service in the host process hands out the endpoint Binder for this action.
-     * Reaching it is not authorisation; [IControlBridge.open] verifies the caller.
+     * Reaching it is not authorisation; the endpoint's `open` verifies the caller.
      */
     const val ACTION_CONTROL_HOST = "io.github.dohex.openrose.action.CONTROL_HOST"
     const val HOST_SERVICE_CLASS = "com.android.bluetooth.agClient.BluetoothAgClientService"
@@ -73,22 +71,4 @@ internal object BridgeWire {
     const val ACTION_SHOW_HEADPHONES = "io.github.dohex.openrose.SHOW_HEADPHONES"
     const val EXTRA_HEADPHONE_ADDRESS = "io.github.dohex.openrose.extra.HEADPHONE_ADDRESS"
     val RESOLUTIONS = setOf(RESOLUTION_MATCHED, RESOLUTION_CLASS_MISSING, RESOLUTION_METHOD_MISSING, RESOLUTION_HOOK_FAILED)
-
-    fun hello(processName: String?, target: BridgeTarget?, resolution: String = RESOLUTION_MATCHED): Bundle = Bundle().apply {
-        putInt(KEY_VERSION, VERSION)
-        target?.let {
-            putString(PACKAGE, it.packageName)
-            putString(COMPONENT_MATCH_KEY, it.componentMatch)
-        }
-        processName?.let { putString(PROCESS, it) }
-        putString(RESOLUTION, resolution)
-    }
-
-    fun response(status: String, message: String? = null): Bundle = Bundle().apply {
-        putInt(KEY_VERSION, VERSION)
-        putString(STATUS, status)
-        message?.let { putString(MESSAGE, it) }
-    }
-
-    fun payload(status: String, text: String): Bundle = response(status).apply { putString(PAYLOAD, text) }
 }

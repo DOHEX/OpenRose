@@ -1,4 +1,4 @@
-package io.github.dohex.openrose
+package io.github.dohex.openrose.androidintegration
 
 import io.github.dohex.openrose.core.PlatformApplicability
 import kotlin.test.Test

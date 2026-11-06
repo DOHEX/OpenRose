@@ -5,6 +5,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import io.github.dohex.openrose.androidintegration.*
+import io.github.dohex.openrose.androidintegration.scope.ScopeRestartPhase
+import io.github.dohex.openrose.androidintegration.scope.ScopeRestartResult
+import io.github.dohex.openrose.androidintegration.scope.ScopeRestartStatus
+import io.github.dohex.openrose.androidintegration.scope.ScopeRestartUpdate
 import io.github.dohex.openrose.core.*
 import io.github.dohex.openrose.ui.*
 import kotlinx.coroutines.CancellationException

@@ -5,11 +5,17 @@ import android.content.Context
 import android.content.Intent
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.util.Log
 import io.github.dohex.openrose.androidintegration.SystemHeadsetMapping
-import io.github.dohex.openrose.bridge.BridgePresentationWire
-import io.github.dohex.openrose.bridge.BridgeWire
+import io.github.dohex.openrose.androidintegration.SystemRequestGate
+import io.github.dohex.openrose.androidintegration.wire.BridgePresentationWire
+import io.github.dohex.openrose.androidintegration.wire.BridgeWire
+import io.github.dohex.openrose.androidintegration.wire.NativeHeadsetSnapshot
+import io.github.dohex.openrose.androidintegration.wire.NativeManagedAddressTombstones
+import io.github.dohex.openrose.androidintegration.wire.NativeSessionReference
 import io.github.dohex.openrose.core.protocol.DeviceField
+import io.github.dohex.openrose.core.transport.normalizeBluetoothAddress
 import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedModule
 import java.lang.ref.WeakReference
@@ -69,7 +75,7 @@ class MiLinkNativeHeadsetAdapter(
 
     /** Called by the authenticated bridge reader after validating a complete frame. */
     fun publish(snapshot: NativeHeadsetSnapshot?) {
-        val fresh = snapshot?.takeIf { it.isFresh() }
+        val fresh = snapshot?.takeIf { it.isFresh(SystemClock.elapsedRealtime()) }
         fresh?.let(managedAddresses::remember)
         val previous = currentSnapshot
         currentSnapshot = fresh
@@ -341,35 +347,35 @@ class MiLinkNativeHeadsetAdapter(
 
     /** The callback only enqueues work; its Boolean means locally accepted, never device-confirmed. */
     private fun submit(snapshot: NativeHeadsetSnapshot, mode: String, address: String?): Boolean {
-        if (!snapshot.isFresh() || !snapshot.supportsNoise(mode)) {
+        if (!snapshot.isFresh(SystemClock.elapsedRealtime()) || !snapshot.supportsNoise(mode)) {
             report(FEATURE, "UNSUPPORTED", "mode=$mode is not currently supported by this session")
             return false
         }
-        val normalizedAddress = NativeHeadsetSnapshot.normalizeBluetoothAddress(address)
+        val normalizedAddress = normalizeBluetoothAddress(address)
             ?.takeIf(snapshot.addresses::contains) ?: run {
             report(FEATURE, "UNAVAILABLE", "mode=$mode request address is not in the authenticated snapshot")
             return false
         }
         val result = NativeNoiseRequestGate.submit(snapshot, mode) {
             val current = currentSnapshot?.takeIf {
-                !closed && it.isFresh() && it.reference == snapshot.reference &&
+                !closed && it.isFresh(SystemClock.elapsedRealtime()) && it.reference == snapshot.reference &&
                     it.matchesAddress(normalizedAddress) && it.supportsNoise(mode)
             }
             if (current == null) false else callbacks.submitNoise(current, mode)
         }
-        if (result == NativeNoiseRequestGate.Result.REJECTED) {
+        if (result == SystemRequestGate.Result.REJECTED) {
             module.log(Log.WARN, TAG, "native noise dispatch rejected mode=$mode")
         }
         report(
             FEATURE,
-            if (result == NativeNoiseRequestGate.Result.REJECTED) "UNAVAILABLE" else "SUBMITTED",
+            if (result == SystemRequestGate.Result.REJECTED) "UNAVAILABLE" else "SUBMITTED",
             when (result) {
-                NativeNoiseRequestGate.Result.ACCEPTED -> "mode=$mode session=${snapshot.sessionId}; awaiting device confirmation"
-                NativeNoiseRequestGate.Result.DUPLICATE -> "mode=$mode session=${snapshot.sessionId}; duplicate vendor callback coalesced"
-                NativeNoiseRequestGate.Result.REJECTED -> "mode=$mode session=${snapshot.sessionId}; authenticated control callback unavailable"
+                SystemRequestGate.Result.ACCEPTED -> "mode=$mode session=${snapshot.sessionId}; awaiting device confirmation"
+                SystemRequestGate.Result.DUPLICATE -> "mode=$mode session=${snapshot.sessionId}; duplicate vendor callback coalesced"
+                SystemRequestGate.Result.REJECTED -> "mode=$mode session=${snapshot.sessionId}; authenticated control callback unavailable"
             },
         )
-        return result != NativeNoiseRequestGate.Result.REJECTED
+        return result != SystemRequestGate.Result.REJECTED
     }
 
     private fun snapshotForDevice(value: Any?): NativeHeadsetSnapshot? = (value as? BluetoothDevice)?.let { device ->
@@ -377,7 +383,7 @@ class MiLinkNativeHeadsetAdapter(
     }
 
     private fun snapshotForAddress(address: String?): NativeHeadsetSnapshot? {
-        val snapshot = currentSnapshot?.takeIf { it.isFresh() } ?: return null
+        val snapshot = currentSnapshot?.takeIf { it.isFresh(SystemClock.elapsedRealtime()) } ?: return null
         return snapshot.takeIf { it.matchesAddress(address) }
     }
 
@@ -389,7 +395,7 @@ class MiLinkNativeHeadsetAdapter(
         val device = chain.args.getOrNull(0) as? BluetoothDevice ?: return HookDecision.Proceed
         val normalizedAddress = runCatching { device.address }
             .getOrNull()
-            ?.let(NativeHeadsetSnapshot::normalizeBluetoothAddress)
+            ?.let(::normalizeBluetoothAddress)
             ?: return HookDecision.Proceed
 
         // The module host decides from its own persisted destination and the earphones it owns; the answer
@@ -435,7 +441,7 @@ class MiLinkNativeHeadsetAdapter(
             val method = resolveMethod(info.javaClass, name, emptyArray()) ?: continue
             if (method.returnType != String::class.java) continue
             val address = runCatching { method.invoke(info) as? String }.getOrNull()
-            if (NativeHeadsetSnapshot.normalizeBluetoothAddress(address) != null) return address
+            if (normalizeBluetoothAddress(address) != null) return address
         }
         return null
     }
@@ -525,7 +531,7 @@ class MiLinkNativeHeadsetAdapter(
     private fun rememberAncController(chain: XposedInterface.Chain, snapshot: NativeHeadsetSnapshot) {
         val controller = chain.thisObject ?: return
         val device = chain.args.firstOrNull() as? BluetoothDevice ?: return
-        val address = NativeHeadsetSnapshot.normalizeBluetoothAddress(runCatching { device.address }.getOrNull()) ?: return
+        val address = normalizeBluetoothAddress(runCatching { device.address }.getOrNull()) ?: return
         if (!snapshot.matchesAddress(address)) return
         lastAncController = WeakReference(controller)
         lastAncDevice = device
@@ -542,26 +548,26 @@ class MiLinkNativeHeadsetAdapter(
 
     private fun notifyHeadsetPropertyChanged(controller: Any?, device: BluetoothDevice?, updateType: Int) {
         if (controller == null || device == null) return
-        val address = NativeHeadsetSnapshot.normalizeBluetoothAddress(runCatching { device.address }.getOrNull())
+        val address = normalizeBluetoothAddress(runCatching { device.address }.getOrNull())
             ?: return
         val expectedReference = lastAncReference ?: return
         if (lastAncAddress != address) return
         if (currentSnapshot?.takeIf {
-                it.isFresh() && it.reference == expectedReference && it.matchesAddress(address)
+                it.isFresh(SystemClock.elapsedRealtime()) && it.reference == expectedReference && it.matchesAddress(address)
             } == null
         ) {
             return
         }
         if (lastAncController?.get() !== controller || lastAncDevice !== device) return
         callbackHandler.post {
-            val current = currentSnapshot?.takeIf { !closed && it.isFresh() }
+            val current = currentSnapshot?.takeIf { !closed && it.isFresh(SystemClock.elapsedRealtime()) }
             if (current == null || current.reference != expectedReference || !current.matchesAddress(address) ||
                 lastAncReference != expectedReference || lastAncAddress != address ||
                 lastAncController?.get() !== controller || lastAncDevice !== device
             ) {
                 return@post
             }
-            if (NativeHeadsetSnapshot.normalizeBluetoothAddress(runCatching { device.address }.getOrNull()) != address) return@post
+            if (normalizeBluetoothAddress(runCatching { device.address }.getOrNull()) != address) return@post
             try {
                 val listener = findObjectField(controller, "headsetPropertyChangeListener") ?: return@post
                 val invoke = findMethodByNameAndCount(listener.javaClass, "invoke", 2)

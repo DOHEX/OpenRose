@@ -6,9 +6,15 @@ import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.os.Parcel
+import android.os.SystemClock
 import android.util.Log
 import io.github.dohex.openrose.androidintegration.SystemHeadsetMapping
-import io.github.dohex.openrose.bridge.BridgePresentationWire
+import io.github.dohex.openrose.androidintegration.SystemRequestGate
+import io.github.dohex.openrose.androidintegration.wire.BridgePresentationWire
+import io.github.dohex.openrose.androidintegration.wire.NativeHeadsetSnapshot
+import io.github.dohex.openrose.androidintegration.wire.NativeManagedAddressTombstones
+import io.github.dohex.openrose.androidintegration.wire.NativeSessionReference
+import io.github.dohex.openrose.core.transport.normalizeBluetoothAddress
 import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedModule
 import java.lang.reflect.Method
@@ -60,7 +66,7 @@ class NativeHeadsetBinderAdapter(
 
     /** Called by the authenticated bridge reader; status callbacks are sent only from this data. */
     fun publish(snapshot: NativeHeadsetSnapshot?) {
-        val fresh = snapshot?.takeIf { it.isFresh() }
+        val fresh = snapshot?.takeIf { it.isFresh(SystemClock.elapsedRealtime()) }
         fresh?.let(managedAddresses::remember)
         currentSnapshot = fresh
         if (fresh == null) {
@@ -409,7 +415,7 @@ class NativeHeadsetBinderAdapter(
             report(FEATURE, "UNAVAILABLE", "callback binder unavailable")
             return false
         }
-        val normalizedAddress = NativeHeadsetSnapshot.normalizeBluetoothAddress(address) ?: return false
+        val normalizedAddress = normalizeBluetoothAddress(address) ?: return false
         val death = IBinder.DeathRecipient { registeredCallbacks.remove(binder) }
         runCatching { binder.linkToDeath(death, 0) }.onFailure {
             report(FEATURE, "UNAVAILABLE", "callback binder already dead")
@@ -432,7 +438,7 @@ class NativeHeadsetBinderAdapter(
 
     private fun sendRefresh(target: RegisteredCallback, snapshot: NativeHeadsetSnapshot, payload: String) {
         callbackHandler.post {
-            val current = currentSnapshot?.takeIf { it.isFresh() }
+            val current = currentSnapshot?.takeIf { it.isFresh(SystemClock.elapsedRealtime()) }
             if (closed || registeredCallbacks[target.binder] !== target || current == null ||
                 current.reference != target.reference || !current.matchesAddress(target.address)
             ) {
@@ -460,14 +466,14 @@ class NativeHeadsetBinderAdapter(
     private fun snapshotForDevice(value: Any?): NativeHeadsetSnapshot? = (value as? BluetoothDevice)?.let { device -> runCatching { snapshotForAddress(device.address) }.getOrNull() }
 
     private fun snapshotForAddress(address: String?): NativeHeadsetSnapshot? {
-        val snapshot = currentSnapshot?.takeIf { it.isFresh() } ?: return null
+        val snapshot = currentSnapshot?.takeIf { it.isFresh(SystemClock.elapsedRealtime()) } ?: return null
         return snapshot.takeIf { it.matchesAddress(address) }
     }
 
     private fun snapshotForActionDevice(owner: Any?, value: Any?): NativeHeadsetSnapshot? {
         val device = value as? BluetoothDevice ?: return null
         val address = runCatching { device.address }.getOrNull() ?: return null
-        val normalized = NativeHeadsetSnapshot.normalizeBluetoothAddress(address) ?: return null
+        val normalized = normalizeBluetoothAddress(address) ?: return null
         val snapshot = snapshotForAddress(normalized) ?: return null
         val binding = owner?.let { instance -> synchronized(binderAddress) { binderAddress[instance] } }
         if (binding != null && binding.address == normalized && binding.reference != snapshot.reference) return null
@@ -487,7 +493,7 @@ class NativeHeadsetBinderAdapter(
             is String -> value
             else -> null
         }
-        val normalized = NativeHeadsetSnapshot.normalizeBluetoothAddress(address) ?: return false
+        val normalized = normalizeBluetoothAddress(address) ?: return false
         if (!managedAddresses.contains(normalized)) return false
         val snapshot = snapshotForAddress(normalized)
         if (snapshot == null) return true
@@ -497,7 +503,7 @@ class NativeHeadsetBinderAdapter(
 
     private fun rememberAddress(owner: Any?, address: String?) {
         val snapshot = snapshotForAddress(address) ?: return
-        val normalized = NativeHeadsetSnapshot.normalizeBluetoothAddress(address) ?: return
+        val normalized = normalizeBluetoothAddress(address) ?: return
         if (owner != null) {
             synchronized(binderAddress) {
                 binderAddress[owner] = BinderAddress(normalized, snapshot.reference)
@@ -511,28 +517,28 @@ class NativeHeadsetBinderAdapter(
             report(FEATURE, "UNSUPPORTED", "native mode=$mode is absent from current capability snapshot")
             return
         }
-        val normalizedAddress = NativeHeadsetSnapshot.normalizeBluetoothAddress(address)
+        val normalizedAddress = normalizeBluetoothAddress(address)
             ?.takeIf(snapshot.addresses::contains) ?: run {
             report(FEATURE, "UNAVAILABLE", "native mode=$mode request address is not in the authenticated snapshot")
             return
         }
         val result = NativeNoiseRequestGate.submit(snapshot, mode) {
             val current = currentSnapshot?.takeIf {
-                !closed && it.isFresh() && it.reference == snapshot.reference &&
+                !closed && it.isFresh(SystemClock.elapsedRealtime()) && it.reference == snapshot.reference &&
                     it.matchesAddress(normalizedAddress) && it.supportsNoise(mode)
             }
             if (current == null) false else callbacks.submitNoise(current, mode)
         }
-        if (result == NativeNoiseRequestGate.Result.REJECTED) {
+        if (result == SystemRequestGate.Result.REJECTED) {
             module.log(Log.WARN, TAG, "native noise dispatch rejected mode=$mode")
         }
         report(
             FEATURE,
-            if (result == NativeNoiseRequestGate.Result.REJECTED) "UNAVAILABLE" else "SUBMITTED",
+            if (result == SystemRequestGate.Result.REJECTED) "UNAVAILABLE" else "SUBMITTED",
             when (result) {
-                NativeNoiseRequestGate.Result.ACCEPTED -> "mode=$mode session=${snapshot.sessionId}; awaiting device confirmation"
-                NativeNoiseRequestGate.Result.DUPLICATE -> "mode=$mode session=${snapshot.sessionId}; duplicate vendor callback coalesced"
-                NativeNoiseRequestGate.Result.REJECTED -> "mode=$mode session=${snapshot.sessionId}; authenticated control callback unavailable"
+                SystemRequestGate.Result.ACCEPTED -> "mode=$mode session=${snapshot.sessionId}; awaiting device confirmation"
+                SystemRequestGate.Result.DUPLICATE -> "mode=$mode session=${snapshot.sessionId}; duplicate vendor callback coalesced"
+                SystemRequestGate.Result.REJECTED -> "mode=$mode session=${snapshot.sessionId}; authenticated control callback unavailable"
             },
         )
     }

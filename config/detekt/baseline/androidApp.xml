@@ -12,33 +12,24 @@
     <ID>ComplexCondition:MiLinkNativeHeadsetAdapter.kt:MiLinkNativeHeadsetAdapter$current == null || current.reference != expectedReference || !current.matchesAddress(address) || lastAncReference != expectedReference || lastAncAddress != address || lastAncController?.get() !== controller || lastAncDevice !== device</ID>
     <ID>ComplexCondition:MiLinkNativeHeadsetAdapter.kt:MiLinkNativeHeadsetAdapter$rememberedReference != null &amp;&amp; (rememberedReference != fresh.reference || rememberedAddress == null || rememberedAddress !in fresh.addresses)</ID>
     <ID>ComplexCondition:NativeHeadsetBinderAdapter.kt:NativeHeadsetBinderAdapter$closed || registeredCallbacks[target.binder] !== target || current == null || current.reference != target.reference || !current.matchesAddress(target.address)</ID>
-    <ID>ComplexCondition:OpenRoseBluetoothModule.kt:OpenRoseBluetoothModule.&lt;no name provided&gt;$retired || !snapshot.isFresh() || !snapshot.supportsNoise(mode) || nativeSnapshot?.reference != snapshot.reference</ID>
     <ID>ComplexCondition:SystemPresentationRenderer.kt:SystemPresentationRenderer$!islandAllowed || prompt == null || promptId == null || promptMode == null || promptMode != snapshot.mode || promptMode == BridgePresentationWire.OFF || promptMode !in PROMPT_MODES</ID>
     <ID>ComplexCondition:SystemPresentationRenderer.kt:SystemPresentationRenderer$pending != null &amp;&amp; ( !islandAllowed || promptId == null || pending.identity != snapshot.identity || pending.key != promptKey(snapshot.identity, promptId) || promptId != pending.id || promptMode != pending.mode || snapshot.mode != pending.mode )</ID>
     <ID>ComplexCondition:SystemPresentationRenderer.kt:SystemPresentationRenderer.&lt;no name provided&gt;$closed || action == null || action != actionReceiverAction || token == null || token != actionToken || deviceId == null || hostEpoch == null || targetMode == null</ID>
     <ID>CyclomaticComplexMethod:AuthenticatedBridgeClient.kt:AuthenticatedBridgeClient$private fun pollBridge</ID>
     <ID>CyclomaticComplexMethod:AuthenticatedBridgeClient.kt:AuthenticatedBridgeClient$private fun readCurrentSnapshot</ID>
-    <ID>CyclomaticComplexMethod:BridgeSnapshotCodec.kt:internal fun DeviceState.toBridgeSnapshot: Bundle</ID>
-    <ID>CyclomaticComplexMethod:BridgeSnapshotCodec.kt:private fun FieldValue.toBridgeValue: Bundle</ID>
     <ID>CyclomaticComplexMethod:HostEndpoint.kt:HostEndpoint$override fun open: Bundle</ID>
-    <ID>CyclomaticComplexMethod:HyperOsBuildClassifier.kt:internal fun classifyHyperOsBuild: PlatformApplicability</ID>
-    <ID>CyclomaticComplexMethod:IntegrationScopeRestarter.kt:IntegrationScopeRestarter$suspend fun restart: List&lt;ScopeRestartResult&gt;</ID>
     <ID>CyclomaticComplexMethod:MiLinkNativeHeadsetAdapter.kt:MiLinkNativeHeadsetAdapter$fun publish</ID>
     <ID>CyclomaticComplexMethod:MiLinkNativeHeadsetAdapter.kt:MiLinkNativeHeadsetAdapter$private fun installAncBatteryController</ID>
     <ID>CyclomaticComplexMethod:MiLinkNativeHeadsetAdapter.kt:MiLinkNativeHeadsetAdapter$private fun notifyHeadsetPropertyChanged</ID>
     <ID>CyclomaticComplexMethod:MiLinkNativeHeadsetAdapter.kt:MiLinkNativeHeadsetAdapter$private fun submit: Boolean</ID>
     <ID>CyclomaticComplexMethod:NativeHeadsetBinderAdapter.kt:NativeHeadsetBinderAdapter$private fun installBinderClass</ID>
     <ID>CyclomaticComplexMethod:NativeHeadsetBinderAdapter.kt:NativeHeadsetBinderAdapter$private fun interceptTransact: HookDecision</ID>
-    <ID>CyclomaticComplexMethod:NativeHeadsetSnapshot.kt:NativeHeadsetSnapshot.Companion$private fun parseBundle: NativeHeadsetSnapshot?</ID>
-    <ID>CyclomaticComplexMethod:NativeHeadsetSnapshot.kt:NativeHeadsetSnapshot.Companion$private fun parseReading: FieldReading?</ID>
     <ID>CyclomaticComplexMethod:OpenRoseBluetoothModule.kt:OpenRoseBluetoothModule$private fun publish</ID>
     <ID>CyclomaticComplexMethod:SystemPresentationRenderer.kt:SystemPresentationRenderer$private fun renderConnectionPrompt</ID>
     <ID>CyclomaticComplexMethod:SystemPresentationRenderer.kt:SystemPresentationRenderer$private fun renderStatusNotification</ID>
     <ID>LargeClass:NativeHeadsetBinderAdapter.kt:NativeHeadsetBinderAdapter</ID>
     <ID>LargeClass:SystemPresentationRenderer.kt:SystemPresentationRenderer : AutoCloseable</ID>
     <ID>LongMethod:AuthenticatedBridgeClient.kt:AuthenticatedBridgeClient$private fun readCurrentSnapshot</ID>
-    <ID>LongMethod:BridgeSnapshotCodec.kt:internal fun DeviceState.toBridgeSnapshot: Bundle</ID>
-    <ID>LongMethod:BridgeSnapshotCodec.kt:private fun FieldValue.toBridgeValue: Bundle</ID>
     <ID>LongMethod:MiLinkNativeHeadsetAdapter.kt:MiLinkNativeHeadsetAdapter$private fun installAncBatteryController</ID>
     <ID>LongMethod:ModuleHostBinderLink.kt:ModuleHostBinderLink$override suspend fun open: LinkOpenResult</ID>
     <ID>LongMethod:NativeHeadsetBinderAdapter.kt:NativeHeadsetBinderAdapter$private fun installBinderClass</ID>
@@ -54,11 +45,9 @@
     <ID>MaxLineLength:AndroidControlTransport.kt:AndroidControlTransport$override suspend fun connectionFacts: TransportFacts</ID>
     <ID>MaxLineLength:AndroidGattDriver.kt:AndroidGattDriver$private fun requireCharacteristic: BluetoothGattCharacteristic</ID>
     <ID>MaxLineLength:AndroidGattDriver.kt:AndroidGattDriver.&lt;no name provided&gt;$canWriteWithoutResponse = properties and BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE != 0</ID>
-    <ID>MaxLineLength:AndroidOwnerStore.kt:AndroidOwnerStore$private fun involvesModule</ID>
     <ID>MaxLineLength:AndroidSettingsStoreTest.kt:AndroidSettingsStoreTest$return</ID>
     <ID>MaxLineLength:AuthenticatedBridgeClient.kt:AuthenticatedBridgeClient$private</ID>
     <ID>MaxLineLength:AuthenticatedBridgeClient.kt:AuthenticatedBridgeClient$private fun generationOf: String?</ID>
-    <ID>MaxLineLength:BridgeSnapshotCodec.kt:noise.levelCapabilities(DeviceSetting.ANC_LEVEL)?.let { level -&gt; putBundle("anc_level", level.toBridgeCapability()) }</ID>
     <ID>MaxLineLength:ControlService.kt:ControlService$(integration.settings.backgroundControlEnabled &amp;&amp; integration.owner.selected == ControlWay.ORDINARY) to notificationText(state)</ID>
     <ID>MaxLineLength:GuardedXposedProvider.kt:GuardedXposedProvider$override fun query: Cursor?</ID>
     <ID>MaxLineLength:HostEndpoint.kt:HostEndpoint$current.copy(endpoints = current.endpoints + (key to endpoint.copy(features = endpoint.features + (feature to "$status · $detail"))))</ID>
@@ -70,20 +59,12 @@
     <ID>MaxLineLength:HostEndpoint.kt:HostEndpoint$return</ID>
     <ID>MaxLineLength:HostEndpoint.kt:HostEndpoint$val</ID>
     <ID>MaxLineLength:HostEndpoint.kt:HostEndpoint$val status = if (refused.rejection == HostRejection.UNAUTHORIZED) BridgeWire.STATUS_UNAUTHORIZED else BridgeWire.STATUS_UNAVAILABLE</ID>
-    <ID>MaxLineLength:IntegrationScopeRestarterTest.kt:IntegrationScopeRestarterTest$assertEquals(listOf(ScopeRestartStatus.FAILED, ScopeRestartStatus.RESTARTED, ScopeRestartStatus.NOT_RUNNING), results.map { it.status })</ID>
-    <ID>MaxLineLength:IntegrationScopeRestarterTest.kt:IntegrationScopeRestarterTest$assertEquals(listOf(ScopeRestartStatus.RESTARTED, ScopeRestartStatus.TERMINATED, ScopeRestartStatus.NOT_RUNNING), results.map { it.status })</ID>
-    <ID>MaxLineLength:IntegrationScopeRestarterTest.kt:IntegrationScopeRestarterTest$assertTrue(reported.indexOfFirst { it is ScopeRestartPhase.Waiting } &lt; reported.indexOfFirst { it is ScopeRestartResult &amp;&amp; it.target == "com.xiaomi.bluetooth" })</ID>
-    <ID>MaxLineLength:IntegrationScopeRestarterTest.kt:IntegrationScopeRestarterTest$private</ID>
-    <ID>MaxLineLength:IntegrationScopeRestarterTest.kt:IntegrationScopeRestarterTest$val process = ProcessBuilder("bash", "-c", "echo \$\$ &gt; \"\$2\"; exec -a \"\$1\" sleep 60", "fixture", name, pidFile.toString()).start()</ID>
-    <ID>MaxLineLength:IntegrationScopeRestarterTest.kt:IntegrationScopeRestarterTest$val results = stubbedRestarter(signals, "FAIL_PID" to bluetooth, "RESPAWN_PID" to xiaomi, "RESPAWN_NAME" to "com.xiaomi.bluetooth:service").restart()</ID>
-    <ID>MaxLineLength:MiLinkNativeHeadsetAdapter.kt:MiLinkNativeHeadsetAdapter$NativeNoiseRequestGate.Result.REJECTED -&gt; "mode=$mode session=${snapshot.sessionId}; authenticated control callback unavailable"</ID>
     <ID>MaxLineLength:MiLinkNativeHeadsetAdapter.kt:MiLinkNativeHeadsetAdapter$private fun bluetoothAddress: String?</ID>
     <ID>MaxLineLength:MiLinkNativeHeadsetAdapter.kt:MiLinkNativeHeadsetAdapter$private fun hookId: String</ID>
     <ID>MaxLineLength:MiLinkNativeHeadsetAdapter.kt:MiLinkNativeHeadsetAdapter$private fun shouldSuppressManagedAction: Boolean</ID>
     <ID>MaxLineLength:ModuleHostBinderLink.kt:ModuleHostBinderLink.BinderConnection$override suspend fun acquire: AcquireResult</ID>
     <ID>MaxLineLength:ModuleHostBinderLink.kt:ModuleHostBinderLink.BinderConnection$override suspend fun execute: HostCallResult</ID>
     <ID>MaxLineLength:ModuleHostBinderLink.kt:ModuleHostBinderLink.BinderConnection$override suspend fun release: ReleaseResult</ID>
-    <ID>MaxLineLength:NativeHeadsetBinderAdapter.kt:NativeHeadsetBinderAdapter$NativeNoiseRequestGate.Result.REJECTED -&gt; "mode=$mode session=${snapshot.sessionId}; authenticated control callback unavailable"</ID>
     <ID>MaxLineLength:NativeHeadsetBinderAdapter.kt:NativeHeadsetBinderAdapter$private fun bluetoothAddress: String?</ID>
     <ID>MaxLineLength:NativeHeadsetBinderAdapter.kt:NativeHeadsetBinderAdapter$private fun hookId: String</ID>
     <ID>MaxLineLength:NativeHeadsetBinderAdapter.kt:NativeHeadsetBinderAdapter$private fun snapshotForDevice: NativeHeadsetSnapshot?</ID>
@@ -91,14 +72,9 @@
     <ID>MaxLineLength:NativeHeadsetBinderAdapter.kt:NativeHeadsetBinderAdapter$report(FEATURE, "UNAVAILABLE", "changeAncLevel transaction blocked because the managed address has no matching current session")</ID>
     <ID>MaxLineLength:NativeHeadsetBinderAdapter.kt:NativeHeadsetBinderAdapter$report(FEATURE, "UNAVAILABLE", "changeAncMode transaction blocked because the managed address has no matching current session")</ID>
     <ID>MaxLineLength:NativeHeadsetBinderAdapter.kt:NativeHeadsetBinderAdapter$report(FEATURE, "UNSUPPORTED", "changeAncLevel transaction has no proven ROSE mapping (level=${level.orEmpty().take(24)})")</ID>
-    <ID>MaxLineLength:NativeHeadsetSnapshot.kt:NativeHeadsetSnapshot$fun</ID>
-    <ID>MaxLineLength:NativeHeadsetSnapshot.kt:NativeHeadsetSnapshot.Companion$private</ID>
-    <ID>MaxLineLength:NativeHeadsetSnapshot.kt:NativeNoiseLevelCapabilities$fun isVisibleIn: Boolean</ID>
-    <ID>MaxLineLength:NativeHeadsetSnapshot.kt:NativeNoiseRequestGate$fun</ID>
     <ID>MaxLineLength:OpenRoseApplication.kt:OpenRoseApplication$fun requestCompanionAssociation</ID>
     <ID>MaxLineLength:OpenRoseBluetoothModule.kt:OpenRoseBluetoothModule$private fun featureFor: String</ID>
     <ID>MaxLineLength:OpenRoseBluetoothModule.kt:OpenRoseBluetoothModule$val identity = "${snapshot.getString(BridgeWire.HOST_EPOCH)}:${snapshot.getString(BridgeWire.DEVICE_ID)}:${snapshot.getLong(BridgeWire.SESSION_ID)}"</ID>
-    <ID>MaxLineLength:OpenRoseBluetoothModule.kt:OpenRoseBluetoothModule.&lt;no name provided&gt;$if (retired || !snapshot.isFresh() || !snapshot.supportsNoise(mode) || nativeSnapshot?.reference != snapshot.reference) return false</ID>
     <ID>MaxLineLength:OpenRoseBluetoothModule.kt:OpenRoseBluetoothModule.&lt;no name provided&gt;$override fun report</ID>
     <ID>MaxLineLength:SystemPresentationRenderer.kt:SystemPresentationRenderer$if</ID>
     <ID>MaxLineLength:SystemPresentationRenderer.kt:SystemPresentationRenderer$if (promptMode == BridgePresentationWire.MODULE) BridgePresentationWire.MODULE_CONNECTION else BridgePresentationWire.OFFICIAL_CONNECTION</ID>
@@ -108,7 +84,6 @@
     <ID>ReturnCount:AndroidGattDriver.kt:AndroidGattDriver.&lt;no name provided&gt;$override fun onCharacteristicWrite</ID>
     <ID>ReturnCount:AndroidGattDriver.kt:AndroidGattDriver.&lt;no name provided&gt;$override fun onDescriptorWrite</ID>
     <ID>ReturnCount:AndroidGattDriver.kt:AndroidGattDriver.&lt;no name provided&gt;$override fun onServicesDiscovered</ID>
-    <ID>ReturnCount:AndroidOwnerStore.kt:AndroidOwnerStore$override fun save: Boolean</ID>
     <ID>ReturnCount:AuthenticatedBridgeClient.kt:AuthenticatedBridgeClient$fun claimPrompt: Boolean</ID>
     <ID>ReturnCount:AuthenticatedBridgeClient.kt:AuthenticatedBridgeClient$fun close: Boolean</ID>
     <ID>ReturnCount:AuthenticatedBridgeClient.kt:AuthenticatedBridgeClient$fun fusionEntryDevice: String?</ID>
@@ -131,8 +106,6 @@
     <ID>ReturnCount:HostEndpoint.kt:HostEndpoint$override fun reportPresentation: Bundle</ID>
     <ID>ReturnCount:HostEndpoint.kt:HostEndpoint$override fun setNoise: Bundle</ID>
     <ID>ReturnCount:HostEndpoint.kt:HostEndpoint$private fun Bundle.reference: SessionReference?</ID>
-    <ID>ReturnCount:HyperOsBuildClassifier.kt:internal fun classifyHyperOsBuild: PlatformApplicability</ID>
-    <ID>ReturnCount:IntegrationScopeRestarter.kt:private fun parseResult: ScopeRestartResult?</ID>
     <ID>ReturnCount:MiLinkNativeHeadsetAdapter.kt:MiLinkNativeHeadsetAdapter$fun publish</ID>
     <ID>ReturnCount:MiLinkNativeHeadsetAdapter.kt:MiLinkNativeHeadsetAdapter$private fun command: HookDecision</ID>
     <ID>ReturnCount:MiLinkNativeHeadsetAdapter.kt:MiLinkNativeHeadsetAdapter$private fun handleSwitchToHeadsetActivity: HookDecision</ID>
@@ -151,9 +124,6 @@
     <ID>ReturnCount:NativeHeadsetBinderAdapter.kt:NativeHeadsetBinderAdapter$private fun registerCallback: Boolean</ID>
     <ID>ReturnCount:NativeHeadsetBinderAdapter.kt:NativeHeadsetBinderAdapter$private fun shouldSuppressManagedAction: Boolean</ID>
     <ID>ReturnCount:NativeHeadsetBinderAdapter.kt:NativeHeadsetBinderAdapter$private fun snapshotForActionDevice: NativeHeadsetSnapshot?</ID>
-    <ID>ReturnCount:NativeHeadsetSnapshot.kt:NativeHeadsetSnapshot.Companion$fun normalizeBluetoothAddress: String?</ID>
-    <ID>ReturnCount:NativeHeadsetSnapshot.kt:NativeHeadsetSnapshot.Companion$private fun parseBundle: NativeHeadsetSnapshot?</ID>
-    <ID>ReturnCount:NativeHeadsetSnapshot.kt:NativeHeadsetSnapshot.Companion$private fun parseReading: FieldReading?</ID>
     <ID>ReturnCount:OfficialConnectionPresenter.kt:OfficialConnectionPresenter$private fun battery: Int?</ID>
     <ID>ReturnCount:OfficialConnectionPresenter.kt:OfficialConnectionPresenter$private fun charging: Boolean?</ID>
     <ID>ReturnCount:OfficialConnectionPresenter.kt:OfficialConnectionPresenter$private fun decodeRequest: PromptRequest?</ID>

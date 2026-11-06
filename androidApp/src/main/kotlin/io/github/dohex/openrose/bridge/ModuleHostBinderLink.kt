@@ -26,6 +26,7 @@ import io.github.dohex.openrose.androidintegration.OwnerFailureStage
 import io.github.dohex.openrose.androidintegration.OwnerGeneration
 import io.github.dohex.openrose.androidintegration.ReleaseResult
 import io.github.dohex.openrose.androidintegration.SwitchRequest
+import io.github.dohex.openrose.androidintegration.wire.BridgeWire
 import io.github.dohex.openrose.androidintegration.wire.HostWire
 import io.github.dohex.openrose.androidintegration.wire.Wire
 import io.github.dohex.openrose.androidintegration.wire.WireFormatException
@@ -93,7 +94,7 @@ class ModuleHostBinderLink(
         val bridge = IControlBridge.Stub.asInterface(binder)
         val token = Binder()
         val opened = try {
-            withContext(Dispatchers.IO) { bridge.open(BridgeWire.hello(null, null), token) }
+            withContext(Dispatchers.IO) { bridge.open(BridgeBundles.hello(null, null), token) }
         } catch (failure: Exception) {
             runCatching { context.unbindService(binding) }
             return LinkOpenResult.Failed(OwnerFailureStage.CONNECTION, "与宿主通信失败：${failure.javaClass.simpleName}")

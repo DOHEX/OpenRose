@@ -21,8 +21,9 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.lifecycleScope
 import io.github.dohex.openrose.androidintegration.IntegrationSettings
+import io.github.dohex.openrose.androidintegration.scope.IntegrationScopeRestarter
 import io.github.dohex.openrose.androidintegration.ui.AndroidPlatformUi
-import io.github.dohex.openrose.bridge.BridgeWire
+import io.github.dohex.openrose.androidintegration.wire.BridgeWire
 import io.github.dohex.openrose.core.transport.DeviceId
 import io.github.dohex.openrose.ui.Appearance
 import io.github.dohex.openrose.ui.OpenRoseApp
@@ -30,7 +31,7 @@ import java.util.Locale
 
 class MainActivity : ComponentActivity() {
     private val owner get() = application as OpenRoseApplication
-    private val scopeRestarter = IntegrationScopeRestarter()
+    private val scopeRestarter = IntegrationScopeRestarter(runRoot = ::runRootShell)
     private val permissionRequest = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
         owner.refreshPlatform()
         owner.startBackgroundControlFromUserEntry()

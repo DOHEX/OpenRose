@@ -11,9 +11,10 @@ import android.os.HandlerThread
 import android.os.IBinder
 import android.os.Looper
 import android.util.Log
-import io.github.dohex.openrose.bridge.BridgePresentationWire
+import io.github.dohex.openrose.androidintegration.wire.BridgePresentationWire
+import io.github.dohex.openrose.androidintegration.wire.BridgeWire
+import io.github.dohex.openrose.bridge.BridgeBundles
 import io.github.dohex.openrose.bridge.BridgeTarget
-import io.github.dohex.openrose.bridge.BridgeWire
 import io.github.dohex.openrose.bridge.IControlBridge
 import io.github.dohex.openrose.bridge.IControlObserver
 import java.util.concurrent.CountDownLatch
@@ -141,7 +142,7 @@ internal class AuthenticatedBridgeClient(
             val bridge = binding.bridge ?: return
 
             if (leaseId == null) {
-                val opened = bridge.open(BridgeWire.hello(processName, target, resolution), binding.clientToken)
+                val opened = bridge.open(BridgeBundles.hello(processName, target, resolution), binding.clientToken)
                 val openedStatus = opened.getString(BridgeWire.STATUS) ?: STATUS_MISSING
                 val openedLease = opened.getString(BridgeWire.LEASE_ID)
                 if (!hasWireVersion(opened) || openedStatus != BridgeWire.STATUS_OK || openedLease.isNullOrBlank()) {
@@ -420,12 +421,12 @@ internal class AuthenticatedBridgeClient(
 
     /** The caller must invoke this synchronous write from its separate bounded action executor. */
     fun setNoise(snapshot: Bundle, mode: String): Bundle {
-        if (mode.isBlank() || mode.length > MAX_NOISE_MODE_LENGTH) return BridgeWire.response(BridgeWire.STATUS_INVALID_ARGUMENT)
+        if (mode.isBlank() || mode.length > MAX_NOISE_MODE_LENGTH) return BridgeBundles.response(BridgeWire.STATUS_INVALID_ARGUMENT)
         val request = snapshotRequest(snapshot, requireCurrentReference = true)
-            ?: return BridgeWire.response(BridgeWire.STATUS_STALE_SESSION)
+            ?: return BridgeBundles.response(BridgeWire.STATUS_STALE_SESSION)
         request.putString(BridgePresentationWire.NOISE_MODE, mode)
         val response = callRemote(request) { bridge, call -> bridge.setNoise(call) }
-            ?: return BridgeWire.response(BridgeWire.STATUS_STALE_SESSION)
+            ?: return BridgeBundles.response(BridgeWire.STATUS_STALE_SESSION)
         if (hasWireVersion(response) && response.getString(BridgeWire.STATUS) == BridgeWire.STATUS_OK) {
             currentBinding?.let { schedulePoll(it) }
         }
@@ -496,7 +497,7 @@ internal class AuthenticatedBridgeClient(
         } catch (failure: SecurityException) {
             // A refusal by the host is an answer, not a missing one: callers must be able to tell it from a lost link.
             Log.w(TAG, "bridge_call_unauthorized target=$target", failure)
-            BridgeWire.response(BridgeWire.STATUS_UNAUTHORIZED, failure.message)
+            BridgeBundles.response(BridgeWire.STATUS_UNAUTHORIZED, failure.message)
         } catch (failure: Throwable) {
             Log.w(TAG, "bridge_call_failed target=$target", failure)
             null

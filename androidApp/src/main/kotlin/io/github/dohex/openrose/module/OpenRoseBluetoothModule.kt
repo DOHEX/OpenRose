@@ -3,15 +3,17 @@ package io.github.dohex.openrose.module
 import android.app.Application
 import android.content.Context
 import android.os.Bundle
+import android.os.SystemClock
 import android.util.Log
 import io.github.dohex.openrose.androidintegration.SystemHeadsetMapping
-import io.github.dohex.openrose.bridge.BridgePresentationWire
+import io.github.dohex.openrose.androidintegration.wire.BridgePresentationWire
+import io.github.dohex.openrose.androidintegration.wire.BridgeWire
+import io.github.dohex.openrose.androidintegration.wire.NativeHeadsetSnapshot
 import io.github.dohex.openrose.bridge.BridgeTarget
-import io.github.dohex.openrose.bridge.BridgeWire
+import io.github.dohex.openrose.bridge.asWireMap
 import io.github.dohex.openrose.integration.AuthenticatedNativeHeadsetCallbacks
 import io.github.dohex.openrose.integration.MiLinkNativeHeadsetAdapter
 import io.github.dohex.openrose.integration.NativeHeadsetBinderAdapter
-import io.github.dohex.openrose.integration.NativeHeadsetSnapshot
 import io.github.dohex.openrose.presentation.OfficialConnectionPresenter
 import io.github.dohex.openrose.presentation.PresentationCallbacks
 import io.github.dohex.openrose.presentation.SystemPresentationRenderer
@@ -116,7 +118,8 @@ class OpenRoseBluetoothModule : XposedModule() {
     private fun installNativeAdapters(selected: BridgeTarget, loader: ClassLoader) {
         val callbacks = object : AuthenticatedNativeHeadsetCallbacks {
             override fun submitNoise(snapshot: NativeHeadsetSnapshot, mode: String): Boolean {
-                if (retired || !snapshot.isFresh() || !snapshot.supportsNoise(mode) || nativeSnapshot?.reference != snapshot.reference) return false
+                val usable = snapshot.isFresh(SystemClock.elapsedRealtime()) && snapshot.supportsNoise(mode)
+                if (retired || !usable || nativeSnapshot?.reference != snapshot.reference) return false
                 val connectedClient = client ?: return false
                 val frame = latestFrame ?: return false
                 return runCatching {
@@ -208,7 +211,7 @@ class OpenRoseBluetoothModule : XposedModule() {
         if (retired) return
         val connected = client ?: return
         val context = targetContext ?: return
-        val native = NativeHeadsetSnapshot.fromBundle(snapshot)
+        val native = NativeHeadsetSnapshot.fromWire(snapshot.asWireMap())
         nativeSnapshot = native
         latestFrame = Bundle(snapshot)
         binderAdapter?.publish(native)

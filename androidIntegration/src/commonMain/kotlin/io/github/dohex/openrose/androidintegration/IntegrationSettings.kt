@@ -88,6 +88,11 @@ data class HostSettings(
 )
 
 object HostSettingsCodec {
+    /** The preference entries a codec can read: raw preferences also hold other types, which are not settings. */
+    fun stringEntries(values: Map<String, Any?>): Map<String, String> = values.mapNotNull { (key, value) ->
+        (value as? String)?.let { key to it }
+    }.toMap()
+
     fun encode(settings: HostSettings): Map<String, String> = UserSettingsCodec.encode(settings.control) + IntegrationSettingsCodec.encode(settings.integration)
 
     fun decode(values: Map<String, String>): HostSettings = HostSettings(UserSettingsCodec.decode(values), IntegrationSettingsCodec.decode(values))

@@ -18,8 +18,8 @@ import io.github.dohex.openrose.androidintegration.HostFacts
 import io.github.dohex.openrose.androidintegration.HostSettings
 import io.github.dohex.openrose.androidintegration.HostSettingsCodec
 import io.github.dohex.openrose.androidintegration.ModuleControlHost
+import io.github.dohex.openrose.androidintegration.wire.BridgeWire
 import io.github.dohex.openrose.bridge.AndroidCallerAuthority
-import io.github.dohex.openrose.bridge.BridgeWire
 import io.github.dohex.openrose.bridge.HostEndpoint
 import io.github.dohex.openrose.core.LocalControlRuntime
 import io.github.dohex.openrose.readPlatformState
@@ -219,8 +219,6 @@ internal class ModuleHostRuntime(
 }
 
 internal fun readHostSettings(prefs: SharedPreferences?): HostSettings {
-    val values = runCatching { prefs?.all }.getOrNull().orEmpty().mapNotNull { (key, value) ->
-        (value as? String)?.let { key to it }
-    }.toMap()
+    val values = HostSettingsCodec.stringEntries(runCatching { prefs?.all }.getOrNull().orEmpty())
     return HostSettingsCodec.decode(values)
 }

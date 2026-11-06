@@ -5,6 +5,7 @@ import io.github.dohex.openrose.androidintegration.HostSettings
 import io.github.dohex.openrose.androidintegration.ModuleAvailability
 import io.github.dohex.openrose.androidintegration.ModuleUnavailableCause
 import io.github.dohex.openrose.androidintegration.SystemBridgeDiagnostics
+import io.github.dohex.openrose.androidintegration.wire.BridgeWire
 import io.github.libxposed.service.XposedService
 import io.github.libxposed.service.XposedServiceHelper
 

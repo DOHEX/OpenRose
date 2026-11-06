@@ -1,22 +1,27 @@
-package io.github.dohex.openrose
+package io.github.dohex.openrose.androidintegration.scope
 
-import io.github.dohex.openrose.ui.ScopeRestartPhase
-import io.github.dohex.openrose.ui.ScopeRestartResult
-import io.github.dohex.openrose.ui.ScopeRestartStatus
-import io.github.dohex.openrose.ui.ScopeRestartUpdate
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withContext
-import java.io.IOException
+
+/** Outcome of one Root shell run: its exit code and every line it printed. */
+data class RootResult(val exitCode: Int, val output: String)
+
+/**
+ * Thrown by a Root runner that could not start the shell at all (no `su`, or the launch was refused). The platform
+ * adapter maps its own I/O and security failures to this type, because those exceptions are not common code.
+ */
+class RootLaunchException(message: String, cause: Throwable? = null) : Exception(message, cause)
 
 /**
  * Runs one Root shell for the chosen scopes, so authorization is requested only after the user confirms.
  * All chosen scopes are signalled together and share one wait of [waitSeconds]; `onUpdate` receives the
  * phase once Root is granted and each second of the wait, and each result the moment its line arrives.
+ * [runRoot] executes the script as Root, forwarding each output line to `onLine` as it arrives.
  */
-internal class IntegrationScopeRestarter(
+class IntegrationScopeRestarter(
     private val waitSeconds: Int = 8,
-    private val runRoot: (script: String, onLine: (String) -> Unit) -> RootResult = ::runRootShell,
+    private val runRoot: (script: String, onLine: (String) -> Unit) -> RootResult,
 ) {
     suspend fun restart(
         requested: List<String> = TARGETS,
@@ -36,13 +41,16 @@ internal class IntegrationScopeRestarter(
                         line.startsWith(WAITING_PREFIX) ->
                             line.removePrefix(WAITING_PREFIX).toIntOrNull()?.let { onUpdate(ScopeRestartPhase.Waiting(it)) }
 
-                        else -> parseResult(line, targets)?.let { if (reported.putIfAbsent(it.target, it) == null) onUpdate(it) }
+                        else -> parseResult(line, targets)?.let {
+                            if (it.target !in reported) {
+                                reported[it.target] = it
+                                onUpdate(it)
+                            }
+                        }
                     }
                 }
-            } catch (error: IOException) {
-                return@withContext failed("无法启动 Root：${error.message ?: "su 不可用"}")
-            } catch (error: SecurityException) {
-                return@withContext failed("无法启动 Root：${error.message ?: "权限被拒绝"}")
+            } catch (error: RootLaunchException) {
+                return@withContext failed("无法启动 Root：${error.message}")
             }
             if (!response.output.lineSequence().any { it == ROOT_OK }) {
                 val reason = response.output.trim().take(500).ifEmpty { "Root 不可用或授权被拒绝" }
@@ -63,20 +71,6 @@ internal class IntegrationScopeRestarter(
     private companion object {
         val restartMutex = Mutex()
     }
-}
-
-internal data class RootResult(val exitCode: Int, val output: String)
-
-private fun runRootShell(script: String, onLine: (String) -> Unit): RootResult {
-    val process = ProcessBuilder("su", "-c", script).redirectErrorStream(true).start()
-    val output = StringBuilder()
-    process.inputStream.bufferedReader().use { reader ->
-        reader.forEachLine { line ->
-            output.appendLine(line)
-            onLine(line)
-        }
-    }
-    return RootResult(process.waitFor(), output.toString())
 }
 
 private const val ROOT_OK = "OPENROSE_ROOT_OK"

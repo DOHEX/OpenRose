@@ -26,9 +26,7 @@ internal class AndroidSettingsStore(private val preferences: () -> SharedPrefere
         save(UiSettingsCodec.encode(settings), commit = false)
     }
 
-    private fun values(): Map<String, String> = preferences().all.mapNotNull { (key, value) ->
-        (value as? String)?.let { key to it }
-    }.toMap()
+    private fun values(): Map<String, String> = HostSettingsCodec.stringEntries(preferences().all)
 
     private fun save(values: Map<String, String>, commit: Boolean): Boolean {
         val editor = preferences().edit()

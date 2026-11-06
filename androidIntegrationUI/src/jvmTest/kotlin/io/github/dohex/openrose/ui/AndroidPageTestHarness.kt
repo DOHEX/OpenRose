@@ -13,6 +13,8 @@ import androidx.compose.ui.Modifier
 import io.github.dohex.openrose.androidintegration.ControlWay
 import io.github.dohex.openrose.androidintegration.IntegrationSettings
 import io.github.dohex.openrose.androidintegration.IntegrationState
+import io.github.dohex.openrose.androidintegration.scope.ScopeRestartResult
+import io.github.dohex.openrose.androidintegration.scope.ScopeRestartUpdate
 import io.github.dohex.openrose.androidintegration.ui.AndroidPlatformUi
 import io.github.dohex.openrose.core.ControlState
 import kotlinx.coroutines.CoroutineScope

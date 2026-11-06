@@ -3,9 +3,13 @@
   <ManuallySuppressedIssues/>
   <CurrentIssues>
     <ID>ComplexCondition:ModuleControlClient.kt:ModuleControlClient$end != null &amp;&amp; end.processDied &amp;&amp; (named == null || named.incarnation == connection.incarnation)</ID>
+    <ID>CyclomaticComplexMethod:HyperOsBuildClassifier.kt:fun classifyHyperOsBuild: PlatformApplicability</ID>
+    <ID>CyclomaticComplexMethod:NativeHeadsetSnapshot.kt:NativeHeadsetSnapshot.Companion$private fun parseReading: FieldReading?</ID>
+    <ID>CyclomaticComplexMethod:NativeHeadsetSnapshot.kt:NativeHeadsetSnapshot.Companion$private fun parseWire: NativeHeadsetSnapshot?</ID>
     <ID>CyclomaticComplexMethod:SwitchingControlRuntime.kt:SwitchingControlRuntime$private fun ownerState: OwnerState</ID>
     <ID>CyclomaticComplexMethod:SwitchingControlRuntime.kt:SwitchingControlRuntime$private suspend fun switchTo: HandoffOutcome</ID>
     <ID>CyclomaticComplexMethod:Wire.kt:WireParser$private fun string: String</ID>
+    <ID>LongMethod:BridgeSnapshotCodec.kt:fun DeviceState.toBridgeSnapshot: Map&lt;String, Any?&gt;</ID>
     <ID>MaxLineLength:BackgroundControl.kt:fun</ID>
     <ID>MaxLineLength:BackgroundControlTest.kt:BackgroundControlTest$assertFalse(IntegrationSettingsCodec.decode(mapOf("androidIntegration.background_control_enabled" to "yes")).backgroundControlEnabled)</ID>
     <ID>MaxLineLength:BackgroundControlTest.kt:BackgroundControlTest$private</ID>
@@ -31,6 +35,12 @@
     <ID>MaxLineLength:HostWire.kt:HostWire$is HostCallResult.Rejected -&gt; obj("t" to str("rejected"), "rejection" to Wire.Str(result.rejection.name), "message" to str(result.message))</ID>
     <ID>MaxLineLength:HostWire.kt:HostWire$is HostCommand.ClaimPrompt -&gt; obj("t" to str("claim"), "reference" to ControlWire.encode(command.reference), "prompt" to str(command.promptId))</ID>
     <ID>MaxLineLength:HostWire.kt:HostWire$is HostOpenResult.Refused -&gt; obj("t" to str("refused"), "rejection" to Wire.Str(result.rejection.name), "message" to str(result.message))</ID>
+    <ID>MaxLineLength:IntegrationScopeRestarterProcessTest.kt:IntegrationScopeRestarterProcessTest$assertEquals(listOf(ScopeRestartStatus.FAILED, ScopeRestartStatus.RESTARTED, ScopeRestartStatus.NOT_RUNNING), results.map { it.status })</ID>
+    <ID>MaxLineLength:IntegrationScopeRestarterProcessTest.kt:IntegrationScopeRestarterProcessTest$assertEquals(listOf(ScopeRestartStatus.RESTARTED, ScopeRestartStatus.TERMINATED, ScopeRestartStatus.NOT_RUNNING), results.map { it.status })</ID>
+    <ID>MaxLineLength:IntegrationScopeRestarterProcessTest.kt:IntegrationScopeRestarterProcessTest$assertTrue(reported.indexOfFirst { it is ScopeRestartPhase.Waiting } &lt; reported.indexOfFirst { it is ScopeRestartResult &amp;&amp; it.target == "com.xiaomi.bluetooth" })</ID>
+    <ID>MaxLineLength:IntegrationScopeRestarterProcessTest.kt:IntegrationScopeRestarterProcessTest$private</ID>
+    <ID>MaxLineLength:IntegrationScopeRestarterProcessTest.kt:IntegrationScopeRestarterProcessTest$val process = ProcessBuilder("bash", "-c", "echo \$\$ &gt; \"\$2\"; exec -a \"\$1\" sleep 60", "fixture", name, pidFile.toString()).start()</ID>
+    <ID>MaxLineLength:IntegrationScopeRestarterProcessTest.kt:IntegrationScopeRestarterProcessTest$val results = stubbedRestarter(signals, "FAIL_PID" to bluetooth, "RESPAWN_PID" to xiaomi, "RESPAWN_NAME" to "com.xiaomi.bluetooth:service").restart()</ID>
     <ID>MaxLineLength:IntegrationSettings.kt:HostSettingsCodec$fun decode: HostSettings</ID>
     <ID>MaxLineLength:IntegrationSettings.kt:HostSettingsCodec$fun encode: Map&lt;String, String&gt;</ID>
     <ID>MaxLineLength:IntegrationSettings.kt:IntegrationSettingsCodec$backgroundControlEnabled = values["androidIntegration.background_control_enabled"]?.toBooleanStrictOrNull() ?: defaults.backgroundControlEnabled</ID>
@@ -55,6 +65,7 @@
     <ID>MaxLineLength:ModuleHostPresentationTest.kt:ModuleHostPresentationTest.Rig$assertIs&lt;HostCallResult.Operation&gt;(execute(app, HostCommand.UpdateSettings(HostSettings(view.state.settings, change(view.settings)))))</ID>
     <ID>MaxLineLength:ModuleHostPresentationTest.kt:ModuleHostPresentationTest.Rig$suspend fun claim</ID>
     <ID>MaxLineLength:ModuleHostPresentationTest.kt:ModuleHostPresentationTest.Rig$suspend fun execute</ID>
+    <ID>MaxLineLength:NativeHeadsetSnapshot.kt:NativeHeadsetSnapshot$fun</ID>
     <ID>MaxLineLength:OrdinaryRecoveryTest.kt:OrdinaryRecoveryTest$integration = IntegrationState(settings = settings, platform = IntegrationPlatformState(backgroundService = BackgroundServiceFacts(wake = wake)))</ID>
     <ID>MaxLineLength:OrdinaryRecoveryTest.kt:OrdinaryRecoveryTest$runtime.report(androidPlatform(), WakeFacts(WakeBand.ANDROID_14_PLUS, CompanionAssociation.MISSING, PresenceObservation.NOT_OBSERVING))</ID>
     <ID>MaxLineLength:OrdinaryRecoveryTest.kt:OrdinaryRecoveryTest$runtime.report(androidPlatform(), WakeFacts(WakeBand.ANDROID_8_11, CompanionAssociation.NOT_REQUIRED, PresenceObservation.NOT_REQUIRED))</ID>
@@ -99,6 +110,8 @@
     <ID>ReturnCount:BackgroundControl.kt:fun IntegrationState.backgroundRecovery: BackgroundRecovery</ID>
     <ID>ReturnCount:FusionEntry.kt:FusionEntry$fun normalizeAddress: String?</ID>
     <ID>ReturnCount:FusionEntry.kt:FusionEntry$fun resolve: FusionEntryDecision</ID>
+    <ID>ReturnCount:HyperOsBuildClassifier.kt:fun classifyHyperOsBuild: PlatformApplicability</ID>
+    <ID>ReturnCount:IntegrationScopeRestarter.kt:private fun parseResult: ScopeRestartResult?</ID>
     <ID>ReturnCount:ModuleControlClient.kt:ModuleControlClient$suspend fun execute: HostCallResult</ID>
     <ID>ReturnCount:ModuleControlHost.kt:ModuleControlHost$fun open: HostOpenResult</ID>
     <ID>ReturnCount:ModuleControlHost.kt:ModuleControlHost$fun view: OwnerView?</ID>
@@ -107,6 +120,8 @@
     <ID>ReturnCount:ModuleControlHost.kt:ModuleControlHost$suspend fun acquire: AcquireResult</ID>
     <ID>ReturnCount:ModuleControlHost.kt:ModuleControlHost$suspend fun execute: HostCallResult</ID>
     <ID>ReturnCount:ModuleControlHost.kt:ModuleControlHost$suspend fun release: ReleaseResult</ID>
+    <ID>ReturnCount:NativeHeadsetSnapshot.kt:NativeHeadsetSnapshot.Companion$private fun parseReading: FieldReading?</ID>
+    <ID>ReturnCount:NativeHeadsetSnapshot.kt:NativeHeadsetSnapshot.Companion$private fun parseWire: NativeHeadsetSnapshot?</ID>
     <ID>ReturnCount:SwitchingControlRuntime.kt:SwitchingControlRuntime$override suspend fun set: OperationResult</ID>
     <ID>ReturnCount:SwitchingControlRuntime.kt:SwitchingControlRuntime$private fun adoptObservedOwner</ID>
     <ID>ReturnCount:SwitchingControlRuntime.kt:SwitchingControlRuntime$private suspend fun switchTo: HandoffOutcome</ID>
