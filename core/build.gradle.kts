@@ -14,16 +14,7 @@ kotlin {
             implementation(kotlin("test"))
             implementation(libs.coroutines.test)
         }
-        // Reads docs/protocols research JSON to check the codecs against it.
-        jvmTest.dependencies {
-            implementation(libs.serialization.json)
-        }
     }
-}
-tasks.named<Test>("jvmTest") {
-    val protocolDocs = layout.projectDirectory.dir("../docs/protocols")
-    inputs.dir(protocolDocs).withPathSensitivity(PathSensitivity.RELATIVE).withPropertyName("protocolDocs")
-    systemProperty("openrose.protocolDocs", protocolDocs.asFile.path)
 }
 // The shared control layer is the most tested code; keep it there (94.4% of lines when set).
 kover {

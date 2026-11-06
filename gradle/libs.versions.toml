@@ -21,7 +21,6 @@ robolectric = "4.17"
 bluez-dbus = "0.3.5"
 dbus-java = "5.2.0"
 slf4j = "2.0.18"
-serialization-json = "1.12.0"
 # Code quality: detekt 2.x embeds Kotlin 2.4, which the 1.23 line cannot parse.
 detekt = "2.0.0-alpha.6"
 spotless = "8.11.0"
@@ -55,7 +54,6 @@ bluez-dbus = { module = "com.github.hypfvieh:bluez-dbus", version.ref = "bluez-d
 dbus-java-native-unixsocket = { module = "com.github.hypfvieh:dbus-java-transport-native-unixsocket", version.ref = "dbus-java" }
 dbus-java-core = { module = "com.github.hypfvieh:dbus-java-core", version.ref = "dbus-java" }
 slf4j-simple = { module = "org.slf4j:slf4j-simple", version.ref = "slf4j" }
-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "serialization-json" }
 
 [plugins]
 kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
