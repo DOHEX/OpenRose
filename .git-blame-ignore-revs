@@ -1,0 +1,4 @@
+# Formatting-only commits; GitHub blame skips these automatically.
+# Locally: git config blame.ignoreRevsFile .git-blame-ignore-revs
+# style: format Kotlin sources with ktlint
+3915b9806fe26142e18c1862734727614f3b4140
