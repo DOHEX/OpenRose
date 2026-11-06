@@ -13,6 +13,8 @@ dependencies {
     implementation(libs.composenativetray.app)
     implementation(libs.dbus.java.core)
     runtimeOnly(libs.dbus.java.native.unixsocket)
+    // dbus-java logs through slf4j-api only; simplelogger.properties keeps its warnings and errors on stderr.
+    runtimeOnly(libs.slf4j.simple)
     testImplementation(kotlin("test-junit"))
     testImplementation(libs.coroutines.test)
 }
