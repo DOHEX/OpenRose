@@ -19,7 +19,7 @@ nucleus = "2.5.18"
 composenativetray = "2.1.7"
 robolectric = "4.17"
 bluez-dbus = "0.3.5"
-dbus-java = "5.2.0"
+dbus-java = "5.2.2"
 slf4j = "2.0.18"
 # Code quality: detekt 2.x embeds Kotlin 2.4, which the 1.23 line cannot parse.
 detekt = "2.0.0-alpha.6"
