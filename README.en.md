@@ -181,19 +181,19 @@ Run the desktop app:
 ./gradlew :desktopApp:run
 ```
 
-Run the tests that need no earphone hardware (protocol, control session, BlueZ drivers and event mapping with fake D-Bus objects, shared UI, and Android / desktop preference persistence tests, plus compilation for both platforms):
+Run the checks that need no earphone hardware (protocol, control session, BlueZ drivers and event mapping with fake D-Bus objects, shared UI, and Android / desktop preference persistence tests, compilation for both platforms, plus formatting, static analysis, Android Lint, coverage floors and the check that the Chinese and English READMEs keep the same structure):
 
 ```bash
 ./gradlew offlineCheck
 ```
 
-Run the full check, which also includes Android Lint:
+Run the full check that CI runs:
 
 ```bash
 ./gradlew check offlineCheck
 ```
 
-`offlineCheck` still needs the Android SDK. Once dependencies are downloaded, add `--offline` to run without network access.
+`offlineCheck` still needs the Android SDK. Once dependencies are downloaded, add `--offline` to run without network access. If formatting fails, run `./gradlew spotlessApply`; [CONTRIBUTING.md](CONTRIBUTING.md) (Chinese) explains each check.
 
 UI tests run on a virtual clock, with test classes in parallel (half the available cores as forks). Whole-app rendering covers navigation, cross-page flows, style-switch continuity, and main-tab swipes. Other tests render pages or sections with a fake presentation model in both component styles; Android-specific sections are tested in `androidIntegrationUI/`.
 
@@ -203,7 +203,7 @@ Package the desktop app. Linux produces DEB, RPM, Pacman and AppImage (x64) and 
 ./gradlew :desktopApp:packageDistributionForCurrentOS
 ```
 
-CI runs the tests on Linux only. Linux publishes the Android APK and the four Linux packages, Windows the MSI, kept for 14 days. Pushing a `vX.Y.Z` tag creates a draft release with a signed APK.
+CI runs the tests on Linux only. Linux publishes the Android APK and the four Linux packages, Windows the MSI, kept for 14 days. Releases go through release-please: merging the release PR it opens from the commit history tags `vX.Y.Z` and creates a draft release with the signed APK and the installers for each platform.
 
 ## Project layout
 
@@ -216,7 +216,8 @@ CI runs the tests on Linux only. Linux publishes the Android APK and the four Li
 | `androidApp/` | Android entry point, primitive GATT driver and SPP transport, audio profile proxies and broadcasts, libxposed module, and HyperOS system bridge |
 | `transportBluez/` | Linux BlueZ D-Bus GATT primitives, scanning, paired devices, and audio facts; reuses shared GATT and audio inference |
 | `desktopApp/` | Windows / Linux desktop entry point, windows, and preferences |
-| `build-logic/` | Gradle convention plugins shared by the modules: toolchain, JVM bytecode target, Android and desktop packaging setup |
+| `build-logic/` | Gradle convention plugins shared by the modules: toolchain, JVM bytecode target, Android and desktop packaging setup, static analysis and coverage, and the README structure check |
+| `config/` | detekt rules and each module's baseline of existing findings |
 | `docs/` | Protocol research & model specifications (`docs/protocols/`), implementation evidence (`docs/protocols.md`), architecture decisions, and specifications |
 
 Each layer owns its settings codec and shares the platform's key-value store: control keys use `core.`, appearance keys use `sharedUI.`, and Android integration keys use `androidIntegration.`. The module host receives only control and integration settings. Old unprefixed keys are ignored without migration; preferences must be selected again when using this version.
@@ -244,7 +245,11 @@ Report bugs and request features in [GitHub Issues](https://github.com/DOHEX/Ope
 - Steps to reproduce
 - For system integration problems, the Xposed framework version and the bridge status shown in diagnostics (reached from the Status page)
 
-Before contributing, read the [glossary](GLOSSARY.md) and [architecture decisions](docs/adr/). When adding a model or system integration, record the protocol evidence, offline test results, and hardware test results separately.
+Before contributing, read [CONTRIBUTING.md](CONTRIBUTING.md) (Chinese), the [glossary](GLOSSARY.md) and the [architecture decisions](docs/adr/). When adding a model or system integration, record the protocol evidence, offline test results, and hardware test results separately.
+
+## License
+
+OpenRose is licensed under [GPL-3.0-or-later](LICENSE).
 
 ## Acknowledgements
 

@@ -181,19 +181,19 @@ cd OpenRose
 ./gradlew :desktopApp:run
 ```
 
-运行不依赖耳机硬件的测试（协议、控制会话、BlueZ 假 D-Bus 驱动与事件映射、共享界面、Android / 桌面偏好持久化测试，以及两端编译检查）：
+运行不依赖耳机硬件的检查（协议、控制会话、BlueZ 假 D-Bus 驱动与事件映射、共享界面、Android / 桌面偏好持久化测试，两端编译检查，以及格式、静态分析、Android Lint、覆盖率下限和中英文 README 结构一致性检查）：
 
 ```bash
 ./gradlew offlineCheck
 ```
 
-完整检查，额外包含 Android Lint：
+CI 运行的完整检查：
 
 ```bash
 ./gradlew check offlineCheck
 ```
 
-`offlineCheck` 仍然需要 Android SDK。依赖下载完后，可以加 `--offline` 离线运行。
+`offlineCheck` 仍然需要 Android SDK。依赖下载完后，可以加 `--offline` 离线运行。格式不符时运行 `./gradlew spotlessApply`；各项检查的说明见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
 界面测试跑在虚拟时钟上，按测试类并行（分叉数为可用核数的一半）。导航、跨页流程、风格切换连续性和主页面滑动在整应用级验证，其余在页面或段落级配假表现层模型覆盖两种界面风格；Android 专属段落的测试位于 `androidIntegrationUI/`。
 
@@ -203,7 +203,7 @@ cd OpenRose
 ./gradlew :desktopApp:packageDistributionForCurrentOS
 ```
 
-CI 只在 Linux 上运行测试；Linux 产出 Android APK 与上述 4 种 Linux 包，Windows 产出 MSI，保留 14 天。推送 `vX.Y.Z` 标签会生成签名的正式版草稿 Release。
+CI 只在 Linux 上运行测试；Linux 产出 Android APK 与上述 4 种 Linux 包，Windows 产出 MSI，保留 14 天。发布由 release-please 完成：合并它根据提交记录开出的发布 PR 后，会打上 `vX.Y.Z` 标签，并生成附带签名 APK 和各平台安装包的草稿 Release。
 
 ## 项目结构
 
@@ -216,7 +216,8 @@ CI 只在 Linux 上运行测试；Linux 产出 Android APK 与上述 4 种 Linux
 | `androidApp/` | Android 入口、GATT 原语驱动与 SPP 传输、音频协议代理与广播、libxposed 模块与 HyperOS 系统桥接 |
 | `transportBluez/` | Linux BlueZ D-Bus GATT 原语、扫描、配对设备与音频事实；复用共享 GATT 与音频推断 |
 | `desktopApp/` | Windows / Linux 桌面入口、窗口与偏好设置 |
-| `build-logic/` | 各模块共用的 Gradle 约定插件：工具链、JVM 字节码目标、Android 与桌面打包配置 |
+| `build-logic/` | 各模块共用的 Gradle 约定插件：工具链、JVM 字节码目标、Android 与桌面打包配置、静态分析与覆盖率、README 结构检查 |
+| `config/` | detekt 规则与各模块的既有问题基线 |
 | `docs/` | 协议研究与型号规范（`docs/protocols/`）、工程实现证据（`docs/protocols.md`）、架构决策与规范 |
 
 用户设置由归属层分别编解码，共用各平台的键值存储：控制设置用 `core.` 前缀，外观设置用 `sharedUI.`，Android 集成设置用 `androidIntegration.`。模块宿主只接收控制和集成设置。旧的无前缀键不再读取，不做迁移；使用新版本时需重新选择偏好。
@@ -242,7 +243,11 @@ CI 只在 Linux 上运行测试；Linux 产出 Android APK 与上述 4 种 Linux
 - 复现步骤
 - 涉及系统集成时，还请附上 Xposed 框架版本和“状态”页进入诊断后显示的桥接状态
 
-参与开发前建议先读[术语表](GLOSSARY.md)和[架构决策记录](docs/adr/)。新增型号或系统适配时，请分别记录协议依据、离线测试结果和真机测试结果。
+参与开发前请先读 [CONTRIBUTING.md](CONTRIBUTING.md)，以及[术语表](GLOSSARY.md)和[架构决策记录](docs/adr/)。新增型号或系统适配时，请分别记录协议依据、离线测试结果和真机测试结果。
+
+## 许可
+
+OpenRose 以 [GPL-3.0-or-later](LICENSE) 授权。
 
 ## 致谢
 

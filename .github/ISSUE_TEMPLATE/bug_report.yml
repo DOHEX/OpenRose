@@ -1,0 +1,124 @@
+name: 问题反馈 / Bug report
+description: 报告 OpenRose 的缺陷或耳机控制异常 / Report a bug or an earphone control problem
+title: "[Bug] "
+labels: ["needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢反馈。请尽量填写下面的信息，设备相关的问题尤其需要型号、平台和版本。中文或英文均可。
+        Thanks for reporting. Please fill in as much as you can; device problems especially need the model, platform and versions. Chinese or English is fine.
+
+        提交前请先阅读 [README](https://github.com/DOHEX/OpenRose#支持的耳机) 中的“支持的耳机”与“平台支持”，确认该型号和平台已实现，并搜索已有 Issue。
+  - type: dropdown
+    id: model
+    attributes:
+      label: 耳机型号 / Earphone model
+      description: OpenRose 目前只实现了 i5 和 i7 两种型号配置。其他型号请选“其他”并在复现步骤中说明。
+      options:
+        - EarFree i5（EarFeel i5）
+        - EarFeel i7
+        - 其他 / 不涉及耳机 (Other / not device related)
+    validations:
+      required: true
+  - type: input
+    id: firmware
+    attributes:
+      label: 耳机固件版本 / Earphone firmware version
+      description: 已知时填写（OpenRose 可在应用内查看固件版本）。不知道可留空。
+      placeholder: 例如 1.2.3
+  - type: dropdown
+    id: platform
+    attributes:
+      label: 平台 / Platform
+      options:
+        - Android
+        - Linux 桌面 (Linux desktop)
+        - Windows 桌面 (Windows desktop)
+    validations:
+      required: true
+  - type: input
+    id: openrose-version
+    attributes:
+      label: OpenRose 版本 / OpenRose version
+      description: Release 版本号，或开发版对应的提交 / CI 构建。
+      placeholder: 例如 v0.1.0，或 commit 哈希
+    validations:
+      required: true
+  - type: textarea
+    id: android-env
+    attributes:
+      label: Android 环境 / Android environment
+      description: |
+        仅 Android 填写。
+        - 手机型号、系统 / ROM 及版本（HyperOS 请写完整版本号）、Android 版本
+        - Xposed 框架及版本（例如 LSPosed），是否启用了 OpenRose 模块
+        - 控制方式：普通控制 / 模块控制（“设置”页）
+        - 是否开启后台控制
+      placeholder: |
+        手机 / 系统：
+        Android 版本：
+        Xposed 框架及版本：
+        控制方式：
+        后台控制：
+  - type: textarea
+    id: linux-env
+    attributes:
+      label: Linux 桌面环境 / Linux desktop environment
+      description: |
+        仅 Linux 填写。
+        - 发行版、桌面环境及合成器（GNOME / KDE / niri / Hyprland / Sway 等），X11 或 Wayland
+        - BlueZ 版本（`bluetoothctl --version`）
+        - 安装方式（DEB / RPM / Pacman / AppImage / 源码运行）
+        - 蓝牙适配器型号；托盘是否可用
+      placeholder: |
+        发行版：
+        桌面 / 合成器：
+        BlueZ 版本：
+        安装方式：
+        适配器：
+  - type: textarea
+    id: windows-env
+    attributes:
+      label: Windows 环境 / Windows environment
+      description: 仅 Windows 填写。Windows 版目前只有界面，蓝牙控制尚未实现；请注明系统版本和安装方式（MSI / 源码运行）。
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤 / Steps to reproduce
+      placeholder: |
+        1. 
+        2. 
+        3. 
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期望行为 / Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: 实际行为 / Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: 日志与诊断信息 / Logs and diagnostics
+      description: |
+        涉及系统集成（Android 模块、超级岛、融合设备中心）时，请附上“状态”页进入诊断后显示的桥接状态。
+        其他情况请附上相关日志（Android 的 logcat，或桌面版从终端启动时的 stderr 输出）。可直接拖入截图或文件。
+        请先检查并去除其中的个人信息（如蓝牙地址）。
+      render: text
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: 提交前确认 / Before submitting
+      options:
+        - label: 我已搜索过现有 Issue，没有找到重复
+          required: true
+        - label: 我已阅读 README 中的“支持的耳机”与“平台支持”
+          required: true
