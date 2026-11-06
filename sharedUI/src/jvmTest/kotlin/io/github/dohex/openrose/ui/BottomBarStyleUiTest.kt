@@ -24,7 +24,7 @@ class BottomBarStyleUiTest {
     @Test
     fun bottomBarStyleChoiceRowRendersUnderDisplayModeAndUpdatesSettings() {
         for (style in InterfaceStyle.entries) {
-            withPreferencesHarness(
+            withPersonalizationHarness(
                 ControlState(
                     platform = PlatformState(permission = PermissionState.GRANTED),
                 ),
@@ -32,8 +32,8 @@ class BottomBarStyleUiTest {
             ) { harness ->
                 harness.render()
 
-                assertTrue(harness.hasText("显示模式"), "Settings page must render display mode section for $style")
-                assertTrue(harness.hasText("底栏样式"), "Settings page must render bottom bar style choice row for $style")
+                assertTrue(harness.hasText("显示模式"), "Personalization page must render display mode section for $style")
+                assertTrue(harness.hasText("底栏样式"), "Personalization page must render bottom bar style choice row for $style")
                 assertTrue(harness.hasText("标准固定"), "Default bottom bar style label must be visible for $style")
 
                 harness.clickText("底栏样式")
@@ -64,6 +64,7 @@ class BottomBarStyleUiTest {
             harness.render()
             harness.clickTab("设置")
             harness.render()
+            harness.openPersonalization()
             assertTrue(harness.hasText("悬浮胶囊"))
 
             harness.clickText("组件风格")
@@ -73,7 +74,7 @@ class BottomBarStyleUiTest {
             assertEquals(InterfaceStyle.MATERIAL3, harness.uiSettings.value.interfaceStyle)
             assertEquals(BottomBarStyle.FLOATING, harness.uiSettings.value.bottomBarStyle)
             assertTrue(harness.hasText("悬浮胶囊"))
-            assertTrue(harness.hasText("组件风格"), "Settings page must remain active after style switch")
+            assertTrue(harness.hasText("组件风格"), "Personalization page must remain active after style switch")
 
             harness.clickText("组件风格")
             harness.render()
@@ -99,7 +100,7 @@ class BottomBarStyleUiTest {
 
                 harness.clickTab("设置")
                 harness.render()
-                assertTrue(harness.hasText("组件风格"), "Settings page active after clicking 设置 tab in $style")
+                assertTrue(harness.hasText("个性化"), "Settings page active after clicking 设置 tab in $style")
             }
         }
     }
@@ -117,7 +118,7 @@ class BottomBarStyleUiTest {
 
                 harness.clickContentDescription("设置")
                 harness.render()
-                assertTrue(harness.hasText("组件风格"), "Settings page active after clicking 设置 floating tab in $style")
+                assertTrue(harness.hasText("个性化"), "Settings page active after clicking 设置 floating tab in $style")
                 val updated = harness.tabs()
                 assertEquals(false, updated.tabFor("耳机").config.getOrNull(SemanticsProperties.Selected))
                 assertEquals(true, updated.tabFor("设置").config.getOrNull(SemanticsProperties.Selected))
@@ -190,7 +191,17 @@ class BottomBarStyleUiTest {
 
                     harness.clickText("设置", expectedRole = Role.Tab)
                     harness.render()
-                    assertTrue(harness.hasText("组件风格"), "Settings page active in wide $style/$bottomBarStyle")
+                    harness.openPersonalization()
+                    assertTrue(harness.hasText("组件风格"), "Personalization page active in wide $style/$bottomBarStyle")
+                    assertFalse(harness.hasText("底栏样式"), "Bottom bar style has no effect beside the rail in $style/$bottomBarStyle")
+
+                    harness.resize(420, 900)
+                    harness.render()
+                    assertTrue(harness.hasText("组件风格"), "Narrowing the window keeps Personalization active in $style/$bottomBarStyle")
+                    assertTrue(harness.hasText("底栏样式"), "Bottom bar style returns with the bottom bar in $style/$bottomBarStyle")
+                    harness.clickContentDescription("返回")
+                    harness.render()
+                    assertTrue(harness.tabs().all { it.boundsInRoot.top > 700f }, "Narrow window shows the bottom bar in $style/$bottomBarStyle")
                 }
             }
         }

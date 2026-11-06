@@ -19,8 +19,10 @@ OpenRose 早期版本采用自建 `List<AppPage>` 状态模拟回退栈，在二
 - 引入 Compose Multiplatform 导航运行时 `top.yukonga.miuix.kmp:miuix-nav`。
 - 根级采用 `NavDisplay` 管理全屏路由栈，定义强类型序列化路由层次 `Route : NavKey`。
 - 根路由为 `Route.Main(tab: AppPage)`，承载常驻 Scaffold、TopAppBar 以及底部导航栏（宽屏为导航侧边栏 NavigationRail）。
-- 二级页面（`Route.Noise`, `Route.Equalizer`, `Route.Touch`, `Route.Audio`, `Route.Details`, `Route.Diagnostics`, `Route.AddDevice`）作为独立全屏路由推入，进入二级页面时自动隐藏底部导航栏，并配置 `swipeDismiss = NavSwipeDirection.LeftToRight` 支持原生边缘手势返回。
+- 二级页面（`Route.Noise`, `Route.Equalizer`, `Route.Touch`, `Route.Audio`, `Route.Details`, `Route.Diagnostics`, `Route.Personalization`, `Route.AddDevice`）作为独立全屏路由推入，进入二级页面时自动隐藏底部导航栏，并配置 `swipeDismiss = NavSwipeDirection.LeftToRight` 支持原生边缘手势返回。
 - 更新（Spec #55）：`Route.Equalizer` 已由耳机主页内联的均衡器下拉偏好行取代，不再作为二级路由。
+- 更新：设置页的界面风格、显示模式与动效偏好移入二级路由 `Route.Personalization`（个性化页），设置页顶部只保留进入它的入口。
+- 更新：宽屏时侧边栏由应用根部放在 `NavDisplay` 旁边（`Row`，两种界面风格相同），不属于任何路由，因此二级页面只占侧边栏右侧区域，转场时侧边栏保持不动，高亮来源主页面；添加耳机流程例外，进入时侧边栏横向收起、返回时展开，“关闭动效”时直接切换。
 - 底部 Tab（耳机、系统、设置）切换在 `Route.Main` 内部原地更新，不向 `NavDisplay` 堆叠多余栈条目；在非耳机 Tab（系统或设置）下触发系统返回操作时，优先回退到主耳机 Tab，在耳机主页返回时则退出应用。
 - 核心设置增加独立的「转场动效」（`PageTransition`：`MIUIX_SPRING`、`SLIDE`、`FADE`、`NONE`），使用户能自主定制页面过渡效果，且与界面风格完全解耦。
 

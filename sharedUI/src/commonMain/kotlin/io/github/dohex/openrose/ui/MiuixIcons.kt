@@ -13,6 +13,7 @@ import top.yukonga.miuix.kmp.icon.extended.Layers
 import top.yukonga.miuix.kmp.icon.extended.More
 import top.yukonga.miuix.kmp.icon.extended.Recent
 import top.yukonga.miuix.kmp.icon.extended.Settings
+import top.yukonga.miuix.kmp.icon.extended.Theme
 import top.yukonga.miuix.kmp.icon.extended.Tune
 import top.yukonga.miuix.kmp.icon.extended.VolumeUp
 
@@ -42,4 +43,5 @@ internal fun miuixIcon(icon: RoseIcon): ImageVector = when (icon) {
     RoseIcon.DEVICE -> materialIcon(icon)
     RoseIcon.CLOSE -> MiuixIcons.Basic.Close
     RoseIcon.GAME -> materialIcon(icon)
+    RoseIcon.PALETTE -> MiuixIcons.Theme
 }

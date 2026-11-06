@@ -1,5 +1,10 @@
 package io.github.dohex.openrose.ui
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.focusable
 import androidx.compose.ui.focus.FocusRequester
@@ -7,7 +12,9 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.unit.dp
@@ -26,6 +33,7 @@ internal enum class AppPage(val title: String, val icon: RoseIcon) {
     AUDIO("音频与设备", RoseIcon.AUDIO),
     DETAILS("设备详情", RoseIcon.INFO),
     DIAGNOSTICS("诊断与记录", RoseIcon.LOG),
+    PERSONALIZATION("个性化", RoseIcon.PALETTE),
 }
 
 
@@ -70,7 +78,7 @@ fun OpenRoseApp(
             while (navBackStack.size > 1) {
                 navBackStack.removeLastOrNull()
             }
-            mainTabsPagerState.selectPage(0, transition = PageTransition.NONE)
+            mainTabsPagerState.selectPage(0, animate = false)
             headphoneMenuExpanded = false
             choiceDialog.value = null
             selectedTouchSlot = null
@@ -86,7 +94,7 @@ fun OpenRoseApp(
             }
             val targetIndex = mainPages.indexOf(destination)
             if (targetIndex >= 0) {
-                mainTabsPagerState.selectPage(targetIndex, transition = uiSettings.pageTransition)
+                mainTabsPagerState.selectPage(targetIndex, animate = uiSettings.pageTransition != PageTransition.NONE)
             }
         } else {
             val target = destination.toRoute()
@@ -102,7 +110,7 @@ fun OpenRoseApp(
             choiceDialog.value != null -> choiceDialog.value = null
             navBackStack.size > 1 -> navBackStack.removeLastOrNull()
             mainTabsPagerState.selectedPage != 0 -> {
-                mainTabsPagerState.selectPage(0, transition = uiSettings.pageTransition)
+                mainTabsPagerState.selectPage(0, animate = uiSettings.pageTransition != PageTransition.NONE)
             }
         }
     }
@@ -167,7 +175,8 @@ fun OpenRoseApp(
                             platformUi = platformUi,
                             onDiagnostics = { navigate(AppPage.DIAGNOSTICS) },
                         )
-                        AppPage.SETTINGS -> PreferencesPage(model, platformUi)
+                        AppPage.SETTINGS -> PreferencesPage(model, platformUi, onPersonalization = { navigate(AppPage.PERSONALIZATION) })
+                        AppPage.PERSONALIZATION -> PersonalizationPage(model, wide = wide)
                         AppPage.DIAGNOSTICS -> {
                             PlatformDiagnosticsCard(model, platformUi)
                             ConnectionDetailsCard(state, onDisconnect)
@@ -217,27 +226,18 @@ fun OpenRoseApp(
                 }
                 val renderShell: @Composable (AppPage) -> Unit = { targetPage ->
                     ProvideInterfaceStyle(uiSettings.interfaceStyle, dark) {
-                        val parentTab = mainPages.getOrElse(mainTabsPagerState.selectedPage) { AppPage.HEADPHONES }
                         val shellContent: @Composable () -> Unit = { pageContentFor(targetPage) }
                         val shellFeedback: @Composable () -> Unit = { feedbackContentFor(targetPage) }
-                        val shellWide = wide && targetPage != AppPage.ADD_DEVICE
-
                         when (uiSettings.interfaceStyle) {
                             InterfaceStyle.MIUIX -> MiuixAppShell(
-                                parentTab = parentTab,
                                 page = targetPage,
-                                wide = shellWide,
-                                onNavigate = onNavigate,
                                 onBack = ::back,
                                 scrollState = scrollStates.getValue(targetPage),
                                 pageContent = shellContent,
                                 feedbackContent = shellFeedback,
                             )
                             InterfaceStyle.MATERIAL3 -> MaterialAppShell(
-                                parentTab = parentTab,
                                 page = targetPage,
-                                wide = shellWide,
-                                onNavigate = onNavigate,
                                 onBack = ::back,
                                 scrollState = scrollStates.getValue(targetPage),
                                 pageContent = shellContent,
@@ -249,7 +249,7 @@ fun OpenRoseApp(
                 val renderMainShell: @Composable () -> Unit = {
                     ProvideInterfaceStyle(uiSettings.interfaceStyle, dark) {
                         val isConnectedHome = state.activeDevice() != null
-                        val pageTransition = uiSettings.pageTransition
+                        val animatePageChanges = uiSettings.pageTransition != PageTransition.NONE
                         val onNavigate: (AppPage) -> Unit = { navigate(it) }
                         val platformActions: @Composable (AppPage) -> Unit = { actionPage ->
                             when (actionPage) {
@@ -273,7 +273,7 @@ fun OpenRoseApp(
                                 onMenuExpandedChange = { headphoneMenuExpanded = it },
                                 onDisconnect = onDisconnect,
                                 platformActions = platformActions,
-                                pageTransition = pageTransition,
+                                animatePageChanges = animatePageChanges,
                             )
                             InterfaceStyle.MATERIAL3 -> MaterialMainShell(
                                 pagerState = mainTabsPagerState,
@@ -288,8 +288,27 @@ fun OpenRoseApp(
                                 onMenuExpandedChange = { headphoneMenuExpanded = it },
                                 onDisconnect = onDisconnect,
                                 platformActions = platformActions,
-                                pageTransition = pageTransition,
+                                animatePageChanges = animatePageChanges,
                             )
+                        }
+                    }
+                }
+                val railTab = mainPages.getOrElse(mainTabsPagerState.selectedPage) { AppPage.HEADPHONES }
+                Row(Modifier.fillMaxSize()) {
+                if (wide) {
+                    // Beside the route stack, not inside it, so page transitions never carry the rail.
+                    // The add-device flow takes the full width, as on narrow screens.
+                    val railMotion = uiSettings.pageTransition != PageTransition.NONE
+                    AnimatedVisibility(
+                        visible = currentRoute !is Route.AddDevice,
+                        enter = if (railMotion) expandHorizontally(expandFrom = Alignment.Start) else EnterTransition.None,
+                        exit = if (railMotion) shrinkHorizontally(shrinkTowards = Alignment.Start) else ExitTransition.None,
+                    ) {
+                        ProvideInterfaceStyle(uiSettings.interfaceStyle, dark) {
+                            when (uiSettings.interfaceStyle) {
+                                InterfaceStyle.MIUIX -> MiuixNavigationRail(railTab, ::navigate)
+                                InterfaceStyle.MATERIAL3 -> MaterialNavigationRail(railTab, ::navigate)
+                            }
                         }
                     }
                 }
@@ -297,7 +316,8 @@ fun OpenRoseApp(
                     backStack = navBackStack,
                     transition = pageTransitionOf(uiSettings.pageTransition),
                     onBack = ::back,
-                    modifier = Modifier.fillMaxSize(),
+                    // Outgoing pages slide past the stack's edge; clipping keeps them off the rail.
+                    modifier = Modifier.weight(1f).fillMaxSize().clipToBounds(),
                 ) {
                     entry<Route.Main> {
                         Box(if (currentRoute is Route.Main) Modifier.fillMaxSize() else Modifier.fillMaxSize().clearAndSetSemantics { }) {
@@ -316,6 +336,9 @@ fun OpenRoseApp(
                     entry<Route.Diagnostics>(swipeDismiss = NavSwipeDirection.LeftToRight) {
                         renderShell(AppPage.DIAGNOSTICS)
                     }
+                    entry<Route.Personalization>(swipeDismiss = NavSwipeDirection.LeftToRight) {
+                        renderShell(AppPage.PERSONALIZATION)
+                    }
                     entry<Route.AddDevice>(swipeDismiss = NavSwipeDirection.LeftToRight) {
                         // Popped entries retain their registration while animating out.
                         if (latestRoute is Route.AddDevice || uiSettings.pageTransition != PageTransition.NONE) {
@@ -324,6 +347,7 @@ fun OpenRoseApp(
                             }
                         }
                     }
+                }
                 }
             }
         }

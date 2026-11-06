@@ -7,6 +7,7 @@ import kotlinx.collections.immutable.toPersistentList
 import kotlinx.collections.immutable.toPersistentSet
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.state.ToggleableState
@@ -62,7 +63,7 @@ class OpenRoseNavigationUiTest {
             harness.render()
             harness.clickTab("设置")
             harness.render()
-            assertTrue(harness.hasText("组件风格"))
+            assertTrue(harness.hasText("个性化"))
             assertTrue(harness.hasText("强制使用 BLE"))
             assertFalse(harness.hasText("运行状态与诊断"))
 
@@ -72,7 +73,89 @@ class OpenRoseNavigationUiTest {
 
             harness.clickTab("设置")
             harness.render()
-            assertTrue(harness.hasText("组件风格"))
+            assertTrue(harness.hasText("个性化"))
+        }
+    }
+
+    @Test
+    fun settingsOpensPersonalizationWhichSurvivesStyleSwitchesAndReturnsToSettings() {
+        for (style in InterfaceStyle.entries) {
+            for (width in listOf(420, 1200)) {
+                withHarness(width = width, height = 1000, initialState = state(connected = false), style = style) { harness ->
+                    val case = "$style width=$width"
+                    harness.render()
+                    harness.clickTab("设置")
+                    harness.render()
+                    assertTrue(harness.hasText("组件风格、明暗模式、背景模糊与转场动效"), "Settings shows the personalization entry in $case")
+                    assertFalse(harness.hasText("组件风格"), "Interface preferences are not on Settings in $case")
+
+                    harness.openPersonalization()
+                    assertTrue(harness.hasText("组件风格"), "Personalization holds the interface preferences in $case")
+                    assertFalse(harness.hasText("强制使用 BLE"), "Control preferences stay on Settings in $case")
+
+                    val next = if (style == InterfaceStyle.MIUIX) InterfaceStyle.MATERIAL3 else InterfaceStyle.MIUIX
+                    harness.clickText("组件风格")
+                    harness.render()
+                    harness.clickText(if (next == InterfaceStyle.MIUIX) "Miuix" else "Material 3 Expressive")
+                    harness.render()
+                    assertEquals(next, harness.uiSettings.value.interfaceStyle)
+                    assertTrue(harness.hasText("组件风格"), "A style switch keeps Personalization open in $case")
+                    assertFalse(harness.hasText("强制使用 BLE"), "A style switch does not fall back to Settings in $case")
+
+                    harness.clickContentDescription("返回")
+                    harness.render(frames = 120)
+                    assertTrue(harness.hasText("强制使用 BLE"), "Back returns to Settings in $case")
+                    assertFalse(harness.hasText("组件风格"), "Back leaves Personalization in $case")
+                    assertTrue(harness.settingWrites.isEmpty(), "Personalization changes never write device settings in $case")
+                }
+            }
+        }
+    }
+
+    @Test
+    fun wideRailStaysStillWhileSecondaryPagesTransitionAndYieldsToAddDevice() {
+        for (style in InterfaceStyle.entries) {
+            withHarness(width = 1200, height = 1000, initialState = state(connected = false), style = style) { harness ->
+                fun rail() = harness.nodes()
+                    .filter { it.config.getOrNull(SemanticsProperties.Role) == Role.Tab }
+                    .map { it.boundsInRoot }
+                harness.render()
+                harness.clickTab("设置")
+                harness.render(frames = 120)
+                val settled = rail()
+                assertEquals(3, settled.size, "one rail with three tabs in $style")
+                val railRight = settled.maxOf { it.right }.toInt()
+                fun railPixels(): List<Int> {
+                    val image = harness.snapshot()
+                    return image.getRGB(0, 0, railRight, image.height, null, 0, railRight).toList()
+                }
+                val settledPixels = railPixels()
+
+                harness.clickText("个性化")
+                harness.render(frames = 8)
+                assertEquals(settled, rail(), "opening a secondary page must not move the rail in $style")
+                assertTrue(settledPixels == railPixels(), "pages in transition must not draw over the rail in $style")
+                harness.render(frames = 120)
+                assertTrue(harness.hasText("组件风格"))
+                assertEquals(settled, rail(), "the rail stays beside a secondary page in $style")
+
+                harness.clickContentDescription("返回")
+                harness.render(frames = 8)
+                assertEquals(settled, rail(), "closing a secondary page must not move the rail in $style")
+                assertTrue(settledPixels == railPixels(), "pages in transition must not draw over the rail in $style")
+                harness.render(frames = 120)
+
+                harness.clickTab("我的耳机")
+                harness.render(frames = 120)
+                harness.clickContentDescription("添加耳机")
+                harness.render(frames = 120)
+                assertTrue(harness.hasText("附近设备"))
+                assertTrue(rail().isEmpty(), "the add-device flow takes the full width in $style")
+
+                harness.clickContentDescription("返回")
+                harness.render(frames = 120)
+                assertEquals(settled, rail(), "the rail returns after the add-device flow in $style")
+            }
         }
     }
 
@@ -95,6 +178,7 @@ class OpenRoseNavigationUiTest {
 
             harness.clickTab("设置")
             harness.render()
+            harness.openPersonalization()
             harness.clickText("组件风格")
             harness.render()
             harness.clickText("Material 3 Expressive")
@@ -102,6 +186,8 @@ class OpenRoseNavigationUiTest {
             harness.clickText("明暗模式")
             harness.render()
             harness.clickText("深色")
+            harness.render()
+            harness.clickContentDescription("返回")
             harness.render()
             assertEquals(InterfaceStyle.MATERIAL3, harness.uiSettings.value.interfaceStyle)
             assertEquals(Appearance.DARK, harness.uiSettings.value.appearance)

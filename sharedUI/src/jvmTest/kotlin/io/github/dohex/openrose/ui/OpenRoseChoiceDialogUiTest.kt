@@ -22,7 +22,7 @@ import kotlin.test.assertTrue
 class OpenRoseChoiceDialogUiTest {
     @Test
     fun materialStyleChoiceRowsShareTheDialogSurface() {
-        withPreferencesHarness(
+        withPersonalizationHarness(
             ControlState(platform = PlatformState(PermissionState.GRANTED)),
             UiSettings(interfaceStyle = InterfaceStyle.MATERIAL3, appearance = Appearance.LIGHT),
         ) { harness ->
@@ -189,6 +189,7 @@ class OpenRoseChoiceDialogUiTest {
             harness.render()
             harness.clickTab("设置")
             harness.render()
+            harness.openPersonalization()
         }
         block(harness)
     }

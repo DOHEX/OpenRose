@@ -19,6 +19,8 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PagerScope
+import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.verticalScroll
@@ -56,13 +58,32 @@ private fun MaterialRailHeader() {
     }
 }
 
-/** Renders a pushed (secondary) page; main tabs live in [MaterialMainShell]. [parentTab] is the tab the rail highlights. */
+/** The wide-screen rail. The app root places it beside the route stack so page transitions never move it. */
+@Composable
+internal fun MaterialNavigationRail(selected: AppPage, onSelect: (AppPage) -> Unit) {
+    NavigationRail(
+        header = { MaterialRailHeader() },
+    ) {
+        mainPages.forEach { destination ->
+            NavigationRailItem(
+                selected = destination == selected,
+                onClick = { onSelect(destination) },
+                icon = { AppIcon(destination.icon) },
+                label = { Text(destination.title) },
+                colors = NavigationRailItemDefaults.colors(
+                    indicatorColor = MaterialTheme.colorScheme.secondaryContainer,
+                    selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                ),
+                modifier = Modifier.padding(vertical = 4.dp),
+            )
+        }
+    }
+}
+
+/** Renders a pushed (secondary) page; main tabs live in [MaterialMainShell]. */
 @Composable
 internal fun MaterialAppShell(
-    parentTab: AppPage,
     page: AppPage,
-    wide: Boolean,
-    onNavigate: (AppPage) -> Unit,
     onBack: () -> Unit,
     scrollState: ScrollState,
     pageContent: @Composable () -> Unit,
@@ -71,27 +92,8 @@ internal fun MaterialAppShell(
     val backdropActive = LocalBackdropBlurActive.current
     val backdrop = rememberAppBackdrop(MaterialTheme.colorScheme.surface, backdropActive)
     CompositionLocalProvider(LocalAppBackdrop provides backdrop) {
-        Row(Modifier.fillMaxSize()) {
-        if (wide) NavigationRail(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
-            header = { MaterialRailHeader() },
-        ) {
-            mainPages.forEach { destination ->
-                NavigationRailItem(
-                    selected = destination == parentTab,
-                    onClick = { onNavigate(destination) },
-                    icon = { AppIcon(destination.icon) },
-                    label = { Text(destination.title) },
-                    colors = NavigationRailItemDefaults.colors(
-                        indicatorColor = MaterialTheme.colorScheme.secondaryContainer,
-                        selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                    ),
-                    modifier = Modifier.padding(vertical = 4.dp),
-                )
-            }
-        }
         val title = page.title
-        Scaffold(modifier = Modifier.weight(1f),
+        Scaffold(modifier = Modifier.fillMaxSize(),
             topBar = {
                 val topBarModifier = Modifier.appBarBackdropBlur(
                     backdrop = backdrop,
@@ -112,7 +114,6 @@ internal fun MaterialAppShell(
                 }
                 ShellFeedback(padding, content = feedbackContent)
             }
-        }
         }
     }
 }
@@ -215,7 +216,7 @@ internal fun MaterialMainShell(
     onMenuExpandedChange: (Boolean) -> Unit = {},
     onDisconnect: () -> Unit = {},
     platformActions: @Composable (AppPage) -> Unit = {},
-    pageTransition: PageTransition = PageTransition.MIUIX_SPRING,
+    animatePageChanges: Boolean = true,
 ) {
     LaunchedEffect(pagerState.pagerState.currentPage) {
         pagerState.syncPage()
@@ -226,33 +227,8 @@ internal fun MaterialMainShell(
         backdropActive && !wide && bottomBarStyle == BottomBarStyle.FLOATING,
     )
     val currentTab = mainPages.getOrElse(pagerState.selectedPage) { AppPage.HEADPHONES }
-    Row(Modifier.fillMaxSize()) {
-        if (wide) {
-            NavigationRail(
-                containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
-                header = { MaterialRailHeader() },
-            ) {
-                mainPages.forEachIndexed { index, destination ->
-                    val isSelected = currentTab == destination
-                    NavigationRailItem(
-                        selected = isSelected,
-                        onClick = {
-                            pagerState.selectPage(index, transition = pageTransition)
-                            onNavigate(destination)
-                        },
-                        icon = { AppIcon(destination.icon) },
-                        label = { Text(destination.title) },
-                        colors = NavigationRailItemDefaults.colors(
-                            indicatorColor = MaterialTheme.colorScheme.secondaryContainer,
-                            selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                        ),
-                        modifier = Modifier.padding(vertical = 4.dp),
-                    )
-                }
-            }
-        }
         Scaffold(
-            modifier = Modifier.weight(1f),
+            modifier = Modifier.fillMaxSize(),
             bottomBar = {
                 if (!wide) {
                     if (bottomBarStyle == BottomBarStyle.FLOATING) {
@@ -317,7 +293,7 @@ internal fun MaterialMainShell(
                                                 selected = isSelected,
                                                 role = Role.Tab,
                                                 onClick = {
-                                                    pagerState.selectPage(index, transition = pageTransition)
+                                                    pagerState.selectPage(index, animate = animatePageChanges)
                                                     onNavigate(destination)
                                                 },
                                             )
@@ -340,7 +316,7 @@ internal fun MaterialMainShell(
                                 NavigationBarItem(
                                     selected = currentTab == destination,
                                     onClick = {
-                                        pagerState.selectPage(index, transition = pageTransition)
+                                        pagerState.selectPage(index, animate = animatePageChanges)
                                         onNavigate(destination)
                                     },
                                     icon = { AppIcon(destination.icon) },
@@ -359,16 +335,11 @@ internal fun MaterialMainShell(
             val isFloating = !wide && bottomBarStyle == BottomBarStyle.FLOATING
             val pagerBottomPadding = if (isFloating) 0.dp else outerPadding.calculateBottomPadding()
             val trailingBottomPadding = if (isFloating) outerPadding.calculateBottomPadding() else 0.dp
-            HorizontalPager(
-                state = pagerState.pagerState,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .appBackdropContent(floatingBackdrop, backdropActive)
-                    .padding(bottom = pagerBottomPadding),
-                beyondViewportPageCount = 1,
-                userScrollEnabled = !wide,
-                key = { index -> mainPages[index] },
-            ) { pageIndex ->
+            val pagerModifier = Modifier
+                .fillMaxSize()
+                .appBackdropContent(floatingBackdrop, backdropActive)
+                .padding(bottom = pagerBottomPadding)
+            val pageContent: @Composable PagerScope.(Int) -> Unit = { pageIndex ->
                 val page = mainPages[pageIndex]
                 val isSelected = pageIndex == pagerState.selectedPage
                 val pageBackdrop = rememberAppBackdrop(MaterialTheme.colorScheme.surface, backdropActive)
@@ -433,6 +404,25 @@ internal fun MaterialMainShell(
                 }
                 }
             }
+            // Wide pages sit beside the vertical rail, so they travel vertically and only on rail taps.
+            if (wide) {
+                VerticalPager(
+                    state = pagerState.pagerState,
+                    modifier = pagerModifier,
+                    beyondViewportPageCount = 1,
+                    userScrollEnabled = false,
+                    pageNestedScrollConnection = WideMainPagerNestedScrollConnection,
+                    key = { index -> mainPages[index] },
+                    pageContent = pageContent,
+                )
+            } else {
+                HorizontalPager(
+                    state = pagerState.pagerState,
+                    modifier = pagerModifier,
+                    beyondViewportPageCount = 1,
+                    key = { index -> mainPages[index] },
+                    pageContent = pageContent,
+                )
+            }
         }
-    }
 }

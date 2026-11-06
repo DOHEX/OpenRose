@@ -19,10 +19,13 @@ status: accepted
 参考并借鉴 OppoPods 实机验证方案，对主页面容器与页面架构进行双层重构：
 
 1. **外层 Scaffold 纯化与 HorizontalPager 承载**：
-   - 根级 `Route.Main` 的外层 Scaffold 仅负责承载常驻底部导航栏（`NavigationBar`）以及宽屏模式下的侧边栏（`NavigationRail`）；
+   - 根级 `Route.Main` 的外层 Scaffold 仅负责承载常驻底部导航栏（`NavigationBar`）；
+   - 更新：宽屏侧边栏（`NavigationRail`）不再属于 `Route.Main` 或任何二级页面，而由应用根部放在 `NavDisplay` 旁边，只绘制一根，二级页面的转场不带动它；
    - 主体区域直接承载 `HorizontalPager`，通过 `MainTabsPagerState` 控制器管理 `PagerState` 与底部导航栏的联动；
    - 启用 `beyondViewportPageCount = 1` 预排版相邻页面，消除左右滑动手势切页时的卡顿；
    - 引入动态像素距离与 `EaseInOut` 缓动滚动的 `animateToPage`，并在点击滚动期间设置 `isNavigating` 防重入锁定，保证点击与拖拽手势互不干扰。
+   - 更新：宽屏（`wide == true`，显示 `NavigationRail`）时主体改用 `VerticalPager`，切页方向与侧边栏一致，仍只由侧边栏点击驱动、不响应手势，且页面内容的滚动与惯性不传给 Pager；窄屏保持 `HorizontalPager` 与水平手势。两者共用同一 `PagerState`，宽窄切换保留当前主页面。
+   - 更新：主页面切换不再跟随转场动效偏好，点击切页统一使用 Miuix 弹簧（`springAnimateToPage`），上文的 `EaseInOut` 缓动已移除；唯一例外是“关闭动效”时直接跳页。转场动效只作用于 `NavDisplay` 中的二级页面。
 
 2. **顶栏下沉至各 Tab 内部（独立 TopAppBar 与 ScrollBehavior）**：
    - 将 `TopAppBar` 与独立的 `MiuixScrollBehavior`（或 Material 3 滚动行为）移入各个主页面自身的内部 Scaffold；

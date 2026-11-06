@@ -19,7 +19,7 @@ OpenRose 采用 `Scaffold` 与 `HorizontalPager` 承载三大主页面（“我�
 2. **跨界面风格对称实现（UI Components）**：
    - **Miuix 风格**：标准固定形态使用 `NavigationBar`（图文并茂）；悬浮胶囊形态使用 Miuix 原生 `FloatingNavigationBar` 与 `FloatingNavigationBarItem`，严格遵循官方规范采用纯图标与紧凑居中布局。
    - **Material 3 风格**：标准固定形态使用 Material 3 `NavigationBar`；悬浮胶囊形态采用官方内置的 `HorizontalFloatingToolbar` 对称封装为居中药丸容器，不依赖任何第三方平台专有库。
-   - 宽屏与桌面扩展模式（`wide == true`）下统一继续使用 `NavigationRail`，不受底栏形态配置影响。
+   - 宽屏与桌面扩展模式（`wide == true`）下统一继续使用 `NavigationRail`，不受底栏形态配置影响；此时个性化页隐藏“底栏样式”选项，窄屏时重新显示，已保存的取值不变。
 
 3. **穿透式滚动与分层内边距拓扑（Layout & Insets）**：
    - 在悬浮胶囊模式下，外层 `Scaffold` 不再硬性截断 `HorizontalPager` 底部（Pager 撑满至屏幕底部，实现滑动手势与毛玻璃背景在胶囊后方的完整穿透）；

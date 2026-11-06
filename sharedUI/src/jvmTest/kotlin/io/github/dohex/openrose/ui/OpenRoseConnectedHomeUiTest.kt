@@ -44,10 +44,11 @@ class OpenRoseConnectedHomeUiTest {
                 harness.render()
                 harness.clickTab("设置")
                 harness.render()
+                harness.openPersonalization()
                 harness.clickText("组件风格")
                 harness.render()
                 harness.homeNavigationRequest.value++
-                harness.render()
+                harness.render(frames = 120)
                 assertTrue(harness.hasContentDescription("耳机菜单"))
                 assertTrue(harness.hasText("已连接 · 控制会话已就绪"))
                 assertFalse(harness.hasText("组件风格"))

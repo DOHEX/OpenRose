@@ -13,7 +13,7 @@ class PageTransitionUiTest {
     @Test
     fun pageTransitionChoiceRowAppearsAndDispatchesChanges() {
         for (style in InterfaceStyle.entries) {
-            withPreferencesHarness(
+            withPersonalizationHarness(
                 ControlState(
                     platform = PlatformState(permission = PermissionState.GRANTED),
                 ),
@@ -21,7 +21,7 @@ class PageTransitionUiTest {
             ) { harness ->
                 harness.render()
 
-                assertTrue(harness.hasText("转场动效"), "transition choice row must appear in Settings for $style")
+                assertTrue(harness.hasText("转场动效"), "transition choice row must appear in Personalization for $style")
                 assertTrue(harness.hasText("Miuix 弹性滑动"), "default transition label must be visible for $style")
 
                 harness.clickText("转场动效")

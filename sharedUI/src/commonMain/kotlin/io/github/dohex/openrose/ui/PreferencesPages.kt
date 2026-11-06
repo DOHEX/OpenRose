@@ -15,10 +15,56 @@ import io.github.dohex.openrose.core.PlatformState
 import io.github.dohex.openrose.core.TransportAvailability
 import io.github.dohex.openrose.ui.model.OpenRoseModel
 
-/** Settings content only. The application root owns the page title, navigation, and scrolling. */
+/**
+ * Settings content only. The application root owns the page title, navigation, and scrolling.
+ * Interface preferences live one level down in [PersonalizationPage].
+ */
 @Composable
-fun PreferencesPage(model: OpenRoseModel, platformUi: PlatformUi) {
+fun PreferencesPage(model: OpenRoseModel, platformUi: PlatformUi, onPersonalization: () -> Unit) {
     val state by model.state.collectAsState()
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        AppGroup {
+            AppArrowRow(
+                title = "个性化",
+                summary = "组件风格、明暗模式、背景模糊与转场动效",
+                icon = RoseIcon.PALETTE,
+                onClick = onPersonalization,
+            )
+        }
+
+        platformUi.SettingsSections(state, PlatformSettingsPosition.BEFORE_CONNECTION)
+
+        if (state.platform.controlTransportApplicability == PlatformApplicability.APPLICABLE) {
+            AppGroup(title = "连接偏好") {
+                AppSwitchRow(
+                    title = "强制使用 BLE",
+                    summary = "仅影响下一次连接",
+                    checked = state.settings.forceBle,
+                    onChange = { model.updateSettings(state.settings.copy(forceBle = it)) },
+                )
+            }
+        }
+
+        platformUi.SettingsSections(state, PlatformSettingsPosition.AFTER_CONNECTION)
+
+        AppGroup(title = "关于") {
+            AppInfoRow(
+                label = "关于 OpenRose",
+                value = "ROSE / ROSESELSA 耳机控制",
+            )
+        }
+    }
+}
+
+/**
+ * Interface style and appearance preferences, reached from Settings.
+ * [wide] mirrors the main shell: with the navigation rail shown, 底栏样式 has no effect and is hidden.
+ */
+@Composable
+fun PersonalizationPage(model: OpenRoseModel, wide: Boolean = false) {
     val uiSettings by model.uiSettings.collectAsState()
     val onUiSettingsChange = model::updateUiSettings
     Column(
@@ -46,13 +92,15 @@ fun PreferencesPage(model: OpenRoseModel, platformUi: PlatformUi) {
                 selected = uiSettings.appearance,
                 onSelect = { onUiSettingsChange(uiSettings.copy(appearance = it)) },
             )
-            AppChoiceRow(
-                title = "底栏样式",
-                valueText = bottomBarStyleLabel(uiSettings.bottomBarStyle),
-                options = BottomBarStyle.entries.map { AppOption(it, bottomBarStyleLabel(it)) },
-                selected = uiSettings.bottomBarStyle,
-                onSelect = { onUiSettingsChange(uiSettings.copy(bottomBarStyle = it)) },
-            )
+            if (!wide) {
+                AppChoiceRow(
+                    title = "底栏样式",
+                    valueText = bottomBarStyleLabel(uiSettings.bottomBarStyle),
+                    options = BottomBarStyle.entries.map { AppOption(it, bottomBarStyleLabel(it)) },
+                    selected = uiSettings.bottomBarStyle,
+                    onSelect = { onUiSettingsChange(uiSettings.copy(bottomBarStyle = it)) },
+                )
+            }
             AppSwitchRow(
                 title = "背景模糊",
                 summary = "顶栏、底栏及浮层启用毛玻璃透视效果",
@@ -60,35 +108,13 @@ fun PreferencesPage(model: OpenRoseModel, platformUi: PlatformUi) {
                 onChange = { onUiSettingsChange(uiSettings.copy(backgroundBlurEnabled = it)) },
             )
         }
-        AppGroup(title = "动效") {
+        AppGroup(title = "动效", footnote = "转场动效作用于进入和返回二级页面；关闭动效时，主页面切换也不播放动画。") {
             AppChoiceRow(
                 title = "转场动效",
                 valueText = pageTransitionLabel(uiSettings.pageTransition),
                 options = PageTransition.entries.map { AppOption(it, pageTransitionLabel(it)) },
                 selected = uiSettings.pageTransition,
                 onSelect = { onUiSettingsChange(uiSettings.copy(pageTransition = it)) },
-            )
-        }
-
-        platformUi.SettingsSections(state, PlatformSettingsPosition.BEFORE_CONNECTION)
-
-        if (state.platform.controlTransportApplicability == PlatformApplicability.APPLICABLE) {
-            AppGroup(title = "连接偏好") {
-                AppSwitchRow(
-                    title = "强制使用 BLE",
-                    summary = "仅影响下一次连接",
-                    checked = state.settings.forceBle,
-                    onChange = { model.updateSettings(state.settings.copy(forceBle = it)) },
-                )
-            }
-        }
-
-        platformUi.SettingsSections(state, PlatformSettingsPosition.AFTER_CONNECTION)
-
-        AppGroup(title = "关于") {
-            AppInfoRow(
-                label = "关于 OpenRose",
-                value = "ROSE / ROSESELSA 耳机控制",
             )
         }
     }

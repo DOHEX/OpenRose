@@ -1,7 +1,6 @@
 package io.github.dohex.openrose.ui
 
-import androidx.compose.animation.core.EaseInOut
-import androidx.compose.animation.core.tween
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
@@ -17,13 +16,15 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
-import kotlin.math.abs
 
 /**
  * [selectedPage] flips the instant a tab is chosen, while [pagerState] still animates towards it, so the
  * two disagree during every transition. Use [selectedPage] only for navigation chrome (bar highlight,
  * back handling) and for semantics/focus isolation. NEVER gate visible page content (top-bar actions,
  * feedback) on it: that content would vanish while its page is still sliding on screen.
+ *
+ * Main pages always switch with the Miuix spring; the 转场动效 preference only governs secondary routes,
+ * except that 关闭动效 also makes main pages jump ([selectPage] with `animate = false`).
  */
 internal class MainTabsPagerState(
     val pagerState: PagerState,
@@ -37,13 +38,13 @@ internal class MainTabsPagerState(
 
     private var navJob: Job? = null
 
-    fun selectPage(targetPage: Int, transition: PageTransition = PageTransition.MIUIX_SPRING) {
+    fun selectPage(targetPage: Int, animate: Boolean = true) {
         if (targetPage == selectedPage) return
 
         navJob?.cancel()
         selectedPage = targetPage
 
-        if (transition == PageTransition.NONE) {
+        if (!animate) {
             coroutineScope.launch {
                 pagerState.scrollToPage(targetPage)
             }
@@ -51,19 +52,10 @@ internal class MainTabsPagerState(
         }
 
         isNavigating = true
-        val duration = 100 * abs(targetPage - pagerState.currentPage).coerceAtLeast(2) + 100
-
         navJob = coroutineScope.launch {
             val currentJob = coroutineContext.job
             try {
-                if (transition == PageTransition.MIUIX_SPRING) {
-                    pagerState.springAnimateToPage(targetPage)
-                } else {
-                    pagerState.animateScrollToPage(
-                        page = targetPage,
-                        animationSpec = tween(easing = EaseInOut, durationMillis = duration),
-                    )
-                }
+                pagerState.springAnimateToPage(targetPage)
             } finally {
                 if (navJob == currentJob) {
                     isNavigating = false
@@ -80,6 +72,9 @@ internal class MainTabsPagerState(
         }
     }
 }
+
+/** Wide shells page vertically beside the rail and only on rail taps; page content keeps every scroll and fling. */
+internal val WideMainPagerNestedScrollConnection: NestedScrollConnection = object : NestedScrollConnection {}
 
 @Composable
 internal fun rememberMainTabsPagerState(

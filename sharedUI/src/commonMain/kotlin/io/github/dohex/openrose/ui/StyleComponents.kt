@@ -117,11 +117,12 @@ private fun materialColors(dark: Boolean) = if (dark) {
 }
 
 @Composable
-fun AppText(text: String, modifier: Modifier = Modifier, role: AppTextRole = AppTextRole.Body, color: Color? = null) {
+fun AppText(text: String, modifier: Modifier = Modifier, role: AppTextRole = AppTextRole.Body, color: Color? = null, maxLines: Int = Int.MAX_VALUE) {
     val textModifier = if (role == AppTextRole.Display || role == AppTextRole.Title) modifier.semantics { heading() } else modifier
     val textColor = color ?: appColor(if (role == AppTextRole.Summary || role == AppTextRole.Footnote) AppColorRole.Summary else AppColorRole.OnSurface)
+    val overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
     when (LocalInterfaceStyle.current) {
-        InterfaceStyle.MIUIX -> MiuixText(text, modifier = textModifier, color = textColor, style = with(MiuixTheme.textStyles) {
+        InterfaceStyle.MIUIX -> MiuixText(text, modifier = textModifier, color = textColor, maxLines = maxLines, overflow = overflow, style = with(MiuixTheme.textStyles) {
             when (role) {
                 AppTextRole.Display -> title1
                 AppTextRole.Title -> title4
@@ -130,7 +131,7 @@ fun AppText(text: String, modifier: Modifier = Modifier, role: AppTextRole = App
                 AppTextRole.Footnote -> footnote1
             }
         })
-        InterfaceStyle.MATERIAL3 -> Text(text, modifier = textModifier, color = textColor, style = with(MaterialTheme.typography) {
+        InterfaceStyle.MATERIAL3 -> Text(text, modifier = textModifier, color = textColor, maxLines = maxLines, overflow = overflow, style = with(MaterialTheme.typography) {
             when (role) {
                 AppTextRole.Display -> displaySmall
                 AppTextRole.Title -> titleMedium
@@ -606,10 +607,11 @@ internal fun AppProgress(fraction: Float?) {
 }
 
 @Composable
-internal fun AppBusyIndicator() {
+fun AppBusyIndicator(size: androidx.compose.ui.unit.Dp? = null) {
     when (LocalInterfaceStyle.current) {
-        InterfaceStyle.MIUIX -> top.yukonga.miuix.kmp.basic.InfiniteProgressIndicator()
-        InterfaceStyle.MATERIAL3 -> CircularProgressIndicator(Modifier.size(24.dp))
+        InterfaceStyle.MIUIX -> if (size == null) top.yukonga.miuix.kmp.basic.InfiniteProgressIndicator()
+            else top.yukonga.miuix.kmp.basic.InfiniteProgressIndicator(size = size)
+        InterfaceStyle.MATERIAL3 -> CircularProgressIndicator(Modifier.size(size ?: 24.dp))
     }
 }
 

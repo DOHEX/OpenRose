@@ -17,7 +17,7 @@ class BackgroundBlurUiTest {
     @Test
     fun backgroundBlurSettingRowRendersAndToggles() {
         for (style in InterfaceStyle.entries) {
-            withPreferencesHarness(
+            withPersonalizationHarness(
                 ControlState(
                     platform = PlatformState(PermissionState.GRANTED),
                 ),
@@ -29,8 +29,8 @@ class BackgroundBlurUiTest {
             ) { harness ->
                 harness.render()
 
-                assertTrue(harness.hasText("背景模糊"), "Settings page must render Background Blur preference in $style")
-                assertTrue(harness.hasText("顶栏、底栏及浮层启用毛玻璃透视效果"), "Settings page must describe Background Blur in $style")
+                assertTrue(harness.hasText("背景模糊"), "Personalization page must render Background Blur preference in $style")
+                assertTrue(harness.hasText("顶栏、底栏及浮层启用毛玻璃透视效果"), "Personalization page must describe Background Blur in $style")
 
                 harness.clickText("背景模糊")
                 harness.render()
@@ -44,7 +44,7 @@ class BackgroundBlurUiTest {
     }
 }
 
-internal fun withPreferencesHarness(
+internal fun withPersonalizationHarness(
     initialState: ControlState,
     initialUiSettings: UiSettings = UiSettings(),
     block: suspend (OpenRoseAppHarness) -> Unit,
@@ -52,11 +52,10 @@ internal fun withPreferencesHarness(
     val state = mutableStateOf(initialState)
     val uiSettings = mutableStateOf(initialUiSettings)
     val model = FakeOpenRoseModel(state, uiSettings)
-    val platformUi = BasicPlatformUi("Test")
     setContent {
         TestPageContent(uiSettings.value.interfaceStyle, dark = uiSettings.value.appearance == Appearance.DARK) {
             Column(Modifier.verticalScroll(rememberScrollState())) {
-                PreferencesPage(model, platformUi)
+                PersonalizationPage(model)
             }
         }
     }

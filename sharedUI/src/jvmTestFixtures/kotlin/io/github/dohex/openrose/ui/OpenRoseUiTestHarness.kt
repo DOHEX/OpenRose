@@ -256,6 +256,12 @@ internal open class OpenRoseUiTestHarness(protected val scene: OpenRoseUiTestSce
         invokeClick(clickNode, text)
     }
 
+    /** From the Settings page, opens the Personalization page that holds interface preferences. */
+    fun openPersonalization() {
+        clickText("个性化")
+        render()
+    }
+
     fun clickText(text: String, expectedRole: Role? = null) {
         val clickNode = textNodes(text).firstNotNullOfOrNull { node ->
             node.findAncestorOrSelf { candidate ->

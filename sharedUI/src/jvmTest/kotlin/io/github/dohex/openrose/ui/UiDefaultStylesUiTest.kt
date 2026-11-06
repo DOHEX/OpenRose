@@ -123,27 +123,19 @@ class UiDefaultStylesUiTest {
     }
 
     @Test
-    fun secondaryPageHidesNarrowNavigationTabsButKeepsTheWideSidebar() {
+    fun secondaryPageShellCarriesNoNavigationTabs() {
         for (style in InterfaceStyle.entries) {
-            withShellHarness(style, width = 420, wide = false) { narrow ->
+            withShellHarness(style, width = 420) { narrow ->
                 narrow.render()
                 assertTrue(narrow.hasText("二级测试页"))
-                assertFalse(narrow.hasRole(Role.Tab), "narrow secondary pages must hide the bottom bar in $style")
-            }
-
-            withShellHarness(style, width = 1200, wide = true) { wide ->
-                wide.render()
-                assertTrue(wide.hasText("二级测试页"))
-                assertTrue(wide.hasText("状态"))
-                assertTrue(wide.hasText("设置"))
-                assertTrue(wide.hasRole(Role.Tab), "wide secondary pages must keep the sidebar in $style")
+                assertFalse(narrow.hasRole(Role.Tab), "secondary pages must not draw navigation of their own in $style")
             }
         }
     }
 
     @Test
     fun shellStyleReplacementKeepsTheSameScrollPosition() {
-        withShellHarness(InterfaceStyle.MIUIX, width = 420, wide = false, longPage = true) { harness ->
+        withShellHarness(InterfaceStyle.MIUIX, width = 420, longPage = true) { harness ->
             harness.render()
             assertTrue(harness.scrollState.maxValue > 240, "the test page must be scrollable")
             harness.scrollState.scrollTo(240)
@@ -187,7 +179,6 @@ class UiDefaultStylesUiTest {
     private fun withShellHarness(
         initialStyle: InterfaceStyle,
         width: Int,
-        wide: Boolean,
         longPage: Boolean = false,
         block: suspend (ShellHarness) -> Unit,
     ) = runOpenRoseUiTest(width, 900) {
@@ -204,7 +195,6 @@ class UiDefaultStylesUiTest {
         }
         setShellContent(
             style = style,
-            wide = wide,
             scrollState = scrollState,
             pageContent = pageContent,
         )
@@ -213,27 +203,19 @@ class UiDefaultStylesUiTest {
 
     private fun OpenRoseUiTestScene.setShellContent(
         style: MutableState<InterfaceStyle>,
-        wide: Boolean,
         scrollState: ScrollState,
         pageContent: @Composable () -> Unit,
     ) = setContent {
         ProvideInterfaceStyle(style.value, dark = false) {
-            val parentTab = AppPage.HEADPHONES
             when (style.value) {
                 InterfaceStyle.MIUIX -> MiuixAppShell(
-                    parentTab = parentTab,
                     page = AppPage.AUDIO,
-                    wide = wide,
-                    onNavigate = {},
                     onBack = {},
                     scrollState = scrollState,
                     pageContent = pageContent,
                 )
                 InterfaceStyle.MATERIAL3 -> MaterialAppShell(
-                    parentTab = parentTab,
                     page = AppPage.AUDIO,
-                    wide = wide,
-                    onNavigate = {},
                     onBack = {},
                     scrollState = scrollState,
                     pageContent = pageContent,
