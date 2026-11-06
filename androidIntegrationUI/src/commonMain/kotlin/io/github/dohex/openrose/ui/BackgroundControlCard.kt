@@ -43,7 +43,8 @@ internal object BackgroundControlTags {
 }
 
 /** Ordinary background control applies wherever Android hosts the control runtime. */
-internal fun ControlState.backgroundControlApplicable(integration: IntegrationState): Boolean = platform.controlTransportApplicability == PlatformApplicability.APPLICABLE &&
+internal fun ControlState.backgroundControlApplicable(integration: IntegrationState): Boolean = platform.controlTransportApplicability ==
+    PlatformApplicability.APPLICABLE &&
     integration.backgroundControl(this) != BackgroundControlStatus.Unsupported
 
 /**

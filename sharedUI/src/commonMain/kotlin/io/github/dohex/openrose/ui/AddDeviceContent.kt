@@ -150,7 +150,10 @@ internal fun AddDeviceContent(
                             supported.forEach { candidate ->
                                 AppText(candidate.addDeviceName(), role = AppTextRole.Body)
                                 AppText(
-                                    listOfNotNull(candidate.profile?.configurationLabel, candidate.rssi?.let { "$it dBm" }).joinToString(" · "),
+                                    listOfNotNull(
+                                        candidate.profile?.configurationLabel,
+                                        candidate.rssi?.let { "$it dBm" },
+                                    ).joinToString(" · "),
                                     role = AppTextRole.Summary,
                                 )
                             }
@@ -354,7 +357,11 @@ private fun AddDeviceCandidateCard(
                         verticalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
                         AppText("连接失败", role = AppTextRole.Title, color = MaterialTheme.colorScheme.onErrorContainer)
-                        AppText(it.message, Modifier.semantics { liveRegion = LiveRegionMode.Polite }, color = MaterialTheme.colorScheme.onErrorContainer)
+                        AppText(
+                            it.message,
+                            Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                        )
                     }
                 } else {
                     AppText("连接失败", role = AppTextRole.Title)

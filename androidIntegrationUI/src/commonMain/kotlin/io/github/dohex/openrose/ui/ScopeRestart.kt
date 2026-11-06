@@ -92,7 +92,11 @@ internal fun ScopeRestartAction(
                     target !in targets -> ScopeRestartMark.SKIPPED
 
                     else -> byTarget[target]?.status?.let(ScopeRestartMark::of)
-                        ?: if (phase == null || phase == ScopeRestartPhase.Authorizing) ScopeRestartMark.WAITING else ScopeRestartMark.WORKING
+                        ?: if (phase == null || phase == ScopeRestartPhase.Authorizing) {
+                            ScopeRestartMark.WAITING
+                        } else {
+                            ScopeRestartMark.WORKING
+                        }
                 }
                 // Reasons appear once the run is over: a row growing mid-run would move every row of the dialog.
                 val detail = byTarget[target]?.detail?.takeIf { stage == ScopeRestartStage.DONE }
@@ -221,7 +225,9 @@ private fun ScopeRestartRow(target: String, mark: ScopeRestartMark, checked: Boo
 
         InterfaceStyle.MATERIAL3 -> ListItem(
             headlineContent = { Text(target) },
-            supportingContent = failure?.let { { AppText(it, role = AppTextRole.Footnote, color = appColor(AppColorRole.Error), maxLines = 2) } },
+            supportingContent = failure?.let {
+                { AppText(it, role = AppTextRole.Footnote, color = appColor(AppColorRole.Error), maxLines = 2) }
+            },
             leadingContent = { ScopeRestartMarkSlot(mark, checked, 24.dp) },
             trailingContent = if (skipped) ({ Text("未选择") }) else null,
             modifier = row

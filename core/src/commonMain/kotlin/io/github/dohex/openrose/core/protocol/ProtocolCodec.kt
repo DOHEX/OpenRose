@@ -197,12 +197,22 @@ data class ProtocolReply(
     },
 )
 
-private val batteryFlags = setOf(DeviceField.LEFT_CHARGING, DeviceField.RIGHT_CHARGING, DeviceField.LEFT_IN_CASE, DeviceField.RIGHT_IN_CASE, DeviceField.CASE_FLAG)
+private val batteryFlags = setOf(
+    DeviceField.LEFT_CHARGING,
+    DeviceField.RIGHT_CHARGING,
+    DeviceField.LEFT_IN_CASE,
+    DeviceField.RIGHT_IN_CASE,
+    DeviceField.CASE_FLAG,
+)
 
 interface ProtocolCodec {
     val profile: ModelProfile
     fun initQueries(maxWriteSize: Int): List<ProtocolQuery>
-    fun prepareSetting(setting: DeviceSetting, value: FieldValue, firmware: FieldValue.Firmware? = null): ProtocolSetting = throw UnsupportedOperationException("该型号尚未实现此设置")
+    fun prepareSetting(
+        setting: DeviceSetting,
+        value: FieldValue,
+        firmware: FieldValue.Firmware? = null,
+    ): ProtocolSetting = throw UnsupportedOperationException("该型号尚未实现此设置")
     fun feedNotification(bytes: ByteArray): List<ProtocolReply>
     fun reset()
 }
@@ -233,7 +243,13 @@ internal fun validatedTouchAssignment(value: FieldValue, profile: ModelProfile):
 }
 
 internal val i5Fields = linkedMapOf(
-    "0101" to setOf(DeviceField.LEFT_BATTERY, DeviceField.RIGHT_BATTERY, DeviceField.CASE_BATTERY, DeviceField.LEFT_CHARGING, DeviceField.RIGHT_CHARGING),
+    "0101" to setOf(
+        DeviceField.LEFT_BATTERY,
+        DeviceField.RIGHT_BATTERY,
+        DeviceField.CASE_BATTERY,
+        DeviceField.LEFT_CHARGING,
+        DeviceField.RIGHT_CHARGING,
+    ),
     "0602" to setOf(DeviceField.NOISE_MODE), "0201" to setOf(DeviceField.EQ),
     "0603" to setOf(DeviceField.GAME_MODE), "0801" to setOf(DeviceField.AUDIO_MODE, DeviceField.MULTIPOINT),
     "0d01" to setOf(DeviceField.FIRMWARE), "0401" to setOf(DeviceField.TOUCH_KEYS),
@@ -245,7 +261,14 @@ internal val i5Fields = linkedMapOf(
 internal val i7Fields = linkedMapOf(
     "01" to setOf(DeviceField.TOUCH_KEYS), "07" to setOf(DeviceField.TOUCH_ENABLED),
     "08" to setOf(DeviceField.EAR_DETECTION), "09" to setOf(DeviceField.NOISE_MODE),
-    "0c" to setOf(DeviceField.LEFT_BATTERY, DeviceField.RIGHT_BATTERY, DeviceField.CASE_BATTERY, DeviceField.LEFT_IN_CASE, DeviceField.RIGHT_IN_CASE, DeviceField.CASE_FLAG),
+    "0c" to setOf(
+        DeviceField.LEFT_BATTERY,
+        DeviceField.RIGHT_BATTERY,
+        DeviceField.CASE_BATTERY,
+        DeviceField.LEFT_IN_CASE,
+        DeviceField.RIGHT_IN_CASE,
+        DeviceField.CASE_FLAG,
+    ),
     "0d" to setOf(DeviceField.FIRMWARE), "0e" to setOf(DeviceField.GAME_MODE),
     "2a" to setOf(DeviceField.EQ), "2b" to setOf(DeviceField.AUDIO_MODE),
     "2c" to setOf(DeviceField.ANC_LEVEL), "2d" to setOf(DeviceField.TRANSPARENCY_LEVEL),

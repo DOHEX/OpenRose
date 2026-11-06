@@ -204,7 +204,8 @@ class OpenRoseBluetoothModule : XposedModule() {
     private fun presentationCallbacks(connected: AuthenticatedBridgeClient) = object : PresentationCallbacks {
         override fun claimPrompt(snapshot: Bundle, promptId: String): Boolean = connected.claimPrompt(snapshot, promptId)
         override fun setNoise(snapshot: Bundle, mode: String): Bundle = connected.setNoise(snapshot, mode)
-        override fun report(snapshot: Bundle, feature: String, status: String, detail: String) = connected.reportPresentation(snapshot, feature, status, detail)
+        override fun report(snapshot: Bundle, feature: String, status: String, detail: String) = connected
+            .reportPresentation(snapshot, feature, status, detail)
     }
 
     private fun publish(snapshot: Bundle) {
@@ -229,7 +230,9 @@ class OpenRoseBluetoothModule : XposedModule() {
                 val spec = snapshot.getBundle(BridgePresentationWire.PRESENTATION)
                 val prompt = spec?.getBundle(BridgePresentationWire.PROMPT)
                 val id = prompt?.getString(BridgePresentationWire.PROMPT_ID)
-                val identity = "${snapshot.getString(BridgeWire.HOST_EPOCH)}:${snapshot.getString(BridgeWire.DEVICE_ID)}:${snapshot.getLong(BridgeWire.SESSION_ID)}"
+                val identity = "${snapshot.getString(BridgeWire.HOST_EPOCH)}:" +
+                    "${snapshot.getString(BridgeWire.DEVICE_ID)}:" +
+                    "${snapshot.getLong(BridgeWire.SESSION_ID)}"
                 if (lastOfficialIdentity != identity) {
                     output.clear()
                     consumedOfficialPrompts.clear()
@@ -323,7 +326,11 @@ class OpenRoseBluetoothModule : XposedModule() {
         attach(context, selected)
     }
 
-    private fun featureFor(selected: BridgeTarget): String = if (selected == BridgeTarget.MILINK) BridgePresentationWire.FUSION_CENTER else BridgePresentationWire.SYSTEM_HEADSET
+    private fun featureFor(selected: BridgeTarget): String = if (selected == BridgeTarget.MILINK) {
+        BridgePresentationWire.FUSION_CENTER
+    } else {
+        BridgePresentationWire.SYSTEM_HEADSET
+    }
 
     private companion object {
         const val TAG = "OpenRoseSystemModule"

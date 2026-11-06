@@ -50,7 +50,12 @@ internal class ControlSession(
     override suspend fun connectForAddDevice(deviceId: DeviceId): OperationResult = targeting.connectForAddDevice(deviceId)
     override suspend fun disconnect(): Boolean = targeting.disconnect()
 
-    override suspend fun set(setting: DeviceSetting, value: FieldValue, expectedSessionId: Long?): OperationResult = settings.set(link, setting, value, expectedSessionId)
+    override suspend fun set(setting: DeviceSetting, value: FieldValue, expectedSessionId: Long?): OperationResult = settings.set(
+        link,
+        setting,
+        value,
+        expectedSessionId,
+    )
 
     override fun updateSettings(settings: UserSettings) {
         mutableState.update { it.copy(settings = settings) }

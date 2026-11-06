@@ -217,7 +217,11 @@ fun OpenRoseApp(
                                 DeviceControlCard(state, device, onSet)
                                 AppGroup {
                                     AppArrowRow("设备详情", icon = RoseIcon.INFO) { navigate(AppPage.DETAILS) }
-                                    AppArrowRow("连接方式", value = state.controlTransportLabel(), icon = RoseIcon.BLUETOOTH) { navigate(AppPage.DIAGNOSTICS) }
+                                    AppArrowRow(
+                                        "连接方式",
+                                        value = state.controlTransportLabel(),
+                                        icon = RoseIcon.BLUETOOTH,
+                                    ) { navigate(AppPage.DIAGNOSTICS) }
                                 }
                             }
 
@@ -367,7 +371,13 @@ fun OpenRoseApp(
                     entry<Route.AddDevice>(swipeDismiss = NavSwipeDirection.LeftToRight) {
                         // Popped entries retain their registration while animating out.
                         if (latestRoute is Route.AddDevice || uiSettings.pageTransition != PageTransition.NONE) {
-                            Box(if (latestRoute is Route.AddDevice) Modifier.fillMaxSize() else Modifier.fillMaxSize().clearAndSetSemantics { }) {
+                            Box(
+                                if (latestRoute is Route.AddDevice) {
+                                    Modifier.fillMaxSize()
+                                } else {
+                                    Modifier.fillMaxSize().clearAndSetSemantics { }
+                                },
+                            ) {
                                 renderShell(AppPage.ADD_DEVICE)
                             }
                         }

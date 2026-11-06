@@ -89,7 +89,9 @@ internal class SettingQueue(
             DeviceSetting.CUSTOM_EQ -> {
                 val custom = equalizerCapabilities(profile, firmware()).custom
                     ?: return ControlError(ControlErrorCode.UNSUPPORTED, "该型号不支持自定义均衡器")
-                value is FieldValue.IntegerList && value.values.size == custom.bandsHz.size && value.values.all { it in custom.minGain..custom.maxGain }
+                value is FieldValue.IntegerList &&
+                    value.values.size == custom.bandsHz.size &&
+                    value.values.all { it in custom.minGain..custom.maxGain }
             }
 
             DeviceSetting.GAIN -> value is FieldValue.Number && value.value in gainLevels(profile, firmware())
@@ -105,14 +107,15 @@ internal class SettingQueue(
             }
 
             DeviceSetting.TOUCH_BINDING -> {
-                if (value !is FieldValue.TouchAssignment) return ControlError(ControlErrorCode.INVALID_ARGUMENT, "触控绑定需要作用耳、手势和动作")
-                val touch = touchControlCapabilities(profile)
-                if (TouchSlot(value.side, value.gesture) !in touch.slots) return ControlError(ControlErrorCode.INVALID_ARGUMENT, "触控作用耳或手势无效")
-                if (value.action !in touch.actions) return ControlError(ControlErrorCode.UNSUPPORTED, "该型号不支持 ${value.action} 触控动作")
+                validateTouchBinding(profile, value)?.let { return it }
                 true
             }
 
-            DeviceSetting.GAME_MODE, DeviceSetting.MULTIPOINT, DeviceSetting.TOUCH_ENABLED, DeviceSetting.EAR_DETECTION -> value is FieldValue.Toggle
+            DeviceSetting.GAME_MODE,
+            DeviceSetting.MULTIPOINT,
+            DeviceSetting.TOUCH_ENABLED,
+            DeviceSetting.EAR_DETECTION,
+            -> value is FieldValue.Toggle
 
             DeviceSetting.AUDIO_MODE -> {
                 if (value is FieldValue.Text && value.value !in audioControlCapabilities(profile).modes) {
@@ -329,10 +332,21 @@ internal class SettingQueue(
         attempt.settings.worker?.cancel()
     }
 
-    private fun firmware(): FieldValue.Firmware? = (state.value.device?.fields?.get(DeviceField.FIRMWARE) as? FieldReading.Known)?.value as? FieldValue.Firmware
+    private fun firmware(): FieldValue.Firmware? = (state.value.device?.fields?.get(DeviceField.FIRMWARE) as? FieldReading.Known)
+        ?.value as? FieldValue.Firmware
 
     private fun failure(error: ControlError): OperationResult.Failure {
         state.update { it.copy(lastError = error) }
         return OperationResult.Failure(error)
     }
+}
+
+private fun validateTouchBinding(profile: ModelProfile, value: FieldValue): ControlError? {
+    if (value !is FieldValue.TouchAssignment) return ControlError(ControlErrorCode.INVALID_ARGUMENT, "触控绑定需要作用耳、手势和动作")
+    val touch = touchControlCapabilities(profile)
+    if (TouchSlot(value.side, value.gesture) !in touch.slots) {
+        return ControlError(ControlErrorCode.INVALID_ARGUMENT, "触控作用耳或手势无效")
+    }
+    if (value.action !in touch.actions) return ControlError(ControlErrorCode.UNSUPPORTED, "该型号不支持 ${value.action} 触控动作")
+    return null
 }

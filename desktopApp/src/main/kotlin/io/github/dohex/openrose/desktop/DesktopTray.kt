@@ -68,7 +68,9 @@ internal enum class TrayPanelHost {
  * xwayland-satellite, TrayApp's override-redirect X11 popup is never presented and wedges the UI loop,
  * so those desktops get a compositor-placed Wayland window instead.
  */
-internal fun trayPanelHost(): TrayPanelHost = if (Platform.Current == Platform.Linux && LinuxDesktopEnvironment.Current == LinuxDesktopEnvironment.Unknown) {
+internal fun trayPanelHost(): TrayPanelHost = if (
+    Platform.Current == Platform.Linux && LinuxDesktopEnvironment.Current == LinuxDesktopEnvironment.Unknown
+) {
     TrayPanelHost.WINDOW
 } else {
     TrayPanelHost.ANCHORED_POPUP

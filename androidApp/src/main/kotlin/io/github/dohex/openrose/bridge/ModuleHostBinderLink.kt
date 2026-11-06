@@ -174,11 +174,20 @@ class ModuleHostBinderLink(
 
         override suspend fun status(): HostStatus = call({ bridge.ownerStatus(request()) }, HostWire::decodeStatus)
 
-        override suspend fun execute(generation: OwnerGeneration, command: HostCommand): HostCallResult = call({ bridge.execute(request(HostWire.encodeCall(generation, command))) }, HostWire::decodeCallResult)
+        override suspend fun execute(generation: OwnerGeneration, command: HostCommand): HostCallResult = call(
+            { bridge.execute(request(HostWire.encodeCall(generation, command))) },
+            HostWire::decodeCallResult,
+        )
 
-        override suspend fun release(request: SwitchRequest): ReleaseResult = call({ bridge.release(request(HostWire.encode(request))) }, HostWire::decodeReleaseResult)
+        override suspend fun release(request: SwitchRequest): ReleaseResult = call(
+            { bridge.release(request(HostWire.encode(request))) },
+            HostWire::decodeReleaseResult,
+        )
 
-        override suspend fun acquire(request: SwitchRequest, settings: HostSettings): AcquireResult = call({ bridge.acquire(request(HostWire.encodeAcquire(request, settings))) }, HostWire::decodeAcquireResult)
+        override suspend fun acquire(request: SwitchRequest, settings: HostSettings): AcquireResult = call(
+            { bridge.acquire(request(HostWire.encodeAcquire(request, settings))) },
+            HostWire::decodeAcquireResult,
+        )
 
         override fun frames(generation: OwnerGeneration): Flow<HostFrame> = callbackFlow {
             val receiver = object : IControlFrames.Stub() {

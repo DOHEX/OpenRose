@@ -54,7 +54,15 @@ internal class NativeBluezBus private constructor(private val connection: DBusCo
             null
         }
         handlers += connection.addSigHandler(Properties.PropertiesChanged::class.java) { s ->
-            if (s.source == owner) publish(BluezSignal.Changed(s.path, s.interfaceName, s.propertiesChanged.mapValues { unwrap(it.value) } + s.propertiesRemoved.associateWith { null }))
+            if (s.source == owner) {
+                publish(
+                    BluezSignal.Changed(
+                        s.path,
+                        s.interfaceName,
+                        s.propertiesChanged.mapValues { unwrap(it.value) } + s.propertiesRemoved.associateWith { null },
+                    ),
+                )
+            }
         }
         handlers += connection.addSigHandler(ObjectManager.InterfacesAdded::class.java) { s ->
             if (s.source == owner) publish(BluezSignal.Added(s.signalSource.path, s.interfaces.keys))
@@ -64,22 +72,30 @@ internal class NativeBluezBus private constructor(private val connection: DBusCo
         }
     }
     override suspend fun objects(): BluezObjects = call {
-        connection.getRemoteObject("org.bluez", "/", ObjectManager::class.java).GetManagedObjects().entries.associate { (path, interfaces) ->
+        val managed = connection.getRemoteObject("org.bluez", "/", ObjectManager::class.java).GetManagedObjects()
+        managed.entries.associate { (path, interfaces) ->
             path.path to interfaces.mapValues { (_, properties) -> properties.mapValues { unwrap(it.value) } }
         }
     }
     override suspend fun connect(path: String) = call { connection.getRemoteObject("org.bluez", path, Device1::class.java).Connect() }
-    override suspend fun startNotify(path: String) = call { connection.getRemoteObject("org.bluez", path, GattCharacteristic1::class.java).StartNotify() }
-    override suspend fun stopNotify(path: String) = call { connection.getRemoteObject("org.bluez", path, GattCharacteristic1::class.java).StopNotify() }
+    override suspend fun startNotify(path: String) = call {
+        connection.getRemoteObject("org.bluez", path, GattCharacteristic1::class.java).StartNotify()
+    }
+    override suspend fun stopNotify(path: String) = call {
+        connection.getRemoteObject("org.bluez", path, GattCharacteristic1::class.java).StopNotify()
+    }
     override suspend fun write(path: String, value: ByteArray, withResponse: Boolean) = call {
-        connection.getRemoteObject("org.bluez", path, GattCharacteristic1::class.java).WriteValue(value, mapOf("type" to Variant(if (withResponse) "request" else "command")))
+        connection.getRemoteObject("org.bluez", path, GattCharacteristic1::class.java)
+            .WriteValue(value, mapOf("type" to Variant(if (withResponse) "request" else "command")))
     }
     override suspend fun startDiscovery(path: String) = call {
         val adapter = connection.getRemoteObject("org.bluez", path, Adapter1::class.java)
         adapter.SetDiscoveryFilter(mapOf("Transport" to Variant("le")))
         adapter.StartDiscovery()
     }
-    override suspend fun stopDiscovery(path: String) = call { connection.getRemoteObject("org.bluez", path, Adapter1::class.java).StopDiscovery() }
+    override suspend fun stopDiscovery(path: String) = call {
+        connection.getRemoteObject("org.bluez", path, Adapter1::class.java).StopDiscovery()
+    }
     override suspend fun close() {
         call {
             handlers.forEach { runCatching { it.close() } }

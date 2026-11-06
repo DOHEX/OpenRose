@@ -46,7 +46,10 @@ internal class I7Codec : ProtocolCodec {
 
             DeviceSetting.NOISE_CYCLE -> {
                 val flags = (expected as FieldValue.NoiseCycle).flags
-                0x36.toByte() to listOf("anc", "wind", "normal", "transparency").map { if (flags.getValue(it) == true) 1.toByte() else 0.toByte() }.toByteArray()
+                val payload = listOf("anc", "wind", "normal", "transparency")
+                    .map { if (flags.getValue(it) == true) 1.toByte() else 0.toByte() }
+                    .toByteArray()
+                0x36.toByte() to payload
             }
 
             DeviceSetting.EQ -> {
@@ -111,7 +114,17 @@ internal class I7Codec : ProtocolCodec {
                 val binding = validatedTouchAssignment(value, profile)
                 val gesture = listOf("single", "double", "triple", "long").indexOf(binding.gesture)
                 val slot = gesture + 1 + if (binding.side == "right") 0x10 else 0
-                val action = listOf("none", "play_pause", "previous_track", "next_track", "volume_up", "volume_down", "game_mode", "voice_assistant", "noise_cycle").indexOf(binding.action)
+                val action = listOf(
+                    "none",
+                    "play_pause",
+                    "previous_track",
+                    "next_track",
+                    "volume_up",
+                    "volume_down",
+                    "game_mode",
+                    "voice_assistant",
+                    "noise_cycle",
+                ).indexOf(binding.action)
                 1.toByte() to byteArrayOf(slot.toByte(), action.toByte())
             }
         }
@@ -132,7 +145,12 @@ internal class I7Codec : ProtocolCodec {
 
     private fun query(ids: ByteArray): ProtocolQuery {
         val keys = ids.map { byteArrayOf(it).hex() }.filter { it in i7Fields }.toSet()
-        return ProtocolQuery("fa" + ids.hex(), frame(byteArrayOf(0xfa.toByte()) + ids), keys, keys.flatMap { i7Fields.getValue(it) }.toSet())
+        return ProtocolQuery(
+            "fa" + ids.hex(),
+            frame(byteArrayOf(0xfa.toByte()) + ids),
+            keys,
+            keys.flatMap { i7Fields.getValue(it) }.toSet(),
+        )
     }
 
     override fun initQueries(maxWriteSize: Int): List<ProtocolQuery> {
@@ -241,7 +259,11 @@ internal class I7Codec : ProtocolCodec {
                     }
                 }
                 listOf(DeviceField.LEFT_IN_CASE, DeviceField.RIGHT_IN_CASE, DeviceField.CASE_FLAG).forEachIndexed { index, field ->
-                    put(field, if (index < 2 && value[index].u() == 255) null else FieldValue.Toggle(value[index].u() and 128 != 0), byteArrayOf(value[index]))
+                    put(
+                        field,
+                        if (index < 2 && value[index].u() == 255) null else FieldValue.Toggle(value[index].u() and 128 != 0),
+                        byteArrayOf(value[index]),
+                    )
                 }
             }
 
@@ -256,7 +278,17 @@ internal class I7Codec : ProtocolCodec {
                 val pairs = value.toList().chunked(2).associate { it[0].u() to it[1].u() }
                 val slots = listOf(1, 2, 3, 4, 0x11, 0x12, 0x13, 0x14)
                 if (!slots.all { it in pairs }) return emptyMap()
-                val actions = listOf("none", "play_pause", "previous_track", "next_track", "volume_up", "volume_down", "game_mode", "voice_assistant", "noise_cycle")
+                val actions = listOf(
+                    "none",
+                    "play_pause",
+                    "previous_track",
+                    "next_track",
+                    "volume_up",
+                    "volume_down",
+                    "game_mode",
+                    "voice_assistant",
+                    "noise_cycle",
+                )
                 val gestures = listOf("single", "double", "triple", "long")
                 val bindings = slots.mapIndexed { index, slot ->
                     val action = pairs.getValue(slot)
@@ -267,7 +299,16 @@ internal class I7Codec : ProtocolCodec {
 
             0x09 -> {
                 if (value.size != 1) return emptyMap()
-                put(DeviceField.NOISE_MODE, mapOf(1 to "anc", 2 to "normal", 3 to "transparency", 4 to "wind", 5 to "auto", 6 to "deep", 7 to "dynamic")[raw]?.let { FieldValue.Text(it) })
+                val modeName = mapOf(
+                    1 to "anc",
+                    2 to "normal",
+                    3 to "transparency",
+                    4 to "wind",
+                    5 to "auto",
+                    6 to "deep",
+                    7 to "dynamic",
+                )[raw]
+                put(DeviceField.NOISE_MODE, modeName?.let { FieldValue.Text(it) })
             }
 
             0x07, 0x08, 0x0e, 0x32 -> {
@@ -287,7 +328,16 @@ internal class I7Codec : ProtocolCodec {
                 } else {
                     raw
                 }
-                put(DeviceField.EQ, mapOf(0 to "pop", 1 to "hifi", 2 to "rock", 3 to "light", 4 to "custom", 5 to "custom_slot", 6 to "eap")[index]?.let { FieldValue.Text(it) })
+                val presetName = mapOf(
+                    0 to "pop",
+                    1 to "hifi",
+                    2 to "rock",
+                    3 to "light",
+                    4 to "custom",
+                    5 to "custom_slot",
+                    6 to "eap",
+                )[index]
+                put(DeviceField.EQ, presetName?.let { FieldValue.Text(it) })
                 if (value.size == 2 && raw == 5) put(DeviceField.EQ_SLOT, FieldValue.Number(value[1].u()))
             }
 
@@ -315,7 +365,10 @@ internal class I7Codec : ProtocolCodec {
 
             0x3e -> {
                 val gains = value.map { if (it.u() and 128 != 0) -(it.u() and 127) else it.u() and 127 }
-                put(DeviceField.CUSTOM_EQ, gains.takeIf { it.size == 10 && it.all { gain -> gain in -6..6 } }?.let { FieldValue.IntegerList(it) })
+                put(
+                    DeviceField.CUSTOM_EQ,
+                    gains.takeIf { it.size == 10 && it.all { gain -> gain in -6..6 } }?.let { FieldValue.IntegerList(it) },
+                )
             }
 
             0x45, 0x46 -> {
@@ -326,7 +379,15 @@ internal class I7Codec : ProtocolCodec {
 
             0x2f -> {
                 if (value.size != 1) return emptyMap()
-                put(DeviceField.FIND_STATE, mapOf(1 to "start_left", 2 to "start_right", 3 to "start_both", 4 to "stop_both", 5 to "stop_left", 6 to "stop_right")[raw]?.let { FieldValue.Text(it) })
+                val findState = mapOf(
+                    1 to "start_left",
+                    2 to "start_right",
+                    3 to "start_both",
+                    4 to "stop_both",
+                    5 to "stop_left",
+                    6 to "stop_right",
+                )[raw]
+                put(DeviceField.FIND_STATE, findState?.let { FieldValue.Text(it) })
             }
         }
         return readings

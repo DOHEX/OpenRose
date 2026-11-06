@@ -98,7 +98,9 @@ class SystemEntryRuntime(
     }
 
     /** Prompt claims and expiry wake readers without combining independently derived session views. */
-    internal fun views(generation: OwnerGeneration): Flow<OwnerView> = combine(control.state, prompts, integrationSettings) { _, _, _ -> view(generation) }.distinctUntilChanged()
+    internal fun views(generation: OwnerGeneration): Flow<OwnerView> = combine(control.state, prompts, integrationSettings) { _, _, _ ->
+        view(generation)
+    }.distinctUntilChanged()
 
     override suspend fun connectFromSystem(deviceId: DeviceId): OperationResult = control.connect(deviceId, pinned = true)
 

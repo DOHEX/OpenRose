@@ -101,7 +101,11 @@ internal fun MaterialAppShell(
                     surfaceColor = MaterialTheme.colorScheme.surface,
                     active = backdropActive,
                 )
-                val topBarColors = if (backdropActive) TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent) else TopAppBarDefaults.topAppBarColors()
+                val topBarColors = if (backdropActive) {
+                    TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
+                } else {
+                    TopAppBarDefaults.topAppBarColors()
+                }
                 TopAppBar(
                     title = { Text(title) },
                     modifier = topBarModifier,
@@ -387,7 +391,11 @@ internal fun MaterialMainShell(
                                 surfaceColor = MaterialTheme.colorScheme.surface,
                                 active = backdropActive,
                             )
-                            val topBarColors = if (backdropActive) TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent) else TopAppBarDefaults.topAppBarColors()
+                            val topBarColors = if (backdropActive) {
+                                TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
+                            } else {
+                                TopAppBarDefaults.topAppBarColors()
+                            }
                             if (page in mainPages) {
                                 LargeTopAppBar(
                                     title = { Text(title) },

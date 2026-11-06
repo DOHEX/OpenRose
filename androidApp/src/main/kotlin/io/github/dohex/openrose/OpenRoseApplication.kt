@@ -268,7 +268,10 @@ class OpenRoseApplication : Application() {
         refreshPlatform()
     }
 
-    fun requestCompanionAssociation(onChooser: (android.content.IntentSender) -> Unit, onFailure: () -> Unit) = companionWake.requestAssociation(onChooser, onFailure)
+    fun requestCompanionAssociation(
+        onChooser: (android.content.IntentSender) -> Unit,
+        onFailure: () -> Unit,
+    ) = companionWake.requestAssociation(onChooser, onFailure)
 
     fun backgroundServiceRunning() = updateBackgroundService(BackgroundServiceFact.Running)
     fun backgroundServiceRejected(reason: BackgroundControlBlock) = updateBackgroundService(BackgroundServiceFact.StartRejected(reason))

@@ -147,6 +147,8 @@ fun IntegrationState.backgroundRecovery(control: ControlState): BackgroundRecove
  * and the Bluetooth permission decide this; a missing association never blocks the attempt, because the
  * system's refusal is then reported as it is.
  */
-fun IntegrationState.mayStartBackgroundService(control: ControlState): Boolean = owner.selected == ControlWay.ORDINARY && control.platform.hasBackgroundService() && control.platform.userUnlocked &&
+fun IntegrationState.mayStartBackgroundService(control: ControlState): Boolean = owner.selected == ControlWay.ORDINARY &&
+    control.platform.hasBackgroundService() &&
+    control.platform.userUnlocked &&
     settings.backgroundControlEnabled &&
     !control.platform.bluetoothPermissionMissing()

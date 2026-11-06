@@ -24,7 +24,8 @@ internal fun displayFieldValue(field: DeviceField, value: FieldValue, profile: M
     is FieldValue.Text -> if (field == DeviceField.EQ) equalizerLabel(value.value, profile) else semanticLabel(value.value)
 
     is FieldValue.TouchKeys -> value.bindings.joinToString("\n") { binding ->
-        "${touchSideLabel(binding.side)}${touchGestureLabel(binding.gesture)}：${binding.action?.let(::semanticLabel) ?: "未知操作（${binding.rawAction}）"}"
+        val action = binding.action?.let(::semanticLabel) ?: "未知操作（${binding.rawAction}）"
+        "${touchSideLabel(binding.side)}${touchGestureLabel(binding.gesture)}：$action"
     }
 
     is FieldValue.TouchAssignment ->

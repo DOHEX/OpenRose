@@ -45,7 +45,11 @@ internal class AndroidAudioProfiles(private val context: Context) : AudioFactsDr
                         val device = getDeviceExtra(intent) ?: return
                         val event = try {
                             RawAudioEvent.ProfileChanged(
-                                if (intent.action == BluetoothA2dp.ACTION_CONNECTION_STATE_CHANGED) AudioProfile.A2DP else AudioProfile.HEADSET,
+                                if (intent.action == BluetoothA2dp.ACTION_CONNECTION_STATE_CHANGED) {
+                                    AudioProfile.A2DP
+                                } else {
+                                    AudioProfile.HEADSET
+                                },
                                 RawAudioDevice(device.name, device.address),
                                 device.bondState == BluetoothDevice.BOND_BONDED,
                                 state == BluetoothProfile.STATE_CONNECTED,
@@ -56,7 +60,9 @@ internal class AndroidAudioProfiles(private val context: Context) : AudioFactsDr
                         trySend(event)
                     }
 
-                    BluetoothAdapter.ACTION_STATE_CHANGED -> when (intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR)) {
+                    BluetoothAdapter.ACTION_STATE_CHANGED -> when (
+                        intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR)
+                    ) {
                         BluetoothAdapter.STATE_TURNING_OFF, BluetoothAdapter.STATE_OFF -> trySend(RawAudioEvent.AdapterOff)
                         BluetoothAdapter.STATE_ON -> trySend(RawAudioEvent.AdapterOn)
                     }
@@ -122,7 +128,10 @@ internal class AndroidAudioProfiles(private val context: Context) : AudioFactsDr
             // A stalled proxy must not discard facts from profiles that already arrived.
             val profiles = leases.mapValues { (_, lease) -> lease?.snapshot(targetAddresses) }.toMutableMap()
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
-                profiles[AudioProfile.LE_AUDIO] = RawProfileSnapshot(emptyList(), targetAddresses.associateWith { AudioConnectionState.DISCONNECTED })
+                profiles[AudioProfile.LE_AUDIO] = RawProfileSnapshot(
+                    emptyList(),
+                    targetAddresses.associateWith { AudioConnectionState.DISCONNECTED },
+                )
             }
             for ((profile, lease) in leases) {
                 if (lease != null && !lease.isValid) profiles[profile] = null

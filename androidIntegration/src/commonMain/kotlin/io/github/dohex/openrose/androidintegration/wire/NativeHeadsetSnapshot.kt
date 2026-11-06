@@ -31,7 +31,10 @@ data class NativeHeadsetSnapshot(
     fun isSupportedProfile(): Boolean = profile == "I5_ZT" || profile == "I7_RS_V2"
 
     /** [nowElapsedMillis] is the reader's elapsed-realtime clock, the same clock the host stamped [capturedElapsedMillis] with. */
-    fun isFresh(nowElapsedMillis: Long): Boolean = isSupportedProfile() && hostEpoch.isNotBlank() && deviceId.isNotBlank() && sessionId > 0L &&
+    fun isFresh(nowElapsedMillis: Long): Boolean = isSupportedProfile() &&
+        hostEpoch.isNotBlank() &&
+        deviceId.isNotBlank() &&
+        sessionId > 0L &&
         addresses.isNotEmpty() && addresses.all { normalizeBluetoothAddress(it) == it } &&
         capturedElapsedMillis > 0L && capturedElapsedMillis <= nowElapsedMillis &&
         nowElapsedMillis - capturedElapsedMillis <= MAX_AGE_MILLIS

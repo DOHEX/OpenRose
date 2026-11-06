@@ -236,7 +236,14 @@ internal fun MiuixMainShell(
                                 active = backdropActive,
                             )
                             val topBarColor = if (backdropActive) Color.Transparent else MiuixTheme.colorScheme.surface
-                            TopAppBar(title = title, largeTitle = title, modifier = topBarModifier, color = topBarColor, scrollBehavior = scrollBehavior, actions = actions)
+                            TopAppBar(
+                                title = title,
+                                largeTitle = title,
+                                modifier = topBarModifier,
+                                color = topBarColor,
+                                scrollBehavior = scrollBehavior,
+                                actions = actions,
+                            )
                         },
                     ) { pagePadding ->
                         Box(Modifier.fillMaxSize()) {

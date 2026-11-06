@@ -29,7 +29,8 @@ internal class AndroidControlTransport(context: Context) : ControlTransport {
 
     override fun scan(): Flow<Advertisement> = ble.scan()
 
-    override suspend fun connectionFacts(deviceId: DeviceId, classicAddress: String?): TransportFacts = audioProfiles.connectionFacts(deviceId, classicAddress)
+    override suspend fun connectionFacts(deviceId: DeviceId, classicAddress: String?): TransportFacts = audioProfiles
+        .connectionFacts(deviceId, classicAddress)
     override val audioConnectedDevice: Flow<DeviceId?> = audioProfiles.audioConnectedDevice
 
     override suspend fun bondedDevices(): List<DeviceCandidate> = audioProfiles.bondedDevices()

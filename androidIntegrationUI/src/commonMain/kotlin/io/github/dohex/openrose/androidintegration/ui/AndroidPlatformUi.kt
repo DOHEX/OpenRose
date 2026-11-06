@@ -96,7 +96,15 @@ class AndroidPlatformUi(
             }
         }
         if (state.backgroundControlApplicable(integration)) {
-            BackgroundControlGroup(state, integration, onIntegrationSettingsChange, requestBluetoothPermission, onRequestNotificationPermission, onRequestAssociation, onOpenAppSettings)
+            BackgroundControlGroup(
+                state,
+                integration,
+                onIntegrationSettingsChange,
+                requestBluetoothPermission,
+                onRequestNotificationPermission,
+                onRequestAssociation,
+                onOpenAppSettings,
+            )
         }
         if (hyperOsIntegrationApplicable(integration.platform)) {
             AppGroup(title = "系统呈现") {
@@ -266,7 +274,9 @@ class AndroidPlatformUi(
                 restartSelection = INTEGRATION_SCOPE_PACKAGES.toSet()
                 restartDialogOpen = true
             },
-            onToggle = { target -> restartSelection = if (target in restartSelection) restartSelection - target else restartSelection + target },
+            onToggle = { target ->
+                restartSelection = if (target in restartSelection) restartSelection - target else restartSelection + target
+            },
             onConfirm = {
                 val targets = INTEGRATION_SCOPE_PACKAGES.filter { it in restartSelection }
                 if (!restartRunning && targets.isNotEmpty()) {
@@ -301,7 +311,8 @@ class AndroidPlatformUi(
     }
 }
 
-private fun hyperOsIntegrationApplicable(integration: IntegrationPlatformState): Boolean = integration.systemIntegrationApplicability == PlatformApplicability.APPLICABLE
+private fun hyperOsIntegrationApplicable(integration: IntegrationPlatformState): Boolean = integration
+    .systemIntegrationApplicability == PlatformApplicability.APPLICABLE
 
 @Composable
 private fun IntegrationReadinessCard(module: ModuleAvailability) {

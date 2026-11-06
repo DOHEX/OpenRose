@@ -173,8 +173,10 @@ private fun OwnerHolderGroup(holder: OwnerHolder) {
 
 private fun Modifier.controlWayTextPadding(): Modifier = padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 12.dp)
 
-private fun HandoffOutcome.Blocked.duplicatesReadiness(readiness: OwnerReadiness): Boolean = readiness is OwnerReadiness.SwitchBlocked && readiness.request.id == request.id &&
-    readiness.stage == stage && readiness.reason == reason
+private fun HandoffOutcome.Blocked.duplicatesReadiness(readiness: OwnerReadiness): Boolean = readiness is OwnerReadiness.SwitchBlocked &&
+    readiness.request.id == request.id &&
+    readiness.stage == stage &&
+    readiness.reason == reason
 
 private fun wayLabel(way: ControlWay): String = when (way) {
     ControlWay.ORDINARY -> "普通控制"

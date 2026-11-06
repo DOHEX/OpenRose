@@ -387,9 +387,11 @@ class MiLinkNativeHeadsetAdapter(
         return snapshot.takeIf { it.matchesAddress(address) }
     }
 
-    private fun bluetoothAddress(value: Any?): String? = (value as? BluetoothDevice)?.let { device -> runCatching { device.address }.getOrNull() }
+    private fun bluetoothAddress(value: Any?): String? = (value as? BluetoothDevice)
+        ?.let { device -> runCatching { device.address }.getOrNull() }
 
-    private fun shouldSuppressManagedAction(address: String?): Boolean = managedAddresses.contains(address) && snapshotForAddress(address) == null
+    private fun shouldSuppressManagedAction(address: String?): Boolean = managedAddresses.contains(address) &&
+        snapshotForAddress(address) == null
 
     private fun handleSwitchToHeadsetActivity(chain: XposedInterface.Chain): HookDecision {
         val device = chain.args.getOrNull(0) as? BluetoothDevice ?: return HookDecision.Proceed
@@ -606,7 +608,8 @@ class MiLinkNativeHeadsetAdapter(
         return null
     }
 
-    private fun hookId(method: Method): String = "openrose.native_headset.milink.${method.declaringClass.name}.${method.name}".replace('-', '_')
+    private fun hookId(method: Method): String = "openrose.native_headset.milink.${method.declaringClass.name}.${method.name}"
+        .replace('-', '_')
 
     private sealed interface HookDecision {
         data object Proceed : HookDecision

@@ -89,7 +89,8 @@ internal class AndroidGattDriver(
                                     val shared = GattCharacteristic(
                                         characteristic.uuid.toString(),
                                         canWrite = properties and BluetoothGattCharacteristic.PROPERTY_WRITE != 0,
-                                        canWriteWithoutResponse = properties and BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE != 0,
+                                        canWriteWithoutResponse =
+                                        properties and BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE != 0,
                                         canNotify = properties and BluetoothGattCharacteristic.PROPERTY_NOTIFY != 0,
                                         canIndicate = properties and BluetoothGattCharacteristic.PROPERTY_INDICATE != 0,
                                     )
@@ -394,7 +395,8 @@ internal class AndroidGattDriver(
         }
         return GattException(kind, "蓝牙连接失败（$status）")
     }
-    private fun requireCharacteristic(characteristic: GattCharacteristic): BluetoothGattCharacteristic = characteristics[characteristic] ?: throw GattException(GattFailureKind.UNSUPPORTED, "蓝牙特征不可用")
+    private fun requireCharacteristic(characteristic: GattCharacteristic): BluetoothGattCharacteristic = characteristics[characteristic]
+        ?: throw GattException(GattFailureKind.UNSUPPORTED, "蓝牙特征不可用")
 
     // Android callbacks have no operation token. A cancelled operation keeps its slot until its
     // callback arrives, so that callback cannot be mistaken for a subsequent operation.

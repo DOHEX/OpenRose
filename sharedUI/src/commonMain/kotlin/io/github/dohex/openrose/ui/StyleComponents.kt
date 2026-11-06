@@ -88,7 +88,12 @@ fun ProvideInterfaceStyle(style: InterfaceStyle, dark: Boolean, content: @Compos
     CompositionLocalProvider(LocalInterfaceStyle provides style) {
         when (style) {
             InterfaceStyle.MIUIX -> MiuixTheme(colors = miuixColors(dark), content = content)
-            InterfaceStyle.MATERIAL3 -> MaterialTheme(colorScheme = materialColors(dark), motionScheme = MotionScheme.expressive(), content = content)
+
+            InterfaceStyle.MATERIAL3 -> MaterialTheme(
+                colorScheme = materialColors(dark),
+                motionScheme = MotionScheme.expressive(),
+                content = content,
+            )
         }
     }
 }
@@ -119,9 +124,17 @@ private fun materialColors(dark: Boolean) = if (dark) {
 }
 
 @Composable
-fun AppText(text: String, modifier: Modifier = Modifier, role: AppTextRole = AppTextRole.Body, color: Color? = null, maxLines: Int = Int.MAX_VALUE) {
+fun AppText(
+    text: String,
+    modifier: Modifier = Modifier,
+    role: AppTextRole = AppTextRole.Body,
+    color: Color? = null,
+    maxLines: Int = Int.MAX_VALUE,
+) {
     val textModifier = if (role == AppTextRole.Display || role == AppTextRole.Title) modifier.semantics { heading() } else modifier
-    val textColor = color ?: appColor(if (role == AppTextRole.Summary || role == AppTextRole.Footnote) AppColorRole.Summary else AppColorRole.OnSurface)
+    val textColor = color ?: appColor(
+        if (role == AppTextRole.Summary || role == AppTextRole.Footnote) AppColorRole.Summary else AppColorRole.OnSurface,
+    )
     val overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
     when (LocalInterfaceStyle.current) {
         InterfaceStyle.MIUIX -> MiuixText(
@@ -193,8 +206,16 @@ fun AppGroup(
 
             InterfaceStyle.MATERIAL3 -> {
                 title?.let { label ->
-                    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text(label, Modifier.weight(1f).semantics { heading() }, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.titleSmall)
+                    Row(
+                        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            label,
+                            Modifier.weight(1f).semantics { heading() },
+                            color = MaterialTheme.colorScheme.primary,
+                            style = MaterialTheme.typography.titleSmall,
+                        )
                         titleTrailing?.invoke()
                     }
                 }
@@ -302,14 +323,24 @@ fun AppStatusCard(
 }
 
 @Composable
-private fun rowColors(): ListItemColors = if (LocalInDashboardCard.current) ListItemDefaults.colors(containerColor = Color.Transparent) else ListItemDefaults.colors()
+private fun rowColors(): ListItemColors = if (LocalInDashboardCard.current) {
+    ListItemDefaults.colors(containerColor = Color.Transparent)
+} else {
+    ListItemDefaults.colors()
+}
 
 private fun iconAction(icon: RoseIcon?): (@Composable () -> Unit)? = icon?.let { { AppIcon(it) } }
 
 @Composable
 fun AppArrowRow(title: String, summary: String? = null, value: String? = null, icon: RoseIcon? = null, onClick: () -> Unit) {
     when (LocalInterfaceStyle.current) {
-        InterfaceStyle.MIUIX -> ArrowPreference(title, summary = summary, startAction = iconAction(icon), endActions = { value?.let { AppText(it, role = AppTextRole.Summary) } }, onClick = onClick)
+        InterfaceStyle.MIUIX -> ArrowPreference(
+            title,
+            summary = summary,
+            startAction = iconAction(icon),
+            endActions = { value?.let { AppText(it, role = AppTextRole.Summary) } },
+            onClick = onClick,
+        )
 
         InterfaceStyle.MATERIAL3 -> ListItem(
             headlineContent = { Text(title) },
@@ -338,7 +369,11 @@ fun AppInfoRow(label: String, value: String, valueColor: Color? = null) {
             BasicComponent(title = label, endActions = { AppText(value, role = AppTextRole.Summary) })
         }
 
-        InterfaceStyle.MATERIAL3 -> ListItem(headlineContent = { Text(label) }, supportingContent = { Text(value, color = valueColor ?: Color.Unspecified) }, colors = rowColors())
+        InterfaceStyle.MATERIAL3 -> ListItem(
+            headlineContent = { Text(label) },
+            supportingContent = { Text(value, color = valueColor ?: Color.Unspecified) },
+            colors = rowColors(),
+        )
     }
 }
 
@@ -373,7 +408,13 @@ fun AppSwitchRow(
 }
 
 @Composable
-fun <T> AppRadioGroup(options: List<AppOption<T>>, selected: T?, enabled: Boolean = true, transparentContainer: Boolean = false, onSelect: (T) -> Unit) {
+fun <T> AppRadioGroup(
+    options: List<AppOption<T>>,
+    selected: T?,
+    enabled: Boolean = true,
+    transparentContainer: Boolean = false,
+    onSelect: (T) -> Unit,
+) {
     Column(Modifier.selectableGroup()) {
         options.forEach { option ->
             val optionModifier = Modifier.semantics {
@@ -393,7 +434,11 @@ fun <T> AppRadioGroup(options: List<AppOption<T>>, selected: T?, enabled: Boolea
                 InterfaceStyle.MATERIAL3 -> ListItem(
                     headlineContent = { Text(option.label) },
                     leadingContent = { RadioButton(selected != null && option.value == selected, onClick = null, enabled = enabled) },
-                    modifier = optionModifier.selectable(selected != null && option.value == selected, enabled, Role.RadioButton) { onSelect(option.value) },
+                    modifier = optionModifier.selectable(
+                        selected != null && option.value == selected,
+                        enabled,
+                        Role.RadioButton,
+                    ) { onSelect(option.value) },
                     colors = if (transparentContainer) ListItemDefaults.colors(containerColor = Color.Transparent) else rowColors(),
                 )
             }
@@ -494,7 +539,9 @@ fun <T> AppChoiceRow(
                     title = { Text(title) },
                     text = {
                         LaunchedEffect(Unit) { dialogFocusRequester.requestFocus() }
-                        Column(Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState())) { AppRadioGroup(options, selected, enabled, transparentContainer = true, onSelect = select) }
+                        Column(Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState())) {
+                            AppRadioGroup(options, selected, enabled, transparentContainer = true, onSelect = select)
+                        }
                     },
                     confirmButton = {},
                     dismissButton = { TextButton(onClick = { setOpen(false) }) { Text("取消") } },
@@ -602,7 +649,13 @@ internal fun <T> AppMultiChoiceRow(
 }
 
 @Composable
-internal fun <T> AppSegmented(options: List<AppOption<T>>, selected: T?, enabled: Boolean = true, modifier: Modifier = Modifier, onSelect: (T) -> Unit) {
+internal fun <T> AppSegmented(
+    options: List<AppOption<T>>,
+    selected: T?,
+    enabled: Boolean = true,
+    modifier: Modifier = Modifier,
+    onSelect: (T) -> Unit,
+) {
     if (options.isEmpty()) return
     when (LocalInterfaceStyle.current) {
         InterfaceStyle.MIUIX -> Row(modifier.fillMaxWidth().selectableGroup(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -616,7 +669,11 @@ internal fun <T> AppSegmented(options: List<AppOption<T>>, selected: T?, enabled
                         role = Role.RadioButton
                         option.contentDescription?.let { contentDescription = it }
                     },
-                    colors = if (option.value == selected) MiuixButtonDefaults.textButtonColorsPrimary() else MiuixButtonDefaults.textButtonColors(),
+                    colors = if (option.value == selected) {
+                        MiuixButtonDefaults.textButtonColorsPrimary()
+                    } else {
+                        MiuixButtonDefaults.textButtonColors()
+                    },
                 )
             }
         }
@@ -639,7 +696,13 @@ internal fun <T> AppSegmented(options: List<AppOption<T>>, selected: T?, enabled
 internal fun AppViewTabs(tabs: List<String>, index: Int, modifier: Modifier = Modifier, onSelect: (Int) -> Unit) {
     when (LocalInterfaceStyle.current) {
         InterfaceStyle.MIUIX -> TabRowWithContour(tabs, index, onSelect, modifier = modifier)
-        InterfaceStyle.MATERIAL3 -> AppSegmented(tabs.mapIndexed { i, label -> AppOption(i, label) }, index, modifier = modifier, onSelect = onSelect)
+
+        InterfaceStyle.MATERIAL3 -> AppSegmented(
+            tabs.mapIndexed { i, label -> AppOption(i, label) },
+            index,
+            modifier = modifier,
+            onSelect = onSelect,
+        )
     }
 }
 
@@ -650,7 +713,13 @@ fun <T> AppCheckGroup(options: List<AppOption<T>>, checked: Set<T>, enabledFor: 
             val enabled = enabledFor(option.value)
             val optionModifier = Modifier.semantics { option.contentDescription?.let { contentDescription = it } }
             when (LocalInterfaceStyle.current) {
-                InterfaceStyle.MIUIX -> CheckboxPreference(option.label, option.value in checked, { onToggle(option.value) }, modifier = optionModifier, enabled = enabled)
+                InterfaceStyle.MIUIX -> CheckboxPreference(
+                    option.label,
+                    option.value in checked,
+                    { onToggle(option.value) },
+                    modifier = optionModifier,
+                    enabled = enabled,
+                )
 
                 InterfaceStyle.MATERIAL3 -> ListItem(
                     headlineContent = { Text(option.label) },
@@ -664,7 +733,15 @@ fun <T> AppCheckGroup(options: List<AppOption<T>>, checked: Set<T>, enabledFor: 
 }
 
 @Composable
-internal fun AppSliderRow(label: String, valueText: String, value: Float, range: ClosedFloatingPointRange<Float>, steps: Int, enabled: Boolean, onChange: (Float) -> Unit) {
+internal fun AppSliderRow(
+    label: String,
+    valueText: String,
+    value: Float,
+    range: ClosedFloatingPointRange<Float>,
+    steps: Int,
+    enabled: Boolean,
+    onChange: (Float) -> Unit,
+) {
     when (LocalInterfaceStyle.current) {
         InterfaceStyle.MIUIX -> SliderPreference(
             value,
@@ -690,13 +767,26 @@ internal fun AppSliderRow(label: String, valueText: String, value: Float, range:
                 Text(label)
                 Text(valueText)
             }
-            Slider(value, onChange, valueRange = range, steps = steps, enabled = enabled, modifier = Modifier.semantics { contentDescription = "$label 草稿增益" })
+            Slider(
+                value,
+                onChange,
+                valueRange = range,
+                steps = steps,
+                enabled = enabled,
+                modifier = Modifier.semantics { contentDescription = "$label 草稿增益" },
+            )
         }
     }
 }
 
 @Composable
-fun AppButton(text: String, onClick: () -> Unit, enabled: Boolean = true, modifier: Modifier = Modifier, kind: AppButtonKind = AppButtonKind.Primary) {
+fun AppButton(
+    text: String,
+    onClick: () -> Unit,
+    enabled: Boolean = true,
+    modifier: Modifier = Modifier,
+    kind: AppButtonKind = AppButtonKind.Primary,
+) {
     when (LocalInterfaceStyle.current) {
         InterfaceStyle.MIUIX -> if (kind == AppButtonKind.Primary) {
             MiuixTextButton(text, onClick, modifier = modifier, enabled = enabled, colors = MiuixButtonDefaults.textButtonColorsPrimary())
@@ -725,7 +815,9 @@ internal fun AppProgress(fraction: Float?) {
         InterfaceStyle.MIUIX -> if (fraction <= .2f) {
             top.yukonga.miuix.kmp.basic.LinearProgressIndicator(
                 progress = fraction,
-                colors = top.yukonga.miuix.kmp.basic.ProgressIndicatorDefaults.progressIndicatorColors(foregroundColor = appColor(AppColorRole.Error)),
+                colors = top.yukonga.miuix.kmp.basic.ProgressIndicatorDefaults.progressIndicatorColors(
+                    foregroundColor = appColor(AppColorRole.Error),
+                ),
             )
         } else {
             top.yukonga.miuix.kmp.basic.LinearProgressIndicator(progress = fraction)
@@ -763,8 +855,17 @@ internal fun AppDivider() {
 @Composable
 internal fun AppCandidateRow(title: String, summary: String, onConnect: (() -> Unit)?, enabled: Boolean = true) {
     when (LocalInterfaceStyle.current) {
-        InterfaceStyle.MIUIX -> BasicComponent(title = title, summary = summary, endActions = { onConnect?.let { MiuixTextButton("连接", it, enabled = enabled) } })
-        InterfaceStyle.MATERIAL3 -> ListItem(headlineContent = { Text(title) }, supportingContent = { Text(summary) }, trailingContent = onConnect?.let { { FilledTonalButton(it, enabled = enabled) { Text("连接") } } })
+        InterfaceStyle.MIUIX -> BasicComponent(
+            title = title,
+            summary = summary,
+            endActions = { onConnect?.let { MiuixTextButton("连接", it, enabled = enabled) } },
+        )
+
+        InterfaceStyle.MATERIAL3 -> ListItem(
+            headlineContent = { Text(title) },
+            supportingContent = { Text(summary) },
+            trailingContent = onConnect?.let { { FilledTonalButton(it, enabled = enabled) { Text("连接") } } },
+        )
     }
 }
 
@@ -775,7 +876,10 @@ internal fun SettingPageBanner(state: io.github.dohex.openrose.core.ControlState
     when (LocalInterfaceStyle.current) {
         InterfaceStyle.MIUIX -> AppGroup { BasicComponent(title = message) }
 
-        InterfaceStyle.MATERIAL3 -> Card(Modifier.fillMaxWidth().padding(horizontal = 16.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)) {
+        InterfaceStyle.MATERIAL3 -> Card(
+            Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
+        ) {
             Text(message, Modifier.padding(16.dp))
         }
     }

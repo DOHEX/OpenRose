@@ -185,7 +185,11 @@ class SwitchingControlRuntime(
         refresh()
         val next = OwnerRecord(
             selected = target,
-            moduleRelease = if (target == ControlWay.MODULE) previous.moduleRelease ?: PendingModuleRelease(request.id, null) else previous.moduleRelease,
+            moduleRelease = if (target == ControlWay.MODULE) {
+                previous.moduleRelease ?: PendingModuleRelease(request.id, null)
+            } else {
+                previous.moduleRelease
+            },
         )
         val saves = next != previous
         if (saves && !store.canSave(next)) {
@@ -496,7 +500,10 @@ class SwitchingControlRuntime(
 
     override suspend fun connectFromSystem(deviceId: DeviceId) = connect(deviceId, pinned = true)
 
-    override suspend fun connectForAddDevice(deviceId: DeviceId) = route({ it.connectForAddDevice(deviceId) }, HostCommand.ConnectForAddDevice(deviceId))
+    override suspend fun connectForAddDevice(deviceId: DeviceId) = route(
+        { it.connectForAddDevice(deviceId) },
+        HostCommand.ConnectForAddDevice(deviceId),
+    )
 
     override suspend fun disconnect(): Boolean {
         ordinary?.let { return it.runtime.disconnect() }
@@ -513,7 +520,10 @@ class SwitchingControlRuntime(
         return set(reference, setting, value)
     }
 
-    override suspend fun set(reference: SessionReference, setting: DeviceSetting, value: FieldValue) = route({ it.set(reference, setting, value) }, HostCommand.Set(reference, setting, value))
+    override suspend fun set(reference: SessionReference, setting: DeviceSetting, value: FieldValue) = route(
+        { it.set(reference, setting, value) },
+        HostCommand.Set(reference, setting, value),
+    )
 
     override fun readSession(reference: SessionReference): SessionSnapshotResult {
         ordinary?.let { return it.runtime.readSession(reference) }
@@ -533,14 +543,22 @@ class SwitchingControlRuntime(
     override fun updateSettings(settings: UserSettings) {
         this.settings = settings
         ordinary?.runtime?.updateSettings(settings)
-        if (record.selected == ControlWay.MODULE) scope.launch { client.execute(HostCommand.UpdateSettings(HostSettings(this@SwitchingControlRuntime.settings, integrationSettings))) }
+        if (record.selected == ControlWay.MODULE) {
+            scope.launch {
+                client.execute(HostCommand.UpdateSettings(HostSettings(this@SwitchingControlRuntime.settings, integrationSettings)))
+            }
+        }
         refresh()
     }
 
     fun updateIntegrationSettings(settings: IntegrationSettings) {
         integrationSettings = settings.copy(controlWay = record.selected)
         ordinary?.runtime?.updateIntegrationSettings(integrationSettings)
-        if (record.selected == ControlWay.MODULE) scope.launch { client.execute(HostCommand.UpdateSettings(HostSettings(this@SwitchingControlRuntime.settings, integrationSettings))) }
+        if (record.selected == ControlWay.MODULE) {
+            scope.launch {
+                client.execute(HostCommand.UpdateSettings(HostSettings(this@SwitchingControlRuntime.settings, integrationSettings)))
+            }
+        }
         refresh()
     }
 

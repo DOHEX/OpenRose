@@ -40,7 +40,9 @@ class BluezControlTransport private constructor(scope: CoroutineScope, private v
             } catch (error: CancellationException) {
                 throw error
             } catch (error: LinkageError) {
-                mutableAvailability.value = TransportAvailability.Unavailable("BlueZ 运行环境缺少依赖：${error.message ?: error.javaClass.simpleName}")
+                mutableAvailability.value = TransportAvailability.Unavailable(
+                    "BlueZ 运行环境缺少依赖：${error.message ?: error.javaClass.simpleName}",
+                )
             } catch (error: Exception) {
                 mutableAvailability.value = unavailable(error)
             } finally {
@@ -91,8 +93,14 @@ class BluezControlTransport private constructor(scope: CoroutineScope, private v
             val events = launch(start = CoroutineStart.UNDISPATCHED) {
                 current.events.collect { signal ->
                     if (signal is BluezSignal.Owner && !signal.present) throw IllegalStateException("BlueZ 服务已停止")
-                    if (signal is BluezSignal.Changed && signal.path == adapter && signal.interfaceName == ADAPTER && signal.values["Powered"] == false) throw IllegalStateException("蓝牙适配器已关闭")
-                    if (signal is BluezSignal.Removed && signal.path == adapter && ADAPTER in signal.interfaces) throw IllegalStateException("蓝牙适配器已移除")
+                    if (signal is BluezSignal.Changed && signal.path == adapter && signal.interfaceName == ADAPTER &&
+                        signal.values["Powered"] == false
+                    ) {
+                        throw IllegalStateException("蓝牙适配器已关闭")
+                    }
+                    if (signal is BluezSignal.Removed && signal.path == adapter && ADAPTER in signal.interfaces) {
+                        throw IllegalStateException("蓝牙适配器已移除")
+                    }
                     val path = when (signal) {
                         is BluezSignal.Added -> signal.path.takeIf { DEVICE in signal.interfaces }
                         is BluezSignal.Changed -> signal.path.takeIf { signal.interfaceName == DEVICE }
@@ -110,7 +118,9 @@ class BluezControlTransport private constructor(scope: CoroutineScope, private v
                 awaitCancellation()
             } catch (error: Throwable) {
                 failure = error
-                if (error is org.freedesktop.dbus.errors.AccessDenied || error is org.bluez.Error.NotAuthorized) mutableAvailability.value = unavailable(error as Exception)
+                if (error is org.freedesktop.dbus.errors.AccessDenied || error is org.bluez.Error.NotAuthorized) {
+                    mutableAvailability.value = unavailable(error as Exception)
+                }
                 throw error
             } finally {
                 events.cancel()
@@ -127,13 +137,18 @@ class BluezControlTransport private constructor(scope: CoroutineScope, private v
         }
     }
     override suspend fun bondedDevices(): List<DeviceCandidate> = audio.bondedDevices()
-    override suspend fun connectionFacts(deviceId: DeviceId, classicAddress: String?): TransportFacts = audio.connectionFacts(deviceId, classicAddress)
+    override suspend fun connectionFacts(deviceId: DeviceId, classicAddress: String?): TransportFacts = audio.connectionFacts(
+        deviceId,
+        classicAddress,
+    )
     override val audioConnectedDevice: Flow<DeviceId?> = audio.audioConnectedDevice
     override suspend fun connect(deviceId: DeviceId, endpoint: TransportEndpoint, onPhase: (ConnectionPhase) -> Unit): ControlConnection {
         val current = activeBus()
         val ble = endpoint as? TransportEndpoint.BleGatt ?: throw IllegalArgumentException("Linux 不支持 SPP 控制连接")
         val address = normalizeBluetoothAddress(deviceId.value) ?: throw IllegalArgumentException("蓝牙地址无效")
-        val path = current.objects().entries.firstOrNull { (_, interfaces) -> normalizeBluetoothAddress(interfaces[DEVICE]?.get("Address") as? String) == address }?.key
+        val path = current.objects().entries.firstOrNull { (_, interfaces) ->
+            normalizeBluetoothAddress(interfaces[DEVICE]?.get("Address") as? String) == address
+        }?.key
             ?: throw IllegalStateException("未找到蓝牙设备 $address")
         return GattControlConnection.open(BluezGattDriver(current, path), ble, onPhase)
     }
@@ -205,12 +220,15 @@ class BluezControlTransport private constructor(scope: CoroutineScope, private v
                         val now = devices(objects).associateBy { it.address }
                         for ((address, device) in previous) {
                             if (address !in now) {
-                                for (profile in listOf(AudioProfile.A2DP, AudioProfile.HEADSET)) send(RawAudioEvent.ProfileChanged(profile, device, false, false))
+                                for (profile in listOf(AudioProfile.A2DP, AudioProfile.HEADSET)) {
+                                    send(RawAudioEvent.ProfileChanged(profile, device, false, false))
+                                }
                             }
                         }
                         for (device in now.values) {
                             for (profile in listOf(AudioProfile.A2DP, AudioProfile.HEADSET)) {
-                                send(RawAudioEvent.ProfileChanged(profile, device, true, device.address in snapshot.profiles[profile]?.connectedAddresses.orEmpty()))
+                                val connected = device.address in snapshot.profiles[profile]?.connectedAddresses.orEmpty()
+                                send(RawAudioEvent.ProfileChanged(profile, device, true, connected))
                             }
                         }
                         previous.clear()
@@ -240,7 +258,12 @@ private fun Map<String, Any?>.advertisement(): Advertisement? {
         val bytes = value.asBytes() ?: return@mapNotNull null
         id to bytes
     }?.toMap().orEmpty()
-    return Advertisement(DeviceId(address), this["Name"] as? String ?: this["Alias"] as? String, (this["RSSI"] as? Number)?.toInt(), manufacturer)
+    return Advertisement(
+        DeviceId(address),
+        this["Name"] as? String ?: this["Alias"] as? String,
+        (this["RSSI"] as? Number)?.toInt(),
+        manufacturer,
+    )
 }
 private fun devices(objects: BluezObjects): List<RawAudioDevice> = objects.values.mapNotNull { interfaces ->
     val properties = interfaces[DEVICE] ?: return@mapNotNull null
@@ -264,13 +287,31 @@ private fun audioSnapshot(objects: BluezObjects, targets: Set<String>): RawAudio
         if (advertised != null && advertised.none { profileForUuid((it as? String)?.lowercase()) == profile }) continue
         connected.getValue(profile).add(address)
     }
-    val profiles = connected.mapValues { (_, list) -> RawProfileSnapshot(list.toList(), (targets + addresses.values).associateWith { if (it in list) AudioConnectionState.CONNECTED else AudioConnectionState.DISCONNECTED }) }
-    return RawAudioSnapshot(objects.values.any { it[ADAPTER]?.get("Powered") == true }, false, connected.getValue(AudioProfile.LE_AUDIO).isNotEmpty(), paired, profiles)
+    val profiles = connected.mapValues { (_, list) ->
+        RawProfileSnapshot(
+            list.toList(),
+            (targets + addresses.values).associateWith {
+                if (it in list) AudioConnectionState.CONNECTED else AudioConnectionState.DISCONNECTED
+            },
+        )
+    }
+    return RawAudioSnapshot(
+        objects.values.any { it[ADAPTER]?.get("Powered") == true },
+        false,
+        connected.getValue(AudioProfile.LE_AUDIO).isNotEmpty(),
+        paired,
+        profiles,
+    )
 }
 
 private fun profileForUuid(uuid: String?): AudioProfile? = when (uuid) {
     "0000110a-0000-1000-8000-00805f9b34fb", "0000110b-0000-1000-8000-00805f9b34fb" -> AudioProfile.A2DP
-    "0000184e-0000-1000-8000-00805f9b34fb", "0000184f-0000-1000-8000-00805f9b34fb", "00001850-0000-1000-8000-00805f9b34fb" -> AudioProfile.LE_AUDIO
+
+    "0000184e-0000-1000-8000-00805f9b34fb",
+    "0000184f-0000-1000-8000-00805f9b34fb",
+    "00001850-0000-1000-8000-00805f9b34fb",
+    -> AudioProfile.LE_AUDIO
+
     else -> null
 }
 

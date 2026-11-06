@@ -36,8 +36,10 @@ internal fun ControlState.activeDevice(): DeviceState? {
     val targetId = connectionTarget?.deviceId
     return device?.takeIf { connection.matches(it) && (targetId == null || targetId == it.deviceId) }
 }
-internal fun PlatformState.transportUnavailableForHome(): Boolean = permission in setOf(PermissionState.GRANTED, PermissionState.NOT_REQUIRED) &&
-    transport is TransportAvailability.Unavailable
+internal fun PlatformState.transportUnavailableForHome(): Boolean = permission in setOf(
+    PermissionState.GRANTED,
+    PermissionState.NOT_REQUIRED,
+) && transport is TransportAvailability.Unavailable
 val ModelProfile.configurationLabel: String
     get() = when (this) {
         ModelProfile.I5_ZT -> "ZT"

@@ -94,8 +94,12 @@ internal class AddDeviceFlow(
     fun observe(connection: ConnectionState) {
         if (!pending || reference != null) return
         reference = when (connection) {
-            is ConnectionState.Connecting -> if (connection.deviceId == selectedDeviceId) SessionReference(connection.deviceId, connection.sessionId) else null
-            is ConnectionState.Connected -> if (connection.deviceId == selectedDeviceId) SessionReference(connection.deviceId, connection.sessionId) else null
+            is ConnectionState.Connecting ->
+                if (connection.deviceId == selectedDeviceId) SessionReference(connection.deviceId, connection.sessionId) else null
+
+            is ConnectionState.Connected ->
+                if (connection.deviceId == selectedDeviceId) SessionReference(connection.deviceId, connection.sessionId) else null
+
             ConnectionState.Disconnected -> null
         }
     }
@@ -104,8 +108,20 @@ internal class AddDeviceFlow(
         if (!pending) return null
         val selected = reference ?: return ConnectionPhase.CONNECTING
         return when (connection) {
-            is ConnectionState.Connecting -> if (connection.deviceId == selected.deviceId && connection.sessionId == selected.sessionId) connection.phase else ConnectionPhase.CONNECTING
-            is ConnectionState.Connected -> if (connection.deviceId == selected.deviceId && connection.sessionId == selected.sessionId) connection.phase else ConnectionPhase.CONNECTING
+            is ConnectionState.Connecting ->
+                if (connection.deviceId == selected.deviceId && connection.sessionId == selected.sessionId) {
+                    connection.phase
+                } else {
+                    ConnectionPhase.CONNECTING
+                }
+
+            is ConnectionState.Connected ->
+                if (connection.deviceId == selected.deviceId && connection.sessionId == selected.sessionId) {
+                    connection.phase
+                } else {
+                    ConnectionPhase.CONNECTING
+                }
+
             ConnectionState.Disconnected -> ConnectionPhase.CONNECTING
         }
     }

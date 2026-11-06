@@ -90,7 +90,8 @@ internal fun ControlState.systemPresentation(settings: IntegrationSettings, prom
 internal fun SystemPresentationState.detached() = copy(actions = actions.toSet())
 
 /** Whether this prompt may still show under [settings]: its mode is the saved one and that mode prompts. */
-internal fun ConnectionPrompt.appliesTo(settings: IntegrationSettings): Boolean = mode == settings.islandMode && settings.allowsConnectionPrompt()
+internal fun ConnectionPrompt.appliesTo(settings: IntegrationSettings): Boolean = mode == settings.islandMode &&
+    settings.allowsConnectionPrompt()
 
 internal fun IntegrationSettings.allowsConnectionPrompt(): Boolean = when (islandMode) {
     IslandMode.OFF -> false

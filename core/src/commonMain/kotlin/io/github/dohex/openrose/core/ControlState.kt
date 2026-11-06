@@ -89,7 +89,23 @@ sealed interface OperationResult {
     data class Failure(val error: ControlError) : OperationResult
 }
 
-enum class DeviceSetting { NOISE_MODE, ANC_LEVEL, TRANSPARENCY_LEVEL, NOISE_CYCLE, EQ, GAME_MODE, AUDIO_MODE, MULTIPOINT, TOUCH_ENABLED, EAR_DETECTION, TOUCH_BINDING, PROMPT_VOLUME, CUSTOM_EQ, GAIN, HEARING_PROTECTION }
+enum class DeviceSetting {
+    NOISE_MODE,
+    ANC_LEVEL,
+    TRANSPARENCY_LEVEL,
+    NOISE_CYCLE,
+    EQ,
+    GAME_MODE,
+    AUDIO_MODE,
+    MULTIPOINT,
+    TOUCH_ENABLED,
+    EAR_DETECTION,
+    TOUCH_BINDING,
+    PROMPT_VOLUME,
+    CUSTOM_EQ,
+    GAIN,
+    HEARING_PROTECTION,
+}
 
 /** Transport acceptance and device state confirmation are separate facts. */
 enum class SettingStage { SUBMITTED, PARTIALLY_WRITTEN, WRITTEN, CONFIRMED, NOT_APPLIED, TIMED_OUT, DISCONNECTED, FAILED }

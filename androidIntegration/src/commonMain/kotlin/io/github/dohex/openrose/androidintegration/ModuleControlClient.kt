@@ -128,7 +128,9 @@ class ModuleControlClient(
      * generation by itself: the owner the host reports is remembered in [lastObservedGeneration] and the
      * caller must ask again naming it.
      */
-    suspend fun release(request: SwitchRequest): ReleaseProof = withConnection({ ReleaseProof.Unproven(it.stage, it.reason) }) { connection ->
+    suspend fun release(request: SwitchRequest): ReleaseProof = withConnection(
+        { ReleaseProof.Unproven(it.stage, it.reason) },
+    ) { connection ->
         val result = try {
             withTimeout(timing.releaseTimeoutMillis) { connection.release(request) }
         } catch (e: TimeoutCancellationException) {
@@ -158,7 +160,9 @@ class ModuleControlClient(
         }
     }
 
-    suspend fun acquire(request: SwitchRequest, settings: HostSettings): AcquireOutcome = withConnection({ AcquireOutcome.Failed(it.stage, it.reason) }) { connection ->
+    suspend fun acquire(request: SwitchRequest, settings: HostSettings): AcquireOutcome = withConnection(
+        { AcquireOutcome.Failed(it.stage, it.reason) },
+    ) { connection ->
         try {
             when (val result = withTimeout(timing.acquireTimeoutMillis) { connection.acquire(request, settings) }) {
                 is AcquireResult.Acquired -> {

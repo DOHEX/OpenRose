@@ -10,7 +10,12 @@ internal class I5Codec : ProtocolCodec {
         val (writeKey, readKey, payload) = when (setting) {
             DeviceSetting.NOISE_MODE -> {
                 require(value is FieldValue.Text) { "降噪模式需要模式名称" }
-                val mode = mapOf("anc" to "01000000", "normal" to "00010000", "wind" to "00000100", "transparency" to "00000001")[value.value]
+                val mode = mapOf(
+                    "anc" to "01000000",
+                    "normal" to "00010000",
+                    "wind" to "00000100",
+                    "transparency" to "00000001",
+                )[value.value]
                     ?: throw UnsupportedOperationException("i5 不支持该降噪模式")
                 Triple("0682", "0602", mode.bytes())
             }
@@ -28,7 +33,10 @@ internal class I5Codec : ProtocolCodec {
 
             DeviceSetting.NOISE_CYCLE -> {
                 val flags = (expected as FieldValue.NoiseCycle).flags
-                Triple("0685", "0605", listOf("normal", "transparency", "wind", "anc").map { if (flags.getValue(it) == true) 1.toByte() else 0.toByte() }.toByteArray())
+                val payload = listOf("normal", "transparency", "wind", "anc")
+                    .map { if (flags.getValue(it) == true) 1.toByte() else 0.toByte() }
+                    .toByteArray()
+                Triple("0685", "0605", payload)
             }
 
             DeviceSetting.EQ -> {
@@ -69,7 +77,16 @@ internal class I5Codec : ProtocolCodec {
                 val binding = validatedTouchAssignment(value, profile)
                 val side = if (binding.side == "left") 0 else 1
                 val gesture = listOf("single", "double", "triple", "long").indexOf(binding.gesture)
-                val action = listOf("volume_up", "volume_down", "previous_track", "next_track", "voice_assistant", "play_pause", "none", "noise_cycle").indexOf(binding.action)
+                val action = listOf(
+                    "volume_up",
+                    "volume_down",
+                    "previous_track",
+                    "next_track",
+                    "voice_assistant",
+                    "play_pause",
+                    "none",
+                    "noise_cycle",
+                ).indexOf(binding.action)
                 Triple("0481", "0401", byteArrayOf(side.toByte(), gesture.toByte(), action.toByte()))
             }
 
@@ -134,7 +151,12 @@ internal class I5Codec : ProtocolCodec {
         val nibble = raw[9].u() and 15
         when (command) {
             "0101" -> {
-                for ((field, offset) in listOf(DeviceField.LEFT_BATTERY to 11, DeviceField.RIGHT_BATTERY to 12, DeviceField.CASE_BATTERY to 15)) {
+                val batteries = listOf(
+                    DeviceField.LEFT_BATTERY to 11,
+                    DeviceField.RIGHT_BATTERY to 12,
+                    DeviceField.CASE_BATTERY to 15,
+                )
+                for ((field, offset) in batteries) {
                     val value = raw[offset].u()
                     val hex = byteArrayOf(raw[offset]).hex()
                     fields[field] = when {
@@ -155,7 +177,16 @@ internal class I5Codec : ProtocolCodec {
             }
 
             "0401" -> {
-                val actions = listOf("volume_up", "volume_down", "previous_track", "next_track", "voice_assistant", "play_pause", "none", "noise_cycle")
+                val actions = listOf(
+                    "volume_up",
+                    "volume_down",
+                    "previous_track",
+                    "next_track",
+                    "voice_assistant",
+                    "play_pause",
+                    "none",
+                    "noise_cycle",
+                )
                 val gestures = listOf("single", "double", "triple", "long")
                 val bindings = (0..7).map {
                     val action = raw[9 + it].u() and 15
@@ -166,7 +197,13 @@ internal class I5Codec : ProtocolCodec {
 
             "0602" -> {
                 val tail = raw.copyOfRange(9, raw.size).hex()
-                val mode = mapOf("0100000020" to "anc", "0001000020" to "normal", "0000010020" to "wind", "0000000120" to "transparency", "0200000021" to "auto")[tail]
+                val mode = mapOf(
+                    "0100000020" to "anc",
+                    "0001000020" to "normal",
+                    "0000010020" to "wind",
+                    "0000000120" to "transparency",
+                    "0200000021" to "auto",
+                )[tail]
                 fields[DeviceField.NOISE_MODE] = mode?.let { FieldReading.Known(FieldValue.Text(it), tail) } ?: FieldReading.Unknown(tail)
             }
 

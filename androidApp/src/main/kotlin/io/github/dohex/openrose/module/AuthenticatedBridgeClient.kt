@@ -306,7 +306,8 @@ internal class AuthenticatedBridgeClient(
         if (status == BridgeWire.STATUS_UNAUTHORIZED) closeLease(bridge)
     }
 
-    private fun generationOf(bundle: Bundle): String? = bundle.getString(BridgeWire.HOST_EPOCH)?.takeIf { it.isNotBlank() && it.length <= MAX_GENERATION_LENGTH }
+    private fun generationOf(bundle: Bundle): String? = bundle.getString(BridgeWire.HOST_EPOCH)
+        ?.takeIf { it.isNotBlank() && it.length <= MAX_GENERATION_LENGTH }
 
     /**
      * Adopts the owner generation reported by `currentSession`. A change revokes every consumer of
@@ -381,7 +382,12 @@ internal class AuthenticatedBridgeClient(
         ownerGeneration?.let { putString(BridgeWire.HOST_EPOCH, it) }
     }
 
-    private fun sessionRequest(lease: String, ownerGeneration: String, deviceId: String, sessionId: Long): Bundle = leaseRequest(lease, ownerGeneration).apply {
+    private fun sessionRequest(
+        lease: String,
+        ownerGeneration: String,
+        deviceId: String,
+        sessionId: Long,
+    ): Bundle = leaseRequest(lease, ownerGeneration).apply {
         putString(BridgeWire.DEVICE_ID, deviceId)
         putLong(BridgeWire.SESSION_ID, sessionId)
     }

@@ -217,7 +217,9 @@ internal class SystemPresentationRenderer(
         }
 
         if (statusTag != null && statusTag != requestedTag) withdrawStatusNotification(snapshot.wire)
-        if (Build.VERSION.SDK_INT >= 33 && appContext.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+        if (Build.VERSION.SDK_INT >= 33 &&
+            appContext.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
             withdrawStatusNotification(snapshot.wire)
             reportOnce(
                 snapshot.wire,
@@ -355,7 +357,11 @@ internal class SystemPresentationRenderer(
                 Log.w(TAG, "prompt_claim_failed", it)
                 reportOnce(
                     snapshot.wire,
-                    if (promptMode == BridgePresentationWire.MODULE) BridgePresentationWire.MODULE_CONNECTION else BridgePresentationWire.OFFICIAL_CONNECTION,
+                    if (promptMode == BridgePresentationWire.MODULE) {
+                        BridgePresentationWire.MODULE_CONNECTION
+                    } else {
+                        BridgePresentationWire.OFFICIAL_CONNECTION
+                    },
                     BridgePresentationWire.UNAVAILABLE,
                     "prompt_claim_temporarily_unavailable",
                 )
@@ -370,7 +376,9 @@ internal class SystemPresentationRenderer(
 
     private fun publishModulePrompt(snapshot: RenderedSnapshot, promptId: String, prompt: Bundle) {
         val key = promptKey(snapshot.identity, promptId)
-        if (Build.VERSION.SDK_INT >= 33 && appContext.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+        if (Build.VERSION.SDK_INT >= 33 &&
+            appContext.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
             processedPrompts += key
             reportOnce(
                 snapshot.wire,
@@ -647,7 +655,9 @@ internal class SystemPresentationRenderer(
     // check at this one posting boundary rather than requesting an unrelated app permission.
     @SuppressLint("NotificationPermission")
     private fun postNotification(tag: String, id: Int, notification: Notification) {
-        if (Build.VERSION.SDK_INT >= 33 && appContext.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+        if (Build.VERSION.SDK_INT >= 33 &&
+            appContext.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
             throw SecurityException("Target process has no notification permission")
         }
         val manager = notificationManager ?: throw IllegalStateException("notification_manager_unavailable")

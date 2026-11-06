@@ -330,7 +330,11 @@ class NativeHeadsetBinderAdapter(
                     val snapshot = snapshotForActionDevice(chain.thisObject, targetDevice)
                     if (snapshot == null) {
                         if (!shouldSuppressManagedAction(chain.thisObject, targetDevice)) return HookDecision.Proceed
-                        report(FEATURE, "UNAVAILABLE", "changeAncMode transaction blocked because the managed address has no matching current session")
+                        report(
+                            FEATURE,
+                            "UNAVAILABLE",
+                            "changeAncMode transaction blocked because the managed address has no matching current session",
+                        )
                         reply.writeNoException()
                         handled = true
                     } else {
@@ -347,11 +351,19 @@ class NativeHeadsetBinderAdapter(
                     val snapshot = snapshotForActionDevice(chain.thisObject, targetDevice)
                     if (snapshot == null) {
                         if (!shouldSuppressManagedAction(chain.thisObject, targetDevice)) return HookDecision.Proceed
-                        report(FEATURE, "UNAVAILABLE", "changeAncLevel transaction blocked because the managed address has no matching current session")
+                        report(
+                            FEATURE,
+                            "UNAVAILABLE",
+                            "changeAncLevel transaction blocked because the managed address has no matching current session",
+                        )
                         reply.writeNoException()
                         handled = true
                     } else {
-                        report(FEATURE, "UNSUPPORTED", "changeAncLevel transaction has no proven ROSE mapping (level=${level.orEmpty().take(24)})")
+                        report(
+                            FEATURE,
+                            "UNSUPPORTED",
+                            "changeAncLevel transaction has no proven ROSE mapping (level=${level.orEmpty().take(24)})",
+                        )
                         reply.writeNoException()
                         handled = true
                     }
@@ -461,9 +473,12 @@ class NativeHeadsetBinderAdapter(
         }
     }
 
-    private fun statusPayload(snapshot: NativeHeadsetSnapshot): String? = (SystemHeadsetMapping.binderStatus(snapshot.fields) as? SystemHeadsetMapping.BinderStatus.Payload)?.text
+    private fun statusPayload(snapshot: NativeHeadsetSnapshot): String? = SystemHeadsetMapping.binderStatus(snapshot.fields)
+        .let { status -> status as? SystemHeadsetMapping.BinderStatus.Payload }
+        ?.text
 
-    private fun snapshotForDevice(value: Any?): NativeHeadsetSnapshot? = (value as? BluetoothDevice)?.let { device -> runCatching { snapshotForAddress(device.address) }.getOrNull() }
+    private fun snapshotForDevice(value: Any?): NativeHeadsetSnapshot? = (value as? BluetoothDevice)
+        ?.let { device -> runCatching { snapshotForAddress(device.address) }.getOrNull() }
 
     private fun snapshotForAddress(address: String?): NativeHeadsetSnapshot? {
         val snapshot = currentSnapshot?.takeIf { it.isFresh(SystemClock.elapsedRealtime()) } ?: return null
@@ -480,7 +495,8 @@ class NativeHeadsetBinderAdapter(
         return snapshot
     }
 
-    private fun bluetoothAddress(value: Any?): String? = (value as? BluetoothDevice)?.let { device -> runCatching { device.address }.getOrNull() }
+    private fun bluetoothAddress(value: Any?): String? = (value as? BluetoothDevice)
+        ?.let { device -> runCatching { device.address }.getOrNull() }
 
     private fun snapshotForBoundAddress(owner: Any?): NativeHeadsetSnapshot? {
         val binding = owner?.let { instance -> synchronized(binderAddress) { binderAddress[instance] } } ?: return null
@@ -686,7 +702,8 @@ class NativeHeadsetBinderAdapter(
         }
     }
 
-    private fun hookId(method: Method): String = "openrose.native_headset.binder.${method.declaringClass.name}.${method.name}".replace('-', '_')
+    private fun hookId(method: Method): String = "openrose.native_headset.binder.${method.declaringClass.name}.${method.name}"
+        .replace('-', '_')
 
     private data class RegisteredCallback(
         val callback: Any,

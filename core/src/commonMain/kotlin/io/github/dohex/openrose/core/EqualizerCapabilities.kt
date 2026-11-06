@@ -12,7 +12,8 @@ data class CustomEqualizerCapabilities(val bandsHz: PersistentList<Int>, val min
 data class EqualizerCapabilities(val presets: PersistentSet<String>, val custom: CustomEqualizerCapabilities? = null)
 
 /** RoseLink compares concatenated decimal text of three complete unsigned firmware bytes. */
-internal fun firmwareComparisonInteger(firmware: FieldValue.Firmware?): Int? = firmware?.parts?.takeIf { it.size == 3 && it.all { part -> part in 0..255 } }
+internal fun firmwareComparisonInteger(firmware: FieldValue.Firmware?): Int? = firmware?.parts
+    ?.takeIf { it.size == 3 && it.all { part -> part in 0..255 } }
     ?.joinToString("")?.toIntOrNull()
 
 fun equalizerCapabilities(profile: ModelProfile, firmware: FieldValue.Firmware? = null): EqualizerCapabilities {

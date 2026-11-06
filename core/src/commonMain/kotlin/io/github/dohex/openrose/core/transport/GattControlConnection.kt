@@ -141,7 +141,9 @@ class GattControlConnection private constructor(
             withContext(NonCancellable) {
                 // Even if an outstanding native CCCD write prevents remote rollback, always undo local routing.
                 try {
-                    withTimeoutOrNull(OPERATION_TIMEOUT_MS) { runCatching { driver.configureSubscription(notifier, GattSubscription.DISABLED) } }
+                    withTimeoutOrNull(OPERATION_TIMEOUT_MS) {
+                        runCatching { driver.configureSubscription(notifier, GattSubscription.DISABLED) }
+                    }
                 } finally {
                     withTimeoutOrNull(OPERATION_TIMEOUT_MS) { runCatching { driver.setNotificationRouting(notifier, false) } }
                 }

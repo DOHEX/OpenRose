@@ -62,7 +62,9 @@ class ControlService : Service() {
                 // Background control exists only while ordinary control is the saved choice; module control
                 // (or none) ends it without touching the saved intent.
                 combine(app.runtime.state, app.runtime.integration) { state, integration ->
-                    (integration.settings.backgroundControlEnabled && integration.owner.selected == ControlWay.ORDINARY) to notificationText(state)
+                    val backgroundEnabled = integration.settings.backgroundControlEnabled &&
+                        integration.owner.selected == ControlWay.ORDINARY
+                    backgroundEnabled to notificationText(state)
                 }
                     .distinctUntilChanged()
                     .collect { (enabled, _) ->

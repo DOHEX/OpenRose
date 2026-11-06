@@ -128,7 +128,9 @@ internal class HostEndpoint(
         scope.launch {
             host.ownerView.collect { view ->
                 val prompt = view?.presentation?.connectionPrompt
-                if (prompt?.mode == IslandMode.OFFICIAL && synchronized(lock) { leases.values.none { it.target == BridgeTarget.XIAOMI_BLUETOOTH } }) {
+                if (prompt?.mode == IslandMode.OFFICIAL &&
+                    synchronized(lock) { leases.values.none { it.target == BridgeTarget.XIAOMI_BLUETOOTH } }
+                ) {
                     facts.update {
                         it.copy(
                             presentation = it.presentation +
@@ -154,7 +156,11 @@ internal class HostEndpoint(
             val refused = opened as HostOpenResult.Refused
             Log.w(TAG, "open_refused uid=${caller.uid} ${refused.rejection}")
             // A retired instance (module hot reload) is not an authorisation failure: the client must rediscover.
-            val status = if (refused.rejection == HostRejection.UNAUTHORIZED) BridgeWire.STATUS_UNAUTHORIZED else BridgeWire.STATUS_UNAVAILABLE
+            val status = if (refused.rejection == HostRejection.UNAUTHORIZED) {
+                BridgeWire.STATUS_UNAUTHORIZED
+            } else {
+                BridgeWire.STATUS_UNAVAILABLE
+            }
             return BridgeBundles.response(status, refused.message)
         }
         val role = opened.lease.role
@@ -210,9 +216,13 @@ internal class HostEndpoint(
             ?: throw SecurityException("读取凭据已失效")
     }
 
-    private fun consumerLease(leaseId: String?): EndpointLease = lease(leaseId).also { if (it.target == null) throw SecurityException("该调用者无权使用系统入口接口") }
+    private fun consumerLease(leaseId: String?): EndpointLease = lease(leaseId).also {
+        if (it.target == null) throw SecurityException("该调用者无权使用系统入口接口")
+    }
 
-    private fun appLease(request: Bundle): EndpointLease = lease(request.getString(BridgeWire.LEASE_ID)).also { if (it.role != ClientRole.APP) throw SecurityException("仅 OpenRose 应用可使用此接口") }
+    private fun appLease(request: Bundle): EndpointLease = lease(request.getString(BridgeWire.LEASE_ID)).also {
+        if (it.role != ClientRole.APP) throw SecurityException("仅 OpenRose 应用可使用此接口")
+    }
 
     override fun currentSession(leaseId: String): Bundle {
         val lease = consumerLease(leaseId)
@@ -273,7 +283,8 @@ internal class HostEndpoint(
     override fun acknowledge(receipt: Bundle): Bundle {
         val lease = consumerLease(receipt.getString(BridgeWire.LEASE_ID))
         val pending = synchronized(lock) { lease.awaiting } ?: return BridgeBundles.response(BridgeWire.STATUS_NO_PENDING_READ)
-        if (receipt.getInt(BridgeWire.KEY_VERSION) != BridgeWire.VERSION || receipt.getString(BridgeWire.HOST_EPOCH) != pending.generation ||
+        if (receipt.getInt(BridgeWire.KEY_VERSION) != BridgeWire.VERSION ||
+            receipt.getString(BridgeWire.HOST_EPOCH) != pending.generation ||
             receipt.getString(BridgeWire.DEVICE_ID) != pending.reference.deviceId.value ||
             receipt.getLong(BridgeWire.SESSION_ID, -1) != pending.reference.sessionId ||
             receipt.getLong(BridgeWire.READ_SEQUENCE, -1) != pending.sequence
@@ -303,7 +314,9 @@ internal class HostEndpoint(
                 host.status.collectLatest { status ->
                     notify(observer, lease.id, (status as? HostStatus.Active)?.generation?.toString())
                     if (status is HostStatus.Active) {
-                        host.changes(lease.caller, lease.id, status.generation).collect { notify(observer, lease.id, status.generation.toString()) }
+                        host.changes(lease.caller, lease.id, status.generation).collect {
+                            notify(observer, lease.id, status.generation.toString())
+                        }
                     }
                 }
             }
@@ -330,7 +343,11 @@ internal class HostEndpoint(
         val reference = request.reference() ?: return BridgeBundles.response(BridgeWire.STATUS_INVALID_ARGUMENT)
         val id = request.getString(BridgePresentationWire.PROMPT_ID)?.takeIf { it.length in 1..128 }
             ?: return BridgeBundles.response(BridgeWire.STATUS_INVALID_ARGUMENT)
-        return when (val result = runBlocking { host.execute(lease.caller, lease.id, generation, HostCommand.ClaimPrompt(reference, id)) }) {
+        return when (
+            val result = runBlocking {
+                host.execute(lease.caller, lease.id, generation, HostCommand.ClaimPrompt(reference, id))
+            }
+        ) {
             is HostCallResult.Flag -> BridgeBundles.response(if (result.value) BridgeWire.STATUS_OK else "STALE_PROMPT")
 
             // The host decides which entry presents the saved island mode; a refusal is not a stale generation.
@@ -355,7 +372,12 @@ internal class HostEndpoint(
         // result is the earphones' confirmation, never that this call arrived.
         return when (
             val result = runBlocking {
-                host.execute(lease.caller, lease.id, generation, HostCommand.Set(reference, DeviceSetting.NOISE_MODE, FieldValue.Text(mode)))
+                host.execute(
+                    lease.caller,
+                    lease.id,
+                    generation,
+                    HostCommand.Set(reference, DeviceSetting.NOISE_MODE, FieldValue.Text(mode)),
+                )
             }
         ) {
             is HostCallResult.Operation -> when (val outcome = result.result) {
@@ -417,7 +439,8 @@ internal class HostEndpoint(
         val key = endpointKey(requireNotNull(lease.target), lease.processName)
         facts.update { current ->
             val endpoint = current.endpoints[key] ?: return@update current
-            current.copy(endpoints = current.endpoints + (key to endpoint.copy(features = endpoint.features + (feature to "$status · $detail"))))
+            val updated = endpoint.copy(features = endpoint.features + (feature to "$status · $detail"))
+            current.copy(endpoints = current.endpoints + (key to updated))
         }
         return BridgeBundles.response(BridgeWire.STATUS_OK)
     }
@@ -536,7 +559,10 @@ internal class HostEndpoint(
         val info = runCatching { context.packageManager.getPackageInfo(target.packageName, 0) }.getOrNull()
 
         @Suppress("DEPRECATION")
-        val version = info?.let { "${it.versionName ?: "未知"} (${if (Build.VERSION.SDK_INT >= 28) it.longVersionCode else it.versionCode.toLong()})" } ?: "未知"
+        val version = info?.let {
+            val code = if (Build.VERSION.SDK_INT >= 28) it.longVersionCode else it.versionCode.toLong()
+            "${it.versionName ?: "未知"} ($code)"
+        } ?: "未知"
         val key = endpointKey(target, process)
         facts.update { current ->
             current.copy(

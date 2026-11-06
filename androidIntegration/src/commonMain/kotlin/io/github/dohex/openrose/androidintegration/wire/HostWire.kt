@@ -30,7 +30,10 @@ import io.github.dohex.openrose.core.transport.DeviceId
 
 /** Wire form of the module-host protocol. Every IPC binding carries these rendered strings. */
 object HostWire {
-    fun encode(generation: OwnerGeneration): Wire = obj("incarnation" to str(generation.incarnation), "sequence" to num(generation.sequence))
+    fun encode(generation: OwnerGeneration): Wire = obj(
+        "incarnation" to str(generation.incarnation),
+        "sequence" to num(generation.sequence),
+    )
     fun decodeGeneration(wire: Wire): OwnerGeneration = wire.asObj().let { OwnerGeneration(it.str("incarnation"), it.long("sequence")) }
 
     fun encode(holder: OwnerHolder): Wire = obj(
@@ -117,7 +120,11 @@ object HostWire {
 
         is HostCommand.UpdateSettings -> obj("t" to str("settings"), "settings" to encode(command.settings))
 
-        is HostCommand.ClaimPrompt -> obj("t" to str("claim"), "reference" to ControlWire.encode(command.reference), "prompt" to str(command.promptId))
+        is HostCommand.ClaimPrompt -> obj(
+            "t" to str("claim"),
+            "reference" to ControlWire.encode(command.reference),
+            "prompt" to str(command.promptId),
+        )
     }
 
     fun decodeCommand(wire: Wire): HostCommand {
@@ -153,8 +160,14 @@ object HostWire {
 
     fun encode(result: HostCallResult): Wire = when (result) {
         is HostCallResult.Operation -> obj("t" to str("operation"), "result" to ControlWire.encode(result.result))
+
         is HostCallResult.Flag -> obj("t" to str("flag"), "value" to bool(result.value))
-        is HostCallResult.Rejected -> obj("t" to str("rejected"), "rejection" to Wire.Str(result.rejection.name), "message" to str(result.message))
+
+        is HostCallResult.Rejected -> obj(
+            "t" to str("rejected"),
+            "rejection" to Wire.Str(result.rejection.name),
+            "message" to str(result.message),
+        )
     }
 
     fun decodeCallResult(wire: Wire): HostCallResult {
@@ -308,7 +321,12 @@ object HostWire {
     )
 
     private fun decodeReceipt(wire: Wire): ReleaseReceipt = wire.asObj().let {
-        ReleaseReceipt(it.str("request"), it.str("incarnation"), it.optional("generation")?.let(::decodeGeneration), it.bool("predecessorEnded"))
+        ReleaseReceipt(
+            it.str("request"),
+            it.str("incarnation"),
+            it.optional("generation")?.let(::decodeGeneration),
+            it.bool("predecessorEnded"),
+        )
     }
 
     fun encode(result: ReleaseResult): Wire = when (result) {
@@ -338,8 +356,17 @@ object HostWire {
     }
 
     fun encode(result: AcquireResult): Wire = when (result) {
-        is AcquireResult.Acquired -> obj("t" to str("acquired"), "generation" to encode(result.generation), "holder" to encode(result.holder))
-        is AcquireResult.Refused -> obj("t" to str("refused"), "rejection" to Wire.Str(result.rejection.name), "message" to str(result.message))
+        is AcquireResult.Acquired -> obj(
+            "t" to str("acquired"),
+            "generation" to encode(result.generation),
+            "holder" to encode(result.holder),
+        )
+
+        is AcquireResult.Refused -> obj(
+            "t" to str("refused"),
+            "rejection" to Wire.Str(result.rejection.name),
+            "message" to str(result.message),
+        )
     }
 
     fun decodeAcquireResult(wire: Wire): AcquireResult {
@@ -360,7 +387,11 @@ object HostWire {
             "status" to encode(result.status),
         )
 
-        is HostOpenResult.Refused -> obj("t" to str("refused"), "rejection" to Wire.Str(result.rejection.name), "message" to str(result.message))
+        is HostOpenResult.Refused -> obj(
+            "t" to str("refused"),
+            "rejection" to Wire.Str(result.rejection.name),
+            "message" to str(result.message),
+        )
     }
 
     fun decodeOpenResult(wire: Wire): HostOpenResult {
@@ -378,11 +409,19 @@ object HostWire {
     }
 
     /** A command addressed to one owner generation. */
-    fun encodeCall(generation: OwnerGeneration, command: HostCommand): Wire = obj("generation" to encode(generation), "command" to encode(command))
+    fun encodeCall(generation: OwnerGeneration, command: HostCommand): Wire = obj(
+        "generation" to encode(generation),
+        "command" to encode(command),
+    )
 
-    fun decodeCall(wire: Wire): Pair<OwnerGeneration, HostCommand> = wire.asObj().let { decodeGeneration(it.field("generation")) to decodeCommand(it.field("command")) }
+    fun decodeCall(wire: Wire): Pair<OwnerGeneration, HostCommand> = wire.asObj()
+        .let { decodeGeneration(it.field("generation")) to decodeCommand(it.field("command")) }
 
-    fun encodeAcquire(request: SwitchRequest, settings: HostSettings): Wire = obj("request" to encode(request), "settings" to encode(settings))
+    fun encodeAcquire(request: SwitchRequest, settings: HostSettings): Wire = obj(
+        "request" to encode(request),
+        "settings" to encode(settings),
+    )
 
-    fun decodeAcquire(wire: Wire): Pair<SwitchRequest, HostSettings> = wire.asObj().let { decodeRequest(it.field("request")) to decodeSettings(it.field("settings")) }
+    fun decodeAcquire(wire: Wire): Pair<SwitchRequest, HostSettings> = wire.asObj()
+        .let { decodeRequest(it.field("request")) to decodeSettings(it.field("settings")) }
 }

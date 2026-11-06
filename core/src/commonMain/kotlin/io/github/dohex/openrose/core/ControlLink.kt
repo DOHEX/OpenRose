@@ -159,11 +159,16 @@ internal class ControlLink(
     }
 
     internal fun ensureActive(attempt: Attempt) {
-        if (state.value.device?.sessionId != attempt.id || state.value.connection is ConnectionState.Disconnected || attempt.progress.value.ended) throw LinkEnded()
+        val ended = state.value.device?.sessionId != attempt.id ||
+            state.value.connection is ConnectionState.Disconnected ||
+            attempt.progress.value.ended
+        if (ended) throw LinkEnded()
     }
 
     internal suspend fun pace(attempt: Attempt) {
-        if (attempt.hasWritten) delay(if (attempt.candidate.profile == ModelProfile.I5_ZT) timing.i5WriteIntervalMillis else timing.i7WriteIntervalMillis)
+        if (attempt.hasWritten) {
+            delay(if (attempt.candidate.profile == ModelProfile.I5_ZT) timing.i5WriteIntervalMillis else timing.i7WriteIntervalMillis)
+        }
         attempt.hasWritten = true
     }
 
@@ -206,12 +211,20 @@ internal class ControlLink(
         } catch (cause: Exception) {
             val code = when {
                 cause is UnsupportedOperationException || cause is IllegalArgumentException -> ControlErrorCode.UNSUPPORTED
+
                 cause is SecurityException -> ControlErrorCode.PERMISSION_REQUIRED
+
                 cause is RecoverableTransportException && cause.cause is UnsupportedOperationException -> ControlErrorCode.UNSUPPORTED
+
                 cause is RecoverableTransportException && cause.cause is IllegalArgumentException -> ControlErrorCode.UNSUPPORTED
+
                 cause is RecoverableTransportException && cause.cause is SecurityException -> ControlErrorCode.PERMISSION_REQUIRED
-                cause is RecoverableTransportException && cause.reason == TransportRecoveryReason.NO_INITIAL_RESPONSE -> ControlErrorCode.TIMEOUT
+
+                cause is RecoverableTransportException &&
+                    cause.reason == TransportRecoveryReason.NO_INITIAL_RESPONSE -> ControlErrorCode.TIMEOUT
+
                 cause is RecoverableTransportException && cause.cause is TimeoutCancellationException -> ControlErrorCode.TIMEOUT
+
                 else -> ControlErrorCode.DISCONNECTED
             }
             val error = ControlError(code, cause.message ?: "设备连接已结束")
@@ -271,14 +284,17 @@ internal class ControlLink(
                     lifecycle.withLock {
                         updateLinkAttempt(attempt, epoch) { current ->
                             val old = requireNotNull(current.device)
-                            val firmware = ((readings[DeviceField.FIRMWARE] ?: old.fields[DeviceField.FIRMWARE]) as? FieldReading.Known)?.value as? FieldValue.Firmware
+                            val firmware = ((readings[DeviceField.FIRMWARE] ?: old.fields[DeviceField.FIRMWARE]) as? FieldReading.Known)
+                                ?.value as? FieldValue.Firmware
                             current.copy(
                                 device = old.copy(
                                     fields = old.fields.putAll(readings),
                                     capabilities = deviceCapabilities(profile, firmware),
                                     fieldErrors = readings.keys.fold(old.fieldErrors) { errors, field -> errors.remove(field) },
                                     rawNotifications = old.rawNotifications.appendRecent(listOf(bytes.hex())),
-                                    unknownNotifications = old.unknownNotifications.appendRecent(parsed.filter { !it.accepted }.map { it.rawHex }),
+                                    unknownNotifications = old.unknownNotifications.appendRecent(
+                                        parsed.filter { !it.accepted }.map { it.rawHex },
+                                    ),
                                     warnings = old.warnings.appendRecent(parsed.flatMap { it.warnings }),
                                 ),
                             )
@@ -290,8 +306,12 @@ internal class ControlLink(
                         previous.copy(
                             keys = previous.keys.addAll(keys),
                             meaningful = previous.meaningful || parsed.any { it.accepted },
-                            keyRevisions = previous.keyRevisions.mutate { revisions -> keys.forEach { revisions[it] = (revisions[it] ?: 0) + 1 } },
-                            fieldRevisions = previous.fieldRevisions.mutate { revisions -> fields.forEach { revisions[it] = (revisions[it] ?: 0) + 1 } },
+                            keyRevisions = previous.keyRevisions.mutate { revisions ->
+                                keys.forEach { revisions[it] = (revisions[it] ?: 0) + 1 }
+                            },
+                            fieldRevisions = previous.fieldRevisions.mutate { revisions ->
+                                fields.forEach { revisions[it] = (revisions[it] ?: 0) + 1 }
+                            },
                         )
                     }
                 }
@@ -300,8 +320,11 @@ internal class ControlLink(
             } catch (cause: Exception) {
                 failure = cause
                 error = when (cause) {
-                    is UnsupportedOperationException, is IllegalArgumentException -> ControlError(ControlErrorCode.UNSUPPORTED, cause.message ?: "不支持该连接")
+                    is UnsupportedOperationException, is IllegalArgumentException ->
+                        ControlError(ControlErrorCode.UNSUPPORTED, cause.message ?: "不支持该连接")
+
                     is SecurityException -> ControlError(ControlErrorCode.PERMISSION_REQUIRED, cause.message ?: "蓝牙权限不足")
+
                     else -> ControlError(ControlErrorCode.DISCONNECTED, cause.message ?: "设备已断开")
                 }
             } finally {
@@ -320,7 +343,12 @@ internal class ControlLink(
                                     if (it.connection is ConnectionState.Disconnected) {
                                         it
                                     } else {
-                                        it.copy(connection = ConnectionState.Disconnected, device = null, lastError = error, transportSelection = null)
+                                        it.copy(
+                                            connection = ConnectionState.Disconnected,
+                                            device = null,
+                                            lastError = error,
+                                            transportSelection = null,
+                                        )
                                     }
                                 }
                             }
@@ -357,7 +385,10 @@ internal class ControlLink(
                 updateLinkAttempt(attempt, epoch) { current ->
                     val old = requireNotNull(current.device)
                     val missing = query.expectedFields.filter { old.fields[it] is FieldReading.Loading }.toSet()
-                    current.copy(device = old.copy(fieldErrors = old.fieldErrors.mutate { errors -> missing.forEach { errors[it] = timeout } }), lastError = timeout)
+                    current.copy(
+                        device = old.copy(fieldErrors = old.fieldErrors.mutate { errors -> missing.forEach { errors[it] = timeout } }),
+                        lastError = timeout,
+                    )
                 }
             }
         }
@@ -365,7 +396,9 @@ internal class ControlLink(
         if (device == null || state.value.connection is ConnectionState.Disconnected) throw LinkEnded()
         if (!progress.value.meaningful) {
             val timeout = ControlError(ControlErrorCode.TIMEOUT, "没有收到可用的设备状态")
-            updateLinkAttempt(attempt, epoch) { it.copy(connection = ConnectionState.Disconnected, lastError = timeout, transportSelection = null) }
+            updateLinkAttempt(attempt, epoch) {
+                it.copy(connection = ConnectionState.Disconnected, lastError = timeout, transportSelection = null)
+            }
             return OperationResult.Failure(timeout)
         }
         val committedReady = lifecycle.withLock {
@@ -411,7 +444,11 @@ internal class ControlLink(
         }
     }
 
-    private fun canRecoverUnclassified(attempt: Attempt, selection: TransportSelection): Boolean = selection.endpoint is TransportEndpoint.BleGatt && requireNotNull(transport).supportsInitializationRecovery
+    private fun canRecoverUnclassified(
+        attempt: Attempt,
+        selection: TransportSelection,
+    ): Boolean = selection.endpoint is TransportEndpoint.BleGatt &&
+        requireNotNull(transport).supportsInitializationRecovery
 
     private fun canRetry(
         attempt: Attempt,
@@ -563,7 +600,10 @@ internal class ControlLink(
 
     private fun updateLinkAttempt(attempt: Attempt, epoch: Long, update: (ControlState) -> ControlState) {
         state.update {
-            if (attempt.linkEpoch.value == epoch && it.device?.sessionId == attempt.id && it.connection !is ConnectionState.Disconnected) update(it) else it
+            val live = attempt.linkEpoch.value == epoch &&
+                it.device?.sessionId == attempt.id &&
+                it.connection !is ConnectionState.Disconnected
+            if (live) update(it) else it
         }
     }
 

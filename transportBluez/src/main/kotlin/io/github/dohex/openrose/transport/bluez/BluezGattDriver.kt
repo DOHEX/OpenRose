@@ -29,24 +29,36 @@ internal class BluezGattDriver(private val bus: BluezBus, private val devicePath
                     emit(disconnected("蓝牙设备已断开"))
                 }
                 if (signal.interfaceName == CHARACTERISTIC) {
-                    val instance = synchronized(lock) { if (signal.path in routed) characteristics.entries.firstOrNull { it.value == signal.path }?.key else null }
+                    val instance = synchronized(lock) {
+                        if (signal.path in routed) characteristics.entries.firstOrNull { it.value == signal.path }?.key else null
+                    }
                     val value = signal.values["Value"].asBytes()
                     if (value != null && instance != null) emit(GattEvent.Notification(instance, value))
                 }
-                if (synchronized(lock) { discovered } && signal.path == devicePath && signal.interfaceName == DEVICE && signal.values.containsKey("ServicesResolved") && signal.values["ServicesResolved"] != true) {
+                if (synchronized(lock) { discovered } && signal.path == devicePath && signal.interfaceName == DEVICE &&
+                    signal.values.containsKey("ServicesResolved") && signal.values["ServicesResolved"] != true
+                ) {
                     emit(GattEvent.ServicesChanged)
                 }
             }
 
             is BluezSignal.Removed -> {
-                if ((signal.path == devicePath && DEVICE in signal.interfaces) || (devicePath.startsWith("${signal.path}/") && ADAPTER in signal.interfaces)) {
+                if ((signal.path == devicePath && DEVICE in signal.interfaces) ||
+                    (devicePath.startsWith("${signal.path}/") && ADAPTER in signal.interfaces)
+                ) {
                     emit(disconnected("蓝牙设备已移除"))
-                } else if (synchronized(lock) { discovered } && signal.path.startsWith("$devicePath/") && (SERVICE in signal.interfaces || CHARACTERISTIC in signal.interfaces)) {
+                } else if (synchronized(lock) { discovered } && signal.path.startsWith("$devicePath/") &&
+                    (SERVICE in signal.interfaces || CHARACTERISTIC in signal.interfaces)
+                ) {
                     emit(GattEvent.ServicesChanged)
                 }
             }
 
-            is BluezSignal.Added -> if (synchronized(lock) { discovered } && signal.path.startsWith("$devicePath/") && (SERVICE in signal.interfaces || CHARACTERISTIC in signal.interfaces)) emit(GattEvent.ServicesChanged)
+            is BluezSignal.Added -> if (synchronized(lock) { discovered } && signal.path.startsWith("$devicePath/") &&
+                (SERVICE in signal.interfaces || CHARACTERISTIC in signal.interfaces)
+            ) {
+                emit(GattEvent.ServicesChanged)
+            }
         }
     }
     override suspend fun connect() = native {
@@ -60,7 +72,11 @@ internal class BluezGattDriver(private val bus: BluezBus, private val devicePath
         suspend fun waitForServices(timeout: Long): BluezObjects? = withTimeoutOrNull(timeout) {
             while (true) {
                 val objects = bus.objects()
-                if (objects[devicePath]?.get(DEVICE)?.get("ServicesResolved") == true && objects.any { it.key.startsWith("$devicePath/") && SERVICE in it.value }) return@withTimeoutOrNull objects
+                if (objects[devicePath]?.get(DEVICE)?.get("ServicesResolved") == true &&
+                    objects.any { it.key.startsWith("$devicePath/") && SERVICE in it.value }
+                ) {
+                    return@withTimeoutOrNull objects
+                }
                 delay(100)
             }
             @Suppress("UNREACHABLE_CODE")
@@ -75,13 +91,23 @@ internal class BluezGattDriver(private val bus: BluezBus, private val devicePath
             objects = waitForServices(8_000) ?: throw GattException(GattFailureKind.TRANSIENT, "等待 BlueZ GATT 服务超时")
         }
         val found = IdentityHashMap<GattCharacteristic, String>()
-        val services = objects.filter { (path, interfaces) -> path.startsWith("$devicePath/") && SERVICE in interfaces }.mapNotNull { (path, interfaces) ->
+        val services = objects.filter { (path, interfaces) ->
+            path.startsWith("$devicePath/") && SERVICE in interfaces
+        }.mapNotNull { (path, interfaces) ->
             val uuid = (interfaces[SERVICE]?.get("UUID") as? String)?.lowercase() ?: return@mapNotNull null
-            val chars = objects.filter { (charPath, values) -> charPath.startsWith("$path/") && CHARACTERISTIC in values }.mapNotNull char@{ (charPath, values) ->
+            val chars = objects.filter { (charPath, values) ->
+                charPath.startsWith("$path/") && CHARACTERISTIC in values
+            }.mapNotNull char@{ (charPath, values) ->
                 val properties = values[CHARACTERISTIC] ?: return@char null
                 val charUuid = (properties["UUID"] as? String)?.lowercase() ?: return@char null
                 val flags = (properties["Flags"] as? Collection<*>)?.toSet().orEmpty()
-                GattCharacteristic(charUuid, "write" in flags, "write-without-response" in flags, "notify" in flags, "indicate" in flags).also { found[it] = charPath }
+                GattCharacteristic(
+                    charUuid,
+                    "write" in flags,
+                    "write-without-response" in flags,
+                    "notify" in flags,
+                    "indicate" in flags,
+                ).also { found[it] = charPath }
             }
             GattService(uuid, chars)
         }
@@ -95,14 +121,19 @@ internal class BluezGattDriver(private val bus: BluezBus, private val devicePath
     override suspend fun requestMtu(preferred: Int): Int? = native {
         checkOpen()
         val objects = bus.objects()
-        synchronized(lock) { characteristics.values.toList() }.mapNotNull { (objects[it]?.get(CHARACTERISTIC)?.get("MTU") as? Number)?.toInt() }.minOrNull()
+        synchronized(lock) { characteristics.values.toList() }
+            .mapNotNull { (objects[it]?.get(CHARACTERISTIC)?.get("MTU") as? Number)?.toInt() }
+            .minOrNull()
     }
     override suspend fun setNotificationRouting(characteristic: GattCharacteristic, enabled: Boolean) {
         checkOpen()
         val path = path(characteristic)
         synchronized(lock) { if (enabled) routed.add(path) else routed.remove(path) }
     }
-    override suspend fun configureSubscription(characteristic: GattCharacteristic, subscription: GattSubscription) = native(recoverNotConnected = true) {
+    override suspend fun configureSubscription(
+        characteristic: GattCharacteristic,
+        subscription: GattSubscription,
+    ) = native(recoverNotConnected = true) {
         checkOpen()
         val path = path(characteristic)
         if (subscription == GattSubscription.DISABLED) {
@@ -115,7 +146,11 @@ internal class BluezGattDriver(private val bus: BluezBus, private val devicePath
             synchronized(lock) { subscribed.add(path) }
         }
     }
-    override suspend fun write(characteristic: GattCharacteristic, value: ByteArray, withResponse: Boolean) = native(recoverNotConnected = true) {
+    override suspend fun write(
+        characteristic: GattCharacteristic,
+        value: ByteArray,
+        withResponse: Boolean,
+    ) = native(recoverNotConnected = true) {
         checkOpen()
         bus.write(path(characteristic), value, withResponse)
     }
@@ -147,11 +182,20 @@ internal class BluezGattDriver(private val bus: BluezBus, private val devicePath
     } catch (error: Exception) {
         val kind = when (error) {
             is org.bluez.Error.NotAuthorized, is org.bluez.Error.NotPermitted, is AccessDenied -> GattFailureKind.PERMISSION
+
             is org.bluez.Error.NotSupported -> GattFailureKind.UNSUPPORTED
-            is org.bluez.Error.InvalidArguments, is org.bluez.Error.InvalidValueLength, is org.bluez.Error.InvalidOffset -> GattFailureKind.INVALID_VALUE
+
+            is org.bluez.Error.InvalidArguments,
+            is org.bluez.Error.InvalidValueLength,
+            is org.bluez.Error.InvalidOffset,
+            -> GattFailureKind.INVALID_VALUE
+
             is org.bluez.Error.NotConnected -> if (recoverNotConnected) GattFailureKind.TRANSIENT else GattFailureKind.DISCONNECTED
+
             is ServiceUnknown -> GattFailureKind.DISCONNECTED
+
             is org.bluez.Error.InProgress, is org.bluez.Error.NotReady, is NoReply -> GattFailureKind.TRANSIENT
+
             else -> GattFailureKind.UNKNOWN
         }
         throw GattException(kind, error.message ?: error.javaClass.simpleName, error)

@@ -64,7 +64,8 @@ object IntegrationSettingsCodec {
                 "module" -> IslandMode.MODULE
                 else -> defaults.islandMode
             },
-            focusNotificationEnabled = values["androidIntegration.focus_notification_enabled"]?.toBooleanStrictOrNull() ?: defaults.focusNotificationEnabled,
+            focusNotificationEnabled = values["androidIntegration.focus_notification_enabled"]?.toBooleanStrictOrNull()
+                ?: defaults.focusNotificationEnabled,
             islandTriggers = when (values["androidIntegration.island_triggers"]) {
                 "" -> persistentSetOf()
                 "connection" -> persistentSetOf(IslandTrigger.CONNECTION)
@@ -76,7 +77,8 @@ object IntegrationSettingsCodec {
                 else -> defaults.fusionSettingsDestination
             },
             fusionOffAsWind = values["androidIntegration.fusion_off_as_wind"]?.toBooleanStrictOrNull() ?: defaults.fusionOffAsWind,
-            backgroundControlEnabled = values["androidIntegration.background_control_enabled"]?.toBooleanStrictOrNull() ?: defaults.backgroundControlEnabled,
+            backgroundControlEnabled = values["androidIntegration.background_control_enabled"]?.toBooleanStrictOrNull()
+                ?: defaults.backgroundControlEnabled,
             controlWay = decodeControlWay(values[CONTROL_WAY_KEY]),
         )
     }
@@ -93,7 +95,11 @@ object HostSettingsCodec {
         (value as? String)?.let { key to it }
     }.toMap()
 
-    fun encode(settings: HostSettings): Map<String, String> = UserSettingsCodec.encode(settings.control) + IntegrationSettingsCodec.encode(settings.integration)
+    fun encode(settings: HostSettings): Map<String, String> = UserSettingsCodec.encode(settings.control) +
+        IntegrationSettingsCodec.encode(settings.integration)
 
-    fun decode(values: Map<String, String>): HostSettings = HostSettings(UserSettingsCodec.decode(values), IntegrationSettingsCodec.decode(values))
+    fun decode(values: Map<String, String>): HostSettings = HostSettings(
+        UserSettingsCodec.decode(values),
+        IntegrationSettingsCodec.decode(values),
+    )
 }

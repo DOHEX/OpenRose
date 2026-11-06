@@ -332,7 +332,9 @@ class ModuleControlHost(
                 return@withLock AcquireResult.Refused(HostRejection.INVALID_REQUEST, "用户尚未解锁，模块控制不会启动")
             }
             held = null
-            configuration = configuration.copy(settings = settings.copy(integration = settings.integration.copy(controlWay = ControlWay.MODULE)))
+            configuration = configuration.copy(
+                settings = settings.copy(integration = settings.integration.copy(controlWay = ControlWay.MODULE)),
+            )
             reconcile()
             owner.value?.let { AcquireResult.Acquired(it.generation, it.holder) }
                 ?: AcquireResult.Refused(HostRejection.INVALID_REQUEST, "模块控制未能启动")
@@ -350,7 +352,9 @@ class ModuleControlHost(
         return OwnerCheck.Current(active)
     }
 
-    private fun leaseFor(caller: CallerIdentity, leaseId: String): Lease? = leases.value[leaseId]?.takeIf { !retired.value && it.caller == caller && authority.roleOf(caller) == it.role }
+    private fun leaseFor(caller: CallerIdentity, leaseId: String): Lease? = leases.value[leaseId]?.takeIf {
+        !retired.value && it.caller == caller && authority.roleOf(caller) == it.role
+    }
 
     private suspend fun dispatch(runtime: SystemEntryRuntime, command: HostCommand): HostCallResult = when (command) {
         HostCommand.RefreshBondedDevices -> {
@@ -412,7 +416,10 @@ class ModuleControlHost(
                 return
             }
         }
-        val wanted = !stopped && configuration.userUnlocked && configuration.settings.integration.controlWay == ControlWay.MODULE && held == null
+        val wanted = !stopped &&
+            configuration.userUnlocked &&
+            configuration.settings.integration.controlWay == ControlWay.MODULE &&
+            held == null
         val current = owner.value
         when {
             wanted && current == null -> activate()
