@@ -1,0 +1,41 @@
+version: 2
+updates:
+  # Reads gradle/libs.versions.toml, build-logic and the wrapper.
+  - package-ecosystem: gradle
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: build
+    groups:
+      kotlin-compose:
+        patterns:
+          - org.jetbrains.kotlin*
+          - org.jetbrains.compose*
+          - org.jetbrains.kotlinx:*
+      android:
+        patterns:
+          - com.android*
+          - androidx.*
+      miuix:
+        patterns:
+          - top.yukonga.miuix.kmp:*
+      nucleus:
+        patterns:
+          - dev.nucleusframework*
+      dbus:
+        patterns:
+          - com.github.hypfvieh:*
+
+  # Actions are pinned to commit SHAs; Dependabot bumps the SHA and the version comment together.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: ci
+    groups:
+      actions:
+        patterns:
+          - "*"
