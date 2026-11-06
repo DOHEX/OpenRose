@@ -1,32 +1,32 @@
 package io.github.dohex.openrose.core
 
-import io.github.dohex.openrose.core.protocol.ModelProfile
-import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.FieldReading
+import io.github.dohex.openrose.core.protocol.FieldValue
+import io.github.dohex.openrose.core.protocol.ModelProfile
 import io.github.dohex.openrose.core.transport.Advertisement
 import io.github.dohex.openrose.core.transport.AudioProfileEvidence
 import io.github.dohex.openrose.core.transport.ControlConnection
 import io.github.dohex.openrose.core.transport.ControlTransport
 import io.github.dohex.openrose.core.transport.DeviceId
 import io.github.dohex.openrose.core.transport.RecoverableTransportException
+import io.github.dohex.openrose.core.transport.TerminalTransportException
 import io.github.dohex.openrose.core.transport.TransportEndpoint
 import io.github.dohex.openrose.core.transport.TransportFacts
 import io.github.dohex.openrose.core.transport.TransportRecoveryReason
-import io.github.dohex.openrose.core.transport.TerminalTransportException
-import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.receiveAsFlow
-import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.advanceTimeBy
-import kotlinx.coroutines.test.TestScope
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -109,7 +109,7 @@ class ControlSessionRecoveryTest {
 
         assertEquals(ControlErrorCode.DISCONNECTED, assertIs<OperationResult.Failure>(result).error.code)
         assertEquals(1, transport.links.size)
-        assertEquals(listOf<TransportEndpoint>(TransportEndpoint.SppRfcomm("A1:B2:C3:D4:E5:F6", sppUuid)), transport.endpoints)
+        assertEquals(listOf<TransportEndpoint>(TransportEndpoint.SppRfcomm("A1:B2:C3:D4:E5:F6", SPP_UUID)), transport.endpoints)
         assertNull(session.state.value.connectionRecovery)
     }
 
@@ -138,7 +138,7 @@ class ControlSessionRecoveryTest {
     fun matchingButUnacceptedFirstReplyWaitsToDeadlineThenUsesTheRecoveryBudget() = runTest {
         val transport = RecoveryTransport(
             failFirstSubscription = false,
-            firstQueryReply = unacceptedI5BatteryReply,
+            firstQueryReply = UNACCEPTED_I5_BATTERY_REPLY,
             firstLinkSilentAfterFirstReply = true,
         )
         val session = newSession(transport, queryTimeoutMillis = 10)
@@ -170,7 +170,7 @@ class ControlSessionRecoveryTest {
     fun laterMeaningfulStateBeforeFirstQueryDeadlineKeepsTheSameLink() = runTest {
         val transport = RecoveryTransport(
             failFirstSubscription = false,
-            firstQueryReply = unacceptedI5BatteryReply,
+            firstQueryReply = UNACCEPTED_I5_BATTERY_REPLY,
             firstLinkSilentAfterFirstReply = true,
         )
         val session = newSession(transport, queryTimeoutMillis = 30)
@@ -484,7 +484,8 @@ class ControlSessionRecoveryTest {
             if (links.any { !it.closed }) previousLinksClosedAtEveryConnect = false
             endpoints += endpoint
             val first = links.isEmpty()
-            val link = RecoveryLink(profile,
+            val link = RecoveryLink(
+                profile,
                 maxWriteSize = writeSizes.getOrNull(links.size) ?: if (profile == ModelProfile.I5_ZT) 20 else 512,
                 failSubscription = first && failFirstSubscription,
                 noResponse = firstLinkHasNoResponse && (first || everyLinkHasNoResponse),
@@ -494,7 +495,8 @@ class ControlSessionRecoveryTest {
                 failWriteAtIndex = if (first) failWriteAtIndex else null,
                 writeFailure = if (first) writeFailure else null,
                 writeGateAtIndex = if (first) writeGateAtIndex else null,
-                writeGate = if (first) writeGate else null)
+                writeGate = if (first) writeGate else null,
+            )
             links += link
             return link
         }
@@ -514,9 +516,13 @@ class ControlSessionRecoveryTest {
         private val writeGate: CompletableDeferred<Unit>?,
     ) : ControlConnection {
         private val incoming = Channel<ByteArray>(Channel.UNLIMITED)
-        override val notifications = if (failNotificationCollection) flow {
-            throw RecoverableTransportException(TransportRecoveryReason.SERVICES_CHANGED, "synthetic service changed")
-        } else incoming.receiveAsFlow()
+        override val notifications = if (failNotificationCollection) {
+            flow {
+                throw RecoverableTransportException(TransportRecoveryReason.SERVICES_CHANGED, "synthetic service changed")
+            }
+        } else {
+            incoming.receiveAsFlow()
+        }
         val writes = mutableListOf<String>()
         var closed = false
         var initializing = true
@@ -532,10 +538,12 @@ class ControlSessionRecoveryTest {
 
         override suspend fun subscribe() {
             subscribeCalls++
-            if (failSubscription) throw RecoverableTransportException(
-                TransportRecoveryReason.SUBSCRIPTION,
-                "synthetic CCCD failure",
-            )
+            if (failSubscription) {
+                throw RecoverableTransportException(
+                    TransportRecoveryReason.SUBSCRIPTION,
+                    "synthetic CCCD failure",
+                )
+            }
         }
 
         override suspend fun write(bytes: ByteArray) {
@@ -546,8 +554,9 @@ class ControlSessionRecoveryTest {
                 incoming.send(firstQueryReply.bytes())
                 return
             }
-            if (writeIndex == failWriteAtIndex) throw writeFailure ?: RecoverableTransportException(
-                TransportRecoveryReason.WRITE_FAILED, "synthetic write failure")
+            if (writeIndex == failWriteAtIndex) {
+                throw writeFailure ?: RecoverableTransportException(TransportRecoveryReason.WRITE_FAILED, "synthetic write failure")
+            }
             if (writeIndex == writeGateAtIndex) writeGate?.await()
             if (!initializing) return
             if (silentAfterFirstReply) return
@@ -574,15 +583,17 @@ class ControlSessionRecoveryTest {
         )
         private val i7Advertisement = Advertisement(
             DeviceId("recovery-i7"),
-            manufacturerData = mapOf(0xe5b8 to ByteArray(15).also { bytes ->
-                bytes[0] = 0x29
-                bytes[1] = 0x0f
-                bytes[5] = 1
-                byteArrayOf(0xa1.toByte(), 0xb2.toByte(), 0xc3.toByte(), 0xd4.toByte(), 0xe5.toByte(), 0xf6.toByte()).copyInto(bytes, 9)
-            }),
+            manufacturerData = mapOf(
+                0xe5b8 to ByteArray(15).also { bytes ->
+                    bytes[0] = 0x29
+                    bytes[1] = 0x0f
+                    bytes[5] = 1
+                    byteArrayOf(0xa1.toByte(), 0xb2.toByte(), 0xc3.toByte(), 0xd4.toByte(), 0xe5.toByte(), 0xf6.toByte()).copyInto(bytes, 9)
+                },
+            ),
         )
-        private const val sppUuid = "0cf12d31-fac3-4553-bd80-d6832e7b3931"
-        private const val unacceptedI5BatteryReply = "000000000001010000aabb00ff0000ff"
+        private const val SPP_UUID = "0cf12d31-fac3-4553-bd80-d6832e7b3931"
+        private const val UNACCEPTED_I5_BATTERY_REPLY = "000000000001010000aabb00ff0000ff"
         private val i5Replies = mapOf(
             "0101" to "09ff00000101011100000164620000ffe2",
             "0602" to "09ff00000106020e000000010020",

@@ -29,7 +29,6 @@ internal class DesktopPlatformUi(
                     .redirectError(ProcessBuilder.Redirect.DISCARD)
                     .start()
             }
-            Unit
         }
     }
 

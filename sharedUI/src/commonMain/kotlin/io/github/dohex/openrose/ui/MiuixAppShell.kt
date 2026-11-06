@@ -13,7 +13,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -209,7 +208,7 @@ internal fun MiuixMainShell(
             } else {
                 Modifier.fillMaxSize().clearAndSetSemantics { }.focusProperties {
                     canFocus = false
-                    enter = { FocusRequester.Cancel }
+                    onEnter = { cancelFocusChange() }
                 }
             }
             CompositionLocalProvider(LocalAppBackdrop provides pageBackdrop) {

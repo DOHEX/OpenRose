@@ -124,10 +124,13 @@ data class NativeHeadsetSnapshot(
             )
         }
 
+        // The wire carries untyped lists; the typed Bundle.get(String, Class) needs API 33.
+        @Suppress("DEPRECATION")
         private fun stringValues(bundle: Bundle?, key: String): List<String> = (runCatching { bundle?.get(key) }.getOrNull() as? ArrayList<*>)
             ?.mapNotNull { it as? String }
             .orEmpty()
 
+        @Suppress("DEPRECATION")
         private fun integerValues(bundle: Bundle?, key: String): List<Int> = (runCatching { bundle?.get(key) }.getOrNull() as? ArrayList<*>)
             ?.mapNotNull { it as? Int }
             .orEmpty()
@@ -144,6 +147,9 @@ data class NativeHeadsetSnapshot(
                 "KNOWN" -> {
                     val value = bundle.getBundle("value") ?: return FieldReading.Unknown("")
                     val type = value.getString("type") ?: return FieldReading.Unknown("")
+
+                    // The wire value is untyped; the typed Bundle.get(String, Class) needs API 33.
+                    @Suppress("DEPRECATION")
                     val primitive = runCatching { value.get("value") }.getOrNull()
                     when (type) {
                         "NUMBER" -> (primitive as? Int)?.let { FieldReading.Known(FieldValue.Number(it), "") }

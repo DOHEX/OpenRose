@@ -252,7 +252,7 @@ internal class OfficialConnectionPresenter(
         if (reading.getString(BridgeWire.STATUS) != KNOWN) return null
         val value = reading.getBundle("value") ?: return null
         if (value.getString("type") != TOGGLE) return null
-        return value.get("value") as? Boolean
+        return value.untypedValue("value") as? Boolean
     }
 
     private fun prepareClips(request: PromptRequest, token: String): List<PreparedClip> {
@@ -533,3 +533,7 @@ internal class OfficialConnectionPresenter(
         private val SUPPORTED_PROFILES = setOf("I5_ZT", "I7_RS_V2")
     }
 }
+
+// The wire value is untyped; the typed Bundle.get(String, Class) needs API 33.
+@Suppress("DEPRECATION")
+private fun Bundle.untypedValue(key: String): Any? = get(key)

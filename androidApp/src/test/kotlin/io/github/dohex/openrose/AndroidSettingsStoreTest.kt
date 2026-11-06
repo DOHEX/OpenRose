@@ -28,6 +28,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
+@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class AndroidSettingsStoreTest {
     @Test
     fun everyLayerSurvivesReopeningStorageAndRebuildingTheAndroidRuntime() = runTest {

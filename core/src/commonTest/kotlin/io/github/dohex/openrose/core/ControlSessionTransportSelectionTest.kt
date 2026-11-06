@@ -1,10 +1,10 @@
 package io.github.dohex.openrose.core
 
-import io.github.dohex.openrose.core.protocol.ModelProfile
 import io.github.dohex.openrose.core.DeviceSetting
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.FieldReading
 import io.github.dohex.openrose.core.protocol.FieldValue
+import io.github.dohex.openrose.core.protocol.ModelProfile
 import io.github.dohex.openrose.core.transport.Advertisement
 import io.github.dohex.openrose.core.transport.AudioProfileEvidence
 import io.github.dohex.openrose.core.transport.ControlConnection
@@ -14,23 +14,23 @@ import io.github.dohex.openrose.core.transport.TransportEndpoint
 import io.github.dohex.openrose.core.transport.TransportFacts
 import io.github.dohex.openrose.core.transport.TransportSelection
 import io.github.dohex.openrose.core.transport.TransportSelectionReason
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.async
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.flow.receiveAsFlow
-import kotlinx.coroutines.async
-import kotlinx.coroutines.test.TestScope
-import kotlinx.coroutines.test.advanceTimeBy
-import kotlinx.coroutines.test.runCurrent
-import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.cancelAndJoin
 
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class ControlSessionTransportSelectionTest {
@@ -85,7 +85,7 @@ class ControlSessionTransportSelectionTest {
         advertise(session, transport, advertisement)
 
         assertEquals(OperationResult.Success, session.connect(advertisement.deviceId))
-        val expectedEndpoint = TransportEndpoint.SppRfcomm("A1:B2:C3:D4:E5:F6", sppUuid)
+        val expectedEndpoint = TransportEndpoint.SppRfcomm("A1:B2:C3:D4:E5:F6", SPP_UUID)
         assertEquals(listOf<TransportEndpoint>(expectedEndpoint), transport.endpoints)
         assertEquals(1, transport.factCalls)
         assertEquals("A1:B2:C3:D4:E5:F6", transport.lastFactsAddress)
@@ -119,23 +119,55 @@ class ControlSessionTransportSelectionTest {
         val i7WithoutAddress = Advertisement(DeviceId("i7-no-address"), manufacturerData = i7Advertisement(flag = 0))
         val i5 = Advertisement(DeviceId("i5"), manufacturerData = mapOf(0x5352 to byteArrayOf(0, 1, 0, 1)))
         val scenarios = listOf(
-            RouteScenario(i7, TransportFacts(sppAvailable = false, audioProfile = AudioProfileEvidence.CLASSIC), false,
-                TransportSelectionReason.SPP_UNAVAILABLE, 1),
-            RouteScenario(i7WithoutAddress, TransportFacts(sppAvailable = true, audioProfile = AudioProfileEvidence.CLASSIC), false,
-                TransportSelectionReason.CLASSIC_ADDRESS_UNAVAILABLE, 0),
-            RouteScenario(i7, TransportFacts(sppAvailable = true, audioProfile = AudioProfileEvidence.UNKNOWN), false,
-                TransportSelectionReason.AUDIO_PROFILE_UNKNOWN, 1),
-            RouteScenario(i7, TransportFacts(sppAvailable = true, audioProfile = AudioProfileEvidence.LE_AUDIO), false,
-                TransportSelectionReason.LE_AUDIO, 1),
-            RouteScenario(i7, TransportFacts(sppAvailable = true, audioProfile = AudioProfileEvidence.CLASSIC), true,
-                TransportSelectionReason.FORCED_BLE, 0),
-            RouteScenario(i5, TransportFacts(sppAvailable = true, audioProfile = AudioProfileEvidence.CLASSIC), false,
-                TransportSelectionReason.MODEL_BLE_ONLY, 0),
+            RouteScenario(
+                i7,
+                TransportFacts(sppAvailable = false, audioProfile = AudioProfileEvidence.CLASSIC),
+                false,
+                TransportSelectionReason.SPP_UNAVAILABLE,
+                1,
+            ),
+            RouteScenario(
+                i7WithoutAddress,
+                TransportFacts(sppAvailable = true, audioProfile = AudioProfileEvidence.CLASSIC),
+                false,
+                TransportSelectionReason.CLASSIC_ADDRESS_UNAVAILABLE,
+                0,
+            ),
+            RouteScenario(
+                i7,
+                TransportFacts(sppAvailable = true, audioProfile = AudioProfileEvidence.UNKNOWN),
+                false,
+                TransportSelectionReason.AUDIO_PROFILE_UNKNOWN,
+                1,
+            ),
+            RouteScenario(
+                i7,
+                TransportFacts(sppAvailable = true, audioProfile = AudioProfileEvidence.LE_AUDIO),
+                false,
+                TransportSelectionReason.LE_AUDIO,
+                1,
+            ),
+            RouteScenario(
+                i7,
+                TransportFacts(sppAvailable = true, audioProfile = AudioProfileEvidence.CLASSIC),
+                true,
+                TransportSelectionReason.FORCED_BLE,
+                0,
+            ),
+            RouteScenario(
+                i5,
+                TransportFacts(sppAvailable = true, audioProfile = AudioProfileEvidence.CLASSIC),
+                false,
+                TransportSelectionReason.MODEL_BLE_ONLY,
+                0,
+            ),
         )
         for ((index, scenario) in scenarios.withIndex()) {
             val link = if (scenario.advertisement.deviceId == i5.deviceId) {
                 SelectionConnection(maxWriteSize = 20, queryReplies = mapOf("0101" to listOf("09ff00000101011100000164620000ffe2")))
-            } else SelectionConnection(maxWriteSize = 512)
+            } else {
+                SelectionConnection(maxWriteSize = 512)
+            }
             val transport = SelectionTransport(scenario.facts, link)
             val session = session(transport, UserSettings(forceBle = scenario.forceBle))
             advertise(session, transport, scenario.advertisement)
@@ -148,8 +180,11 @@ class ControlSessionTransportSelectionTest {
             assertEquals(scenario.expectedFactsCalls, transport.factCalls, "scenario=$index")
             val connected = assertIs<ConnectionState.Connected>(session.state.value.connection)
             assertEquals(SessionReference(connected.deviceId, connected.sessionId), session.state.value.readySession, "scenario=$index")
-            assertEquals(session.state.value.candidates.single().classicAddress,
-                session.state.value.device?.classicAddress, "scenario=$index")
+            assertEquals(
+                session.state.value.candidates.single().classicAddress,
+                session.state.value.device?.classicAddress,
+                "scenario=$index",
+            )
             session.disconnect()
         }
     }
@@ -206,7 +241,7 @@ class ControlSessionTransportSelectionTest {
         factsGate.complete(Unit)
         runCurrent()
         assertEquals(OperationResult.Success, pending.await())
-        val spp = TransportEndpoint.SppRfcomm("A1:B2:C3:D4:E5:F6", sppUuid)
+        val spp = TransportEndpoint.SppRfcomm("A1:B2:C3:D4:E5:F6", SPP_UUID)
         assertEquals(listOf<TransportEndpoint>(spp), transport.endpoints)
         assertEquals(true, session.state.value.settings.forceBle)
         assertEquals(TransportSelection(spp, TransportSelectionReason.CLASSIC_AUDIO), session.state.value.transportSelection)
@@ -305,8 +340,11 @@ class ControlSessionTransportSelectionTest {
         advertise(session, transport, advertisement)
         val pending = async { session.connect(advertisement.deviceId) }
         runCurrent()
-        val ble = TransportEndpoint.BleGatt(ModelProfile.I7_RS_V2.gatt.serviceUuid,
-            ModelProfile.I7_RS_V2.gatt.writeUuid, ModelProfile.I7_RS_V2.gatt.notifyUuid)
+        val ble = TransportEndpoint.BleGatt(
+            ModelProfile.I7_RS_V2.gatt.serviceUuid,
+            ModelProfile.I7_RS_V2.gatt.writeUuid,
+            ModelProfile.I7_RS_V2.gatt.notifyUuid,
+        )
         assertEquals(TransportSelection(ble, TransportSelectionReason.SPP_UNAVAILABLE), session.state.value.transportSelection)
         transport.connectGate?.complete(Unit)
         runCurrent()
@@ -326,9 +364,11 @@ class ControlSessionTransportSelectionTest {
         val advertisement = Advertisement(DeviceId("i7-spp-failure"), manufacturerData = i7Advertisement())
         advertise(session, transport, advertisement)
 
-        assertEquals(ControlErrorCode.DISCONNECTED,
-            assertIs<OperationResult.Failure>(session.connect(advertisement.deviceId)).error.code)
-        assertEquals(listOf<TransportEndpoint>(TransportEndpoint.SppRfcomm("A1:B2:C3:D4:E5:F6", sppUuid)), transport.endpoints)
+        assertEquals(
+            ControlErrorCode.DISCONNECTED,
+            assertIs<OperationResult.Failure>(session.connect(advertisement.deviceId)).error.code,
+        )
+        assertEquals(listOf<TransportEndpoint>(TransportEndpoint.SppRfcomm("A1:B2:C3:D4:E5:F6", SPP_UUID)), transport.endpoints)
         assertEquals(null, session.state.value.transportSelection)
         assertEquals(ConnectionState.Disconnected, session.state.value.connection)
     }
@@ -482,7 +522,9 @@ class ControlSessionTransportSelectionTest {
         val writeTimes = mutableListOf<Long>()
         var initializing = true
         var subscribed = false
-        override suspend fun subscribe() { subscribed = true }
+        override suspend fun subscribe() {
+            subscribed = true
+        }
         override suspend fun write(bytes: ByteArray) {
             check(subscribed)
             val hex = bytes.hex()
@@ -500,7 +542,9 @@ class ControlSessionTransportSelectionTest {
                 }
             }
         }
-        override suspend fun close() { incoming.close() }
+        override suspend fun close() {
+            incoming.close()
+        }
     }
 
     private fun i7Advertisement(
@@ -517,7 +561,7 @@ class ControlSessionTransportSelectionTest {
     }
 
     companion object {
-        private const val sppUuid = "0cf12d31-fac3-4553-bd80-d6832e7b3931"
+        private const val SPP_UUID = "0cf12d31-fac3-4553-bd80-d6832e7b3931"
         private fun ByteArray.hex() = joinToString("") { (it.toInt() and 255).toString(16).padStart(2, '0') }
         private fun String.bytes() = chunked(2).map { it.toInt(16).toByte() }.toByteArray()
     }

@@ -176,7 +176,7 @@ class IntegrationScopeRestarterTest {
     }
 
     private fun withFixtures(body: suspend (dir: Path, start: (String) -> String) -> Unit) = runBlocking {
-        assumeTrue(System.getProperty("os.name").contains("Linux"))
+        assumeTrue(System.getProperty("os.name").orEmpty().contains("Linux"))
         val dir = Files.createTempDirectory("openrose-scopes")
         val processes = mutableListOf<Process>()
         fun start(name: String): String {

@@ -1,12 +1,12 @@
 package io.github.dohex.openrose.transport.bluez
 
-import io.github.dohex.openrose.core.TransportAvailability
 import io.github.dohex.openrose.core.ConnectionState
 import io.github.dohex.openrose.core.ControlErrorCode
 import io.github.dohex.openrose.core.LocalControlRuntime
 import io.github.dohex.openrose.core.PermissionState
 import io.github.dohex.openrose.core.PlatformState
 import io.github.dohex.openrose.core.SessionTiming
+import io.github.dohex.openrose.core.TransportAvailability
 import io.github.dohex.openrose.core.transport.DeviceId
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
@@ -46,13 +46,13 @@ class BluezControlTransportTest {
 
     @Test
     fun existingAudioStartsControlAfterAvailabilityAndReleasesOnRemoval() = runBlocking {
-        val service = "$devicePath/service0001"
+        val service = "$DEVICE_PATH/service0001"
         val writer = "$service/char0001"
         val notifier = "$service/char0002"
         val bus = FakeBluezBus().also {
             it.snapshot = baseObjects() + mapOf(
-                devicePath to mapOf(DEVICE to mapOf("Address" to "00:11:22:33:44:55", "Name" to "EarFree i5", "Paired" to true, "Connected" to true, "ServicesResolved" to true)),
-                mediaPath to mapOf(MEDIA_TRANSPORT to mapOf("Device" to devicePath, "UUID" to a2dpUuid, "State" to "idle")),
+                DEVICE_PATH to mapOf(DEVICE to mapOf("Address" to "00:11:22:33:44:55", "Name" to "EarFree i5", "Paired" to true, "Connected" to true, "ServicesResolved" to true)),
+                MEDIA_PATH to mapOf(MEDIA_TRANSPORT to mapOf("Device" to DEVICE_PATH, "UUID" to A2DP_UUID, "State" to "idle")),
                 service to mapOf(SERVICE to mapOf("UUID" to "011bf5da-0000-1000-8000-00805f9b34fb")),
                 writer to mapOf(CHARACTERISTIC to mapOf("UUID" to "00007777-0000-1000-8000-00805f9b34fb", "Flags" to listOf("write"))),
                 notifier to mapOf(CHARACTERISTIC to mapOf("UUID" to "00008888-0000-1000-8000-00805f9b34fb", "Flags" to listOf("notify"))),
@@ -73,8 +73,8 @@ class BluezControlTransportTest {
         withTimeout(5_000) { runtime.state.first { it.lastError?.code == ControlErrorCode.TRANSPORT_UNAVAILABLE } }
         val availability = scope.launch { transport.availability.collect { runtime.updatePlatformState(initial.copy(transport = it)) } }
         withTimeout(8_000) { runtime.state.first { it.connection is ConnectionState.Connected } }
-        bus.snapshot = bus.snapshot - mediaPath
-        bus.events.emit(BluezSignal.Removed(mediaPath, setOf(MEDIA_TRANSPORT)))
+        bus.snapshot = bus.snapshot - MEDIA_PATH
+        bus.events.emit(BluezSignal.Removed(MEDIA_PATH, setOf(MEDIA_TRANSPORT)))
         withTimeout(5_000) { runtime.state.first { it.connection is ConnectionState.Disconnected } }
         assertEquals(notifier, withTimeout(5_000) { released.await() })
         availability.cancelAndJoin()
@@ -104,11 +104,11 @@ class BluezControlTransportTest {
         val events = Channel<DeviceId?>(Channel.UNLIMITED)
         val listener = launch { transport.audioConnectedDevice.collect { events.send(it) } }
         assertNull(withTimeout(5_000) { events.receive() })
-        bus.snapshot = baseObjects() + (mediaPath to mapOf(MEDIA_TRANSPORT to mapOf("Device" to devicePath, "UUID" to a2dpUuid, "State" to "idle")))
-        bus.events.emit(BluezSignal.Added(mediaPath, setOf(MEDIA_TRANSPORT)))
+        bus.snapshot = baseObjects() + (MEDIA_PATH to mapOf(MEDIA_TRANSPORT to mapOf("Device" to DEVICE_PATH, "UUID" to A2DP_UUID, "State" to "idle")))
+        bus.events.emit(BluezSignal.Added(MEDIA_PATH, setOf(MEDIA_TRANSPORT)))
         assertEquals(DeviceId("00:11:22:33:44:55"), withTimeout(5_000) { events.receive() })
-        bus.snapshot = baseObjects() - devicePath
-        bus.events.emit(BluezSignal.Removed(devicePath, setOf(DEVICE)))
+        bus.snapshot = baseObjects() - DEVICE_PATH
+        bus.events.emit(BluezSignal.Removed(DEVICE_PATH, setOf(DEVICE)))
         assertNull(withTimeout(5_000) { events.receive() })
         listener.cancelAndJoin()
         transport.close()
@@ -116,7 +116,7 @@ class BluezControlTransportTest {
 
     @Test
     fun poweredOffAdapterIsUnavailableAndPairedQueryIsSafe() = runBlocking {
-        val bus = FakeBluezBus().also { it.snapshot = mapOf(adapterPath to mapOf(ADAPTER to mapOf("Powered" to false))) }
+        val bus = FakeBluezBus().also { it.snapshot = mapOf(ADAPTER_PATH to mapOf(ADAPTER to mapOf("Powered" to false))) }
         val transport = BluezControlTransport(this, bus)
         transport.awaitInitialization()
         assertIs<TransportAvailability.Unavailable>(transport.availability.value)
@@ -125,14 +125,22 @@ class BluezControlTransportTest {
     }
 }
 
-private const val adapterPath = "/org/bluez/hci0"
-private const val devicePath = "$adapterPath/dev_00_11_22_33_44_55"
-private const val mediaPath = "$devicePath/fd0"
-private const val a2dpUuid = "0000110b-0000-1000-8000-00805f9b34fb"
+private const val ADAPTER_PATH = "/org/bluez/hci0"
+private const val DEVICE_PATH = "$ADAPTER_PATH/dev_00_11_22_33_44_55"
+private const val MEDIA_PATH = "$DEVICE_PATH/fd0"
+private const val A2DP_UUID = "0000110b-0000-1000-8000-00805f9b34fb"
 private fun baseObjects(): BluezObjects = mapOf(
-    adapterPath to mapOf(ADAPTER to mapOf("Powered" to true)),
-    devicePath to mapOf(DEVICE to mapOf("Address" to "00:11:22:33:44:55", "Name" to "ROSE EarFree i5", "Paired" to true,
-        "Connected" to true, "UUIDs" to listOf(a2dpUuid), "ManufacturerData" to mapOf(UInt16(0x1234) to byteArrayOf(1, 2, 3)))),
+    ADAPTER_PATH to mapOf(ADAPTER to mapOf("Powered" to true)),
+    DEVICE_PATH to mapOf(
+        DEVICE to mapOf(
+            "Address" to "00:11:22:33:44:55",
+            "Name" to "ROSE EarFree i5",
+            "Paired" to true,
+            "Connected" to true,
+            "UUIDs" to listOf(A2DP_UUID),
+            "ManufacturerData" to mapOf(UInt16(0x1234) to byteArrayOf(1, 2, 3)),
+        ),
+    ),
 )
 
 private val i5Replies = mapOf(

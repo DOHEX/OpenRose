@@ -107,7 +107,7 @@ internal class AndroidAudioProfiles(private val context: Context) : AudioFactsDr
         val enabled = adapter != null && hasBluetoothPermission() && runCatching { adapter.isEnabled }.getOrDefault(false)
         val leObservable = Build.VERSION.SDK_INT !in Build.VERSION_CODES.S until Build.VERSION_CODES.TIRAMISU
         val spp = context.packageManager.hasSystemFeature(PackageManager.FEATURE_BLUETOOTH)
-        if (!enabled || adapter == null) return@withContext RawAudioSnapshot(false, spp, leObservable, emptyList(), emptyMap())
+        if (!enabled) return@withContext RawAudioSnapshot(false, spp, leObservable, emptyList(), emptyMap())
         val bonded = readBondedDevices(adapter)
         val leases = mutableMapOf<AudioProfile, ProfileProxyLease?>()
         try {

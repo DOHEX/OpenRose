@@ -249,7 +249,7 @@ class BottomBarStyleUiTest {
                 harness.render()
                 assertEquals(1, selectedTabIndex(), "System tab selected after page change in $style")
 
-                pagerState!!.pagerState.scrollToPage(2)
+                pagerState.pagerState.scrollToPage(2)
                 harness.render()
                 assertEquals(2, selectedTabIndex(), "Settings tab selected after page change in $style")
             }

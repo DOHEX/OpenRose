@@ -228,8 +228,6 @@ fun OpenRoseApp(
                                 }
                                 DeviceReadings(device, state.connection.phaseOrNull() == ConnectionPhase.INITIALIZING)
                             }
-
-                            else -> Unit
                         }
                     } else {
                         AppGroup {

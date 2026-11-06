@@ -360,7 +360,7 @@ internal fun MaterialMainShell(
             } else {
                 Modifier.fillMaxSize().clearAndSetSemantics { }.focusProperties {
                     canFocus = false
-                    enter = { FocusRequester.Cancel }
+                    onEnter = { cancelFocusChange() }
                 }
             }
             CompositionLocalProvider(LocalAppBackdrop provides pageBackdrop) {
@@ -388,9 +388,14 @@ internal fun MaterialMainShell(
                                 active = backdropActive,
                             )
                             val topBarColors = if (backdropActive) TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent) else TopAppBarDefaults.topAppBarColors()
-                            val largeTopBarColors = if (backdropActive) TopAppBarDefaults.largeTopAppBarColors(containerColor = Color.Transparent) else TopAppBarDefaults.largeTopAppBarColors()
                             if (page in mainPages) {
-                                LargeTopAppBar(title = { Text(title) }, modifier = topBarModifier, actions = actions, scrollBehavior = scrollBehavior, colors = largeTopBarColors)
+                                LargeTopAppBar(
+                                    title = { Text(title) },
+                                    modifier = topBarModifier,
+                                    actions = actions,
+                                    scrollBehavior = scrollBehavior,
+                                    colors = topBarColors,
+                                )
                             } else {
                                 TopAppBar(title = { Text(title) }, modifier = topBarModifier, actions = actions, colors = topBarColors)
                             }

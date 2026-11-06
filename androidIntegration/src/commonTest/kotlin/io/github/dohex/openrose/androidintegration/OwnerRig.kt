@@ -344,6 +344,7 @@ internal class OwnerRig(
         initialIntegrationSettings = settings.integration,
     ).also { if (interfaceOpen) it.holdOrdinarySession() }
 
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     fun settle() = test.runCurrent()
 }
 

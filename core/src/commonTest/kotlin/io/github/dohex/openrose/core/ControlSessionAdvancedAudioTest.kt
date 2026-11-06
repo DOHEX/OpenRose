@@ -8,11 +8,6 @@ import io.github.dohex.openrose.core.transport.ControlConnection
 import io.github.dohex.openrose.core.transport.ControlTransport
 import io.github.dohex.openrose.core.transport.DeviceId
 import io.github.dohex.openrose.core.transport.TransportEndpoint
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFalse
-import kotlin.test.assertIs
-import kotlin.test.assertTrue
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
@@ -23,6 +18,11 @@ import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertIs
+import kotlin.test.assertTrue
 
 /** Public control session; independent fixed TX vectors and synthetic DD/LTV device RX. */
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
@@ -43,7 +43,7 @@ class ControlSessionAdvancedAudioTest {
         assertEquals("ff0702fa3e40aa", link.writes.last())
         assertEquals(setOf(DeviceField.EQ), session.state.value.settingOperations.single().confirmedFields)
         assertFalse(pending.isCompleted)
-        link.incoming.send(curveReply.bytes())
+        link.incoming.send(CURVE_REPLY.bytes())
         runCurrent()
 
         assertEquals(OperationResult.Success, pending.await())
@@ -127,7 +127,7 @@ class ControlSessionAdvancedAudioTest {
         assertEquals(FieldValue.Text("custom_slot"), reading(session, DeviceField.EQ))
         assertTrue(session.state.value.settingOperations.single().confirmedFields.isEmpty())
 
-        link.incoming.send(curveReply.bytes())
+        link.incoming.send(CURVE_REPLY.bytes())
         runCurrent()
 
         assertEquals(ControlErrorCode.NOT_APPLIED, assertIs<OperationResult.Failure>(pending.await()).error.code)
@@ -143,7 +143,7 @@ class ControlSessionAdvancedAudioTest {
         val pending = async { session.set(DeviceSetting.CUSTOM_EQ, curve) }
         runCurrent()
 
-        link.incoming.send(curveReply.bytes())
+        link.incoming.send(CURVE_REPLY.bytes())
         runCurrent()
         assertTrue(session.state.value.settingOperations.single().confirmedFields.isEmpty())
         link.incoming.send("dd00022a040daa".bytes())
@@ -213,7 +213,7 @@ class ControlSessionAdvancedAudioTest {
         link.incoming.send("dd00022a0710aa".bytes())
         runCurrent()
         assertIs<FieldReading.Unknown>(session.state.value.device?.fields?.get(DeviceField.EQ))
-        link.incoming.send(curveReply.bytes())
+        link.incoming.send(CURVE_REPLY.bytes())
         runCurrent()
 
         assertEquals(setOf(DeviceField.CUSTOM_EQ), session.state.value.settingOperations.single().confirmedFields)
@@ -235,7 +235,7 @@ class ControlSessionAdvancedAudioTest {
 
         link.incoming.send("dd00022a040daa".bytes())
         runCurrent()
-        link.incoming.send(curveReply.bytes())
+        link.incoming.send(CURVE_REPLY.bytes())
         runCurrent()
         assertEquals(OperationResult.Success, first.await())
         val secondStart = link.writes.size - 3
@@ -243,7 +243,7 @@ class ControlSessionAdvancedAudioTest {
 
         link.incoming.send("dd00022a040daa".bytes())
         runCurrent()
-        link.incoming.send(curveReply.bytes())
+        link.incoming.send(CURVE_REPLY.bytes())
         runCurrent()
 
         assertEquals(OperationResult.Success, second.await())
@@ -261,8 +261,10 @@ class ControlSessionAdvancedAudioTest {
             FieldValue.IntegerList((1..9).toList()),
             FieldValue.IntegerList(listOf(7, 0, 0, 0, 0, 0, 0, 0, 0, 0)),
         )) {
-            assertEquals(ControlErrorCode.INVALID_ARGUMENT,
-                assertIs<OperationResult.Failure>(session.set(DeviceSetting.CUSTOM_EQ, invalid)).error.code)
+            assertEquals(
+                ControlErrorCode.INVALID_ARGUMENT,
+                assertIs<OperationResult.Failure>(session.set(DeviceSetting.CUSTOM_EQ, invalid)).error.code,
+            )
         }
         assertEquals(before, link.writes.size)
         assertTrue(session.state.value.settingOperations.isEmpty())
@@ -287,23 +289,38 @@ class ControlSessionAdvancedAudioTest {
             val gainResult = session.set(DeviceSetting.GAIN, FieldValue.Number(if (gainAllowed) 3 else 0))
             val protectionResult = session.set(DeviceSetting.HEARING_PROTECTION, FieldValue.Number(if (gainAllowed) 7 else 6))
             val promptResult = session.set(DeviceSetting.PROMPT_VOLUME, FieldValue.Number(6))
-            assertEquals(if (gainAllowed) ControlErrorCode.INVALID_ARGUMENT else ControlErrorCode.UNSUPPORTED,
-                assertIs<OperationResult.Failure>(gainResult).error.code, "$firmware gain")
-            assertEquals(if (gainAllowed) ControlErrorCode.INVALID_ARGUMENT else ControlErrorCode.UNSUPPORTED,
-                assertIs<OperationResult.Failure>(protectionResult).error.code, "$firmware protection")
-            assertEquals(ControlErrorCode.INVALID_ARGUMENT,
-                assertIs<OperationResult.Failure>(promptResult).error.code, "$firmware prompt")
+            assertEquals(
+                if (gainAllowed) ControlErrorCode.INVALID_ARGUMENT else ControlErrorCode.UNSUPPORTED,
+                assertIs<OperationResult.Failure>(gainResult).error.code,
+                "$firmware gain",
+            )
+            assertEquals(
+                if (gainAllowed) ControlErrorCode.INVALID_ARGUMENT else ControlErrorCode.UNSUPPORTED,
+                assertIs<OperationResult.Failure>(protectionResult).error.code,
+                "$firmware protection",
+            )
+            assertEquals(
+                ControlErrorCode.INVALID_ARGUMENT,
+                assertIs<OperationResult.Failure>(promptResult).error.code,
+                "$firmware prompt",
+            )
             if (!muteAllowed) {
-                assertEquals(ControlErrorCode.UNSUPPORTED,
+                assertEquals(
+                    ControlErrorCode.UNSUPPORTED,
                     assertIs<OperationResult.Failure>(session.set(DeviceSetting.PROMPT_VOLUME, FieldValue.Number(0))).error.code,
-                    "$firmware mute")
+                    "$firmware mute",
+                )
             }
-            assertEquals(ControlErrorCode.INVALID_ARGUMENT,
+            assertEquals(
+                ControlErrorCode.INVALID_ARGUMENT,
                 assertIs<OperationResult.Failure>(session.set(DeviceSetting.PROMPT_VOLUME, FieldValue.Number(-1))).error.code,
-                "$firmware negative prompt")
-            assertEquals(ControlErrorCode.INVALID_ARGUMENT,
+                "$firmware negative prompt",
+            )
+            assertEquals(
+                ControlErrorCode.INVALID_ARGUMENT,
                 assertIs<OperationResult.Failure>(session.set(DeviceSetting.PROMPT_VOLUME, FieldValue.Toggle(false))).error.code,
-                "$firmware wrong prompt type")
+                "$firmware wrong prompt type",
+            )
             assertEquals(before, link.writes.size, "$firmware")
             assertTrue(session.state.value.settingOperations.isEmpty(), "$firmware")
             session.disconnect()
@@ -324,8 +341,11 @@ class ControlSessionAdvancedAudioTest {
             link.incoming.send(reply.bytes())
             runCurrent()
             assertEquals(OperationResult.Success, pending.await(), setting.name)
-            assertEquals(setOf(if (setting == DeviceSetting.GAIN) DeviceField.GAIN else DeviceField.HEARING_PROTECTION),
-                session.state.value.settingOperations.last().confirmedFields, setting.name)
+            assertEquals(
+                setOf(if (setting == DeviceSetting.GAIN) DeviceField.GAIN else DeviceField.HEARING_PROTECTION),
+                session.state.value.settingOperations.last().confirmedFields,
+                setting.name,
+            )
         }
         session.disconnect()
 
@@ -353,8 +373,12 @@ class ControlSessionAdvancedAudioTest {
             override fun scan(): Flow<Advertisement> = advertisements
             override suspend fun connect(deviceId: DeviceId, endpoint: TransportEndpoint, onPhase: (ConnectionPhase) -> Unit): ControlConnection = link
         }
-        val session = ControlSession(PlatformState(PermissionState.GRANTED, TransportAvailability.Available), transport = transport,
-            scope = backgroundScope, timing = SessionTiming(queryTimeoutMillis = 50, i7WriteIntervalMillis = 0))
+        val session = ControlSession(
+            PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
+            transport = transport,
+            scope = backgroundScope,
+            timing = SessionTiming(queryTimeoutMillis = 50, i7WriteIntervalMillis = 0),
+        )
         session.startScan()
         transport.advertisements.emit(Advertisement(DeviceId("i7"), manufacturerData = mapOf(0xe5b8 to byteArrayOf(0x29, 0x0f))))
         runCurrent()
@@ -381,7 +405,9 @@ class ControlSessionAdvancedAudioTest {
                 firmware?.let { incoming.send(it.bytes()) }
             }
         }
-        override suspend fun close() { incoming.close() }
+        override suspend fun close() {
+            incoming.close()
+        }
     }
 
     private data class SettingVector(
@@ -396,7 +422,7 @@ class ControlSessionAdvancedAudioTest {
 
     companion object {
         private val curve = FieldValue.IntegerList(listOf(-6, -3, -1, 0, 1, 2, 3, 4, 5, 6))
-        private const val curveReply = "dd000b3e86838100010203040506c5aa"
+        private const val CURVE_REPLY = "dd000b3e86838100010203040506c5aa"
         private fun reading(session: ControlSession, field: DeviceField) = assertIs<FieldReading.Known>(session.state.value.device?.fields?.get(field)).value
         private fun ByteArray.hex() = joinToString("") { (it.toInt() and 255).toString(16).padStart(2, '0') }
         private fun String.bytes() = chunked(2).map { it.toInt(16).toByte() }.toByteArray()

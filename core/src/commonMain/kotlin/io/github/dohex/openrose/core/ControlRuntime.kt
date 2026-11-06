@@ -53,6 +53,7 @@ interface ControlRuntime {
 }
 
 /** The runtime owned by this process: one [ControlSession] over the platform transport. */
+@Suppress("ktlint:standard:function-naming", "FunctionNaming") // Factory function in constructor style.
 fun LocalControlRuntime(
     initialPlatformState: PlatformState,
     initialSettings: UserSettings = UserSettings(),
