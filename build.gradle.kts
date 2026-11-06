@@ -16,7 +16,7 @@ tasks.register("offlineCheck") {
     description = "Run hardware-independent checks (add --offline after dependencies are cached)."
     dependsOn(
         ":core:jvmTest", ":androidIntegration:jvmTest", ":sharedUI:jvmTest", ":androidIntegrationUI:jvmTest",
-        ":desktopApp:test", ":androidApp:testDebugUnitTest",
+        ":desktopApp:test", ":androidApp:testDebugUnitTest", ":transportBluez:test",
         ":desktopApp:compileKotlin", ":androidApp:compileDebugKotlin",
     )
 }

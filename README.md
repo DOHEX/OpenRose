@@ -10,7 +10,7 @@
 
 OpenRose 是 ROSE / ROSESELSA（弱水时砂）耳机的第三方控制客户端，可以替代官方 RoseLink 完成日常设置。在 HyperOS 上，它还能把耳机接入超级岛、焦点通知和融合设备中心，体验接近小米自家耳机。
 
-项目基于 Kotlin Multiplatform 与 Compose Multiplatform，提供 Miuix 和 Material 3 两套界面风格。Android 是主力平台；Windows / Linux 桌面版目前只有界面，还不能控制耳机。
+项目基于 Kotlin Multiplatform 与 Compose Multiplatform，提供 Miuix 和 Material 3 两套界面风格。Android 是主力平台；Linux 桌面版通过 BlueZ 提供 BLE 控制，Windows 桌面版目前只有界面。
 
 > [!WARNING]
 > 项目仍在开发中，大部分功能尚未在真机上完整验证，详见下方的[支持的耳机](#支持的耳机)。遇到问题欢迎[反馈](#反馈与参与)。
@@ -132,7 +132,14 @@ OpenRose 与耳机之间的**控制连接**，和系统用来听歌、通话的*
 | --- | --- |
 | Android 8.0+ | 蓝牙扫描、BLE 控制、i7 的 SPP 控制均已实现 |
 | HyperOS 3 / 4 | 系统集成代码已完成，待真机验证 |
-| Windows / Linux | 界面和偏好设置可用；蓝牙控制尚未实现 |
+| Linux x64 | BlueZ BLE 扫描与控制、已配对设备、系统音频驱动控制生命周期；桌面端 i5 完整实机验收待完成 |
+| Windows | 界面和偏好设置可用；蓝牙控制尚未实现 |
+
+Linux 使用系统 BlueZ 和 D-Bus，不申请 Android 式蓝牙权限，也不开关适配器。状态页会说明 BlueZ 缺失、适配器关闭或 D-Bus 拒绝访问的原因；可用时提供“打开蓝牙设置”（依次探测 GNOME、KDE、Blueman）。应用单实例运行，再次启动会唤起已有窗口；关闭窗口会释放控制连接，系统音频连接由系统管理。
+
+Linux 当前只实现 BLE，不含 SPP、OTA 或 Android 系统集成。i5 复用共享协议的 13 项初始化读取及设置回读确认；经典蓝牙已连接但没有 GATT 服务时，补连另一条 BLE 链路并等待服务发布，不删除配对记录。i7 尚无实机验证。离线假 D-Bus 测试覆盖平台事件与错误映射；此前 Linux / Bleak 的 i5 读取证据见[协议说明](docs/protocols/models/earfeel-i5-protocol.md)，不能代替本桌面实现的实测。i5 扫描到控制就绪、13 项读数对照、每项设置回包、音频连接／断开、双模恢复，以及 DEB／RPM／Pacman 在干净系统上的安装运行，仍需维护者验收。
+
+Linux 自动控制依据 BlueZ `MediaTransport1` 的 A2DP 音频连接；只有 HFP 通话连接时不会自动建立控制连接，可从添加耳机流程或已配对设备中手动连接。
 
 ## 从源码构建
 
@@ -141,7 +148,7 @@ OpenRose 与耳机之间的**控制连接**，和系统用来听歌、通话的*
 - JDK 21（`.mise.toml` 已指定 Temurin 版本，可用 [mise](https://mise.jdx.dev/) 安装）
 - Android SDK Platform 37、Build Tools 37.0.0
 - 设置 `ANDROID_HOME`，或在 `local.properties` 中写入 `sdk.dir=/path/to/android-sdk`
-- Linux 运行桌面版还需要 GTK 3、EGL / OpenGL 和 fontconfig，安装命令可参考 [CI 配置](.github/workflows/ci.yml)
+- Linux 运行桌面版还需要已运行的 BlueZ、可访问的系统 D-Bus、已开启且支持 BLE 的适配器，以及 GTK 3、EGL / OpenGL 和 fontconfig；DEB、RPM、Pacman 声明 `bluez` 依赖，AppImage 也依赖宿主的 BlueZ
 
 仓库自带 Gradle Wrapper。Windows 下把 `./gradlew` 换成 `.\gradlew.bat`。
 
@@ -162,7 +169,7 @@ cd OpenRose
 ./gradlew :desktopApp:run
 ```
 
-运行不依赖耳机硬件的测试（协议、控制会话、共享界面、Android / 桌面偏好持久化测试，以及两端编译检查）：
+运行不依赖耳机硬件的测试（协议、控制会话、BlueZ 假 D-Bus 驱动与事件映射、共享界面、Android / 桌面偏好持久化测试，以及两端编译检查）：
 
 ```bash
 ./gradlew offlineCheck
@@ -195,13 +202,14 @@ CI 只在 Linux 上运行测试；Linux 产出 Android APK 与上述 4 种 Linux
 | `sharedUI/` | 共享界面、表现层模型与平台插槽、Miuix / Material 3 组件、外观设置与界面测试 |
 | `androidIntegrationUI/` | Android 专属界面段落：控制方式、后台控制、系统集成状态与诊断、权限和作用域重启；KMP Android / JVM |
 | `androidApp/` | Android 入口、GATT 原语驱动与 SPP 传输、音频协议代理与广播、libxposed 模块与 HyperOS 系统桥接 |
+| `transportBluez/` | Linux BlueZ D-Bus GATT 原语、扫描、配对设备与音频事实；复用共享 GATT 与音频推断 |
 | `desktopApp/` | Windows / Linux 桌面入口、窗口与偏好设置 |
 | `build-logic/` | 各模块共用的 Gradle 约定插件：工具链、JVM 字节码目标、Android 与桌面打包配置 |
 | `docs/` | 协议研究与型号规范（`docs/protocols/`）、工程实现证据（`docs/protocols.md`）、架构决策与规范 |
 
 用户设置由归属层分别编解码，共用各平台的键值存储：控制设置用 `core.` 前缀，外观设置用 `sharedUI.`，Android 集成设置用 `androidIntegration.`。模块宿主只接收控制和集成设置。旧的无前缀键不再读取，不做迁移；使用新版本时需重新选择偏好。
 
-两端入口在界面组合外创建 `RuntimeOpenRoseModel`，统一持有控制入口、设置存储和宿主协程作用域，再将模型与 `PlatformUi` 传给 `OpenRoseApp`。平台通过插槽提供段落及系统动作，共享界面不按平台名称分支。桌面端仅依赖共享界面与控制核心，控制传输尚未实现时在状态页和添加耳机流程中显示原因。
+两端入口统一持有 `RuntimeOpenRoseModel`、控制入口、设置存储和宿主协程作用域，再将模型与 `PlatformUi` 传给 `OpenRoseApp`。平台通过插槽提供段落及系统动作，共享界面不按平台名称分支。桌面端只在取得单实例所有权后创建运行时，Linux 接入 `transportBluez`，状态页和添加耳机流程显示实时传输可用性及原因。
 
 ## 文档
 

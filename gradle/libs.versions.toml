@@ -17,6 +17,8 @@ libxposed-api = "102.0.0"
 libxposed-service = "102.0.0"
 nucleus = "2.5.18"
 robolectric = "4.17"
+bluez-dbus = "0.3.5"
+dbus-java = "5.2.0"
 
 [libraries]
 compose-runtime = { module = "org.jetbrains.compose.runtime:runtime", version.ref = "compose" }
@@ -39,6 +41,8 @@ libxposed-service = { module = "io.github.libxposed:service", version.ref = "lib
 nucleus-application = { module = "dev.nucleusframework:nucleus.nucleus-application", version.ref = "nucleus" }
 nucleus-tao = { module = "dev.nucleusframework:nucleus.decorated-window-tao", version.ref = "nucleus" }
 robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
+bluez-dbus = { module = "com.github.hypfvieh:bluez-dbus", version.ref = "bluez-dbus" }
+dbus-java-native-unixsocket = { module = "com.github.hypfvieh:dbus-java-transport-native-unixsocket", version.ref = "dbus-java" }
 
 [plugins]
 kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }

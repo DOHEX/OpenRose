@@ -165,12 +165,14 @@ internal class ConnectionTargeting(
     }
 
     fun updatePlatformState(platformState: PlatformState) {
-        val unlocking = !state.value.platform.userUnlocked && platformState.userUnlocked
+        val previous = state.value.platform
+        val unlocking = !previous.userUnlocked && platformState.userUnlocked
+        val transportReady = previous.transport != TransportAvailability.Available &&
+            platformState.transport == TransportAvailability.Available
         state.update { it.copy(platform = platformState) }
-        // The audio connection may predate this owner or the unlock; only the current one is resumed.
-        val audioDevice = latestAudioDevice
-        if (unlocking && audioDevice != null && transport != null) {
-            scope.launch { handleAudioConnectedDevice(audioDevice) }
+        // Existing audio may predate unlock or asynchronous platform transport initialization.
+        if ((unlocking || transportReady) && platformState.userUnlocked && transport != null) {
+            scope.launch { latestAudioDevice?.let { handleAudioConnectedDevice(it) } }
         }
     }
 

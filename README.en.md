@@ -10,7 +10,7 @@
 
 OpenRose is an unofficial control app for ROSE / ROSESELSA (弱水时砂) earphones and a replacement for the official RoseLink app for everyday settings. On HyperOS it can also plug the earphones into the system island, focus notifications, and Fusion Device Center, so they behave much like Xiaomi's own earbuds.
 
-It is built with Kotlin Multiplatform and Compose Multiplatform and ships two interface styles, Miuix and Material 3. Android is the main platform. The Windows / Linux desktop builds have the UI only and cannot control earphones yet.
+It is built with Kotlin Multiplatform and Compose Multiplatform and ships two interface styles, Miuix and Material 3. Android is the main platform. Linux desktop provides BLE control through BlueZ; Windows desktop currently provides the UI only.
 
 > [!WARNING]
 > OpenRose is under active development and most features have not been fully tested on real hardware. See [Supported earphones](#supported-earphones) for details, and please [report problems](#feedback-and-contributing).
@@ -132,7 +132,14 @@ The island, focus notification, and control way do not affect each other: hiding
 | --- | --- |
 | Android 8.0+ | Bluetooth scanning, BLE control, and SPP control for the i7 are implemented |
 | HyperOS 3 / 4 | Integration code is complete; awaiting hardware testing |
-| Windows / Linux | UI and preferences work; Bluetooth control is not implemented |
+| Linux x64 | BlueZ BLE scanning and control, paired devices, and control tied to system audio connections; full desktop i5 hardware acceptance is pending |
+| Windows | UI and preferences work; Bluetooth control is not implemented |
+
+Linux uses the system BlueZ service and D-Bus, requires no Android-style permission request, and does not switch the adapter on or off. The Status page explains a missing BlueZ service, a powered-off adapter, or D-Bus access denial. An optional Bluetooth settings action probes GNOME, KDE, then Blueman. Only one application instance runs; launching again brings the existing window forward. Closing the window releases control; the system manages audio connections.
+
+Linux currently supports BLE only, without SPP, OTA, or Android system integration. The i5 uses the shared protocol's 13 initialization reads and setting readback confirmation. When Classic Bluetooth is connected without GATT services, the driver connects the other BLE bearer and waits for services without deleting pairing records. The i7 remains untested on hardware. Offline tests with fake D-Bus objects cover platform events and error mapping. Earlier Linux / Bleak i5 read evidence is documented in the [protocol notes](docs/protocols/models/earfeel-i5-protocol.md) and does not validate this desktop implementation. Maintainer acceptance is still required for i5 scanning through control readiness, comparison of all 13 reads, every setting's reply, audio connection/disconnection, dual-mode recovery, and clean-system DEB/RPM/Pacman installation and launch.
+
+Linux starts automatic control from A2DP audio connections observed through BlueZ `MediaTransport1`. An HFP-only call connection does not start control automatically; connect manually through the add-earphones flow or paired devices.
 
 ## Building from source
 
@@ -141,7 +148,7 @@ The island, focus notification, and control way do not affect each other: hiding
 - JDK 21 (`.mise.toml` pins a Temurin version you can install with [mise](https://mise.jdx.dev/))
 - Android SDK Platform 37 and Build Tools 37.0.0
 - `ANDROID_HOME` set, or `sdk.dir=/path/to/android-sdk` in `local.properties`
-- On Linux, the desktop app also needs GTK 3, EGL / OpenGL, and fontconfig; see the [CI configuration](.github/workflows/ci.yml) for the install command
+- On Linux, the desktop app needs a running BlueZ service, access to the system D-Bus, a powered BLE adapter, GTK 3, EGL / OpenGL, and fontconfig. DEB, RPM, and Pacman declare a `bluez` dependency; AppImage also uses the host's BlueZ service
 
 The Gradle Wrapper is included. On Windows, replace `./gradlew` with `.\gradlew.bat`.
 
@@ -162,7 +169,7 @@ Run the desktop app:
 ./gradlew :desktopApp:run
 ```
 
-Run the tests that need no earphone hardware (protocol, control session, shared UI, and Android / desktop preference persistence tests, plus compilation for both platforms):
+Run the tests that need no earphone hardware (protocol, control session, BlueZ drivers and event mapping with fake D-Bus objects, shared UI, and Android / desktop preference persistence tests, plus compilation for both platforms):
 
 ```bash
 ./gradlew offlineCheck
@@ -195,13 +202,14 @@ CI runs the tests on Linux only. Linux publishes the Android APK and the four Li
 | `sharedUI/` | Shared UI, presentation model and platform slots, Miuix / Material 3 components, appearance settings, and UI tests |
 | `androidIntegrationUI/` | Android-specific UI sections: control way, background control, integration status and diagnostics, permissions, and scope restart; KMP Android / JVM |
 | `androidApp/` | Android entry point, primitive GATT driver and SPP transport, audio profile proxies and broadcasts, libxposed module, and HyperOS system bridge |
+| `transportBluez/` | Linux BlueZ D-Bus GATT primitives, scanning, paired devices, and audio facts; reuses shared GATT and audio inference |
 | `desktopApp/` | Windows / Linux desktop entry point, windows, and preferences |
 | `build-logic/` | Gradle convention plugins shared by the modules: toolchain, JVM bytecode target, Android and desktop packaging setup |
 | `docs/` | Protocol research & model specifications (`docs/protocols/`), implementation evidence (`docs/protocols.md`), architecture decisions, and specifications |
 
 Each layer owns its settings codec and shares the platform's key-value store: control keys use `core.`, appearance keys use `sharedUI.`, and Android integration keys use `androidIntegration.`. The module host receives only control and integration settings. Old unprefixed keys are ignored without migration; preferences must be selected again when using this version.
 
-Both entry points create `RuntimeOpenRoseModel` outside composition, holding the control entry, settings store, and host coroutine scope, then pass it and `PlatformUi` to `OpenRoseApp`. Platforms supply sections and system actions through slots; shared UI never branches on platform names. Desktop depends only on shared UI and the control core, and explains the missing control transport on the status page and in the add-earphone flow.
+Both entry points hold `RuntimeOpenRoseModel`, the control entry, settings store, and host coroutine scope, then pass the model and `PlatformUi` to `OpenRoseApp`. Platforms supply sections and system actions through slots; shared UI never branches on platform names. Desktop creates its runtime only after acquiring single-instance ownership, uses `transportBluez` on Linux, and exposes live transport availability and reasons on the Status page and in the add-earphone flow.
 
 ## Documentation
 
