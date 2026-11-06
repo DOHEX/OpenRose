@@ -3,7 +3,11 @@ import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.kotlin.dsl.configure
 
-/** Android application on the catalog SDK levels and the shared JDK; Kotlin is AGP's built-in support. */
+/**
+ * Android application on the catalog SDK levels and the shared JDK; Kotlin is AGP's built-in support.
+ * Lint also checks the library modules the app depends on, fails on warnings, and freezes existing
+ * findings in the module's `lint-baseline.xml`.
+ */
 class AndroidApplicationConventionPlugin : Plugin<Project> {
     override fun apply(target: Project): Unit = with(target) {
         pluginManager.apply("com.android.application")
@@ -18,7 +22,13 @@ class AndroidApplicationConventionPlugin : Plugin<Project> {
                 sourceCompatibility = javaVersion
                 targetCompatibility = javaVersion
             }
+            lint {
+                warningsAsErrors = true
+                checkDependencies = true
+                baseline = file("lint-baseline.xml")
+            }
         }
         configureKotlinJvm()
+        configureQuality()
     }
 }

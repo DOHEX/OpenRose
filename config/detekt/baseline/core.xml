@@ -1,0 +1,246 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>ComplexCondition:AudioFacts.kt:(targets + connected).any { it !in states } || connected.any { states[it] != AudioConnectionState.CONNECTED } || states.any { (address, state) -&gt; state == AudioConnectionState.CONNECTED &amp;&amp; address !in connected }</ID>
+    <ID>ComplexCondition:ConnectionTargeting.kt:ConnectionTargeting$(unlocking || transportReady) &amp;&amp; platformState.userUnlocked &amp;&amp; transport != null</ID>
+    <ID>ComplexCondition:ControlLink.kt:ControlLink$active !== attempt || attempt.linkEpoch.value != epoch || progress.value.ended || state.value.device?.sessionId != attempt.id || state.value.connection is ConnectionState.Disconnected</ID>
+    <ID>ComplexCondition:ControlLink.kt:ControlLink$active === attempt &amp;&amp; attempt.ready &amp;&amp; current?.deviceId == deviceId &amp;&amp; current.sessionId == attempt.id &amp;&amp; current.phase == ConnectionPhase.READY</ID>
+    <ID>ComplexCondition:ControlLink.kt:ControlLink$cause is TimeoutCancellationException &amp;&amp; currentCoroutineContext().isActive &amp;&amp; queryIndex == 0 &amp;&amp; canRecoverUnclassified(attempt, selection)</ID>
+    <ID>ComplexCondition:ControlLink.kt:ControlLink$failure.cause is SecurityException || failure.cause is IllegalArgumentException || failure.cause is UnsupportedOperationException || failure.cause is TerminalTransportException</ID>
+    <ID>ComplexCondition:ControlLink.kt:ControlLink$index == 0 &amp;&amp; !progress.value.meaningful &amp;&amp; selection.endpoint is TransportEndpoint.BleGatt &amp;&amp; requireNotNull(transport).supportsInitializationRecovery</ID>
+    <ID>ComplexCondition:ControlLink.kt:ControlLink$queryIndex == 0 &amp;&amp; canRecoverUnclassified(attempt, selection) &amp;&amp; cause !is SecurityException &amp;&amp; cause !is IllegalArgumentException &amp;&amp; cause !is UnsupportedOperationException &amp;&amp; cause !is LinkEnded &amp;&amp; cause !is RecoverableTransportException &amp;&amp; cause !is TerminalTransportException</ID>
+    <ID>ComplexCondition:GattControlConnection.kt:GattControlConnection$(!writer.canWrite &amp;&amp; !writer.canWriteWithoutResponse) || (!notifier.canNotify &amp;&amp; !notifier.canIndicate)</ID>
+    <ID>ComplexCondition:SettingQueue.kt:SettingQueue$profile == ModelProfile.I7_RS_V2 &amp;&amp; value is FieldValue.Number &amp;&amp; value.value == 0 &amp;&amp; value.value !in levels</ID>
+    <ID>CyclomaticComplexMethod:AudioFacts.kt:fun inferAudioProfile: AudioProfileEvidence</ID>
+    <ID>CyclomaticComplexMethod:ControlLink.kt:ControlLink$private suspend fun openAndRead: OperationResult</ID>
+    <ID>CyclomaticComplexMethod:ControlLink.kt:ControlLink$private suspend fun openAndReadLink: OperationResult</ID>
+    <ID>CyclomaticComplexMethod:ControlLink.kt:ControlLink$private suspend fun writeInitialQuery</ID>
+    <ID>CyclomaticComplexMethod:ControlLink.kt:ControlLink$suspend fun connect: OperationResult</ID>
+    <ID>CyclomaticComplexMethod:ControlSessionRecoveryTest.kt:ControlSessionRecoveryTest.RecoveryTransport$override suspend fun connect: ControlConnection</ID>
+    <ID>CyclomaticComplexMethod:GattControlConnection.kt:GattControlConnection$private suspend fun initialize</ID>
+    <ID>CyclomaticComplexMethod:I5Codec.kt:I5Codec$override fun feedNotification: List&lt;ProtocolReply&gt;</ID>
+    <ID>CyclomaticComplexMethod:I5Codec.kt:I5Codec$override fun prepareSetting: ProtocolSetting</ID>
+    <ID>CyclomaticComplexMethod:I7Codec.kt:I7Codec$override fun prepareSetting: ProtocolSetting</ID>
+    <ID>CyclomaticComplexMethod:I7Codec.kt:I7Codec$private fun decodeRecord: Map&lt;DeviceField, FieldReading&gt;</ID>
+    <ID>CyclomaticComplexMethod:SettingQueue.kt:SettingQueue$private fun validateSetting: ControlError?</ID>
+    <ID>CyclomaticComplexMethod:SettingQueue.kt:SettingQueue$private suspend fun applySetting: OperationResult</ID>
+    <ID>CyclomaticComplexMethod:SettingQueue.kt:SettingQueue$private suspend fun runSettings</ID>
+    <ID>DestructuringDeclarationWithTooManyEntries:ControlSessionAdvancedAudioTest.kt:ControlSessionAdvancedAudioTest$(firmware, level, write, reply)</ID>
+    <ID>DestructuringDeclarationWithTooManyEntries:ControlSessionAdvancedAudioTest.kt:ControlSessionAdvancedAudioTest$(setting, value, write, query, reply)</ID>
+    <ID>DestructuringDeclarationWithTooManyEntries:ControlSessionDeviceControlsTest.kt:ControlSessionDeviceControlsTest$(enabled, write, query, reply)</ID>
+    <ID>DestructuringDeclarationWithTooManyEntries:ControlSessionDeviceControlsTest.kt:ControlSessionDeviceControlsTest$(mode, write, query, reply)</ID>
+    <ID>DestructuringDeclarationWithTooManyEntries:ControlSessionDeviceControlsTest.kt:ControlSessionDeviceControlsTest$(setting, enabled, write, query, reply)</ID>
+    <ID>DestructuringDeclarationWithTooManyEntries:ControlSessionDeviceControlsTest.kt:ControlSessionDeviceControlsTest$(setting, requested, write, mode, multipoint, reply)</ID>
+    <ID>DestructuringDeclarationWithTooManyEntries:ControlSessionDeviceControlsTest.kt:ControlSessionDeviceControlsTest$(side, gesture, action, write, query, reply)</ID>
+    <ID>DestructuringDeclarationWithTooManyEntries:ControlSessionEqualizerTest.kt:ControlSessionEqualizerTest$(enabled, write, query, reply)</ID>
+    <ID>DestructuringDeclarationWithTooManyEntries:ControlSessionEqualizerTest.kt:ControlSessionEqualizerTest$(preset, write, query, reply)</ID>
+    <ID>LongMethod:AdvancedAudioProtocolTest.kt:AdvancedAudioProtocolTest$@Test fun i7GainProtectionAndPromptSettingsUseTheirIndependentFirmwareGatesAndReadbacks</ID>
+    <ID>LongMethod:ControlLink.kt:ControlLink$private suspend fun openAndReadLink: OperationResult</ID>
+    <ID>LongMethod:ControlLink.kt:ControlLink$suspend fun connect: OperationResult</ID>
+    <ID>LongMethod:ControlSessionTransportSelectionTest.kt:ControlSessionTransportSelectionTest$@Test fun fallbackReasonsUseOnlyAvailableModelAddressPlatformAndAudioEvidence</ID>
+    <ID>LongMethod:I5Codec.kt:I5Codec$override fun feedNotification: List&lt;ProtocolReply&gt;</ID>
+    <ID>LongMethod:I5Codec.kt:I5Codec$override fun prepareSetting: ProtocolSetting</ID>
+    <ID>LongMethod:I7Codec.kt:I7Codec$override fun prepareSetting: ProtocolSetting</ID>
+    <ID>LongMethod:I7Codec.kt:I7Codec$private fun decodeRecord: Map&lt;DeviceField, FieldReading&gt;</ID>
+    <ID>LongMethod:SettingQueue.kt:SettingQueue$private suspend fun applySetting: OperationResult</ID>
+    <ID>LoopWithTooManyJumpStatements:AudioFacts.kt:AudioFacts$for</ID>
+    <ID>LoopWithTooManyJumpStatements:I7Codec.kt:I7Codec$for</ID>
+    <ID>LoopWithTooManyJumpStatements:I7Codec.kt:I7Codec$while</ID>
+    <ID>MaxLineLength:AdvancedAudioProtocolTest.kt:AdvancedAudioProtocolTest$assertEquals(if (gainAllowed) setOf(0, 1, 2, 3, 4, 5, 6) else emptySet(), hearingProtectionLevels(ModelProfile.I7_RS_V2, firmware), "$parts")</ID>
+    <ID>MaxLineLength:AdvancedAudioProtocolTest.kt:AdvancedAudioProtocolTest$assertEquals(if (muteAllowed) setOf(0, 1, 2, 3, 4, 5) else setOf(1, 2, 3, 4, 5), promptVolumeLevels(ModelProfile.I7_RS_V2, firmware), "$parts")</ID>
+    <ID>MaxLineLength:AudioFactsTest.kt:AudioFactsTest$assertEquals(AudioProfileEvidence.UNKNOWN, inferAudioProfile(classic.copy(profiles = classic.profiles + (AudioProfile.A2DP to inconsistent)), setOf(ADDRESS)))</ID>
+    <ID>MaxLineLength:AudioFactsTest.kt:AudioFactsTest$assertEquals(AudioProfileEvidence.UNKNOWN, inferAudioProfile(classic.copy(profiles = classic.profiles - AudioProfile.HEADSET), setOf(ADDRESS)))</ID>
+    <ID>MaxLineLength:AudioFactsTest.kt:AudioFactsTest.Companion$(connected + ADDRESS).associateWith { if (it in connected) AudioConnectionState.CONNECTED else AudioConnectionState.DISCONNECTED }</ID>
+    <ID>MaxLineLength:AudioFactsTest.kt:AudioFactsTest.Companion$private</ID>
+    <ID>MaxLineLength:ControlLink.kt:ControlLink$cause is RecoverableTransportException &amp;&amp; cause.reason == TransportRecoveryReason.NO_INITIAL_RESPONSE -&gt; ControlErrorCode.TIMEOUT</ID>
+    <ID>MaxLineLength:ControlLink.kt:ControlLink$current.copy(device = old.copy(fieldErrors = old.fieldErrors.mutate { errors -&gt; missing.forEach { errors[it] = timeout } }), lastError = timeout)</ID>
+    <ID>MaxLineLength:ControlLink.kt:ControlLink$fieldRevisions = previous.fieldRevisions.mutate { revisions -&gt; fields.forEach { revisions[it] = (revisions[it] ?: 0) + 1 } }</ID>
+    <ID>MaxLineLength:ControlLink.kt:ControlLink$if (attempt.hasWritten) delay(if (attempt.candidate.profile == ModelProfile.I5_ZT) timing.i5WriteIntervalMillis else timing.i7WriteIntervalMillis)</ID>
+    <ID>MaxLineLength:ControlLink.kt:ControlLink$if (attempt.linkEpoch.value == epoch &amp;&amp; it.device?.sessionId == attempt.id &amp;&amp; it.connection !is ConnectionState.Disconnected) update(it) else it</ID>
+    <ID>MaxLineLength:ControlLink.kt:ControlLink$if (state.value.device?.sessionId != attempt.id || state.value.connection is ConnectionState.Disconnected || attempt.progress.value.ended) throw LinkEnded()</ID>
+    <ID>MaxLineLength:ControlLink.kt:ControlLink$is UnsupportedOperationException, is IllegalArgumentException -&gt; ControlError(ControlErrorCode.UNSUPPORTED, cause.message ?: "不支持该连接")</ID>
+    <ID>MaxLineLength:ControlLink.kt:ControlLink$it.copy(connection = ConnectionState.Disconnected, device = null, lastError = error, transportSelection = null)</ID>
+    <ID>MaxLineLength:ControlLink.kt:ControlLink$keyRevisions = previous.keyRevisions.mutate { revisions -&gt; keys.forEach { revisions[it] = (revisions[it] ?: 0) + 1 } }</ID>
+    <ID>MaxLineLength:ControlLink.kt:ControlLink$private fun canRecoverUnclassified: Boolean</ID>
+    <ID>MaxLineLength:ControlLink.kt:ControlLink$unknownNotifications = old.unknownNotifications.appendRecent(parsed.filter { !it.accepted }.map { it.rawHex })</ID>
+    <ID>MaxLineLength:ControlLink.kt:ControlLink$updateLinkAttempt(attempt, epoch) { it.copy(connection = ConnectionState.Disconnected, lastError = timeout, transportSelection = null) }</ID>
+    <ID>MaxLineLength:ControlLink.kt:ControlLink$val firmware = ((readings[DeviceField.FIRMWARE] ?: old.fields[DeviceField.FIRMWARE]) as? FieldReading.Known)?.value as? FieldValue.Firmware</ID>
+    <ID>MaxLineLength:ControlSession.kt:ControlSession$override suspend fun set: OperationResult</ID>
+    <ID>MaxLineLength:ControlSessionAdvancedAudioTest.kt:ControlSessionAdvancedAudioTest.&lt;no name provided&gt;$override suspend fun connect: ControlConnection</ID>
+    <ID>MaxLineLength:ControlSessionAdvancedAudioTest.kt:ControlSessionAdvancedAudioTest.Companion$private fun reading</ID>
+    <ID>MaxLineLength:ControlSessionAudioLifecycleTest.kt:ControlSessionAudioLifecycleTest.TestAudioTransport$override suspend</ID>
+    <ID>MaxLineLength:ControlSessionBehaviorTest.kt:ControlSessionBehaviorTest$assertEquals("125", assertIs&lt;FieldValue.Firmware&gt;(assertIs&lt;FieldReading.Known&gt;(device.fields[DeviceField.FIRMWARE]).value).displayText)</ID>
+    <ID>MaxLineLength:ControlSessionBehaviorTest.kt:ControlSessionBehaviorTest$assertEquals("152", assertIs&lt;FieldValue.Firmware&gt;(assertIs&lt;FieldReading.Known&gt;(device.fields[DeviceField.FIRMWARE]).value).displayText)</ID>
+    <ID>MaxLineLength:ControlSessionBehaviorTest.kt:ControlSessionBehaviorTest$assertEquals(ControlErrorCode.NOT_READY, assertIs&lt;OperationResult.Failure&gt;(session.set(DeviceSetting.GAME_MODE, FieldValue.Toggle(true))).error.code)</ID>
+    <ID>MaxLineLength:ControlSessionBehaviorTest.kt:ControlSessionBehaviorTest$assertEquals(ControlErrorCode.PERMISSION_REQUIRED, assertIs&lt;OperationResult.Failure&gt;(session.connect(DeviceId("device"))).error.code)</ID>
+    <ID>MaxLineLength:ControlSessionBehaviorTest.kt:ControlSessionBehaviorTest$assertEquals(ControlErrorCode.UNSUPPORTED, assertIs&lt;OperationResult.Failure&gt;(session.set(DeviceSetting.EQ, FieldValue.Text("eap"))).error.code)</ID>
+    <ID>MaxLineLength:ControlSessionBehaviorTest.kt:ControlSessionBehaviorTest$assertEquals(listOf("08ee00000001010a0002", "08ee00000006020a0008", "08ee00000002010a0003", "08ee00000006030a0009", "08ee00000008010a0009", "08ee0000000d010a000e", "08ee00000004010a0005", "08ee0000000a010a000b", "08ee00000006050a000b", "08ee0000000c010a000d", "08ee00000006070a000d", "08ee00000006040a000a", "08ee0000000e030a0011"), connection.writes)</ID>
+    <ID>MaxLineLength:ControlSessionBehaviorTest.kt:ControlSessionBehaviorTest$val connection = RecordedConnection(emptyMap(), repeatedNotifications = listOf("dd00040ce4", "325053aa", "dd00040d010502f6aadd00020901020e01faaa"), now = { testScheduler.currentTime })</ID>
+    <ID>MaxLineLength:ControlSessionBehaviorTest.kt:ControlSessionBehaviorTest$val results = listOf(async { session.connect(i5Advertisement.deviceId) }, async { session.connect(i5Advertisement.deviceId) }).awaitAll()</ID>
+    <ID>MaxLineLength:ControlSessionBehaviorTest.kt:ControlSessionBehaviorTest$val session = ControlSession(PlatformState(PermissionState.GRANTED, TransportAvailability.Available), transport = transport, scope = backgroundScope)</ID>
+    <ID>MaxLineLength:ControlSessionBehaviorTest.kt:ControlSessionBehaviorTest.&lt;no name provided&gt;$override suspend</ID>
+    <ID>MaxLineLength:ControlSessionBehaviorTest.kt:ControlSessionBehaviorTest.&lt;no name provided&gt;$override suspend fun connect: ControlConnection</ID>
+    <ID>MaxLineLength:ControlSessionBehaviorTest.kt:ControlSessionBehaviorTest.RecordedConnection$private</ID>
+    <ID>MaxLineLength:ControlSessionBehaviorTest.kt:ControlSessionBehaviorTest.RecordedTransport$override suspend</ID>
+    <ID>MaxLineLength:ControlSessionDeviceControlsTest.kt:ControlSessionDeviceControlsTest$AudioVector</ID>
+    <ID>MaxLineLength:ControlSessionDeviceControlsTest.kt:ControlSessionDeviceControlsTest$AudioVector(DeviceSetting.AUDIO_MODE, FieldValue.Text("aac_sbc"), "08ee00000008810b00008a", "aac_sbc", true, "09ff00000108010b00001d")</ID>
+    <ID>MaxLineLength:ControlSessionDeviceControlsTest.kt:ControlSessionDeviceControlsTest$AudioVector(DeviceSetting.AUDIO_MODE, FieldValue.Text("ldac"), "08ee00000008810b00018b", "ldac", false, "09ff00000108010b00011e")</ID>
+    <ID>MaxLineLength:ControlSessionDeviceControlsTest.kt:ControlSessionDeviceControlsTest$AudioVector(DeviceSetting.MULTIPOINT, FieldValue.Toggle(false), "08ee00000008810b00018b", "ldac", false, "09ff00000108010b00011e")</ID>
+    <ID>MaxLineLength:ControlSessionDeviceControlsTest.kt:ControlSessionDeviceControlsTest$AudioVector(DeviceSetting.MULTIPOINT, FieldValue.Toggle(true), "08ee00000008810b00008a", "aac_sbc", true, "09ff00000108010b00001d")</ID>
+    <ID>MaxLineLength:ControlSessionDeviceControlsTest.kt:ControlSessionDeviceControlsTest$SwitchVector</ID>
+    <ID>MaxLineLength:ControlSessionDeviceControlsTest.kt:ControlSessionDeviceControlsTest$SwitchVector(DeviceSetting.EAR_DETECTION, false, "08ee0000000c810b00018f", "08ee0000000c010a000d", "09ff0000010c010b000122")</ID>
+    <ID>MaxLineLength:ControlSessionDeviceControlsTest.kt:ControlSessionDeviceControlsTest$SwitchVector(DeviceSetting.EAR_DETECTION, true, "08ee0000000c810b00008e", "08ee0000000c010a000d", "09ff0000010c010b000021")</ID>
+    <ID>MaxLineLength:ControlSessionDeviceControlsTest.kt:ControlSessionDeviceControlsTest$SwitchVector(DeviceSetting.TOUCH_ENABLED, false, "08ee0000000a810b00018d", "08ee0000000a010a000b", "09ff0000010a010b000120")</ID>
+    <ID>MaxLineLength:ControlSessionDeviceControlsTest.kt:ControlSessionDeviceControlsTest$SwitchVector(DeviceSetting.TOUCH_ENABLED, true, "08ee0000000a810b00008c", "08ee0000000a010a000b", "09ff0000010a010b00001f")</ID>
+    <ID>MaxLineLength:ControlSessionDeviceControlsTest.kt:ControlSessionDeviceControlsTest$TouchVector</ID>
+    <ID>MaxLineLength:ControlSessionDeviceControlsTest.kt:ControlSessionDeviceControlsTest$TouchVector("left", "double", "play_pause", "ff06030102010caa", "ff0702fa0103aa", "dd00110101ff020103ff04ff11ff12ff13ff14ff3daa")</ID>
+    <ID>MaxLineLength:ControlSessionDeviceControlsTest.kt:ControlSessionDeviceControlsTest$TouchVector("left", "double", "volume_down", "08ee00000004810d000001018a", "08ee00000004010a0005", "09ff000001040112000f010f0f0f0f0f0f8a")</ID>
+    <ID>MaxLineLength:ControlSessionDeviceControlsTest.kt:ControlSessionDeviceControlsTest$TouchVector("left", "long", "next_track", "08ee00000004810d000003038e", "08ee00000004010a0005", "09ff000001040112000f0f0f030f0f0f0f8c")</ID>
+    <ID>MaxLineLength:ControlSessionDeviceControlsTest.kt:ControlSessionDeviceControlsTest$TouchVector("left", "single", "volume_up", "08ee00000004810d0000000088", "08ee00000004010a0005", "09ff00000104011200000f0f0f0f0f0f0f89")</ID>
+    <ID>MaxLineLength:ControlSessionDeviceControlsTest.kt:ControlSessionDeviceControlsTest$TouchVector("left", "triple", "previous_track", "08ee00000004810d000002028c", "08ee00000004010a0005", "09ff000001040112000f0f020f0f0f0f0f8b")</ID>
+    <ID>MaxLineLength:ControlSessionDeviceControlsTest.kt:ControlSessionDeviceControlsTest$TouchVector("left", "triple", "previous_track", "ff080301030210aa", "ff0902fa0105aa", "dd00110101ff02ff030204ff11ff12ff13ff14ff3eaa")</ID>
+    <ID>MaxLineLength:ControlSessionDeviceControlsTest.kt:ControlSessionDeviceControlsTest$TouchVector("right", "double", "play_pause", "08ee00000004810d000101058f", "08ee00000004010a0005", "09ff000001040112000f0f0f0f0f050f0f8e")</ID>
+    <ID>MaxLineLength:ControlSessionDeviceControlsTest.kt:ControlSessionDeviceControlsTest$TouchVector("right", "double", "volume_down", "ff0e0301120528aa", "ff0f02fa010baa", "dd00110101ff02ff03ff04ff11ff120513ff14ff41aa")</ID>
+    <ID>MaxLineLength:ControlSessionDeviceControlsTest.kt:ControlSessionDeviceControlsTest$TouchVector("right", "long", "noise_cycle", "08ee00000004810d0001030793", "08ee00000004010a0005", "09ff000001040112000f0f0f0f0f0f0f0790")</ID>
+    <ID>MaxLineLength:ControlSessionDeviceControlsTest.kt:ControlSessionDeviceControlsTest$TouchVector("right", "long", "noise_cycle", "ff140301140833aa", "ff1502fa0111aa", "dd00110101ff02ff03ff04ff11ff12ff13ff140844aa")</ID>
+    <ID>MaxLineLength:ControlSessionDeviceControlsTest.kt:ControlSessionDeviceControlsTest$TouchVector("right", "long", "voice_assistant", "ff120301140730aa", "ff1302fa010faa", "dd00110101ff02ff03ff04ff11ff12ff13ff140743aa")</ID>
+    <ID>MaxLineLength:ControlSessionDeviceControlsTest.kt:ControlSessionDeviceControlsTest$TouchVector("right", "single", "voice_assistant", "08ee00000004810d000100048d", "08ee00000004010a0005", "09ff000001040112000f0f0f0f040f0f0f8d")</ID>
+    <ID>MaxLineLength:ControlSessionDeviceControlsTest.kt:ControlSessionDeviceControlsTest$TouchVector("right", "single", "volume_up", "ff0c0301110424aa", "ff0d02fa0109aa", "dd00110101ff02ff03ff04ff110412ff13ff14ff40aa")</ID>
+    <ID>MaxLineLength:ControlSessionDeviceControlsTest.kt:ControlSessionDeviceControlsTest$TouchVector("right", "triple", "game_mode", "ff10030113062caa", "ff1102fa010daa", "dd00110101ff02ff03ff04ff11ff12ff130614ff42aa")</ID>
+    <ID>MaxLineLength:ControlSessionDeviceControlsTest.kt:ControlSessionDeviceControlsTest$TouchVector("right", "triple", "none", "08ee00000004810d0001020691", "08ee00000004010a0005", "09ff000001040112000f0f0f0f0f0f060f8f")</ID>
+    <ID>MaxLineLength:ControlSessionDeviceControlsTest.kt:ControlSessionDeviceControlsTest$assertEquals(ControlErrorCode.INVALID_ARGUMENT, assertIs&lt;OperationResult.Failure&gt;(session.set(DeviceSetting.PROMPT_VOLUME, FieldValue.Number(6))).error.code)</ID>
+    <ID>MaxLineLength:ControlSessionDeviceControlsTest.kt:ControlSessionDeviceControlsTest$assertEquals(ControlErrorCode.INVALID_ARGUMENT, assertIs&lt;OperationResult.Failure&gt;(session.set(DeviceSetting.PROMPT_VOLUME, value)).error.code)</ID>
+    <ID>MaxLineLength:ControlSessionDeviceControlsTest.kt:ControlSessionDeviceControlsTest$assertEquals(ControlErrorCode.INVALID_ARGUMENT, assertIs&lt;OperationResult.Failure&gt;(session.set(setting, value)).error.code, "$profile/$setting")</ID>
+    <ID>MaxLineLength:ControlSessionDeviceControlsTest.kt:ControlSessionDeviceControlsTest$assertEquals(ControlErrorCode.NOT_READY, assertIs&lt;OperationResult.Failure&gt;(session.set(DeviceSetting.TOUCH_ENABLED, FieldValue.Toggle(true))).error.code)</ID>
+    <ID>MaxLineLength:ControlSessionDeviceControlsTest.kt:ControlSessionDeviceControlsTest$assertEquals(ControlErrorCode.UNSUPPORTED, assertIs&lt;OperationResult.Failure&gt;(session.set(DeviceSetting.AUDIO_MODE, FieldValue.Text("lhdc"))).error.code)</ID>
+    <ID>MaxLineLength:ControlSessionDeviceControlsTest.kt:ControlSessionDeviceControlsTest$assertEquals(ControlErrorCode.UNSUPPORTED, assertIs&lt;OperationResult.Failure&gt;(session.set(DeviceSetting.AUDIO_MODE, FieldValue.Text("spatial"))).error.code)</ID>
+    <ID>MaxLineLength:ControlSessionDeviceControlsTest.kt:ControlSessionDeviceControlsTest$assertEquals(ControlErrorCode.UNSUPPORTED, assertIs&lt;OperationResult.Failure&gt;(session.set(DeviceSetting.GAIN, FieldValue.Number(1))).error.code)</ID>
+    <ID>MaxLineLength:ControlSessionDeviceControlsTest.kt:ControlSessionDeviceControlsTest$assertEquals(ControlErrorCode.UNSUPPORTED, assertIs&lt;OperationResult.Failure&gt;(session.set(DeviceSetting.HEARING_PROTECTION, FieldValue.Number(1))).error.code)</ID>
+    <ID>MaxLineLength:ControlSessionDeviceControlsTest.kt:ControlSessionDeviceControlsTest$assertEquals(ControlErrorCode.UNSUPPORTED, assertIs&lt;OperationResult.Failure&gt;(session.set(DeviceSetting.PROMPT_VOLUME, FieldValue.Number(0))).error.code)</ID>
+    <ID>MaxLineLength:ControlSessionDeviceControlsTest.kt:ControlSessionDeviceControlsTest$assertEquals(ControlErrorCode.UNSUPPORTED, assertIs&lt;OperationResult.Failure&gt;(session.set(DeviceSetting.TOUCH_BINDING, FieldValue.TouchAssignment("left", "single", "find"))).error.code)</ID>
+    <ID>MaxLineLength:ControlSessionDeviceControlsTest.kt:ControlSessionDeviceControlsTest$assertEquals(ControlErrorCode.UNSUPPORTED, assertIs&lt;OperationResult.Failure&gt;(session.set(DeviceSetting.TOUCH_BINDING, FieldValue.TouchAssignment("left", "single", "game_mode"))).error.code)</ID>
+    <ID>MaxLineLength:ControlSessionDeviceControlsTest.kt:ControlSessionDeviceControlsTest$assertEquals(listOf(SettingStage.WRITTEN, SettingStage.SUBMITTED, SettingStage.SUBMITTED), session.state.value.settingOperations.map { it.stage })</ID>
+    <ID>MaxLineLength:ControlSessionDeviceControlsTest.kt:ControlSessionDeviceControlsTest$for (pending in listOf(touch, volume, audio)) assertEquals(ControlErrorCode.DISCONNECTED, assertIs&lt;OperationResult.Failure&gt;(pending.await()).error.code)</ID>
+    <ID>MaxLineLength:ControlSessionDeviceControlsTest.kt:ControlSessionDeviceControlsTest$val known = if (profile == ModelProfile.I5_ZT) "09ff00000104011200050f0f0f0f0f0f0f8e" else "dd001101010102ff03ff04ff11ff12ff13ff14ff3daa"</ID>
+    <ID>MaxLineLength:ControlSessionDeviceControlsTest.kt:ControlSessionDeviceControlsTest$val reply = if (profile == ModelProfile.I5_ZT) "09ff00000104011200000f0f0f0f0f0f0f89" else "dd001101010002ff03ff04ff11ff12ff13ff14ff3caa"</ID>
+    <ID>MaxLineLength:ControlSessionDeviceControlsTest.kt:ControlSessionDeviceControlsTest.&lt;no name provided&gt;$override suspend fun connect: ControlConnection</ID>
+    <ID>MaxLineLength:ControlSessionDeviceControlsTest.kt:ControlSessionDeviceControlsTest.Companion$private fun reading</ID>
+    <ID>MaxLineLength:ControlSessionDeviceControlsTest.kt:ControlSessionDeviceControlsTest.Companion$private fun unknownTouchReply</ID>
+    <ID>MaxLineLength:ControlSessionEqualizerTest.kt:ControlSessionEqualizerTest$assertEquals(ControlErrorCode.INVALID_ARGUMENT, assertIs&lt;OperationResult.Failure&gt;(session.set(setting, value)).error.code, profile.name)</ID>
+    <ID>MaxLineLength:ControlSessionEqualizerTest.kt:ControlSessionEqualizerTest$assertEquals(ControlErrorCode.UNSUPPORTED, assertIs&lt;OperationResult.Failure&gt;(session.set(DeviceSetting.EQ, FieldValue.Text("eap"))).error.code)</ID>
+    <ID>MaxLineLength:ControlSessionEqualizerTest.kt:ControlSessionEqualizerTest$assertEquals(ControlErrorCode.UNSUPPORTED, assertIs&lt;OperationResult.Failure&gt;(session.set(DeviceSetting.EQ, FieldValue.Text("eap"))).error.code, firmware)</ID>
+    <ID>MaxLineLength:ControlSessionEqualizerTest.kt:ControlSessionEqualizerTest$assertEquals(ControlErrorCode.UNSUPPORTED, assertIs&lt;OperationResult.Failure&gt;(session.set(DeviceSetting.EQ, FieldValue.Text(preset))).error.code, profile.name)</ID>
+    <ID>MaxLineLength:ControlSessionEqualizerTest.kt:ControlSessionEqualizerTest$private suspend</ID>
+    <ID>MaxLineLength:ControlSessionEqualizerTest.kt:ControlSessionEqualizerTest.Companion$private fun reading</ID>
+    <ID>MaxLineLength:ControlSessionEqualizerTest.kt:ControlSessionEqualizerTest.EqualizerTransport$override suspend fun connect: ControlConnection</ID>
+    <ID>MaxLineLength:ControlSessionRecoveryTest.kt:ControlSessionRecoveryTest$assertEquals((session.state.value.connection as ConnectionState.Connected).sessionId, session.state.value.connectionRecovery?.sessionId)</ID>
+    <ID>MaxLineLength:ControlSessionSettingTest.kt:ControlSessionSettingTest$DeviceSetting.NOISE_CYCLE to FieldValue.NoiseCycle(mapOf("normal" to true, "transparency" to null, "wind" to false, "anc" to true))</ID>
+    <ID>MaxLineLength:ControlSessionSettingTest.kt:ControlSessionSettingTest$assertEquals(ControlErrorCode.NOT_READY, assertIs&lt;OperationResult.Failure&gt;(session.set(DeviceSetting.NOISE_MODE, FieldValue.Text("normal"))).error.code)</ID>
+    <ID>MaxLineLength:ControlSessionSettingTest.kt:ControlSessionSettingTest$assertEquals(ControlErrorCode.UNSUPPORTED, assertIs&lt;OperationResult.Failure&gt;(session.set(DeviceSetting.NOISE_MODE, FieldValue.Text("auto"))).error.code)</ID>
+    <ID>MaxLineLength:ControlSessionSettingTest.kt:ControlSessionSettingTest$assertEquals(ControlErrorCode.UNSUPPORTED, assertIs&lt;OperationResult.Failure&gt;(session.set(DeviceSetting.NOISE_MODE, FieldValue.Text("deep"))).error.code)</ID>
+    <ID>MaxLineLength:ControlSessionSettingTest.kt:ControlSessionSettingTest$assertEquals(FieldValue.Text("auto"), assertIs&lt;FieldReading.Known&gt;(session.state.value.device?.fields?.get(DeviceField.NOISE_MODE)).value)</ID>
+    <ID>MaxLineLength:ControlSessionSettingTest.kt:ControlSessionSettingTest$assertEquals(FieldValue.Text("normal"), assertIs&lt;FieldReading.Known&gt;(session.state.value.device?.fields?.get(DeviceField.NOISE_MODE)).value)</ID>
+    <ID>MaxLineLength:ControlSessionSettingTest.kt:ControlSessionSettingTest$assertEquals(FieldValue.Text("wind"), assertIs&lt;FieldReading.Known&gt;(session.state.value.device?.fields?.get(DeviceField.NOISE_MODE)).value)</ID>
+    <ID>MaxLineLength:ControlSessionSettingTest.kt:ControlSessionSettingTest$assertEquals(listOf("08ee00000006820e00010000008d", "08ee00000006020a0008", "08ee00000006870b000290", "08ee00000006070a000d"), link.writes.drop(13))</ID>
+    <ID>MaxLineLength:ControlSessionSettingTest.kt:ControlSessionSettingTest$assertEquals(persistentSetOf("normal", "transparency", "wind", "anc"), session.state.value.device?.capabilities?.noiseControl?.modes)</ID>
+    <ID>MaxLineLength:ControlSessionSettingTest.kt:ControlSessionSettingTest$assertEquals(persistentSetOf("normal", "transparency", "wind", "anc", "auto", "dynamic"), session.state.value.device?.capabilities?.noiseControl?.modes)</ID>
+    <ID>MaxLineLength:ControlSessionSettingTest.kt:ControlSessionSettingTest$assertEquals(requestedCycle, assertIs&lt;FieldReading.Known&gt;(session.state.value.device?.fields?.get(DeviceField.NOISE_CYCLE)).value, profile.name)</ID>
+    <ID>MaxLineLength:ControlSessionSettingTest.kt:ControlSessionSettingTest$fun</ID>
+    <ID>MaxLineLength:ControlSessionSettingTest.kt:ControlSessionSettingTest$pending.dropLast(1).forEach { assertEquals(ControlErrorCode.DISCONNECTED, assertIs&lt;OperationResult.Failure&gt;(it.await()).error.code) }</ID>
+    <ID>MaxLineLength:ControlSessionSettingTest.kt:ControlSessionSettingTest$private suspend</ID>
+    <ID>MaxLineLength:ControlSessionSettingTest.kt:ControlSessionSettingTest$val actual = assertIs&lt;FieldValue.NoiseCycle&gt;(assertIs&lt;FieldReading.Known&gt;(session.state.value.device?.fields?.get(DeviceField.NOISE_CYCLE)).value)</ID>
+    <ID>MaxLineLength:ControlSessionSettingTest.kt:ControlSessionSettingTest$val cycle = async { session.set(DeviceSetting.NOISE_CYCLE, FieldValue.NoiseCycle(mapOf("normal" to true, "transparency" to true, "wind" to false, "anc" to true))) }</ID>
+    <ID>MaxLineLength:ControlSessionSettingTest.kt:ControlSessionSettingTest.Companion$private</ID>
+    <ID>MaxLineLength:ControlSessionSettingTest.kt:ControlSessionSettingTest.Companion$private fun completeCycleReply</ID>
+    <ID>MaxLineLength:ControlSessionSettingTest.kt:ControlSessionSettingTest.SettingLink$private</ID>
+    <ID>MaxLineLength:ControlSessionSettingTest.kt:ControlSessionSettingTest.SettingTransport$override suspend fun connect: ControlConnection</ID>
+    <ID>MaxLineLength:ControlSessionTargetedConnectionTest.kt:ControlSessionTargetedConnectionTest.TargetedAudioTransport$override suspend</ID>
+    <ID>MaxLineLength:ControlSessionTransportSelectionTest.kt:ControlSessionTransportSelectionTest$assertEquals(FieldValue.Number(100), assertIs&lt;FieldReading.Known&gt;(session.state.value.device?.fields?.get(DeviceField.LEFT_BATTERY)).value)</ID>
+    <ID>MaxLineLength:ControlSessionTransportSelectionTest.kt:ControlSessionTransportSelectionTest$assertEquals(FieldValue.Toggle(true), assertIs&lt;FieldReading.Known&gt;(session.state.value.device?.fields?.get(DeviceField.GAME_MODE)).value)</ID>
+    <ID>MaxLineLength:ControlSessionTransportSelectionTest.kt:ControlSessionTransportSelectionTest$val broadcastAddress = Advertisement(DeviceId("i7-ff"), manufacturerData = i7Advertisement(address = ByteArray(6) { 0xff.toByte() }))</ID>
+    <ID>MaxLineLength:ControlSessionTransportSelectionTest.kt:ControlSessionTransportSelectionTest$val session = session(transport, timing = SessionTiming(connectTimeoutMillis = 1_000, queryTimeoutMillis = 50, i7WriteIntervalMillis = 100))</ID>
+    <ID>MaxLineLength:ControlSessionTransportSelectionTest.kt:ControlSessionTransportSelectionTest.SelectionTransport$override suspend</ID>
+    <ID>MaxLineLength:ControlState.kt:DeviceSetting</ID>
+    <ID>MaxLineLength:DeviceControlCapabilities.kt:DeviceSetting.NOISE_CYCLE</ID>
+    <ID>MaxLineLength:DeviceControlCapabilities.kt:fun gainLevels: PersistentSet&lt;Int&gt;</ID>
+    <ID>MaxLineLength:DeviceControlCapabilities.kt:fun hearingProtectionLevels: PersistentSet&lt;Int&gt;</ID>
+    <ID>MaxLineLength:DeviceControlCapabilities.kt:listOf(DeviceSetting.ANC_LEVEL, DeviceSetting.TRANSPARENCY_LEVEL).filter { noise.levelCapabilities(it)?.levels?.isNotEmpty() == true }</ID>
+    <ID>MaxLineLength:DeviceControlCapabilities.kt:val actions = persistentSetOf("none", "play_pause", "previous_track", "next_track", "volume_up", "volume_down", "voice_assistant", "noise_cycle")</ID>
+    <ID>MaxLineLength:DeviceControlProtocolTest.kt:DeviceControlProtocolTest$assertEquals("ff0002320134aa", codec.prepareSetting(DeviceSetting.MULTIPOINT, FieldValue.Toggle(true)).writeFrames.single().hex())</ID>
+    <ID>MaxLineLength:DeviceControlProtocolTest.kt:DeviceControlProtocolTest$assertEquals(AudioControlCapabilities(persistentSetOf("aac_sbc", "ldac", "lhdc", "lc3"), false), audioControlCapabilities(ModelProfile.I7_RS_V2))</ID>
+    <ID>MaxLineLength:DeviceControlProtocolTest.kt:DeviceControlProtocolTest$assertEquals(tx, createProtocolCodec(profile).prepareSetting(DeviceSetting.TOUCH_BINDING, request).writeFrames.single().hex())</ID>
+    <ID>MaxLineLength:DeviceControlProtocolTest.kt:DeviceControlProtocolTest$assertFailsWith&lt;IllegalArgumentException&gt; { codec.prepareSetting(DeviceSetting.PROMPT_VOLUME, FieldValue.Number(level)) }</ID>
+    <ID>MaxLineLength:DeviceControlProtocolTest.kt:DeviceControlProtocolTest$val i5Actions = setOf("volume_up", "volume_down", "previous_track", "next_track", "voice_assistant", "play_pause", "none", "noise_cycle")</ID>
+    <ID>MaxLineLength:DeviceControlProtocolTest.kt:DeviceControlProtocolTest$val i7Bindings = assertIs&lt;FieldValue.TouchKeys&gt;(assertIs&lt;FieldReading.Known&gt;(i7Reply.readings[DeviceField.TOUCH_KEYS]).value).bindings</ID>
+    <ID>MaxLineLength:EqualizerCapabilities.kt:internal</ID>
+    <ID>MaxLineLength:EqualizerProtocolTest.kt:EqualizerProtocolTest$assertEquals(base + if (eap) setOf("eap") else emptySet(), equalizerCapabilities(ModelProfile.I7_RS_V2, firmware).presets, "$parts")</ID>
+    <ID>MaxLineLength:EqualizerProtocolTest.kt:EqualizerProtocolTest$assertFailsWith&lt;UnsupportedOperationException&gt;("$profile $preset") { codec.prepareSetting(DeviceSetting.EQ, FieldValue.Text(preset)) }</ID>
+    <ID>MaxLineLength:GattControlConnection.kt:GattControlConnection$withTimeoutOrNull(OPERATION_TIMEOUT_MS) { runCatching { driver.configureSubscription(notifier, GattSubscription.DISABLED) } }</ID>
+    <ID>MaxLineLength:I5Codec.kt:I5Codec$Triple("0685", "0605", listOf("normal", "transparency", "wind", "anc").map { if (flags.getValue(it) == true) 1.toByte() else 0.toByte() }.toByteArray())</ID>
+    <ID>MaxLineLength:I5Codec.kt:I5Codec$for</ID>
+    <ID>MaxLineLength:I5Codec.kt:I5Codec$val action = listOf("volume_up", "volume_down", "previous_track", "next_track", "voice_assistant", "play_pause", "none", "noise_cycle").indexOf(binding.action)</ID>
+    <ID>MaxLineLength:I5Codec.kt:I5Codec$val actions = listOf("volume_up", "volume_down", "previous_track", "next_track", "voice_assistant", "play_pause", "none", "noise_cycle")</ID>
+    <ID>MaxLineLength:I7Codec.kt:I7Codec$0x36.toByte() to listOf("anc", "wind", "normal", "transparency").map { if (flags.getValue(it) == true) 1.toByte() else 0.toByte() }.toByteArray()</ID>
+    <ID>MaxLineLength:I7Codec.kt:I7Codec$put(DeviceField.CUSTOM_EQ, gains.takeIf { it.size == 10 &amp;&amp; it.all { gain -&gt; gain in -6..6 } }?.let { FieldValue.IntegerList(it) })</ID>
+    <ID>MaxLineLength:I7Codec.kt:I7Codec$put(DeviceField.EQ, mapOf(0 to "pop", 1 to "hifi", 2 to "rock", 3 to "light", 4 to "custom", 5 to "custom_slot", 6 to "eap")[index]?.let { FieldValue.Text(it) })</ID>
+    <ID>MaxLineLength:I7Codec.kt:I7Codec$put(DeviceField.FIND_STATE, mapOf(1 to "start_left", 2 to "start_right", 3 to "start_both", 4 to "stop_both", 5 to "stop_left", 6 to "stop_right")[raw]?.let { FieldValue.Text(it) })</ID>
+    <ID>MaxLineLength:I7Codec.kt:I7Codec$put(DeviceField.NOISE_MODE, mapOf(1 to "anc", 2 to "normal", 3 to "transparency", 4 to "wind", 5 to "auto", 6 to "deep", 7 to "dynamic")[raw]?.let { FieldValue.Text(it) })</ID>
+    <ID>MaxLineLength:I7Codec.kt:I7Codec$put(field, if (index &lt; 2 &amp;&amp; value[index].u() == 255) null else FieldValue.Toggle(value[index].u() and 128 != 0), byteArrayOf(value[index]))</ID>
+    <ID>MaxLineLength:I7Codec.kt:I7Codec$return ProtocolQuery("fa" + ids.hex(), frame(byteArrayOf(0xfa.toByte()) + ids), keys, keys.flatMap { i7Fields.getValue(it) }.toSet())</ID>
+    <ID>MaxLineLength:I7Codec.kt:I7Codec$val action = listOf("none", "play_pause", "previous_track", "next_track", "volume_up", "volume_down", "game_mode", "voice_assistant", "noise_cycle").indexOf(binding.action)</ID>
+    <ID>MaxLineLength:I7Codec.kt:I7Codec$val actions = listOf("none", "play_pause", "previous_track", "next_track", "volume_up", "volume_down", "game_mode", "voice_assistant", "noise_cycle")</ID>
+    <ID>MaxLineLength:NoiseProtocolTest.kt:NoiseProtocolTest$DeviceSetting.NOISE_CYCLE to FieldValue.NoiseCycle(mapOf("anc" to null, "normal" to false, "wind" to false, "transparency" to false))</ID>
+    <ID>MaxLineLength:NoiseProtocolTest.kt:NoiseProtocolTest$DeviceSetting.NOISE_CYCLE to FieldValue.NoiseCycle(mapOf("anc" to true, "normal" to false, "wind" to false, "transparency" to false, "auto" to true))</ID>
+    <ID>MaxLineLength:NoiseProtocolTest.kt:NoiseProtocolTest$Triple(ModelProfile.I5_ZT, DeviceSetting.ANC_LEVEL, listOf("08ee00000006870b00008e", "08ee00000006870b00018f", "08ee00000006870b000290"))</ID>
+    <ID>MaxLineLength:NoiseProtocolTest.kt:NoiseProtocolTest$Triple(ModelProfile.I5_ZT, DeviceSetting.TRANSPARENCY_LEVEL, listOf("08ee00000006840b00008b", "08ee00000006840b00018c", "08ee00000006840b00028d"))</ID>
+    <ID>MaxLineLength:NoiseProtocolTest.kt:NoiseProtocolTest$assertEquals("ff000209010baa", codec.prepareSetting(DeviceSetting.NOISE_MODE, FieldValue.Text("anc")).writeFrames.single().hex())</ID>
+    <ID>MaxLineLength:NoiseProtocolTest.kt:NoiseProtocolTest$assertEquals(none, createProtocolCodec(profile).prepareSetting(DeviceSetting.NOISE_CYCLE, none).expectedValues[DeviceField.NOISE_CYCLE])</ID>
+    <ID>MaxLineLength:NoiseProtocolTest.kt:NoiseProtocolTest$assertEquals(setOf("normal", "transparency", "wind", "anc", "auto", "dynamic"), noiseControlCapabilities(ModelProfile.I7_RS_V2).modes)</ID>
+    <ID>MaxLineLength:NoiseProtocolTest.kt:NoiseProtocolTest$assertFailsWith&lt;UnsupportedOperationException&gt; { codec.prepareSetting(DeviceSetting.NOISE_MODE, FieldValue.Text("dynamic")) }</ID>
+    <ID>MaxLineLength:ProtocolCodec.kt:"0101" to setOf(DeviceField.LEFT_BATTERY, DeviceField.RIGHT_BATTERY, DeviceField.CASE_BATTERY, DeviceField.LEFT_CHARGING, DeviceField.RIGHT_CHARGING)</ID>
+    <ID>MaxLineLength:ProtocolCodec.kt:"0c" to setOf(DeviceField.LEFT_BATTERY, DeviceField.RIGHT_BATTERY, DeviceField.CASE_BATTERY, DeviceField.LEFT_IN_CASE, DeviceField.RIGHT_IN_CASE, DeviceField.CASE_FLAG)</ID>
+    <ID>MaxLineLength:ProtocolCodec.kt:ProtocolCodec$fun prepareSetting: ProtocolSetting</ID>
+    <ID>MaxLineLength:ProtocolCodec.kt:private val batteryFlags = setOf(DeviceField.LEFT_CHARGING, DeviceField.RIGHT_CHARGING, DeviceField.LEFT_IN_CASE, DeviceField.RIGHT_IN_CASE, DeviceField.CASE_FLAG)</ID>
+    <ID>MaxLineLength:ProtocolCodecTest.kt:ProtocolCodecTest$assertEquals(FieldValue.Firmware(listOf(1, 5, 2), "152"), assertIs&lt;FieldReading.Known&gt;(read(0x0d, "010502").readings[DeviceField.FIRMWARE]).value)</ID>
+    <ID>MaxLineLength:ProtocolCodecTest.kt:ProtocolCodecTest$assertEquals(FieldValue.IntegerList(listOf(-6, -3, -1, 0, 1, 2, 3, 4, 5, 6)), assertIs&lt;FieldReading.Known&gt;(curve.readings[DeviceField.CUSTOM_EQ]).value)</ID>
+    <ID>MaxLineLength:ProtocolCodecTest.kt:ProtocolCodecTest$assertEquals(FieldValue.Text("pop"), assertIs&lt;FieldReading.Known&gt;(i7.feedNotification(hex("dd00002a012baa")).single().readings[DeviceField.EQ]).value)</ID>
+    <ID>MaxLineLength:ProtocolCodecTest.kt:ProtocolCodecTest$for</ID>
+    <ID>MaxLineLength:SettingQueue.kt:SettingQueue$DeviceSetting.GAME_MODE, DeviceSetting.MULTIPOINT, DeviceSetting.TOUCH_ENABLED, DeviceSetting.EAR_DETECTION -&gt; value is FieldValue.Toggle</ID>
+    <ID>MaxLineLength:SettingQueue.kt:SettingQueue$if (TouchSlot(value.side, value.gesture) !in touch.slots) return ControlError(ControlErrorCode.INVALID_ARGUMENT, "触控作用耳或手势无效")</ID>
+    <ID>MaxLineLength:SettingQueue.kt:SettingQueue$private fun firmware: FieldValue.Firmware?</ID>
+    <ID>MaxLineLength:SettingQueue.kt:SettingQueue$value is FieldValue.IntegerList &amp;&amp; value.values.size == custom.bandsHz.size &amp;&amp; value.values.all { it in custom.minGain..custom.maxGain }</ID>
+    <ID>ReturnCount:AudioFacts.kt:fun inferAudioProfile: AudioProfileEvidence</ID>
+    <ID>ReturnCount:AudioFacts.kt:fun normalizeBluetoothAddress: String?</ID>
+    <ID>ReturnCount:ConnectionTargeting.kt:ConnectionTargeting$private fun isRequestSuperseded: Boolean</ID>
+    <ID>ReturnCount:ConnectionTargeting.kt:ConnectionTargeting$private suspend fun connectInternal: OperationResult</ID>
+    <ID>ReturnCount:ConnectionTargeting.kt:ConnectionTargeting$private suspend fun handleAudioConnectedDevice</ID>
+    <ID>ReturnCount:ControlLink.kt:ControlLink$private fun canRetry: Boolean</ID>
+    <ID>ReturnCount:ControlLink.kt:ControlLink$private suspend fun openAndRead: OperationResult</ID>
+    <ID>ReturnCount:ControlLink.kt:ControlLink$private suspend fun selectTransport: TransportSelection</ID>
+    <ID>ReturnCount:ControlLink.kt:ControlLink$suspend fun connect: OperationResult</ID>
+    <ID>ReturnCount:ControlSessionRecoveryTest.kt:ControlSessionRecoveryTest.RecoveryLink$override suspend fun write</ID>
+    <ID>ReturnCount:DeviceDiscovery.kt:DeviceDiscovery$fun resolveTarget: DeviceCandidate</ID>
+    <ID>ReturnCount:DeviceDiscovery.kt:DeviceDiscovery$suspend fun findCandidate: DeviceCandidate?</ID>
+    <ID>ReturnCount:I5Codec.kt:I5Codec$override fun feedNotification: List&lt;ProtocolReply&gt;</ID>
+    <ID>ReturnCount:I7Codec.kt:I7Codec$private fun decodeRecord: Map&lt;DeviceField, FieldReading&gt;</ID>
+    <ID>ReturnCount:I7Codec.kt:I7Codec$private fun parseFrame: ProtocolReply?</ID>
+    <ID>ReturnCount:ProtocolCodec.kt:ModelIdentification$fun classicAddress: String?</ID>
+    <ID>ReturnCount:ProtocolCodec.kt:ModelProfile.Companion$fun match: ModelProfile?</ID>
+    <ID>ReturnCount:SettingQueue.kt:SettingQueue$private fun validateSetting: ControlError?</ID>
+    <ID>ReturnCount:SettingQueue.kt:SettingQueue$suspend fun set: OperationResult</ID>
+    <ID>ThrowsCount:ControlLink.kt:ControlLink$private suspend fun openAndReadLink: OperationResult</ID>
+    <ID>ThrowsCount:ControlLink.kt:ControlLink$private suspend fun writeInitialQuery</ID>
+    <ID>ThrowsCount:I5Codec.kt:I5Codec$override fun prepareSetting: ProtocolSetting</ID>
+    <ID>ThrowsCount:I7Codec.kt:I7Codec$override fun prepareSetting: ProtocolSetting</ID>
+    <ID>ThrowsCount:SettingQueue.kt:SettingQueue$private suspend fun applySetting: OperationResult</ID>
+    <ID>TooGenericExceptionCaught:ControlLink.kt:ControlLink$cause: Exception</ID>
+    <ID>TooGenericExceptionCaught:DeviceDiscovery.kt:DeviceDiscovery$cause: Exception</ID>
+    <ID>TooGenericExceptionCaught:GattControlConnection.kt:GattControlConnection$error: Exception</ID>
+    <ID>TooGenericExceptionCaught:GattControlConnection.kt:GattControlConnection.Companion$closing: Exception</ID>
+    <ID>TooGenericExceptionCaught:GattControlConnection.kt:GattControlConnection.Companion$error: Throwable</ID>
+    <ID>TooGenericExceptionCaught:SettingQueue.kt:SettingQueue$cause: Exception</ID>
+    <ID>TooManyFunctions:ControlLink.kt:ControlLink</ID>
+    <ID>UnusedParameter:ControlLink.kt:ControlLink$attempt: Attempt</ID>
+  </CurrentIssues>
+</SmellBaseline>

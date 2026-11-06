@@ -8,10 +8,11 @@ dependencies {
     compileOnly(libs.plugins.kotlin.multiplatform.asDependency())
     compileOnly(libs.plugins.android.application.asDependency())
     compileOnly(libs.plugins.nucleus.asDependency())
+    compileOnly(libs.plugins.detekt.asDependency())
+    compileOnly(libs.plugins.kover.asDependency())
 }
 
-fun Provider<PluginDependency>.asDependency(): Provider<String> =
-    map { "${it.pluginId}:${it.pluginId}.gradle.plugin:${it.version}" }
+fun Provider<PluginDependency>.asDependency(): Provider<String> = map { "${it.pluginId}:${it.pluginId}.gradle.plugin:${it.version}" }
 
 gradlePlugin {
     plugins {

@@ -21,6 +21,11 @@ robolectric = "4.17"
 bluez-dbus = "0.3.5"
 dbus-java = "5.2.0"
 slf4j = "2.0.18"
+# Code quality: detekt 2.x embeds Kotlin 2.4, which the 1.23 line cannot parse.
+detekt = "2.0.0-alpha.6"
+spotless = "8.11.0"
+ktlint = "1.8.0"
+kover = "0.9.11"
 
 [libraries]
 compose-runtime = { module = "org.jetbrains.compose.runtime:runtime", version.ref = "compose" }
@@ -60,6 +65,9 @@ compose-hot-reload = { id = "org.jetbrains.compose.hot-reload", version.ref = "c
 compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 nucleus = { id = "dev.nucleusframework", version.ref = "nucleus" }
+detekt = { id = "dev.detekt", version.ref = "detekt" }
+spotless = { id = "com.diffplug.spotless", version.ref = "spotless" }
+kover = { id = "org.jetbrains.kotlinx.kover", version.ref = "kover" }
 
 # Convention plugins from build-logic.
 openrose-kmp-library = { id = "openrose.kmp.library" }

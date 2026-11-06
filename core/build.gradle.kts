@@ -16,3 +16,9 @@ kotlin {
         }
     }
 }
+// The shared control layer is the most tested code; keep it there (94.4% of lines when set).
+kover {
+    reports {
+        verify { rule { minBound(93) } }
+    }
+}

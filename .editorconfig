@@ -1,0 +1,29 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+indent_style = space
+indent_size = 4
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.{yml,yaml,json,toml}]
+indent_size = 2
+
+[*.md]
+trim_trailing_whitespace = false
+
+[*.{kt,kts}]
+# Same layout as the IDE formatter (gradle.properties: kotlin.code.style=official).
+ktlint_code_style = intellij_idea
+max_line_length = 140
+# Wrapping rules reflow to 140 columns; lines they cannot split are left to detekt's MaxLineLength.
+ktlint_standard_max-line-length = disabled
+# The IDE collapses imports into wildcards; keep ktlint in agreement.
+ktlint_standard_no-wildcard-imports = disabled
+ij_kotlin_allow_trailing_comma = true
+ij_kotlin_allow_trailing_comma_on_call_site = true
+ij_kotlin_imports_layout = *,java.**,javax.**,kotlin.**,^
+# Composables are PascalCase functions.
+ktlint_function_naming_ignore_when_annotated_with = Composable

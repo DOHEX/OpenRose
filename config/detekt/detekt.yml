@@ -1,0 +1,25 @@
+# Overrides on top of detekt's default config (buildUponDefaultConfig); existing findings live in baseline/.
+style:
+  MaxLineLength:
+    maxLineLength: 140
+  MagicNumber:
+    # Protocol frames, UI dimensions and tests are full of literal bytes and sizes.
+    active: false
+  WildcardImport:
+    active: false
+
+naming:
+  FunctionNaming:
+    # Composables are PascalCase functions.
+    ignoreAnnotated: ['Composable']
+  TopLevelPropertyNaming:
+    constantPattern: '[A-Z][A-Za-z0-9_]*'
+
+complexity:
+  LongParameterList:
+    # Composables take their state and callbacks as parameters.
+    ignoreAnnotated: ['Composable']
+  LongMethod:
+    ignoreAnnotated: ['Composable']
+  TooManyFunctions:
+    ignoreAnnotatedFunctions: ['Composable', 'Test']

@@ -1,0 +1,55 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>ComplexCondition:BluezControlTransport.kt:BluezControlTransport$signal is BluezSignal.Changed &amp;&amp; signal.path == adapter &amp;&amp; signal.interfaceName == ADAPTER &amp;&amp; signal.values["Powered"] == false</ID>
+    <ID>ComplexCondition:BluezGattDriver.kt:BluezGattDriver$(signal.path == devicePath &amp;&amp; DEVICE in signal.interfaces) || (devicePath.startsWith("${signal.path}/") &amp;&amp; ADAPTER in signal.interfaces)</ID>
+    <ID>ComplexCondition:BluezGattDriver.kt:BluezGattDriver$(signal.path == devicePath &amp;&amp; signal.interfaceName == DEVICE &amp;&amp; signal.values["Connected"] == false) || (devicePath.startsWith("${signal.path}/") &amp;&amp; signal.interfaceName == ADAPTER &amp;&amp; signal.values["Powered"] == false)</ID>
+    <ID>ComplexCondition:BluezGattDriver.kt:BluezGattDriver$synchronized(lock) { discovered } &amp;&amp; signal.path == devicePath &amp;&amp; signal.interfaceName == DEVICE &amp;&amp; signal.values.containsKey("ServicesResolved") &amp;&amp; signal.values["ServicesResolved"] != true</ID>
+    <ID>ComplexCondition:BluezGattDriver.kt:BluezGattDriver$synchronized(lock) { discovered } &amp;&amp; signal.path.startsWith("$devicePath/") &amp;&amp; (SERVICE in signal.interfaces || CHARACTERISTIC in signal.interfaces)</ID>
+    <ID>CyclomaticComplexMethod:BluezControlTransport.kt:BluezControlTransport$override fun scan: Flow&lt;Advertisement&gt;</ID>
+    <ID>CyclomaticComplexMethod:BluezControlTransport.kt:private fun audioSnapshot: RawAudioSnapshot</ID>
+    <ID>CyclomaticComplexMethod:BluezGattDriver.kt:BluezGattDriver$override suspend fun discoverServices: List&lt;GattService&gt;</ID>
+    <ID>LoopWithTooManyJumpStatements:BluezControlTransport.kt:for</ID>
+    <ID>MaxLineLength:BluezControlTransport.kt:"0000184e-0000-1000-8000-00805f9b34fb", "0000184f-0000-1000-8000-00805f9b34fb", "00001850-0000-1000-8000-00805f9b34fb" -&gt; AudioProfile.LE_AUDIO</ID>
+    <ID>MaxLineLength:BluezControlTransport.kt:BluezControlTransport$if (error is org.freedesktop.dbus.errors.AccessDenied || error is org.bluez.Error.NotAuthorized) mutableAvailability.value = unavailable(error as Exception)</ID>
+    <ID>MaxLineLength:BluezControlTransport.kt:BluezControlTransport$if (signal is BluezSignal.Changed &amp;&amp; signal.path == adapter &amp;&amp; signal.interfaceName == ADAPTER &amp;&amp; signal.values["Powered"] == false) throw IllegalStateException("蓝牙适配器已关闭")</ID>
+    <ID>MaxLineLength:BluezControlTransport.kt:BluezControlTransport$if (signal is BluezSignal.Removed &amp;&amp; signal.path == adapter &amp;&amp; ADAPTER in signal.interfaces) throw IllegalStateException("蓝牙适配器已移除")</ID>
+    <ID>MaxLineLength:BluezControlTransport.kt:BluezControlTransport$mutableAvailability.value = TransportAvailability.Unavailable("BlueZ 运行环境缺少依赖：${error.message ?: error.javaClass.simpleName}")</ID>
+    <ID>MaxLineLength:BluezControlTransport.kt:BluezControlTransport$override suspend fun connectionFacts: TransportFacts</ID>
+    <ID>MaxLineLength:BluezControlTransport.kt:BluezControlTransport$val</ID>
+    <ID>MaxLineLength:BluezControlTransport.kt:BluezControlTransport.BluezAudioDriver$for (profile in listOf(AudioProfile.A2DP, AudioProfile.HEADSET)) send(RawAudioEvent.ProfileChanged(profile, device, false, false))</ID>
+    <ID>MaxLineLength:BluezControlTransport.kt:BluezControlTransport.BluezAudioDriver$send(RawAudioEvent.ProfileChanged(profile, device, true, device.address in snapshot.profiles[profile]?.connectedAddresses.orEmpty()))</ID>
+    <ID>MaxLineLength:BluezControlTransport.kt:return Advertisement(DeviceId(address), this["Name"] as? String ?: this["Alias"] as? String, (this["RSSI"] as? Number)?.toInt(), manufacturer)</ID>
+    <ID>MaxLineLength:BluezControlTransport.kt:return RawAudioSnapshot(objects.values.any { it[ADAPTER]?.get("Powered") == true }, false, connected.getValue(AudioProfile.LE_AUDIO).isNotEmpty(), paired, profiles)</ID>
+    <ID>MaxLineLength:BluezControlTransport.kt:val profiles = connected.mapValues { (_, list) -&gt; RawProfileSnapshot(list.toList(), (targets + addresses.values).associateWith { if (it in list) AudioConnectionState.CONNECTED else AudioConnectionState.DISCONNECTED }) }</ID>
+    <ID>MaxLineLength:BluezControlTransportTest.kt:BluezControlTransportTest$DEVICE_PATH to mapOf(DEVICE to mapOf("Address" to "00:11:22:33:44:55", "Name" to "EarFree i5", "Paired" to true, "Connected" to true, "ServicesResolved" to true))</ID>
+    <ID>MaxLineLength:BluezControlTransportTest.kt:BluezControlTransportTest$bus.snapshot = baseObjects() + (MEDIA_PATH to mapOf(MEDIA_TRANSPORT to mapOf("Device" to DEVICE_PATH, "UUID" to A2DP_UUID, "State" to "idle")))</ID>
+    <ID>MaxLineLength:BluezControlTransportTest.kt:BluezControlTransportTest$i5Replies[command]?.let { hex -&gt; bus.events.emit(BluezSignal.Changed(notifier, CHARACTERISTIC, mapOf("Value" to hex.chunked(2).map { it.toInt(16).toByte() }.toByteArray()))) }</ID>
+    <ID>MaxLineLength:BluezGattDriver.kt:BluezGattDriver$GattCharacteristic(charUuid, "write" in flags, "write-without-response" in flags, "notify" in flags, "indicate" in flags).also { found[it] = charPath }</ID>
+    <ID>MaxLineLength:BluezGattDriver.kt:BluezGattDriver$if</ID>
+    <ID>MaxLineLength:BluezGattDriver.kt:BluezGattDriver$if (objects[devicePath]?.get(DEVICE)?.get("ServicesResolved") == true &amp;&amp; objects.any { it.key.startsWith("$devicePath/") &amp;&amp; SERVICE in it.value }) return@withTimeoutOrNull objects</ID>
+    <ID>MaxLineLength:BluezGattDriver.kt:BluezGattDriver$is BluezSignal.Added -&gt; if (synchronized(lock) { discovered } &amp;&amp; signal.path.startsWith("$devicePath/") &amp;&amp; (SERVICE in signal.interfaces || CHARACTERISTIC in signal.interfaces)) emit(GattEvent.ServicesChanged)</ID>
+    <ID>MaxLineLength:BluezGattDriver.kt:BluezGattDriver$is org.bluez.Error.InvalidArguments, is org.bluez.Error.InvalidValueLength, is org.bluez.Error.InvalidOffset -&gt; GattFailureKind.INVALID_VALUE</ID>
+    <ID>MaxLineLength:BluezGattDriver.kt:BluezGattDriver$override suspend</ID>
+    <ID>MaxLineLength:BluezGattDriver.kt:BluezGattDriver$synchronized(lock) { characteristics.values.toList() }.mapNotNull { (objects[it]?.get(CHARACTERISTIC)?.get("MTU") as? Number)?.toInt() }.minOrNull()</ID>
+    <ID>MaxLineLength:BluezGattDriver.kt:BluezGattDriver$val</ID>
+    <ID>MaxLineLength:BluezGattDriver.kt:BluezGattDriver$val instance = synchronized(lock) { if (signal.path in routed) characteristics.entries.firstOrNull { it.value == signal.path }?.key else null }</ID>
+    <ID>MaxLineLength:BluezGattDriver.kt:BluezGattDriver$}</ID>
+    <ID>MaxLineLength:BluezGattDriverTest.kt:CHAR_PATH to mapOf(CHARACTERISTIC to mapOf("UUID" to "00002a00-0000-1000-8000-00805f9b34fb", "Flags" to listOf("write", "notify"), "MTU" to 100))</ID>
+    <ID>MaxLineLength:NativeBluezBus.kt:NativeBluezBus$connection.getRemoteObject("org.bluez", "/", ObjectManager::class.java).GetManagedObjects().entries</ID>
+    <ID>MaxLineLength:NativeBluezBus.kt:NativeBluezBus$connection.getRemoteObject("org.bluez", path, GattCharacteristic1::class.java).WriteValue(value, mapOf("type" to Variant(if (withResponse) "request" else "command")))</ID>
+    <ID>MaxLineLength:NativeBluezBus.kt:NativeBluezBus$if (s.source == owner) publish(BluezSignal.Changed(s.path, s.interfaceName, s.propertiesChanged.mapValues { unwrap(it.value) } + s.propertiesRemoved.associateWith { null }))</ID>
+    <ID>MaxLineLength:NativeBluezBus.kt:NativeBluezBus$override suspend fun startNotify</ID>
+    <ID>MaxLineLength:NativeBluezBus.kt:NativeBluezBus$override suspend fun stopDiscovery</ID>
+    <ID>MaxLineLength:NativeBluezBus.kt:NativeBluezBus$override suspend fun stopNotify</ID>
+    <ID>ThrowingExceptionFromFinally:BluezControlTransport.kt:BluezControlTransport$throw cleanup</ID>
+    <ID>ThrowsCount:BluezControlTransport.kt:BluezControlTransport$override suspend fun connect: ControlConnection</ID>
+    <ID>ThrowsCount:BluezControlTransport.kt:BluezControlTransport$private suspend fun activeBus: BluezBus</ID>
+    <ID>TooGenericExceptionCaught:BluezControlTransport.kt:BluezControlTransport$cleanup: Exception</ID>
+    <ID>TooGenericExceptionCaught:BluezControlTransport.kt:BluezControlTransport$error: Exception</ID>
+    <ID>TooGenericExceptionCaught:BluezControlTransport.kt:BluezControlTransport$error: Throwable</ID>
+    <ID>TooGenericExceptionCaught:BluezGattDriver.kt:BluezGattDriver$error: Exception</ID>
+    <ID>TooGenericExceptionCaught:NativeBluezBus.kt:NativeBluezBus.Companion$error: Throwable</ID>
+  </CurrentIssues>
+</SmellBaseline>

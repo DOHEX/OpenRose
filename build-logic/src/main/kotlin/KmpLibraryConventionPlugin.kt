@@ -18,5 +18,6 @@ class KmpLibraryConventionPlugin : Plugin<Project> {
             }
         }
         configureKotlinJvm()
+        configureQuality()
     }
 }

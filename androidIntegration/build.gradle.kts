@@ -13,3 +13,9 @@ kotlin {
         }
     }
 }
+// Android integration logic runs on the JVM and stays well covered (91.7% of lines when set).
+kover {
+    reports {
+        verify { rule { minBound(90) } }
+    }
+}

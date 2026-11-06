@@ -11,6 +11,7 @@ class DesktopApplicationConventionPlugin : Plugin<Project> {
         pluginManager.apply("org.jetbrains.kotlin.plugin.compose")
         pluginManager.apply("dev.nucleusframework")
         configureKotlinJvm()
+        configureQuality()
         // Nucleus otherwise runs and bundles whichever JVM started the Gradle daemon.
         extensions.configure<NucleusExtension> { application.javaHome = openRoseJdkHome().get() }
     }

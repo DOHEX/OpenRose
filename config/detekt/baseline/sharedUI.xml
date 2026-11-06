@@ -1,0 +1,102 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>ComplexCondition:AddDeviceFlow.kt:active &amp;&amp; canScan &amp;&amp; state.scan == ScanState.Scanning &amp;&amp; !flow.pending</ID>
+    <ID>ComplexCondition:AddDeviceUiTestHarness.kt:AddDeviceUiTestHarness$terminal is ConnectionState.Connected &amp;&amp; terminal.deviceId == attempt.deviceId &amp;&amp; terminal.sessionId == attempt.sessionId &amp;&amp; terminal.phase == ConnectionPhase.READY</ID>
+    <ID>ComplexCondition:DeviceControlCard.kt:!hasAudio &amp;&amp; !hasMultipoint &amp;&amp; !hasVolume &amp;&amp; !hasGain &amp;&amp; !hasProtection</ID>
+    <ID>ComplexCondition:DevicePanel.kt:visibleError != null &amp;&amp; !permissionRequired &amp;&amp; unavailableTransport == null &amp;&amp; onOpenSystemSettings != null</ID>
+    <ID>ComplexCondition:NoiseControlCard.kt:enabled &amp;&amp; cycleKnown &amp;&amp; (mode !in checked || checked.size &gt; capabilities.minimumCycleSelections)</ID>
+    <ID>ComplexCondition:StyleComponents.kt:selected != null &amp;&amp; selectedIndex &gt;= 0 &amp;&amp; (!isOpen || dropdownOpenedHere)</ID>
+    <ID>CyclomaticComplexMethod:AddDeviceContent.kt:@Composable internal fun AddDeviceContent</ID>
+    <ID>CyclomaticComplexMethod:AddDeviceUiTestHarness.kt:AddDeviceUiTestHarness$suspend fun connectForAddDevice: OperationResult</ID>
+    <ID>CyclomaticComplexMethod:CustomEqualizerCard.kt:@Composable internal fun CustomEqualizerCard</ID>
+    <ID>CyclomaticComplexMethod:CustomEqualizerCard.kt:@Composable private fun EqualizerCurve</ID>
+    <ID>CyclomaticComplexMethod:DeviceControlCard.kt:@Composable internal fun DeviceControlCard</ID>
+    <ID>CyclomaticComplexMethod:DevicePanel.kt:@Composable internal fun ConnectionDetailsCard</ID>
+    <ID>CyclomaticComplexMethod:DevicePanel.kt:@Composable private fun UnconnectedHeadphonesDashboard</ID>
+    <ID>CyclomaticComplexMethod:DeviceValueFormatting.kt:internal fun displayFieldValue: String</ID>
+    <ID>CyclomaticComplexMethod:DeviceValueFormatting.kt:internal fun equalizerLabel: String</ID>
+    <ID>CyclomaticComplexMethod:DeviceValueFormatting.kt:internal fun semanticLabel: String</ID>
+    <ID>CyclomaticComplexMethod:MaterialAppShell.kt:@Composable internal fun MaterialMainShell</ID>
+    <ID>CyclomaticComplexMethod:MaterialIcons.kt:@Composable internal fun materialIcon: ImageVector</ID>
+    <ID>CyclomaticComplexMethod:MiuixIcons.kt:@Composable internal fun miuixIcon: ImageVector</ID>
+    <ID>CyclomaticComplexMethod:NoiseControlCard.kt:@Composable internal fun NoiseCycleRow</ID>
+    <ID>CyclomaticComplexMethod:NoiseControlCard.kt:@Composable internal fun SettingOperationsCard</ID>
+    <ID>CyclomaticComplexMethod:NoiseControlCard.kt:@Composable private fun NoiseModeChoices</ID>
+    <ID>CyclomaticComplexMethod:NoiseControlCard.kt:internal fun DeviceSetting.displayName: String</ID>
+    <ID>CyclomaticComplexMethod:NoiseControlCard.kt:private fun SettingOperation.requestedValueText: String</ID>
+    <ID>CyclomaticComplexMethod:OpenRoseApp.kt:@Composable fun OpenRoseApp</ID>
+    <ID>CyclomaticComplexMethod:StyleComponents.kt:@Composable fun &lt;T&gt; AppChoiceRow</ID>
+    <ID>CyclomaticComplexMethod:StyleComponents.kt:@Composable fun &lt;T&gt; AppRadioGroup</ID>
+    <ID>CyclomaticComplexMethod:StyleComponents.kt:@Composable fun AppText</ID>
+    <ID>CyclomaticComplexMethod:StyleComponents.kt:@Composable fun appColor: Color</ID>
+    <ID>CyclomaticComplexMethod:StyleComponents.kt:@Composable internal fun &lt;T&gt; AppMultiChoiceRow</ID>
+    <ID>CyclomaticComplexMethod:TouchControlCard.kt:@Composable internal fun TouchControlCard</ID>
+    <ID>CyclomaticComplexMethod:TrayPanel.kt:@Composable private fun TrayPanelContent</ID>
+    <ID>CyclomaticComplexMethod:TrayPanel.kt:fun traySummary: TraySummary</ID>
+    <ID>CyclomaticComplexMethod:UiSettings.kt:UiSettingsCodec$fun decode: UiSettings</ID>
+    <ID>EmptyFunctionBlock:AddDeviceUiTestHarness.kt:&lt;no name provided&gt;${}</ID>
+    <ID>EmptyFunctionBlock:OpenRoseHomeScanUiTest.kt:OpenRoseHomeScanUiTest.&lt;no name provided&gt;${}</ID>
+    <ID>LongMethod:OpenRoseChoiceDialogUiTest.kt:OpenRoseChoiceDialogUiTest$@Test fun deviceChoiceWaitsForConfirmationAndDoesNotInventAnUnknownValue</ID>
+    <ID>LongMethod:OpenRoseConnectedHomeUiTest.kt:OpenRoseConnectedHomeUiTest$@Test fun connectedHomePreservesUnknownLoadingAndPendingDeviceValues</ID>
+    <ID>LongMethod:OpenRoseFeedbackUiTest.kt:OpenRoseFeedbackUiTest$@Test fun settingSubmissionWaitsForDeviceConfirmationAndStyleSwitchDoesNotResend</ID>
+    <ID>LongMethod:OpenRoseHomeScanUiTest.kt:OpenRoseHomeScanUiTest$@Test fun unavailableHomeOpensDetailsAndRestoresManualActionsWhenTransportBecomesAvailable</ID>
+    <ID>LongMethod:OpenRoseHomeScanUiTest.kt:OpenRoseHomeScanUiTest$private fun withHarness</ID>
+    <ID>MatchingDeclarationName:OpenRoseApp.kt:AppPage</ID>
+    <ID>MatchingDeclarationName:Routes.kt:Route : NavKey</ID>
+    <ID>MaxLineLength:AddDeviceContent.kt:AppText(it.message, Modifier.semantics { liveRegion = LiveRegionMode.Polite }, color = MaterialTheme.colorScheme.onErrorContainer)</ID>
+    <ID>MaxLineLength:AddDeviceContent.kt:listOfNotNull(candidate.profile?.configurationLabel, candidate.rssi?.let { "$it dBm" }).joinToString(" · ")</ID>
+    <ID>MaxLineLength:AddDeviceFlow.kt:AddDeviceFlow$is ConnectionState.Connected -&gt; if (connection.deviceId == selected.deviceId &amp;&amp; connection.sessionId == selected.sessionId) connection.phase else ConnectionPhase.CONNECTING</ID>
+    <ID>MaxLineLength:AddDeviceFlow.kt:AddDeviceFlow$is ConnectionState.Connected -&gt; if (connection.deviceId == selectedDeviceId) SessionReference(connection.deviceId, connection.sessionId) else null</ID>
+    <ID>MaxLineLength:AddDeviceFlow.kt:AddDeviceFlow$is ConnectionState.Connecting -&gt; if (connection.deviceId == selected.deviceId &amp;&amp; connection.sessionId == selected.sessionId) connection.phase else ConnectionPhase.CONNECTING</ID>
+    <ID>MaxLineLength:AddDeviceFlow.kt:AddDeviceFlow$is ConnectionState.Connecting -&gt; if (connection.deviceId == selectedDeviceId) SessionReference(connection.deviceId, connection.sessionId) else null</ID>
+    <ID>MaxLineLength:AddDeviceUiTestHarness.kt:val harness = AddDeviceUiTestHarness(this, mutableStateOf(initial), mutableStateOf(UiSettings(appearance = Appearance.LIGHT, interfaceStyle = style, pageTransition = PageTransition.NONE)))</ID>
+    <ID>MaxLineLength:BottomBarStyleUiTest.kt:BottomBarStyleUiTest$assertTrue(harness.tabs().all { it.boundsInRoot.top &gt; 700f }, "Narrow window shows the bottom bar in $style/$bottomBarStyle")</ID>
+    <ID>MaxLineLength:BottomBarStyleUiTest.kt:BottomBarStyleUiTest$private fun SemanticsNode.hasText: Boolean</ID>
+    <ID>MaxLineLength:DevicePanel.kt:internal</ID>
+    <ID>MaxLineLength:DeviceValueFormatting.kt:"${touchSideLabel(binding.side)}${touchGestureLabel(binding.gesture)}：${binding.action?.let(::semanticLabel) ?: "未知操作（${binding.rawAction}）"}"</ID>
+    <ID>MaxLineLength:EqualizerDropdownUiTest.kt:EqualizerDropdownUiTest$Triple(ModelProfile.I7_RS_V2, listOf(1, 5, 2), listOf("弱水经典 · POP", "原声再现 · HIFI", "古典乐器 · ROCK", "日系甜美 · LIGHT", "欧美流行 · EAP"))</ID>
+    <ID>MaxLineLength:MainTabsPagerUiTest.kt:MainTabsPagerUiTest$assertEquals(1, midway.distinct().size, "main page motion must not follow the transition preference ($style wide=$wide): $midway")</ID>
+    <ID>MaxLineLength:MaterialAppShell.kt:LargeTopAppBar(title = { Text(title) }, modifier = topBarModifier, actions = actions, scrollBehavior = scrollBehavior, colors = largeTopBarColors)</ID>
+    <ID>MaxLineLength:MaterialAppShell.kt:val largeTopBarColors = if (backdropActive) TopAppBarDefaults.largeTopAppBarColors(containerColor = Color.Transparent) else TopAppBarDefaults.largeTopAppBarColors()</ID>
+    <ID>MaxLineLength:MaterialAppShell.kt:val topBarColors = if (backdropActive) TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent) else TopAppBarDefaults.topAppBarColors()</ID>
+    <ID>MaxLineLength:MiuixAppShell.kt:TopAppBar(title = title, largeTitle = title, modifier = topBarModifier, color = topBarColor, scrollBehavior = scrollBehavior, actions = actions)</ID>
+    <ID>MaxLineLength:OpenRoseApp.kt:AppArrowRow("连接方式", value = state.controlTransportLabel(), icon = RoseIcon.BLUETOOTH) { navigate(AppPage.DIAGNOSTICS) }</ID>
+    <ID>MaxLineLength:OpenRoseApp.kt:Box</ID>
+    <ID>MaxLineLength:OpenRoseChoiceDialogUiTest.kt:OpenRoseChoiceDialogUiTest$assertEquals(listOf&lt;Pair&lt;DeviceSetting, FieldValue&gt;&gt;(DeviceSetting.PROMPT_VOLUME to FieldValue.Number(2)), harness.settingWrites)</ID>
+    <ID>MaxLineLength:OpenRoseConnectedHomeUiTest.kt:OpenRoseConnectedHomeUiTest$assertEquals(listOf&lt;Pair&lt;DeviceSetting, FieldValue&gt;&gt;(DeviceSetting.GAME_MODE to FieldValue.Toggle(true)), harness.settingWrites)</ID>
+    <ID>MaxLineLength:OpenRoseConnectedHomeUiTest.kt:OpenRoseConnectedHomeUiTest$block(ConnectedHomeHarness(this, state, uiSettings, disconnects, connects, startScans, settingWrites, model.homeNavigationRequests))</ID>
+    <ID>MaxLineLength:OpenRoseFeedbackUiTest.kt:OpenRoseFeedbackUiTest$androidx.compose.foundation.layout</ID>
+    <ID>MaxLineLength:OpenRoseFeedbackUiTest.kt:OpenRoseFeedbackUiTest$private</ID>
+    <ID>MaxLineLength:OpenRoseHomeScanUiTest.kt:OpenRoseHomeScanUiTest$withHarness</ID>
+    <ID>MaxLineLength:OpenRoseUiTestHarness.kt:OpenRoseUiTestHarness$(hasText(candidate, text) || candidate.children.any { hasText(it, text) || it.config.getOrNull(SemanticsProperties.ContentDescription).orEmpty().contains(text) })</ID>
+    <ID>MaxLineLength:OpenRoseUiTestHarness.kt:OpenRoseUiTestHarness$(hasText(node, expected) || node.children.any { hasText(it, expected) || it.config.getOrNull(SemanticsProperties.ContentDescription).orEmpty().contains(expected) })</ID>
+    <ID>MaxLineLength:OpenRoseUiTestHarness.kt:OpenRoseUiTestHarness$private fun hasText: Boolean</ID>
+    <ID>MaxLineLength:OpenRoseUiTestHarness.kt:OpenRoseUiTestHarness$}</ID>
+    <ID>MaxLineLength:OpenRoseUiTestHarness.kt:internal</ID>
+    <ID>MaxLineLength:StyleComponents.kt:Column(Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState())) { AppRadioGroup(options, selected, enabled, transparentContainer = true, onSelect = select) }</ID>
+    <ID>MaxLineLength:StyleComponents.kt:InterfaceStyle.MATERIAL3</ID>
+    <ID>MaxLineLength:StyleComponents.kt:InterfaceStyle.MATERIAL3 -&gt; AppSegmented(tabs.mapIndexed { i, label -&gt; AppOption(i, label) }, index, modifier = modifier, onSelect = onSelect)</ID>
+    <ID>MaxLineLength:StyleComponents.kt:InterfaceStyle.MATERIAL3 -&gt; ListItem(headlineContent = { Text(label) }, supportingContent = { Text(value, color = valueColor ?: Color.Unspecified) }, colors = rowColors())</ID>
+    <ID>MaxLineLength:StyleComponents.kt:InterfaceStyle.MATERIAL3 -&gt; ListItem(headlineContent = { Text(title) }, supportingContent = { Text(summary) }, trailingContent = onConnect?.let { { FilledTonalButton(it, enabled = enabled) { Text("连接") } } })</ID>
+    <ID>MaxLineLength:StyleComponents.kt:InterfaceStyle.MATERIAL3 -&gt; MaterialTheme(colorScheme = materialColors(dark), motionScheme = MotionScheme.expressive(), content = content)</ID>
+    <ID>MaxLineLength:StyleComponents.kt:InterfaceStyle.MIUIX -&gt; ArrowPreference(title, summary = summary, startAction = iconAction(icon), endActions = { value?.let { AppText(it, role = AppTextRole.Summary) } }, onClick = onClick)</ID>
+    <ID>MaxLineLength:StyleComponents.kt:InterfaceStyle.MIUIX -&gt; BasicComponent(title = title, summary = summary, endActions = { onConnect?.let { MiuixTextButton("连接", it, enabled = enabled) } })</ID>
+    <ID>MaxLineLength:StyleComponents.kt:InterfaceStyle.MIUIX -&gt; CheckboxPreference(option.label, option.value in checked, { onToggle(option.value) }, modifier = optionModifier, enabled = enabled)</ID>
+    <ID>MaxLineLength:StyleComponents.kt:Row</ID>
+    <ID>MaxLineLength:StyleComponents.kt:Slider(value, onChange, valueRange = range, steps = steps, enabled = enabled, modifier = Modifier.semantics { contentDescription = "$label 草稿增益" })</ID>
+    <ID>MaxLineLength:StyleComponents.kt:Text(label, Modifier.weight(1f).semantics { heading() }, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.titleSmall)</ID>
+    <ID>MaxLineLength:StyleComponents.kt:colors = if (option.value == selected) MiuixButtonDefaults.textButtonColorsPrimary() else MiuixButtonDefaults.textButtonColors()</ID>
+    <ID>MaxLineLength:StyleComponents.kt:colors = top.yukonga.miuix.kmp.basic.ProgressIndicatorDefaults.progressIndicatorColors(foregroundColor = appColor(AppColorRole.Error))</ID>
+    <ID>MaxLineLength:StyleComponents.kt:fun</ID>
+    <ID>MaxLineLength:StyleComponents.kt:internal</ID>
+    <ID>MaxLineLength:StyleComponents.kt:modifier = optionModifier.selectable(selected != null &amp;&amp; option.value == selected, enabled, Role.RadioButton) { onSelect(option.value) }</ID>
+    <ID>MaxLineLength:StyleComponents.kt:private</ID>
+    <ID>MaxLineLength:StyleComponents.kt:val textColor = color ?: appColor(if (role == AppTextRole.Summary || role == AppTextRole.Footnote) AppColorRole.Summary else AppColorRole.OnSurface)</ID>
+    <ID>MaxLineLength:UiDefaultStylesUiTest.kt:UiDefaultStylesUiTest$private fun rowValueLabel: String</ID>
+    <ID>ReturnCount:AddDeviceFlow.kt:AddDeviceFlow$fun phase: ConnectionPhase?</ID>
+    <ID>ReturnCount:CustomEqualizerCard.kt:@Composable internal fun CustomEqualizerCard</ID>
+    <ID>TooManyFunctions:OpenRoseUiTestHarness.kt:OpenRoseUiTestHarness</ID>
+  </CurrentIssues>
+</SmellBaseline>

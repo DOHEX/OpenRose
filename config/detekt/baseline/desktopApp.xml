@@ -1,0 +1,11 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>CyclomaticComplexMethod:DesktopTray.kt:@Composable internal fun NucleusApplicationScope.DesktopTray</ID>
+    <ID>CyclomaticComplexMethod:Main.kt:fun main</ID>
+    <ID>LongMethod:Main.kt:fun main</ID>
+    <ID>MaxLineLength:DesktopTray.kt:internal</ID>
+    <ID>ReturnCount:TrayAvailability.kt:StatusNotifierTrayMonitor$private fun read: TrayAvailability</ID>
+  </CurrentIssues>
+</SmellBaseline>

@@ -11,6 +11,7 @@ import org.gradle.kotlin.dsl.getByType
 import org.gradle.kotlin.dsl.withType
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.dsl.kotlinExtension
+import org.jetbrains.kotlin.gradle.tasks.KotlinCompilationTask
 import org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile
 
 /** The JDK every module compiles and packages with; JVM and Android bytecode targets the same level. */
@@ -27,23 +28,26 @@ private fun JavaToolchainSpec.openRoseJdk() {
 internal val Project.libs: VersionCatalog
     get() = extensions.getByType<VersionCatalogsExtension>().named("libs")
 
-internal fun VersionCatalog.intVersion(alias: String): Int =
-    findVersion(alias).orElseThrow { IllegalStateException("Version '$alias' is missing from the catalog") }
-        .requiredVersion.toInt()
+internal fun VersionCatalog.intVersion(alias: String): Int = findVersion(alias).orElseThrow { IllegalStateException("Version '$alias' is missing from the catalog") }
+    .requiredVersion.toInt()
 
-internal fun VersionCatalog.stringVersion(alias: String): String =
-    findVersion(alias).orElseThrow { IllegalStateException("Version '$alias' is missing from the catalog") }
-        .requiredVersion
+internal fun VersionCatalog.stringVersion(alias: String): String = findVersion(alias).orElseThrow { IllegalStateException("Version '$alias' is missing from the catalog") }
+    .requiredVersion
 
-/** Compiles every Kotlin JVM and Android compilation with the shared JDK and bytecode target. */
+/**
+ * Compiles every Kotlin JVM and Android compilation with the shared JDK and bytecode target, and fails every
+ * Kotlin compilation, common metadata included, on any compiler warning.
+ */
 internal fun Project.configureKotlinJvm() {
     kotlinExtension.jvmToolchain { openRoseJdk() }
     tasks.withType<KotlinJvmCompile>().configureEach {
         compilerOptions.jvmTarget.set(JvmTarget.fromTarget(javaVersion.toString()))
     }
+    tasks.withType<KotlinCompilationTask<*>>().configureEach {
+        compilerOptions.allWarningsAsErrors.set(true)
+    }
 }
 
 /** Installation directory of the shared JDK, independent of the JVM running Gradle. */
-internal fun Project.openRoseJdkHome(): Provider<String> =
-    extensions.getByType<JavaToolchainService>().launcherFor { openRoseJdk() }
-        .map { it.metadata.installationPath.asFile.absolutePath }
+internal fun Project.openRoseJdkHome(): Provider<String> = extensions.getByType<JavaToolchainService>().launcherFor { openRoseJdk() }
+    .map { it.metadata.installationPath.asFile.absolutePath }
