@@ -13,13 +13,16 @@ import io.github.dohex.openrose.ui.PlatformUi
 import kotlinx.coroutines.flow.StateFlow
 import java.io.File
 
-/** Desktop sections: the tray on the status page, 后台控制 and 登录时启动 in settings. */
-internal class DesktopPlatformUi(
+/**
+ * Desktop sections: the tray on the status page, 后台控制 and 登录时启动 in settings. Facts arrive as states and
+ * changes leave through callbacks, so a host other than the desktop app can show these sections.
+ */
+class DesktopPlatformUi(
     override val platformName: String,
     private val desktopSettings: StateFlow<DesktopSettings>,
     private val onDesktopSettingsChange: (DesktopSettings) -> Unit,
     private val tray: StateFlow<TrayAvailability>,
-    private val loginLaunch: LoginLaunch,
+    private val loginLaunch: LoginLaunchControl,
 ) : PlatformUi {
     override val openBluetoothSettings: (() -> Unit)? = bluetoothSettingsCommand(platformName)?.let { args ->
         {

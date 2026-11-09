@@ -41,6 +41,7 @@ cd OpenRose
 | `:androidApp` | Android 入口与全部 Android API 胶水（GATT / SPP 驱动、libxposed 模块、HyperOS 系统桥接、AIDL） |
 | `:desktopApp` | Windows / Linux 桌面入口：窗口、托盘与偏好设置，并装配运行时 |
 | `:transportBluez` | Linux 平台驱动：BlueZ D-Bus GATT 原语、扫描、配对设备与音频事实 |
+| `:uiSandbox` | 开发用界面沙盒，不打包、不发布：在假状态上运行共享界面、各平台段落与托盘面板（见下文“界面调试”）。只有它同时依赖 `:desktopApp` 与 `:androidIntegrationUI`，桌面运行时依赖图仍不含 Android 集成模块 |
 | `build-logic/` | 各模块共用的 Gradle 约定插件（独立的 included build） |
 
 ## 新增型号
@@ -52,6 +53,16 @@ cd OpenRose
 3. 协议族已有编解码（ZT、RS Common V2）时直接复用；族内型号的帧、字段或枚举有差异时，在 `ModelSpec` 增加对应字段，由该族编解码读取。新协议族需要新增 `ProtocolFamily` 项与编解码。
 4. 单体型号（`BatteryLayout.SINGLE_UNIT`）在应用和托盘里显示一行“电量”；在有实机证据之前，系统超级岛、焦点通知和融合设备中心不发布其电量。
 5. 在 `androidIntegration` 测试夹具的 `initializationReplies`、`roseAdvertisement` 中登记该型号的回包与广播。`ModelProfileTest` 会检查每个型号都能凭自己的广播前缀和名称被识别。
+6. 在界面沙盒中选中该型号，按有能力差异的固件分别检查各页面；这是离线验证，不能代替真机验证。
+
+## 界面调试
+
+`./gradlew :uiSandbox:run` 打开两个窗口，不需要耳机或蓝牙：控制台切换平台（Android / Linux / Windows）、型号配置、固件、控制连接阶段、电量、平台状况、设置写入结果、界面风格与预览尺寸，Android 下还有系统集成、所有者与后台服务状态，桌面下还有托盘与登录时启动状态；预览窗口用这些条件运行 `OpenRoseApp` 与该平台真实的 `PlatformUi`，桌面平台另开 `TrayPanel`。窗口由桌面端同一窗口后端（Nucleus Tao）承载，与正在运行的 OpenRose 互不影响。
+
+- 读数由 `ModelProfile.capabilities(firmware)` 推导，电量按型号的电量布局给出；固件框留空表示未读取，控制台下方列出当前可写的设置，便于看出固件门槛。
+- 应用内的操作照常生效：连接按阶段推进，断开后回到未连接看板，添加耳机流程能扫描到每个型号。设置写入经该型号的 `createProtocolCodec(...).prepareSetting(...)` 准备，确认后写回编解码器预期的读回值；编解码器拒绝的值以失败结束，界面传错值时能直接看到。
+- `./gradlew :uiSandbox:hotRun --autoReload` 启用 Compose Hot Reload，修改 `:sharedUI`、`:androidIntegrationUI` 或沙盒自身后，运行中的窗口直接刷新，当前状态保留。
+- 沙盒只运行 JVM 实现：Android 的背景模糊与返回手势、系统超级岛、焦点通知、融合设备中心和桌面托盘菜单需要在真机或真实桌面环境上检查。
 
 ## 日常命令
 

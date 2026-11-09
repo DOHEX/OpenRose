@@ -56,7 +56,7 @@ tasks.register("offlineCheck") {
     dependsOn(
         ":core:jvmTest", ":androidIntegration:jvmTest", ":sharedUI:jvmTest", ":androidIntegrationUI:jvmTest",
         ":desktopApp:test", ":androidApp:testDebugUnitTest", ":transportBluez:test",
-        ":desktopApp:compileKotlin", ":androidApp:compileDebugKotlin",
+        ":desktopApp:compileKotlin", ":androidApp:compileDebugKotlin", ":uiSandbox:compileKotlin",
         ":androidApp:lintDebug", "spotlessCheck",
         "koverVerify", ":core:koverVerify", ":androidIntegration:koverVerify",
     )

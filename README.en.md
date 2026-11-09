@@ -185,7 +185,7 @@ Run the desktop app:
 ./gradlew :desktopApp:run
 ```
 
-Run the checks that need no earphone hardware (protocol, control session, BlueZ drivers and event mapping with fake D-Bus objects, shared UI, and Android / desktop preference persistence tests, compilation for both platforms, plus formatting, static analysis, Android Lint, coverage floors and the check that the Chinese and English READMEs keep the same structure):
+Run the checks that need no earphone hardware (protocol, control session, BlueZ drivers and event mapping with fake D-Bus objects, shared UI, and Android / desktop preference persistence tests, compilation for both platforms and the UI sandbox, plus formatting, static analysis, Android Lint, coverage floors and the check that the Chinese and English READMEs keep the same structure):
 
 ```bash
 ./gradlew offlineCheck
@@ -200,6 +200,15 @@ Run the full check that CI runs:
 `offlineCheck` still needs the Android SDK. Once dependencies are downloaded, add `--offline` to run without network access. If formatting fails, run `./gradlew spotlessApply`; [CONTRIBUTING.md](CONTRIBUTING.md) (Chinese) explains each check.
 
 UI tests run on a virtual clock, with test classes in parallel (half the available cores as forks). Whole-app rendering covers navigation, cross-page flows, style-switch continuity, and main-tab swipes. Other tests render pages or sections with a fake presentation model in both component styles; Android-specific sections are tested in `androidIntegrationUI/`.
+
+To work on the UI, run the UI sandbox; it needs no earphones or Bluetooth. One window sets the platform (Android / Linux / Windows), model configuration, firmware, connection stage, battery, platform issue, how setting writes end, and the component style; another window runs the shared UI and that platform's sections on those facts, and desktop platforms also get the tray panel. Readings follow what the chosen model offers under that firmware, and setting writes are prepared by that model's codec, so a value the codec rejects fails in the sandbox too. `hotRun` turns on Compose Hot Reload: edits to UI code such as `sharedUI/` or `androidIntegrationUI/` show up in the running windows:
+
+```bash
+./gradlew :uiSandbox:run
+./gradlew :uiSandbox:hotRun --autoReload
+```
+
+The sandbox covers only the app's own UI and counts as offline verification: Android backdrop blur and back gestures, the HyperOS island, focus notifications, Fusion Device Center, and the desktop tray menu never pass through it.
 
 Package the desktop app. Linux produces DEB, RPM, Pacman and AppImage (x64) and Windows produces an MSI; each host builds only the formats it supports, into `desktopApp/build/compose/binaries/main/`:
 
@@ -220,6 +229,7 @@ CI runs the tests on Linux only. Linux publishes the Android APK and the four Li
 | `androidApp/` | Android entry point, primitive GATT driver and SPP transport, audio profile proxies and broadcasts, libxposed module, and HyperOS system bridge |
 | `transportBluez/` | Linux BlueZ D-Bus GATT primitives, scanning, paired devices, and audio facts; reuses shared GATT and audio inference |
 | `desktopApp/` | Windows / Linux desktop entry point, windows, and preferences |
+| `uiSandbox/` | Development-only UI sandbox: runs the shared UI, every platform's sections, and the tray panel on fabricated state; never packaged or released, and the only module that depends on both the desktop app and the Android integration UI |
 | `build-logic/` | Gradle convention plugins shared by the modules: toolchain, JVM bytecode target, Android and desktop packaging setup, static analysis and coverage, and the README structure check |
 | `config/` | detekt rules and each module's baseline of existing findings |
 | `docs/` | Protocol research & model specifications (`docs/protocols/`), implementation evidence (`docs/protocols.md`), architecture decisions, and specifications |

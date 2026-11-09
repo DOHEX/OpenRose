@@ -19,4 +19,4 @@ dependencyResolutionManagement {
 }
 enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")
 rootProject.name = "OpenRose"
-include(":core", ":androidIntegration", ":sharedUI", ":androidIntegrationUI", ":androidApp", ":desktopApp", ":transportBluez")
+include(":core", ":androidIntegration", ":sharedUI", ":androidIntegrationUI", ":androidApp", ":desktopApp", ":transportBluez", ":uiSandbox")

@@ -185,7 +185,7 @@ cd OpenRose
 ./gradlew :desktopApp:run
 ```
 
-运行不依赖耳机硬件的检查（协议、控制会话、BlueZ 假 D-Bus 驱动与事件映射、共享界面、Android / 桌面偏好持久化测试，两端编译检查，以及格式、静态分析、Android Lint、覆盖率下限和中英文 README 结构一致性检查）：
+运行不依赖耳机硬件的检查（协议、控制会话、BlueZ 假 D-Bus 驱动与事件映射、共享界面、Android / 桌面偏好持久化测试，两端与界面沙盒的编译检查，以及格式、静态分析、Android Lint、覆盖率下限和中英文 README 结构一致性检查）：
 
 ```bash
 ./gradlew offlineCheck
@@ -200,6 +200,15 @@ CI 运行的完整检查：
 `offlineCheck` 仍然需要 Android SDK。依赖下载完后，可以加 `--offline` 离线运行。格式不符时运行 `./gradlew spotlessApply`；各项检查的说明见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
 界面测试跑在虚拟时钟上，按测试类并行（分叉数为可用核数的一半）。导航、跨页流程、风格切换连续性和主页面滑动在整应用级验证，其余在页面或段落级配假表现层模型覆盖两种界面风格；Android 专属段落的测试位于 `androidIntegrationUI/`。
+
+调试界面时运行界面沙盒，不需要耳机或蓝牙。一个窗口切换平台（Android / Linux / Windows）、型号配置、固件、控制连接阶段、电量、平台状况、设置写入结果与界面风格，另一个窗口按这些条件运行共享界面与该平台的段落，桌面平台另开托盘面板。读数由所选型号在该固件下的能力推导，设置写入经该型号的编解码器准备，编解码器拒绝的值在沙盒里同样失败。`hotRun` 启用 Compose Hot Reload，修改 `sharedUI/`、`androidIntegrationUI/` 等界面代码后，运行中的窗口直接刷新：
+
+```bash
+./gradlew :uiSandbox:run
+./gradlew :uiSandbox:hotRun --autoReload
+```
+
+沙盒只覆盖应用内界面，属于离线验证：Android 端的背景模糊与返回手势、系统超级岛、焦点通知、融合设备中心和桌面托盘菜单都不经过它。
 
 打包桌面版。Linux 产出 DEB、RPM、Pacman 与 AppImage（x64），Windows 产出 MSI，各平台只构建本机支持的格式，产物在 `desktopApp/build/compose/binaries/main/`：
 
@@ -220,6 +229,7 @@ CI 只在 Linux 上运行测试；Linux 产出 Android APK 与上述 4 种 Linux
 | `androidApp/` | Android 入口、GATT 原语驱动与 SPP 传输、音频协议代理与广播、libxposed 模块与 HyperOS 系统桥接 |
 | `transportBluez/` | Linux BlueZ D-Bus GATT 原语、扫描、配对设备与音频事实；复用共享 GATT 与音频推断 |
 | `desktopApp/` | Windows / Linux 桌面入口、窗口与偏好设置 |
+| `uiSandbox/` | 开发用界面沙盒：在假状态上运行共享界面、各平台段落与托盘面板，不打包、不发布；只有它同时依赖桌面端与 Android 集成界面 |
 | `build-logic/` | 各模块共用的 Gradle 约定插件：工具链、JVM 字节码目标、Android 与桌面打包配置、静态分析与覆盖率、README 结构检查 |
 | `config/` | detekt 规则与各模块的既有问题基线 |
 | `docs/` | 协议研究与型号规范（`docs/protocols/`）、工程实现证据（`docs/protocols.md`）、架构决策与规范 |

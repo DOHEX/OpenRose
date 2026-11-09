@@ -14,7 +14,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 /** “登录时启动” as the system records it; the app never keeps its own copy of this choice. */
-internal sealed interface LoginLaunchState {
+sealed interface LoginLaunchState {
     data object Reading : LoginLaunchState
     data class Ready(val enabled: Boolean) : LoginLaunchState
 
@@ -23,17 +23,24 @@ internal sealed interface LoginLaunchState {
     data class Unsupported(val reason: String) : LoginLaunchState
 }
 
+/** “登录时启动” as the system records it, and the two things the user can do about it. */
+interface LoginLaunchControl {
+    val state: StateFlow<LoginLaunchState>
+    fun set(enabled: Boolean)
+    fun openSystemSettings()
+}
+
 /** Reads and changes start-at-login off the UI thread; the backend may run subprocesses. */
-internal class LoginLaunch(private val scope: CoroutineScope) {
+internal class LoginLaunch(private val scope: CoroutineScope) : LoginLaunchControl {
     private val mutableState = MutableStateFlow<LoginLaunchState>(LoginLaunchState.Reading)
     private val mutex = Mutex()
-    val state: StateFlow<LoginLaunchState> = mutableState.asStateFlow()
+    override val state: StateFlow<LoginLaunchState> = mutableState.asStateFlow()
 
     init {
         scope.launch(Dispatchers.IO) { mutex.withLock { mutableState.value = read() } }
     }
 
-    fun set(enabled: Boolean) {
+    override fun set(enabled: Boolean) {
         scope.launch(Dispatchers.IO) {
             mutex.withLock {
                 val result = runCatching { if (enabled) AutoLaunch.enable() else AutoLaunch.disable() }
@@ -46,7 +53,7 @@ internal class LoginLaunch(private val scope: CoroutineScope) {
         }
     }
 
-    fun openSystemSettings() {
+    override fun openSystemSettings() {
         scope.launch(Dispatchers.IO) { runCatching { AutoLaunch.openSystemSettings() } }
     }
 
