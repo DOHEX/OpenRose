@@ -103,4 +103,4 @@ python3 rose_reverse/examples/fetch_ota_links.py i7 --lang zh
 - 官方 fetchDeviceOtaByKeyId 的恢复代码（`rose_reverse/analysis/blutter/asm/roselink/core/api/service/api_device_service.dart:476`）
 - otaUrl → 内部 otaContent 的字段映射（`rose_reverse/analysis/blutter/asm/roselink/core/services/device/device_service.dart:10882`）
 - [i5 协议与 WQ OTA](models/earfeel-i5-protocol.md)
-- [i7 协议与 BES OTA](models/earfeel-i7-protocol.md#378)
+- [i7 协议与 BES OTA](models/earfeel-i7-protocol.md#7-bes-ota)

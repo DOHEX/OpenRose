@@ -1,6 +1,117 @@
-# EarFeel-i5 / EARFREE-i5 第三方控制协议
+# EarFeel-i5 控制协议
 
-## 1. 范围、证据与能力
+配置类 `EarfreeI5DeviceConfig`（cid 501），APK 基线 RoseLink 3.8.0（versionCode 5310，SHA-256 `83cdd7e3e7f6e7d61a26dc6a8fab65f183d5a18a66a70f64a17f69d93e58e40b`），属于 [ZT 协议族](../families/zt.md)。2026-10-18 在 Linux 上对单副 i5 完成 BLE 连接和 13 条初始化读取实机验证；设置写入、持久化、寻机响铃和 OTA 均未实测。除特别注明外，本文的字节级结论来自静态分析。
+
+## 识别
+
+| 分支 | 识别前缀 | 内部名 | 显示名 | 状态 | 出处 |
+|---|---|---|---|---|---|
+| 零售 TWS | `525300010001` | `EARFREE-i5` | `EarFeel-i5` | 静态 | 构造（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/zt/earfree_i5_device_config.dart:10`）、customConfigEarObject（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/zt/earfree_i5_device_config.dart:737`） |
+
+系统设备名、厂商页面和历史文档还使用 `EarFree i5`、`EARFEEL i5`、`EARFREE i5`；实机扫描名称为 `ROSE EARFREE i5`（实机验证（`rose_reverse/analysis/i5_hardware_validation.md`））。CMIIT ID 为 `26J51U5A3756`。识别看 BLE 广播 `manufacturerData` 的前 12 位（算法见 [§2.1](#21-广播识别)），不要按可修改的设备名识别。
+
+## 传输
+
+| 项 | 值 | 状态 | 出处 |
+|---|---|---|---|
+| BLE 服务 | `011bf5da-0000-1000-8000-00805f9b34fb` | 静态 | normalBleServiceConfig（0x74990c）（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/base_device_config.dart:993`）、[§2.2](#22-gatt-uuid-与写入属性) |
+| 写特征 | `00007777-0000-1000-8000-00805f9b34fb` | 静态 | 同上；已由实机发现服务确认 |
+| 通知特征 | `00008888-0000-1000-8000-00805f9b34fb` | 静态 | 同上；已由实机发现服务确认 |
+| SPP 是否允许 | 否 | 静态 | 配置 `sppSupport="false"`（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/zt/earfree_i5_device_config.dart:773`） |
+| 控制 SPP UUID | 无 | 静态 | 配置未写入 SPP UUID |
+| 广播中的经典地址 | 未解析；连接使用系统扫描对象的 remote id/address | 未知 | [§2.1](#21-广播识别)、[§2.3](#23-连接流程) |
+| 写入间隔 | 正常 100 ms；OHOS 分支 350 ms | 静态 | [§2.3](#23-连接流程) |
+| OTA 服务 | `65786365-6c70-6f69-6e74-2e636f6d0000` | 静态 | normalBleOtaServiceConfig（0x824cf8）（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/base_device_config.dart:1143`）、实机服务发现（`rose_reverse/analysis/i5_hardware_validation.md`） |
+| OTA 写入/通知特征 | `65786365-6c70-6f69-6e74-2e636f6d0001` | 静态 | 同上 |
+
+普通 i5 报文最长 14 字节，不依赖大 MTU；App 公共 BLE 层尝试请求 MTU 512，协商结果由设备和系统决定。写特征支持 `writeWithoutResponse` 时使用无响应写，否则使用有响应写；GATT 写响应不等同业务状态回包。
+
+## 初始化
+
+按 [§4](#4-初始化和读取命令) 的顺序发送。13 条查询均已在 2026-10-18 的单副 i5 上实机验证；电量随 `getInfo` 返回，不需要套用 HeadFeel 的 `getBattery=0103`。
+
+| 次序 | App 方法 | 完整 TX hex | 读回 Tag | 状态 | 出处 |
+|---:|---|---|---|---|---|
+| 1 | `getInfo` | `08 EE 00 00 00 01 01 0A 00 02` | `0101` | 实机 | getInfo（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart:2861`） |
+| 2 | `getAnc` | `08 EE 00 00 00 06 02 0A 00 08` | `0602` | 实机 | getAnc（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart:801`） |
+| 3 | `getEq` | `08 EE 00 00 00 02 01 0A 00 03` | `0201` | 实机 | getEq（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart:2731`） |
+| 4 | `getGameMode` | `08 EE 00 00 00 06 03 0A 00 09` | `0603` | 实机 | getGameMode（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart:2392`） |
+| 5 | `getAudioLdac` | `08 EE 00 00 00 08 01 0A 00 09` | `0801` | 实机 | getAudioLdac（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart:2151`） |
+| 6 | `getVersion` | `08 EE 00 00 00 0D 01 0A 00 0E` | `0d01` | 实机 | getVersion（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart:2796`） |
+| 7 | `getKey` | `08 EE 00 00 00 04 01 0A 00 05` | `0401` | 实机 | getKey（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart:1936`） |
+| 8 | `getTouch` | `08 EE 00 00 00 0A 01 0A 00 0B` | `0a01` | 实机 | getTouch（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart:1407`） |
+| 9 | `getAncList` | `08 EE 00 00 00 06 05 0A 00 0B` | `0605` | 实机 | getAncList（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart:866`） |
+| 10 | `getEarDetection` | `08 EE 00 00 00 0C 01 0A 00 0D` | `0c01` | 实机 | getEarDetection（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart:1206`） |
+| 11 | `getAncLevel` | `08 EE 00 00 00 06 07 0A 00 0D` | `0607` | 实机 | getAncLevel（Zt229Sender）（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart:4598`） |
+| 12 | `getAncTransLevel` | `08 EE 00 00 00 06 04 0A 00 0A` | `0604` | 实机 | getAncTransLevel（Zt229Sender）（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart:4458`） |
+| 13 | `getDingLevel` | `08 EE 00 00 00 0E 03 0A 00 11` | `0e03` | 实机 | getDingLevel（Zt229Sender）（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart:4736`） |
+
+`getConnectMul` 在 i5 的父类中调用 `getAudioLdac`，仍发送 `08 01`，不是 HeadFeel 的独立 `08 02` 查询。初始化顺序证据：sendInitCommands（0x8e25cc）（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/zt/earfree_i5_device_config.dart:788`）。
+
+## 电量
+
+`0101` 通知，左/右/盒三槽：
+
+| 偏移 | App 解释 |
+|---|---|
+| 9–10 | 本次电量处理函数未消费；保持 raw |
+| 11 | 左耳电量，完整字节无符号整数 |
+| 12 | 右耳电量 |
+| 13 | 左耳充电状态，`00=false`，其他=true |
+| 14 | 右耳充电状态，`00=false`，其他=true |
+| 15 | 盒电量，`FF` 表示没有盒数据 |
+
+原 App 对左/右只显示 `1..100`，`0` 或超范围显示 `-`；盒值 `FF` 不更新盒显示，有盒数据时还需任意一耳充电标志为 true 且值在 `1..100` 内才显示并缓存。实机回包 `09 ff 00 00 01 01 01 11 00 00 01 64 62 00 00 ff e2` 对应左 100%、右 98%、盒缺失。细节和缓存规则见 [§6.2](#62-电量)。
+
+## 设置命令
+
+BODY 从 group 开始，长度按 [§3](#3-常规发送帧) 自动生成；表中“取值”是 App 在本型号界面提供的线值，不代表 Sender 接受的全部值。i5 的设置写入没有实机证据，状态均为静态；设备是否接受在实测前未知。
+
+| 功能 | Sender 方法 | BODY | 取值 | 固件门槛 | 读回 | 状态 | 出处 |
+|---|---|---|---|---|---|---|---|
+| 电量展示 | `getInfo` | `01 01` | 左/右/盒 | — | `0101` | 实机 | getInfo（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart:2861`） |
+| 降噪模式 | `setNoiseModeAnc`、`setNoiseModeNormal`、`setNoiseModeWind`、`setNoiseModeTrans` | `06 82` | ANC=`01 00 00 00`；普通=`00 01 00 00`；抗风=`00 00 01 00`；通透=`00 00 00 01` | — | `0602` | 静态 | 四分支（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart:501`） |
+| ANC 等级 | `setAncLevel` | `06 87` | UI 1/3/5 = `00/01/02` | — | `0607` | 静态 | Zt229Sender::setAncLevel（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart:4523`） |
+| 通透等级 | `setTransLevel` | `06 84` | UI 1/3/5 = `00/01/02` | — | `0604` | 静态 | Zt229Sender::setTransLevel（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart:4383`） |
+| EQ 预设 | `setEqPop`、`setEqHifi`、`setEqRock`、`setEqLight` | `02 81` | POP=`00`、HIFI=`01`、ROCK=`02`、LIGHT=`03` | — | `0201` | 静态 | setEqPop（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart:2664`） |
+| 游戏模式 | `setGameModeOn`、`setGameModeOff` | `06 83` | 开=`00`、关=`01` | — | `0603` | 静态 | setGameModeOn（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart:2325`） |
+| 多点连接 | `setConnectMulOn`、`setConnectMulOff` | `08 81` | 开=`00`、关=`01`；关闭同时切 LDAC | — | `0801` | 静态 | setConnectMulOn（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart:2932`）、关闭→LDAC（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart:2216`） |
+| 音频模式 | `setAudioAacSbc`、`setAudioLdac` | `08 81` | AAC/SBC=`00`、LDAC=`01` | — | `0801` | 静态 | setAudioAacSbc（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart:2131`） |
+| 触摸绑定 | `setLeftTouchOne`、`setLeftTouchTwo`、`setLeftTouchThree`、`setLeftTouchLong`、`setRightTouchOne`、`setRightTouchTwo`、`setRightTouchThree`、`setRightTouchLong` | `04 81` | `[side][gesture][action]`；side 左=`00` 右=`01`；gesture 单=`00` 双=`01` 三=`02` 长=`03`；action 见 [§5.1](#51-触摸绑定) | — | `0401` | 静态 | setLeftTouchOne（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart:1878`） |
+| 触摸功能 | `setTouchOn`、`setTouchOff` | `0A 81` | 开=`00`、关=`01` | — | `0a01` | 静态 | setTouchOn（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart:1340`） |
+| 寻机 | `setFindDeviceLeft`、`setFindDeviceRight`、`setFindDeviceBoth`、`setFindOff` | `0E 82` | 左/原 App 双耳=`00 01`；右=`01 01`；停止=`03 00` | — | `0e02` | 静态 | setFindDeviceLeft（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart:208`）、setFindOff（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart:4349`） |
+| 佩戴检测 | `setEarDetectionOn`、`setEarDetectionOff` | `0C 81` | 开=`00`、关=`01` | — | `0c01` | 静态 | setEarDetectionOn（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart:1139`） |
+| 提示音等级 | `setDingLevel` | `0E 83` | UI `1..5` = `00..04` | — | `0e03` | 静态 | Zt229Sender::setDingLevel（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart:4663`） |
+| 降噪轮换 | `setAncLine` | `06 85` | `[普通][通透][抗风][ANC]`，每项 `00/01` | — | `0605` | 静态 | setAncLine（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart:10`） |
+| 星芒业务入口 | 范围外 | — | — | — | — | 未知 | 配置（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/zt/earfree_i5_device_config.dart:340`） |
+| OTA | 范围外 | — | — | — | — | 未知 | 配置（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/zt/earfree_i5_device_config.dart:381`） |
+| 面板容器 | 结构 | — | 容器 | — | — | 静态 | 配置（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/zt/earfree_i5_device_config.dart:200`） |
+| 更多设置入口 | 结构 | — | 入口 | — | — | 静态 | 配置（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/zt/earfree_i5_device_config.dart:282`） |
+
+## 接收字段
+
+本型号没有与族文档不同的接收字段处理；`0101`、`0602`、`0201`、`0603`、`0801`、`0d01`、`0401`、`0a01`、`0605`、`0c01`、`0607`、`0604`、`0e03` 已在实机初始化读取中确认可解析。字段布局、分派边界和异常处理见 [ZT 族文档](../families/zt.md#接收-tag-与处理) 与 [§6](#6-通知解析)。
+
+## 未实现与未知
+
+以下缺口的查证范围是 i5 配置类、Sender/Receiver/Handler、i5 实机记录和 OTA 研究；没有设置写入或 OTA 实机样本。
+
+- 设置写入、持久化、寻机响铃范围和 OTA 没有实机验证；本轮实机只发送初始化查询（实机验证（`rose_reverse/analysis/i5_hardware_validation.md`））。
+- `setFindDeviceBoth` 原样调用 `setFindDeviceLeft`；接收器虽能解析方向 `02`，不能证明发送 `02 01` 可启动双耳寻机（[§5.2](#52-音频多点和寻机的差异)）。
+- `0602` 降噪模式回包按 byte9 起的全部尾部精确匹配，第五字节字段性质未证明；未知尾部 App 会退回普通模式（[§6.3](#63-降噪模式尾部的精确匹配)）。
+- RX 固定前缀、byte7/8 长度、末字节求和或 CRC 未验证；不能按 TX 规则筛掉可能合法的 RX（[§6.1](#61-分派和验证边界)）。
+- `0e02` 的停止方向 `03` 未在 i5 handler 分支中处理；设备对停止回包的实际方向未知（[§6.4](#64-固件版本与寻机)）。
+- 提示音语言切换没有独立的普通控制命令，只能通过 WQ OTA 选择语言固件；完整 OTA 流程、E2 偏移单位、设备签名/拒绝条件和中断恢复未验证（[§9](#9-wq-ota-与语言固件)）。
+- `getInfoFromRawData` 的 zt 分支会把 rawData 片段格式化成地址样式，但未证明与广播中的经典地址或连接地址的对应关系；连接使用系统扫描对象地址（[族文档](../families/zt.md#全族共用)）。
+- 自定义 EQ 不在 i5 配置中；Sender 的 `setEqCustom`/`setEqCustomData` 不构成本型号能力（EQ 面板（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/zt/earfree_i5_device_config.dart:164`））。
+
+## OTA
+
+i5 使用 WQ OTA（构造 OTA 类型（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/zt/earfree_i5_device_config.dart:30`））：独立 GATT 服务 `65786365-6c70-6f69-6e74-2e636f6d0000` 和读写/通知特征 `65786365-6c70-6f69-6e74-2e636f6d0001`，与普通 `08 EE` 控制帧无关。OTA 面板开启 `hasEnglish` 和 `ota_upgrade_language_switch`（配置（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/zt/earfree_i5_device_config.dart:381`）），提示音语言切换通过选择对应语言固件再升级实现，没有普通控制通道的语言设置命令。元数据请求、下载链、E2/E5 字面算法和超时状态机见 [§9](#9-wq-ota-与语言固件)。OpenRose 不实现 OTA；本节只作记录。
+
+## 附录：详细证据（保留）
+
+### 1. 范围、证据与能力
 
 本说明依据 **RoseLink 3.8.0（versionCode 5310）Android APK 的 ARM64 Flutter AOT 静态代码**恢复。常规控制已整理到发现、GATT、发送帧、参数、通知解析和状态同步层，可据此编写第三方控制客户端。2026-10-14 已验证匿名 OTA 元数据请求、更新包资源 HEAD 与前 64 字节 Range 响应，见 [OTA 更新包链接](../ota-package-links.md)。2026-10-18 已在 Linux 上验证单副 i5 的 BLE 连接和 13 项初始化读取，见 实机验证记录（`rose_reverse/analysis/i5_hardware_validation.md`）。**设置命令和 OTA 尚未实机验证，也未下载完整固件**；已恢复 App 的打包和状态机，但 E2 偏移单位、设备拒绝条件及中断恢复尚待实测，不能视为已验证的刷机方案。
 
@@ -33,9 +144,9 @@
 
 型号证据：构造与能力配置（0x68d8ec）（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/zt/earfree_i5_device_config.dart:10`）、名称、类型、SPP 配置（0x8262a0）（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/zt/earfree_i5_device_config.dart:737`）。
 
-## 2. 设备发现与连接
+### 2. 设备发现与连接
 
-### 2.1 广播识别
+#### 2.1 广播识别
 
 App 使用 BLE 广播的 `manufacturerData`，不是按可修改的设备名识别。其规范化算法如下，结果转小写；将前 12 个 hex 字符与设备表匹配：
 
@@ -50,7 +161,7 @@ is_i5 = raw.hex().startswith("525300010001")
 
 发现证据：manufacturerData 规范化（0xa0daa8）（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/scanner/r_ble_scanner.dart:3737`）、identifyDevice 前缀匹配（0x90a2ac）（`rose_reverse/analysis/blutter/asm/roselink/constant/device_config.dart:191`）。
 
-### 2.2 GATT UUID 与写入属性
+#### 2.2 GATT UUID 与写入属性
 
 | 通道 | 完整 UUID | 用途 |
 |---|---|---|
@@ -66,7 +177,7 @@ App 检查写特征 `writeWithoutResponse` 属性；支持时使用无响应写�
 
 证据：normalBleServiceConfig（0x74990c）（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/base_device_config.dart:993`）、Guid.str128（0xa257ec）（`rose_reverse/analysis/blutter/asm/flutter_blue_plus_platform_interface/src/guid.dart:322`）、属性决定写入方式（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/connector/ble_connector.dart:5921`）、writeWithoutResponse 字段（`rose_reverse/analysis/blutter/asm/flutter_blue_plus/flutter_blue_plus.dart:12072`）、MTU 请求值 512（`rose_reverse/analysis/blutter/asm/flutter_blue_plus/flutter_blue_plus.dart:11300`）。
 
-### 2.3 连接流程
+#### 2.3 连接流程
 
 1. 让耳机保持唤醒，扫描并匹配广播；用户指定系统设备标识时，仍须在连接后核对服务与特征。
 2. 连接 BLE，发现服务，取得本服务内的 `7777`、`8888` 特征。
@@ -81,7 +192,7 @@ App 检查写特征 `writeWithoutResponse` 属性；支持时使用无响应写�
 
 连接/通知证据：订阅通知（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/connector/ble_connector.dart:8709`）、通知字节转 hex 后送 Receiver（0xe55164）（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/connector/ble_connector.dart:8997`）。队列证据与实现选择详见 发送队列笔记（`rose_reverse/analysis/i5_queue_protocol.md`）。
 
-## 3. 常规发送帧
+### 3. 常规发送帧
 
 本文所有字节偏移从 **0** 开始，区间为左闭右开；hex 以两个字符表示一个字节。`group/op` 是按报文位置命名，未确认厂商字段名称。
 
@@ -106,7 +217,7 @@ packet = body + bytes([sum(body) & 0xff])
 
 证据：transform（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart:2926`）、CommandUtil.checkSum（0x795b24）（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/command_util.dart:189`）；固定帧逐字节提取见 原始命令常量（`rose_reverse/analysis/i5_fixed_sender_commands.json`）。
 
-## 4. 初始化和读取命令
+### 4. 初始化和读取命令
 
 按照下表顺序发送。电量随 `getInfo` 返回，无须套用 HeadFeel 的 `getBattery=0103`。
 
@@ -128,7 +239,7 @@ packet = body + bytes([sum(body) & 0xff])
 
 `getConnectMul` 在 i5 的父类中调用 `getAudioLdac`，仍发送 `08 01`，不是 HeadFeel 的独立 `08 02` 查询。初始化顺序证据：sendInitCommands（0x8e25cc）（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/zt/earfree_i5_device_config.dart:788`）。
 
-## 5. 设置命令与参数
+### 5. 设置命令与参数
 
 以下表格给出 frame 函数中的 group/op 和 payload；长度、校验按第 3 节生成。设置返回在同一 `8888` 通知通道；已证实的状态分派使用读取操作码，例如 `0602`，**不要自动把收到的 op 清除 `0x80` 后当成已确认状态**。
 
@@ -147,7 +258,7 @@ packet = body + bytes([sum(body) & 0xff])
 | 降噪轮换列表 | `06 85` | `[普通][通透][抗风][ANC]`，每项 `00/01` | 14 | `getAncList` | setAncLine（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart:10`） |
 | 寻机 | `0E 82` | 左/原 App 双耳 `00 01`；右 `01 01`；全部停止 `03 00` | 12 | `0e02` 通知，无独立查询 | 双耳别名（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart:120`）、左耳（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart:208`）、i5 停止（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart:4349`） |
 
-### 5.1 触摸绑定
+#### 5.1 触摸绑定
 
 `side=00` 左、`01` 右；`gesture=00` 单击、`01` 双击、`02` 三击、`03` 长按。
 
@@ -164,7 +275,7 @@ packet = body + bytes([sum(body) & 0xff])
 
 注意：这是**设置触摸动作的绑定**，不是让客户端立即播放/调音量的命令。i5 的动作列表证据：i5 专用列表（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/device_type_config/touch_info.dart:60`）；具体数值来自 IntValueModel 对象（`rose_reverse/analysis/blutter/objs.txt:1027`）。
 
-### 5.2 音频、多点和寻机的差异
+#### 5.2 音频、多点和寻机的差异
 
 音频与多点耦合由 i5 UI 配置明确规定：`useAudioModeNotMulDeviceMode=true`，多点对应音频值 `0`，非多点对应 `1`。`setAudioAacSbc` 调用父类 `setConnectMulOn`；父类 `setConnectMulOff` 直接调用 AOT 中标作 `Zt231Sender.setAudioLdac` 的共享函数，生成 `01`。这里的类名是去重后的静态标签，不代表该命令只适用 HeadFeel。没有单独解析 `RCommander.setAudioLdac` 的 GDT 项，本说明使用已确认的继承调用路径和具体帧，不把它说成动态运行验证。
 
@@ -172,7 +283,7 @@ packet = body + bytes([sum(body) & 0xff])
 
 `setFindDeviceBoth` 原样调用 `setFindDeviceLeft`。接收器虽能解析方向 `02` 的双耳状态，**这不能证明发送 `02 01` 可启动双耳寻机**。参考代码复现原 App 的别名，不虚构新的双耳启动命令。i5 停止命令的方向值是 `03`；接收器处理的方向值为 `00/01/02`，不能假定停止回包也一定是 `03 00`。
 
-### 5.3 可直接用于实现检查的 TX 示例
+#### 5.3 可直接用于实现检查的 TX 示例
 
 ```text
 # ANC
@@ -189,9 +300,9 @@ packet = body + bytes([sum(body) & 0xff])
 08 EE 00 00 00 0E 82 0C 00 03 00 95
 ```
 
-## 6. 通知解析
+### 6. 通知解析
 
-### 6.1 分派和验证边界
+#### 6.1 分派和验证边界
 
 接收器将一帧转为无空格 hex；使用 `hex[10:14]`，即 **byte5/6**，作命令键。普通 payload 从 byte9 开始。**已恢复的 RX 是字段偏移解析，不是已证明的完整帧校验器**：该路径未验证 RX 固定前缀、byte7/8 长度、末字节求和或 CRC。不要让 TX 构帧规则筛掉可能合法的 RX，也不要将这些未知字段当成序号或 ACK。
 
@@ -218,7 +329,7 @@ packet = body + bytes([sum(body) & 0xff])
 
 证据：process 分派（0xe51498）（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/receiver/zt_receiver.dart:10`）、触摸8槽读取（0xe52df8）（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/receiver/zt_receiver.dart:2418`）、8项映射到左右4槽（0x92c0a4）（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/receive_handler/r_receiver_tool.dart:434`）。
 
-### 6.2 电量
+#### 6.2 电量
 
 `0101` 通知至少需要 byte15：
 
@@ -235,7 +346,7 @@ packet = body + bytes([sum(body) & 0xff])
 
 证据：电量偏移（0xe53748）（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/receiver/zt_receiver.dart:3326`）、i5电量显示逻辑（0xe41678）（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/receive_handler/zt/earfree_i5_receive_handler.dart:698`）、chargingState 充电图标（`rose_reverse/analysis/blutter/asm/roselink/widgets/device_widgets/device_display.dart:2615`）。
 
-### 6.3 降噪模式尾部的精确匹配
+#### 6.3 降噪模式尾部的精确匹配
 
 原 App 匹配 **byte9 开始的全部剩余数据**，包含下表第五个字节。第五字节的字段性质尚未证明，不称为校验字节：
 
@@ -251,7 +362,7 @@ packet = body + bytes([sum(body) & 0xff])
 
 证据：_handleANCData（0xe52914）（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/receiver/zt_receiver.dart:1939`）。
 
-### 6.4 固件版本与寻机
+#### 6.4 固件版本与寻机
 
 版本例：byte9..11 为 `9A 0B 0C` 时，得到整数 `[10,11,12]`，原 App 版本文本是 **`101112`**，不是 `ABC`、`10.11.12` 或完整三字节整数。应同时保留这三个值和原始报文。证据：_handleFirmwareVersion（0xe533cc）（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/receiver/zt_receiver.dart:2987`）。
 
@@ -270,7 +381,7 @@ packet = body + bytes([sum(body) & 0xff])
 
 等级 `0/1/2→1/3/5` 的共享转换证据：通透档位转换（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/receive_handler/zt/headfree_receive_handler.dart:265`）、ANC档位转换（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/receive_handler/zt/headfree_receive_handler.dart:414`）。这些是 AOT 去重后输出的函数标签；i5 的 Sender 参数映射与共享 Receiver 单字节分支也独立支持相同线值。降噪轮换顺序还由 i5 的4个模型对象（`rose_reverse/analysis/blutter/objs.txt:1849`） 和 UI发送顺序（`rose_reverse/analysis/blutter/asm/roselink/modules/device_control/widget/device_anc_line_panel_item.dart:798`） 交叉核对。
 
-## 7. 客户端状态同步与异常处理
+### 7. 客户端状态同步与异常处理
 
 - `write_complete` 只表示底层 write 返回。`state_confirmed` 应来自可解析通知；要确认一次设置，串行发设置并随后读取对应状态，比较字段值。
 - 本协议未确认业务事务 id。一个字段有多个未完成设置时不要用“下一个回包”机械匹配先前请求；缓存最新状态、记录发送时间并串行处理同字段确认更稳妥。这是客户端设计建议。
@@ -278,7 +389,7 @@ packet = body + bytes([sum(body) & 0xff])
 - 不自动将未知枚举降级为关；不将多个通知任意连接后按 TX 长度拆分。保留原始报文，待确认帧边界和兼容版本。
 - 多点开关更新时同步音频状态；LDAC 切换时同步多点状态。音频编码器实际连接与 A2DP 状态由系统负责，BLE 回包只反映耳机设置。
 
-## 8. 参考实现、验证与交付文件
+### 8. 参考实现、验证与交付文件
 
 - [机器可读协议目录](earfeel-i5-protocol.json)：UUID、初始化顺序、32条固定命令变体、13类设置参数、14类核心通知布局、源文件/行号/地址。
 - 无依赖 Python 编解码（`rose_reverse/examples/i5_protocol.py`）：构帧、校验、广播识别、参数检查、通知解析及未知值保留。
@@ -302,11 +413,11 @@ Bleak 示例明确选择 `response=`，使用扫描得到的设备对象连接�
 
 **验证范围**：离线测试中的 RX 缓冲区是刻意构造的偏移测试数据，测试通过本身不等于硬件通过。2026-10-18 另有 单副 i5 实机初始化读取记录（`rose_reverse/analysis/i5_live_read_2026-10-18.jsonl`），验证范围见 实机验证记录（`rose_reverse/analysis/i5_hardware_validation.md`）。设置后的回包与持久化行为、寻机“双耳”入口实际响铃范围、完整 RX 传输语义及其他固件仍待核实，不补造报文。
 
-## 9. WQ OTA 与语言固件
+### 9. WQ OTA 与语言固件
 
 以下补充来自同一 APK；可复现 App 静态发送行为。参考 BLE 客户端未暴露 OTA 写入入口。
 
-### 9.1 固件来源及语言切换
+#### 9.1 固件来源及语言切换
 
 `WqOta.otaC0E1 @0xaca954` 先调用 `DeviceOtaController.compareOtaDataWithEncodeData`，通过后读取 `getOtaContent`，非空才发送启动指令。这个 APK 的 `compareOtaDataWithEncodeData @0xac05a0` **直接返回 true**，没有验证 `encodeData` 的逻辑，不能把这个函数名当成完整性验证证据。
 
@@ -337,11 +448,11 @@ URL 来自服务端响应 **`data.otaUrl`**；`ApiClient._processResponse` 先�
 - attachSession → bindSession（`rose_reverse/analysis/blutter/asm/roselink/modules/device_ota/controller/ota_manager.dart:281`）
 - bindSession 保存设备名（`rose_reverse/analysis/blutter/asm/roselink/modules/device_ota/controller/ota_controller.dart:3737`）
 
-`clientVersion` 是 App 的 buildNumber 转字符串，当前 APK 应为 `"5310"`，而不是 `"3.8.0"`：ApiDeviceService 读取 `SystemService.field_1f.value.toString`（:590（`rose_reverse/analysis/blutter/asm/roselink/core/api/service/api_device_service.dart:590`）），该字段在 `initVersion` 中由 `PackageInfo.field_13` 解析（`rose_reverse/analysis/blutter/asm/roselink/core/services/system/system_service.dart:605`）；`PackageInfo.toString` 显示 field_13 就是 buildNumber（`rose_reverse/analysis/blutter/asm/package_info_plus/package_info_plus.dart:345`）。
+`clientVersion` 是 App 的 buildNumber 转字符串，当前 APK 应为 `"5310"`，而不是 `"3.8.0"`：ApiDeviceService 读取 `SystemService.field_1f.value.toString`（:590（`rose_reverse/analysis/blutter/asm/roselink/core/api/service/api_device_service.dart:590`）），该字段在 `initVersion` 中由 `PackageInfo.field_13` 解析（system_service.dart:605（`rose_reverse/analysis/blutter/asm/roselink/core/services/system/system_service.dart:605`））；`PackageInfo.toString` 显示 field_13 就是 buildNumber（package_info_plus.dart:345（`rose_reverse/analysis/blutter/asm/package_info_plus/package_info_plus.dart:345`））。
 
 APK 的 API/静态资源默认 base URL 是 `https://api-internal.rosetechnic.com`，见 ApiClient（`rose_reverse/analysis/blutter/asm/roselink/core/api/api_client.dart:1412`） 与 StaticResourceClient（`rose_reverse/analysis/blutter/asm/roselink/core/api/static_resource_client.dart:592`）。WQ 页两个语言选项调用元数据请求时明确传 `"en"`、`"zh"`，见 语言回调（`rose_reverse/analysis/blutter/asm/roselink/modules/device_ota/view/wq_ota_page.dart:1203`）、:1324（`rose_reverse/analysis/blutter/asm/roselink/modules/device_ota/view/wq_ota_page.dart:1324`）。2026-10-14 上述匿名 API 返回成功；中文、英文资源的 HEAD 均为 200，`bytes=0-63` Range 均为 206，采样 64 字节全部为 ASCII hex。结果仅验证元数据与资源可访问性、文本前缀，不是完整固件或刷机验证。链接带时效签名，应在需要时重新请求元数据；当前链接、时效和原始响应见 [OTA 更新包链接](../ota-package-links.md)、中文响应（`rose_reverse/analysis/ota_links/i5-zh-client5310.json`）、英文响应（`rose_reverse/analysis/ota_links/i5-en-client5310.json`）。第三方仍须使用已知兼容的固件；不能据此确认任意固件可用。
 
-### 9.2 通道与状态机
+#### 9.2 通道与状态机
 
 OTA 使用独立 GATT 服务 `65786365-6c70-6f69-6e74-2e636f6d0000` 和读写/通知特征 `65786365-6c70-6f69-6e74-2e636f6d0001`。与普通 `08 EE` 控制帧无关；不能给 OTA 数据追加普通控制通道求和校验。
 
@@ -375,7 +486,7 @@ OTA 使用独立 GATT 服务 `65786365-6c70-6f69-6e74-2e636f6d0000` 和读写/�
 - E8 固定帧（`rose_reverse/analysis/blutter/asm/roselink/modules/device_ota/plan/wq.dart:2726`），`@0xe2bf80`
 - E6/E3 固定帧（`rose_reverse/analysis/blutter/asm/roselink/modules/device_ota/plan/wq.dart:3681`），`@0xe2c9b4 / 0xe2ca20`
 
-### 9.3 E2 与 E5 的字面算法
+#### 9.3 E2 与 E5 的字面算法
 
 记 `F` 为固件 hex 文本；所有数值转 hex 都左侧补 `0`，顺序按字符串书写，是大端字段。
 
@@ -428,14 +539,14 @@ CRC 只覆盖 `block`，不覆盖 E5 包头、序号、偏移。标准 CRC-32/IS
 - CRC 初始值/最终取反（`rose_reverse/analysis/blutter/asm/roselink/lib/crc.dart:163`），`@0xac50fc`
 - CRC 多项式（`rose_reverse/analysis/blutter/asm/roselink/lib/crc.dart:364`），`@0xac54b4`
 
-### 9.4 超时、重复回复及缺口
+#### 9.4 超时、重复回复及缺口
 
-`increaseTimeOutCount @0xacab38` 使用 1 秒 Future.delayed 周期；`Duration@db0781` 的微秒值 `0xf4240=1000000`，见 `rose_reverse/analysis/blutter/objs.txt:49060`。启动阶段立即调用一次计数函数，因此首次计数从 0→1 是立即发生，而后按秒增加；**应称为每秒计数，不应武断写成精确“3 秒首次重试”**。有效通知先把计数归零；计数到 3 时仅重发保存的最后一次写入数据（E5 分片时保存的是最后一片），随后清空保存的数据；计数超过 10 时停止并报错 03。这个策略不能证明设备能从任意位置继续升级。
+`increaseTimeOutCount @0xacab38` 使用 1 秒 Future.delayed 周期；`Duration@db0781` 的微秒值 `0xf4240=1000000`，见 objs.txt（`rose_reverse/analysis/blutter/objs.txt:49060`）。启动阶段立即调用一次计数函数，因此首次计数从 0→1 是立即发生，而后按秒增加；**应称为每秒计数，不应武断写成精确“3 秒首次重试”**。有效通知先把计数归零；计数到 3 时仅重发保存的最后一次写入数据（E5 分片时保存的是最后一片），随后清空保存的数据；计数超过 10 时停止并报错 03。这个策略不能证明设备能从任意位置继续升级。
 
-C002 初始化查询：发出后 500 ms 检查初始化是否完成，未完成增加 retryCount；retryCount≤6 时等待 **2 秒** 后 resetOtaServer，再重发查询，超过 6 停止。2 秒对象 `Duration@db0831` 的微秒值 `0x1e8480=2000000`，见 `rose_reverse/analysis/blutter/objs.txt:49104`；与升级过程的 1 秒计数循环不同。
+C002 初始化查询：发出后 500 ms 检查初始化是否完成，未完成增加 retryCount；retryCount≤6 时等待 **2 秒** 后 resetOtaServer，再重发查询，超过 6 停止。2 秒对象 `Duration@db0831` 的微秒值 `0x1e8480=2000000`，见 objs.txt（`rose_reverse/analysis/blutter/objs.txt:49104`）；与升级过程的 1 秒计数循环不同。
 
 超时及块发送还依赖 `field_2b` 页面存活/允许继续标志；WQ 页进入时置 true、退出时置 false，见 进入页面（`rose_reverse/analysis/blutter/asm/roselink/modules/device_ota/view/wq_ota_page.dart:1879`）、退出页面（`rose_reverse/analysis/blutter/asm/roselink/modules/device_ota/view/wq_ota_page.dart:2076`）。`field_3f` 是升级进行标志，E1 发出后置 true。计数循环只在两标志都 true 时继续，避免把构造器初始 false 误读成设备取消回复。
 
-`process` 会忽略**内容相同且距上次不超过 20 ms** 的通知；其余通知（在命令有效性验证之前）都会把超时计数清零。E6/E8 非成功状态每 500 ms 再查询，对象 `Duration@db0791` 的微秒值 `0x7a120=500000`，见 `rose_reverse/analysis/blutter/objs.txt:49064`。
+`process` 会忽略**内容相同且距上次不超过 20 ms** 的通知；其余通知（在命令有效性验证之前）都会把超时计数清零。E6/E8 非成功状态每 500 ms 再查询，对象 `Duration@db0791` 的微秒值 `0x7a120=500000`，见 objs.txt（`rose_reverse/analysis/blutter/objs.txt:49064`）。
 
 仍需实机/完整固件样本核实：完整 OTA 通知原始前缀、跨通知重组与设备 MTU，E2 偏移单位与完整固件文本结构，查询返回各状态位（含左右耳/双耳升级指示）语义，固件与硬件版本的兼容条件，设备端签名验证/拒绝条件，升级中断与重新连接恢复。普通控制客户端可以独立实现；宣称“OTA 已实机验证”或“可刷任意固件”超出当前证据。

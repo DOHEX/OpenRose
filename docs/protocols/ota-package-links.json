@@ -57,7 +57,7 @@
         "sample_ascii": "076e7033100100088ce5000000002390fcfd4365cdab0100000071120000ffff"
       },
       "full_package_downloaded": false,
-      "evidence_file": "/home/dohex/Projects/rose_reverse/analysis/ota_links/i5-zh-client5310.json"
+      "evidence_file": "rose_reverse/analysis/ota_links/i5-zh-client5310.json"
     },
     {
       "model": "i5",
@@ -109,7 +109,7 @@
         "sample_ascii": "076e7033100100088280000000002ef087244365cdab0100000071120000ffff"
       },
       "full_package_downloaded": false,
-      "evidence_file": "/home/dohex/Projects/rose_reverse/analysis/ota_links/i5-en-client5310.json"
+      "evidence_file": "rose_reverse/analysis/ota_links/i5-en-client5310.json"
     },
     {
       "model": "i7",
@@ -161,7 +161,7 @@
         "sample_ascii": "ffffffff00011a315d00000004ffffffffffffffff007fe87c300a00cbbb6304"
       },
       "full_package_downloaded": false,
-      "evidence_file": "/home/dohex/Projects/rose_reverse/analysis/ota_links/i7-zh-client5310.json"
+      "evidence_file": "rose_reverse/analysis/ota_links/i7-zh-client5310.json"
     },
     {
       "model": "i7",
@@ -213,7 +213,7 @@
         "sample_ascii": "ffffffff00011a315d00000004ffffffffffffffff007fe87c300a00cbbb6304"
       },
       "full_package_downloaded": false,
-      "evidence_file": "/home/dohex/Projects/rose_reverse/analysis/ota_links/i7-en-client5310.json"
+      "evidence_file": "rose_reverse/analysis/ota_links/i7-en-client5310.json"
     }
   ],
   "app_compatibility_probes": [
@@ -230,7 +230,7 @@
       "version_describe": "1.优化充电问题",
       "file_id": "2088197917412392961",
       "download_url_present": true,
-      "evidence_file": "/home/dohex/Projects/rose_reverse/analysis/ota_links/i7-zh-client4150.json"
+      "evidence_file": "rose_reverse/analysis/ota_links/i7-zh-client4150.json"
     },
     {
       "client_version": "4149",
@@ -245,7 +245,7 @@
       "version_describe": "Client Version is too low",
       "file_id": null,
       "download_url_present": false,
-      "evidence_file": "/home/dohex/Projects/rose_reverse/analysis/ota_links/i7-zh-client4149.json"
+      "evidence_file": "rose_reverse/analysis/ota_links/i7-zh-client4149.json"
     }
   ]
 }

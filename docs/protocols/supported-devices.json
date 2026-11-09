@@ -202,7 +202,7 @@
       "capability_details": {
         "key": "ceramics_mk2",
         "name": "CERAMICS-MK2",
-        "path": "/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/ceramics_mk2_device_config.dart",
+        "path": "rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/ceramics_mk2_device_config.dart",
         "inherits": "BaseDeviceConfig",
         "constructor_address": "0x690f1c",
         "capabilities": {
@@ -714,7 +714,7 @@
       "capability_details": {
         "key": "ceramics_mk2_8912f",
         "name": "CERAMICS-MK2 [8912F]",
-        "path": "/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/ceramics_mk2_8912f_device_config.dart",
+        "path": "rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/ceramics_mk2_8912f_device_config.dart",
         "inherits": "BaseDeviceConfig",
         "constructor_address": "0x690704",
         "capabilities": {
@@ -1226,7 +1226,7 @@
       "capability_details": {
         "key": "ceramics_mk2_5736",
         "name": "CERAMICS-MK2 [5736]",
-        "path": "/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/ceramics_mk2_5736_device_config.dart",
+        "path": "rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/ceramics_mk2_5736_device_config.dart",
         "inherits": "BaseDeviceConfig",
         "constructor_address": "0x68ff90",
         "capabilities": {
@@ -1699,7 +1699,7 @@
       "capability_details": {
         "key": "ceramics_u",
         "name": "CERAMICS-U",
-        "path": "/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/ceramics_u_device_config.dart",
+        "path": "rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/ceramics_u_device_config.dart",
         "inherits": "BaseDeviceConfig",
         "constructor_address": "0x68f758",
         "capabilities": {
@@ -2247,7 +2247,7 @@
       "capability_details": {
         "key": "ceramics_u_hsc_2710",
         "name": "CERAMICS-U [HSC-2710]",
-        "path": "/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/ceramics_u_hsc_2710_device_config.dart",
+        "path": "rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/ceramics_u_hsc_2710_device_config.dart",
         "inherits": "BaseDeviceConfig",
         "constructor_address": "0x68ef98",
         "capabilities": {
@@ -3353,7 +3353,7 @@
       "capability_details": {
         "key": "openfeel_mk2",
         "name": "OpenFeel MK2",
-        "path": "/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/openfeel_mk2_device_config.dart",
+        "path": "rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/openfeel_mk2_device_config.dart",
         "inherits": "BaseDeviceConfig",
         "constructor_address": "0x688ad4",
         "capabilities": {
@@ -3773,7 +3773,7 @@
       "capability_details": {
         "key": "speakfree",
         "name": "SpeakFeel [speakfree]",
-        "path": "/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/speakfree_device_config.dart",
+        "path": "rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/speakfree_device_config.dart",
         "inherits": "BaseDeviceConfig",
         "constructor_address": "0x688550",
         "capabilities": {
@@ -4068,7 +4068,7 @@
       "capability_details": {
         "key": "magician",
         "name": "Magician",
-        "path": "/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/magician_device_config.dart",
+        "path": "rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/magician_device_config.dart",
         "inherits": "BaseDeviceConfig",
         "constructor_address": "0x688070",
         "capabilities": {
@@ -4316,7 +4316,7 @@
       "capability_details": {
         "key": "furina",
         "name": "FURINA",
-        "path": "/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/furina_device_config.dart",
+        "path": "rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/furina_device_config.dart",
         "inherits": "BaseDeviceConfig",
         "constructor_address": "0x68779c",
         "capabilities": {
@@ -4860,7 +4860,7 @@
       "capability_details": {
         "key": "zircon",
         "name": "Zircon",
-        "path": "/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/zircon_device_config.dart",
+        "path": "rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/zircon_device_config.dart",
         "inherits": "BaseDeviceConfig",
         "constructor_address": "0x686f74",
         "capabilities": {
@@ -5407,7 +5407,7 @@
       "capability_details": {
         "key": "hyacinth",
         "name": "Hyacinth",
-        "path": "/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/hyacinth_device_config.dart",
+        "path": "rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/hyacinth_device_config.dart",
         "inherits": "BaseDeviceConfig",
         "constructor_address": "0x6869d8",
         "capabilities": {
@@ -5811,7 +5811,7 @@
       "capability_details": {
         "key": "jasmine",
         "name": "Jasmine",
-        "path": "/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/jasmine_device_config.dart",
+        "path": "rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/jasmine_device_config.dart",
         "inherits": "BaseDeviceConfig",
         "constructor_address": "0x686464",
         "capabilities": {
@@ -6154,7 +6154,7 @@
       "capability_details": {
         "key": "astro_x",
         "name": "Astro X",
-        "path": "/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/astro_x_device_config.dart",
+        "path": "rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/astro_x_device_config.dart",
         "inherits": "BaseDeviceConfig",
         "constructor_address": "0x6860cc",
         "capabilities": {
@@ -6599,7 +6599,7 @@
       "capability_details": {
         "key": "opal",
         "name": "Opal",
-        "path": "/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/opal_device_config.dart",
+        "path": "rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/opal_device_config.dart",
         "inherits": "BaseDeviceConfig",
         "constructor_address": "0x685ae0",
         "capabilities": {
@@ -7061,7 +7061,7 @@
       "capability_details": {
         "key": "mirror",
         "name": "Mirror",
-        "path": "/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/mirror_device_config.dart",
+        "path": "rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/mirror_device_config.dart",
         "inherits": "BaseDeviceConfig",
         "constructor_address": "0x685550",
         "capabilities": {
@@ -7439,7 +7439,7 @@
       "capability_details": {
         "key": "ky01",
         "name": "KY01",
-        "path": "/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/ky01_device_config.dart",
+        "path": "rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/ky01_device_config.dart",
         "inherits": "BaseDeviceConfig",
         "constructor_address": "0x684f70",
         "capabilities": {
@@ -7837,7 +7837,7 @@
       "capability_details": {
         "key": "coral",
         "name": "Coral",
-        "path": "/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/coral_device_config.dart",
+        "path": "rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/coral_device_config.dart",
         "inherits": "BaseDeviceConfig",
         "constructor_address": "0x6848b8",
         "capabilities": {
@@ -8256,7 +8256,7 @@
       "capability_details": {
         "key": "budsfeel_mk2",
         "name": "BudsFeel MK2",
-        "path": "/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/budsfeel_mk2_device_config.dart",
+        "path": "rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/budsfeel_mk2_device_config.dart",
         "inherits": "BaseDeviceConfig",
         "constructor_address": "0x6846a8",
         "capabilities": {
@@ -8745,7 +8745,7 @@
       "capability_details": {
         "key": "swift2",
         "name": "SWIFT 2",
-        "path": "/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/swift2_device_config.dart",
+        "path": "rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/swift2_device_config.dart",
         "inherits": "BaseDeviceConfig",
         "constructor_address": "0x683fc8",
         "capabilities": {
@@ -9070,7 +9070,7 @@
       "capability_details": {
         "key": "luminous_patamon",
         "name": "Luminous Patamon",
-        "path": "/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/luminous_patamon_device_config.dart",
+        "path": "rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/luminous_patamon_device_config.dart",
         "inherits": "BaseDeviceConfig",
         "constructor_address": "0x683aec",
         "capabilities": {
@@ -9399,7 +9399,7 @@
       "capability_details": {
         "key": "luminous_tailmon",
         "name": "Luminous Tailmon",
-        "path": "/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/luminous_tailmon_device_config.dart",
+        "path": "rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/luminous_tailmon_device_config.dart",
         "inherits": "BaseDeviceConfig",
         "constructor_address": "0x683610",
         "capabilities": {
@@ -9728,7 +9728,7 @@
       "capability_details": {
         "key": "luminous_gabumon",
         "name": "Luminous Gabumon",
-        "path": "/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/luminous_gabumon_device_config.dart",
+        "path": "rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/luminous_gabumon_device_config.dart",
         "inherits": "BaseDeviceConfig",
         "constructor_address": "0x683134",
         "capabilities": {
@@ -10057,7 +10057,7 @@
       "capability_details": {
         "key": "luminous_agumon",
         "name": "Luminous Agumon",
-        "path": "/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/luminous_agumon_device_config.dart",
+        "path": "rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/luminous_agumon_device_config.dart",
         "inherits": "BaseDeviceConfig",
         "constructor_address": "0x682bb0",
         "capabilities": {
@@ -10388,7 +10388,7 @@
       "capability_details": {
         "key": "earfeel_i7",
         "name": "EarFeel i7",
-        "path": "/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/earfeel_i7_device_config.dart",
+        "path": "rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/earfeel_i7_device_config.dart",
         "inherits": "BaseDeviceConfig",
         "constructor_address": "0x6817ec",
         "capabilities": {
@@ -10965,7 +10965,7 @@
       "capability_details": {
         "key": "speakfeel2",
         "name": "SPEAKFEEL [speakfeel2]",
-        "path": "/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/speakfeel2_device_config.dart",
+        "path": "rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/speakfeel2_device_config.dart",
         "inherits": "BaseDeviceConfig",
         "constructor_address": "0x681170",
         "capabilities": {
@@ -11348,7 +11348,7 @@
       "capability_details": {
         "key": "openfeel_l",
         "name": "OpenFeel L",
-        "path": "/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/openfeel_l_device_config.dart",
+        "path": "rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/openfeel_l_device_config.dart",
         "inherits": "BaseDeviceConfig",
         "constructor_address": "0x680b00",
         "capabilities": {
@@ -11754,7 +11754,7 @@
       "capability_details": {
         "key": "first_angel",
         "name": "FIRST ANGEL",
-        "path": "/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/first_angel_device_config.dart",
+        "path": "rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/first_angel_device_config.dart",
         "inherits": "BaseDeviceConfig",
         "constructor_address": "0x680390",
         "capabilities": {
@@ -12119,7 +12119,7 @@
       "capability_details": {
         "key": "moka",
         "name": "MOKA",
-        "path": "/home/dohex/Projects/rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/moka_device_config.dart",
+        "path": "rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/moka_device_config.dart",
         "inherits": "BaseDeviceConfig",
         "constructor_address": "0x67d9c8",
         "capabilities": {

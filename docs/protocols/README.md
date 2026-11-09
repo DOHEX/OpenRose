@@ -19,26 +19,35 @@ RoseLink 支持的 43 个耳机配置使用四种控制协议：
 
 | 协议族 | 控制通道 | 帧格式 | 代表型号 |
 | --- | --- | --- | --- |
-| ZT | BLE | `08 EE 00 00 00 group op lengthLE16 payload sum8`，普通报文最长 14 字节 | EarFree i5、EarFree i3、HeadFeel |
+| ZT | BLE（HeadFeel 可用 SPP） | `08 EE 00 00 00 group op lengthLE16 payload sum8`，普通报文最长 14 字节 | EarFree i5、EarFree i3、HeadFeel |
 | RS Common V2 | BLE / SPP | 发送 `FF seq len body sum8 AA`；接收 `DD HH [L T V...] CS AA` | EarFeel i7、BudsFeel MK2、OpenFeel MK2、Swift 2、Jasmine、Ceramics MK2 等 28 款 |
-| F8 | BLE（部分支持 SPP） | 8 字节定长帧或专用命令帧 | Ceramics、Ceramics X、Agate、Explorer |
+| F8 | BLE（部分支持 SPP） | `HEAD CMD 01 00 LEN DATA...` | Ceramics、Ceramics X、Agate、Explorer |
 | RS Common | BLE（部分支持 SPP） | 早期 RS 通用帧 | BudsFree i、Cambrian、OpenFeel、OpenFun、SportFeel、Swift |
+
+全族共用的识别、传输、帧、初始化与接收规则，以及按型号变化的项去哪里查，见协议族文档：[ZT](families/zt.md)、[F8](families/f8.md)、[RS Common V2](families/rs-common-v2.md)。RS Common 还没有族文档。
 
 ## 型号协议文档
 
 | 型号 | 协议族 | 主要功能 | 验证情况 | 文档 |
 | --- | --- | --- | --- | --- |
 | EarFeel i5 / EarFree i5 | ZT | 4 种降噪模式，ANC / 通透各 3 档，4 个 EQ 预设，8 个触控槽位，游戏模式，检测开关，AAC / LDAC 与多点联动，WQ OTA | 真机读取已验证；设置和 OTA 未测 | [Markdown](models/earfeel-i5-protocol.md) · [JSON](models/earfeel-i5-protocol.json) |
+| EarFree i3 | ZT | 降噪、EQ、触控、游戏模式、音频与多点、隐藏搜索、WQ OTA | 静态分析，客户端未接入，未实机验证 | [Markdown](models/earfree-i3-protocol.md) |
+| HeadFeel / HeadFree | ZT | 单体电量、降噪、EQ、触控、音频与多点、BES OTA | 静态分析，客户端未接入；部分接收字段仍未知 | [Markdown](models/headfeel-protocol.md) |
 | EarFeel i7 | RS Common V2 | 6 种降噪模式（含自动 / 动态），ANC / 通透各 3 档，5 个 EQ 预设，自定义 10 段 EQ，8 个触控槽位，游戏模式，AAC / LDAC / LHDC / LC3，独立多点，增益与听力保护，BES OTA | 仅离线测试 | [Markdown](models/earfeel-i7-protocol.md) · [JSON](models/earfeel-i7-protocol.json) |
 | BudsFeel MK2 | RS Common V2 | 4 种降噪模式与触控轮换，低音增强，触控映射，游戏模式，多点，AAC / SBC / LDAC / LC3，寻机，JL OTA | 客户端接入有证据的常规控制；寻机 / OTA 未实现，实机未验证 | [Markdown](models/budsfeel-mk2-protocol.md) |
 | OpenFeel MK2 | RS Common V2 | 低音增强，自定义 10 段 EQ，触控映射（无降噪动作），游戏模式，多点，增益与听力保护，AB OTA | 客户端接入有证据的常规控制；自定义 EQ / 寻机 / OTA 未实现，实机未验证 | [Markdown](models/openfeel-mk2-protocol.md) |
 | 踏浪 Swift 2 | RS Common V2 | 骨传导，单体电量，触控映射，游戏模式，多点，提示音音量，寻机，AB OTA | 客户端接入单体电量与基础控制；按键映射 / 提示音音量 / 寻机 / OTA 未实现，实机未验证 | [Markdown](models/swift2-protocol.md) |
 | Jasmine | RS Common V2 | 左右耳电量，触控开关与映射，游戏模式，多点，提示音语言（中 / 英），寻机，无 OTA | 客户端接入有证据的常规控制；寻机 / 提示音音量未实现，实机未验证；商品“茉莉”对应未确认 | [Markdown](models/jasmine-protocol.md) |
+| AGATE / AGATE X | F8 | 左右耳电量，EQ 预设（AGATE：Rock / HIFI；AGATE X：Rock / POP），单击 / 双击 / 长按触控，游戏模式（仅 AGATE），无 OTA | 仅静态分析；客户端未接入（F8 尚无编解码） | [Markdown](models/agate-protocol.md) |
+| CERAMICS | F8 | 左右耳电量、EQ、触控、游戏模式 | 静态分析，客户端未接入，未实机验证 | [Markdown](models/ceramics-protocol.md) |
+| CERAMICS-X / X 7034 | F8 | 降噪、EQ、触控、音频与多点、WQ OTA | 静态分析，客户端未接入；两硬件分支传输配置不同 | [Markdown](models/ceramics-x-protocol.md) |
+| EXPLORER | F8 | 降噪及等级、EQ、触控、音频与多点、佩戴检测、寻机、WQ OTA | 静态分析，客户端未接入，未实机验证 | [Markdown](models/explorer-protocol.md) |
 
 ## 其他资料
 
 | 文档 | 内容 |
 | --- | --- |
+| [文档格式](FORMAT.md) | 本目录文档的结构、验证状态、出处写法和从 rose_reverse 复制的规则 |
 | [型号与能力清单](00-supported-models-and-capabilities.md) | 全部 43 个耳机配置（App 内分类为 34 个 `tws`、9 个 `head`）的识别前缀、协议族、电量、降噪、EQ、触控、音频选项、OTA 方式和固件门槛 |
 | [supported-devices.json](supported-devices.json) | 上述清单的机器可读版本 |
 | [OTA 研究](ota-package-links.md) | 官方 OTA 接口（`api-internal.rosetechnic.com`）的请求格式、鉴权方式，以及已获取的 i5 / i7 固件包地址 |
