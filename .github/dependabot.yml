@@ -28,7 +28,7 @@ updates:
         patterns:
           - com.github.hypfvieh:*
 
-  # Actions are pinned to commit SHAs; Dependabot bumps the SHA and the version comment together.
+  # Keep GitHub Actions version tags up to date.
   - package-ecosystem: github-actions
     directory: /
     schedule:

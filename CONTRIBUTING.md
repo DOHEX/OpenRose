@@ -80,7 +80,8 @@ cd OpenRose
 完整的 CI 还会构建 Android 调试 APK 并打包桌面版：
 
 ```bash
-./gradlew check offlineCheck :androidApp:assembleDebug :desktopApp:packageDistributionForCurrentOS
+./gradlew check offlineCheck :androidApp:assembleDebug
+./gradlew :desktopApp:packageDistributionForCurrentOS
 ```
 
 ## 提交规范

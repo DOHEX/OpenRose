@@ -31,7 +31,7 @@ jobs:
       tag_name: ${{ steps.release.outputs.tag_name }}
     steps:
       - id: release
-        uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        uses: googleapis/release-please-action@v5.0.0
 
   build:
     name: Build (${{ matrix.platform }})
@@ -56,7 +56,7 @@ jobs:
       # Set for a pushed release tag or a release that release-please just created; empty otherwise.
       RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || needs.release-please.outputs.tag_name }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
 
@@ -70,13 +70,13 @@ jobs:
           echo "ORG_GRADLE_PROJECT_releaseVersion=${RELEASE_TAG#v}" >> "$GITHUB_ENV"
           echo "ORG_GRADLE_PROJECT_releaseVersionCode=$GITHUB_RUN_NUMBER" >> "$GITHUB_ENV"
 
-      - uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
+      - uses: actions/setup-java@v6.2.0
         with:
           distribution: temurin
           java-version: '21.0.11+10'
 
       # Nucleus drives electron-builder to turn the jpackage image into installers.
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+      - uses: actions/setup-node@v7.1.0
         with:
           node-version: '24'
 
@@ -88,12 +88,12 @@ jobs:
           echo "platform=$(version android-compileSdk)" >> "$GITHUB_OUTPUT"
           echo "build-tools=$(version android-buildTools)" >> "$GITHUB_OUTPUT"
 
-      - uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
+      - uses: android-actions/setup-android@v4.0.4
         if: runner.os == 'Linux'
         with:
           packages: 'platform-tools platforms;android-${{ steps.android-sdk.outputs.platform }}.0 build-tools;${{ steps.android-sdk.outputs.build-tools }}'
 
-      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+      - uses: gradle/actions/setup-gradle@v6.4.1
         with:
           cache-read-only: ${{ github.ref != 'refs/heads/main' }}
 
@@ -104,13 +104,13 @@ jobs:
           sudo apt-get install --yes libgtk-3-0t64 libegl1 libgl1 libfontconfig1 rpm libarchive-tools
 
       # Tests run once, on Linux; each host packages only the formats it supports.
-      - name: Run checks and build Android and Linux packages
+      - name: Run checks and build Android package
         if: runner.os == 'Linux'
-        run: >-
-          ./gradlew --no-daemon --stacktrace
-          check offlineCheck
-          :androidApp:assembleDebug
-          :desktopApp:packageDistributionForCurrentOS
+        run: ./gradlew --no-daemon --stacktrace check offlineCheck :androidApp:assembleDebug
+
+      - name: Build Linux packages
+        if: runner.os == 'Linux'
+        run: ./gradlew --no-daemon --stacktrace :desktopApp:packageDistributionForCurrentOS
 
       - name: Build Windows installer
         if: runner.os == 'Windows'
@@ -178,7 +178,7 @@ jobs:
           ls -l dist
 
       - name: Upload application packages
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: packages-${{ matrix.platform }}
           path: dist/*
@@ -188,7 +188,7 @@ jobs:
 
       - name: Upload test and lint reports
         if: always() && runner.os == 'Linux'
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: reports-${{ matrix.platform }}
           path: |
@@ -214,7 +214,7 @@ jobs:
     env:
       RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || needs.release-please.outputs.tag_name }}
     steps:
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+      - uses: actions/download-artifact@v8.0.2
         with:
           pattern: packages-*
           path: dist
@@ -228,7 +228,7 @@ jobs:
           cat dist/SHA256SUMS
 
       # Signed SLSA provenance tying each package to this workflow run and commit; check with `gh attestation verify`.
-      - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+      - uses: actions/attest@v4.2.2
         with:
           subject-checksums: dist/SHA256SUMS
 
