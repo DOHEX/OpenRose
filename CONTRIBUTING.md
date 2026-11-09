@@ -76,7 +76,6 @@ cd OpenRose
 - detekt 不检查测试源码的行宽（`MaxLineLength`），`ReturnCount` 不计开头的守卫语句；规则见 `config/detekt/detekt.yml`。
 - Spotless 不会把 `.editorconfig` 的改动当作输入变化：修改 `.editorconfig` 后请运行 `./gradlew spotlessApply --rerun-tasks`。
 - 全仓格式化提交记录在 `.git-blame-ignore-revs` 中。GitHub 的 blame 会自动跳过它；本地运行一次 `git config blame.ignoreRevsFile .git-blame-ignore-revs` 即可同样跳过。
-- 增加或升级依赖后，运行 `./gradlew --write-verification-metadata sha256 help`，以及会解析该依赖的任务，然后检查 `gradle/verification-metadata.xml` 的差异再提交。
 
 完整的 CI 还会构建 Android 调试 APK 并打包桌面版：
 
