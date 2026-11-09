@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 960 960">
+  <!-- Keep in sync with sharedUI/src/commonMain/composeResources/drawable/app_icon.xml, the Android launcher icon and the status card picture in androidApp's SystemPresentationRenderer. Packaging uses openrose.png rendered from this file. -->
+  <path fill="#FFD9DF" d="M240,0H720Q960,0 960,240V720Q960,960 720,960H240Q0,960 0,720V240Q0,0 240,0Z"/>
+  <g transform="translate(192 192) scale(0.6)">
+    <path transform="translate(0 960)" fill="#8F003F" d="M280-120h-80q-33 0-56.5-23.5T120-200v-280q0-75 28.5-140.5t77-114q48.5-48.5 114-77T480-840q75 0 140.5 28.5t114 77q48.5 48.5 77 114T840-480v280q0 33-23.5 56.5T760-120h-80q-33 0-56.5-23.5T600-200v-160q0-33 23.5-56.5T680-440h80v-40q0-117-81.5-198.5T480-760q-117 0-198.5 81.5T200-480v40h80q33 0 56.5 23.5T360-360v160q0 33-23.5 56.5T280-120Zm0-240h-80v160h80v-160Zm400 0v160h80v-160h-80Zm-400 0h-80 80Zm400 0h80-80Z"/>
+  </g>
+</svg>

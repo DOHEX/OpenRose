@@ -30,6 +30,7 @@ import io.github.dohex.openrose.core.PlatformApplicability
 import io.github.dohex.openrose.core.PlatformState
 import io.github.dohex.openrose.core.TransportAvailability
 import io.github.dohex.openrose.transport.bluez.BluezControlTransport
+import io.github.dohex.openrose.ui.AppLogo
 import io.github.dohex.openrose.ui.Appearance
 import io.github.dohex.openrose.ui.OpenRoseApp
 import io.github.dohex.openrose.ui.PrimaryDeviceSelection
@@ -158,6 +159,7 @@ fun main(args: Array<String>) {
                 }
                 DecoratedWindow(
                     title = "OpenRose",
+                    icon = AppLogo.painter,
                     visible = windowVisible,
                     onCloseRequest = {
                         // Hiding is safe only while the tray actually shows OpenRose; otherwise end the control connection.

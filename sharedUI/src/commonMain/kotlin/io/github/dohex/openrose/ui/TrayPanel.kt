@@ -15,6 +15,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
@@ -33,8 +34,10 @@ import io.github.dohex.openrose.core.protocol.ModelProfile
 import io.github.dohex.openrose.core.transport.DeviceId
 import io.github.dohex.openrose.ui.model.OpenRoseModel
 import io.github.dohex.openrose.ui.resources.Res
+import io.github.dohex.openrose.ui.resources.app_icon
 import io.github.dohex.openrose.ui.resources.msr_headphones
 import io.github.dohex.openrose.ui.resources.msr_headset_off
+import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.vectorResource
 
 data class TrayNoiseMode(val mode: String, val label: String, val selected: Boolean, val enabled: Boolean)
@@ -253,4 +256,10 @@ private fun TrayPanelContent(
         }
         AppButton("打开 OpenRose", onOpenApp, kind = AppButtonKind.Secondary, modifier = Modifier.fillMaxWidth())
     }
+}
+
+/** The application icon shown by the window manager's taskbar and window switcher. */
+object AppLogo {
+    val painter: Painter
+        @Composable get() = painterResource(Res.drawable.app_icon)
 }

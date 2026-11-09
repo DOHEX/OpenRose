@@ -23,6 +23,7 @@
     <application
         android:name=".OpenRoseApplication"
         android:allowBackup="false"
+        android:icon="@mipmap/ic_launcher"
         android:label="OpenRose"
         android:supportsRtl="true"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Tone 90 of the rose #C2185B palette, the app icon's tile. -->
+    <color name="ic_launcher_background">#FFFFD9DF</color>
+</resources>

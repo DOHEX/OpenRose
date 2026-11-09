@@ -31,6 +31,7 @@ import dev.nucleusframework.core.runtime.LinuxDesktopEnvironment
 import dev.nucleusframework.core.runtime.Platform
 import io.github.dohex.openrose.core.DeviceSetting
 import io.github.dohex.openrose.core.protocol.FieldValue
+import io.github.dohex.openrose.ui.AppLogo
 import io.github.dohex.openrose.ui.PrimaryDeviceSelection
 import io.github.dohex.openrose.ui.TrayIcons
 import io.github.dohex.openrose.ui.TrayPanel
@@ -195,6 +196,7 @@ private fun NucleusApplicationScope.TrayPanelWindow(
         onCloseRequest = onDismiss,
         state = windowState,
         title = TRAY_PANEL_WINDOW_TITLE,
+        icon = AppLogo.painter,
         resizable = false,
         alwaysOnTop = true,
         undecorated = true,

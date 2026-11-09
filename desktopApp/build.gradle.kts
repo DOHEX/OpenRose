@@ -31,6 +31,7 @@ nucleus {
             packageVersion = providers.gradleProperty("releaseVersion").getOrElse("0.1.0")
             homepage = "https://github.com/DOHEX/OpenRose"
             linux {
+                iconFile.set(project.file("icons/openrose.png"))
                 packageName = "openrose"
                 debMaintainer = "DOHEX <53633138+DOHEX@users.noreply.github.com>"
                 // Custom lists replace electron-builder defaults; include the JVM/GTK runtime too.
@@ -38,6 +39,9 @@ nucleus {
                 debDepends = listOf("bluez", "libgtk-3-0", "libegl1", "libgl1", "libfontconfig1", "libsystemd0")
                 rpmRequires = listOf("bluez", "gtk3", "mesa-libEGL", "mesa-libGL", "fontconfig", "systemd-libs")
                 pacmanDepends = listOf("bluez", "gtk3", "libglvnd", "fontconfig", "systemd-libs")
+            }
+            windows {
+                iconFile.set(project.file("icons/openrose.png"))
             }
         }
     }
