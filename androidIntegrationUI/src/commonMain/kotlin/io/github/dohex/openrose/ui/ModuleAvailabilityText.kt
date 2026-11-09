@@ -29,7 +29,7 @@ internal fun ModuleAvailability.nextStep(): String? = when (this) {
         ModuleUnavailableCause.FRAMEWORK_MISSING -> "请确认 Xposed 框架正在运行，并已在其中启用 OpenRose 模块。"
         ModuleUnavailableCause.FRAMEWORK_OUTDATED -> "请把 Xposed 框架更新到支持 API 102 的版本。"
         ModuleUnavailableCause.HOST_NOT_FOUND -> "请确认已为 OpenRose 模块勾选系统蓝牙（com.android.bluetooth）作用域，再用右上角的重启作用域按钮让模块重新加载。"
-        ModuleUnavailableCause.AUTHORIZATION_REFUSED -> "系统蓝牙宿主拒绝了本应用，详情见“运行状态与诊断”。"
+        ModuleUnavailableCause.AUTHORIZATION_REFUSED -> "系统蓝牙宿主拒绝了本应用，详情见“诊断与记录”。"
         ModuleUnavailableCause.LINK_LOST -> "与系统蓝牙宿主的连接已断开，正在自动重试。反复出现时可用右上角的重启作用域按钮。"
         null -> null
     }

@@ -32,7 +32,7 @@ interface PlatformUi {
     fun DiagnosticsEntry(onDiagnostics: () -> Unit) {
         AppGroup {
             AppArrowRow(
-                title = "运行状态与诊断",
+                title = "诊断与记录",
                 summary = "查看本平台状态与诊断信息",
                 value = "查看",
                 icon = RoseIcon.LOG,

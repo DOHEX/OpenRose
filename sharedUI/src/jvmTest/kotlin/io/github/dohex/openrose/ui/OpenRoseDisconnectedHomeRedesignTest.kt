@@ -84,19 +84,30 @@ class OpenRoseDisconnectedHomeRedesignTest {
                 // (It is in the top-bar more menu, but not on the primary surface)
                 assertFalse(harness.hasText("断开控制连接"), "Primary dashboard should not show secondary Disconnect button")
 
-                // Navigate to 音频与设备
+                // 音频与设备 holds controls only: no disconnect button and no repeated 设备详情 entry
                 harness.clickText("音频与设备")
                 harness.render()
                 assertFalse(harness.hasText("断开控制连接"), "Audio page should not show secondary Disconnect button")
-
-                // Navigate to 设备详情
-                harness.clickText("设备详情")
+                assertFalse(harness.hasText("设备详情"), "Audio page should not repeat the 设备详情 entry")
+                harness.clickContentDescription("返回")
                 harness.render()
 
-                // In 设备详情: "断开控制连接" IS present in the ConnectionDetailsCard!
-                assertTrue(harness.hasText("断开控制连接"), "Device Details must retain 断开控制连接 button in advanced section")
+                // 诊断与记录 is read-only; reached from Status so no 设备详情 entry sits beneath it
+                harness.clickTab("状态")
+                harness.render()
+                harness.clickText("诊断与记录")
+                harness.render()
+                assertTrue(harness.hasText("当前连接"))
+                assertFalse(harness.hasText("断开控制连接"), "Diagnostics must not offer disconnect")
+                harness.clickContentDescription("返回")
+                harness.render()
+                harness.clickTab("耳机")
+                harness.render()
 
-                // Clicking disconnect invokes onDisconnect
+                // 设备详情 keeps 断开控制连接 at the bottom of the page
+                harness.clickText("设备详情")
+                harness.render()
+                assertTrue(harness.hasText("断开控制连接"), "Device Details must retain 断开控制连接")
                 harness.clickText("断开控制连接")
                 assertEquals(1, harness.disconnectCount)
             }

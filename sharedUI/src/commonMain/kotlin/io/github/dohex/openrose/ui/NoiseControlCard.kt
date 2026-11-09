@@ -335,37 +335,33 @@ internal fun SettingOperationsCard(state: ControlState) {
         ConnectionState.Disconnected -> null
     }
     AppGroup(title = "设置操作") {
-        operations.forEachIndexed { index, operation ->
+        operations.forEach { operation ->
             val profile = state.device
                 ?.takeIf { it.sessionId == operation.sessionId && operation.sessionId == sessionId }
                 ?.profile
-            if (index > 0) AppDivider()
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                AppText("请求 #${operation.id}：${operation.setting.displayName()}", role = AppTextRole.Title)
-                AppText("请求值：${operation.requestedValueText(profile)}", role = AppTextRole.Summary)
-                AppText(operation.stage.displayText())
+            val details = buildList {
+                add("请求值：${operation.requestedValueText(profile)}")
                 if (operation.setting == DeviceSetting.CUSTOM_EQ) {
-                    if (operation.totalFrames > 0) {
-                        AppText("发送进度：${operation.writtenFrames}/${operation.totalFrames} 步", role = AppTextRole.Summary)
-                    }
+                    if (operation.totalFrames > 0) add("发送进度：${operation.writtenFrames}/${operation.totalFrames} 步")
                     val modeConfirmed = DeviceField.EQ in operation.confirmedFields
                     val curveConfirmed = DeviceField.CUSTOM_EQ in operation.confirmedFields
-                    AppText(
+                    add(
                         when {
                             modeConfirmed && curveConfirmed -> "模式与曲线均已确认"
                             modeConfirmed -> "模式已确认，曲线尚未确认"
                             curveConfirmed -> "曲线已确认，模式尚未确认"
                             else -> "模式与曲线尚未确认"
                         },
-                        role = AppTextRole.Summary,
                     )
                 }
-                operation.error?.let { AppText(it.message, role = AppTextRole.Summary) }
-                if (operation.sessionId != sessionId) {
-                    AppText("已结束会话 ${operation.sessionId} 的操作记录", role = AppTextRole.Summary)
-                }
+                operation.error?.let { add(it.message) }
+                if (operation.sessionId != sessionId) add("已结束会话 ${operation.sessionId} 的操作记录")
             }
-            if (index < operations.lastIndex) Spacer(Modifier.height(8.dp))
+            AppInfoRow(
+                label = "${operation.setting.displayName()} · #${operation.id}",
+                value = operation.stage.displayText(),
+                summary = details.joinToString("\n"),
+            )
         }
     }
 }
@@ -427,12 +423,12 @@ private fun SettingOperation.requestedValueText(profile: ModelProfile?): String 
 }
 
 private fun SettingStage.displayText(): String = when (this) {
-    SettingStage.SUBMITTED -> "已提交 · 等待写入"
-    SettingStage.PARTIALLY_WRITTEN -> "部分命令已发送 · 等待剩余发送与设备确认"
-    SettingStage.WRITTEN -> "底层写入完成 · 等待设备确认"
-    SettingStage.CONFIRMED -> "设备已确认"
-    SettingStage.NOT_APPLIED -> "设备回读与请求不一致 · 已显示实际返回状态"
-    SettingStage.TIMED_OUT -> "设置超时 · 未获完整设备确认"
-    SettingStage.DISCONNECTED -> "连接已断开 · 请求未获完整确认"
-    SettingStage.FAILED -> "设置失败"
+    SettingStage.SUBMITTED -> "等待写入"
+    SettingStage.PARTIALLY_WRITTEN -> "部分已发送"
+    SettingStage.WRITTEN -> "已写入 · 待确认"
+    SettingStage.CONFIRMED -> "已确认"
+    SettingStage.NOT_APPLIED -> "回读不一致"
+    SettingStage.TIMED_OUT -> "确认超时"
+    SettingStage.DISCONNECTED -> "连接已断开"
+    SettingStage.FAILED -> "失败"
 }

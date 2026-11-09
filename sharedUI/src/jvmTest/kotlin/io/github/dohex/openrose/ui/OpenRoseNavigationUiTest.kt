@@ -60,11 +60,11 @@ class OpenRoseNavigationUiTest {
             harness.render()
             assertTrue(harness.hasText("个性化"))
             assertTrue(harness.hasText("强制使用 BLE"))
-            assertFalse(harness.hasText("运行状态与诊断"))
+            assertFalse(harness.hasText("诊断与记录"))
 
             harness.clickTab("状态")
             harness.render()
-            assertTrue(harness.hasText("运行状态与诊断"))
+            assertTrue(harness.hasText("诊断与记录"))
 
             harness.clickTab("设置")
             harness.render()
@@ -196,22 +196,22 @@ class OpenRoseNavigationUiTest {
 
             harness.clickText("设备详情")
             harness.render()
-            assertTrue(harness.hasText("当前连接"))
-            assertTrue(harness.hasText("设备状态"))
+            assertTrue(harness.hasText("型号配置"))
+            assertTrue(harness.hasText("控制传输"))
 
             harness.state.value = harness.state.value.copy(connection = ConnectionState.Disconnected)
             harness.render()
             assertTrue(harness.hasText("耳机已断开"))
-            assertFalse(harness.hasText("当前连接"))
-            assertFalse(harness.hasText("设备状态"))
+            assertFalse(harness.hasText("型号配置"))
+            assertFalse(harness.hasText("控制传输"))
             assertFalse(harness.hasText("均衡器 / 音效"))
 
             harness.clickTab("状态")
             harness.render()
-            harness.clickText("运行状态与诊断")
+            harness.clickText("诊断与记录")
             harness.render()
-            assertTrue(harness.hasText("请求 #41：降噪模式"))
-            assertTrue(harness.hasText("已结束会话 $SESSION_ID 的操作记录"))
+            assertTrue(harness.hasText("降噪模式 · #41"))
+            assertTrue(harness.hasTextLine("已结束会话 $SESSION_ID 的操作记录"))
             assertTrue(harness.settingWrites.isEmpty())
         }
     }

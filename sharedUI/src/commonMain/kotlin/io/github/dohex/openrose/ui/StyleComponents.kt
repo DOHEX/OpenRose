@@ -358,20 +358,44 @@ fun AppArrowRow(title: String, summary: String? = null, value: String? = null, i
     }
 }
 
+/** Short values sit at the row end in both styles, coloured or not; long or multi-line values go under the title. */
 @Composable
-fun AppInfoRow(label: String, value: String, valueColor: Color? = null) {
+fun AppInfoRow(label: String, value: String, valueColor: Color? = null, summary: String? = null) {
+    val trailing = value.length <= 32 && '\n' !in value
     when (LocalInterfaceStyle.current) {
-        InterfaceStyle.MIUIX -> if (valueColor != null) {
-            BasicComponent(title = label, bottomAction = { AppText(value, role = AppTextRole.Summary, color = valueColor) })
-        } else if (value.length > 32 || '\n' in value) {
-            BasicComponent(title = label, summary = value)
-        } else {
-            BasicComponent(title = label, endActions = { AppText(value, role = AppTextRole.Summary) })
+        InterfaceStyle.MIUIX -> when {
+            trailing -> BasicComponent(
+                title = label,
+                summary = summary,
+                endActions = { AppText(value, role = AppTextRole.Summary, color = valueColor) },
+            )
+
+            valueColor != null -> BasicComponent(
+                title = label,
+                summary = summary,
+                bottomAction = { AppText(value, role = AppTextRole.Summary, color = valueColor) },
+            )
+
+            else -> BasicComponent(title = label, summary = listOfNotNull(value, summary).joinToString("\n"))
         }
 
         InterfaceStyle.MATERIAL3 -> ListItem(
             headlineContent = { Text(label) },
-            supportingContent = { Text(value, color = valueColor ?: Color.Unspecified) },
+            supportingContent = if (trailing) {
+                summary?.let { { Text(it) } }
+            } else {
+                {
+                    Column {
+                        Text(value, color = valueColor ?: Color.Unspecified)
+                        summary?.let { Text(it) }
+                    }
+                }
+            },
+            trailingContent = if (trailing) {
+                { Text(value, color = valueColor ?: Color.Unspecified) }
+            } else {
+                null
+            },
             colors = rowColors(),
         )
     }

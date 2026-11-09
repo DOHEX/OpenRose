@@ -23,14 +23,14 @@ class MainTabsPagerUiTest {
                 // Navigate to Status tab
                 harness.clickTab("状态")
                 harness.render()
-                assertTrue(harness.hasText("运行状态与诊断"), "Status active in $style")
+                assertTrue(harness.hasText("诊断与记录"), "Status active in $style")
                 assertFalse(harness.hasText("均衡器"), "Headphones content quarantined in $style")
 
                 // Navigate to Settings tab
                 harness.clickTab("设置")
                 harness.render()
                 assertTrue(harness.hasText("个性化"), "Settings tab active in $style")
-                assertFalse(harness.hasText("运行状态与诊断"), "System content quarantined in $style")
+                assertFalse(harness.hasText("诊断与记录"), "System content quarantined in $style")
 
                 // Back key returns to Headphones home
                 harness.sendKey(Key.Escape)
@@ -67,9 +67,9 @@ class MainTabsPagerUiTest {
                         harness.render()
                         harness.clickTab("状态")
                         harness.render(frames = 3)
-                        moving = harness.textBounds("运行状态与诊断")
+                        moving = harness.textBounds("诊断与记录")
                         harness.render(frames = 120)
-                        val settled = harness.textBounds("运行状态与诊断")
+                        val settled = harness.textBounds("诊断与记录")
                         val case = "$style wide=$wide $transition"
                         if (wide) {
                             assertEquals(settled.left, moving.left, "wide pages must not move sideways in $case")

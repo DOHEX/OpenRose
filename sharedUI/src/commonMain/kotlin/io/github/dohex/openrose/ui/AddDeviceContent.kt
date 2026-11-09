@@ -144,7 +144,7 @@ internal fun AddDeviceContent(
                         AppText("排查指引", role = AppTextRole.Title)
                         AppText("1. 打开充电盒，确认耳机已开启且有电。\n2. 按耳机说明进入配对模式。\n3. 将耳机靠近当前设备，然后重新搜索。", role = AppTextRole.Summary)
                         onOpenSystemSettings?.let { AppButton("打开蓝牙设置", it, kind = AppButtonKind.Secondary) }
-                        AppButton("诊断详情", onDiagnostics, kind = AppButtonKind.Secondary)
+                        AppButton("查看诊断", onDiagnostics, kind = AppButtonKind.Secondary)
                         if (canScan && supported.isNotEmpty()) {
                             AppText("设备识别信息", role = AppTextRole.Title)
                             supported.forEach { candidate ->

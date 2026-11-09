@@ -49,7 +49,7 @@ internal fun SettingFeedback(
                     AppText(error.message, role = AppTextRole.Summary, color = appColor(AppColorRole.Error))
                 }
                 if (failure) {
-                    AppButton("查看详情", onViewDetails, kind = AppButtonKind.Secondary)
+                    AppButton("查看诊断", onViewDetails, kind = AppButtonKind.Secondary)
                 }
             }
         }
@@ -57,7 +57,7 @@ internal fun SettingFeedback(
         otherError?.let { error ->
             AppDashboardCard {
                 AppText(error.message, color = appColor(AppColorRole.Error))
-                AppButton("查看详情", onViewDetails, kind = AppButtonKind.Secondary)
+                AppButton("查看诊断", onViewDetails, kind = AppButtonKind.Secondary)
             }
         }
     }

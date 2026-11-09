@@ -192,7 +192,7 @@ fun OpenRoseApp(
 
                     AppPage.DIAGNOSTICS -> {
                         PlatformDiagnosticsCard(model, platformUi)
-                        ConnectionDetailsCard(state, onDisconnect)
+                        ConnectionDetailsCard(state)
                         SettingOperationsCard(state)
                         device?.let { DeviceReadings(it, state.connection.phaseOrNull() == ConnectionPhase.INITIALIZING) }
                     }
@@ -213,25 +213,9 @@ fun OpenRoseApp(
                                 { selectedTouchSide = it },
                             )
 
-                            AppPage.AUDIO -> {
-                                DeviceControlCard(state, device, onSet)
-                                AppGroup {
-                                    AppArrowRow("设备详情", icon = RoseIcon.INFO) { navigate(AppPage.DETAILS) }
-                                    AppArrowRow(
-                                        "连接方式",
-                                        value = state.controlTransportLabel(),
-                                        icon = RoseIcon.BLUETOOTH,
-                                    ) { navigate(AppPage.DIAGNOSTICS) }
-                                }
-                            }
+                            AppPage.AUDIO -> DeviceControlCard(state, device, onSet)
 
-                            AppPage.DETAILS -> {
-                                ConnectionDetailsCard(state, onDisconnect)
-                                AppGroup(title = "设备标识") {
-                                    AppInfoRow("型号配置", device.profile.family.displayName)
-                                }
-                                DeviceReadings(device, state.connection.phaseOrNull() == ConnectionPhase.INITIALIZING)
-                            }
+                            AppPage.DETAILS -> DeviceDetails(state, device, onDisconnect) { navigate(AppPage.DIAGNOSTICS) }
                         }
                     } else {
                         AppGroup {

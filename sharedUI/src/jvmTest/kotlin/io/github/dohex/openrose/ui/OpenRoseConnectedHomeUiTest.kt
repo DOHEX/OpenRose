@@ -216,7 +216,7 @@ class OpenRoseConnectedHomeUiTest {
                 harness.clickText("设备详情")
                 harness.render()
                 assertTrue(harness.hasText("型号配置"))
-                assertTrue(harness.hasText("ZT"))
+                assertTrue(harness.hasText("EarFree i5 · ZT"), "型号配置 names the model and its protocol family in $style")
                 assertTrue(harness.settingWrites.isEmpty())
             }
         }

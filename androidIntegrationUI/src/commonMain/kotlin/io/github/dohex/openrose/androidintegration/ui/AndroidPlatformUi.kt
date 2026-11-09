@@ -251,7 +251,7 @@ class AndroidPlatformUi(
         val applicable = hyperOsIntegrationApplicable(integration.platform)
         AppGroup {
             AppArrowRow(
-                title = "运行状态与诊断",
+                title = "诊断与记录",
                 summary = if (applicable) "系统入口、跨进程通道与呈现记录" else "查看本平台状态与诊断信息",
                 value = if (!applicable || integration.platform.module == ModuleAvailability.Available) "查看" else "待就绪",
                 icon = RoseIcon.LOG,

@@ -97,16 +97,16 @@ class OpenRoseFeedbackUiTest {
                 harness.render()
                 assertTrue(harness.hasText("正在处理设置，等待设备确认"), "pending feedback in $style")
                 assertFalse(harness.hasText("最近设置操作"), "home must not present an operation-history block in $style")
-                assertFalse(harness.hasText("请求 #42：降噪模式"), "request identifiers stay in diagnostics in $style")
+                assertFalse(harness.hasText("降噪模式 · #42"), "request identifiers stay in diagnostics in $style")
                 assertFalse(harness.hasText("请求值：抗风噪"), "request values stay in diagnostics in $style")
 
                 harness.clickTab("状态")
                 harness.render()
-                harness.clickText("运行状态与诊断")
+                harness.clickText("诊断与记录")
                 harness.render()
-                assertTrue(harness.hasText("请求 #42：降噪模式"), "diagnostics retain the request identity in $style")
-                assertTrue(harness.hasText("请求值：抗风噪"), "diagnostics retain the requested value in $style")
-                assertTrue(harness.hasText("底层写入完成 · 等待设备确认"), "diagnostics retain the operation phase in $style")
+                assertTrue(harness.hasText("降噪模式 · #42"), "diagnostics retain the request identity in $style")
+                assertTrue(harness.hasTextLine("请求值：抗风噪"), "diagnostics retain the requested value in $style")
+                assertTrue(harness.hasText("已写入 · 待确认"), "diagnostics retain the operation phase in $style")
 
                 val current = harness.state.value
                 val device = requireNotNull(current.device)
@@ -125,7 +125,7 @@ class OpenRoseFeedbackUiTest {
                 harness.render(frames = 30)
                 assertFalse(harness.hasText("设备已确认设置"), "a completed operation is not replayed when returning home in $style")
                 assertTrue(harness.hasText("已确认：抗风噪"), "the current mode comes from device state in $style")
-                assertFalse(harness.hasText("请求 #42：降噪模式"), "a confirmed operation is still not history on home in $style")
+                assertFalse(harness.hasText("降噪模式 · #42"), "a confirmed operation is still not history on home in $style")
             }
         }
     }
@@ -146,15 +146,15 @@ class OpenRoseFeedbackUiTest {
                 harness.render()
                 assertTrue(harness.hasText("等待设备确认超时"), "failure summary in $style")
                 assertTrue(harness.hasText(error.message), "failure reason in $style")
-                assertTrue(harness.hasText("查看详情"), "failure links to diagnostics in $style")
-                assertFalse(harness.hasText("请求 #43：降噪模式"), "request details stay out of home in $style")
+                assertTrue(harness.hasText("查看诊断"), "failure links to diagnostics in $style")
+                assertFalse(harness.hasText("降噪模式 · #43"), "request details stay out of home in $style")
 
-                harness.clickText("查看详情")
+                harness.clickText("查看诊断")
                 harness.render()
-                assertTrue(harness.hasText("请求 #43：降噪模式"), "diagnostics retain request details in $style")
-                assertTrue(harness.hasText("请求值：抗风噪"), "diagnostics retain the requested value in $style")
-                assertTrue(harness.hasText("设置超时 · 未获完整设备确认"), "diagnostics retain the failure stage in $style")
-                assertTrue(harness.hasText(error.message), "diagnostics retain the failure reason in $style")
+                assertTrue(harness.hasText("降噪模式 · #43"), "diagnostics retain request details in $style")
+                assertTrue(harness.hasTextLine("请求值：抗风噪"), "diagnostics retain the requested value in $style")
+                assertTrue(harness.hasText("确认超时"), "diagnostics retain the failure stage in $style")
+                assertTrue(harness.hasText("请求值：抗风噪\n${error.message}"), "the operation row keeps its failure reason in $style")
             }
         }
     }
@@ -178,8 +178,8 @@ class OpenRoseFeedbackUiTest {
                 withHarness(state(operation), style, wholeApp = false) { harness ->
                     harness.render()
                     assertTrue(harness.hasText(expectedMessage), "abnormal stage $stage shows message in $style")
-                    assertTrue(harness.hasText("查看详情"), "abnormal stage $stage shows diagnostics button in $style")
-                    harness.clickText("查看详情")
+                    assertTrue(harness.hasText("查看诊断"), "abnormal stage $stage shows diagnostics button in $style")
+                    harness.clickText("查看诊断")
                     assertEquals(1, harness.diagnosticsRequests.size, "diagnostics requested from $stage in $style")
                 }
             }
@@ -276,8 +276,8 @@ class OpenRoseFeedbackUiTest {
             withHarness(initial, style) { harness ->
                 harness.render()
                 assertTrue(harness.hasText("添加你的 ROSE 耳机"), "disconnect returns home without old device controls in $style")
-                assertFalse(harness.hasText("请求 #44：自定义 EQ"), "ended session detail stays off home in $style")
-                assertFalse(harness.hasText("模式已确认，曲线尚未确认"), "partial EQ confirmation stays in diagnostics in $style")
+                assertFalse(harness.hasText("自定义 EQ · #44"), "ended session detail stays off home in $style")
+                assertFalse(harness.hasTextLine("模式已确认，曲线尚未确认"), "partial EQ confirmation stays in diagnostics in $style")
 
                 val oldDevice = requireNotNull(harness.state.value.device)
                 val newSessionId = SESSION_ID + 1
@@ -291,16 +291,16 @@ class OpenRoseFeedbackUiTest {
                 )
                 harness.render()
                 assertFalse(harness.hasText("设备已确认设置"), "the prior session must not become a new confirmation in $style")
-                assertFalse(harness.hasText("请求 #44：自定义 EQ"), "prior requests stay off the new session's home in $style")
+                assertFalse(harness.hasText("自定义 EQ · #44"), "prior requests stay off the new session's home in $style")
 
                 harness.clickTab("状态")
                 harness.render()
-                harness.clickText("运行状态与诊断")
+                harness.clickText("诊断与记录")
                 harness.render()
-                assertTrue(harness.hasText("请求 #44：自定义 EQ"), "diagnostics retain the old operation in $style")
-                assertTrue(harness.hasText("发送进度：2/2 步"), "diagnostics retain EQ write progress in $style")
-                assertTrue(harness.hasText("模式已确认，曲线尚未确认"), "diagnostics retain partial EQ confirmation in $style")
-                assertTrue(harness.hasText("已结束会话 $SESSION_ID 的操作记录"), "diagnostics retain the session link in $style")
+                assertTrue(harness.hasText("自定义 EQ · #44"), "diagnostics retain the old operation in $style")
+                assertTrue(harness.hasTextLine("发送进度：2/2 步"), "diagnostics retain EQ write progress in $style")
+                assertTrue(harness.hasTextLine("模式已确认，曲线尚未确认"), "diagnostics retain partial EQ confirmation in $style")
+                assertTrue(harness.hasTextLine("已结束会话 $SESSION_ID 的操作记录"), "diagnostics retain the session link in $style")
             }
         }
     }

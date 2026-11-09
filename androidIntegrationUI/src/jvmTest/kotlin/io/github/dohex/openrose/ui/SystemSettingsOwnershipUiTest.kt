@@ -97,7 +97,7 @@ class SystemSettingsOwnershipUiTest {
                     assertTrue(harness.hasText("焦点通知"), "focus notification belongs to Settings for $style at ${width}dp")
                     assertTrue(harness.hasText("官方"), "the existing island default remains visible for $style at ${width}dp")
                     assertTrue(harness.hasText("关于 OpenRose"), "About remains at the bottom of Settings for $style at ${width}dp")
-                    assertFalse(harness.hasText("运行状态与诊断"), "Settings has no fixed diagnostics entry for $style at ${width}dp")
+                    assertFalse(harness.hasText("诊断与记录"), "Settings has no fixed diagnostics entry for $style at ${width}dp")
 
                     harness.clickText("焦点通知")
                     harness.render()
@@ -113,7 +113,7 @@ class SystemSettingsOwnershipUiTest {
                     assertFalse(harness.hasText("强制使用 BLE"), "Status contains no connection preference for $style at ${width}dp")
                     assertFalse(harness.hasText("模块显示时机"), "Status contains no module timing control for $style at ${width}dp")
                     assertTrue(harness.hasText("系统集成未就绪"), "Status keeps the real readiness state for $style at ${width}dp")
-                    assertTrue(harness.hasText("运行状态与诊断"), "Status owns the fixed diagnostics entry for $style at ${width}dp")
+                    assertTrue(harness.hasText("诊断与记录"), "Status owns the fixed diagnostics entry for $style at ${width}dp")
 
                     harness.openPage("诊断")
                     harness.render()

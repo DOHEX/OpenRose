@@ -183,6 +183,11 @@ internal open class OpenRoseUiTestHarness(protected val scene: OpenRoseUiTestSce
         node.config.getOrNull(SemanticsProperties.Text).orEmpty().any { it.text == expected }
     }
 
+    /** True when some text holds [expected] as one whole line, such as one line of a multi-line row summary. */
+    fun hasTextLine(expected: String): Boolean = nodes().any { node ->
+        node.config.getOrNull(SemanticsProperties.Text).orEmpty().any { expected in it.text.lines() }
+    }
+
     fun countText(expected: String): Int = nodes().count { node ->
         node.config.getOrNull(SemanticsProperties.Text).orEmpty().any { it.text == expected }
     }

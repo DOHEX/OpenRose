@@ -85,7 +85,7 @@ class OpenRoseHomeScanUiTest {
             ) { harness ->
                 harness.render()
                 assertTrue(harness.hasText(reason), "the host's reason should be visible in $style")
-                assertTrue(harness.hasClickableText("查看连接与运行状态"))
+                assertTrue(harness.hasClickableText("诊断与记录"))
                 assertFalse(harness.hasContentDescription("添加耳机"))
                 assertFalse(harness.hasText("搜索并添加耳机"))
                 assertFalse(harness.hasText("停止扫描"))
@@ -138,7 +138,7 @@ class OpenRoseHomeScanUiTest {
                 harness.render()
                 assertFalse(harness.hasText("停止扫描"))
                 assertFalse(harness.hasText("正在寻找耳机…"))
-                assertTrue(harness.hasClickableText("查看连接与运行状态"))
+                assertTrue(harness.hasClickableText("诊断与记录"))
             }
         }
     }
@@ -272,14 +272,14 @@ class OpenRoseHomeScanUiTest {
                 app = true,
             ) { harness ->
                 harness.render()
-                harness.focus("查看连接与运行状态")
+                harness.focus("诊断与记录")
                 harness.sendKey(Key.Enter)
                 harness.render()
                 assertTrue(harness.hasText("当前连接"), "the visible action opens existing diagnostics in $style")
                 assertTrue(harness.hasText(reason))
                 harness.sendKey(Key.Escape)
                 harness.render()
-                assertTrue(harness.hasText("查看连接与运行状态"))
+                assertTrue(harness.hasText("诊断与记录"))
                 assertTrue(harness.hasContentDescription("添加耳机"))
                 harness.openAddDevice()
                 assertTrue(harness.hasText(reason), "the add page explains the unavailable transport in $style")
@@ -317,7 +317,7 @@ class OpenRoseHomeScanUiTest {
                 )
                 harness.render()
                 assertTrue(harness.hasContentDescription("添加耳机"))
-                harness.focus("查看连接与运行状态")
+                harness.focus("诊断与记录")
                 harness.sendKey(Key.Tab, shift = true)
                 harness.sendKey(Key.Tab)
                 harness.sendKey(Key.Spacebar)

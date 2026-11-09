@@ -41,10 +41,11 @@ internal fun PlatformState.transportUnavailableForHome(): Boolean = permission i
     PermissionState.NOT_REQUIRED,
 ) && transport is TransportAvailability.Unavailable
 
-internal fun ControlState.controlTransportLabel(): String = when (transportSelection?.endpoint) {
+/** The 控制传输 of the current control connection: "确定中" until chosen, null with no control connection. */
+internal fun ControlState.controlTransportLabel(): String? = when (transportSelection?.endpoint) {
     is TransportEndpoint.BleGatt -> "BLE"
     is TransportEndpoint.SppRfcomm -> "蓝牙串口（SPP）"
-    null -> "尚未选择"
+    null -> if (connection == ConnectionState.Disconnected) null else "确定中"
 }
 
 @Composable
@@ -235,7 +236,7 @@ private fun UnconnectedHeadphonesDashboard(
         val transport = state.platform.transport as TransportAvailability.Unavailable
         AppGroup {
             AppArrowRow(
-                title = "查看连接与运行状态",
+                title = "诊断与记录",
                 summary = transport.reason,
                 icon = RoseIcon.BLUETOOTH,
                 onClick = { onNavigate(AppPage.DIAGNOSTICS) },
@@ -258,7 +259,7 @@ private fun UnconnectedHeadphonesDashboard(
     visibleError?.let { error ->
         AppDashboardCard {
             AppText(error.message, color = appColor(AppColorRole.Error))
-            AppButton("查看详情", { onNavigate(AppPage.DIAGNOSTICS) }, kind = AppButtonKind.Secondary)
+            AppButton("查看诊断", { onNavigate(AppPage.DIAGNOSTICS) }, kind = AppButtonKind.Secondary)
         }
     }
 
@@ -535,7 +536,11 @@ internal fun BatteryStrip(device: DeviceState, initializing: Boolean) {
             ) {
                 AppText(label, role = AppTextRole.Footnote)
                 AppText(
-                    readingText(field, device.fields[field], initializing, device.fieldErrors[field], device.profile),
+                    if (device.fields[field] is FieldReading.NotProvided) {
+                        "-"
+                    } else {
+                        readingText(field, device.fields[field], initializing, device.fieldErrors[field], device.profile)
+                    },
                     role = AppTextRole.Body,
                     color = if (percent != null && percent <= 20) appColor(AppColorRole.Error) else null,
                 )
@@ -547,8 +552,41 @@ internal fun BatteryStrip(device: DeviceState, initializing: Boolean) {
     }
 }
 
+/** User-facing identity and connection facts; troubleshooting detail lives on the diagnostics page. */
 @Composable
-internal fun ConnectionDetailsCard(state: ControlState, onDisconnect: () -> Unit) {
+internal fun DeviceDetails(state: ControlState, device: DeviceState, onDisconnect: () -> Unit, onDiagnostics: () -> Unit) {
+    val initializing = state.connection.phaseOrNull() == ConnectionPhase.INITIALIZING
+    AppGroup {
+        AppInfoRow("型号配置", "${device.profile.displayName} · ${device.profile.family.displayName}")
+        if (DeviceField.FIRMWARE in device.capabilities.readableFields) {
+            AppInfoRow(
+                "固件",
+                readingText(
+                    DeviceField.FIRMWARE,
+                    device.fields[DeviceField.FIRMWARE],
+                    initializing,
+                    device.fieldErrors[DeviceField.FIRMWARE],
+                    device.profile,
+                ),
+            )
+        }
+        state.controlTransportLabel()?.let { AppInfoRow("控制传输", it) }
+    }
+    AppGroup {
+        AppArrowRow("诊断与记录", icon = RoseIcon.LOG, onClick = onDiagnostics)
+    }
+    // Full width and inset like the groups above: Miuix cards sit 12dp in, Material 3 rows keep 16dp content padding.
+    val inset = if (LocalInterfaceStyle.current == InterfaceStyle.MIUIX) 12.dp else 16.dp
+    AppButton(
+        text = if (state.connection is ConnectionState.Connecting) "取消连接" else "断开控制连接",
+        onClick = onDisconnect,
+        modifier = Modifier.fillMaxWidth().padding(horizontal = inset),
+        kind = AppButtonKind.Secondary,
+    )
+}
+
+@Composable
+internal fun ConnectionDetailsCard(state: ControlState) {
     val connectionReason = state.transportSelection?.let {
         when (it.reason) {
             TransportSelectionReason.MODEL_BLE_ONLY -> "此型号使用 BLE 控制"
@@ -579,38 +617,25 @@ internal fun ConnectionDetailsCard(state: ControlState, onDisconnect: () -> Unit
 
     AppGroup(title = "当前连接", footnote = footnote) {
         AppInfoRow("设备", state.activeDevice()?.profile?.displayName ?: "未连接")
-        AppInfoRow("状态", state.connection.phaseOrNull()?.displayText() ?: "未连接耳机")
-        AppInfoRow("控制连接", state.controlTransportLabel())
-        if (state.connection != ConnectionState.Disconnected) {
-            AppButton(
-                text = if (state.connection is ConnectionState.Connecting) "取消连接" else "断开控制连接",
-                onClick = onDisconnect,
-                kind = AppButtonKind.Secondary,
-            )
-        }
+        AppInfoRow("连接阶段", state.connection.phaseOrNull()?.displayText() ?: "未连接耳机")
+        state.controlTransportLabel()?.let { AppInfoRow("控制传输", it) }
     }
 }
 
 @Composable
 internal fun DeviceReadings(device: DeviceState, initializing: Boolean) {
     var showDetails by remember(device.sessionId) { mutableStateOf(false) }
+    val footnote = listOfNotNull(
+        if (initializing) "正在读取设备状态…" else "按设备实际返回的状态显示。",
+        "当前提供状态读取，控制设置尚未开放。".takeIf { device.capabilities.writableSettings.isEmpty() },
+    ).plus(device.warnings.distinct()).joinToString("\n")
 
-    AppGroup(title = "设备状态") {
-        AppInfoRow(
-            "读取状态",
-            if (initializing) "正在读取设备状态…" else "按设备实际返回的状态显示。",
-        )
+    AppGroup(title = "设备读数", footnote = footnote) {
         device.capabilities.readableFields.sortedBy { it.ordinal }.forEach { field ->
             AppInfoRow(
                 field.displayName,
                 readingText(field, device.fields[field], initializing, device.fieldErrors[field], device.profile),
             )
-        }
-        if (device.capabilities.writableSettings.isEmpty()) {
-            AppInfoRow("控制设置", "当前提供状态读取，控制设置尚未开放。")
-        }
-        if (device.warnings.isNotEmpty()) {
-            AppInfoRow("读取提示", device.warnings.distinct().joinToString("\n"))
         }
         AppArrowRow(
             title = if (showDetails) "收起原始记录" else "查看原始记录",
