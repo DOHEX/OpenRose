@@ -6,6 +6,9 @@ import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -160,6 +163,9 @@ private fun NoiseModeChoices(
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         row.forEach { option ->
                             val isSelected = option.value == selected
+                            val interaction = remember { MutableInteractionSource() }
+                            val pressed by interaction.collectIsPressedAsState()
+                            val hovered by interaction.collectIsHoveredAsState()
                             val contentColor = appColor(
                                 when {
                                     !enabled -> AppColorRole.DisabledContent
@@ -167,18 +173,27 @@ private fun NoiseModeChoices(
                                     else -> AppColorRole.Summary
                                 },
                             )
+                            val circleColor = when {
+                                isSelected -> appColor(AppColorRole.SelectedContainer)
+                                enabled && (pressed || hovered) -> appColor(AppColorRole.OnSurface).copy(alpha = 0.08f)
+                                else -> Color.Transparent
+                            }
                             Column(
-                                modifier = Modifier.weight(1f).clip(CircleShape)
-                                    .selectable(isSelected, enabled, Role.RadioButton) { onSelect(option.value) }
+                                modifier = Modifier.weight(1f)
+                                    .selectable(
+                                        selected = isSelected,
+                                        interactionSource = interaction,
+                                        indication = null,
+                                        enabled = enabled,
+                                        role = Role.RadioButton,
+                                        onClick = { onSelect(option.value) },
+                                    )
                                     .padding(vertical = 8.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 verticalArrangement = Arrangement.spacedBy(8.dp),
                             ) {
                                 Box(
-                                    Modifier.size(48.dp).background(
-                                        if (isSelected) appColor(AppColorRole.SelectedContainer) else Color.Transparent,
-                                        CircleShape,
-                                    ),
+                                    Modifier.size(48.dp).background(circleColor, CircleShape),
                                     contentAlignment = Alignment.Center,
                                 ) {
                                     AppIcon(noiseModeIcon(option.value), Modifier.size(24.dp), tint = contentColor)
