@@ -269,13 +269,17 @@ internal class OfficialConnectionPresenter(
                 ClipSpec("left", "earphone_left", MODULE_LEFT_RAW),
                 ClipSpec("right", "earphone_right", MODULE_RIGHT_RAW),
             ).forEach { spec ->
-                // Prefer OpenRose's neutral, self-owned video. Never select in-ear or no-in-ear
-                // footage from connection state; this wire has no wear observation.
-                val resource = moduleResources?.let { findRawResource(it, spec.moduleRawName) }
-                    ?: findRawResource(targetContext, spec.targetRawName)
-                    ?: throw IllegalStateException("neutral_${spec.side}_clip_missing")
+                // Prefer the Xiaomi Bluetooth app's own earbud clip so the prompt looks native; OpenRose's bundled clip is the
+                // fallback when a ROM lacks it. Never select in-ear or no-in-ear footage from connection state: this wire
+                // has no wear observation, so the plain `earphone_*` clip is used.
+                val resource = findRawResource(targetContext, spec.targetRawName)
+                    ?: moduleResources?.let { findRawResource(it, spec.moduleRawName) }
+                    ?: throw IllegalStateException("${spec.side}_clip_missing")
                 val name = "openrose_official_${stableDigest("${request.key}:$token:${spec.side}").take(24)}_${spec.side}.mp4"
-                val file = File(targetContext.filesDir, name)
+                // The target's FileProvider maps `internal_files` to <filesDir>/my_internal_files/ (res/xml/file_paths.xml),
+                // not to filesDir itself, so the clip must live there or the provider answers FileNotFoundException.
+                val directory = File(targetContext.filesDir, PROVIDER_FILES_DIRECTORY).also { it.mkdirs() }
+                val file = File(directory, name)
                 copyRawResource(resource.context, resource.resourceId, file)
                 val uri = Uri.parse("content://$FILE_PROVIDER_AUTHORITY/internal_files/$name")
                 if (uri.authority != FILE_PROVIDER_AUTHORITY || uri.scheme != "content") {
@@ -363,6 +367,10 @@ internal class OfficialConnectionPresenter(
             .put("fileType", MP4_FILE_TYPE)
             .put("iconName", clip.uri.toString())
             .put("iconType", if (island) 0 else 1)
+        // The island model of the HyperOS SystemUI (17.03.260226) reads `iconFormat`/`iconResName`, not `fileType`/`iconName`;
+        // without them toIconInfo logs "Unknown icon type: null" and the whole island is dropped ("Failed to
+        // parseDynamicIslandParam"). Older builds ignore the extra keys and keep reading the legacy pair.
+        if (island) icon.put("iconFormat", MP4_FILE_TYPE).put("iconResName", clip.uri.toString())
         val side = JSONObject().put("iconParams", icon)
         // Only a confirmed true charging field adds the charging color. Neutral battery text
         // remains useful when charging is unknown and does not claim a false charging flag.
@@ -499,6 +507,7 @@ internal class OfficialConnectionPresenter(
         private const val TARGET_PACKAGE = "com.xiaomi.bluetooth"
         private const val SYSTEM_UI_PACKAGE = "com.android.systemui"
         private const val FILE_PROVIDER_AUTHORITY = "com.xiaomi.bluetooth.fileprovider"
+        private const val PROVIDER_FILES_DIRECTORY = "my_internal_files"
         private const val SHOW_CUSTOM_STRONG_TOAST = "show_custom_strong_toast"
         private const val HIDE_STRONG_TOAST = "hide_strong_toast"
         private const val VIDEO_TEXT_TEXT_VIDEO = "video_text_text_video"

@@ -239,11 +239,14 @@ class OpenRoseBluetoothModule : XposedModule() {
                     lastOfficialIdentity = identity
                 }
                 if (spec?.getString(BridgePresentationWire.MODE) != BridgePresentationWire.OFFICIAL ||
-                    !spec.getBoolean(BridgePresentationWire.ALLOW_ISLAND_FIELDS) || id == null
+                    !spec.getBoolean(BridgePresentationWire.ALLOW_ISLAND_FIELDS)
                 ) {
                     output.clear()
                     return
                 }
+                // A prompt that expired on the host can no longer be claimed; SystemUI owns the rest of its display
+                // time, and only a disconnect, mode change or new session withdraws it early (ADR 0004).
+                if (id == null) return
                 if (id !in consumedOfficialPrompts) {
                     consumedOfficialPrompts += id
                     if (!prompt.getBoolean(BridgePresentationWire.CLAIMED)) output.show(snapshot, id)
