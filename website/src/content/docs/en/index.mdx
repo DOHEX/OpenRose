@@ -1,0 +1,40 @@
+---
+title: OpenRose
+description: Third-party ROSE / ROSESELSA earbuds controller & HyperOS system integration.
+template: splash
+hero:
+  tagline: Third-party ROSE / ROSESELSA earbuds controller & HyperOS system integration.
+  image:
+    file: ../../../assets/hero.svg
+  actions:
+    - text: Getting Started
+      link: /en/guides/example/
+      icon: right-arrow
+    - text: Releases
+      link: https://github.com/DOHEX/OpenRose/releases
+      icon: external
+      variant: secondary
+    - text: GitHub
+      link: https://github.com/DOHEX/OpenRose
+      icon: github
+      variant: minimal
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+## Features
+
+<CardGrid stagger>
+	<Card title="HyperOS Deep Integration" icon="star">
+		Connects with Super Island, Focus notifications, and Convergence Device Center. Supports direct management from the system Bluetooth process via Xposed.
+	</Card>
+	<Card title="Dual UI & Cross-Platform" icon="laptop">
+		Powered by Kotlin & Compose Multiplatform, offering Miuix and Material 3 Expressive UI themes across Android and Linux (BlueZ).
+	</Card>
+	<Card title="Full Device Control" icon="setting">
+		Comprehensive controls for ANC/transparency levels, gaming low-latency mode, 10-band custom EQ, gesture mappings, and dual-device connection.
+	</Card>
+	<Card title="Local & Open Source" icon="open-book">
+		No official account required. All operations communicate directly via local Bluetooth Low Energy without background tracking.
+	</Card>
+</CardGrid>

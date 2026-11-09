@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <defs>
+    <radialGradient id="glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#f43f5e" stop-opacity="0.25"/>
+      <stop offset="70%" stop-color="#fb7185" stop-opacity="0.08"/>
+      <stop offset="100%" stop-color="#f43f5e" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="primaryGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f43f5e"/>
+      <stop offset="50%" stop-color="#e11d48"/>
+      <stop offset="100%" stop-color="#be123c"/>
+    </linearGradient>
+    <linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fda4af" stop-opacity="0.4"/>
+      <stop offset="100%" stop-color="#e11d48" stop-opacity="0.1"/>
+    </linearGradient>
+  </defs>
+  <!-- Background glow & subtle ring -->
+  <circle cx="256" cy="256" r="230" fill="url(#glow)"/>
+  <circle cx="256" cy="256" r="210" stroke="url(#ringGrad)" stroke-width="2" stroke-dasharray="8 8"/>
+  <circle cx="256" cy="256" r="170" fill="#ffffff" fill-opacity="0.03"/>
+
+  <!-- Scaled & Centered Headphones (from 960 viewport centered at 256, 256) -->
+  <g transform="translate(112, 112) scale(0.3)">
+    <path d="M280 840h-80q-33 0-56.5-23.5T120 760v-280q0-75 28.5-140.5t77-114q48.5-48.5 114-77T480 120q75 0 140.5 28.5t114 77q48.5 48.5 77 114T840 480v280q0 33-23.5 56.5T760 840h-80q-33 0-56.5-23.5T600 760v-160q0-33 23.5-56.5T680 520h80v-40q0-117-81.5-198.5T480 200q-117 0-198.5 81.5T200 480v40h80q33 0 56.5 23.5T360 600v160q0 33-23.5 56.5T280 840Zm0-240h-80v160h80v-160Zm400 0v160h80v-160h-80Zm-400 0h-80 80Zm400 0h80-80Z" fill="url(#primaryGrad)"/>
+  </g>
+</svg>

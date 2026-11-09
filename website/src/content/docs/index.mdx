@@ -1,0 +1,40 @@
+---
+title: OpenRose
+description: 弱水时砂 (ROSE / ROSESELSA) 耳机第三方控制客户端与 HyperOS 系统集成
+template: splash
+hero:
+  tagline: 弱水时砂 (ROSE / ROSESELSA) 耳机第三方控制客户端与 HyperOS 系统集成
+  image:
+    file: ../../assets/hero.svg
+  actions:
+    - text: 查阅文档
+      link: /guides/example/
+      icon: right-arrow
+    - text: 下载应用
+      link: https://github.com/DOHEX/OpenRose/releases
+      icon: external
+      variant: secondary
+    - text: GitHub 仓库
+      link: https://github.com/DOHEX/OpenRose
+      icon: github
+      variant: minimal
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+## 核心特性
+
+<CardGrid stagger>
+	<Card title="HyperOS 深度集成" icon="star">
+		接入系统超级岛、焦点通知与融合设备中心。支持 Xposed 模块由系统蓝牙服务直接管理耳机，无需应用常驻后台。
+	</Card>
+	<Card title="双界面风格与跨平台" icon="laptop">
+		基于 Kotlin 与 Compose Multiplatform，提供 Miuix 与 Material 3 Expressive 双套原生界面；覆盖 Android 与 Linux (BlueZ)。
+	</Card>
+	<Card title="丰富精细的控制" icon="setting">
+		覆盖降噪与通透分级调节、游戏低延迟模式、十段自定义 EQ、触控手势按键映射与双设备多点连接。
+	</Card>
+	<Card title="纯粹本地与开源透明" icon="open-book">
+		无需注册登录任何官方账号，所有协议通信基于本地蓝牙直连，拒绝多余权限与隐私收集。
+	</Card>
+</CardGrid>
