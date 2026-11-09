@@ -39,6 +39,13 @@ class AndroidPlatformUi(
     private var restartResults by mutableStateOf<List<ScopeRestartResult>?>(null)
     private var restartPhase by mutableStateOf<ScopeRestartPhase?>(null)
 
+    override val dynamicColor: Boolean
+        @Composable get() {
+            val integration by integration.collectAsState()
+            return integration.settings.dynamicColor &&
+                integration.platform.dynamicColorApplicability == PlatformApplicability.APPLICABLE
+        }
+
     @Composable
     override fun BluetoothPermissionRows(platform: PlatformState, diagnostics: Boolean) {
         val integration by integration.collectAsState()
@@ -188,6 +195,18 @@ class AndroidPlatformUi(
                 AppText(message, Modifier.padding(horizontal = 16.dp), role = AppTextRole.Summary)
             }
         }
+    }
+
+    @Composable
+    override fun DisplayModeRows() {
+        val integration by integration.collectAsState()
+        if (integration.platform.dynamicColorApplicability != PlatformApplicability.APPLICABLE) return
+        AppSwitchRow(
+            title = "动态取色",
+            summary = "跟随系统壁纸配色",
+            checked = integration.settings.dynamicColor,
+            onChange = { onIntegrationSettingsChange(integration.settings.copy(dynamicColor = it)) },
+        )
     }
 
     @Composable

@@ -51,6 +51,7 @@ internal fun AndroidTestPage(model: FakeOpenRoseModel, platform: PlatformUi, pag
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
             when (page.value) {
                 "设置" -> PreferencesPage(model, platform, onPersonalization = {})
+                "个性化" -> PersonalizationPage(model, platform)
                 "状态" -> StatusPage(model, platform) { page.value = "诊断" }
                 "诊断" -> PlatformDiagnosticsCard(model, platform)
                 "操作" -> platform.StatusActions()

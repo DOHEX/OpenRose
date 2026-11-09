@@ -57,6 +57,7 @@ fun OpenRoseApp(
         Appearance.LIGHT -> false
         Appearance.DARK -> true
     }
+    val dynamicColor = platformUi.dynamicColor
     val backdropActive = rememberBackdropBlurActive(uiSettings)
     val navBackStack = rememberNavBackStack<Route>(Route.Main(AppPage.HEADPHONES))
     val mainTabsPagerState = rememberMainTabsPagerState(initialPage = 0)
@@ -188,7 +189,7 @@ fun OpenRoseApp(
 
                     AppPage.SETTINGS -> PreferencesPage(model, platformUi, onPersonalization = { navigate(AppPage.PERSONALIZATION) })
 
-                    AppPage.PERSONALIZATION -> PersonalizationPage(model, wide = wide)
+                    AppPage.PERSONALIZATION -> PersonalizationPage(model, platformUi, wide = wide)
 
                     AppPage.DIAGNOSTICS -> {
                         PlatformDiagnosticsCard(model, platformUi)
@@ -236,7 +237,7 @@ fun OpenRoseApp(
                 }
             }
             val renderShell: @Composable (AppPage) -> Unit = { targetPage ->
-                ProvideInterfaceStyle(uiSettings.interfaceStyle, dark) {
+                ProvideInterfaceStyle(uiSettings.interfaceStyle, dark, dynamicColor) {
                     val shellContent: @Composable () -> Unit = { pageContentFor(targetPage) }
                     val shellFeedback: @Composable () -> Unit = { feedbackContentFor(targetPage) }
                     when (uiSettings.interfaceStyle) {
@@ -259,7 +260,7 @@ fun OpenRoseApp(
                 }
             }
             val renderMainShell: @Composable () -> Unit = {
-                ProvideInterfaceStyle(uiSettings.interfaceStyle, dark) {
+                ProvideInterfaceStyle(uiSettings.interfaceStyle, dark, dynamicColor) {
                     val isConnectedHome = state.activeDevice() != null
                     val animatePageChanges = uiSettings.pageTransition != PageTransition.NONE
                     val onNavigate: (AppPage) -> Unit = { navigate(it) }
@@ -317,7 +318,7 @@ fun OpenRoseApp(
                         enter = if (railMotion) expandHorizontally(expandFrom = Alignment.Start) else EnterTransition.None,
                         exit = if (railMotion) shrinkHorizontally(shrinkTowards = Alignment.Start) else ExitTransition.None,
                     ) {
-                        ProvideInterfaceStyle(uiSettings.interfaceStyle, dark) {
+                        ProvideInterfaceStyle(uiSettings.interfaceStyle, dark, dynamicColor) {
                             when (uiSettings.interfaceStyle) {
                                 InterfaceStyle.MIUIX -> MiuixNavigationRail(railTab, ::navigate)
                                 InterfaceStyle.MATERIAL3 -> MaterialNavigationRail(railTab, ::navigate)

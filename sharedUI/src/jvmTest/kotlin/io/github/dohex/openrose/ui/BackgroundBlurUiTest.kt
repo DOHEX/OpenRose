@@ -55,7 +55,7 @@ internal fun withPersonalizationHarness(
     setContent {
         TestPageContent(uiSettings.value.interfaceStyle, dark = uiSettings.value.appearance == Appearance.DARK) {
             Column(Modifier.verticalScroll(rememberScrollState())) {
-                PersonalizationPage(model)
+                PersonalizationPage(model, BasicPlatformUi("Test"))
             }
         }
     }

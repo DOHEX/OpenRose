@@ -64,7 +64,7 @@ fun PreferencesPage(model: OpenRoseModel, platformUi: PlatformUi, onPersonalizat
  * [wide] mirrors the main shell: with the navigation rail shown, 底栏样式 has no effect and is hidden.
  */
 @Composable
-fun PersonalizationPage(model: OpenRoseModel, wide: Boolean = false) {
+fun PersonalizationPage(model: OpenRoseModel, platformUi: PlatformUi, wide: Boolean = false) {
     val uiSettings by model.uiSettings.collectAsState()
     val onUiSettingsChange = model::updateUiSettings
     Column(
@@ -92,6 +92,7 @@ fun PersonalizationPage(model: OpenRoseModel, wide: Boolean = false) {
                 selected = uiSettings.appearance,
                 onSelect = { onUiSettingsChange(uiSettings.copy(appearance = it)) },
             )
+            platformUi.DisplayModeRows()
             if (!wide) {
                 AppChoiceRow(
                     title = "底栏样式",

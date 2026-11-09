@@ -37,6 +37,7 @@ import top.yukonga.miuix.kmp.layout.DialogDefaults
 import top.yukonga.miuix.kmp.overlay.OverlayDialog
 import top.yukonga.miuix.kmp.preference.*
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.theme.platformDynamicColors
 import top.yukonga.miuix.kmp.basic.ButtonDefaults as MiuixButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card as MiuixCard
 import top.yukonga.miuix.kmp.basic.Text as MiuixText
@@ -83,14 +84,18 @@ fun appColor(role: AppColorRole): Color = when (LocalInterfaceStyle.current) {
     }
 }
 
+/** [dynamicColor] takes the system wallpaper colors (动态取色) where the platform provides them, else the style defaults. */
 @Composable
-fun ProvideInterfaceStyle(style: InterfaceStyle, dark: Boolean, content: @Composable () -> Unit) {
+fun ProvideInterfaceStyle(style: InterfaceStyle, dark: Boolean, dynamicColor: Boolean = false, content: @Composable () -> Unit) {
     CompositionLocalProvider(LocalInterfaceStyle provides style) {
         when (style) {
-            InterfaceStyle.MIUIX -> MiuixTheme(colors = miuixColors(dark), content = content)
+            InterfaceStyle.MIUIX -> MiuixTheme(
+                colors = if (dynamicColor) platformDynamicColors(dark) else miuixColors(dark),
+                content = content,
+            )
 
             InterfaceStyle.MATERIAL3 -> MaterialTheme(
-                colorScheme = materialColors(dark),
+                colorScheme = (if (dynamicColor) platformMaterialDynamicColors(dark) else null) ?: materialColors(dark),
                 motionScheme = MotionScheme.expressive(),
                 content = content,
             )

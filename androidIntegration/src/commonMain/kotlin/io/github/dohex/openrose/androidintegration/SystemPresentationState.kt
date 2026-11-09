@@ -50,6 +50,8 @@ data class SystemPresentationState(
     /** False when every island-capable output must omit island content. */
     val allowIslandFields: Boolean = false,
     val statusNotificationTarget: StatusNotificationTarget = StatusNotificationTarget.OPENROSE,
+    /** 动态取色: the status notification icon takes the system wallpaper colors where the system provides them. */
+    val dynamicColor: Boolean = false,
     val battery: SystemBatteryState? = null,
     val noise: SystemNoiseState? = null,
     val actions: Set<DeviceSetting> = emptySet(),
@@ -77,6 +79,7 @@ internal fun ControlState.systemPresentation(settings: IntegrationSettings, prom
             focusNotificationEnabled = settings.focusNotificationEnabled,
             allowIslandFields = allowIslandFields,
             statusNotificationTarget = settings.statusNotificationTarget,
+            dynamicColor = settings.dynamicColor,
         )
     return SystemPresentationState(
         reference = reference,
@@ -85,6 +88,7 @@ internal fun ControlState.systemPresentation(settings: IntegrationSettings, prom
         focusNotificationEnabled = settings.focusNotificationEnabled,
         allowIslandFields = allowIslandFields,
         statusNotificationTarget = settings.statusNotificationTarget,
+        dynamicColor = settings.dynamicColor,
         battery = SystemBatteryState(
             left = device.fields.reading(DeviceField.LEFT_BATTERY).normalizedBattery(),
             right = device.fields.reading(DeviceField.RIGHT_BATTERY).normalizedBattery(),

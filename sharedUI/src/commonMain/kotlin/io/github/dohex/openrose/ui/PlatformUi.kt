@@ -13,6 +13,10 @@ interface PlatformUi {
     val requestBluetoothPermission: (() -> Unit)? get() = null
     val openBluetoothSettings: (() -> Unit)? get() = null
 
+    /** 动态取色: whether the application's colors follow the system wallpaper instead of the style defaults. */
+    val dynamicColor: Boolean
+        @Composable get() = false
+
     @Composable
     fun BluetoothPermissionRows(platform: PlatformState, diagnostics: Boolean) {}
 
@@ -21,6 +25,10 @@ interface PlatformUi {
 
     @Composable
     fun SettingsSections(state: ControlState, position: PlatformSettingsPosition) {}
+
+    /** Rows the host adds to the 显示模式 group of 个性化. */
+    @Composable
+    fun DisplayModeRows() {}
 
     @Composable
     fun DiagnosticsStatusRows(state: ControlState) {}

@@ -11,6 +11,8 @@ data class IntegrationPlatformState(
     val systemIntegrationApplicability: PlatformApplicability = PlatformApplicability.UNKNOWN,
     /** Facts about the ordinary background-control service, separate from the saved intent in settings. */
     val backgroundService: BackgroundServiceFacts = BackgroundServiceFacts(),
+    /** Whether the system provides wallpaper colors for 动态取色 (Android 12+). */
+    val dynamicColorApplicability: PlatformApplicability = PlatformApplicability.UNKNOWN,
 )
 
 /**

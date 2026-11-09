@@ -207,6 +207,7 @@ internal class SystemPresentationRenderer(
             focusEnabled = presentation.getBoolean(BridgePresentationWire.FOCUS_ENABLED),
             statusIsland = presentation.getBoolean(BridgePresentationWire.STATUS_SUMMARY_ISLAND, false),
             statusTarget = presentation.getString(BridgePresentationWire.STATUS_TARGET, BridgePresentationWire.TARGET_OPENROSE),
+            dynamicColor = presentation.getBoolean(BridgePresentationWire.DYNAMIC_COLOR, false),
             address = bluetoothAddress(snapshot),
         )
     }
@@ -265,6 +266,7 @@ internal class SystemPresentationRenderer(
             val nextNoise = noise?.takeIf { canControlNoise(snapshot, it.mode) && actionReceiverRegistered }
                 ?.let { nextNoiseMode(snapshot, it.mode) }
             val canDisconnect = actionReceiverRegistered && snapshot.address != null
+            val iconColors = statusCardColors(snapshot)
             val fingerprint = listOf(
                 snapshot.identity.stableKey,
                 requestedTag,
@@ -274,6 +276,7 @@ internal class SystemPresentationRenderer(
                 canDisconnect,
                 snapshot.statusIsland,
                 snapshot.statusTarget,
+                iconColors,
             ).joinToString("|")
             val unchanged = statusNotificationActive && statusTag == requestedTag && statusFingerprint == fingerprint
             if (unchanged && !showsPrompt) return
@@ -305,6 +308,7 @@ internal class SystemPresentationRenderer(
                     island = snapshot.statusIsland,
                     snapshot = snapshot,
                     aodTitle = aodTitle(snapshot),
+                    iconColors = iconColors,
                 ),
             )
             // An update without island data is not known to remove a summary state already shown, and one with it changes
@@ -595,6 +599,7 @@ internal class SystemPresentationRenderer(
         island: Boolean,
         snapshot: RenderedSnapshot,
         aodTitle: String?,
+        iconColors: IconColors,
     ): Bundle {
         val info = JSONObject()
             .put("title", title)
@@ -625,7 +630,7 @@ internal class SystemPresentationRenderer(
             putBundle(
                 FOCUS_PICTURES,
                 Bundle().apply {
-                    putParcelable(STATUS_CARD_PICTURE, Icon.createWithBitmap(createStatusCardBitmap()))
+                    putParcelable(STATUS_CARD_PICTURE, Icon.createWithBitmap(createStatusCardBitmap(iconColors)))
                     if (island) putPromptPictures(this)
                 },
             )
@@ -638,10 +643,10 @@ internal class SystemPresentationRenderer(
     }
 
     /**
-     * The app icon from `sharedUI/.../drawable/app_icon.xml` at 224px; the template requires a picture, so this stands in
-     * for the app icon. Keep the path data, transforms and colors in sync with that file.
+     * The app icon from `sharedUI/.../drawable/app_icon.xml` at 224px in [colors]; the template requires a picture, so this
+     * stands in for the app icon. Keep the path data and transforms in sync with that file.
      */
-    private fun createStatusCardBitmap(): Bitmap {
+    private fun createStatusCardBitmap(colors: IconColors): Bitmap {
         val bitmap = squareBitmap(STATUS_CARD_PICTURE_SIZE)
         val canvas = Canvas(bitmap)
         val scale = STATUS_CARD_PICTURE_SIZE / APP_ICON_VIEWPORT
@@ -649,16 +654,30 @@ internal class SystemPresentationRenderer(
         canvas.scale(scale, scale)
         canvas.drawPath(
             PathParser.createPathFromPathData(APP_ICON_TILE_PATH),
-            Paint(Paint.ANTI_ALIAS_FLAG).apply { color = APP_ICON_TILE_COLOR },
+            Paint(Paint.ANTI_ALIAS_FLAG).apply { color = colors.tile },
         )
         canvas.translate(APP_ICON_GLYPH_OFFSET, APP_ICON_GLYPH_OFFSET)
         canvas.scale(APP_ICON_GLYPH_SCALE, APP_ICON_GLYPH_SCALE)
         canvas.translate(0f, APP_ICON_VIEWPORT)
         canvas.drawPath(
             PathParser.createPathFromPathData(APP_ICON_GLYPH_PATH),
-            Paint(Paint.ANTI_ALIAS_FLAG).apply { color = APP_ICON_GLYPH_COLOR },
+            Paint(Paint.ANTI_ALIAS_FLAG).apply { color = colors.glyph },
         )
         return bitmap
+    }
+
+    /**
+     * The app icon's tones (tile 90, glyph 30) under 动态取色 from the system wallpaper palette, whose shade N is tone
+     * (1000 - N) / 10; otherwise, and before Android 12, from the rose palette of the static icon.
+     */
+    private fun statusCardColors(snapshot: RenderedSnapshot): IconColors {
+        if (!snapshot.dynamicColor || Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
+            return IconColors(tile = APP_ICON_TILE_COLOR, glyph = APP_ICON_GLYPH_COLOR)
+        }
+        return IconColors(
+            tile = appContext.getColor(android.R.color.system_accent1_100),
+            glyph = appContext.getColor(android.R.color.system_accent1_700),
+        )
     }
 
     private fun batterySummary(snapshot: RenderedSnapshot): String {
@@ -1103,8 +1122,11 @@ internal class SystemPresentationRenderer(
         val focusEnabled: Boolean,
         val statusIsland: Boolean,
         val statusTarget: String,
+        val dynamicColor: Boolean,
         val address: String?,
     )
+
+    private data class IconColors(val tile: Int, val glyph: Int)
 
     private data class NoiseState(val mode: String)
 

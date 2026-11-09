@@ -16,6 +16,7 @@ object BridgePresentationWire {
     const val TARGET_OPENROSE = "OPENROSE"
     const val TARGET_SYSTEM = "SYSTEM"
     const val TARGET_ROSELINK = "ROSELINK"
+    const val DYNAMIC_COLOR = "dynamic_color"
     const val PROMPT = "prompt"
     const val PROMPT_ID = "id"
     const val TRIGGER = "trigger"

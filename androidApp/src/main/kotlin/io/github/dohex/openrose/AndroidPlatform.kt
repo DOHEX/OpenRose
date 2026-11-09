@@ -86,6 +86,11 @@ internal fun Context.readIntegrationPlatform(
         incrementalVersion = Build.VERSION.INCREMENTAL,
     ),
     backgroundService = BackgroundServiceFacts(backgroundService, runningNotification(), wake),
+    dynamicColorApplicability = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        PlatformApplicability.APPLICABLE
+    } else {
+        PlatformApplicability.NOT_APPLICABLE
+    },
 )
 
 /** The required service notification is independent of the focus notification setting and has its own channel. */

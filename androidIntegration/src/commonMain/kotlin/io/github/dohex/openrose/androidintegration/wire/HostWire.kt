@@ -205,6 +205,7 @@ object HostWire {
         "reference" to state.reference?.let(ControlWire::encode), "tag" to state.notificationTag?.let(::str),
         "mode" to Wire.Str(state.islandMode.name), "focus" to bool(state.focusNotificationEnabled),
         "islandFields" to bool(state.allowIslandFields), "target" to Wire.Str(state.statusNotificationTarget.name),
+        "dynamic" to bool(state.dynamicColor),
         "battery" to state.battery?.let { battery ->
             obj(
                 "left" to encodeReading(battery.left, ::num),
@@ -237,7 +238,7 @@ object HostWire {
             reference = node.optional("reference")?.let(ControlWire::decodeReference),
             notificationTag = node.optional("tag")?.asStr(), islandMode = node.field("mode").asEnum(),
             focusNotificationEnabled = node.bool("focus"), allowIslandFields = node.bool("islandFields"),
-            statusNotificationTarget = node.field("target").asEnum(),
+            statusNotificationTarget = node.field("target").asEnum(), dynamicColor = node.bool("dynamic"),
             battery = node.optional("battery")?.asObj()?.let {
                 SystemBatteryState(
                     decodeReading(it.field("left"), Wire::asInt),

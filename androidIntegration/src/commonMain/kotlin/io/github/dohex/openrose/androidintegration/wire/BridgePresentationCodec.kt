@@ -9,6 +9,7 @@ fun SystemPresentationState.toBridgePresentation(): Map<String, Any?> = buildMap
     put(BridgePresentationWire.ALLOW_ISLAND_FIELDS, allowIslandFields)
     put(BridgePresentationWire.STATUS_SUMMARY_ISLAND, statusSummaryIsland)
     put(BridgePresentationWire.STATUS_TARGET, statusNotificationTarget.name)
+    put(BridgePresentationWire.DYNAMIC_COLOR, dynamicColor)
     if (showStatusNotification) {
         put(BridgePresentationWire.NOTIFICATION, mapOf(BridgePresentationWire.TAG to "openrose:$notificationTag"))
     }

@@ -25,6 +25,8 @@ data class IntegrationSettings(
     val fusionOffAsWind: Boolean = false,
     val backgroundControlEnabled: Boolean = false,
     val controlWay: ControlWay = ControlWay.ORDINARY,
+    /** 动态取色: on Android 12+, the application's colors and the status notification icon follow the system wallpaper. */
+    val dynamicColor: Boolean = false,
 )
 
 object IntegrationSettingsCodec {
@@ -66,6 +68,7 @@ object IntegrationSettingsCodec {
         "androidIntegration.fusion_off_as_wind" to settings.fusionOffAsWind.toString(),
         "androidIntegration.background_control_enabled" to settings.backgroundControlEnabled.toString(),
         CONTROL_WAY_KEY to encodeControlWay(settings.controlWay),
+        "androidIntegration.dynamic_color" to settings.dynamicColor.toString(),
     )
 
     fun decode(values: Map<String, String>): IntegrationSettings {
@@ -91,6 +94,7 @@ object IntegrationSettingsCodec {
             backgroundControlEnabled = values["androidIntegration.background_control_enabled"]?.toBooleanStrictOrNull()
                 ?: defaults.backgroundControlEnabled,
             controlWay = decodeControlWay(values[CONTROL_WAY_KEY]),
+            dynamicColor = values["androidIntegration.dynamic_color"]?.toBooleanStrictOrNull() ?: defaults.dynamicColor,
         )
     }
 
