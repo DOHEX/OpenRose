@@ -239,7 +239,7 @@ class TrayPanelUiTest {
         val device = requireNotNull(connected.device)
         val partial = connected.copy(
             device = device.copy(
-                fields = device.fields.putAll(
+                fields = device.fields.puttingAll(
                     persistentMapOf(
                         DeviceField.LEFT_BATTERY to FieldReading.Known(FieldValue.Number(80), "80"),
                         DeviceField.RIGHT_BATTERY to FieldReading.Unknown("ff"),
@@ -255,7 +255,7 @@ class TrayPanelUiTest {
         val none = connected.copy(
             device = device.copy(
                 fields = device.fields
-                    .putAll(
+                    .puttingAll(
                         persistentMapOf(
                             DeviceField.LEFT_BATTERY to FieldReading.Loading,
                             DeviceField.RIGHT_BATTERY to FieldReading.NotProvided(""),

@@ -279,9 +279,9 @@ internal class ControlLink(
                                 ?.value as? FieldValue.Firmware
                             current.copy(
                                 device = old.copy(
-                                    fields = old.fields.putAll(readings),
+                                    fields = old.fields.puttingAll(readings),
                                     capabilities = profile.capabilities(firmware),
-                                    fieldErrors = readings.keys.fold(old.fieldErrors) { errors, field -> errors.remove(field) },
+                                    fieldErrors = readings.keys.fold(old.fieldErrors) { errors, field -> errors.removing(field) },
                                     rawNotifications = old.rawNotifications.appendRecent(listOf(bytes.hex())),
                                     unknownNotifications = old.unknownNotifications.appendRecent(
                                         parsed.filter { !it.accepted }.map { it.rawHex },
@@ -295,7 +295,7 @@ internal class ControlLink(
                         val keys = parsed.flatMap { it.responseKeys }.toSet()
                         val fields = parsed.flatMap { it.readings.keys }.toSet()
                         previous.copy(
-                            keys = previous.keys.addAll(keys),
+                            keys = previous.keys.addingAll(keys),
                             meaningful = previous.meaningful || parsed.any { it.accepted },
                             keyRevisions = previous.keyRevisions.mutate { revisions ->
                                 keys.forEach { revisions[it] = (revisions[it] ?: 0) + 1 }
@@ -626,14 +626,14 @@ internal class ControlLink(
         previous?.let { settings.end(it) }
         previous?.task?.cancel()
         previous?.observer?.cancel()
-        previous?.connection?.let { connection -> unclosed.update { if (connection in it) it else it.add(connection) } }
+        previous?.connection?.let { connection -> unclosed.update { if (connection in it) it else it.adding(connection) } }
         unclosed.getAndUpdate { persistentListOf() }.forEach { closeOrRemember(it) }
         return unclosed.value.isEmpty()
     }
 
     private suspend fun closeOrRemember(connection: ControlConnection): Boolean {
         val closed = closeSafely(connection)
-        if (!closed) unclosed.update { if (connection in it) it else it.add(connection) }
+        if (!closed) unclosed.update { if (connection in it) it else it.adding(connection) }
         return closed
     }
 

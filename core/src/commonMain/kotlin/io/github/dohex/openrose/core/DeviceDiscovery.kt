@@ -37,7 +37,7 @@ internal class DeviceDiscovery(
         if (bonded != null) {
             state.update { old ->
                 if (old.bondedDevices.none { it.deviceId == bonded.deviceId }) {
-                    old.copy(bondedDevices = old.bondedDevices.add(bonded))
+                    old.copy(bondedDevices = old.bondedDevices.adding(bonded))
                 } else {
                     old
                 }
@@ -111,7 +111,11 @@ internal class DeviceDiscovery(
                             old
                         } else {
                             val index = old.candidates.indexOfFirst { it.deviceId == candidate.deviceId }
-                            val candidates = if (index < 0) old.candidates.add(candidate) else old.candidates.set(index, candidate)
+                            val candidates = if (index < 0) {
+                                old.candidates.adding(candidate)
+                            } else {
+                                old.candidates.replacingAt(index, candidate)
+                            }
                             old.copy(candidates = candidates)
                         }
                     }

@@ -140,9 +140,9 @@ class AndroidPlatformUi(
                         enabledFor = { true },
                         onToggle = { trigger ->
                             val triggers = if (trigger in settings.islandTriggers) {
-                                settings.islandTriggers.remove(trigger)
+                                settings.islandTriggers.removing(trigger)
                             } else {
-                                settings.islandTriggers.add(trigger)
+                                settings.islandTriggers.adding(trigger)
                             }
                             saveSystemPreference(settings.copy(islandTriggers = triggers))
                         },
