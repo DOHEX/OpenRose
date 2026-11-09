@@ -68,7 +68,7 @@ internal fun EarbudsArtwork(
             center = Offset(centerX, caseTop + caseHeight * 0.64f),
         )
 
-        val budCenter = Offset(centerX - unit * 0.5f, floor - unit * 0.5f)
+        val budCenter = Offset(centerX - unit * 0.47f, floor - unit * BUD_STEM)
         drawEarbud(budCenter, unit, bud, tip)
         scale(scaleX = -1f, scaleY = 1f, pivot = Offset(centerX, 0f)) {
             drawEarbud(budCenter, unit, bud, tip)
@@ -76,10 +76,12 @@ internal fun EarbudsArtwork(
     }
 }
 
+private const val BUD_STEM = 0.36f
+
 /** One upright earbud with its eartip facing +x and its stem ending on the floor line. */
 private fun DrawScope.drawEarbud(center: Offset, unit: Float, body: Color, tip: Color) {
-    val headRadius = unit * 0.15f
-    val stemWidth = unit * 0.12f
+    val headRadius = unit * 0.105f
+    val stemWidth = unit * 0.08f
     drawCircle(
         color = tip,
         radius = headRadius * 0.5f,
@@ -88,7 +90,7 @@ private fun DrawScope.drawEarbud(center: Offset, unit: Float, body: Color, tip: 
     drawRoundRect(
         color = body,
         topLeft = Offset(center.x - headRadius * 0.35f - stemWidth / 2f, center.y),
-        size = Size(stemWidth, unit * 0.5f),
+        size = Size(stemWidth, unit * BUD_STEM),
         cornerRadius = CornerRadius(stemWidth / 2f),
     )
     drawCircle(color = body, radius = headRadius, center = center)
