@@ -34,7 +34,7 @@ class SessionReferenceOwnershipTest {
         assertEquals(OperationResult.Success, runtime.connectFromSystem(id))
         runCurrent()
         val oldReference = runtime.currentReference()
-        val oldPrompt = requireNotNull(runtime.integration.value.presentation.connectionPrompt).id
+        val oldPrompt = requireNotNull(runtime.integration.value.presentation.prompt).id
         first.release()
         runCurrent()
         assertEquals(null, runtime.state.value.device)
@@ -49,7 +49,7 @@ class SessionReferenceOwnershipTest {
 
         assertIs<SessionSnapshotResult.Failure>(runtime.readSession(oldReference))
         assertIs<OperationResult.Failure>(runtime.set(oldReference, DeviceSetting.NOISE_MODE, FieldValue.Text("anc")))
-        assertFalse(runtime.claimConnectionPrompt(oldReference, oldPrompt))
+        assertFalse(runtime.claimPrompt(oldReference, oldPrompt))
 
         assertEquals(writes, rig.appTransport.links.sumOf { it.writes.size }, "a stale reference reaches no earphones")
         assertIs<SessionSnapshotResult.Available>(runtime.readSession(current))

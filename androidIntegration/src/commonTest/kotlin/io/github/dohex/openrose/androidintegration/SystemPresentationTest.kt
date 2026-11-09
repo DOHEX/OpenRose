@@ -60,16 +60,16 @@ class SystemPresentationTest {
         assertEquals(PresentationReading.Known("wind"), presentation.noise?.mode)
         assertTrue(DeviceSetting.NOISE_MODE in presentation.actions)
 
-        val prompt = assertNotNull(presentation.connectionPrompt)
+        val prompt = assertNotNull(presentation.prompt)
         assertEquals(reference, prompt.reference)
         assertEquals(IslandMode.OFFICIAL, prompt.mode)
         assertFalse(prompt.claimed)
         assertEquals(5_000L, prompt.durationMillis)
-        assertTrue(session.claimConnectionPrompt(reference, prompt.id))
-        assertFalse(session.claimConnectionPrompt(reference, prompt.id))
+        assertTrue(session.claimPrompt(reference, prompt.id))
+        assertFalse(session.claimPrompt(reference, prompt.id))
 
         val snapshot = assertIs<SessionSnapshotResult.Available>(session.readSession(reference))
-        assertTrue(assertNotNull(snapshot.presentation.connectionPrompt).claimed)
+        assertTrue(assertNotNull(snapshot.presentation.prompt).claimed)
         assertEquals("64", (assertIs<FieldReading.Known>(snapshot.device.fields[DeviceField.LEFT_BATTERY])).rawHex)
         assertEquals(PresentationReading.Known(100), snapshot.presentation.battery?.left)
         @Suppress("UNCHECKED_CAST")
@@ -78,7 +78,7 @@ class SystemPresentationTest {
 
         val writesBeforeSettingsChange = transport.connection.writes.size
         session.updateSettings(session.state.value.settings.copy(forceBle = true))
-        assertEquals(prompt.id, session.presentation.value.connectionPrompt?.id)
+        assertEquals(prompt.id, session.presentation.value.prompt?.id)
         assertEquals(writesBeforeSettingsChange, transport.connection.writes.size)
 
         val link = transport.connection
@@ -86,13 +86,13 @@ class SystemPresentationTest {
         runCurrent()
         val updated = assertIs<SessionSnapshotResult.Available>(session.readSession(reference)).presentation
         assertEquals(PresentationReading.Known(16), updated.battery?.right)
-        assertEquals(prompt.id, updated.connectionPrompt?.id)
-        assertTrue(assertNotNull(updated.connectionPrompt).claimed)
-        assertFalse(session.claimConnectionPrompt(reference, prompt.id))
+        assertEquals(prompt.id, updated.prompt?.id)
+        assertTrue(assertNotNull(updated.prompt).claimed)
+        assertFalse(session.claimPrompt(reference, prompt.id))
 
         session.disconnect()
         assertNull(session.presentation.value.reference)
-        assertNull(session.presentation.value.connectionPrompt)
+        assertNull(session.presentation.value.prompt)
     }
 
     @Test
@@ -115,21 +115,26 @@ class SystemPresentationTest {
             val presentation = session.presentation.value
             assertEquals(focusEnabled, presentation.showStatusNotification, "$mode / focus=$focusEnabled")
             assertEquals(mode != IslandMode.OFF, presentation.allowIslandFields, "$mode / focus=$focusEnabled")
-            assertEquals(mode != IslandMode.OFF, presentation.connectionPrompt != null, "$mode / focus=$focusEnabled")
+            assertEquals(
+                mode == IslandMode.MODULE,
+                presentation.statusSummaryIsland,
+                "$mode / focus=$focusEnabled: official mode's connection prompt is its only island",
+            )
+            assertEquals(mode != IslandMode.OFF, presentation.prompt != null, "$mode / focus=$focusEnabled")
             assertEquals(id.value, presentation.notificationTag)
 
             if (mode != IslandMode.OFF) {
-                assertNotNull(presentation.connectionPrompt)
+                assertNotNull(presentation.prompt)
                 val otherMode = if (mode == IslandMode.OFFICIAL) IslandMode.MODULE else IslandMode.OFFICIAL
                 session.updateIntegrationSettings(session.settings.copy(islandMode = otherMode))
-                assertNull(session.presentation.value.connectionPrompt)
+                assertNull(session.presentation.value.prompt)
                 session.updateIntegrationSettings(session.settings.copy(islandMode = mode))
-                assertNull(session.presentation.value.connectionPrompt)
+                assertNull(session.presentation.value.prompt)
             }
 
             session.updateIntegrationSettings(session.settings.copy(focusNotificationEnabled = !focusEnabled))
             assertEquals(!focusEnabled, session.presentation.value.showStatusNotification)
-            assertNull(session.presentation.value.connectionPrompt)
+            assertNull(session.presentation.value.prompt)
             session.disconnect()
         }
     }
@@ -140,13 +145,15 @@ class SystemPresentationTest {
         val session = newSession(transport, IntegrationSettings(islandMode = IslandMode.MODULE, islandTriggers = persistentSetOf()))
         connect(session, transport, DeviceId("i5"))
 
-        assertNull(session.presentation.value.connectionPrompt)
+        assertNull(session.presentation.value.prompt)
         assertFalse(session.presentation.value.allowIslandFields)
+        assertFalse(session.presentation.value.statusSummaryIsland)
         assertTrue(session.presentation.value.showStatusNotification)
 
         session.updateIntegrationSettings(session.settings.copy(islandTriggers = persistentSetOf(IslandTrigger.CONNECTION)))
-        assertNull(session.presentation.value.connectionPrompt)
+        assertNull(session.presentation.value.prompt)
         assertTrue(session.presentation.value.allowIslandFields)
+        assertTrue(session.presentation.value.statusSummaryIsland)
         session.disconnect()
     }
 
@@ -158,7 +165,7 @@ class SystemPresentationTest {
         connect(session, transport, DeviceId("i5"))
 
         val initial = session.presentation.value
-        assertNull(initial.connectionPrompt)
+        assertNull(initial.prompt)
         assertEquals(PresentationReading.NotProvided, initial.battery?.left)
         assertEquals(PresentationReading.NotProvided, initial.battery?.right)
 
@@ -169,7 +176,7 @@ class SystemPresentationTest {
         assertEquals(PresentationReading.Known(100), updated.battery?.left)
         assertEquals(PresentationReading.Known(98), updated.battery?.right)
         assertEquals(PresentationReading.Unknown, updated.battery?.case)
-        assertNotNull(updated.connectionPrompt)
+        assertNotNull(updated.prompt)
         session.disconnect()
     }
 
@@ -179,22 +186,22 @@ class SystemPresentationTest {
         val session = newSession(transport, promptDurationMillis = 100)
         val id = DeviceId("i5")
         connect(session, transport, id)
-        val first = assertNotNull(session.presentation.value.connectionPrompt)
+        val first = assertNotNull(session.presentation.value.prompt)
 
         advanceTimeBy(40)
         runCurrent()
         session.disconnect()
         transport.connection = PresentationConnection(i5Replies)
         connect(session, transport, id)
-        val second = assertNotNull(session.presentation.value.connectionPrompt)
+        val second = assertNotNull(session.presentation.value.prompt)
         assertNotEquals(first.id, second.id)
 
         advanceTimeBy(60)
         runCurrent()
-        assertEquals(second.id, session.presentation.value.connectionPrompt?.id)
+        assertEquals(second.id, session.presentation.value.prompt?.id)
         advanceTimeBy(40)
         runCurrent()
-        assertNull(session.presentation.value.connectionPrompt)
+        assertNull(session.presentation.value.prompt)
         session.disconnect()
     }
 
@@ -240,7 +247,7 @@ class SystemPresentationTest {
             timing = SessionTiming(writeIntervalMillis = 0),
         ),
         backgroundScope,
-        PresentationTiming(connectionPromptDurationMillis = promptDurationMillis),
+        PresentationTiming(promptDurationMillis = promptDurationMillis),
         initialIntegrationSettings = settings,
     )
 

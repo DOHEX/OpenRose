@@ -6,7 +6,7 @@ package io.github.dohex.openrose.androidintegration.wire
  * Protocol commands and device state travel as the core module's rendered wire text in [PAYLOAD].
  */
 object BridgeWire {
-    const val VERSION = 4
+    const val VERSION = 5
     const val KEY_VERSION = "version"
     const val STATUS = "status"
     const val MESSAGE = "message"

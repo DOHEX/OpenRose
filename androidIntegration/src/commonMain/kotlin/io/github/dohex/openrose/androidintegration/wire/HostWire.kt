@@ -3,7 +3,6 @@ package io.github.dohex.openrose.androidintegration.wire
 import io.github.dohex.openrose.androidintegration.AcquireResult
 import io.github.dohex.openrose.androidintegration.BridgeIpcState
 import io.github.dohex.openrose.androidintegration.ClientRole
-import io.github.dohex.openrose.androidintegration.ConnectionPrompt
 import io.github.dohex.openrose.androidintegration.ControlWay
 import io.github.dohex.openrose.androidintegration.HostCallResult
 import io.github.dohex.openrose.androidintegration.HostCommand
@@ -15,6 +14,7 @@ import io.github.dohex.openrose.androidintegration.HostRejection
 import io.github.dohex.openrose.androidintegration.HostSettings
 import io.github.dohex.openrose.androidintegration.HostSettingsCodec
 import io.github.dohex.openrose.androidintegration.HostStatus
+import io.github.dohex.openrose.androidintegration.IslandPrompt
 import io.github.dohex.openrose.androidintegration.OwnerGeneration
 import io.github.dohex.openrose.androidintegration.OwnerHolder
 import io.github.dohex.openrose.androidintegration.PresentationReading
@@ -204,7 +204,7 @@ object HostWire {
     private fun encodePresentation(state: SystemPresentationState): Wire = obj(
         "reference" to state.reference?.let(ControlWire::encode), "tag" to state.notificationTag?.let(::str),
         "mode" to Wire.Str(state.islandMode.name), "focus" to bool(state.focusNotificationEnabled),
-        "islandFields" to bool(state.allowIslandFields),
+        "islandFields" to bool(state.allowIslandFields), "target" to Wire.Str(state.statusNotificationTarget.name),
         "battery" to state.battery?.let { battery ->
             obj(
                 "left" to encodeReading(battery.left, ::num),
@@ -220,9 +220,10 @@ object HostWire {
             )
         },
         "actions" to arr(state.actions.map { Wire.Str(it.name) }),
-        "prompt" to state.connectionPrompt?.let { prompt ->
+        "prompt" to state.prompt?.let { prompt ->
             obj(
                 "id" to str(prompt.id),
+                "trigger" to Wire.Str(prompt.trigger.name),
                 "mode" to Wire.Str(prompt.mode.name),
                 "reference" to ControlWire.encode(prompt.reference),
                 "claimed" to bool(prompt.claimed),
@@ -236,6 +237,7 @@ object HostWire {
             reference = node.optional("reference")?.let(ControlWire::decodeReference),
             notificationTag = node.optional("tag")?.asStr(), islandMode = node.field("mode").asEnum(),
             focusNotificationEnabled = node.bool("focus"), allowIslandFields = node.bool("islandFields"),
+            statusNotificationTarget = node.field("target").asEnum(),
             battery = node.optional("battery")?.asObj()?.let {
                 SystemBatteryState(
                     decodeReading(it.field("left"), Wire::asInt),
@@ -251,9 +253,10 @@ object HostWire {
                 )
             },
             actions = node.arr("actions").map { it.asEnum<DeviceSetting>() }.toSet(),
-            connectionPrompt = node.optional("prompt")?.asObj()?.let {
-                ConnectionPrompt(
+            prompt = node.optional("prompt")?.asObj()?.let {
+                IslandPrompt(
                     it.str("id"),
+                    it.field("trigger").asEnum(),
                     it.field("mode").asEnum(),
                     ControlWire.decodeReference(it.field("reference")),
                     it.bool("claimed"),

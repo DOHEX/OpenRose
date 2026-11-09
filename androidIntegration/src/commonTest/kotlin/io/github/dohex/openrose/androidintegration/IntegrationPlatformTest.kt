@@ -75,21 +75,21 @@ class IntegrationPlatformTest {
         assertEquals(PresentationReading.Known("wind"), assertNotNull(presentation.noise).mode)
         assertTrue(DeviceSetting.NOISE_MODE in presentation.actions)
         assertTrue(presentation.showStatusNotification)
-        val prompt = assertNotNull(presentation.connectionPrompt)
+        val prompt = assertNotNull(presentation.prompt)
         assertEquals(reference, prompt.reference)
         val snapshot = assertIs<SessionSnapshotResult.Available>(runtime.readSession(reference))
         assertEquals(presentation, snapshot.presentation)
 
         advanceTimeBy(prompt.durationMillis)
         runCurrent()
-        assertNull(runtime.integration.value.presentation.connectionPrompt)
+        assertNull(runtime.integration.value.presentation.prompt)
         assertEquals(reference, runtime.integration.value.presentation.reference)
         assertTrue(runtime.integration.value.presentation.showStatusNotification)
 
         assertTrue(runtime.disconnect())
         runCurrent()
         assertNull(runtime.integration.value.presentation.reference)
-        assertNull(runtime.integration.value.presentation.connectionPrompt)
+        assertNull(runtime.integration.value.presentation.prompt)
     }
 
     @Test

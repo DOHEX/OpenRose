@@ -85,7 +85,7 @@ class ModuleHostPresentationTest {
         val state: ControlState get() = requireNotNull(host.view(app.identity, app.id)).state
         val presentation: SystemPresentationState get() = requireNotNull(host.view(app.identity, app.id)).presentation
         val link: HeadsetConnection get() = transport.links.last()
-        val prompt: ConnectionPrompt get() = requireNotNull(presentation.connectionPrompt)
+        val prompt: IslandPrompt get() = requireNotNull(presentation.prompt)
         val reference: SessionReference get() = requireNotNull(presentation.reference)
 
         suspend fun start() {
@@ -142,7 +142,7 @@ class ModuleHostPresentationTest {
         val rig = Rig(this, IntegrationSettings(islandMode = IslandMode.OFF))
         rig.start()
 
-        assertNull(rig.presentation.connectionPrompt)
+        assertNull(rig.presentation.prompt)
         assertFalse(rig.presentation.allowIslandFields)
         for (lease in listOf(rig.xiaomi, rig.hostUi)) {
             assertIs<HostCallResult.Rejected>(rig.claim(lease, id = "forged"))
@@ -192,15 +192,15 @@ class ModuleHostPresentationTest {
         assertTrue(rig.prompt.claimed, "a battery refresh keeps the consumed prompt consumed")
 
         rig.updateSettings { it.copy(islandMode = IslandMode.OFF) }
-        assertNull(rig.presentation.connectionPrompt)
+        assertNull(rig.presentation.prompt)
         rig.updateSettings { it.copy(islandMode = IslandMode.OFFICIAL) }
-        assertNull(rig.presentation.connectionPrompt, "restoring the saved mode does not replay the event")
+        assertNull(rig.presentation.prompt, "restoring the saved mode does not replay the event")
 
         advanceTimeBy(6_000)
         runCurrent()
         rig.link.deviceReply(I5_BATTERY)
         runCurrent()
-        assertNull(rig.presentation.connectionPrompt)
+        assertNull(rig.presentation.prompt)
         assertEquals(listOf("module:open"), rig.headset.events)
     }
 

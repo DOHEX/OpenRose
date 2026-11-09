@@ -10,6 +10,7 @@ import io.github.dohex.openrose.androidintegration.scope.ScopeRestartResult
 import io.github.dohex.openrose.androidintegration.scope.ScopeRestartStatus
 import io.github.dohex.openrose.androidintegration.scope.ScopeRestartUpdate
 import io.github.dohex.openrose.core.*
+import io.github.dohex.openrose.core.protocol.ModelProfile
 import io.github.dohex.openrose.ui.*
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -121,6 +122,15 @@ class AndroidPlatformUi(
                     checked = settings.focusNotificationEnabled,
                     onChange = { saveSystemPreference(settings.copy(focusNotificationEnabled = it)) },
                 )
+                if (settings.focusNotificationEnabled) {
+                    AppChoiceRow(
+                        title = "点击通知打开",
+                        valueText = statusNotificationTargetLabel(settings.statusNotificationTarget),
+                        options = StatusNotificationTarget.entries.map { AppOption(it, statusNotificationTargetLabel(it)) },
+                        selected = settings.statusNotificationTarget,
+                        onSelect = { saveSystemPreference(settings.copy(statusNotificationTarget = it)) },
+                    )
+                }
             }
 
             if (settings.islandMode == IslandMode.MODULE) {
@@ -135,6 +145,11 @@ class AndroidPlatformUi(
                                 label = "连接时",
                                 contentDescription = "新连接会话开始时显示连接提示",
                             ),
+                            AppOption(
+                                value = IslandTrigger.IN_CASE,
+                                label = "入盒时",
+                                contentDescription = "耳机放进充电盒时显示入盒提示",
+                            ),
                         ),
                         checked = settings.islandTriggers,
                         enabledFor = { true },
@@ -147,6 +162,7 @@ class AndroidPlatformUi(
                             saveSystemPreference(settings.copy(islandTriggers = triggers))
                         },
                     )
+                    AppText("入盒时仅对 $inCaseModels 生效。", role = AppTextRole.Summary)
                 }
             }
 
@@ -390,6 +406,14 @@ private fun fusionSettingsDestinationLabel(destination: FusionSettingsDestinatio
     FusionSettingsDestination.SYSTEM -> "系统耳机详情页"
     FusionSettingsDestination.OPENROSE -> "OpenRose 耳机主页"
 }
+
+private fun statusNotificationTargetLabel(target: StatusNotificationTarget): String = when (target) {
+    StatusNotificationTarget.OPENROSE -> "OpenRose 耳机主页"
+    StatusNotificationTarget.SYSTEM -> "系统耳机详情页"
+    StatusNotificationTarget.ROSELINK -> "RoseLink"
+}
+
+private val inCaseModels: String = ModelProfile.entries.filter { it.reportsInCase }.joinToString("、") { it.displayName }
 
 private fun bridgeIpcLabel(state: BridgeIpcState): String = when (state) {
     BridgeIpcState.DISCONNECTED -> "未连接"

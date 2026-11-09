@@ -4,16 +4,23 @@ import io.github.dohex.openrose.core.UserSettings
 import io.github.dohex.openrose.core.UserSettingsCodec
 import kotlinx.collections.immutable.PersistentSet
 import kotlinx.collections.immutable.persistentSetOf
+import kotlinx.collections.immutable.toPersistentSet
 
 enum class ControlWay { ORDINARY, MODULE }
 enum class IslandMode { OFF, OFFICIAL, MODULE }
-enum class IslandTrigger { CONNECTION }
+
+/** 显示时机: the earphone events that show a short module-mode prompt. */
+enum class IslandTrigger { CONNECTION, IN_CASE }
 enum class FusionSettingsDestination { SYSTEM, OPENROSE }
+
+/** 状态通知点击目标: where tapping the status notification card or its expanded island goes. */
+enum class StatusNotificationTarget { OPENROSE, SYSTEM, ROSELINK }
 
 data class IntegrationSettings(
     val islandMode: IslandMode = IslandMode.OFFICIAL,
     val focusNotificationEnabled: Boolean = true,
     val islandTriggers: PersistentSet<IslandTrigger> = persistentSetOf(IslandTrigger.CONNECTION),
+    val statusNotificationTarget: StatusNotificationTarget = StatusNotificationTarget.OPENROSE,
     val fusionSettingsDestination: FusionSettingsDestination = FusionSettingsDestination.SYSTEM,
     val fusionOffAsWind: Boolean = false,
     val backgroundControlEnabled: Boolean = false,
@@ -44,7 +51,13 @@ object IntegrationSettingsCodec {
         "androidIntegration.island_triggers" to settings.islandTriggers.joinToString(",") {
             when (it) {
                 IslandTrigger.CONNECTION -> "connection"
+                IslandTrigger.IN_CASE -> "in_case"
             }
+        },
+        "androidIntegration.status_notification_target" to when (settings.statusNotificationTarget) {
+            StatusNotificationTarget.OPENROSE -> "openrose"
+            StatusNotificationTarget.SYSTEM -> "system"
+            StatusNotificationTarget.ROSELINK -> "roselink"
         },
         "androidIntegration.fusion_settings_destination" to when (settings.fusionSettingsDestination) {
             FusionSettingsDestination.SYSTEM -> "system"
@@ -66,11 +79,9 @@ object IntegrationSettingsCodec {
             },
             focusNotificationEnabled = values["androidIntegration.focus_notification_enabled"]?.toBooleanStrictOrNull()
                 ?: defaults.focusNotificationEnabled,
-            islandTriggers = when (values["androidIntegration.island_triggers"]) {
-                "" -> persistentSetOf()
-                "connection" -> persistentSetOf(IslandTrigger.CONNECTION)
-                else -> defaults.islandTriggers
-            },
+            islandTriggers = decodeTriggers(values["androidIntegration.island_triggers"]) ?: defaults.islandTriggers,
+            statusNotificationTarget = decodeStatusTarget(values["androidIntegration.status_notification_target"])
+                ?: defaults.statusNotificationTarget,
             fusionSettingsDestination = when (values["androidIntegration.fusion_settings_destination"]?.lowercase()) {
                 "system" -> FusionSettingsDestination.SYSTEM
                 "openrose" -> FusionSettingsDestination.OPENROSE
@@ -81,6 +92,26 @@ object IntegrationSettingsCodec {
                 ?: defaults.backgroundControlEnabled,
             controlWay = decodeControlWay(values[CONTROL_WAY_KEY]),
         )
+    }
+
+    private fun decodeStatusTarget(value: String?): StatusNotificationTarget? = when (value) {
+        "openrose" -> StatusNotificationTarget.OPENROSE
+        "system" -> StatusNotificationTarget.SYSTEM
+        "roselink" -> StatusNotificationTarget.ROSELINK
+        else -> null
+    }
+
+    /** An explicit empty value stays empty; a missing value or any unknown entry falls back to the default. */
+    private fun decodeTriggers(value: String?): PersistentSet<IslandTrigger>? {
+        value ?: return null
+        if (value.isEmpty()) return persistentSetOf()
+        return value.split(",").map { token ->
+            when (token) {
+                "connection" -> IslandTrigger.CONNECTION
+                "in_case" -> IslandTrigger.IN_CASE
+                else -> return null
+            }
+        }.toPersistentSet()
     }
 }
 

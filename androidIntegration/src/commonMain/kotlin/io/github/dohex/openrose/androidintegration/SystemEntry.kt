@@ -38,9 +38,9 @@ sealed interface SessionSnapshotResult {
 }
 
 /** Deadlines of the system presentation; injectable so a virtual clock can drive them. */
-data class PresentationTiming(val connectionPromptDurationMillis: Long = 5_000) {
+data class PresentationTiming(val promptDurationMillis: Long = 5_000) {
     init {
-        require(connectionPromptDurationMillis > 0)
+        require(promptDurationMillis > 0)
     }
 }
 
@@ -60,7 +60,7 @@ interface SystemEntry {
     suspend fun set(reference: SessionReference, setting: DeviceSetting, value: FieldValue): OperationResult
 
     /** The first current renderer to claim an active prompt becomes its sole trigger owner. */
-    suspend fun claimConnectionPrompt(reference: SessionReference, promptId: String): Boolean
+    suspend fun claimPrompt(reference: SessionReference, promptId: String): Boolean
 }
 
 /**
@@ -75,8 +75,17 @@ class SystemEntryRuntime(
     initialIntegrationSettings: IntegrationSettings = IntegrationSettings(),
 ) : ControlRuntime by control,
     SystemEntry {
-    /** [consumed] is the session whose connection event was used up; it never prompts again. */
-    private data class Prompts(val consumed: SessionReference? = null, val prompt: ConnectionPrompt? = null)
+    /**
+     * [consumed] is the session whose connection event was used up; it never prompts again. [inCase] holds the
+     * in-case flags last seen in [inCaseSession], so only a change inside one session counts as an in-case event.
+     */
+    private data class Prompts(
+        val consumed: SessionReference? = null,
+        val prompt: IslandPrompt? = null,
+        val inCaseSession: SessionReference? = null,
+        val inCase: Pair<Boolean?, Boolean?>? = null,
+        val inCaseEvents: Int = 0,
+    )
 
     private val prompts = MutableStateFlow(Prompts())
     private val integrationSettings = MutableStateFlow(initialIntegrationSettings)
@@ -120,7 +129,7 @@ class SystemEntryRuntime(
         return control.set(setting, value, expectedSessionId = reference.sessionId)
     }
 
-    override suspend fun claimConnectionPrompt(reference: SessionReference, promptId: String): Boolean {
+    override suspend fun claimPrompt(reference: SessionReference, promptId: String): Boolean {
         advance()
         val captured = control.state.value
         if (captured.readySession != reference) return false
@@ -145,40 +154,60 @@ class SystemEntryRuntime(
     }
 
     /**
-     * Brings the prompt in line with the current control state. A ready session's connection event is
-     * consumed once, at its first trusted ear battery, and shows only if the settings allow it at that
-     * moment; a prompt whose session ended or whose mode no longer applies is dropped for good.
+     * Brings the prompt in line with the current control state. A ready session's connection event is consumed
+     * once, at its first trusted ear battery; an in-case event is an earbud whose flag goes from known out of the
+     * case to known in it within the same session. Each event shows only if the settings allow it at that moment
+     * and replaces any prompt still showing; a prompt whose session ended or whose mode no longer applies is
+     * dropped for good.
      */
     private fun advance() {
-        var installed: ConnectionPrompt? = null
+        var installed: IslandPrompt? = null
         prompts.update { current ->
             installed = null
             // Read inside the update, so a retry never acts on a state older than the one it replaces.
             val state = control.state.value
             val session = state.readySession
-            val kept = current.prompt?.takeIf { it.reference == session && it.appliesTo(settings) }
-            if (session == null || current.consumed == session || !requireNotNull(state.device).hasTrustedEarBattery()) {
-                if (kept == current.prompt) current else current.copy(prompt = kept)
-            } else {
-                val prompt = if (settings.allowsConnectionPrompt()) {
-                    ConnectionPrompt(
-                        id = "${session.deviceId.value}:${session.sessionId}:connection",
-                        mode = settings.islandMode,
-                        reference = session,
-                        durationMillis = timing.connectionPromptDurationMillis,
-                    )
-                } else {
-                    null
+            var next = current.copy(prompt = current.prompt?.takeIf { it.reference == session && it.appliesTo(settings) })
+            if (session != null) {
+                val device = requireNotNull(state.device)
+                val trusted = device.hasTrustedEarBattery()
+                if (next.consumed != session && trusted) {
+                    val prompt = newPrompt(IslandTrigger.CONNECTION, session, "connection")
+                    installed = prompt
+                    next = next.copy(consumed = session, prompt = prompt)
                 }
-                installed = prompt
-                Prompts(consumed = session, prompt = prompt)
+                val flags = device.inCaseFlags()
+                val previous = next.inCase.takeIf { next.inCaseSession == session }
+                val entered = previous != null && flags != null &&
+                    ((previous.first == false && flags.first == true) || (previous.second == false && flags.second == true))
+                next = next.copy(inCaseSession = session, inCase = flags)
+                if (entered && trusted) {
+                    val event = next.inCaseEvents + 1
+                    next = next.copy(inCaseEvents = event)
+                    newPrompt(IslandTrigger.IN_CASE, session, "in_case:$event")?.let { prompt ->
+                        installed = prompt
+                        next = next.copy(prompt = prompt)
+                    }
+                }
             }
+            next
         }
         installed?.let(::expireLater)
     }
 
+    private fun newPrompt(trigger: IslandTrigger, session: SessionReference, event: String): IslandPrompt? {
+        if (!settings.allowsPrompt(trigger)) return null
+        return IslandPrompt(
+            id = "${session.deviceId.value}:${session.sessionId}:$event",
+            trigger = trigger,
+            mode = settings.islandMode,
+            reference = session,
+            durationMillis = timing.promptDurationMillis,
+        )
+    }
+
     /** A timer clears only its own prompt, so an old session's timer can never clear the next one's. */
-    private fun expireLater(prompt: ConnectionPrompt) {
+    private fun expireLater(prompt: IslandPrompt) {
         scope.launch {
             delay(prompt.durationMillis)
             prompts.update { if (it.prompt?.id == prompt.id) it.copy(prompt = null) else it }

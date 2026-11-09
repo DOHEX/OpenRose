@@ -535,8 +535,8 @@ class SwitchingControlRuntime(
         }
     }
 
-    override suspend fun claimConnectionPrompt(reference: SessionReference, promptId: String): Boolean {
-        ordinary?.let { return it.runtime.claimConnectionPrompt(reference, promptId) }
+    override suspend fun claimPrompt(reference: SessionReference, promptId: String): Boolean {
+        ordinary?.let { return it.runtime.claimPrompt(reference, promptId) }
         return (client.execute(HostCommand.ClaimPrompt(reference, promptId)) as? HostCallResult.Flag)?.value == true
     }
 

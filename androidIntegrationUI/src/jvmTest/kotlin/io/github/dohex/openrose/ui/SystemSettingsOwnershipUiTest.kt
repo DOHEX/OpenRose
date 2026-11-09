@@ -2,6 +2,7 @@ package io.github.dohex.openrose.ui
 
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.semantics.Role
 import io.github.dohex.openrose.androidintegration.FusionSettingsDestination
 import io.github.dohex.openrose.androidintegration.IntegrationPlatformState
 import io.github.dohex.openrose.androidintegration.IntegrationSettings
@@ -10,6 +11,7 @@ import io.github.dohex.openrose.androidintegration.IslandMode
 import io.github.dohex.openrose.androidintegration.IslandTrigger
 import io.github.dohex.openrose.androidintegration.ModuleAvailability
 import io.github.dohex.openrose.androidintegration.ModuleUnavailableCause
+import io.github.dohex.openrose.androidintegration.StatusNotificationTarget
 import io.github.dohex.openrose.core.ControlState
 import io.github.dohex.openrose.core.HostPlatform
 import io.github.dohex.openrose.core.PermissionState
@@ -173,7 +175,7 @@ class SystemSettingsOwnershipUiTest {
     }
 
     @Test
-    fun fusionPreferencesAndConnectionTriggerAreSavedInBothStyles() {
+    fun presentationAndFusionPreferencesAreSavedInBothStyles() {
         for (style in InterfaceStyle.entries) {
             withHarness(
                 width = 1200,
@@ -184,17 +186,30 @@ class SystemSettingsOwnershipUiTest {
                 harness.render()
                 harness.clickText("连接时")
                 harness.render()
-                assertEquals(persistentSetOf(IslandTrigger.CONNECTION), harness.integration.value.settings.islandTriggers)
+                harness.clickText("入盒时")
+                harness.render()
+                assertEquals(persistentSetOf(IslandTrigger.CONNECTION, IslandTrigger.IN_CASE), harness.integration.value.settings.islandTriggers)
+
+                harness.clickText("点击通知打开")
+                harness.render()
+                harness.clickText("RoseLink", Role.RadioButton)
+                harness.render()
+                assertEquals(StatusNotificationTarget.ROSELINK, harness.integration.value.settings.statusNotificationTarget)
 
                 harness.clickText("附加设置入口")
                 harness.render()
-                harness.clickText("OpenRose 耳机主页")
+                harness.clickText("OpenRose 耳机主页", Role.RadioButton)
                 harness.render()
                 assertEquals(FusionSettingsDestination.OPENROSE, harness.integration.value.settings.fusionSettingsDestination)
 
                 harness.clickText("关闭降噪使用抗风噪")
                 harness.render()
                 assertTrue(harness.integration.value.settings.fusionOffAsWind)
+
+                harness.clickText("焦点通知")
+                harness.render()
+                assertFalse(harness.hasText("点击通知打开"), "the click target belongs to the status notification in $style")
+                assertEquals(StatusNotificationTarget.ROSELINK, harness.integration.value.settings.statusNotificationTarget)
                 assertTrue(harness.settingWrites.isEmpty())
             }
         }

@@ -22,24 +22,31 @@ class IntegrationSettingsCodecTest {
                     "androidIntegration.island_mode" to "invalid", "androidIntegration.control_way" to "invalid",
                     "androidIntegration.focus_notification_enabled" to "yes", "androidIntegration.island_triggers" to "unknown",
                     "androidIntegration.background_control_enabled" to "yes", "androidIntegration.fusion_off_as_wind" to "yes",
-                    "androidIntegration.fusion_settings_destination" to "invalid",
+                    "androidIntegration.fusion_settings_destination" to "invalid", "androidIntegration.status_notification_target" to "invalid",
                 ),
             ),
         )
         assertEquals(persistentSetOf(), IntegrationSettingsCodec.decode(mapOf("androidIntegration.island_triggers" to "")).islandTriggers)
+        assertEquals(
+            IntegrationSettings().islandTriggers,
+            IntegrationSettingsCodec.decode(mapOf("androidIntegration.island_triggers" to "in_case,wearing")).islandTriggers,
+            "one unknown display timing makes the whole saved value unreadable",
+        )
     }
 
     @Test
     fun eachChoiceRoundTripsWithNamespacedKeys() {
-        for (way in ControlWay.entries) {
-            for (mode in IslandMode.entries) {
-                for (destination in FusionSettingsDestination.entries) {
-                    val settings = IntegrationSettings(mode, false, persistentSetOf(), destination, true, true, way)
-                    val encoded = IntegrationSettingsCodec.encode(settings)
-                    assertTrue(encoded.keys.all { it.startsWith("androidIntegration.") })
-                    assertEquals(settings, IntegrationSettingsCodec.decode(encoded))
-                }
-            }
+        val base = IntegrationSettings(focusNotificationEnabled = false, fusionOffAsWind = true, backgroundControlEnabled = true)
+        val variants = ControlWay.entries.map { base.copy(controlWay = it) } +
+            IslandMode.entries.map { base.copy(islandMode = it) } +
+            FusionSettingsDestination.entries.map { base.copy(fusionSettingsDestination = it) } +
+            StatusNotificationTarget.entries.map { base.copy(statusNotificationTarget = it) } +
+            listOf(persistentSetOf(), persistentSetOf(IslandTrigger.IN_CASE), persistentSetOf(IslandTrigger.IN_CASE, IslandTrigger.CONNECTION))
+                .map { base.copy(islandTriggers = it) }
+        for (settings in variants) {
+            val encoded = IntegrationSettingsCodec.encode(settings)
+            assertTrue(encoded.keys.all { it.startsWith("androidIntegration.") })
+            assertEquals(settings, IntegrationSettingsCodec.decode(encoded))
         }
         assertEquals("connection", IntegrationSettingsCodec.encode(IntegrationSettings())["androidIntegration.island_triggers"])
     }

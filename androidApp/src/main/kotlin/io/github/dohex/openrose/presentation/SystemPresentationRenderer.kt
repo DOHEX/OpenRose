@@ -6,6 +6,9 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
+import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothDevice
+import android.bluetooth.BluetoothManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -21,10 +24,14 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.util.Log
+import androidx.core.graphics.PathParser
 import io.github.dohex.openrose.androidintegration.wire.BridgePresentationWire
 import io.github.dohex.openrose.androidintegration.wire.BridgeWire
+import io.github.dohex.openrose.androidintegration.wire.NativeHeadsetSnapshot
 import io.github.dohex.openrose.core.protocol.ModelProfile
+import org.json.JSONArray
 import org.json.JSONObject
 import java.security.MessageDigest
 import java.util.UUID
@@ -42,11 +49,13 @@ internal interface PresentationCallbacks {
 /**
  * Renders the module owner's trusted snapshot in com.android.bluetooth, the host process itself.
  *
- * The status notification deliberately has no MIUI focus extras. Module islands use a separate,
- * prompt-scoped notification so ordinary battery refreshes cannot retrigger an island and OFF can
- * never leak focus fields. The prompt JSON follows HyperNotification 1.4's public V3 model schema
- * (publisher revision c704a4de3e1d069e213508363303f62b5e057526); that schema alone does not prove
- * SystemUI acceptance or actual display.
+ * The status notification is a focus card (HyperOS 3 template "new image-text + button component 1", `iconTextInfo`
+ * plus up to two text buttons). It carries a summary-state island only while the snapshot asks for one (module mode
+ * with a display timing) and never floats on update, so battery refreshes cannot re-expand it. That summary state is
+ * the module prompt's battery template, so while the card is shown a module prompt is the island's entrance, replayed
+ * by re-posting the card; without the card, the prompt is its own prompt-scoped notification. The JSON follows
+ * HyperNotification 1.4's public V3 model schema (publisher revision c704a4de3e1d069e213508363303f62b5e057526); that
+ * schema alone does not prove SystemUI acceptance or actual display.
  */
 internal class SystemPresentationRenderer(
     context: Context,
@@ -76,32 +85,37 @@ internal class SystemPresentationRenderer(
     private var actionToken: String? = null
     private var activePrompt: ActivePrompt? = null
     private val processedPrompts = mutableSetOf<String>()
-    private val pendingNoiseActions = mutableSetOf<String>()
+    private val pendingActions = mutableSetOf<String>()
     private val reportedStatus = mutableMapOf<String, String>()
+    private var statusIslandPosted = false
 
-    private val noiseActionReceiver = object : BroadcastReceiver() {
+    /** A merged module prompt the status notification has yet to show by (re)posting itself. */
+    private var promptAwaitingStatus = false
+
+    private val actionReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent == null) return
             val action = intent.action
             val token = intent.getStringExtra(EXTRA_ACTION_TOKEN)
+            val kind = intent.getStringExtra(EXTRA_ACTION_KIND)
             val deviceId = intent.getStringExtra(BridgeWire.DEVICE_ID)
-            val sessionId = intent.getLongExtra(BridgeWire.SESSION_ID, INVALID_SESSION_ID)
             val hostEpoch = intent.getStringExtra(BridgeWire.HOST_EPOCH)
+            val sender = if (deviceId != null && hostEpoch != null) {
+                SessionIdentity(deviceId, intent.getLongExtra(BridgeWire.SESSION_ID, INVALID_SESSION_ID), hostEpoch)
+            } else {
+                null
+            }
             val targetMode = intent.getStringExtra(BridgePresentationWire.NOISE_MODE)
             handler.post {
-                if (closed || action == null || action != actionReceiverAction || token == null ||
-                    token != actionToken || deviceId == null || hostEpoch == null || targetMode == null
-                ) {
-                    return@post
-                }
-                val active = current ?: return@post
+                if (closed || sender == null) return@post
+                if (action == null || action != actionReceiverAction) return@post
+                if (token == null || token != actionToken) return@post
+                val active = current?.takeIf { it.identity == sender } ?: return@post
                 if (!active.focusEnabled || !statusNotificationActive) return@post
-                if (active.identity.deviceId != deviceId || active.identity.sessionId != sessionId ||
-                    active.identity.hostEpoch != hostEpoch
-                ) {
-                    return@post
+                when (kind) {
+                    ACTION_KIND_NOISE -> targetMode?.let { executeNoiseAction(active, token, it) }
+                    ACTION_KIND_DISCONNECT -> executeDisconnect(active, token)
                 }
-                executeNoiseAction(active, token, targetMode)
             }
         }
     }
@@ -129,7 +143,7 @@ internal class SystemPresentationRenderer(
         actionExecutor.shutdownNow()
         dispatchOnHandler {
             clearOnHandler(reportWithdrawal = true)
-            unregisterNoiseActionReceiver()
+            unregisterActionReceiver()
         }
     }
 
@@ -147,7 +161,7 @@ internal class SystemPresentationRenderer(
 
         if (previous != null && previous.identity != decoded.identity) {
             clearRenderedState(previous, reportWithdrawal = true)
-            unregisterNoiseActionReceiver()
+            unregisterActionReceiver()
             actionToken = null
             processedPrompts.clear()
             reportedStatus.clear()
@@ -157,11 +171,12 @@ internal class SystemPresentationRenderer(
 
         current = decoded
         if (previous == null || previous.identity != decoded.identity) {
-            registerNoiseActionReceiver()
+            registerActionReceiver()
         }
 
-        renderStatusNotification(decoded)
+        // The prompt goes first: a module prompt merged into the status notification makes that notification re-post.
         renderConnectionPrompt(decoded)
+        renderStatusNotification(decoded)
     }
 
     private fun decode(snapshot: Bundle): RenderedSnapshot? {
@@ -190,13 +205,20 @@ internal class SystemPresentationRenderer(
             presentation = Bundle(presentation),
             mode = mode,
             focusEnabled = presentation.getBoolean(BridgePresentationWire.FOCUS_ENABLED),
+            statusIsland = presentation.getBoolean(BridgePresentationWire.STATUS_SUMMARY_ISLAND, false),
+            statusTarget = presentation.getString(BridgePresentationWire.STATUS_TARGET, BridgePresentationWire.TARGET_OPENROSE),
+            address = bluetoothAddress(snapshot),
         )
     }
 
+    /** The classic address names the system's audio device; an address-shaped control ID is the fallback. */
+    private fun bluetoothAddress(snapshot: Bundle): String? {
+        val address = snapshot.getString(CLASSIC_ADDRESS) ?: snapshot.getString(DEVICE_ADDRESS)
+        return address?.takeIf(BluetoothAdapter::checkBluetoothAddress)
+    }
+
     private fun renderStatusNotification(snapshot: RenderedSnapshot) {
-        val notificationSpec = snapshot.presentation.getBundle(BridgePresentationWire.NOTIFICATION)
-        val requestedTag = notificationSpec?.getString(BridgePresentationWire.TAG)
-            ?.takeIf { it.startsWith(STATUS_TAG_PREFIX) && it.length <= MAX_TAG_LENGTH }
+        val requestedTag = requestedStatusTag(snapshot)
         if (!snapshot.focusEnabled || notificationManager == null || requestedTag == null) {
             withdrawStatusNotification(snapshot.wire)
             if (snapshot.focusEnabled && notificationManager == null) {
@@ -231,76 +253,86 @@ internal class SystemPresentationRenderer(
             return
         }
         statusTag = requestedTag
+        // A merged module prompt is shown as the status island's entrance, replayed by posting the notification afresh.
+        val showsPrompt = promptAwaitingStatus && snapshot.statusIsland &&
+            activePrompt?.let { it.tag == null && it.identity == snapshot.identity } == true
         try {
             ensureStatusChannel()
             val noise = knownNoise(snapshot)
-            val body = batterySummary(snapshot) + noise?.let { " · 降噪：${modeLabel(it.mode)}" }.orEmpty()
-            val title = profileLabel(snapshot.wire.getString("profile"))
-            val actionModes = if (noise != null && canControlNoise(snapshot, noise.mode) && actionReceiverRegistered) {
-                val modes = availableNoiseModes(snapshot)
-                val currentIndex = modes.indexOf(noise.mode)
-                // Android surfaces at most three actions. Rotate from the confirmed mode so all i7
-                // modes remain reachable instead of permanently hiding auto/dynamic after the first three.
-                (1 until modes.size).map { modes[(currentIndex + it) % modes.size] }.take(MAX_NOTIFICATION_ACTIONS)
-            } else {
-                emptyList()
-            }
+            val summary = batterySummary(snapshot)
+            val body = summary + noise?.let { " · ${modeLabel(it.mode)}" }.orEmpty()
+            val title = deviceAlias(snapshot) ?: profileLabel(snapshot.wire.getString("profile"))
+            val nextNoise = noise?.takeIf { canControlNoise(snapshot, it.mode) && actionReceiverRegistered }
+                ?.let { nextNoiseMode(snapshot, it.mode) }
+            val canDisconnect = actionReceiverRegistered && snapshot.address != null
             val fingerprint = listOf(
                 snapshot.identity.stableKey,
                 requestedTag,
                 title,
                 body,
-                actionModes.joinToString(","),
+                nextNoise.orEmpty(),
+                canDisconnect,
+                snapshot.statusIsland,
+                snapshot.statusTarget,
             ).joinToString("|")
-            if (statusNotificationActive && statusTag == requestedTag && statusFingerprint == fingerprint) return
+            val unchanged = statusNotificationActive && statusTag == requestedTag && statusFingerprint == fingerprint
+            if (unchanged && !showsPrompt) return
+
+            // The same two actions back the card's text buttons and, where the card is not rendered, the plain actions.
+            val actions = listOfNotNull(
+                nextNoise?.let { statusAction(snapshot, ACTION_KIND_NOISE, it) },
+                if (canDisconnect) statusAction(snapshot, ACTION_KIND_DISCONNECT) else null,
+            )
 
             val builder = Notification.Builder(appContext, STATUS_CHANNEL_ID)
                 .setSmallIcon(android.R.drawable.stat_sys_data_bluetooth)
                 .setContentTitle(title)
                 .setContentText(body)
                 .setStyle(Notification.BigTextStyle().bigText(body))
-                .setContentIntent(
-                    PendingIntent.getActivity(
-                        appContext,
-                        STATUS_NOTIFICATION_ID,
-                        Intent(BridgeWire.ACTION_SHOW_HEADPHONES).apply {
-                            setClassName(BridgeWire.APP_PACKAGE, "${BridgeWire.APP_PACKAGE}.MainActivity")
-                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-                        },
-                        PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
-                    ),
-                )
+                .setContentIntent(statusContentIntent(snapshot))
                 .setWhen(0L)
                 .setShowWhen(false)
                 .setOnlyAlertOnce(true)
                 .setOngoing(true)
-                .setVisibility(Notification.VISIBILITY_PRIVATE)
-
-            actionModes.forEach { target ->
-                val pendingIntent = createNoisePendingIntent(snapshot, target)
-                if (pendingIntent != null) {
-                    builder.addAction(
-                        Notification.Action.Builder(
-                            Icon.createWithResource(appContext, android.R.drawable.ic_lock_silent_mode),
-                            modeLabel(target),
-                            pendingIntent,
-                        ).build(),
-                    )
-                }
+                .setVisibility(Notification.VISIBILITY_PUBLIC)
+            actions.forEach { (_, action) -> builder.addAction(action) }
+            builder.addExtras(
+                buildStatusCardExtras(
+                    title = title,
+                    content = summary,
+                    noiseText = noise?.let { modeLabel(it.mode) },
+                    buttons = actions,
+                    island = snapshot.statusIsland,
+                    snapshot = snapshot,
+                    aodTitle = aodTitle(snapshot),
+                ),
+            )
+            // An update without island data is not known to remove a summary state already shown, and one with it changes
+            // the island in place unnoticed; withdraw first to remove the island or to replay its entrance.
+            val islandShown = statusNotificationActive && statusIslandPosted
+            if (islandShown && (!snapshot.statusIsland || showsPrompt)) {
+                notificationManager.cancel(requestedTag, STATUS_NOTIFICATION_ID)
             }
-
-            // Notification tags are host-generated and renderer-owned. No focus extras are attached
-            // here in any mode. Island-capable output is confined to the prompt below.
             postNotification(requestedTag, STATUS_NOTIFICATION_ID, builder.build())
             statusTag = requestedTag
             statusFingerprint = fingerprint
             statusNotificationActive = true
+            statusIslandPosted = snapshot.statusIsland
             reportOnce(
                 snapshot.wire,
                 BridgePresentationWire.STATUS_NOTIFICATION,
                 BridgePresentationWire.CALLED,
                 "notification_manager_notify_returned",
             )
+            if (showsPrompt) {
+                promptAwaitingStatus = false
+                reportOnce(
+                    snapshot.wire,
+                    BridgePresentationWire.MODULE_CONNECTION,
+                    BridgePresentationWire.CALLED,
+                    "status_notification_island_notify_returned",
+                )
+            }
             if (noise != null && canControlNoise(snapshot, noise.mode) && !actionReceiverRegistered) {
                 reportOnce(
                     snapshot.wire,
@@ -321,7 +353,26 @@ internal class SystemPresentationRenderer(
                 BridgePresentationWire.UNAVAILABLE,
                 "notification_publish_failed:${failure.javaClass.simpleName}",
             )
+            if (showsPrompt) {
+                reportOnce(
+                    snapshot.wire,
+                    BridgePresentationWire.MODULE_CONNECTION,
+                    BridgePresentationWire.UNAVAILABLE,
+                    "status_notification_island_publish_failed:${failure.javaClass.simpleName}",
+                )
+            }
         }
+    }
+
+    private fun requestedStatusTag(snapshot: RenderedSnapshot): String? {
+        val tag = snapshot.presentation.getBundle(BridgePresentationWire.NOTIFICATION)?.getString(BridgePresentationWire.TAG)
+        return tag?.takeIf { it.startsWith(STATUS_TAG_PREFIX) && it.length <= MAX_TAG_LENGTH }
+    }
+
+    /** A module prompt rides on the status notification's island whenever that notification is shown with one. */
+    private fun canMergePrompt(snapshot: RenderedSnapshot): Boolean {
+        if (!snapshot.focusEnabled || !snapshot.statusIsland || notificationManager == null) return false
+        return requestedStatusTag(snapshot) != null
     }
 
     private fun renderConnectionPrompt(snapshot: RenderedSnapshot) {
@@ -337,6 +388,14 @@ internal class SystemPresentationRenderer(
                 )
         ) {
             cancelActivePrompt("prompt_or_mode_changed")
+        }
+        val merged = activePrompt?.takeIf { it.tag == null }
+        if (merged != null && prompt != null && !canMergePrompt(snapshot)) {
+            // The status card went away mid-prompt. The prompt does not depend on the card, so it carries on as its own
+            // notification for the time it has left.
+            val remaining = merged.deadline - SystemClock.uptimeMillis()
+            cancelActivePrompt("status_notification_withdrawn")
+            if (remaining > 0) publishModulePrompt(snapshot, merged.id, prompt, remaining)
         }
         // Clean up our previous module prompt before handing the new policy to its owner.
         // Official prompts are claimed only by the separate Xiaomi Bluetooth consumer.
@@ -375,7 +434,7 @@ internal class SystemPresentationRenderer(
         publishModulePrompt(snapshot, promptId, prompt)
     }
 
-    private fun publishModulePrompt(snapshot: RenderedSnapshot, promptId: String, prompt: Bundle) {
+    private fun publishModulePrompt(snapshot: RenderedSnapshot, promptId: String, prompt: Bundle, remainingMillis: Long? = null) {
         val key = promptKey(snapshot.identity, promptId)
         if (Build.VERSION.SDK_INT >= 33 &&
             appContext.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
@@ -389,9 +448,17 @@ internal class SystemPresentationRenderer(
             )
             return
         }
-        val tag = "$MODULE_TAG_PREFIX${stableDigest(key)}"
-        val duration = prompt.getLong(BridgePresentationWire.DURATION_MILLIS, DEFAULT_PROMPT_DURATION_MILLIS)
+        val duration = (remainingMillis ?: prompt.getLong(BridgePresentationWire.DURATION_MILLIS, DEFAULT_PROMPT_DURATION_MILLIS))
             .coerceIn(1L, MAX_PROMPT_DURATION_MILLIS)
+        if (remainingMillis == null && canMergePrompt(snapshot)) {
+            // One island at a time: the status island already is the prompt's battery template, so
+            // renderStatusNotification, which runs next, shows the prompt by (re)posting the status notification.
+            promptAwaitingStatus = true
+            processedPrompts += key
+            startPrompt(ActivePrompt(snapshot.identity, promptId, BridgePresentationWire.MODULE, key, null, snapshot.wire), duration)
+            return
+        }
+        val tag = "$MODULE_TAG_PREFIX${stableDigest(key)}"
         try {
             val extras = buildFocusExtras(snapshot, showNotification = false, durationMillis = duration)
             ensurePromptChannel()
@@ -413,15 +480,7 @@ internal class SystemPresentationRenderer(
                 "notification_manager_notify_returned",
             )
 
-            val record = ActivePrompt(snapshot.identity, promptId, BridgePresentationWire.MODULE, key, tag, snapshot.wire)
-            activePrompt = record
-            record.timeout = Runnable {
-                val active = activePrompt
-                if (!closed && active === record && current?.identity == record.identity) {
-                    cancelActivePrompt("prompt_timeout")
-                }
-            }
-            handler.postDelayed(record.timeout!!, duration)
+            startPrompt(ActivePrompt(snapshot.identity, promptId, BridgePresentationWire.MODULE, key, tag, snapshot.wire), duration)
         } catch (failure: Throwable) {
             Log.w(TAG, "module_prompt_failed", failure)
             runCatching { notificationManager?.cancel(tag, MODULE_PROMPT_NOTIFICATION_ID) }
@@ -435,12 +494,40 @@ internal class SystemPresentationRenderer(
         }
     }
 
+    private fun startPrompt(record: ActivePrompt, durationMillis: Long) {
+        record.deadline = SystemClock.uptimeMillis() + durationMillis
+        activePrompt = record
+        record.timeout = Runnable {
+            if (!closed && activePrompt === record && current?.identity == record.identity) {
+                cancelActivePrompt("prompt_timeout")
+            }
+        }
+        handler.postDelayed(record.timeout!!, durationMillis)
+    }
+
     private fun buildFocusExtras(snapshot: RenderedSnapshot, showNotification: Boolean, durationMillis: Long): Bundle {
+        val durationSeconds = ((durationMillis + 999L) / 1_000L).coerceIn(1L, 5L).toInt()
+        val template = JSONObject()
+            .put("enableFloat", true)
+            .put("ticker", "OpenRose")
+            .put("tickerPic", PROMPT_LEFT_PICTURE)
+            .put("isShowNotification", showNotification)
+            .put("param_island", promptIsland(snapshot).put("islandTimeout", durationSeconds))
+        if (showNotification) template.put("updatable", true)
+
+        return Bundle().apply {
+            putString(FOCUS_PARAM, JSONObject().put("param_v2", template).toString())
+            putBundle(FOCUS_PICTURES, Bundle().apply { putPromptPictures(this) })
+        }
+    }
+
+    /**
+     * The battery island, as in OppoPods' `showBatteryIsland`: each earbud's picture with its battery. It is both the
+     * module prompt and the status notification's summary state.
+     */
+    private fun promptIsland(snapshot: RenderedSnapshot): JSONObject {
         val left = batteryValue(snapshot, LEFT_BATTERY)
         val right = batteryValue(snapshot, RIGHT_BATTERY)
-        val leftPicture = "key_pic_left"
-        val rightPicture = "key_pic_right"
-        val durationSeconds = ((durationMillis + 999L) / 1_000L).coerceIn(1L, 5L).toInt()
 
         fun imageText(type: Int, pictureKey: String, value: Int?): JSONObject = JSONObject()
             .put("type", type)
@@ -457,14 +544,13 @@ internal class SystemPresentationRenderer(
             right?.let { "R: $it%" },
         ).joinToString("  ").ifBlank { "电量未知" }
 
-        val island = JSONObject()
+        return JSONObject()
             .put("islandProperty", 1)
-            .put("islandTimeout", durationSeconds)
             .put(
                 "bigIslandArea",
                 JSONObject()
-                    .put("imageTextInfoLeft", imageText(1, leftPicture, left))
-                    .put("imageTextInfoRight", imageText(2, rightPicture, right)),
+                    .put("imageTextInfoLeft", imageText(1, PROMPT_LEFT_PICTURE, left))
+                    .put("imageTextInfoRight", imageText(2, PROMPT_RIGHT_PICTURE, right)),
             )
             .put(
                 "shareData",
@@ -473,29 +559,15 @@ internal class SystemPresentationRenderer(
                     .put("content", shareContent)
                     .put("shareContent", shareContent),
             )
+    }
 
-        val template = JSONObject()
-            .put("enableFloat", true)
-            .put("ticker", "OpenRose")
-            .put("tickerPic", leftPicture)
-            .put("isShowNotification", showNotification)
-            .put("param_island", island)
-        if (showNotification) template.put("updatable", true)
-
-        return Bundle().apply {
-            putString(FOCUS_PARAM, JSONObject().put("param_v2", template).toString())
-            putBundle(
-                FOCUS_PICTURES,
-                Bundle().apply {
-                    putParcelable(leftPicture, Icon.createWithBitmap(createEarbudBitmap(leftSide = true)))
-                    putParcelable(rightPicture, Icon.createWithBitmap(createEarbudBitmap(leftSide = false)))
-                },
-            )
-        }
+    private fun putPromptPictures(pictures: Bundle) {
+        pictures.putParcelable(PROMPT_LEFT_PICTURE, Icon.createWithBitmap(createEarbudBitmap(leftSide = true)))
+        pictures.putParcelable(PROMPT_RIGHT_PICTURE, Icon.createWithBitmap(createEarbudBitmap(leftSide = false)))
     }
 
     private fun createEarbudBitmap(leftSide: Boolean): Bitmap {
-        val bitmap = Bitmap.createBitmap(72, 72, Bitmap.Config.ARGB_8888)
+        val bitmap = squareBitmap(72)
         val canvas = Canvas(bitmap)
         val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFFFFFFF.toInt() }
         val direction = if (leftSide) 1f else -1f
@@ -508,13 +580,166 @@ internal class SystemPresentationRenderer(
         return bitmap
     }
 
+    private fun squareBitmap(size: Int): Bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+
+    /**
+     * Focus card: `iconTextInfo` plus up to two `textButton` entries, with the battery-template summary state when
+     * [island] is set. SystemUI renders a button's text from the JSON `actionTitle` (Html.fromHtml, not from the
+     * Notification.Action title) and crashes the whole UI when it is missing, so every button must carry a non-blank title.
+     */
+    private fun buildStatusCardExtras(
+        title: String,
+        content: String,
+        noiseText: String?,
+        buttons: List<Pair<String, Notification.Action>>,
+        island: Boolean,
+        snapshot: RenderedSnapshot,
+        aodTitle: String?,
+    ): Bundle {
+        val info = JSONObject()
+            .put("title", title)
+            .put("content", content)
+            .put("animIconInfo", JSONObject().put("type", 0).put("src", STATUS_CARD_PICTURE))
+        if (noiseText != null) info.put("subContent", noiseText)
+        val template = JSONObject()
+            .put("protocol", 1)
+            .put("business", STATUS_CARD_BUSINESS)
+            .put("ticker", title)
+            .put("islandFirstFloat", false)
+            .put("enableFloat", false)
+            .put("updatable", true)
+            .put("iconTextInfo", info)
+        if (aodTitle != null) template.put("aodTitle", aodTitle).put("aodPic", STATUS_CARD_PICTURE)
+        // Without param_island, HyperOS 4 SystemUI still derives a summary state from the ticker and title.
+        template.put("param_island", if (island) promptIsland(snapshot) else JSONObject().put("dismissIsland", true))
+        val titled = buttons.filter { it.first.isNotBlank() }.take(MAX_CARD_BUTTONS)
+        if (titled.isNotEmpty()) {
+            val entries = JSONArray()
+            titled.forEachIndexed { index, (label, _) ->
+                entries.put(JSONObject().put("action", "$STATUS_CARD_ACTION_PREFIX$index").put("actionTitle", label))
+            }
+            template.put("textButton", entries)
+        }
+        return Bundle().apply {
+            putString(FOCUS_PARAM, JSONObject().put("param_v2", template).toString())
+            putBundle(
+                FOCUS_PICTURES,
+                Bundle().apply {
+                    putParcelable(STATUS_CARD_PICTURE, Icon.createWithBitmap(createStatusCardBitmap()))
+                    if (island) putPromptPictures(this)
+                },
+            )
+            if (titled.isNotEmpty()) {
+                val actions = Bundle()
+                titled.forEachIndexed { index, (_, action) -> actions.putParcelable("$STATUS_CARD_ACTION_PREFIX$index", action) }
+                putBundle(FOCUS_ACTIONS, actions)
+            }
+        }
+    }
+
+    /**
+     * The app icon from `sharedUI/.../drawable/app_icon.xml` at 224px; the template requires a picture, so this stands in
+     * for the app icon. Keep the path data, transforms and colors in sync with that file.
+     */
+    private fun createStatusCardBitmap(): Bitmap {
+        val bitmap = squareBitmap(STATUS_CARD_PICTURE_SIZE)
+        val canvas = Canvas(bitmap)
+        val scale = STATUS_CARD_PICTURE_SIZE / APP_ICON_VIEWPORT
+        // The canvas is discarded after drawing, so the transforms need no save/restore.
+        canvas.scale(scale, scale)
+        canvas.drawPath(
+            PathParser.createPathFromPathData(APP_ICON_TILE_PATH),
+            Paint(Paint.ANTI_ALIAS_FLAG).apply { color = APP_ICON_TILE_COLOR },
+        )
+        canvas.translate(APP_ICON_GLYPH_OFFSET, APP_ICON_GLYPH_OFFSET)
+        canvas.scale(APP_ICON_GLYPH_SCALE, APP_ICON_GLYPH_SCALE)
+        canvas.translate(0f, APP_ICON_VIEWPORT)
+        canvas.drawPath(
+            PathParser.createPathFromPathData(APP_ICON_GLYPH_PATH),
+            Paint(Paint.ANTI_ALIAS_FLAG).apply { color = APP_ICON_GLYPH_COLOR },
+        )
+        return bitmap
+    }
+
     private fun batterySummary(snapshot: RenderedSnapshot): String {
         val parts = buildList {
-            batteryValue(snapshot, LEFT_BATTERY)?.let { add("左耳 $it%") }
-            batteryValue(snapshot, RIGHT_BATTERY)?.let { add("右耳 $it%") }
-            batteryValue(snapshot, CASE_BATTERY)?.let { add("充电盒 $it%") }
+            batteryValue(snapshot, LEFT_BATTERY)?.let { add("L $it%${chargingMark(snapshot, LEFT_CHARGING)}") }
+            batteryValue(snapshot, RIGHT_BATTERY)?.let { add("R $it%${chargingMark(snapshot, RIGHT_CHARGING)}") }
+            batteryValue(snapshot, CASE_BATTERY)?.let { add("C $it%") }
         }
         return parts.takeIf { it.isNotEmpty() }?.joinToString(" · ") ?: "电量未知"
+    }
+
+    /** Only a confirmed charging reading is marked; unknown charging leaves the battery text neutral. */
+    private fun chargingMark(snapshot: RenderedSnapshot, fieldName: String): String {
+        val reading = snapshot.fields.getBundle(fieldName) ?: return ""
+        if (reading.getString(BridgeWire.STATUS) != KNOWN) return ""
+        val value = reading.getBundle("value") ?: return ""
+        return if (value.getString("type") == TOGGLE && value.getBoolean("value", false)) "⚡" else ""
+    }
+
+    private fun aodTitle(snapshot: RenderedSnapshot): String? = listOfNotNull(
+        batteryValue(snapshot, LEFT_BATTERY)?.let { "L $it%" },
+        batteryValue(snapshot, RIGHT_BATTERY)?.let { "R $it%" },
+    ).takeIf { it.isNotEmpty() }?.joinToString(" | ")
+
+    @SuppressLint("MissingPermission") // Runs in com.android.bluetooth, which holds BLUETOOTH_CONNECT.
+    private fun deviceAlias(snapshot: RenderedSnapshot): String? {
+        val address = snapshot.address ?: return null
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return null
+        return runCatching { bluetoothDevice(address)?.alias }.getOrNull()?.takeIf { it.isNotBlank() }
+    }
+
+    private fun bluetoothDevice(address: String): BluetoothDevice? {
+        val adapter = appContext.getSystemService(BluetoothManager::class.java)?.adapter
+        return adapter?.getRemoteDevice(address)
+    }
+
+    private fun statusAction(snapshot: RenderedSnapshot, kind: String, targetMode: String? = null): Pair<String, Notification.Action>? {
+        val pendingIntent = createActionPendingIntent(snapshot, kind, targetMode) ?: return null
+        val (label, icon) = when (kind) {
+            ACTION_KIND_NOISE -> CYCLE_NOISE_LABEL to android.R.drawable.ic_lock_silent_mode
+            else -> DISCONNECT_LABEL to android.R.drawable.ic_delete
+        }
+        return label to Notification.Action.Builder(Icon.createWithResource(appContext, icon), label, pendingIntent).build()
+    }
+
+    private fun statusContentIntent(snapshot: RenderedSnapshot): PendingIntent {
+        val openRose = Intent(BridgeWire.ACTION_SHOW_HEADPHONES).apply {
+            setClassName(BridgeWire.APP_PACKAGE, "${BridgeWire.APP_PACKAGE}.MainActivity")
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        }
+        val intent = when (snapshot.statusTarget) {
+            BridgePresentationWire.TARGET_SYSTEM -> systemHeadsetIntent(snapshot)
+
+            // The Bluetooth app holds QUERY_ALL_PACKAGES, so RoseLink resolves here; a missing RoseLink falls back.
+            BridgePresentationWire.TARGET_ROSELINK -> appContext.packageManager.getLaunchIntentForPackage(ROSELINK_PACKAGE)
+                ?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+
+            else -> null
+        } ?: openRose
+        return PendingIntent.getActivity(
+            appContext,
+            STATUS_NOTIFICATION_ID,
+            intent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+    }
+
+    /** HyperOS' own headset page, opened with the extras the reference OppoPods passes for its compatibility device. */
+    private fun systemHeadsetIntent(snapshot: RenderedSnapshot): Intent? {
+        val address = snapshot.address ?: return null
+        val device = runCatching { bluetoothDevice(address) }.getOrNull() ?: return null
+        val compatibilityId = NativeHeadsetSnapshot.MILINK_COMPATIBILITY_DEVICE_ID
+        return Intent(SYSTEM_HEADSET_ACTION).apply {
+            setClassName(SETTINGS_PACKAGE, SYSTEM_HEADSET_ACTIVITY)
+            putExtra(BluetoothDevice.EXTRA_DEVICE, device)
+            putExtra("bluetoothaddress", address)
+            putExtra("MIUI_HEADSET_SUPPORT", "$compatibilityId,$SYSTEM_HEADSET_SUPPORT_FLAGS")
+            putExtra("COME_FROM", "MIUI_BLUETOOTH_SETTINGS")
+            putExtra("DEVICE_ID", compatibilityId)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
     }
 
     private fun batteryValue(snapshot: RenderedSnapshot, fieldName: String): Int? {
@@ -547,22 +772,30 @@ internal class SystemPresentationRenderer(
         return "NOISE_MODE" in writable && currentMode in availableNoiseModes(snapshot)
     }
 
-    private fun createNoisePendingIntent(snapshot: RenderedSnapshot, target: String): PendingIntent? {
+    /** The mode after the confirmed one in this model's order; null when there is nothing to switch to. */
+    private fun nextNoiseMode(snapshot: RenderedSnapshot, currentMode: String): String? {
+        val modes = availableNoiseModes(snapshot)
+        if (modes.size < 2) return null
+        return modes[(modes.indexOf(currentMode) + 1) % modes.size]
+    }
+
+    private fun createActionPendingIntent(snapshot: RenderedSnapshot, kind: String, targetMode: String?): PendingIntent? {
         val token = actionToken ?: return null
         val action = actionReceiverAction ?: return null
+        val path = listOfNotNull(token, kind, targetMode).joinToString("/")
         val intent = Intent(action).apply {
             setPackage(appContext.packageName)
-            data = Uri.parse("openrose://noise/$token/$target")
+            data = Uri.parse("$ACTION_DATA_SCHEME://$ACTION_DATA_HOST/$path")
             putExtra(EXTRA_ACTION_TOKEN, token)
+            putExtra(EXTRA_ACTION_KIND, kind)
             putExtra(BridgeWire.HOST_EPOCH, snapshot.identity.hostEpoch)
             putExtra(BridgeWire.DEVICE_ID, snapshot.identity.deviceId)
             putExtra(BridgeWire.SESSION_ID, snapshot.identity.sessionId)
-            putExtra(BridgePresentationWire.NOISE_MODE, target)
+            targetMode?.let { putExtra(BridgePresentationWire.NOISE_MODE, it) }
         }
-        val requestCode = (token.hashCode() * 31 + target.hashCode()) and 0x7fffffff
         return PendingIntent.getBroadcast(
             appContext,
-            requestCode,
+            path.hashCode() and 0x7fffffff,
             intent,
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
@@ -572,13 +805,13 @@ internal class SystemPresentationRenderer(
         val noise = knownNoise(snapshot) ?: return
         if (!canControlNoise(snapshot, noise.mode) || targetMode !in availableNoiseModes(snapshot) || targetMode == noise.mode) return
         val operationKey = "${snapshot.identity.stableKey}:$token:$targetMode"
-        if (!pendingNoiseActions.add(operationKey)) return
+        if (!pendingActions.add(operationKey)) return
 
         try {
             actionExecutor.execute {
                 val result = runCatching { callbacks.setNoise(Bundle(snapshot.wire), targetMode) }
                 handler.post {
-                    pendingNoiseActions.remove(operationKey)
+                    pendingActions.remove(operationKey)
                     if (closed || current?.identity != snapshot.identity || actionToken != token) return@post
                     val response = result.getOrNull()
                     if (response == null || response.getString(BridgeWire.STATUS) != BridgeWire.STATUS_OK) {
@@ -596,7 +829,7 @@ internal class SystemPresentationRenderer(
                 }
             }
         } catch (failure: Throwable) {
-            pendingNoiseActions.remove(operationKey)
+            pendingActions.remove(operationKey)
             reportOnce(
                 snapshot.wire,
                 BridgePresentationWire.STATUS_NOTIFICATION,
@@ -606,12 +839,54 @@ internal class SystemPresentationRenderer(
         }
     }
 
-    private fun registerNoiseActionReceiver() {
+    /**
+     * 断开: drops the headset's system Bluetooth connection, like the native Xiaomi headset notification; the control
+     * connection ends with it. `BluetoothDevice.disconnect()` is a system API (API 33) and this code runs in the
+     * Bluetooth app itself, which holds BLUETOOTH_PRIVILEGED.
+     */
+    private fun executeDisconnect(snapshot: RenderedSnapshot, token: String) {
+        val address = snapshot.address ?: return
+        val operationKey = "${snapshot.identity.stableKey}:$token:disconnect"
+        if (!pendingActions.add(operationKey)) return
+        try {
+            actionExecutor.execute {
+                val result = runCatching {
+                    val device = requireNotNull(bluetoothDevice(address)) { "bluetooth_adapter_unavailable" }
+                    BluetoothDevice::class.java.getMethod("disconnect").invoke(device) as Int
+                }
+                handler.post {
+                    pendingActions.remove(operationKey)
+                    if (closed || current?.identity != snapshot.identity || actionToken != token) return@post
+                    val code = result.getOrNull()
+                    if (code != BLUETOOTH_STATUS_SUCCESS) {
+                        val failure = result.exceptionOrNull()
+                        val detail = code?.toString() ?: (failure?.cause ?: failure)?.javaClass?.simpleName ?: "unknown"
+                        reportOnce(
+                            snapshot.wire,
+                            BridgePresentationWire.STATUS_NOTIFICATION,
+                            BridgePresentationWire.ACTION_FAILED,
+                            "disconnect:$detail",
+                        )
+                    }
+                }
+            }
+        } catch (failure: Throwable) {
+            pendingActions.remove(operationKey)
+            reportOnce(
+                snapshot.wire,
+                BridgePresentationWire.STATUS_NOTIFICATION,
+                BridgePresentationWire.ACTION_FAILED,
+                "disconnect_dispatch:${failure.javaClass.simpleName}",
+            )
+        }
+    }
+
+    private fun registerActionReceiver() {
         // PendingIntent broadcasts execute with their creator's UID. Publishing an action without
         // the permission required by this receiver would create a button that can never work.
         if (appContext.checkSelfPermission(BLUETOOTH_PRIVILEGED_PERMISSION) != PackageManager.PERMISSION_GRANTED) return
         val token = UUID.randomUUID().toString()
-        val action = "${appContext.packageName}.OPENROSE_NOISE_$token"
+        val action = "${appContext.packageName}.OPENROSE_ACTION_$token"
         val filter = IntentFilter(action).apply {
             addDataScheme(ACTION_DATA_SCHEME)
             addDataAuthority(ACTION_DATA_HOST, null)
@@ -619,7 +894,7 @@ internal class SystemPresentationRenderer(
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 appContext.registerReceiver(
-                    noiseActionReceiver,
+                    actionReceiver,
                     filter,
                     BLUETOOTH_PRIVILEGED_PERMISSION,
                     handler,
@@ -628,7 +903,7 @@ internal class SystemPresentationRenderer(
             } else {
                 // Pre-33 has no NOT_EXPORTED flag. The privileged sender permission, package-scoped
                 // PendingIntent, exact random action and session token form the private boundary.
-                appContext.registerReceiver(noiseActionReceiver, filter, BLUETOOTH_PRIVILEGED_PERMISSION, handler)
+                appContext.registerReceiver(actionReceiver, filter, BLUETOOTH_PRIVILEGED_PERMISSION, handler)
             }
             actionToken = token
             actionReceiverAction = action
@@ -637,14 +912,14 @@ internal class SystemPresentationRenderer(
             actionToken = null
             actionReceiverAction = null
             actionReceiverRegistered = false
-            Log.w(TAG, "noise_receiver_registration_failed", failure)
+            Log.w(TAG, "action_receiver_registration_failed", failure)
         }
     }
 
-    private fun unregisterNoiseActionReceiver() {
+    private fun unregisterActionReceiver() {
         if (actionReceiverRegistered) {
-            runCatching { appContext.unregisterReceiver(noiseActionReceiver) }
-                .onFailure { Log.w(TAG, "noise_receiver_unregister_failed", it) }
+            runCatching { appContext.unregisterReceiver(actionReceiver) }
+                .onFailure { Log.w(TAG, "action_receiver_unregister_failed", it) }
         }
         actionReceiverRegistered = false
         actionReceiverAction = null
@@ -711,15 +986,28 @@ internal class SystemPresentationRenderer(
         statusTag = null
         statusFingerprint = null
         statusNotificationActive = false
+        statusIslandPosted = false
     }
 
     private fun cancelActivePrompt(reason: String) {
         val active = activePrompt ?: return
         activePrompt = null
         active.timeout?.let(handler::removeCallbacks)
+        val tag = active.tag
+        if (tag == null) {
+            // Merged into the status notification, whose island stays as the summary state.
+            promptAwaitingStatus = false
+            reportOnce(
+                active.snapshot,
+                BridgePresentationWire.MODULE_CONNECTION,
+                BridgePresentationWire.WITHDRAWN,
+                "merged_module_prompt_ended:$reason",
+            )
+            return
+        }
         val manager = notificationManager
         if (manager != null) {
-            runCatching { manager.cancel(active.tag, MODULE_PROMPT_NOTIFICATION_ID) }
+            runCatching { manager.cancel(tag, MODULE_PROMPT_NOTIFICATION_ID) }
                 .onSuccess {
                     reportOnce(
                         active.snapshot,
@@ -747,13 +1035,13 @@ internal class SystemPresentationRenderer(
         }
         cancelActivePrompt("renderer_clear")
         current = null
-        pendingNoiseActions.clear()
+        pendingActions.clear()
     }
 
     private fun clearOnHandler(reportWithdrawal: Boolean) {
         val previous = current
         clearRenderedState(previous, reportWithdrawal)
-        unregisterNoiseActionReceiver()
+        unregisterActionReceiver()
         processedPrompts.clear()
         reportedStatus.clear()
     }
@@ -784,13 +1072,14 @@ internal class SystemPresentationRenderer(
 
     private fun profileLabel(profile: String?): String = ModelProfile.fromName(profile)?.displayName ?: "OpenRose 耳机"
 
+    /** A copy of the app's `noiseModeLabel` (sharedUI `NoiseControlCard.kt`), so this process need not load the UI module. */
     private fun modeLabel(mode: String): String = when (mode) {
-        "normal" -> "降噪关闭"
+        "normal" -> "标准"
         "anc" -> "降噪"
         "transparency" -> "通透"
         "wind" -> "抗风噪"
-        "auto" -> "自适应"
-        "dynamic" -> "动态"
+        "auto" -> "自动"
+        "dynamic" -> "动态降噪"
         else -> mode
     }
 
@@ -812,6 +1101,9 @@ internal class SystemPresentationRenderer(
         val presentation: Bundle,
         val mode: String,
         val focusEnabled: Boolean,
+        val statusIsland: Boolean,
+        val statusTarget: String,
+        val address: String?,
     )
 
     private data class NoiseState(val mode: String)
@@ -821,9 +1113,11 @@ internal class SystemPresentationRenderer(
         val id: String,
         val mode: String,
         val key: String,
-        val tag: String,
+        /** The prompt's own notification tag; null while the prompt is merged into the status notification. */
+        val tag: String?,
         val snapshot: Bundle,
         var timeout: Runnable? = null,
+        var deadline: Long = 0L,
     )
 
     companion object {
@@ -831,7 +1125,24 @@ internal class SystemPresentationRenderer(
         private const val KNOWN = "KNOWN"
         private const val NUMBER = "NUMBER"
         private const val TEXT = "TEXT"
+        private const val TOGGLE = "TOGGLE"
         private const val NOISE_FIELD = "NOISE_MODE"
+        private const val LEFT_CHARGING = "LEFT_CHARGING"
+        private const val RIGHT_CHARGING = "RIGHT_CHARGING"
+        private const val CLASSIC_ADDRESS = "classic_address"
+        private const val DEVICE_ADDRESS = "device_address"
+        private const val CYCLE_NOISE_LABEL = "切换降噪"
+        private const val DISCONNECT_LABEL = "断开"
+        private const val ACTION_KIND_NOISE = "noise"
+        private const val ACTION_KIND_DISCONNECT = "disconnect"
+        private const val BLUETOOTH_STATUS_SUCCESS = 0
+        private const val ROSELINK_PACKAGE = "cn.ikaile.ruoshui.client"
+        private const val SETTINGS_PACKAGE = "com.android.settings"
+        private const val SYSTEM_HEADSET_ACTIVITY = "com.android.settings.bluetooth.MiuiHeadsetActivity"
+        private const val SYSTEM_HEADSET_ACTION = "miui.bluetooth.action.HEADSET_SETTINGS"
+
+        /** The feature flags OppoPods sends with its compatibility device ID; their individual meaning is unverified. */
+        private const val SYSTEM_HEADSET_SUPPORT_FLAGS = "000000000000000010000000"
         private const val LEFT_BATTERY = "LEFT_BATTERY"
         private const val RIGHT_BATTERY = "RIGHT_BATTERY"
         private const val CASE_BATTERY = "CASE_BATTERY"
@@ -845,15 +1156,34 @@ internal class SystemPresentationRenderer(
         private const val STATUS_NOTIFICATION_ID = 10003
         private const val MODULE_PROMPT_NOTIFICATION_ID = 10086
         private const val MODULE_TAG_PREFIX = "openrose:module:"
+        private const val PROMPT_LEFT_PICTURE = "key_pic_left"
+        private const val PROMPT_RIGHT_PICTURE = "key_pic_right"
         private const val FOCUS_PARAM = "miui.focus.param"
         private const val FOCUS_PICTURES = "miui.focus.pics"
+        private const val FOCUS_ACTIONS = "miui.focus.actions"
+        private const val STATUS_CARD_ACTION_PREFIX = "miui.focus.action_status_"
+        private const val MAX_CARD_BUTTONS = 2
+        private const val STATUS_CARD_PICTURE = "miui.focus.pic_status"
+        private const val STATUS_CARD_BUSINESS = "openrose_headset_status"
+        private const val STATUS_CARD_PICTURE_SIZE = 224
+        private const val APP_ICON_VIEWPORT = 960f
+        private const val APP_ICON_GLYPH_OFFSET = 192f
+        private const val APP_ICON_GLYPH_SCALE = 0.6f
+        private const val APP_ICON_TILE_COLOR = 0xFFFFD9DF.toInt()
+        private const val APP_ICON_GLYPH_COLOR = 0xFF8F003F.toInt()
+        private const val APP_ICON_TILE_PATH = "M240,0H720Q960,0 960,240V720Q960,960 720,960H240Q0,960 0,720V240Q0,0 240,0Z"
+        private const val APP_ICON_GLYPH_PATH = "M280-120h-80q-33 0-56.5-23.5T120-200v-280q0-75 28.5-140.5t77-114q48.5-48.5 " +
+            "114-77T480-840q75 0 140.5 28.5t114 77q48.5 48.5 77 114T840-480v280q0 33-23.5 56.5T760-120h-80q-33 " +
+            "0-56.5-23.5T600-200v-160q0-33 23.5-56.5T680-440h80v-40q0-117-81.5-198.5T480-760q-117 0-198.5 81.5T200-480v40h80q33 " +
+            "0 56.5 23.5T360-360v160q0 33-23.5 56.5T280-120Zm0-240h-80v160h80v-160Zm400 0v160h80v-160h-80Zm-400 0h-80 80Zm400 " +
+            "0h80-80Z"
         private const val EXTRA_ACTION_TOKEN = "openrose_action_token"
+        private const val EXTRA_ACTION_KIND = "openrose_action_kind"
         private const val ACTION_DATA_SCHEME = "openrose"
-        private const val ACTION_DATA_HOST = "noise"
+        private const val ACTION_DATA_HOST = "action"
         private const val BLUETOOTH_PRIVILEGED_PERMISSION = "android.permission.BLUETOOTH_PRIVILEGED"
         private const val DEFAULT_PROMPT_DURATION_MILLIS = 5_000L
         private const val MAX_PROMPT_DURATION_MILLIS = 5_000L
-        private const val MAX_NOTIFICATION_ACTIONS = 3
         private const val MAX_CONCURRENT_ACTIONS = 4
         private val PROMPT_MODES = setOf(BridgePresentationWire.OFFICIAL, BridgePresentationWire.MODULE)
         private val NOISE_MODE_ORDER = listOf("normal", "anc", "transparency", "wind", "auto", "dynamic")

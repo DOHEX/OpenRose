@@ -8,6 +8,7 @@ import io.github.dohex.openrose.core.protocol.BatteryLayout
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.FieldReading
 import io.github.dohex.openrose.core.protocol.FieldValue
+import io.github.dohex.openrose.core.protocol.ModelProfile
 
 /** A normalized field value that preserves the difference between missing and unknown data. */
 sealed interface PresentationReading<out T> {
@@ -29,9 +30,10 @@ data class SystemNoiseState(
     val transparencyLevel: PresentationReading<Int>,
 )
 
-/** A short connection event which must be claimed before an adapter triggers SystemUI. */
-data class ConnectionPrompt(
+/** A short connection or in-case event which must be claimed before an adapter triggers SystemUI. */
+data class IslandPrompt(
     val id: String,
+    val trigger: IslandTrigger,
     val mode: IslandMode,
     val reference: SessionReference,
     val claimed: Boolean = false,
@@ -47,26 +49,34 @@ data class SystemPresentationState(
     val focusNotificationEnabled: Boolean = true,
     /** False when every island-capable output must omit island content. */
     val allowIslandFields: Boolean = false,
+    val statusNotificationTarget: StatusNotificationTarget = StatusNotificationTarget.OPENROSE,
     val battery: SystemBatteryState? = null,
     val noise: SystemNoiseState? = null,
     val actions: Set<DeviceSetting> = emptySet(),
-    val connectionPrompt: ConnectionPrompt? = null,
+    val prompt: IslandPrompt? = null,
 ) {
     val showStatusNotification: Boolean
         get() = reference != null && focusNotificationEnabled
+
+    /**
+     * Whether the status notification carries the persistent summary state. Official mode leaves it out: the connection
+     * prompt is its only island, as with Xiaomi's own earphones, so the two never share the island at connection.
+     */
+    val statusSummaryIsland: Boolean
+        get() = allowIslandFields && islandMode == IslandMode.MODULE
 }
 
 /** The system view of one ControlState capture, showing [prompt] only while it belongs to that capture's ready session. */
-internal fun ControlState.systemPresentation(settings: IntegrationSettings, prompt: ConnectionPrompt?): SystemPresentationState {
+internal fun ControlState.systemPresentation(settings: IntegrationSettings, prompt: IslandPrompt?): SystemPresentationState {
     val reference = readySession
     val mode = settings.islandMode
-    val allowIslandFields = mode != IslandMode.OFF &&
-        (mode != IslandMode.MODULE || IslandTrigger.CONNECTION in settings.islandTriggers)
+    val allowIslandFields = mode != IslandMode.OFF && (mode != IslandMode.MODULE || settings.islandTriggers.isNotEmpty())
     val device = device?.takeIf { reference != null }
         ?: return SystemPresentationState(
             islandMode = mode,
             focusNotificationEnabled = settings.focusNotificationEnabled,
             allowIslandFields = allowIslandFields,
+            statusNotificationTarget = settings.statusNotificationTarget,
         )
     return SystemPresentationState(
         reference = reference,
@@ -74,6 +84,7 @@ internal fun ControlState.systemPresentation(settings: IntegrationSettings, prom
         islandMode = mode,
         focusNotificationEnabled = settings.focusNotificationEnabled,
         allowIslandFields = allowIslandFields,
+        statusNotificationTarget = settings.statusNotificationTarget,
         battery = SystemBatteryState(
             left = device.fields.reading(DeviceField.LEFT_BATTERY).normalizedBattery(),
             right = device.fields.reading(DeviceField.RIGHT_BATTERY).normalizedBattery(),
@@ -89,20 +100,32 @@ internal fun ControlState.systemPresentation(settings: IntegrationSettings, prom
             transparencyLevel = device.fields.reading(DeviceField.TRANSPARENCY_LEVEL).normalizedNumber(),
         ),
         actions = device.capabilities.writableSettings.toSet(),
-        connectionPrompt = prompt?.takeIf { it.reference == reference && it.appliesTo(settings) },
+        prompt = prompt?.takeIf { it.reference == reference && it.appliesTo(settings) },
     )
 }
 
 internal fun SystemPresentationState.detached() = copy(actions = actions.toSet())
 
-/** Whether this prompt may still show under [settings]: its mode is the saved one and that mode prompts. */
-internal fun ConnectionPrompt.appliesTo(settings: IntegrationSettings): Boolean = mode == settings.islandMode &&
-    settings.allowsConnectionPrompt()
+/** Whether this prompt may still show under [settings]: its mode is the saved one and that mode prompts on its trigger. */
+internal fun IslandPrompt.appliesTo(settings: IntegrationSettings): Boolean = mode == settings.islandMode &&
+    settings.allowsPrompt(trigger)
 
-internal fun IntegrationSettings.allowsConnectionPrompt(): Boolean = when (islandMode) {
+/** Official mode prompts only on connection; module mode prompts on the display timings the user selected. */
+internal fun IntegrationSettings.allowsPrompt(trigger: IslandTrigger): Boolean = when (islandMode) {
     IslandMode.OFF -> false
-    IslandMode.OFFICIAL -> true
-    IslandMode.MODULE -> IslandTrigger.CONNECTION in islandTriggers
+    IslandMode.OFFICIAL -> trigger == IslandTrigger.CONNECTION
+    IslandMode.MODULE -> trigger in islandTriggers
+}
+
+/** Whether this model can report an in-case event: it has a charging case and its protocol carries the in-case flags. */
+val ModelProfile.reportsInCase: Boolean
+    get() = batteryLayout == BatteryLayout.EARBUDS_AND_CASE && DeviceField.LEFT_IN_CASE in family.readableFields
+
+/** Both earbuds' reported in-case flags, or null when the model cannot report them; a null side is unknown or FF. */
+internal fun DeviceState.inCaseFlags(): Pair<Boolean?, Boolean?>? {
+    if (!profile.reportsInCase) return null
+    fun flag(field: DeviceField) = ((fields[field] as? FieldReading.Known)?.value as? FieldValue.Toggle)?.value
+    return flag(DeviceField.LEFT_IN_CASE) to flag(DeviceField.RIGHT_IN_CASE)
 }
 
 /**

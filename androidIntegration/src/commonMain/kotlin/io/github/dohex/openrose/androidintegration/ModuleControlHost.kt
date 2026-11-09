@@ -404,7 +404,7 @@ class ModuleControlHost(
             HostCallResult.Operation(OperationResult.Success)
         }
 
-        is HostCommand.ClaimPrompt -> HostCallResult.Flag(runtime.claimConnectionPrompt(command.reference, command.promptId))
+        is HostCommand.ClaimPrompt -> HostCallResult.Flag(runtime.claimPrompt(command.reference, command.promptId))
     }
 
     /** Caller holds [ownership]. */

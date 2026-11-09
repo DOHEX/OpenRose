@@ -134,7 +134,7 @@ class SessionSnapshotTest {
         session.updateIntegrationSettings(session.settings.copy(islandMode = IslandMode.OFF, focusNotificationEnabled = false))
         val hidden = assertIs<SessionSnapshotResult.Available>(session.readSession(reference))
         assertFalse(hidden.presentation.showStatusNotification)
-        assertEquals(null, hidden.presentation.connectionPrompt)
+        assertEquals(null, hidden.presentation.prompt)
         assertEquals(SettingStage.WRITTEN, session.state.value.settingOperations.last().stage)
         assertEquals(beforeConfirmation, hidden.device)
         assertEquals(initialWrites + 2, link.writes.size)
@@ -142,7 +142,7 @@ class SessionSnapshotTest {
 
         session.updateIntegrationSettings(session.settings.copy(islandMode = IslandMode.MODULE, focusNotificationEnabled = true))
         val switched = assertIs<SessionSnapshotResult.Available>(session.readSession(reference))
-        assertEquals(null, switched.presentation.connectionPrompt, "Mode changes must not replay the connection event")
+        assertEquals(null, switched.presentation.prompt, "Mode changes must not replay the connection event")
         assertEquals(beforeConfirmation, switched.device)
         assertEquals(initialWrites + 2, link.writes.size)
         assertFalse(pending.isCompleted)
