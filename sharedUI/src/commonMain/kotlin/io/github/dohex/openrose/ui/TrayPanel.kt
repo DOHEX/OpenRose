@@ -16,6 +16,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import io.github.dohex.openrose.core.ConnectionPhase
 import io.github.dohex.openrose.core.ConnectionState
@@ -134,14 +137,19 @@ object TrayIcons {
         @Composable get() = vectorResource(Res.drawable.msr_headset_off)
 }
 
-/** Fills the popup the host sizes (about 360×440 dp), scrolls vertically if content overflows. */
+/**
+ * Fills the popup the host sizes. [onContentHeight] reports the height that shows all content, so the host
+ * can size the popup to fit; the panel still scrolls vertically if the host keeps it smaller.
+ */
 @Composable
 fun TrayPanel(
     model: OpenRoseModel,
     selection: PrimaryDeviceSelection,
     onOpenApp: () -> Unit,
     modifier: Modifier = Modifier,
+    onContentHeight: (Dp) -> Unit = {},
 ) {
+    val density = LocalDensity.current
     val state by model.state.collectAsState()
     val uiSettings by model.uiSettings.collectAsState()
     val dark = when (uiSettings.appearance) {
@@ -156,6 +164,9 @@ fun TrayPanel(
                 .fillMaxSize()
                 .background(interfaceBackgroundColor(uiSettings.interfaceStyle, dark))
                 .verticalScroll(rememberScrollState())
+                .onSizeChanged { size ->
+                    if (size.height > 0) onContentHeight(with(density) { size.height.toDp() })
+                }
                 .padding(vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {

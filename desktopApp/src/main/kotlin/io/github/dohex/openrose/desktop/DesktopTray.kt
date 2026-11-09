@@ -43,6 +43,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
+/** The panel's width, and its height until the content is measured; the host then fits the height to the content. */
 private val trayPanelSize = DpSize(360.dp, 440.dp)
 
 /** Window rules (for example niri's `match title=`) can float the panel window by this exact title. */
@@ -136,10 +137,15 @@ internal fun NucleusApplicationScope.DesktopTray(
                 windowsTitle = "OpenRose",
                 menu = { render(menu) },
             ) {
-                TrayPanel(model, selection, onOpenApp = {
-                    trayState.hide()
-                    onOpenApp()
-                })
+                TrayPanel(
+                    model,
+                    selection,
+                    onOpenApp = {
+                        trayState.hide()
+                        onOpenApp()
+                    },
+                    onContentHeight = { trayState.setWindowSize(DpSize(trayPanelSize.width, it)) },
+                )
             }
         }
 
@@ -184,9 +190,10 @@ private fun NucleusApplicationScope.TrayPanelWindow(
     onDismiss: () -> Unit,
     onOpenApp: () -> Unit,
 ) {
+    val windowState = rememberWindowState(size = trayPanelSize)
     DecoratedWindow(
         onCloseRequest = onDismiss,
-        state = rememberWindowState(size = trayPanelSize),
+        state = windowState,
         title = TRAY_PANEL_WINDOW_TITLE,
         resizable = false,
         alwaysOnTop = true,
@@ -224,7 +231,12 @@ private fun NucleusApplicationScope.TrayPanelWindow(
                 .onPointerEvent(PointerEventType.Enter) { pointerInside = true }
                 .onPointerEvent(PointerEventType.Exit) { if (pointerInside != null) pointerInside = false },
         ) {
-            TrayPanel(model, selection, onOpenApp)
+            TrayPanel(
+                model,
+                selection,
+                onOpenApp,
+                onContentHeight = { windowState.size = DpSize(trayPanelSize.width, it) },
+            )
         }
     }
 }

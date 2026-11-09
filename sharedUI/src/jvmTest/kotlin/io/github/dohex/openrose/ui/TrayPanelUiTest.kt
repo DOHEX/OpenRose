@@ -124,6 +124,29 @@ class TrayPanelUiTest {
     }
 
     @Test
+    fun reportedContentHeightShowsEveryButtonWithoutScrolling() {
+        for (style in InterfaceStyle.entries) {
+            for (state in listOf(disconnectedAndroidState(), connectedI7State())) {
+                // Taller than any content, so nothing is clipped or scrolled while measuring.
+                runOpenRoseUiTest(360, 1400) {
+                    var reported = 0f
+                    val model = FakeOpenRoseModel(
+                        mutableStateOf(state),
+                        mutableStateOf(UiSettings(interfaceStyle = style, appearance = Appearance.LIGHT)),
+                    )
+                    setContent {
+                        TrayPanel(model, PrimaryDeviceSelection(), onOpenApp = {}, onContentHeight = { reported = it.value })
+                    }
+                    val panel = OpenRoseUiTestHarness(this)
+                    panel.render()
+                    val bottom = panel.clickableBounds("打开 OpenRose").bottom
+                    assertTrue(reported > bottom, "content height $reported covers the last button ending at $bottom in $style")
+                }
+            }
+        }
+    }
+
+    @Test
     fun dashboardAndTrayAgreeOnThePrimaryDeviceAfterSwitchingAndDisconnecting() {
         for (style in InterfaceStyle.entries) {
             val selection = PrimaryDeviceSelection()
