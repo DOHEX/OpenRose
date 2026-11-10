@@ -2,19 +2,33 @@
 
 分析日期：2026-10-13。包名 `cn.ikaile.ruoshui.client`，版本 `3.8.0`，版本码 `5310`。
 
-输入：`rose_reverse/RoseLink_3.8.0.apk`。SHA-256：`83cdd7e3e7f6e7d61a26dc6a8fab65f183d5a18a66a70f64a17f69d93e58e40b`。
+输入：RoseLink_3.8.0.apk（`rose_reverse/RoseLink_3.8.0.apk`）。SHA-256：`83cdd7e3e7f6e7d61a26dc6a8fab65f183d5a18a66a70f64a17f69d93e58e40b`。
 
 本轮先完成型号与能力盘点：APK 注册了 **43 个具体耳机配置项**（34 个 `tws`、9 个 `head`），另有 AURAMIC 麦克风及 3 个未知/通用类型。43 包含同名硬件变体，不能解释为 43 个互不重复的零售产品；`head` 是程序分类，也不能单凭它断言佩戴形态。
 
 这是型号与能力盘点：已确认客户端的静态注册、识别分发、功能入口与允许选项；部分型号另有协议分析和实机验证，不能把清单中的能力入口直接当作实机验证结果。
 
-已整理型号协议：
-- [EarFeel-i5 / EARFREE-i5](models/earfeel-i5-protocol.md)（ZT 协议，常规控制字节级说明、参考实现与 WQ OTA 静态流程；一副 i5 在 Linux 上完成初始化读取实机验证，设置和 OTA 未实测）。
-- [EarFeel i7](models/earfeel-i7-protocol.md)（RS Common V2 协议，BLE/SPP 双传输、个性化 EQ、BES OTA 静态流程与参考实现；未连接实机）。
-- [BudsFeel MK2](models/budsfeel-mk2-protocol.md)（RS Common V2 协议，4 态降噪、低音增强、触控、多点、寻机、JL OTA；未连接实机）。
-- [OpenFeel MK2](models/openfeel-mk2-protocol.md)（RS Common V2 协议，自定义 10 段 EQ、低音增强、触控、多点、增益/听力保护、AB OTA；未连接实机）。
-- [踏浪 Swift 2](models/swift2-protocol.md)（RS Common V2 协议，骨传导单体形态、触控映射、游戏模式、多点、提示音、AB OTA；未连接实机）。
-- [Jasmine](models/jasmine-protocol.md)（RS Common V2 协议，触控、游戏模式、多点、提示音语言切换、寻机；未连接实机）。
+## 型号协议文档
+
+- [AGATE / AGATE X](models/agate-protocol.md)
+- [BudsFeel MK2](models/budsfeel-mk2-protocol.md)
+- [BudsFree i](models/budsfree-i-protocol.md)
+- [Cambrian](models/cambrian-protocol.md)
+- [CERAMICS](models/ceramics-protocol.md)
+- [CERAMICS-X](models/ceramics-x-protocol.md)
+- [EarFeel-i5](models/earfeel-i5-protocol.md)
+- [EarFeel i7](models/earfeel-i7-protocol.md)
+- [EarFree-i3](models/earfree-i3-protocol.md)
+- [EXPLORER](models/explorer-protocol.md)
+- [HeadFeel](models/headfeel-protocol.md)
+- [Jasmine](models/jasmine-protocol.md)
+- [OpenFeel MK2](models/openfeel-mk2-protocol.md)
+- [OpenFeel](models/openfree-protocol.md)
+- [OpenFun](models/openfun-protocol.md)
+- [RS-Common](models/rs-common-protocol.md)
+- [SportFeel](models/sportfree-protocol.md)
+- [SWIFT](models/swift-protocol.md)
+- [Swift 2](models/swift2-protocol.md)
 
 ## 能力判定口径
 
@@ -99,7 +113,7 @@ F8 6 项、ZT 3 项、RS Common 6 项、RS Common V2 28 项。SPP 是否实际�
 | SWIFT | RS Common / RsCommonSender | 单体（复用 charge 槽） | — | — | 单击、双击、三击 | ✓ | — | — | — | ✓ | — | — |
 
 
-HeadFeel、Cambrian、SWIFT 的 `charge` 电量槽表示单体电量，不是充电盒。该组详细 Sender/Receiver/Handler、等级开关及型号证据见 `rose_reverse/analysis/legacy_capabilities.md`。
+HeadFeel、Cambrian、SWIFT 的 `charge` 电量槽表示单体电量，不是充电盒。该组详细 Sender/Receiver/Handler、等级开关及型号证据见 legacy_capabilities.md（`rose_reverse/analysis/legacy_capabilities.md`）。
 
 ## RS Common V2：逐型号能力
 
@@ -137,7 +151,7 @@ HeadFeel、Cambrian、SWIFT 的 `charge` 电量槽表示单体电量，不是充
 | Zircon | ANC/正常/通透/抗风噪 | POP/HIFI/ROCK | 无显式启用 | 有 | AAC/SBC/LDAC/LHDC/LC3 | 有 | 有 | AB | 深度 ANC；ANC 循环配置；提示音语言；录音入口（固件 ≥ 30）；ANC 3 档、通透 3 档 |
 
 
-Luminous 系列当前 App 展示名分别为 Agumon、Gabumon、Patamon、Tailmon。SpeakFeel `[speakfree]` 与 SPEAKFEEL `[speakfeel2]` 是不同注册分支，不能只忽略大小写后按展示名合并。详细枚举、触控动作值、模块行号和地址见 `rose_reverse/analysis/v2_capabilities.md`。录音、AI/星芒入口只证明 App 暴露服务入口，尚不能视为硬件内置功能或可离线实现的设备协议。
+Luminous 系列当前 App 展示名分别为 Agumon、Gabumon、Patamon、Tailmon。SpeakFeel `[speakfree]` 与 SPEAKFEEL `[speakfeel2]` 是不同注册分支，不能只忽略大小写后按展示名合并。详细枚举、触控动作值、模块行号和地址见 v2_capabilities.md（`rose_reverse/analysis/v2_capabilities.md`）。录音、AI/星芒入口只证明 App 暴露服务入口，尚不能视为硬件内置功能或可离线实现的设备协议。
 
 ## 第三方客户端必须保留的型号差异
 
@@ -155,7 +169,7 @@ AURAMIC 的 `earType=mic`，使用 RS Common V2 的麦克风分支，含收发�
 
 ## 连接层现有结论与协议文档完成条件
 
-四族已有 GATT 服务/读写特征、SPP 选择和型号覆写证据，见 `rose_reverse/analysis/transport_findings.md`。控制族与 BLE/SPP/USB 传输分开建模；不能对所有 SPP 设备固定使用标准串口 UUID。
+四族已有 GATT 服务/读写特征、SPP 选择和型号覆写证据，见 transport_findings.md（`rose_reverse/analysis/transport_findings.md`）。控制族与 BLE/SPP/USB 传输分开建模；不能对所有 SPP 设备固定使用标准串口 UUID。
 
 要达到可据文档实现客户端的完整度，后续必须按每款型号补齐：广播字段及偏移、连接/配对与订阅、帧结构与校验、命令和回包字段、初始化及能力发现、参数范围/枚举、状态联动/互斥、分包/队列/超时/重试、固件门槛、OTA 子协议，并附逐条十六进制样例及验证状态。当前阶段只完成型号与能力，连接参数已初步分析；这些命令级项目仍未完成。
 

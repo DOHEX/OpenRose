@@ -53,7 +53,9 @@
         "额外控制入口": "—"
       },
       "battery_display": "左、右",
-      "capability_evidence": "analysis/legacy_capabilities.md"
+      "capability_evidence": "analysis/legacy_capabilities.md",
+      "protocol_document": "docs/models/ceramics-protocol.md",
+      "protocol_status": "static analysis; device untested"
     },
     {
       "enum_index": 4,
@@ -100,7 +102,9 @@
         "额外控制入口": "中/英文提示语言；星芒业务入口"
       },
       "battery_display": "左、右、盒",
-      "capability_evidence": "analysis/legacy_capabilities.md"
+      "capability_evidence": "analysis/legacy_capabilities.md",
+      "protocol_document": "docs/models/ceramics-x-protocol.md",
+      "protocol_status": "static analysis; device untested"
     },
     {
       "enum_index": 5,
@@ -149,7 +153,9 @@
         "额外控制入口": "中/英文提示语言；星芒业务入口"
       },
       "battery_display": "左、右、盒",
-      "capability_evidence": "analysis/legacy_capabilities.md"
+      "capability_evidence": "analysis/legacy_capabilities.md",
+      "protocol_document": "docs/models/ceramics-x-protocol.md",
+      "protocol_status": "static analysis; device untested"
     },
     {
       "enum_index": 6,
@@ -2782,7 +2788,9 @@
         "额外控制入口": "—"
       },
       "battery_display": "左、右",
-      "capability_evidence": "analysis/legacy_capabilities.md"
+      "capability_evidence": "analysis/legacy_capabilities.md",
+      "protocol_document": "docs/models/agate-protocol.md",
+      "protocol_status": "static analysis; device untested"
     },
     {
       "enum_index": 12,
@@ -2827,7 +2835,9 @@
         "额外控制入口": "—"
       },
       "battery_display": "左、右",
-      "capability_evidence": "analysis/legacy_capabilities.md"
+      "capability_evidence": "analysis/legacy_capabilities.md",
+      "protocol_document": "docs/models/agate-protocol.md",
+      "protocol_status": "static analysis; device untested"
     },
     {
       "enum_index": 13,
@@ -2876,7 +2886,9 @@
         "额外控制入口": "提示音音量；中/英文提示语言；更多设置"
       },
       "battery_display": "左、右、盒",
-      "capability_evidence": "analysis/legacy_capabilities.md"
+      "capability_evidence": "analysis/legacy_capabilities.md",
+      "protocol_document": "docs/models/explorer-protocol.md",
+      "protocol_status": "static analysis; device untested"
     },
     {
       "enum_index": 14,
@@ -2923,8 +2935,8 @@
       "battery_display": "左、右、盒",
       "capability_evidence": "analysis/legacy_capabilities.md",
       "protocol_document": "docs/models/earfeel-i5-protocol.md",
-      "protocol_catalog": "docs/models/earfeel-i5-protocol.json",
-      "protocol_status": "normal control statically recovered; WQ OTA workflow recovered with explicit gaps; Linux BLE initialization reads verified on one i5; writes and OTA untested"
+      "protocol_status": "normal control statically recovered; Linux BLE initialization reads verified on one i5; writes and OTA untested",
+      "protocol_catalog": "docs/models/earfeel-i5-protocol.json"
     },
     {
       "enum_index": 15,
@@ -2973,7 +2985,9 @@
         "额外控制入口": "增益等级（版本 ≥130）；提示音音量；ANC 模式轮换；更多设置"
       },
       "battery_display": "单体（复用 charge 槽）",
-      "capability_evidence": "analysis/legacy_capabilities.md"
+      "capability_evidence": "analysis/legacy_capabilities.md",
+      "protocol_document": "docs/models/headfeel-protocol.md",
+      "protocol_status": "static analysis; device untested; some receive fields unknown"
     },
     {
       "enum_index": 16,
@@ -3019,7 +3033,9 @@
         "额外控制入口": "隐藏搜索 / HideSearch；更多设置"
       },
       "battery_display": "左、右、盒",
-      "capability_evidence": "analysis/legacy_capabilities.md"
+      "capability_evidence": "analysis/legacy_capabilities.md",
+      "protocol_document": "docs/models/earfree-i3-protocol.md",
+      "protocol_status": "static analysis; device untested"
     },
     {
       "enum_index": 17,
@@ -3064,7 +3080,9 @@
         "额外控制入口": "—"
       },
       "battery_display": "左、右",
-      "capability_evidence": "analysis/legacy_capabilities.md"
+      "capability_evidence": "analysis/legacy_capabilities.md",
+      "protocol_document": "docs/models/budsfree-i-protocol.md",
+      "protocol_status": "static analysis; device untested"
     },
     {
       "enum_index": 18,
@@ -3109,7 +3127,9 @@
         "额外控制入口": "—"
       },
       "battery_display": "单体（复用 charge 槽）",
-      "capability_evidence": "analysis/legacy_capabilities.md"
+      "capability_evidence": "analysis/legacy_capabilities.md",
+      "protocol_document": "docs/models/swift-protocol.md",
+      "protocol_status": "static analysis; device untested"
     },
     {
       "enum_index": 19,
@@ -3158,7 +3178,9 @@
         "额外控制入口": "提示音音量；星芒业务入口；更多设置"
       },
       "battery_display": "单体（复用 charge 槽）",
-      "capability_evidence": "analysis/legacy_capabilities.md"
+      "capability_evidence": "analysis/legacy_capabilities.md",
+      "protocol_document": "docs/models/cambrian-protocol.md",
+      "protocol_status": "static analysis; device untested"
     },
     {
       "enum_index": 20,
@@ -3206,7 +3228,9 @@
         "额外控制入口": "提示音音量；更多设置"
       },
       "battery_display": "左、右",
-      "capability_evidence": "analysis/legacy_capabilities.md"
+      "capability_evidence": "analysis/legacy_capabilities.md",
+      "protocol_document": "docs/models/openfun-protocol.md",
+      "protocol_status": "static analysis; device untested"
     },
     {
       "enum_index": 21,
@@ -3253,7 +3277,9 @@
         "额外控制入口": "提示音音量；空间音频开关；更多设置"
       },
       "battery_display": "左、右",
-      "capability_evidence": "analysis/legacy_capabilities.md"
+      "capability_evidence": "analysis/legacy_capabilities.md",
+      "protocol_document": "docs/models/sportfree-protocol.md",
+      "protocol_status": "static analysis; device untested"
     },
     {
       "enum_index": 22,
@@ -3300,7 +3326,9 @@
         "额外控制入口": "—"
       },
       "battery_display": "左、右、盒",
-      "capability_evidence": "analysis/legacy_capabilities.md"
+      "capability_evidence": "analysis/legacy_capabilities.md",
+      "protocol_document": "docs/models/openfree-protocol.md",
+      "protocol_status": "static analysis; device untested"
     },
     {
       "enum_index": 23,
@@ -10911,8 +10939,8 @@
       },
       "capability_evidence": "analysis/v2_capabilities.md",
       "protocol_document": "docs/models/earfeel-i7-protocol.md",
-      "protocol_catalog": "docs/models/earfeel-i7-protocol.json",
-      "protocol_status": "normal RS Common V2 control statically recovered; BES OTA workflow recovered with explicit gaps; hardware untested"
+      "protocol_status": "normal RS Common V2 control statically recovered; BES OTA workflow recovered with explicit gaps; hardware untested",
+      "protocol_catalog": "docs/models/earfeel-i7-protocol.json"
     },
     {
       "enum_index": 42,
@@ -12341,7 +12369,9 @@
       "spp_support": "false",
       "spp_support_evidence_line": 653,
       "ear_type": "tws",
-      "ear_type_evidence_line": 651
+      "ear_type_evidence_line": 651,
+      "protocol_document": "docs/models/rs-common-protocol.md",
+      "protocol_status": "static analysis; generic configuration, not a specific product; device untested"
     },
     {
       "enum_index": 2,

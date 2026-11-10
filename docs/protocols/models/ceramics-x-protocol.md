@@ -9,23 +9,23 @@ CERAMICS-X 与 CERAMICS-X-7034 分别使用 `CeramicsXDeviceConfig` 和 `Ceramic
 | CERAMICS-X | `18840109` | `CERAMICS-X` | CERAMICS-X | 静态 | ceramics_x_device_config.dart（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/f8/ceramics_x_device_config.dart:10`） |
 | CERAMICS-X-7034 | `18840112` | `CERAMICS-X-7034` | CERAMICS-X | 静态 | ceramics_x_7034_device_config.dart（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/f8/ceramics_x_7034_device_config.dart:10`） |
 
-系统设备名里可能出现的零售名称都是 `CERAMICS-X`；`CERAMICS-X-7034` 是内部 name，不是第二个展示名。两者的 CMIIT 型号核准代码都是 `24J51R2V9918`（X 构造器（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/f8/ceramics_x_device_config.dart:20`）、7034 构造器（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/f8/ceramics_x_7034_device_config.dart:24`））。7034 不是 UI 变体：它的 SPP 配置与 X 不同，必须保留独立识别分支（注册表（`rose_reverse/analysis/model_registry.json`））。
+系统设备名里可能出现的零售名称都是 `CERAMICS-X`；`CERAMICS-X-7034` 是内部 name，不是第二个展示名。两者的 CMIIT 型号核准代码都是 `24J51R2V9918`（X 构造器（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/f8/ceramics_x_device_config.dart:20`）、7034 构造器（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/f8/ceramics_x_7034_device_config.dart:20`））。7034 不是 UI 变体：它的 SPP 配置与 X 不同，必须保留独立识别分支（注册表（`rose_reverse/analysis/model_registry.json`））。
 
 ## 传输
 
 | 项 | 值 | 状态 | 出处 |
 |---|---|---|---|
-| BLE 服务 | `0000fdb3-0000-1000-8000-00805f9b34fb` | 静态 | base_device_config.dart（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/base_device_config.dart:1030`） |
-| 写特征 | `0000ff16-0000-1000-8000-00805f9b34fb` | 静态 | 同上 |
-| 通知特征 | `0000ff17-0000-1000-8000-00805f9b34fb` | 静态 | 同上 |
+| BLE 服务 | 同族默认 | 同族 | 同族 |
+| 写特征 | 同族默认 | 同族 | 同族 |
+| 通知特征 | 同族默认 | 同族 | 同族 |
 | SPP 是否允许 | CERAMICS-X：否（`"false"`）；CERAMICS-X-7034：是（`"true"`） | 静态 | X 覆写（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/f8/ceramics_x_device_config.dart:549`）；7034 覆写（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/f8/ceramics_x_7034_device_config.dart:547`） |
 | 控制 SPP UUID | CERAMICS-X：—；CERAMICS-X-7034：`0cf12d31-fac3-4553-bd80-d6832e7b3931` | 静态 | 同上 |
-| 广播中的经典地址 | F8 基类分支把两路输入的字符 10–21 解析为 `btAddress`；无抓包确认广播携带 | 推断 | base_device_config.dart（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/base_device_config.dart:124`） |
-| 写入间隔 | 默认 100 ms；BleConnector + OHOS 为 350 ms | 静态 | connect_manager.dart（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/connector/connect_manager.dart:467`） |
+| 广播中的经典地址 | 同族默认 | 同族 | 同族 |
+| 写入间隔 | 同族默认 | 同族 | 同族 |
 | OTA Service / 写 / 读 | 两者均为 `00007033-0000-1000-8000-00805f9b34fb` / `00002001-…` / `00002002-…` | 静态 | OTA 默认配置（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/base_device_config.dart:1143`） |
 | OTA 路由 UUID | 两者均为 `00007034-0000-1000-8000-00805f9b34fb` | 静态 | X 覆写（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/f8/ceramics_x_device_config.dart:549`）；7034 覆写（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/f8/ceramics_x_7034_device_config.dart:547`） |
 
-两者的 `otaType` 都是 `wq`，并调用 `normalBleOtaServiceConfig`。`otaUuid` 是 OTA 路由字段，不是控制 GATT Service；控制仍使用 `fdb3/ff16/ff17`。7034 的 `sppSupport="true"` 只在平台支持 SPP、未强制 BLE、音频 Profile 不是 LE Audio 时才可能走 SPP；静态配置不等于实际 bearer（传输分析（`rose_reverse/analysis/ceramics_transport.md`））。
+7034 的 `sppSupport="true"` 只在平台支持 SPP、未强制 BLE、音频 Profile 不是 LE Audio 时才可能走 SPP；静态配置不等于实际 bearer（传输分析（`rose_reverse/analysis/ceramics_transport.md`））。其余默认项的具体取值见 [F8 默认传输](../families/f8.md#默认传输)。
 
 ## 初始化
 
@@ -34,7 +34,7 @@ CERAMICS-X 与 CERAMICS-X-7034 分别使用 `CeramicsXDeviceConfig` 和 `Ceramic
 | CERAMICS-X | 542 | 60120 | `0x8e1d8c` `ExplorerDeviceConfig::sendInitCommands` |
 | CERAMICS-X-7034 | 543 | 60121 | `0x8e1d8c` `ExplorerDeviceConfig::sendInitCommands` |
 
-两者都没有自己的 `sendInitCommands` 覆写；分派表把两个槽都指向 EXPLORER 的共享实现（table.tsv（`rose_reverse/analysis/i7_dispatch/table.tsv:60120`）），因此连接后发送 12 条查询，比 CERAMICS 多一条 `getEarLanguage`（explorer_device_config.dart（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/f8/explorer_device_config.dart:773`））：
+两者都没有自己的 `sendInitCommands` 覆写；分派表把两个槽都指向 EXPLORER 的共享实现（X 行（`rose_reverse/analysis/i7_dispatch/table.tsv:60121`）、7034 行（`rose_reverse/analysis/i7_dispatch/table.tsv:60122`）），因此连接后发送 12 条查询，比 CERAMICS 多一条 `getEarLanguage`（explorer_device_config.dart（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/f8/explorer_device_config.dart:773`））：
 
 ```text
 00 27 01 00 01 01   getBattery
@@ -70,17 +70,17 @@ CERAMICS-X 与 CERAMICS-X-7034 分别使用 `CeramicsXDeviceConfig` 和 `Ceramic
 | 功能 | Sender 方法 | BODY | 取值 | 固件门槛 | 读回 | 状态 | 出处 |
 |---|---|---|---|---|---|---|---|
 | 电量展示 | — | — | 左、右、盒三槽 | — | `getBattery`，回包 byte5=`01` | 静态 | 配置（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/f8/ceramics_x_device_config.dart:111`） |
-| 降噪模式 | `setNoiseModeAnc`、`setNoiseModeWind`、`setNoiseModeNormal`、`setNoiseModeTrans` | `00 2C 01 00 01 VV` | ANC=`01`、抗风=`00`、关闭=`03`、通透=`02` | — | `getAnc`，回包 byte5=`0C` | 推断 | 降噪条（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/f8/ceramics_x_device_config.dart:129`）；Sender（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/f8_sender.dart:544`） |
+| 降噪模式 | `setNoiseModeAnc`、`setNoiseModeWind`、`setNoiseModeNormal`、`setNoiseModeTrans` | `00 2C 01 00 01 VV` | ANC=`01`、抗风=`00`、关闭=`03`、通透=`02` | — | `getAnc`，回包 byte5=`0C` | 静态 | 降噪条（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/f8/ceramics_x_device_config.dart:129`）；字符串分派（`rose_reverse/analysis/blutter/asm/roselink/widgets/device_widgets/device_anc.dart:3018`）；Sender（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/f8_sender.dart:544`） |
 | EQ 预设 | `setEqPop`、`setEqHifi`、`setEqRock` | `00 20 01 00 02 00 VV` | POP=`01`、HIFI=`00`、ROCK=`02` | — | `getEq`，回包 byte5=`04` | 静态 | EQ 列表（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/f8/ceramics_x_device_config.dart:160`） |
 | 面板容器 | — | — | 内含游戏/多点/音频/触控/语言 | — | — | 静态 | 配置（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/f8/ceramics_x_device_config.dart:196`） |
 | 游戏模式 | `setGameModeOn`、`setGameModeOff` | `00 25 01 00 01 01` / `00 25 01 00 01 00` | 开=`01`、关=`00` | — | `getGameMode`，回包 byte5=`08` | 静态 | 游戏面板（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/f8/ceramics_x_device_config.dart:205`） |
 | 多点连接 | `setConnectMulOn`、`setConnectMulOff` | `00 2B 01 00 01 00` / `00 2B 01 00 01 02` | 开=`00`、关=`02`（关即 AAC/SBC） | — | `getAudioLdac`，回包 byte5=`0B` | 推断 | 多点面板（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/f8/ceramics_x_device_config.dart:218`）；委托（`rose_reverse/analysis/ceramics_f8_protocol.md`） |
 | 音频模式 | `setAudioAacSbc`、`setAudioLdac`、`setAudioMulDevice` | `00 2B 01 00 01 02` / `… 01` / `… 00` | AAC/SBC=`02`、LDAC=`01`、多点=`00` | — | `getAudioLdac`，回包 byte5=`0B` | 静态 | 音频面板（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/f8/ceramics_x_device_config.dart:243`）；setAudioProtocol（`rose_reverse/analysis/blutter/asm/roselink/modules/device_control/widget/device_audio_panel_item.dart:2263`） |
-| 触控绑定 | 8 个左右单/双/三/长方法 | `00 22 01 00 03 SS 01 0A` | `SS`：左单/右单=`01`/`02`、左双/右双=`03`/`04`、左三/右三=`05`/`06`、左长/右长=`07`/`08`；动作码 0、2、3、4、5、6、7、9 | — | `getKey`，回包 byte5=`05` | 静态 | 触控配置（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/f8/ceramics_x_device_config.dart:263`） |
+| 触控绑定 | `setLeftTouchOne`、`setLeftTouchTwo`、`setLeftTouchThree`、`setLeftTouchLong`、`setRightTouchOne`、`setRightTouchTwo`、`setRightTouchThree`、`setRightTouchLong` | `00 22 01 00 03 SS 01 0A` | `SS`：左单/右单=`01`/`02`、左双/右双=`03`/`04`、左三/右三=`05`/`06`、左长/右长=`07`/`08`；动作码 0、2、3、4、5、6、7、9 | — | `getKey`，回包 byte5=`05` | 静态 | 触控配置（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/f8/ceramics_x_device_config.dart:263`） |
 | 触控总开关 | `setTouchOn`、`setTouchOff` | `00 33 01 00 01 01` / `00 33 01 00 01 00` | 开=`01`、关=`00` | — | `getTouch`，回包 byte5=`16` | 推断 | Sender（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/f8_sender.dart:1067`） |
 | 提示音语言 | `setEarLanguageChinese`、`setEarLanguageEnglish` | `00 29 01 00 01 00` / `… 01` | 中文=`00`、英文=`01` | — | `getEarLanguage`，回包 byte5=`0A` | 推断 | 语言项（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/f8/ceramics_x_device_config.dart:272`） |
 | 星芒业务入口 | 范围外 | — | 云端业务 | — | — | 静态 | 入口（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/f8/ceramics_x_device_config.dart:331`） |
-| OTA | 范围外 | — | `wq`，`7033/2001/2002` | — | — | 静态 | OTA 面板（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/f8/ceramics_x_device_config.dart:372`） |
+| OTA | 范围外 | — | `wq`，`7033/2001/2002` | — | — | 静态 | OTA 面板（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/f8/ceramics_x_device_config.dart:371`） |
 
 `RDeviceComponentNoiseBarWidgetModel` 的 ANC/通透等级显示 flag 在 X 与 7034 上都是 false（等级/自适应 flag 结论（`rose_reverse/analysis/legacy_capabilities.md:58`））；因此两个型号都不列“降噪等级”设置行。接收 Tag `11`/`12` 仍能解析，见“接收字段”；协议可解析不等于界面开放等级控件。
 
@@ -91,17 +91,17 @@ CERAMICS-X 与 CERAMICS-X-7034 分别使用 `CeramicsXDeviceConfig` 和 `Ceramic
 | 功能 | Sender 方法 | BODY | 取值 | 固件门槛 | 读回 | 状态 | 出处 |
 |---|---|---|---|---|---|---|---|
 | 电量展示 | — | — | 左、右、盒三槽 | — | `getBattery`，回包 byte5=`01` | 静态 | 配置（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/f8/ceramics_x_7034_device_config.dart:111`） |
-| 降噪模式 | `setNoiseModeAnc`、`setNoiseModeWind`、`setNoiseModeNormal`、`setNoiseModeTrans` | `00 2C 01 00 01 VV` | ANC=`01`、抗风=`00`、关闭=`03`、通透=`02` | — | `getAnc`，回包 byte5=`0C` | 推断 | 降噪条（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/f8/ceramics_x_7034_device_config.dart:129`） |
+| 降噪模式 | `setNoiseModeAnc`、`setNoiseModeWind`、`setNoiseModeNormal`、`setNoiseModeTrans` | `00 2C 01 00 01 VV` | ANC=`01`、抗风=`00`、关闭=`03`、通透=`02` | — | `getAnc`，回包 byte5=`0C` | 静态 | 降噪条（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/f8/ceramics_x_7034_device_config.dart:129`）；字符串分派（`rose_reverse/analysis/blutter/asm/roselink/widgets/device_widgets/device_anc.dart:3018`） |
 | EQ 预设 | `setEqPop`、`setEqHifi`、`setEqRock` | `00 20 01 00 02 00 VV` | POP=`01`、HIFI=`00`、ROCK=`02` | — | `getEq`，回包 byte5=`04` | 静态 | EQ 列表（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/f8/ceramics_x_7034_device_config.dart:160`） |
 | 面板容器 | — | — | 内含游戏/多点/音频/触控/语言 | — | — | 静态 | 配置（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/f8/ceramics_x_7034_device_config.dart:196`） |
 | 游戏模式 | `setGameModeOn`、`setGameModeOff` | `00 25 01 00 01 01` / `00 25 01 00 01 00` | 开=`01`、关=`00` | — | `getGameMode`，回包 byte5=`08` | 静态 | 游戏面板（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/f8/ceramics_x_7034_device_config.dart:205`） |
 | 多点连接 | `setConnectMulOn`、`setConnectMulOff` | `00 2B 01 00 01 00` / `00 2B 01 00 01 02` | 开=`00`、关=`02`（关即 AAC/SBC） | — | `getAudioLdac`，回包 byte5=`0B` | 推断 | 多点面板（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/f8/ceramics_x_7034_device_config.dart:218`）；参数差异（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/f8/ceramics_x_7034_device_config.dart:238`） |
 | 音频模式 | `setAudioAacSbc`、`setAudioLdac`、`setAudioMulDevice` | `00 2B 01 00 01 02` / `… 01` / `… 00` | AAC/SBC=`02`、LDAC=`01`、多点=`00` | — | `getAudioLdac`，回包 byte5=`0B` | 静态 | 音频面板（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/f8/ceramics_x_7034_device_config.dart:241`） |
-| 触控绑定 | 8 个左右单/双/三/长方法 | `00 22 01 00 03 SS 01 0A` | 左单/右单=`01`/`02`、左双/右双=`03`/`04`、左三/右三=`05`/`06`、左长/右长=`07`/`08`；动作码 0、2、3、4、5、6、7、9 | — | `getKey`，回包 byte5=`05` | 静态 | 触控配置（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/f8/ceramics_x_7034_device_config.dart:261`） |
+| 触控绑定 | `setLeftTouchOne`、`setLeftTouchTwo`、`setLeftTouchThree`、`setLeftTouchLong`、`setRightTouchOne`、`setRightTouchTwo`、`setRightTouchThree`、`setRightTouchLong` | `00 22 01 00 03 SS 01 0A` | 左单/右单=`01`/`02`、左双/右双=`03`/`04`、左三/右三=`05`/`06`、左长/右长=`07`/`08`；动作码 0、2、3、4、5、6、7、9 | — | `getKey`，回包 byte5=`05` | 静态 | 触控配置（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/f8/ceramics_x_7034_device_config.dart:261`） |
 | 触控总开关 | `setTouchOn`、`setTouchOff` | `00 33 01 00 01 01` / `00 33 01 00 01 00` | 开=`01`、关=`00` | — | `getTouch`，回包 byte5=`16` | 推断 | Sender（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/f8_sender.dart:1067`） |
 | 提示音语言 | `setEarLanguageChinese`、`setEarLanguageEnglish` | `00 29 01 00 01 00` / `… 01` | 中文=`00`、英文=`01` | — | `getEarLanguage`，回包 byte5=`0A` | 推断 | 语言项（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/f8/ceramics_x_7034_device_config.dart:270`） |
 | 星芒业务入口 | 范围外 | — | 云端业务 | — | — | 静态 | 入口（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/f8/ceramics_x_7034_device_config.dart:329`） |
-| OTA | 范围外 | — | `wq`，`7033/2001/2002` | — | — | 静态 | OTA 面板（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/f8/ceramics_x_7034_device_config.dart:370`） |
+| OTA | 范围外 | — | `wq`，`7033/2001/2002` | — | — | 静态 | OTA 面板（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/f8/ceramics_x_7034_device_config.dart:369`） |
 
 ## 接收字段
 
@@ -122,21 +122,20 @@ CERAMICS-X 与 7034 都使用 `CeramicsXReceiveHandler`（cid 429）。除电量
 | `13` | 提示音音量 | 由 `EarfreeI5ReceiveHandler` 实现；本型号没有提示音面板 | 静态 | 分派表（`rose_reverse/analysis/i7_dispatch/table.tsv:522`） |
 | `16` | 触控开关 | 处理器落到统一 thrower；回包被连接层跳过 | 静态 | 分派表（`rose_reverse/analysis/i7_dispatch/table.tsv:576`） |
 
-`05` 的 8 个索引要求约 31 字节的帧，比 AGATE 的 6 值解析长得多；设备按键回包实际长度未知。语言有对应面板与回包处理器；佩戴、提示音虽有处理器，但 X 没有对应面板，不能据此增加型号能力。
+`05` 的 8 个索引要求约 31 字节的帧，比 AGATE 的 6 值解析长得多；设备按键回包实际长度未知。语言有对应面板与回包处理器；佩戴、提示音虽有处理器，但 X 没有对应面板，不能据此增加型号能力。`0C` 的原始值到控制器值（`0`→`4`、`1`→`6`、`2`→`2`、`6`→`0`）与 `setNoiseMode` 的本地状态赋值（anc→`6`、wind→`4`、normal→`0`、trans→`2`）一致。
 
 ## 未实现与未知
 
-- **初始化来源**：X/7034 没有自己的 `sendInitCommands`；当前结论是分派表指向 EXPLORER 的 `0x8e1d8c`，不是从类转储直接读出的方法体。仍应按“静态共享实现”理解，不能声称已实机验证。
-- **降噪模式/等级映射**：原始值到 ANC/抗风/关闭/通透标签的最终对应未闭合；等级的内部值 `10/6/2` 也不等于界面 `1/3/5`。等级在 X/7034 上没有开放控件，只有接收解析；第三方实现应保留原始值。
+- **降噪模式设备端语义**：App 侧分派已闭合（`setNoiseMode @0x75770c` 按字符串 `anc`/`wind`/`normal`/`trans` 调用 `RCommander.setNoiseModeAnc/Wind/Normal/Trans`，见 分派（`rose_reverse/analysis/blutter/asm/roselink/widgets/device_widgets/device_anc.dart:3018`）），但设备是否把线值 `00`/`01`/`02`/`03` 解释为对应模式未知。
+- **降噪等级映射**：接收原始值 `10/6/2` 与界面 `1/3/5` 的对应未闭合；等级在 X/7034 上没有开放控件，只有接收解析；第三方实现应保留原始值。
 - **按键 8 值结构**：处理器按字符索引读取 8 个动作，但设备回包长度、填充和缺失值行为未知；F8Receiver 自身的 6 值解析对 X 不适用。
 - **触控开关**：回调是 thrower，`getTouch` 回包不会更新状态。
 - **多点面板参数差异**：X 与 7034 的 `DeviceMulDevicePanelItemWidgetModel` 命名参数不同（7034 缺少 `needResetValueWhenCancel`），取消/回退逻辑不能共用一套实现；音频面板参数相同，线上字节也相同。
 - **SPP 实际使用**：7034 的 `sppSupport="true"` 只是配置；平台、全局偏好和音频 Profile 都可能让它仍走 BLE。
-- **OTA**：配置为 `wq`，但没有实机验证 OTA 服务、鉴权或升级流程；OpenRose 不实现 OTA。
 - **无实机**：没有固件版本、广播、通知或写入抓包；所有设备行为未知。
 
 查证范围：两个配置类、`f8_sender.dart`、`f8_receiver.dart`、`CeramicsXReceiveHandler`、`analysis/i7_dispatch/table.tsv` 及 `analysis/ceramics_f8_protocol.md` / `ceramics_transport.md`；没有实机记录可闭合设备行为。
 
 ## OTA
 
-CERAMICS-X 与 CERAMICS-X-7034 的 `otaType` 都是 `wq`，调用 `normalBleOtaServiceConfig`，OTA Service/写/读为 `00007033-…` / `00002001-…` / `00002002-…`，`otaUuid` 为 `00007034-…`（X 覆写（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/f8/ceramics_x_device_config.dart:549`）；7034 覆写（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/f8/ceramics_x_7034_device_config.dart:547`））。这是 App 的 OTA 路由配置，不是已恢复的升级协议；OpenRose 不实现 OTA，此节只作记录。
+CERAMICS-X 与 CERAMICS-X-7034 的 `otaType` 都是 `wq`，调用 `normalBleOtaServiceConfig`（X 覆写（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/f8/ceramics_x_device_config.dart:549`）、7034 覆写（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/f8/ceramics_x_7034_device_config.dart:547`））。OTA 面板没有写 `sinceVersion`，因此没有固件门槛（X OTA 面板（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/f8/ceramics_x_device_config.dart:371`）、7034 OTA 面板（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/f8/ceramics_x_7034_device_config.dart:369`））。两者与 [WQ 方案](../ota/wq.md) 的 F8 组没有差异：通道与 UUID、字节格式、传输窗口与状态机见该文档；OTA Service/写/读与路由 UUID 已列在“传输”表。OpenRose 不实现 OTA，此节只作记录。

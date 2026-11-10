@@ -74,10 +74,10 @@ curl --fail-with-body --connect-timeout 10 --max-time 30 \
 
 ```sh
 # 默认获取 i5/i7 的 zh/en 四条当前记录
-python3 rose_reverse/examples/fetch_ota_links.py
+python3 examples/fetch_ota_links.py
 
 # 只查询 i7 中文记录
-python3 rose_reverse/examples/fetch_ota_links.py i7 --lang zh
+python3 examples/fetch_ota_links.py i7 --lang zh
 ```
 
 该脚本不下载固件，也不连接耳机。网络错误、业务 code 失败或缺少 otaUrl 时会保留已取得的响应并以状态码 2 退出。重新查询只能取得服务器当时选择的候选包；即使记录旧 fileId/路径，也没有证明能重新签发该旧文件的 URL。
@@ -102,5 +102,5 @@ python3 rose_reverse/examples/fetch_ota_links.py i7 --lang zh
 - 历史接口静态调查与参数证据（`rose_reverse/analysis/ota_history_api_findings.md`）
 - 官方 fetchDeviceOtaByKeyId 的恢复代码（`rose_reverse/analysis/blutter/asm/roselink/core/api/service/api_device_service.dart:476`）
 - otaUrl → 内部 otaContent 的字段映射（`rose_reverse/analysis/blutter/asm/roselink/core/services/device/device_service.dart:10882`）
-- [i5 协议与 WQ OTA](models/earfeel-i5-protocol.md)
-- [i7 协议与 BES OTA](models/earfeel-i7-protocol.md#7-bes-ota)
+- [WQ OTA 方案（i5 等）：固件来源与完整性](ota/wq.md#固件来源与完整性)；[i5 协议](models/earfeel-i5-protocol.md)
+- [BES OTA 方案（i7 等）：固件来源与完整性](ota/bes.md#固件来源与完整性)；[i7 协议](models/earfeel-i7-protocol.md)

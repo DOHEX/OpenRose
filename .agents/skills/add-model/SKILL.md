@@ -13,7 +13,7 @@ description: 适配耳机型号：新增 ROSE 型号配置，或修改已有型�
 
 协议文档的结构、验证状态用词和出处写法见 [docs/protocols/FORMAT.md](../../../docs/protocols/FORMAT.md)。证据来源，按可信度从高到低：
 
-1. 型号文档 `docs/protocols/models/<型号>-protocol.md`（及同名 `.json`）。按 FORMAT 组织的文档，“识别”“传输”“初始化”“电量”“设置命令”“接收字段”各表的每一行直接成为一条账本记录，“设置命令”表每行对应一项能力；较早的文档章节不同，逐节阅读后按 FORMAT 的章节归类登记。
+1. 型号文档 `docs/protocols/models/<型号>-protocol.md`（及同名 `.json`）。“识别”“传输”“初始化”“电量”“设置命令”“接收字段”各表的每一行直接成为一条账本记录，“设置命令”表每行对应一项能力；“传输”表写“同族默认”的行到族文档的“默认传输”取值，“OTA”节的字节格式与状态机在 `docs/protocols/ota/<方案>.md`。
 2. 协议族文档 `docs/protocols/families/<族>.md`：型号文档写“同族默认”的项到这里取值；“全族已知的坑”逐条判断是否适用于本型号。
 3. `docs/protocols/00-supported-models-and-capabilities.md` 中该型号所在行，以及 `supported-devices.json` 的 `models`：识别前缀、协议族、电量槽、能力入口。
 4. 已实现的同族型号（`core/.../models/` 下的文件）和对应编解码，只作为族内共性的参照。

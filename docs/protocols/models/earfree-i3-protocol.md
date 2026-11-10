@@ -14,13 +14,13 @@
 
 | 项 | 值 | 状态 | 出处 |
 |---|---|---|---|
-| BLE 服务 | `011bf5da-0000-1000-8000-00805f9b34fb` | 静态 | normalBleServiceConfig（0x74990c）（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/base_device_config.dart:993`） |
-| 写特征 | `00007777-0000-1000-8000-00805f9b34fb` | 静态 | 同上 |
-| 通知特征 | `00008888-0000-1000-8000-00805f9b34fb` | 静态 | 同上 |
-| SPP 是否允许 | 否 | 静态 | 配置 `sppSupport="false"`（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/zt/earfree_i3_device_config.dart:634`） |
-| 控制 SPP UUID | 无 | 静态 | 配置未写入 SPP UUID |
-| 广播中的经典地址 | 未解析；连接使用系统扫描对象的 remote id/address | 未知 | [族文档](../families/zt.md#全族共用) |
-| 写入间隔 | 同族默认 100 ms（i3 未单独核对） | 推断 | [连接流程](../models/earfeel-i5-protocol.md#23-连接流程) |
+| BLE 服务 | 同族默认 | 同族 | 同族 |
+| 写特征 | 同族默认 | 同族 | 同族 |
+| 通知特征 | 同族默认 | 同族 | 同族 |
+| SPP 是否允许 | 同族默认（否；i3 配置 `sppSupport="false"`） | 静态 | 配置（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/zt/earfree_i3_device_config.dart:634`） |
+| 控制 SPP UUID | 同族默认（未配置） | 静态 | 同上 |
+| 广播中的经典地址 | 同族默认 | 同族 | 同族 |
+| 写入间隔 | 同族默认（i3 未单独核对） | 同族 | 同族 |
 | OTA 服务 | `65786365-6c70-6f69-6e74-2e636f6d0000` | 静态 | normalBleOtaServiceConfig（0x824cf8）（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/base_device_config.dart:1143`） |
 | OTA 写入/通知特征 | `65786365-6c70-6f69-6e74-2e636f6d0001` | 静态 | 同上 |
 
@@ -45,7 +45,7 @@ i3 的初始化只有 8 条查询，没有 `getVersion`、佩戴检测、ANC/通
 
 ## 电量
 
-`0101`，左/右/盒三槽，偏移与 i5 相同：byte11 左、byte12 右、byte13/14 左右充电、byte15 盒，`FF` 表示盒数据缺失。i3 使用 `Zt219ReceiveHandler`，它继承 `EarfreeI5ReceiveHandler`，电量处理直接复用 i5 的 `batteryDataReceived`；i3 自己没有电量实机样本。详见 [族文档](../families/zt.md#接收-tag-与处理) 和 [i5 §6.2](../models/earfeel-i5-protocol.md#62-电量)。
+`0101`，左/右/盒三槽，偏移与 i5 相同：byte11 左、byte12 右、byte13/14 左右充电、byte15 盒，`FF` 表示盒数据缺失。i3 使用 `Zt219ReceiveHandler`，它继承 `EarfreeI5ReceiveHandler`，电量处理直接复用 i5 的 `batteryDataReceived`；i3 自己没有电量实机样本。详见 [族文档接收 Tag](../families/zt.md#接收-tag-与处理) 和 [族文档电量](../families/zt.md#电量)。
 
 ## 设置命令
 
@@ -94,4 +94,4 @@ i3 与族文档不同的处理只有 `0b01` 隐藏搜索：`_handleHideSearch` �
 
 ## OTA
 
-i3 配置的 OTA 类型是 WQ，使用与 i5 相同的 OTA GATT 服务/特征（见“传输”表），OTA 面板设置 `hasEnglish=true`（配置（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/zt/earfree_i3_device_config.dart:330`））。静态上支持通过 WQ 选择语言固件；没有 i3 的 OTA 元数据请求、资源下载或刷机验证。OpenRose 不实现 OTA，本节只作记录。WQ 通用流程见 [i5 §9](../models/earfeel-i5-protocol.md#9-wq-ota-与语言固件)，但 i3 的 trackingName、固件版本和服务端记录都未核对。
+i3 配置的 OTA 类型是 WQ，使用与 i5 相同的 OTA GATT 服务/特征（见“传输”表），OTA 面板设置 `hasEnglish=true`，没有写固件版本门槛（配置（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/zt/earfree_i3_device_config.dart:330`））。静态上支持通过 WQ 选择语言固件；没有 i3 的 OTA 元数据请求、资源下载或刷机验证，trackingName、固件版本和服务端记录都未核对，不要套用 i5 的 `keyId`。字节格式、传输窗口与 ACK、状态机见 [WQ 方案文档](../ota/wq.md)。OpenRose 不实现 OTA，本节只作记录。

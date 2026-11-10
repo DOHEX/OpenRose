@@ -15,15 +15,15 @@ AGATE 与 AGATE X 分别使用 `AgateDeviceConfig` 和 `AgateXDeviceConfig`，�
 
 | 项 | 值 | 状态 | 出处 |
 |---|---|---|---|
-| BLE 服务 | `0000fdb3-0000-1000-8000-00805f9b34fb` | 静态 | base_device_config.dart（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/base_device_config.dart:1030`） |
-| 写特征 | `0000ff16-0000-1000-8000-00805f9b34fb` | 静态 | 同上 |
-| 通知特征 | `0000ff17-0000-1000-8000-00805f9b34fb` | 静态 | 同上 |
-| SPP 是否允许 | 否（`sppSupport="false"`） | 静态 | AGATE（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/f8/agate_device_config.dart:404`）、AGATE X（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/f8/agate_x_device_config.dart:382`） |
-| 控制 SPP UUID | —（未配置） | 静态 | 同上 |
-| 广播中的经典地址 | F8 基类分支把两路输入的字符 10–21 解析为 `btAddress`；无抓包确认广播携带 | 推断 | base_device_config.dart（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/base_device_config.dart:124`） |
-| 写入间隔 | 默认 100 ms；BleConnector + OHOS 为 350 ms | 静态 | connect_manager.dart（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/connector/connect_manager.dart:467`） |
+| BLE 服务 | 同族默认 | 同族 | 同族 |
+| 写特征 | 同族默认 | 同族 | 同族 |
+| 通知特征 | 同族默认 | 同族 | 同族 |
+| SPP 是否允许 | 同族默认 | 同族 | 同族 |
+| 控制 SPP UUID | 同族默认 | 同族 | 同族 |
+| 广播中的经典地址 | 同族默认 | 同族 | 同族 |
+| 写入间隔 | 同族默认 | 同族 | 同族 |
 
-两款都没有覆写 BLE GATT；`sppSupport` 都是字符串 `"false"`，也没有 SPP UUID，因此静态上控制通道只走 BLE。两款都不启用 OTA：`customConfigEarObject` 没有调用 OTA 配置，`otaType` 继承 `none`，也没有 OTA UUID（AGATE 覆写（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/f8/agate_device_config.dart:404`）、AGATE X 覆写（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/f8/agate_x_device_config.dart:382`））。
+两款都没有覆写控制 GATT，`sppSupport` 都是字符串 `"false"`，也没有 SPP UUID，控制通道静态上只走 BLE（AGATE 覆写（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/f8/agate_device_config.dart:404`）、AGATE X 覆写（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/f8/agate_x_device_config.dart:382`））。各默认项的具体取值见 [F8 默认传输](../families/f8.md#默认传输)。
 
 ## 初始化
 
@@ -32,7 +32,7 @@ AGATE 与 AGATE X 分别使用 `AgateDeviceConfig` 和 `AgateXDeviceConfig`，�
 | AGATE | 546 | 60124 | `0x8e18b0` `CeramicsDeviceConfig::sendInitCommands` |
 | AGATE X | 545 | 60123 | `0x8e18b0` `CeramicsDeviceConfig::sendInitCommands` |
 
-分派表两项目标相同，见 table.tsv（`rose_reverse/analysis/i7_dispatch/table.tsv:60124`）。`0x8e18b0` 依次发送 11 条查询（ceramics_device_config.dart（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/f8/ceramics_device_config.dart:380`））：
+分派表两项目标相同，见 AGATE 行（`rose_reverse/analysis/i7_dispatch/table.tsv:60125`）、AGATE X 行（`rose_reverse/analysis/i7_dispatch/table.tsv:60124`）。`0x8e18b0` 依次发送 11 条查询（ceramics_device_config.dart（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/f8/ceramics_device_config.dart:380`））：
 
 ```text
 00 27 01 00 01 01   getBattery
@@ -82,7 +82,7 @@ AGATE 的触控动作列表有 8 项，包含 `touch-anc-control(9)`。这只能
 | 电量展示 | — | — | 左、右两槽 | — | `getBattery`，回包 byte5=`01` | 静态 | 配置（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/f8/agate_x_device_config.dart:168`） |
 | EQ 预设 | `setEqPop`、`setEqHifi` | `00 20 01 00 02 00 VV` | Rock=`01`（模型值 0 → `setEqPop`）、POP=`00`（模型值 1 → `setEqHifi`） | — | `getEq`，回包 byte5=`04` | 静态 | EQ 列表（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/f8/agate_x_device_config.dart:184`）；分派（`rose_reverse/analysis/agate_models_findings.md`） |
 | 面板容器 | — | — | 容器，内含 EQ/触控 | — | — | 静态 | 配置（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/f8/agate_x_device_config.dart:220`） |
-| 触控绑定 | 同 AGATE 的 6 个左右单/双/长方法 | `00 22 01 00 03 SS 01 0A` | 左右单/双/长同上；动作码 0、2、3、4、5、6、7（无 ANC control） | — | `getKey`，回包 byte5=`05` | 静态 | 触控配置（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/f8/agate_x_device_config.dart:345`） |
+| 触控绑定 | `setLeftTouchOne`、`setLeftTouchTwo`、`setLeftTouchLong`、`setRightTouchOne`、`setRightTouchTwo`、`setRightTouchLong` | `00 22 01 00 03 SS 01 0A` | 左右单/双/长同上；动作码 0、2、3、4、5、6、7（无 ANC control） | — | `getKey`，回包 byte5=`05` | 静态 | 触控配置（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/f8/agate_x_device_config.dart:345`） |
 | 触控总开关 | `setTouchOn`、`setTouchOff` | `00 33 01 00 01 01` / `00 33 01 00 01 00` | 开=`01`、关=`00` | — | `getTouch`，回包 byte5=`16` | 推断 | Sender（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/f8_sender.dart:1067`） |
 
 AGATE X 没有 `DeviceGamePanelItemWidgetModel`，因此没有用户可见的游戏模式开关；初始化仍会查询，回包仍会写入共享状态。两款配置的 Sender 相同，同一方法产生相同字节。
@@ -103,7 +103,7 @@ AGATE X 没有 `DeviceGamePanelItemWidgetModel`，因此没有用户可见的游
 
 ## 未实现与未知
 
-- **EQ 标签与线值**：静态调用路径显示 AGATE 的 `Rock(0)` 发 `01`、`HIFI(1)` 发 `00`；AGATE X 的 `Rock(0)` 发 `01`、`POP(1)` 发 `00`。设备是否把这些线值解释为标签所示预设未知；不要按标签名直接映射。
+- **EQ 标签与线值**：静态调用路径显示 AGATE 的 `Rock(0)` 发 `01`、`HIFI(1)` 发 `00`；AGATE X 的 `Rock(0)` 发 `01`、`POP(1)` 发 `00`。设备是否把这些线值解释为标签所示预设未知；不要按标签名直接映射。两款配置的 EQ 列表都只有 2 项（AGATE 列表（`rose_reverse/analysis/blutter/pp.txt:8841`）、AGATE X 列表（`rose_reverse/analysis/blutter/pp.txt:8829`）），共享 `F8Sender.setEqRock` 不会被配置选中。
 - **游戏模式在 AGATE X 上的实际能力**：没有 UI 入口，但初始化查询和回包处理存在；不能判断固件是否支持，也不能判断用户是否可控制。
 - **触控动作 9（ANC control）**：AGATE 配置提供该选项，但 AGATE 没有 ANC 面板；硬件是否响应未知。
 - **触控开关回包**：AGATE/AGATE X 的 `touchSwitchReceived` 是 thrower；`getTouch` 回包会被跳过。触控开关控件是否真的出现在界面上也未逐项核对。
@@ -119,4 +119,4 @@ AGATE X 没有 `DeviceGamePanelItemWidgetModel`，因此没有用户可见的游
 
 ## OTA
 
-AGATE 与 AGATE X 的 `otaType` 都是 `none`，`customConfigEarObject` 没有调用 `normalBleOtaServiceConfig`，也没有 OTA UUID（AGATE 覆写（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/f8/agate_device_config.dart:404`）、AGATE X 覆写（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/f8/agate_x_device_config.dart:382`））。OpenRose 不实现 OTA；此处仅记录 App 配置中没有可用的 OTA 路由。
+AGATE 与 AGATE X 的 `otaType` 都是 `none`：没有 OTA 路由，也没有固件门槛。`customConfigEarObject` 没有调用 `normalBleOtaServiceConfig`，也没有 OTA UUID（AGATE 覆写（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/f8/agate_device_config.dart:404`）、AGATE X 覆写（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/f8/agate_x_device_config.dart:382`））。OpenRose 不实现 OTA；此处仅记录 App 配置中没有可用的 OTA 路由。

@@ -542,7 +542,7 @@ OpenRose 没有实现寻机、提示音语言切换和 OTA。
 
 **协议研究文档**
 
-- `docs/earfeel-i5-protocol.md`、`docs/earfeel-i7-protocol.md`（本仓库中的副本见 [docs/protocols/models/](protocols/models/)）
+- `docs/models/earfeel-i5-protocol.md`、`docs/models/earfeel-i7-protocol.md`：i5、i7 型号差异；i5 / i7 的共用内容在 `docs/families/zt.md`、`docs/families/rs-common-v2.md`，OTA 在 `docs/ota/wq.md`、`docs/ota/bes.md`（本仓库中的副本见 [docs/protocols/](protocols/README.md)）
 - `analysis/i5_hardware_validation.md`：i5 实机验证记录
 - `analysis/i7_receiver_findings.md`：i7 接收处理分析
 - `analysis/i7_eq_findings.md`：i7 EQ 分析

@@ -14,15 +14,15 @@ CERAMICS 使用 `CeramicsDeviceConfig`，属于 [F8 协议族](../families/f8.md
 
 | 项 | 值 | 状态 | 出处 |
 |---|---|---|---|
-| BLE 服务 | `0000fdb3-0000-1000-8000-00805f9b34fb` | 静态 | base_device_config.dart（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/base_device_config.dart:1030`） |
-| 写特征 | `0000ff16-0000-1000-8000-00805f9b34fb` | 静态 | 同上 |
-| 通知特征 | `0000ff17-0000-1000-8000-00805f9b34fb` | 静态 | 同上 |
-| SPP 是否允许 | 否（`sppSupport="false"`） | 静态 | customConfigEarObject（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/f8/ceramics_device_config.dart:344`） |
-| 控制 SPP UUID | —（未配置） | 静态 | 同上 |
-| 广播中的经典地址 | F8 基类分支把两路输入的字符 10–21 解析为 `btAddress`；无抓包确认广播携带 | 推断 | base_device_config.dart（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/base_device_config.dart:124`） |
-| 写入间隔 | 默认 100 ms；BleConnector + OHOS 为 350 ms | 静态 | connect_manager.dart（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/connector/connect_manager.dart:467`） |
+| BLE 服务 | 同族默认 | 同族 | 同族 |
+| 写特征 | 同族默认 | 同族 | 同族 |
+| 通知特征 | 同族默认 | 同族 | 同族 |
+| SPP 是否允许 | 同族默认 | 同族 | 同族 |
+| 控制 SPP UUID | 同族默认 | 同族 | 同族 |
+| 广播中的经典地址 | 同族默认 | 同族 | 同族 |
+| 写入间隔 | 同族默认 | 同族 | 同族 |
 
-CERAMICS 没有覆写 BLE GATT，`sppSupport` 是 `"false"`，也没有 SPP UUID。它不启用 OTA：`customConfigEarObject` 没有调用 `normalBleOtaServiceConfig`，`otaType` 继承 `none`，没有 OTA UUID（customConfigEarObject（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/f8/ceramics_device_config.dart:344`））。
+CERAMICS 没有覆写控制 GATT，`sppSupport` 是 `"false"`，也没有 SPP UUID，控制通道静态上只走 BLE（customConfigEarObject（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/f8/ceramics_device_config.dart:344`））。各默认项的具体取值见 [F8 默认传输](../families/f8.md#默认传输)。
 
 ## 初始化
 
@@ -84,11 +84,11 @@ CERAMICS 的接收处理器是 `AgateReceiveHandler`（cid 431，配置（`rose_
 - **EQ 回读**：POP 与 ROCK 的线值 1、2 都写入同一个控制器值 0；UI 是否能重新高亮正确项未闭合。
 - **触控动作 9（ANC control）**：配置提供该动作，但本型号没有 ANC 面板；硬件响应未知。
 - **触控开关**：回调是 thrower，`getTouch` 回包不会更新状态；开关控件是否暴露也未核对。
-- **`0x27`/`0x28` 语义**、**LEN 宽度**、**按键 nibble 语义**、**固件版本格式**、**写入方式与 MTU**：与族文档相同，均未验证。
+- **与 AGATE 相同的未知**：`0x27`/`0x28` 语义、`LEN` 宽度、按键 nibble 语义、固件版本格式、写入方式与 MTU；本型号没有额外证据，见 [AGATE 文档](agate-protocol.md#未实现与未知)。
 - **无实机**：没有固件版本、广播、通知或写入抓包；设备行为全部未知。
 
 查证范围：`CeramicsDeviceConfig`、`f8_sender.dart`、`f8_receiver.dart`、`AgateReceiveHandler`、`analysis/i7_dispatch/table.tsv` 及 `analysis/ceramics_f8_protocol.md` 等 F8 笔记；没有实机记录可闭合设备行为。
 
 ## OTA
 
-CERAMICS 的 `otaType` 是 `none`，没有 OTA UUID，也没有调用 `normalBleOtaServiceConfig`（customConfigEarObject（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/f8/ceramics_device_config.dart:344`））。OpenRose 不实现 OTA；此处仅记录 App 配置中没有可用的 OTA 路由。
+CERAMICS 的 `otaType` 是 `none`：没有 OTA 路由，也没有固件门槛。没有 OTA UUID，也没有调用 `normalBleOtaServiceConfig`（customConfigEarObject（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/f8/ceramics_device_config.dart:344`））。OpenRose 不实现 OTA；此处仅记录 App 配置中没有可用的 OTA 路由。
