@@ -111,23 +111,23 @@ CERAMICS-X 与 7034 都使用 `CeramicsXReceiveHandler`（cid 429）。除电量
 |---|---|---|---|---|
 | `01` | 电量 | 左、右、盒三槽；byte9 特定值表示“没有充电仓数据” | 静态 | ceramics_x_receive_handler.dart（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/receive_handler/f8/ceramics_x_receive_handler.dart:818`） |
 | `02` | 固件版本 | byte9–10 按 hex 解析后转字符串 | 静态 | rs_common_receive_handler.dart（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/receive_handler/rs_common/rs_common_receive_handler.dart:10`） |
-| `04` | EQ 当前值 | 线值 `0`→控制器 `2`；`1`→`0`；`2`→`4`；其他不更新 | 静态 | ceramics_x_receive_handler.dart（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/receive_handler/f8/ceramics_x_receive_handler.dart:634`） |
+| `04` | EQ 当前值 | 线值 `0`→控制器 `1`；`1`→`0`；`2`→`2`；其他不更新 | 静态 | ceramics_x_receive_handler.dart（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/receive_handler/f8/ceramics_x_receive_handler.dart:634`） |
 | `05` | 按键绑定 | 处理器不用 F8Receiver 解析出的 6 个值，而是按字符索引 `[19,31,43,55,25,37,49,61]` 从整帧取 8 个动作（byte9/15/21/27/12/18/24/30 的低 nibble） | 静态 | ceramics_x_receive_handler.dart（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/receive_handler/f8/ceramics_x_receive_handler.dart:385`） |
 | `08` | 游戏模式 | byte7 精确等于 `"01"` 为开 | 静态 | headfree_receive_handler.dart（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/receive_handler/zt/headfree_receive_handler.dart:635`） |
 | `09` | 佩戴检测 | 由 `EarfreeI5ReceiveHandler` 实现；本型号没有佩戴面板 | 静态 | 分派表（`rose_reverse/analysis/i7_dispatch/table.tsv:607`） |
 | `0A` | 提示音语言 | 由 `RsCommonV2ReceiveHandler` 实现 | 静态 | 分派表（`rose_reverse/analysis/i7_dispatch/table.tsv:13798`） |
 | `0B` | 音频模式 | 原始 `0`→控制器 `7`（多点）、`1`→`1`（LDAC）、`2`→`0`（AAC/SBC） | 静态 | ceramics_x_receive_handler.dart（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/receive_handler/f8/ceramics_x_receive_handler.dart:308`） |
-| `0C` | 降噪模式 | 原始 `0`→控制器 `4`、`1`→`6`、`2`→`2`、`6`→`0`；其他记录警告 | 静态 | ceramics_x_receive_handler.dart（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/receive_handler/f8/ceramics_x_receive_handler.dart:464`） |
-| `11` / `12` | ANC / 通透等级 | 原始 `0`→`10`、`1`→`6`、`2`→`2`；其他记录警告。处理器可解析，但 X/7034 的等级显示 flag 为 false，界面未开放等级控件 | 静态 | ceramics_x_receive_handler.dart（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/receive_handler/f8/ceramics_x_receive_handler.dart:10`） |
+| `0C` | 降噪模式 | 原始 `0`→控制器 `2`、`1`→`3`、`2`→`1`、`3`→`0`；其他记录警告 | 静态 | ceramics_x_receive_handler.dart（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/receive_handler/f8/ceramics_x_receive_handler.dart:464`） |
+| `11` / `12` | ANC / 通透等级 | 原始 `0`→`5`、`1`→`3`、`2`→`1`；其他记录警告。X/7034 的等级显示 flag 为 false，界面未开放等级控件 | 静态 | ceramics_x_receive_handler.dart（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/receive_handler/f8/ceramics_x_receive_handler.dart:10`） |
 | `13` | 提示音音量 | 由 `EarfreeI5ReceiveHandler` 实现；本型号没有提示音面板 | 静态 | 分派表（`rose_reverse/analysis/i7_dispatch/table.tsv:522`） |
 | `16` | 触控开关 | 处理器落到统一 thrower；回包被连接层跳过 | 静态 | 分派表（`rose_reverse/analysis/i7_dispatch/table.tsv:576`） |
 
-`05` 的 8 个索引要求约 31 字节的帧，比 AGATE 的 6 值解析长得多；设备按键回包实际长度未知。语言有对应面板与回包处理器；佩戴、提示音虽有处理器，但 X 没有对应面板，不能据此增加型号能力。`0C` 的原始值到控制器值（`0`→`4`、`1`→`6`、`2`→`2`、`6`→`0`）与 `setNoiseMode` 的本地状态赋值（anc→`6`、wind→`4`、normal→`0`、trans→`2`）一致。
+`05` 的 8 个索引要求约 31 字节的帧，比 AGATE 的 6 值解析长得多；设备按键回包实际长度未知。语言有对应面板与回包处理器；佩戴、提示音虽有处理器，但 X 没有对应面板，不能据此增加型号能力。`0C` 的原始值到控制器值（`0`→`2`、`1`→`3`、`2`→`1`、`3`→`0`）与 `setNoiseMode` 的本地状态赋值（anc→`3`、wind→`2`、normal→`0`、trans→`1`）一致；汇编中的 tagged Smi 要右移一位。
 
 ## 未实现与未知
 
 - **降噪模式设备端语义**：App 侧分派已闭合（`setNoiseMode @0x75770c` 按字符串 `anc`/`wind`/`normal`/`trans` 调用 `RCommander.setNoiseModeAnc/Wind/Normal/Trans`，见 分派（`rose_reverse/analysis/blutter/asm/roselink/widgets/device_widgets/device_anc.dart:3018`）），但设备是否把线值 `00`/`01`/`02`/`03` 解释为对应模式未知。
-- **降噪等级映射**：接收原始值 `10/6/2` 与界面 `1/3/5` 的对应未闭合；等级在 X/7034 上没有开放控件，只有接收解析；第三方实现应保留原始值。
+- **降噪等级设备端行为**：接收 `0/1/2` 映射到界面值 `5/3/1`；等级在 X/7034 上没有开放控件，设备是否发送这些值未知。
 - **按键 8 值结构**：处理器按字符索引读取 8 个动作，但设备回包长度、填充和缺失值行为未知；F8Receiver 自身的 6 值解析对 X 不适用。
 - **触控开关**：回调是 thrower，`getTouch` 回包不会更新状态。
 - **多点面板参数差异**：X 与 7034 的 `DeviceMulDevicePanelItemWidgetModel` 命名参数不同（7034 缺少 `needResetValueWhenCancel`），取消/回退逻辑不能共用一套实现；音频面板参数相同，线上字节也相同。

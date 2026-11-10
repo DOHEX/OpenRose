@@ -65,7 +65,7 @@ EXPLORER 的配置 cid 为 541，`sendInitCommands` 分派索引为 `4096 + 541 
 |---|---|---|---|---|---|---|---|
 | 电量展示 | — | — | 左、右、盒三槽 | — | `getBattery`，回包 byte5=`01` | 静态 | 配置（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/f8/explorer_device_config.dart:111`） |
 | 降噪模式 | `setNoiseModeAnc`、`setNoiseModeNormal`、`setNoiseModeTrans` | `00 2C 01 00 01 VV` | ANC=`01`、关闭=`00`（`ExplorerSender` 把 `setNoiseModeNormal` 委托给 `setNoiseModeWind`）、通透=`02` | — | `getAnc`，回包 byte5=`0C` | 静态 | 降噪条（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/f8/explorer_device_config.dart:129`）；字符串分派（`rose_reverse/analysis/blutter/asm/roselink/widgets/device_widgets/device_anc.dart:2948`）；Sender 覆写（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/sender/explorer_sender.dart:8`） |
-| 降噪等级 | `setAncLevel`、`setTransLevel` | `00 30 01 00 01 0M` / `00 31 01 00 01 0M` | 低=`2`、中=`1`、高=`0`（Sender 把界面 1/3/5 映射到 2/1/0） | — | `getAncLevel`/`getAncTransLevel`，回包 byte5=`11`/`12` | 推断 | 等级条（`rose_reverse/analysis/blutter/asm/roselink/widgets/device_widgets/device_anc.dart:1907`） |
+| 降噪等级 | `setAncLevel`、`setTransLevel` | `00 30 01 00 01 0M` / `00 31 01 00 01 0M` | UI `1/3/5` → 线值 `2/1/0`；回读 `2/1/0` → UI `1/3/5` | — | `getAncLevel`/`getAncTransLevel`，回包 byte5=`11`/`12` | 静态 | Sender（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/f8_sender.dart:304`）、接收（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/receive_handler/f8/ceramics_x_receive_handler.dart:10`）、选项（`rose_reverse/analysis/blutter/asm/roselink/widgets/device_widgets/device_anc.dart:707`） |
 | EQ 预设 | `setEqPop`、`setEqHifi`、`setEqRock` | `00 20 01 00 02 00 VV` | ROCK=`02`、HIFI=`00`、POP=`01` | — | `getEq`，回包 byte5=`04` | 静态 | EQ 列表（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/f8/explorer_device_config.dart:162`）；分派（`rose_reverse/analysis/agate_models_findings.md`） |
 | 面板容器 | — | — | 内含游戏/多点/音频/寻机/触控/更多/语言 | — | — | 静态 | 配置（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/f8/explorer_device_config.dart:198`） |
 | 游戏模式 | `setGameModeOn`、`setGameModeOff` | `00 25 01 00 01 01` / `00 25 01 00 01 00` | 开=`01`、关=`00` | — | `getGameMode`，回包 byte5=`08` | 静态 | 游戏面板（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/f8/explorer_device_config.dart:207`） |
@@ -90,25 +90,25 @@ EXPLORER 的处理器是 `ExplorerReceiveHandler`（cid 430，`extends CeramicsX
 |---|---|---|---|---|
 | `01` | 电量 | 左、右、盒三槽；盒哨兵表示无数据 | 静态 | ceramics_x_receive_handler.dart（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/receive_handler/f8/ceramics_x_receive_handler.dart:818`） |
 | `02` | 固件版本 | byte9–10 按 hex 解析后转字符串 | 静态 | rs_common_receive_handler.dart（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/receive_handler/rs_common/rs_common_receive_handler.dart:10`） |
-| `04` | EQ 当前值 | 线值 `0`→控制器 `2`；`1`→`0`；`2`→`4` | 静态 | ceramics_x_receive_handler.dart（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/receive_handler/f8/ceramics_x_receive_handler.dart:634`） |
+| `04` | EQ 当前值 | 线值 `0`→控制器 `1`；`1`→`0`；`2`→`2` | 静态 | ceramics_x_receive_handler.dart（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/receive_handler/f8/ceramics_x_receive_handler.dart:634`） |
 | `05` | 按键绑定 | 按字符索引 `[19,31,43,55,25,37,49,61]` 从整帧取 8 个动作 | 静态 | ceramics_x_receive_handler.dart（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/receive_handler/f8/ceramics_x_receive_handler.dart:385`） |
 | `08` | 游戏模式 | byte7 精确等于 `"01"` 为开 | 静态 | headfree_receive_handler.dart（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/receive_handler/zt/headfree_receive_handler.dart:635`） |
 | `09` | 佩戴检测 | 由 `EarfreeI5ReceiveHandler` 实现，本型号有对应面板 | 静态 | 分派表（`rose_reverse/analysis/i7_dispatch/table.tsv:608`） |
 | `0A` | 提示音语言 | 由 `RsCommonV2ReceiveHandler` 实现 | 静态 | 分派表（`rose_reverse/analysis/i7_dispatch/table.tsv:13799`） |
 | `0B` | 音频模式 | 原始 `0`→`7`（多点）、`1`→`1`（LDAC）、`2`→`0`（AAC/SBC） | 静态 | ceramics_x_receive_handler.dart（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/receive_handler/f8/ceramics_x_receive_handler.dart:308`） |
-| `0C` | 降噪模式 | **本型号覆写**：原始 `0`→控制器 `0`、`1`→`6`、`2`→`2`；没有 `6`→`0` 分支 | 静态 | explorer_receive_handler.dart（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/receive_handler/f8/explorer_receive_handler.dart:10`） |
-| `11` / `12` | ANC / 通透等级 | 原始 `0`→`10`、`1`→`6`、`2`→`2` | 静态 | ceramics_x_receive_handler.dart（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/receive_handler/f8/ceramics_x_receive_handler.dart:10`） |
+| `0C` | 降噪模式 | **本型号覆写**：原始 `0`→控制器 `0`、`1`→`3`、`2`→`1`；不处理原始 `3` | 静态 | explorer_receive_handler.dart（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/receive_handler/f8/explorer_receive_handler.dart:10`） |
+| `11` / `12` | ANC / 通透等级 | 原始 `0`→UI `5`、`1`→`3`、`2`→`1`；汇编中赋值立即数 `10/6/2` 为 tagged Smi | 静态 | ceramics_x_receive_handler.dart（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/receive_handler/f8/ceramics_x_receive_handler.dart:10`）、选项（`rose_reverse/analysis/blutter/asm/roselink/widgets/device_widgets/device_anc.dart:707`） |
 | `13` | 提示音音量 | 由 `EarfreeI5ReceiveHandler` 实现，本型号有对应面板 | 静态 | 分派表（`rose_reverse/analysis/i7_dispatch/table.tsv:523`） |
 | `16` | 触控开关 | 由 `EarfreeI5ReceiveHandler` 实现（与 X 不同，X 是 thrower） | 静态 | 分派表（`rose_reverse/analysis/i7_dispatch/table.tsv:577`） |
 
-降噪回包的核心差异：EXPLORER 的原始 `0` 映射到控制器 `0`，CERAMICS-X 的原始 `0` 映射到 `4`；EXPLORER 不识别原始 `6`。由于 `setNoiseModeNormal` 实际发的是抗风帧 `2C 00`，界面“关闭”与设备原始值 0 的对应关系仍需实机确认。
+降噪回包的核心差异：EXPLORER 的原始 `0` 映射到控制器 `0`，CERAMICS-X 的原始 `0` 映射到 `2`；EXPLORER 不识别原始 `3`。由于 `setNoiseModeNormal` 实际发的是抗风帧 `2C 00`，设备对 `00` 的实际语义仍需实机确认。
 
 ## 未实现与未知
 
 - **降噪模式设备端语义**：UI 只有 ANC/关闭/通透，但“关闭”经 `setNoiseModeNormal` 覆写发送 `2C 00`（`setNoiseModeWind`）；回包原始 `0` 映射回控制器 `0`（normal），App 侧往返闭合，设备是否把 `00` 解释为关闭或抗风未知。
 - **EQ 标签/线值**：ROCK/HIFI/POP 的模型值与 `setEqRock/Hifi/Pop` 对齐，但设备端预设语义未验证。
 - **按键 8 值结构**：索引读取 8 个动作，设备回包长度和缺失值行为未知。
-- **提示音档位**：`DeviceDingLevelPanelItemWidgetModel` 的档位范围未逐项核对；`setDingLevel` 只接受单个十进制位。
+- **提示音档位**：共享面板提供 1–5 档，本型号配置关闭选项为 false；固件是否接受各档未知（配置（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/f8/explorer_device_config.dart:500`）、面板（`rose_reverse/analysis/blutter/asm/roselink/modules/device_control/widget/device_ding_level_panel_item.dart:1129`））。
 - **寻机**：只有发送命令，没有状态查询；接收是事件，是否响铃/停止的时序未验证。
 - **SPP 实际使用**：配置允许且带 UUID，但平台、全局偏好和音频 Profile 都可能让它仍走 BLE。
 - **广播颜色字段**：`getInfoFromRawData` 的字符 22–23 解析已核对，但广播是否携带、颜色值如何映射到资源未验证。

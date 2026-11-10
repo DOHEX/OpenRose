@@ -93,7 +93,7 @@ AGATE X 没有 `DeviceGamePanelItemWidgetModel`，因此没有用户可见的游
 |---|---|---|---|---|
 | `01` | 电量 | byte7 左、byte8 右；bit7 充电；盒字段被忽略 | 静态 | f8_receiver.dart（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/receiver/f8_receiver.dart:1639`） |
 | `02` | 固件版本 | byte9–10 的 4 个 hex 字符按 radix 16 解析成整数，再转字符串 | 静态 | f8_receiver.dart（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/receiver/f8_receiver.dart:1524`） |
-| `04` | EQ 当前值 | 线值 `0`→控制器 `2`；`1`、`2`→控制器 `0`；其他值不更新 | 静态 | agate_receive_handler.dart（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/receive_handler/f8/agate_receive_handler.dart:10`） |
+| `04` | EQ 当前值 | 线值 `0`→控制器 `1`；`1`、`2`→控制器 `0`；其他值不更新 | 静态 | agate_receive_handler.dart（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/receive_handler/f8/agate_receive_handler.dart:10`） |
 | `05` | 按键绑定 | 6 个低 nibble，顺序为 byte7、9、11、8、10、12；写入左右触控列表 | 静态 | f8_receiver.dart（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/receiver/f8_receiver.dart:1271`） |
 | `08` | 游戏模式 | byte7 精确等于 `"01"` 为开，其他为关 | 静态 | f8_receiver.dart（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/receiver/f8_receiver.dart:1173`） |
 | `0B` | 音频/连接模式 | byte7 按十进制解析后写入 `audioMode` | 静态 | earfree_i5_receive_handler.dart（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/receive_handler/zt/earfree_i5_receive_handler.dart:278`） |
@@ -106,7 +106,7 @@ AGATE X 没有 `DeviceGamePanelItemWidgetModel`，因此没有用户可见的游
 - **EQ 标签与线值**：静态调用路径显示 AGATE 的 `Rock(0)` 发 `01`、`HIFI(1)` 发 `00`；AGATE X 的 `Rock(0)` 发 `01`、`POP(1)` 发 `00`。设备是否把这些线值解释为标签所示预设未知；不要按标签名直接映射。两款配置的 EQ 列表都只有 2 项（AGATE 列表（`rose_reverse/analysis/blutter/pp.txt:8841`）、AGATE X 列表（`rose_reverse/analysis/blutter/pp.txt:8829`）），共享 `F8Sender.setEqRock` 不会被配置选中。
 - **游戏模式在 AGATE X 上的实际能力**：没有 UI 入口，但初始化查询和回包处理存在；不能判断固件是否支持，也不能判断用户是否可控制。
 - **触控动作 9（ANC control）**：AGATE 配置提供该选项，但 AGATE 没有 ANC 面板；硬件是否响应未知。
-- **触控开关回包**：AGATE/AGATE X 的 `touchSwitchReceived` 是 thrower；`getTouch` 回包会被跳过。触控开关控件是否真的出现在界面上也未逐项核对。
+- **触控开关**：AGATE/AGATE X 的配置隐藏总开关；`touchSwitchReceived` 是 thrower，`getTouch` 回包被跳过（AGATE 配置（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/f8/agate_device_config.dart:380`）、AGATE X 配置（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/f8/agate_x_device_config.dart:358`）、控件条件（`rose_reverse/analysis/blutter/asm/roselink/screen/common/component/touch.dart:1672`））。
 - **`0x27`/`0x28` 语义**：接收端不区分，可能是查询回复/主动通知或成功/失败；未知。
 - **`LEN` 编码宽度**：单字节 byte4 还是 byte3–4 的 16 位大端，静态无法区分；所有已见 LEN≤3。
 - **按键 nibble 语义**：6 个位置已知，但“哪一侧/哪个手势”的最终映射未经回包验证。

@@ -74,7 +74,7 @@ i3 与族文档不同的处理只有 `0b01` 隐藏搜索：`_handleHideSearch` �
 
 | Tag | 字段 | 本型号取值或差异 | 状态 | 出处 |
 |---|---|---|---|---|
-| `0b01` | 隐藏搜索 | i3 专用；设置开=`01`、关=`00`；接收值写入控制器 | 静态 | _handleHideSearch（0xe51c14）（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/receiver/zt_receiver.dart:691`）、handler（0x921ca8）（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/receive_handler/zt/zt219_receive_handler.dart:10`） |
+| `0b01` | 隐藏搜索 | payload byte9 的 hex 字符串等于 `00` 时控制器值为 true，否则为 false；该值传入界面开关。设置方法开=`01`、关=`00`，与 UI 回读极性不对称 | 静态 | 分派取值（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/receiver/zt_receiver.dart:646`）、等号与回调（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/receiver/zt_receiver.dart:749`）、字符串等号分派（`rose_reverse/analysis/i7_dispatch/table.tsv:4191`）、控件（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/widget_model.dart:1785`） |
 | `0101`、`0201`、`0401`、`0602`、`0603`、`0801`、`0a01` | 电量、EQ、按键、降噪、游戏、音频、触摸 | 同 i5/族文档 | 静态 | [族文档](../families/zt.md#接收-tag-与处理) |
 | `0d01`、`0c01`、`0604`、`0605`、`0607`、`0e03` | 版本、佩戴、等级、轮换、提示音 | 共享分派存在，但 i3 初始化不查询，未实测 | 未知 | process（0xe51498）（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/receiver/zt_receiver.dart:10`） |
 
@@ -88,7 +88,7 @@ i3 与族文档不同的处理只有 `0b01` 隐藏搜索：`_handleHideSearch` �
 - i3 没有语音助手和 ANC 轮换触控动作，也没有长按手势；不要套用 i5 的 8 动作表。
 - i3 的触控左右槽位到实际耳机的映射没有实机确认。
 - i3 初始化不读版本、佩戴、等级、轮换、提示音和寻机；共享 Receiver 虽能解析这些 Tag，不能据此增加型号能力。
-- 隐藏搜索的 `0b01` 回包极性和 UI 语义未闭合；只知道设置开=`01`、关=`00`，以及 handler 把值写入控制器。
+- 隐藏搜索写入方法开=`01`、关=`00`，而回包 byte9=`00` 时官方开关为 true；回包与写入存在不对称，设备是否按此返回以及实际可发现性未实测。其他字节官方均显示 false，第三方可保留未知原始值。
 - `getInfoFromRawData` 的 ZT 分支会把 rawData 片段格式化成地址样式，但未证明是经典地址或连接地址；连接使用系统扫描对象地址。
 - OTA 为 WQ，OTA 面板带 `hasEnglish`，但 i3 没有 i5 那样的云端元数据验证或完整 OTA 流程研究；不要把 i5 的 `keyId`、固件版本或状态机直接套到 i3。
 

@@ -74,7 +74,7 @@ CERAMICS 的接收处理器是 `AgateReceiveHandler`（cid 431，配置（`rose_
 | Tag | 字段 | 本型号取值或差异 | 状态 | 出处 |
 |---|---|---|---|---|
 | `01` | 电量 | 只有左、右两个显示槽；byte9 被解析但不显示 | 静态 | f8_receiver.dart（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/receiver/f8_receiver.dart:1639`） |
-| `04` | EQ 当前值 | 线值 `0`→控制器 `2`；`1`、`2`→控制器 `0`；POP 与 ROCK 在接收侧不可区分 | 静态 | agate_receive_handler.dart（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/receive_handler/f8/agate_receive_handler.dart:10`） |
+| `04` | EQ 当前值 | 线值 `0`→控制器 `1`；`1`、`2`→控制器 `0`；接收器在 handler 折叠之前仍能读到原值 | 静态 | 接收器（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/receiver/f8_receiver.dart:1430`）、handler（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/receive_handler/f8/agate_receive_handler.dart:10`） |
 | `05` | 按键绑定 | 6 个低 nibble，顺序 byte7、9、11、8、10、12 | 静态 | f8_receiver.dart（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/receiver/f8_receiver.dart:1271`） |
 | `08` | 游戏模式 | byte7 精确等于 `"01"` 为开 | 静态 | f8_receiver.dart（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/receiver/f8_receiver.dart:1173`） |
 | `09`、`0A`、`0C`、`11`、`12`、`13`、`16` | 佩戴、语言、ANC、等级、提示音、触控开关 | 落到统一 thrower，回包被连接层跳过 | 静态 | 分派表（`rose_reverse/analysis/i7_dispatch/table.tsv:524`） |
@@ -83,7 +83,7 @@ CERAMICS 的接收处理器是 `AgateReceiveHandler`（cid 431，配置（`rose_
 
 - **EQ 回读**：POP 与 ROCK 的线值 1、2 都写入同一个控制器值 0；UI 是否能重新高亮正确项未闭合。
 - **触控动作 9（ANC control）**：配置提供该动作，但本型号没有 ANC 面板；硬件响应未知。
-- **触控开关**：回调是 thrower，`getTouch` 回包不会更新状态；开关控件是否暴露也未核对。
+- **触控开关**：配置隐藏总开关；回调是 thrower，`getTouch` 回包不会更新状态（配置（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/f8/ceramics_device_config.dart:318`）、控件条件（`rose_reverse/analysis/blutter/asm/roselink/screen/common/component/touch.dart:1672`））。
 - **与 AGATE 相同的未知**：`0x27`/`0x28` 语义、`LEN` 宽度、按键 nibble 语义、固件版本格式、写入方式与 MTU；本型号没有额外证据，见 [AGATE 文档](agate-protocol.md#未实现与未知)。
 - **无实机**：没有固件版本、广播、通知或写入抓包；设备行为全部未知。
 

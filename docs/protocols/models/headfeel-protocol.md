@@ -69,7 +69,7 @@ BODY 从 group 开始，长度和校验按族文档发送帧规则生成。HeadF
 | 通透等级 | `setTransLevel` | `06 84` | UI `1/3/5` → 线值 `01/02/03` | — | `0604` | 静态 | 基类 setTransLevel（0x80b468）（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart:351`） |
 | EQ 预设 | `setEqPop`、`setEqHifi`、`setEqRock` | `02 81` | POP=`00`、HIFI=`01`、ROCK=`02` | — | `0201` | 静态 | setEqPop（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart:2664`） |
 | 自定义 EQ 选择 | `setEqCustom` | `02 81` | 自定义=`03` | 130 | `0201`/`0202` | 静态 | Zt231Sender::setEqCustom（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart:4156`） |
-| 自定义 EQ 数据 | `setEqCustomData` | `02 82` + 10 字节 | 10 个 double 经 `toInt` 后编码：正数原值、负数 `0x80\|abs` | 130 | `0202` | 静态 | Zt231Sender::setEqCustomData（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart:4015`） |
+| 自定义 EQ 数据 | `setEqCustomData` | `02 82` + 10 字节 | UI 十段 `−6..+6`，步长 1；`toInt` 后正数原值、负数 `0x80\|abs` | 130 | `0202` | 静态 | Sender（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart:4015`）、滑块（`rose_reverse/analysis/blutter/asm/roselink/modules/device_control/widget/device_custom_eq_panel.dart:3886`） |
 | 增益等级 | `setGainLevel` | `02 83` | UI `0/1/2` → 线值 `01/02/03` | 130 | `0203` | 静态 | Zt231Sender::setGainLevel（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart:3239`） |
 | 游戏模式 | `setGameModeOn`、`setGameModeOff` | `06 83` | 开=`00`、关=`01` | — | `0603` | 静态 | setGameModeOn（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart:2325`） |
 | 多点连接 | `setConnectMulOn`、`setConnectMulOff` | `08 82` | 开=`01`、关=`00` | — | `0802` | 静态 | Zt231Sender::setConnectMulOn（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart:4275`） |
@@ -117,7 +117,7 @@ HeadFeel 与族文档不同的处理：
 - 寻机 `setFindOff` 发送 `0E 02 03 00`，左/右/双耳发送 `0E 82`；且 `0e02` 回包在 App 内部因 `findMeReceived` 未实现抛出 `RFunctionLostException` 被 `BleConnector` 吞掉，硬件实际响铃与停止逻辑需实机验证。
 - 提示音设置使用 `0E 03` 且 UI `1..5` 原样发送，和 i5 的 `0E 83`/UI−1 不同；接收端也不加 1。没有 HeadFeel 回包样本。
 - 增益和自定义 EQ 的固件门槛是 tagged Smi `0x104`，实际 130；配置门槛不等于设备已升级到该版本。
-- 自定义 EQ 数据为 10 个 double 经 `toInt` 后的符号位+绝对值编码；频段标签、取值范围和声学含义未核对。
+- 自定义 EQ 共用面板标签为 20、100、300、500、1k、2k、3k、5k、8k、15k Hz，范围 −6..+6、步长 1（标签（`rose_reverse/analysis/blutter/asm/roselink/modules/device_control/widget/device_custom_eq_panel.dart:2507`）、范围（`rose_reverse/analysis/blutter/asm/roselink/modules/device_control/widget/device_custom_eq_panel.dart:1347`）、取整和限幅（`rose_reverse/analysis/blutter/asm/roselink/modules/device_control/widget/device_custom_eq_panel.dart:3886`））；这些是界面参数，固件滤波中心、Q 值和实际声学效果未知。
 - 初始化不查询 ANC 等级（`0607`），只查询通透等级和轮换；配置的 NoiseBar 等级 UI 与实际读回路径未闭合。
 - SPP 配置允许，但广播中经典地址的解析、SPP 实际连接和特征选择都未核对。
 - `getEarLanguage`/`setEarLanguageEnglish`/`setEarLanguageChinese` 在 Sender 中存在，但没有 HeadFeel 配置调用点，接收端也没有 `0d02` 分派；不能据此增加普通控制语言能力。

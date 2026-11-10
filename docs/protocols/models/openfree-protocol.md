@@ -105,8 +105,8 @@ BODY: `FA 2B`。在 `getInfo` 之后下发，专门用于刷新并确认耳机�
 
 - **实机验证缺失**：未连接 OpenFree / OpenFeel 实机，所有帧格式、参数映射与硬件分支逻辑均来自 RoseLink 3.8.0 静态反编译分析；设备端是否真正接受这些设置指令及回包格式在实机测试前未知。
 - **触控总开关在界面的具体呈现**：`setTouchOn`/`setTouchOff`（BODY `0E 00`/`0E 02`）在 `RsCommonSender` 中已证实存在并与族内规范一致，但在 OpenFree 触控页面上是否以独立 Switch 呈现还是内嵌在页面中，未在静态代码中穷尽视图树。
-- **广播中的经典地址提取**：`BaseDeviceConfig.getInfoFromRawData` 的 rs_common 分支提取广播 rawData 字符 `10, 22)` 作为经典地址，真实耳机的广播包结构与有效性需实机验证。
+- **广播中的经典地址提取**：`BaseDeviceConfig.getInfoFromRawData` 的 rs_common 分支提取广播 rawData 字符 `[10, 22)` 作为经典地址，真实耳机的广播包结构与有效性需实机验证。
 
 ## OTA
 
-OpenFree 的 `otaType` 为默认值 `none`（未覆写）。`customConfigEarObject` 中未调用 `normalBleOtaServiceConfig`，未配置 OTA 服务或特征 UUID，`homeWidgetModels` 亦未挂载 `DeviceOtaPanelItemWidgetModel`（[配置（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common/openfree_device_config.dart:330`））。App 静态配置中 OpenFree 没有可用的 OTA 路由。OpenRose 不实现 OTA，本节仅作记录。
+OpenFree 的 `otaType` 为默认值 `none`（未覆写）。`customConfigEarObject` 中未调用 `normalBleOtaServiceConfig`，未配置 OTA 服务或特征 UUID，`homeWidgetModels` 亦未挂载 `DeviceOtaPanelItemWidgetModel`（配置（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common/openfree_device_config.dart:330`））。App 静态配置中 OpenFree 没有可用的 OTA 路由。OpenRose 不实现 OTA，本节仅作记录。

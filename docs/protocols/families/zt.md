@@ -34,7 +34,7 @@ RoseLink 3.8.0（versionCode 5310，包名 `cn.ikaile.ruoshui.client`，APK SHA-
 | 广播中的经典地址 | 未解析；连接使用系统扫描对象的 remote id/address | 未知 | [广播识别](#广播识别)、[连接与写入](#连接与写入) |
 | 写入间隔 | 正常 100 ms；OHOS 分支 350 ms | 静态 | ConnectManager.write（0x67fa58）（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/connector/connect_manager.dart:386`）、RQueueMamager.send（0x67fb8c）（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/r_queue_mamager.dart:10`） |
 
-100/350 ms 是 App 公共发送队列参数，不是设备回复超时，也不是型号固件要求；i3/HeadFeel 未单独核对。i5 的普通控制报文最长 14 字节（降噪模式和轮换列表）；HeadFeel 的自定义 EQ 数据帧更长（22 字节），不能假设全族最大 14 字节。App 公共 BLE 层尝试请求 MTU 512，协商结果由设备和系统决定。UUID 由配置里的 32/16 位值 `011bf5da`、`7777`、`8888` 经 Bluetooth 标准基 UUID 扩展，不能把 32 位服务值截成 16 位；匹配时忽略大小写（Guid.str128（0xa257ec）（`rose_reverse/analysis/blutter/asm/flutter_blue_plus_platform_interface/src/guid.dart:322`））。写特征支持 `writeWithoutResponse` 时使用无响应写，否则使用有响应写；GATT 写响应不等同业务状态回包。OTA 是独立通道（i3/i5 为 WQ，HeadFeel 为 BES），不在普通控制特征上传输。
+100/350 ms 是 App 公共发送队列参数，不是设备回复超时，也不是型号固件要求；i3/HeadFeel 未单独核对。i5 的普通控制报文最长 14 字节（降噪模式和轮换列表）；HeadFeel 的自定义 EQ 数据帧更长（20 字节，见 构帧函数（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart:3312`）），不能假设全族最大 14 字节。App 公共 BLE 层尝试请求 MTU 512，协商结果由设备和系统决定。UUID 由配置里的 32/16 位值 `011bf5da`、`7777`、`8888` 经 Bluetooth 标准基 UUID 扩展，不能把 32 位服务值截成 16 位；匹配时忽略大小写（Guid.str128（0xa257ec）（`rose_reverse/analysis/blutter/asm/flutter_blue_plus_platform_interface/src/guid.dart:322`））。写特征支持 `writeWithoutResponse` 时使用无响应写，否则使用有响应写；GATT 写响应不等同业务状态回包。OTA 是独立通道（i3/i5 为 WQ，HeadFeel 为 BES），不在普通控制特征上传输。
 
 写入属性与 MTU 证据：属性决定写入方式（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/connector/ble_connector.dart:5921`）、writeWithoutResponse 字段（`rose_reverse/analysis/blutter/asm/flutter_blue_plus/flutter_blue_plus.dart:12072`）、MTU 请求值 512（`rose_reverse/analysis/blutter/asm/flutter_blue_plus/flutter_blue_plus.dart:11300`）。
 
@@ -89,7 +89,7 @@ body += (10 + len(payload)).to_bytes(2, "little") + payload
 packet = body + bytes([sum(body) & 0xff])
 ```
 
-无 payload 查询为 10 字节；单字节设置为 11 字节；寻机 12 字节；触摸绑定 13 字节；i5/HeadFeel 的降噪模式和轮换列表为 14 字节，i3 的降噪为 13 字节；HeadFeel 的自定义 EQ 数据帧为 22 字节（BODY `02 82` + 10 字节，见 [HeadFeel 文档](../models/headfeel-protocol.md#设置命令)）。`ZtSender.transform` 原样返回，不再增加其他封装。这里只确认 **TX 校验**，不得把公式未经验证地套到 RX 或 OTA。
+无 payload 查询为 10 字节；单字节设置为 11 字节；寻机 12 字节；触摸绑定 13 字节；i5/HeadFeel 的降噪模式和轮换列表为 14 字节，i3 的降噪为 13 字节；HeadFeel 的自定义 EQ 数据帧为 **20 字节**（9 字节头 + 10 字节 payload + 1 字节校验；BODY `02 82` + 10 字节，见 构帧函数（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart:3312`） 和 [HeadFeel 文档](../models/headfeel-protocol.md#设置命令)）。`ZtSender.transform` 原样返回，不再增加其他封装。这里只确认 **TX 校验**，不得把公式未经验证地套到 RX 或 OTA。
 
 证据：transform（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart:2926`）、CommandUtil.checkSum（0x795b24）（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/command_util.dart:189`）；固定帧逐字节提取见 原始命令常量（`rose_reverse/analysis/i5_fixed_sender_commands.json`）。
 
@@ -358,8 +358,8 @@ i5 实机抗风回包命中 `00 00 01 00 20`（实机 L6（`rose_reverse/analysi
 - `0d01` 固件版本取 byte9..11 的低 nibble 后拼接十进制文本（`9A 0B 0C`→`101112`），不是整字节整数或带点版本号（[固件版本与寻机](#固件版本与寻机)）。
 - i5 只在 2026-10-18 验证了初始化读取；设置写入、持久化、寻机响铃和 OTA 都未实测，其他固件未验证（i5 实机验证（`rose_reverse/analysis/i5_hardware_validation.md`））。
 - HeadFeel 初始化调用的 `getLoseLoss`（0x8e29d4（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/r_commander.dart:3883`））经选择器 `0xf495` 分派至 GDT 表项 67111，闭合到 `ZtSender::getAudioLdac` 的合并实现（0xc6e364（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/sender/zt_sender.dart:3749`）），实际发送 `08 EE 00 00 00 08 01 0A 00 09`，读回 Tag `0801`，并非未知帧。
-- `ZTReceiver` 的 `substring` 参数在反汇编中为 tagged Smi（如 `0x28` 对应 20、`0x1c` 对应 14、`0x20` 对应 16），需右移一位解码。HeadFeel 的 `0103` 单体电量读取字符 `18,20)` 对应报文第 9 字节（payload byte 0）。
-- 未实现的接收回调落入 `RFunctionLostReceiveHandler` 抛出 `RFunctionLostException`，由 `BleConnector`（[0xe553a0（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/connector/ble_connector.dart:9203`））捕获跳过；HeadFeel 的 `0e02`（寻机）即走此路径抛出并跳过，而其 `0803` 槽位在分派表中直接指向空返回桩（0xe593f0（`rose_reverse/analysis/i7_dispatch/table.tsv`））。
+- `ZTReceiver` 的 `substring` 参数在反汇编中为 tagged Smi（如 `0x28` 对应 20、`0x1c` 对应 14、`0x20` 对应 16），需右移一位解码。HeadFeel 的 `0103` 单体电量读取字符 `[18,20)` 对应报文第 9 字节（payload byte 0）。
+- 未实现的接收回调落入 `RFunctionLostReceiveHandler` 抛出 `RFunctionLostException`，由 `BleConnector`（0xe553a0（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/connector/ble_connector.dart:9203`））捕获跳过；HeadFeel 的 `0e02`（寻机）即走此路径抛出并跳过，而其 `0803` 槽位在分派表中直接指向空返回桩（0xe593f0（`rose_reverse/analysis/i7_dispatch/table.tsv`））。
 - i3/i5 是 WQ OTA，HeadFeel 是 BES OTA；OTA UUID、会话和固件格式都不同，不能把 i5 的 WQ 状态机套到 HeadFeel（i3 配置（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/zt/earfree_i3_device_config.dart:321`）、i5 配置（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/zt/earfree_i5_device_config.dart:381`）、HeadFeel 配置（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/zt/headfree_device_config.dart:351`））。
 - HeadFeel 的自定义 EQ 与增益门槛在配置里是 tagged Smi `0x104`，实际值 130；不要写成 260（HeadFeel 配置（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/zt/headfree_device_config.dart:169`））。
 

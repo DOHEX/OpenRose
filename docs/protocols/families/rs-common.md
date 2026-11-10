@@ -52,8 +52,8 @@ RoseLink 3.8.0（versionCode 5310，SHA-256 `83cdd7e3e7f6e7d61a26dc6a8fab65f183d
 | 开放的控件（型号能力） | 配置类中 `Allocate*WidgetModel` 的调用；legacy_capabilities.md（`rose_reverse/analysis/legacy_capabilities.md`） 的先行矩阵与配置证据行 |
 | 控件取值 | 配置构造参数的 Dart Smi（右移 1 位），例如 `NoiseType`、`DeviceAudioType`、`DeviceEQTypeModel`、`TouchCtlType`、`IntValueModel`；没有 V2 的 `v2_capabilities.json` 等价物 |
 | 选项差异 | OpenFeel 音频模式与触控动作按设备 ID 后缀（`0b0a0a0b`/`0b0a0a0c`/`0b0a0a0d`）变化，见 legacy_capabilities.md（`rose_reverse/analysis/legacy_capabilities.md`） |
-| 电量槽与单体 | BudsFree/OpenFun/SportFeel/SWIFT/Cambrian 的 handler 或配置；Cambrian、SWIFT 用单体（仓槽）：其 ReceiveHandler 仅取 `RBatteryData` 偏移 0x17（字符 `12,14)`）写入仓电量 `field_27` 并置 `caseCharging=false`，左右槽保留未变 |
-| OTA 路由 | 配置的 `otaType`；Cambrian 为 AB，RS-Common 为 `none`，其余无 OTA 入口；`otaType=none` 时进入 OTA 页面直接返回 Null（[0xb45b30（`rose_reverse/analysis/blutter/asm/roselink/modules/device_ota/controller/ota_controller.dart:3305`）） |
+| 电量槽与单体 | BudsFree/OpenFun/SportFeel/SWIFT/Cambrian 的 handler 或配置；Cambrian、SWIFT 用单体（仓槽）：其 ReceiveHandler 仅取 `RBatteryData` 偏移 0x17（字符 `[12,14)`）写入仓电量 `field_27` 并置 `caseCharging=false`，左右槽保留未变 |
+| OTA 路由 | 配置的 `otaType`；Cambrian 为 AB，RS-Common 为 `none`，其余无 OTA 入口；`otaType=none` 时进入 OTA 页面直接返回 Null（0xb45b30（`rose_reverse/analysis/blutter/asm/roselink/modules/device_ota/controller/ota_controller.dart:3305`）） |
 
 analysis/model_brief.py（`rose_reverse/analysis/model_brief.py`） 以型号名为参数，把上表各项和下面的控件对应关系汇总成简报，并列出索引回答不了的缺口。
 
@@ -96,8 +96,8 @@ analysis/model_brief.py（`rose_reverse/analysis/model_brief.py`） 以型号名
 - 开发者调试过滤：`DeviceConfig`（0xa0d2c4（`rose_reverse/analysis/blutter/asm/roselink/constant/device_config.dart:1061`））在未开启调试模式（`isDeviceDebug` 与 `agreeApp`）时直接过滤丢弃 `RS_COMMON`（前缀 `0a0b0a0b`）与 `RS_COMMON_V2` 设备并输出“未开启开发者调试模式，基础协议/非正式版设备被过滤”，因此 `0a0b0a0b` 不是未识别设备的通用兜底。
 - EQ Tag `2A` 映射：`RsCommonReceiveHandler.eqDataReceived`（0xe35d9c（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/receive_handler/rs_common/rs_common_receive_handler.dart:238`））中线值 `0` 对应控制器 `1`（HIFI / BALANCE），线值 `1` 对应控制器 `0`（POP / BASS），线值 `2` 对应控制器 `2`（ROCK）；线值 `0` 与 `1` 存在反转。
 - 触控动作列表与开关差异：`RTouchInfoModel`（touch_info.dart#L8（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/device_type_config/touch_info.dart:8`））中若缺少 `TouchCtlType.long`，长按设置在 UI 上被隐藏且 `setLeft/RightTouchLong` 永不触发；`field_23` 开关在 SportFree/Cambrian 为 true，Swift 为 false，OpenFun 仅当 `deviceId.substring(0,8) == "0b0a0a10"` 时为 true；OpenFree 的 `0b0a0a0b`/`0c` 前缀使用 5 项动作列表（无无功能 0）。
-- 按键解析下标：`RsCommonReceiver._handleKeyData`（0xe42b68（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/receiver/rs_common_receiver.dart:120`））引用的常量列表 `[0xb, 0xf, 0x13, 0x1f, 0x23, 0x27]`（十进制 11, 15, 19, 31, 35, 39）在对象池中为已解码数值，闭包取 `i, i+1)` 截取单字符并转十进制整数，不是 Smi 需右移。
-- `getInfo` 包含未处理的 ID `12`：查询帧包含 `12`，但 `RsCommonReceiver.process`（[0xe433e0（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/receiver/rs_common_receiver.dart:278`））没有任何针对 Tag `12` 的处理分支，回包会被静默忽略。
+- 按键解析下标：`RsCommonReceiver._handleKeyData`（0xe42b68（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/receiver/rs_common_receiver.dart:120`））引用的常量列表 `[0xb, 0xf, 0x13, 0x1f, 0x23, 0x27]`（十进制 11, 15, 19, 31, 35, 39）在对象池中为已解码数值，闭包取 `[i, i+1)` 截取单字符并转十进制整数，不是 Smi 需右移。
+- `getInfo` 包含未处理的 ID `12`：查询帧包含 `12`，但 `RsCommonReceiver.process`（0xe433e0（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/receiver/rs_common_receiver.dart:278`））没有任何针对 Tag `12` 的处理分支，回包会被静默忽略。
 - 单体电量解析：SWIFT 与 Cambrian 的 ReceiveHandler（0xe403b8（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/receive_handler/rs_common/swift_receive_handler.dart:10`）、0xe4019c（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/receive_handler/rs_common/cambrian_receive_handler.dart:140`））只从 `RBatteryData` 偏移 0x17 读取单体电量存入仓电量 `field_27`，强制置 `caseCharging=false` 并忽略左右槽。
 - OTA 页面入口防护：`DeviceOtaController.enterPage`（0xb45b30（`rose_reverse/analysis/blutter/asm/roselink/modules/device_ota/controller/ota_controller.dart:3305`））在 `otaType == none` 时直接返回 `Null`，不初始化 OTA 管理器。
 
