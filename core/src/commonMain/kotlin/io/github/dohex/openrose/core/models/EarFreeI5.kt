@@ -8,6 +8,7 @@ import io.github.dohex.openrose.core.NoiseControlCapabilities
 import io.github.dohex.openrose.core.NoiseLevelCapabilities
 import io.github.dohex.openrose.core.TouchControlCapabilities
 import io.github.dohex.openrose.core.protocol.BatteryLayout
+import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.GattProfile
 import io.github.dohex.openrose.core.protocol.ProtocolFamily
 import kotlinx.collections.immutable.persistentSetOf
@@ -15,7 +16,8 @@ import kotlinx.collections.immutable.toPersistentSet
 
 /** The recovered EarFree i5 configuration gates nothing on firmware. */
 private val earFreeI5Capabilities = DeviceCapabilities(
-    readableFields = ProtocolFamily.ZT.readableFields.toPersistentSet(),
+    readableFields = (ProtocolFamily.ZT.readableFields - setOf(DeviceField.CUSTOM_EQ, DeviceField.GAIN, DeviceField.HIDE_SEARCH))
+        .toPersistentSet(),
     writableSettings = persistentSetOf(
         DeviceSetting.NOISE_MODE,
         DeviceSetting.NOISE_CYCLE,

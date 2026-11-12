@@ -24,7 +24,10 @@ class ModelProfileTest {
         val wakeFilter = Regex(ModelProfile.namePattern)
         for (profile in ModelProfile.entries) {
             val name = "${profile.spec.nameBrand.uppercase()}-${profile.spec.nameModelNumber}"
-            assertEquals(profile, ModelProfile.match(name), name)
+            val sameName = ModelProfile.entries.filter {
+                it.spec.nameBrand == profile.spec.nameBrand && it.spec.nameModelNumber == profile.spec.nameModelNumber
+            }
+            assertEquals(sameName.singleOrNull(), ModelProfile.match(name), name)
             assertTrue(wakeFilter.matches(name), name)
         }
         for (name in listOf("ROSE i5", "roseselsa i7", "EarFeel-i5", "EarFree i7", "EarFree", "EarFeel")) {
@@ -47,8 +50,23 @@ class ModelProfileTest {
             assertEquals(ModelProfile.SWIFT2_RS_V2, ModelProfile.match(name), name)
         }
         assertEquals(ModelProfile.JASMINE_RS_V2, ModelProfile.match("Jasmine"))
-        for (name in listOf("ROSE MK2", "OpenFeel", "BudsFeel", "SWIFT", "ROSE Swift", "ROSE Swift 20")) {
+        for (name in listOf("ROSE MK2", "OpenFeel", "BudsFeel", "ROSE Swift 20")) {
             assertNull(ModelProfile.match(name), name)
         }
+        for (name in listOf("SWIFT", "ROSE Swift")) {
+            assertEquals(ModelProfile.SWIFT_RS_COMMON, ModelProfile.match(name), name)
+        }
+    }
+
+    @Test
+    fun hardwareAmbiguityRequiresAdvertisementAndLongerRetailNamesWin() {
+        for (name in listOf("CERAMICS-X", "ROSE Ceramics X", "OpenFree", "OpenFun")) {
+            assertNull(ModelProfile.match(name), name)
+        }
+        assertEquals(ModelProfile.AGATE_X_F8, ModelProfile.match("ROSE AGATE X"))
+        assertEquals(ModelProfile.CERAMICS_F8, ModelProfile.match("CERAMICS"))
+        assertEquals(ModelProfile.HEADFEEL_ZT, ModelProfile.match("HeadFree"))
+        assertEquals(ModelProfile.SPORTFEEL_RS_COMMON, ModelProfile.match("SportFree"))
+        assertEquals(ModelProfile.I3_ZT, ModelProfile.match("EarFree i3"))
     }
 }

@@ -357,9 +357,11 @@ internal class ControlLink(
         for ((index, query) in queries.withIndex()) {
             attempt.initializationQueryIndex = index
             throwProgressFailure(progress)
+            delay(query.delayBeforeMillis)
+            throwProgressFailure(progress)
             writeInitialQuery(attempt, selection, opened, query.bytes, index)
-            val waitForMeaningfulState = index == 0 && selection.endpoint is TransportEndpoint.BleGatt &&
-                requireNotNull(transport).supportsInitializationRecovery
+            val waitForMeaningfulState = index == 0 && query.expectedFields.isNotEmpty() &&
+                selection.endpoint is TransportEndpoint.BleGatt && requireNotNull(transport).supportsInitializationRecovery
             val observed = withTimeoutOrNull(timing.queryTimeoutMillis) {
                 progress.first {
                     it.ended || (it.keys.containsAll(query.responseKeys) && (!waitForMeaningfulState || it.meaningful))

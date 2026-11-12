@@ -336,6 +336,22 @@ class OpenRoseConnectedHomeUiTest {
     }
 
     @Test
+    fun spatialAudioAloneExposesTheAudioPage() {
+        for (style in InterfaceStyle.entries) {
+            val base = connectedState()
+            val original = requireNotNull(base.device)
+            val device = original.copy(
+                capabilities = original.capabilities.copy(writableSettings = persistentSetOf(DeviceSetting.SPATIAL_AUDIO)),
+                fields = original.fields + (DeviceField.SPATIAL_AUDIO to FieldReading.Unknown("ff")),
+            )
+            withHarness(420, 900, base.copy(device = device), style) { harness ->
+                harness.render()
+                assertTrue(harness.hasText("音频与设备"), "spatial audio exposes the audio page in $style")
+            }
+        }
+    }
+
+    @Test
     fun gameModeCardRendersCompactSwitchWithGamepadIconAndHandlesToggling() {
         for (style in InterfaceStyle.entries) {
             val baseState = connectedState()

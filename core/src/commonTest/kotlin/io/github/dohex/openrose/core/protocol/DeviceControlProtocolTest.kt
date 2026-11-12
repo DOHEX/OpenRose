@@ -206,7 +206,10 @@ class DeviceControlProtocolTest {
             "ff000301130117aa",
             "ff000301140118aa",
         )
-        for (profile in ModelProfile.entries.filter { DeviceSetting.TOUCH_BINDING in it.capabilities().writableSettings }) {
+        for (profile in ModelProfile.entries.filter {
+            (it == ModelProfile.I5_ZT || it.family == ProtocolFamily.RS_COMMON_V2) &&
+                DeviceSetting.TOUCH_BINDING in it.capabilities().writableSettings
+        }) {
             for ((index, slot) in slots.withIndex()) {
                 val request = FieldValue.TouchAssignment(slot.side, slot.gesture, "play_pause")
                 val setting = createProtocolCodec(profile).prepareSetting(DeviceSetting.TOUCH_BINDING, request)
@@ -251,7 +254,7 @@ class DeviceControlProtocolTest {
 
     @Test
     fun invalidRequestsAreRejectedBeforeI7SequenceAllocation() {
-        for (profile in ModelProfile.entries) {
+        for (profile in ModelProfile.entries.filter { it == ModelProfile.I5_ZT || it.family == ProtocolFamily.RS_COMMON_V2 }) {
             val codec = createProtocolCodec(profile)
             for ((kind, value) in listOf(
                 DeviceSetting.AUDIO_MODE to FieldValue.Number(0),
@@ -280,7 +283,9 @@ class DeviceControlProtocolTest {
                     assertFailsWith<IllegalArgumentException> { codec.prepareSetting(DeviceSetting.PROMPT_VOLUME, value) }
                 }
             } else {
-                assertFailsWith<UnsupportedOperationException> { codec.prepareSetting(DeviceSetting.PROMPT_VOLUME, FieldValue.Number(0)) }
+                if (0 !in profile.capabilities().promptVolumeLevels) {
+                    assertFailsWith<UnsupportedOperationException> { codec.prepareSetting(DeviceSetting.PROMPT_VOLUME, FieldValue.Number(0)) }
+                }
                 for (level in listOf(-1, 6)) {
                     assertFailsWith<IllegalArgumentException> { codec.prepareSetting(DeviceSetting.PROMPT_VOLUME, FieldValue.Number(level)) }
                 }

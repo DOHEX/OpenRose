@@ -310,6 +310,11 @@ object ControlWire {
             obj(
                 "slots" to arr(touch.slots.map { obj("side" to str(it.side), "gesture" to str(it.gesture)) }),
                 "actions" to arr(touch.actions.map(::str)),
+                "slotLabels" to arr(
+                    touch.slotLabels.map { (slot, label) ->
+                        obj("side" to str(slot.side), "gesture" to str(slot.gesture), "label" to str(label))
+                    },
+                ),
             )
         },
         "audio" to capabilities.audioControl?.let { audio ->
@@ -334,6 +339,9 @@ object ControlWire {
                         .map { it.asObj().let { slot -> TouchSlot(slot.str("side"), slot.str("gesture")) } }
                         .toPersistentSet(),
                     touch.arr("actions").map { it.asStr() }.toPersistentSet(),
+                    touch.arr("slotLabels").associate { entry ->
+                        entry.asObj().let { slot -> TouchSlot(slot.str("side"), slot.str("gesture")) to slot.str("label") }
+                    }.toPersistentMap(),
                 )
             },
             audioControl = node.optional("audio")?.asObj()?.let { audio ->

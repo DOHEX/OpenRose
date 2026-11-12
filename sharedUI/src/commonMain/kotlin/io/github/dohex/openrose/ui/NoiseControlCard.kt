@@ -45,7 +45,6 @@ import io.github.dohex.openrose.core.TransportAvailability
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.FieldReading
 import io.github.dohex.openrose.core.protocol.FieldValue
-import io.github.dohex.openrose.core.protocol.ModelProfile
 
 /** Choices always come from device capabilities; selected values always come from device replies. */
 @Composable
@@ -337,11 +336,10 @@ internal fun SettingOperationsCard(state: ControlState) {
     }
     AppGroup(title = "设置操作") {
         operations.forEach { operation ->
-            val profile = state.device
+            val device = state.device
                 ?.takeIf { it.sessionId == operation.sessionId && operation.sessionId == sessionId }
-                ?.profile
             val details = buildList {
-                add("请求值：${operation.requestedValueText(profile)}")
+                add("请求值：${operation.requestedValueText(device)}")
                 if (operation.setting == DeviceSetting.CUSTOM_EQ) {
                     if (operation.totalFrames > 0) add("发送进度：${operation.writtenFrames}/${operation.totalFrames} 步")
                     val modeConfirmed = DeviceField.EQ in operation.confirmedFields
@@ -395,6 +393,7 @@ internal fun DeviceSetting.displayName(): String = when (this) {
     DeviceSetting.EAR_DETECTION -> "佩戴检测功能"
     DeviceSetting.AUDIO_MODE -> "音频模式"
     DeviceSetting.MULTIPOINT -> "多点连接"
+    DeviceSetting.SPATIAL_AUDIO -> "空间音频"
     DeviceSetting.PROMPT_VOLUME -> "提示音音量"
     DeviceSetting.GAIN -> "增益档位"
     DeviceSetting.HEARING_PROTECTION -> "听力保护阈值"
@@ -403,18 +402,19 @@ internal fun DeviceSetting.displayName(): String = when (this) {
     DeviceSetting.CUSTOM_EQ -> "自定义 EQ"
 }
 
-private fun SettingOperation.requestedValueText(profile: ModelProfile?): String = when (setting) {
+private fun SettingOperation.requestedValueText(device: DeviceState?): String = when (setting) {
     DeviceSetting.NOISE_MODE -> displayFieldValue(DeviceField.NOISE_MODE, requestedValue)
     DeviceSetting.ANC_LEVEL -> displayFieldValue(DeviceField.ANC_LEVEL, requestedValue)
     DeviceSetting.TRANSPARENCY_LEVEL -> displayFieldValue(DeviceField.TRANSPARENCY_LEVEL, requestedValue)
     DeviceSetting.NOISE_CYCLE -> displayFieldValue(DeviceField.NOISE_CYCLE, requestedValue)
-    DeviceSetting.EQ -> displayFieldValue(DeviceField.EQ, requestedValue, profile)
+    DeviceSetting.EQ -> displayFieldValue(DeviceField.EQ, requestedValue, device?.profile)
     DeviceSetting.GAME_MODE -> displayFieldValue(DeviceField.GAME_MODE, requestedValue)
-    DeviceSetting.TOUCH_BINDING -> displayFieldValue(DeviceField.TOUCH_KEYS, requestedValue)
+    DeviceSetting.TOUCH_BINDING -> displayFieldValue(DeviceField.TOUCH_KEYS, requestedValue, touch = device?.capabilities?.touchControl)
     DeviceSetting.TOUCH_ENABLED -> displayFieldValue(DeviceField.TOUCH_ENABLED, requestedValue)
     DeviceSetting.EAR_DETECTION -> displayFieldValue(DeviceField.EAR_DETECTION, requestedValue)
     DeviceSetting.AUDIO_MODE -> displayFieldValue(DeviceField.AUDIO_MODE, requestedValue)
     DeviceSetting.MULTIPOINT -> displayFieldValue(DeviceField.MULTIPOINT, requestedValue)
+    DeviceSetting.SPATIAL_AUDIO -> displayFieldValue(DeviceField.SPATIAL_AUDIO, requestedValue)
     DeviceSetting.PROMPT_VOLUME -> displayFieldValue(DeviceField.PROMPT_VOLUME, requestedValue)
     DeviceSetting.CUSTOM_EQ -> displayFieldValue(DeviceField.CUSTOM_EQ, requestedValue)
     DeviceSetting.GAIN -> displayFieldValue(DeviceField.GAIN, requestedValue)

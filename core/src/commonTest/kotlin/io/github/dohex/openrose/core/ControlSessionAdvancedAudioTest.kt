@@ -397,7 +397,7 @@ class ControlSessionAdvancedAudioTest {
         for (vector in listOf(
             RejectedCapability(ModelProfile.BUDSFEEL_MK2_RS_V2, DeviceSetting.BASS_BOOST, listOf(FieldValue.Number(-1), FieldValue.Number(5), FieldValue.Toggle(true)), DeviceSetting.PROMPT_LANGUAGE),
             RejectedCapability(ModelProfile.JASMINE_RS_V2, DeviceSetting.PROMPT_LANGUAGE, listOf(FieldValue.Text("french"), FieldValue.Number(0)), DeviceSetting.BASS_BOOST),
-            RejectedCapability(ModelProfile.OPENFEEL_MK2_RS_V2, DeviceSetting.BASS_BOOST, listOf(FieldValue.Number(5)), DeviceSetting.CUSTOM_EQ),
+            RejectedCapability(ModelProfile.OPENFEEL_MK2_RS_V2, DeviceSetting.BASS_BOOST, listOf(FieldValue.Number(5)), DeviceSetting.PROMPT_LANGUAGE),
             RejectedCapability(ModelProfile.SWIFT2_RS_V2, DeviceSetting.GAME_MODE, listOf(FieldValue.Number(1)), DeviceSetting.TOUCH_BINDING),
             RejectedCapability(ModelProfile.I7_RS_V2, DeviceSetting.GAIN, listOf(FieldValue.Number(3)), DeviceSetting.BASS_BOOST),
         )) {

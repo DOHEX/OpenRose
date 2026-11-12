@@ -77,6 +77,9 @@ fun DeviceState.toBridgeSnapshot(hostEpoch: String, readSequence: Long, captured
                     mapOf(
                         "actions" to touch.actions.sorted(),
                         "slots" to touch.slots.map { slot -> mapOf("side" to slot.side, "gesture" to slot.gesture) },
+                        "slot_labels" to touch.slotLabels.map { (slot, label) ->
+                            mapOf("side" to slot.side, "gesture" to slot.gesture, "label" to label)
+                        },
                     ),
                 )
             }

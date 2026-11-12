@@ -9,12 +9,12 @@ internal class ZtCodec(override val profile: ModelProfile) : ProtocolCodec {
         val (writeKey, readKey, payload) = when (setting) {
             DeviceSetting.NOISE_MODE -> {
                 require(value is FieldValue.Text) { "降噪模式需要模式名称" }
-                val mode = mapOf(
-                    "anc" to "01000000",
-                    "normal" to "00010000",
-                    "wind" to "00000100",
-                    "transparency" to "00000001",
-                )[value.value]
+                val modes = if (profile.spec.ztThreeByteNoise) {
+                    mapOf("anc" to "010000", "normal" to "000001", "transparency" to "000100")
+                } else {
+                    mapOf("anc" to "01000000", "normal" to "00010000", "wind" to "00000100", "transparency" to "00000001")
+                }
+                val mode = modes[value.value]
                     ?: throw UnsupportedOperationException("该型号不支持该降噪模式")
                 Triple("0682", "0602", mode.bytes())
             }
@@ -23,10 +23,11 @@ internal class ZtCodec(override val profile: ModelProfile) : ProtocolCodec {
                 require(value is FieldValue.Number) { "档位需要整数" }
                 val level = listOf(1, 3, 5).indexOf(value.value)
                 require(level >= 0) { "ZT 档位仅支持 1、3、5" }
+                val wire = (level + profile.spec.ztLevelWriteOffset).toByte()
                 if (setting == DeviceSetting.ANC_LEVEL) {
-                    Triple("0687", "0607", byteArrayOf(level.toByte()))
+                    Triple("0687", "0607", byteArrayOf(wire))
                 } else {
-                    Triple("0684", "0604", byteArrayOf(level.toByte()))
+                    Triple("0684", "0604", byteArrayOf(wire))
                 }
             }
 
@@ -40,8 +41,10 @@ internal class ZtCodec(override val profile: ModelProfile) : ProtocolCodec {
 
             DeviceSetting.EQ -> {
                 require(value is FieldValue.Text) { "均衡器需要预设名称" }
-                val preset = listOf("pop", "hifi", "rock", "light").indexOf(value.value)
-                if (preset < 0) throw UnsupportedOperationException("该型号不支持该均衡器预设")
+                val preset = eqPresets.indexOf(value.value)
+                if (preset < 0 || value.value !in profile.capabilities(firmware).equalizer?.presets.orEmpty()) {
+                    throw UnsupportedOperationException("该型号不支持该均衡器预设")
+                }
                 Triple("0281", "0201", byteArrayOf(preset.toByte()))
             }
 
@@ -52,14 +55,23 @@ internal class ZtCodec(override val profile: ModelProfile) : ProtocolCodec {
 
             DeviceSetting.AUDIO_MODE -> {
                 require(value is FieldValue.Text) { "音频模式需要配置名称" }
-                val mode = listOf("aac_sbc", "ldac").indexOf(value.value)
+                val modes = if (profile.spec.ztIndependentMultipoint) {
+                    listOf("aac_sbc", "ldac", "lhdc", "ldac_lhdc")
+                } else {
+                    listOf("aac_sbc", "ldac")
+                }
+                val mode = modes.indexOf(value.value)
                 if (mode < 0) throw UnsupportedOperationException("该型号不支持该音频配置")
                 Triple("0881", "0801", byteArrayOf(mode.toByte()))
             }
 
             DeviceSetting.MULTIPOINT -> {
                 require(value is FieldValue.Toggle) { "多点连接需要明确开关" }
-                Triple("0881", "0801", byteArrayOf(if (value.value) 0 else 1))
+                if (profile.spec.ztIndependentMultipoint) {
+                    Triple("0882", "0802", byteArrayOf(if (value.value) 1 else 0))
+                } else {
+                    Triple("0881", "0801", byteArrayOf(if (value.value) 0 else 1))
+                }
             }
 
             DeviceSetting.TOUCH_ENABLED, DeviceSetting.EAR_DETECTION -> {
@@ -91,19 +103,48 @@ internal class ZtCodec(override val profile: ModelProfile) : ProtocolCodec {
 
             DeviceSetting.PROMPT_VOLUME -> {
                 require(value is FieldValue.Number && value.value in ProtocolFamily.ZT.promptVolumeLevels) { "ZT 提示音仅支持 1～5 档" }
-                Triple("0e83", "0e03", byteArrayOf((value.value - 1).toByte()))
+                if (profile.spec.ztPromptVolumeDirect) {
+                    Triple("0e03", "0e03", byteArrayOf(value.value.toByte()))
+                } else {
+                    Triple("0e83", "0e03", byteArrayOf((value.value - 1).toByte()))
+                }
+            }
+
+            DeviceSetting.CUSTOM_EQ -> {
+                require(value is FieldValue.IntegerList) { "自定义均衡器需要整数曲线" }
+                val custom = profile.capabilities(firmware).equalizer?.custom
+                    ?: throw UnsupportedOperationException("该型号不支持自定义均衡器")
+                val gains = value.values.toList()
+                require(gains.size == custom.bandsHz.size && gains.all { it in custom.minGain..custom.maxGain }) {
+                    "自定义均衡器需要 ${custom.bandsHz.size} 段 ${custom.minGain}..${custom.maxGain} 的整数"
+                }
+                val slot = eqPresets.indexOf("custom")
+                require(slot >= 0) { "该型号的自定义均衡器没有可选的预设槽位" }
+                // Validate and snapshot the whole curve before allocating either write frame.
+                val payload = gains.map { if (it < 0) 0x80 or -it else it }.map { it.toByte() }.toByteArray()
+                return ProtocolSetting(
+                    listOf(frame("0281", byteArrayOf(slot.toByte())), frame("0282", payload)),
+                    query("0201"),
+                    mapOf(DeviceField.EQ to FieldValue.Text("custom"), DeviceField.CUSTOM_EQ to FieldValue.IntegerList(gains)),
+                    listOf(query("0202")),
+                )
+            }
+
+            DeviceSetting.GAIN -> {
+                require(value is FieldValue.Number && value.value in profile.capabilities(firmware).gainLevels) { "该型号不支持此增益档位" }
+                Triple("0283", "0203", byteArrayOf((value.value + 1).toByte()))
             }
 
             else -> throw UnsupportedOperationException("该型号不支持此设置")
         }
-        val expectedValues = if (readKey == "0801") {
+        val expectedValues = if (readKey == "0801" && !profile.spec.ztIndependentMultipoint) {
             val multipoint = payload.single().u() == 0
             mapOf(
                 DeviceField.AUDIO_MODE to FieldValue.Text(if (multipoint) "aac_sbc" else "ldac"),
                 DeviceField.MULTIPOINT to FieldValue.Toggle(multipoint),
             )
         } else {
-            mapOf(ztFields.getValue(readKey).single() to expected)
+            mapOf(query(readKey).expectedFields.single() to expected)
         }
         return ProtocolSetting(
             listOf(frame(writeKey, payload)),
@@ -112,17 +153,36 @@ internal class ZtCodec(override val profile: ModelProfile) : ProtocolCodec {
         )
     }
 
+    /** ZT models with independent multipoint carry the custom curve in slot 3 instead of the light preset. */
+    private val eqPresets: List<String>
+        get() = if (profile.spec.ztIndependentMultipoint) {
+            listOf("pop", "hifi", "rock", "custom")
+        } else {
+            listOf("pop", "hifi", "rock", "light")
+        }
+
     private fun frame(key: String, payload: ByteArray = byteArrayOf()): ByteArray {
         val length = payload.size + 10
         val prefix = "08ee000000$key".bytes() + byteArrayOf(length.toByte(), (length shr 8).toByte()) + payload
         return prefix + byteArrayOf((prefix.sumOf { it.u() } and 255).toByte())
     }
 
-    private fun query(key: String) = ProtocolQuery(key, frame(key), setOf(key), ztFields.getValue(key))
+    private fun query(key: String): ProtocolQuery {
+        val fields = when {
+            key == "0101" && profile.batteryLayout == BatteryLayout.SINGLE_UNIT -> emptySet()
+            key == "0801" && profile.spec.ztIndependentMultipoint -> setOf(DeviceField.AUDIO_MODE)
+            else -> ztFields.getValue(key)
+        }
+        val responseKeys = if (key == "0101" && profile.batteryLayout == BatteryLayout.SINGLE_UNIT) emptySet() else setOf(key)
+        return ProtocolQuery(key, frame(key), responseKeys, fields)
+    }
 
     override fun initQueries(maxWriteSize: Int): List<ProtocolQuery> {
         require(maxWriteSize >= 10) { "ZT queries require a 10-byte write capacity" }
-        return ztFields.keys.map(::query)
+        val keys = profile.spec.ztInitKeys.ifEmpty {
+            listOf("0101", "0602", "0201", "0603", "0801", "0d01", "0401", "0a01", "0605", "0c01", "0607", "0604", "0e03")
+        }
+        return keys.map(::query)
     }
 
     override fun feedNotification(bytes: ByteArray): List<ProtocolReply> {
@@ -131,6 +191,7 @@ internal class ZtCodec(override val profile: ModelProfile) : ProtocolCodec {
         val command = raw.copyOfRange(5, 7).hex()
         val minimum = when (command) {
             "0101" -> 16
+            "0202" -> 19
             "0d01", "0605" -> 13
             "0401" -> 17
             "0602" -> 14
@@ -150,6 +211,7 @@ internal class ZtCodec(override val profile: ModelProfile) : ProtocolCodec {
         val nibble = raw[9].u() and 15
         when (command) {
             "0101" -> {
+                if (profile.batteryLayout == BatteryLayout.SINGLE_UNIT) return listOf(ProtocolReply(raw.hex(), setOf(command)))
                 val batteries = listOf(
                     DeviceField.LEFT_BATTERY to 11,
                     DeviceField.RIGHT_BATTERY to 12,
@@ -167,6 +229,35 @@ internal class ZtCodec(override val profile: ModelProfile) : ProtocolCodec {
                 }
                 for ((field, offset) in listOf(DeviceField.LEFT_CHARGING to 13, DeviceField.RIGHT_CHARGING to 14)) {
                     known(field, FieldValue.Toggle(raw[offset].u() != 0), byteArrayOf(raw[offset]))
+                }
+            }
+
+            "0103" -> {
+                if (profile.batteryLayout == BatteryLayout.SINGLE_UNIT) {
+                    val battery = raw[9].u()
+                    val hex = byteArrayOf(raw[9]).hex()
+                    fields[DeviceField.CASE_BATTERY] = when {
+                        battery == 255 -> FieldReading.NotProvided(hex)
+                        battery in 1..100 -> FieldReading.Known(FieldValue.Number(battery), hex)
+                        else -> FieldReading.Unknown(hex)
+                    }
+                }
+            }
+
+            "0202" -> {
+                val gains = (9..18).map { offset ->
+                    val encoded = raw[offset].u()
+                    if (encoded and 0x80 != 0) -(encoded and 0x7f) else encoded
+                }
+                known(DeviceField.CUSTOM_EQ, FieldValue.IntegerList(gains), raw.copyOfRange(9, 19))
+            }
+
+            "0203" -> {
+                val gain = raw[9].u()
+                fields[DeviceField.GAIN] = if (gain in 1..3) {
+                    FieldReading.Known(FieldValue.Number(gain - 1), byteArrayOf(raw[9]).hex())
+                } else {
+                    FieldReading.Unknown(byteArrayOf(raw[9]).hex())
                 }
             }
 
@@ -224,16 +315,33 @@ internal class ZtCodec(override val profile: ModelProfile) : ProtocolCodec {
                 }
             }
 
-            "0201" -> choice(DeviceField.EQ, listOf("pop", "hifi", "rock", "light"))
+            "0201" -> choice(DeviceField.EQ, eqPresets)
 
             "0801" -> {
-                choice(DeviceField.AUDIO_MODE, listOf("aac_sbc", "ldac"))
+                val modes = if (profile.spec.ztIndependentMultipoint) {
+                    listOf("aac_sbc", "ldac", "lhdc", "ldac_lhdc")
+                } else {
+                    listOf("aac_sbc", "ldac")
+                }
+                choice(DeviceField.AUDIO_MODE, modes)
+                if (!profile.spec.ztIndependentMultipoint) {
+                    fields[DeviceField.MULTIPOINT] = if (nibble in 0..1) {
+                        FieldReading.Known(FieldValue.Toggle(nibble == 0), byteArrayOf(raw[9]).hex())
+                    } else {
+                        FieldReading.Unknown(byteArrayOf(raw[9]).hex())
+                    }
+                }
+            }
+
+            "0802" -> {
                 fields[DeviceField.MULTIPOINT] = if (nibble in 0..1) {
-                    FieldReading.Known(FieldValue.Toggle(nibble == 0), byteArrayOf(raw[9]).hex())
+                    FieldReading.Known(FieldValue.Toggle(nibble == 1), byteArrayOf(raw[9]).hex())
                 } else {
                     FieldReading.Unknown(byteArrayOf(raw[9]).hex())
                 }
             }
+
+            "0b01" -> fields[DeviceField.HIDE_SEARCH] = FieldReading.Unknown(byteArrayOf(raw[9]).hex())
 
             "0607", "0604" -> {
                 val field = ztFields.getValue(command).single()
@@ -243,8 +351,9 @@ internal class ZtCodec(override val profile: ModelProfile) : ProtocolCodec {
             }
 
             "0e03" -> {
-                fields[DeviceField.PROMPT_VOLUME] = if (nibble in 0..4) {
-                    FieldReading.Known(FieldValue.Number(nibble + 1), byteArrayOf(raw[9]).hex())
+                val level = if (profile.spec.ztPromptVolumeDirect) raw[9].u() else nibble + 1
+                fields[DeviceField.PROMPT_VOLUME] = if (level in 1..5) {
+                    FieldReading.Known(FieldValue.Number(level), byteArrayOf(raw[9]).hex())
                 } else {
                     FieldReading.Unknown(byteArrayOf(raw[9]).hex())
                 }

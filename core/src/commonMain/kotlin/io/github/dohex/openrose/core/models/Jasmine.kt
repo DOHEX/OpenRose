@@ -17,12 +17,15 @@ private val jasmineCapabilities = DeviceCapabilities(
         DeviceSetting.TOUCH_ENABLED,
         DeviceSetting.TOUCH_BINDING,
         DeviceSetting.PROMPT_LANGUAGE,
+        DeviceSetting.PROMPT_VOLUME,
     ),
     touchControl = TouchControlCapabilities(
         earbudTouchSlots,
         persistentSetOf("none", "play_pause", "previous_track", "next_track", "volume_up", "volume_down", "game_mode", "voice_assistant"),
     ),
     promptLanguages = persistentSetOf("chinese", "english"),
+    // RoseLink's Jasmine panel disables the off option and sets no firmware gate.
+    promptVolumeLevels = (1..5).toPersistentSet(),
 )
 
 internal val jasmine = ModelSpec(

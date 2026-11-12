@@ -10,7 +10,14 @@ import kotlinx.collections.immutable.toPersistentSet
 
 private val swift2Capabilities = DeviceCapabilities(
     readableFields = ProtocolFamily.RS_COMMON_V2.readableFields.toPersistentSet(),
-    writableSettings = persistentSetOf(DeviceSetting.GAME_MODE, DeviceSetting.MULTIPOINT, DeviceSetting.TOUCH_ENABLED),
+    writableSettings = persistentSetOf(
+        DeviceSetting.GAME_MODE,
+        DeviceSetting.MULTIPOINT,
+        DeviceSetting.TOUCH_ENABLED,
+        DeviceSetting.PROMPT_VOLUME,
+    ),
+    // RoseLink's Swift 2 panel disables the off option and sets no firmware gate.
+    promptVolumeLevels = (1..5).toPersistentSet(),
 )
 
 internal val swift2 = ModelSpec(

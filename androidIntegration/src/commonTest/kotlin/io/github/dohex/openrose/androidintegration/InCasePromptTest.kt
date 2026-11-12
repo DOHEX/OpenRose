@@ -42,7 +42,14 @@ class InCasePromptTest {
     @Test
     fun onlyModelsWithACaseAndInCaseFlagsCanShowAnInCasePrompt() {
         assertEquals(
-            setOf(ModelProfile.I7_RS_V2, ModelProfile.BUDSFEEL_MK2_RS_V2, ModelProfile.OPENFEEL_MK2_RS_V2),
+            setOf(
+                ModelProfile.I7_RS_V2,
+                ModelProfile.BUDSFEEL_MK2_RS_V2,
+                ModelProfile.OPENFEEL_MK2_RS_V2,
+                ModelProfile.OPENFEEL_LDAC_RS_COMMON,
+                ModelProfile.OPENFEEL_LHDC_RS_COMMON,
+                ModelProfile.OPENFEEL_DUAL_RS_COMMON,
+            ),
             ModelProfile.entries.filter { it.reportsInCase }.toSet(),
         )
     }

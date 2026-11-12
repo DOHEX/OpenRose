@@ -1,12 +1,15 @@
 package io.github.dohex.openrose.core.models
 
 import io.github.dohex.openrose.core.AudioControlCapabilities
+import io.github.dohex.openrose.core.CustomEqualizerCapabilities
 import io.github.dohex.openrose.core.DeviceCapabilities
 import io.github.dohex.openrose.core.DeviceSetting
+import io.github.dohex.openrose.core.EqualizerCapabilities
 import io.github.dohex.openrose.core.TouchControlCapabilities
 import io.github.dohex.openrose.core.protocol.BatteryLayout
 import io.github.dohex.openrose.core.protocol.GattProfile
 import io.github.dohex.openrose.core.protocol.ProtocolFamily
+import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.persistentSetOf
 import kotlinx.collections.immutable.toPersistentSet
 
@@ -21,7 +24,18 @@ private val openFeelMk2Capabilities = DeviceCapabilities(
         DeviceSetting.BASS_BOOST,
         DeviceSetting.GAIN,
         DeviceSetting.HEARING_PROTECTION,
+        DeviceSetting.CUSTOM_EQ,
+        DeviceSetting.PROMPT_VOLUME,
     ),
+    // Only the custom curve is writable: RoseLink offers the custom EQ panel plus the separate
+    // bass-loudness-boost preset, which OpenRose exposes as BASS_BOOST rather than an EQ preset.
+    equalizer = EqualizerCapabilities(
+        persistentSetOf(),
+        // The shared EQ panel's band labels and slider bounds, not measured acoustic filter centers.
+        CustomEqualizerCapabilities(persistentListOf(20, 100, 300, 500, 1000, 2000, 3000, 5000, 8000, 15000), -6, 6),
+    ),
+    // RoseLink's OpenFeel MK2 panel offers 1..5 plus the off option (00); it sets no firmware gate.
+    promptVolumeLevels = (0..5).toPersistentSet(),
     touchControl = TouchControlCapabilities(
         earbudTouchSlots,
         persistentSetOf("none", "play_pause", "previous_track", "next_track", "volume_up", "volume_down", "game_mode", "voice_assistant"),

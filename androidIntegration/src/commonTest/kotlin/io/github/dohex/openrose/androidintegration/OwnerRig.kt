@@ -12,6 +12,7 @@ import io.github.dohex.openrose.core.SessionTiming
 import io.github.dohex.openrose.core.TransportAvailability
 import io.github.dohex.openrose.core.UserSettings
 import io.github.dohex.openrose.core.protocol.ModelProfile
+import io.github.dohex.openrose.core.protocol.ProtocolFamily
 import io.github.dohex.openrose.core.transport.Advertisement
 import io.github.dohex.openrose.core.transport.ControlConnection
 import io.github.dohex.openrose.core.transport.ControlTransport
@@ -239,29 +240,98 @@ internal class InProcessHostLink(
 internal fun rosePair(name: String, profile: ModelProfile = ModelProfile.I5_ZT) = DeviceCandidate(DeviceId(name), profile.displayName, null, profile, "", "11:22:33:44:55:66")
 
 /** An advertisement that identifies [profile] by its manufacturer data. */
-internal fun roseAdvertisement(profile: ModelProfile, id: DeviceId) = when (profile) {
-    ModelProfile.I5_ZT -> Advertisement(id, "i5", manufacturerData = mapOf(0x5352 to byteArrayOf(0, 1, 0, 1)))
-    ModelProfile.I7_RS_V2 -> Advertisement(id, "i7", manufacturerData = mapOf(0xe5b8 to byteArrayOf(0x29, 0x0f)))
-    ModelProfile.BUDSFEEL_MK2_RS_V2 -> Advertisement(id, "BudsFeel MK2", manufacturerData = mapOf(0x150b to byteArrayOf(0x0a, 0x0b)))
-    ModelProfile.OPENFEEL_MK2_RS_V2 -> Advertisement(id, "OpenFeel MK2", manufacturerData = mapOf(0x0e0b to byteArrayOf(0xb6.toByte(), 0x57)))
-    ModelProfile.SWIFT2_RS_V2 -> Advertisement(id, "SWIFT 2", manufacturerData = mapOf(0x9959 to byteArrayOf(0x06, 0x4c)))
-    ModelProfile.JASMINE_RS_V2 -> Advertisement(id, "Jasmine", manufacturerData = mapOf(0x0a0b to byteArrayOf(0x0a, 0x11)))
+internal fun roseAdvertisement(profile: ModelProfile, id: DeviceId): Advertisement {
+    val prefix = syntheticAdvertisementPrefixes.getValue(profile).bytes()
+    val company = (prefix[0].toInt() and 255) or ((prefix[1].toInt() and 255) shl 8)
+    val name = when (profile) {
+        ModelProfile.I5_ZT -> "i5"
+        ModelProfile.I7_RS_V2 -> "i7"
+        else -> profile.displayName
+    }
+    return Advertisement(id, name, manufacturerData = mapOf(company to prefix.copyOfRange(2, prefix.size)))
 }
+
+/** Synthetic prefixes from the protocol identification tables; not captured advertisements. */
+private val syntheticAdvertisementPrefixes = mapOf(
+    ModelProfile.I5_ZT to "525300010001",
+    ModelProfile.I7_RS_V2 to "b8e5290f",
+    ModelProfile.BUDSFEEL_MK2_RS_V2 to "0b150a0b",
+    ModelProfile.OPENFEEL_MK2_RS_V2 to "0b0eb657",
+    ModelProfile.SWIFT2_RS_V2 to "5999064c",
+    ModelProfile.JASMINE_RS_V2 to "0b0a0a11",
+    ModelProfile.I3_ZT to "f10203",
+    ModelProfile.HEADFEEL_ZT to "525300020002",
+    ModelProfile.AGATE_F8 to "18840505",
+    ModelProfile.AGATE_X_F8 to "18840506",
+    ModelProfile.CERAMICS_F8 to "18840100",
+    ModelProfile.CERAMICS_X_F8 to "18840109",
+    ModelProfile.CERAMICS_X_7034_F8 to "18840112",
+    ModelProfile.EXPLORER_F8 to "18840107",
+    ModelProfile.BUDSFREE_I_RS_COMMON to "12cc3e4c",
+    ModelProfile.CAMBRIAN_RS_COMMON to "0b0c0a0c",
+    ModelProfile.OPENFEEL_LDAC_RS_COMMON to "0b0a0a0b",
+    ModelProfile.OPENFEEL_LHDC_RS_COMMON to "0b0a0a0c",
+    ModelProfile.OPENFEEL_DUAL_RS_COMMON to "0b0a0a0d",
+    ModelProfile.OPENFUN_RS_COMMON to "0b0a0a0e",
+    ModelProfile.OPENFUN_TOUCH_RS_COMMON to "0b0a0a10",
+    ModelProfile.SPORTFEEL_RS_COMMON to "0b0a0a0f",
+    ModelProfile.SWIFT_RS_COMMON to "0b0b0a0b",
+)
 
 /** What [profile]'s earphones send back for one initialization write, as hex frames. */
-internal fun initializationReplies(profile: ModelProfile, writtenHex: String): List<String> = when (profile) {
-    // One captured reply per ZT query, keyed by its command.
-    ModelProfile.I5_ZT -> listOfNotNull(i5Replies[writtenHex.substring(10, 14)])
+internal fun initializationReplies(profile: ModelProfile, writtenHex: String): List<String> = when (profile.family) {
+    ProtocolFamily.ZT -> {
+        val key = writtenHex.substring(10, 14)
+        if (profile == ModelProfile.I5_ZT) listOfNotNull(i5Replies[key]) else listOfNotNull(ztSyntheticReplies[key])
+    }
 
-    // Synthetic RS Common V2 state; every record answers any query.
-    ModelProfile.I7_RS_V2 -> i7Replies
+    ProtocolFamily.RS_COMMON_V2 -> i7Replies
 
-    ModelProfile.BUDSFEEL_MK2_RS_V2,
-    ModelProfile.OPENFEEL_MK2_RS_V2,
-    ModelProfile.SWIFT2_RS_V2,
-    ModelProfile.JASMINE_RS_V2,
-    -> i7Replies
+    // All legacy RS and F8 replies below are synthetic, not device captures.
+    ProtocolFamily.RS_COMMON -> rsCommonSyntheticReplies
+
+    ProtocolFamily.F8 -> {
+        val tag = writtenHex.takeLast(2)
+        listOf(
+            when (tag) {
+                "01" -> "0027010005010050da32"
+                "02" -> "002701000602000000007d"
+                "05" -> "002701001a05" + "00".repeat(25)
+                else -> "0027010003${tag}0000"
+            },
+        )
+    }
 }
+
+/** Synthetic ZT notifications, using documented offsets; unknown fields remain unknown. */
+private val ztSyntheticReplies = mapOf(
+    "0101" to "09ff00000101011100000164640000ff00",
+    "0602" to "09ff00000106020e000100000020",
+    "0201" to "09ff00000102010a0000",
+    "0603" to "09ff00000106030a0000",
+    "0801" to "09ff00000108010a0000",
+    "0401" to "09ff000001040112000005050505050505",
+    "0a01" to "09ff0000010a010a0000",
+    "0b01" to "09ff0000010b010a0000",
+    "0202" to "09ff0000010202130000000000000000000000",
+    "0203" to "09ff00000102030a0001",
+    "0d01" to "09ff0000010d010d0001030000",
+    "0103" to "09ff00000101030a0050",
+    "0802" to "09ff00000108020a0001",
+    "0803" to "09ff00000108030a0000",
+    "0604" to "09ff00000106040a0001",
+    "0e03" to "09ff0000010e030a0003",
+    "0605" to "09ff00000106050d0001010101",
+)
+
+/** Synthetic legacy RS state covering its shared getInfo tags. */
+private val rsCommonSyntheticReplies = listOf(
+    "ff000d01010002000300110012001300aa",
+    "ff00020700aa", "ff00020800aa", "ff00020904aa",
+    "ff00040c32465aaa", "ff00040d010203aa", "ff00020e00aa",
+    "ff00022a00aa", "ff00022b00aa", "ff00022c01aa",
+    "ff00022d01aa", "ff00022e01aa", "ff00023300aa",
+)
 
 /** The application and the module host over one pair of earphones, built the way production wires them. */
 internal class OwnerRig(

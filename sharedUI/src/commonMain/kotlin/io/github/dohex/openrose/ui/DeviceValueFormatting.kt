@@ -1,12 +1,19 @@
 package io.github.dohex.openrose.ui
 
+import io.github.dohex.openrose.core.TouchControlCapabilities
+import io.github.dohex.openrose.core.TouchSlot
 import io.github.dohex.openrose.core.protocol.BatteryLayout
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.dohex.openrose.core.protocol.ModelProfile
 
 /** Presentation labels only; protocol numeric values and capability decisions stay in the core. */
-internal fun displayFieldValue(field: DeviceField, value: FieldValue, profile: ModelProfile? = null): String = when (value) {
+internal fun displayFieldValue(
+    field: DeviceField,
+    value: FieldValue,
+    profile: ModelProfile? = null,
+    touch: TouchControlCapabilities? = null,
+): String = when (value) {
     is FieldValue.Number -> when {
         field in batteryFields -> "${value.value}%"
         field == DeviceField.PROMPT_VOLUME && value.value == 0 -> "关闭"
@@ -26,11 +33,11 @@ internal fun displayFieldValue(field: DeviceField, value: FieldValue, profile: M
 
     is FieldValue.TouchKeys -> value.bindings.joinToString("\n") { binding ->
         val action = binding.action?.let(::semanticLabel) ?: "未知操作（${binding.rawAction}）"
-        "${touchSideLabel(binding.side)}${touchGestureLabel(binding.gesture)}：$action"
+        "${touchSlotLabel(binding.side, binding.gesture, touch)}：$action"
     }
 
     is FieldValue.TouchAssignment ->
-        "${touchSideLabel(value.side)}${touchGestureLabel(value.gesture)}绑定为${semanticLabel(value.action)}"
+        "${touchSlotLabel(value.side, value.gesture, touch)}绑定为${semanticLabel(value.action)}"
 
     is FieldValue.NoiseCycle -> value.flags.entries.joinToString("\n") { (mode, enabled) ->
         "${semanticLabel(mode)}：${when (enabled) {
@@ -71,6 +78,11 @@ internal fun hearingProtectionLabel(level: Int): String = when (level) {
     else -> "未知（$level）"
 }
 
+internal fun touchSlotLabel(side: String, gesture: String, touch: TouchControlCapabilities?): String {
+    val label = touch?.slotLabels?.get(TouchSlot(side, gesture)) ?: touchSideLabel(side)
+    return label + touchGestureLabel(gesture)
+}
+
 internal fun touchSideLabel(side: String): String = when (side) {
     "left" -> "左耳"
     "right" -> "右耳"
@@ -108,6 +120,7 @@ internal fun semanticLabel(value: String): String = when (value) {
     "dynamic" -> "动态降噪"
     "aac_sbc" -> "AAC / SBC"
     "ldac" -> "LDAC"
+    "ldac_lhdc" -> "LDAC + LHDC"
     "lhdc" -> "LHDC"
     "lc3" -> "LC3"
     "chinese" -> "中文"

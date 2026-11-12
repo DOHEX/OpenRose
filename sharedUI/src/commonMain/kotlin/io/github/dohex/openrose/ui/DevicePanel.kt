@@ -140,6 +140,7 @@ internal fun HeadphonesPage(
                         it in setOf(
                             DeviceSetting.AUDIO_MODE,
                             DeviceSetting.MULTIPOINT,
+                            DeviceSetting.SPATIAL_AUDIO,
                             DeviceSetting.PROMPT_VOLUME,
                             DeviceSetting.GAIN,
                             DeviceSetting.HEARING_PROTECTION,
@@ -634,7 +635,14 @@ internal fun DeviceReadings(device: DeviceState, initializing: Boolean) {
         device.capabilities.readableFields.sortedBy { it.ordinal }.forEach { field ->
             AppInfoRow(
                 field.displayName,
-                readingText(field, device.fields[field], initializing, device.fieldErrors[field], device.profile),
+                readingText(
+                    field,
+                    device.fields[field],
+                    initializing,
+                    device.fieldErrors[field],
+                    device.profile,
+                    device.capabilities.touchControl,
+                ),
             )
         }
         AppArrowRow(
@@ -681,6 +689,7 @@ internal fun readingText(
     initializing: Boolean,
     error: ControlError?,
     profile: ModelProfile,
+    touch: TouchControlCapabilities? = null,
 ): String = when (reading) {
     null, FieldReading.Loading -> when {
         error?.code == ControlErrorCode.TIMEOUT -> "读取超时"
@@ -693,7 +702,7 @@ internal fun readingText(
 
     is FieldReading.Unknown -> "未知"
 
-    is FieldReading.Known -> displayFieldValue(field, reading.value, profile)
+    is FieldReading.Known -> displayFieldValue(field, reading.value, profile, touch)
 }
 
 internal fun ConnectionState.phaseOrNull(): ConnectionPhase? = when (this) {

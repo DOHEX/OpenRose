@@ -3,11 +3,28 @@ package io.github.dohex.openrose.core.protocol
 import io.github.dohex.openrose.core.DeviceCapabilities
 import io.github.dohex.openrose.core.models.ModelSpec
 import io.github.dohex.openrose.core.models.ROSELINK_PREFIX_LENGTHS
+import io.github.dohex.openrose.core.models.agate
+import io.github.dohex.openrose.core.models.agateX
 import io.github.dohex.openrose.core.models.budsFeelMk2
+import io.github.dohex.openrose.core.models.budsFreeI
+import io.github.dohex.openrose.core.models.cambrian
+import io.github.dohex.openrose.core.models.ceramics
+import io.github.dohex.openrose.core.models.ceramicsX
+import io.github.dohex.openrose.core.models.ceramicsX7034
 import io.github.dohex.openrose.core.models.earFeelI7
+import io.github.dohex.openrose.core.models.earFreeI3
 import io.github.dohex.openrose.core.models.earFreeI5
+import io.github.dohex.openrose.core.models.explorer
+import io.github.dohex.openrose.core.models.headFeel
 import io.github.dohex.openrose.core.models.jasmine
+import io.github.dohex.openrose.core.models.openFeelDual
+import io.github.dohex.openrose.core.models.openFeelLdac
+import io.github.dohex.openrose.core.models.openFeelLhdc
 import io.github.dohex.openrose.core.models.openFeelMk2
+import io.github.dohex.openrose.core.models.openFun
+import io.github.dohex.openrose.core.models.openFunTouch
+import io.github.dohex.openrose.core.models.sportFeel
+import io.github.dohex.openrose.core.models.swift
 import io.github.dohex.openrose.core.models.swift2
 
 data class GattProfile(val serviceUuid: String, val writeUuid: String, val notifyUuid: String)
@@ -16,6 +33,8 @@ data class GattProfile(val serviceUuid: String, val writeUuid: String, val notif
 enum class ProtocolFamily(val displayName: String) {
     ZT("ZT"),
     RS_COMMON_V2("RS Common V2"),
+    F8("F8"),
+    RS_COMMON("RS Common"),
     ;
 
     /** Fields this family's reader understands; this is not a list of enabled setting operations. */
@@ -23,6 +42,8 @@ enum class ProtocolFamily(val displayName: String) {
         get() = when (this) {
             ZT -> ztFields.values.flatten().toSet()
             RS_COMMON_V2 -> rsCommonV2Fields.values.flatten().toSet()
+            F8 -> f8Fields.values.flatten().toSet()
+            RS_COMMON -> rsCommonFields.values.flatten().toSet()
         }
 
     /** Prompt volume levels this family's frames can carry, before any model or firmware limit. */
@@ -30,6 +51,8 @@ enum class ProtocolFamily(val displayName: String) {
         get() = when (this) {
             ZT -> 1..5
             RS_COMMON_V2 -> 0..5
+            F8 -> 0..9
+            RS_COMMON -> 1..5
         }
 }
 
@@ -56,6 +79,23 @@ enum class ModelProfile {
     OPENFEEL_MK2_RS_V2,
     SWIFT2_RS_V2,
     JASMINE_RS_V2,
+    I3_ZT,
+    HEADFEEL_ZT,
+    AGATE_F8,
+    AGATE_X_F8,
+    CERAMICS_F8,
+    CERAMICS_X_F8,
+    CERAMICS_X_7034_F8,
+    EXPLORER_F8,
+    BUDSFREE_I_RS_COMMON,
+    CAMBRIAN_RS_COMMON,
+    OPENFEEL_LDAC_RS_COMMON,
+    OPENFEEL_LHDC_RS_COMMON,
+    OPENFEEL_DUAL_RS_COMMON,
+    OPENFUN_RS_COMMON,
+    OPENFUN_TOUCH_RS_COMMON,
+    SPORTFEEL_RS_COMMON,
+    SWIFT_RS_COMMON,
     ;
 
     internal val spec: ModelSpec
@@ -66,6 +106,23 @@ enum class ModelProfile {
             OPENFEEL_MK2_RS_V2 -> openFeelMk2
             SWIFT2_RS_V2 -> swift2
             JASMINE_RS_V2 -> jasmine
+            I3_ZT -> earFreeI3
+            HEADFEEL_ZT -> headFeel
+            AGATE_F8 -> agate
+            AGATE_X_F8 -> agateX
+            CERAMICS_F8 -> ceramics
+            CERAMICS_X_F8 -> ceramicsX
+            CERAMICS_X_7034_F8 -> ceramicsX7034
+            EXPLORER_F8 -> explorer
+            BUDSFREE_I_RS_COMMON -> budsFreeI
+            CAMBRIAN_RS_COMMON -> cambrian
+            OPENFEEL_LDAC_RS_COMMON -> openFeelLdac
+            OPENFEEL_LHDC_RS_COMMON -> openFeelLhdc
+            OPENFEEL_DUAL_RS_COMMON -> openFeelDual
+            OPENFUN_RS_COMMON -> openFun
+            OPENFUN_TOUCH_RS_COMMON -> openFunTouch
+            SPORTFEEL_RS_COMMON -> sportFeel
+            SWIFT_RS_COMMON -> swift
         }
 
     val displayName: String get() = spec.displayName
@@ -90,28 +147,46 @@ enum class ModelProfile {
          */
         fun match(name: String?): ModelProfile? {
             val normalized = name?.trim()?.lowercase() ?: return null
-            if (!normalized.startsWith(ROSE_NAME_PREFIX) && nameBrands.none(normalized::contains)) return null
             val compact = normalized.filter(Char::isLetterOrDigit)
-            val matchingNumbers = entries.filter { profile ->
-                val number = profile.spec.nameModelNumber.filter(Char::isLetterOrDigit)
-                val start = compact.indexOf(number)
-                val end = start + number.length
-                start >= 0 && (end == compact.length || !number.last().isDigit() || !compact[end].isDigit())
+            val knownBrand = nameBrands.any { compact.contains(it.filter(Char::isLetterOrDigit)) }
+            if (!normalized.startsWith(ROSE_NAME_PREFIX) && !knownBrand) return null
+            val numbered = entries.filter { profile ->
+                matchesToken(compact, profile.spec.nameModelNumber) &&
+                    (!profile.spec.nameRequiresModel || profile.brands.any { compact.contains(it.filter(Char::isLetterOrDigit)) })
             }
-            // Shared numbers such as MK2 need their brand; a bare number cannot identify a hardware branch.
-            return matchingNumbers.firstOrNull { normalized.contains(it.spec.nameBrand) }
-                ?: matchingNumbers.singleOrNull { candidate -> !candidate.spec.nameRequiresModel }
-                ?: entries.firstOrNull { !it.spec.nameRequiresModel && normalized.contains(it.spec.nameBrand) }
+            if (numbered.isNotEmpty()) {
+                // An explicit generation (MK2 / Swift 2) takes precedence over a bare retail brand.
+                val specific = numbered.filter {
+                    it.spec.nameModelNumber.filter(Char::isLetterOrDigit) != it.spec.nameBrand.filter(Char::isLetterOrDigit)
+                }.ifEmpty { numbered }
+                val longest = specific.maxOf { it.spec.nameModelNumber.filter(Char::isLetterOrDigit).length }
+                val candidates = specific.filter { it.spec.nameModelNumber.filter(Char::isLetterOrDigit).length == longest }
+                val branded = candidates.filter { profile -> profile.brands.any { compact.contains(it.filter(Char::isLetterOrDigit)) } }
+                return (branded.ifEmpty { candidates }).singleOrNull()
+            }
+            val branded = entries.filter { profile ->
+                !profile.spec.nameRequiresModel && profile.brands.any { matchesToken(compact, it) }
+            }
+            return branded.singleOrNull()
+        }
+
+        private val ModelProfile.brands: List<String> get() = listOf(spec.nameBrand) + spec.nameBrandAliases
+
+        private fun matchesToken(compact: String, token: String): Boolean {
+            val word = token.filter(Char::isLetterOrDigit)
+            val start = compact.indexOf(word)
+            val end = start + word.length
+            return start >= 0 && (end == compact.length || !compact[end].isDigit())
         }
 
         /** [match]'s admission rule as a case-insensitive regular expression, for platform device-name filters. */
         val namePattern: String
-            get() = nameBrands.joinToString("|", prefix = "(?is)${Regex.escape(ROSE_NAME_PREFIX)}.*|.*(?:", postfix = ").*") {
-                Regex.escape(it)
+            get() = nameBrands.joinToString("|", prefix = "(?is)${Regex.escape(ROSE_NAME_PREFIX)}.*|.*(?:", postfix = ").*") { brand ->
+                brand.filter(Char::isLetterOrDigit).map { Regex.escape(it.toString()) }.joinToString("[\\s_-]*")
             }
 
         private const val ROSE_NAME_PREFIX = "rose"
-        private val nameBrands: List<String> get() = entries.map { it.spec.nameBrand }.distinct()
+        private val nameBrands: List<String> get() = entries.flatMap { it.brands }.distinct()
     }
 }
 

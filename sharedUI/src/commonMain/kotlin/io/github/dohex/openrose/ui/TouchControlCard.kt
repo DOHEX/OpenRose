@@ -75,11 +75,15 @@ internal fun TouchControlCard(
     if (hasBindings && side != null) {
         val isMaterial3 = LocalInterfaceStyle.current == InterfaceStyle.MATERIAL3
         AppGroup(
-            title = "左右耳手势",
+            title = if (touch?.slotLabels.isNullOrEmpty()) "左右耳手势" else "按键手势",
             header = if (availableSides.size > 1) {
                 {
                     AppViewTabs(
-                        tabs = availableSides.map(::touchSideLabel),
+                        tabs = availableSides.map { tabSide ->
+                            slots.firstNotNullOfOrNull { slot ->
+                                if (slot.side == tabSide) touch?.slotLabels?.get(slot) else null
+                            } ?: touchSideLabel(tabSide)
+                        },
                         index = availableSides.indexOf(side).coerceAtLeast(0),
                         onSelect = { index ->
                             availableSides.getOrNull(index)?.let { newSide ->
@@ -131,7 +135,8 @@ internal fun TouchControlCard(
 
                         val rowContent: @Composable () -> Unit = {
                             AppChoiceRow(
-                                title = touchGestureLabel(slot.gesture),
+                                title = touch?.slotLabels?.get(slot)?.let { "$it${touchGestureLabel(slot.gesture)}" }
+                                    ?: touchGestureLabel(slot.gesture),
                                 valueText = valueText,
                                 options = touchActions.sortedBy(::semanticLabel)
                                     .map { action -> AppOption(action, semanticLabel(action)) },

@@ -107,6 +107,7 @@ enum class DeviceSetting {
     HEARING_PROTECTION,
     BASS_BOOST,
     PROMPT_LANGUAGE,
+    SPATIAL_AUDIO,
 }
 
 /** Transport acceptance and device state confirmation are separate facts. */

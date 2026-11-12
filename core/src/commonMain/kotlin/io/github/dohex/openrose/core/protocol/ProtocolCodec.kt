@@ -35,6 +35,8 @@ enum class DeviceField(val displayName: String) {
     HEARING_PROTECTION("听力保护档位"),
     PROMPT_LANGUAGE("提示音语言"),
     FIND_STATE("寻机事件"),
+    SPATIAL_AUDIO("空间音频"),
+    HIDE_SEARCH("隐藏搜索"),
 }
 
 sealed interface FieldReading {
@@ -93,6 +95,8 @@ data class ProtocolQuery(
     val bytes: ByteArray,
     val responseKeys: Set<String>,
     val expectedFields: Set<DeviceField>,
+    /** Minimum pause before this initialization query, when required by the model. */
+    val delayBeforeMillis: Long = 0,
 )
 
 /** A write plan and the independent state read used to confirm its result. */
@@ -142,6 +146,8 @@ interface ProtocolCodec {
 fun createProtocolCodec(profile: ModelProfile): ProtocolCodec = when (profile.family) {
     ProtocolFamily.ZT -> ZtCodec(profile)
     ProtocolFamily.RS_COMMON_V2 -> RsCommonV2Codec(profile)
+    ProtocolFamily.F8 -> F8Codec(profile)
+    ProtocolFamily.RS_COMMON -> RsCommonCodec(profile)
 }
 
 internal fun ByteArray.hex(): String = joinToString("") { it.u().toString(16).padStart(2, '0') }
@@ -178,6 +184,12 @@ internal val ztFields = linkedMapOf(
     "0a01" to setOf(DeviceField.TOUCH_ENABLED), "0605" to setOf(DeviceField.NOISE_CYCLE),
     "0c01" to setOf(DeviceField.EAR_DETECTION), "0607" to setOf(DeviceField.ANC_LEVEL),
     "0604" to setOf(DeviceField.TRANSPARENCY_LEVEL), "0e03" to setOf(DeviceField.PROMPT_VOLUME),
+    "0103" to setOf(DeviceField.CASE_BATTERY),
+    "0202" to setOf(DeviceField.CUSTOM_EQ),
+    "0203" to setOf(DeviceField.GAIN),
+    "0802" to setOf(DeviceField.MULTIPOINT),
+    "0803" to emptySet(),
+    "0b01" to setOf(DeviceField.HIDE_SEARCH),
 )
 
 internal val rsCommonV2Fields = linkedMapOf(

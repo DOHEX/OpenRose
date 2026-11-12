@@ -143,6 +143,8 @@ internal class RsCommonV2Codec(override val profile: ModelProfile) : ProtocolCod
                 ).indexOf(binding.action)
                 1.toByte() to byteArrayOf(slot.toByte(), action.toByte())
             }
+
+            DeviceSetting.SPATIAL_AUDIO -> throw UnsupportedOperationException("该型号不支持空间音频控制")
         }
         // Validation precedes both sequence allocations, so rejected settings consume no sequence.
         val key = byteArrayOf(type).hex()

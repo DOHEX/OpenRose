@@ -89,8 +89,7 @@ internal class SettingQueue(
         val valid = when (setting) {
             DeviceSetting.CUSTOM_EQ -> {
                 val custom = capabilities.equalizer?.custom ?: return ControlError(ControlErrorCode.UNSUPPORTED, "该型号不支持自定义均衡器")
-                value is FieldValue.IntegerList &&
-                    value.values.size == custom.bandsHz.size &&
+                value is FieldValue.IntegerList && value.values.size == custom.bandsHz.size &&
                     value.values.all { it in custom.minGain..custom.maxGain }
             }
 
@@ -120,6 +119,7 @@ internal class SettingQueue(
             DeviceSetting.MULTIPOINT,
             DeviceSetting.TOUCH_ENABLED,
             DeviceSetting.EAR_DETECTION,
+            DeviceSetting.SPATIAL_AUDIO,
             -> value is FieldValue.Toggle
 
             DeviceSetting.AUDIO_MODE -> {

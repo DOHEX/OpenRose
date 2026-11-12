@@ -1,6 +1,6 @@
-# ZT / RS Common V2 协议实现说明
+# 耳机控制协议实现说明
 
-本文说明 OpenRose 的 ZT 与 RS Common V2 控制实现：i5、i7，以及新增的 BudsFeel MK2、OpenFeel MK2、Swift 2、Jasmine。内容包括帧格式、字段编码、设置命令、确认机制、测试覆盖，以及尚未经过实机验证的行为。
+OpenRose 按协议族复用编解码，由各型号 `ModelSpec` 声明差异。目前实现 ZT、RS Common V2、F8、RS Common 四族，共 23 个型号配置：原有六个配置之外，新增 i3、HeadFeel、六个 F8 配置与九个 RS Common 配置。OpenFeel 的三个编码分支及 OpenFun 的两个触控分支独立建模。
 
 协议本身的逆向研究（包括其他型号和 OTA）见 [docs/protocols/](protocols/README.md)。本文只讲 OpenRose 实际怎么做，以及和官方 App 不同的地方。
 
@@ -25,8 +25,10 @@
 | 型号配置（识别、传输、电量布局、按固件推导的能力） | `core/.../models/` 中每款型号的独立文件；字段定义在 `models/ModelSpec.kt` |
 | 型号入口、协议族、广播识别、名称匹配 | `core/.../protocol/ModelProfile.kt` |
 | 字段模型与编解码接口 | `core/.../protocol/ProtocolCodec.kt` |
-| ZT 编解码（i5） | `core/.../protocol/ZtCodec.kt` |
+| ZT 编解码（i5 / i3 / HeadFeel） | `core/.../protocol/ZtCodec.kt` |
 | RS Common V2 编解码（i7 与四个新增型号） | `core/.../protocol/RsCommonV2Codec.kt` |
+| F8 编解码（AGATE / AGATE X / CERAMICS / CERAMICS-X / 7034 / EXPLORER） | `core/.../protocol/F8Codec.kt` |
+| RS Common 编解码（BudsFree i / Cambrian / OpenFeel / OpenFun / SportFeel / SWIFT） | `core/.../protocol/RsCommonCodec.kt` |
 | 能力类型（降噪、EQ、触控、音频等） | `core/.../NoiseControl.kt`、`EqualizerCapabilities.kt`、`DeviceControlCapabilities.kt` |
 | 控制会话（发送队列、设置确认、连接生命周期） | `core/.../ControlSession.kt` |
 | Android BLE / SPP 传输、音频 profile 查询 | `androidApp/.../AndroidBleTransport.kt`、`AndroidSppConnection.kt`、`AndroidAudioProfiles.kt` |
@@ -35,7 +37,7 @@
 
 ## 证据与验证状态
 
-所有协议依据都来自官方 App **RoseLink 3.8.0（versionCode 5310）**，APK SHA-256 为 `83cdd7e3e7f6e7d61a26dc6a8fab65f183d5a18a66a70f64a17f69d93e58e40b`。这些是逆向得出的结论，不是厂商公开的规范。
+下文 i5 / i7 的历史实现依据来自官方 App **RoseLink 3.8.0（versionCode 5310）**，APK SHA-256 为 `83cdd7e3e7f6e7d61a26dc6a8fab65f183d5a18a66a70f64a17f69d93e58e40b`。新增型号的来源逐项见证据账本。这些是逆向得出的结论，不是厂商公开的规范。
 
 文中 `rose_reverse/...` 指作者本地的逆向研究工作区（反汇编产物、提取脚本、实机记录），没有随本仓库发布。测试使用的关键数据文件如下：
 
@@ -67,8 +69,22 @@ Swift 2 的电量由 `charge` 槽承载，在应用中显示一行“电量”�
 | --- | --- | --- | --- |
 | 低音增强 | BudsFeel MK2、OpenFeel MK2 | `2A 05 value`，0–4 | 查询 `FA 2A`；只有新鲜的 `2A 05 value` 档位字段才能确认 |
 | 提示音语言 | Jasmine | `31 00` 中文、`31 01` 英文 | 查询 `FA 31`，按新鲜 `31` 状态确认 |
+| 自定义 EQ | OpenFeel MK2 | `2A 04` 加 `3E` + 十个值，−6..+6 | 查询 `FA 2A` 与 `FA 3E`，模式与曲线都新鲜且一致才确认 |
+| 提示音音量 | BudsFeel MK2、Swift 2、Jasmine（1–5）、OpenFeel MK2（0–5） | `2E value` | 查询 `FA 2E`，按新鲜 `2E` 确认 |
 
-寻机 `2F` 只有局部事件，不能证明查询可返回完整双耳状态，故没有开放写入。OpenFeel MK2 自定义 EQ 缺少型号专属频率和滑块范围，Swift 2 按键映射缺少物理键对应关系，四款提示音音量缺少型号与固件允许档位；这些控制均未启用。完整未实现列表及依据见证据账本。
+寻机 `2F` 只有局部事件，不能证明查询可返回完整双耳状态，故没有开放写入。Swift 2 按键映射缺少物理键对应关系，同样未启用。完整未实现列表及依据见证据账本。
+
+### 新接入的 ZT、F8 与 RS Common 型号
+
+完整能力、逐行证据及未实现项见[适配证据账本](protocols/model-adaptation-ledger.md)。新增配置全部依据静态分析，接收夹具为合成数据；BLE / SPP 实机连接、设置效果与持久化均未验证。
+
+- ZT：i3 保留自己的初始化和三字节降噪写入；HeadFeel 使用单体电量、独立多点、专属档位与提示音编码，并按固件 ≥ 130 开放增益与自定义 EQ。
+- F8：六个配置共用帧与字段解析；EXPLORER 的标准模式编码、基础型号折叠后的 EQ 读数、扩展初始化均由配置决定，不能把一款的语义套给全族。EXPLORER 开放提示音音量 1–5（无关闭选项）与 ANC / 通透档位（界面 1 / 3 / 5 发送 2 / 1 / 0，接收 0 / 1 / 2 对应 5 / 3 / 1）；CERAMICS-X 与 7034 的档位控件在官方配置中关闭，两个 Tag 保留 Unknown。
+- RS Common：使用独立的早期帧格式与共享字段解析；BudsFree i 有追加查询并开放触控绑定（左 `01/02/03`、右 `11/12/13`，动作码 0/1/2/3/5/6，无长按），Cambrian 保留延迟重复查询，OpenFeel 三分支独立声明编码允许列表，OpenFun 两分支区分触控开关。SportFeel 的空间音频通过 `33` 写入与回读确认。
+- 同名硬件分支仅凭名称无法区分时返回未识别，扫描广播前缀才能确定具体配置；旧零售名称由型号配置的别名表声明。
+- 所有开放的设置仍要求新鲜字段回读。只有单向命令的寻机、读回语义未闭合的控制不开放；OTA 不实现。
+
+下文 i5 / i7 的帧与设置表保留为这两款的具体实现说明，不代表其他型号继承全部能力。
 
 
 
@@ -304,7 +320,7 @@ DD [HH] [L T V...]... [CS] AA
 - i7 的 POP / HIFI 在界面上的顺序与线上值相反，不能用界面位置当线上值。
 - 耳机主页按 POP、HIFI、ROCK、LIGHT、EAP 的顺序列出当前型号和固件可写的预设。i5 没有自定义 EQ；i7 的预设列表不包含 custom、custom slot 等非预设项。
 
-### 自定义 EQ（仅 i7）
+### 自定义 EQ（i7、OpenFeel MK2、HeadFeel）
 
 - 频段标签为 20 / 100 / 300 / 500 / 1k / 2k / 3k / 5k / 8k / 15k Hz，每段为 −6..6 的整数。频率只是界面标签，不是实测的滤波器中心频率。
 - 曲线必须恰好十个整数，缺项、多项或越界都在构帧前拒绝。
@@ -312,6 +328,8 @@ DD [HH] [L T V...]... [CS] AA
   - 例：曲线 `-6,-3,-1,0,1,2,3,4,5,6` → `ff00022a042faa`、`ff000b3e86838100010203040506e7aa`（seq 0）。运行时两条共用会话序号，各自重算校验。
 - 写入后分别用 `FA 2A` 回读 EQ 模式、`FA 3E` 回读曲线，两项都与请求一致才算确认。
 - 读取时，单字节 `2A 04` 表示 `custom`（索引 4 来自 i7 配置的 `getCustomIndex`）；双字节 `2A 05 [slot]` 表示 `custom_slot`，保留槽位和原始值，不当作曲线已应用。
+- OpenFeel MK2 使用同一套 V2 编码，不设固件门槛，不列命名预设；官方配置里它唯一的预设是等响低音增强，仍走 `2A 05`。
+- HeadFeel 走 ZT：写 `0281` + `03` 切到自定义，再写 `0282` + 十个值（整帧 20 字节，恰好是默认 BLE 写入容量）；回读 `0201` 与 `0202`。固件 ≥ 130 才开放。
 
 ### 触控绑定
 
@@ -390,7 +408,7 @@ DD [HH] [L T V...]... [CS] AA
 | 能力 | 内容 |
 | --- | --- |
 | `NoiseControlCapabilities` | 可选降噪模式；ANC / 通透档位各自的 `levels` 与 `visibleModes`；轮换最少选择数 |
-| `EqualizerCapabilities` | 可写预设（`presets`）；自定义 EQ 频段与范围（`custom`，仅 i7） |
+| `EqualizerCapabilities` | 可写预设（`presets`）；自定义 EQ 频段与范围（`custom`，i7、OpenFeel MK2、HeadFeel） |
 | `TouchControlCapabilities` | 槽位集合与动作集合 |
 | `AudioControlCapabilities` | 音频选项；`multipointCoupled`（i5 为 true，i7 为 false） |
 

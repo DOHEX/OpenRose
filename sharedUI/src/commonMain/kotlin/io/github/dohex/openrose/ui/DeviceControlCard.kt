@@ -18,6 +18,7 @@ internal fun DeviceControlCard(
     val audio = device.capabilities.audioControl
     val hasAudio = DeviceSetting.AUDIO_MODE in writable && audio != null && audio.modes.isNotEmpty()
     val hasMultipoint = DeviceSetting.MULTIPOINT in writable
+    val hasSpatialAudio = DeviceSetting.SPATIAL_AUDIO in writable
     val volumeLevels = device.capabilities.promptVolumeLevels
     val hasVolume = DeviceSetting.PROMPT_VOLUME in writable && volumeLevels.isNotEmpty()
     val gainLevels = device.capabilities.gainLevels
@@ -29,7 +30,7 @@ internal fun DeviceControlCard(
     val languages = device.capabilities.promptLanguages
     val hasLanguage = DeviceSetting.PROMPT_LANGUAGE in writable && languages.isNotEmpty()
     val hasPrompt = hasVolume || hasLanguage
-    val hasAudioControls = hasAudio || hasMultipoint
+    val hasAudioControls = hasAudio || hasMultipoint || hasSpatialAudio
     val hasSound = hasGain || hasProtection || hasBass
     if (!hasPrompt && !hasAudioControls && !hasSound) return
 
@@ -81,7 +82,7 @@ internal fun DeviceControlCard(
         }
     }
 
-    if (hasAudio || hasMultipoint) {
+    if (hasAudioControls) {
         val coupledFootnote = if (hasAudio && hasMultipoint && audio.multipointCoupled) {
             "该型号的 LDAC 与多点连接互斥；切换多点时设备会改用 AAC / SBC。"
         } else {
@@ -108,6 +109,9 @@ internal fun DeviceControlCard(
             }
             if (hasMultipoint) {
                 SettingToggleChoices("多点连接", DeviceField.MULTIPOINT, DeviceSetting.MULTIPOINT, device, enabled, onSet)
+            }
+            if (hasSpatialAudio) {
+                SettingToggleChoices("空间音频", DeviceField.SPATIAL_AUDIO, DeviceSetting.SPATIAL_AUDIO, device, enabled, onSet)
             }
         }
     }

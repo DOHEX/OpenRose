@@ -17,10 +17,26 @@ import io.github.dohex.openrose.androidintegration.OwnerHolder
 import io.github.dohex.openrose.androidintegration.ReleaseReceipt
 import io.github.dohex.openrose.androidintegration.ReleaseResult
 import io.github.dohex.openrose.androidintegration.SwitchRequest
+import io.github.dohex.openrose.core.ControlState
+import io.github.dohex.openrose.core.DeviceCapabilities
 import io.github.dohex.openrose.core.DeviceSetting
+import io.github.dohex.openrose.core.DeviceState
+import io.github.dohex.openrose.core.PermissionState
+import io.github.dohex.openrose.core.PlatformState
 import io.github.dohex.openrose.core.SessionReference
+import io.github.dohex.openrose.core.SettingOperation
+import io.github.dohex.openrose.core.SettingStage
+import io.github.dohex.openrose.core.TouchControlCapabilities
+import io.github.dohex.openrose.core.TouchSlot
+import io.github.dohex.openrose.core.TransportAvailability
+import io.github.dohex.openrose.core.protocol.DeviceField
+import io.github.dohex.openrose.core.protocol.FieldReading
 import io.github.dohex.openrose.core.protocol.FieldValue
+import io.github.dohex.openrose.core.protocol.ModelProfile
 import io.github.dohex.openrose.core.transport.DeviceId
+import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.persistentMapOf
+import kotlinx.collections.immutable.persistentSetOf
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -43,6 +59,7 @@ class HostWireTest {
             HostCommand.Disconnect,
             HostCommand.Set(reference, DeviceSetting.GAME_MODE, FieldValue.Toggle(true)),
             HostCommand.Set(null, DeviceSetting.GAME_MODE, FieldValue.Toggle(false)),
+            HostCommand.Set(reference, DeviceSetting.SPATIAL_AUDIO, FieldValue.Toggle(true)),
             HostCommand.UpdateSettings(HostSettings(integration = IntegrationSettings(islandMode = IslandMode.MODULE))),
             HostCommand.ClaimPrompt(reference, "prompt-1"),
         )
@@ -50,6 +67,44 @@ class HostWireTest {
         for (command in commands) {
             assertEquals(command, HostWire.decodeCommand(HostWire.encode(command)))
         }
+    }
+
+    @Test
+    fun spatialAudioStateSurvivesTheOwnerWire() {
+        val device = DeviceState(
+            deviceId = reference.deviceId,
+            sessionId = reference.sessionId,
+            profile = ModelProfile.I5_ZT,
+            capabilities = DeviceCapabilities(
+                readableFields = persistentSetOf(DeviceField.SPATIAL_AUDIO),
+                writableSettings = persistentSetOf(DeviceSetting.SPATIAL_AUDIO),
+                touchControl = TouchControlCapabilities(
+                    slots = persistentSetOf(TouchSlot("left", "single")),
+                    actions = persistentSetOf("play_pause"),
+                    slotLabels = persistentMapOf(TouchSlot("left", "single") to "电源键"),
+                ),
+            ),
+            fields = persistentMapOf(DeviceField.SPATIAL_AUDIO to FieldReading.Known(FieldValue.Toggle(false), "00")),
+        )
+        val operation = SettingOperation(
+            id = 12,
+            sessionId = reference.sessionId,
+            setting = DeviceSetting.SPATIAL_AUDIO,
+            requestedValue = FieldValue.Toggle(true),
+            stage = SettingStage.WRITTEN,
+            confirmedFields = persistentSetOf(DeviceField.SPATIAL_AUDIO),
+        )
+        val facts = HostPlatformFacts(PermissionState.GRANTED, TransportAvailability.Available)
+        val state = ControlState(
+            platform = PlatformState(PermissionState.NOT_REQUIRED),
+            device = device,
+            settingOperations = persistentListOf(operation),
+        )
+
+        val decoded = ControlWire.decodeOwned(ControlWire.encodeOwned(facts, state))
+        assertEquals(facts, decoded.platform)
+        assertEquals(device, decoded.state.device)
+        assertEquals(listOf(operation), decoded.state.settingOperations)
     }
 
     @Test

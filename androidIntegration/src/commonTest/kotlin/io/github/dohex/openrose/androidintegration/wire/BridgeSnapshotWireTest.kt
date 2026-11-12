@@ -5,6 +5,8 @@ import io.github.dohex.openrose.core.DeviceSetting
 import io.github.dohex.openrose.core.DeviceState
 import io.github.dohex.openrose.core.NoiseControlCapabilities
 import io.github.dohex.openrose.core.NoiseLevelCapabilities
+import io.github.dohex.openrose.core.TouchControlCapabilities
+import io.github.dohex.openrose.core.TouchSlot
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.FieldReading
 import io.github.dohex.openrose.core.protocol.FieldValue
@@ -13,6 +15,7 @@ import io.github.dohex.openrose.core.transport.DeviceId
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.persistentMapOf
 import kotlinx.collections.immutable.persistentSetOf
+import kotlinx.collections.immutable.plus
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -49,6 +52,37 @@ class BridgeSnapshotWireTest {
         assertTrue(snapshot.supportsNoise("anc"))
         assertFalse(snapshot.supportsNoise("wind"))
         assertTrue(snapshot.matchesAddress(" aa:bb:cc:dd:ee:01 "))
+    }
+
+    @Test
+    fun spatialAudioCapabilitySurvivesTheSystemSnapshot() {
+        val original = i5State()
+        val device = original.copy(
+            capabilities = original.capabilities.copy(
+                readableFields = original.capabilities.readableFields + DeviceField.SPATIAL_AUDIO,
+                writableSettings = original.capabilities.writableSettings + DeviceSetting.SPATIAL_AUDIO,
+            ),
+        )
+        val snapshot = requireNotNull(
+            NativeHeadsetSnapshot.fromWire(
+                device.toBridgeSnapshot(HOST_EPOCH, readSequence = 4, capturedElapsedMillis = CAPTURED).asWireMap(),
+            ),
+        )
+        assertTrue("SPATIAL_AUDIO" in snapshot.writableSettings)
+    }
+
+    @Test
+    fun touchSlotLabelsAreIncludedInTheSystemSnapshot() {
+        val original = i5State()
+        val slot = TouchSlot("left", "single")
+        val device = original.copy(
+            capabilities = original.capabilities.copy(
+                touchControl = TouchControlCapabilities(persistentSetOf(slot), persistentSetOf("play_pause"), persistentMapOf(slot to "电源键")),
+            ),
+        )
+        val capabilities = device.toBridgeSnapshot(HOST_EPOCH, 4, CAPTURED)["capabilities"] as Map<*, *>
+        val touch = capabilities["touch"] as Map<*, *>
+        assertEquals(listOf(mapOf("side" to "left", "gesture" to "single", "label" to "电源键")), touch["slot_labels"])
     }
 
     @Test

@@ -93,7 +93,7 @@ class EqualizerProtocolTest {
 
     @Test
     fun invalidTypesAndUnavailablePresetsAreRejectedBeforeAllocatingSequence() {
-        for (profile in ModelProfile.entries) {
+        for (profile in ModelProfile.entries.filter { it == ModelProfile.I5_ZT || it.family == ProtocolFamily.RS_COMMON_V2 }) {
             val codec = createProtocolCodec(profile)
             for ((kind, value) in listOf(
                 DeviceSetting.EQ to FieldValue.Number(0),

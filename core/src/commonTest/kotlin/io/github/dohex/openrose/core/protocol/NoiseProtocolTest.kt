@@ -45,8 +45,6 @@ class NoiseProtocolTest {
         for (profile in ModelProfile.entries) {
             if (DeviceSetting.ANC_LEVEL !in profile.capabilities().writableSettings) {
                 assertNull(profile.capabilities().noiseControl?.ancLevel)
-                assertNull(profile.capabilities().noiseControl?.transparencyLevel)
-                assertFalse(DeviceSetting.TRANSPARENCY_LEVEL in profile.capabilities().writableSettings)
                 continue
             }
             val noise = assertNotNull(profile.capabilities().noiseControl, "$profile noise control")
@@ -164,7 +162,7 @@ class NoiseProtocolTest {
 
     @Test
     fun invalidValuesAndUnsupportedModesNeverAllocateAnI7Sequence() {
-        for (profile in ModelProfile.entries) {
+        for (profile in ModelProfile.entries.filter { it == ModelProfile.I5_ZT || it.family == ProtocolFamily.RS_COMMON_V2 }) {
             val codec = createProtocolCodec(profile)
             for ((kind, value) in listOf(
                 DeviceSetting.NOISE_MODE to FieldValue.Toggle(true),
