@@ -285,6 +285,16 @@ internal open class OpenRoseUiTestHarness(protected val scene: OpenRoseUiTestSce
         invokeClick(clickNode, expected)
     }
 
+    /** Moves the slider described by [expected] as an accessibility service would; false when it refuses. */
+    fun setProgress(expected: String, value: Float): Boolean {
+        val node = nodes().firstOrNull {
+            it.config.getOrNull(SemanticsProperties.ContentDescription).orEmpty().contains(expected)
+        } ?: error("No node found with content description '$expected'")
+        val action = node.config.getOrNull(SemanticsActions.SetProgress)?.action
+            ?: error("No progress action for '$expected'")
+        return scene.runOnUiThread { action(value) }
+    }
+
     fun sendKey(key: Key, shift: Boolean = false) {
         scene.sendKeyEvent(KeyEvent(key = key, type = KeyEventType.KeyDown, isShiftPressed = shift))
         scene.sendKeyEvent(KeyEvent(key = key, type = KeyEventType.KeyUp, isShiftPressed = shift))

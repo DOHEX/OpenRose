@@ -124,7 +124,11 @@ class OpenRoseDisconnectedHomeRedesignTest {
         val model = FakeOpenRoseModel(state, settings).apply { onConnect = { connectRequests += it } }
         setContent {
             ProvideInterfaceStyle(style, dark = false) {
-                HeadphonesPage(model, BasicPlatformUi("Test"), {})
+                HeadphonesPage(
+                    model,
+                    BasicPlatformUi("Test"),
+                    {},
+                )
             }
         }
         block(HomeHarness(this, connectRequests))

@@ -8,13 +8,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.unit.dp
 import io.github.dohex.openrose.core.ControlState
 import io.github.dohex.openrose.core.DeviceState
+import io.github.dohex.openrose.core.SettingOperation
 import io.github.dohex.openrose.core.SettingStage
 
-/** Shows the current session's outcome without exposing the operation record kept in diagnostics. */
+/**
+ * Shows the current session's outcome without exposing the operation record kept in diagnostics.
+ * A page with its own in-place progress passes [showPending] false and keeps only failures here.
+ */
 @Composable
 internal fun SettingFeedback(
     state: ControlState,
     device: DeviceState?,
+    showPending: Boolean = true,
     onViewDetails: () -> Unit,
 ) {
     val operation = device?.let { activeDevice ->
@@ -22,9 +27,7 @@ internal fun SettingFeedback(
     }
     val operationError = operation?.error
     val otherError = state.lastError?.takeIf { it != operationError }
-    val visibleOperation = operation?.takeIf {
-        it.stage in settingPendingStages || it.stage in settingFailureStages || operationError != null
-    }
+    val visibleOperation = operation?.takeIf { it.needsFeedback(showPending) }
     if (visibleOperation == null && otherError == null) return
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -61,6 +64,12 @@ internal fun SettingFeedback(
             }
         }
     }
+}
+
+/** Failures always show; an operation still in progress shows only where the page has no progress of its own. */
+private fun SettingOperation.needsFeedback(showPending: Boolean): Boolean {
+    val pendingShown = showPending && stage in settingPendingStages
+    return pendingShown || stage in settingFailureStages || error != null
 }
 
 private val settingPendingStages = setOf(

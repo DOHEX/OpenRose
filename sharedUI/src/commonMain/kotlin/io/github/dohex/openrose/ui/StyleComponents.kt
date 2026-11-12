@@ -135,6 +135,7 @@ fun AppText(
     role: AppTextRole = AppTextRole.Body,
     color: Color? = null,
     maxLines: Int = Int.MAX_VALUE,
+    textAlign: androidx.compose.ui.text.style.TextAlign? = null,
 ) {
     val textModifier = if (role == AppTextRole.Display || role == AppTextRole.Title) modifier.semantics { heading() } else modifier
     val textColor = color ?: appColor(
@@ -147,6 +148,7 @@ fun AppText(
             modifier = textModifier,
             color = textColor,
             maxLines = maxLines,
+            textAlign = textAlign,
             overflow = overflow,
             style = with(MiuixTheme.textStyles) {
                 when (role) {
@@ -164,6 +166,7 @@ fun AppText(
             modifier = textModifier,
             color = textColor,
             maxLines = maxLines,
+            textAlign = textAlign ?: androidx.compose.ui.text.style.TextAlign.Unspecified,
             overflow = overflow,
             style = with(MaterialTheme.typography) {
                 when (role) {
@@ -761,49 +764,62 @@ fun <T> AppCheckGroup(options: List<AppOption<T>>, checked: Set<T>, enabledFor: 
     }
 }
 
+/** Choices that wrap onto further lines, for option sets whose labels are too long or many for [AppSegmented]. */
 @Composable
-internal fun AppSliderRow(
-    label: String,
-    valueText: String,
-    value: Float,
-    range: ClosedFloatingPointRange<Float>,
-    steps: Int,
-    enabled: Boolean,
-    onChange: (Float) -> Unit,
+internal fun <T> AppChipGroup(
+    options: List<AppOption<T>>,
+    selected: T?,
+    enabled: Boolean = true,
+    modifier: Modifier = Modifier,
+    onSelect: (T) -> Unit,
 ) {
-    when (LocalInterfaceStyle.current) {
-        InterfaceStyle.MIUIX -> SliderPreference(
-            value,
-            onChange,
-            modifier = Modifier.semantics(mergeDescendants = true) {
-                contentDescription = "$label 草稿增益"
-                progressBarRangeInfo = ProgressBarRangeInfo(value, range, steps)
-                if (!enabled) disabled()
-                setProgress { requested ->
-                    if (enabled) onChange(requested.coerceIn(range))
-                    enabled
-                }
-            },
-            title = label,
-            valueText = valueText,
-            valueRange = range,
-            steps = steps,
-            enabled = enabled,
-        )
+    if (options.isEmpty()) return
+    FlowRow(
+        modifier.fillMaxWidth().selectableGroup(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        // Material chips already carry a 48dp touch target, which spaces their rows.
+        verticalArrangement = Arrangement.spacedBy(if (LocalInterfaceStyle.current == InterfaceStyle.MATERIAL3) 0.dp else 8.dp),
+    ) {
+        options.forEach { option ->
+            val isSelected = selected != null && option.value == selected
+            val optionModifier = Modifier.semantics {
+                this.selected = isSelected
+                role = Role.RadioButton
+                option.contentDescription?.let { contentDescription = it }
+            }.let { base -> option.testTag?.let { base.testTag(it) } ?: base }
+            when (LocalInterfaceStyle.current) {
+                InterfaceStyle.MIUIX -> MiuixTextButton(
+                    option.label,
+                    onClick = { if (!isSelected) onSelect(option.value) },
+                    enabled = enabled,
+                    modifier = optionModifier,
+                    colors = if (isSelected) MiuixButtonDefaults.textButtonColorsPrimary() else MiuixButtonDefaults.textButtonColors(),
+                )
 
-        InterfaceStyle.MATERIAL3 -> Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(label)
-                Text(valueText)
+                InterfaceStyle.MATERIAL3 -> FilterChip(
+                    selected = isSelected,
+                    onClick = { if (!isSelected) onSelect(option.value) },
+                    label = { Text(option.label) },
+                    enabled = enabled,
+                    modifier = optionModifier,
+                )
             }
-            Slider(
-                value,
-                onChange,
-                valueRange = range,
-                steps = steps,
-                enabled = enabled,
-                modifier = Modifier.semantics { contentDescription = "$label 草稿增益" },
+        }
+    }
+}
+
+/** A thin indeterminate bar while [active]; it keeps its height when idle so the layout does not jump. */
+@Composable
+internal fun AppSyncIndicator(active: Boolean, modifier: Modifier = Modifier) {
+    Box(modifier.fillMaxWidth().height(4.dp)) {
+        if (!active) return@Box
+        when (LocalInterfaceStyle.current) {
+            InterfaceStyle.MIUIX -> top.yukonga.miuix.kmp.basic.LinearProgressIndicator(
+                modifier = Modifier.fillMaxWidth(),
+                height = 4.dp,
             )
+
+            InterfaceStyle.MATERIAL3 -> LinearProgressIndicator(Modifier.fillMaxWidth())
         }
     }
 }

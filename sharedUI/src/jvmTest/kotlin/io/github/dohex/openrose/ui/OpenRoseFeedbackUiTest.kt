@@ -319,7 +319,11 @@ class OpenRoseFeedbackUiTest {
             } else {
                 ProvideInterfaceStyle(uiSettings.value.interfaceStyle, dark = false) {
                     androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxSize()) {
-                        HeadphonesPage(model, BasicPlatformUi("Test"), {})
+                        HeadphonesPage(
+                            model,
+                            BasicPlatformUi("Test"),
+                            {},
+                        )
                         androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.align(androidx.compose.ui.Alignment.BottomCenter)) {
                             SettingFeedback(state.value, state.value.activeDevice()) { diagnosticsRequests += Unit }
                         }

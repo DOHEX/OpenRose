@@ -519,7 +519,11 @@ class OpenRoseConnectedHomeUiTest {
                     OpenRoseApp(model, BasicPlatformUi("Test"))
                 } else {
                     ProvideInterfaceStyle(uiSettings.value.interfaceStyle, dark = false) {
-                        HeadphonesPage(model, BasicPlatformUi("Test"), {})
+                        HeadphonesPage(
+                            model,
+                            BasicPlatformUi("Test"),
+                            {},
+                        )
                     }
                 }
             }

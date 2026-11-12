@@ -10,8 +10,6 @@
     <ID>ComplexCondition:StyleComponents.kt:selected != null &amp;&amp; selectedIndex &gt;= 0 &amp;&amp; (!isOpen || dropdownOpenedHere)</ID>
     <ID>CyclomaticComplexMethod:AddDeviceContent.kt:@Composable internal fun AddDeviceContent</ID>
     <ID>CyclomaticComplexMethod:AddDeviceUiTestHarness.kt:AddDeviceUiTestHarness$suspend fun connectForAddDevice: OperationResult</ID>
-    <ID>CyclomaticComplexMethod:CustomEqualizerCard.kt:@Composable internal fun CustomEqualizerCard</ID>
-    <ID>CyclomaticComplexMethod:CustomEqualizerCard.kt:@Composable private fun EqualizerCurve</ID>
     <ID>CyclomaticComplexMethod:DeviceControlCard.kt:@Composable internal fun DeviceControlCard</ID>
     <ID>CyclomaticComplexMethod:DevicePanel.kt:@Composable internal fun ConnectionDetailsCard</ID>
     <ID>CyclomaticComplexMethod:DevicePanel.kt:@Composable private fun UnconnectedHeadphonesDashboard</ID>

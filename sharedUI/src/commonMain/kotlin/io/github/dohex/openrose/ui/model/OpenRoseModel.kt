@@ -28,6 +28,9 @@ interface OpenRoseModel {
     fun connect(deviceId: DeviceId)
     fun disconnect()
     fun set(setting: DeviceSetting, value: FieldValue)
+
+    /** Writes to [sessionId] only, and returns once the device confirms the setting or the write ends otherwise. */
+    suspend fun setInSession(sessionId: Long, setting: DeviceSetting, value: FieldValue): OperationResult
     suspend fun connectForAddDevice(deviceId: DeviceId): OperationResult
     fun showHeadphones()
 }
@@ -67,6 +70,8 @@ class RuntimeOpenRoseModel(
     override fun set(setting: DeviceSetting, value: FieldValue) {
         scope.launch { runtime.set(setting, value) }
     }
+
+    override suspend fun setInSession(sessionId: Long, setting: DeviceSetting, value: FieldValue) = runtime.set(setting, value, sessionId)
 
     // The adding flow owns cancellation of its unfinished connection attempt.
     override suspend fun connectForAddDevice(deviceId: DeviceId): OperationResult = runtime.connectForAddDevice(deviceId)

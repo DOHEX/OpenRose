@@ -12,6 +12,9 @@ internal sealed interface Route : NavKey {
     data object Touch : Route
 
     @Serializable
+    data object Equalizer : Route
+
+    @Serializable
     data object Audio : Route
 
     @Serializable
@@ -35,6 +38,7 @@ internal fun AppPage.toRoute(): Route = when (this) {
     AppPage.STATUS -> Route.Main(AppPage.STATUS)
     AppPage.SETTINGS -> Route.Main(AppPage.SETTINGS)
     AppPage.TOUCH -> Route.Touch
+    AppPage.EQUALIZER -> Route.Equalizer
     AppPage.AUDIO -> Route.Audio
     AppPage.DETAILS -> Route.Details
     AppPage.DIAGNOSTICS -> Route.Diagnostics
@@ -46,6 +50,7 @@ internal fun AppPage.toRoute(): Route = when (this) {
 internal fun Route.toAppPage(): AppPage = when (this) {
     is Route.Main -> tab
     Route.Touch -> AppPage.TOUCH
+    Route.Equalizer -> AppPage.EQUALIZER
     Route.Audio -> AppPage.AUDIO
     Route.Details -> AppPage.DETAILS
     Route.Diagnostics -> AppPage.DIAGNOSTICS

@@ -4,6 +4,7 @@ import io.github.dohex.openrose.core.ControlError
 import io.github.dohex.openrose.core.ControlErrorCode
 import io.github.dohex.openrose.core.ControlState
 import io.github.dohex.openrose.core.DeviceSetting
+import io.github.dohex.openrose.core.OperationResult
 import io.github.dohex.openrose.core.SettingOperation
 import io.github.dohex.openrose.core.SettingStage
 import io.github.dohex.openrose.core.protocol.DeviceField
@@ -40,9 +41,23 @@ internal class SandboxWrites(
     private var lastOperationId = 0L
 
     fun submit(setting: DeviceSetting, value: FieldValue) {
+        val run = begin(setting, value, null) ?: return
+        scope.launch { run() }
+    }
+
+    /** Like [submit], but only to [sessionId], and returns once the scenario ends the write. */
+    suspend fun write(sessionId: Long, setting: DeviceSetting, value: FieldValue): OperationResult {
+        val run = begin(setting, value, sessionId)
+            ?: return OperationResult.Failure(ControlError(ControlErrorCode.DISCONNECTED, "请求的设备会话已结束或已被替换"))
+        return run()
+    }
+
+    /** Records the submission now; the returned step plays out the rest, or null when no session can take the write. */
+    private fun begin(setting: DeviceSetting, value: FieldValue, sessionId: Long?): (suspend () -> OperationResult)? {
         val current = state.value
-        current.readySession ?: return
-        val device = current.device ?: return
+        val session = current.readySession ?: return null
+        if (sessionId != null && session.sessionId != sessionId) return null
+        val device = current.device ?: return null
         val prepared = runCatching { createProtocolCodec(device.profile).prepareSetting(setting, value, scenario.value.firmwareValue) }
         val operation = SettingOperation(
             id = ++lastOperationId,
@@ -55,11 +70,12 @@ internal class SandboxWrites(
         record(operation)
         val plan = prepared.getOrElse { rejection ->
             val code = if (rejection is IllegalArgumentException) ControlErrorCode.INVALID_ARGUMENT else ControlErrorCode.UNSUPPORTED
-            finish(operation, SettingStage.FAILED, ControlError(code, rejection.message ?: rejection.toString()))
-            return
+            val error = ControlError(code, rejection.message ?: rejection.toString())
+            finish(operation, SettingStage.FAILED, error)
+            return { OperationResult.Failure(error) }
         }
         val written = operation.copy(stage = SettingStage.WRITTEN, writtenFrames = plan.writeFrames.size)
-        scope.launch {
+        return {
             delay(WRITE_MILLIS)
             record(written)
             delay(READBACK_MILLIS)
@@ -76,19 +92,26 @@ internal class SandboxWrites(
     }
 
     /** A readback for a session that has since ended cannot confirm anything. */
-    private fun confirm(operation: SettingOperation, expected: Map<DeviceField, FieldValue>) = state.update { current ->
-        val device = current.device?.takeIf { it.sessionId == operation.sessionId }
-        if (device == null) {
-            val error = ControlError(ControlErrorCode.DISCONNECTED, "控制连接已断开，设置未获完整确认")
-            current.withOperation(operation.copy(stage = SettingStage.DISCONNECTED, error = error)).copy(lastError = error)
-        } else {
-            current.withOperation(operation.copy(stage = SettingStage.CONFIRMED, confirmedFields = expected.keys.toPersistentSet()))
-                .copy(device = device.copy(fields = confirmedFields(device.fields, expected)))
+    private fun confirm(operation: SettingOperation, expected: Map<DeviceField, FieldValue>): OperationResult {
+        var result: OperationResult = OperationResult.Success
+        state.update { current ->
+            val device = current.device?.takeIf { it.sessionId == operation.sessionId }
+            if (device == null) {
+                val error = ControlError(ControlErrorCode.DISCONNECTED, "控制连接已断开，设置未获完整确认")
+                result = OperationResult.Failure(error)
+                current.withOperation(operation.copy(stage = SettingStage.DISCONNECTED, error = error)).copy(lastError = error)
+            } else {
+                result = OperationResult.Success
+                current.withOperation(operation.copy(stage = SettingStage.CONFIRMED, confirmedFields = expected.keys.toPersistentSet()))
+                    .copy(device = device.copy(fields = confirmedFields(device.fields, expected)))
+            }
         }
+        return result
     }
 
-    private fun finish(operation: SettingOperation, stage: SettingStage, error: ControlError) = state.update {
-        it.withOperation(operation.copy(stage = stage, error = error)).copy(lastError = error)
+    private fun finish(operation: SettingOperation, stage: SettingStage, error: ControlError): OperationResult {
+        state.update { it.withOperation(operation.copy(stage = stage, error = error)).copy(lastError = error) }
+        return OperationResult.Failure(error)
     }
 
     private fun record(operation: SettingOperation) = state.update { it.withOperation(operation) }

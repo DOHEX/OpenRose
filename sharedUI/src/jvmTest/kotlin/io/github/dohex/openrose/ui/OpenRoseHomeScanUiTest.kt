@@ -468,7 +468,11 @@ class OpenRoseHomeScanUiTest {
                             modifier = Modifier.verticalScroll(rememberScrollState()),
                         )
                     } else {
-                        HeadphonesPage(model, platformUi, onNavigate = {})
+                        HeadphonesPage(
+                            model,
+                            platformUi,
+                            onNavigate = {},
+                        )
                     }
                 }
             }

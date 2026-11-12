@@ -51,6 +51,10 @@ internal class FakeOpenRoseModel(
     var onConnect: (DeviceId) -> Unit = {}
     var onDisconnect: () -> Unit = {}
     var onSet: (DeviceSetting, FieldValue) -> Unit = { _, _ -> }
+    var onSetInSession: suspend (Long, DeviceSetting, FieldValue) -> OperationResult = { _, setting, value ->
+        onSet(setting, value)
+        OperationResult.Success
+    }
     var onAddDeviceConnect: suspend (DeviceId) -> OperationResult = {
         error("Unexpected add-device connection in this scenario")
     }
@@ -79,6 +83,10 @@ internal class FakeOpenRoseModel(
     override fun set(setting: DeviceSetting, value: FieldValue) {
         settingWrites += setting to value
         onSet(setting, value)
+    }
+    override suspend fun setInSession(sessionId: Long, setting: DeviceSetting, value: FieldValue): OperationResult {
+        settingWrites += setting to value
+        return onSetInSession(sessionId, setting, value)
     }
     override suspend fun connectForAddDevice(deviceId: DeviceId): OperationResult = onAddDeviceConnect(deviceId)
     override fun showHeadphones() {

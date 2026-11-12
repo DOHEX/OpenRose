@@ -107,6 +107,8 @@ internal class SandboxModel(private val scope: CoroutineScope) : OpenRoseModel {
 
     override fun set(setting: DeviceSetting, value: FieldValue) = writes.submit(setting, value)
 
+    override suspend fun setInSession(sessionId: Long, setting: DeviceSetting, value: FieldValue) = writes.write(sessionId, setting, value)
+
     override fun showHeadphones() = mutableHomeNavigationRequest.update { it + 1L }
 }
 

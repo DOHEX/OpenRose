@@ -30,6 +30,7 @@ internal enum class AppPage(val title: String, val icon: RoseIcon) {
     SETTINGS("设置", RoseIcon.SETTINGS),
     ADD_DEVICE("添加耳机", RoseIcon.PLUS),
     TOUCH("触控操作", RoseIcon.TOUCH),
+    EQUALIZER("均衡器", RoseIcon.EQUALIZER),
     AUDIO("音频与设备", RoseIcon.AUDIO),
     DETAILS("设备详情", RoseIcon.INFO),
     DIAGNOSTICS("诊断与记录", RoseIcon.LOG),
@@ -74,6 +75,10 @@ fun OpenRoseApp(
     val rootFocusRequester = remember { FocusRequester() }
     val choiceDialog = remember(state.device?.sessionId) { mutableStateOf<String?>(null) }
     var selectedTouchSide by remember(state.device?.sessionId) { mutableStateOf<String?>(null) }
+    val uiScope = rememberCoroutineScope()
+    val equalizerEditor = remember { EqualizerEditor(uiScope, model::setInSession) }
+    val readySessionId = state.readySession?.sessionId
+    LaunchedEffect(readySessionId) { equalizerEditor.bind(readySessionId) }
     LaunchedEffect(homeNavigationRequest) {
         if (homeNavigationRequest != 0L) {
             while (navBackStack.size > 1) {
@@ -207,7 +212,7 @@ fun OpenRoseApp(
                     }
 
                     else -> if (device != null) {
-                        val controlPage = targetPage in listOf(AppPage.TOUCH, AppPage.AUDIO)
+                        val controlPage = targetPage in listOf(AppPage.TOUCH, AppPage.EQUALIZER, AppPage.AUDIO)
                         if (controlPage) {
                             SettingPageBanner(state, device)
                         }
@@ -221,6 +226,8 @@ fun OpenRoseApp(
                                 selectedTouchSide,
                                 { selectedTouchSide = it },
                             )
+
+                            AppPage.EQUALIZER -> EqualizerPage(state, device, equalizerEditor)
 
                             AppPage.AUDIO -> DeviceControlCard(state, device, onSet)
 
@@ -237,10 +244,13 @@ fun OpenRoseApp(
             val feedbackContentFor: @Composable (AppPage) -> Unit = { targetPage ->
                 val device = state.activeDevice()
                 if ((targetPage == AppPage.HEADPHONES && device != null) ||
-                    targetPage in listOf(AppPage.TOUCH, AppPage.AUDIO)
+                    targetPage in listOf(AppPage.TOUCH, AppPage.EQUALIZER, AppPage.AUDIO)
                 ) {
                     key(targetPage) {
-                        SettingFeedback(state, device) { navigate(AppPage.DIAGNOSTICS) }
+                        // The equalizer page shows its own progress in place; it keeps only failures here.
+                        SettingFeedback(state, device, showPending = targetPage != AppPage.EQUALIZER) {
+                            navigate(AppPage.DIAGNOSTICS)
+                        }
                     }
                 }
             }
@@ -348,6 +358,9 @@ fun OpenRoseApp(
                     }
                     entry<Route.Touch>(swipeDismiss = NavSwipeDirection.LeftToRight) {
                         renderShell(AppPage.TOUCH)
+                    }
+                    entry<Route.Equalizer>(swipeDismiss = NavSwipeDirection.LeftToRight) {
+                        renderShell(AppPage.EQUALIZER)
                     }
                     entry<Route.Audio>(swipeDismiss = NavSwipeDirection.LeftToRight) {
                         renderShell(AppPage.AUDIO)
