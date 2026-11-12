@@ -8,7 +8,7 @@ agp = "9.5.1"
 compose = "1.12.2"
 # Overrides the Hot Reload 1.2.0 bundled with the Compose plugin, whose Gradle API use is deprecated for Gradle 10/11.
 compose-hot-reload = "1.3.0-rc01"
-material3 = "1.12.0-alpha03"
+material3 = "1.13.0-beta02"
 miuix = "0.9.4"
 coroutines = "1.11.0"
 immutable-collections = "0.5.2"
