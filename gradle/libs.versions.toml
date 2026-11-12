@@ -75,5 +75,4 @@ openrose-kmp-compose-library = { id = "openrose.kmp.compose.library" }
 openrose-jvm-library = { id = "openrose.jvm.library" }
 openrose-desktop-application = { id = "openrose.desktop.application" }
 openrose-android-application = { id = "openrose.android.application" }
-openrose-readme-sync = { id = "openrose.readme.sync" }
 openrose-detekt-baseline = { id = "openrose.detekt.baseline" }

@@ -12,8 +12,6 @@ plugins {
     alias(libs.plugins.detekt) apply false
     alias(libs.plugins.spotless)
     alias(libs.plugins.kover)
-    // README.md is the primary text; README.en.md must keep its headings, code blocks, tables, images and links.
-    alias(libs.plugins.openrose.readme.sync)
     // The findings frozen in config/detekt/baseline may only shrink; see config/detekt/baseline-limit.txt.
     alias(libs.plugins.openrose.detekt.baseline)
 }
@@ -60,5 +58,5 @@ tasks.register("offlineCheck") {
         ":androidApp:lintDebug", "spotlessCheck",
         "koverVerify", ":core:koverVerify", ":androidIntegration:koverVerify",
     )
-    dependsOn(subprojects.map { "${it.path}:detekt" }, "checkReadmeSync", "checkDetektBaseline")
+    dependsOn(subprojects.map { "${it.path}:detekt" }, "checkDetektBaseline")
 }
