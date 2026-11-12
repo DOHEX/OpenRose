@@ -15,6 +15,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -39,6 +41,7 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.contentDescription
@@ -68,12 +71,17 @@ private fun equalizerTokens(): EqualizerTokens = when (LocalInterfaceStyle.curre
     InterfaceStyle.MATERIAL3 -> EqualizerTokens(6.dp, 8.dp, 11.dp, 3.dp, springThumbs = true)
 }
 
-private val BAND_AREA_HEIGHT = 200.dp
+/** Low enough that the i7 page, all six modes and the curve, fits a 360×780dp phone without scrolling. */
+private val BAND_AREA_HEIGHT = 136.dp
+
+/** The gain scale's column left of the bands; band and frequency labels start after it. */
+private val SCALE_WIDTH = 28.dp
 
 /**
- * One vertical control per band on a shared gain axis, with the curve drawn through the thumbs. Pressing anywhere in
- * a band's column moves its thumb there; the band is sent when the finger lifts, or at once from keys and
- * accessibility actions. [active] false draws the curve faded, for a curve the device is not playing.
+ * One vertical control per band on a shared gain axis, with the curve drawn through the thumbs and the model's gain
+ * bounds and zero marked on the left. Pressing anywhere in a band's column moves its thumb there; the band is sent
+ * when the finger lifts, or at once from keys and accessibility actions. [active] false draws the curve faded, for a
+ * curve the device is not playing.
  */
 @Composable
 internal fun EqualizerBands(
@@ -103,37 +111,65 @@ internal fun EqualizerBands(
     val colors = bandColors(enabled, active)
     Column(modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
         BandLabels(shown.map(::gainLabel), highlighted, colors.highlight, appColor(AppColorRole.OnSurface))
-        Box(Modifier.fillMaxWidth().height(BAND_AREA_HEIGHT)) {
-            val thumbGains = thumbGains(shown, drag?.first, eased = tokens.springThumbs)
-            Canvas(Modifier.fillMaxWidth().height(BAND_AREA_HEIGHT)) {
-                drawBands(thumbGains, minGain, maxGain, highlighted, tokens, colors)
-            }
-            Row(Modifier.fillMaxWidth().height(BAND_AREA_HEIGHT)) {
-                capabilities.bandsHz.forEachIndexed { band, hz ->
-                    BandControl(
-                        hz = hz,
-                        gain = shown[band],
-                        minGain = minGain,
-                        maxGain = maxGain,
-                        enabled = enabled,
-                        inset = tokens.activeThumbRadius,
-                        onFocusChange = { focusedBand = focusedBand.afterFocusChange(band, it) },
-                        onSet = { commit(band, it) },
-                        onStep = { commit(band, latestCurve[band] + it) },
-                        onDrag = { gain ->
-                            if (drag != band to gain) haptics.performHapticFeedback(HapticFeedbackType.SegmentFrequentTick)
-                            drag = band to gain
-                        },
-                        onRelease = { lifted ->
-                            drag?.takeIf { lifted }?.let { (draggedBand, draggedGain) -> commit(draggedBand, draggedGain) }
-                            drag = null
-                        },
-                        modifier = Modifier.weight(1f),
-                    )
+        Row(Modifier.fillMaxWidth().height(BAND_AREA_HEIGHT)) {
+            GainScale(minGain, maxGain, tokens.activeThumbRadius, Modifier.width(SCALE_WIDTH).fillMaxHeight())
+            Box(Modifier.weight(1f).fillMaxHeight()) {
+                val thumbGains = thumbGains(shown, drag?.first, eased = tokens.springThumbs)
+                Canvas(Modifier.fillMaxWidth().fillMaxHeight()) {
+                    drawBands(thumbGains, minGain, maxGain, highlighted, tokens, colors)
+                }
+                Row(Modifier.fillMaxWidth().fillMaxHeight()) {
+                    capabilities.bandsHz.forEachIndexed { band, hz ->
+                        BandControl(
+                            hz = hz,
+                            gain = shown[band],
+                            minGain = minGain,
+                            maxGain = maxGain,
+                            enabled = enabled,
+                            inset = tokens.activeThumbRadius,
+                            onFocusChange = { focusedBand = focusedBand.afterFocusChange(band, it) },
+                            onSet = { commit(band, it) },
+                            onStep = { commit(band, latestCurve[band] + it) },
+                            onDrag = { gain ->
+                                if (drag != band to gain) haptics.performHapticFeedback(HapticFeedbackType.SegmentFrequentTick)
+                                drag = band to gain
+                            },
+                            onRelease = { lifted ->
+                                drag?.takeIf { lifted }?.let { (draggedBand, draggedGain) -> commit(draggedBand, draggedGain) }
+                                drag = null
+                            },
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
                 }
             }
         }
         BandLabels(capabilities.bandsHz.map(::compactFrequencyLabel), null, colors.highlight, appColor(AppColorRole.Summary))
+    }
+}
+
+/** [maxGain], zero and [minGain] at the heights the band area draws them, ending just left of it; there is no unit. */
+@Composable
+private fun GainScale(minGain: Int, maxGain: Int, inset: Dp, modifier: Modifier) {
+    val marks = listOf(maxGain, 0, minGain).filter { it in minGain..maxGain }.distinct()
+    Layout(
+        content = { marks.forEach { AppText(gainLabel(it), role = AppTextRole.Footnote, maxLines = 1) } },
+        modifier = modifier,
+    ) { measurables, constraints ->
+        val labels = measurables.map { it.measure(constraints.copy(minWidth = 0, minHeight = 0)) }
+        val width = constraints.maxWidth
+        val height = constraints.maxHeight
+        val top = inset.toPx()
+        val gap = 6.dp.roundToPx()
+        layout(width, height) {
+            labels.forEachIndexed { index, label ->
+                val y = top + gainFraction(marks[index].toFloat(), minGain, maxGain) * (height - 2 * top)
+                label.place(
+                    (width - gap - label.width).coerceAtLeast(0),
+                    (y - label.height / 2f).roundToInt().coerceIn(0, (height - label.height).coerceAtLeast(0)),
+                )
+            }
+        }
     }
 }
 
@@ -150,10 +186,10 @@ private fun bandColors(enabled: Boolean, active: Boolean): BandColors {
     return BandColors(track = appColor(AppColorRole.Divider), highlight = primary, curve = curve)
 }
 
-/** One centred label per band column, the [highlighted] one in [highlight]. */
+/** One centred label per band column, after the gain scale, the [highlighted] one in [highlight]. */
 @Composable
 private fun BandLabels(labels: List<String>, highlighted: Int?, highlight: Color, normal: Color) {
-    Row(Modifier.fillMaxWidth()) {
+    Row(Modifier.fillMaxWidth().padding(start = SCALE_WIDTH)) {
         labels.forEachIndexed { band, label ->
             AppText(
                 label,
@@ -271,8 +307,7 @@ private fun DrawScope.drawBands(
 ) {
     val top = tokens.activeThumbRadius.toPx()
     val bottom = size.height - top
-    val range = (maxGain - minGain).coerceAtLeast(1).toFloat()
-    fun yOf(gain: Float) = top + (maxGain - gain) / range * (bottom - top)
+    fun yOf(gain: Float) = top + gainFraction(gain, minGain, maxGain) * (bottom - top)
     val columnWidth = size.width / gains.size
     fun xOf(band: Int) = columnWidth * (band + 0.5f)
 
@@ -322,7 +357,14 @@ private fun Path.smoothThrough(points: List<Offset>) {
     }
 }
 
-private fun gainLabel(gain: Int): String = if (gain > 0) "+$gain" else "$gain"
+/** How far [gain] sits below [maxGain], from 0 at the maximum to 1 at [minGain]. */
+private fun gainFraction(gain: Float, minGain: Int, maxGain: Int): Float = (maxGain - gain) / (maxGain - minGain).coerceAtLeast(1)
+
+private fun gainLabel(gain: Int): String = when {
+    gain > 0 -> "+$gain"
+    gain < 0 -> "−${-gain}"
+    else -> "0"
+}
 
 private fun compactFrequencyLabel(hz: Int): String = when {
     hz >= 1000 && hz % 1000 == 0 -> "${hz / 1000}k"

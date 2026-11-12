@@ -149,7 +149,7 @@ internal fun HeadphonesPage(
                         )
                     }
                     AppGroup(title = "功能") {
-                        EqualizerEntryRow(device) { onNavigate(AppPage.EQUALIZER) }
+                        EqualizerEntryRow(state, device, onSet) { onNavigate(AppPage.EQUALIZER) }
                         if (hasTouch) {
                             AppArrowRow(
                                 title = "触控操作",

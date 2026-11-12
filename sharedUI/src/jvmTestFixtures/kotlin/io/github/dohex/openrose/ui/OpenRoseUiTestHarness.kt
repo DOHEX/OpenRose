@@ -211,6 +211,9 @@ internal open class OpenRoseUiTestHarness(protected val scene: OpenRoseUiTestSce
     fun textBounds(expected: String): Rect = textNodes(expected).firstOrNull()?.boundsInRoot
         ?: error("No text node found for '$expected'")
 
+    /** Bounds of every node showing [expected], main window first, then popups and dialogs. */
+    fun allTextBounds(expected: String): List<Rect> = textNodes(expected).map { it.boundsInRoot }
+
     /** The current frame as an image; capturing draws pending changes without advancing the clock. */
     fun snapshot(): BufferedImage = scene.capture()
 
@@ -224,6 +227,13 @@ internal open class OpenRoseUiTestHarness(protected val scene: OpenRoseUiTestSce
     }
 
     fun hasDisabledButton(expected: String): Boolean = hasDisabledText(expected)
+
+    /** As with a real touch, a disabled control takes no taps: Material marks it disabled, Miuix drops its click action. */
+    fun hasTappableText(expected: String): Boolean = hasClickableText(expected) && !hasDisabledText(expected)
+
+    fun hasRadioText(expected: String): Boolean = textNodes(expected).any { node ->
+        node.hasAncestorOrSelf { it.config.getOrNull(SemanticsProperties.Role) == Role.RadioButton }
+    }
 
     fun hasSelectedText(expected: String): Boolean = textNodes(expected).any { node ->
         node.hasAncestorOrSelf {

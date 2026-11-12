@@ -20,6 +20,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
@@ -54,6 +55,9 @@ enum class AppColorRole { Primary, OnSurface, Summary, Error, Divider, SelectedC
 enum class AppTextRole { Display, Title, Body, Summary, Footnote }
 enum class AppButtonKind { Primary, Secondary }
 data class AppOption<T>(val value: T, val label: String, val contentDescription: String? = null, val testTag: String? = null)
+
+/** A small text button on a group's title line, for an action on the whole group such as resetting it. */
+class AppTitleAction(val label: String, val enabled: Boolean, val onClick: () -> Unit)
 
 @Composable
 fun appColor(role: AppColorRole): Color = when (LocalInterfaceStyle.current) {
@@ -187,19 +191,14 @@ fun AppGroup(
     header: (@Composable () -> Unit)? = null,
     footnote: String? = null,
     footnoteIcon: RoseIcon? = null,
-    titleTrailing: (@Composable () -> Unit)? = null,
+    titleAction: AppTitleAction? = null,
     plain: Boolean = false,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Column(Modifier.fillMaxWidth()) {
         when (LocalInterfaceStyle.current) {
             InterfaceStyle.MIUIX -> {
-                title?.let { label ->
-                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        SmallTitle(label, Modifier.weight(1f).semantics { heading() })
-                        titleTrailing?.let { Box(Modifier.padding(end = 16.dp)) { it() } }
-                    }
-                }
+                title?.let { MiuixGroupTitle(it, titleAction) }
                 header?.let {
                     Box(Modifier.fillMaxWidth().padding(horizontal = 12.dp).padding(bottom = 8.dp)) {
                         it()
@@ -213,20 +212,7 @@ fun AppGroup(
             }
 
             InterfaceStyle.MATERIAL3 -> {
-                title?.let { label ->
-                    Row(
-                        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            label,
-                            Modifier.weight(1f).semantics { heading() },
-                            color = MaterialTheme.colorScheme.primary,
-                            style = MaterialTheme.typography.titleSmall,
-                        )
-                        titleTrailing?.invoke()
-                    }
-                }
+                title?.let { MaterialGroupTitle(it, titleAction) }
                 header?.let {
                     Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 8.dp)) {
                         it()
@@ -257,6 +243,54 @@ fun AppGroup(
         if (LocalInterfaceStyle.current == InterfaceStyle.MATERIAL3) {
             Spacer(Modifier.height(12.dp))
             AppDivider()
+        }
+    }
+}
+
+/**
+ * Miuix has no text-only button, so the action is primary text set like the [SmallTitle] beside it: the same style and
+ * vertical margin put both on one line, and its end margin ends the text on the card content's edge.
+ */
+@Composable
+private fun MiuixGroupTitle(label: String, action: AppTitleAction?) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        SmallTitle(label, Modifier.weight(1f).semantics { heading() })
+        action?.let {
+            MiuixText(
+                it.label,
+                modifier = Modifier.padding(end = 16.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable(enabled = it.enabled, role = Role.Button, onClick = it.onClick)
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                color = if (it.enabled) MiuixTheme.colorScheme.primary else MiuixTheme.colorScheme.disabledOnSurface,
+                style = MiuixTheme.textStyles.subtitle,
+            )
+        }
+    }
+}
+
+/**
+ * The action is an extra-small text button. Its 48dp touch target stands in for the line's vertical padding, and the
+ * end padding ends its text on the content edge.
+ */
+@Composable
+private fun MaterialGroupTitle(label: String, action: AppTitleAction?) {
+    val padding = if (action == null) PaddingValues(16.dp, 8.dp) else PaddingValues(start = 16.dp, end = 4.dp)
+    Row(Modifier.fillMaxWidth().padding(padding), verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            label,
+            Modifier.weight(1f).semantics { heading() },
+            color = MaterialTheme.colorScheme.primary,
+            style = MaterialTheme.typography.titleSmall,
+        )
+        action?.let {
+            TextButton(
+                onClick = it.onClick,
+                shapes = ButtonDefaults.shapesFor(ButtonDefaults.ExtraSmallContainerHeight),
+                modifier = Modifier.heightIn(min = ButtonDefaults.ExtraSmallContainerHeight),
+                enabled = it.enabled,
+                contentPadding = ButtonDefaults.contentPaddingFor(ButtonDefaults.ExtraSmallContainerHeight),
+            ) { Text(it.label) }
         }
     }
 }
@@ -758,50 +792,6 @@ fun <T> AppCheckGroup(options: List<AppOption<T>>, checked: Set<T>, enabledFor: 
                     leadingContent = { Checkbox(option.value in checked, onCheckedChange = null, enabled = enabled) },
                     modifier = optionModifier.toggleable(option.value in checked, enabled, Role.Checkbox) { onToggle(option.value) },
                     colors = rowColors(),
-                )
-            }
-        }
-    }
-}
-
-/** Choices that wrap onto further lines, for option sets whose labels are too long or many for [AppSegmented]. */
-@Composable
-internal fun <T> AppChipGroup(
-    options: List<AppOption<T>>,
-    selected: T?,
-    enabled: Boolean = true,
-    modifier: Modifier = Modifier,
-    onSelect: (T) -> Unit,
-) {
-    if (options.isEmpty()) return
-    FlowRow(
-        modifier.fillMaxWidth().selectableGroup(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        // Material chips already carry a 48dp touch target, which spaces their rows.
-        verticalArrangement = Arrangement.spacedBy(if (LocalInterfaceStyle.current == InterfaceStyle.MATERIAL3) 0.dp else 8.dp),
-    ) {
-        options.forEach { option ->
-            val isSelected = selected != null && option.value == selected
-            val optionModifier = Modifier.semantics {
-                this.selected = isSelected
-                role = Role.RadioButton
-                option.contentDescription?.let { contentDescription = it }
-            }.let { base -> option.testTag?.let { base.testTag(it) } ?: base }
-            when (LocalInterfaceStyle.current) {
-                InterfaceStyle.MIUIX -> MiuixTextButton(
-                    option.label,
-                    onClick = { if (!isSelected) onSelect(option.value) },
-                    enabled = enabled,
-                    modifier = optionModifier,
-                    colors = if (isSelected) MiuixButtonDefaults.textButtonColorsPrimary() else MiuixButtonDefaults.textButtonColors(),
-                )
-
-                InterfaceStyle.MATERIAL3 -> FilterChip(
-                    selected = isSelected,
-                    onClick = { if (!isSelected) onSelect(option.value) },
-                    label = { Text(option.label) },
-                    enabled = enabled,
-                    modifier = optionModifier,
                 )
             }
         }
