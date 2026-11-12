@@ -28,7 +28,6 @@ nucleus {
             // Each host builds only its own formats: Linux x64 the four packages, Windows the MSI.
             targetFormats(TargetFormat.Deb, TargetFormat.Rpm, TargetFormat.Pacman, TargetFormat.AppImage, TargetFormat.Msi)
             packageName = "OpenRose"
-            packageVersion = providers.gradleProperty("releaseVersion").getOrElse("0.1.0")
             homepage = "https://github.com/DOHEX/OpenRose"
             linux {
                 iconFile.set(project.file("icons/openrose.png"))

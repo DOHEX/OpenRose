@@ -17,10 +17,10 @@ import io.github.dohex.openrose.ui.model.OpenRoseModel
 
 /**
  * Settings content only. The application root owns the page title, navigation, and scrolling.
- * Interface preferences live one level down in [PersonalizationPage].
+ * Interface preferences live one level down in [PersonalizationPage], the app's identity and links in [AboutPage].
  */
 @Composable
-fun PreferencesPage(model: OpenRoseModel, platformUi: PlatformUi, onPersonalization: () -> Unit) {
+fun PreferencesPage(model: OpenRoseModel, platformUi: PlatformUi, onPersonalization: () -> Unit, onAbout: () -> Unit) {
     val state by model.state.collectAsState()
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -50,10 +50,12 @@ fun PreferencesPage(model: OpenRoseModel, platformUi: PlatformUi, onPersonalizat
 
         platformUi.SettingsSections(state, PlatformSettingsPosition.AFTER_CONNECTION)
 
-        AppGroup(title = "关于") {
-            AppInfoRow(
-                label = "关于 OpenRose",
-                value = "ROSE / ROSESELSA 耳机控制",
+        AppGroup {
+            AppArrowRow(
+                title = "关于",
+                summary = "版本、项目链接与致谢",
+                icon = RoseIcon.INFO,
+                onClick = onAbout,
             )
         }
     }

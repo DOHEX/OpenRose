@@ -60,15 +60,16 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Configure release version
+      # The version itself comes from version.txt (build-logic AppVersion); a release only drops the -dev suffix.
+      - name: Mark release build
         if: env.RELEASE_TAG != ''
         run: |
-          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "::error::Release tags must use vMAJOR.MINOR.PATCH, for example v0.1.0."
+          version="$(tr -d '[:space:]' < version.txt)"
+          if [[ "$RELEASE_TAG" != "v$version" ]]; then
+            echo "::error::Release tag $RELEASE_TAG does not match version.txt ($version)."
             exit 1
           fi
-          echo "ORG_GRADLE_PROJECT_releaseVersion=${RELEASE_TAG#v}" >> "$GITHUB_ENV"
-          echo "ORG_GRADLE_PROJECT_releaseVersionCode=$GITHUB_RUN_NUMBER" >> "$GITHUB_ENV"
+          echo "ORG_GRADLE_PROJECT_releaseBuild=true" >> "$GITHUB_ENV"
 
       - uses: actions/setup-java@v6.2.0
         with:

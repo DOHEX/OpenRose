@@ -5,8 +5,8 @@ import org.gradle.kotlin.dsl.configure
 
 /**
  * Android application on the catalog SDK levels and the shared JDK; Kotlin is AGP's built-in support.
- * Lint also checks the library modules the app depends on, fails on warnings, and freezes existing
- * findings in the module's `lint-baseline.xml`.
+ * Its version comes from [appVersion]. Lint also checks the library modules the app depends on, fails on warnings,
+ * and freezes existing findings in the module's `lint-baseline.xml`.
  */
 class AndroidApplicationConventionPlugin : Plugin<Project> {
     override fun apply(target: Project): Unit = with(target) {
@@ -17,6 +17,9 @@ class AndroidApplicationConventionPlugin : Plugin<Project> {
             defaultConfig {
                 minSdk = libs.intVersion("android-minSdk")
                 targetSdk = libs.intVersion("android-targetSdk")
+                val version = appVersion
+                versionCode = version.code
+                versionName = version.name
             }
             compileOptions {
                 sourceCompatibility = javaVersion

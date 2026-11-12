@@ -41,8 +41,8 @@ body:
     id: openrose-version
     attributes:
       label: OpenRose 版本 / OpenRose version
-      description: Release 版本号，或开发版对应的提交 / CI 构建。
-      placeholder: 例如 v0.1.0，或 commit 哈希
+      description: 应用内“设置”→“关于”页显示的版本号；开发版自带提交号。
+      placeholder: 例如 0.1.0，或 0.1.0-dev+abc1234
     validations:
       required: true
   - type: textarea

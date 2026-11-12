@@ -34,6 +34,7 @@ internal enum class AppPage(val title: String, val icon: RoseIcon) {
     DETAILS("设备详情", RoseIcon.INFO),
     DIAGNOSTICS("诊断与记录", RoseIcon.LOG),
     PERSONALIZATION("个性化", RoseIcon.PALETTE),
+    ABOUT("关于", RoseIcon.INFO),
 }
 
 internal val mainPages = listOf(AppPage.HEADPHONES, AppPage.STATUS, AppPage.SETTINGS)
@@ -187,9 +188,16 @@ fun OpenRoseApp(
                         onDiagnostics = { navigate(AppPage.DIAGNOSTICS) },
                     )
 
-                    AppPage.SETTINGS -> PreferencesPage(model, platformUi, onPersonalization = { navigate(AppPage.PERSONALIZATION) })
+                    AppPage.SETTINGS -> PreferencesPage(
+                        model = model,
+                        platformUi = platformUi,
+                        onPersonalization = { navigate(AppPage.PERSONALIZATION) },
+                        onAbout = { navigate(AppPage.ABOUT) },
+                    )
 
                     AppPage.PERSONALIZATION -> PersonalizationPage(model, platformUi, wide = wide)
+
+                    AppPage.ABOUT -> AboutPage()
 
                     AppPage.DIAGNOSTICS -> {
                         PlatformDiagnosticsCard(model, platformUi)
@@ -352,6 +360,9 @@ fun OpenRoseApp(
                     }
                     entry<Route.Personalization>(swipeDismiss = NavSwipeDirection.LeftToRight) {
                         renderShell(AppPage.PERSONALIZATION)
+                    }
+                    entry<Route.About>(swipeDismiss = NavSwipeDirection.LeftToRight) {
+                        renderShell(AppPage.ABOUT)
                     }
                     entry<Route.AddDevice>(swipeDismiss = NavSwipeDirection.LeftToRight) {
                         // Popped entries retain their registration while animating out.

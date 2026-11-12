@@ -98,7 +98,7 @@ class SystemSettingsOwnershipUiTest {
                     assertTrue(harness.hasText("超级岛"), "HyperOS settings remain in Settings for $style at ${width}dp")
                     assertTrue(harness.hasText("焦点通知"), "focus notification belongs to Settings for $style at ${width}dp")
                     assertTrue(harness.hasText("官方"), "the existing island default remains visible for $style at ${width}dp")
-                    assertTrue(harness.hasText("关于 OpenRose"), "About remains at the bottom of Settings for $style at ${width}dp")
+                    assertTrue(harness.hasText("版本、项目链接与致谢"), "the 关于 entry remains at the bottom of Settings for $style at ${width}dp")
                     assertFalse(harness.hasText("诊断与记录"), "Settings has no fixed diagnostics entry for $style at ${width}dp")
 
                     harness.clickText("焦点通知")

@@ -114,11 +114,13 @@ PR 标题同样遵循这一格式，并由 `.github/workflows/pr-title.yml` 检�
 
 发布由自动化完成，贡献者不需要手动打标签：
 
-1. main 分支上的 release-please 根据 Conventional Commits 开出发布 PR，并维护 `CHANGELOG.md`。
+1. main 分支上的 release-please 根据 Conventional Commits 开出发布 PR，改写 `version.txt` 并维护 `CHANGELOG.md`。
 2. 合并该发布 PR 会创建 `vX.Y.Z` 标签。
 3. 标签触发 CI 打包，并生成草稿 GitHub Release。
 
 因此提交类型要如实反映变更性质：`feat` 对应新功能，`fix` 对应缺陷修复。
+
+版本号只来自 `version.txt`，不要手动修改它，也不要在别处写版本号。`build-logic` 的 `AppVersion` 由它推导各平台的版本：发布构建为 `X.Y.Z`，其他构建为 `X.Y.Z-dev+<短提交号>`；Android `versionCode` 为 `MAJOR×1000000 + MINOR×1000 + PATCH`；桌面安装包只用 `X.Y.Z`。CI 构建发布标签时会检查标签与 `version.txt` 一致。依据见 [ADR 0015](docs/adr/0015-single-version-source.md)。
 
 每个发布附带 `SHA256SUMS`，所有安装包还带有由发布工作流签名的构建来源证明（SLSA provenance）。下载后可以这样校验：
 

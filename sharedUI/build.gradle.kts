@@ -2,6 +2,12 @@ plugins {
     alias(libs.plugins.openrose.kmp.compose.library)
     alias(libs.plugins.kotlin.serialization)
 }
+// 关于 shows the application version; build-logic derives it from version.txt.
+val generateAppVersion = tasks.register<GenerateAppVersionSource>("generateAppVersion") {
+    packageName.set("io.github.dohex.openrose.ui")
+    versionName.set(appVersion.name)
+    outputDirectory.set(layout.buildDirectory.dir("generated/appVersion/commonMain"))
+}
 kotlin {
     android {
         namespace = "io.github.dohex.openrose.ui"
@@ -10,6 +16,9 @@ kotlin {
     sourceSets {
         androidMain.dependencies {
             implementation(libs.activity.compose)
+        }
+        commonMain {
+            kotlin.srcDir(generateAppVersion)
         }
         commonMain.dependencies {
             api(projects.core)

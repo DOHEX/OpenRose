@@ -6,8 +6,6 @@ android {
     namespace = "io.github.dohex.openrose"
     defaultConfig {
         applicationId = "io.github.dohex.openrose"
-        versionCode = providers.gradleProperty("releaseVersionCode").map(String::toInt).getOrElse(1)
-        versionName = providers.gradleProperty("releaseVersion").getOrElse("0.1.0-dev")
     }
     buildFeatures {
         compose = true
