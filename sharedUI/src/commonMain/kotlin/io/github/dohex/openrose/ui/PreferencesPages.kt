@@ -128,8 +128,9 @@ fun PersonalizationPage(model: OpenRoseModel, platformUi: PlatformUi, wide: Bool
 }
 
 /**
- * Whether OpenRose can control earphones, laid out like KernelSU's home: the host's notices, one verdict with its
- * fixes, then the facts behind it. Read-only apart from those fixes; preferences live in Settings.
+ * Whether OpenRose can control earphones, laid out like KernelSU's home: one verdict with its fixes, then the facts
+ * behind it. The verdict is the only card that judges; a host fact that does not stop control stays a fact row.
+ * Read-only apart from those fixes; preferences live in Settings.
  */
 @Composable
 fun StatusPage(model: OpenRoseModel, platformUi: PlatformUi, onDiagnostics: () -> Unit) {
@@ -138,7 +139,6 @@ fun StatusPage(model: OpenRoseModel, platformUi: PlatformUi, onDiagnostics: () -
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        platformUi.StatusNotices(state)
         AppStatusHero(statusVerdict(state, platformUi), platformUi.controlWayLabel)
         AppStatusSection {
             val connection = state.connection

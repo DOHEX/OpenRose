@@ -220,7 +220,7 @@ class PlatformApplicabilityUiTest {
                 assertTrue(harness.settingWrites.isEmpty(), "saving an integration preference must not send a device setting")
                 harness.openPage("状态")
                 harness.render()
-                assertTrue(harness.hasText("系统集成未就绪"), "readiness is reported separately from applicability in $style")
+                assertTrue(harness.hasText("未就绪"), "readiness is reported separately from applicability in $style")
 
                 val savedSettings = harness.integration.value.settings
                 harness.integration.value = harness.integration.value.copy(

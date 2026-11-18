@@ -3,6 +3,7 @@ package io.github.dohex.openrose.ui
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.semantics.Role
+import io.github.dohex.openrose.androidintegration.ControlWay
 import io.github.dohex.openrose.androidintegration.FusionSettingsDestination
 import io.github.dohex.openrose.androidintegration.IntegrationPlatformState
 import io.github.dohex.openrose.androidintegration.IntegrationSettings
@@ -11,6 +12,9 @@ import io.github.dohex.openrose.androidintegration.IslandMode
 import io.github.dohex.openrose.androidintegration.IslandTrigger
 import io.github.dohex.openrose.androidintegration.ModuleAvailability
 import io.github.dohex.openrose.androidintegration.ModuleUnavailableCause
+import io.github.dohex.openrose.androidintegration.OwnerFailureStage
+import io.github.dohex.openrose.androidintegration.OwnerReadiness
+import io.github.dohex.openrose.androidintegration.OwnerState
 import io.github.dohex.openrose.androidintegration.StatusNotificationTarget
 import io.github.dohex.openrose.core.ControlState
 import io.github.dohex.openrose.core.HostPlatform
@@ -28,30 +32,7 @@ import kotlin.test.assertTrue
 
 class SystemSettingsOwnershipUiTest {
     @Test
-    fun statusPageSeparatesAnUnresponsiveModuleFromAnUnreadyOne() {
-        val notices = listOf("系统集成未就绪", "系统集成无响应")
-        val expected = listOf(
-            ModuleAvailability.Available to null,
-            ModuleAvailability.NotEnabled to "系统集成未就绪",
-            ModuleAvailability.Unresponsive to "系统集成无响应",
-        )
-        for (style in InterfaceStyle.entries) {
-            for ((module, notice) in expected) {
-                withHarness(1200, style, module = module) { harness ->
-                    harness.render()
-                    harness.openPage("状态")
-                    harness.render()
-                    notice?.let { assertTrue(harness.hasText(it), "$module is stated as \"$it\" in $style") }
-                    for (other in notices.filter { it != notice }) {
-                        assertFalse(harness.hasText(other), "$module is not also stated as \"$other\" in $style")
-                    }
-                }
-            }
-        }
-    }
-
-    @Test
-    fun statusPageSaysWhatToDoOnlyWhereTheCauseIsKnown() {
+    fun anUnreadyModuleIsJudgedOnlyWhenModuleControlDependsOnIt() {
         val advised = ModuleUnavailableCause.entries.map { ModuleAvailability.Unavailable("fixture", it) } +
             listOf(ModuleAvailability.NotEnabled, ModuleAvailability.Unresponsive)
         val advice = advised.map { requireNotNull(it.nextStep()) { "$it has no advice" } }
@@ -59,14 +40,22 @@ class SystemSettingsOwnershipUiTest {
         assertNull(ModuleAvailability.Available.nextStep())
         assertNull(ModuleAvailability.Unavailable("fixture").nextStep(), "an unexplained failure gets no invented advice")
 
+        val reason = "fixture: the module owner could not be reached"
         for (style in InterfaceStyle.entries) {
             for (module in advised + ModuleAvailability.Unavailable("fixture")) {
                 withHarness(1200, style, module = module) { harness ->
                     harness.render()
                     harness.openPage("状态")
                     harness.render()
-                    module.nextStep()?.let { assertTrue(harness.hasText(it), "$module shows its advice in $style") }
-                    assertTrue(harness.hasText("${module.unreadyClause()}。"), "$module keeps its reason in $style")
+                    // Ordinary control does not run through the module, so its state stays a fact row, not advice.
+                    module.nextStep()?.let { assertFalse(harness.hasTextLine(it), "$module gives no advice under ordinary control in $style") }
+
+                    harness.integration.value = harness.integration.value.copy(
+                        owner = OwnerState(ControlWay.MODULE, OwnerReadiness.Unavailable(OwnerFailureStage.DISCOVERY, reason)),
+                    )
+                    harness.render()
+                    assertTrue(harness.hasTextLine(reason), "$module keeps the owner's reason in $style")
+                    module.nextStep()?.let { assertTrue(harness.hasTextLine(it), "$module shows its advice under module control in $style") }
                 }
             }
         }
@@ -115,7 +104,7 @@ class SystemSettingsOwnershipUiTest {
                     assertFalse(harness.hasText("焦点通知"), "Status contains no notification control for $style at ${width}dp")
                     assertFalse(harness.hasText("强制使用 BLE"), "Status contains no connection preference for $style at ${width}dp")
                     assertFalse(harness.hasText("模块显示时机"), "Status contains no module timing control for $style at ${width}dp")
-                    assertTrue(harness.hasText("系统集成未就绪"), "Status keeps the real readiness state for $style at ${width}dp")
+                    assertTrue(harness.hasText("未就绪"), "Status keeps the real readiness state for $style at ${width}dp")
                     assertTrue(harness.hasText("诊断与记录"), "Status owns the fixed diagnostics entry for $style at ${width}dp")
 
                     harness.openPage("诊断")

@@ -71,13 +71,10 @@ class AndroidPlatformUi(
     }
 
     @Composable
-    override fun StatusNotices(state: ControlState) {
+    override fun controlVerdict(state: ControlState): StatusVerdict? {
         val integration by integration.collectAsState()
-        if (hyperOsIntegrationApplicable(integration.platform)) IntegrationNotice(integration.platform.module)
+        return ownerVerdict(integration.owner, integration.platform.module)
     }
-
-    @Composable
-    override fun controlVerdict(state: ControlState): StatusVerdict? = ownerVerdict(integration.collectAsState().value.owner)
 
     override val controlWayLabel: String
         @Composable get() = wayLabel(integration.collectAsState().value.owner.selected)
@@ -369,17 +366,6 @@ class AndroidPlatformUi(
 
 private fun hyperOsIntegrationApplicable(integration: IntegrationPlatformState): Boolean = integration
     .systemIntegrationApplicability == PlatformApplicability.APPLICABLE
-
-/** A notice above the status hero while the system module cannot act; a ready module is a fact row, not a notice. */
-@Composable
-private fun IntegrationNotice(module: ModuleAvailability) {
-    val clause = module.unreadyClause() ?: return
-    if (module == ModuleAvailability.Unresponsive) {
-        AppStatusCard(AppStatusKind.Error, "系统集成无响应", "$clause。", module.nextStep())
-    } else {
-        AppStatusCard(AppStatusKind.Caution, "系统集成未就绪", "$clause。", module.nextStep())
-    }
-}
 
 @Composable
 private fun DiagnosticResultRow(label: String, result: String) {

@@ -50,7 +50,7 @@ class ControlWayUiTest {
         )
         forEachStyle(starting) { harness ->
             harness.openPage("状态")
-            assertTrue(harness.hasText("系统集成未就绪"), "the unready module is reported on the status page")
+            assertTrue(harness.hasText("未就绪"), "the unready module is reported on the status page")
             assertTrue(harness.hasTag(ControlWayTags.readiness(OwnerReadiness.Starting)))
             assertFalse(harness.hasTag(ControlWayTags.readiness(OwnerReadiness.Ready)))
         }

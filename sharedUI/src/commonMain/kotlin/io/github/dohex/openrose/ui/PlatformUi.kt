@@ -21,10 +21,6 @@ interface PlatformUi {
     @Composable
     fun BluetoothPermissionRows(platform: PlatformState) {}
 
-    /** Notices that sit above the status hero, for host facts that need attention without stopping control. */
-    @Composable
-    fun StatusNotices(state: ControlState) {}
-
     /**
      * Why the host cannot control earphones although Bluetooth is usable, for the status hero; null when nothing on
      * its side stops it.

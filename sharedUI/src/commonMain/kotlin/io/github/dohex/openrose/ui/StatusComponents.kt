@@ -182,40 +182,6 @@ fun AppStatusHero(verdict: StatusVerdict, badge: String?, modifier: Modifier = M
     }
 }
 
-/**
- * A notice above the status hero, set like KernelSU's warning card: what needs attention in the accent colour, then
- * why and what to do about it.
- */
-@Composable
-fun AppStatusCard(
-    kind: AppStatusKind,
-    title: String,
-    summary: String?,
-    nextStep: String?,
-    modifier: Modifier = Modifier,
-) {
-    val colors = statusColors(kind)
-    StatusSurface(colors.container, colors.content, modifier) {
-        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            StatusText(
-                title,
-                colors.accent,
-                miuix = { MiuixTheme.textStyles.headline1.copy(fontWeight = FontWeight.Medium) },
-                material = { MaterialTheme.typography.titleMedium },
-                modifier = Modifier.semantics { heading() },
-            )
-            listOfNotNull(summary, nextStep).forEach { line ->
-                StatusText(
-                    line,
-                    colors.content.copy(alpha = 0.8f),
-                    miuix = { MiuixTheme.textStyles.body2 },
-                    material = { MaterialTheme.typography.bodyMedium },
-                )
-            }
-        }
-    }
-}
-
 /** A titleless card of status facts or entries, as KernelSU groups the facts under its status card. */
 @Composable
 fun AppStatusSection(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
