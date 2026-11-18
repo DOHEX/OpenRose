@@ -55,6 +55,28 @@ class IntegrationPlatformTest {
     }
 
     @Test
+    fun aModuleThatKeepsFailingStaysShownAsFailedWhileTheClientRetries() = runTest {
+        val rig = OwnerRig(this, initial = OwnerRecord(ControlWay.MODULE))
+        rig.link.reachable = false
+        rig.link.openMillis = 200
+        val runtime = rig.newRuntime(interfaceOpen = false)
+        val states = mutableListOf<IntegrationState>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { runtime.integration.toList(states) }
+
+        advanceTimeBy(rig.clientTiming.retryMillis * 4)
+        runCurrent()
+
+        assertTrue(rig.link.opens >= 4, "the client must keep retrying, made ${rig.link.opens} attempts")
+        val firstFailure = states.indexOfFirst {
+            (it.platform.module as? ModuleAvailability.Unavailable)?.cause == ModuleUnavailableCause.HOST_NOT_FOUND
+        }
+        assertTrue(firstFailure >= 0)
+        // Every later attempt fails the same way, so the status page must not fall back to "connecting" in between.
+        val shown = states.drop(firstFailure).map { it.platform.module to it.owner.readiness }.distinct()
+        assertEquals(listOf(states[firstFailure].platform.module to states[firstFailure].owner.readiness), shown)
+    }
+
+    @Test
     fun modulePresentationFollowsTheConnectionPromptExpiryAndDisconnect() = runTest {
         val rig = OwnerRig(this, initial = OwnerRecord(ControlWay.MODULE))
         rig.bootHost()

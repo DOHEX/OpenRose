@@ -207,7 +207,7 @@ class ModuleControlClient(
 
     private suspend fun run() {
         while (scope.isActive) {
-            mutableView.value = ModuleView.Connecting
+            // [start] shows the first attempt as connecting; a retry keeps the last failure until it has its own outcome.
             when (val opened = link.open()) {
                 is LinkOpenResult.Failed -> mutableView.value = ModuleView.Unavailable(opened.stage, opened.reason)
 

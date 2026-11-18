@@ -26,6 +26,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.emptyFlow
@@ -168,7 +169,14 @@ internal class InProcessHostLink(
     var tamperReceipt: (ReleaseReceipt) -> ReleaseReceipt = { it }
     val connections = mutableListOf<Connection>()
 
+    /** How long finding the host takes, as binding a real Binder service does; every attempt is counted in [opens]. */
+    var openMillis = 0L
+    var opens = 0
+        private set
+
     override suspend fun open(): LinkOpenResult {
+        opens += 1
+        if (openMillis > 0) delay(openMillis)
         if (!reachable) return LinkOpenResult.Failed(OwnerFailureStage.DISCOVERY, "找不到模块控制宿主")
         return when (val result = HostWire.decodeOpenResult(parseWire(HostWire.encode(host.open(identity)).render()))) {
             is HostOpenResult.Refused -> LinkOpenResult.Failed(OwnerFailureStage.AUTHORIZATION, result.message)
