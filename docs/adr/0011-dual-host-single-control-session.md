@@ -70,6 +70,8 @@ flowchart TD
 
 （2026-11 补注：[ADR 0012](0012-shared-multiplatform-architecture.md) 将 `SwitchingControlRuntime`、`ModuleControlHost`、连接提示判定及其余 Android 集成逻辑移出 `core`，归入 `:androidIntegration`；系统入口改经集成层核对会话引用后调用同一控制入口。本决策的承载、所有权与交接约束不变；下文实施记录中的 `core` 位置描述的是迁移前的代码。）
 
+（2026-11 补注：[ADR 0017](0017-headset-circulation.md) 引入耳机流转，用户发起时 OpenRose 会让出或接入系统音频连接。上文“正常切换只释放和重建 OpenRose 控制连接，不主动改变系统音频连接”针对控制方式交接，仍然成立；耳机流转不改变所有者，控制连接按 ADR 0005 随音频连接迁移。目标设备按已配对记录回答身份类查询的做法见 0017，状态类查询仍只来自当前会话。）
+
 ## 实施验收与当前证据
 
 验收须分别覆盖普通控制、免 root 后台唤起和模块控制，不能以编译、离线测试或一次打开应用后的连接成功替代。
