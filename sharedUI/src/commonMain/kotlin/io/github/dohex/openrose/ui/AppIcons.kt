@@ -31,6 +31,13 @@ enum class RoseIcon {
     CLOSE,
     GAME,
     PALETTE,
+    CHECK_CIRCLE,
+    ERROR,
+    LINK,
+    MODULE,
+    SHIELD,
+    SWAP,
+    DESKTOP,
 }
 
 /** Resolves the same action to the active interface style's official icon set. */

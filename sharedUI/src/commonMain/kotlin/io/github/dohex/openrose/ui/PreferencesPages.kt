@@ -10,6 +10,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import io.github.dohex.openrose.core.ConnectionPhase
+import io.github.dohex.openrose.core.ConnectionState
+import io.github.dohex.openrose.core.ControlState
+import io.github.dohex.openrose.core.PermissionState
 import io.github.dohex.openrose.core.PlatformApplicability
 import io.github.dohex.openrose.core.PlatformState
 import io.github.dohex.openrose.core.TransportAvailability
@@ -123,7 +127,10 @@ fun PersonalizationPage(model: OpenRoseModel, platformUi: PlatformUi, wide: Bool
     }
 }
 
-/** Read-only control facts and the host's integration status; preferences live in Settings. */
+/**
+ * Whether OpenRose can control earphones, laid out like KernelSU's home: the host's notices, one verdict with its
+ * fixes, then the facts behind it. Read-only apart from those fixes; preferences live in Settings.
+ */
 @Composable
 fun StatusPage(model: OpenRoseModel, platformUi: PlatformUi, onDiagnostics: () -> Unit) {
     val state by model.state.collectAsState()
@@ -131,12 +138,66 @@ fun StatusPage(model: OpenRoseModel, platformUi: PlatformUi, onDiagnostics: () -
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        AppGroup(title = "蓝牙") {
-            platformUi.BluetoothPermissionRows(state.platform, diagnostics = false)
-            TransportRow(state.platform, platformUi.openBluetoothSettings)
+        platformUi.StatusNotices(state)
+        AppStatusHero(statusVerdict(state, platformUi), platformUi.controlWayLabel)
+        AppStatusSection {
+            val connection = state.connection
+            Tagged(StatusTags.connection(connection)) {
+                AppFactRow(
+                    RoseIcon.HEADPHONES,
+                    "耳机控制连接",
+                    connectionLabel(connection),
+                    if ((connection as? ConnectionState.Connected)?.phase == ConnectionPhase.READY) StatusTone.GOOD else StatusTone.NEUTRAL,
+                )
+            }
+            state.controlTransportLabel()?.let { AppFactRow(RoseIcon.LINK, "控制传输", it) }
+            when (state.platform.transport) {
+                TransportAvailability.Available -> AppFactRow(RoseIcon.BLUETOOTH, "蓝牙传输", "可用", StatusTone.GOOD)
+                TransportAvailability.Disabled -> AppFactRow(RoseIcon.BLUETOOTH, "蓝牙传输", "已关闭", StatusTone.CAUTION)
+                is TransportAvailability.Unavailable -> AppFactRow(RoseIcon.BLUETOOTH, "蓝牙传输", "不可用", StatusTone.ERROR)
+            }
         }
         platformUi.StatusSections(state)
         platformUi.DiagnosticsEntry(onDiagnostics)
+    }
+}
+
+/** Test tags of the status page. Each carries the state's name, so tests assert the state and never its wording. */
+object StatusTags {
+    fun connection(connection: ConnectionState) = "status.connection." + when (connection) {
+        ConnectionState.Disconnected -> "Disconnected"
+        is ConnectionState.Connecting -> "Connecting"
+        is ConnectionState.Connected -> "Connected"
+    }
+}
+
+/** Bluetooth comes first, since nothing works without it; then whatever stops the host; otherwise OpenRose works. */
+@Composable
+private fun statusVerdict(state: ControlState, platformUi: PlatformUi): StatusVerdict {
+    val permission = state.platform.permission
+    val transport = state.platform.transport
+    val permissionMissing = permission == PermissionState.REQUIRED || permission == PermissionState.DENIED
+    val fixes = listOfNotNull(
+        platformUi.requestBluetoothPermission?.takeIf { permissionMissing }?.let { AppStatusAction("授予蓝牙权限", it) },
+        platformUi.openBluetoothSettings?.takeIf { transport == TransportAvailability.Disabled }?.let { AppStatusAction("打开蓝牙设置", it) },
+    )
+    return when {
+        permission == PermissionState.DENIED -> StatusVerdict(AppStatusKind.Error, "未获得蓝牙权限", "授予权限后才能连接耳机", fixes)
+        permission == PermissionState.REQUIRED -> StatusVerdict(AppStatusKind.Caution, "需要蓝牙权限", "授予权限后才能连接耳机", fixes)
+        transport is TransportAvailability.Unavailable -> StatusVerdict(AppStatusKind.Error, "蓝牙不可用", transport.reason)
+        transport == TransportAvailability.Disabled -> StatusVerdict(AppStatusKind.Caution, "系统蓝牙已关闭", "打开系统蓝牙后才能连接耳机", fixes)
+        else -> platformUi.controlVerdict(state) ?: StatusVerdict(AppStatusKind.Good, "工作中", "版本 ${AppVersion.NAME}")
+    }
+}
+
+private fun connectionLabel(connection: ConnectionState): String = when (connection) {
+    ConnectionState.Disconnected -> "未连接"
+
+    is ConnectionState.Connecting -> "连接中"
+
+    is ConnectionState.Connected -> buildString {
+        append("已连接 · ").append(connection.profile.shortLabel).append(' ').append(connection.profile.family.displayName)
+        if (connection.phase != ConnectionPhase.READY) append("（正在读取状态）")
     }
 }
 
@@ -150,7 +211,7 @@ fun PlatformDiagnosticsCard(model: OpenRoseModel, platformUi: PlatformUi) {
     ) {
         AppGroup(title = "系统状态") {
             AppInfoRow("当前平台", platformUi.platformName)
-            platformUi.BluetoothPermissionRows(state.platform, diagnostics = true)
+            platformUi.BluetoothPermissionRows(state.platform)
             TransportRow(state.platform, platformUi.openBluetoothSettings)
             platformUi.DiagnosticsStatusRows(state)
         }

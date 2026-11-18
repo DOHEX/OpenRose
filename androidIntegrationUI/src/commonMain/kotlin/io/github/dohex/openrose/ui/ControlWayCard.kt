@@ -14,9 +14,7 @@ import io.github.dohex.openrose.androidintegration.IntegrationState
 import io.github.dohex.openrose.androidintegration.OwnerFailureStage
 import io.github.dohex.openrose.androidintegration.OwnerHolder
 import io.github.dohex.openrose.androidintegration.OwnerReadiness
-import io.github.dohex.openrose.core.ConnectionPhase
-import io.github.dohex.openrose.core.ConnectionState
-import io.github.dohex.openrose.core.ControlState
+import io.github.dohex.openrose.androidintegration.OwnerState
 
 private val controlWayOptions = listOf(
     AppOption(ControlWay.ORDINARY, "普通控制", testTag = ControlWayTags.option(ControlWay.ORDINARY)),
@@ -47,17 +45,11 @@ internal object ControlWayTags {
         is OwnerReadiness.Switching -> "Switching"
         is OwnerReadiness.SwitchBlocked -> "SwitchBlocked"
     }
-
-    fun connection(connection: ConnectionState) = "${PREFIX}connection." + when (connection) {
-        ConnectionState.Disconnected -> "Disconnected"
-        is ConnectionState.Connecting -> "Connecting"
-        is ConnectionState.Connected -> "Connected"
-    }
 }
 
 /**
- * Settings side of the control way: the saved choice only. Whether its owner is ready and the
- * earphone 控制连接 are reported by [ControlStatusGroup]; selecting never implies the owner exists.
+ * Settings side of the control way: the saved choice only. Whether its owner is ready is reported by
+ * [ControlStatusRows] and [ownerVerdict]; selecting never implies the owner exists.
  */
 @Composable
 internal fun ControlWayGroup(
@@ -90,51 +82,50 @@ private fun switchFeedback(readiness: OwnerReadiness): String? = when (readiness
     else -> null
 }
 
-/** Status side of the control way: the saved selection, whether its owner is ready, and the earphone 控制连接. */
+/**
+ * Status side of the control way, as rows of the host's status card: the saved selection and whether its owner is
+ * ready. Why it is not ready is the status hero's, through [ownerVerdict].
+ */
 @Composable
-internal fun ControlStatusGroup(state: ControlState, integration: IntegrationState) {
-    val owner = integration.owner
+internal fun ControlStatusRows(owner: OwnerState) {
     val readiness = owner.readiness
-    AppGroup(title = "控制状态") {
-        AppInfoRow("已选择方式", wayLabel(owner.selected))
-        val readinessColor = when (readiness) {
-            OwnerReadiness.Ready -> appColor(AppColorRole.Primary)
-            is OwnerReadiness.Unavailable, is OwnerReadiness.SwitchBlocked -> appColor(AppColorRole.Error)
-            else -> appColor(AppColorRole.Summary)
-        }
-        Tagged(ControlWayTags.readiness(readiness)) {
-            AppInfoRow("所有者状态", readinessLabel(readiness), readinessColor)
-        }
-        when (readiness) {
-            OwnerReadiness.Ready, OwnerReadiness.Starting -> Unit
-
-            is OwnerReadiness.Idle -> AppInfoRow("原因", readiness.reason)
-
-            is OwnerReadiness.Unavailable -> {
-                Tagged(ControlWayTags.failureStage(readiness.stage)) {
-                    AppInfoRow("失败阶段", stageLabel(readiness.stage))
-                }
-                AppInfoRow("原因", readiness.reason)
-            }
-
-            is OwnerReadiness.Switching -> AppInfoRow("切换目标", wayLabel(readiness.request.to))
-
-            is OwnerReadiness.SwitchBlocked -> {
-                Tagged(ControlWayTags.failureStage(readiness.stage)) {
-                    AppInfoRow("失败阶段", stageLabel(readiness.stage))
-                }
-                AppInfoRow("原因", readiness.reason)
-                AppText(
-                    "无法确认上一个所有者已释放控制连接，为避免两个所有者同时连接，没有进行接管。",
-                    Modifier.controlWayTextPadding().testTag(ControlWayTags.SWITCH_BLOCKED_NOTICE),
-                    role = AppTextRole.Summary,
-                )
-            }
-        }
-        Tagged(ControlWayTags.connection(state.connection)) {
-            AppInfoRow("耳机控制连接", connectionLabel(state.connection))
-        }
+    AppFactRow(RoseIcon.SWAP, "控制方式", wayLabel(owner.selected))
+    val readinessTone = when (readiness) {
+        OwnerReadiness.Ready -> StatusTone.GOOD
+        is OwnerReadiness.Unavailable, is OwnerReadiness.SwitchBlocked -> StatusTone.ERROR
+        else -> StatusTone.NEUTRAL
     }
+    Tagged(ControlWayTags.readiness(readiness)) {
+        AppFactRow(RoseIcon.SHIELD, "所有者状态", readinessLabel(readiness), readinessTone)
+    }
+    when (readiness) {
+        is OwnerReadiness.Unavailable -> Tagged(ControlWayTags.failureStage(readiness.stage)) {
+            AppFactRow(RoseIcon.ERROR, "失败阶段", stageLabel(readiness.stage), StatusTone.ERROR)
+        }
+
+        is OwnerReadiness.SwitchBlocked -> {
+            Tagged(ControlWayTags.failureStage(readiness.stage)) {
+                AppFactRow(RoseIcon.ERROR, "失败阶段", stageLabel(readiness.stage), StatusTone.ERROR)
+            }
+            AppText(
+                "无法确认上一个所有者已释放控制连接，为避免两个所有者同时连接，没有进行接管。",
+                Modifier.controlWayTextPadding().testTag(ControlWayTags.SWITCH_BLOCKED_NOTICE),
+                role = AppTextRole.Summary,
+            )
+        }
+
+        else -> Unit
+    }
+}
+
+/** The status hero's verdict while the selected owner cannot act, with the reason it gives; null once it is ready. */
+internal fun ownerVerdict(owner: OwnerState): StatusVerdict? = when (val readiness = owner.readiness) {
+    OwnerReadiness.Ready -> null
+    OwnerReadiness.Starting -> StatusVerdict(AppStatusKind.Caution, "正在启动", "${wayLabel(owner.selected)}正在启动…")
+    is OwnerReadiness.Idle -> StatusVerdict(AppStatusKind.Caution, "控制未运行", readiness.reason)
+    is OwnerReadiness.Unavailable -> StatusVerdict(AppStatusKind.Error, "控制不可用", readiness.reason)
+    is OwnerReadiness.Switching -> StatusVerdict(AppStatusKind.Caution, "正在切换", "正在切换到${wayLabel(readiness.request.to)}…")
+    is OwnerReadiness.SwitchBlocked -> StatusVerdict(AppStatusKind.Error, "切换未完成", readiness.reason)
 }
 
 /** Developer-grade owner facts for the diagnostics page: who holds the connection and the last blocked handoff. */
@@ -178,7 +169,7 @@ private fun HandoffOutcome.Blocked.duplicatesReadiness(readiness: OwnerReadiness
     readiness.stage == stage &&
     readiness.reason == reason
 
-private fun wayLabel(way: ControlWay): String = when (way) {
+internal fun wayLabel(way: ControlWay): String = when (way) {
     ControlWay.ORDINARY -> "普通控制"
     ControlWay.MODULE -> "模块控制"
 }
@@ -200,15 +191,4 @@ private fun stageLabel(stage: OwnerFailureStage): String = when (stage) {
     OwnerFailureStage.RELEASE -> "确认释放"
     OwnerFailureStage.ACTIVATION -> "启动所有者"
     OwnerFailureStage.OWNER_RUNTIME -> "所有者运行"
-}
-
-private fun connectionLabel(connection: ConnectionState): String = when (connection) {
-    ConnectionState.Disconnected -> "未连接"
-
-    is ConnectionState.Connecting -> "连接中"
-
-    is ConnectionState.Connected -> buildString {
-        append("已连接 · ").append(connection.profile.shortLabel).append(' ').append(connection.profile.family.displayName)
-        if (connection.phase != ConnectionPhase.READY) append("（正在读取状态）")
-    }
 }

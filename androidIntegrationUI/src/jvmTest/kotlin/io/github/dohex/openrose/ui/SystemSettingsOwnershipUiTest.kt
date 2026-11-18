@@ -29,19 +29,20 @@ import kotlin.test.assertTrue
 class SystemSettingsOwnershipUiTest {
     @Test
     fun statusPageSeparatesAnUnresponsiveModuleFromAnUnreadyOne() {
-        val verdicts = listOf(
-            ModuleAvailability.Available to "系统集成已连接",
+        val notices = listOf("系统集成未就绪", "系统集成无响应")
+        val expected = listOf(
+            ModuleAvailability.Available to null,
             ModuleAvailability.NotEnabled to "系统集成未就绪",
             ModuleAvailability.Unresponsive to "系统集成无响应",
         )
         for (style in InterfaceStyle.entries) {
-            for ((module, verdict) in verdicts) {
+            for ((module, notice) in expected) {
                 withHarness(1200, style, module = module) { harness ->
                     harness.render()
                     harness.openPage("状态")
                     harness.render()
-                    assertTrue(harness.hasText(verdict), "$module is stated as \"$verdict\" in $style")
-                    for ((_, other) in verdicts.filter { it.second != verdict }) {
+                    notice?.let { assertTrue(harness.hasText(it), "$module is stated as \"$it\" in $style") }
+                    for (other in notices.filter { it != notice }) {
                         assertFalse(harness.hasText(other), "$module is not also stated as \"$other\" in $style")
                     }
                 }

@@ -5,11 +5,14 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import io.github.dohex.openrose.core.ControlState
 import io.github.dohex.openrose.ui.AppArrowRow
+import io.github.dohex.openrose.ui.AppFactRow
 import io.github.dohex.openrose.ui.AppGroup
-import io.github.dohex.openrose.ui.AppInfoRow
+import io.github.dohex.openrose.ui.AppStatusSection
 import io.github.dohex.openrose.ui.AppSwitchRow
 import io.github.dohex.openrose.ui.PlatformSettingsPosition
 import io.github.dohex.openrose.ui.PlatformUi
+import io.github.dohex.openrose.ui.RoseIcon
+import io.github.dohex.openrose.ui.StatusTone
 import kotlinx.coroutines.flow.StateFlow
 import java.io.File
 
@@ -38,15 +41,13 @@ class DesktopPlatformUi(
     @Composable
     override fun StatusSections(state: ControlState) {
         val availability by tray.collectAsState()
-        AppGroup(title = "托盘") {
-            AppInfoRow(
-                "托盘图标",
-                when (val current = availability) {
-                    TrayAvailability.Checking -> "正在检查"
-                    TrayAvailability.Available -> "可用"
-                    is TrayAvailability.Unavailable -> "不可用 · ${current.reason}"
-                },
-            )
+        val (value, tone) = when (val current = availability) {
+            TrayAvailability.Checking -> "正在检查" to StatusTone.NEUTRAL
+            TrayAvailability.Available -> "可用" to StatusTone.GOOD
+            is TrayAvailability.Unavailable -> "不可用 · ${current.reason}" to StatusTone.CAUTION
+        }
+        AppStatusSection {
+            AppFactRow(RoseIcon.DESKTOP, "托盘图标", value, tone)
         }
     }
 

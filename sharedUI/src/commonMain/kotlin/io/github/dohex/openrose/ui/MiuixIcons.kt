@@ -10,6 +10,7 @@ import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.icon.extended.ChevronForward
 import top.yukonga.miuix.kmp.icon.extended.Info
 import top.yukonga.miuix.kmp.icon.extended.Layers
+import top.yukonga.miuix.kmp.icon.extended.Link
 import top.yukonga.miuix.kmp.icon.extended.More
 import top.yukonga.miuix.kmp.icon.extended.Recent
 import top.yukonga.miuix.kmp.icon.extended.Settings
@@ -44,4 +45,6 @@ internal fun miuixIcon(icon: RoseIcon): ImageVector = when (icon) {
     RoseIcon.CLOSE -> MiuixIcons.Basic.Close
     RoseIcon.GAME -> materialIcon(icon)
     RoseIcon.PALETTE -> MiuixIcons.Theme
+    RoseIcon.LINK -> MiuixIcons.Link
+    RoseIcon.CHECK_CIRCLE, RoseIcon.ERROR, RoseIcon.MODULE, RoseIcon.SHIELD, RoseIcon.SWAP, RoseIcon.DESKTOP -> materialIcon(icon)
 }

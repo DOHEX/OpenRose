@@ -47,28 +47,22 @@ class AndroidPlatformUi(
         }
 
     @Composable
-    override fun BluetoothPermissionRows(platform: PlatformState, diagnostics: Boolean) {
+    override fun BluetoothPermissionRows(platform: PlatformState) {
         val integration by integration.collectAsState()
-        if (diagnostics) {
-            val permissionValue = when (platform.permission) {
-                PermissionState.NOT_REQUIRED -> "无需应用内授权"
-                PermissionState.GRANTED -> "已授权"
-                PermissionState.REQUIRED -> "需要授权后才能使用蓝牙"
-                PermissionState.DENIED -> "未获得蓝牙权限"
-            }
-            val permissionTone = when (platform.permission) {
-                PermissionState.NOT_REQUIRED -> StatusTone.NEUTRAL
-                PermissionState.GRANTED -> StatusTone.GOOD
-                PermissionState.REQUIRED -> StatusTone.CAUTION
-                PermissionState.DENIED -> StatusTone.ERROR
-            }
-            ToneInfoRow("蓝牙权限", permissionValue, permissionTone)
+        val permissionValue = when (platform.permission) {
+            PermissionState.NOT_REQUIRED -> "无需应用内授权"
+            PermissionState.GRANTED -> "已授权"
+            PermissionState.REQUIRED -> "需要授权后才能使用蓝牙"
+            PermissionState.DENIED -> "未获得蓝牙权限"
         }
+        val permissionTone = when (platform.permission) {
+            PermissionState.NOT_REQUIRED -> StatusTone.NEUTRAL
+            PermissionState.GRANTED -> StatusTone.GOOD
+            PermissionState.REQUIRED -> StatusTone.CAUTION
+            PermissionState.DENIED -> StatusTone.ERROR
+        }
+        ToneInfoRow("蓝牙权限", permissionValue, permissionTone)
         if (platform.permission == PermissionState.REQUIRED || platform.permission == PermissionState.DENIED) {
-            if (!diagnostics) {
-                val denied = platform.permission == PermissionState.DENIED
-                ToneInfoRow("蓝牙权限", if (denied) "未获得蓝牙权限" else "需要授权后才能使用蓝牙", if (denied) StatusTone.ERROR else StatusTone.CAUTION)
-            }
             AppButton(text = "授予蓝牙权限", onClick = requestBluetoothPermission, modifier = Modifier.padding(start = 16.dp))
         }
         if (integration.platform.systemIntegrationApplicability == PlatformApplicability.UNKNOWN) {
@@ -77,10 +71,37 @@ class AndroidPlatformUi(
     }
 
     @Composable
+    override fun StatusNotices(state: ControlState) {
+        val integration by integration.collectAsState()
+        if (hyperOsIntegrationApplicable(integration.platform)) IntegrationNotice(integration.platform.module)
+    }
+
+    @Composable
+    override fun controlVerdict(state: ControlState): StatusVerdict? = ownerVerdict(integration.collectAsState().value.owner)
+
+    override val controlWayLabel: String
+        @Composable get() = wayLabel(integration.collectAsState().value.owner.selected)
+
+    @Composable
     override fun StatusSections(state: ControlState) {
         val integration by integration.collectAsState()
-        if (hyperOsIntegrationApplicable(integration.platform)) IntegrationReadinessCard(integration.platform.module)
-        ControlStatusGroup(state, integration)
+        AppStatusSection {
+            when (integration.platform.systemIntegrationApplicability) {
+                PlatformApplicability.APPLICABLE -> {
+                    val (value, tone) = when (integration.platform.module) {
+                        ModuleAvailability.Available -> "已连接" to StatusTone.GOOD
+                        ModuleAvailability.Unresponsive -> "无响应" to StatusTone.ERROR
+                        ModuleAvailability.NotEnabled, is ModuleAvailability.Unavailable -> "未就绪" to StatusTone.CAUTION
+                    }
+                    AppFactRow(RoseIcon.MODULE, "系统集成", value, tone)
+                }
+
+                PlatformApplicability.UNKNOWN -> AppFactRow(RoseIcon.MODULE, "系统集成适用性", "尚未核实", StatusTone.CAUTION)
+
+                PlatformApplicability.NOT_APPLICABLE -> Unit
+            }
+            ControlStatusRows(integration.owner)
+        }
     }
 
     @Composable
@@ -284,7 +305,7 @@ class AndroidPlatformUi(
     override fun DiagnosticsEntry(onDiagnostics: () -> Unit) {
         val integration by integration.collectAsState()
         val applicable = hyperOsIntegrationApplicable(integration.platform)
-        AppGroup {
+        AppStatusSection {
             AppArrowRow(
                 title = "诊断与记录",
                 summary = if (applicable) "系统入口、跨进程通道与呈现记录" else "查看本平台状态与诊断信息",
@@ -349,16 +370,14 @@ class AndroidPlatformUi(
 private fun hyperOsIntegrationApplicable(integration: IntegrationPlatformState): Boolean = integration
     .systemIntegrationApplicability == PlatformApplicability.APPLICABLE
 
+/** A notice above the status hero while the system module cannot act; a ready module is a fact row, not a notice. */
 @Composable
-private fun IntegrationReadinessCard(module: ModuleAvailability) {
-    val clause = module.unreadyClause()
-    when {
-        clause == null -> AppStatusCard(AppStatusKind.Good, RoseIcon.CHECK, "系统集成已连接", null, null)
-
-        module == ModuleAvailability.Unresponsive ->
-            AppStatusCard(AppStatusKind.Error, RoseIcon.CLOSE, "系统集成无响应", "$clause。", module.nextStep())
-
-        else -> AppStatusCard(AppStatusKind.Caution, RoseIcon.INFO, "系统集成未就绪", "$clause。", module.nextStep())
+private fun IntegrationNotice(module: ModuleAvailability) {
+    val clause = module.unreadyClause() ?: return
+    if (module == ModuleAvailability.Unresponsive) {
+        AppStatusCard(AppStatusKind.Error, "系统集成无响应", "$clause。", module.nextStep())
+    } else {
+        AppStatusCard(AppStatusKind.Caution, "系统集成未就绪", "$clause。", module.nextStep())
     }
 }
 

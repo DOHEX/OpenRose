@@ -79,7 +79,7 @@ class ControlWayUiTest {
             assertTrue(harness.hasTag(ControlWayTags.failureStage(OwnerFailureStage.DISCOVERY)))
             assertTrue(harness.hasText(reason))
             assertFalse(harness.hasTag(ControlWayTags.readiness(OwnerReadiness.Ready)))
-            assertTrue(harness.hasTag(ControlWayTags.connection(ConnectionState.Disconnected)))
+            assertTrue(harness.hasTag(StatusTags.connection(ConnectionState.Disconnected)))
         }
     }
 
@@ -105,7 +105,7 @@ class ControlWayUiTest {
             assertTrue(harness.isTagSelected(ControlWayTags.option(ControlWay.MODULE)))
             harness.openPage("状态")
             assertTrue(harness.hasTag(ControlWayTags.readiness(OwnerReadiness.Ready)))
-            assertTrue(harness.hasTag(ControlWayTags.connection(connection)))
+            assertTrue(harness.hasTag(StatusTags.connection(connection)))
             assertFalse(harness.hasTag(ControlWayTags.HOLDER), "holder details stay off the status page")
             harness.openPage("诊断")
             harness.render()
@@ -125,8 +125,8 @@ class ControlWayUiTest {
         )
         forEachStyle(state, page = "状态") { harness ->
             assertTrue(harness.hasTag(ControlWayTags.readiness(OwnerReadiness.Ready)))
-            assertTrue(harness.hasTag(ControlWayTags.connection(connection)))
-            assertFalse(harness.hasTag(ControlWayTags.connection(ConnectionState.Disconnected)))
+            assertTrue(harness.hasTag(StatusTags.connection(connection)))
+            assertFalse(harness.hasTag(StatusTags.connection(ConnectionState.Disconnected)))
         }
     }
 

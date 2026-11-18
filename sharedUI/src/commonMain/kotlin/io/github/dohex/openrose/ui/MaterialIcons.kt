@@ -34,5 +34,12 @@ internal fun materialIcon(icon: RoseIcon): ImageVector = vectorResource(
         RoseIcon.CLOSE -> Res.drawable.msr_close
         RoseIcon.GAME -> Res.drawable.msr_sports_esports
         RoseIcon.PALETTE -> Res.drawable.msr_palette
+        RoseIcon.CHECK_CIRCLE -> Res.drawable.msr_check_circle
+        RoseIcon.ERROR -> Res.drawable.msr_error
+        RoseIcon.LINK -> Res.drawable.msr_link
+        RoseIcon.MODULE -> Res.drawable.msr_extension
+        RoseIcon.SHIELD -> Res.drawable.msr_verified_user
+        RoseIcon.SWAP -> Res.drawable.msr_swap_horiz
+        RoseIcon.DESKTOP -> Res.drawable.msr_desktop_windows
     },
 )

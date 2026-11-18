@@ -67,9 +67,9 @@ class MainTabsPagerUiTest {
                         harness.render()
                         harness.clickTab("状态")
                         harness.render(frames = 3)
-                        moving = harness.textBounds("诊断与记录")
+                        moving = harness.textBounds("工作中")
                         harness.render(frames = 120)
-                        val settled = harness.textBounds("诊断与记录")
+                        val settled = harness.textBounds("工作中")
                         val case = "$style wide=$wide $transition"
                         if (wide) {
                             assertEquals(settled.left, moving.left, "wide pages must not move sideways in $case")

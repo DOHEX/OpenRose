@@ -6,7 +6,6 @@
 package io.github.dohex.openrose.ui
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
@@ -24,7 +23,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.*
@@ -91,7 +89,7 @@ fun appColor(role: AppColorRole): Color = when (LocalInterfaceStyle.current) {
 /** [dynamicColor] takes the system wallpaper colors (动态取色) where the platform provides them, else the style defaults. */
 @Composable
 fun ProvideInterfaceStyle(style: InterfaceStyle, dark: Boolean, dynamicColor: Boolean = false, content: @Composable () -> Unit) {
-    CompositionLocalProvider(LocalInterfaceStyle provides style) {
+    CompositionLocalProvider(LocalInterfaceStyle provides style, LocalThemeTone provides ThemeTone(dark, dynamicColor)) {
         when (style) {
             InterfaceStyle.MIUIX -> MiuixTheme(
                 colors = if (dynamicColor) platformDynamicColors(dark) else miuixColors(dark),
@@ -322,50 +320,8 @@ internal fun AppDashboardCard(
     }
 }
 
-enum class AppStatusKind { Good, Caution, Error }
-
 @Composable
-private fun statusAccent(kind: AppStatusKind): Color = when (kind) {
-    AppStatusKind.Good -> appColor(AppColorRole.Primary)
-
-    AppStatusKind.Error -> appColor(AppColorRole.Error)
-
-    // Neither theme has a warning role; the amber follows the surface's brightness so it stays legible in both.
-    AppStatusKind.Caution -> if (appColor(AppColorRole.OnSurface).luminance() > 0.5f) Color(0xFFFFB74D) else Color(0xFFB26A00)
-}
-
-/**
- * One glanceable verdict: a card tinted with its status colour, an icon, the verdict, why, and what to do next.
- * Both interface styles share this body so the verdict reads the same in either.
- */
-@Composable
-fun AppStatusCard(
-    kind: AppStatusKind,
-    icon: RoseIcon,
-    title: String,
-    summary: String?,
-    nextStep: String?,
-    modifier: Modifier = Modifier,
-) {
-    val accent = statusAccent(kind)
-    AppDashboardCard(modifier, compact = true) {
-        Row(
-            Modifier.fillMaxWidth().background(accent.copy(alpha = 0.14f)).padding(16.dp),
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            AppIcon(icon, Modifier.size(36.dp), tint = accent)
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                AppText(title, role = AppTextRole.Title)
-                summary?.let { AppText(it, role = AppTextRole.Summary, color = if (kind == AppStatusKind.Good) null else accent) }
-                nextStep?.let { AppText(it, role = AppTextRole.Summary) }
-            }
-        }
-    }
-}
-
-@Composable
-private fun rowColors(): ListItemColors = if (LocalInDashboardCard.current) {
+internal fun rowColors(): ListItemColors = if (LocalInDashboardCard.current) {
     ListItemDefaults.colors(containerColor = Color.Transparent)
 } else {
     ListItemDefaults.colors()

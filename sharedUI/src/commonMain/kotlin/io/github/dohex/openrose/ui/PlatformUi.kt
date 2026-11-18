@@ -17,9 +17,26 @@ interface PlatformUi {
     val dynamicColor: Boolean
         @Composable get() = false
 
+    /** Permission facts and fixes for the diagnostics page's 系统状态 group. */
     @Composable
-    fun BluetoothPermissionRows(platform: PlatformState, diagnostics: Boolean) {}
+    fun BluetoothPermissionRows(platform: PlatformState) {}
 
+    /** Notices that sit above the status hero, for host facts that need attention without stopping control. */
+    @Composable
+    fun StatusNotices(state: ControlState) {}
+
+    /**
+     * Why the host cannot control earphones although Bluetooth is usable, for the status hero; null when nothing on
+     * its side stops it.
+     */
+    @Composable
+    fun controlVerdict(state: ControlState): StatusVerdict? = null
+
+    /** The saved 控制方式 shown on the status hero, where the host has one. */
+    val controlWayLabel: String?
+        @Composable get() = null
+
+    /** The host's fact cards beneath the status hero and the shared connection facts. */
     @Composable
     fun StatusSections(state: ControlState) {}
 
@@ -38,7 +55,7 @@ interface PlatformUi {
 
     @Composable
     fun DiagnosticsEntry(onDiagnostics: () -> Unit) {
-        AppGroup {
+        AppStatusSection {
             AppArrowRow(
                 title = "诊断与记录",
                 summary = "查看本平台状态与诊断信息",
