@@ -55,6 +55,7 @@ Hardware branches with the same retail name are identified by advertisement pref
 - Connection prompts and earphone status shown through the system island and focus notifications
 - Earbud battery and noise mode switching in Fusion Device Center; its "Additional Settings" can open OpenRose directly
 - Module control: the system Bluetooth process connects to the earphones, and OpenRose does not need to be open
+- Headset circulation (experimental): move the earphones between two HyperOS devices through Fusion Device Center
 
 ## Getting started
 
@@ -86,6 +87,10 @@ The Background control (后台控制) switch on the Settings page is off by defa
 Then check the Status (状态) page in OpenRose to confirm that the module is ready.
 
 Choose the control way (控制方式) on the Settings page: ordinary control (普通控制, the default) has the OpenRose app connect to the earphones itself; module control (模块控制) has the system Bluetooth process connect, works from the first unlock after boot, and does not need OpenRose to be open.
+
+**Headset circulation (experimental)**
+
+Between two HyperOS devices, Fusion Device Center can circulate the earphones: they play on the other device, and OpenRose's control connection follows them there. Both devices need the OpenRose module enabled and module control selected; it is not offered under ordinary control. This has not been verified on real devices yet.
 
 **Known limitations**
 

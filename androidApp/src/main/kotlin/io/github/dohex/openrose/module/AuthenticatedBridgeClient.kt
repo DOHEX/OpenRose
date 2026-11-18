@@ -39,6 +39,7 @@ internal class AuthenticatedBridgeClient(
     private val processName: String,
     private val onSnapshot: (Bundle) -> Unit,
     private val onClear: () -> Unit,
+    private val onBonded: (Set<String>) -> Unit,
     private val onAuthenticated: (AuthenticatedBridgeClient) -> Unit = {},
     private val onClosing: () -> Boolean = { true },
     private val resolution: String = BridgeWire.RESOLUTION_MATCHED,
@@ -75,6 +76,7 @@ internal class AuthenticatedBridgeClient(
     private var authenticatedLease: String? = null
     private var watchedGeneration: String? = null
     private var deliveredSnapshot = false
+    private var deliveredBonded: Set<String> = emptySet()
     private val rebindRunnable = Runnable { bindControlBridge() }
 
     init {
@@ -176,6 +178,7 @@ internal class AuthenticatedBridgeClient(
             if (recordStatus("rejected_by_host")) Log.w(TAG, "bridge_request_rejected target=$target", failure)
         } catch (failure: Throwable) {
             clearSnapshot()
+            publishBonded(emptySet())
             if (recordStatus("request_failed_${failure.javaClass.simpleName}")) {
                 Log.w(TAG, "bridge_request_failed target=$target", failure)
             }
@@ -189,6 +192,7 @@ internal class AuthenticatedBridgeClient(
         if (!isCurrentBinding(binding)) return
 
         val current = bridge.currentSession(lease)
+        publishBonded(if (hasWireVersion(current)) bondedOf(current) else emptySet())
         if (!hasWireVersion(current)) {
             unconfirm()
             recordStatus("session_invalid_version")
@@ -355,6 +359,19 @@ internal class AuthenticatedBridgeClient(
         runCatching { onClear() }
             .onFailure { Log.w(TAG, "bridge_clear_callback_failed target=$target", it) }
     }
+
+    /** The host's bonded ROSE earphones from its last `currentSession` reply; empty once that answer is lost. */
+    private fun publishBonded(addresses: Set<String>) {
+        if (addresses == deliveredBonded) return
+        deliveredBonded = addresses
+        runCatching { onBonded(addresses) }
+            .onFailure { Log.w(TAG, "bridge_bonded_callback_failed target=$target", it) }
+    }
+
+    /** Bounded like every other reply field; the adapters normalize each address themselves. */
+    private fun bondedOf(reply: Bundle): Set<String> = reply.getStringArrayList(BridgeWire.BONDED_ADDRESSES).orEmpty()
+        .take(MAX_BONDED_ADDRESSES)
+        .toSet()
 
     private fun schedulePoll(binding: BridgeBinding, delayMillis: Long = 0L) {
         if (!isCurrentBinding(binding)) return
@@ -619,6 +636,7 @@ internal class AuthenticatedBridgeClient(
         watchedGeneration = null
         currentReference = null
         currentSnapshot = null
+        publishBonded(emptySet())
     }
 
     private fun unbindQuietly(binding: BridgeBinding) {
@@ -704,5 +722,6 @@ internal class AuthenticatedBridgeClient(
         const val INVALID_WIRE_VERSION = -1
         const val INVALID_READ_SEQUENCE = -1L
         const val INVALID_SESSION_ID = Long.MIN_VALUE
+        const val MAX_BONDED_ADDRESSES = 32
     }
 }

@@ -11,8 +11,8 @@ import io.github.dohex.openrose.androidintegration.SystemHeadsetMapping
 import io.github.dohex.openrose.androidintegration.SystemRequestGate
 import io.github.dohex.openrose.androidintegration.wire.BridgePresentationWire
 import io.github.dohex.openrose.androidintegration.wire.BridgeWire
+import io.github.dohex.openrose.androidintegration.wire.NativeHeadsetDirectory
 import io.github.dohex.openrose.androidintegration.wire.NativeHeadsetSnapshot
-import io.github.dohex.openrose.androidintegration.wire.NativeManagedAddressTombstones
 import io.github.dohex.openrose.androidintegration.wire.NativeSessionReference
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.transport.normalizeBluetoothAddress
@@ -27,7 +27,9 @@ import java.util.concurrent.CopyOnWriteArrayList
  *
  * This class never opens Bluetooth, sends a broadcast, or keeps a second device state. The module
  * publishes snapshots from its existing authenticated bridge reader and supplies the callback
- * which queues a mode request into the same control runtime.
+ * which queues a mode request into the same control runtime. Identity queries (`isMiTWS`, `checkIsMiTWS`,
+ * `isSupportAudioSwitch`, the model id) also answer for the module host's bonded ROSE earphones with no session
+ * (ADR 0017); battery, noise and every action come only from the current session.
  */
 class MiLinkNativeHeadsetAdapter(
     private val module: XposedModule,
@@ -43,9 +45,10 @@ class MiLinkNativeHeadsetAdapter(
     private val hookHandles = CopyOnWriteArrayList<XposedInterface.HookHandle>()
     private val installedIds = mutableSetOf<String>()
     private val callbackHandler = Handler(Looper.getMainLooper())
-    private val managedAddresses = NativeManagedAddressTombstones()
+    private val directory = NativeHeadsetDirectory(SystemClock::elapsedRealtime)
 
-    @Volatile private var currentSnapshot: NativeHeadsetSnapshot? = null
+    /** The last published session, kept only to tell which reported state changed. */
+    @Volatile private var lastPublished: NativeHeadsetSnapshot? = null
 
     @Volatile private var lastAncController: WeakReference<Any>? = null
 
@@ -75,10 +78,9 @@ class MiLinkNativeHeadsetAdapter(
 
     /** Called by the authenticated bridge reader after validating a complete frame. */
     fun publish(snapshot: NativeHeadsetSnapshot?) {
-        val fresh = snapshot?.takeIf { it.isFresh(SystemClock.elapsedRealtime()) }
-        fresh?.let(managedAddresses::remember)
-        val previous = currentSnapshot
-        currentSnapshot = fresh
+        val fresh = directory.publishSession(snapshot)
+        val previous = lastPublished
+        lastPublished = fresh
         if (fresh == null) {
             clearRememberedAncController()
             return
@@ -114,6 +116,11 @@ class MiLinkNativeHeadsetAdapter(
         }
     }
 
+    /** The module host's bonded ROSE earphones; identity queries answer for them even with no session (ADR 0017). */
+    fun publishBonded(addresses: Set<String>) {
+        if (!closed) directory.publishBonded(addresses)
+    }
+
     /** Release every API 102 hook handle during module shutdown or hot reload. */
     @Synchronized
     fun close() {
@@ -122,8 +129,8 @@ class MiLinkNativeHeadsetAdapter(
         hookHandles.forEach { handle -> runCatching { handle.unhook() } }
         hookHandles.clear()
         installedIds.clear()
-        currentSnapshot = null
-        managedAddresses.clear()
+        lastPublished = null
+        directory.clear()
         clearRememberedAncController()
         callbackHandler.removeCallbacksAndMessages(null)
     }
@@ -134,15 +141,15 @@ class MiLinkNativeHeadsetAdapter(
         val string = String::class.java
 
         hook(target, "checkIsMiTWS", arrayOf(bluetoothDevice), Int::class.javaPrimitiveType!!) { chain ->
-            val snapshot = snapshotForDevice(chain.args.getOrNull(0)) ?: return@hook HookDecision.Proceed
-            report(FEATURE, "IDENTIFIED", "checkIsMiTWS matched ${snapshot.profile}")
+            val address = bluetoothAddress(chain.args.getOrNull(0))
+            if (!directory.identifies(address)) return@hook HookDecision.Proceed
+            reportIdentified("checkIsMiTWS")
             HookDecision.Return(1)
         }
         hook(target, "getDeviceId", arrayOf(bluetoothDevice), string) { chain ->
-            snapshotForDevice(chain.args.getOrNull(0)) ?: return@hook HookDecision.Proceed
             // This is the fixed MiLink compatibility identifier from the pinned adapter source;
             // it is deliberately separate from the ROSE profile/capability snapshot.
-            HookDecision.Return(NativeHeadsetSnapshot.MILINK_COMPATIBILITY_DEVICE_ID)
+            identityAnswer(bluetoothAddress(chain.args.getOrNull(0)), NativeHeadsetSnapshot.MILINK_COMPATIBILITY_DEVICE_ID)
         }
         hook(target, "getBatteryLevel", arrayOf(bluetoothDevice), Int::class.javaPrimitiveType!!) { chain ->
             val snapshot = snapshotForDevice(chain.args.getOrNull(0)) ?: return@hook HookDecision.Proceed
@@ -169,14 +176,13 @@ class MiLinkNativeHeadsetAdapter(
         }
 
         hook(target, "isMiTWS", arrayOf(string), Boolean::class.javaPrimitiveType!!) { chain ->
-            val snapshot = snapshotForAddress(chain.args.getOrNull(0) as? String) ?: return@hook HookDecision.Proceed
-            report(FEATURE, "IDENTIFIED", "isMiTWS matched ${snapshot.profile}")
+            val address = chain.args.getOrNull(0) as? String
+            if (!directory.identifies(address)) return@hook HookDecision.Proceed
+            reportIdentified("isMiTWS")
             HookDecision.Return(true)
         }
         hook(target, "isSupportAudioSwitch", arrayOf(string), Int::class.javaPrimitiveType!!) { chain ->
-            snapshotForAddress(chain.args.getOrNull(0) as? String) ?: return@hook HookDecision.Proceed
-            // The pinned source uses 0 when the spatial/audio switch panel is disabled.
-            HookDecision.Return(0)
+            identityAnswer(chain.args.getOrNull(0) as? String, NativeHeadsetDirectory.MILINK_AUDIO_SWITCH)
         }
         hook(target, "getRingFindState", arrayOf(string), Boolean::class.javaPrimitiveType!!) { chain ->
             snapshotForAddress(chain.args.getOrNull(0) as? String) ?: return@hook HookDecision.Proceed
@@ -191,8 +197,7 @@ class MiLinkNativeHeadsetAdapter(
     private fun installProfileContext() {
         val target = loadClass("com.miui.headset.runtime.ProfileContext") ?: return
         hook(target, "getDeviceId", arrayOf(BluetoothDevice::class.java), String::class.java) { chain ->
-            snapshotForDevice(chain.args.getOrNull(0)) ?: return@hook HookDecision.Proceed
-            HookDecision.Return(NativeHeadsetSnapshot.MILINK_COMPATIBILITY_DEVICE_ID)
+            identityAnswer(bluetoothAddress(chain.args.getOrNull(0)), NativeHeadsetSnapshot.MILINK_COMPATIBILITY_DEVICE_ID)
         }
         hook(target, "getBatteryLevel", arrayOf(BluetoothDevice::class.java), List::class.java) { chain ->
             val snapshot = snapshotForDevice(chain.args.getOrNull(0)) ?: return@hook HookDecision.Proceed
@@ -209,8 +214,7 @@ class MiLinkNativeHeadsetAdapter(
         val target = loadClass("com.miui.headset.runtime.AncBatteryController") ?: return
         val device = BluetoothDevice::class.java
         hook(target, "getDeviceId", arrayOf(device), String::class.java) { chain ->
-            snapshotForDevice(chain.args.getOrNull(0)) ?: return@hook HookDecision.Proceed
-            HookDecision.Return(NativeHeadsetSnapshot.MILINK_COMPATIBILITY_DEVICE_ID)
+            identityAnswer(bluetoothAddress(chain.args.getOrNull(0)), NativeHeadsetSnapshot.MILINK_COMPATIBILITY_DEVICE_ID)
         }
         hook(target, "getAncState", arrayOf(device), Int::class.javaPrimitiveType!!) { chain ->
             val snapshot = snapshotForDevice(chain.args.getOrNull(0)) ?: return@hook HookDecision.Proceed
@@ -277,12 +281,8 @@ class MiLinkNativeHeadsetAdapter(
 
     private fun installHeadsetInfo() {
         val target = loadClass("com.miui.headset.api.HeadsetInfo") ?: return
-        hookNoArg(target, "getDeviceId", String::class.java) { snapshot ->
-            NativeHeadsetSnapshot.MILINK_COMPATIBILITY_DEVICE_ID
-        }
-        hookNoArg(target, "component3", String::class.java) { snapshot ->
-            NativeHeadsetSnapshot.MILINK_COMPATIBILITY_DEVICE_ID
-        }
+        hookNoArgIdentity(target, "getDeviceId", String::class.java, NativeHeadsetSnapshot.MILINK_COMPATIBILITY_DEVICE_ID)
+        hookNoArgIdentity(target, "component3", String::class.java, NativeHeadsetSnapshot.MILINK_COMPATIBILITY_DEVICE_ID)
         hookNoArg(target, "getPowers", List::class.java) { snapshot ->
             SystemHeadsetMapping.miLinkBattery(snapshot.fields)
         }
@@ -306,6 +306,27 @@ class MiLinkNativeHeadsetAdapter(
         methodName: String,
         returnType: Class<*>,
         value: (NativeHeadsetSnapshot) -> Any?,
+    ) = hookHeadsetInfo(target, methodName, returnType) { address ->
+        val snapshot = snapshotForAddress(address) ?: return@hookHeadsetInfo HookDecision.Proceed
+        val mapped = value(snapshot)
+        if (mapped == null) {
+            reportUnknown("${methodName}_unavailable", snapshot)
+            HookDecision.Proceed
+        } else {
+            HookDecision.Return(mapped)
+        }
+    }
+
+    private fun hookNoArgIdentity(target: Class<*>, methodName: String, returnType: Class<*>, value: Any) {
+        hookHeadsetInfo(target, methodName, returnType) { address -> identityAnswer(address, value) }
+    }
+
+    /** Hooks a no-argument `HeadsetInfo` accessor, deciding from the address of the instance it reads. */
+    private fun hookHeadsetInfo(
+        target: Class<*>,
+        methodName: String,
+        returnType: Class<*>,
+        decide: (String) -> HookDecision,
     ) {
         val method = resolveMethod(target, methodName, emptyArray()) ?: run {
             reportResolution(target.name, methodName, "METHOD_MISSING")
@@ -317,14 +338,7 @@ class MiLinkNativeHeadsetAdapter(
         }
         install(method) { chain ->
             val address = headsetInfoAddress(chain.thisObject) ?: return@install HookDecision.Proceed
-            val snapshot = snapshotForAddress(address) ?: return@install HookDecision.Proceed
-            val mapped = value(snapshot)
-            if (mapped == null) {
-                reportUnknown("${methodName}_unavailable", snapshot)
-                HookDecision.Proceed
-            } else {
-                HookDecision.Return(mapped)
-            }
+            decide(address)
         }
     }
 
@@ -357,8 +371,8 @@ class MiLinkNativeHeadsetAdapter(
             return false
         }
         val result = NativeNoiseRequestGate.submit(snapshot, mode) {
-            val current = currentSnapshot?.takeIf {
-                !closed && it.isFresh(SystemClock.elapsedRealtime()) && it.reference == snapshot.reference &&
+            val current = directory.current()?.takeIf {
+                !closed && it.reference == snapshot.reference &&
                     it.matchesAddress(normalizedAddress) && it.supportsNoise(mode)
             }
             if (current == null) false else callbacks.submitNoise(current, mode)
@@ -382,15 +396,20 @@ class MiLinkNativeHeadsetAdapter(
         runCatching { snapshotForAddress(device.address) }.getOrNull()
     }
 
-    private fun snapshotForAddress(address: String?): NativeHeadsetSnapshot? {
-        val snapshot = currentSnapshot?.takeIf { it.isFresh(SystemClock.elapsedRealtime()) } ?: return null
-        return snapshot.takeIf { it.matchesAddress(address) }
+    private fun snapshotForAddress(address: String?): NativeHeadsetSnapshot? = directory.session(address)
+
+    /** An identity query: answered for the current session and the bonded ROSE earphones, otherwise left to the system. */
+    private fun identityAnswer(address: String?, value: Any): HookDecision {
+        if (!directory.identifies(address)) return HookDecision.Proceed
+        return HookDecision.Return(value)
     }
+
+    private fun reportIdentified(query: String) = report(FEATURE, "IDENTIFIED", "$query identified ROSE earphones")
 
     private fun bluetoothAddress(value: Any?): String? = (value as? BluetoothDevice)
         ?.let { device -> runCatching { device.address }.getOrNull() }
 
-    private fun shouldSuppressManagedAction(address: String?): Boolean = managedAddresses.contains(address) &&
+    private fun shouldSuppressManagedAction(address: String?): Boolean = directory.isManaged(address) &&
         snapshotForAddress(address) == null
 
     private fun handleSwitchToHeadsetActivity(chain: XposedInterface.Chain): HookDecision {
@@ -554,15 +573,12 @@ class MiLinkNativeHeadsetAdapter(
             ?: return
         val expectedReference = lastAncReference ?: return
         if (lastAncAddress != address) return
-        if (currentSnapshot?.takeIf {
-                it.isFresh(SystemClock.elapsedRealtime()) && it.reference == expectedReference && it.matchesAddress(address)
-            } == null
-        ) {
+        if (directory.current()?.takeIf { it.reference == expectedReference && it.matchesAddress(address) } == null) {
             return
         }
         if (lastAncController?.get() !== controller || lastAncDevice !== device) return
         callbackHandler.post {
-            val current = currentSnapshot?.takeIf { !closed && it.isFresh(SystemClock.elapsedRealtime()) }
+            val current = directory.current()?.takeIf { !closed }
             if (current == null || current.reference != expectedReference || !current.matchesAddress(address) ||
                 lastAncReference != expectedReference || lastAncAddress != address ||
                 lastAncController?.get() !== controller || lastAncDevice !== device

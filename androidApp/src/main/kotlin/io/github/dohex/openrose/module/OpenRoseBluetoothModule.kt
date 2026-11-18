@@ -181,6 +181,7 @@ class OpenRoseBluetoothModule : XposedModule() {
                 actualProcess,
                 onSnapshot = ::publish,
                 onClear = ::clearConsumers,
+                onBonded = ::publishBonded,
                 onAuthenticated = { authenticated ->
                     val reports = synchronized(pendingReports) { pendingReports.toMap() }
                     reports.forEach { (feature, value) -> authenticated.reportComponent(feature, value.first, value.second) }
@@ -255,6 +256,13 @@ class OpenRoseBluetoothModule : XposedModule() {
 
             else -> Unit
         }
+    }
+
+    /** The module host's bonded ROSE earphones, for the identity queries of the system entries (ADR 0017). */
+    private fun publishBonded(addresses: Set<String>) {
+        if (retired) return
+        binderAdapter?.publishBonded(addresses)
+        fusionAdapter?.publishBonded(addresses)
     }
 
     private fun clearConsumers() {

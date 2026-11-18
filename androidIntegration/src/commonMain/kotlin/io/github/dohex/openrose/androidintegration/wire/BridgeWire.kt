@@ -70,5 +70,11 @@ object BridgeWire {
     const val FUSION_OPENROSE = "OPENROSE"
     const val ACTION_SHOW_HEADPHONES = "io.github.dohex.openrose.SHOW_HEADPHONES"
     const val EXTRA_HEADPHONE_ADDRESS = "io.github.dohex.openrose.extra.HEADPHONE_ADDRESS"
+
+    /**
+     * On `currentSession` replies (OK or NO_SESSION): the module owner's bonded ROSE earphones, by every address they
+     * answer to, as a string list. Absent without a module owner. System entries answer identity queries for them.
+     */
+    const val BONDED_ADDRESSES = "bonded_addresses"
     val RESOLUTIONS = setOf(RESOLUTION_MATCHED, RESOLUTION_CLASS_MISSING, RESOLUTION_METHOD_MISSING, RESOLUTION_HOOK_FAILED)
 }

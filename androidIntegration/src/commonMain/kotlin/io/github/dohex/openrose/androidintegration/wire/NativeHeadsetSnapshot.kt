@@ -165,21 +165,3 @@ data class NativeSessionReference(
     val deviceId: String,
     val sessionId: Long,
 )
-
-/** Retains exact managed addresses until unhook, so elapsed time never reopens an OEM action path. */
-class NativeManagedAddressTombstones {
-    // These addresses come only from authenticated, ready control session snapshots. Keeping the
-    // small history for this module generation avoids a TTL or eviction admitting a stale action.
-    private val lock = Any()
-    private val addresses = linkedSetOf<String>()
-
-    fun remember(snapshot: NativeHeadsetSnapshot) {
-        synchronized(lock) { snapshot.addresses.mapNotNullTo(addresses, ::normalizeBluetoothAddress) }
-    }
-
-    fun contains(address: String?): Boolean = synchronized(lock) { normalizeBluetoothAddress(address) in addresses }
-
-    fun clear() {
-        synchronized(lock) { addresses.clear() }
-    }
-}

@@ -11,8 +11,8 @@ import android.util.Log
 import io.github.dohex.openrose.androidintegration.SystemHeadsetMapping
 import io.github.dohex.openrose.androidintegration.SystemRequestGate
 import io.github.dohex.openrose.androidintegration.wire.BridgePresentationWire
+import io.github.dohex.openrose.androidintegration.wire.NativeHeadsetDirectory
 import io.github.dohex.openrose.androidintegration.wire.NativeHeadsetSnapshot
-import io.github.dohex.openrose.androidintegration.wire.NativeManagedAddressTombstones
 import io.github.dohex.openrose.androidintegration.wire.NativeSessionReference
 import io.github.dohex.openrose.core.transport.normalizeBluetoothAddress
 import io.github.libxposed.api.XposedInterface
@@ -26,9 +26,11 @@ import java.util.concurrent.CopyOnWriteArrayList
 /**
  * Hooks the native `IMiuiHeadsetService` binder used by HyperOS' Bluetooth headset page.
  *
- * The adapter only accepts operations for a Bluetooth address in the latest authenticated OpenRose
- * snapshot. It does not create a Bluetooth client, send Xiaomi broadcasts, or synthesize any
- * unsupported wear/spatial/device-transfer state.
+ * Identity queries (`isMiTWS`, `checkIsMiTWS`, `isSupportAudioSwitch`, `checkSupport`, `getDeviceInfo`) answer with
+ * the pinned OppoPods reference's values for the current session and for the module host's bonded ROSE earphones, so
+ * a source device the earphones are not connected to yet still offers headset circulation (ADR 0017). Status and
+ * actions come only from the latest authenticated session. The adapter does not create a Bluetooth client, send Xiaomi
+ * broadcasts, or synthesize wear or spatial state.
  */
 class NativeHeadsetBinderAdapter(
     private val module: XposedModule,
@@ -39,11 +41,9 @@ class NativeHeadsetBinderAdapter(
     private val installedIds = ConcurrentHashMap.newKeySet<String>()
     private val installedBinderClasses = ConcurrentHashMap.newKeySet<String>()
     private val binderAddress = Collections.synchronizedMap(WeakHashMap<Any, BinderAddress>())
-    private val managedAddresses = NativeManagedAddressTombstones()
+    private val directory = NativeHeadsetDirectory(SystemClock::elapsedRealtime)
     private val registeredCallbacks = ConcurrentHashMap<IBinder, RegisteredCallback>()
     private val callbackHandler = Handler(Looper.getMainLooper())
-
-    @Volatile private var currentSnapshot: NativeHeadsetSnapshot? = null
 
     @Volatile private var lastReportedSnapshot: NativeHeadsetSnapshot? = null
 
@@ -66,9 +66,7 @@ class NativeHeadsetBinderAdapter(
 
     /** Called by the authenticated bridge reader; status callbacks are sent only from this data. */
     fun publish(snapshot: NativeHeadsetSnapshot?) {
-        val fresh = snapshot?.takeIf { it.isFresh(SystemClock.elapsedRealtime()) }
-        fresh?.let(managedAddresses::remember)
-        currentSnapshot = fresh
+        val fresh = directory.publishSession(snapshot)
         if (fresh == null) {
             registeredCallbacks.values.toList().forEach { target ->
                 registeredCallbacks.remove(target.binder, target)
@@ -101,6 +99,11 @@ class NativeHeadsetBinderAdapter(
         targets.forEach { target -> sendRefresh(target, fresh, status.text) }
     }
 
+    /** The module host's bonded ROSE earphones; identity queries answer for them even with no session (ADR 0017). */
+    fun publishBonded(addresses: Set<String>) {
+        if (!closed) directory.publishBonded(addresses)
+    }
+
     /** Release API 102 hook handles, callback registrations, and the local snapshot on shutdown. */
     @Synchronized
     fun close() {
@@ -113,8 +116,7 @@ class NativeHeadsetBinderAdapter(
         registeredCallbacks.values.forEach(::unlinkDeath)
         registeredCallbacks.clear()
         synchronized(binderAddress) { binderAddress.clear() }
-        managedAddresses.clear()
-        currentSnapshot = null
+        directory.clear()
         lastReportedSnapshot = null
         callbackHandler.removeCallbacksAndMessages(null)
     }
@@ -151,30 +153,27 @@ class NativeHeadsetBinderAdapter(
         val string = String::class.java
 
         hook(binderClass, "checkSupport", arrayOf(device), string) { chain ->
-            rememberAddress(chain.thisObject, (chain.args.getOrNull(0) as? BluetoothDevice)?.address)
-            // The fixed reference returns an opaque support bit mask here. Its bit meanings are
-            // undocumented, so preserve the system result and report that no mask was synthesized.
-            report(FEATURE, "UNAVAILABLE", "checkSupport mask semantics are not documented by the pinned source")
-            HookDecision.Proceed
+            val address = bluetoothAddress(chain.args.getOrNull(0))
+            rememberAddress(chain.thisObject, address)
+            identityAnswer(chain.executable.name, address, NativeHeadsetDirectory.BINDER_SUPPORT_MASK)
         }
         hook(binderClass, "getDeviceInfo", arrayOf(string), string) { chain ->
-            rememberAddress(chain.thisObject, chain.args.getOrNull(0) as? String)
-            report(FEATURE, "UNAVAILABLE", "getDeviceInfo support mask semantics are not documented by the pinned source")
-            HookDecision.Proceed
+            val address = chain.args.getOrNull(0) as? String
+            rememberAddress(chain.thisObject, address)
+            identityAnswer(chain.executable.name, address, NativeHeadsetDirectory.BINDER_SUPPORT_MASK)
         }
 
         for (name in listOf("isMiTWS", "mo19771O0", "O0", "checkIsMiTWS", "mo19766B", "B")) {
             hook(binderClass, name, arrayOf(string), Boolean::class.javaPrimitiveType!!) { chain ->
-                val snapshot = snapshotForAddress(chain.args.getOrNull(0) as? String) ?: return@hook HookDecision.Proceed
-                rememberAddress(chain.thisObject, chain.args.getOrNull(0) as? String)
-                report(FEATURE, "IDENTIFIED", "${chain.executable.name} matched ${snapshot.profile}")
-                HookDecision.Return(true)
+                val address = chain.args.getOrNull(0) as? String
+                rememberAddress(chain.thisObject, address)
+                identityAnswer(chain.executable.name, address, true)
             }
         }
-        hook(binderClass, "isSupportAudioSwitch", arrayOf(string), string) { chain ->
-            snapshotForAddress(chain.args.getOrNull(0) as? String) ?: return@hook HookDecision.Proceed
-            // The corresponding MiLink method has an explicit disabled value of 0 in the pinned source.
-            HookDecision.Return("0")
+        for (name in listOf("isSupportAudioSwitch", "mo19775z1", "z1")) {
+            hook(binderClass, name, arrayOf(string), string) { chain ->
+                identityAnswer(chain.executable.name, chain.args.getOrNull(0) as? String, NativeHeadsetDirectory.BINDER_AUDIO_SWITCH)
+            }
         }
         hook(binderClass, "getRingFindState", arrayOf(string), Boolean::class.javaPrimitiveType!!) { chain ->
             snapshotForAddress(chain.args.getOrNull(0) as? String) ?: return@hook HookDecision.Proceed
@@ -283,37 +282,27 @@ class NativeHeadsetBinderAdapter(
             data.enforceInterface(SERVICE_DESCRIPTOR)
             when (code) {
                 TRANSACTION_CHECK_SUPPORT -> {
-                    val device = data.readDevice()
-                    rememberAddress(chain.thisObject, device?.address)
-                    if (snapshotForDevice(device) != null) {
-                        report(FEATURE, "UNAVAILABLE", "checkSupport mask semantics are not documented by the pinned source")
-                    }
+                    val address = data.readDevice()?.address
+                    rememberAddress(chain.thisObject, address)
+                    handled = replyIdentity("checkSupport", address, reply) { writeString(NativeHeadsetDirectory.BINDER_SUPPORT_MASK) }
                 }
 
                 TRANSACTION_GET_DEVICE_INFO -> {
                     val address = data.readString()
                     rememberAddress(chain.thisObject, address)
-                    if (snapshotForAddress(address) != null) {
-                        report(FEATURE, "UNAVAILABLE", "getDeviceInfo support mask semantics are not documented by the pinned source")
-                    }
+                    handled = replyIdentity("getDeviceInfo", address, reply) { writeString(NativeHeadsetDirectory.BINDER_SUPPORT_MASK) }
                 }
 
                 TRANSACTION_IS_MITWS, TRANSACTION_CHECK_IS_MITWS -> {
                     val address = data.readString()
-                    val snapshot = snapshotForAddress(address) ?: return HookDecision.Proceed
                     rememberAddress(chain.thisObject, address)
-                    reply.writeNoException()
-                    reply.writeInt(1)
-                    report(FEATURE, "IDENTIFIED", "MiLink binder transaction=$code matched ${snapshot.profile}")
-                    handled = true
+                    handled = replyIdentity("transaction=$code", address, reply) { writeInt(1) }
                 }
 
                 TRANSACTION_IS_SUPPORT_AUDIO_SWITCH -> {
-                    val address = data.readString()
-                    snapshotForAddress(address) ?: return HookDecision.Proceed
-                    reply.writeNoException()
-                    reply.writeString("0")
-                    handled = true
+                    handled = replyIdentity("isSupportAudioSwitch", data.readString(), reply) {
+                        writeString(NativeHeadsetDirectory.BINDER_AUDIO_SWITCH)
+                    }
                 }
 
                 TRANSACTION_GET_RING_FIND_STATE -> {
@@ -450,7 +439,7 @@ class NativeHeadsetBinderAdapter(
 
     private fun sendRefresh(target: RegisteredCallback, snapshot: NativeHeadsetSnapshot, payload: String) {
         callbackHandler.post {
-            val current = currentSnapshot?.takeIf { it.isFresh(SystemClock.elapsedRealtime()) }
+            val current = directory.current()
             if (closed || registeredCallbacks[target.binder] !== target || current == null ||
                 current.reference != target.reference || !current.matchesAddress(target.address)
             ) {
@@ -480,10 +469,25 @@ class NativeHeadsetBinderAdapter(
     private fun snapshotForDevice(value: Any?): NativeHeadsetSnapshot? = (value as? BluetoothDevice)
         ?.let { device -> runCatching { snapshotForAddress(device.address) }.getOrNull() }
 
-    private fun snapshotForAddress(address: String?): NativeHeadsetSnapshot? {
-        val snapshot = currentSnapshot?.takeIf { it.isFresh(SystemClock.elapsedRealtime()) } ?: return null
-        return snapshot.takeIf { it.matchesAddress(address) }
+    private fun snapshotForAddress(address: String?): NativeHeadsetSnapshot? = directory.session(address)
+
+    /** An identity query: answered for the current session and the bonded ROSE earphones, otherwise left to the system. */
+    private fun identityAnswer(query: String, address: String?, value: Any): HookDecision {
+        if (!directory.identifies(address)) return HookDecision.Proceed
+        reportIdentified(query)
+        return HookDecision.Return(value)
     }
+
+    /** [identityAnswer] for the `onTransact` fallback; true when the reply was written. */
+    private fun replyIdentity(query: String, address: String?, reply: Parcel, write: Parcel.() -> Unit): Boolean {
+        if (!directory.identifies(address)) return false
+        reply.writeNoException()
+        reply.write()
+        reportIdentified(query)
+        return true
+    }
+
+    private fun reportIdentified(query: String) = report(FEATURE, "IDENTIFIED", "$query identified ROSE earphones")
 
     private fun snapshotForActionDevice(owner: Any?, value: Any?): NativeHeadsetSnapshot? {
         val device = value as? BluetoothDevice ?: return null
@@ -491,7 +495,7 @@ class NativeHeadsetBinderAdapter(
         val normalized = normalizeBluetoothAddress(address) ?: return null
         val snapshot = snapshotForAddress(normalized) ?: return null
         val binding = owner?.let { instance -> synchronized(binderAddress) { binderAddress[instance] } }
-        if (binding != null && binding.address == normalized && binding.reference != snapshot.reference) return null
+        if (binding != null && binding.address == normalized && !binding.admits(snapshot)) return null
         return snapshot
     }
 
@@ -500,7 +504,7 @@ class NativeHeadsetBinderAdapter(
 
     private fun snapshotForBoundAddress(owner: Any?): NativeHeadsetSnapshot? {
         val binding = owner?.let { instance -> synchronized(binderAddress) { binderAddress[instance] } } ?: return null
-        return snapshotForAddress(binding.address)?.takeIf { it.reference == binding.reference }
+        return snapshotForAddress(binding.address)?.takeIf(binding::admits)
     }
 
     private fun shouldSuppressManagedAction(owner: Any?, value: Any?): Boolean {
@@ -510,22 +514,23 @@ class NativeHeadsetBinderAdapter(
             else -> null
         }
         val normalized = normalizeBluetoothAddress(address) ?: return false
-        if (!managedAddresses.contains(normalized)) return false
+        if (!directory.isManaged(normalized)) return false
         val snapshot = snapshotForAddress(normalized)
         if (snapshot == null) return true
         val binding = owner?.let { instance -> synchronized(binderAddress) { binderAddress[instance] } }
-        return binding != null && binding.address == normalized && binding.reference != snapshot.reference
+        return binding != null && binding.address == normalized && !binding.admits(snapshot)
     }
 
+    /**
+     * Binds a binder instance to the ROSE address it identified. Without a session the binding carries no reference: its
+     * address-less calls (`register`) stay off the vendor path until a session for that address exists, which it then
+     * admits, as on the target source device of a headset circulation (ADR 0017).
+     */
     private fun rememberAddress(owner: Any?, address: String?) {
-        val snapshot = snapshotForAddress(address) ?: return
+        if (owner == null || !directory.identifies(address)) return
         val normalized = normalizeBluetoothAddress(address) ?: return
-        if (owner != null) {
-            synchronized(binderAddress) {
-                binderAddress[owner] = BinderAddress(normalized, snapshot.reference)
-            }
-        }
-        report(FEATURE, "IDENTIFIED", "native binder address matched ${snapshot.profile}")
+        val reference = snapshotForAddress(normalized)?.reference
+        synchronized(binderAddress) { binderAddress[owner] = BinderAddress(normalized, reference) }
     }
 
     private fun submit(snapshot: NativeHeadsetSnapshot, mode: String, address: String?) {
@@ -539,8 +544,8 @@ class NativeHeadsetBinderAdapter(
             return
         }
         val result = NativeNoiseRequestGate.submit(snapshot, mode) {
-            val current = currentSnapshot?.takeIf {
-                !closed && it.isFresh(SystemClock.elapsedRealtime()) && it.reference == snapshot.reference &&
+            val current = directory.current()?.takeIf {
+                !closed && it.reference == snapshot.reference &&
                     it.matchesAddress(normalizedAddress) && it.supportsNoise(mode)
             }
             if (current == null) false else callbacks.submitNoise(current, mode)
@@ -715,8 +720,12 @@ class NativeHeadsetBinderAdapter(
 
     private data class BinderAddress(
         val address: String,
-        val reference: NativeSessionReference,
-    )
+        /** Null when bound to bonded earphones with no session. */
+        val reference: NativeSessionReference?,
+    ) {
+        /** A binding made in a session keeps to that session; one made with none admits the session for its address. */
+        fun admits(snapshot: NativeHeadsetSnapshot): Boolean = reference == null || reference == snapshot.reference
+    }
 
     private sealed interface HookDecision {
         data object Proceed : HookDecision

@@ -9,6 +9,7 @@ import android.os.IBinder
 import android.os.Process
 import android.os.SystemClock
 import android.util.Log
+import io.github.dohex.openrose.androidintegration.BondedHeadsets
 import io.github.dohex.openrose.androidintegration.BridgeIpcState
 import io.github.dohex.openrose.androidintegration.CallerAuthority
 import io.github.dohex.openrose.androidintegration.CallerIdentity
@@ -227,15 +228,19 @@ internal class HostEndpoint(
     override fun currentSession(leaseId: String): Bundle {
         val lease = consumerLease(leaseId)
         val view = host.view(lease.caller, lease.id) ?: return BridgeBundles.response(BridgeWire.STATUS_NO_SESSION)
+        // Bonded ROSE earphones are named with or without a session: on the target source device of a headset
+        // circulation they are not connected yet (ADR 0017).
+        val bonded = ArrayList(BondedHeadsets.addresses(view.state))
         val connection = view.state.connection as? ConnectionState.Connected
         val device = view.state.device
         if (connection == null || device == null || device.deviceId != connection.deviceId || device.sessionId != connection.sessionId) {
-            return BridgeBundles.response(BridgeWire.STATUS_NO_SESSION)
+            return BridgeBundles.response(BridgeWire.STATUS_NO_SESSION).apply { putStringArrayList(BridgeWire.BONDED_ADDRESSES, bonded) }
         }
         return BridgeBundles.response(BridgeWire.STATUS_OK).apply {
             putString(BridgeWire.HOST_EPOCH, view.generation.toString())
             putString(BridgeWire.DEVICE_ID, connection.deviceId.value)
             putLong(BridgeWire.SESSION_ID, connection.sessionId)
+            putStringArrayList(BridgeWire.BONDED_ADDRESSES, bonded)
         }
     }
 

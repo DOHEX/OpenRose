@@ -9,7 +9,6 @@ import io.github.dohex.openrose.core.SessionReference
 import io.github.dohex.openrose.core.transport.DeviceId
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -67,34 +66,5 @@ class BridgePresentationWireTest {
             val sent = SystemPresentationState(islandMode = mode).toBridgePresentation().asWireMap().string(BridgePresentationWire.MODE)
             assertTrue(sent in recognised, "$mode is sent as $sent")
         }
-    }
-
-    @Test
-    fun managedAddressTombstonesMatchAnySpellingOfARememberedAddressUntilCleared() {
-        val tombstones = NativeManagedAddressTombstones()
-        val snapshot = requireNotNull(
-            NativeHeadsetSnapshot.fromWire(
-                mapOf<String, Any?>(
-                    BridgeWire.KEY_VERSION to BridgeWire.VERSION,
-                    BridgeWire.HOST_EPOCH to "epoch",
-                    BridgeWire.DEVICE_ID to "rose-a",
-                    BridgeWire.SESSION_ID to 7L,
-                    "profile" to "I7_RS_V2",
-                    "addresses" to listOf("aa:bb:cc:dd:ee:01", "not an address"),
-                    "captured_elapsed_millis" to 1L,
-                    "capabilities" to emptyMap<String, Any?>(),
-                    "fields" to emptyMap<String, Any?>(),
-                ).asWireMap(),
-            ),
-        )
-        assertEquals(setOf("AA:BB:CC:DD:EE:01"), snapshot.addresses)
-
-        assertFalse(tombstones.contains("AA:BB:CC:DD:EE:01"))
-        tombstones.remember(snapshot)
-        assertTrue(tombstones.contains(" aa:bb:cc:dd:ee:01"))
-        assertFalse(tombstones.contains("AA:BB:CC:DD:EE:02"))
-        assertFalse(tombstones.contains(null))
-        tombstones.clear()
-        assertFalse(tombstones.contains("AA:BB:CC:DD:EE:01"))
     }
 }
