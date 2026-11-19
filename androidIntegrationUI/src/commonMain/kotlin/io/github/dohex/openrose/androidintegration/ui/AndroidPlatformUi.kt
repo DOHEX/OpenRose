@@ -148,11 +148,18 @@ class AndroidPlatformUi(
                     onChange = { saveSystemPreference(settings.copy(focusNotificationEnabled = it)) },
                 )
                 if (settings.focusNotificationEnabled) {
+                    val unavailable = integration.platform.unavailableStatusTargets
+                    val selectedTarget = settings.statusNotificationTarget
                     AppChoiceRow(
                         title = "点击通知打开",
-                        valueText = statusNotificationTargetLabel(settings.statusNotificationTarget),
-                        options = StatusNotificationTarget.entries.map { AppOption(it, statusNotificationTargetLabel(it)) },
-                        selected = settings.statusNotificationTarget,
+                        // The saved target stays selected; while it cannot open, the row says what the tap does instead.
+                        valueText = unavailable[selectedTarget]
+                            ?.let { "${statusNotificationTargetLabel(selectedTarget)}（$it，点击通知将打开 OpenRose）" }
+                            ?: statusNotificationTargetLabel(selectedTarget),
+                        options = StatusNotificationTarget.entries.map {
+                            AppOption(it, statusNotificationTargetLabel(it), disabledReason = unavailable[it])
+                        },
+                        selected = selectedTarget,
                         onSelect = { saveSystemPreference(settings.copy(statusNotificationTarget = it)) },
                     )
                 }
@@ -435,6 +442,7 @@ private fun statusNotificationTargetLabel(target: StatusNotificationTarget): Str
     StatusNotificationTarget.OPENROSE -> "OpenRose 耳机主页"
     StatusNotificationTarget.SYSTEM -> "系统耳机详情页"
     StatusNotificationTarget.ROSELINK -> "RoseLink"
+    StatusNotificationTarget.QUICK_PANEL -> "快捷面板"
 }
 
 private val inCaseModels: String = ModelProfile.entries.filter { it.reportsInCase }.joinToString("、") { it.displayName }

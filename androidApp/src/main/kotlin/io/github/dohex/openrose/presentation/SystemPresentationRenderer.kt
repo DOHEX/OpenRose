@@ -723,20 +723,16 @@ internal class SystemPresentationRenderer(
         return label to Notification.Action.Builder(Icon.createWithResource(appContext, icon), label, pendingIntent).build()
     }
 
+    /** Opens the chosen 状态通知点击目标; one that cannot open now opens OpenRose with the reason, never silently. */
     private fun statusContentIntent(snapshot: RenderedSnapshot): PendingIntent {
-        val openRose = Intent(BridgeWire.ACTION_SHOW_HEADPHONES).apply {
-            setClassName(BridgeWire.APP_PACKAGE, "${BridgeWire.APP_PACKAGE}.MainActivity")
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        val intent = when (val launch = statusTargetLaunch(snapshot)) {
+            is StatusLaunch.Open -> launch.intent
+
+            is StatusLaunch.Fallback -> openRoseIntent().putExtra(
+                BridgeWire.EXTRA_FALLBACK_REASON,
+                StatusTargetLaunch.fallbackNotice(launch.reason),
+            )
         }
-        val intent = when (snapshot.statusTarget) {
-            BridgePresentationWire.TARGET_SYSTEM -> systemHeadsetIntent(snapshot)
-
-            // The Bluetooth app holds QUERY_ALL_PACKAGES, so RoseLink resolves here; a missing RoseLink falls back.
-            BridgePresentationWire.TARGET_ROSELINK -> appContext.packageManager.getLaunchIntentForPackage(ROSELINK_PACKAGE)
-                ?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-
-            else -> null
-        } ?: openRose
         return PendingIntent.getActivity(
             appContext,
             STATUS_NOTIFICATION_ID,
@@ -745,13 +741,36 @@ internal class SystemPresentationRenderer(
         )
     }
 
+    private fun statusTargetLaunch(snapshot: RenderedSnapshot): StatusLaunch = when (snapshot.statusTarget) {
+        BridgePresentationWire.TARGET_SYSTEM -> systemHeadsetLaunch(snapshot)
+
+        // The Bluetooth app holds QUERY_ALL_PACKAGES, so RoseLink resolves here.
+        BridgePresentationWire.TARGET_ROSELINK -> StatusTargetLaunch.roseLinkIntent(appContext.packageManager)
+            ?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            ?.let(StatusLaunch::Open)
+            ?: StatusLaunch.Fallback(StatusTargetLaunch.ROSELINK_MISSING)
+
+        BridgePresentationWire.TARGET_QUICK_PANEL -> StatusLaunch.Open(
+            Intent()
+                .setClassName(BridgeWire.APP_PACKAGE, "${BridgeWire.APP_PACKAGE}.QuickPanelActivity")
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        )
+
+        else -> StatusLaunch.Open(openRoseIntent())
+    }
+
+    private fun openRoseIntent(): Intent = Intent(BridgeWire.ACTION_SHOW_HEADPHONES).apply {
+        setClassName(BridgeWire.APP_PACKAGE, "${BridgeWire.APP_PACKAGE}.MainActivity")
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+    }
+
     /** HyperOS' own headset page, opened with the extras the reference OppoPods passes for its compatibility device. */
-    private fun systemHeadsetIntent(snapshot: RenderedSnapshot): Intent? {
-        val address = snapshot.address ?: return null
-        val device = runCatching { bluetoothDevice(address) }.getOrNull() ?: return null
+    private fun systemHeadsetLaunch(snapshot: RenderedSnapshot): StatusLaunch {
+        val address = snapshot.address
+        val device = address?.let { runCatching { bluetoothDevice(it) }.getOrNull() }
+        if (address == null || device == null) return StatusLaunch.Fallback(StatusTargetLaunch.SYSTEM_DEVICE_MISSING)
         val compatibilityId = NativeHeadsetSnapshot.MILINK_COMPATIBILITY_DEVICE_ID
-        return Intent(SYSTEM_HEADSET_ACTION).apply {
-            setClassName(SETTINGS_PACKAGE, SYSTEM_HEADSET_ACTIVITY)
+        val intent = StatusTargetLaunch.systemHeadsetIntent().apply {
             putExtra(BluetoothDevice.EXTRA_DEVICE, device)
             putExtra("bluetoothaddress", address)
             putExtra("MIUI_HEADSET_SUPPORT", "$compatibilityId,$SYSTEM_HEADSET_SUPPORT_FLAGS")
@@ -759,6 +778,16 @@ internal class SystemPresentationRenderer(
             putExtra("DEVICE_ID", compatibilityId)
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
+        if (!StatusTargetLaunch.resolves(appContext.packageManager, intent)) {
+            return StatusLaunch.Fallback(StatusTargetLaunch.SYSTEM_PAGE_UNAVAILABLE)
+        }
+        return StatusLaunch.Open(intent)
+    }
+
+    /** Where a status notification tap goes: the chosen target, or OpenRose with the [Fallback.reason] it could not open. */
+    private sealed interface StatusLaunch {
+        class Open(val intent: Intent) : StatusLaunch
+        class Fallback(val reason: String) : StatusLaunch
     }
 
     private fun batteryValue(snapshot: RenderedSnapshot, fieldName: String): Int? {
@@ -1158,10 +1187,6 @@ internal class SystemPresentationRenderer(
         private const val ACTION_KIND_NOISE = "noise"
         private const val ACTION_KIND_DISCONNECT = "disconnect"
         private const val BLUETOOTH_STATUS_SUCCESS = 0
-        private const val ROSELINK_PACKAGE = "cn.ikaile.ruoshui.client"
-        private const val SETTINGS_PACKAGE = "com.android.settings"
-        private const val SYSTEM_HEADSET_ACTIVITY = "com.android.settings.bluetooth.MiuiHeadsetActivity"
-        private const val SYSTEM_HEADSET_ACTION = "miui.bluetooth.action.HEADSET_SETTINGS"
 
         /** The feature flags OppoPods sends with its compatibility device ID; their individual meaning is unverified. */
         private const val SYSTEM_HEADSET_SUPPORT_FLAGS = "000000000000000010000000"

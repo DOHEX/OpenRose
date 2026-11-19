@@ -55,7 +55,15 @@ internal val LocalRowPlacement = staticCompositionLocalOf { RowPlacement.Page }
 enum class AppColorRole { Primary, OnSurface, Summary, Error, Divider, SelectedContainer, SelectedContent, DisabledContent }
 enum class AppTextRole { Display, Title, Body, Summary, Footnote }
 enum class AppButtonKind { Primary, Secondary }
-data class AppOption<T>(val value: T, val label: String, val contentDescription: String? = null, val testTag: String? = null)
+
+/** [disabledReason] makes the option unselectable in choice lists that show it, with the reason beside it; other components ignore it. */
+data class AppOption<T>(
+    val value: T,
+    val label: String,
+    val contentDescription: String? = null,
+    val testTag: String? = null,
+    val disabledReason: String? = null,
+)
 
 /** A small text button on a group's title line, for an action on the whole group such as resetting it. */
 class AppTitleAction(val label: String, val enabled: Boolean, val onClick: () -> Unit)
@@ -488,26 +496,29 @@ fun <T> AppRadioGroup(
 ) {
     Column(Modifier.selectableGroup(), verticalArrangement = rowArrangement()) {
         options.forEach { option ->
+            val optionEnabled = enabled && option.disabledReason == null
             val optionModifier = Modifier.semantics {
                 this.selected = selected != null && option.value == selected
                 option.contentDescription?.let { contentDescription = it }
-                if (!enabled) disabled()
+                if (!optionEnabled) disabled()
             }.let { base -> option.testTag?.let { base.testTag(it) } ?: base }
             when (LocalInterfaceStyle.current) {
                 InterfaceStyle.MIUIX -> RadioButtonPreference(
                     option.label,
                     selected != null && option.value == selected,
-                    onClick = { if (enabled) onSelect(option.value) },
+                    onClick = { if (optionEnabled) onSelect(option.value) },
                     modifier = optionModifier,
-                    enabled = enabled,
+                    summary = option.disabledReason,
+                    enabled = optionEnabled,
                 )
 
                 InterfaceStyle.MATERIAL3 -> ListItem(
                     selected = selected != null && option.value == selected,
                     onClick = { onSelect(option.value) },
                     modifier = optionModifier,
-                    enabled = enabled,
-                    leadingContent = { RadioButton(selected != null && option.value == selected, onClick = null, enabled = enabled) },
+                    enabled = optionEnabled,
+                    leadingContent = { RadioButton(selected != null && option.value == selected, onClick = null, enabled = optionEnabled) },
+                    supportingContent = option.disabledReason?.let { { Text(it) } },
                     colors = rowColors(),
                 ) { Text(option.label) }
             }
@@ -557,7 +568,9 @@ fun <T> AppChoiceRow(
     when (LocalInterfaceStyle.current) {
         InterfaceStyle.MIUIX -> {
             val selectedIndex = options.indexOfFirst { it.value == selected }
-            if (selected != null && selectedIndex >= 0 && (!isOpen || dropdownOpenedHere)) {
+            // The dropdown lists labels only, so a list with an unavailable option takes the dialog that can say why.
+            val dropdownFits = selected != null && selectedIndex >= 0 && options.none { it.disabledReason != null }
+            if (dropdownFits && (!isOpen || dropdownOpenedHere)) {
                 key(dropdownGeneration) {
                     OverlayDropdownPreference(
                         items = options.map { it.label },

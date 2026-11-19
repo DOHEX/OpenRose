@@ -49,6 +49,8 @@ internal class SandboxModel(private val scope: CoroutineScope) : OpenRoseModel {
     private val mutableHomeNavigationRequest = MutableStateFlow(0L)
     override val homeNavigationRequest: StateFlow<Long> = mutableHomeNavigationRequest.asStateFlow()
 
+    override val notice = MutableStateFlow<String?>(null)
+
     private val writes = SandboxWrites(mutableState, scenario, scope)
     private var connection: Job? = null
 

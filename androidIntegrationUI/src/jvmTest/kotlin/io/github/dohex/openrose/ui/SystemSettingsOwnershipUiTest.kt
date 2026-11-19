@@ -206,6 +206,45 @@ class SystemSettingsOwnershipUiTest {
     }
 
     @Test
+    fun aStatusTargetThatCannotOpenIsDisabledWithItsReasonAndTheQuickPanelCanBeChosen() {
+        for (style in InterfaceStyle.entries) {
+            withHarness(width = 1200, height = 2600, style = style) { harness ->
+                harness.markUnavailable(StatusNotificationTarget.ROSELINK to "RoseLink 未安装")
+                harness.render()
+                harness.clickText("点击通知打开")
+                harness.render()
+
+                assertTrue(harness.hasText("RoseLink 未安装"), "the reason is shown beside the option in $style")
+                assertTrue(harness.hasDisabledText("RoseLink"), "an unavailable target is disabled in $style")
+                assertFalse(harness.hasTappableText("RoseLink"), "an unavailable target takes no taps in $style")
+                assertTrue(harness.hasTappableText("系统耳机详情页"), "an available target stays selectable in $style")
+
+                harness.clickText("快捷面板", Role.RadioButton)
+                harness.render()
+                assertEquals(StatusNotificationTarget.QUICK_PANEL, harness.integration.value.settings.statusNotificationTarget)
+            }
+        }
+    }
+
+    @Test
+    fun aSavedStatusTargetThatCannotOpenStaysSelectedAndItsRowSaysWhatTheTapDoes() {
+        for (style in InterfaceStyle.entries) {
+            withHarness(
+                width = 1200,
+                height = 2600,
+                style = style,
+                settings = IntegrationSettings(focusNotificationEnabled = true, statusNotificationTarget = StatusNotificationTarget.ROSELINK),
+            ) { harness ->
+                harness.markUnavailable(StatusNotificationTarget.ROSELINK to "RoseLink 未安装")
+                harness.render()
+
+                assertTrue(harness.hasText("RoseLink（RoseLink 未安装，点击通知将打开 OpenRose）"), "the row reports the fallback in $style")
+                assertEquals(StatusNotificationTarget.ROSELINK, harness.integration.value.settings.statusNotificationTarget)
+            }
+        }
+    }
+
+    @Test
     fun readyIntegrationSaveStillDoesNotClaimSystemPresentationSucceeded() {
         for (style in InterfaceStyle.entries) {
             withHarness(
@@ -273,5 +312,9 @@ class SystemSettingsOwnershipUiTest {
         val integration: MutableStateFlow<IntegrationState>,
         val settingsChanges: List<IntegrationSettings>,
         val settingWrites: List<Pair<io.github.dohex.openrose.core.DeviceSetting, io.github.dohex.openrose.core.protocol.FieldValue>>,
-    ) : AndroidPageHarness(scene, page)
+    ) : AndroidPageHarness(scene, page) {
+        fun markUnavailable(vararg targets: Pair<StatusNotificationTarget, String>) {
+            integration.value = integration.value.copy(platform = integration.value.platform.copy(unavailableStatusTargets = targets.toMap()))
+        }
+    }
 }

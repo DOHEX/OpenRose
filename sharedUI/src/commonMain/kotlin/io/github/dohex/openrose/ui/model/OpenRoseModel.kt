@@ -21,6 +21,12 @@ interface OpenRoseModel {
     val uiSettings: StateFlow<UiSettings>
     val homeNavigationRequest: StateFlow<Long>
 
+    /**
+     * A sentence the host wants the user to read on the 我的耳机 page, such as why a notification opened here.
+     * The host posts it and the page sets it back to null when the user dismisses it.
+     */
+    val notice: MutableStateFlow<String?>
+
     fun updateUiSettings(settings: UiSettings)
     fun updateSettings(settings: UserSettings)
     fun startScan()
@@ -52,6 +58,7 @@ class RuntimeOpenRoseModel(
     override val uiSettings: StateFlow<UiSettings> = settingsStore.uiSettings
     private val mutableHomeNavigationRequest = MutableStateFlow(0L)
     override val homeNavigationRequest: StateFlow<Long> = mutableHomeNavigationRequest.asStateFlow()
+    override val notice = MutableStateFlow<String?>(null)
 
     override fun updateUiSettings(settings: UiSettings) = settingsStore.updateUiSettings(settings)
     override fun updateSettings(settings: UserSettings) = settingsStore.updateSettings(settings)

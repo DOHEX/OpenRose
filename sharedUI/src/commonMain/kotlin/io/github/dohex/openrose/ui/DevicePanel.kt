@@ -67,6 +67,7 @@ internal fun HeadphonesPage(
         Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        NoticeBanner(model)
         if (device == null) {
             UnconnectedHeadphonesDashboard(
                 state = state,

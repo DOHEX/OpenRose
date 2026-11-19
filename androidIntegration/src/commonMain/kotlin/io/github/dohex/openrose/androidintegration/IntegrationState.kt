@@ -13,6 +13,8 @@ data class IntegrationPlatformState(
     val backgroundService: BackgroundServiceFacts = BackgroundServiceFacts(),
     /** Whether the system provides wallpaper colors for 动态取色 (Android 12+). */
     val dynamicColorApplicability: PlatformApplicability = PlatformApplicability.UNKNOWN,
+    /** Why each 状态通知点击目标 that cannot open now cannot, for display; a target that is absent can open. */
+    val unavailableStatusTargets: Map<StatusNotificationTarget, String> = emptyMap(),
 )
 
 /**

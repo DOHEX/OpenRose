@@ -19,6 +19,8 @@
         <package android:name="com.android.bluetooth" />
         <package android:name="com.xiaomi.bluetooth" />
         <package android:name="com.milink.service" />
+        <package android:name="cn.ikaile.ruoshui.client" />
+        <package android:name="com.android.settings" />
     </queries>
     <application
         android:name=".OpenRoseApplication"
@@ -68,5 +70,27 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <!--
+            The 快捷面板 is opened by the quick settings tile and by the status notification, whose PendingIntent is
+            created in the system Bluetooth process, so it is exported. It has its own task affinity and stays out of
+            recents so opening it never brings the main task forward.
+        -->
+        <activity
+            android:name=".QuickPanelActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTask"
+            android:taskAffinity="${applicationId}.quickpanel"
+            android:theme="@style/Theme.OpenRose.QuickPanel" />
+        <service
+            android:name=".QuickPanelTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_quick_panel_tile"
+            android:label="OpenRose"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
     </application>
 </manifest>

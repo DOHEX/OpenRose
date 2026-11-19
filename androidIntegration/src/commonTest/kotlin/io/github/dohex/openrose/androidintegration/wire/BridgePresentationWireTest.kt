@@ -67,4 +67,20 @@ class BridgePresentationWireTest {
             assertTrue(sent in recognised, "$mode is sent as $sent")
         }
     }
+
+    @Test
+    fun everyStatusNotificationTargetIsSentAsOneOfTheTargetsTheRendererRecognises() {
+        val recognised = mapOf(
+            StatusNotificationTarget.OPENROSE to BridgePresentationWire.TARGET_OPENROSE,
+            StatusNotificationTarget.SYSTEM to BridgePresentationWire.TARGET_SYSTEM,
+            StatusNotificationTarget.ROSELINK to BridgePresentationWire.TARGET_ROSELINK,
+            StatusNotificationTarget.QUICK_PANEL to BridgePresentationWire.TARGET_QUICK_PANEL,
+        )
+        assertEquals(StatusNotificationTarget.entries.toSet(), recognised.keys)
+        recognised.forEach { (target, expected) ->
+            val sent = SystemPresentationState(statusNotificationTarget = target).toBridgePresentation().asWireMap()
+                .string(BridgePresentationWire.STATUS_TARGET)
+            assertEquals(expected, sent)
+        }
+    }
 }

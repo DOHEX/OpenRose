@@ -21,6 +21,7 @@ import io.github.dohex.openrose.core.PermissionState
 import io.github.dohex.openrose.core.PlatformApplicability
 import io.github.dohex.openrose.core.PlatformState
 import io.github.dohex.openrose.core.TransportAvailability
+import io.github.dohex.openrose.presentation.StatusTargetLaunch
 
 internal fun bluetoothPermissions(): Array<String> = if (Build.VERSION.SDK_INT >= 31) {
     arrayOf(Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT)
@@ -91,6 +92,7 @@ internal fun Context.readIntegrationPlatform(
     } else {
         PlatformApplicability.NOT_APPLICABLE
     },
+    unavailableStatusTargets = StatusTargetLaunch.unavailableTargets(packageManager),
 )
 
 /** The required service notification is independent of the focus notification setting and has its own channel. */

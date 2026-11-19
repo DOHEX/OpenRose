@@ -38,6 +38,7 @@ internal class FakeOpenRoseModel(
     override val uiSettings: StateFlow<UiSettings> = SnapshotStateFlow(mutableUiSettings)
     val homeNavigationRequests = MutableStateFlow(0L)
     override val homeNavigationRequest: StateFlow<Long> = homeNavigationRequests
+    override val notice = MutableStateFlow<String?>(null)
 
     val settingsChanges = mutableListOf<UiSettings>()
     val controlSettingsChanges = mutableListOf<UserSettings>()

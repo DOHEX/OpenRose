@@ -111,7 +111,7 @@ private fun PlatformState.transportUsable(): Boolean = permission in setOf(Permi
     transport !is TransportAvailability.Unavailable
 
 /** A connection attempt is under way, including a session that is not yet ready for control. */
-private fun ControlState.isConnectingForTray(): Boolean = when (val current = connection) {
+internal fun ControlState.isConnectingForTray(): Boolean = when (val current = connection) {
     ConnectionState.Disconnected -> false
     is ConnectionState.Connecting -> true
     is ConnectionState.Connected -> current.phase != ConnectionPhase.READY
@@ -155,11 +155,7 @@ fun TrayPanel(
     val density = LocalDensity.current
     val state by model.state.collectAsState()
     val uiSettings by model.uiSettings.collectAsState()
-    val dark = when (uiSettings.appearance) {
-        Appearance.SYSTEM -> isSystemInDarkTheme()
-        Appearance.LIGHT -> false
-        Appearance.DARK -> true
-    }
+    val dark = uiSettings.appearance.isDark()
     // The popup is a plain opaque canvas: no LocalAppBackdrop, so backdrop blur stays off.
     ProvideInterfaceStyle(uiSettings.interfaceStyle, dark) {
         Column(
@@ -178,6 +174,14 @@ fun TrayPanel(
     }
 }
 
+/** Whether this appearance draws dark, following the system only for [Appearance.SYSTEM]. */
+@Composable
+internal fun Appearance.isDark(): Boolean = when (this) {
+    Appearance.SYSTEM -> isSystemInDarkTheme()
+    Appearance.LIGHT -> false
+    Appearance.DARK -> true
+}
+
 @Composable
 private fun TrayPanelContent(
     model: OpenRoseModel,
@@ -186,6 +190,20 @@ private fun TrayPanelContent(
     onOpenApp: () -> Unit,
 ) {
     val summary = traySummary(state, selection)
+    val device = state.activeDevice()?.takeIf { summary.connected }
+
+    TrayStatusCard(state, summary)
+
+    if (device != null && device.capabilities.noiseControl != null) {
+        NoiseControlCard(state, device, showLevelControls = false, onSet = model::set)
+    }
+
+    TrayActions(model, state, summary, onOpenApp)
+}
+
+/** The headphones' title, connection progress or reason it is not connected, and the battery strip when connected. */
+@Composable
+internal fun TrayStatusCard(state: ControlState, summary: TraySummary) {
     val device = state.activeDevice()?.takeIf { summary.connected }
     val connecting = !summary.connected && state.isConnectingForTray()
     val permissionRequired = state.platform.permission != PermissionState.GRANTED &&
@@ -227,11 +245,12 @@ private fun TrayPanelContent(
             BatteryStrip(device, initializing = false)
         }
     }
+}
 
-    if (device != null && device.capabilities.noiseControl != null) {
-        NoiseControlCard(state, device, showLevelControls = false, onSet = model::set)
-    }
-
+/** 取消连接, 重新连接 and 添加耳机 as the state calls for, then 打开 OpenRose. */
+@Composable
+internal fun TrayActions(model: OpenRoseModel, state: ControlState, summary: TraySummary, onOpenApp: () -> Unit) {
+    val connecting = !summary.connected && state.isConnectingForTray()
     val inset = if (LocalInterfaceStyle.current == InterfaceStyle.MATERIAL3) 16.dp else 12.dp
     Column(
         Modifier.fillMaxWidth().padding(horizontal = inset),

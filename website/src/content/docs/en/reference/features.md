@@ -11,6 +11,7 @@ What you see depends on the model and firmware; see [Supported earphones](../sup
 - Noise control mode, with separate ANC and transparency levels
 - Game mode, EQ presets, touch bindings, wear detection, prompt volume, multipoint, and audio codec preference
 - On some models: custom EQ, gain and hearing protection, bass boost
+- Android quick panel: open it from the OpenRose Quick Settings tile or the focus notification to check battery and switch noise mode, EQ preset, and game mode without opening the app
 
 ## Appearance
 
@@ -28,7 +29,7 @@ No root needed; see [Background control](../../guides/background-control/).
 
 Requires an Xposed framework; see [HyperOS integration](../../guides/hyperos-integration/).
 
-- Connection prompts and earphone status shown through the system island and focus notifications
+- Connection prompts and earphone status shown through the system island and focus notifications; tapping the focus notification opens OpenRose, the system headset page, RoseLink, or the quick panel
 - Earbud battery and noise mode switching in Fusion Device Center; its "Additional Settings" opens OpenRose directly
 - Module control: the system Bluetooth process connects to the earphones, and OpenRose does not need to be open
 - Headset circulation (experimental): move the earphones from one HyperOS audio source device to another through Fusion Device Center

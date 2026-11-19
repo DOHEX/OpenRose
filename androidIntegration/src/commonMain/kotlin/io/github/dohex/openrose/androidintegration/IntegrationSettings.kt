@@ -14,7 +14,7 @@ enum class IslandTrigger { CONNECTION, IN_CASE }
 enum class FusionSettingsDestination { SYSTEM, OPENROSE }
 
 /** 状态通知点击目标: where tapping the status notification card or its expanded island goes. */
-enum class StatusNotificationTarget { OPENROSE, SYSTEM, ROSELINK }
+enum class StatusNotificationTarget { OPENROSE, SYSTEM, ROSELINK, QUICK_PANEL }
 
 data class IntegrationSettings(
     val islandMode: IslandMode = IslandMode.OFFICIAL,
@@ -60,6 +60,7 @@ object IntegrationSettingsCodec {
             StatusNotificationTarget.OPENROSE -> "openrose"
             StatusNotificationTarget.SYSTEM -> "system"
             StatusNotificationTarget.ROSELINK -> "roselink"
+            StatusNotificationTarget.QUICK_PANEL -> "quick_panel"
         },
         "androidIntegration.fusion_settings_destination" to when (settings.fusionSettingsDestination) {
             FusionSettingsDestination.SYSTEM -> "system"
@@ -102,6 +103,7 @@ object IntegrationSettingsCodec {
         "openrose" -> StatusNotificationTarget.OPENROSE
         "system" -> StatusNotificationTarget.SYSTEM
         "roselink" -> StatusNotificationTarget.ROSELINK
+        "quick_panel" -> StatusNotificationTarget.QUICK_PANEL
         else -> null
     }
 

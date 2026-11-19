@@ -102,6 +102,9 @@ class MainActivity : ComponentActivity() {
         // Consume the request so Activity recreation does not retry a failed connection.
         intent.removeExtra(BridgeWire.EXTRA_HEADPHONE_ADDRESS)
         address?.let { owner.connectFromSystem(DeviceId(it)) }
+        // The same goes for the reason: a recreated Activity must not announce an old fallback again.
+        intent.getStringExtra(BridgeWire.EXTRA_FALLBACK_REASON)?.takeIf { it.isNotBlank() }?.let { owner.model.notice.value = it }
+        intent.removeExtra(BridgeWire.EXTRA_FALLBACK_REASON)
         owner.model.showHeadphones()
     }
 

@@ -71,6 +71,9 @@ object BridgeWire {
     const val ACTION_SHOW_HEADPHONES = "io.github.dohex.openrose.SHOW_HEADPHONES"
     const val EXTRA_HEADPHONE_ADDRESS = "io.github.dohex.openrose.extra.HEADPHONE_ADDRESS"
 
+    /** On a SHOW_HEADPHONES intent: why the chosen 状态通知点击目标 could not open and OpenRose opened instead, as a sentence for the user. */
+    const val EXTRA_FALLBACK_REASON = "io.github.dohex.openrose.extra.FALLBACK_REASON"
+
     /**
      * On `currentSession` replies (OK or NO_SESSION): the module owner's bonded ROSE earphones, by every address they
      * answer to, as a string list. Absent without a module owner. System entries answer identity queries for them.
