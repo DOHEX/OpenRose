@@ -25,6 +25,7 @@ import io.github.dohex.openrose.androidintegration.scope.IntegrationScopeRestart
 import io.github.dohex.openrose.androidintegration.ui.AndroidPlatformUi
 import io.github.dohex.openrose.androidintegration.wire.BridgeWire
 import io.github.dohex.openrose.core.transport.DeviceId
+import io.github.dohex.openrose.platform.bluetoothPermissions
 import io.github.dohex.openrose.ui.Appearance
 import io.github.dohex.openrose.ui.OpenRoseApp
 import java.util.Locale

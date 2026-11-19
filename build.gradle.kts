@@ -37,6 +37,8 @@ dependencies {
     kover(projects.androidIntegration)
     kover(projects.sharedUI)
     kover(projects.androidIntegrationUI)
+    kover(projects.androidPlatform)
+    kover(projects.androidModule)
     kover(projects.androidApp)
     kover(projects.desktopApp)
     kover(projects.transportBluez)
@@ -53,8 +55,8 @@ tasks.register("offlineCheck") {
     description = "Run hardware-independent checks (add --offline after dependencies are cached)."
     dependsOn(
         ":core:jvmTest", ":androidIntegration:jvmTest", ":sharedUI:jvmTest", ":androidIntegrationUI:jvmTest",
-        ":desktopApp:test", ":androidApp:testDebugUnitTest", ":transportBluez:test",
-        ":desktopApp:compileKotlin", ":androidApp:compileDebugKotlin", ":uiSandbox:compileKotlin",
+        ":desktopApp:test", ":androidPlatform:testDebugUnitTest", ":androidApp:testDebugUnitTest", ":transportBluez:test",
+        ":desktopApp:compileKotlin", ":androidModule:compileDebugKotlin", ":androidApp:compileDebugKotlin", ":uiSandbox:compileKotlin",
         ":androidApp:lintDebug", "spotlessCheck",
         "koverVerify", ":core:koverVerify", ":androidIntegration:koverVerify",
     )

@@ -4,7 +4,7 @@ import android.content.SharedPreferences
 import io.github.dohex.openrose.androidintegration.OwnerRecord
 import io.github.dohex.openrose.androidintegration.OwnerRecordCodec
 import io.github.dohex.openrose.androidintegration.OwnerSelectionStore
-import io.github.dohex.openrose.bridge.FrameworkLink
+import io.github.dohex.openrose.framework.FrameworkLink
 
 /**
  * The user's control way and the module-release bookkeeping, durable in the credential-protected

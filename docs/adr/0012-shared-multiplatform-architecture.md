@@ -12,7 +12,7 @@ status: accepted
   - `:core`：型号与能力、协议、控制会话、控制入口、传输契约与共享 GATT 层、已配对设备与音频连接推断规则、控制相关设置，不含 Android 概念。
   - `:androidIntegration`：控制方式与所有者交接、模块宿主与客户端、IPC 编码、系统入口、系统呈现（超级岛、焦点通知、连接提示）、融合设备中心映射、后台控制状态与设置。纯 Kotlin，在 JVM 上测试。
   - `:sharedUI`：共享界面、表现层、平台插槽与外观设置。`:androidIntegrationUI`：Android 专属界面段落。
-  - `:transportBluez`：Linux 平台驱动。`:androidApp`：全部 Android API 胶水，含 AIDL（Android-KMP 库插件不支持 AIDL）。`:desktopApp`：组装。
+  - `:transportBluez`：Linux 平台驱动。`:androidApp`：全部 Android API 胶水，含 AIDL（Android-KMP 库插件不支持 AIDL）；[ADR 0018](0018-android-module-and-platform-split.md) 起按运行进程拆为 `:androidPlatform`、`:androidModule` 与 `:androidApp`。`:desktopApp`：组装。
 - **状态**：`ControlState` 只含控制会话与平台蓝牙事实，Android 集成状态由 `:androidIntegration` 单独暴露。
 - **控制入口**：`ControlRuntime` 只含各平台共有的操作。系统入口的操作（来自系统的连接、按会话引用读取与设置、领取连接提示）由集成层核对后再调用同一控制入口；连接提示的判定与计时移出 `ControlSession`。`ControlSession` 只保留门面，组合连接目标仲裁、发现、单次连接、设置队列等部件，状态使用不可变集合。
 - **设置**：按归属层拆分，各层自带编解码，键名加层前缀。

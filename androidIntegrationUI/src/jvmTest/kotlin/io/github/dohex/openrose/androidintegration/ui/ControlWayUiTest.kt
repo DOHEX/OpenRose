@@ -1,0 +1,317 @@
+@file:OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+
+package io.github.dohex.openrose.androidintegration.ui
+
+import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.mutableStateOf
+import io.github.dohex.openrose.androidintegration.ControlWay
+import io.github.dohex.openrose.androidintegration.HandoffOutcome
+import io.github.dohex.openrose.androidintegration.IntegrationPlatformState
+import io.github.dohex.openrose.androidintegration.IntegrationState
+import io.github.dohex.openrose.androidintegration.ModuleAvailability
+import io.github.dohex.openrose.androidintegration.OwnerFailureStage
+import io.github.dohex.openrose.androidintegration.OwnerGeneration
+import io.github.dohex.openrose.androidintegration.OwnerHolder
+import io.github.dohex.openrose.androidintegration.OwnerReadiness
+import io.github.dohex.openrose.androidintegration.OwnerState
+import io.github.dohex.openrose.androidintegration.SwitchRequest
+import io.github.dohex.openrose.core.ConnectionPhase
+import io.github.dohex.openrose.core.ConnectionState
+import io.github.dohex.openrose.core.ControlState
+import io.github.dohex.openrose.core.HostPlatform
+import io.github.dohex.openrose.core.PermissionState
+import io.github.dohex.openrose.core.PlatformApplicability
+import io.github.dohex.openrose.core.PlatformState
+import io.github.dohex.openrose.core.TransportAvailability
+import io.github.dohex.openrose.core.protocol.ModelProfile
+import io.github.dohex.openrose.core.transport.DeviceId
+import io.github.dohex.openrose.ui.*
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
+
+class ControlWayUiTest {
+    private val moduleUnavailable = ModuleAvailability.Unavailable("兼容框架服务尚未连接")
+
+    @Test
+    fun defaultStateShowsOrdinaryControlSelected() {
+        forEachStyle(Scenario(ControlState(platform = platform()), integration(ModuleAvailability.NotEnabled))) { harness ->
+            assertTrue(harness.isTagSelected(ControlWayTags.option(ControlWay.ORDINARY)))
+            assertFalse(harness.isTagSelected(ControlWayTags.option(ControlWay.MODULE)))
+        }
+    }
+
+    @Test
+    fun anUnreadyOwnerNeverClaimsToBeReadyWhileTheModuleIsUnavailable() {
+        val starting = Scenario(
+            ControlState(platform = platform()),
+            integration(moduleUnavailable, OwnerState(selected = ControlWay.ORDINARY, readiness = OwnerReadiness.Starting)),
+        )
+        forEachStyle(starting) { harness ->
+            harness.openPage("状态")
+            assertTrue(harness.hasText("未就绪"), "the unready module is reported on the status page")
+            assertTrue(harness.hasTag(ControlWayTags.readiness(OwnerReadiness.Starting)))
+            assertFalse(harness.hasTag(ControlWayTags.readiness(OwnerReadiness.Ready)))
+        }
+        val moduleStarting = starting.copy(
+            integration = starting.integration.copy(owner = OwnerState(selected = ControlWay.MODULE, readiness = OwnerReadiness.Starting)),
+        )
+        forEachStyle(moduleStarting) { harness ->
+            assertTrue(harness.isTagSelected(ControlWayTags.option(ControlWay.MODULE)))
+            harness.openPage("状态")
+            assertFalse(harness.hasTag(ControlWayTags.readiness(OwnerReadiness.Ready)))
+        }
+    }
+
+    @Test
+    fun unavailableModuleOwnerShowsStageAndReasonWithoutReadiness() {
+        val reason = "fixture: the system Bluetooth exposes no module control endpoint"
+        val unavailable = OwnerReadiness.Unavailable(OwnerFailureStage.DISCOVERY, reason)
+        val state = Scenario(
+            ControlState(platform = platform()),
+            integration(moduleUnavailable, OwnerState(selected = ControlWay.MODULE, readiness = unavailable)),
+        )
+        forEachStyle(state) { harness ->
+            assertTrue(harness.isTagSelected(ControlWayTags.option(ControlWay.MODULE)))
+            harness.openPage("状态")
+            assertTrue(harness.hasTag(ControlWayTags.readiness(unavailable)))
+            assertTrue(harness.hasTag(ControlWayTags.failureStage(OwnerFailureStage.DISCOVERY)))
+            assertTrue(harness.hasText(reason))
+            assertFalse(harness.hasTag(ControlWayTags.readiness(OwnerReadiness.Ready)))
+            assertTrue(harness.hasTag(StatusTags.connection(ConnectionState.Disconnected)))
+        }
+    }
+
+    @Test
+    fun readyConnectedModuleShowsSelectionOwnerAndConnectionAsSeparateFactsAndTheHolderOnlyInDiagnostics() {
+        val holder = OwnerHolder(
+            way = ControlWay.MODULE,
+            generation = OwnerGeneration("boot-7", 3),
+            packageName = "com.android.bluetooth",
+            processName = "com.android.bluetooth",
+            uid = 1002,
+            pid = 4321,
+        )
+        val connection = ConnectionState.Connected(DeviceId("ctl-way-i5"), 1L, ModelProfile.I5_ZT, ConnectionPhase.READY)
+        val state = Scenario(
+            ControlState(platform = platform(), connection = connection),
+            integration(
+                ModuleAvailability.Available,
+                OwnerState(selected = ControlWay.MODULE, readiness = OwnerReadiness.Ready, holder = holder),
+            ),
+        )
+        forEachStyle(state) { harness ->
+            assertTrue(harness.isTagSelected(ControlWayTags.option(ControlWay.MODULE)))
+            harness.openPage("状态")
+            assertTrue(harness.hasTag(ControlWayTags.readiness(OwnerReadiness.Ready)))
+            assertTrue(harness.hasTag(StatusTags.connection(connection)))
+            assertFalse(harness.hasTag(ControlWayTags.HOLDER), "holder details stay off the status page")
+            harness.openPage("诊断")
+            harness.render()
+            val shown = harness.tagTexts(ControlWayTags.HOLDER)
+            for (fact in listOf(holder.packageName, holder.processName, holder.generation.toString(), "1002", "4321")) {
+                assertTrue(shown.any { fact in it }, "the holder shows $fact")
+            }
+        }
+    }
+
+    @Test
+    fun readyOwnerWithoutAnEarphoneConnectionStillReportsTheConnectionSeparately() {
+        val connection = ConnectionState.Connecting(DeviceId("ctl-way-i5"), 1L, ConnectionPhase.CONNECTING)
+        val state = Scenario(
+            ControlState(platform = platform(), connection = connection),
+            integration(ModuleAvailability.Available, OwnerState(selected = ControlWay.ORDINARY, readiness = OwnerReadiness.Ready)),
+        )
+        forEachStyle(state, page = "状态") { harness ->
+            assertTrue(harness.hasTag(ControlWayTags.readiness(OwnerReadiness.Ready)))
+            assertTrue(harness.hasTag(StatusTags.connection(connection)))
+            assertFalse(harness.hasTag(StatusTags.connection(ConnectionState.Disconnected)))
+        }
+    }
+
+    @Test
+    fun selectingAnotherWayMovesTheSelectionAndReselectingTheSelectedWayChangesNothing() {
+        val state = Scenario(
+            ControlState(platform = platform()),
+            integration(ModuleAvailability.NotEnabled, OwnerState(selected = ControlWay.ORDINARY, readiness = OwnerReadiness.Ready)),
+        )
+        forEachStyle(state) { harness ->
+            harness.clickTag(ControlWayTags.option(ControlWay.ORDINARY))
+            harness.render()
+            // The fake host starts a new owner on every selection it receives, so a forwarded reselect would show.
+            assertEquals(OwnerState(selected = ControlWay.ORDINARY, readiness = OwnerReadiness.Ready), harness.host.integration.value.owner)
+
+            harness.clickTag(ControlWayTags.option(ControlWay.MODULE))
+            harness.render()
+            assertEquals(ControlWay.MODULE, harness.host.integration.value.owner.selected)
+            assertTrue(harness.isTagSelected(ControlWayTags.option(ControlWay.MODULE)))
+            assertFalse(harness.isTagSelected(ControlWayTags.option(ControlWay.ORDINARY)))
+            harness.openPage("状态")
+            assertTrue(harness.hasTag(ControlWayTags.readiness(OwnerReadiness.Starting)))
+        }
+    }
+
+    @Test
+    fun blockedSwitchExplainsNothingWasTakenOverAndKeepsBothChoices() {
+        val request = SwitchRequest("req-1", ControlWay.MODULE, ControlWay.ORDINARY, OwnerGeneration("boot-7", 3))
+        val reason = "fixture: the module release could not be confirmed"
+        val blocked = OwnerReadiness.SwitchBlocked(request, OwnerFailureStage.RELEASE, reason)
+        val state = Scenario(
+            ControlState(platform = platform()),
+            integration(ModuleAvailability.Available, OwnerState(selected = ControlWay.ORDINARY, readiness = blocked)),
+        )
+        forEachStyle(state) { harness ->
+            assertTrue(harness.hasTag(ControlWayTags.SWITCH_FEEDBACK), "settings points at the status page")
+            assertTrue(harness.isTagClickable(ControlWayTags.option(ControlWay.ORDINARY)))
+            assertTrue(harness.isTagClickable(ControlWayTags.option(ControlWay.MODULE)))
+            assertFalse(harness.hasText(reason), "settings does not repeat the failure reason")
+            harness.openPage("状态")
+            assertTrue(harness.hasTag(ControlWayTags.readiness(blocked)))
+            assertTrue(harness.hasTag(ControlWayTags.failureStage(OwnerFailureStage.RELEASE)))
+            assertTrue(harness.hasText(reason))
+            assertTrue(harness.hasTag(ControlWayTags.SWITCH_BLOCKED_NOTICE))
+            assertFalse(harness.hasTag(ControlWayTags.readiness(OwnerReadiness.Ready)))
+        }
+    }
+
+    @Test
+    fun blockedHandoffShowsItsStageAndReasonOnlyInDiagnostics() {
+        val request = SwitchRequest("req-2", ControlWay.ORDINARY, ControlWay.MODULE)
+        val reason = "fixture: the selection could not be saved"
+        val state = Scenario(
+            ControlState(platform = platform()),
+            integration(
+                ModuleAvailability.Available,
+                OwnerState(
+                    selected = ControlWay.ORDINARY,
+                    readiness = OwnerReadiness.Ready,
+                    lastHandoff = HandoffOutcome.Blocked(request, OwnerFailureStage.SELECTION_PERSISTENCE, reason),
+                ),
+            ),
+        )
+        forEachStyle(state, page = "状态") { harness ->
+            assertFalse(harness.hasTag(ControlWayTags.LAST_HANDOFF), "the status page does not list past handoffs")
+            harness.openPage("诊断")
+            harness.render()
+            assertTrue(harness.hasTag(ControlWayTags.LAST_HANDOFF))
+            assertTrue(harness.hasTag(ControlWayTags.failureStage(OwnerFailureStage.SELECTION_PERSISTENCE)))
+            assertTrue(harness.hasText(reason))
+        }
+    }
+
+    @Test
+    fun aCompletedHandoffLeavesNoBlockedRecord() {
+        val request = SwitchRequest("req-4", ControlWay.ORDINARY, ControlWay.MODULE)
+        val state = Scenario(
+            ControlState(platform = platform()),
+            integration(
+                ModuleAvailability.Available,
+                OwnerState(
+                    selected = ControlWay.MODULE,
+                    readiness = OwnerReadiness.Ready,
+                    lastHandoff = HandoffOutcome.Completed(request),
+                ),
+            ),
+        )
+        forEachStyle(state, page = "状态") { harness ->
+            harness.openPage("诊断")
+            harness.render()
+            assertFalse(harness.hasTag(ControlWayTags.LAST_HANDOFF))
+        }
+    }
+
+    @Test
+    fun switchingDisablesTheChoices() {
+        val request = SwitchRequest("req-3", ControlWay.ORDINARY, ControlWay.MODULE)
+        val switching = OwnerReadiness.Switching(request)
+        val state = Scenario(
+            ControlState(platform = platform()),
+            integration(ModuleAvailability.Available, OwnerState(selected = ControlWay.ORDINARY, readiness = switching)),
+        )
+        forEachStyle(state) { harness ->
+            assertTrue(harness.hasTag(ControlWayTags.SWITCH_FEEDBACK))
+            assertTrue(harness.isTagDisabled(ControlWayTags.option(ControlWay.ORDINARY)))
+            assertTrue(harness.isTagDisabled(ControlWayTags.option(ControlWay.MODULE)))
+            assertFalse(harness.isTagClickable(ControlWayTags.option(ControlWay.MODULE)))
+            assertFalse(harness.isTagClickable(ControlWayTags.option(ControlWay.ORDINARY)))
+            assertEquals(ControlWay.ORDINARY, harness.host.integration.value.owner.selected, "a disabled choice selects nothing")
+            harness.openPage("状态")
+            assertTrue(harness.hasTag(ControlWayTags.readiness(switching)))
+            assertFalse(harness.hasTag(ControlWayTags.readiness(OwnerReadiness.Ready)))
+        }
+    }
+
+    @Test
+    fun basicPlatformsDoNotExposeControlWay() {
+        for (style in InterfaceStyle.entries) {
+            runOpenRoseUiTest(1200, 1000) {
+                val page = mutableStateOf("设置")
+                val model = FakeOpenRoseModel(mutableUiSettings = mutableStateOf(UiSettings(interfaceStyle = style)))
+                setContent { AndroidTestPage(model, BasicPlatformUi("Linux"), page) }
+                val harness = AndroidPageHarness(this, page)
+                harness.render()
+                assertFalse(harness.hasTagWithPrefix(ControlWayTags.PREFIX))
+                harness.openPage("状态")
+                assertFalse(harness.hasTagWithPrefix(ControlWayTags.PREFIX))
+            }
+        }
+    }
+
+    /** The control facts and the Android-integration facts a scenario starts from. */
+    private data class Scenario(val control: ControlState, val integration: IntegrationState)
+
+    private fun platform() = PlatformState(
+        permission = PermissionState.GRANTED,
+        transport = TransportAvailability.Available,
+        hostPlatform = HostPlatform.ANDROID,
+        controlTransportApplicability = PlatformApplicability.APPLICABLE,
+    )
+
+    private fun integration(module: ModuleAvailability, owner: OwnerState = OwnerState()) = IntegrationState(
+        platform = IntegrationPlatformState(
+            module = module,
+            systemIntegrationApplicability = PlatformApplicability.APPLICABLE,
+        ),
+        owner = owner,
+    )
+
+    private fun forEachStyle(base: Scenario, page: String = "设置", check: suspend (Harness) -> Unit) {
+        for (style in InterfaceStyle.entries) {
+            withHarness(base, style) { harness ->
+                try {
+                    harness.render()
+                    harness.openPage(page)
+                    check(harness)
+                } catch (failure: Throwable) {
+                    throw AssertionError("style $style: ${failure.message}", failure)
+                }
+            }
+        }
+    }
+
+    private fun withHarness(initial: Scenario, style: InterfaceStyle, block: suspend (Harness) -> Unit) = runOpenRoseUiTest(1200, 1000) {
+        val host = FakeOwnerHost(initial)
+        val page = mutableStateOf("设置")
+        val model = FakeOpenRoseModel(host.state, mutableStateOf(UiSettings(interfaceStyle = style)))
+        val platform = androidTestPlatform(host.integration, onSelect = host::selectControlWay)
+        setContent { AndroidTestPage(model, platform, page) }
+        block(Harness(this, page, host))
+    }
+
+    /**
+     * Stands in for the application's owner: a selection starts the new owner, which is not ready
+     * yet. Tests read the resulting state.
+     */
+    private class FakeOwnerHost(initial: Scenario) {
+        val state = mutableStateOf(initial.control)
+        val integration = MutableStateFlow(initial.integration)
+
+        fun selectControlWay(way: ControlWay) {
+            integration.value = integration.value.copy(owner = OwnerState(selected = way, readiness = OwnerReadiness.Starting))
+        }
+    }
+
+    private class Harness(scene: OpenRoseUiTestScene, page: MutableState<String>, val host: FakeOwnerHost) : AndroidPageHarness(scene, page)
+}

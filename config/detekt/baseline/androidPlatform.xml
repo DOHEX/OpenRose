@@ -1,0 +1,19 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>ReturnCount:AndroidAudioProfiles.kt:AndroidAudioProfiles.&lt;no name provided&gt;$@SuppressLint("MissingPermission") override fun onReceive</ID>
+    <ID>ReturnCount:AndroidGattDriver.kt:AndroidGattDriver.&lt;no name provided&gt;$override fun onCharacteristicWrite</ID>
+    <ID>ReturnCount:AndroidGattDriver.kt:AndroidGattDriver.&lt;no name provided&gt;$override fun onDescriptorWrite</ID>
+    <ID>ReturnCount:AndroidGattDriver.kt:AndroidGattDriver.&lt;no name provided&gt;$override fun onServicesDiscovered</ID>
+    <ID>ThrowsCount:AndroidGattDriver.kt:AndroidGattDriver$override suspend fun configureSubscription</ID>
+    <ID>ThrowsCount:AndroidGattDriver.kt:AndroidGattDriver$override suspend fun connect</ID>
+    <ID>ThrowsCount:AndroidGattDriver.kt:AndroidGattDriver$override suspend fun discoverServices: List&lt;GattService&gt;</ID>
+    <ID>ThrowsCount:AndroidGattDriver.kt:AndroidGattDriver$override suspend fun write</ID>
+    <ID>TooGenericExceptionCaught:AndroidControlTransport.kt:AndroidControlTransport$error: Throwable</ID>
+    <ID>TooGenericExceptionCaught:AndroidGattDriver.kt:AndroidGattDriver$error: Exception</ID>
+    <ID>TooGenericExceptionCaught:AndroidGattDriver.kt:AndroidGattDriver.&lt;no name provided&gt;$error: Exception</ID>
+    <ID>TooGenericExceptionCaught:AndroidSppConnection.kt:AndroidSppConnection$error: Throwable</ID>
+    <ID>TooManyFunctions:AndroidGattDriver.kt:AndroidGattDriver : GattDriver</ID>
+  </CurrentIssues>
+</SmellBaseline>

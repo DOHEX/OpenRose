@@ -2,13 +2,13 @@ package io.github.dohex.openrose
 
 import android.content.SharedPreferences
 import io.github.dohex.openrose.androidintegration.*
-import io.github.dohex.openrose.bridge.FrameworkLink
-import io.github.dohex.openrose.bridge.ModuleSettingsPublisher
+import io.github.dohex.openrose.bridge.readHostSettings
 import io.github.dohex.openrose.core.LocalControlRuntime
 import io.github.dohex.openrose.core.PermissionState
 import io.github.dohex.openrose.core.PlatformState
 import io.github.dohex.openrose.core.UserSettings
-import io.github.dohex.openrose.module.readHostSettings
+import io.github.dohex.openrose.framework.FrameworkLink
+import io.github.dohex.openrose.framework.ModuleSettingsPublisher
 import io.github.dohex.openrose.ui.*
 import kotlinx.collections.immutable.persistentSetOf
 import kotlinx.coroutines.CoroutineScope

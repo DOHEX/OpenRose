@@ -31,7 +31,7 @@
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
         <provider android:name="io.github.libxposed.service.XposedProvider" tools:node="remove" />
         <provider
-            android:name=".bridge.GuardedXposedProvider"
+            android:name=".framework.GuardedXposedProvider"
             android:authorities="${applicationId}.XposedService"
             android:directBootAware="true"
             android:exported="true" />

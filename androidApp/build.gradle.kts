@@ -9,7 +9,6 @@ android {
     }
     buildFeatures {
         compose = true
-        aidl = true
     }
     buildTypes {
         getByName("release") {
@@ -40,6 +39,10 @@ dependencies {
     implementation(projects.androidIntegrationUI)
     implementation(projects.sharedUI)
     implementation(libs.activity.compose)
+    implementation(projects.androidPlatform)
+    // Packaged into the APK for LSPosed, but invisible to the application's sources (ADR 0018).
+    runtimeOnly(projects.androidModule)
+    // LSPosed supplies the API at runtime; R8 needs it as library classes to keep the module entry's overrides.
     compileOnly(libs.libxposed.api)
     implementation(libs.libxposed.service)
     testImplementation(kotlin("test-junit"))

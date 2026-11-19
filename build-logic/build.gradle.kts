@@ -36,6 +36,10 @@ gradlePlugin {
             id = libs.plugins.openrose.android.application.get().pluginId
             implementationClass = "AndroidApplicationConventionPlugin"
         }
+        register("androidLibrary") {
+            id = libs.plugins.openrose.android.library.get().pluginId
+            implementationClass = "AndroidLibraryConventionPlugin"
+        }
         register("detektBaseline") {
             id = libs.plugins.openrose.detekt.baseline.get().pluginId
             implementationClass = "DetektBaselineConventionPlugin"

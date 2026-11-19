@@ -1,13 +1,8 @@
 package io.github.dohex.openrose
 
-import android.Manifest
 import android.app.NotificationManager
-import android.bluetooth.BluetoothManager
 import android.content.Context
-import android.content.pm.PackageManager
-import android.location.LocationManager
 import android.os.Build
-import android.provider.Settings
 import io.github.dohex.openrose.androidintegration.BackgroundServiceFact
 import io.github.dohex.openrose.androidintegration.BackgroundServiceFacts
 import io.github.dohex.openrose.androidintegration.IntegrationPlatformState
@@ -16,64 +11,8 @@ import io.github.dohex.openrose.androidintegration.RunningNotification
 import io.github.dohex.openrose.androidintegration.WakeFacts
 import io.github.dohex.openrose.androidintegration.classifyHyperOsBuild
 import io.github.dohex.openrose.androidintegration.runningNotificationVisible
-import io.github.dohex.openrose.core.HostPlatform
-import io.github.dohex.openrose.core.PermissionState
 import io.github.dohex.openrose.core.PlatformApplicability
-import io.github.dohex.openrose.core.PlatformState
-import io.github.dohex.openrose.core.TransportAvailability
-import io.github.dohex.openrose.presentation.StatusTargetLaunch
-
-internal fun bluetoothPermissions(): Array<String> = if (Build.VERSION.SDK_INT >= 31) {
-    arrayOf(Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT)
-} else {
-    arrayOf(Manifest.permission.ACCESS_FINE_LOCATION)
-}
-
-internal fun Context.readPlatformState(
-    permissionRequested: Boolean,
-    userUnlocked: Boolean = true,
-): PlatformState {
-    val granted = bluetoothPermissions().all { checkSelfPermission(it) == PackageManager.PERMISSION_GRANTED }
-    val permission = when {
-        granted -> PermissionState.GRANTED
-        permissionRequested -> PermissionState.DENIED
-        else -> PermissionState.REQUIRED
-    }
-    val transport = when {
-        !packageManager.hasSystemFeature(PackageManager.FEATURE_BLUETOOTH_LE) ->
-            TransportAvailability.Unavailable("此设备没有 BLE 硬件")
-
-        !granted -> TransportAvailability.Unavailable("授予权限后可检测蓝牙并发现耳机")
-
-        else -> {
-            val adapter = getSystemService(BluetoothManager::class.java)?.adapter
-            when {
-                adapter == null -> TransportAvailability.Unavailable("系统蓝牙适配器不可用")
-
-                !adapter.isEnabled -> TransportAvailability.Disabled
-
-                Build.VERSION.SDK_INT <= 30 && !locationServicesEnabled() ->
-                    TransportAvailability.Unavailable("请在系统设置中开启定位服务，以便此 Android 版本扫描蓝牙设备")
-
-                else -> TransportAvailability.Available
-            }
-        }
-    }
-    return PlatformState(
-        permission = permission,
-        transport = transport,
-        hostPlatform = HostPlatform.ANDROID,
-        controlTransportApplicability = if (
-            packageManager.hasSystemFeature(PackageManager.FEATURE_BLUETOOTH_LE) &&
-            packageManager.hasSystemFeature(PackageManager.FEATURE_BLUETOOTH)
-        ) {
-            PlatformApplicability.APPLICABLE
-        } else {
-            PlatformApplicability.NOT_APPLICABLE
-        },
-        userUnlocked = userUnlocked,
-    )
-}
+import io.github.dohex.openrose.platform.StatusTargetLaunch
 
 /** The Android integration facts of this host; [IntegrationPlatformState.module] keeps its default until the framework reports in. */
 internal fun Context.readIntegrationPlatform(
@@ -101,12 +40,4 @@ private fun Context.runningNotification(): RunningNotification {
     val importance = manager.getNotificationChannel(ControlService.CHANNEL_ID)?.importance
     val visible = runningNotificationVisible(manager.areNotificationsEnabled(), importance)
     return if (visible) RunningNotification.VISIBLE else RunningNotification.HIDDEN
-}
-
-private fun Context.locationServicesEnabled(): Boolean = if (Build.VERSION.SDK_INT >= 28) {
-    getSystemService(LocationManager::class.java)?.isLocationEnabled == true
-} else {
-    @Suppress("DEPRECATION")
-    Settings.Secure.getInt(contentResolver, Settings.Secure.LOCATION_MODE, Settings.Secure.LOCATION_MODE_OFF) !=
-        Settings.Secure.LOCATION_MODE_OFF
 }
