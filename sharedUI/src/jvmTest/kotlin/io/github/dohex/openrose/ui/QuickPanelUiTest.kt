@@ -3,6 +3,7 @@
 package io.github.dohex.openrose.ui
 
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.geometry.Offset
 import io.github.dohex.openrose.core.ConnectionPhase
 import io.github.dohex.openrose.core.ConnectionState
 import io.github.dohex.openrose.core.ControlState
@@ -198,7 +199,61 @@ class QuickPanelUiTest {
                 assertEquals(1, panel.openAppCount, "open app in $style")
 
                 panel.clickTag(QUICK_PANEL_SCRIM_TAG)
+                assertEquals(0, panel.dismissCount, "the sheet animates out before dismissing in $style")
+                panel.clickTag(QUICK_PANEL_SCRIM_TAG)
+                panel.advanceTimeBy(1_000)
                 assertEquals(1, panel.dismissCount, "scrim in $style")
+            }
+        }
+    }
+
+    @Test
+    fun aShortHandleDragFollowsTheFingerAndSpringsBack() {
+        for (style in InterfaceStyle.entries) {
+            withQuickPanel(connectedI7State(), style) { panel ->
+                panel.render(60)
+                val rest = panel.tagBounds(QUICK_PANEL_HANDLE_TAG)
+                panel.pressAndDrag(rest.center, Offset(0f, 60f))
+                panel.render()
+                val dragged = panel.tagBounds(QUICK_PANEL_HANDLE_TAG)
+                assertTrue(dragged.top > rest.top + 20f, "the sheet follows the drag in $style: $rest -> $dragged")
+
+                panel.releaseTouch()
+                panel.advanceTimeBy(1_000)
+                assertEquals(rest.top, panel.tagBounds(QUICK_PANEL_HANDLE_TAG).top, 1f, "springs back in $style")
+                assertEquals(0, panel.dismissCount, "a short drag keeps the panel in $style")
+            }
+        }
+    }
+
+    @Test
+    fun anUpwardFlingNeverLiftsTheSheetAboveRest() {
+        for (style in InterfaceStyle.entries) {
+            withQuickPanel(connectedI7State(), style) { panel ->
+                panel.render(60)
+                val rest = panel.tagBounds(QUICK_PANEL_HANDLE_TAG)
+                panel.pressAndDrag(rest.center, Offset(0f, -200f))
+                panel.releaseTouch()
+                repeat(40) {
+                    panel.advanceTimeBy(16)
+                    val top = panel.tagBounds(QUICK_PANEL_HANDLE_TAG).top
+                    assertTrue(top >= rest.top - 0.5f, "frame $it lifted the sheet in $style: ${rest.top} -> $top")
+                }
+                assertEquals(0, panel.dismissCount, "an upward fling keeps the panel in $style")
+            }
+        }
+    }
+
+    @Test
+    fun aLongHandleDragDismissesOnce() {
+        for (style in InterfaceStyle.entries) {
+            withQuickPanel(connectedI7State(), style) { panel ->
+                panel.render()
+                val rest = panel.tagBounds(QUICK_PANEL_HANDLE_TAG)
+                panel.pressAndDrag(rest.center, Offset(0f, 1000f - rest.center.y - 1f))
+                panel.releaseTouch()
+                panel.advanceTimeBy(1_000)
+                assertEquals(1, panel.dismissCount, "a long drag dismisses in $style")
             }
         }
     }

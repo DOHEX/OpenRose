@@ -352,6 +352,8 @@ internal open class OpenRoseUiTestHarness(protected val scene: OpenRoseUiTestSce
     /** Whether production exposed a node under [tag]; tags carry state names, never wording. */
     fun hasTag(tag: String): Boolean = taggedNodes(tag).isNotEmpty()
 
+    fun tagBounds(tag: String): Rect = taggedNodes(tag).firstOrNull()?.boundsInRoot ?: error("No node found for tag '$tag'")
+
     fun hasTagWithPrefix(prefix: String): Boolean = nodes().any {
         it.config.getOrNull(SemanticsProperties.TestTag)?.startsWith(prefix) == true
     }
