@@ -382,6 +382,12 @@ private fun rowArrangement(): Arrangement.Vertical = if (LocalRowPlacement.curre
 
 private fun iconAction(icon: RoseIcon?): (@Composable () -> Unit)? = icon?.let { { AppIcon(it) } }
 
+/**
+ * Interactive rows keep their leading and trailing content centred however far the text wraps, as Miuix rows do.
+ * The MD3E default top-aligns them once a row reaches three-line height, which a wrapped summary does on a phone.
+ */
+private val RowAlignment = Alignment.CenterVertically
+
 @Composable
 fun AppArrowRow(title: String, summary: String? = null, value: String? = null, icon: RoseIcon? = null, onClick: () -> Unit) {
     when (LocalInterfaceStyle.current) {
@@ -397,6 +403,7 @@ fun AppArrowRow(title: String, summary: String? = null, value: String? = null, i
             onClick = onClick,
             modifier = Modifier.semantics { role = Role.Button },
             leadingContent = iconAction(icon),
+            verticalAlignment = RowAlignment,
             trailingContent = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     value?.let { Text(it) }
@@ -480,6 +487,7 @@ fun AppSwitchRow(
             },
             enabled = enabled,
             leadingContent = iconAction(icon),
+            verticalAlignment = RowAlignment,
             trailingContent = { Switch(checked, onCheckedChange = null, enabled = enabled) },
             supportingContent = summary?.let { { Text(it) } },
             colors = rowColors(),
@@ -518,6 +526,7 @@ fun <T> AppRadioGroup(
                     modifier = optionModifier,
                     enabled = optionEnabled,
                     leadingContent = { RadioButton(selected != null && option.value == selected, onClick = null, enabled = optionEnabled) },
+                    verticalAlignment = RowAlignment,
                     supportingContent = option.disabledReason?.let { { Text(it) } },
                     colors = rowColors(),
                 ) { Text(option.label) }
@@ -602,6 +611,7 @@ fun <T> AppChoiceRow(
                 modifier = Modifier.semantics { role = Role.Button },
                 enabled = enabled,
                 leadingContent = iconAction(icon),
+                verticalAlignment = RowAlignment,
                 supportingContent = { Text(valueText) },
                 colors = rowColors(),
             ) { Text(title) }
@@ -707,6 +717,7 @@ internal fun <T> AppMultiChoiceRow(
                 modifier = Modifier.semantics { role = Role.Button },
                 enabled = enabled,
                 trailingContent = { AppIcon(RoseIcon.CHEVRON) },
+                verticalAlignment = RowAlignment,
                 supportingContent = { Text(summary) },
                 colors = rowColors(),
             ) { Text(title) }
@@ -815,6 +826,7 @@ fun <T> AppCheckGroup(options: List<AppOption<T>>, checked: Set<T>, enabledFor: 
                     modifier = optionModifier,
                     enabled = enabled,
                     leadingContent = { Checkbox(option.value in checked, onCheckedChange = null, enabled = enabled) },
+                    verticalAlignment = RowAlignment,
                     colors = rowColors(),
                 ) { Text(option.label) }
             }
