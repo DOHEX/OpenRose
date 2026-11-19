@@ -85,6 +85,7 @@ OpenRose is licensed under [GPL-3.0-or-later](LICENSE).
 
 - [OppoPods](https://github.com/1812z/OppoPods) — the HyperOS integration draws on its approach
 - [Miuix](https://github.com/compose-miuix-ui/miuix) — UI library behind the Miuix style
+- [Backdrop](https://github.com/Kyant0/AndroidLiquidGlass) — liquid glass effects behind the Miuix liquid glass bottom bar
 - [LSPosed](https://github.com/LSPosed/LSPosed) — Xposed framework that runs the system-integration module
 - [libxposed API](https://github.com/libxposed/api) — Xposed API used by the module
 - [Compose Multiplatform](https://github.com/JetBrains/compose-multiplatform) — cross-platform UI framework

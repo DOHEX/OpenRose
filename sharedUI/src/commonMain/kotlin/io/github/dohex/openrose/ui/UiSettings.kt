@@ -6,12 +6,16 @@ enum class Appearance { SYSTEM, LIGHT, DARK }
 enum class PageTransition { MIUIX_SPRING, SLIDE, FADE, NONE }
 enum class BottomBarStyle { FIXED, FLOATING }
 
+/** What the Miuix floating capsule is made of; Material 3 and the fixed bar ignore it. */
+enum class FloatingBarMaterial { FROSTED, LIQUID_GLASS }
+
 data class UiSettings(
     val interfaceStyle: InterfaceStyle = InterfaceStyle.MIUIX,
     val appearance: Appearance = Appearance.SYSTEM,
     val pageTransition: PageTransition = PageTransition.MIUIX_SPRING,
     val backgroundBlurEnabled: Boolean = true,
     val bottomBarStyle: BottomBarStyle = BottomBarStyle.FIXED,
+    val floatingBarMaterial: FloatingBarMaterial = FloatingBarMaterial.FROSTED,
 )
 
 /** Layer-prefixed storage format; missing and unrecognized values use product defaults. */
@@ -36,6 +40,10 @@ object UiSettingsCodec {
         "sharedUI.bottom_bar_style" to when (settings.bottomBarStyle) {
             BottomBarStyle.FIXED -> "fixed"
             BottomBarStyle.FLOATING -> "floating"
+        },
+        "sharedUI.floating_bar_material" to when (settings.floatingBarMaterial) {
+            FloatingBarMaterial.FROSTED -> "frosted"
+            FloatingBarMaterial.LIQUID_GLASS -> "liquid_glass"
         },
     )
 
@@ -65,6 +73,11 @@ object UiSettingsCodec {
                 "fixed" -> BottomBarStyle.FIXED
                 "floating" -> BottomBarStyle.FLOATING
                 else -> defaults.bottomBarStyle
+            },
+            floatingBarMaterial = when (values["sharedUI.floating_bar_material"]) {
+                "frosted" -> FloatingBarMaterial.FROSTED
+                "liquid_glass" -> FloatingBarMaterial.LIQUID_GLASS
+                else -> defaults.floatingBarMaterial
             },
         )
     }

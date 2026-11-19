@@ -295,6 +295,7 @@ fun OpenRoseApp(
                             pagerState = mainTabsPagerState,
                             wide = wide,
                             bottomBarStyle = uiSettings.bottomBarStyle,
+                            floatingBarMaterial = uiSettings.floatingBarMaterial,
                             onNavigate = onNavigate,
                             scrollStates = scrollStates,
                             pageContentFor = { targetPage -> pageContentFor(targetPage) },

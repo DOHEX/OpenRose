@@ -31,6 +31,7 @@ private val projectLinks = listOf(
 private val acknowledgements = listOf(
     AboutLink("OppoPods", "HyperOS 系统集成参考了它的实现思路", "https://github.com/1812z/OppoPods"),
     AboutLink("Miuix", "Miuix 界面风格使用的组件库", "https://github.com/compose-miuix-ui/miuix"),
+    AboutLink("Backdrop", "Miuix 液态玻璃底栏使用的效果库", "https://github.com/Kyant0/AndroidLiquidGlass"),
     AboutLink("LSPosed", "运行系统集成模块的 Xposed 框架", "https://github.com/LSPosed/LSPosed"),
     AboutLink("libxposed API", "模块使用的 Xposed API", "https://github.com/libxposed/api"),
     AboutLink("Compose Multiplatform", "跨平台界面框架", "https://github.com/JetBrains/compose-multiplatform"),

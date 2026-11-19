@@ -127,6 +127,65 @@ class BottomBarStyleUiTest {
     }
 
     @Test
+    fun floatingBarMaterialChoiceOnlyAppliesToTheMiuixFloatingBar() {
+        withPersonalizationHarness(
+            ControlState(platform = PlatformState(permission = PermissionState.GRANTED)),
+            initialUiSettings = UiSettings(interfaceStyle = InterfaceStyle.MIUIX, bottomBarStyle = BottomBarStyle.FIXED),
+        ) { harness ->
+            harness.render()
+            assertFalse(harness.hasText("悬浮底栏材质"), "The fixed bar has no floating material")
+
+            harness.clickText("底栏样式")
+            harness.render()
+            harness.clickText("悬浮胶囊")
+            harness.render()
+            assertTrue(harness.hasText("悬浮底栏材质"), "The Miuix floating bar offers its material")
+            assertTrue(harness.hasText("毛玻璃"), "Frosted is the default material")
+
+            harness.clickText("悬浮底栏材质")
+            harness.render()
+            harness.clickText("液态玻璃")
+            harness.render()
+            assertEquals(FloatingBarMaterial.LIQUID_GLASS, harness.uiSettings.value.floatingBarMaterial)
+
+            harness.clickText("组件风格")
+            harness.render()
+            harness.clickText("Material 3 Expressive")
+            harness.render()
+            assertFalse(harness.hasText("悬浮底栏材质"), "Material 3's floating toolbar has no second material")
+            assertEquals(FloatingBarMaterial.LIQUID_GLASS, harness.uiSettings.value.floatingBarMaterial, "Switching style keeps the material")
+        }
+    }
+
+    @Test
+    fun liquidGlassBarSelectsIconTabsByTapAndByDraggingTheIndicator() {
+        withOpenRoseAppHarness(
+            connectedI7State(),
+            initialUiSettings = settings(InterfaceStyle.MIUIX, BottomBarStyle.FLOATING).copy(floatingBarMaterial = FloatingBarMaterial.LIQUID_GLASS),
+        ) { harness ->
+            harness.render()
+            val tabs = harness.tabs()
+            assertEquals(3, tabs.size, "Liquid glass bar must have 3 tabs")
+            assertTrue(tabs.none { it.hasText("耳机") }, "Liquid glass tabs must not render text labels")
+            assertEquals(true, tabs.tabFor("耳机").config.getOrNull(SemanticsProperties.Selected))
+
+            harness.clickContentDescription("状态")
+            harness.render()
+            assertEquals(true, harness.tabs().tabFor("状态").config.getOrNull(SemanticsProperties.Selected))
+
+            // Only the liquid glass indicator selects by dragging: carry it from 状态 over to 设置.
+            val from = harness.tabs().tabFor("状态").boundsInRoot.center
+            val to = harness.tabs().tabFor("设置").boundsInRoot.center
+            harness.pressAndDrag(from, to - from)
+            harness.render()
+            harness.releaseTouch()
+            harness.render(30)
+            assertEquals(true, harness.tabs().tabFor("设置").config.getOrNull(SemanticsProperties.Selected))
+            assertTrue(harness.hasText("个性化"), "Settings page active after dragging the indicator onto 设置")
+        }
+    }
+
+    @Test
     fun onlyFloatingBottomBarReservesTrailingClearance() {
         for (style in InterfaceStyle.entries) {
             withMainShellHarness(style, BottomBarStyle.FLOATING) { floating ->

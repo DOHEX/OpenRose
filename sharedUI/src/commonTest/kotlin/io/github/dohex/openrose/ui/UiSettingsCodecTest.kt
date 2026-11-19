@@ -6,7 +6,14 @@ import kotlin.test.assertEquals
 class UiSettingsCodecTest {
     @Test
     fun roundTripPreservesAppearanceSettings() {
-        val settings = UiSettings(InterfaceStyle.MATERIAL3, Appearance.DARK, PageTransition.FADE, false, BottomBarStyle.FLOATING)
+        val settings = UiSettings(
+            InterfaceStyle.MATERIAL3,
+            Appearance.DARK,
+            PageTransition.FADE,
+            false,
+            BottomBarStyle.FLOATING,
+            FloatingBarMaterial.LIQUID_GLASS,
+        )
         assertEquals(
             mapOf(
                 "sharedUI.interface_style" to "material3",
@@ -14,6 +21,7 @@ class UiSettingsCodecTest {
                 "sharedUI.page_transition" to "fade",
                 "sharedUI.background_blur_enabled" to "false",
                 "sharedUI.bottom_bar_style" to "floating",
+                "sharedUI.floating_bar_material" to "liquid_glass",
             ),
             UiSettingsCodec.encode(settings),
         )
@@ -22,11 +30,12 @@ class UiSettingsCodecTest {
 
     @Test
     fun everyAppearanceOptionRoundTrips() {
+        val bars = BottomBarStyle.entries.flatMap { bar -> FloatingBarMaterial.entries.map { bar to it } }
         for (style in InterfaceStyle.entries) {
             for (appearance in Appearance.entries) {
                 for (transition in PageTransition.entries) {
-                    for (bar in BottomBarStyle.entries) {
-                        val settings = UiSettings(style, appearance, transition, false, bar)
+                    for ((bar, material) in bars) {
+                        val settings = UiSettings(style, appearance, transition, false, bar, material)
                         assertEquals(settings, UiSettingsCodec.decode(UiSettingsCodec.encode(settings)))
                     }
                 }
@@ -46,6 +55,7 @@ class UiSettingsCodecTest {
                     "sharedUI.page_transition" to "unknown",
                     "sharedUI.background_blur_enabled" to "unknown",
                     "sharedUI.bottom_bar_style" to "unknown",
+                    "sharedUI.floating_bar_material" to "unknown",
                 ),
             ),
         )

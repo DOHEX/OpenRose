@@ -20,7 +20,9 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.dp
+import com.kyant.backdrop.backdrops.LayerBackdrop
 import top.yukonga.miuix.kmp.basic.*
+import top.yukonga.miuix.kmp.blur.Backdrop
 import top.yukonga.miuix.kmp.blur.BlendColorEntry
 import top.yukonga.miuix.kmp.blur.BlurDefaults
 import top.yukonga.miuix.kmp.blur.highlight.Highlight
@@ -141,6 +143,7 @@ internal fun MiuixMainShell(
     pagerState: MainTabsPagerState,
     wide: Boolean,
     bottomBarStyle: BottomBarStyle = BottomBarStyle.FIXED,
+    floatingBarMaterial: FloatingBarMaterial = FloatingBarMaterial.FROSTED,
     onNavigate: (AppPage) -> Unit,
     scrollStates: Map<AppPage, ScrollState>,
     pageContentFor: @Composable (AppPage) -> Unit,
@@ -156,75 +159,36 @@ internal fun MiuixMainShell(
         pagerState.syncPage()
     }
     val backdropActive = LocalBackdropBlurActive.current
-    val floatingBackdrop = rememberAppBackdrop(
+    val floating = !wide && bottomBarStyle == BottomBarStyle.FLOATING
+    // Liquid glass needs the same shader support as blur; without it the capsule falls back to the solid frosted bar.
+    val glassBackdrop = rememberLiquidGlassBackdrop(
         MiuixTheme.colorScheme.surface,
-        backdropActive && !wide && bottomBarStyle == BottomBarStyle.FLOATING,
+        active = floating && backdropActive && floatingBarMaterial == FloatingBarMaterial.LIQUID_GLASS,
     )
-    val currentTab = mainPages.getOrElse(pagerState.selectedPage) { AppPage.HEADPHONES }
+    val floatingBackdrop = rememberAppBackdrop(MiuixTheme.colorScheme.surface, backdropActive && floating && glassBackdrop == null)
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         bottomBar = {
             if (!wide) {
-                if (bottomBarStyle == BottomBarStyle.FLOATING) {
-                    // Mirrors the Miuix example: the glass stroke highlight (or, without blur, the divider
-                    // outline) separates the bar from surfaceContainer cards scrolling underneath it.
-                    val blurBackdrop = floatingBackdrop.takeIf { backdropActive }
-                    val dark = MiuixTheme.colorScheme.surface.luminance() < 0.5f
-                    FloatingNavigationBar(
-                        modifier = if (blurBackdrop != null) {
-                            Modifier.textureBlur(
-                                backdrop = blurBackdrop,
-                                shape = RoundedCornerShape(FloatingToolbarDefaults.CornerRadius),
-                                blurRadius = 25f,
-                                colors = BlurDefaults.blurColors(
-                                    blendColors = listOf(
-                                        BlendColorEntry(color = MiuixTheme.colorScheme.surfaceContainer.copy(alpha = 0.6f)),
-                                    ),
-                                ),
-                                highlight = if (dark) Highlight.GlassStrokeMiddleDark else Highlight.GlassStrokeMiddleLight,
-                            )
-                        } else {
-                            Modifier
-                        },
-                        color = if (blurBackdrop != null) Color.Transparent else MiuixTheme.colorScheme.surfaceContainer,
-                        showDivider = blurBackdrop == null,
-                    ) {
-                        mainPages.forEachIndexed { index, destination ->
-                            FloatingNavigationBarItem(
-                                selected = currentTab == destination,
-                                onClick = {
-                                    pagerState.selectPage(index, animate = animatePageChanges)
-                                    onNavigate(destination)
-                                },
-                                icon = RoseIcons[destination.icon],
-                                label = destination.navigationLabel,
-                            )
-                        }
-                    }
-                } else {
-                    NavigationBar {
-                        mainPages.forEachIndexed { index, destination ->
-                            NavigationBarItem(
-                                selected = currentTab == destination,
-                                onClick = {
-                                    pagerState.selectPage(index, animate = animatePageChanges)
-                                    onNavigate(destination)
-                                },
-                                icon = RoseIcons[destination.icon],
-                                label = destination.navigationLabel,
-                            )
-                        }
-                    }
-                }
+                MiuixMainBottomBar(
+                    selectedIndex = pagerState.selectedPage,
+                    floating = floating,
+                    floatingBackdrop = floatingBackdrop.takeIf { backdropActive },
+                    glassBackdrop = glassBackdrop,
+                    onSelect = { index ->
+                        pagerState.selectPage(index, animate = animatePageChanges)
+                        onNavigate(mainPages[index])
+                    },
+                )
             }
         },
     ) { outerPadding ->
-        val isFloating = !wide && bottomBarStyle == BottomBarStyle.FLOATING
-        val pagerBottomPadding = if (isFloating) 0.dp else outerPadding.calculateBottomPadding()
-        val trailingBottomPadding = if (isFloating) outerPadding.calculateBottomPadding() else 0.dp
+        val pagerBottomPadding = if (floating) 0.dp else outerPadding.calculateBottomPadding()
+        val trailingBottomPadding = if (floating) outerPadding.calculateBottomPadding() else 0.dp
         val pagerModifier = Modifier
             .fillMaxSize()
             .appBackdropContent(floatingBackdrop, backdropActive)
+            .liquidGlassContent(glassBackdrop)
             .padding(bottom = pagerBottomPadding)
         val pageContent: @Composable PagerScope.(Int) -> Unit = { pageIndex ->
             val page = mainPages[pageIndex]
@@ -314,6 +278,66 @@ internal fun MiuixMainShell(
                 key = { index -> mainPages[index] },
                 pageContent = pageContent,
             )
+        }
+    }
+}
+
+/**
+ * The narrow-screen bar: liquid glass when [glassBackdrop] is given, otherwise the floating capsule (frosted over
+ * [floatingBackdrop], solid without it) or the fixed bar. [onSelect] receives the index into [mainPages].
+ */
+@Composable
+private fun MiuixMainBottomBar(
+    selectedIndex: Int,
+    floating: Boolean,
+    floatingBackdrop: Backdrop?,
+    glassBackdrop: LayerBackdrop?,
+    onSelect: (Int) -> Unit,
+) {
+    if (glassBackdrop != null) {
+        MiuixLiquidGlassBottomBar(backdrop = glassBackdrop, selectedIndex = selectedIndex, onSelect = onSelect)
+    } else if (floating) {
+        // Mirrors the Miuix example: the glass stroke highlight (or, without blur, the divider
+        // outline) separates the bar from surfaceContainer cards scrolling underneath it.
+        val dark = MiuixTheme.colorScheme.surface.luminance() < 0.5f
+        FloatingNavigationBar(
+            modifier = if (floatingBackdrop != null) {
+                Modifier.textureBlur(
+                    backdrop = floatingBackdrop,
+                    shape = RoundedCornerShape(FloatingToolbarDefaults.CornerRadius),
+                    blurRadius = 25f,
+                    colors = BlurDefaults.blurColors(
+                        blendColors = listOf(
+                            BlendColorEntry(color = MiuixTheme.colorScheme.surfaceContainer.copy(alpha = 0.6f)),
+                        ),
+                    ),
+                    highlight = if (dark) Highlight.GlassStrokeMiddleDark else Highlight.GlassStrokeMiddleLight,
+                )
+            } else {
+                Modifier
+            },
+            color = if (floatingBackdrop != null) Color.Transparent else MiuixTheme.colorScheme.surfaceContainer,
+            showDivider = floatingBackdrop == null,
+        ) {
+            mainPages.forEachIndexed { index, destination ->
+                FloatingNavigationBarItem(
+                    selected = index == selectedIndex,
+                    onClick = { onSelect(index) },
+                    icon = RoseIcons[destination.icon],
+                    label = destination.navigationLabel,
+                )
+            }
+        }
+    } else {
+        NavigationBar {
+            mainPages.forEachIndexed { index, destination ->
+                NavigationBarItem(
+                    selected = index == selectedIndex,
+                    onClick = { onSelect(index) },
+                    icon = RoseIcons[destination.icon],
+                    label = destination.navigationLabel,
+                )
+            }
         }
     }
 }

@@ -107,6 +107,16 @@ fun PersonalizationPage(model: OpenRoseModel, platformUi: PlatformUi, wide: Bool
                     selected = uiSettings.bottomBarStyle,
                     onSelect = { onUiSettingsChange(uiSettings.copy(bottomBarStyle = it)) },
                 )
+                // Liquid glass is a Miuix-only capsule; Material 3's floating toolbar has no second material.
+                if (uiSettings.interfaceStyle == InterfaceStyle.MIUIX && uiSettings.bottomBarStyle == BottomBarStyle.FLOATING) {
+                    AppChoiceRow(
+                        title = "悬浮底栏材质",
+                        valueText = floatingBarMaterialLabel(uiSettings.floatingBarMaterial),
+                        options = FloatingBarMaterial.entries.map { AppOption(it, floatingBarMaterialLabel(it)) },
+                        selected = uiSettings.floatingBarMaterial,
+                        onSelect = { onUiSettingsChange(uiSettings.copy(floatingBarMaterial = it)) },
+                    )
+                }
             }
             AppSwitchRow(
                 title = "背景模糊",
@@ -277,6 +287,11 @@ private fun appearanceLabel(appearance: Appearance): String = when (appearance) 
 internal fun bottomBarStyleLabel(style: BottomBarStyle): String = when (style) {
     BottomBarStyle.FIXED -> "标准固定"
     BottomBarStyle.FLOATING -> "悬浮胶囊"
+}
+
+private fun floatingBarMaterialLabel(material: FloatingBarMaterial): String = when (material) {
+    FloatingBarMaterial.FROSTED -> "毛玻璃"
+    FloatingBarMaterial.LIQUID_GLASS -> "液态玻璃"
 }
 
 private fun pageTransitionLabel(transition: PageTransition): String = when (transition) {

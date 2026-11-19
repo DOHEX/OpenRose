@@ -85,6 +85,7 @@ OpenRose 以 [GPL-3.0-or-later](LICENSE) 授权。
 
 - [OppoPods](https://github.com/1812z/OppoPods) — HyperOS 系统集成参考了它的实现思路
 - [Miuix](https://github.com/compose-miuix-ui/miuix) — Miuix 界面风格使用的组件库
+- [Backdrop](https://github.com/Kyant0/AndroidLiquidGlass) — Miuix 液态玻璃底栏使用的效果库
 - [LSPosed](https://github.com/LSPosed/LSPosed) — 运行系统集成模块的 Xposed 框架
 - [libxposed API](https://github.com/libxposed/api) — 模块使用的 Xposed API
 - [Compose Multiplatform](https://github.com/JetBrains/compose-multiplatform) — 跨平台界面框架
