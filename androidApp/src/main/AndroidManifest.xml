@@ -73,10 +73,13 @@
         <!--
             The 快捷面板 is opened by the quick settings tile and by the status notification, whose PendingIntent is
             created in the system Bluetooth process, so it is exported. It has its own task affinity and stays out of
-            recents so opening it never brings the main task forward.
+            recents so opening it never brings the main task forward. A finished root activity otherwise leaves an
+            empty task record that HyperOS recents still shows as a card despite excludeFromRecents, so the task is
+            removed once the panel finishes.
         -->
         <activity
             android:name=".QuickPanelActivity"
+            android:autoRemoveFromRecents="true"
             android:exported="true"
             android:excludeFromRecents="true"
             android:launchMode="singleTask"
