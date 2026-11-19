@@ -67,14 +67,12 @@ internal fun NoiseControlCard(
     AppDashboardCard {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             AppText("降噪模式", Modifier.weight(1f), role = AppTextRole.Title)
-            AppText(
-                if (pending) {
-                    "等待设备确认"
-                } else {
-                    confirmedMode?.let { "已确认：${semanticLabel(it)}" } ?: "当前状态未知"
-                },
-                role = AppTextRole.Summary,
-            )
+            val headerStatus = when {
+                pending -> "等待设备确认"
+                confirmedMode == null -> "当前状态未知"
+                else -> null
+            }
+            headerStatus?.let { AppText(it, role = AppTextRole.Summary) }
         }
         NoiseModeChoices(modes, confirmedMode, enabled && DeviceSetting.NOISE_MODE in writable) { mode ->
             if (mode != confirmedMode) onSet(DeviceSetting.NOISE_MODE, FieldValue.Text(mode))
@@ -93,7 +91,10 @@ internal fun NoiseControlCard(
                     val levels = remember(levelCapabilities.levels) {
                         levelCapabilities.levels.sorted().map { level -> AppOption(level, "$level 档") }
                     }
-                    AppText(title, role = AppTextRole.Summary)
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        AppText(title, Modifier.weight(1f), role = AppTextRole.Summary)
+                        if (selected == null) AppText("当前状态未知", role = AppTextRole.Summary)
+                    }
                     AppSegmented(levels, selected, enabled) { level ->
                         if (level != selected) onSet(setting, FieldValue.Number(level))
                     }

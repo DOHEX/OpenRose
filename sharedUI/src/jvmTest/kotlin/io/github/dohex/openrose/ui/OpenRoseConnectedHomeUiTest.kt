@@ -49,7 +49,7 @@ class OpenRoseConnectedHomeUiTest {
                 harness.homeNavigationRequest.value++
                 harness.render(frames = 120)
                 assertTrue(harness.hasContentDescription("耳机菜单"))
-                assertTrue(harness.hasText("已连接 · 控制会话已就绪"))
+                assertTrue(harness.hasText("已连接"))
                 assertFalse(harness.hasText("组件风格"))
                 assertEquals(initial.connection, harness.state.value.connection)
                 assertTrue(harness.connects.isEmpty() && harness.disconnects.isEmpty())
@@ -200,8 +200,7 @@ class OpenRoseConnectedHomeUiTest {
             withHarness(420, 900, connectedState(), style, wholeApp = true) { harness ->
                 harness.render()
                 assertTrue(harness.hasText("i5"))
-                assertTrue(harness.hasText("控制连接"))
-                assertTrue(harness.hasText("已连接 · 控制会话已就绪"))
+                assertTrue(harness.hasText("已连接"))
                 assertTrue(harness.hasText("左耳"))
                 assertTrue(harness.hasText("86%"))
                 assertTrue(harness.hasText("右耳"))
@@ -209,7 +208,8 @@ class OpenRoseConnectedHomeUiTest {
                 assertTrue(harness.hasText("充电盒"))
                 assertTrue(harness.hasText("67%"))
                 assertTrue(harness.hasText("降噪模式"))
-                assertTrue(harness.hasText("已确认：主动降噪"))
+                assertTrue(harness.hasSelectedText("降噪"), "the confirmed mode shows only as the selection in $style")
+                assertFalse(harness.hasText("当前状态未知"))
                 assertFalse(harness.hasText("ZT"), "model configuration stays out of the daily home in $style")
                 assertFalse(harness.hasText("RS Common V2"), "model configuration stays out of the daily home in $style")
 
@@ -430,7 +430,7 @@ class OpenRoseConnectedHomeUiTest {
             withHarness(420, 900, base.copy(device = device), style) { harness ->
                 harness.render()
                 assertTrue(harness.hasText("游戏模式"))
-                assertFalse(harness.hasText("当前状态未知"))
+                assertTrue(harness.hasText("当前状态未知"), "an unread toggle explains why it is disabled in $style")
                 assertFalse(harness.hasText("设备已确认：开启"))
                 assertFalse(harness.hasText("设备已确认：关闭"))
                 assertTrue(

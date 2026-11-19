@@ -10,7 +10,7 @@ import org.jetbrains.compose.resources.vectorResource
 internal fun materialIcon(icon: RoseIcon): ImageVector = vectorResource(
     when (icon) {
         RoseIcon.HEADPHONES -> Res.drawable.msr_headphones
-        RoseIcon.STATUS -> Res.drawable.msr_extension
+        RoseIcon.STATUS -> Res.drawable.msr_monitor_heart
         RoseIcon.SETTINGS -> Res.drawable.msr_settings
         RoseIcon.PLUS -> Res.drawable.msr_add
         RoseIcon.MORE -> Res.drawable.msr_more_vert

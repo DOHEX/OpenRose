@@ -96,7 +96,6 @@ internal fun HeadphonesPage(
                             verticalArrangement = Arrangement.spacedBy(4.dp),
                         ) {
                             AppText(device.profile.shortLabel, role = AppTextRole.Title)
-                            AppText("控制连接", role = AppTextRole.Footnote)
                             AppText(
                                 state.connection.phaseOrNull()?.displayText() ?: "未连接",
                                 role = AppTextRole.Summary,
@@ -694,5 +693,5 @@ internal fun ConnectionPhase.displayText(): String = when (this) {
     ConnectionPhase.DISCOVERING -> "正在发现耳机服务…"
     ConnectionPhase.SUBSCRIBING -> "正在订阅状态通知…"
     ConnectionPhase.INITIALIZING -> "正在初始化并读取状态…"
-    ConnectionPhase.READY -> "已连接 · 控制会话已就绪"
+    ConnectionPhase.READY -> "已连接"
 }

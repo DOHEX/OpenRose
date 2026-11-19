@@ -55,7 +55,6 @@ interface PlatformUi {
             AppArrowRow(
                 title = "诊断与记录",
                 summary = "查看本平台状态与诊断信息",
-                value = "查看",
                 icon = RoseIcon.LOG,
                 onClick = onDiagnostics,
             )

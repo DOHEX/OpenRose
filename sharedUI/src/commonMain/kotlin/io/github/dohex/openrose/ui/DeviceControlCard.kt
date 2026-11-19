@@ -169,7 +169,7 @@ internal fun SettingToggleChoices(
     val isKnown = selected != null
     AppSwitchRow(
         title = label,
-        summary = null,
+        summary = if (isKnown) null else "当前状态未知",
         checked = selected ?: false,
         enabled = enabled && isKnown,
         icon = icon,

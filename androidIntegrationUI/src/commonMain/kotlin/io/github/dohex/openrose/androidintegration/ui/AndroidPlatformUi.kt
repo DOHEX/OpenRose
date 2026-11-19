@@ -306,7 +306,7 @@ class AndroidPlatformUi(
             AppArrowRow(
                 title = "诊断与记录",
                 summary = if (applicable) "系统入口、跨进程通道与呈现记录" else "查看本平台状态与诊断信息",
-                value = if (!applicable || integration.platform.module == ModuleAvailability.Available) "查看" else "待就绪",
+                value = "待就绪".takeIf { applicable && integration.platform.module != ModuleAvailability.Available },
                 icon = RoseIcon.LOG,
                 onClick = onDiagnostics,
             )

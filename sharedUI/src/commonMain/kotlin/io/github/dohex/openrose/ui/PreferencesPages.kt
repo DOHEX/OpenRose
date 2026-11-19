@@ -42,10 +42,10 @@ fun PreferencesPage(model: OpenRoseModel, platformUi: PlatformUi, onPersonalizat
         platformUi.SettingsSections(state, PlatformSettingsPosition.BEFORE_CONNECTION)
 
         if (state.platform.controlTransportApplicability == PlatformApplicability.APPLICABLE) {
-            AppGroup(title = "连接偏好") {
+            AppGroup(title = "高级") {
                 AppSwitchRow(
                     title = "强制使用 BLE",
-                    summary = "仅影响下一次连接",
+                    summary = "连接不稳定时再开启；仅影响下一次连接",
                     checked = state.settings.forceBle,
                     onChange = { model.updateSettings(state.settings.copy(forceBle = it)) },
                 )

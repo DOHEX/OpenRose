@@ -124,7 +124,7 @@ class OpenRoseFeedbackUiTest {
                 harness.clickTab("我的耳机")
                 harness.render(frames = 30)
                 assertFalse(harness.hasText("设备已确认设置"), "a completed operation is not replayed when returning home in $style")
-                assertTrue(harness.hasText("已确认：抗风噪"), "the current mode comes from device state in $style")
+                assertTrue(harness.hasSelectedText("抗风噪"), "the current mode comes from device state in $style")
                 assertFalse(harness.hasText("降噪模式 · #42"), "a confirmed operation is still not history on home in $style")
             }
         }
