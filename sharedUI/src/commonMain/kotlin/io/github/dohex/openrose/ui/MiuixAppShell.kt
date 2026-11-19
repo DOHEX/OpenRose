@@ -121,7 +121,6 @@ private fun MiuixHeadphoneActions(
             show = connectedHome && menuExpanded,
             popupPositionProvider = ListPopupDefaults.ContextMenuPositionProvider,
             alignment = PopupPositionProvider.Align.TopEnd,
-            enableWindowDim = false,
             onDismissRequest = { onMenuExpandedChange(false) },
         ) {
             ListPopupColumn {
