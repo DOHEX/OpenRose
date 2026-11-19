@@ -35,4 +35,4 @@ Requires an Xposed framework; see [HyperOS integration](../../guides/hyperos-int
 
 ## Privacy
 
-OpenRose talks to the earphones directly over local Bluetooth and needs no account sign-up or sign-in.
+OpenRose talks to the earphones directly over local Bluetooth, needs no account, and the Android app has no network permission. See [Permissions and privacy](../permissions/) for what each permission is for.

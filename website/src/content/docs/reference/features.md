@@ -35,4 +35,4 @@ description: OpenRose 提供的耳机控制、外观、后台控制与 HyperOS �
 
 ## 隐私
 
-OpenRose 通过本地蓝牙直接与耳机通信，不需要注册或登录任何账号。
+OpenRose 通过本地蓝牙直接与耳机通信，不需要账号，Android 应用也没有网络权限。各项权限的用途见[权限与隐私](../permissions/)。

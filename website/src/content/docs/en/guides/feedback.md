@@ -15,6 +15,7 @@ Report bugs and request features in [GitHub Issues](https://github.com/DOHEX/Ope
 
 ## Check first
 
+- Look up the message you see in [Troubleshooting](../troubleshooting/).
 - Whether your model is in [Supported earphones](../../reference/supported-earphones/), and its verification status.
 - Whether the earphones are connected to audio in the system Bluetooth settings. OpenRose's control connection follows the audio connection; see [Getting started](../getting-started/#control-connection-and-audio-connection).
 - If background control does not come back, check the setup for your Android version in [Background control](../background-control/).

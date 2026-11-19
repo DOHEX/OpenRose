@@ -34,13 +34,19 @@ export default defineConfig({
 						'guides/background-control',
 						'guides/hyperos-integration',
 						'guides/linux-desktop',
+						'guides/troubleshooting',
 						'guides/feedback',
 					],
 				},
 				{
 					label: '参考',
 					translations: { en: 'Reference' },
-					items: ['reference/supported-earphones', 'reference/features', 'reference/platforms'],
+					items: [
+						'reference/supported-earphones',
+						'reference/features',
+						'reference/platforms',
+						'reference/permissions',
+					],
 				},
 				{
 					label: '开发',
