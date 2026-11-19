@@ -147,6 +147,14 @@ class AndroidPlatformUi(
                     checked = settings.focusNotificationEnabled,
                     onChange = { saveSystemPreference(settings.copy(focusNotificationEnabled = it)) },
                 )
+                if (settings.focusNotificationEnabled && settings.islandMode == IslandMode.MODULE) {
+                    AppSwitchRow(
+                        title = "常驻电量岛",
+                        summary = "连接期间超级岛一直显示电量；关闭后只在显示时机弹出几秒",
+                        checked = settings.islandSummaryEnabled,
+                        onChange = { saveSystemPreference(settings.copy(islandSummaryEnabled = it)) },
+                    )
+                }
                 if (settings.focusNotificationEnabled) {
                     val unavailable = integration.platform.unavailableStatusTargets
                     val selectedTarget = settings.statusNotificationTarget
@@ -166,10 +174,11 @@ class AndroidPlatformUi(
             }
 
             if (settings.islandMode == IslandMode.MODULE) {
-                AppGroup(title = "模块显示时机") {
-                    if (settings.islandTriggers.isEmpty()) {
-                        AppText("未选择显示时机，不自动触发。", role = AppTextRole.Summary)
-                    }
+                val footnote = listOfNotNull(
+                    "未选择显示时机，不会弹出展开。".takeIf { settings.islandTriggers.isEmpty() },
+                    "入盒时仅对 $inCaseModels 生效。",
+                ).joinToString("\n")
+                AppGroup(title = "模块显示时机", footnote = footnote) {
                     AppCheckGroup(
                         options = listOf(
                             AppOption(
@@ -194,7 +203,6 @@ class AndroidPlatformUi(
                             saveSystemPreference(settings.copy(islandTriggers = triggers))
                         },
                     )
-                    AppText("入盒时仅对 $inCaseModels 生效。", role = AppTextRole.Summary)
                 }
             }
 

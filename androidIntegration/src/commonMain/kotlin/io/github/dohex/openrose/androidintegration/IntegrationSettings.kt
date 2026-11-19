@@ -19,6 +19,8 @@ enum class StatusNotificationTarget { OPENROSE, SYSTEM, ROSELINK, QUICK_PANEL }
 data class IntegrationSettings(
     val islandMode: IslandMode = IslandMode.OFFICIAL,
     val focusNotificationEnabled: Boolean = true,
+    /** 常驻电量岛: in module mode, the status notification keeps the battery island for the whole connection. */
+    val islandSummaryEnabled: Boolean = true,
     val islandTriggers: PersistentSet<IslandTrigger> = persistentSetOf(IslandTrigger.CONNECTION),
     val statusNotificationTarget: StatusNotificationTarget = StatusNotificationTarget.OPENROSE,
     val fusionSettingsDestination: FusionSettingsDestination = FusionSettingsDestination.SYSTEM,
@@ -50,6 +52,7 @@ object IntegrationSettingsCodec {
             IslandMode.MODULE -> "module"
         },
         "androidIntegration.focus_notification_enabled" to settings.focusNotificationEnabled.toString(),
+        "androidIntegration.island_summary_enabled" to settings.islandSummaryEnabled.toString(),
         "androidIntegration.island_triggers" to settings.islandTriggers.joinToString(",") {
             when (it) {
                 IslandTrigger.CONNECTION -> "connection"
@@ -83,6 +86,8 @@ object IntegrationSettingsCodec {
             },
             focusNotificationEnabled = values["androidIntegration.focus_notification_enabled"]?.toBooleanStrictOrNull()
                 ?: defaults.focusNotificationEnabled,
+            islandSummaryEnabled = values["androidIntegration.island_summary_enabled"]?.toBooleanStrictOrNull()
+                ?: defaults.islandSummaryEnabled,
             islandTriggers = decodeTriggers(values["androidIntegration.island_triggers"]) ?: defaults.islandTriggers,
             statusNotificationTarget = decodeStatusTarget(values["androidIntegration.status_notification_target"])
                 ?: defaults.statusNotificationTarget,

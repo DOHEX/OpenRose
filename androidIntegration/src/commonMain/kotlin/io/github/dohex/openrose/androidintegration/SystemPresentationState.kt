@@ -47,6 +47,8 @@ data class SystemPresentationState(
     val notificationTag: String? = null,
     val islandMode: IslandMode = IslandMode.OFFICIAL,
     val focusNotificationEnabled: Boolean = true,
+    /** 常驻电量岛: whether module mode keeps the battery island on the status notification between prompts. */
+    val islandSummaryEnabled: Boolean = true,
     /** False when every island-capable output must omit island content. */
     val allowIslandFields: Boolean = false,
     val statusNotificationTarget: StatusNotificationTarget = StatusNotificationTarget.OPENROSE,
@@ -62,21 +64,25 @@ data class SystemPresentationState(
 
     /**
      * Whether the status notification carries the persistent summary state. Official mode leaves it out: the connection
-     * prompt is its only island, as with Xiaomi's own earphones, so the two never share the island at connection.
+     * prompt is its only island, as with Xiaomi's own earphones, so the two never share the island at connection. Without
+     * it, a module prompt shows as its own timed island.
      */
     val statusSummaryIsland: Boolean
-        get() = allowIslandFields && islandMode == IslandMode.MODULE
+        get() = allowIslandFields && islandMode == IslandMode.MODULE && islandSummaryEnabled
 }
 
 /** The system view of one ControlState capture, showing [prompt] only while it belongs to that capture's ready session. */
 internal fun ControlState.systemPresentation(settings: IntegrationSettings, prompt: IslandPrompt?): SystemPresentationState {
     val reference = readySession
     val mode = settings.islandMode
-    val allowIslandFields = mode != IslandMode.OFF && (mode != IslandMode.MODULE || settings.islandTriggers.isNotEmpty())
+    // Module mode has island content while some display timing can prompt or the status notification keeps the summary.
+    val moduleIsland = settings.islandTriggers.isNotEmpty() || (settings.islandSummaryEnabled && settings.focusNotificationEnabled)
+    val allowIslandFields = mode != IslandMode.OFF && (mode != IslandMode.MODULE || moduleIsland)
     val device = device?.takeIf { reference != null }
         ?: return SystemPresentationState(
             islandMode = mode,
             focusNotificationEnabled = settings.focusNotificationEnabled,
+            islandSummaryEnabled = settings.islandSummaryEnabled,
             allowIslandFields = allowIslandFields,
             statusNotificationTarget = settings.statusNotificationTarget,
             dynamicColor = settings.dynamicColor,
@@ -86,6 +92,7 @@ internal fun ControlState.systemPresentation(settings: IntegrationSettings, prom
         notificationTag = device.deviceId.value,
         islandMode = mode,
         focusNotificationEnabled = settings.focusNotificationEnabled,
+        islandSummaryEnabled = settings.islandSummaryEnabled,
         allowIslandFields = allowIslandFields,
         statusNotificationTarget = settings.statusNotificationTarget,
         dynamicColor = settings.dynamicColor,

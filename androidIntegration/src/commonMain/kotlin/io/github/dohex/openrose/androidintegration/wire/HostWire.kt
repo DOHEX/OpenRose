@@ -204,6 +204,7 @@ object HostWire {
     private fun encodePresentation(state: SystemPresentationState): Wire = obj(
         "reference" to state.reference?.let(ControlWire::encode), "tag" to state.notificationTag?.let(::str),
         "mode" to Wire.Str(state.islandMode.name), "focus" to bool(state.focusNotificationEnabled),
+        "summary" to bool(state.islandSummaryEnabled),
         "islandFields" to bool(state.allowIslandFields), "target" to Wire.Str(state.statusNotificationTarget.name),
         "dynamic" to bool(state.dynamicColor),
         "battery" to state.battery?.let { battery ->
@@ -237,7 +238,8 @@ object HostWire {
         SystemPresentationState(
             reference = node.optional("reference")?.let(ControlWire::decodeReference),
             notificationTag = node.optional("tag")?.asStr(), islandMode = node.field("mode").asEnum(),
-            focusNotificationEnabled = node.bool("focus"), allowIslandFields = node.bool("islandFields"),
+            focusNotificationEnabled = node.bool("focus"), islandSummaryEnabled = node.bool("summary"),
+            allowIslandFields = node.bool("islandFields"),
             statusNotificationTarget = node.field("target").asEnum(), dynamicColor = node.bool("dynamic"),
             battery = node.optional("battery")?.asObj()?.let {
                 SystemBatteryState(

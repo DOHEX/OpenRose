@@ -141,7 +141,7 @@ class SystemSettingsOwnershipUiTest {
                 harness.clickText("模块")
                 harness.render()
                 assertTrue(harness.hasText("模块显示时机"), "trigger settings appear in module mode in $style")
-                assertTrue(harness.hasText("未选择显示时机，不自动触发。"), "an empty trigger set stays explicit in $style")
+                assertTrue(harness.hasTextLine("未选择显示时机，不会弹出展开。"), "an empty trigger set stays explicit in $style")
                 assertTrue(harness.integration.value.settings.islandTriggers.isEmpty())
 
                 harness.scrollToText("超级岛")
@@ -159,7 +159,7 @@ class SystemSettingsOwnershipUiTest {
                 harness.render()
                 harness.clickText("模块")
                 harness.render()
-                assertTrue(harness.hasText("未选择显示时机，不自动触发。"), "the empty trigger set survives hiding and restoring in $style")
+                assertTrue(harness.hasTextLine("未选择显示时机，不会弹出展开。"), "the empty trigger set survives hiding and restoring in $style")
                 assertTrue(harness.settingWrites.isEmpty())
             }
         }

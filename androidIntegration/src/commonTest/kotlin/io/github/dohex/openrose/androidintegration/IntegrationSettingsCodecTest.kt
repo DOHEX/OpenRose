@@ -41,6 +41,7 @@ class IntegrationSettingsCodecTest {
             IslandMode.entries.map { base.copy(islandMode = it) } +
             FusionSettingsDestination.entries.map { base.copy(fusionSettingsDestination = it) } +
             StatusNotificationTarget.entries.map { base.copy(statusNotificationTarget = it) } +
+            listOf(base.copy(islandSummaryEnabled = false)) +
             listOf(persistentSetOf(), persistentSetOf(IslandTrigger.IN_CASE), persistentSetOf(IslandTrigger.IN_CASE, IslandTrigger.CONNECTION))
                 .map { base.copy(islandTriggers = it) }
         for (settings in variants) {

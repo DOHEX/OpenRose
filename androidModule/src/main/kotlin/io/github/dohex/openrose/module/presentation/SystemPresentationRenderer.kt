@@ -263,7 +263,7 @@ internal class SystemPresentationRenderer(
             val noise = knownNoise(snapshot)
             val summary = batterySummary(snapshot)
             val body = summary + noise?.let { " · ${modeLabel(it.mode)}" }.orEmpty()
-            val title = deviceAlias(snapshot) ?: profileLabel(snapshot.wire.getString("profile"))
+            val title = cardTitle(snapshot)
             val nextNoise = noise?.takeIf { canControlNoise(snapshot, it.mode) && actionReceiverRegistered }
                 ?.let { nextNoiseMode(snapshot, it.mode) }
             val canDisconnect = actionReceiverRegistered && snapshot.address != null
@@ -307,6 +307,7 @@ internal class SystemPresentationRenderer(
                     noiseText = noise?.let { modeLabel(it.mode) },
                     buttons = actions,
                     island = snapshot.statusIsland,
+                    expandOnEntrance = showsPrompt,
                     snapshot = snapshot,
                     aodTitle = aodTitle(snapshot),
                     iconColors = iconColors,
@@ -510,21 +511,45 @@ internal class SystemPresentationRenderer(
         handler.postDelayed(record.timeout!!, durationMillis)
     }
 
+    /**
+     * A module prompt of its own: the battery island, plus the focus card as its expanded state, which the first
+     * appearance opens before the island settles to the summary.
+     */
     private fun buildFocusExtras(snapshot: RenderedSnapshot, showNotification: Boolean, durationMillis: Long): Bundle {
         val durationSeconds = ((durationMillis + 999L) / 1_000L).coerceIn(1L, 5L).toInt()
+        val title = cardTitle(snapshot)
         val template = JSONObject()
+            .put("protocol", 1)
+            .put("business", STATUS_CARD_BUSINESS)
+            .put("islandFirstFloat", true)
             .put("enableFloat", true)
-            .put("ticker", "OpenRose")
+            .put("ticker", title)
             .put("tickerPic", PROMPT_LEFT_PICTURE)
             .put("isShowNotification", showNotification)
+            .put("iconTextInfo", cardInfo(title, batterySummary(snapshot), knownNoise(snapshot)?.let { modeLabel(it.mode) }))
             .put("param_island", promptIsland(snapshot).put("islandTimeout", durationSeconds))
         if (showNotification) template.put("updatable", true)
 
         return Bundle().apply {
             putString(FOCUS_PARAM, JSONObject().put("param_v2", template).toString())
-            putBundle(FOCUS_PICTURES, Bundle().apply { putPromptPictures(this) })
+            putBundle(
+                FOCUS_PICTURES,
+                Bundle().apply {
+                    putParcelable(STATUS_CARD_PICTURE, Icon.createWithBitmap(createStatusCardBitmap(statusCardColors(snapshot))))
+                    putPromptPictures(this)
+                },
+            )
         }
     }
+
+    private fun cardTitle(snapshot: RenderedSnapshot): String = deviceAlias(snapshot) ?: profileLabel(snapshot.wire.getString("profile"))
+
+    /** The focus card's `iconTextInfo`: the card body and the expanded state of either island. */
+    private fun cardInfo(title: String, content: String, noiseText: String?): JSONObject = JSONObject()
+        .put("title", title)
+        .put("content", content)
+        .put("animIconInfo", JSONObject().put("type", 0).put("src", STATUS_CARD_PICTURE))
+        .apply { if (noiseText != null) put("subContent", noiseText) }
 
     /**
      * The battery island, as in OppoPods' `showBatteryIsland`: each earbud's picture with its battery. It is both the
@@ -589,8 +614,10 @@ internal class SystemPresentationRenderer(
 
     /**
      * Focus card: `iconTextInfo` plus up to two `textButton` entries, with the battery-template summary state when
-     * [island] is set. SystemUI renders a button's text from the JSON `actionTitle` (Html.fromHtml, not from the
-     * Notification.Action title) and crashes the whole UI when it is missing, so every button must carry a non-blank title.
+     * [island] is set. [expandOnEntrance] makes the notification's first appearance open the expanded state before it
+     * settles to the summary, which is how a merged module prompt shows. SystemUI renders a button's text from the JSON
+     * `actionTitle` (Html.fromHtml, not from the Notification.Action title) and crashes the whole UI when it is missing, so
+     * every button must carry a non-blank title.
      */
     private fun buildStatusCardExtras(
         title: String,
@@ -598,20 +625,17 @@ internal class SystemPresentationRenderer(
         noiseText: String?,
         buttons: List<Pair<String, Notification.Action>>,
         island: Boolean,
+        expandOnEntrance: Boolean,
         snapshot: RenderedSnapshot,
         aodTitle: String?,
         iconColors: IconColors,
     ): Bundle {
-        val info = JSONObject()
-            .put("title", title)
-            .put("content", content)
-            .put("animIconInfo", JSONObject().put("type", 0).put("src", STATUS_CARD_PICTURE))
-        if (noiseText != null) info.put("subContent", noiseText)
+        val info = cardInfo(title, content, noiseText)
         val template = JSONObject()
             .put("protocol", 1)
             .put("business", STATUS_CARD_BUSINESS)
             .put("ticker", title)
-            .put("islandFirstFloat", false)
+            .put("islandFirstFloat", expandOnEntrance)
             .put("enableFloat", false)
             .put("updatable", true)
             .put("iconTextInfo", info)

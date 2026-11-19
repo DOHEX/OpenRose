@@ -140,19 +140,39 @@ class SystemPresentationTest {
     }
 
     @Test
-    fun anEmptyModuleTriggerSetDoesNotReplayTheConnectionAfterSettingsChange() = runTest {
+    fun anEmptyModuleTriggerSetKeepsTheSummaryIslandWithoutReplayingTheConnection() = runTest {
         val transport = PresentationTransport(PresentationConnection(i5Replies))
         val session = newSession(transport, IntegrationSettings(islandMode = IslandMode.MODULE, islandTriggers = persistentSetOf()))
         connect(session, transport, DeviceId("i5"))
 
         assertNull(session.presentation.value.prompt)
-        assertFalse(session.presentation.value.allowIslandFields)
-        assertFalse(session.presentation.value.statusSummaryIsland)
+        assertTrue(session.presentation.value.allowIslandFields)
+        assertTrue(session.presentation.value.statusSummaryIsland, "the summary island stays without any display timing")
         assertTrue(session.presentation.value.showStatusNotification)
 
         session.updateIntegrationSettings(session.settings.copy(islandTriggers = persistentSetOf(IslandTrigger.CONNECTION)))
-        assertNull(session.presentation.value.prompt)
-        assertTrue(session.presentation.value.allowIslandFields)
+        assertNull(session.presentation.value.prompt, "the already-connected session does not replay its connection")
+        assertTrue(session.presentation.value.statusSummaryIsland)
+
+        session.updateIntegrationSettings(session.settings.copy(islandTriggers = persistentSetOf(), islandSummaryEnabled = false))
+        assertFalse(session.presentation.value.allowIslandFields, "no timing and no summary leaves module mode without an island")
+        assertFalse(session.presentation.value.statusSummaryIsland)
+        session.disconnect()
+    }
+
+    @Test
+    fun turningOffTheSummaryIslandKeepsTheModulePromptButDropsThePersistentIsland() = runTest {
+        val transport = PresentationTransport(PresentationConnection(i5Replies))
+        val session = newSession(transport, IntegrationSettings(islandMode = IslandMode.MODULE, islandSummaryEnabled = false))
+        connect(session, transport, DeviceId("i5"))
+
+        val presentation = session.presentation.value
+        assertNotNull(presentation.prompt, "the connection prompt still shows as its own timed island")
+        assertTrue(presentation.allowIslandFields)
+        assertTrue(presentation.showStatusNotification)
+        assertFalse(presentation.statusSummaryIsland)
+
+        session.updateIntegrationSettings(session.settings.copy(islandSummaryEnabled = true))
         assertTrue(session.presentation.value.statusSummaryIsland)
         session.disconnect()
     }

@@ -205,7 +205,7 @@ class PlatformApplicabilityUiTest {
                 assertTrue(harness.hasText("超级岛"), "HyperOS settings remain visible while integration is unready in $style")
                 assertTrue(harness.hasText("焦点通知"), "HyperOS focus notification remains in Settings while unready in $style")
                 assertTrue(harness.hasText("模块显示时机"), "the saved module mode controls its applicable settings in $style")
-                assertTrue(harness.hasText("未选择显示时机，不自动触发。"), "an explicit empty trigger set remains visible in $style")
+                assertTrue(harness.hasTextLine("未选择显示时机，不会弹出展开。"), "an explicit empty trigger set remains visible in $style")
                 assertTrue(harness.hasText("强制使用 BLE"), "the Android host exposes its supported transport preference in $style")
                 assertTrue(harness.hasText("附加设置入口"), "fusion settings destination entry remains in Settings while unready in $style")
                 assertFalse(harness.hasText("选择 OpenRose 后"), "footnote text below additional settings entry is removed in $style")
