@@ -71,10 +71,10 @@ jobs:
           fi
           echo "ORG_GRADLE_PROJECT_releaseBuild=true" >> "$GITHUB_ENV"
 
-      - uses: actions/setup-java@v6.3.0
+      # The JDK version comes from .mise.toml, the same pin developers use locally.
+      - uses: jdx/mise-action@v5.2.10
         with:
-          distribution: temurin
-          java-version: '21.0.13+9'
+          version: 2026.11.5
 
       # Nucleus drives electron-builder to turn the jpackage image into installers.
       - uses: actions/setup-node@v7.1.0
