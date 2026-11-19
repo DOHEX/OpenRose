@@ -58,6 +58,18 @@ private fun MaterialRailHeader() {
     }
 }
 
+/**
+ * Top bar colors. With backdrop blur both container colors stay clear so only the blur tint shows:
+ * a collapsing bar lerps container toward scrolled color, and Transparent (clear black) into an opaque
+ * scrolled color passes through translucent grey, darkening the bar mid-collapse.
+ */
+@Composable
+internal fun materialTopAppBarColors(backdropActive: Boolean): TopAppBarColors = if (backdropActive) {
+    TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent, scrolledContainerColor = Color.Transparent)
+} else {
+    TopAppBarDefaults.topAppBarColors()
+}
+
 /** The wide-screen rail. The app root places it beside the route stack so page transitions never move it. */
 @Composable
 internal fun MaterialNavigationRail(selected: AppPage, onSelect: (AppPage) -> Unit) {
@@ -101,11 +113,7 @@ internal fun MaterialAppShell(
                     surfaceColor = MaterialTheme.colorScheme.surface,
                     active = backdropActive,
                 )
-                val topBarColors = if (backdropActive) {
-                    TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
-                } else {
-                    TopAppBarDefaults.topAppBarColors()
-                }
+                val topBarColors = materialTopAppBarColors(backdropActive)
                 TopAppBar(
                     title = { Text(title) },
                     modifier = topBarModifier,
@@ -391,11 +399,7 @@ internal fun MaterialMainShell(
                                 surfaceColor = MaterialTheme.colorScheme.surface,
                                 active = backdropActive,
                             )
-                            val topBarColors = if (backdropActive) {
-                                TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
-                            } else {
-                                TopAppBarDefaults.topAppBarColors()
-                            }
+                            val topBarColors = materialTopAppBarColors(backdropActive)
                             if (page in mainPages) {
                                 LargeTopAppBar(
                                     title = { Text(title) },
