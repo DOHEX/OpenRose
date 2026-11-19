@@ -8,7 +8,9 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.SharedPreferences
 import android.os.Build
+import android.os.Binder
 import android.os.IBinder
+import android.os.Parcel
 import android.os.Process
 import android.os.UserManager
 import android.util.Log
@@ -33,6 +35,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeoutOrNull
 import java.lang.reflect.Method
 import java.util.UUID
+import java.util.concurrent.atomic.AtomicReference
 
 /**
  * Hosts the single control session inside `com.android.bluetooth` with the host's own Context, uid and
@@ -41,13 +44,20 @@ import java.util.UUID
  *
  * The endpoint Binder is handed out by an existing host service for [BridgeWire.ACTION_CONTROL_HOST];
  * finding it authorises nothing, [HostEndpoint] verifies every caller.
+ *
+ * The system binds that service once per Intent and caches the Binder [installDiscovery] returned for as long as the
+ * service lives, so a hot-reloaded generation is never asked again. Discovery therefore hands out a forwarder to
+ * [endpointSlot], which outlives module generations: each one inherits the slot and points it at its own endpoint.
  */
 internal class ModuleHostRuntime(
     private val module: XposedModule,
     private val classLoader: ClassLoader,
+    /** Framework-typed so it can cross the hot reload boundary; see [OpenRoseBluetoothModule.onHotReloading]. */
+    val endpointSlot: AtomicReference<IBinder?> = AtomicReference(),
 ) {
     private val lifecycle = Any()
     private val hooks = mutableListOf<XposedInterface.HookHandle>()
+    private val discoveryBinder = EndpointForwarder(endpointSlot)
 
     @Volatile private var endpoint: HostEndpoint? = null
     private var host: ModuleControlHost? = null
@@ -73,7 +83,7 @@ internal class ModuleHostRuntime(
                 .setExceptionMode(XposedInterface.ExceptionMode.PROTECTIVE).intercept { chain ->
                     val intent = chain.getArg(0) as? Intent
                     if (intent?.action == BridgeWire.ACTION_CONTROL_HOST) {
-                        endpoint as IBinder?
+                        discoveryBinder
                     } else {
                         chain.proceed()
                     }
@@ -125,7 +135,9 @@ internal class ModuleHostRuntime(
                 facts = facts,
             )
             host = created
-            endpoint = HostEndpoint(appContext, created, facts, hostScope)
+            val served = HostEndpoint(appContext, created, facts, hostScope)
+            endpoint = served
+            endpointSlot.set(served)
             watchConfiguration(appContext, hostScope, created)
         }
     }
@@ -202,7 +214,11 @@ internal class ModuleHostRuntime(
             configListener?.let { l -> runCatching { config?.unregisterOnSharedPreferenceChangeListener(l) } }
             configListener = null
         }
-        endpoint?.shutdown()
+        endpoint?.let { retiring ->
+            // Until the next generation starts, callers of the cached discovery Binder find no host rather than a retired one.
+            endpointSlot.compareAndSet(retiring, null)
+            retiring.shutdown()
+        }
         endpoint = null
         hostScope?.cancel()
         return true
@@ -212,5 +228,17 @@ internal class ModuleHostRuntime(
         const val TAG = "OpenRoseModuleHost"
         const val CLOSE_TIMEOUT_MILLIS = 2_000L
         const val CONFIG_RETRY_MILLIS = 5_000L
+    }
+}
+
+/**
+ * The Binder the system caches for discovery: every transaction goes to the endpoint currently in [slot], with the
+ * caller's identity intact because an in-process transact keeps the Binder calling identity. With no endpoint (a
+ * generation is between stop and start) the call fails and the caller retries as for any unreachable host.
+ */
+private class EndpointForwarder(private val slot: AtomicReference<IBinder?>) : Binder() {
+    override fun onTransact(code: Int, data: Parcel, reply: Parcel?, flags: Int): Boolean {
+        val target = slot.get() ?: throw IllegalStateException("宿主正在重新加载")
+        return target.transact(code, data, reply, flags)
     }
 }

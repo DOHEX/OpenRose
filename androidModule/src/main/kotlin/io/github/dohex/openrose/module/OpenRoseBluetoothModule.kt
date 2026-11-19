@@ -3,6 +3,7 @@ package io.github.dohex.openrose.module
 import android.app.Application
 import android.content.Context
 import android.os.Bundle
+import android.os.IBinder
 import android.os.SystemClock
 import android.util.Log
 import io.github.dohex.openrose.androidintegration.SystemHeadsetMapping
@@ -27,6 +28,7 @@ import java.lang.reflect.Method
 import java.util.concurrent.SynchronousQueue
 import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicReference
 
 /**
  * Scoped system module. In `com.android.bluetooth` it hosts the single module-controlled session
@@ -53,8 +55,10 @@ class OpenRoseBluetoothModule : XposedModule() {
     @Volatile private var client: AuthenticatedBridgeClient? = null
 
     @Volatile private var nativeSnapshot: NativeHeadsetSnapshot? = null
-    private var binderAdapter: NativeHeadsetBinderAdapter? = null
-    private var fusionAdapter: MiLinkNativeHeadsetAdapter? = null
+
+    @Volatile private var binderAdapter: NativeHeadsetBinderAdapter? = null
+
+    @Volatile private var fusionAdapter: MiLinkNativeHeadsetAdapter? = null
     private var renderer: SystemPresentationRenderer? = null
     private var official: OfficialConnectionPresenter? = null
     private var lastOfficialIdentity: String? = null
@@ -282,10 +286,7 @@ class OpenRoseBluetoothModule : XposedModule() {
 
     private fun closeConsumers(): Boolean {
         clearConsumers()
-        binderAdapter?.close()
-        binderAdapter = null
-        fusionAdapter?.close()
-        fusionAdapter = null
+        closeNativeAdapters()
         val output = renderer
         output?.close()
         renderer = null
@@ -300,26 +301,48 @@ class OpenRoseBluetoothModule : XposedModule() {
         }
     }
 
+    /** Unhooks the native entry adapters; idempotent, so whichever of hot reload and client cleanup comes first does it. */
+    private fun closeNativeAdapters() {
+        binderAdapter?.close()
+        binderAdapter = null
+        fusionAdapter?.close()
+        fusionAdapter = null
+    }
+
     override fun onHotReloading(param: HotReloadingParam): Boolean {
         // Release the host owner first so no consumer outlives or races its source. When the release is
         // unconfirmed the reload is refused before anything changes: the old instance keeps serving and
         // keeps its hooks, host and consumers, and the framework may retry the reload.
-        if (hostRuntime?.close() == false) return false
+        val runtime = hostRuntime
+        if (runtime?.close() == false) return false
         hostRuntime = null
         retired = true
-        // Only framework/target-owned values cross the generation boundary.
-        targetContext?.let { param.setSavedInstanceState(it) }
+        // Only framework/target-owned values cross the generation boundary: the target Context and, in the host process,
+        // the slot behind the discovery Binder the system has cached, which the next generation points at its endpoint.
+        targetContext?.let { context ->
+            param.setSavedInstanceState(
+                HashMap<String, Any>().apply {
+                    put(SAVED_CONTEXT, context)
+                    runtime?.let { put(SAVED_ENDPOINT_SLOT, it.endpointSlot) }
+                },
+            )
+        }
         synchronized(lifecycle) {
             entryHooks.forEach { runCatching { it.unhook() } }
             entryHooks.clear()
         }
+        // The framework holds its hook lock for this whole call, so unhooking must happen on this thread: left to the
+        // client's reader thread, unhook() would block until the close timeout and the reload would be refused.
+        closeNativeAdapters()
         return client?.close() ?: closeConsumers()
     }
 
     override fun onHotReloaded(param: HotReloadedParam) {
         processName = param.processName
         param.oldHookHandles.forEach { runCatching { it.unhook() } }
-        val context = param.savedInstanceState as? Context
+        val saved = param.savedInstanceState as? Map<*, *>
+        // A generation from before the endpoint slot saved the bare Context.
+        val context = (saved?.get(SAVED_CONTEXT) ?: param.savedInstanceState) as? Context
         if (context == null) {
             log(Log.WARN, TAG, "hot_reload_context_unavailable")
             return
@@ -327,7 +350,10 @@ class OpenRoseBluetoothModule : XposedModule() {
         val selected = BridgeTarget.resolve(context.packageName, param.processName) ?: return
         target = selected
         if (selected == BridgeTarget.BLUETOOTH) {
-            val runtime = ModuleHostRuntime(this, context.classLoader)
+            @Suppress("UNCHECKED_CAST")
+            val slot = saved?.get(SAVED_ENDPOINT_SLOT) as? AtomicReference<IBinder?>
+            if (slot == null) log(Log.WARN, TAG, "hot_reload_endpoint_slot_unavailable")
+            val runtime = slot?.let { ModuleHostRuntime(this, context.classLoader, it) } ?: ModuleHostRuntime(this, context.classLoader)
             hostRuntime = runtime
             hostStarted = false
             runtime.installDiscovery()
@@ -348,5 +374,8 @@ class OpenRoseBluetoothModule : XposedModule() {
 
         /** A settings-entry tap waits this long for the host before the system's own page runs. */
         const val FUSION_ENTRY_TIMEOUT_MILLIS = 750L
+
+        const val SAVED_CONTEXT = "context"
+        const val SAVED_ENDPOINT_SLOT = "endpointSlot"
     }
 }
