@@ -1,40 +1,52 @@
 ---
 title: OpenRose
-description: 弱水时砂 (ROSE / ROSESELSA) 耳机第三方控制客户端与 HyperOS 系统集成
+description: ROSE / ROSESELSA（弱水时砂）耳机的第三方控制客户端，支持 HyperOS 系统集成。
 template: splash
 hero:
-  tagline: 弱水时砂 (ROSE / ROSESELSA) 耳机第三方控制客户端与 HyperOS 系统集成
+  tagline: ROSE / ROSESELSA（弱水时砂）耳机的第三方控制客户端，可以替代官方 RoseLink 完成日常设置，并把耳机接入 HyperOS 系统界面。
   image:
     file: ../../assets/hero.svg
   actions:
-    - text: 查阅文档
-      link: /guides/example/
+    - text: 快速开始
+      link: guides/getting-started/
       icon: right-arrow
-    - text: 下载应用
-      link: https://github.com/DOHEX/OpenRose/releases
-      icon: external
+    - text: 支持的耳机
+      link: reference/supported-earphones/
       variant: secondary
-    - text: GitHub 仓库
+    - text: GitHub
       link: https://github.com/DOHEX/OpenRose
       icon: github
       variant: minimal
 ---
 
-import { Card, CardGrid } from '@astrojs/starlight/components';
+import { Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
 
-## 核心特性
+:::caution[仍在开发中]
+大部分功能尚未在真机上完整验证，各型号的状态见[支持的耳机](reference/supported-earphones/)。遇到问题欢迎[反馈](guides/feedback/)。
+:::
+
+## 功能
 
 <CardGrid stagger>
-	<Card title="HyperOS 深度集成" icon="star">
-		接入系统超级岛、焦点通知与融合设备中心。支持 Xposed 模块由系统蓝牙服务直接管理耳机，无需应用常驻后台。
+	<Card title="耳机控制" icon="setting">
+		电量与固件版本、降噪与通透档位、游戏模式、EQ、触控按键、佩戴检测与多点连接。可用项随型号和固件变化。
 	</Card>
-	<Card title="双界面风格与跨平台" icon="laptop">
-		基于 Kotlin 与 Compose Multiplatform，提供 Miuix 与 Material 3 Expressive 双套原生界面；覆盖 Android 与 Linux (BlueZ)。
+	<Card title="HyperOS 系统集成" icon="star">
+		经 Xposed 模块接入超级岛、焦点通知和融合设备中心；模块控制下由系统蓝牙进程连接耳机，不需要打开 OpenRose。
 	</Card>
-	<Card title="丰富精细的控制" icon="setting">
-		覆盖降噪与通透分级调节、游戏低延迟模式、十段自定义 EQ、触控手势按键映射与双设备多点连接。
+	<Card title="两种界面风格" icon="laptop">
+		Miuix 与 Material 3 Expressive，切换时不断开耳机。支持 Android，以及通过 BlueZ 控制耳机的 Linux 桌面版。
 	</Card>
-	<Card title="纯粹本地与开源透明" icon="open-book">
-		无需注册登录任何官方账号，所有协议通信基于本地蓝牙直连，拒绝多余权限与隐私收集。
+	<Card title="本地与开源" icon="open-book">
+		通过本地蓝牙直接与耳机通信，不需要任何账号。以 GPL-3.0-or-later 开源。
 	</Card>
+</CardGrid>
+
+## 开始使用
+
+<CardGrid>
+	<LinkCard title="快速开始" description="安装 OpenRose，连接耳机" href="guides/getting-started/" />
+	<LinkCard title="HyperOS 系统集成" description="启用模块，选择控制方式" href="guides/hyperos-integration/" />
+	<LinkCard title="Linux 桌面版" description="BlueZ 控制、托盘与窗口规则" href="guides/linux-desktop/" />
+	<LinkCard title="参与开发" description="从源码构建，开发文档" href="development/contributing/" />
 </CardGrid>

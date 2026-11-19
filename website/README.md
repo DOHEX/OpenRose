@@ -1,49 +1,30 @@
-# Starlight Starter Kit: Basics
+# OpenRose 网站
 
-[![Built with Starlight](https://astro.badg.es/v2/built-with-starlight/tiny.svg)](https://starlight.astro.build)
+OpenRose 的用户文档站点，基于 [Astro](https://docs.astro.build) + [Starlight](https://starlight.astro.build)，部署在 <https://dohex.github.io/OpenRose/>。
 
-```
-pnpm create astro@latest -- --template starlight
-```
+## 命令
 
-> 🧑‍🚀 **Seasoned astronaut?** Delete this file. Have fun!
+在 `website/` 下运行：
 
-## 🚀 Project Structure
+| 命令 | 作用 |
+| --- | --- |
+| `pnpm install` | 安装依赖 |
+| `pnpm dev` | 本地预览，地址为 `http://localhost:4321/OpenRose/` |
+| `pnpm build` | 构建到 `dist/` |
+| `pnpm preview` | 预览构建结果 |
 
-Inside of your Astro + Starlight project, you'll see the following folders and files:
+## 结构
 
-```
-.
-├── public/
-├── src/
-│   ├── assets/
-│   ├── content/
-│   │   └── docs/
-│   └── content.config.ts
-├── astro.config.mjs
-├── package.json
-└── tsconfig.json
-```
+- `src/content/docs/`：简体中文页面（默认语言，位于站点根路径）
+- `src/content/docs/en/`：英文页面，与中文页面一一对应、路径相同
+- `astro.config.mjs`：站点地址、语言与侧边栏；新增页面要在 `sidebar` 中登记
 
-Starlight looks for `.md` or `.mdx` files in the `src/content/docs/` directory. Each file is exposed as a route based on its file name.
+## 写作约定
 
-Images can be added to `src/assets/` and embedded in Markdown with a relative link.
+- 站内链接用相对路径（如 `../background-control/`）。站点部署在 `/OpenRose/` 子路径下，以 `/` 开头的链接会丢掉这个前缀。
+- 指向仓库文件的链接用 `https://github.com/DOHEX/OpenRose/blob/main/...` 完整地址。
+- 术语与 [GLOSSARY.md](../GLOSSARY.md) 一致；功能与验证状态以仓库 [README](../README.md) 为准，两边需同步更新。
 
-Static assets, like favicons, can be placed in the `public/` directory.
+## 部署
 
-## 🧞 Commands
-
-All commands are run from the root of the project, from a terminal:
-
-| Command                   | Action                                           |
-| :------------------------ | :----------------------------------------------- |
-| `pnpm install`             | Installs dependencies                            |
-| `pnpm dev`             | Starts local dev server at `localhost:4321`      |
-| `pnpm build`           | Build your production site to `./dist/`          |
-| `pnpm preview`         | Preview your build locally, before deploying     |
-| `pnpm astro ...`       | Run CLI commands like `astro add`, `astro check` |
-| `pnpm astro -- --help` | Get help using the Astro CLI                     |
-
-## 👀 Want to learn more?
-
-Check out [Starlight’s docs](https://starlight.astro.build/), read [the Astro documentation](https://docs.astro.build), or jump into the [Astro Discord server](https://astro.build/chat).
+推送到 `main` 且改动涉及 `website/**` 时，[Deploy Docs](../.github/workflows/deploy-docs.yml) 工作流会构建并发布到 GitHub Pages，也可以在 Actions 页面手动触发。

@@ -1,0 +1,59 @@
+---
+title: Getting started
+description: Install OpenRose on Android, connect the earphones, and open the control connection.
+---
+
+import { Steps } from '@astrojs/starlight/components';
+
+:::caution[Under active development]
+Most features have not been fully tested on real hardware. Check your model and its verification status in [Supported earphones](../../reference/supported-earphones/) first.
+:::
+
+## Requirements
+
+- Android 8.0 (API 26) or later
+- Supported ROSE / ROSESELSA earphones
+
+For the desktop app, see [Linux desktop](../linux-desktop/).
+
+The app UI is currently Chinese only, so UI labels on this site include the Chinese text you will see.
+
+## Get the package
+
+- **Releases**: published on [GitHub Releases](https://github.com/DOHEX/OpenRose/releases) with `SHA256SUMS` and build provenance.
+- **Development builds**: open a successful run on [GitHub Actions](https://github.com/DOHEX/OpenRose/actions/workflows/ci.yml) and download the `packages-linux-x64` artifact; `OpenRose-android-debug.apk` inside it is the Android development build. Downloading requires GitHub sign-in, and artifacts are kept for 14 days.
+
+To verify files downloaded from a release:
+
+```bash
+sha256sum -c SHA256SUMS --ignore-missing
+gh attestation verify OpenRose-android.apk -R DOHEX/OpenRose
+```
+
+## Connect the earphones
+
+<Steps>
+
+1. Install the APK.
+
+2. Pair and connect the earphones in the **system Bluetooth settings**. OpenRose does not handle audio pairing.
+
+3. Open OpenRose and grant the Bluetooth permission. On Android 8–11, also grant the location permission and turn on system location services.
+
+4. Paired earphones show up on the My Earphones (我的耳机) page. Once they connect to system audio, OpenRose opens the control connection automatically; add new earphones with **+** in the top right.
+
+</Steps>
+
+## Control connection and audio connection
+
+OpenRose's **control connection** is separate from the **audio connection** the system uses for music and calls:
+
+- The control connection reads state such as battery and mode, and sends settings.
+- "Disconnect control connection" (断开控制连接) in the app only disconnects OpenRose; playback is not affected.
+- When the earphones connect to system audio, the control connection opens automatically; when audio disconnects (for example, the earbuds go back in the case), the control connection ends with it.
+
+## Next steps
+
+- Keep control after closing the app: [Background control](../background-control/)
+- On HyperOS with an Xposed framework: [HyperOS integration](../hyperos-integration/)
+- Something went wrong: [Feedback](../feedback/)

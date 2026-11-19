@@ -1,0 +1,65 @@
+---
+title: HyperOS integration
+description: Plug the earphones into the system island, focus notifications, and Fusion Device Center through the Xposed module.
+---
+
+import { Steps } from '@astrojs/starlight/components';
+
+On HyperOS, OpenRose can run as an Xposed module and bring the earphones into the system UI:
+
+- Connection prompts and earphone status shown through the system island and focus notifications.
+- Earbud battery and noise mode switching in Fusion Device Center; its "Additional Settings" opens OpenRose directly.
+- Module control: the system Bluetooth process connects to the earphones, and OpenRose does not need to be open.
+- Headset circulation (experimental): move the earphones from one HyperOS audio source device to another through Fusion Device Center.
+
+:::caution[Verification status]
+Only the Additional Settings redirect has been verified on real hardware (EarFree i5 with a Xiaomi 14); the rest has only offline tests.
+:::
+
+## Requirements
+
+- HyperOS 3 or 4
+- A framework supporting libxposed API 102, for example LSPosed 2.2.0 or later
+
+## Enable the module
+
+<Steps>
+
+1. Install OpenRose and connect the earphones as in [Getting started](../getting-started/).
+
+2. Enable the OpenRose module in the Xposed framework, scoped to:
+   - `com.android.bluetooth`
+   - `com.xiaomi.bluetooth`
+   - `com.milink.service`
+
+3. Load the module: restart the phone, or tap Restart scopes (重启作用域) in the top right of OpenRose's Status (状态) page (requires root).
+
+4. Back on the Status page, confirm that the module is ready.
+
+</Steps>
+
+## Control way
+
+Choose the control way (控制方式) on the Settings page:
+
+| Control way | Who connects to the earphones | Notes |
+| --- | --- | --- |
+| Ordinary control (普通控制, default) | The OpenRose app | No module needed; module-provided system integration is paused |
+| Module control (模块控制) | The system Bluetooth process | Works from the first unlock after boot; OpenRose does not need to be open |
+
+The choice is only an intent: whether the module is ready and whether the control connection is open are shown separately on the Status page.
+
+## Headset circulation (experimental)
+
+Between HyperOS audio source devices, Fusion Device Center can circulate the earphones: they play on the other device, and OpenRose's control connection follows them there.
+
+- Both devices need the OpenRose module enabled and module control selected; it is not offered under ordinary control.
+- Circulation is not multipoint: with multipoint, the earphones stay connected to two devices at once.
+- This has not been verified on real devices yet.
+
+## Known limitations
+
+- **Noise mode mapping**: the system only knows Off / ANC / Transparency. When the earphones are in wind-noise reduction, Fusion Device Center shows Off and the real mode is unchanged. Turn on "Off uses wind-noise reduction" (关闭降噪使用抗风噪) on the Settings page to make tapping Off write wind-noise reduction instead of normal mode.
+- **Battery display**: when an earbud's battery is known but its charging state is unknown, Fusion Device Center does not show that battery; the case battery is not shown either.
+
+When reporting system integration problems, include the Xposed framework version and the bridge status shown in diagnostics (reached from the Status page); see [Feedback](../feedback/).

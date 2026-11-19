@@ -24,18 +24,28 @@ export default defineConfig({
 				},
 			},
 			social: [{ icon: 'github', label: 'GitHub', href: 'https://github.com/DOHEX/OpenRose' }],
+			editLink: { baseUrl: 'https://github.com/DOHEX/OpenRose/edit/main/website/' },
 			sidebar: [
 				{
 					label: '指南',
 					translations: { en: 'Guides' },
 					items: [
-						{ label: '示例指南', translations: { en: 'Example Guide' }, slug: 'guides/example' },
+						'guides/getting-started',
+						'guides/background-control',
+						'guides/hyperos-integration',
+						'guides/linux-desktop',
+						'guides/feedback',
 					],
 				},
 				{
 					label: '参考',
 					translations: { en: 'Reference' },
-					items: [{ autogenerate: { directory: 'reference' } }],
+					items: ['reference/supported-earphones', 'reference/features', 'reference/platforms'],
+				},
+				{
+					label: '开发',
+					translations: { en: 'Development' },
+					items: ['development/contributing'],
 				},
 			],
 		}),

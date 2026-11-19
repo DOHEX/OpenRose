@@ -1,18 +1,17 @@
 ---
 title: OpenRose
-description: Third-party ROSE / ROSESELSA earbuds controller & HyperOS system integration.
+description: Unofficial control app for ROSE / ROSESELSA earphones, with HyperOS system integration.
 template: splash
 hero:
-  tagline: Third-party ROSE / ROSESELSA earbuds controller & HyperOS system integration.
+  tagline: Unofficial control app for ROSE / ROSESELSA (弱水时砂) earphones. It replaces the official RoseLink app for everyday settings and brings the earphones into the HyperOS system UI.
   image:
     file: ../../../assets/hero.svg
   actions:
-    - text: Getting Started
-      link: /en/guides/example/
+    - text: Getting started
+      link: guides/getting-started/
       icon: right-arrow
-    - text: Releases
-      link: https://github.com/DOHEX/OpenRose/releases
-      icon: external
+    - text: Supported earphones
+      link: reference/supported-earphones/
       variant: secondary
     - text: GitHub
       link: https://github.com/DOHEX/OpenRose
@@ -20,21 +19,34 @@ hero:
       variant: minimal
 ---
 
-import { Card, CardGrid } from '@astrojs/starlight/components';
+import { Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+:::caution[Under active development]
+Most features have not been fully tested on real hardware; see [Supported earphones](reference/supported-earphones/) for each model's status. Please [report problems](guides/feedback/).
+:::
 
 ## Features
 
 <CardGrid stagger>
-	<Card title="HyperOS Deep Integration" icon="star">
-		Connects with Super Island, Focus notifications, and Convergence Device Center. Supports direct management from the system Bluetooth process via Xposed.
+	<Card title="Earphone controls" icon="setting">
+		Battery and firmware version, ANC and transparency levels, game mode, EQ, touch bindings, wear detection, and multipoint. What you see depends on the model and firmware.
 	</Card>
-	<Card title="Dual UI & Cross-Platform" icon="laptop">
-		Powered by Kotlin & Compose Multiplatform, offering Miuix and Material 3 Expressive UI themes across Android and Linux (BlueZ).
+	<Card title="HyperOS integration" icon="star">
+		Through the Xposed module: system island, focus notifications, and Fusion Device Center. Under module control, the system Bluetooth process connects to the earphones without OpenRose open.
 	</Card>
-	<Card title="Full Device Control" icon="setting">
-		Comprehensive controls for ANC/transparency levels, gaming low-latency mode, 10-band custom EQ, gesture mappings, and dual-device connection.
+	<Card title="Two UI styles" icon="laptop">
+		Miuix and Material 3 Expressive; switching keeps the earphones connected. Runs on Android, and on the Linux desktop with control through BlueZ.
 	</Card>
-	<Card title="Local & Open Source" icon="open-book">
-		No official account required. All operations communicate directly via local Bluetooth Low Energy without background tracking.
+	<Card title="Local and open source" icon="open-book">
+		Talks to the earphones directly over local Bluetooth; no account needed. Licensed under GPL-3.0-or-later.
 	</Card>
+</CardGrid>
+
+## Start here
+
+<CardGrid>
+	<LinkCard title="Getting started" description="Install OpenRose and connect the earphones" href="guides/getting-started/" />
+	<LinkCard title="HyperOS integration" description="Enable the module and choose the control way" href="guides/hyperos-integration/" />
+	<LinkCard title="Linux desktop" description="BlueZ control, tray, and window rules" href="guides/linux-desktop/" />
+	<LinkCard title="Contributing" description="Build from source and developer docs" href="development/contributing/" />
 </CardGrid>
