@@ -23,7 +23,15 @@ import top.yukonga.miuix.kmp.basic.*
 import top.yukonga.miuix.kmp.overlay.OverlayListPopup
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.PagerGestureNestedScrollConnection
+import top.yukonga.miuix.kmp.utils.overScrollVertical
 import top.yukonga.miuix.kmp.utils.pagerGestureOverride
+
+/**
+ * Page scrolling with the Miuix bounce on every page. A scroll container's own overscroll only
+ * engages while its content can scroll, so pages shorter than the viewport would never bounce;
+ * [overScrollVertical] takes the leftover drag from the nested scroll chain instead.
+ */
+private fun Modifier.miuixPageScroll(state: ScrollState): Modifier = overScrollVertical().verticalScroll(state, overscrollEffect = null)
 
 /** The wide-screen rail. The app root places it beside the route stack so page transitions never move it. */
 @Composable
@@ -74,7 +82,7 @@ internal fun MiuixAppShell(
             },
         ) { padding ->
             Box(Modifier.fillMaxSize()) {
-                Column(Modifier.fillMaxSize().appBackdropContent(backdrop, backdropActive).verticalScroll(scrollState)) {
+                Column(Modifier.fillMaxSize().appBackdropContent(backdrop, backdropActive).miuixPageScroll(scrollState)) {
                     ShellPageContent(page, padding, compactHome = false, pageContent = pageContent)
                 }
                 ShellFeedback(padding, content = feedbackContent)
@@ -248,7 +256,7 @@ internal fun MiuixMainShell(
                     ) { pagePadding ->
                         Box(Modifier.fillMaxSize()) {
                             val scrollState = scrollStates.getValue(page)
-                            Column(Modifier.fillMaxSize().appBackdropContent(pageBackdrop, backdropActive).verticalScroll(scrollState)) {
+                            Column(Modifier.fillMaxSize().appBackdropContent(pageBackdrop, backdropActive).miuixPageScroll(scrollState)) {
                                 ShellPageContent(
                                     page = page,
                                     padding = pagePadding,

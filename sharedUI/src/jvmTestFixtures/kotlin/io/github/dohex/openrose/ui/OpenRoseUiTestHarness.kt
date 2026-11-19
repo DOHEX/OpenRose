@@ -12,6 +12,7 @@ import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.InternalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.toAwtImage
 import androidx.compose.ui.input.key.Key
@@ -26,7 +27,9 @@ import androidx.compose.ui.test.DesktopComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.v2.runDesktopComposeUiTest
 import androidx.compose.ui.unit.IntSize
 import io.github.dohex.openrose.core.*
@@ -100,6 +103,18 @@ internal class OpenRoseUiTestScene(private val test: DesktopComposeUiTest) {
         }
     }
 
+    /** Touches down at [start] and drags by [delta] over [steps] moves; the finger stays down. */
+    fun pressAndDrag(start: Offset, delta: Offset, steps: Int = 10) {
+        test.onRoot().performTouchInput {
+            down(start)
+            repeat(steps) { moveBy(delta / steps.toFloat()) }
+        }
+    }
+
+    fun releaseTouch() {
+        test.onRoot().performTouchInput { up() }
+    }
+
     fun sendKeyEvent(event: KeyEvent) {
         test.runOnUiThread { test.scene.sendKeyEvent(event) }
     }
@@ -164,6 +179,10 @@ internal open class OpenRoseUiTestHarness(protected val scene: OpenRoseUiTestSce
     fun resize(width: Int, height: Int) = scene.resize(width, height)
 
     fun scrollToText(text: String) = scene.scrollToText(text)
+
+    fun pressAndDrag(start: Offset, delta: Offset) = scene.pressAndDrag(start, delta)
+
+    fun releaseTouch() = scene.releaseTouch()
 
     /** Every merged semantics node, main window first, then popups and dialogs; reading never settles the scene. */
     fun nodes(): List<SemanticsNode> {
