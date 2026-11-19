@@ -12,6 +12,8 @@ export default defineConfig({
 			title: 'OpenRose',
 			description: 'ROSE / ROSESELSA（弱水时砂）耳机第三方控制客户端与 HyperOS 系统集成',
 			plugins: [starlightThemeRapide()],
+			components: { Hero: './src/components/Hero.astro' },
+			customCss: ['./src/styles/theme.css', './src/styles/home.css'],
 			defaultLocale: 'root',
 			locales: {
 				root: {

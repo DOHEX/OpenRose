@@ -1,0 +1,15 @@
+/* Rose accent, matching the homepage hero. Unlayered, so it overrides starlight-theme-rapide's `@layer rapide`. */
+:root,
+::backdrop {
+	--sl-hue-accent: 12;
+	--sl-color-accent-low: oklch(24% 0.05 var(--sl-hue-accent));
+	--sl-color-accent: oklch(72% 0.17 var(--sl-hue-accent));
+	--sl-color-accent-high: oklch(85% 0.08 var(--sl-hue-accent));
+}
+
+:root[data-theme='light'],
+[data-theme='light'] ::backdrop {
+	--sl-color-accent-low: oklch(95% 0.025 var(--sl-hue-accent));
+	--sl-color-accent: oklch(60% 0.2 var(--sl-hue-accent));
+	--sl-color-accent-high: oklch(48% 0.18 var(--sl-hue-accent));
+}
