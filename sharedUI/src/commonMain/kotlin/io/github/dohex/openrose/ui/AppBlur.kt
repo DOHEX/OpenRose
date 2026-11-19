@@ -6,7 +6,6 @@ import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
-import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import top.yukonga.miuix.kmp.blur.Backdrop
@@ -58,22 +57,4 @@ internal fun Modifier.appBarBackdropBlur(
         .background(surfaceColor.copy(alpha = 0.75f))
 } else {
     this.background(surfaceColor)
-}
-
-internal fun Modifier.appPopupBackdropBlur(
-    backdrop: Backdrop?,
-    shape: Shape,
-    surfaceColor: Color,
-    active: Boolean,
-    blurRadius: Float = 25f,
-): Modifier = if (active && backdrop != null) {
-    this
-        .textureBlur(
-            backdrop = backdrop,
-            shape = shape,
-            blurRadius = blurRadius,
-        )
-        .background(surfaceColor.copy(alpha = 0.85f), shape)
-} else {
-    this.background(surfaceColor, shape)
 }

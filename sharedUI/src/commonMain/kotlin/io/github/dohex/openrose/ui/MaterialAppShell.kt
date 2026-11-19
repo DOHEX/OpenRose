@@ -43,6 +43,7 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import top.yukonga.miuix.kmp.blur.textureBlur
 
 @Composable
 private fun MaterialRailHeader() {
@@ -263,17 +264,27 @@ internal fun MaterialMainShell(
                             .padding(bottom = 16.dp),
                         contentAlignment = Alignment.Center,
                     ) {
+                        // The toolbar's default elevation is Level0 and its container matches surfaceContainer
+                        // list rows, so it vanishes over them. Lift it one tone (surfaceContainerHigh) and give
+                        // it MD3 floating elevation (Level3, 6dp). The tint goes through the toolbar's own
+                        // background so it paints above the shadow layer instead of under it.
                         HorizontalFloatingToolbar(
                             expanded = true,
-                            modifier = Modifier.appPopupBackdropBlur(
-                                backdrop = floatingBackdrop,
-                                shape = CircleShape,
-                                surfaceColor = MaterialTheme.colorScheme.surfaceContainer,
-                                active = backdropActive,
-                            ),
+                            modifier = if (backdropActive && floatingBackdrop != null) {
+                                Modifier.textureBlur(
+                                    backdrop = floatingBackdrop,
+                                    shape = FloatingToolbarDefaults.ContainerShape,
+                                    blurRadius = 25f,
+                                )
+                            } else {
+                                Modifier
+                            },
                             colors = FloatingToolbarDefaults.standardFloatingToolbarColors(
-                                toolbarContainerColor = Color.Transparent,
+                                toolbarContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh.let {
+                                    if (backdropActive) it.copy(alpha = 0.85f) else it
+                                },
                             ),
+                            expandedShadowElevation = 6.dp,
                         ) {
                             mainPages.forEachIndexed { index, destination ->
                                 val isSelected = currentTab == destination

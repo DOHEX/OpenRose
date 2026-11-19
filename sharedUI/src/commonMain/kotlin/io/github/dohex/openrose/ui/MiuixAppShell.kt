@@ -7,7 +7,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerScope
 import androidx.compose.foundation.pager.VerticalPager
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -15,11 +15,16 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.dp
 import top.yukonga.miuix.kmp.basic.*
+import top.yukonga.miuix.kmp.blur.BlendColorEntry
+import top.yukonga.miuix.kmp.blur.BlurDefaults
+import top.yukonga.miuix.kmp.blur.highlight.Highlight
+import top.yukonga.miuix.kmp.blur.textureBlur
 import top.yukonga.miuix.kmp.overlay.OverlayListPopup
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.PagerGestureNestedScrollConnection
@@ -161,14 +166,28 @@ internal fun MiuixMainShell(
         bottomBar = {
             if (!wide) {
                 if (bottomBarStyle == BottomBarStyle.FLOATING) {
+                    // Mirrors the Miuix example: the glass stroke highlight (or, without blur, the divider
+                    // outline) separates the bar from surfaceContainer cards scrolling underneath it.
+                    val blurBackdrop = floatingBackdrop.takeIf { backdropActive }
+                    val dark = MiuixTheme.colorScheme.surface.luminance() < 0.5f
                     FloatingNavigationBar(
-                        modifier = Modifier.appPopupBackdropBlur(
-                            backdrop = floatingBackdrop,
-                            shape = CircleShape,
-                            surfaceColor = MiuixTheme.colorScheme.surfaceContainer,
-                            active = backdropActive,
-                        ),
-                        color = Color.Transparent,
+                        modifier = if (blurBackdrop != null) {
+                            Modifier.textureBlur(
+                                backdrop = blurBackdrop,
+                                shape = RoundedCornerShape(FloatingToolbarDefaults.CornerRadius),
+                                blurRadius = 25f,
+                                colors = BlurDefaults.blurColors(
+                                    blendColors = listOf(
+                                        BlendColorEntry(color = MiuixTheme.colorScheme.surfaceContainer.copy(alpha = 0.6f)),
+                                    ),
+                                ),
+                                highlight = if (dark) Highlight.GlassStrokeMiddleDark else Highlight.GlassStrokeMiddleLight,
+                            )
+                        } else {
+                            Modifier
+                        },
+                        color = if (blurBackdrop != null) Color.Transparent else MiuixTheme.colorScheme.surfaceContainer,
+                        showDivider = blurBackdrop == null,
                     ) {
                         mainPages.forEachIndexed { index, destination ->
                             FloatingNavigationBarItem(
