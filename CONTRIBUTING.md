@@ -1,6 +1,6 @@
 # 参与贡献
 
-感谢你对 OpenRose 的关注。本文说明如何搭建开发环境、提交修改，以及合入前需要满足的检查。项目介绍与使用说明见 [README.md](README.md)（[English](README.en.md)）。
+感谢你对 OpenRose 的关注。本文说明如何搭建开发环境、提交修改，以及合入前需要满足的检查。项目介绍见 [README.md](README.md)（[English](README.en.md)），使用说明见[文档网站](https://dohex.github.io/OpenRose/)（源码在 [`website/`](website/README.md)）。
 
 ## 反馈问题与提出建议
 
@@ -134,7 +134,7 @@ gh attestation verify OpenRose-android.apk --repo DOHEX/OpenRose
 - 引入或改变领域术语时，更新 [GLOSSARY.md](GLOSSARY.md)，并使用其中已有的用语；术语表中的 _Avoid_ 条目是应避免的说法。
 - 架构决策记录在 `docs/adr/NNNN-kebab-title.md`（编号顺延，标题为中文）。文件以 `status: accepted` 的 YAML front matter 开头，随后是标题、说明背景的段落，以及“决策”“考虑过的方案”“后果”等小节，可参考 [ADR 0012](docs/adr/0012-shared-multiplatform-architecture.md) 和 [ADR 0014](docs/adr/0014-desktop-tray-and-background-control.md)。
 - 修改前先阅读涉及区域的术语和 ADR。若修改与某条 ADR 冲突，请在 PR 中指出是哪一条，并说明为什么需要重新讨论。
-- 面向用户的行为或说明变化时，同步更新 `README.md` 和 `README.en.md`。
+- 面向用户的行为或说明变化时，更新文档网站 `website/src/content/docs/` 下的中文页面和 `en/` 下对应的英文页面。README 只保留概要：涉及支持的耳机表、功能概要或安装步骤时，同步更新 `README.md` 和 `README.en.md`。
 
 ## 验证与真机测试
 
@@ -143,7 +143,7 @@ OpenRose 区分两类验证，请在 PR 描述和文档中分别如实记录，�
 - **离线验证**：协议编解码、控制会话、BlueZ 假 D-Bus 驱动、界面测试等，由 `offlineCheck` 覆盖，不需要耳机。
 - **真机验证**：在真实耳机、真实设备或桌面环境上执行。请写明耳机型号、设备 / 系统（或桌面环境与 BlueZ 版本）、OpenRose 版本，以及具体验证了哪些功能。
 
-新增型号或系统适配时，请分别记录协议依据、离线测试结果和真机测试结果；没有测过的部分明确写“未验证”。README 的“支持的耳机”和“平台支持”表中的状态列就是这种写法：已在真机验证的部分和只有离线测试的部分分开标注。型号协议研究位于 [docs/protocols/](docs/protocols/)。
+新增型号或系统适配时，请分别记录协议依据、离线测试结果和真机测试结果；没有测过的部分明确写“未验证”。网站“支持的耳机”和“平台支持”页（以及 README 的支持表）中的状态列就是这种写法：已在真机验证的部分和只有离线测试的部分分开标注。型号协议研究位于 [docs/protocols/](docs/protocols/)。
 
 ## 许可
 

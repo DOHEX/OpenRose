@@ -23,7 +23,7 @@ OpenRose 的用户文档站点，基于 [Astro](https://docs.astro.build) + [Sta
 
 - 站内链接用相对路径（如 `../background-control/`）。站点部署在 `/OpenRose/` 子路径下，以 `/` 开头的链接会丢掉这个前缀。
 - 指向仓库文件的链接用 `https://github.com/DOHEX/OpenRose/blob/main/...` 完整地址。
-- 术语与 [GLOSSARY.md](../GLOSSARY.md) 一致；功能与验证状态以仓库 [README](../README.md) 为准，两边需同步更新。
+- 术语与 [GLOSSARY.md](../GLOSSARY.md) 一致。网站是使用说明的唯一来源；仓库 README 只保留概要和支持表，改动支持表、功能概要或安装步骤时同步更新 `README.md` 与 `README.en.md`。
 
 ## 部署
 
