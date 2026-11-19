@@ -125,14 +125,19 @@ internal fun ControlStatusRows(owner: OwnerState) {
  */
 internal fun ownerVerdict(owner: OwnerState, module: ModuleAvailability): StatusVerdict? = when (val readiness = owner.readiness) {
     OwnerReadiness.Ready -> null
+
     OwnerReadiness.Starting -> StatusVerdict(AppStatusKind.Caution, "正在启动", "${wayLabel(owner.selected)}正在启动…")
+
     is OwnerReadiness.Idle -> StatusVerdict(AppStatusKind.Caution, "控制未运行", readiness.reason)
+
     is OwnerReadiness.Unavailable -> StatusVerdict(
         AppStatusKind.Error,
         "控制不可用",
         listOfNotNull(readiness.reason, module.nextStep().takeIf { owner.selected == ControlWay.MODULE }).joinToString("\n"),
     )
+
     is OwnerReadiness.Switching -> StatusVerdict(AppStatusKind.Caution, "正在切换", "正在切换到${wayLabel(readiness.request.to)}…")
+
     is OwnerReadiness.SwitchBlocked -> StatusVerdict(AppStatusKind.Error, "切换未完成", readiness.reason)
 }
 
