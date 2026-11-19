@@ -77,28 +77,39 @@ internal fun NoiseControlCard(
         NoiseModeChoices(modes, confirmedMode, enabled && DeviceSetting.NOISE_MODE in writable) { mode ->
             if (mode != confirmedMode) onSet(DeviceSetting.NOISE_MODE, FieldValue.Text(mode))
         }
-        val levelControls = remember(capabilities) {
-            listOf(
-                Triple(DeviceSetting.ANC_LEVEL, "降噪档位", capabilities.ancLevel),
-                Triple(DeviceSetting.TRANSPARENCY_LEVEL, "通透档位", capabilities.transparencyLevel),
-            )
-        }
-        if (showLevelControls) {
-            levelControls.forEach { (setting, title, levelCapabilities) ->
-                if (setting in writable && levelCapabilities?.isVisibleIn(confirmedMode) == true) {
-                    val field = if (setting == DeviceSetting.ANC_LEVEL) DeviceField.ANC_LEVEL else DeviceField.TRANSPARENCY_LEVEL
-                    val selected = (device.knownValue(field) as? FieldValue.Number)?.value
-                    val levels = remember(levelCapabilities.levels) {
-                        levelCapabilities.levels.sorted().map { level -> AppOption(level, "$level 档") }
-                    }
-                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        AppText(title, Modifier.weight(1f), role = AppTextRole.Summary)
-                        if (selected == null) AppText("当前状态未知", role = AppTextRole.Summary)
-                    }
-                    AppSegmented(levels, selected, enabled) { level ->
-                        if (level != selected) onSet(setting, FieldValue.Number(level))
-                    }
-                }
+        if (showLevelControls) NoiseLevelControls(device, confirmedMode, enabled, onSet)
+    }
+}
+
+/** The 降噪档位 and 通透档位 selectors, each only while the confirmed mode is one it applies to. */
+@Composable
+private fun NoiseLevelControls(
+    device: DeviceState,
+    confirmedMode: String?,
+    enabled: Boolean,
+    onSet: (DeviceSetting, FieldValue) -> Unit,
+) {
+    val capabilities = device.capabilities.noiseControl ?: return
+    val writable = device.capabilities.writableSettings
+    val levelControls = remember(capabilities) {
+        listOf(
+            Triple(DeviceSetting.ANC_LEVEL, "降噪档位", capabilities.ancLevel),
+            Triple(DeviceSetting.TRANSPARENCY_LEVEL, "通透档位", capabilities.transparencyLevel),
+        )
+    }
+    levelControls.forEach { (setting, title, levelCapabilities) ->
+        if (setting in writable && levelCapabilities?.isVisibleIn(confirmedMode) == true) {
+            val field = if (setting == DeviceSetting.ANC_LEVEL) DeviceField.ANC_LEVEL else DeviceField.TRANSPARENCY_LEVEL
+            val selected = (device.knownValue(field) as? FieldValue.Number)?.value
+            val levels = remember(levelCapabilities.levels) {
+                levelCapabilities.levels.sorted().map { level -> AppOption(level, "$level 档") }
+            }
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                AppText(title, Modifier.weight(1f), role = AppTextRole.Summary)
+                if (selected == null) AppText("当前状态未知", role = AppTextRole.Summary)
+            }
+            AppSegmented(levels, selected, enabled) { level ->
+                if (level != selected) onSet(setting, FieldValue.Number(level))
             }
         }
     }
