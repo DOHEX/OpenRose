@@ -10,9 +10,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
-import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
@@ -26,6 +24,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.*
+import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.unit.dp
 import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.basic.DropdownEntry
@@ -48,7 +47,11 @@ val LocalInterfaceStyle = staticCompositionLocalOf { InterfaceStyle.MIUIX }
 
 // Owned above the style branch so an open picker survives component replacement.
 internal val LocalChoiceDialog = staticCompositionLocalOf<MutableState<String?>?> { null }
-internal val LocalInDashboardCard = staticCompositionLocalOf { false }
+
+/** What Material rows sit on: the page, a tile of a segmented [AppGroup], or a container that draws their background. */
+internal enum class RowPlacement { Page, Segmented, Contained }
+internal val LocalRowPlacement = staticCompositionLocalOf { RowPlacement.Page }
+
 enum class AppColorRole { Primary, OnSurface, Summary, Error, Divider, SelectedContainer, SelectedContent, DisabledContent }
 enum class AppTextRole { Display, Title, Body, Summary, Footnote }
 enum class AppButtonKind { Primary, Secondary }
@@ -216,7 +219,11 @@ fun AppGroup(
                         it()
                     }
                 }
-                Column(Modifier.fillMaxWidth().padding(start = if (plain) 16.dp else 0.dp), content = content)
+                if (plain) {
+                    Column(Modifier.fillMaxWidth().padding(start = 16.dp), content = content)
+                } else {
+                    MaterialSegmentedList(content)
+                }
             }
         }
         footnote?.let { text ->
@@ -237,10 +244,6 @@ fun AppGroup(
             } else {
                 AppText(text, Modifier.padding(horizontal = 16.dp), role = AppTextRole.Footnote)
             }
-        }
-        if (LocalInterfaceStyle.current == InterfaceStyle.MATERIAL3) {
-            Spacer(Modifier.height(12.dp))
-            AppDivider()
         }
     }
 }
@@ -293,6 +296,22 @@ private fun MaterialGroupTitle(label: String, action: AppTitleAction?) {
     }
 }
 
+/**
+ * MD3E segmented list: every row is its own tile, [ListItemDefaults.SegmentedGap] apart. A row cannot know its position
+ * in the group, so the group clips the outer corners to the list container shape and each row keeps the small resting
+ * corners between tiles; pressing or selecting a row still morphs its own shape.
+ */
+@Composable
+private fun MaterialSegmentedList(content: @Composable ColumnScope.() -> Unit) {
+    CompositionLocalProvider(LocalRowPlacement provides RowPlacement.Segmented) {
+        Column(
+            Modifier.fillMaxWidth().padding(horizontal = 16.dp).clip(MaterialTheme.shapes.large),
+            verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap),
+            content = content,
+        )
+    }
+}
+
 @Composable
 internal fun AppDashboardCard(
     modifier: Modifier = Modifier,
@@ -301,7 +320,7 @@ internal fun AppDashboardCard(
 ) {
     val padding = if (compact) 0.dp else 16.dp
     val spacing = if (compact) 0.dp else 12.dp
-    CompositionLocalProvider(LocalInDashboardCard provides true) {
+    CompositionLocalProvider(LocalRowPlacement provides RowPlacement.Contained) {
         when (LocalInterfaceStyle.current) {
             InterfaceStyle.MIUIX -> MiuixCard(modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
                 Column(Modifier.padding(padding), verticalArrangement = Arrangement.spacedBy(spacing), content = content)
@@ -321,10 +340,36 @@ internal fun AppDashboardCard(
 }
 
 @Composable
-internal fun rowColors(): ListItemColors = if (LocalInDashboardCard.current) {
-    ListItemDefaults.colors(containerColor = Color.Transparent)
+internal fun rowColors(): ListItemColors = when (LocalRowPlacement.current) {
+    RowPlacement.Page -> ListItemDefaults.colors()
+
+    // Tiles take the list-item container role so they stand out from the page surface, enabled or not.
+    RowPlacement.Segmented -> MaterialTheme.colorScheme.surfaceContainer.let { tile ->
+        ListItemDefaults.segmentedColors(containerColor = tile, disabledContainerColor = tile)
+    }
+
+    // The container shows through; a choice is marked by its control, not by a filled row.
+    RowPlacement.Contained -> ListItemDefaults.colors(
+        containerColor = Color.Transparent,
+        disabledContainerColor = Color.Transparent,
+        selectedContainerColor = Color.Transparent,
+    )
+}
+
+/** Static rows have no interaction shapes, so inside a segmented group they clip to the resting tile shape. */
+@Composable
+private fun staticRowModifier(): Modifier = if (LocalRowPlacement.current == RowPlacement.Segmented) {
+    Modifier.clip(ListItemDefaults.shapes().shape)
 } else {
-    ListItemDefaults.colors()
+    Modifier
+}
+
+/** Rows one helper emits together are separate tiles inside a segmented group, so they keep the segment gap. */
+@Composable
+private fun rowArrangement(): Arrangement.Vertical = if (LocalRowPlacement.current == RowPlacement.Segmented) {
+    Arrangement.spacedBy(ListItemDefaults.SegmentedGap)
+} else {
+    Arrangement.Top
 }
 
 private fun iconAction(icon: RoseIcon?): (@Composable () -> Unit)? = icon?.let { { AppIcon(it) } }
@@ -341,8 +386,8 @@ fun AppArrowRow(title: String, summary: String? = null, value: String? = null, i
         )
 
         InterfaceStyle.MATERIAL3 -> ListItem(
-            headlineContent = { Text(title) },
-            supportingContent = summary?.let { { Text(it) } },
+            onClick = onClick,
+            modifier = Modifier.semantics { role = Role.Button },
             leadingContent = iconAction(icon),
             trailingContent = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -350,9 +395,9 @@ fun AppArrowRow(title: String, summary: String? = null, value: String? = null, i
                     AppIcon(RoseIcon.CHEVRON)
                 }
             },
-            modifier = Modifier.clickable(role = Role.Button, onClick = onClick),
+            supportingContent = summary?.let { { Text(it) } },
             colors = rowColors(),
-        )
+        ) { Text(title) }
     }
 }
 
@@ -394,6 +439,7 @@ fun AppInfoRow(label: String, value: String, valueColor: Color? = null, summary:
             } else {
                 null
             },
+            modifier = staticRowModifier(),
             colors = rowColors(),
         )
     }
@@ -419,13 +465,17 @@ fun AppSwitchRow(
         )
 
         InterfaceStyle.MATERIAL3 -> ListItem(
-            headlineContent = { Text(title) },
-            supportingContent = summary?.let { { Text(it) } },
+            onClick = { onChange(!checked) },
+            modifier = Modifier.semantics {
+                role = Role.Switch
+                toggleableState = ToggleableState(checked)
+            },
+            enabled = enabled,
             leadingContent = iconAction(icon),
             trailingContent = { Switch(checked, onCheckedChange = null, enabled = enabled) },
-            modifier = Modifier.toggleable(checked, enabled = enabled, role = Role.Switch, onValueChange = onChange),
+            supportingContent = summary?.let { { Text(it) } },
             colors = rowColors(),
-        )
+        ) { Text(title) }
     }
 }
 
@@ -434,10 +484,9 @@ fun <T> AppRadioGroup(
     options: List<AppOption<T>>,
     selected: T?,
     enabled: Boolean = true,
-    transparentContainer: Boolean = false,
     onSelect: (T) -> Unit,
 ) {
-    Column(Modifier.selectableGroup()) {
+    Column(Modifier.selectableGroup(), verticalArrangement = rowArrangement()) {
         options.forEach { option ->
             val optionModifier = Modifier.semantics {
                 this.selected = selected != null && option.value == selected
@@ -454,15 +503,13 @@ fun <T> AppRadioGroup(
                 )
 
                 InterfaceStyle.MATERIAL3 -> ListItem(
-                    headlineContent = { Text(option.label) },
+                    selected = selected != null && option.value == selected,
+                    onClick = { onSelect(option.value) },
+                    modifier = optionModifier,
+                    enabled = enabled,
                     leadingContent = { RadioButton(selected != null && option.value == selected, onClick = null, enabled = enabled) },
-                    modifier = optionModifier.selectable(
-                        selected != null && option.value == selected,
-                        enabled,
-                        Role.RadioButton,
-                    ) { onSelect(option.value) },
-                    colors = if (transparentContainer) ListItemDefaults.colors(containerColor = Color.Transparent) else rowColors(),
-                )
+                    colors = rowColors(),
+                ) { Text(option.label) }
             }
         }
     }
@@ -538,12 +585,13 @@ fun <T> AppChoiceRow(
 
         InterfaceStyle.MATERIAL3 -> {
             ListItem(
-                headlineContent = { Text(title) },
-                supportingContent = { Text(valueText) },
+                onClick = { setOpen(true) },
+                modifier = Modifier.semantics { role = Role.Button },
+                enabled = enabled,
                 leadingContent = iconAction(icon),
-                modifier = Modifier.clickable(enabled, role = Role.Button) { setOpen(true) },
+                supportingContent = { Text(valueText) },
                 colors = rowColors(),
-            )
+            ) { Text(title) }
             if (isOpen) {
                 AlertDialog(
                     onDismissRequest = { setOpen(false) },
@@ -561,8 +609,10 @@ fun <T> AppChoiceRow(
                     title = { Text(title) },
                     text = {
                         LaunchedEffect(Unit) { dialogFocusRequester.requestFocus() }
-                        Column(Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState())) {
-                            AppRadioGroup(options, selected, enabled, transparentContainer = true, onSelect = select)
+                        CompositionLocalProvider(LocalRowPlacement provides RowPlacement.Contained) {
+                            Column(Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState())) {
+                                AppRadioGroup(options, selected, enabled, onSelect = select)
+                            }
                         }
                     },
                     confirmButton = {},
@@ -640,12 +690,13 @@ internal fun <T> AppMultiChoiceRow(
 
         InterfaceStyle.MATERIAL3 -> {
             ListItem(
-                headlineContent = { Text(title) },
-                supportingContent = { Text(summary) },
+                onClick = { setOpen(true) },
+                modifier = Modifier.semantics { role = Role.Button },
+                enabled = enabled,
                 trailingContent = { AppIcon(RoseIcon.CHEVRON) },
-                modifier = Modifier.clickable(enabled, role = Role.Button) { setOpen(true) },
+                supportingContent = { Text(summary) },
                 colors = rowColors(),
-            )
+            ) { Text(title) }
             if (isOpen) {
                 val focusRequester = remember { FocusRequester() }
                 AlertDialog(
@@ -661,7 +712,9 @@ internal fun <T> AppMultiChoiceRow(
                     title = { Text(title) },
                     text = {
                         LaunchedEffect(Unit) { focusRequester.requestFocus() }
-                        AppCheckGroup(options, checked, canToggle, toggle)
+                        CompositionLocalProvider(LocalRowPlacement provides RowPlacement.Contained) {
+                            AppCheckGroup(options, checked, canToggle, toggle)
+                        }
                     },
                     confirmButton = { TextButton(onClick = { setOpen(false) }) { Text("关闭") } },
                 )
@@ -730,7 +783,7 @@ internal fun AppViewTabs(tabs: List<String>, index: Int, modifier: Modifier = Mo
 
 @Composable
 fun <T> AppCheckGroup(options: List<AppOption<T>>, checked: Set<T>, enabledFor: (T) -> Boolean, onToggle: (T) -> Unit) {
-    Column {
+    Column(verticalArrangement = rowArrangement()) {
         options.forEach { option ->
             val enabled = enabledFor(option.value)
             val optionModifier = Modifier.semantics { option.contentDescription?.let { contentDescription = it } }
@@ -744,11 +797,13 @@ fun <T> AppCheckGroup(options: List<AppOption<T>>, checked: Set<T>, enabledFor: 
                 )
 
                 InterfaceStyle.MATERIAL3 -> ListItem(
-                    headlineContent = { Text(option.label) },
+                    checked = option.value in checked,
+                    onCheckedChange = { onToggle(option.value) },
+                    modifier = optionModifier,
+                    enabled = enabled,
                     leadingContent = { Checkbox(option.value in checked, onCheckedChange = null, enabled = enabled) },
-                    modifier = optionModifier.toggleable(option.value in checked, enabled, Role.Checkbox) { onToggle(option.value) },
                     colors = rowColors(),
-                )
+                ) { Text(option.label) }
             }
         }
     }
@@ -836,14 +891,6 @@ fun AppBusyIndicator(size: androidx.compose.ui.unit.Dp? = null) {
 }
 
 @Composable
-internal fun AppDivider() {
-    when (LocalInterfaceStyle.current) {
-        InterfaceStyle.MIUIX -> top.yukonga.miuix.kmp.basic.HorizontalDivider()
-        InterfaceStyle.MATERIAL3 -> HorizontalDivider()
-    }
-}
-
-@Composable
 internal fun AppCandidateRow(title: String, summary: String, onConnect: (() -> Unit)?, enabled: Boolean = true) {
     when (LocalInterfaceStyle.current) {
         InterfaceStyle.MIUIX -> BasicComponent(
@@ -856,6 +903,7 @@ internal fun AppCandidateRow(title: String, summary: String, onConnect: (() -> U
             headlineContent = { Text(title) },
             supportingContent = { Text(summary) },
             trailingContent = onConnect?.let { { FilledTonalButton(it, enabled = enabled) { Text("连接") } } },
+            modifier = staticRowModifier(),
         )
     }
 }

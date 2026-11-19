@@ -186,7 +186,7 @@ internal fun TouchControlCard(
                                         shape = RoundedCornerShape(16.dp),
                                     ),
                             ) {
-                                CompositionLocalProvider(LocalInDashboardCard provides true) {
+                                CompositionLocalProvider(LocalRowPlacement provides RowPlacement.Contained) {
                                     rowContent()
                                 }
                             }
