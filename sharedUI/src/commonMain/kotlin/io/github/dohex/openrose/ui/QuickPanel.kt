@@ -22,8 +22,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
@@ -65,11 +65,11 @@ import io.github.dohex.openrose.core.protocol.BatteryLayout
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.dohex.openrose.ui.model.OpenRoseModel
+import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import kotlin.math.roundToInt
 import top.yukonga.miuix.kmp.basic.ButtonDefaults as MiuixButtonDefaults
 import top.yukonga.miuix.kmp.basic.TextButton as MiuixTextButton
-import kotlin.math.roundToInt
-import kotlinx.coroutines.launch
 
 /** Test tag of the scrim behind the sheet; tapping it dismisses the panel. */
 internal const val QUICK_PANEL_SCRIM_TAG = "quick-panel-scrim"
@@ -117,6 +117,7 @@ fun QuickPanel(
     val drop = remember { Animatable(0f, visibilityThreshold = 1f).apply { updateBounds(lowerBound = 0f) } }
     var sheetHeight by remember { mutableIntStateOf(0) }
     var closing by remember { mutableStateOf(false) }
+
     // Every way out slides the sheet off first; the host only hears about it once the sheet has left the screen.
     fun close(velocity: Float = 0f) {
         if (closing) return
