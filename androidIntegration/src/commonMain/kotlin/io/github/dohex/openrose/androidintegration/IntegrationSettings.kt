@@ -78,12 +78,7 @@ object IntegrationSettingsCodec {
     fun decode(values: Map<String, String>): IntegrationSettings {
         val defaults = IntegrationSettings()
         return IntegrationSettings(
-            islandMode = when (values["androidIntegration.island_mode"]) {
-                "off" -> IslandMode.OFF
-                "official" -> IslandMode.OFFICIAL
-                "module" -> IslandMode.MODULE
-                else -> defaults.islandMode
-            },
+            islandMode = decodeIslandMode(values["androidIntegration.island_mode"]) ?: defaults.islandMode,
             focusNotificationEnabled = values["androidIntegration.focus_notification_enabled"]?.toBooleanStrictOrNull()
                 ?: defaults.focusNotificationEnabled,
             islandSummaryEnabled = values["androidIntegration.island_summary_enabled"]?.toBooleanStrictOrNull()
@@ -91,17 +86,27 @@ object IntegrationSettingsCodec {
             islandTriggers = decodeTriggers(values["androidIntegration.island_triggers"]) ?: defaults.islandTriggers,
             statusNotificationTarget = decodeStatusTarget(values["androidIntegration.status_notification_target"])
                 ?: defaults.statusNotificationTarget,
-            fusionSettingsDestination = when (values["androidIntegration.fusion_settings_destination"]?.lowercase()) {
-                "system" -> FusionSettingsDestination.SYSTEM
-                "openrose" -> FusionSettingsDestination.OPENROSE
-                else -> defaults.fusionSettingsDestination
-            },
+            fusionSettingsDestination = decodeFusionDestination(values["androidIntegration.fusion_settings_destination"])
+                ?: defaults.fusionSettingsDestination,
             fusionOffAsWind = values["androidIntegration.fusion_off_as_wind"]?.toBooleanStrictOrNull() ?: defaults.fusionOffAsWind,
             backgroundControlEnabled = values["androidIntegration.background_control_enabled"]?.toBooleanStrictOrNull()
                 ?: defaults.backgroundControlEnabled,
             controlWay = decodeControlWay(values[CONTROL_WAY_KEY]),
             dynamicColor = values["androidIntegration.dynamic_color"]?.toBooleanStrictOrNull() ?: defaults.dynamicColor,
         )
+    }
+
+    private fun decodeIslandMode(value: String?): IslandMode? = when (value) {
+        "off" -> IslandMode.OFF
+        "official" -> IslandMode.OFFICIAL
+        "module" -> IslandMode.MODULE
+        else -> null
+    }
+
+    private fun decodeFusionDestination(value: String?): FusionSettingsDestination? = when (value?.lowercase()) {
+        "system" -> FusionSettingsDestination.SYSTEM
+        "openrose" -> FusionSettingsDestination.OPENROSE
+        else -> null
     }
 
     private fun decodeStatusTarget(value: String?): StatusNotificationTarget? = when (value) {
