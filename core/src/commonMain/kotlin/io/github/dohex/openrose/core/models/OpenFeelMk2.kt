@@ -49,10 +49,11 @@ private val openFeelMk2Capabilities = DeviceCapabilities(
     audioControl = AudioControlCapabilities(persistentSetOf("aac_sbc", "ldac", "lhdc", "lc3"), multipointCoupled = false),
     gainLevels = (0..2).toPersistentSet(),
     hearingProtectionLevels = (0..6).toPersistentSet(),
-    bassBoostLevels = (0..4).toPersistentSet(),
+    bassBoostLevels = (0..2).toPersistentSet(),
 )
 
 internal val openFeelMk2 = ModelSpec(
+    rsV2InfoIds = "0d0c2a45460e322b01072f2e",
     displayName = "OpenFeel MK2", shortLabel = "OpenFeel MK2", family = ProtocolFamily.RS_COMMON_V2,
     advertisementPrefixes = listOf("0b0eb657"), nameBrand = "openfeel", nameModelNumber = "mk2", nameRequiresModel = true,
     gatt = GattProfile(
@@ -60,7 +61,7 @@ internal val openFeelMk2 = ModelSpec(
         "000000f1-0000-1000-8000-00805f9b34fb",
         "000000f2-0000-1000-8000-00805f9b34fb",
     ),
-    sppControlUuid = "0cf12d31-fac3-4553-bd80-d6832e7b3931", writeIntervalMillis = 100, advertisedClassicAddress = null,
+    sppControlUuid = "0cf12d31-fac3-4553-bd80-d6832e7b3931", writeIntervalMillis = 100, advertisedClassicAddress = ::rsV2ClassicAddress,
     batteryLayout = BatteryLayout.EARBUDS_AND_CASE, equalizerPresetLabels = emptyMap(),
     capabilities = { openFeelMk2Capabilities },
 )

@@ -28,6 +28,7 @@ private val swift2Capabilities = DeviceCapabilities(
 )
 
 internal val swift2 = ModelSpec(
+    rsV2InfoIds = "0d0c0e3201072f2e",
     displayName = "SWIFT 2", shortLabel = "SWIFT 2", family = ProtocolFamily.RS_COMMON_V2,
     advertisementPrefixes = listOf("5999064c"), nameBrand = "swift", nameModelNumber = "swift2", nameRequiresModel = true,
     gatt = GattProfile(
@@ -35,7 +36,7 @@ internal val swift2 = ModelSpec(
         "000000f1-0000-1000-8000-00805f9b34fb",
         "000000f2-0000-1000-8000-00805f9b34fb",
     ),
-    sppControlUuid = "0cf12d31-fac3-4553-bd80-d6832e7b3931", writeIntervalMillis = 100, advertisedClassicAddress = null,
+    sppControlUuid = "0cf12d31-fac3-4553-bd80-d6832e7b3931", writeIntervalMillis = 100, advertisedClassicAddress = ::rsV2ClassicAddress,
     batteryLayout = BatteryLayout.SINGLE_UNIT, equalizerPresetLabels = emptyMap(),
     capabilities = { swift2Capabilities },
 )

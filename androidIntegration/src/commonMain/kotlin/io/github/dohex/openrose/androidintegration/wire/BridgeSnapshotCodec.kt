@@ -71,13 +71,14 @@ fun DeviceState.toBridgeSnapshot(hostEpoch: String, readSequence: Long, captured
             capabilities.audioControl?.let { audio ->
                 put("audio", mapOf("modes" to audio.modes.sorted(), "multipoint_coupled" to audio.multipointCoupled))
             }
-            capabilities.touchControl?.let { touch ->
+            for ((key, gestures) in listOf("touch" to capabilities.touchControl, "tap" to capabilities.tapControl)) {
+                if (gestures == null) continue
                 put(
-                    "touch",
+                    key,
                     mapOf(
-                        "actions" to touch.actions.sorted(),
-                        "slots" to touch.slots.map { slot -> mapOf("side" to slot.side, "gesture" to slot.gesture) },
-                        "slot_labels" to touch.slotLabels.map { (slot, label) ->
+                        "actions" to gestures.actions.sorted(),
+                        "slots" to gestures.slots.map { slot -> mapOf("side" to slot.side, "gesture" to slot.gesture) },
+                        "slot_labels" to gestures.slotLabels.map { (slot, label) ->
                             mapOf("side" to slot.side, "gesture" to slot.gesture, "label" to label)
                         },
                     ),
@@ -88,6 +89,8 @@ fun DeviceState.toBridgeSnapshot(hostEpoch: String, readSequence: Long, captured
             put("hearing_protection_levels", capabilities.hearingProtectionLevels.sorted())
             put("bass_boost_levels", capabilities.bassBoostLevels.sorted())
             put("prompt_languages", capabilities.promptLanguages.sorted())
+            put("spatial_modes", capabilities.spatialModes.sorted())
+            put("spatial_contents", capabilities.spatialContents.sorted())
         },
     )
 }

@@ -104,10 +104,10 @@ internal fun equalizerLabel(preset: String, profile: ModelProfile?): String {
         "rock" -> "ROCK"
         "light" -> "LIGHT"
         "eap" -> "EAP"
-        else -> return semanticLabel(preset)
+        else -> return profile?.equalizerPresetLabel(preset) ?: semanticLabel(preset)
     }
     val label = profile?.equalizerPresetLabel(preset)
-    return if (label == null) code else "$label · $code"
+    return if (label == null || label.equals(code, ignoreCase = true)) code else "$label · $code"
 }
 
 internal fun semanticLabel(value: String): String = when (value) {
@@ -130,6 +130,17 @@ internal fun semanticLabel(value: String): String = when (value) {
     "rock" -> "摇滚"
     "light" -> "轻音乐"
     "custom" -> "自定义"
+    "off" -> "关闭"
+    "head_tracking" -> "头部跟踪"
+    "fixed" -> "固定"
+    "tv" -> "电视"
+    "music" -> "音乐"
+    "movie" -> "电影"
+    "game" -> "游戏"
+    "aptx" -> "aptX"
+    "aptx_hd" -> "aptX HD"
+    "aptx_adaptive" -> "aptX Adaptive"
+    "game_1" -> "游戏 1"
     "custom_slot" -> "自定义槽位"
     "eap" -> "EAP"
     "volume_up" -> "增加音量"

@@ -667,7 +667,9 @@
         },
         "ota": "AB"
       },
-      "capability_evidence": "analysis/v2_capabilities.md"
+      "capability_evidence": "analysis/v2_capabilities.md",
+      "protocol_document": "docs/models/ceramics-mk2-protocol.md",
+      "protocol_status": "static analysis; device untested"
     },
     {
       "enum_index": 7,
@@ -1179,7 +1181,9 @@
         },
         "ota": "AB"
       },
-      "capability_evidence": "analysis/v2_capabilities.md"
+      "capability_evidence": "analysis/v2_capabilities.md",
+      "protocol_document": "docs/models/ceramics-mk2-protocol.md",
+      "protocol_status": "static analysis; device untested"
     },
     {
       "enum_index": 8,
@@ -1652,7 +1656,9 @@
         },
         "ota": "面板；type=none"
       },
-      "capability_evidence": "analysis/v2_capabilities.md"
+      "capability_evidence": "analysis/v2_capabilities.md",
+      "protocol_document": "docs/models/ceramics-mk2-protocol.md",
+      "protocol_status": "static analysis; device untested"
     },
     {
       "enum_index": 9,
@@ -2200,7 +2206,9 @@
         },
         "ota": "WQ"
       },
-      "capability_evidence": "analysis/v2_capabilities.md"
+      "capability_evidence": "analysis/v2_capabilities.md",
+      "protocol_document": "docs/models/ceramics-u-protocol.md",
+      "protocol_status": "static analysis; device untested"
     },
     {
       "enum_index": 10,
@@ -2743,7 +2751,9 @@
         },
         "ota": "BES"
       },
-      "capability_evidence": "analysis/v2_capabilities.md"
+      "capability_evidence": "analysis/v2_capabilities.md",
+      "protocol_document": "docs/models/ceramics-u-protocol.md",
+      "protocol_status": "static analysis; device untested"
     },
     {
       "enum_index": 11,
@@ -4043,7 +4053,9 @@
         "custom_eq": "无显式启用",
         "ota": "面板；type=none"
       },
-      "capability_evidence": "analysis/v2_capabilities.md"
+      "capability_evidence": "analysis/v2_capabilities.md",
+      "protocol_document": "docs/models/speakfree-protocol.md",
+      "protocol_status": "static analysis; device untested"
     },
     {
       "enum_index": 25,
@@ -4291,7 +4303,9 @@
         "custom_eq": "无显式启用",
         "ota": "AB"
       },
-      "capability_evidence": "analysis/v2_capabilities.md"
+      "capability_evidence": "analysis/v2_capabilities.md",
+      "protocol_document": "docs/models/magician-protocol.md",
+      "protocol_status": "static analysis; device untested"
     },
     {
       "enum_index": 26,
@@ -4835,7 +4849,9 @@
         },
         "ota": "AB（面板默认）"
       },
-      "capability_evidence": "analysis/v2_capabilities.md"
+      "capability_evidence": "analysis/v2_capabilities.md",
+      "protocol_document": "docs/models/furina-protocol.md",
+      "protocol_status": "static analysis; device untested"
     },
     {
       "enum_index": 27,
@@ -5384,7 +5400,9 @@
         },
         "ota": "AB"
       },
-      "capability_evidence": "analysis/v2_capabilities.md"
+      "capability_evidence": "analysis/v2_capabilities.md",
+      "protocol_document": "docs/models/zircon-protocol.md",
+      "protocol_status": "static analysis; device untested"
     },
     {
       "enum_index": 28,
@@ -5788,7 +5806,9 @@
         "custom_eq": "无显式启用",
         "ota": "无入口"
       },
-      "capability_evidence": "analysis/v2_capabilities.md"
+      "capability_evidence": "analysis/v2_capabilities.md",
+      "protocol_document": "docs/models/hyacinth-protocol.md",
+      "protocol_status": "static analysis; device untested"
     },
     {
       "enum_index": 29,
@@ -6576,7 +6596,9 @@
         "custom_eq": "无显式启用",
         "ota": "AB"
       },
-      "capability_evidence": "analysis/v2_capabilities.md"
+      "capability_evidence": "analysis/v2_capabilities.md",
+      "protocol_document": "docs/models/astro-x-protocol.md",
+      "protocol_status": "static analysis; device untested"
     },
     {
       "enum_index": 31,
@@ -7038,7 +7060,9 @@
         },
         "ota": "无入口"
       },
-      "capability_evidence": "analysis/v2_capabilities.md"
+      "capability_evidence": "analysis/v2_capabilities.md",
+      "protocol_document": "docs/models/opal-protocol.md",
+      "protocol_status": "static analysis; device untested"
     },
     {
       "enum_index": 32,
@@ -7414,7 +7438,9 @@
         "custom_eq": "无显式启用",
         "ota": "无入口"
       },
-      "capability_evidence": "analysis/v2_capabilities.md"
+      "capability_evidence": "analysis/v2_capabilities.md",
+      "protocol_document": "docs/models/mirror-protocol.md",
+      "protocol_status": "static analysis; device untested"
     },
     {
       "enum_index": 33,
@@ -7812,7 +7838,9 @@
         "custom_eq": "无显式启用",
         "ota": "AB"
       },
-      "capability_evidence": "analysis/v2_capabilities.md"
+      "capability_evidence": "analysis/v2_capabilities.md",
+      "protocol_document": "docs/models/ky01-protocol.md",
+      "protocol_status": "static analysis; device untested"
     },
     {
       "enum_index": 34,
@@ -8231,7 +8259,9 @@
         "custom_eq": "无显式启用",
         "ota": "AB"
       },
-      "capability_evidence": "analysis/v2_capabilities.md"
+      "capability_evidence": "analysis/v2_capabilities.md",
+      "protocol_document": "docs/models/coral-protocol.md",
+      "protocol_status": "static analysis; device untested"
     },
     {
       "enum_index": 35,
@@ -9376,7 +9406,9 @@
         "custom_eq": "无显式启用",
         "ota": "无入口"
       },
-      "capability_evidence": "analysis/v2_capabilities.md"
+      "capability_evidence": "analysis/v2_capabilities.md",
+      "protocol_document": "docs/models/luminous-protocol.md",
+      "protocol_status": "static analysis; device untested"
     },
     {
       "enum_index": 38,
@@ -9705,7 +9737,9 @@
         "custom_eq": "无显式启用",
         "ota": "无入口"
       },
-      "capability_evidence": "analysis/v2_capabilities.md"
+      "capability_evidence": "analysis/v2_capabilities.md",
+      "protocol_document": "docs/models/luminous-protocol.md",
+      "protocol_status": "static analysis; device untested"
     },
     {
       "enum_index": 39,
@@ -10034,7 +10068,9 @@
         "custom_eq": "无显式启用",
         "ota": "无入口"
       },
-      "capability_evidence": "analysis/v2_capabilities.md"
+      "capability_evidence": "analysis/v2_capabilities.md",
+      "protocol_document": "docs/models/luminous-protocol.md",
+      "protocol_status": "static analysis; device untested"
     },
     {
       "enum_index": 40,
@@ -10363,7 +10399,9 @@
         "custom_eq": "无显式启用",
         "ota": "无入口"
       },
-      "capability_evidence": "analysis/v2_capabilities.md"
+      "capability_evidence": "analysis/v2_capabilities.md",
+      "protocol_document": "docs/models/luminous-protocol.md",
+      "protocol_status": "static analysis; device untested"
     },
     {
       "enum_index": 41,
@@ -11323,7 +11361,9 @@
         "custom_eq": "无显式启用",
         "ota": "AB + USB AB123A"
       },
-      "capability_evidence": "analysis/v2_capabilities.md"
+      "capability_evidence": "analysis/v2_capabilities.md",
+      "protocol_document": "docs/models/speakfeel2-protocol.md",
+      "protocol_status": "static analysis; device untested"
     },
     {
       "enum_index": 43,
@@ -11729,7 +11769,9 @@
         "custom_eq": "有",
         "ota": "AB"
       },
-      "capability_evidence": "analysis/v2_capabilities.md"
+      "capability_evidence": "analysis/v2_capabilities.md",
+      "protocol_document": "docs/models/openfeel-l-protocol.md",
+      "protocol_status": "static analysis; device untested"
     },
     {
       "enum_index": 44,
@@ -12094,7 +12136,9 @@
         "custom_eq": "有（音乐/游戏分离）",
         "ota": "AB + USB AB123A"
       },
-      "capability_evidence": "analysis/v2_capabilities.md"
+      "capability_evidence": "analysis/v2_capabilities.md",
+      "protocol_document": "docs/models/first-angel-protocol.md",
+      "protocol_status": "static analysis; device untested"
     },
     {
       "enum_index": 46,
@@ -12326,7 +12370,9 @@
         "custom_eq": "有",
         "ota": "AB；USB AB123A"
       },
-      "capability_evidence": "analysis/v2_capabilities.md"
+      "capability_evidence": "analysis/v2_capabilities.md",
+      "protocol_document": "docs/models/moka-protocol.md",
+      "protocol_status": "static analysis; device untested"
     }
   ],
   "non_headphone_and_generic_types": [

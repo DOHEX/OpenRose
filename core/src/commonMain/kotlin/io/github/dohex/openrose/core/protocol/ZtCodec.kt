@@ -4,7 +4,12 @@ import io.github.dohex.openrose.core.DeviceSetting
 
 /** ZT family frames: 08EE requests, fixed command keys and nibble-encoded replies. */
 internal class ZtCodec(override val profile: ModelProfile) : ProtocolCodec {
-    override fun prepareSetting(setting: DeviceSetting, value: FieldValue, firmware: FieldValue.Firmware?): ProtocolSetting {
+    override fun prepareSetting(
+        setting: DeviceSetting,
+        value: FieldValue,
+        firmware: FieldValue.Firmware?,
+        currentFields: Map<DeviceField, FieldReading>,
+    ): ProtocolSetting {
         val expected = if (setting == DeviceSetting.NOISE_CYCLE) validatedNoiseCycle(value) else value
         val (writeKey, readKey, payload) = when (setting) {
             DeviceSetting.NOISE_MODE -> {

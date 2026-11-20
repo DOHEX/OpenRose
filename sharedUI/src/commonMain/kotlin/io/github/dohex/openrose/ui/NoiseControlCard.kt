@@ -388,11 +388,18 @@ internal fun DeviceSetting.displayName(): String = when (this) {
     DeviceSetting.NOISE_CYCLE -> "降噪轮换"
     DeviceSetting.EQ -> "预设 EQ"
     DeviceSetting.GAME_MODE -> "游戏模式"
+    DeviceSetting.TAP_ENABLED -> "轻拍开关"
+    DeviceSetting.TAP_BINDING -> "轻拍绑定"
     DeviceSetting.TOUCH_BINDING -> "触控绑定"
     DeviceSetting.TOUCH_ENABLED -> "触控总开关"
     DeviceSetting.EAR_DETECTION -> "佩戴检测功能"
     DeviceSetting.AUDIO_MODE -> "音频模式"
     DeviceSetting.MULTIPOINT -> "多点连接"
+    DeviceSetting.SPATIAL_MODE -> "空间模式"
+    DeviceSetting.SPATIAL_CONTENT -> "空间音频内容"
+    DeviceSetting.EAR_ADAPTIVE -> "耳道自适应"
+    DeviceSetting.INDEPENDENT_MIC_ACTIVATION -> "独立麦克风激活"
+    DeviceSetting.INDEPENDENT_MIC_MODE -> "独立麦克风模式"
     DeviceSetting.SPATIAL_AUDIO -> "空间音频"
     DeviceSetting.PROMPT_VOLUME -> "提示音音量"
     DeviceSetting.GAIN -> "增益档位"
@@ -409,11 +416,18 @@ private fun SettingOperation.requestedValueText(device: DeviceState?): String = 
     DeviceSetting.NOISE_CYCLE -> displayFieldValue(DeviceField.NOISE_CYCLE, requestedValue)
     DeviceSetting.EQ -> displayFieldValue(DeviceField.EQ, requestedValue, device?.profile)
     DeviceSetting.GAME_MODE -> displayFieldValue(DeviceField.GAME_MODE, requestedValue)
+    DeviceSetting.TAP_ENABLED -> displayFieldValue(DeviceField.TAP_ENABLED, requestedValue)
+    DeviceSetting.TAP_BINDING -> displayFieldValue(DeviceField.TAP_KEYS, requestedValue, touch = device?.capabilities?.tapControl)
     DeviceSetting.TOUCH_BINDING -> displayFieldValue(DeviceField.TOUCH_KEYS, requestedValue, touch = device?.capabilities?.touchControl)
     DeviceSetting.TOUCH_ENABLED -> displayFieldValue(DeviceField.TOUCH_ENABLED, requestedValue)
     DeviceSetting.EAR_DETECTION -> displayFieldValue(DeviceField.EAR_DETECTION, requestedValue)
     DeviceSetting.AUDIO_MODE -> displayFieldValue(DeviceField.AUDIO_MODE, requestedValue)
     DeviceSetting.MULTIPOINT -> displayFieldValue(DeviceField.MULTIPOINT, requestedValue)
+    DeviceSetting.SPATIAL_MODE -> displayFieldValue(DeviceField.SPATIAL_MODE, requestedValue)
+    DeviceSetting.SPATIAL_CONTENT -> displayFieldValue(DeviceField.SPATIAL_CONTENT, requestedValue)
+    DeviceSetting.EAR_ADAPTIVE -> displayFieldValue(DeviceField.EAR_ADAPTIVE, requestedValue)
+    DeviceSetting.INDEPENDENT_MIC_ACTIVATION -> displayFieldValue(DeviceField.INDEPENDENT_MIC_ACTIVATION, requestedValue)
+    DeviceSetting.INDEPENDENT_MIC_MODE -> displayFieldValue(DeviceField.INDEPENDENT_MIC_MODE, requestedValue)
     DeviceSetting.SPATIAL_AUDIO -> displayFieldValue(DeviceField.SPATIAL_AUDIO, requestedValue)
     DeviceSetting.PROMPT_VOLUME -> displayFieldValue(DeviceField.PROMPT_VOLUME, requestedValue)
     DeviceSetting.CUSTOM_EQ -> displayFieldValue(DeviceField.CUSTOM_EQ, requestedValue)

@@ -19,8 +19,19 @@ description: 已适配的 ROSE / ROSESELSA 耳机型号、控制传输与真机�
 | BudsFree i、SWIFT | BLE | 未经真机验证 |
 | Cambrian、OpenFun、SportFeel（SportFree） | BLE 或 SPP | 未经真机验证 |
 | OpenFeel（OpenFree，LDAC / LHDC / 双编码分支） | BLE | 未经真机验证 |
+| CERAMICS-MK2（标准、8912F、5736） | BLE 或 SPP | 未经真机验证 |
+| CERAMICS-U（标准、HSC-2710） | BLE 或 SPP | 未经真机验证 |
+| FURINA、Zircon、Coral | BLE 或 SPP | 未经真机验证 |
+| SpeakFeel（speakfree）、SPEAKFEEL（speakfeel2） | BLE 或 SPP | 未经真机验证 |
+| Astro X、OpenFeel L、FIRST ANGEL、MOKA | BLE 或 SPP | 未经真机验证 |
+| Hyacinth、Opal、Mirror、KY01 | BLE 或 SPP | 未经真机验证 |
+| Luminous Patamon、Tailmon、Gabumon、Agumon | BLE 或 SPP | 未经真机验证 |
+| BudsFeel AE Neo、EarFeel iE Neo、EarFeel iE2 | BLE 或 SPP | 未经真机验证 |
+| SportFeel 8912F | BLE 或 SPP | 未经真机验证 |
+| Cambrian S、OpenLink | BLE 或 SPP | 未经真机验证 |
+| Magician | BLE 或 SPP | 未经真机验证 |
 
-其余型号尚未适配。
+OpenRose 已接入 RoseLink 3.8.6 的全部 48 个蓝牙耳机配置，并保留 3.8.0 的 Magician。OpenFeel 的三个编码分支及 OpenFun 的两个触控分支分别适配，共 52 个 OpenRose 型号配置。
 
 ## 说明
 

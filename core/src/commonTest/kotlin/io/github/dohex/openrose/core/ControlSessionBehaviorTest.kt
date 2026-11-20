@@ -121,6 +121,25 @@ class ControlSessionBehaviorTest {
     }
 
     @Test
+    fun readingsFromAbsentEarbudSlotsCannotMakeASingleUnitReady() = runTest {
+        // Synthetic 0C: valid left/right percentages, unavailable single-unit battery in the third slot.
+        val connection = RecordedConnection(emptyMap(), repeatedNotifications = listOf("dd00040c6432ff82aa"))
+        val transport = RecordedTransport(connection)
+        val session = ControlSession(
+            PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
+            transport = transport,
+            scope = backgroundScope,
+            timing = SessionTiming(queryTimeoutMillis = 30, writeIntervalMillis = 0),
+        )
+        session.startScan()
+        runCurrent()
+        val id = DeviceId("moka")
+        transport.advertisements.emit(Advertisement(id, manufacturerData = mapOf(0xf568 to byteArrayOf(0xb8.toByte(), 0xeb.toByte()))))
+        runCurrent()
+        assertEquals(ControlErrorCode.TIMEOUT, assertIs<OperationResult.Failure>(session.connect(id)).error.code)
+    }
+
+    @Test
     fun partialReadTimeoutKeepsConfirmedFieldsAndReportsTheUnavailableField() = runTest {
         val connection = RecordedConnection(i5Replies - "0d01")
         val transport = RecordedTransport(connection)
@@ -236,7 +255,7 @@ class ControlSessionBehaviorTest {
         assertEquals(FieldReading.Known(FieldValue.Number(80), "50"), device.fields[DeviceField.CASE_BATTERY])
         assertEquals(FieldValue.Toggle(true), assertIs<FieldReading.Known>(device.fields[DeviceField.GAME_MODE]).value)
         assertEquals("152", assertIs<FieldValue.Firmware>(assertIs<FieldReading.Known>(device.fields[DeviceField.FIRMWARE]).value).displayText)
-        assertEquals(4, connection.writes.size)
+        assertEquals(3, connection.writes.size)
         assertTrue(connection.writes.all { it.length <= 40 })
         assertTrue(connection.writeTimes.zipWithNext().all { (before, after) -> after - before >= 100 })
         assertEquals(ControlErrorCode.TIMEOUT, device.fieldErrors[DeviceField.TOUCH_KEYS]?.code)

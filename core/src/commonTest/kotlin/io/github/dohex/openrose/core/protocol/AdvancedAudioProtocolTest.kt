@@ -11,14 +11,14 @@ class AdvancedAudioProtocolTest {
     @Test
     fun customCurveUsesTwoOrderedWritesAndTwoIndependentReadbacksAfterInitialization() {
         val codec = createProtocolCodec(ModelProfile.I7_RS_V2)
-        assertEquals(4, codec.initQueries(20).size)
+        assertEquals(3, codec.initQueries(20).size)
         val gains = mutableListOf(-6, -3, -1, 0, 1, 2, 3, 4, 5, 6)
         val setting = codec.prepareSetting(DeviceSetting.CUSTOM_EQ, FieldValue.IntegerList(gains))
         // APK setEqCustom fixed literal + independent dynamic curve example in
-        // rose_reverse/docs/earfeel-i7-protocol.md §4.4, advanced by session seq04/05.
-        assertEquals(listOf("ff04022a0433aa", "ff050b3e86838100010203040506ecaa"), setting.writeFrames.map { it.hex() })
-        // APK getEq/getCustomEq fixed bodies, independently worked seq06/07 literals.
-        assertEquals(listOf("ff0602fa2a2baa", "ff0702fa3e40aa"), setting.readbacks.map { it.bytes.hex() })
+        // rose_reverse/docs/earfeel-i7-protocol.md §4.4, advanced by session seq03/04.
+        assertEquals(listOf("ff03022a0432aa", "ff040b3e86838100010203040506ebaa"), setting.writeFrames.map { it.hex() })
+        // APK getEq/getCustomEq fixed bodies, independently worked seq05/06 literals.
+        assertEquals(listOf("ff0502fa2a2aaa", "ff0602fa3e3faa"), setting.readbacks.map { it.bytes.hex() })
         assertEquals(listOf(setOf("2a"), setOf("3e")), setting.readbacks.map { it.responseKeys })
         assertEquals(listOf(setOf(DeviceField.EQ), setOf(DeviceField.CUSTOM_EQ)), setting.readbacks.map { it.expectedFields })
         assertEquals(setting.readbacks.first(), setting.readback)
@@ -31,7 +31,7 @@ class AdvancedAudioProtocolTest {
             ),
             setting.expectedValues,
         )
-        assertEquals("ff08020e0118aa", codec.prepareSetting(DeviceSetting.GAME_MODE, FieldValue.Toggle(true)).writeFrames.single().hex())
+        assertEquals("ff07020e0117aa", codec.prepareSetting(DeviceSetting.GAME_MODE, FieldValue.Toggle(true)).writeFrames.single().hex())
     }
 
     @Test
@@ -209,6 +209,10 @@ class AdvancedAudioProtocolTest {
                 4 to "ff00032a050435aa",
             )) {
                 val codec = createProtocolCodec(profile)
+                if (profile == ModelProfile.OPENFEEL_MK2_RS_V2 && level > 2) {
+                    assertFailsWith<UnsupportedOperationException> { codec.prepareSetting(DeviceSetting.BASS_BOOST, FieldValue.Number(level)) }
+                    continue
+                }
                 val setting = codec.prepareSetting(DeviceSetting.BASS_BOOST, FieldValue.Number(level))
                 assertEquals(frame, setting.writeFrames.single().hex())
                 assertEquals("ff0102fa2a26aa", setting.readback.bytes.hex())

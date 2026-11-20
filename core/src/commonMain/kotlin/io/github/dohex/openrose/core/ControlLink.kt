@@ -267,23 +267,22 @@ internal class ControlLink(
             attempt.connection = opened
         }
         val link = opened
+        val deviceReadings = ConnectionReadings(profile)
         attempt.observer = scope.launch(start = CoroutineStart.UNDISPATCHED) {
             var failure: Throwable? = null
             var error = ControlError(ControlErrorCode.DISCONNECTED, "设备已断开")
             try {
                 link.notifications.collect { bytes ->
                     if (attempt.linkEpoch.value != epoch) return@collect
-                    val parsed = codec.feedNotification(bytes.copyOf())
+                    val parsed = codec.feedNotification(bytes.copyOf()).map(deviceReadings::receive)
                     val readings = parsed.flatMap { it.readings.entries }.associate { it.toPair() }
                     lifecycle.withLock {
                         updateLinkAttempt(attempt, epoch) { current ->
                             val old = requireNotNull(current.device)
-                            val firmware = ((readings[DeviceField.FIRMWARE] ?: old.fields[DeviceField.FIRMWARE]) as? FieldReading.Known)
-                                ?.value as? FieldValue.Firmware
                             current.copy(
                                 device = old.copy(
-                                    fields = old.fields.puttingAll(readings),
-                                    capabilities = profile.capabilities(firmware),
+                                    fields = deviceReadings.published(),
+                                    capabilities = deviceReadings.capabilities,
                                     fieldErrors = readings.keys.fold(old.fieldErrors) { errors, field -> errors.removing(field) },
                                     rawNotifications = old.rawNotifications.appendRecent(listOf(bytes.hex())),
                                     unknownNotifications = old.unknownNotifications.appendRecent(
@@ -356,7 +355,11 @@ internal class ControlLink(
         withTimeout(timing.connectTimeoutMillis) { opened.subscribe() }
         throwProgressFailure(progress)
         phase(attempt, epoch, ConnectionPhase.INITIALIZING)
-        val queries = codec.initQueries(opened.maxWriteSize)
+        val queries = sequence {
+            yieldAll(codec.initQueries(opened.maxWriteSize))
+            val firmware = (state.value.device?.fields?.get(DeviceField.FIRMWARE) as? FieldReading.Known)?.value as? FieldValue.Firmware
+            yieldAll(codec.firmwareInitQueries(firmware))
+        }
         for ((index, query) in queries.withIndex()) {
             attempt.initializationQueryIndex = index
             throwProgressFailure(progress)

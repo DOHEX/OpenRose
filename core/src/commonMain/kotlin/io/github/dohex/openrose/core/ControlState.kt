@@ -101,6 +101,8 @@ enum class DeviceSetting {
     TOUCH_ENABLED,
     EAR_DETECTION,
     TOUCH_BINDING,
+    TAP_ENABLED,
+    TAP_BINDING,
     PROMPT_VOLUME,
     CUSTOM_EQ,
     GAIN,
@@ -108,6 +110,11 @@ enum class DeviceSetting {
     BASS_BOOST,
     PROMPT_LANGUAGE,
     SPATIAL_AUDIO,
+    SPATIAL_MODE,
+    SPATIAL_CONTENT,
+    EAR_ADAPTIVE,
+    INDEPENDENT_MIC_ACTIVATION,
+    INDEPENDENT_MIC_MODE,
 }
 
 /** Transport acceptance and device state confirmation are separate facts. */
@@ -131,12 +138,15 @@ data class DeviceCapabilities(
     val noiseControl: NoiseControlCapabilities? = null,
     val equalizer: EqualizerCapabilities? = null,
     val touchControl: TouchControlCapabilities? = null,
+    val tapControl: TouchControlCapabilities? = null,
     val audioControl: AudioControlCapabilities? = null,
     val promptVolumeLevels: PersistentSet<Int> = persistentSetOf(),
     val gainLevels: PersistentSet<Int> = persistentSetOf(),
     val hearingProtectionLevels: PersistentSet<Int> = persistentSetOf(),
     val bassBoostLevels: PersistentSet<Int> = persistentSetOf(),
     val promptLanguages: PersistentSet<String> = persistentSetOf(),
+    val spatialModes: PersistentSet<String> = persistentSetOf(),
+    val spatialContents: PersistentSet<String> = persistentSetOf(),
 )
 
 data class DeviceState(
@@ -200,3 +210,17 @@ data class ConnectionRecovery(
     val reason: io.github.dohex.openrose.core.transport.TransportRecoveryReason,
     val attempt: Int = 1,
 )
+
+/** The dependent control is available after the headset confirms its prerequisite. */
+fun DeviceState.settingPrerequisite(setting: DeviceSetting): String? {
+    val requirement = when (setting) {
+        DeviceSetting.SPATIAL_CONTENT -> DeviceField.SPATIAL_MODE
+        DeviceSetting.INDEPENDENT_MIC_MODE -> DeviceField.INDEPENDENT_MIC_ACTIVATION
+        else -> return null
+    }
+    val current = (fields[requirement] as? FieldReading.Known)?.value
+    return when (requirement) {
+        DeviceField.SPATIAL_MODE -> if (current is FieldValue.Text && current.value in setOf("head_tracking", "fixed")) null else "请先开启空间模式"
+        else -> if (current == FieldValue.Toggle(true)) null else "请先激活独立麦克风"
+    }
+}

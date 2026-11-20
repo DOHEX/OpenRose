@@ -39,6 +39,22 @@ class ModelProfileTest {
     }
 
     @Test
+    fun partialWordsCannotSelectAProductWithAnUnrelatedNameOrHardwareSuffix() {
+        for (name in listOf("Screen Mirroring", "Opalescent Speaker", "Mirrorless Camera", "Acoustic Coraline")) {
+            assertNull(ModelProfile.match(name), name)
+            assertFalse(Regex(ModelProfile.namePattern).matches(name), name)
+        }
+        assertNull(ModelProfile.match("ROSE OpenFeel LDAC"))
+        assertNull(ModelProfile.match("OpenFeel LHDC"))
+        assertNull(ModelProfile.match("ROSE EarFeel iE20"))
+        assertNull(ModelProfile.match("EarFree i8"))
+        assertEquals(ModelProfile.OPENFEEL_L_RS_V2, ModelProfile.match("ROSE OpenFeel-L"))
+        assertEquals(ModelProfile.I5_ZT, ModelProfile.match("EarFeeli5"))
+        assertEquals(ModelProfile.I5_ZT, ModelProfile.match("ROSESELSAEarFeeli5"))
+        assertEquals(ModelProfile.MIRROR_RS_V2, ModelProfile.match("Mirror"))
+    }
+
+    @Test
     fun retailNamesKeepMk2BrandsAndSwiftGenerationsDistinct() {
         for (name in listOf("BudsFeel MK2", "ROSE BudsFeel-MK2", "budsfeel mk2")) {
             assertEquals(ModelProfile.BUDSFEEL_MK2_RS_V2, ModelProfile.match(name), name)

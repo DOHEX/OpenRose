@@ -55,7 +55,12 @@ internal class RsCommonCodec(override val profile: ModelProfile) : ProtocolCodec
         }
     }
 
-    override fun prepareSetting(setting: DeviceSetting, value: FieldValue, firmware: FieldValue.Firmware?): ProtocolSetting {
+    override fun prepareSetting(
+        setting: DeviceSetting,
+        value: FieldValue,
+        firmware: FieldValue.Firmware?,
+        currentFields: Map<DeviceField, FieldReading>,
+    ): ProtocolSetting {
         val caps = profile.capabilities(firmware)
         if (setting !in caps.writableSettings) throw UnsupportedOperationException("该型号不支持此设置")
         if (setting == DeviceSetting.TOUCH_BINDING) return prepareTouch(value)

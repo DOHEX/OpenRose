@@ -9,6 +9,15 @@ import kotlin.test.assertTrue
 
 class RsCommonV2Mk2CustomEqAndPromptVolumeTest {
     @Test
+    fun eachMk2StartsWithItsOwnPanelQueriesAtDefaultBleCapacity() {
+        // RoseLink 3.8.6 panel order. Only OpenFeel MK2 can supply the custom curve OpenRose reads separately.
+        val buds = createProtocolCodec(ModelProfile.BUDSFEEL_MK2_RS_V2).initQueries(20)
+        val open = createProtocolCodec(ModelProfile.OPENFEEL_MK2_RS_V2).initQueries(20)
+        assertEquals(listOf("ff000dfa0d0c092a0e322b01072f2e3658aa"), buds.map { it.bytes.hex() })
+        assertEquals(listOf("ff000dfa0d0c2a45460e322b01072f2ea4aa", "ff0102fa3e3aaa"), open.map { it.bytes.hex() })
+    }
+
+    @Test
     fun openFeelMk2CustomEqWritesModeThenCurveAndReadsBothBack() {
         val capabilities = ModelProfile.OPENFEEL_MK2_RS_V2.capabilities()
         assertTrue(DeviceSetting.CUSTOM_EQ in capabilities.writableSettings)

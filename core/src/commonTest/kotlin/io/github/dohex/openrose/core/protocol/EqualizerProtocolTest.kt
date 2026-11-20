@@ -130,16 +130,16 @@ class EqualizerProtocolTest {
     @Test
     fun eqAndGameContinueTheSameI7InitializationAndAncSequence() {
         val codec = createProtocolCodec(ModelProfile.I7_RS_V2)
-        codec.initQueries(20) // Four complete queries use sequences00..03.
+        codec.initQueries(20) // Three complete queries use sequences 00..02.
         val eq = codec.prepareSetting(DeviceSetting.EQ, FieldValue.Text("hifi"))
-        assertEquals("ff04022a002faa", eq.writeFrames.single().hex())
-        assertEquals("ff0502fa2a2aaa", eq.readback.bytes.hex())
+        assertEquals("ff03022a002eaa", eq.writeFrames.single().hex())
+        assertEquals("ff0402fa2a29aa", eq.readback.bytes.hex())
         val game = codec.prepareSetting(DeviceSetting.GAME_MODE, FieldValue.Toggle(true))
-        assertEquals("ff06020e0116aa", game.writeFrames.single().hex())
-        assertEquals("ff0702fa0e10aa", game.readback.bytes.hex())
+        assertEquals("ff05020e0115aa", game.writeFrames.single().hex())
+        assertEquals("ff0602fa0e0faa", game.readback.bytes.hex())
         val anc = codec.prepareSetting(DeviceSetting.NOISE_MODE, FieldValue.Text("anc"))
-        assertEquals("ff0802090113aa", anc.writeFrames.single().hex())
-        assertEquals("ff0902fa090daa", anc.readback.bytes.hex())
+        assertEquals("ff0702090112aa", anc.writeFrames.single().hex())
+        assertEquals("ff0802fa090caa", anc.readback.bytes.hex())
     }
 
     @Test

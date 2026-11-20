@@ -43,6 +43,7 @@ private val budsFeelMk2Capabilities = DeviceCapabilities(
 )
 
 internal val budsFeelMk2 = ModelSpec(
+    rsV2InfoIds = "0d0c092a0e322b01072f2e36",
     displayName = "BudsFeel MK2", shortLabel = "BudsFeel MK2", family = ProtocolFamily.RS_COMMON_V2,
     advertisementPrefixes = listOf("0b150a0b"), nameBrand = "budsfeel", nameModelNumber = "mk2", nameRequiresModel = true,
     gatt = GattProfile(
@@ -50,7 +51,7 @@ internal val budsFeelMk2 = ModelSpec(
         "000000f1-0000-1000-8000-00805f9b34fb",
         "000000f2-0000-1000-8000-00805f9b34fb",
     ),
-    sppControlUuid = "0cf12d31-fac3-4553-bd80-d6832e7b3931", writeIntervalMillis = 100, advertisedClassicAddress = null,
+    sppControlUuid = "0cf12d31-fac3-4553-bd80-d6832e7b3931", writeIntervalMillis = 100, advertisedClassicAddress = ::rsV2ClassicAddress,
     batteryLayout = BatteryLayout.EARBUDS_AND_CASE, equalizerPresetLabels = emptyMap(),
     capabilities = { budsFeelMk2Capabilities },
 )

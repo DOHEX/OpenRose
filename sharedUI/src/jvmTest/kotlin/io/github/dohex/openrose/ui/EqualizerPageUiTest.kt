@@ -53,6 +53,27 @@ class EqualizerPageUiTest {
     }
 
     @Test
+    fun firstAngelOffersOnlyTheConfirmedGameModesPresets() {
+        val profile = ModelProfile.FIRST_ANGEL_RS_V2
+        for (style in InterfaceStyle.entries) {
+            withHarness(style, profile, listOf(5, 1, 0), Surface.PAGE, mode = null) { harness ->
+                val state = harness.state.value
+                val device = requireNotNull(state.device)
+                for (game in listOf(false, true)) {
+                    harness.state.value = state.copy(device = device.copy(capabilities = profile.capabilities(gameMode = game)))
+                    harness.render()
+                    assertEquals(game, harness.hasRadioText("战术调律"))
+                    assertEquals(!game, harness.hasRadioText(equalizerLabel("pop", profile)))
+                    assertTrue(harness.hasRadioText("自定义"))
+                }
+                harness.clickText("战术调律")
+                harness.render()
+                assertEquals(listOf<Pair<DeviceSetting, FieldValue>>(DeviceSetting.EQ to FieldValue.Text("game_1")), harness.writes)
+            }
+        }
+    }
+
+    @Test
     fun aPresetOnlyModelChoosesItsPresetOnHome() {
         val scenarios = listOf(
             Triple(ModelProfile.I5_ZT, listOf(1, 5, 2), listOf("弱水经典 · POP", "日系柔情 · HIFI", "乐器大师 · ROCK", "清新空灵 · LIGHT")),

@@ -75,6 +75,30 @@ class ControlSessionTransportSelectionTest {
     }
 
     @Test
+    fun expandedV2ModelsUseTheAddressAdvertisedByTheEarphonesForSpp() = runTest {
+        // Synthetic manufacturer records: product prefix, V2 status bytes, BR/EDR address in wire order.
+        val records = mapOf(
+            ModelProfile.BUDSFEEL_MK2_RS_V2 to (0x150b to "0a0b00000101000000a1b2c3d4e5f6"),
+            ModelProfile.OPENFEEL_MK2_RS_V2 to (0x0e0b to "b65700000101000000a1b2c3d4e5f6"),
+            ModelProfile.SWIFT2_RS_V2 to (0x9959 to "064c00000301000000a1b2c3d4e5f6"),
+            ModelProfile.JASMINE_RS_V2 to (0x0a0b to "0a1100000101000000a1b2c3d4e5f6"),
+        )
+        for ((profile, record) in records) {
+            val transport = SelectionTransport(
+                facts = TransportFacts(sppAvailable = true, audioProfile = AudioProfileEvidence.CLASSIC),
+                link = SelectionConnection(maxWriteSize = 512),
+            )
+            val session = session(transport)
+            val advertisement = Advertisement(DeviceId(profile.name), manufacturerData = mapOf(record.first to record.second.bytes()))
+            advertise(session, transport, advertisement)
+            assertEquals(OperationResult.Success, session.connect(advertisement.deviceId), profile.name)
+            assertEquals(profile, session.state.value.device?.profile)
+            assertEquals(listOf<TransportEndpoint>(TransportEndpoint.SppRfcomm("A1:B2:C3:D4:E5:F6", SPP_UUID)), transport.endpoints)
+            session.disconnect()
+        }
+    }
+
+    @Test
     fun classicI7UsesItsDedicatedSppEndpointForInitializationAndConfirmedSettings() = runTest {
         val transport = SelectionTransport(
             facts = TransportFacts(sppAvailable = true, audioProfile = AudioProfileEvidence.CLASSIC),
@@ -211,7 +235,7 @@ class ControlSessionTransportSelectionTest {
         transport.link.initializing = false
         val pending = async { session.set(DeviceSetting.GAME_MODE, FieldValue.Toggle(false)) }
         runCurrent()
-        assertEquals(listOf("ff09020e0018aa", "ff0a02fa0e13aa"), transport.link.writes.takeLast(2))
+        assertEquals(listOf("ff06020e0015aa", "ff0702fa0e10aa"), transport.link.writes.takeLast(2))
         val gameReply = "dd00020e00edaa".bytes()
         transport.link.incoming.send(gameReply.copyOfRange(0, 3))
         runCurrent()

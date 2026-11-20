@@ -15,7 +15,7 @@ description: 适配耳机型号：新增 ROSE 型号配置，或修改已有型�
 
 1. 型号文档 `docs/protocols/models/<型号>-protocol.md`（及同名 `.json`）。“识别”“传输”“初始化”“电量”“设置命令”“接收字段”各表的每一行直接成为一条账本记录，“设置命令”表每行对应一项能力；“传输”表写“同族默认”的行到族文档的“默认传输”取值，“OTA”节的字节格式与状态机在 `docs/protocols/ota/<方案>.md`。
 2. 协议族文档 `docs/protocols/families/<族>.md`：型号文档写“同族默认”的项到这里取值；“全族已知的坑”逐条判断是否适用于本型号。
-3. `docs/protocols/00-supported-models-and-capabilities.md` 中该型号所在行，以及 `supported-devices.json` 的 `models`：识别前缀、协议族、电量槽、能力入口。
+3. 优先核对当前版本的清单（3.8.6 为 `docs/protocols/supported-devices-3.8.6.json`，变化见 `3.8.6-model-delta.md`）。3.8.0 的来源为 `docs/protocols/00-supported-models-and-capabilities.md` 及 `supported-devices.json` 的 `models`：识别前缀、协议族、电量槽、能力入口。
 4. 已实现的同族型号（`core/.../models/` 下的文件）和对应编解码，只作为族内共性的参照。
 
 每条记录写明值、出处（文件与小节）和 FORMAT 的验证状态（实机 / 静态 / 推断 / 未知）。“App 配置了控件”只是静态事实；没有字节级证据（BODY 为“—”或状态为“未知”）的能力记为“不实现”并写明原因。账本写进 `docs/protocols/model-adaptation-ledger.md`，沿用其中已有的结构。
@@ -58,7 +58,7 @@ C、D 分支的改动面见 [new-capability.md](new-capability.md)。
 
 ## 4. 编解码与测试
 
-- B 类差异：在族编解码中读取新加的 `ModelSpec` 字段；解码表（`ztFields`、`rsCommonV2Fields`）和 RS Common V2 的共享 `getInfo` 批量查询属于协议族，保持共用。
+- B 类差异：在族编解码中读取新加的 `ModelSpec` 字段；解码表（`ztFields`、`rsCommonV2Fields`）和 RS Common V2 的 `FA` 编码属于协议族。3.8.6 的 `getInfo` 按型号面板收集字段，逐个核对并保存其顺序；3.8.0 仅有的 Magician 使用旧发送器的固定列表。
 - 测试替身：编译器会在 `androidIntegration` 的 `OwnerRig.kt` 中报出 `roseAdvertisement`、`initializationReplies` 缺少分支，在那里登记该型号的广播与初始化回包；回包注明来源（实机记录或合成）。
 - 编解码测试沿用现有写法：期望帧用协议文档中独立提取的十六进制字面量，不用编解码自己算出的值；合成的接收报文在注释中标“合成”。
 - `ModelProfileTest` 会自动检查新型号能凭自己的前缀和名称被识别。

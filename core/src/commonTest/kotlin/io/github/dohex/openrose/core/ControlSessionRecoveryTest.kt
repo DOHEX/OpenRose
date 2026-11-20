@@ -88,7 +88,7 @@ class ControlSessionRecoveryTest {
         assertEquals(2, transport.links.size)
         assertTrue(transport.links.first().closed)
         assertEquals(TransportRecoveryReason.SERVICES_CHANGED, session.state.value.connectionRecovery?.reason)
-        assertEquals(9, transport.links.last().writes.size)
+        assertEquals(6, transport.links.last().writes.size)
         assertIs<ConnectionState.Connected>(session.state.value.connection)
         session.disconnect()
     }

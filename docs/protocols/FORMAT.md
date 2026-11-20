@@ -9,7 +9,8 @@
 | `README.md` | 导读与索引 | OpenRose |
 | `FORMAT.md` | 本文 | OpenRose |
 | `model-adaptation-ledger.md` | `add-model` 的证据账本：已适配型号的每项证据如何归类 | OpenRose |
-| `00-supported-models-and-capabilities.md`、`supported-devices.json` | 全部型号配置的识别与能力清单 | rose_reverse |
+| `00-supported-models-and-capabilities.md`、`supported-devices.json` | RoseLink 3.8.0 的识别与能力清单 | rose_reverse |
+| `3.8.6-model-delta.md`、`supported-devices-3.8.6.json` | 3.8.6 的完整注册清单、配置工厂、面板取值及相较 3.8.0 的变化 | rose_reverse |
 | `families/<协议族>.md` | 协议族文档 | rose_reverse |
 | `models/<型号>-protocol.md`，可另附同名 `.json` | 型号文档 | rose_reverse |
 | `ota/<方案>.md` | OTA 方案文档，按厂商方案分文件：`wq`、`bes`，材料够时再增 `ab` | rose_reverse |

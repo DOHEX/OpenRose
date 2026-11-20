@@ -54,7 +54,6 @@ internal fun TouchControlCard(
     val hasBindings = DeviceSetting.TOUCH_BINDING in writable && slots.isNotEmpty() && touchActions.isNotEmpty()
     val hasTouchSwitch = DeviceSetting.TOUCH_ENABLED in writable
     val hasDetection = DeviceSetting.EAR_DETECTION in writable
-    if (!hasBindings && !hasTouchSwitch && !hasDetection) return
 
     val enabled = state.isReady(device) && !state.hasPendingSetting(device)
     val knownBindings = device.knownValue(DeviceField.TOUCH_KEYS) as? FieldValue.TouchKeys
@@ -195,6 +194,29 @@ internal fun TouchControlCard(
                         }
                     }
                 }
+            }
+        }
+    }
+    device.capabilities.tapControl?.let { tap ->
+        val reading = device.fields[DeviceField.TAP_KEYS]
+        val bindings = (device.knownValue(DeviceField.TAP_KEYS) as? FieldValue.TouchKeys)?.bindings.orEmpty()
+        AppGroup(title = "轻拍控制") {
+            SettingToggleChoices("轻拍开关", DeviceField.TAP_ENABLED, DeviceSetting.TAP_ENABLED, device, enabled, onSet)
+            tap.slots.sortedWith(compareBy({ touchSideOrder(it.side) }, { touchGestureOrder(it.gesture) })).forEach { slot ->
+                val binding = bindings.firstOrNull { it.side == slot.side && it.gesture == slot.gesture }
+                AppChoiceRow(
+                    title = touchSlotLabel(slot.side, slot.gesture, tap),
+                    valueText = touchBindingStatus(reading, binding),
+                    options = tap.actions.sortedBy(::semanticLabel).map { AppOption(it, semanticLabel(it)) },
+                    selected = binding?.action,
+                    enabled = enabled,
+                    id = "tap:${slot.side}:${slot.gesture}",
+                    onSelect = { action ->
+                        if (enabled && action != binding?.action) {
+                            onSet(DeviceSetting.TAP_BINDING, FieldValue.TouchAssignment(slot.side, slot.gesture, action))
+                        }
+                    },
+                )
             }
         }
     }

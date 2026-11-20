@@ -29,7 +29,12 @@ internal class F8Codec(override val profile: ModelProfile) : ProtocolCodec {
         return tags.map(::query)
     }
 
-    override fun prepareSetting(setting: DeviceSetting, value: FieldValue, firmware: FieldValue.Firmware?): ProtocolSetting {
+    override fun prepareSetting(
+        setting: DeviceSetting,
+        value: FieldValue,
+        firmware: FieldValue.Firmware?,
+        currentFields: Map<DeviceField, FieldReading>,
+    ): ProtocolSetting {
         val capabilities = profile.capabilities(firmware)
         if (setting !in capabilities.writableSettings) throw UnsupportedOperationException("该型号不支持此设置")
         val (command, tag, payload) = settingFrame(profile, setting, value, capabilities)

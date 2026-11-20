@@ -1,6 +1,7 @@
 package io.github.dohex.openrose.core.protocol
 
 import io.github.dohex.openrose.core.DeviceSetting
+import io.github.dohex.openrose.core.TouchControlCapabilities
 import io.github.dohex.openrose.core.TouchSlot
 import kotlinx.collections.immutable.PersistentList
 import kotlinx.collections.immutable.PersistentMap
@@ -24,6 +25,8 @@ enum class DeviceField(val displayName: String) {
     AUDIO_MODE("音频模式"),
     MULTIPOINT("多点连接"),
     TOUCH_KEYS("触摸绑定"),
+    TAP_ENABLED("轻拍开关"),
+    TAP_KEYS("轻拍绑定"),
     TOUCH_ENABLED("触摸开关"),
     NOISE_CYCLE("降噪轮换"),
     EAR_DETECTION("佩戴检测功能"),
@@ -37,6 +40,11 @@ enum class DeviceField(val displayName: String) {
     FIND_STATE("寻机事件"),
     SPATIAL_AUDIO("空间音频"),
     HIDE_SEARCH("隐藏搜索"),
+    SPATIAL_MODE("空间模式"),
+    SPATIAL_CONTENT("空间音频内容"),
+    EAR_ADAPTIVE("耳道自适应"),
+    INDEPENDENT_MIC_ACTIVATION("独立麦克风激活"),
+    INDEPENDENT_MIC_MODE("独立麦克风模式"),
 }
 
 sealed interface FieldReading {
@@ -134,10 +142,14 @@ private val batteryFlags = setOf(
 interface ProtocolCodec {
     val profile: ModelProfile
     fun initQueries(maxWriteSize: Int): List<ProtocolQuery>
+
+    /** Reads that become applicable once the initial batch has returned the firmware. */
+    fun firmwareInitQueries(firmware: FieldValue.Firmware?): List<ProtocolQuery> = emptyList()
     fun prepareSetting(
         setting: DeviceSetting,
         value: FieldValue,
         firmware: FieldValue.Firmware? = null,
+        currentFields: Map<DeviceField, FieldReading> = emptyMap(),
     ): ProtocolSetting = throw UnsupportedOperationException("该型号尚未实现此设置")
     fun feedNotification(bytes: ByteArray): List<ProtocolReply>
     fun reset()
@@ -154,17 +166,24 @@ internal fun ByteArray.hex(): String = joinToString("") { it.u().toString(16).pa
 internal fun Byte.u(): Int = toInt() and 255
 internal fun String.bytes(): ByteArray = chunked(2).map { it.toInt(16).toByte() }.toByteArray()
 
-internal fun validatedNoiseCycle(value: FieldValue): FieldValue.NoiseCycle {
+internal fun validatedNoiseCycle(
+    value: FieldValue,
+    modes: Set<String> = setOf("normal", "transparency", "wind", "anc"),
+): FieldValue.NoiseCycle {
     require(value is FieldValue.NoiseCycle) { "轮换需要四种模式的明确开关" }
     val flags = value.flags.toMap()
-    require(flags.keys == setOf("normal", "transparency", "wind", "anc")) { "轮换必须包含普通、通透、抗风和 ANC 四项" }
+    require(modes.isNotEmpty() && flags.keys == modes) { "轮换必须包含该型号的全部可选模式" }
     require(flags.values.all { it != null }) { "轮换不能包含未知开关" }
     return FieldValue.NoiseCycle(flags)
 }
 
-internal fun validatedTouchAssignment(value: FieldValue, profile: ModelProfile): FieldValue.TouchAssignment {
+internal fun validatedTouchAssignment(
+    value: FieldValue,
+    profile: ModelProfile,
+    capabilities: TouchControlCapabilities? = profile.capabilities().touchControl,
+): FieldValue.TouchAssignment {
     require(value is FieldValue.TouchAssignment) { "触控绑定需要单个耳侧、手势和动作" }
-    val capabilities = profile.capabilities().touchControl ?: throw UnsupportedOperationException("该型号不支持触控绑定")
+    if (capabilities == null) throw UnsupportedOperationException("该型号不支持此按键绑定")
     require(TouchSlot(value.side, value.gesture) in capabilities.slots) { "该触控槽位无效" }
     if (value.action !in capabilities.actions) throw UnsupportedOperationException("该型号不支持此触控动作")
     return value
@@ -207,6 +226,10 @@ internal val rsCommonV2Fields = linkedMapOf(
     "2a" to setOf(DeviceField.EQ), "2b" to setOf(DeviceField.AUDIO_MODE),
     "2c" to setOf(DeviceField.ANC_LEVEL), "2d" to setOf(DeviceField.TRANSPARENCY_LEVEL),
     "2e" to setOf(DeviceField.PROMPT_VOLUME), "2f" to setOf(DeviceField.FIND_STATE),
-    "31" to setOf(DeviceField.PROMPT_LANGUAGE), "32" to setOf(DeviceField.MULTIPOINT), "36" to setOf(DeviceField.NOISE_CYCLE),
+    "31" to setOf(DeviceField.PROMPT_LANGUAGE), "32" to setOf(DeviceField.MULTIPOINT),
+    "36" to setOf(DeviceField.NOISE_CYCLE), "38" to setOf(DeviceField.SPATIAL_MODE),
+    "3a" to setOf(DeviceField.EAR_ADAPTIVE), "3d" to setOf(DeviceField.SPATIAL_CONTENT),
+    "49" to setOf(DeviceField.INDEPENDENT_MIC_ACTIVATION, DeviceField.INDEPENDENT_MIC_MODE),
+    "3b" to setOf(DeviceField.TAP_ENABLED), "3c" to setOf(DeviceField.TAP_KEYS),
     "3e" to setOf(DeviceField.CUSTOM_EQ), "45" to setOf(DeviceField.GAIN), "46" to setOf(DeviceField.HEARING_PROTECTION),
 )

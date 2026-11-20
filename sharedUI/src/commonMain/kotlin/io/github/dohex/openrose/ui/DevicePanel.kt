@@ -129,21 +129,10 @@ internal fun HeadphonesPage(
                             )
                         }
                     }
-                    val hasTouch = device.capabilities.touchControl != null ||
+                    val hasTouch = device.capabilities.touchControl != null || device.capabilities.tapControl != null ||
                         DeviceSetting.TOUCH_ENABLED in device.capabilities.writableSettings ||
                         DeviceSetting.EAR_DETECTION in device.capabilities.writableSettings
-                    val hasAudio = device.capabilities.writableSettings.any {
-                        it in setOf(
-                            DeviceSetting.AUDIO_MODE,
-                            DeviceSetting.MULTIPOINT,
-                            DeviceSetting.SPATIAL_AUDIO,
-                            DeviceSetting.PROMPT_VOLUME,
-                            DeviceSetting.GAIN,
-                            DeviceSetting.HEARING_PROTECTION,
-                            DeviceSetting.BASS_BOOST,
-                            DeviceSetting.PROMPT_LANGUAGE,
-                        )
-                    }
+                    val hasAudio = device.capabilities.writableSettings.any { it in audioPageSettings }
                     AppGroup(title = "功能") {
                         EqualizerEntryRow(state, device, onSet) { onNavigate(AppPage.EQUALIZER) }
                         if (hasTouch) {
@@ -613,7 +602,7 @@ internal fun DeviceReadings(device: DeviceState, initializing: Boolean) {
                     initializing,
                     device.fieldErrors[field],
                     device.profile,
-                    device.capabilities.touchControl,
+                    if (field == DeviceField.TAP_KEYS) device.capabilities.tapControl else device.capabilities.touchControl,
                 ),
             )
         }

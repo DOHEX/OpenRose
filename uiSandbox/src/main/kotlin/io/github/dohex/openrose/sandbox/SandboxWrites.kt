@@ -139,7 +139,7 @@ private fun confirmedFields(
     val result = fields.builder()
     for ((field, value) in expected) {
         result[field] = if (value is FieldValue.TouchAssignment) {
-            val current = (fields[DeviceField.TOUCH_KEYS] as? FieldReading.Known)?.value as? FieldValue.TouchKeys
+            val current = (fields[field] as? FieldReading.Known)?.value as? FieldValue.TouchKeys
             FieldReading.Known(FieldValue.TouchKeys(current?.bindings.orEmpty().assigning(value)), "")
         } else {
             FieldReading.Known(value, "")

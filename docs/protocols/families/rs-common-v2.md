@@ -54,6 +54,8 @@ field `4b=bleAddress`、`4f=btAddress`，实际字段名称见 EarObject.toMap�
 - V2 广播解析:451 起，0x749298（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/base_device_config.dart:451`）
 - MAC 格式化:685，0x74953c（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/base_device_config.dart:685`）
 
+RoseLink 3.8.6 保留上述布局，BudsFeel MK2、OpenFeel MK2、Swift 2、Jasmine 使用同一 V2 解析分支。读取 BR/EDR 标志（`rose_reverse/analysis/3.8.6/blutter/asm/roselink/rose_bluetooth/config/base_device_config.dart:714`）、读取并格式化两个地址字段（`rose_reverse/analysis/3.8.6/blutter/asm/roselink/rose_bluetooth/config/base_device_config.dart:813`）。
+
 ### 传输选择
 
 `ConnectManager._shouldUseSppControl @0xa009fc`：平台 SPP 可用且该型号 `sppSupport=true`、全局没有强制 BLE，音频 Profile 非 LE Audio 才选 BtConnector。`isSppOperatingSystem @0x9ecba0` 包含 android、windows、ohos、openharmony、harmonyos、harmony。LE Audio 情况由 `A2dpManager.prefersBleControl` 决定，不能直接根据 UI 选了 LC3 就断言连接已进入 LE Audio。
@@ -106,6 +108,8 @@ def pack(body, seq):
 ```
 
 ### 初始化与查询
+
+以下固定查询来自 RoseLink 3.8.0。3.8.6 的 31 个蓝牙耳机配置改由型号面板生成查询，字段顺序及定时补查见[3.8.6 实际握手查询](../3.8.6-model-delta.md#rs-common-v2-的实际握手查询)。
 
 `getInfo` 返回 BODY：
 

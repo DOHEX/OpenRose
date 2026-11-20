@@ -30,6 +30,8 @@
 
 ## 初始化
 
+下列初始化记录基于 3.8.0。3.8.6 的首帧字段顺序见[逐型号查询表](../3.8.6-model-delta.md#rs-common-v2-的实际握手查询)。
+
 | 分派 | 表项 | 目标 | 发送的查询 | 状态 | 出处 |
 |---|---|---|---|---|---|
 | GDT+0xd8ba，cid 530 | 60108（`table.tsv` 第 60109 行） | `0x8e2444` | 仅 `getInfo` | 静态 | 分派表（`rose_reverse/analysis/i7_dispatch/table.tsv:60109`）、补核（`rose_reverse/analysis/i7_dispatch_findings.md`）、目标闭包（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common/sportfree_device_config.dart:573`） |
