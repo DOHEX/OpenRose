@@ -51,6 +51,21 @@ class F8CodecTest {
     }
 
     @Test
+    fun agateReadbackTwoUsesTheSamePresetAsOne() {
+        for (profile in listOf(ModelProfile.AGATE_F8, ModelProfile.AGATE_X_F8)) {
+            val codec = createProtocolCodec(profile)
+            for (reply in listOf("0028010003040001", "0028010003040002")) {
+                val readings = codec.feedNotification(reply.bytes()).single().readings
+                assertEquals(FieldValue.Text("pop"), assertIs<FieldReading.Known>(readings[DeviceField.EQ]).value)
+            }
+            val fields = profile.capabilities().readableFields
+            assertFalse(DeviceField.CASE_BATTERY in fields)
+            assertFalse(DeviceField.TRANSPARENCY_LEVEL in fields)
+            assertTrue(DeviceField.LEFT_BATTERY in fields)
+        }
+    }
+
+    @Test
     fun syntheticUnknownValuesDoNotConfirmSettings() {
         // Synthetic RX: 0x28 shares the same dispatch as 0x27.
         val codec = F8Codec(ModelProfile.CERAMICS_F8)

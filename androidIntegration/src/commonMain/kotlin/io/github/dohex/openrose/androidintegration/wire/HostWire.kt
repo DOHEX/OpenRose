@@ -422,12 +422,4 @@ object HostWire {
 
     fun decodeCall(wire: Wire): Pair<OwnerGeneration, HostCommand> = wire.asObj()
         .let { decodeGeneration(it.field("generation")) to decodeCommand(it.field("command")) }
-
-    fun encodeAcquire(request: SwitchRequest, settings: HostSettings): Wire = obj(
-        "request" to encode(request),
-        "settings" to encode(settings),
-    )
-
-    fun decodeAcquire(wire: Wire): Pair<SwitchRequest, HostSettings> = wire.asObj()
-        .let { decodeRequest(it.field("request")) to decodeSettings(it.field("settings")) }
 }

@@ -26,61 +26,43 @@ internal class DeviceDiscovery(
     private var scanJob: Job? = null
 
     suspend fun refreshBondedDevices() {
-        val bonded = runCatching { transport?.bondedDevices() }.getOrNull() ?: emptyList()
+        val bonded = try {
+            transport?.bondedDevices().orEmpty()
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            return
+        }
         state.update { it.copy(bondedDevices = bonded.toPersistentList()) }
     }
 
     suspend fun findCandidate(deviceId: DeviceId): DeviceCandidate? {
-        state.value.candidates.firstOrNull { it.deviceId == deviceId }?.let { return it }
-        state.value.bondedDevices.firstOrNull { it.deviceId == deviceId }?.let { return it }
-        val bonded = runCatching { transport?.bondedDevices()?.firstOrNull { it.deviceId == deviceId } }.getOrNull()
-        if (bonded != null) {
-            state.update { old ->
-                if (old.bondedDevices.none { it.deviceId == bonded.deviceId }) {
-                    old.copy(bondedDevices = old.bondedDevices.adding(bonded))
-                } else {
-                    old
-                }
-            }
-            return bonded
-        }
-        state.value.device?.takeIf { it.deviceId == deviceId }?.let {
-            return DeviceCandidate(
-                deviceId = it.deviceId,
-                name = null,
-                rssi = null,
-                profile = it.profile,
-                manufacturerDataHex = "",
-                classicAddress = it.classicAddress,
-            )
-        }
-        state.value.connectionTarget?.takeIf { it.deviceId == deviceId && it.profile != null }?.let {
-            return it
-        }
-        return null
+        val cached = state.value.knownCandidate(deviceId)
+        if (cached?.profile != null) return cached
+        refreshBondedDevices()
+        return state.value.knownCandidate(deviceId)
     }
 
-    fun resolveTarget(deviceId: DeviceId): DeviceCandidate {
-        val current = state.value
-        current.candidates.firstOrNull { it.deviceId == deviceId }?.let { return it }
-        current.bondedDevices.firstOrNull { it.deviceId == deviceId }?.let { return it }
-        current.connectionTarget?.takeIf { it.deviceId == deviceId }?.let { return it }
-        current.device?.takeIf { it.deviceId == deviceId }?.let {
-            return DeviceCandidate(
-                deviceId = it.deviceId,
-                name = null,
-                rssi = null,
-                profile = it.profile,
-                manufacturerDataHex = "",
-                classicAddress = it.classicAddress,
-            )
+    fun resolveTarget(deviceId: DeviceId): DeviceCandidate = state.value.knownCandidate(deviceId)
+        ?: DeviceCandidate(deviceId, null, null, null, "")
+
+    private fun ControlState.knownCandidate(id: DeviceId): DeviceCandidate? {
+        val scanned = candidates.firstOrNull { it.deviceId == id }
+        val bonded = bondedDevices.firstOrNull { it.deviceId == id }
+        val active = device?.takeIf { it.deviceId == id }?.let {
+            DeviceCandidate(id, null, null, it.profile, "", it.classicAddress)
         }
-        return DeviceCandidate(
-            deviceId = deviceId,
-            name = null,
-            rssi = null,
-            profile = null,
-            manufacturerDataHex = "",
+        val known = listOfNotNull(bonded, active, connectionTarget?.takeIf { it.deviceId == id }).firstOrNull { it.profile != null }
+        return scanned?.withEvidence(known) ?: known ?: bonded
+    }
+
+    private fun DeviceCandidate.withEvidence(previous: DeviceCandidate?): DeviceCandidate {
+        if (previous == null || (profile != null && previous.profile != profile)) return this
+        return copy(
+            name = name ?: previous.name,
+            profile = profile ?: previous.profile,
+            manufacturerDataHex = if (profile == null && previous.profile != null) previous.manufacturerDataHex else manufacturerDataHex,
+            classicAddress = classicAddress ?: previous.classicAddress,
         )
     }
 
@@ -111,10 +93,11 @@ internal class DeviceDiscovery(
                             old
                         } else {
                             val index = old.candidates.indexOfFirst { it.deviceId == candidate.deviceId }
+                            val identified = candidate.withEvidence(old.knownCandidate(candidate.deviceId))
                             val candidates = if (index < 0) {
-                                old.candidates.adding(candidate)
+                                old.candidates.adding(identified)
                             } else {
-                                old.candidates.replacingAt(index, candidate)
+                                old.candidates.replacingAt(index, identified)
                             }
                             old.copy(candidates = candidates)
                         }

@@ -160,11 +160,11 @@ class ModuleControlClient(
         }
     }
 
-    suspend fun acquire(request: SwitchRequest, settings: HostSettings): AcquireOutcome = withConnection(
+    suspend fun acquire(request: SwitchRequest): AcquireOutcome = withConnection(
         { AcquireOutcome.Failed(it.stage, it.reason) },
     ) { connection ->
         try {
-            when (val result = withTimeout(timing.acquireTimeoutMillis) { connection.acquire(request, settings) }) {
+            when (val result = withTimeout(timing.acquireTimeoutMillis) { connection.acquire(request) }) {
                 is AcquireResult.Acquired -> {
                     lastObservedGeneration = result.generation
                     AcquireOutcome.Acquired(result.generation, result.holder)

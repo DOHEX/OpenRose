@@ -12,6 +12,7 @@ import io.github.dohex.openrose.core.UserSettings
 import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.dohex.openrose.core.transport.DeviceId
 import io.github.dohex.openrose.ui.model.OpenRoseModel
+import io.github.dohex.openrose.ui.model.WindowNavigation
 import kotlinx.coroutines.ExperimentalForInheritanceCoroutinesApi
 import kotlinx.coroutines.InternalCoroutinesApi
 import kotlinx.coroutines.awaitCancellation
@@ -36,8 +37,7 @@ internal class FakeOpenRoseModel(
 ) : OpenRoseModel {
     override val state: StateFlow<ControlState> = SnapshotStateFlow(mutableState)
     override val uiSettings: StateFlow<UiSettings> = SnapshotStateFlow(mutableUiSettings)
-    val homeNavigationRequests = MutableStateFlow(0L)
-    override val homeNavigationRequest: StateFlow<Long> = homeNavigationRequests
+    override val navigation = WindowNavigation()
     override val notice = MutableStateFlow<String?>(null)
 
     val settingsChanges = mutableListOf<UiSettings>()
@@ -59,7 +59,6 @@ internal class FakeOpenRoseModel(
     var onAddDeviceConnect: suspend (DeviceId) -> OperationResult = {
         error("Unexpected add-device connection in this scenario")
     }
-    var onShowHeadphones: () -> Unit = {}
 
     override fun updateUiSettings(settings: UiSettings) {
         settingsChanges += settings
@@ -90,8 +89,4 @@ internal class FakeOpenRoseModel(
         return onSetInSession(sessionId, setting, value)
     }
     override suspend fun connectForAddDevice(deviceId: DeviceId): OperationResult = onAddDeviceConnect(deviceId)
-    override fun showHeadphones() {
-        homeNavigationRequests.value++
-        onShowHeadphones()
-    }
 }

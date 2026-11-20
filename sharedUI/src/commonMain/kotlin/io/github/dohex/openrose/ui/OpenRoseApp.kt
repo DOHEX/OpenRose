@@ -20,6 +20,7 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.dp
 import io.github.dohex.openrose.core.*
 import io.github.dohex.openrose.ui.model.OpenRoseModel
+import io.github.dohex.openrose.ui.model.WindowDestination
 import top.yukonga.miuix.kmp.nav.core.NavDisplay
 import top.yukonga.miuix.kmp.nav.core.rememberNavBackStack
 import top.yukonga.miuix.kmp.nav.transition.NavSwipeDirection
@@ -51,7 +52,6 @@ fun OpenRoseApp(
 ) {
     val state by model.state.collectAsState()
     val uiSettings by model.uiSettings.collectAsState()
-    val homeNavigationRequest by model.homeNavigationRequest.collectAsState()
     val onDisconnect = model::disconnect
     val onSet = model::set
     val dark = when (uiSettings.appearance) {
@@ -79,8 +79,8 @@ fun OpenRoseApp(
     val equalizerEditor = remember { EqualizerEditor(uiScope, model::setInSession) }
     val readySessionId = state.readySession?.sessionId
     LaunchedEffect(readySessionId) { equalizerEditor.bind(readySessionId) }
-    LaunchedEffect(homeNavigationRequest) {
-        if (homeNavigationRequest != 0L) {
+    LaunchedEffect(model.navigation) {
+        model.navigation.requests.collect { destination ->
             while (navBackStack.size > 1) {
                 navBackStack.removeLastOrNull()
             }
@@ -88,6 +88,11 @@ fun OpenRoseApp(
             headphoneMenuExpanded = false
             choiceDialog.value = null
             selectedTouchSlot = null
+            when (destination) {
+                WindowDestination.ADD_DEVICE -> navBackStack.add(Route.AddDevice)
+                WindowDestination.DIAGNOSTICS -> navBackStack.add(Route.Diagnostics)
+                WindowDestination.HEADPHONES -> Unit
+            }
         }
     }
     fun navigate(destination: AppPage) {

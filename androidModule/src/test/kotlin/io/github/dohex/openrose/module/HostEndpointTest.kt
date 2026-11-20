@@ -1,0 +1,95 @@
+package io.github.dohex.openrose.module
+
+import android.app.Application
+import android.os.Binder
+import android.os.Bundle
+import io.github.dohex.openrose.androidintegration.ClientRole
+import io.github.dohex.openrose.androidintegration.ControlWay
+import io.github.dohex.openrose.androidintegration.HostConfiguration
+import io.github.dohex.openrose.androidintegration.HostFacts
+import io.github.dohex.openrose.androidintegration.HostSettings
+import io.github.dohex.openrose.androidintegration.IntegrationSettings
+import io.github.dohex.openrose.androidintegration.ModuleControlHost
+import io.github.dohex.openrose.androidintegration.wire.BridgeWire
+import io.github.dohex.openrose.bridge.BridgeBundles
+import io.github.dohex.openrose.bridge.BridgeTarget
+import io.github.dohex.openrose.core.ConnectionState
+import io.github.dohex.openrose.core.ControlRuntime
+import io.github.dohex.openrose.core.ControlState
+import io.github.dohex.openrose.core.DeviceState
+import io.github.dohex.openrose.core.LocalControlRuntime
+import io.github.dohex.openrose.core.PermissionState
+import io.github.dohex.openrose.core.PlatformState
+import io.github.dohex.openrose.core.protocol.DeviceField
+import io.github.dohex.openrose.core.protocol.FieldReading
+import io.github.dohex.openrose.core.protocol.FieldValue
+import io.github.dohex.openrose.core.protocol.ModelProfile
+import io.github.dohex.openrose.core.transport.DeviceId
+import kotlinx.collections.immutable.persistentMapOf
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.test.runTest
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
+import org.robolectric.annotation.Config
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
+import kotlin.test.assertTrue
+
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [33], manifest = Config.NONE, application = Application::class)
+class HostEndpointTest {
+    @Test
+    fun onlyAnAcknowledgedAndStillCurrentReadingCanBeRefreshedWithoutItsPayload() = runTest {
+        val profile = ModelProfile.I5_ZT
+        val device = DeviceState(DeviceId("AA:BB:CC:DD:EE:FF"), 1, profile, profile.capabilities(), persistentMapOf())
+        val state = MutableStateFlow(
+            ControlState(
+                PlatformState(PermissionState.NOT_REQUIRED),
+                ConnectionState.Connected(device.deviceId, device.sessionId, profile),
+                device = device,
+            ),
+        )
+        val target = BridgeTarget.BLUETOOTH
+        val host = ModuleControlHost(
+            target.packageName,
+            target.packageName,
+            "test-host",
+            { ClientRole.HOST_PRESENTATION },
+            { scope, settings, platform, _ ->
+                object : ControlRuntime by LocalControlRuntime(platform, settings, scope = scope) {
+                    override val state = state
+                }
+            },
+            backgroundScope,
+            { "lease" },
+        )
+        val configuration = HostConfiguration(true, HostSettings(integration = IntegrationSettings(controlWay = ControlWay.MODULE)))
+        host.configure { configuration }
+        val endpoint = HostEndpoint(RuntimeEnvironment.getApplication(), host, MutableStateFlow(HostFacts()), backgroundScope)
+        val lease = assertNotNull(endpoint.open(BridgeBundles.hello(target.packageName, target), Binder()).getString(BridgeWire.LEASE_ID))
+        fun current() = endpoint.currentSession(lease)
+        val request = current().apply { putString(BridgeWire.LEASE_ID, lease) }
+        val frame = assertNotNull(endpoint.read(request).getBundle(BridgeWire.SNAPSHOT))
+        assertFalse(current().containsKey(BridgeWire.READ_SEQUENCE))
+        val seq = frame.getLong(BridgeWire.READ_SEQUENCE)
+        val receipt = Bundle(request).apply { putLong(BridgeWire.READ_SEQUENCE, seq) }
+        assertEquals(BridgeWire.STATUS_OK, endpoint.acknowledge(receipt).getString(BridgeWire.STATUS))
+        val heartbeat = current()
+        assertEquals(seq, heartbeat.getLong(BridgeWire.READ_SEQUENCE))
+        assertTrue(heartbeat.containsKey(BridgeWire.CAPTURED_ELAPSED_MILLIS))
+        assertFalse(heartbeat.containsKey(BridgeWire.SNAPSHOT))
+
+        state.value = state.value.copy(
+            device = device.copy(fields = persistentMapOf(DeviceField.GAME_MODE to FieldReading.Known(FieldValue.Toggle(true), "01"))),
+        )
+        assertFalse(current().containsKey(BridgeWire.READ_SEQUENCE))
+        state.value = state.value.copy(device = device)
+        host.configure { configuration.copy(settings = configuration.settings.copy(integration = configuration.settings.integration.copy(dynamicColor = true))) }
+        assertFalse(current().containsKey(BridgeWire.READ_SEQUENCE))
+        state.value = state.value.copy(connection = ConnectionState.Disconnected)
+        assertEquals(BridgeWire.STATUS_NO_SESSION, current().getString(BridgeWire.STATUS))
+    }
+}

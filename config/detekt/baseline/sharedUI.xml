@@ -4,10 +4,7 @@
   <CurrentIssues>
     <ID>ComplexCondition:AddDeviceFlow.kt:active &amp;&amp; canScan &amp;&amp; state.scan == ScanState.Scanning &amp;&amp; !flow.pending</ID>
     <ID>ComplexCondition:AddDeviceUiTestHarness.kt:AddDeviceUiTestHarness$terminal is ConnectionState.Connected &amp;&amp; terminal.deviceId == attempt.deviceId &amp;&amp; terminal.sessionId == attempt.sessionId &amp;&amp; terminal.phase == ConnectionPhase.READY</ID>
-    <ID>ComplexCondition:DeviceControlCard.kt:!hasAudio &amp;&amp; !hasMultipoint &amp;&amp; !hasVolume &amp;&amp; !hasGain &amp;&amp; !hasProtection</ID>
-    <ID>ComplexCondition:DevicePanel.kt:visibleError != null &amp;&amp; !permissionRequired &amp;&amp; unavailableTransport == null &amp;&amp; onOpenSystemSettings != null</ID>
     <ID>ComplexCondition:NoiseControlCard.kt:enabled &amp;&amp; cycleKnown &amp;&amp; (mode !in checked || checked.size &gt; capabilities.minimumCycleSelections)</ID>
-    <ID>ComplexCondition:StyleComponents.kt:selected != null &amp;&amp; selectedIndex &gt;= 0 &amp;&amp; (!isOpen || dropdownOpenedHere)</ID>
     <ID>CyclomaticComplexMethod:AddDeviceContent.kt:@Composable internal fun AddDeviceContent</ID>
     <ID>CyclomaticComplexMethod:AddDeviceUiTestHarness.kt:AddDeviceUiTestHarness$suspend fun connectForAddDevice: OperationResult</ID>
     <ID>CyclomaticComplexMethod:DeviceControlCard.kt:@Composable internal fun DeviceControlCard</ID>
@@ -30,7 +27,6 @@
     <ID>CyclomaticComplexMethod:StyleComponents.kt:@Composable fun appColor: Color</ID>
     <ID>CyclomaticComplexMethod:StyleComponents.kt:@Composable internal fun &lt;T&gt; AppMultiChoiceRow</ID>
     <ID>CyclomaticComplexMethod:TouchControlCard.kt:@Composable internal fun TouchControlCard</ID>
-    <ID>CyclomaticComplexMethod:TrayPanel.kt:@Composable internal fun TrayStatusCard</ID>
     <ID>CyclomaticComplexMethod:TrayPanel.kt:fun traySummary: TraySummary</ID>
     <ID>CyclomaticComplexMethod:UiSettings.kt:UiSettingsCodec$fun decode: UiSettings</ID>
     <ID>EmptyFunctionBlock:AddDeviceUiTestHarness.kt:&lt;no name provided&gt;${}</ID>

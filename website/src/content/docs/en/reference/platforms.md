@@ -6,7 +6,7 @@ description: Implementation and verification status of OpenRose on Android, Hype
 | Platform | Status |
 | --- | --- |
 | Android 8.0+ | BLE and SPP (i7) control implemented; background control has only offline tests |
-| HyperOS 3 / 4 | Additional Settings redirect verified on an i5 with a Xiaomi 14; the rest has only offline tests |
+| HyperOS 3 / 4 | i5 + Xiaomi 14 verified the Additional Settings redirect. HyperOS 4.0.0.27 also verified hiding the island while keeping the focus card, and merging the module connection prompt into one battery island. HyperOS 3 awaits verification. |
 | Linux x64 | BLE control implemented; full desktop i5 hardware acceptance pending |
 | Windows | UI and preferences work; Bluetooth control is not implemented |
 

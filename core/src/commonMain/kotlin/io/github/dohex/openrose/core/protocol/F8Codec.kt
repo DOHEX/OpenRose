@@ -88,7 +88,7 @@ internal class F8Codec(override val profile: ModelProfile) : ProtocolCodec {
                 val name = when (value) {
                     0 -> "hifi"
                     1 -> "pop"
-                    2 -> if (profile.spec.f8CollapsedEqRead) null else "rock"
+                    2 -> profile.spec.f8EqAtTwo
                     else -> null
                 }
                 fields.putReading(raw, DeviceField.EQ, name?.let(FieldValue::Text))

@@ -14,7 +14,7 @@ interface IControlBridge {
     Bundle currentSession(String leaseId);
     Bundle read(in Bundle request);
     Bundle acknowledge(in Bundle receipt);
-    void close(String leaseId);
+    oneway void close(String leaseId);
     Bundle watch(in Bundle request, IControlObserver observer);
     Bundle claimPrompt(in Bundle request);
     Bundle setNoise(in Bundle request);

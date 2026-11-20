@@ -152,7 +152,16 @@ data class DeviceState(
     val warnings: PersistentList<String> = persistentListOf(),
     /** An independently identified BR/EDR address, when the model advertisement provides it. */
     val classicAddress: String? = null,
-)
+) {
+    /** The level carried by the latest confirmed bass-slot reading, while that slot is selected. */
+    val confirmedBassBoostLevel: Int?
+        get() {
+            val mode = fields[DeviceField.EQ] as? FieldReading.Known ?: return null
+            val slot = fields[DeviceField.EQ_SLOT] as? FieldReading.Known ?: return null
+            if (mode.value != FieldValue.Text("custom_slot") || mode.rawHex != slot.rawHex) return null
+            return (slot.value as? FieldValue.Number)?.value?.takeIf { it in capabilities.bassBoostLevels }
+        }
+}
 
 /** Opaque reference to one device session; a caller holding one may address that session and no other. */
 data class SessionReference(val deviceId: DeviceId, val sessionId: Long)

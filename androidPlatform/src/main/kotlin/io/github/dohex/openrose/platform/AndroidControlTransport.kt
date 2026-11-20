@@ -15,6 +15,7 @@ import io.github.dohex.openrose.core.transport.ControlTransport
 import io.github.dohex.openrose.core.transport.DeviceId
 import io.github.dohex.openrose.core.transport.TransportEndpoint
 import io.github.dohex.openrose.core.transport.TransportFacts
+import io.github.dohex.openrose.core.transport.closeAfterFailedOpen
 import io.github.dohex.openrose.core.transport.normalizeBluetoothAddress
 import kotlinx.coroutines.flow.Flow
 import java.io.IOException
@@ -66,8 +67,7 @@ class AndroidControlTransport(context: Context) : ControlTransport {
                 connection.open(onPhase)
                 connection
             } catch (error: Throwable) {
-                connection.close()
-                throw error
+                connection.closeAfterFailedOpen(error)
             }
         }
     }

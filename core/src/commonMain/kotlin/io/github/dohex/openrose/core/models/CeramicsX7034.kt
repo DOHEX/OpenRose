@@ -10,10 +10,9 @@ import io.github.dohex.openrose.core.protocol.BatteryLayout
 import io.github.dohex.openrose.core.protocol.GattProfile
 import io.github.dohex.openrose.core.protocol.ProtocolFamily
 import kotlinx.collections.immutable.persistentSetOf
-import kotlinx.collections.immutable.toPersistentSet
 
 private val ceramicsX7034Capabilities = DeviceCapabilities(
-    readableFields = ProtocolFamily.F8.readableFields.toPersistentSet(),
+    readableFields = f8ExtendedReadings,
     writableSettings = persistentSetOf(
         DeviceSetting.EQ,
         DeviceSetting.TOUCH_BINDING,
@@ -54,5 +53,4 @@ internal val ceramicsX7034 = ModelSpec(
     capabilities = { ceramicsX7034Capabilities },
     f8ExtendedInit = true,
     f8NoiseNormalWire = 3,
-    f8CollapsedEqRead = false,
 )

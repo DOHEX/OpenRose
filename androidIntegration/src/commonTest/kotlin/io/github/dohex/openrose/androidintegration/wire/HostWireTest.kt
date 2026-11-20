@@ -115,14 +115,6 @@ class HostWireTest {
     }
 
     @Test
-    fun anAcquireRequestKeepsTheSwitchAndTheSettingsItCarries() {
-        val request = SwitchRequest("switch-1", ControlWay.ORDINARY, ControlWay.MODULE, generation)
-        val settings = HostSettings(integration = IntegrationSettings(controlWay = ControlWay.MODULE))
-
-        assertEquals(request to settings, HostWire.decodeAcquire(HostWire.encodeAcquire(request, settings)))
-    }
-
-    @Test
     fun aSwitchRequestWithoutAnObservedGenerationKeepsThatAbsence() {
         val request = SwitchRequest("switch-2", ControlWay.MODULE, ControlWay.ORDINARY)
 

@@ -3,6 +3,7 @@ package io.github.dohex.openrose.transport.bluez
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.trySendBlocking
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
@@ -23,19 +24,20 @@ import org.freedesktop.dbus.types.Variant
 import java.util.concurrent.CopyOnWriteArrayList
 
 internal class NativeBluezBus private constructor(private val connection: DBusConnection) : BluezBus {
-    private val listeners = CopyOnWriteArrayList<Channel<BluezSignal>>()
-    override val events: Flow<BluezSignal> = flow {
-        val inbox = Channel<BluezSignal>(Channel.UNLIMITED)
-        listeners.add(inbox)
+    private class Listener(val accepts: (BluezSignal) -> Boolean, val inbox: Channel<BluezSignal> = Channel(Channel.BUFFERED))
+    private val listeners = CopyOnWriteArrayList<Listener>()
+    override fun signals(accepts: (BluezSignal) -> Boolean): Flow<BluezSignal> = flow {
+        val listener = Listener(accepts)
+        listeners.add(listener)
         try {
-            for (signal in inbox) emit(signal)
+            for (signal in listener.inbox) emit(signal)
         } finally {
-            listeners.remove(inbox)
-            inbox.cancel()
+            listeners.remove(listener)
+            listener.inbox.cancel()
         }
     }
     private fun publish(signal: BluezSignal) {
-        listeners.forEach { it.trySend(signal) }
+        listeners.forEach { if (it.accepts(signal)) it.inbox.trySendBlocking(signal) }
     }
 
     @Volatile private var owner: String? = null
@@ -65,7 +67,10 @@ internal class NativeBluezBus private constructor(private val connection: DBusCo
             }
         }
         handlers += connection.addSigHandler(ObjectManager.InterfacesAdded::class.java) { s ->
-            if (s.source == owner) publish(BluezSignal.Added(s.signalSource.path, s.interfaces.keys))
+            if (s.source == owner) {
+                val properties = s.interfaces.mapValues { (_, fields) -> fields.mapValues { unwrap(it.value) } }
+                publish(BluezSignal.Added(s.signalSource.path, properties))
+            }
         }
         handlers += connection.addSigHandler(ObjectManager.InterfacesRemoved::class.java) { s ->
             if (s.source == owner) publish(BluezSignal.Removed(s.signalSource.path, s.interfaces.toSet()))
@@ -97,11 +102,11 @@ internal class NativeBluezBus private constructor(private val connection: DBusCo
         connection.getRemoteObject("org.bluez", path, Adapter1::class.java).StopDiscovery()
     }
     override suspend fun close() {
+        listeners.forEach { it.inbox.close() }
         call {
             handlers.forEach { runCatching { it.close() } }
             connection.close()
         }
-        listeners.forEach { it.close() }
     }
 
     companion object {

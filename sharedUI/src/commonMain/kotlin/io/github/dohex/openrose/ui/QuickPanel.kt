@@ -65,6 +65,7 @@ import io.github.dohex.openrose.core.protocol.BatteryLayout
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.dohex.openrose.ui.model.OpenRoseModel
+import io.github.dohex.openrose.ui.model.WindowDestination
 import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import kotlin.math.roundToInt
@@ -101,7 +102,7 @@ fun QuickPanel(
     model: OpenRoseModel,
     selection: PrimaryDeviceSelection,
     dynamicColor: Boolean,
-    onOpenApp: () -> Unit,
+    onOpenApp: (WindowDestination?) -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -220,7 +221,7 @@ private fun QuickPanelContent(
     model: OpenRoseModel,
     state: ControlState,
     selection: PrimaryDeviceSelection,
-    onOpenApp: () -> Unit,
+    onOpenApp: (WindowDestination?) -> Unit,
 ) {
     val summary = traySummary(state, selection)
     val device = state.activeDevice()?.takeIf { summary.connected }
@@ -246,7 +247,7 @@ private fun QuickPanelContent(
             }
         }
         // The diagnostics live in the main window.
-        SettingFeedback(state, device, showPending = true, onViewDetails = onOpenApp)
+        SettingFeedback(state, device, showPending = true, onViewDetails = { onOpenApp(WindowDestination.DIAGNOSTICS) })
     }
 
     TrayActions(model, state, summary, onOpenApp)

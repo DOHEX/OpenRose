@@ -63,13 +63,7 @@ internal fun DeviceControlCard(
     }
 
     if (hasBass) {
-        val mode = device.fields[DeviceField.EQ] as? FieldReading.Known
-        val slot = device.fields[DeviceField.EQ_SLOT] as? FieldReading.Known
-        val confirmed = if (mode != null && (mode.value as? FieldValue.Text)?.value == "custom_slot" && mode.rawHex == slot?.rawHex) {
-            (slot.value as? FieldValue.Number)?.value
-        } else {
-            null
-        }
+        val confirmed = device.confirmedBassBoostLevel
         AppGroup(title = "音效") {
             AppChoiceRow(
                 title = "低音增强",

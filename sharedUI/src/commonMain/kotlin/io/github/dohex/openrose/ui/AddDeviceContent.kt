@@ -29,7 +29,6 @@ import io.github.dohex.openrose.core.ConnectionPhase
 import io.github.dohex.openrose.core.ControlError
 import io.github.dohex.openrose.core.ControlState
 import io.github.dohex.openrose.core.DeviceCandidate
-import io.github.dohex.openrose.core.PermissionState
 import io.github.dohex.openrose.core.ScanState
 import io.github.dohex.openrose.core.TransportAvailability
 import io.github.dohex.openrose.core.transport.DeviceId
@@ -266,7 +265,7 @@ private fun AddDevicePrerequisite(
 ) {
     AppDashboardCard {
         when {
-            state.platform.permission == PermissionState.REQUIRED || state.platform.permission == PermissionState.DENIED -> {
+            state.platform.bluetoothPermissionRequired -> {
                 AppText("需要蓝牙权限", role = AppTextRole.Title)
                 AppText("允许访问附近设备后，才能搜索并连接耳机。", role = AppTextRole.Summary)
                 onRequestPermission?.let { AppButton("授予蓝牙权限", it) }
@@ -316,7 +315,7 @@ private fun AddDeviceCandidateCard(
                 Modifier.width(88.dp).height(88.dp)
             }
             Box(artworkModifier, contentAlignment = Alignment.Center) {
-                EarbudsArtwork(Modifier.fillMaxWidth().height(88.dp), compact = true)
+                DeviceArtwork(candidate.profile, Modifier.fillMaxWidth().height(88.dp), compact = true)
             }
             Column(
                 modifier = Modifier

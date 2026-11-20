@@ -2,13 +2,17 @@
 
 package io.github.dohex.openrose.ui
 
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
+import androidx.compose.ui.unit.LayoutDirection
 import io.github.dohex.openrose.core.*
 import io.github.dohex.openrose.core.protocol.*
 import io.github.dohex.openrose.core.transport.DeviceId
@@ -286,6 +290,37 @@ class EqualizerPageUiTest {
                 harness.state.value = harness.withCurve(FLAT)
                 harness.render()
                 assertTrue(harness.hasDisabledText("重置"), "reset is disabled once the curve is flat in $style")
+            }
+        }
+    }
+
+    @Test
+    fun rightToLeftCurveDrawsTheHighThumbUnderItsOwnFrequencyAndReadsTheGainWithoutAUnit() {
+        val custom = CustomEqualizerCapabilities(persistentListOf(20, 1000), -6, 6)
+        for (style in InterfaceStyle.entries) {
+            runOpenRoseUiTest(400, 240) {
+                var thumbColor = 0
+                val writes = mutableListOf<List<Int>>()
+                setContent {
+                    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+                        ProvideInterfaceStyle(style, dark = false) {
+                            thumbColor = appColor(AppColorRole.Primary).toArgb()
+                            EqualizerBands(listOf(6, -6), custom, enabled = true, active = true, onCommit = { writes += it })
+                        }
+                    }
+                }
+                val harness = OpenRoseUiTestHarness(this)
+                harness.render()
+                val first = harness.nodes().single { "20 Hz 增益" in it.config.getOrNull(SemanticsProperties.ContentDescription).orEmpty() }
+                val band = first.boundsInRoot
+                assertTrue(band.center.x > harness.textBounds("1k").center.x)
+                assertEquals("+6", first.config.getOrNull(SemanticsProperties.StateDescription))
+                val frame = harness.snapshot()
+                val centerX = band.center.x.toInt()
+                val top = band.top.toInt()
+                assertTrue((top until (top + band.height.toInt() / 4)).any { frame.getRGB(centerX, it) == thumbColor })
+                harness.setProgress("20 Hz 增益", 3f)
+                assertEquals(listOf(3, -6), writes.single())
             }
         }
     }

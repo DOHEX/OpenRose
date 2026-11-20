@@ -101,7 +101,7 @@ class AndroidSettingsStoreTest {
                 parentScope = backgroundScope,
                 newId = { "lease" },
             )
-            host.configure(HostConfiguration(userUnlocked = true, settings = configured))
+            host.configure { HostConfiguration(userUnlocked = true, settings = configured) }
             runCurrent()
             assertIs<HostStatus.Active>(host.status.value)
             val owner = requireNotNull(host.ownerView.first())

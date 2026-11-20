@@ -1,9 +1,11 @@
 package io.github.dohex.openrose.transport.bluez
 
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.filter
 
 internal class FakeBluezBus : BluezBus {
-    override val events = MutableSharedFlow<BluezSignal>(extraBufferCapacity = 64)
+    val events = MutableSharedFlow<BluezSignal>(extraBufferCapacity = 64)
+    override fun signals(accepts: (BluezSignal) -> Boolean) = events.filter(accepts)
     var connectFailure: Exception? = null
     var discoveryFailure: Exception? = null
     var stopDiscoveryFailure: Exception? = null

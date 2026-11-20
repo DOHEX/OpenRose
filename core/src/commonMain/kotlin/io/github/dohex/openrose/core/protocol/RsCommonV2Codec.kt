@@ -148,11 +148,15 @@ internal class RsCommonV2Codec(override val profile: ModelProfile) : ProtocolCod
         }
         // Validation precedes both sequence allocations, so rejected settings consume no sequence.
         val key = byteArrayOf(type).hex()
-        val expectedField = if (setting == DeviceSetting.BASS_BOOST) DeviceField.EQ_SLOT else rsCommonV2Fields.getValue(key).single()
+        val values = if (setting == DeviceSetting.BASS_BOOST) {
+            mapOf(DeviceField.EQ to FieldValue.Text("custom_slot"), DeviceField.EQ_SLOT to expected)
+        } else {
+            mapOf(rsCommonV2Fields.getValue(key).single() to expected)
+        }
         return ProtocolSetting(
             listOf(frame(byteArrayOf(type) + payload)),
-            query(byteArrayOf(type), setOf(expectedField)),
-            mapOf(expectedField to expected),
+            query(byteArrayOf(type), values.keys),
+            values,
         )
     }
 

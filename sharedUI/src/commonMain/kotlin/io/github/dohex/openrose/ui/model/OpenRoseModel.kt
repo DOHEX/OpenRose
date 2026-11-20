@@ -9,17 +9,30 @@ import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.dohex.openrose.core.transport.DeviceId
 import io.github.dohex.openrose.ui.UiSettings
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
+
+/** Pages the system and compact panels can open in the main window. */
+enum class WindowDestination { HEADPHONES, ADD_DEVICE, DIAGNOSTICS }
+
+/** Holds the latest request while the window is closed. A reopened window only receives unhandled requests. */
+class WindowNavigation {
+    private val destinations = Channel<WindowDestination>(Channel.CONFLATED)
+    internal val requests = destinations.receiveAsFlow()
+
+    fun open(destination: WindowDestination) {
+        destinations.trySend(destination)
+    }
+}
 
 /** Presentation state and intents shared by every page and component style. */
 interface OpenRoseModel {
     val state: StateFlow<ControlState>
     val uiSettings: StateFlow<UiSettings>
-    val homeNavigationRequest: StateFlow<Long>
+    val navigation: WindowNavigation
 
     /**
      * A sentence the host wants the user to read on the 我的耳机 page, such as why a notification opened here.
@@ -38,7 +51,6 @@ interface OpenRoseModel {
     /** Writes to [sessionId] only, and returns once the device confirms the setting or the write ends otherwise. */
     suspend fun setInSession(sessionId: Long, setting: DeviceSetting, value: FieldValue): OperationResult
     suspend fun connectForAddDevice(deviceId: DeviceId): OperationResult
-    fun showHeadphones()
 }
 
 /** Each host preserves its persistence and control-settings publication rules here. */
@@ -56,8 +68,7 @@ class RuntimeOpenRoseModel(
 ) : OpenRoseModel {
     override val state: StateFlow<ControlState> = runtime.state
     override val uiSettings: StateFlow<UiSettings> = settingsStore.uiSettings
-    private val mutableHomeNavigationRequest = MutableStateFlow(0L)
-    override val homeNavigationRequest: StateFlow<Long> = mutableHomeNavigationRequest.asStateFlow()
+    override val navigation = WindowNavigation()
     override val notice = MutableStateFlow<String?>(null)
 
     override fun updateUiSettings(settings: UiSettings) = settingsStore.updateUiSettings(settings)
@@ -82,8 +93,4 @@ class RuntimeOpenRoseModel(
 
     // The adding flow owns cancellation of its unfinished connection attempt.
     override suspend fun connectForAddDevice(deviceId: DeviceId): OperationResult = runtime.connectForAddDevice(deviceId)
-
-    override fun showHeadphones() {
-        mutableHomeNavigationRequest.update { it + 1L }
-    }
 }

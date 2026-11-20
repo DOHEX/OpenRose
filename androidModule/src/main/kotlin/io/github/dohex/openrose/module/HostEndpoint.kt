@@ -27,8 +27,10 @@ import io.github.dohex.openrose.androidintegration.HostStatus
 import io.github.dohex.openrose.androidintegration.IslandMode
 import io.github.dohex.openrose.androidintegration.ModuleControlHost
 import io.github.dohex.openrose.androidintegration.OwnerGeneration
+import io.github.dohex.openrose.androidintegration.OwnerView
 import io.github.dohex.openrose.androidintegration.SessionSnapshotResult
 import io.github.dohex.openrose.androidintegration.SystemEndpointDiagnostics
+import io.github.dohex.openrose.androidintegration.SystemPresentationState
 import io.github.dohex.openrose.androidintegration.wire.BridgePresentationWire
 import io.github.dohex.openrose.androidintegration.wire.BridgeWire
 import io.github.dohex.openrose.androidintegration.wire.HostWire
@@ -44,8 +46,8 @@ import io.github.dohex.openrose.bridge.IControlBridge
 import io.github.dohex.openrose.bridge.IControlFrames
 import io.github.dohex.openrose.bridge.IControlObserver
 import io.github.dohex.openrose.bridge.toBundle
-import io.github.dohex.openrose.core.ConnectionState
 import io.github.dohex.openrose.core.DeviceSetting
+import io.github.dohex.openrose.core.DeviceState
 import io.github.dohex.openrose.core.OperationResult
 import io.github.dohex.openrose.core.SessionReference
 import io.github.dohex.openrose.core.protocol.FieldValue
@@ -118,12 +120,24 @@ internal class HostEndpoint(
         val client: IBinder,
         val death: IBinder.DeathRecipient,
         var awaiting: PendingRead? = null,
-        var acknowledged: SessionReference? = null,
+        var confirmedRead: PendingRead? = null,
         var watchJob: Job? = null,
         var framesJob: Job? = null,
     )
 
-    private data class PendingRead(val reference: SessionReference, val sequence: Long, val generation: String)
+    private data class PendingRead(
+        val reference: SessionReference,
+        val sequence: Long,
+        val generation: OwnerGeneration,
+        val device: DeviceState,
+        val presentation: SystemPresentationState,
+    ) {
+        fun matches(view: OwnerView): Boolean = generation == view.generation &&
+            device === view.state.device && presentation == view.presentation
+
+        fun matches(receipt: Bundle): Boolean = receipt.getString(BridgeWire.HOST_EPOCH) == generation.toString() &&
+            receipt.reference() == reference && receipt.getLong(BridgeWire.READ_SEQUENCE, -1) == sequence
+    }
 
     init {
         // A report belongs to the session it described; a new owner or an ended one starts clean.
@@ -233,19 +247,24 @@ internal class HostEndpoint(
 
     override fun currentSession(leaseId: String): Bundle {
         val lease = consumerLease(leaseId)
+        val capturedAt = SystemClock.elapsedRealtime()
         val view = host.view(lease.caller, lease.id) ?: return BridgeBundles.response(BridgeWire.STATUS_NO_SESSION)
         // Bonded ROSE earphones are named with or without a session: on the target source device of a headset
         // circulation they are not connected yet (ADR 0017).
         val bonded = ArrayList(BondedHeadsets.addresses(view.state))
-        val connection = view.state.connection as? ConnectionState.Connected
-        val device = view.state.device
-        if (connection == null || device == null || device.deviceId != connection.deviceId || device.sessionId != connection.sessionId) {
+        val reference = view.state.readySession
+        if (reference == null) {
             return BridgeBundles.response(BridgeWire.STATUS_NO_SESSION).apply { putStringArrayList(BridgeWire.BONDED_ADDRESSES, bonded) }
         }
         return BridgeBundles.response(BridgeWire.STATUS_OK).apply {
             putString(BridgeWire.HOST_EPOCH, view.generation.toString())
-            putString(BridgeWire.DEVICE_ID, connection.deviceId.value)
-            putLong(BridgeWire.SESSION_ID, connection.sessionId)
+            putString(BridgeWire.DEVICE_ID, reference.deviceId.value)
+            putLong(BridgeWire.SESSION_ID, reference.sessionId)
+            val last = synchronized(lock) { lease.confirmedRead }
+            if (last != null && last.matches(view)) {
+                putLong(BridgeWire.READ_SEQUENCE, last.sequence)
+                putLong(BridgeWire.CAPTURED_ELAPSED_MILLIS, capturedAt)
+            }
             putStringArrayList(BridgeWire.BONDED_ADDRESSES, bonded)
         }
     }
@@ -270,8 +289,9 @@ internal class HostEndpoint(
             is HostReadResult.Available -> when (val snapshot = result.snapshot) {
                 is SessionSnapshotResult.Available -> {
                     val sequence = reads.incrementAndGet()
-                    val current = SessionReference(snapshot.device.deviceId, snapshot.device.sessionId)
-                    synchronized(lock) { lease.awaiting = PendingRead(current, sequence, generation.toString()) }
+                    synchronized(lock) {
+                        lease.awaiting = PendingRead(reference, sequence, generation, snapshot.device, snapshot.presentation)
+                    }
                     BridgeBundles.response(BridgeWire.STATUS_OK).apply {
                         putBundle(
                             BridgeWire.SNAPSHOT,
@@ -294,22 +314,19 @@ internal class HostEndpoint(
     override fun acknowledge(receipt: Bundle): Bundle {
         val lease = consumerLease(receipt.getString(BridgeWire.LEASE_ID))
         val pending = synchronized(lock) { lease.awaiting } ?: return BridgeBundles.response(BridgeWire.STATUS_NO_PENDING_READ)
-        if (receipt.getInt(BridgeWire.KEY_VERSION) != BridgeWire.VERSION ||
-            receipt.getString(BridgeWire.HOST_EPOCH) != pending.generation ||
-            receipt.getString(BridgeWire.DEVICE_ID) != pending.reference.deviceId.value ||
-            receipt.getLong(BridgeWire.SESSION_ID, -1) != pending.reference.sessionId ||
-            receipt.getLong(BridgeWire.READ_SEQUENCE, -1) != pending.sequence
-        ) {
+        if (receipt.getInt(BridgeWire.KEY_VERSION) != BridgeWire.VERSION || !pending.matches(receipt)) {
             return BridgeBundles.response(BridgeWire.STATUS_STALE_RECEIPT)
         }
-        synchronized(lock) { lease.awaiting = null }
-        val generation = generation(receipt) ?: return BridgeBundles.response(BridgeWire.STATUS_STALE_HOST)
-        val still = runBlocking { host.readSession(lease.caller, lease.id, generation, pending.reference) }
-        if ((still as? HostReadResult.Available)?.snapshot !is SessionSnapshotResult.Available) {
+        val view = host.view(lease.caller, lease.id)
+        if (view?.generation != pending.generation || view.state.readySession != pending.reference) {
             return BridgeBundles.response(BridgeWire.STATUS_STALE_SESSION)
         }
-        synchronized(lock) { lease.acknowledged = pending.reference }
-        return BridgeBundles.response(BridgeWire.STATUS_OK)
+        return synchronized(lock) {
+            if (lease.awaiting !== pending) return@synchronized BridgeBundles.response(BridgeWire.STATUS_STALE_RECEIPT)
+            lease.awaiting = null
+            lease.confirmedRead = pending
+            BridgeBundles.response(BridgeWire.STATUS_OK)
+        }
     }
 
     override fun close(leaseId: String) {
@@ -514,9 +531,9 @@ internal class HostEndpoint(
 
     override fun acquire(request: Bundle): Bundle {
         val lease = appLease(request)
-        val (switch, settings) = decodeOrNull { HostWire.decodeAcquire(parseWire(request.getString(BridgeWire.PAYLOAD).orEmpty())) }
+        val switch = decodeOrNull { HostWire.decodeRequest(parseWire(request.getString(BridgeWire.PAYLOAD).orEmpty())) }
             ?: return BridgeBundles.response(BridgeWire.STATUS_INVALID_ARGUMENT)
-        val result = runBlocking { host.acquire(lease.caller, lease.id, switch, settings) }
+        val result = runBlocking { host.acquire(lease.caller, lease.id, switch) }
         return BridgeBundles.payload(BridgeWire.STATUS_OK, HostWire.encode(result).render())
     }
 
@@ -597,12 +614,6 @@ internal class HostEndpoint(
         if (request.getInt(BridgeWire.KEY_VERSION) != BridgeWire.VERSION) throw SecurityException("请求版本不匹配")
     }
 
-    private fun Bundle.reference(): SessionReference? {
-        val id = getString(BridgeWire.DEVICE_ID)?.takeIf { it.length in 1..128 } ?: return null
-        val sessionId = getLong(BridgeWire.SESSION_ID, -1).takeIf { it > 0 } ?: return null
-        return SessionReference(DeviceId(id), sessionId)
-    }
-
     private inline fun <T> decodeOrNull(block: () -> T): T? = try {
         block()
     } catch (_: WireFormatException) {
@@ -612,4 +623,10 @@ internal class HostEndpoint(
     private companion object {
         const val TAG = "HostEndpoint"
     }
+}
+
+private fun Bundle.reference(): SessionReference? {
+    val id = getString(BridgeWire.DEVICE_ID)?.takeIf { it.length in 1..128 } ?: return null
+    val sessionId = getLong(BridgeWire.SESSION_ID, -1).takeIf { it > 0 } ?: return null
+    return SessionReference(DeviceId(id), sessionId)
 }

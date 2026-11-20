@@ -35,7 +35,6 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.getAndUpdate
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -57,8 +56,8 @@ internal class ControlLink(
     internal val lifecycle = Mutex()
     private var generation = sessionIdBase
 
-    /** Connections whose close the platform refused, retried on every release. */
-    private val unclosed = MutableStateFlow<PersistentList<ControlConnection>>(persistentListOf())
+    private val connections = OwnedConnections()
+    private var released = false
     internal var active: Attempt? = null
         private set
 
@@ -87,10 +86,11 @@ internal class ControlLink(
         val deviceId = candidate.deviceId
         var ownsAttempt = false
         val attempt = lifecycle.withLock {
+            if (released) return OperationResult.Failure(ControlError(ControlErrorCode.NOT_READY, "控制所有者已释放"))
             if (isSuperseded()) return@withLock null
             active?.takeIf { it.candidate.deviceId == deviceId && state.value.connection !is ConnectionState.Disconnected }
                 ?.let { return@withLock it }
-            clearActive()
+            if (!clearActive()) return OperationResult.Failure(ControlError(ControlErrorCode.NOT_READY, "之前的控制连接尚未确认释放"))
             onStarted()
             val next = Attempt(++generation, candidate, state.value.settings.forceBle)
             ownsAttempt = true
@@ -143,8 +143,9 @@ internal class ControlLink(
         return result
     }
 
-    suspend fun disconnect(): Boolean = lifecycle.withLock {
+    suspend fun disconnect(retire: Boolean = false): Boolean = lifecycle.withLock {
         val closed = clearActive()
+        if (retire && closed) released = true
         state.update { it.copy(connection = ConnectionState.Disconnected, device = null, lastError = null, connectionRecovery = null) }
         closed
     }
@@ -255,8 +256,10 @@ internal class ControlLink(
         val codec = attempt.codec
         val progress = attempt.progress
         val opened = withTimeout(timing.connectTimeoutMillis) {
-            requireNotNull(transport).connect(candidate.deviceId, selection.endpoint) { nextPhase ->
-                phase(attempt, epoch, nextPhase)
+            connections.open {
+                requireNotNull(transport).connect(candidate.deviceId, selection.endpoint) { nextPhase ->
+                    phase(attempt, epoch, nextPhase)
+                }
             }.also { attempt.connection = it }
         }
         lifecycle.withLock {
@@ -346,7 +349,7 @@ internal class ControlLink(
                         }
                     }
                 }
-                closeOrRemember(link)
+                connections.close(link)
             }
         }
         phase(attempt, epoch, ConnectionPhase.SUBSCRIBING)
@@ -490,7 +493,7 @@ internal class ControlLink(
         withContext(NonCancellable) {
             oldObserver?.cancel()
             try {
-                oldConnection?.close()
+                check(oldConnection == null || connections.close(oldConnection)) { "旧控制连接尚未确认释放" }
             } finally {
                 oldObserver?.join()
             }
@@ -528,7 +531,7 @@ internal class ControlLink(
             oldConnection to oldObserver
         }
         oldObserver?.cancel()
-        oldConnection?.let { closeOrRemember(it) }
+        oldConnection?.let { connections.close(it) }
         oldObserver?.join()
     }
 
@@ -628,24 +631,7 @@ internal class ControlLink(
         previous?.let { settings.end(it) }
         previous?.task?.cancel()
         previous?.observer?.cancel()
-        previous?.connection?.let { connection -> unclosed.update { if (connection in it) it else it.adding(connection) } }
-        unclosed.getAndUpdate { persistentListOf() }.forEach { closeOrRemember(it) }
-        return unclosed.value.isEmpty()
-    }
-
-    private suspend fun closeOrRemember(connection: ControlConnection): Boolean {
-        val closed = closeSafely(connection)
-        if (!closed) unclosed.update { if (connection in it) it else it.adding(connection) }
-        return closed
-    }
-
-    private suspend fun closeSafely(connection: ControlConnection): Boolean = withContext(NonCancellable) {
-        try {
-            connection.close()
-            true
-        } catch (_: Exception) {
-            false
-        }
+        return connections.closeAll()
     }
 
     internal fun platformError(): ControlError? = platformError(state.value, transport)

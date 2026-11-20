@@ -16,7 +16,7 @@
 | writeIntervalMillis | 100 | 100 | 100 | 100 | A；各文档传输节及 [RS Common V2 族文档的默认传输](families/rs-common-v2.md#默认传输)；非 OHOS 队列 |
 | advertisedClassicAddress | null | null | null | null | 不实现；各文档识别节没有给出地址偏移，不能套用 i7 布局 |
 | equalizerPresetLabels | 空 | 空 | 空 | 空 | 不实现；清单能力表没有这四款可映射的常规预设显示名，低音增强另列 |
-| readableFields | V2 接收器支持的字段集合 | 同左 | 同左 | 同左 | A；各文档接收字段节；解析能力不代表设备一定上报 |
+| readableFields | 按型号列出已实现的读数，含左右耳与盒电量、降噪、低音槽位 | 左右耳与盒电量、低音槽位、自定义曲线等 | 单体电量、提示音音量等 | 左右耳电量、提示音语言等 | B；各型号的接收字段与电量布局决定诊断页条目 |
 | 固件门槛 | 不用于已启用控制 | 同左 | 同左 | 同左 | A；各协议设置命令节没有已启用控制的门槛；BudsFeel OTA ≥200 只属于 OTA |
 
 ## 能力清单逐列
@@ -153,7 +153,7 @@ AGATE/AGATE X/CERAMICS 依次查询 01、0c、04、08、0b、02、05、09、13�
 |---|---|---|
 | 01 | byte7/8/9 电量，前三区忽略盒 | D/B |
 | 02 | byte9–10 hex 整数转十进制固件字符串 | D |
-| 04 | 前三区 raw0→控制器2、raw1/2→0；后三 raw0→2、1→0、2→4；前三区 raw2 未知避免伪确认 | B |
+| 04 | AGATE、AGATE X 的 raw1/2 均读回同一 Rock 选项，raw0 为各自的第二项。CERAMICS 的 raw2 有歧义，保留 Unknown。扩展型号 raw0/1/2 分别解为 HIFI/POP/ROCK | B |
 | 05 | 前三区索引7、9、11、8、10、12低半字节；后三索引9、15、21、27、12、18、24、30 | B，槽对应推断、合成 fixture |
 | 08 | byte7=01 开 | D |
 | 09 | 前三区 thrower；后三有接收，只有 EXPLORER 有面板 | B |
@@ -191,7 +191,7 @@ getKey 02、无 CRC、LEN 宽度未知、27/28 语义未知、按 hex 解析、E
 
 ### Cambrian（B；`models/cambrian-protocol.md` 各节）
 
-- 识别 0b0c0a0c；BLE+SPP；初始化立即查询，500ms 后再查；单体电量证据冲突：`cambrian-protocol.md:47,49,75` 将 list[0]/字符 [8,10) 称第1路，但 `families/rs-common.md:55,101` 明确 handler 的 RBatteryData 偏移 0x17 对应字符 [12,14) 即第3路，`swift-protocol.md:50` 同样确认该偏移；本实现取第3路，上游需修正冲突。
+- 识别 0b0c0a0c；BLE+SPP；初始化立即查询，500ms 后再查；单体电量取第三路（十六进制字符 `[12,14)`）。接收器写入与型号处理器读取的 `RBatteryData` 字段偏移均为 `0x17`。RoseLink 3.8.0 静态确认，待实机验证。见[型号研究](models/cambrian-protocol.md#电量)，同步自 rose_reverse 提交 `dcd6a6e`。
 - 设置表逐行：电量；降噪 1202/04/06/08；通透 5a01/02/03；EQ 2a01/00/02；面板结构；游戏 0e01/00；多点 2b04/00；音频 2b00/01；寻机 5e01..04 无读回不开放；触控六槽 01 SS 0A；总开关 0e00/02；更多结构；星芒云业务范围外；OTA 范围外；提示音 5c01..05。无 ANC 档位、无长按。
 - 接收表逐行：0c 单体、2b 音频及多点、01/07/08/09/0d/0e/2a/2c/2d/2e/33 族解析；未配置功能不开放。OTA AB 全部 OTA 表行仅记录，不实现。
 

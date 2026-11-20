@@ -916,24 +916,6 @@ fun AppBusyIndicator(size: androidx.compose.ui.unit.Dp? = null) {
 }
 
 @Composable
-internal fun AppCandidateRow(title: String, summary: String, onConnect: (() -> Unit)?, enabled: Boolean = true) {
-    when (LocalInterfaceStyle.current) {
-        InterfaceStyle.MIUIX -> BasicComponent(
-            title = title,
-            summary = summary,
-            endActions = { onConnect?.let { MiuixTextButton("连接", it, enabled = enabled) } },
-        )
-
-        InterfaceStyle.MATERIAL3 -> ListItem(
-            headlineContent = { Text(title) },
-            supportingContent = { Text(summary) },
-            trailingContent = onConnect?.let { { FilledTonalButton(it, enabled = enabled) { Text("连接") } } },
-            modifier = staticRowModifier(),
-        )
-    }
-}
-
-@Composable
 internal fun SettingPageBanner(state: io.github.dohex.openrose.core.ControlState, device: io.github.dohex.openrose.core.DeviceState) {
     if (state.isReady(device)) return
     val message = "控制会话尚未就绪，暂不能设置。"

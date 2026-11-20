@@ -30,8 +30,8 @@ description: 适配耳机型号：新增 ROSE 型号配置，或修改已有型�
 
 - **A 只写配置**：协议族已有编解码，帧与字段完全相同。
 - **B 族内差异**：同族但帧、字段或枚举取值不同。在 `ModelSpec` 增加字段，由该族编解码读取；ZT 各型号在 RoseLink 中有不同的 Sender 子类（i3 / i5 / HeadFeel），默认按存在差异处理。
-- **C 新能力类型**：现有 `DeviceSetting` / `DeviceField` 表达不了（低音增强、寻机、提示音语言、空间音频等）。
-- **D 新协议族**：F8、RS Common 等尚无编解码的协议族。
+- **C 新能力类型**：先查 `DeviceSetting` 与 `DeviceField`。有协议证据，且现有类型无法表达该能力时，增加领域类型。
+- **D 新协议族**：先查 `createProtocolCodec`。已有对应编解码器时按 A 或 B 处理，缺少对应编解码器时按 D 处理。
 
 C、D 分支的改动面见 [new-capability.md](new-capability.md)。
 
@@ -50,7 +50,7 @@ C、D 分支的改动面见 [new-capability.md](new-capability.md)。
 | 广播里的经典地址（传输） | `advertisedClassicAddress` | 有文档给出偏移时才写解析函数，否则为 `null` |
 | 电量槽（电量） | `batteryLayout` | 左右耳与仓 → `EARBUDS_AND_CASE`；仅左右耳 → `EARBUDS_ONLY`，系统界面不发布仓电量；单体（复用 charge 槽）→ `SINGLE_UNIT`，应用显示一行“电量”，系统超级岛、焦点通知和融合设备中心不发布其电量 |
 | EQ 预设的 App 显示名（设置命令的取值列） | `equalizerPresetLabels` | |
-| 能力与固件门槛（设置命令） | `capabilities` | `writableSettings` 只列 A/B 类且有字节级证据的设置；固件门槛用 `firmwareComparisonInteger`（RoseLink 拼接十进制比较）；`readableFields` 取 `family.readableFields` |
+| 能力与固件门槛（设置命令） | `capabilities` | `writableSettings` 只列 A/B 类且有字节级证据的设置；固件门槛用 `firmwareComparisonInteger`（RoseLink 拼接十进制比较）；`readableFields` 只列该型号有证据且解码器可返回的字段 |
 
 `writableSettings` 同时决定界面是否出现该控制和 `SettingQueue` 是否放行写入，宁缺毋滥。
 
@@ -66,7 +66,7 @@ C、D 分支的改动面见 [new-capability.md](new-capability.md)。
 ## 5. 验证与文档
 
 1. 在各模块 main 源码中搜索新枚举名：除 `ModelProfile` 枚举和 `spec` 映射外不应出现。出现即说明某处在按型号分支，改为读取 `ModelSpec`。
-2. 运行 `./gradlew spotlessApply offlineCheck`。detekt 基线只减不增：新代码直接满足规则；`baseline-limit.txt` 只在基线条目减少时同步下调。
+2. 运行 `./gradlew spotlessApply offlineCheck`。detekt 基线只减不增：新代码直接满足规则。
 3. 更新 `README.md` 与 `README.en.md` 的“支持的耳机”表、`docs/protocols.md`（实现说明与代码位置）和 `docs/protocols/README.md` 的验证情况；`docs/protocols/` 下的副本不改。
 4. 最终报告列出：账本中“不实现”的能力及原因；离线验证与实机验证分开写，没测过的写“未验证”。
 

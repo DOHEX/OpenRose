@@ -5,6 +5,7 @@ package io.github.dohex.openrose.ui
 import androidx.compose.foundation.ScrollState
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
@@ -25,6 +26,8 @@ import io.github.dohex.openrose.core.protocol.FieldReading
 import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.dohex.openrose.core.protocol.ModelProfile
 import io.github.dohex.openrose.core.transport.DeviceId
+import io.github.dohex.openrose.ui.model.WindowDestination
+import io.github.dohex.openrose.ui.model.WindowNavigation
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.persistentMapOf
 import kotlinx.collections.immutable.persistentSetOf
@@ -46,7 +49,7 @@ class OpenRoseConnectedHomeUiTest {
                 harness.openPersonalization()
                 harness.clickText("组件风格")
                 harness.render()
-                harness.homeNavigationRequest.value++
+                harness.navigation.open(WindowDestination.HEADPHONES)
                 harness.render(frames = 120)
                 assertTrue(harness.hasContentDescription("耳机菜单"))
                 assertTrue(harness.hasText("已连接"))
@@ -54,6 +57,48 @@ class OpenRoseConnectedHomeUiTest {
                 assertEquals(initial.connection, harness.state.value.connection)
                 assertTrue(harness.connects.isEmpty() && harness.disconnects.isEmpty())
                 assertTrue(harness.settingWrites.isEmpty() && harness.startScans.isEmpty())
+            }
+        }
+    }
+
+    @Test
+    fun externalRequestsOpenTheNamedPageAndBackReturnsHome() {
+        for (style in InterfaceStyle.entries) {
+            withHarness(420, 900, connectedState(), style, wholeApp = true) { harness ->
+                harness.navigation.open(WindowDestination.DIAGNOSTICS)
+                harness.render(frames = 60)
+                assertTrue(harness.hasText("当前连接"))
+                harness.navigation.open(WindowDestination.ADD_DEVICE)
+                harness.render(frames = 60)
+                assertTrue(harness.hasText("打开耳机并靠近设备"))
+                harness.clickContentDescription("返回")
+                harness.render(frames = 60)
+                assertTrue(harness.hasContentDescription("耳机菜单"))
+            }
+        }
+    }
+
+    @Test
+    fun recreatingTheWindowPreservesThePageOpenedAfterANotification() {
+        for (style in InterfaceStyle.entries) {
+            runOpenRoseUiTest(420, 900) {
+                val visible = mutableStateOf(true)
+                val model = FakeOpenRoseModel(mutableStateOf(connectedState()), mutableStateOf(UiSettings(interfaceStyle = style)))
+                setContent {
+                    val pages = rememberSaveableStateHolder()
+                    if (visible.value) pages.SaveableStateProvider("main") { OpenRoseApp(model, BasicPlatformUi("Test")) }
+                }
+                val harness = OpenRoseUiTestHarness(this)
+                model.navigation.open(WindowDestination.HEADPHONES)
+                harness.render()
+                harness.clickText("设备详情")
+                harness.render(frames = 50)
+                assertTrue(harness.hasText("断开控制连接"))
+                visible.value = false
+                harness.render()
+                visible.value = true
+                harness.render(frames = 50)
+                assertTrue(harness.hasText("断开控制连接"), "return to the restored device details page in $style")
             }
         }
     }
@@ -527,7 +572,7 @@ class OpenRoseConnectedHomeUiTest {
                     }
                 }
             }
-            block(ConnectedHomeHarness(this, state, uiSettings, disconnects, connects, startScans, settingWrites, model.homeNavigationRequests))
+            block(ConnectedHomeHarness(this, state, uiSettings, disconnects, connects, startScans, settingWrites, model.navigation))
         }
     }
 
@@ -539,7 +584,7 @@ class OpenRoseConnectedHomeUiTest {
         val connects: MutableList<DeviceId>,
         val startScans: MutableList<Unit>,
         val settingWrites: MutableList<Pair<DeviceSetting, FieldValue>>,
-        val homeNavigationRequest: kotlinx.coroutines.flow.MutableStateFlow<Long>,
+        val navigation: WindowNavigation,
     ) : OpenRoseUiTestHarness(scene)
 
     private companion object {

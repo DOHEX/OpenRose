@@ -16,10 +16,8 @@ import io.github.dohex.openrose.core.ConnectionState
 import io.github.dohex.openrose.core.ControlError
 import io.github.dohex.openrose.core.ControlState
 import io.github.dohex.openrose.core.OperationResult
-import io.github.dohex.openrose.core.PermissionState
 import io.github.dohex.openrose.core.ScanState
 import io.github.dohex.openrose.core.SessionReference
-import io.github.dohex.openrose.core.TransportAvailability
 import io.github.dohex.openrose.core.transport.DeviceId
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
@@ -184,5 +182,4 @@ internal fun rememberAddDeviceFlow(
     return flow
 }
 
-internal fun ControlState.canSearchForHeadphones(): Boolean = platform.transport == TransportAvailability.Available &&
-    (platform.permission == PermissionState.GRANTED || platform.permission == PermissionState.NOT_REQUIRED)
+internal fun ControlState.canSearchForHeadphones(): Boolean = platform.connectionBlockReason == null

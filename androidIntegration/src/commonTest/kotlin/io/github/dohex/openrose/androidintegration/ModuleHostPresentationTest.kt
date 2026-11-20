@@ -90,7 +90,7 @@ class ModuleHostPresentationTest {
 
         suspend fun start() {
             host.updatePlatform(PlatformState(PermissionState.GRANTED, TransportAvailability.Available))
-            host.configure(HostConfiguration(true, HostSettings(integration = settings.copy(controlWay = ControlWay.MODULE))))
+            host.configure { HostConfiguration(true, HostSettings(integration = settings.copy(controlWay = ControlWay.MODULE))) }
             test.runCurrent()
             connect()
         }
@@ -253,7 +253,8 @@ class ModuleHostPresentationTest {
         assertEquals(listOf("module:open", "module:close"), rig.headset.events)
 
         // Back to module control: the saved presentation preferences apply, the old event is not replayed.
-        assertIs<AcquireResult.Acquired>(rig.host.acquire(rig.app.identity, rig.app.id, SwitchRequest("to-module", ControlWay.ORDINARY, ControlWay.MODULE), HostSettings(integration = saved)))
+        val newLease = assertIs<HostOpenResult.Opened>(rig.host.open(appIdentity)).lease.id
+        assertIs<AcquireResult.Acquired>(rig.host.acquire(appIdentity, newLease, SwitchRequest("to-module", ControlWay.ORDINARY, ControlWay.MODULE)))
         runCurrent()
         rig.connect()
         val next = rig.generation

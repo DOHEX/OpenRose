@@ -184,6 +184,7 @@ class OpenRoseBluetoothModule : XposedModule() {
                 selected,
                 actualProcess,
                 onSnapshot = ::publish,
+                onSnapshotFresh = ::refreshSnapshot,
                 onClear = ::clearConsumers,
                 onBonded = ::publishBonded,
                 onAuthenticated = { authenticated ->
@@ -260,6 +261,15 @@ class OpenRoseBluetoothModule : XposedModule() {
 
             else -> Unit
         }
+    }
+
+    private fun refreshSnapshot(capturedAt: Long) {
+        if (retired) return
+        val current = nativeSnapshot ?: return
+        val fresh = current.copy(capturedElapsedMillis = capturedAt)
+        nativeSnapshot = fresh
+        binderAdapter?.publish(fresh)
+        fusionAdapter?.publish(fresh)
     }
 
     /** The module host's bonded ROSE earphones, for the identity queries of the system entries (ADR 0017). */

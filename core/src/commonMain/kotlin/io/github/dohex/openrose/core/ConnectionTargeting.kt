@@ -5,7 +5,9 @@ import io.github.dohex.openrose.core.transport.DeviceId
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.flow.updateAndGet
 import kotlinx.coroutines.launch
@@ -26,16 +28,23 @@ internal class ConnectionTargeting(
     private data class TargetIntent(val epoch: Long, val deviceId: DeviceId?)
     private val targetIntent = MutableStateFlow(TargetIntent(0L, null))
 
+    private val audioPermission = MutableStateFlow(state.value.platform.canReadAudio)
+
     init {
         if (transport != null) {
-            scope.launch {
-                discovery.refreshBondedDevices()
-            }
             scope.launch(start = CoroutineStart.UNDISPATCHED) {
-                transport.audioConnectedDevice.collect { audioDeviceId ->
-                    latestAudioDevice = audioDeviceId
-                    discovery.refreshBondedDevices()
-                    if (state.value.platform.userUnlocked) handleAudioConnectedDevice(audioDeviceId)
+                audioPermission.collectLatest { permitted ->
+                    latestAudioDevice = null
+                    if (permitted) {
+                        coroutineScope {
+                            launch { discovery.refreshBondedDevices() }
+                            transport.audioConnectedDevice.collect { audioDeviceId ->
+                                latestAudioDevice = audioDeviceId
+                                discovery.refreshBondedDevices()
+                                if (state.value.platform.userUnlocked) handleAudioConnectedDevice(audioDeviceId)
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -183,8 +192,10 @@ internal class ConnectionTargeting(
         val transportReady = previous.transport != TransportAvailability.Available &&
             platformState.transport == TransportAvailability.Available
         state.update { it.copy(platform = platformState) }
+        audioPermission.value = platformState.canReadAudio
         // Existing audio may predate unlock or asynchronous platform transport initialization.
-        if ((unlocking || transportReady) && platformState.userUnlocked && transport != null) {
+        if (!previous.canReadAudio || !platformState.canReadAudio || !platformState.userUnlocked) return
+        if ((unlocking || transportReady) && transport != null) {
             scope.launch { latestAudioDevice?.let { handleAudioConnectedDevice(it) } }
         }
     }
@@ -194,3 +205,6 @@ internal class ConnectionTargeting(
         return OperationResult.Failure(error)
     }
 }
+
+private val PlatformState.canReadAudio: Boolean
+    get() = permission == PermissionState.GRANTED || permission == PermissionState.NOT_REQUIRED

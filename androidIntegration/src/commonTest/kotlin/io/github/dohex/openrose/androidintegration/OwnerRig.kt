@@ -160,6 +160,8 @@ internal class InProcessHostLink(
 ) : ModuleHostLink {
     var reachable = true
     var releaseHangs = false
+    var pauseNextAcquire = false
+    var delayedAcquire: (suspend () -> AcquireResult)? = null
     var releaseKillsHostProcess = false
 
     /** The host process is alive and the link open, but it never answers a status call. */
@@ -226,10 +228,15 @@ internal class InProcessHostLink(
             return if (delivered is ReleaseResult.Released) ReleaseResult.Released(tamperReceipt(delivered.receipt)) else delivered
         }
 
-        override suspend fun acquire(request: SwitchRequest, settings: HostSettings): AcquireResult {
+        override suspend fun acquire(request: SwitchRequest): AcquireResult {
             ensureOpen()
             val sent = HostWire.decodeRequest(parseWire(HostWire.encode(request).render()))
-            val result = host.acquire(identity, lease.id, sent, HostWire.decodeSettings(parseWire(HostWire.encode(settings).render())))
+            if (pauseNextAcquire) {
+                pauseNextAcquire = false
+                delayedAcquire = { host.acquire(identity, lease.id, sent) }
+                awaitCancellation()
+            }
+            val result = host.acquire(identity, lease.id, sent)
             return HostWire.decodeAcquireResult(parseWire(HostWire.encode(result).render()))
         }
 
@@ -399,9 +406,9 @@ internal class OwnerRig(
     private var hostUnlocked = true
 
     init {
-        store.onSaved = { record ->
+        store.onSaved = {
             test.backgroundScope.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
-                host.configure(HostConfiguration(hostUnlocked, HostSettings(integration = IntegrationSettings(controlWay = record.selected))))
+                host.configure { HostConfiguration(hostUnlocked, HostSettings(integration = IntegrationSettings(controlWay = store.record.selected))) }
             }
         }
     }
@@ -409,13 +416,13 @@ internal class OwnerRig(
     suspend fun bootHost(unlocked: Boolean = true) {
         hostUnlocked = unlocked
         host.updatePlatform(platform)
-        host.configure(HostConfiguration(unlocked, HostSettings(integration = IntegrationSettings(controlWay = store.record.selected))))
+        host.configure { HostConfiguration(unlocked, HostSettings(integration = IntegrationSettings(controlWay = store.record.selected))) }
     }
 
     /** The first unlock of a boot, as the host learns it. */
     suspend fun unlockHost() {
         hostUnlocked = true
-        host.configure(HostConfiguration(true, HostSettings(integration = IntegrationSettings(controlWay = store.record.selected))))
+        host.configure { HostConfiguration(true, HostSettings(integration = IntegrationSettings(controlWay = store.record.selected))) }
     }
 
     /** A scope standing for one application process; cancelling it is that process disappearing. */

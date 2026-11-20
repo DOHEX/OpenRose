@@ -12,8 +12,10 @@ import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Runnable
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
@@ -29,6 +31,64 @@ import kotlin.test.assertTrue
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class ControlSessionTargetedConnectionTest {
+
+    @Test
+    fun scanWithoutManufacturerDataKeepsKnownIdentityAndNewManufacturerEvidenceWins() = runTest {
+        val id = DeviceId("bonded-i5")
+        val paired = DeviceCandidate(id, "EarFree i5", null, ModelProfile.I5_ZT, "", "11:22:33:44:55:66")
+        val transport = TargetedAudioTransport(bondedList = listOf(paired))
+        val session = ControlSession(
+            PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
+            transport = transport,
+            scope = backgroundScope,
+            timing = SessionTiming(writeIntervalMillis = 0),
+        )
+        session.startScan()
+        runCurrent()
+        transport.advertisements.emit(Advertisement(id, rssi = -48))
+        runCurrent()
+        assertEquals(paired.copy(rssi = -48), session.state.value.candidates.single())
+        assertEquals(OperationResult.Success, session.connect(id))
+        assertEquals(paired.copy(rssi = -48), session.state.value.connectionTarget)
+        session.disconnect()
+
+        session.startScan()
+        val agate = Advertisement(id, manufacturerData = mapOf(0x8418 to byteArrayOf(5, 5)))
+        transport.advertisements.emit(agate)
+        runCurrent()
+        transport.advertisements.emit(Advertisement(id, rssi = -52))
+        runCurrent()
+        val scanned = session.state.value.candidates.single()
+        assertEquals(ModelProfile.AGATE_F8, scanned.profile)
+        assertEquals("18840505", scanned.manufacturerDataHex)
+        assertEquals(-52, scanned.rssi)
+        assertNull(scanned.classicAddress)
+    }
+
+    @Test
+    fun grantingPermissionReadsAlreadyConnectedAudioWithoutANewEvent() = runTest {
+        val id = DeviceId("audio-before-permission")
+        val paired = DeviceCandidate(id, "EarFree i5", null, ModelProfile.I5_ZT, "")
+        val platform = PlatformState(PermissionState.REQUIRED, TransportAvailability.Unavailable("permission"))
+        val base = TargetedAudioTransport(bondedList = listOf(paired))
+        var granted = false
+        val transport = object : ControlTransport by base {
+            override val audioConnectedDevice = flow {
+                emit(if (granted) id else null)
+                awaitCancellation()
+            }
+        }
+        val session = ControlSession(platform, transport = transport, scope = backgroundScope, timing = SessionTiming(writeIntervalMillis = 0))
+        runCurrent()
+        assertEquals(ConnectionState.Disconnected, session.state.value.connection)
+        granted = true
+        session.updatePlatformState(platform.copy(permission = PermissionState.GRANTED, transport = TransportAvailability.Available))
+        runCurrent()
+        assertEquals(id, assertIs<ConnectionState.Connected>(session.state.value.connection).deviceId)
+        assertTrue(session.release())
+        assertIs<OperationResult.Failure>(session.connect(id))
+        assertEquals(1, base.connectCalls)
+    }
 
     @Test
     fun targetedConnectSetsTargetIdentitySynchronouslyAndEstablishesSession() = runTest {

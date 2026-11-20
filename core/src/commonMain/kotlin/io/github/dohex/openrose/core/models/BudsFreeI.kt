@@ -7,11 +7,11 @@ import io.github.dohex.openrose.core.EqualizerCapabilities
 import io.github.dohex.openrose.core.NoiseControlCapabilities
 import io.github.dohex.openrose.core.TouchControlCapabilities
 import io.github.dohex.openrose.core.protocol.BatteryLayout
+import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.GattProfile
 import io.github.dohex.openrose.core.protocol.ProtocolFamily
 import io.github.dohex.openrose.core.protocol.RsCommonInit
 import kotlinx.collections.immutable.persistentSetOf
-import kotlinx.collections.immutable.toPersistentSet
 
 internal val budsFreeI = ModelSpec(
     displayName = "BudsFree i",
@@ -44,7 +44,14 @@ internal val budsFreeI = ModelSpec(
     ),
     capabilities = {
         DeviceCapabilities(
-            readableFields = ProtocolFamily.RS_COMMON.readableFields.toPersistentSet(),
+            readableFields = rsReadings(
+                BatteryLayout.EARBUDS_ONLY,
+                DeviceField.TOUCH_KEYS,
+                DeviceField.TOUCH_ENABLED,
+                DeviceField.NOISE_MODE,
+                DeviceField.EQ,
+                DeviceField.AUDIO_MODE,
+            ),
             writableSettings = persistentSetOf(
                 DeviceSetting.GAME_MODE,
                 DeviceSetting.TOUCH_BINDING,

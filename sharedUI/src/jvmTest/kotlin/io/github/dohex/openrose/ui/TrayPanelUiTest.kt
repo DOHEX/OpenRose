@@ -15,6 +15,7 @@ import io.github.dohex.openrose.core.protocol.FieldReading
 import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.dohex.openrose.core.protocol.ModelProfile
 import io.github.dohex.openrose.core.transport.DeviceId
+import io.github.dohex.openrose.ui.model.WindowDestination
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.persistentMapOf
 import kotlinx.collections.immutable.toPersistentList
@@ -103,7 +104,7 @@ class TrayPanelUiTest {
                 panel.render()
                 assertFalse(panel.hasText("重新连接"), "nothing to reconnect in $style")
                 panel.clickText("添加耳机")
-                assertEquals(1L, panel.model.homeNavigationRequests.value, "showHeadphones in $style")
+                assertEquals(WindowDestination.ADD_DEVICE, panel.destinations.single(), "opens the adding flow in $style")
                 assertEquals(1, panel.openAppCount, "main window opened in $style")
             }
         }
@@ -117,7 +118,7 @@ class TrayPanelUiTest {
                     panel.render()
                     panel.clickText("打开 OpenRose")
                     assertEquals(1, panel.openAppCount, "open app in $style")
-                    assertEquals(0L, panel.model.homeNavigationRequests.value, "plain open does not navigate in $style")
+                    assertEquals(null, panel.destinations.single(), "plain open does not navigate in $style")
                 }
             }
         }
@@ -328,12 +329,13 @@ class TrayPanelUiTest {
             mutableStateOf(UiSettings(interfaceStyle = style, appearance = Appearance.LIGHT)),
         )
         val panel = TrayHarness(this, model)
-        setContent { TrayPanel(model, selection, onOpenApp = { panel.openAppCount++ }) }
+        setContent { TrayPanel(model, selection, onOpenApp = { panel.destinations += it }) }
         block(panel)
     }
 
     private class TrayHarness(scene: OpenRoseUiTestScene, val model: FakeOpenRoseModel) : OpenRoseUiTestHarness(scene) {
-        var openAppCount = 0
+        val destinations = mutableListOf<WindowDestination?>()
+        val openAppCount get() = destinations.size
     }
 
     private class AppHarness(

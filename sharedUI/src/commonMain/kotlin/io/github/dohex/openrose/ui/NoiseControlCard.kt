@@ -324,18 +324,6 @@ internal fun noiseModeOrder(mode: String): Int = when (mode) {
     else -> 6
 }
 
-internal fun confirmedSettingStatus(field: DeviceField, device: DeviceState): String = when (val reading = device.fields[field]) {
-    is FieldReading.Known -> "设备已确认：${displayFieldValue(field, reading.value, device.profile)}"
-    is FieldReading.Unknown -> "当前状态：未知"
-    is FieldReading.NotProvided -> "当前状态：设备未提供"
-    FieldReading.Loading, null -> "当前状态：尚未读取"
-}
-
-@Composable
-internal fun ConfirmedSettingLabel(label: String, field: DeviceField, device: DeviceState) {
-    AppInfoRow(label, confirmedSettingStatus(field, device))
-}
-
 /** Detailed request and session history is shown only on the diagnostics page. */
 @Composable
 internal fun SettingOperationsCard(state: ControlState) {

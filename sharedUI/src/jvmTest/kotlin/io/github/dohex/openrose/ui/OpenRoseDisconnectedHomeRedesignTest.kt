@@ -15,6 +15,31 @@ import kotlin.test.assertTrue
 class OpenRoseDisconnectedHomeRedesignTest {
 
     @Test
+    fun dashboardUsesTheAvailableTransportAndGuidesDesktopAndCaselessUsers() {
+        val base = disconnectedAndroidState()
+        val linux = base.copy(platform = base.platform.copy(hostPlatform = HostPlatform.LINUX))
+        val paired = DeviceCandidate(DeviceId("headset"), "Jasmine", null, ModelProfile.JASMINE_RS_V2, "")
+        for (style in InterfaceStyle.entries) {
+            withHomeHarness(linux, style) { harness ->
+                harness.render()
+                assertTrue(harness.hasText("打开耳机并靠近电脑，必要时让耳机进入配对模式。"))
+            }
+            withHomeHarness(linux.copy(bondedDevices = persistentListOf(paired)), style) { harness ->
+                harness.render()
+                assertTrue(harness.hasText("未连接 · 系统蓝牙连上耳机后将自动连接"))
+            }
+            withHomeHarness(
+                base.copy(platform = base.platform.copy(transport = TransportAvailability.Disabled), bondedDevices = persistentListOf(paired)),
+                style,
+            ) { harness ->
+                harness.render()
+                assertTrue(harness.hasText("系统蓝牙已关闭"))
+                assertFalse(harness.hasText("连接"))
+            }
+        }
+    }
+
+    @Test
     fun disconnectedHomeShowsPairedDeviceCardWithDirectConnect() {
         for (style in InterfaceStyle.entries) {
             val pairedDevice = DeviceCandidate(

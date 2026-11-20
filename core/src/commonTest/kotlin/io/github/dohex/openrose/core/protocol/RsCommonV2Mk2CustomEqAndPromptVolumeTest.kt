@@ -82,8 +82,8 @@ class RsCommonV2Mk2CustomEqAndPromptVolumeTest {
         // Bass boost stays on 2A 05 after the custom writes, and confirms only the boost slot.
         assertEquals("ff04032a050136aa", bass.writeFrames.single().hex())
         assertEquals("ff0502fa2a2aaa", bass.readback.bytes.hex())
-        assertEquals(mapOf(DeviceField.EQ_SLOT to FieldValue.Number(1)), bass.expectedValues)
-        assertEquals(setOf(DeviceField.EQ_SLOT), bass.readback.expectedFields)
+        assertEquals(mapOf(DeviceField.EQ to FieldValue.Text("custom_slot"), DeviceField.EQ_SLOT to FieldValue.Number(1)), bass.expectedValues)
+        assertEquals(setOf(DeviceField.EQ, DeviceField.EQ_SLOT), bass.readback.expectedFields)
     }
 
     @Test

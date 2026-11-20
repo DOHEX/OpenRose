@@ -37,6 +37,7 @@ import io.github.dohex.openrose.ui.PrimaryDeviceSelection
 import io.github.dohex.openrose.ui.interfaceBackgroundColor
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -98,7 +99,10 @@ fun main(args: Array<String>) {
             var window by remember { mutableStateOf<NucleusWindow?>(null) }
             var exiting by remember { mutableStateOf(false) }
 
+            var closingWindow by remember { mutableStateOf<Job?>(null) }
+
             fun showWindow() {
+                closingWindow?.cancel()
                 windowVisible = true
                 window?.run {
                     setMinimized(false)
@@ -109,6 +113,7 @@ fun main(args: Array<String>) {
 
             fun exit() {
                 if (exiting) return
+                closingWindow?.cancel()
                 exiting = true
                 uiScope.launch {
                     try {
@@ -162,11 +167,16 @@ fun main(args: Array<String>) {
                     icon = AppLogo.painter,
                     visible = windowVisible,
                     onCloseRequest = {
-                        // Hiding is safe only while the tray actually shows OpenRose; otherwise end the control connection.
-                        if (desktopSettings.backgroundControl && tray.refresh() == TrayAvailability.Available) {
-                            windowVisible = false
-                        } else {
+                        if (!desktopSettings.backgroundControl) {
                             exit()
+                        } else if (!exiting && closingWindow?.isActive != true) {
+                            closingWindow = uiScope.launch {
+                                if (tray.refresh() == TrayAvailability.Available && runtime.desktopSettings.value.backgroundControl) {
+                                    windowVisible = false
+                                } else {
+                                    exit()
+                                }
+                            }
                         }
                     },
                     state = rememberWindowState(width = 1180.dp, height = 820.dp),

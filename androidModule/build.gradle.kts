@@ -13,4 +13,7 @@ dependencies {
     implementation(projects.androidPlatform)
     implementation(libs.androidx.core)
     compileOnly(libs.libxposed.api)
+    testImplementation(kotlin("test-junit"))
+    testImplementation(libs.coroutines.test)
+    testImplementation(libs.robolectric)
 }

@@ -7,6 +7,7 @@ import io.github.dohex.openrose.core.DeviceSetting
 import io.github.dohex.openrose.core.EqualizerCapabilities
 import io.github.dohex.openrose.core.TouchControlCapabilities
 import io.github.dohex.openrose.core.protocol.BatteryLayout
+import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.GattProfile
 import io.github.dohex.openrose.core.protocol.ProtocolFamily
 import kotlinx.collections.immutable.persistentListOf
@@ -14,7 +15,12 @@ import kotlinx.collections.immutable.persistentSetOf
 import kotlinx.collections.immutable.toPersistentSet
 
 private val openFeelMk2Capabilities = DeviceCapabilities(
-    readableFields = ProtocolFamily.RS_COMMON_V2.readableFields.toPersistentSet(),
+    readableFields = rsReadings(
+        BatteryLayout.EARBUDS_AND_CASE, DeviceField.CASE_FLAG, DeviceField.TOUCH_KEYS, DeviceField.TOUCH_ENABLED,
+        DeviceField.EQ, DeviceField.EQ_SLOT, DeviceField.CUSTOM_EQ, DeviceField.GAIN,
+        DeviceField.HEARING_PROTECTION, DeviceField.AUDIO_MODE, DeviceField.MULTIPOINT, DeviceField.PROMPT_VOLUME,
+        DeviceField.FIND_STATE,
+    ),
     writableSettings = persistentSetOf(
         DeviceSetting.GAME_MODE,
         DeviceSetting.MULTIPOINT,

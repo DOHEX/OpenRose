@@ -123,7 +123,10 @@ fun main(args: Array<String>) = nucleusApplication(args = args, backend = Nucleu
             TrayPanel(
                 model = model,
                 selection = selection,
-                onOpenApp = { preview.isMinimized = false },
+                onOpenApp = { destination ->
+                    destination?.let(model.navigation::open)
+                    preview.isMinimized = false
+                },
                 onContentHeight = { trayState.size = DpSize(trayPanelSize.width, it) },
             )
         }

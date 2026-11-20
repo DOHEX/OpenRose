@@ -37,6 +37,7 @@ import io.github.dohex.openrose.ui.TrayIcons
 import io.github.dohex.openrose.ui.TrayPanel
 import io.github.dohex.openrose.ui.TraySummary
 import io.github.dohex.openrose.ui.model.OpenRoseModel
+import io.github.dohex.openrose.ui.model.WindowDestination
 import io.github.dohex.openrose.ui.traySummary
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
@@ -96,6 +97,11 @@ internal fun NucleusApplicationScope.DesktopTray(
     var started by remember { mutableStateOf(false) }
     val tooltip = if (started) listOfNotNull(summary.title, summary.battery).joinToString(" · ") else "OpenRose"
 
+    fun openApp(destination: WindowDestination?) {
+        destination?.let(model.navigation::open)
+        onOpenApp()
+    }
+
     // Native menu callbacks arrive off the UI thread; every action runs on it.
     fun entries(showPanel: () -> Unit) = trayMenuEntries(summary).map { entry ->
         when (entry) {
@@ -103,16 +109,9 @@ internal fun NucleusApplicationScope.DesktopTray(
                 uiScope.launch {
                     when (entry.target) {
                         TrayMenuTarget.RECONNECT -> summary.reconnectTarget?.let(model::connect)
-
-                        TrayMenuTarget.ADD_DEVICE -> {
-                            model.showHeadphones()
-                            onOpenApp()
-                        }
-
+                        TrayMenuTarget.ADD_DEVICE -> openApp(WindowDestination.ADD_DEVICE)
                         TrayMenuTarget.PANEL -> showPanel()
-
                         TrayMenuTarget.OPEN_APP -> onOpenApp()
-
                         TrayMenuTarget.EXIT -> onExit()
                     }
                 }
@@ -143,7 +142,7 @@ internal fun NucleusApplicationScope.DesktopTray(
                     selection,
                     onOpenApp = {
                         trayState.hide()
-                        onOpenApp()
+                        openApp(it)
                     },
                     onContentHeight = { trayState.setWindowSize(DpSize(trayPanelSize.width, it)) },
                 )
@@ -167,7 +166,7 @@ internal fun NucleusApplicationScope.DesktopTray(
                     onDismiss = { panelOpen = false },
                     onOpenApp = {
                         panelOpen = false
-                        onOpenApp()
+                        openApp(it)
                     },
                 )
             }
@@ -189,7 +188,7 @@ private fun NucleusApplicationScope.TrayPanelWindow(
     model: OpenRoseModel,
     selection: PrimaryDeviceSelection,
     onDismiss: () -> Unit,
-    onOpenApp: () -> Unit,
+    onOpenApp: (WindowDestination?) -> Unit,
 ) {
     val windowState = rememberWindowState(size = trayPanelSize)
     DecoratedWindow(

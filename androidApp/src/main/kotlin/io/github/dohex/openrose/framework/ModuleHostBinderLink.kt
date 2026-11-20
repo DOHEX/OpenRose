@@ -17,7 +17,6 @@ import io.github.dohex.openrose.androidintegration.HostFrame
 import io.github.dohex.openrose.androidintegration.HostLease
 import io.github.dohex.openrose.androidintegration.HostLinkException
 import io.github.dohex.openrose.androidintegration.HostOpenResult
-import io.github.dohex.openrose.androidintegration.HostSettings
 import io.github.dohex.openrose.androidintegration.HostStatus
 import io.github.dohex.openrose.androidintegration.LinkEnd
 import io.github.dohex.openrose.androidintegration.LinkOpenResult
@@ -35,14 +34,14 @@ import io.github.dohex.openrose.androidintegration.wire.render
 import io.github.dohex.openrose.bridge.BridgeBundles
 import io.github.dohex.openrose.bridge.IControlBridge
 import io.github.dohex.openrose.bridge.IControlFrames
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Deferred
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
-import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Binder binding from the application to the module host in `com.android.bluetooth`. Discovery binds an
@@ -76,40 +75,62 @@ class ModuleHostBinderLink(
                 connected.complete(null)
             }
         }
-        val bound = try {
-            context.bindService(intent, binding, Context.BIND_AUTO_CREATE)
-        } catch (failure: SecurityException) {
-            context.unbindService(binding)
-            return LinkOpenResult.Failed(OwnerFailureStage.DISCOVERY, "系统不允许绑定宿主服务：${failure.message}")
+        val released = AtomicBoolean(false)
+        fun unbind() {
+            if (released.compareAndSet(false, true)) runCatching { context.unbindService(binding) }
         }
-        if (!bound) {
-            runCatching { context.unbindService(binding) }
-            return LinkOpenResult.Failed(
-                OwnerFailureStage.DISCOVERY,
-                "无法绑定模块宿主服务（模块未启用、作用域未包含 ${BridgeWire.TARGET_PACKAGE}，或服务不可达）",
-            )
+
+        var handedOff = false
+        try {
+            val opened = try {
+                if (context.bindService(intent, binding, Context.BIND_AUTO_CREATE)) {
+                    awaitAuthorization(connected, ended, ::unbind)
+                } else {
+                    LinkOpenResult.Failed(
+                        OwnerFailureStage.DISCOVERY,
+                        "无法绑定模块宿主服务（模块未启用、作用域未包含 ${BridgeWire.TARGET_PACKAGE}，或服务不可达）",
+                    )
+                }
+            } catch (failure: SecurityException) {
+                LinkOpenResult.Failed(OwnerFailureStage.DISCOVERY, "系统不允许绑定宿主服务：${failure.message}")
+            }
+            handedOff = opened is LinkOpenResult.Open
+            return opened
+        } finally {
+            if (!handedOff) unbind()
         }
+    }
+
+    private suspend fun awaitAuthorization(
+        connected: Deferred<IBinder?>,
+        ended: CompletableDeferred<LinkEnd>,
+        unbind: () -> Unit,
+    ): LinkOpenResult {
         val binder = withTimeoutOrNull(bindTimeoutMillis) { connected.await() }
-        if (binder == null) {
-            runCatching { context.unbindService(binding) }
-            return LinkOpenResult.Failed(OwnerFailureStage.DISCOVERY, "宿主没有提供控制端点")
-        }
+            ?: return LinkOpenResult.Failed(OwnerFailureStage.DISCOVERY, "宿主没有提供控制端点")
+        return withTimeoutOrNull(bindTimeoutMillis) {
+            calls.run(onAbandoned = { (it as? LinkOpenResult.Open)?.connection?.close() }) {
+                authorize(binder, ended, unbind)
+            }
+        } ?: LinkOpenResult.Failed(OwnerFailureStage.CONNECTION, "宿主未在期限内响应")
+    }
+
+    private fun authorize(binder: IBinder, ended: CompletableDeferred<LinkEnd>, unbind: () -> Unit): LinkOpenResult {
         val bridge = IControlBridge.Stub.asInterface(binder)
         val token = Binder()
         val opened = try {
-            withContext(Dispatchers.IO) { bridge.open(BridgeBundles.hello(null, null), token) }
-        } catch (failure: Exception) {
-            runCatching { context.unbindService(binding) }
+            bridge.open(BridgeBundles.hello(null, null), token)
+        } catch (failure: RemoteException) {
             return LinkOpenResult.Failed(OwnerFailureStage.CONNECTION, "与宿主通信失败：${failure.javaClass.simpleName}")
+        } catch (failure: SecurityException) {
+            return LinkOpenResult.Failed(OwnerFailureStage.AUTHORIZATION, "宿主拒绝了此调用者：${failure.message}")
         }
         val status = opened.getString(BridgeWire.STATUS)
         if (status == BridgeWire.STATUS_UNAUTHORIZED) {
-            runCatching { context.unbindService(binding) }
             return LinkOpenResult.Failed(OwnerFailureStage.AUTHORIZATION, opened.getString(BridgeWire.MESSAGE) ?: "宿主拒绝了此调用者")
         }
         if (status == BridgeWire.STATUS_UNAVAILABLE) {
             // A reloaded or stopped host instance still answers on its old Binder; rebind to find the new one.
-            runCatching { context.unbindService(binding) }
             return LinkOpenResult.Failed(OwnerFailureStage.CONNECTION, opened.getString(BridgeWire.MESSAGE) ?: "宿主暂不可用，等待重新发现")
         }
         val result = try {
@@ -122,7 +143,6 @@ class ModuleHostBinderLink(
             null
         }
         if (result !is HostOpenResult.Opened) {
-            runCatching { context.unbindService(binding) }
             val reason = (result as? HostOpenResult.Refused)?.message ?: "宿主返回了无法识别的授权结果（$status）"
             return LinkOpenResult.Failed(OwnerFailureStage.AUTHORIZATION, reason)
         }
@@ -130,18 +150,16 @@ class ModuleHostBinderLink(
         try {
             binder.linkToDeath(death, 0)
         } catch (_: RemoteException) {
-            runCatching { context.unbindService(binding) }
             return LinkOpenResult.Failed(OwnerFailureStage.CONNECTION, "宿主进程已不存在")
         }
-        return LinkOpenResult.Open(BinderConnection(context, bridge, binder, token, binding, death, result.lease, result.status, ended))
+        return LinkOpenResult.Open(BinderConnection(bridge, binder, token, unbind, death, result.lease, result.status, ended))
     }
 
     private class BinderConnection(
-        private val context: Context,
         private val bridge: IControlBridge,
         private val binder: IBinder,
         @Suppress("unused") private val token: IBinder,
-        private val binding: ServiceConnection,
+        private val unbind: () -> Unit,
         private val death: IBinder.DeathRecipient,
         private val lease: HostLease,
         override val initialStatus: HostStatus,
@@ -157,7 +175,7 @@ class ModuleHostBinderLink(
 
         private suspend fun <T> call(block: () -> Bundle, decode: (Wire) -> T): T {
             val reply = try {
-                withContext(Dispatchers.IO) { block() }
+                calls.run(call = block)
             } catch (failure: DeadObjectException) {
                 throw HostLinkException("宿主进程已结束", failure)
             } catch (failure: RemoteException) {
@@ -187,8 +205,8 @@ class ModuleHostBinderLink(
             HostWire::decodeReleaseResult,
         )
 
-        override suspend fun acquire(request: SwitchRequest, settings: HostSettings): AcquireResult = call(
-            { bridge.acquire(request(HostWire.encodeAcquire(request, settings))) },
+        override suspend fun acquire(request: SwitchRequest): AcquireResult = call(
+            { bridge.acquire(request(HostWire.encode(request))) },
             HostWire::decodeAcquireResult,
         )
 
@@ -205,7 +223,9 @@ class ModuleHostBinderLink(
                 }
             }
             val reply = try {
-                withContext(Dispatchers.IO) { bridge.watchFrames(request(HostWire.encode(generation)), receiver) }
+                calls.run { bridge.watchFrames(request(HostWire.encode(generation)), receiver) }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
             } catch (failure: Exception) {
                 this@callbackFlow.close(HostLinkException("无法订阅宿主状态", failure))
                 null
@@ -219,7 +239,12 @@ class ModuleHostBinderLink(
         override fun close() {
             runCatching { bridge.close(lease.id) }
             runCatching { binder.unlinkToDeath(death, 0) }
-            runCatching { context.unbindService(binding) }
+            unbind()
         }
+    }
+
+    private companion object {
+        // Commands, discovery and probe calls can overlap. Retries share these slots across all bindings.
+        val calls = BinderCalls(4)
     }
 }

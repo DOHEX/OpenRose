@@ -25,14 +25,13 @@ import io.github.dohex.openrose.core.ConnectionPhase
 import io.github.dohex.openrose.core.ConnectionState
 import io.github.dohex.openrose.core.ControlState
 import io.github.dohex.openrose.core.DeviceSetting
-import io.github.dohex.openrose.core.PermissionState
-import io.github.dohex.openrose.core.PlatformState
 import io.github.dohex.openrose.core.TransportAvailability
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.dohex.openrose.core.protocol.ModelProfile
 import io.github.dohex.openrose.core.transport.DeviceId
 import io.github.dohex.openrose.ui.model.OpenRoseModel
+import io.github.dohex.openrose.ui.model.WindowDestination
 import io.github.dohex.openrose.ui.resources.Res
 import io.github.dohex.openrose.ui.resources.app_icon
 import io.github.dohex.openrose.ui.resources.msr_headphones
@@ -55,13 +54,17 @@ data class TraySummary(
     val reconnectTarget: DeviceId?,
     /** There is no bonded ROSE device and no connection target. */
     val addDevice: Boolean,
+    /** Reason or guidance to display below the primary device while disconnected. */
+    val connectionHint: String?,
 )
 
 fun traySummary(state: ControlState, selection: PrimaryDeviceSelection): TraySummary {
     val ready = state.activeDevice()?.takeIf { state.isReady(it) }
     val connecting = ready == null && state.isConnectingForTray()
     val primary = selection.primary(state)
-    val unavailable = state.platform.transport as? TransportAvailability.Unavailable
+    val blockReason = state.platform.connectionBlockReason
+    val showPlatformReason = state.connectionTarget == null && !state.platform.bluetoothPermissionRequired &&
+        state.platform.transport is TransportAvailability.Unavailable
 
     val title = when {
         ready != null -> "${state.trayDeviceName(ready.deviceId, ready.profile)} · 已连接"
@@ -72,8 +75,7 @@ fun traySummary(state: ControlState, selection: PrimaryDeviceSelection): TraySum
             "${state.trayDeviceName(deviceId, profile)} · 正在连接…"
         }
 
-        state.connectionTarget == null && state.platform.transportUnavailableForHome() ->
-            checkNotNull(unavailable).reason
+        showPlatformReason -> requireNotNull(blockReason)
 
         primary == null -> "未添加耳机"
 
@@ -102,13 +104,16 @@ fun traySummary(state: ControlState, selection: PrimaryDeviceSelection): TraySum
         title = title,
         battery = battery,
         noiseModes = noiseModes,
-        reconnectTarget = if (ready == null && !connecting && state.platform.transportUsable()) primary?.deviceId else null,
+        reconnectTarget = if (ready == null && !connecting && blockReason == null) primary?.deviceId else null,
         addDevice = state.bondedRoseDevices().isEmpty() && state.connectionTarget == null,
+        connectionHint = when {
+            ready != null || connecting || showPlatformReason -> null
+            blockReason != null -> blockReason
+            primary != null -> primary.profile.reconnectHint(state.lastError != null)
+            else -> null
+        },
     )
 }
-
-private fun PlatformState.transportUsable(): Boolean = permission in setOf(PermissionState.GRANTED, PermissionState.NOT_REQUIRED) &&
-    transport !is TransportAvailability.Unavailable
 
 /** A connection attempt is under way, including a session that is not yet ready for control. */
 internal fun ControlState.isConnectingForTray(): Boolean = when (val current = connection) {
@@ -148,7 +153,7 @@ object TrayIcons {
 fun TrayPanel(
     model: OpenRoseModel,
     selection: PrimaryDeviceSelection,
-    onOpenApp: () -> Unit,
+    onOpenApp: (WindowDestination?) -> Unit,
     modifier: Modifier = Modifier,
     onContentHeight: (Dp) -> Unit = {},
 ) {
@@ -187,7 +192,7 @@ private fun TrayPanelContent(
     model: OpenRoseModel,
     state: ControlState,
     selection: PrimaryDeviceSelection,
-    onOpenApp: () -> Unit,
+    onOpenApp: (WindowDestination?) -> Unit,
 ) {
     val summary = traySummary(state, selection)
     val device = state.activeDevice()?.takeIf { summary.connected }
@@ -206,10 +211,6 @@ private fun TrayPanelContent(
 internal fun TrayStatusCard(state: ControlState, summary: TraySummary) {
     val device = state.activeDevice()?.takeIf { summary.connected }
     val connecting = !summary.connected && state.isConnectingForTray()
-    val permissionRequired = state.platform.permission != PermissionState.GRANTED &&
-        state.platform.permission != PermissionState.NOT_REQUIRED
-    val unavailableTransport = state.platform.transport as? TransportAvailability.Unavailable
-
     AppDashboardCard {
         AppText(summary.title, role = AppTextRole.Title)
         when {
@@ -225,21 +226,11 @@ internal fun TrayStatusCard(state: ControlState, summary: TraySummary) {
                 )
             }
 
-            summary.connected || summary.addDevice -> Unit
-
-            permissionRequired -> AppText("需要蓝牙权限才能连接这副耳机", role = AppTextRole.Summary)
-
-            // Without a connection target the title already carries the reason.
-            unavailableTransport != null ->
-                if (state.connectionTarget != null) AppText(unavailableTransport.reason, role = AppTextRole.Summary)
-
-            state.lastError != null -> AppText(
-                "连接未成功 · 请确认耳机已开盖并在附近",
+            summary.connectionHint != null -> AppText(
+                summary.connectionHint,
                 role = AppTextRole.Summary,
-                color = appColor(AppColorRole.Error),
+                color = if (state.lastError != null && state.platform.connectionBlockReason == null) appColor(AppColorRole.Error) else null,
             )
-
-            else -> AppText("未连接 · 耳机开盖后将自动连接", role = AppTextRole.Summary)
         }
         if (device != null) {
             BatteryStrip(device, initializing = false)
@@ -249,7 +240,7 @@ internal fun TrayStatusCard(state: ControlState, summary: TraySummary) {
 
 /** 取消连接, 重新连接 and 添加耳机 as the state calls for, then 打开 OpenRose. */
 @Composable
-internal fun TrayActions(model: OpenRoseModel, state: ControlState, summary: TraySummary, onOpenApp: () -> Unit) {
+internal fun TrayActions(model: OpenRoseModel, state: ControlState, summary: TraySummary, onOpenApp: (WindowDestination?) -> Unit) {
     val connecting = !summary.connected && state.isConnectingForTray()
     val inset = if (LocalInterfaceStyle.current == InterfaceStyle.MATERIAL3) 16.dp else 12.dp
     Column(
@@ -265,15 +256,12 @@ internal fun TrayActions(model: OpenRoseModel, state: ControlState, summary: Tra
         if (summary.addDevice) {
             AppButton(
                 "添加耳机",
-                {
-                    model.showHeadphones()
-                    onOpenApp()
-                },
+                { onOpenApp(WindowDestination.ADD_DEVICE) },
                 kind = AppButtonKind.Primary,
                 modifier = Modifier.fillMaxWidth(),
             )
         }
-        AppButton("打开 OpenRose", onOpenApp, kind = AppButtonKind.Secondary, modifier = Modifier.fillMaxWidth())
+        AppButton("打开 OpenRose", { onOpenApp(null) }, kind = AppButtonKind.Secondary, modifier = Modifier.fillMaxWidth())
     }
 }
 

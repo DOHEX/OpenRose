@@ -13,7 +13,7 @@ On HyperOS, OpenRose can run as an Xposed module and bring the earphones into th
 - Headset circulation (experimental): move the earphones from one HyperOS audio source device to another through Fusion Device Center.
 
 :::caution[Verification status]
-Only the Additional Settings redirect has been verified on real hardware (EarFree i5 with a Xiaomi 14); the rest has only offline tests.
+With an EarFree i5 and Xiaomi 14, Additional Settings opened OpenRose. On HyperOS 4.0.0.27, the focus card stayed visible with its island hidden. In module mode, the connection prompt and status notification appeared as a single battery island. Putting an earbud back in the case, switching audio between two devices, and HyperOS 3 still await hardware verification.
 :::
 
 ## Requirements
@@ -48,6 +48,12 @@ Choose the control way (控制方式) on the Settings page:
 | Module control (模块控制) | The system Bluetooth process | Works from the first unlock after boot; OpenRose does not need to be open |
 
 The choice is only an intent: whether the module is ready and whether the control connection is open are shown separately on the Status page.
+
+When switching from module to ordinary control, OpenRose saves your choice and waits for the module to release the connection. If Status shows that release is pending, the app keeps retrying and takes over when release is confirmed. When switching to module control, OpenRose releases the ordinary control connection before saving the new choice.
+
+## Persistent battery island and event prompts
+
+In module mode, turn on focus notifications and the persistent battery island to keep battery levels visible in the status bar. Clear the display timings to keep that readout without connection or in-case prompts. To see only event prompts, turn off the persistent battery island and select the events you want.
 
 ## Focus notification tap target
 

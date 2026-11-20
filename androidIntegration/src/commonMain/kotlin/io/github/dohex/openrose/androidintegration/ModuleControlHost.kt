@@ -74,15 +74,20 @@ class ModuleControlHost(
         val job: Job,
         val runtime: SystemEntryRuntime,
         val ended: CompletableDeferred<Unit> = CompletableDeferred(),
-    )
+    ) {
+        val commands = MutableStateFlow<Job>(SupervisorJob(job))
+        var releasePending = false
+    }
 
-    private class Lease(val id: String, val role: ClientRole, val caller: CallerIdentity)
+    private class Lease(val id: String, val role: ClientRole, val caller: CallerIdentity, val releaseEpoch: Long)
 
     private val hostContext = parentScope.coroutineContext
     private val ownership = Mutex()
     private val owner = MutableStateFlow<Owner?>(null)
     private val leases = MutableStateFlow<Map<String, Lease>>(emptyMap())
+    private var readConfiguration: () -> HostConfiguration = { HostConfiguration() }
     private var configuration = HostConfiguration()
+    private val releaseEpoch = MutableStateFlow(0L)
     private var platform = PlatformState(PermissionState.NOT_REQUIRED)
     private var held: String? = null
     private var stopped = false
@@ -100,9 +105,16 @@ class ModuleControlHost(
     }
 
     /** Applies persisted user intent. The selected way alone decides whether an owner exists. */
-    suspend fun configure(next: HostConfiguration) = ownership.withLock {
-        configuration = next
+    suspend fun configure(read: () -> HostConfiguration) = ownership.withLock {
+        readConfiguration = read
+        reloadConfiguration()
         reconcile()
+    }
+
+    private fun reloadConfiguration() {
+        val previous = configuration.settings.integration.controlWay
+        configuration = readConfiguration()
+        if (previous == ControlWay.ORDINARY && configuration.settings.integration.controlWay == ControlWay.MODULE) held = null
     }
 
     /** Host-side platform facts (adapter power, permissions) the owner's runtime should see. */
@@ -144,7 +156,7 @@ class ModuleControlHost(
                 refused = true
                 current
             } else {
-                current + (id to Lease(id, role, caller))
+                current + (id to Lease(id, role, caller, releaseEpoch.value))
             }
         }
         if (refused) return HostOpenResult.Refused(HostRejection.INVALID_REQUEST, "控制宿主连接数已满")
@@ -170,11 +182,11 @@ class ModuleControlHost(
         if (command is HostCommand.ClaimPrompt && !lease.role.presents(active.runtime.settings.islandMode)) {
             return HostCallResult.Rejected(HostRejection.FORBIDDEN, "该系统入口不拥有当前提示策略")
         }
+        val commands = active.commands.value
         return try {
-            // Running under the owner's job lets a release cancel and join this very command first.
-            withContext(active.job) { dispatch(active.runtime, systemRouted(lease.role, active.runtime, command)) }
+            withContext(commands) { dispatch(active.runtime, systemRouted(lease.role, active.runtime, command)) }
         } catch (e: CancellationException) {
-            if (active.job.isCancelled) HostCallResult.Rejected(HostRejection.NO_OWNER, "控制所有者已释放") else throw e
+            if (commands.isCancelled) HostCallResult.Rejected(HostRejection.NO_OWNER, "控制所有者已释放") else throw e
         }
     }
 
@@ -295,15 +307,14 @@ class ModuleControlHost(
                     held = null
                     return@withLock ReleaseResult.Refused(HostRejection.RELEASE_FAILED, "无法确认控制连接已关闭", status.value)
                 }
-                publishStatus()
+                confirmRelease(request.id)
                 ReleaseResult.Released(ReleaseReceipt(request.id, incarnation, current.generation))
             } else {
                 if (named != null && named.incarnation == incarnation && named != lastGeneration) {
                     return@withLock ReleaseResult.Refused(HostRejection.STALE_GENERATION, "请求引用的所有者代际未知", status.value)
                 }
                 // Hold the release against a lagging selection until a newer explicit acquire.
-                held = request.id
-                publishStatus()
+                confirmRelease(request.id)
                 ReleaseResult.Released(
                     ReleaseReceipt(
                         request.id,
@@ -316,29 +327,29 @@ class ModuleControlHost(
         }
     }
 
-    /** Establishes the module owner for a switch to [SwitchRequest.to] = MODULE with the user's settings. */
-    suspend fun acquire(
-        caller: CallerIdentity,
-        leaseId: String,
-        request: SwitchRequest,
-        settings: HostSettings,
-    ): AcquireResult {
+    private fun confirmRelease(requestId: String) {
+        configuration = readConfiguration()
+        held = requestId
+        releaseEpoch.value++
+        publishStatus()
+    }
+
+    /** A release receipt fences off acquires already in transit on every earlier application lease. */
+    suspend fun acquire(caller: CallerIdentity, leaseId: String, request: SwitchRequest): AcquireResult = ownership.withLock {
         val lease = leaseFor(caller, leaseId)
-            ?: return AcquireResult.Refused(HostRejection.INVALID_LEASE, "控制宿主授权无效或已过期")
-        if (lease.role != ClientRole.APP) return AcquireResult.Refused(HostRejection.FORBIDDEN, "只有 OpenRose 应用可以请求交接")
-        if (request.to != ControlWay.MODULE) return AcquireResult.Refused(HostRejection.INVALID_REQUEST, "该请求不是切换到模块控制")
-        return ownership.withLock {
-            if (!configuration.userUnlocked) {
-                return@withLock AcquireResult.Refused(HostRejection.INVALID_REQUEST, "用户尚未解锁，模块控制不会启动")
-            }
-            held = null
-            configuration = configuration.copy(
-                settings = settings.copy(integration = settings.integration.copy(controlWay = ControlWay.MODULE)),
-            )
-            reconcile()
-            owner.value?.let { AcquireResult.Acquired(it.generation, it.holder) }
-                ?: AcquireResult.Refused(HostRejection.INVALID_REQUEST, "模块控制未能启动")
+        if (lease == null || lease.releaseEpoch != releaseEpoch.value) {
+            return@withLock AcquireResult.Refused(HostRejection.INVALID_LEASE, "交接授权已失效，请重新发现宿主")
         }
+        if (lease.role != ClientRole.APP) return@withLock AcquireResult.Refused(HostRejection.FORBIDDEN, "只有 OpenRose 应用可以请求交接")
+        if (request.to != ControlWay.MODULE) return@withLock AcquireResult.Refused(HostRejection.INVALID_REQUEST, "该请求不是切换到模块控制")
+        reloadConfiguration()
+        if (!configuration.userUnlocked || configuration.settings.integration.controlWay != ControlWay.MODULE) {
+            return@withLock AcquireResult.Refused(HostRejection.INVALID_REQUEST, "用户尚未解锁或未保存模块控制")
+        }
+        held = null
+        reconcile()
+        owner.value?.let { AcquireResult.Acquired(it.generation, it.holder) }
+            ?: AcquireResult.Refused(HostRejection.INVALID_REQUEST, "模块控制未能启动")
     }
 
     private sealed interface OwnerCheck {
@@ -410,7 +421,7 @@ class ModuleControlHost(
     /** Caller holds [ownership]. */
     private suspend fun reconcile() {
         // An owner whose close was refused earlier is closed again before anything else is decided.
-        owner.value?.takeIf { it.job.isCancelled }?.let {
+        owner.value?.takeIf { it.releasePending }?.let {
             if (!stop(it)) {
                 publishStatus()
                 return
@@ -451,12 +462,17 @@ class ModuleControlHost(
     }
 
     /**
-     * Caller holds [ownership]. Cancels and joins everything the owner started (including commands in
-     * flight), then closes the connection; only a closed connection counts as released.
+     * Stop in-flight commands before releasing. Keep the runtime and its observers alive on a refused close
+     * so the same owner generation can still serve requests and retry its transport handle.
      */
     private suspend fun stop(current: Owner): Boolean {
+        current.commands.value.cancelAndJoin()
+        if (!current.runtime.release()) {
+            current.releasePending = true
+            current.commands.value = SupervisorJob(current.job)
+            return false
+        }
         current.job.cancelAndJoin()
-        if (!current.runtime.disconnect()) return false
         lastGeneration = current.generation
         owner.value = null
         current.ended.complete(Unit)

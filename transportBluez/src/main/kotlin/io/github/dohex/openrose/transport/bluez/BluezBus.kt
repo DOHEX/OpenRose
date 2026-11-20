@@ -6,13 +6,13 @@ typealias BluezObjects = Map<String, Map<String, Map<String, Any?>>>
 
 internal sealed interface BluezSignal {
     data class Changed(val path: String, val interfaceName: String, val values: Map<String, Any?>) : BluezSignal
-    data class Added(val path: String, val interfaces: Set<String>) : BluezSignal
+    data class Added(val path: String, val interfaces: Map<String, Map<String, Any?>>) : BluezSignal
     data class Removed(val path: String, val interfaces: Set<String>) : BluezSignal
     data class Owner(val present: Boolean) : BluezSignal
 }
 
 internal interface BluezBus {
-    val events: Flow<BluezSignal>
+    fun signals(accepts: (BluezSignal) -> Boolean): Flow<BluezSignal>
     suspend fun objects(): BluezObjects
     suspend fun connect(path: String)
     suspend fun startNotify(path: String)

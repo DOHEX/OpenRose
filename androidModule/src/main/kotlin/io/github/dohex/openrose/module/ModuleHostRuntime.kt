@@ -168,11 +168,11 @@ internal class ModuleHostRuntime(
     private fun reconfigure(appContext: Context, hostScope: CoroutineScope, created: ModuleControlHost) {
         hostScope.launch {
             created.updatePlatform(appContext.readPlatformState(permissionRequested = true))
-            // Read after the last suspension so a later reconfiguration always carries the later facts.
-            val unlocked = appContext.getSystemService(UserManager::class.java).isUserUnlocked
+            val user = appContext.getSystemService(UserManager::class.java)
             val prefs = openConfig()
-            created.configure(HostConfiguration(unlocked, readHostSettings(prefs)))
-            if (prefs == null || !unlocked) {
+            // Acquires and release receipts use the same persisted source while holding the ownership lock.
+            created.configure { HostConfiguration(user.isUserUnlocked, readHostSettings(prefs)) }
+            if (prefs == null || !user.isUserUnlocked) {
                 delay(CONFIG_RETRY_MILLIS)
                 reconfigure(appContext, hostScope, created)
             }

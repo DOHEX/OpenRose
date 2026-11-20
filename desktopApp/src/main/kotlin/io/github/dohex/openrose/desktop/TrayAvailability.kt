@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.freedesktop.dbus.connections.impl.DBusConnection
 import org.freedesktop.dbus.connections.impl.DBusConnectionBuilder
 import org.freedesktop.dbus.interfaces.DBus
@@ -29,8 +30,8 @@ internal interface TrayMonitor : AutoCloseable {
     val nativeReady: Boolean
     val availability: StateFlow<TrayAvailability>
 
-    /** Re-reads the tray host synchronously, for decisions that cannot wait for the next event. */
-    fun refresh(): TrayAvailability
+    /** Checks whether hiding the window would leave a reachable tray icon. */
+    suspend fun refresh(): TrayAvailability
 
     /** The tray icon was handed to the native library; registration with the host follows. */
     fun trayStarted()
@@ -42,7 +43,7 @@ internal fun trayMonitor(hostIsLinux: Boolean): TrayMonitor = if (hostIsLinux) S
 private object ShellTrayMonitor : TrayMonitor {
     override val nativeReady = true
     override val availability: StateFlow<TrayAvailability> = MutableStateFlow(TrayAvailability.Available)
-    override fun refresh(): TrayAvailability = TrayAvailability.Available
+    override suspend fun refresh(): TrayAvailability = TrayAvailability.Available
     override fun trayStarted() = Unit
     override fun close() = Unit
 }
@@ -111,9 +112,8 @@ private class StatusNotifierTrayMonitor : TrayMonitor {
         }
     }
 
-    override fun refresh(): TrayAvailability {
-        if (connection.isFailure) return mutableAvailability.value
-        return evaluate().also { mutableAvailability.value = it }
+    override suspend fun refresh(): TrayAvailability = withContext(Dispatchers.IO) {
+        evaluate().also { mutableAvailability.value = it }
     }
 
     private fun evaluate(): TrayAvailability {

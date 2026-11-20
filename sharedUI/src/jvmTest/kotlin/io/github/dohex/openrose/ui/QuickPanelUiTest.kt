@@ -6,17 +6,21 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.geometry.Offset
 import io.github.dohex.openrose.core.ConnectionPhase
 import io.github.dohex.openrose.core.ConnectionState
+import io.github.dohex.openrose.core.ControlError
+import io.github.dohex.openrose.core.ControlErrorCode
 import io.github.dohex.openrose.core.ControlState
 import io.github.dohex.openrose.core.DeviceCandidate
 import io.github.dohex.openrose.core.DeviceSetting
 import io.github.dohex.openrose.core.SettingOperation
 import io.github.dohex.openrose.core.SettingStage
+import io.github.dohex.openrose.core.TransportAvailability
 import io.github.dohex.openrose.core.protocol.BatteryLayout
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.FieldReading
 import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.dohex.openrose.core.protocol.ModelProfile
 import io.github.dohex.openrose.core.transport.DeviceId
+import io.github.dohex.openrose.ui.model.WindowDestination
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.persistentMapOf
 import kotlinx.collections.immutable.toPersistentList
@@ -34,6 +38,28 @@ class QuickPanelUiTest {
         profile = ModelProfile.I5_ZT,
         manufacturerDataHex = "",
     )
+
+    @Test
+    fun panelOpensDiagnosticsForFailuresAndHidesReconnectWhileBluetoothIsOff() {
+        for (style in InterfaceStyle.entries) {
+            val failed = connectedI7State().copy(lastError = ControlError(ControlErrorCode.NOT_APPLIED, "写入失败"))
+            withQuickPanel(failed, style) { panel ->
+                panel.render()
+                panel.clickText("查看诊断")
+                assertEquals(WindowDestination.DIAGNOSTICS, panel.destinations.single())
+            }
+            val base = disconnectedAndroidState()
+            val disabled = base.copy(
+                bondedDevices = persistentListOf(bonded),
+                platform = base.platform.copy(transport = TransportAvailability.Disabled),
+            )
+            withQuickPanel(disabled, style) { panel ->
+                panel.render()
+                assertTrue(panel.hasText("系统蓝牙已关闭"))
+                assertFalse(panel.hasText("重新连接"))
+            }
+        }
+    }
 
     @Test
     fun equalizerChoiceWritesThePresetAndIsSelectedOnlyOnceTheHeadsetConfirms() {
@@ -183,7 +209,7 @@ class QuickPanelUiTest {
             withQuickPanel(disconnectedAndroidState(), style) { panel ->
                 panel.render()
                 panel.clickText("添加耳机")
-                assertEquals(1L, panel.model.homeNavigationRequests.value, "showHeadphones in $style")
+                assertEquals(WindowDestination.ADD_DEVICE, panel.destinations.single(), "opens the adding flow in $style")
                 assertEquals(1, panel.openAppCount, "open app in $style")
             }
         }
@@ -339,7 +365,7 @@ class QuickPanelUiTest {
                 model,
                 PrimaryDeviceSelection(),
                 dynamicColor = false,
-                onOpenApp = { panel.openAppCount++ },
+                onOpenApp = { panel.destinations += it },
                 onDismiss = { panel.dismissCount++ },
             )
         }
@@ -347,7 +373,8 @@ class QuickPanelUiTest {
     }
 
     private class QuickHarness(scene: OpenRoseUiTestScene, val model: FakeOpenRoseModel) : OpenRoseUiTestHarness(scene) {
-        var openAppCount = 0
+        val destinations = mutableListOf<WindowDestination?>()
+        val openAppCount get() = destinations.size
         var dismissCount = 0
     }
 }

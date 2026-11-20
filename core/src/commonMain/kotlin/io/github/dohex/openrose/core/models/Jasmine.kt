@@ -4,13 +4,22 @@ import io.github.dohex.openrose.core.DeviceCapabilities
 import io.github.dohex.openrose.core.DeviceSetting
 import io.github.dohex.openrose.core.TouchControlCapabilities
 import io.github.dohex.openrose.core.protocol.BatteryLayout
+import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.GattProfile
 import io.github.dohex.openrose.core.protocol.ProtocolFamily
 import kotlinx.collections.immutable.persistentSetOf
 import kotlinx.collections.immutable.toPersistentSet
 
 private val jasmineCapabilities = DeviceCapabilities(
-    readableFields = ProtocolFamily.RS_COMMON_V2.readableFields.toPersistentSet(),
+    readableFields = rsReadings(
+        BatteryLayout.EARBUDS_ONLY,
+        DeviceField.TOUCH_KEYS,
+        DeviceField.TOUCH_ENABLED,
+        DeviceField.MULTIPOINT,
+        DeviceField.PROMPT_VOLUME,
+        DeviceField.PROMPT_LANGUAGE,
+        DeviceField.FIND_STATE,
+    ),
     writableSettings = persistentSetOf(
         DeviceSetting.GAME_MODE,
         DeviceSetting.MULTIPOINT,

@@ -114,7 +114,11 @@ class ModuleControlHostTest {
             HostRejection.NO_OWNER,
             assertIs<HostCallResult.Rejected>(rig.host.execute(appIdentity, lease, first, HostCommand.StartScan)).rejection,
         )
-        val acquired = rig.host.acquire(appIdentity, lease, SwitchRequest("b", ControlWay.ORDINARY, ControlWay.MODULE), HostSettings())
+        val request = SwitchRequest("b", ControlWay.ORDINARY, ControlWay.MODULE)
+        // An already-dispatched acquire using this lease cannot undo the later release.
+        assertEquals(HostRejection.INVALID_LEASE, assertIs<AcquireResult.Refused>(rig.host.acquire(appIdentity, lease, request)).rejection)
+        val nextLease = assertIs<HostOpenResult.Opened>(rig.host.open(appIdentity)).lease.id
+        val acquired = rig.host.acquire(appIdentity, nextLease, request)
         val second = assertIs<AcquireResult.Acquired>(acquired).generation
 
         assertNotEquals(first, second)
@@ -192,7 +196,7 @@ class ModuleControlHostTest {
         rig.bootHost()
         assertIs<HostStatus.Inactive>(rig.host.status.value)
 
-        rig.host.configure(HostConfiguration(true, HostSettings(integration = IntegrationSettings(controlWay = ControlWay.MODULE))))
+        rig.host.configure { HostConfiguration(true, HostSettings(integration = IntegrationSettings(controlWay = ControlWay.MODULE))) }
         runCurrent()
         val generation = (rig.host.status.value as HostStatus.Active).generation
         val lease = (rig.host.open(appIdentity) as HostOpenResult.Opened).lease.id
@@ -200,7 +204,7 @@ class ModuleControlHostTest {
         runCurrent()
         assertEquals(listOf("module:open"), rig.headset.events)
 
-        rig.host.configure(HostConfiguration(true, HostSettings(integration = IntegrationSettings(controlWay = ControlWay.ORDINARY))))
+        rig.host.configure { HostConfiguration(true, HostSettings(integration = IntegrationSettings(controlWay = ControlWay.ORDINARY))) }
         runCurrent()
         assertEquals(listOf("module:open", "module:close"), rig.headset.events)
         assertIs<HostStatus.Inactive>(rig.host.status.value)

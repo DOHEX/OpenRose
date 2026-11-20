@@ -36,10 +36,6 @@ internal fun ControlState.activeDevice(): DeviceState? {
     val targetId = connectionTarget?.deviceId
     return device?.takeIf { connection.matches(it) && (targetId == null || targetId == it.deviceId) }
 }
-internal fun PlatformState.transportUnavailableForHome(): Boolean = permission in setOf(
-    PermissionState.GRANTED,
-    PermissionState.NOT_REQUIRED,
-) && transport is TransportAvailability.Unavailable
 
 /** The 控制传输 of the current control connection: "确定中" until chosen, null with no control connection. */
 internal fun ControlState.controlTransportLabel(): String? = when (transportSelection?.endpoint) {
@@ -91,7 +87,7 @@ internal fun HeadphonesPage(
                         horizontalArrangement = Arrangement.spacedBy(16.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        EarbudsArtwork(Modifier.size(if (wide) 84.dp else 68.dp), compact = true)
+                        DeviceArtwork(device.profile, Modifier.size(if (wide) 84.dp else 68.dp), compact = true)
                         Column(
                             Modifier.weight(1f),
                             verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -205,12 +201,15 @@ private fun UnconnectedHeadphonesDashboard(
     onStopScan: () -> Unit,
     selection: PrimaryDeviceSelection,
 ) {
-    if (state.connectionTarget == null && state.platform.transportUnavailableForHome()) {
-        val transport = state.platform.transport as TransportAvailability.Unavailable
+    val platform = state.platform
+    val blockReason = platform.connectionBlockReason
+    if (state.connectionTarget == null && !platform.bluetoothPermissionRequired &&
+        platform.transport is TransportAvailability.Unavailable
+    ) {
         AppGroup {
             AppArrowRow(
                 title = "诊断与记录",
-                summary = transport.reason,
+                summary = blockReason,
                 icon = RoseIcon.BLUETOOTH,
                 onClick = { onNavigate(AppPage.DIAGNOSTICS) },
             )
@@ -262,7 +261,12 @@ private fun UnconnectedHeadphonesDashboard(
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     AppText("添加你的 ROSE 耳机", role = AppTextRole.Title)
-                    AppText("请打开耳机盒盖并靠近手机，首次使用需配对连接", role = AppTextRole.Summary)
+                    val hint = if (platform.transport == TransportAvailability.Disabled) {
+                        "系统蓝牙已关闭"
+                    } else {
+                        platform.hostPlatform.firstConnectionHint()
+                    }
+                    AppText(hint, role = AppTextRole.Summary)
                 }
                 Column(
                     Modifier.fillMaxWidth(),
@@ -294,9 +298,6 @@ private fun UnconnectedHeadphonesDashboard(
     val otherBonded = bondedRose.filter { it.deviceId != primaryDevice.deviceId }
     val connecting = state.connection as? ConnectionState.Connecting
     val isConnecting = connecting?.deviceId == primaryDevice.deviceId
-    val permissionRequired = state.platform.permission != PermissionState.GRANTED &&
-        state.platform.permission != PermissionState.NOT_REQUIRED
-    val unavailableTransport = state.platform.transport as? TransportAvailability.Unavailable
 
     AppDashboardCard {
         Column(
@@ -313,10 +314,10 @@ private fun UnconnectedHeadphonesDashboard(
                         .padding(12.dp),
                     contentAlignment = Alignment.Center,
                 ) {
-                    EarbudsArtwork(compact = false)
+                    DeviceArtwork(primaryDevice.profile)
                 }
             } else {
-                EarbudsArtwork(compact = false)
+                DeviceArtwork(primaryDevice.profile)
             }
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -348,14 +349,12 @@ private fun UnconnectedHeadphonesDashboard(
                             AppBusyIndicator()
                             AppText("正在连接…", role = AppTextRole.Summary, color = appColor(AppColorRole.Primary))
                         }
-                    } else if (permissionRequired) {
-                        AppText("需要蓝牙权限才能连接这副耳机", role = AppTextRole.Summary)
-                    } else if (unavailableTransport != null) {
-                        AppText(unavailableTransport.reason, role = AppTextRole.Summary)
-                    } else if (visibleError != null) {
-                        AppText("连接未成功 · 请确认耳机已开盖并在附近", role = AppTextRole.Summary, color = appColor(AppColorRole.Error))
                     } else {
-                        AppText("未连接 · 耳机开盖后将自动连接", role = AppTextRole.Summary)
+                        AppText(
+                            blockReason ?: primaryDevice.profile.reconnectHint(visibleError != null),
+                            role = AppTextRole.Summary,
+                            color = if (visibleError != null && blockReason == null) appColor(AppColorRole.Error) else null,
+                        )
                     }
                 }
                 if (isMaterial3) {
@@ -383,7 +382,7 @@ private fun UnconnectedHeadphonesDashboard(
                         kind = AppButtonKind.Secondary,
                         modifier = Modifier.fillMaxWidth(),
                     )
-                } else if (permissionRequired) {
+                } else if (platform.bluetoothPermissionRequired) {
                     onRequestPermission?.let { requestPermission ->
                         AppButton(
                             text = "授予蓝牙权限",
@@ -392,7 +391,7 @@ private fun UnconnectedHeadphonesDashboard(
                             modifier = Modifier.fillMaxWidth(),
                         )
                     }
-                } else if (unavailableTransport != null) {
+                } else if (blockReason != null) {
                     onOpenSystemSettings?.let { openSettings ->
                         AppButton(
                             text = "打开系统蓝牙设置",
@@ -409,7 +408,7 @@ private fun UnconnectedHeadphonesDashboard(
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }
-                if (visibleError != null && !permissionRequired && unavailableTransport == null && onOpenSystemSettings != null) {
+                if (visibleError != null && blockReason == null && onOpenSystemSettings != null) {
                     AppButton(
                         text = "无法连接？打开系统蓝牙设置",
                         onClick = onOpenSystemSettings,
@@ -457,6 +456,7 @@ private fun UnconnectedHeadphonesDashboard(
                         }
                         AppButton(
                             text = "切换",
+                            enabled = blockReason == null,
                             onClick = {
                                 selection.select(state, paired.deviceId)
                                 onConnect(paired.deviceId)

@@ -22,7 +22,7 @@ fun DeviceState.toBridgeSnapshot(hostEpoch: String, readSequence: Long, captured
     classicAddress?.takeIf { it.matches(BLUETOOTH_ADDRESS) }?.let { put("classic_address", it.uppercase()) }
     put(BridgeWire.SESSION_ID, sessionId)
     put(BridgeWire.READ_SEQUENCE, readSequence)
-    put("captured_elapsed_millis", capturedElapsedMillis)
+    put(BridgeWire.CAPTURED_ELAPSED_MILLIS, capturedElapsedMillis)
     put("profile", profile.name)
     put("fields", systemFields().entries.associate { (field, reading) -> field.name to reading.toBridgeReading() })
     put(

@@ -18,7 +18,7 @@ internal class BluezGattDriver(private val bus: BluezBus, private val devicePath
     private val subscribed = mutableSetOf<String>()
     private var discovered = false
     private var closed = false
-    override val events: Flow<GattEvent> = bus.events.transform { signal ->
+    override val events: Flow<GattEvent> = bus.signals { it.affectsLink(devicePath) }.transform { signal ->
         when (signal) {
             is BluezSignal.Owner -> if (!signal.present) emit(disconnected("BlueZ 服务已停止"))
 
@@ -206,4 +206,15 @@ internal fun Any?.asBytes(): ByteArray? = when (this) {
     is ByteArray -> copyOf()
     is List<*> -> mapNotNull { (it as? Number)?.toByte() }.toByteArray()
     else -> null
+}
+
+private fun BluezSignal.affectsLink(devicePath: String): Boolean = when (this) {
+    is BluezSignal.Changed -> when (interfaceName) {
+        ADAPTER -> devicePath.startsWith("$path/")
+        DEVICE -> path == devicePath && ("Connected" in values || "ServicesResolved" in values)
+        CHARACTERISTIC -> path.startsWith("$devicePath/") && "Value" in values
+        else -> false
+    }
+
+    else -> true
 }

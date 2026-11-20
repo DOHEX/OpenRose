@@ -82,7 +82,7 @@ data class NativeHeadsetSnapshot(
             normalizeBluetoothAddress(deviceId)?.let(addresses::add)
             if (addresses.isEmpty()) return null
 
-            val capturedElapsedMillis = wire.long("captured_elapsed_millis")?.takeIf { it > 0L } ?: return null
+            val capturedElapsedMillis = wire.long(BridgeWire.CAPTURED_ELAPSED_MILLIS)?.takeIf { it > 0L } ?: return null
             val capabilities = wire.child("capabilities") ?: return null
             val noise = capabilities.child("noise")
             val fieldsWire = wire.child("fields") ?: return null

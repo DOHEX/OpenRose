@@ -3,7 +3,6 @@
   <ManuallySuppressedIssues/>
   <CurrentIssues>
     <ID>CyclomaticComplexMethod:AndroidPlatformUi.kt:@Composable private fun DiagnosticResultRow</ID>
-    <ID>CyclomaticComplexMethod:AndroidPlatformUi.kt:AndroidPlatformUi$@Composable override fun BluetoothPermissionRows</ID>
     <ID>CyclomaticComplexMethod:AndroidPlatformUi.kt:AndroidPlatformUi$@Composable override fun DiagnosticsSections</ID>
     <ID>CyclomaticComplexMethod:ScopeRestart.kt:@Composable internal fun ScopeRestartAction</ID>
     <ID>LongMethod:PlatformApplicabilityUiTest.kt:PlatformApplicabilityUiTest$@Test fun applicableHyperOsKeepsIntegrationSettingsAvailableUntilTheModuleIsReady</ID>

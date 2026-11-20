@@ -41,6 +41,9 @@ interface ControlRuntime {
      */
     suspend fun disconnect(): Boolean
 
+    /** Releases an owner for handoff. A successfully retired local session may never open another connection. */
+    suspend fun release(): Boolean = disconnect()
+
     /**
      * A setting succeeds only after the earphones confirm it, never when the write is accepted. With
      * [expectedSessionId] the setting is admitted only while that session is still current; admission and

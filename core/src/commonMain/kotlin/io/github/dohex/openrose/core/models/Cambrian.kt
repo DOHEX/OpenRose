@@ -8,6 +8,7 @@ import io.github.dohex.openrose.core.NoiseControlCapabilities
 import io.github.dohex.openrose.core.NoiseLevelCapabilities
 import io.github.dohex.openrose.core.TouchControlCapabilities
 import io.github.dohex.openrose.core.protocol.BatteryLayout
+import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.GattProfile
 import io.github.dohex.openrose.core.protocol.ProtocolFamily
 import io.github.dohex.openrose.core.protocol.RsCommonInit
@@ -36,7 +37,11 @@ internal val cambrian = ModelSpec(
     rsCommonInit = RsCommonInit.CAMBRIAN,
     capabilities = {
         DeviceCapabilities(
-            readableFields = ProtocolFamily.RS_COMMON.readableFields.toPersistentSet(),
+            readableFields = rsReadings(
+                BatteryLayout.SINGLE_UNIT, DeviceField.TOUCH_KEYS, DeviceField.TOUCH_ENABLED,
+                DeviceField.NOISE_MODE, DeviceField.EQ, DeviceField.AUDIO_MODE, DeviceField.MULTIPOINT,
+                DeviceField.TRANSPARENCY_LEVEL, DeviceField.PROMPT_VOLUME,
+            ),
             writableSettings = persistentSetOf(
                 DeviceSetting.GAME_MODE,
                 DeviceSetting.TOUCH_BINDING,

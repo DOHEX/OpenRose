@@ -63,6 +63,42 @@ class OwnerHandoffTest {
     }
 
     @Test
+    fun anAcquireArrivingAfterTimeoutCannotUndoALaterRelease() = runTest {
+        val rig = OwnerRig(this)
+        rig.bootHost()
+        val runtime = rig.newRuntime()
+        val id = rig.earphones.deviceId
+        rig.appTransport.audioDevice.emit(id)
+        rig.hostTransport.audioDevice.emit(id)
+        runCurrent()
+        advanceTimeBy(1)
+        runCurrent()
+        rig.link.pauseNextAcquire = true
+        assertIs<HandoffOutcome.Blocked>(runtime.selectControlWay(ControlWay.MODULE))
+        val delayedCall: suspend () -> AcquireResult = requireNotNull(rig.link.delayedAcquire)
+
+        assertIs<HandoffOutcome.Completed>(runtime.selectControlWay(ControlWay.ORDINARY))
+        runCurrent()
+        advanceTimeBy(1)
+        runCurrent()
+        assertEquals("ordinary", rig.headset.openOwner)
+        val lateResult = delayedCall.invoke()
+        assertIs<AcquireResult.Refused>(lateResult)
+        // Even a new lease has to honor the currently saved ordinary selection.
+        val lease = assertIs<HostOpenResult.Opened>(rig.host.open(appIdentity)).lease.id
+        val request = SwitchRequest("stale", ControlWay.ORDINARY, ControlWay.MODULE)
+        assertIs<AcquireResult.Refused>(rig.host.acquire(appIdentity, lease, request))
+        assertIs<HostStatus.Inactive>(rig.host.status.value)
+
+        assertIs<HandoffOutcome.Completed>(runtime.selectControlWay(ControlWay.MODULE))
+        runCurrent()
+        advanceTimeBy(1)
+        runCurrent()
+        assertEquals("module", rig.headset.openOwner)
+        assertEquals(0, rig.headset.overlappingOpens)
+    }
+
+    @Test
     fun moduleToOrdinaryClosesTheHostConnectionBeforeOrdinaryConnects() = runTest {
         val rig = OwnerRig(this, initial = OwnerRecord(ControlWay.MODULE, PendingModuleRelease("earlier", null)))
         rig.bootHost()
@@ -109,6 +145,7 @@ class OwnerHandoffTest {
         assertEquals(ControlWay.ORDINARY, runtime.integration.value.owner.selected)
         assertIs<OwnerReadiness.SwitchBlocked>(runtime.integration.value.owner.readiness)
         assertEquals(ControlErrorCode.NOT_READY, assertIs<OperationResult.Failure>(runtime.connect(rig.earphones.deviceId)).error.code)
+        assertFalse(runtime.disconnect(), "the unconfirmed module release still holds the connection")
 
         // Once the host can answer, the saved choice completes without another user action.
         rig.link.releaseHangs = false
@@ -522,13 +559,14 @@ class OwnerHandoffTest {
         assertEquals(ControlWay.ORDINARY, runtime.integration.value.owner.selected)
 
         rig.appTransport.closeFails = false
+        assertEquals(OperationResult.Success, runtime.connectFromSystem(rig.earphones.deviceId))
         assertIs<HandoffOutcome.Completed>(runtime.selectControlWay(ControlWay.MODULE))
         runCurrent()
         advanceTimeBy(1)
         runCurrent()
         assertEquals(OperationResult.Success, runtime.connectFromSystem(rig.earphones.deviceId))
         runCurrent()
-        assertEquals(listOf("ordinary:open", "ordinary:close", "module:open"), rig.headset.events)
+        assertEquals(listOf("ordinary:open", "ordinary:close", "ordinary:open", "ordinary:close", "module:open"), rig.headset.events)
         assertEquals(0, rig.headset.overlappingOpens)
     }
 

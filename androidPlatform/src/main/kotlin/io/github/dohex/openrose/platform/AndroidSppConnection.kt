@@ -63,14 +63,12 @@ internal class AndroidSppConnection(
         checkOpen()
         val client = device.createRfcommSocketToServiceRecord(serviceId)
         socket = client
-        try {
-            onPhase(ConnectionPhase.DISCOVERING)
-            connectCancellable(client)
-            checkOpen()
-        } catch (error: Throwable) {
-            terminate(error)
-            throw error
+        onPhase(ConnectionPhase.DISCOVERING)
+        performBlockingIo("连接") {
+            adapter.cancelDiscovery()
+            client.connect()
         }
+        checkOpen()
     }
 
     override suspend fun subscribe() {
@@ -84,62 +82,39 @@ internal class AndroidSppConnection(
         checkOpen()
         require(bytes.isNotEmpty() && bytes.size <= maxWriteSize) { "协议报文必须适配完整 SPP 写入容量" }
         val client = requireSocket()
-        performBlockingIo {
+        performBlockingIo("写入") {
             client.outputStream.write(bytes)
             client.outputStream.flush()
         }
     }
 
     override suspend fun close() {
-        terminate(IOException("SPP 连接已关闭"))
+        stopIo(IOException("SPP 连接已关闭"))
+        releaseSocket()
         val reader = readerJob
         if (reader != null && reader != kotlinx.coroutines.currentCoroutineContext()[Job]) {
             withContext(NonCancellable) { reader.cancelAndJoin() }
         }
-        ioScope.cancel()
     }
 
-    private suspend fun connectCancellable(client: BluetoothSocket) {
-        suspendCancellableCoroutine<Unit> { continuation ->
-            val operation = ioScope.launch {
-                try {
-                    adapter.cancelDiscovery()
-                    client.connect()
-                    continuation.resume(Unit) { _, _, _ -> terminate(IOException("SPP 连接结果已取消")) }
-                } catch (error: Throwable) {
-                    continuation.resumeWith(Result.failure(error))
-                }
-            }
-            operation.invokeOnCompletion { cause ->
-                if (cause != null && continuation.isActive) {
-                    continuation.resumeWith(Result.failure(IOException("SPP 连接操作已结束", cause)))
-                }
-            }
-            continuation.invokeOnCancellation {
-                terminate(IOException("SPP 连接已取消"))
-                operation.cancel()
-            }
-        }
-    }
-
-    private suspend fun performBlockingIo(operation: () -> Unit) {
+    private suspend fun performBlockingIo(action: String, operation: () -> Unit) {
         suspendCancellableCoroutine<Unit> { continuation ->
             val ioJob = ioScope.launch {
                 try {
                     operation()
-                    continuation.resume(Unit) { _, _, _ -> terminate(IOException("SPP 写入结果已取消")) }
+                    continuation.resume(Unit) { _, _, _ -> terminate(IOException("SPP ${action}结果已取消")) }
                 } catch (error: Throwable) {
                     continuation.resumeWith(Result.failure(error))
                 }
             }
             ioJob.invokeOnCompletion { cause ->
                 if (cause != null && continuation.isActive) {
-                    continuation.resumeWith(Result.failure(IOException("SPP 写入操作已结束", cause)))
+                    continuation.resumeWith(Result.failure(IOException("SPP ${action}操作已结束", cause)))
                 }
             }
             continuation.invokeOnCancellation {
                 // Closing the socket interrupts a blocked RFCOMM operation; cancelling the coroutine alone does not.
-                terminate(IOException("SPP 写入已取消"))
+                terminate(IOException("SPP ${action}已取消"))
                 ioJob.cancel()
             }
         }
@@ -170,11 +145,23 @@ internal class AndroidSppConnection(
         if (closed.get()) throw IOException("SPP 连接已关闭")
     }
 
-    private fun terminate(error: Throwable?) {
-        if (!closed.compareAndSet(false, true)) return
-        if (error == null) incoming.close() else incoming.close(error)
-        runCatching { socket?.close() }
-        ioScope.cancel()
+    private fun stopIo(error: Throwable) {
+        if (closed.compareAndSet(false, true)) {
+            incoming.close(error)
+            ioScope.cancel()
+        }
+    }
+
+    private fun terminate(error: Throwable) {
+        stopIo(error)
+        // A cancellation callback cannot deliver a close failure. Explicit close retries the same socket.
+        runCatching { releaseSocket() }
+    }
+
+    @Synchronized
+    private fun releaseSocket() {
+        socket?.close()
+        socket = null
     }
 
     private companion object {

@@ -412,7 +412,7 @@ DD [HH] [L T V...]... [CS] AA
 | `TouchControlCapabilities` | 槽位集合与动作集合 |
 | `AudioControlCapabilities` | 音频选项；`multipointCoupled`（i5 为 true，i7 为 false） |
 
-`DeviceCapabilities.readableFields` 来自协议族的 `ProtocolFamily.readableFields`，只表示解析器认识哪些字段，**不能**用来判断能否写入；能否写入只看型号配置声明的 `writableSettings`。初始化查询里包含某个共享 ID，也不说明该型号支持对应功能。
+`ProtocolFamily.readableFields` 列出协议族认识的字段。型号配置按硬件布局和协议依据声明 `DeviceCapabilities.readableFields`，诊断页只列这些读数。可写操作由型号的 `writableSettings` 单独决定。
 
 ### 档位的显示条件
 

@@ -10,6 +10,7 @@ import io.github.dohex.openrose.core.NoiseLevelCapabilities
 import io.github.dohex.openrose.core.TouchControlCapabilities
 import io.github.dohex.openrose.core.firmwareComparisonInteger
 import io.github.dohex.openrose.core.protocol.BatteryLayout
+import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.dohex.openrose.core.protocol.GattProfile
 import io.github.dohex.openrose.core.protocol.ProtocolFamily
@@ -50,7 +51,13 @@ private fun earFeelI7Capabilities(firmware: FieldValue.Firmware?): DeviceCapabil
     val gainAndProtection = version >= 213
     val presets = persistentSetOf("pop", "hifi", "rock", "light")
     return DeviceCapabilities(
-        readableFields = ProtocolFamily.RS_COMMON_V2.readableFields.toPersistentSet(),
+        readableFields = rsReadings(
+            BatteryLayout.EARBUDS_AND_CASE, DeviceField.CASE_FLAG, DeviceField.TOUCH_KEYS,
+            DeviceField.TOUCH_ENABLED, DeviceField.EAR_DETECTION, DeviceField.EQ, DeviceField.CUSTOM_EQ,
+            DeviceField.NOISE_MODE, DeviceField.NOISE_CYCLE, DeviceField.ANC_LEVEL,
+            DeviceField.TRANSPARENCY_LEVEL, DeviceField.AUDIO_MODE, DeviceField.MULTIPOINT,
+            DeviceField.PROMPT_VOLUME, DeviceField.GAIN, DeviceField.HEARING_PROTECTION, DeviceField.FIND_STATE,
+        ),
         writableSettings = (
             listOf(
                 DeviceSetting.NOISE_MODE,

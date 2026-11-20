@@ -1,8 +1,17 @@
 package io.github.dohex.openrose.core.transport
 
+import io.github.dohex.openrose.core.ConnectionPhase
+import io.github.dohex.openrose.core.ControlSession
+import io.github.dohex.openrose.core.DeviceCandidate
+import io.github.dohex.openrose.core.OperationResult
+import io.github.dohex.openrose.core.PermissionState
+import io.github.dohex.openrose.core.PlatformState
+import io.github.dohex.openrose.core.TransportAvailability
+import io.github.dohex.openrose.core.protocol.ModelProfile
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.toList
@@ -132,6 +141,38 @@ class GattControlConnectionTest {
     }
 
     @Test
+    fun unconfirmedReleaseDuringSetupBlocksNewOpensAndHandoffUntilTheDriverCloses() = runTest {
+        val driver = FakeGattDriver().apply {
+            discoveryGate = CompletableDeferred()
+            closeGate = CompletableDeferred()
+            refuseClose = true
+        }
+        val id = DeviceId("partial-open")
+        val transport = object : ControlTransport {
+            override fun scan() = emptyFlow<Advertisement>()
+            override suspend fun bondedDevices() = listOf(DeviceCandidate(id, "EarFree i5", null, ModelProfile.I5_ZT, ""))
+            override suspend fun connect(deviceId: DeviceId, endpoint: TransportEndpoint, onPhase: (ConnectionPhase) -> Unit) = GattControlConnection.open(driver, endpoint as TransportEndpoint.BleGatt, onPhase)
+        }
+        val session = ControlSession(PlatformState(PermissionState.GRANTED, TransportAvailability.Available), transport = transport, scope = backgroundScope)
+        val connecting = async { session.connect(id) }
+        runCurrent()
+        assertEquals(1, driver.discoveries)
+        val retiring = async { session.release() }
+        runCurrent()
+        assertFalse(retiring.isCompleted)
+        driver.closeGate?.complete(Unit)
+        assertFalse(retiring.await())
+        assertIs<OperationResult.Failure>(connecting.await())
+        assertIs<OperationResult.Failure>(session.connect(id))
+        assertEquals(1, driver.discoveries)
+        driver.refuseClose = false
+        assertTrue(session.release())
+        assertTrue(driver.closed)
+        assertIs<OperationResult.Failure>(session.connect(id))
+        assertEquals(1, driver.discoveries)
+    }
+
+    @Test
     fun mtuTimeoutFallsBackWithoutBlockingSubscriptionOrSmallPackets() = runTest {
         val driver = FakeGattDriver().apply { mtuGate = CompletableDeferred() }
         val connection = GattControlConnection.open(driver, endpoint) {}
@@ -190,6 +231,8 @@ class GattControlConnectionTest {
         var writeGate: CompletableDeferred<Unit>? = null
         var mtuGate: CompletableDeferred<Unit>? = null
         var closed = false
+        var refuseClose = false
+        var closeGate: CompletableDeferred<Unit>? = null
         var routing = false
         var remoteSubscription = GattSubscription.DISABLED
         override suspend fun connect() = Unit
@@ -216,6 +259,8 @@ class GattControlConnectionTest {
             writeGate?.await()
         }
         override suspend fun close() {
+            closeGate?.await()
+            check(!refuseClose)
             closed = true
             writeGate?.completeExceptionally(GattException(GattFailureKind.DISCONNECTED, "closed"))
             incoming.close()

@@ -7,6 +7,7 @@ import io.github.dohex.openrose.core.PermissionState
 import io.github.dohex.openrose.core.PlatformState
 import io.github.dohex.openrose.core.SessionTiming
 import io.github.dohex.openrose.core.TransportAvailability
+import io.github.dohex.openrose.core.transport.Advertisement
 import io.github.dohex.openrose.core.transport.DeviceId
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
@@ -105,13 +106,66 @@ class BluezControlTransportTest {
         val listener = launch { transport.audioConnectedDevice.collect { events.send(it) } }
         assertNull(withTimeout(5_000) { events.receive() })
         bus.snapshot = baseObjects() + (MEDIA_PATH to mapOf(MEDIA_TRANSPORT to mapOf("Device" to DEVICE_PATH, "UUID" to A2DP_UUID, "State" to "idle")))
-        bus.events.emit(BluezSignal.Added(MEDIA_PATH, setOf(MEDIA_TRANSPORT)))
+        bus.events.emit(BluezSignal.Added(MEDIA_PATH, bus.snapshot.getValue(MEDIA_PATH)))
         assertEquals(DeviceId("00:11:22:33:44:55"), withTimeout(5_000) { events.receive() })
         bus.snapshot = baseObjects() - DEVICE_PATH
         bus.events.emit(BluezSignal.Removed(DEVICE_PATH, setOf(DEVICE)))
         assertNull(withTimeout(5_000) { events.receive() })
         listener.cancelAndJoin()
         transport.close()
+    }
+
+    @Test
+    fun discoveryMergesDeviceDeltasWithoutReadingTheObjectTreeAgain() = runBlocking {
+        val bus = FakeBluezBus().also { it.snapshot = baseObjects() }
+        val transport = BluezControlTransport(this, bus)
+        transport.awaitInitialization()
+        val seen = Channel<Advertisement>(Channel.BUFFERED)
+        val scan = launch { transport.scan().collect { seen.send(it) } }
+        try {
+            val initial = withTimeout(5_000) { seen.receive() }
+            bus.objectsFailure = IllegalStateException("unexpected object tree read")
+            bus.events.emit(BluezSignal.Changed(DEVICE_PATH, DEVICE, mapOf("RSSI" to -43)))
+            val changed = withTimeout(5_000) { seen.receive() }
+            assertEquals(-43, changed.rssi)
+            assertEquals(initial.deviceId, changed.deviceId)
+            assertContentEquals(initial.manufacturerData[0x1234], changed.manufacturerData[0x1234])
+
+            bus.events.emit(BluezSignal.Removed(DEVICE_PATH, setOf(DEVICE)))
+            val added = mapOf(DEVICE to mapOf("Address" to initial.deviceId.value, "Alias" to "new name"))
+            bus.events.emit(BluezSignal.Added(DEVICE_PATH, added))
+            val replacement = withTimeout(5_000) { seen.receive() }
+            assertEquals("new name", replacement.name)
+            assertNull(replacement.rssi)
+            assertTrue(replacement.manufacturerData.isEmpty())
+        } finally {
+            scan.cancelAndJoin()
+            transport.close()
+        }
+    }
+
+    @Test
+    fun poweringOffASpareAdapterKeepsAudioObservationOnTheOtherAdapter() = runBlocking {
+        val spare = "/org/bluez/hci1"
+        val media = mapOf(MEDIA_TRANSPORT to mapOf("Device" to DEVICE_PATH, "UUID" to A2DP_UUID))
+        val bus = FakeBluezBus().apply {
+            snapshot = baseObjects() + (spare to mapOf(ADAPTER to mapOf("Powered" to true)))
+        }
+        val transport = BluezControlTransport(this, bus)
+        transport.awaitInitialization()
+        val seen = Channel<DeviceId?>(Channel.BUFFERED)
+        val listener = launch { transport.audioConnectedDevice.collect { seen.send(it) } }
+        try {
+            assertNull(withTimeout(5_000) { seen.receive() })
+            bus.snapshot += spare to mapOf(ADAPTER to mapOf("Powered" to false))
+            bus.events.emit(BluezSignal.Changed(spare, ADAPTER, mapOf("Powered" to false)))
+            bus.snapshot += MEDIA_PATH to media
+            bus.events.emit(BluezSignal.Added(MEDIA_PATH, media))
+            assertEquals(DeviceId("00:11:22:33:44:55"), withTimeout(5_000) { seen.receive() })
+        } finally {
+            listener.cancelAndJoin()
+            transport.close()
+        }
     }
 
     @Test

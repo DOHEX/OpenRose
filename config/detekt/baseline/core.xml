@@ -3,7 +3,6 @@
   <ManuallySuppressedIssues/>
   <CurrentIssues>
     <ID>ComplexCondition:AudioFacts.kt:(targets + connected).any { it !in states } || connected.any { states[it] != AudioConnectionState.CONNECTED } || states.any { (address, state) -&gt; state == AudioConnectionState.CONNECTED &amp;&amp; address !in connected }</ID>
-    <ID>ComplexCondition:ConnectionTargeting.kt:ConnectionTargeting$(unlocking || transportReady) &amp;&amp; platformState.userUnlocked &amp;&amp; transport != null</ID>
     <ID>ComplexCondition:ControlLink.kt:ControlLink$active !== attempt || attempt.linkEpoch.value != epoch || progress.value.ended || state.value.device?.sessionId != attempt.id || state.value.connection is ConnectionState.Disconnected</ID>
     <ID>ComplexCondition:ControlLink.kt:ControlLink$active === attempt &amp;&amp; attempt.ready &amp;&amp; current?.deviceId == deviceId &amp;&amp; current.sessionId == attempt.id &amp;&amp; current.phase == ConnectionPhase.READY</ID>
     <ID>ComplexCondition:ControlLink.kt:ControlLink$cause is TimeoutCancellationException &amp;&amp; currentCoroutineContext().isActive &amp;&amp; queryIndex == 0 &amp;&amp; canRecoverUnclassified(attempt, selection)</ID>
@@ -48,8 +47,6 @@
     <ID>ReturnCount:ConnectionTargeting.kt:ConnectionTargeting$private suspend fun connectInternal: OperationResult</ID>
     <ID>ReturnCount:ControlLink.kt:ControlLink$private suspend fun openAndRead: OperationResult</ID>
     <ID>ReturnCount:ControlSessionRecoveryTest.kt:ControlSessionRecoveryTest.RecoveryLink$override suspend fun write</ID>
-    <ID>ReturnCount:DeviceDiscovery.kt:DeviceDiscovery$fun resolveTarget: DeviceCandidate</ID>
-    <ID>ReturnCount:DeviceDiscovery.kt:DeviceDiscovery$suspend fun findCandidate: DeviceCandidate?</ID>
     <ID>ReturnCount:RsCommonV2Codec.kt:RsCommonV2Codec$private fun decodeRecord: Map&lt;DeviceField, FieldReading&gt;</ID>
     <ID>ReturnCount:RsCommonV2Codec.kt:RsCommonV2Codec$private fun parseFrame: ProtocolReply?</ID>
     <ID>ThrowsCount:ControlLink.kt:ControlLink$private suspend fun openAndReadLink: OperationResult</ID>
@@ -60,7 +57,6 @@
     <ID>TooGenericExceptionCaught:ControlLink.kt:ControlLink$cause: Exception</ID>
     <ID>TooGenericExceptionCaught:DeviceDiscovery.kt:DeviceDiscovery$cause: Exception</ID>
     <ID>TooGenericExceptionCaught:GattControlConnection.kt:GattControlConnection$error: Exception</ID>
-    <ID>TooGenericExceptionCaught:GattControlConnection.kt:GattControlConnection.Companion$closing: Exception</ID>
     <ID>TooGenericExceptionCaught:GattControlConnection.kt:GattControlConnection.Companion$error: Throwable</ID>
     <ID>TooGenericExceptionCaught:SettingQueue.kt:SettingQueue$cause: Exception</ID>
     <ID>TooManyFunctions:ControlLink.kt:ControlLink</ID>

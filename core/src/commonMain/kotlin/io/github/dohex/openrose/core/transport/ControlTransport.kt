@@ -2,8 +2,10 @@ package io.github.dohex.openrose.core.transport
 
 import io.github.dohex.openrose.core.ConnectionPhase
 import io.github.dohex.openrose.core.DeviceCandidate
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.withContext
 
 @JvmInline
 value class DeviceId(val value: String)
@@ -93,4 +95,18 @@ interface ControlConnection {
     /** Completes when the platform accepted the write, not when device state is confirmed. */
     suspend fun write(bytes: ByteArray)
     suspend fun close()
+}
+
+/** An interrupted open still owns this platform handle until its close succeeds. */
+internal class UnreleasedConnectionException(val connection: ControlConnection, cause: Throwable) : Exception("连接建立失败且平台尚未确认释放", cause)
+
+@Suppress("TooGenericExceptionCaught") // Any platform close failure leaves this exact handle owned.
+suspend fun ControlConnection.closeAfterFailedOpen(cause: Throwable): Nothing {
+    try {
+        withContext(NonCancellable) { close() }
+    } catch (closing: Exception) {
+        cause.addSuppressed(closing)
+        throw UnreleasedConnectionException(this, cause)
+    }
+    throw cause
 }

@@ -21,17 +21,17 @@ System Bluetooth is off. Turn it on and return to OpenRose.
 
 ### "暂未找到受支持的耳机" when adding earphones (no supported earphones found yet)
 
-- Turn on the earphones, put them in pairing mode, and keep them close to the phone.
+- Turn on the earphones, put them in pairing mode, and keep them close to the phone or computer running OpenRose.
 - Check that the model is in [Supported earphones](../../reference/supported-earphones/).
 - When one retail name covers several hardware branches, OpenRose tells them apart by advertisement prefix; if the name is not enough, it does not pick a branch automatically.
 
 ### "未连接 · 耳机开盖后将自动连接" on the earphone page (not connected; connects automatically when the case opens)
 
-OpenRose's control connection follows the system audio connection: it opens automatically only after the earphones connect to audio in system Bluetooth. Connect the earphones in the system Bluetooth settings first; "无法连接？打开系统蓝牙设置" (can't connect? open system Bluetooth settings) takes you there.
+Other models may show "未连接 · 系统蓝牙连上耳机后将自动连接" (control will connect after system Bluetooth does). OpenRose's control connection follows the system audio connection: it opens automatically only after the earphones connect to audio in system Bluetooth. Connect the earphones in the system Bluetooth settings first; "无法连接？打开系统蓝牙设置" (can't connect? open system Bluetooth settings) takes you there.
 
 ### "连接未成功 · 请确认耳机已开盖并在附近" (connection failed; make sure the case is open and nearby)
 
-The control connection did not open. Put the earbuds back in the case, close it, open it again, and wait for system audio to reconnect. If it keeps failing, check which stage the control connection stopped at under earphone home → device details → diagnostics and records (诊断与记录):
+The control connection did not open. For models with a charging case, close and reopen the case. For headphones without a case, turn the headphones on again and wait for system audio to reconnect. If it keeps failing, check which stage the control connection stopped at under earphone home → device details → diagnostics and records (诊断与记录):
 
 | Reason in diagnostics | Meaning |
 | --- | --- |

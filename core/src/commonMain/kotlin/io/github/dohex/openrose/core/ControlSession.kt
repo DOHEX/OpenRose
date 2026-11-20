@@ -49,6 +49,7 @@ internal class ControlSession(
     override suspend fun connect(deviceId: DeviceId, pinned: Boolean): OperationResult = targeting.connect(deviceId, pinned)
     override suspend fun connectForAddDevice(deviceId: DeviceId): OperationResult = targeting.connectForAddDevice(deviceId)
     override suspend fun disconnect(): Boolean = targeting.disconnect()
+    override suspend fun release(): Boolean = link.disconnect(retire = true)
 
     override suspend fun set(setting: DeviceSetting, value: FieldValue, expectedSessionId: Long?): OperationResult = settings.set(
         link,

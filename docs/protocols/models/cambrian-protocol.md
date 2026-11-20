@@ -43,10 +43,10 @@ FF 00 0F FA 01 07 08 09 0C 0D 0E 12 2A 2B 2C 2D 2E 33 AA
 | 项目 | 内容 | 状态 | 出处 |
 |---|---|---|---|
 | 电量槽布局 | 单体（头戴式，复用仓槽展示） | 静态 | 配置（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common/cambrian_device_config.dart:110`） |
-| 回包字段 | byte8–9 为第 1 路原始电量；byte10–11 为第 2 路；byte12–13 为第 3 路 | 静态 | rs_common_receiver.dart（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/receiver/rs_common_receiver.dart:1033`） |
-| 本型号消费方式 | 只消费 `list[0]`（byte8–9），写入控制器仓电量槽 `chargeBattery`，充电状态固定设为 `false`；同步调用 `localStorage.saveCaseBattery` 写入持久化缓存；数值不在 1–100% 范围时回退为 `"-"` 并从本地缓存读取 | 静态 | cambrian_receive_handler.dart（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/receive_handler/rs_common/cambrian_receive_handler.dart:140`） |
+| 回包字段 | 十六进制字符串的字符区间 `[8,10)`、`[10,12)`、`[12,14)` 依次给出三个电量字节 | 静态 | rs_common_receiver.dart（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/receiver/rs_common_receiver.dart:1033`） |
+| 本型号消费方式 | 读取 `RBatteryData` 偏移 `0x17` 的第三路电量（字符 `[12,14)`），写入控制器仓电量槽 `chargeBattery`，充电状态固定设为 `false`；同步调用 `localStorage.saveCaseBattery` 写入持久化缓存；数值不在 1–100% 范围时回退为 `"-"` 并从本地缓存读取 | 静态 | cambrian_receive_handler.dart（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/receive_handler/rs_common/cambrian_receive_handler.dart:140`） |
 
-Cambrian 为单体头戴式耳机（`head`），App 在 `RDeviceComponentDisplayBarWidgetModel` 中仅配置了 `BatteryType.charge` 单槽（cambrian_device_config.dart（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common/cambrian_device_config.dart:110`））。`CambrianReceiveHandler.batteryDataReceived` 仅取第 1 路数据并将其格式化为百分比字符串写入仓电量展示位，忽略左耳、右耳槽位。
+Cambrian 为单体头戴式耳机（`head`），App 在 `RDeviceComponentDisplayBarWidgetModel` 中仅配置了 `BatteryType.charge` 单槽（cambrian_device_config.dart（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common/cambrian_device_config.dart:110`））。`CambrianReceiveHandler.batteryDataReceived` 从 `RBatteryData` 偏移 `0x17` 读取电量。族接收器把第三个电量字节写入该字段，Cambrian 将它显示为单体电量。该映射已静态确认，待实机验证。见字段写入（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/commander/receiver/rs_common_receiver.dart:1276`）和字段读取（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/receive_handler/rs_common/cambrian_receive_handler.dart:151`）。
 
 ## 设置命令
 
@@ -72,7 +72,7 @@ Cambrian 为单体头戴式耳机（`head`），App 在 `RDeviceComponentDisplay
 
 | Tag | 字段 | 本型号取值或差异 | 状态 | 出处 |
 |---|---|---|---|---|
-| `0C` | 电量 | 覆写处理：仅取第 1 路原始值（byte8–9），转十进制百分比字符串存入仓槽，充电标志固定设为 `false` 并写入缓存；左右槽被忽略 | 静态 | cambrian_receive_handler.dart（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/receive_handler/rs_common/cambrian_receive_handler.dart:140`） |
+| `0C` | 电量 | 覆写处理：取第三路原始值（十六进制字符 `[12,14)`），转十进制百分比字符串存入仓槽，充电标志固定设为 `false` 并写入缓存；左右槽被忽略 | 静态 | cambrian_receive_handler.dart（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/receive_handler/rs_common/cambrian_receive_handler.dart:140`） |
 | `2B` | 音频/多点模式 | 覆写处理：线值 `0` 对应 AAC/SBC（关闭多点）、`1` 对应 LDAC（关闭多点）、`4` 对应开启多点；忽略 `2`（LHDC）和 `3`（LC3） | 静态 | cambrian_receive_handler.dart（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/receive_handler/rs_common/cambrian_receive_handler.dart:10`） |
 | `01`、`07`、`08`、`09`、`0D`、`0E`、`2A`、`2C`、`2D`、`2E`、`33` | 按键、触摸开关、佩戴、降噪、版本、游戏、EQ、降噪等级、通透等级、提示音、空间音频 | 同族默认：由 `RsCommonReceiver` 和 `RsCommonReceiveHandler` 默认处理 | 静态 | [rs-common.md](../families/rs-common.md#全族共用) |
 

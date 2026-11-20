@@ -138,19 +138,11 @@ private fun confirmedFields(
 ): PersistentMap<DeviceField, FieldReading> {
     val result = fields.builder()
     for ((field, value) in expected) {
-        when {
-            value is FieldValue.TouchAssignment -> {
-                val current = (fields[DeviceField.TOUCH_KEYS] as? FieldReading.Known)?.value as? FieldValue.TouchKeys
-                result[DeviceField.TOUCH_KEYS] = FieldReading.Known(FieldValue.TouchKeys(current?.bindings.orEmpty().assigning(value)), "")
-            }
-
-            field == DeviceField.EQ_SLOT && value is FieldValue.Number -> {
-                val reply = "05%02x".format(value.value)
-                result[DeviceField.EQ] = FieldReading.Known(FieldValue.Text("custom_slot"), reply)
-                result[DeviceField.EQ_SLOT] = FieldReading.Known(value, reply)
-            }
-
-            else -> result[field] = FieldReading.Known(value, "")
+        result[field] = if (value is FieldValue.TouchAssignment) {
+            val current = (fields[DeviceField.TOUCH_KEYS] as? FieldReading.Known)?.value as? FieldValue.TouchKeys
+            FieldReading.Known(FieldValue.TouchKeys(current?.bindings.orEmpty().assigning(value)), "")
+        } else {
+            FieldReading.Known(value, "")
         }
     }
     return result.build()

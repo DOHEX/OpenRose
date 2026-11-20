@@ -50,7 +50,8 @@ internal class ModelSpec(
     /** F8 models vary in initialization, normal-mode encoding and EQ read semantics. */
     val f8ExtendedInit: Boolean = false,
     val f8NoiseNormalWire: Int = 3,
-    val f8CollapsedEqRead: Boolean = false,
+    /** EQ readback 2 is Rock on extended models, aliases the first preset on AGATE, and is ambiguous on CERAMICS. */
+    val f8EqAtTwo: String? = "rock",
     val rsCommonInit: RsCommonInit = RsCommonInit.DEFAULT,
     /** Touch action names to the action code each model's RoseLink action table sends. */
     val rsCommonTouchActions: Map<String, Int> = mapOf(

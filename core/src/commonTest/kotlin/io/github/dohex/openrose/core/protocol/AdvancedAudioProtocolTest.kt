@@ -212,8 +212,8 @@ class AdvancedAudioProtocolTest {
                 val setting = codec.prepareSetting(DeviceSetting.BASS_BOOST, FieldValue.Number(level))
                 assertEquals(frame, setting.writeFrames.single().hex())
                 assertEquals("ff0102fa2a26aa", setting.readback.bytes.hex())
-                assertEquals(setOf(DeviceField.EQ_SLOT), setting.readback.expectedFields)
-                assertEquals(mapOf(DeviceField.EQ_SLOT to FieldValue.Number(level)), setting.expectedValues)
+                assertEquals(setOf(DeviceField.EQ, DeviceField.EQ_SLOT), setting.readback.expectedFields)
+                assertEquals(mapOf(DeviceField.EQ to FieldValue.Text("custom_slot"), DeviceField.EQ_SLOT to FieldValue.Number(level)), setting.expectedValues)
             }
             assertFailsWith<IllegalArgumentException> {
                 createProtocolCodec(profile).prepareSetting(DeviceSetting.BASS_BOOST, FieldValue.Number(5))

@@ -3,13 +3,20 @@ package io.github.dohex.openrose.core.models
 import io.github.dohex.openrose.core.DeviceCapabilities
 import io.github.dohex.openrose.core.DeviceSetting
 import io.github.dohex.openrose.core.protocol.BatteryLayout
+import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.GattProfile
 import io.github.dohex.openrose.core.protocol.ProtocolFamily
 import kotlinx.collections.immutable.persistentSetOf
 import kotlinx.collections.immutable.toPersistentSet
 
 private val swift2Capabilities = DeviceCapabilities(
-    readableFields = ProtocolFamily.RS_COMMON_V2.readableFields.toPersistentSet(),
+    readableFields = rsReadings(
+        BatteryLayout.SINGLE_UNIT,
+        DeviceField.TOUCH_ENABLED,
+        DeviceField.MULTIPOINT,
+        DeviceField.PROMPT_VOLUME,
+        DeviceField.FIND_STATE,
+    ),
     writableSettings = persistentSetOf(
         DeviceSetting.GAME_MODE,
         DeviceSetting.MULTIPOINT,

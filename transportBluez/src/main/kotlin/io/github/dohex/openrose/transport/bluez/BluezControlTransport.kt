@@ -32,7 +32,7 @@ class BluezControlTransport private constructor(scope: CoroutineScope, private v
                 bus = current
                 // Subscribe before the first object snapshot, including BlueZ owner changes.
                 val observer = launch(start = CoroutineStart.UNDISPATCHED) {
-                    current.events.collect { if (it.affects(availabilityInterfaces)) updateAvailability(current) }
+                    current.signals { it.affects(availabilityInterfaces) }.collect { updateAvailability(current) }
                 }
                 updateAvailability(current)
                 ready.complete(Unit)
@@ -90,8 +90,10 @@ class BluezControlTransport private constructor(scope: CoroutineScope, private v
         scanLock.withLock {
             val adapter = current.objects().entries.firstOrNull { it.value[ADAPTER]?.get("Powered") == true }?.key
                 ?: error("未找到已开启的蓝牙适配器")
+            val devices = mutableMapOf<String, Map<String, Any?>>()
+            val initialDevices = CompletableDeferred<Unit>()
             val events = launch(start = CoroutineStart.UNDISPATCHED) {
-                current.events.collect { signal ->
+                current.signals { it.affects(scanInterfaces) }.collect { signal ->
                     if (signal is BluezSignal.Owner && !signal.present) throw IllegalStateException("BlueZ 服务已停止")
                     if (signal is BluezSignal.Changed && signal.path == adapter && signal.interfaceName == ADAPTER &&
                         signal.values["Powered"] == false
@@ -101,12 +103,8 @@ class BluezControlTransport private constructor(scope: CoroutineScope, private v
                     if (signal is BluezSignal.Removed && signal.path == adapter && ADAPTER in signal.interfaces) {
                         throw IllegalStateException("蓝牙适配器已移除")
                     }
-                    val path = when (signal) {
-                        is BluezSignal.Added -> signal.path.takeIf { DEVICE in signal.interfaces }
-                        is BluezSignal.Changed -> signal.path.takeIf { signal.interfaceName == DEVICE }
-                        else -> null
-                    }
-                    if (path != null) current.objects()[path]?.get(DEVICE)?.advertisement()?.let { send(it) }
+                    initialDevices.await()
+                    devices.updateAdvertisement(signal)?.let { send(it) }
                 }
             }
             var started = false
@@ -114,7 +112,11 @@ class BluezControlTransport private constructor(scope: CoroutineScope, private v
             try {
                 current.startDiscovery(adapter)
                 started = true
-                current.objects().values.mapNotNull { it[DEVICE]?.advertisement() }.forEach { send(it) }
+                for ((path, interfaces) in current.objects()) {
+                    interfaces[DEVICE]?.let { devices[path] = it }
+                }
+                devices.values.mapNotNull { it.advertisement() }.forEach { send(it) }
+                initialDevices.complete(Unit)
                 awaitCancellation()
             } catch (error: Throwable) {
                 failure = error
@@ -167,8 +169,9 @@ class BluezControlTransport private constructor(scope: CoroutineScope, private v
             emptyList()
         }
         override suspend fun snapshot(targetAddresses: Set<String>): RawAudioSnapshot {
+            ready.await()
             val objects = try {
-                activeBus().objects()
+                bus?.objects().orEmpty()
             } catch (error: CancellationException) {
                 throw error
             } catch (_: Exception) {
@@ -185,29 +188,15 @@ class BluezControlTransport private constructor(scope: CoroutineScope, private v
             }
             val mutex = Mutex(locked = true)
             val previous = mutableMapOf<String, RawAudioDevice>()
+            var powered = false
             val collector = launch(start = CoroutineStart.UNDISPATCHED) {
-                current.events.collect { signal ->
-                    if (!signal.affects(audioInterfaces)) return@collect
-                    if (signal is BluezSignal.Changed && signal.interfaceName == DEVICE &&
-                        signal.values.keys.none { it in audioDeviceProperties }
-                    ) {
-                        return@collect
-                    }
+                current.signals(::affectsAudio).collect { signal ->
                     mutex.withLock {
-                        when (signal) {
-                            is BluezSignal.Owner -> if (!signal.present) {
-                                previous.clear()
-                                send(RawAudioEvent.AdapterOff)
-                                return@withLock
-                            } else {
-                                send(RawAudioEvent.AdapterOn)
-                            }
-
-                            is BluezSignal.Changed -> if (signal.interfaceName == ADAPTER && signal.values.containsKey("Powered")) {
-                                send(if (signal.values["Powered"] == true) RawAudioEvent.AdapterOn else RawAudioEvent.AdapterOff)
-                            }
-
-                            else -> Unit
+                        if (signal is BluezSignal.Owner && !signal.present) {
+                            previous.clear()
+                            powered = false
+                            send(RawAudioEvent.AdapterOff)
+                            return@withLock
                         }
                         val objects = try {
                             current.objects()
@@ -217,7 +206,11 @@ class BluezControlTransport private constructor(scope: CoroutineScope, private v
                             return@withLock
                         }
                         val snapshot = audioSnapshot(objects, emptySet())
-                        val now = devices(objects).associateBy { it.address }
+                        if (powered != snapshot.enabled) {
+                            powered = snapshot.enabled
+                            send(if (powered) RawAudioEvent.AdapterOn else RawAudioEvent.AdapterOff)
+                        }
+                        val now = snapshot.bondedDevices.associateBy { it.address }
                         for ((address, device) in previous) {
                             if (address !in now) {
                                 for (profile in listOf(AudioProfile.A2DP, AudioProfile.HEADSET)) {
@@ -238,7 +231,9 @@ class BluezControlTransport private constructor(scope: CoroutineScope, private v
             }
             try {
                 try {
-                    previous.putAll(devices(current.objects()).associateBy { it.address })
+                    val initial = current.objects()
+                    powered = initial.values.any { it[ADAPTER]?.get("Powered") == true }
+                    previous.putAll(devices(initial).associateBy { it.address })
                 } catch (error: CancellationException) {
                     throw error
                 } catch (_: Exception) { }
@@ -249,6 +244,27 @@ class BluezControlTransport private constructor(scope: CoroutineScope, private v
             collector.join()
         }
     }
+}
+
+private fun MutableMap<String, Map<String, Any?>>.updateAdvertisement(signal: BluezSignal): Advertisement? {
+    val device = when (signal) {
+        is BluezSignal.Added -> signal.interfaces[DEVICE]?.let { signal.path to it }
+
+        is BluezSignal.Changed -> if (signal.interfaceName == DEVICE && signal.values.keys.any { it in advertisementKeys }) {
+            signal.path to (get(signal.path).orEmpty() + signal.values)
+        } else {
+            null
+        }
+
+        is BluezSignal.Removed -> {
+            if (DEVICE in signal.interfaces) remove(signal.path)
+            null
+        }
+
+        is BluezSignal.Owner -> null
+    } ?: return null
+    put(device.first, device.second)
+    return device.second.advertisement()
 }
 
 private fun Map<String, Any?>.advertisement(): Advertisement? {
@@ -280,8 +296,9 @@ private fun audioSnapshot(objects: BluezObjects, targets: Set<String>): RawAudio
     val connected = AudioProfile.entries.associateWith { mutableSetOf<String>() }
     for ((path, interfaces) in objects) {
         val transport = interfaces[MEDIA_TRANSPORT] ?: continue
-        val owner = (transport["Device"] as? String) ?: addresses.keys.firstOrNull { path == it || path.startsWith("$it/") }
+        val owner = (transport["Device"] as? String) ?: addresses.keys.firstOrNull { path == it || path.startsWith("$it/") } ?: continue
         val address = addresses[owner] ?: continue
+        if (objects[owner.substringBeforeLast('/')]?.get(ADAPTER)?.get("Powered") == false) continue
         val profile = profileForUuid((transport["UUID"] as? String)?.lowercase()) ?: continue
         val advertised = objects[owner]?.get(DEVICE)?.get("UUIDs") as? Collection<*>
         if (advertised != null && advertised.none { profileForUuid((it as? String)?.lowercase()) == profile }) continue
@@ -316,12 +333,20 @@ private fun profileForUuid(uuid: String?): AudioProfile? = when (uuid) {
 }
 
 private val audioDeviceProperties = setOf("Address", "Name", "Alias", "Paired", "Connected", "UUIDs")
+private val scanInterfaces = setOf(ADAPTER, DEVICE)
+private val advertisementKeys = setOf("Address", "Name", "Alias", "RSSI", "ManufacturerData")
+
+private fun affectsAudio(signal: BluezSignal): Boolean = when {
+    signal is BluezSignal.Changed && signal.interfaceName == DEVICE -> signal.values.keys.any { it in audioDeviceProperties }
+    else -> signal.affects(audioInterfaces)
+}
+
 private val availabilityInterfaces = setOf(ADAPTER)
 private val audioInterfaces = setOf(ADAPTER, DEVICE, MEDIA_TRANSPORT)
 
 private fun BluezSignal.affects(interfaces: Set<String>): Boolean = when (this) {
     is BluezSignal.Owner -> true
     is BluezSignal.Changed -> interfaceName in interfaces
-    is BluezSignal.Added -> this.interfaces.any { it in interfaces }
+    is BluezSignal.Added -> this.interfaces.keys.any { it in interfaces }
     is BluezSignal.Removed -> this.interfaces.any { it in interfaces }
 }

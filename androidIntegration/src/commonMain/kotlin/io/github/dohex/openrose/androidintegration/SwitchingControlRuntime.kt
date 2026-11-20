@@ -100,6 +100,7 @@ class SwitchingControlRuntime(
     private var platform = initialPlatformState
     private var integrationPlatform = initialIntegrationPlatform
     private var ordinary: Ordinary? = null
+    private val servingOrdinary: Ordinary? get() = ordinary?.takeIf { holds > 0 && it.job.isActive }
     private var holds = 0
     private var switching: SwitchRequest? = null
     private var blocked: OwnerReadiness.SwitchBlocked? = null
@@ -136,13 +137,20 @@ class SwitchingControlRuntime(
         refresh()
         if (holds > 0) return
         scope.launch {
-            switchLock.withLock {
-                // A claim taken again before this ran keeps the session; a failed close leaves it as a handoff would.
-                if (holds == 0) ordinary?.let { stopOrdinary(it) }
-                // A claim taken while the session was closing found it still present and could not start one.
-                startOrdinary()
-            }
+            val retiring = switchLock.withLock {
+                ordinary?.takeIf { holds == 0 && it.job.isActive }?.also { it.job.cancelAndJoin() }
+            } ?: return@launch
+            // A cached process must not react to audio while the platform refuses to close its last handle.
+            while (!finishIdleRelease(retiring)) delay(timing.retryMillis)
         }
+    }
+
+    private suspend fun finishIdleRelease(retiring: Ordinary): Boolean = switchLock.withLock {
+        if (ordinary !== retiring) return@withLock true
+        val closed = stopOrdinary(retiring)
+        if (closed) startOrdinary() // A new claim may have arrived while the old handle was closing.
+        refresh()
+        closed
     }
 
     /**
@@ -215,7 +223,7 @@ class SwitchingControlRuntime(
 
     private suspend fun establishModule(request: SwitchRequest): HandoffOutcome {
         client.start()
-        return when (val outcome = client.acquire(request, HostSettings(settings, integrationSettings))) {
+        return when (val outcome = client.acquire(request)) {
             is AcquireOutcome.Acquired -> {
                 record = record.copy(moduleRelease = PendingModuleRelease(request.id, outcome.generation))
                 store.save(record)
@@ -318,10 +326,10 @@ class SwitchingControlRuntime(
         ownerScope.launch { runtime.presentation.collect { refresh() } }
     }
 
-    /** Cancels and joins everything the ordinary owner started, then closes its connection; false if the close is unconfirmed. */
+    /** A failed handoff leaves the held runtime usable. A successful release prohibits any later connection on it. */
     private suspend fun stopOrdinary(current: Ordinary): Boolean {
+        if (!current.runtime.release()) return false
         current.job.cancelAndJoin()
-        if (!current.runtime.disconnect()) return false
         ordinary = null
         refresh()
         return true
@@ -355,7 +363,8 @@ class SwitchingControlRuntime(
         } else {
             switching?.let { OwnerReadiness.Switching(it) } ?: activeBlock ?: when (selected) {
                 ControlWay.ORDINARY -> when {
-                    ordinary != null -> OwnerReadiness.Ready
+                    ordinary?.job?.isCancelled == true -> OwnerReadiness.Unavailable(OwnerFailureStage.RELEASE, "正在等待普通控制连接释放")
+                    servingOrdinary != null -> OwnerReadiness.Ready
                     holds == 0 -> OwnerReadiness.Idle("没有界面或后台控制服务需要控制会话")
                     else -> OwnerReadiness.Starting
                 }
@@ -374,7 +383,7 @@ class SwitchingControlRuntime(
 
     private fun composeControl(): ControlState {
         val view = client.view.value
-        val local = ordinary
+        val local = servingOrdinary
         return when {
             local != null -> local.runtime.state.value.copy(platform = platform, settings = settings)
 
@@ -397,7 +406,7 @@ class SwitchingControlRuntime(
             // While module control is chosen the module/bridge facts are the live host link, not a guess.
             platform = if (record.selected == ControlWay.MODULE) moduleFacts(integrationPlatform, view) else integrationPlatform,
             owner = ownerState(view),
-            presentation = ordinary?.runtime?.presentation?.value
+            presentation = servingOrdinary?.runtime?.presentation?.value
                 ?: if (record.selected == ControlWay.MODULE && view is ModuleView.Active) {
                     view.frame.presentation
                 } else {
@@ -468,7 +477,7 @@ class SwitchingControlRuntime(
         ordinaryCall: suspend (SystemEntryRuntime) -> OperationResult,
         command: HostCommand,
     ): OperationResult {
-        val local = ordinary
+        val local = servingOrdinary
         return when {
             local != null -> ordinaryCall(local.runtime)
             record.selected == ControlWay.MODULE -> module(command)
@@ -477,7 +486,7 @@ class SwitchingControlRuntime(
     }
 
     override suspend fun refreshBondedDevices() {
-        ordinary?.let {
+        servingOrdinary?.let {
             it.runtime.refreshBondedDevices()
             return
         }
@@ -507,8 +516,11 @@ class SwitchingControlRuntime(
 
     override suspend fun disconnect(): Boolean {
         ordinary?.let { return it.runtime.disconnect() }
-        // With no owner there is no control connection to close.
-        return record.selected != ControlWay.MODULE || module(HostCommand.Disconnect) == OperationResult.Success
+        return if (record.selected == ControlWay.MODULE) {
+            module(HostCommand.Disconnect) == OperationResult.Success
+        } else {
+            record.moduleRelease == null
+        }
     }
 
     override suspend fun set(setting: DeviceSetting, value: FieldValue, expectedSessionId: Long?): OperationResult {
@@ -526,7 +538,7 @@ class SwitchingControlRuntime(
     )
 
     override fun readSession(reference: SessionReference): SessionSnapshotResult {
-        ordinary?.let { return it.runtime.readSession(reference) }
+        servingOrdinary?.let { return it.runtime.readSession(reference) }
         val frame = (client.view.value as? ModuleView.Active)?.frame
         return if (record.selected == ControlWay.MODULE && frame?.state?.readySession == reference) {
             SessionSnapshotResult.Available(requireNotNull(frame.state.device), frame.presentation)
@@ -536,8 +548,9 @@ class SwitchingControlRuntime(
     }
 
     override suspend fun claimPrompt(reference: SessionReference, promptId: String): Boolean {
-        ordinary?.let { return it.runtime.claimPrompt(reference, promptId) }
-        return (client.execute(HostCommand.ClaimPrompt(reference, promptId)) as? HostCallResult.Flag)?.value == true
+        servingOrdinary?.let { return it.runtime.claimPrompt(reference, promptId) }
+        return record.selected == ControlWay.MODULE &&
+            (client.execute(HostCommand.ClaimPrompt(reference, promptId)) as? HostCallResult.Flag)?.value == true
     }
 
     override fun updateSettings(settings: UserSettings) {
