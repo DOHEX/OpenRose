@@ -12,6 +12,7 @@ import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerScope
@@ -264,18 +265,25 @@ internal fun MaterialMainShell(
                             .padding(bottom = 16.dp),
                         contentAlignment = Alignment.Center,
                     ) {
-                        // The toolbar's default elevation is Level0 and its container matches surfaceContainer
-                        // list rows, so it vanishes over them. Lift it one tone (surfaceContainerHigh) and give
-                        // it MD3 floating elevation (Level3, 6dp). The tint goes through the toolbar's own
-                        // background so it paints above the shadow layer instead of under it.
+                        // The toolbar's default container matches surfaceContainer list rows, so it vanishes
+                        // over them: lift it one tone (surfaceContainerHigh). Opaque, it gets MD3 floating
+                        // elevation (Level3, 6dp). Translucent over the blur, an elevation shadow fills the
+                        // whole shape and shows through the tint, darkening it, so the blurred toolbar uses
+                        // an outlineVariant hairline for separation instead.
                         HorizontalFloatingToolbar(
                             expanded = true,
                             modifier = if (backdropActive && floatingBackdrop != null) {
-                                Modifier.textureBlur(
-                                    backdrop = floatingBackdrop,
-                                    shape = FloatingToolbarDefaults.ContainerShape,
-                                    blurRadius = 25f,
-                                )
+                                Modifier
+                                    .textureBlur(
+                                        backdrop = floatingBackdrop,
+                                        shape = FloatingToolbarDefaults.ContainerShape,
+                                        blurRadius = 25f,
+                                    )
+                                    .border(
+                                        width = 1.dp,
+                                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+                                        shape = FloatingToolbarDefaults.ContainerShape,
+                                    )
                             } else {
                                 Modifier
                             },
@@ -284,7 +292,7 @@ internal fun MaterialMainShell(
                                     if (backdropActive) it.copy(alpha = 0.85f) else it
                                 },
                             ),
-                            expandedShadowElevation = 6.dp,
+                            expandedShadowElevation = if (backdropActive) 0.dp else 6.dp,
                         ) {
                             mainPages.forEachIndexed { index, destination ->
                                 val isSelected = currentTab == destination
