@@ -233,34 +233,34 @@ class OpenRoseBluetoothModule : XposedModule() {
             BridgeTarget.XIAOMI_BLUETOOTH -> {
                 val output = official ?: OfficialConnectionPresenter(context, connected.handler, presentationCallbacks(connected))
                     .also { official = it }
-                val spec = snapshot.getBundle(BridgePresentationWire.PRESENTATION)
-                val prompt = spec?.getBundle(BridgePresentationWire.PROMPT)
-                val id = prompt?.getString(BridgePresentationWire.PROMPT_ID)
-                val identity = "${snapshot.getString(BridgeWire.HOST_EPOCH)}:" +
-                    "${snapshot.getString(BridgeWire.DEVICE_ID)}:" +
-                    "${snapshot.getLong(BridgeWire.SESSION_ID)}"
-                if (lastOfficialIdentity != identity) {
-                    output.clear()
-                    consumedOfficialPrompts.clear()
-                    lastOfficialIdentity = identity
-                }
-                if (spec?.getString(BridgePresentationWire.MODE) != BridgePresentationWire.OFFICIAL ||
-                    !spec.getBoolean(BridgePresentationWire.ALLOW_ISLAND_FIELDS)
-                ) {
-                    output.clear()
-                    return
-                }
-                // A prompt that expired on the host can no longer be claimed; SystemUI owns the rest of its display
-                // time, and only a disconnect, mode change or new session withdraws it early (ADR 0004).
-                if (id == null) return
-                if (id !in consumedOfficialPrompts) {
-                    consumedOfficialPrompts += id
-                    if (!prompt.getBoolean(BridgePresentationWire.CLAIMED)) output.show(snapshot, id)
-                }
+                publishOfficialPrompt(snapshot, output)
             }
 
             else -> Unit
         }
+    }
+
+    private fun publishOfficialPrompt(snapshot: Bundle, output: OfficialConnectionPresenter) {
+        val identity = "${snapshot.getString(BridgeWire.HOST_EPOCH)}:" +
+            "${snapshot.getString(BridgeWire.DEVICE_ID)}:" +
+            "${snapshot.getLong(BridgeWire.SESSION_ID)}"
+        if (lastOfficialIdentity != identity) {
+            output.clear()
+            consumedOfficialPrompts.clear()
+            lastOfficialIdentity = identity
+        }
+        val spec = snapshot.getBundle(BridgePresentationWire.PRESENTATION)
+        if (spec?.getString(BridgePresentationWire.MODE) != BridgePresentationWire.OFFICIAL ||
+            !spec.getBoolean(BridgePresentationWire.ALLOW_ISLAND_FIELDS)
+        ) {
+            output.clear()
+            return
+        }
+        // A prompt that expired on the host can no longer be claimed; SystemUI owns the rest of its display
+        // time, and only a disconnect, mode change or new session withdraws it early (ADR 0004).
+        val prompt = spec.getBundle(BridgePresentationWire.PROMPT)
+        val id = prompt?.getString(BridgePresentationWire.PROMPT_ID) ?: return
+        if (consumedOfficialPrompts.add(id) && !prompt.getBoolean(BridgePresentationWire.CLAIMED)) output.show(snapshot, id)
     }
 
     private fun refreshSnapshot(capturedAt: Long) {

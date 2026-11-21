@@ -2,18 +2,9 @@
 <SmellBaseline>
   <ManuallySuppressedIssues/>
   <CurrentIssues>
-    <ID>ComplexCondition:BluezControlTransport.kt:BluezControlTransport$signal is BluezSignal.Changed &amp;&amp; signal.path == adapter &amp;&amp; signal.interfaceName == ADAPTER &amp;&amp; signal.values["Powered"] == false</ID>
-    <ID>ComplexCondition:BluezGattDriver.kt:BluezGattDriver$(signal.path == devicePath &amp;&amp; DEVICE in signal.interfaces) || (devicePath.startsWith("${signal.path}/") &amp;&amp; ADAPTER in signal.interfaces)</ID>
     <ID>ComplexCondition:BluezGattDriver.kt:BluezGattDriver$(signal.path == devicePath &amp;&amp; signal.interfaceName == DEVICE &amp;&amp; signal.values["Connected"] == false) || (devicePath.startsWith("${signal.path}/") &amp;&amp; signal.interfaceName == ADAPTER &amp;&amp; signal.values["Powered"] == false)</ID>
-    <ID>ComplexCondition:BluezGattDriver.kt:BluezGattDriver$synchronized(lock) { discovered } &amp;&amp; signal.path == devicePath &amp;&amp; signal.interfaceName == DEVICE &amp;&amp; signal.values.containsKey("ServicesResolved") &amp;&amp; signal.values["ServicesResolved"] != true</ID>
-    <ID>ComplexCondition:BluezGattDriver.kt:BluezGattDriver$synchronized(lock) { discovered } &amp;&amp; signal.path.startsWith("$devicePath/") &amp;&amp; (SERVICE in signal.interfaces || CHARACTERISTIC in signal.interfaces)</ID>
-    <ID>CyclomaticComplexMethod:BluezControlTransport.kt:BluezControlTransport$override fun scan: Flow&lt;Advertisement&gt;</ID>
-    <ID>CyclomaticComplexMethod:BluezControlTransport.kt:private fun audioSnapshot: RawAudioSnapshot</ID>
     <ID>CyclomaticComplexMethod:BluezGattDriver.kt:BluezGattDriver$override suspend fun discoverServices: List&lt;GattService&gt;</ID>
-    <ID>LoopWithTooManyJumpStatements:BluezControlTransport.kt:for</ID>
     <ID>ThrowingExceptionFromFinally:BluezControlTransport.kt:BluezControlTransport$throw cleanup</ID>
-    <ID>ThrowsCount:BluezControlTransport.kt:BluezControlTransport$override suspend fun connect: ControlConnection</ID>
-    <ID>ThrowsCount:BluezControlTransport.kt:BluezControlTransport$private suspend fun activeBus: BluezBus</ID>
     <ID>TooGenericExceptionCaught:BluezControlTransport.kt:BluezControlTransport$cleanup: Exception</ID>
     <ID>TooGenericExceptionCaught:BluezControlTransport.kt:BluezControlTransport$error: Exception</ID>
     <ID>TooGenericExceptionCaught:BluezControlTransport.kt:BluezControlTransport$error: Throwable</ID>

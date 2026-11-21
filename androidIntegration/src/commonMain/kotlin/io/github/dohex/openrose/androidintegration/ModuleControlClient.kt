@@ -184,7 +184,7 @@ class ModuleControlClient(
         val end = connection.ended.takeIf { it.isCompleted }?.getCompleted()
         val named = request.fromGeneration
         // The death of a process only proves the owners that process held, so it must be the one the request names.
-        if (end != null && end.processDied && (named == null || named.incarnation == connection.incarnation)) {
+        if (end?.processDied == true && (named == null || named.incarnation == connection.incarnation)) {
             return ReleaseProof.ProcessEnded(connection.incarnation)
         }
         return ReleaseProof.Unproven(OwnerFailureStage.CONNECTION, detail ?: "与模块宿主失联，无法确认已释放")

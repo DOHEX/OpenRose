@@ -59,11 +59,11 @@ class BluezControlTransport private constructor(
     }
     private suspend fun activeBus(): BluezBus {
         ready.await()
-        val current = bus ?: throw IllegalStateException((availability.value as? TransportAvailability.Unavailable)?.reason ?: "BlueZ 不可用")
-        when (val status = availability.value) {
-            TransportAvailability.Available -> return current
-            TransportAvailability.Disabled -> throw IllegalStateException("蓝牙适配器已关闭")
-            is TransportAvailability.Unavailable -> throw IllegalStateException(status.reason)
+        val current = checkNotNull(bus) { (availability.value as? TransportAvailability.Unavailable)?.reason ?: "BlueZ 不可用" }
+        return when (val status = availability.value) {
+            TransportAvailability.Available -> current
+            TransportAvailability.Disabled -> error("蓝牙适配器已关闭")
+            is TransportAvailability.Unavailable -> error(status.reason)
         }
     }
     private suspend fun updateAvailability(current: BluezBus) {
@@ -98,15 +98,7 @@ class BluezControlTransport private constructor(
             val initialDevices = CompletableDeferred<Unit>()
             val events = launch(start = CoroutineStart.UNDISPATCHED) {
                 current.signals { it.affects(scanInterfaces) }.collect { signal ->
-                    if (signal is BluezSignal.Owner && !signal.present) throw IllegalStateException("BlueZ 服务已停止")
-                    if (signal is BluezSignal.Changed && signal.path == adapter && signal.interfaceName == ADAPTER &&
-                        signal.values["Powered"] == false
-                    ) {
-                        throw IllegalStateException("蓝牙适配器已关闭")
-                    }
-                    if (signal is BluezSignal.Removed && signal.path == adapter && ADAPTER in signal.interfaces) {
-                        throw IllegalStateException("蓝牙适配器已移除")
-                    }
+                    signal.discoveryFailure(adapter)?.let { error(it) }
                     initialDevices.await()
                     devices.updateAdvertisement(signal)?.let { send(it) }
                 }
@@ -150,13 +142,13 @@ class BluezControlTransport private constructor(
     override val audioConnectedDevice: Flow<DeviceId?> = audio.audioConnectedDevice
     override suspend fun connect(deviceId: DeviceId, endpoint: TransportEndpoint, onPhase: (ConnectionPhase) -> Unit): ControlConnection {
         val current = activeBus()
-        val ble = endpoint as? TransportEndpoint.BleGatt ?: throw IllegalArgumentException("Linux 不支持 SPP 控制连接")
-        val address = normalizeBluetoothAddress(deviceId.value) ?: throw IllegalArgumentException("蓝牙地址无效")
+        require(endpoint is TransportEndpoint.BleGatt) { "Linux 不支持 SPP 控制连接" }
+        val address = requireNotNull(normalizeBluetoothAddress(deviceId.value)) { "蓝牙地址无效" }
         val path = current.objects().entries.firstOrNull { (_, interfaces) ->
             normalizeBluetoothAddress(interfaces[DEVICE]?.get("Address") as? String) == address
         }?.key
-            ?: throw IllegalStateException("未找到蓝牙设备 $address")
-        return GattControlConnection.open(BluezGattDriver(current, path), ble, onPhase)
+            ?: error("未找到蓝牙设备 $address")
+        return GattControlConnection.open(BluezGattDriver(current, path), endpoint, onPhase)
     }
     override suspend fun close() {
         job.cancelAndJoin()
@@ -252,6 +244,13 @@ class BluezControlTransport private constructor(
     }
 }
 
+private fun BluezSignal.discoveryFailure(adapter: String): String? = when (this) {
+    is BluezSignal.Owner -> if (!present) "BlueZ 服务已停止" else null
+    is BluezSignal.Changed -> if (path == adapter && interfaceName == ADAPTER && values["Powered"] == false) "蓝牙适配器已关闭" else null
+    is BluezSignal.Removed -> if (path == adapter && ADAPTER in interfaces) "蓝牙适配器已移除" else null
+    is BluezSignal.Added, is BluezSignal.PrepareForSleep -> null
+}
+
 private fun MutableMap<String, Map<String, Any?>>.updateAdvertisement(signal: BluezSignal): Advertisement? {
     val device = when (signal) {
         is BluezSignal.Added -> signal.interfaces[DEVICE]?.let { signal.path to it }
@@ -307,13 +306,9 @@ private fun audioSnapshot(objects: BluezObjects, targets: Set<String>): RawAudio
     val connected = AudioProfile.entries.associateWith { mutableSetOf<String>() }
     for ((path, interfaces) in objects) {
         val transport = interfaces[MEDIA_TRANSPORT] ?: continue
-        val owner = (transport["Device"] as? String) ?: addresses.keys.firstOrNull { path == it || path.startsWith("$it/") } ?: continue
-        val address = addresses[owner] ?: continue
-        if (objects[owner.substringBeforeLast('/')]?.get(ADAPTER)?.get("Powered") == false) continue
-        val profile = profileForUuid((transport["UUID"] as? String)?.lowercase()) ?: continue
-        val advertised = objects[owner]?.get(DEVICE)?.get("UUIDs") as? Collection<*>
-        if (advertised != null && advertised.none { profileForUuid((it as? String)?.lowercase()) == profile }) continue
-        connected.getValue(profile).add(address)
+        objects.connectedAudioProfile(path, transport, addresses)?.let { (profile, address) ->
+            connected.getValue(profile).add(address)
+        }
     }
     val profiles = connected.mapValues { (_, list) ->
         RawProfileSnapshot(
@@ -332,7 +327,20 @@ private fun audioSnapshot(objects: BluezObjects, targets: Set<String>): RawAudio
     )
 }
 
-private fun profileForUuid(uuid: String?): AudioProfile? = when (uuid) {
+private fun BluezObjects.connectedAudioProfile(
+    path: String,
+    transport: Map<String, Any?>,
+    addresses: Map<String, String>,
+): Pair<AudioProfile, String>? {
+    val owner = (transport["Device"] as? String) ?: addresses.keys.firstOrNull { path == it || path.startsWith("$it/") } ?: return null
+    val address = addresses[owner] ?: return null
+    if (this[owner.substringBeforeLast('/')]?.get(ADAPTER)?.get("Powered") == false) return null
+    val profile = profileForUuid(transport["UUID"]) ?: return null
+    val advertised = this[owner]?.get(DEVICE)?.get("UUIDs") as? Collection<*>
+    return if (advertised == null || advertised.any { profileForUuid(it) == profile }) profile to address else null
+}
+
+private fun profileForUuid(uuid: Any?): AudioProfile? = when ((uuid as? String)?.lowercase()) {
     "0000110a-0000-1000-8000-00805f9b34fb", "0000110b-0000-1000-8000-00805f9b34fb" -> AudioProfile.A2DP
 
     "0000184e-0000-1000-8000-00805f9b34fb",

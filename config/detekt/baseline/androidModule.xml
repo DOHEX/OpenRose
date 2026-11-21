@@ -2,53 +2,7 @@
 <SmellBaseline>
   <ManuallySuppressedIssues/>
   <CurrentIssues>
-    <ID>ComplexCondition:AuthenticatedBridgeClient.kt:AuthenticatedBridgeClient$feature.isBlank() || feature.length &gt; MAX_FEATURE_LENGTH || status.isBlank() || status.length &gt; MAX_STATUS_LENGTH</ID>
-    <ID>ComplexCondition:AuthenticatedBridgeClient.kt:AuthenticatedBridgeClient$ownerGeneration == null || deviceId.isNullOrBlank() || deviceId.length &gt; MAX_DEVICE_ID_LENGTH || sessionId &lt;= 0L</ID>
-    <ID>ComplexCondition:AuthenticatedBridgeClient.kt:AuthenticatedBridgeClient$snapshot == null || !hasWireVersion(snapshot) || snapshot.getString(BridgeWire.HOST_EPOCH) != ownerGeneration || snapshot.getString(BridgeWire.DEVICE_ID) != deviceId || snapshot.getLong(BridgeWire.SESSION_ID, INVALID_SESSION_ID) != sessionId</ID>
-    <ID>ComplexCondition:AuthenticatedBridgeClient.kt:AuthenticatedBridgeClient$snapshot.getInt(BridgeWire.KEY_VERSION, INVALID_WIRE_VERSION) != BridgeWire.VERSION || snapshotGeneration != confirmed || (requireCurrentReference &amp;&amp; currentReference != SessionReference(deviceId, sessionId))</ID>
-    <ID>ComplexCondition:MiLinkNativeHeadsetAdapter.kt:MiLinkNativeHeadsetAdapter$current == null || current.reference != expectedReference || !current.matchesAddress(address) || lastAncReference != expectedReference || lastAncAddress != address || lastAncController?.get() !== controller || lastAncDevice !== device</ID>
-    <ID>ComplexCondition:MiLinkNativeHeadsetAdapter.kt:MiLinkNativeHeadsetAdapter$rememberedReference != null &amp;&amp; (rememberedReference != fresh.reference || rememberedAddress == null || rememberedAddress !in fresh.addresses)</ID>
-    <ID>ComplexCondition:NativeHeadsetBinderAdapter.kt:NativeHeadsetBinderAdapter$closed || registeredCallbacks[target.binder] !== target || current == null || current.reference != target.reference || !current.matchesAddress(target.address)</ID>
-    <ID>ComplexCondition:SystemPresentationRenderer.kt:SystemPresentationRenderer$!islandAllowed || prompt == null || promptId == null || promptMode == null || promptMode != snapshot.mode || promptMode == BridgePresentationWire.OFF || promptMode !in PROMPT_MODES</ID>
-    <ID>ComplexCondition:SystemPresentationRenderer.kt:SystemPresentationRenderer$pending != null &amp;&amp; ( !islandAllowed || promptId == null || pending.identity != snapshot.identity || pending.key != promptKey(snapshot.identity, promptId) || promptId != pending.id || promptMode != pending.mode || snapshot.mode != pending.mode )</ID>
-    <ID>CyclomaticComplexMethod:AuthenticatedBridgeClient.kt:AuthenticatedBridgeClient$private fun pollBridge</ID>
-    <ID>CyclomaticComplexMethod:AuthenticatedBridgeClient.kt:AuthenticatedBridgeClient$private fun readCurrentSnapshot</ID>
-    <ID>CyclomaticComplexMethod:HostEndpoint.kt:HostEndpoint$override fun open: Bundle</ID>
-    <ID>CyclomaticComplexMethod:MiLinkNativeHeadsetAdapter.kt:MiLinkNativeHeadsetAdapter$fun publish</ID>
-    <ID>CyclomaticComplexMethod:MiLinkNativeHeadsetAdapter.kt:MiLinkNativeHeadsetAdapter$private fun installAncBatteryController</ID>
-    <ID>CyclomaticComplexMethod:MiLinkNativeHeadsetAdapter.kt:MiLinkNativeHeadsetAdapter$private fun notifyHeadsetPropertyChanged</ID>
-    <ID>CyclomaticComplexMethod:NativeHeadsetBinderAdapter.kt:NativeHeadsetBinderAdapter$private fun installBinderClass</ID>
-    <ID>CyclomaticComplexMethod:NativeHeadsetBinderAdapter.kt:NativeHeadsetBinderAdapter$private fun interceptTransact: HookDecision</ID>
-    <ID>CyclomaticComplexMethod:OpenRoseBluetoothModule.kt:OpenRoseBluetoothModule$private fun publish</ID>
-    <ID>CyclomaticComplexMethod:SystemPresentationRenderer.kt:SystemPresentationRenderer$private fun renderConnectionPrompt</ID>
-    <ID>CyclomaticComplexMethod:SystemPresentationRenderer.kt:SystemPresentationRenderer$private fun renderStatusNotification</ID>
-    <ID>LargeClass:NativeHeadsetBinderAdapter.kt:NativeHeadsetBinderAdapter</ID>
-    <ID>LargeClass:SystemPresentationRenderer.kt:SystemPresentationRenderer : AutoCloseable</ID>
-    <ID>LongMethod:AuthenticatedBridgeClient.kt:AuthenticatedBridgeClient$private fun readCurrentSnapshot</ID>
-    <ID>LongMethod:MiLinkNativeHeadsetAdapter.kt:MiLinkNativeHeadsetAdapter$private fun installAncBatteryController</ID>
-    <ID>LongMethod:NativeHeadsetBinderAdapter.kt:NativeHeadsetBinderAdapter$private fun installBinderClass</ID>
-    <ID>LongMethod:NativeHeadsetBinderAdapter.kt:NativeHeadsetBinderAdapter$private fun interceptTransact: HookDecision</ID>
-    <ID>LongMethod:SystemPresentationRenderer.kt:SystemPresentationRenderer$private fun renderStatusNotification</ID>
-    <ID>LoopWithTooManyJumpStatements:MiLinkNativeHeadsetAdapter.kt:MiLinkNativeHeadsetAdapter$for</ID>
-    <ID>NestedBlockDepth:AuthenticatedBridgeClient.kt:AuthenticatedBridgeClient$private fun pollBridge</ID>
     <ID>ReturnCount:AuthenticatedBridgeClient.kt:AuthenticatedBridgeClient$fun close: Boolean</ID>
-    <ID>ReturnCount:AuthenticatedBridgeClient.kt:AuthenticatedBridgeClient$fun fusionEntryDevice: String?</ID>
-    <ID>ReturnCount:AuthenticatedBridgeClient.kt:AuthenticatedBridgeClient$private fun pollBridge</ID>
-    <ID>ReturnCount:AuthenticatedBridgeClient.kt:AuthenticatedBridgeClient$private fun readCurrentSnapshot</ID>
-    <ID>ReturnCount:HostEndpoint.kt:HostEndpoint$override fun claimPrompt: Bundle</ID>
-    <ID>ReturnCount:HostEndpoint.kt:HostEndpoint$override fun open: Bundle</ID>
-    <ID>ReturnCount:HostEndpoint.kt:HostEndpoint$override fun reportComponent: Bundle</ID>
-    <ID>ReturnCount:HostEndpoint.kt:HostEndpoint$override fun reportPresentation: Bundle</ID>
-    <ID>ReturnCount:HostEndpoint.kt:HostEndpoint$override fun setNoise: Bundle</ID>
-    <ID>ReturnCount:MiLinkNativeHeadsetAdapter.kt:MiLinkNativeHeadsetAdapter$fun publish</ID>
-    <ID>ReturnCount:ModuleHostRuntime.kt:ModuleHostRuntime$fun close: Boolean</ID>
-    <ID>ReturnCount:NativeHeadsetBinderAdapter.kt:NativeHeadsetBinderAdapter$fun publish</ID>
-    <ID>ReturnCount:NativeHeadsetBinderAdapter.kt:NativeHeadsetBinderAdapter$private fun registerCallback: Boolean</ID>
-    <ID>ReturnCount:OfficialConnectionPresenter.kt:OfficialConnectionPresenter$private fun showOnHandler</ID>
-    <ID>ReturnCount:SystemPresentationRenderer.kt:SystemPresentationRenderer$private fun renderConnectionPrompt</ID>
-    <ID>SwallowedException:HostEndpoint.kt:HostEndpoint$failure: Exception</ID>
-    <ID>ThrowsCount:OfficialConnectionPresenter.kt:OfficialConnectionPresenter$private fun prepareClips: List&lt;PreparedClip&gt;</ID>
-    <ID>ThrowsCount:OfficialConnectionPresenter.kt:OfficialConnectionPresenter$private fun probeProviderVideo</ID>
     <ID>TooGenericExceptionCaught:AuthenticatedBridgeClient.kt:AuthenticatedBridgeClient$failure: Throwable</ID>
     <ID>TooGenericExceptionCaught:HostEndpoint.kt:HostEndpoint$failure: Exception</ID>
     <ID>TooGenericExceptionCaught:MiLinkNativeHeadsetAdapter.kt:MiLinkNativeHeadsetAdapter$failure: Throwable</ID>
@@ -64,6 +18,5 @@
     <ID>TooManyFunctions:NativeHeadsetBinderAdapter.kt:NativeHeadsetBinderAdapter</ID>
     <ID>TooManyFunctions:OfficialConnectionPresenter.kt:OfficialConnectionPresenter : AutoCloseable</ID>
     <ID>TooManyFunctions:OpenRoseBluetoothModule.kt:OpenRoseBluetoothModule : XposedModule</ID>
-    <ID>TooManyFunctions:SystemPresentationRenderer.kt:SystemPresentationRenderer : AutoCloseable</ID>
   </CurrentIssues>
 </SmellBaseline>

@@ -39,29 +39,27 @@ internal class BluezGattDriver(private val bus: BluezBus, private val devicePath
                     val value = signal.values["Value"].asBytes()
                     if (value != null && instance != null) emit(GattEvent.Notification(instance, value))
                 }
-                if (synchronized(lock) { discovered } && signal.path == devicePath && signal.interfaceName == DEVICE &&
-                    signal.values.containsKey("ServicesResolved") && signal.values["ServicesResolved"] != true
-                ) {
+                val servicesInvalidated = signal.interfaceName == DEVICE &&
+                    "ServicesResolved" in signal.values && signal.values["ServicesResolved"] != true
+                if (synchronized(lock) { discovered } && servicesInvalidated) {
                     emit(GattEvent.ServicesChanged)
                 }
             }
 
             is BluezSignal.Removed -> {
-                if ((signal.path == devicePath && DEVICE in signal.interfaces) ||
-                    (devicePath.startsWith("${signal.path}/") && ADAPTER in signal.interfaces)
-                ) {
+                val deviceRemoved = signal.path == devicePath && DEVICE in signal.interfaces
+                val adapterRemoved = devicePath.startsWith("${signal.path}/") && ADAPTER in signal.interfaces
+                if (deviceRemoved || adapterRemoved) {
                     emit(disconnected("蓝牙设备已移除"))
-                } else if (synchronized(lock) { discovered } && signal.path.startsWith("$devicePath/") &&
-                    (SERVICE in signal.interfaces || CHARACTERISTIC in signal.interfaces)
-                ) {
+                } else if (synchronized(lock) { discovered } && isGattAttribute(devicePath, signal.path, signal.interfaces)) {
                     emit(GattEvent.ServicesChanged)
                 }
             }
 
-            is BluezSignal.Added -> if (synchronized(lock) { discovered } && signal.path.startsWith("$devicePath/") &&
-                (SERVICE in signal.interfaces || CHARACTERISTIC in signal.interfaces)
-            ) {
-                emit(GattEvent.ServicesChanged)
+            is BluezSignal.Added -> {
+                if (synchronized(lock) { discovered } && isGattAttribute(devicePath, signal.path, signal.interfaces.keys)) {
+                    emit(GattEvent.ServicesChanged)
+                }
             }
         }
     }
@@ -252,6 +250,12 @@ private fun BluezObjects.gattServicesReady(devicePath: String): Boolean {
 }
 
 private fun disconnected(message: String) = GattEvent.Disconnected(GattException(GattFailureKind.DISCONNECTED, message))
+
+private fun isGattAttribute(
+    devicePath: String,
+    path: String,
+    interfaces: Set<String>,
+): Boolean = path.startsWith("$devicePath/") && (SERVICE in interfaces || CHARACTERISTIC in interfaces)
 
 internal fun Any?.asBytes(): ByteArray? = when (this) {
     is ByteArray -> copyOf()

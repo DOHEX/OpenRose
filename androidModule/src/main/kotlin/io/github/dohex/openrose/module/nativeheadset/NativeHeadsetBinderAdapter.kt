@@ -67,26 +67,24 @@ class NativeHeadsetBinderAdapter(
     /** Called by the authenticated bridge reader; status callbacks are sent only from this data. */
     fun publish(snapshot: NativeHeadsetSnapshot?) {
         val fresh = directory.publishSession(snapshot)
-        if (fresh == null) {
-            registeredCallbacks.values.toList().forEach { target ->
+        registeredCallbacks.values.toList().forEach { target ->
+            if (fresh == null || !target.matches(fresh)) {
                 registeredCallbacks.remove(target.binder, target)
                 unlinkDeath(target)
             }
+        }
+        if (fresh == null) {
             lastReportedSnapshot = null
             return
         }
-
-        registeredCallbacks.values.toList().filter { target ->
-            target.reference != fresh.reference || target.address !in fresh.addresses
-        }.forEach { target ->
-            registeredCallbacks.remove(target.binder, target)
-            unlinkDeath(target)
+        if (lastReportedSnapshot?.sameReportedState(fresh) != true) {
+            lastReportedSnapshot = fresh
+            refreshCallbacks(fresh)
         }
+    }
 
-        val previous = lastReportedSnapshot
-        if (previous != null && previous.sameReportedState(fresh)) return
-        lastReportedSnapshot = fresh
-        val targets = registeredCallbacks.values.filter { it.address in fresh.addresses && it.reference == fresh.reference }
+    private fun refreshCallbacks(fresh: NativeHeadsetSnapshot) {
+        val targets = registeredCallbacks.values.filter { it.matches(fresh) }
         if (targets.isEmpty()) return
         val status = SystemHeadsetMapping.binderStatus(fresh.fields) as? SystemHeadsetMapping.BinderStatus.Payload
         if (status == null) {
@@ -179,79 +177,45 @@ class NativeHeadsetBinderAdapter(
             snapshotForAddress(chain.args.getOrNull(0) as? String) ?: return@hook HookDecision.Proceed
             HookDecision.Return(false)
         }
+        installNoiseMethods(binderClass)
+        installCallbackMethods(binderClass)
+    }
+
+    private fun installNoiseMethods(binderClass: Class<*>) {
+        val device = BluetoothDevice::class.java
         hook(binderClass, "changeAncMode", arrayOf(Int::class.javaPrimitiveType!!, device), Void.TYPE) { chain ->
             val targetDevice = chain.args.getOrNull(1)
-            val snapshot = snapshotForActionDevice(chain.thisObject, targetDevice) ?: run {
-                if (shouldSuppressManagedAction(chain.thisObject, targetDevice)) {
-                    report(FEATURE, "UNAVAILABLE", "changeAncMode blocked because the managed address has no matching current session")
-                    return@hook HookDecision.Return(null)
-                }
-                return@hook HookDecision.Proceed
-            }
-            val requestedMode = (chain.args.getOrNull(0) as? Int)?.let(SystemHeadsetMapping::noiseModeFromSystem)
-            if (requestedMode == null) {
-                report(FEATURE, "UNSUPPORTED", "changeAncMode received an unmapped native mode")
-            } else {
-                submit(snapshot, requestedMode, bluetoothAddress(targetDevice))
-            }
-            // A void vendor method must not fall through to a second vendor control path for ROSE.
-            HookDecision.Return(null)
+            val handled = changeNoiseMode(chain.thisObject, targetDevice, chain.args.firstOrNull() as? Int, "changeAncMode")
+            if (handled) HookDecision.Return(null) else HookDecision.Proceed
         }
-        hook(binderClass, "changeAncLevel", arrayOf(string, device), Void.TYPE) { chain ->
-            val targetDevice = chain.args.getOrNull(1)
-            val snapshot = snapshotForActionDevice(chain.thisObject, targetDevice) ?: run {
-                if (shouldSuppressManagedAction(chain.thisObject, targetDevice)) {
-                    report(FEATURE, "UNAVAILABLE", "changeAncLevel blocked because the managed address has no matching current session")
-                    return@hook HookDecision.Return(null)
-                }
-                return@hook HookDecision.Proceed
+        hook(binderClass, "changeAncLevel", arrayOf(String::class.java, device), Void.TYPE) { chain ->
+            val handled = handleNoiseAction(chain.thisObject, chain.args.getOrNull(1), "changeAncLevel") { snapshot ->
+                report(FEATURE, "UNSUPPORTED", "changeAncLevel has no proven ROSE level mapping for ${snapshot.profile}")
             }
-            report(FEATURE, "UNSUPPORTED", "changeAncLevel has no proven ROSE level mapping for ${snapshot.profile}")
-            HookDecision.Return(null)
+            if (handled) HookDecision.Return(null) else HookDecision.Proceed
         }
+    }
 
-        val callbackClass = callbackClassOrNull()
-        if (callbackClass != null) {
-            hook(binderClass, "register", arrayOf(callbackClass), Void.TYPE) { chain ->
-                val binding = synchronized(binderAddress) { binderAddress[chain.thisObject] }
-                    ?: return@hook HookDecision.Proceed
-                val address = binding.address
-                val snapshot = snapshotForBoundAddress(chain.thisObject) ?: run {
-                    if (shouldSuppressManagedAction(chain.thisObject, address)) {
-                        report(FEATURE, "UNAVAILABLE", "callback registration blocked for a stale managed session")
-                        return@hook HookDecision.Return(null)
-                    }
-                    return@hook HookDecision.Proceed
-                }
-                val callback = chain.args.getOrNull(0) ?: return@hook HookDecision.Proceed
-                if (registerCallback(callback, snapshot, address)) {
-                    HookDecision.Return(null)
-                } else {
-                    HookDecision.Proceed
-                }
-            }
-            hook(binderClass, "registerCallbackDevice", arrayOf(callbackClass, device), Void.TYPE) { chain ->
-                val bluetoothDevice = chain.args.getOrNull(1) as? BluetoothDevice ?: return@hook HookDecision.Proceed
-                val address = runCatching { bluetoothDevice.address }.getOrNull() ?: return@hook HookDecision.Proceed
-                val snapshot = snapshotForActionDevice(chain.thisObject, bluetoothDevice) ?: run {
-                    if (shouldSuppressManagedAction(chain.thisObject, bluetoothDevice)) {
-                        report(FEATURE, "UNAVAILABLE", "callback registration blocked for a stale managed session")
-                        return@hook HookDecision.Return(null)
-                    }
-                    return@hook HookDecision.Proceed
-                }
-                val callback = chain.args.getOrNull(0) ?: return@hook HookDecision.Proceed
-                if (registerCallback(callback, snapshot, address)) HookDecision.Return(null) else HookDecision.Proceed
-            }
-            hook(binderClass, "unregister", arrayOf(callbackClass, device), Void.TYPE) { chain ->
-                val snapshot = snapshotForDevice(chain.args.getOrNull(1)) ?: return@hook HookDecision.Proceed
-                val callback = chain.args.getOrNull(0) ?: return@hook HookDecision.Proceed
-                removeCallback(callback)
-                report(FEATURE, "RESOLVED", "callback removed for ${snapshot.deviceId}")
-                HookDecision.Return(null)
-            }
-        } else {
+    private fun installCallbackMethods(binderClass: Class<*>) {
+        val callbackClass = callbackClassOrNull() ?: run {
             report(FEATURE, "UNAVAILABLE", "IMiuiHeadsetCallback class missing; using onTransact fallback if available")
+            return
+        }
+        hook(binderClass, "register", arrayOf(callbackClass), Void.TYPE) { chain ->
+            val handled = registerBoundCallback(chain.thisObject) { chain.args.firstOrNull() }
+            if (handled) HookDecision.Return(null) else HookDecision.Proceed
+        }
+        val device = BluetoothDevice::class.java
+        hook(binderClass, "registerCallbackDevice", arrayOf(callbackClass, device), Void.TYPE) { chain ->
+            val handled = registerDeviceCallback(chain.thisObject, chain.args.getOrNull(1) as? BluetoothDevice, chain.args.firstOrNull())
+            if (handled) HookDecision.Return(null) else HookDecision.Proceed
+        }
+        hook(binderClass, "unregister", arrayOf(callbackClass, device), Void.TYPE) { chain ->
+            val snapshot = snapshotForDevice(chain.args.getOrNull(1)) ?: return@hook HookDecision.Proceed
+            val callback = chain.args.firstOrNull() ?: return@hook HookDecision.Proceed
+            removeCallback(callback)
+            report(FEATURE, "RESOLVED", "callback removed for ${snapshot.deviceId}")
+            HookDecision.Return(null)
         }
     }
 
@@ -277,138 +241,131 @@ class NativeHeadsetBinderAdapter(
         val data = chain.args.getOrNull(1) as? Parcel ?: return HookDecision.Proceed
         val reply = chain.args.getOrNull(2) as? Parcel ?: return HookDecision.Proceed
         val originalPosition = data.dataPosition()
-        var handled = false
-        try {
+        val handled = try {
             data.enforceInterface(SERVICE_DESCRIPTOR)
-            when (code) {
-                TRANSACTION_CHECK_SUPPORT -> {
-                    val address = data.readDevice()?.address
-                    rememberAddress(chain.thisObject, address)
-                    handled = replyIdentity("checkSupport", address, reply) { writeString(NativeHeadsetDirectory.BINDER_SUPPORT_MASK) }
-                }
-
-                TRANSACTION_GET_DEVICE_INFO -> {
-                    val address = data.readString()
-                    rememberAddress(chain.thisObject, address)
-                    handled = replyIdentity("getDeviceInfo", address, reply) { writeString(NativeHeadsetDirectory.BINDER_SUPPORT_MASK) }
-                }
-
-                TRANSACTION_IS_MITWS, TRANSACTION_CHECK_IS_MITWS -> {
-                    val address = data.readString()
-                    rememberAddress(chain.thisObject, address)
-                    handled = replyIdentity("transaction=$code", address, reply) { writeInt(1) }
-                }
-
-                TRANSACTION_IS_SUPPORT_AUDIO_SWITCH -> {
-                    handled = replyIdentity("isSupportAudioSwitch", data.readString(), reply) {
-                        writeString(NativeHeadsetDirectory.BINDER_AUDIO_SWITCH)
-                    }
-                }
-
-                TRANSACTION_GET_RING_FIND_STATE -> {
-                    val address = data.readString()
-                    snapshotForAddress(address) ?: return HookDecision.Proceed
-                    reply.writeNoException()
-                    reply.writeInt(0)
-                    handled = true
-                }
-
-                TRANSACTION_CHANGE_ANC_MODE -> {
-                    val requested = data.readInt()
-                    val targetDevice = data.readDevice()
-                    val snapshot = snapshotForActionDevice(chain.thisObject, targetDevice)
-                    if (snapshot == null) {
-                        if (!shouldSuppressManagedAction(chain.thisObject, targetDevice)) return HookDecision.Proceed
-                        report(
-                            FEATURE,
-                            "UNAVAILABLE",
-                            "changeAncMode transaction blocked because the managed address has no matching current session",
-                        )
-                        reply.writeNoException()
-                        handled = true
-                    } else {
-                        SystemHeadsetMapping.noiseModeFromSystem(requested)?.let { submit(snapshot, it, bluetoothAddress(targetDevice)) }
-                            ?: report(FEATURE, "UNSUPPORTED", "changeAncMode transaction received an unmapped native mode")
-                        reply.writeNoException()
-                        handled = true
-                    }
-                }
-
-                TRANSACTION_CHANGE_ANC_LEVEL -> {
-                    val level = data.readString()
-                    val targetDevice = data.readDevice()
-                    val snapshot = snapshotForActionDevice(chain.thisObject, targetDevice)
-                    if (snapshot == null) {
-                        if (!shouldSuppressManagedAction(chain.thisObject, targetDevice)) return HookDecision.Proceed
-                        report(
-                            FEATURE,
-                            "UNAVAILABLE",
-                            "changeAncLevel transaction blocked because the managed address has no matching current session",
-                        )
-                        reply.writeNoException()
-                        handled = true
-                    } else {
-                        report(
-                            FEATURE,
-                            "UNSUPPORTED",
-                            "changeAncLevel transaction has no proven ROSE mapping (level=${level.orEmpty().take(24)})",
-                        )
-                        reply.writeNoException()
-                        handled = true
-                    }
-                }
-
-                TRANSACTION_REGISTER -> {
-                    val binding = synchronized(binderAddress) { binderAddress[chain.thisObject] }
-                        ?: return HookDecision.Proceed
-                    val address = binding.address
-                    val snapshot = snapshotForBoundAddress(chain.thisObject)
-                    if (snapshot == null) {
-                        if (!shouldSuppressManagedAction(chain.thisObject, address)) return HookDecision.Proceed
-                        report(FEATURE, "UNAVAILABLE", "callback registration blocked for a stale managed session")
-                        reply.writeNoException()
-                        handled = true
-                    } else {
-                        val callback = data.readCallback() ?: return HookDecision.Proceed
-                        if (!registerCallback(callback, snapshot, address)) return HookDecision.Proceed
-                        reply.writeNoException()
-                        handled = true
-                    }
-                }
-
-                TRANSACTION_REGISTER_CALLBACK_DEVICE -> {
-                    val callback = data.readCallback()
-                    val device = data.readDevice() ?: return HookDecision.Proceed
-                    val address = runCatching { device.address }.getOrNull() ?: return HookDecision.Proceed
-                    val snapshot = snapshotForActionDevice(chain.thisObject, device)
-                    if (snapshot == null) {
-                        if (!shouldSuppressManagedAction(chain.thisObject, device)) return HookDecision.Proceed
-                        report(FEATURE, "UNAVAILABLE", "callback registration blocked for a stale managed session")
-                        reply.writeNoException()
-                        handled = true
-                    } else {
-                        if (callback == null) return HookDecision.Proceed
-                        if (!registerCallback(callback, snapshot, address)) return HookDecision.Proceed
-                        reply.writeNoException()
-                        handled = true
-                    }
-                }
-
-                TRANSACTION_UNREGISTER -> {
-                    val binder = data.readStrongBinder()
-                    if (binder != null) removeCallback(binder)
-                }
-
-                else -> Unit
-            }
+            dispatchTransaction(chain.thisObject, code, data, reply)
         } catch (failure: Throwable) {
             module.log(Log.WARN, TAG, "onTransact_probe_failed code=$code", failure)
             report(FEATURE, "UNAVAILABLE", "onTransact_probe_failed:$code")
-            handled = false
+            false
         } finally {
             data.setDataPosition(originalPosition)
         }
         return if (handled) HookDecision.Return(true) else HookDecision.Proceed
+    }
+
+    private fun dispatchTransaction(owner: Any?, code: Int, data: Parcel, reply: Parcel): Boolean {
+        return when (code) {
+            TRANSACTION_CHECK_SUPPORT -> {
+                val address = data.readDevice()?.address
+                rememberAddress(owner, address)
+                replyIdentity("checkSupport", address, reply) { writeString(NativeHeadsetDirectory.BINDER_SUPPORT_MASK) }
+            }
+
+            TRANSACTION_GET_DEVICE_INFO -> {
+                val address = data.readString()
+                rememberAddress(owner, address)
+                replyIdentity("getDeviceInfo", address, reply) { writeString(NativeHeadsetDirectory.BINDER_SUPPORT_MASK) }
+            }
+
+            TRANSACTION_IS_MITWS, TRANSACTION_CHECK_IS_MITWS -> {
+                val address = data.readString()
+                rememberAddress(owner, address)
+                replyIdentity("transaction=$code", address, reply) { writeInt(1) }
+            }
+
+            TRANSACTION_IS_SUPPORT_AUDIO_SWITCH -> {
+                replyIdentity("isSupportAudioSwitch", data.readString(), reply) {
+                    writeString(NativeHeadsetDirectory.BINDER_AUDIO_SWITCH)
+                }
+            }
+
+            TRANSACTION_GET_RING_FIND_STATE -> {
+                val address = data.readString()
+                snapshotForAddress(address) ?: return false
+                reply.writeNoException()
+                reply.writeInt(0)
+                true
+            }
+
+            TRANSACTION_CHANGE_ANC_MODE, TRANSACTION_CHANGE_ANC_LEVEL ->
+                reply.acknowledgeIfHandled(handleNoiseTransaction(owner, code, data))
+
+            TRANSACTION_REGISTER -> reply.acknowledgeIfHandled(registerBoundCallback(owner) { data.readCallback() })
+
+            TRANSACTION_REGISTER_CALLBACK_DEVICE -> {
+                val callback = data.readCallback()
+                reply.acknowledgeIfHandled(registerDeviceCallback(owner, data.readDevice(), callback))
+            }
+
+            TRANSACTION_UNREGISTER -> {
+                val binder = data.readStrongBinder()
+                if (binder != null) removeCallback(binder)
+                false
+            }
+
+            else -> false
+        }
+    }
+
+    private fun Parcel.acknowledgeIfHandled(handled: Boolean): Boolean {
+        if (handled) writeNoException()
+        return handled
+    }
+
+    private fun handleNoiseTransaction(owner: Any?, code: Int, data: Parcel): Boolean {
+        if (code == TRANSACTION_CHANGE_ANC_MODE) {
+            val mode = data.readInt()
+            return changeNoiseMode(owner, data.readDevice(), mode, "changeAncMode transaction")
+        }
+        val level = data.readString()
+        return handleNoiseAction(owner, data.readDevice(), "changeAncLevel transaction") {
+            report(FEATURE, "UNSUPPORTED", "changeAncLevel transaction has no proven ROSE mapping (level=${level.orEmpty().take(24)})")
+        }
+    }
+
+    private fun handleNoiseAction(owner: Any?, device: Any?, operation: String, action: (NativeHeadsetSnapshot) -> Unit): Boolean {
+        val snapshot = snapshotForActionDevice(owner, device)
+        if (snapshot == null) {
+            if (!shouldSuppressManagedAction(owner, device)) return false
+            report(FEATURE, "UNAVAILABLE", "$operation blocked because the managed address has no matching current session")
+        } else {
+            action(snapshot)
+        }
+        // A managed action must not fall through to a second vendor control path for ROSE.
+        return true
+    }
+
+    private fun changeNoiseMode(
+        owner: Any?,
+        device: Any?,
+        nativeMode: Int?,
+        operation: String,
+    ): Boolean = handleNoiseAction(owner, device, operation) { snapshot ->
+        val mode = nativeMode?.let(SystemHeadsetMapping::noiseModeFromSystem)
+        if (mode == null) {
+            report(FEATURE, "UNSUPPORTED", "$operation received an unmapped native mode")
+        } else {
+            submit(snapshot, mode, bluetoothAddress(device))
+        }
+    }
+
+    private fun registerBoundCallback(owner: Any?, readCallback: () -> Any?): Boolean {
+        val binding = synchronized(binderAddress) { binderAddress[owner] } ?: return false
+        val snapshot = snapshotForBoundAddress(owner) ?: return blockStaleRegistration(owner, binding.address)
+        return readCallback()?.let { registerCallback(it, snapshot, binding.address) } == true
+    }
+
+    private fun registerDeviceCallback(owner: Any?, device: BluetoothDevice?, callback: Any?): Boolean {
+        val address = bluetoothAddress(device) ?: return false
+        val snapshot = snapshotForActionDevice(owner, device) ?: return blockStaleRegistration(owner, device)
+        return callback != null && registerCallback(callback, snapshot, address)
+    }
+
+    private fun blockStaleRegistration(owner: Any?, target: Any?): Boolean {
+        if (!shouldSuppressManagedAction(owner, target)) return false
+        report(FEATURE, "UNAVAILABLE", "callback registration blocked for a stale managed session")
+        return true
     }
 
     private fun registerCallback(callback: Any, snapshot: NativeHeadsetSnapshot, address: String): Boolean {
@@ -426,25 +383,25 @@ class NativeHeadsetBinderAdapter(
             binder,
             RegisteredCallback(callback, binder, normalizedAddress, snapshot.reference, death),
         )?.let(::unlinkDeath)
-        val payload = statusPayload(snapshot)
-        if (payload == null) {
+        return sendInitialStatus(binder, snapshot)
+    }
+
+    private fun sendInitialStatus(binder: IBinder, snapshot: NativeHeadsetSnapshot): Boolean {
+        val status = SystemHeadsetMapping.binderStatus(snapshot.fields) as? SystemHeadsetMapping.BinderStatus.Payload
+        if (status == null) {
             report(FEATURE, "UNAVAILABLE", "initial status callback cannot represent current snapshot")
-            return true
+        } else {
+            val registered = registeredCallbacks[binder] ?: return false
+            sendRefresh(registered, snapshot, status.text)
+            report(FEATURE, "RESOLVED", "native refresh callback registered for ${snapshot.deviceId}")
         }
-        val registered = registeredCallbacks[binder] ?: return false
-        sendRefresh(registered, snapshot, payload)
-        report(FEATURE, "RESOLVED", "native refresh callback registered for ${snapshot.deviceId}")
         return true
     }
 
     private fun sendRefresh(target: RegisteredCallback, snapshot: NativeHeadsetSnapshot, payload: String) {
         callbackHandler.post {
-            val current = directory.current()
-            if (closed || registeredCallbacks[target.binder] !== target || current == null ||
-                current.reference != target.reference || !current.matchesAddress(target.address)
-            ) {
-                return@post
-            }
+            if (closed || registeredCallbacks[target.binder] !== target) return@post
+            if (directory.session(target.address)?.reference != target.reference) return@post
             try {
                 val method = target.callback.javaClass.methods.firstOrNull { candidate ->
                     candidate.name == "refreshStatus" && candidate.parameterTypes.contentEquals(
@@ -461,10 +418,6 @@ class NativeHeadsetBinderAdapter(
             }
         }
     }
-
-    private fun statusPayload(snapshot: NativeHeadsetSnapshot): String? = SystemHeadsetMapping.binderStatus(snapshot.fields)
-        .let { status -> status as? SystemHeadsetMapping.BinderStatus.Payload }
-        ?.text
 
     private fun snapshotForDevice(value: Any?): NativeHeadsetSnapshot? = (value as? BluetoothDevice)
         ?.let { device -> runCatching { snapshotForAddress(device.address) }.getOrNull() }
@@ -716,7 +669,9 @@ class NativeHeadsetBinderAdapter(
         val address: String,
         val reference: NativeSessionReference,
         val death: IBinder.DeathRecipient,
-    )
+    ) {
+        fun matches(snapshot: NativeHeadsetSnapshot): Boolean = reference == snapshot.reference && address in snapshot.addresses
+    }
 
     private data class BinderAddress(
         val address: String,

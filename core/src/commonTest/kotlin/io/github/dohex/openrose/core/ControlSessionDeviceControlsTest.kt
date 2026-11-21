@@ -110,7 +110,7 @@ class ControlSessionDeviceControlsTest {
     @Test
     fun i5AllEightTouchSlotsAndActionsUseTheirModelMapping() = runTest {
         val (session, link) = ready(ModelProfile.I5_ZT)
-        for ((side, gesture, action, write, query, reply) in listOf(
+        for (vector in listOf(
             TouchVector("left", "single", "volume_up", "08ee00000004810d0000000088", "08ee00000004010a0005", "09ff00000104011200000f0f0f0f0f0f0f89"),
             TouchVector("left", "double", "volume_down", "08ee00000004810d000001018a", "08ee00000004010a0005", "09ff000001040112000f010f0f0f0f0f0f8a"),
             TouchVector("left", "triple", "previous_track", "08ee00000004810d000002028c", "08ee00000004010a0005", "09ff000001040112000f0f020f0f0f0f0f8b"),
@@ -120,13 +120,15 @@ class ControlSessionDeviceControlsTest {
             TouchVector("right", "triple", "none", "08ee00000004810d0001020691", "08ee00000004010a0005", "09ff000001040112000f0f0f0f0f0f060f8f"),
             TouchVector("right", "long", "noise_cycle", "08ee00000004810d0001030793", "08ee00000004010a0005", "09ff000001040112000f0f0f0f0f0f0f0790"),
         )) {
-            val pending = async { session.set(DeviceSetting.TOUCH_BINDING, FieldValue.TouchAssignment(side, gesture, action)) }
+            val slot = "${vector.side}/${vector.gesture}/${vector.action}"
+            val assignment = FieldValue.TouchAssignment(vector.side, vector.gesture, vector.action)
+            val pending = async { session.set(DeviceSetting.TOUCH_BINDING, assignment) }
             runCurrent()
-            assertEquals(listOf(write, query), link.writes.takeLast(2), "$side/$gesture/$action")
+            assertEquals(listOf(vector.write, vector.query), link.writes.takeLast(2), slot)
             assertFalse(pending.isCompleted)
-            link.incoming.send(reply.bytes())
+            link.incoming.send(vector.reply.bytes())
             runCurrent()
-            assertEquals(OperationResult.Success, pending.await(), "$side/$gesture/$action")
+            assertEquals(OperationResult.Success, pending.await(), slot)
         }
         assertEquals(8, session.state.value.device?.capabilities?.touchControl?.slots?.size)
         session.disconnect()
@@ -135,7 +137,7 @@ class ControlSessionDeviceControlsTest {
     @Test
     fun i7AllEightSlotsAndNineActionsConfirmFromFragmentedModelReplies() = runTest {
         val (session, link) = ready(ModelProfile.I7_RS_V2)
-        for ((side, gesture, action, write, query, reply) in listOf(
+        for (vector in listOf(
             TouchVector("left", "single", "none", "ff030301010007aa", "ff0402fa0100aa", "dd001101010002ff03ff04ff11ff12ff13ff14ff3caa"),
             TouchVector("left", "double", "play_pause", "ff05030102010baa", "ff0602fa0102aa", "dd00110101ff020103ff04ff11ff12ff13ff14ff3daa"),
             TouchVector("left", "triple", "previous_track", "ff07030103020faa", "ff0802fa0104aa", "dd00110101ff02ff030204ff11ff12ff13ff14ff3eaa"),
@@ -146,15 +148,17 @@ class ControlSessionDeviceControlsTest {
             TouchVector("right", "long", "voice_assistant", "ff11030114072faa", "ff1202fa010eaa", "dd00110101ff02ff03ff04ff11ff12ff13ff140743aa"),
             TouchVector("right", "long", "noise_cycle", "ff130301140832aa", "ff1402fa0110aa", "dd00110101ff02ff03ff04ff11ff12ff13ff140844aa"),
         )) {
-            val pending = async { session.set(DeviceSetting.TOUCH_BINDING, FieldValue.TouchAssignment(side, gesture, action)) }
+            val slot = "${vector.side}/${vector.gesture}/${vector.action}"
+            val assignment = FieldValue.TouchAssignment(vector.side, vector.gesture, vector.action)
+            val pending = async { session.set(DeviceSetting.TOUCH_BINDING, assignment) }
             runCurrent()
-            assertEquals(listOf(write, query), link.writes.takeLast(2), "$side/$gesture/$action")
-            link.incoming.send(reply.take(20).bytes())
+            assertEquals(listOf(vector.write, vector.query), link.writes.takeLast(2), slot)
+            link.incoming.send(vector.reply.take(20).bytes())
             runCurrent()
-            assertFalse(pending.isCompleted, "$side/$gesture/$action")
-            link.incoming.send(reply.drop(20).bytes())
+            assertFalse(pending.isCompleted, slot)
+            link.incoming.send(vector.reply.drop(20).bytes())
             runCurrent()
-            assertEquals(OperationResult.Success, pending.await(), "$side/$gesture/$action")
+            assertEquals(OperationResult.Success, pending.await(), slot)
         }
         session.disconnect()
     }
@@ -212,7 +216,7 @@ class ControlSessionDeviceControlsTest {
     fun i5AudioAndMultipointSelectionsConfirmTheCouplingInBothDirections() = runTest {
         val (session, link) = ready(ModelProfile.I5_ZT)
         assertEquals(true, session.state.value.device?.capabilities?.audioControl?.multipointCoupled)
-        for ((setting, requested, write, mode, multipoint, reply) in listOf(
+        for (vector in listOf(
             AudioVector(DeviceSetting.AUDIO_MODE, FieldValue.Text("aac_sbc"), "08ee00000008810b00008a", "aac_sbc", true, "09ff00000108010b00001d"),
             AudioVector(DeviceSetting.MULTIPOINT, FieldValue.Toggle(false), "08ee00000008810b00018b", "ldac", false, "09ff00000108010b00011e"),
             AudioVector(DeviceSetting.AUDIO_MODE, FieldValue.Text("ldac"), "08ee00000008810b00018b", "ldac", false, "09ff00000108010b00011e"),
@@ -220,17 +224,17 @@ class ControlSessionDeviceControlsTest {
         )) {
             val beforeAudio = reading(session, DeviceField.AUDIO_MODE)
             val beforeMultipoint = reading(session, DeviceField.MULTIPOINT)
-            val pending = async { session.set(setting, requested) }
+            val pending = async { session.set(vector.setting, vector.requested) }
             runCurrent()
-            assertEquals(listOf(write, "08ee00000008010a0009"), link.writes.takeLast(2))
+            assertEquals(listOf(vector.write, "08ee00000008010a0009"), link.writes.takeLast(2))
             assertFalse(pending.isCompleted)
             assertEquals(beforeAudio, reading(session, DeviceField.AUDIO_MODE))
             assertEquals(beforeMultipoint, reading(session, DeviceField.MULTIPOINT))
-            link.incoming.send(reply.bytes())
+            link.incoming.send(vector.reply.bytes())
             runCurrent()
             assertEquals(OperationResult.Success, pending.await())
-            assertEquals(FieldValue.Text(mode), reading(session, DeviceField.AUDIO_MODE))
-            assertEquals(FieldValue.Toggle(multipoint), reading(session, DeviceField.MULTIPOINT))
+            assertEquals(FieldValue.Text(vector.mode), reading(session, DeviceField.AUDIO_MODE))
+            assertEquals(FieldValue.Toggle(vector.multipoint), reading(session, DeviceField.MULTIPOINT))
         }
         session.disconnect()
     }
@@ -239,7 +243,7 @@ class ControlSessionDeviceControlsTest {
     fun i7AllAudioModesAndMultipointOperateIndependently() = runTest {
         val (session, link) = ready(ModelProfile.I7_RS_V2)
         assertEquals(false, session.state.value.device?.capabilities?.audioControl?.multipointCoupled)
-        for ((mode, write, query, reply) in listOf(
+        for (vector in listOf(
             ModeVector("aac_sbc", "ff03022b002faa", "ff0402fa2b2aaa", "dd00022b000aaa"),
             ModeVector("ldac", "ff05022b0132aa", "ff0602fa2b2caa", "dd00022b010baa"),
             ModeVector("lhdc", "ff07022b0235aa", "ff0802fa2b2eaa", "dd00022b020caa"),
@@ -247,29 +251,29 @@ class ControlSessionDeviceControlsTest {
         )) {
             val previousMode = reading(session, DeviceField.AUDIO_MODE)
             val previousMultipoint = reading(session, DeviceField.MULTIPOINT)
-            val pending = async { session.set(DeviceSetting.AUDIO_MODE, FieldValue.Text(mode)) }
+            val pending = async { session.set(DeviceSetting.AUDIO_MODE, FieldValue.Text(vector.mode)) }
             runCurrent()
-            assertEquals(listOf(write, query), link.writes.takeLast(2), mode)
+            assertEquals(listOf(vector.write, vector.query), link.writes.takeLast(2), vector.mode)
             assertEquals(previousMode, reading(session, DeviceField.AUDIO_MODE))
             assertFalse(pending.isCompleted)
-            link.incoming.send(reply.bytes())
+            link.incoming.send(vector.reply.bytes())
             runCurrent()
-            assertEquals(OperationResult.Success, pending.await(), mode)
-            assertEquals(FieldValue.Text(mode), reading(session, DeviceField.AUDIO_MODE))
+            assertEquals(OperationResult.Success, pending.await(), vector.mode)
+            assertEquals(FieldValue.Text(vector.mode), reading(session, DeviceField.AUDIO_MODE))
             assertEquals(previousMultipoint, reading(session, DeviceField.MULTIPOINT))
         }
-        for ((enabled, write, query, reply) in listOf(
+        for (vector in listOf(
             SwitchVector(DeviceSetting.MULTIPOINT, true, "ff0b0232013faa", "ff0c02fa3239aa", "dd0002320112aa"),
             SwitchVector(DeviceSetting.MULTIPOINT, false, "ff0d02320040aa", "ff0e02fa323baa", "dd0002320011aa"),
-        ).map { MultipointVector(it.enabled, it.write, it.query, it.reply) }) {
-            val pending = async { session.set(DeviceSetting.MULTIPOINT, FieldValue.Toggle(enabled)) }
+        )) {
+            val pending = async { session.set(vector.setting, FieldValue.Toggle(vector.enabled)) }
             runCurrent()
-            assertEquals(listOf(write, query), link.writes.takeLast(2))
+            assertEquals(listOf(vector.write, vector.query), link.writes.takeLast(2))
             assertFalse(pending.isCompleted)
-            link.incoming.send(reply.bytes())
+            link.incoming.send(vector.reply.bytes())
             runCurrent()
             assertEquals(OperationResult.Success, pending.await())
-            assertEquals(FieldValue.Toggle(enabled), reading(session, DeviceField.MULTIPOINT))
+            assertEquals(FieldValue.Toggle(vector.enabled), reading(session, DeviceField.MULTIPOINT))
             assertEquals(FieldValue.Text("lc3"), reading(session, DeviceField.AUDIO_MODE))
         }
         session.disconnect()
@@ -294,17 +298,18 @@ class ControlSessionDeviceControlsTest {
                     SwitchVector(DeviceSetting.EAR_DETECTION, false, "ff0902080113aa", "ff0a02fa080daa", "dd00020801e8aa"),
                 )
             }
-            for ((setting, enabled, write, query, reply) in vectors) {
-                val field = if (setting == DeviceSetting.TOUCH_ENABLED) DeviceField.TOUCH_ENABLED else DeviceField.EAR_DETECTION
+            for (vector in vectors) {
+                val description = "$profile/${vector.setting}/${vector.enabled}"
+                val field = if (vector.setting == DeviceSetting.TOUCH_ENABLED) DeviceField.TOUCH_ENABLED else DeviceField.EAR_DETECTION
                 val before = requireNotNull(session.state.value.device).fields
-                val pending = async { session.set(setting, FieldValue.Toggle(enabled)) }
+                val pending = async { session.set(vector.setting, FieldValue.Toggle(vector.enabled)) }
                 runCurrent()
-                assertEquals(listOf(write, query), link.writes.takeLast(2), "$profile/$setting/$enabled")
+                assertEquals(listOf(vector.write, vector.query), link.writes.takeLast(2), description)
                 assertFalse(pending.isCompleted)
-                link.incoming.send(reply.bytes())
+                link.incoming.send(vector.reply.bytes())
                 runCurrent()
-                assertEquals(OperationResult.Success, pending.await(), "$profile/$setting/$enabled")
-                assertEquals(FieldValue.Toggle(enabled), reading(session, field))
+                assertEquals(OperationResult.Success, pending.await(), description)
+                assertEquals(FieldValue.Toggle(vector.enabled), reading(session, field))
                 assertEquals(before - field, requireNotNull(session.state.value.device).fields - field)
             }
             session.disconnect()
@@ -386,7 +391,6 @@ class ControlSessionDeviceControlsTest {
     private data class AudioVector(val setting: DeviceSetting, val requested: FieldValue, val write: String, val mode: String, val multipoint: Boolean, val reply: String)
     private data class ModeVector(val mode: String, val write: String, val query: String, val reply: String)
     private data class SwitchVector(val setting: DeviceSetting, val enabled: Boolean, val write: String, val query: String, val reply: String)
-    private data class MultipointVector(val enabled: Boolean, val write: String, val query: String, val reply: String)
 
     private data class TouchVector(val side: String, val gesture: String, val action: String, val write: String, val query: String, val reply: String)
 

@@ -95,7 +95,6 @@ class ModuleControlHostTest {
         val lease = (rig.host.open(milinkIdentity) as HostOpenResult.Opened).lease.id
         val reference = SessionReference(rig.earphones.deviceId, 1)
 
-        fun forbidden(command: HostCommand) = HostRejection.FORBIDDEN
         for (command in listOf(
             HostCommand.Connect(rig.earphones.deviceId),
             HostCommand.Disconnect,
@@ -103,7 +102,8 @@ class ModuleControlHostTest {
             HostCommand.Set(null, DeviceSetting.NOISE_MODE, FieldValue.Text("anc")),
             HostCommand.Set(reference, DeviceSetting.EQ, FieldValue.Text("pop")),
         )) {
-            assertEquals(forbidden(command), assertIs<HostCallResult.Rejected>(rig.host.execute(milinkIdentity, lease, generation, command)).rejection, command.toString())
+            val rejected = assertIs<HostCallResult.Rejected>(rig.host.execute(milinkIdentity, lease, generation, command))
+            assertEquals(HostRejection.FORBIDDEN, rejected.rejection, command.toString())
         }
         // Allowed in role; a reference to no current session is still refused by the runtime itself.
         val noise = rig.host.execute(milinkIdentity, lease, generation, HostCommand.Set(reference, DeviceSetting.NOISE_MODE, FieldValue.Text("anc")))

@@ -100,7 +100,7 @@ class ControlSessionEqualizerTest {
         assertEquals(persistentSetOf("pop", "hifi", "rock", "light", "eap"), session.state.value.device?.capabilities?.equalizer?.presets)
         // Independently worked sequences 03..0c after three complete initialization queries.
         // Single-byte 00/01 are HIFI/POP; the two-byte 00/01 records reverse that order.
-        for ((preset, write, query, reply) in listOf(
+        for (vector in listOf(
             EqVector("hifi", "ff03022a002eaa", "ff0402fa2a29aa", "dd00032a01000baa"),
             EqVector("pop", "ff05022a0131aa", "ff0602fa2a2baa", "dd00032a00000aaa"),
             EqVector("rock", "ff07022a0234aa", "ff0802fa2a2daa", "dd00022a020baa"),
@@ -108,15 +108,15 @@ class ControlSessionEqualizerTest {
             EqVector("eap", "ff0b022a063caa", "ff0c02fa2a31aa", "dd00022a060faa"),
         )) {
             val before = reading(session, DeviceField.EQ)
-            val pending = async { session.set(DeviceSetting.EQ, FieldValue.Text(preset)) }
+            val pending = async { session.set(DeviceSetting.EQ, FieldValue.Text(vector.preset)) }
             runCurrent()
-            assertEquals(listOf(write, query), link.writes.takeLast(2), preset)
-            assertFalse(pending.isCompleted, preset)
-            assertEquals(before, reading(session, DeviceField.EQ), preset)
-            link.incoming.send(reply.bytes())
+            assertEquals(listOf(vector.write, vector.query), link.writes.takeLast(2), vector.preset)
+            assertFalse(pending.isCompleted, vector.preset)
+            assertEquals(before, reading(session, DeviceField.EQ), vector.preset)
+            link.incoming.send(vector.reply.bytes())
             runCurrent()
-            assertEquals(OperationResult.Success, pending.await(), preset)
-            assertEquals(FieldValue.Text(preset), reading(session, DeviceField.EQ), preset)
+            assertEquals(OperationResult.Success, pending.await(), vector.preset)
+            assertEquals(FieldValue.Text(vector.preset), reading(session, DeviceField.EQ), vector.preset)
         }
         session.disconnect()
     }
@@ -124,20 +124,20 @@ class ControlSessionEqualizerTest {
     @Test
     fun i7GameOnAndOffUseDirectWirePolarityAndAlwaysReadTheDevice() = runTest {
         val (session, link) = ready(ModelProfile.I7_RS_V2)
-        for ((enabled, write, query, reply) in listOf(
+        for (vector in listOf(
             GameVector(true, "ff03020e0113aa", "ff0402fa0e0daa", "dd00020e01eeaa"),
             GameVector(false, "ff05020e0014aa", "ff0602fa0e0faa", "dd00020e00edaa"),
         )) {
             val before = reading(session, DeviceField.GAME_MODE)
-            val pending = async { session.set(DeviceSetting.GAME_MODE, FieldValue.Toggle(enabled)) }
+            val pending = async { session.set(DeviceSetting.GAME_MODE, FieldValue.Toggle(vector.enabled)) }
             runCurrent()
-            assertEquals(listOf(write, query), link.writes.takeLast(2))
+            assertEquals(listOf(vector.write, vector.query), link.writes.takeLast(2))
             assertFalse(pending.isCompleted)
             assertEquals(before, reading(session, DeviceField.GAME_MODE))
-            link.incoming.send(reply.bytes())
+            link.incoming.send(vector.reply.bytes())
             runCurrent()
             assertEquals(OperationResult.Success, pending.await())
-            assertEquals(FieldValue.Toggle(enabled), reading(session, DeviceField.GAME_MODE))
+            assertEquals(FieldValue.Toggle(vector.enabled), reading(session, DeviceField.GAME_MODE))
         }
         session.disconnect()
     }

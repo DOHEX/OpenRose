@@ -72,40 +72,14 @@ internal class AndroidGattDriver(
                 if (!current(gatt)) return
                 val pending = discoveryPending ?: return
                 discoveryPending = null
-                if (status != BluetoothGatt.GATT_SUCCESS) {
-                    pending.completeExceptionally(callbackFailure("蓝牙服务发现失败", status))
-                    return
-                }
-                try {
-                    val native = gatt.services
-                    val byShared = IdentityHashMap<GattCharacteristic, BluetoothGattCharacteristic>()
-                    val byNative = IdentityHashMap<BluetoothGattCharacteristic, GattCharacteristic>()
-                    val services = native.map { service ->
-                        GattService(
-                            service.uuid.toString(),
-                            service.characteristics.map { characteristic ->
-                                byNative[characteristic] ?: run {
-                                    val properties = characteristic.properties
-                                    val shared = GattCharacteristic(
-                                        characteristic.uuid.toString(),
-                                        canWrite = properties and BluetoothGattCharacteristic.PROPERTY_WRITE != 0,
-                                        canWriteWithoutResponse =
-                                        properties and BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE != 0,
-                                        canNotify = properties and BluetoothGattCharacteristic.PROPERTY_NOTIFY != 0,
-                                        canIndicate = properties and BluetoothGattCharacteristic.PROPERTY_INDICATE != 0,
-                                    )
-                                    byShared[shared] = characteristic
-                                    byNative[characteristic] = shared
-                                    shared
-                                }
-                            },
-                        )
+                if (status == BluetoothGatt.GATT_SUCCESS) {
+                    try {
+                        pending.complete(readServices(gatt))
+                    } catch (error: Exception) {
+                        pending.completeExceptionally(mapException("读取蓝牙服务表失败", error))
                     }
-                    characteristics = byShared
-                    sharedCharacteristics = byNative
-                    pending.complete(services)
-                } catch (error: Exception) {
-                    pending.completeExceptionally(mapException("读取蓝牙服务表失败", error))
+                } else {
+                    pending.completeExceptionally(callbackFailure("蓝牙服务发现失败", status))
                 }
             }
         }
@@ -125,29 +99,19 @@ internal class AndroidGattDriver(
 
         override fun onDescriptorWrite(gatt: BluetoothGatt, descriptor: BluetoothGattDescriptor, status: Int) {
             synchronized(lock) {
-                if (!current(gatt)) return
                 val pending = descriptorPending ?: return
-                if (pending.descriptor !== descriptor) return
+                if (!current(gatt) || pending.descriptor !== descriptor) return
                 descriptorPending = null
-                if (status == BluetoothGatt.GATT_SUCCESS) {
-                    pending.completion.complete(Unit)
-                } else {
-                    pending.completion.completeExceptionally(callbackFailure("通知配置失败", status))
-                }
+                pending.completion.completeWrite(status, "通知配置失败")
             }
         }
 
         override fun onCharacteristicWrite(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic, status: Int) {
             synchronized(lock) {
-                if (!current(gatt)) return
                 val pending = writePending ?: return
-                if (pending.characteristic !== characteristic) return
+                if (!current(gatt) || pending.characteristic !== characteristic) return
                 writePending = null
-                if (status == BluetoothGatt.GATT_SUCCESS) {
-                    pending.completion.complete(Unit)
-                } else {
-                    pending.completion.completeExceptionally(callbackFailure("蓝牙写入失败", status))
-                }
+                pending.completion.completeWrite(status, "蓝牙写入失败")
             }
         }
 
@@ -179,7 +143,7 @@ internal class AndroidGattDriver(
             withContext(Dispatchers.Main.immediate) {
                 synchronized(lock) {
                     checkAvailable()
-                    if (client != null || connectPending != null) throw busy()
+                    requireIdle(client == null && connectPending == null)
                     connectPending = pending
                     try {
                         // This handler queues callbacks until connectGatt returns and the handle is stored.
@@ -211,10 +175,10 @@ internal class AndroidGattDriver(
         val pending = CompletableDeferred<List<GattService>>()
         synchronized(lock) {
             val gatt = requireClient()
-            if (discoveryPending != null) throw busy()
+            requireIdle(discoveryPending == null)
             discoveryPending = pending
             try {
-                if (!gatt.discoverServices()) throw initiationFailure("无法开始蓝牙服务发现")
+                requireStarted(gatt.discoverServices(), "无法开始蓝牙服务发现")
             } catch (error: Exception) {
                 discoveryPending = null
                 throw mapException("无法开始蓝牙服务发现", error)
@@ -227,7 +191,7 @@ internal class AndroidGattDriver(
         val pending = CompletableDeferred<Int?>()
         synchronized(lock) {
             val gatt = requireClient()
-            if (mtuPending != null) throw busy()
+            requireIdle(mtuPending == null)
             mtuPending = pending
             try {
                 if (!gatt.requestMtu(preferred)) {
@@ -247,7 +211,7 @@ internal class AndroidGattDriver(
             val gatt = requireClient()
             val native = requireCharacteristic(characteristic)
             try {
-                if (!gatt.setCharacteristicNotification(native, enabled)) throw initiationFailure("无法设置本地通知")
+                requireStarted(gatt.setCharacteristicNotification(native, enabled), "无法设置本地通知")
             } catch (error: Exception) {
                 throw mapException("无法设置本地通知", error)
             }
@@ -261,7 +225,7 @@ internal class AndroidGattDriver(
             val native = requireCharacteristic(characteristic)
             val descriptor = native.getDescriptor(CCCD_UUID)
                 ?: throw GattException(GattFailureKind.UNSUPPORTED, "通知配置描述符缺失")
-            if (descriptorPending != null) throw busy()
+            requireIdle(descriptorPending == null)
             val value = when (subscription) {
                 GattSubscription.DISABLED -> BluetoothGattDescriptor.DISABLE_NOTIFICATION_VALUE
                 GattSubscription.NOTIFY -> BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
@@ -275,7 +239,7 @@ internal class AndroidGattDriver(
                     @Suppress("DEPRECATION")
                     descriptor.value = value
                     @Suppress("DEPRECATION")
-                    if (!gatt.writeDescriptor(descriptor)) throw initiationFailure("无法开始通知配置")
+                    requireStarted(gatt.writeDescriptor(descriptor), "无法开始通知配置")
                 }
             } catch (error: Exception) {
                 descriptorPending = null
@@ -290,7 +254,7 @@ internal class AndroidGattDriver(
         synchronized(lock) {
             val gatt = requireClient()
             val native = requireCharacteristic(characteristic)
-            if (writePending != null) throw busy()
+            requireIdle(writePending == null)
             val type = if (withResponse) {
                 BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
             } else {
@@ -305,7 +269,7 @@ internal class AndroidGattDriver(
                     native.value = value.copyOf()
                     native.writeType = type
                     @Suppress("DEPRECATION")
-                    if (!gatt.writeCharacteristic(native)) throw initiationFailure("无法开始蓝牙写入")
+                    requireStarted(gatt.writeCharacteristic(native), "无法开始蓝牙写入")
                 }
             } catch (error: Exception) {
                 writePending = null
@@ -330,6 +294,41 @@ internal class AndroidGattDriver(
                     terminateFromCallback(eventOverflow(), notify = false, closeWithCause = true)
                 }
             }
+        }
+    }
+
+    private fun readServices(gatt: BluetoothGatt): List<GattService> {
+        val byShared = IdentityHashMap<GattCharacteristic, BluetoothGattCharacteristic>()
+        val byNative = IdentityHashMap<BluetoothGattCharacteristic, GattCharacteristic>()
+        val services = gatt.services.map { service ->
+            GattService(
+                service.uuid.toString(),
+                service.characteristics.map { native ->
+                    byNative.getOrPut(native) {
+                        val properties = native.properties
+                        val shared = GattCharacteristic(
+                            native.uuid.toString(),
+                            canWrite = properties and BluetoothGattCharacteristic.PROPERTY_WRITE != 0,
+                            canWriteWithoutResponse = properties and BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE != 0,
+                            canNotify = properties and BluetoothGattCharacteristic.PROPERTY_NOTIFY != 0,
+                            canIndicate = properties and BluetoothGattCharacteristic.PROPERTY_INDICATE != 0,
+                        )
+                        byShared[shared] = native
+                        shared
+                    }
+                },
+            )
+        }
+        characteristics = byShared
+        sharedCharacteristics = byNative
+        return services
+    }
+
+    private fun CompletableDeferred<Unit>.completeWrite(status: Int, message: String) {
+        if (status == BluetoothGatt.GATT_SUCCESS) {
+            complete(Unit)
+        } else {
+            completeExceptionally(callbackFailure(message, status))
         }
     }
 
@@ -400,8 +399,13 @@ internal class AndroidGattDriver(
 
     // Android callbacks have no operation token. A cancelled operation keeps its slot until its
     // callback arrives, so that callback cannot be mistaken for a subsequent operation.
-    private fun busy() = GattException(GattFailureKind.TRANSIENT, "已有同类蓝牙操作等待回调")
-    private fun initiationFailure(message: String) = GattException(GattFailureKind.TRANSIENT, message)
+    private fun requireIdle(idle: Boolean) {
+        if (!idle) throw GattException(GattFailureKind.TRANSIENT, "已有同类蓝牙操作等待回调")
+    }
+
+    private fun requireStarted(started: Boolean, message: String) {
+        if (!started) throw GattException(GattFailureKind.TRANSIENT, message)
+    }
 
     private fun requireStarted(status: Int, message: String) {
         if (status == BluetoothStatusCodes.SUCCESS) return

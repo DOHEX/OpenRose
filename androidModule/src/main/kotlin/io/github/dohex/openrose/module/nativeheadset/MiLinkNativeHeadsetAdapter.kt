@@ -87,15 +87,15 @@ class MiLinkNativeHeadsetAdapter(
         }
         val rememberedReference = lastAncReference
         val rememberedAddress = lastAncAddress
-        if (rememberedReference != null &&
-            (rememberedReference != fresh.reference || rememberedAddress == null || rememberedAddress !in fresh.addresses)
-        ) {
+        if (rememberedReference != null && (rememberedReference != fresh.reference || rememberedAddress !in fresh.addresses)) {
             clearRememberedAncController()
         }
-        if (previous == null || previous.sameReportedState(fresh)) return
-        val address = lastAncDevice?.let { runCatching { it.address }.getOrNull() }
-        if (!fresh.matchesAddress(address)) return
+        if (previous != null && !previous.sameReportedState(fresh) && fresh.matchesAddress(bluetoothAddress(lastAncDevice))) {
+            publishChangedProperties(previous, fresh)
+        }
+    }
 
+    private fun publishChangedProperties(previous: NativeHeadsetSnapshot, fresh: NativeHeadsetSnapshot) {
         val noiseChanged = previous.fields[DeviceField.NOISE_MODE] != fresh.fields[DeviceField.NOISE_MODE]
         val batteryChanged = BATTERY_STATE_FIELDS.any { field -> previous.fields[field] != fresh.fields[field] }
         val canUpdateBattery = SystemHeadsetMapping.miLinkSummaryBattery(fresh.fields) != null
@@ -217,34 +217,13 @@ class MiLinkNativeHeadsetAdapter(
             identityAnswer(bluetoothAddress(chain.args.getOrNull(0)), NativeHeadsetSnapshot.MILINK_COMPATIBILITY_DEVICE_ID)
         }
         hook(target, "getAncState", arrayOf(device), Int::class.javaPrimitiveType!!) { chain ->
-            val snapshot = snapshotForDevice(chain.args.getOrNull(0)) ?: return@hook HookDecision.Proceed
-            rememberAncController(chain, snapshot)
-            val mode = SystemHeadsetMapping.miLinkAncState(snapshot.fields)
-            if (mode == null) {
-                reportUnknown("noise_state_unrepresentable", snapshot)
-                return@hook HookDecision.Proceed
-            }
-            HookDecision.Return(mode)
+            controllerReading(chain, "noise_state_unrepresentable") { SystemHeadsetMapping.miLinkAncState(it.fields) }
         }
         hook(target, "getBatteryLevelCache", arrayOf(device), List::class.java) { chain ->
-            val snapshot = snapshotForDevice(chain.args.getOrNull(0)) ?: return@hook HookDecision.Proceed
-            rememberAncController(chain, snapshot)
-            val levels = SystemHeadsetMapping.miLinkBattery(snapshot.fields)
-            if (levels == null) {
-                reportUnknown("battery_cache_unrepresentable", snapshot)
-                return@hook HookDecision.Proceed
-            }
-            HookDecision.Return(levels)
+            controllerReading(chain, "battery_cache_unrepresentable") { SystemHeadsetMapping.miLinkBattery(it.fields) }
         }
         hook(target, "getHeadsetPropertyBlock", arrayOf(device), Int::class.javaPrimitiveType!!) { chain ->
-            val snapshot = snapshotForDevice(chain.args.getOrNull(0)) ?: return@hook HookDecision.Proceed
-            rememberAncController(chain, snapshot)
-            val summary = SystemHeadsetMapping.miLinkSummaryBattery(snapshot.fields)
-            if (summary == null) {
-                reportUnknown("ear_battery_unavailable", snapshot)
-                return@hook HookDecision.Proceed
-            }
-            HookDecision.Return(summary)
+            controllerReading(chain, "ear_battery_unavailable") { SystemHeadsetMapping.miLinkSummaryBattery(it.fields) }
         }
         hook(target, "getFindRingState", arrayOf(device), Int::class.javaPrimitiveType!!) { chain ->
             snapshotForDevice(chain.args.getOrNull(0)) ?: return@hook HookDecision.Proceed
@@ -277,6 +256,19 @@ class MiLinkNativeHeadsetAdapter(
             // mode; the app's device reply updates it through the next published snapshot.
             HookDecision.Return(confirmedMode)
         }
+    }
+
+    private fun controllerReading(
+        chain: XposedInterface.Chain,
+        unavailableReason: String,
+        read: (NativeHeadsetSnapshot) -> Any?,
+    ): HookDecision {
+        val snapshot = snapshotForDevice(chain.args.firstOrNull()) ?: return HookDecision.Proceed
+        rememberAncController(chain, snapshot)
+        val value = read(snapshot)
+        if (value != null) return HookDecision.Return(value)
+        reportUnknown(unavailableReason, snapshot)
+        return HookDecision.Proceed
     }
 
     private fun installHeadsetInfo() {
@@ -458,13 +450,14 @@ class MiLinkNativeHeadsetAdapter(
     }
     private fun headsetInfoAddress(info: Any?): String? {
         if (info == null) return null
-        for (name in listOf("getAddress", "component1")) {
-            val method = resolveMethod(info.javaClass, name, emptyArray()) ?: continue
-            if (method.returnType != String::class.java) continue
-            val address = runCatching { method.invoke(info) as? String }.getOrNull()
-            if (normalizeBluetoothAddress(address) != null) return address
+        return listOf("getAddress", "component1").firstNotNullOfOrNull { name ->
+            val method = resolveMethod(info.javaClass, name, emptyArray())
+            if (method?.returnType == String::class.java) {
+                runCatching { method.invoke(info) as? String }.getOrNull()?.takeIf { normalizeBluetoothAddress(it) != null }
+            } else {
+                null
+            }
         }
-        return null
     }
 
     private fun loadClass(className: String): Class<*>? = try {
@@ -569,32 +562,30 @@ class MiLinkNativeHeadsetAdapter(
 
     private fun notifyHeadsetPropertyChanged(controller: Any?, device: BluetoothDevice?, updateType: Int) {
         if (controller == null || device == null) return
-        val address = normalizeBluetoothAddress(runCatching { device.address }.getOrNull())
-            ?: return
+        val address = normalizeBluetoothAddress(bluetoothAddress(device)) ?: return
         val expectedReference = lastAncReference ?: return
-        if (lastAncAddress != address) return
-        if (directory.current()?.takeIf { it.reference == expectedReference && it.matchesAddress(address) } == null) {
-            return
+        fun isCurrentController(): Boolean {
+            val sameSession = lastAncReference == expectedReference && lastAncAddress == address
+            val sameController = lastAncController?.get() === controller && lastAncDevice === device
+            return sameSession && sameController && directory.session(address)?.reference == expectedReference
         }
-        if (lastAncController?.get() !== controller || lastAncDevice !== device) return
+        if (!isCurrentController()) return
         callbackHandler.post {
-            val current = directory.current()?.takeIf { !closed }
-            if (current == null || current.reference != expectedReference || !current.matchesAddress(address) ||
-                lastAncReference != expectedReference || lastAncAddress != address ||
-                lastAncController?.get() !== controller || lastAncDevice !== device
-            ) {
-                return@post
-            }
-            if (normalizeBluetoothAddress(runCatching { device.address }.getOrNull()) != address) return@post
-            try {
-                val listener = findObjectField(controller, "headsetPropertyChangeListener") ?: return@post
-                val invoke = findMethodByNameAndCount(listener.javaClass, "invoke", 2)
-                    ?: throw NoSuchMethodException("headsetPropertyChangeListener.invoke/2")
-                invoke.invoke(listener, device, updateType)
-            } catch (failure: Throwable) {
-                module.log(Log.WARN, TAG, "headset_property_callback_failed updateType=$updateType", failure)
-                report(FEATURE, "UNAVAILABLE", "headset_property_callback_failed:$updateType")
-            }
+            if (closed || !isCurrentController()) return@post
+            if (normalizeBluetoothAddress(bluetoothAddress(device)) != address) return@post
+            invokePropertyChangeListener(controller, device, updateType)
+        }
+    }
+
+    private fun invokePropertyChangeListener(controller: Any, device: BluetoothDevice, updateType: Int) {
+        try {
+            val listener = findObjectField(controller, "headsetPropertyChangeListener") ?: return
+            val invoke = findMethodByNameAndCount(listener.javaClass, "invoke", 2)
+                ?: throw NoSuchMethodException("headsetPropertyChangeListener.invoke/2")
+            invoke.invoke(listener, device, updateType)
+        } catch (failure: Throwable) {
+            module.log(Log.WARN, TAG, "headset_property_callback_failed updateType=$updateType", failure)
+            report(FEATURE, "UNAVAILABLE", "headset_property_callback_failed:$updateType")
         }
     }
 

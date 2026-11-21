@@ -11,29 +11,13 @@ fun classifyHyperOsBuild(
     brand: String,
     incrementalVersion: String,
 ): PlatformApplicability {
-    val normalizedManufacturer = manufacturer.trim().lowercase()
-    val normalizedBrand = brand.trim().lowercase()
+    val identities = listOf(manufacturer, brand).map { it.trim().lowercase() }
+    if (identities.all { it.isEmpty() || it == BUILD_UNKNOWN }) return PlatformApplicability.UNKNOWN
+    if (identities.none { it in XIAOMI_DEVICE_NAMES }) return PlatformApplicability.NOT_APPLICABLE
+
     val version = incrementalVersion.trim()
-    val manufacturerKnown = normalizedManufacturer.isNotEmpty() && normalizedManufacturer != BUILD_UNKNOWN
-    val brandKnown = normalizedBrand.isNotEmpty() && normalizedBrand != BUILD_UNKNOWN
-    if (!manufacturerKnown && !brandKnown) {
-        return PlatformApplicability.UNKNOWN
-    }
-
-    val xiaomiFamily = normalizedManufacturer in XIAOMI_DEVICE_NAMES || normalizedBrand in XIAOMI_DEVICE_NAMES
-    if (!xiaomiFamily) return PlatformApplicability.NOT_APPLICABLE
-    if (version.isEmpty() || version.equals(BUILD_UNKNOWN, ignoreCase = true)) return PlatformApplicability.UNKNOWN
-
-    val hyperOsMatch = HYPER_OS_INCREMENTAL.matchEntire(version)
-    if (hyperOsMatch == null) {
-        return if (KNOWN_MIUI_14_INCREMENTAL.matches(version)) {
-            PlatformApplicability.NOT_APPLICABLE
-        } else {
-            PlatformApplicability.UNKNOWN
-        }
-    }
-
-    val major = hyperOsMatch.groupValues[1].toIntOrNull() ?: return PlatformApplicability.UNKNOWN
+    if (KNOWN_MIUI_14_INCREMENTAL.matches(version)) return PlatformApplicability.NOT_APPLICABLE
+    val major = HYPER_OS_INCREMENTAL.matchEntire(version)?.groupValues?.get(1)?.toIntOrNull()
     return when (major) {
         3, 4 -> PlatformApplicability.APPLICABLE
         1, 2 -> PlatformApplicability.NOT_APPLICABLE

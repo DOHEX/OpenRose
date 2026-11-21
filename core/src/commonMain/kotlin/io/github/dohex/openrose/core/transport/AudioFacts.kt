@@ -71,9 +71,8 @@ fun inferAudioProfile(snapshot: RawAudioSnapshot, targetAddresses: Set<String>):
         val states = raw.states.map { (address, state) ->
             (normalizeBluetoothAddress(address) ?: return AudioProfileEvidence.UNKNOWN) to state
         }.toMap()
-        if ((targets + connected).any { it !in states } || connected.any { states[it] != AudioConnectionState.CONNECTED } ||
-            states.any { (address, state) -> state == AudioConnectionState.CONNECTED && address !in connected }
-        ) {
+        val connectedByState = states.filterValues { it == AudioConnectionState.CONNECTED }.keys
+        if (!states.keys.containsAll(targets) || connectedByState != connected) {
             return AudioProfileEvidence.UNKNOWN
         }
         connected

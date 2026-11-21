@@ -377,9 +377,9 @@ internal class ControlLink(
             settings.runNextDuringInitialization(this, attempt)
             delay(query.delayBeforeMillis)
             throwProgressFailure(progress)
-            writeInitialQuery(attempt, selection, opened, query.bytes, index)
-            val waitForMeaningfulState = index == 0 && query.expectedFields.isNotEmpty() &&
-                selection.endpoint is TransportEndpoint.BleGatt && requireNotNull(transport).supportsInitializationRecovery
+            val canRecoverQuery = canRecoverFirstQuery(index, selection)
+            writeInitialQuery(attempt, opened, query.bytes, canRecoverQuery)
+            val waitForMeaningfulState = canRecoverQuery && query.expectedFields.isNotEmpty()
             val observed = withTimeoutOrNull(timing.queryTimeoutMillis) {
                 progress.first {
                     it.ended || (it.keys.containsAll(query.responseKeys) && (!waitForMeaningfulState || it.meaningful))
@@ -387,9 +387,7 @@ internal class ControlLink(
             }
             if (observed?.ended == true) throw observed.failure ?: LinkEnded()
             if (observed == null) {
-                if (index == 0 && !progress.value.meaningful && selection.endpoint is TransportEndpoint.BleGatt &&
-                    requireNotNull(transport).supportsInitializationRecovery
-                ) {
+                if (canRecoverQuery && !progress.value.meaningful) {
                     throw RecoverableTransportException(TransportRecoveryReason.NO_INITIAL_RESPONSE, "首条初始化读取没有收到有效设备状态")
                 }
                 val timeout = ControlError(ControlErrorCode.TIMEOUT, "${query.key} 部分字段读取超时")
@@ -430,36 +428,35 @@ internal class ControlLink(
 
     private suspend fun writeInitialQuery(
         attempt: Attempt,
-        selection: TransportSelection,
         connection: ControlConnection,
         bytes: ByteArray,
-        queryIndex: Int,
+        canRecoverQuery: Boolean,
     ) {
         try {
             writePaced(attempt, connection, bytes)
-        } catch (cause: CancellationException) {
-            if (cause is TimeoutCancellationException && currentCoroutineContext().isActive &&
-                queryIndex == 0 && canRecoverUnclassified(attempt, selection)
-            ) {
-                throw RecoverableTransportException(TransportRecoveryReason.WRITE_FAILED, "首条初始化读取写入超时", cause)
-            }
-            throw cause
         } catch (cause: Exception) {
-            if (queryIndex == 0 && canRecoverUnclassified(attempt, selection) && cause !is SecurityException &&
-                cause !is IllegalArgumentException && cause !is UnsupportedOperationException && cause !is LinkEnded &&
-                cause !is RecoverableTransportException && cause !is TerminalTransportException
-            ) {
-                throw RecoverableTransportException(TransportRecoveryReason.WRITE_FAILED, "首条初始化读取写入失败", cause)
+            val message = when {
+                cause is TimeoutCancellationException && currentCoroutineContext().isActive -> "首条初始化读取写入超时"
+                cause is CancellationException || cause is LinkEnded || cause is RecoverableTransportException -> null
+                isTerminalTransportFailure(cause) -> null
+                else -> "首条初始化读取写入失败"
+            }
+            if (canRecoverQuery && message != null) {
+                throw RecoverableTransportException(TransportRecoveryReason.WRITE_FAILED, message, cause)
             }
             throw cause
         }
     }
 
-    private fun canRecoverUnclassified(
-        attempt: Attempt,
+    private fun canRecoverFirstQuery(
+        index: Int?,
         selection: TransportSelection,
-    ): Boolean = selection.endpoint is TransportEndpoint.BleGatt &&
-        requireNotNull(transport).supportsInitializationRecovery
+    ): Boolean = index == 0 && selection.endpoint is TransportEndpoint.BleGatt && requireNotNull(transport).supportsInitializationRecovery
+
+    private fun isTerminalTransportFailure(cause: Throwable?): Boolean = when (cause) {
+        is SecurityException, is IllegalArgumentException, is UnsupportedOperationException, is TerminalTransportException -> true
+        else -> false
+    }
 
     private fun canRetry(
         attempt: Attempt,
@@ -467,14 +464,10 @@ internal class ControlLink(
         failure: RecoverableTransportException,
     ): Boolean {
         if (selection.endpoint !is TransportEndpoint.BleGatt) return false
-        if (failure.cause is SecurityException || failure.cause is IllegalArgumentException ||
-            failure.cause is UnsupportedOperationException || failure.cause is TerminalTransportException
-        ) {
-            return false
-        }
+        if (isTerminalTransportFailure(failure.cause)) return false
         return when (failure.reason) {
             TransportRecoveryReason.WRITE_FAILED, TransportRecoveryReason.NO_INITIAL_RESPONSE ->
-                attempt.initializationQueryIndex == 0 && canRecoverUnclassified(attempt, selection)
+                canRecoverFirstQuery(attempt.initializationQueryIndex, selection)
 
             TransportRecoveryReason.SERVICE_DISCOVERY,
             TransportRecoveryReason.SERVICES_UNAVAILABLE,

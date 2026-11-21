@@ -182,60 +182,84 @@ internal class HostEndpoint(
     override fun open(hello: Bundle, clientToken: IBinder): Bundle {
         val caller = caller()
         if (hello.getInt(BridgeWire.KEY_VERSION) != BridgeWire.VERSION) return BridgeBundles.response(BridgeWire.STATUS_UNSUPPORTED_VERSION)
-        val opened = host.open(caller)
-        if (opened !is HostOpenResult.Opened) {
-            val refused = opened as HostOpenResult.Refused
-            Log.w(TAG, "open_refused uid=${caller.uid} ${refused.rejection}")
-            // A retired instance (module hot reload) is not an authorisation failure: the client must rediscover.
-            val status = if (refused.rejection == HostRejection.UNAUTHORIZED) {
-                BridgeWire.STATUS_UNAUTHORIZED
-            } else {
-                BridgeWire.STATUS_UNAVAILABLE
+        return when (val result = host.open(caller)) {
+            is HostOpenResult.Opened -> {
+                val role = result.lease.role
+                val target = when (role) {
+                    ClientRole.APP -> null
+                    ClientRole.MILINK -> BridgeTarget.MILINK
+                    ClientRole.XIAOMI_BLUETOOTH -> BridgeTarget.XIAOMI_BLUETOOTH
+                    ClientRole.HOST_PRESENTATION -> BridgeTarget.BLUETOOTH
+                }
+                val lease = EndpointLease(
+                    result.lease.id,
+                    caller,
+                    role,
+                    target,
+                    hello.getString(BridgeWire.PROCESS),
+                    clientToken,
+                    IBinder.DeathRecipient { clientDied(result.lease.id) },
+                )
+                validateTarget(hello, lease) ?: registerLease(lease, result)
             }
-            return BridgeBundles.response(status, refused.message)
-        }
-        val role = opened.lease.role
-        val target = when (role) {
-            ClientRole.APP -> null
-            ClientRole.MILINK -> BridgeTarget.MILINK
-            ClientRole.XIAOMI_BLUETOOTH -> BridgeTarget.XIAOMI_BLUETOOTH
-            ClientRole.HOST_PRESENTATION -> BridgeTarget.BLUETOOTH
-        }
-        val processName = hello.getString(BridgeWire.PROCESS)
-        if (target != null) {
-            // The claimed scope must match the verified caller; it can never widen what the role allows.
-            if (hello.getString(BridgeWire.PACKAGE) != target.packageName || processName == null || !target.acceptsProcess(processName)) {
-                host.close(caller, opened.lease.id)
-                return BridgeBundles.response(BridgeWire.STATUS_UNAUTHORIZED, "目标包或运行进程与已验证的调用者不一致")
-            }
-            val resolution = hello.getString(BridgeWire.RESOLUTION)
-            if (resolution !in BridgeWire.RESOLUTIONS) {
-                host.close(caller, opened.lease.id)
-                return BridgeBundles.response(BridgeWire.STATUS_INVALID_ARGUMENT)
-            }
-            if (resolution != BridgeWire.RESOLUTION_MATCHED) {
-                host.close(caller, opened.lease.id)
-                recordEndpoint(target, processName, BridgeIpcState.TARGET_INCOMPATIBLE, "${target.componentMatch} · $resolution")
-                return BridgeBundles.response(BridgeWire.STATUS_TARGET_INCOMPATIBLE)
+
+            is HostOpenResult.Refused -> {
+                Log.w(TAG, "open_refused uid=${caller.uid} ${result.rejection}")
+                // A retired instance (module hot reload) must be rediscovered.
+                val status = if (result.rejection == HostRejection.UNAUTHORIZED) {
+                    BridgeWire.STATUS_UNAUTHORIZED
+                } else {
+                    BridgeWire.STATUS_UNAVAILABLE
+                }
+                BridgeBundles.response(status, result.message)
             }
         }
-        val death = IBinder.DeathRecipient { clientDied(opened.lease.id) }
+    }
+
+    private fun validateTarget(hello: Bundle, lease: EndpointLease): Bundle? {
+        val target = lease.target ?: return null
+        val process = lease.processName
+        // The claimed scope must match the verified caller; it can never widen what the role allows.
+        if (hello.getString(BridgeWire.PACKAGE) != target.packageName || process == null || !target.acceptsProcess(process)) {
+            host.close(lease.caller, lease.id)
+            return BridgeBundles.response(BridgeWire.STATUS_UNAUTHORIZED, "目标包或运行进程与已验证的调用者不一致")
+        }
+        return when (val resolution = hello.getString(BridgeWire.RESOLUTION)) {
+            BridgeWire.RESOLUTION_MATCHED -> null
+
+            in BridgeWire.RESOLUTIONS -> {
+                host.close(lease.caller, lease.id)
+                recordEndpoint(target, process, BridgeIpcState.TARGET_INCOMPATIBLE, "${target.componentMatch} · $resolution")
+                BridgeBundles.response(BridgeWire.STATUS_TARGET_INCOMPATIBLE)
+            }
+
+            else -> {
+                host.close(lease.caller, lease.id)
+                BridgeBundles.response(BridgeWire.STATUS_INVALID_ARGUMENT)
+            }
+        }
+    }
+
+    private fun registerLease(lease: EndpointLease, opened: HostOpenResult.Opened): Bundle {
         // The lease is registered before the death link, so a death in between finds and drops it.
         synchronized(lock) {
             // One lease per caller process; a reconnecting client replaces its earlier lease.
-            leases.values.filter { it.caller == caller }.map { it.id }.forEach { dropLease(it) }
-            leases[opened.lease.id] = EndpointLease(opened.lease.id, caller, role, target, processName, clientToken, death)
+            leases.values.filter { it.caller == lease.caller }.map { it.id }.forEach { dropLease(it) }
+            leases[lease.id] = lease
         }
         try {
-            clientToken.linkToDeath(death, 0)
+            lease.client.linkToDeath(lease.death, 0)
         } catch (failure: Exception) {
             // Drops the endpoint lease and closes the host lease.
-            synchronized(lock) { dropLease(opened.lease.id) }
+            synchronized(lock) { dropLease(lease.id) }
+            Log.w(TAG, "lease_link_failed uid=${lease.caller.uid}", failure)
             return BridgeBundles.response(BridgeWire.STATUS_UNAVAILABLE, "调用者已不存在")
         }
-        if (target != null && processName != null) recordEndpoint(target, processName, BridgeIpcState.AUTHENTICATED, target.componentMatch)
+        if (lease.target != null && lease.processName != null) {
+            recordEndpoint(lease.target, lease.processName, BridgeIpcState.AUTHENTICATED, lease.target.componentMatch)
+        }
         return BridgeBundles.response(BridgeWire.STATUS_OK).apply {
-            putString(BridgeWire.LEASE_ID, opened.lease.id)
+            putString(BridgeWire.LEASE_ID, lease.id)
             putString(BridgeWire.HOST_EPOCH, opened.lease.incarnation)
             putString(BridgeWire.PAYLOAD, HostWire.encode(opened).render())
         }
@@ -374,63 +398,59 @@ internal class HostEndpoint(
         }
     }
 
+    private fun withSessionReference(request: Bundle, action: (OwnerGeneration, SessionReference) -> Bundle): Bundle {
+        val generation = generation(request) ?: return BridgeBundles.response(BridgeWire.STATUS_STALE_HOST)
+        val reference = request.reference() ?: return BridgeBundles.response(BridgeWire.STATUS_INVALID_ARGUMENT)
+        return action(generation, reference)
+    }
+
     override fun claimPrompt(request: Bundle): Bundle {
         val lease = consumerLease(request.getString(BridgeWire.LEASE_ID))
         requireVersion(request)
-        val generation = generation(request) ?: return BridgeBundles.response(BridgeWire.STATUS_STALE_HOST)
-        val reference = request.reference() ?: return BridgeBundles.response(BridgeWire.STATUS_INVALID_ARGUMENT)
-        val id = request.getString(BridgePresentationWire.PROMPT_ID)?.takeIf { it.length in 1..128 }
-            ?: return BridgeBundles.response(BridgeWire.STATUS_INVALID_ARGUMENT)
-        return when (
-            val result = runBlocking {
-                host.execute(lease.caller, lease.id, generation, HostCommand.ClaimPrompt(reference, id))
-            }
-        ) {
-            is HostCallResult.Flag -> BridgeBundles.response(if (result.value) BridgeWire.STATUS_OK else "STALE_PROMPT")
+        return withSessionReference(request) { generation, reference ->
+            val id = request.getString(BridgePresentationWire.PROMPT_ID)?.takeIf { it.length in 1..128 }
+                ?: return@withSessionReference BridgeBundles.response(BridgeWire.STATUS_INVALID_ARGUMENT)
+            val result = runBlocking { host.execute(lease.caller, lease.id, generation, HostCommand.ClaimPrompt(reference, id)) }
+            when (result) {
+                is HostCallResult.Flag -> BridgeBundles.response(if (result.value) BridgeWire.STATUS_OK else "STALE_PROMPT")
 
-            // The host decides which entry presents the saved island mode; a refusal is not a stale generation.
-            is HostCallResult.Rejected -> if (result.rejection == HostRejection.FORBIDDEN) {
-                BridgeBundles.response(BridgeWire.STATUS_UNAVAILABLE, result.message)
-            } else {
-                BridgeBundles.response(BridgeWire.STATUS_STALE_HOST, result.message)
-            }
+                // The host decides which entry presents the saved island mode; a refusal is not a stale generation.
+                is HostCallResult.Rejected -> if (result.rejection == HostRejection.FORBIDDEN) {
+                    BridgeBundles.response(BridgeWire.STATUS_UNAVAILABLE, result.message)
+                } else {
+                    BridgeBundles.response(BridgeWire.STATUS_STALE_HOST, result.message)
+                }
 
-            is HostCallResult.Operation -> BridgeBundles.response(BridgeWire.STATUS_ACTION_FAILED)
+                is HostCallResult.Operation -> BridgeBundles.response(BridgeWire.STATUS_ACTION_FAILED)
+            }
         }
     }
 
     override fun setNoise(request: Bundle): Bundle {
         val lease = consumerLease(request.getString(BridgeWire.LEASE_ID))
         requireVersion(request)
-        val generation = generation(request) ?: return BridgeBundles.response(BridgeWire.STATUS_STALE_HOST)
-        val reference = request.reference() ?: return BridgeBundles.response(BridgeWire.STATUS_INVALID_ARGUMENT)
-        val mode = request.getString(BridgePresentationWire.NOISE_MODE)?.takeIf { it.length in 1..64 }
-            ?: return BridgeBundles.response(BridgeWire.STATUS_INVALID_ARGUMENT)
-        // The owner validates the generation and session reference under its own lifecycle lock, and the
-        // result is the earphones' confirmation, never that this call arrived.
-        return when (
-            val result = runBlocking {
-                host.execute(
-                    lease.caller,
-                    lease.id,
-                    generation,
-                    HostCommand.Set(reference, DeviceSetting.NOISE_MODE, FieldValue.Text(mode)),
-                )
-            }
-        ) {
-            is HostCallResult.Operation -> when (val outcome = result.result) {
-                OperationResult.Success -> BridgeBundles.response(BridgeWire.STATUS_OK)
-                is OperationResult.Failure -> BridgeBundles.response(outcome.error.code.name, outcome.error.message)
-            }
+        return withSessionReference(request) { generation, reference ->
+            val mode = request.getString(BridgePresentationWire.NOISE_MODE)?.takeIf { it.length in 1..64 }
+                ?: return@withSessionReference BridgeBundles.response(BridgeWire.STATUS_INVALID_ARGUMENT)
+            // The owner validates the generation and session reference under its own lifecycle lock, and the
+            // result is the earphones' confirmation, never that this call arrived.
+            val command = HostCommand.Set(reference, DeviceSetting.NOISE_MODE, FieldValue.Text(mode))
+            val result = runBlocking { host.execute(lease.caller, lease.id, generation, command) }
+            when (result) {
+                is HostCallResult.Operation -> when (val outcome = result.result) {
+                    OperationResult.Success -> BridgeBundles.response(BridgeWire.STATUS_OK)
+                    is OperationResult.Failure -> BridgeBundles.response(outcome.error.code.name, outcome.error.message)
+                }
 
-            is HostCallResult.Rejected -> when (result.rejection) {
-                HostRejection.FORBIDDEN, HostRejection.INVALID_LEASE ->
-                    BridgeBundles.response(BridgeWire.STATUS_UNAUTHORIZED, result.message)
+                is HostCallResult.Rejected -> when (result.rejection) {
+                    HostRejection.FORBIDDEN, HostRejection.INVALID_LEASE ->
+                        BridgeBundles.response(BridgeWire.STATUS_UNAUTHORIZED, result.message)
 
-                else -> BridgeBundles.response(BridgeWire.STATUS_STALE_HOST, result.message)
+                    else -> BridgeBundles.response(BridgeWire.STATUS_STALE_HOST, result.message)
+                }
+
+                is HostCallResult.Flag -> BridgeBundles.response(BridgeWire.STATUS_ACTION_FAILED)
             }
-
-            is HostCallResult.Flag -> BridgeBundles.response(BridgeWire.STATUS_ACTION_FAILED)
         }
     }
 
@@ -470,17 +490,14 @@ internal class HostEndpoint(
             else -> setOf(BridgePresentationWire.SYSTEM_HEADSET, BridgePresentationWire.OFFICIAL_CONNECTION)
         }
         if (feature !in allowed) throw SecurityException("系统入口不能代其他组件报告状态")
-        val status = report.getString(BridgeWire.STATUS)?.takeIf { it in BridgePresentationWire.COMPONENT_STATUSES }
-            ?: return BridgeBundles.response(BridgeWire.STATUS_INVALID_ARGUMENT)
-        val detail = report.getString(BridgePresentationWire.DETAIL)?.takeIf { it.length <= 512 }
-            ?: return BridgeBundles.response(BridgeWire.STATUS_INVALID_ARGUMENT)
-        val key = endpointKey(requireNotNull(lease.target), lease.processName)
-        facts.update { current ->
-            val endpoint = current.endpoints[key] ?: return@update current
-            val updated = endpoint.copy(features = endpoint.features + (feature to "$status · $detail"))
-            current.copy(endpoints = current.endpoints + (key to updated))
+        return recordReport(report, BridgePresentationWire.COMPONENT_STATUSES) { description ->
+            val key = endpointKey(requireNotNull(lease.target), lease.processName)
+            facts.update { current ->
+                val endpoint = current.endpoints[key] ?: return@update current
+                val updated = endpoint.copy(features = endpoint.features + (feature to description))
+                current.copy(endpoints = current.endpoints + (key to updated))
+            }
         }
-        return BridgeBundles.response(BridgeWire.STATUS_OK)
     }
 
     override fun reportPresentation(report: Bundle): Bundle {
@@ -502,17 +519,24 @@ internal class HostEndpoint(
             else -> emptySet()
         }
         if (feature !in allowed) throw SecurityException("系统入口不能代其他组件报告展示状态")
-        val generation = generation(report) ?: return BridgeBundles.response(BridgeWire.STATUS_STALE_HOST)
-        val reference = report.reference() ?: return BridgeBundles.response(BridgeWire.STATUS_INVALID_ARGUMENT)
-        val read = runBlocking { host.readSession(lease.caller, lease.id, generation, reference) }
-        if ((read as? HostReadResult.Available)?.snapshot !is SessionSnapshotResult.Available) {
-            return BridgeBundles.response(BridgeWire.STATUS_STALE_SESSION)
+        return withSessionReference(report) { generation, reference ->
+            val read = runBlocking { host.readSession(lease.caller, lease.id, generation, reference) }
+            if ((read as? HostReadResult.Available)?.snapshot !is SessionSnapshotResult.Available) {
+                BridgeBundles.response(BridgeWire.STATUS_STALE_SESSION)
+            } else {
+                recordReport(report, BridgePresentationWire.STATUSES) { description ->
+                    facts.update { it.copy(presentation = it.presentation + (feature to description)) }
+                }
+            }
         }
-        val status = report.getString(BridgeWire.STATUS)?.takeIf { it in BridgePresentationWire.STATUSES }
+    }
+
+    private fun recordReport(report: Bundle, validStatuses: Set<String>, update: (String) -> Unit): Bundle {
+        val status = report.getString(BridgeWire.STATUS)?.takeIf { it in validStatuses }
             ?: return BridgeBundles.response(BridgeWire.STATUS_INVALID_ARGUMENT)
         val detail = report.getString(BridgePresentationWire.DETAIL)?.takeIf { it.length <= 512 }
             ?: return BridgeBundles.response(BridgeWire.STATUS_INVALID_ARGUMENT)
-        facts.update { it.copy(presentation = it.presentation + (feature to "$status · $detail")) }
+        update("$status · $detail")
         return BridgeBundles.response(BridgeWire.STATUS_OK)
     }
 

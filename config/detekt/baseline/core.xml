@@ -2,18 +2,10 @@
 <SmellBaseline>
   <ManuallySuppressedIssues/>
   <CurrentIssues>
-    <ID>ComplexCondition:AudioFacts.kt:(targets + connected).any { it !in states } || connected.any { states[it] != AudioConnectionState.CONNECTED } || states.any { (address, state) -&gt; state == AudioConnectionState.CONNECTED &amp;&amp; address !in connected }</ID>
     <ID>ComplexCondition:ControlLink.kt:ControlLink$active !== attempt || attempt.linkEpoch.value != epoch || progress.value.ended || state.value.device?.sessionId != attempt.id || state.value.connection is ConnectionState.Disconnected</ID>
     <ID>ComplexCondition:ControlLink.kt:ControlLink$active === attempt &amp;&amp; attempt.ready &amp;&amp; current?.deviceId == deviceId &amp;&amp; current.sessionId == attempt.id &amp;&amp; current.phase == ConnectionPhase.READY</ID>
-    <ID>ComplexCondition:ControlLink.kt:ControlLink$cause is TimeoutCancellationException &amp;&amp; currentCoroutineContext().isActive &amp;&amp; queryIndex == 0 &amp;&amp; canRecoverUnclassified(attempt, selection)</ID>
-    <ID>ComplexCondition:ControlLink.kt:ControlLink$failure.cause is SecurityException || failure.cause is IllegalArgumentException || failure.cause is UnsupportedOperationException || failure.cause is TerminalTransportException</ID>
-    <ID>ComplexCondition:ControlLink.kt:ControlLink$index == 0 &amp;&amp; !progress.value.meaningful &amp;&amp; selection.endpoint is TransportEndpoint.BleGatt &amp;&amp; requireNotNull(transport).supportsInitializationRecovery</ID>
-    <ID>ComplexCondition:ControlLink.kt:ControlLink$queryIndex == 0 &amp;&amp; canRecoverUnclassified(attempt, selection) &amp;&amp; cause !is SecurityException &amp;&amp; cause !is IllegalArgumentException &amp;&amp; cause !is UnsupportedOperationException &amp;&amp; cause !is LinkEnded &amp;&amp; cause !is RecoverableTransportException &amp;&amp; cause !is TerminalTransportException</ID>
-    <ID>ComplexCondition:GattControlConnection.kt:GattControlConnection$(!writer.canWrite &amp;&amp; !writer.canWriteWithoutResponse) || (!notifier.canNotify &amp;&amp; !notifier.canIndicate)</ID>
-    <ID>CyclomaticComplexMethod:AudioFacts.kt:fun inferAudioProfile: AudioProfileEvidence</ID>
     <ID>CyclomaticComplexMethod:ControlLink.kt:ControlLink$private suspend fun openAndRead: OperationResult</ID>
     <ID>CyclomaticComplexMethod:ControlLink.kt:ControlLink$private suspend fun openAndReadLink: OperationResult</ID>
-    <ID>CyclomaticComplexMethod:ControlLink.kt:ControlLink$private suspend fun writeInitialQuery</ID>
     <ID>CyclomaticComplexMethod:ControlLink.kt:ControlLink$suspend fun connect: OperationResult</ID>
     <ID>CyclomaticComplexMethod:ControlSessionRecoveryTest.kt:ControlSessionRecoveryTest.RecoveryTransport$override suspend fun connect: ControlConnection</ID>
     <ID>CyclomaticComplexMethod:GattControlConnection.kt:GattControlConnection$private suspend fun initialize</ID>
@@ -24,15 +16,6 @@
     <ID>CyclomaticComplexMethod:SettingQueue.kt:SettingQueue$private suspend fun runSettings</ID>
     <ID>CyclomaticComplexMethod:ZtCodec.kt:ZtCodec$override fun feedNotification: List&lt;ProtocolReply&gt;</ID>
     <ID>CyclomaticComplexMethod:ZtCodec.kt:ZtCodec$override fun prepareSetting: ProtocolSetting</ID>
-    <ID>DestructuringDeclarationWithTooManyEntries:ControlSessionAdvancedAudioTest.kt:ControlSessionAdvancedAudioTest$(firmware, level, write, reply)</ID>
-    <ID>DestructuringDeclarationWithTooManyEntries:ControlSessionAdvancedAudioTest.kt:ControlSessionAdvancedAudioTest$(setting, value, write, query, reply)</ID>
-    <ID>DestructuringDeclarationWithTooManyEntries:ControlSessionDeviceControlsTest.kt:ControlSessionDeviceControlsTest$(enabled, write, query, reply)</ID>
-    <ID>DestructuringDeclarationWithTooManyEntries:ControlSessionDeviceControlsTest.kt:ControlSessionDeviceControlsTest$(mode, write, query, reply)</ID>
-    <ID>DestructuringDeclarationWithTooManyEntries:ControlSessionDeviceControlsTest.kt:ControlSessionDeviceControlsTest$(setting, enabled, write, query, reply)</ID>
-    <ID>DestructuringDeclarationWithTooManyEntries:ControlSessionDeviceControlsTest.kt:ControlSessionDeviceControlsTest$(setting, requested, write, mode, multipoint, reply)</ID>
-    <ID>DestructuringDeclarationWithTooManyEntries:ControlSessionDeviceControlsTest.kt:ControlSessionDeviceControlsTest$(side, gesture, action, write, query, reply)</ID>
-    <ID>DestructuringDeclarationWithTooManyEntries:ControlSessionEqualizerTest.kt:ControlSessionEqualizerTest$(enabled, write, query, reply)</ID>
-    <ID>DestructuringDeclarationWithTooManyEntries:ControlSessionEqualizerTest.kt:ControlSessionEqualizerTest$(preset, write, query, reply)</ID>
     <ID>LongMethod:AdvancedAudioProtocolTest.kt:AdvancedAudioProtocolTest$@Test fun i7GainProtectionAndPromptSettingsUseTheirIndependentFirmwareGatesAndReadbacks</ID>
     <ID>LongMethod:ControlLink.kt:ControlLink$private suspend fun openAndReadLink: OperationResult</ID>
     <ID>LongMethod:ControlSessionTransportSelectionTest.kt:ControlSessionTransportSelectionTest$@Test fun fallbackReasonsUseOnlyAvailableModelAddressPlatformAndAudioEvidence</ID>
@@ -50,7 +33,6 @@
     <ID>ReturnCount:RsCommonV2Codec.kt:RsCommonV2Codec$private fun decodeRecord: Map&lt;DeviceField, FieldReading&gt;</ID>
     <ID>ReturnCount:RsCommonV2Codec.kt:RsCommonV2Codec$private fun parseFrame: ProtocolReply?</ID>
     <ID>ThrowsCount:ControlLink.kt:ControlLink$private suspend fun openAndReadLink: OperationResult</ID>
-    <ID>ThrowsCount:ControlLink.kt:ControlLink$private suspend fun writeInitialQuery</ID>
     <ID>ThrowsCount:RsCommonV2Codec.kt:RsCommonV2Codec$override fun prepareSetting: ProtocolSetting</ID>
     <ID>ThrowsCount:SettingQueue.kt:SettingQueue$private suspend fun applySetting: OperationResult</ID>
     <ID>ThrowsCount:ZtCodec.kt:ZtCodec$override fun prepareSetting: ProtocolSetting</ID>
@@ -60,6 +42,5 @@
     <ID>TooGenericExceptionCaught:GattControlConnection.kt:GattControlConnection.Companion$error: Throwable</ID>
     <ID>TooGenericExceptionCaught:SettingQueue.kt:SettingQueue$cause: Exception</ID>
     <ID>TooManyFunctions:ControlLink.kt:ControlLink</ID>
-    <ID>UnusedParameter:ControlLink.kt:ControlLink$attempt: Attempt</ID>
   </CurrentIssues>
 </SmellBaseline>

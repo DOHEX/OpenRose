@@ -302,7 +302,7 @@ private fun NoiseModeChoices(
     }
 }
 
-/** The status notification keeps a copy as `SystemPresentationRenderer.modeLabel` in androidApp; change both together. */
+/** The status notification uses the same labels in androidModule's RenderedSnapshot.kt; change both together. */
 fun noiseModeLabel(mode: String): String = when (mode) {
     "normal" -> "标准"
     "anc" -> "降噪"

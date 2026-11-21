@@ -80,19 +80,20 @@ internal class OfficialConnectionPresenter(
 
     private fun showOnHandler(snapshot: Bundle, promptId: String) {
         val request = decodeRequest(snapshot, promptId)
-        if (request == null) {
-            report(snapshot, BridgePresentationWire.UNAVAILABLE, "official_prompt_or_session_not_ready")
-            return
-        }
-        if (targetContext.packageName != TARGET_PACKAGE) {
-            report(snapshot, BridgePresentationWire.UNAVAILABLE, "official_target_context_must_be_com_xiaomi_bluetooth")
-            return
-        }
+        when {
+            request == null -> report(snapshot, BridgePresentationWire.UNAVAILABLE, "official_prompt_or_session_not_ready")
 
-        val previous = active
-        if (previous?.request?.key == request.key) return
-        if (previous != null) withdrawActive(previous, "superseded_by_new_openrose_prompt", report = false)
+            targetContext.packageName != TARGET_PACKAGE ->
+                report(snapshot, BridgePresentationWire.UNAVAILABLE, "official_target_context_must_be_com_xiaomi_bluetooth")
 
+            active?.request?.key != request.key -> {
+                active?.let { withdrawActive(it, "superseded_by_new_openrose_prompt", report = false) }
+                submitPrompt(snapshot, request)
+            }
+        }
+    }
+
+    private fun submitPrompt(snapshot: Bundle, request: PromptRequest) {
         val token = UUID.randomUUID().toString()
         val clips = try {
             prepareClips(request, token)
@@ -106,27 +107,26 @@ internal class OfficialConnectionPresenter(
         }
 
         val payload = buildShowBundle(clips, request)
-        if (!callbacks.claimPrompt(snapshot, promptId)) {
+        if (!callbacks.claimPrompt(snapshot, request.promptId)) {
             revokeAssets(clips)
             return
         }
         val failure = runCatching { setStatus(payload) }.exceptionOrNull()
-        if (failure != null) {
+        if (failure == null) {
+            active = activateToast(request, clips, snapshot)
+            report(
+                snapshot,
+                BridgePresentationWire.CALLED,
+                "xiaomi_bluetooth_set_status_returned;provider_and_uri_grant_probed;systemui_display_unverified",
+            )
+        } else {
             revokeAssetsAfter(clips, OFFICIAL_DURATION_MILLIS + URI_RELEASE_GRACE_MILLIS)
             report(
                 snapshot,
                 BridgePresentationWire.UNAVAILABLE,
                 "official_set_status_failed:${failure.cause?.javaClass?.simpleName ?: failure.javaClass.simpleName}",
             )
-            return
         }
-
-        active = activateToast(request, clips, snapshot)
-        report(
-            snapshot,
-            BridgePresentationWire.CALLED,
-            "xiaomi_bluetooth_set_status_returned;provider_and_uri_grant_probed;systemui_display_unverified",
-        )
     }
 
     private fun activateToast(
@@ -257,8 +257,9 @@ internal class OfficialConnectionPresenter(
     }
 
     private fun prepareClips(request: PromptRequest, token: String): List<PreparedClip> {
-        val provider = targetContext.packageManager.resolveContentProvider(FILE_PROVIDER_AUTHORITY, 0)
-            ?: throw IllegalStateException("target_fileprovider_missing")
+        val provider = checkNotNull(targetContext.packageManager.resolveContentProvider(FILE_PROVIDER_AUTHORITY, 0)) {
+            "target_fileprovider_missing"
+        }
         if (provider.packageName != TARGET_PACKAGE) throw SecurityException("target_fileprovider_package_mismatch")
         val moduleResources = runCatching {
             targetContext.createPackageContext(BridgeWire.APP_PACKAGE, Context.CONTEXT_IGNORE_SECURITY)
@@ -272,20 +273,21 @@ internal class OfficialConnectionPresenter(
                 // Prefer the Xiaomi Bluetooth app's own earbud clip so the prompt looks native; OpenRose's bundled clip is the
                 // fallback when a ROM lacks it. Never select in-ear or no-in-ear footage from connection state: this wire
                 // has no wear observation, so the plain `earphone_*` clip is used.
-                val resource = findRawResource(targetContext, spec.targetRawName)
-                    ?: moduleResources?.let { findRawResource(it, spec.moduleRawName) }
-                    ?: throw IllegalStateException("${spec.side}_clip_missing")
+                val resource = checkNotNull(
+                    findRawResource(targetContext, spec.targetRawName) ?: moduleResources?.let { findRawResource(it, spec.moduleRawName) },
+                ) { "${spec.side}_clip_missing" }
                 val name = "openrose_official_${stableDigest("${request.key}:$token:${spec.side}").take(24)}_${spec.side}.mp4"
                 // The target's FileProvider maps `internal_files` to <filesDir>/my_internal_files/ (res/xml/file_paths.xml),
                 // not to filesDir itself, so the clip must live there or the provider answers FileNotFoundException.
                 val directory = File(targetContext.filesDir, PROVIDER_FILES_DIRECTORY).also { it.mkdirs() }
                 val file = File(directory, name)
                 copyRawResource(resource.context, resource.resourceId, file)
-                val uri = Uri.parse("content://$FILE_PROVIDER_AUTHORITY/internal_files/$name")
-                if (uri.authority != FILE_PROVIDER_AUTHORITY || uri.scheme != "content") {
-                    file.delete()
-                    throw IllegalStateException("target_provider_uri_invalid")
-                }
+                val uri = Uri.Builder()
+                    .scheme("content")
+                    .authority(FILE_PROVIDER_AUTHORITY)
+                    .appendPath("internal_files")
+                    .appendPath(name)
+                    .build()
                 val clip = PreparedClip(file, uri)
                 clips += clip
                 synchronized(assetLock) { ownedAssets[uri] = OwnedAsset(clip) }
@@ -319,18 +321,15 @@ internal class OfficialConnectionPresenter(
     }
 
     private fun probeProviderVideo(uri: Uri) {
-        targetContext.contentResolver.openAssetFileDescriptor(uri, "r")?.use { descriptor ->
-            if (descriptor.length == 0L) throw IllegalStateException("target_provider_empty_clip")
-        } ?: throw IllegalStateException("target_provider_open_failed")
+        val descriptor = checkNotNull(targetContext.contentResolver.openAssetFileDescriptor(uri, "r")) { "target_provider_open_failed" }
+        descriptor.use { check(it.length != 0L) { "target_provider_empty_clip" } }
         val retriever = MediaMetadataRetriever()
         try {
             retriever.setDataSource(targetContext, uri)
-            if (retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_HAS_VIDEO) != "yes") {
-                throw IllegalStateException("target_clip_has_no_video_track")
-            }
+            check(retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_HAS_VIDEO) == "yes") { "target_clip_has_no_video_track" }
             val width = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)?.toIntOrNull() ?: 0
             val height = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)?.toIntOrNull() ?: 0
-            if (width <= 0 || height <= 0) throw IllegalStateException("target_clip_dimensions_unavailable")
+            check(width > 0 && height > 0) { "target_clip_dimensions_unavailable" }
         } finally {
             retriever.release()
         }

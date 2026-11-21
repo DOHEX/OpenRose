@@ -36,29 +36,11 @@ import kotlin.coroutines.resume
 internal class AndroidAudioProfiles(private val context: Context) : AudioFactsDriver {
     override val events: Flow<RawAudioEvent> = callbackFlow {
         val receiver = object : BroadcastReceiver() {
-            @SuppressLint("MissingPermission")
             override fun onReceive(receiverContext: Context, intent: Intent) {
                 when (intent.action) {
-                    BluetoothA2dp.ACTION_CONNECTION_STATE_CHANGED, BluetoothHeadset.ACTION_CONNECTION_STATE_CHANGED -> {
-                        val state = intent.getIntExtra(BluetoothProfile.EXTRA_STATE, -1)
-                        if (state != BluetoothProfile.STATE_CONNECTED && state != BluetoothProfile.STATE_DISCONNECTED) return
-                        val device = getDeviceExtra(intent) ?: return
-                        val event = try {
-                            RawAudioEvent.ProfileChanged(
-                                if (intent.action == BluetoothA2dp.ACTION_CONNECTION_STATE_CHANGED) {
-                                    AudioProfile.A2DP
-                                } else {
-                                    AudioProfile.HEADSET
-                                },
-                                RawAudioDevice(device.name, device.address),
-                                device.bondState == BluetoothDevice.BOND_BONDED,
-                                state == BluetoothProfile.STATE_CONNECTED,
-                            )
-                        } catch (_: SecurityException) {
-                            return
-                        }
-                        trySend(event)
-                    }
+                    BluetoothA2dp.ACTION_CONNECTION_STATE_CHANGED -> profileChange(intent, AudioProfile.A2DP)?.let { trySend(it) }
+
+                    BluetoothHeadset.ACTION_CONNECTION_STATE_CHANGED -> profileChange(intent, AudioProfile.HEADSET)?.let { trySend(it) }
 
                     BluetoothAdapter.ACTION_STATE_CHANGED -> when (
                         intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR)
@@ -81,6 +63,26 @@ internal class AndroidAudioProfiles(private val context: Context) : AudioFactsDr
         }
         trySend(RawAudioEvent.Ready)
         awaitClose { runCatching { context.unregisterReceiver(receiver) } }
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun profileChange(intent: Intent, profile: AudioProfile): RawAudioEvent.ProfileChanged? {
+        val connected = when (intent.getIntExtra(BluetoothProfile.EXTRA_STATE, -1)) {
+            BluetoothProfile.STATE_CONNECTED -> true
+            BluetoothProfile.STATE_DISCONNECTED -> false
+            else -> return null
+        }
+        val device = getDeviceExtra(intent) ?: return null
+        return try {
+            RawAudioEvent.ProfileChanged(
+                profile,
+                RawAudioDevice(device.name, device.address),
+                device.bondState == BluetoothDevice.BOND_BONDED,
+                connected,
+            )
+        } catch (_: SecurityException) {
+            null
+        }
     }
 
     private fun getDeviceExtra(intent: Intent): BluetoothDevice? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {

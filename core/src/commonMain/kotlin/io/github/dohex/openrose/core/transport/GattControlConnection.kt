@@ -101,7 +101,9 @@ class GattControlConnection private constructor(
                     exhausted = RecoverableTransportException(TransportRecoveryReason.SERVICES_UNAVAILABLE, "未找到此型号要求的服务或特征")
                     false
                 } else {
-                    if ((!writer.canWrite && !writer.canWriteWithoutResponse) || (!notifier.canNotify && !notifier.canIndicate)) {
+                    val supportsWrites = writer.canWrite || writer.canWriteWithoutResponse
+                    val supportsSubscriptions = notifier.canNotify || notifier.canIndicate
+                    if (!supportsWrites || !supportsSubscriptions) {
                         throw UnsupportedOperationException("设备特征不提供所需的写入或订阅能力")
                     }
                     services.value = Services(writer, notifier)

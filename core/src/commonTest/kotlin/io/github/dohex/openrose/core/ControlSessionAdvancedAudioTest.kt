@@ -331,35 +331,35 @@ class ControlSessionAdvancedAudioTest {
     @Test
     fun supportedGainProtectionAndPromptSettingsConfirmThroughTheSession() = runTest {
         val (session, link) = ready(firmware = "dd00040d020103f4aa")
-        for ((setting, value, write, query, reply) in listOf(
+        for (vector in listOf(
             SettingVector(DeviceSetting.GAIN, FieldValue.Number(2), "ff030245024baa", "ff0402fa4544aa", "dd0002450226aa"),
             SettingVector(DeviceSetting.HEARING_PROTECTION, FieldValue.Number(6), "ff0502460652aa", "ff0602fa4647aa", "dd000246062baa"),
         )) {
-            val pending = async { session.set(setting, value) }
+            val pending = async { session.set(vector.setting, vector.value) }
             runCurrent()
-            assertEquals(listOf(write, query), link.writes.takeLast(2), setting.name)
-            assertFalse(pending.isCompleted, setting.name)
-            link.incoming.send(reply.bytes())
+            assertEquals(listOf(vector.write, vector.query), link.writes.takeLast(2), vector.setting.name)
+            assertFalse(pending.isCompleted, vector.setting.name)
+            link.incoming.send(vector.reply.bytes())
             runCurrent()
-            assertEquals(OperationResult.Success, pending.await(), setting.name)
+            assertEquals(OperationResult.Success, pending.await(), vector.setting.name)
             assertEquals(
-                setOf(if (setting == DeviceSetting.GAIN) DeviceField.GAIN else DeviceField.HEARING_PROTECTION),
+                setOf(if (vector.setting == DeviceSetting.GAIN) DeviceField.GAIN else DeviceField.HEARING_PROTECTION),
                 session.state.value.settingOperations.last().confirmedFields,
-                setting.name,
+                vector.setting.name,
             )
         }
         session.disconnect()
 
-        for ((firmware, level, write, reply) in listOf(
+        for (vector in listOf(
             PromptVector("dd00040d030003f4aa", 5, "ff03022e0537aa", "dd00022e0512aa"),
             PromptVector("dd00040d030004f5aa", 0, "ff03022e0032aa", "dd00022e000daa"),
         )) {
-            val (promptSession, promptLink) = ready(firmware = firmware)
-            val pending = async { promptSession.set(DeviceSetting.PROMPT_VOLUME, FieldValue.Number(level)) }
+            val (promptSession, promptLink) = ready(firmware = vector.firmware)
+            val pending = async { promptSession.set(DeviceSetting.PROMPT_VOLUME, FieldValue.Number(vector.level)) }
             runCurrent()
-            assertEquals(listOf(write, "ff0402fa2e2daa"), promptLink.writes.takeLast(2), "$firmware/$level")
+            assertEquals(listOf(vector.write, "ff0402fa2e2daa"), promptLink.writes.takeLast(2), "${vector.firmware}/${vector.level}")
             assertFalse(pending.isCompleted)
-            promptLink.incoming.send(reply.bytes())
+            promptLink.incoming.send(vector.reply.bytes())
             runCurrent()
             assertEquals(OperationResult.Success, pending.await())
             assertEquals(setOf(DeviceField.PROMPT_VOLUME), promptSession.state.value.settingOperations.single().confirmedFields)

@@ -226,7 +226,12 @@ internal class ModuleHostRuntime(
             if (closed) return true
             host to scope
         }
-        if (current != null && runBlocking { withTimeoutOrNull(CLOSE_TIMEOUT_MILLIS) { current.stop() } } != true) return false
+        val released = current == null || runBlocking { withTimeoutOrNull(CLOSE_TIMEOUT_MILLIS) { current.stop() } } == true
+        if (released) retire(hostScope)
+        return released
+    }
+
+    private fun retire(hostScope: CoroutineScope?) {
         synchronized(lifecycle) {
             closed = true
             hooks.forEach { runCatching { it.unhook() } }
@@ -243,7 +248,6 @@ internal class ModuleHostRuntime(
         }
         endpoint = null
         hostScope?.cancel()
-        return true
     }
 
     private companion object {
