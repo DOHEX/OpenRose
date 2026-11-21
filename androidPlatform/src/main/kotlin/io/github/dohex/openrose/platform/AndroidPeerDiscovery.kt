@@ -3,6 +3,7 @@ package io.github.dohex.openrose.platform
 import android.content.Context
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import io.github.dohex.openrose.circulation.NearbyPeer
@@ -18,7 +19,7 @@ class AndroidPeerDiscovery(context: Context) : PeerDiscovery {
     private var active = false
     private val services = mutableMapOf<String, NsdServiceInfo>()
     private val pending = ArrayDeque<NsdServiceInfo>()
-    private val seen = mutableMapOf<String, NearbyPeer>()
+    private val seen = mutableMapOf<String, List<NearbyPeer>>()
     private var resolving = false
 
     override fun start(id: String, name: String, port: Int, found: (List<NearbyPeer>) -> Unit) {
@@ -67,7 +68,7 @@ class AndroidPeerDiscovery(context: Context) : PeerDiscovery {
                 main.post {
                     services.remove(info.serviceName)
                     seen.remove(info.serviceName)
-                    found(seen.values.toList())
+                    found(seen.values.flatten())
                 }
             }
         }
@@ -102,10 +103,8 @@ class AndroidPeerDiscovery(context: Context) : PeerDiscovery {
                 main.post {
                     resolving = false
                     if (active && services[next.serviceName] === next) {
-                        info.peer()?.takeUnless { it.id == id }?.let {
-                            seen[next.serviceName] = it
-                            found(seen.values.toList())
-                        }
+                        seen[next.serviceName] = info.peers().filter { it.id != id }
+                        found(seen.values.flatten())
                     }
                     resolve(id, found)
                 }
@@ -114,10 +113,11 @@ class AndroidPeerDiscovery(context: Context) : PeerDiscovery {
         runCatching { nsd.resolveService(next, listener) }.onFailure { listener.onResolveFailed(next, -1) }
     }
 
-    private fun NsdServiceInfo.peer(): NearbyPeer? {
-        val peerId = attributes["id"]?.decodeToString() ?: return null
-        val displayName = attributes["name"]?.decodeToString() ?: return null
-        return NearbyPeer(peerId, displayName, host ?: return null, port)
+    private fun NsdServiceInfo.peers(): List<NearbyPeer> {
+        val peerId = attributes["id"]?.decodeToString() ?: return emptyList()
+        val displayName = attributes["name"]?.decodeToString() ?: return emptyList()
+        val addresses = if (Build.VERSION.SDK_INT >= 34) hostAddresses else listOfNotNull(host)
+        return addresses.sortedBy { it !is java.net.Inet4Address }.map { NearbyPeer(peerId, displayName, it, port) }
     }
 
     private fun retry(action: () -> Unit) {
