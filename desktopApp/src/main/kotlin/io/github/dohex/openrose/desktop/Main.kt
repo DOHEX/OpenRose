@@ -82,6 +82,7 @@ fun main(args: Array<String>) {
             }
             val tray = remember { trayMonitor(hostIsLinux = hostPlatform == HostPlatform.LINUX).also { trayOwner = it } }
             val loginLaunch = remember { LoginLaunch(scope) }
+            val circulation = remember(runtime) { runtime.startCirculation() }
             val platformUi = remember {
                 DesktopPlatformUi(
                     platformName = platform,
@@ -89,7 +90,7 @@ fun main(args: Array<String>) {
                     onDesktopSettingsChange = runtime::updateDesktopSettings,
                     tray = tray.availability,
                     loginLaunch = loginLaunch,
-                    circulation = runtime.startCirculation(),
+                    circulation = circulation,
                 )
             }
             // One choice for the 未连接看板 and the tray, so “重新连接” targets the device the window shows.
@@ -163,6 +164,7 @@ fun main(args: Array<String>) {
                         model = runtime.model,
                         selection = selection,
                         uiScope = uiScope,
+                        circulation = circulation,
                         onOpenApp = ::showWindow,
                         onExit = ::exit,
                         onStarted = tray::trayStarted,

@@ -33,6 +33,54 @@ class TrayPanelUiTest {
     private val second = candidate("rose-2", ModelProfile.I7_RS_V2)
 
     @Test
+    fun remotePhoneCanConfirmTransparencyWhileTheDesktopRadioIsDisabled() {
+        for (platform in listOf(HostPlatform.LINUX, HostPlatform.WINDOWS)) {
+            val base = disconnectedAndroidState()
+            val state = base.copy(platform = base.platform.copy(hostPlatform = platform, transport = io.github.dohex.openrose.core.TransportAvailability.Disabled))
+            val reading = mapOf(
+                "status" to "ready",
+                "session" to "phone/12",
+                "device" to "i5",
+                "deviceName" to "EarFree i5",
+                "mode" to "normal",
+                "modes" to "normal,transparency",
+                "left" to "79",
+            )
+            var confirmed = reading
+            val commands = mutableListOf<Map<String, String>>()
+            val client = CirculationClient { request ->
+                when (request.getValue("op")) {
+                    "list" -> mapOf("paired.phone" to "小米 14", "near.phone" to "小米 14")
+
+                    "read" -> confirmed
+
+                    "noise" -> {
+                        commands.add(request)
+                        confirmed = reading + ("mode" to "transparency")
+                        confirmed
+                    }
+
+                    else -> error("Unexpected request $request")
+                }
+            }
+            withTrayPanel(state, InterfaceStyle.MIUIX, circulation = client) { panel ->
+                panel.render()
+                assertTrue(panel.hasText("音源设备 · 小米 14"))
+                assertTrue(panel.hasText("左耳 79% · 右耳 未知 · 充电盒 未知"))
+                panel.clickText("通透")
+                panel.render()
+                assertTrue(panel.hasText("降噪模式 · 通透"))
+                assertEquals(
+                    listOf(mapOf("op" to "noise", "peer" to "phone", "device" to "i5", "session" to "phone/12", "mode" to "transparency")),
+                    commands,
+                )
+                assertTrue(panel.model.settingWrites.isEmpty())
+                assertTrue(panel.model.connectRequests.isEmpty())
+            }
+        }
+    }
+
+    @Test
     fun connectedPanelShowsBatteryAndNoiseModeWithoutLevelControls() {
         for (style in InterfaceStyle.entries) {
             withTrayPanel(connectedI7State(), style) { panel ->
@@ -355,6 +403,7 @@ class TrayPanelUiTest {
         initialState: ControlState,
         style: InterfaceStyle,
         selection: PrimaryDeviceSelection = PrimaryDeviceSelection(),
+        circulation: CirculationClient? = null,
         block: suspend (TrayHarness) -> Unit,
     ) = runOpenRoseUiTest(360, 440) {
         val model = FakeOpenRoseModel(
@@ -362,7 +411,7 @@ class TrayPanelUiTest {
             mutableStateOf(UiSettings(interfaceStyle = style, appearance = Appearance.LIGHT)),
         )
         val panel = TrayHarness(this, model)
-        setContent { TrayPanel(model, selection, onOpenApp = { panel.destinations += it }) }
+        setContent { TrayPanel(model, selection, onOpenApp = { panel.destinations += it }, circulation = circulation) }
         block(panel)
     }
 

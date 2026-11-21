@@ -298,7 +298,7 @@ private fun NoiseModeChoices(
 }
 
 /** The status notification keeps a copy as `SystemPresentationRenderer.modeLabel` in androidApp; change both together. */
-internal fun noiseModeLabel(mode: String): String = when (mode) {
+fun noiseModeLabel(mode: String): String = when (mode) {
     "normal" -> "标准"
     "anc" -> "降噪"
     else -> semanticLabel(mode)

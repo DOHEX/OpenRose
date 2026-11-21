@@ -166,6 +166,8 @@ fun TrayPanel(
     onOpenApp: (WindowDestination?) -> Unit,
     modifier: Modifier = Modifier,
     onContentHeight: (Dp) -> Unit = {},
+    circulation: CirculationClient? = null,
+    remoteHeadsets: List<RemoteHeadset>? = null,
 ) {
     val density = LocalDensity.current
     val state by model.state.collectAsState()
@@ -184,7 +186,7 @@ fun TrayPanel(
                 .padding(vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            TrayPanelContent(model, state, selection, onOpenApp)
+            TrayPanelContent(model, state, selection, onOpenApp, circulation, remoteHeadsets)
         }
     }
 }
@@ -203,11 +205,17 @@ private fun TrayPanelContent(
     state: ControlState,
     selection: PrimaryDeviceSelection,
     onOpenApp: (WindowDestination?) -> Unit,
+    circulation: CirculationClient?,
+    remoteHeadsets: List<RemoteHeadset>?,
 ) {
     val summary = traySummary(state, selection)
     val device = state.activeDevice()?.takeIf { summary.connected }
 
-    TrayStatusCard(state, summary)
+    val peers = remoteHeadsets ?: circulation?.let { rememberRemoteHeadsets(it) }.orEmpty()
+    peers.forEach { RemoteHeadsetCard(it) }
+    if (device != null || peers.none { it.reading["status"] == "ready" } || state.audioDeviceId != null) {
+        TrayStatusCard(state, summary)
+    }
 
     if (device != null && device.capabilities.noiseControl != null) {
         NoiseControlCard(state, device, showLevelControls = false, onSet = model.settingsFor(device.sessionId))
