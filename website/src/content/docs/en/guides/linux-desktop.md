@@ -22,7 +22,7 @@ Desktop packages are published alongside the Android app; see [Getting started](
 
 The packages declare dependencies on `bluez`, GTK 3, and `libsystemd`. The AppImage needs BlueZ installed on the system with the Bluetooth service running.
 
-As on Android, pair and connect the earphones in the system Bluetooth settings first.
+Pair and connect the earphones in the system Bluetooth settings first. If the Status page shows “D-Bus 拒绝访问蓝牙” during discovery, check whether your desktop account has permission to use the system BlueZ service.
 
 ## Pair a phone and desktop
 

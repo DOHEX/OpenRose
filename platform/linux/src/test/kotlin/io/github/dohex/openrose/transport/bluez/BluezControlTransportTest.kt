@@ -31,21 +31,29 @@ class BluezControlTransportTest {
         transport.awaitInitialization()
         val failure = assertFailsWith<IllegalStateException> { transport.scan().first() }
         assertEquals("advertisement read failed", failure.message)
+        val cleanupFailures = generateSequence<Throwable>(failure) { it.cause }.flatMap { it.suppressed.asSequence() }
+        assertTrue(cleanupFailures.any { it.message == "cleanup failed" })
         transport.close()
     }
 
     @Test
     fun deniedDiscoveryMarksTransportUnavailable() = runBlocking {
-        val bus = FakeBluezBus().also {
-            it.snapshot = baseObjects()
-            it.discoveryFailure = org.freedesktop.dbus.errors.AccessDenied("denied")
+        for (denied in listOf(
+            org.freedesktop.dbus.errors.AccessDenied("denied"),
+            org.bluez.Error.NotPermitted("denied"),
+            org.bluez.Error.NotAuthorized("denied"),
+        )) {
+            val bus = FakeBluezBus().also {
+                it.snapshot = baseObjects()
+                it.discoveryFailure = denied
+            }
+            val transport = BluezControlTransport(this, bus)
+            transport.awaitInitialization()
+            assertEquals(denied::class, assertFails { transport.scan().first() }::class)
+            assertEquals(TransportAvailability.Unavailable("D-Bus 拒绝访问蓝牙"), transport.availability.value)
+            assertEquals(0, bus.scanStops)
+            transport.close()
         }
-        val transport = BluezControlTransport(this, bus)
-        transport.awaitInitialization()
-        assertFailsWith<org.freedesktop.dbus.errors.AccessDenied> { transport.scan().first() }
-        assertIs<TransportAvailability.Unavailable>(transport.availability.value)
-        assertEquals(0, bus.scanStops)
-        transport.close()
     }
 
     @Test

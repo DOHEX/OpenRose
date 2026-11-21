@@ -1,5 +1,6 @@
 package io.github.dohex.openrose.transport.bluez
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.channels.Channel
@@ -18,6 +19,7 @@ import org.freedesktop.dbus.annotations.DBusInterfaceName
 import org.freedesktop.dbus.connections.impl.DBusConnection
 import org.freedesktop.dbus.connections.impl.DBusConnectionBuilder
 import org.freedesktop.dbus.errors.NoReply
+import org.freedesktop.dbus.exceptions.DBusExecutionException
 import org.freedesktop.dbus.interfaces.DBus
 import org.freedesktop.dbus.interfaces.DBusInterface
 import org.freedesktop.dbus.interfaces.ObjectManager
@@ -137,18 +139,31 @@ internal class NativeBluezBus private constructor(private val connection: DBusCo
     companion object {
         suspend fun open(): NativeBluezBus = call {
             val connection = DBusConnectionBuilder.forSystemBus().withShared(false).build()
+            var registered = false
             try {
-                NativeBluezBus(connection).also { it.register() }
-            } catch (error: Throwable) {
-                connection.close()
-                throw error
+                NativeBluezBus(connection).also {
+                    it.register()
+                    registered = true
+                }
+            } finally {
+                if (!registered) connection.close()
             }
         }
+
+        // D-Bus transports and proxy factories can throw checked or implementation-specific exceptions.
+        // Consumers see one D-Bus error family, retaining specific remote replies such as NotConnected.
+        @Suppress("TooGenericExceptionCaught")
         internal suspend fun <T> call(block: () -> T): T = try {
             withTimeout(10_000) { runInterruptible(Dispatchers.IO) { block() } }
         } catch (_: TimeoutCancellationException) {
             currentCoroutineContext().ensureActive()
             throw NoReply("BlueZ D-Bus 调用超时")
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (remote: DBusExecutionException) {
+            throw remote
+        } catch (local: Exception) {
+            throw DBusExecutionException(local.message ?: local.javaClass.simpleName, local)
         }
         private fun unwrap(value: Any?): Any? = when (value) {
             is Variant<*> -> unwrap(value.value)

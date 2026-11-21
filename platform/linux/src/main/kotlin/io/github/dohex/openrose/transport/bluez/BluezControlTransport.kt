@@ -8,6 +8,7 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import org.freedesktop.dbus.exceptions.DBusExecutionException
 
 /** Linux BlueZ transport. The supplied scope owns initialization and event observation. */
 class BluezControlTransport private constructor(
@@ -45,13 +46,11 @@ class BluezControlTransport private constructor(
                 updateAvailability(current)
                 ready.complete(Unit)
                 observer.join()
-            } catch (error: CancellationException) {
-                throw error
             } catch (error: LinkageError) {
                 mutableAvailability.value = TransportAvailability.Unavailable(
                     "BlueZ 运行环境缺少依赖：${error.message ?: error.javaClass.simpleName}",
                 )
-            } catch (error: Exception) {
+            } catch (error: DBusExecutionException) {
                 mutableAvailability.value = unavailable(error)
             } finally {
                 ready.complete(Unit)
@@ -78,16 +77,14 @@ class BluezControlTransport private constructor(
                 adapters.none { it["Powered"] == true } -> TransportAvailability.Unavailable("蓝牙适配器已关闭")
                 else -> TransportAvailability.Available
             }
-        } catch (error: CancellationException) {
-            throw error
-        } catch (error: Exception) {
+        } catch (error: DBusExecutionException) {
             unavailable(error)
         }
     }
-    private fun unavailable(error: Exception): TransportAvailability.Unavailable {
+    private fun unavailable(error: Throwable): TransportAvailability.Unavailable {
         val name = error.javaClass.simpleName
         val reason = when {
-            name.contains("AccessDenied") || name.contains("NotAuthorized") || name.contains("NotPermitted") -> "D-Bus 拒绝访问蓝牙"
+            error.isBluezAccessDenied -> "D-Bus 拒绝访问蓝牙"
             name.contains("ServiceUnknown") || name.contains("NameHasNoOwner") -> "BlueZ 服务不可用"
             else -> "BlueZ 不可用：${error.message ?: name}"
         }
@@ -107,38 +104,34 @@ class BluezControlTransport private constructor(
                     devices.updateAdvertisement(signal, adapter)?.let { send(it) }
                 }
             }
-            var started = false
-            var failure: Throwable? = null
+            current.startDiscovery(adapter)
+            scanAdapter = adapter
+            // Every exit after StartDiscovery must release the adapter, including cancellation by the collector.
+            @Suppress("TooGenericExceptionCaught")
             try {
-                current.startDiscovery(adapter)
-                started = true
-                scanAdapter = adapter
                 for ((path, interfaces) in current.objects()) {
                     if (path.substringBeforeLast('/') == adapter) interfaces[DEVICE]?.let { devices[path] = it }
                 }
                 devices.values.mapNotNull { it.advertisement() }.forEach { send(it) }
                 initialDevices.complete(Unit)
                 awaitCancellation()
-            } catch (error: Throwable) {
-                failure = error
-                if (error is org.freedesktop.dbus.errors.AccessDenied || error is org.bluez.Error.NotAuthorized) {
-                    mutableAvailability.value = unavailable(error as Exception)
-                }
-                throw error
-            } finally {
+            } catch (end: Throwable) {
                 events.cancel()
-                if (started) {
-                    withContext(NonCancellable) {
-                        try {
-                            current.stopDiscovery(adapter)
-                        } catch (cleanup: Exception) {
-                            if (failure != null) failure.addSuppressed(cleanup) else throw cleanup
-                        }
+                withContext(NonCancellable) {
+                    try {
+                        current.stopDiscovery(adapter)
+                    } catch (cleanup: Exception) {
+                        end.addSuppressed(cleanup)
                     }
                 }
+                throw end
             }
         }
+    }.catch { error ->
+        if (error.isBluezAccessDenied) mutableAvailability.value = unavailable(error)
+        throw error
     }
+
     override suspend fun bondedDevices(): List<DeviceCandidate> = audio.bondedDevices().distinctBy { it.deviceId }
     override suspend fun connectionFacts(deviceId: DeviceId, classicAddress: String?): TransportFacts = audio.connectionFacts(
         deviceId,

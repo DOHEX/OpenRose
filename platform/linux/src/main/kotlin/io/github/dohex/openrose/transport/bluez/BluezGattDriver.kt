@@ -6,9 +6,9 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.transform
 import kotlinx.coroutines.withTimeoutOrNull
-import org.freedesktop.dbus.errors.AccessDenied
 import org.freedesktop.dbus.errors.NoReply
 import org.freedesktop.dbus.errors.ServiceUnknown
+import org.freedesktop.dbus.exceptions.DBusExecutionException
 import java.util.IdentityHashMap
 
 internal class BluezGattDriver(private val bus: BluezBus, private val devicePath: String) : GattDriver {
@@ -188,20 +188,12 @@ internal class BluezGattDriver(private val bus: BluezBus, private val devicePath
         ?: throw GattException(GattFailureKind.INVALID_VALUE, "未知 GATT 特征实例")
     private suspend fun <T> native(recoverNotConnected: Boolean = false, block: suspend () -> T): T = try {
         block()
-    } catch (error: CancellationException) {
-        throw error
-    } catch (error: GattException) {
-        throw error
-    } catch (error: Exception) {
+    } catch (error: DBusExecutionException) {
         val kind = when (error) {
-            is org.bluez.Error.NotAuthorized, is org.bluez.Error.NotPermitted, is AccessDenied -> GattFailureKind.PERMISSION
-
             is org.bluez.Error.NotSupported -> GattFailureKind.UNSUPPORTED
 
-            is org.bluez.Error.InvalidArguments,
-            is org.bluez.Error.InvalidValueLength,
-            is org.bluez.Error.InvalidOffset,
-            -> GattFailureKind.INVALID_VALUE
+            is org.bluez.Error.InvalidArguments, is org.bluez.Error.InvalidValueLength, is org.bluez.Error.InvalidOffset ->
+                GattFailureKind.INVALID_VALUE
 
             is org.bluez.Error.NotConnected -> if (recoverNotConnected) GattFailureKind.TRANSIENT else GattFailureKind.DISCONNECTED
 
@@ -209,7 +201,7 @@ internal class BluezGattDriver(private val bus: BluezBus, private val devicePath
 
             is org.bluez.Error.InProgress, is org.bluez.Error.NotReady, is NoReply -> GattFailureKind.TRANSIENT
 
-            else -> GattFailureKind.UNKNOWN
+            else -> if (error.isBluezAccessDenied) GattFailureKind.PERMISSION else GattFailureKind.UNKNOWN
         }
         throw GattException(kind, error.message ?: error.javaClass.simpleName, error)
     }

@@ -2,6 +2,9 @@ package io.github.dohex.openrose.transport.bluez
 
 import io.github.dohex.openrose.core.transport.normalizeBluetoothAddress
 import kotlinx.coroutines.flow.Flow
+import org.bluez.Error.NotAuthorized
+import org.bluez.Error.NotPermitted
+import org.freedesktop.dbus.errors.AccessDenied
 
 typealias BluezObjects = Map<String, Map<String, Map<String, Any?>>>
 
@@ -49,6 +52,10 @@ internal interface BluezAudioBus {
     suspend fun disconnectAudio(path: String, owner: String, interfaces: Map<String, Map<String, Any?>>)
     suspend fun disconnectLe(path: String, owner: String = "org.bluez")
 }
+
+/** BlueZ and the bus daemon use different errors for a denied operation. */
+internal val Throwable.isBluezAccessDenied: Boolean
+    get() = this is NotAuthorized || this is NotPermitted || this is AccessDenied
 
 internal interface BluezBus : BluezAudioBus {
     /** Unique D-Bus name of the process serving org.bluez. */
