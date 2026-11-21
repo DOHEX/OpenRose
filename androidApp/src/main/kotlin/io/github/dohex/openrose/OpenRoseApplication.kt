@@ -20,6 +20,7 @@ import io.github.dohex.openrose.androidintegration.SwitchingControlRuntime
 import io.github.dohex.openrose.androidintegration.backgroundControl
 import io.github.dohex.openrose.androidintegration.mayStartBackgroundService
 import io.github.dohex.openrose.core.LocalControlRuntime
+import io.github.dohex.openrose.core.OperationResult
 import io.github.dohex.openrose.core.UserSettings
 import io.github.dohex.openrose.core.transport.DeviceId
 import io.github.dohex.openrose.framework.FrameworkLink
@@ -33,6 +34,7 @@ import io.github.dohex.openrose.ui.model.RuntimeOpenRoseModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
@@ -41,7 +43,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import java.util.UUID
 
 /** The names of the application's own preference file and its flags, shared by every reader and writer. */
@@ -74,6 +75,7 @@ class OpenRoseApplication : Application() {
     private val moduleLink by lazy { ModuleHostBinderLink(applicationContext) }
     val circulation by lazy { CirculationClient(moduleLink::circulation) }
     private val companionWake by lazy { CompanionWake(this) }
+    private var systemConnectionRequest: Job? = null
     private var preferencesLoaded = false
     private var backgroundService: BackgroundServiceFact = BackgroundServiceFact.NotRunning
 
@@ -140,7 +142,7 @@ class OpenRoseApplication : Application() {
         controlScope.launch {
             moduleSettingsChanges.receiveAsFlow().collectLatest {
                 while (preferencesLoaded && !ordinaryControlSelected() && framework.canPublish()) {
-                    if (withContext(Dispatchers.IO) { ownerStore.publishConfig() }) break
+                    if (ownerStore.publishSelection()) break
                     delay(3_000)
                 }
             }
@@ -149,7 +151,7 @@ class OpenRoseApplication : Application() {
         refreshPlatform()
         registerPlatformReceiver()
         // Unlock may complete between the initial check and receiver registration.
-        loadUnlockedSettings()
+        if (unlocked) syncWakeObservation() else loadUnlockedSettings()
     }
 
     private fun registerPlatformReceiver() {
@@ -172,12 +174,14 @@ class OpenRoseApplication : Application() {
     }
 
     fun connectFromSystem(deviceId: DeviceId) {
-        controlScope.launch(start = CoroutineStart.UNDISPATCHED) {
+        systemConnectionRequest?.cancel()
+        systemConnectionRequest = controlScope.launch(start = CoroutineStart.UNDISPATCHED) {
             // The request arrives while the launching activity is not started yet; the claim bridges that gap
             // and ends with the call, by which time the started interface holds the session itself.
             val hold = runtime.holdOrdinarySession()
             try {
-                runtime.connectFromSystem(deviceId)
+                val result = runtime.connectFromSystem(deviceId)
+                if (result is OperationResult.Failure) model.notice.value = "无法打开所选耳机：${result.error.message}"
             } finally {
                 hold.release()
             }

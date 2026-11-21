@@ -39,8 +39,6 @@ import io.github.dohex.openrose.core.ControlState
 import io.github.dohex.openrose.core.DeviceSetting
 import io.github.dohex.openrose.core.DeviceState
 import io.github.dohex.openrose.core.PermissionState
-import io.github.dohex.openrose.core.SettingOperation
-import io.github.dohex.openrose.core.SettingStage
 import io.github.dohex.openrose.core.TransportAvailability
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.FieldReading
@@ -329,47 +327,6 @@ internal fun noiseModeOrder(mode: String): Int = when (mode) {
     else -> 6
 }
 
-/** Detailed request and session history is shown only on the diagnostics page. */
-@Composable
-internal fun SettingOperationsCard(state: ControlState) {
-    val operations = state.settingOperations.takeLast(4).asReversed()
-    if (operations.isEmpty()) return
-    val sessionId = when (val connection = state.connection) {
-        is ConnectionState.Connecting -> connection.sessionId
-        is ConnectionState.Connected -> connection.sessionId
-        ConnectionState.Disconnected -> null
-    }
-    AppGroup(title = "设置操作") {
-        operations.forEach { operation ->
-            val device = state.device
-                ?.takeIf { it.sessionId == operation.sessionId && operation.sessionId == sessionId }
-            val details = buildList {
-                add("请求值：${operation.requestedValueText(device)}")
-                if (operation.setting == DeviceSetting.CUSTOM_EQ) {
-                    if (operation.totalFrames > 0) add("发送进度：${operation.writtenFrames}/${operation.totalFrames} 步")
-                    val modeConfirmed = DeviceField.EQ in operation.confirmedFields
-                    val curveConfirmed = DeviceField.CUSTOM_EQ in operation.confirmedFields
-                    add(
-                        when {
-                            modeConfirmed && curveConfirmed -> "模式与曲线均已确认"
-                            modeConfirmed -> "模式已确认，曲线尚未确认"
-                            curveConfirmed -> "曲线已确认，模式尚未确认"
-                            else -> "模式与曲线尚未确认"
-                        },
-                    )
-                }
-                operation.error?.let { add(it.message) }
-                if (operation.sessionId != sessionId) add("已结束会话 ${operation.sessionId} 的操作记录")
-            }
-            AppInfoRow(
-                label = "${operation.setting.displayName()} · #${operation.id}",
-                value = operation.stage.displayText(),
-                summary = details.joinToString("\n"),
-            )
-        }
-    }
-}
-
 internal fun DeviceState.knownValue(field: DeviceField): FieldValue? = (fields[field] as? FieldReading.Known)?.value
 
 internal fun ControlState.isReady(device: DeviceState): Boolean {
@@ -411,43 +368,4 @@ internal fun DeviceSetting.displayName(): String = when (this) {
     DeviceSetting.BASS_BOOST -> "低音增强"
     DeviceSetting.PROMPT_LANGUAGE -> "提示音语言"
     DeviceSetting.CUSTOM_EQ -> "自定义 EQ"
-}
-
-private fun SettingOperation.requestedValueText(device: DeviceState?): String = when (setting) {
-    DeviceSetting.NOISE_MODE -> displayFieldValue(DeviceField.NOISE_MODE, requestedValue)
-    DeviceSetting.ANC_LEVEL -> displayFieldValue(DeviceField.ANC_LEVEL, requestedValue)
-    DeviceSetting.TRANSPARENCY_LEVEL -> displayFieldValue(DeviceField.TRANSPARENCY_LEVEL, requestedValue)
-    DeviceSetting.NOISE_CYCLE -> displayFieldValue(DeviceField.NOISE_CYCLE, requestedValue)
-    DeviceSetting.EQ -> displayFieldValue(DeviceField.EQ, requestedValue, device?.profile)
-    DeviceSetting.GAME_MODE -> displayFieldValue(DeviceField.GAME_MODE, requestedValue)
-    DeviceSetting.TAP_ENABLED -> displayFieldValue(DeviceField.TAP_ENABLED, requestedValue)
-    DeviceSetting.TAP_BINDING -> displayFieldValue(DeviceField.TAP_KEYS, requestedValue, touch = device?.capabilities?.tapControl)
-    DeviceSetting.TOUCH_BINDING -> displayFieldValue(DeviceField.TOUCH_KEYS, requestedValue, touch = device?.capabilities?.touchControl)
-    DeviceSetting.TOUCH_ENABLED -> displayFieldValue(DeviceField.TOUCH_ENABLED, requestedValue)
-    DeviceSetting.EAR_DETECTION -> displayFieldValue(DeviceField.EAR_DETECTION, requestedValue)
-    DeviceSetting.AUDIO_MODE -> displayFieldValue(DeviceField.AUDIO_MODE, requestedValue)
-    DeviceSetting.MULTIPOINT -> displayFieldValue(DeviceField.MULTIPOINT, requestedValue)
-    DeviceSetting.SPATIAL_MODE -> displayFieldValue(DeviceField.SPATIAL_MODE, requestedValue)
-    DeviceSetting.SPATIAL_CONTENT -> displayFieldValue(DeviceField.SPATIAL_CONTENT, requestedValue)
-    DeviceSetting.EAR_ADAPTIVE -> displayFieldValue(DeviceField.EAR_ADAPTIVE, requestedValue)
-    DeviceSetting.INDEPENDENT_MIC_ACTIVATION -> displayFieldValue(DeviceField.INDEPENDENT_MIC_ACTIVATION, requestedValue)
-    DeviceSetting.INDEPENDENT_MIC_MODE -> displayFieldValue(DeviceField.INDEPENDENT_MIC_MODE, requestedValue)
-    DeviceSetting.SPATIAL_AUDIO -> displayFieldValue(DeviceField.SPATIAL_AUDIO, requestedValue)
-    DeviceSetting.PROMPT_VOLUME -> displayFieldValue(DeviceField.PROMPT_VOLUME, requestedValue)
-    DeviceSetting.CUSTOM_EQ -> displayFieldValue(DeviceField.CUSTOM_EQ, requestedValue)
-    DeviceSetting.GAIN -> displayFieldValue(DeviceField.GAIN, requestedValue)
-    DeviceSetting.HEARING_PROTECTION -> displayFieldValue(DeviceField.HEARING_PROTECTION, requestedValue)
-    DeviceSetting.BASS_BOOST -> displayFieldValue(DeviceField.EQ_SLOT, requestedValue)
-    DeviceSetting.PROMPT_LANGUAGE -> displayFieldValue(DeviceField.PROMPT_LANGUAGE, requestedValue)
-}
-
-private fun SettingStage.displayText(): String = when (this) {
-    SettingStage.SUBMITTED -> "等待写入"
-    SettingStage.PARTIALLY_WRITTEN -> "部分已发送"
-    SettingStage.WRITTEN -> "已写入 · 待确认"
-    SettingStage.CONFIRMED -> "已确认"
-    SettingStage.NOT_APPLIED -> "回读不一致"
-    SettingStage.TIMED_OUT -> "确认超时"
-    SettingStage.DISCONNECTED -> "连接已断开"
-    SettingStage.FAILED -> "失败"
 }

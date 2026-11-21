@@ -294,24 +294,20 @@ class OpenRoseBluetoothModule : XposedModule() {
         connected.handler.post { if (!retired) connected.reportComponent(feature, status, detail.take(512)) }
     }
 
-    private fun closeConsumers(): Boolean {
+    private fun closeConsumers() {
         clearConsumers()
-        closeNativeAdapters()
-        val output = renderer
-        output?.close()
-        renderer = null
+        renderer?.close()
         official?.close()
-        official = null
         actions.shutdownNow()
-        return (output == null || output.awaitActionTermination(1_000)) && try {
-            actions.awaitTermination(1_000, TimeUnit.MILLISECONDS)
-        } catch (_: InterruptedException) {
-            Thread.currentThread().interrupt()
-            false
-        }
     }
 
-    /** Unhooks the native entry adapters; idempotent, so whichever of hot reload and client cleanup comes first does it. */
+    private fun consumersTerminated(): Boolean = renderer?.awaitActionTermination(1_000) != false && try {
+        actions.awaitTermination(1_000, TimeUnit.MILLISECONDS)
+    } catch (interrupted: InterruptedException) {
+        Thread.currentThread().interrupt()
+        false
+    }
+
     private fun closeNativeAdapters() {
         binderAdapter?.close()
         binderAdapter = null
@@ -325,8 +321,16 @@ class OpenRoseBluetoothModule : XposedModule() {
         // keeps its hooks, host and consumers, and the framework may retry the reload.
         val runtime = hostRuntime
         if (runtime?.close() == false) return false
-        hostRuntime = null
         retired = true
+        val readerClosed = client?.close() ?: run {
+            closeConsumers()
+            true
+        }
+        if (!readerClosed || !consumersTerminated()) return false
+
+        hostRuntime = null
+        renderer = null
+        official = null
         // Only framework/target-owned values cross the generation boundary: the target Context and, in the host process,
         // the slot behind the discovery Binder the system has cached, which the next generation points at its endpoint.
         targetContext?.let { context ->
@@ -344,7 +348,7 @@ class OpenRoseBluetoothModule : XposedModule() {
         // The framework holds its hook lock for this whole call, so unhooking must happen on this thread: left to the
         // client's reader thread, unhook() would block until the close timeout and the reload would be refused.
         closeNativeAdapters()
-        return client?.close() ?: closeConsumers()
+        return true
     }
 
     override fun onHotReloaded(param: HotReloadedParam) {

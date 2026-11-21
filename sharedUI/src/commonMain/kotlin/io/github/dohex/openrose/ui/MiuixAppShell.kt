@@ -21,6 +21,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.backdrops.LayerBackdrop
+import io.github.dohex.openrose.ui.shell.ShellPageContent
 import top.yukonga.miuix.kmp.basic.*
 import top.yukonga.miuix.kmp.blur.Backdrop
 import top.yukonga.miuix.kmp.blur.BlendColorEntry
@@ -62,7 +63,7 @@ internal fun MiuixAppShell(
     onBack: () -> Unit,
     scrollState: ScrollState,
     pageContent: @Composable () -> Unit,
-    feedbackContent: @Composable () -> Unit = {},
+    feedbackContent: @Composable (Modifier) -> Unit = {},
 ) {
     val backdropActive = LocalBackdropBlurActive.current
     val backdrop = rememberAppBackdrop(MiuixTheme.colorScheme.surface, backdropActive)
@@ -88,12 +89,13 @@ internal fun MiuixAppShell(
                 )
             },
         ) { padding ->
-            Box(Modifier.fillMaxSize()) {
-                Column(Modifier.fillMaxSize().appBackdropContent(backdrop, backdropActive).miuixPageScroll(scrollState)) {
-                    ShellPageContent(page, padding, compactHome = false, pageContent = pageContent)
-                }
-                ShellFeedback(padding, content = feedbackContent)
-            }
+            ShellPageContent(
+                page = page,
+                padding = padding,
+                scrollModifier = Modifier.appBackdropContent(backdrop, backdropActive).miuixPageScroll(scrollState),
+                pageContent = pageContent,
+                feedbackContent = feedbackContent,
+            )
         }
     }
 }
@@ -146,7 +148,7 @@ internal fun MiuixMainShell(
     onNavigate: (AppPage) -> Unit,
     scrollStates: Map<AppPage, ScrollState>,
     pageContentFor: @Composable (AppPage) -> Unit,
-    pageFeedbackFor: @Composable (AppPage) -> Unit = {},
+    pageFeedbackFor: @Composable (AppPage, Modifier) -> Unit = { _, _ -> },
     connectedHome: Boolean = false,
     menuExpanded: Boolean = false,
     onMenuExpandedChange: (Boolean) -> Unit = {},
@@ -236,22 +238,16 @@ internal fun MiuixMainShell(
                             )
                         },
                     ) { pagePadding ->
-                        Box(Modifier.fillMaxSize()) {
-                            val scrollState = scrollStates.getValue(page)
-                            Column(Modifier.fillMaxSize().appBackdropContent(pageBackdrop, backdropActive).miuixPageScroll(scrollState)) {
-                                ShellPageContent(
-                                    page = page,
-                                    padding = pagePadding,
-                                    compactHome = page == AppPage.HEADPHONES && !connectedHome,
-                                    bottomClearance = trailingBottomPadding,
-                                ) {
-                                    pageContentFor(page)
-                                }
-                            }
-                            ShellFeedback(pagePadding, bottomClearance = trailingBottomPadding) {
-                                pageFeedbackFor(page)
-                            }
-                        }
+                        ShellPageContent(
+                            page = page,
+                            padding = pagePadding,
+                            scrollModifier = Modifier.appBackdropContent(pageBackdrop, backdropActive)
+                                .miuixPageScroll(scrollStates.getValue(page)),
+                            compactHome = page == AppPage.HEADPHONES && !connectedHome,
+                            bottomClearance = trailingBottomPadding,
+                            pageContent = { pageContentFor(page) },
+                            feedbackContent = { modifier -> pageFeedbackFor(page, modifier) },
+                        )
                     }
                 }
             }

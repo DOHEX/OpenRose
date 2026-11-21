@@ -24,8 +24,11 @@ class BluezControlTransport private constructor(
     override val availability: StateFlow<TransportAvailability> = mutableAvailability.asStateFlow()
 
     @Volatile private var bus: BluezBus? = null
+
+    @Volatile private var scanAdapter: String? = null
     private val scanLock = Mutex()
-    val audioProfiles = BluezAudioProfiles(::activeBus)
+    private val releasedLinks = ReleasedBluezLinks()
+    val audioProfiles = BluezAudioProfiles(releasedLinks, ::activeBus)
     private val audio = AudioFacts(BluezAudioDriver())
     override val supportsInitializationRecovery = true
 
@@ -35,6 +38,7 @@ class BluezControlTransport private constructor(
                 val current = openBus()
                 bus = current
                 // Subscribe before the first object snapshot, including BlueZ owner changes.
+                launch(start = CoroutineStart.UNDISPATCHED) { releasedLinks.observe(current) }
                 val observer = launch(start = CoroutineStart.UNDISPATCHED) {
                     current.signals { it.affects(availabilityInterfaces) }.collect { updateAvailability(current) }
                 }
@@ -92,7 +96,7 @@ class BluezControlTransport private constructor(
     override fun scan(): Flow<Advertisement> = channelFlow {
         val current = activeBus()
         scanLock.withLock {
-            val adapter = current.objects().entries.firstOrNull { it.value[ADAPTER]?.get("Powered") == true }?.key
+            val adapter = current.objects().filterValues { it[ADAPTER]?.get("Powered") == true }.keys.minOrNull()
                 ?: error("未找到已开启的蓝牙适配器")
             val devices = mutableMapOf<String, Map<String, Any?>>()
             val initialDevices = CompletableDeferred<Unit>()
@@ -100,7 +104,7 @@ class BluezControlTransport private constructor(
                 current.signals { it.affects(scanInterfaces) }.collect { signal ->
                     signal.discoveryFailure(adapter)?.let { error(it) }
                     initialDevices.await()
-                    devices.updateAdvertisement(signal)?.let { send(it) }
+                    devices.updateAdvertisement(signal, adapter)?.let { send(it) }
                 }
             }
             var started = false
@@ -108,8 +112,9 @@ class BluezControlTransport private constructor(
             try {
                 current.startDiscovery(adapter)
                 started = true
+                scanAdapter = adapter
                 for ((path, interfaces) in current.objects()) {
-                    interfaces[DEVICE]?.let { devices[path] = it }
+                    if (path.substringBeforeLast('/') == adapter) interfaces[DEVICE]?.let { devices[path] = it }
                 }
                 devices.values.mapNotNull { it.advertisement() }.forEach { send(it) }
                 initialDevices.complete(Unit)
@@ -134,7 +139,7 @@ class BluezControlTransport private constructor(
             }
         }
     }
-    override suspend fun bondedDevices(): List<DeviceCandidate> = audio.bondedDevices()
+    override suspend fun bondedDevices(): List<DeviceCandidate> = audio.bondedDevices().distinctBy { it.deviceId }
     override suspend fun connectionFacts(deviceId: DeviceId, classicAddress: String?): TransportFacts = audio.connectionFacts(
         deviceId,
         classicAddress,
@@ -144,10 +149,8 @@ class BluezControlTransport private constructor(
         val current = activeBus()
         require(endpoint is TransportEndpoint.BleGatt) { "Linux 不支持 SPP 控制连接" }
         val address = requireNotNull(normalizeBluetoothAddress(deviceId.value)) { "蓝牙地址无效" }
-        val path = current.objects().entries.firstOrNull { (_, interfaces) ->
-            normalizeBluetoothAddress(interfaces[DEVICE]?.get("Address") as? String) == address
-        }?.key
-            ?: error("未找到蓝牙设备 $address")
+        val path = checkNotNull(current.objects().devicePath(address, scanAdapter = scanAdapter)) { "未找到蓝牙设备 $address" }
+        releasedLinks.resumeLocal(path)
         return GattControlConnection.open(BluezGattDriver(current, path), endpoint, onPhase)
     }
     override suspend fun close() {
@@ -251,7 +254,7 @@ private fun BluezSignal.discoveryFailure(adapter: String): String? = when (this)
     is BluezSignal.Added, is BluezSignal.PrepareForSleep -> null
 }
 
-private fun MutableMap<String, Map<String, Any?>>.updateAdvertisement(signal: BluezSignal): Advertisement? {
+private fun MutableMap<String, Map<String, Any?>>.updateAdvertisement(signal: BluezSignal, adapter: String): Advertisement? {
     val device = when (signal) {
         is BluezSignal.Added -> signal.interfaces[DEVICE]?.let { signal.path to it }
 
@@ -268,6 +271,7 @@ private fun MutableMap<String, Map<String, Any?>>.updateAdvertisement(signal: Bl
 
         is BluezSignal.Owner, is BluezSignal.PrepareForSleep -> null
     } ?: return null
+    if (device.first.substringBeforeLast('/') != adapter) return null
     put(device.first, device.second)
     return device.second.advertisement()
 }
@@ -286,9 +290,9 @@ private fun Map<String, Any?>.advertisement(): Advertisement? {
         manufacturer,
     )
 }
-private fun devices(objects: BluezObjects): List<RawAudioDevice> = objects.values.mapNotNull { interfaces ->
+private fun devices(objects: BluezObjects): List<RawAudioDevice> = objects.mapNotNull { (path, interfaces) ->
     val properties = interfaces[DEVICE] ?: return@mapNotNull null
-    if (properties["Paired"] != true) return@mapNotNull null
+    if (properties["Paired"] != true || !objects.onPoweredAdapter(path)) return@mapNotNull null
     val address = normalizeBluetoothAddress(properties["Address"] as? String) ?: return@mapNotNull null
     RawAudioDevice(properties["Name"] as? String ?: properties["Alias"] as? String, address)
 }

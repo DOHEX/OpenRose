@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import io.github.dohex.openrose.core.ControlState
 import io.github.dohex.openrose.core.DeviceSetting
@@ -21,6 +22,7 @@ internal fun SettingFeedback(
     state: ControlState,
     device: DeviceState?,
     showPending: (DeviceSetting) -> Boolean = { true },
+    modifier: Modifier = Modifier,
     onViewDetails: () -> Unit,
 ) {
     val operation = device?.let { activeDevice ->
@@ -31,7 +33,7 @@ internal fun SettingFeedback(
     val visibleOperation = operation?.takeIf { it.needsFeedback(showPending(it.setting)) }
     if (visibleOperation == null && otherError == null) return
 
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         visibleOperation?.let {
             val failure = it.stage in settingFailureStages || operationError != null
             AppDashboardCard {

@@ -1,6 +1,7 @@
 package io.github.dohex.openrose.core.protocol
 
 import io.github.dohex.openrose.core.DeviceSetting
+import io.github.dohex.openrose.core.models.ModelProtocol
 
 internal enum class RsCommonInit { DEFAULT, BUDS_FREE, OPEN_FEEL, CAMBRIAN }
 
@@ -21,10 +22,10 @@ internal val rsCommonFields = linkedMapOf(
 )
 
 /** Legacy RS Common has fixed sequence bytes and no checksum. */
-internal class RsCommonCodec(override val profile: ModelProfile) : ProtocolCodec {
+internal class RsCommonCodec(override val profile: ModelProfile, private val protocol: ModelProtocol.RsCommon) : ProtocolCodec {
     private var buffer = byteArrayOf()
     private val info = "010708090c0d0e122a2b2c2d2e33".bytes()
-    private val touchActionNames = profile.spec.rsCommonTouchActions.entries.associate { it.value to it.key }
+    private val touchActionNames = protocol.touchActions.entries.associate { it.value to it.key }
 
     private fun frame(
         body: ByteArray,
@@ -48,7 +49,7 @@ internal class RsCommonCodec(override val profile: ModelProfile) : ProtocolCodec
     override fun initQueries(maxWriteSize: Int): List<ProtocolQuery> {
         require(maxWriteSize >= 19) { "RS Common getInfo requires 19-byte write capacity" }
         val first = query(info)
-        return when (profile.spec.rsCommonInit) {
+        return when (protocol.initialization) {
             RsCommonInit.DEFAULT -> listOf(first)
             RsCommonInit.BUDS_FREE -> listOf(first, query("2a090c0e07012b".bytes(), 5))
             RsCommonInit.OPEN_FEEL -> listOf(first, query("2b".bytes()))
@@ -76,7 +77,7 @@ internal class RsCommonCodec(override val profile: ModelProfile) : ProtocolCodec
     private fun prepareTouch(value: FieldValue): ProtocolSetting {
         val binding = validatedTouchAssignment(value, profile)
         val slot = listOf("single", "double", "triple").indexOf(binding.gesture) + 1 + if (binding.side == "right") 16 else 0
-        val action = profile.spec.rsCommonTouchActions[binding.action]
+        val action = protocol.touchActions[binding.action]
             ?: throw UnsupportedOperationException("该型号不支持此触控动作")
         return ProtocolSetting(
             listOf(frame(byteArrayOf(1, slot.toByte(), action.toByte()))),

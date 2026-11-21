@@ -13,7 +13,7 @@ data class NearbyPeer(
     /** Android can resolve this address on a different network from the process default. */
     val socketFactory: SocketFactory = SocketFactory.getDefault(),
 )
-data class PairingOffer(val code: String, val qr: String)
+data class PairingOffer(val code: String, val qr: String, val validForMillis: Long)
 
 interface PeerDiscovery : Closeable {
     /** One current snapshot for all visible interfaces. A service can move to another address after wake. */

@@ -29,8 +29,16 @@ internal class FakeBluezBus : BluezBus {
     }
     var onAudioConnect: (String) -> Unit = {}
     var onAudioDisconnect: (String) -> Unit = {}
+    var onLeDisconnect: suspend (String) -> Unit = {}
+    override suspend fun disconnectLe(path: String, owner: String) {
+        check(owner == this.owner || owner == "org.bluez")
+        onLeDisconnect(path)
+    }
     override suspend fun connectAudio(path: String) = onAudioConnect(path)
-    override suspend fun disconnectAudio(path: String, interfaces: Map<String, Map<String, Any?>>) = onAudioDisconnect(path)
+    override suspend fun disconnectAudio(path: String, owner: String, interfaces: Map<String, Map<String, Any?>>) {
+        check(owner == this.owner || owner == "org.bluez")
+        onAudioDisconnect(path)
+    }
     override suspend fun connectGatt(path: String, useLeBearer: Boolean) {
         connectBearers.add(useLeBearer)
         connects++

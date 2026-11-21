@@ -52,14 +52,8 @@ internal fun withAddDeviceHarness(
         if (app) {
             OpenRoseApp(model, platformUi)
         } else {
-            val flow = rememberAddDeviceFlow(
-                active = true,
-                state = state.value,
-                onStartScan = model::startScan,
-                onStopScan = model::stopScan,
-                onConnect = model::connectForAddDevice,
-                onReady = {},
-            )
+            val flow = rememberAddDeviceFlow(model)
+            AddDeviceLifecycle(true, state.value, flow) {}
             ProvideInterfaceStyle(harness.uiSettings.value.interfaceStyle, dark = false) {
                 AddDeviceContent(
                     state = state.value,

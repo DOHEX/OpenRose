@@ -67,7 +67,13 @@ internal class DeviceDiscovery(
     }
 
     suspend fun startScan(): OperationResult = scanLifecycle.withLock {
-        platformError(state.value, transport)?.let { error ->
+        val current = state.value
+        val denied = if (current.platform.scanPermission.missing) {
+            ControlError(ControlErrorCode.PERMISSION_REQUIRED, "需要扫描权限才能搜索附近耳机")
+        } else {
+            platformError(current, transport)
+        }
+        denied?.let { error ->
             state.update { it.copy(lastError = error) }
             return@withLock OperationResult.Failure(error)
         }

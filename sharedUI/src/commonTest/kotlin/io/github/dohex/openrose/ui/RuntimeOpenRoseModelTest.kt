@@ -45,11 +45,9 @@ class RuntimeOpenRoseModelTest {
             }
         }
         val model = RuntimeOpenRoseModel(runtime, store, backgroundScope)
-        val flow = AddDeviceFlow(backgroundScope, { model.state.value }, model::startScan, model::stopScan, model::connectForAddDevice) {}
-        flow.enter()
+        val flow = AddDeviceFlow(backgroundScope, model)
         flow.startSearch()
         flow.leave()
-        flow.enter()
         flow.startSearch()
         assertEquals(listOf("starting"), calls)
         acknowledged.complete(Unit)

@@ -3,10 +3,14 @@
 package io.github.dohex.openrose.androidintegration.ui
 
 import androidx.compose.runtime.mutableStateOf
+import io.github.dohex.openrose.androidintegration.ControlWay
+import io.github.dohex.openrose.androidintegration.IntegrationPlatformState
 import io.github.dohex.openrose.androidintegration.IntegrationState
+import io.github.dohex.openrose.androidintegration.scope.INTEGRATION_SCOPE_PACKAGES
 import io.github.dohex.openrose.androidintegration.scope.ScopeRestartPhase
 import io.github.dohex.openrose.androidintegration.scope.ScopeRestartResult
 import io.github.dohex.openrose.androidintegration.scope.ScopeRestartStatus
+import io.github.dohex.openrose.core.PlatformApplicability
 import io.github.dohex.openrose.ui.*
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -17,6 +21,13 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+
+private val hyperOsIntegration = IntegrationState(
+    platform = IntegrationPlatformState(
+        systemIntegrationApplicability = PlatformApplicability.APPLICABLE,
+        installedScopes = INTEGRATION_SCOPE_PACKAGES.toSet(),
+    ),
+)
 
 class ScopeRestartUiTest {
     @Test
@@ -30,7 +41,7 @@ class ScopeRestartUiTest {
                 val settings = mutableStateOf(UiSettings(interfaceStyle = style))
                 val model = FakeOpenRoseModel(mutableStateOf(disconnectedAndroidState()), settings)
                 val page = mutableStateOf("操作")
-                val platform = androidTestPlatform(MutableStateFlow(IntegrationState()), restart = { _, emit ->
+                val platform = androidTestPlatform(MutableStateFlow(hyperOsIntegration), restart = { _, emit ->
                     requests++
                     authorized.await()
                     emit(ScopeRestartPhase.Signalling)
@@ -103,7 +114,7 @@ class ScopeRestartUiTest {
                 val finish = CompletableDeferred<Unit>()
                 val settings = mutableStateOf(UiSettings(interfaceStyle = style))
                 val page = mutableStateOf("操作")
-                val platform = androidTestPlatform(MutableStateFlow(IntegrationState()), restart = { targets, emit ->
+                val platform = androidTestPlatform(MutableStateFlow(hyperOsIntegration), restart = { targets, emit ->
                     requested = targets
                     emit(ScopeRestartPhase.Signalling)
                     emit(ScopeRestartResult("com.android.bluetooth", ScopeRestartStatus.FAILED, "permission denied"))
@@ -146,7 +157,7 @@ class ScopeRestartUiTest {
     fun failedRestartReportsEachAffectedProcess() = runOpenRoseUiTest(1200, 1000) {
         val page = mutableStateOf("操作")
         val platform = androidTestPlatform(
-            MutableStateFlow(IntegrationState()),
+            MutableStateFlow(hyperOsIntegration),
             restart = { _, _ -> error("权限不足") },
             scope = CoroutineScope(currentCoroutineContext()),
         )
@@ -164,7 +175,7 @@ class ScopeRestartUiTest {
     @Test
     fun failureKeepsResultsAlreadyReported() = runOpenRoseUiTest(1200, 1000) {
         val page = mutableStateOf("操作")
-        val platform = androidTestPlatform(MutableStateFlow(IntegrationState()), restart = { _, emit ->
+        val platform = androidTestPlatform(MutableStateFlow(hyperOsIntegration), restart = { _, emit ->
             emit(ScopeRestartResult("com.android.bluetooth", ScopeRestartStatus.RESTARTED))
             error("Root 中断")
         }, scope = CoroutineScope(currentCoroutineContext()))
@@ -184,7 +195,7 @@ class ScopeRestartUiTest {
     fun restartIsUnavailableWithoutASelectedProcess() = runOpenRoseUiTest(1200, 1000) {
         var requests = 0
         val page = mutableStateOf("操作")
-        val platform = androidTestPlatform(MutableStateFlow(IntegrationState()), restart = { _, _ ->
+        val platform = androidTestPlatform(MutableStateFlow(hyperOsIntegration), restart = { _, _ ->
             requests++
             emptyList()
         }, scope = CoroutineScope(currentCoroutineContext()))
@@ -200,6 +211,33 @@ class ScopeRestartUiTest {
         harness.clickText(INTEGRATION_SCOPE_PACKAGES.first())
         harness.render()
         assertFalse(harness.hasDisabledButton("重启"))
+    }
+
+    @Test
+    fun restartOnlyOffersInstalledScopesForTheChosenPlatformAndOwner() = runOpenRoseUiTest(390, 840) {
+        val ordinary = hyperOsIntegration.copy(
+            platform = hyperOsIntegration.platform.copy(systemIntegrationApplicability = PlatformApplicability.NOT_APPLICABLE),
+        )
+        val integration = MutableStateFlow(ordinary)
+        val platform = androidTestPlatform(integration)
+        val page = mutableStateOf("操作")
+        setContent { AndroidTestPage(FakeOpenRoseModel(), platform, page) }
+        val harness = AndroidPageHarness(this, page)
+        harness.render()
+        assertFalse(harness.hasContentDescription("重启作用域"))
+        integration.value = ordinary.copy(owner = ordinary.owner.copy(selected = ControlWay.MODULE))
+        harness.render()
+        harness.clickContentDescription("重启作用域")
+        harness.render()
+        assertTrue(harness.hasText("com.android.bluetooth"))
+        assertFalse(harness.hasText("com.xiaomi.bluetooth"))
+        harness.clickText("取消")
+        integration.value = hyperOsIntegration.copy(platform = hyperOsIntegration.platform.copy(installedScopes = setOf("com.milink.service")))
+        harness.render()
+        harness.clickContentDescription("重启作用域")
+        harness.render()
+        assertTrue(harness.hasText("com.milink.service"))
+        assertFalse(harness.hasText("com.android.bluetooth"))
     }
 
     @Test

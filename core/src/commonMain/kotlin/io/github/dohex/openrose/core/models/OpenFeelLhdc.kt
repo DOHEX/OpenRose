@@ -7,14 +7,13 @@ import io.github.dohex.openrose.core.EqualizerCapabilities
 import io.github.dohex.openrose.core.TouchControlCapabilities
 import io.github.dohex.openrose.core.protocol.BatteryLayout
 import io.github.dohex.openrose.core.protocol.GattProfile
-import io.github.dohex.openrose.core.protocol.ProtocolFamily
 import io.github.dohex.openrose.core.protocol.RsCommonInit
 import kotlinx.collections.immutable.persistentSetOf
 
 internal val openFeelLhdc = ModelSpec(
     displayName = "OpenFeel",
     shortLabel = "OpenFeel",
-    family = ProtocolFamily.RS_COMMON,
+    protocol = ModelProtocol.RsCommon(initialization = RsCommonInit.OPEN_FEEL),
     advertisementPrefixes = listOf("0b0a0a0c"),
     nameBrand = "openfeel",
     nameModelNumber = "openfeel",
@@ -29,7 +28,6 @@ internal val openFeelLhdc = ModelSpec(
     advertisedClassicAddress = { rsCommonClassicAddress(it, 10) },
     batteryLayout = BatteryLayout.EARBUDS_AND_CASE,
     equalizerPresetLabels = mapOf("pop" to "BASS", "hifi" to "BALANCE"),
-    rsCommonInit = RsCommonInit.OPEN_FEEL,
     capabilities = {
         DeviceCapabilities(
             readableFields = openFeelReadings,

@@ -20,4 +20,4 @@ description: Implementation and verification status of OpenRose on Android, Hype
 | Control way (ordinary / module) | ✓ | — | — |
 | HyperOS integration | Requires an Xposed framework | — | — |
 
-See [Linux desktop](../../guides/linux-desktop/) and [HyperOS integration](../../guides/hyperos-integration/) for details.
+See [Windows desktop](../../guides/windows-desktop/), [Linux desktop](../../guides/linux-desktop/) and [HyperOS integration](../../guides/hyperos-integration/) for details.

@@ -9,7 +9,6 @@ import io.github.dohex.openrose.core.TouchControlCapabilities
 import io.github.dohex.openrose.core.protocol.BatteryLayout
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.GattProfile
-import io.github.dohex.openrose.core.protocol.ProtocolFamily
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.persistentSetOf
 import kotlinx.collections.immutable.toPersistentSet
@@ -53,8 +52,8 @@ private val openFeelMk2Capabilities = DeviceCapabilities(
 )
 
 internal val openFeelMk2 = ModelSpec(
-    rsV2InfoIds = "0d0c2a45460e322b01072f2e",
-    displayName = "OpenFeel MK2", shortLabel = "OpenFeel MK2", family = ProtocolFamily.RS_COMMON_V2,
+    displayName = "OpenFeel MK2", shortLabel = "OpenFeel MK2",
+    protocol = ModelProtocol.RsCommonV2(infoIds = "0d0c2a45460e322b01072f2e"),
     advertisementPrefixes = listOf("0b0eb657"), nameBrand = "openfeel", nameModelNumber = "mk2", nameRequiresModel = true,
     gatt = GattProfile(
         "000000fe-0000-1000-8000-00805f9b34fb",

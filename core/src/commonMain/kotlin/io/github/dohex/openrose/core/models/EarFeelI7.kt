@@ -13,17 +13,15 @@ import io.github.dohex.openrose.core.protocol.BatteryLayout
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.dohex.openrose.core.protocol.GattProfile
-import io.github.dohex.openrose.core.protocol.ProtocolFamily
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.persistentSetOf
 import kotlinx.collections.immutable.toPersistentSet
 
 /** EarFeel i7, RoseLink `rs_common_v2/earfeel_i7_device_config`. */
 internal val earFeelI7 = ModelSpec(
-    rsV2InfoIds = "0d0c092c2d2a45460e322b01072f082e36",
     displayName = "EarFeel i7",
     shortLabel = "i7",
-    family = ProtocolFamily.RS_COMMON_V2,
+    protocol = ModelProtocol.RsCommonV2(infoIds = "0d0c092c2d2a45460e322b01072f082e36"),
     advertisementPrefixes = listOf("b8e5290f"),
     nameBrand = "earfeel",
     nameModelNumber = "i7",

@@ -6,6 +6,7 @@ import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothManager
 import android.content.pm.PackageManager
 import android.location.LocationManager
+import io.github.dohex.openrose.core.PermissionState
 import io.github.dohex.openrose.core.TransportAvailability
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
@@ -22,6 +23,20 @@ import kotlin.test.assertFailsWith
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [30], manifest = Config.NONE, application = Application::class)
 class AndroidBleScanTest {
+    @Test
+    fun denyingLocationStillAllowsControlOfPairedHeadphones() {
+        val app = RuntimeEnvironment.getApplication()
+        shadowOf(app).grantPermissions(Manifest.permission.BLUETOOTH)
+        shadowOf(app).denyPermissions(Manifest.permission.ACCESS_FINE_LOCATION)
+        shadowOf(app.packageManager).setSystemFeature(PackageManager.FEATURE_BLUETOOTH_LE, true)
+        shadowOf(app.getSystemService(BluetoothManager::class.java).adapter).setState(BluetoothAdapter.STATE_ON)
+
+        val platform = app.readPlatformState(permissionRequested = true)
+        assertEquals(PermissionState.NOT_REQUIRED, platform.permission)
+        assertEquals(TransportAvailability.Available, platform.transport)
+        assertEquals(PermissionState.DENIED, platform.scanPermission)
+    }
+
     @Test
     fun locationServicesAreRequiredOnlyWhenStartingDiscovery() = runTest {
         val app = RuntimeEnvironment.getApplication()

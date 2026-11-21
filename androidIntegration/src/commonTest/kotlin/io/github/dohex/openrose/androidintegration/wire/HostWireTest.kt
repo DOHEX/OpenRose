@@ -90,7 +90,7 @@ class HostWireTest {
             stage = SettingStage.WRITTEN,
             confirmedFields = persistentSetOf(DeviceField.SPATIAL_AUDIO),
         )
-        val facts = HostPlatformFacts(PermissionState.GRANTED, TransportAvailability.Available)
+        val facts = HostPlatformFacts(PermissionState.GRANTED, TransportAvailability.Available, scanPermission = PermissionState.DENIED)
         val state = ControlState(
             platform = PlatformState(PermissionState.NOT_REQUIRED),
             device = device,

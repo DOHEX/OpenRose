@@ -5,7 +5,7 @@ description: Adapted ROSE / ROSESELSA earphone models, their control transports,
 
 | Earphones | Control transport | Status |
 | --- | --- | --- |
-| EarFree i5 (EarFeel i5) | BLE | Reads verified on a real device; settings writes on Android not verified |
+| EarFree i5 (EarFeel i5) | BLE | Hardware reads verified. Android ordinary and module control both confirmed transparency and wind-noise mode writes by device read-back. Other setting writes await verification |
 | EarFeel i7 | BLE or SPP | Offline tests only; not tested on a real device |
 | BudsFeel MK2 | BLE or SPP | Not tested on a real device |
 | OpenFeel MK2 | BLE or SPP | Not tested on a real device |

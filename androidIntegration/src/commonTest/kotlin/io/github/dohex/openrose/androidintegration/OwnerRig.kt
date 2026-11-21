@@ -137,7 +137,10 @@ internal class HeadsetConnection(
 internal class MemoryOwnerStore(var record: OwnerRecord = OwnerRecord()) : OwnerSelectionStore {
     var failSaves = false
     val saved = mutableListOf<OwnerRecord>()
-    var onSaved: (OwnerRecord) -> Unit = {}
+    var hostSelection = record.selected
+        private set
+    var publicationUnavailable = false
+    var onPublished: () -> Unit = {}
 
     override fun load() = record
 
@@ -145,9 +148,19 @@ internal class MemoryOwnerStore(var record: OwnerRecord = OwnerRecord()) : Owner
 
     override fun save(record: OwnerRecord): Boolean {
         if (failSaves) return false
-        this.record = record
-        saved += record
-        onSaved(record)
+        return OwnerRecordCodec.save(this.record, record, ::publish) { next ->
+            this.record = next
+            saved += next
+            true
+        }
+    }
+
+    override suspend fun publishSelection(): Boolean = publish()
+
+    private fun publish(): Boolean {
+        if (publicationUnavailable) return false
+        hostSelection = record.selected
+        onPublished()
         return true
     }
 }
@@ -394,10 +407,11 @@ internal class OwnerRig(
     private val test: TestScope,
     val earphones: DeviceCandidate = rosePair("rose-a"),
     initial: OwnerRecord = OwnerRecord(),
+    bonded: List<DeviceCandidate> = listOf(earphones),
 ) {
     val headset = SharedHeadset()
-    val appTransport = HeadsetTransport("ordinary", headset, earphones.profile!!, listOf(earphones))
-    val hostTransport = HeadsetTransport("module", headset, earphones.profile!!, listOf(earphones))
+    val appTransport = HeadsetTransport("ordinary", headset, earphones.profile!!, bonded)
+    val hostTransport = HeadsetTransport("module", headset, earphones.profile!!, bonded)
     val store = MemoryOwnerStore(initial)
     private val ids = generateSequence(1) { it + 1 }.map { "id-$it" }.iterator()
     private val sessionTiming = SessionTiming(queryTimeoutMillis = 50, writeIntervalMillis = 0)
@@ -447,9 +461,9 @@ internal class OwnerRig(
     private var hostUnlocked = true
 
     init {
-        store.onSaved = {
+        store.onPublished = {
             test.backgroundScope.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
-                host.configure { HostConfiguration(hostUnlocked, HostSettings(integration = IntegrationSettings(controlWay = store.record.selected))) }
+                host.configure { HostConfiguration(hostUnlocked, HostSettings(integration = IntegrationSettings(controlWay = store.hostSelection))) }
             }
         }
     }
@@ -457,13 +471,13 @@ internal class OwnerRig(
     suspend fun bootHost(unlocked: Boolean = true) {
         hostUnlocked = unlocked
         host.updatePlatform(platform)
-        host.configure { HostConfiguration(unlocked, HostSettings(integration = IntegrationSettings(controlWay = store.record.selected))) }
+        host.configure { HostConfiguration(unlocked, HostSettings(integration = IntegrationSettings(controlWay = store.hostSelection))) }
     }
 
     /** The first unlock of a boot, as the host learns it. */
     suspend fun unlockHost() {
         hostUnlocked = true
-        host.configure { HostConfiguration(true, HostSettings(integration = IntegrationSettings(controlWay = store.record.selected))) }
+        host.configure { HostConfiguration(true, HostSettings(integration = IntegrationSettings(controlWay = store.hostSelection))) }
     }
 
     /** A scope standing for one application process; cancelling it is that process disappearing. */

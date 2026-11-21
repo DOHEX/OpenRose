@@ -12,33 +12,33 @@ import kotlin.test.assertTrue
 class F8CodecTest {
     @Test
     fun initializationUsesDocumentedQueriesAndCapacity() {
-        val codec = F8Codec(ModelProfile.AGATE_F8)
+        val codec = createProtocolCodec(ModelProfile.AGATE_F8)
         assertFailsWith<IllegalArgumentException> { codec.initQueries(5) }
         assertEquals(
             listOf("002701000101", "00270100010c", "002701000104", "002701000108", "00270100010b", "002701000102", "022701000105", "002701000109", "002701000113", "002701000111", "002701000116"),
             codec.initQueries(6).map { it.bytes.hex() },
         )
-        assertEquals("00270100010a", F8Codec(ModelProfile.EXPLORER_F8).initQueries(6).last().bytes.hex())
+        assertEquals("00270100010a", createProtocolCodec(ModelProfile.EXPLORER_F8).initQueries(6).last().bytes.hex())
     }
 
     @Test
     fun settingsUseIndependentDocumentedFramesAndReadbacks() {
-        val x = F8Codec(ModelProfile.CERAMICS_X_F8)
+        val x = createProtocolCodec(ModelProfile.CERAMICS_X_F8)
         val anc = x.prepareSetting(DeviceSetting.NOISE_MODE, FieldValue.Text("anc"))
         assertContentEquals("002c01000101".bytes(), anc.writeFrames.single())
         assertContentEquals("00270100010c".bytes(), anc.readback.bytes)
-        val explorer = F8Codec(ModelProfile.EXPLORER_F8)
+        val explorer = createProtocolCodec(ModelProfile.EXPLORER_F8)
         assertContentEquals("002c01000100".bytes(), explorer.prepareSetting(DeviceSetting.NOISE_MODE, FieldValue.Text("normal")).writeFrames.single())
         assertContentEquals("00200100020002".bytes(), x.prepareSetting(DeviceSetting.EQ, FieldValue.Text("rock")).writeFrames.single())
         assertContentEquals("0022010003080109".bytes(), x.prepareSetting(DeviceSetting.TOUCH_BINDING, FieldValue.TouchAssignment("right", "long", "noise_cycle")).writeFrames.single())
-        assertFailsWith<UnsupportedOperationException> { F8Codec(ModelProfile.AGATE_X_F8).prepareSetting(DeviceSetting.GAME_MODE, FieldValue.Toggle(true)) }
+        assertFailsWith<UnsupportedOperationException> { createProtocolCodec(ModelProfile.AGATE_X_F8).prepareSetting(DeviceSetting.GAME_MODE, FieldValue.Toggle(true)) }
     }
 
     @Test
     fun syntheticRepliesAreBufferedAndDecodedWithoutChecksum() {
         // Synthetic RX, using the documented header, tag and byte offsets; not a hardware capture.
         val frame = "0027010005010050da32".bytes()
-        val codec = F8Codec(ModelProfile.CERAMICS_X_F8)
+        val codec = createProtocolCodec(ModelProfile.CERAMICS_X_F8)
         assertTrue(codec.feedNotification(frame.copyOfRange(0, 4)).isEmpty())
         val reply = codec.feedNotification(frame.copyOfRange(4, frame.size)).single()
         assertEquals(FieldValue.Number(80), assertIs<FieldReading.Known>(reply.readings[DeviceField.LEFT_BATTERY]).value)
@@ -68,11 +68,11 @@ class F8CodecTest {
     @Test
     fun syntheticUnknownValuesDoNotConfirmSettings() {
         // Synthetic RX: 0x28 shares the same dispatch as 0x27.
-        val codec = F8Codec(ModelProfile.CERAMICS_F8)
+        val codec = createProtocolCodec(ModelProfile.CERAMICS_F8)
         val ambiguous = codec.feedNotification("0028010003040002".bytes()).single()
         assertIs<FieldReading.Unknown>(ambiguous.readings[DeviceField.EQ])
         assertFalse(ambiguous.accepted)
-        val invalid = F8Codec(ModelProfile.EXPLORER_F8).feedNotification("00270100030c00ff".bytes()).single()
+        val invalid = createProtocolCodec(ModelProfile.EXPLORER_F8).feedNotification("00270100030c00ff".bytes()).single()
         assertFalse(invalid.accepted)
     }
 
@@ -126,7 +126,7 @@ class F8CodecTest {
     @Test
     fun explorerPromptVolumeUsesDingLevelAndLeavesOffClosed() {
         assertEquals((1..5).toSet(), ModelProfile.EXPLORER_F8.capabilities().promptVolumeLevels)
-        val codec = F8Codec(ModelProfile.EXPLORER_F8)
+        val codec = createProtocolCodec(ModelProfile.EXPLORER_F8)
         for (level in 1..5) {
             val setting = codec.prepareSetting(DeviceSetting.PROMPT_VOLUME, FieldValue.Number(level))
             assertEquals("00320100010$level", setting.writeFrames.single().hex())
@@ -146,7 +146,7 @@ class F8CodecTest {
 
     @Test
     fun explorerNoiseLevelsInvertOnWriteAndDecodeOnFreshReadback() {
-        val codec = F8Codec(ModelProfile.EXPLORER_F8)
+        val codec = createProtocolCodec(ModelProfile.EXPLORER_F8)
         for ((level, wire) in listOf(1 to 2, 3 to 1, 5 to 0)) {
             val anc = codec.prepareSetting(DeviceSetting.ANC_LEVEL, FieldValue.Number(level))
             assertEquals("00300100010$wire", anc.writeFrames.single().hex())
@@ -179,7 +179,7 @@ class F8CodecTest {
     @Test
     fun ceramicsXModelsKeepNoiseLevelsAndPromptVolumeClosed() {
         for (profile in listOf(ModelProfile.CERAMICS_X_F8, ModelProfile.CERAMICS_X_7034_F8)) {
-            val codec = F8Codec(profile)
+            val codec = createProtocolCodec(profile)
             for (setting in listOf(DeviceSetting.ANC_LEVEL, DeviceSetting.TRANSPARENCY_LEVEL, DeviceSetting.PROMPT_VOLUME)) {
                 assertFailsWith<UnsupportedOperationException>("$profile $setting") {
                     codec.prepareSetting(setting, FieldValue.Number(3))

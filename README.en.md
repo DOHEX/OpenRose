@@ -15,7 +15,7 @@ OpenRose is an unofficial control app for ROSE / ROSESELSA (弱水时砂) earpho
 
 | Earphones | Connection | Status |
 | --- | --- | --- |
-| EarFree i5 (EarFeel i5) | BLE | Reads verified on a real device; settings writes on Android not verified |
+| EarFree i5 (EarFeel i5) | BLE | Hardware reads verified. Android ordinary and module control both confirmed transparency and wind-noise mode writes by device read-back. Other setting writes await verification |
 | EarFeel i7 | BLE or SPP | Offline tests only; not tested on a real device |
 | BudsFeel MK2 | BLE or SPP | Not tested on a real device |
 | OpenFeel MK2 | BLE or SPP | Not tested on a real device |
@@ -50,7 +50,7 @@ OpenRose covers all 48 Bluetooth earphone configurations in RoseLink 3.8.6 and r
 - **Two UI styles**: Miuix and Material 3 Expressive; switching keeps the earphones connected
 - **Background control**: keeps the control connection after you close the app and restores it after the process is reclaimed or the phone restarts; no root needed
 - **HyperOS integration**: through the Xposed module, the system island, focus notifications, and Fusion Device Center; the system Bluetooth process can control the earphones directly
-- **Local only**: talks to the earphones directly over local Bluetooth, needs no account, and the Android app has no network permission
+- **Local control**: controls earphones over Bluetooth without an account. Once paired for handoff, the phone module host and computer exchange earphone state and commands on the LAN.
 
 See [Features](https://dohex.github.io/OpenRose/en/reference/features/) for the full list.
 
@@ -68,6 +68,7 @@ See [Getting started](https://dohex.github.io/OpenRose/en/guides/getting-started
 
 - [Background control](https://dohex.github.io/OpenRose/en/guides/background-control/)
 - [HyperOS integration](https://dohex.github.io/OpenRose/en/guides/hyperos-integration/): requirements, control way, headset circulation, and known limitations
+- [Windows desktop](https://dohex.github.io/OpenRose/en/guides/windows-desktop/) for MSI installation and Bluetooth pairing
 - [Linux desktop](https://dohex.github.io/OpenRose/en/guides/linux-desktop/): packages, tray, and window rules
 - [Troubleshooting](https://dohex.github.io/OpenRose/en/guides/troubleshooting/)
 - [Permissions and privacy](https://dohex.github.io/OpenRose/en/reference/permissions/)

@@ -5,6 +5,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import io.github.dohex.openrose.androidintegration.*
+import io.github.dohex.openrose.androidintegration.scope.INTEGRATION_SCOPE_PACKAGES
 import io.github.dohex.openrose.androidintegration.scope.ScopeRestartPhase
 import io.github.dohex.openrose.androidintegration.scope.ScopeRestartResult
 import io.github.dohex.openrose.androidintegration.scope.ScopeRestartStatus
@@ -21,7 +22,7 @@ class AndroidPlatformUi(
     private val integration: StateFlow<IntegrationState>,
     private val onIntegrationSettingsChange: (IntegrationSettings) -> Unit,
     private val onSelectControlWay: (ControlWay) -> Unit,
-    override val requestBluetoothPermission: () -> Unit,
+    requestBluetoothPermission: () -> Unit,
     override val openBluetoothSettings: () -> Unit,
     private val onRequestNotificationPermission: () -> Unit,
     private val onRequestAssociation: () -> Unit,
@@ -31,12 +32,16 @@ class AndroidPlatformUi(
     private val circulationSettings: (@Composable () -> Unit)? = null,
     private val circulation: CirculationClient? = null,
 ) : PlatformUi {
+    private val requestAppPermission = requestBluetoothPermission
+    override val requestBluetoothPermission: (() -> Unit)?
+        get() = requestAppPermission.takeIf { integration.value.owner.selected == ControlWay.ORDINARY }
+
     override val platformName: String = "Android"
     private var restartRunning by mutableStateOf(false)
 
     // Whether the restart dialog is shown; its content stays until the next opening so the dialog can animate out.
     private var restartDialogOpen by mutableStateOf(false)
-    private var restartSelection by mutableStateOf(INTEGRATION_SCOPE_PACKAGES.toSet())
+    private var restartSelection by mutableStateOf(emptySet<String>())
     private var restartTargets by mutableStateOf(emptyList<String>())
     private var restartResults by mutableStateOf<List<ScopeRestartResult>?>(null)
     private var restartPhase by mutableStateOf<ScopeRestartPhase?>(null)
@@ -73,12 +78,21 @@ class AndroidPlatformUi(
             PermissionState.DENIED -> StatusTone.ERROR
         }
         ToneInfoRow("蓝牙权限", permissionValue, permissionTone)
-        if (platform.permission == PermissionState.REQUIRED || platform.permission == PermissionState.DENIED) {
-            AppButton(text = "授予蓝牙权限", onClick = requestBluetoothPermission, modifier = Modifier.padding(start = 16.dp))
+        if (platform.permission.missing) {
+            requestBluetoothPermission?.let { AppButton("授予蓝牙权限", it, modifier = Modifier.padding(start = 16.dp)) }
         }
+        if (platform.scanPermission.missing) ScanPermissionRow()
         if (integration.platform.systemIntegrationApplicability == PlatformApplicability.UNKNOWN) {
             ToneInfoRow("系统集成适用性", "尚未核实", StatusTone.CAUTION)
         }
+    }
+
+    @Composable
+    private fun ScanPermissionRow() {
+        val request = requestBluetoothPermission
+        val guidance = if (request == null) "模块宿主未获得扫描权限，可切回普通控制后搜索" else "仅搜索新耳机时需要，已配对耳机可直接连接"
+        ToneInfoRow("扫描定位权限", guidance, StatusTone.CAUTION)
+        request?.let { AppButton("授予定位权限", it, modifier = Modifier.padding(start = 16.dp)) }
     }
 
     @Composable
@@ -137,7 +151,7 @@ class AndroidPlatformUi(
                 state,
                 integration,
                 onIntegrationSettingsChange,
-                requestBluetoothPermission,
+                requestAppPermission,
                 onRequestNotificationPermission,
                 onRequestAssociation,
                 onOpenAppSettings,
@@ -341,23 +355,31 @@ class AndroidPlatformUi(
 
     @Composable
     override fun StatusActions() {
+        val current by integration.collectAsState()
+        val hyperOs = hyperOsIntegrationApplicable(current.platform)
+        val available = INTEGRATION_SCOPE_PACKAGES.filter { scope ->
+            scope in current.platform.installedScopes &&
+                (hyperOs || (current.owner.selected == ControlWay.MODULE && scope == "com.android.bluetooth"))
+        }
+        if (available.isEmpty()) return
         ScopeRestartAction(
+            availableTargets = available,
             open = restartDialogOpen,
             running = restartRunning,
-            selected = restartSelection,
+            selected = restartSelection.intersect(available.toSet()),
             targets = restartTargets,
             phase = restartPhase,
             results = restartResults,
             onOpen = {
                 restartResults = null
-                restartSelection = INTEGRATION_SCOPE_PACKAGES.toSet()
+                restartSelection = available.toSet()
                 restartDialogOpen = true
             },
             onToggle = { target ->
                 restartSelection = if (target in restartSelection) restartSelection - target else restartSelection + target
             },
             onConfirm = {
-                val targets = INTEGRATION_SCOPE_PACKAGES.filter { it in restartSelection }
+                val targets = available.filter { it in restartSelection }
                 if (!restartRunning && targets.isNotEmpty()) {
                     restartRunning = true
                     restartTargets = targets

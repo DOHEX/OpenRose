@@ -5,7 +5,6 @@
     <ID>CyclomaticComplexMethod:SwitchingControlRuntime.kt:SwitchingControlRuntime$private fun ownerState: OwnerState</ID>
     <ID>CyclomaticComplexMethod:SwitchingControlRuntime.kt:SwitchingControlRuntime$private suspend fun switchTo: HandoffOutcome</ID>
     <ID>CyclomaticComplexMethod:Wire.kt:WireParser$private fun string: String</ID>
-    <ID>ReturnCount:FusionEntry.kt:FusionEntry$fun normalizeAddress: String?</ID>
     <ID>ReturnCount:SwitchingControlRuntime.kt:SwitchingControlRuntime$private suspend fun switchTo: HandoffOutcome</ID>
     <ID>SwallowedException:ModuleControlClient.kt:ModuleControlClient$e: HostLinkException</ID>
     <ID>SwallowedException:ModuleControlClient.kt:ModuleControlClient$e: TimeoutCancellationException</ID>

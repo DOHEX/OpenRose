@@ -2,9 +2,10 @@ package io.github.dohex.openrose.core.protocol
 
 import io.github.dohex.openrose.core.DeviceCapabilities
 import io.github.dohex.openrose.core.DeviceSetting
+import io.github.dohex.openrose.core.models.ModelProtocol
 
 // F8 setting encoders: each returns the command byte, the readback tag and the data bytes of one frame.
-internal fun settingFrame(
+internal fun ModelProtocol.F8.settingFrame(
     profile: ModelProfile,
     setting: DeviceSetting,
     value: FieldValue,
@@ -15,7 +16,7 @@ internal fun settingFrame(
     DeviceSetting.GAME_MODE, DeviceSetting.EAR_DETECTION, DeviceSetting.TOUCH_ENABLED -> toggleFrame(setting, value)
 
     DeviceSetting.NOISE_MODE, DeviceSetting.ANC_LEVEL, DeviceSetting.TRANSPARENCY_LEVEL ->
-        noiseFrame(profile, setting, value, capabilities)
+        noiseFrame(setting, value, capabilities)
 
     DeviceSetting.PROMPT_LANGUAGE -> languageFrame(value, capabilities)
 
@@ -65,15 +66,14 @@ private fun promptVolumeFrame(value: FieldValue, capabilities: DeviceCapabilitie
     return Triple(0x32, 19, intArrayOf(value.value))
 }
 
-private fun noiseFrame(
-    profile: ModelProfile,
+private fun ModelProtocol.F8.noiseFrame(
     setting: DeviceSetting,
     value: FieldValue,
     capabilities: DeviceCapabilities,
 ): Triple<Int, Int, IntArray> {
     if (setting == DeviceSetting.NOISE_MODE) {
         require(value is FieldValue.Text && value.value in capabilities.noiseControl!!.modes)
-        val modes = mapOf("anc" to 1, "transparency" to 2, "wind" to 0, "normal" to profile.spec.f8NoiseNormalWire)
+        val modes = mapOf("anc" to 1, "transparency" to 2, "wind" to 0, "normal" to noiseNormalWire)
         return Triple(0x2c, 12, intArrayOf(modes.getValue(value.value)))
     }
     require(value is FieldValue.Number && value.value in capabilities.noiseControl!!.levelCapabilities(setting)!!.levels)

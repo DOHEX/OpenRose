@@ -28,6 +28,11 @@ import kotlin.test.assertTrue
 
 class DesktopRuntimeTest {
     @Test
+    fun windowsOffersTheSystemBluetoothSettingsPage() {
+        assertEquals(listOf("explorer.exe", "ms-settings:bluetooth"), bluetoothSettingsCommand("Windows 11"))
+    }
+
+    @Test
     fun controlAndAppearanceSurviveRebuildingTheRuntime() = runTest {
         val path = "io/github/dohex/openrose/test/${UUID.randomUUID()}"
         val preferences = Preferences.userRoot().node(path)

@@ -1,6 +1,7 @@
 package io.github.dohex.openrose.core.protocol
 
 import io.github.dohex.openrose.core.DeviceSetting
+import io.github.dohex.openrose.core.models.ModelProtocol
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.number
@@ -10,13 +11,14 @@ import kotlin.time.Clock
 /** RS Common V2 frames: FF/DD framing, LTV records and a per-session sequence. */
 internal class RsCommonV2Codec(
     override val profile: ModelProfile,
+    private val protocol: ModelProtocol.RsCommonV2,
     private val localTime: () -> LocalDateTime = { Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()) },
 ) : ProtocolCodec {
     private var sequence = 0
     private var buffer = byteArrayOf()
 
     /** RoseLink 3.8.6 builds getInfo from the panel order; 3.8.0 used the sender default. */
-    private val infoTypes = (profile.spec.rsV2InfoIds ?: "010708090c0d0e122a2b2c2d2e2f313233363738393a3b3c3d3f454649").bytes()
+    private val infoTypes = (protocol.infoIds ?: "010708090c0d0e122a2b2c2d2e2f313233363738393a3b3c3d3f454649").bytes()
 
     override fun prepareSetting(
         setting: DeviceSetting,
@@ -194,7 +196,7 @@ internal class RsCommonV2Codec(
             else -> mapOf(rsCommonV2Fields.getValue(key).single() to expected)
         }
         val write = frame(byteArrayOf(type) + payload)
-        if (profile.spec.spatialNeedsEarAdaptive) {
+        if (protocol.spatialNeedsEarAdaptive) {
             fun confirmed(field: DeviceField) = (currentFields[field] as? FieldReading.Known)?.value
             val followUp = when {
                 setting == DeviceSetting.SPATIAL_MODE && value != FieldValue.Text("off") &&
@@ -218,7 +220,7 @@ internal class RsCommonV2Codec(
             }
         }
         val readback = query(byteArrayOf(type), values.keys)
-        val refreshEq = setting == DeviceSetting.GAME_MODE && profile.spec.refreshEqualizerAfterGameMode
+        val refreshEq = setting == DeviceSetting.GAME_MODE && protocol.refreshEqualizerAfterGameMode
         return ProtocolSetting(listOf(write), readback, values, if (refreshEq) listOf(query(byteArrayOf(0x2a))) else emptyList())
     }
 
@@ -244,7 +246,7 @@ internal class RsCommonV2Codec(
         val groups = infoTypes.toList().chunked(maxWriteSize - 6)
         return buildList {
             groups.forEach { add(query(it.toByteArray())) }
-            if (profile.spec.synchronizeClockOnConnect) {
+            if (protocol.synchronizeClockOnConnect) {
                 val now = localTime()
                 val body = byteArrayOf(
                     0x35,

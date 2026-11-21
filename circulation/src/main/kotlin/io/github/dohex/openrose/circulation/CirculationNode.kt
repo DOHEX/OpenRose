@@ -46,6 +46,7 @@ class CirculationNode(
     }
 
     fun offerPairing() = pairing.open()
+    internal fun currentOffer() = pairing.current()
 
     fun pairQr(qr: String) {
         val parts = requireNotNull(QR.matchEntire(qr)) { "无法识别流转二维码" }.groupValues

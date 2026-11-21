@@ -488,7 +488,7 @@ class ControlSessionSettingTest {
             PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
             transport = transport,
             scope = backgroundScope,
-            timing = SessionTiming(queryTimeoutMillis = 50, writeIntervalMillis = interval),
+            timing = SessionTiming(queryTimeoutMillis = 50, writeIntervalMillis = interval, writeTimeoutMillis = 50),
         )
         session.startScan()
         val advertisement = if (profile == ModelProfile.I5_ZT) i5Advertisement else i7Advertisement

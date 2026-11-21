@@ -6,7 +6,6 @@ import io.github.dohex.openrose.core.EqualizerCapabilities
 import io.github.dohex.openrose.core.TouchControlCapabilities
 import io.github.dohex.openrose.core.protocol.BatteryLayout
 import io.github.dohex.openrose.core.protocol.GattProfile
-import io.github.dohex.openrose.core.protocol.ProtocolFamily
 import kotlinx.collections.immutable.persistentSetOf
 
 private val ceramicsCapabilities = DeviceCapabilities(
@@ -23,7 +22,11 @@ private val ceramicsCapabilities = DeviceCapabilities(
 internal val ceramics = ModelSpec(
     displayName = "CERAMICS",
     shortLabel = "CERAMICS",
-    family = ProtocolFamily.F8,
+    protocol = ModelProtocol.F8(
+        extendedInit = false,
+        noiseNormalWire = 3,
+        eqAtTwo = null,
+    ),
     advertisementPrefixes = listOf("18840100", "18840103"),
     nameBrand = "ceramics",
     nameModelNumber = "ceramics",
@@ -39,7 +42,4 @@ internal val ceramics = ModelSpec(
     batteryLayout = BatteryLayout.EARBUDS_ONLY,
     equalizerPresetLabels = mapOf("pop" to "POP", "hifi" to "HIFI", "rock" to "ROCK"),
     capabilities = { ceramicsCapabilities },
-    f8ExtendedInit = false,
-    f8NoiseNormalWire = 3,
-    f8EqAtTwo = null,
 )

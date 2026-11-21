@@ -91,7 +91,9 @@ class MainActivity : ComponentActivity() {
                     },
                 )
             }
-            OpenRoseApp(model = owner.model, platformUi = platformUi)
+            CirculationVisibility {
+                OpenRoseApp(model = owner.model, platformUi = platformUi)
+            }
         }
     }
 

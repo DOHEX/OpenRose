@@ -14,7 +14,8 @@ interface IControlBridge {
     Bundle currentSession(String leaseId);
     Bundle read(in Bundle request);
     Bundle acknowledge(in Bundle receipt);
-    oneway void close(String leaseId);
+    /** Synchronous so Binder supplies the same calling pid as open. */
+    void close(String leaseId);
     Bundle watch(in Bundle request, IControlObserver observer);
     Bundle claimPrompt(in Bundle request);
     Bundle setNoise(in Bundle request);

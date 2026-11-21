@@ -6,7 +6,6 @@ import io.github.dohex.openrose.core.TouchControlCapabilities
 import io.github.dohex.openrose.core.protocol.BatteryLayout
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.GattProfile
-import io.github.dohex.openrose.core.protocol.ProtocolFamily
 import io.github.dohex.openrose.core.protocol.RsCommonInit
 import kotlinx.collections.immutable.persistentSetOf
 import kotlinx.collections.immutable.toPersistentSet
@@ -14,7 +13,7 @@ import kotlinx.collections.immutable.toPersistentSet
 internal val sportFeel = ModelSpec(
     displayName = "SportFeel",
     shortLabel = "SportFeel",
-    family = ProtocolFamily.RS_COMMON,
+    protocol = ModelProtocol.RsCommon(initialization = RsCommonInit.DEFAULT),
     advertisementPrefixes = listOf("0b0a0a0f"),
     nameBrand = "sportfeel",
     nameModelNumber = "sportfeel",
@@ -29,7 +28,6 @@ internal val sportFeel = ModelSpec(
     advertisedClassicAddress = { rsCommonClassicAddress(it, 10) },
     batteryLayout = BatteryLayout.EARBUDS_ONLY,
     equalizerPresetLabels = emptyMap(),
-    rsCommonInit = RsCommonInit.DEFAULT,
     capabilities = {
         DeviceCapabilities(
             readableFields = rsReadings(

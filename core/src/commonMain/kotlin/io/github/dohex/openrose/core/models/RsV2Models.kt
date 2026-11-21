@@ -11,7 +11,6 @@ import io.github.dohex.openrose.core.protocol.BatteryLayout
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.dohex.openrose.core.protocol.GattProfile
-import io.github.dohex.openrose.core.protocol.ProtocolFamily
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.persistentSetOf
 import kotlinx.collections.immutable.toPersistentSet
@@ -38,15 +37,18 @@ internal fun rsV2Model(
     infoIds: String? = null,
     capabilities: (FieldValue.Firmware?) -> DeviceCapabilities,
 ) = ModelSpec(
-    displayName = displayName, shortLabel = displayName, family = ProtocolFamily.RS_COMMON_V2,
+    displayName = displayName, shortLabel = displayName,
+    protocol = ModelProtocol.RsCommonV2(
+        infoIds = infoIds,
+        spatialNeedsEarAdaptive = spatialNeedsEarAdaptive,
+        synchronizeClockOnConnect = synchronizeClockOnConnect,
+        refreshEqualizerAfterGameMode = refreshEqualizerAfterGameMode,
+    ),
     advertisementPrefixes = listOf(prefix), batteryLayout = batteryLayout, nameBrand = nameBrand,
     nameModelNumber = nameModelNumber, nameRequiresModel = nameRequiresModel, nameBrandAliases = nameBrandAliases,
     equalizerPresetLabels = equalizerPresetLabels, capabilities = capabilities, gatt = rsV2Gatt,
     sppControlUuid = "0cf12d31-fac3-4553-bd80-d6832e7b3931", writeIntervalMillis = 100,
-    spatialNeedsEarAdaptive = spatialNeedsEarAdaptive,
     advertisedClassicAddress = ::rsV2ClassicAddress, gameEqualizerPresets = gameEqualizerPresets,
-    synchronizeClockOnConnect = synchronizeClockOnConnect,
-    rsV2InfoIds = infoIds, refreshEqualizerAfterGameMode = refreshEqualizerAfterGameMode,
 )
 
 internal val rsV2Curve = CustomEqualizerCapabilities(

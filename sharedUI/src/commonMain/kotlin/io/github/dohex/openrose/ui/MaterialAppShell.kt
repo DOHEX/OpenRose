@@ -41,9 +41,8 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import io.github.dohex.openrose.ui.shell.ShellPageContent
 import top.yukonga.miuix.kmp.blur.textureBlur
 
 @Composable
@@ -101,7 +100,7 @@ internal fun MaterialAppShell(
     onBack: () -> Unit,
     scrollState: ScrollState,
     pageContent: @Composable () -> Unit,
-    feedbackContent: @Composable () -> Unit = {},
+    feedbackContent: @Composable (Modifier) -> Unit = {},
 ) {
     val backdropActive = LocalBackdropBlurActive.current
     val backdrop = rememberAppBackdrop(MaterialTheme.colorScheme.surface, backdropActive)
@@ -124,12 +123,13 @@ internal fun MaterialAppShell(
                 )
             },
         ) { padding ->
-            Box(Modifier.fillMaxSize()) {
-                Column(Modifier.fillMaxSize().appBackdropContent(backdrop, backdropActive).verticalScroll(scrollState)) {
-                    ShellPageContent(page, padding, compactHome = false, pageContent = pageContent)
-                }
-                ShellFeedback(padding, content = feedbackContent)
-            }
+            ShellPageContent(
+                page = page,
+                padding = padding,
+                scrollModifier = Modifier.appBackdropContent(backdrop, backdropActive).verticalScroll(scrollState),
+                pageContent = pageContent,
+                feedbackContent = feedbackContent,
+            )
         }
     }
 }
@@ -181,54 +181,6 @@ private fun MaterialHeadphoneActions(
 }
 
 @Composable
-internal fun BoxScope.ShellFeedback(
-    padding: PaddingValues,
-    bottomClearance: Dp = 0.dp,
-    content: @Composable () -> Unit,
-) {
-    Box(
-        Modifier.align(Alignment.BottomCenter)
-            .padding(bottom = padding.calculateBottomPadding() + bottomClearance)
-            .widthIn(max = 600.dp).fillMaxWidth().padding(16.dp),
-    ) {
-        content()
-    }
-}
-
-@Composable
-internal fun ShellPageContent(
-    page: AppPage,
-    padding: PaddingValues,
-    compactHome: Boolean,
-    bottomClearance: Dp = 0.dp,
-    pageContent: @Composable () -> Unit,
-) {
-    Column(Modifier.fillMaxWidth().padding(padding).consumeWindowInsets(padding), horizontalAlignment = Alignment.CenterHorizontally) {
-        val maxWidth = if (compactHome) {
-            680.dp
-        } else if (page == AppPage.HEADPHONES) {
-            1120.dp
-        } else {
-            800.dp
-        }
-        Column(
-            Modifier.widthIn(max = maxWidth).fillMaxWidth()
-                .padding(horizontal = 0.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            pageContent()
-            if (bottomClearance > 0.dp) {
-                Spacer(
-                    Modifier
-                        .height(bottomClearance)
-                        .clearAndSetSemantics { contentDescription = "ShellBottomClearance" },
-                )
-            }
-        }
-    }
-}
-
-@Composable
 internal fun MaterialMainShell(
     pagerState: MainTabsPagerState,
     wide: Boolean,
@@ -236,7 +188,7 @@ internal fun MaterialMainShell(
     onNavigate: (AppPage) -> Unit,
     scrollStates: Map<AppPage, ScrollState>,
     pageContentFor: @Composable (AppPage) -> Unit,
-    pageFeedbackFor: @Composable (AppPage) -> Unit = {},
+    pageFeedbackFor: @Composable (AppPage, Modifier) -> Unit = { _, _ -> },
     connectedHome: Boolean = false,
     menuExpanded: Boolean = false,
     onMenuExpandedChange: (Boolean) -> Unit = {},
@@ -432,22 +384,16 @@ internal fun MaterialMainShell(
                             }
                         },
                     ) { pagePadding ->
-                        Box(Modifier.fillMaxSize()) {
-                            val scrollState = scrollStates.getValue(page)
-                            Column(Modifier.fillMaxSize().appBackdropContent(pageBackdrop, backdropActive).verticalScroll(scrollState)) {
-                                ShellPageContent(
-                                    page = page,
-                                    padding = pagePadding,
-                                    compactHome = page == AppPage.HEADPHONES && !connectedHome,
-                                    bottomClearance = trailingBottomPadding,
-                                ) {
-                                    pageContentFor(page)
-                                }
-                            }
-                            ShellFeedback(pagePadding, bottomClearance = trailingBottomPadding) {
-                                pageFeedbackFor(page)
-                            }
-                        }
+                        ShellPageContent(
+                            page = page,
+                            padding = pagePadding,
+                            scrollModifier = Modifier.appBackdropContent(pageBackdrop, backdropActive)
+                                .verticalScroll(scrollStates.getValue(page)),
+                            compactHome = page == AppPage.HEADPHONES && !connectedHome,
+                            bottomClearance = trailingBottomPadding,
+                            pageContent = { pageContentFor(page) },
+                            feedbackContent = { modifier -> pageFeedbackFor(page, modifier) },
+                        )
                     }
                 }
             }

@@ -2,6 +2,7 @@ package io.github.dohex.openrose.core.protocol
 
 import io.github.dohex.openrose.core.DeviceCapabilities
 import io.github.dohex.openrose.core.DeviceSetting
+import io.github.dohex.openrose.core.models.ModelProtocol
 
 /** F8 has a five-byte header and no application checksum. */
 internal val f8Fields = linkedMapOf(
@@ -20,12 +21,12 @@ internal val f8Fields = linkedMapOf(
     "16" to setOf(DeviceField.TOUCH_ENABLED),
 )
 
-internal class F8Codec(override val profile: ModelProfile) : ProtocolCodec {
+internal class F8Codec(override val profile: ModelProfile, private val protocol: ModelProtocol.F8) : ProtocolCodec {
     private var buffer = byteArrayOf()
 
     override fun initQueries(maxWriteSize: Int): List<ProtocolQuery> {
         require(maxWriteSize >= 6) { "F8 queries require a 6-byte write capacity" }
-        val tags = listOf(1, 12, 4, 8, 11, 2, 5, 9, 19, 17, 22) + if (profile.spec.f8ExtendedInit) listOf(10) else emptyList()
+        val tags = listOf(1, 12, 4, 8, 11, 2, 5, 9, 19, 17, 22) + if (protocol.extendedInit) listOf(10) else emptyList()
         return tags.map(::query)
     }
 
@@ -37,7 +38,7 @@ internal class F8Codec(override val profile: ModelProfile) : ProtocolCodec {
     ): ProtocolSetting {
         val capabilities = profile.capabilities(firmware)
         if (setting !in capabilities.writableSettings) throw UnsupportedOperationException("该型号不支持此设置")
-        val (command, tag, payload) = settingFrame(profile, setting, value, capabilities)
+        val (command, tag, payload) = protocol.settingFrame(profile, setting, value, capabilities)
         val expected = if (setting == DeviceSetting.AUDIO_MODE || setting == DeviceSetting.MULTIPOINT) {
             val wire = payload.single()
             mapOf(
@@ -75,7 +76,7 @@ internal class F8Codec(override val profile: ModelProfile) : ProtocolCodec {
         if (raw.size <= 7) return ProtocolReply(raw.hex(), setOf(key), warnings = listOf("$key 字段被截断"))
         val fields = linkedMapOf<DeviceField, FieldReading>()
         decodeBasic(tag, raw, fields)
-        if (profile.spec.f8ExtendedInit) decodeExtended(tag, key, raw, fields)
+        if (protocol.extendedInit) decodeExtended(tag, key, raw, fields)
         return ProtocolReply(raw.hex(), setOf(key), fields)
     }
 
@@ -93,7 +94,7 @@ internal class F8Codec(override val profile: ModelProfile) : ProtocolCodec {
                 val name = when (value) {
                     0 -> "hifi"
                     1 -> "pop"
-                    2 -> profile.spec.f8EqAtTwo
+                    2 -> protocol.eqAtTwo
                     else -> null
                 }
                 fields.putReading(raw, DeviceField.EQ, name?.let(FieldValue::Text))
@@ -119,7 +120,7 @@ internal class F8Codec(override val profile: ModelProfile) : ProtocolCodec {
     }
 
     private fun decodeTouch(raw: ByteArray, fields: MutableMap<DeviceField, FieldReading>) {
-        val offsets = if (profile.spec.f8ExtendedInit) {
+        val offsets = if (protocol.extendedInit) {
             listOf(9, 15, 21, 27, 12, 18, 24, 30)
         } else {
             listOf(7, 9, 11, 8, 10, 12)
@@ -142,7 +143,7 @@ internal class F8Codec(override val profile: ModelProfile) : ProtocolCodec {
         when (tag) {
             9 -> fields.putReading(raw, DeviceField.EAR_DETECTION, toggleValue(value))
 
-            22 -> if (profile.spec.f8NoiseNormalWire == 0) {
+            22 -> if (protocol.noiseNormalWire == 0) {
                 fields.putReading(raw, DeviceField.TOUCH_ENABLED, toggleValue(value))
             }
 
@@ -178,10 +179,10 @@ internal class F8Codec(override val profile: ModelProfile) : ProtocolCodec {
 
     private fun decodeNoise(raw: ByteArray, fields: MutableMap<DeviceField, FieldReading>) {
         val mode = when (raw[7].u()) {
-            0 -> if (profile.spec.f8NoiseNormalWire == 0) "normal" else "wind"
+            0 -> if (protocol.noiseNormalWire == 0) "normal" else "wind"
             1 -> "anc"
             2 -> "transparency"
-            6 -> if (profile.spec.f8NoiseNormalWire == 3) "normal" else null
+            6 -> if (protocol.noiseNormalWire == 3) "normal" else null
             else -> null
         }
         fields.putReading(raw, DeviceField.NOISE_MODE, mode?.let(FieldValue::Text))

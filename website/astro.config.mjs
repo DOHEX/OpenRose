@@ -36,6 +36,7 @@ export default defineConfig({
 						'guides/background-control',
 						'guides/hyperos-integration',
 						'guides/linux-desktop',
+						'guides/windows-desktop',
 						'guides/troubleshooting',
 						'guides/feedback',
 					],

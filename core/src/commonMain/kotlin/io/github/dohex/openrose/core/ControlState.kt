@@ -27,6 +27,8 @@ data class PlatformState(
      * predates this fact is connected as soon as it turns true.
      */
     val userUnlocked: Boolean = true,
+    /** Additional permission used only to discover nearby headphones, such as location on Android 8–11. */
+    val scanPermission: PermissionState = PermissionState.NOT_REQUIRED,
 )
 
 enum class HostPlatform {
@@ -42,7 +44,15 @@ enum class HostPlatform {
 /** Explicitly keeps unknown platform facts separate from supported and unsupported features. */
 enum class PlatformApplicability { UNKNOWN, NOT_APPLICABLE, APPLICABLE }
 
-enum class PermissionState { NOT_REQUIRED, REQUIRED, GRANTED, DENIED }
+enum class PermissionState {
+    NOT_REQUIRED,
+    REQUIRED,
+    GRANTED,
+    DENIED,
+    ;
+
+    val missing: Boolean get() = this == REQUIRED || this == DENIED
+}
 
 sealed interface TransportAvailability {
     data object Available : TransportAvailability
@@ -76,7 +86,11 @@ data class DeviceCandidate(
     val profile: ModelProfile?,
     val manufacturerDataHex: String,
     val classicAddress: String? = null,
-)
+) {
+    fun matchesAudioDevice(audio: DeviceId?): Boolean = audio.matchesHeadset(deviceId, classicAddress)
+}
+
+private fun DeviceId?.matchesHeadset(id: DeviceId, classic: String?) = this != null && (this == id || value == classic)
 
 enum class ControlErrorCode {
     PERMISSION_REQUIRED,
@@ -221,7 +235,7 @@ data class ControlState(
             val audio = audioDeviceId ?: return false
             val target = connectionTarget
             if (target != null && target.deviceId != current.deviceId) return false
-            return audio == current.deviceId || audio.value == current.classicAddress || audio.value == target?.classicAddress
+            return audio.matchesHeadset(current.deviceId, current.classicAddress) || target?.matchesAudioDevice(audio) == true
         }
 
     /** The desktop can change the i5's noise mode as soon as this audio session reports it. */

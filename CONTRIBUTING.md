@@ -93,7 +93,9 @@ cd OpenRose
 - Spotless 不会把 `.editorconfig` 的改动当作输入变化：修改 `.editorconfig` 后请运行 `./gradlew spotlessApply --rerun-tasks`。
 - 全仓格式化提交记录在 `.git-blame-ignore-revs` 中。GitHub 的 blame 会自动跳过它；本地运行一次 `git config blame.ignoreRevsFile .git-blame-ignore-revs` 即可同样跳过。
 
-完整的 CI 还会构建 Android 调试 APK 并打包桌面版：
+CI 还会构建 Android 调试 APK 并打包桌面版。Windows 作业运行 WinRT 助手的 Rust 测试。影响 Android 安装包的 PR 会构建未签名的 release APK，并核对 R8 后的模块入口和系统呈现资源。文档 PR 在部署前运行站点构建与站内链接检查。
+
+本地构建命令：
 
 ```bash
 ./gradlew check offlineCheck :androidApp:assembleDebug

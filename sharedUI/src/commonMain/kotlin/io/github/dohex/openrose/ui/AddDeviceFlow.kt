@@ -7,9 +7,6 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import io.github.dohex.openrose.core.ConnectionPhase
 import io.github.dohex.openrose.core.ConnectionState
@@ -19,6 +16,7 @@ import io.github.dohex.openrose.core.OperationResult
 import io.github.dohex.openrose.core.ScanState
 import io.github.dohex.openrose.core.SessionReference
 import io.github.dohex.openrose.core.transport.DeviceId
+import io.github.dohex.openrose.ui.model.OpenRoseModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Deferred
@@ -31,11 +29,7 @@ import kotlinx.coroutines.launch
 @Stable
 internal class AddDeviceFlow(
     private val scope: CoroutineScope,
-    private val state: () -> ControlState,
-    private val startScan: () -> Deferred<OperationResult>,
-    private val stopScan: () -> Unit,
-    private val connect: suspend (DeviceId) -> OperationResult,
-    private val onReady: () -> Unit,
+    private val model: OpenRoseModel,
 ) {
     var selectedDeviceId by mutableStateOf<DeviceId?>(null)
         private set
@@ -50,20 +44,16 @@ internal class AddDeviceFlow(
     private var connectionJob: Job? = null
     private var request = 0L
 
-    fun enter() {
-        scanError = null
-        selectedDeviceId = null
-        connectionError = null
-        reference = null
-    }
+    var completed by mutableStateOf(false)
+        private set
 
     fun startSearch() {
-        if (pending || scanRequest?.isActive == true || !state().canSearchForHeadphones()) return
+        if (pending || scanRequest?.isActive == true || !model.state.value.canSearchForHeadphones()) return
         scanError = null
         selectedDeviceId = null
         connectionError = null
         reference = null
-        val started = startScan()
+        val started = model.startScan()
         scanRequest = started
         scope.launch(start = CoroutineStart.UNDISPATCHED) {
             val result = started.await()
@@ -74,11 +64,11 @@ internal class AddDeviceFlow(
     fun stopSearch() {
         if (scanRequest == null) return
         scanRequest = null
-        stopScan()
+        model.stopScan()
     }
 
     fun connect(deviceId: DeviceId) {
-        if (pending || !state().canSearchForHeadphones()) return
+        if (pending || !model.state.value.canSearchForHeadphones()) return
         stopSearch()
         selectedDeviceId = deviceId
         reference = null
@@ -87,12 +77,12 @@ internal class AddDeviceFlow(
         val currentRequest = ++request
         connectionJob = scope.launch(start = CoroutineStart.UNDISPATCHED) {
             try {
-                val result = connect.invoke(deviceId)
+                val result = model.connectForAddDevice(deviceId)
                 coroutineContext.ensureActive()
                 if (request == currentRequest) {
                     pending = false
                     when (result) {
-                        OperationResult.Success -> onReady()
+                        OperationResult.Success -> completed = true
                         is OperationResult.Failure -> connectionError = result.error
                     }
                 }
@@ -149,50 +139,42 @@ internal class AddDeviceFlow(
     fun leave() {
         cancelConnection()
         stopSearch()
+        selectedDeviceId = null
+        scanError = null
+        completed = false
     }
 }
 
 @Composable
-internal fun rememberAddDeviceFlow(
-    active: Boolean,
-    state: ControlState,
-    onStartScan: () -> Deferred<OperationResult>,
-    onStopScan: () -> Unit,
-    onConnect: suspend (DeviceId) -> OperationResult,
-    onReady: () -> Unit,
-): AddDeviceFlow {
-    val scope = rememberCoroutineScope()
-    val latestState by rememberUpdatedState(state)
-    val startScan by rememberUpdatedState(onStartScan)
-    val stopScan by rememberUpdatedState(onStopScan)
-    val connect by rememberUpdatedState(onConnect)
-    val ready by rememberUpdatedState(onReady)
-    val flow = remember {
-        AddDeviceFlow(scope, { latestState }, { startScan() }, { stopScan() }, { connect(it) }, { ready() })
-    }
+internal expect fun rememberAddDeviceFlow(model: OpenRoseModel): AddDeviceFlow
+
+/** Detaching a rendition stops discovery. Leaving the route also cancels the attempt it started. */
+@Composable
+internal fun AddDeviceLifecycle(active: Boolean, state: ControlState, flow: AddDeviceFlow, onReady: () -> Unit) {
     val canScan = state.canSearchForHeadphones()
-    DisposableEffect(active) {
-        if (active) flow.enter()
-        onDispose { if (active) flow.leave() }
+    DisposableEffect(flow, active) {
+        if (!active) flow.leave()
+        onDispose { if (active) flow.stopSearch() }
     }
-    LaunchedEffect(active, canScan) {
+    LaunchedEffect(flow, active, canScan) {
         if (active) {
-            if (canScan) {
+            if (!canScan) {
+                flow.leave()
+            } else if (flow.selectedDeviceId == null) {
                 flow.startSearch()
-            } else {
-                flow.stopSearch()
-                flow.cancelConnection()
             }
         }
     }
-    LaunchedEffect(active, canScan, state.scan, flow.pending) {
+    LaunchedEffect(flow, active, flow.completed) {
+        if (active && flow.completed) onReady()
+    }
+    LaunchedEffect(flow, active, canScan, state.scan, flow.pending) {
         if (active && canScan && state.scan == ScanState.Scanning && !flow.pending) {
             delay(20_000)
             flow.stopSearch()
         }
     }
     SideEffect { flow.observe(state.connection) }
-    return flow
 }
 
-internal fun ControlState.canSearchForHeadphones(): Boolean = platform.connectionBlockReason == null
+internal fun ControlState.canSearchForHeadphones(): Boolean = platform.connectionBlockReason == null && !platform.scanPermission.missing

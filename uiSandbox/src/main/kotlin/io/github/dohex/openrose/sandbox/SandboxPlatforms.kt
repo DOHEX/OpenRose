@@ -22,6 +22,7 @@ import io.github.dohex.openrose.androidintegration.SwitchRequest
 import io.github.dohex.openrose.androidintegration.SystemBridgeDiagnostics
 import io.github.dohex.openrose.androidintegration.WakeBand
 import io.github.dohex.openrose.androidintegration.WakeFacts
+import io.github.dohex.openrose.androidintegration.scope.INTEGRATION_SCOPE_PACKAGES
 import io.github.dohex.openrose.androidintegration.scope.ScopeRestartPhase
 import io.github.dohex.openrose.androidintegration.scope.ScopeRestartResult
 import io.github.dohex.openrose.androidintegration.scope.ScopeRestartStatus
@@ -104,6 +105,7 @@ internal class SandboxPlatforms(private val model: SandboxModel, private val sco
                     } else {
                         PlatformApplicability.NOT_APPLICABLE
                     },
+                    installedScopes = if (scenario.hyperOs) INTEGRATION_SCOPE_PACKAGES.toSet() else setOf("com.android.bluetooth"),
                     backgroundService = scenario.backgroundService.facts(),
                 ),
                 owner = ownerState(selected, scenario.owner),

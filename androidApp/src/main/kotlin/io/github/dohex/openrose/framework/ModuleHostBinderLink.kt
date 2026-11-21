@@ -37,11 +37,14 @@ import io.github.dohex.openrose.bridge.IControlFrames
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
+import kotlin.coroutines.EmptyCoroutineContext
 
 /**
  * Binder binding from the application to the module host in `com.android.bluetooth`. Discovery binds an
@@ -54,10 +57,10 @@ class ModuleHostBinderLink(
 ) : ModuleHostLink {
     private val context = context.applicationContext ?: context
 
-    @Volatile private var connection: BinderConnection? = null
+    private val connection = AtomicReference<BinderConnection?>()
 
     suspend fun circulation(fields: Map<String, String>): Map<String, String> {
-        val active = connection ?: return mapOf("error" to "模块控制尚未就绪")
+        val active = connection.get() ?: return mapOf("error" to "模块控制尚未就绪")
         return active.circulation(fields)
     }
 
@@ -162,11 +165,11 @@ class ModuleHostBinderLink(
             return LinkOpenResult.Failed(OwnerFailureStage.CONNECTION, "宿主进程已不存在")
         }
         val active = BinderConnection(bridge, binder, token, unbind, death, result.lease, result.status, ended)
-        connection = active
+        connection.set(active)
         return LinkOpenResult.Open(active)
     }
 
-    private class BinderConnection(
+    private inner class BinderConnection(
         private val bridge: IControlBridge,
         private val binder: IBinder,
         @Suppress("unused") private val token: IBinder,
@@ -261,7 +264,9 @@ class ModuleHostBinderLink(
         }
 
         override fun close() {
-            runCatching { bridge.close(lease.id) }
+            connection.compareAndSet(this, null)
+            // The synchronous transaction carries our pid. A stalled host must not block the application main thread.
+            closeDispatcher.dispatch(EmptyCoroutineContext) { runCatching { bridge.close(lease.id) } }
             runCatching { binder.unlinkToDeath(death, 0) }
             unbind()
         }
@@ -270,5 +275,6 @@ class ModuleHostBinderLink(
     private companion object {
         // Commands, discovery and probe calls can overlap. Retries share these slots across all bindings.
         val calls = BinderCalls(4)
+        val closeDispatcher = Dispatchers.IO.limitedParallelism(2)
     }
 }

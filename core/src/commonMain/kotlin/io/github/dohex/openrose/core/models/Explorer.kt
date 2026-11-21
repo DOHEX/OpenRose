@@ -10,7 +10,6 @@ import io.github.dohex.openrose.core.TouchControlCapabilities
 import io.github.dohex.openrose.core.protocol.BatteryLayout
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.GattProfile
-import io.github.dohex.openrose.core.protocol.ProtocolFamily
 import kotlinx.collections.immutable.persistentSetOf
 import kotlinx.collections.immutable.toPersistentSet
 
@@ -46,7 +45,10 @@ private val explorerCapabilities = DeviceCapabilities(
 internal val explorer = ModelSpec(
     displayName = "EXPLORER",
     shortLabel = "EXPLORER",
-    family = ProtocolFamily.F8,
+    protocol = ModelProtocol.F8(
+        extendedInit = true,
+        noiseNormalWire = 0,
+    ),
     advertisementPrefixes = listOf("18840107"),
     nameBrand = "explorer",
     nameModelNumber = "explorer",
@@ -62,6 +64,4 @@ internal val explorer = ModelSpec(
     batteryLayout = BatteryLayout.EARBUDS_AND_CASE,
     equalizerPresetLabels = mapOf("pop" to "POP", "hifi" to "HIFI", "rock" to "ROCK"),
     capabilities = { explorerCapabilities },
-    f8ExtendedInit = true,
-    f8NoiseNormalWire = 0,
 )

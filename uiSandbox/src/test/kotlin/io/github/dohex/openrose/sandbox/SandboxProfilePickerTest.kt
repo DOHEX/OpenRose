@@ -12,6 +12,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.v2.runDesktopComposeUiTest
 import io.github.dohex.openrose.core.protocol.ModelProfile
+import io.github.dohex.openrose.ui.configurationLabel
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -31,7 +32,7 @@ class SandboxProfilePickerTest {
             labels += options.map { it.config[SemanticsProperties.Text].single().text }
             onNodeWithText("全部系列").performClick()
         }
-        assertEquals(ModelProfile.entries.map { it.sandboxLabel }.sorted(), labels.sorted())
+        assertEquals(ModelProfile.entries.map { it.configurationLabel }.sorted(), labels.sorted())
         assertEquals(labels.size, labels.distinct().size)
     }
 

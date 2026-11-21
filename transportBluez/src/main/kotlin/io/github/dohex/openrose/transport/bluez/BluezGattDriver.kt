@@ -27,11 +27,12 @@ internal class BluezGattDriver(private val bus: BluezBus, private val devicePath
             is BluezSignal.Owner -> if (!signal.present || bus.owner != owner) emit(disconnected("BlueZ 服务已停止"))
 
             is BluezSignal.Changed -> {
-                if ((signal.path == devicePath && signal.interfaceName == DEVICE && signal.values["Connected"] == false) ||
-                    (devicePath.startsWith("${signal.path}/") && signal.interfaceName == ADAPTER && signal.values["Powered"] == false)
-                ) {
-                    emit(disconnected("蓝牙设备已断开"))
+                val linkLost = when (signal.interfaceName) {
+                    DEVICE, LE_BEARER -> signal.values["Connected"] == false
+                    ADAPTER -> signal.values["Powered"] == false
+                    else -> false
                 }
+                if (linkLost) emit(disconnected("蓝牙控制连接已断开"))
                 if (signal.interfaceName == CHARACTERISTIC) {
                     val instance = synchronized(lock) {
                         if (signal.path in routed) characteristics.entries.firstOrNull { it.value == signal.path }?.key else null
@@ -267,6 +268,7 @@ private fun BluezSignal.affectsLink(devicePath: String): Boolean = when (this) {
     is BluezSignal.Changed -> when (interfaceName) {
         ADAPTER -> devicePath.startsWith("$path/")
         DEVICE -> path == devicePath && ("Connected" in values || "ServicesResolved" in values)
+        LE_BEARER -> path == devicePath && "Connected" in values
         CHARACTERISTIC -> path.startsWith("$devicePath/") && "Value" in values
         else -> false
     }

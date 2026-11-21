@@ -16,6 +16,7 @@ kotlin {
     sourceSets {
         androidMain.dependencies {
             implementation(libs.activity.compose)
+            implementation(libs.lifecycle.viewmodel.compose)
         }
         commonMain {
             kotlin.srcDir(generateAppVersion)

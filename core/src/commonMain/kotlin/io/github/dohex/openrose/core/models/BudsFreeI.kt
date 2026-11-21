@@ -9,14 +9,24 @@ import io.github.dohex.openrose.core.TouchControlCapabilities
 import io.github.dohex.openrose.core.protocol.BatteryLayout
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.GattProfile
-import io.github.dohex.openrose.core.protocol.ProtocolFamily
 import io.github.dohex.openrose.core.protocol.RsCommonInit
 import kotlinx.collections.immutable.persistentSetOf
 
 internal val budsFreeI = ModelSpec(
     displayName = "BudsFree i",
     shortLabel = "BudsFree i",
-    family = ProtocolFamily.RS_COMMON,
+    protocol = ModelProtocol.RsCommon(
+        initialization = RsCommonInit.BUDS_FREE,
+        // RoseLink 的触控动作表从 0 起编号且跳过语音助手 4：音量加/减为 5/6。
+        touchActions = mapOf(
+            "none" to 0,
+            "play_pause" to 1,
+            "previous_track" to 2,
+            "next_track" to 3,
+            "volume_up" to 5,
+            "volume_down" to 6,
+        ),
+    ),
     advertisementPrefixes = listOf("12cc3e4c"),
     nameBrand = "budsfree",
     nameModelNumber = "i",
@@ -32,16 +42,6 @@ internal val budsFreeI = ModelSpec(
     advertisedClassicAddress = { rsCommonClassicAddress(it, 16) },
     batteryLayout = BatteryLayout.EARBUDS_ONLY,
     equalizerPresetLabels = mapOf("pop" to "POP", "hifi" to "HIFI", "rock" to "ROCK"),
-    rsCommonInit = RsCommonInit.BUDS_FREE,
-    // RoseLink 的触控动作表从 0 起编号且跳过语音助手 4：音量加/减为 5/6。
-    rsCommonTouchActions = mapOf(
-        "none" to 0,
-        "play_pause" to 1,
-        "previous_track" to 2,
-        "next_track" to 3,
-        "volume_up" to 5,
-        "volume_down" to 6,
-    ),
     capabilities = {
         DeviceCapabilities(
             readableFields = rsReadings(

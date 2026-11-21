@@ -3,6 +3,7 @@ package io.github.dohex.openrose.core.protocol
 import io.github.dohex.openrose.core.DeviceSetting
 import io.github.dohex.openrose.core.TouchControlCapabilities
 import io.github.dohex.openrose.core.TouchSlot
+import io.github.dohex.openrose.core.models.ModelProtocol
 import kotlinx.collections.immutable.PersistentList
 import kotlinx.collections.immutable.PersistentMap
 import kotlinx.collections.immutable.toPersistentList
@@ -155,11 +156,11 @@ interface ProtocolCodec {
     fun reset()
 }
 
-fun createProtocolCodec(profile: ModelProfile): ProtocolCodec = when (profile.family) {
-    ProtocolFamily.ZT -> ZtCodec(profile)
-    ProtocolFamily.RS_COMMON_V2 -> RsCommonV2Codec(profile)
-    ProtocolFamily.F8 -> F8Codec(profile)
-    ProtocolFamily.RS_COMMON -> RsCommonCodec(profile)
+fun createProtocolCodec(profile: ModelProfile): ProtocolCodec = when (val protocol = profile.spec.protocol) {
+    is ModelProtocol.Zt -> ZtCodec(profile, protocol)
+    is ModelProtocol.RsCommonV2 -> RsCommonV2Codec(profile, protocol)
+    is ModelProtocol.F8 -> F8Codec(profile, protocol)
+    is ModelProtocol.RsCommon -> RsCommonCodec(profile, protocol)
 }
 
 internal fun ByteArray.hex(): String = joinToString("") { it.u().toString(16).padStart(2, '0') }

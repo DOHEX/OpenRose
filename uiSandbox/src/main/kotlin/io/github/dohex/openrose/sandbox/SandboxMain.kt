@@ -53,6 +53,7 @@ import io.github.dohex.openrose.ui.OpenRoseApp
 import io.github.dohex.openrose.ui.PrimaryDeviceSelection
 import io.github.dohex.openrose.ui.TrayPanel
 import io.github.dohex.openrose.ui.UiSettings
+import io.github.dohex.openrose.ui.configurationLabel
 import io.github.dohex.openrose.ui.interfaceBackgroundColor
 
 /** Preview sizes in dp: a phone, the narrow layout the UI tests use, a tablet, and the desktop window's default. */
@@ -98,7 +99,7 @@ fun main(args: Array<String>) = nucleusApplication(args = args, backend = Nucleu
         SandboxControls(model, scenario, uiSettings, controlColors, preview, trayShown) { trayShown = it }
     }
     SandboxWindow(
-        title = "预览 · ${scenario.profile.sandboxLabel} · ${scenario.platformName} · ${uiSettings.interfaceStyle.label}",
+        title = "预览 · ${scenario.profile.configurationLabel} · ${scenario.platformName} · ${uiSettings.interfaceStyle.label}",
         state = preview,
         dark = dark,
         background = appBackground,

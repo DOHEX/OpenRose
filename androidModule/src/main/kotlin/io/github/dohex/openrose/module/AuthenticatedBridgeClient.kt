@@ -17,8 +17,6 @@ import io.github.dohex.openrose.bridge.BridgeBundles
 import io.github.dohex.openrose.bridge.BridgeTarget
 import io.github.dohex.openrose.bridge.IControlBridge
 import io.github.dohex.openrose.bridge.IControlObserver
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
 
 /**
  * Consumer of the module host's single control session, running in a target process.
@@ -42,7 +40,7 @@ internal class AuthenticatedBridgeClient(
     private val onClear: () -> Unit,
     private val onBonded: (Set<String>) -> Unit,
     private val onAuthenticated: (AuthenticatedBridgeClient) -> Unit = {},
-    private val onClosing: () -> Boolean = { true },
+    private val onClosing: () -> Unit = {},
     private val resolution: String = BridgeWire.RESOLUTION_MATCHED,
 ) {
     private val context = context.applicationContext ?: context
@@ -56,8 +54,6 @@ internal class AuthenticatedBridgeClient(
     @Volatile private var closing = false
 
     @Volatile private var closed = false
-
-    @Volatile private var closeResult: Boolean? = null
 
     /** Host incarnation from `open`; diagnostics only, never sent back. */
     @Volatile private var hostIncarnation: String? = null
@@ -558,88 +554,44 @@ internal class AuthenticatedBridgeClient(
         }
     }
 
-    fun close(): Boolean {
+    /** A timeout leaves shutdown in progress. A later reload observes the reader's actual termination. */
+    fun close(timeoutMillis: Long = CLOSE_TIMEOUT_MILLIS): Boolean {
         synchronized(lock) {
-            closeResult?.let { return it }
-            if (closing) return false
-            closing = true
-        }
-
-        val completed = CountDownLatch(1)
-        val cleanupSucceeded = booleanArrayOf(false)
-        val cleanup = Runnable {
-            try {
-                cleanupSucceeded[0] = cleanupOnReaderThread()
-            } catch (failure: Throwable) {
-                Log.e(TAG, "bridge_close_failed target=$target", failure)
-                cleanupSucceeded[0] = false
-            } finally {
-                closed = true
-                readerThread.quitSafely()
-                completed.countDown()
+            if (!closing && !closed) {
+                closing = true
+                if (!handler.post(::finishClose)) closing = false
             }
         }
-
-        if (Looper.myLooper() == handler.looper) {
-            cleanup.run()
-            // The reader cannot join itself, so report that shutdown was not fully confirmed.
-            closeResult = false
-            return false
+        if (Looper.myLooper() != handler.looper) {
+            try {
+                readerThread.join(timeoutMillis)
+            } catch (interrupted: InterruptedException) {
+                Thread.currentThread().interrupt()
+                return false
+            }
         }
-
-        val posted = handler.post(cleanup)
-        if (!posted) {
-            readerThread.quitSafely()
-            closeResult = false
-            return false
-        }
-
-        val deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(CLOSE_TIMEOUT_MILLIS)
-        val finished = try {
-            completed.await(CLOSE_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)
-        } catch (failure: InterruptedException) {
-            Thread.currentThread().interrupt()
-            false
-        }
-        if (!finished) {
-            closeResult = false
-            return false
-        }
-
-        val remainingMillis = TimeUnit.NANOSECONDS.toMillis((deadline - System.nanoTime()).coerceAtLeast(0L))
-        try {
-            if (remainingMillis > 0L) readerThread.join(remainingMillis)
-        } catch (failure: InterruptedException) {
-            Thread.currentThread().interrupt()
-            closeResult = false
-            return false
-        }
-        val result = cleanupSucceeded[0] && !readerThread.isAlive
-        closeResult = result
-        return result
+        return closed && !readerThread.isAlive
     }
 
-    private fun cleanupOnReaderThread(): Boolean {
-        var clean = true
-        handler.removeCallbacks(rebindRunnable)
-        currentBinding?.pollRunnable?.let(handler::removeCallbacks)
-        clearSnapshot()
-        if (!runCatching(onClosing).onFailure {
-                clean = false
-                Log.e(TAG, "bridge_feature_cleanup_failed target=$target", it)
-            }.getOrDefault(false)
-        ) {
-            clean = false
+    private fun finishClose() {
+        runCatching {
+            handler.removeCallbacks(rebindRunnable)
+            val binding = currentBinding
+            binding?.pollRunnable?.let(handler::removeCallbacks)
+            clearSnapshot()
+            onClosing()
+            closeLease(binding?.bridge ?: targetBridge)
+            if (binding != null) {
+                currentBinding = null
+                unbindQuietly(binding)
+            }
+            started = false
+            closed = true
+            readerThread.quitSafely()
+        }.onFailure { failure ->
+            Log.e(TAG, "bridge_close_failed target=$target", failure)
+            synchronized(lock) { closing = false }
         }
-
-        val binding = currentBinding
-        closeLease(binding?.bridge ?: targetBridge)
-        if (binding != null) {
-            currentBinding = null
-            unbindQuietly(binding)
-        }
-        started = false
-        return clean
     }
 
     /**

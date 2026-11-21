@@ -8,36 +8,27 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import kotlinx.coroutines.CancellationException
+import androidx.compose.runtime.staticCompositionLocalOf
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 
-/** Operations from a local, authorised UI to the owner of the LAN endpoint. */
-fun interface CirculationClient {
-    suspend fun call(fields: Map<String, String>): Map<String, String>
-}
+/** Only UI polls follow visibility. Bluetooth ownership and the LAN listener run independently. */
+val LocalCirculationVisible = staticCompositionLocalOf { true }
 
-private const val REFRESH_MILLIS = 2_000L
-
-@Suppress("TooGenericExceptionCaught") // The platform boundary can fail via sockets, local Binder, or an expired pairing.
-internal suspend fun CirculationClient.submit(vararg fields: Pair<String, String>): Map<String, String> = try {
-    call(mapOf(*fields))
-} catch (cancelled: CancellationException) {
-    throw cancelled
-} catch (failure: Exception) {
-    mapOf("error" to (failure.localizedMessage ?: "互联服务不可用"))
-}
+internal const val VISIBLE_REFRESH_MILLIS = 2_000L
 
 @Composable
-internal fun rememberPeerList(client: CirculationClient): Map<String, String> {
-    var peers by remember(client) { mutableStateOf(emptyMap<String, String>()) }
-    LaunchedEffect(client) {
-        while (true) {
-            peers = client.submit("op" to "list")
-            delay(REFRESH_MILLIS)
+internal fun rememberPeerList(client: CirculationClient, interval: Long = VISIBLE_REFRESH_MILLIS, refresh: Int = 0): PeerDirectory {
+    var peers by remember(client) { mutableStateOf(PeerDirectory()) }
+    if (LocalCirculationVisible.current) {
+        LaunchedEffect(client, interval, refresh) {
+            while (true) {
+                peers = client.directory()
+                delay(interval)
+            }
         }
     }
     return peers
@@ -45,20 +36,20 @@ internal fun rememberPeerList(client: CirculationClient): Map<String, String> {
 
 data class RemoteHeadset(
     val name: String,
-    val reading: Map<String, String>,
+    val reading: RemoteReading,
     val busy: Boolean,
     val feedback: String?,
     val selectMode: (String) -> Unit,
 ) {
-    val deviceName: String? get() = reading["deviceName"]
+    val deviceName: String? get() = reading.deviceName
     val sourceLabel: String get() = "音源设备 · $name"
-    val statusLabel: String? get() = when {
-        reading["status"] == "initializing" -> "已可调降噪，正在读取其他设置"
-        reading["status"] == "recovering" -> "耳机已接入，控制暂不可用"
-        deviceName != null -> null
-        "error" in reading -> "远端不可用"
-        reading["status"] == "idle" -> "未持有耳机"
-        else -> "正在读取"
+    val statusLabel: String? get() = when (reading.status) {
+        RemoteControlStatus.INITIALIZING -> "已可调降噪，正在读取其他设置"
+        RemoteControlStatus.RECOVERING -> "耳机已接入，控制暂不可用"
+        RemoteControlStatus.READY -> null
+        RemoteControlStatus.UNAVAILABLE -> "远端不可用"
+        RemoteControlStatus.IDLE -> "未持有耳机"
+        RemoteControlStatus.WAITING -> "正在读取"
     }
 }
 
@@ -68,45 +59,57 @@ fun RemoteHeadsets(client: CirculationClient) {
 }
 
 @Composable
-fun rememberRemoteHeadsets(client: CirculationClient): List<RemoteHeadset> {
-    val peers = rememberPeerList(client)
-    return peers.filterKeys { it.startsWith("paired.") }.map { (property, name) ->
-        val id = property.substringAfter('.')
-        key(client, id) { rememberRemoteHeadset(client, id, name, "near.$id" in peers) }
+fun rememberRemoteHeadsets(
+    client: CirculationClient,
+    interval: Long = VISIBLE_REFRESH_MILLIS,
+    refresh: Int = 0,
+): List<RemoteHeadset> {
+    val peers = rememberPeerList(client, interval, refresh)
+    return peers.paired.map { (id, name) ->
+        key(client, id) { rememberRemoteHeadset(client, id, name, id in peers.nearby, interval, refresh) }
     }
 }
 
 @Composable
-private fun rememberRemoteHeadset(client: CirculationClient, id: String, name: String, nearby: Boolean): RemoteHeadset {
-    if (!nearby) return RemoteHeadset(name, mapOf("error" to "远端不可用"), false, null) {}
+private fun rememberRemoteHeadset(
+    client: CirculationClient,
+    id: String,
+    name: String,
+    nearby: Boolean,
+    interval: Long,
+    refresh: Int,
+): RemoteHeadset {
+    if (!nearby) return RemoteHeadset(name, RemoteReading(RemoteControlStatus.UNAVAILABLE), false, null) {}
     val state = remember(client, id) { RemoteHeadsetState(client, id) }
     val scope = rememberCoroutineScope()
-    LaunchedEffect(state, state.revision) { state.poll() }
+    if (LocalCirculationVisible.current) {
+        LaunchedEffect(state, state.revision, interval, refresh) { state.poll(interval) }
+    }
     return state.presentation(name, scope)
 }
 
 private class RemoteHeadsetState(private val client: CirculationClient, private val id: String) {
-    private var reading by mutableStateOf(emptyMap<String, String>())
+    private var reading by mutableStateOf(RemoteReading())
     private var feedback by mutableStateOf<Pair<String, String>?>(null)
     private var pending by mutableStateOf<String?>(null)
     var revision by mutableStateOf(0)
         private set
 
-    suspend fun poll() {
+    suspend fun poll(interval: Long) {
         val initialRevision = revision
         while (revision == initialRevision) {
-            val reply = client.submit("op" to "read", "peer" to id)
+            val reply = client.read(id)
             currentCoroutineContext().ensureActive()
             if (revision != initialRevision) return
             reading = reply
-            if (reply["session"] != null && reply["session"] != feedback?.first) feedback = null
-            delay(REFRESH_MILLIS)
+            if (reply.session != null && reply.session != feedback?.first) feedback = null
+            delay(interval)
         }
     }
 
     fun presentation(name: String, scope: CoroutineScope): RemoteHeadset {
-        val session = reading["session"]
-        val device = reading["device"]
+        val session = reading.session
+        val device = reading.device
         val busy = session != null && session == pending
         val message = when {
             busy -> "等待耳机确认"
@@ -115,7 +118,7 @@ private class RemoteHeadsetState(private val client: CirculationClient, private 
         }
         return RemoteHeadset(name, reading, busy, message) { mode ->
             if (pending != session && session != null && device != null) {
-                if (session == reading["session"]) {
+                if (session == reading.session) {
                     pending = session
                     feedback = null
                     scope.launch { select(session, device, mode) }
@@ -125,23 +128,18 @@ private class RemoteHeadsetState(private val client: CirculationClient, private 
     }
 
     private suspend fun select(session: String, device: String, mode: String) {
-        val reply = client.submit("op" to "noise", "peer" to id, "device" to device, "session" to session, "mode" to mode)
+        val reply = client.setNoise(id, device, session, mode)
         currentCoroutineContext().ensureActive()
         if (pending != session) return
         pending = null
-        feedback = reply["error"]?.let { session to "操作未确认 · $it" }
-        if (reading["session"] == session && reply["session"] == session) reading = reply
+        feedback = reply.error?.let { session to "操作未确认 · $it" }
+        if (reading.session == session && reply.session == session) reading = reply
         revision++
     }
 }
 
-fun remoteBatteryText(reading: Map<String, String>): String {
-    val parts = listOf("左耳" to "left", "右耳" to "right", "充电盒" to "case")
-    return parts.joinToString(" · ") { (label, field) ->
-        val battery = reading[field]?.toIntOrNull()?.takeIf { it in 0..100 }
-        "$label ${battery?.let { "$it%" } ?: "未知"}"
-    }
-}
+fun remoteBatteryText(reading: RemoteReading): String = listOf("左耳" to reading.left, "右耳" to reading.right, "充电盒" to reading.case)
+    .joinToString(" · ") { (label, percent) -> "$label ${percent?.let { "$it%" } ?: "未知"}" }
 
 @Composable
 fun RemoteHeadsetCard(headset: RemoteHeadset) {
@@ -155,9 +153,9 @@ fun RemoteHeadsetCard(headset: RemoteHeadset) {
             AppText(headset.sourceLabel, role = AppTextRole.Summary)
             headset.statusLabel?.let { AppText(it, role = AppTextRole.Summary) }
             AppText(remoteBatteryText(reading))
-            val mode = reading["mode"]
+            val mode = reading.mode
             AppText("降噪模式 · ${mode?.let(::noiseModeLabel) ?: "未知"}")
-            val modes = reading["modes"].orEmpty().split(',').filter(String::isNotEmpty).sortedBy(::noiseModeOrder)
+            val modes = reading.modes.sortedBy(::noiseModeOrder)
             if (modes.isNotEmpty()) {
                 RemoteNoiseModeChoices(modes, mode, !headset.busy, headset.selectMode)
             }

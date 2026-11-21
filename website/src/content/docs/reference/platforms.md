@@ -20,4 +20,4 @@ description: OpenRose 在 Android、HyperOS、Linux 与 Windows 上的实现与�
 | 控制方式（普通 / 模块） | ✓ | — | — |
 | HyperOS 系统集成 | 需要 Xposed 框架 | — | — |
 
-平台说明见 [Linux 桌面版](../../guides/linux-desktop/) 和 [HyperOS 系统集成](../../guides/hyperos-integration/)。
+平台说明见 [Windows 桌面版](../../guides/windows-desktop/)、[Linux 桌面版](../../guides/linux-desktop/) 和 [HyperOS 系统集成](../../guides/hyperos-integration/)。

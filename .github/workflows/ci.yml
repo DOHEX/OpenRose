@@ -105,7 +105,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install --yes libgtk-3-0t64 libegl1 libgl1 libfontconfig1 rpm libarchive-tools
 
-      # Tests run once, on Linux; each host packages only the formats it supports.
+      # Shared JVM and Android checks run on Linux. Windows also tests the native WinRT helper.
       - name: Run checks and build Android package
         if: runner.os == 'Linux'
         env:
@@ -120,9 +120,28 @@ jobs:
         if: runner.os == 'Linux'
         run: ./gradlew --no-daemon --stacktrace :desktopApp:packageDistributionForCurrentOS
 
+      - name: Test the native WinRT helper
+        if: runner.os == 'Windows'
+        run: cargo test --locked --manifest-path transportWindows/native/Cargo.toml
+
       - name: Build Windows installer
         if: runner.os == 'Windows'
         run: ./gradlew --no-daemon --stacktrace :desktopApp:packageDistributionForCurrentOS
+
+      - name: Determine whether this PR changes the Android release package
+        id: android-release-check
+        if: github.event_name == 'pull_request' && runner.os == 'Linux'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          git diff --name-only "$BASE_SHA" HEAD -- androidApp androidPlatform androidIntegration androidIntegrationUI androidModule \
+            sharedUI core circulation build-logic gradle build.gradle.kts settings.gradle.kts gradle.properties .github/workflows/ci.yml \
+            > "$RUNNER_TEMP/android-inputs.txt"
+          if [[ -s "$RUNNER_TEMP/android-inputs.txt" ]]; then echo 'required=true' >> "$GITHUB_OUTPUT"; fi
+
+      - name: Build unsigned release for packaging checks
+        if: steps.android-release-check.outputs.required == 'true'
+        run: ./gradlew --no-daemon --stacktrace :androidApp:assembleRelease
 
       - name: Build signed Android release
         if: env.RELEASE_TAG != '' && runner.os == 'Linux'
@@ -146,11 +165,13 @@ jobs:
 
       # R8 and the resource shrinker cannot see reflective or by-name use; fail if they dropped any of it.
       - name: Check what R8 must keep
-        if: env.RELEASE_TAG != '' && runner.os == 'Linux'
+        if: runner.os == 'Linux' && (env.RELEASE_TAG != '' || steps.android-release-check.outputs.required == 'true')
         env:
           BUILD_TOOLS: ${{ steps.android-sdk.outputs.build-tools }}
         run: |
-          apk=androidApp/build/outputs/apk/release/androidApp-release.apk
+          packages=(androidApp/build/outputs/apk/release/*.apk)
+          [[ ${#packages[@]} -eq 1 && -f "${packages[0]}" ]]
+          apk="${packages[0]}"
           tools="$ANDROID_HOME/build-tools/$BUILD_TOOLS"
           entry=$(unzip -p "$apk" META-INF/xposed/java_init.list)
           unzip -q -o "$apk" 'classes*.dex' -d "$RUNNER_TEMP/dex"

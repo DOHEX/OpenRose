@@ -54,15 +54,17 @@ class QuickPanelActivity : ComponentActivity() {
                     },
                 )
             }
-            QuickPanel(
-                model = owner.model,
-                selection = remember { PrimaryDeviceSelection() },
-                dynamicColor = integration.settings.dynamicColor &&
-                    integration.platform.dynamicColorApplicability == PlatformApplicability.APPLICABLE,
-                onOpenApp = ::openApp,
-                onDismiss = ::finish,
-                circulation = owner.circulation.takeIf { integration.owner.selected == ControlWay.MODULE },
-            )
+            CirculationVisibility {
+                QuickPanel(
+                    model = owner.model,
+                    selection = remember { PrimaryDeviceSelection() },
+                    dynamicColor = integration.settings.dynamicColor &&
+                        integration.platform.dynamicColorApplicability == PlatformApplicability.APPLICABLE,
+                    onOpenApp = ::openApp,
+                    onDismiss = ::finish,
+                    circulation = owner.circulation.takeIf { integration.owner.selected == ControlWay.MODULE },
+                )
+            }
         }
     }
 

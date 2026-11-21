@@ -269,7 +269,11 @@ class ModuleControlHost(
                     HostFrame(
                         view.generation,
                         active.holder,
-                        HostPlatformFacts(view.state.platform.permission, view.state.platform.transport),
+                        HostPlatformFacts(
+                            view.state.platform.permission,
+                            view.state.platform.transport,
+                            view.state.platform.scanPermission,
+                        ),
                         view.state,
                         view.presentation,
                         reported,

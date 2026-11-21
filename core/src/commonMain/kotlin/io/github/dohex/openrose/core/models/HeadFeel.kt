@@ -14,7 +14,6 @@ import io.github.dohex.openrose.core.protocol.BatteryLayout
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.dohex.openrose.core.protocol.GattProfile
-import io.github.dohex.openrose.core.protocol.ProtocolFamily
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.persistentMapOf
 import kotlinx.collections.immutable.persistentSetOf
@@ -24,7 +23,15 @@ import kotlinx.collections.immutable.toPersistentSet
 internal val headFeel = ModelSpec(
     displayName = "HeadFeel",
     shortLabel = "HeadFeel",
-    family = ProtocolFamily.ZT,
+    protocol = ModelProtocol.Zt(
+        initKeys = listOf(
+            "0101", "0602", "0201", "0202", "0203", "0603", "0801", "0d01", "0401", "0a01",
+            "0103", "0801", "0802", "0803", "0604", "0e03", "0605",
+        ),
+        independentMultipoint = true,
+        levelWriteOffset = 1,
+        promptVolumeDirect = true,
+    ),
     advertisementPrefixes = listOf("525300020002"),
     nameBrand = "headfeel",
     nameBrandAliases = listOf("headfree"),
@@ -39,14 +46,6 @@ internal val headFeel = ModelSpec(
     advertisedClassicAddress = null,
     batteryLayout = BatteryLayout.SINGLE_UNIT,
     equalizerPresetLabels = emptyMap(),
-    ztInitKeys = listOf(
-        "0101", "0602", "0201", "0202", "0203", "0603", "0801", "0d01", "0401", "0a01",
-        "0103", "0801", "0802", "0803", "0604", "0e03", "0605",
-    ),
-    ztIndependentMultipoint = true,
-    ztLevelWriteOffset = 1,
-    ztPromptVolumeDirect = true,
-    ztFindStopReadOpcode = true,
     capabilities = ::headFeelCapabilities,
 )
 

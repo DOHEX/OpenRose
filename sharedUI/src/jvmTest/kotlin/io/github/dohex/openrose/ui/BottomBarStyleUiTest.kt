@@ -5,6 +5,7 @@ package io.github.dohex.openrose.ui
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -191,6 +192,7 @@ class BottomBarStyleUiTest {
             withMainShellHarness(style, BottomBarStyle.FLOATING) { floating ->
                 floating.render()
                 val clearance = assertNotNull(floating.clearance(), "Trailing clearance must be rendered in $style floating mode")
+                assertNull(clearance.config.getOrNull(SemanticsProperties.ContentDescription))
                 val bar = floating.nodes().first { node -> node.children.any { it.role() == Role.Tab } }
                 assertTrue(
                     clearance.size.height >= bar.size.height,
@@ -325,8 +327,8 @@ class BottomBarStyleUiTest {
         setContent {
             ProvideInterfaceStyle(style, dark = false) {
                 val pagerState = rememberMainTabsPagerState()
-                val feedback: @Composable (AppPage) -> Unit = {
-                    if (state != null) SettingFeedback(state, state.device) {}
+                val feedback: @Composable (AppPage, Modifier) -> Unit = { _, modifier ->
+                    if (state != null) SettingFeedback(state, state.device, modifier = modifier) {}
                 }
                 when (style) {
                     InterfaceStyle.MIUIX -> MiuixMainShell(
@@ -363,7 +365,7 @@ class BottomBarStyleUiTest {
     private fun OpenRoseUiTestHarness.tabs(): List<SemanticsNode> = nodes().filter { it.role() == Role.Tab }
 
     private fun OpenRoseUiTestHarness.clearance(): SemanticsNode? = nodes().firstOrNull { node ->
-        node.config.getOrNull(SemanticsProperties.ContentDescription).orEmpty().contains("ShellBottomClearance")
+        node.config.getOrNull(SemanticsProperties.TestTag) == "ShellBottomClearance"
     }
 
     private fun List<SemanticsNode>.tabFor(label: String): SemanticsNode = first { tab ->

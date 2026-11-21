@@ -3,9 +3,11 @@ package io.github.dohex.openrose.desktop
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -33,6 +35,7 @@ import io.github.dohex.openrose.core.DeviceSetting
 import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.dohex.openrose.ui.AppLogo
 import io.github.dohex.openrose.ui.CirculationClient
+import io.github.dohex.openrose.ui.LocalCirculationVisible
 import io.github.dohex.openrose.ui.PrimaryDeviceSelection
 import io.github.dohex.openrose.ui.RemoteHeadset
 import io.github.dohex.openrose.ui.TrayIcons
@@ -99,14 +102,18 @@ internal fun NucleusApplicationScope.DesktopTray(
     val state by model.state.collectAsState()
     val summary = traySummary(state, selection)
     val sessionId = state.noiseModeSession?.sessionId
-    val peers = rememberRemoteHeadsets(circulation)
+    val trayState = rememberTrayAppState(initialWindowSize = trayPanelSize)
+    val anchoredOpen by trayState.isVisible.collectAsState()
+    var panelOpen by remember { mutableStateOf(false) }
+    var menuRefresh by remember { mutableIntStateOf(0) }
+    val peers = rememberRemoteHeadsets(circulation, if (panelOpen || anchoredOpen) 2_000L else 30_000L, menuRefresh)
     val remoteSource = peers.firstOrNull { it.deviceName != null }
     val icon = if (summary.connected || remoteSource != null) TrayIcons.connected else TrayIcons.disconnected
     // The Linux tray fixes the item's Title from the first tooltip it sees, so that one names the app.
     var started by remember { mutableStateOf(false) }
     val tooltip = when {
         !started -> "OpenRose"
-        !summary.connected && remoteSource != null -> "${remoteSource.reading["deviceName"]} · ${remoteSource.name}"
+        !summary.connected && remoteSource != null -> "${remoteSource.deviceName} · ${remoteSource.name}"
         else -> listOfNotNull(summary.title, summary.battery).joinToString(" · ")
     }
 
@@ -146,7 +153,6 @@ internal fun NucleusApplicationScope.DesktopTray(
 
     when (host) {
         TrayPanelHost.ANCHORED_POPUP -> {
-            val trayState = rememberTrayAppState(initialWindowSize = trayPanelSize)
             val menu = entries { trayState.show() }
             TrayApp(
                 icon = icon,
@@ -156,26 +162,28 @@ internal fun NucleusApplicationScope.DesktopTray(
                 windowsTitle = "OpenRose",
                 menu = { render(menu) },
             ) {
-                TrayPanel(
-                    model,
-                    selection,
-                    onOpenApp = {
-                        trayState.hide()
-                        openApp(it)
-                    },
-                    circulation = circulation,
-                    remoteHeadsets = peers,
-                    onContentHeight = { trayState.setWindowSize(DpSize(trayPanelSize.width, it)) },
-                )
+                CompositionLocalProvider(LocalCirculationVisible provides anchoredOpen) {
+                    TrayPanel(
+                        model,
+                        selection,
+                        onOpenApp = {
+                            trayState.hide()
+                            openApp(it)
+                        },
+                        circulation = circulation,
+                        remoteHeadsets = peers,
+                        onContentHeight = { trayState.setWindowSize(DpSize(trayPanelSize.width, it)) },
+                    )
+                }
             }
         }
 
         TrayPanelHost.WINDOW -> {
-            var panelOpen by remember { mutableStateOf(false) }
             val menu = entries { panelOpen = true }
             Tray(
                 icon = icon,
                 tooltip = tooltip,
+                onMenuOpened = { uiScope.launch { menuRefresh++ } },
                 primaryAction = {
                     uiScope.launch { panelOpen = !panelOpen }
                 },
@@ -293,8 +301,8 @@ private fun remoteMenuEntries(peers: List<RemoteHeadset>, uiScope: CoroutineScop
             add(TrayMenuEntry.Label("$device · ${peer.sourceLabel}"))
             peer.statusLabel?.let { add(TrayMenuEntry.Label(it)) }
             add(TrayMenuEntry.Label(remoteBatteryText(reading)))
-            reading["modes"]?.split(',')?.filter(String::isNotBlank)?.forEach { mode ->
-                val entry = TrayMenuEntry.NoiseMode(mode, noiseModeLabel(mode), mode == reading["mode"], !peer.busy) {
+            reading.modes.forEach { mode ->
+                val entry = TrayMenuEntry.NoiseMode(mode, noiseModeLabel(mode), mode == reading.mode, !peer.busy) {
                     uiScope.launch { peer.selectMode(mode) }
                 }
                 add(entry)

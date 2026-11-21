@@ -15,7 +15,7 @@ OpenRose 是 ROSE / ROSESELSA（弱水时砂）耳机的第三方控制客户端
 
 | 耳机 | 连接 | 状态 |
 | --- | --- | --- |
-| EarFree i5（EarFeel i5） | BLE | 真机读取已验证，Android 上的设置写入未验证 |
+| EarFree i5（EarFeel i5） | BLE | 真机读取已验证。Android 普通与模块控制均已验证通透、抗风噪写入和设备回读；其他设置写入待验证 |
 | EarFeel i7 | BLE 或 SPP | 仅有离线测试，未经真机验证 |
 | BudsFeel MK2 | BLE 或 SPP | 未经真机验证 |
 | OpenFeel MK2 | BLE 或 SPP | 未经真机验证 |
@@ -50,7 +50,7 @@ OpenRose 已接入 RoseLink 3.8.6 的全部 48 个蓝牙耳机配置，并保留
 - **两种界面风格**：Miuix 与 Material 3 Expressive，切换时不断开耳机
 - **后台控制**：关闭界面后保持控制连接，进程被回收或重启后自动恢复，无需 root
 - **HyperOS 系统集成**：经 Xposed 模块接入超级岛、焦点通知和融合设备中心，可由系统蓝牙进程直接控制耳机
-- **本地运行**：通过本地蓝牙直连耳机，不需要账号，Android 应用没有网络权限
+- **本地运行**：本机通过蓝牙控制耳机，无需账号。流转配对后，手机模块宿主和电脑通过局域网交换耳机状态与操作
 
 完整说明见[功能一览](https://dohex.github.io/OpenRose/reference/features/)。
 
@@ -68,6 +68,7 @@ OpenRose 已接入 RoseLink 3.8.6 的全部 48 个蓝牙耳机配置，并保留
 
 - [后台控制](https://dohex.github.io/OpenRose/guides/background-control/)
 - [HyperOS 系统集成](https://dohex.github.io/OpenRose/guides/hyperos-integration/)：前提条件、控制方式、耳机流转与已知限制
+- [Windows 桌面版](https://dohex.github.io/OpenRose/guides/windows-desktop/)：MSI 安装与系统蓝牙配对
 - [Linux 桌面版](https://dohex.github.io/OpenRose/guides/linux-desktop/)：安装包、托盘与窗口规则
 - [常见问题](https://dohex.github.io/OpenRose/guides/troubleshooting/)
 - [权限与隐私](https://dohex.github.io/OpenRose/reference/permissions/)

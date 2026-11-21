@@ -33,6 +33,38 @@ import kotlin.test.assertTrue
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class OwnerHandoffTest {
     @Test
+    fun fusionEntryWaitsForTheFirstModuleFrameAndConnectsTheChosenHeadphones() = runTest {
+        val playing = rosePair("playing")
+        val chosen = rosePair("chosen").copy(classicAddress = "11:22:33:44:55:77")
+        val rig = OwnerRig(this, playing, OwnerRecord(ControlWay.MODULE), listOf(playing, chosen))
+        rig.hostTransport.audioDevice.emit(playing.deviceId)
+        rig.bootHost()
+        runCurrent()
+        rig.link.openMillis = 300
+        val runtime = rig.newRuntime()
+        val request = async { runtime.connectFromSystem(chosen.deviceId) }
+        runCurrent()
+        assertFalse(request.isCompleted)
+
+        assertEquals(OperationResult.Success, request.await())
+        runCurrent()
+        assertEquals(chosen.deviceId, runtime.state.value.readySession?.deviceId)
+    }
+
+    @Test
+    fun scanPermissionDoesNotBlockPairedControl() = runTest {
+        val rig = OwnerRig(this)
+        val runtime = rig.newRuntime()
+        runtime.updatePlatformState(
+            PlatformState(PermissionState.NOT_REQUIRED, TransportAvailability.Available, scanPermission = PermissionState.DENIED),
+        )
+        runCurrent()
+        val denied = assertIs<OperationResult.Failure>(runtime.startScan())
+        assertEquals(ControlErrorCode.PERMISSION_REQUIRED, denied.error.code)
+        assertEquals(OperationResult.Success, runtime.connect(rig.earphones.deviceId))
+    }
+
+    @Test
     fun ordinaryToModuleReleasesTheOrdinaryConnectionBeforeTheHostConnects() = runTest {
         val rig = OwnerRig(this)
         rig.bootHost()
@@ -261,6 +293,48 @@ class OwnerHandoffTest {
         runCurrent()
         assertEquals(ControlWay.ORDINARY, ordinary.integration.value.owner.selected)
         assertEquals(OwnerReadiness.Ready, ordinary.integration.value.owner.readiness)
+    }
+
+    @Test
+    fun recoveringAnInterruptedPublicationKeepsTheNextHostFromReacquiring() = runTest {
+        val rig = OwnerRig(this, initial = OwnerRecord(ControlWay.MODULE))
+        val device = rig.earphones.deviceId
+        rig.hostTransport.audioDevice.emit(device)
+        rig.appTransport.audioDevice.emit(device)
+        rig.bootHost()
+        runCurrent()
+        assertEquals(listOf("module:open"), rig.headset.events)
+
+        // The application was killed between the local commit and publication to the framework.
+        val generation = assertIs<HostStatus.Active>(rig.host.status.value).generation
+        rig.store.record = OwnerRecord(ControlWay.ORDINARY, PendingModuleRelease("switch", generation))
+        rig.store.publicationUnavailable = true
+        val runtime = rig.newRuntime()
+        advanceTimeBy(rig.clientTiming.retryMillis * 2)
+        runCurrent()
+        assertEquals(ControlWay.MODULE, rig.store.hostSelection)
+        val blocked = assertIs<OwnerReadiness.SwitchBlocked>(runtime.integration.value.owner.readiness)
+        assertEquals(OwnerFailureStage.SELECTION_PERSISTENCE, blocked.stage)
+        assertNotNull(rig.store.record.moduleRelease)
+        assertEquals(0, rig.headset.opens("ordinary"))
+
+        // A refused change back to module control must not cancel recovery of the saved choice.
+        rig.store.failSaves = true
+        assertIs<HandoffOutcome.Blocked>(runtime.selectControlWay(ControlWay.MODULE))
+        rig.store.failSaves = false
+        rig.store.publicationUnavailable = false
+        advanceTimeBy(rig.clientTiming.retryMillis)
+        runCurrent()
+        assertEquals(ControlWay.ORDINARY, rig.store.hostSelection)
+        assertNull(rig.store.record.moduleRelease)
+        assertEquals(listOf("module:open", "module:close", "ordinary:open"), rig.headset.events)
+
+        rig.replaceHost(processDied = true)
+        rig.bootHost()
+        runCurrent()
+        assertIs<HostStatus.Inactive>(rig.host.status.value)
+        assertEquals(1, rig.headset.opens("module"))
+        assertEquals(0, rig.headset.overlappingOpens)
     }
 
     @Test

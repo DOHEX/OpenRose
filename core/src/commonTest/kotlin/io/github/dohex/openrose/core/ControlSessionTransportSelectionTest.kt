@@ -35,6 +35,27 @@ import kotlin.test.assertTrue
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class ControlSessionTransportSelectionTest {
     @Test
+    fun losingClassicAudioClosesTheI7ControlConnectionOpenedByItsBleAddress() = runTest {
+        val ble = DeviceId("11:22:33:44:55:66")
+        val classic = DeviceId("A1:B2:C3:D4:E5:F6")
+        for (audioFirst in listOf(true, false)) {
+            val transport = SelectionTransport(TransportFacts(false, AudioProfileEvidence.CLASSIC), SelectionConnection(512))
+            val session = session(transport)
+            advertise(session, transport, Advertisement(ble, manufacturerData = i7Advertisement()))
+            if (!audioFirst) assertEquals(OperationResult.Success, session.connect(ble))
+            transport.audioConnectedDevice.emit(classic)
+            runCurrent()
+            if (audioFirst) assertEquals(OperationResult.Success, session.connect(ble))
+            assertTrue(session.state.value.deviceHasSystemAudio)
+
+            transport.audioConnectedDevice.emit(null)
+            runCurrent()
+            assertEquals(ConnectionState.Disconnected, session.state.value.connection)
+            assertTrue(transport.link.incoming.trySend(byteArrayOf()).isClosed)
+        }
+    }
+
+    @Test
     fun candidatesExposeOnlyCompleteUsableI7ClassicAddresses() = runTest {
         val advertisements = MutableSharedFlow<Advertisement>(extraBufferCapacity = 8)
         val transport = object : ControlTransport {
@@ -507,6 +528,7 @@ class ControlSessionTransportSelectionTest {
         var facts: TransportFacts,
         val link: SelectionConnection,
     ) : ControlTransport {
+        override val audioConnectedDevice = MutableSharedFlow<DeviceId?>(replay = 1)
         val advertisements = MutableSharedFlow<Advertisement>(extraBufferCapacity = 8)
         var factCalls = 0
         var factsGate: CompletableDeferred<Unit>? = null

@@ -171,7 +171,7 @@ internal class ControlLink(
         val baseline = attempt.progress.value
         attempt.hasWritten = true
         attempt.nextWriteAt = null
-        withTimeout(timing.queryTimeoutMillis) { link.write(bytes.copyOf()) }
+        withTimeout(timing.writeTimeoutMillis) { link.write(bytes.copyOf()) }
         val current = state.value
         if (attempt.candidate.profile == ModelProfile.I5_ZT && current.platform.hostPlatform.isDesktop && current.deviceHasSystemAudio) {
             attempt.nextWriteAt = timeSource.markNow() + interval

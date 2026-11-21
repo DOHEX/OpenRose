@@ -13,7 +13,6 @@
     <ID>CyclomaticComplexMethod:RsCommonV2Codec.kt:RsCommonV2Codec$private fun decodeRecord: Map&lt;DeviceField, FieldReading&gt;</ID>
     <ID>CyclomaticComplexMethod:SettingQueue.kt:SettingQueue$private fun validateSetting: ControlError?</ID>
     <ID>CyclomaticComplexMethod:SettingQueue.kt:SettingQueue$private suspend fun applySetting: OperationResult</ID>
-    <ID>CyclomaticComplexMethod:SettingQueue.kt:SettingQueue$private suspend fun runSettings</ID>
     <ID>CyclomaticComplexMethod:ZtCodec.kt:ZtCodec$override fun feedNotification: List&lt;ProtocolReply&gt;</ID>
     <ID>CyclomaticComplexMethod:ZtCodec.kt:ZtCodec$override fun prepareSetting: ProtocolSetting</ID>
     <ID>LongMethod:AdvancedAudioProtocolTest.kt:AdvancedAudioProtocolTest$@Test fun i7GainProtectionAndPromptSettingsUseTheirIndependentFirmwareGatesAndReadbacks</ID>
@@ -21,7 +20,6 @@
     <ID>LongMethod:ControlSessionTransportSelectionTest.kt:ControlSessionTransportSelectionTest$@Test fun fallbackReasonsUseOnlyAvailableModelAddressPlatformAndAudioEvidence</ID>
     <ID>LongMethod:RsCommonV2Codec.kt:RsCommonV2Codec$override fun prepareSetting: ProtocolSetting</ID>
     <ID>LongMethod:RsCommonV2Codec.kt:RsCommonV2Codec$private fun decodeRecord: Map&lt;DeviceField, FieldReading&gt;</ID>
-    <ID>LongMethod:SettingQueue.kt:SettingQueue$private suspend fun applySetting: OperationResult</ID>
     <ID>LongMethod:ZtCodec.kt:ZtCodec$override fun feedNotification: List&lt;ProtocolReply&gt;</ID>
     <ID>LongMethod:ZtCodec.kt:ZtCodec$override fun prepareSetting: ProtocolSetting</ID>
     <ID>LoopWithTooManyJumpStatements:AudioFacts.kt:AudioFacts$for</ID>

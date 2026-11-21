@@ -24,19 +24,7 @@ import androidx.compose.ui.semantics.semantics
 import io.github.dohex.openrose.core.protocol.ModelProfile
 import io.github.dohex.openrose.ui.AppIcon
 import io.github.dohex.openrose.ui.RoseIcon
-
-/** Retail names shared by distinct hardware profiles need a qualifier when choosing a sandbox device. */
-internal val ModelProfile.sandboxLabel: String
-    get() = when (this) {
-        ModelProfile.CERAMICS_X_F8 -> "CERAMICS-X · 标准版"
-        ModelProfile.CERAMICS_X_7034_F8 -> "CERAMICS-X · 7034"
-        ModelProfile.OPENFEEL_LDAC_RS_COMMON -> "OpenFeel · LDAC"
-        ModelProfile.OPENFEEL_LHDC_RS_COMMON -> "OpenFeel · LHDC"
-        ModelProfile.OPENFEEL_DUAL_RS_COMMON -> "OpenFeel · LDAC + LHDC"
-        ModelProfile.OPENFUN_RS_COMMON -> "OpenFun · 无触控开关"
-        ModelProfile.OPENFUN_TOUCH_RS_COMMON -> "OpenFun · 有触控开关"
-        else -> displayName
-    }
+import io.github.dohex.openrose.ui.configurationLabel
 
 private val ModelProfile.series: String
     get() = when (displayName.substringBefore(' ').substringBefore('-').uppercase()) {
@@ -71,7 +59,7 @@ internal fun SandboxProfilePicker(selected: ModelProfile, onSelect: (ModelProfil
         },
     ) {
         OutlinedTextField(
-            value = selected.sandboxLabel,
+            value = selected.configurationLabel,
             onValueChange = {},
             readOnly = true,
             singleLine = true,
@@ -104,7 +92,7 @@ internal fun SandboxProfilePicker(selected: ModelProfile, onSelect: (ModelProfil
                 for (profile in profilesBySeries.getValue(currentSeries)) {
                     val active = profile == selected
                     DropdownMenuItem(
-                        text = { Text(profile.sandboxLabel) },
+                        text = { Text(profile.configurationLabel) },
                         modifier = Modifier.semantics { this.selected = active },
                         trailingIcon = { if (active) AppIcon(RoseIcon.CHECK, tint = MaterialTheme.colorScheme.primary) },
                         onClick = {

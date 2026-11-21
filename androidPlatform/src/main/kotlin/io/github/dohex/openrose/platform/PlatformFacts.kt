@@ -24,16 +24,20 @@ fun Context.readPlatformState(
     userUnlocked: Boolean = true,
 ): PlatformState {
     val granted = bluetoothPermissions().all { checkSelfPermission(it) == PackageManager.PERMISSION_GRANTED }
-    val permission = when {
+    val runtimePermission = when {
         granted -> PermissionState.GRANTED
         permissionRequested -> PermissionState.DENIED
         else -> PermissionState.REQUIRED
     }
+    // Before Android 12 the manifest's normal Bluetooth permissions cover an already-paired headset.
+    // Fine location is a separate prerequisite for discovering a new one.
+    val legacy = Build.VERSION.SDK_INT < Build.VERSION_CODES.S
+    val permission = if (legacy) PermissionState.NOT_REQUIRED else runtimePermission
     val transport = when {
         !packageManager.hasSystemFeature(PackageManager.FEATURE_BLUETOOTH_LE) ->
             TransportAvailability.Unavailable("此设备没有 BLE 硬件")
 
-        !granted -> TransportAvailability.Unavailable("授予权限后可检测蓝牙并发现耳机")
+        permission.missing -> TransportAvailability.Unavailable("授予权限后可检测蓝牙并发现耳机")
 
         else -> {
             val adapter = getSystemService(BluetoothManager::class.java)?.adapter
@@ -46,6 +50,7 @@ fun Context.readPlatformState(
     }
     return PlatformState(
         permission = permission,
+        scanPermission = if (legacy) runtimePermission else PermissionState.NOT_REQUIRED,
         transport = transport,
         hostPlatform = HostPlatform.ANDROID,
         controlTransportApplicability = if (

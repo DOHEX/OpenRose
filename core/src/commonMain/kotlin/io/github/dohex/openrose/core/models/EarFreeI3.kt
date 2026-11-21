@@ -10,7 +10,6 @@ import io.github.dohex.openrose.core.TouchSlot
 import io.github.dohex.openrose.core.protocol.BatteryLayout
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.GattProfile
-import io.github.dohex.openrose.core.protocol.ProtocolFamily
 import kotlinx.collections.immutable.persistentSetOf
 import kotlinx.collections.immutable.toPersistentSet
 
@@ -18,7 +17,10 @@ import kotlinx.collections.immutable.toPersistentSet
 internal val earFreeI3 = ModelSpec(
     displayName = "EarFree-i3",
     shortLabel = "i3",
-    family = ProtocolFamily.ZT,
+    protocol = ModelProtocol.Zt(
+        initKeys = listOf("0101", "0602", "0201", "0603", "0801", "0401", "0a01", "0b01"),
+        threeByteNoise = true,
+    ),
     advertisementPrefixes = listOf("f10203", "010203"),
     nameBrand = "earfree",
     nameModelNumber = "i3",
@@ -33,8 +35,6 @@ internal val earFreeI3 = ModelSpec(
     advertisedClassicAddress = null,
     batteryLayout = BatteryLayout.EARBUDS_AND_CASE,
     equalizerPresetLabels = emptyMap(),
-    ztInitKeys = listOf("0101", "0602", "0201", "0603", "0801", "0401", "0a01", "0b01"),
-    ztThreeByteNoise = true,
     capabilities = {
         DeviceCapabilities(
             readableFields = persistentSetOf(

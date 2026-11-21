@@ -29,7 +29,7 @@ description: 适配耳机型号：新增 ROSE 型号配置，或修改已有型�
 ## 2. 给每条记录归类
 
 - **A 只写配置**：协议族已有编解码，帧与字段完全相同。
-- **B 族内差异**：同族但帧、字段或枚举取值不同。在 `ModelSpec` 增加字段，由该族编解码读取；ZT 各型号在 RoseLink 中有不同的 Sender 子类（i3 / i5 / HeadFeel），默认按存在差异处理。
+- **B 族内差异**：同族的帧、字段或枚举取值有变化时，在该族的 `ModelProtocol` 子类声明选项，由该族编解码读取。ZT 的 i3、i5 和 HeadFeel 在 RoseLink 中使用不同的 Sender，需分别核对。
 - **C 新能力类型**：先查 `DeviceSetting` 与 `DeviceField`。有协议证据，且现有类型无法表达该能力时，增加领域类型。
 - **D 新协议族**：先查 `createProtocolCodec`。已有对应编解码器时按 A 或 B 处理，缺少对应编解码器时按 D 处理。
 
@@ -45,7 +45,7 @@ C、D 分支的改动面见 [new-capability.md](new-capability.md)。
 | --- | --- | --- |
 | 识别前缀（识别） | `advertisementPrefixes` | 小写十六进制，长度 12 / 8 / 6；清单中的前缀即规范化后的“company ID 小端 + payload” |
 | 零售名称（识别） | `nameBrand`、`nameModelNumber`、`nameRequiresModel`、`displayName`、`shortLabel` | `match` 先按型号词判定，型号词被多个型号共用时（如 BudsFeel MK2 与 OpenFeel MK2 都含 `mk2`）再看品牌词；品牌词或型号词单独出现会认错型号时，设 `nameRequiresModel = true`，要求两者同时出现。规则不够用时扩展 `ModelProfile.match`，不要换个词绕过 |
-| 协议族（开头） | `family` | |
+| 协议族及族内差异（开头、初始化、设置命令） | `protocol` | 选用 `ModelProtocol.Zt`、`F8`、`RsCommon` 或 `RsCommonV2`，填入该族的查询顺序和编码差异。V2 型号工厂 `rsV2Model` 将这些选项组装成 `RsCommonV2`。 |
 | 控制传输（传输） | `gatt`、`sppControlUuid`、`writeIntervalMillis` | 只有协议文档给出 RFCOMM UUID 时才填 SPP；SPP 连接还要有经典地址（广播解析或已配对设备地址），否则回退 BLE |
 | 广播里的经典地址（传输） | `advertisedClassicAddress` | 有文档给出偏移时才写解析函数，否则为 `null` |
 | 电量槽（电量） | `batteryLayout` | 左右耳与仓 → `EARBUDS_AND_CASE`；仅左右耳 → `EARBUDS_ONLY`，系统界面不发布仓电量；单体（复用 charge 槽）→ `SINGLE_UNIT`，应用显示一行“电量”，系统超级岛、焦点通知和融合设备中心不发布其电量 |
@@ -58,7 +58,7 @@ C、D 分支的改动面见 [new-capability.md](new-capability.md)。
 
 ## 4. 编解码与测试
 
-- B 类差异：在族编解码中读取新加的 `ModelSpec` 字段；解码表（`ztFields`、`rsCommonV2Fields`）和 RS Common V2 的 `FA` 编码属于协议族。3.8.6 的 `getInfo` 按型号面板收集字段，逐个核对并保存其顺序；3.8.0 仅有的 Magician 使用旧发送器的固定列表。
+- B 类差异在族编解码中经由类型化的 `protocol` 读取。解码表（`ztFields`、`rsCommonV2Fields`）和 RS Common V2 的 `FA` 编码属于协议族。3.8.6 的 `getInfo` 按型号面板收集字段，逐个核对并保存其顺序。3.8.0 仅有的 Magician 使用旧发送器的固定列表。
 - 测试替身：编译器会在 `androidIntegration` 的 `OwnerRig.kt` 中报出 `roseAdvertisement`、`initializationReplies` 缺少分支，在那里登记该型号的广播与初始化回包；回包注明来源（实机记录或合成）。
 - 编解码测试沿用现有写法：期望帧用协议文档中独立提取的十六进制字面量，不用编解码自己算出的值；合成的接收报文在注释中标“合成”。
 - `ModelProfileTest` 会自动检查新型号能凭自己的前缀和名称被识别。

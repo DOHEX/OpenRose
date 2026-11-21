@@ -5,7 +5,6 @@ import io.github.dohex.openrose.core.DeviceSetting
 import io.github.dohex.openrose.core.protocol.BatteryLayout
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.GattProfile
-import io.github.dohex.openrose.core.protocol.ProtocolFamily
 import kotlinx.collections.immutable.persistentSetOf
 import kotlinx.collections.immutable.toPersistentSet
 
@@ -28,8 +27,8 @@ private val swift2Capabilities = DeviceCapabilities(
 )
 
 internal val swift2 = ModelSpec(
-    rsV2InfoIds = "0d0c0e3201072f2e",
-    displayName = "SWIFT 2", shortLabel = "SWIFT 2", family = ProtocolFamily.RS_COMMON_V2,
+    displayName = "SWIFT 2", shortLabel = "SWIFT 2",
+    protocol = ModelProtocol.RsCommonV2(infoIds = "0d0c0e3201072f2e"),
     advertisementPrefixes = listOf("5999064c"), nameBrand = "swift", nameModelNumber = "swift2", nameRequiresModel = true,
     gatt = GattProfile(
         "000000fe-0000-1000-8000-00805f9b34fb",

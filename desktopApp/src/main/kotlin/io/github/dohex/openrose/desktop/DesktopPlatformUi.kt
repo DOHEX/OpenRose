@@ -99,7 +99,8 @@ class DesktopPlatformUi(
     }
 }
 
-private fun bluetoothSettingsCommand(platform: String): List<String>? {
+internal fun bluetoothSettingsCommand(platform: String): List<String>? {
+    if (platform.startsWith("Windows", ignoreCase = true)) return listOf("explorer.exe", "ms-settings:bluetooth")
     if (!platform.contains("linux", ignoreCase = true)) return null
     val directories = System.getenv("PATH").orEmpty().split(File.pathSeparatorChar)
     return listOf(

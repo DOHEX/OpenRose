@@ -535,6 +535,35 @@ fun <T> AppRadioGroup(
     }
 }
 
+/** Miuix reports expansion but cannot restore it. An already-open choice uses the controlled dialog in a new shell. */
+@Composable
+private fun MiuixChoicePopup(
+    isOpen: Boolean,
+    setOpen: (Boolean) -> Unit,
+    dropdownFits: Boolean = true,
+    dropdown: @Composable ((Boolean) -> Unit) -> Unit,
+    dialog: @Composable () -> Unit,
+) {
+    var openedHere by remember { mutableStateOf(false) }
+    var generation by remember { mutableIntStateOf(0) }
+    LaunchedEffect(isOpen) {
+        if (!isOpen && openedHere) {
+            openedHere = false
+            generation++
+        }
+    }
+    if (dropdownFits && (!isOpen || openedHere)) {
+        key(generation) {
+            dropdown { expanded ->
+                openedHere = expanded
+                setOpen(expanded)
+            }
+        }
+    } else {
+        dialog()
+    }
+}
+
 @Composable
 fun <T> AppChoiceRow(
     title: String,
@@ -561,40 +590,25 @@ fun <T> AppChoiceRow(
             if (value != selected) onSelect(value)
         }
     }
-    // 0.9.4 exposes expansion notifications, but no controlled expanded parameter.
-    // A picker restored into a new Miuix shell uses its controlled dialog equivalent.
-    var dropdownOpenedHere by remember { mutableStateOf(false) }
-    var dropdownGeneration by remember { mutableIntStateOf(0) }
     val dialogFocusRequester = remember { FocusRequester() }
     val backdropActive = LocalBackdropBlurActive.current
     val backdrop = LocalAppBackdrop.current
-    LaunchedEffect(isOpen) {
-        if (!isOpen && dropdownOpenedHere) {
-            dropdownOpenedHere = false
-            dropdownGeneration++
-        }
-    }
     when (LocalInterfaceStyle.current) {
         InterfaceStyle.MIUIX -> {
             val selectedIndex = options.indexOfFirst { it.value == selected }
             // The dropdown lists labels only, so a list with an unavailable option takes the dialog that can say why.
             val dropdownFits = selected != null && selectedIndex >= 0 && options.none { it.disabledReason != null }
-            if (dropdownFits && (!isOpen || dropdownOpenedHere)) {
-                key(dropdownGeneration) {
-                    OverlayDropdownPreference(
-                        items = options.map { it.label },
-                        selectedIndex = selectedIndex,
-                        title = title,
-                        enabled = enabled,
-                        startAction = iconAction(icon),
-                        onExpandedChange = {
-                            dropdownOpenedHere = it
-                            setOpen(it)
-                        },
-                        onSelectedIndexChange = { select(options[it].value) },
-                    )
-                }
-            } else {
+            MiuixChoicePopup(isOpen, ::setOpen, dropdownFits, dropdown = { expanded ->
+                OverlayDropdownPreference(
+                    items = options.map { it.label },
+                    selectedIndex = selectedIndex,
+                    title = title,
+                    enabled = enabled,
+                    startAction = iconAction(icon),
+                    onExpandedChange = expanded,
+                    onSelectedIndexChange = { select(options[it].value) },
+                )
+            }) {
                 ArrowPreference(title, summary = valueText, enabled = enabled, startAction = iconAction(icon), onClick = { setOpen(true) })
                 OverlayDialog(show = isOpen, title = title, onDismissRequest = { setOpen(false) }) {
                     Column(Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState())) {
@@ -664,18 +678,9 @@ internal fun <T> AppMultiChoiceRow(
     }
     val canToggle: (T) -> Boolean = { enabled && enabledFor(it) }
     val toggle: (T) -> Unit = { if (canToggle(it)) onToggle(it) }
-    // Like AppChoiceRow, restore an open picker as a controlled dialog after a style change.
-    var dropdownOpenedHere by remember { mutableStateOf(false) }
-    var dropdownGeneration by remember { mutableIntStateOf(0) }
-    LaunchedEffect(isOpen) {
-        if (!isOpen && dropdownOpenedHere) {
-            dropdownOpenedHere = false
-            dropdownGeneration++
-        }
-    }
     when (LocalInterfaceStyle.current) {
         InterfaceStyle.MIUIX -> {
-            if (!isOpen || dropdownOpenedHere) {
+            MiuixChoicePopup(isOpen, ::setOpen, dropdown = { expanded ->
                 val entry = remember(options, checked, enabled, enabledFor, onToggle) {
                     DropdownEntry(
                         options.map { option ->
@@ -688,21 +693,16 @@ internal fun <T> AppMultiChoiceRow(
                         },
                     )
                 }
-                key(dropdownGeneration) {
-                    OverlayDropdownPreference(
-                        entry = entry,
-                        title = title,
-                        summary = summary,
-                        showValue = false,
-                        enabled = enabled,
-                        collapseOnSelection = false,
-                        onExpandedChange = {
-                            dropdownOpenedHere = it
-                            setOpen(it)
-                        },
-                    )
-                }
-            } else {
+                OverlayDropdownPreference(
+                    entry = entry,
+                    title = title,
+                    summary = summary,
+                    showValue = false,
+                    enabled = enabled,
+                    collapseOnSelection = false,
+                    onExpandedChange = expanded,
+                )
+            }) {
                 ArrowPreference(title, summary = summary, enabled = enabled, onClick = { setOpen(true) })
                 OverlayDialog(show = true, title = title, onDismissRequest = { setOpen(false) }) {
                     AppCheckGroup(options, checked, canToggle, toggle)

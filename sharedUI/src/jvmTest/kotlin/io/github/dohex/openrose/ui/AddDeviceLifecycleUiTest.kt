@@ -115,6 +115,7 @@ class AddDeviceLifecycleUiTest {
         for (style in InterfaceStyle.entries) {
             for (unavailable in listOf(
                 PlatformState(PermissionState.DENIED, TransportAvailability.Available),
+                PlatformState(PermissionState.GRANTED, TransportAvailability.Available, scanPermission = PermissionState.DENIED),
                 PlatformState(PermissionState.GRANTED, TransportAvailability.Disabled),
             )) {
                 withAddDeviceHarness(style) { harness ->
@@ -128,7 +129,11 @@ class AddDeviceLifecycleUiTest {
                     assertFalse(harness.hasText("连接"))
                     assertTrue(
                         harness.hasClickableText(
-                            if (unavailable.permission == PermissionState.DENIED) "授予蓝牙权限" else "打开蓝牙设置",
+                            when {
+                                unavailable.permission.missing -> "授予蓝牙权限"
+                                unavailable.scanPermission.missing -> "授予定位权限"
+                                else -> "打开蓝牙设置"
+                            },
                         ),
                     )
                     harness.advanceTimeBy(30_000)

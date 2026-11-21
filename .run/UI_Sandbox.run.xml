@@ -1,6 +1,17 @@
 <component name="ProjectRunConfigurationManager">
   <configuration default="false" name="UI Sandbox" type="GradleRunConfiguration" factoryName="Gradle">
     <ExternalSystemSettings>
+      <option name="env">
+        <map>
+          <entry key="CARGO_HOME" value="$USER_HOME$/.cargo" />
+          <entry key="GOBIN" value="$USER_HOME$/.local/share/mise/installs/go/1.26.4/bin" />
+          <entry key="GOROOT" value="$USER_HOME$/.local/share/mise/installs/go/1.26.4" />
+          <entry key="JAVA_HOME" value="$USER_HOME$/.local/share/mise/installs/java/temurin-21.0.13+9.0.LTS" />
+          <entry key="PATH" value="$USER_HOME$/.local/share/mise/installs/java/temurin-21.0.13+9.0.LTS/bin:$USER_HOME$/.local/share/mise/installs/bun/latest/bin:$USER_HOME$/.local/share/mise/installs/github-longbridge-nsh/latest/bin:$USER_HOME$/.local/share/mise/installs/go/1.26.4/bin:$USER_HOME$/.local/share/mise/installs/pnpm/latest:$USER_HOME$/.local/share/mise/installs/node/latest/bin:$USER_HOME$/.local/share/mise/installs/npm-vercel/latest/bin:$USER_HOME$/.cargo/bin:$USER_HOME$/.local/share/mise/installs/usage/latest:$USER_HOME$/.local/share/mise/installs/uv/latest/uv-x86_64-unknown-linux-musl:$USER_HOME$/.local/share/mise/shims:$USER_HOME$/.local/bin:/opt/cuda/bin:$USER_HOME$/Android/Sdk/platform-tools:$USER_HOME$/.bun/bin:/usr/local/sbin:/usr/local/bin:/usr/bin:/usr/share/dotnet:$USER_HOME$/.dotnet/tools:/var/lib/flatpak/exports/bin:/usr/bin/site_perl:/usr/bin/vendor_perl:/usr/bin/core_perl:$USER_HOME$/.local/share/JetBrains/Toolbox/scripts" />
+          <entry key="RUSTUP_HOME" value="$USER_HOME$/.rustup" />
+          <entry key="RUSTUP_TOOLCHAIN" value="1.96.0" />
+        </map>
+      </option>
       <option name="executionName" />
       <option name="externalProjectPath" value="$PROJECT_DIR$" />
       <option name="externalSystemIdString" value="GRADLE" />

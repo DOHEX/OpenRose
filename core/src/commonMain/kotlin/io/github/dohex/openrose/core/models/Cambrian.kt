@@ -10,7 +10,6 @@ import io.github.dohex.openrose.core.TouchControlCapabilities
 import io.github.dohex.openrose.core.protocol.BatteryLayout
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.GattProfile
-import io.github.dohex.openrose.core.protocol.ProtocolFamily
 import io.github.dohex.openrose.core.protocol.RsCommonInit
 import kotlinx.collections.immutable.persistentSetOf
 import kotlinx.collections.immutable.toPersistentMap
@@ -19,7 +18,7 @@ import kotlinx.collections.immutable.toPersistentSet
 internal val cambrian = ModelSpec(
     displayName = "Cambrian",
     shortLabel = "Cambrian",
-    family = ProtocolFamily.RS_COMMON,
+    protocol = ModelProtocol.RsCommon(initialization = RsCommonInit.CAMBRIAN),
     advertisementPrefixes = listOf("0b0c0a0c"),
     nameBrand = "cambrian",
     nameModelNumber = "cambrian",
@@ -34,7 +33,6 @@ internal val cambrian = ModelSpec(
     advertisedClassicAddress = { rsCommonClassicAddress(it, 10) },
     batteryLayout = BatteryLayout.SINGLE_UNIT,
     equalizerPresetLabels = mapOf("pop" to "POP", "hifi" to "HIFI", "rock" to "ROCK"),
-    rsCommonInit = RsCommonInit.CAMBRIAN,
     capabilities = { cambrianControls },
 )
 

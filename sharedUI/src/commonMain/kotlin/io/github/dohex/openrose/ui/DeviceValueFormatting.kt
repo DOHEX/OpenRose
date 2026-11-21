@@ -9,7 +9,7 @@ import io.github.dohex.openrose.core.protocol.ModelProfile
 
 /** Presentation labels only; protocol numeric values and capability decisions stay in the core. */
 internal fun displayFieldValue(
-    field: DeviceField,
+    field: DeviceField?,
     value: FieldValue,
     profile: ModelProfile? = null,
     touch: TouchControlCapabilities? = null,
@@ -160,3 +160,23 @@ internal fun semanticLabel(value: String): String = when (value) {
     "stop_right" -> "停止右耳寻机"
     else -> value
 }
+
+/** The retail name with its hardware qualifier when more than one configuration shares it. */
+val ModelProfile.configurationLabel: String
+    get() = branchLabel?.let { "$displayName · $it" } ?: displayName
+
+/** The caption below a device's Bluetooth name. */
+internal val ModelProfile.configurationCaption: String
+    get() = listOfNotNull(branchLabel, family.displayName).joinToString(" · ")
+
+private val ModelProfile.branchLabel: String?
+    get() = when (this) {
+        ModelProfile.CERAMICS_X_F8 -> "标准版"
+        ModelProfile.CERAMICS_X_7034_F8 -> "7034"
+        ModelProfile.OPENFEEL_LDAC_RS_COMMON -> "LDAC"
+        ModelProfile.OPENFEEL_LHDC_RS_COMMON -> "LHDC"
+        ModelProfile.OPENFEEL_DUAL_RS_COMMON -> "LDAC + LHDC"
+        ModelProfile.OPENFUN_RS_COMMON -> "无触控开关"
+        ModelProfile.OPENFUN_TOUCH_RS_COMMON -> "有触控开关"
+        else -> null
+    }

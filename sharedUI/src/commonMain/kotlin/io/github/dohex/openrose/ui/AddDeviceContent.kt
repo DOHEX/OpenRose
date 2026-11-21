@@ -159,7 +159,7 @@ internal fun AddDeviceContent(
                                 AppText(candidate.addDeviceName(), role = AppTextRole.Body)
                                 AppText(
                                     listOfNotNull(
-                                        candidate.profile?.family?.displayName,
+                                        candidate.profile?.configurationCaption,
                                         candidate.rssi?.let { "$it dBm" },
                                     ).joinToString(" · "),
                                     role = AppTextRole.Summary,
@@ -278,6 +278,17 @@ private fun AddDevicePrerequisite(
                 AppText("需要蓝牙权限", role = AppTextRole.Title)
                 AppText("允许访问附近设备后，才能搜索并连接耳机。", role = AppTextRole.Summary)
                 onRequestPermission?.let { AppButton("授予蓝牙权限", it) }
+            }
+
+            state.platform.scanPermission.missing -> {
+                AppText("搜索耳机需要定位权限", role = AppTextRole.Title)
+                val guidance = if (onRequestPermission == null) {
+                    "当前宿主未获得扫描权限，可在设置中切回普通控制后搜索。"
+                } else {
+                    "此 Android 版本需要定位权限来扫描附近耳机。已配对耳机仍可直接连接。"
+                }
+                AppText(guidance, role = AppTextRole.Summary)
+                onRequestPermission?.let { AppButton("授予定位权限", it) }
             }
 
             state.platform.transport == TransportAvailability.Disabled -> {

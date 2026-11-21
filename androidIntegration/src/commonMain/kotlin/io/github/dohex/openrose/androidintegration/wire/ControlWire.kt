@@ -39,7 +39,11 @@ import kotlinx.collections.immutable.toPersistentMap
 import kotlinx.collections.immutable.toPersistentSet
 
 /** Facts about the host's own Bluetooth platform that the application mirrors, never re-derives. */
-data class HostPlatformFacts(val permission: PermissionState, val transport: TransportAvailability)
+data class HostPlatformFacts(
+    val permission: PermissionState,
+    val transport: TransportAvailability,
+    val scanPermission: PermissionState = PermissionState.NOT_REQUIRED,
+)
 
 /** The part of a [ControlState] only the session owner can know. Settings, presentation and owner are composed locally. */
 data class OwnedControlState(val platform: HostPlatformFacts, val state: ControlState)
@@ -48,6 +52,7 @@ data class OwnedControlState(val platform: HostPlatformFacts, val state: Control
 object ControlWire {
     fun encodeOwned(platform: HostPlatformFacts, state: ControlState): Wire = obj(
         "permission" to Wire.Str(platform.permission.name),
+        "scanPermission" to Wire.Str(platform.scanPermission.name),
         "transport" to encode(platform.transport),
         "connection" to encode(state.connection),
         "scan" to encode(state.scan),
@@ -65,7 +70,11 @@ object ControlWire {
     fun decodeOwned(wire: Wire): OwnedControlState {
         val node = wire.asObj()
         return OwnedControlState(
-            platform = HostPlatformFacts(node.field("permission").asEnum(), decodeTransport(node.field("transport"))),
+            platform = HostPlatformFacts(
+                node.field("permission").asEnum(),
+                decodeTransport(node.field("transport")),
+                node.optional("scanPermission")?.asEnum<PermissionState>() ?: PermissionState.NOT_REQUIRED,
+            ),
             state = ControlState(
                 platform = io.github.dohex.openrose.core.PlatformState(PermissionState.NOT_REQUIRED),
                 connection = decodeConnection(node.field("connection")),

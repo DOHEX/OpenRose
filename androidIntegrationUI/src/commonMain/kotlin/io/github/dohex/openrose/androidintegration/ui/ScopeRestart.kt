@@ -43,8 +43,6 @@ import top.yukonga.miuix.kmp.layout.DialogDefaults
 import top.yukonga.miuix.kmp.overlay.OverlayDialog
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
-internal val INTEGRATION_SCOPE_PACKAGES = listOf("com.android.bluetooth", "com.xiaomi.bluetooth", "com.milink.service")
-
 // Every summary fits on one line, so the line under the title keeps its height and the rows never move.
 private const val SCOPE_RESTART_NOTICE = "蓝牙可能短暂断开"
 private const val SCOPE_RESTART_DONE = "已完成"
@@ -61,6 +59,7 @@ private enum class ScopeRestartStage { SELECTING, RUNNING, DONE }
 internal fun ScopeRestartAction(
     open: Boolean,
     running: Boolean,
+    availableTargets: List<String>,
     selected: Set<String>,
     targets: List<String>,
     phase: ScopeRestartPhase?,
@@ -86,7 +85,7 @@ internal fun ScopeRestartAction(
     val rows = @Composable {
         val byTarget = results.orEmpty().associateBy { it.target }
         Column {
-            INTEGRATION_SCOPE_PACKAGES.forEach { target ->
+            availableTargets.forEach { target ->
                 val mark = when {
                     selecting -> ScopeRestartMark.CHECKBOX
 

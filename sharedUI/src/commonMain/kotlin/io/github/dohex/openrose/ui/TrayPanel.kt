@@ -70,7 +70,7 @@ fun traySummary(state: ControlState, selection: PrimaryDeviceSelection): TraySum
         state.platform.transport is TransportAvailability.Unavailable
 
     val desktop = state.platform.hostPlatform.isDesktop
-    val audioConnected = desktop && primary != null && state.audioDeviceId == primary.deviceId
+    val audioConnected = desktop && primary != null && primary.matchesAudioDevice(state.audioDeviceId)
     val title = when {
         ready != null -> "${state.trayDeviceName(ready.deviceId, ready.profile)} · 已连接"
 
@@ -216,7 +216,8 @@ private fun TrayPanelContent(
 
     val peers = remoteHeadsets ?: circulation?.let { rememberRemoteHeadsets(it) }.orEmpty()
     peers.forEach { RemoteHeadsetCard(it) }
-    if (summary.connected || peers.none { it.reading["status"] in setOf("ready", "initializing") } || state.audioDeviceId != null) {
+    val remoteControllable = peers.any { it.reading.status in setOf(RemoteControlStatus.READY, RemoteControlStatus.INITIALIZING) }
+    if (summary.connected || !remoteControllable || state.audioDeviceId != null) {
         TrayStatusCard(state, summary)
     }
 

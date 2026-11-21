@@ -18,9 +18,11 @@ data class SessionTiming(
     val queryTimeoutMillis: Long = 1_500,
     /** Overrides every model's own pause between control writes; null keeps each model's interval. */
     val writeIntervalMillis: Long? = null,
+    /** Time for the platform to accept a write. The response deadline starts after acceptance. */
+    val writeTimeoutMillis: Long = 5_000,
 ) {
     init {
-        require(connectTimeoutMillis > 0 && queryTimeoutMillis > 0 && (writeIntervalMillis ?: 0) >= 0)
+        require(connectTimeoutMillis > 0 && queryTimeoutMillis > 0 && writeTimeoutMillis > 0 && (writeIntervalMillis ?: 0) >= 0)
     }
 }
 

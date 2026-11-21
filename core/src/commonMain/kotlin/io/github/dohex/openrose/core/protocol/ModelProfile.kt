@@ -216,7 +216,7 @@ enum class ModelProfile {
 
     val displayName: String get() = spec.displayName
     val shortLabel: String get() = spec.shortLabel
-    val family: ProtocolFamily get() = spec.family
+    val family: ProtocolFamily get() = spec.protocol.family
     val gatt: GattProfile get() = spec.gatt
     val batteryLayout: BatteryLayout get() = spec.batteryLayout
 

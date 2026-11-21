@@ -23,6 +23,7 @@ OpenRose 按协议族复用编解码，由各型号 `ModelSpec` 声明差异。O
 | 内容 | 位置 |
 | --- | --- |
 | 型号配置（识别、传输、电量布局、按固件推导的能力） | `core/.../models/` 中每款型号的独立文件；字段定义在 `models/ModelSpec.kt` |
+| 型号在协议族内的差异 | `core/.../models/ModelProtocol.kt` 的 `Zt`、`F8`、`RsCommon`、`RsCommonV2` 分别保存本族的初始化与编码选项 |
 | 型号入口、协议族、广播识别、名称匹配 | `core/.../protocol/ModelProfile.kt` |
 | 字段模型与编解码接口 | `core/.../protocol/ProtocolCodec.kt` |
 | ZT 编解码（i5 / i3 / HeadFeel） | `core/.../protocol/ZtCodec.kt` |
@@ -34,6 +35,8 @@ OpenRose 按协议族复用编解码，由各型号 `ModelSpec` 声明差异。O
 | Android BLE / SPP 传输、音频 profile 查询 | `androidApp/.../AndroidBleTransport.kt`、`AndroidSppConnection.kt`、`AndroidAudioProfiles.kt` |
 
 `core/...` 即 `core/src/commonMain/kotlin/io/github/dohex/openrose/core`。编解码器是纯 Kotlin 对象，只负责识别、构帧和解析；扫描、GATT、订阅和串行写入由平台传输层负责。OpenRose 不提供 OTA 入口。
+
+每个 `ModelSpec` 选择一种 `ModelProtocol`。`createProtocolCodec` 将这份配置交给对应的编解码器。例如，F8 的标准降噪码写在 `F8.noiseNormalWire`，RS Common V2 的有序查询字段写在 `RsCommonV2.infoIds`。跨进程与持久化继续使用 `ModelProfile.name`。
 
 ## 证据与验证状态
 
@@ -49,11 +52,11 @@ OpenRose 按协议族复用编解码，由各型号 `ModelSpec` 声明差异。O
 | i5 参考测试（Python） | `rose_reverse/tests/test_i5_protocol.py` | `8e50403bb0bc6ad5f5f139a9947a4c4a6b47d6a182ee543e73b06e8fefda50ca` |
 | i7 参考测试（Python） | `rose_reverse/tests/test_i7_protocol.py` | `831c61151b456f69c21617c902b72ce7171f2787b646bda96403183e22da296b` |
 
-**真机数据只有一份**：一副 i5（固件 `125`）在 Linux / BlueZ 5.87 / Bleak 3.0.2 下完成的 13 项初始化读取。测试里凡是 i5 的真实接收报文都出自这份记录。
+**历史协议测试使用一份实机读取记录**：一副 i5（固件 `125`）在 Linux / BlueZ 5.87 / Bleak 3.0.2 下完成的 13 项初始化读取。测试里凡是 i5 的真实接收报文都出自这份记录。
 
 **i7 没有任何真机数据**。测试中所有 i7 接收报文都是按协议规则构造的合成数据。
 
-因此，下文描述的设置写入、回读时序和持久化行为，在两个型号上都还没有经过真机验证。测试通过只说明实现符合逆向得出的规则。
+OpenRose 后续已在 i5 上验证通透与抗风噪写入后的设备回读，见 [Android 普通与模块控制实测](testing/android-i5-control-regressions.md)和 [Linux 托盘实测](testing/linux-i5-tray.md)。i5 其他设置的写入、断电后的持久化，以及 i7 的写入仍待实机验证。
 
 ### 新增型号的证据边界
 

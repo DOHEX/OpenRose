@@ -10,7 +10,6 @@ import io.github.dohex.openrose.core.TouchControlCapabilities
 import io.github.dohex.openrose.core.protocol.BatteryLayout
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.GattProfile
-import io.github.dohex.openrose.core.protocol.ProtocolFamily
 import kotlinx.collections.immutable.persistentSetOf
 import kotlinx.collections.immutable.toPersistentSet
 
@@ -66,7 +65,7 @@ private val earFreeI5Capabilities = DeviceCapabilities(
 internal val earFreeI5 = ModelSpec(
     displayName = "EarFree i5",
     shortLabel = "i5",
-    family = ProtocolFamily.ZT,
+    protocol = ModelProtocol.Zt(),
     advertisementPrefixes = listOf("525300010001"),
     nameBrand = "earfree",
     nameModelNumber = "i5",

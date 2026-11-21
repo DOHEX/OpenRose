@@ -6,7 +6,6 @@ import io.github.dohex.openrose.core.EqualizerCapabilities
 import io.github.dohex.openrose.core.TouchControlCapabilities
 import io.github.dohex.openrose.core.protocol.BatteryLayout
 import io.github.dohex.openrose.core.protocol.GattProfile
-import io.github.dohex.openrose.core.protocol.ProtocolFamily
 import kotlinx.collections.immutable.persistentSetOf
 
 private val agateXCapabilities = DeviceCapabilities(
@@ -22,7 +21,11 @@ private val agateXCapabilities = DeviceCapabilities(
 internal val agateX = ModelSpec(
     displayName = "AGATE X",
     shortLabel = "AGATE X",
-    family = ProtocolFamily.F8,
+    protocol = ModelProtocol.F8(
+        extendedInit = false,
+        noiseNormalWire = 3,
+        eqAtTwo = "pop",
+    ),
     advertisementPrefixes = listOf("18840506"),
     nameBrand = "agatex",
     nameModelNumber = "agatex",
@@ -38,7 +41,4 @@ internal val agateX = ModelSpec(
     batteryLayout = BatteryLayout.EARBUDS_ONLY,
     equalizerPresetLabels = mapOf("pop" to "Rock", "hifi" to "POP"),
     capabilities = { agateXCapabilities },
-    f8ExtendedInit = false,
-    f8NoiseNormalWire = 3,
-    f8EqAtTwo = "pop",
 )

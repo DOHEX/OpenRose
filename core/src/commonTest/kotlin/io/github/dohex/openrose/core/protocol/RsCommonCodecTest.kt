@@ -1,6 +1,7 @@
 package io.github.dohex.openrose.core.protocol
 
 import io.github.dohex.openrose.core.DeviceSetting
+import io.github.dohex.openrose.core.models.ModelProtocol
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -48,7 +49,7 @@ class RsCommonCodecTest {
         val codec = createProtocolCodec(ModelProfile.BUDSFREE_I_RS_COMMON)
         // 界面动作集合与线码表必须一致，否则界面会提供写入必然失败的动作。
         val profile = ModelProfile.BUDSFREE_I_RS_COMMON
-        assertEquals(profile.spec.rsCommonTouchActions.keys, requireNotNull(profile.capabilities().touchControl).actions)
+        assertEquals((profile.spec.protocol as ModelProtocol.RsCommon).touchActions.keys, requireNotNull(profile.capabilities().touchControl).actions)
         // 独立取自 Sender：左单/右单前缀 "FF 00 03 01 01 0" / "FF 00 03 01 11 0"，动作码按单个十进制数字拼接。
         assertEquals(
             "ff0003010101aa",

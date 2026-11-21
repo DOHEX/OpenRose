@@ -2,8 +2,6 @@
 <SmellBaseline>
   <ManuallySuppressedIssues/>
   <CurrentIssues>
-    <ID>ComplexCondition:BluezGattDriver.kt:BluezGattDriver$(signal.path == devicePath &amp;&amp; signal.interfaceName == DEVICE &amp;&amp; signal.values["Connected"] == false) || (devicePath.startsWith("${signal.path}/") &amp;&amp; signal.interfaceName == ADAPTER &amp;&amp; signal.values["Powered"] == false)</ID>
-    <ID>CyclomaticComplexMethod:BluezGattDriver.kt:BluezGattDriver$override suspend fun discoverServices: List&lt;GattService&gt;</ID>
     <ID>ThrowingExceptionFromFinally:BluezControlTransport.kt:BluezControlTransport$throw cleanup</ID>
     <ID>TooGenericExceptionCaught:BluezControlTransport.kt:BluezControlTransport$cleanup: Exception</ID>
     <ID>TooGenericExceptionCaught:BluezControlTransport.kt:BluezControlTransport$error: Exception</ID>

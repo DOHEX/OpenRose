@@ -19,6 +19,7 @@ import androidx.compose.ui.input.key.*
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.dp
 import io.github.dohex.openrose.core.*
+import io.github.dohex.openrose.ui.diagnostics.SettingOperationsCard
 import io.github.dohex.openrose.ui.model.OpenRoseModel
 import io.github.dohex.openrose.ui.model.WindowDestination
 import io.github.dohex.openrose.ui.model.settingsFor
@@ -139,14 +140,8 @@ fun OpenRoseApp(
         canGoBack,
         ::back,
     )
-    val addDeviceFlow = rememberAddDeviceFlow(
-        active = currentRoute is Route.AddDevice,
-        state = state,
-        onStartScan = model::startScan,
-        onStopScan = model::stopScan,
-        onConnect = model::connectForAddDevice,
-        onReady = { navigate(AppPage.HEADPHONES) },
-    )
+    val addDeviceFlow = rememberAddDeviceFlow(model)
+    AddDeviceLifecycle(currentRoute is Route.AddDevice, state, addDeviceFlow) { navigate(AppPage.HEADPHONES) }
     LaunchedEffect(state.connection, page) {
         if (page != AppPage.HEADPHONES || state.activeDevice() == null) {
             headphoneMenuExpanded = false
@@ -259,7 +254,7 @@ fun OpenRoseApp(
                     }
                 }
             }
-            val feedbackContentFor: @Composable (AppPage) -> Unit = { targetPage ->
+            val feedbackContentFor: @Composable (AppPage, Modifier) -> Unit = { targetPage, feedbackModifier ->
                 val device = state.activeDevice()
                 if ((targetPage == AppPage.HEADPHONES && device != null) ||
                     targetPage in listOf(AppPage.TOUCH, AppPage.EQUALIZER, AppPage.AUDIO)
@@ -275,6 +270,7 @@ fun OpenRoseApp(
                                     else -> true
                                 }
                             },
+                            modifier = feedbackModifier,
                         ) {
                             navigate(AppPage.DIAGNOSTICS)
                         }
@@ -284,7 +280,7 @@ fun OpenRoseApp(
             val renderShell: @Composable (AppPage) -> Unit = { targetPage ->
                 ProvideInterfaceStyle(uiSettings.interfaceStyle, dark, dynamicColor) {
                     val shellContent: @Composable () -> Unit = { pageContentFor(targetPage) }
-                    val shellFeedback: @Composable () -> Unit = { feedbackContentFor(targetPage) }
+                    val shellFeedback: @Composable (Modifier) -> Unit = { feedbackContentFor(targetPage, it) }
                     when (uiSettings.interfaceStyle) {
                         InterfaceStyle.MIUIX -> MiuixAppShell(
                             page = targetPage,
@@ -326,7 +322,7 @@ fun OpenRoseApp(
                             onNavigate = onNavigate,
                             scrollStates = scrollStates,
                             pageContentFor = { targetPage -> pageContentFor(targetPage) },
-                            pageFeedbackFor = { targetPage -> feedbackContentFor(targetPage) },
+                            pageFeedbackFor = feedbackContentFor,
                             connectedHome = isConnectedHome,
                             menuExpanded = headphoneMenuExpanded,
                             onMenuExpandedChange = { headphoneMenuExpanded = it },
@@ -342,7 +338,7 @@ fun OpenRoseApp(
                             onNavigate = onNavigate,
                             scrollStates = scrollStates,
                             pageContentFor = { targetPage -> pageContentFor(targetPage) },
-                            pageFeedbackFor = { targetPage -> feedbackContentFor(targetPage) },
+                            pageFeedbackFor = feedbackContentFor,
                             connectedHome = isConnectedHome,
                             menuExpanded = headphoneMenuExpanded,
                             onMenuExpandedChange = { headphoneMenuExpanded = it },

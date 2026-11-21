@@ -2,6 +2,7 @@ package io.github.dohex.openrose.desktop
 
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.text.BasicText
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -33,6 +34,7 @@ import io.github.dohex.openrose.transport.bluez.BluezControlTransport
 import io.github.dohex.openrose.transport.windows.WindowsControlTransport
 import io.github.dohex.openrose.ui.AppLogo
 import io.github.dohex.openrose.ui.Appearance
+import io.github.dohex.openrose.ui.LocalCirculationVisible
 import io.github.dohex.openrose.ui.OpenRoseApp
 import io.github.dohex.openrose.ui.PrimaryDeviceSelection
 import io.github.dohex.openrose.ui.interfaceBackgroundColor
@@ -204,7 +206,9 @@ fun main(args: Array<String>) {
                     TitleBar {
                         BasicText("OpenRose", style = TextStyle(color = LocalTitleBarStyle.current.colors.content))
                     }
-                    OpenRoseApp(model = runtime.model, platformUi = platformUi, primaryDeviceSelection = selection)
+                    CompositionLocalProvider(LocalCirculationVisible provides windowVisible) {
+                        OpenRoseApp(model = runtime.model, platformUi = platformUi, primaryDeviceSelection = selection)
+                    }
                 }
             }
         }

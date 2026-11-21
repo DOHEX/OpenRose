@@ -9,6 +9,8 @@ data class IntegrationPlatformState(
     val bridge: SystemBridgeDiagnostics? = null,
     /** Whether HyperOS system integration applies on this host, independent of integration readiness. */
     val systemIntegrationApplicability: PlatformApplicability = PlatformApplicability.UNKNOWN,
+    /** Integration scopes installed and enabled on this host. */
+    val installedScopes: Set<String> = emptySet(),
     /** Facts about the ordinary background-control service, separate from the saved intent in settings. */
     val backgroundService: BackgroundServiceFacts = BackgroundServiceFacts(),
     /** Whether the system provides wallpaper colors for 动态取色 (Android 12+). */

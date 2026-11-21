@@ -2,7 +2,6 @@
 <SmellBaseline>
   <ManuallySuppressedIssues/>
   <CurrentIssues>
-    <ID>ReturnCount:AuthenticatedBridgeClient.kt:AuthenticatedBridgeClient$fun close: Boolean</ID>
     <ID>TooGenericExceptionCaught:AuthenticatedBridgeClient.kt:AuthenticatedBridgeClient$failure: Throwable</ID>
     <ID>TooGenericExceptionCaught:HostEndpoint.kt:HostEndpoint$failure: Exception</ID>
     <ID>TooGenericExceptionCaught:MiLinkNativeHeadsetAdapter.kt:MiLinkNativeHeadsetAdapter$failure: Throwable</ID>

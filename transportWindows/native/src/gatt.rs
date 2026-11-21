@@ -4,13 +4,14 @@ use std::{
     io::{self, BufRead},
 };
 use windows::{
-    core::GUID,
+    core::{Error, GUID},
     Devices::Bluetooth::{
         BluetoothCacheMode, BluetoothConnectionStatus, BluetoothLEDevice,
         GenericAttributeProfile::*,
     },
     Foundation::TypedEventHandler,
     Storage::Streams::DataWriter,
+    Win32::Foundation::{E_ACCESSDENIED, E_INVALIDARG, E_NOTIMPL},
 };
 
 struct Session {
@@ -25,9 +26,20 @@ struct Session {
 fn check(status: GattCommunicationStatus) -> Result<()> {
     match status {
         GattCommunicationStatus::Success => Ok(()),
-        GattCommunicationStatus::AccessDenied => Err("Windows 拒绝访问 GATT".into()),
+        GattCommunicationStatus::AccessDenied => {
+            Err(Error::new(E_ACCESSDENIED, "Windows 拒绝访问 GATT").into())
+        }
         GattCommunicationStatus::Unreachable => Err("耳机暂时无法连接".into()),
         _ => Err(format!("Windows GATT 操作失败 ({})", status.0).into()),
+    }
+}
+
+fn failure_kind(error: &(dyn std::error::Error + 'static)) -> &'static str {
+    match error.downcast_ref::<Error>().map(Error::code) {
+        Some(E_ACCESSDENIED) => "PERMISSION",
+        Some(E_INVALIDARG) => "INVALID_VALUE",
+        Some(E_NOTIMPL) => "UNSUPPORTED",
+        _ => "TRANSIENT",
     }
 }
 
@@ -182,16 +194,39 @@ pub fn serve(address: &str, service: &str) -> Result<()> {
                 Ok(response) if response.is_empty() => println!("{id}\tok"),
                 Ok(response) => println!("{id}\tok\t{response}"),
                 Err(error) => {
+                    let kind = failure_kind(error.as_ref());
                     let message = clean(error);
-                    let kind = if message.contains("拒绝访问") {
-                        "PERMISSION"
-                    } else {
-                        "TRANSIENT"
-                    };
                     println!("{id}\terr\t{kind}\t{message}");
                 }
             }
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn hresult_controls_recovery_independently_of_the_display_message() {
+        for (code, expected) in [
+            (E_ACCESSDENIED, "PERMISSION"),
+            (E_INVALIDARG, "INVALID_VALUE"),
+            (E_NOTIMPL, "UNSUPPORTED"),
+        ] {
+            assert_eq!(
+                failure_kind(&Error::new(code, "Native operation failed")),
+                expected
+            );
+        }
+    }
+
+    #[test]
+    fn gatt_status_and_native_access_denied_use_the_same_wire_kind() {
+        let denied = check(GattCommunicationStatus::AccessDenied).unwrap_err();
+        assert_eq!(failure_kind(denied.as_ref()), "PERMISSION");
+        let unreachable = check(GattCommunicationStatus::Unreachable).unwrap_err();
+        assert_eq!(failure_kind(unreachable.as_ref()), "TRANSIENT");
+    }
 }

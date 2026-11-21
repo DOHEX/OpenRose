@@ -6,14 +6,13 @@ import io.github.dohex.openrose.core.TouchControlCapabilities
 import io.github.dohex.openrose.core.protocol.BatteryLayout
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.GattProfile
-import io.github.dohex.openrose.core.protocol.ProtocolFamily
 import io.github.dohex.openrose.core.protocol.RsCommonInit
 import kotlinx.collections.immutable.persistentSetOf
 
 internal val swift = ModelSpec(
     displayName = "SWIFT",
     shortLabel = "SWIFT",
-    family = ProtocolFamily.RS_COMMON,
+    protocol = ModelProtocol.RsCommon(initialization = RsCommonInit.DEFAULT),
     advertisementPrefixes = listOf("0b0b0a0b"),
     nameBrand = "swift",
     nameModelNumber = "swift",
@@ -28,7 +27,6 @@ internal val swift = ModelSpec(
     advertisedClassicAddress = { rsCommonClassicAddress(it, 10) },
     batteryLayout = BatteryLayout.SINGLE_UNIT,
     equalizerPresetLabels = emptyMap(),
-    rsCommonInit = RsCommonInit.DEFAULT,
     capabilities = {
         DeviceCapabilities(
             readableFields = rsReadings(

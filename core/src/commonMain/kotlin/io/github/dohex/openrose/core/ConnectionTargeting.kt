@@ -55,16 +55,15 @@ internal class ConnectionTargeting(
             }
             return
         }
+        val current = state.value
+        if (current.connection !is ConnectionState.Disconnected && current.deviceHasSystemAudio) {
+            audioDrivenSessionDeviceId = current.device?.deviceId
+            return
+        }
         if (systemPinnedDeviceId != null) {
             return
         }
-        val requestEpoch = targetIntent.updateAndGet { current ->
-            if (current.deviceId == audioDeviceId && current.epoch > 0) {
-                current
-            } else {
-                TargetIntent(current.epoch + 1, audioDeviceId)
-            }
-        }.epoch
+        val requestEpoch = targetEpoch(audioDeviceId)
         val candidate = discovery.findCandidate(audioDeviceId)
         if (isRequestSuperseded(requestEpoch, isAudioDriven = true)) {
             return
@@ -77,13 +76,7 @@ internal class ConnectionTargeting(
             disconnect()
         }
         if (state.value.connection is ConnectionState.Disconnected && systemPinnedDeviceId == null) {
-            val autoEpoch = targetIntent.updateAndGet { current ->
-                if (current.deviceId == audioDeviceId && current.epoch > 0) {
-                    current
-                } else {
-                    TargetIntent(current.epoch + 1, audioDeviceId)
-                }
-            }.epoch
+            val autoEpoch = targetEpoch(audioDeviceId)
             audioDrivenSessionDeviceId = audioDeviceId
             autoConnectJob?.cancel()
             autoConnectJob = scope.launch {
@@ -93,13 +86,7 @@ internal class ConnectionTargeting(
     }
 
     suspend fun connect(deviceId: DeviceId, pinned: Boolean): OperationResult {
-        val requestEpoch = targetIntent.updateAndGet { current ->
-            if (current.deviceId == deviceId && current.epoch > 0) {
-                current
-            } else {
-                TargetIntent(current.epoch + 1, deviceId)
-            }
-        }.epoch
+        val requestEpoch = targetEpoch(deviceId)
         if (pinned || systemPinnedDeviceId != null) {
             systemPinnedDeviceId = deviceId
         }
@@ -110,13 +97,7 @@ internal class ConnectionTargeting(
 
     /** Cancelling the adding flow releases only the unfinished attempt it created. */
     suspend fun connectForAddDevice(deviceId: DeviceId): OperationResult {
-        val requestEpoch = targetIntent.updateAndGet { current ->
-            if (current.deviceId == deviceId && current.epoch > 0) {
-                current
-            } else {
-                TargetIntent(current.epoch + 1, deviceId)
-            }
-        }.epoch
+        val requestEpoch = targetEpoch(deviceId)
         if (systemPinnedDeviceId != null) {
             systemPinnedDeviceId = deviceId
         }
@@ -124,6 +105,10 @@ internal class ConnectionTargeting(
         state.update { it.copy(connectionTarget = target) }
         return connectInternal(deviceId, isAudioDriven = false, cancelWithCaller = true, requestEpoch = requestEpoch)
     }
+
+    private fun targetEpoch(deviceId: DeviceId): Long = targetIntent.updateAndGet { current ->
+        if (current.deviceId == deviceId) current else TargetIntent(current.epoch + 1, deviceId)
+    }.epoch
 
     private fun isRequestSuperseded(requestEpoch: Long, isAudioDriven: Boolean, deviceId: DeviceId? = null): Boolean {
         val current = targetIntent.value
@@ -168,7 +153,7 @@ internal class ConnectionTargeting(
             cancelWithCaller = cancelWithCaller,
             isSuperseded = { isRequestSuperseded(requestEpoch, isAudioDriven, deviceId) },
             onStarted = {
-                audioDrivenSessionDeviceId = deviceId.takeIf { isAudioDriven || state.value.audioDeviceId == it }
+                audioDrivenSessionDeviceId = deviceId.takeIf { isAudioDriven || candidate.matchesAudioDevice(state.value.audioDeviceId) }
             },
             onAttemptFailed = {
                 if (audioDrivenSessionDeviceId == deviceId) audioDrivenSessionDeviceId = null

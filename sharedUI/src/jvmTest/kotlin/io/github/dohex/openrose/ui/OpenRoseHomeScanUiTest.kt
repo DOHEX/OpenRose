@@ -442,14 +442,8 @@ class OpenRoseHomeScanUiTest {
             if (app) {
                 OpenRoseApp(model, platformUi)
             } else {
-                val flow = rememberAddDeviceFlow(
-                    active = page == AppPage.ADD_DEVICE,
-                    state = state.value,
-                    onStartScan = model::startScan,
-                    onStopScan = model::stopScan,
-                    onConnect = model::connectForAddDevice,
-                    onReady = {},
-                )
+                val flow = rememberAddDeviceFlow(model)
+                AddDeviceLifecycle(page == AppPage.ADD_DEVICE, state.value, flow) {}
                 ProvideInterfaceStyle(uiSettings.value.interfaceStyle, dark = false) {
                     if (page == AppPage.ADD_DEVICE) {
                         AddDeviceContent(

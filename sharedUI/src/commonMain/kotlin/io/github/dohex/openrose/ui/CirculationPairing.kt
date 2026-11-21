@@ -18,6 +18,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -28,40 +29,48 @@ fun CirculationSettings(
     scan: (@Composable ((String) -> Unit) -> (() -> Unit))? = null,
     showQr: (@Composable (String) -> Unit)? = null,
 ) {
-    val peers = rememberPeerList(client)
-    val paired = peers.filterKeys { it.startsWith("paired.") }.mapKeys { it.key.removePrefix("paired.") }
-    val nearby = peers.filterKeys { it.startsWith("near.") }.mapKeys { it.key.removePrefix("near.") }
+    var refresh by remember(client) { mutableIntStateOf(0) }
+    val peers = rememberPeerList(client, refresh = refresh)
     val scope = rememberCoroutineScope()
-    var result by remember(client) { mutableStateOf(emptyMap<String, String>()) }
+    var result by remember(client) { mutableStateOf<CirculationResult?>(null) }
+    var issued by remember(client) { mutableStateOf<PairingTicket?>(null) }
     var busy by remember(client) { mutableStateOf(false) }
-    fun submit(vararg fields: Pair<String, String>) {
+    fun submit(action: suspend () -> CirculationResult) {
         if (busy) return
         busy = true
         scope.launch {
             try {
-                result = client.submit(*fields)
+                result = action()
+                refresh++
             } finally {
                 busy = false
             }
         }
     }
 
+    val ticket = rememberValidTicket(peers, issued)
     Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
         Column(Modifier.widthIn(max = 640.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             if (scan != null) {
                 PhonePairing(
-                    nearby = nearby - paired.keys,
+                    nearby = peers.nearby - peers.paired.keys,
                     busy = busy,
                     scan = scan,
-                    onQr = { submit("op" to "pairQr", "qr" to it) },
-                    onPair = { peer, code -> submit("op" to "pair", "peer" to peer, "code" to code) },
+                    onQr = { qr -> submit { client.pairQr(qr) } },
+                    onPair = { peer, code -> submit { client.pair(peer, code) } },
                 )
             }
             if (showQr != null) {
-                DesktopPairing(result["code"], result["qr"], showQr, busy, onOffer = { submit("op" to "offer") })
+                DesktopPairing(ticket, issued != null, showQr, busy) {
+                    submit {
+                        val reply = client.offer()
+                        issued = reply.ticket
+                        CirculationResult(null, reply.error)
+                    }
+                }
             }
-            val error = result["error"] ?: peers["error"]
-            (error ?: result["message"])?.let { message ->
+            val error = result?.error ?: peers.error
+            (error ?: result?.message)?.let { message ->
                 AppText(
                     message,
                     Modifier.padding(horizontal = 24.dp).semantics { liveRegion = LiveRegionMode.Polite },
@@ -69,17 +78,34 @@ fun CirculationSettings(
                     color = if (error != null) appColor(AppColorRole.Error) else null,
                 )
             }
-            if (paired.isNotEmpty()) {
+            if (peers.paired.isNotEmpty()) {
                 AppGroup(title = "已配对的设备") {
-                    paired.forEach { (id, name) ->
+                    peers.paired.forEach { (id, name) ->
                         key(id) {
-                            PairedDeviceRow(name, id in nearby, busy) { submit("op" to "forget", "peer" to id) }
+                            PairedDeviceRow(name, id in peers.nearby, busy) { submit { client.forget(id) } }
                         }
                     }
                 }
             }
         }
     }
+}
+
+@Composable
+private fun rememberValidTicket(peers: PeerDirectory, issued: PairingTicket?): PairingTicket? {
+    val ticket = when {
+        peers.error != null -> null
+        peers.reportsOffer -> peers.offer
+        else -> issued
+    }
+    var expired by remember(ticket?.qr, issued) { mutableStateOf(false) }
+    LaunchedEffect(ticket?.qr, issued) {
+        if (ticket != null) {
+            delay(ticket.validForMillis)
+            expired = true
+        }
+    }
+    return ticket.takeUnless { expired }
 }
 
 @Composable
@@ -104,10 +130,17 @@ internal fun PairingIntroduction(title: String, summary: String, icon: RoseIcon,
 }
 
 @Composable
-private fun DesktopPairing(code: String?, qr: String?, showQr: @Composable (String) -> Unit, busy: Boolean, onOffer: () -> Unit) {
-    if (code == null || qr == null) {
-        PairingIntroduction("与手机配对", "让手机和这台电脑连入同一局域网，再用手机扫码。", RoseIcon.LINK) {
-            AppButton("显示配对码", onOffer, enabled = !busy, modifier = Modifier.fillMaxWidth())
+private fun DesktopPairing(
+    ticket: PairingTicket?,
+    previouslyShown: Boolean,
+    showQr: @Composable (String) -> Unit,
+    busy: Boolean,
+    onOffer: () -> Unit,
+) {
+    if (ticket == null) {
+        val summary = if (previouslyShown) "上一组配对码已失效，需要配对时请重新获取。" else "让手机和这台电脑连入同一局域网，再用手机扫码。"
+        PairingIntroduction("与手机配对", summary, RoseIcon.LINK) {
+            AppButton(if (previouslyShown) "刷新配对码" else "显示配对码", onOffer, enabled = !busy, modifier = Modifier.fillMaxWidth())
         }
         return
     }
@@ -126,7 +159,7 @@ private fun DesktopPairing(code: String?, qr: String?, showQr: @Composable (Stri
                             InterfaceStyle.MATERIAL3 -> MaterialTheme.typography.headlineLarge
                         }
                         BasicText(
-                            code,
+                            ticket.code,
                             style = style.copy(
                                 color = appColor(AppColorRole.OnSurface),
                                 fontFamily = FontFamily.Monospace,
@@ -139,7 +172,7 @@ private fun DesktopPairing(code: String?, qr: String?, showQr: @Composable (Stri
                 }
             }
             val qrTile: @Composable () -> Unit = {
-                Box(Modifier.clip(RoundedCornerShape(16.dp))) { showQr(qr) }
+                Box(Modifier.clip(RoundedCornerShape(16.dp))) { showQr(ticket.qr) }
             }
             if (maxWidth >= 216.dp + 200.dp * LocalDensity.current.fontScale) {
                 Row(horizontalArrangement = Arrangement.spacedBy(24.dp), verticalAlignment = Alignment.CenterVertically) {

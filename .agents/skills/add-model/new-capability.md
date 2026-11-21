@@ -28,7 +28,7 @@
 ## D：新协议族
 
 - `ProtocolFamily`（`protocol/ModelProfile.kt`）：新增枚举项与 `displayName`，补全 `readableFields`、`promptVolumeLevels` 的穷举分支。
-- 新编解码实现 `ProtocolCodec`，并在 `createProtocolCodec` 中按族分发。编解码实例随每次连接尝试重建：会话内序号、接收缓冲放在实例内，`reset()` 清空。
+- 在 `models/ModelProtocol.kt` 添加本族的配置子类。新编解码实现 `ProtocolCodec`，由 `createProtocolCodec` 的对应分支传入此子类。编解码实例随每次连接尝试重建，会话内序号、接收缓冲放在实例内，`reset()` 清空。
 - 字段表与初始化查询放在该族编解码内，表示“族认识的字段”；型号实际提供什么只由 `ModelSpec.capabilities` 决定。
 - `ProtocolReply.accepted` 决定一条通知能否推进初始化：只有带已知语义值的字段才算。
 - 帧格式、校验和、分包与写入容量（`initQueries(maxWriteSize)`）都要有协议文档中的字面量测试；没有字节级文档的族不实现。

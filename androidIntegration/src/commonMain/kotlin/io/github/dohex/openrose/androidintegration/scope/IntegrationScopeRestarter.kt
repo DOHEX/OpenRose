@@ -1,5 +1,6 @@
 package io.github.dohex.openrose.androidintegration.scope
 
+import kotlinx.collections.immutable.persistentListOf
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withContext
@@ -24,10 +25,10 @@ class IntegrationScopeRestarter(
     private val runRoot: (script: String, onLine: (String) -> Unit) -> RootResult,
 ) {
     suspend fun restart(
-        requested: List<String> = TARGETS,
+        requested: List<String> = INTEGRATION_SCOPE_PACKAGES,
         onUpdate: (ScopeRestartUpdate) -> Unit = {},
     ): List<ScopeRestartResult> = withContext(Dispatchers.IO) {
-        val targets = TARGETS.filter { it in requested }
+        val targets = INTEGRATION_SCOPE_PACKAGES.filter { it in requested }
         if (targets.isEmpty()) return@withContext emptyList()
         fun failed(reason: String) = targets.map { ScopeRestartResult(it, ScopeRestartStatus.FAILED, reason) }.onEach(onUpdate)
         if (!restartMutex.tryLock()) return@withContext failed("重启操作正在进行")
@@ -96,7 +97,7 @@ private fun parseResult(line: String, targets: List<String>): ScopeRestartResult
     }
 }
 
-private val TARGETS = listOf("com.android.bluetooth", "com.xiaomi.bluetooth", "com.milink.service")
+val INTEGRATION_SCOPE_PACKAGES = persistentListOf("com.android.bluetooth", "com.xiaomi.bluetooth", "com.milink.service")
 
 // scan() prints pid:target for every process of a chosen scope. One grep over all cmdlines finds the candidates,
 // so only processes that mention a scope are read in full; the first NUL-delimited argv value must then be the
@@ -104,7 +105,7 @@ private val TARGETS = listOf("com.android.bluetooth", "com.xiaomi.bluetooth", "c
 // BridgeTarget.acceptsProcess. Every scope is snapshotted, then all are signalled with SIGTERM (never force-stop)
 // and share one deadline. A scope counts as restarted when a pid that was not there before appears; pids that are
 // still alive at the deadline mean the process ignored the signal. The seconds left are printed whenever they drop.
-// Targets are only ever members of TARGETS, so they are safe to inline into the script.
+// Targets are only ever members of INTEGRATION_SCOPE_PACKAGES, so they are safe to inline into the script.
 private fun restartScript(targets: List<String>, waitSeconds: Int) = """
     if [ "${'$'}(id -u)" != 0 ]; then exit 1; fi
     echo $ROOT_OK

@@ -8,7 +8,6 @@ import io.github.dohex.openrose.core.TouchControlCapabilities
 import io.github.dohex.openrose.core.protocol.BatteryLayout
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.GattProfile
-import io.github.dohex.openrose.core.protocol.ProtocolFamily
 import kotlinx.collections.immutable.persistentSetOf
 import kotlinx.collections.immutable.toPersistentSet
 
@@ -43,8 +42,8 @@ private val budsFeelMk2Capabilities = DeviceCapabilities(
 )
 
 internal val budsFeelMk2 = ModelSpec(
-    rsV2InfoIds = "0d0c092a0e322b01072f2e36",
-    displayName = "BudsFeel MK2", shortLabel = "BudsFeel MK2", family = ProtocolFamily.RS_COMMON_V2,
+    displayName = "BudsFeel MK2", shortLabel = "BudsFeel MK2",
+    protocol = ModelProtocol.RsCommonV2(infoIds = "0d0c092a0e322b01072f2e36"),
     advertisementPrefixes = listOf("0b150a0b"), nameBrand = "budsfeel", nameModelNumber = "mk2", nameRequiresModel = true,
     gatt = GattProfile(
         "000000fe-0000-1000-8000-00805f9b34fb",

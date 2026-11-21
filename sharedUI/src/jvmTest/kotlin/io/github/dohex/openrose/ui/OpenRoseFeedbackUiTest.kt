@@ -3,6 +3,12 @@ package io.github.dohex.openrose.ui
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.click
+import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.v2.runDesktopComposeUiTest
 import io.github.dohex.openrose.core.ConnectionPhase
 import io.github.dohex.openrose.core.ConnectionState
 import io.github.dohex.openrose.core.ControlError
@@ -31,6 +37,40 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class OpenRoseFeedbackUiTest {
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun failureFeedbackLeavesTheLastHomeRowTappableOnAPhone() {
+        val connected = connectedI7State()
+        val operation = SettingOperation(
+            id = 8,
+            sessionId = requireNotNull(connected.device).sessionId,
+            setting = DeviceSetting.NOISE_MODE,
+            requestedValue = FieldValue.Text("transparency"),
+            stage = SettingStage.TIMED_OUT,
+        )
+        for (style in InterfaceStyle.entries) {
+            runDesktopComposeUiTest(width = 390, height = 640) {
+                mainClock.autoAdvance = false
+                val scene = OpenRoseUiTestScene(this)
+                val model = FakeOpenRoseModel(
+                    mutableStateOf(connected.copy(settingOperations = persistentListOf(operation))),
+                    mutableStateOf(UiSettings(interfaceStyle = style, pageTransition = PageTransition.NONE)),
+                )
+                scene.setContent { OpenRoseApp(model, BasicPlatformUi("Test")) }
+                val harness = OpenRoseUiTestHarness(scene)
+                harness.render()
+                harness.scrollToText("设备详情")
+                harness.render()
+                val row = harness.clickableBounds("设备详情")
+                val diagnosticButton = harness.clickableBounds("查看诊断")
+                assertTrue(row.bottom <= diagnosticButton.top, "Last row $row overlaps feedback button $diagnosticButton in $style")
+                onRoot().performTouchInput { click(Offset(diagnosticButton.center.x, row.center.y)) }
+                harness.render()
+                assertTrue(harness.hasText("型号配置"), "Touch must open device details in $style")
+            }
+        }
+    }
+
     @Test
     fun pendingFeedbackDoesNotMoveTheNoiseControls() {
         for (style in InterfaceStyle.entries) {

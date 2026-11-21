@@ -10,10 +10,13 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.yield
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
@@ -58,6 +61,23 @@ class BluezGattDriverTest {
         val ownerLost = async(start = CoroutineStart.UNDISPATCHED) { driver.events.first() }
         bus.events.emit(BluezSignal.Owner(false))
         assertEquals(GattFailureKind.DISCONNECTED, (ownerLost.await() as GattEvent.Disconnected).failure.kind)
+    }
+
+    @Test
+    fun losingOnlyTheLeBearerEndsTheControlLinkWithClassicAudioStillConnected() = runTest {
+        val bus = FakeBluezBus().apply { snapshot = dualModeGattObjects(true) }
+        val driver = BluezGattDriver(bus, DEVICE_PATH)
+        val notify = driver.discoverServices().single().characteristics.single()
+        driver.configureSubscription(notify, GattSubscription.NOTIFY)
+        val event = async(start = CoroutineStart.UNDISPATCHED) { withTimeout(1_000) { driver.events.first() } }
+        bus.events.emit(BluezSignal.Changed("/org/bluez/hci1/dev_00_11_22_33_44_55", LE_BEARER, mapOf("Connected" to false)))
+        yield()
+        assertFalse(event.isCompleted)
+        bus.snapshot = dualModeGattObjects(false)
+        bus.events.emit(BluezSignal.Changed(DEVICE_PATH, LE_BEARER, mapOf("Connected" to false)))
+        assertEquals(GattFailureKind.DISCONNECTED, (event.await() as GattEvent.Disconnected).failure.kind)
+        driver.close()
+        assertEquals(listOf("start:$CHAR_PATH", "stop:$CHAR_PATH"), bus.notifications)
     }
 
     @Test

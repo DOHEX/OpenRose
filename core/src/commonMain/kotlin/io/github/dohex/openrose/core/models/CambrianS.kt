@@ -2,13 +2,12 @@ package io.github.dohex.openrose.core.models
 
 import io.github.dohex.openrose.core.protocol.BatteryLayout
 import io.github.dohex.openrose.core.protocol.GattProfile
-import io.github.dohex.openrose.core.protocol.ProtocolFamily
 import io.github.dohex.openrose.core.protocol.RsCommonInit
 
 internal val cambrianS = ModelSpec(
     displayName = "Cambrian S",
     shortLabel = "Cambrian S",
-    family = ProtocolFamily.RS_COMMON,
+    protocol = ModelProtocol.RsCommon(initialization = RsCommonInit.CAMBRIAN),
     advertisementPrefixes = listOf("0b0c2b46"),
     nameBrand = "cambrian",
     nameModelNumber = "cambrian s",
@@ -23,6 +22,5 @@ internal val cambrianS = ModelSpec(
     advertisedClassicAddress = { rsCommonClassicAddress(it, 10) },
     batteryLayout = BatteryLayout.SINGLE_UNIT,
     equalizerPresetLabels = mapOf("pop" to "POP", "hifi" to "HIFI", "rock" to "ROCK"),
-    rsCommonInit = RsCommonInit.CAMBRIAN,
     capabilities = { cambrianControls },
 )

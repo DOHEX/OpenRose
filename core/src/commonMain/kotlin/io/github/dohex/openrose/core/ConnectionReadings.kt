@@ -18,7 +18,7 @@ internal class ConnectionReadings(private val profile: ModelProfile) {
         observed.putAll(reply.readings)
         val game = observed[DeviceField.GAME_MODE]
         val changedGame = previousGame != null && game != previousGame
-        if (changedGame && profile.spec.refreshEqualizerAfterGameMode && DeviceField.EQ !in reply.readings) {
+        if (changedGame && profile.spec.protocol.refreshEqualizerAfterGameMode && DeviceField.EQ !in reply.readings) {
             observed.remove(DeviceField.EQ)
         }
         if (DeviceField.GAME_MODE in reply.readings || DeviceField.FIRMWARE in reply.readings) {

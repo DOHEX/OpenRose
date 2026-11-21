@@ -52,7 +52,7 @@ class HeadsetEndpoint(private val control: ControlRuntime) {
         val id = state.audioDeviceId ?: return mapOf("status" to "idle")
         val candidates = listOfNotNull(state.connectionTarget) + state.bondedDevices + state.candidates
         val held = candidates.any {
-            it.profile == ModelProfile.I5_ZT && (it.deviceId == id || it.classicAddress == id.value)
+            it.profile == ModelProfile.I5_ZT && it.matchesAudioDevice(id)
         }
         return if (held) mapOf("status" to "recovering", "deviceName" to ModelProfile.I5_ZT.displayName) else mapOf("status" to "idle")
     }
@@ -83,12 +83,9 @@ fun CirculationNode.localCommand(fields: Map<String, String>): Map<String, Strin
 
     "circulation" -> circulationStatus(fields["address"])
 
-    "list" -> buildMap {
-        peers.value.forEach { put("paired.${it.id}", it.name) }
-        nearby.value.forEach { put("near.${it.id}", it.name) }
-    }
+    "list" -> directoryFields()
 
-    "offer" -> offerPairing().let { mapOf("code" to it.code, "qr" to it.qr) }
+    "offer" -> offerPairing().fields()
 
     "pair" -> {
         pair(fields.getValue("peer"), fields.getValue("code"))
@@ -109,6 +106,16 @@ fun CirculationNode.localCommand(fields: Map<String, String>): Map<String, Strin
 
     else -> mapOf("error" to "未知的互联操作")
 }
+
+private fun CirculationNode.directoryFields(): Map<String, String> = buildMap {
+    peers.value.forEach { put("paired.${it.id}", it.name) }
+    nearby.value.forEach { put("near.${it.id}", it.name) }
+    val offer = currentOffer()
+    put("offerState", if (offer == null) "idle" else "active")
+    offer?.let { putAll(it.fields()) }
+}
+
+private fun PairingOffer.fields() = mapOf("code" to code, "qr" to qr, "validForMillis" to validForMillis.toString())
 
 private fun CirculationNode.circulationStatus(address: String?): Map<String, String> = buildMap {
     if (address != null) put("mediaReady", (circulation?.isMediaConnected(address) == true).toString())

@@ -5,8 +5,6 @@ import io.github.dohex.openrose.core.TouchSlot
 import io.github.dohex.openrose.core.protocol.BatteryLayout
 import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.dohex.openrose.core.protocol.GattProfile
-import io.github.dohex.openrose.core.protocol.ProtocolFamily
-import io.github.dohex.openrose.core.protocol.RsCommonInit
 import kotlinx.collections.immutable.PersistentSet
 import kotlinx.collections.immutable.persistentSetOf
 import kotlinx.collections.immutable.toPersistentSet
@@ -18,7 +16,7 @@ import kotlinx.collections.immutable.toPersistentSet
 internal class ModelSpec(
     val displayName: String,
     val shortLabel: String,
-    val family: ProtocolFamily,
+    val protocol: ModelProtocol,
     /** Lowercase normalized manufacturer-data prefixes, each as long as one of [ROSELINK_PREFIX_LENGTHS]. */
     val advertisementPrefixes: List<String>,
     /** Lowercase brand word that admits a device name, and decides this model when the name has no model number. */
@@ -40,36 +38,8 @@ internal class ModelSpec(
     /** The vendor app's names for equalizer presets. */
     val equalizerPresetLabels: Map<String, String>,
     val capabilities: (FieldValue.Firmware?) -> DeviceCapabilities,
-    /** ZT Sender differences, taken from each model's protocol document. */
-    val ztInitKeys: List<String> = emptyList(),
-    val ztThreeByteNoise: Boolean = false,
-    val ztIndependentMultipoint: Boolean = false,
-    val ztLevelWriteOffset: Int = 0,
-    val ztPromptVolumeDirect: Boolean = false,
-    val ztFindStopReadOpcode: Boolean = false,
-    /** F8 models vary in initialization, normal-mode encoding and EQ read semantics. */
-    val f8ExtendedInit: Boolean = false,
-    val f8NoiseNormalWire: Int = 3,
-    /** EQ readback 2 is Rock on extended models, aliases the first preset on AGATE, and is ambiguous on CERAMICS. */
-    val f8EqAtTwo: String? = "rock",
     /** On models with separate music/game presets a confirmed game-mode reading selects the bank. */
     val gameEqualizerPresets: Set<String>? = null,
-    /** RoseLink refreshes EQ after either game-mode command on these models. */
-    val refreshEqualizerAfterGameMode: Boolean = false,
-    val spatialNeedsEarAdaptive: Boolean = false,
-    val synchronizeClockOnConnect: Boolean = false,
-    /** Ordered feature IDs included in the model's 3.8.6 FA batch. Null uses the original sender's fixed list. */
-    val rsV2InfoIds: String? = null,
-    val rsCommonInit: RsCommonInit = RsCommonInit.DEFAULT,
-    /** Touch action names to the action code each model's RoseLink action table sends. */
-    val rsCommonTouchActions: Map<String, Int> = mapOf(
-        "none" to 0,
-        "play_pause" to 1,
-        "previous_track" to 2,
-        "next_track" to 3,
-        "volume_up" to 4,
-        "volume_down" to 5,
-    ),
 ) {
     init {
         require(
@@ -79,8 +49,6 @@ internal class ModelSpec(
         require(nameBrand.isNotBlank() && nameBrand == nameBrand.lowercase()) { "$displayName 的品牌词须为小写" }
         require(nameModelNumber.isNotBlank() && nameModelNumber == nameModelNumber.lowercase()) { "$displayName 的型号词须为小写" }
         require(writeIntervalMillis >= 0) { "$displayName 的写入间隔不能为负" }
-        // RoseLink 把动作码按单个十进制数字拼进触控帧；两位数会多出一个字符并破坏声明长度。
-        require(rsCommonTouchActions.values.all { it in 0..9 }) { "$displayName 的触控动作码须为单个十进制数字" }
     }
 }
 

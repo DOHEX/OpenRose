@@ -19,14 +19,16 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * Whether the module owner may still hold the session. It is set when module control is selected and
- * cleared only by [ReleaseProof], so ordinary control cannot start while a module owner is unaccounted for.
+ * cleared only after ordinary control is published to the host and its previous owner is covered by [ReleaseProof].
  */
 data class PendingModuleRelease(val requestId: String?, val generation: OwnerGeneration?)
 
@@ -41,6 +43,9 @@ interface OwnerSelectionStore {
 
     /** True only when the record is durable and visible to the module host; false changes nothing. */
     fun save(record: OwnerRecord): Boolean
+
+    /** Re-publishes the durable selection after a process interruption between the local and remote writes. */
+    suspend fun publishSelection(): Boolean
 
     /** Whether [save] could succeed now, so a handoff can refuse before it closes anything. */
     fun canSave(record: OwnerRecord): Boolean = true
@@ -106,6 +111,7 @@ class SwitchingControlRuntime(
     private var blocked: OwnerReadiness.SwitchBlocked? = null
     private var lastHandoff: HandoffOutcome? = null
     private var releaseRetry: Job? = null
+    private var needsSelectionPublication = false
     private val mutableState = MutableStateFlow(composeControl())
     private val mutableIntegration = MutableStateFlow(composeIntegration())
 
@@ -170,7 +176,12 @@ class SwitchingControlRuntime(
     private fun startup() {
         when {
             record.selected == ControlWay.ORDINARY && record.moduleRelease == null -> startOrdinary()
-            record.selected != ControlWay.MODULE && record.moduleRelease != null -> resumeModuleRelease()
+
+            record.selected != ControlWay.MODULE && record.moduleRelease != null -> {
+                needsSelectionPublication = true
+                resumeModuleRelease()
+            }
+
             record.selected == ControlWay.MODULE -> client.start()
         }
     }
@@ -186,23 +197,24 @@ class SwitchingControlRuntime(
     private suspend fun switchTo(target: ControlWay): HandoffOutcome {
         val previous = record
         val request = SwitchRequest(newId(), previous.selected, target, previous.moduleRelease?.generation ?: client.lastObservedGeneration)
-        releaseRetry?.cancelAndJoin()
-        releaseRetry = null
         switching = request
         blocked = null
         refresh()
         val next = OwnerRecord(
             selected = target,
-            moduleRelease = if (target == ControlWay.MODULE) {
-                previous.moduleRelease ?: PendingModuleRelease(request.id, null)
-            } else {
-                previous.moduleRelease
+            moduleRelease = when {
+                previous.moduleRelease != null -> previous.moduleRelease
+                target == ControlWay.MODULE -> PendingModuleRelease(request.id, null)
+                previous.selected == ControlWay.MODULE -> PendingModuleRelease(request.id, request.fromGeneration)
+                else -> null
             },
         )
         val saves = next != previous
         if (saves && !store.canSave(next)) {
             return finish(HandoffOutcome.Blocked(request, OwnerFailureStage.SELECTION_PERSISTENCE, "无法保存控制方式，未做任何切换"))
         }
+        releaseRetry?.cancelAndJoin()
+        releaseRetry = null
         // Saving module control tells the module host, which then connects by itself. So while an ordinary
         // connection is open it is closed first; in every other direction the intent is made durable first,
         // so a restarted module host never reclaims what the user left.
@@ -210,8 +222,10 @@ class SwitchingControlRuntime(
         if (closeFirst) closeOrdinary(request)?.let { return it }
         if (saves && !store.save(next)) {
             if (closeFirst) startOrdinary()
+            if (previous.selected == ControlWay.ORDINARY && previous.moduleRelease != null) resumeModuleRelease()
             return finish(HandoffOutcome.Blocked(request, OwnerFailureStage.SELECTION_PERSISTENCE, "无法保存控制方式，未做任何切换"))
         }
+        if (previous.selected != target) needsSelectionPublication = false
         record = next
         integrationSettings = integrationSettings.copy(controlWay = target)
         closeOrdinary(request)?.let { return it }
@@ -238,7 +252,7 @@ class SwitchingControlRuntime(
     private suspend fun returnToOrdinary(request: SwitchRequest): HandoffOutcome {
         client.stop()
         if (record.moduleRelease != null) {
-            when (val proof = client.release(request.copy(fromGeneration = record.moduleRelease?.generation ?: request.fromGeneration))) {
+            when (val proof = releaseModule(request.copy(fromGeneration = record.moduleRelease?.generation ?: request.fromGeneration))) {
                 is ReleaseProof.Unproven -> {
                     releaseRetry = scope.launch { retryModuleRelease() }
                     return finish(HandoffOutcome.Blocked(request, proof.stage, proof.reason))
@@ -249,6 +263,18 @@ class SwitchingControlRuntime(
         }
         startOrdinary()
         return finish(HandoffOutcome.Completed(request))
+    }
+
+    private suspend fun releaseModule(request: SwitchRequest): ReleaseProof {
+        if (needsSelectionPublication) {
+            // A prior process may have written the local record and exited before the framework acknowledged it.
+            // Publish first, so a restarted host cannot reacquire after the current incarnation supplies its proof.
+            if (!store.publishSelection()) {
+                return ReleaseProof.Unproven(OwnerFailureStage.SELECTION_PERSISTENCE, "尚未向模块宿主保存普通控制")
+            }
+            needsSelectionPublication = false
+        }
+        return client.release(request)
     }
 
     private fun clearModuleRelease() {
@@ -277,7 +303,7 @@ class SwitchingControlRuntime(
         while (scope.isActive && record.selected != ControlWay.MODULE && record.moduleRelease != null) {
             adoptObservedOwner()
             val request = SwitchRequest(newId(), ControlWay.MODULE, record.selected, record.moduleRelease?.generation)
-            when (val proof = client.release(request)) {
+            when (val proof = releaseModule(request)) {
                 is ReleaseProof.Unproven -> {
                     blocked = OwnerReadiness.SwitchBlocked(request, proof.stage, proof.reason)
                     refresh()
@@ -390,7 +416,11 @@ class SwitchingControlRuntime(
             record.selected == ControlWay.MODULE && view is ModuleView.Active -> {
                 val frame = view.frame
                 frame.state.copy(
-                    platform = platform.copy(permission = frame.platform.permission, transport = frame.platform.transport),
+                    platform = platform.copy(
+                        permission = frame.platform.permission,
+                        transport = frame.platform.transport,
+                        scanPermission = frame.platform.scanPermission,
+                    ),
                     settings = settings,
                 )
             }
@@ -507,7 +537,24 @@ class SwitchingControlRuntime(
         if (pinned) HostCommand.ConnectFromSystem(deviceId) else HostCommand.Connect(deviceId),
     )
 
-    override suspend fun connectFromSystem(deviceId: DeviceId) = connect(deviceId, pinned = true)
+    override suspend fun connectFromSystem(deviceId: DeviceId): OperationResult {
+        val initial = integration.value.owner
+        if (initial.selected != ControlWay.MODULE) return connect(deviceId, pinned = true)
+        val owner = if (initial.readiness == OwnerReadiness.Starting) {
+            withTimeoutOrNull(timing.acquireTimeoutMillis) {
+                integration.first { it.owner.selected != ControlWay.MODULE || it.owner.readiness != OwnerReadiness.Starting }.owner
+            }
+        } else {
+            initial
+        }
+        val readiness = owner?.readiness
+        return when {
+            owner == null -> OperationResult.Failure(ControlError(ControlErrorCode.TIMEOUT, "等待模块控制宿主就绪超时"))
+            owner.selected != ControlWay.MODULE -> noOwner()
+            readiness is OwnerReadiness.Unavailable -> OperationResult.Failure(ControlError(ControlErrorCode.NOT_READY, readiness.reason))
+            else -> connect(deviceId, pinned = true)
+        }
+    }
 
     override suspend fun connectForAddDevice(deviceId: DeviceId) = route(
         { it.connectForAddDevice(deviceId) },

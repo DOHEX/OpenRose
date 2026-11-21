@@ -324,7 +324,7 @@ private fun UnconnectedHeadphonesDashboard(
                     )
                     primaryDevice.profile?.let {
                         AppText(
-                            it.family.displayName,
+                            it.configurationCaption,
                             role = AppTextRole.Footnote,
                             color = appColor(AppColorRole.Primary),
                         )
@@ -440,7 +440,7 @@ private fun UnconnectedHeadphonesDashboard(
                             Column {
                                 AppText(paired.name?.takeIf(String::isNotBlank) ?: paired.profile!!.displayName)
                                 paired.profile?.let {
-                                    AppText(it.family.displayName, role = AppTextRole.Summary)
+                                    AppText(it.configurationCaption, role = AppTextRole.Summary)
                                 }
                             }
                         }
@@ -522,7 +522,7 @@ internal fun BatteryStrip(device: DeviceState, initializing: Boolean, showUnknow
 internal fun DeviceDetails(state: ControlState, device: DeviceState, onDisconnect: () -> Unit, onDiagnostics: () -> Unit) {
     val initializing = state.connection.phaseOrNull() == ConnectionPhase.INITIALIZING
     AppGroup {
-        AppInfoRow("型号配置", "${device.profile.displayName} · ${device.profile.family.displayName}")
+        AppInfoRow("型号配置", "${device.profile.configurationLabel} · ${device.profile.family.displayName}")
         if (DeviceField.FIRMWARE in device.capabilities.readableFields) {
             AppInfoRow(
                 "固件",
@@ -581,7 +581,7 @@ internal fun ConnectionDetailsCard(state: ControlState) {
     ).joinToString("\n").ifBlank { null }
 
     AppGroup(title = "当前连接", footnote = footnote) {
-        AppInfoRow("设备", state.activeDevice()?.profile?.displayName ?: "未连接")
+        AppInfoRow("设备", state.activeDevice()?.profile?.configurationLabel ?: "未连接")
         AppInfoRow("连接阶段", state.connection.phaseOrNull()?.displayText() ?: "未连接耳机")
         state.controlTransportLabel()?.let { AppInfoRow("控制传输", it) }
     }
