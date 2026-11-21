@@ -14,11 +14,6 @@ internal interface PresentationCallbacks {
     fun report(snapshot: Bundle, feature: String, status: String, detail: String)
 }
 
-/** Platform failures in an injected process are reported by the operation that owns the affected state. */
-internal fun interface PresentationFailureBoundary {
-    fun attempt(block: () -> Unit, onFailure: (Throwable) -> Unit)
-}
-
 /**
  * Renders the module owner's trusted snapshot in com.android.bluetooth, the host process itself.
  *
@@ -41,7 +36,6 @@ internal class SystemPresentationRenderer(
     @Volatile private var closed = false
     private var current: RenderedSnapshot? = null
     private val reportedStatus = mutableMapOf<String, String>()
-    private val boundary = PresentationFailureBoundary(::attempt)
     private val notifications = PresentationNotifications(appContext)
     private val actionSession: PresentationActionSession = object : PresentationActionSession {
         override val currentSnapshot: RenderedSnapshot? get() = if (closed) null else current
@@ -50,15 +44,14 @@ internal class SystemPresentationRenderer(
             reportOnce(snapshot, BridgePresentationWire.STATUS_NOTIFICATION, BridgePresentationWire.ACTION_FAILED, detail)
         }
     }
-    private val actions = PresentationActions(appContext, handler, callbacks, actionSession, boundary)
+    private val actions = PresentationActions(appContext, handler, callbacks, actionSession)
     private val content = PresentationNotificationContent(appContext, actions)
-    private val statusNotification = HeadsetStatusNotification(notifications, content, boundary, ::reportOnce)
+    private val statusNotification = HeadsetStatusNotification(notifications, content, ::reportOnce)
     private val prompt = ModuleConnectionPrompt(
         handler,
         callbacks,
         notifications,
         content,
-        boundary,
         { actionSession.currentSnapshot?.identity },
         ::reportOnce,
     )
@@ -116,14 +109,6 @@ internal class SystemPresentationRenderer(
         current = null
         actions.unregister()
         reportedStatus.clear()
-    }
-
-    private fun attempt(block: () -> Unit, onFailure: (Throwable) -> Unit) {
-        try {
-            block()
-        } catch (failure: Throwable) {
-            onFailure(failure)
-        }
     }
 
     private fun reportOnce(snapshot: Bundle, feature: String, status: String, detail: String) {

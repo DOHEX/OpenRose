@@ -16,6 +16,7 @@ import android.os.Handler
 import android.util.Log
 import io.github.dohex.openrose.androidintegration.wire.BridgePresentationWire
 import io.github.dohex.openrose.androidintegration.wire.BridgeWire
+import io.github.dohex.openrose.module.systemIntegrationResult
 import java.util.UUID
 import java.util.concurrent.SynchronousQueue
 import java.util.concurrent.ThreadPoolExecutor
@@ -27,7 +28,6 @@ internal class PresentationActions(
     private val handler: Handler,
     private val callbacks: PresentationCallbacks,
     private val session: PresentationActionSession,
-    private val boundary: PresentationFailureBoundary,
 ) {
     private val executor = ThreadPoolExecutor(
         0,
@@ -81,7 +81,7 @@ internal class PresentationActions(
             addDataScheme(ACTION_DATA_SCHEME)
             addDataAuthority(ACTION_DATA_HOST, null)
         }
-        boundary.attempt({
+        systemIntegrationResult {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 appContext.registerReceiver(receiver, filter, BLUETOOTH_PRIVILEGED_PERMISSION, handler, Context.RECEIVER_NOT_EXPORTED)
             } else {
@@ -89,7 +89,7 @@ internal class PresentationActions(
                 appContext.registerReceiver(receiver, filter, BLUETOOTH_PRIVILEGED_PERMISSION, handler)
             }
             registration = ActionRegistration(action, token)
-        }) { failure ->
+        }.onFailure { failure ->
             registration = null
             Log.w(PRESENTATION_TAG, "action_receiver_registration_failed", failure)
         }
@@ -98,7 +98,7 @@ internal class PresentationActions(
     fun unregister() {
         pending.clear()
         if (registered) {
-            boundary.attempt({ appContext.unregisterReceiver(receiver) }) {
+            systemIntegrationResult { appContext.unregisterReceiver(receiver) }.onFailure {
                 Log.w(PRESENTATION_TAG, "action_receiver_unregister_failed", it)
             }
         }
@@ -162,7 +162,7 @@ internal class PresentationActions(
         val token = registration?.token ?: return
         val key = "${snapshot.identity.stableKey}:$token:$operation"
         if (!pending.add(key)) return
-        boundary.attempt({
+        systemIntegrationResult {
             executor.execute {
                 val result = runCatching(perform)
                 handler.post {
@@ -171,7 +171,7 @@ internal class PresentationActions(
                     failureDetail(result)?.let { session.reportActionFailure(snapshot.wire, it) }
                 }
             }
-        }) { failure ->
+        }.onFailure { failure ->
             pending.remove(key)
             session.reportActionFailure(snapshot.wire, "$dispatchFailure:${failure.javaClass.simpleName}")
         }

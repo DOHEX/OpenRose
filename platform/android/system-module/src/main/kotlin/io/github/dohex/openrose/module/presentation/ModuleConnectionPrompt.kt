@@ -5,6 +5,7 @@ import android.os.Handler
 import android.os.SystemClock
 import android.util.Log
 import io.github.dohex.openrose.androidintegration.wire.BridgePresentationWire
+import io.github.dohex.openrose.module.systemIntegrationResult
 import java.security.MessageDigest
 
 /** Claims module prompts and owns their timeout, including prompts merged into the status island. */
@@ -13,7 +14,6 @@ internal class ModuleConnectionPrompt(
     private val callbacks: PresentationCallbacks,
     private val notifications: PresentationNotifications,
     private val content: PresentationNotificationContent,
-    private val boundary: PresentationFailureBoundary,
     private val currentIdentity: () -> SessionIdentity?,
     private val reportOnce: (Bundle, String, String, String) -> Unit,
 ) {
@@ -110,7 +110,7 @@ internal class ModuleConnectionPrompt(
             return
         }
         val tag = "$MODULE_TAG_PREFIX${stableDigest(key)}"
-        boundary.attempt({
+        systemIntegrationResult {
             val extras = content.promptExtras(snapshot, duration)
             notifications.ensureChannel(PROMPT_CHANNEL_ID, "OpenRose 系统提示")
             notifications.post(tag, MODULE_PROMPT_NOTIFICATION_ID, content.promptNotification(snapshot, extras))
@@ -123,7 +123,7 @@ internal class ModuleConnectionPrompt(
             )
 
             startPrompt(ActivePrompt(snapshot.identity, promptId, tag, snapshot.wire), duration)
-        }) { failure ->
+        }.onFailure { failure ->
             Log.w(PRESENTATION_TAG, "module_prompt_failed", failure)
             runCatching { notifications.cancel(tag, MODULE_PROMPT_NOTIFICATION_ID) }
             processedPrompts += key

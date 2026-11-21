@@ -3,12 +3,12 @@ package io.github.dohex.openrose.module.presentation
 import android.os.Bundle
 import android.util.Log
 import io.github.dohex.openrose.androidintegration.wire.BridgePresentationWire
+import io.github.dohex.openrose.module.systemIntegrationResult
 
 /** Owns the persistent headset status notification and its last published content. */
 internal class HeadsetStatusNotification(
     private val notifications: PresentationNotifications,
     private val content: PresentationNotificationContent,
-    private val boundary: PresentationFailureBoundary,
     private val reportOnce: (Bundle, String, String, String) -> Unit,
 ) {
     private var statusTag: String? = null
@@ -20,7 +20,7 @@ internal class HeadsetStatusNotification(
     fun render(snapshot: RenderedSnapshot, onPromptShown: (() -> Unit)?) {
         val requestedTag = prepareStatusTag(snapshot) ?: return
         // A merged module prompt is shown as the status island's entrance, replayed by posting the notification afresh.
-        boundary.attempt({ publishStatusCard(snapshot, requestedTag, onPromptShown) }) { failure ->
+        systemIntegrationResult { publishStatusCard(snapshot, requestedTag, onPromptShown) }.onFailure { failure ->
             Log.w(PRESENTATION_TAG, "status_notification_failed", failure)
             runCatching { notifications.cancel(requestedTag, STATUS_NOTIFICATION_ID) }
             statusTag = null
