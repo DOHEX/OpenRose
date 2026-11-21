@@ -22,8 +22,6 @@ internal class ConnectionTargeting(
     private var audioDrivenSessionDeviceId: DeviceId? = null
     private var autoConnectJob: Job? = null
 
-    /** The newest audio-connection fact, kept while automatic control must wait for first unlock. */
-    private var latestAudioDevice: DeviceId? = null
     private var systemPinnedDeviceId: DeviceId? = null
     private data class TargetIntent(val epoch: Long, val deviceId: DeviceId?)
     private val targetIntent = MutableStateFlow(TargetIntent(0L, null))
@@ -34,12 +32,12 @@ internal class ConnectionTargeting(
         if (transport != null) {
             scope.launch(start = CoroutineStart.UNDISPATCHED) {
                 audioPermission.collectLatest { permitted ->
-                    latestAudioDevice = null
+                    state.update { it.copy(audioDeviceId = null) }
                     if (permitted) {
                         coroutineScope {
                             launch { discovery.refreshBondedDevices() }
                             transport.audioConnectedDevice.collect { audioDeviceId ->
-                                latestAudioDevice = audioDeviceId
+                                state.update { it.copy(audioDeviceId = audioDeviceId) }
                                 discovery.refreshBondedDevices()
                                 if (state.value.platform.userUnlocked) handleAudioConnectedDevice(audioDeviceId)
                             }
@@ -169,11 +167,16 @@ internal class ConnectionTargeting(
             candidate = candidate,
             cancelWithCaller = cancelWithCaller,
             isSuperseded = { isRequestSuperseded(requestEpoch, isAudioDriven, deviceId) },
-            onStarted = { audioDrivenSessionDeviceId = if (isAudioDriven) deviceId else null },
+            onStarted = { audioDrivenSessionDeviceId = audioSessionTarget(deviceId, isAudioDriven) },
             onAttemptFailed = {
                 if (audioDrivenSessionDeviceId == deviceId) audioDrivenSessionDeviceId = null
             },
         )
+    }
+
+    private fun audioSessionTarget(deviceId: DeviceId, isAudioDriven: Boolean): DeviceId? {
+        val current = state.value
+        return deviceId.takeIf { isAudioDriven || (current.platform.hostPlatform.isDesktop && current.audioDeviceId == it) }
     }
 
     suspend fun disconnect(): Boolean {
@@ -196,7 +199,7 @@ internal class ConnectionTargeting(
         // Existing audio may predate unlock or asynchronous platform transport initialization.
         if (!previous.canReadAudio || !platformState.canReadAudio || !platformState.userUnlocked) return
         if ((unlocking || transportReady) && transport != null) {
-            scope.launch { latestAudioDevice?.let { handleAudioConnectedDevice(it) } }
+            scope.launch { state.value.audioDeviceId?.let { handleAudioConnectedDevice(it) } }
         }
     }
 

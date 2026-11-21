@@ -470,7 +470,7 @@ private fun UnconnectedHeadphonesDashboard(
 }
 
 @Composable
-internal fun BatteryStrip(device: DeviceState, initializing: Boolean) {
+internal fun BatteryStrip(device: DeviceState, initializing: Boolean, showUnknown: Boolean = false) {
     val isMaterial3 = LocalInterfaceStyle.current == InterfaceStyle.MATERIAL3
     Row(
         Modifier.fillMaxWidth(),
@@ -499,7 +499,9 @@ internal fun BatteryStrip(device: DeviceState, initializing: Boolean) {
             ) {
                 AppText(label, role = AppTextRole.Footnote)
                 AppText(
-                    if (device.fields[field] is FieldReading.NotProvided) {
+                    if (showUnknown && percent == null) {
+                        "未知"
+                    } else if (device.fields[field] is FieldReading.NotProvided) {
                         "-"
                     } else {
                         readingText(field, device.fields[field], initializing, device.fieldErrors[field], device.profile)

@@ -59,6 +59,27 @@ class ControlSessionAudioLifecycleTest {
     }
 
     @Test
+    fun retryingDesktopControlWhileAudioIsConnectedFollowsTheNextAudioDisconnect() = runTest {
+        val id = DeviceId("bonded-i5")
+        val paired = DeviceCandidate(id, "EarFree i5", null, ModelProfile.I5_ZT, "")
+        val transport = TestAudioTransport(TestAudioConnection(i5Replies), listOf(paired))
+        val session = ControlSession(
+            PlatformState(PermissionState.NOT_REQUIRED, TransportAvailability.Available, hostPlatform = HostPlatform.LINUX),
+            transport = transport,
+            scope = backgroundScope,
+            timing = SessionTiming(writeIntervalMillis = 0),
+        )
+        transport.audioDeviceFlow.emit(id)
+        runCurrent()
+        session.disconnect()
+        assertEquals(OperationResult.Success, session.connect(id))
+        transport.audioDeviceFlow.emit(null)
+        runCurrent()
+        assertEquals(ConnectionState.Disconnected, session.state.value.connection)
+        assertEquals(null, session.state.value.device)
+    }
+
+    @Test
     fun autoDisconnectWhenSystemAudioDisconnects() = runTest {
         val connection = TestAudioConnection(i5Replies)
         val bondedCandidate = DeviceCandidate(

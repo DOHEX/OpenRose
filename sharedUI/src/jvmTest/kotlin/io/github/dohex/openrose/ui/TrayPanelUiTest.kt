@@ -8,6 +8,7 @@ import io.github.dohex.openrose.core.ConnectionState
 import io.github.dohex.openrose.core.ControlState
 import io.github.dohex.openrose.core.DeviceCandidate
 import io.github.dohex.openrose.core.DeviceSetting
+import io.github.dohex.openrose.core.HostPlatform
 import io.github.dohex.openrose.core.SettingOperation
 import io.github.dohex.openrose.core.SettingStage
 import io.github.dohex.openrose.core.protocol.DeviceField
@@ -79,6 +80,23 @@ class TrayPanelUiTest {
                 assertEquals(listOf(second.deviceId), panel.model.connectRequests, "primary device in $style")
             }
         }
+    }
+
+    @Test
+    fun desktopCanRetryOnlyControlWhenAudioIsAlreadyConnected() {
+        val base = disconnectedAndroidState()
+        val state = base.copy(
+            platform = base.platform.copy(hostPlatform = HostPlatform.LINUX),
+            bondedDevices = persistentListOf(first),
+            audioDeviceId = first.deviceId,
+        )
+        withTrayPanel(state, InterfaceStyle.MIUIX) { panel ->
+            panel.render()
+            panel.clickText("重试耳机控制")
+            assertEquals(listOf(first.deviceId), panel.model.connectRequests)
+        }
+        val loading = state.copy(connection = ConnectionState.Connecting(first.deviceId, 1L, ConnectionPhase.DISCOVERING))
+        assertTrue("耳机已接入，正在恢复控制" in traySummary(loading, PrimaryDeviceSelection()).title)
     }
 
     @Test
@@ -255,6 +273,21 @@ class TrayPanelUiTest {
         assertTrue(waiting.none { it.enabled })
         // Only the device's read-back is ever selected, never the requested value.
         assertEquals(idle.single { it.selected }.mode, waiting.single { it.selected }.mode)
+    }
+
+    @Test
+    fun desktopTrayNamesEachBatteryEvenWhenTheHeadsetOmitsTheReading() {
+        val connected = connectedI7State()
+        val device = requireNotNull(connected.device)
+        val state = connected.copy(
+            platform = connected.platform.copy(hostPlatform = HostPlatform.LINUX),
+            device = device.copy(fields = persistentMapOf(DeviceField.LEFT_BATTERY to FieldReading.Known(FieldValue.Number(98), "62"))),
+        )
+        assertEquals("左耳 98% · 右耳 未知 · 充电盒 未知", traySummary(state, PrimaryDeviceSelection()).battery)
+        withTrayPanel(state, InterfaceStyle.MIUIX) { panel ->
+            panel.render()
+            assertTrue(panel.hasText("未知"))
+        }
     }
 
     @Test
