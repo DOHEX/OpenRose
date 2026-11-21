@@ -3,6 +3,7 @@ package io.github.dohex.openrose.desktop
 import io.github.dohex.openrose.circulation.NearbyPeer
 import io.github.dohex.openrose.circulation.PeerDiscovery
 import javax.jmdns.JmmDNS
+import javax.jmdns.NetworkTopologyDiscovery
 import javax.jmdns.ServiceEvent
 import javax.jmdns.ServiceInfo
 import javax.jmdns.ServiceListener
@@ -14,6 +15,7 @@ class DesktopPeerDiscovery : PeerDiscovery {
 
     override fun start(id: String, name: String, port: Int, found: (List<NearbyPeer>) -> Unit) {
         val type = PeerDiscovery.TYPE + "local."
+        NetworkTopologyDiscovery.Factory.setClassDelegate { DesktopNetworkTopology() }
         val mdns = JmmDNS.Factory.getInstance()
         dns = mdns
         mdns.addServiceListener(
