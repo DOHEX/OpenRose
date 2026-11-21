@@ -16,6 +16,11 @@ dependencies {
     implementation(libs.compose.foundation)
     implementation(libs.compose.ui)
     implementation(libs.material3)
+    testImplementation(kotlin("test-junit"))
+    testImplementation(libs.compose.ui.test)
+}
+tasks.withType<Test>().configureEach {
+    systemProperty("java.awt.headless", "true")
 }
 // `run` starts it; the bundled Compose Hot Reload adds `hotRun`, which reloads edits to this and every UI module.
 compose.desktop {
