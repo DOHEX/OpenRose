@@ -19,6 +19,7 @@
   ```
 
   其中 `rpm` 和 `libarchive-tools` 用于打包 RPM / Pacman。真实运行桌面版控制耳机还需要已运行的 BlueZ、可访问的系统 D-Bus 和已开启且支持 BLE 的适配器；DEB、RPM、Pacman 声明 `bluez` 依赖，AppImage 依赖宿主的 BlueZ。Linux 托盘需要 `libsystemd`。
+- Windows 桌面构建需要 Rust stable（MSVC 工具链）和 Visual Studio C++ Build Tools。Gradle 会编译 WinRT 蓝牙组件并随 MSI 分发。
 - 仓库自带 Gradle Wrapper。Windows 下把 `./gradlew` 换成 `.\gradlew.bat`。
 
 ```bash
@@ -42,6 +43,7 @@ cd OpenRose
 | `:androidModule` | 模块：LSPosed 载入作用域进程的代码（模块入口、模块宿主运行时与端点、原生耳机适配、系统呈现渲染、`META-INF/xposed`）；看不到应用与共享界面 |
 | `:androidApp` | Android 应用入口：Activity、服务与唤醒、设置存储、与 LSPosed 框架和模块宿主的连接；仅在运行时依赖 `:androidModule`，打进同一 APK（见 ADR 0018） |
 | `:desktopApp` | Windows / Linux 桌面入口：窗口、托盘与偏好设置，并装配运行时 |
+| `:transportWindows` | Windows 平台驱动：WinRT BLE 与 Core Audio 音频端点，使用 Rust 构建本机组件 |
 | `:transportBluez` | Linux 平台驱动：BlueZ D-Bus GATT 原语、扫描、配对设备与音频事实 |
 | `:uiSandbox` | 开发用界面沙盒，不打包、不发布：在假状态上运行共享界面、各平台段落与托盘面板（见下文“界面调试”）。只有它同时依赖 `:desktopApp` 与 `:androidIntegrationUI`，桌面运行时依赖图仍不含 Android 集成模块 |
 | `build-logic/` | 各模块共用的 Gradle 约定插件（独立的 included build） |

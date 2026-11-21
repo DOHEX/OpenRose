@@ -105,7 +105,7 @@ private fun sandboxPlatform(scenario: SandboxScenario): PlatformState {
             SandboxPlatformIssue.TRANSPORT_UNAVAILABLE -> TransportAvailability.Unavailable(unavailableReason(scenario))
         },
         hostPlatform = scenario.host,
-        controlTransportApplicability = if (scenario.desktop && issue == SandboxPlatformIssue.TRANSPORT_UNAVAILABLE) {
+        controlTransportApplicability = if (scenario.host == HostPlatform.UNKNOWN) {
             PlatformApplicability.NOT_APPLICABLE
         } else {
             PlatformApplicability.APPLICABLE
@@ -113,9 +113,9 @@ private fun sandboxPlatform(scenario: SandboxScenario): PlatformState {
     )
 }
 
-/** Windows matches the desktop app's own wording for its missing transport. */
 private fun unavailableReason(scenario: SandboxScenario): String = when (scenario.host) {
     HostPlatform.ANDROID -> "此设备不支持低功耗蓝牙"
     HostPlatform.LINUX -> "无法连接 BlueZ：系统总线不可用"
-    HostPlatform.WINDOWS, HostPlatform.UNKNOWN -> "${scenario.platformName} 控制传输尚未实现"
+    HostPlatform.WINDOWS -> "Windows 蓝牙适配器不支持 BLE"
+    HostPlatform.UNKNOWN -> "${scenario.platformName} 控制传输尚未实现"
 }

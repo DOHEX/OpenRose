@@ -6,6 +6,7 @@ plugins {
 dependencies {
     implementation(projects.sharedUI)
     implementation(projects.transportBluez)
+    implementation(projects.transportWindows)
     implementation(compose.desktop.currentOs)
     implementation(libs.nucleus.application)
     implementation(libs.nucleus.tao)

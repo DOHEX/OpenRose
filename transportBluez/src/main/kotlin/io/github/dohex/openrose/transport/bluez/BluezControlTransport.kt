@@ -10,7 +10,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 /** Linux BlueZ transport. The supplied scope owns initialization and event observation. */
-class BluezControlTransport private constructor(scope: CoroutineScope, private val openBus: suspend () -> BluezBus) : ControlTransport {
+class BluezControlTransport private constructor(scope: CoroutineScope, private val openBus: suspend () -> BluezBus) : DesktopControlTransport {
     constructor(scope: CoroutineScope) : this(scope, { NativeBluezBus.open() })
     internal constructor(scope: CoroutineScope, bus: BluezBus) : this(scope, { bus })
 
@@ -18,7 +18,7 @@ class BluezControlTransport private constructor(scope: CoroutineScope, private v
     private val work = CoroutineScope(scope.coroutineContext + job + Dispatchers.IO)
     private val ready = CompletableDeferred<Unit>()
     private val mutableAvailability = MutableStateFlow<TransportAvailability>(TransportAvailability.Unavailable("正在初始化 BlueZ"))
-    val availability: StateFlow<TransportAvailability> = mutableAvailability.asStateFlow()
+    override val availability: StateFlow<TransportAvailability> = mutableAvailability.asStateFlow()
 
     @Volatile private var bus: BluezBus? = null
     private val scanLock = Mutex()
@@ -154,7 +154,7 @@ class BluezControlTransport private constructor(scope: CoroutineScope, private v
             ?: throw IllegalStateException("未找到蓝牙设备 $address")
         return GattControlConnection.open(BluezGattDriver(current, path), ble, onPhase)
     }
-    suspend fun close() {
+    override suspend fun close() {
         job.cancelAndJoin()
         bus?.close()
         bus = null
