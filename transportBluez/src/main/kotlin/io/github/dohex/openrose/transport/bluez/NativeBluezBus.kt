@@ -14,14 +14,22 @@ import org.bluez.Adapter1
 import org.bluez.Device1
 import org.bluez.GattCharacteristic1
 import org.freedesktop.dbus.DBusPath
+import org.freedesktop.dbus.annotations.DBusInterfaceName
 import org.freedesktop.dbus.connections.impl.DBusConnection
 import org.freedesktop.dbus.connections.impl.DBusConnectionBuilder
 import org.freedesktop.dbus.errors.NoReply
 import org.freedesktop.dbus.interfaces.DBus
+import org.freedesktop.dbus.interfaces.DBusInterface
 import org.freedesktop.dbus.interfaces.ObjectManager
 import org.freedesktop.dbus.interfaces.Properties
+import org.freedesktop.dbus.messages.DBusSignal
 import org.freedesktop.dbus.types.Variant
 import java.util.concurrent.CopyOnWriteArrayList
+
+@DBusInterfaceName("org.freedesktop.login1.Manager")
+internal interface LoginManager : DBusInterface {
+    class PrepareForSleep(path: String, val sleeping: Boolean) : DBusSignal(path, sleeping)
+}
 
 internal class NativeBluezBus private constructor(private val connection: DBusConnection) : BluezBus {
     private class Listener(val accepts: (BluezSignal) -> Boolean, val inbox: Channel<BluezSignal> = Channel(Channel.BUFFERED))
@@ -42,19 +50,27 @@ internal class NativeBluezBus private constructor(private val connection: DBusCo
 
     @Volatile override var owner: String? = null
         private set
+
+    @Volatile private var loginOwner: String? = null
     private val handlers = mutableListOf<AutoCloseable>()
 
     private fun register() {
         handlers += connection.addSigHandler(DBus.NameOwnerChanged::class.java) { s ->
+            if (s.name == "org.freedesktop.login1") loginOwner = s.newOwner.takeIf { it.isNotEmpty() }
             if (s.name == "org.bluez") {
                 owner = s.newOwner.takeIf { it.isNotEmpty() }
                 publish(BluezSignal.Owner(s.newOwner.isNotEmpty()))
             }
         }
-        owner = try {
-            connection.getRemoteObject("org.freedesktop.DBus", "/org/freedesktop/DBus", DBus::class.java).GetNameOwner("org.bluez")
+        fun busOwner(name: String): String? = try {
+            connection.getRemoteObject("org.freedesktop.DBus", "/org/freedesktop/DBus", DBus::class.java).GetNameOwner(name)
         } catch (_: Exception) {
             null
+        }
+        owner = busOwner("org.bluez")
+        loginOwner = busOwner("org.freedesktop.login1")
+        handlers += connection.addSigHandler(LoginManager.PrepareForSleep::class.java) { s ->
+            if (s.source == loginOwner && s.path == "/org/freedesktop/login1") publish(BluezSignal.PrepareForSleep(s.sleeping))
         }
         handlers += connection.addSigHandler(Properties.PropertiesChanged::class.java) { s ->
             if (s.source == owner) {

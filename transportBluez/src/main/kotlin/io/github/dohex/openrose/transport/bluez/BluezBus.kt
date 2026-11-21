@@ -8,6 +8,7 @@ internal sealed interface BluezSignal {
     data class Changed(val path: String, val interfaceName: String, val values: Map<String, Any?>) : BluezSignal
     data class Added(val path: String, val interfaces: Map<String, Map<String, Any?>>) : BluezSignal
     data class Removed(val path: String, val interfaces: Set<String>) : BluezSignal
+    data class PrepareForSleep(val sleeping: Boolean) : BluezSignal
     data class Owner(val present: Boolean) : BluezSignal
 }
 
