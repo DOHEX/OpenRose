@@ -34,12 +34,13 @@ internal class RsCommonCodec(override val profile: ModelProfile) : ProtocolCodec
         )
 
     private fun query(ids: ByteArray, sequence: Int = 0, delay: Long = 0): ProtocolQuery {
-        val keys = ids.map { byteArrayOf(it).hex() }.filter { it in rsCommonFields }.toSet()
+        val fields = profile.capabilities().readableFields
+        val keys = ids.map { byteArrayOf(it).hex() }.filter { key -> rsCommonFields[key].orEmpty().any { it in fields } }.toSet()
         return ProtocolQuery(
             "fa" + ids.hex(),
             frame(byteArrayOf(0xfa.toByte()) + ids, sequence),
             keys,
-            keys.flatMap { rsCommonFields.getValue(it) }.toSet(),
+            keys.flatMap { rsCommonFields.getValue(it) }.intersect(fields),
             delayBeforeMillis = delay,
         )
     }
@@ -115,6 +116,7 @@ internal class RsCommonCodec(override val profile: ModelProfile) : ProtocolCodec
     private fun decode(raw: ByteArray): ProtocolReply {
         val tag = raw[3].u()
         val value = raw.copyOfRange(4, raw.size - 1)
+        if (value.isEmpty()) return ProtocolReply(raw.hex())
         val key = byteArrayOf(tag.toByte()).hex()
         val out = when (tag) {
             0x0c -> decodeBattery(value)
@@ -125,7 +127,7 @@ internal class RsCommonCodec(override val profile: ModelProfile) : ProtocolCodec
             0x2c, 0x2d, 0x2e -> decodeLevel(tag, value)
             else -> emptyMap()
         }
-        return ProtocolReply(raw.hex(), if (key in rsCommonFields) setOf(key) else emptySet(), out)
+        return ProtocolReply(raw.hex(), if (out.isEmpty()) emptySet() else setOf(key), out)
     }
 
     private fun decodeBattery(value: ByteArray): Map<DeviceField, FieldReading> {

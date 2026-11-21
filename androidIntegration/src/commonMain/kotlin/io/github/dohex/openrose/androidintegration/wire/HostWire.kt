@@ -11,8 +11,6 @@ import io.github.dohex.openrose.androidintegration.HostFrame
 import io.github.dohex.openrose.androidintegration.HostLease
 import io.github.dohex.openrose.androidintegration.HostOpenResult
 import io.github.dohex.openrose.androidintegration.HostRejection
-import io.github.dohex.openrose.androidintegration.HostSettings
-import io.github.dohex.openrose.androidintegration.HostSettingsCodec
 import io.github.dohex.openrose.androidintegration.HostStatus
 import io.github.dohex.openrose.androidintegration.IslandPrompt
 import io.github.dohex.openrose.androidintegration.OwnerGeneration
@@ -92,10 +90,6 @@ object HostWire {
         )
     }
 
-    fun encode(settings: HostSettings): Wire = Wire.Obj(HostSettingsCodec.encode(settings).mapValues { (_, value) -> Wire.Str(value) })
-
-    fun decodeSettings(wire: Wire): HostSettings = HostSettingsCodec.decode(wire.asObj().fields.mapValues { (_, value) -> value.asStr() })
-
     fun encode(command: HostCommand): Wire = when (command) {
         HostCommand.RefreshBondedDevices -> obj("t" to str("refresh"))
 
@@ -117,8 +111,6 @@ object HostWire {
             "setting" to Wire.Str(command.setting.name),
             "value" to ControlWire.encode(command.value),
         )
-
-        is HostCommand.UpdateSettings -> obj("t" to str("settings"), "settings" to encode(command.settings))
 
         is HostCommand.ClaimPrompt -> obj(
             "t" to str("claim"),
@@ -149,8 +141,6 @@ object HostWire {
                 node.field("setting").asEnum<DeviceSetting>(),
                 ControlWire.decodeValue(node.field("value")),
             )
-
-            "settings" -> HostCommand.UpdateSettings(decodeSettings(node.field("settings")))
 
             "claim" -> HostCommand.ClaimPrompt(ControlWire.decodeReference(node.field("reference")), node.str("prompt"))
 

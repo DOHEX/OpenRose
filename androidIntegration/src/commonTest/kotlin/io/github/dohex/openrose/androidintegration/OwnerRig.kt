@@ -370,7 +370,7 @@ private val ztSyntheticReplies = mapOf(
 
 /** Synthetic legacy RS state covering its shared getInfo tags. */
 private val rsCommonSyntheticReplies = listOf(
-    "ff000d01010002000300110012001300aa",
+    "ff00110100010002000300000000000500060000aa",
     "ff00020700aa", "ff00020800aa", "ff00020904aa",
     "ff00040c32465aaa", "ff00040d010203aa", "ff00020e00aa",
     "ff00022a00aa", "ff00022b00aa", "ff00022c01aa",

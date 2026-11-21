@@ -9,11 +9,16 @@ import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.dohex.openrose.core.transport.DeviceId
 import io.github.dohex.openrose.ui.UiSettings
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /** Pages the system and compact panels can open in the main window. */
 enum class WindowDestination { HEADPHONES, ADD_DEVICE, DIAGNOSTICS }
@@ -42,15 +47,20 @@ interface OpenRoseModel {
 
     fun updateUiSettings(settings: UiSettings)
     fun updateSettings(settings: UserSettings)
-    fun startScan()
+    fun startScan(): Deferred<OperationResult>
     fun stopScan()
     fun connect(deviceId: DeviceId)
     fun disconnect()
-    fun set(setting: DeviceSetting, value: FieldValue)
+    fun set(sessionId: Long, setting: DeviceSetting, value: FieldValue)
 
     /** Writes to [sessionId] only, and returns once the device confirms the setting or the write ends otherwise. */
     suspend fun setInSession(sessionId: Long, setting: DeviceSetting, value: FieldValue): OperationResult
     suspend fun connectForAddDevice(deviceId: DeviceId): OperationResult
+}
+
+/** Captures the session shown by a control, including callbacks delivered after the device changes. */
+internal fun OpenRoseModel.settingsFor(sessionId: Long): (DeviceSetting, FieldValue) -> Unit = { setting, value ->
+    set(sessionId, setting, value)
 }
 
 /** Each host preserves its persistence and control-settings publication rules here. */
@@ -66,6 +76,9 @@ class RuntimeOpenRoseModel(
     private val settingsStore: OpenRoseSettingsStore,
     private val scope: CoroutineScope,
 ) : OpenRoseModel {
+    // Enter the mutex on the caller's turn so late scan acknowledgements cannot reorder start, stop and re-entry.
+    private val scanCommands = Mutex()
+
     override val state: StateFlow<ControlState> = runtime.state
     override val uiSettings: StateFlow<UiSettings> = settingsStore.uiSettings
     override val navigation = WindowNavigation()
@@ -73,11 +86,11 @@ class RuntimeOpenRoseModel(
 
     override fun updateUiSettings(settings: UiSettings) = settingsStore.updateUiSettings(settings)
     override fun updateSettings(settings: UserSettings) = settingsStore.updateSettings(settings)
-    override fun startScan() {
-        scope.launch { runtime.startScan() }
+    override fun startScan(): Deferred<OperationResult> = scope.async(start = CoroutineStart.UNDISPATCHED) {
+        scanCommands.withLock { runtime.startScan() }
     }
     override fun stopScan() {
-        scope.launch { runtime.stopScan() }
+        scope.launch(start = CoroutineStart.UNDISPATCHED) { scanCommands.withLock { runtime.stopScan() } }
     }
     override fun connect(deviceId: DeviceId) {
         scope.launch { runtime.connect(deviceId) }
@@ -85,8 +98,8 @@ class RuntimeOpenRoseModel(
     override fun disconnect() {
         scope.launch { runtime.disconnect() }
     }
-    override fun set(setting: DeviceSetting, value: FieldValue) {
-        scope.launch { runtime.set(setting, value) }
+    override fun set(sessionId: Long, setting: DeviceSetting, value: FieldValue) {
+        scope.launch { setInSession(sessionId, setting, value) }
     }
 
     override suspend fun setInSession(sessionId: Long, setting: DeviceSetting, value: FieldValue) = runtime.set(setting, value, sessionId)

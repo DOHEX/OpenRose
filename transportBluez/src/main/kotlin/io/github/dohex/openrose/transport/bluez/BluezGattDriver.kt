@@ -12,6 +12,7 @@ import org.freedesktop.dbus.errors.ServiceUnknown
 import java.util.IdentityHashMap
 
 internal class BluezGattDriver(private val bus: BluezBus, private val devicePath: String) : GattDriver {
+    private val owner = bus.owner ?: throw GattException(GattFailureKind.DISCONNECTED, "BlueZ 服务不可用")
     private val lock = Any()
     private val characteristics = IdentityHashMap<GattCharacteristic, String>()
     private val routed = mutableSetOf<String>()
@@ -20,7 +21,7 @@ internal class BluezGattDriver(private val bus: BluezBus, private val devicePath
     private var closed = false
     override val events: Flow<GattEvent> = bus.signals { it.affectsLink(devicePath) }.transform { signal ->
         when (signal) {
-            is BluezSignal.Owner -> if (!signal.present) emit(disconnected("BlueZ 服务已停止"))
+            is BluezSignal.Owner -> if (!signal.present || bus.owner != owner) emit(disconnected("BlueZ 服务已停止"))
 
             is BluezSignal.Changed -> {
                 if ((signal.path == devicePath && signal.interfaceName == DEVICE && signal.values["Connected"] == false) ||
@@ -138,11 +139,10 @@ internal class BluezGattDriver(private val bus: BluezBus, private val devicePath
         val path = path(characteristic)
         if (subscription == GattSubscription.DISABLED) {
             if (synchronized(lock) { path in subscribed }) {
-                bus.stopNotify(path)
-                synchronized(lock) { subscribed.remove(path) }
+                releaseSubscription(path)
             }
         } else if (synchronized(lock) { path !in subscribed }) {
-            bus.startNotify(path)
+            bus.startNotify(owner, path)
             synchronized(lock) { subscribed.add(path) }
         }
     }
@@ -157,16 +157,18 @@ internal class BluezGattDriver(private val bus: BluezBus, private val devicePath
     override suspend fun close() {
         if (synchronized(lock) { closed }) return
         for (path in synchronized(lock) { subscribed.toList() }) {
-            native {
-                bus.stopNotify(path)
-                synchronized(lock) { subscribed.remove(path) }
-            }
+            native { releaseSubscription(path) }
         }
         synchronized(lock) {
             routed.clear()
             closed = true
         }
         // Device1.Disconnect tears down all profiles, including audio. StopNotify releases our lease.
+    }
+    private suspend fun releaseSubscription(path: String) {
+        // A BlueZ restart destroys the old daemon's subscriptions, even if link observation has already stopped.
+        if (bus.owner == owner) bus.stopNotify(owner, path)
+        synchronized(lock) { subscribed.remove(path) }
     }
     private fun checkOpen() {
         if (synchronized(lock) { closed }) throw GattException(GattFailureKind.DISCONNECTED, "GATT 已关闭")
@@ -200,8 +202,10 @@ internal class BluezGattDriver(private val bus: BluezBus, private val devicePath
         }
         throw GattException(kind, error.message ?: error.javaClass.simpleName, error)
     }
-    private fun disconnected(message: String) = GattEvent.Disconnected(GattException(GattFailureKind.DISCONNECTED, message))
 }
+
+private fun disconnected(message: String) = GattEvent.Disconnected(GattException(GattFailureKind.DISCONNECTED, message))
+
 internal fun Any?.asBytes(): ByteArray? = when (this) {
     is ByteArray -> copyOf()
     is List<*> -> mapNotNull { (it as? Number)?.toByte() }.toByteArray()

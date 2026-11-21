@@ -12,6 +12,7 @@ import io.github.dohex.openrose.core.protocol.FieldReading
 import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.dohex.openrose.core.protocol.ModelProfile
 import kotlinx.coroutines.async
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
@@ -313,6 +314,19 @@ class OwnerHandoffTest {
     }
 
     @Test
+    fun switchingAndObservingShareOneAsynchronousBinding() = runTest {
+        val rig = OwnerRig(this)
+        rig.link.openMillis = 30
+        rig.bootHost()
+        val runtime = rig.newRuntime()
+
+        assertIs<HandoffOutcome.Completed>(runtime.selectControlWay(ControlWay.MODULE))
+        runCurrent()
+        assertEquals(1, rig.link.opens)
+        assertEquals(OwnerReadiness.Ready, runtime.integration.value.owner.readiness)
+    }
+
+    @Test
     fun aPreferenceUpdateCannotMoveTheOwnerBackToOrdinary() = runTest {
         val rig = OwnerRig(this)
         rig.bootHost()
@@ -320,21 +334,14 @@ class OwnerHandoffTest {
         runCurrent()
         runtime.selectControlWay(ControlWay.MODULE)
         runCurrent()
-        val generation = (rig.host.status.value as HostStatus.Active).generation
-
         runtime.updateIntegrationSettings(IntegrationSettings(controlWay = ControlWay.ORDINARY, islandMode = IslandMode.OFF))
         runCurrent()
-        val hostView = requireNotNull(rig.host.view(appIdentity, leaseOf(rig)))
-        assertEquals(IslandMode.OFF, hostView.settings.islandMode)
-        assertEquals(ControlWay.MODULE, hostView.settings.controlWay)
-        val forged = rig.host.execute(
-            appIdentity,
-            leaseOf(rig),
-            generation,
-            HostCommand.UpdateSettings(HostSettings(integration = IntegrationSettings(controlWay = ControlWay.ORDINARY))),
-        )
-
-        assertEquals(HostCallResult.Operation(OperationResult.Success), forged)
+        val saved = runtime.integration.value.settings
+        assertEquals(ControlWay.MODULE, saved.controlWay)
+        val hostView = requireNotNull(rig.host.ownerView.first())
+        assertEquals(IslandMode.OFFICIAL, hostView.settings.islandMode)
+        rig.host.configure { HostConfiguration(true, HostSettings(integration = saved)) }
+        assertEquals(IslandMode.OFF, requireNotNull(rig.host.ownerView.first()).settings.islandMode)
         assertEquals(ControlWay.MODULE, runtime.integration.value.owner.selected)
         assertIs<HostStatus.Active>(rig.host.status.value)
     }
@@ -598,8 +605,6 @@ class OwnerHandoffTest {
             assertEquals(profile, runtime.state.value.device?.profile)
         }
     }
-
-    private suspend fun leaseOf(rig: OwnerRig): String = (rig.host.open(appIdentity) as HostOpenResult.Opened).lease.id
 
     private fun assertNotNull(value: Any?) = assertTrue(value != null)
 }

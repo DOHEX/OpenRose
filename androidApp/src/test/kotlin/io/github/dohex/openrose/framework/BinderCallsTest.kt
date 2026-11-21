@@ -5,6 +5,10 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.content.Intent
 import android.content.ServiceConnection
+import android.os.Binder
+import android.os.Parcel
+import io.github.dohex.openrose.androidintegration.LinkOpenResult
+import io.github.dohex.openrose.androidintegration.OwnerFailureStage
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.cancelAndJoin
@@ -22,6 +26,7 @@ import java.util.concurrent.CountDownLatch
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertIs
 import kotlin.test.assertNull
 
 @RunWith(RobolectricTestRunner::class)
@@ -54,6 +59,23 @@ class BinderCallsTest {
         } finally {
             release.countDown()
         }
+    }
+
+    @Test
+    fun discoveryDuringHostReloadIsAConnectionFailure() = runBlocking {
+        val reloading = object : Binder() {
+            override fun onTransact(code: Int, data: Parcel, reply: Parcel?, flags: Int): Boolean = throw IllegalStateException("宿主正在重新加载")
+        }
+        val context = object : ContextWrapper(RuntimeEnvironment.getApplication()) {
+            override fun getApplicationContext(): Context = this
+            override fun bindService(service: Intent, connection: ServiceConnection, flags: Int): Boolean {
+                connection.onServiceConnected(requireNotNull(service.component), reloading)
+                return true
+            }
+            override fun unbindService(connection: ServiceConnection) = Unit
+        }
+        val result = assertIs<LinkOpenResult.Failed>(ModuleHostBinderLink(context).open())
+        assertEquals(OwnerFailureStage.CONNECTION, result.stage)
     }
 
     @OptIn(ExperimentalCoroutinesApi::class)

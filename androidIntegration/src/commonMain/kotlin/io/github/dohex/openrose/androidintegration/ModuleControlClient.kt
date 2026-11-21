@@ -15,6 +15,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -87,7 +89,7 @@ class ModuleControlClient(
 
     private val lifecycle = Mutex()
     private var loop: Job? = null
-    private val currentConnection = MutableStateFlow<HostConnection?>(null)
+    private val observedLink = MutableStateFlow<LinkOpenResult?>(null)
 
     /** The latest module owner this client has seen; used to name the owner a release must cover. */
     var lastObservedGeneration: OwnerGeneration? = null
@@ -102,15 +104,14 @@ class ModuleControlClient(
     suspend fun stop() = lifecycle.withLock {
         loop?.cancelAndJoin()
         loop = null
-        currentConnection.value?.close()
-        currentConnection.value = null
+        observedLink.value = null
         mutableView.value = ModuleView.Stopped
     }
 
     suspend fun execute(command: HostCommand): HostCallResult {
         val active = view.value as? ModuleView.Active
             ?: return HostCallResult.Rejected(HostRejection.NO_OWNER, "模块控制尚未就绪")
-        val connection = currentConnection.value
+        val connection = (observedLink.value as? LinkOpenResult.Open)?.connection
             ?: return HostCallResult.Rejected(HostRejection.NO_OWNER, "模块控制尚未就绪")
         return try {
             withTimeout(timing.commandTimeoutMillis) { connection.execute(active.frame.generation, command) }
@@ -193,12 +194,20 @@ class ModuleControlClient(
         onFailed: (LinkOpenResult.Failed) -> T,
         block: suspend (HostConnection) -> T,
     ): T {
-        currentConnection.value?.takeIf { !it.ended.isCompleted }?.let { return block(it) }
+        // The endpoint replaces a process's previous lease on open. Share the observer's binding,
+        // including discovery in progress. Only release after stop needs a separate, temporary lease.
+        if (loop?.isActive == true) {
+            val observed = observedLink.filterNotNull().first { it !is LinkOpenResult.Open || !it.connection.ended.isCompleted }
+            return when (observed) {
+                is LinkOpenResult.Open -> block(observed.connection)
+                is LinkOpenResult.Failed -> onFailed(observed)
+            }
+        }
         return when (val opened = link.open()) {
             is LinkOpenResult.Open -> try {
                 block(opened.connection)
             } finally {
-                if (currentConnection.value !== opened.connection) opened.connection.close()
+                opened.connection.close()
             }
 
             is LinkOpenResult.Failed -> onFailed(opened)
@@ -208,16 +217,17 @@ class ModuleControlClient(
     private suspend fun run() {
         while (scope.isActive) {
             // [start] shows the first attempt as connecting; a retry keeps the last failure until it has its own outcome.
-            when (val opened = link.open()) {
+            val opened = link.open()
+            observedLink.value = opened
+            when (opened) {
                 is LinkOpenResult.Failed -> mutableView.value = ModuleView.Unavailable(opened.stage, opened.reason)
 
                 is LinkOpenResult.Open -> {
                     val connection = opened.connection
-                    currentConnection.value = connection
                     try {
                         observe(connection)
                     } finally {
-                        currentConnection.value = null
+                        observedLink.value = null
                         connection.close()
                     }
                     if (scope.isActive) {

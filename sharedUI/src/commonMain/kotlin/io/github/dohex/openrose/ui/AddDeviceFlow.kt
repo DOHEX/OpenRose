@@ -21,6 +21,7 @@ import io.github.dohex.openrose.core.SessionReference
 import io.github.dohex.openrose.core.transport.DeviceId
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
@@ -31,7 +32,7 @@ import kotlinx.coroutines.launch
 internal class AddDeviceFlow(
     private val scope: CoroutineScope,
     private val state: () -> ControlState,
-    private val startScan: () -> Unit,
+    private val startScan: () -> Deferred<OperationResult>,
     private val stopScan: () -> Unit,
     private val connect: suspend (DeviceId) -> OperationResult,
     private val onReady: () -> Unit,
@@ -42,26 +43,38 @@ internal class AddDeviceFlow(
         private set
     var pending by mutableStateOf(false)
         private set
+    var scanError by mutableStateOf<ControlError?>(null)
+        private set
+    private var scanRequest: Deferred<OperationResult>? = null
     private var reference by mutableStateOf<SessionReference?>(null)
     private var connectionJob: Job? = null
     private var request = 0L
 
     fun enter() {
+        scanError = null
         selectedDeviceId = null
         connectionError = null
         reference = null
     }
 
     fun startSearch() {
-        if (pending || !state().canSearchForHeadphones()) return
+        if (pending || scanRequest?.isActive == true || !state().canSearchForHeadphones()) return
+        scanError = null
         selectedDeviceId = null
         connectionError = null
         reference = null
-        startScan()
+        val started = startScan()
+        scanRequest = started
+        scope.launch(start = CoroutineStart.UNDISPATCHED) {
+            val result = started.await()
+            if (scanRequest === started && result is OperationResult.Failure) scanError = result.error
+        }
     }
 
     fun stopSearch() {
-        if (state().scan == ScanState.Scanning) stopScan()
+        if (scanRequest == null) return
+        scanRequest = null
+        stopScan()
     }
 
     fun connect(deviceId: DeviceId) {
@@ -143,7 +156,7 @@ internal class AddDeviceFlow(
 internal fun rememberAddDeviceFlow(
     active: Boolean,
     state: ControlState,
-    onStartScan: () -> Unit,
+    onStartScan: () -> Deferred<OperationResult>,
     onStopScan: () -> Unit,
     onConnect: suspend (DeviceId) -> OperationResult,
     onReady: () -> Unit,

@@ -8,10 +8,7 @@ import io.github.dohex.openrose.androidintegration.HostCommand
 import io.github.dohex.openrose.androidintegration.HostLease
 import io.github.dohex.openrose.androidintegration.HostOpenResult
 import io.github.dohex.openrose.androidintegration.HostRejection
-import io.github.dohex.openrose.androidintegration.HostSettings
 import io.github.dohex.openrose.androidintegration.HostStatus
-import io.github.dohex.openrose.androidintegration.IntegrationSettings
-import io.github.dohex.openrose.androidintegration.IslandMode
 import io.github.dohex.openrose.androidintegration.OwnerGeneration
 import io.github.dohex.openrose.androidintegration.OwnerHolder
 import io.github.dohex.openrose.androidintegration.ReleaseReceipt
@@ -60,7 +57,6 @@ class HostWireTest {
             HostCommand.Set(reference, DeviceSetting.GAME_MODE, FieldValue.Toggle(true)),
             HostCommand.Set(null, DeviceSetting.GAME_MODE, FieldValue.Toggle(false)),
             HostCommand.Set(reference, DeviceSetting.SPATIAL_AUDIO, FieldValue.Toggle(true)),
-            HostCommand.UpdateSettings(HostSettings(integration = IntegrationSettings(islandMode = IslandMode.MODULE))),
             HostCommand.ClaimPrompt(reference, "prompt-1"),
         )
 

@@ -3,16 +3,21 @@ package io.github.dohex.openrose.module
 import android.app.Application
 import android.os.Binder
 import android.os.Bundle
+import android.os.DeadObjectException
 import io.github.dohex.openrose.androidintegration.ClientRole
 import io.github.dohex.openrose.androidintegration.ControlWay
 import io.github.dohex.openrose.androidintegration.HostConfiguration
 import io.github.dohex.openrose.androidintegration.HostFacts
 import io.github.dohex.openrose.androidintegration.HostSettings
+import io.github.dohex.openrose.androidintegration.HostStatus
 import io.github.dohex.openrose.androidintegration.IntegrationSettings
 import io.github.dohex.openrose.androidintegration.ModuleControlHost
 import io.github.dohex.openrose.androidintegration.wire.BridgeWire
+import io.github.dohex.openrose.androidintegration.wire.HostWire
+import io.github.dohex.openrose.androidintegration.wire.render
 import io.github.dohex.openrose.bridge.BridgeBundles
 import io.github.dohex.openrose.bridge.BridgeTarget
+import io.github.dohex.openrose.bridge.IControlFrames
 import io.github.dohex.openrose.core.ConnectionState
 import io.github.dohex.openrose.core.ControlRuntime
 import io.github.dohex.openrose.core.ControlState
@@ -26,7 +31,9 @@ import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.dohex.openrose.core.protocol.ModelProfile
 import io.github.dohex.openrose.core.transport.DeviceId
 import kotlinx.collections.immutable.persistentMapOf
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -35,12 +42,52 @@ import org.robolectric.annotation.Config
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [33], manifest = Config.NONE, application = Application::class)
 class HostEndpointTest {
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
+    fun aDeadApplicationEndsOnlyItsFrameSubscription() = runTest {
+        val host = ModuleControlHost(
+            "bluetooth",
+            "bluetooth",
+            "host",
+            { ClientRole.APP },
+            { scope, settings, platform, _ -> LocalControlRuntime(platform, settings, scope = scope) },
+            backgroundScope,
+            { "lease" },
+        )
+        host.configure { HostConfiguration(true, HostSettings(integration = IntegrationSettings(controlWay = ControlWay.MODULE))) }
+        val active = assertIs<HostStatus.Active>(host.status.value)
+        val endpoint = HostEndpoint(RuntimeEnvironment.getApplication(), host, MutableStateFlow(HostFacts()), backgroundScope)
+        val lease = assertNotNull(endpoint.open(BridgeBundles.hello(null, null), Binder()).getString(BridgeWire.LEASE_ID))
+        val request = Bundle().apply {
+            putString(BridgeWire.LEASE_ID, lease)
+            putString(BridgeWire.PAYLOAD, HostWire.encode(active.generation).render())
+        }
+        var attempted = 0
+        var ended = false
+        val receiver = object : IControlFrames.Stub() {
+            override fun onFrame(frame: Bundle) {
+                attempted++
+                throw DeadObjectException()
+            }
+            override fun onEnded(end: Bundle) {
+                ended = true
+            }
+        }
+
+        assertEquals(BridgeWire.STATUS_OK, endpoint.watchFrames(request, receiver).getString(BridgeWire.STATUS))
+        runCurrent()
+        assertEquals(1, attempted)
+        assertTrue(ended)
+        assertEquals(active, host.status.value)
+    }
+
     @Test
     fun onlyAnAcknowledgedAndStillCurrentReadingCanBeRefreshedWithoutItsPayload() = runTest {
         val profile = ModelProfile.I5_ZT

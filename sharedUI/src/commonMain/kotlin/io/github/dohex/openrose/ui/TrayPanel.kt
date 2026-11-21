@@ -32,6 +32,7 @@ import io.github.dohex.openrose.core.protocol.ModelProfile
 import io.github.dohex.openrose.core.transport.DeviceId
 import io.github.dohex.openrose.ui.model.OpenRoseModel
 import io.github.dohex.openrose.ui.model.WindowDestination
+import io.github.dohex.openrose.ui.model.settingsFor
 import io.github.dohex.openrose.ui.resources.Res
 import io.github.dohex.openrose.ui.resources.app_icon
 import io.github.dohex.openrose.ui.resources.msr_headphones
@@ -200,7 +201,7 @@ private fun TrayPanelContent(
     TrayStatusCard(state, summary)
 
     if (device != null && device.capabilities.noiseControl != null) {
-        NoiseControlCard(state, device, showLevelControls = false, onSet = model::set)
+        NoiseControlCard(state, device, showLevelControls = false, onSet = model.settingsFor(device.sessionId))
     }
 
     TrayActions(model, state, summary, onOpenApp)

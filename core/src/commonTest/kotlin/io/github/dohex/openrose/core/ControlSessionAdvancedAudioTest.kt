@@ -447,15 +447,54 @@ class ControlSessionAdvancedAudioTest {
         val gameReply = "dd00020e01eeaa".bytes()
         link.incoming.send(gameReply)
         runCurrent()
-        assertEquals(OperationResult.Success, toggle.await())
-        assertEquals(ControlErrorCode.UNSUPPORTED, assertIs<OperationResult.Failure>(oldPreset.await()).error.code)
+        assertFalse(toggle.isCompleted)
+        assertFalse(oldPreset.isCompleted)
         assertEquals(listOf("0e01", "fa0e", "fa2a"), link.writes.drop(before).map { it.substring(6, 10) })
         assertEquals(setOf("game_1"), session.state.value.device?.capabilities?.equalizer?.presets.orEmpty().toSet())
         assertEquals(FieldReading.Loading, session.state.value.device?.fields?.get(DeviceField.EQ))
         link.incoming.send("dd00022aa0ccaa".bytes()) // Synthetic FA 2A response from the new bank.
         runCurrent()
+        assertEquals(OperationResult.Success, toggle.await())
+        assertEquals(ControlErrorCode.UNSUPPORTED, assertIs<OperationResult.Failure>(oldPreset.await()).error.code)
         assertEquals(FieldValue.Text("game_1"), reading(session, DeviceField.EQ))
         session.disconnect()
+    }
+
+    @Test
+    fun gameModeRefreshDoesNotConsumeTheQueuedMokaPresetReadback() = runTest {
+        val (session, link) = ready(profile = ModelProfile.MOKA_RS_V2)
+        val before = link.writes.size
+        val toggle = async { session.set(DeviceSetting.GAME_MODE, FieldValue.Toggle(true)) }
+        val preset = async { session.set(DeviceSetting.EQ, FieldValue.Text("pop")) }
+        runCurrent()
+        link.incoming.send("dd00020e01eeaa".bytes())
+        runCurrent()
+        link.incoming.send("dd00022b000aaa".bytes()) // Audio mode cannot finish the EQ refresh.
+        runCurrent()
+        assertFalse(toggle.isCompleted)
+        assertEquals(listOf("0e01", "fa0e", "fa2a"), link.writes.drop(before).map { it.substring(6, 10) })
+        link.incoming.send("dd00022a0009aa".bytes()) // Earlier refresh reports HiFi.
+        runCurrent()
+        assertEquals(OperationResult.Success, toggle.await())
+        assertFalse(preset.isCompleted)
+        assertEquals(listOf("2a01", "fa2a"), link.writes.takeLast(2).map { it.substring(6, 10) })
+        link.incoming.send("dd00022a010aaa".bytes()) // Queued write now receives its own POP confirmation.
+        assertEquals(OperationResult.Success, preset.await())
+        session.disconnect()
+    }
+
+    @Test
+    fun missingGameModeRefreshTimesOutBeforeAQueuedPresetIsWritten() = runTest {
+        val (session, link) = ready(profile = ModelProfile.MOKA_RS_V2)
+        val before = link.writes.size
+        val toggle = async { session.set(DeviceSetting.GAME_MODE, FieldValue.Toggle(true)) }
+        val preset = async { session.set(DeviceSetting.EQ, FieldValue.Text("pop")) }
+        runCurrent()
+        link.incoming.send("dd00020e01eeaa".bytes())
+        runCurrent()
+        assertEquals(ControlErrorCode.TIMEOUT, assertIs<OperationResult.Failure>(toggle.await()).error.code)
+        assertEquals(ControlErrorCode.DISCONNECTED, assertIs<OperationResult.Failure>(preset.await()).error.code)
+        assertEquals(listOf("0e01", "fa0e", "fa2a"), link.writes.drop(before).map { it.substring(6, 10) })
     }
 
     private suspend fun TestScope.ready(capacity: Int = 16, firmware: String? = "dd00040d020103f4aa", profile: ModelProfile = ModelProfile.I7_RS_V2): Pair<ControlSession, AdvancedLink> {

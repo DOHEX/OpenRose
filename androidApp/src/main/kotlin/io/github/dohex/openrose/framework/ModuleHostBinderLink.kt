@@ -124,6 +124,8 @@ class ModuleHostBinderLink(
             return LinkOpenResult.Failed(OwnerFailureStage.CONNECTION, "与宿主通信失败：${failure.javaClass.simpleName}")
         } catch (failure: SecurityException) {
             return LinkOpenResult.Failed(OwnerFailureStage.AUTHORIZATION, "宿主拒绝了此调用者：${failure.message}")
+        } catch (reloading: IllegalStateException) {
+            return LinkOpenResult.Failed(OwnerFailureStage.CONNECTION, "模块宿主暂不可用：${reloading.message}")
         }
         val status = opened.getString(BridgeWire.STATUS)
         if (status == BridgeWire.STATUS_UNAUTHORIZED) {
@@ -182,6 +184,8 @@ class ModuleHostBinderLink(
                 throw HostLinkException("与宿主通信失败", failure)
             } catch (failure: SecurityException) {
                 throw HostLinkException("宿主拒绝了请求：${failure.message}", failure)
+            } catch (reloading: IllegalStateException) {
+                throw HostLinkException("模块宿主暂不可用，等待重新发现", reloading)
             }
             if (reply.getString(BridgeWire.STATUS) != BridgeWire.STATUS_OK) {
                 throw HostLinkException("宿主返回 ${reply.getString(BridgeWire.STATUS)}")

@@ -17,6 +17,7 @@ import io.github.dohex.openrose.ui.model.OpenRoseModel
 import io.github.dohex.openrose.ui.model.WindowNavigation
 import kotlinx.collections.immutable.toPersistentList
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -70,8 +71,9 @@ internal class SandboxModel(private val scope: CoroutineScope) : OpenRoseModel {
 
     override fun updateSettings(settings: UserSettings) = mutableState.update { it.copy(settings = settings) }
 
-    override fun startScan() = mutableState.update {
-        it.copy(scan = ScanState.Scanning, candidates = sandboxScanResults.toPersistentList())
+    override fun startScan(): CompletableDeferred<OperationResult> {
+        mutableState.update { it.copy(scan = ScanState.Scanning, candidates = sandboxScanResults.toPersistentList()) }
+        return CompletableDeferred(OperationResult.Success)
     }
 
     override fun stopScan() = mutableState.update { it.copy(scan = ScanState.Idle) }
@@ -107,7 +109,7 @@ internal class SandboxModel(private val scope: CoroutineScope) : OpenRoseModel {
         }
     }
 
-    override fun set(setting: DeviceSetting, value: FieldValue) = writes.submit(setting, value)
+    override fun set(sessionId: Long, setting: DeviceSetting, value: FieldValue) = writes.submit(sessionId, setting, value)
 
     override suspend fun setInSession(sessionId: Long, setting: DeviceSetting, value: FieldValue) = writes.write(sessionId, setting, value)
 }

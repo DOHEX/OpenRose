@@ -1,8 +1,5 @@
 package io.github.dohex.openrose.androidintegration
 
-import io.github.dohex.openrose.androidintegration.wire.HostWire
-import io.github.dohex.openrose.androidintegration.wire.parseWire
-import io.github.dohex.openrose.androidintegration.wire.render
 import io.github.dohex.openrose.core.UserSettings
 import kotlinx.collections.immutable.persistentSetOf
 import kotlin.test.Test
@@ -53,7 +50,7 @@ class IntegrationSettingsCodecTest {
     }
 
     @Test
-    fun hostCodecCombinesOnlyControlAndIntegrationAndWirePreservesBoth() {
+    fun hostCodecCombinesOnlyControlAndIntegration() {
         val settings = HostSettings(
             UserSettings(forceBle = true),
             IntegrationSettings(
@@ -67,7 +64,6 @@ class IntegrationSettingsCodecTest {
         assertEquals("module", encoded["androidIntegration.control_way"])
         assertFalse(encoded.keys.any { it.startsWith("sharedUI.") })
         assertEquals(settings, HostSettingsCodec.decode(encoded + ("sharedUI.appearance" to "dark")))
-        assertEquals(settings, HostWire.decodeSettings(parseWire(HostWire.encode(settings).render())))
         assertEquals(HostSettings(), HostSettingsCodec.decode(mapOf("force_ble" to "true", "control_way" to "module")))
     }
 }

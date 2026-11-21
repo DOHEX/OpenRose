@@ -92,6 +92,7 @@ internal fun NucleusApplicationScope.DesktopTray(
 ) {
     val state by model.state.collectAsState()
     val summary = traySummary(state, selection)
+    val sessionId = state.readySession?.sessionId
     val icon = if (summary.connected) TrayIcons.connected else TrayIcons.disconnected
     // The Linux tray fixes the item's Title from the first tooltip it sees, so that one names the app.
     var started by remember { mutableStateOf(false) }
@@ -118,7 +119,7 @@ internal fun NucleusApplicationScope.DesktopTray(
             })
 
             is TrayMenuEntry.NoiseMode -> entry.copy(onSelect = {
-                uiScope.launch { model.set(DeviceSetting.NOISE_MODE, FieldValue.Text(entry.mode)) }
+                if (sessionId != null) uiScope.launch { model.set(sessionId, DeviceSetting.NOISE_MODE, FieldValue.Text(entry.mode)) }
             })
 
             else -> entry

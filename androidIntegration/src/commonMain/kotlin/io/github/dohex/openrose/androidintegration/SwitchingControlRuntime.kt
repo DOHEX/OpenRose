@@ -556,22 +556,12 @@ class SwitchingControlRuntime(
     override fun updateSettings(settings: UserSettings) {
         this.settings = settings
         ordinary?.runtime?.updateSettings(settings)
-        if (record.selected == ControlWay.MODULE) {
-            scope.launch {
-                client.execute(HostCommand.UpdateSettings(HostSettings(this@SwitchingControlRuntime.settings, integrationSettings)))
-            }
-        }
         refresh()
     }
 
     fun updateIntegrationSettings(settings: IntegrationSettings) {
         integrationSettings = settings.copy(controlWay = record.selected)
         ordinary?.runtime?.updateIntegrationSettings(integrationSettings)
-        if (record.selected == ControlWay.MODULE) {
-            scope.launch {
-                client.execute(HostCommand.UpdateSettings(HostSettings(this@SwitchingControlRuntime.settings, integrationSettings)))
-            }
-        }
         refresh()
     }
 

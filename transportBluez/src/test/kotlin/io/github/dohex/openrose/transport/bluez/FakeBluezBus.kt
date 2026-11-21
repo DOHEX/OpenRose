@@ -4,6 +4,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.filter
 
 internal class FakeBluezBus : BluezBus {
+    override var owner: String? = ":1.1"
     val events = MutableSharedFlow<BluezSignal>(extraBufferCapacity = 64)
     override fun signals(accepts: (BluezSignal) -> Boolean) = events.filter(accepts)
     var connectFailure: Exception? = null
@@ -29,10 +30,12 @@ internal class FakeBluezBus : BluezBus {
         connectFailure?.let { throw it }
         onConnect(connects)
     }
-    override suspend fun startNotify(path: String) {
+    override suspend fun startNotify(owner: String, path: String) {
+        check(owner == this.owner)
         notifications.add("start:$path")
     }
-    override suspend fun stopNotify(path: String) {
+    override suspend fun stopNotify(owner: String, path: String) {
+        check(owner == this.owner)
         notifications.add("stop:$path")
         onStopNotify(path)
     }

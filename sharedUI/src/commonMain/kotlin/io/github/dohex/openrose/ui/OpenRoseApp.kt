@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import io.github.dohex.openrose.core.*
 import io.github.dohex.openrose.ui.model.OpenRoseModel
 import io.github.dohex.openrose.ui.model.WindowDestination
+import io.github.dohex.openrose.ui.model.settingsFor
 import top.yukonga.miuix.kmp.nav.core.NavDisplay
 import top.yukonga.miuix.kmp.nav.core.rememberNavBackStack
 import top.yukonga.miuix.kmp.nav.transition.NavSwipeDirection
@@ -53,7 +54,6 @@ fun OpenRoseApp(
     val state by model.state.collectAsState()
     val uiSettings by model.uiSettings.collectAsState()
     val onDisconnect = model::disconnect
-    val onSet = model::set
     val dark = when (uiSettings.appearance) {
         Appearance.SYSTEM -> isSystemInDarkTheme()
         Appearance.LIGHT -> false
@@ -183,6 +183,7 @@ fun OpenRoseApp(
                         selectedDeviceId = addDeviceFlow.selectedDeviceId,
                         connectionPhase = addDeviceFlow.phase(state.connection),
                         connectionError = addDeviceFlow.connectionError,
+                        startScanError = addDeviceFlow.scanError,
                         onRequestPermission = platformUi.requestBluetoothPermission,
                         onOpenSystemSettings = platformUi.openBluetoothSettings,
                         onStartScan = addDeviceFlow::startSearch,
@@ -217,6 +218,7 @@ fun OpenRoseApp(
                     }
 
                     else -> if (device != null) {
+                        val onSet = model.settingsFor(device.sessionId)
                         val controlPage = targetPage in listOf(AppPage.TOUCH, AppPage.EQUALIZER, AppPage.AUDIO)
                         if (controlPage) {
                             SettingPageBanner(state, device)

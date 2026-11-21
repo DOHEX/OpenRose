@@ -85,7 +85,7 @@ class ModuleControlHost(
     private val ownership = Mutex()
     private val owner = MutableStateFlow<Owner?>(null)
     private val leases = MutableStateFlow<Map<String, Lease>>(emptyMap())
-    private var readConfiguration: () -> HostConfiguration = { HostConfiguration() }
+    private var readConfiguration: () -> HostConfiguration? = { HostConfiguration() }
     private var configuration = HostConfiguration()
     private val releaseEpoch = MutableStateFlow(0L)
     private var platform = PlatformState(PermissionState.NOT_REQUIRED)
@@ -105,16 +105,18 @@ class ModuleControlHost(
     }
 
     /** Applies persisted user intent. The selected way alone decides whether an owner exists. */
-    suspend fun configure(read: () -> HostConfiguration) = ownership.withLock {
+    suspend fun configure(read: () -> HostConfiguration?): Boolean = ownership.withLock {
         readConfiguration = read
-        reloadConfiguration()
+        if (!reloadConfiguration()) return@withLock false
         reconcile()
+        true
     }
 
-    private fun reloadConfiguration() {
+    private fun reloadConfiguration(): Boolean {
         val previous = configuration.settings.integration.controlWay
-        configuration = readConfiguration()
+        configuration = readConfiguration() ?: return false
         if (previous == ControlWay.ORDINARY && configuration.settings.integration.controlWay == ControlWay.MODULE) held = null
+        return true
     }
 
     /** Host-side platform facts (adapter power, permissions) the owner's runtime should see. */
@@ -328,7 +330,7 @@ class ModuleControlHost(
     }
 
     private fun confirmRelease(requestId: String) {
-        configuration = readConfiguration()
+        reloadConfiguration()
         held = requestId
         releaseEpoch.value++
         publishStatus()
@@ -342,7 +344,9 @@ class ModuleControlHost(
         }
         if (lease.role != ClientRole.APP) return@withLock AcquireResult.Refused(HostRejection.FORBIDDEN, "只有 OpenRose 应用可以请求交接")
         if (request.to != ControlWay.MODULE) return@withLock AcquireResult.Refused(HostRejection.INVALID_REQUEST, "该请求不是切换到模块控制")
-        reloadConfiguration()
+        if (!reloadConfiguration()) {
+            return@withLock AcquireResult.Refused(HostRejection.INVALID_REQUEST, "暂时无法读取已保存的控制方式")
+        }
         if (!configuration.userUnlocked || configuration.settings.integration.controlWay != ControlWay.MODULE) {
             return@withLock AcquireResult.Refused(HostRejection.INVALID_REQUEST, "用户尚未解锁或未保存模块控制")
         }
@@ -401,19 +405,6 @@ class ModuleControlHost(
                 runtime.set(command.reference, command.setting, command.value)
             },
         )
-
-        is HostCommand.UpdateSettings -> {
-            // A preference change never moves the owner; only an explicit handoff changes the way.
-            val settings = command.settings.copy(integration = command.settings.integration.copy(controlWay = ControlWay.MODULE))
-            ownership.withLock {
-                configuration = configuration.copy(settings = settings)
-                owner.value?.runtime?.let {
-                    it.updateSettings(settings.control)
-                    it.updateIntegrationSettings(settings.integration)
-                }
-            }
-            HostCallResult.Operation(OperationResult.Success)
-        }
 
         is HostCommand.ClaimPrompt -> HostCallResult.Flag(runtime.claimPrompt(command.reference, command.promptId))
     }

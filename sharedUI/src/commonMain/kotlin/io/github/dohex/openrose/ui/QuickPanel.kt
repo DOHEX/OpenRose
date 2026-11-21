@@ -66,6 +66,7 @@ import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.dohex.openrose.ui.model.OpenRoseModel
 import io.github.dohex.openrose.ui.model.WindowDestination
+import io.github.dohex.openrose.ui.model.settingsFor
 import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import kotlin.math.roundToInt
@@ -229,10 +230,11 @@ private fun QuickPanelContent(
     TrayStatusCard(state, summary)
 
     if (device != null) {
+        val onSet = model.settingsFor(device.sessionId)
         if (device.capabilities.noiseControl != null) {
-            NoiseControlCard(state, device, showLevelControls = false, onSet = model::set)
+            NoiseControlCard(state, device, showLevelControls = false, onSet = onSet)
         }
-        EqualizerChoices(state, device, model::set)
+        EqualizerChoices(state, device, onSet)
         if (DeviceSetting.GAME_MODE in device.capabilities.writableSettings) {
             AppDashboardCard(compact = true) {
                 SettingToggleChoices(
@@ -241,7 +243,7 @@ private fun QuickPanelContent(
                     DeviceSetting.GAME_MODE,
                     device,
                     state.isReady(device) && !state.hasPendingSetting(device),
-                    model::set,
+                    onSet,
                     icon = RoseIcon.GAME,
                 )
             }

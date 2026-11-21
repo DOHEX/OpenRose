@@ -84,6 +84,20 @@ class BluezGattDriverTest {
     }
 
     @Test
+    fun releaseRetriesWhileTheOwnerLivesAndCompletesAfterBluezRestarts() = runTest {
+        val bus = FakeBluezBus().also { it.snapshot = gattObjects() }
+        val driver = BluezGattDriver(bus, DEVICE_PATH)
+        val characteristic = driver.discoverServices().single().characteristics.single()
+        driver.configureSubscription(characteristic, GattSubscription.NOTIFY)
+        bus.onStopNotify = { throw org.freedesktop.dbus.errors.NoReply("timeout") }
+        assertFailsWith<GattException> { driver.close() }
+
+        bus.owner = ":1.2"
+        driver.close()
+        assertEquals(listOf("start:$CHAR_PATH", "stop:$CHAR_PATH"), bus.notifications)
+    }
+
+    @Test
     fun notificationAndWritesKeepTheDiscoveredCharacteristicIdentity() = runTest {
         val bus = FakeBluezBus().also { it.snapshot = gattObjects() }
         val driver = BluezGattDriver(bus, DEVICE_PATH)

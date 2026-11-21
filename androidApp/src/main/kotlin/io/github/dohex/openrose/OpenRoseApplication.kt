@@ -6,7 +6,6 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.location.LocationManager
 import android.os.Build
 import android.os.Process
 import android.os.UserManager
@@ -34,9 +33,14 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.UUID
 
 /** The names of the application's own preference file and its flags, shared by every reader and writer. */
@@ -55,6 +59,7 @@ internal object AppPreferences {
  */
 class OpenRoseApplication : Application() {
     private val controlScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private val moduleSettingsChanges = Channel<Unit>(Channel.CONFLATED)
     private val settingsStore = AndroidSettingsStore(::preferences)
     private val mutableUiSettings = MutableStateFlow(UiSettings())
     val uiSettings = mutableUiSettings.asStateFlow()
@@ -74,7 +79,12 @@ class OpenRoseApplication : Application() {
         val unlocked = userUnlocked()
         val saved = if (unlocked) settingsStore.load() else AppSettings()
         mutableUiSettings.value = saved.ui
-        framework = FrameworkLink { controlScope.launch { refreshPlatform() } }
+        framework = FrameworkLink {
+            controlScope.launch {
+                refreshPlatform()
+                moduleSettingsChanges.trySend(Unit)
+            }
+        }
         ownerStore = AndroidOwnerStore({ preferences() }, framework)
         runtime = SwitchingControlRuntime(
             initialPlatformState = readPlatformState(permissionRequested(), userUnlocked = unlocked),
@@ -111,7 +121,7 @@ class OpenRoseApplication : Application() {
                     if (!userUnlocked()) return
                     runtime.updateSettings(settings)
                     settingsStore.saveHost(hostSettings())
-                    publishModuleSettings()
+                    moduleSettingsChanges.trySend(Unit)
                 }
 
                 override fun updateUiSettings(settings: UiSettings) {
@@ -124,22 +134,31 @@ class OpenRoseApplication : Application() {
         )
         preferencesLoaded = unlocked
         registerActivityLifecycleCallbacks(VisibleInterfaceHold(runtime, controlScope))
+        controlScope.launch {
+            moduleSettingsChanges.receiveAsFlow().collectLatest {
+                while (preferencesLoaded && !ordinaryControlSelected() && framework.canPublish()) {
+                    if (withContext(Dispatchers.IO) { ownerStore.publishConfig() }) break
+                    delay(3_000)
+                }
+            }
+        }
         framework.start()
         refreshPlatform()
+        registerPlatformReceiver()
+        // Unlock may complete between the initial check and receiver registration.
+        loadUnlockedSettings()
+    }
+
+    private fun registerPlatformReceiver() {
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context, intent: Intent) {
                 if (intent.action == Intent.ACTION_USER_UNLOCKED) loadUnlockedSettings()
                 // Re-read system facts instead of trusting broadcast extras.
-                if (intent.action == BluetoothAdapter.ACTION_STATE_CHANGED ||
-                    intent.action == LocationManager.MODE_CHANGED_ACTION
-                ) {
-                    refreshPlatform()
-                }
+                if (intent.action == BluetoothAdapter.ACTION_STATE_CHANGED) refreshPlatform()
             }
         }
         val filter = IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED).apply {
             addAction(Intent.ACTION_USER_UNLOCKED)
-            if (Build.VERSION.SDK_INT <= 30) addAction(LocationManager.MODE_CHANGED_ACTION)
         }
         // Bluetooth broadcasts may originate in a privileged app with a non-system UID.
         if (Build.VERSION.SDK_INT >= 33) {
@@ -147,8 +166,6 @@ class OpenRoseApplication : Application() {
         } else {
             registerReceiver(receiver, filter)
         }
-        // Unlock may complete between the initial check and receiver registration.
-        loadUnlockedSettings()
     }
 
     fun connectFromSystem(deviceId: DeviceId) {
@@ -201,19 +218,12 @@ class OpenRoseApplication : Application() {
         val effective = runtime.integration.value.settings
         // A stop choice must be on disk before the user can leave the application.
         settingsStore.saveHost(hostSettings(), commit = backgroundIntentChanged)
-        publishModuleSettings()
+        moduleSettingsChanges.trySend(Unit)
         syncWakeObservation()
         if (effective.backgroundControlEnabled) startBackgroundControlFromUserEntry()
     }
 
     private fun hostSettings() = HostSettings(runtime.state.value.settings, runtime.integration.value.settings)
-
-    private fun publishModuleSettings() {
-        if (!ordinaryControlSelected()) {
-            // The single writer reads the persisted values after acquiring its publication lock.
-            controlScope.launch(Dispatchers.IO) { ownerStore.publishConfig() }
-        }
-    }
 
     fun setBackgroundControlEnabled(enabled: Boolean) {
         updateIntegrationSettings(runtime.integration.value.settings.copy(backgroundControlEnabled = enabled))
@@ -309,6 +319,7 @@ class OpenRoseApplication : Application() {
         preferencesLoaded = true
         val saved = settingsStore.load()
         runtime.onUserUnlocked(saved.host)
+        moduleSettingsChanges.trySend(Unit)
         mutableUiSettings.value = saved.ui
         refreshPlatform()
         syncWakeObservation()

@@ -12,11 +12,13 @@ internal sealed interface BluezSignal {
 }
 
 internal interface BluezBus {
+    /** Unique D-Bus name of the process serving org.bluez. */
+    val owner: String?
     fun signals(accepts: (BluezSignal) -> Boolean): Flow<BluezSignal>
     suspend fun objects(): BluezObjects
     suspend fun connect(path: String)
-    suspend fun startNotify(path: String)
-    suspend fun stopNotify(path: String)
+    suspend fun startNotify(owner: String, path: String)
+    suspend fun stopNotify(owner: String, path: String)
     suspend fun write(path: String, value: ByteArray, withResponse: Boolean)
     suspend fun startDiscovery(path: String)
     suspend fun stopDiscovery(path: String)

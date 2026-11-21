@@ -65,10 +65,9 @@ internal class ControlLink(
         lateinit var task: Deferred<OperationResult>
         var connection: ControlConnection? = null
         var observer: Job? = null
-        var codec: ProtocolCodec = createProtocolCodec(requireNotNull(candidate.profile))
-        var progress = MutableStateFlow(ReadProgress())
+        lateinit var codec: ProtocolCodec
+        lateinit var progress: MutableStateFlow<ReadProgress>
         val linkEpoch = MutableStateFlow(0L)
-        var selection: TransportSelection? = null
         var initializationQueryIndex: Int? = null
         val settings = SettingQueue.Pending()
         var hasWritten = false
@@ -173,7 +172,7 @@ internal class ControlLink(
 
     private suspend fun openAndRead(attempt: Attempt): OperationResult {
         try {
-            val selected = attempt.selection ?: selectTransport(attempt).also { attempt.selection = it }
+            val selected = selectTransport(attempt)
             updateAttempt(attempt) { it.copy(transportSelection = selected) }
             while (true) {
                 val epoch = beginLink(attempt)
@@ -503,11 +502,6 @@ internal class ControlLink(
         }
         lifecycle.withLock {
             if (active !== attempt) throw CancellationException("Stale recovery")
-            attempt.codec = createProtocolCodec(requireNotNull(attempt.candidate.profile))
-            attempt.progress = MutableStateFlow(ReadProgress())
-            attempt.hasWritten = false
-            attempt.initializationQueryIndex = null
-            attempt.ready = false
             state.update { current ->
                 if (current.device?.sessionId != attempt.id || current.connection is ConnectionState.Disconnected) {
                     current

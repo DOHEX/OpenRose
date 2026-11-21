@@ -7,7 +7,9 @@ import android.bluetooth.le.ScanCallback
 import android.bluetooth.le.ScanResult
 import android.bluetooth.le.ScanSettings
 import android.content.Context
+import android.location.LocationManager
 import android.os.Build
+import android.provider.Settings
 import io.github.dohex.openrose.core.ConnectionPhase
 import io.github.dohex.openrose.core.transport.Advertisement
 import io.github.dohex.openrose.core.transport.ControlConnection
@@ -28,6 +30,9 @@ internal class AndroidBleTransport(private val context: Context) : ControlTransp
 
     override fun scan(): Flow<Advertisement> = callbackFlow {
         requireBluetoothPermission(scan = true)
+        if (Build.VERSION.SDK_INT <= 30 && !locationServicesEnabled()) {
+            throw IOException("请在系统设置中开启定位服务，以便此 Android 版本扫描蓝牙设备")
+        }
         val scanner = adapter().bluetoothLeScanner ?: throw IOException("系统蓝牙未开启或扫描不可用")
         val callback = object : ScanCallback() {
             override fun onScanResult(callbackType: Int, result: ScanResult) {
@@ -75,6 +80,14 @@ internal class AndroidBleTransport(private val context: Context) : ControlTransp
             gattEndpoint,
             onPhase,
         )
+    }
+
+    private fun locationServicesEnabled(): Boolean = if (Build.VERSION.SDK_INT >= 28) {
+        context.getSystemService(LocationManager::class.java)?.isLocationEnabled == true
+    } else {
+        @Suppress("DEPRECATION")
+        Settings.Secure.getInt(context.contentResolver, Settings.Secure.LOCATION_MODE, Settings.Secure.LOCATION_MODE_OFF) !=
+            Settings.Secure.LOCATION_MODE_OFF
     }
 
     private fun requireBluetoothPermission(scan: Boolean) {

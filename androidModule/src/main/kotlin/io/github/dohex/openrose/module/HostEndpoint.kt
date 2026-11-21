@@ -7,6 +7,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
 import android.os.Process
+import android.os.RemoteException
 import android.os.SystemClock
 import android.util.Log
 import io.github.dohex.openrose.androidintegration.BondedHeadsets
@@ -548,6 +549,8 @@ internal class HostEndpoint(
                     host.frames(lease.caller, lease.id, generation).collect { frame ->
                         frames.onFrame(Bundle().apply { putString(BridgeWire.PAYLOAD, HostWire.encode(frame).render()) })
                     }
+                } catch (_: RemoteException) {
+                    // An application that has exited can no longer receive this subscription.
                 } finally {
                     runCatching { frames.onEnded(Bundle().apply { putString(BridgeWire.GENERATION, generation.toString()) }) }
                 }

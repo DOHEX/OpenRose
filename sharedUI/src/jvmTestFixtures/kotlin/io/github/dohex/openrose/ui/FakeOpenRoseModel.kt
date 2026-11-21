@@ -13,6 +13,7 @@ import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.dohex.openrose.core.transport.DeviceId
 import io.github.dohex.openrose.ui.model.OpenRoseModel
 import io.github.dohex.openrose.ui.model.WindowNavigation
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalForInheritanceCoroutinesApi
 import kotlinx.coroutines.InternalCoroutinesApi
 import kotlinx.coroutines.awaitCancellation
@@ -48,6 +49,7 @@ internal class FakeOpenRoseModel(
         private set
 
     var onStartScan: () -> Unit = {}
+    var startScanResult: OperationResult = OperationResult.Success
     var onStopScan: () -> Unit = {}
     var onConnect: (DeviceId) -> Unit = {}
     var onDisconnect: () -> Unit = {}
@@ -70,7 +72,10 @@ internal class FakeOpenRoseModel(
         mutableState.value = mutableState.value.copy(settings = settings)
     }
 
-    override fun startScan() = onStartScan()
+    override fun startScan(): CompletableDeferred<OperationResult> {
+        onStartScan()
+        return CompletableDeferred(startScanResult)
+    }
     override fun stopScan() = onStopScan()
     override fun connect(deviceId: DeviceId) {
         connectRequests += deviceId
@@ -80,7 +85,8 @@ internal class FakeOpenRoseModel(
         disconnectCount++
         onDisconnect()
     }
-    override fun set(setting: DeviceSetting, value: FieldValue) {
+    override fun set(sessionId: Long, setting: DeviceSetting, value: FieldValue) {
+        if (state.value.readySession?.sessionId != sessionId) return
         settingWrites += setting to value
         onSet(setting, value)
     }

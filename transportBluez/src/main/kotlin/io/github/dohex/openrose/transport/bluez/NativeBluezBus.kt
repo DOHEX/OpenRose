@@ -40,7 +40,8 @@ internal class NativeBluezBus private constructor(private val connection: DBusCo
         listeners.forEach { if (it.accepts(signal)) it.inbox.trySendBlocking(signal) }
     }
 
-    @Volatile private var owner: String? = null
+    @Volatile override var owner: String? = null
+        private set
     private val handlers = mutableListOf<AutoCloseable>()
 
     private fun register() {
@@ -83,11 +84,11 @@ internal class NativeBluezBus private constructor(private val connection: DBusCo
         }
     }
     override suspend fun connect(path: String) = call { connection.getRemoteObject("org.bluez", path, Device1::class.java).Connect() }
-    override suspend fun startNotify(path: String) = call {
-        connection.getRemoteObject("org.bluez", path, GattCharacteristic1::class.java).StartNotify()
+    override suspend fun startNotify(owner: String, path: String) = call {
+        connection.getRemoteObject(owner, path, GattCharacteristic1::class.java).StartNotify()
     }
-    override suspend fun stopNotify(path: String) = call {
-        connection.getRemoteObject("org.bluez", path, GattCharacteristic1::class.java).StopNotify()
+    override suspend fun stopNotify(owner: String, path: String) = call {
+        connection.getRemoteObject(owner, path, GattCharacteristic1::class.java).StopNotify()
     }
     override suspend fun write(path: String, value: ByteArray, withResponse: Boolean) = call {
         connection.getRemoteObject("org.bluez", path, GattCharacteristic1::class.java)

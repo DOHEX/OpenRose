@@ -44,6 +44,7 @@ internal fun AddDeviceContent(
     selectedDeviceId: DeviceId?,
     connectionPhase: ConnectionPhase?,
     connectionError: ControlError?,
+    startScanError: ControlError?,
     onRequestPermission: (() -> Unit)?,
     onOpenSystemSettings: (() -> Unit)?,
     onStartScan: () -> Unit,
@@ -59,7 +60,7 @@ internal fun AddDeviceContent(
     val nameCounts = remember(supported) { supported.groupingBy { it.addDeviceName() }.eachCount() }
     val pending = connectionPhase != null
     val scanning = canScan && !pending && state.scan == ScanState.Scanning
-    val scanError = (state.scan as? ScanState.Failed)?.error
+    val scanError = startScanError ?: (state.scan as? ScanState.Failed)?.error
 
     Box(modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
         Column(

@@ -106,7 +106,8 @@ class ModuleHostPresentationTest {
 
         suspend fun updateSettings(change: (IntegrationSettings) -> IntegrationSettings) {
             val view = requireNotNull(host.view(app.identity, app.id))
-            assertIs<HostCallResult.Operation>(execute(app, HostCommand.UpdateSettings(HostSettings(view.state.settings, change(view.settings)))))
+            val saved = HostConfiguration(true, HostSettings(view.state.settings, change(view.settings)))
+            host.configure { saved }
             test.runCurrent()
         }
     }

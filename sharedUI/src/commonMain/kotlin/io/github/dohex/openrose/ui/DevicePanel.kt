@@ -31,6 +31,7 @@ import io.github.dohex.openrose.core.*
 import io.github.dohex.openrose.core.protocol.*
 import io.github.dohex.openrose.core.transport.*
 import io.github.dohex.openrose.ui.model.OpenRoseModel
+import io.github.dohex.openrose.ui.model.settingsFor
 
 internal fun ControlState.activeDevice(): DeviceState? {
     val targetId = connectionTarget?.deviceId
@@ -57,7 +58,6 @@ internal fun HeadphonesPage(
     val onStopScan = model::stopScan
     val onConnect = model::connect
     val onDisconnect = model::disconnect
-    val onSet = model::set
     val device = state.activeDevice()
     Column(
         Modifier.fillMaxWidth(),
@@ -78,6 +78,7 @@ internal fun HeadphonesPage(
             return@Column
         }
 
+        val onSet = model.settingsFor(device.sessionId)
         BoxWithConstraints(Modifier.fillMaxWidth()) {
             val wide = maxWidth >= 680.dp
             val deviceCard: @Composable () -> Unit = {

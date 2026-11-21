@@ -2,12 +2,10 @@ package io.github.dohex.openrose.core
 
 import io.github.dohex.openrose.core.ControlLink.Attempt
 import io.github.dohex.openrose.core.ControlLink.LinkEnded
-import io.github.dohex.openrose.core.ControlLink.ReadProgress
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.FieldReading
 import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.dohex.openrose.core.protocol.ModelProfile
-import io.github.dohex.openrose.core.protocol.ProtocolQuery
 import kotlinx.collections.immutable.mutate
 import kotlinx.collections.immutable.toPersistentSet
 import kotlinx.coroutines.CancellationException
@@ -223,37 +221,31 @@ internal class SettingQueue(
                 writtenFrames = index + 1,
             )
         }
-        val baselines = mutableListOf<Pair<ProtocolQuery, ReadProgress>>()
+        val fieldBaselines = mutableMapOf<DeviceField, Long>()
         var actualValues = emptyMap<DeviceField, FieldValue>()
         for (query in prepared.readbacks) {
             // A later field query gets its own baseline; earlier unsolicited data cannot confirm it.
             owner.pace(attempt)
             owner.ensureActive(attempt)
-            baselines += query to attempt.progress.value
+            val baseline = attempt.progress.value
+            for (field in query.expectedFields) {
+                if (field in prepared.expectedValues) fieldBaselines[field] = baseline.fieldRevisions[field] ?: 0L
+            }
             withTimeout(timing.queryTimeoutMillis) { link.write(query.bytes.copyOf()) }
             val observed = withTimeoutOrNull(timing.queryTimeoutMillis) {
                 attempt.progress.first { progress ->
-                    if (progress.ended) {
-                        true
-                    } else {
-                        val fields = state.value.device?.fields.orEmpty()
-                        val values = prepared.expectedValues.mapNotNull { (field, expected) ->
-                            val reading = baselines.lastOrNull { field in it.first.expectedFields } ?: return@mapNotNull null
-                            val (readback, baseline) = reading
-                            val fresh = (progress.fieldRevisions[field] ?: 0) > (baseline.fieldRevisions[field] ?: 0) &&
-                                readback.responseKeys.all { (progress.keyRevisions[it] ?: 0) > (baseline.keyRevisions[it] ?: 0) }
-                            if (fresh) confirmationValue(fields[field], expected)?.let { field to it } else null
-                        }.toMap()
-                        val confirmed = values.filter { (field, value) -> value == prepared.expectedValues[field] }.keys.toSet()
-                        settingStage(attempt, request, SettingStage.WRITTEN, confirmedFields = confirmed)
-                        val required = baselines.flatMap { it.first.expectedFields }.filter { it in prepared.expectedValues }.toSet()
-                        if (values.keys.containsAll(required)) {
-                            actualValues = values
-                            true
-                        } else {
-                            false
-                        }
-                    }
+                    if (progress.ended) return@first true
+                    // A refresh with no requested value still owns its reply before the next write can run.
+                    val received = query.responseKeys.all { (progress.keyRevisions[it] ?: 0) > (baseline.keyRevisions[it] ?: 0) }
+                    val fields = state.value.device?.fields.orEmpty()
+                    actualValues = fieldBaselines.mapNotNull { (field, revision) ->
+                        if (!received && field in query.expectedFields) return@mapNotNull null
+                        if ((progress.fieldRevisions[field] ?: 0) <= revision) return@mapNotNull null
+                        confirmationValue(fields[field], prepared.expectedValues.getValue(field))?.let { field to it }
+                    }.toMap()
+                    val confirmed = actualValues.filter { (field, value) -> value == prepared.expectedValues[field] }.keys
+                    settingStage(attempt, request, SettingStage.WRITTEN, confirmedFields = confirmed)
+                    received && actualValues.size == fieldBaselines.size
                 }
             }
             if (observed?.ended == true) throw LinkEnded()

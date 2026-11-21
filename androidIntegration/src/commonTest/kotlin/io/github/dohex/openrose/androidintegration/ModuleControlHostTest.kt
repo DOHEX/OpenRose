@@ -35,6 +35,21 @@ import kotlin.test.assertTrue
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class ModuleControlHostTest {
     @Test
+    fun unreadablePreferencesPreserveTheOwnerAndCannotAuthorizeANewAcquire() = runTest {
+        val rig = OwnerRig(this, initial = OwnerRecord(ControlWay.MODULE, PendingModuleRelease("r", null)))
+        rig.bootHost()
+        val before = assertIs<HostStatus.Active>(rig.host.status.value)
+        val lease = assertIs<HostOpenResult.Opened>(rig.host.open(appIdentity)).lease
+
+        assertFalse(rig.host.configure { null })
+        assertEquals(before, rig.host.status.value)
+        assertIs<AcquireResult.Refused>(rig.host.acquire(appIdentity, lease.id, SwitchRequest("new", ControlWay.ORDINARY, ControlWay.MODULE)))
+
+        assertTrue(rig.host.configure { HostConfiguration(true, HostSettings()) })
+        assertIs<HostStatus.Inactive>(rig.host.status.value)
+    }
+
+    @Test
     fun aCallerThatIsNotOpenRoseOrASystemEntryIsRefusedAtAuthorisation() = runTest {
         val rig = OwnerRig(this)
         rig.bootHost()
@@ -85,7 +100,6 @@ class ModuleControlHostTest {
             HostCommand.Connect(rig.earphones.deviceId),
             HostCommand.Disconnect,
             HostCommand.StartScan,
-            HostCommand.UpdateSettings(HostSettings()),
             HostCommand.Set(null, DeviceSetting.NOISE_MODE, FieldValue.Text("anc")),
             HostCommand.Set(reference, DeviceSetting.EQ, FieldValue.Text("pop")),
         )) {
