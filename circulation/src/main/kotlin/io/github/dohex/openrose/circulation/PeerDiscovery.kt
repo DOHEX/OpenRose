@@ -2,9 +2,17 @@ package io.github.dohex.openrose.circulation
 
 import java.io.Closeable
 import java.net.InetAddress
+import javax.net.SocketFactory
 
 data class PairedPeer(val id: String, val name: String)
-data class NearbyPeer(val id: String, val name: String, val address: InetAddress, val port: Int)
+data class NearbyPeer(
+    val id: String,
+    val name: String,
+    val address: InetAddress,
+    val port: Int,
+    /** Android can resolve this address on a different network from the process default. */
+    val socketFactory: SocketFactory = SocketFactory.getDefault(),
+)
 data class PairingOffer(val code: String, val qr: String)
 
 interface PeerDiscovery : Closeable {

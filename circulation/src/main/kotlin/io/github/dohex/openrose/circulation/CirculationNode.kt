@@ -5,7 +5,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import java.io.Closeable
 import java.io.File
 import java.io.IOException
+import java.net.Inet4Address
 import java.net.InetSocketAddress
+import java.net.Socket
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import javax.net.ssl.SSLSocket
@@ -20,7 +22,7 @@ class CirculationNode(
     constructor(directory: File, name: String, discovery: PeerDiscovery, handler: (Map<String, String>) -> Map<String, String>) :
         this(directory, name, discovery, null, handler)
 
-    private val outgoing = ConcurrentHashMap.newKeySet<SSLSocket>()
+    private val outgoing = ConcurrentHashMap.newKeySet<Socket>()
     private val storage = directory.apply { check(isDirectory || mkdirs()) }
     private val identity = PeerIdentity(storage)
     private val trust = PeerTrust(storage)
@@ -54,7 +56,11 @@ class CirculationNode(
         require(CODE.matches(code)) { "请输入六位配对码" }
         connect(id) { wire ->
             wire.send(mapOf("action" to "pair", "name" to name))
-            authenticatePairing(identity.id, id, code, wire.input, wire.output)
+            try {
+                authenticatePairing(identity.id, id, code, wire.input, wire.output)
+            } catch (failure: IOException) {
+                throw IOException("配对校验中断，请刷新配对码 · ${failure.localizedMessage ?: "连接已关闭"}", failure)
+            }
             val response = wire.receive()
             synchronized(this) {
                 check(server.running) { "互联服务已关闭" }
@@ -87,29 +93,52 @@ class CirculationNode(
 
     private fun <T> connect(id: String, operation: (PeerWire) -> T): T {
         check(server.running) { "互联服务已关闭" }
-        val candidates = routes.filter { it.id == id }
-        var unreachable = IOException("无法联系对端")
+        // Multihomed mDNS can publish several service names for one peer, each resolving to a single address.
+        val candidates = routes.filter { it.id == id }.distinctBy { it.address to it.port }.sortedBy { it.address !is Inet4Address }
+        val failures = mutableListOf<String>()
         for (address in candidates) {
-            val socket = identity.tls.socketFactory.createSocket() as SSLSocket
-            outgoing.add(socket)
+            val secure = try {
+                openRoute(address, id)
+            } catch (failure: IOException) {
+                val family = if (address.address is Inet4Address) "IPv4" else "IPv6"
+                failures += "$family · ${failure.localizedMessage}"
+                continue
+            }
+            // No retry once application data may have reached the peer.
             try {
-                check(server.running) { "互联服务已关闭" }
-                try {
-                    socket.soTimeout = PeerServer.RESPONSE_TIMEOUT_MS
-                    socket.connect(InetSocketAddress(address.address, address.port), PeerServer.CONNECT_TIMEOUT_MS)
-                    if (PeerIdentity.peer(socket) != id) throw IOException("对端证书与所选设备不匹配")
-                } catch (failure: IOException) {
-                    unreachable = failure
-                    continue
-                }
-                // Only try another route before the first byte of the request has been delivered.
-                return operation(PeerWire(socket))
+                return secure.use { operation(PeerWire(it)) }
             } finally {
-                outgoing.remove(socket)
-                socket.close()
+                outgoing.remove(secure)
             }
         }
-        throw PeerUnreachable(unreachable)
+        throw PeerUnreachable(IOException(failures.distinct().joinToString(" / ").ifEmpty { "未发现对端地址" }))
+    }
+
+    private fun openRoute(address: NearbyPeer, id: String): SSLSocket {
+        val raw = address.socketFactory.createSocket()
+        outgoing.add(raw)
+        var step = "TCP"
+        var authenticated = false
+        try {
+            check(server.running) { "互联服务已关闭" }
+            raw.connect(InetSocketAddress(address.address, address.port), PeerServer.CONNECT_TIMEOUT_MS)
+            step = "TLS"
+            val secure = identity.tls.socketFactory.createSocket(raw, address.address.hostAddress, address.port, true) as SSLSocket
+            secure.soTimeout = PeerServer.RESPONSE_TIMEOUT_MS
+            check(PeerIdentity.peer(secure) == id) { "对端证书与所选设备不匹配" }
+            // Track the TLS wrapper before untracking its underlying socket so close() can always interrupt it.
+            synchronized(this) {
+                check(server.running) { "互联服务已关闭" }
+                outgoing.add(secure)
+                authenticated = true
+            }
+            return secure
+        } catch (failure: IOException) {
+            throw IOException("$step · ${failure.localizedMessage ?: "连接已关闭"}", failure)
+        } finally {
+            outgoing.remove(raw)
+            if (!authenticated) raw.close()
+        }
     }
 
     private fun accept(socket: SSLSocket) {
