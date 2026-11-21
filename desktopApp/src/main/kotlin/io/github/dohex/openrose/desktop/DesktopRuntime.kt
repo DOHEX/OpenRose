@@ -66,7 +66,10 @@ internal class DesktopRuntime(
         model = RuntimeOpenRoseModel(control, store, scope)
     }
 
-    fun startCirculation() = desktopCirculation(scope, control, (transport as? BluezControlTransport)?.let { LinuxCirculationAudio(it.audioProfiles) })
+    fun startCirculation(): io.github.dohex.openrose.ui.CirculationClient {
+        val audio = (transport as? BluezControlTransport)?.let { LinuxCirculationAudio(it.audioProfiles) }
+        return desktopCirculation(scope, control, audio)
+    }
 
     fun updateDesktopSettings(settings: DesktopSettings) {
         mutableDesktopSettings.value = settings

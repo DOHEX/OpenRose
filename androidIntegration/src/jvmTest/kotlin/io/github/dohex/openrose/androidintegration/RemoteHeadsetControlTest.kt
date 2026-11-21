@@ -140,11 +140,9 @@ class RemoteHeadsetControlTest {
         override fun close() = Unit
     }
 
-    private fun CirculationNode.command(op: String, fields: Map<String, String> = emptyMap()) =
-        localCommand(fields + mapOf("op" to op, "peer" to peers.value.single().id))
+    private fun CirculationNode.command(op: String, fields: Map<String, String> = emptyMap()) = localCommand(fields + mapOf("op" to op, "peer" to peers.value.single().id))
 
-    private fun CirculationNode.noise(read: Map<String, String>) =
-        command("noise", mapOf("mode" to "transparency", "device" to read.getValue("device"), "session" to read.getValue("session")))
+    private fun CirculationNode.noise(read: Map<String, String>) = command("noise", mapOf("mode" to "transparency", "device" to read.getValue("device"), "session" to read.getValue("session")))
 
     private companion object {
         const val TRANSPARENCY = "09ff00000106020e000000000120"

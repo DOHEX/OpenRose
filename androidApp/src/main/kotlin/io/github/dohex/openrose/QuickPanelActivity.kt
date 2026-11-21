@@ -1,6 +1,5 @@
 package io.github.dohex.openrose
 
-import io.github.dohex.openrose.androidintegration.ControlWay
 import android.content.Intent
 import android.content.res.Configuration
 import android.graphics.Color
@@ -13,6 +12,7 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import io.github.dohex.openrose.androidintegration.ControlWay
 import io.github.dohex.openrose.core.PlatformApplicability
 import io.github.dohex.openrose.ui.Appearance
 import io.github.dohex.openrose.ui.PrimaryDeviceSelection

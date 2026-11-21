@@ -517,7 +517,11 @@ internal class HostEndpoint(
         if (generation == null || generation.toString() != request.getString(BridgeWire.HOST_EPOCH)) {
             return BridgeBundles.response(BridgeWire.STATUS_UNAVAILABLE, "模块控制尚未就绪")
         }
-        val data = request.getBundle(BridgeWire.PAYLOAD) ?: return BridgeBundles.response(BridgeWire.STATUS_INVALID_ARGUMENT)
+        val payload = request.getBundle(BridgeWire.PAYLOAD)
+        return payload?.let(::circulationResponse) ?: BridgeBundles.response(BridgeWire.STATUS_INVALID_ARGUMENT)
+    }
+
+    private fun circulationResponse(data: Bundle): Bundle {
         val fields = data.keySet().associateWith { data.getString(it).orEmpty() }
         val response = try {
             circulationAction(fields)

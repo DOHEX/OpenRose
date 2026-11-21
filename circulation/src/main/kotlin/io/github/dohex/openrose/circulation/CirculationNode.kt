@@ -14,9 +14,12 @@ class CirculationNode(
     directory: File,
     private val name: String,
     private val discovery: PeerDiscovery,
-    internal val handoff: HeadsetHandoff? = null,
+    internal val handoff: HeadsetHandoff?,
     private val handler: (Map<String, String>) -> Map<String, String>,
 ) : Closeable {
+    constructor(directory: File, name: String, discovery: PeerDiscovery, handler: (Map<String, String>) -> Map<String, String>) :
+        this(directory, name, discovery, null, handler)
+
     private val outgoing = ConcurrentHashMap.newKeySet<SSLSocket>()
     private val storage = directory.apply { check(isDirectory || mkdirs()) }
     private val identity = PeerIdentity(storage)

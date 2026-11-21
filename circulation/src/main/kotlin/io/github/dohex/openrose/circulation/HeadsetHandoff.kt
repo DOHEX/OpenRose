@@ -14,6 +14,7 @@ class HeadsetHandoff(private val audio: CirculationAudio, private val bonded: ()
     })
 
     private val operation = ReentrantLock()
+
     @Volatile var progress = ""
         private set
 
@@ -31,31 +32,30 @@ class HeadsetHandoff(private val audio: CirculationAudio, private val bonded: ()
         if (audio.isConnected(address)) return@exclusive mapOf("message" to "本机已接入耳机")
         progress = "正在联系已配对的音源设备"
         try {
-            var reachable = 0
-            for (peer in peers) {
+            val deliveries = peers.mapNotNull { peer ->
                 val reply = try {
                     node.request(peer.id, mapOf("op" to "release", "address" to address))
                 } catch (_: PeerUnreachable) {
-                    continue
+                    return@mapNotNull null
                 }
-                reachable++
-                check(reply["status"] in setOf("idle", "released")) { reply["error"] ?: "对端未确认让出耳机" }
+                val answer = reply["status"]
+                check(answer == "idle" || answer == "released") { reply["error"] ?: "对端未确认让出耳机" }
+                answer
             }
-            check(reachable == 0 || reachable == peers.size) { "部分对端不可达，未能确认耳机持有状态" }
-            val offline = reachable == 0
+            val offline = deliveries.isEmpty()
+            check(offline || "released" in deliveries || deliveries.size == peers.size) { "部分对端不可达，未能确认耳机持有状态" }
             progress = if (offline) "对端均不可达，正在尝试本机接入" else "正在接入耳机"
-            try {
-                audio.acquire(address)
-                check(audio.isConnected(address)) { "未确认系统音频已接入" }
-            } catch (failure: Exception) {
-                throw IOException("${if (offline) "对端均不可达；" else ""}${failure.message ?: "接入失败"}", failure)
-            }
+            audio.acquire(address)
+            check(audio.isConnected(address)) { "未确认系统音频已接入" }
             mapOf("message" to if (offline) "对端均不可达，本机已接入耳机" else "本机已接入耳机")
+        } catch (failure: IOException) {
+            throw IOException("$progress：${failure.localizedMessage}", failure)
         } finally {
             progress = ""
         }
     }
 
+    @Suppress("TooGenericExceptionCaught") // The platform may report a D-Bus error, Bluetooth Binder exception or audio server failure.
     private inline fun exclusive(action: () -> Map<String, String>): Map<String, String> {
         if (!operation.tryLock()) return mapOf("error" to "另一项耳机流转正在进行")
         return try {

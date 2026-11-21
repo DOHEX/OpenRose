@@ -1,6 +1,5 @@
 package io.github.dohex.openrose.module
 
-import io.github.dohex.openrose.circulation.CirculationService
 import android.app.Application
 import android.bluetooth.BluetoothAdapter
 import android.content.BroadcastReceiver
@@ -20,6 +19,7 @@ import io.github.dohex.openrose.androidintegration.HostFacts
 import io.github.dohex.openrose.androidintegration.ModuleControlHost
 import io.github.dohex.openrose.androidintegration.wire.BridgeWire
 import io.github.dohex.openrose.bridge.readHostSettings
+import io.github.dohex.openrose.circulation.CirculationService
 import io.github.dohex.openrose.core.LocalControlRuntime
 import io.github.dohex.openrose.platform.AndroidControlTransport
 import io.github.dohex.openrose.platform.readPlatformState
@@ -63,6 +63,7 @@ internal class ModuleHostRuntime(
     private val discoveryBinder = EndpointForwarder(endpointSlot)
 
     @Volatile private var endpoint: HostEndpoint? = null
+
     @Volatile private var circulation: CirculationService? = null
     private var host: ModuleControlHost? = null
     private var scope: CoroutineScope? = null

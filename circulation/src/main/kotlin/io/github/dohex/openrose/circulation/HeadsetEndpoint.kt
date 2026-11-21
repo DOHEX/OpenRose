@@ -83,28 +83,38 @@ class HeadsetEndpoint(private val control: ControlRuntime) {
 /** UI-only dispatch. Network peers are routed separately to [HeadsetEndpoint.handle]. */
 fun CirculationNode.localCommand(fields: Map<String, String>): Map<String, String> = when (fields["op"]) {
     "pull" -> handoff?.pull(this, fields.getValue("address")) ?: mapOf("error" to "该平台暂不支持流转")
-    "handoff" -> buildMap {
-        if (handoff != null && peers.value.isNotEmpty()) put("available", "true")
-        if (peers.value.isNotEmpty() && peers.value.none { paired -> nearby.value.any { it.id == paired.id } }) put("offline", "true")
-        handoff?.progress?.takeIf(String::isNotEmpty)?.let { put("progress", it) }
-    }
+
+    "handoff" -> handoffStatus()
+
     "list" -> buildMap {
         peers.value.forEach { put("paired.${it.id}", it.name) }
         nearby.value.forEach { put("near.${it.id}", it.name) }
     }
+
     "offer" -> offerPairing().let { mapOf("code" to it.code, "qr" to it.qr) }
+
     "pair" -> {
         pair(fields.getValue("peer"), fields.getValue("code"))
         mapOf("message" to "已配对")
     }
+
     "pairQr" -> {
         pairQr(fields.getValue("qr"))
         mapOf("message" to "已配对")
     }
+
     "forget" -> {
         forget(fields.getValue("peer"))
         mapOf("message" to "已解除配对")
     }
+
     "read", "noise" -> request(fields.getValue("peer"), fields - "peer")
+
     else -> mapOf("error" to "未知的互联操作")
+}
+
+private fun CirculationNode.handoffStatus(): Map<String, String> = buildMap {
+    if (handoff != null && peers.value.isNotEmpty()) put("available", "true")
+    if (peers.value.isNotEmpty() && peers.value.none { paired -> nearby.value.any { it.id == paired.id } }) put("offline", "true")
+    handoff?.progress?.takeIf(String::isNotEmpty)?.let { put("progress", it) }
 }

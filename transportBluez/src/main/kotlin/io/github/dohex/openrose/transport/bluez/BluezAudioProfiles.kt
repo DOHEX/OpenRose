@@ -1,22 +1,24 @@
 package io.github.dohex.openrose.transport.bluez
 
-import io.github.dohex.openrose.core.transport.AudioProfile
 import io.github.dohex.openrose.core.transport.normalizeBluetoothAddress
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeoutOrNull
+import org.bluez.Device1
 import org.freedesktop.dbus.annotations.DBusInterfaceName
+import org.freedesktop.dbus.annotations.DBusMemberName
+import org.freedesktop.dbus.connections.impl.DBusConnection
 import org.freedesktop.dbus.interfaces.DBusInterface
 
 @DBusInterfaceName("org.bluez.Bearer.BREDR1")
 internal interface ClassicBearer : DBusInterface {
-    @Suppress("FunctionNaming")
-    fun Disconnect()
+    @DBusMemberName("Disconnect")
+    fun disconnect()
 }
 
 @DBusInterfaceName("org.bluez.Bearer.LE1")
 internal interface LeBearer : DBusInterface {
-    @Suppress("FunctionNaming")
-    fun Disconnect()
+    @DBusMemberName("Disconnect")
+    fun disconnect()
 }
 
 internal const val CLASSIC_BEARER = "org.bluez.Bearer.BREDR1"
@@ -60,5 +62,30 @@ private fun BluezObjects.path(address: String): String? = entries.firstOrNull { 
     device?.get("Paired") == true && normalizeBluetoothAddress(device["Address"] as? String) == address
 }?.key
 
-private fun BluezObjects.hasMedia(address: String): Boolean =
-    address in audioSnapshot(this, setOf(address)).profiles[AudioProfile.A2DP]?.connectedAddresses.orEmpty()
+internal class NativeBluezAudioBus(private val connection: DBusConnection) : BluezAudioBus {
+    override suspend fun connectAudio(path: String) = NativeBluezBus.call {
+        try {
+            connection.getRemoteObject("org.bluez", path, Device1::class.java).ConnectProfile(AUDIO_SINK_UUID)
+        } catch (_: org.bluez.Error.AlreadyConnected) {
+            // The caller verifies that MediaTransport1 actually exists.
+        } catch (_: org.bluez.Error.InProgress) {
+            // A system connection is already in flight. Wait for its actual result.
+        }
+    }
+    override suspend fun disconnectAudio(path: String, interfaces: Map<String, Map<String, Any?>>) = NativeBluezBus.call {
+        if (CLASSIC_BEARER in interfaces && LE_BEARER in interfaces) {
+            if (interfaces[CLASSIC_BEARER]?.get("Connected") == true) {
+                connection.getRemoteObject("org.bluez", path, ClassicBearer::class.java).disconnect()
+            }
+            if (interfaces[LE_BEARER]?.get("Connected") == true) {
+                try {
+                    connection.getRemoteObject("org.bluez", path, LeBearer::class.java).disconnect()
+                } catch (_: org.bluez.Error.NotConnected) {
+                    // LE may already have followed the classic audio disconnect.
+                }
+            }
+        } else {
+            connection.getRemoteObject("org.bluez", path, Device1::class.java).Disconnect()
+        }
+    }
+}

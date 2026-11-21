@@ -37,8 +37,9 @@ class PhoneCirculationAudio(private val context: Context) : CirculationAudio {
 
     private fun checkCall() {
         val mode = context.getSystemService(AudioManager::class.java).mode
-        check(mode != AudioManager.MODE_IN_CALL && mode != AudioManager.MODE_IN_COMMUNICATION &&
-            mode != AudioManager.MODE_RINGTONE && context.getSystemService(TelecomManager::class.java)?.isInCall != true
+        check(
+            mode != AudioManager.MODE_IN_CALL && mode != AudioManager.MODE_IN_COMMUNICATION &&
+                mode != AudioManager.MODE_RINGTONE && context.getSystemService(TelecomManager::class.java)?.isInCall != true,
         ) { "手机通话中，无法让出耳机" }
     }
 
@@ -62,7 +63,12 @@ class PhoneCirculationAudio(private val context: Context) : CirculationAudio {
             while (true) {
                 val states = leases.map { it.currentProxy().getConnectionState(device) }
                 // A2DP is the media source. On release, HFP must be gone too.
-                if (if (connect) states.first() == BluetoothProfile.STATE_CONNECTED else states.all { it == BluetoothProfile.STATE_DISCONNECTED }) break
+                val reached = if (connect) {
+                    states.first() == BluetoothProfile.STATE_CONNECTED
+                } else {
+                    states.all { it == BluetoothProfile.STATE_DISCONNECTED }
+                }
+                if (reached) break
                 delay(120)
             }
             true
@@ -70,22 +76,24 @@ class PhoneCirculationAudio(private val context: Context) : CirculationAudio {
         check(observed == true) { if (connect) "手机接入耳机音频超时" else "手机尚未让出耳机音频" }
     }
 
-    private fun <T> withProfiles(address: String, action: suspend (BluetoothDevice, List<AndroidAudioProfiles.ProfileProxyLease>) -> T): T =
-        runBlocking {
-            val adapter = checkNotNull(context.getSystemService(BluetoothManager::class.java)?.adapter) { "系统蓝牙不可用" }
-            val device = adapter.bondedDevices.firstOrNull { it.address.equals(address, ignoreCase = true) } ?: error("手机尚未配对这副耳机")
-            val leases = mutableListOf<AndroidAudioProfiles.ProfileProxyLease>()
-            try {
-                val ready = withTimeoutOrNull(2_500L) {
-                    listOf(BluetoothProfile.A2DP, BluetoothProfile.HEADSET).forEach { profile ->
-                        leases += checkNotNull(profiles.requestProfileProxy(adapter, profile)) { "系统音频服务不可用" }
-                    }
-                    true
+    private fun <T> withProfiles(
+        address: String,
+        action: suspend (BluetoothDevice, List<AndroidAudioProfiles.ProfileProxyLease>) -> T,
+    ): T = runBlocking {
+        val adapter = checkNotNull(context.getSystemService(BluetoothManager::class.java)?.adapter) { "系统蓝牙不可用" }
+        val device = adapter.bondedDevices.firstOrNull { it.address.equals(address, ignoreCase = true) } ?: error("手机尚未配对这副耳机")
+        val leases = mutableListOf<AndroidAudioProfiles.ProfileProxyLease>()
+        try {
+            val ready = withTimeoutOrNull(2_500L) {
+                listOf(BluetoothProfile.A2DP, BluetoothProfile.HEADSET).forEach { profile ->
+                    leases += checkNotNull(profiles.requestProfileProxy(adapter, profile)) { "系统音频服务不可用" }
                 }
-                check(ready == true) { "读取系统音频连接超时" }
-                action(device, leases)
-            } finally {
-                leases.forEach { it.close() }
+                true
             }
+            check(ready == true) { "读取系统音频连接超时" }
+            action(device, leases)
+        } finally {
+            leases.forEach { it.close() }
         }
+    }
 }

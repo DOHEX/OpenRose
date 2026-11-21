@@ -143,7 +143,10 @@ class CirculationNodeTest {
         }
         val network = TestNetwork()
         fun node(host: String) = CirculationNode(
-            files.newFolder(), host, network.discovery(), HeadsetHandoff(adapter(host)) { listOf(headset) },
+            files.newFolder(),
+            host,
+            network.discovery(),
+            HeadsetHandoff(adapter(host)) { listOf(headset) },
         ) { emptyMap() }
         node("Desktop").use { desktop ->
             node("Phone").use { phone ->

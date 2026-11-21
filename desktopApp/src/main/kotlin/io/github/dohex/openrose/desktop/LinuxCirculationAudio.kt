@@ -56,7 +56,7 @@ internal class LinuxCirculationAudio(private val profiles: BluezAudioProfiles) :
     }
 
     private fun matchesHeadset(name: String, kind: String, address: String): Boolean {
-        val prefix = "bluez_${kind}.${address.replace(':', '_')}"
+        val prefix = "bluez_$kind.${address.replace(':', '_')}"
         val device = name.replace(':', '_')
         return device == prefix || device.startsWith("$prefix.")
     }
