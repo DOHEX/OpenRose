@@ -34,7 +34,7 @@ kover = "0.9.11"
 zxing-core = { module = "com.google.zxing:core", version = "3.5.4" }
 zxing-embedded = { module = "com.journeyapps:zxing-android-embedded", version = "4.3.0" }
 jmdns = { module = "org.jmdns:jmdns", version = "3.6.5" }
-bcpkix = { module = "org.bouncycastle:bcpkix-jdk18on", version = "1.87" }
+bcprov = { module = "org.bouncycastle:bcprov-jdk18on", version = "1.87" }
 compose-runtime = { module = "org.jetbrains.compose.runtime:runtime", version.ref = "compose" }
 compose-foundation = { module = "org.jetbrains.compose.foundation:foundation", version.ref = "compose" }
 compose-components-resources = { module = "org.jetbrains.compose.components:components-resources", version.ref = "compose" }

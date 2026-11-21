@@ -88,7 +88,12 @@ class AndroidPeerDiscovery(context: Context) : PeerDiscovery {
             override fun onResolveFailed(info: NsdServiceInfo, error: Int) {
                 main.post {
                     resolving = false
-                    retry { if (services[next.serviceName] === next) { pending.add(next); resolve(id, found) } }
+                    retry {
+                        if (services[next.serviceName] === next) {
+                            pending.add(next)
+                            resolve(id, found)
+                        }
+                    }
                     resolve(id, found)
                 }
             }
@@ -96,18 +101,23 @@ class AndroidPeerDiscovery(context: Context) : PeerDiscovery {
             override fun onServiceResolved(info: NsdServiceInfo) {
                 main.post {
                     resolving = false
-                    val peerId = info.attributes["id"]?.decodeToString()
-                    val displayName = info.attributes["name"]?.decodeToString()
-                    val address = info.host
-                    if (active && services[next.serviceName] === next && peerId != null && peerId != id && displayName != null && address != null) {
-                        seen[next.serviceName] = NearbyPeer(peerId, displayName, address, info.port)
-                        found(seen.values.toList())
+                    if (active && services[next.serviceName] === next) {
+                        info.peer()?.takeUnless { it.id == id }?.let {
+                            seen[next.serviceName] = it
+                            found(seen.values.toList())
+                        }
                     }
                     resolve(id, found)
                 }
             }
         }
         runCatching { nsd.resolveService(next, listener) }.onFailure { listener.onResolveFailed(next, -1) }
+    }
+
+    private fun NsdServiceInfo.peer(): NearbyPeer? {
+        val peerId = attributes["id"]?.decodeToString() ?: return null
+        val displayName = attributes["name"]?.decodeToString() ?: return null
+        return NearbyPeer(peerId, displayName, host ?: return null, port)
     }
 
     private fun retry(action: () -> Unit) {
