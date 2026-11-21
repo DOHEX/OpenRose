@@ -1,5 +1,7 @@
 package io.github.dohex.openrose.desktop
 
+import io.github.dohex.openrose.ui.CirculationSettings
+import io.github.dohex.openrose.ui.CirculationClient
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -26,7 +28,7 @@ class DesktopPlatformUi(
     private val onDesktopSettingsChange: (DesktopSettings) -> Unit,
     private val tray: StateFlow<TrayAvailability>,
     private val loginLaunch: LoginLaunchControl,
-    private val circulation: io.github.dohex.openrose.ui.CirculationClient? = null,
+    private val circulation: CirculationClient? = null,
 ) : PlatformUi {
     override val openBluetoothSettings: (() -> Unit)? = bluetoothSettingsCommand(platformName)?.let { args ->
         {
@@ -58,7 +60,7 @@ class DesktopPlatformUi(
         val settings by desktopSettings.collectAsState()
         val availability by tray.collectAsState()
         val login by loginLaunch.state.collectAsState()
-        circulation?.let { io.github.dohex.openrose.ui.CirculationSettings(it, showQr = { text -> PairingQr(text) }) }
+        circulation?.let { CirculationSettings(it, showQr = { text -> PairingQr(text) }) }
         AppGroup(title = "后台控制") {
             AppSwitchRow(
                 title = "后台控制",

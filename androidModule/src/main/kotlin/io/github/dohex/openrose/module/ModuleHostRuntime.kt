@@ -1,5 +1,6 @@
 package io.github.dohex.openrose.module
 
+import io.github.dohex.openrose.circulation.CirculationService
 import android.app.Application
 import android.bluetooth.BluetoothAdapter
 import android.content.BroadcastReceiver
@@ -62,7 +63,7 @@ internal class ModuleHostRuntime(
     private val discoveryBinder = EndpointForwarder(endpointSlot)
 
     @Volatile private var endpoint: HostEndpoint? = null
-    @Volatile private var circulation: io.github.dohex.openrose.circulation.CirculationService? = null
+    @Volatile private var circulation: CirculationService? = null
     private var host: ModuleControlHost? = null
     private var scope: CoroutineScope? = null
     private var context: Context? = null
