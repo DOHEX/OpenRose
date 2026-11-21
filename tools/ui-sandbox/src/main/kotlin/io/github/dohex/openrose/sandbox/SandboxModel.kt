@@ -37,10 +37,10 @@ internal class SandboxModel(private val scope: CoroutineScope) : OpenRoseModel {
     private val mutableScenario = MutableStateFlow(SandboxScenario())
     val scenario: StateFlow<SandboxScenario> = mutableScenario.asStateFlow()
 
-    private var lastSessionId = 1L
+    private var session = SandboxSession(1L)
     private val mutableState = MutableStateFlow(
         ControlState(platform = PlatformState(PermissionState.NOT_REQUIRED))
-            .showing(mutableScenario.value, lastSessionId, keepReadings = false),
+            .showing(mutableScenario.value, session.id, keepReadings = false),
     )
     override val state: StateFlow<ControlState> = mutableState.asStateFlow()
 
@@ -59,9 +59,9 @@ internal class SandboxModel(private val scope: CoroutineScope) : OpenRoseModel {
         val next = change(previous).normalized()
         if (next == previous) return
         val sameSession = sameSession(previous, next)
-        if (next.link >= SandboxLink.CONNECTING && !sameSession) lastSessionId++
+        if (next.link >= SandboxLink.CONNECTING && !sameSession) session = SandboxSession(session.id + 1)
         mutableScenario.value = next
-        mutableState.update { it.showing(next, lastSessionId, keepReadings = sameSession && previous.link == SandboxLink.READY) }
+        mutableState.update { it.showing(next, session.id, keepReadings = sameSession && previous.link == SandboxLink.READY) }
     }
 
     override fun updateUiSettings(settings: UiSettings) {
@@ -108,9 +108,11 @@ internal class SandboxModel(private val scope: CoroutineScope) : OpenRoseModel {
         }
     }
 
-    override fun set(sessionId: Long, command: HeadsetCommand) = writes.submit(sessionId, command)
+    override fun set(sessionId: Long, command: HeadsetCommand) {
+        writes.submit(session, sessionId, command)
+    }
 
-    override suspend fun setInSession(sessionId: Long, command: HeadsetCommand) = writes.write(sessionId, command)
+    override suspend fun setInSession(sessionId: Long, command: HeadsetCommand) = writes.submit(session, sessionId, command).await()
 }
 
 private suspend fun SandboxModel.connectThrough(profile: ModelProfile) {

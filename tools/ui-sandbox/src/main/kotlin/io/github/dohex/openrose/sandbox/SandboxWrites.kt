@@ -11,24 +11,32 @@ import io.github.dohex.openrose.core.SettingStage
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.FieldReading
 import io.github.dohex.openrose.core.protocol.FieldValue
+import io.github.dohex.openrose.core.protocol.ProtocolSetting
 import io.github.dohex.openrose.core.protocol.TouchBinding
 import io.github.dohex.openrose.core.protocol.createProtocolCodec
 import io.github.dohex.openrose.core.validate
-import kotlinx.collections.immutable.PersistentMap
-import kotlinx.collections.immutable.toPersistentList
+import io.github.dohex.openrose.core.withReadings
+import io.github.dohex.openrose.core.withSettingOperation
 import kotlinx.collections.immutable.toPersistentSet
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.updateAndGet
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import java.util.concurrent.atomic.AtomicLong
 
 private const val WRITE_MILLIS = 250L
 private const val READBACK_MILLIS = 600L
 
-/** The control session keeps this many recent operations, terminal ones included. */
-private const val OPERATION_HISTORY = 64
+internal class SandboxSession(val id: Long) {
+    val writing = Mutex()
+}
 
 /**
  * Setting writes as the control session records them: submitted, written, then ended the way the scenario says.
@@ -40,116 +48,90 @@ internal class SandboxWrites(
     private val scenario: StateFlow<SandboxScenario>,
     private val scope: CoroutineScope,
 ) {
-    private var lastOperationId = 0L
+    private val operationIds = AtomicLong()
+    private val sessionEnded = ControlError(ControlErrorCode.DISCONNECTED, "请求的设备会话已结束或已被替换")
 
-    fun submit(sessionId: Long, command: HeadsetCommand) {
-        val run = begin(command, sessionId) ?: return
-        scope.launch { run() }
-    }
-
-    /** Like [submit], but only to [sessionId], and returns once the scenario ends the write. */
-    suspend fun write(sessionId: Long, command: HeadsetCommand): OperationResult {
-        val run = begin(command, sessionId)
-            ?: return OperationResult.Failure(ControlError(ControlErrorCode.DISCONNECTED, "请求的设备会话已结束或已被替换"))
-        return run()
-    }
-
-    /** Records the submission now; the returned step plays out the rest, or null when no session can take the write. */
-    private fun begin(command: HeadsetCommand, sessionId: Long): (suspend () -> OperationResult)? {
+    /** Record admission before returning. The sandbox owns execution even if a caller stops waiting. */
+    fun submit(
+        session: SandboxSession,
+        expectedSessionId: Long,
+        command: HeadsetCommand,
+    ): Deferred<OperationResult> = scope.async(start = CoroutineStart.UNDISPATCHED) {
         val current = state.value
-        val session = current.readySession ?: return null
-        if (session.sessionId != sessionId) return null
-        val device = current.device ?: return null
-        val error = device.validate(command)
-        return if (error == null) {
-            prepare(device, command)
-        } else {
-            val outcome = OperationResult.Failure(error)
-            state.update { it.copy(lastError = error) }
-            suspend { outcome }
+        if (session.id != expectedSessionId || current.sessionFor(command.setting)?.sessionId != session.id) {
+            return@async OperationResult.Failure(sessionEnded)
         }
-    }
-
-    private fun prepare(device: DeviceState, command: HeadsetCommand): suspend () -> OperationResult {
-        val firmware = device.knownValue(DeviceField.FIRMWARE) as? FieldValue.Firmware
-        val prepared = runCatching {
-            createProtocolCodec(device.profile).prepareSetting(command.setting, command.value, firmware, device.diagnostics.fields)
+        val error = requireNotNull(current.device).validate(command)
+        if (error != null) {
+            state.update { if (it.device?.sessionId == session.id) it.copy(lastError = error) else it }
+            return@async OperationResult.Failure(error)
         }
-        val operation = SettingOperation(
-            id = ++lastOperationId,
-            sessionId = device.sessionId,
-            setting = command.setting,
-            requestedValue = command.value,
-            stage = SettingStage.SUBMITTED,
-            totalFrames = prepared.getOrNull()?.writeFrames?.size ?: 0,
-        )
+        val operation = SettingOperation(operationIds.incrementAndGet(), session.id, command.setting, command.value, SettingStage.SUBMITTED)
         record(operation)
-        val plan = prepared.getOrElse { rejection ->
-            val code = if (rejection is IllegalArgumentException) ControlErrorCode.INVALID_ARGUMENT else ControlErrorCode.UNSUPPORTED
-            val error = ControlError(code, rejection.message ?: rejection.toString())
-            finish(operation, SettingStage.FAILED, error)
-            return { OperationResult.Failure(error) }
+        session.writing.withLock { execute(operation, command) }
+    }
+
+    private suspend fun execute(operation: SettingOperation, command: HeadsetCommand): OperationResult {
+        val current = state.value
+        if (current.sessionFor(command.setting)?.sessionId != operation.sessionId) {
+            return record(operation.copy(stage = SettingStage.DISCONNECTED, error = sessionEnded))
         }
-        val written = operation.copy(stage = SettingStage.WRITTEN, writtenFrames = plan.writeFrames.size)
-        return {
-            delay(WRITE_MILLIS)
-            record(written)
-            delay(READBACK_MILLIS)
-            when (scenario.value.writeOutcome) {
-                SandboxWriteOutcome.CONFIRMED -> confirm(written, plan.expectedValues)
+        val device = requireNotNull(current.device)
+        device.validate(command)?.let { return record(operation.copy(stage = SettingStage.FAILED, error = it)) }
 
-                SandboxWriteOutcome.TIMED_OUT ->
-                    finish(written, SettingStage.TIMED_OUT, ControlError(ControlErrorCode.TIMEOUT, "没有收到有效的设置回读"))
+        val plan = runCatching {
+            createProtocolCodec(device.profile).prepareSetting(command, device)
+        }
+        return plan.fold(
+            onSuccess = { simulateWrite(operation, it) },
+            onFailure = { rejection ->
+                val code = if (rejection is IllegalArgumentException) ControlErrorCode.INVALID_ARGUMENT else ControlErrorCode.UNSUPPORTED
+                val error = ControlError(code, rejection.message ?: rejection.toString())
+                record(operation.copy(stage = SettingStage.FAILED, error = error))
+            },
+        )
+    }
 
-                SandboxWriteOutcome.NOT_APPLIED ->
-                    finish(written, SettingStage.NOT_APPLIED, ControlError(ControlErrorCode.NOT_APPLIED, "设备状态与请求不一致"))
-            }
+    private suspend fun simulateWrite(operation: SettingOperation, plan: ProtocolSetting): OperationResult {
+        val submitted = operation.copy(totalFrames = plan.writeFrames.size)
+        record(submitted)
+        delay(WRITE_MILLIS)
+        val written = submitted.copy(stage = SettingStage.WRITTEN, writtenFrames = submitted.totalFrames)
+        val writeResult = record(written)
+        if (writeResult is OperationResult.Failure) return writeResult
+
+        delay(READBACK_MILLIS)
+        return when (scenario.value.writeOutcome) {
+            SandboxWriteOutcome.CONFIRMED -> record(
+                written.copy(stage = SettingStage.CONFIRMED, confirmedFields = plan.expectedValues.keys.toPersistentSet()),
+                plan.expectedValues,
+            )
+
+            SandboxWriteOutcome.TIMED_OUT -> record(
+                written.copy(stage = SettingStage.TIMED_OUT, error = ControlError(ControlErrorCode.TIMEOUT, "没有收到有效的设置回读")),
+            )
+
+            SandboxWriteOutcome.NOT_APPLIED -> record(
+                written.copy(stage = SettingStage.NOT_APPLIED, error = ControlError(ControlErrorCode.NOT_APPLIED, "设备状态与请求不一致")),
+            )
         }
     }
 
-    /** A readback for a session that has since ended cannot confirm anything. */
-    private fun confirm(operation: SettingOperation, expected: Map<DeviceField, FieldValue>): OperationResult {
-        var result: OperationResult = OperationResult.Success
-        state.update { current ->
-            val device = current.device?.takeIf { it.sessionId == operation.sessionId }
-            if (device == null) {
-                val error = ControlError(ControlErrorCode.DISCONNECTED, "控制连接已断开，设置未获完整确认")
-                result = OperationResult.Failure(error)
-                current.withOperation(operation.copy(stage = SettingStage.DISCONNECTED, error = error)).copy(lastError = error)
+    /** A late result updates the original operation's history only. */
+    private fun record(operation: SettingOperation, expected: Map<DeviceField, FieldValue> = emptyMap()): OperationResult {
+        val updated = state.updateAndGet { current ->
+            if (current.sessionFor(operation.setting)?.sessionId != operation.sessionId) {
+                val previous = current.settingOperations.firstOrNull { it.id == operation.id } ?: operation
+                current.withSettingOperation(previous.copy(stage = SettingStage.DISCONNECTED, error = sessionEnded))
             } else {
-                result = OperationResult.Success
-                var readings = confirmedFields(device.diagnostics.fields, expected)
-                val previousMode = device.reading(DeviceField.GAME_MODE)
-                if (device.profile.invalidatesEqualizer(previousMode, readings[DeviceField.GAME_MODE], expected.keys)) {
-                    readings = readings.removing(DeviceField.EQ)
-                }
-                val confirmed = device.copy(
-                    diagnostics = device.diagnostics.copy(fields = readings),
-                    capabilities = device.profile.capabilities(readings),
-                )
-                current.withOperation(operation.copy(stage = SettingStage.CONFIRMED, confirmedFields = expected.keys.toPersistentSet()))
-                    .copy(device = confirmed)
+                val device = requireNotNull(current.device)
+                val confirmed = if (expected.isEmpty()) device else device.withReadings(device.simulateReadback(expected))
+                current.withSettingOperation(operation).copy(device = confirmed, lastError = operation.error)
             }
         }
-        return result
+        val error = updated.settingOperations.first { it.id == operation.id }.error
+        return error?.let(OperationResult::Failure) ?: OperationResult.Success
     }
-
-    private fun finish(operation: SettingOperation, stage: SettingStage, error: ControlError): OperationResult {
-        state.update { it.withOperation(operation.copy(stage = stage, error = error)).copy(lastError = error) }
-        return OperationResult.Failure(error)
-    }
-
-    private fun record(operation: SettingOperation) = state.update { it.withOperation(operation) }
-}
-
-private fun ControlState.withOperation(operation: SettingOperation): ControlState {
-    val replaced = settingOperations.indexOfFirst { it.id == operation.id }
-    val operations = if (replaced >= 0) {
-        settingOperations.replacingAt(replaced, operation)
-    } else {
-        settingOperations.adding(operation)
-    }
-    return copy(settingOperations = operations.takeLast(OPERATION_HISTORY).toPersistentList())
 }
 
 /**
@@ -157,20 +139,16 @@ private fun ControlState.withOperation(operation: SettingOperation): ControlStat
  * reply completes it. A touch assignment lands in its slot of the full binding table, and a bass level reads back
  * together with the custom-slot EQ mode from the same reply.
  */
-private fun confirmedFields(
-    fields: PersistentMap<DeviceField, FieldReading>,
+private fun DeviceState.simulateReadback(
     expected: Map<DeviceField, FieldValue>,
-): PersistentMap<DeviceField, FieldReading> {
-    val result = fields.builder()
-    for ((field, value) in expected) {
-        result[field] = if (value is FieldValue.TouchAssignment) {
-            val current = (fields[field] as? FieldReading.Known)?.value as? FieldValue.TouchKeys
-            FieldReading.Known(FieldValue.TouchKeys(current?.bindings.orEmpty().assigning(value)), "")
-        } else {
-            FieldReading.Known(value, "")
-        }
+): Map<DeviceField, FieldReading> = expected.mapValues { (field, value) ->
+    val reading = if (value is FieldValue.TouchAssignment) {
+        val current = knownValue(field) as? FieldValue.TouchKeys
+        FieldValue.TouchKeys(current?.bindings.orEmpty().assigning(value))
+    } else {
+        value
     }
-    return result.build()
+    FieldReading.Known(reading, "")
 }
 
 /** The binding table with [assignment] in its slot; the device keeps the slot's own raw action code. */

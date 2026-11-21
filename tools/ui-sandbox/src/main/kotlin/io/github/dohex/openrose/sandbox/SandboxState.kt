@@ -22,10 +22,9 @@ import kotlinx.collections.immutable.persistentMapOf
 
 private val batteryFields = listOf(DeviceField.LEFT_BATTERY, DeviceField.RIGHT_BATTERY, DeviceField.CASE_BATTERY)
 
-/** The same model and firmware staying connected keep one session; anything else is a new one. */
-internal fun sameSession(previous: SandboxScenario?, next: SandboxScenario): Boolean = previous != null &&
-    previous.link >= SandboxLink.CONNECTING &&
-    next.link >= SandboxLink.CONNECTING &&
+/** Advancing the same connection keeps its session. Restarting at an earlier phase creates another. */
+internal fun sameSession(previous: SandboxScenario, next: SandboxScenario): Boolean = previous.link >= SandboxLink.CONNECTING &&
+    next.link >= previous.link &&
     previous.profile == next.profile &&
     previous.firmware == next.firmware
 
@@ -78,8 +77,8 @@ private fun sandboxCandidate(profile: ModelProfile) = DeviceCandidate(
 private fun sandboxConnection(scenario: SandboxScenario, deviceId: DeviceId, sessionId: Long): ConnectionState = when (scenario.link) {
     SandboxLink.FIRST_VISIT, SandboxLink.PAIRED -> ConnectionState.Disconnected
     SandboxLink.CONNECTING -> ConnectionState.Connecting(deviceId, sessionId, ConnectionPhase.CONNECTING)
-    SandboxLink.INITIALIZING -> ConnectionState.Connected(deviceId, sessionId, scenario.profile, ConnectionPhase.INITIALIZING)
-    SandboxLink.READY -> ConnectionState.Connected(deviceId, sessionId, scenario.profile, ConnectionPhase.READY)
+    SandboxLink.INITIALIZING -> ConnectionState.Connecting(deviceId, sessionId, ConnectionPhase.INITIALIZING)
+    SandboxLink.READY -> ConnectionState.Connected(deviceId, sessionId, scenario.profile)
 }
 
 /** An initializing device has read nothing yet. */

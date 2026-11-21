@@ -223,13 +223,6 @@ enum class ModelProfile {
     /** Control choices derived from the facts this particular headset session has confirmed. */
     fun capabilities(readings: Map<DeviceField, FieldReading>): DeviceCapabilities = CapabilityFacts(readings).resolve(this)
 
-    /** Switching preset banks invalidates the previous EQ unless the same reply also supplied its replacement. */
-    fun invalidatesEqualizer(
-        previous: FieldReading?,
-        current: FieldReading?,
-        updatedFields: Set<DeviceField>,
-    ): Boolean = previous != null && previous != current && spec.protocol.refreshEqualizerAfterGameMode && DeviceField.EQ !in updatedFields
-
     /** What this model offers under [firmware]; null means the firmware has not been read. */
     fun capabilities(firmware: FieldValue.Firmware? = null, gameMode: Boolean? = null): DeviceCapabilities {
         val capabilities = spec.capabilities(firmware)

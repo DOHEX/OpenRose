@@ -17,6 +17,8 @@ cd OpenRose
 
 提 PR 前必须通过 `./gradlew offlineCheck`。开发环境、模块结构、新增型号、界面沙盒和提交规范见 [CONTRIBUTING.md](https://github.com/DOHEX/OpenRose/blob/main/CONTRIBUTING.md)。
 
+运行 `./gradlew :tools:ui-sandbox:run` 可检查设置何时可用。选择「初始化中」时，沙盒模拟耳机尚未返回读数，普通设置要等控制连接就绪后才能写入。沙盒按提交顺序写入设置。以 FirstAngel 为例，游戏模式切换成功后，排在后面的 EQ 请求会按新的预设列表校验。把控制台拨回「初始化中」可以模拟重连，之前的设置结果只记入旧会话。
+
 ## 开发文档
 
 | 文档 | 内容 |

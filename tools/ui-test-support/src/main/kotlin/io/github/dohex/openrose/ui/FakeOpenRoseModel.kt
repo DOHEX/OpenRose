@@ -87,7 +87,7 @@ class FakeOpenRoseModel(
         onDisconnect()
     }
     override fun set(sessionId: Long, command: HeadsetCommand) {
-        val session = if (command is HeadsetCommand.NoiseMode) state.value.noiseModeSession else state.value.readySession
+        val session = state.value.sessionFor(command.setting)
         if (session?.sessionId != sessionId) return
         settingWrites += command.setting to command.value
         onSet(command.setting, command.value)
