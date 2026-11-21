@@ -25,6 +25,10 @@ internal class FakeBluezBus : BluezBus {
         objectsFailure?.let { throw it }
         return snapshot
     }
+    var onAudioConnect: (String) -> Unit = {}
+    var onAudioDisconnect: (String) -> Unit = {}
+    override suspend fun connectAudio(path: String) = onAudioConnect(path)
+    override suspend fun disconnectAudio(path: String, interfaces: Map<String, Map<String, Any?>>) = onAudioDisconnect(path)
     override suspend fun connect(path: String) {
         connects++
         connectFailure?.let { throw it }

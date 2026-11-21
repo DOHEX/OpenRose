@@ -29,6 +29,7 @@ class AndroidPlatformUi(
     private val onRestartScope: suspend (List<String>, (ScopeRestartUpdate) -> Unit) -> List<ScopeRestartResult>,
     private val restartScope: CoroutineScope,
     private val circulationSettings: @Composable () -> Unit = {},
+    private val circulation: CirculationClient? = null,
 ) : PlatformUi {
     override val platformName: String = "Android"
     private var restartRunning by mutableStateOf(false)
@@ -46,6 +47,12 @@ class AndroidPlatformUi(
             return integration.settings.dynamicColor &&
                 integration.platform.dynamicColorApplicability == PlatformApplicability.APPLICABLE
         }
+
+    @Composable
+    override fun HandoffAction(state: ControlState, selection: PrimaryDeviceSelection) {
+        val current by integration.collectAsState()
+        if (current.owner.selected == ControlWay.MODULE) circulation?.let { CirculationHandoffRow(it, state, selection) }
+    }
 
     @Composable
     override fun BluetoothPermissionRows(platform: PlatformState) {

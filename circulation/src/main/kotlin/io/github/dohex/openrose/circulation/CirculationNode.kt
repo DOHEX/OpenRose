@@ -14,6 +14,7 @@ class CirculationNode(
     directory: File,
     private val name: String,
     private val discovery: PeerDiscovery,
+    internal val handoff: HeadsetHandoff? = null,
     private val handler: (Map<String, String>) -> Map<String, String>,
 ) : Closeable {
     private val outgoing = ConcurrentHashMap.newKeySet<SSLSocket>()
@@ -105,7 +106,7 @@ class CirculationNode(
                 socket.close()
             }
         }
-        throw unreachable
+        throw PeerUnreachable(unreachable)
     }
 
     private fun accept(socket: SSLSocket) {
@@ -127,7 +128,10 @@ class CirculationNode(
             val grant = checkNotNull(trust.grant(id))
             check(server.running && grant.token == header["grant"])
             when (header["action"]) {
-                "request" -> handler(checkNotNull(request))
+                "request" -> when (request?.get("op")) {
+                    "release" -> handoff?.release(request.getValue("address")) ?: mapOf("error" to "该平台暂不支持流转")
+                    else -> handler(checkNotNull(request))
+                }
 
                 "forget" -> {
                     trust.remove(id)

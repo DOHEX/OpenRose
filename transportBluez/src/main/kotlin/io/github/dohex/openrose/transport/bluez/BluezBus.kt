@@ -17,6 +17,8 @@ internal interface BluezBus {
     val owner: String?
     fun signals(accepts: (BluezSignal) -> Boolean): Flow<BluezSignal>
     suspend fun objects(): BluezObjects
+    suspend fun connectAudio(path: String)
+    suspend fun disconnectAudio(path: String, interfaces: Map<String, Map<String, Any?>>)
     suspend fun connect(path: String)
     suspend fun startNotify(owner: String, path: String)
     suspend fun stopNotify(owner: String, path: String)

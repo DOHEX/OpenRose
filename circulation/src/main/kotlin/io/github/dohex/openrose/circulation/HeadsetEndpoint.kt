@@ -82,6 +82,12 @@ class HeadsetEndpoint(private val control: ControlRuntime) {
 
 /** UI-only dispatch. Network peers are routed separately to [HeadsetEndpoint.handle]. */
 fun CirculationNode.localCommand(fields: Map<String, String>): Map<String, String> = when (fields["op"]) {
+    "pull" -> handoff?.pull(this, fields.getValue("address")) ?: mapOf("error" to "该平台暂不支持流转")
+    "handoff" -> buildMap {
+        if (handoff != null && peers.value.isNotEmpty()) put("available", "true")
+        if (peers.value.isNotEmpty() && peers.value.none { paired -> nearby.value.any { it.id == paired.id } }) put("offline", "true")
+        handoff?.progress?.takeIf(String::isNotEmpty)?.let { put("progress", it) }
+    }
     "list" -> buildMap {
         peers.value.forEach { put("paired.${it.id}", it.name) }
         nearby.value.forEach { put("near.${it.id}", it.name) }

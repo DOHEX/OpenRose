@@ -16,6 +16,7 @@ import com.google.zxing.BarcodeFormat
 import com.google.zxing.qrcode.QRCodeWriter
 import io.github.dohex.openrose.circulation.CirculationNode
 import io.github.dohex.openrose.circulation.CirculationService
+import io.github.dohex.openrose.circulation.HeadsetHandoff
 import io.github.dohex.openrose.circulation.HeadsetEndpoint
 import io.github.dohex.openrose.core.ControlRuntime
 import io.github.dohex.openrose.ui.CirculationClient
@@ -28,7 +29,7 @@ import java.net.InetAddress
 
 private const val DESKTOP_CIRCULATION_PORT = 21871
 
-internal fun desktopCirculation(scope: CoroutineScope, control: ControlRuntime): CirculationClient {
+internal fun desktopCirculation(scope: CoroutineScope, control: ControlRuntime, audio: DesktopCirculationAudio?): CirculationClient {
     val service = CirculationService()
     val headset = HeadsetEndpoint(control)
     scope.launch {
@@ -38,11 +39,20 @@ internal fun desktopCirculation(scope: CoroutineScope, control: ControlRuntime):
                 File(System.getProperty("user.home"), ".openrose/circulation"),
                 name,
                 DesktopPeerDiscovery(),
-                headset::handle,
+                audio?.let { HeadsetHandoff(it, control) },
+                handler = headset::handle,
             )
         }
     }
-    return CirculationClient { withContext(Dispatchers.IO) { service.call(it) } }
+    return CirculationClient { fields ->
+        withContext(Dispatchers.IO) {
+            when (fields["op"]) {
+                "output" -> audio?.currentOutput()?.let { mapOf("output" to it) }.orEmpty()
+                "soundSettings" -> { audio?.openSoundSettings(); emptyMap() }
+                else -> service.call(fields)
+            }
+        }
+    }
 }
 
 @Composable

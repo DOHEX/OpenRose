@@ -221,6 +221,7 @@ private fun TrayPanelContent(
         NoiseControlCard(state, device, showLevelControls = false, onSet = model.settingsFor(device.sessionId))
     }
 
+    circulation?.let { CirculationHandoffRow(it, state, selection, showOutput = true) }
     TrayActions(model, state, summary, onOpenApp)
 }
 

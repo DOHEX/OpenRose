@@ -33,7 +33,7 @@ fun interface CirculationClient {
 private const val REFRESH_MILLIS = 2_000L
 
 @Suppress("TooGenericExceptionCaught") // The platform boundary can fail via sockets, local Binder, or an expired pairing.
-private suspend fun CirculationClient.submit(vararg fields: Pair<String, String>): Map<String, String> = try {
+internal suspend fun CirculationClient.submit(vararg fields: Pair<String, String>): Map<String, String> = try {
     call(mapOf(*fields))
 } catch (cancelled: CancellationException) {
     throw cancelled

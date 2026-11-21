@@ -65,6 +65,7 @@ internal fun HeadphonesPage(
     ) {
         NoticeBanner(model)
         if (device == null) {
+            platformUi.HandoffAction(state, primaryDeviceSelection)
             UnconnectedHeadphonesDashboard(
                 state = state,
                 onNavigate = onNavigate,

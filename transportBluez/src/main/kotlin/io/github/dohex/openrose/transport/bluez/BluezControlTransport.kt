@@ -22,6 +22,7 @@ class BluezControlTransport private constructor(scope: CoroutineScope, private v
 
     @Volatile private var bus: BluezBus? = null
     private val scanLock = Mutex()
+    val audioProfiles = BluezAudioProfiles(::activeBus)
     private val audio = AudioFacts(BluezAudioDriver())
     override val supportsInitializationRecovery = true
 
@@ -289,7 +290,7 @@ private fun devices(objects: BluezObjects): List<RawAudioDevice> = objects.value
     val address = normalizeBluetoothAddress(properties["Address"] as? String) ?: return@mapNotNull null
     RawAudioDevice(properties["Name"] as? String ?: properties["Alias"] as? String, address)
 }
-private fun audioSnapshot(objects: BluezObjects, targets: Set<String>): RawAudioSnapshot {
+internal fun audioSnapshot(objects: BluezObjects, targets: Set<String>): RawAudioSnapshot {
     val paired = devices(objects)
     val addresses = objects.mapNotNull { (path, interfaces) ->
         val address = normalizeBluetoothAddress(interfaces[DEVICE]?.get("Address") as? String) ?: return@mapNotNull null
