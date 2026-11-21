@@ -6,7 +6,7 @@
     <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" android:maxSdkVersion="30" />
-    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation" />
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation" tools:targetApi="31" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
@@ -15,6 +15,7 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.REQUEST_OBSERVE_COMPANION_DEVICE_PRESENCE" />
     <uses-permission android:name="android.permission.REQUEST_COMPANION_START_FOREGROUND_SERVICES_FROM_BACKGROUND" />
+    <permission android:name="${applicationId}.permission.FRAMEWORK_DISPATCH" android:protectionLevel="signature" />
     <queries>
         <package android:name="com.android.bluetooth" />
         <package android:name="com.xiaomi.bluetooth" />
@@ -25,6 +26,8 @@
     <application
         android:name=".OpenRoseApplication"
         android:allowBackup="false"
+        android:fullBackupContent="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
         android:icon="@mipmap/ic_launcher"
         android:label="OpenRose"
         android:supportsRtl="true"
@@ -33,6 +36,7 @@
         <provider
             android:name=".framework.GuardedXposedProvider"
             android:authorities="${applicationId}.XposedService"
+            android:permission="${applicationId}.permission.FRAMEWORK_DISPATCH"
             android:directBootAware="true"
             android:exported="true" />
         <!-- Ordinary background control: a connected-device foreground service, never exported. -->
