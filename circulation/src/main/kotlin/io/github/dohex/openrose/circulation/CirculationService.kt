@@ -13,12 +13,13 @@ class CirculationService {
     @Volatile private var current: CirculationNode? = null
     @Volatile private var unavailable = "互联服务尚未就绪"
 
-    suspend fun serve(create: () -> CirculationNode): Unit = withContext(Dispatchers.IO) {
+    @Suppress("TooGenericExceptionCaught") // Platform discovery, disk-backed credentials and TLS can each fail independently.
+    suspend fun serve(listenPort: Int = 0, create: () -> CirculationNode): Unit = withContext(Dispatchers.IO) {
         while (currentCoroutineContext().isActive) {
             try {
                 val node = create()
                 try {
-                    node.start()
+                    node.start(listenPort)
                     current = node
                     awaitCancellation()
                 } finally {
