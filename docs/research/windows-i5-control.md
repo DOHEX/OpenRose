@@ -17,3 +17,9 @@
 切换通透后，Windows 端从 GATT 通知读回通透，随后手机读取到相同结果。音频端点消失时读数撤下，再出现后读取到新会话的初始模式。重连前的请求被拒绝，未获耳机回读的降噪操作返回未确认，Windows 的系统音频连接事实仍在。用例位于 `WindowsSessionTest`，随 `offlineCheck` 运行。
 
 Windows 蓝牙实机验收仍待进行。关窗与休眠唤醒、实际持续出声、默认输出保持，以及手机快捷面板显示与耳机物理状态一致，均需在 Windows 主机、模块控制手机与关闭多点的 i5 上记录。
+
+## 手机与 Windows 手动流转
+
+2026-11-21，[工单 #115](https://github.com/DOHEX/OpenRose/issues/115)。Linux 离线用例为手机与 Windows 实例完成回环 TLS 配对。两端先后发起「接到这里」，模拟系统适配器分别确认原持有端已让出，随后目标端接入。Windows 适配器测试涵盖音频驱动接受请求但端点未连接、目标耳机麦克风正录音时拒绝让出、音频释放确认，以及驱动将媒体默认输出改为耳机后恢复原 USB 音箱。
+
+Windows 蓝牙组件已为 Windows x64 交叉链接。系统的连接与断开由匹配端点的 KS 过滤器处理，操作后重新读取播放与录音端点状态。端点已连、真正出声与 GATT 确认仍需各自取得真机证据。本轮没有可用的 Windows 蓝牙实机，两向播放、锁屏、休眠、保留默认输出、麦克风占用与控制重试的现场结果均为待验证。[Microsoft 蓝牙音频 KS 属性](https://learn.microsoft.com/en-us/windows-hardware/drivers/audio/kspropsetid-btaudio)

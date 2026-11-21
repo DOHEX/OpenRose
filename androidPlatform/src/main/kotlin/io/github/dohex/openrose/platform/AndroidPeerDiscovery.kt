@@ -8,6 +8,7 @@ import android.os.Handler
 import android.os.Looper
 import io.github.dohex.openrose.circulation.NearbyPeer
 import io.github.dohex.openrose.circulation.PeerDiscovery
+import javax.net.SocketFactory
 
 /** Android NSD owns the multicast socket. Serialize resolutions for API 26–33, where only one may run at once. */
 @Suppress("DEPRECATION")
@@ -117,7 +118,8 @@ class AndroidPeerDiscovery(context: Context) : PeerDiscovery {
         val peerId = attributes["id"]?.decodeToString() ?: return emptyList()
         val displayName = attributes["name"]?.decodeToString() ?: return emptyList()
         val addresses = if (Build.VERSION.SDK_INT >= 34) hostAddresses else listOfNotNull(host)
-        return addresses.sortedBy { it !is java.net.Inet4Address }.map { NearbyPeer(peerId, displayName, it, port) }
+        val route = if (Build.VERSION.SDK_INT >= 33) network?.socketFactory else null
+        return addresses.map { NearbyPeer(peerId, displayName, it, port, route ?: SocketFactory.getDefault()) }
     }
 
     private fun retry(action: () -> Unit) {
