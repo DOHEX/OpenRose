@@ -13,7 +13,13 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @Composable
-fun CirculationRow(client: CirculationClient, state: ControlState, selection: PrimaryDeviceSelection, pullLabel: String, showOutput: Boolean = false) {
+fun CirculationRow(
+    client: CirculationClient,
+    state: ControlState,
+    selection: PrimaryDeviceSelection,
+    pullLabel: String,
+    showOutput: Boolean = false,
+) {
     val candidate = selection.primary(state)?.takeIf { it.profile == ModelProfile.I5_ZT } ?: return
     val address = candidate.classicAddress ?: candidate.deviceId.value
     val hasAudio = state.audioDeviceId?.value in listOf(address, candidate.deviceId.value)

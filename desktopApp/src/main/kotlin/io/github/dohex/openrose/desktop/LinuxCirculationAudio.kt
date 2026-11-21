@@ -30,7 +30,8 @@ internal class LinuxCirculationAudio(private val profiles: BluezAudioProfiles) :
         try {
             runBlocking { profiles.acquire(address) }
         } finally {
-            if (matchesPulseEndpoint(pactl("get-default-sink").trim(), address, "bluez_output", "bluez_sink")) pactl("set-default-sink", previous)
+            val current = pactl("get-default-sink").trim()
+            if (matchesPulseEndpoint(current, address, "bluez_output", "bluez_sink")) pactl("set-default-sink", previous)
         }
     }
 
