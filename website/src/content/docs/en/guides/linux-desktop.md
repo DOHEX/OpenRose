@@ -24,6 +24,12 @@ The packages declare dependencies on `bluez`, GTK 3, and `libsystemd`. The AppIm
 
 As on Android, pair and connect the earphones in the system Bluetooth settings first.
 
+## Pair a phone and desktop
+
+Enable module control on the phone. In the desktop settings, open **流转配对** and show the pairing code. Open the same setting on the phone, then scan the QR code or select the computer and enter its six digits. Both devices need local network discovery and the phone needs access to TCP port 21871 on the desktop. Either device can remove the pairing in settings.
+
+Changing noise mode from the phone quick panel or desktop tray keeps audio at its current source. To move audio, use **接到这台电脑** on the computer or **接回手机** on the phone.
+
 ## Tray and background control
 
 The tray icon requires `libsystemd`, and GNOME also needs the AppIndicator extension. The tray is not verified on hardware under GNOME or KDE.

@@ -10,7 +10,10 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 /** Linux BlueZ transport. The supplied scope owns initialization and event observation. */
-class BluezControlTransport private constructor(scope: CoroutineScope, private val openBus: suspend () -> BluezBus) : DesktopControlTransport {
+class BluezControlTransport private constructor(
+    scope: CoroutineScope,
+    private val openBus: suspend () -> BluezBus,
+) : DesktopControlTransport {
     constructor(scope: CoroutineScope) : this(scope, { NativeBluezBus.open() })
     internal constructor(scope: CoroutineScope, bus: BluezBus) : this(scope, { bus })
 
@@ -290,7 +293,12 @@ private fun devices(objects: BluezObjects): List<RawAudioDevice> = objects.value
     val address = normalizeBluetoothAddress(properties["Address"] as? String) ?: return@mapNotNull null
     RawAudioDevice(properties["Name"] as? String ?: properties["Alias"] as? String, address)
 }
-internal fun audioSnapshot(objects: BluezObjects, targets: Set<String>): RawAudioSnapshot {
+internal fun BluezObjects.hasMedia(address: String): Boolean {
+    val a2dp = audioSnapshot(this, setOf(address)).profiles[AudioProfile.A2DP]
+    return address in a2dp?.connectedAddresses.orEmpty()
+}
+
+private fun audioSnapshot(objects: BluezObjects, targets: Set<String>): RawAudioSnapshot {
     val paired = devices(objects)
     val addresses = objects.mapNotNull { (path, interfaces) ->
         val address = normalizeBluetoothAddress(interfaces[DEVICE]?.get("Address") as? String) ?: return@mapNotNull null

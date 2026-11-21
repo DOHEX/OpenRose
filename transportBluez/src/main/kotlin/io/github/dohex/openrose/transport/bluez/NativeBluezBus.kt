@@ -31,7 +31,9 @@ internal interface LoginManager : DBusInterface {
     class PrepareForSleep(path: String, val sleeping: Boolean) : DBusSignal(path, sleeping)
 }
 
-internal class NativeBluezBus private constructor(private val connection: DBusConnection) : BluezBus {
+internal class NativeBluezBus private constructor(private val connection: DBusConnection) :
+    BluezBus,
+    BluezAudioBus by NativeBluezAudioBus(connection) {
     private class Listener(val accepts: (BluezSignal) -> Boolean, val inbox: Channel<BluezSignal> = Channel(Channel.BUFFERED))
     private val listeners = CopyOnWriteArrayList<Listener>()
     override fun signals(accepts: (BluezSignal) -> Boolean): Flow<BluezSignal> = flow {
@@ -100,31 +102,6 @@ internal class NativeBluezBus private constructor(private val connection: DBusCo
         }
     }
     override suspend fun connect(path: String) = call { connection.getRemoteObject("org.bluez", path, Device1::class.java).Connect() }
-    override suspend fun connectAudio(path: String) = call {
-        try {
-            connection.getRemoteObject("org.bluez", path, Device1::class.java).ConnectProfile(AUDIO_SINK_UUID)
-        } catch (_: org.bluez.Error.AlreadyConnected) {
-            // The caller verifies that MediaTransport1 actually exists.
-        } catch (_: org.bluez.Error.InProgress) {
-            // A system connection is already in flight. Wait for its actual result.
-        }
-    }
-    override suspend fun disconnectAudio(path: String, interfaces: Map<String, Map<String, Any?>>) = call {
-        if (CLASSIC_BEARER in interfaces && LE_BEARER in interfaces) {
-            if (interfaces[CLASSIC_BEARER]?.get("Connected") == true) {
-                connection.getRemoteObject("org.bluez", path, ClassicBearer::class.java).Disconnect()
-            }
-            if (interfaces[LE_BEARER]?.get("Connected") == true) {
-                try {
-                    connection.getRemoteObject("org.bluez", path, LeBearer::class.java).Disconnect()
-                } catch (_: org.bluez.Error.NotConnected) {
-                    // LE may already have followed the classic audio disconnect.
-                }
-            }
-        } else {
-            connection.getRemoteObject("org.bluez", path, Device1::class.java).Disconnect()
-        }
-    }
     override suspend fun startNotify(owner: String, path: String) = call {
         connection.getRemoteObject(owner, path, GattCharacteristic1::class.java).StartNotify()
     }
@@ -161,7 +138,7 @@ internal class NativeBluezBus private constructor(private val connection: DBusCo
                 throw error
             }
         }
-        private suspend fun <T> call(block: () -> T): T = try {
+        internal suspend fun <T> call(block: () -> T): T = try {
             withTimeout(10_000) { runInterruptible(Dispatchers.IO) { block() } }
         } catch (_: TimeoutCancellationException) {
             currentCoroutineContext().ensureActive()

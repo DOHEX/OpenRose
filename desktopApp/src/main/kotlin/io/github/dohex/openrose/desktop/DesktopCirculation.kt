@@ -16,8 +16,8 @@ import com.google.zxing.BarcodeFormat
 import com.google.zxing.qrcode.QRCodeWriter
 import io.github.dohex.openrose.circulation.CirculationNode
 import io.github.dohex.openrose.circulation.CirculationService
-import io.github.dohex.openrose.circulation.HeadsetHandoff
 import io.github.dohex.openrose.circulation.HeadsetEndpoint
+import io.github.dohex.openrose.circulation.HeadsetHandoff
 import io.github.dohex.openrose.core.ControlRuntime
 import io.github.dohex.openrose.ui.CirculationClient
 import kotlinx.coroutines.CoroutineScope
@@ -48,7 +48,12 @@ internal fun desktopCirculation(scope: CoroutineScope, control: ControlRuntime, 
         withContext(Dispatchers.IO) {
             when (fields["op"]) {
                 "output" -> audio?.currentOutput()?.let { mapOf("output" to it) }.orEmpty()
-                "soundSettings" -> { audio?.openSoundSettings(); emptyMap() }
+
+                "soundSettings" -> {
+                    audio?.openSoundSettings()
+                    emptyMap()
+                }
+
                 else -> service.call(fields)
             }
         }

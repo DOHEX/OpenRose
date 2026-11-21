@@ -1,9 +1,5 @@
 package io.github.dohex.openrose.desktop
 
-import io.github.dohex.openrose.ui.CirculationHandoffRow
-import io.github.dohex.openrose.ui.PrimaryDeviceSelection
-import io.github.dohex.openrose.ui.CirculationSettings
-import io.github.dohex.openrose.ui.CirculationClient
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -13,8 +9,12 @@ import io.github.dohex.openrose.ui.AppFactRow
 import io.github.dohex.openrose.ui.AppGroup
 import io.github.dohex.openrose.ui.AppStatusSection
 import io.github.dohex.openrose.ui.AppSwitchRow
+import io.github.dohex.openrose.ui.CirculationClient
+import io.github.dohex.openrose.ui.CirculationHandoffRow
+import io.github.dohex.openrose.ui.CirculationSettings
 import io.github.dohex.openrose.ui.PlatformSettingsPosition
 import io.github.dohex.openrose.ui.PlatformUi
+import io.github.dohex.openrose.ui.PrimaryDeviceSelection
 import io.github.dohex.openrose.ui.RoseIcon
 import io.github.dohex.openrose.ui.StatusTone
 import kotlinx.coroutines.flow.StateFlow

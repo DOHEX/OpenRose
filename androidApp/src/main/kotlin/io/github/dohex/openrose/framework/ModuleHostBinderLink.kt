@@ -56,8 +56,10 @@ class ModuleHostBinderLink(
 
     @Volatile private var connection: BinderConnection? = null
 
-    suspend fun circulation(fields: Map<String, String>): Map<String, String> =
-        connection?.circulation(fields) ?: mapOf("error" to "模块控制尚未就绪")
+    suspend fun circulation(fields: Map<String, String>): Map<String, String> {
+        val active = connection ?: return mapOf("error" to "模块控制尚未就绪")
+        return active.circulation(fields)
+    }
 
     override suspend fun open(): LinkOpenResult {
         val intent = Intent(BridgeWire.ACTION_CONTROL_HOST)

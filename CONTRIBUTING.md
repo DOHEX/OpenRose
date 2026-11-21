@@ -43,6 +43,7 @@ cd OpenRose
 | `:androidModule` | 模块：LSPosed 载入作用域进程的代码（模块入口、模块宿主运行时与端点、原生耳机适配、系统呈现渲染、`META-INF/xposed`）；看不到应用与共享界面 |
 | `:androidApp` | Android 应用入口：Activity、服务与唤醒、设置存储、与 LSPosed 框架和模块宿主的连接；仅在运行时依赖 `:androidModule`，打进同一 APK（见 ADR 0018） |
 | `:desktopApp` | Windows / Linux 桌面入口：窗口、托盘与偏好设置，并装配运行时 |
+| `:circulation` | 手机与电脑间的局域网流转配对、双向认证、远端耳机控制与手动流转 |
 | `:transportWindows` | Windows 平台驱动：WinRT BLE 与 Core Audio 音频端点，使用 Rust 构建本机组件 |
 | `:transportBluez` | Linux 平台驱动：BlueZ D-Bus GATT 原语、扫描、配对设备与音频事实 |
 | `:uiSandbox` | 开发用界面沙盒，不打包、不发布：在假状态上运行共享界面、各平台段落与托盘面板（见下文“界面调试”）。只有它同时依赖 `:desktopApp` 与 `:androidIntegrationUI`，桌面运行时依赖图仍不含 Android 集成模块 |

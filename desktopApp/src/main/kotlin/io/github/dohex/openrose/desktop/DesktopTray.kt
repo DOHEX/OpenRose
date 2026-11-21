@@ -293,7 +293,10 @@ private fun remoteMenuEntries(peers: List<RemoteHeadset>, uiScope: CoroutineScop
                 add(TrayMenuEntry.Label("${reading["deviceName"]} · 音源设备 · ${peer.name}"))
                 add(TrayMenuEntry.Label(remoteBatteryText(reading)))
                 reading["modes"]?.split(',')?.filter(String::isNotBlank)?.forEach { mode ->
-                    add(TrayMenuEntry.NoiseMode(mode, noiseModeLabel(mode), mode == reading["mode"], !peer.busy, onSelect = { uiScope.launch { peer.selectMode(mode) } }))
+                    val entry = TrayMenuEntry.NoiseMode(mode, noiseModeLabel(mode), mode == reading["mode"], !peer.busy) {
+                        uiScope.launch { peer.selectMode(mode) }
+                    }
+                    add(entry)
                 }
             }
 
