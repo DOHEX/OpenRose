@@ -2,6 +2,7 @@ package io.github.dohex.openrose.core.transport
 
 import io.github.dohex.openrose.core.ConnectionPhase
 import io.github.dohex.openrose.core.DeviceCandidate
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
@@ -100,13 +101,29 @@ interface ControlConnection {
 /** An interrupted open still owns this platform handle until its close succeeds. */
 internal class UnreleasedConnectionException(val connection: ControlConnection, cause: Throwable) : Exception("连接建立失败且平台尚未确认释放", cause)
 
-@Suppress("TooGenericExceptionCaught") // Any platform close failure leaves this exact handle owned.
-suspend fun ControlConnection.closeAfterFailedOpen(cause: Throwable): Nothing {
+/** Every failed or cancelled native open must release its handle before ownership may move to another connection. */
+@Suppress("TooGenericExceptionCaught") // Preserve the original failure, or retain the exact handle if native close also fails.
+suspend fun <T : ControlConnection> T.openSafely(open: suspend T.() -> Unit): T {
     try {
-        withContext(NonCancellable) { close() }
-    } catch (closing: Exception) {
-        cause.addSuppressed(closing)
-        throw UnreleasedConnectionException(this, cause)
+        open()
+    } catch (cause: Throwable) {
+        try {
+            withContext(NonCancellable) { close() }
+        } catch (closing: Exception) {
+            cause.addSuppressed(closing)
+            throw UnreleasedConnectionException(this, cause)
+        }
+        throw cause
     }
-    throw cause
+    return this
+}
+
+/** A native Bluetooth adapter can fail with a platform-specific exception. The owning operation decides its result. */
+@Suppress("TooGenericExceptionCaught") // Android, BlueZ and WinRT do not share exception types. Cancellation stays with the caller.
+internal inline fun <T> transportOperation(onFailure: (Exception) -> T, operation: () -> T): T = try {
+    operation()
+} catch (cancelled: CancellationException) {
+    throw cancelled
+} catch (failure: Exception) {
+    onFailure(failure)
 }

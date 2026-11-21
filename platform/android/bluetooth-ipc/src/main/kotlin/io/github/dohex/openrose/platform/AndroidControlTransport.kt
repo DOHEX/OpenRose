@@ -15,7 +15,7 @@ import io.github.dohex.openrose.core.transport.ControlTransport
 import io.github.dohex.openrose.core.transport.DeviceId
 import io.github.dohex.openrose.core.transport.TransportEndpoint
 import io.github.dohex.openrose.core.transport.TransportFacts
-import io.github.dohex.openrose.core.transport.closeAfterFailedOpen
+import io.github.dohex.openrose.core.transport.openSafely
 import io.github.dohex.openrose.core.transport.normalizeBluetoothAddress
 import kotlinx.coroutines.flow.Flow
 import java.io.IOException
@@ -58,17 +58,7 @@ class AndroidControlTransport(context: Context) : ControlTransport {
             if (!enabled || !appContext.packageManager.hasSystemFeature(PackageManager.FEATURE_BLUETOOTH)) {
                 throw IOException("此设备当前无法使用经典蓝牙 SPP")
             }
-            val connection = AndroidSppConnection(
-                adapter = adapter,
-                address = address,
-                serviceUuid = endpoint.serviceUuid,
-            )
-            try {
-                connection.open(onPhase)
-                connection
-            } catch (error: Throwable) {
-                connection.closeAfterFailedOpen(error)
-            }
+            AndroidSppConnection(adapter, address, endpoint.serviceUuid).openSafely { open(onPhase) }
         }
     }
 

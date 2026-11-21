@@ -1,13 +1,11 @@
 package io.github.dohex.openrose.core
 
-import io.github.dohex.openrose.core.ControlLink.Attempt
-import io.github.dohex.openrose.core.ControlLink.LinkEnded
 import io.github.dohex.openrose.core.protocol.DeviceField
-import io.github.dohex.openrose.core.protocol.FieldReading
-import io.github.dohex.openrose.core.protocol.FieldValue
+import io.github.dohex.openrose.core.protocol.ProtocolSetting
+import io.github.dohex.openrose.core.transport.ControlConnection
+import io.github.dohex.openrose.core.transport.transportOperation
 import kotlinx.collections.immutable.mutate
 import kotlinx.collections.immutable.toPersistentSet
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -40,7 +38,7 @@ internal class SettingQueue(
         var worker: Job? = null
     }
 
-    fun start(link: ControlLink, attempt: Attempt) {
+    fun start(link: ControlLink, attempt: ConnectionAttempt) {
         attempt.settings.worker = scope.launch {
             for (request in attempt.settings.commands) execute(link, attempt, request)
         }
@@ -66,15 +64,7 @@ internal class SettingQueue(
             val operation = SettingOperation(++operationId, attempt.id, command.setting, command.value, SettingStage.SUBMITTED)
             val next = Request(command, operation, CompletableDeferred())
             attempt.settings.requests[operation.id] = next
-            state.update {
-                it.copy(
-                    settingOperations = it.settingOperations.mutate { operations ->
-                        operations.add(operation)
-                        if (operations.size > 64) operations.removeAt(0)
-                    },
-                    lastError = null,
-                )
-            }
+            state.update { it.withSettingOperation(operation).copy(lastError = null) }
             check(attempt.settings.commands.trySend(next).isSuccess)
             next
         }
@@ -82,37 +72,23 @@ internal class SettingQueue(
     }
 
     /** The initialization loop owns the wire until READY. Give a user command the next complete exchange. */
-    suspend fun runNextDuringInitialization(link: ControlLink, attempt: Attempt) {
+    suspend fun runNextDuringInitialization(link: ControlLink, attempt: ConnectionAttempt) {
         val request = attempt.settings.commands.tryReceive().getOrNull() ?: return
-        val prerequisite = if (state.value.noiseModeSession?.sessionId == attempt.id) null else "当前耳机尚不能调节降噪模式"
-        execute(link, attempt, request, prerequisite)
+        execute(link, attempt, request)
     }
 
-    private suspend fun execute(
-        link: ControlLink,
-        attempt: Attempt,
-        request: Request,
-        prerequisite: String? = null,
-    ) {
+    private suspend fun execute(link: ControlLink, attempt: ConnectionAttempt, request: Request) {
         if (request.result.isCompleted) return
         val result = try {
-            validateAndApply(link, attempt, request, prerequisite)
-        } catch (cancelled: CancellationException) {
-            if (cancelled !is TimeoutCancellationException) throw cancelled
-            settingFailure(attempt, request, ControlError(ControlErrorCode.TIMEOUT, "设置或设备回读超时"), SettingStage.TIMED_OUT)
-        } catch (cause: Exception) {
-            val code = when (cause) {
-                is LinkEnded -> ControlErrorCode.DISCONNECTED
-                is UnsupportedOperationException -> ControlErrorCode.UNSUPPORTED
-                is IllegalArgumentException -> ControlErrorCode.INVALID_ARGUMENT
-                else -> ControlErrorCode.FAILED
+            transportOperation(onFailure = { cause ->
+                val error = commandFailure(cause)
+                val stage = if (error.code == ControlErrorCode.DISCONNECTED) SettingStage.DISCONNECTED else SettingStage.FAILED
+                settingFailure(attempt, request, error, stage)
+            }) {
+                validateAndApply(link, attempt, request)
             }
-            settingFailure(
-                attempt,
-                request,
-                ControlError(code, cause.message ?: "设置失败"),
-                if (code == ControlErrorCode.DISCONNECTED) SettingStage.DISCONNECTED else SettingStage.FAILED,
-            )
+        } catch (_: TimeoutCancellationException) {
+            settingFailure(attempt, request, ControlError(ControlErrorCode.TIMEOUT, "设置或设备回读超时"), SettingStage.TIMED_OUT)
         }
         link.lifecycle.withLock {
             attempt.settings.requests.remove(request.operation.id)
@@ -128,14 +104,14 @@ internal class SettingQueue(
     }
 
     /** A queued write belongs to its original session and must still be valid for the latest readings. */
-    private suspend fun validateAndApply(
-        link: ControlLink,
-        attempt: Attempt,
-        request: Request,
-        prerequisite: String?,
-    ): OperationResult {
-        val device = state.value.device?.takeIf { it.sessionId == attempt.id } ?: throw LinkEnded()
-        val error = prerequisite?.let { ControlError(ControlErrorCode.NOT_READY, it) } ?: device.validate(request.command)
+    private suspend fun validateAndApply(link: ControlLink, attempt: ConnectionAttempt, request: Request): OperationResult {
+        val current = state.value
+        val device = current.device?.takeIf { it.sessionId == attempt.id } ?: throw LinkEnded()
+        val error = if (current.sessionFor(request.command.setting)?.sessionId == attempt.id) {
+            device.validate(request.command)
+        } else {
+            ControlError(ControlErrorCode.NOT_READY, "设备尚未就绪")
+        }
         return if (error == null) {
             applySetting(link, attempt, request, device)
         } else {
@@ -143,11 +119,14 @@ internal class SettingQueue(
         }
     }
 
-    private suspend fun applySetting(owner: ControlLink, attempt: Attempt, request: Request, device: DeviceState): OperationResult {
+    private suspend fun applySetting(
+        owner: ControlLink,
+        attempt: ConnectionAttempt,
+        request: Request,
+        device: DeviceState,
+    ): OperationResult {
         val link = attempt.connection ?: throw LinkEnded()
-        val operation = request.operation
-        val firmware = device.knownValue(DeviceField.FIRMWARE) as? FieldValue.Firmware
-        val prepared = attempt.codec.prepareSetting(operation.setting, operation.requestedValue, firmware, device.diagnostics.fields)
+        val prepared = attempt.codec.prepareSetting(request.command, device)
         settingStage(attempt, request, SettingStage.SUBMITTED, totalFrames = prepared.writeFrames.size)
         if ((prepared.writeFrames + prepared.readbacks.map { it.bytes }).any { it.size > link.maxWriteSize }) {
             throw UnsupportedOperationException("完整协议设置或回读超出传输写入容量")
@@ -161,28 +140,29 @@ internal class SettingQueue(
                 writtenFrames = index + 1,
             )
         }
-        val fieldBaselines = mutableMapOf<DeviceField, Long>()
-        var actualValues = emptyMap<DeviceField, FieldValue>()
+        return confirmReadbacks(owner, attempt, request, link, prepared)
+    }
+
+    private suspend fun confirmReadbacks(
+        owner: ControlLink,
+        attempt: ConnectionAttempt,
+        request: Request,
+        link: ControlConnection,
+        prepared: ProtocolSetting,
+    ): OperationResult {
+        val confirmation = SettingConfirmation(prepared.expectedValues)
         for (query in prepared.readbacks) {
             // A later field query gets its own baseline; earlier unsolicited data cannot confirm it.
             val baseline = owner.writePaced(attempt, link, query.bytes)
-            for (field in query.expectedFields) {
-                if (field in prepared.expectedValues) fieldBaselines[field] = baseline.fieldRevisions[field] ?: 0L
-            }
+            confirmation.beginQuery(query, baseline)
             val observed = withTimeoutOrNull(timing.queryTimeoutMillis) {
                 attempt.progress.first { progress ->
                     if (progress.ended) return@first true
                     // A refresh with no requested value still owns its reply before the next write can run.
-                    val received = query.responseKeys.all { (progress.keyRevisions[it] ?: 0) > (baseline.keyRevisions[it] ?: 0) }
                     val fields = state.value.device?.diagnostics?.fields.orEmpty()
-                    actualValues = fieldBaselines.mapNotNull { (field, revision) ->
-                        if (!received && field in query.expectedFields) return@mapNotNull null
-                        if ((progress.fieldRevisions[field] ?: 0) <= revision) return@mapNotNull null
-                        confirmationValue(fields[field], prepared.expectedValues.getValue(field))?.let { field to it }
-                    }.toMap()
-                    val confirmed = actualValues.filter { (field, value) -> value == prepared.expectedValues[field] }.keys
-                    settingStage(attempt, request, SettingStage.WRITTEN, confirmedFields = confirmed)
-                    received && actualValues.size == fieldBaselines.size
+                    val finished = confirmation.observe(query, baseline, progress, fields)
+                    settingStage(attempt, request, SettingStage.WRITTEN, confirmedFields = confirmation.confirmedFields)
+                    finished
                 }
             }
             if (observed?.ended == true) throw LinkEnded()
@@ -196,7 +176,7 @@ internal class SettingQueue(
                 )
             }
         }
-        return if (prepared.expectedValues.all { (field, expected) -> actualValues[field] == expected }) {
+        return if (confirmation.applied) {
             settingStage(attempt, request, SettingStage.CONFIRMED)
             OperationResult.Success
         } else {
@@ -204,25 +184,8 @@ internal class SettingQueue(
         }
     }
 
-    /** A touch assignment confirms only its target; the device still retains its full bindings. */
-    private fun confirmationValue(reading: FieldReading?, expected: FieldValue): FieldValue? {
-        val actual = (reading as? FieldReading.Known)?.value ?: return null
-        return when {
-            expected is FieldValue.TouchAssignment -> {
-                val binding = (actual as? FieldValue.TouchKeys)?.bindings?.firstOrNull {
-                    it.side == expected.side && it.gesture == expected.gesture
-                }
-                binding?.action?.let { expected.copy(action = it) }
-            }
-
-            actual is FieldValue.NoiseCycle && actual.flags.values.any { it == null } -> null
-
-            else -> actual
-        }
-    }
-
     private fun settingStage(
-        attempt: Attempt,
+        attempt: ConnectionAttempt,
         request: Request,
         stage: SettingStage,
         error: ControlError? = null,
@@ -254,13 +217,18 @@ internal class SettingQueue(
         }
     }
 
-    private fun settingFailure(attempt: Attempt, request: Request, error: ControlError, stage: SettingStage): OperationResult.Failure {
+    private fun settingFailure(
+        attempt: ConnectionAttempt,
+        request: Request,
+        error: ControlError,
+        stage: SettingStage,
+    ): OperationResult.Failure {
         settingStage(attempt, request, stage, error)
         return OperationResult.Failure(error)
     }
 
     /** Caller holds lifecycle; complete every waiter before cancelling the owned worker. */
-    fun end(attempt: Attempt) {
+    fun end(attempt: ConnectionAttempt) {
         val error = ControlError(ControlErrorCode.DISCONNECTED, "连接会话已结束")
         val ids = attempt.settings.requests.keys.toSet()
         state.update { current ->
@@ -283,4 +251,14 @@ internal class SettingQueue(
         state.update { it.copy(lastError = error) }
         return OperationResult.Failure(error)
     }
+}
+
+private fun commandFailure(cause: Exception): ControlError {
+    val code = when (cause) {
+        is LinkEnded -> ControlErrorCode.DISCONNECTED
+        is UnsupportedOperationException -> ControlErrorCode.UNSUPPORTED
+        is IllegalArgumentException -> ControlErrorCode.INVALID_ARGUMENT
+        else -> ControlErrorCode.FAILED
+    }
+    return ControlError(code, cause.message ?: "设置失败")
 }

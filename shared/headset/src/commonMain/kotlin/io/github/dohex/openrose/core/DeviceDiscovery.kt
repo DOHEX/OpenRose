@@ -3,9 +3,9 @@ package io.github.dohex.openrose.core
 import io.github.dohex.openrose.core.protocol.ModelIdentification
 import io.github.dohex.openrose.core.transport.ControlTransport
 import io.github.dohex.openrose.core.transport.DeviceId
+import io.github.dohex.openrose.core.transport.transportOperation
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toPersistentList
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
@@ -26,13 +26,7 @@ internal class DeviceDiscovery(
     private var scanJob: Job? = null
 
     suspend fun refreshBondedDevices() {
-        val bonded = try {
-            transport?.bondedDevices().orEmpty()
-        } catch (cancelled: CancellationException) {
-            throw cancelled
-        } catch (_: Exception) {
-            return
-        }
+        val bonded = transportOperation(onFailure = { return }) { transport?.bondedDevices().orEmpty() }
         state.update { it.copy(bondedDevices = bonded.toPersistentList()) }
     }
 
@@ -82,7 +76,10 @@ internal class DeviceDiscovery(
         scanEpoch.value = epoch
         state.update { it.copy(scan = ScanState.Scanning, candidates = persistentListOf(), lastError = null) }
         scanJob = scope.launch(start = CoroutineStart.UNDISPATCHED) {
-            try {
+            transportOperation(onFailure = { cause ->
+                val error = ControlError(ControlErrorCode.FAILED, cause.message ?: "扫描失败")
+                state.update { if (scanEpoch.value == epoch) it.copy(scan = ScanState.Failed(error), lastError = error) else it }
+            }) {
                 requireNotNull(transport).scan().collect { advertisement ->
                     val manufacturerDataHex = ModelIdentification.normalizedHex(advertisement.manufacturerData)
                     val profile = ModelIdentification.identify(advertisement.manufacturerData)
@@ -110,11 +107,6 @@ internal class DeviceDiscovery(
                     }
                 }
                 state.update { if (scanEpoch.value == epoch) it.copy(scan = ScanState.Idle) else it }
-            } catch (cancelled: CancellationException) {
-                throw cancelled
-            } catch (cause: Exception) {
-                val error = ControlError(ControlErrorCode.FAILED, cause.message ?: "扫描失败")
-                state.update { if (scanEpoch.value == epoch) it.copy(scan = ScanState.Failed(error), lastError = error) else it }
             }
         }
         val failed = state.value.scan as? ScanState.Failed

@@ -166,11 +166,17 @@ class ControlSessionAudioLifecycleTest {
         val device = requireNotNull(state.device)
         val expected = SessionReference(device.deviceId, device.sessionId)
         assertEquals(expected, state.noiseModeSession)
+        assertEquals(listOf(DeviceSetting.NOISE_MODE), DeviceSetting.entries.filter { state.sessionFor(it) != null })
+        val android = state.copy(platform = state.platform.copy(hostPlatform = HostPlatform.ANDROID))
+        assertTrue(DeviceSetting.entries.all { android.sessionFor(it) == null })
+        val connectedButInitializing = android.copy(
+            connection = ConnectionState.Connected(device.deviceId, device.sessionId, device.profile, ConnectionPhase.INITIALIZING),
+        )
+        assertTrue(DeviceSetting.entries.all { connectedButInitializing.sessionFor(it) == null })
         assertEquals(expected, state.copy(platform = state.platform.copy(hostPlatform = HostPlatform.WINDOWS)).noiseModeSession)
         val unknownMode = persistentMapOf<DeviceField, FieldReading>(DeviceField.NOISE_MODE to FieldReading.Unknown("ff"))
         for ((scenario, ineligible) in listOf(
             "unrelated audio" to state.copy(audioDeviceId = DeviceId("other-headset")),
-            "Android" to state.copy(platform = state.platform.copy(hostPlatform = HostPlatform.ANDROID)),
             "non-i5 model" to state.copy(device = device.copy(profile = ModelProfile.I7_RS_V2)),
             "missing mode" to state.copy(device = device.copy(diagnostics = device.diagnostics.copy(fields = persistentMapOf()))),
             "unknown mode" to state.copy(device = device.copy(diagnostics = device.diagnostics.copy(fields = unknownMode))),

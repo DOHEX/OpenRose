@@ -57,6 +57,22 @@ class RemoteHeadsetControlTest {
     }
 
     @Test
+    fun unsupportedRemoteModeLeavesTheHolderAndItsHeadsetUntouched() = runBlocking {
+        withPair { holder, phone, device ->
+            val read = phone.read()
+            assertFalse(NoiseMode.DEEP in read.modes)
+            val before = holder.state.value
+            val writes = device.link.writes.toList()
+            val result = phone.noise(read, NoiseMode.DEEP)
+            assertEquals("耳机不支持该降噪模式", result.error)
+            assertEquals(writes, device.link.writes)
+            assertEquals(before.lastError, holder.state.value.lastError)
+            assertEquals(before.settingOperations, holder.state.value.settingOperations)
+            assertEquals(read, phone.read())
+        }
+    }
+
+    @Test
     fun pairedPhoneCanAdjustConfirmedNoiseDuringDesktopInitialization() = runBlocking {
         withPair { holder, phone, device ->
             val previous = phone.read()
@@ -166,8 +182,8 @@ class RemoteHeadsetControlTest {
 
     private fun CirculationNode.read() = localCommand(CirculationCommand.Read(peers.value.single().id)) as RemoteReading
 
-    private fun CirculationNode.noise(read: RemoteReading) = localCommand(
-        CirculationCommand.SetNoise(requireNotNull(read.session), NoiseMode.TRANSPARENCY),
+    private fun CirculationNode.noise(read: RemoteReading, mode: NoiseMode = NoiseMode.TRANSPARENCY) = localCommand(
+        CirculationCommand.SetNoise(requireNotNull(read.session), mode),
     ) as RemoteReading
 
     private companion object {

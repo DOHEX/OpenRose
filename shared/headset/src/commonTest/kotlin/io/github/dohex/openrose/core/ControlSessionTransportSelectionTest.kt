@@ -159,10 +159,38 @@ class ControlSessionTransportSelectionTest {
 
     @Test
     fun fallbackReasonsUseOnlyAvailableModelAddressPlatformAndAudioEvidence() = runTest {
+        for ((index, scenario) in fallbackScenarios().withIndex()) {
+            val link = if (scenario.reason == TransportSelectionReason.MODEL_BLE_ONLY) {
+                SelectionConnection(maxWriteSize = 20, queryReplies = mapOf("0101" to listOf("09ff00000101011100000164620000ffe2")))
+            } else {
+                SelectionConnection(maxWriteSize = 512)
+            }
+            val transport = SelectionTransport(scenario.facts, link)
+            val session = session(transport, UserSettings(forceBle = scenario.forceBle))
+            advertise(session, transport, scenario.advertisement)
+
+            assertEquals(OperationResult.Success, session.connect(scenario.advertisement.deviceId), "scenario=$index")
+            val profile = requireNotNull(session.state.value.candidates.single().profile)
+            val ble = TransportEndpoint.BleGatt(profile.gatt.serviceUuid, profile.gatt.writeUuid, profile.gatt.notifyUuid)
+            assertEquals(listOf<TransportEndpoint>(ble), transport.endpoints, "scenario=$index")
+            assertEquals(TransportSelection(ble, scenario.reason), session.state.value.transportSelection, "scenario=$index")
+            assertEquals(scenario.expectedFactsCalls, transport.factCalls, "scenario=$index")
+            val connected = assertIs<ConnectionState.Connected>(session.state.value.connection)
+            assertEquals(SessionReference(connected.deviceId, connected.sessionId), session.state.value.readySession, "scenario=$index")
+            assertEquals(
+                session.state.value.candidates.single().classicAddress,
+                session.state.value.device?.classicAddress,
+                "scenario=$index",
+            )
+            session.disconnect()
+        }
+    }
+
+    private fun fallbackScenarios(): List<RouteScenario> {
         val i7 = Advertisement(DeviceId("i7"), manufacturerData = i7Advertisement())
         val i7WithoutAddress = Advertisement(DeviceId("i7-no-address"), manufacturerData = i7Advertisement(flag = 0))
         val i5 = Advertisement(DeviceId("i5"), manufacturerData = mapOf(0x5352 to byteArrayOf(0, 1, 0, 1)))
-        val scenarios = listOf(
+        return listOf(
             RouteScenario(
                 i7,
                 TransportFacts(sppAvailable = false, audioProfile = AudioProfileEvidence.CLASSIC),
@@ -206,31 +234,6 @@ class ControlSessionTransportSelectionTest {
                 0,
             ),
         )
-        for ((index, scenario) in scenarios.withIndex()) {
-            val link = if (scenario.advertisement.deviceId == i5.deviceId) {
-                SelectionConnection(maxWriteSize = 20, queryReplies = mapOf("0101" to listOf("09ff00000101011100000164620000ffe2")))
-            } else {
-                SelectionConnection(maxWriteSize = 512)
-            }
-            val transport = SelectionTransport(scenario.facts, link)
-            val session = session(transport, UserSettings(forceBle = scenario.forceBle))
-            advertise(session, transport, scenario.advertisement)
-
-            assertEquals(OperationResult.Success, session.connect(scenario.advertisement.deviceId), "scenario=$index")
-            val profile = requireNotNull(session.state.value.candidates.single().profile)
-            val ble = TransportEndpoint.BleGatt(profile.gatt.serviceUuid, profile.gatt.writeUuid, profile.gatt.notifyUuid)
-            assertEquals(listOf<TransportEndpoint>(ble), transport.endpoints, "scenario=$index")
-            assertEquals(TransportSelection(ble, scenario.reason), session.state.value.transportSelection, "scenario=$index")
-            assertEquals(scenario.expectedFactsCalls, transport.factCalls, "scenario=$index")
-            val connected = assertIs<ConnectionState.Connected>(session.state.value.connection)
-            assertEquals(SessionReference(connected.deviceId, connected.sessionId), session.state.value.readySession, "scenario=$index")
-            assertEquals(
-                session.state.value.candidates.single().classicAddress,
-                session.state.value.device?.classicAddress,
-                "scenario=$index",
-            )
-            session.disconnect()
-        }
     }
 
     @Test

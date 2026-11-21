@@ -125,24 +125,35 @@ internal class ConnectionTargeting(
         requestEpoch: Long,
     ): OperationResult {
         if (isRequestSuperseded(requestEpoch, isAudioDriven)) {
-            return OperationResult.Failure(ControlError(ControlErrorCode.DISCONNECTED, "连接请求已被替换"))
+            return supersededConnection()
         }
-        platformError(state.value, transport)?.let { return failure(it) }
+        val unavailable = platformError(state.value, transport)
+        if (unavailable != null) return failure(unavailable)
         val candidate = discovery.findCandidate(deviceId)
-        if (isRequestSuperseded(requestEpoch, isAudioDriven)) {
-            return OperationResult.Failure(ControlError(ControlErrorCode.DISCONNECTED, "连接请求已被替换"))
-        }
-        if (candidate != null) {
-            if (state.value.connectionTarget?.deviceId == deviceId || (isAudioDriven && systemPinnedDeviceId == null)) {
-                if (state.value.connectionTarget != candidate) {
-                    state.update { it.copy(connectionTarget = candidate) }
-                }
+        return if (isRequestSuperseded(requestEpoch, isAudioDriven)) {
+            supersededConnection()
+        } else {
+            val adoptTarget = state.value.connectionTarget?.deviceId == deviceId || (isAudioDriven && systemPinnedDeviceId == null)
+            if (candidate != null && adoptTarget) {
+                state.update { it.copy(connectionTarget = candidate) }
+            }
+            if (candidate?.profile == null) {
+                failure(ControlError(ControlErrorCode.UNSUPPORTED, "没有受支持的型号识别证据"))
+            } else {
+                connectCandidate(candidate, isAudioDriven, cancelWithCaller, requestEpoch)
             }
         }
-        if (candidate?.profile == null) return failure(ControlError(ControlErrorCode.UNSUPPORTED, "没有受支持的型号识别证据"))
+    }
+
+    private suspend fun connectCandidate(
+        candidate: DeviceCandidate,
+        isAudioDriven: Boolean,
+        cancelWithCaller: Boolean,
+        requestEpoch: Long,
+    ): OperationResult {
         discovery.stopScan()
         if (isRequestSuperseded(requestEpoch, isAudioDriven)) {
-            return OperationResult.Failure(ControlError(ControlErrorCode.DISCONNECTED, "连接请求已被替换"))
+            return supersededConnection()
         }
         if (!isAudioDriven) {
             autoConnectJob?.cancel()
@@ -151,12 +162,14 @@ internal class ConnectionTargeting(
         return link.connect(
             candidate = candidate,
             cancelWithCaller = cancelWithCaller,
-            isSuperseded = { isRequestSuperseded(requestEpoch, isAudioDriven, deviceId) },
+            isSuperseded = { isRequestSuperseded(requestEpoch, isAudioDriven, candidate.deviceId) },
             onStarted = {
-                audioDrivenSessionDeviceId = deviceId.takeIf { isAudioDriven || candidate.matchesAudioDevice(state.value.audioDeviceId) }
+                audioDrivenSessionDeviceId = candidate.deviceId.takeIf {
+                    isAudioDriven || candidate.matchesAudioDevice(state.value.audioDeviceId)
+                }
             },
             onAttemptFailed = {
-                if (audioDrivenSessionDeviceId == deviceId) audioDrivenSessionDeviceId = null
+                if (audioDrivenSessionDeviceId == candidate.deviceId) audioDrivenSessionDeviceId = null
             },
         )
     }
@@ -193,3 +206,5 @@ internal class ConnectionTargeting(
 
 private val PlatformState.canReadAudio: Boolean
     get() = permission == PermissionState.GRANTED || permission == PermissionState.NOT_REQUIRED
+
+private fun supersededConnection() = OperationResult.Failure(ControlError(ControlErrorCode.DISCONNECTED, "连接请求已被替换"))

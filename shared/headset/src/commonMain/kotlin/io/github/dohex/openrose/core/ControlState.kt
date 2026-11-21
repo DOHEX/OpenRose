@@ -9,6 +9,7 @@ import io.github.dohex.openrose.core.transport.TransportSelection
 import kotlinx.collections.immutable.PersistentList
 import kotlinx.collections.immutable.PersistentMap
 import kotlinx.collections.immutable.PersistentSet
+import kotlinx.collections.immutable.mutate
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.persistentMapOf
 import kotlinx.collections.immutable.persistentSetOf
@@ -248,6 +249,7 @@ data class ControlState(
     val readySession: SessionReference?
         get() {
             val connected = connection as? ConnectionState.Connected ?: return null
+            if (connected.phase != ConnectionPhase.READY) return null
             val current = device ?: return null
             if (current.deviceId != connected.deviceId || current.sessionId != connected.sessionId ||
                 current.profile != connected.profile
@@ -260,8 +262,7 @@ data class ControlState(
     /** Most settings require a ready session. Desktop i5 noise control may be admitted during initialization. */
     fun sessionFor(setting: DeviceSetting): SessionReference? = if (setting == DeviceSetting.NOISE_MODE) noiseModeSession else readySession
 
-    fun isReady(device: DeviceState): Boolean = (connection as? ConnectionState.Connected)?.phase == ConnectionPhase.READY &&
-        sessionAvailable(readySession, device)
+    fun isReady(device: DeviceState): Boolean = sessionAvailable(readySession, device)
 
     fun canControlNoiseMode(device: DeviceState): Boolean = sessionAvailable(noiseModeSession, device)
 
@@ -283,7 +284,7 @@ data class ControlState(
     /** The desktop can change the i5's noise mode as soon as this audio session reports it. */
     val noiseModeSession: SessionReference?
         get() {
-            if (connection is ConnectionState.Connected) return readySession.takeIf { connection.phase == ConnectionPhase.READY }
+            if (connection is ConnectionState.Connected) return readySession
             val initializing = connection as? ConnectionState.Connecting ?: return null
             val current = device ?: return null
             if (!platform.hostPlatform.isDesktop || current.profile != ModelProfile.I5_ZT || !deviceHasSystemAudio) return null
@@ -296,6 +297,17 @@ data class ControlState(
             return SessionReference(current.deviceId, current.sessionId)
         }
 }
+
+/** Recent setting operations are kept in submission order, including terminal outcomes from an earlier session. */
+fun ControlState.withSettingOperation(operation: SettingOperation): ControlState = copy(
+    settingOperations = settingOperations.mutate { history ->
+        val existing = history.indexOfFirst { it.id == operation.id }
+        if (existing >= 0) history[existing] = operation else history.add(operation)
+        while (history.size > SETTING_HISTORY_LIMIT) history.removeAt(0)
+    },
+)
+
+private const val SETTING_HISTORY_LIMIT = 64
 
 data class ConnectionRecovery(
     val sessionId: Long,

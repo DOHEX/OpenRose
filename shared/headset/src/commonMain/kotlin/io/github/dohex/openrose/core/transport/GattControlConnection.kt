@@ -12,6 +12,7 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -25,7 +26,13 @@ class GattControlConnection private constructor(
     private val endpoint: TransportEndpoint.BleGatt,
     private val eventScope: CoroutineScope,
 ) : ControlConnection {
-    private data class Services(val writer: GattCharacteristic, val notifier: GattCharacteristic)
+    private data class Services(val writer: GattCharacteristic, val notifier: GattCharacteristic) {
+        fun requireControlFeatures() {
+            val supportsWrites = writer.canWrite || writer.canWriteWithoutResponse
+            val supportsSubscriptions = notifier.canNotify || notifier.canIndicate
+            if (!supportsWrites || !supportsSubscriptions) throw UnsupportedOperationException("设备特征不提供所需的写入或订阅能力")
+        }
+    }
 
     private val operations = Mutex()
     private val lifecycle = Mutex()
@@ -42,7 +49,14 @@ class GattControlConnection private constructor(
     private fun observe() {
         eventScope.launch(start = CoroutineStart.UNDISPATCHED) {
             try {
-                driver.events.collect { event ->
+                driver.events.catch { failure ->
+                    when (failure) {
+                        is GattException -> end(failure.classify(TransportRecoveryReason.SERVICE_DISCOVERY))
+                        is CancellationException -> throw failure
+                        is Exception -> end(failure)
+                        else -> throw failure
+                    }
+                }.collect { event ->
                     when (event) {
                         is GattEvent.Notification -> {
                             if (event.characteristic === services.value?.notifier &&
@@ -62,14 +76,10 @@ class GattControlConnection private constructor(
                             }
                         }
 
-                        is GattEvent.Disconnected -> end(classify(event.failure, TransportRecoveryReason.SERVICE_DISCOVERY))
+                        is GattEvent.Disconnected -> end(event.failure.classify(TransportRecoveryReason.SERVICE_DISCOVERY))
                     }
                 }
                 end(TerminalTransportException("蓝牙事件流已结束"))
-            } catch (error: CancellationException) {
-                throw error
-            } catch (error: Exception) {
-                end(if (error is GattException) classify(error, TransportRecoveryReason.SERVICE_DISCOVERY) else error)
             } finally {
                 // A failed release remains retryable through close(), as required by ControlLink.
                 withContext(NonCancellable) { runCatching { releaseDriver() } }
@@ -80,78 +90,62 @@ class GattControlConnection private constructor(
     private suspend fun initialize(onPhase: (ConnectionPhase) -> Unit) {
         native(TransportRecoveryReason.SERVICE_DISCOVERY) { driver.connect() }
         onPhase(ConnectionPhase.DISCOVERING)
-        var exhausted: Exception = RecoverableTransportException(TransportRecoveryReason.SERVICES_UNAVAILABLE, "重新发现后仍未找到此型号要求的服务或特征")
-        for (attempt in 0..2) {
-            val before = lifecycle.withLock { generation }
-            val found = try {
-                native(TransportRecoveryReason.SERVICE_DISCOVERY) { driver.discoverServices() }
-            } catch (error: RecoverableTransportException) {
-                exhausted = error
-                continue
-            }
-            val service = found.firstOrNull { it.uuid.equals(endpoint.serviceUuid, ignoreCase = true) }
-            val writer = service?.characteristics?.firstOrNull { it.uuid.equals(endpoint.writeUuid, ignoreCase = true) }
-            val notifier = service?.characteristics?.firstOrNull { it.uuid.equals(endpoint.notifyUuid, ignoreCase = true) }
-            val accepted = lifecycle.withLock {
-                checkOpen()
-                if (before != generation) {
-                    exhausted = RecoverableTransportException(TransportRecoveryReason.SERVICES_CHANGED, "蓝牙服务在发现过程中发生变化")
-                    false
-                } else if (writer == null || notifier == null) {
-                    exhausted = RecoverableTransportException(TransportRecoveryReason.SERVICES_UNAVAILABLE, "未找到此型号要求的服务或特征")
-                    false
-                } else {
-                    val supportsWrites = writer.canWrite || writer.canWriteWithoutResponse
-                    val supportsSubscriptions = notifier.canNotify || notifier.canIndicate
-                    if (!supportsWrites || !supportsSubscriptions) {
-                        throw UnsupportedOperationException("设备特征不提供所需的写入或订阅能力")
-                    }
-                    services.value = Services(writer, notifier)
-                    true
-                }
-            }
-            if (accepted) {
-                val mtu = try {
-                    withTimeoutOrNull(MTU_TIMEOUT_MS) { native(TransportRecoveryReason.SERVICE_DISCOVERY) { driver.requestMtu(185) } }
-                } catch (_: RecoverableTransportException) {
-                    null
-                } catch (_: UnsupportedOperationException) {
-                    null
-                }
-                checkOpen()
-                capacity.value = ((mtu ?: 23).coerceAtLeast(23) - 3).coerceAtMost(512)
-                return
+        for (attempt in 1..3) {
+            try {
+                discoverServices()
+                break
+            } catch (exhausted: RecoverableTransportException) {
+                if (attempt == 3) throw exhausted
             }
         }
-        throw exhausted
+        val mtu = try {
+            withTimeoutOrNull(MTU_TIMEOUT_MS) { native(TransportRecoveryReason.SERVICE_DISCOVERY) { driver.requestMtu(185) } }
+        } catch (_: RecoverableTransportException) {
+            null
+        } catch (_: UnsupportedOperationException) {
+            null
+        }
+        checkOpen()
+        capacity.value = ((mtu ?: 23).coerceAtLeast(23) - 3).coerceAtMost(512)
+    }
+
+    private suspend fun discoverServices() {
+        val before = lifecycle.withLock { generation }
+        val found = native(TransportRecoveryReason.SERVICE_DISCOVERY) { driver.discoverServices() }
+        val service = found.firstOrNull { it.uuid.equals(endpoint.serviceUuid, ignoreCase = true) }
+        val writer = service?.characteristics?.firstOrNull { it.uuid.equals(endpoint.writeUuid, ignoreCase = true) }
+        val notifier = service?.characteristics?.firstOrNull { it.uuid.equals(endpoint.notifyUuid, ignoreCase = true) }
+        lifecycle.withLock {
+            checkOpen()
+            if (before != generation) {
+                throw RecoverableTransportException(TransportRecoveryReason.SERVICES_CHANGED, "蓝牙服务在发现过程中发生变化")
+            }
+            if (writer == null || notifier == null) {
+                throw RecoverableTransportException(TransportRecoveryReason.SERVICES_UNAVAILABLE, "未找到此型号要求的服务或特征")
+            }
+            services.value = Services(writer, notifier).also { it.requireControlFeatures() }
+        }
     }
 
     override suspend fun subscribe() = operations.withLock {
         checkOpen()
         val notifier = requireNotNull(services.value).notifier
-        try {
-            val subscribed = withTimeoutOrNull(OPERATION_TIMEOUT_MS) {
-                native(TransportRecoveryReason.SUBSCRIPTION) {
-                    driver.setNotificationRouting(notifier, true)
-                    driver.configureSubscription(notifier, if (notifier.canNotify) GattSubscription.NOTIFY else GattSubscription.INDICATE)
-                }
-                true
-            } ?: false
-            if (!subscribed) throw RecoverableTransportException(TransportRecoveryReason.SUBSCRIPTION, "通知订阅超时")
-            checkOpen()
-        } catch (error: Exception) {
-            withContext(NonCancellable) {
-                // Even if an outstanding native CCCD write prevents remote rollback, always undo local routing.
-                try {
-                    withTimeoutOrNull(OPERATION_TIMEOUT_MS) {
-                        runCatching { driver.configureSubscription(notifier, GattSubscription.DISABLED) }
+        terminalOnFailure {
+            var subscribed = false
+            try {
+                subscribed = withTimeoutOrNull(GATT_OPERATION_TIMEOUT_MS) {
+                    native(TransportRecoveryReason.SUBSCRIPTION) {
+                        driver.setNotificationRouting(notifier, true)
+                        val subscription = if (notifier.canNotify) GattSubscription.NOTIFY else GattSubscription.INDICATE
+                        driver.configureSubscription(notifier, subscription)
                     }
-                } finally {
-                    withTimeoutOrNull(OPERATION_TIMEOUT_MS) { runCatching { driver.setNotificationRouting(notifier, false) } }
-                }
+                    checkOpen()
+                    true
+                } ?: false
+                if (!subscribed) throw RecoverableTransportException(TransportRecoveryReason.SUBSCRIPTION, "通知订阅超时")
+            } finally {
+                if (!subscribed) driver.undoSubscription(notifier)
             }
-            if (error !is CancellationException) end(error)
-            throw error
         }
     }
 
@@ -159,18 +153,20 @@ class GattControlConnection private constructor(
         checkOpen()
         require(bytes.isNotEmpty() && bytes.size <= maxWriteSize) { "协议报文必须完整适配当前写入容量" }
         val writer = requireNotNull(services.value).writer
-        try {
-            val written = withTimeoutOrNull(OPERATION_TIMEOUT_MS) {
+        terminalOnFailure {
+            val written = withTimeoutOrNull(GATT_OPERATION_TIMEOUT_MS) {
                 native(TransportRecoveryReason.WRITE_FAILED) { driver.write(writer, bytes, withResponse = !writer.canWriteWithoutResponse) }
                 true
             } ?: false
             if (!written) throw RecoverableTransportException(TransportRecoveryReason.WRITE_FAILED, "蓝牙写入超时")
             checkOpen()
-        } catch (error: Exception) {
-            if (error !is CancellationException) end(error)
-            throw error
         }
     }
+
+    private inline fun terminalOnFailure(operation: () -> Unit) = transportOperation({ failure ->
+        end(failure)
+        throw failure
+    }, operation)
 
     override suspend fun close() {
         failure.compareAndSet(null, TerminalTransportException("蓝牙连接已关闭"))
@@ -204,21 +200,12 @@ class GattControlConnection private constructor(
             block().also { checkOpen() }
         } catch (error: GattException) {
             checkOpen()
-            throw classify(error, reason)
+            throw error.classify(reason)
         }
-    }
-
-    private fun classify(error: GattException, reason: TransportRecoveryReason): Exception = when (error.kind) {
-        GattFailureKind.TRANSIENT -> RecoverableTransportException(reason, error.message ?: "GATT 操作失败", error)
-        GattFailureKind.PERMISSION -> SecurityException(error.message, error)
-        GattFailureKind.UNSUPPORTED -> UnsupportedOperationException(error.message, error)
-        GattFailureKind.INVALID_VALUE -> IllegalArgumentException(error.message, error)
-        GattFailureKind.DISCONNECTED, GattFailureKind.UNKNOWN -> TerminalTransportException(error.message ?: "GATT 连接不可用", error)
     }
 
     companion object {
         private const val MTU_TIMEOUT_MS = 1_500L
-        private const val OPERATION_TIMEOUT_MS = 5_000L
 
         suspend fun open(
             driver: GattDriver,
@@ -230,13 +217,29 @@ class GattControlConnection private constructor(
                 endpoint,
                 CoroutineScope(currentCoroutineContext().minusKey(Job) + SupervisorJob()),
             )
-            connection.observe()
-            try {
-                connection.initialize(onPhase)
-                return connection
-            } catch (error: Throwable) {
-                connection.closeAfterFailedOpen(error)
+            return connection.openSafely {
+                observe()
+                initialize(onPhase)
             }
         }
+    }
+}
+
+private const val GATT_OPERATION_TIMEOUT_MS = 5_000L
+
+private fun GattException.classify(reason: TransportRecoveryReason): Exception = when (kind) {
+    GattFailureKind.TRANSIENT -> RecoverableTransportException(reason, message ?: "GATT 操作失败", this)
+    GattFailureKind.PERMISSION -> SecurityException(message, this)
+    GattFailureKind.UNSUPPORTED -> UnsupportedOperationException(message, this)
+    GattFailureKind.INVALID_VALUE -> IllegalArgumentException(message, this)
+    GattFailureKind.DISCONNECTED, GattFailureKind.UNKNOWN -> TerminalTransportException(message ?: "GATT 连接不可用", this)
+}
+
+private suspend fun GattDriver.undoSubscription(notifier: GattCharacteristic) = withContext(NonCancellable) {
+    // Even if an outstanding CCCD write prevents remote rollback, always undo local routing.
+    try {
+        withTimeoutOrNull(GATT_OPERATION_TIMEOUT_MS) { runCatching { configureSubscription(notifier, GattSubscription.DISABLED) } }
+    } finally {
+        withTimeoutOrNull(GATT_OPERATION_TIMEOUT_MS) { runCatching { setNotificationRouting(notifier, false) } }
     }
 }

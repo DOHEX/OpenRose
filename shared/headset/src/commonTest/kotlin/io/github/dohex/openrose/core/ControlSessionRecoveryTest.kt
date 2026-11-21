@@ -483,23 +483,24 @@ class ControlSessionRecoveryTest {
             if (connectCalls == 2) secondConnectGate?.await()
             if (links.any { !it.closed }) previousLinksClosedAtEveryConnect = false
             endpoints += endpoint
-            val first = links.isEmpty()
-            val link = RecoveryLink(
-                profile,
-                maxWriteSize = writeSizes.getOrNull(links.size) ?: if (profile == ModelProfile.I5_ZT) 20 else 512,
-                failSubscription = first && failFirstSubscription,
-                noResponse = firstLinkHasNoResponse && (first || everyLinkHasNoResponse),
-                firstQueryReply = if (first) firstQueryReply else null,
-                silentAfterFirstReply = first && firstLinkSilentAfterFirstReply,
-                failNotificationCollection = first && failFirstNotificationCollection,
-                failWriteAtIndex = if (first) failWriteAtIndex else null,
-                writeFailure = if (first) writeFailure else null,
-                writeGateAtIndex = if (first) writeGateAtIndex else null,
-                writeGate = if (first) writeGate else null,
-            )
+            val link = nextLink(first = links.isEmpty())
             links += link
             return link
         }
+
+        private fun nextLink(first: Boolean) = RecoveryLink(
+            profile,
+            maxWriteSize = writeSizes.getOrNull(links.size) ?: if (profile == ModelProfile.I5_ZT) 20 else 512,
+            failSubscription = first && failFirstSubscription,
+            noResponse = firstLinkHasNoResponse && (first || everyLinkHasNoResponse),
+            firstQueryReply = if (first) firstQueryReply else null,
+            silentAfterFirstReply = first && firstLinkSilentAfterFirstReply,
+            failNotificationCollection = first && failFirstNotificationCollection,
+            failWriteAtIndex = if (first) failWriteAtIndex else null,
+            writeFailure = if (first) writeFailure else null,
+            writeGateAtIndex = if (first) writeGateAtIndex else null,
+            writeGate = if (first) writeGate else null,
+        )
     }
 
     private class RecoveryLink(
@@ -558,9 +559,7 @@ class ControlSessionRecoveryTest {
                 throw writeFailure ?: RecoverableTransportException(TransportRecoveryReason.WRITE_FAILED, "synthetic write failure")
             }
             if (writeIndex == writeGateAtIndex) writeGate?.await()
-            if (!initializing) return
-            if (silentAfterFirstReply) return
-            if (noResponse) return
+            if (!initializing || silentAfterFirstReply || noResponse) return
             if (profile == ModelProfile.I5_ZT) {
                 i5Replies[hex.substring(10, 14)]?.let { incoming.send(it.bytes()) }
             } else {

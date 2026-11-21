@@ -132,6 +132,22 @@ class AudioFacts(private val driver: AudioFactsDriver) {
             }
             launch { inbox.send(AudioMessage.Result(queryEpoch, driver.snapshot(emptySet()))) }
         }
+        fun profileChanged(event: RawAudioEvent.ProfileChanged) {
+            if (!enabled || event.profile == AudioProfile.LE_AUDIO) return
+            val address = normalizeBluetoothAddress(event.device.address) ?: return
+            val device = event.device.takeIf { event.bonded }
+            val hasIdentity = !event.bonded || event.device.name != null
+            if (querying) {
+                changes[event.profile to address] = event.connected
+                if (hasIdentity) eventDevices[address] = device
+            }
+            if (hasIdentity) {
+                if (device != null && supportedAudioModel(device) != null) bonded.add(address) else bonded.remove(address)
+            }
+            val set = connected.getOrPut(event.profile) { mutableSetOf() }
+            if (event.connected) set.add(address) else set.remove(address)
+            if (!querying) publish()
+        }
         launch(start = CoroutineStart.UNDISPATCHED) { driver.events.collect { inbox.send(AudioMessage.Event(it)) } }
         for (message in inbox) {
             when (message) {
@@ -189,20 +205,7 @@ class AudioFacts(private val driver: AudioFactsDriver) {
                     }
 
                     is RawAudioEvent.ProfileChanged -> {
-                        if (!enabled || event.profile == AudioProfile.LE_AUDIO) continue
-                        val address = normalizeBluetoothAddress(event.device.address) ?: continue
-                        val device = event.device.takeIf { event.bonded }
-                        val hasIdentity = !event.bonded || event.device.name != null
-                        if (querying) {
-                            changes[event.profile to address] = event.connected
-                            if (hasIdentity) eventDevices[address] = device
-                        }
-                        if (hasIdentity) {
-                            if (device != null && supportedAudioModel(device) != null) bonded.add(address) else bonded.remove(address)
-                        }
-                        val set = connected.getOrPut(event.profile) { mutableSetOf() }
-                        if (event.connected) set.add(address) else set.remove(address)
-                        if (!querying) publish()
+                        profileChanged(event)
                     }
                 }
             }

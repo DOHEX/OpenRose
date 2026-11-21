@@ -430,10 +430,35 @@ class ControlSessionAdvancedAudioTest {
     }
 
     @Test
+    fun firmwareChangesRetainObservedFieldsAndWithdrawOnlyLoadingFields() = runTest {
+        val oldFirmware = "dd00040d010501f5aa"
+        val (session, link) = ready(profile = ModelProfile.ASTRO_X_RS_V2, firmware = oldFirmware)
+        val gain = "dd0002450226aa"
+        val newFirmware = "dd00040d010502f6aa"
+        link.incoming.send((gain + newFirmware).bytes())
+        runCurrent()
+        val enabled = requireNotNull(session.state.value.device)
+        // The gain reply was diagnostic only when it arrived, even though the next frame unlocks gain.
+        assertEquals(gain, enabled.diagnostics.unknownNotifications.last())
+        assertTrue(DeviceField.GAIN in enabled.capabilities.readableFields)
+        assertEquals(2, enabled.confirmedNumber(DeviceField.GAIN))
+        assertEquals(FieldReading.Loading, enabled.reading(DeviceField.HEARING_PROTECTION))
+
+        link.incoming.send(oldFirmware.bytes())
+        runCurrent()
+        val disabled = requireNotNull(session.state.value.device)
+        assertFalse(DeviceField.GAIN in disabled.capabilities.readableFields)
+        assertEquals(2, disabled.confirmedNumber(DeviceField.GAIN))
+        assertEquals(null, disabled.reading(DeviceField.HEARING_PROTECTION))
+        session.disconnect()
+    }
+
+    @Test
     fun changingFirstAngelGameModeRefreshesEqAndRejectsTheQueuedMusicPreset() = runTest {
         val (session, link) = ready(profile = ModelProfile.FIRST_ANGEL_RS_V2)
         link.incoming.send("dd00020e00edaa".bytes()) // Synthetic music mode.
         runCurrent()
+        assertEquals(FieldValue.Text("hifi"), reading(session, DeviceField.EQ))
         assertEquals(setOf("pop", "hifi"), session.state.value.device?.capabilities?.equalizer?.presets.orEmpty().toSet())
         val before = link.writes.size
         val toggle = async { session.set(HeadsetCommand.GameMode(true)) }
