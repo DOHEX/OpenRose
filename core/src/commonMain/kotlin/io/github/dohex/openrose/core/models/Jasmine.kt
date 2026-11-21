@@ -4,13 +4,22 @@ import io.github.dohex.openrose.core.DeviceCapabilities
 import io.github.dohex.openrose.core.DeviceSetting
 import io.github.dohex.openrose.core.TouchControlCapabilities
 import io.github.dohex.openrose.core.protocol.BatteryLayout
+import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.GattProfile
 import io.github.dohex.openrose.core.protocol.ProtocolFamily
 import kotlinx.collections.immutable.persistentSetOf
 import kotlinx.collections.immutable.toPersistentSet
 
 private val jasmineCapabilities = DeviceCapabilities(
-    readableFields = ProtocolFamily.RS_COMMON_V2.readableFields.toPersistentSet(),
+    readableFields = rsReadings(
+        BatteryLayout.EARBUDS_ONLY,
+        DeviceField.TOUCH_KEYS,
+        DeviceField.TOUCH_ENABLED,
+        DeviceField.MULTIPOINT,
+        DeviceField.PROMPT_VOLUME,
+        DeviceField.PROMPT_LANGUAGE,
+        DeviceField.FIND_STATE,
+    ),
     writableSettings = persistentSetOf(
         DeviceSetting.GAME_MODE,
         DeviceSetting.MULTIPOINT,
@@ -29,6 +38,7 @@ private val jasmineCapabilities = DeviceCapabilities(
 )
 
 internal val jasmine = ModelSpec(
+    rsV2InfoIds = "0d0c0e322f0107312e",
     displayName = "Jasmine", shortLabel = "Jasmine", family = ProtocolFamily.RS_COMMON_V2,
     advertisementPrefixes = listOf("0b0a0a11"), nameBrand = "jasmine", nameModelNumber = "jasmine",
     gatt = GattProfile(
@@ -36,7 +46,7 @@ internal val jasmine = ModelSpec(
         "000000f1-0000-1000-8000-00805f9b34fb",
         "000000f2-0000-1000-8000-00805f9b34fb",
     ),
-    sppControlUuid = "0cf12d31-fac3-4553-bd80-d6832e7b3931", writeIntervalMillis = 100, advertisedClassicAddress = null,
+    sppControlUuid = "0cf12d31-fac3-4553-bd80-d6832e7b3931", writeIntervalMillis = 100, advertisedClassicAddress = ::rsV2ClassicAddress,
     batteryLayout = BatteryLayout.EARBUDS_ONLY, equalizerPresetLabels = emptyMap(),
     capabilities = { jasmineCapabilities },
 )

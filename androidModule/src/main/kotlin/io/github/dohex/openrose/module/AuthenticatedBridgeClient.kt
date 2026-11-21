@@ -38,6 +38,7 @@ internal class AuthenticatedBridgeClient(
     private val target: BridgeTarget,
     private val processName: String,
     private val onSnapshot: (Bundle) -> Unit,
+    private val onSnapshotFresh: (Long) -> Unit,
     private val onClear: () -> Unit,
     private val onBonded: (Set<String>) -> Unit,
     private val onAuthenticated: (AuthenticatedBridgeClient) -> Unit = {},
@@ -68,7 +69,7 @@ internal class AuthenticatedBridgeClient(
 
     @Volatile private var currentReference: SessionReference? = null
 
-    @Volatile private var currentSnapshot: Bundle? = null
+    private var deliveredSequence = INVALID_READ_SEQUENCE
 
     @Volatile private var targetBridge: IControlBridge? = null
 
@@ -246,6 +247,14 @@ internal class AuthenticatedBridgeClient(
             if (!isCurrentBinding(binding) || leaseId != lease || generation != ownerGeneration) return
         }
 
+        val reference = SessionReference(deviceId, sessionId)
+        if (currentReference == reference && deliveredSequence > 0L &&
+            current.getLong(BridgeWire.READ_SEQUENCE, INVALID_READ_SEQUENCE) == deliveredSequence
+        ) {
+            onSnapshotFresh(current.getLong(BridgeWire.CAPTURED_ELAPSED_MILLIS))
+            return
+        }
+
         val response = bridge.read(sessionRequest(lease, ownerGeneration, deviceId, sessionId))
         if (!hasWireVersion(response)) {
             clearSnapshot()
@@ -292,8 +301,8 @@ internal class AuthenticatedBridgeClient(
         }
 
         if (!isCurrentBinding(binding) || leaseId != lease || generation != ownerGeneration) return
-        currentReference = SessionReference(deviceId, sessionId)
-        currentSnapshot = Bundle(snapshot)
+        currentReference = reference
+        deliveredSequence = sequence
         deliveredSnapshot = true
         try {
             onSnapshot(Bundle(snapshot))
@@ -349,7 +358,7 @@ internal class AuthenticatedBridgeClient(
     /** Clear on the reader looper only; a stale binding can never clear a newer target adapter. */
     private fun clearSnapshot() {
         currentReference = null
-        currentSnapshot = null
+        deliveredSequence = INVALID_READ_SEQUENCE
         clearDeliveredSnapshot()
     }
 
@@ -635,7 +644,7 @@ internal class AuthenticatedBridgeClient(
         generation = null
         watchedGeneration = null
         currentReference = null
-        currentSnapshot = null
+        deliveredSequence = INVALID_READ_SEQUENCE
         publishBonded(emptySet())
     }
 

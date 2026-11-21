@@ -40,8 +40,8 @@ internal class SandboxWrites(
 ) {
     private var lastOperationId = 0L
 
-    fun submit(setting: DeviceSetting, value: FieldValue) {
-        val run = begin(setting, value, null) ?: return
+    fun submit(sessionId: Long, setting: DeviceSetting, value: FieldValue) {
+        val run = begin(setting, value, sessionId) ?: return
         scope.launch { run() }
     }
 
@@ -53,10 +53,10 @@ internal class SandboxWrites(
     }
 
     /** Records the submission now; the returned step plays out the rest, or null when no session can take the write. */
-    private fun begin(setting: DeviceSetting, value: FieldValue, sessionId: Long?): (suspend () -> OperationResult)? {
+    private fun begin(setting: DeviceSetting, value: FieldValue, sessionId: Long): (suspend () -> OperationResult)? {
         val current = state.value
         val session = current.readySession ?: return null
-        if (sessionId != null && session.sessionId != sessionId) return null
+        if (session.sessionId != sessionId) return null
         val device = current.device ?: return null
         val prepared = runCatching { createProtocolCodec(device.profile).prepareSetting(setting, value, scenario.value.firmwareValue) }
         val operation = SettingOperation(
@@ -138,19 +138,11 @@ private fun confirmedFields(
 ): PersistentMap<DeviceField, FieldReading> {
     val result = fields.builder()
     for ((field, value) in expected) {
-        when {
-            value is FieldValue.TouchAssignment -> {
-                val current = (fields[DeviceField.TOUCH_KEYS] as? FieldReading.Known)?.value as? FieldValue.TouchKeys
-                result[DeviceField.TOUCH_KEYS] = FieldReading.Known(FieldValue.TouchKeys(current?.bindings.orEmpty().assigning(value)), "")
-            }
-
-            field == DeviceField.EQ_SLOT && value is FieldValue.Number -> {
-                val reply = "05%02x".format(value.value)
-                result[DeviceField.EQ] = FieldReading.Known(FieldValue.Text("custom_slot"), reply)
-                result[DeviceField.EQ_SLOT] = FieldReading.Known(value, reply)
-            }
-
-            else -> result[field] = FieldReading.Known(value, "")
+        result[field] = if (value is FieldValue.TouchAssignment) {
+            val current = (fields[field] as? FieldReading.Known)?.value as? FieldValue.TouchKeys
+            FieldReading.Known(FieldValue.TouchKeys(current?.bindings.orEmpty().assigning(value)), "")
+        } else {
+            FieldReading.Known(value, "")
         }
     }
     return result.build()

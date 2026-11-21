@@ -1,6 +1,8 @@
 package io.github.dohex.openrose.androidintegration
 
 import io.github.dohex.openrose.core.ConnectionState
+import io.github.dohex.openrose.core.OperationResult
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -51,6 +53,39 @@ class OrdinarySessionHoldTest {
         advanceUntilIdle()
         assertEquals(1, rig.headset.opens("ordinary"))
         assertEquals(ConnectionState.Disconnected, runtime.state.value.connection)
+    }
+
+    @Test
+    fun reopeningAfterARefusedLastCloseRecoversOnlyAfterTheOldHandleIsReleased() = runTest {
+        val rig = OwnerRig(this)
+        rig.bootHost()
+        val runtime = rig.newRuntime(interfaceOpen = false)
+        val first = runtime.holdOrdinarySession()
+        val device = rig.earphones.deviceId
+        assertEquals(OperationResult.Success, runtime.connect(device))
+        rig.appTransport.closeFails = true
+        first.release()
+        runCurrent()
+        rig.appTransport.audioDevice.emit(device)
+        runCurrent()
+        assertEquals(1, rig.headset.opens("ordinary"))
+
+        val reopened = runtime.holdOrdinarySession()
+        val waiting = assertIs<OwnerReadiness.Unavailable>(runtime.integration.value.owner.readiness)
+        assertEquals(OwnerFailureStage.RELEASE, waiting.stage)
+        assertIs<OperationResult.Failure>(runtime.connect(device))
+        assertEquals(1, rig.headset.opens("ordinary"))
+
+        rig.appTransport.closeFails = false
+        advanceTimeBy(rig.clientTiming.retryMillis)
+        runCurrent()
+        assertEquals(OwnerReadiness.Ready, runtime.integration.value.owner.readiness)
+        assertEquals(OperationResult.Success, runtime.connect(device))
+        runCurrent()
+        assertIs<ConnectionState.Connected>(runtime.state.value.connection)
+        assertEquals(listOf("ordinary:open", "ordinary:close", "ordinary:open"), rig.headset.events)
+        assertEquals(0, rig.headset.overlappingOpens)
+        reopened.release()
     }
 
     @Test

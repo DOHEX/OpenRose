@@ -8,13 +8,14 @@ import io.github.dohex.openrose.core.NoiseControlCapabilities
 import io.github.dohex.openrose.core.NoiseLevelCapabilities
 import io.github.dohex.openrose.core.TouchControlCapabilities
 import io.github.dohex.openrose.core.protocol.BatteryLayout
+import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.GattProfile
 import io.github.dohex.openrose.core.protocol.ProtocolFamily
 import kotlinx.collections.immutable.persistentSetOf
 import kotlinx.collections.immutable.toPersistentSet
 
 private val explorerCapabilities = DeviceCapabilities(
-    readableFields = ProtocolFamily.F8.readableFields.toPersistentSet(),
+    readableFields = f8ExtendedReadings.addingAll(listOf(DeviceField.ANC_LEVEL, DeviceField.TRANSPARENCY_LEVEL, DeviceField.TOUCH_ENABLED)),
     writableSettings = persistentSetOf(
         DeviceSetting.EQ,
         DeviceSetting.TOUCH_BINDING,
@@ -63,5 +64,4 @@ internal val explorer = ModelSpec(
     capabilities = { explorerCapabilities },
     f8ExtendedInit = true,
     f8NoiseNormalWire = 0,
-    f8CollapsedEqRead = false,
 )

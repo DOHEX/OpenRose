@@ -1,0 +1,27 @@
+[package]
+name = "openrose-winrt"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+hex = "0.4.3"
+# Match the Windows projection used by com-policy-config.
+windows = { version = "0.61.3", features = [
+    "Devices_Bluetooth_Advertisement",
+    "Devices_Bluetooth_GenericAttributeProfile",
+    "Devices_Enumeration",
+    "Devices_Radios",
+    "Foundation_Collections",
+    "Storage_Streams",
+    "Win32_System_WinRT",
+    "Win32_Media_Audio",
+    "Win32_Media_KernelStreaming",
+    "Win32_System_Com",
+    "Win32_UI_Shell_PropertiesSystem",
+    "Win32_Devices_FunctionDiscovery",
+    "Win32_System_Com_StructuredStorage",
+    "Win32_System_Variant",
+] }
+windows-collections = "0.2.0"
+com-policy-config = "0.6.0"

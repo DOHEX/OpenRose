@@ -19,6 +19,7 @@
   ```
 
   其中 `rpm` 和 `libarchive-tools` 用于打包 RPM / Pacman。真实运行桌面版控制耳机还需要已运行的 BlueZ、可访问的系统 D-Bus 和已开启且支持 BLE 的适配器；DEB、RPM、Pacman 声明 `bluez` 依赖，AppImage 依赖宿主的 BlueZ。Linux 托盘需要 `libsystemd`。
+- Windows 桌面构建需要 Rust stable（MSVC 工具链）和 Visual Studio C++ Build Tools。Gradle 会编译 WinRT 蓝牙组件并随 MSI 分发。
 - 仓库自带 Gradle Wrapper。Windows 下把 `./gradlew` 换成 `.\gradlew.bat`。
 
 ```bash
@@ -42,6 +43,8 @@ cd OpenRose
 | `:androidModule` | 模块：LSPosed 载入作用域进程的代码（模块入口、模块宿主运行时与端点、原生耳机适配、系统呈现渲染、`META-INF/xposed`）；看不到应用与共享界面 |
 | `:androidApp` | Android 应用入口：Activity、服务与唤醒、设置存储、与 LSPosed 框架和模块宿主的连接；仅在运行时依赖 `:androidModule`，打进同一 APK（见 ADR 0018） |
 | `:desktopApp` | Windows / Linux 桌面入口：窗口、托盘与偏好设置，并装配运行时 |
+| `:circulation` | 手机与电脑间的局域网流转配对、双向认证、远端耳机控制与手动流转 |
+| `:transportWindows` | Windows 平台驱动：WinRT BLE 与 Core Audio 音频端点，使用 Rust 构建本机组件 |
 | `:transportBluez` | Linux 平台驱动：BlueZ D-Bus GATT 原语、扫描、配对设备与音频事实 |
 | `:uiSandbox` | 开发用界面沙盒，不打包、不发布：在假状态上运行共享界面、各平台段落与托盘面板（见下文“界面调试”）。只有它同时依赖 `:desktopApp` 与 `:androidIntegrationUI`，桌面运行时依赖图仍不含 Android 集成模块 |
 | `build-logic/` | 各模块共用的 Gradle 约定插件（独立的 included build） |
@@ -52,7 +55,7 @@ cd OpenRose
 
 1. 在 `ModelProfile` 增加枚举项，并在其 `spec` 中映射到新的 `ModelSpec`；缺少映射无法编译。枚举名跨进程传递，确定后不要改名。
 2. 写全 `ModelSpec` 的各项。能力只列有研究证据的设置：未声明的设置不会出现在界面，也不会被写入。
-3. 协议族已有编解码（ZT、RS Common V2）时直接复用；族内型号的帧、字段或枚举有差异时，在 `ModelSpec` 增加对应字段，由该族编解码读取。新协议族需要新增 `ProtocolFamily` 项与编解码。
+3. 在 `createProtocolCodec` 查到现有协议族编解码器时直接复用；族内型号的帧、字段或枚举有差异时，在 `ModelSpec` 增加对应字段，由该族编解码读取。新协议族需要新增 `ProtocolFamily` 项与编解码。
 4. 单体型号（`BatteryLayout.SINGLE_UNIT`）在应用和托盘里显示一行“电量”；在有实机证据之前，系统超级岛、焦点通知和融合设备中心不发布其电量。
 5. 在 `androidIntegration` 测试夹具的 `initializationReplies`、`roseAdvertisement` 中登记该型号的回包与广播。`ModelProfileTest` 会检查每个型号都能凭自己的广播前缀和名称被识别。
 6. 在界面沙盒中选中该型号，按有能力差异的固件分别检查各页面；这是离线验证，不能代替真机验证。
@@ -85,7 +88,7 @@ cd OpenRose
 
 - Kotlin 编译器警告会使构建失败（`allWarningsAsErrors`），请直接修复警告。
 - Android lint 的警告按错误处理；既有问题冻结在 `androidApp/lint-baseline.xml`。
-- detekt 的既有问题冻结在 `config/detekt/baseline/<module>.xml`，条目总数记录在 `config/detekt/baseline-limit.txt`，`checkDetektBaseline` 要求两者相等。基线只能变少：不要向基线添加新条目，新代码直接修复问题，也尽量不用 `@Suppress`。修掉旧问题后运行 `./gradlew detektBaseline` 重新生成基线，并把 `baseline-limit.txt` 改成新的条目数；基线清空后，删除基线目录、`baseline-limit.txt` 和 `checkDetektBaseline`。
+- detekt 的既有问题冻结在 `config/detekt/baseline/<module>.xml`。`checkDetektBaseline` 按模块和问题 ID 与 Git 基准提交比较，本地用当前 HEAD 与 `origin/main` 的共同祖先，无此历史时使用 HEAD。PR 使用目标分支提交，可用 `-PdetektBaselineBase=<commit>` 指定基准。基线只能变少：不要向基线添加新条目，新代码直接修复问题，也尽量不用 `@Suppress`。修掉旧问题后运行 `./gradlew detektBaseline` 重新生成基线；可以直接删除已清空的模块基线。
 - detekt 不检查测试源码的行宽（`MaxLineLength`），`ReturnCount` 不计开头的守卫语句；规则见 `config/detekt/detekt.yml`。
 - Spotless 不会把 `.editorconfig` 的改动当作输入变化：修改 `.editorconfig` 后请运行 `./gradlew spotlessApply --rerun-tasks`。
 - 全仓格式化提交记录在 `.git-blame-ignore-revs` 中。GitHub 的 blame 会自动跳过它；本地运行一次 `git config blame.ignoreRevsFile .git-blame-ignore-revs` 即可同样跳过。
@@ -117,8 +120,8 @@ PR 标题同样遵循这一格式，并由 `.github/workflows/pr-title.yml` 检�
 发布由自动化完成，贡献者不需要手动打标签：
 
 1. main 分支上的 release-please 根据 Conventional Commits 开出发布 PR，改写 `version.txt` 并维护 `CHANGELOG.md`。
-2. 合并该发布 PR 会创建 `vX.Y.Z` 标签。
-3. 标签触发 CI 打包，并生成草稿 GitHub Release。
+2. 合并发布 PR 后，main 上的 CI 调用 release-please 创建 `vX.Y.Z` 标签和草稿发布。
+3. 同一次 CI 构建安装包，校验 Android 模块入口及资源，再把安装包、来源证明和校验和关联到此次发布。
 
 因此提交类型要如实反映变更性质：`feat` 对应新功能，`fix` 对应缺陷修复。
 

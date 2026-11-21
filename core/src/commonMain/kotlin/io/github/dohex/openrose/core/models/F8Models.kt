@@ -1,5 +1,6 @@
 package io.github.dohex.openrose.core.models
 
+import io.github.dohex.openrose.core.protocol.DeviceField
 import kotlinx.collections.immutable.persistentSetOf
 import kotlinx.collections.immutable.toPersistentSet
 
@@ -22,3 +23,27 @@ internal val f8Actions = persistentSetOf(
     "noise_cycle",
 )
 internal val f8ActionsWithoutNoise = f8Actions.removing("noise_cycle")
+
+/** Fields decoded by the basic F8 receiver; these earbuds do not report a case slot. */
+internal val f8BasicReadings = persistentSetOf(
+    DeviceField.LEFT_BATTERY,
+    DeviceField.RIGHT_BATTERY,
+    DeviceField.LEFT_CHARGING,
+    DeviceField.RIGHT_CHARGING,
+    DeviceField.FIRMWARE,
+    DeviceField.EQ,
+    DeviceField.TOUCH_KEYS,
+    DeviceField.GAME_MODE,
+)
+
+internal val f8ExtendedReadings = f8BasicReadings.addingAll(
+    listOf(
+        DeviceField.CASE_BATTERY,
+        DeviceField.EAR_DETECTION,
+        DeviceField.PROMPT_LANGUAGE,
+        DeviceField.AUDIO_MODE,
+        DeviceField.MULTIPOINT,
+        DeviceField.NOISE_MODE,
+        DeviceField.PROMPT_VOLUME,
+    ),
+)

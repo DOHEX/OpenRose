@@ -31,29 +31,14 @@ internal fun withAddDeviceHarness(
         candidates = persistentListOf(addDeviceCandidate),
     ),
     app: Boolean = false,
+    scanFailure: ControlError? = null,
     width: Int = 420,
     height: Int = 1000,
     block: suspend (AddDeviceUiTestHarness) -> Unit,
 ) = runOpenRoseUiTest(width, height) {
     val harness = AddDeviceUiTestHarness(this, mutableStateOf(initial), mutableStateOf(UiSettings(appearance = Appearance.LIGHT, interfaceStyle = style, pageTransition = PageTransition.NONE)))
     val state = harness.state
-    val model = FakeOpenRoseModel(state, harness.uiSettings).apply {
-        onStartScan = {
-            harness.scanStarts++
-            harness.scanStartTimes += harness.currentTime
-            state.value = state.value.copy(scan = ScanState.Scanning, lastError = null)
-        }
-        onStopScan = {
-            harness.scanStops++
-            state.value = state.value.copy(scan = ScanState.Idle)
-        }
-        onConnect = { harness.beginConnection(it) }
-        onDisconnect = {
-            harness.disconnects++
-            state.value = state.value.copy(connection = ConnectionState.Disconnected, device = null)
-        }
-        onAddDeviceConnect = { harness.connectForAddDevice(it) }
-    }
+    val model = harness.model(scanFailure)
     val platformUi = object : PlatformUi {
         override val platformName = "Test"
         override val requestBluetoothPermission: (() -> Unit) = {}
@@ -82,6 +67,7 @@ internal fun withAddDeviceHarness(
                     selectedDeviceId = flow.selectedDeviceId,
                     connectionPhase = flow.phase(state.value.connection),
                     connectionError = flow.connectionError,
+                    startScanError = flow.scanError,
                     onRequestPermission = platformUi.requestBluetoothPermission,
                     onOpenSystemSettings = platformUi.openBluetoothSettings,
                     onStartScan = flow::startSearch,
@@ -109,6 +95,29 @@ internal class AddDeviceUiTestHarness(
     var disconnects = 0
     val connectRequests = mutableListOf<DeviceId>()
     private var nextSessionId = 1L
+
+    fun model(scanFailure: ControlError?): FakeOpenRoseModel {
+        val model = FakeOpenRoseModel(state, uiSettings)
+        model.startScanResult = scanFailure?.let(OperationResult::Failure) ?: OperationResult.Success
+        model.onStartScan = {
+            scanStarts++
+            scanStartTimes += currentTime
+            if (scanFailure == null) {
+                state.value = state.value.copy(scan = ScanState.Scanning, lastError = null)
+            }
+        }
+        model.onStopScan = {
+            scanStops++
+            state.value = state.value.copy(scan = ScanState.Idle)
+        }
+        model.onConnect = ::beginConnection
+        model.onDisconnect = {
+            disconnects++
+            state.value = state.value.copy(connection = ConnectionState.Disconnected, device = null)
+        }
+        model.onAddDeviceConnect = ::connectForAddDevice
+        return model
+    }
 
     fun openAddDevice() {
         render()

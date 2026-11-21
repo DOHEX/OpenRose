@@ -89,7 +89,7 @@ class AndroidSettingsStoreTest {
             app.saveUi(UiSettings(interfaceStyle = InterfaceStyle.MATERIAL3))
             val publisher = ModuleSettingsPublisher { preferences(remoteFile) }
             assertTrue(publisher.publish(app::loadHost))
-            val configured = readHostSettings(preferences(remoteFile))
+            val configured = requireNotNull(readHostSettings(preferences(remoteFile)))
             val host = ModuleControlHost(
                 packageName = "com.android.bluetooth",
                 processName = "com.android.bluetooth",
@@ -101,7 +101,7 @@ class AndroidSettingsStoreTest {
                 parentScope = backgroundScope,
                 newId = { "lease" },
             )
-            host.configure(HostConfiguration(userUnlocked = true, settings = configured))
+            host.configure { HostConfiguration(userUnlocked = true, settings = configured) }
             runCurrent()
             assertIs<HostStatus.Active>(host.status.value)
             val owner = requireNotNull(host.ownerView.first())
@@ -112,6 +112,18 @@ class AndroidSettingsStoreTest {
             Files.deleteIfExists(file)
             Files.deleteIfExists(remoteFile)
         }
+    }
+
+    @Test
+    fun emptyAndUnavailableConfigurationRemainDistinguishable() {
+        val file = Files.createTempFile("openrose-empty-settings", ".properties")
+        val prefs = preferences(file)
+        try {
+            assertEquals(HostSettings(), readHostSettings(prefs))
+        } finally {
+            Files.deleteIfExists(file)
+        }
+        assertEquals(null, readHostSettings(prefs))
     }
 
     private fun TestScope.runtime(file: Path, scope: CoroutineScope = backgroundScope): SwitchingControlRuntime {

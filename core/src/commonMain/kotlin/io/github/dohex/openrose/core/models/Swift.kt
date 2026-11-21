@@ -4,11 +4,11 @@ import io.github.dohex.openrose.core.DeviceCapabilities
 import io.github.dohex.openrose.core.DeviceSetting
 import io.github.dohex.openrose.core.TouchControlCapabilities
 import io.github.dohex.openrose.core.protocol.BatteryLayout
+import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.GattProfile
 import io.github.dohex.openrose.core.protocol.ProtocolFamily
 import io.github.dohex.openrose.core.protocol.RsCommonInit
 import kotlinx.collections.immutable.persistentSetOf
-import kotlinx.collections.immutable.toPersistentSet
 
 internal val swift = ModelSpec(
     displayName = "SWIFT",
@@ -31,7 +31,11 @@ internal val swift = ModelSpec(
     rsCommonInit = RsCommonInit.DEFAULT,
     capabilities = {
         DeviceCapabilities(
-            readableFields = ProtocolFamily.RS_COMMON.readableFields.toPersistentSet(),
+            readableFields = rsReadings(
+                BatteryLayout.SINGLE_UNIT,
+                DeviceField.TOUCH_KEYS,
+                DeviceField.TOUCH_ENABLED,
+            ),
             writableSettings = persistentSetOf(
                 DeviceSetting.GAME_MODE,
                 DeviceSetting.TOUCH_BINDING,

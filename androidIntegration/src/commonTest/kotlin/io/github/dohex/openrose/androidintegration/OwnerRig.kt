@@ -29,7 +29,9 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
@@ -69,6 +71,7 @@ internal class HeadsetTransport(
 ) : ControlTransport {
     val audioDevice = MutableSharedFlow<DeviceId?>(replay = 1, extraBufferCapacity = 8)
     val links = mutableListOf<HeadsetConnection>()
+    var autoReplyOnOpen = true
 
     /** Closing a real link takes time; the owner is not released before it has actually finished. */
     var closeDelayMillis = 0L
@@ -82,7 +85,10 @@ internal class HeadsetTransport(
 
     override suspend fun connect(deviceId: DeviceId, endpoint: TransportEndpoint, onPhase: (ConnectionPhase) -> Unit): ControlConnection {
         headset.opened(owner)
-        return HeadsetConnection(owner, headset, profile, { closeDelayMillis }, { closeFails }).also(links::add)
+        return HeadsetConnection(owner, headset, profile, { closeDelayMillis }, { closeFails }).also {
+            it.initializing = autoReplyOnOpen
+            links.add(it)
+        }
     }
 }
 
@@ -96,7 +102,8 @@ internal class HeadsetConnection(
     override val maxWriteSize = 20
     private val incoming = Channel<ByteArray>(Channel.UNLIMITED)
     override val notifications = incoming.receiveAsFlow()
-    val writes = mutableListOf<String>()
+    private val sent = MutableStateFlow(emptyList<String>())
+    val writes: List<String> get() = sent.value
     var initializing = true
     var closed = false
 
@@ -104,7 +111,7 @@ internal class HeadsetConnection(
 
     override suspend fun write(bytes: ByteArray) {
         val hex = bytes.hex()
-        writes += hex
+        sent.value += hex
         if (!initializing) return
         initializationReplies(profile, hex).forEach { incoming.send(it.bytes()) }
     }
@@ -117,6 +124,11 @@ internal class HeadsetConnection(
         initializing = false
         incoming.close()
         headset.closed(owner)
+    }
+
+    suspend fun replyToWrite(frame: String, reply: String) {
+        sent.first { it.lastOrNull() == frame }
+        deviceReply(reply)
     }
 
     suspend fun deviceReply(hex: String) = incoming.send(hex.bytes())
@@ -160,6 +172,8 @@ internal class InProcessHostLink(
 ) : ModuleHostLink {
     var reachable = true
     var releaseHangs = false
+    var pauseNextAcquire = false
+    var delayedAcquire: (suspend () -> AcquireResult)? = null
     var releaseKillsHostProcess = false
 
     /** The host process is alive and the link open, but it never answers a status call. */
@@ -226,10 +240,15 @@ internal class InProcessHostLink(
             return if (delivered is ReleaseResult.Released) ReleaseResult.Released(tamperReceipt(delivered.receipt)) else delivered
         }
 
-        override suspend fun acquire(request: SwitchRequest, settings: HostSettings): AcquireResult {
+        override suspend fun acquire(request: SwitchRequest): AcquireResult {
             ensureOpen()
             val sent = HostWire.decodeRequest(parseWire(HostWire.encode(request).render()))
-            val result = host.acquire(identity, lease.id, sent, HostWire.decodeSettings(parseWire(HostWire.encode(settings).render())))
+            if (pauseNextAcquire) {
+                pauseNextAcquire = false
+                delayedAcquire = { host.acquire(identity, lease.id, sent) }
+                awaitCancellation()
+            }
+            val result = host.acquire(identity, lease.id, sent)
             return HostWire.decodeAcquireResult(parseWire(HostWire.encode(result).render()))
         }
 
@@ -284,6 +303,35 @@ private val syntheticAdvertisementPrefixes = mapOf(
     ModelProfile.OPENFUN_TOUCH_RS_COMMON to "0b0a0a10",
     ModelProfile.SPORTFEEL_RS_COMMON to "0b0a0a0f",
     ModelProfile.SWIFT_RS_COMMON to "0b0b0a0b",
+    ModelProfile.CERAMICS_MK2_RS_V2 to "0b0e0a0c",
+    ModelProfile.CERAMICS_MK2_8912F_RS_V2 to "0b0e208b",
+    ModelProfile.CERAMICS_MK2_5736_RS_V2 to "45d7b286",
+    ModelProfile.CERAMICS_U_RS_V2 to "0b0d0a0b",
+    ModelProfile.CERAMICS_U_HSC_2710_RS_V2 to "0b137957",
+    ModelProfile.SPEAKFREE_RS_V2 to "0b0f0a0b",
+    ModelProfile.MAGICIAN_RS_V2 to "0b0e0a0d",
+    ModelProfile.FURINA_RS_V2 to "0b110a0c",
+    ModelProfile.ZIRCON_RS_V2 to "0b110a0b",
+    ModelProfile.HYACINTH_RS_V2 to "0b120a0b",
+    ModelProfile.ASTRO_X_RS_V2 to "0b0e0a0b",
+    ModelProfile.OPAL_RS_V2 to "0b0a0a12",
+    ModelProfile.MIRROR_RS_V2 to "0b0a0a13",
+    ModelProfile.KY01_RS_V2 to "0a0b0a0d",
+    ModelProfile.CORAL_RS_V2 to "0b0e0a0e",
+    ModelProfile.PATAMON_RS_V2 to "0b0ae916",
+    ModelProfile.TAILMON_RS_V2 to "0b0a941f",
+    ModelProfile.GABUMON_RS_V2 to "0b0a2aed",
+    ModelProfile.AGUMON_RS_V2 to "0b0a34fd",
+    ModelProfile.SPEAKFEEL2_RS_V2 to "0b0e3ce6",
+    ModelProfile.OPENFEEL_L_RS_V2 to "45d7cbed",
+    ModelProfile.FIRST_ANGEL_RS_V2 to "0b0e64be",
+    ModelProfile.BUDSFEEL_AE_NEO_RS_V2 to "45d789b0",
+    ModelProfile.EARFEEL_IE_NEO_RS_V2 to "45d7aa12",
+    ModelProfile.EARFEEL_IE2_RS_V2 to "0b154572",
+    ModelProfile.SPORTFEEL_8912F_RS_V2 to "5d2f61f0",
+    ModelProfile.CAMBRIAN_S_RS_COMMON to "0b0c2b46",
+    ModelProfile.OPENLINK_RS_COMMON to "0b0a5b9d",
+    ModelProfile.MOKA_RS_V2 to "68f5b8eb",
 )
 
 /** What [profile]'s earphones send back for one initialization write, as hex frames. */
@@ -334,7 +382,7 @@ private val ztSyntheticReplies = mapOf(
 
 /** Synthetic legacy RS state covering its shared getInfo tags. */
 private val rsCommonSyntheticReplies = listOf(
-    "ff000d01010002000300110012001300aa",
+    "ff00110100010002000300000000000500060000aa",
     "ff00020700aa", "ff00020800aa", "ff00020904aa",
     "ff00040c32465aaa", "ff00040d010203aa", "ff00020e00aa",
     "ff00022a00aa", "ff00022b00aa", "ff00022c01aa",
@@ -399,9 +447,9 @@ internal class OwnerRig(
     private var hostUnlocked = true
 
     init {
-        store.onSaved = { record ->
+        store.onSaved = {
             test.backgroundScope.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
-                host.configure(HostConfiguration(hostUnlocked, HostSettings(integration = IntegrationSettings(controlWay = record.selected))))
+                host.configure { HostConfiguration(hostUnlocked, HostSettings(integration = IntegrationSettings(controlWay = store.record.selected))) }
             }
         }
     }
@@ -409,13 +457,13 @@ internal class OwnerRig(
     suspend fun bootHost(unlocked: Boolean = true) {
         hostUnlocked = unlocked
         host.updatePlatform(platform)
-        host.configure(HostConfiguration(unlocked, HostSettings(integration = IntegrationSettings(controlWay = store.record.selected))))
+        host.configure { HostConfiguration(unlocked, HostSettings(integration = IntegrationSettings(controlWay = store.record.selected))) }
     }
 
     /** The first unlock of a boot, as the host learns it. */
     suspend fun unlockHost() {
         hostUnlocked = true
-        host.configure(HostConfiguration(true, HostSettings(integration = IntegrationSettings(controlWay = store.record.selected))))
+        host.configure { HostConfiguration(true, HostSettings(integration = IntegrationSettings(controlWay = store.record.selected))) }
     }
 
     /** A scope standing for one application process; cancelling it is that process disappearing. */
@@ -447,7 +495,7 @@ internal class OwnerRig(
     fun settle() = test.runCurrent()
 }
 
-private val i5Replies = mapOf(
+internal val i5Replies = mapOf(
     "0101" to "09ff00000101011100000164620000ffe2",
     "0602" to "09ff00000106020e000000010020",
     "0201" to "09ff00000102010b000118",

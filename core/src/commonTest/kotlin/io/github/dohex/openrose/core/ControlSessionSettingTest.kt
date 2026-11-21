@@ -327,8 +327,8 @@ class ControlSessionSettingTest {
         assertEquals(persistentSetOf("normal", "transparency", "wind", "anc", "auto", "dynamic"), session.state.value.device?.capabilities?.noiseControl?.modes)
         val first = async { session.set(DeviceSetting.NOISE_MODE, FieldValue.Text("dynamic")) }
         runCurrent()
-        // Independently worked sender sequence04/05 after four capacity20 initialization reads.
-        assertEquals(listOf("ff0402090715aa", "ff0502fa0909aa"), link.writes.drop(4))
+        // Independently worked sender sequences 03/04 after three initialization reads with 20-byte capacity.
+        assertEquals(listOf("ff0302090714aa", "ff0402fa0908aa"), link.writes.drop(3))
         assertFalse(first.isCompleted)
         assertEquals(FieldValue.Text("auto"), assertIs<FieldReading.Known>(session.state.value.device?.fields?.get(DeviceField.NOISE_MODE)).value)
         // All i7 RX in this suite is synthetic, per recovered DD/LTV receiver rules.
@@ -337,7 +337,7 @@ class ControlSessionSettingTest {
         assertEquals(OperationResult.Success, first.await())
         val second = async { session.set(DeviceSetting.NOISE_MODE, FieldValue.Text("normal")) }
         runCurrent()
-        assertEquals(listOf("ff0602090212aa", "ff0702fa090baa"), link.writes.takeLast(2))
+        assertEquals(listOf("ff0502090211aa", "ff0602fa090aaa"), link.writes.takeLast(2))
         // A vendor automatic-mode exit can report wind; retain the actual result.
         link.incoming.send("dd00020904ecaa".bytes())
         runCurrent()
@@ -355,7 +355,7 @@ class ControlSessionSettingTest {
         )
         val level = async { session.set(DeviceSetting.ANC_LEVEL, FieldValue.Number(3)) }
         runCurrent()
-        assertEquals(listOf("ff04022c0334aa", "ff0502fa2c2caa"), link.writes.drop(4))
+        assertEquals(listOf("ff03022c0333aa", "ff0402fa2c2baa"), link.writes.drop(3))
         link.incoming.send("dd00022c030eaa".bytes())
         runCurrent()
         assertEquals(OperationResult.Success, level.await())
@@ -370,7 +370,7 @@ class ControlSessionSettingTest {
         )
         val cycle = async { session.set(DeviceSetting.NOISE_CYCLE, FieldValue.NoiseCycle(mapOf("normal" to true, "transparency" to true, "wind" to false, "anc" to true))) }
         runCurrent()
-        assertEquals(listOf("ff0605360100010143aa", "ff0702fa3638aa"), link.writes.takeLast(2))
+        assertEquals(listOf("ff0505360100010142aa", "ff0602fa3637aa"), link.writes.takeLast(2))
         link.incoming.send("dd000536010001011baa".bytes())
         runCurrent()
         assertEquals(OperationResult.Success, cycle.await())

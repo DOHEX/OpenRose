@@ -6,7 +6,7 @@ description: 在 Linux 上通过 BlueZ 控制耳机，以及托盘、后台控�
 Linux 版通过系统 BlueZ 和 D-Bus 提供 BLE 控制，不含 SPP、OTA 和系统集成。桌面端没有控制方式可选，应用直接持有控制连接。
 
 :::caution[验证状态]
-Linux x64 的 BLE 控制已实现，EarFree i5 在桌面端的完整真机验收尚未完成。Windows 版目前只有界面和偏好设置，蓝牙控制尚未实现。
+Linux x64 的 BLE 控制已实现，EarFree i5 在桌面端的完整真机验收尚未完成。Windows 桌面版使用 WinRT 读取电量和切换降噪，i5 真机验证待完成。
 :::
 
 ## 安装
@@ -23,6 +23,12 @@ Linux x64 的 BLE 控制已实现，EarFree i5 在桌面端的完整真机验收
 软件包会声明对 `bluez`、GTK 3 和 `libsystemd` 的依赖。AppImage 需要系统已装好 BlueZ 并运行蓝牙服务。
 
 使用前同样先在系统蓝牙设置里配对并连接耳机。
+
+## 流转配对
+
+手机启用模块并选择「模块控制」。在电脑的「设置 → 流转配对」显示配对码，再在手机的同一位置扫码，或选择电脑并输入六位码。两端通过局域网发现彼此，主机防火墙需允许手机访问桌面的 TCP 21871 端口。在任一端的配对列表中可解除配对。
+
+用手机快捷面板或电脑托盘切换降噪时，声音留在原音源。需要移动声音时，在目标设备选择「接到这台电脑」或「接回手机」。
 
 ## 托盘与后台控制
 
@@ -44,3 +50,5 @@ window-rule {
     default-floating-position x=12 y=12 relative-to="top-right"
 }
 ```
+
+使用 AppImage 时，耳机流转需要系统提供 `pactl`。Debian 和 Fedora 的对应软件包是 `pulseaudio-utils`，Arch Linux 的对应软件包是 `libpulse`。

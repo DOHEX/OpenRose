@@ -8,10 +8,7 @@ import io.github.dohex.openrose.androidintegration.HostCommand
 import io.github.dohex.openrose.androidintegration.HostLease
 import io.github.dohex.openrose.androidintegration.HostOpenResult
 import io.github.dohex.openrose.androidintegration.HostRejection
-import io.github.dohex.openrose.androidintegration.HostSettings
 import io.github.dohex.openrose.androidintegration.HostStatus
-import io.github.dohex.openrose.androidintegration.IntegrationSettings
-import io.github.dohex.openrose.androidintegration.IslandMode
 import io.github.dohex.openrose.androidintegration.OwnerGeneration
 import io.github.dohex.openrose.androidintegration.OwnerHolder
 import io.github.dohex.openrose.androidintegration.ReleaseReceipt
@@ -60,7 +57,6 @@ class HostWireTest {
             HostCommand.Set(reference, DeviceSetting.GAME_MODE, FieldValue.Toggle(true)),
             HostCommand.Set(null, DeviceSetting.GAME_MODE, FieldValue.Toggle(false)),
             HostCommand.Set(reference, DeviceSetting.SPATIAL_AUDIO, FieldValue.Toggle(true)),
-            HostCommand.UpdateSettings(HostSettings(integration = IntegrationSettings(islandMode = IslandMode.MODULE))),
             HostCommand.ClaimPrompt(reference, "prompt-1"),
         )
 
@@ -99,12 +95,29 @@ class HostWireTest {
             platform = PlatformState(PermissionState.NOT_REQUIRED),
             device = device,
             settingOperations = persistentListOf(operation),
+            audioDeviceId = reference.deviceId,
         )
 
         val decoded = ControlWire.decodeOwned(ControlWire.encodeOwned(facts, state))
         assertEquals(facts, decoded.platform)
         assertEquals(device, decoded.state.device)
         assertEquals(listOf(operation), decoded.state.settingOperations)
+        assertEquals(reference.deviceId, decoded.state.audioDeviceId)
+    }
+
+    @Test
+    fun spatialOptionsReachTheAppWhenTheModuleOwnsTheConnection() {
+        val profile = ModelProfile.ASTRO_X_RS_V2
+        val device = DeviceState(
+            deviceId = reference.deviceId,
+            sessionId = reference.sessionId,
+            profile = profile,
+            capabilities = profile.capabilities(),
+            fields = persistentMapOf(DeviceField.SPATIAL_MODE to FieldReading.Known(FieldValue.Text("fixed"), "02")),
+        )
+        val facts = HostPlatformFacts(PermissionState.GRANTED, TransportAvailability.Available)
+        val state = ControlState(platform = PlatformState(PermissionState.NOT_REQUIRED), device = device)
+        assertEquals(device, ControlWire.decodeOwned(ControlWire.encodeOwned(facts, state)).state.device)
     }
 
     @Test
@@ -112,14 +125,6 @@ class HostWireTest {
         val command = HostCommand.ClaimPrompt(reference, "prompt-1")
 
         assertEquals(generation to command, HostWire.decodeCall(HostWire.encodeCall(generation, command)))
-    }
-
-    @Test
-    fun anAcquireRequestKeepsTheSwitchAndTheSettingsItCarries() {
-        val request = SwitchRequest("switch-1", ControlWay.ORDINARY, ControlWay.MODULE, generation)
-        val settings = HostSettings(integration = IntegrationSettings(controlWay = ControlWay.MODULE))
-
-        assertEquals(request to settings, HostWire.decodeAcquire(HostWire.encodeAcquire(request, settings)))
     }
 
     @Test

@@ -20,6 +20,8 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.dp
 import io.github.dohex.openrose.core.*
 import io.github.dohex.openrose.ui.model.OpenRoseModel
+import io.github.dohex.openrose.ui.model.WindowDestination
+import io.github.dohex.openrose.ui.model.settingsFor
 import top.yukonga.miuix.kmp.nav.core.NavDisplay
 import top.yukonga.miuix.kmp.nav.core.rememberNavBackStack
 import top.yukonga.miuix.kmp.nav.transition.NavSwipeDirection
@@ -35,6 +37,7 @@ internal enum class AppPage(val title: String, val icon: RoseIcon) {
     DETAILS("设备详情", RoseIcon.INFO),
     DIAGNOSTICS("诊断与记录", RoseIcon.LOG),
     PERSONALIZATION("个性化", RoseIcon.PALETTE),
+    CIRCULATION_PAIRING("流转配对", RoseIcon.LINK),
     ABOUT("关于", RoseIcon.INFO),
 }
 
@@ -51,9 +54,7 @@ fun OpenRoseApp(
 ) {
     val state by model.state.collectAsState()
     val uiSettings by model.uiSettings.collectAsState()
-    val homeNavigationRequest by model.homeNavigationRequest.collectAsState()
     val onDisconnect = model::disconnect
-    val onSet = model::set
     val dark = when (uiSettings.appearance) {
         Appearance.SYSTEM -> isSystemInDarkTheme()
         Appearance.LIGHT -> false
@@ -79,8 +80,8 @@ fun OpenRoseApp(
     val equalizerEditor = remember { EqualizerEditor(uiScope, model::setInSession) }
     val readySessionId = state.readySession?.sessionId
     LaunchedEffect(readySessionId) { equalizerEditor.bind(readySessionId) }
-    LaunchedEffect(homeNavigationRequest) {
-        if (homeNavigationRequest != 0L) {
+    LaunchedEffect(model.navigation) {
+        model.navigation.requests.collect { destination ->
             while (navBackStack.size > 1) {
                 navBackStack.removeLastOrNull()
             }
@@ -88,6 +89,11 @@ fun OpenRoseApp(
             headphoneMenuExpanded = false
             choiceDialog.value = null
             selectedTouchSlot = null
+            when (destination) {
+                WindowDestination.ADD_DEVICE -> navBackStack.add(Route.AddDevice)
+                WindowDestination.DIAGNOSTICS -> navBackStack.add(Route.Diagnostics)
+                WindowDestination.HEADPHONES -> Unit
+            }
         }
     }
     fun navigate(destination: AppPage) {
@@ -178,6 +184,7 @@ fun OpenRoseApp(
                         selectedDeviceId = addDeviceFlow.selectedDeviceId,
                         connectionPhase = addDeviceFlow.phase(state.connection),
                         connectionError = addDeviceFlow.connectionError,
+                        startScanError = addDeviceFlow.scanError,
                         onRequestPermission = platformUi.requestBluetoothPermission,
                         onOpenSystemSettings = platformUi.openBluetoothSettings,
                         onStartScan = addDeviceFlow::startSearch,
@@ -197,10 +204,20 @@ fun OpenRoseApp(
                         model = model,
                         platformUi = platformUi,
                         onPersonalization = { navigate(AppPage.PERSONALIZATION) },
+                        onCirculationPairing = { navigate(AppPage.CIRCULATION_PAIRING) },
                         onAbout = { navigate(AppPage.ABOUT) },
                     )
 
                     AppPage.PERSONALIZATION -> PersonalizationPage(model, platformUi, wide = wide)
+
+                    AppPage.CIRCULATION_PAIRING -> {
+                        val content = platformUi.circulationPairingContent
+                        if (content != null) {
+                            content()
+                        } else {
+                            LaunchedEffect(Unit) { if (latestRoute == Route.CirculationPairing) back() }
+                        }
+                    }
 
                     AppPage.ABOUT -> AboutPage()
 
@@ -212,6 +229,7 @@ fun OpenRoseApp(
                     }
 
                     else -> if (device != null) {
+                        val onSet = model.settingsFor(device.sessionId)
                         val controlPage = targetPage in listOf(AppPage.TOUCH, AppPage.EQUALIZER, AppPage.AUDIO)
                         if (controlPage) {
                             SettingPageBanner(state, device)
@@ -374,6 +392,9 @@ fun OpenRoseApp(
                     }
                     entry<Route.Personalization>(swipeDismiss = NavSwipeDirection.LeftToRight) {
                         renderShell(AppPage.PERSONALIZATION)
+                    }
+                    entry<Route.CirculationPairing>(swipeDismiss = NavSwipeDirection.LeftToRight) {
+                        renderShell(AppPage.CIRCULATION_PAIRING)
                     }
                     entry<Route.About>(swipeDismiss = NavSwipeDirection.LeftToRight) {
                         renderShell(AppPage.ABOUT)

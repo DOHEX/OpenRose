@@ -27,6 +27,9 @@ internal sealed interface Route : NavKey {
     data object Personalization : Route
 
     @Serializable
+    data object CirculationPairing : Route
+
+    @Serializable
     data object About : Route
 
     @Serializable
@@ -43,6 +46,7 @@ internal fun AppPage.toRoute(): Route = when (this) {
     AppPage.DETAILS -> Route.Details
     AppPage.DIAGNOSTICS -> Route.Diagnostics
     AppPage.PERSONALIZATION -> Route.Personalization
+    AppPage.CIRCULATION_PAIRING -> Route.CirculationPairing
     AppPage.ABOUT -> Route.About
     AppPage.ADD_DEVICE -> Route.AddDevice
 }
@@ -55,6 +59,7 @@ internal fun Route.toAppPage(): AppPage = when (this) {
     Route.Details -> AppPage.DETAILS
     Route.Diagnostics -> AppPage.DIAGNOSTICS
     Route.Personalization -> AppPage.PERSONALIZATION
+    Route.CirculationPairing -> AppPage.CIRCULATION_PAIRING
     Route.About -> AppPage.ABOUT
     Route.AddDevice -> AppPage.ADD_DEVICE
 }

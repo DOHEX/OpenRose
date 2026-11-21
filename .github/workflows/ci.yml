@@ -59,6 +59,7 @@ jobs:
       - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 0
 
       # The version itself comes from version.txt (build-logic AppVersion); a release only drops the -dev suffix.
       - name: Mark release build
@@ -107,7 +108,13 @@ jobs:
       # Tests run once, on Linux; each host packages only the formats it supports.
       - name: Run checks and build Android package
         if: runner.os == 'Linux'
-        run: ./gradlew --no-daemon --stacktrace check offlineCheck :androidApp:assembleDebug
+        env:
+          BASELINE_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          if [[ -n "$BASELINE_BASE" && ! "$BASELINE_BASE" =~ ^0+$ ]]; then
+            export ORG_GRADLE_PROJECT_detektBaselineBase="$BASELINE_BASE"
+          fi
+          ./gradlew --no-daemon --stacktrace check offlineCheck :androidApp:assembleDebug
 
       - name: Build Linux packages
         if: runner.os == 'Linux'
@@ -147,10 +154,12 @@ jobs:
           tools="$ANDROID_HOME/build-tools/$BUILD_TOOLS"
           entry=$(unzip -p "$apk" META-INF/xposed/java_init.list)
           unzip -q -o "$apk" 'classes*.dex' -d "$RUNNER_TEMP/dex"
-          "$tools/dexdump" -l plain "$RUNNER_TEMP"/dex/classes*.dex | grep -qF "'L${entry//.//};'" ||
+          "$tools/dexdump" -l plain "$RUNNER_TEMP"/dex/classes*.dex > "$RUNNER_TEMP/classes.txt"
+          awk -v entry="'L${entry//.//};'" '$1 == "Class" && $2 == "descriptor" && $4 == entry { found = 1 } END { exit !found }' "$RUNNER_TEMP/classes.txt" ||
             { echo "::error::Xposed entry $entry is missing from the release APK"; exit 1; }
+          "$tools/aapt2" dump resources "$apk" > "$RUNNER_TEMP/resources.txt"
           for video in openrose_earbud_left openrose_earbud_right; do
-            "$tools/aapt2" dump resources "$apk" | grep -q "raw/$video\$" ||
+            grep -q "raw/$video\$" "$RUNNER_TEMP/resources.txt" ||
               { echo "::error::raw/$video was shrunk out of the release APK"; exit 1; }
           done
 

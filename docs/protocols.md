@@ -1,6 +1,6 @@
 # 耳机控制协议实现说明
 
-OpenRose 按协议族复用编解码，由各型号 `ModelSpec` 声明差异。目前实现 ZT、RS Common V2、F8、RS Common 四族，共 23 个型号配置：原有六个配置之外，新增 i3、HeadFeel、六个 F8 配置与九个 RS Common 配置。OpenFeel 的三个编码分支及 OpenFun 的两个触控分支独立建模。
+OpenRose 按协议族复用编解码，由各型号 `ModelSpec` 声明差异。OpenRose 已接入 RoseLink 3.8.6 的全部 48 个蓝牙耳机配置，并保留 3.8.0 的 Magician。OpenFeel 的三个编码分支及 OpenFun 的两个触控分支分别适配，共 52 个 OpenRose 型号配置。
 
 协议本身的逆向研究（包括其他型号和 OTA）见 [docs/protocols/](protocols/README.md)。本文只讲 OpenRose 实际怎么做，以及和官方 App 不同的地方。
 
@@ -26,7 +26,7 @@ OpenRose 按协议族复用编解码，由各型号 `ModelSpec` 声明差异。�
 | 型号入口、协议族、广播识别、名称匹配 | `core/.../protocol/ModelProfile.kt` |
 | 字段模型与编解码接口 | `core/.../protocol/ProtocolCodec.kt` |
 | ZT 编解码（i5 / i3 / HeadFeel） | `core/.../protocol/ZtCodec.kt` |
-| RS Common V2 编解码（i7 与四个新增型号） | `core/.../protocol/RsCommonV2Codec.kt` |
+| RS Common V2 编解码（3.8.6 共 31 个配置，另保留 Magician） | `core/.../protocol/RsCommonV2Codec.kt` |
 | F8 编解码（AGATE / AGATE X / CERAMICS / CERAMICS-X / 7034 / EXPLORER） | `core/.../protocol/F8Codec.kt` |
 | RS Common 编解码（BudsFree i / Cambrian / OpenFeel / OpenFun / SportFeel / SWIFT） | `core/.../protocol/RsCommonCodec.kt` |
 | 能力类型（降噪、EQ、触控、音频等） | `core/.../NoiseControl.kt`、`EqualizerCapabilities.kt`、`DeviceControlCapabilities.kt` |
@@ -59,7 +59,7 @@ OpenRose 按协议族复用编解码，由各型号 `ModelSpec` 声明差异。�
 
 BudsFeel MK2、OpenFeel MK2、Swift 2、Jasmine 的实现依据各自的[型号协议文档](protocols/README.md#型号协议文档)和结构化能力清单；逐列、逐节的依据及 A–D 分类见[适配证据账本](protocols/model-adaptation-ledger.md)。这四款的广播与通知夹具均为合成数据，实机连接、状态读取、设置效果和持久化均未验证。
 
-四款共用 RS Common V2 字段表、发送序号、接收缓冲和 `getInfo` 批量查询。查询中的功能 ID 不决定可写能力；所有控制仍受各自 `ModelSpec.capabilities.writableSettings` 限制。文档没有给出这四款广播中经典地址的偏移，故不复用 i7 的地址解析；SPP 需平台提供已配对设备的经典地址，否则回退 BLE。控制 UUID 与 OTA UUID 分开，新增型号也不开放 OTA。
+四款共用 RS Common V2 字段表、发送序号、接收缓冲和 `getInfo` 批量查询。查询中的功能 ID 不决定可写能力；所有控制仍受各自 `ModelSpec.capabilities.writableSettings` 限制。四款与 i7 共用 [V2 广播地址布局](protocols/families/rs-common-v2.md#广播识别)。规范化广播的 BR/EDR 标志为 01 且地址完整有效时，可将广播中的经典地址用于 SPP。平台已配对设备也可提供经典地址。缺少可用地址时使用 BLE。控制 UUID 与 OTA UUID 分开，新增型号也不开放 OTA。
 
 Swift 2 的电量由 `charge` 槽承载，在应用中显示一行“电量”，不向超级岛、焦点通知或融合设备中心发布电量。Jasmine 只显示左右耳电量；共享解析器即使解析出仓槽值，也不在应用或系统界面显示充电盒电量。
 
@@ -67,12 +67,18 @@ Swift 2 的电量由 `charge` 槽承载，在应用中显示一行“电量”�
 
 | 新控制 | 型号 | 发送 BODY | 回读确认 |
 | --- | --- | --- | --- |
-| 低音增强 | BudsFeel MK2、OpenFeel MK2 | `2A 05 value`，0–4 | 查询 `FA 2A`；只有新鲜的 `2A 05 value` 档位字段才能确认 |
+| 低音增强 | BudsFeel MK2、OpenFeel MK2 | `2A 05 value`，BudsFeel MK2 为 0–4，OpenFeel MK2 为 0–2 | 查询 `FA 2A`；只有新鲜的 `2A 05 value` 档位字段才能确认 |
 | 提示音语言 | Jasmine | `31 00` 中文、`31 01` 英文 | 查询 `FA 31`，按新鲜 `31` 状态确认 |
 | 自定义 EQ | OpenFeel MK2 | `2A 04` 加 `3E` + 十个值，−6..+6 | 查询 `FA 2A` 与 `FA 3E`，模式与曲线都新鲜且一致才确认 |
 | 提示音音量 | BudsFeel MK2、Swift 2、Jasmine（1–5）、OpenFeel MK2（0–5） | `2E value` | 查询 `FA 2E`，按新鲜 `2E` 确认 |
 
 寻机 `2F` 只有局部事件，不能证明查询可返回完整双耳状态，故没有开放写入。Swift 2 按键映射缺少物理键对应关系，同样未启用。完整未实现列表及依据见证据账本。
+
+### 3.8.6 蓝牙耳机覆盖
+
+3.8.6 的 48 个蓝牙耳机配置分布为 ZT 3、F8 6、RS Common 8、RS Common V2 31。Magician 的版本差异及新增六个分支见[版本对照](protocols/3.8.6-model-delta.md)。当前功能、各固件门槛与逐项未实现原因见[适配账本](protocols/model-adaptation-ledger.md)。
+
+3.8.6 的 31 个 V2 耳机配置按各自面板的字段顺序发送 `FA` 查询，首个字段均为固件版本 `0D`。旧版 Magician 保留 3.8.0 Sender 的固定查询。OpenRose 使用自己的连接恢复策略，分帧等待该型号可读字段，缺项计入读数超时。官方应用另有定时补查，具体条件见[3.8.6 的握手研究](protocols/3.8.6-model-delta.md#rs-common-v2-的实际握手查询)。有自定义曲线时再读 `FA 3E`；固件门槛在首次读取版本后满足时补读。Astro X 追加本地日期与时间 `35 CC YY MM DD hh mm ss`。FIRST ANGEL 依据设备确认的游戏模式选择 EQ 预设，模式尚未读到时只显示两个模式共有的选项。
 
 ### 新接入的 ZT、F8 与 RS Common 型号
 
@@ -231,15 +237,15 @@ FF [seq] [bodyLength] [body...] [sum8] AA
 
 ### 初始化与 MTU
 
-官方初始化只发一条 `getInfo`，完整 35 字节：
+RoseLink 3.8.6 的 i7 配置查询 17 个字段。序号 00 的完整帧为
 
 ```text
-ff001efa010708090c0d0e122a2b2c2d2e2f313233363738393a3b3c3d3f454649e9aa
+ff0012fa0d0c092c2d2a45460e322b01072f082e3649aa
 ```
 
 OpenRose 另外发一条 `FA 3E` 查询读取自定义 EQ 曲线，这是客户端自己的选择。
 
-默认 ATT MTU 为 23 时，每次写入只能放 20 字节，装不下 35 字节的 `getInfo`。这时 OpenRose 把查询拆成多条**各自完整**的 `FA` 查询，每条最多放 `容量 - 6` 个 ID，每条使用新序号并重新计算校验，而不是把一条帧切成几段写。容量为 20 时会产生三条信息查询加一条曲线查询，第三条只含共享 ID `49`（本型号没有对应字段）。
+默认 ATT MTU 23 的写入容量是 20 字节。OpenRose 将较长的查询拆成多条完整的 `FA` 帧，每条容纳至多 `容量 − 6` 个字段 ID，分别分配序号和校验。i7 在此容量下发送两条信息查询，再补一条曲线查询。3.8.0 发送器的固定查询曾包含 29 个 ID，仍用于仅在旧清单登记的 Magician。
 
 这种拆分方式是根据官方 App 中已出现的多 ID / 单 ID 查询归纳出来的，设备是否接受还没有实测。
 
@@ -390,7 +396,7 @@ DD [HH] [L T V...]... [CS] AA
 
 这里的"音频模式"是耳机端的配置项，系统最终协商到哪种编码还取决于手机。
 
-### 增益与听力保护（仅 i7）
+### i7 的增益与听力保护
 
 | 设置 | body | 范围 | 门槛 |
 | --- | --- | --- | --- |
@@ -412,7 +418,7 @@ DD [HH] [L T V...]... [CS] AA
 | `TouchControlCapabilities` | 槽位集合与动作集合 |
 | `AudioControlCapabilities` | 音频选项；`multipointCoupled`（i5 为 true，i7 为 false） |
 
-`DeviceCapabilities.readableFields` 来自协议族的 `ProtocolFamily.readableFields`，只表示解析器认识哪些字段，**不能**用来判断能否写入；能否写入只看型号配置声明的 `writableSettings`。初始化查询里包含某个共享 ID，也不说明该型号支持对应功能。
+`ProtocolFamily.readableFields` 列出协议族认识的字段。型号配置按硬件布局和协议依据声明 `DeviceCapabilities.readableFields`，诊断页只列这些读数。可写操作由型号的 `writableSettings` 单独决定。
 
 ### 档位的显示条件
 
@@ -462,7 +468,7 @@ i7 支持 BLE 和传统蓝牙 SPP 两种控制通道。每次连接前选一次�
 
 用前文的规则规范化 manufacturer data 得到十六进制串 `H`。只有满足以下条件才提取地址：
 
-- 已识别为 i7；
+- 已识别为使用 RS Common V2 广播布局的型号配置；
 - `H` 长度至少 34；
 - `H[14:16] == "01"`。
 
@@ -489,7 +495,7 @@ Android 上通过公开 API 查询 A2DP、HEADSET，以及 API 33+ 的 LE Audio 
 
 - 控制 UUID 为 `0cf12d31-fac3-4553-bd80-d6832e7b3931`。不是标准串口 `1101`，也不是 OTA 用的 `66666666-6666-6666-6666-666666666666`。
 - SPP 上收发与 BLE 相同的 RS Common V2 帧。接收端按字节流处理分包、合包；发送端同样走共享队列，每次写完间隔 100 ms 并等待回读。
-- SPP 可以一次写完 35 字节的初始化帧；BLE 容量不足时按前文方式拆分查询。
+- SPP 可以一次写完 i7 的 23 字节初始化帧；BLE 容量不足时按前文方式拆分查询。
 - 一次会话只建立一种控制连接。SPP 失败后不会在后台自动改用 BLE、重放设置或同时尝试两种连接。
 - Android 使用公开的 RFCOMM 接口：连接前取消设备发现，在后台线程执行阻塞的连接和读写，取消时关闭 socket 以解除阻塞。参考：[`getProfileProxy`](https://developer.android.com/reference/android/bluetooth/BluetoothAdapter#getProfileProxy(android.content.Context,%20android.bluetooth.BluetoothProfile.ServiceListener,%20int))、[`BluetoothLeAudio.getConnectedDevices`](https://developer.android.com/reference/android/bluetooth/BluetoothLeAudio#getConnectedDevices())、[`BluetoothSocket`](https://developer.android.com/reference/android/bluetooth/BluetoothSocket)。
 

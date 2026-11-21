@@ -57,7 +57,7 @@ internal fun NoiseControlCard(
     val capabilities = device.capabilities.noiseControl ?: return
     val writable = device.capabilities.writableSettings
     val pending = state.hasPendingSetting(device)
-    val enabled = state.isReady(device) && !pending
+    val modesEnabled = state.canControlNoiseMode(device) && !pending && DeviceSetting.NOISE_MODE in writable
     val confirmedMode = (device.knownValue(DeviceField.NOISE_MODE) as? FieldValue.Text)?.value
 
     val modes = remember(capabilities.modes) {
@@ -74,10 +74,10 @@ internal fun NoiseControlCard(
             }
             headerStatus?.let { AppText(it, role = AppTextRole.Summary) }
         }
-        NoiseModeChoices(modes, confirmedMode, enabled && DeviceSetting.NOISE_MODE in writable) { mode ->
+        NoiseModeChoices(modes, confirmedMode, modesEnabled) { mode ->
             if (mode != confirmedMode) onSet(DeviceSetting.NOISE_MODE, FieldValue.Text(mode))
         }
-        if (showLevelControls) NoiseLevelControls(device, confirmedMode, enabled, onSet)
+        if (showLevelControls) NoiseLevelControls(device, confirmedMode, state.isReady(device) && !pending, onSet)
     }
 }
 
@@ -156,6 +156,11 @@ internal fun NoiseCycleRow(
             }
         },
     )
+}
+
+@Composable
+internal fun RemoteNoiseModeChoices(modes: List<String>, selected: String?, enabled: Boolean, select: (String) -> Unit) {
+    NoiseModeChoices(modes.map { AppOption(it, noiseModeLabel(it)) }, selected, enabled, select)
 }
 
 @Composable
@@ -298,7 +303,7 @@ private fun NoiseModeChoices(
 }
 
 /** The status notification keeps a copy as `SystemPresentationRenderer.modeLabel` in androidApp; change both together. */
-internal fun noiseModeLabel(mode: String): String = when (mode) {
+fun noiseModeLabel(mode: String): String = when (mode) {
     "normal" -> "标准"
     "anc" -> "降噪"
     else -> semanticLabel(mode)
@@ -322,18 +327,6 @@ internal fun noiseModeOrder(mode: String): Int = when (mode) {
     "auto" -> 4
     "dynamic" -> 5
     else -> 6
-}
-
-internal fun confirmedSettingStatus(field: DeviceField, device: DeviceState): String = when (val reading = device.fields[field]) {
-    is FieldReading.Known -> "设备已确认：${displayFieldValue(field, reading.value, device.profile)}"
-    is FieldReading.Unknown -> "当前状态：未知"
-    is FieldReading.NotProvided -> "当前状态：设备未提供"
-    FieldReading.Loading, null -> "当前状态：尚未读取"
-}
-
-@Composable
-internal fun ConfirmedSettingLabel(label: String, field: DeviceField, device: DeviceState) {
-    AppInfoRow(label, confirmedSettingStatus(field, device))
 }
 
 /** Detailed request and session history is shown only on the diagnostics page. */
@@ -389,6 +382,11 @@ internal fun ControlState.isReady(device: DeviceState): Boolean {
         platform.permission in setOf(PermissionState.GRANTED, PermissionState.NOT_REQUIRED)
 }
 
+internal fun ControlState.canControlNoiseMode(device: DeviceState): Boolean {
+    val session = noiseModeSession ?: return false
+    return session.deviceId == device.deviceId && session.sessionId == device.sessionId && platform.connectionBlockReason == null
+}
+
 internal fun ControlState.hasPendingSetting(device: DeviceState): Boolean = settingOperations.any {
     it.sessionId == device.sessionId && it.stage in pendingSettingStages
 }
@@ -400,11 +398,18 @@ internal fun DeviceSetting.displayName(): String = when (this) {
     DeviceSetting.NOISE_CYCLE -> "降噪轮换"
     DeviceSetting.EQ -> "预设 EQ"
     DeviceSetting.GAME_MODE -> "游戏模式"
+    DeviceSetting.TAP_ENABLED -> "轻拍开关"
+    DeviceSetting.TAP_BINDING -> "轻拍绑定"
     DeviceSetting.TOUCH_BINDING -> "触控绑定"
     DeviceSetting.TOUCH_ENABLED -> "触控总开关"
     DeviceSetting.EAR_DETECTION -> "佩戴检测功能"
     DeviceSetting.AUDIO_MODE -> "音频模式"
     DeviceSetting.MULTIPOINT -> "多点连接"
+    DeviceSetting.SPATIAL_MODE -> "空间模式"
+    DeviceSetting.SPATIAL_CONTENT -> "空间音频内容"
+    DeviceSetting.EAR_ADAPTIVE -> "耳道自适应"
+    DeviceSetting.INDEPENDENT_MIC_ACTIVATION -> "独立麦克风激活"
+    DeviceSetting.INDEPENDENT_MIC_MODE -> "独立麦克风模式"
     DeviceSetting.SPATIAL_AUDIO -> "空间音频"
     DeviceSetting.PROMPT_VOLUME -> "提示音音量"
     DeviceSetting.GAIN -> "增益档位"
@@ -421,11 +426,18 @@ private fun SettingOperation.requestedValueText(device: DeviceState?): String = 
     DeviceSetting.NOISE_CYCLE -> displayFieldValue(DeviceField.NOISE_CYCLE, requestedValue)
     DeviceSetting.EQ -> displayFieldValue(DeviceField.EQ, requestedValue, device?.profile)
     DeviceSetting.GAME_MODE -> displayFieldValue(DeviceField.GAME_MODE, requestedValue)
+    DeviceSetting.TAP_ENABLED -> displayFieldValue(DeviceField.TAP_ENABLED, requestedValue)
+    DeviceSetting.TAP_BINDING -> displayFieldValue(DeviceField.TAP_KEYS, requestedValue, touch = device?.capabilities?.tapControl)
     DeviceSetting.TOUCH_BINDING -> displayFieldValue(DeviceField.TOUCH_KEYS, requestedValue, touch = device?.capabilities?.touchControl)
     DeviceSetting.TOUCH_ENABLED -> displayFieldValue(DeviceField.TOUCH_ENABLED, requestedValue)
     DeviceSetting.EAR_DETECTION -> displayFieldValue(DeviceField.EAR_DETECTION, requestedValue)
     DeviceSetting.AUDIO_MODE -> displayFieldValue(DeviceField.AUDIO_MODE, requestedValue)
     DeviceSetting.MULTIPOINT -> displayFieldValue(DeviceField.MULTIPOINT, requestedValue)
+    DeviceSetting.SPATIAL_MODE -> displayFieldValue(DeviceField.SPATIAL_MODE, requestedValue)
+    DeviceSetting.SPATIAL_CONTENT -> displayFieldValue(DeviceField.SPATIAL_CONTENT, requestedValue)
+    DeviceSetting.EAR_ADAPTIVE -> displayFieldValue(DeviceField.EAR_ADAPTIVE, requestedValue)
+    DeviceSetting.INDEPENDENT_MIC_ACTIVATION -> displayFieldValue(DeviceField.INDEPENDENT_MIC_ACTIVATION, requestedValue)
+    DeviceSetting.INDEPENDENT_MIC_MODE -> displayFieldValue(DeviceField.INDEPENDENT_MIC_MODE, requestedValue)
     DeviceSetting.SPATIAL_AUDIO -> displayFieldValue(DeviceField.SPATIAL_AUDIO, requestedValue)
     DeviceSetting.PROMPT_VOLUME -> displayFieldValue(DeviceField.PROMPT_VOLUME, requestedValue)
     DeviceSetting.CUSTOM_EQ -> displayFieldValue(DeviceField.CUSTOM_EQ, requestedValue)

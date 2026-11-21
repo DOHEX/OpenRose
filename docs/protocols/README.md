@@ -2,25 +2,28 @@
 
 这个目录收录了对官方 App **RoseLink** 的逆向研究：它支持哪些耳机、各型号用什么协议、能控制什么，以及固件 OTA 怎么下发。
 
-这些是官方 App 的行为记录，不是厂商规范，大部分也没有经过真机验证。OpenRose 实际实现的 23 个型号配置见[协议实现说明](../protocols.md)；支持范围与未实现项见[型号适配证据账本](model-adaptation-ledger.md)。
+这些是官方 App 的行为记录，不是厂商规范，大部分也没有经过真机验证。OpenRose 实际实现的 52 个型号配置见[协议实现说明](../protocols.md)；支持范围与未实现项见[型号适配证据账本](model-adaptation-ledger.md)。
 
 ## 研究基础
 
-- 分析对象：RoseLink 3.8.0（versionCode 5310）Android 版，包名 `cn.ikaile.ruoshui.client`
+- 历史基线：RoseLink 3.8.0（versionCode 5310）Android 版，包名 `cn.ikaile.ruoshui.client`
 - APK SHA-256：`83cdd7e3e7f6e7d61a26dc6a8fab65f183d5a18a66a70f64a17f69d93e58e40b`
+- 当前基线为 RoseLink 3.8.6（versionCode 5495），APK SHA-256 为 `42563496da6cdea9a6c9f16a886daaa1550b099d60156dd3ae9f6c555d89cf14`。见[新版配置与版本差异](3.8.6-model-delta.md)和[机器清单](supported-devices-3.8.6.json)。
 - 方法：App 由 Flutter 编写，用 [Blutter](https://github.com/worawit/blutter) 对 ARM64 AOT 代码静态反汇编后分析
 - 真机验证：只有一副 i5 在 Linux 上完成了 13 项初始化读取
+
+本次同步对应 rose_reverse 提交 `99f8a725a64460de02770ac48326922fb2bd5e78`。
 
 文中形如 `rose_reverse/...` 的路径指作者本地的研究工作区（APK、反汇编产物、提取脚本和实机记录），没有随本仓库发布。引用中的 `:行号` 和 `0x` 开头的地址可用来在反汇编产物中定位证据。
 
 ## 协议族
 
-RoseLink 支持的 43 个耳机配置使用四种控制协议：
+RoseLink 3.8.6 的 48 个蓝牙耳机配置使用四种控制协议：
 
 | 协议族 | 控制通道 | 帧格式 | 代表型号 |
 | --- | --- | --- | --- |
 | ZT | BLE（HeadFeel 可用 SPP） | `08 EE 00 00 00 group op lengthLE16 payload sum8`，普通报文最长 14 字节 | EarFree i5、EarFree i3、HeadFeel |
-| RS Common V2 | BLE / SPP | 发送 `FF seq len body sum8 AA`；接收 `DD HH [L T V...] CS AA` | EarFeel i7、BudsFeel MK2、OpenFeel MK2、Swift 2、Jasmine、Ceramics MK2 等 28 款 |
+| RS Common V2 | BLE / SPP | 发送 `FF seq len body sum8 AA`；接收 `DD HH [L T V...] CS AA` | EarFeel i7、BudsFeel MK2、OpenFeel MK2、Swift 2、Jasmine、CERAMICS-MK2 等 31 个配置 |
 | F8 | BLE（部分支持 SPP） | `HEAD CMD 01 00 LEN DATA...` | Ceramics、Ceramics X、Agate、Explorer |
 | RS Common | BLE（部分支持 SPP） | 早期 RS 通用帧 | BudsFree i、Cambrian、OpenFeel、OpenFun、SportFeel、Swift |
 
@@ -48,13 +51,37 @@ RoseLink 支持的 43 个耳机配置使用四种控制协议：
 | OpenFun | RS Common | 两硬件分支的触控、游戏、多点 | 分支分别接入；寻机未实现；未实机验证 | [Markdown](models/openfun-protocol.md) |
 | SportFeel / SportFree | RS Common | 触控、游戏、多点、空间音频 | 客户端接入有证据的控制；寻机未实现；未实机验证 | [Markdown](models/sportfree-protocol.md) |
 | SWIFT | RS Common | 单体电量、游戏模式 | 客户端接入有证据的控制；寻机未实现；未实机验证 | [Markdown](models/swift-protocol.md) |
+| CERAMICS-MK2（标准、8912F、5736） | RS Common V2 | 三分支独立识别；5736 仅读左右耳电量。曲线、语言和提示音按分支及固件开放。 | 静态分析，未实机验证 | [Markdown](models/ceramics-mk2-protocol.md) |
+| CERAMICS-U（标准、HSC-2710） | RS Common V2 | 深度降噪、三档 ANC、两档通透；自动降噪与提示音语言按分支开放。 | 静态分析，未实机验证 | [Markdown](models/ceramics-u-protocol.md) |
+| FURINA | RS Common V2 | 深度降噪、轮换、EQ、佩戴检测、音频模式。 | 静态分析，未实机验证 | [Markdown](models/furina-protocol.md) |
+| Zircon | RS Common V2 | 深度降噪、轮换、EQ、佩戴检测、音频模式。 | 静态分析，未实机验证 | [Markdown](models/zircon-protocol.md) |
+| Coral | RS Common V2 | 两种降噪模式、三档低音增强。 | 静态分析，未实机验证 | [Markdown](models/coral-protocol.md) |
+| SpeakFeel（speakfree） | RS Common V2 | 单体电量、EQ、提示音语言、aptX / HD / Adaptive。 | 静态分析，未实机验证 | [Markdown](models/speakfree-protocol.md) |
+| SPEAKFEEL（speakfeel2） | RS Common V2 | 单体电量、两档低音增强、独立麦克风。与 speakfree 用广播区分。 | 静态分析，未实机验证 | [Markdown](models/speakfeel2-protocol.md) |
+| Magician | RS Common V2 | 保留 3.8.0 配置；单体电量、提示音语言、aptX / HD。 | 静态分析，未实机验证 | [Markdown](models/magician-protocol.md) |
+| Astro X | RS Common V2 | 连接时校时。按型号开放轻拍、空间模式、内容模式与耳道自适应；增益与听力保护需固件 ≥152。 | 静态分析，未实机验证 | [Markdown](models/astro-x-protocol.md) |
+| OpenFeel L | RS Common V2 | 预设、自定义曲线、增益和听力保护。 | 静态分析，未实机验证 | [Markdown](models/openfeel-l-protocol.md) |
+| FIRST ANGEL | RS Common V2 | 音乐和游戏有不同的 EQ 选项；提示音静音需固件 ≥510。 | 静态分析，未实机验证 | [Markdown](models/first-angel-protocol.md) |
+| MOKA | RS Common V2 | 单体电量、预设、自定义曲线、音频模式。 | 静态分析，未实机验证 | [Markdown](models/moka-protocol.md) |
+| Hyacinth | RS Common V2 | 预设 EQ、触控、提示音语言和音频模式。 | 静态分析，未实机验证 | [Markdown](models/hyacinth-protocol.md) |
+| Opal | RS Common V2 | 三种降噪模式、预设 EQ、触控。 | 静态分析，未实机验证 | [Markdown](models/opal-protocol.md) |
+| Mirror | RS Common V2 | 预设 EQ、触控、提示音语言。 | 静态分析，未实机验证 | [Markdown](models/mirror-protocol.md) |
+| KY01 | RS Common V2 | 预设 EQ、触控、提示音语言。触控动作允许降噪轮换。 | 静态分析，未实机验证 | [Markdown](models/ky01-protocol.md) |
+| Luminous Patamon、Tailmon、Gabumon、Agumon | RS Common V2 | 四个独立前缀；仅左右耳电量、触控、游戏、多点、提示音。 | 静态分析，未实机验证 | [Markdown](models/luminous-protocol.md) |
+| BudsFeel AE Neo | RS Common V2 | 仅左右耳电量、自定义 EQ、增益、听力保护。 | 静态分析，未实机验证 | [Markdown](models/budsfeel-ae-neo-protocol.md) |
+| EarFeel iE Neo | RS Common V2 | 仅左右耳电量、三种降噪模式和轮换、自定义 EQ、增益、听力保护。 | 静态分析，未实机验证 | [Markdown](models/earfeel-ie-neo-protocol.md) |
+| EarFeel iE2 | RS Common V2 | 含仓电量、四种降噪模式和轮换、自定义 EQ、AAC/SBC 与 LDAC。 | 静态分析，未实机验证 | [Markdown](models/earfeel-ie2-protocol.md) |
+| SportFeel 8912F | RS Common V2 | 含仓电量、HIFI 预设、触控、音频模式；与早期 SportFeel 的协议和电量布局不同。 | 静态分析，未实机验证 | [Markdown](models/sportfeel-8912f-protocol.md) |
+| Cambrian S | RS Common | 单体电量、降噪、EQ、通透档位与音频模式。 | 静态分析，未实机验证 | [Markdown](models/cambrian-s-protocol.md) |
+| OpenLink | RS Common | 左右耳电量、触控、游戏、多点与提示音。 | 静态分析，未实机验证 | [Markdown](models/openlink-protocol.md) |
 
 ## 其他资料
 
 | 文档 | 内容 |
 | --- | --- |
 | [文档格式](FORMAT.md) | 本目录文档的结构、验证状态、出处写法和从 rose_reverse 复制的规则 |
-| [型号与能力清单](00-supported-models-and-capabilities.md) | 全部 43 个耳机配置（App 内分类为 34 个 `tws`、9 个 `head`）的识别前缀、协议族、电量、降噪、EQ、触控、音频选项、OTA 方式和固件门槛 |
+| [3.8.6 型号清单](supported-devices-3.8.6.json) | 48 个蓝牙耳机配置及其 GDT 分派、控件和选项，对应 [版本差异](3.8.6-model-delta.md) |
+| [3.8.0 型号与能力清单](00-supported-models-and-capabilities.md) | 3.8.0 的 43 个耳机配置（App 内分类为 34 个 `tws`、9 个 `head`）的识别前缀、协议族、电量、降噪、EQ、触控、音频选项、OTA 方式和固件门槛 |
 | [supported-devices.json](supported-devices.json) | 上述清单的机器可读版本 |
 | [OTA 研究](ota-package-links.md) | 官方 OTA 接口（`api-internal.rosetechnic.com`）的请求格式、鉴权方式，以及已获取的 i5 / i7 固件包地址 |
 | [ota-package-links.json](ota-package-links.json) | OTA 版本元数据的机器可读版本 |

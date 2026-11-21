@@ -61,6 +61,10 @@ private fun fieldValue(field: DeviceField, capabilities: DeviceCapabilities): Fi
 
     DeviceField.CUSTOM_EQ -> capabilities.equalizer?.custom?.let { FieldValue.IntegerList(List(it.bandsHz.size) { 0 }) }
 
+    DeviceField.TAP_KEYS -> capabilities.tapControl?.let(::touchKeys)
+
+    DeviceField.TAP_ENABLED -> FieldValue.Toggle(true)
+
     DeviceField.TOUCH_KEYS -> capabilities.touchControl?.let(::touchKeys)
 
     DeviceField.MULTIPOINT, DeviceField.TOUCH_ENABLED, DeviceField.EAR_DETECTION -> FieldValue.Toggle(true)

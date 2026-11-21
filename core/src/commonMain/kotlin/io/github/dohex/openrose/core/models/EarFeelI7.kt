@@ -10,6 +10,7 @@ import io.github.dohex.openrose.core.NoiseLevelCapabilities
 import io.github.dohex.openrose.core.TouchControlCapabilities
 import io.github.dohex.openrose.core.firmwareComparisonInteger
 import io.github.dohex.openrose.core.protocol.BatteryLayout
+import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.dohex.openrose.core.protocol.GattProfile
 import io.github.dohex.openrose.core.protocol.ProtocolFamily
@@ -19,6 +20,7 @@ import kotlinx.collections.immutable.toPersistentSet
 
 /** EarFeel i7, RoseLink `rs_common_v2/earfeel_i7_device_config`. */
 internal val earFeelI7 = ModelSpec(
+    rsV2InfoIds = "0d0c092c2d2a45460e322b01072f082e36",
     displayName = "EarFeel i7",
     shortLabel = "i7",
     family = ProtocolFamily.RS_COMMON_V2,
@@ -32,7 +34,7 @@ internal val earFeelI7 = ModelSpec(
     ),
     sppControlUuid = "0cf12d31-fac3-4553-bd80-d6832e7b3931",
     writeIntervalMillis = 100,
-    advertisedClassicAddress = ::earFeelI7ClassicAddress,
+    advertisedClassicAddress = ::rsV2ClassicAddress,
     batteryLayout = BatteryLayout.EARBUDS_AND_CASE,
     equalizerPresetLabels = mapOf(
         "pop" to "弱水经典",
@@ -50,7 +52,13 @@ private fun earFeelI7Capabilities(firmware: FieldValue.Firmware?): DeviceCapabil
     val gainAndProtection = version >= 213
     val presets = persistentSetOf("pop", "hifi", "rock", "light")
     return DeviceCapabilities(
-        readableFields = ProtocolFamily.RS_COMMON_V2.readableFields.toPersistentSet(),
+        readableFields = rsReadings(
+            BatteryLayout.EARBUDS_AND_CASE, DeviceField.CASE_FLAG, DeviceField.TOUCH_KEYS,
+            DeviceField.TOUCH_ENABLED, DeviceField.EAR_DETECTION, DeviceField.EQ, DeviceField.CUSTOM_EQ,
+            DeviceField.NOISE_MODE, DeviceField.NOISE_CYCLE, DeviceField.ANC_LEVEL,
+            DeviceField.TRANSPARENCY_LEVEL, DeviceField.AUDIO_MODE, DeviceField.MULTIPOINT,
+            DeviceField.PROMPT_VOLUME, DeviceField.GAIN, DeviceField.HEARING_PROTECTION, DeviceField.FIND_STATE,
+        ),
         writableSettings = (
             listOf(
                 DeviceSetting.NOISE_MODE,
@@ -99,15 +107,4 @@ private fun earFeelI7Capabilities(firmware: FieldValue.Firmware?): DeviceCapabil
         gainLevels = if (gainAndProtection) (0..2).toPersistentSet() else persistentSetOf(),
         hearingProtectionLevels = if (gainAndProtection) (0..6).toPersistentSet() else persistentSetOf(),
     )
-}
-
-/** The i7 advertisement carries its BR/EDR address after a type byte of 01. */
-private fun earFeelI7ClassicAddress(normalizedManufacturerDataHex: String): String? {
-    if (normalizedManufacturerDataHex.length < 34) return null
-    val normalized = normalizedManufacturerDataHex.uppercase()
-    if (normalized.any { it !in '0'..'9' && it !in 'A'..'F' }) return null
-    if (normalized.substring(14, 16) != "01") return null
-    val octets = normalized.substring(22, 34).chunked(2)
-    if (octets.all { it == "00" } || octets.all { it == "FF" }) return null
-    return octets.joinToString(":")
 }

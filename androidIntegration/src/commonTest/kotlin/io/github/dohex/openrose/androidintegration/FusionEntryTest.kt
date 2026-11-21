@@ -23,7 +23,7 @@ class FusionEntryTest {
         if (connected) rig.hostTransport.audioDevice.emit(rig.earphones.deviceId)
         rig.bootHost()
         // The user's persisted choice as the host reads it, not anything the application publishes at run time.
-        rig.host.configure(HostConfiguration(true, HostSettings(integration = IntegrationSettings(controlWay = ControlWay.MODULE, fusionSettingsDestination = destination))))
+        rig.host.configure { HostConfiguration(true, HostSettings(integration = IntegrationSettings(controlWay = ControlWay.MODULE, fusionSettingsDestination = destination))) }
         runCurrent()
         testScheduler.advanceUntilIdle()
         val lease = (rig.host.open(milinkIdentity) as HostOpenResult.Opened).lease.id

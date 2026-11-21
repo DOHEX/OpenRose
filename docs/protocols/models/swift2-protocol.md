@@ -19,7 +19,7 @@
 | 通知特征 | 同族默认 | 同族 | 同族 |
 | SPP 是否允许 | 同族默认 | 同族 | 同族 |
 | 控制 SPP UUID | `0cf12d31-fac3-4553-bd80-d6832e7b3931` | 静态 | customConfigEarObject:541（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/swift2_device_config.dart:541`） |
-| 广播中的经典地址 | `1` | 静态 | customConfigEarObject:538（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/swift2_device_config.dart:538`） |
+| 广播中的经典地址 | 同族默认 | 同族 | 同族 |
 | 写入间隔 | 同族默认 | 同族 | 同族 |
 | OTA SPP UUID | `0cf12d32-fac3-4553-bd80-d6832e7b3931` | 静态 | customConfigEarObject:545（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/swift2_device_config.dart:545`） |
 | BLE OTA 服务 | `0000ff12-0000-1000-8000-00805f9b34fb`（`ff12`） | 静态 | normalBleOtaServiceConfig:1235（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/base_device_config.dart:1235`） |
@@ -28,7 +28,11 @@
 
 同族默认的取值与证据见 [族文档的默认传输表](../families/rs-common-v2.md#默认传输)。Swift 2 配置中允许 SPP（`isSupportSpp="true"`，定制:574（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/swift2_device_config.dart:574`）），指定控制 SPP UUID 为 `0cf12d31-fac3-4553-bd80-d6832e7b3931`，独立 OTA SPP UUID 为 `0cf12d32-fac3-4553-bd80-d6832e7b3931`。通过 `normalBleOtaServiceConfig` 分配 AB 方案的 16 位 BLE OTA UUID（`ff12`/`ff15`/`ff14`）。控制通道选择、MTU、订阅与发送队列规则见族文档。
 
+Swift 2 定制函数中的 `"1"` 写入 `EarObject.version`。广播中的 BR/EDR 标志与地址使用[族广播布局](../families/rs-common-v2.md#广播识别)。字段写入（`rose_reverse/analysis/blutter/asm/roselink/rose_bluetooth/config/rs_common_v2/swift2_device_config.dart:557`）、version 映射（`rose_reverse/analysis/blutter/asm/roselink_bluetooth/ear_object.dart:1499`）。
+
 ## 初始化
+
+下列初始化记录基于 3.8.0。3.8.6 的首帧字段顺序见[逐型号查询表](../3.8.6-model-delta.md#rs-common-v2-的实际握手查询)。
 
 | 分派 | 表项 | 目标 | 发送的查询 | 状态 | 出处 |
 |---|---|---|---|---|---|

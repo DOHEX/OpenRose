@@ -28,7 +28,10 @@ import io.github.dohex.openrose.core.transport.DeviceId
 import io.github.dohex.openrose.platform.bluetoothPermissions
 import io.github.dohex.openrose.ui.Appearance
 import io.github.dohex.openrose.ui.OpenRoseApp
+import io.github.dohex.openrose.ui.model.WindowDestination
 import java.util.Locale
+
+internal const val EXTRA_PANEL_DESTINATION = "io.github.dohex.openrose.PANEL_DESTINATION"
 
 class MainActivity : ComponentActivity() {
     private val owner get() = application as OpenRoseApplication
@@ -47,7 +50,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        handleNavigationIntent(intent)
+        if (savedInstanceState == null) handleNavigationIntent(intent)
         enableEdgeToEdge()
         val platformUi = AndroidPlatformUi(
             integration = owner.runtime.integration,
@@ -60,6 +63,8 @@ class MainActivity : ComponentActivity() {
             onOpenAppSettings = ::openAppSettings,
             onRestartScope = scopeRestarter::restart,
             restartScope = lifecycleScope,
+            circulationSettings = { PhonePairingSettings(owner.circulation) },
+            circulation = owner.circulation,
         )
         setContent {
             val uiSettings by owner.model.uiSettings.collectAsState()
@@ -97,7 +102,11 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun handleNavigationIntent(intent: Intent) {
-        if (intent.action != BridgeWire.ACTION_SHOW_HEADPHONES) return
+        if (intent.action != BridgeWire.ACTION_SHOW_HEADPHONES) {
+            val page = intent.getStringExtra(EXTRA_PANEL_DESTINATION)
+            WindowDestination.entries.firstOrNull { it.name == page }?.let(owner.model.navigation::open)
+            return
+        }
         val address = intent.getStringExtra(BridgeWire.EXTRA_HEADPHONE_ADDRESS)?.uppercase(Locale.ROOT)
             ?.takeIf(BluetoothAdapter::checkBluetoothAddress)
         // Consume the request so Activity recreation does not retry a failed connection.
@@ -106,7 +115,7 @@ class MainActivity : ComponentActivity() {
         // The same goes for the reason: a recreated Activity must not announce an old fallback again.
         intent.getStringExtra(BridgeWire.EXTRA_FALLBACK_REASON)?.takeIf { it.isNotBlank() }?.let { owner.model.notice.value = it }
         intent.removeExtra(BridgeWire.EXTRA_FALLBACK_REASON)
-        owner.model.showHeadphones()
+        owner.model.navigation.open(WindowDestination.HEADPHONES)
     }
 
     override fun onResume() {

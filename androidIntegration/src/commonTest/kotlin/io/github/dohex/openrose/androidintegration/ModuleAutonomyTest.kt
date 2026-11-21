@@ -1,5 +1,6 @@
 package io.github.dohex.openrose.androidintegration
 
+import io.github.dohex.openrose.core.OperationResult
 import io.github.dohex.openrose.core.SessionReference
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.FieldReading
@@ -307,7 +308,7 @@ class ModuleAutonomyTest {
             HostRejection.INVALID_LEASE,
             assertIs<HostCallResult.Rejected>(old.execute(appIdentity, lease, generation, HostCommand.StartScan)).rejection,
         )
-        old.configure(HostConfiguration(true, HostSettings(integration = IntegrationSettings(controlWay = ControlWay.MODULE))))
+        old.configure { HostConfiguration(true, HostSettings(integration = IntegrationSettings(controlWay = ControlWay.MODULE))) }
         assertIs<HostStatus.Inactive>(old.status.value)
         assertEquals(listOf("module:open", "module:close"), rig.headset.events)
     }
@@ -331,7 +332,11 @@ class ModuleAutonomyTest {
         assertSame(old, rig.host)
         assertEquals("module", rig.headset.openOwner)
         assertEquals(generation, (old.status.value as HostStatus.Active).generation)
-        assertIs<HostOpenResult.Opened>(old.open(appIdentity))
+        val newLease = assertIs<HostOpenResult.Opened>(old.open(appIdentity)).lease
+        assertEquals(
+            HostCallResult.Operation(OperationResult.Success),
+            old.execute(appIdentity, newLease.id, generation, HostCommand.RefreshBondedDevices),
+        )
         assertEquals(1, rig.link.connections.count { it.isOpen })
         assertEquals(0, rig.headset.opens("ordinary"))
 

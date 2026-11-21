@@ -12,6 +12,20 @@ import kotlin.test.assertTrue
 
 class AddDeviceLifecycleUiTest {
     @Test
+    fun rejectedStartShowsTheOwnerErrorWhileRuntimeScanIsIdle() {
+        val failure = ControlError(ControlErrorCode.NOT_READY, "模块控制尚未就绪")
+        for (style in InterfaceStyle.entries) {
+            withAddDeviceHarness(style, scanFailure = failure) { harness ->
+                harness.openAddDevice()
+                assertEquals(ScanState.Idle, harness.state.value.scan)
+                assertTrue(harness.hasText("搜索未完成"))
+                assertTrue(harness.hasText(failure.message))
+                assertTrue(harness.hasClickableText("重新搜索"))
+            }
+        }
+    }
+
+    @Test
     fun manualStopAndScanFailureKeepDiscoveredHeadsetsUsable() {
         for (style in InterfaceStyle.entries) {
             for (failScan in listOf(false, true)) {

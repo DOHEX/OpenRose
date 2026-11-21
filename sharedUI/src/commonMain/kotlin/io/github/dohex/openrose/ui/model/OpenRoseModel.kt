@@ -9,17 +9,35 @@ import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.dohex.openrose.core.transport.DeviceId
 import io.github.dohex.openrose.ui.UiSettings
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.async
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+
+/** Pages the system and compact panels can open in the main window. */
+enum class WindowDestination { HEADPHONES, ADD_DEVICE, DIAGNOSTICS }
+
+/** Holds the latest request while the window is closed. A reopened window only receives unhandled requests. */
+class WindowNavigation {
+    private val destinations = Channel<WindowDestination>(Channel.CONFLATED)
+    internal val requests = destinations.receiveAsFlow()
+
+    fun open(destination: WindowDestination) {
+        destinations.trySend(destination)
+    }
+}
 
 /** Presentation state and intents shared by every page and component style. */
 interface OpenRoseModel {
     val state: StateFlow<ControlState>
     val uiSettings: StateFlow<UiSettings>
-    val homeNavigationRequest: StateFlow<Long>
+    val navigation: WindowNavigation
 
     /**
      * A sentence the host wants the user to read on the 我的耳机 page, such as why a notification opened here.
@@ -29,16 +47,20 @@ interface OpenRoseModel {
 
     fun updateUiSettings(settings: UiSettings)
     fun updateSettings(settings: UserSettings)
-    fun startScan()
+    fun startScan(): Deferred<OperationResult>
     fun stopScan()
     fun connect(deviceId: DeviceId)
     fun disconnect()
-    fun set(setting: DeviceSetting, value: FieldValue)
+    fun set(sessionId: Long, setting: DeviceSetting, value: FieldValue)
 
     /** Writes to [sessionId] only, and returns once the device confirms the setting or the write ends otherwise. */
     suspend fun setInSession(sessionId: Long, setting: DeviceSetting, value: FieldValue): OperationResult
     suspend fun connectForAddDevice(deviceId: DeviceId): OperationResult
-    fun showHeadphones()
+}
+
+/** Captures the session shown by a control, including callbacks delivered after the device changes. */
+internal fun OpenRoseModel.settingsFor(sessionId: Long): (DeviceSetting, FieldValue) -> Unit = { setting, value ->
+    set(sessionId, setting, value)
 }
 
 /** Each host preserves its persistence and control-settings publication rules here. */
@@ -54,19 +76,21 @@ class RuntimeOpenRoseModel(
     private val settingsStore: OpenRoseSettingsStore,
     private val scope: CoroutineScope,
 ) : OpenRoseModel {
+    // Enter the mutex on the caller's turn so late scan acknowledgements cannot reorder start, stop and re-entry.
+    private val scanCommands = Mutex()
+
     override val state: StateFlow<ControlState> = runtime.state
     override val uiSettings: StateFlow<UiSettings> = settingsStore.uiSettings
-    private val mutableHomeNavigationRequest = MutableStateFlow(0L)
-    override val homeNavigationRequest: StateFlow<Long> = mutableHomeNavigationRequest.asStateFlow()
+    override val navigation = WindowNavigation()
     override val notice = MutableStateFlow<String?>(null)
 
     override fun updateUiSettings(settings: UiSettings) = settingsStore.updateUiSettings(settings)
     override fun updateSettings(settings: UserSettings) = settingsStore.updateSettings(settings)
-    override fun startScan() {
-        scope.launch { runtime.startScan() }
+    override fun startScan(): Deferred<OperationResult> = scope.async(start = CoroutineStart.UNDISPATCHED) {
+        scanCommands.withLock { runtime.startScan() }
     }
     override fun stopScan() {
-        scope.launch { runtime.stopScan() }
+        scope.launch(start = CoroutineStart.UNDISPATCHED) { scanCommands.withLock { runtime.stopScan() } }
     }
     override fun connect(deviceId: DeviceId) {
         scope.launch { runtime.connect(deviceId) }
@@ -74,16 +98,12 @@ class RuntimeOpenRoseModel(
     override fun disconnect() {
         scope.launch { runtime.disconnect() }
     }
-    override fun set(setting: DeviceSetting, value: FieldValue) {
-        scope.launch { runtime.set(setting, value) }
+    override fun set(sessionId: Long, setting: DeviceSetting, value: FieldValue) {
+        scope.launch { setInSession(sessionId, setting, value) }
     }
 
     override suspend fun setInSession(sessionId: Long, setting: DeviceSetting, value: FieldValue) = runtime.set(setting, value, sessionId)
 
     // The adding flow owns cancellation of its unfinished connection attempt.
     override suspend fun connectForAddDevice(deviceId: DeviceId): OperationResult = runtime.connectForAddDevice(deviceId)
-
-    override fun showHeadphones() {
-        mutableHomeNavigationRequest.update { it + 1L }
-    }
 }

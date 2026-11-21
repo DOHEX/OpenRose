@@ -2,13 +2,17 @@
 
 package io.github.dohex.openrose.ui
 
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
+import androidx.compose.ui.unit.LayoutDirection
 import io.github.dohex.openrose.core.*
 import io.github.dohex.openrose.core.protocol.*
 import io.github.dohex.openrose.core.transport.DeviceId
@@ -44,6 +48,27 @@ class EqualizerPageUiTest {
                     assertEquals(listOf(AppPage.EQUALIZER), harness.navigations, "$profile opens the page in $style")
                     assertTrue(harness.homeWrites.isEmpty(), "opening the page writes nothing for $profile in $style")
                 }
+            }
+        }
+    }
+
+    @Test
+    fun firstAngelOffersOnlyTheConfirmedGameModesPresets() {
+        val profile = ModelProfile.FIRST_ANGEL_RS_V2
+        for (style in InterfaceStyle.entries) {
+            withHarness(style, profile, listOf(5, 1, 0), Surface.PAGE, mode = null) { harness ->
+                val state = harness.state.value
+                val device = requireNotNull(state.device)
+                for (game in listOf(false, true)) {
+                    harness.state.value = state.copy(device = device.copy(capabilities = profile.capabilities(gameMode = game)))
+                    harness.render()
+                    assertEquals(game, harness.hasRadioText("战术调律"))
+                    assertEquals(!game, harness.hasRadioText(equalizerLabel("pop", profile)))
+                    assertTrue(harness.hasRadioText("自定义"))
+                }
+                harness.clickText("战术调律")
+                harness.render()
+                assertEquals(listOf<Pair<DeviceSetting, FieldValue>>(DeviceSetting.EQ to FieldValue.Text("game_1")), harness.writes)
             }
         }
     }
@@ -286,6 +311,37 @@ class EqualizerPageUiTest {
                 harness.state.value = harness.withCurve(FLAT)
                 harness.render()
                 assertTrue(harness.hasDisabledText("重置"), "reset is disabled once the curve is flat in $style")
+            }
+        }
+    }
+
+    @Test
+    fun rightToLeftCurveDrawsTheHighThumbUnderItsOwnFrequencyAndReadsTheGainWithoutAUnit() {
+        val custom = CustomEqualizerCapabilities(persistentListOf(20, 1000), -6, 6)
+        for (style in InterfaceStyle.entries) {
+            runOpenRoseUiTest(400, 240) {
+                var thumbColor = 0
+                val writes = mutableListOf<List<Int>>()
+                setContent {
+                    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+                        ProvideInterfaceStyle(style, dark = false) {
+                            thumbColor = appColor(AppColorRole.Primary).toArgb()
+                            EqualizerBands(listOf(6, -6), custom, enabled = true, active = true, onCommit = { writes += it })
+                        }
+                    }
+                }
+                val harness = OpenRoseUiTestHarness(this)
+                harness.render()
+                val first = harness.nodes().single { "20 Hz 增益" in it.config.getOrNull(SemanticsProperties.ContentDescription).orEmpty() }
+                val band = first.boundsInRoot
+                assertTrue(band.center.x > harness.textBounds("1k").center.x)
+                assertEquals("+6", first.config.getOrNull(SemanticsProperties.StateDescription))
+                val frame = harness.snapshot()
+                val centerX = band.center.x.toInt()
+                val top = band.top.toInt()
+                assertTrue((top until (top + band.height.toInt() / 4)).any { frame.getRGB(centerX, it) == thumbColor })
+                harness.setProgress("20 Hz 增益", 3f)
+                assertEquals(listOf(3, -6), writes.single())
             }
         }
     }

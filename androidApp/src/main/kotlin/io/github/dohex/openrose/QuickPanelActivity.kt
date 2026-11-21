@@ -12,11 +12,12 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import io.github.dohex.openrose.androidintegration.wire.BridgeWire
+import io.github.dohex.openrose.androidintegration.ControlWay
 import io.github.dohex.openrose.core.PlatformApplicability
 import io.github.dohex.openrose.ui.Appearance
 import io.github.dohex.openrose.ui.PrimaryDeviceSelection
 import io.github.dohex.openrose.ui.QuickPanel
+import io.github.dohex.openrose.ui.model.WindowDestination
 
 /**
  * The 快捷面板: a translucent bottom sheet over whatever the user was doing, opened by the quick settings tile
@@ -60,6 +61,7 @@ class QuickPanelActivity : ComponentActivity() {
                     integration.platform.dynamicColorApplicability == PlatformApplicability.APPLICABLE,
                 onOpenApp = ::openApp,
                 onDismiss = ::finish,
+                circulation = owner.circulation.takeIf { integration.owner.selected == ControlWay.MODULE },
             )
         }
     }
@@ -70,10 +72,10 @@ class QuickPanelActivity : ComponentActivity() {
         owner.startBackgroundControlFromUserEntry()
     }
 
-    private fun openApp() {
+    private fun openApp(destination: WindowDestination?) {
         startActivity(
             Intent(this, MainActivity::class.java)
-                .setAction(BridgeWire.ACTION_SHOW_HEADPHONES)
+                .putExtra(EXTRA_PANEL_DESTINATION, (destination ?: WindowDestination.HEADPHONES).name)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP),
         )
         finish()

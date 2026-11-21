@@ -12,20 +12,28 @@ plugins {
     alias(libs.plugins.detekt) apply false
     alias(libs.plugins.spotless)
     alias(libs.plugins.kover)
-    // The findings frozen in config/detekt/baseline may only shrink; see config/detekt/baseline-limit.txt.
+    // The findings frozen in config/detekt/baseline may only shrink relative to the comparison commit.
     alias(libs.plugins.openrose.detekt.baseline)
 }
 
 // ktlint formats every Kotlin source and build script; rules come from .editorconfig.
 spotless {
     kotlin {
-        target("**/*.kt")
-        targetExclude("**/build/**", "**/.gradle/**", "**/.kotlin/**")
+        target(
+            fileTree(rootDir) {
+                include("**/*.kt")
+                exclude("**/build/**", "**/.gradle/**", "**/.kotlin/**", "**/node_modules/**")
+            },
+        )
         ktlint(libs.versions.ktlint.get()).setEditorConfigPath(rootProject.file(".editorconfig"))
     }
     kotlinGradle {
-        target("**/*.gradle.kts")
-        targetExclude("**/build/**", "**/.gradle/**", "**/.kotlin/**")
+        target(
+            fileTree(rootDir) {
+                include("**/*.gradle.kts")
+                exclude("**/build/**", "**/.gradle/**", "**/.kotlin/**", "**/node_modules/**")
+            },
+        )
         ktlint(libs.versions.ktlint.get()).setEditorConfigPath(rootProject.file(".editorconfig"))
     }
 }
@@ -42,6 +50,8 @@ dependencies {
     kover(projects.androidApp)
     kover(projects.desktopApp)
     kover(projects.transportBluez)
+    kover(projects.transportWindows)
+    kover(projects.circulation)
 }
 kover {
     reports {
@@ -55,7 +65,8 @@ tasks.register("offlineCheck") {
     description = "Run hardware-independent checks (add --offline after dependencies are cached)."
     dependsOn(
         ":core:jvmTest", ":androidIntegration:jvmTest", ":sharedUI:jvmTest", ":androidIntegrationUI:jvmTest",
-        ":desktopApp:test", ":androidPlatform:testDebugUnitTest", ":androidApp:testDebugUnitTest", ":transportBluez:test",
+        ":desktopApp:test", ":androidPlatform:testDebugUnitTest", ":androidModule:testDebugUnitTest",
+        ":androidApp:testDebugUnitTest", ":transportBluez:test", ":transportWindows:test", ":circulation:test",
         ":desktopApp:compileKotlin", ":androidModule:compileDebugKotlin", ":androidApp:compileDebugKotlin", ":uiSandbox:compileKotlin",
         ":androidApp:lintDebug", "spotlessCheck",
         "koverVerify", ":core:koverVerify", ":androidIntegration:koverVerify",

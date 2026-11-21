@@ -11,6 +11,7 @@ import io.github.dohex.openrose.core.protocol.FieldReading
 import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.dohex.openrose.core.protocol.ModelProfile
 import io.github.dohex.openrose.core.transport.DeviceId
+import io.github.dohex.openrose.ui.model.settingsFor
 import kotlinx.collections.immutable.persistentMapOf
 import kotlinx.collections.immutable.persistentSetOf
 import kotlinx.collections.immutable.plus
@@ -233,7 +234,8 @@ class OpenRoseChoiceDialogUiTest {
                 OpenRoseApp(model, BasicPlatformUi("Test"))
             } else {
                 TestPageContent(uiSettings.value.interfaceStyle) {
-                    DeviceControlCard(state.value, requireNotNull(state.value.device), model::set)
+                    val device = requireNotNull(state.value.device)
+                    DeviceControlCard(state.value, device, model.settingsFor(device.sessionId))
                 }
             }
         }

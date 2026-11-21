@@ -16,8 +16,13 @@ import kotlinx.collections.immutable.toPersistentSet
 
 /** The recovered EarFree i5 configuration gates nothing on firmware. */
 private val earFreeI5Capabilities = DeviceCapabilities(
-    readableFields = (ProtocolFamily.ZT.readableFields - setOf(DeviceField.CUSTOM_EQ, DeviceField.GAIN, DeviceField.HIDE_SEARCH))
-        .toPersistentSet(),
+    readableFields = persistentSetOf(
+        DeviceField.LEFT_BATTERY, DeviceField.RIGHT_BATTERY, DeviceField.CASE_BATTERY, DeviceField.LEFT_CHARGING,
+        DeviceField.RIGHT_CHARGING, DeviceField.FIRMWARE, DeviceField.NOISE_MODE, DeviceField.NOISE_CYCLE,
+        DeviceField.EQ, DeviceField.GAME_MODE, DeviceField.AUDIO_MODE, DeviceField.MULTIPOINT, DeviceField.TOUCH_KEYS,
+        DeviceField.TOUCH_ENABLED, DeviceField.EAR_DETECTION, DeviceField.ANC_LEVEL, DeviceField.TRANSPARENCY_LEVEL,
+        DeviceField.PROMPT_VOLUME,
+    ),
     writableSettings = persistentSetOf(
         DeviceSetting.NOISE_MODE,
         DeviceSetting.NOISE_CYCLE,

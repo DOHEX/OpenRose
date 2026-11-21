@@ -5,8 +5,6 @@ import io.github.dohex.openrose.core.DeviceSetting
 import io.github.dohex.openrose.core.DeviceState
 import io.github.dohex.openrose.core.NoiseControlCapabilities
 import io.github.dohex.openrose.core.NoiseLevelCapabilities
-import io.github.dohex.openrose.core.TouchControlCapabilities
-import io.github.dohex.openrose.core.TouchSlot
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.FieldReading
 import io.github.dohex.openrose.core.protocol.FieldValue
@@ -72,17 +70,10 @@ class BridgeSnapshotWireTest {
     }
 
     @Test
-    fun touchSlotLabelsAreIncludedInTheSystemSnapshot() {
-        val original = i5State()
-        val slot = TouchSlot("left", "single")
-        val device = original.copy(
-            capabilities = original.capabilities.copy(
-                touchControl = TouchControlCapabilities(persistentSetOf(slot), persistentSetOf("play_pause"), persistentMapOf(slot to "电源键")),
-            ),
-        )
+    fun systemSnapshotOnlyCarriesTheCapabilitiesUsedBySystemEntries() {
+        val device = i5State().copy(capabilities = ModelProfile.I5_ZT.capabilities())
         val capabilities = device.toBridgeSnapshot(HOST_EPOCH, 4, CAPTURED)["capabilities"] as Map<*, *>
-        val touch = capabilities["touch"] as Map<*, *>
-        assertEquals(listOf(mapOf("side" to "left", "gesture" to "single", "label" to "电源键")), touch["slot_labels"])
+        assertEquals(setOf("readable_fields", "writable_settings", "noise"), capabilities.keys)
     }
 
     @Test

@@ -12,6 +12,7 @@ material3 = "1.12.0-alpha03"
 miuix = "0.9.4"
 backdrop = "2.0.1"
 coroutines = "1.11.0"
+datetime = "0.8.0"
 immutable-collections = "0.5.2"
 activity = "1.13.0"
 androidx-core = "1.18.0"
@@ -30,11 +31,16 @@ ktlint = "1.8.0"
 kover = "0.9.11"
 
 [libraries]
+zxing-core = { module = "com.google.zxing:core", version = "3.5.4" }
+zxing-embedded = { module = "com.journeyapps:zxing-android-embedded", version = "4.3.0" }
+jmdns = { module = "org.jmdns:jmdns", version = "3.6.5" }
+bcprov = { module = "org.bouncycastle:bcprov-jdk18on", version = "1.87" }
 compose-runtime = { module = "org.jetbrains.compose.runtime:runtime", version.ref = "compose" }
 compose-foundation = { module = "org.jetbrains.compose.foundation:foundation", version.ref = "compose" }
 compose-components-resources = { module = "org.jetbrains.compose.components:components-resources", version.ref = "compose" }
 compose-ui = { module = "org.jetbrains.compose.ui:ui", version.ref = "compose" }
 compose-ui-test = { module = "org.jetbrains.compose.ui:ui-test", version.ref = "compose" }
+datetime = { module = "org.jetbrains.kotlinx:kotlinx-datetime", version.ref = "datetime" }
 coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
 coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "coroutines" }
 immutable-collections = { module = "org.jetbrains.kotlinx:kotlinx-collections-immutable", version.ref = "immutable-collections" }

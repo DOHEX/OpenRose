@@ -2,12 +2,10 @@ package io.github.dohex.openrose.core
 
 import io.github.dohex.openrose.core.ControlLink.Attempt
 import io.github.dohex.openrose.core.ControlLink.LinkEnded
-import io.github.dohex.openrose.core.ControlLink.ReadProgress
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.FieldReading
 import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.dohex.openrose.core.protocol.ModelProfile
-import io.github.dohex.openrose.core.protocol.ProtocolQuery
 import kotlinx.collections.immutable.mutate
 import kotlinx.collections.immutable.toPersistentSet
 import kotlinx.coroutines.CancellationException
@@ -21,7 +19,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
 
 /** Validation, ordered writes and fresh readback confirmation for the current device session. */
@@ -41,22 +38,23 @@ internal class SettingQueue(
     }
 
     fun start(link: ControlLink, attempt: Attempt) {
-        attempt.settings.worker = scope.launch { runSettings(link, attempt) }
+        attempt.settings.worker = scope.launch {
+            for (request in attempt.settings.commands) execute(link, attempt, request)
+        }
     }
 
     /** A caller owns its wait; the platform session owns the queued operation. */
     suspend fun set(link: ControlLink, setting: DeviceSetting, value: FieldValue, expectedSessionId: Long?): OperationResult {
         val request = link.lifecycle.withLock {
-            val attempt = link.active
-            if (expectedSessionId != null) {
-                // Checked under the same lock as admission, so a session replaced meanwhile never receives the write.
-                val connection = state.value.connection as? ConnectionState.Connected
-                if (attempt == null || attempt.id != expectedSessionId || connection?.sessionId != expectedSessionId) {
-                    return OperationResult.Failure(ControlError(ControlErrorCode.DISCONNECTED, "请求的设备会话已结束或已被替换"))
-                }
+            val attempt = link.active?.takeIf { it.connection != null && !it.progress.value.ended }
+            val current = state.value
+            val session = if (setting == DeviceSetting.NOISE_MODE) current.noiseModeSession else current.readySession
+            // Check the caller's reference under the same lock as admission.
+            if (expectedSessionId != null && (attempt?.id != expectedSessionId || session?.sessionId != expectedSessionId)) {
+                return OperationResult.Failure(ControlError(ControlErrorCode.DISCONNECTED, "请求的设备会话已结束或已被替换"))
             }
             link.platformError()?.let { return failure(it) }
-            if (attempt == null || state.value.connection !is ConnectionState.Connected) {
+            if (attempt == null || session?.sessionId != attempt.id) {
                 return failure(ControlError(ControlErrorCode.NOT_READY, "设备尚未就绪"))
             }
             if (setting !in requireNotNull(state.value.device).capabilities.writableSettings) {
@@ -84,112 +82,128 @@ internal class SettingQueue(
     }
 
     private fun validateSetting(profile: ModelProfile, setting: DeviceSetting, value: FieldValue): ControlError? {
-        val capabilities = profile.capabilities(firmware())
+        val device = requireNotNull(state.value.device)
+        val capabilities = device.capabilities
         val noise = capabilities.noiseControl
-        val valid = when (setting) {
+        val invalid = ControlError(ControlErrorCode.INVALID_ARGUMENT, "${setting.name} 参数无效")
+        fun checkValue(valid: Boolean) = invalid.takeUnless { valid }
+        fun unsupported(message: String) = ControlError(ControlErrorCode.UNSUPPORTED, message)
+        fun choice(choices: Set<String>, message: (String) -> String): ControlError? = when {
+            value !is FieldValue.Text -> invalid
+            value.value !in choices -> unsupported(message(value.value))
+            else -> null
+        }
+
+        return device.settingPrerequisite(setting)?.let { ControlError(ControlErrorCode.NOT_READY, it) } ?: when (setting) {
             DeviceSetting.CUSTOM_EQ -> {
-                val custom = capabilities.equalizer?.custom ?: return ControlError(ControlErrorCode.UNSUPPORTED, "该型号不支持自定义均衡器")
-                value is FieldValue.IntegerList && value.values.size == custom.bandsHz.size &&
-                    value.values.all { it in custom.minGain..custom.maxGain }
-            }
-
-            DeviceSetting.GAIN -> value is FieldValue.Number && value.value in capabilities.gainLevels
-
-            DeviceSetting.HEARING_PROTECTION -> value is FieldValue.Number && value.value in capabilities.hearingProtectionLevels
-
-            DeviceSetting.BASS_BOOST -> value is FieldValue.Number && value.value in capabilities.bassBoostLevels
-
-            DeviceSetting.PROMPT_LANGUAGE -> value is FieldValue.Text && value.value in capabilities.promptLanguages
-
-            DeviceSetting.PROMPT_VOLUME -> {
-                val levels = capabilities.promptVolumeLevels
-                // A level the family can carry but this firmware does not offer is unsupported, not malformed.
-                if (value is FieldValue.Number && value.value !in levels && value.value in profile.family.promptVolumeLevels) {
-                    return ControlError(ControlErrorCode.UNSUPPORTED, if (value.value == 0) "当前固件不支持关闭提示音" else "当前固件不支持此提示音档位")
+                val custom = capabilities.equalizer?.custom
+                if (custom == null) {
+                    unsupported("该型号不支持自定义均衡器")
+                } else {
+                    checkValue(
+                        value is FieldValue.IntegerList && value.values.size == custom.bandsHz.size &&
+                            value.values.all { it in custom.minGain..custom.maxGain },
+                    )
                 }
-                value is FieldValue.Number && value.value in levels
             }
 
-            DeviceSetting.TOUCH_BINDING -> {
-                validateTouchBinding(capabilities.touchControl, value)?.let { return it }
-                true
+            DeviceSetting.GAIN -> checkValue(value is FieldValue.Number && value.value in capabilities.gainLevels)
+
+            DeviceSetting.HEARING_PROTECTION ->
+                checkValue(value is FieldValue.Number && value.value in capabilities.hearingProtectionLevels)
+
+            DeviceSetting.BASS_BOOST -> checkValue(value is FieldValue.Number && value.value in capabilities.bassBoostLevels)
+
+            DeviceSetting.PROMPT_LANGUAGE -> checkValue(value is FieldValue.Text && value.value in capabilities.promptLanguages)
+
+            DeviceSetting.PROMPT_VOLUME -> when {
+                value !is FieldValue.Number -> invalid
+                value.value in capabilities.promptVolumeLevels -> null
+                value.value in profile.family.promptVolumeLevels -> unsupported(if (value.value == 0) "当前固件不支持关闭提示音" else "当前固件不支持此提示音档位")
+                else -> invalid
             }
 
-            DeviceSetting.GAME_MODE,
-            DeviceSetting.MULTIPOINT,
-            DeviceSetting.TOUCH_ENABLED,
-            DeviceSetting.EAR_DETECTION,
-            DeviceSetting.SPATIAL_AUDIO,
-            -> value is FieldValue.Toggle
+            DeviceSetting.TOUCH_BINDING -> validateTouchBinding(capabilities.touchControl, value)
 
-            DeviceSetting.AUDIO_MODE -> {
-                if (value is FieldValue.Text && value.value !in capabilities.audioControl?.modes.orEmpty()) {
-                    return ControlError(ControlErrorCode.UNSUPPORTED, "该型号不支持 ${value.value} 音频配置")
-                }
-                value is FieldValue.Text
-            }
+            DeviceSetting.TAP_BINDING -> validateTouchBinding(capabilities.tapControl, value)
 
-            DeviceSetting.EQ -> {
-                if (value is FieldValue.Text && value.value !in capabilities.equalizer?.presets.orEmpty()) {
-                    return ControlError(ControlErrorCode.UNSUPPORTED, "该型号与固件不支持 ${value.value} EQ")
-                }
-                value is FieldValue.Text
-            }
+            DeviceSetting.GAME_MODE, DeviceSetting.MULTIPOINT, DeviceSetting.TAP_ENABLED, DeviceSetting.TOUCH_ENABLED,
+            DeviceSetting.EAR_DETECTION, DeviceSetting.EAR_ADAPTIVE, DeviceSetting.SPATIAL_AUDIO,
+            DeviceSetting.INDEPENDENT_MIC_ACTIVATION, DeviceSetting.INDEPENDENT_MIC_MODE,
+            -> checkValue(value is FieldValue.Toggle)
 
-            DeviceSetting.NOISE_MODE -> {
-                if (value is FieldValue.Text && value.value !in noise?.modes.orEmpty()) {
-                    return ControlError(ControlErrorCode.UNSUPPORTED, "该型号不支持 ${value.value} 模式")
-                }
-                value is FieldValue.Text
-            }
+            DeviceSetting.SPATIAL_MODE -> checkValue(value is FieldValue.Text && value.value in capabilities.spatialModes)
+
+            DeviceSetting.SPATIAL_CONTENT -> checkValue(value is FieldValue.Text && value.value in capabilities.spatialContents)
+
+            DeviceSetting.AUDIO_MODE -> choice(capabilities.audioControl?.modes.orEmpty()) { "该型号不支持 $it 音频配置" }
+
+            DeviceSetting.EQ -> choice(capabilities.equalizer?.presets.orEmpty()) { "该型号与固件不支持 $it EQ" }
+
+            DeviceSetting.NOISE_MODE -> choice(noise?.modes.orEmpty()) { "该型号不支持 $it 模式" }
 
             DeviceSetting.ANC_LEVEL, DeviceSetting.TRANSPARENCY_LEVEL -> {
-                val level = noise?.levelCapabilities(setting) ?: return ControlError(ControlErrorCode.UNSUPPORTED, "该型号不支持此档位设置")
-                // The original sender has no mode precondition; visibility is a separate rule.
-                value is FieldValue.Number && value.value in level.levels
+                val level = noise?.levelCapabilities(setting)
+                if (level == null) unsupported("该型号不支持此档位设置") else checkValue(value is FieldValue.Number && value.value in level.levels)
             }
 
-            DeviceSetting.NOISE_CYCLE -> {
-                val cycle = noise ?: return ControlError(ControlErrorCode.UNSUPPORTED, "该型号不支持降噪轮换")
-                value is FieldValue.NoiseCycle && value.flags.keys == cycle.cycleModes &&
-                    value.flags.values.all { it != null } && value.flags.values.count { it == true } >= cycle.minimumCycleSelections
-            }
-        }
-        return if (valid) null else ControlError(ControlErrorCode.INVALID_ARGUMENT, "${setting.name} 参数无效")
-    }
-
-    private suspend fun runSettings(link: ControlLink, attempt: Attempt) {
-        for (request in attempt.settings.commands) {
-            if (request.result.isCompleted) continue
-            val result = try {
-                applySetting(link, attempt, request)
-            } catch (cancelled: CancellationException) {
-                if (cancelled !is TimeoutCancellationException) throw cancelled
-                settingFailure(attempt, request, ControlError(ControlErrorCode.TIMEOUT, "设置或设备回读超时"), SettingStage.TIMED_OUT)
-            } catch (cause: Exception) {
-                val code = when (cause) {
-                    is LinkEnded -> ControlErrorCode.DISCONNECTED
-                    is UnsupportedOperationException -> ControlErrorCode.UNSUPPORTED
-                    is IllegalArgumentException -> ControlErrorCode.INVALID_ARGUMENT
-                    else -> ControlErrorCode.FAILED
-                }
-                settingFailure(
-                    attempt,
-                    request,
-                    ControlError(code, cause.message ?: "设置失败"),
-                    if (code == ControlErrorCode.DISCONNECTED) SettingStage.DISCONNECTED else SettingStage.FAILED,
+            DeviceSetting.NOISE_CYCLE -> if (noise == null) {
+                unsupported("该型号不支持降噪轮换")
+            } else {
+                checkValue(
+                    value is FieldValue.NoiseCycle && value.flags.keys == noise.cycleModes &&
+                        value.flags.values.all { it != null } && value.flags.values.count { it == true } >= noise.minimumCycleSelections,
                 )
             }
-            link.lifecycle.withLock {
-                attempt.settings.requests.remove(request.operation.id)
-                request.result.complete(result)
-                val error = (result as? OperationResult.Failure)?.error
-                if (link.active === attempt && error?.code in setOf(ControlErrorCode.TIMEOUT, ControlErrorCode.FAILED)) {
-                    // Neither protocol correlates a late readback with a transaction. End this
-                    // link before another setting can consume an old response or native write.
-                    link.clearActive()
-                    state.update { it.copy(lastError = error) }
-                }
+        }
+    }
+
+    /** The initialization loop owns the wire until READY. Give a user command the next complete exchange. */
+    suspend fun runNextDuringInitialization(link: ControlLink, attempt: Attempt) {
+        val request = attempt.settings.commands.tryReceive().getOrNull() ?: return
+        val prerequisite = if (state.value.noiseModeSession?.sessionId == attempt.id) null else "当前耳机尚不能调节降噪模式"
+        execute(link, attempt, request, prerequisite)
+    }
+
+    private suspend fun execute(
+        link: ControlLink,
+        attempt: Attempt,
+        request: Request,
+        prerequisite: String? = state.value.device?.settingPrerequisite(request.operation.setting),
+    ) {
+        if (request.result.isCompleted) return
+        val result = try {
+            if (prerequisite == null) {
+                applySetting(link, attempt, request)
+            } else {
+                settingFailure(attempt, request, ControlError(ControlErrorCode.NOT_READY, prerequisite), SettingStage.FAILED)
+            }
+        } catch (cancelled: CancellationException) {
+            if (cancelled !is TimeoutCancellationException) throw cancelled
+            settingFailure(attempt, request, ControlError(ControlErrorCode.TIMEOUT, "设置或设备回读超时"), SettingStage.TIMED_OUT)
+        } catch (cause: Exception) {
+            val code = when (cause) {
+                is LinkEnded -> ControlErrorCode.DISCONNECTED
+                is UnsupportedOperationException -> ControlErrorCode.UNSUPPORTED
+                is IllegalArgumentException -> ControlErrorCode.INVALID_ARGUMENT
+                else -> ControlErrorCode.FAILED
+            }
+            settingFailure(
+                attempt,
+                request,
+                ControlError(code, cause.message ?: "设置失败"),
+                if (code == ControlErrorCode.DISCONNECTED) SettingStage.DISCONNECTED else SettingStage.FAILED,
+            )
+        }
+        link.lifecycle.withLock {
+            attempt.settings.requests.remove(request.operation.id)
+            request.result.complete(result)
+            val error = (result as? OperationResult.Failure)?.error
+            if (link.active === attempt && error?.code in setOf(ControlErrorCode.TIMEOUT, ControlErrorCode.FAILED)) {
+                // Neither protocol correlates a late readback with a transaction. End this
+                // link before another setting can consume an old response or native write.
+                link.clearActive()
+                state.update { it.copy(lastError = error) }
             }
         }
     }
@@ -197,7 +211,9 @@ internal class SettingQueue(
     private suspend fun applySetting(owner: ControlLink, attempt: Attempt, request: Request): OperationResult {
         val link = attempt.connection ?: throw LinkEnded()
         val operation = request.operation
-        val prepared = attempt.codec.prepareSetting(operation.setting, operation.requestedValue, firmware())
+        val device = state.value.device ?: throw LinkEnded()
+        val firmware = (device.fields[DeviceField.FIRMWARE] as? FieldReading.Known)?.value as? FieldValue.Firmware
+        val prepared = attempt.codec.prepareSetting(operation.setting, operation.requestedValue, firmware, device.fields)
         settingStage(attempt, request, SettingStage.SUBMITTED, totalFrames = prepared.writeFrames.size)
         if ((prepared.writeFrames + prepared.readbacks.map { it.bytes }).any { it.size > link.maxWriteSize }) {
             throw UnsupportedOperationException("完整协议设置或回读超出传输写入容量")
@@ -211,37 +227,28 @@ internal class SettingQueue(
                 writtenFrames = index + 1,
             )
         }
-        val baselines = mutableListOf<Pair<ProtocolQuery, ReadProgress>>()
+        val fieldBaselines = mutableMapOf<DeviceField, Long>()
         var actualValues = emptyMap<DeviceField, FieldValue>()
         for (query in prepared.readbacks) {
             // A later field query gets its own baseline; earlier unsolicited data cannot confirm it.
-            owner.pace(attempt)
-            owner.ensureActive(attempt)
-            baselines += query to attempt.progress.value
-            withTimeout(timing.queryTimeoutMillis) { link.write(query.bytes.copyOf()) }
+            val baseline = owner.writePaced(attempt, link, query.bytes)
+            for (field in query.expectedFields) {
+                if (field in prepared.expectedValues) fieldBaselines[field] = baseline.fieldRevisions[field] ?: 0L
+            }
             val observed = withTimeoutOrNull(timing.queryTimeoutMillis) {
                 attempt.progress.first { progress ->
-                    if (progress.ended) {
-                        true
-                    } else {
-                        val fields = state.value.device?.fields.orEmpty()
-                        val values = prepared.expectedValues.mapNotNull { (field, expected) ->
-                            val reading = baselines.lastOrNull { field in it.first.expectedFields } ?: return@mapNotNull null
-                            val (readback, baseline) = reading
-                            val fresh = (progress.fieldRevisions[field] ?: 0) > (baseline.fieldRevisions[field] ?: 0) &&
-                                readback.responseKeys.all { (progress.keyRevisions[it] ?: 0) > (baseline.keyRevisions[it] ?: 0) }
-                            if (fresh) confirmationValue(fields[field], expected)?.let { field to it } else null
-                        }.toMap()
-                        val confirmed = values.filter { (field, value) -> value == prepared.expectedValues[field] }.keys.toSet()
-                        settingStage(attempt, request, SettingStage.WRITTEN, confirmedFields = confirmed)
-                        val required = baselines.flatMap { it.first.expectedFields }.filter { it in prepared.expectedValues }.toSet()
-                        if (values.keys.containsAll(required)) {
-                            actualValues = values
-                            true
-                        } else {
-                            false
-                        }
-                    }
+                    if (progress.ended) return@first true
+                    // A refresh with no requested value still owns its reply before the next write can run.
+                    val received = query.responseKeys.all { (progress.keyRevisions[it] ?: 0) > (baseline.keyRevisions[it] ?: 0) }
+                    val fields = state.value.device?.fields.orEmpty()
+                    actualValues = fieldBaselines.mapNotNull { (field, revision) ->
+                        if (!received && field in query.expectedFields) return@mapNotNull null
+                        if ((progress.fieldRevisions[field] ?: 0) <= revision) return@mapNotNull null
+                        confirmationValue(fields[field], prepared.expectedValues.getValue(field))?.let { field to it }
+                    }.toMap()
+                    val confirmed = actualValues.filter { (field, value) -> value == prepared.expectedValues[field] }.keys
+                    settingStage(attempt, request, SettingStage.WRITTEN, confirmedFields = confirmed)
+                    received && actualValues.size == fieldBaselines.size
                 }
             }
             if (observed?.ended == true) throw LinkEnded()
@@ -337,9 +344,6 @@ internal class SettingQueue(
         attempt.settings.commands.close()
         attempt.settings.worker?.cancel()
     }
-
-    private fun firmware(): FieldValue.Firmware? = (state.value.device?.fields?.get(DeviceField.FIRMWARE) as? FieldReading.Known)
-        ?.value as? FieldValue.Firmware
 
     private fun failure(error: ControlError): OperationResult.Failure {
         state.update { it.copy(lastError = error) }

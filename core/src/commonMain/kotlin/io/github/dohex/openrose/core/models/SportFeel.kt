@@ -4,6 +4,7 @@ import io.github.dohex.openrose.core.DeviceCapabilities
 import io.github.dohex.openrose.core.DeviceSetting
 import io.github.dohex.openrose.core.TouchControlCapabilities
 import io.github.dohex.openrose.core.protocol.BatteryLayout
+import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.GattProfile
 import io.github.dohex.openrose.core.protocol.ProtocolFamily
 import io.github.dohex.openrose.core.protocol.RsCommonInit
@@ -31,7 +32,15 @@ internal val sportFeel = ModelSpec(
     rsCommonInit = RsCommonInit.DEFAULT,
     capabilities = {
         DeviceCapabilities(
-            readableFields = ProtocolFamily.RS_COMMON.readableFields.toPersistentSet(),
+            readableFields = rsReadings(
+                BatteryLayout.EARBUDS_ONLY,
+                DeviceField.TOUCH_KEYS,
+                DeviceField.TOUCH_ENABLED,
+                DeviceField.AUDIO_MODE,
+                DeviceField.MULTIPOINT,
+                DeviceField.PROMPT_VOLUME,
+                DeviceField.SPATIAL_AUDIO,
+            ),
             writableSettings = persistentSetOf(
                 DeviceSetting.GAME_MODE,
                 DeviceSetting.TOUCH_BINDING,

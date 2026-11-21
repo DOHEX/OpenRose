@@ -28,6 +28,8 @@ class AndroidPlatformUi(
     private val onOpenAppSettings: () -> Unit,
     private val onRestartScope: suspend (List<String>, (ScopeRestartUpdate) -> Unit) -> List<ScopeRestartResult>,
     private val restartScope: CoroutineScope,
+    private val circulationSettings: (@Composable () -> Unit)? = null,
+    private val circulation: CirculationClient? = null,
 ) : PlatformUi {
     override val platformName: String = "Android"
     private var restartRunning by mutableStateOf(false)
@@ -39,12 +41,21 @@ class AndroidPlatformUi(
     private var restartResults by mutableStateOf<List<ScopeRestartResult>?>(null)
     private var restartPhase by mutableStateOf<ScopeRestartPhase?>(null)
 
+    override val circulationPairingContent: (@Composable () -> Unit)?
+        @Composable get() = circulationSettings.takeIf { integration.collectAsState().value.owner.selected == ControlWay.MODULE }
+
     override val dynamicColor: Boolean
         @Composable get() {
             val integration by integration.collectAsState()
             return integration.settings.dynamicColor &&
                 integration.platform.dynamicColorApplicability == PlatformApplicability.APPLICABLE
         }
+
+    @Composable
+    override fun CirculationAction(state: ControlState, selection: PrimaryDeviceSelection) {
+        val current by integration.collectAsState()
+        if (current.owner.selected == ControlWay.MODULE) circulation?.let { CirculationRow(it, state, selection, "接回手机") }
+    }
 
     @Composable
     override fun BluetoothPermissionRows(platform: PlatformState) {

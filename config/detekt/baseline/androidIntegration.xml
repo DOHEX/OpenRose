@@ -9,7 +9,6 @@
     <ID>CyclomaticComplexMethod:SwitchingControlRuntime.kt:SwitchingControlRuntime$private fun ownerState: OwnerState</ID>
     <ID>CyclomaticComplexMethod:SwitchingControlRuntime.kt:SwitchingControlRuntime$private suspend fun switchTo: HandoffOutcome</ID>
     <ID>CyclomaticComplexMethod:Wire.kt:WireParser$private fun string: String</ID>
-    <ID>LongMethod:BridgeSnapshotCodec.kt:fun DeviceState.toBridgeSnapshot: Map&lt;String, Any?&gt;</ID>
     <ID>ReturnCount:FusionEntry.kt:FusionEntry$fun normalizeAddress: String?</ID>
     <ID>ReturnCount:NativeHeadsetSnapshot.kt:NativeHeadsetSnapshot.Companion$private fun parseReading: FieldReading?</ID>
     <ID>ReturnCount:NativeHeadsetSnapshot.kt:NativeHeadsetSnapshot.Companion$private fun parseWire: NativeHeadsetSnapshot?</ID>

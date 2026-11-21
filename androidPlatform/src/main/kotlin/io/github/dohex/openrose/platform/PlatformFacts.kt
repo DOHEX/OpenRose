@@ -4,9 +4,7 @@ import android.Manifest
 import android.bluetooth.BluetoothManager
 import android.content.Context
 import android.content.pm.PackageManager
-import android.location.LocationManager
 import android.os.Build
-import android.provider.Settings
 import io.github.dohex.openrose.core.HostPlatform
 import io.github.dohex.openrose.core.PermissionState
 import io.github.dohex.openrose.core.PlatformApplicability
@@ -41,12 +39,7 @@ fun Context.readPlatformState(
             val adapter = getSystemService(BluetoothManager::class.java)?.adapter
             when {
                 adapter == null -> TransportAvailability.Unavailable("系统蓝牙适配器不可用")
-
                 !adapter.isEnabled -> TransportAvailability.Disabled
-
-                Build.VERSION.SDK_INT <= 30 && !locationServicesEnabled() ->
-                    TransportAvailability.Unavailable("请在系统设置中开启定位服务，以便此 Android 版本扫描蓝牙设备")
-
                 else -> TransportAvailability.Available
             }
         }
@@ -65,12 +58,4 @@ fun Context.readPlatformState(
         },
         userUnlocked = userUnlocked,
     )
-}
-
-private fun Context.locationServicesEnabled(): Boolean = if (Build.VERSION.SDK_INT >= 28) {
-    getSystemService(LocationManager::class.java)?.isLocationEnabled == true
-} else {
-    @Suppress("DEPRECATION")
-    Settings.Secure.getInt(contentResolver, Settings.Secure.LOCATION_MODE, Settings.Secure.LOCATION_MODE_OFF) !=
-        Settings.Secure.LOCATION_MODE_OFF
 }

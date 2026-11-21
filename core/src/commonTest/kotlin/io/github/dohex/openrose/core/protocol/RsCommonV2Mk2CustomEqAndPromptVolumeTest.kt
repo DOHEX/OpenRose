@@ -9,6 +9,15 @@ import kotlin.test.assertTrue
 
 class RsCommonV2Mk2CustomEqAndPromptVolumeTest {
     @Test
+    fun eachMk2StartsWithItsOwnPanelQueriesAtDefaultBleCapacity() {
+        // RoseLink 3.8.6 panel order. Only OpenFeel MK2 can supply the custom curve OpenRose reads separately.
+        val buds = createProtocolCodec(ModelProfile.BUDSFEEL_MK2_RS_V2).initQueries(20)
+        val open = createProtocolCodec(ModelProfile.OPENFEEL_MK2_RS_V2).initQueries(20)
+        assertEquals(listOf("ff000dfa0d0c092a0e322b01072f2e3658aa"), buds.map { it.bytes.hex() })
+        assertEquals(listOf("ff000dfa0d0c2a45460e322b01072f2ea4aa", "ff0102fa3e3aaa"), open.map { it.bytes.hex() })
+    }
+
+    @Test
     fun openFeelMk2CustomEqWritesModeThenCurveAndReadsBothBack() {
         val capabilities = ModelProfile.OPENFEEL_MK2_RS_V2.capabilities()
         assertTrue(DeviceSetting.CUSTOM_EQ in capabilities.writableSettings)
@@ -82,8 +91,8 @@ class RsCommonV2Mk2CustomEqAndPromptVolumeTest {
         // Bass boost stays on 2A 05 after the custom writes, and confirms only the boost slot.
         assertEquals("ff04032a050136aa", bass.writeFrames.single().hex())
         assertEquals("ff0502fa2a2aaa", bass.readback.bytes.hex())
-        assertEquals(mapOf(DeviceField.EQ_SLOT to FieldValue.Number(1)), bass.expectedValues)
-        assertEquals(setOf(DeviceField.EQ_SLOT), bass.readback.expectedFields)
+        assertEquals(mapOf(DeviceField.EQ to FieldValue.Text("custom_slot"), DeviceField.EQ_SLOT to FieldValue.Number(1)), bass.expectedValues)
+        assertEquals(setOf(DeviceField.EQ, DeviceField.EQ_SLOT), bass.readback.expectedFields)
     }
 
     @Test

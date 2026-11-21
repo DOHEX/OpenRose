@@ -28,8 +28,10 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeoutOrNull
@@ -60,6 +62,8 @@ internal class ModuleHostRuntime(
     private val discoveryBinder = EndpointForwarder(endpointSlot)
 
     @Volatile private var endpoint: HostEndpoint? = null
+
+    @Volatile private var circulation: OwnerCirculation? = null
     private var host: ModuleControlHost? = null
     private var scope: CoroutineScope? = null
     private var context: Context? = null
@@ -128,6 +132,10 @@ internal class ModuleHostRuntime(
                         sessionIdBase = sessionIdBase,
                     )
                 },
+                onOwnerStarted = { generation, runtimeScope, control ->
+                    val service = startPhoneCirculation(appContext, runtimeScope, control)
+                    circulation = OwnerCirculation(generation, runtimeScope, service::call)
+                },
                 parentScope = hostScope,
                 newId = { UUID.randomUUID().toString() },
                 uid = Process.myUid(),
@@ -135,7 +143,7 @@ internal class ModuleHostRuntime(
                 facts = facts,
             )
             host = created
-            val served = HostEndpoint(appContext, created, facts, hostScope)
+            val served = HostEndpoint(appContext, created, facts, hostScope) { circulation }
             endpoint = served
             endpointSlot.set(served)
             watchConfiguration(appContext, hostScope, created)
@@ -149,10 +157,13 @@ internal class ModuleHostRuntime(
      * restored as soon as it is readable without any help from the OpenRose application.
      */
     private fun watchConfiguration(appContext: Context, hostScope: CoroutineScope, created: ModuleControlHost) {
-        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, _ -> reconfigure(appContext, hostScope, created) }
+        val changes = Channel<Unit>(Channel.CONFLATED)
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, _ -> changes.trySend(Unit) }
         configListener = listener
         val unlockReceiver = object : BroadcastReceiver() {
-            override fun onReceive(context: Context, intent: Intent) = reconfigure(appContext, hostScope, created)
+            override fun onReceive(context: Context, intent: Intent) {
+                changes.trySend(Unit)
+            }
         }
         receiver = unlockReceiver
         val filter = IntentFilter(Intent.ACTION_USER_UNLOCKED).apply { addAction(BluetoothAdapter.ACTION_STATE_CHANGED) }
@@ -161,36 +172,47 @@ internal class ModuleHostRuntime(
         } else {
             appContext.registerReceiver(unlockReceiver, filter)
         }
-        // Unlock may complete between the module loading and the receiver registration.
-        reconfigure(appContext, hostScope, created)
-    }
-
-    private fun reconfigure(appContext: Context, hostScope: CoroutineScope, created: ModuleControlHost) {
         hostScope.launch {
-            created.updatePlatform(appContext.readPlatformState(permissionRequested = true))
-            // Read after the last suspension so a later reconfiguration always carries the later facts.
-            val unlocked = appContext.getSystemService(UserManager::class.java).isUserUnlocked
-            val prefs = openConfig()
-            created.configure(HostConfiguration(unlocked, readHostSettings(prefs)))
-            if (prefs == null || !unlocked) {
-                delay(CONFIG_RETRY_MILLIS)
-                reconfigure(appContext, hostScope, created)
+            val user = appContext.getSystemService(UserManager::class.java)
+            while (isActive) {
+                created.updatePlatform(appContext.readPlatformState(permissionRequested = true))
+                val configured = created.configure {
+                    if (user.isUserUnlocked) {
+                        // An acquire can discover an unreadable store while this watcher is asleep.
+                        readConfiguration().also { if (it == null) changes.trySend(Unit) }
+                    } else {
+                        HostConfiguration()
+                    }
+                }
+                if (configured && user.isUserUnlocked) {
+                    changes.receive()
+                } else {
+                    delay(CONFIG_RETRY_MILLIS)
+                }
             }
         }
     }
 
-    /** Opens the module's remote preferences once they can be served, and starts listening to them. */
-    private fun openConfig(): SharedPreferences? = synchronized(lifecycle) {
+    /** A missing framework or failed read leaves the last confirmed configuration in effect until the next attempt. */
+    private fun readConfiguration(): HostConfiguration? = synchronized(lifecycle) {
         if (closed) return null
-        config ?: runCatching { module.getRemotePreferences(BridgeWire.CONFIG_GROUP) }
-            .onFailure { module.log(Log.WARN, TAG, "config_unavailable", it) }.getOrNull()
-            ?.also { prefs ->
-                config = prefs
-                configListener?.let { listener ->
-                    runCatching { prefs.registerOnSharedPreferenceChangeListener(listener) }
-                        .onFailure { module.log(Log.WARN, TAG, "config_listener_unavailable", it) }
-                }
+        val listener = configListener ?: return null
+        val prefs = config ?: runCatching {
+            module.getRemotePreferences(BridgeWire.CONFIG_GROUP).also {
+                it.registerOnSharedPreferenceChangeListener(listener)
+                config = it
             }
+        }.getOrElse { failure ->
+            module.log(Log.WARN, TAG, "config_unavailable", failure)
+            return null
+        }
+        val settings = readHostSettings(prefs)
+        if (settings == null) {
+            runCatching { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+            config = null
+            return null
+        }
+        HostConfiguration(userUnlocked = true, settings = settings)
     }
 
     /**

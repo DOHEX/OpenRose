@@ -23,10 +23,6 @@ private val controlWayOptions = listOf(
     AppOption(ControlWay.MODULE, "模块控制", testTag = ControlWayTags.option(ControlWay.MODULE)),
 )
 
-/**
- * Test tags of the control-way card. Tags that report state carry the state's name, so tests
- * assert the state itself and never the wording shown for it.
- */
 internal object ControlWayTags {
     /** Every control-way tag starts with this, so a host without the choice can be shown to expose none. */
     const val PREFIX = "control-way."
@@ -37,16 +33,8 @@ internal object ControlWayTags {
     const val HOLDER = "${PREFIX}holder"
 
     fun option(way: ControlWay) = "${PREFIX}option.${way.name}"
-    fun failureStage(stage: OwnerFailureStage) = "${PREFIX}stage.${stage.name}"
-
-    fun readiness(readiness: OwnerReadiness) = "${PREFIX}readiness." + when (readiness) {
-        OwnerReadiness.Ready -> "Ready"
-        OwnerReadiness.Starting -> "Starting"
-        is OwnerReadiness.Idle -> "Idle"
-        is OwnerReadiness.Unavailable -> "Unavailable"
-        is OwnerReadiness.Switching -> "Switching"
-        is OwnerReadiness.SwitchBlocked -> "SwitchBlocked"
-    }
+    const val FAILURE_STAGE = "${PREFIX}failure-stage"
+    const val READINESS = "${PREFIX}readiness"
 }
 
 /**
@@ -80,7 +68,16 @@ internal fun ControlWayGroup(
 /** One line for a handoff in flight or stuck; stage and reason are shown on the status page only. */
 private fun switchFeedback(readiness: OwnerReadiness): String? = when (readiness) {
     is OwnerReadiness.Switching -> "正在切换到${wayLabel(readiness.request.to)}…"
-    is OwnerReadiness.SwitchBlocked -> "切换未完成，详情见状态页。"
+
+    is OwnerReadiness.SwitchBlocked -> if (readiness.stage == OwnerFailureStage.RELEASE) {
+        when (readiness.request.to) {
+            ControlWay.ORDINARY -> "已选择普通控制，正在等待模块释放控制连接。"
+            ControlWay.MODULE -> "正在等待普通控制释放连接，之后才能切换到模块控制。"
+        }
+    } else {
+        "切换未完成，详情见状态页。"
+    }
+
     else -> null
 }
 
@@ -97,23 +94,25 @@ internal fun ControlStatusRows(owner: OwnerState) {
         is OwnerReadiness.Unavailable, is OwnerReadiness.SwitchBlocked -> StatusTone.ERROR
         else -> StatusTone.NEUTRAL
     }
-    Tagged(ControlWayTags.readiness(readiness)) {
+    Tagged(ControlWayTags.READINESS) {
         AppFactRow(RoseIcon.SHIELD, "所有者状态", readinessLabel(readiness), readinessTone)
     }
     when (readiness) {
-        is OwnerReadiness.Unavailable -> Tagged(ControlWayTags.failureStage(readiness.stage)) {
+        is OwnerReadiness.Unavailable -> Tagged(ControlWayTags.FAILURE_STAGE) {
             AppFactRow(RoseIcon.ERROR, "失败阶段", stageLabel(readiness.stage), StatusTone.ERROR)
         }
 
         is OwnerReadiness.SwitchBlocked -> {
-            Tagged(ControlWayTags.failureStage(readiness.stage)) {
+            Tagged(ControlWayTags.FAILURE_STAGE) {
                 AppFactRow(RoseIcon.ERROR, "失败阶段", stageLabel(readiness.stage), StatusTone.ERROR)
             }
-            AppText(
-                "无法确认上一个所有者已释放控制连接，为避免两个所有者同时连接，没有进行接管。",
-                Modifier.controlWayTextPadding().testTag(ControlWayTags.SWITCH_BLOCKED_NOTICE),
-                role = AppTextRole.Summary,
-            )
+            if (readiness.stage == OwnerFailureStage.RELEASE) {
+                AppText(
+                    "上一个所有者的控制连接仍待确认释放。",
+                    Modifier.controlWayTextPadding().testTag(ControlWayTags.SWITCH_BLOCKED_NOTICE),
+                    role = AppTextRole.Summary,
+                )
+            }
         }
 
         else -> Unit
@@ -154,7 +153,7 @@ internal fun ControlOwnerDiagnostics(integration: IntegrationState) {
             Tagged(ControlWayTags.LAST_HANDOFF) {
                 AppGroup(title = "上次切换") {
                     AppInfoRow("切换结果", "未完成：${wayLabel(handoff.request.from)} → ${wayLabel(handoff.request.to)}")
-                    Tagged(ControlWayTags.failureStage(handoff.stage)) {
+                    Tagged(ControlWayTags.FAILURE_STAGE) {
                         AppInfoRow("未完成阶段", stageLabel(handoff.stage))
                     }
                     AppInfoRow("未完成原因", handoff.reason)

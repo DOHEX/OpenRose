@@ -297,16 +297,16 @@ class DeviceControlProtocolTest {
     @Test
     fun initializationTouchSwitchesAndAudioKeepOneI7Sequence() {
         val codec = createProtocolCodec(ModelProfile.I7_RS_V2)
-        codec.initQueries(20) // Four complete query frames consume00..03.
+        codec.initQueries(20) // Three complete query frames consume 00..02.
         val touch = codec.prepareSetting(DeviceSetting.TOUCH_BINDING, FieldValue.TouchAssignment("left", "single", "none"))
-        assertEquals("ff040301010008aa", touch.writeFrames.single().hex())
-        assertEquals("ff0502fa0101aa", touch.readback.bytes.hex())
+        assertEquals("ff030301010007aa", touch.writeFrames.single().hex())
+        assertEquals("ff0402fa0100aa", touch.readback.bytes.hex())
         val detection = codec.prepareSetting(DeviceSetting.EAR_DETECTION, FieldValue.Toggle(true))
-        assertEquals("ff060208000faa", detection.writeFrames.single().hex())
-        assertEquals("ff0702fa080aaa", detection.readback.bytes.hex())
+        assertEquals("ff050208000eaa", detection.writeFrames.single().hex())
+        assertEquals("ff0602fa0809aa", detection.readback.bytes.hex())
         val audio = codec.prepareSetting(DeviceSetting.AUDIO_MODE, FieldValue.Text("lc3"))
-        assertEquals("ff08022b0337aa", audio.writeFrames.single().hex())
-        assertEquals("ff0902fa2b2faa", audio.readback.bytes.hex())
+        assertEquals("ff07022b0336aa", audio.writeFrames.single().hex())
+        assertEquals("ff0802fa2b2eaa", audio.readback.bytes.hex())
     }
 
     @Test

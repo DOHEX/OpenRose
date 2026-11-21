@@ -33,7 +33,7 @@ class ControlSessionAdvancedAudioTest {
         val (session, link) = ready()
         val pending = async { session.set(DeviceSetting.CUSTOM_EQ, curve) }
         runCurrent()
-        assertEquals(listOf("ff04022a0433aa", "ff050b3e86838100010203040506ecaa", "ff0602fa2a2baa"), link.writes.drop(4))
+        assertEquals(listOf("ff03022a0432aa", "ff040b3e86838100010203040506ebaa", "ff0502fa2a2aaa"), link.writes.drop(3))
         assertFalse(pending.isCompleted)
         assertEquals(FieldValue.Text("hifi"), reading(session, DeviceField.EQ))
         assertEquals(2, session.state.value.settingOperations.single().writtenFrames)
@@ -41,7 +41,7 @@ class ControlSessionAdvancedAudioTest {
         assertTrue(session.state.value.settingOperations.single().confirmedFields.isEmpty())
         link.incoming.send("dd00022a040daa".bytes())
         runCurrent()
-        assertEquals("ff0702fa3e40aa", link.writes.last())
+        assertEquals("ff0602fa3e3faa", link.writes.last())
         assertEquals(setOf(DeviceField.EQ), session.state.value.settingOperations.single().confirmedFields)
         assertFalse(pending.isCompleted)
         link.incoming.send(CURVE_REPLY.bytes())
@@ -85,7 +85,7 @@ class ControlSessionAdvancedAudioTest {
             assertEquals(failedWrite - 1, operation.writtenFrames)
             assertEquals(2, operation.totalFrames)
             assertEquals(SettingStage.FAILED, operation.stage)
-            assertEquals(listOf("ff04022a0433aa", "ff050b3e86838100010203040506ecaa").take(failedWrite), link.writes.drop(before))
+            assertEquals(listOf("ff03022a0432aa", "ff040b3e86838100010203040506ebaa").take(failedWrite), link.writes.drop(before))
             assertEquals(ConnectionState.Disconnected, session.state.value.connection)
             assertEquals(null, session.state.value.device)
         }
@@ -103,7 +103,7 @@ class ControlSessionAdvancedAudioTest {
         assertEquals(SettingStage.PARTIALLY_WRITTEN, inProgress.stage)
         assertEquals(1, inProgress.writtenFrames)
         assertEquals(2, inProgress.totalFrames)
-        assertEquals(listOf("ff04022a0433aa", "ff050b3e86838100010203040506ecaa"), link.writes.drop(before))
+        assertEquals(listOf("ff03022a0432aa", "ff040b3e86838100010203040506ebaa"), link.writes.drop(before))
 
         session.disconnect()
         runCurrent()
@@ -124,7 +124,7 @@ class ControlSessionAdvancedAudioTest {
 
         link.incoming.send("dd00022a050eaa".bytes())
         runCurrent()
-        assertEquals("ff0702fa3e40aa", link.writes.last())
+        assertEquals("ff0602fa3e3faa", link.writes.last())
         assertEquals(FieldValue.Text("custom_slot"), reading(session, DeviceField.EQ))
         assertTrue(session.state.value.settingOperations.single().confirmedFields.isEmpty())
 
@@ -149,7 +149,7 @@ class ControlSessionAdvancedAudioTest {
         assertTrue(session.state.value.settingOperations.single().confirmedFields.isEmpty())
         link.incoming.send("dd00022a040daa".bytes())
         runCurrent()
-        assertEquals("ff0702fa3e40aa", link.writes.last())
+        assertEquals("ff0602fa3e3faa", link.writes.last())
         assertEquals(setOf(DeviceField.EQ), session.state.value.settingOperations.single().confirmedFields)
 
         advanceTimeBy(51)
@@ -175,7 +175,7 @@ class ControlSessionAdvancedAudioTest {
             runCurrent()
 
             assertEquals(ControlErrorCode.TIMEOUT, assertIs<OperationResult.Failure>(pending.await()).error.code, modeReply)
-            assertEquals("ff0602fa2a2baa", link.writes.last(), modeReply)
+            assertEquals("ff0502fa2a2aaa", link.writes.last(), modeReply)
             assertEquals(emptySet(), session.state.value.settingOperations.single().confirmedFields, modeReply)
             assertEquals(SettingStage.TIMED_OUT, session.state.value.settingOperations.single().stage, modeReply)
         }
@@ -188,7 +188,7 @@ class ControlSessionAdvancedAudioTest {
         runCurrent()
         link.incoming.send("dd00022a040daa".bytes())
         runCurrent()
-        assertEquals("ff0702fa3e40aa", link.writes.last())
+        assertEquals("ff0602fa3e3faa", link.writes.last())
 
         session.disconnect()
         runCurrent()
@@ -199,7 +199,7 @@ class ControlSessionAdvancedAudioTest {
         assertEquals(2, operation.totalFrames)
         assertEquals(setOf(DeviceField.EQ), operation.confirmedFields)
         assertEquals(SettingStage.DISCONNECTED, operation.stage)
-        assertEquals("ff0702fa3e40aa", link.writes.last())
+        assertEquals("ff0602fa3e3faa", link.writes.last())
     }
 
     @Test
@@ -240,7 +240,7 @@ class ControlSessionAdvancedAudioTest {
         runCurrent()
         assertEquals(OperationResult.Success, first.await())
         val secondStart = link.writes.size - 3
-        assertEquals(listOf("ff08022a0437aa", "ff090b3e86838100010203040506f0aa", "ff0a02fa2a2faa"), link.writes.drop(secondStart))
+        assertEquals(listOf("ff07022a0436aa", "ff080b3e86838100010203040506efaa", "ff0902fa2a2eaa"), link.writes.drop(secondStart))
 
         link.incoming.send("dd00022a040daa".bytes())
         runCurrent()
@@ -248,7 +248,7 @@ class ControlSessionAdvancedAudioTest {
         runCurrent()
 
         assertEquals(OperationResult.Success, second.await())
-        assertEquals("ff0b02fa3e44aa", link.writes.last())
+        assertEquals("ff0a02fa3e43aa", link.writes.last())
         assertEquals(listOf(SettingStage.CONFIRMED, SettingStage.CONFIRMED), session.state.value.settingOperations.map { it.stage })
         session.disconnect()
     }
@@ -332,8 +332,8 @@ class ControlSessionAdvancedAudioTest {
     fun supportedGainProtectionAndPromptSettingsConfirmThroughTheSession() = runTest {
         val (session, link) = ready(firmware = "dd00040d020103f4aa")
         for ((setting, value, write, query, reply) in listOf(
-            SettingVector(DeviceSetting.GAIN, FieldValue.Number(2), "ff040245024caa", "ff0502fa4545aa", "dd0002450226aa"),
-            SettingVector(DeviceSetting.HEARING_PROTECTION, FieldValue.Number(6), "ff0602460653aa", "ff0702fa4648aa", "dd000246062baa"),
+            SettingVector(DeviceSetting.GAIN, FieldValue.Number(2), "ff030245024baa", "ff0402fa4544aa", "dd0002450226aa"),
+            SettingVector(DeviceSetting.HEARING_PROTECTION, FieldValue.Number(6), "ff0502460652aa", "ff0602fa4647aa", "dd000246062baa"),
         )) {
             val pending = async { session.set(setting, value) }
             runCurrent()
@@ -351,13 +351,13 @@ class ControlSessionAdvancedAudioTest {
         session.disconnect()
 
         for ((firmware, level, write, reply) in listOf(
-            PromptVector("dd00040d030003f4aa", 5, "ff04022e0538aa", "dd00022e0512aa"),
-            PromptVector("dd00040d030004f5aa", 0, "ff04022e0033aa", "dd00022e000daa"),
+            PromptVector("dd00040d030003f4aa", 5, "ff03022e0537aa", "dd00022e0512aa"),
+            PromptVector("dd00040d030004f5aa", 0, "ff03022e0032aa", "dd00022e000daa"),
         )) {
             val (promptSession, promptLink) = ready(firmware = firmware)
             val pending = async { promptSession.set(DeviceSetting.PROMPT_VOLUME, FieldValue.Number(level)) }
             runCurrent()
-            assertEquals(listOf(write, "ff0502fa2e2eaa"), promptLink.writes.takeLast(2), "$firmware/$level")
+            assertEquals(listOf(write, "ff0402fa2e2daa"), promptLink.writes.takeLast(2), "$firmware/$level")
             assertFalse(pending.isCompleted)
             promptLink.incoming.send(reply.bytes())
             runCurrent()
@@ -397,7 +397,7 @@ class ControlSessionAdvancedAudioTest {
         for (vector in listOf(
             RejectedCapability(ModelProfile.BUDSFEEL_MK2_RS_V2, DeviceSetting.BASS_BOOST, listOf(FieldValue.Number(-1), FieldValue.Number(5), FieldValue.Toggle(true)), DeviceSetting.PROMPT_LANGUAGE),
             RejectedCapability(ModelProfile.JASMINE_RS_V2, DeviceSetting.PROMPT_LANGUAGE, listOf(FieldValue.Text("french"), FieldValue.Number(0)), DeviceSetting.BASS_BOOST),
-            RejectedCapability(ModelProfile.OPENFEEL_MK2_RS_V2, DeviceSetting.BASS_BOOST, listOf(FieldValue.Number(5)), DeviceSetting.PROMPT_LANGUAGE),
+            RejectedCapability(ModelProfile.OPENFEEL_MK2_RS_V2, DeviceSetting.BASS_BOOST, listOf(FieldValue.Number(3), FieldValue.Number(5)), DeviceSetting.PROMPT_LANGUAGE),
             RejectedCapability(ModelProfile.SWIFT2_RS_V2, DeviceSetting.GAME_MODE, listOf(FieldValue.Number(1)), DeviceSetting.TOUCH_BINDING),
             RejectedCapability(ModelProfile.I7_RS_V2, DeviceSetting.GAIN, listOf(FieldValue.Number(3)), DeviceSetting.BASS_BOOST),
         )) {
@@ -411,6 +411,90 @@ class ControlSessionAdvancedAudioTest {
             assertTrue(session.state.value.settingOperations.isEmpty())
             session.disconnect()
         }
+    }
+
+    @Test
+    fun aTapAssignmentWaitsForItsOwnFreshKeyTable() = runTest {
+        val (session, link) = ready(profile = ModelProfile.ASTRO_X_RS_V2)
+        // Synthetic 3C table already has the requested right triple action (07).
+        val tapReply = "dd00093c13070201030212045aaa".bytes()
+        link.incoming.send(tapReply)
+        runCurrent()
+        val pending = async { session.set(DeviceSetting.TAP_BINDING, FieldValue.TouchAssignment("right", "triple", "voice_assistant")) }
+        runCurrent()
+        assertFalse(pending.isCompleted)
+        // 01 belongs to the ordinary touch sensor, even when all its actions decode.
+        link.incoming.send("dd0011010100020003000400110012001300140043aa".bytes())
+        runCurrent()
+        assertFalse(pending.isCompleted)
+        link.incoming.send(tapReply)
+        runCurrent()
+        assertEquals(OperationResult.Success, pending.await())
+        assertEquals(setOf(DeviceField.TAP_KEYS), session.state.value.settingOperations.single().confirmedFields)
+        session.disconnect()
+    }
+
+    @Test
+    fun changingFirstAngelGameModeRefreshesEqAndRejectsTheQueuedMusicPreset() = runTest {
+        val (session, link) = ready(profile = ModelProfile.FIRST_ANGEL_RS_V2)
+        link.incoming.send("dd00020e00edaa".bytes()) // Synthetic music mode.
+        runCurrent()
+        assertEquals(setOf("pop", "hifi"), session.state.value.device?.capabilities?.equalizer?.presets.orEmpty().toSet())
+        val before = link.writes.size
+        val toggle = async { session.set(DeviceSetting.GAME_MODE, FieldValue.Toggle(true)) }
+        val oldPreset = async { session.set(DeviceSetting.EQ, FieldValue.Text("hifi")) }
+        runCurrent()
+        val gameReply = "dd00020e01eeaa".bytes()
+        link.incoming.send(gameReply)
+        runCurrent()
+        assertFalse(toggle.isCompleted)
+        assertFalse(oldPreset.isCompleted)
+        assertEquals(listOf("0e01", "fa0e", "fa2a"), link.writes.drop(before).map { it.substring(6, 10) })
+        assertEquals(setOf("game_1"), session.state.value.device?.capabilities?.equalizer?.presets.orEmpty().toSet())
+        assertEquals(FieldReading.Loading, session.state.value.device?.fields?.get(DeviceField.EQ))
+        link.incoming.send("dd00022aa0ccaa".bytes()) // Synthetic FA 2A response from the new bank.
+        runCurrent()
+        assertEquals(OperationResult.Success, toggle.await())
+        assertEquals(ControlErrorCode.UNSUPPORTED, assertIs<OperationResult.Failure>(oldPreset.await()).error.code)
+        assertEquals(FieldValue.Text("game_1"), reading(session, DeviceField.EQ))
+        session.disconnect()
+    }
+
+    @Test
+    fun gameModeRefreshDoesNotConsumeTheQueuedMokaPresetReadback() = runTest {
+        val (session, link) = ready(profile = ModelProfile.MOKA_RS_V2)
+        val before = link.writes.size
+        val toggle = async { session.set(DeviceSetting.GAME_MODE, FieldValue.Toggle(true)) }
+        val preset = async { session.set(DeviceSetting.EQ, FieldValue.Text("pop")) }
+        runCurrent()
+        link.incoming.send("dd00020e01eeaa".bytes())
+        runCurrent()
+        link.incoming.send("dd00022b000aaa".bytes()) // Audio mode cannot finish the EQ refresh.
+        runCurrent()
+        assertFalse(toggle.isCompleted)
+        assertEquals(listOf("0e01", "fa0e", "fa2a"), link.writes.drop(before).map { it.substring(6, 10) })
+        link.incoming.send("dd00022a0009aa".bytes()) // Earlier refresh reports HiFi.
+        runCurrent()
+        assertEquals(OperationResult.Success, toggle.await())
+        assertFalse(preset.isCompleted)
+        assertEquals(listOf("2a01", "fa2a"), link.writes.takeLast(2).map { it.substring(6, 10) })
+        link.incoming.send("dd00022a010aaa".bytes()) // Queued write now receives its own POP confirmation.
+        assertEquals(OperationResult.Success, preset.await())
+        session.disconnect()
+    }
+
+    @Test
+    fun missingGameModeRefreshTimesOutBeforeAQueuedPresetIsWritten() = runTest {
+        val (session, link) = ready(profile = ModelProfile.MOKA_RS_V2)
+        val before = link.writes.size
+        val toggle = async { session.set(DeviceSetting.GAME_MODE, FieldValue.Toggle(true)) }
+        val preset = async { session.set(DeviceSetting.EQ, FieldValue.Text("pop")) }
+        runCurrent()
+        link.incoming.send("dd00020e01eeaa".bytes())
+        runCurrent()
+        assertEquals(ControlErrorCode.TIMEOUT, assertIs<OperationResult.Failure>(toggle.await()).error.code)
+        assertEquals(ControlErrorCode.DISCONNECTED, assertIs<OperationResult.Failure>(preset.await()).error.code)
+        assertEquals(listOf("0e01", "fa0e", "fa2a"), link.writes.drop(before).map { it.substring(6, 10) })
     }
 
     private suspend fun TestScope.ready(capacity: Int = 16, firmware: String? = "dd00040d020103f4aa", profile: ModelProfile = ModelProfile.I7_RS_V2): Pair<ControlSession, AdvancedLink> {

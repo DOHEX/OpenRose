@@ -8,10 +8,9 @@ import io.github.dohex.openrose.core.protocol.BatteryLayout
 import io.github.dohex.openrose.core.protocol.GattProfile
 import io.github.dohex.openrose.core.protocol.ProtocolFamily
 import kotlinx.collections.immutable.persistentSetOf
-import kotlinx.collections.immutable.toPersistentSet
 
 private val agateCapabilities = DeviceCapabilities(
-    readableFields = ProtocolFamily.F8.readableFields.toPersistentSet(),
+    readableFields = f8BasicReadings,
     writableSettings = persistentSetOf(
         DeviceSetting.EQ,
         DeviceSetting.TOUCH_BINDING,
@@ -42,5 +41,5 @@ internal val agate = ModelSpec(
     capabilities = { agateCapabilities },
     f8ExtendedInit = false,
     f8NoiseNormalWire = 3,
-    f8CollapsedEqRead = true,
+    f8EqAtTwo = "pop",
 )

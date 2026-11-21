@@ -1,8 +1,8 @@
 # 型号适配证据账本
 
-本账本覆盖已接入的型号配置：既有四款 RS Common V2 扩展，以及新增 i3、HeadFeel、六个 F8 配置、九个 RS Common 配置。证据来自型号文档、协议族及结构化清单；新增型号均无本项目实机验证，合成夹具不是设备抓包。A：共用编解码与配置；B：族内差异；C：新能力类型；D：新协议族；不实现：证据不足、无法确认或范围外。
+本账本记录 3.8.6 与 3.8.0 的蓝牙耳机型号适配。证据来自型号文档、协议族与分版本清单；新增型号均无本项目实机验证，合成夹具不是设备抓包。A：共用编解码与配置；B：族内差异；C：新能力类型；D：新协议族；不实现：证据不足、无法确认或范围外。
 
-## 配置字段与识别分支清单
+## 初次适配四款 RS Common V2 型号（3.8.0 证据）
 
 | 字段 / 清单列 | BudsFeel MK2 | OpenFeel MK2 | SWIFT 2 | Jasmine | 归类与来源 |
 |---|---|---|---|---|---|
@@ -14,9 +14,9 @@
 | 控制传输 / gatt | BLE FE/F1/F2 | 同左 | 同左 | 同左 | A；各协议文档识别、传输节；UUID 均为蓝牙基础 UUID 全长形式 |
 | sppControlUuid | `0cf12d31-fac3-4553-bd80-d6832e7b3931` | 同左 | 同左 | 同左 | A；各协议文档识别、传输节；有经典地址时才可选用 |
 | writeIntervalMillis | 100 | 100 | 100 | 100 | A；各文档传输节及 [RS Common V2 族文档的默认传输](families/rs-common-v2.md#默认传输)；非 OHOS 队列 |
-| advertisedClassicAddress | null | null | null | null | 不实现；各文档识别节没有给出地址偏移，不能套用 i7 布局 |
+| advertisedClassicAddress | V2 BR/EDR 地址 | 同左 | 同左 | 同左 | A；3.8.0 与 3.8.6 均由 [V2 共用广播解析](families/rs-common-v2.md#广播识别) 取得标志 `H[14:16]` 与地址 `H[22:34]`。Swift 2 的配置常量 `1` 属于 version 字段。静态，实机未验证。 |
 | equalizerPresetLabels | 空 | 空 | 空 | 空 | 不实现；清单能力表没有这四款可映射的常规预设显示名，低音增强另列 |
-| readableFields | V2 接收器支持的字段集合 | 同左 | 同左 | 同左 | A；各文档接收字段节；解析能力不代表设备一定上报 |
+| readableFields | 按型号列出已实现的读数，含左右耳与盒电量、降噪、低音槽位 | 左右耳与盒电量、低音槽位、自定义曲线等 | 单体电量、提示音音量等 | 左右耳电量、提示音语言等 | B；各型号的接收字段与电量布局决定诊断页条目 |
 | 固件门槛 | 不用于已启用控制 | 同左 | 同左 | 同左 | A；各协议设置命令节没有已启用控制的门槛；BudsFeel OTA ≥200 只属于 OTA |
 
 ## 能力清单逐列
@@ -24,7 +24,7 @@
 | 清单列 | BudsFeel MK2 | OpenFeel MK2 | SWIFT 2 | Jasmine | 归类 / 证据 |
 |---|---|---|---|---|---|
 | ANC 模式 | ANC、普通、通透、抗风 | 无入口 | 无入口 | 无入口 | A；BudsFeel 协议「设置命令」`09`；其余不实现 |
-| EQ/音效 | 低音增强 0–4 | 低音增强 0–4 | 无入口 | 无入口 | C；前两者协议设置命令节 `2A 05` 的 Sender 范围；实际 UI 范围及设备效果未实测 |
+| EQ/音效 | 低音增强 0–4 | 低音增强 0–2 | 无入口 | 无入口 | C；前两者协议设置命令节 `2A 05` 的型号控件分别提供五档与三档；设备效果未实测 |
 | 自定义 EQ | 无入口 | 有，10 字节 | 无入口 | 无入口 | A；OpenFeel MK2 `2a 04` 加 `3e` 十字节符号位加绝对值，10 段 20Hz–15kHz、−6..+6、无固件门槛，复用 V2 编码；频点是界面标签，不是实测滤波器中心；其余三款不实现 |
 | 触控 | 总开关与左右单/双/三/长按 | 同左 | 总开关；物理键映射未知 | 总开关与左右单/双/三/长按 | A；各协议设置命令节 `07`、`01`；Swift 按键绑定不实现 |
 | 触控动作 | 00–08：无、播放暂停、上一曲、下一曲、音量加减、游戏、助手、ANC 轮换 | 00–07，不含 ANC 轮换 | 00–07，但物理槽对应未知 | 00–07，不含 ANC 轮换 | A；JSON `capability_details.TouchCtlType` 与 `IntValueModel`；Swift 绑定不实现 |
@@ -44,7 +44,7 @@
 | 协议文档 | 小节 | 内容与处理 | 分类 / 验证 |
 |---|---|---|---|
 | [BudsFeel MK2](models/budsfeel-mk2-protocol.md) | 识别、传输 | 前缀、BLE、控制 SPP 如上；OTA AE00/AE01/AE02 及 OTA SPP 独立 | A 控制通道；OTA 不实现；静态 |
-| 同上 | 初始化、接收字段 | 共享 V2 帧及 getInfo，35 字节，MTU 协商不保证成功；接收 DD | A；静态，初始化回包夹具合成 |
+| 同上 | 初始化、接收字段 | 3.8.0 的共享 V2 帧及 getInfo，35 字节，MTU 协商不保证成功；接收 DD | A；静态，初始化回包夹具合成 |
 | 同上 | 设置命令 | ANC、轮换、低音、触控、游戏、多点、音频按上表；寻机未开放 | A/C/不实现，静态 |
 | 同上 | OTA | JL、门槛 200，升级内层格式未知 | 不实现；静态 |
 | [OpenFeel MK2](models/openfeel-mk2-protocol.md) | 识别、传输、初始化 | 前缀、BLE/SPP、共享 getInfo；FA 3E 是独立读取而非 getInfo | A；静态，回包夹具合成 |
@@ -153,7 +153,7 @@ AGATE/AGATE X/CERAMICS 依次查询 01、0c、04、08、0b、02、05、09、13�
 |---|---|---|
 | 01 | byte7/8/9 电量，前三区忽略盒 | D/B |
 | 02 | byte9–10 hex 整数转十进制固件字符串 | D |
-| 04 | 前三区 raw0→控制器2、raw1/2→0；后三 raw0→2、1→0、2→4；前三区 raw2 未知避免伪确认 | B |
+| 04 | AGATE、AGATE X 的 raw1/2 均读回同一 Rock 选项，raw0 为各自的第二项。CERAMICS 的 raw2 有歧义，保留 Unknown。扩展型号 raw0/1/2 分别解为 HIFI/POP/ROCK | B |
 | 05 | 前三区索引7、9、11、8、10、12低半字节；后三索引9、15、21、27、12、18、24、30 | B，槽对应推断、合成 fixture |
 | 08 | byte7=01 开 | D |
 | 09 | 前三区 thrower；后三有接收，只有 EXPLORER 有面板 | B |
@@ -191,7 +191,7 @@ getKey 02、无 CRC、LEN 宽度未知、27/28 语义未知、按 hex 解析、E
 
 ### Cambrian（B；`models/cambrian-protocol.md` 各节）
 
-- 识别 0b0c0a0c；BLE+SPP；初始化立即查询，500ms 后再查；单体电量证据冲突：`cambrian-protocol.md:47,49,75` 将 list[0]/字符 [8,10) 称第1路，但 `families/rs-common.md:55,101` 明确 handler 的 RBatteryData 偏移 0x17 对应字符 [12,14) 即第3路，`swift-protocol.md:50` 同样确认该偏移；本实现取第3路，上游需修正冲突。
+- 识别 0b0c0a0c；BLE+SPP；初始化立即查询，500ms 后再查；单体电量取第三路（十六进制字符 `[12,14)`）。接收器写入与型号处理器读取的 `RBatteryData` 字段偏移均为 `0x17`。RoseLink 3.8.0 静态确认，待实机验证。见[型号研究](models/cambrian-protocol.md#电量)，同步自 rose_reverse 提交 `dcd6a6e`。
 - 设置表逐行：电量；降噪 1202/04/06/08；通透 5a01/02/03；EQ 2a01/00/02；面板结构；游戏 0e01/00；多点 2b04/00；音频 2b00/01；寻机 5e01..04 无读回不开放；触控六槽 01 SS 0A；总开关 0e00/02；更多结构；星芒云业务范围外；OTA 范围外；提示音 5c01..05。无 ANC 档位、无长按。
 - 接收表逐行：0c 单体、2b 音频及多点、01/07/08/09/0d/0e/2a/2c/2d/2e/33 族解析；未配置功能不开放。OTA AB 全部 OTA 表行仅记录，不实现。
 
@@ -224,35 +224,39 @@ getKey 02、无 CRC、LEN 宽度未知、27/28 语义未知、按 hex 解析、E
 前缀 0a0b0a0b 仅开发调试，不是零售型号，不注册；BLE、禁用 SPP、地址、共享初始化、左右盒电量及全部设置/接收字段为族证据，不将通用控件当成零售型号能力。ANC/通透映射及提示音推断，寻机无读回；OTA none，整节范围外。
 
 
-## 仍未适配的 23 个 RS Common V2 清单分支
+## 两版型号清单的完整覆盖
 
-以下仍为“不实现”：只有清单能力与共享族命令，缺少本型号参数范围、初始化或差异处理的完整字节证据。不能把共享 Sender 方法或 App 控件入口直接作为型号可用能力。来源为[识别分支清单](00-supported-models-and-capabilities.md#支持的耳机与识别分支)，状态为静态，均无本项目实机验证。
+3.8.6 注册 48 个蓝牙耳机配置。3.8.0 另有 Magician，两版合计 49 项；OpenFeel、OpenFun 内部再按硬件拆分后共 52 个 OpenRose 型号配置。[3.8.6 分支变化](3.8.6-model-delta.md) · [3.8.6 机器清单](supported-devices-3.8.6.json) · [3.8.0 清单](00-supported-models-and-capabilities.md)
 
-| 分支 | 前缀 | 族 | 处理 |
-|---|---|---|---|
-| CERAMICS-MK2 | 0b0e0a0c | V2 | 不实现 |
-| CERAMICS-MK2 [8912F] | 0b0e208b | V2 | 不实现 |
-| CERAMICS-MK2 [5736] | 45d7b286 | V2 | 不实现 |
-| CERAMICS-U | 0b0d0a0b | V2 | 不实现 |
-| CERAMICS-U [HSC-2710] | 0b137957 | V2 | 不实现 |
-| SpeakFeel [speakfree] | 0b0f0a0b | V2 | 不实现 |
-| Magician | 0b0e0a0d | V2 | 不实现 |
-| FURINA | 0b110a0c | V2 | 不实现 |
-| Zircon | 0b110a0b | V2 | 不实现 |
-| Hyacinth | 0b120a0b | V2 | 不实现 |
-| Astro X | 0b0e0a0b | V2 | 不实现 |
-| Opal | 0b0a0a12 | V2 | 不实现 |
-| Mirror | 0b0a0a13 | V2 | 不实现 |
-| KY01 | 0a0b0a0d | V2 | 不实现 |
-| Coral | 0b0e0a0e | V2 | 不实现 |
-| Patamon | 0b0ae916 | V2 | 不实现 |
-| Tailmon | 0b0a941f | V2 | 不实现 |
-| Gabumon | 0b0a2aed | V2 | 不实现 |
-| Agumon | 0b0a34fd | V2 | 不实现 |
-| SPEAKFEEL [speakfeel2] | 0b0e3ce6 | V2 | 不实现 |
-| OpenFeel L | 45d7cbed | V2 | 不实现 |
-| FIRST ANGEL | 0b0e64be | V2 | 不实现 |
-| MOKA | 68f5b8eb | V2 | 不实现 |
+3.8.6 的 31 个 RS Common V2 型号按面板取值生成首条批量查询。字段顺序存于每个型号的配置；历史型号文档中 3.8.0 的固定查询仅适用于对应基线。
+
+下表链接到各分支的逐项记录。表中每份型号文档的“识别、传输、电量、设置命令、接收字段”均按实际硬件分支取值（B），同族的查询、帧和命令编码沿用族实现（A）。Astro X 的轻拍、空间与自适应控制，SPEAKFEEL 的独立麦克风为新增控制类型（C）。每个型号的“未实现与未知”和“OTA”列出剩余项及依据；寻机事件只表达设备上报的局部变化。表内型号采用静态证据，未作耳机实测。
+
+| 型号与协议记录 | 协议族 | 型号差异与能力边界 |
+| --- | --- | --- |
+| [CERAMICS-MK2（标准、8912F、5736）](models/ceramics-mk2-protocol.md) | RS Common V2 | 三分支独立识别；5736 仅读左右耳电量。曲线、语言和提示音按分支及固件开放。 |
+| [CERAMICS-U（标准、HSC-2710）](models/ceramics-u-protocol.md) | RS Common V2 | 深度降噪、三档 ANC、两档通透；自动降噪与提示音语言按分支开放。 |
+| [FURINA](models/furina-protocol.md) | RS Common V2 | 深度降噪、轮换、EQ、佩戴检测、音频模式。 |
+| [Zircon](models/zircon-protocol.md) | RS Common V2 | 深度降噪、轮换、EQ、佩戴检测、音频模式。 |
+| [Coral](models/coral-protocol.md) | RS Common V2 | 两种降噪模式、三档低音增强。 |
+| [SpeakFeel（speakfree）](models/speakfree-protocol.md) | RS Common V2 | 单体电量、EQ、提示音语言、aptX / HD / Adaptive。 |
+| [SPEAKFEEL（speakfeel2）](models/speakfeel2-protocol.md) | RS Common V2 | 单体电量、两档低音增强、独立麦克风。与 speakfree 用广播区分。 |
+| [Magician](models/magician-protocol.md) | RS Common V2 | 保留 3.8.0 配置；单体电量、提示音语言、aptX / HD。 |
+| [Astro X](models/astro-x-protocol.md) | RS Common V2 | 连接时校时。按型号开放轻拍、空间模式、内容模式与耳道自适应；增益与听力保护需固件 ≥152。 |
+| [OpenFeel L](models/openfeel-l-protocol.md) | RS Common V2 | 预设、自定义曲线、增益和听力保护。 |
+| [FIRST ANGEL](models/first-angel-protocol.md) | RS Common V2 | 音乐和游戏有不同的 EQ 选项；提示音静音需固件 ≥510。 |
+| [MOKA](models/moka-protocol.md) | RS Common V2 | 单体电量、预设、自定义曲线、音频模式。 |
+| [Hyacinth](models/hyacinth-protocol.md) | RS Common V2 | 预设 EQ、触控、提示音语言和音频模式。 |
+| [Opal](models/opal-protocol.md) | RS Common V2 | 三种降噪模式、预设 EQ、触控。 |
+| [Mirror](models/mirror-protocol.md) | RS Common V2 | 预设 EQ、触控、提示音语言。 |
+| [KY01](models/ky01-protocol.md) | RS Common V2 | 预设 EQ、触控、提示音语言。触控动作允许降噪轮换。 |
+| [Luminous Patamon、Tailmon、Gabumon、Agumon](models/luminous-protocol.md) | RS Common V2 | 四个独立前缀；仅左右耳电量、触控、游戏、多点、提示音。 |
+| [BudsFeel AE Neo](models/budsfeel-ae-neo-protocol.md) | RS Common V2 | 仅左右耳电量、自定义 EQ、增益、听力保护。 |
+| [EarFeel iE Neo](models/earfeel-ie-neo-protocol.md) | RS Common V2 | 仅左右耳电量、三种降噪模式和轮换、自定义 EQ、增益、听力保护。 |
+| [EarFeel iE2](models/earfeel-ie2-protocol.md) | RS Common V2 | 含仓电量、四种降噪模式和轮换、自定义 EQ、AAC/SBC 与 LDAC。 |
+| [SportFeel 8912F](models/sportfeel-8912f-protocol.md) | RS Common V2 | 含仓电量、HIFI 预设、触控、音频模式；与早期 SportFeel 的协议和电量布局不同。 |
+| [Cambrian S](models/cambrian-s-protocol.md) | RS Common | 单体电量、降噪、EQ、通透档位与音频模式。 |
+| [OpenLink](models/openlink-protocol.md) | RS Common | 左右耳电量、触控、游戏、多点与提示音。 |
 
 ## 既有四款 RS Common V2 的离线验证记录
 
@@ -265,13 +269,20 @@ getKey 02、无 CRC、LEN 宽度未知、27/28 语义未知、按 hex 解析、E
 
 实机验证：四款的广播、BLE / SPP 连接、初始化读取、设置效果与持久化均**未验证**。离线回包全部标为合成，不作为实机证据。
 
-## 本次新增型号的验证记录
+## 前 23 个 OpenRose 配置的验证记录
 
 - `./gradlew spotlessApply` 与 `./gradlew offlineCheck` 已通过，覆盖核心、集成与双样式界面测试、平台编译、静态检查和既有覆盖率门槛；未新增 detekt 或 lint 基线条目。
-- 可执行冒烟逐款覆盖全部 23 个注册配置的连接与电量；在提供游戏模式的配置上，确认缓存状态不能代替新鲜回读，随后用合成通知完成设置确认。临时冒烟源码已移除。
+- 可执行冒烟逐款覆盖当时的 23 个注册配置的连接与电量；在提供游戏模式的配置上，确认缓存状态不能代替新鲜回读，随后用合成通知完成设置确认。临时冒烟源码已移除。
 - 正式会话回归覆盖 HeadFeel 忽略首条无语义查询时不触发错误恢复、Cambrian 重复初始化查询前的 500ms 间隔，以及空间音频必须收到自身字段的新鲜回读。
 - Miuix 与 Material 3 的空间音频开关、HeadFeel 电源键 / ANC 键及 Cambrian 音量键标签均已实际渲染并检查截图；截图前推进虚拟动画时间，避免把过渡帧当作最终布局。
 - 型号识别回归覆盖广播前缀、旧名、MK2 与 Swift 代际、单字母型号须匹配品牌，以及同名硬件分支不凭名称猜选。新增型号枚举不出现在型号入口以外的 main 源码分支中。
 
 实机验证：新增型号的广播、BLE / SPP 连接、设置效果与持久化均未验证。合成通知只验证客户端行为，不作为耳机实际响应证据。
 
+
+## 双版本清单验收
+
+- `RoseLinkInventoryTest` 直接读取两份 APK 研究清单，向生产识别器输入全部 54 个不同广播前缀。每个前缀均选中预期协议族，两版清单合计对应全部 52 个 OpenRose 型号配置。测试还将 3.8.6 的全部 31 个 V2 配置实际编码的首条查询与独立研究清单逐字节核对。
+- `ModelCoverageTest` 逐配置通过扫描、添加和初始化到达就绪状态，检查当前型号的电量槽，并释放连接。对 V2 配置另验证游戏模式写入及新鲜回读。会话使用合成蓝牙数据。
+- 分支测试覆盖同名硬件的广播识别、固件门槛、自定义曲线、FIRST ANGEL 的 EQ 模式切换、Astro X 的校时和轻拍、独立麦克风与空间模式。双风格界面与模块 IPC 回归覆盖新增控制项。
+- OpenRose 的 `check`、`offlineCheck` 和 Android 调试 APK 构建通过。中英文站点通过静态构建。i5 保留单副设备的真实读取记录；本次新增型号均未进行实机连接、写入效果或持久化验证。

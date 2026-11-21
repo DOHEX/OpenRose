@@ -1,5 +1,6 @@
 package io.github.dohex.openrose.ui
 
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.semantics.Role
@@ -69,6 +70,44 @@ class OpenRoseNavigationUiTest {
             harness.clickTab("设置")
             harness.render()
             assertTrue(harness.hasText("个性化"))
+        }
+    }
+
+    @Test
+    fun circulationPairingOpensFromSettingsOnlyWhileTheHostCanPair() {
+        for (style in InterfaceStyle.entries) {
+            val available = mutableStateOf(true)
+            val platform = object : PlatformUi {
+                override val platformName = "Test"
+                override val circulationPairingContent: (@Composable () -> Unit)?
+                    @Composable get() = if (available.value) {
+                        { AppText("配对测试内容") }
+                    } else {
+                        null
+                    }
+            }
+            withHarness(420, 900, state(connected = false), style, platform) { harness ->
+                harness.render()
+                harness.clickTab("设置")
+                harness.render()
+                assertTrue(harness.hasClickableText("流转配对"))
+                assertFalse(harness.hasText("配对测试内容"))
+
+                harness.clickText("流转配对")
+                harness.render()
+                assertTrue(harness.hasText("配对测试内容"))
+                harness.clickContentDescription("返回")
+                harness.render(frames = 120)
+                assertTrue(harness.hasClickableText("流转配对"))
+
+                harness.clickText("流转配对")
+                harness.render()
+                available.value = false
+                harness.render(frames = 120)
+                assertTrue(harness.hasText("个性化"))
+                assertFalse(harness.hasText("流转配对"))
+                assertFalse(harness.hasText("配对测试内容"))
+            }
         }
     }
 
@@ -221,6 +260,7 @@ class OpenRoseNavigationUiTest {
         height: Int,
         initialState: ControlState,
         style: InterfaceStyle = InterfaceStyle.MIUIX,
+        platform: PlatformUi = BasicPlatformUi("Test"),
         block: suspend (NavigationHarness) -> Unit,
     ) = runOpenRoseUiTest(width, height) {
         val state = mutableStateOf(initialState)
@@ -228,7 +268,7 @@ class OpenRoseNavigationUiTest {
         val model = FakeOpenRoseModel(state, uiSettings)
         model.onStartScan = { state.value = state.value.copy(scan = io.github.dohex.openrose.core.ScanState.Scanning) }
         model.onStopScan = { state.value = state.value.copy(scan = io.github.dohex.openrose.core.ScanState.Idle) }
-        setContent { OpenRoseApp(model = model, platformUi = BasicPlatformUi("Test")) }
+        setContent { OpenRoseApp(model = model, platformUi = platform) }
         val settingsChanges = model.settingsChanges
         val settingWrites = model.settingWrites
         block(NavigationHarness(this, state, uiSettings, settingsChanges, settingWrites))

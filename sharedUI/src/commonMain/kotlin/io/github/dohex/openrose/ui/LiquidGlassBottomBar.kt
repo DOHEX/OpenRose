@@ -8,8 +8,6 @@ package io.github.dohex.openrose.ui
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.EaseOut
-import androidx.compose.animation.core.VectorConverter
-import androidx.compose.animation.core.VisibilityThreshold
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.MutatorMutex
@@ -183,7 +181,7 @@ internal fun MiuixLiquidGlassBottomBar(
     val interactiveHighlight = remember(animationScope, dragAnimation) {
         InteractiveHighlight(
             animationScope = animationScope,
-            position = { size, _ ->
+            position = { size ->
                 val center = (dragAnimation.value + 0.5f) * tabWidthPx + panelOffset
                 Offset(if (isLtr) center else size.width - center, size.height / 2f)
             },
@@ -459,18 +457,14 @@ private class DampedDragAnimation(
     }
 }
 
-/** A light glow that follows the finger across the glass while the indicator is held. */
+/** A light glow centred on the indicator while it is held. */
 private class InteractiveHighlight(
     private val animationScope: CoroutineScope,
-    private val position: (size: Size, offset: Offset) -> Offset,
+    private val position: (Size) -> Offset,
 ) {
     private val pressProgressAnimationSpec = spring(0.5f, 300f, 0.001f)
-    private val positionAnimationSpec = spring(0.5f, 300f, Offset.VisibilityThreshold)
 
     private val pressProgressAnimation = Animatable(0f, 0.001f)
-    private val positionAnimation = Animatable(Offset.Zero, Offset.VectorConverter, Offset.VisibilityThreshold)
-
-    private var startPosition = Offset.Zero
 
     private val shader = if (isRuntimeShaderSupported()) {
         RuntimeShader(
@@ -495,7 +489,7 @@ half4 main(float2 coord) {
         if (progress > 0f) {
             if (shader != null) {
                 drawRect(Color.White.copy(0.08f * progress), blendMode = BlendMode.Plus)
-                val center = position(size, positionAnimation.value)
+                val center = position(size)
                 shader.setFloatUniform("size", size.width, size.height)
                 shader.setColorUniform("color", Color.White.copy(0.15f * progress))
                 shader.setFloatUniform("radius", size.minDimension * 1.5f)
@@ -510,25 +504,14 @@ half4 main(float2 coord) {
 
     val gestureModifier: Modifier = Modifier.pointerInput(animationScope) {
         inspectDragGestures(
-            onDragStart = { down ->
-                startPosition = down.position
-                animationScope.launch {
-                    launch { pressProgressAnimation.animateTo(1f, pressProgressAnimationSpec) }
-                    launch { positionAnimation.snapTo(startPosition) }
-                }
-            },
-            onDragEnd = { settle() },
-            onDragCancel = { settle() },
-        ) { change, _ ->
-            animationScope.launch { positionAnimation.snapTo(change.position) }
-        }
+            onDragStart = { animatePress(1f) },
+            onDragEnd = { animatePress(0f) },
+            onDragCancel = { animatePress(0f) },
+        )
     }
 
-    private fun settle() {
-        animationScope.launch {
-            launch { pressProgressAnimation.animateTo(0f, pressProgressAnimationSpec) }
-            launch { positionAnimation.animateTo(startPosition, positionAnimationSpec) }
-        }
+    private fun animatePress(target: Float) {
+        animationScope.launch { pressProgressAnimation.animateTo(target, pressProgressAnimationSpec) }
     }
 }
 
@@ -540,7 +523,7 @@ private suspend fun PointerInputScope.inspectDragGestures(
     onDragStart: (down: PointerInputChange) -> Unit = {},
     onDragEnd: (change: PointerInputChange) -> Unit = {},
     onDragCancel: () -> Unit = {},
-    onDrag: (change: PointerInputChange, dragAmount: Offset) -> Unit,
+    onDrag: (change: PointerInputChange, dragAmount: Offset) -> Unit = { _, _ -> },
 ) {
     awaitEachGesture {
         val initialDown = awaitFirstDown(false, PointerEventPass.Initial)

@@ -4,6 +4,7 @@ import io.github.dohex.openrose.core.DeviceCapabilities
 import io.github.dohex.openrose.core.DeviceSetting
 import io.github.dohex.openrose.core.TouchControlCapabilities
 import io.github.dohex.openrose.core.protocol.BatteryLayout
+import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.GattProfile
 import io.github.dohex.openrose.core.protocol.ProtocolFamily
 import io.github.dohex.openrose.core.protocol.RsCommonInit
@@ -29,21 +30,28 @@ internal val openFunTouch = ModelSpec(
     batteryLayout = BatteryLayout.EARBUDS_ONLY,
     equalizerPresetLabels = emptyMap(),
     rsCommonInit = RsCommonInit.DEFAULT,
-    capabilities = {
-        DeviceCapabilities(
-            readableFields = ProtocolFamily.RS_COMMON.readableFields.toPersistentSet(),
-            writableSettings = persistentSetOf(
-                DeviceSetting.GAME_MODE,
-                DeviceSetting.TOUCH_BINDING,
-                DeviceSetting.MULTIPOINT,
-                DeviceSetting.TOUCH_ENABLED,
-                DeviceSetting.PROMPT_VOLUME,
-            ),
-            touchControl = TouchControlCapabilities(
-                rsCommonTouchSlots,
-                persistentSetOf("none", "play_pause", "previous_track", "next_track", "volume_up", "volume_down"),
-            ),
-            promptVolumeLevels = (1..5).toPersistentSet(),
-        )
-    },
+    capabilities = { rsOpenTouchControls },
+)
+
+internal val rsOpenTouchControls = DeviceCapabilities(
+    readableFields = rsReadings(
+        BatteryLayout.EARBUDS_ONLY,
+        DeviceField.TOUCH_KEYS,
+        DeviceField.TOUCH_ENABLED,
+        DeviceField.AUDIO_MODE,
+        DeviceField.MULTIPOINT,
+        DeviceField.PROMPT_VOLUME,
+    ),
+    writableSettings = persistentSetOf(
+        DeviceSetting.GAME_MODE,
+        DeviceSetting.TOUCH_BINDING,
+        DeviceSetting.MULTIPOINT,
+        DeviceSetting.TOUCH_ENABLED,
+        DeviceSetting.PROMPT_VOLUME,
+    ),
+    touchControl = TouchControlCapabilities(
+        rsCommonTouchSlots,
+        persistentSetOf("none", "play_pause", "previous_track", "next_track", "volume_up", "volume_down"),
+    ),
+    promptVolumeLevels = (1..5).toPersistentSet(),
 )

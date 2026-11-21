@@ -59,6 +59,7 @@ object ControlWire {
         "selection" to state.transportSelection?.let(::encode),
         "recovery" to state.connectionRecovery?.let(::encode),
         "target" to state.connectionTarget?.let(::encode),
+        "audioDevice" to state.audioDeviceId?.value?.let(::str),
     )
 
     fun decodeOwned(wire: Wire): OwnedControlState {
@@ -77,6 +78,7 @@ object ControlWire {
                 transportSelection = node.optional("selection")?.let(::decodeSelection),
                 connectionRecovery = node.optional("recovery")?.let(::decodeRecovery),
                 connectionTarget = node.optional("target")?.let(::decodeCandidate),
+                audioDeviceId = node.optional("audioDevice")?.let { DeviceId(it.asStr()) },
             ),
         )
     }
@@ -306,17 +308,8 @@ object ControlWire {
         "writable" to arr(capabilities.writableSettings.map { Wire.Str(it.name) }),
         "noise" to capabilities.noiseControl?.let(::encode),
         "equalizer" to capabilities.equalizer?.let(::encode),
-        "touch" to capabilities.touchControl?.let { touch ->
-            obj(
-                "slots" to arr(touch.slots.map { obj("side" to str(it.side), "gesture" to str(it.gesture)) }),
-                "actions" to arr(touch.actions.map(::str)),
-                "slotLabels" to arr(
-                    touch.slotLabels.map { (slot, label) ->
-                        obj("side" to str(slot.side), "gesture" to str(slot.gesture), "label" to str(label))
-                    },
-                ),
-            )
-        },
+        "touch" to capabilities.touchControl?.let(::encodeTouch),
+        "tap" to capabilities.tapControl?.let(::encodeTouch),
         "audio" to capabilities.audioControl?.let { audio ->
             obj("modes" to arr(audio.modes.map(::str)), "coupled" to bool(audio.multipointCoupled))
         },
@@ -325,6 +318,8 @@ object ControlWire {
         "hearingProtection" to arr(capabilities.hearingProtectionLevels.map(::num)),
         "bassBoost" to arr(capabilities.bassBoostLevels.map(::num)),
         "promptLanguages" to arr(capabilities.promptLanguages.map(::str)),
+        "spatialModes" to arr(capabilities.spatialModes.map(::str)),
+        "spatialContents" to arr(capabilities.spatialContents.map(::str)),
     )
 
     private fun decodeCapabilities(wire: Wire): DeviceCapabilities = wire.asObj().let { node ->
@@ -333,17 +328,8 @@ object ControlWire {
             writableSettings = node.arr("writable").map { it.asEnum<DeviceSetting>() }.toPersistentSet(),
             noiseControl = node.optional("noise")?.let(::decodeNoise),
             equalizer = node.optional("equalizer")?.let(::decodeEqualizer),
-            touchControl = node.optional("touch")?.asObj()?.let { touch ->
-                TouchControlCapabilities(
-                    touch.arr("slots")
-                        .map { it.asObj().let { slot -> TouchSlot(slot.str("side"), slot.str("gesture")) } }
-                        .toPersistentSet(),
-                    touch.arr("actions").map { it.asStr() }.toPersistentSet(),
-                    touch.arr("slotLabels").associate { entry ->
-                        entry.asObj().let { slot -> TouchSlot(slot.str("side"), slot.str("gesture")) to slot.str("label") }
-                    }.toPersistentMap(),
-                )
-            },
+            touchControl = node.optional("touch")?.let(::decodeTouch),
+            tapControl = node.optional("tap")?.let(::decodeTouch),
             audioControl = node.optional("audio")?.asObj()?.let { audio ->
                 AudioControlCapabilities(audio.arr("modes").map { it.asStr() }.toPersistentSet(), audio.bool("coupled"))
             },
@@ -352,6 +338,30 @@ object ControlWire {
             hearingProtectionLevels = node.arr("hearingProtection").map { it.asInt() }.toPersistentSet(),
             bassBoostLevels = node.arr("bassBoost").map { it.asInt() }.toPersistentSet(),
             promptLanguages = node.arr("promptLanguages").map { it.asStr() }.toPersistentSet(),
+            spatialModes = node.optional("spatialModes")?.asArr().orEmpty().map { it.asStr() }.toPersistentSet(),
+            spatialContents = node.optional("spatialContents")?.asArr().orEmpty().map { it.asStr() }.toPersistentSet(),
+        )
+    }
+
+    private fun encodeTouch(touch: TouchControlCapabilities): Wire = obj(
+        "slots" to arr(touch.slots.map { obj("side" to str(it.side), "gesture" to str(it.gesture)) }),
+        "actions" to arr(touch.actions.map(::str)),
+        "slotLabels" to arr(
+            touch.slotLabels.map { (slot, label) ->
+                obj("side" to str(slot.side), "gesture" to str(slot.gesture), "label" to str(label))
+            },
+        ),
+    )
+
+    private fun decodeTouch(wire: Wire): TouchControlCapabilities = wire.asObj().let { touch ->
+        TouchControlCapabilities(
+            touch.arr("slots")
+                .map { it.asObj().let { slot -> TouchSlot(slot.str("side"), slot.str("gesture")) } }
+                .toPersistentSet(),
+            touch.arr("actions").map { it.asStr() }.toPersistentSet(),
+            touch.arr("slotLabels").associate { entry ->
+                entry.asObj().let { slot -> TouchSlot(slot.str("side"), slot.str("gesture")) to slot.str("label") }
+            }.toPersistentMap(),
         )
     }
 

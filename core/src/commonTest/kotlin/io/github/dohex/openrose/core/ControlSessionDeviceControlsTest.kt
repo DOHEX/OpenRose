@@ -136,15 +136,15 @@ class ControlSessionDeviceControlsTest {
     fun i7AllEightSlotsAndNineActionsConfirmFromFragmentedModelReplies() = runTest {
         val (session, link) = ready(ModelProfile.I7_RS_V2)
         for ((side, gesture, action, write, query, reply) in listOf(
-            TouchVector("left", "single", "none", "ff040301010008aa", "ff0502fa0101aa", "dd001101010002ff03ff04ff11ff12ff13ff14ff3caa"),
-            TouchVector("left", "double", "play_pause", "ff06030102010caa", "ff0702fa0103aa", "dd00110101ff020103ff04ff11ff12ff13ff14ff3daa"),
-            TouchVector("left", "triple", "previous_track", "ff080301030210aa", "ff0902fa0105aa", "dd00110101ff02ff030204ff11ff12ff13ff14ff3eaa"),
-            TouchVector("left", "long", "next_track", "ff0a0301040314aa", "ff0b02fa0107aa", "dd00110101ff02ff03ff040311ff12ff13ff14ff3faa"),
-            TouchVector("right", "single", "volume_up", "ff0c0301110424aa", "ff0d02fa0109aa", "dd00110101ff02ff03ff04ff110412ff13ff14ff40aa"),
-            TouchVector("right", "double", "volume_down", "ff0e0301120528aa", "ff0f02fa010baa", "dd00110101ff02ff03ff04ff11ff120513ff14ff41aa"),
-            TouchVector("right", "triple", "game_mode", "ff10030113062caa", "ff1102fa010daa", "dd00110101ff02ff03ff04ff11ff12ff130614ff42aa"),
-            TouchVector("right", "long", "voice_assistant", "ff120301140730aa", "ff1302fa010faa", "dd00110101ff02ff03ff04ff11ff12ff13ff140743aa"),
-            TouchVector("right", "long", "noise_cycle", "ff140301140833aa", "ff1502fa0111aa", "dd00110101ff02ff03ff04ff11ff12ff13ff140844aa"),
+            TouchVector("left", "single", "none", "ff030301010007aa", "ff0402fa0100aa", "dd001101010002ff03ff04ff11ff12ff13ff14ff3caa"),
+            TouchVector("left", "double", "play_pause", "ff05030102010baa", "ff0602fa0102aa", "dd00110101ff020103ff04ff11ff12ff13ff14ff3daa"),
+            TouchVector("left", "triple", "previous_track", "ff07030103020faa", "ff0802fa0104aa", "dd00110101ff02ff030204ff11ff12ff13ff14ff3eaa"),
+            TouchVector("left", "long", "next_track", "ff090301040313aa", "ff0a02fa0106aa", "dd00110101ff02ff03ff040311ff12ff13ff14ff3faa"),
+            TouchVector("right", "single", "volume_up", "ff0b0301110423aa", "ff0c02fa0108aa", "dd00110101ff02ff03ff04ff110412ff13ff14ff40aa"),
+            TouchVector("right", "double", "volume_down", "ff0d0301120527aa", "ff0e02fa010aaa", "dd00110101ff02ff03ff04ff11ff120513ff14ff41aa"),
+            TouchVector("right", "triple", "game_mode", "ff0f030113062baa", "ff1002fa010caa", "dd00110101ff02ff03ff04ff11ff12ff130614ff42aa"),
+            TouchVector("right", "long", "voice_assistant", "ff11030114072faa", "ff1202fa010eaa", "dd00110101ff02ff03ff04ff11ff12ff13ff140743aa"),
+            TouchVector("right", "long", "noise_cycle", "ff130301140832aa", "ff1402fa0110aa", "dd00110101ff02ff03ff04ff11ff12ff13ff140844aa"),
         )) {
             val pending = async { session.set(DeviceSetting.TOUCH_BINDING, FieldValue.TouchAssignment(side, gesture, action)) }
             runCurrent()
@@ -240,10 +240,10 @@ class ControlSessionDeviceControlsTest {
         val (session, link) = ready(ModelProfile.I7_RS_V2)
         assertEquals(false, session.state.value.device?.capabilities?.audioControl?.multipointCoupled)
         for ((mode, write, query, reply) in listOf(
-            ModeVector("aac_sbc", "ff04022b0030aa", "ff0502fa2b2baa", "dd00022b000aaa"),
-            ModeVector("ldac", "ff06022b0133aa", "ff0702fa2b2daa", "dd00022b010baa"),
-            ModeVector("lhdc", "ff08022b0236aa", "ff0902fa2b2faa", "dd00022b020caa"),
-            ModeVector("lc3", "ff0a022b0339aa", "ff0b02fa2b31aa", "dd00022b030daa"),
+            ModeVector("aac_sbc", "ff03022b002faa", "ff0402fa2b2aaa", "dd00022b000aaa"),
+            ModeVector("ldac", "ff05022b0132aa", "ff0602fa2b2caa", "dd00022b010baa"),
+            ModeVector("lhdc", "ff07022b0235aa", "ff0802fa2b2eaa", "dd00022b020caa"),
+            ModeVector("lc3", "ff09022b0338aa", "ff0a02fa2b30aa", "dd00022b030daa"),
         )) {
             val previousMode = reading(session, DeviceField.AUDIO_MODE)
             val previousMultipoint = reading(session, DeviceField.MULTIPOINT)
@@ -259,8 +259,8 @@ class ControlSessionDeviceControlsTest {
             assertEquals(previousMultipoint, reading(session, DeviceField.MULTIPOINT))
         }
         for ((enabled, write, query, reply) in listOf(
-            SwitchVector(DeviceSetting.MULTIPOINT, true, "ff0c02320140aa", "ff0d02fa323aaa", "dd0002320112aa"),
-            SwitchVector(DeviceSetting.MULTIPOINT, false, "ff0e02320041aa", "ff0f02fa323caa", "dd0002320011aa"),
+            SwitchVector(DeviceSetting.MULTIPOINT, true, "ff0b0232013faa", "ff0c02fa3239aa", "dd0002320112aa"),
+            SwitchVector(DeviceSetting.MULTIPOINT, false, "ff0d02320040aa", "ff0e02fa323baa", "dd0002320011aa"),
         ).map { MultipointVector(it.enabled, it.write, it.query, it.reply) }) {
             val pending = async { session.set(DeviceSetting.MULTIPOINT, FieldValue.Toggle(enabled)) }
             runCurrent()
@@ -288,10 +288,10 @@ class ControlSessionDeviceControlsTest {
                 )
             } else {
                 listOf(
-                    SwitchVector(DeviceSetting.TOUCH_ENABLED, false, "ff040207010daa", "ff0502fa0707aa", "dd00020701e7aa"),
-                    SwitchVector(DeviceSetting.TOUCH_ENABLED, true, "ff060207000eaa", "ff0702fa0709aa", "dd00020700e6aa"),
-                    SwitchVector(DeviceSetting.EAR_DETECTION, true, "ff0802080011aa", "ff0902fa080caa", "dd00020800e7aa"),
-                    SwitchVector(DeviceSetting.EAR_DETECTION, false, "ff0a02080114aa", "ff0b02fa080eaa", "dd00020801e8aa"),
+                    SwitchVector(DeviceSetting.TOUCH_ENABLED, false, "ff030207010caa", "ff0402fa0706aa", "dd00020701e7aa"),
+                    SwitchVector(DeviceSetting.TOUCH_ENABLED, true, "ff050207000daa", "ff0602fa0708aa", "dd00020700e6aa"),
+                    SwitchVector(DeviceSetting.EAR_DETECTION, true, "ff0702080010aa", "ff0802fa080baa", "dd00020800e7aa"),
+                    SwitchVector(DeviceSetting.EAR_DETECTION, false, "ff0902080113aa", "ff0a02fa080daa", "dd00020801e8aa"),
                 )
             }
             for ((setting, enabled, write, query, reply) in vectors) {

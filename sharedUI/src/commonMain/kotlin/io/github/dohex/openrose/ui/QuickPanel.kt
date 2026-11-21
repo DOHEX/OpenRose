@@ -65,6 +65,8 @@ import io.github.dohex.openrose.core.protocol.BatteryLayout
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.dohex.openrose.ui.model.OpenRoseModel
+import io.github.dohex.openrose.ui.model.WindowDestination
+import io.github.dohex.openrose.ui.model.settingsFor
 import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import kotlin.math.roundToInt
@@ -101,9 +103,10 @@ fun QuickPanel(
     model: OpenRoseModel,
     selection: PrimaryDeviceSelection,
     dynamicColor: Boolean,
-    onOpenApp: () -> Unit,
+    onOpenApp: (WindowDestination?) -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
+    circulation: CirculationClient? = null,
 ) {
     val state by model.state.collectAsState()
     val uiSettings by model.uiSettings.collectAsState()
@@ -182,6 +185,7 @@ fun QuickPanel(
                             },
                         ),
                     )
+                    if (circulation != null && state.readySession == null) RemoteHeadsets(circulation)
                     QuickPanelContent(model, state, selection, onOpenApp)
                 }
             }
@@ -220,7 +224,7 @@ private fun QuickPanelContent(
     model: OpenRoseModel,
     state: ControlState,
     selection: PrimaryDeviceSelection,
-    onOpenApp: () -> Unit,
+    onOpenApp: (WindowDestination?) -> Unit,
 ) {
     val summary = traySummary(state, selection)
     val device = state.activeDevice()?.takeIf { summary.connected }
@@ -228,10 +232,11 @@ private fun QuickPanelContent(
     TrayStatusCard(state, summary)
 
     if (device != null) {
+        val onSet = model.settingsFor(device.sessionId)
         if (device.capabilities.noiseControl != null) {
-            NoiseControlCard(state, device, showLevelControls = false, onSet = model::set)
+            NoiseControlCard(state, device, showLevelControls = false, onSet = onSet)
         }
-        EqualizerChoices(state, device, model::set)
+        EqualizerChoices(state, device, onSet)
         if (DeviceSetting.GAME_MODE in device.capabilities.writableSettings) {
             AppDashboardCard(compact = true) {
                 SettingToggleChoices(
@@ -240,13 +245,13 @@ private fun QuickPanelContent(
                     DeviceSetting.GAME_MODE,
                     device,
                     state.isReady(device) && !state.hasPendingSetting(device),
-                    model::set,
+                    onSet,
                     icon = RoseIcon.GAME,
                 )
             }
         }
         // The diagnostics live in the main window.
-        SettingFeedback(state, device, showPending = true, onViewDetails = onOpenApp)
+        SettingFeedback(state, device, showPending = true, onViewDetails = { onOpenApp(WindowDestination.DIAGNOSTICS) })
     }
 
     TrayActions(model, state, summary, onOpenApp)

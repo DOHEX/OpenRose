@@ -12,6 +12,8 @@ import io.github.dohex.openrose.core.UserSettings
 import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.dohex.openrose.core.transport.DeviceId
 import io.github.dohex.openrose.ui.model.OpenRoseModel
+import io.github.dohex.openrose.ui.model.WindowNavigation
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalForInheritanceCoroutinesApi
 import kotlinx.coroutines.InternalCoroutinesApi
 import kotlinx.coroutines.awaitCancellation
@@ -36,8 +38,7 @@ internal class FakeOpenRoseModel(
 ) : OpenRoseModel {
     override val state: StateFlow<ControlState> = SnapshotStateFlow(mutableState)
     override val uiSettings: StateFlow<UiSettings> = SnapshotStateFlow(mutableUiSettings)
-    val homeNavigationRequests = MutableStateFlow(0L)
-    override val homeNavigationRequest: StateFlow<Long> = homeNavigationRequests
+    override val navigation = WindowNavigation()
     override val notice = MutableStateFlow<String?>(null)
 
     val settingsChanges = mutableListOf<UiSettings>()
@@ -48,6 +49,7 @@ internal class FakeOpenRoseModel(
         private set
 
     var onStartScan: () -> Unit = {}
+    var startScanResult: OperationResult = OperationResult.Success
     var onStopScan: () -> Unit = {}
     var onConnect: (DeviceId) -> Unit = {}
     var onDisconnect: () -> Unit = {}
@@ -59,7 +61,6 @@ internal class FakeOpenRoseModel(
     var onAddDeviceConnect: suspend (DeviceId) -> OperationResult = {
         error("Unexpected add-device connection in this scenario")
     }
-    var onShowHeadphones: () -> Unit = {}
 
     override fun updateUiSettings(settings: UiSettings) {
         settingsChanges += settings
@@ -71,7 +72,10 @@ internal class FakeOpenRoseModel(
         mutableState.value = mutableState.value.copy(settings = settings)
     }
 
-    override fun startScan() = onStartScan()
+    override fun startScan(): CompletableDeferred<OperationResult> {
+        onStartScan()
+        return CompletableDeferred(startScanResult)
+    }
     override fun stopScan() = onStopScan()
     override fun connect(deviceId: DeviceId) {
         connectRequests += deviceId
@@ -81,7 +85,9 @@ internal class FakeOpenRoseModel(
         disconnectCount++
         onDisconnect()
     }
-    override fun set(setting: DeviceSetting, value: FieldValue) {
+    override fun set(sessionId: Long, setting: DeviceSetting, value: FieldValue) {
+        val session = if (setting == DeviceSetting.NOISE_MODE) state.value.noiseModeSession else state.value.readySession
+        if (session?.sessionId != sessionId) return
         settingWrites += setting to value
         onSet(setting, value)
     }
@@ -90,8 +96,4 @@ internal class FakeOpenRoseModel(
         return onSetInSession(sessionId, setting, value)
     }
     override suspend fun connectForAddDevice(deviceId: DeviceId): OperationResult = onAddDeviceConnect(deviceId)
-    override fun showHeadphones() {
-        homeNavigationRequests.value++
-        onShowHeadphones()
-    }
 }

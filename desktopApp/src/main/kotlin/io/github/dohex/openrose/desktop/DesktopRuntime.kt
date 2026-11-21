@@ -6,7 +6,10 @@ import io.github.dohex.openrose.core.PlatformState
 import io.github.dohex.openrose.core.TransportAvailability
 import io.github.dohex.openrose.core.UserSettings
 import io.github.dohex.openrose.core.UserSettingsCodec
+import io.github.dohex.openrose.core.transport.DesktopControlTransport
 import io.github.dohex.openrose.transport.bluez.BluezControlTransport
+import io.github.dohex.openrose.transport.windows.WindowsControlTransport
+import io.github.dohex.openrose.ui.CirculationClient
 import io.github.dohex.openrose.ui.UiSettings
 import io.github.dohex.openrose.ui.UiSettingsCodec
 import io.github.dohex.openrose.ui.model.OpenRoseSettingsStore
@@ -15,7 +18,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -28,7 +30,7 @@ internal class DesktopRuntime(
     private val preferences: Preferences,
     platform: PlatformState,
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
-    private val transport: BluezControlTransport? = null,
+    private val transport: DesktopControlTransport? = null,
 ) {
     private val control: ControlRuntime
     private val availabilityJob: Job?
@@ -65,6 +67,15 @@ internal class DesktopRuntime(
         model = RuntimeOpenRoseModel(control, store, scope)
     }
 
+    fun startCirculation(): CirculationClient {
+        val audio = when (transport) {
+            is BluezControlTransport -> LinuxCirculationAudio(transport.audioProfiles)
+            is WindowsControlTransport -> WindowsCirculationAudio()
+            else -> null
+        }
+        return desktopCirculation(scope, control, audio)
+    }
+
     fun updateDesktopSettings(settings: DesktopSettings) {
         mutableDesktopSettings.value = settings
         save(DesktopSettingsCodec.encode(settings))
@@ -87,7 +98,7 @@ internal class DesktopRuntime(
             try {
                 transport?.close()
             } finally {
-                scope.cancel()
+                scope.coroutineContext[Job]?.cancelAndJoin()
             }
         }
     }

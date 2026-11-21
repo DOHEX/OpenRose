@@ -98,14 +98,14 @@ class ControlSessionEqualizerTest {
     fun allFiveI7PresetsShareTheSessionSequenceAndNormalizeBothEqReplyLayouts() = runTest {
         val (session, link) = ready(ModelProfile.I7_RS_V2)
         assertEquals(persistentSetOf("pop", "hifi", "rock", "light", "eap"), session.state.value.device?.capabilities?.equalizer?.presets)
-        // Independently worked seq04..0d after four complete initialization queries.
+        // Independently worked sequences 03..0c after three complete initialization queries.
         // Single-byte 00/01 are HIFI/POP; the two-byte 00/01 records reverse that order.
         for ((preset, write, query, reply) in listOf(
-            EqVector("hifi", "ff04022a002faa", "ff0502fa2a2aaa", "dd00032a01000baa"),
-            EqVector("pop", "ff06022a0132aa", "ff0702fa2a2caa", "dd00032a00000aaa"),
-            EqVector("rock", "ff08022a0235aa", "ff0902fa2a2eaa", "dd00022a020baa"),
-            EqVector("light", "ff0a022a0338aa", "ff0b02fa2a30aa", "dd00022a030caa"),
-            EqVector("eap", "ff0c022a063daa", "ff0d02fa2a32aa", "dd00022a060faa"),
+            EqVector("hifi", "ff03022a002eaa", "ff0402fa2a29aa", "dd00032a01000baa"),
+            EqVector("pop", "ff05022a0131aa", "ff0602fa2a2baa", "dd00032a00000aaa"),
+            EqVector("rock", "ff07022a0234aa", "ff0802fa2a2daa", "dd00022a020baa"),
+            EqVector("light", "ff09022a0337aa", "ff0a02fa2a2faa", "dd00022a030caa"),
+            EqVector("eap", "ff0b022a063caa", "ff0c02fa2a31aa", "dd00022a060faa"),
         )) {
             val before = reading(session, DeviceField.EQ)
             val pending = async { session.set(DeviceSetting.EQ, FieldValue.Text(preset)) }
@@ -125,8 +125,8 @@ class ControlSessionEqualizerTest {
     fun i7GameOnAndOffUseDirectWirePolarityAndAlwaysReadTheDevice() = runTest {
         val (session, link) = ready(ModelProfile.I7_RS_V2)
         for ((enabled, write, query, reply) in listOf(
-            GameVector(true, "ff04020e0114aa", "ff0502fa0e0eaa", "dd00020e01eeaa"),
-            GameVector(false, "ff06020e0015aa", "ff0702fa0e10aa", "dd00020e00edaa"),
+            GameVector(true, "ff03020e0113aa", "ff0402fa0e0daa", "dd00020e01eeaa"),
+            GameVector(false, "ff05020e0014aa", "ff0602fa0e0faa", "dd00020e00edaa"),
         )) {
             val before = reading(session, DeviceField.GAME_MODE)
             val pending = async { session.set(DeviceSetting.GAME_MODE, FieldValue.Toggle(enabled)) }
@@ -155,14 +155,14 @@ class ControlSessionEqualizerTest {
             if (allowed) {
                 val pending = async { session.set(DeviceSetting.EQ, FieldValue.Text("eap")) }
                 runCurrent()
-                assertEquals(listOf("ff04022a0635aa", "ff0502fa2a2aaa"), link.writes.drop(4), firmware)
+                assertEquals(listOf("ff03022a0634aa", "ff0402fa2a29aa"), link.writes.drop(3), firmware)
                 assertFalse(pending.isCompleted)
                 link.incoming.send("dd00022a060faa".bytes())
                 runCurrent()
                 assertEquals(OperationResult.Success, pending.await(), firmware)
             } else {
                 assertEquals(ControlErrorCode.UNSUPPORTED, assertIs<OperationResult.Failure>(session.set(DeviceSetting.EQ, FieldValue.Text("eap"))).error.code, firmware)
-                assertEquals(4, link.writes.size, firmware)
+                assertEquals(3, link.writes.size, firmware)
                 assertTrue(session.state.value.settingOperations.isEmpty())
             }
             session.disconnect()
@@ -184,7 +184,7 @@ class ControlSessionEqualizerTest {
         runCurrent()
         assertFalse("eap" in requireNotNull(session.state.value.device?.capabilities?.equalizer).presets)
         assertEquals(ControlErrorCode.UNSUPPORTED, assertIs<OperationResult.Failure>(session.set(DeviceSetting.EQ, FieldValue.Text("eap"))).error.code)
-        assertEquals(4, link.writes.size)
+        assertEquals(3, link.writes.size)
         session.disconnect()
     }
 
@@ -221,19 +221,19 @@ class ControlSessionEqualizerTest {
         val eap = async { session.set(DeviceSetting.EQ, FieldValue.Text("eap")) }
         runCurrent()
         assertEquals(listOf(SettingStage.WRITTEN, SettingStage.SUBMITTED), session.state.value.settingOperations.map { it.stage })
-        assertEquals(6, link.writes.size)
+        assertEquals(5, link.writes.size)
         link.incoming.send("dd00040d010501f5aa".bytes())
         runCurrent()
-        assertEquals(6, link.writes.size)
+        assertEquals(5, link.writes.size)
         link.incoming.send("dd00020e01eeaa".bytes())
         runCurrent()
         assertEquals(OperationResult.Success, game.await())
         assertEquals(ControlErrorCode.UNSUPPORTED, assertIs<OperationResult.Failure>(eap.await()).error.code)
-        assertEquals(6, link.writes.size)
+        assertEquals(5, link.writes.size)
         assertEquals(FieldValue.Text("hifi"), reading(session, DeviceField.EQ))
         val pop = async { session.set(DeviceSetting.EQ, FieldValue.Text("pop")) }
         runCurrent()
-        assertEquals(listOf("ff06022a0132aa", "ff0702fa2a2caa"), link.writes.takeLast(2))
+        assertEquals(listOf("ff05022a0131aa", "ff0602fa2a2baa"), link.writes.takeLast(2))
         link.incoming.send("dd00022a010aaa".bytes())
         runCurrent()
         assertEquals(OperationResult.Success, pop.await())

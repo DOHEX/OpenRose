@@ -139,7 +139,8 @@ class SystemEntryClosedLoopTest {
             ).rejection,
         )
 
-        val acquired = entry.rig.host.acquire(appIdentity, app, SwitchRequest("to-module", ControlWay.ORDINARY, ControlWay.MODULE), HostSettings())
+        val freshApp = assertIs<HostOpenResult.Opened>(entry.rig.host.open(appIdentity)).lease.id
+        val acquired = entry.rig.host.acquire(appIdentity, freshApp, SwitchRequest("to-module", ControlWay.ORDINARY, ControlWay.MODULE))
         val next = assertIs<AcquireResult.Acquired>(acquired).generation
         runCurrent()
         testScheduler.advanceUntilIdle()
@@ -168,7 +169,7 @@ class SystemEntryClosedLoopTest {
 
     private suspend fun TestScope.frameWritten(offAsWind: Boolean, mode: String): String {
         val entry = connectedEntry()
-        entry.rig.host.configure(HostConfiguration(true, HostSettings(integration = IntegrationSettings(controlWay = ControlWay.MODULE, fusionOffAsWind = offAsWind))))
+        entry.rig.host.configure { HostConfiguration(true, HostSettings(integration = IntegrationSettings(controlWay = ControlWay.MODULE, fusionOffAsWind = offAsWind))) }
         runCurrent()
         val link = entry.rig.hostTransport.links.single()
         val before = link.writes.size

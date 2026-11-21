@@ -1,31 +1,62 @@
 package io.github.dohex.openrose.core.protocol
 
 import io.github.dohex.openrose.core.DeviceCapabilities
+import io.github.dohex.openrose.core.DeviceSetting
 import io.github.dohex.openrose.core.models.ModelSpec
 import io.github.dohex.openrose.core.models.ROSELINK_PREFIX_LENGTHS
 import io.github.dohex.openrose.core.models.agate
 import io.github.dohex.openrose.core.models.agateX
+import io.github.dohex.openrose.core.models.agumon
+import io.github.dohex.openrose.core.models.astroX
+import io.github.dohex.openrose.core.models.budsFeelAeNeo
 import io.github.dohex.openrose.core.models.budsFeelMk2
 import io.github.dohex.openrose.core.models.budsFreeI
 import io.github.dohex.openrose.core.models.cambrian
+import io.github.dohex.openrose.core.models.cambrianS
 import io.github.dohex.openrose.core.models.ceramics
+import io.github.dohex.openrose.core.models.ceramicsMk2
+import io.github.dohex.openrose.core.models.ceramicsMk25736
+import io.github.dohex.openrose.core.models.ceramicsMk28912f
+import io.github.dohex.openrose.core.models.ceramicsU
+import io.github.dohex.openrose.core.models.ceramicsUHsc2710
 import io.github.dohex.openrose.core.models.ceramicsX
 import io.github.dohex.openrose.core.models.ceramicsX7034
+import io.github.dohex.openrose.core.models.coral
 import io.github.dohex.openrose.core.models.earFeelI7
+import io.github.dohex.openrose.core.models.earFeelIe2
+import io.github.dohex.openrose.core.models.earFeelIeNeo
 import io.github.dohex.openrose.core.models.earFreeI3
 import io.github.dohex.openrose.core.models.earFreeI5
 import io.github.dohex.openrose.core.models.explorer
+import io.github.dohex.openrose.core.models.firstAngel
+import io.github.dohex.openrose.core.models.furina
+import io.github.dohex.openrose.core.models.gabumon
 import io.github.dohex.openrose.core.models.headFeel
+import io.github.dohex.openrose.core.models.hyacinth
 import io.github.dohex.openrose.core.models.jasmine
+import io.github.dohex.openrose.core.models.ky01
+import io.github.dohex.openrose.core.models.magician
+import io.github.dohex.openrose.core.models.mirror
+import io.github.dohex.openrose.core.models.moka
+import io.github.dohex.openrose.core.models.opal
 import io.github.dohex.openrose.core.models.openFeelDual
+import io.github.dohex.openrose.core.models.openFeelL
 import io.github.dohex.openrose.core.models.openFeelLdac
 import io.github.dohex.openrose.core.models.openFeelLhdc
 import io.github.dohex.openrose.core.models.openFeelMk2
 import io.github.dohex.openrose.core.models.openFun
 import io.github.dohex.openrose.core.models.openFunTouch
+import io.github.dohex.openrose.core.models.openLink
+import io.github.dohex.openrose.core.models.patamon
+import io.github.dohex.openrose.core.models.speakFeel2
+import io.github.dohex.openrose.core.models.speakFree
 import io.github.dohex.openrose.core.models.sportFeel
+import io.github.dohex.openrose.core.models.sportFeel8912f
 import io.github.dohex.openrose.core.models.swift
 import io.github.dohex.openrose.core.models.swift2
+import io.github.dohex.openrose.core.models.tailmon
+import io.github.dohex.openrose.core.models.zircon
+import kotlinx.collections.immutable.toPersistentSet
 
 data class GattProfile(val serviceUuid: String, val writeUuid: String, val notifyUuid: String)
 
@@ -96,6 +127,35 @@ enum class ModelProfile {
     OPENFUN_TOUCH_RS_COMMON,
     SPORTFEEL_RS_COMMON,
     SWIFT_RS_COMMON,
+    OPENLINK_RS_COMMON,
+    CAMBRIAN_S_RS_COMMON,
+    CERAMICS_MK2_RS_V2,
+    CERAMICS_MK2_8912F_RS_V2,
+    CERAMICS_MK2_5736_RS_V2,
+    CERAMICS_U_RS_V2,
+    CERAMICS_U_HSC_2710_RS_V2,
+    SPEAKFREE_RS_V2,
+    MAGICIAN_RS_V2,
+    FURINA_RS_V2,
+    ZIRCON_RS_V2,
+    HYACINTH_RS_V2,
+    ASTRO_X_RS_V2,
+    OPAL_RS_V2,
+    MIRROR_RS_V2,
+    KY01_RS_V2,
+    CORAL_RS_V2,
+    PATAMON_RS_V2,
+    TAILMON_RS_V2,
+    GABUMON_RS_V2,
+    AGUMON_RS_V2,
+    SPEAKFEEL2_RS_V2,
+    OPENFEEL_L_RS_V2,
+    FIRST_ANGEL_RS_V2,
+    BUDSFEEL_AE_NEO_RS_V2,
+    EARFEEL_IE_NEO_RS_V2,
+    EARFEEL_IE2_RS_V2,
+    SPORTFEEL_8912F_RS_V2,
+    MOKA_RS_V2,
     ;
 
     internal val spec: ModelSpec
@@ -123,6 +183,35 @@ enum class ModelProfile {
             OPENFUN_TOUCH_RS_COMMON -> openFunTouch
             SPORTFEEL_RS_COMMON -> sportFeel
             SWIFT_RS_COMMON -> swift
+            OPENLINK_RS_COMMON -> openLink
+            CAMBRIAN_S_RS_COMMON -> cambrianS
+            CERAMICS_MK2_RS_V2 -> ceramicsMk2
+            CERAMICS_MK2_8912F_RS_V2 -> ceramicsMk28912f
+            CERAMICS_MK2_5736_RS_V2 -> ceramicsMk25736
+            CERAMICS_U_RS_V2 -> ceramicsU
+            CERAMICS_U_HSC_2710_RS_V2 -> ceramicsUHsc2710
+            SPEAKFREE_RS_V2 -> speakFree
+            MAGICIAN_RS_V2 -> magician
+            FURINA_RS_V2 -> furina
+            ZIRCON_RS_V2 -> zircon
+            HYACINTH_RS_V2 -> hyacinth
+            ASTRO_X_RS_V2 -> astroX
+            OPAL_RS_V2 -> opal
+            MIRROR_RS_V2 -> mirror
+            KY01_RS_V2 -> ky01
+            CORAL_RS_V2 -> coral
+            PATAMON_RS_V2 -> patamon
+            TAILMON_RS_V2 -> tailmon
+            GABUMON_RS_V2 -> gabumon
+            AGUMON_RS_V2 -> agumon
+            SPEAKFEEL2_RS_V2 -> speakFeel2
+            OPENFEEL_L_RS_V2 -> openFeelL
+            FIRST_ANGEL_RS_V2 -> firstAngel
+            BUDSFEEL_AE_NEO_RS_V2 -> budsFeelAeNeo
+            EARFEEL_IE_NEO_RS_V2 -> earFeelIeNeo
+            EARFEEL_IE2_RS_V2 -> earFeelIe2
+            SPORTFEEL_8912F_RS_V2 -> sportFeel8912f
+            MOKA_RS_V2 -> moka
         }
 
     val displayName: String get() = spec.displayName
@@ -132,7 +221,21 @@ enum class ModelProfile {
     val batteryLayout: BatteryLayout get() = spec.batteryLayout
 
     /** What this model offers under [firmware]; null means the firmware has not been read. */
-    fun capabilities(firmware: FieldValue.Firmware? = null): DeviceCapabilities = spec.capabilities(firmware)
+    fun capabilities(firmware: FieldValue.Firmware? = null, gameMode: Boolean? = null): DeviceCapabilities {
+        val capabilities = spec.capabilities(firmware)
+        val gamePresets = spec.gameEqualizerPresets ?: return capabilities
+        val eq = requireNotNull(capabilities.equalizer)
+        val presets = when (gameMode) {
+            true -> gamePresets
+            false -> eq.presets
+            null -> eq.presets.intersect(gamePresets)
+        }
+        val settings = capabilities.writableSettings
+        return capabilities.copy(
+            equalizer = eq.copy(presets = presets.toPersistentSet()),
+            writableSettings = if (presets.isEmpty()) settings.removing(DeviceSetting.EQ) else settings,
+        )
+    }
 
     /** The vendor app's name for an equalizer preset on this model, when it gives one. */
     fun equalizerPresetLabel(preset: String): String? = spec.equalizerPresetLabels[preset]
@@ -147,12 +250,10 @@ enum class ModelProfile {
          */
         fun match(name: String?): ModelProfile? {
             val normalized = name?.trim()?.lowercase() ?: return null
-            val compact = normalized.filter(Char::isLetterOrDigit)
-            val knownBrand = nameBrands.any { compact.contains(it.filter(Char::isLetterOrDigit)) }
-            if (!normalized.startsWith(ROSE_NAME_PREFIX) && !knownBrand) return null
+            val words = nameTokens(normalized)
+            if (!normalized.startsWith(ROSE_NAME_PREFIX) && words.none { it in compactBrands }) return null
             val numbered = entries.filter { profile ->
-                matchesToken(compact, profile.spec.nameModelNumber) &&
-                    (!profile.spec.nameRequiresModel || profile.brands.any { compact.contains(it.filter(Char::isLetterOrDigit)) })
+                profile.spec.nameModelNumber.compact() in words && (!profile.spec.nameRequiresModel || profile.hasBrand(words))
             }
             if (numbered.isNotEmpty()) {
                 // An explicit generation (MK2 / Swift 2) takes precedence over a bare retail brand.
@@ -161,29 +262,58 @@ enum class ModelProfile {
                 }.ifEmpty { numbered }
                 val longest = specific.maxOf { it.spec.nameModelNumber.filter(Char::isLetterOrDigit).length }
                 val candidates = specific.filter { it.spec.nameModelNumber.filter(Char::isLetterOrDigit).length == longest }
-                val branded = candidates.filter { profile -> profile.brands.any { compact.contains(it.filter(Char::isLetterOrDigit)) } }
+                val branded = candidates.filter { it.hasBrand(words) }
                 return (branded.ifEmpty { candidates }).singleOrNull()
             }
             val branded = entries.filter { profile ->
-                !profile.spec.nameRequiresModel && profile.brands.any { matchesToken(compact, it) }
+                !normalized.any(Char::isDigit) && !profile.spec.nameRequiresModel && profile.hasBrand(words)
             }
             return branded.singleOrNull()
         }
 
         private val ModelProfile.brands: List<String> get() = listOf(spec.nameBrand) + spec.nameBrandAliases
 
-        private fun matchesToken(compact: String, token: String): Boolean {
-            val word = token.filter(Char::isLetterOrDigit)
-            val start = compact.indexOf(word)
-            val end = start + word.length
-            return start >= 0 && (end == compact.length || !compact[end].isDigit())
+        private fun String.compact() = filter(Char::isLetterOrDigit)
+        private fun ModelProfile.hasBrand(words: Set<String>) = brands.any { it.compact() in words }
+
+        /** Whole device-name words, including multiword brands and unseparated forms such as EarFeeli5. */
+        private fun nameTokens(normalized: String): Set<String> {
+            val retail = normalized.removePrefix("roseselsa").removePrefix(ROSE_NAME_PREFIX)
+            val parts = retail.split(nameSeparators).filter(String::isNotEmpty)
+            val words = mutableSetOf<String>()
+            for (start in parts.indices) {
+                val joined = StringBuilder()
+                for (end in start until parts.size) {
+                    joined.append(parts[end])
+                    // "Swift 20" must not fall back to "Swift" or "Swift 2".
+                    if (parts.getOrNull(end + 1)?.first()?.isDigit() != true) words += joined.toString()
+                }
+            }
+            for (word in words.toList()) {
+                for (brand in compactBrands.filter(word::startsWith)) {
+                    val suffix = word.removePrefix(brand)
+                    if (suffix in modelNumbers || word in modelNumbers) words += brand
+                    if (suffix in modelNumbers) words += suffix
+                }
+            }
+            return words
         }
 
-        /** [match]'s admission rule as a case-insensitive regular expression, for platform device-name filters. */
-        val namePattern: String
-            get() = nameBrands.joinToString("|", prefix = "(?is)${Regex.escape(ROSE_NAME_PREFIX)}.*|.*(?:", postfix = ").*") { brand ->
-                brand.filter(Char::isLetterOrDigit).map { Regex.escape(it.toString()) }.joinToString("[\\s_-]*")
+        private val nameSeparators = Regex("[^\\p{L}\\p{N}]+")
+        private val compactBrands by lazy { nameBrands.map { it.compact() }.toSet() }
+        private val modelNumbers by lazy { entries.map { it.spec.nameModelNumber.compact() }.toSet() }
+
+        /** Admit word-bounded retail names and their concatenated model numbers to platform scans. */
+        val namePattern: String by lazy {
+            fun alternatives(words: Collection<String>) = words.joinToString("|") { word ->
+                word.map { Regex.escape(it.toString()) }.joinToString("[\\s_-]*")
             }
+            val retail = compactBrands + modelNumbers.filter { number -> compactBrands.any(number::startsWith) }
+            val boundary = "[\\p{L}\\p{N}]"
+            val brand = alternatives(retail)
+            val model = alternatives(modelNumbers)
+            "(?is)$ROSE_NAME_PREFIX.*|.*(?<!$boundary)(?:$brand)(?:$model)?(?!$boundary).*"
+        }
 
         private const val ROSE_NAME_PREFIX = "rose"
         private val nameBrands: List<String> get() = entries.flatMap { it.brands }.distinct()

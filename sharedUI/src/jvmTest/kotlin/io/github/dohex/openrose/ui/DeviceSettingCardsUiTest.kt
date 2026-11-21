@@ -2,6 +2,8 @@
 
 package io.github.dohex.openrose.ui
 
+import androidx.compose.foundation.layout.Column
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -30,6 +32,7 @@ import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.persistentMapOf
 import kotlinx.collections.immutable.persistentSetOf
 import kotlinx.collections.immutable.plus
+import top.yukonga.miuix.kmp.basic.Scaffold
 import java.io.File
 import javax.imageio.ImageIO
 import kotlin.test.Test
@@ -85,6 +88,83 @@ class DeviceSettingCardsUiTest {
                         ),
                     )
                 }
+            }
+        }
+    }
+
+    @Test
+    fun tapControlsWriteToTheirIndependentSwitchAndGestureTable() {
+        val caps = ModelProfile.ASTRO_X_RS_V2.capabilities().copy(
+            touchControl = null,
+            writableSettings = persistentSetOf(DeviceSetting.TAP_ENABLED, DeviceSetting.TAP_BINDING),
+        )
+        val state = readyState(caps, persistentMapOf(DeviceField.TAP_ENABLED to FieldReading.Known(FieldValue.Toggle(false), "00")))
+        for (style in InterfaceStyle.entries) {
+            val writes = mutableListOf<Pair<DeviceSetting, FieldValue>>()
+            runOpenRoseUiTest(420, 900) {
+                setContent {
+                    ProvideInterfaceStyle(style, dark = false) {
+                        val card: @Composable () -> Unit = {
+                            Column {
+                                TouchControlCard(state, requireNotNull(state.device), null, {}, { setting, value -> writes += setting to value })
+                            }
+                        }
+                        if (style == InterfaceStyle.MIUIX) Scaffold { card() } else card()
+                    }
+                }
+                val harness = OpenRoseUiTestHarness(this)
+                harness.render()
+                assertTrue(harness.hasText("轻拍控制"))
+                assertFalse(harness.hasText("触控总开关"))
+                assertFalse(harness.hasText("左耳单击"))
+                harness.clickText("轻拍开关")
+                harness.render()
+                harness.clickText("右耳三击")
+                harness.render()
+                harness.clickText(semanticLabel("voice_assistant"))
+                harness.render()
+                assertEquals(
+                    listOf(
+                        DeviceSetting.TAP_ENABLED to FieldValue.Toggle(true),
+                        DeviceSetting.TAP_BINDING to FieldValue.TouchAssignment("right", "triple", "voice_assistant"),
+                    ),
+                    writes,
+                )
+            }
+        }
+    }
+
+    @Test
+    fun spatialContentAppearsAfterTheHeadsetConfirmsAnActiveMode() {
+        val capabilities = DeviceCapabilities(
+            persistentSetOf(DeviceField.SPATIAL_MODE, DeviceField.SPATIAL_CONTENT),
+            persistentSetOf(DeviceSetting.SPATIAL_MODE, DeviceSetting.SPATIAL_CONTENT),
+            spatialModes = persistentSetOf("off", "head_tracking", "fixed"),
+            spatialContents = persistentSetOf("tv", "music", "movie", "game"),
+        )
+        for (style in InterfaceStyle.entries) {
+            val initial = readyState(
+                capabilities,
+                persistentMapOf(DeviceField.SPATIAL_MODE to FieldReading.Known(FieldValue.Text("off"), "00")),
+            )
+            val state = mutableStateOf(initial)
+            runOpenRoseUiTest(420, 900) {
+                setContent {
+                    ProvideInterfaceStyle(style, dark = false) {
+                        DeviceControlCard(state.value, requireNotNull(state.value.device)) { _, _ -> }
+                    }
+                }
+                val harness = OpenRoseUiTestHarness(this)
+                harness.render()
+                assertTrue(harness.hasText("空间模式"))
+                assertFalse(harness.hasText("空间音频内容"))
+                val device = requireNotNull(initial.device)
+                state.value = initial.copy(
+                    device = device.copy(fields = device.fields + (DeviceField.SPATIAL_MODE to FieldReading.Known(FieldValue.Text("fixed"), "02"))),
+                )
+                harness.render()
+                assertTrue(harness.hasText("空间音频内容"))
+                assertTrue(harness.hasText("固定"))
             }
         }
     }

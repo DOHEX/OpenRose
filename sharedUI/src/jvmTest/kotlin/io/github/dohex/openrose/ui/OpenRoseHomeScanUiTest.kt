@@ -458,6 +458,7 @@ class OpenRoseHomeScanUiTest {
                             selectedDeviceId = flow.selectedDeviceId,
                             connectionPhase = flow.phase(state.value.connection),
                             connectionError = flow.connectionError,
+                            startScanError = flow.scanError,
                             onRequestPermission = platformUi.requestBluetoothPermission,
                             onOpenSystemSettings = platformUi.openBluetoothSettings,
                             onStartScan = flow::startSearch,

@@ -233,14 +233,7 @@ class GattControlConnection private constructor(
                 connection.initialize(onPhase)
                 return connection
             } catch (error: Throwable) {
-                withContext(NonCancellable) {
-                    try {
-                        connection.close()
-                    } catch (closing: Exception) {
-                        error.addSuppressed(closing)
-                    }
-                }
-                throw error
+                connection.closeAfterFailedOpen(error)
             }
         }
     }

@@ -35,7 +35,7 @@ interface HostConnection {
     suspend fun status(): HostStatus
     suspend fun execute(generation: OwnerGeneration, command: HostCommand): HostCallResult
     suspend fun release(request: SwitchRequest): ReleaseResult
-    suspend fun acquire(request: SwitchRequest, settings: HostSettings): AcquireResult
+    suspend fun acquire(request: SwitchRequest): AcquireResult
 
     /** The owner's states while [generation] holds control; completes when that generation ends. */
     fun frames(generation: OwnerGeneration): Flow<HostFrame>

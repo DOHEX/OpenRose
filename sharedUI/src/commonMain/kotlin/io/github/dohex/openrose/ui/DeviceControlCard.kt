@@ -7,6 +7,7 @@ import io.github.dohex.openrose.core.DeviceState
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.FieldReading
 import io.github.dohex.openrose.core.protocol.FieldValue
+import io.github.dohex.openrose.core.settingPrerequisite
 
 @Composable
 internal fun DeviceControlCard(
@@ -30,7 +31,7 @@ internal fun DeviceControlCard(
     val languages = device.capabilities.promptLanguages
     val hasLanguage = DeviceSetting.PROMPT_LANGUAGE in writable && languages.isNotEmpty()
     val hasPrompt = hasVolume || hasLanguage
-    val hasAudioControls = hasAudio || hasMultipoint || hasSpatialAudio
+    val hasAudioControls = hasAudio || hasMultipoint || hasSpatialAudio || writable.any { it in additionalAudioSettings }
     val hasSound = hasGain || hasProtection || hasBass
     if (!hasPrompt && !hasAudioControls && !hasSound) return
 
@@ -63,13 +64,7 @@ internal fun DeviceControlCard(
     }
 
     if (hasBass) {
-        val mode = device.fields[DeviceField.EQ] as? FieldReading.Known
-        val slot = device.fields[DeviceField.EQ_SLOT] as? FieldReading.Known
-        val confirmed = if (mode != null && (mode.value as? FieldValue.Text)?.value == "custom_slot" && mode.rawHex == slot?.rawHex) {
-            (slot.value as? FieldValue.Number)?.value
-        } else {
-            null
-        }
+        val confirmed = device.confirmedBassBoostLevel
         AppGroup(title = "音效") {
             AppChoiceRow(
                 title = "低音增强",
@@ -110,6 +105,7 @@ internal fun DeviceControlCard(
             if (hasMultipoint) {
                 SettingToggleChoices("多点连接", DeviceField.MULTIPOINT, DeviceSetting.MULTIPOINT, device, enabled, onSet)
             }
+            AdditionalAudioControls(device, enabled, onSet)
             if (hasSpatialAudio) {
                 SettingToggleChoices("空间音频", DeviceField.SPATIAL_AUDIO, DeviceSetting.SPATIAL_AUDIO, device, enabled, onSet)
             }
@@ -146,6 +142,86 @@ internal fun DeviceControlCard(
             }
         }
     }
+}
+
+private val additionalAudioSettings = setOf(
+    DeviceSetting.SPATIAL_MODE,
+    DeviceSetting.SPATIAL_CONTENT,
+    DeviceSetting.EAR_ADAPTIVE,
+    DeviceSetting.INDEPENDENT_MIC_ACTIVATION,
+    DeviceSetting.INDEPENDENT_MIC_MODE,
+)
+
+internal val audioPageSettings = additionalAudioSettings + setOf(
+    DeviceSetting.AUDIO_MODE,
+    DeviceSetting.MULTIPOINT,
+    DeviceSetting.SPATIAL_AUDIO,
+    DeviceSetting.PROMPT_VOLUME,
+    DeviceSetting.GAIN,
+    DeviceSetting.HEARING_PROTECTION,
+    DeviceSetting.BASS_BOOST,
+    DeviceSetting.PROMPT_LANGUAGE,
+)
+
+@Composable
+private fun AdditionalAudioControls(device: DeviceState, enabled: Boolean, onSet: (DeviceSetting, FieldValue) -> Unit) {
+    val writable = device.capabilities.writableSettings
+    if (DeviceSetting.SPATIAL_MODE in writable) {
+        SpatialChoiceRow(DeviceSetting.SPATIAL_MODE, DeviceField.SPATIAL_MODE, device.capabilities.spatialModes, device, enabled, onSet)
+    }
+    if (DeviceSetting.SPATIAL_CONTENT in writable && device.settingPrerequisite(DeviceSetting.SPATIAL_CONTENT) == null) {
+        SpatialChoiceRow(
+            DeviceSetting.SPATIAL_CONTENT,
+            DeviceField.SPATIAL_CONTENT,
+            device.capabilities.spatialContents,
+            device,
+            enabled,
+            onSet,
+        )
+    }
+    if (DeviceSetting.EAR_ADAPTIVE in writable) {
+        SettingToggleChoices("耳道自适应", DeviceField.EAR_ADAPTIVE, DeviceSetting.EAR_ADAPTIVE, device, enabled, onSet)
+    }
+    if (DeviceSetting.INDEPENDENT_MIC_ACTIVATION in writable) {
+        SettingToggleChoices(
+            "激活独立麦克风",
+            DeviceField.INDEPENDENT_MIC_ACTIVATION,
+            DeviceSetting.INDEPENDENT_MIC_ACTIVATION,
+            device,
+            enabled,
+            onSet,
+        )
+    }
+    if (DeviceSetting.INDEPENDENT_MIC_MODE in writable) {
+        SettingToggleChoices(
+            "独立麦克风模式",
+            DeviceField.INDEPENDENT_MIC_MODE,
+            DeviceSetting.INDEPENDENT_MIC_MODE,
+            device,
+            enabled && device.settingPrerequisite(DeviceSetting.INDEPENDENT_MIC_MODE) == null,
+            onSet,
+        )
+    }
+}
+
+@Composable
+private fun SpatialChoiceRow(
+    setting: DeviceSetting,
+    field: DeviceField,
+    choices: Set<String>,
+    device: DeviceState,
+    enabled: Boolean,
+    onSet: (DeviceSetting, FieldValue) -> Unit,
+) {
+    val confirmed = (device.knownValue(field) as? FieldValue.Text)?.value
+    AppChoiceRow(
+        title = field.displayName,
+        valueText = confirmedChoiceValue(field, device),
+        options = choices.map { AppOption(it, semanticLabel(it)) },
+        selected = confirmed,
+        enabled = enabled,
+        onSelect = { if (it != confirmed) onSet(setting, FieldValue.Text(it)) },
+    )
 }
 
 internal fun confirmedChoiceValue(field: DeviceField, device: DeviceState): String = when (val reading = device.fields[field]) {

@@ -29,7 +29,15 @@ data class PlatformState(
     val userUnlocked: Boolean = true,
 )
 
-enum class HostPlatform { UNKNOWN, ANDROID, WINDOWS, LINUX }
+enum class HostPlatform {
+    UNKNOWN,
+    ANDROID,
+    WINDOWS,
+    LINUX,
+    ;
+
+    val isDesktop: Boolean get() = this == LINUX || this == WINDOWS
+}
 
 /** Explicitly keeps unknown platform facts separate from supported and unsupported features. */
 enum class PlatformApplicability { UNKNOWN, NOT_APPLICABLE, APPLICABLE }
@@ -101,6 +109,8 @@ enum class DeviceSetting {
     TOUCH_ENABLED,
     EAR_DETECTION,
     TOUCH_BINDING,
+    TAP_ENABLED,
+    TAP_BINDING,
     PROMPT_VOLUME,
     CUSTOM_EQ,
     GAIN,
@@ -108,6 +118,11 @@ enum class DeviceSetting {
     BASS_BOOST,
     PROMPT_LANGUAGE,
     SPATIAL_AUDIO,
+    SPATIAL_MODE,
+    SPATIAL_CONTENT,
+    EAR_ADAPTIVE,
+    INDEPENDENT_MIC_ACTIVATION,
+    INDEPENDENT_MIC_MODE,
 }
 
 /** Transport acceptance and device state confirmation are separate facts. */
@@ -131,12 +146,15 @@ data class DeviceCapabilities(
     val noiseControl: NoiseControlCapabilities? = null,
     val equalizer: EqualizerCapabilities? = null,
     val touchControl: TouchControlCapabilities? = null,
+    val tapControl: TouchControlCapabilities? = null,
     val audioControl: AudioControlCapabilities? = null,
     val promptVolumeLevels: PersistentSet<Int> = persistentSetOf(),
     val gainLevels: PersistentSet<Int> = persistentSetOf(),
     val hearingProtectionLevels: PersistentSet<Int> = persistentSetOf(),
     val bassBoostLevels: PersistentSet<Int> = persistentSetOf(),
     val promptLanguages: PersistentSet<String> = persistentSetOf(),
+    val spatialModes: PersistentSet<String> = persistentSetOf(),
+    val spatialContents: PersistentSet<String> = persistentSetOf(),
 )
 
 data class DeviceState(
@@ -152,7 +170,16 @@ data class DeviceState(
     val warnings: PersistentList<String> = persistentListOf(),
     /** An independently identified BR/EDR address, when the model advertisement provides it. */
     val classicAddress: String? = null,
-)
+) {
+    /** The level carried by the latest confirmed bass-slot reading, while that slot is selected. */
+    val confirmedBassBoostLevel: Int?
+        get() {
+            val mode = fields[DeviceField.EQ] as? FieldReading.Known ?: return null
+            val slot = fields[DeviceField.EQ_SLOT] as? FieldReading.Known ?: return null
+            if (mode.value != FieldValue.Text("custom_slot") || mode.rawHex != slot.rawHex) return null
+            return (slot.value as? FieldValue.Number)?.value?.takeIf { it in capabilities.bassBoostLevels }
+        }
+}
 
 /** Opaque reference to one device session; a caller holding one may address that session and no other. */
 data class SessionReference(val deviceId: DeviceId, val sessionId: Long)
@@ -171,6 +198,8 @@ data class ControlState(
     val transportSelection: TransportSelection? = null,
     val connectionRecovery: ConnectionRecovery? = null,
     val connectionTarget: DeviceCandidate? = null,
+    /** Latest system-audio observation, independent of the control connection. */
+    val audioDeviceId: DeviceId? = null,
 ) {
     /** The ready device session, present only while the connection and the device state agree on it. */
     val readySession: SessionReference?
@@ -184,6 +213,34 @@ data class ControlState(
             }
             return SessionReference(current.deviceId, current.sessionId)
         }
+
+    /** Whether the system audio observation belongs to the current control device (including its classic address). */
+    val deviceHasSystemAudio: Boolean
+        get() {
+            val current = device ?: return false
+            val audio = audioDeviceId ?: return false
+            val target = connectionTarget
+            if (target != null && target.deviceId != current.deviceId) return false
+            return audio == current.deviceId || audio.value == current.classicAddress || audio.value == target?.classicAddress
+        }
+
+    /** The desktop can change the i5's noise mode as soon as this audio session reports it. */
+    val noiseModeSession: SessionReference?
+        get() {
+            if (connection is ConnectionState.Connected) return readySession.takeIf { connection.phase == ConnectionPhase.READY }
+            val initializing = connection as? ConnectionState.Connecting ?: return null
+            val current = device ?: return null
+            if (!platform.hostPlatform.isDesktop || current.profile != ModelProfile.I5_ZT || !deviceHasSystemAudio) return null
+            if (initializing.phase != ConnectionPhase.INITIALIZING ||
+                initializing.deviceId != current.deviceId || initializing.sessionId != current.sessionId
+            ) {
+                return null
+            }
+            val reading = current.fields[DeviceField.NOISE_MODE] as? FieldReading.Known
+            val mode = reading?.value as? FieldValue.Text ?: return null
+            if (mode.value !in current.capabilities.noiseControl?.modes.orEmpty()) return null
+            return SessionReference(current.deviceId, current.sessionId)
+        }
 }
 
 data class ConnectionRecovery(
@@ -191,3 +248,17 @@ data class ConnectionRecovery(
     val reason: io.github.dohex.openrose.core.transport.TransportRecoveryReason,
     val attempt: Int = 1,
 )
+
+/** The dependent control is available after the headset confirms its prerequisite. */
+fun DeviceState.settingPrerequisite(setting: DeviceSetting): String? {
+    val requirement = when (setting) {
+        DeviceSetting.SPATIAL_CONTENT -> DeviceField.SPATIAL_MODE
+        DeviceSetting.INDEPENDENT_MIC_MODE -> DeviceField.INDEPENDENT_MIC_ACTIVATION
+        else -> return null
+    }
+    val current = (fields[requirement] as? FieldReading.Known)?.value
+    return when (requirement) {
+        DeviceField.SPATIAL_MODE -> if (current is FieldValue.Text && current.value in setOf("head_tracking", "fixed")) null else "请先开启空间模式"
+        else -> if (current == FieldValue.Toggle(true)) null else "请先激活独立麦克风"
+    }
+}

@@ -6,21 +6,17 @@
     <ID>ComplexCondition:AuthenticatedBridgeClient.kt:AuthenticatedBridgeClient$ownerGeneration == null || deviceId.isNullOrBlank() || deviceId.length &gt; MAX_DEVICE_ID_LENGTH || sessionId &lt;= 0L</ID>
     <ID>ComplexCondition:AuthenticatedBridgeClient.kt:AuthenticatedBridgeClient$snapshot == null || !hasWireVersion(snapshot) || snapshot.getString(BridgeWire.HOST_EPOCH) != ownerGeneration || snapshot.getString(BridgeWire.DEVICE_ID) != deviceId || snapshot.getLong(BridgeWire.SESSION_ID, INVALID_SESSION_ID) != sessionId</ID>
     <ID>ComplexCondition:AuthenticatedBridgeClient.kt:AuthenticatedBridgeClient$snapshot.getInt(BridgeWire.KEY_VERSION, INVALID_WIRE_VERSION) != BridgeWire.VERSION || snapshotGeneration != confirmed || (requireCurrentReference &amp;&amp; currentReference != SessionReference(deviceId, sessionId))</ID>
-    <ID>ComplexCondition:HostEndpoint.kt:HostEndpoint$connection == null || device == null || device.deviceId != connection.deviceId || device.sessionId != connection.sessionId</ID>
-    <ID>ComplexCondition:HostEndpoint.kt:HostEndpoint$receipt.getInt(BridgeWire.KEY_VERSION) != BridgeWire.VERSION || receipt.getString(BridgeWire.HOST_EPOCH) != pending.generation || receipt.getString(BridgeWire.DEVICE_ID) != pending.reference.deviceId.value || receipt.getLong(BridgeWire.SESSION_ID, -1) != pending.reference.sessionId || receipt.getLong(BridgeWire.READ_SEQUENCE, -1) != pending.sequence</ID>
     <ID>ComplexCondition:MiLinkNativeHeadsetAdapter.kt:MiLinkNativeHeadsetAdapter$current == null || current.reference != expectedReference || !current.matchesAddress(address) || lastAncReference != expectedReference || lastAncAddress != address || lastAncController?.get() !== controller || lastAncDevice !== device</ID>
     <ID>ComplexCondition:MiLinkNativeHeadsetAdapter.kt:MiLinkNativeHeadsetAdapter$rememberedReference != null &amp;&amp; (rememberedReference != fresh.reference || rememberedAddress == null || rememberedAddress !in fresh.addresses)</ID>
     <ID>ComplexCondition:NativeHeadsetBinderAdapter.kt:NativeHeadsetBinderAdapter$closed || registeredCallbacks[target.binder] !== target || current == null || current.reference != target.reference || !current.matchesAddress(target.address)</ID>
     <ID>ComplexCondition:SystemPresentationRenderer.kt:SystemPresentationRenderer$!islandAllowed || prompt == null || promptId == null || promptMode == null || promptMode != snapshot.mode || promptMode == BridgePresentationWire.OFF || promptMode !in PROMPT_MODES</ID>
     <ID>ComplexCondition:SystemPresentationRenderer.kt:SystemPresentationRenderer$pending != null &amp;&amp; ( !islandAllowed || promptId == null || pending.identity != snapshot.identity || pending.key != promptKey(snapshot.identity, promptId) || promptId != pending.id || promptMode != pending.mode || snapshot.mode != pending.mode )</ID>
-    <ID>ComplexCondition:SystemPresentationRenderer.kt:SystemPresentationRenderer.&lt;no name provided&gt;$closed || action == null || action != actionReceiverAction || token == null || token != actionToken || deviceId == null || hostEpoch == null || targetMode == null</ID>
     <ID>CyclomaticComplexMethod:AuthenticatedBridgeClient.kt:AuthenticatedBridgeClient$private fun pollBridge</ID>
     <ID>CyclomaticComplexMethod:AuthenticatedBridgeClient.kt:AuthenticatedBridgeClient$private fun readCurrentSnapshot</ID>
     <ID>CyclomaticComplexMethod:HostEndpoint.kt:HostEndpoint$override fun open: Bundle</ID>
     <ID>CyclomaticComplexMethod:MiLinkNativeHeadsetAdapter.kt:MiLinkNativeHeadsetAdapter$fun publish</ID>
     <ID>CyclomaticComplexMethod:MiLinkNativeHeadsetAdapter.kt:MiLinkNativeHeadsetAdapter$private fun installAncBatteryController</ID>
     <ID>CyclomaticComplexMethod:MiLinkNativeHeadsetAdapter.kt:MiLinkNativeHeadsetAdapter$private fun notifyHeadsetPropertyChanged</ID>
-    <ID>CyclomaticComplexMethod:MiLinkNativeHeadsetAdapter.kt:MiLinkNativeHeadsetAdapter$private fun submit: Boolean</ID>
     <ID>CyclomaticComplexMethod:NativeHeadsetBinderAdapter.kt:NativeHeadsetBinderAdapter$private fun installBinderClass</ID>
     <ID>CyclomaticComplexMethod:NativeHeadsetBinderAdapter.kt:NativeHeadsetBinderAdapter$private fun interceptTransact: HookDecision</ID>
     <ID>CyclomaticComplexMethod:OpenRoseBluetoothModule.kt:OpenRoseBluetoothModule$private fun publish</ID>
@@ -39,7 +35,6 @@
     <ID>ReturnCount:AuthenticatedBridgeClient.kt:AuthenticatedBridgeClient$fun fusionEntryDevice: String?</ID>
     <ID>ReturnCount:AuthenticatedBridgeClient.kt:AuthenticatedBridgeClient$private fun pollBridge</ID>
     <ID>ReturnCount:AuthenticatedBridgeClient.kt:AuthenticatedBridgeClient$private fun readCurrentSnapshot</ID>
-    <ID>ReturnCount:HostEndpoint.kt:HostEndpoint$override fun acknowledge: Bundle</ID>
     <ID>ReturnCount:HostEndpoint.kt:HostEndpoint$override fun claimPrompt: Bundle</ID>
     <ID>ReturnCount:HostEndpoint.kt:HostEndpoint$override fun open: Bundle</ID>
     <ID>ReturnCount:HostEndpoint.kt:HostEndpoint$override fun reportComponent: Bundle</ID>

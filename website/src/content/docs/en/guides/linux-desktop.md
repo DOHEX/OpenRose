@@ -6,7 +6,7 @@ description: Control the earphones on Linux through BlueZ, plus the tray, backgr
 The Linux app provides BLE control through the system BlueZ service and D-Bus, without SPP, OTA, or system integration. The desktop has no control way to choose; the app holds the control connection directly.
 
 :::caution[Verification status]
-BLE control on Linux x64 is implemented; full desktop hardware acceptance with the EarFree i5 is pending. The Windows app currently has the UI and preferences only; Bluetooth control is not implemented.
+BLE control on Linux x64 is implemented; full desktop hardware acceptance with the EarFree i5 is pending. The Windows app uses WinRT to read battery levels and change noise modes. Windows hardware acceptance with the i5 is pending.
 :::
 
 ## Install
@@ -23,6 +23,12 @@ Desktop packages are published alongside the Android app; see [Getting started](
 The packages declare dependencies on `bluez`, GTK 3, and `libsystemd`. The AppImage needs BlueZ installed on the system with the Bluetooth service running.
 
 As on Android, pair and connect the earphones in the system Bluetooth settings first.
+
+## Pair a phone and desktop
+
+Enable module control on the phone. In the desktop settings, open **流转配对** and show the pairing code. Open the same setting on the phone, then scan the QR code or select the computer and enter its six digits. Both devices need local network discovery and the phone needs access to TCP port 21871 on the desktop. Either device can remove the pairing in settings.
+
+Changing noise mode from the phone quick panel or desktop tray keeps audio at its current source. To move audio, use **接到这台电脑** on the computer or **接回手机** on the phone.
 
 ## Tray and background control
 
@@ -44,3 +50,5 @@ window-rule {
     default-floating-position x=12 y=12 relative-to="top-right"
 }
 ```
+
+For headset circulation with the AppImage, install the host’s `pactl` command. Debian and Fedora package it in `pulseaudio-utils`, and Arch Linux packages it in `libpulse`.

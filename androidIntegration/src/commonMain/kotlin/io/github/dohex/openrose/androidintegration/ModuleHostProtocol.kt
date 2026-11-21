@@ -41,7 +41,6 @@ sealed interface HostCommand {
 
     /** [reference] null targets whatever session is current; non-null is rejected unless it still is. */
     data class Set(val reference: SessionReference?, val setting: DeviceSetting, val value: FieldValue) : HostCommand
-    data class UpdateSettings(val settings: HostSettings) : HostCommand
     data class ClaimPrompt(val reference: SessionReference, val promptId: String) : HostCommand
 }
 

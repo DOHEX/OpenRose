@@ -52,6 +52,7 @@ import androidx.compose.ui.semantics.setProgress
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import io.github.dohex.openrose.core.CustomEqualizerCapabilities
 import kotlin.math.roundToInt
@@ -164,7 +165,7 @@ private fun GainScale(minGain: Int, maxGain: Int, inset: Dp, modifier: Modifier)
         layout(width, height) {
             labels.forEachIndexed { index, label ->
                 val y = top + gainFraction(marks[index].toFloat(), minGain, maxGain) * (height - 2 * top)
-                label.place(
+                label.placeRelative(
                     (width - gap - label.width).coerceAtLeast(0),
                     (y - label.height / 2f).roundToInt().coerceIn(0, (height - label.height).coerceAtLeast(0)),
                 )
@@ -242,7 +243,7 @@ private fun BandControl(
             .fillMaxHeight()
             .semantics(mergeDescendants = true) {
                 contentDescription = "${equalizerFrequencyLabel(hz)} 增益"
-                stateDescription = "${gainLabel(gain)} dB"
+                stateDescription = gainLabel(gain)
                 progressBarRangeInfo = ProgressBarRangeInfo(
                     gain.toFloat(),
                     minGain.toFloat()..maxGain.toFloat(),
@@ -309,7 +310,10 @@ private fun DrawScope.drawBands(
     val bottom = size.height - top
     fun yOf(gain: Float) = top + gainFraction(gain, minGain, maxGain) * (bottom - top)
     val columnWidth = size.width / gains.size
-    fun xOf(band: Int) = columnWidth * (band + 0.5f)
+    fun xOf(band: Int): Float {
+        val column = if (layoutDirection == LayoutDirection.Rtl) gains.lastIndex - band else band
+        return columnWidth * (column + 0.5f)
+    }
 
     val hairline = 1.dp.toPx()
     for (limit in listOf(maxGain, minGain)) {

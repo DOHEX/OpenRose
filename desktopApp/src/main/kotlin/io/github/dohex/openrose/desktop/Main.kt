@@ -30,6 +30,7 @@ import io.github.dohex.openrose.core.PlatformApplicability
 import io.github.dohex.openrose.core.PlatformState
 import io.github.dohex.openrose.core.TransportAvailability
 import io.github.dohex.openrose.transport.bluez.BluezControlTransport
+import io.github.dohex.openrose.transport.windows.WindowsControlTransport
 import io.github.dohex.openrose.ui.AppLogo
 import io.github.dohex.openrose.ui.Appearance
 import io.github.dohex.openrose.ui.OpenRoseApp
@@ -37,10 +38,12 @@ import io.github.dohex.openrose.ui.PrimaryDeviceSelection
 import io.github.dohex.openrose.ui.interfaceBackgroundColor
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import java.util.prefs.Preferences
+import kotlin.system.exitProcess
 
 fun main(args: Array<String>) {
     val platform = System.getProperty("os.name")
@@ -56,7 +59,11 @@ fun main(args: Array<String>) {
         nucleusApplication(args = args, backend = NucleusBackend.Tao, enableSingleInstance = true) {
             val scope = remember { CoroutineScope(SupervisorJob() + Dispatchers.Default) }
             val runtime = remember {
-                val transport = if (hostPlatform == HostPlatform.LINUX) BluezControlTransport(scope) else null
+                val transport = when (hostPlatform) {
+                    HostPlatform.LINUX -> BluezControlTransport(scope)
+                    HostPlatform.WINDOWS -> WindowsControlTransport(scope)
+                    else -> null
+                }
                 DesktopRuntime(
                     preferences = Preferences.userRoot().node("io/github/dohex/openrose"),
                     platform = PlatformState(
@@ -76,6 +83,7 @@ fun main(args: Array<String>) {
             }
             val tray = remember { trayMonitor(hostIsLinux = hostPlatform == HostPlatform.LINUX).also { trayOwner = it } }
             val loginLaunch = remember { LoginLaunch(scope) }
+            val circulation = remember(runtime) { runtime.startCirculation() }
             val platformUi = remember {
                 DesktopPlatformUi(
                     platformName = platform,
@@ -83,6 +91,7 @@ fun main(args: Array<String>) {
                     onDesktopSettingsChange = runtime::updateDesktopSettings,
                     tray = tray.availability,
                     loginLaunch = loginLaunch,
+                    circulation = circulation,
                 )
             }
             // One choice for the 未连接看板 and the tray, so “重新连接” targets the device the window shows.
@@ -98,7 +107,10 @@ fun main(args: Array<String>) {
             var window by remember { mutableStateOf<NucleusWindow?>(null) }
             var exiting by remember { mutableStateOf(false) }
 
+            var closingWindow by remember { mutableStateOf<Job?>(null) }
+
             fun showWindow() {
+                closingWindow?.cancel()
                 windowVisible = true
                 window?.run {
                     setMinimized(false)
@@ -107,16 +119,23 @@ fun main(args: Array<String>) {
                 }
             }
 
-            fun exit() {
+            fun exit(fromTray: Boolean = false) {
                 if (exiting) return
+                closingWindow?.cancel()
                 exiting = true
                 uiScope.launch {
                     try {
-                        runtime.close()
+                        try {
+                            runtime.close()
+                        } finally {
+                            owner = null
+                            tray.close()
+                            trayOwner = null
+                        }
+                        // On Linux Tao's EGL detach can wedge the main thread while a visible
+                        // window is being destroyed. The JVM shutdown hook releases the instance lock.
+                        if (fromTray && hostPlatform == HostPlatform.LINUX) exitProcess(0)
                     } finally {
-                        owner = null
-                        tray.close()
-                        trayOwner = null
                         exitApplication()
                     }
                 }
@@ -152,8 +171,9 @@ fun main(args: Array<String>) {
                         model = runtime.model,
                         selection = selection,
                         uiScope = uiScope,
+                        circulation = circulation,
                         onOpenApp = ::showWindow,
-                        onExit = ::exit,
+                        onExit = { exit(fromTray = true) },
                         onStarted = tray::trayStarted,
                     )
                 }
@@ -162,11 +182,16 @@ fun main(args: Array<String>) {
                     icon = AppLogo.painter,
                     visible = windowVisible,
                     onCloseRequest = {
-                        // Hiding is safe only while the tray actually shows OpenRose; otherwise end the control connection.
-                        if (desktopSettings.backgroundControl && tray.refresh() == TrayAvailability.Available) {
-                            windowVisible = false
-                        } else {
+                        if (!desktopSettings.backgroundControl) {
                             exit()
+                        } else if (!exiting && closingWindow?.isActive != true) {
+                            closingWindow = uiScope.launch {
+                                if (tray.refresh() == TrayAvailability.Available && runtime.desktopSettings.value.backgroundControl) {
+                                    windowVisible = false
+                                } else {
+                                    exit()
+                                }
+                            }
                         }
                     },
                     state = rememberWindowState(width = 1180.dp, height = 820.dp),

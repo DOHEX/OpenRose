@@ -24,7 +24,13 @@ import io.github.dohex.openrose.ui.model.OpenRoseModel
  * Interface preferences live one level down in [PersonalizationPage], the app's identity and links in [AboutPage].
  */
 @Composable
-fun PreferencesPage(model: OpenRoseModel, platformUi: PlatformUi, onPersonalization: () -> Unit, onAbout: () -> Unit) {
+fun PreferencesPage(
+    model: OpenRoseModel,
+    platformUi: PlatformUi,
+    onPersonalization: () -> Unit,
+    onCirculationPairing: () -> Unit,
+    onAbout: () -> Unit,
+) {
     val state by model.state.collectAsState()
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -40,6 +46,17 @@ fun PreferencesPage(model: OpenRoseModel, platformUi: PlatformUi, onPersonalizat
         }
 
         platformUi.SettingsSections(state, PlatformSettingsPosition.BEFORE_CONNECTION)
+
+        if (platformUi.circulationPairingContent != null) {
+            AppGroup {
+                AppArrowRow(
+                    title = "流转配对",
+                    summary = "配对手机与电脑，让耳机在两端之间流转",
+                    icon = RoseIcon.LINK,
+                    onClick = onCirculationPairing,
+                )
+            }
+        }
 
         if (state.platform.controlTransportApplicability == PlatformApplicability.APPLICABLE) {
             AppGroup(title = "高级") {
@@ -152,7 +169,7 @@ fun StatusPage(model: OpenRoseModel, platformUi: PlatformUi, onDiagnostics: () -
         AppStatusHero(statusVerdict(state, platformUi), platformUi.controlWayLabel)
         AppStatusSection {
             val connection = state.connection
-            Tagged(StatusTags.connection(connection)) {
+            Tagged(StatusTags.CONNECTION) {
                 AppFactRow(
                     RoseIcon.HEADPHONES,
                     "耳机控制连接",
@@ -172,13 +189,8 @@ fun StatusPage(model: OpenRoseModel, platformUi: PlatformUi, onDiagnostics: () -
     }
 }
 
-/** Test tags of the status page. Each carries the state's name, so tests assert the state and never its wording. */
 object StatusTags {
-    fun connection(connection: ConnectionState) = "status.connection." + when (connection) {
-        ConnectionState.Disconnected -> "Disconnected"
-        is ConnectionState.Connecting -> "Connecting"
-        is ConnectionState.Connected -> "Connected"
-    }
+    const val CONNECTION = "status.connection"
 }
 
 /** Bluetooth comes first, since nothing works without it; then whatever stops the host; otherwise OpenRose works. */
@@ -186,7 +198,7 @@ object StatusTags {
 private fun statusVerdict(state: ControlState, platformUi: PlatformUi): StatusVerdict {
     val permission = state.platform.permission
     val transport = state.platform.transport
-    val permissionMissing = permission == PermissionState.REQUIRED || permission == PermissionState.DENIED
+    val permissionMissing = state.platform.bluetoothPermissionRequired
     val fixes = listOfNotNull(
         platformUi.requestBluetoothPermission?.takeIf { permissionMissing }?.let { AppStatusAction("授予蓝牙权限", it) },
         platformUi.openBluetoothSettings?.takeIf { transport == TransportAvailability.Disabled }?.let { AppStatusAction("打开蓝牙设置", it) },

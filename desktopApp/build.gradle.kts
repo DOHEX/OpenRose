@@ -5,7 +5,11 @@ plugins {
 }
 dependencies {
     implementation(projects.sharedUI)
+    implementation(libs.zxing.core)
     implementation(projects.transportBluez)
+    implementation(projects.transportWindows)
+    implementation(projects.circulation)
+    implementation(libs.jmdns)
     implementation(compose.desktop.currentOs)
     implementation(libs.nucleus.application)
     implementation(libs.nucleus.tao)
@@ -24,7 +28,7 @@ nucleus {
         jvmArgs += "--enable-native-access=ALL-UNNAMED"
         nativeDistributions {
             // dbus-java authenticates Unix sockets through com.sun.security.auth.module.UnixSystem.
-            modules("jdk.security.auth")
+            modules("jdk.security.auth", "jdk.crypto.ec")
             // Each host builds only its own formats: Linux x64 the four packages, Windows the MSI.
             targetFormats(TargetFormat.Deb, TargetFormat.Rpm, TargetFormat.Pacman, TargetFormat.AppImage, TargetFormat.Msi)
             packageName = "OpenRose"
@@ -35,9 +39,9 @@ nucleus {
                 debMaintainer = "DOHEX <53633138+DOHEX@users.noreply.github.com>"
                 // Custom lists replace electron-builder defaults; include the JVM/GTK runtime too.
                 // The tray's native library talks to the tray host through sd-bus (libsystemd.so.0).
-                debDepends = listOf("bluez", "libgtk-3-0", "libegl1", "libgl1", "libfontconfig1", "libsystemd0")
-                rpmRequires = listOf("bluez", "gtk3", "mesa-libEGL", "mesa-libGL", "fontconfig", "systemd-libs")
-                pacmanDepends = listOf("bluez", "gtk3", "libglvnd", "fontconfig", "systemd-libs")
+                debDepends = listOf("bluez", "pulseaudio-utils", "libgtk-3-0", "libegl1", "libgl1", "libfontconfig1", "libsystemd0")
+                rpmRequires = listOf("bluez", "pulseaudio-utils", "gtk3", "mesa-libEGL", "mesa-libGL", "fontconfig", "systemd-libs")
+                pacmanDepends = listOf("bluez", "libpulse", "gtk3", "libglvnd", "fontconfig", "systemd-libs")
             }
             windows {
                 iconFile.set(project.file("icons/openrose.png"))

@@ -56,7 +56,11 @@ class NoiseProtocolTest {
 
             assertEquals(setOf(1, 3, 5), anc.levels, "$profile ANC options")
             assertEquals(setOf("anc"), anc.visibleModes, "$profile ANC visibility")
-            assertEquals(setOf(1, 3, 5), transparency.levels, "$profile transparency options")
+            val expected = when (profile) {
+                ModelProfile.CERAMICS_U_RS_V2, ModelProfile.CERAMICS_U_HSC_2710_RS_V2 -> setOf(1, 5)
+                else -> setOf(1, 3, 5)
+            }
+            assertEquals(expected, transparency.levels, "$profile transparency options")
             assertEquals(setOf("transparency"), transparency.visibleModes, "$profile transparency visibility")
 
             assertTrue(anc.isVisibleIn("anc"), "$profile ANC should be visible in ANC mode")
@@ -176,7 +180,9 @@ class NoiseProtocolTest {
                 if (kind !in profile.capabilities().writableSettings) continue
                 assertFailsWith<IllegalArgumentException>("$profile $kind $value") { codec.prepareSetting(kind, value) }
             }
-            assertFailsWith<UnsupportedOperationException> { codec.prepareSetting(DeviceSetting.NOISE_MODE, FieldValue.Text("deep")) }
+            if ("deep" !in profile.capabilities().noiseControl?.modes.orEmpty()) {
+                assertFailsWith<UnsupportedOperationException> { codec.prepareSetting(DeviceSetting.NOISE_MODE, FieldValue.Text("deep")) }
+            }
             assertFailsWith<UnsupportedOperationException> { codec.prepareSetting(DeviceSetting.EQ, FieldValue.Text("custom")) }
             if (profile == ModelProfile.I5_ZT) {
                 assertFailsWith<UnsupportedOperationException> { codec.prepareSetting(DeviceSetting.NOISE_MODE, FieldValue.Text("auto")) }
@@ -190,10 +196,10 @@ class NoiseProtocolTest {
     @Test
     fun i7InitializationWritesAndReadbacksShareSequenceUntilReset() {
         val codec = createProtocolCodec(ModelProfile.I7_RS_V2)
-        codec.initQueries(20) // Three FA info groups, then a curve query: sequences 00..03.
+        codec.initQueries(20) // Two FA info groups followed by the curve query use sequences 00..02.
         val dynamic = codec.prepareSetting(DeviceSetting.NOISE_MODE, FieldValue.Text("dynamic"))
-        assertEquals("ff0402090715aa", dynamic.writeFrames.single().hex())
-        assertEquals("ff0502fa0909aa", dynamic.readback.bytes.hex())
+        assertEquals("ff0302090714aa", dynamic.writeFrames.single().hex())
+        assertEquals("ff0402fa0908aa", dynamic.readback.bytes.hex())
         codec.reset()
         repeat(127) { codec.prepareSetting(DeviceSetting.NOISE_MODE, FieldValue.Text("anc")) }
         val last = codec.prepareSetting(DeviceSetting.NOISE_MODE, FieldValue.Text("anc"))

@@ -14,7 +14,7 @@ interface IControlBridge {
     Bundle currentSession(String leaseId);
     Bundle read(in Bundle request);
     Bundle acknowledge(in Bundle receipt);
-    void close(String leaseId);
+    oneway void close(String leaseId);
     Bundle watch(in Bundle request, IControlObserver observer);
     Bundle claimPrompt(in Bundle request);
     Bundle setNoise(in Bundle request);
@@ -36,4 +36,7 @@ interface IControlBridge {
     // System entry role (fusion device center), appended after the application surface.
     /** Decides the fusion device center's additional settings entry for one Bluetooth address from the owner's own state. */
     Bundle fusionEntry(in Bundle request);
+
+    /** Local app UI only. Uses the established app lease and the currently active module owner. */
+    Bundle circulation(in Bundle request);
 }

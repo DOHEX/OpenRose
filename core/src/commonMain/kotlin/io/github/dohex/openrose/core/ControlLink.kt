@@ -3,6 +3,7 @@ package io.github.dohex.openrose.core
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.FieldReading
 import io.github.dohex.openrose.core.protocol.FieldValue
+import io.github.dohex.openrose.core.protocol.ModelProfile
 import io.github.dohex.openrose.core.protocol.ProtocolCodec
 import io.github.dohex.openrose.core.protocol.createProtocolCodec
 import io.github.dohex.openrose.core.transport.AudioProfileEvidence
@@ -35,7 +36,6 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.getAndUpdate
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -44,6 +44,9 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.TimeMark
+import kotlin.time.TimeSource
 
 /** Owns connection attempts, including every native link opened during initialization recovery. */
 internal class ControlLink(
@@ -53,12 +56,13 @@ internal class ControlLink(
     private val timing: SessionTiming,
     private val settings: SettingQueue,
     sessionIdBase: Long,
+    private val timeSource: TimeSource,
 ) {
     internal val lifecycle = Mutex()
     private var generation = sessionIdBase
 
-    /** Connections whose close the platform refused, retried on every release. */
-    private val unclosed = MutableStateFlow<PersistentList<ControlConnection>>(persistentListOf())
+    private val connections = OwnedConnections()
+    private var released = false
     internal var active: Attempt? = null
         private set
 
@@ -66,12 +70,12 @@ internal class ControlLink(
         lateinit var task: Deferred<OperationResult>
         var connection: ControlConnection? = null
         var observer: Job? = null
-        var codec: ProtocolCodec = createProtocolCodec(requireNotNull(candidate.profile))
-        var progress = MutableStateFlow(ReadProgress())
+        lateinit var codec: ProtocolCodec
+        lateinit var progress: MutableStateFlow<ReadProgress>
         val linkEpoch = MutableStateFlow(0L)
-        var selection: TransportSelection? = null
         var initializationQueryIndex: Int? = null
-        val settings = SettingQueue.Pending()
+        var settings = SettingQueue.Pending()
+        var nextWriteAt: TimeMark? = null
         var hasWritten = false
         var recoveryUsed = false
         var ready = false
@@ -87,10 +91,11 @@ internal class ControlLink(
         val deviceId = candidate.deviceId
         var ownsAttempt = false
         val attempt = lifecycle.withLock {
+            if (released) return OperationResult.Failure(ControlError(ControlErrorCode.NOT_READY, "控制所有者已释放"))
             if (isSuperseded()) return@withLock null
             active?.takeIf { it.candidate.deviceId == deviceId && state.value.connection !is ConnectionState.Disconnected }
                 ?.let { return@withLock it }
-            clearActive()
+            if (!clearActive()) return OperationResult.Failure(ControlError(ControlErrorCode.NOT_READY, "之前的控制连接尚未确认释放"))
             onStarted()
             val next = Attempt(++generation, candidate, state.value.settings.forceBle)
             ownsAttempt = true
@@ -143,8 +148,9 @@ internal class ControlLink(
         return result
     }
 
-    suspend fun disconnect(): Boolean = lifecycle.withLock {
+    suspend fun disconnect(retire: Boolean = false): Boolean = lifecycle.withLock {
         val closed = clearActive()
+        if (retire && closed) released = true
         state.update { it.copy(connection = ConnectionState.Disconnected, device = null, lastError = null, connectionRecovery = null) }
         closed
     }
@@ -156,23 +162,26 @@ internal class ControlLink(
         if (ended) throw LinkEnded()
     }
 
-    internal suspend fun pace(attempt: Attempt) {
-        if (attempt.hasWritten) {
-            delay(timing.writeIntervalMillis ?: requireNotNull(attempt.candidate.profile).spec.writeIntervalMillis)
-        }
-        attempt.hasWritten = true
-    }
-
-    internal suspend fun writePaced(attempt: Attempt, link: ControlConnection, bytes: ByteArray) {
+    /** Returns the notification revisions from immediately before the write, for fresh setting readbacks. */
+    internal suspend fun writePaced(attempt: Attempt, link: ControlConnection, bytes: ByteArray): ReadProgress {
         check(bytes.size <= link.maxWriteSize) { "完整协议报文超出传输写入容量" }
-        pace(attempt)
+        val interval = (timing.writeIntervalMillis ?: requireNotNull(attempt.candidate.profile).spec.writeIntervalMillis).milliseconds
+        if (attempt.hasWritten) delay(attempt.nextWriteAt?.let { -it.elapsedNow() } ?: interval)
         ensureActive(attempt)
+        val baseline = attempt.progress.value
+        attempt.hasWritten = true
+        attempt.nextWriteAt = null
         withTimeout(timing.queryTimeoutMillis) { link.write(bytes.copyOf()) }
+        val current = state.value
+        if (attempt.candidate.profile == ModelProfile.I5_ZT && current.platform.hostPlatform.isDesktop && current.deviceHasSystemAudio) {
+            attempt.nextWriteAt = timeSource.markNow() + interval
+        }
+        return baseline
     }
 
     private suspend fun openAndRead(attempt: Attempt): OperationResult {
         try {
-            val selected = attempt.selection ?: selectTransport(attempt).also { attempt.selection = it }
+            val selected = selectTransport(attempt)
             updateAttempt(attempt) { it.copy(transportSelection = selected) }
             while (true) {
                 val epoch = beginLink(attempt)
@@ -242,6 +251,7 @@ internal class ControlLink(
         attempt.codec = createProtocolCodec(requireNotNull(attempt.candidate.profile))
         attempt.progress = MutableStateFlow(ReadProgress())
         attempt.hasWritten = false
+        attempt.nextWriteAt = null
         attempt.initializationQueryIndex = null
         attempt.connection = null
         attempt.observer = null
@@ -255,8 +265,10 @@ internal class ControlLink(
         val codec = attempt.codec
         val progress = attempt.progress
         val opened = withTimeout(timing.connectTimeoutMillis) {
-            requireNotNull(transport).connect(candidate.deviceId, selection.endpoint) { nextPhase ->
-                phase(attempt, epoch, nextPhase)
+            connections.open {
+                requireNotNull(transport).connect(candidate.deviceId, selection.endpoint) { nextPhase ->
+                    phase(attempt, epoch, nextPhase)
+                }
             }.also { attempt.connection = it }
         }
         lifecycle.withLock {
@@ -264,23 +276,22 @@ internal class ControlLink(
             attempt.connection = opened
         }
         val link = opened
+        val deviceReadings = ConnectionReadings(profile)
         attempt.observer = scope.launch(start = CoroutineStart.UNDISPATCHED) {
             var failure: Throwable? = null
             var error = ControlError(ControlErrorCode.DISCONNECTED, "设备已断开")
             try {
                 link.notifications.collect { bytes ->
                     if (attempt.linkEpoch.value != epoch) return@collect
-                    val parsed = codec.feedNotification(bytes.copyOf())
+                    val parsed = codec.feedNotification(bytes.copyOf()).map(deviceReadings::receive)
                     val readings = parsed.flatMap { it.readings.entries }.associate { it.toPair() }
                     lifecycle.withLock {
                         updateLinkAttempt(attempt, epoch) { current ->
                             val old = requireNotNull(current.device)
-                            val firmware = ((readings[DeviceField.FIRMWARE] ?: old.fields[DeviceField.FIRMWARE]) as? FieldReading.Known)
-                                ?.value as? FieldValue.Firmware
                             current.copy(
                                 device = old.copy(
-                                    fields = old.fields.puttingAll(readings),
-                                    capabilities = profile.capabilities(firmware),
+                                    fields = deviceReadings.published(),
+                                    capabilities = deviceReadings.capabilities,
                                     fieldErrors = readings.keys.fold(old.fieldErrors) { errors, field -> errors.removing(field) },
                                     rawNotifications = old.rawNotifications.appendRecent(listOf(bytes.hex())),
                                     unknownNotifications = old.unknownNotifications.appendRecent(
@@ -346,17 +357,24 @@ internal class ControlLink(
                         }
                     }
                 }
-                closeOrRemember(link)
+                connections.close(link)
             }
         }
         phase(attempt, epoch, ConnectionPhase.SUBSCRIBING)
         withTimeout(timing.connectTimeoutMillis) { opened.subscribe() }
         throwProgressFailure(progress)
         phase(attempt, epoch, ConnectionPhase.INITIALIZING)
-        val queries = codec.initQueries(opened.maxWriteSize)
+        val queries = sequence {
+            yieldAll(codec.initQueries(opened.maxWriteSize))
+            val firmware = (state.value.device?.fields?.get(DeviceField.FIRMWARE) as? FieldReading.Known)?.value as? FieldValue.Firmware
+            yieldAll(codec.firmwareInitQueries(firmware))
+        }
         for ((index, query) in queries.withIndex()) {
             attempt.initializationQueryIndex = index
             throwProgressFailure(progress)
+            // A mode change queued during the inter-write gap gets this slot before the next initialization query.
+            attempt.nextWriteAt?.let { delay(-it.elapsedNow()) }
+            settings.runNextDuringInitialization(this, attempt)
             delay(query.delayBeforeMillis)
             throwProgressFailure(progress)
             writeInitialQuery(attempt, selection, opened, query.bytes, index)
@@ -481,6 +499,8 @@ internal class ControlLink(
             if (active !== attempt || attempt.linkEpoch.value != failedEpoch) throw CancellationException("Stale recovery")
             // Invalidate callbacks before cancellation so an old finally cannot clear the new link.
             attempt.linkEpoch.value += 1
+            settings.end(attempt)
+            attempt.settings = SettingQueue.Pending()
             val oldConnection = attempt.connection
             val oldObserver = attempt.observer
             attempt.connection = null
@@ -490,18 +510,13 @@ internal class ControlLink(
         withContext(NonCancellable) {
             oldObserver?.cancel()
             try {
-                oldConnection?.close()
+                check(oldConnection == null || connections.close(oldConnection)) { "旧控制连接尚未确认释放" }
             } finally {
                 oldObserver?.join()
             }
         }
         lifecycle.withLock {
             if (active !== attempt) throw CancellationException("Stale recovery")
-            attempt.codec = createProtocolCodec(requireNotNull(attempt.candidate.profile))
-            attempt.progress = MutableStateFlow(ReadProgress())
-            attempt.hasWritten = false
-            attempt.initializationQueryIndex = null
-            attempt.ready = false
             state.update { current ->
                 if (current.device?.sessionId != attempt.id || current.connection is ConnectionState.Disconnected) {
                     current
@@ -521,6 +536,7 @@ internal class ControlLink(
     private suspend fun closeAttemptLink(attempt: Attempt) = withContext(NonCancellable) {
         val (oldConnection, oldObserver) = lifecycle.withLock {
             attempt.linkEpoch.value += 1
+            settings.end(attempt)
             val oldConnection = attempt.connection
             val oldObserver = attempt.observer
             attempt.connection = null
@@ -528,7 +544,7 @@ internal class ControlLink(
             oldConnection to oldObserver
         }
         oldObserver?.cancel()
-        oldConnection?.let { closeOrRemember(it) }
+        oldConnection?.let { connections.close(it) }
         oldObserver?.join()
     }
 
@@ -628,24 +644,7 @@ internal class ControlLink(
         previous?.let { settings.end(it) }
         previous?.task?.cancel()
         previous?.observer?.cancel()
-        previous?.connection?.let { connection -> unclosed.update { if (connection in it) it else it.adding(connection) } }
-        unclosed.getAndUpdate { persistentListOf() }.forEach { closeOrRemember(it) }
-        return unclosed.value.isEmpty()
-    }
-
-    private suspend fun closeOrRemember(connection: ControlConnection): Boolean {
-        val closed = closeSafely(connection)
-        if (!closed) unclosed.update { if (connection in it) it else it.adding(connection) }
-        return closed
-    }
-
-    private suspend fun closeSafely(connection: ControlConnection): Boolean = withContext(NonCancellable) {
-        try {
-            connection.close()
-            true
-        } catch (_: Exception) {
-            false
-        }
+        return connections.closeAll()
     }
 
     internal fun platformError(): ControlError? = platformError(state.value, transport)

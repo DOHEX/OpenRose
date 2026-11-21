@@ -114,16 +114,30 @@ class ProtocolCodecTest {
     fun i7InitialQueryUsesIndependentLiteralAndCompleteSmallMtuQueries() {
         val codec = createProtocolCodec(ModelProfile.I7_RS_V2)
         val initial = codec.initQueries(512)
-        assertEquals("ff001efa010708090c0d0e122a2b2c2d2e2f313233363738393a3b3c3d3f454649e9aa", initial.first().bytes.toHex())
-        assertEquals("ff0102fa3e3aaa", initial.last().bytes.toHex()) // Explicit client supplement.
+        // RoseLink 3.8.6 i7 panel command order, with OpenRose's independent FA 3E supplement.
+        assertEquals(listOf("ff0012fa0d0c092c2d2a45460e322b01072f082e3649aa", "ff0102fa3e3aaa"), initial.map { it.bytes.toHex() })
         codec.reset()
         val small = codec.initQueries(20)
-        assertEquals(4, small.size)
+        assertEquals(
+            listOf("ff000ffa0d0c092c2d2a45460e322b01072fdaaa", "ff0104fa082e366aaa", "ff0202fa3e3baa"),
+            small.map { it.bytes.toHex() },
+        )
+        assertEquals(setOf("08", "2e", "36"), small[1].responseKeys)
         assertTrue(small.all { it.bytes.size <= 20 })
-        assertEquals(listOf(0, 1, 2, 3), small.map { it.bytes[1].toInt() })
-        assertEquals("fa", small[2].bytes.copyOfRange(3, 4).toHex())
-        assertTrue(small[2].responseKeys.isEmpty()) // Shared-only ID49 must not wait for supported state.
         assertFailsWith<IllegalArgumentException> { codec.initQueries(6) }
+    }
+
+    @Test
+    fun magicianRetainsTheLegacyFixedInfoQuery() {
+        val codec = createProtocolCodec(ModelProfile.MAGICIAN_RS_V2)
+        assertEquals(
+            "ff001efa010708090c0d0e122a2b2c2d2e2f313233363738393a3b3c3d3f454649e9aa",
+            codec.initQueries(512).first().bytes.toHex(),
+        )
+        codec.reset()
+        val small = codec.initQueries(20)
+        // The final status group contains only the unsupported 49 tag and requires no state reply.
+        assertTrue(small.single { it.key == "fa49" }.responseKeys.isEmpty())
     }
 
     @Test

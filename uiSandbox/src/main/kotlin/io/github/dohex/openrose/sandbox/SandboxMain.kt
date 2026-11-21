@@ -47,7 +47,6 @@ import dev.nucleusframework.window.NucleusDecoratedWindowTheme
 import dev.nucleusframework.window.TitleBar
 import dev.nucleusframework.window.styling.LocalTitleBarStyle
 import io.github.dohex.openrose.core.HostPlatform
-import io.github.dohex.openrose.core.protocol.ModelProfile
 import io.github.dohex.openrose.ui.Appearance
 import io.github.dohex.openrose.ui.InterfaceStyle
 import io.github.dohex.openrose.ui.OpenRoseApp
@@ -99,7 +98,7 @@ fun main(args: Array<String>) = nucleusApplication(args = args, backend = Nucleu
         SandboxControls(model, scenario, uiSettings, controlColors, preview, trayShown) { trayShown = it }
     }
     SandboxWindow(
-        title = "预览 · ${scenario.profile.displayName} · ${scenario.platformName} · ${uiSettings.interfaceStyle.label}",
+        title = "预览 · ${scenario.profile.sandboxLabel} · ${scenario.platformName} · ${uiSettings.interfaceStyle.label}",
         state = preview,
         dark = dark,
         background = appBackground,
@@ -123,7 +122,10 @@ fun main(args: Array<String>) = nucleusApplication(args = args, backend = Nucleu
             TrayPanel(
                 model = model,
                 selection = selection,
-                onOpenApp = { preview.isMinimized = false },
+                onOpenApp = { destination ->
+                    destination?.let(model.navigation::open)
+                    preview.isMinimized = false
+                },
                 onContentHeight = { trayState.size = DpSize(trayPanelSize.width, it) },
             )
         }
@@ -179,7 +181,7 @@ private fun SandboxControls(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 ScenarioChoice(model, "平台", sandboxHosts, scenario.host, { it.label }) { onHost(it) }
-                ScenarioChoice(model, "型号配置", ModelProfile.entries, scenario.profile, { it.displayName }) { copy(profile = it) }
+                SandboxProfilePicker(scenario.profile) { profile -> model.updateScenario { it.copy(profile = profile) } }
                 Section("固件") {
                     OutlinedTextField(
                         value = scenario.firmware,

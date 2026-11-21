@@ -8,6 +8,7 @@ import io.github.dohex.openrose.core.NoiseControlCapabilities
 import io.github.dohex.openrose.core.NoiseLevelCapabilities
 import io.github.dohex.openrose.core.TouchControlCapabilities
 import io.github.dohex.openrose.core.protocol.BatteryLayout
+import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.GattProfile
 import io.github.dohex.openrose.core.protocol.ProtocolFamily
 import io.github.dohex.openrose.core.protocol.RsCommonInit
@@ -34,33 +35,37 @@ internal val cambrian = ModelSpec(
     batteryLayout = BatteryLayout.SINGLE_UNIT,
     equalizerPresetLabels = mapOf("pop" to "POP", "hifi" to "HIFI", "rock" to "ROCK"),
     rsCommonInit = RsCommonInit.CAMBRIAN,
-    capabilities = {
-        DeviceCapabilities(
-            readableFields = ProtocolFamily.RS_COMMON.readableFields.toPersistentSet(),
-            writableSettings = persistentSetOf(
-                DeviceSetting.GAME_MODE,
-                DeviceSetting.TOUCH_BINDING,
-                DeviceSetting.MULTIPOINT,
-                DeviceSetting.TOUCH_ENABLED,
-                DeviceSetting.PROMPT_VOLUME,
-                DeviceSetting.NOISE_MODE,
-                DeviceSetting.TRANSPARENCY_LEVEL,
-                DeviceSetting.EQ,
-                DeviceSetting.AUDIO_MODE,
-            ),
-            noiseControl = NoiseControlCapabilities(
-                persistentSetOf("anc", "normal", "transparency", "wind"),
-                persistentSetOf(),
-                transparencyLevel = NoiseLevelCapabilities(persistentSetOf(1, 2, 3), persistentSetOf("transparency")),
-            ),
-            equalizer = EqualizerCapabilities(persistentSetOf("pop", "hifi", "rock")),
-            touchControl = TouchControlCapabilities(
-                rsCommonTouchSlots,
-                persistentSetOf("none", "play_pause", "previous_track", "next_track", "volume_up", "volume_down"),
-                rsCommonTouchSlots.associateWith { if (it.side == "left") "音量−" else "音量＋" }.toPersistentMap(),
-            ),
-            audioControl = AudioControlCapabilities(persistentSetOf("aac_sbc", "ldac"), multipointCoupled = true),
-            promptVolumeLevels = (1..5).toPersistentSet(),
-        )
-    },
+    capabilities = { cambrianControls },
+)
+
+internal val cambrianControls = DeviceCapabilities(
+    readableFields = rsReadings(
+        BatteryLayout.SINGLE_UNIT, DeviceField.TOUCH_KEYS, DeviceField.TOUCH_ENABLED,
+        DeviceField.NOISE_MODE, DeviceField.EQ, DeviceField.AUDIO_MODE, DeviceField.MULTIPOINT,
+        DeviceField.TRANSPARENCY_LEVEL, DeviceField.PROMPT_VOLUME,
+    ),
+    writableSettings = persistentSetOf(
+        DeviceSetting.GAME_MODE,
+        DeviceSetting.TOUCH_BINDING,
+        DeviceSetting.MULTIPOINT,
+        DeviceSetting.TOUCH_ENABLED,
+        DeviceSetting.PROMPT_VOLUME,
+        DeviceSetting.NOISE_MODE,
+        DeviceSetting.TRANSPARENCY_LEVEL,
+        DeviceSetting.EQ,
+        DeviceSetting.AUDIO_MODE,
+    ),
+    noiseControl = NoiseControlCapabilities(
+        persistentSetOf("anc", "normal", "transparency", "wind"),
+        persistentSetOf(),
+        transparencyLevel = NoiseLevelCapabilities(persistentSetOf(1, 2, 3), persistentSetOf("transparency")),
+    ),
+    equalizer = EqualizerCapabilities(persistentSetOf("pop", "hifi", "rock")),
+    touchControl = TouchControlCapabilities(
+        rsCommonTouchSlots,
+        persistentSetOf("none", "play_pause", "previous_track", "next_track", "volume_up", "volume_down"),
+        rsCommonTouchSlots.associateWith { if (it.side == "left") "音量−" else "音量＋" }.toPersistentMap(),
+    ),
+    audioControl = AudioControlCapabilities(persistentSetOf("aac_sbc", "ldac"), multipointCoupled = true),
+    promptVolumeLevels = (1..5).toPersistentSet(),
 )

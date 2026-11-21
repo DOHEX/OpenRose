@@ -1,17 +1,31 @@
 package io.github.dohex.openrose.core.protocol
 
 import io.github.dohex.openrose.core.DeviceSetting
+import kotlinx.datetime.LocalDateTime
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.number
+import kotlinx.datetime.toLocalDateTime
+import kotlin.time.Clock
 
 /** RS Common V2 frames: FF/DD framing, LTV records and a per-session sequence. */
-internal class RsCommonV2Codec(override val profile: ModelProfile) : ProtocolCodec {
+internal class RsCommonV2Codec(
+    override val profile: ModelProfile,
+    private val localTime: () -> LocalDateTime = { Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()) },
+) : ProtocolCodec {
     private var sequence = 0
     private var buffer = byteArrayOf()
 
-    /** RoseLink's shared getInfo batch; querying an ID does not mean the model offers that function. */
-    private val infoTypes = "010708090c0d0e122a2b2c2d2e2f313233363738393a3b3c3d3f454649".bytes()
+    /** RoseLink 3.8.6 builds getInfo from the panel order; 3.8.0 used the sender default. */
+    private val infoTypes = (profile.spec.rsV2InfoIds ?: "010708090c0d0e122a2b2c2d2e2f313233363738393a3b3c3d3f454649").bytes()
 
-    override fun prepareSetting(setting: DeviceSetting, value: FieldValue, firmware: FieldValue.Firmware?): ProtocolSetting {
-        val capabilities = profile.capabilities(firmware)
+    override fun prepareSetting(
+        setting: DeviceSetting,
+        value: FieldValue,
+        firmware: FieldValue.Firmware?,
+        currentFields: Map<DeviceField, FieldReading>,
+    ): ProtocolSetting {
+        val gameMode = (currentFields[DeviceField.GAME_MODE] as? FieldReading.Known)?.value as? FieldValue.Toggle
+        val capabilities = profile.capabilities(firmware, gameMode?.value)
         if (setting == DeviceSetting.CUSTOM_EQ) {
             require(value is FieldValue.IntegerList) { "自定义均衡器需要整数曲线" }
             val custom = capabilities.equalizer?.custom ?: throw UnsupportedOperationException("该型号不支持自定义均衡器")
@@ -23,7 +37,7 @@ internal class RsCommonV2Codec(override val profile: ModelProfile) : ProtocolCod
             val payload = gains.map { if (it < 0) 0x80 or -it else it }.map { it.toByte() }.toByteArray()
             val writes = listOf(frame(byteArrayOf(0x2a, 4)), frame(byteArrayOf(0x3e) + payload))
             val modeReadback = query(byteArrayOf(0x2a))
-            val curveReadback = query(byteArrayOf(0x3e))
+            val curveReadback = queryCurve()
             return ProtocolSetting(
                 writes,
                 modeReadback,
@@ -31,11 +45,16 @@ internal class RsCommonV2Codec(override val profile: ModelProfile) : ProtocolCod
                 listOf(curveReadback),
             )
         }
-        val expected = if (setting == DeviceSetting.NOISE_CYCLE) validatedNoiseCycle(value) else value
+        val expected = if (setting == DeviceSetting.NOISE_CYCLE) {
+            validatedNoiseCycle(value, capabilities.noiseControl?.cycleModes.orEmpty())
+        } else {
+            value
+        }
         val (type, payload) = when (setting) {
             DeviceSetting.NOISE_MODE -> {
                 require(value is FieldValue.Text) { "降噪模式需要模式名称" }
-                val mode = mapOf("anc" to 1, "normal" to 2, "transparency" to 3, "wind" to 4, "auto" to 5, "dynamic" to 7)[value.value]
+                if (value.value !in capabilities.noiseControl?.modes.orEmpty()) throw UnsupportedOperationException("该型号不支持该降噪模式")
+                val mode = mapOf("anc" to 1, "normal" to 2, "transparency" to 3, "wind" to 4, "auto" to 5, "deep" to 6, "dynamic" to 7)[value.value]
                     ?: throw UnsupportedOperationException("该型号不支持该降噪模式")
                 9.toByte() to byteArrayOf(mode.toByte())
             }
@@ -51,7 +70,7 @@ internal class RsCommonV2Codec(override val profile: ModelProfile) : ProtocolCod
             DeviceSetting.NOISE_CYCLE -> {
                 val flags = (expected as FieldValue.NoiseCycle).flags
                 val payload = listOf("anc", "wind", "normal", "transparency")
-                    .map { if (flags.getValue(it) == true) 1.toByte() else 0.toByte() }
+                    .map { if (flags[it] == true) 1.toByte() else 0.toByte() }
                     .toByteArray()
                 0x36.toByte() to payload
             }
@@ -61,7 +80,7 @@ internal class RsCommonV2Codec(override val profile: ModelProfile) : ProtocolCod
                 if (value.value !in capabilities.equalizer?.presets.orEmpty()) {
                     throw UnsupportedOperationException("该型号当前固件不支持该均衡器预设")
                 }
-                val preset = mapOf("hifi" to 0, "pop" to 1, "rock" to 2, "light" to 3, "eap" to 6).getValue(value.value)
+                val preset = mapOf("hifi" to 0, "pop" to 1, "rock" to 2, "light" to 3, "eap" to 6, "game_1" to 0xa0).getValue(value.value)
                 0x2a.toByte() to byteArrayOf(preset.toByte())
             }
 
@@ -111,8 +130,10 @@ internal class RsCommonV2Codec(override val profile: ModelProfile) : ProtocolCod
 
             DeviceSetting.AUDIO_MODE -> {
                 require(value is FieldValue.Text) { "音频模式需要配置名称" }
-                val mode = listOf("aac_sbc", "ldac", "lhdc", "lc3").indexOf(value.value)
-                if (mode < 0) throw UnsupportedOperationException("该型号不支持该音频配置")
+                val mode = rsV2AudioModes.indexOf(value.value)
+                if (mode < 0 || value.value !in capabilities.audioControl?.modes.orEmpty()) {
+                    throw UnsupportedOperationException("该型号不支持该音频配置")
+                }
                 0x2b.toByte() to byteArrayOf(mode.toByte())
             }
 
@@ -126,34 +147,79 @@ internal class RsCommonV2Codec(override val profile: ModelProfile) : ProtocolCod
                 (if (setting == DeviceSetting.TOUCH_ENABLED) 7 else 8).toByte() to byteArrayOf(if (value.value) 0 else 1)
             }
 
-            DeviceSetting.TOUCH_BINDING -> {
-                val binding = validatedTouchAssignment(value, profile)
-                val gesture = listOf("single", "double", "triple", "long").indexOf(binding.gesture)
-                val slot = gesture + 1 + if (binding.side == "right") 0x10 else 0
-                val action = listOf(
-                    "none",
-                    "play_pause",
-                    "previous_track",
-                    "next_track",
-                    "volume_up",
-                    "volume_down",
-                    "game_mode",
-                    "voice_assistant",
-                    "noise_cycle",
-                ).indexOf(binding.action)
-                1.toByte() to byteArrayOf(slot.toByte(), action.toByte())
+            DeviceSetting.TAP_ENABLED -> {
+                if (setting !in capabilities.writableSettings) throw UnsupportedOperationException("该型号不支持轻拍控制")
+                require(value is FieldValue.Toggle) { "轻拍控制需要明确开关" }
+                0x3b.toByte() to byteArrayOf(if (value.value) 1 else 0)
             }
 
-            DeviceSetting.SPATIAL_AUDIO -> throw UnsupportedOperationException("该型号不支持空间音频控制")
+            DeviceSetting.TOUCH_BINDING, DeviceSetting.TAP_BINDING -> {
+                val isTap = setting == DeviceSetting.TAP_BINDING
+                val gestures = if (isTap) capabilities.tapControl else capabilities.touchControl
+                val binding = validatedTouchAssignment(value, profile, gestures)
+                val slot = rsV2Gestures.indexOf(binding.gesture) + 1 + if (binding.side == "right") 0x10 else 0
+                val action = rsV2Actions.indexOf(binding.action)
+                (if (isTap) 0x3c else 0x01).toByte() to byteArrayOf(slot.toByte(), action.toByte())
+            }
+
+            DeviceSetting.SPATIAL_AUDIO -> throw UnsupportedOperationException("该型号不支持空间音频总开关")
+
+            DeviceSetting.SPATIAL_MODE, DeviceSetting.SPATIAL_CONTENT -> {
+                val mode = setting == DeviceSetting.SPATIAL_MODE
+                val choices = if (mode) capabilities.spatialModes else capabilities.spatialContents
+                require(value is FieldValue.Text && value.value in choices) { "该型号不支持此空间音频选项" }
+                val wire = (if (mode) rsV2SpatialModes else rsV2SpatialContents).indexOf(value.value)
+                require(wire >= 0) { "未知空间音频选项" }
+                (if (mode) 0x38 else 0x3d).toByte() to byteArrayOf(wire.toByte())
+            }
+
+            DeviceSetting.EAR_ADAPTIVE, DeviceSetting.INDEPENDENT_MIC_ACTIVATION, DeviceSetting.INDEPENDENT_MIC_MODE -> {
+                if (setting !in capabilities.writableSettings) throw UnsupportedOperationException("该型号不支持此设置")
+                require(value is FieldValue.Toggle) { "需要明确开关" }
+                val toggle = (if (value.value) 1 else 0).toByte()
+                if (setting == DeviceSetting.EAR_ADAPTIVE) {
+                    0x3a.toByte() to byteArrayOf(toggle)
+                } else {
+                    val selector = (if (setting == DeviceSetting.INDEPENDENT_MIC_ACTIVATION) 0 else 1).toByte()
+                    0x49.toByte() to byteArrayOf(selector, toggle)
+                }
+            }
         }
         // Validation precedes both sequence allocations, so rejected settings consume no sequence.
         val key = byteArrayOf(type).hex()
-        val expectedField = if (setting == DeviceSetting.BASS_BOOST) DeviceField.EQ_SLOT else rsCommonV2Fields.getValue(key).single()
-        return ProtocolSetting(
-            listOf(frame(byteArrayOf(type) + payload)),
-            query(byteArrayOf(type), setOf(expectedField)),
-            mapOf(expectedField to expected),
-        )
+        val values = when (setting) {
+            DeviceSetting.BASS_BOOST -> mapOf(DeviceField.EQ to FieldValue.Text("custom_slot"), DeviceField.EQ_SLOT to expected)
+            DeviceSetting.INDEPENDENT_MIC_ACTIVATION -> mapOf(DeviceField.INDEPENDENT_MIC_ACTIVATION to expected)
+            DeviceSetting.INDEPENDENT_MIC_MODE -> mapOf(DeviceField.INDEPENDENT_MIC_MODE to expected)
+            else -> mapOf(rsCommonV2Fields.getValue(key).single() to expected)
+        }
+        val write = frame(byteArrayOf(type) + payload)
+        if (profile.spec.spatialNeedsEarAdaptive) {
+            fun confirmed(field: DeviceField) = (currentFields[field] as? FieldReading.Known)?.value
+            val followUp = when {
+                setting == DeviceSetting.SPATIAL_MODE && value != FieldValue.Text("off") &&
+                    confirmed(DeviceField.EAR_ADAPTIVE) != FieldValue.Toggle(true) ->
+                    Triple(byteArrayOf(0x3a, 1), DeviceField.EAR_ADAPTIVE, FieldValue.Toggle(true))
+
+                setting == DeviceSetting.EAR_ADAPTIVE && value == FieldValue.Toggle(false) &&
+                    confirmed(DeviceField.SPATIAL_MODE) != FieldValue.Text("off") ->
+                    Triple(byteArrayOf(0x38, 0), DeviceField.SPATIAL_MODE, FieldValue.Text("off"))
+
+                else -> null
+            }
+            if (followUp != null) {
+                val (body, field, expectedValue) = followUp
+                return ProtocolSetting(
+                    listOf(write, frame(body)),
+                    query(byteArrayOf(type), values.keys),
+                    values + (field to expectedValue),
+                    listOf(query(byteArrayOf(body.first()), setOf(field))),
+                )
+            }
+        }
+        val readback = query(byteArrayOf(type), values.keys)
+        val refreshEq = setting == DeviceSetting.GAME_MODE && profile.spec.refreshEqualizerAfterGameMode
+        return ProtocolSetting(listOf(write), readback, values, if (refreshEq) listOf(query(byteArrayOf(0x2a))) else emptyList())
     }
 
     private fun frame(body: ByteArray): ByteArray {
@@ -163,20 +229,45 @@ internal class RsCommonV2Codec(override val profile: ModelProfile) : ProtocolCod
     }
 
     private fun query(ids: ByteArray, expectedFields: Set<DeviceField>? = null): ProtocolQuery {
-        val keys = ids.map { byteArrayOf(it).hex() }.filter { it in rsCommonV2Fields }.toSet()
+        val fields = expectedFields ?: profile.capabilities().readableFields
+        val keys = ids.map { byteArrayOf(it).hex() }.filter { id -> rsCommonV2Fields[id].orEmpty().any { it in fields } }.toSet()
         return ProtocolQuery(
             "fa" + ids.hex(),
             frame(byteArrayOf(0xfa.toByte()) + ids),
             keys,
-            expectedFields ?: keys.flatMap { rsCommonV2Fields.getValue(it) }.toSet(),
+            expectedFields ?: keys.flatMap { rsCommonV2Fields.getValue(it) }.intersect(fields),
         )
     }
 
     override fun initQueries(maxWriteSize: Int): List<ProtocolQuery> {
         require(maxWriteSize >= 7) { "RS Common V2 queries require at least a 7-byte write capacity" }
         val groups = infoTypes.toList().chunked(maxWriteSize - 6)
-        return (groups + listOf(listOf(0x3e.toByte()))).map { query(it.toByteArray()) }
+        return buildList {
+            groups.forEach { add(query(it.toByteArray())) }
+            if (profile.spec.synchronizeClockOnConnect) {
+                val now = localTime()
+                val body = byteArrayOf(
+                    0x35,
+                    (now.year / 100).toByte(),
+                    (now.year % 100).toByte(),
+                    now.month.number.toByte(),
+                    now.day.toByte(),
+                    now.hour.toByte(),
+                    now.minute.toByte(),
+                    now.second.toByte(),
+                )
+                add(ProtocolQuery("35", frame(body), emptySet(), emptySet()))
+            }
+            if (profile.capabilities().equalizer?.custom != null) add(queryCurve())
+        }
     }
+
+    override fun firmwareInitQueries(firmware: FieldValue.Firmware?): List<ProtocolQuery> {
+        val unlocked = profile.capabilities().equalizer?.custom == null && profile.capabilities(firmware).equalizer?.custom != null
+        return if (unlocked) listOf(queryCurve()) else emptyList()
+    }
+
+    private fun queryCurve() = query(byteArrayOf(0x3e), setOf(DeviceField.CUSTOM_EQ))
 
     override fun feedNotification(bytes: ByteArray): List<ProtocolReply> {
         buffer += bytes
@@ -295,28 +386,19 @@ internal class RsCommonV2Codec(override val profile: ModelProfile) : ProtocolCod
                 put(DeviceField.FIRMWARE, FieldValue.Firmware(parts, parts.joinToString("")))
             }
 
-            0x01 -> {
-                if (value.size < 16 || value.size % 2 != 0) return emptyMap()
+            0x01, 0x3c -> {
+                val isTap = type == 0x3c
+                val slots = if (isTap) listOf(2, 3, 0x12, 0x13) else listOf(1, 2, 3, 4, 0x11, 0x12, 0x13, 0x14)
+                if (value.size < slots.size * 2 || value.size % 2 != 0) return emptyMap()
                 val pairs = value.toList().chunked(2).associate { it[0].u() to it[1].u() }
-                val slots = listOf(1, 2, 3, 4, 0x11, 0x12, 0x13, 0x14)
                 if (!slots.all { it in pairs }) return emptyMap()
-                val actions = listOf(
-                    "none",
-                    "play_pause",
-                    "previous_track",
-                    "next_track",
-                    "volume_up",
-                    "volume_down",
-                    "game_mode",
-                    "voice_assistant",
-                    "noise_cycle",
-                )
-                val gestures = listOf("single", "double", "triple", "long")
-                val bindings = slots.mapIndexed { index, slot ->
+                val allowedActions = if (isTap) profile.capabilities().tapControl?.actions.orEmpty() else null
+                val bindings = slots.map { slot ->
                     val action = pairs.getValue(slot)
-                    TouchBinding(if (index < 4) "left" else "right", gestures[index % 4], actions.getOrNull(action), action)
+                    val name = rsV2Actions.getOrNull(action)?.takeIf { allowedActions == null || it in allowedActions }
+                    TouchBinding(if (slot < 0x10) "left" else "right", rsV2Gestures[(slot and 0x0f) - 1], name, action)
                 }
-                put(DeviceField.TOUCH_KEYS, FieldValue.TouchKeys(bindings))
+                put(if (isTap) DeviceField.TAP_KEYS else DeviceField.TOUCH_KEYS, FieldValue.TouchKeys(bindings))
             }
 
             0x09 -> {
@@ -333,7 +415,7 @@ internal class RsCommonV2Codec(override val profile: ModelProfile) : ProtocolCod
                 put(DeviceField.NOISE_MODE, modeName?.let { FieldValue.Text(it) })
             }
 
-            0x07, 0x08, 0x0e, 0x32 -> {
+            0x3b, 0x07, 0x08, 0x0e, 0x32, 0x3a -> {
                 if (value.size != 1) return emptyMap()
                 val on = if (type in listOf(7, 8)) 0 else 1
                 put(expected.single(), if (raw in 0..1) FieldValue.Toggle(raw == on) else null)
@@ -358,6 +440,7 @@ internal class RsCommonV2Codec(override val profile: ModelProfile) : ProtocolCod
                     4 to "custom",
                     5 to "custom_slot",
                     6 to "eap",
+                    0xa0 to "game_1",
                 )[index]
                 put(DeviceField.EQ, presetName?.let { FieldValue.Text(it) })
                 if (value.size == 2 && raw == 5) put(DeviceField.EQ_SLOT, FieldValue.Number(value[1].u()))
@@ -369,7 +452,7 @@ internal class RsCommonV2Codec(override val profile: ModelProfile) : ProtocolCod
                 val decimalText = value.hex()
                 val number = if (decimalText.all { it in '0'..'9' }) decimalText.toIntOrNull() else null
                 val semantic = when (type) {
-                    0x2b -> number?.let { listOf("aac_sbc", "ldac", "lhdc", "lc3").getOrNull(it) }?.let { FieldValue.Text(it) }
+                    0x2b -> number?.let { rsV2AudioModes.getOrNull(it) }?.let { FieldValue.Text(it) }
                     0x2c, 0x2d -> number?.takeIf { it in listOf(1, 3, 5) }?.let { FieldValue.Number(it) }
                     else -> number?.takeIf { it in 0..5 }?.let { FieldValue.Number(it) }
                 }
@@ -387,7 +470,8 @@ internal class RsCommonV2Codec(override val profile: ModelProfile) : ProtocolCod
                     val flag = value[index].u()
                     name to if (flag in 0..1) flag == 1 else null
                 }.toMap()
-                put(DeviceField.NOISE_CYCLE, FieldValue.NoiseCycle(flags))
+                val supported = profile.capabilities().noiseControl?.cycleModes.orEmpty()
+                put(DeviceField.NOISE_CYCLE, FieldValue.NoiseCycle(flags.filterKeys { it in supported }))
             }
 
             0x3e -> {
@@ -396,6 +480,20 @@ internal class RsCommonV2Codec(override val profile: ModelProfile) : ProtocolCod
                     DeviceField.CUSTOM_EQ,
                     gains.takeIf { it.size == 10 && it.all { gain -> gain in -6..6 } }?.let { FieldValue.IntegerList(it) },
                 )
+            }
+
+            0x38, 0x3d -> {
+                if (value.size != 1) return emptyMap()
+                val choices = if (type == 0x38) rsV2SpatialModes else rsV2SpatialContents
+                put(expected.single(), choices.getOrNull(value[0].u())?.let { FieldValue.Text(it) })
+            }
+
+            0x49 -> {
+                // Longer 49 records carry extended firmware versions, not microphone states.
+                if (value.size != 2 || value.any { it.u() !in 0..1 }) return emptyMap()
+                val activated = value[0].u() == 1
+                put(DeviceField.INDEPENDENT_MIC_ACTIVATION, FieldValue.Toggle(activated))
+                put(DeviceField.INDEPENDENT_MIC_MODE, FieldValue.Toggle(activated && value[1].u() == 1))
             }
 
             0x45, 0x46 -> {
@@ -425,3 +523,12 @@ internal class RsCommonV2Codec(override val profile: ModelProfile) : ProtocolCod
         buffer = byteArrayOf()
     }
 }
+
+private val rsV2SpatialModes = listOf("off", "head_tracking", "fixed")
+private val rsV2SpatialContents = listOf("tv", "music", "movie", "game")
+private val rsV2AudioModes = listOf("aac_sbc", "ldac", "lhdc", "lc3", "aptx", "aptx_hd", "aptx_adaptive")
+
+private val rsV2Gestures = listOf("single", "double", "triple", "long")
+private val rsV2Actions = listOf(
+    "none", "play_pause", "previous_track", "next_track", "volume_up", "volume_down", "game_mode", "voice_assistant", "noise_cycle",
+)

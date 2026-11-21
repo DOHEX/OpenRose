@@ -130,7 +130,7 @@ internal fun IntegrationSettings.allowsPrompt(trigger: IslandTrigger): Boolean =
 
 /** Whether this model can report an in-case event: it has a charging case and its protocol carries the in-case flags. */
 val ModelProfile.reportsInCase: Boolean
-    get() = batteryLayout == BatteryLayout.EARBUDS_AND_CASE && DeviceField.LEFT_IN_CASE in family.readableFields
+    get() = batteryLayout == BatteryLayout.EARBUDS_AND_CASE && DeviceField.LEFT_IN_CASE in capabilities().readableFields
 
 /** Both earbuds' reported in-case flags, or null when the model cannot report them; a null side is unknown or FF. */
 internal fun DeviceState.inCaseFlags(): Pair<Boolean?, Boolean?>? {

@@ -12,15 +12,19 @@ import org.freedesktop.dbus.errors.ServiceUnknown
 import java.util.IdentityHashMap
 
 internal class BluezGattDriver(private val bus: BluezBus, private val devicePath: String) : GattDriver {
+    private val owner = bus.owner ?: throw GattException(GattFailureKind.DISCONNECTED, "BlueZ 服务不可用")
     private val lock = Any()
     private val characteristics = IdentityHashMap<GattCharacteristic, String>()
     private val routed = mutableSetOf<String>()
     private val subscribed = mutableSetOf<String>()
     private var discovered = false
+    private var firstWrite = true
     private var closed = false
-    override val events: Flow<GattEvent> = bus.events.transform { signal ->
+    override val events: Flow<GattEvent> = bus.signals { it.affectsLink(devicePath) }.transform { signal ->
         when (signal) {
-            is BluezSignal.Owner -> if (!signal.present) emit(disconnected("BlueZ 服务已停止"))
+            is BluezSignal.PrepareForSleep -> if (signal.sleeping) emit(disconnected("电脑进入休眠"))
+
+            is BluezSignal.Owner -> if (!signal.present || bus.owner != owner) emit(disconnected("BlueZ 服务已停止"))
 
             is BluezSignal.Changed -> {
                 if ((signal.path == devicePath && signal.interfaceName == DEVICE && signal.values["Connected"] == false) ||
@@ -63,18 +67,14 @@ internal class BluezGattDriver(private val bus: BluezBus, private val devicePath
     }
     override suspend fun connect() = native {
         checkOpen()
-        try {
-            bus.connect(devicePath)
-        } catch (_: org.bluez.Error.AlreadyConnected) { }
+        bus.requestGattConnection(devicePath)
     }
     override suspend fun discoverServices(): List<GattService> = native {
         checkOpen()
         suspend fun waitForServices(timeout: Long): BluezObjects? = withTimeoutOrNull(timeout) {
             while (true) {
                 val objects = bus.objects()
-                if (objects[devicePath]?.get(DEVICE)?.get("ServicesResolved") == true &&
-                    objects.any { it.key.startsWith("$devicePath/") && SERVICE in it.value }
-                ) {
+                if (objects.gattServicesReady(devicePath)) {
                     return@withTimeoutOrNull objects
                 }
                 delay(100)
@@ -85,9 +85,7 @@ internal class BluezGattDriver(private val bus: BluezBus, private val devicePath
         var objects = waitForServices(2_000)
         if (objects == null) {
             // If the first Connect chose the classic bearer, BlueZ selects the disconnected bearer on a second call.
-            try {
-                bus.connect(devicePath)
-            } catch (_: org.bluez.Error.AlreadyConnected) { }
+            bus.requestGattConnection(devicePath)
             objects = waitForServices(8_000) ?: throw GattException(GattFailureKind.TRANSIENT, "等待 BlueZ GATT 服务超时")
         }
         val found = IdentityHashMap<GattCharacteristic, String>()
@@ -138,11 +136,10 @@ internal class BluezGattDriver(private val bus: BluezBus, private val devicePath
         val path = path(characteristic)
         if (subscription == GattSubscription.DISABLED) {
             if (synchronized(lock) { path in subscribed }) {
-                bus.stopNotify(path)
-                synchronized(lock) { subscribed.remove(path) }
+                releaseSubscription(path)
             }
         } else if (synchronized(lock) { path !in subscribed }) {
-            bus.startNotify(path)
+            bus.startNotify(owner, path)
             synchronized(lock) { subscribed.add(path) }
         }
     }
@@ -152,21 +149,38 @@ internal class BluezGattDriver(private val bus: BluezBus, private val devicePath
         withResponse: Boolean,
     ) = native(recoverNotConnected = true) {
         checkOpen()
-        bus.write(path(characteristic), value, withResponse)
+        val path = path(characteristic)
+        var retries = if (firstWrite) FIRST_WRITE_RETRIES else 0
+        while (true) {
+            try {
+                bus.write(path, value, withResponse)
+                firstWrite = false
+                break
+            } catch (error: org.bluez.Error.Failed) {
+                // BlueZ can accept StartNotify before attaching its GATT client. This exact
+                // WriteValue error is returned before it processes the value or transmits bytes.
+                if (error.message != "Not connected" || retries == 0) throw error
+                retries--
+                delay(125)
+                checkOpen()
+            }
+        }
     }
     override suspend fun close() {
         if (synchronized(lock) { closed }) return
         for (path in synchronized(lock) { subscribed.toList() }) {
-            native {
-                bus.stopNotify(path)
-                synchronized(lock) { subscribed.remove(path) }
-            }
+            native { releaseSubscription(path) }
         }
         synchronized(lock) {
             routed.clear()
             closed = true
         }
         // Device1.Disconnect tears down all profiles, including audio. StopNotify releases our lease.
+    }
+    private suspend fun releaseSubscription(path: String) {
+        // A BlueZ restart destroys the old daemon's subscriptions, even if link observation has already stopped.
+        if (bus.owner == owner) bus.stopNotify(owner, path)
+        synchronized(lock) { subscribed.remove(path) }
     }
     private fun checkOpen() {
         if (synchronized(lock) { closed }) throw GattException(GattFailureKind.DISCONNECTED, "GATT 已关闭")
@@ -200,10 +214,58 @@ internal class BluezGattDriver(private val bus: BluezBus, private val devicePath
         }
         throw GattException(kind, error.message ?: error.javaClass.simpleName, error)
     }
-    private fun disconnected(message: String) = GattEvent.Disconnected(GattException(GattFailureKind.DISCONNECTED, message))
 }
+
+// Leaves time for the ATT write inside the shared five-second GATT operation deadline.
+private const val FIRST_WRITE_RETRIES = 24
+
+private suspend fun BluezBus.requestGattConnection(devicePath: String) {
+    var busyRetries = 8
+    var interfaces = objects()[devicePath].orEmpty()
+    while (interfaces[LE_BEARER]?.get("Connected") != true) {
+        val useLeBearer = LE_BEARER in interfaces
+        val busy = try {
+            connectGatt(devicePath, useLeBearer)
+            false
+        } catch (_: org.bluez.Error.AlreadyConnected) {
+            false
+        } catch (error: org.bluez.Error.InProgress) {
+            val current = objects()[devicePath].orEmpty()
+            if (current[DEVICE]?.get("Connected") != true) throw error
+            // An in-flight audio profile makes BlueZ reject LE1.Connect before it queues the request.
+            useLeBearer && current[CLASSIC_BEARER]?.get("Connected") == true
+        }
+        if (!busy || busyRetries == 0) return
+        busyRetries--
+        delay(125)
+        interfaces = objects()[devicePath].orEmpty()
+        if (LE_BEARER !in interfaces || interfaces[CLASSIC_BEARER]?.get("Connected") != true) return
+    }
+}
+
+private fun BluezObjects.gattServicesReady(devicePath: String): Boolean {
+    val interfaces = this[devicePath] ?: return false
+    val le = interfaces[LE_BEARER]
+    // ServicesResolved and the GATT table can outlive the LE link while classic audio is connected.
+    if (le != null && le["Connected"] != true) return false
+    return interfaces[DEVICE]?.get("ServicesResolved") == true && any { it.key.startsWith("$devicePath/") && SERVICE in it.value }
+}
+
+private fun disconnected(message: String) = GattEvent.Disconnected(GattException(GattFailureKind.DISCONNECTED, message))
+
 internal fun Any?.asBytes(): ByteArray? = when (this) {
     is ByteArray -> copyOf()
     is List<*> -> mapNotNull { (it as? Number)?.toByte() }.toByteArray()
     else -> null
+}
+
+private fun BluezSignal.affectsLink(devicePath: String): Boolean = when (this) {
+    is BluezSignal.Changed -> when (interfaceName) {
+        ADAPTER -> devicePath.startsWith("$path/")
+        DEVICE -> path == devicePath && ("Connected" in values || "ServicesResolved" in values)
+        CHARACTERISTIC -> path.startsWith("$devicePath/") && "Value" in values
+        else -> false
+    }
+
+    else -> true
 }

@@ -12,6 +12,7 @@ import io.github.dohex.openrose.core.protocol.FieldReading
 import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.dohex.openrose.core.protocol.ModelProfile
 import kotlinx.coroutines.async
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
@@ -63,6 +64,42 @@ class OwnerHandoffTest {
     }
 
     @Test
+    fun anAcquireArrivingAfterTimeoutCannotUndoALaterRelease() = runTest {
+        val rig = OwnerRig(this)
+        rig.bootHost()
+        val runtime = rig.newRuntime()
+        val id = rig.earphones.deviceId
+        rig.appTransport.audioDevice.emit(id)
+        rig.hostTransport.audioDevice.emit(id)
+        runCurrent()
+        advanceTimeBy(1)
+        runCurrent()
+        rig.link.pauseNextAcquire = true
+        assertIs<HandoffOutcome.Blocked>(runtime.selectControlWay(ControlWay.MODULE))
+        val delayedCall: suspend () -> AcquireResult = requireNotNull(rig.link.delayedAcquire)
+
+        assertIs<HandoffOutcome.Completed>(runtime.selectControlWay(ControlWay.ORDINARY))
+        runCurrent()
+        advanceTimeBy(1)
+        runCurrent()
+        assertEquals("ordinary", rig.headset.openOwner)
+        val lateResult = delayedCall.invoke()
+        assertIs<AcquireResult.Refused>(lateResult)
+        // Even a new lease has to honor the currently saved ordinary selection.
+        val lease = assertIs<HostOpenResult.Opened>(rig.host.open(appIdentity)).lease.id
+        val request = SwitchRequest("stale", ControlWay.ORDINARY, ControlWay.MODULE)
+        assertIs<AcquireResult.Refused>(rig.host.acquire(appIdentity, lease, request))
+        assertIs<HostStatus.Inactive>(rig.host.status.value)
+
+        assertIs<HandoffOutcome.Completed>(runtime.selectControlWay(ControlWay.MODULE))
+        runCurrent()
+        advanceTimeBy(1)
+        runCurrent()
+        assertEquals("module", rig.headset.openOwner)
+        assertEquals(0, rig.headset.overlappingOpens)
+    }
+
+    @Test
     fun moduleToOrdinaryClosesTheHostConnectionBeforeOrdinaryConnects() = runTest {
         val rig = OwnerRig(this, initial = OwnerRecord(ControlWay.MODULE, PendingModuleRelease("earlier", null)))
         rig.bootHost()
@@ -109,6 +146,7 @@ class OwnerHandoffTest {
         assertEquals(ControlWay.ORDINARY, runtime.integration.value.owner.selected)
         assertIs<OwnerReadiness.SwitchBlocked>(runtime.integration.value.owner.readiness)
         assertEquals(ControlErrorCode.NOT_READY, assertIs<OperationResult.Failure>(runtime.connect(rig.earphones.deviceId)).error.code)
+        assertFalse(runtime.disconnect(), "the unconfirmed module release still holds the connection")
 
         // Once the host can answer, the saved choice completes without another user action.
         rig.link.releaseHangs = false
@@ -276,6 +314,19 @@ class OwnerHandoffTest {
     }
 
     @Test
+    fun switchingAndObservingShareOneAsynchronousBinding() = runTest {
+        val rig = OwnerRig(this)
+        rig.link.openMillis = 30
+        rig.bootHost()
+        val runtime = rig.newRuntime()
+
+        assertIs<HandoffOutcome.Completed>(runtime.selectControlWay(ControlWay.MODULE))
+        runCurrent()
+        assertEquals(1, rig.link.opens)
+        assertEquals(OwnerReadiness.Ready, runtime.integration.value.owner.readiness)
+    }
+
+    @Test
     fun aPreferenceUpdateCannotMoveTheOwnerBackToOrdinary() = runTest {
         val rig = OwnerRig(this)
         rig.bootHost()
@@ -283,21 +334,14 @@ class OwnerHandoffTest {
         runCurrent()
         runtime.selectControlWay(ControlWay.MODULE)
         runCurrent()
-        val generation = (rig.host.status.value as HostStatus.Active).generation
-
         runtime.updateIntegrationSettings(IntegrationSettings(controlWay = ControlWay.ORDINARY, islandMode = IslandMode.OFF))
         runCurrent()
-        val hostView = requireNotNull(rig.host.view(appIdentity, leaseOf(rig)))
-        assertEquals(IslandMode.OFF, hostView.settings.islandMode)
-        assertEquals(ControlWay.MODULE, hostView.settings.controlWay)
-        val forged = rig.host.execute(
-            appIdentity,
-            leaseOf(rig),
-            generation,
-            HostCommand.UpdateSettings(HostSettings(integration = IntegrationSettings(controlWay = ControlWay.ORDINARY))),
-        )
-
-        assertEquals(HostCallResult.Operation(OperationResult.Success), forged)
+        val saved = runtime.integration.value.settings
+        assertEquals(ControlWay.MODULE, saved.controlWay)
+        val hostView = requireNotNull(rig.host.ownerView.first())
+        assertEquals(IslandMode.OFFICIAL, hostView.settings.islandMode)
+        rig.host.configure { HostConfiguration(true, HostSettings(integration = saved)) }
+        assertEquals(IslandMode.OFF, requireNotNull(rig.host.ownerView.first()).settings.islandMode)
         assertEquals(ControlWay.MODULE, runtime.integration.value.owner.selected)
         assertIs<HostStatus.Active>(rig.host.status.value)
     }
@@ -522,13 +566,14 @@ class OwnerHandoffTest {
         assertEquals(ControlWay.ORDINARY, runtime.integration.value.owner.selected)
 
         rig.appTransport.closeFails = false
+        assertEquals(OperationResult.Success, runtime.connectFromSystem(rig.earphones.deviceId))
         assertIs<HandoffOutcome.Completed>(runtime.selectControlWay(ControlWay.MODULE))
         runCurrent()
         advanceTimeBy(1)
         runCurrent()
         assertEquals(OperationResult.Success, runtime.connectFromSystem(rig.earphones.deviceId))
         runCurrent()
-        assertEquals(listOf("ordinary:open", "ordinary:close", "module:open"), rig.headset.events)
+        assertEquals(listOf("ordinary:open", "ordinary:close", "ordinary:open", "ordinary:close", "module:open"), rig.headset.events)
         assertEquals(0, rig.headset.overlappingOpens)
     }
 
@@ -560,8 +605,6 @@ class OwnerHandoffTest {
             assertEquals(profile, runtime.state.value.device?.profile)
         }
     }
-
-    private suspend fun leaseOf(rig: OwnerRig): String = (rig.host.open(appIdentity) as HostOpenResult.Opened).lease.id
 
     private fun assertNotNull(value: Any?) = assertTrue(value != null)
 }

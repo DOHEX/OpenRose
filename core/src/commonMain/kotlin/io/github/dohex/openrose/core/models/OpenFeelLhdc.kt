@@ -10,7 +10,6 @@ import io.github.dohex.openrose.core.protocol.GattProfile
 import io.github.dohex.openrose.core.protocol.ProtocolFamily
 import io.github.dohex.openrose.core.protocol.RsCommonInit
 import kotlinx.collections.immutable.persistentSetOf
-import kotlinx.collections.immutable.toPersistentSet
 
 internal val openFeelLhdc = ModelSpec(
     displayName = "OpenFeel",
@@ -33,7 +32,7 @@ internal val openFeelLhdc = ModelSpec(
     rsCommonInit = RsCommonInit.OPEN_FEEL,
     capabilities = {
         DeviceCapabilities(
-            readableFields = ProtocolFamily.RS_COMMON.readableFields.toPersistentSet(),
+            readableFields = openFeelReadings,
             writableSettings = persistentSetOf(
                 DeviceSetting.GAME_MODE,
                 DeviceSetting.TOUCH_BINDING,

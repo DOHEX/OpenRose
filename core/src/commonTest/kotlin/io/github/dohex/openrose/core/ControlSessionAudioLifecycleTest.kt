@@ -1,16 +1,27 @@
 package io.github.dohex.openrose.core
 
+import io.github.dohex.openrose.core.protocol.DeviceField
+import io.github.dohex.openrose.core.protocol.FieldReading
+import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.dohex.openrose.core.protocol.ModelProfile
 import io.github.dohex.openrose.core.transport.Advertisement
 import io.github.dohex.openrose.core.transport.ControlConnection
 import io.github.dohex.openrose.core.transport.ControlTransport
 import io.github.dohex.openrose.core.transport.DeviceId
 import io.github.dohex.openrose.core.transport.TransportEndpoint
+import kotlinx.collections.immutable.persistentMapOf
+import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withTimeout
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -56,6 +67,203 @@ class ControlSessionAudioLifecycleTest {
         assertEquals(DeviceId("bonded-i5"), conn.deviceId)
         assertEquals(ModelProfile.I5_ZT, conn.profile)
         assertEquals(DeviceId("bonded-i5"), session.state.value.device?.deviceId)
+    }
+
+    @Test
+    fun manualControlRetryWhileTheSameI5HasAudioClosesItsNewLinkOnAudioDisconnect() = runTest {
+        for (platform in listOf(HostPlatform.ANDROID, HostPlatform.LINUX)) {
+            val id = DeviceId("bonded-i5")
+            val paired = DeviceCandidate(id, "EarFree i5", null, ModelProfile.I5_ZT, "")
+            val transport = TestAudioTransport(TestAudioConnection(i5Replies), listOf(paired))
+            val session = ControlSession(
+                PlatformState(PermissionState.NOT_REQUIRED, TransportAvailability.Available, hostPlatform = platform),
+                transport = transport,
+                scope = backgroundScope,
+                timing = SessionTiming(writeIntervalMillis = 0),
+            )
+            transport.audioDeviceFlow.emit(id)
+            runCurrent()
+            session.disconnect()
+            val retry = TestAudioConnection(i5Replies)
+            transport.connection = retry
+            assertEquals(OperationResult.Success, session.connect(id))
+            assertFalse(retry.closed)
+            transport.audioDeviceFlow.emit(null)
+            runCurrent()
+            assertEquals(ConnectionState.Disconnected, session.state.value.connection, platform.name)
+            assertTrue(retry.closed, platform.name)
+        }
+    }
+
+    @Test
+    fun losingAudioOnOneI5KeepsTheOtherManuallySelectedAndroidI5Connected() = runTest {
+        val playing = DeviceCandidate(DeviceId("playing-i5"), "EarFree i5", null, ModelProfile.I5_ZT, "")
+        val silent = playing.copy(deviceId = DeviceId("silent-i5"))
+        val transport = TestAudioTransport(TestAudioConnection(i5Replies), listOf(playing, silent))
+        val session = ControlSession(
+            PlatformState(PermissionState.GRANTED, TransportAvailability.Available, hostPlatform = HostPlatform.ANDROID),
+            transport = transport,
+            scope = backgroundScope,
+            timing = SessionTiming(writeIntervalMillis = 0),
+        )
+        transport.audioDeviceFlow.emit(playing.deviceId)
+        runCurrent()
+        val manual = TestAudioConnection(i5Replies)
+        transport.connection = manual
+        assertEquals(OperationResult.Success, session.connect(silent.deviceId))
+        transport.audioDeviceFlow.emit(null)
+        runCurrent()
+        assertEquals(silent.deviceId, session.state.value.readySession?.deviceId)
+        assertFalse(manual.closed)
+    }
+
+    @Test
+    fun desktopNoiseModeCanBeConfirmedBetweenInitializationQueries() = runTest {
+        val link = TestAudioConnection(i5Replies - "0602" - "0201")
+        val (session, _) = startAudioI5(link)
+        link.awaitWrite(NOISE_QUERY)
+        assertEquals(null, session.state.value.noiseModeSession)
+        assertIs<OperationResult.Failure>(session.set(DeviceSetting.NOISE_MODE, FieldValue.Text("normal")))
+
+        link.report(i5Replies.getValue("0602"))
+        val early = withTimeout(1_000) { session.state.first { it.noiseModeSession != null } }
+        val modeSession = requireNotNull(early.noiseModeSession)
+        assertEquals(100L, testScheduler.currentTime, "only the gap between the battery and noise queries is needed")
+        link.awaitWrite("08ee00000002010a0003")
+        assertEquals(null, session.state.value.readySession)
+        assertIs<OperationResult.Failure>(session.set(DeviceSetting.GAME_MODE, FieldValue.Toggle(true)))
+        val initializationWrites = link.writes.toList()
+        val pending = async { session.set(DeviceSetting.NOISE_MODE, FieldValue.Text("normal"), modeSession.sessionId) }
+
+        // The unanswered 0201 owns the link until its normal response deadline.
+        advanceTimeBy(1_499)
+        runCurrent()
+        assertEquals(initializationWrites, link.writes)
+        link.awaitWrite(NORMAL_MODE_WRITE)
+        link.awaitWrite(NOISE_QUERY)
+        advanceTimeBy(250)
+        runCurrent()
+        assertEquals(listOf(NORMAL_MODE_WRITE, NOISE_QUERY), link.writes.drop(initializationWrites.size))
+        assertFalse(pending.isCompleted)
+        assertEquals(FieldValue.Text("wind"), assertIs<FieldReading.Known>(session.state.value.device?.fields?.get(DeviceField.NOISE_MODE)).value)
+        link.report(NORMAL_MODE_REPLY)
+        assertEquals(OperationResult.Success, pending.await())
+        assertEquals(FieldValue.Text("normal"), assertIs<FieldReading.Known>(session.state.value.device?.fields?.get(DeviceField.NOISE_MODE)).value)
+        assertEquals(SettingStage.CONFIRMED, session.state.value.settingOperations.single().stage)
+        assertEquals(null, session.state.value.readySession)
+
+        val ready = withTimeout(5_000) { session.state.first { it.readySession != null } }
+        assertEquals(modeSession, ready.readySession)
+        assertEquals(15, link.writes.size, "all 13 initialization reads and the mode write/readback complete")
+    }
+
+    @Test
+    fun earlyNoiseModeRequiresThisDesktopAudioSessionAndItsCurrentI5Mode() = runTest {
+        val link = TestAudioConnection(i5Replies)
+        val (session, _) = startAudioI5(link)
+        link.awaitWrite("08ee00000002010a0003")
+        val state = session.state.value
+        val device = requireNotNull(state.device)
+        val expected = SessionReference(device.deviceId, device.sessionId)
+        assertEquals(expected, state.noiseModeSession)
+        assertEquals(expected, state.copy(platform = state.platform.copy(hostPlatform = HostPlatform.WINDOWS)).noiseModeSession)
+        val unknownMode = persistentMapOf<DeviceField, FieldReading>(DeviceField.NOISE_MODE to FieldReading.Unknown("ff"))
+        for ((scenario, ineligible) in listOf(
+            "unrelated audio" to state.copy(audioDeviceId = DeviceId("other-headset")),
+            "Android" to state.copy(platform = state.platform.copy(hostPlatform = HostPlatform.ANDROID)),
+            "non-i5 model" to state.copy(device = device.copy(profile = ModelProfile.I7_RS_V2)),
+            "missing mode" to state.copy(device = device.copy(fields = persistentMapOf())),
+            "unknown mode" to state.copy(device = device.copy(fields = unknownMode)),
+            "stale session" to state.copy(device = device.copy(sessionId = device.sessionId + 1)),
+        )) {
+            assertEquals(null, ineligible.noiseModeSession, scenario)
+        }
+    }
+
+    @Test
+    fun disconnectDuringEarlyReadbackRejectsTheOldRequestAfterSameI5Reconnects() = runTest {
+        val old = TestAudioConnection(i5Replies - "0602")
+        val (session, transport) = startAudioI5(old)
+        old.awaitWrite(NOISE_QUERY)
+        old.report(i5Replies.getValue("0602"))
+        old.awaitWrite("08ee00000002010a0003")
+        val reference = requireNotNull(session.state.value.noiseModeSession)
+        val pending = async { session.set(DeviceSetting.NOISE_MODE, FieldValue.Text("normal"), reference.sessionId) }
+        old.awaitWrite(NORMAL_MODE_WRITE)
+        old.awaitWrite(NOISE_QUERY)
+        assertEquals(null, session.state.value.readySession)
+
+        transport.audioDeviceFlow.emit(null)
+        runCurrent()
+        assertEquals(ControlErrorCode.DISCONNECTED, assertIs<OperationResult.Failure>(pending.await()).error.code)
+        assertEquals(null, session.state.value.noiseModeSession)
+        val fresh = TestAudioConnection(i5Replies)
+        transport.connection = fresh
+        transport.audioDeviceFlow.emit(reference.deviceId)
+        val replacement = withTimeout(5_000) { session.state.first { it.readySession != null } }
+        assertTrue(requireNotNull(replacement.readySession).sessionId > reference.sessionId)
+        old.report(NORMAL_MODE_REPLY)
+        runCurrent()
+        assertEquals(replacement, session.state.value)
+        val stale = session.set(DeviceSetting.NOISE_MODE, FieldValue.Text("normal"), reference.sessionId)
+        assertEquals(ControlErrorCode.DISCONNECTED, assertIs<OperationResult.Failure>(stale).error.code)
+        assertEquals(13, fresh.writes.size)
+    }
+
+    @Test
+    fun desktopI5GivesTheNextWriteSlotToANoiseCommandQueuedDuringTheGap() = runTest {
+        val link = TestAudioConnection(i5Replies - "0101" - "0602", writeDurationMillis = 20)
+        val (session, _) = startAudioI5(link)
+        link.awaitWrite(BATTERY_QUERY)
+        advanceTimeBy(70)
+        link.report(i5Replies.getValue("0101"))
+        link.awaitWrite(NOISE_QUERY)
+        assertEquals(120L, testScheduler.currentTime, "battery write completed at 20 ms; its reply arrived at 70 ms")
+
+        advanceTimeBy(50)
+        link.report(i5Replies.getValue("0602"))
+        val reference = requireNotNull(session.state.first { it.noiseModeSession != null }.noiseModeSession)
+        advanceTimeBy(20)
+        val change = async { session.set(DeviceSetting.NOISE_MODE, FieldValue.Text("normal"), reference.sessionId) }
+        link.awaitWrite(NORMAL_MODE_WRITE)
+        assertEquals(240L, testScheduler.currentTime, "mode change takes the slot reserved by the 140 ms write completion")
+        assertEquals(listOf(BATTERY_QUERY, NOISE_QUERY, NORMAL_MODE_WRITE), link.writes)
+        link.report(NORMAL_MODE_REPLY)
+        link.awaitWrite(NOISE_QUERY)
+        assertEquals(360L, testScheduler.currentTime, "readback also respects the setting write's completion")
+        advanceTimeBy(150)
+        assertFalse(change.isCompleted, "an unsolicited report before the readback cannot confirm this request")
+        link.report(NORMAL_MODE_REPLY)
+        assertEquals(OperationResult.Success, change.await())
+        link.awaitWrite("08ee00000002010a0003")
+        assertEquals(510L, testScheduler.currentTime, "the full gap elapsed while awaiting readback")
+    }
+
+    @Test
+    fun androidI5KeepsItsExistingPauseAfterTheBatteryReply() = runTest {
+        val link = TestAudioConnection(i5Replies - "0101", writeDurationMillis = 20)
+        startAudioI5(link, HostPlatform.ANDROID)
+        link.awaitWrite(BATTERY_QUERY)
+        advanceTimeBy(70)
+        link.report(i5Replies.getValue("0101"))
+        link.awaitWrite(NOISE_QUERY)
+        assertEquals(170L, testScheduler.currentTime)
+    }
+
+    private suspend fun TestScope.startAudioI5(
+        link: TestAudioConnection,
+        hostPlatform: HostPlatform = HostPlatform.LINUX,
+    ): Pair<ControlSession, TestAudioTransport> {
+        val device = DeviceCandidate(DeviceId("desktop-i5"), "EarFree i5", null, ModelProfile.I5_ZT, "")
+        val transport = TestAudioTransport(link, listOf(device))
+        val session = ControlSession(
+            PlatformState(PermissionState.NOT_REQUIRED, TransportAvailability.Available, hostPlatform = hostPlatform),
+            transport = transport,
+            scope = backgroundScope,
+            timeSource = testScheduler.timeSource,
+        )
+        transport.audioDeviceFlow.emit(device.deviceId)
+        return session to transport
     }
 
     @Test
@@ -283,12 +491,20 @@ class ControlSessionAudioLifecycleTest {
     private class TestAudioConnection(
         val replies: Map<String, String>,
         override val maxWriteSize: Int = 20,
+        private val writeDurationMillis: Long = 0,
     ) : ControlConnection {
         private val incoming = MutableSharedFlow<ByteArray>(extraBufferCapacity = 64)
         override val notifications: Flow<ByteArray> = incoming
         var subscribed = false
         var closed = false
         val writes = mutableListOf<String>()
+        private val lastWrite = MutableStateFlow<String?>(null)
+
+        suspend fun awaitWrite(frame: String) {
+            withTimeout(5_000) { lastWrite.first { it == frame } }
+        }
+
+        suspend fun report(hex: String) = incoming.emit(hex.bytes())
 
         override suspend fun subscribe() {
             subscribed = true
@@ -297,6 +513,8 @@ class ControlSessionAudioLifecycleTest {
             check(subscribed) { "The earbud requires notifications before its first read" }
             val hex = bytes.hex()
             writes += hex
+            lastWrite.value = hex
+            delay(writeDurationMillis)
             replies[hex.substring(10, 14)]?.let { incoming.emit(it.bytes()) }
         }
         override suspend fun close() {
@@ -305,6 +523,10 @@ class ControlSessionAudioLifecycleTest {
     }
 
     companion object {
+        private const val BATTERY_QUERY = "08ee00000001010a0002"
+        private const val NOISE_QUERY = "08ee00000006020a0008"
+        private const val NORMAL_MODE_WRITE = "08ee00000006820e00000100008d"
+        private const val NORMAL_MODE_REPLY = "09ff00000106020e000001000020"
         private fun ByteArray.hex() = joinToString("") { (it.toInt() and 255).toString(16).padStart(2, '0') }
         private fun String.bytes() = chunked(2).map { it.toInt(16).toByte() }.toByteArray()
 

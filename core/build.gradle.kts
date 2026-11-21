@@ -7,6 +7,7 @@ kotlin {
     }
     sourceSets {
         commonMain.dependencies {
+            implementation(libs.datetime)
             api(libs.coroutines.core)
             api(libs.immutable.collections)
         }

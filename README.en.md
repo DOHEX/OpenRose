@@ -29,8 +29,19 @@ OpenRose is an unofficial control app for ROSE / ROSESELSA (弱水时砂) earpho
 | BudsFree i, SWIFT | BLE | Not tested on a real device |
 | Cambrian, OpenFun, SportFeel (SportFree) | BLE or SPP | Not tested on a real device |
 | OpenFeel (OpenFree, LDAC / LHDC / dual-codec branches) | BLE | Not tested on a real device |
+| CERAMICS-MK2 (standard, 8912F, 5736) | BLE or SPP | Not tested on a real device |
+| CERAMICS-U (standard, HSC-2710) | BLE or SPP | Not tested on a real device |
+| FURINA, Zircon, Coral | BLE or SPP | Not tested on a real device |
+| SpeakFeel (speakfree), SPEAKFEEL (speakfeel2) | BLE or SPP | Not tested on a real device |
+| Astro X, OpenFeel L, FIRST ANGEL, MOKA | BLE or SPP | Not tested on a real device |
+| Hyacinth, Opal, Mirror, KY01 | BLE or SPP | Not tested on a real device |
+| Luminous Patamon, Tailmon, Gabumon, Agumon | BLE or SPP | Not tested on a real device |
+| BudsFeel AE Neo, EarFeel iE Neo, EarFeel iE2 | BLE or SPP | Not tested on a real device |
+| SportFeel 8912F | BLE or SPP | Not tested on a real device |
+| Cambrian S, OpenLink | BLE or SPP | Not tested on a real device |
+| Magician | BLE or SPP | Not tested on a real device |
 
-Other models are not adapted yet. See [Supported earphones](https://dohex.github.io/OpenRose/en/reference/supported-earphones/) for how models are identified, and the [model adaptation evidence ledger](docs/protocols/model-adaptation-ledger.md) (Chinese) for each model's sources.
+OpenRose covers all 48 Bluetooth earphone configurations in RoseLink 3.8.6 and retains Magician from 3.8.0. OpenFeel has three codec variants and OpenFun has two touch-control variants, bringing the OpenRose total to 52 profiles. See [Supported earphones](https://dohex.github.io/OpenRose/en/reference/supported-earphones/) for how models are identified, and the [model adaptation evidence ledger](docs/protocols/model-adaptation-ledger.md) (Chinese) for each model's sources.
 
 ## Features
 
@@ -63,7 +74,7 @@ See [Getting started](https://dohex.github.io/OpenRose/en/guides/getting-started
 
 ## Building from source
 
-Requires JDK 21 and the Android SDK (Platform 37, Build Tools 37.0.0; set `ANDROID_HOME` or `sdk.dir` in `local.properties`). On Windows, replace `./gradlew` with `.\gradlew.bat`. For the development environment, checks, and commit conventions, see [CONTRIBUTING.md](CONTRIBUTING.md) (Chinese).
+Requires JDK 21 and the Android SDK (Platform 37, Build Tools 37.0.0; set `ANDROID_HOME` or `sdk.dir` in `local.properties`). Building the Windows desktop app also requires stable Rust with the MSVC toolchain and Visual Studio C++ Build Tools. On Windows, replace `./gradlew` with `.\gradlew.bat`. For the development environment, checks, and commit conventions, see [CONTRIBUTING.md](CONTRIBUTING.md) (Chinese).
 
 ```bash
 ./gradlew :androidApp:assembleDebug   # Android debug APK
