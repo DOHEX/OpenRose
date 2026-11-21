@@ -8,6 +8,8 @@ import io.github.dohex.openrose.core.UserSettings
 import io.github.dohex.openrose.core.UserSettingsCodec
 import io.github.dohex.openrose.core.transport.DesktopControlTransport
 import io.github.dohex.openrose.transport.bluez.BluezControlTransport
+import io.github.dohex.openrose.transport.windows.WindowsControlTransport
+import io.github.dohex.openrose.ui.CirculationClient
 import io.github.dohex.openrose.ui.UiSettings
 import io.github.dohex.openrose.ui.UiSettingsCodec
 import io.github.dohex.openrose.ui.model.OpenRoseSettingsStore
@@ -66,8 +68,12 @@ internal class DesktopRuntime(
         model = RuntimeOpenRoseModel(control, store, scope)
     }
 
-    fun startCirculation(): io.github.dohex.openrose.ui.CirculationClient {
-        val audio = (transport as? BluezControlTransport)?.let { LinuxCirculationAudio(it.audioProfiles) }
+    fun startCirculation(): CirculationClient {
+        val audio = when (transport) {
+            is BluezControlTransport -> LinuxCirculationAudio(transport.audioProfiles)
+            is WindowsControlTransport -> WindowsCirculationAudio()
+            else -> null
+        }
         return desktopCirculation(scope, control, audio)
     }
 

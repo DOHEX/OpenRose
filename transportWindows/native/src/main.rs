@@ -5,6 +5,7 @@ use std::{
 };
 use windows::Win32::System::WinRT::{RoInitialize, RO_INIT_MULTITHREADED};
 
+mod audio;
 mod facts;
 mod gatt;
 mod scan;
@@ -37,6 +38,13 @@ fn main() -> Result<()> {
                 );
                 std::thread::sleep(Duration::from_secs(2));
             }
+        }
+        Some("audio") => {
+            if let Err(error) = audio::run(&args[2..]) {
+                println!("error\t{}", clean(error));
+                std::process::exit(1);
+            }
+            Ok(())
         }
         Some("scan") => scan::watch(),
         Some("gatt") if args.len() == 4 => gatt::serve(&args[2], &args[3]),

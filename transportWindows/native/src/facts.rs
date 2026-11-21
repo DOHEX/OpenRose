@@ -9,18 +9,13 @@ use windows::{
     },
     Foundation::IPropertyValue,
     Win32::{
-        Devices::FunctionDiscovery::PKEY_Device_ContainerId,
         Media::Audio::{eRender, IMMDeviceEnumerator, MMDeviceEnumerator, DEVICE_STATE_ACTIVE},
-        System::Com::{
-            CoCreateInstance,
-            StructuredStorage::{PropVariantClear, PropVariantToGUID},
-            CLSCTX_ALL, STGM_READ,
-        },
+        System::Com::{CoCreateInstance, CLSCTX_ALL},
     },
 };
 use windows_collections::IIterable;
 
-const CONTAINER: &str = "System.Devices.Aep.ContainerId";
+pub const CONTAINER: &str = "System.Devices.Aep.ContainerId";
 const ADDRESS: &str = "System.Devices.Aep.DeviceAddress";
 
 fn active_render_containers() -> Result<HashSet<GUID>> {
@@ -29,28 +24,24 @@ fn active_render_containers() -> Result<HashSet<GUID>> {
         let audio: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)?;
         let endpoints = audio.EnumAudioEndpoints(eRender, DEVICE_STATE_ACTIVE)?;
         for index in 0..endpoints.GetCount()? {
-            let store = endpoints.Item(index)?.OpenPropertyStore(STGM_READ)?;
-            if let Ok(mut value) = store.GetValue(&PKEY_Device_ContainerId) {
-                if let Ok(id) = PropVariantToGUID(&value) {
-                    active.insert(id);
-                }
-                PropVariantClear(&mut value)?;
+            if let Ok(id) = crate::audio::container(&endpoints.Item(index)?) {
+                active.insert(id);
             }
         }
     }
     Ok(active)
 }
 
-fn property(device: &DeviceInformation, name: &str) -> windows::core::Result<IPropertyValue> {
+pub fn property(device: &DeviceInformation, name: &str) -> windows::core::Result<IPropertyValue> {
     device.Properties()?.Lookup(&HSTRING::from(name))?.cast()
 }
 
 pub fn snapshot() -> Result<String> {
-    let adapter = BluetoothAdapter::GetDefaultAsync()?.join()?;
+    let adapter = BluetoothAdapter::GetDefaultAsync()?.get()?;
     if !adapter.IsLowEnergySupported()? {
         return Ok("unavailable\tWindows 蓝牙适配器不支持 BLE".into());
     }
-    match adapter.GetRadioAsync()?.join()?.State()? {
+    match adapter.GetRadioAsync()?.get()?.State()? {
         RadioState::On => (),
         RadioState::Off | RadioState::Disabled => return Ok("disabled".into()),
         _ => return Ok("unavailable\tWindows 蓝牙适配器状态未知".into()),
@@ -62,7 +53,7 @@ pub fn snapshot() -> Result<String> {
         &properties,
         DeviceInformationKind::AssociationEndpoint,
     )?
-    .join()?;
+    .get()?;
     let active = active_render_containers()?;
     let mut fields = vec!["available".to_owned()];
     for device in devices {

@@ -61,7 +61,7 @@ pub fn find_device(address: u64) -> Result<windows::Devices::Bluetooth::Bluetoot
     use windows::Devices::Bluetooth::BluetoothLEDevice;
     use windows::Win32::Foundation::E_ACCESSDENIED;
 
-    match BluetoothLEDevice::FromBluetoothAddressAsync(address)?.join() {
+    match BluetoothLEDevice::FromBluetoothAddressAsync(address)?.get() {
         Ok(device) => return Ok(device),
         Err(error) if error.code() == E_ACCESSDENIED => return Err(error.into()),
         Err(_) => {}
@@ -84,6 +84,6 @@ pub fn find_device(address: u64) -> Result<windows::Devices::Bluetooth::Bluetoot
     let kind = kind.map_err(|_| "未在 Windows BLE 扫描中找到目标耳机")?;
     Ok(
         BluetoothLEDevice::FromBluetoothAddressWithBluetoothAddressTypeAsync(address, kind)?
-            .join()?,
+            .get()?,
     )
 }

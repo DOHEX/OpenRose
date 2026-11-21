@@ -58,7 +58,7 @@ impl Session {
         let device = self.device.as_ref().ok_or("GATT 未连接")?;
         let result = device
             .GetGattServicesForUuidWithCacheModeAsync(self.uuid, BluetoothCacheMode::Uncached)?
-            .join()?;
+            .get()?;
         check(result.Status()?)?;
         let services = result.Services()?;
         if services.Size()? == 0 {
@@ -67,7 +67,7 @@ impl Session {
         let service = services.GetAt(0)?;
         let result = service
             .GetCharacteristicsWithCacheModeAsync(BluetoothCacheMode::Uncached)?
-            .join()?;
+            .get()?;
         check(result.Status()?)?;
         let mut fields = vec![service.Session()?.MaxPduSize()?.to_string()];
         for characteristic in result.Characteristics()? {
@@ -139,7 +139,7 @@ impl Session {
                         check(
                             characteristic
                                 .WriteClientCharacteristicConfigurationDescriptorAsync(value)?
-                                .join()?,
+                                .get()?,
                         )?;
                     }
                     ("write", [response, payload]) => {
@@ -153,7 +153,7 @@ impl Session {
                         check(
                             characteristic
                                 .WriteValueWithOptionAsync(&writer.DetachBuffer()?, option)?
-                                .join()?,
+                                .get()?,
                         )?;
                     }
                     _ => return Err("未知 GATT 请求".into()),
