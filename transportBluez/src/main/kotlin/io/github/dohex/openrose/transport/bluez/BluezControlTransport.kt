@@ -189,10 +189,12 @@ class BluezControlTransport private constructor(scope: CoroutineScope, private v
             val mutex = Mutex(locked = true)
             val previous = mutableMapOf<String, RawAudioDevice>()
             var powered = false
+            var sleeping = false
             val collector = launch(start = CoroutineStart.UNDISPATCHED) {
                 current.signals(::affectsAudio).collect { signal ->
                     mutex.withLock {
-                        if (signal is BluezSignal.Owner && !signal.present) {
+                        if (signal is BluezSignal.PrepareForSleep) sleeping = signal.sleeping
+                        if (sleeping || (signal is BluezSignal.Owner && !signal.present)) {
                             previous.clear()
                             powered = false
                             send(RawAudioEvent.AdapterOff)
@@ -261,7 +263,7 @@ private fun MutableMap<String, Map<String, Any?>>.updateAdvertisement(signal: Bl
             null
         }
 
-        is BluezSignal.Owner -> null
+        is BluezSignal.Owner, is BluezSignal.PrepareForSleep -> null
     } ?: return null
     put(device.first, device.second)
     return device.second.advertisement()
@@ -345,6 +347,7 @@ private val availabilityInterfaces = setOf(ADAPTER)
 private val audioInterfaces = setOf(ADAPTER, DEVICE, MEDIA_TRANSPORT)
 
 private fun BluezSignal.affects(interfaces: Set<String>): Boolean = when (this) {
+    is BluezSignal.PrepareForSleep -> MEDIA_TRANSPORT in interfaces
     is BluezSignal.Owner -> true
     is BluezSignal.Changed -> interfaceName in interfaces
     is BluezSignal.Added -> this.interfaces.keys.any { it in interfaces }

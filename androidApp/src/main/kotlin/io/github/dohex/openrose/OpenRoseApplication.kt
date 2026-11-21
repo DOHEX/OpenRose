@@ -26,6 +26,7 @@ import io.github.dohex.openrose.framework.FrameworkLink
 import io.github.dohex.openrose.framework.ModuleHostBinderLink
 import io.github.dohex.openrose.platform.AndroidControlTransport
 import io.github.dohex.openrose.platform.readPlatformState
+import io.github.dohex.openrose.ui.CirculationClient
 import io.github.dohex.openrose.ui.UiSettings
 import io.github.dohex.openrose.ui.model.OpenRoseSettingsStore
 import io.github.dohex.openrose.ui.model.RuntimeOpenRoseModel
@@ -70,6 +71,8 @@ class OpenRoseApplication : Application() {
     lateinit var framework: FrameworkLink
         private set
     private lateinit var ownerStore: AndroidOwnerStore
+    private val moduleLink by lazy { ModuleHostBinderLink(applicationContext) }
+    val circulation by lazy { CirculationClient(moduleLink::circulation) }
     private val companionWake by lazy { CompanionWake(this) }
     private var preferencesLoaded = false
     private var backgroundService: BackgroundServiceFact = BackgroundServiceFact.NotRunning
@@ -101,7 +104,7 @@ class OpenRoseApplication : Application() {
                     sessionIdBase = sessionIdBase,
                 )
             },
-            moduleLink = ModuleHostBinderLink(applicationContext),
+            moduleLink = moduleLink,
             scope = controlScope,
             local = LocalOwnerIdentity(
                 packageName,

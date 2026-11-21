@@ -95,12 +95,14 @@ class HostWireTest {
             platform = PlatformState(PermissionState.NOT_REQUIRED),
             device = device,
             settingOperations = persistentListOf(operation),
+            audioDeviceId = reference.deviceId,
         )
 
         val decoded = ControlWire.decodeOwned(ControlWire.encodeOwned(facts, state))
         assertEquals(facts, decoded.platform)
         assertEquals(device, decoded.state.device)
         assertEquals(listOf(operation), decoded.state.settingOperations)
+        assertEquals(reference.deviceId, decoded.state.audioDeviceId)
     }
 
     @Test

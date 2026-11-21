@@ -39,6 +39,7 @@ dependencies {
     implementation(projects.androidIntegrationUI)
     implementation(projects.sharedUI)
     implementation(libs.activity.compose)
+    implementation(libs.zxing.embedded)
     implementation(projects.androidPlatform)
     // Packaged into the APK for LSPosed, but invisible to the application's sources (ADR 0018).
     runtimeOnly(projects.androidModule)
