@@ -127,7 +127,17 @@ data class RemoteHeadset(
     val busy: Boolean,
     val feedback: String?,
     val selectMode: (String) -> Unit,
-)
+) {
+    val deviceName: String? get() = reading["deviceName"]
+    val sourceLabel: String get() = "音源设备 · $name"
+    val statusLabel: String? get() = when {
+        reading["status"] == "recovering" -> "耳机已接入，控制暂不可用"
+        deviceName != null -> null
+        "error" in reading -> "远端不可用"
+        reading["status"] == "idle" -> "未持有耳机"
+        else -> "正在读取"
+    }
+}
 
 @Composable
 fun RemoteHeadsets(client: CirculationClient) {
@@ -212,20 +222,15 @@ fun remoteBatteryText(reading: Map<String, String>): String {
 
 @Composable
 fun RemoteHeadsetCard(headset: RemoteHeadset) {
-    val (name, reading) = headset
+    val reading = headset.reading
     AppDashboardCard(compact = true) {
-        val device = reading["deviceName"]
+        val device = headset.deviceName
         if (device == null) {
-            val status = when {
-                "error" in reading -> "远端不可用"
-                reading["status"] == "idle" -> "未持有耳机"
-                else -> "正在读取"
-            }
-            AppText("$name · $status", role = AppTextRole.Summary)
+            AppText("${headset.name} · ${headset.statusLabel}", role = AppTextRole.Summary)
         } else {
             AppText(device, role = AppTextRole.Title)
-            AppText("音源设备 · $name", role = AppTextRole.Summary)
-            if (reading["status"] == "recovering") AppText("耳机已接入，控制暂不可用", role = AppTextRole.Summary)
+            AppText(headset.sourceLabel, role = AppTextRole.Summary)
+            headset.statusLabel?.let { AppText(it, role = AppTextRole.Summary) }
             AppText(remoteBatteryText(reading))
             val mode = reading["mode"]
             AppText("降噪模式 · ${mode?.let(::noiseModeLabel) ?: "未知"}")

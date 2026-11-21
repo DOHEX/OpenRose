@@ -39,9 +39,9 @@ nucleus {
                 debMaintainer = "DOHEX <53633138+DOHEX@users.noreply.github.com>"
                 // Custom lists replace electron-builder defaults; include the JVM/GTK runtime too.
                 // The tray's native library talks to the tray host through sd-bus (libsystemd.so.0).
-                debDepends = listOf("bluez", "libgtk-3-0", "libegl1", "libgl1", "libfontconfig1", "libsystemd0")
-                rpmRequires = listOf("bluez", "gtk3", "mesa-libEGL", "mesa-libGL", "fontconfig", "systemd-libs")
-                pacmanDepends = listOf("bluez", "gtk3", "libglvnd", "fontconfig", "systemd-libs")
+                debDepends = listOf("bluez", "pulseaudio-utils", "libgtk-3-0", "libegl1", "libgl1", "libfontconfig1", "libsystemd0")
+                rpmRequires = listOf("bluez", "pulseaudio-utils", "gtk3", "mesa-libEGL", "mesa-libGL", "fontconfig", "systemd-libs")
+                pacmanDepends = listOf("bluez", "libpulse", "gtk3", "libglvnd", "fontconfig", "systemd-libs")
             }
             windows {
                 iconFile.set(project.file("icons/openrose.png"))

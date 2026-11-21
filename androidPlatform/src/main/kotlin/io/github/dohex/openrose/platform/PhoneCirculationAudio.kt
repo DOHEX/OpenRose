@@ -28,6 +28,10 @@ class PhoneCirculationAudio(private val context: Context) : CirculationAudio {
         }
     }
 
+    override fun isMediaConnected(address: String): Boolean = withProfiles(address) { device, leases ->
+        leases.first().currentProxy().getConnectionState(device) == BluetoothProfile.STATE_CONNECTED
+    }
+
     override fun release(address: String) {
         checkCall()
         change(address, connect = false)

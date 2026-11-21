@@ -49,9 +49,9 @@ class AndroidPlatformUi(
         }
 
     @Composable
-    override fun HandoffAction(state: ControlState, selection: PrimaryDeviceSelection) {
+    override fun CirculationAction(state: ControlState, selection: PrimaryDeviceSelection) {
         val current by integration.collectAsState()
-        if (current.owner.selected == ControlWay.MODULE) circulation?.let { CirculationHandoffRow(it, state, selection) }
+        if (current.owner.selected == ControlWay.MODULE) circulation?.let { CirculationRow(it, state, selection, "接回手机") }
     }
 
     @Composable

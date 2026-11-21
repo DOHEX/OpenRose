@@ -50,3 +50,5 @@ window-rule {
     default-floating-position x=12 y=12 relative-to="top-right"
 }
 ```
+
+使用 AppImage 时，耳机流转需要系统提供 `pactl`。Debian 和 Fedora 的对应软件包是 `pulseaudio-utils`，Arch Linux 的对应软件包是 `libpulse`。

@@ -1,6 +1,6 @@
 # Linux 托盘与 EarFree i5 实测
 
-2026-11-21 在 CachyOS（内核 7.3.3、BlueZ 5.88、PipeWire、niri 26.04、Noctalia 托盘）运行桌面应用，使用已配对的 ROSE EARFREE i5。耳机的 `0801` 回包档位为 1，对应 LDAC、多点关闭。测试时小米 14 与 i5 的经典蓝牙和 LE 均已断开。通过 niri 关闭应用主窗口，从已注册的 StatusNotifierItem 的原生菜单执行操作。
+2026-11-21 在 CachyOS（内核 7.3.3、BlueZ 5.88、PipeWire、niri 26.04、Noctalia 托盘）运行桌面应用，使用已配对的 ROSE EARFREE i5。耳机的 `0801` 回包档位为 1，对应 LDAC、多点关闭。测试时小米 14 与 i5 的经典蓝牙和 LE 均已断开。初测桌面端为 OpenRose 0.0.0（提交 `1fde164`），重连复测使用 `6400a46`。通过 niri 关闭应用主窗口，从已注册的 StatusNotifierItem 的原生菜单执行操作。
 
 | 操作 | 实际结果 |
 | --- | --- |

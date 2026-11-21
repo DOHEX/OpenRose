@@ -3,6 +3,7 @@ package io.github.dohex.openrose.desktop
 import io.github.dohex.openrose.circulation.NearbyPeer
 import io.github.dohex.openrose.circulation.PeerDiscovery
 import javax.jmdns.JmmDNS
+import javax.jmdns.NetworkTopologyDiscovery
 import javax.jmdns.ServiceEvent
 import javax.jmdns.ServiceInfo
 import javax.jmdns.ServiceListener
@@ -10,10 +11,11 @@ import javax.jmdns.ServiceListener
 /** JmmDNS follows interface additions/removals, including Ethernet and Wi-Fi changes after sleep. */
 class DesktopPeerDiscovery : PeerDiscovery {
     private var dns: JmmDNS? = null
-    private val seen = mutableMapOf<Pair<String, String>, NearbyPeer>()
+    private val seen = mutableMapOf<Pair<String, String>, List<NearbyPeer>>()
 
     override fun start(id: String, name: String, port: Int, found: (List<NearbyPeer>) -> Unit) {
         val type = PeerDiscovery.TYPE + "local."
+        NetworkTopologyDiscovery.Factory.setClassDelegate { DesktopNetworkTopology() }
         val mdns = JmmDNS.Factory.getInstance()
         dns = mdns
         mdns.addServiceListener(
@@ -27,7 +29,7 @@ class DesktopPeerDiscovery : PeerDiscovery {
                     synchronized(seen) {
                         if (dns !== mdns) return
                         seen.remove(event.dns.inetAddress.hostAddress to event.name)
-                        found(seen.values.toList())
+                        found(seen.values.flatten())
                     }
                 }
 
@@ -35,11 +37,12 @@ class DesktopPeerDiscovery : PeerDiscovery {
                     val peerId = event.info.getPropertyString("id") ?: return
                     if (peerId == id) return
                     val displayName = event.info.getPropertyString("name") ?: return
-                    val address = event.info.inetAddresses.firstOrNull() ?: return
+                    val routes = event.info.inetAddresses.distinct().map { NearbyPeer(peerId, displayName, it, event.info.port) }
+                    if (routes.isEmpty()) return
                     synchronized(seen) {
                         if (dns !== mdns) return
-                        seen[event.dns.inetAddress.hostAddress to event.name] = NearbyPeer(peerId, displayName, address, event.info.port)
-                        found(seen.values.toList())
+                        seen[event.dns.inetAddress.hostAddress to event.name] = routes
+                        found(seen.values.flatten())
                     }
                 }
             },

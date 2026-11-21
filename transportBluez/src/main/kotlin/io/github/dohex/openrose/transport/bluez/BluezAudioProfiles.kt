@@ -33,6 +33,8 @@ class BluezAudioProfiles internal constructor(private val bus: suspend () -> Blu
         return objects.hasMedia(address) || objects[path]?.get(CLASSIC_BEARER)?.get("Connected") == true
     }
 
+    suspend fun isMediaConnected(address: String) = bus().objects().hasMedia(address)
+
     suspend fun acquire(address: String) {
         val current = bus()
         val path = checkNotNull(current.objects().path(address)) { "Linux 尚未配对这副耳机" }

@@ -30,6 +30,8 @@ class WindowsAudio internal constructor(
 
     fun isConnected(address: String): Boolean = state(key(address)).let { it.render || it.capture }
 
+    fun isMediaConnected(address: String): Boolean = state(key(address)).render
+
     fun release(address: String) {
         val target = key(address)
         val previous = state(target)

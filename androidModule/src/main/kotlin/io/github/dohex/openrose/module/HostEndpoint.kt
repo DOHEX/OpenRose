@@ -526,13 +526,8 @@ internal class HostEndpoint(
         if (owner == null || owner.generation != generation || owner.generation.toString() != request.getString(BridgeWire.HOST_EPOCH)) {
             return BridgeBundles.response(BridgeWire.STATUS_UNAVAILABLE, "模块控制尚未就绪")
         }
-        val payload = request.getBundle(BridgeWire.PAYLOAD) ?: return BridgeBundles.response(BridgeWire.STATUS_INVALID_ARGUMENT)
-        val reply = circulationResponse(owner, payload)
-        return if ((host.status.value as? HostStatus.Active)?.generation == owner.generation) {
-            reply
-        } else {
-            BridgeBundles.response(BridgeWire.STATUS_UNAVAILABLE, "所有者代际已过期")
-        }
+        val payload = request.getBundle(BridgeWire.PAYLOAD)
+        return if (payload == null) BridgeBundles.response(BridgeWire.STATUS_INVALID_ARGUMENT) else circulationResponse(owner, payload)
     }
 
     private fun circulationResponse(owner: OwnerCirculation, data: Bundle): Bundle {
@@ -547,6 +542,9 @@ internal class HostEndpoint(
             }
         } catch (failure: Exception) {
             mapOf("error" to (failure.localizedMessage ?: "互联操作失败"))
+        }
+        if ((host.status.value as? HostStatus.Active)?.generation != owner.generation) {
+            return BridgeBundles.response(BridgeWire.STATUS_UNAVAILABLE, "所有者代际已过期")
         }
         return BridgeBundles.response(BridgeWire.STATUS_OK).apply {
             putBundle(BridgeWire.PAYLOAD, Bundle().apply { response.forEach { (key, value) -> putString(key, value) } })
