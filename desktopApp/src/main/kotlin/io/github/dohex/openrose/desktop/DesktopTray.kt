@@ -100,7 +100,7 @@ internal fun NucleusApplicationScope.DesktopTray(
     val summary = traySummary(state, selection)
     val sessionId = state.readySession?.sessionId
     val peers = rememberRemoteHeadsets(circulation)
-    val remoteSource = peers.firstOrNull { it.reading["status"] == "ready" }
+    val remoteSource = peers.firstOrNull { it.deviceName != null }
     val icon = if (summary.connected || remoteSource != null) TrayIcons.connected else TrayIcons.disconnected
     // The Linux tray fixes the item's Title from the first tooltip it sees, so that one names the app.
     var started by remember { mutableStateOf(false) }
@@ -288,21 +288,19 @@ internal sealed interface TrayMenuEntry {
 private fun remoteMenuEntries(peers: List<RemoteHeadset>, uiScope: CoroutineScope): List<TrayMenuEntry> = buildList {
     peers.forEach { peer ->
         val reading = peer.reading
-        when (reading["status"]) {
-            "ready" -> {
-                add(TrayMenuEntry.Label("${reading["deviceName"]} · 音源设备 · ${peer.name}"))
-                add(TrayMenuEntry.Label(remoteBatteryText(reading)))
-                reading["modes"]?.split(',')?.filter(String::isNotBlank)?.forEach { mode ->
-                    val entry = TrayMenuEntry.NoiseMode(mode, noiseModeLabel(mode), mode == reading["mode"], !peer.busy) {
-                        uiScope.launch { peer.selectMode(mode) }
-                    }
-                    add(entry)
+        val device = peer.deviceName
+        if (device != null) {
+            add(TrayMenuEntry.Label("$device · ${peer.sourceLabel}"))
+            peer.statusLabel?.let { add(TrayMenuEntry.Label(it)) }
+            add(TrayMenuEntry.Label(remoteBatteryText(reading)))
+            reading["modes"]?.split(',')?.filter(String::isNotBlank)?.forEach { mode ->
+                val entry = TrayMenuEntry.NoiseMode(mode, noiseModeLabel(mode), mode == reading["mode"], !peer.busy) {
+                    uiScope.launch { peer.selectMode(mode) }
                 }
+                add(entry)
             }
-
-            "idle" -> add(TrayMenuEntry.Label("${peer.name} · 未持有耳机"))
-
-            else -> add(TrayMenuEntry.Label("${peer.name} · " + if ("error" in reading) "远端不可用" else "正在读取"))
+        } else {
+            add(TrayMenuEntry.Label("${peer.name} · ${peer.statusLabel}"))
         }
         peer.feedback?.let { add(TrayMenuEntry.Label(it)) }
         add(TrayMenuEntry.Separator)

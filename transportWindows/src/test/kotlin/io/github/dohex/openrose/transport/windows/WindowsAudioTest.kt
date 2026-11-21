@@ -2,7 +2,7 @@ package io.github.dohex.openrose.transport.windows
 
 import io.github.dohex.openrose.circulation.CirculationAudio
 import io.github.dohex.openrose.circulation.CirculationNode
-import io.github.dohex.openrose.circulation.HeadsetHandoff
+import io.github.dohex.openrose.circulation.HeadsetCirculation
 import io.github.dohex.openrose.circulation.LoopbackDiscoveryNetwork
 import io.github.dohex.openrose.circulation.localCommand
 import org.junit.Rule
@@ -38,11 +38,13 @@ class WindowsAudioTest {
         })
         val desktopAudio = object : CirculationAudio {
             override fun isConnected(address: String) = windows.isConnected(address)
+            override fun isMediaConnected(address: String) = windows.isMediaConnected(address)
             override fun release(address: String) = windows.release(address)
             override fun acquire(address: String) = windows.acquire(address)
         }
         val phoneAudio = object : CirculationAudio {
             override fun isConnected(address: String) = address == target && owner.get() == "phone"
+            override fun isMediaConnected(address: String) = isConnected(address)
             override fun release(address: String) = check(address == target && owner.compareAndSet("phone", null))
             override fun acquire(address: String) = check(address == target && owner.compareAndSet(null, "phone"))
         }
@@ -51,7 +53,7 @@ class WindowsAudioTest {
             files.newFolder(),
             name,
             network.discovery(),
-            HeadsetHandoff(audio) { listOf(target) },
+            HeadsetCirculation(audio) { listOf(target) },
         ) { emptyMap() }
         node("Windows PC", desktopAudio).use { desktop ->
             node("Phone", phoneAudio).use { phone ->

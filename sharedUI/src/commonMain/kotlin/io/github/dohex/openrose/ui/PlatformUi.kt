@@ -14,7 +14,7 @@ interface PlatformUi {
     val openBluetoothSettings: (() -> Unit)? get() = null
 
     @Composable
-    fun HandoffAction(state: ControlState, selection: PrimaryDeviceSelection) {}
+    fun CirculationAction(state: ControlState, selection: PrimaryDeviceSelection) {}
 
     /** 动态取色: whether the application's colors follow the system wallpaper instead of the style defaults. */
     val dynamicColor: Boolean

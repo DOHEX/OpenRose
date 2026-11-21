@@ -10,7 +10,7 @@ import io.github.dohex.openrose.ui.AppGroup
 import io.github.dohex.openrose.ui.AppStatusSection
 import io.github.dohex.openrose.ui.AppSwitchRow
 import io.github.dohex.openrose.ui.CirculationClient
-import io.github.dohex.openrose.ui.CirculationHandoffRow
+import io.github.dohex.openrose.ui.CirculationRow
 import io.github.dohex.openrose.ui.CirculationSettings
 import io.github.dohex.openrose.ui.PlatformSettingsPosition
 import io.github.dohex.openrose.ui.PlatformUi
@@ -44,8 +44,8 @@ class DesktopPlatformUi(
     }
 
     @Composable
-    override fun HandoffAction(state: ControlState, selection: PrimaryDeviceSelection) {
-        circulation?.let { CirculationHandoffRow(it, state, selection) }
+    override fun CirculationAction(state: ControlState, selection: PrimaryDeviceSelection) {
+        circulation?.let { CirculationRow(it, state, selection, "接到这台电脑") }
     }
 
     @Composable

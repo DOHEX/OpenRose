@@ -50,3 +50,5 @@ window-rule {
     default-floating-position x=12 y=12 relative-to="top-right"
 }
 ```
+
+For headset circulation with the AppImage, install the host’s `pactl` command. Debian and Fedora package it in `pulseaudio-utils`, and Arch Linux packages it in `libpulse`.

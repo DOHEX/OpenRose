@@ -14,7 +14,7 @@ class CirculationNode(
     directory: File,
     private val name: String,
     private val discovery: PeerDiscovery,
-    internal val handoff: HeadsetHandoff?,
+    internal val circulation: HeadsetCirculation?,
     private val handler: (Map<String, String>) -> Map<String, String>,
 ) : Closeable {
     constructor(directory: File, name: String, discovery: PeerDiscovery, handler: (Map<String, String>) -> Map<String, String>) :
@@ -132,7 +132,7 @@ class CirculationNode(
             check(server.running && grant.token == header["grant"])
             when (header["action"]) {
                 "request" -> when (request?.get("op")) {
-                    "release" -> handoff?.release(request.getValue("address")) ?: mapOf("error" to "该平台暂不支持流转")
+                    "release" -> circulation?.release(request.getValue("address")) ?: mapOf("error" to "该平台暂不支持流转")
                     else -> handler(checkNotNull(request))
                 }
 

@@ -125,9 +125,11 @@ class CirculationNodeTest {
         var owner: String? = "Phone"
         var refusal: String? = "通话中"
         var acquireFailure: String? = null
+        var desktopCaptureOnly = false
         val events = mutableListOf<String>()
         fun adapter(host: String) = object : CirculationAudio {
-            override fun isConnected(address: String) = owner == host && address == headset
+            override fun isConnected(address: String) = (owner == host || (host == "Desktop" && desktopCaptureOnly)) && address == headset
+            override fun isMediaConnected(address: String) = owner == host && address == headset
             override fun release(address: String) {
                 refusal?.let { error(it) }
                 events.add("$host release")
@@ -145,7 +147,7 @@ class CirculationNodeTest {
             files.newFolder(),
             host,
             network.discovery(),
-            HeadsetHandoff(adapter(host)) { listOf(headset) },
+            HeadsetCirculation(adapter(host)) { listOf(headset) },
         ) { emptyMap() }
         node("Desktop").use { desktop ->
             node("Phone").use { phone ->
@@ -156,7 +158,9 @@ class CirculationNodeTest {
                 assertEquals("通话中", desktop.localCommand(pull)["error"])
                 assertEquals("Phone", owner)
                 refusal = null
+                desktopCaptureOnly = true
                 desktop.localCommand(pull)
+                desktopCaptureOnly = false
                 assertEquals(listOf("Phone release", "Desktop acquire"), events)
                 refusal = "耳机麦克风正在使用"
                 assertEquals(refusal, phone.localCommand(pull)["error"])
