@@ -50,6 +50,7 @@ dependencies {
     kover(projects.androidApp)
     kover(projects.desktopApp)
     kover(projects.transportBluez)
+    kover(projects.transportWindows)
     kover(projects.circulation)
 }
 kover {
@@ -65,7 +66,7 @@ tasks.register("offlineCheck") {
     dependsOn(
         ":core:jvmTest", ":androidIntegration:jvmTest", ":sharedUI:jvmTest", ":androidIntegrationUI:jvmTest",
         ":desktopApp:test", ":androidPlatform:testDebugUnitTest", ":androidModule:testDebugUnitTest",
-        ":androidApp:testDebugUnitTest", ":transportBluez:test", ":circulation:test",
+        ":androidApp:testDebugUnitTest", ":transportBluez:test", ":transportWindows:test", ":circulation:test",
         ":desktopApp:compileKotlin", ":androidModule:compileDebugKotlin", ":androidApp:compileDebugKotlin", ":uiSandbox:compileKotlin",
         ":androidApp:lintDebug", "spotlessCheck",
         "koverVerify", ":core:koverVerify", ":androidIntegration:koverVerify",

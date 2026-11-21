@@ -21,5 +21,5 @@ enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")
 rootProject.name = "OpenRose"
 include(
     ":core", ":androidIntegration", ":sharedUI", ":androidIntegrationUI", ":androidPlatform", ":androidModule", ":androidApp",
-    ":desktopApp", ":circulation", ":transportBluez", ":uiSandbox",
+    ":desktopApp", ":circulation", ":transportBluez", ":transportWindows", ":uiSandbox",
 )

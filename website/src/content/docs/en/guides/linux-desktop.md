@@ -6,7 +6,7 @@ description: Control the earphones on Linux through BlueZ, plus the tray, backgr
 The Linux app provides BLE control through the system BlueZ service and D-Bus, without SPP, OTA, or system integration. The desktop has no control way to choose; the app holds the control connection directly.
 
 :::caution[Verification status]
-BLE control on Linux x64 is implemented; full desktop hardware acceptance with the EarFree i5 is pending. The Windows app currently has the UI and preferences only; Bluetooth control is not implemented.
+BLE control on Linux x64 is implemented; full desktop hardware acceptance with the EarFree i5 is pending. The Windows app uses WinRT to read battery levels and change noise modes. Windows hardware acceptance with the i5 is pending.
 :::
 
 ## Install

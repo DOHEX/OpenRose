@@ -21,9 +21,9 @@ internal class PeerServer(private val tls: SSLContext, private val accept: (SSLS
     @Volatile private var listener: SSLServerSocket? = null
     val running get() = listener != null
 
-    fun start(): Int {
+    fun start(port: Int): Int {
         check(!workers.isShutdown && !running)
-        val server = (tls.serverSocketFactory.createServerSocket(0) as SSLServerSocket).apply { needClientAuth = true }
+        val server = (tls.serverSocketFactory.createServerSocket(port) as SSLServerSocket).apply { needClientAuth = true }
         listener = server
         thread(isDaemon = true, name = "OpenRose-discovery-listener") {
             try {
