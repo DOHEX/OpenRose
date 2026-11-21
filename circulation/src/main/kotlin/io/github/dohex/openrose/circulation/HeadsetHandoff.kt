@@ -5,7 +5,7 @@ import io.github.dohex.openrose.core.protocol.ModelProfile
 import java.io.IOException
 import java.util.concurrent.locks.ReentrantLock
 
-internal class PeerUnreachable(cause: IOException) : IOException("无法联系对端", cause)
+internal class PeerUnreachable(cause: IOException) : IOException("无法联系对端 · ${cause.message}", cause)
 
 /** All commands target the classic address of the i5 selected by the receiving device. */
 class HeadsetHandoff(private val audio: CirculationAudio, private val bonded: () -> List<String>) {
