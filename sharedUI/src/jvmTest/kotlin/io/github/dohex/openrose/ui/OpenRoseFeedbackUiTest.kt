@@ -41,13 +41,14 @@ class OpenRoseFeedbackUiTest {
                 requestedValue = FieldValue.Text("wind"),
                 stage = SettingStage.SUBMITTED,
             )
-            withHarness(state(operation).copy(settingOperations = persistentListOf()), style, wholeApp = false) { harness ->
+            withHarness(state(operation).copy(settingOperations = persistentListOf()), style) { harness ->
                 harness.render()
                 val before = harness.clickableBounds("通透")
                 harness.state.value = harness.state.value.copy(settingOperations = persistentListOf(operation))
                 harness.render(frames = 20)
                 assertEquals(before, harness.clickableBounds("通透"), "feedback must not shift the control being used in $style")
-                assertTrue(harness.hasText("正在处理设置，等待设备确认"))
+                assertTrue(harness.hasText("等待设备确认"))
+                assertFalse(harness.hasText("正在处理设置，等待设备确认"), "the mode row already shows the pending write in $style")
                 harness.state.value = harness.state.value.copy(
                     settingOperations = persistentListOf(
                         operation.copy(
@@ -58,7 +59,7 @@ class OpenRoseFeedbackUiTest {
                 )
                 harness.render()
                 assertFalse(harness.hasText("设备已确认设置"), "confirmed settings must apply silently without bottom banner in $style")
-                assertFalse(harness.hasText("正在处理设置，等待设备确认"), "pending feedback disappears once confirmed in $style")
+                assertFalse(harness.hasText("等待设备确认"), "pending feedback disappears once confirmed in $style")
             }
         }
     }
@@ -95,7 +96,7 @@ class OpenRoseFeedbackUiTest {
             )
             withHarness(state(operation), style) { harness ->
                 harness.render()
-                assertTrue(harness.hasText("正在处理设置，等待设备确认"), "pending feedback in $style")
+                assertTrue(harness.hasText("等待设备确认"), "pending feedback in $style")
                 assertFalse(harness.hasText("最近设置操作"), "home must not present an operation-history block in $style")
                 assertFalse(harness.hasText("降噪模式 · #42"), "request identifiers stay in diagnostics in $style")
                 assertFalse(harness.hasText("请求值：抗风噪"), "request values stay in diagnostics in $style")
@@ -216,7 +217,7 @@ class OpenRoseFeedbackUiTest {
                 harness.state.value = harness.state.value.copy(settingOperations = persistentListOf(submitted))
                 harness.render()
                 assertTrue(harness.hasSelectedText("降噪"), "submission keeps the prior confirmed mode in $style")
-                assertTrue(harness.hasText("正在处理设置，等待设备确认"), "submission shows a waiting result in $style")
+                assertTrue(harness.hasText("等待设备确认"), "submission shows a waiting result in $style")
                 assertTrue(harness.hasDisabledText("通透"), "pending settings keep the existing disabled-control rule in $style")
 
                 harness.clickTab("设置")

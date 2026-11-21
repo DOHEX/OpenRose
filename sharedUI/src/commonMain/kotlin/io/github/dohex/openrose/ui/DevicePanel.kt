@@ -7,9 +7,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -106,7 +104,6 @@ internal fun HeadphonesPage(
                             )
                         }
                     }
-                    Spacer(Modifier.height(12.dp))
                     BatteryStrip(
                         device = device,
                         initializing = state.connection.phaseOrNull() == ConnectionPhase.INITIALIZING,
@@ -120,6 +117,7 @@ internal fun HeadphonesPage(
                     }
                     if (DeviceSetting.GAME_MODE in device.capabilities.writableSettings) {
                         AppDashboardCard(compact = true) {
+                            val requested = state.pendingSetting(device, DeviceSetting.GAME_MODE)?.requestedValue
                             SettingToggleChoices(
                                 "游戏模式",
                                 DeviceField.GAME_MODE,
@@ -128,6 +126,7 @@ internal fun HeadphonesPage(
                                 state.isReady(device) && !state.hasPendingSetting(device),
                                 onSet,
                                 icon = RoseIcon.GAME,
+                                pendingToggle = (requested as? FieldValue.Toggle)?.value,
                             )
                         }
                     }

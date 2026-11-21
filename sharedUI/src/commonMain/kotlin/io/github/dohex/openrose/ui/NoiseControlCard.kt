@@ -68,7 +68,7 @@ internal fun NoiseControlCard(
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             AppText("降噪模式", Modifier.weight(1f), role = AppTextRole.Title)
             val headerStatus = when {
-                pending -> "等待设备确认"
+                state.pendingSetting(device, DeviceSetting.NOISE_MODE) != null -> "等待设备确认"
                 confirmedMode == null -> "当前状态未知"
                 else -> null
             }
@@ -372,8 +372,6 @@ internal fun SettingOperationsCard(state: ControlState) {
 
 internal fun DeviceState.knownValue(field: DeviceField): FieldValue? = (fields[field] as? FieldReading.Known)?.value
 
-private val pendingSettingStages = setOf(SettingStage.SUBMITTED, SettingStage.PARTIALLY_WRITTEN, SettingStage.WRITTEN)
-
 internal fun ControlState.isReady(device: DeviceState): Boolean {
     val connection = connection as? ConnectionState.Connected ?: return false
     return connection.phase == ConnectionPhase.READY &&
@@ -385,10 +383,6 @@ internal fun ControlState.isReady(device: DeviceState): Boolean {
 internal fun ControlState.canControlNoiseMode(device: DeviceState): Boolean {
     val session = noiseModeSession ?: return false
     return session.deviceId == device.deviceId && session.sessionId == device.sessionId && platform.connectionBlockReason == null
-}
-
-internal fun ControlState.hasPendingSetting(device: DeviceState): Boolean = settingOperations.any {
-    it.sessionId == device.sessionId && it.stage in pendingSettingStages
 }
 
 internal fun DeviceSetting.displayName(): String = when (this) {

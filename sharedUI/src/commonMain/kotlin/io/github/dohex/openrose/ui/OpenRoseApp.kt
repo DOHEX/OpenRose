@@ -265,8 +265,17 @@ fun OpenRoseApp(
                     targetPage in listOf(AppPage.TOUCH, AppPage.EQUALIZER, AppPage.AUDIO)
                 ) {
                     key(targetPage) {
-                        // The equalizer page shows its own progress in place; it keeps only failures here.
-                        SettingFeedback(state, device, showPending = targetPage != AppPage.EQUALIZER) {
+                        SettingFeedback(
+                            state,
+                            device,
+                            showPending = { setting ->
+                                when (targetPage) {
+                                    AppPage.HEADPHONES -> setting != DeviceSetting.GAME_MODE && setting != DeviceSetting.NOISE_MODE
+                                    AppPage.EQUALIZER -> false
+                                    else -> true
+                                }
+                            },
+                        ) {
                             navigate(AppPage.DIAGNOSTICS)
                         }
                     }

@@ -46,7 +46,7 @@ class OpenRoseNavigationUiTest {
             assertTrue(harness.hasContentDescription("添加耳机"))
             harness.clickContentDescription("添加耳机")
             harness.render()
-            assertTrue(harness.hasText("附近设备"))
+            assertTrue(harness.hasText("打开耳机并靠近设备"))
             harness.clickContentDescription("返回")
             harness.render()
             assertTrue(harness.hasText("添加你的 ROSE 耳机"))
@@ -183,7 +183,7 @@ class OpenRoseNavigationUiTest {
                 harness.render(frames = 120)
                 harness.clickContentDescription("添加耳机")
                 harness.render(frames = 120)
-                assertTrue(harness.hasText("附近设备"))
+                assertTrue(harness.hasText("打开耳机并靠近设备"))
                 assertTrue(rail().isEmpty(), "the add-device flow takes the full width in $style")
 
                 harness.clickContentDescription("返回")

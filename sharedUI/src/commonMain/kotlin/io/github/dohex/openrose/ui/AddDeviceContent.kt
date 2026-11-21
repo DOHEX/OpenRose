@@ -68,7 +68,9 @@ internal fun AddDeviceContent(
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             key("search-guidance") {
-                if (canScan) {
+                if (!canScan) {
+                    AddDevicePrerequisite(state, onRequestPermission, onOpenSystemSettings)
+                } else if (supported.isEmpty() && selectedDeviceId == null) {
                     Column(
                         Modifier.fillMaxWidth().padding(horizontal = 24.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
@@ -78,8 +80,6 @@ internal fun AddDeviceContent(
                         AppText("打开耳机并靠近设备", role = AppTextRole.Title)
                         AppText("让耳机保持开启，必要时进入配对模式。", role = AppTextRole.Summary)
                     }
-                } else {
-                    AddDevicePrerequisite(state, onRequestPermission, onOpenSystemSettings)
                 }
             }
             if (canScan) {
@@ -88,33 +88,41 @@ internal fun AddDeviceContent(
                         Modifier.fillMaxWidth().padding(horizontal = 24.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        AppText(
-                            text = when {
-                                pending -> "正在连接所选耳机"
-                                scanning -> "正在搜索附近的耳机…"
-                                scanError != null -> "搜索未完成"
-                                supported.isEmpty() -> "暂未找到受支持的耳机"
-                                else -> "搜索已结束"
-                            },
-                            modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
-                            role = AppTextRole.Title,
-                        )
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column(
+                                Modifier.weight(1f).semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite },
+                                verticalArrangement = Arrangement.spacedBy(4.dp),
+                            ) {
+                                if (supported.isNotEmpty()) {
+                                    AppText("已找到 ${supported.size} 副耳机", role = AppTextRole.Title)
+                                }
+                                AppText(
+                                    text = when {
+                                        pending -> "正在连接所选耳机"
+                                        scanning -> "正在搜索附近的耳机…"
+                                        scanError != null -> "搜索未完成"
+                                        supported.isEmpty() -> "暂未找到受支持的耳机"
+                                        else -> "搜索已结束"
+                                    },
+                                    role = if (supported.isEmpty()) AppTextRole.Title else AppTextRole.Summary,
+                                )
+                            }
+                            if (!pending) {
+                                AppButton(
+                                    text = if (scanning) "停止搜索" else "重新搜索",
+                                    onClick = if (scanning) onStopScan else onStartScan,
+                                    kind = AppButtonKind.Secondary,
+                                )
+                            }
+                        }
                         if (!pending && scanError != null && scanError != connectionError) {
                             AppText(scanError.message, color = appColor(AppColorRole.Error))
-                        } else if (!scanning && !pending && supported.isEmpty()) {
-                            AppText("请打开耳机、进入配对模式并靠近设备，再重新搜索。", role = AppTextRole.Summary)
-                        }
-                        if (!pending) {
-                            AppButton(
-                                text = if (scanning) "停止搜索" else "重新搜索",
-                                onClick = if (scanning) onStopScan else onStartScan,
-                                kind = AppButtonKind.Secondary,
-                            )
                         }
                     }
-                }
-                key("nearby-heading") {
-                    AppText("附近设备", Modifier.padding(horizontal = 24.dp), role = AppTextRole.Title)
                 }
                 supported.forEach { candidate ->
                     key(candidate.deviceId) {

@@ -240,12 +240,17 @@ internal fun SettingToggleChoices(
     enabled: Boolean,
     onSet: (DeviceSetting, FieldValue) -> Unit,
     icon: RoseIcon? = null,
+    pendingToggle: Boolean? = null,
 ) {
     val selected = (device.knownValue(field) as? FieldValue.Toggle)?.value
     val isKnown = selected != null
     AppSwitchRow(
         title = label,
-        summary = if (isKnown) null else "当前状态未知",
+        summary = when (pendingToggle) {
+            true -> "正在开启"
+            false -> "正在关闭"
+            null -> if (isKnown) null else "当前状态未知"
+        },
         checked = selected ?: false,
         enabled = enabled && isKnown,
         icon = icon,

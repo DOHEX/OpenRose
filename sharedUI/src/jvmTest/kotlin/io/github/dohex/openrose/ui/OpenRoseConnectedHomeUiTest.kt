@@ -399,15 +399,9 @@ class OpenRoseConnectedHomeUiTest {
     @Test
     fun gameModeCardRendersCompactSwitchWithGamepadIconAndHandlesToggling() {
         for (style in InterfaceStyle.entries) {
-            val baseState = connectedState()
-            val baseDevice = requireNotNull(baseState.device)
-            val gameDevice = baseDevice.copy(
-                capabilities = baseDevice.capabilities.copy(
-                    writableSettings = baseDevice.capabilities.writableSettings + DeviceSetting.GAME_MODE,
-                ),
-                fields = baseDevice.fields + (DeviceField.GAME_MODE to FieldReading.Known(FieldValue.Toggle(false), "00")),
-            )
-            withHarness(420, 900, baseState.copy(device = gameDevice), style) { harness ->
+            val initial = gameModeState(FieldReading.Known(FieldValue.Toggle(false), "00"))
+            val gameDevice = requireNotNull(initial.device)
+            withHarness(420, 900, initial, style, wholeApp = true) { harness ->
                 harness.render()
                 // Game mode card should render single-line title without "设备已确认" subtitle
                 assertTrue(harness.hasText("游戏模式"), "game mode switch must be visible in $style")
@@ -436,10 +430,13 @@ class OpenRoseConnectedHomeUiTest {
                     settingOperations = persistentListOf(pendingOp),
                 )
                 harness.render()
+                assertTrue(harness.hasText("正在开启"), "game mode shows the requested direction in $style")
+                assertFalse(harness.hasText("等待设备确认"), "game mode does not show progress on the noise card in $style")
+                assertFalse(harness.hasText("正在处理设置，等待设备确认"), "game mode does not also show a progress card in $style")
                 assertTrue(
                     harness.nodes().any {
                         it.config.contains(SemanticsProperties.Disabled) &&
-                            it.config.getOrNull(SemanticsProperties.ToggleableState) != null
+                            it.config.getOrNull(SemanticsProperties.ToggleableState) == ToggleableState.Off
                     },
                     "game mode toggle must be disabled during pending setting in $style",
                 )
@@ -454,6 +451,7 @@ class OpenRoseConnectedHomeUiTest {
                     ),
                 )
                 harness.render()
+                assertFalse(harness.hasText("正在开启"))
                 assertFalse(harness.hasText("设备已确认设置"), "confirmation of game mode must be silent without banner in $style")
                 assertFalse(harness.hasText("正在处理设置，等待设备确认"), "pending banner disappears after confirmation in $style")
                 assertFalse(harness.hasText("设备已确认：开启"), "no redundant subtitle after confirmation in $style")
@@ -462,17 +460,35 @@ class OpenRoseConnectedHomeUiTest {
     }
 
     @Test
+    fun gameModeDisableFailurePreservesTheConfirmedSwitchAndShowsTheReason() {
+        val initial = gameModeState(FieldReading.Known(FieldValue.Toggle(true), "01"))
+        val turningOff = SettingOperation(102, SESSION_ID, DeviceSetting.GAME_MODE, FieldValue.Toggle(false), SettingStage.WRITTEN)
+        for (style in InterfaceStyle.entries) {
+            withHarness(420, 900, initial.copy(settingOperations = persistentListOf(turningOff)), style, wholeApp = true) { harness ->
+                harness.render()
+                assertTrue(harness.hasText("正在关闭"))
+                assertTrue(
+                    harness.nodes().any {
+                        it.config.contains(SemanticsProperties.Disabled) &&
+                            it.config.getOrNull(SemanticsProperties.ToggleableState) == ToggleableState.On
+                    },
+                    "a pending disable keeps the last confirmed switch value in $style",
+                )
+                harness.state.value = harness.state.value.copy(
+                    settingOperations = persistentListOf(turningOff.copy(stage = SettingStage.TIMED_OUT)),
+                )
+                harness.render()
+                assertFalse(harness.hasText("正在关闭"))
+                assertTrue(harness.hasText("等待设备确认超时"))
+                assertTrue(harness.hasText("查看诊断"))
+            }
+        }
+    }
+
+    @Test
     fun unknownToggleRendersDisabledSwitchWithoutInventingConfirmation() {
         for (style in InterfaceStyle.entries) {
-            val base = connectedState()
-            val original = requireNotNull(base.device)
-            val device = original.copy(
-                capabilities = original.capabilities.copy(
-                    writableSettings = original.capabilities.writableSettings + DeviceSetting.GAME_MODE,
-                ),
-                fields = original.fields + (DeviceField.GAME_MODE to FieldReading.Unknown("ff")),
-            )
-            withHarness(420, 900, base.copy(device = device), style) { harness ->
+            withHarness(420, 900, gameModeState(FieldReading.Unknown("ff")), style) { harness ->
                 harness.render()
                 assertTrue(harness.hasText("游戏模式"))
                 assertTrue(harness.hasText("当前状态未知"), "an unread toggle explains why it is disabled in $style")
@@ -487,6 +503,7 @@ class OpenRoseConnectedHomeUiTest {
                 )
                 assertTrue(harness.settingWrites.isEmpty())
 
+                val device = requireNotNull(harness.state.value.device)
                 harness.state.value = harness.state.value.copy(
                     device = device.copy(
                         fields = device.fields +
@@ -502,6 +519,17 @@ class OpenRoseConnectedHomeUiTest {
                 assertEquals(listOf<Pair<DeviceSetting, FieldValue>>(DeviceSetting.GAME_MODE to FieldValue.Toggle(true)), harness.settingWrites)
             }
         }
+    }
+
+    private fun gameModeState(reading: FieldReading): ControlState {
+        val base = connectedState()
+        val device = requireNotNull(base.device)
+        return base.copy(
+            device = device.copy(
+                capabilities = device.capabilities.copy(writableSettings = device.capabilities.writableSettings + DeviceSetting.GAME_MODE),
+                fields = device.fields + (DeviceField.GAME_MODE to reading),
+            ),
+        )
     }
 
     private fun connectedState(): ControlState {

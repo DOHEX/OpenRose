@@ -14,13 +14,13 @@ import io.github.dohex.openrose.core.SettingStage
 
 /**
  * Shows the current session's outcome without exposing the operation record kept in diagnostics.
- * A page with its own in-place progress passes [showPending] false and keeps only failures here.
+ * [showPending] keeps the progress card for settings that the page does not already show in place.
  */
 @Composable
 internal fun SettingFeedback(
     state: ControlState,
     device: DeviceState?,
-    showPending: Boolean = true,
+    showPending: (DeviceSetting) -> Boolean = { true },
     onViewDetails: () -> Unit,
 ) {
     val operation = device?.let { activeDevice ->
@@ -28,7 +28,7 @@ internal fun SettingFeedback(
     }
     val operationError = operation?.error
     val otherError = state.lastError?.takeIf { it != operationError }
-    val visibleOperation = operation?.takeIf { it.needsFeedback(showPending) }
+    val visibleOperation = operation?.takeIf { it.needsFeedback(showPending(it.setting)) }
     if (visibleOperation == null && otherError == null) return
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -66,6 +66,15 @@ internal fun SettingFeedback(
         }
     }
 }
+
+internal fun ControlState.pendingSetting(
+    device: DeviceState,
+    setting: DeviceSetting? = null,
+): SettingOperation? = settingOperations.lastOrNull {
+    it.sessionId == device.sessionId && it.stage in settingPendingStages && (setting == null || it.setting == setting)
+}
+
+internal fun ControlState.hasPendingSetting(device: DeviceState): Boolean = pendingSetting(device) != null
 
 internal fun ControlState.noiseModeFeedback(device: DeviceState): String? {
     val last = settingOperations.lastOrNull { it.sessionId == device.sessionId } ?: return null

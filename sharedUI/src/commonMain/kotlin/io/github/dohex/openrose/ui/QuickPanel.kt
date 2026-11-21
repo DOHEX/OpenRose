@@ -251,7 +251,7 @@ private fun QuickPanelContent(
             }
         }
         // The diagnostics live in the main window.
-        SettingFeedback(state, device, showPending = true, onViewDetails = { onOpenApp(WindowDestination.DIAGNOSTICS) })
+        SettingFeedback(state, device, onViewDetails = { onOpenApp(WindowDestination.DIAGNOSTICS) })
     }
 
     TrayActions(model, state, summary, onOpenApp)
