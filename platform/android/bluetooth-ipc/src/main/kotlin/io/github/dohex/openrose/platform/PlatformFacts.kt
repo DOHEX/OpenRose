@@ -18,6 +18,16 @@ fun bluetoothPermissions(): Array<String> = if (Build.VERSION.SDK_INT >= 31) {
     arrayOf(Manifest.permission.ACCESS_FINE_LOCATION)
 }
 
+/** Permission used for a paired device's name, audio profiles and RFCOMM control. */
+fun Context.hasBluetoothConnectPermission(): Boolean {
+    val permission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        Manifest.permission.BLUETOOTH_CONNECT
+    } else {
+        Manifest.permission.BLUETOOTH
+    }
+    return checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED
+}
+
 /** The control-relevant platform facts, read the same way in the application and in the module host. */
 fun Context.readPlatformState(
     permissionRequested: Boolean,

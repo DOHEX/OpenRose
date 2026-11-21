@@ -11,10 +11,10 @@ import android.companion.DevicePresenceEvent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.os.Build
 import androidx.annotation.RequiresApi
 import io.github.dohex.openrose.core.protocol.ModelProfile
+import io.github.dohex.openrose.platform.hasBluetoothConnectPermission
 
 private fun Context.ordinaryOwner() = applicationContext as OpenRoseApplication
 
@@ -41,11 +41,7 @@ class OrdinaryWakeReceiver : BroadcastReceiver() {
     /** Other Bluetooth audio devices must not wake OpenRose; the name needs the connect permission on Android 12+. */
     @SuppressLint("MissingPermission")
     private fun isSupportedEarphone(context: Context, intent: Intent): Boolean {
-        if (Build.VERSION.SDK_INT >= 31 &&
-            context.checkSelfPermission(android.Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED
-        ) {
-            return false
-        }
+        if (!context.hasBluetoothConnectPermission()) return false
         val device = if (Build.VERSION.SDK_INT >= 33) {
             intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE, BluetoothDevice::class.java)
         } else {

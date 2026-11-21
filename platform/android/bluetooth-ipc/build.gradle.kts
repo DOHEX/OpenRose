@@ -10,6 +10,7 @@ android {
     }
 }
 dependencies {
+    implementation(libs.androidx.core)
     api(projects.platform.android.integration)
     api(projects.shared.circulation)
     testImplementation(kotlin("test-junit"))

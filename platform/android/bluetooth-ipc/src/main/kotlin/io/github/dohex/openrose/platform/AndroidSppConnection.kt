@@ -6,17 +6,18 @@ import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothSocket
 import io.github.dohex.openrose.core.ConnectionPhase
 import io.github.dohex.openrose.core.transport.ControlConnection
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -75,7 +76,11 @@ internal class AndroidSppConnection(
         checkOpen()
         if (!collectorAttached.get()) throw IOException("SPP 通知读取器尚未启动")
         if (!subscribed.compareAndSet(false, true)) return
-        readerJob = ioScope.launch { readLoop() }
+        readerJob = ioScope.async { readLoop() }.also { job ->
+            job.invokeOnCompletion { failure ->
+                if (failure != null && !closed.get()) terminate(if (failure is IOException) failure else IOException("SPP 读取失败", failure))
+            }
+        }
     }
 
     override suspend fun write(bytes: ByteArray) = writeLock.withLock {
@@ -99,17 +104,14 @@ internal class AndroidSppConnection(
 
     private suspend fun performBlockingIo(action: String, operation: () -> Unit) {
         suspendCancellableCoroutine<Unit> { continuation ->
-            val ioJob = ioScope.launch {
-                try {
-                    operation()
-                    continuation.resume(Unit) { _, _, _ -> terminate(IOException("SPP ${action}结果已取消")) }
-                } catch (error: Throwable) {
-                    continuation.resumeWith(Result.failure(error))
-                }
-            }
+            val ioJob = ioScope.async { operation() }
             ioJob.invokeOnCompletion { cause ->
-                if (cause != null && continuation.isActive) {
-                    continuation.resumeWith(Result.failure(IOException("SPP ${action}操作已结束", cause)))
+                if (cause == null) {
+                    continuation.resume(Unit) { _, _, _ -> terminate(IOException("SPP ${action}结果已取消")) }
+                } else if (continuation.isActive) {
+                    // Closing the connection cancels its I/O job, even if the caller is still waiting.
+                    val error = if (cause is CancellationException) IOException("SPP ${action}操作已结束", cause) else cause
+                    continuation.resumeWith(Result.failure(error))
                 }
             }
             continuation.invokeOnCancellation {
@@ -121,20 +123,16 @@ internal class AndroidSppConnection(
     }
 
     private fun readLoop() {
-        try {
-            val client = requireSocket()
-            val input = client.inputStream
-            val buffer = ByteArray(READ_BUFFER_SIZE)
-            while (!closed.get()) {
-                val length = input.read(buffer)
-                if (length < 0) throw IOException("SPP 连接已断开")
-                if (length == 0) continue
-                if (incoming.trySend(buffer.copyOf(length)).isFailure) {
-                    throw IOException("SPP 通知接收缓冲区已满或已关闭")
-                }
+        val client = requireSocket()
+        val input = client.inputStream
+        val buffer = ByteArray(READ_BUFFER_SIZE)
+        while (!closed.get()) {
+            val length = input.read(buffer)
+            if (length < 0) throw IOException("SPP 连接已断开")
+            if (length == 0) continue
+            if (incoming.trySend(buffer.copyOf(length)).isFailure) {
+                throw IOException("SPP 通知接收缓冲区已满或已关闭")
             }
-        } catch (error: Throwable) {
-            if (!closed.get()) terminate(if (error is IOException) error else IOException("SPP 读取失败", error))
         }
     }
 

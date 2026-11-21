@@ -1,6 +1,5 @@
 package io.github.dohex.openrose.platform
 
-import android.Manifest
 import android.annotation.SuppressLint
 import android.bluetooth.BluetoothA2dp
 import android.bluetooth.BluetoothAdapter
@@ -14,6 +13,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.os.Build
+import androidx.core.content.ContextCompat
 import io.github.dohex.openrose.core.transport.AudioConnectionState
 import io.github.dohex.openrose.core.transport.AudioFactsDriver
 import io.github.dohex.openrose.core.transport.AudioProfile
@@ -56,11 +56,8 @@ internal class AndroidAudioProfiles(private val context: Context) : AudioFactsDr
             addAction(BluetoothHeadset.ACTION_CONNECTION_STATE_CHANGED)
             addAction(BluetoothAdapter.ACTION_STATE_CHANGED)
         }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            context.registerReceiver(receiver, filter, Context.RECEIVER_EXPORTED)
-        } else {
-            context.registerReceiver(receiver, filter)
-        }
+        // Bluetooth broadcasts come from a privileged app with its own UID.
+        ContextCompat.registerReceiver(context, receiver, filter, ContextCompat.RECEIVER_EXPORTED)
         trySend(RawAudioEvent.Ready)
         awaitClose { runCatching { context.unregisterReceiver(receiver) } }
     }
@@ -95,7 +92,7 @@ internal class AndroidAudioProfiles(private val context: Context) : AudioFactsDr
     @SuppressLint("MissingPermission")
     override suspend fun bondedDevices(): List<RawAudioDevice> = withContext(Dispatchers.IO) {
         val adapter = context.getSystemService(BluetoothManager::class.java)?.adapter
-        if (adapter == null || !hasBluetoothPermission() || !runCatching { adapter.isEnabled }.getOrDefault(false)) {
+        if (adapter == null || !context.hasBluetoothConnectPermission() || !runCatching { adapter.isEnabled }.getOrDefault(false)) {
             emptyList()
         } else {
             readBondedDevices(adapter)
@@ -112,7 +109,7 @@ internal class AndroidAudioProfiles(private val context: Context) : AudioFactsDr
     @SuppressLint("MissingPermission")
     override suspend fun snapshot(targetAddresses: Set<String>): RawAudioSnapshot = withContext(Dispatchers.IO) {
         val adapter = context.getSystemService(BluetoothManager::class.java)?.adapter
-        val enabled = adapter != null && hasBluetoothPermission() && runCatching { adapter.isEnabled }.getOrDefault(false)
+        val enabled = adapter != null && context.hasBluetoothConnectPermission() && runCatching { adapter.isEnabled }.getOrDefault(false)
         val leObservable = Build.VERSION.SDK_INT !in Build.VERSION_CODES.S until Build.VERSION_CODES.TIRAMISU
         val spp = context.packageManager.hasSystemFeature(PackageManager.FEATURE_BLUETOOTH)
         if (!enabled) return@withContext RawAudioSnapshot(false, spp, leObservable, emptyList(), emptyMap())
@@ -157,12 +154,6 @@ internal class AndroidAudioProfiles(private val context: Context) : AudioFactsDr
                 request.unavailable()
             }
         }
-
-    private fun hasBluetoothPermission(): Boolean = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-        context.checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
-    } else {
-        context.checkSelfPermission(Manifest.permission.BLUETOOTH) == PackageManager.PERMISSION_GRANTED
-    }
 
     private class ProfileProxyRequest(
         private val adapter: BluetoothAdapter,

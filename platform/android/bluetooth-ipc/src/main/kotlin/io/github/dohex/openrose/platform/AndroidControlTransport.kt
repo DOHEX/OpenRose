@@ -1,11 +1,9 @@
 package io.github.dohex.openrose.platform
 
-import android.Manifest
 import android.annotation.SuppressLint
 import android.bluetooth.BluetoothManager
 import android.content.Context
 import android.content.pm.PackageManager
-import android.os.Build
 import io.github.dohex.openrose.core.ConnectionPhase
 import io.github.dohex.openrose.core.DeviceCandidate
 import io.github.dohex.openrose.core.transport.Advertisement
@@ -15,8 +13,8 @@ import io.github.dohex.openrose.core.transport.ControlTransport
 import io.github.dohex.openrose.core.transport.DeviceId
 import io.github.dohex.openrose.core.transport.TransportEndpoint
 import io.github.dohex.openrose.core.transport.TransportFacts
-import io.github.dohex.openrose.core.transport.openSafely
 import io.github.dohex.openrose.core.transport.normalizeBluetoothAddress
+import io.github.dohex.openrose.core.transport.openSafely
 import kotlinx.coroutines.flow.Flow
 import java.io.IOException
 
@@ -49,7 +47,7 @@ class AndroidControlTransport(context: Context) : ControlTransport {
                 ?: throw IOException("系统蓝牙适配器不可用")
             val address = normalizeBluetoothAddress(endpoint.address)
                 ?: throw IOException("SPP 设备地址无效")
-            if (!hasBluetoothPermission()) throw IOException("缺少蓝牙连接权限")
+            if (!appContext.hasBluetoothConnectPermission()) throw IOException("缺少蓝牙连接权限")
             val enabled = try {
                 adapter.isEnabled
             } catch (error: SecurityException) {
@@ -61,14 +59,4 @@ class AndroidControlTransport(context: Context) : ControlTransport {
             AndroidSppConnection(adapter, address, endpoint.serviceUuid).openSafely { open(onPhase) }
         }
     }
-
-    private companion object {
-        fun hasBluetoothPermission(context: Context): Boolean = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            context.checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
-        } else {
-            context.checkSelfPermission(Manifest.permission.BLUETOOTH) == PackageManager.PERMISSION_GRANTED
-        }
-    }
-
-    private fun hasBluetoothPermission(): Boolean = hasBluetoothPermission(appContext)
 }
