@@ -14,12 +14,13 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.qrcode.QRCodeWriter
+import io.github.dohex.openrose.circulation.CirculationAudio
+import io.github.dohex.openrose.circulation.CirculationClient
 import io.github.dohex.openrose.circulation.CirculationNode
 import io.github.dohex.openrose.circulation.CirculationService
 import io.github.dohex.openrose.circulation.HeadsetCirculation
 import io.github.dohex.openrose.circulation.HeadsetEndpoint
 import io.github.dohex.openrose.core.ControlRuntime
-import io.github.dohex.openrose.ui.CirculationClient
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -29,7 +30,7 @@ import java.net.InetAddress
 
 private const val DESKTOP_CIRCULATION_PORT = 21871
 
-internal fun desktopCirculation(scope: CoroutineScope, control: ControlRuntime, audio: DesktopCirculationAudio?): CirculationClient {
+internal fun desktopCirculation(scope: CoroutineScope, control: ControlRuntime, audio: CirculationAudio?): CirculationClient {
     val service = CirculationService()
     val headset = HeadsetEndpoint(control)
     scope.launch {
@@ -40,24 +41,11 @@ internal fun desktopCirculation(scope: CoroutineScope, control: ControlRuntime, 
                 name,
                 DesktopPeerDiscovery(),
                 audio?.let { HeadsetCirculation(it, control) },
-                handler = headset::handle,
+                headset = headset,
             )
         }
     }
-    return CirculationClient { fields ->
-        withContext(Dispatchers.IO) {
-            when (fields["op"]) {
-                "output" -> audio?.currentOutput()?.let { mapOf("output" to it) }.orEmpty()
-
-                "soundSettings" -> {
-                    audio?.openSoundSettings()
-                    emptyMap()
-                }
-
-                else -> service.call(fields)
-            }
-        }
-    }
+    return CirculationClient { command -> withContext(Dispatchers.IO) { service.call(command) } }
 }
 
 @Composable

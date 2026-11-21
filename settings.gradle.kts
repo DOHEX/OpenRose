@@ -20,6 +20,18 @@ dependencyResolutionManagement {
 enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")
 rootProject.name = "OpenRose"
 include(
-    ":core", ":androidIntegration", ":sharedUI", ":androidIntegrationUI", ":androidPlatform", ":androidModule", ":androidApp",
-    ":desktopApp", ":circulation", ":transportBluez", ":transportWindows", ":uiSandbox",
+    ":androidApp",
+    ":desktopApp",
+    ":shared:headset",
+    ":shared:ui",
+    ":shared:circulation",
+    ":shared:circulation-lan",
+    ":platform:android:integration",
+    ":platform:android:bluetooth-ipc",
+    ":platform:android:system-module",
+    ":platform:android:ui",
+    ":platform:linux",
+    ":platform:windows",
+    ":tools:ui-sandbox",
+    ":tools:ui-test-support",
 )

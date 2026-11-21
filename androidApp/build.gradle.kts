@@ -35,14 +35,14 @@ android {
     }
 }
 dependencies {
-    implementation(projects.androidIntegration)
-    implementation(projects.androidIntegrationUI)
-    implementation(projects.sharedUI)
+    implementation(projects.platform.android.integration)
+    implementation(projects.platform.android.ui)
+    implementation(projects.shared.ui)
     implementation(libs.activity.compose)
     implementation(libs.zxing.embedded)
-    implementation(projects.androidPlatform)
+    implementation(projects.platform.android.bluetoothIpc)
     // Packaged into the APK for LSPosed, but invisible to the application's sources (ADR 0018).
-    runtimeOnly(projects.androidModule)
+    runtimeOnly(projects.platform.android.systemModule)
     // LSPosed supplies the API at runtime; R8 needs it as library classes to keep the module entry's overrides.
     compileOnly(libs.libxposed.api)
     implementation(libs.libxposed.service)

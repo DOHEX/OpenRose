@@ -15,7 +15,7 @@
 
 ## 耳机型号与卡片上的操作
 
-OpenRose 当前向 MiLink 统一上报兼容型号 ID `01010607`。小米官方蓝牙资源包内的 `resource_record.xml` 将它列为 Xiaomi Buds 3 Pro。小米 14 安装的蓝牙扩展也将它归入 K73 型号组。资源表另列 Redmi Buds 3 Pro（`01010602`）和 Xiaomi Buds 4 Pro（`01011104`）等型号；本次仅核对这些记录，没有把 i5 切换到其他型号做对照实验。[OpenRose 兼容型号](../../androidIntegration/src/commonMain/kotlin/io/github/dohex/openrose/androidintegration/wire/NativeHeadsetSnapshot.kt) · [小米蓝牙资源包（ZIP）](https://cdn.cnbj1.fds.api.mi-img.com/miuibluetooth/fast_connect/00000000.zip)
+OpenRose 当前向 MiLink 统一上报兼容型号 ID `01010607`。小米官方蓝牙资源包内的 `resource_record.xml` 将它列为 Xiaomi Buds 3 Pro。小米 14 安装的蓝牙扩展也将它归入 K73 型号组。资源表另列 Redmi Buds 3 Pro（`01010602`）和 Xiaomi Buds 4 Pro（`01011104`）等型号；本次仅核对这些记录，没有把 i5 切换到其他型号做对照实验。[OpenRose 兼容型号](../../platform/android/integration/src/commonMain/kotlin/io/github/dohex/openrose/androidintegration/wire/NativeHeadsetSnapshot.kt) · [小米蓝牙资源包（ZIP）](https://cdn.cnbj1.fds.api.mi-img.com/miuibluetooth/fast_connect/00000000.zip)
 
 本机 MiLink 安装包的耳机卡片资源含降噪、空间音频和响铃查找。本次检索未发现独立的游戏或低延迟开关。REDMI Buds 6 的官方说明将游戏低延迟入口放在部分手机的蓝牙设置中。第三方模块 HyperEars 为 FitBuds Turbo 在保留降噪区的同时另加了游戏模式开关；原贡献者版本有实测，维护版布局待复核。这个先例能说明卡片可以按真实耳机能力扩展，不能证明仅更换型号 ID 就会出现游戏开关。[REDMI Buds 6 常见问题，第 32 问](https://www.mi.com/tw/support/faq/details/KA-512307/) · [HyperEars 的 FitBuds Turbo 卡片](https://github.com/silverpoetry/HyperEars/blob/91d6804af40fa749bb80608a30b5bd9369a96cee/system-module/src/main/java/dev/hyperears/hook/EdifierFitBudsTurboMiLinkCardAdapter.kt)
 
@@ -39,7 +39,7 @@ OpenRose 当前向 MiLink 统一上报兼容型号 ID `01010607`。小米官方�
 | Redmi Buds 5 Pro（N76） | 开／开 | 开／开 |
 | ROSE EarFree i5 | 未找到型号记录 | 未找到型号记录 |
 
-OpenRose 手机上报的兼容 ID 不改变真实 i5 在电脑上的型号和协议。OpenRose 对 i5 的原生控制使用 ROSE ZT 协议。本次还核对到电脑管家读写云端耳机记录的调用，这说明云同步参与设备记录管理；每次点按降噪经过哪条网络路径仍未知。[i5 型号配置](../../core/src/commonMain/kotlin/io/github/dohex/openrose/core/models/EarFreeI5.kt) · [小米智能蓝牙服务](https://developers.xiaoai.mi.com/voiceservice/Bluetooth/index)
+OpenRose 手机上报的兼容 ID 不改变真实 i5 在电脑上的型号和协议。OpenRose 对 i5 的原生控制使用 ROSE ZT 协议。本次还核对到电脑管家读写云端耳机记录的调用，这说明云同步参与设备记录管理；每次点按降噪经过哪条网络路径仍未知。[i5 型号配置](../../shared/headset/src/commonMain/kotlin/io/github/dohex/openrose/core/models/EarFreeI5.kt) · [小米智能蓝牙服务](https://developers.xiaoai.mi.com/voiceservice/Bluetooth/index)
 
 复查了两份 6.x 原厂发布物。`6.0.0.39` 来自 REDMI Book 16 2027 机型驱动包，与 `5.8.1.130` 的型号和能力表逐字段一致。`6.0.2.30` 的底层耳机库保留活动属性上报和远端模式处理函数，表中仍有 101 条身份记录、31 条能力配置。两个 6.x 版本都能定位电脑本机界面的降噪写入；由于外层互联组件经过重构，本次只在 5.8.1.130 追通了从收到跨设备消息到耳机写入的完整静态调用链。三个版本都没有 i5 型号记录，K73 和 N76 在上表中的四项取值也一致。[REDMI Book 16 2027 驱动](https://www.mi.com/service/notebook/drivers/TM2429) · [6.0.2.30 原厂安装包](https://cdn.cnbj1.fds.api.mi-img.com/ota-packages/ZOj6_XiaomiPCManager_hotfix_19_6.0.2.30_acb3c61c.exe)
 

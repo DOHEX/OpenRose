@@ -31,12 +31,16 @@ import io.github.dohex.openrose.core.PlatformApplicability
 import io.github.dohex.openrose.core.PlatformState
 import io.github.dohex.openrose.core.TransportAvailability
 import io.github.dohex.openrose.transport.bluez.BluezControlTransport
+import io.github.dohex.openrose.transport.bluez.linuxBluetoothSettingsCommand
 import io.github.dohex.openrose.transport.windows.WindowsControlTransport
+import io.github.dohex.openrose.transport.windows.windowsBluetoothSettingsCommand
 import io.github.dohex.openrose.ui.AppLogo
 import io.github.dohex.openrose.ui.Appearance
 import io.github.dohex.openrose.ui.LocalCirculationVisible
 import io.github.dohex.openrose.ui.OpenRoseApp
 import io.github.dohex.openrose.ui.PrimaryDeviceSelection
+import io.github.dohex.openrose.ui.desktop.DesktopPlatformUi
+import io.github.dohex.openrose.ui.desktop.TrayAvailability
 import io.github.dohex.openrose.ui.interfaceBackgroundColor
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -94,6 +98,8 @@ fun main(args: Array<String>) {
                     tray = tray.availability,
                     loginLaunch = loginLaunch,
                     circulation = circulation,
+                    openBluetoothSettings = bluetoothSettingsAction(hostPlatform),
+                    showQr = { PairingQr(it) },
                 )
             }
             // One choice for the 未连接看板 and the tray, so “重新连接” targets the device the window shows.
@@ -174,6 +180,7 @@ fun main(args: Array<String>) {
                         selection = selection,
                         uiScope = uiScope,
                         circulation = circulation,
+                        sound = runtime.sound,
                         onOpenApp = ::showWindow,
                         onExit = { exit(fromTray = true) },
                         onStarted = tray::trayStarted,
@@ -215,5 +222,21 @@ fun main(args: Array<String>) {
     } finally {
         owner?.let { runtime -> runBlocking { runtime.close() } }
         trayOwner?.close()
+    }
+}
+
+private fun bluetoothSettingsAction(platform: HostPlatform): (() -> Unit)? {
+    val command = when (platform) {
+        HostPlatform.LINUX -> linuxBluetoothSettingsCommand()
+        HostPlatform.WINDOWS -> windowsBluetoothSettingsCommand()
+        else -> null
+    } ?: return null
+    return {
+        runCatching {
+            ProcessBuilder(command)
+                .redirectOutput(ProcessBuilder.Redirect.DISCARD)
+                .redirectError(ProcessBuilder.Redirect.DISCARD)
+                .start()
+        }
     }
 }

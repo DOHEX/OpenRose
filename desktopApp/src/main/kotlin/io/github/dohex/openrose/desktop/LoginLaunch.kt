@@ -4,6 +4,8 @@ import dev.nucleusframework.autolaunch.AutoLaunch
 import dev.nucleusframework.autolaunch.AutoLaunchResult
 import dev.nucleusframework.autolaunch.AutoLaunchState
 import dev.nucleusframework.core.runtime.ExecutableRuntime
+import io.github.dohex.openrose.ui.desktop.LoginLaunchControl
+import io.github.dohex.openrose.ui.desktop.LoginLaunchState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -12,23 +14,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-
-/** “登录时启动” as the system records it; the app never keeps its own copy of this choice. */
-sealed interface LoginLaunchState {
-    data object Reading : LoginLaunchState
-    data class Ready(val enabled: Boolean) : LoginLaunchState
-
-    /** The user turned it off in system settings; only they can turn it back on there. */
-    data object DisabledByUser : LoginLaunchState
-    data class Unsupported(val reason: String) : LoginLaunchState
-}
-
-/** “登录时启动” as the system records it, and the two things the user can do about it. */
-interface LoginLaunchControl {
-    val state: StateFlow<LoginLaunchState>
-    fun set(enabled: Boolean)
-    fun openSystemSettings()
-}
 
 /** Reads and changes start-at-login off the UI thread; the backend may run subprocesses. */
 internal class LoginLaunch(private val scope: CoroutineScope) : LoginLaunchControl {

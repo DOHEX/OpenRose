@@ -4,11 +4,11 @@ plugins {
     alias(libs.plugins.openrose.desktop.application)
 }
 dependencies {
-    implementation(projects.sharedUI)
+    implementation(projects.shared.ui)
     implementation(libs.zxing.core)
-    implementation(projects.transportBluez)
-    implementation(projects.transportWindows)
-    implementation(projects.circulation)
+    implementation(projects.platform.linux)
+    implementation(projects.platform.windows)
+    implementation(projects.shared.circulationLan)
     implementation(libs.jmdns)
     implementation(compose.desktop.currentOs)
     implementation(libs.nucleus.application)

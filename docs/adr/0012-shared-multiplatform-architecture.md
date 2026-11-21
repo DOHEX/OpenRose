@@ -4,6 +4,8 @@ status: accepted
 
 # 多端共享架构：控制领域核心、Android 集成分离与共享 GATT 层
 
+现行模块路径及共享流转接口见 [ADR 0020](0020-client-and-platform-modules.md)。下文的模块名与命令按决策当时的工程布局记录。
+
 [ADR 0002](0002-shared-kotlin-core-and-platform-adapters.md) 确立了 Kotlin 共享核心，但桌面端此前只有界面：没有平台传输，界面回调由各入口各自转发，桌面端多数为空实现。`core` 同时承载 Android 的所有者交接、模块宿主与 IPC、系统呈现与连接提示、融合设备中心映射及后台控制，共享界面也按 `HostPlatform.ANDROID` 分支。为让各平台接入同一控制闭环、不按平台重复逻辑，按领域重新划分模块。应用尚未发布，设置键与 IPC 不保留兼容。
 
 ## 决策

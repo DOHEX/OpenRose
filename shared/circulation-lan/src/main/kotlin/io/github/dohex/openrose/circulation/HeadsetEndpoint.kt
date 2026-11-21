@@ -1,0 +1,79 @@
+package io.github.dohex.openrose.circulation
+
+import io.github.dohex.openrose.core.ConnectionPhase
+import io.github.dohex.openrose.core.ConnectionState
+import io.github.dohex.openrose.core.ControlRuntime
+import io.github.dohex.openrose.core.ControlState
+import io.github.dohex.openrose.core.HeadsetCommand
+import io.github.dohex.openrose.core.NoiseMode
+import io.github.dohex.openrose.core.OperationResult
+import io.github.dohex.openrose.core.SessionReference
+import io.github.dohex.openrose.core.protocol.DeviceField
+import io.github.dohex.openrose.core.protocol.FieldValue
+import kotlinx.coroutines.runBlocking
+import java.util.UUID
+
+/** A paired peer can adjust an i5 once this audio source has confirmed its noise mode. */
+class HeadsetEndpoint(private val control: ControlRuntime, private val ownerActive: () -> Boolean = { true }) {
+    private val incarnation = UUID.randomUUID().toString()
+
+    internal fun handle(message: Map<String, String>): Map<String, String> {
+        if (!ownerActive()) return mapOf("error" to "控制所有者已结束")
+        return when (message["op"]) {
+            "read" -> read(control.state.value)
+            "noise" -> noise(message)
+            else -> mapOf("error" to "未知的耳机操作")
+        }
+    }
+
+    private fun heldSession(state: ControlState): SessionReference? {
+        if (!supportsCirculation(state.device?.profile) || !state.deviceHasSystemAudio) return null
+        return state.noiseModeSession
+    }
+
+    private fun noise(message: Map<String, String>): Map<String, String> {
+        val state = control.state.value
+        val session = heldSession(state)
+        val mode = message["mode"]?.let(NoiseMode::fromId)
+        if (session == null || message["device"] != session.deviceId.value || message["session"] != token(session)) return expired()
+        if (mode == null || mode.id !in state.device?.capabilities?.noiseControl?.modes.orEmpty()) {
+            return mapOf("error" to "耳机不支持该降噪模式")
+        }
+        val result = runBlocking { control.set(HeadsetCommand.NoiseMode(mode), expectedSessionId = session.sessionId) }
+        if (result is OperationResult.Failure) return mapOf("error" to "耳机未确认 · ${result.error.message}")
+        val current = control.state.value
+        if (heldSession(current) != session) return expired()
+        return read(current)
+    }
+
+    private fun expired() = mapOf("error" to "耳机会话已结束，请重新读取")
+
+    private fun token(session: SessionReference) = "$incarnation/${session.sessionId}"
+
+    private fun audioOnly(state: ControlState): Map<String, String> {
+        val id = state.audioDeviceId ?: return mapOf("status" to "idle")
+        val candidates = listOfNotNull(state.connectionTarget) + state.bondedDevices + state.candidates
+        val held = candidates.firstOrNull {
+            supportsCirculation(it.profile) && it.matchesAudioDevice(id)
+        }
+        return held?.profile?.let { mapOf("status" to "recovering", "deviceName" to it.displayName) } ?: mapOf("status" to "idle")
+    }
+
+    private fun read(state: ControlState): Map<String, String> {
+        val session = heldSession(state) ?: return audioOnly(state)
+        val device = requireNotNull(state.device)
+        return buildMap {
+            val ready = (state.connection as? ConnectionState.Connected)?.phase == ConnectionPhase.READY
+            put("status", if (ready) "ready" else "initializing")
+            put("device", device.deviceId.value)
+            put("deviceName", device.profile.displayName)
+            put("session", token(session))
+            val parts = mapOf("left" to DeviceField.LEFT_BATTERY, "right" to DeviceField.RIGHT_BATTERY, "case" to DeviceField.CASE_BATTERY)
+            parts.forEach { (name, field) ->
+                (device.knownValue(field) as? FieldValue.Number)?.value?.takeIf { it in 0..100 }?.let { put(name, it.toString()) }
+            }
+            (device.knownValue(DeviceField.NOISE_MODE) as? FieldValue.Text)?.value?.let { put("mode", it) }
+            device.capabilities.noiseControl?.modes?.let { put("modes", it.joinToString(",")) }
+        }
+    }
+}

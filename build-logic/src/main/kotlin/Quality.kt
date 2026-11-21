@@ -14,7 +14,8 @@ internal fun Project.configureQuality() {
         parallel.set(true)
         source.setFrom(layout.projectDirectory.dir("src"))
         config.setFrom(rootDir.resolve("config/detekt/detekt.yml"))
-        baseline.set(rootDir.resolve("config/detekt/baseline/$name.xml"))
+        val module = path.removePrefix(":").replace(':', '-')
+        baseline.set(rootDir.resolve("config/detekt/baseline/$module.xml"))
     }
     pluginManager.apply("org.jetbrains.kotlinx.kover")
 }

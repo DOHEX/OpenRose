@@ -19,6 +19,7 @@ import io.github.dohex.openrose.androidintegration.LocalOwnerIdentity
 import io.github.dohex.openrose.androidintegration.SwitchingControlRuntime
 import io.github.dohex.openrose.androidintegration.backgroundControl
 import io.github.dohex.openrose.androidintegration.mayStartBackgroundService
+import io.github.dohex.openrose.circulation.CirculationClient
 import io.github.dohex.openrose.core.LocalControlRuntime
 import io.github.dohex.openrose.core.OperationResult
 import io.github.dohex.openrose.core.UserSettings
@@ -27,7 +28,6 @@ import io.github.dohex.openrose.framework.FrameworkLink
 import io.github.dohex.openrose.framework.ModuleHostBinderLink
 import io.github.dohex.openrose.platform.AndroidControlTransport
 import io.github.dohex.openrose.platform.readPlatformState
-import io.github.dohex.openrose.ui.CirculationClient
 import io.github.dohex.openrose.ui.UiSettings
 import io.github.dohex.openrose.ui.model.OpenRoseSettingsStore
 import io.github.dohex.openrose.ui.model.RuntimeOpenRoseModel

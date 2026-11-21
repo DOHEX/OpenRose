@@ -34,6 +34,11 @@ import io.github.dohex.openrose.androidintegration.wire.render
 import io.github.dohex.openrose.bridge.BridgeBundles
 import io.github.dohex.openrose.bridge.IControlBridge
 import io.github.dohex.openrose.bridge.IControlFrames
+import io.github.dohex.openrose.bridge.circulationReply
+import io.github.dohex.openrose.bridge.toBundle
+import io.github.dohex.openrose.circulation.CirculationCommand
+import io.github.dohex.openrose.circulation.CirculationFailure
+import io.github.dohex.openrose.circulation.CirculationReply
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Deferred
@@ -59,9 +64,9 @@ class ModuleHostBinderLink(
 
     private val connection = AtomicReference<BinderConnection?>()
 
-    suspend fun circulation(fields: Map<String, String>): Map<String, String> {
-        val active = connection.get() ?: return mapOf("error" to "模块控制尚未就绪")
-        return active.circulation(fields)
+    suspend fun circulation(command: CirculationCommand): CirculationReply {
+        val active = connection.get() ?: return CirculationFailure("模块控制尚未就绪")
+        return active.circulation(command)
     }
 
     override suspend fun open(): LinkOpenResult {
@@ -141,6 +146,9 @@ class ModuleHostBinderLink(
         if (status == BridgeWire.STATUS_UNAUTHORIZED) {
             return LinkOpenResult.Failed(OwnerFailureStage.AUTHORIZATION, opened.getString(BridgeWire.MESSAGE) ?: "宿主拒绝了此调用者")
         }
+        if (status == BridgeWire.STATUS_UNSUPPORTED_VERSION) {
+            return LinkOpenResult.Failed(OwnerFailureStage.CONNECTION, "应用与模块宿主版本不匹配，请重启系统集成作用域以加载当前模块")
+        }
         if (status == BridgeWire.STATUS_UNAVAILABLE) {
             // A reloaded or stopped host instance still answers on its old Binder; rebind to find the new one.
             return LinkOpenResult.Failed(OwnerFailureStage.CONNECTION, opened.getString(BridgeWire.MESSAGE) ?: "宿主暂不可用，等待重新发现")
@@ -209,15 +217,15 @@ class ModuleHostBinderLink(
             }
         }
 
-        suspend fun circulation(fields: Map<String, String>): Map<String, String> {
-            val active = status() as? HostStatus.Active ?: return mapOf("error" to "模块控制尚未就绪")
+        suspend fun circulation(command: CirculationCommand): CirculationReply {
+            val active = status() as? HostStatus.Active ?: return CirculationFailure("模块控制尚未就绪")
             val query = request().apply {
                 putString(BridgeWire.HOST_EPOCH, active.generation.toString())
-                putBundle(BridgeWire.PAYLOAD, Bundle().apply { fields.forEach { (key, value) -> putString(key, value) } })
+                putBundle(BridgeWire.PAYLOAD, command.toBundle())
             }
             val reply = calls.run { bridge.circulation(query) }
-            val data = reply.getBundle(BridgeWire.PAYLOAD) ?: return mapOf("error" to (reply.getString(BridgeWire.MESSAGE) ?: "互联服务不可用"))
-            return data.keySet().associateWith { data.getString(it).orEmpty() }
+            val data = reply.getBundle(BridgeWire.PAYLOAD) ?: return CirculationFailure(reply.getString(BridgeWire.MESSAGE) ?: "互联服务不可用")
+            return data.circulationReply(command)
         }
 
         override suspend fun status(): HostStatus = call({ bridge.ownerStatus(request()) }, HostWire::decodeStatus)

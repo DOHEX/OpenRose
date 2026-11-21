@@ -41,17 +41,18 @@ spotless {
 // One coverage report over every module's JVM tests. Floors sit just under the coverage measured when they
 // were set (total 56.8% of lines); raise them as coverage grows, never lower them to pass.
 dependencies {
-    kover(projects.core)
-    kover(projects.androidIntegration)
-    kover(projects.sharedUI)
-    kover(projects.androidIntegrationUI)
-    kover(projects.androidPlatform)
-    kover(projects.androidModule)
+    kover(projects.shared.headset)
+    kover(projects.platform.android.integration)
+    kover(projects.shared.ui)
+    kover(projects.platform.android.ui)
+    kover(projects.platform.android.bluetoothIpc)
+    kover(projects.platform.android.systemModule)
     kover(projects.androidApp)
     kover(projects.desktopApp)
-    kover(projects.transportBluez)
-    kover(projects.transportWindows)
-    kover(projects.circulation)
+    kover(projects.platform.linux)
+    kover(projects.platform.windows)
+    kover(projects.shared.circulationLan)
+    kover(projects.shared.circulation)
 }
 kover {
     reports {
@@ -64,12 +65,13 @@ tasks.register("offlineCheck") {
     group = "verification"
     description = "Run hardware-independent checks (add --offline after dependencies are cached)."
     dependsOn(
-        ":core:jvmTest", ":androidIntegration:jvmTest", ":sharedUI:jvmTest", ":androidIntegrationUI:jvmTest",
-        ":desktopApp:test", ":androidPlatform:testDebugUnitTest", ":androidModule:testDebugUnitTest",
-        ":androidApp:testDebugUnitTest", ":transportBluez:test", ":transportWindows:test", ":circulation:test",
-        ":desktopApp:compileKotlin", ":androidModule:compileDebugKotlin", ":androidApp:compileDebugKotlin", ":uiSandbox:compileKotlin",
+        ":shared:headset:jvmTest", ":platform:android:integration:jvmTest", ":shared:ui:jvmTest", ":platform:android:ui:jvmTest",
+        ":desktopApp:test", ":platform:android:bluetooth-ipc:testDebugUnitTest", ":platform:android:system-module:testDebugUnitTest",
+        ":androidApp:testDebugUnitTest", ":platform:linux:test", ":platform:windows:test", ":shared:circulation-lan:test",
+        ":shared:circulation:jvmTest", ":tools:ui-sandbox:test", ":tools:ui-test-support:test",
+        ":desktopApp:compileKotlin", ":platform:android:system-module:compileDebugKotlin", ":androidApp:compileDebugKotlin", ":tools:ui-sandbox:compileKotlin",
         ":androidApp:lintDebug", "spotlessCheck",
-        "koverVerify", ":core:koverVerify", ":androidIntegration:koverVerify",
+        "koverVerify", ":shared:headset:koverVerify", ":platform:android:integration:koverVerify",
     )
-    dependsOn(subprojects.map { "${it.path}:detekt" }, "checkDetektBaseline")
+    dependsOn(subprojects.filter { it.childProjects.isEmpty() }.map { "${it.path}:detekt" }, "checkDetektBaseline")
 }

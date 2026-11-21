@@ -31,10 +31,10 @@ import dev.nucleusframework.composenativetray.trayapp.TrayApp
 import dev.nucleusframework.composenativetray.trayapp.rememberTrayAppState
 import dev.nucleusframework.core.runtime.LinuxDesktopEnvironment
 import dev.nucleusframework.core.runtime.Platform
-import io.github.dohex.openrose.core.DeviceSetting
-import io.github.dohex.openrose.core.protocol.FieldValue
+import io.github.dohex.openrose.circulation.CirculationClient
+import io.github.dohex.openrose.core.HeadsetCommand
 import io.github.dohex.openrose.ui.AppLogo
-import io.github.dohex.openrose.ui.CirculationClient
+import io.github.dohex.openrose.ui.DesktopSoundActions
 import io.github.dohex.openrose.ui.LocalCirculationVisible
 import io.github.dohex.openrose.ui.PrimaryDeviceSelection
 import io.github.dohex.openrose.ui.RemoteHeadset
@@ -52,6 +52,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import io.github.dohex.openrose.core.NoiseMode as HeadsetNoiseMode
 
 /** The panel's width, and its height until the content is measured; the host then fits the height to the content. */
 private val trayPanelSize = DpSize(360.dp, 440.dp)
@@ -95,6 +96,7 @@ internal fun NucleusApplicationScope.DesktopTray(
     selection: PrimaryDeviceSelection,
     uiScope: CoroutineScope,
     circulation: CirculationClient,
+    sound: DesktopSoundActions?,
     onOpenApp: () -> Unit,
     onExit: () -> Unit,
     onStarted: () -> Unit,
@@ -138,7 +140,7 @@ internal fun NucleusApplicationScope.DesktopTray(
             })
 
             is TrayMenuEntry.NoiseMode -> entry.copy(onSelect = {
-                if (sessionId != null) uiScope.launch { model.set(sessionId, DeviceSetting.NOISE_MODE, FieldValue.Text(entry.mode)) }
+                if (sessionId != null) uiScope.launch { model.set(sessionId, HeadsetCommand.NoiseMode(entry.mode)) }
             })
 
             is TrayMenuEntry.Label -> if (remoteSource != null && entry.text == summary.title) {
@@ -171,6 +173,7 @@ internal fun NucleusApplicationScope.DesktopTray(
                             openApp(it)
                         },
                         circulation = circulation,
+                        sound = sound,
                         remoteHeadsets = peers,
                         onContentHeight = { trayState.setWindowSize(DpSize(trayPanelSize.width, it)) },
                     )
@@ -193,6 +196,7 @@ internal fun NucleusApplicationScope.DesktopTray(
                     model = model,
                     selection = selection,
                     circulation = circulation,
+                    sound = sound,
                     peers = peers,
                     onDismiss = { panelOpen = false },
                     onOpenApp = {
@@ -219,6 +223,7 @@ private fun NucleusApplicationScope.TrayPanelWindow(
     model: OpenRoseModel,
     selection: PrimaryDeviceSelection,
     circulation: CirculationClient,
+    sound: DesktopSoundActions?,
     peers: List<RemoteHeadset>,
     onDismiss: () -> Unit,
     onOpenApp: (WindowDestination?) -> Unit,
@@ -270,6 +275,7 @@ private fun NucleusApplicationScope.TrayPanelWindow(
                 selection,
                 onOpenApp,
                 circulation = circulation,
+                sound = sound,
                 remoteHeadsets = peers,
                 onContentHeight = { windowState.size = DpSize(trayPanelSize.width, it) },
             )
@@ -284,7 +290,7 @@ internal sealed interface TrayMenuEntry {
     data class Label(val text: String) : TrayMenuEntry
     data object Separator : TrayMenuEntry
     data class NoiseMode(
-        val mode: String,
+        val mode: HeadsetNoiseMode,
         val label: String,
         val selected: Boolean,
         val enabled: Boolean,
@@ -302,7 +308,7 @@ private fun remoteMenuEntries(peers: List<RemoteHeadset>, uiScope: CoroutineScop
             peer.statusLabel?.let { add(TrayMenuEntry.Label(it)) }
             add(TrayMenuEntry.Label(remoteBatteryText(reading)))
             reading.modes.forEach { mode ->
-                val entry = TrayMenuEntry.NoiseMode(mode, noiseModeLabel(mode), mode == reading.mode, !peer.busy) {
+                val entry = TrayMenuEntry.NoiseMode(mode, noiseModeLabel(mode.id), mode == reading.mode, !peer.busy) {
                     uiScope.launch { peer.selectMode(mode) }
                 }
                 add(entry)

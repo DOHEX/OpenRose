@@ -22,19 +22,19 @@ OpenRose 按协议族复用编解码，由各型号 `ModelSpec` 声明差异。O
 
 | 内容 | 位置 |
 | --- | --- |
-| 型号配置（识别、传输、电量布局、按固件推导的能力） | `core/.../models/` 中每款型号的独立文件；字段定义在 `models/ModelSpec.kt` |
-| 型号在协议族内的差异 | `core/.../models/ModelProtocol.kt` 的 `Zt`、`F8`、`RsCommon`、`RsCommonV2` 分别保存本族的初始化与编码选项 |
-| 型号入口、协议族、广播识别、名称匹配 | `core/.../protocol/ModelProfile.kt` |
-| 字段模型与编解码接口 | `core/.../protocol/ProtocolCodec.kt` |
-| ZT 编解码（i5 / i3 / HeadFeel） | `core/.../protocol/ZtCodec.kt` |
-| RS Common V2 编解码（3.8.6 共 31 个配置，另保留 Magician） | `core/.../protocol/RsCommonV2Codec.kt` |
-| F8 编解码（AGATE / AGATE X / CERAMICS / CERAMICS-X / 7034 / EXPLORER） | `core/.../protocol/F8Codec.kt` |
-| RS Common 编解码（BudsFree i / Cambrian / OpenFeel / OpenFun / SportFeel / SWIFT） | `core/.../protocol/RsCommonCodec.kt` |
-| 能力类型（降噪、EQ、触控、音频等） | `core/.../NoiseControl.kt`、`EqualizerCapabilities.kt`、`DeviceControlCapabilities.kt` |
-| 控制会话（发送队列、设置确认、连接生命周期） | `core/.../ControlSession.kt` |
+| 型号配置（识别、传输、电量布局、按固件推导的能力） | `shared/headset/.../models/` 中每款型号的独立文件；字段定义在 `models/ModelSpec.kt` |
+| 型号在协议族内的差异 | `shared/headset/.../models/ModelProtocol.kt` 的 `Zt`、`F8`、`RsCommon`、`RsCommonV2` 分别保存本族的初始化与编码选项 |
+| 型号入口、协议族、广播识别、名称匹配 | `shared/headset/.../protocol/ModelProfile.kt` |
+| 字段模型与编解码接口 | `shared/headset/.../protocol/ProtocolCodec.kt` |
+| ZT 编解码（i5 / i3 / HeadFeel） | `shared/headset/.../protocol/ZtCodec.kt` |
+| RS Common V2 编解码（3.8.6 共 31 个配置，另保留 Magician） | `shared/headset/.../protocol/RsCommonV2Codec.kt` |
+| F8 编解码（AGATE / AGATE X / CERAMICS / CERAMICS-X / 7034 / EXPLORER） | `shared/headset/.../protocol/F8Codec.kt` |
+| RS Common 编解码（BudsFree i / Cambrian / OpenFeel / OpenFun / SportFeel / SWIFT） | `shared/headset/.../protocol/RsCommonCodec.kt` |
+| 能力类型（降噪、EQ、触控、音频等） | `shared/headset/.../NoiseControl.kt`、`EqualizerCapabilities.kt`、`DeviceControlCapabilities.kt` |
+| 控制会话（发送队列、设置确认、连接生命周期） | `shared/headset/.../ControlSession.kt` |
 | Android BLE / SPP 传输、音频 profile 查询 | `androidApp/.../AndroidBleTransport.kt`、`AndroidSppConnection.kt`、`AndroidAudioProfiles.kt` |
 
-`core/...` 即 `core/src/commonMain/kotlin/io/github/dohex/openrose/core`。编解码器是纯 Kotlin 对象，只负责识别、构帧和解析；扫描、GATT、订阅和串行写入由平台传输层负责。OpenRose 不提供 OTA 入口。
+`shared/headset/...` 即 `shared/headset/src/commonMain/kotlin/io/github/dohex/openrose/core`。编解码器是纯 Kotlin 对象，只负责识别、构帧和解析；扫描、GATT、订阅和串行写入由平台传输层负责。OpenRose 不提供 OTA 入口。
 
 每个 `ModelSpec` 选择一种 `ModelProtocol`。`createProtocolCodec` 将这份配置交给对应的编解码器。例如，F8 的标准降噪码写在 `F8.noiseNormalWire`，RS Common V2 的有序查询字段写在 `RsCommonV2.infoIds`。跨进程与持久化继续使用 `ModelProfile.name`。
 
@@ -504,7 +504,7 @@ Android 上通过公开 API 查询 A2DP、HEADSET，以及 API 33+ 的 LE Audio 
 
 ## 测试覆盖
 
-测试位于 `core/src/commonTest/kotlin/io/github/dohex/openrose/core/protocol/`。预期发送报文都取自独立提取的数据，测试不调用 OpenRose 自己的构帧代码来生成预期值。
+测试位于 `shared/headset/src/commonTest/kotlin/io/github/dohex/openrose/core/protocol/`。预期发送报文都取自独立提取的数据，测试不调用 OpenRose 自己的构帧代码来生成预期值。
 
 | 测试 | 覆盖内容 |
 | --- | --- |
@@ -514,7 +514,7 @@ Android 上通过公开 API 查询 A2DP、HEADSET，以及 API 33+ 的 LE Audio 
 | `DeviceControlProtocolTest` | 八个触控槽位地址、两型号全部动作码和所有槽位 / 动作组合；单槽期望值；全部音频选项；i5 音频 / 多点联动；开关极性；提示音档位；初始化、触控、检测、音频共用 i7 序号 |
 | `AdvancedAudioProtocolTest` | i7 自定义 EQ 的两条写入与 `FA2A` / `FA3E` 回读；`45` / `46` / `2E` 各值；整条计划无效时不分配序号；固件门槛；接收时保留原始数据 |
 
-会话层的行为（设置确认、断开清理、通道选择等）在 `core/src/commonTest/.../core/ControlSession*Test.kt` 中测试。
+会话层的行为（设置确认、断开清理、通道选择等）在 `shared/headset/src/commonTest/.../core/ControlSession*Test.kt` 中测试。
 
 ### 测试数据的来源
 

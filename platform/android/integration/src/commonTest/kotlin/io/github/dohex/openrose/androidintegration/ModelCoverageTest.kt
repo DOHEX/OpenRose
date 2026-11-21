@@ -1,0 +1,62 @@
+package io.github.dohex.openrose.androidintegration
+
+import io.github.dohex.openrose.core.HeadsetCommand
+import io.github.dohex.openrose.core.LocalControlRuntime
+import io.github.dohex.openrose.core.OperationResult
+import io.github.dohex.openrose.core.PermissionState
+import io.github.dohex.openrose.core.PlatformState
+import io.github.dohex.openrose.core.SessionTiming
+import io.github.dohex.openrose.core.TransportAvailability
+import io.github.dohex.openrose.core.protocol.BatteryLayout
+import io.github.dohex.openrose.core.protocol.DeviceField
+import io.github.dohex.openrose.core.protocol.FieldReading
+import io.github.dohex.openrose.core.protocol.ModelProfile
+import io.github.dohex.openrose.core.protocol.ProtocolFamily
+import io.github.dohex.openrose.core.transport.ControlTransport
+import io.github.dohex.openrose.core.transport.DeviceId
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.test.runTest
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertIs
+import kotlin.test.assertNotNull
+import kotlin.test.assertTrue
+
+@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+class ModelCoverageTest {
+    @Test
+    fun catalogAdvertisementsReachAReadyControlSessionWithTheDocumentedBatteryLayout() = runTest {
+        for (profile in ModelProfile.entries) {
+            val id = DeviceId(profile.name)
+            val transport = HeadsetTransport("client", SharedHeadset(), profile)
+            val runtime = LocalControlRuntime(
+                PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
+                transport = object : ControlTransport by transport {
+                    override fun scan() = flowOf(roseAdvertisement(profile, id))
+                },
+                scope = backgroundScope,
+                timing = SessionTiming(queryTimeoutMillis = 25, writeIntervalMillis = 0),
+            )
+            runtime.startScan()
+            runCurrent()
+            assertEquals(OperationResult.Success, runtime.connectForAddDevice(id), profile.name)
+            val device = assertNotNull(runtime.state.value.device)
+            assertEquals(profile, device.profile)
+            val battery = if (profile.batteryLayout == BatteryLayout.SINGLE_UNIT) DeviceField.CASE_BATTERY else DeviceField.LEFT_BATTERY
+            assertIs<FieldReading.Known>(device.diagnostics.fields[battery], profile.name)
+            if (profile.family == ProtocolFamily.RS_COMMON_V2) {
+                // The synthetic getInfo and FA 0E notifications both report game mode off.
+                assertEquals(OperationResult.Success, runtime.set(HeadsetCommand.GameMode(false)), profile.name)
+                val commands = transport.links.single().writes.map { it.substring(6, 10) }
+                val expected = if (profile in setOf(ModelProfile.FIRST_ANGEL_RS_V2, ModelProfile.MOKA_RS_V2)) {
+                    listOf("0e00", "fa0e", "fa2a")
+                } else {
+                    listOf("0e00", "fa0e")
+                }
+                assertEquals(expected, commands.takeLast(expected.size), profile.name)
+            }
+            assertTrue(runtime.release(), profile.name)
+        }
+    }
+}

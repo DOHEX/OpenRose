@@ -4,6 +4,8 @@ status: accepted
 
 # Android 端按运行进程拆分：模块、平台适配与应用
 
+现行模块路径及共享流转接口见 [ADR 0020](0020-client-and-platform-modules.md)。下文的模块名与命令按决策当时的工程布局记录。
+
 [ADR 0012](0012-shared-multiplatform-architecture.md) 把全部 Android API 胶水放在 `:androidApp`。同一 APK 里的代码却运行在两类进程：模块的代码由 LSPosed 加载进作用域内的系统进程（`com.android.bluetooth`、`com.xiaomi.bluetooth`、`com.milink.service`），其余代码在 OpenRose 应用进程。`:androidApp` 依赖共享界面与 Compose，模块代码引用界面、`Application` 或应用组件都能编译通过，要到系统进程加载时才出错；两侧边界只靠包名约定。`androidApp` 中的 `integration` 包还与 `:androidIntegration` 同名，含义相混。
 
 ## 决策

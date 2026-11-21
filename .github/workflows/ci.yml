@@ -122,7 +122,7 @@ jobs:
 
       - name: Test the native WinRT helper
         if: runner.os == 'Windows'
-        run: cargo test --locked --manifest-path transportWindows/native/Cargo.toml
+        run: cargo test --locked --manifest-path platform/windows/native/Cargo.toml
 
       - name: Build Windows installer
         if: runner.os == 'Windows'
@@ -134,8 +134,8 @@ jobs:
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
-          git diff --name-only "$BASE_SHA" HEAD -- androidApp androidPlatform androidIntegration androidIntegrationUI androidModule \
-            sharedUI core circulation build-logic gradle build.gradle.kts settings.gradle.kts gradle.properties .github/workflows/ci.yml \
+          git diff --name-only "$BASE_SHA" HEAD -- androidApp platform/android shared \
+            build-logic gradle build.gradle.kts settings.gradle.kts gradle.properties .github/workflows/ci.yml \
             > "$RUNNER_TEMP/android-inputs.txt"
           if [[ -s "$RUNNER_TEMP/android-inputs.txt" ]]; then echo 'required=true' >> "$GITHUB_OUTPUT"; fi
 

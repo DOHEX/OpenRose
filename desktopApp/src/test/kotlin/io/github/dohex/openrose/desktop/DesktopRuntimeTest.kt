@@ -9,6 +9,7 @@ import io.github.dohex.openrose.ui.BottomBarStyle
 import io.github.dohex.openrose.ui.InterfaceStyle
 import io.github.dohex.openrose.ui.PageTransition
 import io.github.dohex.openrose.ui.UiSettings
+import io.github.dohex.openrose.ui.desktop.DesktopSettings
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
@@ -27,11 +28,6 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class DesktopRuntimeTest {
-    @Test
-    fun windowsOffersTheSystemBluetoothSettingsPage() {
-        assertEquals(listOf("explorer.exe", "ms-settings:bluetooth"), bluetoothSettingsCommand("Windows 11"))
-    }
-
     @Test
     fun controlAndAppearanceSurviveRebuildingTheRuntime() = runTest {
         val path = "io/github/dohex/openrose/test/${UUID.randomUUID()}"

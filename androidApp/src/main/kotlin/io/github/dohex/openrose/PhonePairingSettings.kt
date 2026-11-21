@@ -4,7 +4,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.runtime.Composable
 import com.journeyapps.barcodescanner.ScanContract
 import com.journeyapps.barcodescanner.ScanOptions
-import io.github.dohex.openrose.ui.CirculationClient
+import io.github.dohex.openrose.circulation.CirculationClient
 import io.github.dohex.openrose.ui.CirculationSettings
 
 @Composable

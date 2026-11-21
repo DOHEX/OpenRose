@@ -21,7 +21,7 @@
       </option>
       <option name="taskNames">
         <list>
-          <option value=":uiSandbox:run" />
+          <option value=":tools:ui-sandbox:run" />
         </list>
       </option>
       <option name="vmOptions" />

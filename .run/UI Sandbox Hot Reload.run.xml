@@ -10,7 +10,7 @@
       </option>
       <option name="taskNames">
         <list>
-          <option value=":uiSandbox:hotRun" />
+          <option value=":tools:ui-sandbox:hotRun" />
           <option value="--autoReload" />
         </list>
       </option>

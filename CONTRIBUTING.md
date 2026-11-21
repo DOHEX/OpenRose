@@ -31,42 +31,44 @@ cd OpenRose
 
 ## 模块结构
 
-模块列表见 `settings.gradle.kts`，职责划分的依据是 [ADR 0012](docs/adr/0012-shared-multiplatform-architecture.md)。
+两个应用入口在根目录，通用能力在 `shared/`，操作系统适配在 `platform/`，开发工具在 `tools/`。[模块清单](settings.gradle.kts) · [架构决策](docs/adr/0020-client-and-platform-modules.md)
 
 | 模块 | 职责 |
 | --- | --- |
-| `:core` | 型号与能力、协议、控制会话、控制入口（`ControlRuntime`）、共享 GATT 层、已配对设备与音频连接推断、控制设置；不含 Android 概念 |
-| `:androidIntegration` | Android 集成逻辑（控制方式与所有者交接、模块宿主与 IPC、系统呈现、融合设备中心映射、后台控制）；纯 Kotlin，在 JVM 上测试 |
-| `:sharedUI` | 共享界面、表现层模型、平台插槽、Miuix / Material 3 组件与外观设置 |
-| `:androidIntegrationUI` | Android 专属界面段落 |
-| `:androidPlatform` | 应用与模块两类进程共用的 Android 适配：GATT / SPP 驱动与音频连接事实、平台事实读取、模块宿主 IPC（AIDL 与 Bundle 编码）；不依赖界面与 libxposed |
-| `:androidModule` | 模块：LSPosed 载入作用域进程的代码（模块入口、模块宿主运行时与端点、原生耳机适配、系统呈现渲染、`META-INF/xposed`）；看不到应用与共享界面 |
-| `:androidApp` | Android 应用入口：Activity、服务与唤醒、设置存储、与 LSPosed 框架和模块宿主的连接；仅在运行时依赖 `:androidModule`，打进同一 APK（见 ADR 0018） |
-| `:desktopApp` | Windows / Linux 桌面入口：窗口、托盘与偏好设置，并装配运行时 |
-| `:circulation` | 手机与电脑间的局域网流转配对、双向认证、远端耳机控制与手动流转 |
-| `:transportWindows` | Windows 平台驱动：WinRT BLE 与 Core Audio 音频端点，使用 Rust 构建本机组件 |
-| `:transportBluez` | Linux 平台驱动：BlueZ D-Bus GATT 原语、扫描、配对设备与音频事实 |
-| `:uiSandbox` | 开发用界面沙盒，不打包、不发布：在假状态上运行共享界面、各平台段落与托盘面板（见下文“界面调试”）。只有它同时依赖 `:desktopApp` 与 `:androidIntegrationUI`，桌面运行时依赖图仍不含 Android 集成模块 |
-| `build-logic/` | 各模块共用的 Gradle 约定插件（独立的 included build） |
+| `:androidApp` | Android 应用进程、Activity、服务、权限与组装。运行时将系统模块装入同一个 APK |
+| `:desktopApp` | Linux 和 Windows 共用的桌面入口、窗口、原生托盘、登录启动与打包 |
+| `:shared:headset` | 型号、协议、共享 GATT、控制连接与设置确认。调用方通过同一个控制入口提交耳机命令 |
+| `:shared:ui` | 共享页面、快捷面板、托盘面板和外观。桌面展示段落在 `jvmMain`，由应用或沙盒提供平台动作 |
+| `:shared:circulation` | 跨端流转契约、型号资格、配对与远端会话引用 |
+| `:shared:circulation-lan` | 局域网发现、配对认证、网络收发、流转与远端控制的 JVM 实现 |
+| `:platform:android:integration` | 普通／模块控制与所有者交接、系统入口及呈现规则，在 JVM 上测试 |
+| `:platform:android:bluetooth-ipc` | 应用与模块共用的 Android 蓝牙驱动、音频连接事实、AIDL 与 Binder 编解码 |
+| `:platform:android:system-module` | LSPosed 在作用域进程内加载的模块、模块宿主、耳机系统集成和手机流转端点 |
+| `:platform:android:ui` | 手机与 JVM 沙盒共用的 Android 设置、状态和诊断界面段落 |
+| `:platform:linux` | BlueZ D-Bus 驱动、音频接入与让出、桌面声音设置 |
+| `:platform:windows` | WinRT BLE、Core Audio 系统操作以及 Rust 原生助手 |
+| `:tools:ui-sandbox` | 使用合成状态预览真实的 Android 和桌面界面 |
+| `:tools:ui-test-support` | 界面测试共用的假模型、场景与操作 |
+| `build-logic/` | Gradle 约定插件（独立 included build） |
 
 ## 新增型号
 
-每个型号配置是 `core/.../models/` 下的一个文件（`core/...` 即 `core/src/commonMain/kotlin/io/github/dohex/openrose/core`），集中声明识别前缀、名称规则、协议族、控制传输、电量布局、EQ 预设名称，以及按固件推导的型号能力。新增时：
+每个型号配置是 `shared/headset/.../models/` 下的一个文件（`shared/headset/...` 即 `shared/headset/src/commonMain/kotlin/io/github/dohex/openrose/core`），集中声明识别前缀、名称规则、协议族、控制传输、电量布局、EQ 预设名称，以及按固件推导的型号能力。新增时：
 
 1. 在 `ModelProfile` 增加枚举项，并在其 `spec` 中映射到新的 `ModelSpec`；缺少映射无法编译。枚举名跨进程传递，确定后不要改名。
 2. 写全 `ModelSpec` 的各项。能力只列有研究证据的设置：未声明的设置不会出现在界面，也不会被写入。
 3. 在 `createProtocolCodec` 查到现有协议族编解码器时直接复用；族内型号的帧、字段或枚举有差异时，在 `ModelSpec` 增加对应字段，由该族编解码读取。新协议族需要新增 `ProtocolFamily` 项与编解码。
 4. 单体型号（`BatteryLayout.SINGLE_UNIT`）在应用和托盘里显示一行“电量”；在有实机证据之前，系统超级岛、焦点通知和融合设备中心不发布其电量。
-5. 在 `androidIntegration` 测试夹具的 `initializationReplies`、`roseAdvertisement` 中登记该型号的回包与广播。`ModelProfileTest` 会检查每个型号都能凭自己的广播前缀和名称被识别。
+5. 在 `platform/android/integration` 测试夹具的 `initializationReplies`、`roseAdvertisement` 中登记该型号的回包与广播。`ModelProfileTest` 会检查每个型号都能凭自己的广播前缀和名称被识别。
 6. 在界面沙盒中选中该型号，按有能力差异的固件分别检查各页面；这是离线验证，不能代替真机验证。
 
 ## 界面调试
 
-`./gradlew :uiSandbox:run` 打开两个窗口，不需要耳机或蓝牙：控制台切换平台（Android / Linux / Windows）、型号配置、固件、控制连接阶段、电量、平台状况、设置写入结果、界面风格与预览尺寸，Android 下还有系统集成、所有者与后台服务状态，桌面下还有托盘与登录时启动状态；预览窗口用这些条件运行 `OpenRoseApp` 与该平台真实的 `PlatformUi`，桌面平台另开 `TrayPanel`。窗口由桌面端同一窗口后端（Nucleus Tao）承载，与正在运行的 OpenRose 互不影响。
+`./gradlew :tools:ui-sandbox:run` 打开两个窗口，不需要耳机或蓝牙：控制台切换平台（Android / Linux / Windows）、型号配置、固件、控制连接阶段、电量、平台状况、设置写入结果、界面风格与预览尺寸，Android 下还有系统集成、所有者与后台服务状态，桌面下还有托盘与登录时启动状态；预览窗口用这些条件运行 `OpenRoseApp` 与该平台真实的 `PlatformUi`，桌面平台另开 `TrayPanel`。窗口由桌面端同一窗口后端（Nucleus Tao）承载，与正在运行的 OpenRose 互不影响。
 
-- 读数由 `ModelProfile.capabilities(firmware)` 推导，电量按型号的电量布局给出；固件框留空表示未读取，控制台下方列出当前可写的设置，便于看出固件门槛。
+- 型号能力与真实会话共用同一推导规则，输入包括固件和已确认的读数，电量按型号的电量布局给出；固件框留空表示未读取，控制台下方列出当前可写的设置，便于看出固件门槛。
 - 应用内的操作照常生效：连接按阶段推进，断开后回到未连接看板，添加耳机流程能扫描到每个型号。设置写入经该型号的 `createProtocolCodec(...).prepareSetting(...)` 准备，确认后写回编解码器预期的读回值；编解码器拒绝的值以失败结束，界面传错值时能直接看到。
-- `./gradlew :uiSandbox:hotRun --autoReload` 启用 Compose Hot Reload，修改 `:sharedUI`、`:androidIntegrationUI` 或沙盒自身后，运行中的窗口直接刷新，当前状态保留。
+- `./gradlew :tools:ui-sandbox:hotRun --autoReload` 启用 Compose Hot Reload，修改 `:shared:ui`、`:platform:android:ui` 或沙盒自身后，运行中的窗口直接刷新，当前状态保留。
 - 沙盒只运行 JVM 实现：Android 的背景模糊与返回手势、系统超级岛、焦点通知、融合设备中心和桌面托盘菜单需要在真机或真实桌面环境上检查。
 
 ## 日常命令
@@ -111,7 +113,7 @@ feat(desktop): add tray panel and background control
 
 <describe the behaviour change>
 
-Validation: :sharedUI:jvmTest and :desktopApp:test pass; check offlineCheck
+Validation: :shared:ui:jvmTest and :desktopApp:test pass; check offlineCheck
 passes. GNOME and KDE are not verified on hardware.
 ```
 

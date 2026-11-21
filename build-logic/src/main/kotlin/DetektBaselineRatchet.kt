@@ -50,7 +50,9 @@ abstract class DetektBaselineRatchet : DefaultTask() {
         val files = repository.dir(BASELINES).get().asFile.listFiles { file -> file.extension == "xml" }.orEmpty()
         for (file in files.sortedBy { it.name }) {
             val path = "$BASELINES/${file.name}"
-            val accepted = if (path in existing) ids(git("show", "$base:$path").byteInputStream()) else emptySet()
+            val previous = previousModuleNames[file.nameWithoutExtension]?.let { "$BASELINES/$it.xml" }
+            val source = listOfNotNull(path, previous).firstOrNull { it in existing }
+            val accepted = source?.let { ids(git("show", "$base:$it").byteInputStream()) }.orEmpty()
             val current = file.inputStream().use(::ids)
             added += (current - accepted).map { "${file.nameWithoutExtension}: $it" }
         }
@@ -91,5 +93,16 @@ abstract class DetektBaselineRatchet : DefaultTask() {
 
     private companion object {
         const val BASELINES = "config/detekt/baseline"
+
+        // Comparisons can span the module reorganization. Carry over only the same module's findings.
+        val previousModuleNames = mapOf(
+            "platform-android-bluetooth-ipc" to "androidPlatform",
+            "platform-android-integration" to "androidIntegration",
+            "platform-android-system-module" to "androidModule",
+            "platform-android-ui" to "androidIntegrationUI",
+            "platform-linux" to "transportBluez",
+            "shared-headset" to "core",
+            "shared-ui" to "sharedUI",
+        )
     }
 }

@@ -1,5 +1,7 @@
 package io.github.dohex.openrose.desktop
 
+import io.github.dohex.openrose.circulation.CirculationAudio
+import io.github.dohex.openrose.circulation.CirculationClient
 import io.github.dohex.openrose.core.ControlRuntime
 import io.github.dohex.openrose.core.LocalControlRuntime
 import io.github.dohex.openrose.core.PlatformState
@@ -8,10 +10,13 @@ import io.github.dohex.openrose.core.UserSettings
 import io.github.dohex.openrose.core.UserSettingsCodec
 import io.github.dohex.openrose.core.transport.DesktopControlTransport
 import io.github.dohex.openrose.transport.bluez.BluezControlTransport
+import io.github.dohex.openrose.transport.bluez.LinuxCirculationAudio
+import io.github.dohex.openrose.transport.windows.WindowsAudio
 import io.github.dohex.openrose.transport.windows.WindowsControlTransport
-import io.github.dohex.openrose.ui.CirculationClient
+import io.github.dohex.openrose.ui.DesktopSoundActions
 import io.github.dohex.openrose.ui.UiSettings
 import io.github.dohex.openrose.ui.UiSettingsCodec
+import io.github.dohex.openrose.ui.desktop.DesktopSettings
 import io.github.dohex.openrose.ui.model.OpenRoseSettingsStore
 import io.github.dohex.openrose.ui.model.RuntimeOpenRoseModel
 import kotlinx.coroutines.CoroutineScope
@@ -23,6 +28,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.prefs.Preferences
 
 /** Window, tray and appearance changes share this process's single control entry and preference store. */
@@ -67,14 +73,21 @@ internal class DesktopRuntime(
         model = RuntimeOpenRoseModel(control, store, scope)
     }
 
-    fun startCirculation(): CirculationClient {
-        val audio = when (transport) {
-            is BluezControlTransport -> LinuxCirculationAudio(transport.audioProfiles)
-            is WindowsControlTransport -> WindowsCirculationAudio()
-            else -> null
+    private val audio = when (transport) {
+        is BluezControlTransport -> LinuxCirculationAudio(transport.audioProfiles).let {
+            DesktopAudio(it, it::currentOutput, it::openSoundSettings)
         }
-        return desktopCirculation(scope, control, audio)
+
+        is WindowsControlTransport -> WindowsAudio().let {
+            DesktopAudio(it, it::currentOutput, it::openSoundSettings)
+        }
+
+        else -> null
     }
+
+    val sound: DesktopSoundActions? get() = audio?.sound
+
+    fun startCirculation(): CirculationClient = desktopCirculation(scope, control, audio?.circulation)
 
     fun updateDesktopSettings(settings: DesktopSettings) {
         mutableDesktopSettings.value = settings
@@ -106,4 +119,11 @@ internal class DesktopRuntime(
     private fun save(values: Map<String, String>) {
         values.forEach { (key, value) -> preferences.put(key, value) }
     }
+}
+
+private class DesktopAudio(val circulation: CirculationAudio, currentOutput: () -> String?, openSettings: () -> Unit) {
+    val sound = DesktopSoundActions(
+        currentOutput = { withContext(Dispatchers.IO) { currentOutput() } },
+        openSoundSettings = { withContext(Dispatchers.IO) { openSettings() } },
+    )
 }
