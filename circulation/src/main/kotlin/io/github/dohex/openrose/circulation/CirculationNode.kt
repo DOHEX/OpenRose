@@ -7,6 +7,7 @@ import java.io.File
 import java.io.IOException
 import java.net.InetSocketAddress
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 import javax.net.ssl.SSLSocket
 
 class CirculationNode(
@@ -15,11 +16,13 @@ class CirculationNode(
     private val discovery: PeerDiscovery,
     private val handler: (Map<String, String>) -> Map<String, String>,
 ) : Closeable {
+    private val outgoing = ConcurrentHashMap.newKeySet<SSLSocket>()
     private val storage = directory.apply { check(isDirectory || mkdirs()) }
     private val identity = PeerIdentity(storage)
     private val trust = PeerTrust(storage)
     private val pairing = PairingWindow(identity.id)
     private val server = PeerServer(identity.tls, ::accept)
+
     @Volatile private var routes: List<NearbyPeer> = emptyList()
     private val mutableNearby = MutableStateFlow<List<NearbyPeer>>(emptyList())
     val nearby = mutableNearby.asStateFlow()
@@ -49,7 +52,10 @@ class CirculationNode(
             wire.send(mapOf("action" to "pair", "name" to name))
             authenticatePairing(identity.id, id, code, wire.input, wire.output)
             val response = wire.receive()
-            trust.add(PeerGrant(PairedPeer(id, response.getValue("name")), response.getValue("grant")))
+            synchronized(this) {
+                check(server.running) { "互联服务已关闭" }
+                trust.add(PeerGrant(PairedPeer(id, response.getValue("name")), response.getValue("grant")))
+            }
         }
     }
 
@@ -59,7 +65,7 @@ class CirculationNode(
             wire.send(mapOf("action" to "request", "grant" to grant.token))
             wire.send(message)
             val response = wire.receive()
-            check(trust.grant(id) == grant) { "流转配对已解除" }
+            check(server.running && trust.grant(id) == grant) { "流转配对已解除" }
             response
         }
     }
@@ -81,17 +87,23 @@ class CirculationNode(
         var unreachable = IOException("无法联系对端")
         for (address in candidates) {
             val socket = identity.tls.socketFactory.createSocket() as SSLSocket
+            outgoing.add(socket)
             try {
-                socket.soTimeout = PeerServer.RESPONSE_TIMEOUT_MS
-                socket.connect(InetSocketAddress(address.address, address.port), PeerServer.CONNECT_TIMEOUT_MS)
-                if (PeerIdentity.peer(socket) != id) throw IOException("对端证书与所选设备不匹配")
-            } catch (failure: IOException) {
+                check(server.running) { "互联服务已关闭" }
+                try {
+                    socket.soTimeout = PeerServer.RESPONSE_TIMEOUT_MS
+                    socket.connect(InetSocketAddress(address.address, address.port), PeerServer.CONNECT_TIMEOUT_MS)
+                    if (PeerIdentity.peer(socket) != id) throw IOException("对端证书与所选设备不匹配")
+                } catch (failure: IOException) {
+                    unreachable = failure
+                    continue
+                }
+                // Only try another route before the first byte of the request has been delivered.
+                return operation(PeerWire(socket))
+            } finally {
+                outgoing.remove(socket)
                 socket.close()
-                unreachable = failure
-                continue
             }
-            // Once a request has been sent, a lost response must never replay the operation on another route.
-            return socket.use { operation(PeerWire(it)) }
         }
         throw unreachable
     }
@@ -116,7 +128,12 @@ class CirculationNode(
             check(server.running && grant.token == header["grant"])
             when (header["action"]) {
                 "request" -> handler(checkNotNull(request))
-                "forget" -> { trust.remove(id); emptyMap() }
+
+                "forget" -> {
+                    trust.remove(id)
+                    emptyMap()
+                }
+
                 else -> throw IOException("未知的互联操作")
             }
         }
@@ -126,6 +143,7 @@ class CirculationNode(
     @Synchronized
     override fun close() {
         server.close()
+        outgoing.forEach { runCatching { it.close() } }
         discovery.close()
         routes = emptyList()
         mutableNearby.value = emptyList()

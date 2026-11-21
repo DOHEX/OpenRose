@@ -102,11 +102,7 @@ data class SandboxScenario(
         this
     }
 
-    /** Windows has no control transport yet, so switching to it starts where the real Windows app starts. */
-    fun onHost(next: HostPlatform): SandboxScenario = copy(
-        host = next,
-        issue = if (next == HostPlatform.WINDOWS) SandboxPlatformIssue.TRANSPORT_UNAVAILABLE else SandboxPlatformIssue.NONE,
-    )
+    fun onHost(next: HostPlatform): SandboxScenario = copy(host = next, issue = SandboxPlatformIssue.NONE)
 
     val desktop: Boolean get() = host == HostPlatform.LINUX || host == HostPlatform.WINDOWS
 

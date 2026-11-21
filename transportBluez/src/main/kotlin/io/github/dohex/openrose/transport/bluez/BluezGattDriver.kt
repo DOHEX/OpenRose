@@ -66,9 +66,7 @@ internal class BluezGattDriver(private val bus: BluezBus, private val devicePath
     }
     override suspend fun connect() = native {
         checkOpen()
-        try {
-            bus.connect(devicePath)
-        } catch (_: org.bluez.Error.AlreadyConnected) { }
+        bus.requestGattConnection(devicePath)
     }
     override suspend fun discoverServices(): List<GattService> = native {
         checkOpen()
@@ -88,9 +86,7 @@ internal class BluezGattDriver(private val bus: BluezBus, private val devicePath
         var objects = waitForServices(2_000)
         if (objects == null) {
             // If the first Connect chose the classic bearer, BlueZ selects the disconnected bearer on a second call.
-            try {
-                bus.connect(devicePath)
-            } catch (_: org.bluez.Error.AlreadyConnected) { }
+            bus.requestGattConnection(devicePath)
             objects = waitForServices(8_000) ?: throw GattException(GattFailureKind.TRANSIENT, "等待 BlueZ GATT 服务超时")
         }
         val found = IdentityHashMap<GattCharacteristic, String>()
@@ -203,6 +199,17 @@ internal class BluezGattDriver(private val bus: BluezBus, private val devicePath
             else -> GattFailureKind.UNKNOWN
         }
         throw GattException(kind, error.message ?: error.javaClass.simpleName, error)
+    }
+}
+
+private suspend fun BluezBus.requestGattConnection(devicePath: String) {
+    try {
+        connect(devicePath)
+    } catch (_: org.bluez.Error.AlreadyConnected) {
+        // Continue into bounded service discovery on the existing connection.
+    } catch (error: org.bluez.Error.InProgress) {
+        // BlueZ can still be completing an audio profile when it publishes the media transport.
+        if (objects()[devicePath]?.get(DEVICE)?.get("Connected") != true) throw error
     }
 }
 

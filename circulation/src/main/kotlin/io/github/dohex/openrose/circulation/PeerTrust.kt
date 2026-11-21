@@ -33,7 +33,10 @@ internal class PeerTrust(directory: File) {
     }
 
     private fun update(change: Properties.() -> Unit) {
-        val next = Properties().apply { putAll(saved); change() }
+        val next = Properties().apply {
+            putAll(saved)
+            change()
+        }
         file.replaceContents { next.store(it, null) }
         saved.clear()
         saved.putAll(next)
