@@ -54,7 +54,9 @@ import io.github.dohex.openrose.core.SessionReference
 import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.dohex.openrose.core.transport.DeviceId
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -97,6 +99,12 @@ internal class AndroidCallerAuthority(
     }.getOrDefault(false)
 }
 
+internal class OwnerCirculation(
+    val generation: OwnerGeneration,
+    val scope: CoroutineScope,
+    val call: (Map<String, String>) -> Map<String, String>,
+)
+
 /**
  * The Binder surface of the module host. It translates the AIDL to the core [ModuleControlHost] and keeps
  * only what is specific to the transport: leases per Binder client, the system entries' read → acknowledge
@@ -107,7 +115,7 @@ internal class HostEndpoint(
     private val host: ModuleControlHost,
     private val facts: MutableStateFlow<HostFacts>,
     private val scope: CoroutineScope,
-    private val circulationAction: (Map<String, String>) -> Map<String, String> = { mapOf("error" to "互联服务尚未就绪") },
+    private val circulationOwner: () -> OwnerCirculation? = { null },
 ) : IControlBridge.Stub() {
     private val lock = Any()
     private val reads = AtomicLong()
@@ -513,18 +521,30 @@ internal class HostEndpoint(
     override fun circulation(request: Bundle): Bundle {
         appLease(request)
         requireVersion(request)
+        val owner = circulationOwner()
         val generation = (host.status.value as? HostStatus.Active)?.generation
-        if (generation == null || generation.toString() != request.getString(BridgeWire.HOST_EPOCH)) {
+        if (owner == null || owner.generation != generation || owner.generation.toString() != request.getString(BridgeWire.HOST_EPOCH)) {
             return BridgeBundles.response(BridgeWire.STATUS_UNAVAILABLE, "模块控制尚未就绪")
         }
-        val payload = request.getBundle(BridgeWire.PAYLOAD)
-        return payload?.let(::circulationResponse) ?: BridgeBundles.response(BridgeWire.STATUS_INVALID_ARGUMENT)
+        val payload = request.getBundle(BridgeWire.PAYLOAD) ?: return BridgeBundles.response(BridgeWire.STATUS_INVALID_ARGUMENT)
+        val reply = circulationResponse(owner, payload)
+        return if ((host.status.value as? HostStatus.Active)?.generation == owner.generation) {
+            reply
+        } else {
+            BridgeBundles.response(BridgeWire.STATUS_UNAVAILABLE, "所有者代际已过期")
+        }
     }
 
-    private fun circulationResponse(data: Bundle): Bundle {
+    private fun circulationResponse(owner: OwnerCirculation, data: Bundle): Bundle {
         val fields = data.keySet().associateWith { data.getString(it).orEmpty() }
         val response = try {
-            circulationAction(fields)
+            // Authorize on the incoming Binder thread. System calls must run under the Bluetooth host identity.
+            runBlocking {
+                owner.scope.async(Dispatchers.IO) {
+                    check((host.status.value as? HostStatus.Active)?.generation == owner.generation) { "所有者代际已过期" }
+                    owner.call(fields)
+                }.await()
+            }
         } catch (failure: Exception) {
             mapOf("error" to (failure.localizedMessage ?: "互联操作失败"))
         }
