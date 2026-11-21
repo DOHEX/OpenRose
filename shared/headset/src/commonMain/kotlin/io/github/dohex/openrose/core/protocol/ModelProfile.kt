@@ -71,7 +71,7 @@ enum class ProtocolFamily(val displayName: String) {
     /** Fields this family's reader understands; this is not a list of enabled setting operations. */
     val readableFields: Set<DeviceField>
         get() = when (this) {
-            ZT -> ztFields.values.flatten().toSet()
+            ZT -> ZtReply.commands.values.flatMap { it.fields }.toSet()
             RS_COMMON_V2 -> rsCommonV2Fields.values.flatten().toSet()
             F8 -> f8Fields.values.flatten().toSet()
             RS_COMMON -> rsCommonFields.values.flatten().toSet()
@@ -221,11 +221,7 @@ enum class ModelProfile {
     val batteryLayout: BatteryLayout get() = spec.batteryLayout
 
     /** Control choices derived from the facts this particular headset session has confirmed. */
-    fun capabilities(readings: Map<DeviceField, FieldReading>): DeviceCapabilities {
-        val firmware = (readings[DeviceField.FIRMWARE] as? FieldReading.Known)?.value as? FieldValue.Firmware
-        val gameMode = (readings[DeviceField.GAME_MODE] as? FieldReading.Known)?.value as? FieldValue.Toggle
-        return capabilities(firmware, gameMode?.value)
-    }
+    fun capabilities(readings: Map<DeviceField, FieldReading>): DeviceCapabilities = CapabilityFacts(readings).resolve(this)
 
     /** Switching preset banks invalidates the previous EQ unless the same reply also supplied its replacement. */
     fun invalidatesEqualizer(
@@ -332,6 +328,19 @@ enum class ModelProfile {
         private const val ROSE_NAME_PREFIX = "rose"
         private val nameBrands: List<String> get() = entries.flatMap { it.brands }.distinct()
     }
+}
+
+/** Confirmed readings that can change the controls offered by a model. */
+internal data class CapabilityFacts(val firmware: FieldValue.Firmware?, val gameMode: Boolean?) {
+    constructor(
+        readings: Map<DeviceField, FieldReading>,
+        firmware: FieldValue.Firmware? = (readings[DeviceField.FIRMWARE] as? FieldReading.Known)?.value as? FieldValue.Firmware,
+    ) : this(
+        firmware,
+        ((readings[DeviceField.GAME_MODE] as? FieldReading.Known)?.value as? FieldValue.Toggle)?.value,
+    )
+
+    fun resolve(profile: ModelProfile): DeviceCapabilities = profile.capabilities(firmware, gameMode)
 }
 
 object ModelIdentification {

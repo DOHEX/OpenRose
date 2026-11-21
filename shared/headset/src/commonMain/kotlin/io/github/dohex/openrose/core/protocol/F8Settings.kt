@@ -40,7 +40,7 @@ private fun languageFrame(value: FieldValue, capabilities: DeviceCapabilities): 
 }
 
 private fun touchFrame(profile: ModelProfile, value: FieldValue): Triple<Int, Int, IntArray> {
-    val binding = validatedTouchAssignment(value, profile)
+    val binding = validatedTouchAssignment(value, profile.capabilities().touchControl)
     val gesture = listOf("single", "double", "triple", "long").indexOf(binding.gesture)
     val slot = gesture * 2 + if (binding.side == "left") 1 else 2
     val action = f8TouchActions.entries.first { it.value == binding.action }.key

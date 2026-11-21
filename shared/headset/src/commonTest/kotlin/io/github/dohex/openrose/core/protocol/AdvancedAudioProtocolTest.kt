@@ -66,7 +66,7 @@ class AdvancedAudioProtocolTest {
     }
 
     @Test
-    fun i7GainProtectionAndPromptSettingsUseTheirIndependentFirmwareGatesAndReadbacks() {
+    fun i7GainAndProtectionUseIndependentReadbacksFromFirmware213() {
         val fw213 = FieldValue.Firmware(listOf(2, 1, 3), "213")
         val gateCodec = createProtocolCodec(ModelProfile.I7_RS_V2)
         assertFailsWith<UnsupportedOperationException> {
@@ -112,7 +112,11 @@ class AdvancedAudioProtocolTest {
             assertEquals(setOf("46"), setting.readback.responseKeys)
             assertEquals(mapOf(DeviceField.HEARING_PROTECTION to FieldValue.Number(level)), setting.expectedValues)
         }
+    }
 
+    @Test
+    fun i7PromptVolumeGatesOnlyMuteOnFirmware304() {
+        val fw213 = FieldValue.Firmware(listOf(2, 1, 3), "213")
         // The firmware gate applies only to the mute value. Basic levels work with unknown firmware.
         val basicPrompt = createProtocolCodec(ModelProfile.I7_RS_V2)
             .prepareSetting(DeviceSetting.PROMPT_VOLUME, FieldValue.Number(5))

@@ -1,6 +1,9 @@
 package io.github.dohex.openrose.core.protocol
 
+import io.github.dohex.openrose.core.CustomEqualizerCapabilities
 import io.github.dohex.openrose.core.DeviceSetting
+import io.github.dohex.openrose.core.DeviceState
+import io.github.dohex.openrose.core.HeadsetCommand
 import io.github.dohex.openrose.core.TouchControlCapabilities
 import io.github.dohex.openrose.core.TouchSlot
 import io.github.dohex.openrose.core.models.ModelProtocol
@@ -146,6 +149,15 @@ interface ProtocolCodec {
 
     /** Reads that become applicable once the initial batch has returned the firmware. */
     fun firmwareInitQueries(firmware: FieldValue.Firmware?): List<ProtocolQuery> = emptyList()
+
+    /** Both real and simulated writes use the facts the current device has actually reported. */
+    fun prepareSetting(command: HeadsetCommand, device: DeviceState): ProtocolSetting = prepareSetting(
+        command.setting,
+        command.value,
+        device.knownValue(DeviceField.FIRMWARE) as? FieldValue.Firmware,
+        device.diagnostics.fields,
+    )
+
     fun prepareSetting(
         setting: DeviceSetting,
         value: FieldValue,
@@ -178,10 +190,23 @@ internal fun validatedNoiseCycle(
     return FieldValue.NoiseCycle(flags)
 }
 
+/** ZT and RS Common V2 both encode each signed band gain in one sign-magnitude byte. */
+internal fun customCurveBytes(value: FieldValue, capability: CustomEqualizerCapabilities?): ByteArray {
+    require(value is FieldValue.IntegerList) { "自定义均衡器需要整数曲线" }
+    if (capability == null) throw UnsupportedOperationException("该型号不支持自定义均衡器")
+    val gains = value.values
+    require(gains.size == capability.bandsHz.size && gains.all { it in capability.minGain..capability.maxGain }) {
+        "自定义均衡器需要 ${capability.bandsHz.size} 段 ${capability.minGain}..${capability.maxGain} 的整数"
+    }
+    return ByteArray(gains.size) { i ->
+        val gain = gains[i]
+        (if (gain < 0) 0x80 or -gain else gain).toByte()
+    }
+}
+
 internal fun validatedTouchAssignment(
     value: FieldValue,
-    profile: ModelProfile,
-    capabilities: TouchControlCapabilities? = profile.capabilities().touchControl,
+    capabilities: TouchControlCapabilities?,
 ): FieldValue.TouchAssignment {
     require(value is FieldValue.TouchAssignment) { "触控绑定需要单个耳侧、手势和动作" }
     if (capabilities == null) throw UnsupportedOperationException("该型号不支持此按键绑定")
@@ -189,48 +214,3 @@ internal fun validatedTouchAssignment(
     if (value.action !in capabilities.actions) throw UnsupportedOperationException("该型号不支持此触控动作")
     return value
 }
-
-internal val ztFields = linkedMapOf(
-    "0101" to setOf(
-        DeviceField.LEFT_BATTERY,
-        DeviceField.RIGHT_BATTERY,
-        DeviceField.CASE_BATTERY,
-        DeviceField.LEFT_CHARGING,
-        DeviceField.RIGHT_CHARGING,
-    ),
-    "0602" to setOf(DeviceField.NOISE_MODE), "0201" to setOf(DeviceField.EQ),
-    "0603" to setOf(DeviceField.GAME_MODE), "0801" to setOf(DeviceField.AUDIO_MODE, DeviceField.MULTIPOINT),
-    "0d01" to setOf(DeviceField.FIRMWARE), "0401" to setOf(DeviceField.TOUCH_KEYS),
-    "0a01" to setOf(DeviceField.TOUCH_ENABLED), "0605" to setOf(DeviceField.NOISE_CYCLE),
-    "0c01" to setOf(DeviceField.EAR_DETECTION), "0607" to setOf(DeviceField.ANC_LEVEL),
-    "0604" to setOf(DeviceField.TRANSPARENCY_LEVEL), "0e03" to setOf(DeviceField.PROMPT_VOLUME),
-    "0103" to setOf(DeviceField.CASE_BATTERY),
-    "0202" to setOf(DeviceField.CUSTOM_EQ),
-    "0203" to setOf(DeviceField.GAIN),
-    "0802" to setOf(DeviceField.MULTIPOINT),
-    "0803" to emptySet(),
-    "0b01" to setOf(DeviceField.HIDE_SEARCH),
-)
-
-internal val rsCommonV2Fields = linkedMapOf(
-    "01" to setOf(DeviceField.TOUCH_KEYS), "07" to setOf(DeviceField.TOUCH_ENABLED),
-    "08" to setOf(DeviceField.EAR_DETECTION), "09" to setOf(DeviceField.NOISE_MODE),
-    "0c" to setOf(
-        DeviceField.LEFT_BATTERY,
-        DeviceField.RIGHT_BATTERY,
-        DeviceField.CASE_BATTERY,
-        DeviceField.LEFT_IN_CASE,
-        DeviceField.RIGHT_IN_CASE,
-        DeviceField.CASE_FLAG,
-    ),
-    "0d" to setOf(DeviceField.FIRMWARE), "0e" to setOf(DeviceField.GAME_MODE),
-    "2a" to setOf(DeviceField.EQ), "2b" to setOf(DeviceField.AUDIO_MODE),
-    "2c" to setOf(DeviceField.ANC_LEVEL), "2d" to setOf(DeviceField.TRANSPARENCY_LEVEL),
-    "2e" to setOf(DeviceField.PROMPT_VOLUME), "2f" to setOf(DeviceField.FIND_STATE),
-    "31" to setOf(DeviceField.PROMPT_LANGUAGE), "32" to setOf(DeviceField.MULTIPOINT),
-    "36" to setOf(DeviceField.NOISE_CYCLE), "38" to setOf(DeviceField.SPATIAL_MODE),
-    "3a" to setOf(DeviceField.EAR_ADAPTIVE), "3d" to setOf(DeviceField.SPATIAL_CONTENT),
-    "49" to setOf(DeviceField.INDEPENDENT_MIC_ACTIVATION, DeviceField.INDEPENDENT_MIC_MODE),
-    "3b" to setOf(DeviceField.TAP_ENABLED), "3c" to setOf(DeviceField.TAP_KEYS),
-    "3e" to setOf(DeviceField.CUSTOM_EQ), "45" to setOf(DeviceField.GAIN), "46" to setOf(DeviceField.HEARING_PROTECTION),
-)

@@ -75,7 +75,7 @@ internal class RsCommonCodec(override val profile: ModelProfile, private val pro
     }
 
     private fun prepareTouch(value: FieldValue): ProtocolSetting {
-        val binding = validatedTouchAssignment(value, profile)
+        val binding = validatedTouchAssignment(value, profile.capabilities().touchControl)
         val slot = listOf("single", "double", "triple").indexOf(binding.gesture) + 1 + if (binding.side == "right") 16 else 0
         val action = protocol.touchActions[binding.action]
             ?: throw UnsupportedOperationException("该型号不支持此触控动作")

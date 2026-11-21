@@ -1,5 +1,6 @@
 package io.github.dohex.openrose.core.protocol
 
+import io.github.dohex.openrose.core.DeviceCapabilities
 import io.github.dohex.openrose.core.DeviceSetting
 import io.github.dohex.openrose.core.models.ModelProtocol
 import kotlinx.datetime.LocalDateTime
@@ -26,202 +27,37 @@ internal class RsCommonV2Codec(
         firmware: FieldValue.Firmware?,
         currentFields: Map<DeviceField, FieldReading>,
     ): ProtocolSetting {
-        val gameMode = (currentFields[DeviceField.GAME_MODE] as? FieldReading.Known)?.value as? FieldValue.Toggle
-        val capabilities = profile.capabilities(firmware, gameMode?.value)
-        if (setting == DeviceSetting.CUSTOM_EQ) {
-            require(value is FieldValue.IntegerList) { "自定义均衡器需要整数曲线" }
-            val custom = capabilities.equalizer?.custom ?: throw UnsupportedOperationException("该型号不支持自定义均衡器")
-            val gains = value.values.toList()
-            require(gains.size == custom.bandsHz.size && gains.all { it in custom.minGain..custom.maxGain }) {
-                "自定义均衡器需要 ${custom.bandsHz.size} 段 ${custom.minGain}..${custom.maxGain} 的整数"
-            }
-            // Validate and snapshot the whole curve before allocating either write or read sequence.
-            val payload = gains.map { if (it < 0) 0x80 or -it else it }.map { it.toByte() }.toByteArray()
-            val writes = listOf(frame(byteArrayOf(0x2a, 4)), frame(byteArrayOf(0x3e) + payload))
-            val modeReadback = query(byteArrayOf(0x2a))
-            val curveReadback = queryCurve()
-            return ProtocolSetting(
-                writes,
-                modeReadback,
-                mapOf(DeviceField.EQ to FieldValue.Text("custom"), DeviceField.CUSTOM_EQ to FieldValue.IntegerList(gains)),
-                listOf(curveReadback),
-            )
-        }
-        val expected = if (setting == DeviceSetting.NOISE_CYCLE) {
-            validatedNoiseCycle(value, capabilities.noiseControl?.cycleModes.orEmpty())
-        } else {
-            value
-        }
-        val (type, payload) = when (setting) {
-            DeviceSetting.NOISE_MODE -> {
-                require(value is FieldValue.Text) { "降噪模式需要模式名称" }
-                if (value.value !in capabilities.noiseControl?.modes.orEmpty()) throw UnsupportedOperationException("该型号不支持该降噪模式")
-                val mode = mapOf("anc" to 1, "normal" to 2, "transparency" to 3, "wind" to 4, "auto" to 5, "deep" to 6, "dynamic" to 7)[value.value]
-                    ?: throw UnsupportedOperationException("该型号不支持该降噪模式")
-                9.toByte() to byteArrayOf(mode.toByte())
-            }
-
-            DeviceSetting.ANC_LEVEL, DeviceSetting.TRANSPARENCY_LEVEL -> {
-                require(value is FieldValue.Number) { "档位需要整数" }
-                val levels = capabilities.noiseControl?.levelCapabilities(setting)?.levels
-                    ?: throw UnsupportedOperationException("该型号不支持此档位设置")
-                require(value.value in levels) { "档位仅支持 ${levels.sorted().joinToString("、")}" }
-                (if (setting == DeviceSetting.ANC_LEVEL) 0x2c else 0x2d).toByte() to byteArrayOf(value.value.toByte())
-            }
-
-            DeviceSetting.NOISE_CYCLE -> {
-                val flags = (expected as FieldValue.NoiseCycle).flags
-                val payload = listOf("anc", "wind", "normal", "transparency")
-                    .map { if (flags[it] == true) 1.toByte() else 0.toByte() }
-                    .toByteArray()
-                0x36.toByte() to payload
-            }
-
-            DeviceSetting.EQ -> {
-                require(value is FieldValue.Text) { "均衡器需要预设名称" }
-                if (value.value !in capabilities.equalizer?.presets.orEmpty()) {
-                    throw UnsupportedOperationException("该型号当前固件不支持该均衡器预设")
-                }
-                val preset = mapOf("hifi" to 0, "pop" to 1, "rock" to 2, "light" to 3, "eap" to 6, "game_1" to 0xa0).getValue(value.value)
-                0x2a.toByte() to byteArrayOf(preset.toByte())
-            }
-
-            DeviceSetting.BASS_BOOST -> {
-                require(value is FieldValue.Number && value.value in 0..4) { "低音增强仅支持 0～4 档" }
-                if (value.value !in capabilities.bassBoostLevels) throw UnsupportedOperationException("该型号不支持低音增强")
-                0x2a.toByte() to byteArrayOf(5, value.value.toByte())
-            }
-
-            DeviceSetting.PROMPT_LANGUAGE -> {
-                require(value is FieldValue.Text && value.value in listOf("chinese", "english")) { "提示音语言无效" }
-                if (value.value !in capabilities.promptLanguages) throw UnsupportedOperationException("该型号不支持提示音语言")
-                0x31.toByte() to byteArrayOf(if (value.value == "chinese") 0 else 1)
-            }
-
-            DeviceSetting.GAIN -> {
-                require(value is FieldValue.Number) { "增益需要档位整数" }
-                require(value.value in 0..2) { "RS Common V2 增益档位仅支持 0～2" }
-                if (value.value !in capabilities.gainLevels) {
-                    throw UnsupportedOperationException("该型号当前固件不支持增益设置")
-                }
-                0x45.toByte() to byteArrayOf(value.value.toByte())
-            }
-
-            DeviceSetting.HEARING_PROTECTION -> {
-                require(value is FieldValue.Number) { "听力保护需要档位整数" }
-                require(value.value in 0..6) { "RS Common V2 听力保护档位仅支持 0～6" }
-                if (value.value !in capabilities.hearingProtectionLevels) {
-                    throw UnsupportedOperationException("该型号当前固件不支持听力保护设置")
-                }
-                0x46.toByte() to byteArrayOf(value.value.toByte())
-            }
-
-            DeviceSetting.PROMPT_VOLUME -> {
-                require(value is FieldValue.Number) { "提示音需要档位整数" }
-                require(value.value in ProtocolFamily.RS_COMMON_V2.promptVolumeLevels) { "RS Common V2 提示音仅支持 0～5 档" }
-                if (value.value !in capabilities.promptVolumeLevels) {
-                    throw UnsupportedOperationException("该型号当前固件不支持此提示音档位")
-                }
-                0x2e.toByte() to byteArrayOf(value.value.toByte())
-            }
-
-            DeviceSetting.GAME_MODE -> {
-                require(value is FieldValue.Toggle) { "游戏模式需要明确开关" }
-                0x0e.toByte() to byteArrayOf(if (value.value) 1 else 0)
-            }
-
-            DeviceSetting.AUDIO_MODE -> {
-                require(value is FieldValue.Text) { "音频模式需要配置名称" }
-                val mode = rsV2AudioModes.indexOf(value.value)
-                if (mode < 0 || value.value !in capabilities.audioControl?.modes.orEmpty()) {
-                    throw UnsupportedOperationException("该型号不支持该音频配置")
-                }
-                0x2b.toByte() to byteArrayOf(mode.toByte())
-            }
-
-            DeviceSetting.MULTIPOINT -> {
-                require(value is FieldValue.Toggle) { "多点连接需要明确开关" }
-                0x32.toByte() to byteArrayOf(if (value.value) 1 else 0)
-            }
-
-            DeviceSetting.TOUCH_ENABLED, DeviceSetting.EAR_DETECTION -> {
-                require(value is FieldValue.Toggle) { "触控和检测功能需要明确开关" }
-                (if (setting == DeviceSetting.TOUCH_ENABLED) 7 else 8).toByte() to byteArrayOf(if (value.value) 0 else 1)
-            }
-
-            DeviceSetting.TAP_ENABLED -> {
-                if (setting !in capabilities.writableSettings) throw UnsupportedOperationException("该型号不支持轻拍控制")
-                require(value is FieldValue.Toggle) { "轻拍控制需要明确开关" }
-                0x3b.toByte() to byteArrayOf(if (value.value) 1 else 0)
-            }
-
-            DeviceSetting.TOUCH_BINDING, DeviceSetting.TAP_BINDING -> {
-                val isTap = setting == DeviceSetting.TAP_BINDING
-                val gestures = if (isTap) capabilities.tapControl else capabilities.touchControl
-                val binding = validatedTouchAssignment(value, profile, gestures)
-                val slot = rsV2Gestures.indexOf(binding.gesture) + 1 + if (binding.side == "right") 0x10 else 0
-                val action = rsV2Actions.indexOf(binding.action)
-                (if (isTap) 0x3c else 0x01).toByte() to byteArrayOf(slot.toByte(), action.toByte())
-            }
-
-            DeviceSetting.SPATIAL_AUDIO -> throw UnsupportedOperationException("该型号不支持空间音频总开关")
-
-            DeviceSetting.SPATIAL_MODE, DeviceSetting.SPATIAL_CONTENT -> {
-                val mode = setting == DeviceSetting.SPATIAL_MODE
-                val choices = if (mode) capabilities.spatialModes else capabilities.spatialContents
-                require(value is FieldValue.Text && value.value in choices) { "该型号不支持此空间音频选项" }
-                val wire = (if (mode) rsV2SpatialModes else rsV2SpatialContents).indexOf(value.value)
-                require(wire >= 0) { "未知空间音频选项" }
-                (if (mode) 0x38 else 0x3d).toByte() to byteArrayOf(wire.toByte())
-            }
-
-            DeviceSetting.EAR_ADAPTIVE, DeviceSetting.INDEPENDENT_MIC_ACTIVATION, DeviceSetting.INDEPENDENT_MIC_MODE -> {
-                if (setting !in capabilities.writableSettings) throw UnsupportedOperationException("该型号不支持此设置")
-                require(value is FieldValue.Toggle) { "需要明确开关" }
-                val toggle = (if (value.value) 1 else 0).toByte()
-                if (setting == DeviceSetting.EAR_ADAPTIVE) {
-                    0x3a.toByte() to byteArrayOf(toggle)
-                } else {
-                    val selector = (if (setting == DeviceSetting.INDEPENDENT_MIC_ACTIVATION) 0 else 1).toByte()
-                    0x49.toByte() to byteArrayOf(selector, toggle)
-                }
-            }
-        }
-        // Validation precedes both sequence allocations, so rejected settings consume no sequence.
-        val key = byteArrayOf(type).hex()
-        val values = when (setting) {
-            DeviceSetting.BASS_BOOST -> mapOf(DeviceField.EQ to FieldValue.Text("custom_slot"), DeviceField.EQ_SLOT to expected)
-            DeviceSetting.INDEPENDENT_MIC_ACTIVATION -> mapOf(DeviceField.INDEPENDENT_MIC_ACTIVATION to expected)
-            DeviceSetting.INDEPENDENT_MIC_MODE -> mapOf(DeviceField.INDEPENDENT_MIC_MODE to expected)
-            else -> mapOf(rsCommonV2Fields.getValue(key).single() to expected)
-        }
+        val capabilities = CapabilityFacts(currentFields, firmware).resolve(profile)
+        if (setting == DeviceSetting.CUSTOM_EQ) return customEqualizer(value, capabilities)
+        // Validate the complete record before allocating either sequence number.
+        val (type, payload, values) = rsV2Setting(capabilities, setting, value)
         val write = frame(byteArrayOf(type) + payload)
-        if (protocol.spatialNeedsEarAdaptive) {
-            fun confirmed(field: DeviceField) = (currentFields[field] as? FieldReading.Known)?.value
-            val followUp = when {
-                setting == DeviceSetting.SPATIAL_MODE && value != FieldValue.Text("off") &&
-                    confirmed(DeviceField.EAR_ADAPTIVE) != FieldValue.Toggle(true) ->
-                    Triple(byteArrayOf(0x3a, 1), DeviceField.EAR_ADAPTIVE, FieldValue.Toggle(true))
-
-                setting == DeviceSetting.EAR_ADAPTIVE && value == FieldValue.Toggle(false) &&
-                    confirmed(DeviceField.SPATIAL_MODE) != FieldValue.Text("off") ->
-                    Triple(byteArrayOf(0x38, 0), DeviceField.SPATIAL_MODE, FieldValue.Text("off"))
-
-                else -> null
-            }
-            if (followUp != null) {
-                val (body, field, expectedValue) = followUp
-                return ProtocolSetting(
-                    listOf(write, frame(body)),
-                    query(byteArrayOf(type), values.keys),
-                    values + (field to expectedValue),
-                    listOf(query(byteArrayOf(body.first()), setOf(field))),
-                )
-            }
+        val followUp = protocol.spatialFollowUp(setting, value, currentFields)
+        if (followUp != null) {
+            val (body, field, expectedValue) = followUp
+            return ProtocolSetting(
+                listOf(write, frame(body)),
+                query(byteArrayOf(type), values.keys),
+                values + (field to expectedValue),
+                listOf(query(byteArrayOf(body.first()), setOf(field))),
+            )
         }
         val readback = query(byteArrayOf(type), values.keys)
         val refreshEq = setting == DeviceSetting.GAME_MODE && protocol.refreshEqualizerAfterGameMode
         return ProtocolSetting(listOf(write), readback, values, if (refreshEq) listOf(query(byteArrayOf(0x2a))) else emptyList())
+    }
+
+    private fun customEqualizer(value: FieldValue, capabilities: DeviceCapabilities): ProtocolSetting {
+        val payload = customCurveBytes(value, capabilities.equalizer?.custom)
+        val writes = listOf(frame(byteArrayOf(0x2a, 4)), frame(byteArrayOf(0x3e) + payload))
+        val modeReadback = query(byteArrayOf(0x2a))
+        val curveReadback = queryCurve()
+        return ProtocolSetting(
+            writes,
+            modeReadback,
+            mapOf(DeviceField.EQ to FieldValue.Text("custom"), DeviceField.CUSTOM_EQ to value),
+            listOf(curveReadback),
+        )
     }
 
     private fun frame(body: ByteArray): ByteArray {
@@ -284,33 +120,25 @@ internal class RsCommonV2Codec(
             if (start < 0) {
                 replies += ProtocolReply(buffer.hex(), warnings = listOf("没有 DD 接收帧头"))
                 buffer = byteArrayOf()
-                break
-            }
-            if (start > 0) {
-                replies += ProtocolReply(buffer.copyOfRange(0, start).hex(), warnings = listOf("忽略帧前数据"))
-                buffer = buffer.copyOfRange(start, buffer.size)
-            }
-            val complete = findComplete(0)
-            if (complete != null) {
-                val (end, reply) = complete
+            } else {
+                if (start > 0) {
+                    replies += ProtocolReply(buffer.copyOfRange(0, start).hex(), warnings = listOf("忽略帧前数据"))
+                    buffer = buffer.copyOfRange(start, buffer.size)
+                }
+                // A DD byte can be opaque data inside an incomplete field. Wait for the current frame's checksum.
+                val (end, reply) = findComplete() ?: break
                 replies += reply
                 buffer = buffer.copyOfRange(end, buffer.size)
-                continue
             }
-            // There is no total frame length. A later DD may be opaque bytes inside an
-            // incomplete declared V, even if those bytes resemble a checksummed frame.
-            // Retain the leading frame until complete; reset/buffer limit handles corruption.
-            break
         }
         return replies
     }
 
-    private fun findComplete(start: Int): Pair<Int, ProtocolReply>? {
-        for (end in start + 5 until buffer.size) {
-            if (buffer[end].u() != 0xaa) continue
-            val raw = buffer.copyOfRange(start, end + 1)
-            val reply = parseFrame(raw) ?: continue
-            return (end + 1) to reply
+    private fun findComplete(): Pair<Int, ProtocolReply>? {
+        for (end in 5 until buffer.size) {
+            if (buffer[end].u() == 0xaa) {
+                parseFrame(buffer.copyOfRange(0, end + 1))?.let { return (end + 1) to it }
+            }
         }
         return null
     }
@@ -325,199 +153,23 @@ internal class RsCommonV2Codec(
         val warnings = mutableListOf<String>()
         var position = 2
         val stop = raw.size - 2
-        while (position < stop) {
-            if (stop - position < 2) return null
+        while (position + 1 < stop) {
             val length = raw[position].u()
             val end = if (length == 0) stop else position + length + 1
             if (end > stop) return null
-            val type = raw[position + 1].u()
+            val key = byteArrayOf(raw[position + 1]).hex()
             val value = raw.copyOfRange(position + 2, end)
             if (length == 0) warnings += "L00 兼容字段；客户端仍验证校验字节"
-            val decoded = decodeRecord(type, value)
+            val decoded = readRsV2Record(key, profile, value)
             if (decoded.isNotEmpty()) {
-                keys += byteArrayOf(type.toByte()).hex()
+                keys += key
                 readings += decoded
             } else {
-                warnings += "未更新字段 ${byteArrayOf(type.toByte()).hex()}=${value.hex()}"
+                warnings += "未更新字段 $key=${value.hex()}"
             }
             position = end
         }
-        return ProtocolReply(raw.hex(), keys, readings, warnings)
-    }
-
-    private fun decodeRecord(type: Int, value: ByteArray): Map<DeviceField, FieldReading> {
-        val key = byteArrayOf(type.toByte()).hex()
-        val expected = rsCommonV2Fields[key] ?: return emptyMap()
-        val readings = linkedMapOf<DeviceField, FieldReading>()
-        fun put(field: DeviceField, semantic: FieldValue?, source: ByteArray = value) {
-            readings[field] = semantic?.let { FieldReading.Known(it, source.hex()) } ?: FieldReading.Unknown(source.hex())
-        }
-        val raw = value.firstOrNull()?.u()
-        when (type) {
-            0x0c -> {
-                if (value.size < 3) return emptyMap()
-                val left = value[0].u()
-                val right = value[1].u()
-                val case = value[2].u()
-                val caseAvailable = (case and 127) in 1..100 &&
-                    (
-                        profile.batteryLayout == BatteryLayout.SINGLE_UNIT ||
-                            (left and 128 != 0 && left != 255) || (right and 128 != 0 && right != 255)
-                        )
-                for ((index, field) in listOf(DeviceField.LEFT_BATTERY, DeviceField.RIGHT_BATTERY, DeviceField.CASE_BATTERY).withIndex()) {
-                    val byte = value[index].u()
-                    readings[field] = when {
-                        byte == 255 -> FieldReading.NotProvided(byteArrayOf(value[index]).hex())
-                        index == 2 && !caseAvailable -> FieldReading.Unknown(byteArrayOf(value[index]).hex())
-                        byte and 127 in 1..100 -> FieldReading.Known(FieldValue.Number(byte and 127), byteArrayOf(value[index]).hex())
-                        else -> FieldReading.Unknown(byteArrayOf(value[index]).hex())
-                    }
-                }
-                listOf(DeviceField.LEFT_IN_CASE, DeviceField.RIGHT_IN_CASE, DeviceField.CASE_FLAG).forEachIndexed { index, field ->
-                    put(
-                        field,
-                        if (index < 2 && value[index].u() == 255) null else FieldValue.Toggle(value[index].u() and 128 != 0),
-                        byteArrayOf(value[index]),
-                    )
-                }
-            }
-
-            0x0d -> {
-                if (value.size < 3) return emptyMap()
-                val parts = value.take(3).map { it.u() }
-                put(DeviceField.FIRMWARE, FieldValue.Firmware(parts, parts.joinToString("")))
-            }
-
-            0x01, 0x3c -> {
-                val isTap = type == 0x3c
-                val slots = if (isTap) listOf(2, 3, 0x12, 0x13) else listOf(1, 2, 3, 4, 0x11, 0x12, 0x13, 0x14)
-                if (value.size < slots.size * 2 || value.size % 2 != 0) return emptyMap()
-                val pairs = value.toList().chunked(2).associate { it[0].u() to it[1].u() }
-                if (!slots.all { it in pairs }) return emptyMap()
-                val allowedActions = if (isTap) profile.capabilities().tapControl?.actions.orEmpty() else null
-                val bindings = slots.map { slot ->
-                    val action = pairs.getValue(slot)
-                    val name = rsV2Actions.getOrNull(action)?.takeIf { allowedActions == null || it in allowedActions }
-                    TouchBinding(if (slot < 0x10) "left" else "right", rsV2Gestures[(slot and 0x0f) - 1], name, action)
-                }
-                put(if (isTap) DeviceField.TAP_KEYS else DeviceField.TOUCH_KEYS, FieldValue.TouchKeys(bindings))
-            }
-
-            0x09 -> {
-                if (value.size != 1) return emptyMap()
-                val modeName = mapOf(
-                    1 to "anc",
-                    2 to "normal",
-                    3 to "transparency",
-                    4 to "wind",
-                    5 to "auto",
-                    6 to "deep",
-                    7 to "dynamic",
-                )[raw]
-                put(DeviceField.NOISE_MODE, modeName?.let { FieldValue.Text(it) })
-            }
-
-            0x3b, 0x07, 0x08, 0x0e, 0x32, 0x3a -> {
-                if (value.size != 1) return emptyMap()
-                val on = if (type in listOf(7, 8)) 0 else 1
-                put(expected.single(), if (raw in 0..1) FieldValue.Toggle(raw == on) else null)
-            }
-
-            0x2a -> {
-                if (value.size !in 1..2) return emptyMap()
-                val index = if (value.size == 1) {
-                    when (raw) {
-                        0 -> 1
-                        1 -> 0
-                        else -> raw
-                    }
-                } else {
-                    raw
-                }
-                val presetName = mapOf(
-                    0 to "pop",
-                    1 to "hifi",
-                    2 to "rock",
-                    3 to "light",
-                    4 to "custom",
-                    5 to "custom_slot",
-                    6 to "eap",
-                    0xa0 to "game_1",
-                )[index]
-                put(DeviceField.EQ, presetName?.let { FieldValue.Text(it) })
-                if (value.size == 2 && raw == 5) put(DeviceField.EQ_SLOT, FieldValue.Number(value[1].u()))
-            }
-
-            0x2b, 0x2c, 0x2d, 0x2e -> {
-                if (value.isEmpty()) return emptyMap()
-                // Observed F8 helpers parse the entire hex text with decimal radix.
-                val decimalText = value.hex()
-                val number = if (decimalText.all { it in '0'..'9' }) decimalText.toIntOrNull() else null
-                val semantic = when (type) {
-                    0x2b -> number?.let { rsV2AudioModes.getOrNull(it) }?.let { FieldValue.Text(it) }
-                    0x2c, 0x2d -> number?.takeIf { it in listOf(1, 3, 5) }?.let { FieldValue.Number(it) }
-                    else -> number?.takeIf { it in 0..5 }?.let { FieldValue.Number(it) }
-                }
-                put(expected.single(), semantic)
-            }
-
-            0x31 -> {
-                if (value.size != 1) return emptyMap()
-                put(DeviceField.PROMPT_LANGUAGE, listOf("chinese", "english").getOrNull(raw ?: -1)?.let { FieldValue.Text(it) })
-            }
-
-            0x36 -> {
-                if (value.size < 4) return emptyMap()
-                val flags = listOf("anc", "wind", "normal", "transparency").mapIndexed { index, name ->
-                    val flag = value[index].u()
-                    name to if (flag in 0..1) flag == 1 else null
-                }.toMap()
-                val supported = profile.capabilities().noiseControl?.cycleModes.orEmpty()
-                put(DeviceField.NOISE_CYCLE, FieldValue.NoiseCycle(flags.filterKeys { it in supported }))
-            }
-
-            0x3e -> {
-                val gains = value.map { if (it.u() and 128 != 0) -(it.u() and 127) else it.u() and 127 }
-                put(
-                    DeviceField.CUSTOM_EQ,
-                    gains.takeIf { it.size == 10 && it.all { gain -> gain in -6..6 } }?.let { FieldValue.IntegerList(it) },
-                )
-            }
-
-            0x38, 0x3d -> {
-                if (value.size != 1) return emptyMap()
-                val choices = if (type == 0x38) rsV2SpatialModes else rsV2SpatialContents
-                put(expected.single(), choices.getOrNull(value[0].u())?.let { FieldValue.Text(it) })
-            }
-
-            0x49 -> {
-                // Longer 49 records carry extended firmware versions, not microphone states.
-                if (value.size != 2 || value.any { it.u() !in 0..1 }) return emptyMap()
-                val activated = value[0].u() == 1
-                put(DeviceField.INDEPENDENT_MIC_ACTIVATION, FieldValue.Toggle(activated))
-                put(DeviceField.INDEPENDENT_MIC_MODE, FieldValue.Toggle(activated && value[1].u() == 1))
-            }
-
-            0x45, 0x46 -> {
-                if (value.size != 1) return emptyMap()
-                val max = if (type == 0x45) 2 else 6
-                put(expected.single(), raw?.takeIf { it in 0..max }?.let { FieldValue.Number(it) })
-            }
-
-            0x2f -> {
-                if (value.size != 1) return emptyMap()
-                val findState = mapOf(
-                    1 to "start_left",
-                    2 to "start_right",
-                    3 to "start_both",
-                    4 to "stop_both",
-                    5 to "stop_left",
-                    6 to "stop_right",
-                )[raw]
-                put(DeviceField.FIND_STATE, findState?.let { FieldValue.Text(it) })
-            }
-        }
-        return readings
+        return if (position == stop) ProtocolReply(raw.hex(), keys, readings, warnings) else null
     }
 
     override fun reset() {
@@ -526,11 +178,22 @@ internal class RsCommonV2Codec(
     }
 }
 
-private val rsV2SpatialModes = listOf("off", "head_tracking", "fixed")
-private val rsV2SpatialContents = listOf("tv", "music", "movie", "game")
-private val rsV2AudioModes = listOf("aac_sbc", "ldac", "lhdc", "lc3", "aptx", "aptx_hd", "aptx_adaptive")
+private fun ModelProtocol.RsCommonV2.spatialFollowUp(
+    setting: DeviceSetting,
+    value: FieldValue,
+    currentFields: Map<DeviceField, FieldReading>,
+): Triple<ByteArray, DeviceField, FieldValue>? {
+    if (!spatialNeedsEarAdaptive) return null
+    fun confirmed(field: DeviceField) = (currentFields[field] as? FieldReading.Known)?.value
+    return when {
+        setting == DeviceSetting.SPATIAL_MODE && value != FieldValue.Text("off") &&
+            confirmed(DeviceField.EAR_ADAPTIVE) != FieldValue.Toggle(true) ->
+            Triple(byteArrayOf(0x3a, 1), DeviceField.EAR_ADAPTIVE, FieldValue.Toggle(true))
 
-private val rsV2Gestures = listOf("single", "double", "triple", "long")
-private val rsV2Actions = listOf(
-    "none", "play_pause", "previous_track", "next_track", "volume_up", "volume_down", "game_mode", "voice_assistant", "noise_cycle",
-)
+        setting == DeviceSetting.EAR_ADAPTIVE && value == FieldValue.Toggle(false) &&
+            confirmed(DeviceField.SPATIAL_MODE) != FieldValue.Text("off") ->
+            Triple(byteArrayOf(0x38, 0), DeviceField.SPATIAL_MODE, FieldValue.Text("off"))
+
+        else -> null
+    }
+}
