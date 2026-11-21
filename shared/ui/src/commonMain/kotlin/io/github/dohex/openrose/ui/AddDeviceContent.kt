@@ -54,7 +54,6 @@ internal fun AddDeviceContent(
     onDiagnostics: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var troubleshootingExpanded by rememberSaveable { mutableStateOf(false) }
     val supported = remember(state.candidates) { state.candidates.filter { it.profile != null } }
     val unsupported = remember(state.candidates) { state.candidates.filter { it.profile == null } }
     val nameCounts = remember(supported) { supported.groupingBy { it.addDeviceName() }.eachCount() }
@@ -83,47 +82,7 @@ internal fun AddDeviceContent(
                 }
             }
             if (canScan) {
-                key("search-status") {
-                    Column(
-                        Modifier.fillMaxWidth().padding(horizontal = 24.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        Row(
-                            Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Column(
-                                Modifier.weight(1f).semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite },
-                                verticalArrangement = Arrangement.spacedBy(4.dp),
-                            ) {
-                                if (supported.isNotEmpty()) {
-                                    AppText("已找到 ${supported.size} 副耳机", role = AppTextRole.Title)
-                                }
-                                AppText(
-                                    text = when {
-                                        pending -> "正在连接所选耳机"
-                                        scanning -> "正在搜索附近的耳机…"
-                                        scanError != null -> "搜索未完成"
-                                        supported.isEmpty() -> "暂未找到受支持的耳机"
-                                        else -> "搜索已结束"
-                                    },
-                                    role = if (supported.isEmpty()) AppTextRole.Title else AppTextRole.Summary,
-                                )
-                            }
-                            if (!pending) {
-                                AppButton(
-                                    text = if (scanning) "停止搜索" else "重新搜索",
-                                    onClick = if (scanning) onStopScan else onStartScan,
-                                    kind = AppButtonKind.Secondary,
-                                )
-                            }
-                        }
-                        if (!pending && scanError != null && scanError != connectionError) {
-                            AppText(scanError.message, color = appColor(AppColorRole.Error))
-                        }
-                    }
-                }
+                AddDeviceSearchStatus(supported.size, pending, scanning, scanError, connectionError, onStartScan, onStopScan)
                 supported.forEach { candidate ->
                     key(candidate.deviceId) {
                         AddDeviceCandidateCard(
@@ -138,46 +97,7 @@ internal fun AddDeviceContent(
                     }
                 }
             }
-            key("troubleshooting") {
-                Column(
-                    Modifier.fillMaxWidth().padding(horizontal = 24.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    AppButton(
-                        text = if (troubleshootingExpanded) "收起排查指引" else "找不到耳机？",
-                        onClick = { troubleshootingExpanded = !troubleshootingExpanded },
-                        kind = AppButtonKind.Secondary,
-                    )
-                    if (troubleshootingExpanded) {
-                        AppText("排查指引", role = AppTextRole.Title)
-                        AppText("1. 打开充电盒，确认耳机已开启且有电。\n2. 按耳机说明进入配对模式。\n3. 将耳机靠近当前设备，然后重新搜索。", role = AppTextRole.Summary)
-                        onOpenSystemSettings?.let { AppButton("打开蓝牙设置", it, kind = AppButtonKind.Secondary) }
-                        AppButton("查看诊断", onDiagnostics, kind = AppButtonKind.Secondary)
-                        if (canScan && supported.isNotEmpty()) {
-                            AppText("设备识别信息", role = AppTextRole.Title)
-                            supported.forEach { candidate ->
-                                AppText(candidate.addDeviceName(), role = AppTextRole.Body)
-                                AppText(
-                                    listOfNotNull(
-                                        candidate.profile?.configurationCaption,
-                                        candidate.rssi?.let { "$it dBm" },
-                                    ).joinToString(" · "),
-                                    role = AppTextRole.Summary,
-                                )
-                            }
-                        }
-                        if (canScan && unsupported.isNotEmpty()) {
-                            AppText("其他蓝牙设备", role = AppTextRole.Title)
-                            unsupported.forEach { candidate ->
-                                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                    AppText(candidate.name?.takeIf { it.isNotBlank() } ?: "未命名蓝牙设备")
-                                    AppText("暂不支持", role = AppTextRole.Summary)
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+            AddDeviceTroubleshooting(canScan, supported, unsupported, onOpenSystemSettings, onDiagnostics)
         }
     }
 }
@@ -393,3 +313,107 @@ private fun AddDeviceCandidateCard(
 }
 
 private fun DeviceCandidate.addDeviceName(): String = name?.takeIf { it.isNotBlank() } ?: profile?.displayName ?: "ROSE 耳机"
+
+@Composable
+private fun AddDeviceSearchStatus(
+    count: Int,
+    pending: Boolean,
+    scanning: Boolean,
+    scanError: ControlError?,
+    connectionError: ControlError?,
+    onStartScan: () -> Unit,
+    onStopScan: () -> Unit,
+) {
+    key("search-status") {
+        Column(
+            Modifier.fillMaxWidth().padding(horizontal = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(
+                    Modifier.weight(1f).semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite },
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    if (count > 0) {
+                        AppText("已找到 $count 副耳机", role = AppTextRole.Title)
+                    }
+                    AppText(
+                        text = when {
+                            pending -> "正在连接所选耳机"
+                            scanning -> "正在搜索附近的耳机…"
+                            scanError != null -> "搜索未完成"
+                            count == 0 -> "暂未找到受支持的耳机"
+                            else -> "搜索已结束"
+                        },
+                        role = if (count == 0) AppTextRole.Title else AppTextRole.Summary,
+                    )
+                }
+                if (!pending) {
+                    AppButton(
+                        text = if (scanning) "停止搜索" else "重新搜索",
+                        onClick = if (scanning) onStopScan else onStartScan,
+                        kind = AppButtonKind.Secondary,
+                    )
+                }
+            }
+            if (!pending && scanError != null && scanError != connectionError) {
+                AppText(scanError.message, color = appColor(AppColorRole.Error))
+            }
+        }
+    }
+}
+
+@Composable
+private fun AddDeviceTroubleshooting(
+    canScan: Boolean,
+    supported: List<DeviceCandidate>,
+    unsupported: List<DeviceCandidate>,
+    onOpenSystemSettings: (() -> Unit)?,
+    onDiagnostics: () -> Unit,
+) {
+    var troubleshootingExpanded by rememberSaveable { mutableStateOf(false) }
+    key("troubleshooting") {
+        Column(
+            Modifier.fillMaxWidth().padding(horizontal = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            AppButton(
+                text = if (troubleshootingExpanded) "收起排查指引" else "找不到耳机？",
+                onClick = { troubleshootingExpanded = !troubleshootingExpanded },
+                kind = AppButtonKind.Secondary,
+            )
+            if (troubleshootingExpanded) {
+                AppText("排查指引", role = AppTextRole.Title)
+                AppText("1. 打开充电盒，确认耳机已开启且有电。\n2. 按耳机说明进入配对模式。\n3. 将耳机靠近当前设备，然后重新搜索。", role = AppTextRole.Summary)
+                onOpenSystemSettings?.let { AppButton("打开蓝牙设置", it, kind = AppButtonKind.Secondary) }
+                AppButton("查看诊断", onDiagnostics, kind = AppButtonKind.Secondary)
+                if (canScan && supported.isNotEmpty()) {
+                    AppText("设备识别信息", role = AppTextRole.Title)
+                    supported.forEach { candidate ->
+                        AppText(candidate.addDeviceName(), role = AppTextRole.Body)
+                        AppText(
+                            listOfNotNull(
+                                candidate.profile?.configurationCaption,
+                                candidate.rssi?.let { "$it dBm" },
+                            ).joinToString(" · "),
+                            role = AppTextRole.Summary,
+                        )
+                    }
+                }
+                if (canScan && unsupported.isNotEmpty()) {
+                    AppText("其他蓝牙设备", role = AppTextRole.Title)
+                    unsupported.forEach { candidate ->
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            AppText(candidate.name?.takeIf { it.isNotBlank() } ?: "未命名蓝牙设备")
+                            AppText("暂不支持", role = AppTextRole.Summary)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

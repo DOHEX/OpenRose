@@ -260,6 +260,20 @@ class OpenRoseHomeScanUiTest {
         }
     }
 
+    private suspend fun ScanHarness.switchStyleAndReturnHome(style: InterfaceStyle) {
+        clickTab("设置")
+        render()
+        openPersonalization()
+        clickText("组件风格")
+        render()
+        clickText(if (style == InterfaceStyle.MIUIX) "Material 3 Expressive" else "Miuix")
+        render()
+        clickContentDescription("返回")
+        render()
+        clickTab("耳机")
+        render()
+    }
+
     @Test
     fun unavailableHomeOpensDetailsAndRestoresManualActionsWhenTransportBecomesAvailable() {
         for (style in InterfaceStyle.entries) {
@@ -287,17 +301,7 @@ class OpenRoseHomeScanUiTest {
                 harness.clickContentDescription("返回")
                 harness.render()
 
-                harness.clickTab("设置")
-                harness.render()
-                harness.openPersonalization()
-                harness.clickText("组件风格")
-                harness.render()
-                harness.clickText(if (style == InterfaceStyle.MIUIX) "Material 3 Expressive" else "Miuix")
-                harness.render()
-                harness.clickContentDescription("返回")
-                harness.render()
-                harness.clickTab("耳机")
-                harness.render()
+                harness.switchStyleAndReturnHome(style)
                 assertTrue(harness.hasText(reason))
                 assertTrue(harness.hasContentDescription("添加耳机"))
 
@@ -395,6 +399,40 @@ class OpenRoseHomeScanUiTest {
         manufacturerDataHex = "",
     )
 
+    @androidx.compose.runtime.Composable
+    private fun TestHomePage(page: AppPage, model: FakeOpenRoseModel, platformUi: PlatformUi) {
+        val state = model.mutableState
+        val uiSettings = model.mutableUiSettings
+        val flow = rememberAddDeviceFlow(model)
+        AddDeviceLifecycle(page == AppPage.ADD_DEVICE, state.value, flow) {}
+        ProvideInterfaceStyle(uiSettings.value.interfaceStyle, dark = false) {
+            if (page == AppPage.ADD_DEVICE) {
+                AddDeviceContent(
+                    state = state.value,
+                    canScan = state.value.canSearchForHeadphones(),
+                    selectedDeviceId = flow.selectedDeviceId,
+                    connectionPhase = flow.phase(state.value.connection),
+                    connectionError = flow.connectionError,
+                    startScanError = flow.scanError,
+                    onRequestPermission = platformUi.requestBluetoothPermission,
+                    onOpenSystemSettings = platformUi.openBluetoothSettings,
+                    onStartScan = flow::startSearch,
+                    onStopScan = flow::stopSearch,
+                    onConnect = flow::connect,
+                    onCancelConnection = flow::cancelConnection,
+                    onDiagnostics = {},
+                    modifier = Modifier.verticalScroll(rememberScrollState()),
+                )
+            } else {
+                HeadphonesPage(
+                    model,
+                    platformUi,
+                    onNavigate = {},
+                )
+            }
+        }
+    }
+
     private fun withHarness(
         width: Int,
         height: Int,
@@ -436,40 +474,13 @@ class OpenRoseHomeScanUiTest {
             override val openBluetoothSettings: (() -> Unit) = { systemSettingsOpens += Unit }
 
             @androidx.compose.runtime.Composable
-            override fun DiagnosticsEntry(onDiagnostics: () -> Unit) {}
+            override fun DiagnosticsEntry(onDiagnostics: () -> Unit) = Unit
         }
         setContent {
             if (app) {
                 OpenRoseApp(model, platformUi)
             } else {
-                val flow = rememberAddDeviceFlow(model)
-                AddDeviceLifecycle(page == AppPage.ADD_DEVICE, state.value, flow) {}
-                ProvideInterfaceStyle(uiSettings.value.interfaceStyle, dark = false) {
-                    if (page == AppPage.ADD_DEVICE) {
-                        AddDeviceContent(
-                            state = state.value,
-                            canScan = state.value.canSearchForHeadphones(),
-                            selectedDeviceId = flow.selectedDeviceId,
-                            connectionPhase = flow.phase(state.value.connection),
-                            connectionError = flow.connectionError,
-                            startScanError = flow.scanError,
-                            onRequestPermission = platformUi.requestBluetoothPermission,
-                            onOpenSystemSettings = platformUi.openBluetoothSettings,
-                            onStartScan = flow::startSearch,
-                            onStopScan = flow::stopSearch,
-                            onConnect = flow::connect,
-                            onCancelConnection = flow::cancelConnection,
-                            onDiagnostics = {},
-                            modifier = Modifier.verticalScroll(rememberScrollState()),
-                        )
-                    } else {
-                        HeadphonesPage(
-                            model,
-                            platformUi,
-                            onNavigate = {},
-                        )
-                    }
-                }
+                TestHomePage(page, model, platformUi)
             }
         }
         block(

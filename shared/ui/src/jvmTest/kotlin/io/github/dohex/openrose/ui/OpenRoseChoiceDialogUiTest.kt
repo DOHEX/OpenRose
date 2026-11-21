@@ -44,74 +44,84 @@ class OpenRoseChoiceDialogUiTest {
         }
     }
 
-    @Test
-    fun deviceChoiceWaitsForConfirmationAndDoesNotInventAnUnknownValue() {
-        for (style in InterfaceStyle.entries) {
-            for (reading in listOf<FieldReading>(
-                FieldReading.Known(FieldValue.Number(1), "01"),
-                FieldReading.Unknown("ff"),
-            )) {
-                withConnectedHarness(style, reading) { harness ->
-                    harness.render()
-                    if (style == InterfaceStyle.MIUIX && reading is FieldReading.Known) {
-                        assertEquals(1, harness.countText("1 档"), "the current choice is displayed once")
-                        assertFalse(harness.hasText("1"), "the raw value is not repeated as a summary")
-                    }
-                    harness.clickText("提示音音量")
-                    harness.render()
-                    if (reading is FieldReading.Unknown) {
-                        assertFalse(
-                            harness.nodes().any { node ->
-                                node.config.getOrNull(SemanticsProperties.Role) == Role.RadioButton &&
-                                    node.config.getOrNull(SemanticsProperties.Selected) == true
-                            },
-                            "unknown device state has no selected option in $style",
-                        )
-                        harness.clickText("取消")
-                        harness.render()
-                        assertTrue(harness.settingWrites.isEmpty(), "cancel must not submit an unknown value")
-                        harness.clickText("提示音音量")
-                        harness.render()
-                    } else {
-                        assertTrue(harness.hasSelectedText("1 档"), "the confirmed option is selected in $style")
-                    }
-                    harness.clickText("2 档")
-                    harness.render()
-                    assertEquals(listOf<Pair<DeviceSetting, FieldValue>>(DeviceSetting.PROMPT_VOLUME to FieldValue.Number(2)), harness.settingWrites)
-                    if (reading is FieldReading.Unknown) assertTrue(harness.hasText("当前状态未知"))
+    private suspend fun ConnectedHarness.openVolumeChoice() {
+        clickText("提示音音量")
+        render()
+    }
 
-                    harness.clickText("提示音音量")
-                    harness.render()
-                    if (reading is FieldReading.Unknown) {
-                        assertFalse(
-                            harness.nodes().any { node ->
-                                node.config.getOrNull(SemanticsProperties.Role) == Role.RadioButton &&
-                                    node.config.getOrNull(SemanticsProperties.Selected) == true
-                            },
-                            "the request is not a confirmation in $style",
-                        )
-                    } else {
-                        assertTrue(harness.hasSelectedText("1 档"), "the previous confirmed option remains selected in $style")
-                    }
-                    harness.clickText(if (reading is FieldReading.Unknown) "取消" else "1 档")
-                    harness.render()
-                    val device = requireNotNull(harness.state.value.device)
-                    harness.state.value = harness.state.value.copy(
-                        device = device.copy(
-                            diagnostics = device.diagnostics.copy(
-                                fields = device.diagnostics.fields +
-                                    (DeviceField.PROMPT_VOLUME to FieldReading.Known(FieldValue.Number(2), "02")),
-                            ),
-                        ),
-                    )
-                    harness.render()
-                    harness.clickText("提示音音量")
-                    harness.render()
-                    assertTrue(harness.hasSelectedText("2 档"), "device confirmation selects the new option in $style")
-                    harness.clickText("2 档")
-                    harness.render()
-                    assertEquals(1, harness.settingWrites.size, "choosing the confirmed option does not resend")
+    private fun ConnectedHarness.hasSelectedRadioOption(): Boolean = nodes().any { node ->
+        node.config.getOrNull(SemanticsProperties.Role) == Role.RadioButton &&
+            node.config.getOrNull(SemanticsProperties.Selected) == true
+    }
+
+    private fun ConnectedHarness.reportVolume(reading: FieldReading.Known) {
+        val device = requireNotNull(state.value.device)
+        state.value = state.value.copy(
+            device = device.copy(
+                diagnostics = device.diagnostics.copy(
+                    fields = device.diagnostics.fields + (DeviceField.PROMPT_VOLUME to reading),
+                ),
+            ),
+        )
+        render()
+    }
+
+    @Test
+    fun knownVolumeRemainsSelectedUntilTheDeviceConfirmsTheNewChoice() {
+        for (style in InterfaceStyle.entries) {
+            withConnectedHarness(style, FieldReading.Known(FieldValue.Number(1), "01")) { harness ->
+                harness.render()
+                if (style == InterfaceStyle.MIUIX) {
+                    assertEquals(1, harness.countText("1 档"), "the current choice is displayed once")
+                    assertFalse(harness.hasText("1"), "the raw value is not repeated as a summary")
                 }
+                harness.openVolumeChoice()
+                assertTrue(harness.hasSelectedText("1 档"))
+                harness.clickText("2 档")
+                harness.render()
+                assertEquals(listOf<Pair<DeviceSetting, FieldValue>>(DeviceSetting.PROMPT_VOLUME to FieldValue.Number(2)), harness.settingWrites)
+                harness.openVolumeChoice()
+                assertTrue(harness.hasSelectedText("1 档"), "the request has not been confirmed")
+                harness.clickText("1 档")
+                harness.render()
+
+                harness.reportVolume(FieldReading.Known(FieldValue.Number(2), "02"))
+                harness.openVolumeChoice()
+                assertTrue(harness.hasSelectedText("2 档"))
+                harness.clickText("2 档")
+                harness.render()
+                assertEquals(1, harness.settingWrites.size, "choosing the confirmed option does not resend")
+            }
+        }
+    }
+
+    @Test
+    fun unknownVolumeAllowsCancelAndHasNoSelectionUntilTheDeviceReplies() {
+        for (style in InterfaceStyle.entries) {
+            withConnectedHarness(style, FieldReading.Unknown("ff")) { harness ->
+                harness.render()
+                harness.openVolumeChoice()
+                assertFalse(harness.hasSelectedRadioOption())
+                harness.clickText("取消")
+                harness.render()
+                assertTrue(harness.settingWrites.isEmpty())
+
+                harness.openVolumeChoice()
+                harness.clickText("2 档")
+                harness.render()
+                assertEquals(listOf<Pair<DeviceSetting, FieldValue>>(DeviceSetting.PROMPT_VOLUME to FieldValue.Number(2)), harness.settingWrites)
+                assertTrue(harness.hasText("当前状态未知"))
+                harness.openVolumeChoice()
+                assertFalse(harness.hasSelectedRadioOption(), "submission does not select an unconfirmed value")
+                harness.clickText("取消")
+                harness.render()
+
+                harness.reportVolume(FieldReading.Known(FieldValue.Number(2), "02"))
+                harness.openVolumeChoice()
+                assertTrue(harness.hasSelectedText("2 档"))
+                harness.clickText("2 档")
+                harness.render()
+                assertEquals(1, harness.settingWrites.size, "choosing the confirmed option does not resend")
             }
         }
     }

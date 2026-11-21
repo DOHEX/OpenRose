@@ -14,20 +14,9 @@ internal fun displayFieldValue(
     profile: ModelProfile? = null,
     touch: TouchControlCapabilities? = null,
 ): String = when (value) {
-    is FieldValue.Number -> when {
-        field in batteryFields -> "${value.value}%"
-        field == DeviceField.PROMPT_VOLUME && value.value == 0 -> "关闭"
-        field == DeviceField.GAIN -> gainLevelLabel(value.value)
-        field == DeviceField.HEARING_PROTECTION -> hearingProtectionLabel(value.value)
-        else -> value.displayText
-    }
+    is FieldValue.Number -> numberLabel(field, value)
 
-    is FieldValue.Toggle -> when (field) {
-        DeviceField.LEFT_CHARGING, DeviceField.RIGHT_CHARGING -> if (value.value) "充电中" else "未充电"
-        DeviceField.LEFT_IN_CASE, DeviceField.RIGHT_IN_CASE -> if (value.value) "在盒内" else "不在盒内"
-        DeviceField.CASE_FLAG -> if (value.value) "已置位" else "未置位"
-        else -> value.displayText
-    }
+    is FieldValue.Toggle -> toggleLabel(field, value)
 
     is FieldValue.Text -> if (field == DeviceField.EQ) equalizerLabel(value.value, profile) else semanticLabel(value.value)
 
@@ -110,56 +99,57 @@ internal fun equalizerLabel(preset: String, profile: ModelProfile?): String {
     return if (label == null || label.equals(code, ignoreCase = true)) code else "$label · $code"
 }
 
-internal fun semanticLabel(value: String): String = when (value) {
-    "anc" -> "主动降噪"
-    "normal" -> "标准模式"
-    "wind" -> "抗风噪"
-    "transparency" -> "通透"
-    "auto" -> "自动"
-    "deep" -> "深度降噪"
-    "dynamic" -> "动态降噪"
-    "aac_sbc" -> "AAC / SBC"
-    "ldac" -> "LDAC"
-    "ldac_lhdc" -> "LDAC + LHDC"
-    "lhdc" -> "LHDC"
-    "lc3" -> "LC3"
-    "chinese" -> "中文"
-    "english" -> "英文"
-    "pop" -> "流行"
-    "hifi" -> "Hi-Fi"
-    "rock" -> "摇滚"
-    "light" -> "轻音乐"
-    "custom" -> "自定义"
-    "off" -> "关闭"
-    "head_tracking" -> "头部跟踪"
-    "fixed" -> "固定"
-    "tv" -> "电视"
-    "music" -> "音乐"
-    "movie" -> "电影"
-    "game" -> "游戏"
-    "aptx" -> "aptX"
-    "aptx_hd" -> "aptX HD"
-    "aptx_adaptive" -> "aptX Adaptive"
-    "game_1" -> "游戏 1"
-    "custom_slot" -> "自定义槽位"
-    "eap" -> "EAP"
-    "volume_up" -> "增加音量"
-    "volume_down" -> "减小音量"
-    "previous_track" -> "上一曲"
-    "next_track" -> "下一曲"
-    "voice_assistant" -> "语音助手"
-    "play_pause" -> "播放 / 暂停"
-    "none" -> "无操作"
-    "noise_cycle" -> "降噪轮换"
-    "game_mode" -> "游戏模式"
-    "start_left" -> "开始左耳寻机"
-    "start_right" -> "开始右耳寻机"
-    "start_both" -> "开始双耳寻机"
-    "stop_both" -> "停止双耳寻机"
-    "stop_left" -> "停止左耳寻机"
-    "stop_right" -> "停止右耳寻机"
-    else -> value
-}
+private val semanticLabels = mapOf(
+    "anc" to "主动降噪",
+    "normal" to "标准模式",
+    "wind" to "抗风噪",
+    "transparency" to "通透",
+    "auto" to "自动",
+    "deep" to "深度降噪",
+    "dynamic" to "动态降噪",
+    "aac_sbc" to "AAC / SBC",
+    "ldac" to "LDAC",
+    "ldac_lhdc" to "LDAC + LHDC",
+    "lhdc" to "LHDC",
+    "lc3" to "LC3",
+    "chinese" to "中文",
+    "english" to "英文",
+    "pop" to "流行",
+    "hifi" to "Hi-Fi",
+    "rock" to "摇滚",
+    "light" to "轻音乐",
+    "custom" to "自定义",
+    "off" to "关闭",
+    "head_tracking" to "头部跟踪",
+    "fixed" to "固定",
+    "tv" to "电视",
+    "music" to "音乐",
+    "movie" to "电影",
+    "game" to "游戏",
+    "aptx" to "aptX",
+    "aptx_hd" to "aptX HD",
+    "aptx_adaptive" to "aptX Adaptive",
+    "game_1" to "游戏 1",
+    "custom_slot" to "自定义槽位",
+    "eap" to "EAP",
+    "volume_up" to "增加音量",
+    "volume_down" to "减小音量",
+    "previous_track" to "上一曲",
+    "next_track" to "下一曲",
+    "voice_assistant" to "语音助手",
+    "play_pause" to "播放 / 暂停",
+    "none" to "无操作",
+    "noise_cycle" to "降噪轮换",
+    "game_mode" to "游戏模式",
+    "start_left" to "开始左耳寻机",
+    "start_right" to "开始右耳寻机",
+    "start_both" to "开始双耳寻机",
+    "stop_both" to "停止双耳寻机",
+    "stop_left" to "停止左耳寻机",
+    "stop_right" to "停止右耳寻机",
+)
+
+internal fun semanticLabel(value: String): String = semanticLabels[value] ?: value
 
 /** The retail name with its hardware qualifier when more than one configuration shares it. */
 val ModelProfile.configurationLabel: String
@@ -180,3 +170,18 @@ private val ModelProfile.branchLabel: String?
         ModelProfile.OPENFUN_TOUCH_RS_COMMON -> "有触控开关"
         else -> null
     }
+
+private fun numberLabel(field: DeviceField?, value: FieldValue.Number): String = when {
+    field in batteryFields -> "${value.value}%"
+    field == DeviceField.PROMPT_VOLUME && value.value == 0 -> "关闭"
+    field == DeviceField.GAIN -> gainLevelLabel(value.value)
+    field == DeviceField.HEARING_PROTECTION -> hearingProtectionLabel(value.value)
+    else -> value.displayText
+}
+
+private fun toggleLabel(field: DeviceField?, value: FieldValue.Toggle): String = when (field) {
+    DeviceField.LEFT_CHARGING, DeviceField.RIGHT_CHARGING -> if (value.value) "充电中" else "未充电"
+    DeviceField.LEFT_IN_CASE, DeviceField.RIGHT_IN_CASE -> if (value.value) "在盒内" else "不在盒内"
+    DeviceField.CASE_FLAG -> if (value.value) "已置位" else "未置位"
+    else -> value.displayText
+}

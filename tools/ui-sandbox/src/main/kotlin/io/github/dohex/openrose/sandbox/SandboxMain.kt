@@ -1,6 +1,5 @@
 package io.github.dohex.openrose.sandbox
 
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
@@ -56,6 +55,7 @@ import io.github.dohex.openrose.ui.TrayPanel
 import io.github.dohex.openrose.ui.UiSettings
 import io.github.dohex.openrose.ui.configurationLabel
 import io.github.dohex.openrose.ui.interfaceBackgroundColor
+import io.github.dohex.openrose.ui.isDark
 
 /** Preview sizes in dp: a phone, the narrow layout the UI tests use, a tablet, and the desktop window's default. */
 private val previewSizes = listOf(
@@ -80,11 +80,7 @@ fun main(args: Array<String>) = nucleusApplication(args = args, backend = Nucleu
     val selection = remember { PrimaryDeviceSelection() }
     val scenario by model.scenario.collectAsState()
     val uiSettings by model.uiSettings.collectAsState()
-    val dark = when (uiSettings.appearance) {
-        Appearance.SYSTEM -> isSystemInDarkTheme()
-        Appearance.LIGHT -> false
-        Appearance.DARK -> true
-    }
+    val dark = uiSettings.appearance.isDark()
     val controlColors = if (dark) darkColorScheme() else lightColorScheme()
     val appBackground = interfaceBackgroundColor(uiSettings.interfaceStyle, dark)
     val preview = rememberWindowState(size = previewSizes[1].second, position = WindowPosition(440.dp, 40.dp))

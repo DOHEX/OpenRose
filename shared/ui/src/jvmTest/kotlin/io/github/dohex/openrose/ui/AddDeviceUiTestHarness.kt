@@ -45,7 +45,7 @@ internal fun withAddDeviceHarness(
         override val openBluetoothSettings: (() -> Unit) = {}
 
         @androidx.compose.runtime.Composable
-        override fun DiagnosticsEntry(onDiagnostics: () -> Unit) {}
+        override fun DiagnosticsEntry(onDiagnostics: () -> Unit) = Unit
     }
     harness.app = app
     setContent {
@@ -136,21 +136,8 @@ internal class AddDeviceUiTestHarness(
         beginConnection(deviceId)
         val attempt = state.value.connection as ConnectionState.Connecting
         try {
-            val terminal = snapshotFlow { state.value.connection }.first { connection ->
-                when (connection) {
-                    is ConnectionState.Connecting -> connection.deviceId != attempt.deviceId || connection.sessionId != attempt.sessionId
-
-                    is ConnectionState.Connected ->
-                        connection.deviceId != attempt.deviceId ||
-                            connection.sessionId != attempt.sessionId || connection.phase == ConnectionPhase.READY
-
-                    ConnectionState.Disconnected -> true
-                }
-            }
-            return if (terminal is ConnectionState.Connected &&
-                terminal.deviceId == attempt.deviceId && terminal.sessionId == attempt.sessionId &&
-                terminal.phase == ConnectionPhase.READY
-            ) {
+            val terminal = snapshotFlow { state.value.connection }.first { !it.waitingFor(attempt) }
+            return if (terminal is ConnectionState.Connected && terminal.deviceId == attempt.deviceId && terminal.sessionId == attempt.sessionId) {
                 OperationResult.Success
             } else {
                 OperationResult.Failure(state.value.lastError ?: ControlError(ControlErrorCode.DISCONNECTED, "连接已结束"))
@@ -173,4 +160,10 @@ internal class AddDeviceUiTestHarness(
             connection = ConnectionState.Connected(device.deviceId, device.sessionId, device.profile),
         )
     }
+}
+
+private fun ConnectionState.waitingFor(attempt: ConnectionState.Connecting): Boolean = when (this) {
+    is ConnectionState.Connecting -> deviceId == attempt.deviceId && sessionId == attempt.sessionId
+    is ConnectionState.Connected -> deviceId == attempt.deviceId && sessionId == attempt.sessionId && phase != ConnectionPhase.READY
+    ConnectionState.Disconnected -> false
 }

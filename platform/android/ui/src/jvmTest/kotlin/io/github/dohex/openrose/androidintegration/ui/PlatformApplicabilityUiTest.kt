@@ -174,34 +174,9 @@ class PlatformApplicabilityUiTest {
     }
 
     @Test
-    fun applicableHyperOsKeepsIntegrationSettingsAvailableUntilTheModuleIsReady() {
+    fun hyperOsSettingsCanBeSavedWhileTheModuleIsUnready() {
         for (style in InterfaceStyle.entries) {
-            val initialSettings = IntegrationSettings(
-                islandMode = IslandMode.MODULE,
-                focusNotificationEnabled = true,
-                islandTriggers = persistentSetOf(),
-            )
-            val platform = PlatformState(
-                permission = PermissionState.GRANTED,
-                transport = TransportAvailability.Available,
-                hostPlatform = HostPlatform.ANDROID,
-                controlTransportApplicability = PlatformApplicability.APPLICABLE,
-            )
-            withHarness(
-                initialState = ControlState(platform = platform, settings = UserSettings(forceBle = true)),
-                initialUiSettings = UiSettings(interfaceStyle = style),
-                initialIntegration = IntegrationState(
-                    settings = initialSettings,
-                    platform = IntegrationPlatformState(
-                        module = ModuleAvailability.Unavailable("兼容框架服务尚未连接"),
-                        systemIntegrationApplicability = PlatformApplicability.APPLICABLE,
-                    ),
-                ),
-            ) { harness ->
-                harness.render()
-                harness.openPage("设置")
-                harness.render()
-
+            withUnreadyHyperOsSettings(style) { harness ->
                 assertTrue(harness.hasText("超级岛"), "HyperOS settings remain visible while integration is unready in $style")
                 assertTrue(harness.hasText("焦点通知"), "HyperOS focus notification remains in Settings while unready in $style")
                 assertTrue(harness.hasText("模块显示时机"), "the saved module mode controls its applicable settings in $style")
@@ -210,10 +185,7 @@ class PlatformApplicabilityUiTest {
                 assertTrue(harness.hasText("附加设置入口"), "fusion settings destination entry remains in Settings while unready in $style")
                 assertFalse(harness.hasText("选择 OpenRose 后"), "footnote text below additional settings entry is removed in $style")
 
-                harness.clickText("超级岛")
-                harness.render()
-                harness.clickText("不显示")
-                harness.render()
+                harness.hideIsland()
 
                 assertEquals(1, harness.settingsChanges.size, "an applicable but unready integration setting can still be saved in $style")
                 assertEquals(IslandMode.OFF, harness.integration.value.settings.islandMode)
@@ -222,14 +194,19 @@ class PlatformApplicabilityUiTest {
                 harness.openPage("状态")
                 harness.render()
                 assertTrue(harness.hasText("未就绪"), "readiness is reported separately from applicability in $style")
+            }
+        }
+    }
 
-                val savedSettings = harness.integration.value.settings
-                harness.integration.value = harness.integration.value.copy(
-                    platform = harness.integration.value.platform.copy(
-                        systemIntegrationApplicability = PlatformApplicability.NOT_APPLICABLE,
-                    ),
-                )
+    @Test
+    fun hidingAndRestoringHyperOsSettingsPreservesTheSavedSelection() {
+        for (style in InterfaceStyle.entries) {
+            withUnreadyHyperOsSettings(style) { harness ->
+                harness.hideIsland()
+                harness.openPage("状态")
                 harness.render()
+                val savedSettings = harness.integration.value.settings
+                harness.setApplicability(PlatformApplicability.NOT_APPLICABLE)
                 assertFalse(harness.hasText("焦点通知"), "settings are hidden when the host becomes inapplicable in $style")
                 assertEquals(savedSettings, harness.integration.value.settings, "hiding settings leaves saved values unchanged in $style")
 
@@ -238,12 +215,7 @@ class PlatformApplicabilityUiTest {
                 assertFalse(harness.hasText("超级岛"), "HyperOS controls are hidden while inapplicable in $style")
                 assertEquals(savedSettings, harness.integration.value.settings)
 
-                harness.integration.value = harness.integration.value.copy(
-                    platform = harness.integration.value.platform.copy(
-                        systemIntegrationApplicability = PlatformApplicability.APPLICABLE,
-                    ),
-                )
-                harness.render()
+                harness.setApplicability(PlatformApplicability.APPLICABLE)
                 assertTrue(harness.hasText("超级岛"), "settings return when the host becomes applicable again in $style")
                 assertTrue(harness.hasText("焦点通知"), "focus notification returns with HyperOS applicability in $style")
                 assertTrue(harness.hasText("不显示"), "the saved mode is restored when settings reappear in $style")
@@ -253,6 +225,48 @@ class PlatformApplicabilityUiTest {
                 assertTrue(harness.transportActions.isEmpty(), "visibility changes do not reconnect or scan in $style")
             }
         }
+    }
+
+    private fun withUnreadyHyperOsSettings(style: InterfaceStyle, block: suspend (Harness) -> Unit) {
+        val initialSettings = IntegrationSettings(
+            islandMode = IslandMode.MODULE,
+            focusNotificationEnabled = true,
+            islandTriggers = persistentSetOf(),
+        )
+        val platform = PlatformState(
+            permission = PermissionState.GRANTED,
+            transport = TransportAvailability.Available,
+            hostPlatform = HostPlatform.ANDROID,
+            controlTransportApplicability = PlatformApplicability.APPLICABLE,
+        )
+        withHarness(
+            initialState = ControlState(platform = platform, settings = UserSettings(forceBle = true)),
+            initialUiSettings = UiSettings(interfaceStyle = style),
+            initialIntegration = IntegrationState(
+                settings = initialSettings,
+                platform = IntegrationPlatformState(
+                    module = ModuleAvailability.Unavailable("兼容框架服务尚未连接"),
+                    systemIntegrationApplicability = PlatformApplicability.APPLICABLE,
+                ),
+            ),
+        ) { harness ->
+            harness.render()
+            harness.openPage("设置")
+            harness.render()
+            block(harness)
+        }
+    }
+
+    private suspend fun Harness.hideIsland() {
+        clickText("超级岛")
+        render()
+        clickText("不显示")
+        render()
+    }
+
+    private fun Harness.setApplicability(value: PlatformApplicability) {
+        integration.value = integration.value.copy(platform = integration.value.platform.copy(systemIntegrationApplicability = value))
+        render()
     }
 
     private fun withHarness(

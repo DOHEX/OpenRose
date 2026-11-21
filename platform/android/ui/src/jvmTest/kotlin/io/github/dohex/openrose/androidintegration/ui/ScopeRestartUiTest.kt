@@ -2,6 +2,7 @@
 
 package io.github.dohex.openrose.androidintegration.ui
 
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import io.github.dohex.openrose.androidintegration.ControlWay
 import io.github.dohex.openrose.androidintegration.IntegrationPlatformState
@@ -10,6 +11,7 @@ import io.github.dohex.openrose.androidintegration.scope.INTEGRATION_SCOPE_PACKA
 import io.github.dohex.openrose.androidintegration.scope.ScopeRestartPhase
 import io.github.dohex.openrose.androidintegration.scope.ScopeRestartResult
 import io.github.dohex.openrose.androidintegration.scope.ScopeRestartStatus
+import io.github.dohex.openrose.androidintegration.scope.ScopeRestartUpdate
 import io.github.dohex.openrose.core.PlatformApplicability
 import io.github.dohex.openrose.ui.*
 import kotlinx.coroutines.CompletableDeferred
@@ -30,6 +32,46 @@ private val hyperOsIntegration = IntegrationState(
 )
 
 class ScopeRestartUiTest {
+    private suspend fun OpenRoseUiTestScene.restartPage(
+        settings: MutableState<UiSettings>,
+        restart: suspend (List<String>, (ScopeRestartUpdate) -> Unit) -> List<ScopeRestartResult>,
+    ): AndroidPageHarness {
+        val model = FakeOpenRoseModel(mutableStateOf(disconnectedAndroidState()), settings)
+        val page = mutableStateOf("操作")
+        val platform = androidTestPlatform(
+            MutableStateFlow(hyperOsIntegration),
+            restart = restart,
+            scope = CoroutineScope(currentCoroutineContext()),
+        )
+        setContent { AndroidTestPage(model, platform, page) }
+        return AndroidPageHarness(this, page).also { it.render() }
+    }
+
+    @Test
+    fun cancellingScopeSelectionLeavesRestartAvailableWithoutRequestingRoot() {
+        for (style in InterfaceStyle.entries) {
+            runOpenRoseUiTest(1200, 1000) {
+                var requests = 0
+                val harness = restartPage(mutableStateOf(UiSettings(interfaceStyle = style))) { _, _ ->
+                    requests++
+                    emptyList()
+                }
+                harness.clickContentDescription("重启作用域")
+                harness.render()
+                harness.clickText("取消")
+                harness.render()
+                assertEquals(0, requests)
+
+                harness.clickContentDescription("重启作用域")
+                harness.render()
+                harness.clickText("重启")
+                yield()
+                harness.render()
+                assertEquals(1, requests)
+            }
+        }
+    }
+
     @Test
     fun progressShowsThePhaseAndStreamsResultsAcrossStyles() {
         for (style in InterfaceStyle.entries) {
@@ -37,12 +79,8 @@ class ScopeRestartUiTest {
                 val authorized = CompletableDeferred<Unit>()
                 val tick = CompletableDeferred<Unit>()
                 val finish = CompletableDeferred<Unit>()
-                var requests = 0
                 val settings = mutableStateOf(UiSettings(interfaceStyle = style))
-                val model = FakeOpenRoseModel(mutableStateOf(disconnectedAndroidState()), settings)
-                val page = mutableStateOf("操作")
-                val platform = androidTestPlatform(MutableStateFlow(hyperOsIntegration), restart = { _, emit ->
-                    requests++
+                val harness = restartPage(settings) { _, emit ->
                     authorized.await()
                     emit(ScopeRestartPhase.Signalling)
                     emit(ScopeRestartResult("com.xiaomi.bluetooth", ScopeRestartStatus.NOT_RUNNING))
@@ -56,26 +94,17 @@ class ScopeRestartUiTest {
                         ScopeRestartResult("com.xiaomi.bluetooth", ScopeRestartStatus.NOT_RUNNING),
                         ScopeRestartResult("com.milink.service", ScopeRestartStatus.RESTARTED),
                     )
-                }, scope = CoroutineScope(currentCoroutineContext()))
-                setContent { AndroidTestPage(model, platform, page) }
-                val harness = AndroidPageHarness(this, page)
-                harness.render()
-                harness.clickContentDescription("重启作用域")
-                harness.render()
-                harness.clickText("取消")
-                harness.render()
-                assertEquals(0, requests)
+                }
                 harness.clickContentDescription("重启作用域")
                 harness.render()
                 harness.clickText("重启")
                 yield()
                 harness.render()
-                assertEquals(1, requests)
-                // Until Root is granted nothing has been signalled, so every process waits.
                 assertTrue(harness.hasText("正在请求 Root 授权…"))
                 assertTrue(harness.hasContentDescription("等待中"))
                 assertFalse(harness.hasContentDescription("正在重启"))
                 assertFalse(harness.hasText("关闭"))
+
                 authorized.complete(Unit)
                 yield()
                 harness.render()

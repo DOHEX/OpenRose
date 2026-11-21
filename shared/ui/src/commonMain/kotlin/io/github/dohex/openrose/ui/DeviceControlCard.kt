@@ -15,27 +15,21 @@ internal fun DeviceControlCard(
     device: DeviceState,
     onSet: (HeadsetCommand) -> Unit,
 ) {
+    val enabled = state.isReady(device) && !state.hasPendingSetting(device)
+    PromptSettings(device, enabled, onSet)
+    BassBoostSettings(device, enabled, onSet)
+    AudioConnectionSettings(device, enabled, onSet)
+    HearingSettings(device, enabled, onSet)
+}
+
+@Composable
+private fun PromptSettings(device: DeviceState, enabled: Boolean, onSet: (HeadsetCommand) -> Unit) {
     val writable = device.capabilities.writableSettings
-    val audio = device.capabilities.audioControl
-    val hasAudio = DeviceSetting.AUDIO_MODE in writable && audio != null && audio.modes.isNotEmpty()
-    val hasMultipoint = DeviceSetting.MULTIPOINT in writable
-    val hasSpatialAudio = DeviceSetting.SPATIAL_AUDIO in writable
     val volumeLevels = device.capabilities.promptVolumeLevels
     val hasVolume = DeviceSetting.PROMPT_VOLUME in writable && volumeLevels.isNotEmpty()
-    val gainLevels = device.capabilities.gainLevels
-    val hasGain = DeviceSetting.GAIN in writable && gainLevels.isNotEmpty()
-    val protectionLevels = device.capabilities.hearingProtectionLevels
-    val hasProtection = DeviceSetting.HEARING_PROTECTION in writable && protectionLevels.isNotEmpty()
-    val bassLevels = device.capabilities.bassBoostLevels
-    val hasBass = DeviceSetting.BASS_BOOST in writable && bassLevels.isNotEmpty()
     val languages = device.capabilities.promptLanguages
     val hasLanguage = DeviceSetting.PROMPT_LANGUAGE in writable && languages.isNotEmpty()
     val hasPrompt = hasVolume || hasLanguage
-    val hasAudioControls = hasAudio || hasMultipoint || hasSpatialAudio || writable.any { it in additionalAudioSettings }
-    val hasSound = hasGain || hasProtection || hasBass
-    if (!hasPrompt && !hasAudioControls && !hasSound) return
-
-    val enabled = state.isReady(device) && !state.hasPendingSetting(device)
     if (hasPrompt) {
         AppGroup(title = "提示与音量") {
             if (hasVolume) {
@@ -46,7 +40,7 @@ internal fun DeviceControlCard(
                     options = volumeLevels.sorted().map { level -> AppOption(level, if (level == 0) "关闭" else "$level 档") },
                     selected = confirmed,
                     enabled = enabled,
-                    onSelect = { level -> if (level != confirmed) onSet(HeadsetCommand.PromptVolume(level)) },
+                    onSelect = { level -> onSet(HeadsetCommand.PromptVolume(level)) },
                 )
             }
             if (hasLanguage) {
@@ -57,12 +51,18 @@ internal fun DeviceControlCard(
                     options = languages.sorted().map { AppOption(it, semanticLabel(it)) },
                     selected = confirmed,
                     enabled = enabled,
-                    onSelect = { if (it != confirmed) onSet(HeadsetCommand.PromptLanguage(it)) },
+                    onSelect = { onSet(HeadsetCommand.PromptLanguage(it)) },
                 )
             }
         }
     }
+}
 
+@Composable
+private fun BassBoostSettings(device: DeviceState, enabled: Boolean, onSet: (HeadsetCommand) -> Unit) {
+    val writable = device.capabilities.writableSettings
+    val bassLevels = device.capabilities.bassBoostLevels
+    val hasBass = DeviceSetting.BASS_BOOST in writable && bassLevels.isNotEmpty()
     if (hasBass) {
         val confirmed = device.confirmedBassBoostLevel
         AppGroup(title = "音效") {
@@ -72,11 +72,20 @@ internal fun DeviceControlCard(
                 options = bassLevels.sorted().map { AppOption(it, "$it 档") },
                 selected = confirmed,
                 enabled = enabled,
-                onSelect = { if (it != confirmed) onSet(HeadsetCommand.BassBoost(it)) },
+                onSelect = { onSet(HeadsetCommand.BassBoost(it)) },
             )
         }
     }
+}
 
+@Composable
+private fun AudioConnectionSettings(device: DeviceState, enabled: Boolean, onSet: (HeadsetCommand) -> Unit) {
+    val writable = device.capabilities.writableSettings
+    val audio = device.capabilities.audioControl
+    val hasAudio = DeviceSetting.AUDIO_MODE in writable && audio != null && audio.modes.isNotEmpty()
+    val hasMultipoint = DeviceSetting.MULTIPOINT in writable
+    val hasSpatialAudio = DeviceSetting.SPATIAL_AUDIO in writable
+    val hasAudioControls = hasAudio || hasMultipoint || hasSpatialAudio || writable.any { it in additionalAudioSettings }
     if (hasAudioControls) {
         val coupledFootnote = if (hasAudio && hasMultipoint && audio.multipointCoupled) {
             "该型号的 LDAC 与多点连接互斥；切换多点时设备会改用 AAC / SBC。"
@@ -97,9 +106,7 @@ internal fun DeviceControlCard(
                         .map { mode -> AppOption(mode, semanticLabel(mode)) },
                     selected = confirmed,
                     enabled = enabled,
-                    onSelect = { mode ->
-                        if (mode != confirmed) onSet(HeadsetCommand.AudioMode(mode))
-                    },
+                    onSelect = { mode -> onSet(HeadsetCommand.AudioMode(mode)) },
                 )
             }
             if (hasMultipoint) {
@@ -111,7 +118,15 @@ internal fun DeviceControlCard(
             }
         }
     }
+}
 
+@Composable
+private fun HearingSettings(device: DeviceState, enabled: Boolean, onSet: (HeadsetCommand) -> Unit) {
+    val writable = device.capabilities.writableSettings
+    val gainLevels = device.capabilities.gainLevels
+    val hasGain = DeviceSetting.GAIN in writable && gainLevels.isNotEmpty()
+    val protectionLevels = device.capabilities.hearingProtectionLevels
+    val hasProtection = DeviceSetting.HEARING_PROTECTION in writable && protectionLevels.isNotEmpty()
     if (hasGain || hasProtection) {
         AppGroup(title = "输出与保护") {
             if (hasGain) {
@@ -122,9 +137,7 @@ internal fun DeviceControlCard(
                     options = gainLevels.sorted().map { level -> AppOption(level, gainLevelLabel(level)) },
                     selected = confirmed,
                     enabled = enabled,
-                    onSelect = { level ->
-                        if (level != confirmed) onSet(HeadsetCommand.Gain(level))
-                    },
+                    onSelect = { level -> onSet(HeadsetCommand.Gain(level)) },
                 )
             }
             if (hasProtection) {
@@ -135,9 +148,7 @@ internal fun DeviceControlCard(
                     options = protectionLevels.sorted().map { level -> AppOption(level, hearingProtectionLabel(level)) },
                     selected = confirmed,
                     enabled = enabled,
-                    onSelect = { level ->
-                        if (level != confirmed) onSet(HeadsetCommand.HearingProtection(level))
-                    },
+                    onSelect = { level -> onSet(HeadsetCommand.HearingProtection(level)) },
                 )
             }
         }
@@ -220,7 +231,7 @@ private fun SpatialChoiceRow(
         options = choices.map { AppOption(it, semanticLabel(it)) },
         selected = confirmed,
         enabled = enabled,
-        onSelect = { if (it != confirmed) onSet(command(it)) },
+        onSelect = { onSet(command(it)) },
     )
 }
 

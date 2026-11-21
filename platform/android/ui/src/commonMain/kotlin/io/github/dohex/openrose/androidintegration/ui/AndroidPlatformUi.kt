@@ -308,24 +308,7 @@ class AndroidPlatformUi(
                     bridge.detail?.let { AppInfoRow("详情", it) }
                 }
 
-                bridge.endpoints.values.forEach { endpoint ->
-                    val endpointName = when (endpoint.targetPackage) {
-                        "com.android.bluetooth" -> "蓝牙服务"
-                        "com.xiaomi.bluetooth" -> "小米蓝牙"
-                        "com.milink.service" -> "融合设备中心"
-                        else -> endpoint.targetPackage
-                    }
-                    AppGroup(title = endpointName) {
-                        AppInfoRow("目标包", endpoint.targetPackage)
-                        AppInfoRow("目标进程", endpoint.targetProcess)
-                        AppInfoRow("组件版本", endpoint.componentVersion)
-                        AppInfoRow("入口依据", endpoint.entryMatch)
-                        AppInfoRow("跨进程通道", bridgeIpcLabel(endpoint.ipc))
-                        endpoint.features.forEach { (feature, result) ->
-                            DiagnosticResultRow(featureLabel(feature), result)
-                        }
-                    }
-                }
+                bridge.endpoints.values.forEach { EndpointDiagnostics(it) }
 
                 bridge.presentation.takeIf { it.isNotEmpty() }?.let { presentation ->
                     AppGroup(title = "系统呈现记录") {
@@ -388,19 +371,7 @@ class AndroidPlatformUi(
                     restartPhase = ScopeRestartPhase.Authorizing
                     restartScope.launch {
                         try {
-                            restartResults = onRestartScope(targets) { update ->
-                                when (update) {
-                                    is ScopeRestartPhase -> restartPhase = update
-                                    is ScopeRestartResult -> restartResults = restartResults.orEmpty() + update
-                                }
-                            }
-                        } catch (cancelled: CancellationException) {
-                            throw cancelled
-                        } catch (failure: Exception) {
-                            val done = restartResults.orEmpty().associateBy { it.target }
-                            restartResults = targets.map {
-                                done[it] ?: ScopeRestartResult(it, ScopeRestartStatus.FAILED, failure.message ?: "操作失败")
-                            }
+                            restartResults = restart(targets)
                         } finally {
                             restartRunning = false
                             restartPhase = null
@@ -411,6 +382,23 @@ class AndroidPlatformUi(
             onClose = { restartDialogOpen = false },
         )
     }
+
+    /** Keep terminal results already reported by the host if its restart call fails partway. */
+    private suspend fun restart(targets: List<String>): List<ScopeRestartResult> {
+        val outcome = runCatching {
+            onRestartScope(targets) { update ->
+                when (update) {
+                    is ScopeRestartPhase -> restartPhase = update
+                    is ScopeRestartResult -> restartResults = restartResults.orEmpty() + update
+                }
+            }
+        }
+        return outcome.getOrElse { failure ->
+            if (failure !is Exception || failure is CancellationException) throw failure
+            val done = restartResults.orEmpty().associateBy { it.target }
+            targets.map { done[it] ?: ScopeRestartResult(it, ScopeRestartStatus.FAILED, failure.message ?: "操作失败") }
+        }
+    }
 }
 
 private fun hyperOsIntegrationApplicable(integration: IntegrationPlatformState): Boolean = integration
@@ -419,18 +407,7 @@ private fun hyperOsIntegrationApplicable(integration: IntegrationPlatformState):
 @Composable
 private fun DiagnosticResultRow(label: String, result: String) {
     val code = result.substringBefore(" · ")
-    val status = when (code) {
-        "RESOLVED" -> "已定位入口，实际行为待验收"
-        "IDENTIFIED" -> "已匹配当前设备"
-        "SUBMITTED" -> "已提交操作，等待设备确认"
-        "CONFIRMED" -> "设备已确认操作"
-        "CALLED" -> "已调用接口，实际行为待验收"
-        "REJECTED" -> "请求已拒绝"
-        "UNSUPPORTED" -> "缺少已核实的能力映射"
-        "UNAVAILABLE" -> "当前系统路径不可用"
-        "ACTION_FAILED" -> "操作失败"
-        else -> "等待确认"
-    }
+    val status = diagnosticStatusLabels[code] ?: "等待确认"
     val detail = result.substringAfter(" · ", "").takeIf { it.isNotBlank() }
     val tone = when (code) {
         "RESOLVED", "IDENTIFIED", "CONFIRMED" -> StatusTone.GOOD
@@ -517,3 +494,35 @@ private fun presentationLabel(feature: String): String = when (feature) {
     "STATUS_NOTIFICATION" -> "耳机状态通知"
     else -> feature
 }
+
+@Composable
+private fun EndpointDiagnostics(endpoint: SystemEndpointDiagnostics) {
+    val endpointName = when (endpoint.targetPackage) {
+        "com.android.bluetooth" -> "蓝牙服务"
+        "com.xiaomi.bluetooth" -> "小米蓝牙"
+        "com.milink.service" -> "融合设备中心"
+        else -> endpoint.targetPackage
+    }
+    AppGroup(title = endpointName) {
+        AppInfoRow("目标包", endpoint.targetPackage)
+        AppInfoRow("目标进程", endpoint.targetProcess)
+        AppInfoRow("组件版本", endpoint.componentVersion)
+        AppInfoRow("入口依据", endpoint.entryMatch)
+        AppInfoRow("跨进程通道", bridgeIpcLabel(endpoint.ipc))
+        endpoint.features.forEach { (feature, result) ->
+            DiagnosticResultRow(featureLabel(feature), result)
+        }
+    }
+}
+
+private val diagnosticStatusLabels = mapOf(
+    "RESOLVED" to "已定位入口，实际行为待验收",
+    "IDENTIFIED" to "已匹配当前设备",
+    "SUBMITTED" to "已提交操作，等待设备确认",
+    "CONFIRMED" to "设备已确认操作",
+    "CALLED" to "已调用接口，实际行为待验收",
+    "REJECTED" to "请求已拒绝",
+    "UNSUPPORTED" to "缺少已核实的能力映射",
+    "UNAVAILABLE" to "当前系统路径不可用",
+    "ACTION_FAILED" to "操作失败",
+)

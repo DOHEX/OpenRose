@@ -83,26 +83,7 @@ internal fun ScopeRestartAction(
     val selecting = stage == ScopeRestartStage.SELECTING
     val onDismiss = { if (stage != ScopeRestartStage.RUNNING) onClose() }
     val rows = @Composable {
-        val byTarget = results.orEmpty().associateBy { it.target }
-        Column {
-            availableTargets.forEach { target ->
-                val mark = when {
-                    selecting -> ScopeRestartMark.CHECKBOX
-
-                    target !in targets -> ScopeRestartMark.SKIPPED
-
-                    else -> byTarget[target]?.status?.let(ScopeRestartMark::of)
-                        ?: if (phase == null || phase == ScopeRestartPhase.Authorizing) {
-                            ScopeRestartMark.WAITING
-                        } else {
-                            ScopeRestartMark.WORKING
-                        }
-                }
-                // Reasons appear once the run is over: a row growing mid-run would move every row of the dialog.
-                val detail = byTarget[target]?.detail?.takeIf { stage == ScopeRestartStage.DONE }
-                ScopeRestartRow(target, mark, target in selected, detail, onToggle)
-            }
-        }
+        ScopeRestartRows(availableTargets, selected, targets, phase, results, stage, onToggle)
     }
     when (LocalInterfaceStyle.current) {
         InterfaceStyle.MIUIX -> {
@@ -138,33 +119,7 @@ internal fun ScopeRestartAction(
                 androidx.compose.material3.Icon(restartIcon, contentDescription = "重启作用域")
             }
             if (open) {
-                AlertDialog(
-                    onDismissRequest = onDismiss,
-                    title = { Text("重启作用域") },
-                    text = {
-                        Column {
-                            Text(summary, maxLines = 1)
-                            Spacer(Modifier.height(8.dp))
-                            rows()
-                        }
-                    },
-                    dismissButton = if (stage == ScopeRestartStage.DONE) {
-                        null
-                    } else {
-                        (
-                            {
-                                TextButton(onClick = onClose, enabled = selecting) { Text("取消") }
-                            }
-                            )
-                    },
-                    confirmButton = {
-                        if (stage == ScopeRestartStage.DONE) {
-                            TextButton(onClick = onClose) { Text("关闭") }
-                        } else {
-                            TextButton(onClick = onConfirm, enabled = selecting && selected.isNotEmpty()) { Text("重启") }
-                        }
-                    },
-                )
+                MaterialRestartDialog(stage, summary, selected.isNotEmpty(), onDismiss, onClose, onConfirm, rows)
             }
         }
     }
@@ -266,4 +221,76 @@ private fun ScopeRestartMarkSlot(mark: ScopeRestartMark, checked: Boolean, size:
             }
         }
     }
+}
+
+@Composable
+private fun ScopeRestartRows(
+    availableTargets: List<String>,
+    selected: Set<String>,
+    targets: List<String>,
+    phase: ScopeRestartPhase?,
+    results: List<ScopeRestartResult>?,
+    stage: ScopeRestartStage,
+    onToggle: (String) -> Unit,
+) {
+    val byTarget = results.orEmpty().associateBy { it.target }
+    Column {
+        availableTargets.forEach { target ->
+            val mark = when {
+                stage == ScopeRestartStage.SELECTING -> ScopeRestartMark.CHECKBOX
+
+                target !in targets -> ScopeRestartMark.SKIPPED
+
+                else -> byTarget[target]?.status?.let(ScopeRestartMark::of)
+                    ?: if (phase == null || phase == ScopeRestartPhase.Authorizing) {
+                        ScopeRestartMark.WAITING
+                    } else {
+                        ScopeRestartMark.WORKING
+                    }
+            }
+            // Reasons appear once the run is over: a row growing mid-run would move every row of the dialog.
+            val detail = byTarget[target]?.detail?.takeIf { stage == ScopeRestartStage.DONE }
+            ScopeRestartRow(target, mark, target in selected, detail, onToggle)
+        }
+    }
+}
+
+@Composable
+private fun MaterialRestartDialog(
+    stage: ScopeRestartStage,
+    summary: String,
+    hasSelection: Boolean,
+    onDismiss: () -> Unit,
+    onClose: () -> Unit,
+    onConfirm: () -> Unit,
+    rows: @Composable () -> Unit,
+) {
+    val selecting = stage == ScopeRestartStage.SELECTING
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("重启作用域") },
+        text = {
+            Column {
+                Text(summary, maxLines = 1)
+                Spacer(Modifier.height(8.dp))
+                rows()
+            }
+        },
+        dismissButton = if (stage == ScopeRestartStage.DONE) {
+            null
+        } else {
+            (
+                {
+                    TextButton(onClick = onClose, enabled = selecting) { Text("取消") }
+                }
+                )
+        },
+        confirmButton = {
+            if (stage == ScopeRestartStage.DONE) {
+                TextButton(onClick = onClose) { Text("关闭") }
+            } else {
+                TextButton(onClick = onConfirm, enabled = selecting && hasSelection) { Text("重启") }
+            }
+        },
+    )
 }

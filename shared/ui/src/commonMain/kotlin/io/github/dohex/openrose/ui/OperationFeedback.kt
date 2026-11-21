@@ -117,3 +117,33 @@ private fun SettingStage.feedbackMessage(): String = when (this) {
 
     SettingStage.FAILED -> "设置失败"
 }
+
+private val settingNames = mapOf(
+    DeviceSetting.NOISE_MODE to "降噪模式",
+    DeviceSetting.ANC_LEVEL to "降噪档位",
+    DeviceSetting.TRANSPARENCY_LEVEL to "通透档位",
+    DeviceSetting.NOISE_CYCLE to "降噪轮换",
+    DeviceSetting.EQ to "预设 EQ",
+    DeviceSetting.GAME_MODE to "游戏模式",
+    DeviceSetting.TAP_ENABLED to "轻拍开关",
+    DeviceSetting.TAP_BINDING to "轻拍绑定",
+    DeviceSetting.TOUCH_BINDING to "触控绑定",
+    DeviceSetting.TOUCH_ENABLED to "触控总开关",
+    DeviceSetting.EAR_DETECTION to "佩戴检测功能",
+    DeviceSetting.AUDIO_MODE to "音频模式",
+    DeviceSetting.MULTIPOINT to "多点连接",
+    DeviceSetting.SPATIAL_MODE to "空间模式",
+    DeviceSetting.SPATIAL_CONTENT to "空间音频内容",
+    DeviceSetting.EAR_ADAPTIVE to "耳道自适应",
+    DeviceSetting.INDEPENDENT_MIC_ACTIVATION to "独立麦克风激活",
+    DeviceSetting.INDEPENDENT_MIC_MODE to "独立麦克风模式",
+    DeviceSetting.SPATIAL_AUDIO to "空间音频",
+    DeviceSetting.PROMPT_VOLUME to "提示音音量",
+    DeviceSetting.GAIN to "增益档位",
+    DeviceSetting.HEARING_PROTECTION to "听力保护阈值",
+    DeviceSetting.BASS_BOOST to "低音增强",
+    DeviceSetting.PROMPT_LANGUAGE to "提示音语言",
+    DeviceSetting.CUSTOM_EQ to "自定义 EQ",
+)
+
+internal fun DeviceSetting.displayName(): String = settingNames.getValue(this)

@@ -43,6 +43,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.dp
 import io.github.dohex.openrose.ui.shell.ShellPageContent
+import top.yukonga.miuix.kmp.blur.Backdrop
 import top.yukonga.miuix.kmp.blur.textureBlur
 
 @Composable
@@ -210,99 +211,9 @@ internal fun MaterialMainShell(
         bottomBar = {
             if (!wide) {
                 if (bottomBarStyle == BottomBarStyle.FLOATING) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .navigationBarsPadding()
-                            .padding(bottom = 16.dp),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        // The toolbar's default container matches surfaceContainer list rows, so it vanishes
-                        // over them: lift it one tone (surfaceContainerHigh). Opaque, it gets MD3 floating
-                        // elevation (Level3, 6dp). Translucent over the blur, an elevation shadow fills the
-                        // whole shape and shows through the tint, darkening it, so the blurred toolbar uses
-                        // an outlineVariant hairline for separation instead.
-                        HorizontalFloatingToolbar(
-                            expanded = true,
-                            modifier = if (backdropActive && floatingBackdrop != null) {
-                                Modifier
-                                    .textureBlur(
-                                        backdrop = floatingBackdrop,
-                                        shape = FloatingToolbarDefaults.ContainerShape,
-                                        blurRadius = 25f,
-                                    )
-                                    .border(
-                                        width = 1.dp,
-                                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
-                                        shape = FloatingToolbarDefaults.ContainerShape,
-                                    )
-                            } else {
-                                Modifier
-                            },
-                            colors = FloatingToolbarDefaults.standardFloatingToolbarColors(
-                                toolbarContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh.let {
-                                    if (backdropActive) it.copy(alpha = 0.85f) else it
-                                },
-                            ),
-                            expandedShadowElevation = if (backdropActive) 0.dp else 6.dp,
-                        ) {
-                            mainPages.forEachIndexed { index, destination ->
-                                val isSelected = currentTab == destination
-                                val indicatorWidth by animateDpAsState(
-                                    targetValue = if (isSelected) 56.dp else 48.dp,
-                                    animationSpec = spring(
-                                        dampingRatio = 0.75f,
-                                        stiffness = 400f,
-                                    ),
-                                    label = "tabIndicatorWidth",
-                                )
-                                val containerColor by animateColorAsState(
-                                    targetValue = if (isSelected) {
-                                        MaterialTheme.colorScheme.secondaryContainer
-                                    } else {
-                                        MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0f)
-                                    },
-                                    animationSpec = spring(
-                                        dampingRatio = Spring.DampingRatioNoBouncy,
-                                        stiffness = Spring.StiffnessMedium,
-                                    ),
-                                    label = "tabContainerColor",
-                                )
-                                val iconTint by animateColorAsState(
-                                    targetValue = if (isSelected) {
-                                        MaterialTheme.colorScheme.onSecondaryContainer
-                                    } else {
-                                        MaterialTheme.colorScheme.onSurfaceVariant
-                                    },
-                                    animationSpec = spring(
-                                        dampingRatio = Spring.DampingRatioNoBouncy,
-                                        stiffness = Spring.StiffnessMedium,
-                                    ),
-                                    label = "tabIconTint",
-                                )
-                                Box(
-                                    modifier = Modifier
-                                        .clip(CircleShape)
-                                        .background(containerColor)
-                                        .selectable(
-                                            selected = isSelected,
-                                            role = Role.Tab,
-                                            onClick = {
-                                                pagerState.selectPage(index, animate = animatePageChanges)
-                                                onNavigate(destination)
-                                            },
-                                        )
-                                        .size(width = indicatorWidth, height = 48.dp),
-                                    contentAlignment = Alignment.Center,
-                                ) {
-                                    AppIcon(
-                                        destination.icon,
-                                        contentDescription = destination.navigationLabel,
-                                        tint = iconTint,
-                                    )
-                                }
-                            }
-                        }
+                    MaterialFloatingTabs(currentTab, backdropActive, floatingBackdrop) { index, destination ->
+                        pagerState.selectPage(index, animate = animatePageChanges)
+                        onNavigate(destination)
                     }
                 } else {
                     val bottomBarColor = if (backdropActive) Color.Transparent else MaterialTheme.colorScheme.surfaceContainer
@@ -417,6 +328,106 @@ internal fun MaterialMainShell(
                 key = { index -> mainPages[index] },
                 pageContent = pageContent,
             )
+        }
+    }
+}
+
+@Composable
+private fun MaterialFloatingTabs(
+    currentTab: AppPage,
+    backdropActive: Boolean,
+    floatingBackdrop: Backdrop?,
+    onSelect: (Int, AppPage) -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .navigationBarsPadding()
+            .padding(bottom = 16.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        // The toolbar's default container matches surfaceContainer list rows, so it vanishes
+        // over them: lift it one tone (surfaceContainerHigh). Opaque, it gets MD3 floating
+        // elevation (Level3, 6dp). Translucent over the blur, an elevation shadow fills the
+        // whole shape and shows through the tint, darkening it, so the blurred toolbar uses
+        // an outlineVariant hairline for separation instead.
+        HorizontalFloatingToolbar(
+            expanded = true,
+            modifier = if (backdropActive && floatingBackdrop != null) {
+                Modifier
+                    .textureBlur(
+                        backdrop = floatingBackdrop,
+                        shape = FloatingToolbarDefaults.ContainerShape,
+                        blurRadius = 25f,
+                    )
+                    .border(
+                        width = 1.dp,
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+                        shape = FloatingToolbarDefaults.ContainerShape,
+                    )
+            } else {
+                Modifier
+            },
+            colors = FloatingToolbarDefaults.standardFloatingToolbarColors(
+                toolbarContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh.let {
+                    if (backdropActive) it.copy(alpha = 0.85f) else it
+                },
+            ),
+            expandedShadowElevation = if (backdropActive) 0.dp else 6.dp,
+        ) {
+            mainPages.forEachIndexed { index, destination ->
+                val isSelected = currentTab == destination
+                val indicatorWidth by animateDpAsState(
+                    targetValue = if (isSelected) 56.dp else 48.dp,
+                    animationSpec = spring(
+                        dampingRatio = 0.75f,
+                        stiffness = 400f,
+                    ),
+                    label = "tabIndicatorWidth",
+                )
+                val containerColor by animateColorAsState(
+                    targetValue = if (isSelected) {
+                        MaterialTheme.colorScheme.secondaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0f)
+                    },
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioNoBouncy,
+                        stiffness = Spring.StiffnessMedium,
+                    ),
+                    label = "tabContainerColor",
+                )
+                val iconTint by animateColorAsState(
+                    targetValue = if (isSelected) {
+                        MaterialTheme.colorScheme.onSecondaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioNoBouncy,
+                        stiffness = Spring.StiffnessMedium,
+                    ),
+                    label = "tabIconTint",
+                )
+                Box(
+                    modifier = Modifier
+                        .clip(CircleShape)
+                        .background(containerColor)
+                        .selectable(
+                            selected = isSelected,
+                            role = Role.Tab,
+                            onClick = { onSelect(index, destination) },
+                        )
+                        .size(width = indicatorWidth, height = 48.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    AppIcon(
+                        destination.icon,
+                        contentDescription = destination.navigationLabel,
+                        tint = iconTint,
+                    )
+                }
+            }
         }
     }
 }

@@ -7,7 +7,6 @@ import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.focusable
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -23,26 +22,10 @@ import io.github.dohex.openrose.ui.diagnostics.SettingOperationsCard
 import io.github.dohex.openrose.ui.model.OpenRoseModel
 import io.github.dohex.openrose.ui.model.WindowDestination
 import io.github.dohex.openrose.ui.model.settingsFor
+import top.yukonga.miuix.kmp.nav.core.NavBackStack
 import top.yukonga.miuix.kmp.nav.core.NavDisplay
 import top.yukonga.miuix.kmp.nav.core.rememberNavBackStack
 import top.yukonga.miuix.kmp.nav.transition.NavSwipeDirection
-
-internal enum class AppPage(val title: String, val icon: RoseIcon) {
-    HEADPHONES("我的耳机", RoseIcon.HEADPHONES),
-    STATUS("状态", RoseIcon.STATUS),
-    SETTINGS("设置", RoseIcon.SETTINGS),
-    ADD_DEVICE("添加耳机", RoseIcon.PLUS),
-    TOUCH("触控操作", RoseIcon.TOUCH),
-    EQUALIZER("均衡器", RoseIcon.EQUALIZER),
-    AUDIO("音频与设备", RoseIcon.AUDIO),
-    DETAILS("设备详情", RoseIcon.INFO),
-    DIAGNOSTICS("诊断与记录", RoseIcon.LOG),
-    PERSONALIZATION("个性化", RoseIcon.PALETTE),
-    CIRCULATION_PAIRING("流转配对", RoseIcon.LINK),
-    ABOUT("关于", RoseIcon.INFO),
-}
-
-internal val mainPages = listOf(AppPage.HEADPHONES, AppPage.STATUS, AppPage.SETTINGS)
 
 /** Navigation, scroll positions and drafts survive replacement of either component style.
  * The host remains the sole owner of the control session and transport. */
@@ -55,111 +38,48 @@ fun OpenRoseApp(
 ) {
     val state by model.state.collectAsState()
     val uiSettings by model.uiSettings.collectAsState()
-    val onDisconnect = model::disconnect
-    val dark = when (uiSettings.appearance) {
-        Appearance.SYSTEM -> isSystemInDarkTheme()
-        Appearance.LIGHT -> false
-        Appearance.DARK -> true
-    }
-    val dynamicColor = platformUi.dynamicColor
     val backdropActive = rememberBackdropBlurActive(uiSettings)
     val navBackStack = rememberNavBackStack<Route>(Route.Main(AppPage.HEADPHONES))
     val mainTabsPagerState = rememberMainTabsPagerState(initialPage = 0)
-    val currentRoute = (navBackStack.lastOrNull() as? Route) ?: Route.Main(AppPage.HEADPHONES)
-    val latestRoute by rememberUpdatedState(currentRoute)
-    val page = when (currentRoute) {
-        is Route.Main -> mainPages.getOrElse(mainTabsPagerState.selectedPage) { AppPage.HEADPHONES }
-        else -> currentRoute.toAppPage()
-    }
     val scrollStates = remember { AppPage.entries.associateWith { ScrollState(0) } }
-    var selectedTouchSlot by remember(state.device?.sessionId) { mutableStateOf<TouchSlot?>(null) }
-    var headphoneMenuExpanded by remember { mutableStateOf(false) }
+    val devicePages = remember(state.device?.sessionId) { DevicePageState() }
+    val menu = remember { mutableStateOf(false) }
+    val animate = uiSettings.pageTransition != PageTransition.NONE
+    val navigation = remember(navBackStack, mainTabsPagerState, devicePages, animate) {
+        AppNavigation(navBackStack, mainTabsPagerState, devicePages, menu, animate)
+    }
+    val page = navigation.visiblePage
+    val currentNavigation by rememberUpdatedState(navigation)
     val rootFocusRequester = remember { FocusRequester() }
-    val choiceDialog = remember(state.device?.sessionId) { mutableStateOf<String?>(null) }
-    var selectedTouchSide by remember(state.device?.sessionId) { mutableStateOf<String?>(null) }
     val uiScope = rememberCoroutineScope()
     val equalizerEditor = remember { EqualizerEditor(uiScope, model::setInSession) }
     val readySessionId = state.readySession?.sessionId
     LaunchedEffect(readySessionId) { equalizerEditor.bind(readySessionId) }
     LaunchedEffect(model.navigation) {
-        model.navigation.requests.collect { destination ->
-            while (navBackStack.size > 1) {
-                navBackStack.removeLastOrNull()
-            }
-            mainTabsPagerState.selectPage(0, animate = false)
-            headphoneMenuExpanded = false
-            choiceDialog.value = null
-            selectedTouchSlot = null
-            when (destination) {
-                WindowDestination.ADD_DEVICE -> navBackStack.add(Route.AddDevice)
-                WindowDestination.DIAGNOSTICS -> navBackStack.add(Route.Diagnostics)
-                WindowDestination.HEADPHONES -> Unit
-            }
-        }
+        model.navigation.requests.collect { currentNavigation.openWindow(it) }
     }
-    fun navigate(destination: AppPage) {
-        headphoneMenuExpanded = false
-        choiceDialog.value = null
-        selectedTouchSlot = null
-        if (destination in mainPages) {
-            while (navBackStack.size > 1) {
-                navBackStack.removeLastOrNull()
-            }
-            val targetIndex = mainPages.indexOf(destination)
-            if (targetIndex >= 0) {
-                mainTabsPagerState.selectPage(targetIndex, animate = uiSettings.pageTransition != PageTransition.NONE)
-            }
-        } else {
-            val target = destination.toRoute()
-            if (navBackStack.lastOrNull() != target) {
-                navBackStack.add(target)
-            }
-        }
-    }
-    fun back() {
-        when {
-            headphoneMenuExpanded -> headphoneMenuExpanded = false
-
-            selectedTouchSlot != null -> selectedTouchSlot = null
-
-            choiceDialog.value != null -> choiceDialog.value = null
-
-            navBackStack.size > 1 -> navBackStack.removeLastOrNull()
-
-            mainTabsPagerState.selectedPage != 0 -> {
-                mainTabsPagerState.selectPage(0, animate = uiSettings.pageTransition != PageTransition.NONE)
-            }
-        }
-    }
-    val canGoBack = headphoneMenuExpanded ||
-        selectedTouchSlot != null ||
-        choiceDialog.value != null ||
-        navBackStack.size > 1 ||
-        (currentRoute is Route.Main && mainTabsPagerState.selectedPage != 0)
-    PlatformBackHandler(
-        canGoBack,
-        ::back,
-    )
+    val canGoBack = navigation.canGoBack
+    PlatformBackHandler(canGoBack, navigation::back)
     val addDeviceFlow = rememberAddDeviceFlow(model)
-    AddDeviceLifecycle(currentRoute is Route.AddDevice, state, addDeviceFlow) { navigate(AppPage.HEADPHONES) }
+    AddDeviceLifecycle(navigation.route is Route.AddDevice, state, addDeviceFlow) { navigation.navigate(AppPage.HEADPHONES) }
     LaunchedEffect(state.connection, page) {
         if (page != AppPage.HEADPHONES || state.activeDevice() == null) {
-            headphoneMenuExpanded = false
+            navigation.menuExpanded = false
         }
     }
     CompositionLocalProvider(
-        LocalChoiceDialog provides choiceDialog,
+        LocalChoiceDialog provides devicePages.choiceDialog,
         LocalBackdropBlurActive provides backdropActive,
     ) {
-        LaunchedEffect(page, choiceDialog.value, selectedTouchSlot, headphoneMenuExpanded) {
-            if (choiceDialog.value == null && selectedTouchSlot == null && !headphoneMenuExpanded) {
+        LaunchedEffect(page, navigation.overlayOpen) {
+            if (!navigation.overlayOpen) {
                 rootFocusRequester.requestFocus()
             }
         }
         BoxWithConstraints(
             modifier.fillMaxSize().focusRequester(rootFocusRequester).onPreviewKeyEvent {
                 if (it.type == KeyEventType.KeyUp && it.key == Key.Escape && canGoBack) {
-                    back()
+                    navigation.back()
                     true
                 } else {
                     false
@@ -167,258 +87,32 @@ fun OpenRoseApp(
             }.focusable(),
         ) {
             val wide = maxWidth >= 900.dp
-            val onNavigate: (AppPage) -> Unit = ::navigate
             val pageContentFor: @Composable (AppPage) -> Unit = { targetPage ->
-                val device = state.activeDevice()
-                when (targetPage) {
-                    AppPage.HEADPHONES -> HeadphonesPage(model, platformUi, onNavigate, primaryDeviceSelection)
-
-                    AppPage.ADD_DEVICE -> AddDeviceContent(
-                        state = state,
-                        canScan = state.canSearchForHeadphones(),
-                        selectedDeviceId = addDeviceFlow.selectedDeviceId,
-                        connectionPhase = addDeviceFlow.phase(state.connection),
-                        connectionError = addDeviceFlow.connectionError,
-                        startScanError = addDeviceFlow.scanError,
-                        onRequestPermission = platformUi.requestBluetoothPermission,
-                        onOpenSystemSettings = platformUi.openBluetoothSettings,
-                        onStartScan = addDeviceFlow::startSearch,
-                        onStopScan = addDeviceFlow::stopSearch,
-                        onConnect = addDeviceFlow::connect,
-                        onCancelConnection = addDeviceFlow::cancelConnection,
-                        onDiagnostics = { navigate(AppPage.DIAGNOSTICS) },
-                    )
-
-                    AppPage.STATUS -> StatusPage(
-                        model = model,
-                        platformUi = platformUi,
-                        onDiagnostics = { navigate(AppPage.DIAGNOSTICS) },
-                    )
-
-                    AppPage.SETTINGS -> PreferencesPage(
-                        model = model,
-                        platformUi = platformUi,
-                        onPersonalization = { navigate(AppPage.PERSONALIZATION) },
-                        onCirculationPairing = { navigate(AppPage.CIRCULATION_PAIRING) },
-                        onAbout = { navigate(AppPage.ABOUT) },
-                    )
-
-                    AppPage.PERSONALIZATION -> PersonalizationPage(model, platformUi, wide = wide)
-
-                    AppPage.CIRCULATION_PAIRING -> {
-                        val content = platformUi.circulationPairingContent
-                        if (content != null) {
-                            content()
-                        } else {
-                            LaunchedEffect(Unit) { if (latestRoute == Route.CirculationPairing) back() }
-                        }
-                    }
-
-                    AppPage.ABOUT -> AboutPage()
-
-                    AppPage.DIAGNOSTICS -> {
-                        PlatformDiagnosticsCard(model, platformUi)
-                        ConnectionDetailsCard(state)
-                        SettingOperationsCard(state)
-                        device?.let { DeviceReadings(it, state.connection.phaseOrNull() == ConnectionPhase.INITIALIZING) }
-                    }
-
-                    else -> if (device != null) {
-                        val onSet = model.settingsFor(device.sessionId)
-                        val controlPage = targetPage in listOf(AppPage.TOUCH, AppPage.EQUALIZER, AppPage.AUDIO)
-                        if (controlPage) {
-                            SettingPageBanner(state, device)
-                        }
-                        when (targetPage) {
-                            AppPage.TOUCH -> TouchControlCard(
-                                state,
-                                device,
-                                selectedTouchSlot,
-                                { selectedTouchSlot = it },
-                                onSet,
-                                selectedTouchSide,
-                                { selectedTouchSide = it },
-                            )
-
-                            AppPage.EQUALIZER -> EqualizerPage(state, device, equalizerEditor)
-
-                            AppPage.AUDIO -> DeviceControlCard(state, device, onSet)
-
-                            AppPage.DETAILS -> DeviceDetails(state, device, onDisconnect) { navigate(AppPage.DIAGNOSTICS) }
-                        }
-                    } else {
-                        AppGroup {
-                            AppInfoRow("耳机已断开", "连接耳机后，可查看和调整当前型号支持的功能。")
-                            AppButton("添加耳机", { navigate(AppPage.ADD_DEVICE) })
-                        }
-                    }
-                }
+                AppPageContent(
+                    targetPage,
+                    state,
+                    model,
+                    platformUi,
+                    primaryDeviceSelection,
+                    wide,
+                    addDeviceFlow,
+                    navigation,
+                    equalizerEditor,
+                )
             }
             val feedbackContentFor: @Composable (AppPage, Modifier) -> Unit = { targetPage, feedbackModifier ->
-                val device = state.activeDevice()
-                if ((targetPage == AppPage.HEADPHONES && device != null) ||
-                    targetPage in listOf(AppPage.TOUCH, AppPage.EQUALIZER, AppPage.AUDIO)
-                ) {
-                    key(targetPage) {
-                        SettingFeedback(
-                            state,
-                            device,
-                            showPending = { setting ->
-                                when (targetPage) {
-                                    AppPage.HEADPHONES -> setting != DeviceSetting.GAME_MODE && setting != DeviceSetting.NOISE_MODE
-                                    AppPage.EQUALIZER -> false
-                                    else -> true
-                                }
-                            },
-                            modifier = feedbackModifier,
-                        ) {
-                            navigate(AppPage.DIAGNOSTICS)
-                        }
-                    }
-                }
+                PageFeedback(targetPage, state, feedbackModifier, navigation)
             }
-            val renderShell: @Composable (AppPage) -> Unit = { targetPage ->
-                ProvideInterfaceStyle(uiSettings.interfaceStyle, dark, dynamicColor) {
-                    val shellContent: @Composable () -> Unit = { pageContentFor(targetPage) }
-                    val shellFeedback: @Composable (Modifier) -> Unit = { feedbackContentFor(targetPage, it) }
-                    when (uiSettings.interfaceStyle) {
-                        InterfaceStyle.MIUIX -> MiuixAppShell(
-                            page = targetPage,
-                            onBack = ::back,
-                            scrollState = scrollStates.getValue(targetPage),
-                            pageContent = shellContent,
-                            feedbackContent = shellFeedback,
-                        )
-
-                        InterfaceStyle.MATERIAL3 -> MaterialAppShell(
-                            page = targetPage,
-                            onBack = ::back,
-                            scrollState = scrollStates.getValue(targetPage),
-                            pageContent = shellContent,
-                            feedbackContent = shellFeedback,
-                        )
-                    }
-                }
-            }
-            val renderMainShell: @Composable () -> Unit = {
-                ProvideInterfaceStyle(uiSettings.interfaceStyle, dark, dynamicColor) {
-                    val isConnectedHome = state.activeDevice() != null
-                    val animatePageChanges = uiSettings.pageTransition != PageTransition.NONE
-                    val onNavigate: (AppPage) -> Unit = { navigate(it) }
-                    val platformActions: @Composable (AppPage) -> Unit = { actionPage ->
-                        when (actionPage) {
-                            AppPage.STATUS -> platformUi.StatusActions()
-                            AppPage.HEADPHONES -> platformUi.HeadphoneActions()
-                            else -> Unit
-                        }
-                    }
-
-                    when (uiSettings.interfaceStyle) {
-                        InterfaceStyle.MIUIX -> MiuixMainShell(
-                            pagerState = mainTabsPagerState,
-                            wide = wide,
-                            bottomBarStyle = uiSettings.bottomBarStyle,
-                            floatingBarMaterial = uiSettings.floatingBarMaterial,
-                            onNavigate = onNavigate,
-                            scrollStates = scrollStates,
-                            pageContentFor = { targetPage -> pageContentFor(targetPage) },
-                            pageFeedbackFor = feedbackContentFor,
-                            connectedHome = isConnectedHome,
-                            menuExpanded = headphoneMenuExpanded,
-                            onMenuExpandedChange = { headphoneMenuExpanded = it },
-                            onDisconnect = onDisconnect,
-                            platformActions = platformActions,
-                            animatePageChanges = animatePageChanges,
-                        )
-
-                        InterfaceStyle.MATERIAL3 -> MaterialMainShell(
-                            pagerState = mainTabsPagerState,
-                            wide = wide,
-                            bottomBarStyle = uiSettings.bottomBarStyle,
-                            onNavigate = onNavigate,
-                            scrollStates = scrollStates,
-                            pageContentFor = { targetPage -> pageContentFor(targetPage) },
-                            pageFeedbackFor = feedbackContentFor,
-                            connectedHome = isConnectedHome,
-                            menuExpanded = headphoneMenuExpanded,
-                            onMenuExpandedChange = { headphoneMenuExpanded = it },
-                            onDisconnect = onDisconnect,
-                            platformActions = platformActions,
-                            animatePageChanges = animatePageChanges,
-                        )
-                    }
-                }
-            }
-            val railTab = mainPages.getOrElse(mainTabsPagerState.selectedPage) { AppPage.HEADPHONES }
+            val shell = AppShell(uiSettings, platformUi, navigation, scrollStates, pageContentFor, feedbackContentFor)
             Row(Modifier.fillMaxSize()) {
-                if (wide) {
-                    // Beside the route stack, not inside it, so page transitions never carry the rail.
-                    // The add-device flow takes the full width, as on narrow screens.
-                    val railMotion = uiSettings.pageTransition != PageTransition.NONE
-                    AnimatedVisibility(
-                        visible = currentRoute !is Route.AddDevice,
-                        enter = if (railMotion) expandHorizontally(expandFrom = Alignment.Start) else EnterTransition.None,
-                        exit = if (railMotion) shrinkHorizontally(shrinkTowards = Alignment.Start) else ExitTransition.None,
-                    ) {
-                        ProvideInterfaceStyle(uiSettings.interfaceStyle, dark, dynamicColor) {
-                            when (uiSettings.interfaceStyle) {
-                                InterfaceStyle.MIUIX -> MiuixNavigationRail(railTab, ::navigate)
-                                InterfaceStyle.MATERIAL3 -> MaterialNavigationRail(railTab, ::navigate)
-                            }
-                        }
-                    }
-                }
-                NavDisplay(
-                    backStack = navBackStack,
-                    transition = pageTransitionOf(uiSettings.pageTransition),
-                    onBack = ::back,
-                    // Outgoing pages slide past the stack's edge; clipping keeps them off the rail.
-                    modifier = Modifier.weight(1f).fillMaxSize().clipToBounds(),
-                ) {
-                    entry<Route.Main> {
-                        Box(if (currentRoute is Route.Main) Modifier.fillMaxSize() else Modifier.fillMaxSize().clearAndSetSemantics { }) {
-                            renderMainShell()
-                        }
-                    }
-                    entry<Route.Touch>(swipeDismiss = NavSwipeDirection.LeftToRight) {
-                        renderShell(AppPage.TOUCH)
-                    }
-                    entry<Route.Equalizer>(swipeDismiss = NavSwipeDirection.LeftToRight) {
-                        renderShell(AppPage.EQUALIZER)
-                    }
-                    entry<Route.Audio>(swipeDismiss = NavSwipeDirection.LeftToRight) {
-                        renderShell(AppPage.AUDIO)
-                    }
-                    entry<Route.Details>(swipeDismiss = NavSwipeDirection.LeftToRight) {
-                        renderShell(AppPage.DETAILS)
-                    }
-                    entry<Route.Diagnostics>(swipeDismiss = NavSwipeDirection.LeftToRight) {
-                        renderShell(AppPage.DIAGNOSTICS)
-                    }
-                    entry<Route.Personalization>(swipeDismiss = NavSwipeDirection.LeftToRight) {
-                        renderShell(AppPage.PERSONALIZATION)
-                    }
-                    entry<Route.CirculationPairing>(swipeDismiss = NavSwipeDirection.LeftToRight) {
-                        renderShell(AppPage.CIRCULATION_PAIRING)
-                    }
-                    entry<Route.About>(swipeDismiss = NavSwipeDirection.LeftToRight) {
-                        renderShell(AppPage.ABOUT)
-                    }
-                    entry<Route.AddDevice>(swipeDismiss = NavSwipeDirection.LeftToRight) {
-                        // Popped entries retain their registration while animating out.
-                        if (latestRoute is Route.AddDevice || uiSettings.pageTransition != PageTransition.NONE) {
-                            Box(
-                                if (latestRoute is Route.AddDevice) {
-                                    Modifier.fillMaxSize()
-                                } else {
-                                    Modifier.fillMaxSize().clearAndSetSemantics { }
-                                },
-                            ) {
-                                renderShell(AppPage.ADD_DEVICE)
-                            }
-                        }
-                    }
-                }
+                if (wide) shell.Rail()
+                AppRouteStack(
+                    uiSettings.pageTransition,
+                    navigation,
+                    Modifier.weight(1f),
+                    renderMainShell = { shell.Main(wide, state.activeDevice() != null, model::disconnect) },
+                    renderShell = { shell.Secondary(it) },
+                )
             }
         }
     }
@@ -429,3 +123,377 @@ internal val AppPage.navigationLabel: String
         AppPage.HEADPHONES -> "耳机"
         else -> title
     }
+
+private class DevicePageState {
+    val choiceDialog = mutableStateOf<String?>(null)
+    var selectedTouchSlot by mutableStateOf<TouchSlot?>(null)
+    var selectedTouchSide by mutableStateOf<String?>(null)
+}
+
+private class AppNavigation(
+    val stack: NavBackStack,
+    val tabs: MainTabsPagerState,
+    val device: DevicePageState,
+    menu: MutableState<Boolean>,
+    val animate: Boolean,
+) {
+    var menuExpanded by menu
+
+    val route: Route
+        get() = stack.lastOrNull() as? Route ?: Route.Main()
+
+    val selectedTab: AppPage
+        get() = mainPages.getOrElse(tabs.selectedPage) { AppPage.HEADPHONES }
+
+    val visiblePage: AppPage
+        get() = when (val current = route) {
+            is Route.Main -> selectedTab
+            else -> current.toAppPage()
+        }
+
+    val overlayOpen: Boolean
+        get() = menuExpanded || device.selectedTouchSlot != null || device.choiceDialog.value != null
+
+    val canGoBack: Boolean
+        get() = overlayOpen || stack.size > 1 || (route is Route.Main && tabs.selectedPage != 0)
+
+    private fun clearOverlays() {
+        menuExpanded = false
+        device.choiceDialog.value = null
+        device.selectedTouchSlot = null
+    }
+
+    private fun returnToTabs() {
+        while (stack.size > 1) stack.removeLastOrNull()
+    }
+
+    fun openWindow(destination: WindowDestination) {
+        returnToTabs()
+        tabs.selectPage(0, animate = false)
+        clearOverlays()
+        when (destination) {
+            WindowDestination.ADD_DEVICE -> stack.add(Route.AddDevice)
+            WindowDestination.DIAGNOSTICS -> stack.add(Route.Diagnostics)
+            WindowDestination.HEADPHONES -> Unit
+        }
+    }
+
+    fun navigate(destination: AppPage) {
+        clearOverlays()
+        val tab = mainPages.indexOf(destination)
+        if (tab >= 0) {
+            returnToTabs()
+            tabs.selectPage(tab, animate = animate)
+        } else {
+            val target = requireNotNull(destination.secondaryRoute)
+            if (stack.lastOrNull() != target) stack.add(target)
+        }
+    }
+
+    fun back() {
+        when {
+            menuExpanded -> menuExpanded = false
+            device.selectedTouchSlot != null -> device.selectedTouchSlot = null
+            device.choiceDialog.value != null -> device.choiceDialog.value = null
+            stack.size > 1 -> stack.removeLastOrNull()
+            tabs.selectedPage != 0 -> tabs.selectPage(0, animate = animate)
+        }
+    }
+}
+
+@Composable
+private fun AppPageContent(
+    targetPage: AppPage,
+    state: ControlState,
+    model: OpenRoseModel,
+    platformUi: PlatformUi,
+    selection: PrimaryDeviceSelection,
+    wide: Boolean,
+    addDeviceFlow: AddDeviceFlow,
+    navigation: AppNavigation,
+    equalizerEditor: EqualizerEditor,
+) {
+    val withHeadset: @Composable (@Composable (DeviceState) -> Unit) -> Unit = { content ->
+        HeadsetPage(state, targetPage, navigation, content)
+    }
+    when (targetPage) {
+        AppPage.HEADPHONES -> HeadphonesPage(model, platformUi, navigation::navigate, selection)
+
+        AppPage.ADD_DEVICE -> AddDeviceContent(
+            state = state,
+            canScan = state.canSearchForHeadphones(),
+            selectedDeviceId = addDeviceFlow.selectedDeviceId,
+            connectionPhase = addDeviceFlow.phase(state.connection),
+            connectionError = addDeviceFlow.connectionError,
+            startScanError = addDeviceFlow.scanError,
+            onRequestPermission = platformUi.requestBluetoothPermission,
+            onOpenSystemSettings = platformUi.openBluetoothSettings,
+            onStartScan = addDeviceFlow::startSearch,
+            onStopScan = addDeviceFlow::stopSearch,
+            onConnect = addDeviceFlow::connect,
+            onCancelConnection = addDeviceFlow::cancelConnection,
+            onDiagnostics = { navigation.navigate(AppPage.DIAGNOSTICS) },
+        )
+
+        AppPage.STATUS -> StatusPage(
+            model = model,
+            platformUi = platformUi,
+            onDiagnostics = { navigation.navigate(AppPage.DIAGNOSTICS) },
+        )
+
+        AppPage.SETTINGS -> PreferencesPage(
+            model = model,
+            platformUi = platformUi,
+            onPersonalization = { navigation.navigate(AppPage.PERSONALIZATION) },
+            onCirculationPairing = { navigation.navigate(AppPage.CIRCULATION_PAIRING) },
+            onAbout = { navigation.navigate(AppPage.ABOUT) },
+        )
+
+        AppPage.PERSONALIZATION -> PersonalizationPage(model, platformUi, wide = wide)
+
+        AppPage.CIRCULATION_PAIRING -> CirculationPairingPage(platformUi, navigation)
+
+        AppPage.ABOUT -> AboutPage()
+
+        AppPage.DIAGNOSTICS -> DiagnosticsPage(model, platformUi, state)
+
+        AppPage.TOUCH -> withHeadset { device ->
+            TouchControlCard(
+                state,
+                device,
+                navigation.device.selectedTouchSlot,
+                { navigation.device.selectedTouchSlot = it },
+                model.settingsFor(device.sessionId),
+                navigation.device.selectedTouchSide,
+                { navigation.device.selectedTouchSide = it },
+            )
+        }
+
+        AppPage.EQUALIZER -> withHeadset { device ->
+            EqualizerPage(state, device, equalizerEditor)
+        }
+
+        AppPage.AUDIO -> withHeadset { device ->
+            DeviceControlCard(state, device, model.settingsFor(device.sessionId))
+        }
+
+        AppPage.DETAILS -> withHeadset { device ->
+            DeviceDetails(state, device, model::disconnect) { navigation.navigate(AppPage.DIAGNOSTICS) }
+        }
+    }
+}
+
+@Composable
+private fun HeadsetPage(
+    state: ControlState,
+    page: AppPage,
+    navigation: AppNavigation,
+    content: @Composable (DeviceState) -> Unit,
+) {
+    val device = state.activeDevice()
+    if (device == null) {
+        AppGroup {
+            AppInfoRow("耳机已断开", "连接耳机后，可查看和调整当前型号支持的功能。")
+            AppButton("添加耳机", { navigation.navigate(AppPage.ADD_DEVICE) })
+        }
+    } else {
+        if (page.editsHeadset) SettingPageBanner(state, device)
+        content(device)
+    }
+}
+
+@Composable
+private fun DiagnosticsPage(model: OpenRoseModel, platformUi: PlatformUi, state: ControlState) {
+    PlatformDiagnosticsCard(model, platformUi)
+    ConnectionDetailsCard(state)
+    SettingOperationsCard(state)
+    state.activeDevice()?.let { DeviceReadings(it, state.connection.phaseOrNull() == ConnectionPhase.INITIALIZING) }
+}
+
+@Composable
+private fun CirculationPairingPage(platformUi: PlatformUi, navigation: AppNavigation) {
+    val content = platformUi.circulationPairingContent
+    if (content != null) {
+        content()
+    } else {
+        LaunchedEffect(Unit) { if (navigation.route == Route.CirculationPairing) navigation.back() }
+    }
+}
+
+@Composable
+private fun PageFeedback(targetPage: AppPage, state: ControlState, feedbackModifier: Modifier, navigation: AppNavigation) {
+    val device = state.activeDevice()
+    if (targetPage.editsHeadset || (targetPage == AppPage.HEADPHONES && device != null)) {
+        key(targetPage) {
+            SettingFeedback(
+                state,
+                device,
+                showPending = { setting ->
+                    when (targetPage) {
+                        AppPage.HEADPHONES -> setting != DeviceSetting.GAME_MODE && setting != DeviceSetting.NOISE_MODE
+                        AppPage.EQUALIZER -> false
+                        else -> true
+                    }
+                },
+                modifier = feedbackModifier,
+            ) {
+                navigation.navigate(AppPage.DIAGNOSTICS)
+            }
+        }
+    }
+}
+
+@Composable
+private fun AppRouteStack(
+    transition: PageTransition,
+    navigation: AppNavigation,
+    modifier: Modifier,
+    renderMainShell: @Composable () -> Unit,
+    renderShell: @Composable (AppPage) -> Unit,
+) {
+    val secondary: @Composable (Route) -> Unit = { renderShell(it.toAppPage()) }
+    NavDisplay(
+        backStack = navigation.stack,
+        transition = pageTransitionOf(transition),
+        onBack = navigation::back,
+        // Outgoing pages slide past the stack's edge; clipping keeps them off the rail.
+        modifier = modifier.fillMaxSize().clipToBounds(),
+    ) {
+        entry<Route.Main> {
+            Box(if (navigation.route is Route.Main) Modifier.fillMaxSize() else Modifier.fillMaxSize().clearAndSetSemantics { }) {
+                renderMainShell()
+            }
+        }
+        entry<Route.Touch>(swipeDismiss = NavSwipeDirection.LeftToRight, content = secondary)
+        entry<Route.Equalizer>(swipeDismiss = NavSwipeDirection.LeftToRight, content = secondary)
+        entry<Route.Audio>(swipeDismiss = NavSwipeDirection.LeftToRight, content = secondary)
+        entry<Route.Details>(swipeDismiss = NavSwipeDirection.LeftToRight, content = secondary)
+        entry<Route.Diagnostics>(swipeDismiss = NavSwipeDirection.LeftToRight, content = secondary)
+        entry<Route.Personalization>(swipeDismiss = NavSwipeDirection.LeftToRight, content = secondary)
+        entry<Route.CirculationPairing>(swipeDismiss = NavSwipeDirection.LeftToRight, content = secondary)
+        entry<Route.About>(swipeDismiss = NavSwipeDirection.LeftToRight, content = secondary)
+        entry<Route.AddDevice>(swipeDismiss = NavSwipeDirection.LeftToRight) { added ->
+            // Popped entries retain their registration while animating out.
+            if (navigation.route is Route.AddDevice || navigation.animate) {
+                Box(
+                    if (navigation.route is Route.AddDevice) {
+                        Modifier.fillMaxSize()
+                    } else {
+                        Modifier.fillMaxSize().clearAndSetSemantics { }
+                    },
+                ) {
+                    secondary(added)
+                }
+            }
+        }
+    }
+}
+
+/** The main canvas, secondary pages and wide rail share a style and one set of page slots. */
+private class AppShell(
+    private val uiSettings: UiSettings,
+    private val platformUi: PlatformUi,
+    private val navigation: AppNavigation,
+    private val scrollStates: Map<AppPage, ScrollState>,
+    private val pageContentFor: @Composable (AppPage) -> Unit,
+    private val feedbackContentFor: @Composable (AppPage, Modifier) -> Unit,
+) {
+    @Composable
+    private fun Theme(content: @Composable () -> Unit) {
+        ProvideInterfaceStyle(uiSettings.interfaceStyle, uiSettings.appearance.isDark(), platformUi.dynamicColor, content)
+    }
+
+    @Composable
+    fun Main(wide: Boolean, connectedHome: Boolean, onDisconnect: () -> Unit) {
+        Theme {
+            val animatePageChanges = navigation.animate
+            val onNavigate: (AppPage) -> Unit = navigation::navigate
+            val platformActions: @Composable (AppPage) -> Unit = { actionPage ->
+                when (actionPage) {
+                    AppPage.STATUS -> platformUi.StatusActions()
+                    AppPage.HEADPHONES -> platformUi.HeadphoneActions()
+                    else -> Unit
+                }
+            }
+
+            when (uiSettings.interfaceStyle) {
+                InterfaceStyle.MIUIX -> MiuixMainShell(
+                    pagerState = navigation.tabs,
+                    wide = wide,
+                    bottomBarStyle = uiSettings.bottomBarStyle,
+                    floatingBarMaterial = uiSettings.floatingBarMaterial,
+                    onNavigate = onNavigate,
+                    scrollStates = scrollStates,
+                    pageContentFor = pageContentFor,
+                    pageFeedbackFor = feedbackContentFor,
+                    connectedHome = connectedHome,
+                    menuExpanded = navigation.menuExpanded,
+                    onMenuExpandedChange = { navigation.menuExpanded = it },
+                    onDisconnect = onDisconnect,
+                    platformActions = platformActions,
+                    animatePageChanges = animatePageChanges,
+                )
+
+                InterfaceStyle.MATERIAL3 -> MaterialMainShell(
+                    pagerState = navigation.tabs,
+                    wide = wide,
+                    bottomBarStyle = uiSettings.bottomBarStyle,
+                    onNavigate = onNavigate,
+                    scrollStates = scrollStates,
+                    pageContentFor = pageContentFor,
+                    pageFeedbackFor = feedbackContentFor,
+                    connectedHome = connectedHome,
+                    menuExpanded = navigation.menuExpanded,
+                    onMenuExpandedChange = { navigation.menuExpanded = it },
+                    onDisconnect = onDisconnect,
+                    platformActions = platformActions,
+                    animatePageChanges = animatePageChanges,
+                )
+            }
+        }
+    }
+
+    @Composable
+    fun Secondary(targetPage: AppPage) {
+        Theme {
+            val shellContent: @Composable () -> Unit = { pageContentFor(targetPage) }
+            val shellFeedback: @Composable (Modifier) -> Unit = { feedbackContentFor(targetPage, it) }
+            when (uiSettings.interfaceStyle) {
+                InterfaceStyle.MIUIX -> MiuixAppShell(
+                    page = targetPage,
+                    onBack = navigation::back,
+                    scrollState = scrollStates.getValue(targetPage),
+                    pageContent = shellContent,
+                    feedbackContent = shellFeedback,
+                )
+
+                InterfaceStyle.MATERIAL3 -> MaterialAppShell(
+                    page = targetPage,
+                    onBack = navigation::back,
+                    scrollState = scrollStates.getValue(targetPage),
+                    pageContent = shellContent,
+                    feedbackContent = shellFeedback,
+                )
+            }
+        }
+    }
+
+    @Composable
+    fun Rail() {
+        // Beside the route stack, not inside it, so page transitions never carry the rail.
+        // The add-device flow takes the full width, as on narrow screens.
+        val railMotion = navigation.animate
+        AnimatedVisibility(
+            visible = navigation.route !is Route.AddDevice,
+            enter = if (railMotion) expandHorizontally(expandFrom = Alignment.Start) else EnterTransition.None,
+            exit = if (railMotion) shrinkHorizontally(shrinkTowards = Alignment.Start) else ExitTransition.None,
+        ) {
+            Theme {
+                when (uiSettings.interfaceStyle) {
+                    InterfaceStyle.MIUIX -> MiuixNavigationRail(navigation.selectedTab, navigation::navigate)
+                    InterfaceStyle.MATERIAL3 -> MaterialNavigationRail(navigation.selectedTab, navigation::navigate)
+                }
+            }
+        }
+    }
+}

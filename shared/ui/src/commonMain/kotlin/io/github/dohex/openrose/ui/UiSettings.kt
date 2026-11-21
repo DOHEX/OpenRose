@@ -1,5 +1,9 @@
 package io.github.dohex.openrose.ui
 
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.runtime.Composable
+import kotlin.enums.enumEntries
+
 /** Component style is independent of light/dark appearance. */
 enum class InterfaceStyle { MIUIX, MATERIAL3 }
 enum class Appearance { SYSTEM, LIGHT, DARK }
@@ -8,6 +12,14 @@ enum class BottomBarStyle { FIXED, FLOATING }
 
 /** What the Miuix floating capsule is made of; Material 3 and the fixed bar ignore it. */
 enum class FloatingBarMaterial { FROSTED, LIQUID_GLASS }
+
+/** Whether this appearance draws dark, following the system only for [Appearance.SYSTEM]. */
+@Composable
+fun Appearance.isDark(): Boolean = when (this) {
+    Appearance.SYSTEM -> isSystemInDarkTheme()
+    Appearance.LIGHT -> false
+    Appearance.DARK -> true
+}
 
 data class UiSettings(
     val interfaceStyle: InterfaceStyle = InterfaceStyle.MIUIX,
@@ -21,64 +33,28 @@ data class UiSettings(
 /** Layer-prefixed storage format; missing and unrecognized values use product defaults. */
 object UiSettingsCodec {
     fun encode(settings: UiSettings): Map<String, String> = mapOf(
-        "sharedUI.interface_style" to when (settings.interfaceStyle) {
-            InterfaceStyle.MIUIX -> "miuix"
-            InterfaceStyle.MATERIAL3 -> "material3"
-        },
-        "sharedUI.appearance" to when (settings.appearance) {
-            Appearance.SYSTEM -> "system"
-            Appearance.LIGHT -> "light"
-            Appearance.DARK -> "dark"
-        },
-        "sharedUI.page_transition" to when (settings.pageTransition) {
-            PageTransition.MIUIX_SPRING -> "miuix_spring"
-            PageTransition.SLIDE -> "slide"
-            PageTransition.FADE -> "fade"
-            PageTransition.NONE -> "none"
-        },
+        "sharedUI.interface_style" to settings.interfaceStyle.name.lowercase(),
+        "sharedUI.appearance" to settings.appearance.name.lowercase(),
+        "sharedUI.page_transition" to settings.pageTransition.name.lowercase(),
         "sharedUI.background_blur_enabled" to settings.backgroundBlurEnabled.toString(),
-        "sharedUI.bottom_bar_style" to when (settings.bottomBarStyle) {
-            BottomBarStyle.FIXED -> "fixed"
-            BottomBarStyle.FLOATING -> "floating"
-        },
-        "sharedUI.floating_bar_material" to when (settings.floatingBarMaterial) {
-            FloatingBarMaterial.FROSTED -> "frosted"
-            FloatingBarMaterial.LIQUID_GLASS -> "liquid_glass"
-        },
+        "sharedUI.bottom_bar_style" to settings.bottomBarStyle.name.lowercase(),
+        "sharedUI.floating_bar_material" to settings.floatingBarMaterial.name.lowercase(),
     )
 
     fun decode(values: Map<String, String>): UiSettings {
         val defaults = UiSettings()
         return UiSettings(
-            interfaceStyle = when (values["sharedUI.interface_style"]) {
-                "miuix" -> InterfaceStyle.MIUIX
-                "material3" -> InterfaceStyle.MATERIAL3
-                else -> defaults.interfaceStyle
-            },
-            appearance = when (values["sharedUI.appearance"]) {
-                "system" -> Appearance.SYSTEM
-                "light" -> Appearance.LIGHT
-                "dark" -> Appearance.DARK
-                else -> defaults.appearance
-            },
-            pageTransition = when (values["sharedUI.page_transition"]) {
-                "miuix_spring" -> PageTransition.MIUIX_SPRING
-                "slide" -> PageTransition.SLIDE
-                "fade" -> PageTransition.FADE
-                "none" -> PageTransition.NONE
-                else -> defaults.pageTransition
-            },
+            interfaceStyle = option(values["sharedUI.interface_style"], defaults.interfaceStyle),
+            appearance = option(values["sharedUI.appearance"], defaults.appearance),
+            pageTransition = option(values["sharedUI.page_transition"], defaults.pageTransition),
             backgroundBlurEnabled = values["sharedUI.background_blur_enabled"]?.toBooleanStrictOrNull() ?: defaults.backgroundBlurEnabled,
-            bottomBarStyle = when (values["sharedUI.bottom_bar_style"]) {
-                "fixed" -> BottomBarStyle.FIXED
-                "floating" -> BottomBarStyle.FLOATING
-                else -> defaults.bottomBarStyle
-            },
-            floatingBarMaterial = when (values["sharedUI.floating_bar_material"]) {
-                "frosted" -> FloatingBarMaterial.FROSTED
-                "liquid_glass" -> FloatingBarMaterial.LIQUID_GLASS
-                else -> defaults.floatingBarMaterial
-            },
+            bottomBarStyle = option(values["sharedUI.bottom_bar_style"], defaults.bottomBarStyle),
+            floatingBarMaterial = option(values["sharedUI.floating_bar_material"], defaults.floatingBarMaterial),
         )
+    }
+
+    private inline fun <reified T : Enum<T>> option(value: String?, default: T): T {
+        val options = enumEntries<T>()
+        return options.firstOrNull { it.name.lowercase() == value } ?: default
     }
 }

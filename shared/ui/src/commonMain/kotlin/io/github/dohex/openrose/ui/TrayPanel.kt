@@ -1,7 +1,6 @@
 package io.github.dohex.openrose.ui
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -26,7 +25,9 @@ import io.github.dohex.openrose.circulation.RemoteControlStatus
 import io.github.dohex.openrose.core.ConnectionPhase
 import io.github.dohex.openrose.core.ConnectionState
 import io.github.dohex.openrose.core.ControlState
+import io.github.dohex.openrose.core.DeviceCandidate
 import io.github.dohex.openrose.core.DeviceSetting
+import io.github.dohex.openrose.core.DeviceState
 import io.github.dohex.openrose.core.NoiseMode
 import io.github.dohex.openrose.core.TransportAvailability
 import io.github.dohex.openrose.core.protocol.FieldValue
@@ -64,68 +65,24 @@ data class TraySummary(
 )
 
 fun traySummary(state: ControlState, selection: PrimaryDeviceSelection): TraySummary {
-    val ready = state.activeDevice()?.takeIf { state.isReady(it) }
-    val connecting = ready == null && state.isConnectingForTray()
-    val primary = selection.primary(state)
-    val blockReason = state.platform.connectionBlockReason
-    val showPlatformReason = state.connectionTarget == null && !state.platform.bluetoothPermissionRequired &&
-        state.platform.transport is TransportAvailability.Unavailable
-
+    val connection = TrayConnection(state, selection.primary(state))
+    val ready = connection.ready
     val desktop = state.platform.hostPlatform.isDesktop
-    val audioConnected = desktop && primary != null && primary.matchesAudioDevice(state.audioDeviceId)
-    val title = when {
-        ready != null -> "${state.trayDeviceName(ready.deviceId, ready.profile)} · 已连接"
-
-        audioConnected && connecting -> "${state.trayDeviceName(primary.deviceId, primary.profile)} · 耳机已接入，正在恢复控制"
-
-        audioConnected -> "${state.trayDeviceName(primary.deviceId, primary.profile)} · 耳机已接入，控制未连接"
-
-        connecting -> {
-            val deviceId = checkNotNull(state.connection.deviceIdOrNull())
-            val profile = state.device?.takeIf { it.deviceId == deviceId }?.profile
-            "${state.trayDeviceName(deviceId, profile)} · 正在连接…"
-        }
-
-        showPlatformReason -> requireNotNull(blockReason)
-
-        primary == null -> "未添加耳机"
-
-        else -> "${state.trayDeviceName(primary.deviceId, primary.profile)} · 未连接"
-    }
-
-    val battery = ready?.let { device ->
-        device.profile.batteryReadings().mapNotNull { (label, field) ->
-            (device.knownValue(field) as? FieldValue.Number)?.value?.takeIf { it in 0..100 }
-                ?.let { "$label $it%" } ?: if (desktop) "$label 未知" else null
-        }.takeIf { it.isNotEmpty() }?.joinToString(" · ")
-    }
+    val battery = ready?.trayBattery(desktop)
 
     val noiseDevice = state.activeDevice()?.takeIf(state::canControlNoiseMode)
-    val noiseModes = noiseDevice?.let { device ->
-        val confirmed = device.confirmedNoiseMode
-        val enabled = !state.hasPendingSetting(device) &&
-            DeviceSetting.NOISE_MODE in device.capabilities.writableSettings
-        device.noiseModes.sortedBy { noiseModeOrder(it.id) }.map { mode ->
-            TrayNoiseMode(mode, noiseModeLabel(mode.id), selected = mode == confirmed, enabled = enabled)
-        }
-    }.orEmpty()
+    val noiseModes = noiseDevice?.let { state.trayNoiseModes(it) }.orEmpty()
 
     return TraySummary(
         connected = ready != null,
-        title = title,
+        title = connection.title,
         battery = battery,
         noiseModes = noiseModes,
         noiseModeFeedback = noiseDevice?.let { state.noiseModeFeedback(it) },
-        reconnectTarget = if (ready == null && !connecting && blockReason == null) primary?.deviceId else null,
-        reconnectLabel = if (audioConnected) "重试耳机控制" else "重新连接",
+        reconnectTarget = connection.reconnectTarget,
+        reconnectLabel = if (connection.audioConnected) "重试耳机控制" else "重新连接",
         addDevice = state.bondedRoseDevices().isEmpty() && state.connectionTarget == null,
-        connectionHint = when {
-            ready != null || connecting || showPlatformReason -> null
-            blockReason != null -> blockReason
-            audioConnected -> state.lastError?.message
-            primary != null -> primary.profile.reconnectHint(state.lastError != null)
-            else -> null
-        },
+        connectionHint = connection.hint,
     )
 }
 
@@ -194,14 +151,6 @@ fun TrayPanel(
             TrayPanelContent(model, state, selection, onOpenApp, circulation, remoteHeadsets, sound)
         }
     }
-}
-
-/** Whether this appearance draws dark, following the system only for [Appearance.SYSTEM]. */
-@Composable
-internal fun Appearance.isDark(): Boolean = when (this) {
-    Appearance.SYSTEM -> isSystemInDarkTheme()
-    Appearance.LIGHT -> false
-    Appearance.DARK -> true
 }
 
 @Composable
@@ -304,4 +253,62 @@ internal fun TrayActions(model: OpenRoseModel, state: ControlState, summary: Tra
 object AppLogo {
     val painter: Painter
         @Composable get() = painterResource(Res.drawable.app_icon)
+}
+
+private fun DeviceState.trayBattery(desktop: Boolean): String? = profile.batteryReadings().mapNotNull { (label, field) ->
+    (knownValue(field) as? FieldValue.Number)?.value?.takeIf { it in 0..100 }
+        ?.let { "$label $it%" } ?: if (desktop) "$label 未知" else null
+}.takeIf { it.isNotEmpty() }?.joinToString(" · ")
+
+private fun ControlState.trayNoiseModes(device: DeviceState): List<TrayNoiseMode> {
+    val confirmed = device.confirmedNoiseMode
+    val enabled = !hasPendingSetting(device) &&
+        DeviceSetting.NOISE_MODE in device.capabilities.writableSettings
+    return device.noiseModes.sortedBy { noiseModeOrder(it.id) }.map { mode ->
+        TrayNoiseMode(mode, noiseModeLabel(mode.id), selected = mode == confirmed, enabled = enabled)
+    }
+}
+
+/** One view of the platform and the selected headset drives the tray title, reconnect action and hint. */
+private class TrayConnection(private val state: ControlState, private val primary: DeviceCandidate?) {
+    val ready = state.activeDevice()?.takeIf { state.isReady(it) }
+    private val connecting = ready == null && state.isConnectingForTray()
+    private val blockReason = state.platform.connectionBlockReason
+    private val showPlatformReason = state.connectionTarget == null && !state.platform.bluetoothPermissionRequired &&
+        state.platform.transport is TransportAvailability.Unavailable
+
+    private val desktop = state.platform.hostPlatform.isDesktop
+    val audioConnected = desktop && primary != null && primary.matchesAudioDevice(state.audioDeviceId)
+    val title: String
+        get() = when {
+            ready != null -> "${state.trayDeviceName(ready.deviceId, ready.profile)} · 已连接"
+
+            audioConnected && connecting -> "${state.trayDeviceName(requireNotNull(primary).deviceId, primary.profile)} · 耳机已接入，正在恢复控制"
+
+            audioConnected -> "${state.trayDeviceName(requireNotNull(primary).deviceId, primary.profile)} · 耳机已接入，控制未连接"
+
+            connecting -> {
+                val deviceId = checkNotNull(state.connection.deviceIdOrNull())
+                val profile = state.device?.takeIf { it.deviceId == deviceId }?.profile
+                "${state.trayDeviceName(deviceId, profile)} · 正在连接…"
+            }
+
+            showPlatformReason -> requireNotNull(blockReason)
+
+            primary == null -> "未添加耳机"
+
+            else -> "${state.trayDeviceName(primary.deviceId, primary.profile)} · 未连接"
+        }
+
+    val reconnectTarget: DeviceId?
+        get() = if (ready == null && !connecting && blockReason == null) primary?.deviceId else null
+
+    val hint: String?
+        get() = when {
+            ready != null || connecting || showPlatformReason -> null
+            blockReason != null -> blockReason
+            audioConnected -> state.lastError?.message
+            primary != null -> primary.profile.reconnectHint(state.lastError != null)
+            else -> null
+        }
 }

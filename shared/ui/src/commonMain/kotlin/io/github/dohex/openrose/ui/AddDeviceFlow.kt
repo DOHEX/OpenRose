@@ -169,7 +169,8 @@ internal fun AddDeviceLifecycle(active: Boolean, state: ControlState, flow: AddD
         if (active && flow.completed) onReady()
     }
     LaunchedEffect(flow, active, canScan, state.scan, flow.pending) {
-        if (active && canScan && state.scan == ScanState.Scanning && !flow.pending) {
+        val searching = state.scan == ScanState.Scanning && !flow.pending
+        if (active && canScan && searching) {
             delay(20_000)
             flow.stopSearch()
         }

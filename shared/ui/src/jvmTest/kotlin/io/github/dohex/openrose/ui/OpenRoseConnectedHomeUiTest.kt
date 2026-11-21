@@ -271,6 +271,33 @@ class OpenRoseConnectedHomeUiTest {
         }
     }
 
+    private fun ConnectedHomeHarness.showPendingNoiseMode() {
+        val pendingState = state.value
+        val pendingDevice = requireNotNull(pendingState.device)
+        val pending = SettingOperation(
+            id = 63,
+            sessionId = pendingDevice.sessionId,
+            setting = DeviceSetting.NOISE_MODE,
+            requestedValue = FieldValue.Text("wind"),
+            stage = SettingStage.WRITTEN,
+        )
+        state.value = pendingState.copy(
+            connection = ConnectionState.Connected(
+                pendingDevice.deviceId,
+                pendingDevice.sessionId,
+                pendingDevice.profile,
+                ConnectionPhase.READY,
+            ),
+            device = pendingDevice.copy(
+                diagnostics = pendingDevice.diagnostics.copy(
+                    fields = pendingDevice.diagnostics.fields +
+                        (DeviceField.NOISE_MODE to FieldReading.Known(FieldValue.Text("anc"), "anc")),
+                ),
+            ),
+            settingOperations = persistentListOf(pending),
+        )
+    }
+
     @Test
     fun connectedHomePreservesUnknownLoadingAndPendingDeviceValues() {
         for (style in InterfaceStyle.entries) {
@@ -321,30 +348,7 @@ class OpenRoseConnectedHomeUiTest {
                 assertTrue(harness.hasText("读取中…"), "battery loading remains distinct from unknown in $style")
                 assertTrue(harness.settingWrites.isEmpty())
 
-                val pendingState = harness.state.value
-                val pendingDevice = requireNotNull(pendingState.device)
-                val pending = SettingOperation(
-                    id = 63,
-                    sessionId = pendingDevice.sessionId,
-                    setting = DeviceSetting.NOISE_MODE,
-                    requestedValue = FieldValue.Text("wind"),
-                    stage = SettingStage.WRITTEN,
-                )
-                harness.state.value = pendingState.copy(
-                    connection = ConnectionState.Connected(
-                        pendingDevice.deviceId,
-                        pendingDevice.sessionId,
-                        pendingDevice.profile,
-                        ConnectionPhase.READY,
-                    ),
-                    device = pendingDevice.copy(
-                        diagnostics = pendingDevice.diagnostics.copy(
-                            fields = pendingDevice.diagnostics.fields +
-                                (DeviceField.NOISE_MODE to FieldReading.Known(FieldValue.Text("anc"), "anc")),
-                        ),
-                    ),
-                    settingOperations = persistentListOf(pending),
-                )
+                harness.showPendingNoiseMode()
                 harness.render()
                 assertTrue(harness.hasText("等待设备确认"), "pending status remains visible in $style")
                 assertTrue(harness.hasSelectedText("降噪"), "a pending request keeps the previously confirmed mode selected in $style")

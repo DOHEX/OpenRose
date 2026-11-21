@@ -227,58 +227,7 @@ private fun UnconnectedHeadphonesDashboard(
 
     val primaryDevice = selection.primary(state)
     if (primaryDevice == null) {
-        AppDashboardCard {
-            Column(
-                Modifier.fillMaxWidth().padding(vertical = 16.dp, horizontal = 8.dp),
-                horizontalAlignment = Alignment.Start,
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-            ) {
-                if (isMaterial3) {
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(MaterialTheme.colorScheme.surfaceContainerLowest)
-                            .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f), RoundedCornerShape(16.dp))
-                            .padding(12.dp),
-                    ) {
-                        EarbudsArtwork(compact = false)
-                    }
-                } else {
-                    EarbudsArtwork(compact = false)
-                }
-                Column(
-                    horizontalAlignment = Alignment.Start,
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    AppText("添加你的 ROSE 耳机", role = AppTextRole.Title)
-                    val hint = if (platform.transport == TransportAvailability.Disabled) {
-                        "系统蓝牙已关闭"
-                    } else {
-                        platform.hostPlatform.firstConnectionHint()
-                    }
-                    AppText(hint, role = AppTextRole.Summary)
-                }
-                Column(
-                    Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    AppButton(
-                        text = "搜索并添加耳机",
-                        onClick = { onNavigate(AppPage.ADD_DEVICE) },
-                        kind = AppButtonKind.Primary,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    onOpenSystemSettings?.let { openSettings ->
-                        AppButton(
-                            text = "打开系统蓝牙设置",
-                            onClick = openSettings,
-                            kind = AppButtonKind.Secondary,
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                    }
-                }
-            }
-        }
+        AddFirstHeadsetCard(platform, onNavigate, onOpenSystemSettings)
         return
     }
 
@@ -330,135 +279,16 @@ private fun UnconnectedHeadphonesDashboard(
                         )
                     }
                 }
-                val statusContent: @Composable () -> Unit = {
-                    if (isConnecting) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        ) {
-                            AppBusyIndicator()
-                            AppText("正在连接…", role = AppTextRole.Summary, color = appColor(AppColorRole.Primary))
-                        }
-                    } else {
-                        AppText(
-                            blockReason ?: primaryDevice.profile.reconnectHint(visibleError != null),
-                            role = AppTextRole.Summary,
-                            color = if (visibleError != null && blockReason == null) appColor(AppColorRole.Error) else null,
-                        )
-                    }
-                }
-                if (isMaterial3) {
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(MaterialTheme.colorScheme.surfaceContainer)
-                            .padding(horizontal = 12.dp, vertical = 6.dp),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        statusContent()
-                    }
-                } else {
-                    statusContent()
-                }
+                ReconnectStatus(state, primaryDevice, isConnecting)
             }
-            Column(
-                Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                if (isConnecting) {
-                    AppButton(
-                        text = "取消连接",
-                        onClick = onDisconnect,
-                        kind = AppButtonKind.Secondary,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                } else if (platform.bluetoothPermissionRequired) {
-                    onRequestPermission?.let { requestPermission ->
-                        AppButton(
-                            text = "授予蓝牙权限",
-                            onClick = requestPermission,
-                            kind = AppButtonKind.Primary,
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                    }
-                } else if (blockReason != null) {
-                    onOpenSystemSettings?.let { openSettings ->
-                        AppButton(
-                            text = "打开系统蓝牙设置",
-                            onClick = openSettings,
-                            kind = AppButtonKind.Primary,
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                    }
-                } else {
-                    AppButton(
-                        text = if (visibleError != null) "重试连接" else "连接",
-                        onClick = { onConnect(primaryDevice.deviceId) },
-                        kind = AppButtonKind.Primary,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
-                if (visibleError != null && blockReason == null && onOpenSystemSettings != null) {
-                    AppButton(
-                        text = "无法连接？打开系统蓝牙设置",
-                        onClick = onOpenSystemSettings,
-                        kind = AppButtonKind.Secondary,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
-            }
+            ReconnectActions(state, primaryDevice, isConnecting, onConnect, onDisconnect, onRequestPermission, onOpenSystemSettings)
         }
     }
 
-    if (otherBonded.isNotEmpty()) {
-        AppGroup(title = "其他已配对设备") {
-            otherBonded.forEach { paired ->
-                AppDashboardCard {
-                    Row(
-                        Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.weight(1f),
-                        ) {
-                            if (isMaterial3) {
-                                Box(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(12.dp))
-                                        .background(MaterialTheme.colorScheme.surfaceContainer)
-                                        .padding(8.dp),
-                                    contentAlignment = Alignment.Center,
-                                ) {
-                                    AppIcon(RoseIcon.HEADPHONES)
-                                }
-                            } else {
-                                AppIcon(RoseIcon.HEADPHONES)
-                            }
-                            Column {
-                                AppText(paired.name?.takeIf(String::isNotBlank) ?: paired.profile!!.displayName)
-                                paired.profile?.let {
-                                    AppText(it.configurationCaption, role = AppTextRole.Summary)
-                                }
-                            }
-                        }
-                        AppButton(
-                            text = "切换",
-                            enabled = blockReason == null,
-                            onClick = {
-                                selection.select(state, paired.deviceId)
-                                onConnect(paired.deviceId)
-                            },
-                            kind = AppButtonKind.Secondary,
-                        )
-                    }
-                }
-            }
-        }
+    OtherPairedDevices(otherBonded, blockReason == null) { id ->
+        selection.select(state, id)
+        onConnect(id)
     }
-
     AppGroup {
         AppArrowRow(
             title = "配对新耳机",
@@ -551,17 +381,7 @@ internal fun DeviceDetails(state: ControlState, device: DeviceState, onDisconnec
 
 @Composable
 internal fun ConnectionDetailsCard(state: ControlState) {
-    val connectionReason = state.transportSelection?.let {
-        when (it.reason) {
-            TransportSelectionReason.MODEL_BLE_ONLY -> "此型号使用 BLE 控制"
-            TransportSelectionReason.FORCED_BLE -> "本次连接使用强制 BLE 偏好"
-            TransportSelectionReason.SPP_UNAVAILABLE -> "当前平台未提供蓝牙串口控制"
-            TransportSelectionReason.CLASSIC_ADDRESS_UNAVAILABLE -> "尚无可用的蓝牙串口地址"
-            TransportSelectionReason.AUDIO_PROFILE_UNKNOWN -> "无法确认音频连接类型，使用 BLE"
-            TransportSelectionReason.LE_AUDIO -> "已检测到 LE Audio 音频连接，使用 BLE"
-            TransportSelectionReason.CLASSIC_AUDIO -> "已确认传统蓝牙音频连接，可使用串口控制"
-        }
-    }
+    val connectionReason = state.transportSelection?.reason?.description()
     val recoveryInfo = state.connectionRecovery?.let { recovery ->
         val reason = when (recovery.reason) {
             TransportRecoveryReason.SERVICE_DISCOVERY -> "蓝牙服务发现暂不可用"
@@ -686,4 +506,221 @@ internal fun ConnectionPhase.displayText(): String = when (this) {
     ConnectionPhase.SUBSCRIBING -> "正在订阅状态通知…"
     ConnectionPhase.INITIALIZING -> "正在初始化并读取状态…"
     ConnectionPhase.READY -> "已连接"
+}
+
+private fun TransportSelectionReason.description(): String = when (this) {
+    TransportSelectionReason.MODEL_BLE_ONLY -> "此型号使用 BLE 控制"
+    TransportSelectionReason.FORCED_BLE -> "本次连接使用强制 BLE 偏好"
+    TransportSelectionReason.SPP_UNAVAILABLE -> "当前平台未提供蓝牙串口控制"
+    TransportSelectionReason.CLASSIC_ADDRESS_UNAVAILABLE -> "尚无可用的蓝牙串口地址"
+    TransportSelectionReason.AUDIO_PROFILE_UNKNOWN -> "无法确认音频连接类型，使用 BLE"
+    TransportSelectionReason.LE_AUDIO -> "已检测到 LE Audio 音频连接，使用 BLE"
+    TransportSelectionReason.CLASSIC_AUDIO -> "已确认传统蓝牙音频连接，可使用串口控制"
+}
+
+@Composable
+private fun AddFirstHeadsetCard(platform: PlatformState, onNavigate: (AppPage) -> Unit, onOpenSystemSettings: (() -> Unit)?) {
+    val isMaterial3 = LocalInterfaceStyle.current == InterfaceStyle.MATERIAL3
+    AppDashboardCard {
+        Column(
+            Modifier.fillMaxWidth().padding(vertical = 16.dp, horizontal = 8.dp),
+            horizontalAlignment = Alignment.Start,
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            if (isMaterial3) {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(MaterialTheme.colorScheme.surfaceContainerLowest)
+                        .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f), RoundedCornerShape(16.dp))
+                        .padding(12.dp),
+                ) {
+                    EarbudsArtwork(compact = false)
+                }
+            } else {
+                EarbudsArtwork(compact = false)
+            }
+            Column(
+                horizontalAlignment = Alignment.Start,
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                AppText("添加你的 ROSE 耳机", role = AppTextRole.Title)
+                val hint = if (platform.transport == TransportAvailability.Disabled) {
+                    "系统蓝牙已关闭"
+                } else {
+                    platform.hostPlatform.firstConnectionHint()
+                }
+                AppText(hint, role = AppTextRole.Summary)
+            }
+            Column(
+                Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                AppButton(
+                    text = "搜索并添加耳机",
+                    onClick = { onNavigate(AppPage.ADD_DEVICE) },
+                    kind = AppButtonKind.Primary,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                onOpenSystemSettings?.let { openSettings ->
+                    AppButton(
+                        text = "打开系统蓝牙设置",
+                        onClick = openSettings,
+                        kind = AppButtonKind.Secondary,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ReconnectActions(
+    state: ControlState,
+    primaryDevice: DeviceCandidate,
+    isConnecting: Boolean,
+    onConnect: (DeviceId) -> Unit,
+    onDisconnect: () -> Unit,
+    onRequestPermission: (() -> Unit)?,
+    onOpenSystemSettings: (() -> Unit)?,
+) {
+    val platform = state.platform
+    val blockReason = platform.connectionBlockReason
+    val visibleError = state.lastError
+    Column(
+        Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        if (isConnecting) {
+            AppButton(
+                text = "取消连接",
+                onClick = onDisconnect,
+                kind = AppButtonKind.Secondary,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        } else if (platform.bluetoothPermissionRequired) {
+            onRequestPermission?.let { requestPermission ->
+                AppButton(
+                    text = "授予蓝牙权限",
+                    onClick = requestPermission,
+                    kind = AppButtonKind.Primary,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        } else if (blockReason != null) {
+            onOpenSystemSettings?.let { openSettings ->
+                AppButton(
+                    text = "打开系统蓝牙设置",
+                    onClick = openSettings,
+                    kind = AppButtonKind.Primary,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        } else {
+            AppButton(
+                text = if (visibleError != null) "重试连接" else "连接",
+                onClick = { onConnect(primaryDevice.deviceId) },
+                kind = AppButtonKind.Primary,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        if (visibleError != null && blockReason == null && onOpenSystemSettings != null) {
+            AppButton(
+                text = "无法连接？打开系统蓝牙设置",
+                onClick = onOpenSystemSettings,
+                kind = AppButtonKind.Secondary,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+    }
+}
+
+@Composable
+private fun OtherPairedDevices(devices: List<DeviceCandidate>, enabled: Boolean, onSelect: (DeviceId) -> Unit) {
+    val isMaterial3 = LocalInterfaceStyle.current == InterfaceStyle.MATERIAL3
+    if (devices.isNotEmpty()) {
+        AppGroup(title = "其他已配对设备") {
+            devices.forEach { paired ->
+                AppDashboardCard {
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            if (isMaterial3) {
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(MaterialTheme.colorScheme.surfaceContainer)
+                                        .padding(8.dp),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    AppIcon(RoseIcon.HEADPHONES)
+                                }
+                            } else {
+                                AppIcon(RoseIcon.HEADPHONES)
+                            }
+                            Column {
+                                AppText(paired.name?.takeIf(String::isNotBlank) ?: paired.profile!!.displayName)
+                                paired.profile?.let {
+                                    AppText(it.configurationCaption, role = AppTextRole.Summary)
+                                }
+                            }
+                        }
+                        AppButton(
+                            text = "切换",
+                            enabled = enabled,
+                            onClick = {
+                                onSelect(paired.deviceId)
+                            },
+                            kind = AppButtonKind.Secondary,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ReconnectStatus(state: ControlState, primaryDevice: DeviceCandidate, isConnecting: Boolean) {
+    val blockReason = state.platform.connectionBlockReason
+    val visibleError = state.lastError
+    val isMaterial3 = LocalInterfaceStyle.current == InterfaceStyle.MATERIAL3
+    val statusContent: @Composable () -> Unit = {
+        if (isConnecting) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                AppBusyIndicator()
+                AppText("正在连接…", role = AppTextRole.Summary, color = appColor(AppColorRole.Primary))
+            }
+        } else {
+            AppText(
+                blockReason ?: primaryDevice.profile.reconnectHint(visibleError != null),
+                role = AppTextRole.Summary,
+                color = if (visibleError != null && blockReason == null) appColor(AppColorRole.Error) else null,
+            )
+        }
+    }
+    if (isMaterial3) {
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(12.dp))
+                .background(MaterialTheme.colorScheme.surfaceContainer)
+                .padding(horizontal = 12.dp, vertical = 6.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            statusContent()
+        }
+    } else {
+        statusContent()
+    }
 }

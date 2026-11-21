@@ -70,31 +70,8 @@ class AppTitleAction(val label: String, val enabled: Boolean, val onClick: () ->
 
 @Composable
 fun appColor(role: AppColorRole): Color = when (LocalInterfaceStyle.current) {
-    InterfaceStyle.MIUIX -> with(MiuixTheme.colorScheme) {
-        when (role) {
-            AppColorRole.Primary -> primary
-            AppColorRole.OnSurface -> onSurface
-            AppColorRole.Summary -> onSurfaceVariantSummary
-            AppColorRole.Error -> error
-            AppColorRole.Divider -> dividerLine
-            AppColorRole.SelectedContainer -> tertiaryContainer
-            AppColorRole.SelectedContent -> onTertiaryContainer
-            AppColorRole.DisabledContent -> disabledOnSurface
-        }
-    }
-
-    InterfaceStyle.MATERIAL3 -> with(MaterialTheme.colorScheme) {
-        when (role) {
-            AppColorRole.Primary -> primary
-            AppColorRole.OnSurface -> onSurface
-            AppColorRole.Summary -> onSurfaceVariant
-            AppColorRole.Error -> error
-            AppColorRole.Divider -> outlineVariant
-            AppColorRole.SelectedContainer -> secondaryContainer
-            AppColorRole.SelectedContent -> onSecondaryContainer
-            AppColorRole.DisabledContent -> onSurface.copy(alpha = 0.38f)
-        }
-    }
+    InterfaceStyle.MIUIX -> miuixColor(role)
+    InterfaceStyle.MATERIAL3 -> materialColor(role)
 }
 
 /** [dynamicColor] takes the system wallpaper colors (动态取色) where the platform provides them, else the style defaults. */
@@ -163,15 +140,7 @@ fun AppText(
             maxLines = maxLines,
             textAlign = textAlign,
             overflow = overflow,
-            style = with(MiuixTheme.textStyles) {
-                when (role) {
-                    AppTextRole.Display -> title1
-                    AppTextRole.Title -> title4
-                    AppTextRole.Body -> main
-                    AppTextRole.Summary -> body2
-                    AppTextRole.Footnote -> footnote1
-                }
-            },
+            style = miuixTextStyle(role),
         )
 
         InterfaceStyle.MATERIAL3 -> Text(
@@ -181,15 +150,7 @@ fun AppText(
             maxLines = maxLines,
             textAlign = textAlign ?: androidx.compose.ui.text.style.TextAlign.Unspecified,
             overflow = overflow,
-            style = with(MaterialTheme.typography) {
-                when (role) {
-                    AppTextRole.Display -> displaySmall
-                    AppTextRole.Title -> titleMedium
-                    AppTextRole.Body -> bodyLarge
-                    AppTextRole.Summary -> bodyMedium
-                    AppTextRole.Footnote -> bodySmall
-                }
-            },
+            style = materialTextStyle(role),
         )
     }
 }
@@ -504,16 +465,17 @@ fun <T> AppRadioGroup(
 ) {
     Column(Modifier.selectableGroup(), verticalArrangement = rowArrangement()) {
         options.forEach { option ->
+            val chosen = selected != null && option.value == selected
             val optionEnabled = enabled && option.disabledReason == null
             val optionModifier = Modifier.semantics {
-                this.selected = selected != null && option.value == selected
+                this.selected = chosen
                 option.contentDescription?.let { contentDescription = it }
                 if (!optionEnabled) disabled()
             }.let { base -> option.testTag?.let { base.testTag(it) } ?: base }
             when (LocalInterfaceStyle.current) {
                 InterfaceStyle.MIUIX -> RadioButtonPreference(
                     option.label,
-                    selected != null && option.value == selected,
+                    chosen,
                     onClick = { if (optionEnabled) onSelect(option.value) },
                     modifier = optionModifier,
                     summary = option.disabledReason,
@@ -521,11 +483,11 @@ fun <T> AppRadioGroup(
                 )
 
                 InterfaceStyle.MATERIAL3 -> ListItem(
-                    selected = selected != null && option.value == selected,
+                    selected = chosen,
                     onClick = { onSelect(option.value) },
                     modifier = optionModifier,
                     enabled = optionEnabled,
-                    leadingContent = { RadioButton(selected != null && option.value == selected, onClick = null, enabled = optionEnabled) },
+                    leadingContent = { RadioButton(chosen, onClick = null, enabled = optionEnabled) },
                     verticalAlignment = RowAlignment,
                     supportingContent = option.disabledReason?.let { { Text(it) } },
                     colors = rowColors(),
@@ -591,33 +553,8 @@ fun <T> AppChoiceRow(
         }
     }
     val dialogFocusRequester = remember { FocusRequester() }
-    val backdropActive = LocalBackdropBlurActive.current
-    val backdrop = LocalAppBackdrop.current
     when (LocalInterfaceStyle.current) {
-        InterfaceStyle.MIUIX -> {
-            val selectedIndex = options.indexOfFirst { it.value == selected }
-            // The dropdown lists labels only, so a list with an unavailable option takes the dialog that can say why.
-            val dropdownFits = selected != null && selectedIndex >= 0 && options.none { it.disabledReason != null }
-            MiuixChoicePopup(isOpen, ::setOpen, dropdownFits, dropdown = { expanded ->
-                OverlayDropdownPreference(
-                    items = options.map { it.label },
-                    selectedIndex = selectedIndex,
-                    title = title,
-                    enabled = enabled,
-                    startAction = iconAction(icon),
-                    onExpandedChange = expanded,
-                    onSelectedIndexChange = { select(options[it].value) },
-                )
-            }) {
-                ArrowPreference(title, summary = valueText, enabled = enabled, startAction = iconAction(icon), onClick = { setOpen(true) })
-                OverlayDialog(show = isOpen, title = title, onDismissRequest = { setOpen(false) }) {
-                    Column(Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState())) {
-                        AppRadioGroup(options, selected, enabled, onSelect = select)
-                    }
-                    AppButton("取消", { setOpen(false) }, kind = AppButtonKind.Secondary)
-                }
-            }
-        }
+        InterfaceStyle.MIUIX -> MiuixChoiceRow(title, valueText, options, selected, enabled, icon, isOpen, ::setOpen, select)
 
         InterfaceStyle.MATERIAL3 -> {
             ListItem(
@@ -927,6 +864,92 @@ internal fun SettingPageBanner(state: io.github.dohex.openrose.core.ControlState
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
         ) {
             Text(message, Modifier.padding(16.dp))
+        }
+    }
+}
+
+@Composable
+private fun miuixColor(role: AppColorRole): Color = with(MiuixTheme.colorScheme) {
+    when (role) {
+        AppColorRole.Primary -> primary
+        AppColorRole.OnSurface -> onSurface
+        AppColorRole.Summary -> onSurfaceVariantSummary
+        AppColorRole.Error -> error
+        AppColorRole.Divider -> dividerLine
+        AppColorRole.SelectedContainer -> tertiaryContainer
+        AppColorRole.SelectedContent -> onTertiaryContainer
+        AppColorRole.DisabledContent -> disabledOnSurface
+    }
+}
+
+@Composable
+private fun materialColor(role: AppColorRole): Color = with(MaterialTheme.colorScheme) {
+    when (role) {
+        AppColorRole.Primary -> primary
+        AppColorRole.OnSurface -> onSurface
+        AppColorRole.Summary -> onSurfaceVariant
+        AppColorRole.Error -> error
+        AppColorRole.Divider -> outlineVariant
+        AppColorRole.SelectedContainer -> secondaryContainer
+        AppColorRole.SelectedContent -> onSecondaryContainer
+        AppColorRole.DisabledContent -> onSurface.copy(alpha = 0.38f)
+    }
+}
+
+@Composable
+private fun miuixTextStyle(role: AppTextRole) = with(MiuixTheme.textStyles) {
+    when (role) {
+        AppTextRole.Display -> title1
+        AppTextRole.Title -> title4
+        AppTextRole.Body -> main
+        AppTextRole.Summary -> body2
+        AppTextRole.Footnote -> footnote1
+    }
+}
+
+@Composable
+private fun materialTextStyle(role: AppTextRole) = with(MaterialTheme.typography) {
+    when (role) {
+        AppTextRole.Display -> displaySmall
+        AppTextRole.Title -> titleMedium
+        AppTextRole.Body -> bodyLarge
+        AppTextRole.Summary -> bodyMedium
+        AppTextRole.Footnote -> bodySmall
+    }
+}
+
+@Composable
+private fun <T> MiuixChoiceRow(
+    title: String,
+    valueText: String,
+    options: List<AppOption<T>>,
+    selected: T?,
+    enabled: Boolean,
+    icon: RoseIcon?,
+    isOpen: Boolean,
+    setOpen: (Boolean) -> Unit,
+    select: (T) -> Unit,
+) {
+    val selectedIndex = options.indexOfFirst { it.value == selected }
+    // The dropdown lists labels only, so a list with an unavailable option takes the dialog that can say why.
+    val dropdownFits = selected != null && selectedIndex >= 0 && options.none { it.disabledReason != null }
+    MiuixChoicePopup(isOpen, setOpen, dropdownFits, dropdown = { expanded ->
+        OverlayDropdownPreference(
+            items = options.map { it.label },
+            selectedIndex = selectedIndex,
+            title = title,
+            enabled = enabled,
+            startAction = iconAction(icon),
+            onExpandedChange = expanded,
+            onSelectedIndexChange = { select(options[it].value) },
+        )
+    }) {
+        ArrowPreference(title, summary = valueText, enabled = enabled, startAction = iconAction(icon), onClick = { setOpen(true) })
+        OverlayDialog(show = isOpen, title = title, onDismissRequest = { setOpen(false) }) {
+            Column(Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState())) {
+                AppRadioGroup(options, selected, enabled, onSelect = select)
+            }
+            AppButton("取消", { setOpen(false) }, kind = AppButtonKind.Secondary)
         }
     }
 }

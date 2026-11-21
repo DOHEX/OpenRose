@@ -155,12 +155,10 @@ internal fun NoiseCycleRow(
         enabled = enabled && cycleKnown,
         enabledFor = { mode -> mode !in checked || checked.size > capabilities.minimumCycleSelections },
         onToggle = { mode ->
-            if (enabled && cycleKnown && (mode !in checked || checked.size > capabilities.minimumCycleSelections)) {
-                val requested = capabilities.cycleModes.associateWith { option ->
-                    if (option == mode) option !in checked else option in checked
-                }
-                onSet(HeadsetCommand.NoiseCycle(requested))
+            val requested = capabilities.cycleModes.associateWith { option ->
+                if (option == mode) option !in checked else option in checked
             }
+            onSet(HeadsetCommand.NoiseCycle(requested))
         },
     )
 }
@@ -180,132 +178,8 @@ private fun NoiseModeChoices(
     val columns = if (options.size <= 4) options.size.coerceAtLeast(1) else 3
     val rows = remember(options, columns) { options.chunked(columns) }
     when (LocalInterfaceStyle.current) {
-        InterfaceStyle.MIUIX -> {
-            Column(Modifier.fillMaxWidth().selectableGroup(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                rows.forEach { row ->
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        row.forEach { option ->
-                            val isSelected = option.value == selected
-                            val interaction = remember { MutableInteractionSource() }
-                            val pressed by interaction.collectIsPressedAsState()
-                            val hovered by interaction.collectIsHoveredAsState()
-                            val contentColor = appColor(
-                                when {
-                                    !enabled -> AppColorRole.DisabledContent
-                                    isSelected -> AppColorRole.SelectedContent
-                                    else -> AppColorRole.Summary
-                                },
-                            )
-                            val circleColor = when {
-                                isSelected -> appColor(AppColorRole.SelectedContainer)
-                                enabled && (pressed || hovered) -> appColor(AppColorRole.OnSurface).copy(alpha = 0.08f)
-                                else -> Color.Transparent
-                            }
-                            Column(
-                                modifier = Modifier.weight(1f)
-                                    .selectable(
-                                        selected = isSelected,
-                                        interactionSource = interaction,
-                                        indication = null,
-                                        enabled = enabled,
-                                        role = Role.RadioButton,
-                                        onClick = { onSelect(option.value) },
-                                    )
-                                    .padding(vertical = 8.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.spacedBy(8.dp),
-                            ) {
-                                Box(
-                                    Modifier.size(48.dp).background(circleColor, CircleShape),
-                                    contentAlignment = Alignment.Center,
-                                ) {
-                                    AppIcon(noiseModeIcon(option.value), Modifier.size(24.dp), tint = contentColor)
-                                }
-                                AppText(option.label, role = AppTextRole.Footnote, color = contentColor)
-                            }
-                        }
-                        repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
-                    }
-                }
-            }
-        }
-
-        InterfaceStyle.MATERIAL3 -> {
-            Column(Modifier.fillMaxWidth().selectableGroup(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                rows.forEach { row ->
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                        row.forEachIndexed { index, option ->
-                            val isSelected = option.value == selected
-                            val targetStartCorner = if (isSelected || index == 0) 16.dp else 8.dp
-                            val targetEndCorner = if (isSelected || index == row.size - 1) 16.dp else 8.dp
-                            val startCorner by animateDpAsState(
-                                targetValue = targetStartCorner,
-                                animationSpec = spring(dampingRatio = 0.75f, stiffness = 500f),
-                                label = "modeStartCorner",
-                            )
-                            val endCorner by animateDpAsState(
-                                targetValue = targetEndCorner,
-                                animationSpec = spring(dampingRatio = 0.75f, stiffness = 500f),
-                                label = "modeEndCorner",
-                            )
-                            val shape = RoundedCornerShape(
-                                topStart = startCorner,
-                                bottomStart = startCorner,
-                                topEnd = endCorner,
-                                bottomEnd = endCorner,
-                            )
-                            val containerColor by animateColorAsState(
-                                targetValue = when {
-                                    isSelected -> MaterialTheme.colorScheme.secondaryContainer
-                                    else -> MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.5f)
-                                },
-                                animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium),
-                                label = "modeContainerColor",
-                            )
-                            val iconScale by animateFloatAsState(
-                                targetValue = if (isSelected) 1.05f else 1.0f,
-                                animationSpec = spring(dampingRatio = 0.75f, stiffness = 600f),
-                                label = "modeIconScale",
-                            )
-                            val contentColor by animateColorAsState(
-                                targetValue = when {
-                                    !enabled -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-                                    isSelected -> MaterialTheme.colorScheme.onSecondaryContainer
-                                    else -> MaterialTheme.colorScheme.onSurfaceVariant
-                                },
-                                animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium),
-                                label = "modeContentColor",
-                            )
-                            Column(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .clip(shape)
-                                    .background(containerColor)
-                                    .selectable(
-                                        selected = isSelected,
-                                        enabled = enabled,
-                                        role = Role.RadioButton,
-                                        onClick = { onSelect(option.value) },
-                                    )
-                                    .padding(vertical = 10.dp, horizontal = 4.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.spacedBy(4.dp),
-                            ) {
-                                AppIcon(
-                                    noiseModeIcon(option.value),
-                                    modifier = Modifier
-                                        .size(24.dp)
-                                        .graphicsLayer(scaleX = iconScale, scaleY = iconScale),
-                                    tint = contentColor,
-                                )
-                                AppText(option.label, role = AppTextRole.Footnote, color = contentColor)
-                            }
-                        }
-                        repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
-                    }
-                }
-            }
-        }
+        InterfaceStyle.MIUIX -> MiuixNoiseModeGrid(rows, columns, selected, enabled, onSelect)
+        InterfaceStyle.MATERIAL3 -> MaterialNoiseModeGrid(rows, columns, selected, enabled, onSelect)
     }
 }
 
@@ -336,30 +210,143 @@ internal fun noiseModeOrder(mode: String): Int = when (mode) {
     else -> 6
 }
 
-internal fun DeviceSetting.displayName(): String = when (this) {
-    DeviceSetting.NOISE_MODE -> "降噪模式"
-    DeviceSetting.ANC_LEVEL -> "降噪档位"
-    DeviceSetting.TRANSPARENCY_LEVEL -> "通透档位"
-    DeviceSetting.NOISE_CYCLE -> "降噪轮换"
-    DeviceSetting.EQ -> "预设 EQ"
-    DeviceSetting.GAME_MODE -> "游戏模式"
-    DeviceSetting.TAP_ENABLED -> "轻拍开关"
-    DeviceSetting.TAP_BINDING -> "轻拍绑定"
-    DeviceSetting.TOUCH_BINDING -> "触控绑定"
-    DeviceSetting.TOUCH_ENABLED -> "触控总开关"
-    DeviceSetting.EAR_DETECTION -> "佩戴检测功能"
-    DeviceSetting.AUDIO_MODE -> "音频模式"
-    DeviceSetting.MULTIPOINT -> "多点连接"
-    DeviceSetting.SPATIAL_MODE -> "空间模式"
-    DeviceSetting.SPATIAL_CONTENT -> "空间音频内容"
-    DeviceSetting.EAR_ADAPTIVE -> "耳道自适应"
-    DeviceSetting.INDEPENDENT_MIC_ACTIVATION -> "独立麦克风激活"
-    DeviceSetting.INDEPENDENT_MIC_MODE -> "独立麦克风模式"
-    DeviceSetting.SPATIAL_AUDIO -> "空间音频"
-    DeviceSetting.PROMPT_VOLUME -> "提示音音量"
-    DeviceSetting.GAIN -> "增益档位"
-    DeviceSetting.HEARING_PROTECTION -> "听力保护阈值"
-    DeviceSetting.BASS_BOOST -> "低音增强"
-    DeviceSetting.PROMPT_LANGUAGE -> "提示音语言"
-    DeviceSetting.CUSTOM_EQ -> "自定义 EQ"
+@Composable
+private fun MiuixNoiseModeGrid(
+    rows: List<List<AppOption<String>>>,
+    columns: Int,
+    selected: String?,
+    enabled: Boolean,
+    onSelect: (String) -> Unit,
+) {
+    Column(Modifier.fillMaxWidth().selectableGroup(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        rows.forEach { row ->
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                row.forEach { option ->
+                    val isSelected = option.value == selected
+                    val interaction = remember { MutableInteractionSource() }
+                    val pressed by interaction.collectIsPressedAsState()
+                    val hovered by interaction.collectIsHoveredAsState()
+                    val contentColor = appColor(
+                        when {
+                            !enabled -> AppColorRole.DisabledContent
+                            isSelected -> AppColorRole.SelectedContent
+                            else -> AppColorRole.Summary
+                        },
+                    )
+                    val circleColor = when {
+                        isSelected -> appColor(AppColorRole.SelectedContainer)
+                        enabled && (pressed || hovered) -> appColor(AppColorRole.OnSurface).copy(alpha = 0.08f)
+                        else -> Color.Transparent
+                    }
+                    Column(
+                        modifier = Modifier.weight(1f)
+                            .selectable(
+                                selected = isSelected,
+                                interactionSource = interaction,
+                                indication = null,
+                                enabled = enabled,
+                                role = Role.RadioButton,
+                                onClick = { onSelect(option.value) },
+                            )
+                            .padding(vertical = 8.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Box(
+                            Modifier.size(48.dp).background(circleColor, CircleShape),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            AppIcon(noiseModeIcon(option.value), Modifier.size(24.dp), tint = contentColor)
+                        }
+                        AppText(option.label, role = AppTextRole.Footnote, color = contentColor)
+                    }
+                }
+                repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MaterialNoiseModeGrid(
+    rows: List<List<AppOption<String>>>,
+    columns: Int,
+    selected: String?,
+    enabled: Boolean,
+    onSelect: (String) -> Unit,
+) {
+    Column(Modifier.fillMaxWidth().selectableGroup(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        rows.forEach { row ->
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                row.forEachIndexed { index, option ->
+                    val isSelected = option.value == selected
+                    val targetStartCorner = if (isSelected || index == 0) 16.dp else 8.dp
+                    val targetEndCorner = if (isSelected || index == row.size - 1) 16.dp else 8.dp
+                    val startCorner by animateDpAsState(
+                        targetValue = targetStartCorner,
+                        animationSpec = spring(dampingRatio = 0.75f, stiffness = 500f),
+                        label = "modeStartCorner",
+                    )
+                    val endCorner by animateDpAsState(
+                        targetValue = targetEndCorner,
+                        animationSpec = spring(dampingRatio = 0.75f, stiffness = 500f),
+                        label = "modeEndCorner",
+                    )
+                    val shape = RoundedCornerShape(
+                        topStart = startCorner,
+                        bottomStart = startCorner,
+                        topEnd = endCorner,
+                        bottomEnd = endCorner,
+                    )
+                    val containerColor by animateColorAsState(
+                        targetValue = when {
+                            isSelected -> MaterialTheme.colorScheme.secondaryContainer
+                            else -> MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.5f)
+                        },
+                        animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium),
+                        label = "modeContainerColor",
+                    )
+                    val iconScale by animateFloatAsState(
+                        targetValue = if (isSelected) 1.05f else 1.0f,
+                        animationSpec = spring(dampingRatio = 0.75f, stiffness = 600f),
+                        label = "modeIconScale",
+                    )
+                    val contentColor by animateColorAsState(
+                        targetValue = when {
+                            !enabled -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                            isSelected -> MaterialTheme.colorScheme.onSecondaryContainer
+                            else -> MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                        animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium),
+                        label = "modeContentColor",
+                    )
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(shape)
+                            .background(containerColor)
+                            .selectable(
+                                selected = isSelected,
+                                enabled = enabled,
+                                role = Role.RadioButton,
+                                onClick = { onSelect(option.value) },
+                            )
+                            .padding(vertical = 10.dp, horizontal = 4.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        AppIcon(
+                            noiseModeIcon(option.value),
+                            modifier = Modifier
+                                .size(24.dp)
+                                .graphicsLayer(scaleX = iconScale, scaleY = iconScale),
+                            tint = contentColor,
+                        )
+                        AppText(option.label, role = AppTextRole.Footnote, color = contentColor)
+                    }
+                }
+                repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
+            }
+        }
+    }
 }

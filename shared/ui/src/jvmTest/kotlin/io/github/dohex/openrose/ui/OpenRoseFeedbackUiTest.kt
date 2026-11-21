@@ -27,6 +27,7 @@ import io.github.dohex.openrose.core.protocol.FieldReading
 import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.dohex.openrose.core.protocol.ModelProfile
 import io.github.dohex.openrose.core.transport.DeviceId
+import io.github.dohex.openrose.core.withReadings
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.persistentMapOf
 import kotlinx.collections.immutable.persistentSetOf
@@ -37,6 +38,11 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class OpenRoseFeedbackUiTest {
+    @Test
+    fun everySettingCanBeNamedInOperationFeedback() {
+        DeviceSetting.entries.forEach { assertTrue(it.displayName().isNotBlank(), it.name) }
+    }
+
     @OptIn(ExperimentalTestApi::class)
     @Test
     fun failureFeedbackLeavesTheLastHomeRowTappableOnAPhone() {
@@ -229,6 +235,18 @@ class OpenRoseFeedbackUiTest {
         }
     }
 
+    private suspend fun FeedbackHarness.selectInterfaceStyle(nextStyle: InterfaceStyle) {
+        clickTab("设置")
+        render()
+        openPersonalization()
+        clickText("组件风格")
+        render()
+        clickText(if (nextStyle == InterfaceStyle.MIUIX) "Miuix" else "Material 3 Expressive")
+        render()
+        clickContentDescription("返回")
+        render()
+    }
+
     @Test
     fun settingSubmissionWaitsForDeviceConfirmationAndStyleSwitchDoesNotResend() {
         for (style in InterfaceStyle.entries) {
@@ -244,15 +262,14 @@ class OpenRoseFeedbackUiTest {
                 harness.render()
                 harness.clickText("通透")
 
+                val requested = FieldValue.Text("transparency")
                 assertEquals(
-                    listOf<Pair<DeviceSetting, FieldValue>>(
-                        DeviceSetting.NOISE_MODE to FieldValue.Text("transparency"),
-                    ),
+                    listOf<Pair<DeviceSetting, FieldValue>>(DeviceSetting.NOISE_MODE to requested),
                     harness.settingWrites,
                     "the user request reaches the model once in $style",
                 )
                 val submitted = confirmed.copy(
-                    requestedValue = FieldValue.Text("transparency"),
+                    requestedValue = requested,
                     stage = SettingStage.SUBMITTED,
                     confirmedFields = persistentSetOf(),
                 )
@@ -262,19 +279,10 @@ class OpenRoseFeedbackUiTest {
                 assertTrue(harness.hasText("等待设备确认"), "submission shows a waiting result in $style")
                 assertTrue(harness.hasDisabledText("通透"), "pending settings keep the existing disabled-control rule in $style")
 
-                harness.clickTab("设置")
-                harness.render()
-                harness.openPersonalization()
-                harness.clickText("组件风格")
-                harness.render()
-                val nextStyle = if (style == InterfaceStyle.MIUIX) InterfaceStyle.MATERIAL3 else InterfaceStyle.MIUIX
-                harness.clickText(if (nextStyle == InterfaceStyle.MIUIX) "Miuix" else "Material 3 Expressive")
-                harness.render()
-                harness.clickContentDescription("返回")
-                harness.render()
+                val nextStyle = InterfaceStyle.entries.first { it != style }
+                harness.selectInterfaceStyle(nextStyle)
                 assertEquals(nextStyle, harness.uiSettings.value.interfaceStyle)
                 assertEquals(1, harness.settingWrites.size, "style changes do not resubmit settings in $style")
-
                 harness.clickTab("我的耳机")
                 harness.render()
                 assertTrue(harness.hasSelectedText("降噪"), "navigation preserves the confirmed value in $style")
@@ -283,12 +291,7 @@ class OpenRoseFeedbackUiTest {
                 val current = harness.state.value
                 val device = requireNotNull(current.device)
                 harness.state.value = current.copy(
-                    device = device.copy(
-                        diagnostics = device.diagnostics.copy(
-                            fields = device.diagnostics.fields +
-                                (DeviceField.NOISE_MODE to FieldReading.Known(FieldValue.Text("transparency"), "transparency")),
-                        ),
-                    ),
+                    device = device.withReadings(mapOf(DeviceField.NOISE_MODE to FieldReading.Known(requested, "transparency"))),
                     settingOperations = persistentListOf(
                         submitted.copy(
                             stage = SettingStage.CONFIRMED,
