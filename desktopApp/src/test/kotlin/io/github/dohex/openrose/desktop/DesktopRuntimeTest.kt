@@ -9,11 +9,22 @@ import io.github.dohex.openrose.ui.BottomBarStyle
 import io.github.dohex.openrose.ui.InterfaceStyle
 import io.github.dohex.openrose.ui.PageTransition
 import io.github.dohex.openrose.ui.UiSettings
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withContext
 import java.util.UUID
 import java.util.prefs.Preferences
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 class DesktopRuntimeTest {
     @Test
@@ -62,6 +73,30 @@ class DesktopRuntimeTest {
         } finally {
             preferences.removeNode()
             Preferences.userRoot().flush()
+        }
+    }
+
+    @Test
+    fun closingTheDesktopWaitsForItsBackgroundServicesToReleaseTheirResources() = runTest {
+        val scope = CoroutineScope(SupervisorJob() + StandardTestDispatcher(testScheduler))
+        val preferences = Preferences.userRoot().node("io/github/dohex/openrose/test/${UUID.randomUUID()}")
+        val released = CompletableDeferred<Unit>()
+        try {
+            val runtime = DesktopRuntime(preferences, platform, scope)
+            scope.launch(start = CoroutineStart.UNDISPATCHED) {
+                try {
+                    awaitCancellation()
+                } finally {
+                    withContext(NonCancellable) {
+                        delay(100)
+                        released.complete(Unit)
+                    }
+                }
+            }
+            runtime.close()
+            assertTrue(released.isCompleted)
+        } finally {
+            preferences.removeNode()
         }
     }
 

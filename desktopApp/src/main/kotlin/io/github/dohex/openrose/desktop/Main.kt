@@ -43,6 +43,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import java.util.prefs.Preferences
+import kotlin.system.exitProcess
 
 fun main(args: Array<String>) {
     val platform = System.getProperty("os.name")
@@ -118,17 +119,23 @@ fun main(args: Array<String>) {
                 }
             }
 
-            fun exit() {
+            fun exit(fromTray: Boolean = false) {
                 if (exiting) return
                 closingWindow?.cancel()
                 exiting = true
                 uiScope.launch {
                     try {
-                        runtime.close()
+                        try {
+                            runtime.close()
+                        } finally {
+                            owner = null
+                            tray.close()
+                            trayOwner = null
+                        }
+                        // On Linux Tao's EGL detach can wedge the main thread while a visible
+                        // window is being destroyed. The JVM shutdown hook releases the instance lock.
+                        if (fromTray && hostPlatform == HostPlatform.LINUX) exitProcess(0)
                     } finally {
-                        owner = null
-                        tray.close()
-                        trayOwner = null
                         exitApplication()
                     }
                 }
@@ -166,7 +173,7 @@ fun main(args: Array<String>) {
                         uiScope = uiScope,
                         circulation = circulation,
                         onOpenApp = ::showWindow,
-                        onExit = ::exit,
+                        onExit = { exit(fromTray = true) },
                         onStarted = tray::trayStarted,
                     )
                 }
