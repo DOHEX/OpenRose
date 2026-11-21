@@ -101,7 +101,13 @@ internal class NativeBluezBus private constructor(private val connection: DBusCo
             path.path to interfaces.mapValues { (_, properties) -> properties.mapValues { unwrap(it.value) } }
         }
     }
-    override suspend fun connect(path: String) = call { connection.getRemoteObject("org.bluez", path, Device1::class.java).Connect() }
+    override suspend fun connectGatt(path: String, useLeBearer: Boolean) = call {
+        if (useLeBearer) {
+            connection.getRemoteObject("org.bluez", path, LeBearer::class.java).connect()
+        } else {
+            connection.getRemoteObject("org.bluez", path, Device1::class.java).Connect()
+        }
+    }
     override suspend fun startNotify(owner: String, path: String) = call {
         connection.getRemoteObject(owner, path, GattCharacteristic1::class.java).StartNotify()
     }

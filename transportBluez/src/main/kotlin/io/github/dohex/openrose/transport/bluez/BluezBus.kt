@@ -22,7 +22,7 @@ internal interface BluezBus : BluezAudioBus {
     val owner: String?
     fun signals(accepts: (BluezSignal) -> Boolean): Flow<BluezSignal>
     suspend fun objects(): BluezObjects
-    suspend fun connect(path: String)
+    suspend fun connectGatt(path: String, useLeBearer: Boolean)
     suspend fun startNotify(owner: String, path: String)
     suspend fun stopNotify(owner: String, path: String)
     suspend fun write(path: String, value: ByteArray, withResponse: Boolean)

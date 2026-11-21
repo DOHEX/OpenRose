@@ -18,6 +18,7 @@ internal class BluezGattDriver(private val bus: BluezBus, private val devicePath
     private val routed = mutableSetOf<String>()
     private val subscribed = mutableSetOf<String>()
     private var discovered = false
+    private var firstWrite = true
     private var closed = false
     override val events: Flow<GattEvent> = bus.signals { it.affectsLink(devicePath) }.transform { signal ->
         when (signal) {
@@ -73,9 +74,7 @@ internal class BluezGattDriver(private val bus: BluezBus, private val devicePath
         suspend fun waitForServices(timeout: Long): BluezObjects? = withTimeoutOrNull(timeout) {
             while (true) {
                 val objects = bus.objects()
-                if (objects[devicePath]?.get(DEVICE)?.get("ServicesResolved") == true &&
-                    objects.any { it.key.startsWith("$devicePath/") && SERVICE in it.value }
-                ) {
+                if (objects.gattServicesReady(devicePath)) {
                     return@withTimeoutOrNull objects
                 }
                 delay(100)
@@ -150,7 +149,22 @@ internal class BluezGattDriver(private val bus: BluezBus, private val devicePath
         withResponse: Boolean,
     ) = native(recoverNotConnected = true) {
         checkOpen()
-        bus.write(path(characteristic), value, withResponse)
+        val path = path(characteristic)
+        var retries = if (firstWrite) FIRST_WRITE_RETRIES else 0
+        while (true) {
+            try {
+                bus.write(path, value, withResponse)
+                firstWrite = false
+                break
+            } catch (error: org.bluez.Error.Failed) {
+                // BlueZ can accept StartNotify before attaching its GATT client. This exact
+                // WriteValue error is returned before it processes the value or transmits bytes.
+                if (error.message != "Not connected" || retries == 0) throw error
+                retries--
+                delay(125)
+                checkOpen()
+            }
+        }
     }
     override suspend fun close() {
         if (synchronized(lock) { closed }) return
@@ -202,15 +216,29 @@ internal class BluezGattDriver(private val bus: BluezBus, private val devicePath
     }
 }
 
+// Leaves time for the ATT write inside the shared five-second GATT operation deadline.
+private const val FIRST_WRITE_RETRIES = 24
+
 private suspend fun BluezBus.requestGattConnection(devicePath: String) {
+    val interfaces = objects()[devicePath].orEmpty()
+    val le = interfaces[LE_BEARER]
+    if (le?.get("Connected") == true) return
     try {
-        connect(devicePath)
+        connectGatt(devicePath, useLeBearer = le != null)
     } catch (_: org.bluez.Error.AlreadyConnected) {
         // Continue into bounded service discovery on the existing connection.
     } catch (error: org.bluez.Error.InProgress) {
         // BlueZ can still be completing an audio profile when it publishes the media transport.
         if (objects()[devicePath]?.get(DEVICE)?.get("Connected") != true) throw error
     }
+}
+
+private fun BluezObjects.gattServicesReady(devicePath: String): Boolean {
+    val interfaces = this[devicePath] ?: return false
+    val le = interfaces[LE_BEARER]
+    // ServicesResolved and the GATT table can outlive the LE link while classic audio is connected.
+    if (le != null && le["Connected"] != true) return false
+    return interfaces[DEVICE]?.get("ServicesResolved") == true && any { it.key.startsWith("$devicePath/") && SERVICE in it.value }
 }
 
 private fun disconnected(message: String) = GattEvent.Disconnected(GattException(GattFailureKind.DISCONNECTED, message))

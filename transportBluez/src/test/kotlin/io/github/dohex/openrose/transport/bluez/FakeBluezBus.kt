@@ -12,9 +12,11 @@ internal class FakeBluezBus : BluezBus {
     var stopDiscoveryFailure: Exception? = null
     var objectsFailure: Exception? = null
     var onStartDiscovery: () -> Unit = {}
+    val connectBearers = mutableListOf<Boolean>()
     var connects = 0
     var onConnect: suspend (Int) -> Unit = {}
     var onWrite: suspend (ByteArray) -> Unit = {}
+    var onStartNotify: () -> Unit = {}
     var onStopNotify: (String) -> Unit = {}
     val notifications = mutableListOf<String>()
     val writes = mutableListOf<Triple<String, ByteArray, Boolean>>()
@@ -29,13 +31,15 @@ internal class FakeBluezBus : BluezBus {
     var onAudioDisconnect: (String) -> Unit = {}
     override suspend fun connectAudio(path: String) = onAudioConnect(path)
     override suspend fun disconnectAudio(path: String, interfaces: Map<String, Map<String, Any?>>) = onAudioDisconnect(path)
-    override suspend fun connect(path: String) {
+    override suspend fun connectGatt(path: String, useLeBearer: Boolean) {
+        connectBearers.add(useLeBearer)
         connects++
         connectFailure?.let { throw it }
         onConnect(connects)
     }
     override suspend fun startNotify(owner: String, path: String) {
         check(owner == this.owner)
+        onStartNotify()
         notifications.add("start:$path")
     }
     override suspend fun stopNotify(owner: String, path: String) {

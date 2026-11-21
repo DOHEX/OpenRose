@@ -17,6 +17,9 @@ internal interface ClassicBearer : DBusInterface {
 
 @DBusInterfaceName("org.bluez.Bearer.LE1")
 internal interface LeBearer : DBusInterface {
+    @DBusMemberName("Connect")
+    fun connect()
+
     @DBusMemberName("Disconnect")
     fun disconnect()
 }

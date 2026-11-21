@@ -6,7 +6,9 @@ import io.github.dohex.openrose.core.transport.GattFailureKind
 import io.github.dohex.openrose.core.transport.GattSubscription
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
@@ -82,6 +84,37 @@ class BluezGattDriverTest {
     }
 
     @Test
+    fun reconnectWithClassicAudioWaitsForTheLeBearerBeforeSubscribingToCachedServices() = runTest {
+        val bus = FakeBluezBus()
+        fun snapshot(leConnected: Boolean) = gattObjects().let { objects ->
+            objects + (
+                DEVICE_PATH to objects.getValue(DEVICE_PATH) + mapOf(
+                    CLASSIC_BEARER to mapOf("Connected" to true),
+                    LE_BEARER to mapOf("Connected" to leConnected),
+                )
+                )
+        }
+        bus.snapshot = snapshot(false)
+        bus.onStartNotify = {
+            if (bus.snapshot[DEVICE_PATH]?.get(LE_BEARER)?.get("Connected") != true) throw org.bluez.Error.NotConnected("Not connected")
+        }
+        bus.onConnect = {
+            if (bus.connectBearers.last()) {
+                launch {
+                    delay(400)
+                    bus.snapshot = snapshot(true)
+                }
+            }
+        }
+        val driver = BluezGattDriver(bus, DEVICE_PATH)
+        driver.connect()
+        val characteristic = driver.discoverServices().single().characteristics.single()
+        driver.configureSubscription(characteristic, GattSubscription.NOTIFY)
+        assertEquals(listOf("start:$CHAR_PATH"), bus.notifications)
+        driver.close()
+    }
+
+    @Test
     fun classicConnectionRetriesForGattAndCloseOnlyReleasesNotificationLease() = runTest {
         val bus = FakeBluezBus()
         bus.snapshot = mapOf(DEVICE_PATH to mapOf(DEVICE to mapOf("Connected" to true, "ServicesResolved" to false)))
@@ -95,6 +128,31 @@ class BluezGattDriverTest {
         driver.close()
         assertEquals(listOf("start:$CHAR_PATH", "stop:$CHAR_PATH"), bus.notifications)
         assertEquals(2, bus.connects)
+    }
+
+    @Test
+    fun firstReadWaitsForTheGattClientAfterBluezAcceptsANotificationLease() = runTest {
+        val bus = FakeBluezBus().apply { snapshot = gattObjects() }
+        val driver = BluezGattDriver(bus, DEVICE_PATH)
+        val characteristic = driver.discoverServices().single().characteristics.single()
+        driver.configureSubscription(characteristic, GattSubscription.NOTIFY)
+        var attached = false
+        launch {
+            delay(400)
+            attached = true
+        }
+        val delivered = mutableListOf<Byte>()
+        bus.onWrite = {
+            if (!attached) throw org.bluez.Error.Failed("Not connected")
+            delivered += it.single()
+        }
+        driver.write(characteristic, byteArrayOf(1), true)
+        assertEquals(listOf<Byte>(1), delivered)
+        // Once initialized, user writes keep the ordinary failure path.
+        attached = false
+        assertFailsWith<GattException> { driver.write(characteristic, byteArrayOf(2), true) }
+        assertEquals(listOf<Byte>(1), delivered)
+        driver.close()
     }
 
     @Test
