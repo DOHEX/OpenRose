@@ -159,6 +159,11 @@ internal fun NoiseCycleRow(
 }
 
 @Composable
+internal fun RemoteNoiseModeChoices(modes: List<String>, selected: String?, enabled: Boolean, select: (String) -> Unit) {
+    NoiseModeChoices(modes.map { AppOption(it, noiseModeLabel(it)) }, selected, enabled, select)
+}
+
+@Composable
 private fun NoiseModeChoices(
     options: List<AppOption<String>>,
     selected: String?,
