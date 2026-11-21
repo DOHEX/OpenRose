@@ -1,0 +1,27 @@
+package io.github.dohex.openrose.platform
+
+import android.Manifest
+import android.app.Application
+import android.content.Context
+import android.media.AudioManager
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
+import org.robolectric.Shadows.shadowOf
+import org.robolectric.annotation.Config
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [33], manifest = Config.NONE, application = Application::class)
+class PhoneCirculationAudioTest {
+    @Test
+    fun refusesToReleaseDuringAnOngoingVoiceCall() {
+        val context: Context = RuntimeEnvironment.getApplication()
+        shadowOf(RuntimeEnvironment.getApplication()).grantPermissions(Manifest.permission.MODIFY_AUDIO_SETTINGS)
+        context.getSystemService(AudioManager::class.java).mode = AudioManager.MODE_IN_COMMUNICATION
+        val error = assertFailsWith<IllegalStateException> { PhoneCirculationAudio(context).release("11:22:33:44:55:66") }
+        assertEquals("手机通话中，无法让出耳机", error.message)
+    }
+}

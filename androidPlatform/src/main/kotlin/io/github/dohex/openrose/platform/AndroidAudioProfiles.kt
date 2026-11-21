@@ -143,7 +143,7 @@ internal class AndroidAudioProfiles(private val context: Context) : AudioFactsDr
     }
 
     @SuppressLint("MissingPermission") // connectionFacts checks BLUETOOTH_CONNECT (or legacy BLUETOOTH) first.
-    private suspend fun requestProfileProxy(adapter: BluetoothAdapter, profileId: Int): ProfileProxyLease? =
+    internal suspend fun requestProfileProxy(adapter: BluetoothAdapter, profileId: Int): ProfileProxyLease? =
         suspendCancellableCoroutine { continuation ->
             val request = ProfileProxyRequest(adapter, profileId, continuation)
             continuation.invokeOnCancellation { request.cancel() }
@@ -239,7 +239,7 @@ internal class AndroidAudioProfiles(private val context: Context) : AudioFactsDr
         }
     }
 
-    private class ProfileProxyLease(
+    internal class ProfileProxyLease(
         private val adapter: BluetoothAdapter,
         private val profileId: Int,
         private val proxy: BluetoothProfile,
@@ -273,6 +273,11 @@ internal class AndroidAudioProfiles(private val context: Context) : AudioFactsDr
                 return null
             }
             return RawProfileSnapshot(connected.toList(), states).takeIf { isValid }
+        }
+
+        fun currentProxy(): BluetoothProfile {
+            check(isValid) { "系统音频服务已断开" }
+            return proxy
         }
 
         fun invalidate() {
