@@ -30,8 +30,8 @@ class CirculationNode(
     val peers = trust.peers
 
     @Synchronized
-    fun start() {
-        val port = server.start()
+    fun start(listenPort: Int = 0) {
+        val port = server.start(listenPort)
         runCatching {
             discovery.start(identity.id, name, port) { peers ->
                 routes = peers.filter { it.id != identity.id && ID.matches(it.id) }

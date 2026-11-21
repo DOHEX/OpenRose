@@ -32,12 +32,17 @@ import dev.nucleusframework.core.runtime.Platform
 import io.github.dohex.openrose.core.DeviceSetting
 import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.dohex.openrose.ui.AppLogo
+import io.github.dohex.openrose.ui.CirculationClient
 import io.github.dohex.openrose.ui.PrimaryDeviceSelection
+import io.github.dohex.openrose.ui.RemoteHeadset
 import io.github.dohex.openrose.ui.TrayIcons
 import io.github.dohex.openrose.ui.TrayPanel
 import io.github.dohex.openrose.ui.TraySummary
 import io.github.dohex.openrose.ui.model.OpenRoseModel
 import io.github.dohex.openrose.ui.model.WindowDestination
+import io.github.dohex.openrose.ui.noiseModeLabel
+import io.github.dohex.openrose.ui.rememberRemoteHeadsets
+import io.github.dohex.openrose.ui.remoteBatteryText
 import io.github.dohex.openrose.ui.traySummary
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
@@ -86,6 +91,7 @@ internal fun NucleusApplicationScope.DesktopTray(
     model: OpenRoseModel,
     selection: PrimaryDeviceSelection,
     uiScope: CoroutineScope,
+    circulation: CirculationClient,
     onOpenApp: () -> Unit,
     onExit: () -> Unit,
     onStarted: () -> Unit,
@@ -93,10 +99,16 @@ internal fun NucleusApplicationScope.DesktopTray(
     val state by model.state.collectAsState()
     val summary = traySummary(state, selection)
     val sessionId = state.readySession?.sessionId
-    val icon = if (summary.connected) TrayIcons.connected else TrayIcons.disconnected
+    val peers = rememberRemoteHeadsets(circulation)
+    val remoteSource = peers.firstOrNull { it.reading["status"] == "ready" }
+    val icon = if (summary.connected || remoteSource != null) TrayIcons.connected else TrayIcons.disconnected
     // The Linux tray fixes the item's Title from the first tooltip it sees, so that one names the app.
     var started by remember { mutableStateOf(false) }
-    val tooltip = if (started) listOfNotNull(summary.title, summary.battery).joinToString(" · ") else "OpenRose"
+    val tooltip = when {
+        !started -> "OpenRose"
+        !summary.connected && remoteSource != null -> "${remoteSource.reading["deviceName"]} · ${remoteSource.name}"
+        else -> listOfNotNull(summary.title, summary.battery).joinToString(" · ")
+    }
 
     fun openApp(destination: WindowDestination?) {
         destination?.let(model.navigation::open)
@@ -104,7 +116,7 @@ internal fun NucleusApplicationScope.DesktopTray(
     }
 
     // Native menu callbacks arrive off the UI thread; every action runs on it.
-    fun entries(showPanel: () -> Unit) = trayMenuEntries(summary).map { entry ->
+    fun entries(showPanel: () -> Unit) = remoteMenuEntries(peers, uiScope) + trayMenuEntries(summary).map { entry ->
         when (entry) {
             is TrayMenuEntry.Action -> entry.copy(onClick = {
                 uiScope.launch {
@@ -122,7 +134,13 @@ internal fun NucleusApplicationScope.DesktopTray(
                 if (sessionId != null) uiScope.launch { model.set(sessionId, DeviceSetting.NOISE_MODE, FieldValue.Text(entry.mode)) }
             })
 
-            else -> entry
+            is TrayMenuEntry.Label -> if (remoteSource != null && entry.text == summary.title) {
+                entry.copy(text = "本机 · ${entry.text}")
+            } else {
+                entry
+            }
+
+            TrayMenuEntry.Separator -> entry
         }
     }
 
@@ -145,6 +163,8 @@ internal fun NucleusApplicationScope.DesktopTray(
                         trayState.hide()
                         openApp(it)
                     },
+                    circulation = circulation,
+                    remoteHeadsets = peers,
                     onContentHeight = { trayState.setWindowSize(DpSize(trayPanelSize.width, it)) },
                 )
             }
@@ -164,6 +184,8 @@ internal fun NucleusApplicationScope.DesktopTray(
                 TrayPanelWindow(
                     model = model,
                     selection = selection,
+                    circulation = circulation,
+                    peers = peers,
                     onDismiss = { panelOpen = false },
                     onOpenApp = {
                         panelOpen = false
@@ -188,6 +210,8 @@ internal fun NucleusApplicationScope.DesktopTray(
 private fun NucleusApplicationScope.TrayPanelWindow(
     model: OpenRoseModel,
     selection: PrimaryDeviceSelection,
+    circulation: CirculationClient,
+    peers: List<RemoteHeadset>,
     onDismiss: () -> Unit,
     onOpenApp: (WindowDestination?) -> Unit,
 ) {
@@ -237,6 +261,8 @@ private fun NucleusApplicationScope.TrayPanelWindow(
                 model,
                 selection,
                 onOpenApp,
+                circulation = circulation,
+                remoteHeadsets = peers,
                 onContentHeight = { windowState.size = DpSize(trayPanelSize.width, it) },
             )
         }
@@ -257,6 +283,27 @@ internal sealed interface TrayMenuEntry {
         val onSelect: () -> Unit = {},
     ) : TrayMenuEntry
     data class Action(val label: String, val target: TrayMenuTarget, val onClick: () -> Unit = {}) : TrayMenuEntry
+}
+
+private fun remoteMenuEntries(peers: List<RemoteHeadset>, uiScope: CoroutineScope): List<TrayMenuEntry> = buildList {
+    peers.forEach { peer ->
+        val reading = peer.reading
+        when (reading["status"]) {
+            "ready" -> {
+                add(TrayMenuEntry.Label("${reading["deviceName"]} · 音源设备 · ${peer.name}"))
+                add(TrayMenuEntry.Label(remoteBatteryText(reading)))
+                reading["modes"]?.split(',')?.filter(String::isNotBlank)?.forEach { mode ->
+                    add(TrayMenuEntry.NoiseMode(mode, noiseModeLabel(mode), mode == reading["mode"], !peer.busy, onSelect = { uiScope.launch { peer.selectMode(mode) } }))
+                }
+            }
+
+            "idle" -> add(TrayMenuEntry.Label("${peer.name} · 未持有耳机"))
+
+            else -> add(TrayMenuEntry.Label("${peer.name} · " + if ("error" in reading) "远端不可用" else "正在读取"))
+        }
+        peer.feedback?.let { add(TrayMenuEntry.Label(it)) }
+        add(TrayMenuEntry.Separator)
+    }
 }
 
 internal fun trayMenuEntries(summary: TraySummary): List<TrayMenuEntry> = buildList {

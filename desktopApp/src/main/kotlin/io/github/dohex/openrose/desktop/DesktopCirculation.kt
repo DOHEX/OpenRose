@@ -27,11 +27,13 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.net.InetAddress
 
+private const val DESKTOP_CIRCULATION_PORT = 21871
+
 internal fun desktopCirculation(scope: CoroutineScope, control: ControlRuntime, audio: DesktopCirculationAudio?): CirculationClient {
     val service = CirculationService()
     val headset = HeadsetEndpoint(control)
     scope.launch {
-        service.serve {
+        service.serve(DESKTOP_CIRCULATION_PORT) {
             val name = System.getenv("COMPUTERNAME") ?: System.getenv("HOSTNAME") ?: InetAddress.getLocalHost().hostName
             CirculationNode(
                 File(System.getProperty("user.home"), ".openrose/circulation"),
