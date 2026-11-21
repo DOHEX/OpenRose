@@ -31,6 +31,8 @@ ktlint = "1.8.0"
 kover = "0.9.11"
 
 [libraries]
+jmdns = { module = "org.jmdns:jmdns", version = "3.6.5" }
+bcpkix = { module = "org.bouncycastle:bcpkix-jdk18on", version = "1.87" }
 compose-runtime = { module = "org.jetbrains.compose.runtime:runtime", version.ref = "compose" }
 compose-foundation = { module = "org.jetbrains.compose.foundation:foundation", version.ref = "compose" }
 compose-components-resources = { module = "org.jetbrains.compose.components:components-resources", version.ref = "compose" }
