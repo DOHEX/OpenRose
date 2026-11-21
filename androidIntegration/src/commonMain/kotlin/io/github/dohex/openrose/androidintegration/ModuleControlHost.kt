@@ -67,6 +67,7 @@ class ModuleControlHost(
     private val maxLeases: Int = 16,
     private val facts: StateFlow<HostFacts> = MutableStateFlow(HostFacts()),
     private val presentationTiming: PresentationTiming = PresentationTiming(),
+    private val onOwnerStarted: (OwnerGeneration, CoroutineScope, ControlRuntime) -> Unit = { _, _, _ -> },
 ) {
     private class Owner(
         val generation: OwnerGeneration,
@@ -443,7 +444,9 @@ class ModuleControlHost(
         val job = SupervisorJob(hostContext[Job])
         val scope = CoroutineScope(hostContext + job)
         val runtime = SystemEntryRuntime(
-            runtimeFactory(scope, configuration.settings.control, platform, SessionIdBase.module(sequence)),
+            runtimeFactory(scope, configuration.settings.control, platform, SessionIdBase.module(sequence)).also {
+                onOwnerStarted(generation, scope, it)
+            },
             scope,
             presentationTiming,
             configuration.settings.integration,

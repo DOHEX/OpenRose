@@ -49,6 +49,51 @@ import kotlin.test.assertTrue
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [33], manifest = Config.NONE, application = Application::class)
 class HostEndpointTest {
+    @Test
+    fun circulationDoesNotRunAGenerationNamedRequestOnAReplacementService() = runTest {
+        val host = ModuleControlHost(
+            "bluetooth",
+            "bluetooth",
+            "host",
+            { ClientRole.APP },
+            { scope, settings, platform, _ -> LocalControlRuntime(platform, settings, scope = scope) },
+            backgroundScope,
+            { "lease" },
+        )
+        host.configure { HostConfiguration(true, HostSettings(integration = IntegrationSettings(controlWay = ControlWay.MODULE))) }
+        val active = assertIs<HostStatus.Active>(host.status.value).generation
+        var calls = 0
+        var service = OwnerCirculation(active.copy(sequence = active.sequence + 1), backgroundScope) {
+            calls++
+            emptyMap()
+        }
+        val endpoint = HostEndpoint(RuntimeEnvironment.getApplication(), host, MutableStateFlow(HostFacts()), backgroundScope) { service }
+        val lease = assertNotNull(endpoint.open(BridgeBundles.hello(null, null), Binder()).getString(BridgeWire.LEASE_ID))
+        val request = Bundle().apply {
+            putString(BridgeWire.LEASE_ID, lease)
+            putInt(BridgeWire.KEY_VERSION, BridgeWire.VERSION)
+            putString(BridgeWire.HOST_EPOCH, active.toString())
+            putBundle(
+                BridgeWire.PAYLOAD,
+                Bundle().apply {
+                    putString("op", "forget")
+                    putString("peer", "peer")
+                },
+            )
+        }
+        assertEquals(BridgeWire.STATUS_UNAVAILABLE, endpoint.circulation(request).getString(BridgeWire.STATUS))
+        assertEquals(0, calls)
+
+        val callerThread = Thread.currentThread()
+        service = OwnerCirculation(active, backgroundScope) {
+            assertFalse(Thread.currentThread() === callerThread)
+            calls++
+            emptyMap()
+        }
+        assertEquals(BridgeWire.STATUS_OK, endpoint.circulation(request).getString(BridgeWire.STATUS))
+        assertEquals(1, calls)
+    }
+
     @OptIn(ExperimentalCoroutinesApi::class)
     @Test
     fun aDeadApplicationEndsOnlyItsFrameSubscription() = runTest {

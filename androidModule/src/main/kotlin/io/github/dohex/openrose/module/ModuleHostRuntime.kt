@@ -19,7 +19,6 @@ import io.github.dohex.openrose.androidintegration.HostFacts
 import io.github.dohex.openrose.androidintegration.ModuleControlHost
 import io.github.dohex.openrose.androidintegration.wire.BridgeWire
 import io.github.dohex.openrose.bridge.readHostSettings
-import io.github.dohex.openrose.circulation.CirculationService
 import io.github.dohex.openrose.core.LocalControlRuntime
 import io.github.dohex.openrose.platform.AndroidControlTransport
 import io.github.dohex.openrose.platform.readPlatformState
@@ -64,7 +63,7 @@ internal class ModuleHostRuntime(
 
     @Volatile private var endpoint: HostEndpoint? = null
 
-    @Volatile private var circulation: CirculationService? = null
+    @Volatile private var circulation: OwnerCirculation? = null
     private var host: ModuleControlHost? = null
     private var scope: CoroutineScope? = null
     private var context: Context? = null
@@ -131,7 +130,11 @@ internal class ModuleHostRuntime(
                         transport = AndroidControlTransport(appContext),
                         scope = runtimeScope,
                         sessionIdBase = sessionIdBase,
-                    ).also { control -> circulation = startPhoneCirculation(appContext, runtimeScope, control) }
+                    )
+                },
+                onOwnerStarted = { generation, runtimeScope, control ->
+                    val service = startPhoneCirculation(appContext, runtimeScope, control)
+                    circulation = OwnerCirculation(generation, runtimeScope, service::call)
                 },
                 parentScope = hostScope,
                 newId = { UUID.randomUUID().toString() },
@@ -140,9 +143,7 @@ internal class ModuleHostRuntime(
                 facts = facts,
             )
             host = created
-            val served = HostEndpoint(appContext, created, facts, hostScope) { fields ->
-                circulation?.call(fields) ?: mapOf("error" to "模块控制尚未就绪")
-            }
+            val served = HostEndpoint(appContext, created, facts, hostScope) { circulation }
             endpoint = served
             endpointSlot.set(served)
             watchConfiguration(appContext, hostScope, created)
