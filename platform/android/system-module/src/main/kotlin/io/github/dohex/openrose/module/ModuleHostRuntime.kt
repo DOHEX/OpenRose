@@ -1,5 +1,6 @@
 package io.github.dohex.openrose.module
 
+import android.annotation.SuppressLint
 import android.app.Application
 import android.bluetooth.BluetoothAdapter
 import android.content.BroadcastReceiver
@@ -24,6 +25,7 @@ import io.github.dohex.openrose.platform.AndroidControlTransport
 import io.github.dohex.openrose.platform.readPlatformState
 import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedModule
+import io.github.libxposed.api.error.HookFailedError
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -73,6 +75,8 @@ internal class ModuleHostRuntime(
     private var closed = false
 
     /** Hooks the discovery service so the endpoint can be bound. Safe before the host has started. */
+    // This service implements the discovery endpoint in the Bluetooth host's class loader.
+    @SuppressLint("PrivateApi")
     fun installDiscovery() {
         val type = runCatching { classLoader.loadClass(BridgeWire.HOST_SERVICE_CLASS) }.getOrNull() ?: run {
             module.log(Log.WARN, TAG, "discovery_service_missing ${BridgeWire.HOST_SERVICE_CLASS}")
@@ -93,7 +97,9 @@ internal class ModuleHostRuntime(
                     }
                 }
             synchronized(lifecycle) { hooks += handle }
-        } catch (failure: Throwable) {
+        } catch (failure: IllegalArgumentException) {
+            module.log(Log.ERROR, TAG, "discovery_hook_failed", failure)
+        } catch (failure: HookFailedError) {
             module.log(Log.ERROR, TAG, "discovery_hook_failed", failure)
         }
     }

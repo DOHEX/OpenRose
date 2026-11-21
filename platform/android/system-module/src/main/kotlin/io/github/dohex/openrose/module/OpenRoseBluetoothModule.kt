@@ -1,5 +1,6 @@
 package io.github.dohex.openrose.module
 
+import android.annotation.SuppressLint
 import android.app.Application
 import android.content.Context
 import android.os.Bundle
@@ -24,10 +25,14 @@ import io.github.libxposed.api.XposedModuleInterface.HotReloadedParam
 import io.github.libxposed.api.XposedModuleInterface.HotReloadingParam
 import io.github.libxposed.api.XposedModuleInterface.ModuleLoadedParam
 import io.github.libxposed.api.XposedModuleInterface.PackageReadyParam
+import io.github.libxposed.api.error.HookFailedError
 import java.lang.reflect.Method
+import java.util.concurrent.ExecutionException
+import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.SynchronousQueue
 import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.TimeoutException
 import java.util.concurrent.atomic.AtomicReference
 
 /**
@@ -37,6 +42,7 @@ import java.util.concurrent.atomic.AtomicReference
  */
 class OpenRoseBluetoothModule : XposedModule() {
     private val lifecycle = Any()
+    private val presentation = HeadsetPresentation()
     private val entryHooks = mutableListOf<XposedInterface.HookHandle>()
     private val pendingReports = linkedMapOf<String, Pair<String, String>>()
     private val consumedOfficialPrompts = mutableSetOf<String>()
@@ -86,20 +92,26 @@ class OpenRoseBluetoothModule : XposedModule() {
         }
         installNativeAdapters(selected, param.classLoader)
         val entry = if (selected == BridgeTarget.BLUETOOTH) {
-            val type = runCatching { param.classLoader.loadClass(BridgeWire.TARGET_COMPONENT_CLASS) }.getOrNull()
-            entryResolution = if (type == null) BridgeWire.RESOLUTION_CLASS_MISSING else BridgeWire.RESOLUTION_METHOD_MISSING
-            runCatching { type?.getDeclaredMethod("onCreate") }.getOrNull()
-                ?.takeIf { it.returnType == Void.TYPE && it.parameterTypes.isEmpty() }
+            bluetoothServiceEntry(param.classLoader)
         } else {
-            Application::class.java.getDeclaredMethod("attach", Context::class.java)
+            applicationAttach()
         }
         if (entry == null) {
             log(Log.WARN, TAG, "entry_unavailable target=$selected process=$actualProcess")
-            installEntry(Application::class.java.getDeclaredMethod("attach", Context::class.java), selected, contextArgument = true)
+            installEntry(applicationAttach(), selected, contextArgument = true)
             return
         }
         entryResolution = BridgeWire.RESOLUTION_MATCHED
         installEntry(entry, selected)
+    }
+
+    // AdapterService is private to the Bluetooth host. Its lifecycle method must come from that host's class loader.
+    @SuppressLint("PrivateApi")
+    private fun bluetoothServiceEntry(loader: ClassLoader): Method? {
+        val type = runCatching { loader.loadClass(BridgeWire.TARGET_COMPONENT_CLASS) }.getOrNull()
+        entryResolution = if (type == null) BridgeWire.RESOLUTION_CLASS_MISSING else BridgeWire.RESOLUTION_METHOD_MISSING
+        return runCatching { type?.getDeclaredMethod("onCreate") }.getOrNull()
+            ?.takeIf { it.returnType == Void.TYPE && it.parameterTypes.isEmpty() }
     }
 
     private fun installEntry(method: Method, selected: BridgeTarget, contextArgument: Boolean = selected != BridgeTarget.BLUETOOTH) {
@@ -114,7 +126,9 @@ class OpenRoseBluetoothModule : XposedModule() {
                     result
                 }
             synchronized(lifecycle) { entryHooks += handle }
-        } catch (failure: Throwable) {
+        } catch (failure: IllegalArgumentException) {
+            log(Log.ERROR, TAG, "entry_hook_failed target=$selected", failure)
+        } catch (failure: HookFailedError) {
             log(Log.ERROR, TAG, "entry_hook_failed target=$selected", failure)
         }
     }
@@ -129,7 +143,7 @@ class OpenRoseBluetoothModule : XposedModule() {
                 return runCatching {
                     actions.execute {
                         if (retired || nativeSnapshot?.reference != snapshot.reference) return@execute
-                        val result = connectedClient.setNoise(frame, mode)
+                        val result = connectedClient.calls.setNoise(frame, mode)
                         if (!retired && nativeSnapshot?.reference == snapshot.reference) {
                             // Only the earphones' confirmation is a success; every refusal keeps its own status.
                             val outcome = SystemHeadsetMapping.commandReport(
@@ -137,23 +151,32 @@ class OpenRoseBluetoothModule : XposedModule() {
                                 result.getString(BridgeWire.STATUS),
                                 result.getString(BridgeWire.MESSAGE),
                             )
-                            componentReport(featureFor(selected), outcome.status, outcome.detail)
+                            presentation.componentReport(featureFor(selected), outcome.status, outcome.detail)
                         }
                     }
                     true
                 }.getOrDefault(false)
             }
-            override fun report(feature: String, status: String, detail: String) = componentReport(featureFor(selected), status, detail)
+            override fun report(feature: String, status: String, detail: String) {
+                presentation.componentReport(featureFor(selected), status, detail)
+            }
             override fun fusionEntryDevice(address: String): String? {
                 val connectedClient = client?.takeIf { !retired } ?: return null
-                val ask = java.util.concurrent.FutureTask { connectedClient.fusionEntryDevice(address) }
+                val ask = java.util.concurrent.FutureTask { connectedClient.calls.fusionEntryDevice(address) }
                 return try {
                     actions.execute(ask)
                     ask.get(FUSION_ENTRY_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)
-                } catch (failure: Throwable) {
-                    ask.cancel(true)
-                    if (failure is InterruptedException) Thread.currentThread().interrupt()
+                } catch (_: RejectedExecutionException) {
                     null
+                } catch (_: TimeoutException) {
+                    null
+                } catch (_: ExecutionException) {
+                    null
+                } catch (_: InterruptedException) {
+                    Thread.currentThread().interrupt()
+                    null
+                } finally {
+                    if (!ask.isDone) ask.cancel(true)
                 }
             }
         }
@@ -183,15 +206,15 @@ class OpenRoseBluetoothModule : XposedModule() {
                 context,
                 selected,
                 actualProcess,
-                onSnapshot = ::publish,
-                onSnapshotFresh = ::refreshSnapshot,
-                onClear = ::clearConsumers,
-                onBonded = ::publishBonded,
+                onSnapshot = presentation::publish,
+                onSnapshotFresh = presentation::refreshSnapshot,
+                onClear = presentation::clearConsumers,
+                onBonded = presentation::publishBonded,
                 onAuthenticated = { authenticated ->
                     val reports = synchronized(pendingReports) { pendingReports.toMap() }
-                    reports.forEach { (feature, value) -> authenticated.reportComponent(feature, value.first, value.second) }
+                    reports.forEach { (feature, value) -> authenticated.calls.reportComponent(feature, value.first, value.second) }
                 },
-                onClosing = ::closeConsumers,
+                onClosing = presentation::closeConsumers,
                 resolution = entryResolution,
             )
             client = created
@@ -207,105 +230,107 @@ class OpenRoseBluetoothModule : XposedModule() {
         runtime.start(context)
     }
 
-    private fun presentationCallbacks(connected: AuthenticatedBridgeClient) = object : PresentationCallbacks {
-        override fun claimPrompt(snapshot: Bundle, promptId: String): Boolean = connected.claimPrompt(snapshot, promptId)
-        override fun setNoise(snapshot: Bundle, mode: String): Bundle = connected.setNoise(snapshot, mode)
-        override fun report(snapshot: Bundle, feature: String, status: String, detail: String) = connected
-            .reportPresentation(snapshot, feature, status, detail)
-    }
+    private inner class HeadsetPresentation {
+        private fun presentationCallbacks(connected: AuthenticatedBridgeClient) = object : PresentationCallbacks {
+            override fun claimPrompt(snapshot: Bundle, promptId: String): Boolean = connected.calls.claimPrompt(snapshot, promptId)
+            override fun setNoise(snapshot: Bundle, mode: String): Bundle = connected.calls.setNoise(snapshot, mode)
+            override fun report(snapshot: Bundle, feature: String, status: String, detail: String) = connected.calls
+                .reportPresentation(snapshot, feature, status, detail)
+        }
 
-    private fun publish(snapshot: Bundle) {
-        if (retired) return
-        val connected = client ?: return
-        val context = targetContext ?: return
-        val native = NativeHeadsetSnapshot.fromWire(snapshot.asWireMap())
-        nativeSnapshot = native
-        latestFrame = Bundle(snapshot)
-        binderAdapter?.publish(native)
-        fusionAdapter?.publish(native)
-        when (target) {
-            BridgeTarget.BLUETOOTH -> {
-                val output = renderer ?: SystemPresentationRenderer(context, connected.handler, presentationCallbacks(connected))
-                    .also { renderer = it }
-                output.render(snapshot)
+        fun publish(snapshot: Bundle) {
+            if (retired) return
+            val connected = client ?: return
+            val context = targetContext ?: return
+            val native = NativeHeadsetSnapshot.fromWire(snapshot.asWireMap())
+            nativeSnapshot = native
+            latestFrame = Bundle(snapshot)
+            binderAdapter?.publish(native)
+            fusionAdapter?.publish(native)
+            when (target) {
+                BridgeTarget.BLUETOOTH -> {
+                    val output = renderer ?: SystemPresentationRenderer(context, connected.handler, presentationCallbacks(connected))
+                        .also { renderer = it }
+                    output.render(snapshot)
+                }
+
+                BridgeTarget.XIAOMI_BLUETOOTH -> {
+                    val output = official ?: OfficialConnectionPresenter(context, connected.handler, presentationCallbacks(connected))
+                        .also { official = it }
+                    publishOfficialPrompt(snapshot, output)
+                }
+
+                else -> Unit
             }
+        }
 
-            BridgeTarget.XIAOMI_BLUETOOTH -> {
-                val output = official ?: OfficialConnectionPresenter(context, connected.handler, presentationCallbacks(connected))
-                    .also { official = it }
-                publishOfficialPrompt(snapshot, output)
+        private fun publishOfficialPrompt(snapshot: Bundle, output: OfficialConnectionPresenter) {
+            val identity = "${snapshot.getString(BridgeWire.HOST_EPOCH)}:" +
+                "${snapshot.getString(BridgeWire.DEVICE_ID)}:" +
+                "${snapshot.getLong(BridgeWire.SESSION_ID)}"
+            if (lastOfficialIdentity != identity) {
+                output.clear()
+                consumedOfficialPrompts.clear()
+                lastOfficialIdentity = identity
             }
-
-            else -> Unit
+            val spec = snapshot.getBundle(BridgePresentationWire.PRESENTATION)
+            if (spec?.getString(BridgePresentationWire.MODE) != BridgePresentationWire.OFFICIAL ||
+                !spec.getBoolean(BridgePresentationWire.ALLOW_ISLAND_FIELDS)
+            ) {
+                output.clear()
+                return
+            }
+            // A prompt that expired on the host can no longer be claimed; SystemUI owns the rest of its display
+            // time, and only a disconnect, mode change or new session withdraws it early (ADR 0004).
+            val prompt = spec.getBundle(BridgePresentationWire.PROMPT)
+            val id = prompt?.getString(BridgePresentationWire.PROMPT_ID) ?: return
+            if (consumedOfficialPrompts.add(id) && !prompt.getBoolean(BridgePresentationWire.CLAIMED)) output.show(snapshot, id)
         }
-    }
 
-    private fun publishOfficialPrompt(snapshot: Bundle, output: OfficialConnectionPresenter) {
-        val identity = "${snapshot.getString(BridgeWire.HOST_EPOCH)}:" +
-            "${snapshot.getString(BridgeWire.DEVICE_ID)}:" +
-            "${snapshot.getLong(BridgeWire.SESSION_ID)}"
-        if (lastOfficialIdentity != identity) {
-            output.clear()
-            consumedOfficialPrompts.clear()
-            lastOfficialIdentity = identity
+        fun refreshSnapshot(capturedAt: Long) {
+            if (retired) return
+            val current = nativeSnapshot ?: return
+            val fresh = current.copy(capturedElapsedMillis = capturedAt)
+            nativeSnapshot = fresh
+            binderAdapter?.publish(fresh)
+            fusionAdapter?.publish(fresh)
         }
-        val spec = snapshot.getBundle(BridgePresentationWire.PRESENTATION)
-        if (spec?.getString(BridgePresentationWire.MODE) != BridgePresentationWire.OFFICIAL ||
-            !spec.getBoolean(BridgePresentationWire.ALLOW_ISLAND_FIELDS)
-        ) {
-            output.clear()
-            return
+
+        /** The module host's bonded ROSE earphones, for the identity queries of the system entries (ADR 0017). */
+        fun publishBonded(addresses: Set<String>) {
+            if (retired) return
+            binderAdapter?.publishBonded(addresses)
+            fusionAdapter?.publishBonded(addresses)
         }
-        // A prompt that expired on the host can no longer be claimed; SystemUI owns the rest of its display
-        // time, and only a disconnect, mode change or new session withdraws it early (ADR 0004).
-        val prompt = spec.getBundle(BridgePresentationWire.PROMPT)
-        val id = prompt?.getString(BridgePresentationWire.PROMPT_ID) ?: return
-        if (consumedOfficialPrompts.add(id) && !prompt.getBoolean(BridgePresentationWire.CLAIMED)) output.show(snapshot, id)
-    }
 
-    private fun refreshSnapshot(capturedAt: Long) {
-        if (retired) return
-        val current = nativeSnapshot ?: return
-        val fresh = current.copy(capturedElapsedMillis = capturedAt)
-        nativeSnapshot = fresh
-        binderAdapter?.publish(fresh)
-        fusionAdapter?.publish(fresh)
-    }
+        fun clearConsumers() {
+            nativeSnapshot = null
+            latestFrame = null
+            binderAdapter?.publish(null)
+            fusionAdapter?.publish(null)
+            renderer?.clear()
+            official?.clear()
+        }
 
-    /** The module host's bonded ROSE earphones, for the identity queries of the system entries (ADR 0017). */
-    private fun publishBonded(addresses: Set<String>) {
-        if (retired) return
-        binderAdapter?.publishBonded(addresses)
-        fusionAdapter?.publishBonded(addresses)
-    }
+        fun componentReport(feature: String, status: String, detail: String) {
+            synchronized(pendingReports) { pendingReports[feature] = status to detail.take(512) }
+            val connected = client ?: return
+            connected.handler.post { if (!retired) connected.calls.reportComponent(feature, status, detail.take(512)) }
+        }
 
-    private fun clearConsumers() {
-        nativeSnapshot = null
-        latestFrame = null
-        binderAdapter?.publish(null)
-        fusionAdapter?.publish(null)
-        renderer?.clear()
-        official?.clear()
-    }
+        fun closeConsumers() {
+            clearConsumers()
+            renderer?.close()
+            official?.close()
+            actions.shutdownNow()
+        }
 
-    private fun componentReport(feature: String, status: String, detail: String) {
-        synchronized(pendingReports) { pendingReports[feature] = status to detail.take(512) }
-        val connected = client ?: return
-        connected.handler.post { if (!retired) connected.reportComponent(feature, status, detail.take(512)) }
-    }
-
-    private fun closeConsumers() {
-        clearConsumers()
-        renderer?.close()
-        official?.close()
-        actions.shutdownNow()
-    }
-
-    private fun consumersTerminated(): Boolean = renderer?.awaitActionTermination(1_000) != false && try {
-        actions.awaitTermination(1_000, TimeUnit.MILLISECONDS)
-    } catch (interrupted: InterruptedException) {
-        Thread.currentThread().interrupt()
-        false
+        fun consumersTerminated(): Boolean = renderer?.awaitActionTermination(1_000) != false && try {
+            actions.awaitTermination(1_000, TimeUnit.MILLISECONDS)
+        } catch (interrupted: InterruptedException) {
+            Thread.currentThread().interrupt()
+            false
+        }
     }
 
     private fun closeNativeAdapters() {
@@ -323,10 +348,10 @@ class OpenRoseBluetoothModule : XposedModule() {
         if (runtime?.close() == false) return false
         retired = true
         val readerClosed = client?.close() ?: run {
-            closeConsumers()
+            presentation.closeConsumers()
             true
         }
-        if (!readerClosed || !consumersTerminated()) return false
+        if (!readerClosed || !presentation.consumersTerminated()) return false
 
         hostRuntime = null
         renderer = null
@@ -393,3 +418,7 @@ class OpenRoseBluetoothModule : XposedModule() {
         const val SAVED_ENDPOINT_SLOT = "endpointSlot"
     }
 }
+
+// Application.attach supplies the host Context before its components start and onCreate may already be overridden by the ROM.
+@SuppressLint("DiscouragedPrivateApi")
+private fun applicationAttach(): Method = Application::class.java.getDeclaredMethod("attach", Context::class.java)
