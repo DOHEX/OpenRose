@@ -2,8 +2,7 @@ package io.github.dohex.openrose.androidintegration
 
 import io.github.dohex.openrose.circulation.CirculationNode
 import io.github.dohex.openrose.circulation.HeadsetEndpoint
-import io.github.dohex.openrose.circulation.NearbyPeer
-import io.github.dohex.openrose.circulation.PeerDiscovery
+import io.github.dohex.openrose.circulation.LoopbackDiscoveryNetwork
 import io.github.dohex.openrose.circulation.localCommand
 import io.github.dohex.openrose.core.ConnectionPhase
 import io.github.dohex.openrose.core.ConnectionState
@@ -24,7 +23,6 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.junit.Rule
 import org.junit.rules.TemporaryFolder
-import java.net.InetAddress
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -104,15 +102,12 @@ class RemoteHeadsetControlTest {
             device.transport.audioDevice.emit(device.candidate.deviceId)
             holder.state.first { (it.connection as? ConnectionState.Connected)?.phase == ConnectionPhase.READY }
             device.link.initializing = false
-            val local = Discovery()
-            val remote = Discovery()
+            val network = LoopbackDiscoveryNetwork()
             val endpoint = HeadsetEndpoint(holder)
-            CirculationNode(files.newFolder(), "Linux", local, endpoint::handle).use { desktop ->
-                CirculationNode(files.newFolder(), "Phone", remote) { error("Phone holds no earphones") }.use { phone ->
+            CirculationNode(files.newFolder(), "Linux", network.discovery(), endpoint::handle).use { desktop ->
+                CirculationNode(files.newFolder(), "Phone", network.discovery()) { error("Phone holds no earphones") }.use { phone ->
                     desktop.start()
                     phone.start()
-                    remote.found(listOf(local.own))
-                    local.found(listOf(remote.own))
                     phone.pairQr(desktop.offerPairing().qr)
                     test(holder, phone, device)
                 }
@@ -130,21 +125,9 @@ class RemoteHeadsetControlTest {
         val link get() = transport.links.last()
     }
 
-    private class Discovery : PeerDiscovery {
-        lateinit var own: NearbyPeer
-        lateinit var found: (List<NearbyPeer>) -> Unit
-        override fun start(id: String, name: String, port: Int, found: (List<NearbyPeer>) -> Unit) {
-            own = NearbyPeer(id, name, InetAddress.getLoopbackAddress(), port)
-            this.found = found
-        }
-        override fun close() = Unit
-    }
+    private fun CirculationNode.command(op: String, fields: Map<String, String> = emptyMap()) = localCommand(fields + mapOf("op" to op, "peer" to peers.value.single().id))
 
-    private fun CirculationNode.command(op: String, fields: Map<String, String> = emptyMap()) =
-        localCommand(fields + mapOf("op" to op, "peer" to peers.value.single().id))
-
-    private fun CirculationNode.noise(read: Map<String, String>) =
-        command("noise", mapOf("mode" to "transparency", "device" to read.getValue("device"), "session" to read.getValue("session")))
+    private fun CirculationNode.noise(read: Map<String, String>) = command("noise", mapOf("mode" to "transparency", "device" to read.getValue("device"), "session" to read.getValue("session")))
 
     private companion object {
         const val TRANSPARENCY = "09ff00000106020e000000000120"

@@ -2,7 +2,6 @@ package io.github.dohex.openrose.circulation
 
 import org.junit.Rule
 import org.junit.rules.TemporaryFolder
-import java.net.InetAddress
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
@@ -16,7 +15,7 @@ class CirculationNodeTest {
 
     @Test
     fun phonePairsWithDesktopBeforeItCanReadTheCurrentHeadset() {
-        val network = TestNetwork()
+        val network = LoopbackDiscoveryNetwork()
         var battery = "71"
         CirculationNode(files.newFolder(), "Desktop", network.discovery()) { mapOf("battery" to battery) }.use { desktop ->
             CirculationNode(files.newFolder(), "Phone", network.discovery()) { emptyMap() }.use { phone ->
@@ -38,7 +37,7 @@ class CirculationNodeTest {
 
     @Test
     fun qrPairingSurvivesBothRestartsAndRevocationStopsReadsInBothDirections() {
-        val network = TestNetwork()
+        val network = LoopbackDiscoveryNetwork()
         val desktopFiles = files.newFolder()
         val phoneFiles = files.newFolder()
         fun desktop(level: String) = CirculationNode(desktopFiles, "Desk", network.discovery()) { mapOf("left" to level) }
@@ -79,7 +78,7 @@ class CirculationNodeTest {
 
     @Test
     fun aStaleInterfaceAfterWakeDoesNotHideAReachableAddressForTheSameDesktop() {
-        val network = TestNetwork(stalePort = 0)
+        val network = LoopbackDiscoveryNetwork(stalePort = 0)
         CirculationNode(files.newFolder(), "Desk", network.discovery()) { mapOf("current" to "80") }.use { desktop ->
             CirculationNode(files.newFolder(), "Phone", network.discovery()) { emptyMap() }.use { phone ->
                 desktop.start()
@@ -92,7 +91,7 @@ class CirculationNodeTest {
 
     @Test
     fun closingThePhoneEndpointDiscardsAnOutstandingBatteryRead() {
-        val network = TestNetwork()
+        val network = LoopbackDiscoveryNetwork()
         val reading = CountDownLatch(1)
         val release = CountDownLatch(1)
         val reads = Executors.newSingleThreadExecutor()
@@ -117,23 +116,6 @@ class CirculationNodeTest {
         } finally {
             release.countDown()
             reads.shutdownNow()
-        }
-    }
-
-    private class TestNetwork(private val stalePort: Int? = null) {
-        private val services = mutableMapOf<NearbyPeer, (List<NearbyPeer>) -> Unit>()
-
-        fun discovery() = object : PeerDiscovery {
-            private lateinit var own: NearbyPeer
-            override fun start(id: String, name: String, port: Int, found: (List<NearbyPeer>) -> Unit) {
-                own = NearbyPeer(id, name, InetAddress.getLoopbackAddress(), port)
-                services[own] = found
-                services.forEach { (peer, receiver) -> receiver(services.keys.filter { it != peer }.flatMap { if (stalePort == null) listOf(it) else listOf(it.copy(port = stalePort), it) }) }
-            }
-            override fun close() {
-                services.remove(own)
-                services.forEach { (peer, receiver) -> receiver(services.keys.filter { it != peer }.flatMap { if (stalePort == null) listOf(it) else listOf(it.copy(port = stalePort), it) }) }
-            }
         }
     }
 }

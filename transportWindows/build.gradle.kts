@@ -5,6 +5,7 @@ plugins {
 dependencies {
     api(projects.core)
     implementation(libs.coroutines.core)
+    testImplementation(testFixtures(projects.circulation))
     testImplementation(kotlin("test-junit"))
     testImplementation(libs.coroutines.test)
 }
