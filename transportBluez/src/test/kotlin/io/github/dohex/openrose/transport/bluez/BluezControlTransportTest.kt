@@ -116,6 +116,27 @@ class BluezControlTransportTest {
     }
 
     @Test
+    fun resumingWithTheSameAudioTransportReestablishesCurrentAudio() = runBlocking {
+        val bus = FakeBluezBus().apply {
+            snapshot = baseObjects() + (MEDIA_PATH to mapOf(MEDIA_TRANSPORT to mapOf("Device" to DEVICE_PATH, "UUID" to A2DP_UUID)))
+        }
+        val transport = BluezControlTransport(this, bus)
+        val seen = Channel<DeviceId?>(Channel.UNLIMITED)
+        val listener = launch { transport.audioConnectedDevice.collect { seen.send(it) } }
+        try {
+            val id = DeviceId("00:11:22:33:44:55")
+            assertEquals(id, withTimeout(5_000) { seen.receive() })
+            bus.events.emit(BluezSignal.PrepareForSleep(true))
+            assertNull(withTimeout(5_000) { seen.receive() })
+            bus.events.emit(BluezSignal.PrepareForSleep(false))
+            assertEquals(id, withTimeout(5_000) { seen.receive() })
+        } finally {
+            listener.cancelAndJoin()
+            transport.close()
+        }
+    }
+
+    @Test
     fun discoveryMergesDeviceDeltasWithoutReadingTheObjectTreeAgain() = runBlocking {
         val bus = FakeBluezBus().also { it.snapshot = baseObjects() }
         val transport = BluezControlTransport(this, bus)

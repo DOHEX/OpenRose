@@ -21,6 +21,8 @@ internal class BluezGattDriver(private val bus: BluezBus, private val devicePath
     private var closed = false
     override val events: Flow<GattEvent> = bus.signals { it.affectsLink(devicePath) }.transform { signal ->
         when (signal) {
+            is BluezSignal.PrepareForSleep -> if (signal.sleeping) emit(disconnected("电脑进入休眠"))
+
             is BluezSignal.Owner -> if (!signal.present || bus.owner != owner) emit(disconnected("BlueZ 服务已停止"))
 
             is BluezSignal.Changed -> {

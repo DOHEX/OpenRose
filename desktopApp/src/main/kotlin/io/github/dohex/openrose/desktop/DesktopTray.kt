@@ -266,7 +266,7 @@ internal fun trayMenuEntries(summary: TraySummary): List<TrayMenuEntry> = buildL
         add(TrayMenuEntry.Separator)
         summary.noiseModes.forEach { add(TrayMenuEntry.NoiseMode(it.mode, it.label, it.selected, it.enabled)) }
     }
-    if (summary.reconnectTarget != null) add(TrayMenuEntry.Action("重新连接", TrayMenuTarget.RECONNECT))
+    if (summary.reconnectTarget != null) add(TrayMenuEntry.Action(summary.reconnectLabel, TrayMenuTarget.RECONNECT))
     if (summary.addDevice) add(TrayMenuEntry.Action("添加耳机", TrayMenuTarget.ADD_DEVICE))
     add(TrayMenuEntry.Separator)
     add(TrayMenuEntry.Action("托盘面板", TrayMenuTarget.PANEL))

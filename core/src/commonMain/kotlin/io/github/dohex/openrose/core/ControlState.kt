@@ -29,7 +29,15 @@ data class PlatformState(
     val userUnlocked: Boolean = true,
 )
 
-enum class HostPlatform { UNKNOWN, ANDROID, WINDOWS, LINUX }
+enum class HostPlatform {
+    UNKNOWN,
+    ANDROID,
+    WINDOWS,
+    LINUX,
+    ;
+
+    val isDesktop: Boolean get() = this == LINUX || this == WINDOWS
+}
 
 /** Explicitly keeps unknown platform facts separate from supported and unsupported features. */
 enum class PlatformApplicability { UNKNOWN, NOT_APPLICABLE, APPLICABLE }
@@ -190,6 +198,8 @@ data class ControlState(
     val transportSelection: TransportSelection? = null,
     val connectionRecovery: ConnectionRecovery? = null,
     val connectionTarget: DeviceCandidate? = null,
+    /** Latest system-audio observation, independent of the control connection. */
+    val audioDeviceId: DeviceId? = null,
 ) {
     /** The ready device session, present only while the connection and the device state agree on it. */
     val readySession: SessionReference?

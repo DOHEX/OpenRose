@@ -47,12 +47,13 @@ data class TraySummary(
     /** A ready control session exists. */
     val connected: Boolean,
     val title: String,
-    /** Known battery readings only; null when there are none. */
+    /** Battery readings in model order. Desktop trays explicitly mark missing values. */
     val battery: String?,
     /** Empty unless connected and the model has 降噪模式; ordered and labelled like the main window. */
     val noiseModes: List<TrayNoiseMode>,
     /** The primary device to reconnect, only when neither connected nor connecting and the transport is usable. */
     val reconnectTarget: DeviceId?,
+    val reconnectLabel: String,
     /** There is no bonded ROSE device and no connection target. */
     val addDevice: Boolean,
     /** Reason or guidance to display below the primary device while disconnected. */
@@ -67,8 +68,14 @@ fun traySummary(state: ControlState, selection: PrimaryDeviceSelection): TraySum
     val showPlatformReason = state.connectionTarget == null && !state.platform.bluetoothPermissionRequired &&
         state.platform.transport is TransportAvailability.Unavailable
 
+    val desktop = state.platform.hostPlatform.isDesktop
+    val audioConnected = desktop && primary != null && state.audioDeviceId == primary.deviceId
     val title = when {
         ready != null -> "${state.trayDeviceName(ready.deviceId, ready.profile)} · 已连接"
+
+        audioConnected && connecting -> "${state.trayDeviceName(primary.deviceId, primary.profile)} · 耳机已接入，正在恢复控制"
+
+        audioConnected -> "${state.trayDeviceName(primary.deviceId, primary.profile)} · 耳机已接入，控制未连接"
 
         connecting -> {
             val deviceId = checkNotNull(state.connection.deviceIdOrNull())
@@ -86,7 +93,7 @@ fun traySummary(state: ControlState, selection: PrimaryDeviceSelection): TraySum
     val battery = ready?.let { device ->
         device.profile.batteryReadings().mapNotNull { (label, field) ->
             (device.knownValue(field) as? FieldValue.Number)?.value?.takeIf { it in 0..100 }
-                ?.let { "$label $it%" }
+                ?.let { "$label $it%" } ?: if (desktop) "$label 未知" else null
         }.takeIf { it.isNotEmpty() }?.joinToString(" · ")
     }
 
@@ -106,10 +113,12 @@ fun traySummary(state: ControlState, selection: PrimaryDeviceSelection): TraySum
         battery = battery,
         noiseModes = noiseModes,
         reconnectTarget = if (ready == null && !connecting && blockReason == null) primary?.deviceId else null,
+        reconnectLabel = if (audioConnected) "重试耳机控制" else "重新连接",
         addDevice = state.bondedRoseDevices().isEmpty() && state.connectionTarget == null,
         connectionHint = when {
             ready != null || connecting || showPlatformReason -> null
             blockReason != null -> blockReason
+            audioConnected -> state.lastError?.message
             primary != null -> primary.profile.reconnectHint(state.lastError != null)
             else -> null
         },
@@ -234,7 +243,7 @@ internal fun TrayStatusCard(state: ControlState, summary: TraySummary) {
             )
         }
         if (device != null) {
-            BatteryStrip(device, initializing = false)
+            BatteryStrip(device, initializing = false, showUnknown = state.platform.hostPlatform.isDesktop)
         }
     }
 }
@@ -252,7 +261,7 @@ internal fun TrayActions(model: OpenRoseModel, state: ControlState, summary: Tra
             AppButton("取消连接", model::disconnect, kind = AppButtonKind.Secondary, modifier = Modifier.fillMaxWidth())
         }
         summary.reconnectTarget?.let { target ->
-            AppButton("重新连接", { model.connect(target) }, kind = AppButtonKind.Primary, modifier = Modifier.fillMaxWidth())
+            AppButton(summary.reconnectLabel, { model.connect(target) }, kind = AppButtonKind.Primary, modifier = Modifier.fillMaxWidth())
         }
         if (summary.addDevice) {
             AppButton(

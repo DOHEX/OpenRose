@@ -5,6 +5,7 @@ plugins {
 }
 dependencies {
     implementation(projects.sharedUI)
+    implementation(libs.zxing.core)
     implementation(projects.transportBluez)
     implementation(projects.circulation)
     implementation(libs.jmdns)
@@ -26,7 +27,7 @@ nucleus {
         jvmArgs += "--enable-native-access=ALL-UNNAMED"
         nativeDistributions {
             // dbus-java authenticates Unix sockets through com.sun.security.auth.module.UnixSystem.
-            modules("jdk.security.auth")
+            modules("jdk.security.auth", "jdk.crypto.ec")
             // Each host builds only its own formats: Linux x64 the four packages, Windows the MSI.
             targetFormats(TargetFormat.Deb, TargetFormat.Rpm, TargetFormat.Pacman, TargetFormat.AppImage, TargetFormat.Msi)
             packageName = "OpenRose"
