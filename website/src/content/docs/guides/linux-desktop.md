@@ -6,7 +6,7 @@ description: 在 Linux 上通过 BlueZ 控制耳机，以及托盘、后台控�
 Linux 版通过系统 BlueZ 和 D-Bus 提供 BLE 控制，不含 SPP、OTA 和系统集成。桌面端没有控制方式可选，应用直接持有控制连接。
 
 :::caution[验证状态]
-Linux x64 的 BLE 控制已实现，EarFree i5 在桌面端的完整真机验收尚未完成。Windows 版目前只有界面和偏好设置，蓝牙控制尚未实现。
+Linux x64 的 BLE 控制已实现，EarFree i5 在桌面端的完整真机验收尚未完成。Windows 桌面版使用 WinRT 读取电量和切换降噪，i5 真机验证待完成。
 :::
 
 ## 安装

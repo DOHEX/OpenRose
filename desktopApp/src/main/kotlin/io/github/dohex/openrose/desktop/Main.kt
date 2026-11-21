@@ -30,6 +30,7 @@ import io.github.dohex.openrose.core.PlatformApplicability
 import io.github.dohex.openrose.core.PlatformState
 import io.github.dohex.openrose.core.TransportAvailability
 import io.github.dohex.openrose.transport.bluez.BluezControlTransport
+import io.github.dohex.openrose.transport.windows.WindowsControlTransport
 import io.github.dohex.openrose.ui.AppLogo
 import io.github.dohex.openrose.ui.Appearance
 import io.github.dohex.openrose.ui.OpenRoseApp
@@ -57,7 +58,11 @@ fun main(args: Array<String>) {
         nucleusApplication(args = args, backend = NucleusBackend.Tao, enableSingleInstance = true) {
             val scope = remember { CoroutineScope(SupervisorJob() + Dispatchers.Default) }
             val runtime = remember {
-                val transport = if (hostPlatform == HostPlatform.LINUX) BluezControlTransport(scope) else null
+                val transport = when (hostPlatform) {
+                    HostPlatform.LINUX -> BluezControlTransport(scope)
+                    HostPlatform.WINDOWS -> WindowsControlTransport(scope)
+                    else -> null
+                }
                 DesktopRuntime(
                     preferences = Preferences.userRoot().node("io/github/dohex/openrose"),
                     platform = PlatformState(
@@ -84,6 +89,7 @@ fun main(args: Array<String>) {
                     onDesktopSettingsChange = runtime::updateDesktopSettings,
                     tray = tray.availability,
                     loginLaunch = loginLaunch,
+                    circulation = runtime.startCirculation(),
                 )
             }
             // One choice for the 未连接看板 and the tray, so “重新连接” targets the device the window shows.

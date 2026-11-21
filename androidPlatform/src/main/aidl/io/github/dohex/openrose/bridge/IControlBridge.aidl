@@ -36,4 +36,7 @@ interface IControlBridge {
     // System entry role (fusion device center), appended after the application surface.
     /** Decides the fusion device center's additional settings entry for one Bluetooth address from the owner's own state. */
     Bundle fusionEntry(in Bundle request);
+
+    /** Local app UI only. Uses the established app lease and the currently active module owner. */
+    Bundle circulation(in Bundle request);
 }
