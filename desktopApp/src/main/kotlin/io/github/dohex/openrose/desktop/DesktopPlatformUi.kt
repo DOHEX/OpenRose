@@ -1,5 +1,7 @@
 package io.github.dohex.openrose.desktop
 
+import io.github.dohex.openrose.ui.CirculationHandoffRow
+import io.github.dohex.openrose.ui.PrimaryDeviceSelection
 import io.github.dohex.openrose.ui.CirculationSettings
 import io.github.dohex.openrose.ui.CirculationClient
 import androidx.compose.runtime.Composable
@@ -39,6 +41,11 @@ class DesktopPlatformUi(
                     .start()
             }
         }
+    }
+
+    @Composable
+    override fun HandoffAction(state: ControlState, selection: PrimaryDeviceSelection) {
+        circulation?.let { CirculationHandoffRow(it, state, selection) }
     }
 
     @Composable

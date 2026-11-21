@@ -64,6 +64,7 @@ class MainActivity : ComponentActivity() {
             onRestartScope = scopeRestarter::restart,
             restartScope = lifecycleScope,
             circulationSettings = { PhonePairingSettings(owner.circulation) },
+            circulation = owner.circulation,
         )
         setContent {
             val uiSettings by owner.model.uiSettings.collectAsState()

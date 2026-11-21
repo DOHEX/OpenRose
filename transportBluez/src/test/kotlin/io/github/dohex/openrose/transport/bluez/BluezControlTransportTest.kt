@@ -190,6 +190,28 @@ class BluezControlTransportTest {
     }
 
     @Test
+    fun audioHandoffWaitsForMediaTransportAndReleasesBothBearers() = runBlocking {
+        val bus = FakeBluezBus().apply { snapshot = baseObjects() }
+        val transport = BluezControlTransport(this, bus)
+        val audio = transport.audioProfiles
+        val address = "00:11:22:33:44:55"
+        try {
+            assertFalse(audio.isConnected(address))
+            bus.onAudioConnect = { snapshotPath ->
+                assertEquals(DEVICE_PATH, snapshotPath)
+                bus.snapshot += MEDIA_PATH to mapOf(MEDIA_TRANSPORT to mapOf("Device" to DEVICE_PATH, "UUID" to A2DP_UUID))
+            }
+            audio.acquire(address)
+            assertTrue(audio.isConnected(address))
+            bus.onAudioDisconnect = { bus.snapshot = baseObjects().filterKeys { it != DEVICE_PATH } }
+            audio.release(address)
+            assertFalse(audio.isConnected(address))
+        } finally {
+            transport.close()
+        }
+    }
+
+    @Test
     fun poweredOffAdapterIsUnavailableAndPairedQueryIsSafe() = runBlocking {
         val bus = FakeBluezBus().also { it.snapshot = mapOf(ADAPTER_PATH to mapOf(ADAPTER to mapOf("Powered" to false))) }
         val transport = BluezControlTransport(this, bus)

@@ -7,6 +7,7 @@ import io.github.dohex.openrose.core.TransportAvailability
 import io.github.dohex.openrose.core.UserSettings
 import io.github.dohex.openrose.core.UserSettingsCodec
 import io.github.dohex.openrose.core.transport.DesktopControlTransport
+import io.github.dohex.openrose.transport.bluez.BluezControlTransport
 import io.github.dohex.openrose.ui.UiSettings
 import io.github.dohex.openrose.ui.UiSettingsCodec
 import io.github.dohex.openrose.ui.model.OpenRoseSettingsStore
@@ -65,7 +66,7 @@ internal class DesktopRuntime(
         model = RuntimeOpenRoseModel(control, store, scope)
     }
 
-    fun startCirculation() = desktopCirculation(scope, control)
+    fun startCirculation() = desktopCirculation(scope, control, (transport as? BluezControlTransport)?.let { LinuxCirculationAudio(it.audioProfiles) })
 
     fun updateDesktopSettings(settings: DesktopSettings) {
         mutableDesktopSettings.value = settings

@@ -29,7 +29,7 @@ fun interface CirculationClient {
 
 private const val REFRESH_MILLIS = 2_000L
 
-private suspend fun CirculationClient.submit(vararg fields: Pair<String, String>): Map<String, String> = try {
+internal suspend fun CirculationClient.submit(vararg fields: Pair<String, String>): Map<String, String> = try {
     call(mapOf(*fields))
 } catch (cancelled: CancellationException) {
     throw cancelled

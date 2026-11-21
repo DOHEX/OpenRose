@@ -120,6 +120,61 @@ class CirculationNodeTest {
         }
     }
 
+    @Test
+    fun pullingAnI5WaitsForReleaseAndBothSidesKeepTheirAudioWhenTheHolderRefuses() {
+        val headset = "00:11:22:33:44:55"
+        var owner: String? = "Phone"
+        var refusal: String? = "通话中"
+        var acquireFailure: String? = null
+        val events = mutableListOf<String>()
+        fun adapter(host: String) = object : CirculationAudio {
+            override fun isConnected(address: String) = owner == host && address == headset
+            override fun release(address: String) {
+                refusal?.let { error(it) }
+                events.add("$host release")
+                owner = null
+            }
+            override fun acquire(address: String) {
+                check(owner == null)
+                acquireFailure?.let { error(it) }
+                events.add("$host acquire")
+                owner = host
+            }
+        }
+        val network = TestNetwork()
+        fun node(host: String) = CirculationNode(
+            files.newFolder(), host, network.discovery(), HeadsetHandoff(adapter(host)) { listOf(headset) },
+        ) { emptyMap() }
+        node("Desktop").use { desktop ->
+            node("Phone").use { phone ->
+                desktop.start()
+                phone.start()
+                phone.pairQr(desktop.offerPairing().qr)
+                val pull = mapOf("op" to "pull", "address" to headset)
+                assertEquals("通话中", desktop.localCommand(pull)["error"])
+                assertEquals("Phone", owner)
+                refusal = null
+                desktop.localCommand(pull)
+                assertEquals(listOf("Phone release", "Desktop acquire"), events)
+                refusal = "耳机麦克风正在使用"
+                assertEquals(refusal, phone.localCommand(pull)["error"])
+                assertEquals("Desktop", owner)
+                refusal = null
+                phone.localCommand(pull)
+                assertEquals("Phone", owner)
+                acquireFailure = "接入超时"
+                assertEquals(acquireFailure, desktop.localCommand(pull)["error"])
+                assertEquals(null, owner)
+                acquireFailure = null
+                assertEquals("本机已接入耳机", desktop.localCommand(pull)["message"])
+                owner = null
+                phone.close()
+                assertEquals("对端均不可达，本机已接入耳机", desktop.localCommand(pull)["message"])
+                assertEquals("Desktop", owner)
+            }
+        }
+    }
+
     private class TestNetwork(private val stalePort: Int? = null) {
         private val services = mutableMapOf<NearbyPeer, (List<NearbyPeer>) -> Unit>()
 
