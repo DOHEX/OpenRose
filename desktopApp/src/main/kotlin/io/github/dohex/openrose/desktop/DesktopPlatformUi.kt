@@ -26,6 +26,7 @@ class DesktopPlatformUi(
     private val onDesktopSettingsChange: (DesktopSettings) -> Unit,
     private val tray: StateFlow<TrayAvailability>,
     private val loginLaunch: LoginLaunchControl,
+    private val circulation: io.github.dohex.openrose.ui.CirculationClient? = null,
 ) : PlatformUi {
     override val openBluetoothSettings: (() -> Unit)? = bluetoothSettingsCommand(platformName)?.let { args ->
         {
@@ -57,6 +58,7 @@ class DesktopPlatformUi(
         val settings by desktopSettings.collectAsState()
         val availability by tray.collectAsState()
         val login by loginLaunch.state.collectAsState()
+        circulation?.let { io.github.dohex.openrose.ui.CirculationSettings(it, showQr = { text -> PairingQr(text) }) }
         AppGroup(title = "后台控制") {
             AppSwitchRow(
                 title = "后台控制",

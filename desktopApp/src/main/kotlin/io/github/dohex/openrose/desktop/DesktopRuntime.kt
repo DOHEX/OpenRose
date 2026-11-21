@@ -65,6 +65,8 @@ internal class DesktopRuntime(
         model = RuntimeOpenRoseModel(control, store, scope)
     }
 
+    fun startCirculation() = desktopCirculation(scope, control)
+
     fun updateDesktopSettings(settings: DesktopSettings) {
         mutableDesktopSettings.value = settings
         save(DesktopSettingsCodec.encode(settings))

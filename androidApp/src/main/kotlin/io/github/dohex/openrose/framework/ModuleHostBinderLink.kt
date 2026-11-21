@@ -54,6 +54,11 @@ class ModuleHostBinderLink(
 ) : ModuleHostLink {
     private val context = context.applicationContext ?: context
 
+    @Volatile private var connection: BinderConnection? = null
+
+    suspend fun circulation(fields: Map<String, String>): Map<String, String> =
+        connection?.circulation(fields) ?: mapOf("error" to "模块控制尚未就绪")
+
     override suspend fun open(): LinkOpenResult {
         val intent = Intent(BridgeWire.ACTION_CONTROL_HOST)
             .setComponent(ComponentName(BridgeWire.TARGET_PACKAGE, BridgeWire.HOST_SERVICE_CLASS))
@@ -154,7 +159,9 @@ class ModuleHostBinderLink(
         } catch (_: RemoteException) {
             return LinkOpenResult.Failed(OwnerFailureStage.CONNECTION, "宿主进程已不存在")
         }
-        return LinkOpenResult.Open(BinderConnection(bridge, binder, token, unbind, death, result.lease, result.status, ended))
+        val active = BinderConnection(bridge, binder, token, unbind, death, result.lease, result.status, ended)
+        connection = active
+        return LinkOpenResult.Open(active)
     }
 
     private class BinderConnection(
@@ -195,6 +202,17 @@ class ModuleHostBinderLink(
             } catch (failure: WireFormatException) {
                 throw HostLinkException("宿主返回了无法识别的内容", failure)
             }
+        }
+
+        suspend fun circulation(fields: Map<String, String>): Map<String, String> {
+            val active = status() as? HostStatus.Active ?: return mapOf("error" to "模块控制尚未就绪")
+            val query = request().apply {
+                putString(BridgeWire.HOST_EPOCH, active.generation.toString())
+                putBundle(BridgeWire.PAYLOAD, Bundle().apply { fields.forEach { (key, value) -> putString(key, value) } })
+            }
+            val reply = calls.run { bridge.circulation(query) }
+            val data = reply.getBundle(BridgeWire.PAYLOAD) ?: return mapOf("error" to (reply.getString(BridgeWire.MESSAGE) ?: "互联服务不可用"))
+            return data.keySet().associateWith { data.getString(it).orEmpty() }
         }
 
         override suspend fun status(): HostStatus = call({ bridge.ownerStatus(request()) }, HostWire::decodeStatus)

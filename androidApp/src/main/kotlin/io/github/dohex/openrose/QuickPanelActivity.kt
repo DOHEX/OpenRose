@@ -60,6 +60,7 @@ class QuickPanelActivity : ComponentActivity() {
                     integration.platform.dynamicColorApplicability == PlatformApplicability.APPLICABLE,
                 onOpenApp = ::openApp,
                 onDismiss = ::finish,
+                circulation = owner.circulation.takeIf { integration.owner.selected == io.github.dohex.openrose.androidintegration.ControlWay.MODULE },
             )
         }
     }

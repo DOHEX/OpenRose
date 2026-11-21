@@ -70,6 +70,8 @@ class OpenRoseApplication : Application() {
     lateinit var framework: FrameworkLink
         private set
     private lateinit var ownerStore: AndroidOwnerStore
+    private val moduleLink by lazy { ModuleHostBinderLink(applicationContext) }
+    val circulation by lazy { io.github.dohex.openrose.ui.CirculationClient(moduleLink::circulation) }
     private val companionWake by lazy { CompanionWake(this) }
     private var preferencesLoaded = false
     private var backgroundService: BackgroundServiceFact = BackgroundServiceFact.NotRunning
@@ -101,7 +103,7 @@ class OpenRoseApplication : Application() {
                     sessionIdBase = sessionIdBase,
                 )
             },
-            moduleLink = ModuleHostBinderLink(applicationContext),
+            moduleLink = moduleLink,
             scope = controlScope,
             local = LocalOwnerIdentity(
                 packageName,

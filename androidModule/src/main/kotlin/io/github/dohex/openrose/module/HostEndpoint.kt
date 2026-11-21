@@ -107,6 +107,7 @@ internal class HostEndpoint(
     private val host: ModuleControlHost,
     private val facts: MutableStateFlow<HostFacts>,
     private val scope: CoroutineScope,
+    private val circulationAction: (Map<String, String>) -> Map<String, String> = { mapOf("error" to "互联服务尚未就绪") },
 ) : IControlBridge.Stub() {
     private val lock = Any()
     private val reads = AtomicLong()
@@ -508,6 +509,25 @@ internal class HostEndpoint(
     }
 
     // --- application role: the full client surface ---
+
+    override fun circulation(request: Bundle): Bundle {
+        appLease(request)
+        requireVersion(request)
+        val generation = (host.status.value as? HostStatus.Active)?.generation
+        if (generation == null || generation.toString() != request.getString(BridgeWire.HOST_EPOCH)) {
+            return BridgeBundles.response(BridgeWire.STATUS_UNAVAILABLE, "模块控制尚未就绪")
+        }
+        val data = request.getBundle(BridgeWire.PAYLOAD) ?: return BridgeBundles.response(BridgeWire.STATUS_INVALID_ARGUMENT)
+        val fields = data.keySet().associateWith { data.getString(it).orEmpty() }
+        val response = try {
+            circulationAction(fields)
+        } catch (failure: Exception) {
+            mapOf("error" to (failure.localizedMessage ?: "互联操作失败"))
+        }
+        return BridgeBundles.response(BridgeWire.STATUS_OK).apply {
+            putBundle(BridgeWire.PAYLOAD, Bundle().apply { response.forEach { (key, value) -> putString(key, value) } })
+        }
+    }
 
     override fun ownerStatus(request: Bundle): Bundle {
         appLease(request)

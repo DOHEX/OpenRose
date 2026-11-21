@@ -28,6 +28,7 @@ class AndroidPlatformUi(
     private val onOpenAppSettings: () -> Unit,
     private val onRestartScope: suspend (List<String>, (ScopeRestartUpdate) -> Unit) -> List<ScopeRestartResult>,
     private val restartScope: CoroutineScope,
+    private val circulationSettings: @Composable () -> Unit = {},
 ) : PlatformUi {
     override val platformName: String = "Android"
     private var restartRunning by mutableStateOf(false)
@@ -107,6 +108,7 @@ class AndroidPlatformUi(
         val settings = integration.settings
         if (position == PlatformSettingsPosition.BEFORE_CONNECTION) {
             ControlWayGroup(integration, onSelectControlWay)
+            if (integration.owner.selected == ControlWay.MODULE) circulationSettings()
             return
         }
         var systemPreferenceFeedback by remember { mutableStateOf<String?>(null) }

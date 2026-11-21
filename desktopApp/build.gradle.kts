@@ -5,6 +5,7 @@ plugins {
 }
 dependencies {
     implementation(projects.sharedUI)
+    implementation(libs.zxing.core)
     implementation(projects.transportBluez)
     implementation(compose.desktop.currentOs)
     implementation(libs.nucleus.application)

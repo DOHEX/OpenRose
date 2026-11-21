@@ -106,6 +106,7 @@ fun QuickPanel(
     onOpenApp: (WindowDestination?) -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
+    circulation: CirculationClient? = null,
 ) {
     val state by model.state.collectAsState()
     val uiSettings by model.uiSettings.collectAsState()
@@ -184,6 +185,7 @@ fun QuickPanel(
                             },
                         ),
                     )
+                    if (circulation != null && state.readySession == null) RemoteHeadsets(circulation)
                     QuickPanelContent(model, state, selection, onOpenApp)
                 }
             }

@@ -84,6 +84,7 @@ fun main(args: Array<String>) {
                     onDesktopSettingsChange = runtime::updateDesktopSettings,
                     tray = tray.availability,
                     loginLaunch = loginLaunch,
+                    circulation = runtime.startCirculation(),
                 )
             }
             // One choice for the 未连接看板 and the tray, so “重新连接” targets the device the window shows.
