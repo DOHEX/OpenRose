@@ -10,10 +10,14 @@ plugins {
     alias(libs.plugins.kotlin.serialization) apply false
     alias(libs.plugins.nucleus) apply false
     alias(libs.plugins.detekt) apply false
+    alias(libs.plugins.openrose.detekt)
     alias(libs.plugins.spotless)
     alias(libs.plugins.kover)
-    // The findings frozen in config/detekt/baseline may only shrink relative to the comparison commit.
-    alias(libs.plugins.openrose.detekt.baseline)
+}
+
+// The included build compiles the conventions. Check its sources alongside the modules that use them.
+detekt {
+    source.setFrom(layout.projectDirectory.dir("build-logic/src"))
 }
 
 // ktlint formats every Kotlin source and build script; rules come from .editorconfig.
@@ -70,8 +74,8 @@ tasks.register("offlineCheck") {
         ":androidApp:testDebugUnitTest", ":platform:linux:test", ":platform:windows:test", ":shared:circulation-lan:test",
         ":shared:circulation:jvmTest", ":tools:ui-sandbox:test", ":tools:ui-test-support:test",
         ":desktopApp:compileKotlin", ":platform:android:system-module:compileDebugKotlin", ":androidApp:compileDebugKotlin", ":tools:ui-sandbox:compileKotlin",
-        ":androidApp:lintDebug", "spotlessCheck",
+        ":androidApp:lintDebug", "spotlessCheck", ":detekt",
         "koverVerify", ":shared:headset:koverVerify", ":platform:android:integration:koverVerify",
     )
-    dependsOn(subprojects.filter { it.childProjects.isEmpty() }.map { "${it.path}:detekt" }, "checkDetektBaseline")
+    dependsOn(subprojects.filter { it.childProjects.isEmpty() }.map { "${it.path}:detekt" })
 }

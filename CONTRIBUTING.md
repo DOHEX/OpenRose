@@ -77,9 +77,7 @@ cd OpenRose
 | --- | --- |
 | `./gradlew spotlessApply` | 格式化全部 Kotlin 与 Gradle Kotlin DSL（Spotless + ktlint，规则在 `.editorconfig`） |
 | `./gradlew spotlessCheck` | 检查格式 |
-| `./gradlew detekt` | 各模块静态分析，配置为 `config/detekt/detekt.yml` |
-| `./gradlew detektBaseline` | 重新生成 `config/detekt/baseline/<module>.xml`。仅在有意接受既有问题时使用 |
-| `./gradlew :androidApp:updateLintBaseline` | 重新生成 `androidApp/lint-baseline.xml`，同样仅在有意接受既有问题时使用 |
+| `./gradlew detekt` | 产品模块和构建约定的 Kotlin 静态分析，配置为 `config/detekt/detekt.yml` |
 | `./gradlew koverHtmlReport` | 生成根项目聚合的覆盖率 HTML 报告 |
 | `./gradlew koverVerify` | 校验行覆盖率不低于下限 |
 | `./gradlew offlineCheck` | 运行全部不依赖硬件的测试，以及 `spotlessCheck`、`detekt`、lint 与 `koverVerify`。CI 执行的就是它 |
@@ -89,13 +87,12 @@ cd OpenRose
 约束：
 
 - Kotlin 编译器警告会使构建失败（`allWarningsAsErrors`），请直接修复警告。
-- Android lint 的警告按错误处理；既有问题冻结在 `androidApp/lint-baseline.xml`。
-- detekt 的既有问题冻结在 `config/detekt/baseline/<module>.xml`。`checkDetektBaseline` 按模块和问题 ID 与 Git 基准提交比较，本地用当前 HEAD 与 `origin/main` 的共同祖先，无此历史时使用 HEAD。PR 使用目标分支提交，可用 `-PdetektBaselineBase=<commit>` 指定基准。基线只能变少：不要向基线添加新条目，新代码直接修复问题，也尽量不用 `@Suppress`。修掉旧问题后运行 `./gradlew detektBaseline` 重新生成基线；可以直接删除已清空的模块基线。
+- Android lint 的警告按错误处理。上游发布新版本的提示列为信息，依赖升级由 Dependabot 每周提出。detekt 与 Android lint 直接检查源码。必须依赖宿主私有 API 或实现固定 AIDL 契约时，将例外限定到相应调用或适配器，并在源码中说明原因。
 - detekt 不检查测试源码的行宽（`MaxLineLength`），`ReturnCount` 不计开头的守卫语句；规则见 `config/detekt/detekt.yml`。
 - Spotless 不会把 `.editorconfig` 的改动当作输入变化：修改 `.editorconfig` 后请运行 `./gradlew spotlessApply --rerun-tasks`。
 - 全仓格式化提交记录在 `.git-blame-ignore-revs` 中。GitHub 的 blame 会自动跳过它；本地运行一次 `git config blame.ignoreRevsFile .git-blame-ignore-revs` 即可同样跳过。
 
-CI 还会构建 Android 调试 APK 并打包桌面版。Windows 作业运行 WinRT 助手的 Rust 测试。影响 Android 安装包的 PR 会构建未签名的 release APK，并核对 R8 后的模块入口和系统呈现资源。文档 PR 在部署前运行站点构建与站内链接检查。
+CI 还会构建 Android 调试 APK 并打包桌面版。Windows 作业对 WinRT 助手运行 `cargo fmt -- --check`、`cargo clippy --locked --all-targets -- -D warnings` 和 `cargo test --locked`。影响 Android 安装包的 PR 会运行 release 变体的完整 lint、构建未签名的 release APK，并核对 R8 后的模块入口和系统呈现资源。文档 PR 在部署前运行站点构建与站内链接检查。
 
 本地构建命令：
 

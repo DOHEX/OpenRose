@@ -1,4 +1,4 @@
-# Overrides on top of detekt's default config (buildUponDefaultConfig); existing findings live in baseline/.
+# Overrides on top of detekt's default config (buildUponDefaultConfig).
 style:
   MaxLineLength:
     maxLineLength: 140

@@ -15,7 +15,7 @@ cd OpenRose
 ./gradlew offlineCheck                # all checks that need no earphone hardware
 ```
 
-Pull requests must pass `./gradlew offlineCheck`. For the development environment, module layout, adding models, the UI sandbox, and commit conventions, see [CONTRIBUTING.md](https://github.com/DOHEX/OpenRose/blob/main/CONTRIBUTING.md) (Chinese).
+Pull requests must pass `./gradlew offlineCheck`. It checks formatting with Spotless and runs detekt and Android lint against the source without baselines. For the development environment, module layout, adding models, the UI sandbox, and commit conventions, see [CONTRIBUTING.md](https://github.com/DOHEX/OpenRose/blob/main/CONTRIBUTING.md) (Chinese).
 
 Run `./gradlew :tools:ui-sandbox:run` to check when settings become available. The initializing scenario represents a headset that has yet to report its readings. Ordinary settings become writable once the control connection is ready. The sandbox processes writes in submission order. On FirstAngel, an EQ request queued after a game mode change is checked against the new preset list once the headset confirms the change. To simulate reconnecting, return the console to the initializing phase. Pending results belong to the previous session.
 

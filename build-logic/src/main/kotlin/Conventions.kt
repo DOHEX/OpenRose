@@ -28,11 +28,12 @@ private fun JavaToolchainSpec.openRoseJdk() {
 internal val Project.libs: VersionCatalog
     get() = extensions.getByType<VersionCatalogsExtension>().named("libs")
 
-internal fun VersionCatalog.intVersion(alias: String): Int = findVersion(alias).orElseThrow { IllegalStateException("Version '$alias' is missing from the catalog") }
-    .requiredVersion.toInt()
+internal fun VersionCatalog.intVersion(alias: String): Int = stringVersion(alias).toInt()
 
-internal fun VersionCatalog.stringVersion(alias: String): String = findVersion(alias).orElseThrow { IllegalStateException("Version '$alias' is missing from the catalog") }
-    .requiredVersion
+internal fun VersionCatalog.stringVersion(alias: String): String {
+    val version = findVersion(alias).orElseThrow { IllegalStateException("Version '$alias' is missing from the catalog") }
+    return version.requiredVersion
+}
 
 /**
  * Compiles every Kotlin JVM and Android compilation with the shared JDK and bytecode target, and fails every

@@ -26,7 +26,6 @@ PR title must follow Conventional Commits (in English).
 - [ ] PR 标题符合 Conventional Commits
 - [ ] `./gradlew offlineCheck` 通过
 - [ ] 已运行 `./gradlew spotlessApply`
-- [ ] 没有新增 detekt / lint 基线条目；如有，已在 PR 描述中说明理由
 - [ ] 涉及领域术语或架构决策时，已更新 `GLOSSARY.md` 或 `docs/adr/`
 - [ ] 修改了面向用户的行为或说明时，`README.md` 与 `README.en.md` 已同步
 - [ ] 已在上方“验证”中如实写明真机验证的有无（设备与平台）

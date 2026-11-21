@@ -16,6 +16,10 @@ fun Provider<PluginDependency>.asDependency(): Provider<String> = map { "${it.pl
 
 gradlePlugin {
     plugins {
+        register("detekt") {
+            id = libs.plugins.openrose.detekt.get().pluginId
+            implementationClass = "DetektConventionPlugin"
+        }
         register("kmpLibrary") {
             id = libs.plugins.openrose.kmp.library.get().pluginId
             implementationClass = "KmpLibraryConventionPlugin"
@@ -39,10 +43,6 @@ gradlePlugin {
         register("androidLibrary") {
             id = libs.plugins.openrose.android.library.get().pluginId
             implementationClass = "AndroidLibraryConventionPlugin"
-        }
-        register("detektBaseline") {
-            id = libs.plugins.openrose.detekt.baseline.get().pluginId
-            implementationClass = "DetektBaselineConventionPlugin"
         }
     }
 }
