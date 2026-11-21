@@ -52,7 +52,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import io.github.dohex.openrose.core.NoiseMode as HeadsetNoiseMode
 
 /** The panel's width, and its height until the content is measured; the host then fits the height to the content. */
 private val trayPanelSize = DpSize(360.dp, 440.dp)
@@ -119,39 +118,9 @@ internal fun NucleusApplicationScope.DesktopTray(
         else -> listOfNotNull(summary.title, summary.battery).joinToString(" · ")
     }
 
-    fun openApp(destination: WindowDestination?) {
-        destination?.let(model.navigation::open)
-        onOpenApp()
-    }
-
-    // Native menu callbacks arrive off the UI thread; every action runs on it.
-    fun entries(showPanel: () -> Unit) = remoteMenuEntries(peers, uiScope) + trayMenuEntries(summary).map { entry ->
-        when (entry) {
-            is TrayMenuEntry.Action -> entry.copy(onClick = {
-                uiScope.launch {
-                    when (entry.target) {
-                        TrayMenuTarget.RECONNECT -> summary.reconnectTarget?.let(model::connect)
-                        TrayMenuTarget.ADD_DEVICE -> openApp(WindowDestination.ADD_DEVICE)
-                        TrayMenuTarget.PANEL -> showPanel()
-                        TrayMenuTarget.OPEN_APP -> onOpenApp()
-                        TrayMenuTarget.EXIT -> onExit()
-                    }
-                }
-            })
-
-            is TrayMenuEntry.NoiseMode -> entry.copy(onSelect = {
-                if (sessionId != null) uiScope.launch { model.set(sessionId, HeadsetCommand.NoiseMode(entry.mode)) }
-            })
-
-            is TrayMenuEntry.Label -> if (remoteSource != null && entry.text == summary.title) {
-                entry.copy(text = "本机 · ${entry.text}")
-            } else {
-                entry
-            }
-
-            TrayMenuEntry.Separator -> entry
-        }
-    }
+    val actions = remember(model, uiScope, onOpenApp, onExit) { TrayActions(model, uiScope, onOpenApp, onExit) }
+    fun entries(showPanel: () -> Unit) = remoteMenuEntries(peers, uiScope) +
+        actions.localMenu(summary, sessionId, remoteSource != null, showPanel)
 
     when (host) {
         TrayPanelHost.ANCHORED_POPUP -> {
@@ -170,7 +139,7 @@ internal fun NucleusApplicationScope.DesktopTray(
                         selection,
                         onOpenApp = {
                             trayState.hide()
-                            openApp(it)
+                            actions.open(it)
                         },
                         circulation = circulation,
                         sound = sound,
@@ -201,7 +170,7 @@ internal fun NucleusApplicationScope.DesktopTray(
                     onDismiss = { panelOpen = false },
                     onOpenApp = {
                         panelOpen = false
-                        openApp(it)
+                        actions.open(it)
                     },
                 )
             }
@@ -283,20 +252,17 @@ private fun NucleusApplicationScope.TrayPanelWindow(
     }
 }
 
-internal enum class TrayMenuTarget { RECONNECT, ADD_DEVICE, PANEL, OPEN_APP, EXIT }
-
 /** The 托盘菜单 as data, so both tray APIs render the same entries. */
-internal sealed interface TrayMenuEntry {
+private sealed interface TrayMenuEntry {
     data class Label(val text: String) : TrayMenuEntry
     data object Separator : TrayMenuEntry
     data class NoiseMode(
-        val mode: HeadsetNoiseMode,
         val label: String,
         val selected: Boolean,
         val enabled: Boolean,
-        val onSelect: () -> Unit = {},
+        val onSelect: () -> Unit,
     ) : TrayMenuEntry
-    data class Action(val label: String, val target: TrayMenuTarget, val onClick: () -> Unit = {}) : TrayMenuEntry
+    data class Action(val label: String, val onClick: () -> Unit) : TrayMenuEntry
 }
 
 private fun remoteMenuEntries(peers: List<RemoteHeadset>, uiScope: CoroutineScope): List<TrayMenuEntry> = buildList {
@@ -308,7 +274,7 @@ private fun remoteMenuEntries(peers: List<RemoteHeadset>, uiScope: CoroutineScop
             peer.statusLabel?.let { add(TrayMenuEntry.Label(it)) }
             add(TrayMenuEntry.Label(remoteBatteryText(reading)))
             reading.modes.forEach { mode ->
-                val entry = TrayMenuEntry.NoiseMode(mode, noiseModeLabel(mode.id), mode == reading.mode, !peer.busy) {
+                val entry = TrayMenuEntry.NoiseMode(noiseModeLabel(mode.id), mode == reading.mode, !peer.busy) {
                     uiScope.launch { peer.selectMode(mode) }
                 }
                 add(entry)
@@ -321,20 +287,45 @@ private fun remoteMenuEntries(peers: List<RemoteHeadset>, uiScope: CoroutineScop
     }
 }
 
-internal fun trayMenuEntries(summary: TraySummary): List<TrayMenuEntry> = buildList {
-    add(TrayMenuEntry.Label(summary.title))
-    summary.battery?.let { add(TrayMenuEntry.Label(it)) }
-    if (summary.noiseModes.isNotEmpty()) {
-        add(TrayMenuEntry.Separator)
-        summary.noiseModeFeedback?.let { add(TrayMenuEntry.Label(it)) }
-        summary.noiseModes.forEach { add(TrayMenuEntry.NoiseMode(it.mode, it.label, it.selected, it.enabled)) }
+/** Native menu callbacks run off the UI thread. Bind each entry to the state shown when it was built. */
+private class TrayActions(
+    private val model: OpenRoseModel,
+    private val uiScope: CoroutineScope,
+    private val showApp: () -> Unit,
+    private val exit: () -> Unit,
+) {
+    fun open(destination: WindowDestination?) {
+        destination?.let(model.navigation::open)
+        showApp()
     }
-    if (summary.reconnectTarget != null) add(TrayMenuEntry.Action(summary.reconnectLabel, TrayMenuTarget.RECONNECT))
-    if (summary.addDevice) add(TrayMenuEntry.Action("添加耳机", TrayMenuTarget.ADD_DEVICE))
-    add(TrayMenuEntry.Separator)
-    add(TrayMenuEntry.Action("托盘面板", TrayMenuTarget.PANEL))
-    add(TrayMenuEntry.Action("打开 OpenRose", TrayMenuTarget.OPEN_APP))
-    add(TrayMenuEntry.Action("退出", TrayMenuTarget.EXIT))
+
+    fun localMenu(
+        summary: TraySummary,
+        sessionId: Long?,
+        hasRemoteSource: Boolean,
+        showPanel: () -> Unit,
+    ): List<TrayMenuEntry> = buildList {
+        fun action(label: String, perform: () -> Unit) = add(TrayMenuEntry.Action(label) { uiScope.launch { perform() } })
+        add(TrayMenuEntry.Label(if (hasRemoteSource) "本机 · ${summary.title}" else summary.title))
+        summary.battery?.let { add(TrayMenuEntry.Label(it)) }
+        if (summary.noiseModes.isNotEmpty()) {
+            add(TrayMenuEntry.Separator)
+            summary.noiseModeFeedback?.let { add(TrayMenuEntry.Label(it)) }
+            summary.noiseModes.forEach { choice ->
+                add(
+                    TrayMenuEntry.NoiseMode(choice.label, choice.selected, choice.enabled) {
+                        if (sessionId != null) uiScope.launch { model.set(sessionId, HeadsetCommand.NoiseMode(choice.mode)) }
+                    },
+                )
+            }
+        }
+        summary.reconnectTarget?.let { device -> action(summary.reconnectLabel) { model.connect(device) } }
+        if (summary.addDevice) action("添加耳机") { open(WindowDestination.ADD_DEVICE) }
+        add(TrayMenuEntry.Separator)
+        action("托盘面板", showPanel)
+        action("打开 OpenRose", showApp)
+        action("退出", exit)
+    }
 }
 
 private fun TrayMenuBuilder.render(entries: List<TrayMenuEntry>) = entries.forEach { entry ->

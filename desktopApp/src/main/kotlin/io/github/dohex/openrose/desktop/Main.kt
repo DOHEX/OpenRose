@@ -1,7 +1,7 @@
 package io.github.dohex.openrose.desktop
 
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.text.BasicText
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -16,6 +16,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.rememberWindowState
 import dev.nucleusframework.application.DecoratedWindow
+import dev.nucleusframework.application.NucleusApplicationScope
 import dev.nucleusframework.application.NucleusBackend
 import dev.nucleusframework.application.NucleusWindow
 import dev.nucleusframework.application.SingleInstanceRestoreEffect
@@ -35,13 +36,14 @@ import io.github.dohex.openrose.transport.bluez.linuxBluetoothSettingsCommand
 import io.github.dohex.openrose.transport.windows.WindowsControlTransport
 import io.github.dohex.openrose.transport.windows.windowsBluetoothSettingsCommand
 import io.github.dohex.openrose.ui.AppLogo
-import io.github.dohex.openrose.ui.Appearance
 import io.github.dohex.openrose.ui.LocalCirculationVisible
 import io.github.dohex.openrose.ui.OpenRoseApp
 import io.github.dohex.openrose.ui.PrimaryDeviceSelection
+import io.github.dohex.openrose.ui.UiSettings
 import io.github.dohex.openrose.ui.desktop.DesktopPlatformUi
 import io.github.dohex.openrose.ui.desktop.TrayAvailability
 import io.github.dohex.openrose.ui.interfaceBackgroundColor
+import io.github.dohex.openrose.ui.isDark
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -61,168 +63,201 @@ fun main(args: Array<String>) {
     val startedAtLogin = runCatching { AutoLaunch.wasStartedAtLogin(args) }.getOrDefault(false)
     var owner: DesktopRuntime? = null
     var trayOwner: TrayMonitor? = null
+    suspend fun closeResources() {
+        try {
+            owner?.close()
+        } finally {
+            owner = null
+            trayOwner?.close()
+            trayOwner = null
+        }
+    }
+
     try {
         nucleusApplication(args = args, backend = NucleusBackend.Tao, enableSingleInstance = true) {
             val scope = remember { CoroutineScope(SupervisorJob() + Dispatchers.Default) }
-            val runtime = remember {
-                val transport = when (hostPlatform) {
-                    HostPlatform.LINUX -> BluezControlTransport(scope)
-                    HostPlatform.WINDOWS -> WindowsControlTransport(scope)
-                    else -> null
-                }
-                DesktopRuntime(
-                    preferences = Preferences.userRoot().node("io/github/dohex/openrose"),
-                    platform = PlatformState(
-                        permission = PermissionState.NOT_REQUIRED,
-                        transport = transport?.availability?.value
-                            ?: TransportAvailability.Unavailable("$platform 控制传输尚未实现"),
-                        hostPlatform = hostPlatform,
-                        controlTransportApplicability = if (transport != null) {
-                            PlatformApplicability.APPLICABLE
-                        } else {
-                            PlatformApplicability.NOT_APPLICABLE
-                        },
-                    ),
-                    scope = scope,
-                    transport = transport,
-                ).also { owner = it }
-            }
+            val runtime = remember { startRuntime(platform, hostPlatform, scope).also { owner = it } }
             val tray = remember { trayMonitor(hostIsLinux = hostPlatform == HostPlatform.LINUX).also { trayOwner = it } }
-            val loginLaunch = remember { LoginLaunch(scope) }
-            val circulation = remember(runtime) { runtime.startCirculation() }
-            val platformUi = remember {
-                DesktopPlatformUi(
-                    platformName = platform,
-                    desktopSettings = runtime.desktopSettings,
-                    onDesktopSettingsChange = runtime::updateDesktopSettings,
-                    tray = tray.availability,
-                    loginLaunch = loginLaunch,
-                    circulation = circulation,
-                    openBluetoothSettings = bluetoothSettingsAction(hostPlatform),
-                    showQr = { PairingQr(it) },
-                )
-            }
-            // One choice for the 未连接看板 and the tray, so “重新连接” targets the device the window shows.
-            val selection = remember { PrimaryDeviceSelection() }
-            val uiSettings by runtime.model.uiSettings.collectAsState()
-            val desktopSettings by runtime.desktopSettings.collectAsState()
-            val trayAvailability by tray.availability.collectAsState()
-            val uiScope = rememberCoroutineScope()
-            // A login launch stays in the tray only when closing the window would have kept it there.
-            var windowVisible by remember {
-                mutableStateOf(!(startedAtLogin && desktopSettings.backgroundControl && tray.nativeReady))
-            }
-            var window by remember { mutableStateOf<NucleusWindow?>(null) }
-            var exiting by remember { mutableStateOf(false) }
+            DesktopWindows(runtime, tray, scope, platform, hostPlatform, startedAtLogin, ::closeResources)
+        }
+    } finally {
+        runBlocking { closeResources() }
+    }
+}
 
-            var closingWindow by remember { mutableStateOf<Job?>(null) }
+private fun startRuntime(platform: String, hostPlatform: HostPlatform, scope: CoroutineScope): DesktopRuntime {
+    val transport = when (hostPlatform) {
+        HostPlatform.LINUX -> BluezControlTransport(scope)
+        HostPlatform.WINDOWS -> WindowsControlTransport(scope)
+        else -> null
+    }
+    return DesktopRuntime(
+        preferences = Preferences.userRoot().node("io/github/dohex/openrose"),
+        platform = PlatformState(
+            permission = PermissionState.NOT_REQUIRED,
+            transport = transport?.availability?.value
+                ?: TransportAvailability.Unavailable("$platform 控制传输尚未实现"),
+            hostPlatform = hostPlatform,
+            controlTransportApplicability = if (transport != null) {
+                PlatformApplicability.APPLICABLE
+            } else {
+                PlatformApplicability.NOT_APPLICABLE
+            },
+        ),
+        scope = scope,
+        transport = transport,
+    )
+}
 
-            fun showWindow() {
-                closingWindow?.cancel()
-                windowVisible = true
-                window?.run {
-                    setMinimized(false)
-                    toFront()
-                    requestFocus()
-                }
+@Composable
+private fun NucleusApplicationScope.DesktopWindows(
+    runtime: DesktopRuntime,
+    tray: TrayMonitor,
+    scope: CoroutineScope,
+    platform: String,
+    hostPlatform: HostPlatform,
+    startedAtLogin: Boolean,
+    closeResources: suspend () -> Unit,
+) {
+    val loginLaunch = remember { LoginLaunch(scope) }
+    val circulation = remember(runtime) { runtime.startCirculation() }
+    val platformUi = remember {
+        DesktopPlatformUi(
+            platformName = platform,
+            desktopSettings = runtime.desktopSettings,
+            onDesktopSettingsChange = runtime::updateDesktopSettings,
+            tray = tray.availability,
+            loginLaunch = loginLaunch,
+            circulation = circulation,
+            openBluetoothSettings = bluetoothSettingsAction(hostPlatform),
+            showQr = { PairingQr(it) },
+        )
+    }
+    // One choice for the 未连接看板 and the tray, so “重新连接” targets the device the window shows.
+    val selection = remember { PrimaryDeviceSelection() }
+    val uiSettings by runtime.model.uiSettings.collectAsState()
+    val trayAvailability by tray.availability.collectAsState()
+    val uiScope = rememberCoroutineScope()
+    val window = remember {
+        DesktopWindow(
+            runtime,
+            tray,
+            uiScope,
+            visibleAtLaunch = !(startedAtLogin && runtime.desktopSettings.value.backgroundControl && tray.nativeReady),
+        ) { fromTray ->
+            try {
+                closeResources()
+                // Tao on Linux can stall while destroying a visible EGL window on tray exit.
+                if (fromTray && hostPlatform == HostPlatform.LINUX) exitProcess(0)
+            } finally {
+                exitApplication()
             }
+        }
+    }
+    SingleInstanceRestoreEffect { window.show() }
+    LaunchedEffect(window.visible, trayAvailability) {
+        if (!window.visible && trayAvailability is TrayAvailability.Unavailable) window.show()
+    }
 
-            fun exit(fromTray: Boolean = false) {
-                if (exiting) return
-                closingWindow?.cancel()
-                exiting = true
-                uiScope.launch {
-                    try {
-                        try {
-                            runtime.close()
-                        } finally {
-                            owner = null
-                            tray.close()
-                            trayOwner = null
-                        }
-                        // On Linux Tao's EGL detach can wedge the main thread while a visible
-                        // window is being destroyed. The JVM shutdown hook releases the instance lock.
-                        if (fromTray && hostPlatform == HostPlatform.LINUX) exitProcess(0)
-                    } finally {
-                        exitApplication()
-                    }
-                }
+    DesktopWindowTheme(uiSettings) {
+        if (tray.nativeReady) {
+            DesktopTray(
+                host = remember { trayPanelHost() },
+                model = runtime.model,
+                selection = selection,
+                uiScope = uiScope,
+                circulation = circulation,
+                sound = runtime.sound,
+                onOpenApp = window::show,
+                onExit = { window.exit(fromTray = true) },
+                onStarted = tray::trayStarted,
+            )
+        }
+        DecoratedWindow(
+            title = "OpenRose",
+            icon = AppLogo.painter,
+            visible = window.visible,
+            onCloseRequest = window::closeRequested,
+            state = rememberWindowState(width = 1180.dp, height = 820.dp),
+        ) {
+            val current = nucleusWindow
+            DisposableEffect(current) {
+                window.native = current
+                onDispose { if (window.native === current) window.native = null }
             }
+            TitleBar {
+                BasicText("OpenRose", style = TextStyle(color = LocalTitleBarStyle.current.colors.content))
+            }
+            CompositionLocalProvider(LocalCirculationVisible provides window.visible) {
+                OpenRoseApp(model = runtime.model, platformUi = platformUi, primaryDeviceSelection = selection)
+            }
+        }
+    }
+}
 
-            SingleInstanceRestoreEffect { showWindow() }
-            // A hidden window must stay reachable: reveal it once the tray stops showing OpenRose.
-            LaunchedEffect(windowVisible, trayAvailability) {
-                if (!windowVisible && trayAvailability is TrayAvailability.Unavailable) showWindow()
-            }
+/** A close may hide the window only while the user's setting and a reachable tray both allow it. */
+private class DesktopWindow(
+    private val runtime: DesktopRuntime,
+    private val tray: TrayMonitor,
+    private val scope: CoroutineScope,
+    visibleAtLaunch: Boolean,
+    private val shutdown: suspend (fromTray: Boolean) -> Unit,
+) {
+    var visible by mutableStateOf(visibleAtLaunch)
+        private set
+    var native: NucleusWindow? = null
+    private var exiting = false
+    private var closing: Job? = null
 
-            val dark = when (uiSettings.appearance) {
-                Appearance.SYSTEM -> isSystemInDarkTheme()
-                Appearance.LIGHT -> false
-                Appearance.DARK -> true
-            }
-            val background = interfaceBackgroundColor(uiSettings.interfaceStyle, dark)
-            val titleBarStyle = if (dark) DecoratedWindowDefaults.darkTitleBarStyle() else DecoratedWindowDefaults.lightTitleBarStyle()
-            NucleusDecoratedWindowTheme(
-                isDark = dark,
-                titleBarStyle = titleBarStyle.copy(
-                    colors = titleBarStyle.colors.copy(
-                        background = background,
-                        inactiveBackground = background,
-                        border = Color.Transparent,
-                        fullscreenControlButtonsBackground = background,
-                    ),
-                ),
-            ) {
-                if (tray.nativeReady) {
-                    DesktopTray(
-                        host = remember { trayPanelHost() },
-                        model = runtime.model,
-                        selection = selection,
-                        uiScope = uiScope,
-                        circulation = circulation,
-                        sound = runtime.sound,
-                        onOpenApp = ::showWindow,
-                        onExit = { exit(fromTray = true) },
-                        onStarted = tray::trayStarted,
-                    )
-                }
-                DecoratedWindow(
-                    title = "OpenRose",
-                    icon = AppLogo.painter,
-                    visible = windowVisible,
-                    onCloseRequest = {
-                        if (!desktopSettings.backgroundControl) {
-                            exit()
-                        } else if (!exiting && closingWindow?.isActive != true) {
-                            closingWindow = uiScope.launch {
-                                if (tray.refresh() == TrayAvailability.Available && runtime.desktopSettings.value.backgroundControl) {
-                                    windowVisible = false
-                                } else {
-                                    exit()
-                                }
-                            }
-                        }
-                    },
-                    state = rememberWindowState(width = 1180.dp, height = 820.dp),
-                ) {
-                    val current = nucleusWindow
-                    DisposableEffect(current) {
-                        window = current
-                        onDispose { if (window === current) window = null }
-                    }
-                    TitleBar {
-                        BasicText("OpenRose", style = TextStyle(color = LocalTitleBarStyle.current.colors.content))
-                    }
-                    CompositionLocalProvider(LocalCirculationVisible provides windowVisible) {
-                        OpenRoseApp(model = runtime.model, platformUi = platformUi, primaryDeviceSelection = selection)
-                    }
+    fun show() {
+        closing?.cancel()
+        visible = true
+        native?.run {
+            setMinimized(false)
+            toFront()
+            requestFocus()
+        }
+    }
+
+    fun closeRequested() {
+        if (!runtime.desktopSettings.value.backgroundControl) {
+            exit()
+        } else if (!exiting && closing?.isActive != true) {
+            closing = scope.launch {
+                if (tray.refresh() == TrayAvailability.Available && runtime.desktopSettings.value.backgroundControl) {
+                    visible = false
+                } else {
+                    exit()
                 }
             }
         }
-    } finally {
-        owner?.let { runtime -> runBlocking { runtime.close() } }
-        trayOwner?.close()
     }
+
+    fun exit(fromTray: Boolean = false) {
+        if (exiting) return
+        exiting = true
+        closing?.cancel()
+        scope.launch { shutdown(fromTray) }
+    }
+}
+
+@Composable
+private fun DesktopWindowTheme(uiSettings: UiSettings, content: @Composable () -> Unit) {
+    val dark = uiSettings.appearance.isDark()
+    val background = interfaceBackgroundColor(uiSettings.interfaceStyle, dark)
+    val titleBarStyle = if (dark) DecoratedWindowDefaults.darkTitleBarStyle() else DecoratedWindowDefaults.lightTitleBarStyle()
+    NucleusDecoratedWindowTheme(
+        isDark = dark,
+        titleBarStyle = titleBarStyle.copy(
+            colors = titleBarStyle.colors.copy(
+                background = background,
+                inactiveBackground = background,
+                border = Color.Transparent,
+                fullscreenControlButtonsBackground = background,
+            ),
+        ),
+        content = content,
+    )
 }
 
 private fun bluetoothSettingsAction(platform: HostPlatform): (() -> Unit)? {
