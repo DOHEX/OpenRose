@@ -1,18 +1,27 @@
 package io.github.dohex.openrose.circulation
 
+import org.bouncycastle.asn1.ASN1Integer
+import org.bouncycastle.asn1.DERBitString
 import org.bouncycastle.asn1.x500.X500Name
-import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter
-import org.bouncycastle.cert.jcajce.JcaX509v3CertificateBuilder
-import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder
+import org.bouncycastle.asn1.x509.AlgorithmIdentifier
+import org.bouncycastle.asn1.x509.Certificate
+import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo
+import org.bouncycastle.asn1.x509.Time
+import org.bouncycastle.asn1.x509.V3TBSCertificateGenerator
+import org.bouncycastle.asn1.x509.Validity
+import org.bouncycastle.asn1.x9.X9ObjectIdentifiers
 import java.io.File
 import java.io.OutputStream
 import java.math.BigInteger
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
+import java.security.KeyPair
 import java.security.KeyPairGenerator
 import java.security.KeyStore
 import java.security.MessageDigest
 import java.security.SecureRandom
+import java.security.Signature
+import java.security.cert.CertificateFactory
 import java.security.cert.CertificateException
 import java.security.cert.X509Certificate
 import java.security.spec.ECGenParameterSpec
@@ -40,13 +49,7 @@ internal class PeerIdentity(directory: File) {
         } else {
             load(null, PASSWORD)
             val keys = KeyPairGenerator.getInstance("EC").apply { initialize(ECGenParameterSpec("secp256r1")) }.generateKeyPair()
-            val subject = X500Name("CN=OpenRose")
-            val now = System.currentTimeMillis()
-            val cert = JcaX509v3CertificateBuilder(
-                subject, BigInteger(159, SecureRandom()).setBit(158), Date(now - 86_400_000L),
-                Date(now + 30L * 365 * 86_400_000), subject, keys.public,
-            ).build(JcaContentSignerBuilder("SHA256withECDSA").build(keys.private))
-            setKeyEntry("node", keys.private, PASSWORD, arrayOf(JcaX509CertificateConverter().getCertificate(cert)))
+            setKeyEntry("node", keys.private, PASSWORD, arrayOf(keys.nodeCertificate()))
             file.replaceContents { store(it, PASSWORD) }
         }
     }
@@ -59,14 +62,36 @@ internal class PeerIdentity(directory: File) {
     companion object {
         // The containing file is private to the OS account. PKCS12 uses the password for its integrity encoding.
         private val PASSWORD = "OpenRose".toCharArray()
-        private fun fingerprint(cert: X509Certificate) =
-            MessageDigest.getInstance("SHA-256").digest(cert.encoded).joinToString("") { "%02x".format(it) }
+        private fun fingerprint(cert: X509Certificate): String {
+            val digest = MessageDigest.getInstance("SHA-256").digest(cert.encoded)
+            return digest.joinToString("") { "%02x".format(it) }
+        }
 
         fun peer(socket: SSLSocket): String {
             socket.startHandshake()
             return fingerprint(socket.session.peerCertificates.single() as X509Certificate)
         }
     }
+}
+
+private fun KeyPair.nodeCertificate(): X509Certificate {
+    val subject = X500Name("CN=OpenRose")
+    val now = System.currentTimeMillis()
+    val algorithm = AlgorithmIdentifier(X9ObjectIdentifiers.ecdsa_with_SHA256)
+    val certificateBody = V3TBSCertificateGenerator().apply {
+        setSerialNumber(ASN1Integer(BigInteger(159, SecureRandom()).setBit(158)))
+        setSubject(subject)
+        setIssuer(subject)
+        setSignature(algorithm)
+        setSubjectPublicKeyInfo(SubjectPublicKeyInfo.getInstance(public.encoded))
+        setValidity(Validity(Time(Date(now - 86_400_000L)), Time(Date(now + 30L * 365 * 86_400_000))))
+    }.generateTBSCertificate()
+    val signature = Signature.getInstance("SHA256withECDSA").apply {
+        initSign(private)
+        update(certificateBody.encoded)
+    }.sign()
+    val certificate = Certificate(certificateBody, algorithm, DERBitString(signature))
+    return CertificateFactory.getInstance("X.509").generateCertificate(certificate.encoded.inputStream()) as X509Certificate
 }
 
 /** TLS proves possession. Pairing or the saved certificate pin must still authorize *every* application request. */

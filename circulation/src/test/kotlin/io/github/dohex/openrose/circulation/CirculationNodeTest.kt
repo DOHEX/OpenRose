@@ -3,6 +3,9 @@ package io.github.dohex.openrose.circulation
 import org.junit.Rule
 import org.junit.rules.TemporaryFolder
 import java.net.InetAddress
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFails
@@ -84,6 +87,36 @@ class CirculationNodeTest {
                 phone.pairQr(desktop.offerPairing().qr)
                 assertEquals("80", phone.request(phone.nearby.value.single().id, mapOf("op" to "read"))["current"])
             }
+        }
+    }
+
+    @Test
+    fun closingThePhoneEndpointDiscardsAnOutstandingBatteryRead() {
+        val network = TestNetwork()
+        val reading = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val reads = Executors.newSingleThreadExecutor()
+        try {
+            CirculationNode(files.newFolder(), "Desktop", network.discovery()) {
+                reading.countDown()
+                check(release.await(5, TimeUnit.SECONDS))
+                mapOf("battery" to "62")
+            }.use { desktop ->
+                CirculationNode(files.newFolder(), "Phone", network.discovery()) { emptyMap() }.use { phone ->
+                    desktop.start()
+                    phone.start()
+                    phone.pairQr(desktop.offerPairing().qr)
+                    val id = phone.peers.value.single().id
+                    val pending = reads.submit<Map<String, String>> { phone.request(id, mapOf("op" to "read")) }
+                    check(reading.await(5, TimeUnit.SECONDS))
+                    phone.close()
+                    release.countDown()
+                    assertFails { pending.get(5, TimeUnit.SECONDS) }
+                }
+            }
+        } finally {
+            release.countDown()
+            reads.shutdownNow()
         }
     }
 

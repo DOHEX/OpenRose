@@ -3,6 +3,6 @@ plugins {
 }
 dependencies {
     api(projects.core)
-    implementation(libs.bcpkix)
+    implementation(libs.bcprov)
     testImplementation(kotlin("test-junit"))
 }

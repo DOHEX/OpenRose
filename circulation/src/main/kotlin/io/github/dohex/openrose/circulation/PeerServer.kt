@@ -17,6 +17,7 @@ internal class PeerServer(private val tls: SSLContext, private val accept: (SSLS
     private val workers = ThreadPoolExecutor(0, 8, 30, TimeUnit.SECONDS, SynchronousQueue()) {
         Thread(it, "OpenRose-peer").apply { isDaemon = true }
     }
+
     @Volatile private var listener: SSLServerSocket? = null
     val running get() = listener != null
 
