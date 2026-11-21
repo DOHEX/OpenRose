@@ -2,8 +2,6 @@ package io.github.dohex.openrose.androidintegration
 
 import io.github.dohex.openrose.androidintegration.wire.Wire
 import io.github.dohex.openrose.androidintegration.wire.arr
-import io.github.dohex.openrose.androidintegration.wire.asObj
-import io.github.dohex.openrose.androidintegration.wire.asStr
 import io.github.dohex.openrose.androidintegration.wire.parseWire
 import io.github.dohex.openrose.androidintegration.wire.str
 import io.github.dohex.openrose.core.protocol.ModelIdentification

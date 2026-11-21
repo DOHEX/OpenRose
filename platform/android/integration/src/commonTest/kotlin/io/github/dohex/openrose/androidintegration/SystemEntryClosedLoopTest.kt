@@ -36,7 +36,7 @@ class SystemEntryClosedLoopTest {
         testScheduler.advanceUntilIdle()
         val generation = (rig.host.status.value as HostStatus.Active).generation
         val lease = (rig.host.open(identity) as HostOpenResult.Opened).lease.id
-        val connection = assertIs<ConnectionState.Connected>(requireNotNull(rig.host.view(identity, lease)).state.connection)
+        val connection = assertIs<ConnectionState.Connected>(requireNotNull(rig.host.control.view(identity, lease)).state.connection)
         rig.hostTransport.links.single().initializing = false
         return Entry(rig, lease, generation, SessionReference(connection.deviceId, connection.sessionId))
     }
@@ -44,7 +44,7 @@ class SystemEntryClosedLoopTest {
     private fun Entry.noise(mode: String) = HostCommand.Set(reference, HeadsetCommand.NoiseMode(requireNotNull(NoiseMode.fromId(mode))))
 
     private suspend fun Entry.mappedMode(): Int? {
-        val read = assertIs<HostReadResult.Available>(rig.host.readSession(milinkIdentity, lease, generation, reference))
+        val read = assertIs<HostReadResult.Available>(rig.host.control.readSession(milinkIdentity, lease, generation, reference))
         return SystemHeadsetMapping.miLinkAncState(assertIs<SessionSnapshotResult.Available>(read.snapshot).device.diagnostics.fields)
     }
 
@@ -55,7 +55,7 @@ class SystemEntryClosedLoopTest {
         val entry = connectedEntry()
         assertEquals(0, entry.mappedMode())
 
-        val tap = async { entry.rig.host.execute(milinkIdentity, entry.lease, entry.generation, entry.noise("anc")) }
+        val tap = async { entry.rig.host.control.execute(milinkIdentity, entry.lease, entry.generation, entry.noise("anc")) }
         runCurrent()
 
         assertFalse(tap.isCompleted)
@@ -71,7 +71,7 @@ class SystemEntryClosedLoopTest {
     fun anEarphoneThatNeverAnswersIsATimeoutNotASuccess() = runTest {
         val entry = connectedEntry()
 
-        val tap = async { entry.rig.host.execute(milinkIdentity, entry.lease, entry.generation, entry.noise("anc")) }
+        val tap = async { entry.rig.host.control.execute(milinkIdentity, entry.lease, entry.generation, entry.noise("anc")) }
         runCurrent()
         testScheduler.advanceUntilIdle()
 
@@ -86,7 +86,7 @@ class SystemEntryClosedLoopTest {
 
         assertEquals(
             ControlErrorCode.UNSUPPORTED,
-            failureOf(entry.rig.host.execute(milinkIdentity, entry.lease, entry.generation, entry.noise("deep"))),
+            failureOf(entry.rig.host.control.execute(milinkIdentity, entry.lease, entry.generation, entry.noise("deep"))),
         )
         assertEquals(writesBefore, entry.rig.hostTransport.links.single().writes.size)
     }
@@ -95,31 +95,31 @@ class SystemEntryClosedLoopTest {
     fun aCommandFromAnotherCallerOrBeyondTheNoiseRoleIsUnauthorised() = runTest {
         val entry = connectedEntry()
 
-        val stolen = entry.rig.host.execute(strangerIdentity, entry.lease, entry.generation, entry.noise("anc"))
+        val stolen = entry.rig.host.control.execute(strangerIdentity, entry.lease, entry.generation, entry.noise("anc"))
         assertEquals(HostRejection.INVALID_LEASE, assertIs<HostCallResult.Rejected>(stolen).rejection)
-        val beyond = entry.rig.host.execute(milinkIdentity, entry.lease, entry.generation, HostCommand.Disconnect)
+        val beyond = entry.rig.host.control.execute(milinkIdentity, entry.lease, entry.generation, HostCommand.Disconnect)
         assertEquals(HostRejection.FORBIDDEN, assertIs<HostCallResult.Rejected>(beyond).rejection)
-        assertIs<ConnectionState.Connected>(entry.rig.host.view(milinkIdentity, entry.lease)!!.state.connection)
+        assertIs<ConnectionState.Connected>(entry.rig.host.control.view(milinkIdentity, entry.lease)!!.state.connection)
     }
 
     @Test
     fun theEarphonesLosingTheLinkRevokesTheReferenceAndNeverFakesTheState() = runTest {
         val entry = connectedEntry()
         val app = (entry.rig.host.open(appIdentity) as HostOpenResult.Opened).lease.id
-        entry.rig.host.execute(appIdentity, app, entry.generation, HostCommand.Disconnect)
+        entry.rig.host.control.execute(appIdentity, app, entry.generation, HostCommand.Disconnect)
         runCurrent()
 
-        val read = assertIs<HostReadResult.Available>(entry.rig.host.readSession(milinkIdentity, entry.lease, entry.generation, entry.reference))
+        val read = assertIs<HostReadResult.Available>(entry.rig.host.control.readSession(milinkIdentity, entry.lease, entry.generation, entry.reference))
         assertIs<SessionSnapshotResult.Failure>(read.snapshot)
-        assertIs<ConnectionState.Disconnected>(requireNotNull(entry.rig.host.view(milinkIdentity, entry.lease)).state.connection)
-        assertEquals(ControlErrorCode.DISCONNECTED, failureOf(entry.rig.host.execute(milinkIdentity, entry.lease, entry.generation, entry.noise("anc"))))
+        assertIs<ConnectionState.Disconnected>(requireNotNull(entry.rig.host.control.view(milinkIdentity, entry.lease)).state.connection)
+        assertEquals(ControlErrorCode.DISCONNECTED, failureOf(entry.rig.host.control.execute(milinkIdentity, entry.lease, entry.generation, entry.noise("anc"))))
     }
 
     @Test
     fun switchingToOrdinaryControlRevokesTheCardAndItsReferencesThenAFreshSessionIsReadAfterSwitchingBack() = runTest {
         val entry = connectedEntry()
         val app = (entry.rig.host.open(appIdentity) as HostOpenResult.Opened).lease.id
-        val ended = async { entry.rig.host.changes(milinkIdentity, entry.lease, entry.generation).collect { } }
+        val ended = async { entry.rig.host.control.changes(milinkIdentity, entry.lease, entry.generation).collect { } }
         runCurrent()
 
         val released = entry.rig.host.release(appIdentity, app, SwitchRequest("to-ordinary", ControlWay.MODULE, ControlWay.ORDINARY, entry.generation))
@@ -127,15 +127,15 @@ class SystemEntryClosedLoopTest {
         runCurrent()
 
         assertTrue(ended.isCompleted, "the system entry's watch ends with the owner generation")
-        assertNull(entry.rig.host.view(milinkIdentity, entry.lease))
+        assertNull(entry.rig.host.control.view(milinkIdentity, entry.lease))
         assertEquals(
             HostRejection.NO_OWNER,
-            assertIs<HostCallResult.Rejected>(entry.rig.host.execute(milinkIdentity, entry.lease, entry.generation, entry.noise("anc"))).rejection,
+            assertIs<HostCallResult.Rejected>(entry.rig.host.control.execute(milinkIdentity, entry.lease, entry.generation, entry.noise("anc"))).rejection,
         )
         assertEquals(
             HostRejection.NO_OWNER,
             assertIs<HostReadResult.Rejected>(
-                entry.rig.host.readSession(milinkIdentity, entry.lease, entry.generation, entry.reference),
+                entry.rig.host.control.readSession(milinkIdentity, entry.lease, entry.generation, entry.reference),
             ).rejection,
         )
 
@@ -150,17 +150,17 @@ class SystemEntryClosedLoopTest {
         assertEquals(
             HostRejection.STALE_GENERATION,
             assertIs<HostReadResult.Rejected>(
-                entry.rig.host.readSession(milinkIdentity, entry.lease, entry.generation, entry.reference),
+                entry.rig.host.control.readSession(milinkIdentity, entry.lease, entry.generation, entry.reference),
             ).rejection,
         )
         assertEquals(
             HostRejection.STALE_GENERATION,
-            assertIs<HostCallResult.Rejected>(entry.rig.host.execute(milinkIdentity, entry.lease, entry.generation, entry.noise("anc"))).rejection,
+            assertIs<HostCallResult.Rejected>(entry.rig.host.control.execute(milinkIdentity, entry.lease, entry.generation, entry.noise("anc"))).rejection,
         )
         // The new generation is read from the new session: real fields, read again from the earphones.
-        val connection = assertIs<ConnectionState.Connected>(requireNotNull(entry.rig.host.view(milinkIdentity, entry.lease)).state.connection)
+        val connection = assertIs<ConnectionState.Connected>(requireNotNull(entry.rig.host.control.view(milinkIdentity, entry.lease)).state.connection)
         val fresh = assertIs<HostReadResult.Available>(
-            entry.rig.host.readSession(milinkIdentity, entry.lease, next, SessionReference(connection.deviceId, connection.sessionId)),
+            entry.rig.host.control.readSession(milinkIdentity, entry.lease, next, SessionReference(connection.deviceId, connection.sessionId)),
         )
         val device = assertIs<SessionSnapshotResult.Available>(fresh.snapshot).device
         assertEquals(2, entry.rig.hostTransport.links.size, "the new owner opened its own link")
@@ -173,7 +173,7 @@ class SystemEntryClosedLoopTest {
         runCurrent()
         val link = entry.rig.hostTransport.links.single()
         val before = link.writes.size
-        val tap = async { entry.rig.host.execute(milinkIdentity, entry.lease, entry.generation, entry.noise(mode)) }
+        val tap = async { entry.rig.host.control.execute(milinkIdentity, entry.lease, entry.generation, entry.noise(mode)) }
         runCurrent()
         testScheduler.advanceUntilIdle()
         tap.await()

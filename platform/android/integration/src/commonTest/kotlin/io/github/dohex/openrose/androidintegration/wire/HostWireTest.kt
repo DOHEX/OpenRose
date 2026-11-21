@@ -186,7 +186,7 @@ class HostWireTest {
     fun aSwitchRequestWithoutAnObservedGenerationKeepsThatAbsence() {
         val request = SwitchRequest("switch-2", ControlWay.MODULE, ControlWay.ORDINARY)
 
-        assertEquals(request, HostWire.decodeRequest(HostWire.encode(request)))
+        assertEquals(request, HandoffWire.decodeRequest(HandoffWire.encode(request)))
     }
 
     @Test
@@ -206,7 +206,7 @@ class HostWireTest {
     fun aHolderWithoutProcessIdentityKeepsThatAbsence() {
         val anonymous = holder.copy(uid = null, pid = null)
 
-        assertEquals(anonymous, HostWire.decodeHolder(HostWire.encode(anonymous)))
+        assertEquals(anonymous, HostIdentityWire.decodeHolder(HostIdentityWire.encode(anonymous)))
     }
 
     @Test
@@ -218,7 +218,7 @@ class HostWireTest {
         )
 
         for (status in statuses) {
-            assertEquals(status, HostWire.decodeStatus(HostWire.encode(status)))
+            assertEquals(status, HostIdentityWire.decodeStatus(HostIdentityWire.encode(status)))
         }
     }
 
@@ -232,7 +232,7 @@ class HostWireTest {
         )
 
         for (result in results) {
-            assertEquals(result, HostWire.decodeReleaseResult(HostWire.encode(result)))
+            assertEquals(result, HandoffWire.decodeReleaseResult(HandoffWire.encode(result)))
         }
     }
 
@@ -244,7 +244,7 @@ class HostWireTest {
         )
 
         for (result in results) {
-            assertEquals(result, HostWire.decodeAcquireResult(HostWire.encode(result)))
+            assertEquals(result, HandoffWire.decodeAcquireResult(HandoffWire.encode(result)))
         }
     }
 
@@ -256,7 +256,7 @@ class HostWireTest {
         )
 
         for (result in results) {
-            assertEquals(result, HostWire.decodeOpenResult(HostWire.encode(result)))
+            assertEquals(result, HostIdentityWire.decodeOpenResult(HostIdentityWire.encode(result)))
         }
     }
 
@@ -266,9 +266,9 @@ class HostWireTest {
 
         assertFailsWith<WireFormatException> { HostWire.decodeCommand(foreign) }
         assertFailsWith<WireFormatException> { HostWire.decodeCallResult(foreign) }
-        assertFailsWith<WireFormatException> { HostWire.decodeReleaseResult(foreign) }
-        assertFailsWith<WireFormatException> { HostWire.decodeAcquireResult(foreign) }
-        assertFailsWith<WireFormatException> { HostWire.decodeOpenResult(foreign) }
-        assertFailsWith<WireFormatException> { HostWire.decodeStatus(foreign) }
+        assertFailsWith<WireFormatException> { HandoffWire.decodeReleaseResult(foreign) }
+        assertFailsWith<WireFormatException> { HandoffWire.decodeAcquireResult(foreign) }
+        assertFailsWith<WireFormatException> { HostIdentityWire.decodeOpenResult(foreign) }
+        assertFailsWith<WireFormatException> { HostIdentityWire.decodeStatus(foreign) }
     }
 }

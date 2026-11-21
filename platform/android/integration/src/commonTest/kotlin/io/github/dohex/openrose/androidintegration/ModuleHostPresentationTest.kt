@@ -83,8 +83,8 @@ class ModuleHostPresentationTest {
         private fun lease(identity: CallerIdentity) = Lease(identity, (host.open(identity) as HostOpenResult.Opened).lease.id)
 
         val generation: OwnerGeneration get() = (host.status.value as HostStatus.Active).generation
-        val state: ControlState get() = requireNotNull(host.view(app.identity, app.id)).state
-        val presentation: SystemPresentationState get() = requireNotNull(host.view(app.identity, app.id)).presentation
+        val state: ControlState get() = requireNotNull(host.control.view(app.identity, app.id)).state
+        val presentation: SystemPresentationState get() = requireNotNull(host.control.view(app.identity, app.id)).presentation
         val link: HeadsetConnection get() = transport.links.last()
         val prompt: IslandPrompt get() = requireNotNull(presentation.prompt)
         val reference: SessionReference get() = requireNotNull(presentation.reference)
@@ -97,16 +97,16 @@ class ModuleHostPresentationTest {
         }
 
         suspend fun connect() {
-            host.execute(app.identity, app.id, generation, HostCommand.ConnectFromSystem(earphones.deviceId))
+            host.control.execute(app.identity, app.id, generation, HostCommand.ConnectFromSystem(earphones.deviceId))
             test.runCurrent()
         }
 
-        suspend fun execute(lease: Lease, command: HostCommand, at: OwnerGeneration = generation) = host.execute(lease.identity, lease.id, at, command)
+        suspend fun execute(lease: Lease, command: HostCommand, at: OwnerGeneration = generation) = host.control.execute(lease.identity, lease.id, at, command)
 
         suspend fun claim(lease: Lease, at: OwnerGeneration = generation, ref: SessionReference = reference, id: String = prompt.id) = execute(lease, HostCommand.ClaimPrompt(ref, id), at)
 
         suspend fun updateSettings(change: (IntegrationSettings) -> IntegrationSettings) {
-            val view = requireNotNull(host.view(app.identity, app.id))
+            val view = requireNotNull(host.control.view(app.identity, app.id))
             val saved = HostConfiguration(true, HostSettings(view.state.settings, change(view.settings)))
             host.configure { saved }
             test.runCurrent()
@@ -245,11 +245,11 @@ class ModuleHostPresentationTest {
         runCurrent()
 
         for (lease in listOf(rig.xiaomi, rig.hostUi)) {
-            assertNull(rig.host.view(lease.identity, lease.id), "no state is offered while ordinary control owns the session")
+            assertNull(rig.host.control.view(lease.identity, lease.id), "no state is offered while ordinary control owns the session")
             assertEquals(HostRejection.NO_OWNER, assertIs<HostCallResult.Rejected>(rig.claim(lease, at = old, ref = oldReference, id = oldPrompt.id)).rejection)
             assertEquals(
                 HostRejection.NO_OWNER,
-                assertIs<HostReadResult.Rejected>(rig.host.readSession(lease.identity, lease.id, old, oldReference)).rejection,
+                assertIs<HostReadResult.Rejected>(rig.host.control.readSession(lease.identity, lease.id, old, oldReference)).rejection,
             )
         }
         assertEquals(listOf("module:open", "module:close"), rig.headset.events)

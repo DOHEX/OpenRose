@@ -26,6 +26,9 @@ import io.github.dohex.openrose.androidintegration.OwnerGeneration
 import io.github.dohex.openrose.androidintegration.ReleaseResult
 import io.github.dohex.openrose.androidintegration.SwitchRequest
 import io.github.dohex.openrose.androidintegration.wire.BridgeWire
+import io.github.dohex.openrose.androidintegration.wire.HandoffWire
+import io.github.dohex.openrose.androidintegration.wire.HostFrameWire
+import io.github.dohex.openrose.androidintegration.wire.HostIdentityWire
 import io.github.dohex.openrose.androidintegration.wire.HostWire
 import io.github.dohex.openrose.androidintegration.wire.Wire
 import io.github.dohex.openrose.androidintegration.wire.WireFormatException
@@ -157,7 +160,7 @@ class ModuleHostBinderLink(
             if (status != BridgeWire.STATUS_OK) {
                 null
             } else {
-                HostWire.decodeOpenResult(parseWire(opened.getString(BridgeWire.PAYLOAD).orEmpty()))
+                HostIdentityWire.decodeOpenResult(parseWire(opened.getString(BridgeWire.PAYLOAD).orEmpty()))
             }
         } catch (_: WireFormatException) {
             null
@@ -195,18 +198,30 @@ class ModuleHostBinderLink(
             payload?.let { putString(BridgeWire.PAYLOAD, it.render()) }
         }
 
-        private suspend fun <T> call(block: () -> Bundle, decode: (Wire) -> T): T {
-            val reply = try {
-                calls.run(call = block)
-            } catch (failure: DeadObjectException) {
-                throw HostLinkException("宿主进程已结束", failure)
-            } catch (failure: RemoteException) {
-                throw HostLinkException("与宿主通信失败", failure)
-            } catch (failure: SecurityException) {
-                throw HostLinkException("宿主拒绝了请求：${failure.message}", failure)
+        // Parcel.readException can rethrow a host-specific runtime failure. All failed transactions
+        // leave the outcome unknown to the client, while caller cancellation still ends its own wait.
+        @Suppress("TooGenericExceptionCaught")
+        private suspend fun transact(block: () -> Bundle): Bundle {
+            val failure = try {
+                return calls.run(call = block)
+            } catch (ended: DeadObjectException) {
+                HostLinkException("宿主进程已结束", ended)
+            } catch (remote: RemoteException) {
+                HostLinkException("与宿主通信失败", remote)
+            } catch (denied: SecurityException) {
+                HostLinkException("宿主拒绝了请求：${denied.message}", denied)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
             } catch (reloading: IllegalStateException) {
-                throw HostLinkException("模块宿主暂不可用，等待重新发现", reloading)
+                HostLinkException("模块宿主暂不可用，等待重新发现", reloading)
+            } catch (rejected: RuntimeException) {
+                HostLinkException("与宿主通信失败：${rejected.message ?: rejected.javaClass.simpleName}", rejected)
             }
+            throw failure
+        }
+
+        private suspend fun <T> call(block: () -> Bundle, decode: (Wire) -> T): T {
+            val reply = transact(block)
             if (reply.getString(BridgeWire.STATUS) != BridgeWire.STATUS_OK) {
                 throw HostLinkException("宿主返回 ${reply.getString(BridgeWire.STATUS)}")
             }
@@ -228,7 +243,7 @@ class ModuleHostBinderLink(
             return data.circulationReply(command)
         }
 
-        override suspend fun status(): HostStatus = call({ bridge.ownerStatus(request()) }, HostWire::decodeStatus)
+        override suspend fun status(): HostStatus = call({ bridge.ownerStatus(request()) }, HostIdentityWire::decodeStatus)
 
         override suspend fun execute(generation: OwnerGeneration, command: HostCommand): HostCallResult = call(
             { bridge.execute(request(HostWire.encodeCall(generation, command))) },
@@ -236,20 +251,22 @@ class ModuleHostBinderLink(
         )
 
         override suspend fun release(request: SwitchRequest): ReleaseResult = call(
-            { bridge.release(request(HostWire.encode(request))) },
-            HostWire::decodeReleaseResult,
+            { bridge.release(request(HandoffWire.encode(request))) },
+            HandoffWire::decodeReleaseResult,
         )
 
         override suspend fun acquire(request: SwitchRequest): AcquireResult = call(
-            { bridge.acquire(request(HostWire.encode(request))) },
-            HostWire::decodeAcquireResult,
+            { bridge.acquire(request(HandoffWire.encode(request))) },
+            HandoffWire::decodeAcquireResult,
         )
 
         override fun frames(generation: OwnerGeneration): Flow<HostFrame> = callbackFlow {
             val receiver = object : IControlFrames.Stub() {
                 override fun onFrame(frame: Bundle) {
                     // A frame that cannot be decoded ends the stream rather than showing unverifiable state.
-                    val decoded = runCatching { HostWire.decodeFrame(parseWire(frame.getString(BridgeWire.PAYLOAD).orEmpty())) }.getOrNull()
+                    val decoded = runCatching {
+                        HostFrameWire.decodeFrame(parseWire(frame.getString(BridgeWire.PAYLOAD).orEmpty()))
+                    }.getOrNull()
                     if (decoded == null) this@callbackFlow.close() else trySend(decoded)
                 }
 
@@ -257,16 +274,9 @@ class ModuleHostBinderLink(
                     this@callbackFlow.close()
                 }
             }
-            val reply = try {
-                calls.run { bridge.watchFrames(request(HostWire.encode(generation)), receiver) }
-            } catch (cancelled: CancellationException) {
-                throw cancelled
-            } catch (failure: Exception) {
-                this@callbackFlow.close(HostLinkException("无法订阅宿主状态", failure))
-                null
-            }
-            if (reply != null && reply.getString(BridgeWire.STATUS) != BridgeWire.STATUS_OK) {
-                this@callbackFlow.close(HostLinkException("宿主拒绝订阅状态"))
+            val reply = transact { bridge.watchFrames(request(HostIdentityWire.encode(generation)), receiver) }
+            if (reply.getString(BridgeWire.STATUS) != BridgeWire.STATUS_OK) {
+                throw HostLinkException("宿主拒绝订阅状态")
             }
             awaitClose()
         }

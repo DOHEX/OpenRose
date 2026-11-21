@@ -15,6 +15,7 @@ import io.github.dohex.openrose.androidintegration.HostStatus
 import io.github.dohex.openrose.androidintegration.IntegrationSettings
 import io.github.dohex.openrose.androidintegration.ModuleControlHost
 import io.github.dohex.openrose.androidintegration.wire.BridgeWire
+import io.github.dohex.openrose.androidintegration.wire.HostIdentityWire
 import io.github.dohex.openrose.androidintegration.wire.HostWire
 import io.github.dohex.openrose.androidintegration.wire.render
 import io.github.dohex.openrose.bridge.BridgeBundles
@@ -78,7 +79,7 @@ class HostEndpointTest {
         val lease = assertNotNull(remote.open(BridgeBundles.hello(null, null), Binder()).getString(BridgeWire.LEASE_ID))
         val request = Bundle().apply {
             putString(BridgeWire.LEASE_ID, lease)
-            putString(BridgeWire.PAYLOAD, HostWire.encode(generation).render())
+            putString(BridgeWire.PAYLOAD, HostIdentityWire.encode(generation).render())
         }
         var delivered = false
         var ended = false
@@ -166,7 +167,7 @@ class HostEndpointTest {
         val lease = assertNotNull(endpoint.open(BridgeBundles.hello(null, null), Binder()).getString(BridgeWire.LEASE_ID))
         val request = Bundle().apply {
             putString(BridgeWire.LEASE_ID, lease)
-            putString(BridgeWire.PAYLOAD, HostWire.encode(active.generation).render())
+            putString(BridgeWire.PAYLOAD, HostIdentityWire.encode(active.generation).render())
         }
         var attempted = 0
         var ended = false

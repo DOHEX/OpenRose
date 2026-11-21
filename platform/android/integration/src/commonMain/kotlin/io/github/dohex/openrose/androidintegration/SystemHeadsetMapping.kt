@@ -36,7 +36,7 @@ object SystemHeadsetMapping {
         supportedModes: Set<String>,
     ): String = if (offAsWind && requested == "normal" && "wind" in supportedModes) "wind" else requested
 
-    fun miLinkAncState(fields: Map<DeviceField, FieldReading>): Int? = text(fields, DeviceField.NOISE_MODE)?.let(::miLinkMode)
+    fun miLinkAncState(fields: Map<DeviceField, FieldReading>): Int? = fields[DeviceField.NOISE_MODE].confirmedText?.let(::miLinkMode)
 
     /**
      * MiLink's `[case, left, right, caseCharging, leftCharging, rightCharging]`. -1 is its own "unavailable".
@@ -46,24 +46,24 @@ object SystemHeadsetMapping {
      * case battery is withheld too (-1). Null when no battery is left to show.
      */
     fun miLinkBattery(fields: Map<DeviceField, FieldReading>): List<Int>? {
-        val left = battery(fields, DeviceField.LEFT_BATTERY)
-        val right = battery(fields, DeviceField.RIGHT_BATTERY)
+        val left = fields[DeviceField.LEFT_BATTERY].batteryPercent
+        val right = fields[DeviceField.RIGHT_BATTERY].batteryPercent
         if (left == null && right == null) return null
-        val leftCharging = miLinkCharging(fields, left, DeviceField.LEFT_CHARGING) ?: return null
-        val rightCharging = miLinkCharging(fields, right, DeviceField.RIGHT_CHARGING) ?: return null
+        val leftCharging = miLinkCharging(left, fields[DeviceField.LEFT_CHARGING]) ?: return null
+        val rightCharging = miLinkCharging(right, fields[DeviceField.RIGHT_CHARGING]) ?: return null
         return listOf(-1, left ?: -1, right ?: -1, 0, leftCharging, rightCharging)
     }
 
     /** The slot for an ear: its real charging flag, a placeholder where the ear has no battery to describe, null if unknown. */
-    private fun miLinkCharging(fields: Map<DeviceField, FieldReading>, battery: Int?, field: DeviceField): Int? {
+    private fun miLinkCharging(battery: Int?, charging: FieldReading?): Int? {
         if (battery == null) return 0
-        return toggle(fields, field)?.let { if (it) 1 else 0 }
+        return charging.confirmedToggle?.let { if (it) 1 else 0 }
     }
 
     /** MiLink's summary battery: the lower real ear, only when both ears are real. */
     fun miLinkSummaryBattery(fields: Map<DeviceField, FieldReading>): Int? {
-        val left = battery(fields, DeviceField.LEFT_BATTERY) ?: return null
-        val right = battery(fields, DeviceField.RIGHT_BATTERY) ?: return null
+        val left = fields[DeviceField.LEFT_BATTERY].batteryPercent ?: return null
+        val right = fields[DeviceField.RIGHT_BATTERY].batteryPercent ?: return null
         return minOf(left, right)
     }
 
@@ -78,26 +78,18 @@ object SystemHeadsetMapping {
      * position, in particular 8 (wear state), stays empty because no real reading backs it.
      */
     fun binderStatus(fields: Map<DeviceField, FieldReading>): BinderStatus {
-        val left = encodedEar(fields, DeviceField.LEFT_BATTERY, DeviceField.LEFT_CHARGING) ?: return BinderStatus.Unrepresentable
-        val right = encodedEar(fields, DeviceField.RIGHT_BATTERY, DeviceField.RIGHT_CHARGING) ?: return BinderStatus.Unrepresentable
+        val left = encodedEar(fields[DeviceField.LEFT_BATTERY], fields[DeviceField.LEFT_CHARGING]) ?: return BinderStatus.Unrepresentable
+        val right = encodedEar(fields[DeviceField.RIGHT_BATTERY], fields[DeviceField.RIGHT_CHARGING]) ?: return BinderStatus.Unrepresentable
         if (left == UNKNOWN_BATTERY && right == UNKNOWN_BATTERY) return BinderStatus.Unrepresentable
-        var caseOmitted = false
-        val case = when (val reading = fields[DeviceField.CASE_BATTERY]) {
-            null, FieldReading.Loading, is FieldReading.Unknown, is FieldReading.NotProvided -> UNKNOWN_BATTERY.toString()
-
-            is FieldReading.Known -> {
-                val value = (reading.value as? FieldValue.Number)?.value ?: return BinderStatus.Unrepresentable
-                if (value !in 0..100) return BinderStatus.Unrepresentable
-                caseOmitted = true
-                ""
-            }
-        }
+        val case = fields[DeviceField.CASE_BATTERY]
+        val caseOmitted = case is FieldReading.Known
+        if (caseOmitted && case.batteryPercent == null) return BinderStatus.Unrepresentable
         val values = MutableList(16) { "" }
         values[0] = left.toString()
         values[1] = right.toString()
-        values[2] = case
+        values[2] = if (caseOmitted) "" else UNKNOWN_BATTERY.toString()
         // The status carries no distinct value for normal and basic ANC, so only transparency is sent.
-        if (text(fields, DeviceField.NOISE_MODE)?.trim()?.lowercase() == "transparency") values[7] = "0200"
+        if (fields[DeviceField.NOISE_MODE].confirmedText?.trim()?.lowercase() == "transparency") values[7] = "0200"
         return BinderStatus.Payload(values.joinToString(","), caseOmitted)
     }
 
@@ -118,34 +110,25 @@ object SystemHeadsetMapping {
         else -> CommandReport("ACTION_FAILED", message ?: "control rejected: ${wireStatus ?: "no answer"}")
     }
 
-    private fun encodedEar(
-        fields: Map<DeviceField, FieldReading>,
-        field: DeviceField,
-        charging: DeviceField,
-    ): Int? = when (val reading = fields[field]) {
-        null, FieldReading.Loading, is FieldReading.Unknown, is FieldReading.NotProvided -> UNKNOWN_BATTERY
-
-        is FieldReading.Known -> {
-            val level = (reading.value as? FieldValue.Number)?.value?.takeIf { it in 0..100 }
-            val isCharging = toggle(fields, charging)
-            if (level == null || isCharging == null) null else level or if (isCharging) CHARGING_FLAG else 0
+    private fun encodedEar(battery: FieldReading?, charging: FieldReading?): Int? {
+        if (battery !is FieldReading.Known) return UNKNOWN_BATTERY
+        val percent = battery.batteryPercent ?: return null
+        return when (charging.confirmedToggle) {
+            true -> percent or CHARGING_FLAG
+            false -> percent
+            null -> null
         }
     }
-
-    private fun battery(fields: Map<DeviceField, FieldReading>, field: DeviceField): Int? = number(fields, field)?.takeIf { it in 0..100 }
-
-    private fun number(fields: Map<DeviceField, FieldReading>, field: DeviceField): Int? = (fields[field] as? FieldReading.Known)
-        ?.let { it.value as? FieldValue.Number }
-        ?.value
-
-    private fun text(fields: Map<DeviceField, FieldReading>, field: DeviceField): String? = (fields[field] as? FieldReading.Known)
-        ?.let { it.value as? FieldValue.Text }
-        ?.value
-
-    private fun toggle(fields: Map<DeviceField, FieldReading>, field: DeviceField): Boolean? = (fields[field] as? FieldReading.Known)
-        ?.let { it.value as? FieldValue.Toggle }
-        ?.value
 
     private const val UNKNOWN_BATTERY = 255
     private const val CHARGING_FLAG = 128
 }
+
+private val FieldReading?.batteryPercent: Int?
+    get() = ((this as? FieldReading.Known)?.value as? FieldValue.Number)?.value?.takeIf { it in 0..100 }
+
+private val FieldReading?.confirmedText: String?
+    get() = ((this as? FieldReading.Known)?.value as? FieldValue.Text)?.value
+
+private val FieldReading?.confirmedToggle: Boolean?
+    get() = ((this as? FieldReading.Known)?.value as? FieldValue.Toggle)?.value

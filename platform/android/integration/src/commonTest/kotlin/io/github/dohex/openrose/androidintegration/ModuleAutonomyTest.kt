@@ -172,15 +172,15 @@ class ModuleAutonomyTest {
         // The old lease, generation and session mean nothing to the new owner.
         assertEquals(
             HostRejection.INVALID_LEASE,
-            assertIs<HostCallResult.Rejected>(rig.host.execute(appIdentity, oldLease, newGeneration, HostCommand.StartScan)).rejection,
+            assertIs<HostCallResult.Rejected>(rig.host.control.execute(appIdentity, oldLease, newGeneration, HostCommand.StartScan)).rejection,
         )
         val fresh = (rig.host.open(appIdentity) as HostOpenResult.Opened).lease.id
         assertEquals(
             HostRejection.STALE_GENERATION,
-            assertIs<HostCallResult.Rejected>(rig.host.execute(appIdentity, fresh, oldGeneration, HostCommand.StartScan)).rejection,
+            assertIs<HostCallResult.Rejected>(rig.host.control.execute(appIdentity, fresh, oldGeneration, HostCommand.StartScan)).rejection,
         )
         // Every read names the generation it was issued for, so a pre-restart reference cannot reach the new owner.
-        assertIs<HostReadResult.Rejected>(rig.host.readSession(appIdentity, fresh, oldGeneration, oldReference))
+        assertIs<HostReadResult.Rejected>(rig.host.control.readSession(appIdentity, fresh, oldGeneration, oldReference))
     }
 
     @Test
@@ -306,7 +306,7 @@ class ModuleAutonomyTest {
         // Leases die with the instance that issued them, whatever the owner state is.
         assertEquals(
             HostRejection.INVALID_LEASE,
-            assertIs<HostCallResult.Rejected>(old.execute(appIdentity, lease, generation, HostCommand.StartScan)).rejection,
+            assertIs<HostCallResult.Rejected>(old.control.execute(appIdentity, lease, generation, HostCommand.StartScan)).rejection,
         )
         old.configure { HostConfiguration(true, HostSettings(integration = IntegrationSettings(controlWay = ControlWay.MODULE))) }
         assertIs<HostStatus.Inactive>(old.status.value)
@@ -335,7 +335,7 @@ class ModuleAutonomyTest {
         val newLease = assertIs<HostOpenResult.Opened>(old.open(appIdentity)).lease
         assertEquals(
             HostCallResult.Operation(OperationResult.Success),
-            old.execute(appIdentity, newLease.id, generation, HostCommand.RefreshBondedDevices),
+            old.control.execute(appIdentity, newLease.id, generation, HostCommand.RefreshBondedDevices),
         )
         assertEquals(1, rig.link.connections.count { it.isOpen })
         assertEquals(0, rig.headset.opens("ordinary"))

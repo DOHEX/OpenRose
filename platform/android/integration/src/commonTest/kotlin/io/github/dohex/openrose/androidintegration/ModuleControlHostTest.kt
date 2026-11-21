@@ -74,16 +74,16 @@ class ModuleControlHostTest {
         val sameUidOtherProcess = appIdentity.copy(pid = 1)
         assertEquals(
             HostRejection.INVALID_LEASE,
-            assertIs<HostCallResult.Rejected>(rig.host.execute(sameUidOtherProcess, lease, generation, HostCommand.StartScan)).rejection,
+            assertIs<HostCallResult.Rejected>(rig.host.control.execute(sameUidOtherProcess, lease, generation, HostCommand.StartScan)).rejection,
         )
         assertEquals(
             HostRejection.INVALID_LEASE,
-            assertIs<HostCallResult.Rejected>(rig.host.execute(strangerIdentity, lease, generation, HostCommand.StartScan)).rejection,
+            assertIs<HostCallResult.Rejected>(rig.host.control.execute(strangerIdentity, lease, generation, HostCommand.StartScan)).rejection,
         )
         rig.host.close(appIdentity, lease)
         assertEquals(
             HostRejection.INVALID_LEASE,
-            assertIs<HostCallResult.Rejected>(rig.host.execute(appIdentity, lease, generation, HostCommand.StartScan)).rejection,
+            assertIs<HostCallResult.Rejected>(rig.host.control.execute(appIdentity, lease, generation, HostCommand.StartScan)).rejection,
         )
     }
 
@@ -103,13 +103,13 @@ class ModuleControlHostTest {
             HostCommand.Set(null, HeadsetCommand.NoiseMode(NoiseMode.ANC)),
             HostCommand.Set(reference, HeadsetCommand.EqualizerPreset("pop")),
         )) {
-            val rejected = assertIs<HostCallResult.Rejected>(rig.host.execute(milinkIdentity, lease, generation, command))
+            val rejected = assertIs<HostCallResult.Rejected>(rig.host.control.execute(milinkIdentity, lease, generation, command))
             assertEquals(HostRejection.FORBIDDEN, rejected.rejection, command.toString())
         }
         // Allowed in role; a reference to no current session is still refused by the runtime itself.
-        val noise = rig.host.execute(milinkIdentity, lease, generation, HostCommand.Set(reference, HeadsetCommand.NoiseMode(NoiseMode.ANC)))
+        val noise = rig.host.control.execute(milinkIdentity, lease, generation, HostCommand.Set(reference, HeadsetCommand.NoiseMode(NoiseMode.ANC)))
         assertEquals(ControlErrorCode.DISCONNECTED, assertIs<OperationResult.Failure>(assertIs<HostCallResult.Operation>(noise).result).error.code)
-        assertTrue(rig.host.frames(milinkIdentity, lease, generation).toList().isEmpty())
+        assertTrue(rig.host.control.frames(milinkIdentity, lease, generation).toList().isEmpty())
         val release = rig.host.release(milinkIdentity, lease, SwitchRequest("x", ControlWay.MODULE, ControlWay.ORDINARY))
         assertEquals(HostRejection.FORBIDDEN, assertIs<ReleaseResult.Refused>(release).rejection)
         assertIs<HostStatus.Active>(rig.host.status.value)
@@ -127,7 +127,7 @@ class ModuleControlHostTest {
         assertEquals(first, assertIs<ReleaseResult.Released>(released).receipt.generation)
         assertEquals(
             HostRejection.NO_OWNER,
-            assertIs<HostCallResult.Rejected>(rig.host.execute(appIdentity, lease, first, HostCommand.StartScan)).rejection,
+            assertIs<HostCallResult.Rejected>(rig.host.control.execute(appIdentity, lease, first, HostCommand.StartScan)).rejection,
         )
         val request = SwitchRequest("b", ControlWay.ORDINARY, ControlWay.MODULE)
         // An already-dispatched acquire using this lease cannot undo the later release.
@@ -139,9 +139,9 @@ class ModuleControlHostTest {
         assertNotEquals(first, second)
         assertEquals(
             HostRejection.STALE_GENERATION,
-            assertIs<HostCallResult.Rejected>(rig.host.execute(appIdentity, lease, first, HostCommand.StartScan)).rejection,
+            assertIs<HostCallResult.Rejected>(rig.host.control.execute(appIdentity, lease, first, HostCommand.StartScan)).rejection,
         )
-        assertIs<HostCallResult.Operation>(rig.host.execute(appIdentity, lease, second, HostCommand.StopScan))
+        assertIs<HostCallResult.Operation>(rig.host.control.execute(appIdentity, lease, second, HostCommand.StopScan))
         val stale = rig.host.release(appIdentity, lease, SwitchRequest("c", ControlWay.MODULE, ControlWay.ORDINARY, first))
         assertEquals(HostRejection.STALE_GENERATION, assertIs<ReleaseResult.Refused>(stale).rejection)
         assertIs<HostStatus.Active>(rig.host.status.value)
@@ -183,7 +183,7 @@ class ModuleControlHostTest {
         assertEquals(null, rig.headset.openOwner)
         assertEquals(
             HostRejection.INVALID_LEASE,
-            assertIs<HostCallResult.Rejected>(rig.host.execute(appIdentity, lease, generation, HostCommand.StartScan)).rejection,
+            assertIs<HostCallResult.Rejected>(rig.host.control.execute(appIdentity, lease, generation, HostCommand.StartScan)).rejection,
         )
     }
 
@@ -215,7 +215,7 @@ class ModuleControlHostTest {
         runCurrent()
         val generation = (rig.host.status.value as HostStatus.Active).generation
         val lease = (rig.host.open(appIdentity) as HostOpenResult.Opened).lease.id
-        rig.host.execute(appIdentity, lease, generation, HostCommand.ConnectFromSystem(rig.earphones.deviceId))
+        rig.host.control.execute(appIdentity, lease, generation, HostCommand.ConnectFromSystem(rig.earphones.deviceId))
         runCurrent()
         assertEquals(listOf("module:open"), rig.headset.events)
 

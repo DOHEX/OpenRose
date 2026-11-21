@@ -31,7 +31,7 @@ class FusionEntryTest {
     }
 
     private fun decide(rig: OwnerRig, lease: String, address: String): FusionEntryDecision {
-        val view = rig.host.view(milinkIdentity, lease)
+        val view = rig.host.control.view(milinkIdentity, lease)
         return FusionEntry.resolve(view?.state, view?.settings ?: IntegrationSettings(), address)
     }
 
@@ -65,7 +65,7 @@ class FusionEntryTest {
         val (rig, lease) = moduleRig(FusionSettingsDestination.OPENROSE, connected = false)
         val app = (rig.host.open(appIdentity) as HostOpenResult.Opened).lease.id
         val generation = (rig.host.status.value as HostStatus.Active).generation
-        rig.host.execute(appIdentity, app, generation, HostCommand.RefreshBondedDevices)
+        rig.host.control.execute(appIdentity, app, generation, HostCommand.RefreshBondedDevices)
 
         assertEquals(FusionEntryDecision.OpenRose(DeviceId(ble)), decide(rig, lease, classic))
     }
@@ -77,7 +77,7 @@ class FusionEntryTest {
         val generation = (rig.host.status.value as HostStatus.Active).generation
         rig.host.release(appIdentity, app, SwitchRequest("x", ControlWay.MODULE, ControlWay.ORDINARY, generation))
 
-        assertNull(rig.host.view(milinkIdentity, lease))
+        assertNull(rig.host.control.view(milinkIdentity, lease))
         assertIs<FusionEntryDecision.System>(decide(rig, lease, classic))
     }
 }

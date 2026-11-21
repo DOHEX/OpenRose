@@ -30,9 +30,9 @@ class SystemHeadsetMappingTest {
         testScheduler.advanceUntilIdle()
         val generation = (rig.host.status.value as HostStatus.Active).generation
         val lease = (rig.host.open(milinkIdentity) as HostOpenResult.Opened).lease.id
-        val view = requireNotNull(rig.host.view(milinkIdentity, lease))
+        val view = requireNotNull(rig.host.control.view(milinkIdentity, lease))
         val connection = assertIs<ConnectionState.Connected>(view.state.connection)
-        val read = rig.host.readSession(milinkIdentity, lease, generation, SessionReference(connection.deviceId, connection.sessionId))
+        val read = rig.host.control.readSession(milinkIdentity, lease, generation, SessionReference(connection.deviceId, connection.sessionId))
         val snapshot = assertIs<SessionSnapshotResult.Available>(assertIs<HostReadResult.Available>(read).snapshot)
         return snapshot.device.diagnostics.fields
     }

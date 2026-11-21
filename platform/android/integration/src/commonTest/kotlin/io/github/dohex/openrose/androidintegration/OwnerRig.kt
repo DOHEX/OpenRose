@@ -1,5 +1,8 @@
 package io.github.dohex.openrose.androidintegration
 
+import io.github.dohex.openrose.androidintegration.wire.HandoffWire
+import io.github.dohex.openrose.androidintegration.wire.HostFrameWire
+import io.github.dohex.openrose.androidintegration.wire.HostIdentityWire
 import io.github.dohex.openrose.androidintegration.wire.HostWire
 import io.github.dohex.openrose.androidintegration.wire.parseWire
 import io.github.dohex.openrose.androidintegration.wire.render
@@ -205,7 +208,7 @@ internal class InProcessHostLink(
         opens += 1
         if (openMillis > 0) delay(openMillis)
         if (!reachable) return LinkOpenResult.Failed(OwnerFailureStage.DISCOVERY, "找不到模块控制宿主")
-        return when (val result = HostWire.decodeOpenResult(parseWire(HostWire.encode(host.open(identity)).render()))) {
+        return when (val result = HostIdentityWire.decodeOpenResult(parseWire(HostIdentityWire.encode(host.open(identity)).render()))) {
             is HostOpenResult.Refused -> LinkOpenResult.Failed(OwnerFailureStage.AUTHORIZATION, result.message)
             is HostOpenResult.Opened -> LinkOpenResult.Open(Connection(result.lease, result.status).also(connections::add))
         }
@@ -235,7 +238,7 @@ internal class InProcessHostLink(
         override suspend fun execute(generation: OwnerGeneration, command: HostCommand): HostCallResult {
             ensureOpen()
             val sent = HostWire.decodeCommand(parseWire(HostWire.encode(command).render()))
-            val result = host.execute(identity, lease.id, generation, sent)
+            val result = host.control.execute(identity, lease.id, generation, sent)
             ensureOpen()
             return HostWire.decodeCallResult(parseWire(HostWire.encode(result).render()))
         }
@@ -247,27 +250,27 @@ internal class InProcessHostLink(
                 throw HostLinkException("宿主进程在释放期间结束")
             }
             if (releaseHangs) awaitCancellation()
-            val sent = HostWire.decodeRequest(parseWire(HostWire.encode(request).render()))
+            val sent = HandoffWire.decodeRequest(parseWire(HandoffWire.encode(request).render()))
             val result = host.release(identity, lease.id, sent)
-            val delivered = HostWire.decodeReleaseResult(parseWire(HostWire.encode(result).render()))
+            val delivered = HandoffWire.decodeReleaseResult(parseWire(HandoffWire.encode(result).render()))
             return if (delivered is ReleaseResult.Released) ReleaseResult.Released(tamperReceipt(delivered.receipt)) else delivered
         }
 
         override suspend fun acquire(request: SwitchRequest): AcquireResult {
             ensureOpen()
-            val sent = HostWire.decodeRequest(parseWire(HostWire.encode(request).render()))
+            val sent = HandoffWire.decodeRequest(parseWire(HandoffWire.encode(request).render()))
             if (pauseNextAcquire) {
                 pauseNextAcquire = false
                 delayedAcquire = { host.acquire(identity, lease.id, sent) }
                 awaitCancellation()
             }
             val result = host.acquire(identity, lease.id, sent)
-            return HostWire.decodeAcquireResult(parseWire(HostWire.encode(result).render()))
+            return HandoffWire.decodeAcquireResult(parseWire(HandoffWire.encode(result).render()))
         }
 
-        override fun frames(generation: OwnerGeneration): Flow<HostFrame> = host.frames(identity, lease.id, generation).map { frame ->
+        override fun frames(generation: OwnerGeneration): Flow<HostFrame> = host.control.frames(identity, lease.id, generation).map { frame ->
             ensureOpen()
-            HostWire.decodeFrame(parseWire(HostWire.encode(frame).render()))
+            HostFrameWire.decodeFrame(parseWire(HostFrameWire.encode(frame).render()))
         }
 
         override fun close() {

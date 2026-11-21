@@ -6,12 +6,29 @@ import android.content.ContextWrapper
 import android.content.Intent
 import android.content.ServiceConnection
 import android.os.Binder
+import android.os.Bundle
+import android.os.IBinder
 import android.os.Parcel
+import io.github.dohex.openrose.androidintegration.ClientRole
+import io.github.dohex.openrose.androidintegration.ControlWay
+import io.github.dohex.openrose.androidintegration.HostLease
+import io.github.dohex.openrose.androidintegration.HostLinkException
+import io.github.dohex.openrose.androidintegration.HostOpenResult
+import io.github.dohex.openrose.androidintegration.HostStatus
 import io.github.dohex.openrose.androidintegration.LinkOpenResult
 import io.github.dohex.openrose.androidintegration.OwnerFailureStage
+import io.github.dohex.openrose.androidintegration.OwnerGeneration
+import io.github.dohex.openrose.androidintegration.OwnerHolder
+import io.github.dohex.openrose.androidintegration.wire.BridgeWire
+import io.github.dohex.openrose.androidintegration.wire.HostIdentityWire
+import io.github.dohex.openrose.androidintegration.wire.render
+import io.github.dohex.openrose.bridge.BridgeBundles
+import io.github.dohex.openrose.bridge.IControlBridge
+import io.github.dohex.openrose.bridge.IControlFrames
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runCurrent
@@ -25,6 +42,7 @@ import org.robolectric.annotation.Config
 import java.util.concurrent.CountDownLatch
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNull
@@ -66,16 +84,40 @@ class BinderCallsTest {
         val reloading = object : Binder() {
             override fun onTransact(code: Int, data: Parcel, reply: Parcel?, flags: Int): Boolean = throw IllegalStateException("宿主正在重新加载")
         }
-        val context = object : ContextWrapper(RuntimeEnvironment.getApplication()) {
-            override fun getApplicationContext(): Context = this
-            override fun bindService(service: Intent, connection: ServiceConnection, flags: Int): Boolean {
-                connection.onServiceConnected(requireNotNull(service.component), reloading)
-                return true
-            }
-            override fun unbindService(connection: ServiceConnection) = Unit
-        }
-        val result = assertIs<LinkOpenResult.Failed>(ModuleHostBinderLink(context).open())
+        val result = assertIs<LinkOpenResult.Failed>(ModuleHostBinderLink(boundContext(reloading)).open())
         assertEquals(OwnerFailureStage.CONNECTION, result.stage)
+    }
+
+    @Test
+    fun hostRejectingFrameSubscriptionSignalsALostLink() = runBlocking {
+        val generation = OwnerGeneration("host", 1)
+        val status = HostStatus.Active(generation, OwnerHolder(ControlWay.MODULE, generation, "bluetooth", "bluetooth"))
+        val host = object : IControlBridge.Default() {
+            override fun open(hello: Bundle, clientToken: IBinder): Bundle {
+                val authorized = HostOpenResult.Opened(HostLease("lease", ClientRole.APP, generation.incarnation), status)
+                return BridgeBundles.payload(BridgeWire.STATUS_OK, HostIdentityWire.encode(authorized).render())
+            }
+
+            override fun watchFrames(request: Bundle, frames: IControlFrames): Bundle = throw IllegalArgumentException("invalid subscription")
+        }
+        val binder = Binder().apply { attachInterface(host, IControlBridge.DESCRIPTOR) }
+        val connection = assertIs<LinkOpenResult.Open>(ModuleHostBinderLink(boundContext(binder)).open()).connection
+        try {
+            val failure = assertFailsWith<HostLinkException> { withTimeout(5_000) { connection.frames(generation).first() } }
+            val cause = generateSequence<Throwable>(failure) { it.cause }.last()
+            assertEquals("invalid subscription", assertIs<IllegalArgumentException>(cause).message)
+        } finally {
+            connection.close()
+        }
+    }
+
+    private fun boundContext(binder: IBinder): Context = object : ContextWrapper(RuntimeEnvironment.getApplication()) {
+        override fun getApplicationContext(): Context = this
+        override fun bindService(service: Intent, connection: ServiceConnection, flags: Int): Boolean {
+            connection.onServiceConnected(requireNotNull(service.component), binder)
+            return true
+        }
+        override fun unbindService(connection: ServiceConnection) = Unit
     }
 
     @OptIn(ExperimentalCoroutinesApi::class)

@@ -115,9 +115,9 @@ class ModuleControlClient(
             ?: return HostCallResult.Rejected(HostRejection.NO_OWNER, "模块控制尚未就绪")
         return try {
             withTimeout(timing.commandTimeoutMillis) { connection.execute(active.frame.generation, command) }
-        } catch (e: TimeoutCancellationException) {
+        } catch (_: TimeoutCancellationException) {
             HostCallResult.Operation(OperationResult.Failure(ControlError(ControlErrorCode.TIMEOUT, "模块宿主未在期限内确认结果")))
-        } catch (e: HostLinkException) {
+        } catch (_: HostLinkException) {
             HostCallResult.Operation(OperationResult.Failure(ControlError(ControlErrorCode.DISCONNECTED, "与模块宿主的连接中断，结果未确认")))
         }
     }
@@ -134,7 +134,7 @@ class ModuleControlClient(
     ) { connection ->
         val result = try {
             withTimeout(timing.releaseTimeoutMillis) { connection.release(request) }
-        } catch (e: TimeoutCancellationException) {
+        } catch (_: TimeoutCancellationException) {
             return@withConnection ReleaseProof.Unproven(OwnerFailureStage.RELEASE, "模块宿主未在期限内确认释放")
         } catch (e: HostLinkException) {
             return@withConnection lostLinkProof(connection, request, e.message)
@@ -173,7 +173,7 @@ class ModuleControlClient(
 
                 is AcquireResult.Refused -> AcquireOutcome.Failed(OwnerFailureStage.ACTIVATION, result.message)
             }
-        } catch (e: TimeoutCancellationException) {
+        } catch (_: TimeoutCancellationException) {
             AcquireOutcome.Failed(OwnerFailureStage.ACTIVATION, "模块宿主未在期限内响应")
         } catch (e: HostLinkException) {
             AcquireOutcome.Failed(OwnerFailureStage.CONNECTION, e.message ?: "与模块宿主的连接中断")
@@ -268,7 +268,8 @@ class ModuleControlClient(
         } catch (e: CancellationException) {
             if (scope.isActive && connection.ended.isCompleted) return
             throw e
-        } catch (e: HostLinkException) {
+        } catch (_: HostLinkException) {
+            // The observation loop closes the lost transport and reports it before reconnecting.
             return
         }
     }
@@ -291,7 +292,7 @@ class ModuleControlClient(
                 val answered = try {
                     withTimeout(timing.probeTimeoutMillis) { connection.status() }
                     true
-                } catch (e: TimeoutCancellationException) {
+                } catch (_: TimeoutCancellationException) {
                     false
                 }
                 if (answered) {

@@ -36,7 +36,7 @@ class BondedHeadsetsTest {
     @Test
     fun bondedRoseEarphonesWithoutASessionAreKnownByEveryAddress() = runTest {
         val (rig, lease) = moduleHost()
-        val view = rig.host.view(milinkIdentity, lease)
+        val view = rig.host.control.view(milinkIdentity, lease)
 
         val state = assertNotNull(view).state
         assertNull(state.readySession)
@@ -65,6 +65,6 @@ class BondedHeadsetsTest {
         rig.host.release(appIdentity, app, SwitchRequest("x", ControlWay.MODULE, ControlWay.ORDINARY, generation))
 
         // No owner view: the host's currentSession reply names no earphones, and the system entries answer nothing.
-        assertNull(rig.host.view(milinkIdentity, lease))
+        assertNull(rig.host.control.view(milinkIdentity, lease))
     }
 }

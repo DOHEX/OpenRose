@@ -80,10 +80,16 @@ class ModuleControlHost(
         var releasePending = false
     }
 
+    private sealed interface OwnerCheck {
+        class Current(val owner: Owner) : OwnerCheck
+        class Rejected(val rejection: HostRejection, val message: String) : OwnerCheck
+    }
+
     private class Lease(val id: String, val role: ClientRole, val caller: CallerIdentity, val releaseEpoch: Long)
 
     private val hostContext = parentScope.coroutineContext
     private val ownership = Mutex()
+    private val lifecycle = OwnerLifecycle()
     private val owner = MutableStateFlow<Owner?>(null)
     private val leases = MutableStateFlow<Map<String, Lease>>(emptyMap())
     private var readConfiguration: () -> HostConfiguration? = { HostConfiguration() }
@@ -109,7 +115,7 @@ class ModuleControlHost(
     suspend fun configure(read: () -> HostConfiguration?): Boolean = ownership.withLock {
         readConfiguration = read
         if (!reloadConfiguration()) return@withLock false
-        reconcile()
+        lifecycle.reconcile()
         true
     }
 
@@ -138,11 +144,11 @@ class ModuleControlHost(
         stopped = true
         var released = false
         try {
-            reconcile()
+            lifecycle.reconcile()
             released = owner.value == null
         } finally {
             if (released) retired.value = true else stopped = false
-            publishStatus()
+            lifecycle.publishStatus()
         }
         released
     }
@@ -170,122 +176,172 @@ class ModuleControlHost(
         leases.update { current -> current[leaseId]?.takeIf { it.caller == caller }?.let { current - leaseId } ?: current }
     }
 
-    suspend fun execute(
-        caller: CallerIdentity,
-        leaseId: String,
-        generation: OwnerGeneration,
-        command: HostCommand,
-    ): HostCallResult {
-        val lease = leaseFor(caller, leaseId)
-            ?: return HostCallResult.Rejected(HostRejection.INVALID_LEASE, "控制宿主授权无效或已过期")
-        if (!lease.role.allows(command)) return HostCallResult.Rejected(HostRejection.FORBIDDEN, "该调用者无权执行此操作")
-        val current = currentOwner(generation)
-        if (current is OwnerCheck.Rejected) return HostCallResult.Rejected(current.rejection, current.message)
-        val active = (current as OwnerCheck.Current).owner
-        if (command is HostCommand.ClaimPrompt && !lease.role.presents(active.runtime.settings.islandMode)) {
-            return HostCallResult.Rejected(HostRejection.FORBIDDEN, "该系统入口不拥有当前提示策略")
+    /** Commands, reads and subscriptions addressed to an authenticated caller and the current owner. */
+    val control = ClientControl()
+
+    inner class ClientControl internal constructor() {
+        suspend fun execute(
+            caller: CallerIdentity,
+            leaseId: String,
+            generation: OwnerGeneration,
+            command: HostCommand,
+        ): HostCallResult {
+            val lease = leaseFor(caller, leaseId)
+                ?: return HostCallResult.Rejected(HostRejection.INVALID_LEASE, "控制宿主授权无效或已过期")
+            if (!lease.role.allows(command)) return HostCallResult.Rejected(HostRejection.FORBIDDEN, "该调用者无权执行此操作")
+            val current = currentOwner(generation)
+            if (current is OwnerCheck.Rejected) return HostCallResult.Rejected(current.rejection, current.message)
+            val active = (current as OwnerCheck.Current).owner
+            if (command is HostCommand.ClaimPrompt && !lease.role.presents(active.runtime.settings.islandMode)) {
+                return HostCallResult.Rejected(HostRejection.FORBIDDEN, "该系统入口不拥有当前提示策略")
+            }
+            val commands = active.commands.value
+            return try {
+                withContext(commands) { dispatch(active.runtime, systemRouted(lease.role, active.runtime, command)) }
+            } catch (e: CancellationException) {
+                if (commands.isCancelled) HostCallResult.Rejected(HostRejection.NO_OWNER, "控制所有者已释放") else throw e
+            }
         }
-        val commands = active.commands.value
-        return try {
-            withContext(commands) { dispatch(active.runtime, systemRouted(lease.role, active.runtime, command)) }
-        } catch (e: CancellationException) {
-            if (commands.isCancelled) HostCallResult.Rejected(HostRejection.NO_OWNER, "控制所有者已释放") else throw e
+
+        /** A system entry's "off" tap follows the user's choice of writing wind reduction. */
+        private fun systemRouted(role: ClientRole, runtime: SystemEntryRuntime, command: HostCommand): HostCommand {
+            if (role != ClientRole.MILINK && role != ClientRole.XIAOMI_BLUETOOTH) return command
+            if (command !is HostCommand.Set || command.reference == null) return command
+            val requested = (command.command as? HeadsetCommand.NoiseMode)?.mode?.id ?: return command
+            if (!runtime.settings.fusionOffAsWind) return command
+            val modes = (runtime.readSession(command.reference) as? SessionSnapshotResult.Available)
+                ?.device?.capabilities?.noiseControl?.modes ?: return command
+            val mode = SystemHeadsetMapping.requestedMode(requested, offAsWind = true, supportedModes = modes)
+            if (mode == requested) return command
+            return command.copy(command = HeadsetCommand.NoiseMode(requireNotNull(NoiseMode.fromId(mode))))
         }
-    }
 
-    /** A system entry's "off" tap follows the user's choice of writing wind reduction. */
-    private fun systemRouted(role: ClientRole, runtime: SystemEntryRuntime, command: HostCommand): HostCommand {
-        if (role != ClientRole.MILINK && role != ClientRole.XIAOMI_BLUETOOTH) return command
-        if (command !is HostCommand.Set || command.reference == null) return command
-        val requested = (command.command as? HeadsetCommand.NoiseMode)?.mode?.id ?: return command
-        if (!runtime.settings.fusionOffAsWind) return command
-        val modes = (runtime.readSession(command.reference) as? SessionSnapshotResult.Available)
-            ?.device?.capabilities?.noiseControl?.modes ?: return command
-        val mode = SystemHeadsetMapping.requestedMode(requested, offAsWind = true, supportedModes = modes)
-        return if (mode == requested) command else command.copy(command = HeadsetCommand.NoiseMode(requireNotNull(NoiseMode.fromId(mode))))
-    }
-
-    /** Reads a detached snapshot, only for the named owner generation and a still-current device session. */
-    suspend fun readSession(
-        caller: CallerIdentity,
-        leaseId: String,
-        generation: OwnerGeneration,
-        reference: SessionReference,
-    ): HostReadResult {
-        leaseFor(caller, leaseId) ?: return HostReadResult.Rejected(HostRejection.INVALID_LEASE, "控制宿主授权无效或已过期")
-        return when (val current = currentOwner(generation)) {
-            is OwnerCheck.Rejected -> HostReadResult.Rejected(current.rejection, current.message)
-            is OwnerCheck.Current -> HostReadResult.Available(current.owner.runtime.readSession(reference))
+        /** Reads a detached snapshot, only for the named owner generation and a still-current device session. */
+        suspend fun readSession(
+            caller: CallerIdentity,
+            leaseId: String,
+            generation: OwnerGeneration,
+            reference: SessionReference,
+        ): HostReadResult {
+            leaseFor(caller, leaseId) ?: return HostReadResult.Rejected(HostRejection.INVALID_LEASE, "控制宿主授权无效或已过期")
+            return when (val current = currentOwner(generation)) {
+                is OwnerCheck.Rejected -> HostReadResult.Rejected(current.rejection, current.message)
+                is OwnerCheck.Current -> HostReadResult.Available(current.owner.runtime.readSession(reference))
+            }
         }
-    }
 
-    /** The current owner state for any authorised role; null when the lease is invalid or nobody owns the session. */
-    fun view(caller: CallerIdentity, leaseId: String): OwnerView? {
-        leaseFor(caller, leaseId) ?: return null
-        val active = owner.value ?: return null
-        return active.runtime.view(active.generation)
-    }
+        /** The current owner state for any authorised role; null when the lease is invalid or nobody owns the session. */
+        fun view(caller: CallerIdentity, leaseId: String): OwnerView? {
+            leaseFor(caller, leaseId) ?: return null
+            val active = owner.value ?: return null
+            return active.runtime.view(active.generation)
+        }
 
-    /**
-     * A wake-up whenever the named owner's state changes, for any authorised role; completes when the
-     * generation ends. Consumers still read through an authorised, reference-checked read.
-     */
-    fun changes(caller: CallerIdentity, leaseId: String, generation: OwnerGeneration): Flow<OwnerView> {
-        val lease = leaseFor(caller, leaseId)
-        val active = owner.value?.takeIf { it.generation == generation }
-        if (lease == null || active == null) {
+        /**
+         * A wake-up whenever the named owner's state changes, for any authorised role; completes when the
+         * generation ends. Consumers still read through an authorised, reference-checked read.
+         */
+        fun changes(caller: CallerIdentity, leaseId: String, generation: OwnerGeneration): Flow<OwnerView> {
+            val lease = leaseFor(caller, leaseId)
+            val active = owner.value?.takeIf { it.generation == generation }
+            if (lease == null || active == null) {
+                return callbackFlow {
+                    close()
+                    awaitClose()
+                }
+            }
             return callbackFlow {
-                close()
-                awaitClose()
+                val collector = launch { active.runtime.views(active.generation).collect { send(it) } }
+                launch {
+                    active.ended.await()
+                    collector.cancel()
+                    close()
+                }
+                awaitClose { collector.cancel() }
             }
         }
-        return callbackFlow {
-            val collector = launch { active.runtime.views(active.generation).collect { send(it) } }
-            launch {
-                active.ended.await()
-                collector.cancel()
-                close()
-            }
-            awaitClose { collector.cancel() }
-        }
-    }
 
-    /**
-     * The owner's state, only for a lease of the app role. Completes when the owner generation ends
-     * or the caller is not authorised, so a consumer never keeps treating an ended owner as current.
-     */
-    fun frames(caller: CallerIdentity, leaseId: String, generation: OwnerGeneration): Flow<HostFrame> {
-        val lease = leaseFor(caller, leaseId)
-        val active = owner.value?.takeIf { it.generation == generation }
-        if (lease == null || lease.role != ClientRole.APP || active == null) {
+        /**
+         * The owner's state, only for a lease of the app role. Completes when the owner generation ends
+         * or the caller is not authorised, so a consumer never keeps treating an ended owner as current.
+         */
+        fun frames(caller: CallerIdentity, leaseId: String, generation: OwnerGeneration): Flow<HostFrame> {
+            val lease = leaseFor(caller, leaseId)
+            val active = owner.value?.takeIf { it.generation == generation }
+            if (lease == null || lease.role != ClientRole.APP || active == null) {
+                return callbackFlow {
+                    close()
+                    awaitClose()
+                }
+            }
             return callbackFlow {
-                close()
-                awaitClose()
+                val collector = launch {
+                    combine(active.runtime.views(active.generation), facts) { view, reported ->
+                        HostFrame(
+                            view.generation,
+                            active.holder,
+                            HostPlatformFacts(
+                                view.state.platform.permission,
+                                view.state.platform.transport,
+                                view.state.platform.scanPermission,
+                            ),
+                            view.state,
+                            view.presentation,
+                            reported,
+                        )
+                    }.collect { send(it) }
+                }
+                launch {
+                    active.ended.await()
+                    collector.cancel()
+                    close()
+                }
+                awaitClose { collector.cancel() }
             }
         }
-        return callbackFlow {
-            val collector = launch {
-                combine(active.runtime.views(active.generation), facts) { view, reported ->
-                    HostFrame(
-                        view.generation,
-                        active.holder,
-                        HostPlatformFacts(
-                            view.state.platform.permission,
-                            view.state.platform.transport,
-                            view.state.platform.scanPermission,
-                        ),
-                        view.state,
-                        view.presentation,
-                        reported,
-                    )
-                }.collect { send(it) }
+
+        private fun currentOwner(generation: OwnerGeneration): OwnerCheck {
+            val active = owner.value ?: return OwnerCheck.Rejected(HostRejection.NO_OWNER, "当前没有控制所有者")
+            if (active.generation != generation) return OwnerCheck.Rejected(HostRejection.STALE_GENERATION, "所有者代际已过期")
+            return OwnerCheck.Current(active)
+        }
+
+        private suspend fun dispatch(runtime: SystemEntryRuntime, command: HostCommand): HostCallResult = when (command) {
+            HostCommand.RefreshBondedDevices -> {
+                runtime.refreshBondedDevices()
+                HostCallResult.Operation(OperationResult.Success)
             }
-            launch {
-                active.ended.await()
-                collector.cancel()
-                close()
+
+            HostCommand.StartScan -> HostCallResult.Operation(runtime.startScan())
+
+            HostCommand.StopScan -> {
+                runtime.stopScan()
+                HostCallResult.Operation(OperationResult.Success)
             }
-            awaitClose { collector.cancel() }
+
+            is HostCommand.Connect -> HostCallResult.Operation(runtime.connect(command.deviceId))
+
+            is HostCommand.ConnectFromSystem -> HostCallResult.Operation(runtime.connectFromSystem(command.deviceId))
+
+            is HostCommand.ConnectForAddDevice -> HostCallResult.Operation(runtime.connectForAddDevice(command.deviceId))
+
+            HostCommand.Disconnect -> HostCallResult.Operation(
+                if (runtime.disconnect()) {
+                    OperationResult.Success
+                } else {
+                    OperationResult.Failure(ControlError(ControlErrorCode.FAILED, "无法确认控制连接已关闭"))
+                },
+            )
+
+            is HostCommand.Set -> HostCallResult.Operation(
+                if (command.reference == null) {
+                    runtime.set(command.command)
+                } else {
+                    runtime.set(command.reference, command.command)
+                },
+            )
+
+            is HostCommand.ClaimPrompt -> HostCallResult.Flag(runtime.claimPrompt(command.reference, command.promptId))
         }
     }
 
@@ -310,7 +366,7 @@ class ModuleControlHost(
                     )
                 }
                 held = request.id
-                if (!stop(current)) {
+                if (!lifecycle.stop(current)) {
                     held = null
                     return@withLock ReleaseResult.Refused(HostRejection.RELEASE_FAILED, "无法确认控制连接已关闭", status.value)
                 }
@@ -338,7 +394,7 @@ class ModuleControlHost(
         reloadConfiguration()
         held = requestId
         releaseEpoch.value++
-        publishStatus()
+        lifecycle.publishStatus()
     }
 
     /** A release receipt fences off acquires already in transit on every earlier application lease. */
@@ -356,143 +412,97 @@ class ModuleControlHost(
             return@withLock AcquireResult.Refused(HostRejection.INVALID_REQUEST, "用户尚未解锁或未保存模块控制")
         }
         held = null
-        reconcile()
+        lifecycle.reconcile()
         owner.value?.let { AcquireResult.Acquired(it.generation, it.holder) }
             ?: AcquireResult.Refused(HostRejection.INVALID_REQUEST, "模块控制未能启动")
-    }
-
-    private sealed interface OwnerCheck {
-        class Current(val owner: Owner) : OwnerCheck
-        class Rejected(val rejection: HostRejection, val message: String) : OwnerCheck
-    }
-
-    private fun currentOwner(generation: OwnerGeneration): OwnerCheck {
-        val active = owner.value ?: return OwnerCheck.Rejected(HostRejection.NO_OWNER, "当前没有控制所有者")
-        if (active.generation != generation) return OwnerCheck.Rejected(HostRejection.STALE_GENERATION, "所有者代际已过期")
-        return OwnerCheck.Current(active)
     }
 
     private fun leaseFor(caller: CallerIdentity, leaseId: String): Lease? = leases.value[leaseId]?.takeIf {
         !retired.value && it.caller == caller && authority.roleOf(caller) == it.role
     }
 
-    private suspend fun dispatch(runtime: SystemEntryRuntime, command: HostCommand): HostCallResult = when (command) {
-        HostCommand.RefreshBondedDevices -> {
-            runtime.refreshBondedDevices()
-            HostCallResult.Operation(OperationResult.Success)
-        }
-
-        HostCommand.StartScan -> HostCallResult.Operation(runtime.startScan())
-
-        HostCommand.StopScan -> {
-            runtime.stopScan()
-            HostCallResult.Operation(OperationResult.Success)
-        }
-
-        is HostCommand.Connect -> HostCallResult.Operation(runtime.connect(command.deviceId))
-
-        is HostCommand.ConnectFromSystem -> HostCallResult.Operation(runtime.connectFromSystem(command.deviceId))
-
-        is HostCommand.ConnectForAddDevice -> HostCallResult.Operation(runtime.connectForAddDevice(command.deviceId))
-
-        HostCommand.Disconnect -> HostCallResult.Operation(
-            if (runtime.disconnect()) {
-                OperationResult.Success
-            } else {
-                OperationResult.Failure(ControlError(ControlErrorCode.FAILED, "无法确认控制连接已关闭"))
-            },
-        )
-
-        is HostCommand.Set -> HostCallResult.Operation(
-            if (command.reference == null) {
-                runtime.set(command.command)
-            } else {
-                runtime.set(command.reference, command.command)
-            },
-        )
-
-        is HostCommand.ClaimPrompt -> HostCallResult.Flag(runtime.claimPrompt(command.reference, command.promptId))
-    }
-
-    /** Caller holds [ownership]. */
-    private suspend fun reconcile() {
-        // An owner whose close was refused earlier is closed again before anything else is decided.
-        owner.value?.takeIf { it.releasePending }?.let {
-            if (!stop(it)) {
-                publishStatus()
-                return
+    /** Changes to the active generation run under the host ownership lock. */
+    private inner class OwnerLifecycle {
+        /** Caller holds [ownership]. */
+        suspend fun reconcile() {
+            // An owner whose close was refused earlier is closed again before anything else is decided.
+            owner.value?.takeIf { it.releasePending }?.let {
+                if (!stop(it)) {
+                    publishStatus()
+                    return
+                }
             }
-        }
-        val wanted = !stopped &&
-            configuration.userUnlocked &&
-            configuration.settings.integration.controlWay == ControlWay.MODULE &&
-            held == null
-        val current = owner.value
-        when {
-            wanted && current == null -> activate()
+            val wanted = !stopped &&
+                configuration.userUnlocked &&
+                configuration.settings.integration.controlWay == ControlWay.MODULE &&
+                held == null
+            val current = owner.value
+            when {
+                wanted && current == null -> activate()
 
-            !wanted && current != null -> stop(current)
+                !wanted && current != null -> stop(current)
 
-            current != null -> {
-                current.runtime.updateSettings(configuration.settings.control)
-                current.runtime.updateIntegrationSettings(configuration.settings.integration)
+                current != null -> {
+                    current.runtime.updateSettings(configuration.settings.control)
+                    current.runtime.updateIntegrationSettings(configuration.settings.integration)
+                }
             }
+            publishStatus()
         }
-        publishStatus()
-    }
 
-    /** Caller holds [ownership]. */
-    private fun activate() {
-        sequence += 1
-        val generation = OwnerGeneration(incarnation, sequence)
-        val job = SupervisorJob(hostContext[Job])
-        val scope = CoroutineScope(hostContext + job)
-        val runtime = SystemEntryRuntime(
-            runtimeFactory(scope, configuration.settings.control, platform, SessionIdBase.module(sequence)).also {
-                onOwnerStarted(generation, scope, it)
-            },
-            scope,
-            presentationTiming,
-            configuration.settings.integration,
-        )
-        val holder = OwnerHolder(ControlWay.MODULE, generation, packageName, processName, uid, pid)
-        owner.value = Owner(generation, holder, job, runtime)
-    }
-
-    /**
-     * Stop in-flight commands before releasing. Keep the runtime and its observers alive on a refused close
-     * so the same owner generation can still serve requests and retry its transport handle.
-     */
-    private suspend fun stop(current: Owner): Boolean {
-        current.commands.value.cancelAndJoin()
-        if (!current.runtime.release()) {
-            current.releasePending = true
-            current.commands.value = SupervisorJob(current.job)
-            return false
-        }
-        current.job.cancelAndJoin()
-        lastGeneration = current.generation
-        owner.value = null
-        current.ended.complete(Unit)
-        return true
-    }
-
-    private fun publishStatus() {
-        val current = owner.value
-        mutableStatus.value = if (current != null) {
-            HostStatus.Active(current.generation, current.holder)
-        } else {
-            HostStatus.Inactive(
-                incarnation,
-                lastGeneration,
-                when {
-                    !configuration.userUnlocked -> "用户尚未解锁"
-                    stopped -> "宿主已停止"
-                    held != null -> "已按切换请求释放"
-                    configuration.settings.integration.controlWay != ControlWay.MODULE -> "当前未选择模块控制"
-                    else -> "模块控制尚未启动"
+        /** Caller holds [ownership]. */
+        private fun activate() {
+            sequence += 1
+            val generation = OwnerGeneration(incarnation, sequence)
+            val job = SupervisorJob(hostContext[Job])
+            val scope = CoroutineScope(hostContext + job)
+            val runtime = SystemEntryRuntime(
+                runtimeFactory(scope, configuration.settings.control, platform, SessionIdBase.module(sequence)).also {
+                    onOwnerStarted(generation, scope, it)
                 },
+                scope,
+                presentationTiming,
+                configuration.settings.integration,
             )
+            val holder = OwnerHolder(ControlWay.MODULE, generation, packageName, processName, uid, pid)
+            owner.value = Owner(generation, holder, job, runtime)
+        }
+
+        /**
+         * Stop in-flight commands before releasing. Keep the runtime and its observers alive on a refused close
+         * so the same owner generation can still serve requests and retry its transport handle.
+         */
+        suspend fun stop(current: Owner): Boolean {
+            current.commands.value.cancelAndJoin()
+            if (!current.runtime.release()) {
+                current.releasePending = true
+                current.commands.value = SupervisorJob(current.job)
+                return false
+            }
+            current.job.cancelAndJoin()
+            lastGeneration = current.generation
+            owner.value = null
+            current.ended.complete(Unit)
+            return true
+        }
+
+        fun publishStatus() {
+            val current = owner.value
+            mutableStatus.value = if (current != null) {
+                HostStatus.Active(current.generation, current.holder)
+            } else {
+                HostStatus.Inactive(
+                    incarnation,
+                    lastGeneration,
+                    when {
+                        !configuration.userUnlocked -> "用户尚未解锁"
+                        stopped -> "宿主已停止"
+                        held != null -> "已按切换请求释放"
+                        configuration.settings.integration.controlWay != ControlWay.MODULE -> "当前未选择模块控制"
+                        else -> "模块控制尚未启动"
+                    },
+                )
+            }
         }
     }
 }
