@@ -5,14 +5,13 @@ import io.github.dohex.openrose.androidintegration.HostSettings
 import io.github.dohex.openrose.androidintegration.HostSettingsCodec
 import io.github.dohex.openrose.androidintegration.SerializedPublisher
 import io.github.dohex.openrose.androidintegration.wire.BridgeWire
+import io.github.dohex.openrose.commitEntries
 
 /** Serializes writes and derives the current persisted settings only when the writer is held. */
 internal class ModuleSettingsPublisher(preferences: () -> SharedPreferences?) {
     private val publisher = SerializedPublisher<HostSettings> { settings ->
-        val editor = preferences()?.edit() ?: return@SerializedPublisher false
-        HostSettingsCodec.encode(settings).forEach { (key, value) -> editor.putString(key, value) }
-        editor.putString(BridgeWire.CONFIG_REVISION, System.nanoTime().toString())
-        editor.commit()
+        val prefs = preferences() ?: return@SerializedPublisher false
+        prefs.commitEntries(HostSettingsCodec.encode(settings) + (BridgeWire.CONFIG_REVISION to System.nanoTime().toString()))
     }
 
     fun publish(settings: () -> HostSettings): Boolean = publisher.publish(settings)

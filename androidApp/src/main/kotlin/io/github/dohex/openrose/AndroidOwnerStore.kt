@@ -33,12 +33,5 @@ internal class AndroidOwnerStore(
 
     private fun publishConfig(): Boolean = framework.publishConfig(settingsStore::loadHost)
 
-    private fun write(record: OwnerRecord): Boolean {
-        val editor = preferences().edit()
-        OwnerRecordCodec.encode(record).forEach { (key, value) ->
-            if (value == null) editor.remove(key) else editor.putString(key, value)
-        }
-        // commit(): the choice must be on disk before ownership moves, not eventually.
-        return editor.commit()
-    }
+    private fun write(record: OwnerRecord): Boolean = preferences().commitEntries(OwnerRecordCodec.encode(record))
 }

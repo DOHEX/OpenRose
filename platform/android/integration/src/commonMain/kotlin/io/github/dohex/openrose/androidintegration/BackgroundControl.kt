@@ -101,11 +101,15 @@ sealed interface BackgroundControlStatus {
     data class Blocked(val reason: BackgroundControlBlock) : BackgroundControlStatus
 }
 
+/** The preference is effective only while this application owns ordinary control. */
+val IntegrationState.ordinaryBackgroundRequested: Boolean
+    get() = owner.selected == ControlWay.ORDINARY && settings.backgroundControlEnabled
+
 /** Derived from the saved intent in [control] plus the platform facts; a saved preference alone is never "ready". */
 fun IntegrationState.backgroundControl(control: ControlState): BackgroundControlStatus {
     if (!control.platform.hasBackgroundService()) return BackgroundControlStatus.Unsupported
     // Background control belongs to ordinary control; the saved intent is kept but not in force under another way.
-    if (!settings.backgroundControlEnabled || owner.selected != ControlWay.ORDINARY) return BackgroundControlStatus.Disabled
+    if (!ordinaryBackgroundRequested) return BackgroundControlStatus.Disabled
     if (control.platform.bluetoothPermissionMissing()) {
         return BackgroundControlStatus.Blocked(BackgroundControlBlock.BLUETOOTH_PERMISSION)
     }
@@ -130,7 +134,7 @@ fun IntegrationState.backgroundRecovery(control: ControlState): BackgroundRecove
     if (!control.platform.hasBackgroundService() || band == null) return BackgroundRecovery.Unsupported
     if (!control.platform.userUnlocked) return BackgroundRecovery.WaitingForUnlock
     // Like the background control status: the saved intent is kept but not in force under another control way.
-    if (!settings.backgroundControlEnabled || owner.selected != ControlWay.ORDINARY) return BackgroundRecovery.Disabled
+    if (!ordinaryBackgroundRequested) return BackgroundRecovery.Disabled
     val missing = buildList {
         if (control.platform.bluetoothPermissionMissing()) add(WakePrerequisite.BLUETOOTH_PERMISSION)
         if (wake.association == CompanionAssociation.MISSING) add(WakePrerequisite.COMPANION_ASSOCIATION)
@@ -147,8 +151,7 @@ fun IntegrationState.backgroundRecovery(control: ControlState): BackgroundRecove
  * and the Bluetooth permission decide this; a missing association never blocks the attempt, because the
  * system's refusal is then reported as it is.
  */
-fun IntegrationState.mayStartBackgroundService(control: ControlState): Boolean = owner.selected == ControlWay.ORDINARY &&
+fun IntegrationState.mayStartBackgroundService(control: ControlState): Boolean = ordinaryBackgroundRequested &&
     control.platform.hasBackgroundService() &&
     control.platform.userUnlocked &&
-    settings.backgroundControlEnabled &&
     !control.platform.bluetoothPermissionMissing()

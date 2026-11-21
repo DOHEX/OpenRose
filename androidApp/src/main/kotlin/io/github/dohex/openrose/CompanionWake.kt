@@ -10,6 +10,7 @@ import android.content.Context
 import android.content.IntentSender
 import android.content.pm.PackageManager
 import android.os.Build
+import android.util.Log
 import androidx.annotation.RequiresApi
 import io.github.dohex.openrose.androidintegration.CompanionAssociation
 import io.github.dohex.openrose.androidintegration.PresenceObservation
@@ -69,16 +70,13 @@ internal class CompanionWake(private val context: Context) {
             return
         }
         if (!enabled) {
-            associated.forEach { runCatching { stopObserving(it) } }
+            associated.forEach { association -> companionCall<Unit>({}) { stopObserving(association) } }
             presence = PresenceObservation.NOT_OBSERVING
             return
         }
-        presence = try {
+        presence = companionCall({ PresenceObservation.REFUSED }) {
             associated.forEach(::startObserving)
             PresenceObservation.OBSERVING
-        } catch (refused: RuntimeException) {
-            // Missing association or permission: reported as it is, never retried in a loop.
-            PresenceObservation.REFUSED
         }
     }
 
@@ -86,7 +84,7 @@ internal class CompanionWake(private val context: Context) {
     fun requestAssociation(onChooser: (IntentSender) -> Unit, onFailure: () -> Unit) {
         val manager = manager?.takeIf { supported } ?: return onFailure()
         val request = associationRequest()
-        try {
+        companionCall(onFailure) {
             if (Build.VERSION.SDK_INT >= 33) {
                 manager.associate(
                     request,
@@ -109,9 +107,16 @@ internal class CompanionWake(private val context: Context) {
                     null,
                 )
             }
-        } catch (refused: RuntimeException) {
-            onFailure()
         }
+    }
+
+    // CompanionDeviceManager rethrows Binder and vendor service failures as RuntimeException.
+    @Suppress("TooGenericExceptionCaught")
+    private inline fun <T> companionCall(onUnavailable: () -> T, call: () -> T): T = try {
+        call()
+    } catch (failure: RuntimeException) {
+        Log.w("OpenRose", "Companion device service refused the request", failure)
+        onUnavailable()
     }
 
     private fun associationRequest(): AssociationRequest {
@@ -127,7 +132,7 @@ internal class CompanionWake(private val context: Context) {
     @Suppress("DEPRECATION")
     private fun associations(): List<Association> {
         val manager = manager ?: return emptyList()
-        return try {
+        return companionCall({ emptyList() }) {
             if (Build.VERSION.SDK_INT >= 33) {
                 manager.myAssociations.mapNotNull { info ->
                     info.deviceMacAddress?.toString()?.uppercase()?.let { Association(info.id, it) }
@@ -135,8 +140,6 @@ internal class CompanionWake(private val context: Context) {
             } else {
                 manager.associations.map { Association(null, it.uppercase()) }
             }
-        } catch (unavailable: RuntimeException) {
-            emptyList()
         }
     }
 

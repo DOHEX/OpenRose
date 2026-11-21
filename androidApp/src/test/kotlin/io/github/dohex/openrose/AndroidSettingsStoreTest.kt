@@ -25,6 +25,7 @@ import java.nio.file.Path
 import java.util.Properties
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
@@ -126,6 +127,21 @@ class AndroidSettingsStoreTest {
         assertEquals(null, readHostSettings(prefs))
     }
 
+    @Test
+    fun failedDiskWritesCannotAcknowledgeOwnerChangesOrHostPublication() {
+        val file = Files.createTempFile("openrose-write-refused", ".properties")
+        try {
+            val storage = preferences(file, commitAccepted = false)
+            val owner = AndroidOwnerStore({ storage }, FrameworkLink {})
+            assertFalse(owner.save(OwnerRecord(moduleRelease = PendingModuleRelease("release", null))))
+            assertFalse(ModuleSettingsPublisher { storage }.publish { HostSettings() })
+            assertEquals(OwnerRecord(), owner.load())
+            assertTrue(storage.all.isEmpty())
+        } finally {
+            Files.deleteIfExists(file)
+        }
+    }
+
     private fun TestScope.runtime(file: Path, scope: CoroutineScope = backgroundScope): SwitchingControlRuntime {
         val saved = AndroidSettingsStore { preferences(file) }.load().host
         return SwitchingControlRuntime(
@@ -144,18 +160,18 @@ class AndroidSettingsStoreTest {
     }
 
     /** File-backed substitute for the Android storage API; application codecs and runtimes are real. */
-    private fun preferences(file: Path): SharedPreferences {
+    private fun preferences(file: Path, commitAccepted: Boolean = true): SharedPreferences {
         fun load() = Properties().apply { Files.newInputStream(file).use(::load) }
         return Proxy.newProxyInstance(SharedPreferences::class.java.classLoader, arrayOf(SharedPreferences::class.java)) { _, method, args ->
             when (method.name) {
                 "getAll" -> load().let { values -> values.stringPropertyNames().associateWith(values::getProperty) }
-                "edit" -> editor(file, ::load)
+                "edit" -> editor(file, ::load, commitAccepted)
                 else -> error("Unsupported preference operation: ${method.name}")
             }
         } as SharedPreferences
     }
 
-    private fun editor(file: Path, load: () -> Properties): SharedPreferences.Editor {
+    private fun editor(file: Path, load: () -> Properties, commitAccepted: Boolean): SharedPreferences.Editor {
         val changes = mutableMapOf<String, String?>()
         return Proxy.newProxyInstance(SharedPreferences.Editor::class.java.classLoader, arrayOf(SharedPreferences.Editor::class.java)) { proxy, method, args ->
             when (method.name) {
@@ -170,6 +186,7 @@ class AndroidSettingsStoreTest {
                 }
 
                 "commit", "apply" -> {
+                    if (method.name == "commit" && !commitAccepted) return@newProxyInstance false
                     val values = load()
                     changes.forEach { (key, value) -> if (value == null) values.remove(key) else values.setProperty(key, value) }
                     Files.newOutputStream(file).use { values.store(it, null) }

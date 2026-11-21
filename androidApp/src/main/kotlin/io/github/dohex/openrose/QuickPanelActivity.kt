@@ -71,7 +71,7 @@ class QuickPanelActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         owner.refreshPlatform()
-        owner.startBackgroundControlFromUserEntry()
+        owner.background.startIfEnabled()
     }
 
     private fun openApp(destination: WindowDestination?) {

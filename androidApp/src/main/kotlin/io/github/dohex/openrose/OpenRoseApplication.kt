@@ -8,17 +8,11 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.os.Build
 import android.os.Process
-import android.os.UserManager
-import io.github.dohex.openrose.androidintegration.BackgroundControlBlock
-import io.github.dohex.openrose.androidintegration.BackgroundControlStatus
-import io.github.dohex.openrose.androidintegration.BackgroundServiceFact
 import io.github.dohex.openrose.androidintegration.ControlWay
 import io.github.dohex.openrose.androidintegration.HostSettings
 import io.github.dohex.openrose.androidintegration.IntegrationSettings
 import io.github.dohex.openrose.androidintegration.LocalOwnerIdentity
 import io.github.dohex.openrose.androidintegration.SwitchingControlRuntime
-import io.github.dohex.openrose.androidintegration.backgroundControl
-import io.github.dohex.openrose.androidintegration.mayStartBackgroundService
 import io.github.dohex.openrose.circulation.CirculationClient
 import io.github.dohex.openrose.core.LocalControlRuntime
 import io.github.dohex.openrose.core.OperationResult
@@ -45,13 +39,6 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import java.util.UUID
 
-/** The names of the application's own preference file and its flags, shared by every reader and writer. */
-internal object AppPreferences {
-    const val FILE = "openrose"
-    const val PERMISSION_REQUESTED = "permissionRequested"
-    const val NOTIFICATION_REQUESTED = "notificationRequested"
-}
-
 /**
  * Hosts the application's side of control. Activities, interface styles and [ControlService] only use or
  * observe [runtime], which routes to exactly one owner: the ordinary session this process creates while
@@ -62,7 +49,8 @@ internal object AppPreferences {
 class OpenRoseApplication : Application() {
     private val controlScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val moduleSettingsChanges = Channel<Unit>(Channel.CONFLATED)
-    private val settingsStore = AndroidSettingsStore(::preferences)
+    internal val permissions = AppPreferences(this)
+    private val settingsStore = AndroidSettingsStore(permissions::open)
     private val mutableUiSettings = MutableStateFlow(UiSettings())
     val uiSettings = mutableUiSettings.asStateFlow()
     lateinit var runtime: SwitchingControlRuntime
@@ -77,11 +65,12 @@ class OpenRoseApplication : Application() {
     private val companionWake by lazy { CompanionWake(this) }
     private var systemConnectionRequest: Job? = null
     private var preferencesLoaded = false
-    private var backgroundService: BackgroundServiceFact = BackgroundServiceFact.NotRunning
+    internal lateinit var background: OrdinaryBackgroundControl
+        private set
 
     override fun onCreate() {
         super.onCreate()
-        val unlocked = userUnlocked()
+        val unlocked = permissions.unlocked
         val saved = if (unlocked) settingsStore.load() else AppSettings()
         mutableUiSettings.value = saved.ui
         framework = FrameworkLink {
@@ -90,9 +79,9 @@ class OpenRoseApplication : Application() {
                 moduleSettingsChanges.trySend(Unit)
             }
         }
-        ownerStore = AndroidOwnerStore({ preferences() }, framework)
+        ownerStore = AndroidOwnerStore(permissions::open, framework)
         runtime = SwitchingControlRuntime(
-            initialPlatformState = readPlatformState(permissionRequested(), userUnlocked = unlocked),
+            initialPlatformState = readPlatformState(permissions.bluetoothRequested, userUnlocked = unlocked),
             initialIntegrationPlatform = readIntegrationPlatform(wake = companionWake.facts()),
             initialSettings = saved.host.control,
             initialIntegrationSettings = saved.host.integration,
@@ -117,31 +106,13 @@ class OpenRoseApplication : Application() {
             newId = { UUID.randomUUID().toString() },
             userUnlocked = unlocked,
         )
-        model = RuntimeOpenRoseModel(
-            runtime,
-            object : OpenRoseSettingsStore {
-                override val uiSettings = this@OpenRoseApplication.uiSettings
-
-                override fun updateSettings(settings: UserSettings) {
-                    if (!userUnlocked()) return
-                    runtime.updateSettings(settings)
-                    settingsStore.saveHost(hostSettings())
-                    moduleSettingsChanges.trySend(Unit)
-                }
-
-                override fun updateUiSettings(settings: UiSettings) {
-                    if (!userUnlocked()) return
-                    mutableUiSettings.value = settings
-                    settingsStore.saveUi(settings)
-                }
-            },
-            controlScope,
-        )
+        background = OrdinaryBackgroundControl(this, runtime, companionWake, ::refreshPlatform)
+        model = createModel()
         preferencesLoaded = unlocked
         registerActivityLifecycleCallbacks(VisibleInterfaceHold(runtime, controlScope))
         controlScope.launch {
             moduleSettingsChanges.receiveAsFlow().collectLatest {
-                while (preferencesLoaded && !ordinaryControlSelected() && framework.canPublish()) {
+                while (preferencesLoaded && !background.ordinarySelected && framework.canPublish()) {
                     if (ownerStore.publishSelection()) break
                     delay(3_000)
                 }
@@ -151,8 +122,29 @@ class OpenRoseApplication : Application() {
         refreshPlatform()
         registerPlatformReceiver()
         // Unlock may complete between the initial check and receiver registration.
-        if (unlocked) syncWakeObservation() else loadUnlockedSettings()
+        if (unlocked) background.syncObservation() else loadUnlockedSettings()
     }
+
+    private fun createModel() = RuntimeOpenRoseModel(
+        runtime,
+        object : OpenRoseSettingsStore {
+            override val uiSettings = this@OpenRoseApplication.uiSettings
+
+            override fun updateSettings(settings: UserSettings) {
+                if (!permissions.unlocked) return
+                runtime.updateSettings(settings)
+                settingsStore.saveHost(hostSettings())
+                moduleSettingsChanges.trySend(Unit)
+            }
+
+            override fun updateUiSettings(settings: UiSettings) {
+                if (!permissions.unlocked) return
+                mutableUiSettings.value = settings
+                settingsStore.saveUi(settings)
+            }
+        },
+        controlScope,
+    )
 
     private fun registerPlatformReceiver() {
         val receiver = object : BroadcastReceiver() {
@@ -195,39 +187,19 @@ class OpenRoseApplication : Application() {
     fun selectControlWay(way: ControlWay) {
         controlScope.launch {
             runtime.selectControlWay(way)
-            followSavedControlWay()
+            background.followSavedIntent()
         }
     }
-
-    /**
-     * After a handoff: presence observation is withdrawn when ordinary control is no longer the saved
-     * choice, and the stopped service is started again (a user-initiated action) when it is and background
-     * control is enabled.
-     */
-    private fun followSavedControlWay() {
-        syncWakeObservation()
-        if (ordinaryControlSelected() && runtime.integration.value.settings.backgroundControlEnabled) {
-            startBackgroundControlFromUserEntry()
-        }
-    }
-
-    /**
-     * True while the saved choice is ordinary control, i.e. while this process may host a session. Services
-     * and wake-ups for ordinary background control check this; they never create a session themselves.
-     */
-    fun ordinaryControlSelected(): Boolean = runtime.integration.value.owner.selected == ControlWay.ORDINARY
 
     fun updateIntegrationSettings(settings: IntegrationSettings) {
-        if (!userUnlocked()) return
+        if (!permissions.unlocked) return
         val backgroundIntentChanged = runtime.integration.value.settings.backgroundControlEnabled != settings.backgroundControlEnabled
         // Only the explicit handoff changes the saved control way.
         runtime.updateIntegrationSettings(settings)
-        val effective = runtime.integration.value.settings
         // A stop choice must be on disk before the user can leave the application.
         settingsStore.saveHost(hostSettings(), commit = backgroundIntentChanged)
         moduleSettingsChanges.trySend(Unit)
-        syncWakeObservation()
-        if (effective.backgroundControlEnabled) startBackgroundControlFromUserEntry()
+        background.followSavedIntent()
     }
 
     private fun hostSettings() = HostSettings(runtime.state.value.settings, runtime.integration.value.settings)
@@ -235,12 +207,6 @@ class OpenRoseApplication : Application() {
     fun setBackgroundControlEnabled(enabled: Boolean) {
         updateIntegrationSettings(runtime.integration.value.settings.copy(backgroundControlEnabled = enabled))
     }
-
-    /**
-     * Starts the foreground service for the saved background-control intent from an entry the user is
-     * looking at (toggle, opening the app, a permission result). It is never a retry loop.
-     */
-    fun startBackgroundControlFromUserEntry() = startBackgroundService()
 
     /**
      * Entry of the system-delivered wake-ups (first unlock of a boot, an audio connection while the
@@ -251,86 +217,28 @@ class OpenRoseApplication : Application() {
      */
     fun wakeOrdinaryControl() {
         loadUnlockedSettings()
-        if (!ordinaryControlSelected()) return
-        syncWakeObservation()
-        startBackgroundService()
-    }
-
-    private fun startBackgroundService() {
-        val state = runtime.state.value
-        val integration = runtime.integration.value
-        // mayStartBackgroundService is false unless ordinary control is the saved choice.
-        if (!integration.mayStartBackgroundService(state) ||
-            integration.backgroundControl(state) is BackgroundControlStatus.Running
-        ) {
-            return
-        }
-        updateBackgroundService(BackgroundServiceFact.NotRunning)
-        try {
-            startForegroundService(Intent(this, ControlService::class.java))
-        } catch (denied: SecurityException) {
-            backgroundServiceRejected(BackgroundControlBlock.SERVICE_START_REFUSED)
-        } catch (restricted: IllegalStateException) {
-            backgroundServiceRejected(BackgroundControlBlock.BACKGROUND_START_RESTRICTED)
-        }
-    }
-
-    /**
-     * Presence observation follows the saved intent: observed only while ordinary control is selected,
-     * background control is enabled and the user has unlocked; withdrawn otherwise.
-     */
-    fun syncWakeObservation() {
-        if (!preferencesLoaded) return
-        companionWake.syncObservation(
-            runtime.integration.value.settings.backgroundControlEnabled && ordinaryControlSelected(),
-        )
-        refreshPlatform()
-    }
-
-    fun requestCompanionAssociation(
-        onChooser: (android.content.IntentSender) -> Unit,
-        onFailure: () -> Unit,
-    ) = companionWake.requestAssociation(onChooser, onFailure)
-
-    fun backgroundServiceRunning() = updateBackgroundService(BackgroundServiceFact.Running)
-    fun backgroundServiceRejected(reason: BackgroundControlBlock) = updateBackgroundService(BackgroundServiceFact.StartRejected(reason))
-
-    /** A rejected start keeps its reason; only a service that had been running becomes "not running". */
-    fun backgroundServiceStopped() {
-        if (backgroundService == BackgroundServiceFact.Running) updateBackgroundService(BackgroundServiceFact.NotRunning)
-    }
-
-    private fun updateBackgroundService(fact: BackgroundServiceFact) {
-        backgroundService = fact
-        refreshPlatform()
+        if (!background.ordinarySelected) return
+        background.followSavedIntent()
     }
 
     fun refreshPlatform() {
-        runtime.updatePlatformState(readPlatformState(permissionRequested(), preferencesLoaded))
+        runtime.updatePlatformState(readPlatformState(permissions.bluetoothRequested, preferencesLoaded))
         runtime.updateIntegrationPlatform(
-            readIntegrationPlatform(backgroundService, companionWake.facts()).copy(
+            readIntegrationPlatform(background.service, companionWake.facts()).copy(
                 module = framework.availability(),
                 bridge = framework.diagnostics(),
             ),
         )
     }
 
-    fun markPermissionRequested() {
-        if (!userUnlocked()) return
-        preferences().edit().putBoolean(AppPreferences.PERMISSION_REQUESTED, true).apply()
-    }
-
-    private fun permissionRequested() = userUnlocked() && preferences().getBoolean(AppPreferences.PERMISSION_REQUESTED, false)
     private fun loadUnlockedSettings() {
-        if (preferencesLoaded || !userUnlocked()) return
+        if (preferencesLoaded || !permissions.unlocked) return
         preferencesLoaded = true
         val saved = settingsStore.load()
         runtime.onUserUnlocked(saved.host)
         moduleSettingsChanges.trySend(Unit)
         mutableUiSettings.value = saved.ui
         refreshPlatform()
-        syncWakeObservation()
+        background.syncObservation()
     }
-    private fun userUnlocked() = getSystemService(UserManager::class.java).isUserUnlocked
-    private fun preferences() = getSharedPreferences(AppPreferences.FILE, MODE_PRIVATE)
 }

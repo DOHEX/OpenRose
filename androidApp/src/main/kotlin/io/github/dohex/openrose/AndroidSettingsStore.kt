@@ -1,6 +1,8 @@
 package io.github.dohex.openrose
 
+import android.annotation.SuppressLint
 import android.content.SharedPreferences
+import androidx.core.content.edit
 import io.github.dohex.openrose.androidintegration.HostSettings
 import io.github.dohex.openrose.androidintegration.HostSettingsCodec
 import io.github.dohex.openrose.ui.UiSettings
@@ -29,10 +31,15 @@ internal class AndroidSettingsStore(private val preferences: () -> SharedPrefere
     private fun values(): Map<String, String> = HostSettingsCodec.stringEntries(preferences().all)
 
     private fun save(values: Map<String, String>, commit: Boolean): Boolean {
-        val editor = preferences().edit()
-        values.forEach { (key, value) -> editor.putString(key, value) }
-        if (commit) return editor.commit()
-        editor.apply()
+        val prefs = preferences()
+        if (commit) return prefs.commitEntries(values)
+        prefs.edit { values.forEach { (key, value) -> putString(key, value) } }
         return true
     }
 }
+
+/** Ownership handoff and host publication require the acknowledgement from SharedPreferences.commit(). */
+@SuppressLint("UseKtx") // The KTX edit(commit = true) overload discards the Boolean acknowledgement.
+internal fun SharedPreferences.commitEntries(values: Map<String, String?>): Boolean = edit().apply {
+    values.forEach { (key, value) -> if (value == null) remove(key) else putString(key, value) }
+}.commit()

@@ -10,9 +10,8 @@ import android.content.pm.ServiceInfo
 import android.graphics.drawable.Icon
 import android.os.Build
 import android.os.IBinder
-import io.github.dohex.openrose.androidintegration.BackgroundControlBlock
-import io.github.dohex.openrose.androidintegration.ControlWay
 import io.github.dohex.openrose.androidintegration.OrdinarySessionHold
+import io.github.dohex.openrose.androidintegration.ordinaryBackgroundRequested
 import io.github.dohex.openrose.core.ConnectionState
 import io.github.dohex.openrose.core.ControlState
 import io.github.dohex.openrose.core.TransportAvailability
@@ -51,20 +50,18 @@ class ControlService : Service() {
         }
         // Every start request must reach startForeground, including repeated ones.
         if (!enterForeground(notification(app.runtime.state.value))) return START_NOT_STICKY
-        if (!app.ordinaryControlSelected()) {
+        if (!app.runtime.integration.value.ordinaryBackgroundRequested) {
             leaveForeground()
             return START_NOT_STICKY
         }
-        app.backgroundServiceRunning()
+        app.background.running()
         if (sessionHold == null) sessionHold = app.runtime.holdOrdinarySession()
         if (observer == null) {
             observer = scope.launch {
                 // Background control exists only while ordinary control is the saved choice; module control
                 // (or none) ends it without touching the saved intent.
                 combine(app.runtime.state, app.runtime.integration) { state, integration ->
-                    val backgroundEnabled = integration.settings.backgroundControlEnabled &&
-                        integration.owner.selected == ControlWay.ORDINARY
-                    backgroundEnabled to notificationText(state)
+                    integration.ordinaryBackgroundRequested to notificationText(state)
                 }
                     .distinctUntilChanged()
                     .collect { (enabled, _) ->
@@ -82,25 +79,17 @@ class ControlService : Service() {
         return START_NOT_STICKY
     }
 
-    private fun enterForeground(notification: Notification): Boolean = try {
-        ensureChannel()
-        if (Build.VERSION.SDK_INT >= 29) {
-            startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)
-        } else {
-            startForeground(NOTIFICATION_ID, notification)
+    private fun enterForeground(notification: Notification): Boolean {
+        val started = app.background.tryStart {
+            ensureChannel()
+            if (Build.VERSION.SDK_INT >= 29) {
+                startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)
+            } else {
+                startForeground(NOTIFICATION_ID, notification)
+            }
         }
-        true
-    } catch (denied: SecurityException) {
-        reject(BackgroundControlBlock.SERVICE_START_REFUSED)
-    } catch (restricted: IllegalStateException) {
-        // ForegroundServiceStartNotAllowedException (API 31+) extends IllegalStateException.
-        reject(BackgroundControlBlock.BACKGROUND_START_RESTRICTED)
-    }
-
-    private fun reject(reason: BackgroundControlBlock): Boolean {
-        app.backgroundServiceRejected(reason)
-        stopSelf()
-        return false
+        if (!started) stopSelf()
+        return started
     }
 
     private fun leaveForeground() {
@@ -119,7 +108,7 @@ class ControlService : Service() {
     override fun onDestroy() {
         scope.cancel()
         releaseSession()
-        app.backgroundServiceStopped()
+        app.background.stopped()
         super.onDestroy()
     }
 

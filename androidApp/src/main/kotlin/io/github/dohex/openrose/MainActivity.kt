@@ -38,14 +38,14 @@ class MainActivity : ComponentActivity() {
     private val scopeRestarter = IntegrationScopeRestarter(runRoot = ::runRootShell)
     private val permissionRequest = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
         owner.refreshPlatform()
-        owner.startBackgroundControlFromUserEntry()
+        owner.background.startIfEnabled()
     }
     private val notificationRequest = registerForActivityResult(ActivityResultContracts.RequestPermission()) {
         owner.refreshPlatform()
     }
     private val associationChooser = registerForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) {
         // Whether the user confirmed or cancelled, the platform facts are re-read from the system.
-        owner.syncWakeObservation()
+        owner.background.syncObservation()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -123,7 +123,7 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         owner.refreshPlatform()
-        owner.startBackgroundControlFromUserEntry()
+        owner.background.startIfEnabled()
     }
 
     override fun onStop() {
@@ -134,27 +134,28 @@ class MainActivity : ComponentActivity() {
 
     /** The system shows its own chooser; the association is the user's explicit consent, never created silently. */
     private fun requestAssociation() {
-        owner.requestCompanionAssociation(
+        owner.background.companion.requestAssociation(
             onChooser = { associationChooser.launch(IntentSenderRequest.Builder(it).build()) },
-            onFailure = { owner.syncWakeObservation() },
+            onFailure = { owner.background.syncObservation() },
         )
     }
 
     /** Autostart and battery limits cannot be queried, so the user is sent to the app's system page. */
     private fun openAppSettings() {
-        startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName")))
+        startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", packageName, null)))
     }
 
+    private fun notificationPermissionMissing(): Boolean = Build.VERSION.SDK_INT >= 33 &&
+        checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+
     private fun requestNotificationPermission() {
-        val prefs = getSharedPreferences(AppPreferences.FILE, MODE_PRIVATE)
-        val askable = Build.VERSION.SDK_INT >= 33 &&
-            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED &&
+        val askable = notificationPermissionMissing() &&
             (
-                !prefs.getBoolean(AppPreferences.NOTIFICATION_REQUESTED, false) ||
+                !owner.permissions.notificationRequested ||
                     shouldShowRequestPermissionRationale(Manifest.permission.POST_NOTIFICATIONS)
                 )
         if (askable) {
-            prefs.edit().putBoolean(AppPreferences.NOTIFICATION_REQUESTED, true).apply()
+            owner.permissions.notificationRequested = true
             notificationRequest.launch(Manifest.permission.POST_NOTIFICATIONS)
         } else {
             startActivity(
@@ -167,25 +168,21 @@ class MainActivity : ComponentActivity() {
     private fun onIntegrationSettingsChanged(settings: IntegrationSettings) {
         val enabling = settings.backgroundControlEnabled && !owner.runtime.integration.value.settings.backgroundControlEnabled
         owner.updateIntegrationSettings(settings)
-        val prefs = getSharedPreferences(AppPreferences.FILE, MODE_PRIVATE)
-        if (enabling && Build.VERSION.SDK_INT >= 33 &&
-            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED &&
-            !prefs.getBoolean(AppPreferences.NOTIFICATION_REQUESTED, false)
-        ) {
+        if (enabling && notificationPermissionMissing() && !owner.permissions.notificationRequested) {
             requestNotificationPermission()
         }
     }
 
     private fun requestBluetoothPermission() {
-        val requested = getSharedPreferences(AppPreferences.FILE, MODE_PRIVATE).getBoolean(AppPreferences.PERMISSION_REQUESTED, false)
+        val requested = owner.permissions.bluetoothRequested
         val permanentlyDenied = requested && bluetoothPermissions().any {
             checkSelfPermission(it) != android.content.pm.PackageManager.PERMISSION_GRANTED &&
                 !shouldShowRequestPermissionRationale(it)
         }
         if (permanentlyDenied) {
-            startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName")))
+            openAppSettings()
         } else {
-            owner.markPermissionRequested()
+            owner.permissions.bluetoothRequested = true
             permissionRequest.launch(bluetoothPermissions())
         }
     }
