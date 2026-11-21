@@ -58,6 +58,20 @@ class BluezGattDriverTest {
     }
 
     @Test
+    fun busyAudioConnectStillAllowsTheResolvedGattServiceToBeUsed() = runTest {
+        val bus = FakeBluezBus().apply {
+            snapshot = gattObjects()
+            connectFailure = org.bluez.Error.InProgress("In Progress")
+        }
+        val driver = BluezGattDriver(bus, DEVICE_PATH)
+        driver.connect()
+        val characteristic = driver.discoverServices().single().characteristics.single()
+        driver.configureSubscription(characteristic, GattSubscription.NOTIFY)
+        assertEquals(listOf("start:$CHAR_PATH"), bus.notifications)
+        driver.close()
+    }
+
+    @Test
     fun servicesChangedInvalidatesDiscoveredTable() = runTest {
         val bus = FakeBluezBus().also { it.snapshot = gattObjects() }
         val driver = BluezGattDriver(bus, DEVICE_PATH)
