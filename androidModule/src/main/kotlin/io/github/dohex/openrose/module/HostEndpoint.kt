@@ -548,6 +548,9 @@ internal class HostEndpoint(
         } catch (failure: Exception) {
             mapOf("error" to (failure.localizedMessage ?: "互联操作失败"))
         }
+        if ((host.status.value as? HostStatus.Active)?.generation != owner.generation) {
+            return BridgeBundles.response(BridgeWire.STATUS_UNAVAILABLE, "所有者代际已过期")
+        }
         return BridgeBundles.response(BridgeWire.STATUS_OK).apply {
             putBundle(BridgeWire.PAYLOAD, Bundle().apply { response.forEach { (key, value) -> putString(key, value) } })
         }
