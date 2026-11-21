@@ -7,6 +7,8 @@ dependencies {
     implementation(projects.sharedUI)
     implementation(libs.zxing.core)
     implementation(projects.transportBluez)
+    implementation(projects.circulation)
+    implementation(libs.jmdns)
     implementation(compose.desktop.currentOs)
     implementation(libs.nucleus.application)
     implementation(libs.nucleus.tao)
