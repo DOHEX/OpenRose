@@ -14,7 +14,7 @@ import io.github.dohex.openrose.core.protocol.ModelProfile
 import kotlinx.coroutines.runBlocking
 import java.util.UUID
 
-/** Read by a paired peer. Only an i5 with both current system audio and a ready control session is advertised. */
+/** A paired peer can adjust an i5 once this audio source has confirmed its noise mode. */
 class HeadsetEndpoint(private val control: ControlRuntime) {
     private val incarnation = UUID.randomUUID().toString()
 
@@ -25,12 +25,8 @@ class HeadsetEndpoint(private val control: ControlRuntime) {
     }
 
     private fun heldSession(state: ControlState): SessionReference? {
-        val device = state.device ?: return null
-        if (device.profile != ModelProfile.I5_ZT) return null
-        if ((state.connection as? ConnectionState.Connected)?.phase != ConnectionPhase.READY) return null
-        val audio = state.audioDeviceId?.value ?: return null
-        val identities = listOfNotNull(device.deviceId.value, device.classicAddress, state.connectionTarget?.classicAddress)
-        return state.readySession?.takeIf { audio in identities }
+        if (state.device?.profile != ModelProfile.I5_ZT || !state.deviceHasSystemAudio) return null
+        return state.noiseModeSession
     }
 
     private fun noise(message: Map<String, String>): Map<String, String> {
@@ -66,7 +62,8 @@ class HeadsetEndpoint(private val control: ControlRuntime) {
         val device = requireNotNull(state.device)
         fun confirmed(field: DeviceField) = (device.fields[field] as? FieldReading.Known)?.value
         return buildMap {
-            put("status", "ready")
+            val ready = (state.connection as? ConnectionState.Connected)?.phase == ConnectionPhase.READY
+            put("status", if (ready) "ready" else "initializing")
             put("device", device.deviceId.value)
             put("deviceName", device.profile.displayName)
             put("session", token(session))

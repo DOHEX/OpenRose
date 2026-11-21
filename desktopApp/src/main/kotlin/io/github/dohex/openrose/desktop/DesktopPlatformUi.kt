@@ -48,6 +48,9 @@ class DesktopPlatformUi(
         circulation?.let { CirculationRow(it, state, selection, "接到这台电脑") }
     }
 
+    override val circulationPairingContent: (@Composable () -> Unit)?
+        @Composable get() = circulation?.let { client -> { CirculationSettings(client, showQr = { PairingQr(it) }) } }
+
     @Composable
     override fun StatusSections(state: ControlState) {
         val availability by tray.collectAsState()
@@ -67,7 +70,6 @@ class DesktopPlatformUi(
         val settings by desktopSettings.collectAsState()
         val availability by tray.collectAsState()
         val login by loginLaunch.state.collectAsState()
-        circulation?.let { CirculationSettings(it, showQr = { text -> PairingQr(text) }) }
         AppGroup(title = "后台控制") {
             AppSwitchRow(
                 title = "后台控制",

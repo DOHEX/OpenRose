@@ -28,7 +28,7 @@ class AndroidPlatformUi(
     private val onOpenAppSettings: () -> Unit,
     private val onRestartScope: suspend (List<String>, (ScopeRestartUpdate) -> Unit) -> List<ScopeRestartResult>,
     private val restartScope: CoroutineScope,
-    private val circulationSettings: @Composable () -> Unit = {},
+    private val circulationSettings: (@Composable () -> Unit)? = null,
     private val circulation: CirculationClient? = null,
 ) : PlatformUi {
     override val platformName: String = "Android"
@@ -40,6 +40,9 @@ class AndroidPlatformUi(
     private var restartTargets by mutableStateOf(emptyList<String>())
     private var restartResults by mutableStateOf<List<ScopeRestartResult>?>(null)
     private var restartPhase by mutableStateOf<ScopeRestartPhase?>(null)
+
+    override val circulationPairingContent: (@Composable () -> Unit)?
+        @Composable get() = circulationSettings.takeIf { integration.collectAsState().value.owner.selected == ControlWay.MODULE }
 
     override val dynamicColor: Boolean
         @Composable get() {
@@ -115,7 +118,6 @@ class AndroidPlatformUi(
         val settings = integration.settings
         if (position == PlatformSettingsPosition.BEFORE_CONNECTION) {
             ControlWayGroup(integration, onSelectControlWay)
-            if (integration.owner.selected == ControlWay.MODULE) circulationSettings()
             return
         }
         var systemPreferenceFeedback by remember { mutableStateOf<String?>(null) }

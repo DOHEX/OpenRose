@@ -167,16 +167,13 @@ internal class ConnectionTargeting(
             candidate = candidate,
             cancelWithCaller = cancelWithCaller,
             isSuperseded = { isRequestSuperseded(requestEpoch, isAudioDriven, deviceId) },
-            onStarted = { audioDrivenSessionDeviceId = audioSessionTarget(deviceId, isAudioDriven) },
+            onStarted = {
+                audioDrivenSessionDeviceId = deviceId.takeIf { isAudioDriven || state.value.audioDeviceId == it }
+            },
             onAttemptFailed = {
                 if (audioDrivenSessionDeviceId == deviceId) audioDrivenSessionDeviceId = null
             },
         )
-    }
-
-    private fun audioSessionTarget(deviceId: DeviceId, isAudioDriven: Boolean): DeviceId? {
-        val current = state.value
-        return deviceId.takeIf { isAudioDriven || (current.platform.hostPlatform.isDesktop && current.audioDeviceId == it) }
     }
 
     suspend fun disconnect(): Boolean {

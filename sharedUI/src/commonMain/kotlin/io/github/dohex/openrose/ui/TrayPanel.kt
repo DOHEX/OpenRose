@@ -49,7 +49,7 @@ data class TraySummary(
     val title: String,
     /** Battery readings in model order. Desktop trays explicitly mark missing values. */
     val battery: String?,
-    /** Empty unless connected and the model has 降噪模式; ordered and labelled like the main window. */
+    /** Modes offered by the current control session, ordered and labelled like the main window. */
     val noiseModes: List<TrayNoiseMode>,
     /** The primary device to reconnect, only when neither connected nor connecting and the transport is usable. */
     val reconnectTarget: DeviceId?,
@@ -58,6 +58,7 @@ data class TraySummary(
     val addDevice: Boolean,
     /** Reason or guidance to display below the primary device while disconnected. */
     val connectionHint: String?,
+    val noiseModeFeedback: String? = null,
 )
 
 fun traySummary(state: ControlState, selection: PrimaryDeviceSelection): TraySummary {
@@ -97,7 +98,8 @@ fun traySummary(state: ControlState, selection: PrimaryDeviceSelection): TraySum
         }.takeIf { it.isNotEmpty() }?.joinToString(" · ")
     }
 
-    val noiseModes = ready?.let { device ->
+    val noiseDevice = state.activeDevice()?.takeIf(state::canControlNoiseMode)
+    val noiseModes = noiseDevice?.let { device ->
         val noise = device.capabilities.noiseControl ?: return@let emptyList<TrayNoiseMode>()
         val confirmed = (device.knownValue(DeviceField.NOISE_MODE) as? FieldValue.Text)?.value
         val enabled = !state.hasPendingSetting(device) &&
@@ -112,6 +114,7 @@ fun traySummary(state: ControlState, selection: PrimaryDeviceSelection): TraySum
         title = title,
         battery = battery,
         noiseModes = noiseModes,
+        noiseModeFeedback = noiseDevice?.let { state.noiseModeFeedback(it) },
         reconnectTarget = if (ready == null && !connecting && blockReason == null) primary?.deviceId else null,
         reconnectLabel = if (audioConnected) "重试耳机控制" else "重新连接",
         addDevice = state.bondedRoseDevices().isEmpty() && state.connectionTarget == null,
@@ -209,16 +212,24 @@ private fun TrayPanelContent(
     remoteHeadsets: List<RemoteHeadset>?,
 ) {
     val summary = traySummary(state, selection)
-    val device = state.activeDevice()?.takeIf { summary.connected }
+    val device = state.activeDevice()
 
     val peers = remoteHeadsets ?: circulation?.let { rememberRemoteHeadsets(it) }.orEmpty()
     peers.forEach { RemoteHeadsetCard(it) }
-    if (device != null || peers.none { it.reading["status"] == "ready" } || state.audioDeviceId != null) {
+    if (summary.connected || peers.none { it.reading["status"] in setOf("ready", "initializing") } || state.audioDeviceId != null) {
         TrayStatusCard(state, summary)
     }
 
-    if (device != null && device.capabilities.noiseControl != null) {
+    if (device != null && state.canControlNoiseMode(device) && device.capabilities.noiseControl != null) {
         NoiseControlCard(state, device, showLevelControls = false, onSet = model.settingsFor(device.sessionId))
+        if (summary.noiseModeFeedback != null && !state.hasPendingSetting(device)) {
+            AppText(
+                summary.noiseModeFeedback,
+                Modifier.padding(horizontal = 24.dp),
+                role = AppTextRole.Summary,
+                color = appColor(AppColorRole.Error),
+            )
+        }
     }
 
     circulation?.let { CirculationRow(it, state, selection, "接到这台电脑", showOutput = true) }

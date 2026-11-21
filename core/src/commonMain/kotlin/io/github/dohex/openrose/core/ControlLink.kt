@@ -3,6 +3,7 @@ package io.github.dohex.openrose.core
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.FieldReading
 import io.github.dohex.openrose.core.protocol.FieldValue
+import io.github.dohex.openrose.core.protocol.ModelProfile
 import io.github.dohex.openrose.core.protocol.ProtocolCodec
 import io.github.dohex.openrose.core.protocol.createProtocolCodec
 import io.github.dohex.openrose.core.transport.AudioProfileEvidence
@@ -43,6 +44,9 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.TimeMark
+import kotlin.time.TimeSource
 
 /** Owns connection attempts, including every native link opened during initialization recovery. */
 internal class ControlLink(
@@ -52,6 +56,7 @@ internal class ControlLink(
     private val timing: SessionTiming,
     private val settings: SettingQueue,
     sessionIdBase: Long,
+    private val timeSource: TimeSource,
 ) {
     internal val lifecycle = Mutex()
     private var generation = sessionIdBase
@@ -69,7 +74,8 @@ internal class ControlLink(
         lateinit var progress: MutableStateFlow<ReadProgress>
         val linkEpoch = MutableStateFlow(0L)
         var initializationQueryIndex: Int? = null
-        val settings = SettingQueue.Pending()
+        var settings = SettingQueue.Pending()
+        var nextWriteAt: TimeMark? = null
         var hasWritten = false
         var recoveryUsed = false
         var ready = false
@@ -156,18 +162,21 @@ internal class ControlLink(
         if (ended) throw LinkEnded()
     }
 
-    internal suspend fun pace(attempt: Attempt) {
-        if (attempt.hasWritten) {
-            delay(timing.writeIntervalMillis ?: requireNotNull(attempt.candidate.profile).spec.writeIntervalMillis)
-        }
-        attempt.hasWritten = true
-    }
-
-    internal suspend fun writePaced(attempt: Attempt, link: ControlConnection, bytes: ByteArray) {
+    /** Returns the notification revisions from immediately before the write, for fresh setting readbacks. */
+    internal suspend fun writePaced(attempt: Attempt, link: ControlConnection, bytes: ByteArray): ReadProgress {
         check(bytes.size <= link.maxWriteSize) { "完整协议报文超出传输写入容量" }
-        pace(attempt)
+        val interval = (timing.writeIntervalMillis ?: requireNotNull(attempt.candidate.profile).spec.writeIntervalMillis).milliseconds
+        if (attempt.hasWritten) delay(attempt.nextWriteAt?.let { -it.elapsedNow() } ?: interval)
         ensureActive(attempt)
+        val baseline = attempt.progress.value
+        attempt.hasWritten = true
+        attempt.nextWriteAt = null
         withTimeout(timing.queryTimeoutMillis) { link.write(bytes.copyOf()) }
+        val current = state.value
+        if (attempt.candidate.profile == ModelProfile.I5_ZT && current.platform.hostPlatform.isDesktop && current.deviceHasSystemAudio) {
+            attempt.nextWriteAt = timeSource.markNow() + interval
+        }
+        return baseline
     }
 
     private suspend fun openAndRead(attempt: Attempt): OperationResult {
@@ -242,6 +251,7 @@ internal class ControlLink(
         attempt.codec = createProtocolCodec(requireNotNull(attempt.candidate.profile))
         attempt.progress = MutableStateFlow(ReadProgress())
         attempt.hasWritten = false
+        attempt.nextWriteAt = null
         attempt.initializationQueryIndex = null
         attempt.connection = null
         attempt.observer = null
@@ -362,6 +372,9 @@ internal class ControlLink(
         for ((index, query) in queries.withIndex()) {
             attempt.initializationQueryIndex = index
             throwProgressFailure(progress)
+            // A mode change queued during the inter-write gap gets this slot before the next initialization query.
+            attempt.nextWriteAt?.let { delay(-it.elapsedNow()) }
+            settings.runNextDuringInitialization(this, attempt)
             delay(query.delayBeforeMillis)
             throwProgressFailure(progress)
             writeInitialQuery(attempt, selection, opened, query.bytes, index)
@@ -486,6 +499,8 @@ internal class ControlLink(
             if (active !== attempt || attempt.linkEpoch.value != failedEpoch) throw CancellationException("Stale recovery")
             // Invalidate callbacks before cancellation so an old finally cannot clear the new link.
             attempt.linkEpoch.value += 1
+            settings.end(attempt)
+            attempt.settings = SettingQueue.Pending()
             val oldConnection = attempt.connection
             val oldObserver = attempt.observer
             attempt.connection = null
@@ -521,6 +536,7 @@ internal class ControlLink(
     private suspend fun closeAttemptLink(attempt: Attempt) = withContext(NonCancellable) {
         val (oldConnection, oldObserver) = lifecycle.withLock {
             attempt.linkEpoch.value += 1
+            settings.end(attempt)
             val oldConnection = attempt.connection
             val oldObserver = attempt.observer
             attempt.connection = null

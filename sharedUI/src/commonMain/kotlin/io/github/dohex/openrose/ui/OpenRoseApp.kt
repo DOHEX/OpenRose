@@ -37,6 +37,7 @@ internal enum class AppPage(val title: String, val icon: RoseIcon) {
     DETAILS("设备详情", RoseIcon.INFO),
     DIAGNOSTICS("诊断与记录", RoseIcon.LOG),
     PERSONALIZATION("个性化", RoseIcon.PALETTE),
+    CIRCULATION_PAIRING("流转配对", RoseIcon.LINK),
     ABOUT("关于", RoseIcon.INFO),
 }
 
@@ -203,10 +204,20 @@ fun OpenRoseApp(
                         model = model,
                         platformUi = platformUi,
                         onPersonalization = { navigate(AppPage.PERSONALIZATION) },
+                        onCirculationPairing = { navigate(AppPage.CIRCULATION_PAIRING) },
                         onAbout = { navigate(AppPage.ABOUT) },
                     )
 
                     AppPage.PERSONALIZATION -> PersonalizationPage(model, platformUi, wide = wide)
+
+                    AppPage.CIRCULATION_PAIRING -> {
+                        val content = platformUi.circulationPairingContent
+                        if (content != null) {
+                            content()
+                        } else {
+                            LaunchedEffect(Unit) { if (latestRoute == Route.CirculationPairing) back() }
+                        }
+                    }
 
                     AppPage.ABOUT -> AboutPage()
 
@@ -381,6 +392,9 @@ fun OpenRoseApp(
                     }
                     entry<Route.Personalization>(swipeDismiss = NavSwipeDirection.LeftToRight) {
                         renderShell(AppPage.PERSONALIZATION)
+                    }
+                    entry<Route.CirculationPairing>(swipeDismiss = NavSwipeDirection.LeftToRight) {
+                        renderShell(AppPage.CIRCULATION_PAIRING)
                     }
                     entry<Route.About>(swipeDismiss = NavSwipeDirection.LeftToRight) {
                         renderShell(AppPage.ABOUT)

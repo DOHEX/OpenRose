@@ -7,6 +7,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.unit.dp
 import io.github.dohex.openrose.core.ControlState
+import io.github.dohex.openrose.core.DeviceSetting
 import io.github.dohex.openrose.core.DeviceState
 import io.github.dohex.openrose.core.SettingOperation
 import io.github.dohex.openrose.core.SettingStage
@@ -64,6 +65,12 @@ internal fun SettingFeedback(
             }
         }
     }
+}
+
+internal fun ControlState.noiseModeFeedback(device: DeviceState): String? {
+    val last = settingOperations.lastOrNull { it.sessionId == device.sessionId } ?: return null
+    if (last.setting != DeviceSetting.NOISE_MODE || !last.needsFeedback(showPending = true)) return null
+    return last.error?.message ?: last.stage.feedbackMessage()
 }
 
 /** Failures always show; an operation still in progress shows only where the page has no progress of its own. */

@@ -29,7 +29,9 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
@@ -69,6 +71,7 @@ internal class HeadsetTransport(
 ) : ControlTransport {
     val audioDevice = MutableSharedFlow<DeviceId?>(replay = 1, extraBufferCapacity = 8)
     val links = mutableListOf<HeadsetConnection>()
+    var autoReplyOnOpen = true
 
     /** Closing a real link takes time; the owner is not released before it has actually finished. */
     var closeDelayMillis = 0L
@@ -82,7 +85,10 @@ internal class HeadsetTransport(
 
     override suspend fun connect(deviceId: DeviceId, endpoint: TransportEndpoint, onPhase: (ConnectionPhase) -> Unit): ControlConnection {
         headset.opened(owner)
-        return HeadsetConnection(owner, headset, profile, { closeDelayMillis }, { closeFails }).also(links::add)
+        return HeadsetConnection(owner, headset, profile, { closeDelayMillis }, { closeFails }).also {
+            it.initializing = autoReplyOnOpen
+            links.add(it)
+        }
     }
 }
 
@@ -96,7 +102,8 @@ internal class HeadsetConnection(
     override val maxWriteSize = 20
     private val incoming = Channel<ByteArray>(Channel.UNLIMITED)
     override val notifications = incoming.receiveAsFlow()
-    val writes = mutableListOf<String>()
+    private val sent = MutableStateFlow(emptyList<String>())
+    val writes: List<String> get() = sent.value
     var initializing = true
     var closed = false
 
@@ -104,7 +111,7 @@ internal class HeadsetConnection(
 
     override suspend fun write(bytes: ByteArray) {
         val hex = bytes.hex()
-        writes += hex
+        sent.value += hex
         if (!initializing) return
         initializationReplies(profile, hex).forEach { incoming.send(it.bytes()) }
     }
@@ -117,6 +124,11 @@ internal class HeadsetConnection(
         initializing = false
         incoming.close()
         headset.closed(owner)
+    }
+
+    suspend fun replyToWrite(frame: String, reply: String) {
+        sent.first { it.lastOrNull() == frame }
+        deviceReply(reply)
     }
 
     suspend fun deviceReply(hex: String) = incoming.send(hex.bytes())
@@ -483,7 +495,7 @@ internal class OwnerRig(
     fun settle() = test.runCurrent()
 }
 
-private val i5Replies = mapOf(
+internal val i5Replies = mapOf(
     "0101" to "09ff00000101011100000164620000ffe2",
     "0602" to "09ff00000106020e000000010020",
     "0201" to "09ff00000102010b000118",

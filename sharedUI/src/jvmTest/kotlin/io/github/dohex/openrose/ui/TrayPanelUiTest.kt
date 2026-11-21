@@ -8,6 +8,7 @@ import io.github.dohex.openrose.core.ConnectionState
 import io.github.dohex.openrose.core.ControlState
 import io.github.dohex.openrose.core.DeviceCandidate
 import io.github.dohex.openrose.core.DeviceSetting
+import io.github.dohex.openrose.core.DeviceState
 import io.github.dohex.openrose.core.HostPlatform
 import io.github.dohex.openrose.core.SettingOperation
 import io.github.dohex.openrose.core.SettingStage
@@ -373,6 +374,59 @@ class TrayPanelUiTest {
     }
 
     @Test
+    fun desktopTrayShowsTheConfirmedModeAndWriteFeedbackDuringInitialization() {
+        val state = initializingDesktopI5()
+        val summary = traySummary(state, PrimaryDeviceSelection())
+        assertFalse(summary.connected)
+        assertTrue(summary.title.contains("正在恢复控制"))
+        assertEquals("anc", summary.noiseModes.single { it.selected }.mode)
+        assertTrue(summary.noiseModes.all { it.enabled })
+        val pending = SettingOperation(
+            id = 1L,
+            sessionId = requireNotNull(state.device).sessionId,
+            setting = DeviceSetting.NOISE_MODE,
+            requestedValue = FieldValue.Text("transparency"),
+            stage = SettingStage.WRITTEN,
+        )
+        val expected = listOf<Pair<DeviceSetting, FieldValue>>(DeviceSetting.NOISE_MODE to FieldValue.Text("transparency"))
+        for (style in InterfaceStyle.entries) {
+            withTrayPanel(state, style) { panel ->
+                panel.render()
+                panel.clickText("通透")
+                assertEquals(expected, panel.model.settingWrites)
+                panel.model.mutableState.value = state.copy(settingOperations = persistentListOf(pending))
+                panel.render()
+                assertTrue(panel.hasText("等待设备确认"))
+                assertTrue(panel.hasDisabledText("通透"))
+                assertTrue(panel.hasSelectedText("降噪"))
+                panel.model.mutableState.value = state.copy(settingOperations = persistentListOf(pending.copy(stage = SettingStage.TIMED_OUT)))
+                panel.render()
+                assertTrue(panel.hasText("等待设备确认超时"))
+            }
+        }
+    }
+
+    @Test
+    fun desktopMainWindowEnablesOnlyNoiseModeWhileInitializingOnAudio() {
+        val state = initializingDesktopI5()
+        val expected = listOf<Pair<DeviceSetting, FieldValue>>(DeviceSetting.NOISE_MODE to FieldValue.Text("transparency"))
+        for (style in InterfaceStyle.entries) {
+            withApp(state, style, PrimaryDeviceSelection()) { app ->
+                app.render()
+                assertTrue(app.hasText("正在初始化并读取状态…"), "$style should still report initialization")
+                assertTrue(app.hasTappableText("通透"), "$style should allow changing noise mode")
+                assertFalse(app.hasTappableText("3 档"), "$style should keep ANC levels disabled")
+                assertFalse(app.hasTappableText("游戏模式"), "$style should keep game mode disabled")
+                app.clickText("通透")
+                assertEquals(expected, app.model.settingWrites)
+                app.state.value = state.copy(audioDeviceId = null)
+                app.render()
+                assertFalse(app.hasTappableText("通透"), "$style should disable early control when audio disconnects")
+            }
+        }
+    }
+
+    @Test
     fun onlyAReadySessionCountsAsConnected() {
         val selection = PrimaryDeviceSelection()
         val connected = connectedI7State()
@@ -397,6 +451,29 @@ class TrayPanelUiTest {
         assertEquals(first.deviceId, traySummary(disconnected, selection).reconnectTarget)
         assertFalse(traySummary(disconnected, selection).addDevice)
         assertTrue(traySummary(disconnectedAndroidState(), selection).addDevice)
+    }
+
+    private fun initializingDesktopI5(): ControlState {
+        val base = disconnectedAndroidState()
+        val device = DeviceState(
+            deviceId = first.deviceId,
+            sessionId = 73L,
+            profile = ModelProfile.I5_ZT,
+            capabilities = ModelProfile.I5_ZT.capabilities(),
+            fields = persistentMapOf(
+                DeviceField.NOISE_MODE to FieldReading.Known(FieldValue.Text("anc"), "anc"),
+                DeviceField.ANC_LEVEL to FieldReading.Known(FieldValue.Number(3), "03"),
+                DeviceField.GAME_MODE to FieldReading.Known(FieldValue.Toggle(false), "00"),
+            ),
+        )
+        return base.copy(
+            platform = base.platform.copy(hostPlatform = HostPlatform.LINUX),
+            connection = ConnectionState.Connecting(device.deviceId, device.sessionId, ConnectionPhase.INITIALIZING),
+            connectionTarget = first,
+            bondedDevices = persistentListOf(first),
+            audioDeviceId = device.deviceId,
+            device = device,
+        )
     }
 
     private fun withTrayPanel(

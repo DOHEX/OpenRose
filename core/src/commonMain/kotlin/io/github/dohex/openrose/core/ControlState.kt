@@ -213,6 +213,34 @@ data class ControlState(
             }
             return SessionReference(current.deviceId, current.sessionId)
         }
+
+    /** Whether the system audio observation belongs to the current control device (including its classic address). */
+    val deviceHasSystemAudio: Boolean
+        get() {
+            val current = device ?: return false
+            val audio = audioDeviceId ?: return false
+            val target = connectionTarget
+            if (target != null && target.deviceId != current.deviceId) return false
+            return audio == current.deviceId || audio.value == current.classicAddress || audio.value == target?.classicAddress
+        }
+
+    /** The desktop can change the i5's noise mode as soon as this audio session reports it. */
+    val noiseModeSession: SessionReference?
+        get() {
+            if (connection is ConnectionState.Connected) return readySession.takeIf { connection.phase == ConnectionPhase.READY }
+            val initializing = connection as? ConnectionState.Connecting ?: return null
+            val current = device ?: return null
+            if (!platform.hostPlatform.isDesktop || current.profile != ModelProfile.I5_ZT || !deviceHasSystemAudio) return null
+            if (initializing.phase != ConnectionPhase.INITIALIZING ||
+                initializing.deviceId != current.deviceId || initializing.sessionId != current.sessionId
+            ) {
+                return null
+            }
+            val reading = current.fields[DeviceField.NOISE_MODE] as? FieldReading.Known
+            val mode = reading?.value as? FieldValue.Text ?: return null
+            if (mode.value !in current.capabilities.noiseControl?.modes.orEmpty()) return null
+            return SessionReference(current.deviceId, current.sessionId)
+        }
 }
 
 data class ConnectionRecovery(

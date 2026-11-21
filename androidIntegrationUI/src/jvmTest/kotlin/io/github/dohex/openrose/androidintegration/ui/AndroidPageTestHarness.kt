@@ -51,10 +51,22 @@ internal fun AndroidTestPage(model: FakeOpenRoseModel, platform: PlatformUi, pag
     TestPageContent(style) {
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
             when (page.value) {
-                "设置" -> PreferencesPage(model, platform, onPersonalization = {}, onAbout = {})
+                "设置" -> PreferencesPage(
+                    model,
+                    platform,
+                    onPersonalization = {},
+                    onCirculationPairing = { page.value = "流转配对" },
+                    onAbout = {},
+                )
+
+                "流转配对" -> platform.circulationPairingContent?.invoke()
+
                 "个性化" -> PersonalizationPage(model, platform)
+
                 "状态" -> StatusPage(model, platform) { page.value = "诊断" }
+
                 "诊断" -> PlatformDiagnosticsCard(model, platform)
+
                 "操作" -> platform.StatusActions()
             }
         }

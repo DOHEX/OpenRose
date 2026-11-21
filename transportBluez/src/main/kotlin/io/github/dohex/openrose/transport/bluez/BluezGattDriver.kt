@@ -220,16 +220,26 @@ internal class BluezGattDriver(private val bus: BluezBus, private val devicePath
 private const val FIRST_WRITE_RETRIES = 24
 
 private suspend fun BluezBus.requestGattConnection(devicePath: String) {
-    val interfaces = objects()[devicePath].orEmpty()
-    val le = interfaces[LE_BEARER]
-    if (le?.get("Connected") == true) return
-    try {
-        connectGatt(devicePath, useLeBearer = le != null)
-    } catch (_: org.bluez.Error.AlreadyConnected) {
-        // Continue into bounded service discovery on the existing connection.
-    } catch (error: org.bluez.Error.InProgress) {
-        // BlueZ can still be completing an audio profile when it publishes the media transport.
-        if (objects()[devicePath]?.get(DEVICE)?.get("Connected") != true) throw error
+    var busyRetries = 8
+    var interfaces = objects()[devicePath].orEmpty()
+    while (interfaces[LE_BEARER]?.get("Connected") != true) {
+        val useLeBearer = LE_BEARER in interfaces
+        val busy = try {
+            connectGatt(devicePath, useLeBearer)
+            false
+        } catch (_: org.bluez.Error.AlreadyConnected) {
+            false
+        } catch (error: org.bluez.Error.InProgress) {
+            val current = objects()[devicePath].orEmpty()
+            if (current[DEVICE]?.get("Connected") != true) throw error
+            // An in-flight audio profile makes BlueZ reject LE1.Connect before it queues the request.
+            useLeBearer && current[CLASSIC_BEARER]?.get("Connected") == true
+        }
+        if (!busy || busyRetries == 0) return
+        busyRetries--
+        delay(125)
+        interfaces = objects()[devicePath].orEmpty()
+        if (LE_BEARER !in interfaces || interfaces[CLASSIC_BEARER]?.get("Connected") != true) return
     }
 }
 

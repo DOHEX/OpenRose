@@ -19,7 +19,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
 
 /** Validation, ordered writes and fresh readback confirmation for the current device session. */
@@ -39,22 +38,23 @@ internal class SettingQueue(
     }
 
     fun start(link: ControlLink, attempt: Attempt) {
-        attempt.settings.worker = scope.launch { runSettings(link, attempt) }
+        attempt.settings.worker = scope.launch {
+            for (request in attempt.settings.commands) execute(link, attempt, request)
+        }
     }
 
     /** A caller owns its wait; the platform session owns the queued operation. */
     suspend fun set(link: ControlLink, setting: DeviceSetting, value: FieldValue, expectedSessionId: Long?): OperationResult {
         val request = link.lifecycle.withLock {
-            val attempt = link.active
-            if (expectedSessionId != null) {
-                // Checked under the same lock as admission, so a session replaced meanwhile never receives the write.
-                val connection = state.value.connection as? ConnectionState.Connected
-                if (attempt == null || attempt.id != expectedSessionId || connection?.sessionId != expectedSessionId) {
-                    return OperationResult.Failure(ControlError(ControlErrorCode.DISCONNECTED, "请求的设备会话已结束或已被替换"))
-                }
+            val attempt = link.active?.takeIf { it.connection != null && !it.progress.value.ended }
+            val current = state.value
+            val session = if (setting == DeviceSetting.NOISE_MODE) current.noiseModeSession else current.readySession
+            // Check the caller's reference under the same lock as admission.
+            if (expectedSessionId != null && (attempt?.id != expectedSessionId || session?.sessionId != expectedSessionId)) {
+                return OperationResult.Failure(ControlError(ControlErrorCode.DISCONNECTED, "请求的设备会话已结束或已被替换"))
             }
             link.platformError()?.let { return failure(it) }
-            if (attempt == null || state.value.connection !is ConnectionState.Connected) {
+            if (attempt == null || session?.sessionId != attempt.id) {
                 return failure(ControlError(ControlErrorCode.NOT_READY, "设备尚未就绪"))
             }
             if (setting !in requireNotNull(state.value.device).capabilities.writableSettings) {
@@ -158,43 +158,52 @@ internal class SettingQueue(
         }
     }
 
-    private suspend fun runSettings(link: ControlLink, attempt: Attempt) {
-        for (request in attempt.settings.commands) {
-            if (request.result.isCompleted) continue
-            val result = try {
-                val prerequisite = state.value.device?.settingPrerequisite(request.operation.setting)
-                if (prerequisite == null) {
-                    applySetting(link, attempt, request)
-                } else {
-                    settingFailure(attempt, request, ControlError(ControlErrorCode.NOT_READY, prerequisite), SettingStage.FAILED)
-                }
-            } catch (cancelled: CancellationException) {
-                if (cancelled !is TimeoutCancellationException) throw cancelled
-                settingFailure(attempt, request, ControlError(ControlErrorCode.TIMEOUT, "设置或设备回读超时"), SettingStage.TIMED_OUT)
-            } catch (cause: Exception) {
-                val code = when (cause) {
-                    is LinkEnded -> ControlErrorCode.DISCONNECTED
-                    is UnsupportedOperationException -> ControlErrorCode.UNSUPPORTED
-                    is IllegalArgumentException -> ControlErrorCode.INVALID_ARGUMENT
-                    else -> ControlErrorCode.FAILED
-                }
-                settingFailure(
-                    attempt,
-                    request,
-                    ControlError(code, cause.message ?: "设置失败"),
-                    if (code == ControlErrorCode.DISCONNECTED) SettingStage.DISCONNECTED else SettingStage.FAILED,
-                )
+    /** The initialization loop owns the wire until READY. Give a user command the next complete exchange. */
+    suspend fun runNextDuringInitialization(link: ControlLink, attempt: Attempt) {
+        val request = attempt.settings.commands.tryReceive().getOrNull() ?: return
+        val prerequisite = if (state.value.noiseModeSession?.sessionId == attempt.id) null else "当前耳机尚不能调节降噪模式"
+        execute(link, attempt, request, prerequisite)
+    }
+
+    private suspend fun execute(
+        link: ControlLink,
+        attempt: Attempt,
+        request: Request,
+        prerequisite: String? = state.value.device?.settingPrerequisite(request.operation.setting),
+    ) {
+        if (request.result.isCompleted) return
+        val result = try {
+            if (prerequisite == null) {
+                applySetting(link, attempt, request)
+            } else {
+                settingFailure(attempt, request, ControlError(ControlErrorCode.NOT_READY, prerequisite), SettingStage.FAILED)
             }
-            link.lifecycle.withLock {
-                attempt.settings.requests.remove(request.operation.id)
-                request.result.complete(result)
-                val error = (result as? OperationResult.Failure)?.error
-                if (link.active === attempt && error?.code in setOf(ControlErrorCode.TIMEOUT, ControlErrorCode.FAILED)) {
-                    // Neither protocol correlates a late readback with a transaction. End this
-                    // link before another setting can consume an old response or native write.
-                    link.clearActive()
-                    state.update { it.copy(lastError = error) }
-                }
+        } catch (cancelled: CancellationException) {
+            if (cancelled !is TimeoutCancellationException) throw cancelled
+            settingFailure(attempt, request, ControlError(ControlErrorCode.TIMEOUT, "设置或设备回读超时"), SettingStage.TIMED_OUT)
+        } catch (cause: Exception) {
+            val code = when (cause) {
+                is LinkEnded -> ControlErrorCode.DISCONNECTED
+                is UnsupportedOperationException -> ControlErrorCode.UNSUPPORTED
+                is IllegalArgumentException -> ControlErrorCode.INVALID_ARGUMENT
+                else -> ControlErrorCode.FAILED
+            }
+            settingFailure(
+                attempt,
+                request,
+                ControlError(code, cause.message ?: "设置失败"),
+                if (code == ControlErrorCode.DISCONNECTED) SettingStage.DISCONNECTED else SettingStage.FAILED,
+            )
+        }
+        link.lifecycle.withLock {
+            attempt.settings.requests.remove(request.operation.id)
+            request.result.complete(result)
+            val error = (result as? OperationResult.Failure)?.error
+            if (link.active === attempt && error?.code in setOf(ControlErrorCode.TIMEOUT, ControlErrorCode.FAILED)) {
+                // Neither protocol correlates a late readback with a transaction. End this
+                // link before another setting can consume an old response or native write.
+                link.clearActive()
+                state.update { it.copy(lastError = error) }
             }
         }
     }
@@ -202,12 +211,9 @@ internal class SettingQueue(
     private suspend fun applySetting(owner: ControlLink, attempt: Attempt, request: Request): OperationResult {
         val link = attempt.connection ?: throw LinkEnded()
         val operation = request.operation
-        val prepared = attempt.codec.prepareSetting(
-            operation.setting,
-            operation.requestedValue,
-            firmware(),
-            state.value.device?.fields.orEmpty(),
-        )
+        val device = state.value.device ?: throw LinkEnded()
+        val firmware = (device.fields[DeviceField.FIRMWARE] as? FieldReading.Known)?.value as? FieldValue.Firmware
+        val prepared = attempt.codec.prepareSetting(operation.setting, operation.requestedValue, firmware, device.fields)
         settingStage(attempt, request, SettingStage.SUBMITTED, totalFrames = prepared.writeFrames.size)
         if ((prepared.writeFrames + prepared.readbacks.map { it.bytes }).any { it.size > link.maxWriteSize }) {
             throw UnsupportedOperationException("完整协议设置或回读超出传输写入容量")
@@ -225,13 +231,10 @@ internal class SettingQueue(
         var actualValues = emptyMap<DeviceField, FieldValue>()
         for (query in prepared.readbacks) {
             // A later field query gets its own baseline; earlier unsolicited data cannot confirm it.
-            owner.pace(attempt)
-            owner.ensureActive(attempt)
-            val baseline = attempt.progress.value
+            val baseline = owner.writePaced(attempt, link, query.bytes)
             for (field in query.expectedFields) {
                 if (field in prepared.expectedValues) fieldBaselines[field] = baseline.fieldRevisions[field] ?: 0L
             }
-            withTimeout(timing.queryTimeoutMillis) { link.write(query.bytes.copyOf()) }
             val observed = withTimeoutOrNull(timing.queryTimeoutMillis) {
                 attempt.progress.first { progress ->
                     if (progress.ended) return@first true
@@ -341,9 +344,6 @@ internal class SettingQueue(
         attempt.settings.commands.close()
         attempt.settings.worker?.cancel()
     }
-
-    private fun firmware(): FieldValue.Firmware? = (state.value.device?.fields?.get(DeviceField.FIRMWARE) as? FieldReading.Known)
-        ?.value as? FieldValue.Firmware
 
     private fun failure(error: ControlError): OperationResult.Failure {
         state.update { it.copy(lastError = error) }

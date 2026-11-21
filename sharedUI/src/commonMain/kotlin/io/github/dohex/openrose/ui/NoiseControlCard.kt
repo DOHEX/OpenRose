@@ -57,7 +57,7 @@ internal fun NoiseControlCard(
     val capabilities = device.capabilities.noiseControl ?: return
     val writable = device.capabilities.writableSettings
     val pending = state.hasPendingSetting(device)
-    val enabled = state.isReady(device) && !pending
+    val modesEnabled = state.canControlNoiseMode(device) && !pending && DeviceSetting.NOISE_MODE in writable
     val confirmedMode = (device.knownValue(DeviceField.NOISE_MODE) as? FieldValue.Text)?.value
 
     val modes = remember(capabilities.modes) {
@@ -74,10 +74,10 @@ internal fun NoiseControlCard(
             }
             headerStatus?.let { AppText(it, role = AppTextRole.Summary) }
         }
-        NoiseModeChoices(modes, confirmedMode, enabled && DeviceSetting.NOISE_MODE in writable) { mode ->
+        NoiseModeChoices(modes, confirmedMode, modesEnabled) { mode ->
             if (mode != confirmedMode) onSet(DeviceSetting.NOISE_MODE, FieldValue.Text(mode))
         }
-        if (showLevelControls) NoiseLevelControls(device, confirmedMode, enabled, onSet)
+        if (showLevelControls) NoiseLevelControls(device, confirmedMode, state.isReady(device) && !pending, onSet)
     }
 }
 
@@ -380,6 +380,11 @@ internal fun ControlState.isReady(device: DeviceState): Boolean {
         connection.deviceId == device.deviceId && connection.sessionId == device.sessionId &&
         platform.transport == TransportAvailability.Available &&
         platform.permission in setOf(PermissionState.GRANTED, PermissionState.NOT_REQUIRED)
+}
+
+internal fun ControlState.canControlNoiseMode(device: DeviceState): Boolean {
+    val session = noiseModeSession ?: return false
+    return session.deviceId == device.deviceId && session.sessionId == device.sessionId && platform.connectionBlockReason == null
 }
 
 internal fun ControlState.hasPendingSetting(device: DeviceState): Boolean = settingOperations.any {

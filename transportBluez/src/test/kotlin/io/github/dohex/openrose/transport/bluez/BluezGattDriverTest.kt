@@ -15,6 +15,7 @@ import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertSame
+import kotlin.test.assertTrue
 
 class BluezGattDriverTest {
     @Test
@@ -86,15 +87,7 @@ class BluezGattDriverTest {
     @Test
     fun reconnectWithClassicAudioWaitsForTheLeBearerBeforeSubscribingToCachedServices() = runTest {
         val bus = FakeBluezBus()
-        fun snapshot(leConnected: Boolean) = gattObjects().let { objects ->
-            objects + (
-                DEVICE_PATH to objects.getValue(DEVICE_PATH) + mapOf(
-                    CLASSIC_BEARER to mapOf("Connected" to true),
-                    LE_BEARER to mapOf("Connected" to leConnected),
-                )
-                )
-        }
-        bus.snapshot = snapshot(false)
+        bus.snapshot = dualModeGattObjects(false)
         bus.onStartNotify = {
             if (bus.snapshot[DEVICE_PATH]?.get(LE_BEARER)?.get("Connected") != true) throw org.bluez.Error.NotConnected("Not connected")
         }
@@ -102,7 +95,7 @@ class BluezGattDriverTest {
             if (bus.connectBearers.last()) {
                 launch {
                     delay(400)
-                    bus.snapshot = snapshot(true)
+                    bus.snapshot = dualModeGattObjects(true)
                 }
             }
         }
@@ -111,6 +104,41 @@ class BluezGattDriverTest {
         val characteristic = driver.discoverServices().single().characteristics.single()
         driver.configureSubscription(characteristic, GattSubscription.NOTIFY)
         assertEquals(listOf("start:$CHAR_PATH"), bus.notifications)
+        driver.close()
+    }
+
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    @Test
+    fun leConnectionRejectedByTheAudioProfileRetriesWhenBluezCanAcceptIt() = runTest {
+        val bus = FakeBluezBus()
+        bus.snapshot = dualModeGattObjects(false)
+        bus.onConnect = {
+            if (testScheduler.currentTime < 200) throw org.bluez.Error.InProgress("In Progress")
+            bus.snapshot = dualModeGattObjects(true)
+        }
+        val driver = BluezGattDriver(bus, DEVICE_PATH)
+        driver.connect()
+        driver.discoverServices().single()
+        assertTrue(testScheduler.currentTime < 1_000)
+        assertTrue(bus.connectBearers.all { it })
+        driver.close()
+    }
+
+    @Test
+    fun busyLeRequestDoesNotConnectAgainWhenTheSystemCompletesIt() = runTest {
+        val bus = FakeBluezBus()
+        bus.snapshot = dualModeGattObjects(false)
+        bus.onConnect = {
+            launch {
+                delay(50)
+                bus.snapshot = dualModeGattObjects(true)
+            }
+            throw org.bluez.Error.InProgress("In Progress")
+        }
+        val driver = BluezGattDriver(bus, DEVICE_PATH)
+        driver.connect()
+        driver.discoverServices().single()
+        assertEquals(listOf(true), bus.connectBearers)
         driver.close()
     }
 
@@ -193,6 +221,12 @@ class BluezGattDriverTest {
 private const val DEVICE_PATH = "/org/bluez/hci0/dev_00_11_22_33_44_55"
 private const val SERVICE_PATH = "$DEVICE_PATH/service0001"
 private const val CHAR_PATH = "$SERVICE_PATH/char0002"
+private fun dualModeGattObjects(leConnected: Boolean): BluezObjects {
+    val objects = gattObjects()
+    val bearers = mapOf(CLASSIC_BEARER to mapOf("Connected" to true), LE_BEARER to mapOf("Connected" to leConnected))
+    return objects + (DEVICE_PATH to objects.getValue(DEVICE_PATH) + bearers)
+}
+
 private fun gattObjects(): BluezObjects = mapOf(
     DEVICE_PATH to mapOf(DEVICE to mapOf("Connected" to true, "ServicesResolved" to true)),
     SERVICE_PATH to mapOf(SERVICE to mapOf("UUID" to "00001800-0000-1000-8000-00805f9b34fb")),

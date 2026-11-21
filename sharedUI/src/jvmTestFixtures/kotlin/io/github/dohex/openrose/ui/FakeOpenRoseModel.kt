@@ -86,7 +86,8 @@ internal class FakeOpenRoseModel(
         onDisconnect()
     }
     override fun set(sessionId: Long, setting: DeviceSetting, value: FieldValue) {
-        if (state.value.readySession?.sessionId != sessionId) return
+        val session = if (setting == DeviceSetting.NOISE_MODE) state.value.noiseModeSession else state.value.readySession
+        if (session?.sessionId != sessionId) return
         settingWrites += setting to value
         onSet(setting, value)
     }

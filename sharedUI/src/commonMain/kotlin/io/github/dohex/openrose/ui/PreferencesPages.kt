@@ -24,7 +24,13 @@ import io.github.dohex.openrose.ui.model.OpenRoseModel
  * Interface preferences live one level down in [PersonalizationPage], the app's identity and links in [AboutPage].
  */
 @Composable
-fun PreferencesPage(model: OpenRoseModel, platformUi: PlatformUi, onPersonalization: () -> Unit, onAbout: () -> Unit) {
+fun PreferencesPage(
+    model: OpenRoseModel,
+    platformUi: PlatformUi,
+    onPersonalization: () -> Unit,
+    onCirculationPairing: () -> Unit,
+    onAbout: () -> Unit,
+) {
     val state by model.state.collectAsState()
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -40,6 +46,17 @@ fun PreferencesPage(model: OpenRoseModel, platformUi: PlatformUi, onPersonalizat
         }
 
         platformUi.SettingsSections(state, PlatformSettingsPosition.BEFORE_CONNECTION)
+
+        if (platformUi.circulationPairingContent != null) {
+            AppGroup {
+                AppArrowRow(
+                    title = "流转配对",
+                    summary = "配对手机与电脑，让耳机在两端之间流转",
+                    icon = RoseIcon.LINK,
+                    onClick = onCirculationPairing,
+                )
+            }
+        }
 
         if (state.platform.controlTransportApplicability == PlatformApplicability.APPLICABLE) {
             AppGroup(title = "高级") {

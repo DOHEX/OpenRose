@@ -16,6 +16,10 @@ interface PlatformUi {
     @Composable
     fun CirculationAction(state: ControlState, selection: PrimaryDeviceSelection) {}
 
+    /** Page supplied by hosts that can pair this audio source for headset circulation. */
+    val circulationPairingContent: (@Composable () -> Unit)?
+        @Composable get() = null
+
     /** 动态取色: whether the application's colors follow the system wallpaper instead of the style defaults. */
     val dynamicColor: Boolean
         @Composable get() = false

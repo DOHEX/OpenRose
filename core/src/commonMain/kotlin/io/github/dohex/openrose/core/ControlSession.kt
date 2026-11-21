@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlin.time.TimeSource
 
 /** Deadlines are injectable so public behavior can be tested with a virtual clock. */
 data class SessionTiming(
@@ -35,11 +36,12 @@ internal class ControlSession(
     timing: SessionTiming = SessionTiming(),
     /** Device session ids count up from here, so a reference from another owner instance never matches. */
     sessionIdBase: Long = 0L,
+    timeSource: TimeSource = TimeSource.Monotonic,
 ) : ControlRuntime {
     private val mutableState = MutableStateFlow(ControlState(platform = initialPlatformState, settings = initialSettings))
     override val state: StateFlow<ControlState> = mutableState.asStateFlow()
     private val settings = SettingQueue(mutableState, scope, timing)
-    private val link = ControlLink(mutableState, transport, scope, timing, settings, sessionIdBase)
+    private val link = ControlLink(mutableState, transport, scope, timing, settings, sessionIdBase, timeSource)
     private val discovery = DeviceDiscovery(mutableState, transport, scope)
     private val targeting = ConnectionTargeting(mutableState, transport, scope, discovery, link)
 

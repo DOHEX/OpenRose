@@ -98,7 +98,7 @@ internal fun NucleusApplicationScope.DesktopTray(
 ) {
     val state by model.state.collectAsState()
     val summary = traySummary(state, selection)
-    val sessionId = state.readySession?.sessionId
+    val sessionId = state.noiseModeSession?.sessionId
     val peers = rememberRemoteHeadsets(circulation)
     val remoteSource = peers.firstOrNull { it.deviceName != null }
     val icon = if (summary.connected || remoteSource != null) TrayIcons.connected else TrayIcons.disconnected
@@ -312,6 +312,7 @@ internal fun trayMenuEntries(summary: TraySummary): List<TrayMenuEntry> = buildL
     summary.battery?.let { add(TrayMenuEntry.Label(it)) }
     if (summary.noiseModes.isNotEmpty()) {
         add(TrayMenuEntry.Separator)
+        summary.noiseModeFeedback?.let { add(TrayMenuEntry.Label(it)) }
         summary.noiseModes.forEach { add(TrayMenuEntry.NoiseMode(it.mode, it.label, it.selected, it.enabled)) }
     }
     if (summary.reconnectTarget != null) add(TrayMenuEntry.Action(summary.reconnectLabel, TrayMenuTarget.RECONNECT))

@@ -7,6 +7,7 @@ import io.github.dohex.openrose.circulation.localCommand
 import io.github.dohex.openrose.core.ConnectionPhase
 import io.github.dohex.openrose.core.ConnectionState
 import io.github.dohex.openrose.core.ControlRuntime
+import io.github.dohex.openrose.core.HostPlatform
 import io.github.dohex.openrose.core.LocalControlRuntime
 import io.github.dohex.openrose.core.PermissionState
 import io.github.dohex.openrose.core.PlatformState
@@ -52,6 +53,40 @@ class RemoteHeadsetControlTest {
     }
 
     @Test
+    fun pairedPhoneCanAdjustConfirmedNoiseDuringDesktopInitialization() = runBlocking {
+        withPair { holder, phone, device ->
+            val previous = phone.command("read")
+            device.transport.audioDevice.emit(null)
+            holder.state.first { it.connection == ConnectionState.Disconnected }
+            device.transport.autoReplyOnOpen = false
+            device.transport.audioDevice.emit(device.candidate.deviceId)
+            holder.state.first { (it.connection as? ConnectionState.Connecting)?.phase == ConnectionPhase.INITIALIZING }
+            val recovering = phone.command("read")
+            assertEquals("recovering", recovering["status"])
+            assertFalse("session" in recovering)
+            assertTrue("error" in phone.noise(previous))
+
+            device.link.replyToWrite("08ee00000001010a0002", i5Replies.getValue("0101"))
+            device.link.replyToWrite("08ee00000006020a0008", i5Replies.getValue("0602"))
+            holder.state.first { it.noiseModeSession != null }
+            val reading = phone.command("read")
+            assertEquals("initializing", reading["status"])
+            assertEquals("wind", reading["mode"])
+            assertTrue("transparency" in reading.getValue("modes").split(','))
+            assertNotEquals(previous["session"], reading["session"])
+
+            val pending = async(Dispatchers.IO) { phone.noise(reading) }
+            holder.state.first { it.settingOperations.lastOrNull()?.stage == SettingStage.WRITTEN }
+            assertFalse(pending.isCompleted)
+            device.link.replyToWrite("08ee00000006020a0008", TRANSPARENCY)
+            val confirmed = pending.await()
+            assertEquals("transparency", confirmed["mode"])
+            assertEquals("initializing", confirmed["status"])
+            assertEquals(device.candidate.deviceId, holder.state.value.audioDeviceId)
+        }
+    }
+
+    @Test
     fun missingReadbackMarksTheModeUnknownAndReturnsAnUnconfirmedResult() = runBlocking {
         withPair { holder, phone, device ->
             val result = phone.noise(phone.command("read"))
@@ -93,7 +128,7 @@ class RemoteHeadsetControlTest {
         val device = Headphones()
         val owner = CoroutineScope(Dispatchers.Default + SupervisorJob())
         val holder = LocalControlRuntime(
-            PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
+            PlatformState(PermissionState.GRANTED, TransportAvailability.Available, hostPlatform = HostPlatform.LINUX),
             transport = device.transport,
             scope = owner,
             timing = SessionTiming(queryTimeoutMillis = 700, writeIntervalMillis = 0),
