@@ -194,7 +194,7 @@ class OpenRoseHomeScanUiTest {
                     harness.render()
                     harness.clickContentDescription("返回")
                     harness.render()
-                    harness.clickTab(if (width >= 900) "我的耳机" else "耳机")
+                    harness.clickTab("耳机")
                     harness.render()
                     assertTrue(harness.startScans.isEmpty(), "style changes must not start scanning")
                     assertTrue(harness.connects.isEmpty(), "style changes must not reconnect")

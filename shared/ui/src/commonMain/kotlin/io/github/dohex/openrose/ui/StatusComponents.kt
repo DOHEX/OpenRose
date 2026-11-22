@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ListItem
@@ -109,7 +108,7 @@ private fun StatusSurface(container: Color, content: Color, modifier: Modifier, 
 
         InterfaceStyle.MATERIAL3 -> Card(
             modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp),
-            shape = RoundedCornerShape(20.dp),
+            shape = MaterialTheme.shapes.largeIncreased,
             colors = CardDefaults.cardColors(containerColor = container, contentColor = content),
         ) { body() }
     }
@@ -139,7 +138,11 @@ fun AppStatusHero(verdict: StatusVerdict, badge: String?, modifier: Modifier = M
     StatusSurface(colors.container, colors.content, modifier) {
         Box(Modifier.fillMaxWidth()) {
             AppIcon(
-                icon = if (verdict.kind == AppStatusKind.Good) RoseIcon.CHECK_CIRCLE else RoseIcon.ERROR,
+                icon = when (verdict.kind) {
+                    AppStatusKind.Good -> RoseIcon.CHECK_CIRCLE
+                    AppStatusKind.Caution -> RoseIcon.WARNING
+                    AppStatusKind.Error -> RoseIcon.ERROR
+                },
                 modifier = Modifier.align(Alignment.BottomEnd).offset(27.dp, 31.dp).size(110.dp),
                 tint = colors.accent,
             )

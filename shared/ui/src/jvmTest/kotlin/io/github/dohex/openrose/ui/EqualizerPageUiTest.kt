@@ -114,7 +114,7 @@ class EqualizerPageUiTest {
     }
 
     @Test
-    fun aPresetOnlyEntryWaitsForAReadySessionWithNothingInFlight() {
+    fun aPresetOnlyEntryWaitsForAReadySessionAndItsOwnWriteGroupOnly() {
         for (style in InterfaceStyle.entries) {
             withHarness(style, ModelProfile.I5_ZT, listOf(1, 5, 2), Surface.HOME) { harness ->
                 harness.render()
@@ -125,7 +125,7 @@ class EqualizerPageUiTest {
                     ready.copy(connection = connection.copy(phase = ConnectionPhase.INITIALIZING)),
                     ready.copy(
                         settingOperations = persistentListOf(
-                            SettingOperation(1, SESSION_ID, DeviceSetting.NOISE_MODE, FieldValue.Text("anc"), SettingStage.SUBMITTED),
+                            SettingOperation(1, SESSION_ID, DeviceSetting.EQ, FieldValue.Text("rock"), SettingStage.SUBMITTED),
                         ),
                     ),
                 )) {
@@ -133,6 +133,13 @@ class EqualizerPageUiTest {
                     harness.render()
                     assertFalse(harness.hasTappableText("均衡器"), "the entry takes no taps in $style")
                 }
+                harness.state.value = ready.copy(
+                    settingOperations = persistentListOf(
+                        SettingOperation(2, SESSION_ID, DeviceSetting.NOISE_MODE, FieldValue.Text("anc"), SettingStage.SUBMITTED),
+                    ),
+                )
+                harness.render()
+                assertTrue(harness.hasTappableText("均衡器"), "another setting in flight does not block the entry in $style")
             }
         }
     }
@@ -200,7 +207,7 @@ class EqualizerPageUiTest {
     }
 
     @Test
-    fun aPresetChoiceShowsUntilItsWriteEndsThenTheDeviceDecides() {
+    fun aPresetChoiceShowsProgressUntilItsWriteEndsThenTheDeviceDecides() {
         for (style in InterfaceStyle.entries) {
             withHarness(style, ModelProfile.I7_RS_V2, listOf(1, 5, 2), Surface.PAGE) { harness ->
                 harness.render()
@@ -208,11 +215,14 @@ class EqualizerPageUiTest {
                 harness.clickText("原声再现 · HIFI")
                 harness.render()
                 assertEquals(listOf<Pair<DeviceSetting, FieldValue>>(DeviceSetting.EQ to FieldValue.Text("hifi")), harness.writes)
-                assertTrue(harness.hasSelectedText("原声再现 · HIFI"), "the choice shows while it is written in $style")
+                assertTrue(harness.hasSelectedText("弱水经典 · POP"), "the selection stays on the confirmed mode while writing in $style")
+                assertFalse(harness.hasSelectedText("原声再现 · HIFI"), "the requested mode is not selected before confirmation in $style")
+                assertTrue(harness.hasContentDescription("正在设为 原声再现 · HIFI"), "the written option shows progress in $style")
 
                 harness.replies.single().complete(OperationResult.Failure(ControlError(ControlErrorCode.NOT_APPLIED, "设备状态与请求不一致")))
                 harness.render()
                 assertTrue(harness.hasSelectedText("弱水经典 · POP"), "a write the device did not apply falls back in $style")
+                assertFalse(harness.hasContentDescription("正在设为 原声再现 · HIFI"), "progress ends with the write in $style")
 
                 harness.clickText("弱水经典 · POP")
                 harness.render()
@@ -266,7 +276,13 @@ class EqualizerPageUiTest {
                         harness.writes,
                         "custom writes the current curve in $style",
                     )
-                    assertTrue(harness.hasSelectedText("自定义"), "custom shows while it is written in $style")
+                    assertFalse(harness.hasSelectedText("自定义"), "custom is not selected before the device confirms it in $style")
+                    assertTrue(harness.hasContentDescription("正在设为 自定义"), "custom shows progress while it is written in $style")
+                    assertFalse(harness.hasContentDescription("20 Hz 增益"), "the editor opens once custom is confirmed in $style")
+
+                    harness.state.value = harness.withMode(CUSTOM)
+                    harness.render()
+                    assertTrue(harness.hasSelectedText("自定义"), "custom is selected once confirmed in $style")
                     assertTrue(harness.hasContentDescription("20 Hz 增益"), "the editor opens with custom in $style")
                     assertEquals(
                         curve == null,
@@ -350,7 +366,8 @@ class EqualizerPageUiTest {
     fun theCurveHasAGainScaleAndSignedBandValues() {
         val custom = CustomEqualizerCapabilities(persistentListOf(20, 100, 300, 500, 1000, 2000, 3000, 5000, 8000, 15000), -12, 10)
         for (style in InterfaceStyle.entries) {
-            withHarness(style, ModelProfile.I7_RS_V2, listOf(1, 5, 2), Surface.PAGE, mode = CUSTOM, custom = custom) { harness ->
+            // Ten bands of at least 48dp need a wide page; on a phone the row scrolls and off-screen labels have no bounds.
+            withHarness(style, ModelProfile.I7_RS_V2, listOf(1, 5, 2), Surface.PAGE, mode = CUSTOM, custom = custom, width = 640) { harness ->
                 harness.render()
                 val top = harness.lastTextBounds("+10")
                 val bottom = harness.lastTextBounds("−12")
@@ -500,6 +517,15 @@ class EqualizerPageUiTest {
         fun withFirmware(parts: List<Int>): ControlState {
             val device = requireNotNull(state.value.device)
             return state.value.copy(device = device.copy(capabilities = capabilitiesFor(profile, parts, custom)))
+        }
+
+        fun withMode(mode: String): ControlState {
+            val device = requireNotNull(state.value.device)
+            return state.value.copy(
+                device = device.copy(
+                    diagnostics = device.diagnostics.copy(fields = device.diagnostics.fields + (DeviceField.EQ to FieldReading.Known(FieldValue.Text(mode), "00"))),
+                ),
+            )
         }
 
         fun withCurve(curve: List<Int>): ControlState {

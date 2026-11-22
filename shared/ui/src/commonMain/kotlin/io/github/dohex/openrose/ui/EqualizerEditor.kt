@@ -24,8 +24,9 @@ internal sealed interface EqualizerChoice {
  * Sends the equalizer page's choices to one device session, one write at a time.
  *
  * While a write is in flight, newer choices replace each other and only the last is sent once it ends. Until that
- * queue drains the page shows the latest choice; afterwards it shows what the device confirmed, so a failed or
- * not-applied write falls back to the device's own state without a separate rollback path.
+ * queue drains the page marks the latest choice as being written and shows its curve, while the selected mode stays
+ * the one the device confirmed; afterwards it shows what the device confirmed, so a failed or not-applied write
+ * falls back to the device's own state without a separate rollback path.
  *
  * Kept with the other app-level UI state so replacing the component style does not drop a choice still in flight.
  */
@@ -72,12 +73,13 @@ internal class EqualizerEditor(
         }
     }
 
-    /** The mode to show: the pending choice's, else the device's confirmed [mode]. */
-    fun displayedMode(mode: String?): String? = when (val choice = pending) {
-        is EqualizerChoice.Preset -> choice.name
-        is EqualizerChoice.Curve -> CUSTOM_EQUALIZER_MODE
-        null -> mode
-    }
+    /** The mode being written, whose option shows its progress; null once every write has ended. */
+    val pendingMode: String?
+        get() = when (val choice = pending) {
+            is EqualizerChoice.Preset -> choice.name
+            is EqualizerChoice.Curve -> CUSTOM_EQUALIZER_MODE
+            null -> null
+        }
 
     /** The curve to show: the pending curve, else the device's confirmed [curve]. */
     fun displayedCurve(curve: List<Int>?): List<Int>? = (pending as? EqualizerChoice.Curve)?.gains ?: curve

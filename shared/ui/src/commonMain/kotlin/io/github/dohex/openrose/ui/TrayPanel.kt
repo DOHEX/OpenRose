@@ -11,7 +11,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.painter.Painter
@@ -30,7 +32,6 @@ import io.github.dohex.openrose.core.DeviceSetting
 import io.github.dohex.openrose.core.DeviceState
 import io.github.dohex.openrose.core.NoiseMode
 import io.github.dohex.openrose.core.TransportAvailability
-import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.dohex.openrose.core.protocol.ModelProfile
 import io.github.dohex.openrose.core.transport.DeviceId
 import io.github.dohex.openrose.ui.model.OpenRoseModel
@@ -86,6 +87,51 @@ fun traySummary(state: ControlState, selection: PrimaryDeviceSelection): TraySum
     )
 }
 
+/**
+ * [traySummary] for one composition: reused while the state and the selection it reads are unchanged, so a
+ * recomposition driven by something else (a peer poll, a countdown) does not rebuild it.
+ */
+@Composable
+fun rememberTraySummary(state: ControlState, selection: PrimaryDeviceSelection): TraySummary {
+    val summary by remember(state, selection) { derivedStateOf { traySummary(state, selection) } }
+    return summary
+}
+
+/** What the 快捷面板 and 托盘面板 both put above the headphones' controls. */
+internal class PanelSections(
+    /** Paired audio sources' headphones. Hidden while this device holds a ready session of its own. */
+    val remoteHeadsets: List<RemoteHeadset>,
+    /** The local status card. A source that can already be controlled replaces it, unless this device has audio or a session. */
+    val statusCard: Boolean,
+)
+
+/**
+ * Decides the sections once for both panels. [hostPeers] are the paired sources a host already polls for its own
+ * menu; without them the sources are polled here, and only while they would show.
+ */
+@Composable
+internal fun rememberPanelSections(
+    state: ControlState,
+    summary: TraySummary,
+    circulation: CirculationClient?,
+    hostPeers: List<RemoteHeadset>? = null,
+): PanelSections {
+    val holdsHeadset = state.readySession != null
+    val polled = hostPeers ?: if (circulation != null && !holdsHeadset) rememberRemoteHeadsets(circulation) else emptyList()
+    val peers = if (holdsHeadset) emptyList() else polled
+    val remoteControllable = peers.any {
+        it.reading.status == RemoteControlStatus.READY || it.reading.status == RemoteControlStatus.INITIALIZING
+    }
+    return PanelSections(peers, statusCard = summary.connected || !remoteControllable || state.audioDeviceId != null)
+}
+
+/** Why a setting cannot be written right now, for the control to say beside itself; null when it can be. */
+internal fun ControlState.writeBlockedReason(device: DeviceState, setting: DeviceSetting): String? = when {
+    canWrite(device, setting) -> null
+    pendingSetting(device) != null -> "正在设置，等待设备确认"
+    else -> "控制会话尚未就绪，暂不能设置。"
+}
+
 /** A connection attempt is under way, including a session that is not yet ready for control. */
 internal fun ControlState.isConnectingForTray(): Boolean = when (val current = connection) {
     ConnectionState.Disconnected -> false
@@ -130,13 +176,14 @@ fun TrayPanel(
     circulation: CirculationClient? = null,
     remoteHeadsets: List<RemoteHeadset>? = null,
     sound: DesktopSoundActions? = null,
+    dynamicColor: Boolean = false,
 ) {
     val density = LocalDensity.current
     val state by model.state.collectAsState()
     val uiSettings by model.uiSettings.collectAsState()
     val dark = uiSettings.appearance.isDark()
     // The popup is a plain opaque canvas: no LocalAppBackdrop, so backdrop blur stays off.
-    ProvideInterfaceStyle(uiSettings.interfaceStyle, dark) {
+    ProvideInterfaceStyle(uiSettings.interfaceStyle, dark, dynamicColor) {
         Column(
             modifier
                 .fillMaxSize()
@@ -163,19 +210,17 @@ private fun TrayPanelContent(
     remoteHeadsets: List<RemoteHeadset>?,
     sound: DesktopSoundActions?,
 ) {
-    val summary = traySummary(state, selection)
+    val summary = rememberTraySummary(state, selection)
+    val sections = rememberPanelSections(state, summary, circulation, remoteHeadsets)
     val device = state.activeDevice()
 
-    val peers = remoteHeadsets ?: circulation?.let { rememberRemoteHeadsets(it) }.orEmpty()
-    peers.forEach { RemoteHeadsetCard(it) }
-    val remoteControllable = peers.any { it.reading.status in setOf(RemoteControlStatus.READY, RemoteControlStatus.INITIALIZING) }
-    if (summary.connected || !remoteControllable || state.audioDeviceId != null) {
-        TrayStatusCard(state, summary)
-    }
+    sections.remoteHeadsets.forEach { RemoteHeadsetCard(it) }
+    if (sections.statusCard) TrayStatusCard(state, summary)
 
     if (device != null && state.canControlNoiseMode(device) && device.capabilities.noiseControl != null) {
         NoiseControlCard(state, device, showLevelControls = false, onSet = model.settingsFor(device.sessionId))
-        if (summary.noiseModeFeedback != null && !state.hasPendingSetting(device)) {
+        // While the write is pending the card shows its own progress; only an outcome needs this line.
+        if (summary.noiseModeFeedback != null && state.pendingSetting(device, DeviceSetting.NOISE_MODE) == null) {
             AppText(
                 summary.noiseModeFeedback,
                 Modifier.padding(horizontal = 24.dp),
@@ -255,14 +300,13 @@ object AppLogo {
         @Composable get() = painterResource(Res.drawable.app_icon)
 }
 
-private fun DeviceState.trayBattery(desktop: Boolean): String? = profile.batteryReadings().mapNotNull { (label, field) ->
-    (knownValue(field) as? FieldValue.Number)?.value?.takeIf { it in 0..100 }
-        ?.let { "$label $it%" } ?: if (desktop) "$label 未知" else null
-}.takeIf { it.isNotEmpty() }?.joinToString(" · ")
+private fun DeviceState.trayBattery(
+    desktop: Boolean,
+): String? = batterySummary(profile.batteryReadings(), showUnknown = desktop) { confirmedNumber(it) }
 
 private fun ControlState.trayNoiseModes(device: DeviceState): List<TrayNoiseMode> {
     val confirmed = device.confirmedNoiseMode
-    val enabled = !hasPendingSetting(device) &&
+    val enabled = canWrite(device, DeviceSetting.NOISE_MODE) &&
         DeviceSetting.NOISE_MODE in device.capabilities.writableSettings
     return device.noiseModes.sortedBy { noiseModeOrder(it.id) }.map { mode ->
         TrayNoiseMode(mode, noiseModeLabel(mode.id), selected = mode == confirmed, enabled = enabled)

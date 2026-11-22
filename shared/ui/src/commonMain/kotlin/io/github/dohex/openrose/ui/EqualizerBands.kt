@@ -1,29 +1,34 @@
 package io.github.dohex.openrose.ui
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.focusable
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.CornerRadius
@@ -40,8 +45,9 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.contentDescription
@@ -55,6 +61,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import io.github.dohex.openrose.core.CustomEqualizerCapabilities
+import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
 /** What each interface style varies on the band editor; layout, gestures and drawing are shared. */
@@ -72,17 +79,23 @@ private fun equalizerTokens(): EqualizerTokens = when (LocalInterfaceStyle.curre
     InterfaceStyle.MATERIAL3 -> EqualizerTokens(6.dp, 8.dp, 11.dp, 3.dp, springThumbs = true)
 }
 
-/** Low enough that the i7 page, all six modes and the curve, fits a 360×780dp phone without scrolling. */
+/** Low enough that the i7 page, all six modes and the curve, fits a 360×780dp phone without scrolling down. */
 private val BAND_AREA_HEIGHT = 136.dp
 
-/** The gain scale's column left of the bands; band and frequency labels start after it. */
+/** A band's touch target is at least this wide; bands that do not all fit at this width scroll sideways. */
+private val MIN_BAND_WIDTH = 48.dp
+
+/** The gain scale's least width; it grows with the font so its labels are never cut. */
 private val SCALE_WIDTH = 28.dp
+
+private val LABEL_GAP = 6.dp
 
 /**
  * One vertical control per band on a shared gain axis, with the curve drawn through the thumbs and the model's gain
  * bounds and zero marked on the left. Pressing anywhere in a band's column moves its thumb there; the band is sent
- * when the finger lifts, or at once from keys and accessibility actions. [active] false draws the curve faded, for a
- * curve the device is not playing.
+ * when the finger lifts, or at once from keys and accessibility actions. Bands are at least [MIN_BAND_WIDTH] wide, so
+ * a row that does not fit scrolls sideways while the gain scale stays put. [active] false draws the curve faded, for
+ * a curve the device is not playing.
  */
 @Composable
 internal fun EqualizerBands(
@@ -97,12 +110,17 @@ internal fun EqualizerBands(
     val minGain = capabilities.minGain
     val maxGain = capabilities.maxGain
     val haptics = LocalHapticFeedback.current
-    var drag by remember { mutableStateOf<Pair<Int, Int>?>(null) }
-    var focusedBand by remember { mutableStateOf<Int?>(null) }
+    val density = LocalDensity.current
+    // A drag changes these many times a second, so they are read where they are drawn, measured or described and
+    // never while composing: the page does not recompose for every finger movement.
+    val drag = remember { mutableStateOf<Pair<Int, Int>?>(null) }
+    val focusedBand = remember { mutableStateOf<Int?>(null) }
     val latestCurve by rememberUpdatedState(curve)
     val latestCommit by rememberUpdatedState(onCommit)
-    val shown = drag?.let { (band, gain) -> curve.toMutableList().also { it[band] = gain } } ?: curve
-    val highlighted = drag?.first ?: focusedBand
+    val shown: () -> List<Int> = remember {
+        { drag.value?.let { (band, gain) -> latestCurve.toMutableList().also { it[band] = gain } } ?: latestCurve }
+    }
+    val highlighted: () -> Int? = remember { { drag.value?.first ?: focusedBand.value } }
 
     fun commit(band: Int, gain: Int) {
         val clamped = gain.coerceIn(minGain, maxGain)
@@ -110,42 +128,69 @@ internal fun EqualizerBands(
     }
 
     val colors = bandColors(enabled, active)
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        BandLabels(shown.map(::gainLabel), highlighted, colors.highlight, appColor(AppColorRole.OnSurface))
-        Row(Modifier.fillMaxWidth().height(BAND_AREA_HEIGHT)) {
-            GainScale(minGain, maxGain, tokens.activeThumbRadius, Modifier.width(SCALE_WIDTH).fillMaxHeight())
-            Box(Modifier.weight(1f).fillMaxHeight()) {
-                val thumbGains = thumbGains(shown, drag?.first, eased = tokens.springThumbs)
-                Canvas(Modifier.fillMaxWidth().fillMaxHeight()) {
-                    drawBands(thumbGains, minGain, maxGain, highlighted, tokens, colors)
-                }
-                Row(Modifier.fillMaxWidth().fillMaxHeight()) {
-                    capabilities.bandsHz.forEachIndexed { band, hz ->
-                        BandControl(
-                            hz = hz,
-                            gain = shown[band],
-                            minGain = minGain,
-                            maxGain = maxGain,
-                            enabled = enabled,
-                            inset = tokens.activeThumbRadius,
-                            onFocusChange = { focusedBand = focusedBand.afterFocusChange(band, it) },
-                            onSet = { commit(band, it) },
-                            onStep = { commit(band, latestCurve[band] + it) },
-                            onDrag = { gain ->
-                                if (drag != band to gain) haptics.performHapticFeedback(HapticFeedbackType.SegmentFrequentTick)
-                                drag = band to gain
-                            },
-                            onRelease = { lifted ->
-                                drag?.takeIf { lifted }?.let { (draggedBand, draggedGain) -> commit(draggedBand, draggedGain) }
-                                drag = null
-                            },
-                            modifier = Modifier.weight(1f),
-                        )
+    val thumbs = rememberThumbs(curve, shown, { drag.value?.first }, eased = tokens.springThumbs)
+    // The scale sits beside the band area, so it starts below the gain labels however tall the font makes them.
+    var gainLabelsHeight by remember { mutableIntStateOf(0) }
+    Row(modifier) {
+        Column(Modifier.widthIn(min = SCALE_WIDTH)) {
+            Spacer(Modifier.height(with(density) { gainLabelsHeight.toDp() } + LABEL_GAP))
+            GainScale(minGain, maxGain, tokens.activeThumbRadius, Modifier.height(BAND_AREA_HEIGHT))
+        }
+        BoxWithConstraints(Modifier.weight(1f)) {
+            val count = capabilities.bandsHz.size
+            val bandWidth = maxOf(MIN_BAND_WIDTH, maxWidth / count)
+            Box(Modifier.horizontalScroll(rememberScrollState())) {
+                Column(Modifier.width(bandWidth * count), verticalArrangement = Arrangement.spacedBy(LABEL_GAP)) {
+                    BandLabels(
+                        labels = { shown().map(::gainLabel) },
+                        highlighted = highlighted,
+                        highlight = colors.highlight,
+                        normal = appColor(AppColorRole.OnSurface),
+                        bandWidth = bandWidth,
+                        modifier = Modifier.onSizeChanged { gainLabelsHeight = it.height },
+                    )
+                    Box(Modifier.fillMaxWidth().height(BAND_AREA_HEIGHT)) {
+                        Canvas(Modifier.fillMaxSize()) {
+                            drawBands(thumbs.map { it.value }, minGain, maxGain, highlighted(), tokens, colors)
+                        }
+                        Row(Modifier.fillMaxSize()) {
+                            capabilities.bandsHz.forEachIndexed { band, hz ->
+                                BandControl(
+                                    hz = hz,
+                                    gain = { shown()[band] },
+                                    minGain = minGain,
+                                    maxGain = maxGain,
+                                    enabled = enabled,
+                                    inset = tokens.activeThumbRadius,
+                                    onFocusChange = { focusedBand.value = focusedBand.value.afterFocusChange(band, it) },
+                                    onSet = { commit(band, it) },
+                                    onStep = { commit(band, latestCurve[band] + it) },
+                                    onDrag = { gain ->
+                                        if (drag.value != band to gain) {
+                                            haptics.performHapticFeedback(HapticFeedbackType.SegmentFrequentTick)
+                                        }
+                                        drag.value = band to gain
+                                    },
+                                    onRelease = { lifted ->
+                                        val dragged = drag.value
+                                        if (lifted && dragged != null) commit(dragged.first, dragged.second)
+                                        drag.value = null
+                                    },
+                                    modifier = Modifier.width(bandWidth),
+                                )
+                            }
+                        }
                     }
+                    BandLabels(
+                        labels = { capabilities.bandsHz.map(::compactFrequencyLabel) },
+                        highlighted = { null },
+                        highlight = colors.highlight,
+                        normal = appColor(AppColorRole.Summary),
+                        bandWidth = bandWidth,
+                    )
                 }
             }
         }
-        BandLabels(capabilities.bandsHz.map(::compactFrequencyLabel), null, colors.highlight, appColor(AppColorRole.Summary))
     }
 }
 
@@ -154,14 +199,14 @@ internal fun EqualizerBands(
 private fun GainScale(minGain: Int, maxGain: Int, inset: Dp, modifier: Modifier) {
     val marks = listOf(maxGain, 0, minGain).filter { it in minGain..maxGain }.distinct()
     Layout(
-        content = { marks.forEach { AppText(gainLabel(it), role = AppTextRole.Footnote, maxLines = 1) } },
+        content = { marks.forEach { AppText(gainLabel(it), role = AppTextRole.Footnote) } },
         modifier = modifier,
     ) { measurables, constraints ->
         val labels = measurables.map { it.measure(constraints.copy(minWidth = 0, minHeight = 0)) }
-        val width = constraints.maxWidth
+        val gap = LABEL_GAP.roundToPx()
+        val width = ((labels.maxOfOrNull { it.width } ?: 0) + gap).coerceAtLeast(SCALE_WIDTH.roundToPx())
         val height = constraints.maxHeight
         val top = inset.toPx()
-        val gap = 6.dp.roundToPx()
         layout(width, height) {
             labels.forEachIndexed { index, label ->
                 val y = top + gainFraction(marks[index].toFloat(), minGain, maxGain) * (height - 2 * top)
@@ -187,44 +232,71 @@ private fun bandColors(enabled: Boolean, active: Boolean): BandColors {
     return BandColors(track = appColor(AppColorRole.Divider), highlight = primary, curve = curve)
 }
 
-/** One centred label per band column, after the gain scale, the [highlighted] one in [highlight]. */
+/**
+ * One label per band column, each as wide as its band and as tall as its text needs at the current font size, the
+ * [highlighted] one in [highlight]. [labels] and [highlighted] are read here, so a drag recomposes only the labels.
+ */
 @Composable
-private fun BandLabels(labels: List<String>, highlighted: Int?, highlight: Color, normal: Color) {
-    Row(Modifier.fillMaxWidth().padding(start = SCALE_WIDTH)) {
-        labels.forEachIndexed { band, label ->
+private fun BandLabels(
+    labels: () -> List<String>,
+    highlighted: () -> Int?,
+    highlight: Color,
+    normal: Color,
+    bandWidth: Dp,
+    modifier: Modifier = Modifier,
+) {
+    val current = highlighted()
+    Row(modifier) {
+        labels().forEachIndexed { band, label ->
             AppText(
                 label,
-                Modifier.weight(1f),
+                Modifier.width(bandWidth),
                 role = AppTextRole.Footnote,
-                color = if (band == highlighted) highlight else normal,
+                color = if (band == current) highlight else normal,
                 textAlign = TextAlign.Center,
-                maxLines = 1,
             )
         }
     }
 }
 
-/** Thumb positions, eased toward [gains] when [eased]; the [dragged] thumb follows the finger exactly. */
+/**
+ * Thumb positions, one per band, eased toward the [shown] gains when [eased]; the [dragged] thumb follows the finger
+ * exactly. They are animated outside composition and read when drawing, so a drag or an easing step redraws without
+ * recomposing.
+ */
 @Composable
-private fun thumbGains(gains: List<Int>, dragged: Int?, eased: Boolean): List<Float> = key(gains.size) {
-    gains.mapIndexed { band, gain ->
-        val animated = animateFloatAsState(
-            gain.toFloat(),
-            if (eased) spring(dampingRatio = 0.75f, stiffness = Spring.StiffnessMediumLow) else snap(),
-            label = "eqThumb",
-        ).value
-        if (band == dragged) gain.toFloat() else animated
+private fun rememberThumbs(
+    curve: List<Int>,
+    shown: () -> List<Int>,
+    dragged: () -> Int?,
+    eased: Boolean,
+): List<Animatable<Float, AnimationVector1D>> {
+    val thumbs = remember(curve.size) { List(curve.size) { Animatable(curve[it].toFloat()) } }
+    LaunchedEffect(thumbs, eased) {
+        snapshotFlow { shown() to dragged() }.collect { (gains, draggedBand) ->
+            gains.forEachIndexed { band, gain ->
+                launch {
+                    if (!eased || band == draggedBand) {
+                        thumbs[band].snapTo(gain.toFloat())
+                    } else {
+                        thumbs[band].animateTo(gain.toFloat(), spring(dampingRatio = 0.75f, stiffness = Spring.StiffnessMediumLow))
+                    }
+                }
+            }
+        }
     }
+    return thumbs
 }
 
 /**
  * One band's input: a slider to accessibility services, ↑/↓ while focused, and press-and-drag along its column.
+ * A drag that starts sideways is left to the scrolling band row. [gain] is read for semantics only.
  * [onRelease] is told whether the gesture ended with the finger lifting, rather than being cancelled.
  */
 @Composable
 private fun BandControl(
     hz: Int,
-    gain: Int,
+    gain: () -> Int,
     minGain: Int,
     maxGain: Int,
     enabled: Boolean,
@@ -241,52 +313,42 @@ private fun BandControl(
     Box(
         modifier
             .fillMaxHeight()
-            .semantics(mergeDescendants = true) {
-                contentDescription = "${equalizerFrequencyLabel(hz)} 增益"
-                stateDescription = gainLabel(gain)
-                progressBarRangeInfo = ProgressBarRangeInfo(
-                    gain.toFloat(),
-                    minGain.toFloat()..maxGain.toFloat(),
-                    (maxGain - minGain - 1).coerceAtLeast(0),
-                )
-                if (!enabled) disabled()
-                setProgress { requested ->
-                    if (enabled) onSet(requested.roundToInt())
-                    enabled
-                }
-            }
+            .bandSemantics(hz, gain, minGain, maxGain, enabled, onSet)
             .onFocusChanged { onFocusChange(it.isFocused) }
-            .onKeyEvent { event ->
-                val step = gainStepFor(event.key) ?: return@onKeyEvent false
-                if (enabled && event.type == KeyEventType.KeyDown) onStep(step)
-                true
-            }
+            .bandKeys(enabled, onStep)
             .focusable(enabled)
-            .pointerInput(enabled, minGain, maxGain, inset) {
-                if (!enabled) return@pointerInput
-                val insetPx = inset.toPx()
-                fun gainAt(y: Float): Int {
-                    val fraction = ((y - insetPx) / (size.height - 2 * insetPx)).coerceIn(0f, 1f)
-                    return (maxGain - fraction * (maxGain - minGain)).roundToInt()
-                }
-                awaitEachGesture {
-                    val down = awaitFirstDown()
-                    down.consume()
-                    var lifted = false
-                    try {
-                        latestDrag(gainAt(down.position.y))
-                        while (!lifted) {
-                            val change = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: break
-                            change.consume()
-                            lifted = !change.pressed
-                            if (!lifted) latestDrag(gainAt(change.position.y))
-                        }
-                    } finally {
-                        latestRelease(lifted)
-                    }
-                }
-            },
+            .bandDrag(enabled, minGain, maxGain, inset, { latestDrag(it) }, { latestRelease(it) }),
     )
+}
+
+/** A band as a slider to accessibility services; [gain] is read in the semantics phase, not while composing. */
+private fun Modifier.bandSemantics(
+    hz: Int,
+    gain: () -> Int,
+    minGain: Int,
+    maxGain: Int,
+    enabled: Boolean,
+    onSet: (Int) -> Unit,
+): Modifier = semantics(mergeDescendants = true) {
+    val current = gain()
+    contentDescription = "${equalizerFrequencyLabel(hz)} 增益"
+    stateDescription = gainLabel(current)
+    progressBarRangeInfo = ProgressBarRangeInfo(
+        current.toFloat(),
+        minGain.toFloat()..maxGain.toFloat(),
+        (maxGain - minGain - 1).coerceAtLeast(0),
+    )
+    if (!enabled) disabled()
+    setProgress { requested ->
+        if (enabled) onSet(requested.roundToInt())
+        enabled
+    }
+}
+
+private fun Modifier.bandKeys(enabled: Boolean, onStep: (Int) -> Unit): Modifier = onKeyEvent { event ->
+    val step = gainStepFor(event.key)
+    if (step != null && enabled && event.type == KeyEventType.KeyDown) onStep(step)
+    step != null
 }
 
 private fun gainStepFor(key: Key): Int? = when (key) {

@@ -19,6 +19,7 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.onPointerEvent
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.rememberWindowState
@@ -45,16 +46,22 @@ import io.github.dohex.openrose.ui.model.OpenRoseModel
 import io.github.dohex.openrose.ui.model.WindowDestination
 import io.github.dohex.openrose.ui.noiseModeLabel
 import io.github.dohex.openrose.ui.rememberRemoteHeadsets
-import io.github.dohex.openrose.ui.remoteBatteryText
-import io.github.dohex.openrose.ui.traySummary
+import io.github.dohex.openrose.ui.rememberTraySummary
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
-/** The panel's width, and its height until the content is measured; the host then fits the height to the content. */
-private val trayPanelSize = DpSize(360.dp, 440.dp)
+private val screen: DpSize? by lazy { usableScreenSize() }
+
+/**
+ * The panel's width, and its height until the content is measured; the host then fits the height to the content.
+ * Kept within the screen, so the panel never starts larger than it.
+ */
+private val trayPanelSize: DpSize by lazy { DpSize(360.dp, 440.dp).fitTo(screen) }
+
+private fun trayPanelSizeFor(contentHeight: Dp): DpSize = DpSize(trayPanelSize.width, contentHeight).fitTo(screen)
 
 /** Window rules (for example niri's `match title=`) can float the panel window by this exact title. */
 internal const val TRAY_PANEL_WINDOW_TITLE = "OpenRose 托盘面板"
@@ -101,7 +108,7 @@ internal fun NucleusApplicationScope.DesktopTray(
     onStarted: () -> Unit,
 ) {
     val state by model.state.collectAsState()
-    val summary = traySummary(state, selection)
+    val summary = rememberTraySummary(state, selection)
     val sessionId = state.noiseModeSession?.sessionId
     val trayState = rememberTrayAppState(initialWindowSize = trayPanelSize)
     val anchoredOpen by trayState.isVisible.collectAsState()
@@ -144,7 +151,7 @@ internal fun NucleusApplicationScope.DesktopTray(
                         circulation = circulation,
                         sound = sound,
                         remoteHeadsets = peers,
-                        onContentHeight = { trayState.setWindowSize(DpSize(trayPanelSize.width, it)) },
+                        onContentHeight = { trayState.setWindowSize(trayPanelSizeFor(it)) },
                     )
                 }
             }
@@ -246,7 +253,7 @@ private fun NucleusApplicationScope.TrayPanelWindow(
                 circulation = circulation,
                 sound = sound,
                 remoteHeadsets = peers,
-                onContentHeight = { windowState.size = DpSize(trayPanelSize.width, it) },
+                onContentHeight = { windowState.size = trayPanelSizeFor(it) },
             )
         }
     }
@@ -272,7 +279,7 @@ private fun remoteMenuEntries(peers: List<RemoteHeadset>, uiScope: CoroutineScop
         if (device != null) {
             add(TrayMenuEntry.Label("$device · ${peer.sourceLabel}"))
             peer.statusLabel?.let { add(TrayMenuEntry.Label(it)) }
-            add(TrayMenuEntry.Label(remoteBatteryText(reading)))
+            add(TrayMenuEntry.Label(peer.batteryText))
             reading.modes.forEach { mode ->
                 val entry = TrayMenuEntry.NoiseMode(noiseModeLabel(mode.id), mode == reading.mode, !peer.busy) {
                     uiScope.launch { peer.selectMode(mode) }
@@ -280,7 +287,7 @@ private fun remoteMenuEntries(peers: List<RemoteHeadset>, uiScope: CoroutineScop
                 add(entry)
             }
         } else {
-            add(TrayMenuEntry.Label("${peer.name} · ${peer.statusLabel}"))
+            add(TrayMenuEntry.Label(peer.offlineLabel))
         }
         peer.feedback?.let { add(TrayMenuEntry.Label(it)) }
         add(TrayMenuEntry.Separator)

@@ -1,6 +1,7 @@
 package io.github.dohex.openrose.ui
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.Spring
@@ -58,6 +59,10 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -87,7 +92,8 @@ internal const val QUICK_PANEL_HANDLE_TAG = "quick-panel-handle"
 
 internal const val QUICK_EQUALIZER_MENU_TAG = "quick-eq-menu"
 
-private val SheetMaxWidth = 640.dp
+/** The widest a page's centered column, or the quick panel sheet, grows on a big window. */
+internal val ContentMaxWidth = 640.dp
 private val SheetCorner = 28.dp
 private const val SCRIM_ALPHA = 0.32f
 
@@ -125,13 +131,19 @@ fun QuickPanel(
     val drop = remember { Animatable(0f, visibilityThreshold = 1f).apply { updateBounds(lowerBound = 0f) } }
     var sheetHeight by remember { mutableIntStateOf(0) }
     var closing by remember { mutableStateOf(false) }
+    val reduceMotion = rememberReduceMotion()
 
     // Every way out slides the sheet off first; the host only hears about it once the sheet has left the screen.
+    // With animations removed in the system settings the sheet jumps instead of sliding.
+    suspend fun settle(target: Float, velocity: Float = 0f) {
+        if (reduceMotion) drop.snapTo(target) else drop.animateTo(target, sheetSpring, initialVelocity = velocity)
+    }
+
     fun close(velocity: Float = 0f) {
         if (closing) return
         closing = true
         scope.launch {
-            drop.animateTo(sheetHeight.toFloat(), sheetSpring, initialVelocity = velocity)
+            settle(sheetHeight.toFloat(), velocity)
             dismiss()
         }
     }
@@ -156,13 +168,13 @@ fun QuickPanel(
             AnimatedVisibility(
                 visibleState = entered,
                 modifier = Modifier.align(Alignment.BottomCenter),
-                enter = slideInVertically { it },
+                enter = if (reduceMotion) EnterTransition.None else slideInVertically { it },
             ) {
                 Column(
                     Modifier
                         .offset { IntOffset(0, drop.value.roundToInt()) }
                         .onSizeChanged { sheetHeight = it.height }
-                        .widthIn(max = SheetMaxWidth)
+                        .widthIn(max = ContentMaxWidth)
                         .fillMaxWidth()
                         .statusBarsPadding()
                         .clip(RoundedCornerShape(topStart = SheetCorner, topEnd = SheetCorner))
@@ -185,13 +197,13 @@ fun QuickPanel(
                                 if (drop.value > sheetHeight * DISMISS_FRACTION || velocity > dismissVelocity) {
                                     close(velocity)
                                 } else {
-                                    drop.animateTo(0f, sheetSpring, initialVelocity = velocity)
+                                    settle(0f, velocity)
                                 }
                             },
                         ),
+                        onClose = { close() },
                     )
-                    if (circulation != null && state.readySession == null) RemoteHeadsets(circulation)
-                    QuickPanelContent(model, state, selection, onOpenApp)
+                    QuickPanelContent(model, state, selection, circulation, onOpenApp)
                 }
             }
         }
@@ -207,11 +219,23 @@ private fun sheetBackground(): Color = when (LocalInterfaceStyle.current) {
     InterfaceStyle.MATERIAL3 -> MaterialTheme.colorScheme.background
 }
 
-/** The visible bar is small; the whole width above the content takes the drag. */
+/** The visible bar is small; the whole width above the content takes the drag. A screen reader gets the same exit as a button. */
 @Composable
-private fun SheetHandle(modifier: Modifier) {
+private fun SheetHandle(modifier: Modifier, onClose: () -> Unit) {
     Box(
-        modifier.testTag(QUICK_PANEL_HANDLE_TAG).fillMaxWidth().height(20.dp).padding(top = 8.dp),
+        modifier
+            .testTag(QUICK_PANEL_HANDLE_TAG)
+            .fillMaxWidth()
+            .height(20.dp)
+            .semantics {
+                role = Role.Button
+                contentDescription = "快捷面板拖动条"
+                onClick(label = "关闭快捷面板") {
+                    onClose()
+                    true
+                }
+            }
+            .padding(top = 8.dp),
         contentAlignment = Alignment.TopCenter,
     ) {
         Box(
@@ -229,12 +253,15 @@ private fun QuickPanelContent(
     model: OpenRoseModel,
     state: ControlState,
     selection: PrimaryDeviceSelection,
+    circulation: CirculationClient?,
     onOpenApp: (WindowDestination?) -> Unit,
 ) {
-    val summary = traySummary(state, selection)
+    val summary = rememberTraySummary(state, selection)
+    val sections = rememberPanelSections(state, summary, circulation)
     val device = state.activeDevice()?.takeIf { summary.connected }
 
-    TrayStatusCard(state, summary)
+    sections.remoteHeadsets.forEach { RemoteHeadsetCard(it) }
+    if (sections.statusCard) TrayStatusCard(state, summary)
 
     if (device != null) {
         val onSet = model.settingsFor(device.sessionId)
@@ -249,7 +276,7 @@ private fun QuickPanelContent(
                     DeviceField.GAME_MODE,
                     HeadsetCommand::GameMode,
                     device,
-                    state.isReady(device) && !state.hasPendingSetting(device),
+                    state.canWrite(device, DeviceSetting.GAME_MODE),
                     onSet,
                     icon = RoseIcon.GAME,
                 )
@@ -268,7 +295,8 @@ private fun QuickPanelContent(
 private fun QuickEqualizerMenu(state: ControlState, device: DeviceState, onSet: (HeadsetCommand) -> Unit) {
     val options = device.writablePresetOptions()
     if (options.isEmpty()) return
-    val enabled = state.isReady(device) && !state.hasPendingSetting(device)
+    val blocked = state.writeBlockedReason(device, DeviceSetting.EQ)
+    val enabled = blocked == null
     val confirmed = device.confirmedText(DeviceField.EQ)
     var expanded by remember(device.sessionId, enabled) { mutableStateOf(false) }
     fun select(preset: String) {
@@ -332,5 +360,6 @@ private fun QuickEqualizerMenu(state: ControlState, device: DeviceState, onSet: 
                 }
             }
         }
+        blocked?.let { AppText(it, Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp), role = AppTextRole.Footnote) }
     }
 }

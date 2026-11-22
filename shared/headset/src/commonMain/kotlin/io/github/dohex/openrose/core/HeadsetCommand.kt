@@ -93,6 +93,11 @@ sealed class HeadsetCommand(val setting: DeviceSetting, val value: FieldValue) {
 
     data class HearingProtection(val level: Int) : HeadsetCommand(DeviceSetting.HEARING_PROTECTION, FieldValue.Number(level)) {
         override fun checkOptions(device: DeviceState): ControlError? = invalidUnless(level in device.capabilities.hearingProtectionLevels)
+
+        companion object {
+            /** The volume ceiling in dB a protection level stands for; level 0 is off and levels outside 1..6 have none. */
+            fun thresholdDb(level: Int): Int? = if (level in 1..6) 70 + level * 5 else null
+        }
     }
 
     data class BassBoost(val level: Int) : HeadsetCommand(DeviceSetting.BASS_BOOST, FieldValue.Number(level)) {

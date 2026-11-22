@@ -25,22 +25,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusProperties
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.KeyEventType
-import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onPreviewKeyEvent
-import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import io.github.dohex.openrose.ui.shell.ShellPageContent
 import top.yukonga.miuix.kmp.blur.Backdrop
@@ -83,7 +74,7 @@ internal fun MaterialNavigationRail(selected: AppPage, onSelect: (AppPage) -> Un
                 selected = destination == selected,
                 onClick = { onSelect(destination) },
                 icon = { AppIcon(destination.icon) },
-                label = { Text(destination.title) },
+                label = { Text(destination.navigationLabel) },
                 colors = NavigationRailItemDefaults.colors(
                     indicatorColor = MaterialTheme.colorScheme.secondaryContainer,
                     selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
@@ -103,79 +94,26 @@ internal fun MaterialAppShell(
     pageContent: @Composable () -> Unit,
     feedbackContent: @Composable (Modifier) -> Unit = {},
 ) {
-    val backdropActive = LocalBackdropBlurActive.current
-    val backdrop = rememberAppBackdrop(MaterialTheme.colorScheme.surface, backdropActive)
+    val backdrop = rememberAppBackdrop(MaterialTheme.colorScheme.surface, LocalBackdropBlurActive.current)
     CompositionLocalProvider(LocalAppBackdrop provides backdrop) {
         val title = page.title
         Scaffold(
             modifier = Modifier.fillMaxSize(),
             topBar = {
-                val topBarModifier = Modifier.appBarBackdropBlur(
-                    backdrop = backdrop,
-                    surfaceColor = MaterialTheme.colorScheme.surface,
-                    active = backdropActive,
-                )
-                val topBarColors = materialTopAppBarColors(backdropActive)
                 TopAppBar(
                     title = { Text(title) },
-                    modifier = topBarModifier,
+                    modifier = Modifier.topBarBackdropBlur(backdrop, MaterialTheme.colorScheme.surface),
                     navigationIcon = { IconButton(onClick = onBack) { Icon(RoseIcons.Back, "返回") } },
-                    colors = topBarColors,
+                    colors = materialTopAppBarColors(backdrop != null),
                 )
             },
         ) { padding ->
             ShellPageContent(
                 page = page,
                 padding = padding,
-                scrollModifier = Modifier.appBackdropContent(backdrop, backdropActive).verticalScroll(scrollState),
+                scrollModifier = Modifier.appBackdropContent(backdrop).verticalScroll(scrollState),
                 pageContent = pageContent,
                 feedbackContent = feedbackContent,
-            )
-        }
-    }
-}
-
-/** Top-bar actions of the headphones tab: overflow menu while connected, add-device button otherwise. */
-@Composable
-private fun MaterialHeadphoneActions(
-    connectedHome: Boolean,
-    menuExpanded: Boolean,
-    onMenuExpandedChange: (Boolean) -> Unit,
-    onAddDevice: () -> Unit,
-    onDisconnect: () -> Unit,
-) {
-    val menuFocusRequester = remember { FocusRequester() }
-    Box {
-        if (connectedHome) {
-            IconButton(onClick = { onMenuExpandedChange(true) }) {
-                Icon(RoseIcons[RoseIcon.MORE], contentDescription = "耳机菜单")
-            }
-        } else {
-            IconButton(onClick = onAddDevice) {
-                Icon(RoseIcons.Plus, contentDescription = "添加耳机")
-            }
-        }
-        DropdownMenu(
-            expanded = connectedHome && menuExpanded,
-            onDismissRequest = { onMenuExpandedChange(false) },
-        ) {
-            LaunchedEffect(menuExpanded) {
-                if (menuExpanded) menuFocusRequester.requestFocus()
-            }
-            DropdownMenuItem(
-                modifier = Modifier.focusRequester(menuFocusRequester).onPreviewKeyEvent { event ->
-                    if (event.type == KeyEventType.KeyUp && event.key == Key.Escape) {
-                        onMenuExpandedChange(false)
-                        true
-                    } else {
-                        false
-                    }
-                },
-                text = { Text("断开控制连接") },
-                onClick = {
-                    onMenuExpandedChange(false)
-                    onDisconnect()
-                },
             )
         }
     }
@@ -193,6 +131,8 @@ internal fun MaterialMainShell(
     connectedHome: Boolean = false,
     menuExpanded: Boolean = false,
     onMenuExpandedChange: (Boolean) -> Unit = {},
+    confirmingDisconnect: Boolean = false,
+    onConfirmingDisconnectChange: (Boolean) -> Unit = {},
     onDisconnect: () -> Unit = {},
     platformActions: @Composable (AppPage) -> Unit = {},
     animatePageChanges: Boolean = true,
@@ -201,133 +141,152 @@ internal fun MaterialMainShell(
         pagerState.syncPage()
     }
     val backdropActive = LocalBackdropBlurActive.current
-    val floatingBackdrop = rememberAppBackdrop(
-        MaterialTheme.colorScheme.surface,
-        backdropActive && !wide && bottomBarStyle == BottomBarStyle.FLOATING,
-    )
+    val floating = !wide && bottomBarStyle == BottomBarStyle.FLOATING
+    // The bottom bar, fixed or floating, blurs the pages behind it, so they run under it.
+    val barBackdrop = rememberAppBackdrop(MaterialTheme.colorScheme.surface, backdropActive && !wide)
+    val contentBehindBar = floating || barBackdrop != null
     val currentTab = mainPages.getOrElse(pagerState.selectedPage) { AppPage.HEADPHONES }
+    val headphoneMenu = HeadphoneMenuState(
+        connectedHome = connectedHome,
+        menuExpanded = menuExpanded,
+        onMenuExpandedChange = onMenuExpandedChange,
+        confirmingDisconnect = confirmingDisconnect,
+        onConfirmingDisconnectChange = onConfirmingDisconnectChange,
+        onAddDevice = { onNavigate(AppPage.ADD_DEVICE) },
+        onDisconnect = onDisconnect,
+    )
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         bottomBar = {
-            if (!wide) {
-                if (bottomBarStyle == BottomBarStyle.FLOATING) {
-                    MaterialFloatingTabs(currentTab, backdropActive, floatingBackdrop) { index, destination ->
-                        pagerState.selectPage(index, animate = animatePageChanges)
-                        onNavigate(destination)
-                    }
-                } else {
-                    val bottomBarColor = if (backdropActive) Color.Transparent else MaterialTheme.colorScheme.surfaceContainer
-                    NavigationBar(containerColor = bottomBarColor) {
-                        mainPages.forEachIndexed { index, destination ->
-                            NavigationBarItem(
-                                selected = currentTab == destination,
-                                onClick = {
-                                    pagerState.selectPage(index, animate = animatePageChanges)
-                                    onNavigate(destination)
-                                },
-                                icon = { AppIcon(destination.icon) },
-                                label = { Text(destination.navigationLabel) },
-                                colors = NavigationBarItemDefaults.colors(
-                                    indicatorColor = MaterialTheme.colorScheme.secondaryContainer,
-                                    selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                                ),
-                            )
-                        }
-                    }
-                }
-            }
+            if (!wide) MaterialBottomBar(floating, currentTab, barBackdrop, onNavigate)
         },
     ) { outerPadding ->
-        val isFloating = !wide && bottomBarStyle == BottomBarStyle.FLOATING
-        val pagerBottomPadding = if (isFloating) 0.dp else outerPadding.calculateBottomPadding()
-        val trailingBottomPadding = if (isFloating) outerPadding.calculateBottomPadding() else 0.dp
+        val barHeight = outerPadding.calculateBottomPadding()
         val pagerModifier = Modifier
             .fillMaxSize()
-            .appBackdropContent(floatingBackdrop, backdropActive)
-            .padding(bottom = pagerBottomPadding)
-        val pageContent: @Composable PagerScope.(Int) -> Unit = { pageIndex ->
+            .appBackdropContent(barBackdrop)
+            .padding(bottom = if (contentBehindBar) 0.dp else barHeight)
+        MaterialMainPager(pagerState, wide, pagerModifier) { pageIndex ->
             val page = mainPages[pageIndex]
-            val isSelected = pageIndex == pagerState.selectedPage
-            val pageBackdrop = rememberAppBackdrop(MaterialTheme.colorScheme.surface, backdropActive)
-            val pageModifier = if (isSelected) {
-                Modifier.fillMaxSize()
-            } else {
-                Modifier.fillMaxSize().clearAndSetSemantics { }.focusProperties {
-                    canFocus = false
-                    onEnter = { cancelFocusChange() }
-                }
-            }
-            CompositionLocalProvider(LocalAppBackdrop provides pageBackdrop) {
-                Box(pageModifier) {
-                    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
-                    val title = page.title
-                    val actions: @Composable RowScope.() -> Unit = {
-                        platformActions(page)
-                        if (page == AppPage.HEADPHONES) {
-                            MaterialHeadphoneActions(
-                                connectedHome = connectedHome,
-                                menuExpanded = menuExpanded,
-                                onMenuExpandedChange = onMenuExpandedChange,
-                                onAddDevice = { onNavigate(AppPage.ADD_DEVICE) },
-                                onDisconnect = onDisconnect,
-                            )
-                        }
-                    }
-                    Scaffold(
-                        modifier = Modifier.fillMaxSize().nestedScroll(scrollBehavior.nestedScrollConnection),
-                        topBar = {
-                            val topBarModifier = Modifier.appBarBackdropBlur(
-                                backdrop = pageBackdrop,
-                                surfaceColor = MaterialTheme.colorScheme.surface,
-                                active = backdropActive,
-                            )
-                            val topBarColors = materialTopAppBarColors(backdropActive)
-                            if (page in mainPages) {
-                                LargeTopAppBar(
-                                    title = { Text(title) },
-                                    modifier = topBarModifier,
-                                    actions = actions,
-                                    scrollBehavior = scrollBehavior,
-                                    colors = topBarColors,
-                                )
-                            } else {
-                                TopAppBar(title = { Text(title) }, modifier = topBarModifier, actions = actions, colors = topBarColors)
-                            }
-                        },
-                    ) { pagePadding ->
-                        ShellPageContent(
-                            page = page,
-                            padding = pagePadding,
-                            scrollModifier = Modifier.appBackdropContent(pageBackdrop, backdropActive)
-                                .verticalScroll(scrollStates.getValue(page)),
-                            compactHome = page == AppPage.HEADPHONES && !connectedHome,
-                            bottomClearance = trailingBottomPadding,
-                            pageContent = { pageContentFor(page) },
-                            feedbackContent = { modifier -> pageFeedbackFor(page, modifier) },
-                        )
-                    }
-                }
-            }
+            MaterialMainPage(
+                pagerState = pagerState,
+                pageIndex = pageIndex,
+                backdropActive = backdropActive,
+                scrollState = scrollStates.getValue(page),
+                headphoneMenu = headphoneMenu,
+                platformActions = platformActions,
+                bottomClearance = if (contentBehindBar) barHeight else 0.dp,
+                animateWidth = animatePageChanges,
+                pageContent = { pageContentFor(page) },
+                feedbackContent = { modifier -> pageFeedbackFor(page, modifier) },
+            )
         }
-        // Wide pages sit beside the vertical rail, so they travel vertically and only on rail taps.
-        if (wide) {
-            VerticalPager(
-                state = pagerState.pagerState,
-                modifier = pagerModifier,
-                beyondViewportPageCount = 1,
-                userScrollEnabled = false,
-                pageNestedScrollConnection = WideMainPagerNestedScrollConnection,
-                key = { index -> mainPages[index] },
-                pageContent = pageContent,
+    }
+}
+
+/** The narrow-screen bar: the floating toolbar or the fixed navigation bar, each blurring [barBackdrop] or solid without it. */
+@Composable
+private fun MaterialBottomBar(floating: Boolean, currentTab: AppPage, barBackdrop: Backdrop?, onNavigate: (AppPage) -> Unit) {
+    if (floating) {
+        MaterialFloatingTabs(currentTab, barBackdrop, onNavigate)
+        return
+    }
+    val barColor = MaterialTheme.colorScheme.surfaceContainer
+    NavigationBar(
+        modifier = Modifier.bottomBarBackdropBlur(barBackdrop, barColor),
+        containerColor = if (barBackdrop != null) Color.Transparent else barColor,
+    ) {
+        mainPages.forEach { destination ->
+            NavigationBarItem(
+                selected = currentTab == destination,
+                onClick = { onNavigate(destination) },
+                icon = { AppIcon(destination.icon) },
+                label = { Text(destination.navigationLabel) },
+                colors = NavigationBarItemDefaults.colors(
+                    indicatorColor = MaterialTheme.colorScheme.secondaryContainer,
+                    selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                ),
             )
-        } else {
-            HorizontalPager(
-                state = pagerState.pagerState,
-                modifier = pagerModifier,
-                beyondViewportPageCount = 1,
-                key = { index -> mainPages[index] },
-                pageContent = pageContent,
-            )
+        }
+    }
+}
+
+/** Wide pages sit beside the vertical rail, so they travel vertically and only on rail taps. */
+@Composable
+private fun MaterialMainPager(
+    pagerState: MainTabsPagerState,
+    wide: Boolean,
+    modifier: Modifier,
+    pageContent: @Composable PagerScope.(Int) -> Unit,
+) {
+    if (wide) {
+        VerticalPager(
+            state = pagerState.pagerState,
+            modifier = modifier,
+            beyondViewportPageCount = 1,
+            userScrollEnabled = false,
+            pageNestedScrollConnection = WideMainPagerNestedScrollConnection,
+            key = { index -> mainPages[index] },
+            pageContent = pageContent,
+        )
+    } else {
+        HorizontalPager(
+            state = pagerState.pagerState,
+            modifier = modifier,
+            beyondViewportPageCount = 1,
+            key = { index -> mainPages[index] },
+            pageContent = pageContent,
+        )
+    }
+}
+
+/** One main tab: its own collapsing top bar over its scrolling content. */
+@Composable
+private fun MaterialMainPage(
+    pagerState: MainTabsPagerState,
+    pageIndex: Int,
+    backdropActive: Boolean,
+    scrollState: ScrollState,
+    headphoneMenu: HeadphoneMenuState,
+    platformActions: @Composable (AppPage) -> Unit,
+    bottomClearance: Dp,
+    animateWidth: Boolean,
+    pageContent: @Composable () -> Unit,
+    feedbackContent: @Composable (Modifier) -> Unit,
+) {
+    val page = mainPages[pageIndex]
+    val surface = MaterialTheme.colorScheme.surface
+    // Pages kept composed beside the visible ones neither record nor blur a backdrop.
+    val pageBackdrop = rememberAppBackdrop(surface, backdropActive && rememberPageVisible(pagerState, pageIndex))
+    CompositionLocalProvider(LocalAppBackdrop provides pageBackdrop) {
+        Box(Modifier.mainPageSemantics(pageIndex == pagerState.selectedPage)) {
+            val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+            ScrollToTopOnRequest(pagerState.scrollToTopRequest(pageIndex), scrollState) {
+                scrollBehavior.state.heightOffset = 0f
+            }
+            Scaffold(
+                modifier = Modifier.fillMaxSize().nestedScroll(scrollBehavior.nestedScrollConnection),
+                topBar = {
+                    LargeTopAppBar(
+                        title = { Text(page.title) },
+                        modifier = Modifier.topBarBackdropBlur(pageBackdrop, surface),
+                        actions = { MainTabActions(page, platformActions, headphoneMenu) },
+                        scrollBehavior = scrollBehavior,
+                        colors = materialTopAppBarColors(pageBackdrop != null),
+                    )
+                },
+            ) { pagePadding ->
+                ShellPageContent(
+                    page = page,
+                    padding = pagePadding,
+                    scrollModifier = Modifier.appBackdropContent(pageBackdrop).verticalScroll(scrollState),
+                    compactHome = page == AppPage.HEADPHONES && !headphoneMenu.connectedHome,
+                    bottomClearance = bottomClearance,
+                    animateWidth = animateWidth,
+                    pageContent = pageContent,
+                    feedbackContent = feedbackContent,
+                )
+            }
         }
     }
 }
@@ -335,10 +294,10 @@ internal fun MaterialMainShell(
 @Composable
 private fun MaterialFloatingTabs(
     currentTab: AppPage,
-    backdropActive: Boolean,
-    floatingBackdrop: Backdrop?,
-    onSelect: (Int, AppPage) -> Unit,
+    barBackdrop: Backdrop?,
+    onSelect: (AppPage) -> Unit,
 ) {
+    val blurred = barBackdrop != null
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -353,12 +312,12 @@ private fun MaterialFloatingTabs(
         // an outlineVariant hairline for separation instead.
         HorizontalFloatingToolbar(
             expanded = true,
-            modifier = if (backdropActive && floatingBackdrop != null) {
+            modifier = if (barBackdrop != null) {
                 Modifier
                     .textureBlur(
-                        backdrop = floatingBackdrop,
+                        backdrop = barBackdrop,
                         shape = FloatingToolbarDefaults.ContainerShape,
-                        blurRadius = 25f,
+                        blurRadius = BlurTokens.RADIUS,
                     )
                     .border(
                         width = 1.dp,
@@ -370,12 +329,12 @@ private fun MaterialFloatingTabs(
             },
             colors = FloatingToolbarDefaults.standardFloatingToolbarColors(
                 toolbarContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh.let {
-                    if (backdropActive) it.copy(alpha = 0.85f) else it
+                    if (blurred) it.copy(alpha = BlurTokens.MATERIAL_FLOATING_TINT) else it
                 },
             ),
-            expandedShadowElevation = if (backdropActive) 0.dp else 6.dp,
+            expandedShadowElevation = if (blurred) 0.dp else 6.dp,
         ) {
-            mainPages.forEachIndexed { index, destination ->
+            mainPages.forEach { destination ->
                 val isSelected = currentTab == destination
                 val indicatorWidth by animateDpAsState(
                     targetValue = if (isSelected) 56.dp else 48.dp,
@@ -416,7 +375,7 @@ private fun MaterialFloatingTabs(
                         .selectable(
                             selected = isSelected,
                             role = Role.Tab,
-                            onClick = { onSelect(index, destination) },
+                            onClick = { onSelect(destination) },
                         )
                         .size(width = indicatorWidth, height = 48.dp),
                     contentAlignment = Alignment.Center,

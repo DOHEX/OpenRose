@@ -15,15 +15,14 @@ internal fun DeviceControlCard(
     device: DeviceState,
     onSet: (HeadsetCommand) -> Unit,
 ) {
-    val enabled = state.isReady(device) && !state.hasPendingSetting(device)
-    PromptSettings(device, enabled, onSet)
-    BassBoostSettings(device, enabled, onSet)
-    AudioConnectionSettings(device, enabled, onSet)
-    HearingSettings(device, enabled, onSet)
+    PromptSettings(state, device, onSet)
+    BassBoostSettings(state, device, onSet)
+    AudioConnectionSettings(state, device, onSet)
+    HearingSettings(state, device, onSet)
 }
 
 @Composable
-private fun PromptSettings(device: DeviceState, enabled: Boolean, onSet: (HeadsetCommand) -> Unit) {
+private fun PromptSettings(state: ControlState, device: DeviceState, onSet: (HeadsetCommand) -> Unit) {
     val writable = device.capabilities.writableSettings
     val volumeLevels = device.capabilities.promptVolumeLevels
     val hasVolume = DeviceSetting.PROMPT_VOLUME in writable && volumeLevels.isNotEmpty()
@@ -39,7 +38,8 @@ private fun PromptSettings(device: DeviceState, enabled: Boolean, onSet: (Headse
                     valueText = confirmedChoiceValue(DeviceField.PROMPT_VOLUME, device),
                     options = volumeLevels.sorted().map { level -> AppOption(level, if (level == 0) "关闭" else "$level 档") },
                     selected = confirmed,
-                    enabled = enabled,
+                    enabled = state.canWrite(device, DeviceSetting.PROMPT_VOLUME),
+                    pending = state.pendingNumber(device, DeviceSetting.PROMPT_VOLUME),
                     onSelect = { level -> onSet(HeadsetCommand.PromptVolume(level)) },
                 )
             }
@@ -50,7 +50,8 @@ private fun PromptSettings(device: DeviceState, enabled: Boolean, onSet: (Headse
                     valueText = confirmedChoiceValue(DeviceField.PROMPT_LANGUAGE, device),
                     options = languages.sorted().map { AppOption(it, semanticLabel(it)) },
                     selected = confirmed,
-                    enabled = enabled,
+                    enabled = state.canWrite(device, DeviceSetting.PROMPT_LANGUAGE),
+                    pending = state.pendingText(device, DeviceSetting.PROMPT_LANGUAGE),
                     onSelect = { onSet(HeadsetCommand.PromptLanguage(it)) },
                 )
             }
@@ -59,7 +60,7 @@ private fun PromptSettings(device: DeviceState, enabled: Boolean, onSet: (Headse
 }
 
 @Composable
-private fun BassBoostSettings(device: DeviceState, enabled: Boolean, onSet: (HeadsetCommand) -> Unit) {
+private fun BassBoostSettings(state: ControlState, device: DeviceState, onSet: (HeadsetCommand) -> Unit) {
     val writable = device.capabilities.writableSettings
     val bassLevels = device.capabilities.bassBoostLevels
     val hasBass = DeviceSetting.BASS_BOOST in writable && bassLevels.isNotEmpty()
@@ -71,7 +72,8 @@ private fun BassBoostSettings(device: DeviceState, enabled: Boolean, onSet: (Hea
                 valueText = confirmed?.let { "$it 档" } ?: "当前状态未知",
                 options = bassLevels.sorted().map { AppOption(it, "$it 档") },
                 selected = confirmed,
-                enabled = enabled,
+                enabled = state.canWrite(device, DeviceSetting.BASS_BOOST),
+                pending = state.pendingNumber(device, DeviceSetting.BASS_BOOST),
                 onSelect = { onSet(HeadsetCommand.BassBoost(it)) },
             )
         }
@@ -79,7 +81,7 @@ private fun BassBoostSettings(device: DeviceState, enabled: Boolean, onSet: (Hea
 }
 
 @Composable
-private fun AudioConnectionSettings(device: DeviceState, enabled: Boolean, onSet: (HeadsetCommand) -> Unit) {
+private fun AudioConnectionSettings(state: ControlState, device: DeviceState, onSet: (HeadsetCommand) -> Unit) {
     val writable = device.capabilities.writableSettings
     val audio = device.capabilities.audioControl
     val hasAudio = DeviceSetting.AUDIO_MODE in writable && audio != null && audio.modes.isNotEmpty()
@@ -105,23 +107,40 @@ private fun AudioConnectionSettings(device: DeviceState, enabled: Boolean, onSet
                     options = audio.modes.sortedBy(::semanticLabel)
                         .map { mode -> AppOption(mode, semanticLabel(mode)) },
                     selected = confirmed,
-                    enabled = enabled,
+                    enabled = state.canWrite(device, DeviceSetting.AUDIO_MODE),
+                    pending = state.pendingText(device, DeviceSetting.AUDIO_MODE),
                     onSelect = { mode -> onSet(HeadsetCommand.AudioMode(mode)) },
                 )
             }
             if (hasMultipoint) {
-                SettingToggleChoices("多点连接", DeviceField.MULTIPOINT, HeadsetCommand::Multipoint, device, enabled, onSet)
+                SettingToggleChoices(
+                    "多点连接",
+                    DeviceField.MULTIPOINT,
+                    HeadsetCommand::Multipoint,
+                    device,
+                    state.canWrite(device, DeviceSetting.MULTIPOINT),
+                    onSet,
+                    pendingToggle = state.pendingToggle(device, DeviceSetting.MULTIPOINT),
+                )
             }
-            AdditionalAudioControls(device, enabled, onSet)
+            AdditionalAudioControls(state, device, onSet)
             if (hasSpatialAudio) {
-                SettingToggleChoices("空间音频", DeviceField.SPATIAL_AUDIO, HeadsetCommand::SpatialAudio, device, enabled, onSet)
+                SettingToggleChoices(
+                    "空间音频",
+                    DeviceField.SPATIAL_AUDIO,
+                    HeadsetCommand::SpatialAudio,
+                    device,
+                    state.canWrite(device, DeviceSetting.SPATIAL_AUDIO),
+                    onSet,
+                    pendingToggle = state.pendingToggle(device, DeviceSetting.SPATIAL_AUDIO),
+                )
             }
         }
     }
 }
 
 @Composable
-private fun HearingSettings(device: DeviceState, enabled: Boolean, onSet: (HeadsetCommand) -> Unit) {
+private fun HearingSettings(state: ControlState, device: DeviceState, onSet: (HeadsetCommand) -> Unit) {
     val writable = device.capabilities.writableSettings
     val gainLevels = device.capabilities.gainLevels
     val hasGain = DeviceSetting.GAIN in writable && gainLevels.isNotEmpty()
@@ -136,7 +155,8 @@ private fun HearingSettings(device: DeviceState, enabled: Boolean, onSet: (Heads
                     valueText = confirmedChoiceValue(DeviceField.GAIN, device),
                     options = gainLevels.sorted().map { level -> AppOption(level, gainLevelLabel(level)) },
                     selected = confirmed,
-                    enabled = enabled,
+                    enabled = state.canWrite(device, DeviceSetting.GAIN),
+                    pending = state.pendingNumber(device, DeviceSetting.GAIN),
                     onSelect = { level -> onSet(HeadsetCommand.Gain(level)) },
                 )
             }
@@ -147,7 +167,8 @@ private fun HearingSettings(device: DeviceState, enabled: Boolean, onSet: (Heads
                     valueText = confirmedChoiceValue(DeviceField.HEARING_PROTECTION, device),
                     options = protectionLevels.sorted().map { level -> AppOption(level, hearingProtectionLabel(level)) },
                     selected = confirmed,
-                    enabled = enabled,
+                    enabled = state.canWrite(device, DeviceSetting.HEARING_PROTECTION),
+                    pending = state.pendingNumber(device, DeviceSetting.HEARING_PROTECTION),
                     onSelect = { level -> onSet(HeadsetCommand.HearingProtection(level)) },
                 )
             }
@@ -175,23 +196,40 @@ internal val audioPageSettings = additionalAudioSettings + setOf(
 )
 
 @Composable
-private fun AdditionalAudioControls(device: DeviceState, enabled: Boolean, onSet: (HeadsetCommand) -> Unit) {
+private fun AdditionalAudioControls(state: ControlState, device: DeviceState, onSet: (HeadsetCommand) -> Unit) {
     val writable = device.capabilities.writableSettings
     if (DeviceSetting.SPATIAL_MODE in writable) {
-        SpatialChoiceRow(HeadsetCommand::SpatialMode, DeviceField.SPATIAL_MODE, device.capabilities.spatialModes, device, enabled, onSet)
+        SpatialChoiceRow(
+            HeadsetCommand::SpatialMode,
+            DeviceField.SPATIAL_MODE,
+            DeviceSetting.SPATIAL_MODE,
+            device.capabilities.spatialModes,
+            state,
+            device,
+            onSet,
+        )
     }
     if (DeviceSetting.SPATIAL_CONTENT in writable && device.settingPrerequisite(DeviceSetting.SPATIAL_CONTENT) == null) {
         SpatialChoiceRow(
             HeadsetCommand::SpatialContent,
             DeviceField.SPATIAL_CONTENT,
+            DeviceSetting.SPATIAL_CONTENT,
             device.capabilities.spatialContents,
+            state,
             device,
-            enabled,
             onSet,
         )
     }
     if (DeviceSetting.EAR_ADAPTIVE in writable) {
-        SettingToggleChoices("耳道自适应", DeviceField.EAR_ADAPTIVE, HeadsetCommand::EarAdaptive, device, enabled, onSet)
+        SettingToggleChoices(
+            "耳道自适应",
+            DeviceField.EAR_ADAPTIVE,
+            HeadsetCommand::EarAdaptive,
+            device,
+            state.canWrite(device, DeviceSetting.EAR_ADAPTIVE),
+            onSet,
+            pendingToggle = state.pendingToggle(device, DeviceSetting.EAR_ADAPTIVE),
+        )
     }
     if (DeviceSetting.INDEPENDENT_MIC_ACTIVATION in writable) {
         SettingToggleChoices(
@@ -199,8 +237,9 @@ private fun AdditionalAudioControls(device: DeviceState, enabled: Boolean, onSet
             DeviceField.INDEPENDENT_MIC_ACTIVATION,
             HeadsetCommand::IndependentMicActivation,
             device,
-            enabled,
+            state.canWrite(device, DeviceSetting.INDEPENDENT_MIC_ACTIVATION),
             onSet,
+            pendingToggle = state.pendingToggle(device, DeviceSetting.INDEPENDENT_MIC_ACTIVATION),
         )
     }
     if (DeviceSetting.INDEPENDENT_MIC_MODE in writable) {
@@ -209,8 +248,10 @@ private fun AdditionalAudioControls(device: DeviceState, enabled: Boolean, onSet
             DeviceField.INDEPENDENT_MIC_MODE,
             HeadsetCommand::IndependentMicMode,
             device,
-            enabled && device.settingPrerequisite(DeviceSetting.INDEPENDENT_MIC_MODE) == null,
+            state.canWrite(device, DeviceSetting.INDEPENDENT_MIC_MODE) &&
+                device.settingPrerequisite(DeviceSetting.INDEPENDENT_MIC_MODE) == null,
             onSet,
+            pendingToggle = state.pendingToggle(device, DeviceSetting.INDEPENDENT_MIC_MODE),
         )
     }
 }
@@ -219,9 +260,10 @@ private fun AdditionalAudioControls(device: DeviceState, enabled: Boolean, onSet
 private fun SpatialChoiceRow(
     command: (String) -> HeadsetCommand,
     field: DeviceField,
+    setting: DeviceSetting,
     choices: Set<String>,
+    state: ControlState,
     device: DeviceState,
-    enabled: Boolean,
     onSet: (HeadsetCommand) -> Unit,
 ) {
     val confirmed = device.confirmedText(field)
@@ -230,7 +272,8 @@ private fun SpatialChoiceRow(
         valueText = confirmedChoiceValue(field, device),
         options = choices.map { AppOption(it, semanticLabel(it)) },
         selected = confirmed,
-        enabled = enabled,
+        enabled = state.canWrite(device, setting),
+        pending = state.pendingText(device, setting),
         onSelect = { onSet(command(it)) },
     )
 }

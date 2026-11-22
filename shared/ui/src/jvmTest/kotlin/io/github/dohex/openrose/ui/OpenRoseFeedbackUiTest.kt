@@ -153,7 +153,7 @@ class OpenRoseFeedbackUiTest {
                 harness.render()
                 assertTrue(harness.hasText("降噪模式 · #42"), "diagnostics retain the request identity in $style")
                 assertTrue(harness.hasTextLine("请求值：抗风噪"), "diagnostics retain the requested value in $style")
-                assertTrue(harness.hasText("已写入 · 待确认"), "diagnostics retain the operation phase in $style")
+                assertTrue(harness.hasText("正在处理设置，等待设备确认"), "diagnostics retain the operation phase in $style")
 
                 val current = harness.state.value
                 val device = requireNotNull(current.device)
@@ -170,7 +170,7 @@ class OpenRoseFeedbackUiTest {
                     ),
                     settingOperations = persistentListOf(confirmedOperation),
                 )
-                harness.clickTab("我的耳机")
+                harness.clickTab("耳机")
                 harness.render(frames = 30)
                 assertFalse(harness.hasText("设备已确认设置"), "a completed operation is not replayed when returning home in $style")
                 assertTrue(harness.hasSelectedText("抗风噪"), "the current mode comes from device state in $style")
@@ -202,7 +202,7 @@ class OpenRoseFeedbackUiTest {
                 harness.render()
                 assertTrue(harness.hasText("降噪模式 · #43"), "diagnostics retain request details in $style")
                 assertTrue(harness.hasTextLine("请求值：抗风噪"), "diagnostics retain the requested value in $style")
-                assertTrue(harness.hasText("确认超时"), "diagnostics retain the failure stage in $style")
+                assertTrue(harness.hasText("等待设备确认超时"), "diagnostics retain the failure stage in $style")
                 assertTrue(harness.hasText("请求值：抗风噪\n${error.message}"), "the operation row keeps its failure reason in $style")
             }
         }
@@ -283,7 +283,7 @@ class OpenRoseFeedbackUiTest {
                 harness.selectInterfaceStyle(nextStyle)
                 assertEquals(nextStyle, harness.uiSettings.value.interfaceStyle)
                 assertEquals(1, harness.settingWrites.size, "style changes do not resubmit settings in $style")
-                harness.clickTab("我的耳机")
+                harness.clickTab("耳机")
                 harness.render()
                 assertTrue(harness.hasSelectedText("降噪"), "navigation preserves the confirmed value in $style")
                 assertEquals(1, harness.settingWrites.size, "navigation and rendering do not resubmit settings in $style")

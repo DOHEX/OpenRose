@@ -28,7 +28,5 @@ private fun DeviceState.earbudBatterySubtitle(): String? {
     val earbudReadings = profile.batteryReadings().filter { (_, field) ->
         field != DeviceField.CASE_BATTERY || profile.batteryLayout == BatteryLayout.SINGLE_UNIT
     }
-    return earbudReadings.mapNotNull { (label, field) ->
-        confirmedNumber(field)?.takeIf { it in 0..100 }?.let { "$label $it%" }
-    }.takeIf { it.isNotEmpty() }?.joinToString(" · ")
+    return batterySummary(earbudReadings, showUnknown = false) { confirmedNumber(it) }
 }

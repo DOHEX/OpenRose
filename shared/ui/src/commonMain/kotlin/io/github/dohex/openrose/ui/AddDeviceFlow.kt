@@ -25,6 +25,9 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 
+/** How long a search runs before it stops by itself. */
+private const val SEARCH_TIMEOUT_MILLIS = 20_000L
+
 /** Lives above the style and navigation-entry compositions, so rendering never owns a connection. */
 @Stable
 internal class AddDeviceFlow(
@@ -39,6 +42,10 @@ internal class AddDeviceFlow(
         private set
     var scanError by mutableStateOf<ControlError?>(null)
         private set
+
+    /** The search ended because [SEARCH_TIMEOUT_MILLIS] ran out, not because the user or the screen stopped it. */
+    var scanTimedOut by mutableStateOf(false)
+        private set
     private var scanRequest: Deferred<OperationResult>? = null
     private var reference by mutableStateOf<SessionReference?>(null)
     private var connectionJob: Job? = null
@@ -50,6 +57,7 @@ internal class AddDeviceFlow(
     fun startSearch() {
         if (pending || scanRequest?.isActive == true || !model.state.value.canSearchForHeadphones()) return
         scanError = null
+        scanTimedOut = false
         selectedDeviceId = null
         connectionError = null
         reference = null
@@ -65,6 +73,13 @@ internal class AddDeviceFlow(
         if (scanRequest == null) return
         scanRequest = null
         model.stopScan()
+    }
+
+    /** The search timer ran out: stops like [stopSearch] and lets the screen say so. */
+    fun stopSearchAfterTimeout() {
+        if (scanRequest == null) return
+        scanTimedOut = true
+        stopSearch()
     }
 
     fun connect(deviceId: DeviceId) {
@@ -141,6 +156,7 @@ internal class AddDeviceFlow(
         stopSearch()
         selectedDeviceId = null
         scanError = null
+        scanTimedOut = false
         completed = false
     }
 }
@@ -171,8 +187,8 @@ internal fun AddDeviceLifecycle(active: Boolean, state: ControlState, flow: AddD
     LaunchedEffect(flow, active, canScan, state.scan, flow.pending) {
         val searching = state.scan == ScanState.Scanning && !flow.pending
         if (active && canScan && searching) {
-            delay(20_000)
-            flow.stopSearch()
+            delay(SEARCH_TIMEOUT_MILLIS)
+            flow.stopSearchAfterTimeout()
         }
     }
     SideEffect { flow.observe(state.connection) }

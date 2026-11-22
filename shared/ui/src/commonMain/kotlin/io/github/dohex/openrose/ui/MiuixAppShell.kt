@@ -13,12 +13,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.backdrops.LayerBackdrop
 import io.github.dohex.openrose.ui.shell.ShellPageContent
@@ -28,7 +26,6 @@ import top.yukonga.miuix.kmp.blur.BlendColorEntry
 import top.yukonga.miuix.kmp.blur.BlurDefaults
 import top.yukonga.miuix.kmp.blur.highlight.Highlight
 import top.yukonga.miuix.kmp.blur.textureBlur
-import top.yukonga.miuix.kmp.overlay.OverlayListPopup
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.PagerGestureNestedScrollConnection
 import top.yukonga.miuix.kmp.utils.overScrollVertical
@@ -50,7 +47,7 @@ internal fun MiuixNavigationRail(selected: AppPage, onSelect: (AppPage) -> Unit)
                 selected = destination == selected,
                 onClick = { onSelect(destination) },
                 icon = RoseIcons[destination.icon],
-                label = destination.title,
+                label = destination.navigationLabel,
             )
         }
     }
@@ -65,25 +62,18 @@ internal fun MiuixAppShell(
     pageContent: @Composable () -> Unit,
     feedbackContent: @Composable (Modifier) -> Unit = {},
 ) {
-    val backdropActive = LocalBackdropBlurActive.current
-    val backdrop = rememberAppBackdrop(MiuixTheme.colorScheme.surface, backdropActive)
+    val backdrop = rememberAppBackdrop(MiuixTheme.colorScheme.surface, LocalBackdropBlurActive.current)
     CompositionLocalProvider(LocalAppBackdrop provides backdrop) {
         val scrollBehavior = MiuixScrollBehavior()
         val title = page.title
         Scaffold(
             modifier = Modifier.fillMaxSize().nestedScroll(scrollBehavior.nestedScrollConnection),
             topBar = {
-                val topBarModifier = Modifier.appBarBackdropBlur(
-                    backdrop = backdrop,
-                    surfaceColor = MiuixTheme.colorScheme.surface,
-                    active = backdropActive,
-                )
-                val topBarColor = if (backdropActive) Color.Transparent else MiuixTheme.colorScheme.surface
                 TopAppBar(
                     title = title,
                     largeTitle = title,
-                    modifier = topBarModifier,
-                    color = topBarColor,
+                    modifier = Modifier.topBarBackdropBlur(backdrop, MiuixTheme.colorScheme.surface),
+                    color = if (backdrop != null) Color.Transparent else MiuixTheme.colorScheme.surface,
                     scrollBehavior = scrollBehavior,
                     navigationIcon = { IconButton(onClick = onBack) { Icon(RoseIcons.Back, "返回") } },
                 )
@@ -92,49 +82,10 @@ internal fun MiuixAppShell(
             ShellPageContent(
                 page = page,
                 padding = padding,
-                scrollModifier = Modifier.appBackdropContent(backdrop, backdropActive).miuixPageScroll(scrollState),
+                scrollModifier = Modifier.appBackdropContent(backdrop).miuixPageScroll(scrollState),
                 pageContent = pageContent,
                 feedbackContent = feedbackContent,
             )
-        }
-    }
-}
-
-/** Top-bar actions of the headphones tab: overflow menu while connected, add-device button otherwise. */
-@Composable
-private fun MiuixHeadphoneActions(
-    connectedHome: Boolean,
-    menuExpanded: Boolean,
-    onMenuExpandedChange: (Boolean) -> Unit,
-    onAddDevice: () -> Unit,
-    onDisconnect: () -> Unit,
-) {
-    Box {
-        if (connectedHome) {
-            IconButton(onClick = { onMenuExpandedChange(true) }) {
-                Icon(RoseIcons[RoseIcon.MORE], "耳机菜单")
-            }
-        } else {
-            IconButton(onClick = onAddDevice) {
-                Icon(RoseIcons.Plus, "添加耳机")
-            }
-        }
-        OverlayListPopup(
-            show = connectedHome && menuExpanded,
-            popupPositionProvider = ListPopupDefaults.ContextMenuPositionProvider,
-            alignment = PopupPositionProvider.Align.TopEnd,
-            onDismissRequest = { onMenuExpandedChange(false) },
-        ) {
-            ListPopupColumn {
-                BasicComponent(
-                    title = "断开控制连接",
-                    onClick = {
-                        onMenuExpandedChange(false)
-                        onDisconnect()
-                    },
-                    role = Role.Button,
-                )
-            }
         }
     }
 }
@@ -152,6 +103,8 @@ internal fun MiuixMainShell(
     connectedHome: Boolean = false,
     menuExpanded: Boolean = false,
     onMenuExpandedChange: (Boolean) -> Unit = {},
+    confirmingDisconnect: Boolean = false,
+    onConfirmingDisconnectChange: (Boolean) -> Unit = {},
     onDisconnect: () -> Unit = {},
     platformActions: @Composable (AppPage) -> Unit = {},
     animatePageChanges: Boolean = true,
@@ -166,7 +119,18 @@ internal fun MiuixMainShell(
         MiuixTheme.colorScheme.surface,
         active = floating && backdropActive && floatingBarMaterial == FloatingBarMaterial.LIQUID_GLASS,
     )
-    val floatingBackdrop = rememberAppBackdrop(MiuixTheme.colorScheme.surface, backdropActive && floating && glassBackdrop == null)
+    // The bottom bar, fixed or floating, blurs the pages behind it, so they run under it; the glass bar records its own backdrop.
+    val barBackdrop = rememberAppBackdrop(MiuixTheme.colorScheme.surface, backdropActive && !wide && glassBackdrop == null)
+    val contentBehindBar = floating || barBackdrop != null
+    val headphoneMenu = HeadphoneMenuState(
+        connectedHome = connectedHome,
+        menuExpanded = menuExpanded,
+        onMenuExpandedChange = onMenuExpandedChange,
+        confirmingDisconnect = confirmingDisconnect,
+        onConfirmingDisconnectChange = onConfirmingDisconnectChange,
+        onAddDevice = { onNavigate(AppPage.ADD_DEVICE) },
+        onDisconnect = onDisconnect,
+    )
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         bottomBar = {
@@ -174,118 +138,129 @@ internal fun MiuixMainShell(
                 MiuixMainBottomBar(
                     selectedIndex = pagerState.selectedPage,
                     floating = floating,
-                    floatingBackdrop = floatingBackdrop.takeIf { backdropActive },
+                    barBackdrop = barBackdrop,
                     glassBackdrop = glassBackdrop,
-                    onSelect = { index ->
-                        pagerState.selectPage(index, animate = animatePageChanges)
-                        onNavigate(mainPages[index])
-                    },
+                    onSelect = { index -> onNavigate(mainPages[index]) },
                 )
             }
         },
     ) { outerPadding ->
-        val pagerBottomPadding = if (floating) 0.dp else outerPadding.calculateBottomPadding()
-        val trailingBottomPadding = if (floating) outerPadding.calculateBottomPadding() else 0.dp
+        val barHeight = outerPadding.calculateBottomPadding()
         val pagerModifier = Modifier
             .fillMaxSize()
-            .appBackdropContent(floatingBackdrop, backdropActive)
+            .appBackdropContent(barBackdrop)
             .liquidGlassContent(glassBackdrop)
-            .padding(bottom = pagerBottomPadding)
-        val pageContent: @Composable PagerScope.(Int) -> Unit = { pageIndex ->
+            .padding(bottom = if (contentBehindBar) 0.dp else barHeight)
+        MiuixMainPager(pagerState, wide, pagerModifier) { pageIndex ->
             val page = mainPages[pageIndex]
-            val isSelected = pageIndex == pagerState.selectedPage
-            val pageBackdrop = rememberAppBackdrop(MiuixTheme.colorScheme.surface, backdropActive)
-            val pageModifier = if (isSelected) {
-                Modifier.fillMaxSize()
-            } else {
-                Modifier.fillMaxSize().clearAndSetSemantics { }.focusProperties {
-                    canFocus = false
-                    onEnter = { cancelFocusChange() }
-                }
-            }
-            CompositionLocalProvider(LocalAppBackdrop provides pageBackdrop) {
-                Box(pageModifier) {
-                    val scrollBehavior = MiuixScrollBehavior()
-                    val title = page.title
-                    val actions: @Composable RowScope.() -> Unit = {
-                        platformActions(page)
-                        if (page == AppPage.HEADPHONES) {
-                            MiuixHeadphoneActions(
-                                connectedHome = connectedHome,
-                                menuExpanded = menuExpanded,
-                                onMenuExpandedChange = onMenuExpandedChange,
-                                onAddDevice = { onNavigate(AppPage.ADD_DEVICE) },
-                                onDisconnect = onDisconnect,
-                            )
-                        }
-                    }
-                    Scaffold(
-                        modifier = Modifier.fillMaxSize().nestedScroll(scrollBehavior.nestedScrollConnection),
-                        topBar = {
-                            val topBarModifier = Modifier.appBarBackdropBlur(
-                                backdrop = pageBackdrop,
-                                surfaceColor = MiuixTheme.colorScheme.surface,
-                                active = backdropActive,
-                            )
-                            val topBarColor = if (backdropActive) Color.Transparent else MiuixTheme.colorScheme.surface
-                            TopAppBar(
-                                title = title,
-                                largeTitle = title,
-                                modifier = topBarModifier,
-                                color = topBarColor,
-                                scrollBehavior = scrollBehavior,
-                                actions = actions,
-                            )
-                        },
-                    ) { pagePadding ->
-                        ShellPageContent(
-                            page = page,
-                            padding = pagePadding,
-                            scrollModifier = Modifier.appBackdropContent(pageBackdrop, backdropActive)
-                                .miuixPageScroll(scrollStates.getValue(page)),
-                            compactHome = page == AppPage.HEADPHONES && !connectedHome,
-                            bottomClearance = trailingBottomPadding,
-                            pageContent = { pageContentFor(page) },
-                            feedbackContent = { modifier -> pageFeedbackFor(page, modifier) },
-                        )
-                    }
-                }
-            }
-        }
-        // Wide pages sit beside the vertical rail, so they travel vertically and only on rail taps.
-        if (wide) {
-            VerticalPager(
-                state = pagerState.pagerState,
-                modifier = pagerModifier,
-                beyondViewportPageCount = 1,
-                userScrollEnabled = false,
-                pageNestedScrollConnection = WideMainPagerNestedScrollConnection,
-                key = { index -> mainPages[index] },
-                pageContent = pageContent,
-            )
-        } else {
-            HorizontalPager(
-                state = pagerState.pagerState,
-                modifier = pagerModifier.pagerGestureOverride(pagerState = pagerState.pagerState),
-                beyondViewportPageCount = 1,
-                userScrollEnabled = false,
-                pageNestedScrollConnection = PagerGestureNestedScrollConnection,
-                key = { index -> mainPages[index] },
-                pageContent = pageContent,
+            MiuixMainPage(
+                pagerState = pagerState,
+                pageIndex = pageIndex,
+                backdropActive = backdropActive,
+                scrollState = scrollStates.getValue(page),
+                headphoneMenu = headphoneMenu,
+                platformActions = platformActions,
+                bottomClearance = if (contentBehindBar) barHeight else 0.dp,
+                animateWidth = animatePageChanges,
+                pageContent = { pageContentFor(page) },
+                feedbackContent = { modifier -> pageFeedbackFor(page, modifier) },
             )
         }
     }
 }
 
+/** Wide pages sit beside the vertical rail, so they travel vertically and only on rail taps. */
+@Composable
+private fun MiuixMainPager(
+    pagerState: MainTabsPagerState,
+    wide: Boolean,
+    modifier: Modifier,
+    pageContent: @Composable PagerScope.(Int) -> Unit,
+) {
+    if (wide) {
+        VerticalPager(
+            state = pagerState.pagerState,
+            modifier = modifier,
+            beyondViewportPageCount = 1,
+            userScrollEnabled = false,
+            pageNestedScrollConnection = WideMainPagerNestedScrollConnection,
+            key = { index -> mainPages[index] },
+            pageContent = pageContent,
+        )
+    } else {
+        HorizontalPager(
+            state = pagerState.pagerState,
+            modifier = modifier.pagerGestureOverride(pagerState = pagerState.pagerState),
+            beyondViewportPageCount = 1,
+            userScrollEnabled = false,
+            pageNestedScrollConnection = PagerGestureNestedScrollConnection,
+            key = { index -> mainPages[index] },
+            pageContent = pageContent,
+        )
+    }
+}
+
+/** One main tab: its own collapsing top bar over its scrolling content. */
+@Composable
+private fun MiuixMainPage(
+    pagerState: MainTabsPagerState,
+    pageIndex: Int,
+    backdropActive: Boolean,
+    scrollState: ScrollState,
+    headphoneMenu: HeadphoneMenuState,
+    platformActions: @Composable (AppPage) -> Unit,
+    bottomClearance: Dp,
+    animateWidth: Boolean,
+    pageContent: @Composable () -> Unit,
+    feedbackContent: @Composable (Modifier) -> Unit,
+) {
+    val page = mainPages[pageIndex]
+    val surface = MiuixTheme.colorScheme.surface
+    // Pages kept composed beside the visible ones neither record nor blur a backdrop.
+    val pageBackdrop = rememberAppBackdrop(surface, backdropActive && rememberPageVisible(pagerState, pageIndex))
+    CompositionLocalProvider(LocalAppBackdrop provides pageBackdrop) {
+        Box(Modifier.mainPageSemantics(pageIndex == pagerState.selectedPage)) {
+            val scrollBehavior = MiuixScrollBehavior()
+            ScrollToTopOnRequest(pagerState.scrollToTopRequest(pageIndex), scrollState) {
+                scrollBehavior.state.heightOffset = 0f
+            }
+            Scaffold(
+                modifier = Modifier.fillMaxSize().nestedScroll(scrollBehavior.nestedScrollConnection),
+                topBar = {
+                    TopAppBar(
+                        title = page.title,
+                        largeTitle = page.title,
+                        modifier = Modifier.topBarBackdropBlur(pageBackdrop, surface),
+                        color = if (pageBackdrop != null) Color.Transparent else surface,
+                        scrollBehavior = scrollBehavior,
+                        actions = { MainTabActions(page, platformActions, headphoneMenu) },
+                    )
+                },
+            ) { pagePadding ->
+                ShellPageContent(
+                    page = page,
+                    padding = pagePadding,
+                    scrollModifier = Modifier.appBackdropContent(pageBackdrop).miuixPageScroll(scrollState),
+                    compactHome = page == AppPage.HEADPHONES && !headphoneMenu.connectedHome,
+                    bottomClearance = bottomClearance,
+                    animateWidth = animateWidth,
+                    pageContent = pageContent,
+                    feedbackContent = feedbackContent,
+                )
+            }
+        }
+    }
+}
+
 /**
- * The narrow-screen bar: liquid glass when [glassBackdrop] is given, otherwise the floating capsule (frosted over
- * [floatingBackdrop], solid without it) or the fixed bar. [onSelect] receives the index into [mainPages].
+ * The narrow-screen bar: liquid glass when [glassBackdrop] is given, otherwise the floating capsule or the fixed
+ * bar, each blurring [barBackdrop] or solid without it. [onSelect] receives the index into [mainPages].
  */
 @Composable
 private fun MiuixMainBottomBar(
     selectedIndex: Int,
     floating: Boolean,
-    floatingBackdrop: Backdrop?,
+    barBackdrop: Backdrop?,
     glassBackdrop: LayerBackdrop?,
     onSelect: (Int) -> Unit,
 ) {
@@ -295,24 +270,23 @@ private fun MiuixMainBottomBar(
         // Mirrors the Miuix example: the glass stroke highlight (or, without blur, the divider
         // outline) separates the bar from surfaceContainer cards scrolling underneath it.
         val dark = MiuixTheme.colorScheme.surface.luminance() < 0.5f
+        val tint = MiuixTheme.colorScheme.surfaceContainer
         FloatingNavigationBar(
-            modifier = if (floatingBackdrop != null) {
+            modifier = if (barBackdrop != null) {
                 Modifier.textureBlur(
-                    backdrop = floatingBackdrop,
+                    backdrop = barBackdrop,
                     shape = RoundedCornerShape(FloatingToolbarDefaults.CornerRadius),
-                    blurRadius = 25f,
+                    blurRadius = BlurTokens.RADIUS,
                     colors = BlurDefaults.blurColors(
-                        blendColors = listOf(
-                            BlendColorEntry(color = MiuixTheme.colorScheme.surfaceContainer.copy(alpha = 0.6f)),
-                        ),
+                        blendColors = listOf(BlendColorEntry(color = tint.copy(alpha = BlurTokens.MIUIX_FLOATING_TINT))),
                     ),
                     highlight = if (dark) Highlight.GlassStrokeMiddleDark else Highlight.GlassStrokeMiddleLight,
                 )
             } else {
                 Modifier
             },
-            color = if (floatingBackdrop != null) Color.Transparent else MiuixTheme.colorScheme.surfaceContainer,
-            showDivider = floatingBackdrop == null,
+            color = if (barBackdrop != null) Color.Transparent else tint,
+            showDivider = barBackdrop == null,
         ) {
             mainPages.forEachIndexed { index, destination ->
                 FloatingNavigationBarItem(
@@ -324,7 +298,12 @@ private fun MiuixMainBottomBar(
             }
         }
     } else {
-        NavigationBar {
+        val surface = MiuixTheme.colorScheme.surface
+        NavigationBar(
+            modifier = Modifier.bottomBarBackdropBlur(barBackdrop, surface),
+            color = if (barBackdrop != null) Color.Transparent else surface,
+            showDivider = barBackdrop == null,
+        ) {
             mainPages.forEachIndexed { index, destination ->
                 NavigationBarItem(
                     selected = index == selectedIndex,

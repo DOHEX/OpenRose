@@ -69,6 +69,7 @@ private fun Map<String, String>.remoteReading(peer: String): RemoteReading {
         left = battery("left"),
         right = battery("right"),
         case = battery("case"),
+        batteryLayout = parseBatteryLayout(get("batteryLayout")),
         error = get("error"),
     )
 }

@@ -69,6 +69,7 @@ class HeadsetEndpoint(private val control: ControlRuntime, private val ownerActi
             parts.forEach { (name, field) ->
                 device.confirmedNumber(field)?.takeIf { it in 0..100 }?.let { put(name, it.toString()) }
             }
+            put("batteryLayout", device.profile.batteryLayout.name)
             device.confirmedText(DeviceField.NOISE_MODE)?.let { put("mode", it) }
             device.capabilities.noiseControl?.modes?.let { put("modes", it.joinToString(",")) }
         }

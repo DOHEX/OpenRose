@@ -102,6 +102,7 @@ fun CirculationReply.toBundle(): Bundle = Bundle().apply {
             reply.left?.let { putInt("left", it) }
             reply.right?.let { putInt("right", it) }
             reply.case?.let { putInt("case", it) }
+            putString("batteryLayout", reply.batteryLayout?.name)
             putString("error", reply.error)
         }
     }
@@ -124,6 +125,7 @@ fun Bundle.circulationReply(command: CirculationCommand): CirculationReply {
             left = battery("left"),
             right = battery("right"),
             case = battery("case"),
+            batteryLayout = parseBatteryLayout(getString("batteryLayout")),
         )
 
         is CirculationCommand.Handoff -> HandoffStatus(

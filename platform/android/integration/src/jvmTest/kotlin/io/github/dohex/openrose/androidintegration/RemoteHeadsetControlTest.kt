@@ -18,6 +18,7 @@ import io.github.dohex.openrose.core.PlatformState
 import io.github.dohex.openrose.core.SessionTiming
 import io.github.dohex.openrose.core.SettingStage
 import io.github.dohex.openrose.core.TransportAvailability
+import io.github.dohex.openrose.core.protocol.BatteryLayout
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -43,6 +44,7 @@ class RemoteHeadsetControlTest {
             val read = phone.read()
             assertEquals(NoiseMode.WIND, read.mode)
             assertEquals(100, read.left)
+            assertEquals(BatteryLayout.EARBUDS_AND_CASE, read.batteryLayout)
             val pending = async(Dispatchers.IO) { phone.noise(read) }
             holder.state.first { it.settingOperations.lastOrNull()?.stage == SettingStage.WRITTEN }
             assertFalse(pending.isCompleted)

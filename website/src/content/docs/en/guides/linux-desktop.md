@@ -26,7 +26,7 @@ Pair and connect the earphones in the system Bluetooth settings first. If the St
 
 ## Pair a phone and desktop
 
-Enable module control on the phone. In the desktop settings, open **流转配对** and show the pairing code. Open the same setting on the phone, then scan the QR code or select the computer and enter its six digits. Both devices need local network discovery and the phone needs access to TCP port 21871 on the desktop. Either device can remove the pairing in settings.
+Enable module control on the phone. In the desktop settings, open **流转配对** and show the pairing code. The remaining validity is shown below the code. Open the same setting on the phone, then scan the QR code or select the computer and enter its six digits. Both devices need local network discovery and the phone needs access to TCP port 21871 on the desktop. Either device can remove the pairing in settings after confirming.
 
 Changing noise mode from the phone quick panel or desktop tray keeps audio at its current source. To move audio, use **接到这台电脑** on the computer or **接回手机** on the phone.
 

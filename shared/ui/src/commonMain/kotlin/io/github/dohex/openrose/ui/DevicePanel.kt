@@ -4,13 +4,14 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -23,7 +24,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import io.github.dohex.openrose.core.*
 import io.github.dohex.openrose.core.HeadsetCommand
@@ -118,16 +123,15 @@ internal fun HeadphonesPage(
                     }
                     if (DeviceSetting.GAME_MODE in device.capabilities.writableSettings) {
                         AppDashboardCard(compact = true) {
-                            val requested = state.pendingSetting(device, DeviceSetting.GAME_MODE)?.requestedValue
                             SettingToggleChoices(
                                 "游戏模式",
                                 DeviceField.GAME_MODE,
                                 HeadsetCommand::GameMode,
                                 device,
-                                state.isReady(device) && !state.hasPendingSetting(device),
+                                state.canWrite(device, DeviceSetting.GAME_MODE),
                                 onSet,
                                 icon = RoseIcon.GAME,
-                                pendingToggle = (requested as? FieldValue.Toggle)?.value,
+                                pendingToggle = state.pendingToggle(device, DeviceSetting.GAME_MODE),
                             )
                         }
                     }
@@ -152,7 +156,6 @@ internal fun HeadphonesPage(
                                 onClick = { onNavigate(AppPage.AUDIO) },
                             )
                         }
-                        NoiseCycleRow(state, device, onSet)
                         AppArrowRow(
                             title = "设备详情",
                             icon = RoseIcon.INFO,
@@ -216,18 +219,10 @@ private fun UnconnectedHeadphonesDashboard(
         }
         return
     }
-    val isMaterial3 = LocalInterfaceStyle.current == InterfaceStyle.MATERIAL3
-    val visibleError = state.lastError
-    visibleError?.let { error ->
-        AppDashboardCard {
-            AppText(error.message, color = appColor(AppColorRole.Error))
-            AppButton("查看诊断", { onNavigate(AppPage.DIAGNOSTICS) }, kind = AppButtonKind.Secondary)
-        }
-    }
 
     val primaryDevice = selection.primary(state)
     if (primaryDevice == null) {
-        AddFirstHeadsetCard(platform, onNavigate, onOpenSystemSettings)
+        AddFirstHeadsetCard(platform, state.lastError, onNavigate, onOpenSystemSettings) { onNavigate(AppPage.DIAGNOSTICS) }
         return
     }
 
@@ -244,18 +239,7 @@ private fun UnconnectedHeadphonesDashboard(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            if (isMaterial3) {
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(MaterialTheme.colorScheme.surfaceContainerLowest)
-                        .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f), RoundedCornerShape(16.dp))
-                        .padding(12.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    DeviceArtwork(primaryDevice.profile)
-                }
-            } else {
+            StyledTile(TileKind.ArtworkFrame, contentPadding = PaddingValues(12.dp), contentAlignment = Alignment.Center) {
                 DeviceArtwork(primaryDevice.profile)
             }
             Column(
@@ -281,11 +265,21 @@ private fun UnconnectedHeadphonesDashboard(
                 }
                 ReconnectStatus(state, primaryDevice, isConnecting)
             }
-            ReconnectActions(state, primaryDevice, isConnecting, onConnect, onDisconnect, onRequestPermission, onOpenSystemSettings)
+            ReconnectActions(
+                state,
+                primaryDevice,
+                isConnecting,
+                onConnect,
+                onDisconnect,
+                onRequestPermission,
+                onOpenSystemSettings,
+                onDiagnostics = { onNavigate(AppPage.DIAGNOSTICS) },
+            )
         }
     }
 
-    OtherPairedDevices(otherBonded, blockReason == null) { id ->
+    // One connection at a time: while any device is connecting, no other device can be switched to.
+    OtherPairedDevices(otherBonded, blockReason == null && connecting == null) { id ->
         selection.select(state, id)
         onConnect(id)
     }
@@ -307,41 +301,34 @@ internal fun BatteryStrip(device: DeviceState, initializing: Boolean, showUnknow
         horizontalArrangement = Arrangement.spacedBy(if (isMaterial3) 8.dp else 12.dp),
     ) {
         device.profile.batteryReadings().forEach { (label, field) ->
-            val percent = device.confirmedNumber(field)?.takeIf { it in 0..100 }
-            val itemModifier = if (isMaterial3) {
-                Modifier
-                    .weight(1f)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(MaterialTheme.colorScheme.surfaceContainer)
-                    .border(
-                        width = 1.dp,
-                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
-                        shape = RoundedCornerShape(12.dp),
-                    )
-                    .padding(horizontal = 10.dp, vertical = 8.dp)
-            } else {
-                Modifier.weight(1f)
+            StyledTile(TileKind.OutlinedChip, Modifier.weight(1f), PaddingValues(horizontal = 10.dp, vertical = 8.dp)) {
+                BatteryReading(label, field, device, initializing, showUnknown)
             }
-            Column(
-                modifier = itemModifier,
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                AppText(label, role = AppTextRole.Footnote)
-                AppText(
-                    if (showUnknown && percent == null) {
-                        "未知"
-                    } else if (device.reading(field) is FieldReading.NotProvided) {
-                        "-"
-                    } else {
-                        readingText(field, device.reading(field), initializing, device.diagnostics.fieldErrors[field], device.profile)
-                    },
-                    role = AppTextRole.Body,
-                    color = if (percent != null && percent <= 20) appColor(AppColorRole.Error) else null,
-                )
-                if (field != DeviceField.CASE_BATTERY || percent != null) {
-                    AppProgress(percent?.div(100f))
-                }
+        }
+    }
+}
+
+@Composable
+private fun BatteryReading(label: String, field: DeviceField, device: DeviceState, initializing: Boolean, showUnknown: Boolean) {
+    val percent = device.confirmedNumber(field)?.takeIf { it in 0..100 }
+    val low = percent != null && percent <= LOW_BATTERY_PERCENT
+    val text = if (showUnknown && percent == null) {
+        "未知"
+    } else {
+        val error = device.diagnostics.fieldErrors[field]
+        readingText(field, device.reading(field), initializing, error, device.profile)
+    }
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        AppText(label, role = AppTextRole.Footnote)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            AppText(text, role = AppTextRole.Body, color = if (low) appColor(AppColorRole.Error) else null)
+            // A low charge also shows as a symbol, so the warning does not rest on colour alone.
+            if (low) {
+                AppIcon(RoseIcon.WARNING, Modifier.size(16.dp), contentDescription = "电量低", tint = appColor(AppColorRole.Error))
             }
+        }
+        if (field != DeviceField.CASE_BATTERY || percent != null) {
+            AppProgress(percent?.div(100f))
         }
     }
 }
@@ -519,38 +506,42 @@ private fun TransportSelectionReason.description(): String = when (this) {
 }
 
 @Composable
-private fun AddFirstHeadsetCard(platform: PlatformState, onNavigate: (AppPage) -> Unit, onOpenSystemSettings: (() -> Unit)?) {
-    val isMaterial3 = LocalInterfaceStyle.current == InterfaceStyle.MATERIAL3
+private fun AddFirstHeadsetCard(
+    platform: PlatformState,
+    error: ControlError?,
+    onNavigate: (AppPage) -> Unit,
+    onOpenSystemSettings: (() -> Unit)?,
+    onDiagnostics: () -> Unit,
+) {
     AppDashboardCard {
         Column(
             Modifier.fillMaxWidth().padding(vertical = 16.dp, horizontal = 8.dp),
-            horizontalAlignment = Alignment.Start,
+            horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            if (isMaterial3) {
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(MaterialTheme.colorScheme.surfaceContainerLowest)
-                        .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f), RoundedCornerShape(16.dp))
-                        .padding(12.dp),
-                ) {
-                    EarbudsArtwork(compact = false)
-                }
-            } else {
+            StyledTile(TileKind.ArtworkFrame, contentPadding = PaddingValues(12.dp), contentAlignment = Alignment.Center) {
                 EarbudsArtwork(compact = false)
             }
             Column(
-                horizontalAlignment = Alignment.Start,
+                horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                AppText("添加你的 ROSE 耳机", role = AppTextRole.Title)
+                AppText("添加你的 ROSE 耳机", role = AppTextRole.Title, textAlign = TextAlign.Center)
                 val hint = if (platform.transport == TransportAvailability.Disabled) {
                     "系统蓝牙已关闭"
                 } else {
                     platform.hostPlatform.firstConnectionHint()
                 }
-                AppText(hint, role = AppTextRole.Summary)
+                AppText(hint, role = AppTextRole.Summary, textAlign = TextAlign.Center)
+                error?.let {
+                    AppText(
+                        it.message,
+                        Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                        role = AppTextRole.Summary,
+                        color = appColor(AppColorRole.Error),
+                        textAlign = TextAlign.Center,
+                    )
+                }
             }
             Column(
                 Modifier.fillMaxWidth(),
@@ -570,6 +561,14 @@ private fun AddFirstHeadsetCard(platform: PlatformState, onNavigate: (AppPage) -
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }
+                if (error != null) {
+                    AppButton(
+                        text = "查看诊断",
+                        onClick = onDiagnostics,
+                        kind = AppButtonKind.Secondary,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
             }
         }
     }
@@ -584,6 +583,7 @@ private fun ReconnectActions(
     onDisconnect: () -> Unit,
     onRequestPermission: (() -> Unit)?,
     onOpenSystemSettings: (() -> Unit)?,
+    onDiagnostics: () -> Unit,
 ) {
     val platform = state.platform
     val blockReason = platform.connectionBlockReason
@@ -618,12 +618,22 @@ private fun ReconnectActions(
                 )
             }
         } else {
-            AppButton(
-                text = if (visibleError != null) "重试连接" else "连接",
-                onClick = { onConnect(primaryDevice.deviceId) },
-                kind = AppButtonKind.Primary,
-                modifier = Modifier.fillMaxWidth(),
-            )
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                AppButton(
+                    text = if (visibleError != null) "重试连接" else "连接",
+                    onClick = { onConnect(primaryDevice.deviceId) },
+                    kind = AppButtonKind.Primary,
+                    modifier = Modifier.weight(1f),
+                )
+                if (visibleError != null) {
+                    AppButton(
+                        text = "查看诊断",
+                        onClick = onDiagnostics,
+                        kind = AppButtonKind.Secondary,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
         }
         if (visibleError != null && blockReason == null && onOpenSystemSettings != null) {
             AppButton(
@@ -638,10 +648,10 @@ private fun ReconnectActions(
 
 @Composable
 private fun OtherPairedDevices(devices: List<DeviceCandidate>, enabled: Boolean, onSelect: (DeviceId) -> Unit) {
-    val isMaterial3 = LocalInterfaceStyle.current == InterfaceStyle.MATERIAL3
     if (devices.isNotEmpty()) {
         AppGroup(title = "其他已配对设备") {
             devices.forEach { paired ->
+                val name = paired.name?.takeIf(String::isNotBlank) ?: paired.profile!!.displayName
                 AppDashboardCard {
                     Row(
                         Modifier.fillMaxWidth(),
@@ -653,21 +663,11 @@ private fun OtherPairedDevices(devices: List<DeviceCandidate>, enabled: Boolean,
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.weight(1f),
                         ) {
-                            if (isMaterial3) {
-                                Box(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(12.dp))
-                                        .background(MaterialTheme.colorScheme.surfaceContainer)
-                                        .padding(8.dp),
-                                    contentAlignment = Alignment.Center,
-                                ) {
-                                    AppIcon(RoseIcon.HEADPHONES)
-                                }
-                            } else {
+                            StyledTile(TileKind.Chip, contentPadding = PaddingValues(8.dp), contentAlignment = Alignment.Center) {
                                 AppIcon(RoseIcon.HEADPHONES)
                             }
                             Column {
-                                AppText(paired.name?.takeIf(String::isNotBlank) ?: paired.profile!!.displayName)
+                                AppText(name)
                                 paired.profile?.let {
                                     AppText(it.configurationCaption, role = AppTextRole.Summary)
                                 }
@@ -680,6 +680,7 @@ private fun OtherPairedDevices(devices: List<DeviceCandidate>, enabled: Boolean,
                                 onSelect(paired.deviceId)
                             },
                             kind = AppButtonKind.Secondary,
+                            modifier = Modifier.semantics { contentDescription = "切换到 $name" },
                         )
                     }
                 }
@@ -691,36 +692,82 @@ private fun OtherPairedDevices(devices: List<DeviceCandidate>, enabled: Boolean,
 @Composable
 private fun ReconnectStatus(state: ControlState, primaryDevice: DeviceCandidate, isConnecting: Boolean) {
     val blockReason = state.platform.connectionBlockReason
-    val visibleError = state.lastError
-    val isMaterial3 = LocalInterfaceStyle.current == InterfaceStyle.MATERIAL3
-    val statusContent: @Composable () -> Unit = {
-        if (isConnecting) {
-            Row(
+    // A platform block explains itself and outranks the last failure.
+    val visibleError = state.lastError?.takeIf { blockReason == null }
+    val announce = Modifier.semantics { liveRegion = LiveRegionMode.Polite }
+    StyledTile(
+        TileKind.Chip,
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        when {
+            isConnecting -> Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 AppBusyIndicator()
-                AppText("正在连接…", role = AppTextRole.Summary, color = appColor(AppColorRole.Primary))
+                AppText("正在连接…", announce, role = AppTextRole.Summary, color = appColor(AppColorRole.Primary))
             }
-        } else {
-            AppText(
-                blockReason ?: primaryDevice.profile.reconnectHint(visibleError != null),
+
+            // The failure is stated once, by the error itself; the hint only says what to check.
+            visibleError != null -> Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                AppText(
+                    visibleError.message,
+                    announce,
+                    role = AppTextRole.Summary,
+                    color = appColor(AppColorRole.Error),
+                    textAlign = TextAlign.Center,
+                )
+                AppText(primaryDevice.profile.reconnectHint(failed = true), role = AppTextRole.Summary, textAlign = TextAlign.Center)
+            }
+
+            else -> AppText(
+                blockReason ?: primaryDevice.profile.reconnectHint(failed = false),
+                announce,
                 role = AppTextRole.Summary,
-                color = if (visibleError != null && blockReason == null) appColor(AppColorRole.Error) else null,
             )
         }
     }
-    if (isMaterial3) {
-        Box(
-            modifier = Modifier
-                .clip(RoundedCornerShape(12.dp))
-                .background(MaterialTheme.colorScheme.surfaceContainer)
-                .padding(horizontal = 12.dp, vertical = 6.dp),
-            contentAlignment = Alignment.Center,
-        ) {
-            statusContent()
-        }
-    } else {
-        statusContent()
+}
+
+private const val LOW_BATTERY_PERCENT = 20
+
+private enum class TileKind { ArtworkFrame, Chip, OutlinedChip }
+
+/**
+ * Material 3 sets some dashboard content on a rounded, tinted tile; Miuix sets it bare on its card. The tile is
+ * owned here so every use stays alike and takes its corners from the theme's shape tokens.
+ */
+@Composable
+private fun StyledTile(
+    kind: TileKind,
+    modifier: Modifier = Modifier,
+    contentPadding: PaddingValues,
+    contentAlignment: Alignment = Alignment.TopStart,
+    content: @Composable BoxScope.() -> Unit,
+) {
+    if (LocalInterfaceStyle.current != InterfaceStyle.MATERIAL3) {
+        Box(modifier, contentAlignment, content = content)
+        return
     }
+    val framed = kind == TileKind.ArtworkFrame
+    val shape = if (framed) MaterialTheme.shapes.large else MaterialTheme.shapes.medium
+    val container = if (framed) MaterialTheme.colorScheme.surfaceContainerLowest else MaterialTheme.colorScheme.surfaceContainer
+    val outline = if (kind == TileKind.Chip) {
+        Modifier
+    } else {
+        Modifier.border(
+            1.dp,
+            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
+            shape,
+        )
+    }
+    Box(
+        modifier.clip(shape).background(container).then(outline).padding(contentPadding),
+        contentAlignment,
+        content = content,
+    )
 }

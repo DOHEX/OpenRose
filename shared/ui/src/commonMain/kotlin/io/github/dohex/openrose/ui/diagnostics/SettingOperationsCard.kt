@@ -6,12 +6,12 @@ import io.github.dohex.openrose.core.ControlState
 import io.github.dohex.openrose.core.DeviceSetting
 import io.github.dohex.openrose.core.DeviceState
 import io.github.dohex.openrose.core.SettingOperation
-import io.github.dohex.openrose.core.SettingStage
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.ui.AppGroup
 import io.github.dohex.openrose.ui.AppInfoRow
 import io.github.dohex.openrose.ui.displayFieldValue
 import io.github.dohex.openrose.ui.displayName
+import io.github.dohex.openrose.ui.statusText
 
 @Composable
 internal fun SettingOperationsCard(state: ControlState) {
@@ -27,7 +27,7 @@ internal fun SettingOperationsCard(state: ControlState) {
             val device = state.device?.takeIf { it.sessionId == operation.sessionId && it.sessionId == sessionId }
             AppInfoRow(
                 label = "${operation.setting.displayName()} · #${operation.id}",
-                value = operation.stage.displayText(),
+                value = operation.statusText(),
                 summary = operation.summary(device, sessionId),
             )
         }
@@ -49,7 +49,7 @@ private fun SettingOperation.summary(device: DeviceState?, currentSession: Long?
             },
         )
     }
-    error?.let { add(it.message) }
+    error?.takeIf { it.message != statusText() }?.let { add(it.message) }
     if (sessionId != currentSession) add("已结束会话 $sessionId 的操作记录")
 }.joinToString("\n")
 
@@ -67,15 +67,4 @@ private fun SettingOperation.requestedValueText(device: DeviceState?): String {
         else -> null
     }
     return displayFieldValue(field, requestedValue, device?.profile, touch)
-}
-
-private fun SettingStage.displayText(): String = when (this) {
-    SettingStage.SUBMITTED -> "等待写入"
-    SettingStage.PARTIALLY_WRITTEN -> "部分已发送"
-    SettingStage.WRITTEN -> "已写入 · 待确认"
-    SettingStage.CONFIRMED -> "已确认"
-    SettingStage.NOT_APPLIED -> "回读不一致"
-    SettingStage.TIMED_OUT -> "确认超时"
-    SettingStage.DISCONNECTED -> "连接已断开"
-    SettingStage.FAILED -> "失败"
 }

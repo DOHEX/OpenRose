@@ -25,19 +25,20 @@ status: accepted
 
 在 `composeApp` 应用层抽象统一度量的 `Modifier.appBackdropBlur(...)`：
 - **顶栏与底栏（单向滚动穿透）**：采用边缘渐进模糊（`ProgressiveBlur.Top` / `ProgressiveBlur.Bottom`）。利用渐变着色器将视效边缘向内容区域平滑过渡淡出，消除内容进出栏底时的几何生硬切边。
-- **浮层弹窗与菜单（独立悬浮）**：在 Dialog、OverlayListPopup 等浮层组件上使用全域均匀模糊（Uniform Texture Blur），四周搭配平滑倒角，提供聚焦的悬浮毛玻璃质感。
+- **浮层弹窗与菜单（独立悬浮）**：理想形态是在 Dialog、OverlayListPopup 等浮层上使用全域均匀模糊。当前未实现：Miuix 0.9.4 的 `OverlayListPopup` 在 `popupModifier` 之后固定绘制不透明的 `surfaceContainer` 底色且无颜色参数，模糊会被完全遮住；Material 3 的 `DropdownMenu` 与 `AlertDialog` 在 Android 上是独立窗口，背景图层按窗口坐标采样会错位。待组件支持容器颜色与跨窗口坐标后再启用。
 - **常规内容列表卡片排除**：常规卡片严禁启用背景模糊，保持实体卡片底色，避免深层重叠引发的 GPU 填充率雪崩与文本对比度受损。
 
 ### 3. 布局穿透与表面透明度动态绑定
 
-- **模糊激活状态**：顶底栏表面颜色切换为半透明着色（`surface.copy(alpha = 0.75f)`），Scaffold 内容区域填充穿透至窗口边缘，使滚动列表自然垫入栏底。
-- **降级/关闭状态**：当环境不支持或用户关闭模糊时，顶底栏表面立即恢复为预设实体底色（`alpha = 1.0f`），阻断穿透视效，确保低版本设备上的文字排版与对比度绝对清晰。
+- **模糊激活状态**：顶底栏的 `surface` 半透明着色（`BlurTokens.BarTint`）混入渐进模糊内部，随模糊一同淡出，不另加会留下硬边的背景层。Scaffold 内容区域填充穿透至窗口边缘（固定底栏同悬浮胶囊一样，页面在栏底之下，列表末尾追加底栏高度的留白），使滚动列表自然垫入栏底。
+- **降级/关闭状态**：当环境不支持或用户关闭模糊时，顶底栏表面立即恢复为预设实体底色（`alpha = 1.0f`），页面回到栏之上，阻断穿透视效，确保低版本设备上的文字排版与对比度绝对清晰。
+- **统一取值**：模糊半径与各表面的着色不透明度集中在 `AppBlur.kt` 的 `BlurTokens`。渐进模糊在栏自身图标与文字所在的外缘 70% 保持满强度，其余部分淡出。只有当前可见的页面录入背景，Pager 预加载但不在屏幕上的页面不录入。
 
 ### 4. 省电模式感知与自适应降级矩阵
 
 建立统一的运行时能力判定流：
 1. **用户开关**：`UserSettings.backgroundBlurEnabled` 为 `false` 则直接降级。
-2. **省电模式**：系统开启 Power Saver（Android `PowerManager.isPowerSaveMode` / 桌面低功耗）时自动降级。
+2. **省电模式**：系统开启 Power Saver（Android `PowerManager.isPowerSaveMode`）时自动降级。桌面端目前只识别 Linux：每 30 秒在后台线程读取 sysfs，`/sys/firmware/acpi/platform_profile` 为 `low-power`，或电池正在放电且电量不高于 20% 时视为省电；其他桌面系统与任何读取失败都视为非省电。
 3. **平台与硬件门禁**：Android < API 33 或无着色器支持环境自动降级为实体预设底色。
 4. **生效平台**：仅在 Android API 33+ 及桌面端非省电状态下执行着色器多通道采样。
 

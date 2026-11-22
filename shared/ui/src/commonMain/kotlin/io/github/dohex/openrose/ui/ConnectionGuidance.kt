@@ -27,11 +27,12 @@ internal fun HostPlatform.firstConnectionHint(): String = when (this) {
     HostPlatform.UNKNOWN -> "打开耳机并靠近设备，必要时让耳机进入配对模式。"
 }
 
+/** What to check or expect before connecting; after a failure it only advises, since the error states the failure. */
 internal fun ModelProfile?.reconnectHint(failed: Boolean): String = when {
     this?.batteryLayout == BatteryLayout.EARBUDS_AND_CASE ->
-        if (failed) "连接未成功 · 请确认耳机已开盖并在附近" else "未连接 · 耳机开盖后将自动连接"
+        if (failed) "请确认耳机已开盖并在附近" else "未连接 · 耳机开盖后将自动连接"
 
-    failed -> "连接未成功 · 请确认耳机已开启并在附近"
+    failed -> "请确认耳机已开启并在附近"
 
     else -> "未连接 · 系统蓝牙连上耳机后将自动连接"
 }

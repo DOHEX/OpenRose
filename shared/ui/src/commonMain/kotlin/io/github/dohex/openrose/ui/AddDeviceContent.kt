@@ -52,6 +52,7 @@ internal fun AddDeviceContent(
     onConnect: (DeviceId) -> Unit,
     onCancelConnection: () -> Unit,
     onDiagnostics: () -> Unit,
+    scanTimedOut: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     val supported = remember(state.candidates) { state.candidates.filter { it.profile != null } }
@@ -63,7 +64,7 @@ internal fun AddDeviceContent(
 
     Box(modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
         Column(
-            modifier = Modifier.widthIn(max = 640.dp).fillMaxWidth().padding(vertical = 16.dp),
+            modifier = Modifier.widthIn(max = ContentMaxWidth).fillMaxWidth().padding(vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             key("search-guidance") {
@@ -82,7 +83,7 @@ internal fun AddDeviceContent(
                 }
             }
             if (canScan) {
-                AddDeviceSearchStatus(supported.size, pending, scanning, scanError, connectionError, onStartScan, onStopScan)
+                AddDeviceSearchStatus(supported.size, pending, scanning, scanTimedOut, scanError, connectionError, onStartScan, onStopScan)
                 supported.forEach { candidate ->
                     key(candidate.deviceId) {
                         AddDeviceCandidateCard(
@@ -90,7 +91,7 @@ internal fun AddDeviceContent(
                             distinguishName = (nameCounts[candidate.addDeviceName()] ?: 0) > 1,
                             phase = connectionPhase.takeIf { candidate.deviceId == selectedDeviceId },
                             error = connectionError.takeIf { candidate.deviceId == selectedDeviceId },
-                            canConnect = !pending,
+                            blockedReason = "正在连接其他耳机".takeIf { pending },
                             onConnect = { onConnect(candidate.deviceId) },
                             onCancelConnection = onCancelConnection,
                         )
@@ -102,15 +103,20 @@ internal fun AddDeviceContent(
     }
 }
 
+/** Where the search pulse rests when the system asks for no animation. */
+private const val STILL_PULSE = 0.4f
+
 @Composable
 private fun AddDeviceHero(scanning: Boolean) {
+    val reduceMotion = rememberReduceMotion()
     val isMaterial3 = LocalInterfaceStyle.current == InterfaceStyle.MATERIAL3
     Box(Modifier.fillMaxWidth().height(190.dp), contentAlignment = Alignment.Center) {
         if (scanning) {
             if (isMaterial3) {
-                val pulse1 = remember { Animatable(0f) }
-                val pulse2 = remember { Animatable(0f) }
-                LaunchedEffect(Unit) {
+                val pulse1 = remember(reduceMotion) { Animatable(if (reduceMotion) STILL_PULSE else 0f) }
+                val pulse2 = remember(reduceMotion) { Animatable(if (reduceMotion) STILL_PULSE else 0f) }
+                LaunchedEffect(reduceMotion) {
+                    if (reduceMotion) return@LaunchedEffect
                     launch {
                         while (isActive) {
                             pulse1.snapTo(0f)
@@ -159,13 +165,16 @@ private fun AddDeviceHero(scanning: Boolean) {
                     )
                 }
             } else {
-                val transition = rememberInfiniteTransition(label = "earbud search")
-                val pulse = transition.animateFloat(
-                    initialValue = 0f,
-                    targetValue = 1f,
-                    animationSpec = infiniteRepeatable(tween(2400, easing = LinearEasing), RepeatMode.Restart),
-                    label = "search pulse",
-                )
+                val pulse: State<Float> = if (reduceMotion) {
+                    rememberUpdatedState(STILL_PULSE)
+                } else {
+                    rememberInfiniteTransition(label = "earbud search").animateFloat(
+                        initialValue = 0f,
+                        targetValue = 1f,
+                        animationSpec = infiniteRepeatable(tween(2400, easing = LinearEasing), RepeatMode.Restart),
+                        label = "search pulse",
+                    )
+                }
                 val primary = appColor(AppColorRole.Primary)
                 Canvas(Modifier.size(184.dp)) {
                     val progress = pulse.value
@@ -234,7 +243,7 @@ private fun AddDeviceCandidateCard(
     distinguishName: Boolean,
     phase: ConnectionPhase?,
     error: ControlError?,
-    canConnect: Boolean,
+    blockedReason: String?,
     onConnect: () -> Unit,
     onCancelConnection: () -> Unit,
 ) {
@@ -307,7 +316,8 @@ private fun AddDeviceCandidateCard(
                     AppText(it.message, Modifier.semantics { liveRegion = LiveRegionMode.Polite }, color = appColor(AppColorRole.Error))
                 }
             }
-            AppButton(if (error == null) "连接" else "重试", onConnect, enabled = canConnect)
+            AppButton(if (error == null) "连接" else "重试", onConnect, enabled = blockedReason == null)
+            blockedReason?.let { AppText(it, role = AppTextRole.Footnote) }
         }
     }
 }
@@ -319,6 +329,7 @@ private fun AddDeviceSearchStatus(
     count: Int,
     pending: Boolean,
     scanning: Boolean,
+    scanTimedOut: Boolean,
     scanError: ControlError?,
     connectionError: ControlError?,
     onStartScan: () -> Unit,
@@ -342,13 +353,7 @@ private fun AddDeviceSearchStatus(
                         AppText("已找到 $count 副耳机", role = AppTextRole.Title)
                     }
                     AppText(
-                        text = when {
-                            pending -> "正在连接所选耳机"
-                            scanning -> "正在搜索附近的耳机…"
-                            scanError != null -> "搜索未完成"
-                            count == 0 -> "暂未找到受支持的耳机"
-                            else -> "搜索已结束"
-                        },
+                        text = searchStatusText(count, pending, scanning, scanTimedOut, scanError),
                         role = if (count == 0) AppTextRole.Title else AppTextRole.Summary,
                     )
                 }
@@ -365,6 +370,22 @@ private fun AddDeviceSearchStatus(
             }
         }
     }
+}
+
+/** The one line under the headline: what the search is doing, or why and how it ended. */
+private fun searchStatusText(
+    count: Int,
+    pending: Boolean,
+    scanning: Boolean,
+    scanTimedOut: Boolean,
+    scanError: ControlError?,
+): String = when {
+    pending -> "正在连接所选耳机"
+    scanning -> "正在搜索附近的耳机…"
+    scanError != null -> "搜索未完成"
+    count == 0 && scanTimedOut -> "搜索已超时，可重新搜索"
+    count == 0 -> "暂未找到受支持的耳机"
+    else -> "搜索已结束"
 }
 
 @Composable

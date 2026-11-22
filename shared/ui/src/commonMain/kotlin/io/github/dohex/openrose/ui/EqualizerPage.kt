@@ -9,6 +9,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import io.github.dohex.openrose.core.ControlState
 import io.github.dohex.openrose.core.CustomEqualizerCapabilities
+import io.github.dohex.openrose.core.DeviceSetting
 import io.github.dohex.openrose.core.DeviceState
 import io.github.dohex.openrose.core.HeadsetCommand
 import io.github.dohex.openrose.core.confirmedCurve
@@ -52,7 +53,8 @@ internal fun EqualizerEntryRow(
             valueText = confirmedChoiceValue(DeviceField.EQ, device),
             options = presets,
             selected = device.confirmedText(DeviceField.EQ),
-            enabled = state.isReady(device) && !state.hasPendingSetting(device),
+            enabled = state.canWrite(device, DeviceSetting.EQ),
+            pending = state.pendingText(device, DeviceSetting.EQ),
             icon = RoseIcon.EQUALIZER,
             onSelect = { onSet(HeadsetCommand.EqualizerPreset(it)) },
         )
@@ -60,22 +62,25 @@ internal fun EqualizerEntryRow(
 }
 
 /**
- * Mode choice and, while the shown mode is custom, the custom curve; a model without presets has only the curve. The
- * page renders what the device can do now, so a curve that stops being writable takes its card with it.
+ * Mode choice and, while the confirmed mode is custom, the custom curve; a model without presets has only the curve.
+ * The page renders what the device can do now, so a curve that stops being writable takes its card with it.
  */
 @Composable
 internal fun EqualizerPage(state: ControlState, device: DeviceState, editor: EqualizerEditor) {
     val enabled = state.isReady(device)
     val presets = device.writablePresetOptions()
     val custom = device.writableCustomCurve
-    val mode = editor.displayedMode(device.confirmedText(DeviceField.EQ))
+    val mode = device.confirmedText(DeviceField.EQ)
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         if (presets.isNotEmpty()) EqualizerModes(device, presets, custom, mode, enabled, editor)
         if (custom != null && (presets.isEmpty() || mode == CUSTOM_EQUALIZER_MODE)) CustomCurveCard(device, custom, mode, enabled, editor)
     }
 }
 
-/** The presets in order, then custom when the model has a curve; choosing custom writes the curve the page shows. */
+/**
+ * The presets in order, then custom when the model has a curve; choosing custom writes the curve the page shows. The
+ * selection stays on the confirmed [mode]; the option being written shows its progress.
+ */
 @Composable
 private fun EqualizerModes(
     device: DeviceState,
@@ -90,6 +95,7 @@ private fun EqualizerModes(
             options = presets + listOfNotNull(custom?.let { AppOption(CUSTOM_EQUALIZER_MODE, "自定义") }),
             selected = mode,
             enabled = enabled,
+            pending = editor.pendingMode,
             onSelect = { choice ->
                 when {
                     choice == mode -> Unit

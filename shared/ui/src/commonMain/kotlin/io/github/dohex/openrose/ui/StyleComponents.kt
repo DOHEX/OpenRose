@@ -56,7 +56,7 @@ enum class AppColorRole { Primary, OnSurface, Summary, Error, Divider, SelectedC
 enum class AppTextRole { Display, Title, Body, Summary, Footnote }
 enum class AppButtonKind { Primary, Secondary }
 
-/** [disabledReason] makes the option unselectable in choice lists that show it, with the reason beside it; other components ignore it. */
+/** [disabledReason] makes the option unselectable in the radio and check groups, with the reason beside it; other components ignore it. */
 data class AppOption<T>(
     val value: T,
     val label: String,
@@ -297,7 +297,7 @@ internal fun AppDashboardCard(
 
             InterfaceStyle.MATERIAL3 -> Card(
                 modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                shape = RoundedCornerShape(20.dp),
+                shape = MaterialTheme.shapes.largeIncreased,
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
                 elevation = CardDefaults.elevatedCardElevation(),
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
@@ -349,16 +349,42 @@ private fun iconAction(icon: RoseIcon?): (@Composable () -> Unit)? = icon?.let {
  */
 private val RowAlignment = Alignment.CenterVertically
 
+/** [endIcon] replaces the chevron, for a row that leaves the app, such as [RoseIcon.OPEN_IN_NEW]. */
 @Composable
-fun AppArrowRow(title: String, summary: String? = null, value: String? = null, icon: RoseIcon? = null, onClick: () -> Unit) {
+fun AppArrowRow(
+    title: String,
+    summary: String? = null,
+    value: String? = null,
+    icon: RoseIcon? = null,
+    endIcon: RoseIcon? = null,
+    onClick: () -> Unit,
+) {
     when (LocalInterfaceStyle.current) {
-        InterfaceStyle.MIUIX -> ArrowPreference(
-            title,
-            summary = summary,
-            startAction = iconAction(icon),
-            endActions = { value?.let { AppText(it, role = AppTextRole.Summary) } },
-            onClick = onClick,
-        )
+        InterfaceStyle.MIUIX -> if (endIcon == null) {
+            ArrowPreference(
+                title,
+                summary = summary,
+                startAction = iconAction(icon),
+                endActions = { value?.let { AppText(it, role = AppTextRole.Summary) } },
+                onClick = onClick,
+            )
+        } else {
+            // ArrowPreference always draws its own arrow, so a row with another end icon is a BasicComponent.
+            BasicComponent(
+                title = title,
+                summary = summary,
+                startAction = iconAction(icon),
+                endActions = {
+                    value?.let { AppText(it, Modifier.padding(end = 8.dp), role = AppTextRole.Summary) }
+                    AppIcon(
+                        endIcon,
+                        Modifier.size(18.dp).align(Alignment.CenterVertically),
+                        tint = MiuixTheme.colorScheme.onSurfaceVariantActions,
+                    )
+                },
+                onClick = onClick,
+            )
+        }
 
         InterfaceStyle.MATERIAL3 -> ListItem(
             onClick = onClick,
@@ -368,7 +394,7 @@ fun AppArrowRow(title: String, summary: String? = null, value: String? = null, i
             trailingContent = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     value?.let { Text(it) }
-                    AppIcon(RoseIcon.CHEVRON)
+                    AppIcon(endIcon ?: RoseIcon.CHEVRON)
                 }
             },
             supportingContent = summary?.let { { Text(it) } },
@@ -461,39 +487,60 @@ fun <T> AppRadioGroup(
     options: List<AppOption<T>>,
     selected: T?,
     enabled: Boolean = true,
+    pending: T? = null,
     onSelect: (T) -> Unit,
 ) {
     Column(Modifier.selectableGroup(), verticalArrangement = rowArrangement()) {
         options.forEach { option ->
-            val chosen = selected != null && option.value == selected
-            val optionEnabled = enabled && option.disabledReason == null
-            val optionModifier = Modifier.semantics {
-                this.selected = chosen
-                option.contentDescription?.let { contentDescription = it }
-                if (!optionEnabled) disabled()
-            }.let { base -> option.testTag?.let { base.testTag(it) } ?: base }
-            when (LocalInterfaceStyle.current) {
-                InterfaceStyle.MIUIX -> RadioButtonPreference(
-                    option.label,
-                    chosen,
-                    onClick = { if (optionEnabled) onSelect(option.value) },
-                    modifier = optionModifier,
-                    summary = option.disabledReason,
-                    enabled = optionEnabled,
-                )
-
-                InterfaceStyle.MATERIAL3 -> ListItem(
-                    selected = chosen,
-                    onClick = { onSelect(option.value) },
-                    modifier = optionModifier,
-                    enabled = optionEnabled,
-                    leadingContent = { RadioButton(chosen, onClick = null, enabled = optionEnabled) },
-                    verticalAlignment = RowAlignment,
-                    supportingContent = option.disabledReason?.let { { Text(it) } },
-                    colors = rowColors(),
-                ) { Text(option.label) }
-            }
+            RadioOption(
+                option = option,
+                chosen = selected != null && option.value == selected,
+                writing = pending != null && option.value == pending,
+                enabled = enabled && option.disabledReason == null,
+                onSelect = { onSelect(option.value) },
+            )
         }
+    }
+}
+
+/** One option of [AppRadioGroup]; [writing] shows a spinner while the option is being written to the device. */
+@Composable
+private fun <T> RadioOption(option: AppOption<T>, chosen: Boolean, writing: Boolean, enabled: Boolean, onSelect: () -> Unit) {
+    val modifier = Modifier.semantics {
+        this.selected = chosen
+        option.contentDescription?.let { contentDescription = it }
+        if (!enabled) disabled()
+    }.let { base -> option.testTag?.let { base.testTag(it) } ?: base }
+    when (LocalInterfaceStyle.current) {
+        InterfaceStyle.MIUIX -> RadioButtonPreference(
+            option.label,
+            chosen,
+            onClick = { if (enabled) onSelect() },
+            modifier = modifier,
+            summary = option.disabledReason,
+            endActions = if (writing) {
+                { AppBusyIndicator(20.dp, "正在设为 ${option.label}") }
+            } else {
+                null
+            },
+            enabled = enabled,
+        )
+
+        InterfaceStyle.MATERIAL3 -> ListItem(
+            selected = chosen,
+            onClick = onSelect,
+            modifier = modifier,
+            enabled = enabled,
+            leadingContent = { RadioButton(chosen, onClick = null, enabled = enabled) },
+            verticalAlignment = RowAlignment,
+            supportingContent = option.disabledReason?.let { { Text(it) } },
+            trailingContent = if (writing) {
+                { AppBusyIndicator(20.dp, "正在设为 ${option.label}") }
+            } else {
+                null
+            },
+            colors = rowColors(),
+        ) { Text(option.label) }
     }
 }
 
@@ -537,6 +584,7 @@ fun <T> AppChoiceRow(
     open: Boolean? = null,
     onOpenChange: ((Boolean) -> Unit)? = null,
     icon: RoseIcon? = null,
+    pending: T? = null,
     onSelect: (T) -> Unit,
 ) {
     val shared = LocalChoiceDialog.current
@@ -552,48 +600,83 @@ fun <T> AppChoiceRow(
             if (value != selected) onSelect(value)
         }
     }
-    val dialogFocusRequester = remember { FocusRequester() }
+    val pendingLabel = pending?.let { requested -> options.firstOrNull { it.value == requested }?.label }
     when (LocalInterfaceStyle.current) {
-        InterfaceStyle.MIUIX -> MiuixChoiceRow(title, valueText, options, selected, enabled, icon, isOpen, ::setOpen, select)
+        InterfaceStyle.MIUIX -> MiuixChoiceRow(title, valueText, options, selected, enabled, icon, isOpen, ::setOpen, pendingLabel, select)
 
-        InterfaceStyle.MATERIAL3 -> {
-            ListItem(
-                onClick = { setOpen(true) },
-                modifier = Modifier.semantics { role = Role.Button },
-                enabled = enabled,
-                leadingContent = iconAction(icon),
-                verticalAlignment = RowAlignment,
-                supportingContent = { Text(valueText) },
-                colors = rowColors(),
-            ) { Text(title) }
-            if (isOpen) {
-                AlertDialog(
-                    onDismissRequest = { setOpen(false) },
-                    modifier = Modifier
-                        .focusRequester(dialogFocusRequester)
-                        .onPreviewKeyEvent {
-                            if (it.type == KeyEventType.KeyUp && it.key == Key.Escape) {
-                                setOpen(false)
-                                true
-                            } else {
-                                false
-                            }
-                        }
-                        .focusable(),
-                    title = { Text(title) },
-                    text = {
-                        LaunchedEffect(Unit) { dialogFocusRequester.requestFocus() }
-                        CompositionLocalProvider(LocalRowPlacement provides RowPlacement.Contained) {
-                            Column(Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState())) {
-                                AppRadioGroup(options, selected, enabled, onSelect = select)
-                            }
-                        }
-                    },
-                    confirmButton = {},
-                    dismissButton = { TextButton(onClick = { setOpen(false) }) { Text("取消") } },
-                )
-            }
+        InterfaceStyle.MATERIAL3 ->
+            MaterialChoiceRow(title, valueText, options, selected, enabled, icon, isOpen, ::setOpen, pendingLabel, select)
+    }
+}
+
+@Composable
+private fun <T> MaterialChoiceRow(
+    title: String,
+    valueText: String,
+    options: List<AppOption<T>>,
+    selected: T?,
+    enabled: Boolean,
+    icon: RoseIcon?,
+    isOpen: Boolean,
+    setOpen: (Boolean) -> Unit,
+    pendingLabel: String?,
+    select: (T) -> Unit,
+) {
+    ListItem(
+        onClick = { setOpen(true) },
+        modifier = Modifier.semantics { role = Role.Button },
+        enabled = enabled,
+        leadingContent = iconAction(icon),
+        verticalAlignment = RowAlignment,
+        supportingContent = { ChoiceValue(valueText, pendingLabel) },
+        colors = rowColors(),
+    ) { Text(title) }
+    if (isOpen) {
+        val focusRequester = remember { FocusRequester() }
+        AlertDialog(
+            onDismissRequest = { setOpen(false) },
+            modifier = Modifier.focusRequester(focusRequester).closeOnEscape { setOpen(false) }.focusable(),
+            title = { Text(title) },
+            text = {
+                LaunchedEffect(Unit) { focusRequester.requestFocus() }
+                CompositionLocalProvider(LocalRowPlacement provides RowPlacement.Contained) {
+                    Column(Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState())) {
+                        AppRadioGroup(options, selected, enabled, onSelect = select)
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = { TextButton(onClick = { setOpen(false) }) { Text("取消") } },
+        )
+    }
+}
+
+/** The confirmed value of a choice row, with the progress line under it while a choice is being written. */
+@Composable
+private fun ChoiceValue(valueText: String, pendingLabel: String?) {
+    if (pendingLabel == null) {
+        Text(valueText)
+    } else {
+        Column {
+            Text(valueText)
+            PendingChoiceLine(pendingLabel)
         }
+    }
+}
+
+/** Closes a dialog on Escape, as a desktop user expects; every other key passes through. */
+private fun Modifier.closeOnEscape(close: () -> Unit): Modifier = onPreviewKeyEvent {
+    val escape = it.type == KeyEventType.KeyUp && it.key == Key.Escape
+    if (escape) close()
+    escape
+}
+
+/** What a choice row shows while a choice is written: the confirmed value stays, this says what is on its way. */
+@Composable
+private fun PendingChoiceLine(label: String) {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        AppBusyIndicator(16.dp, "正在设为 $label")
+        AppText("正在设为 $label", Modifier.semantics { liveRegion = LiveRegionMode.Polite }, role = AppTextRole.Summary)
     }
 }
 
@@ -625,6 +708,7 @@ internal fun <T> AppMultiChoiceRow(
                                 text = option.label,
                                 selected = option.value in checked,
                                 enabled = canToggle(option.value),
+                                summary = option.disabledReason,
                                 onClick = { toggle(option.value) },
                             )
                         },
@@ -662,14 +746,7 @@ internal fun <T> AppMultiChoiceRow(
                 val focusRequester = remember { FocusRequester() }
                 AlertDialog(
                     onDismissRequest = { setOpen(false) },
-                    modifier = Modifier.focusRequester(focusRequester).onPreviewKeyEvent {
-                        if (it.type == KeyEventType.KeyUp && it.key == Key.Escape) {
-                            setOpen(false)
-                            true
-                        } else {
-                            false
-                        }
-                    }.focusable(),
+                    modifier = Modifier.focusRequester(focusRequester).closeOnEscape { setOpen(false) }.focusable(),
                     title = { Text(title) },
                     text = {
                         LaunchedEffect(Unit) { focusRequester.requestFocus() }
@@ -746,7 +823,7 @@ internal fun AppViewTabs(tabs: List<String>, index: Int, modifier: Modifier = Mo
 fun <T> AppCheckGroup(options: List<AppOption<T>>, checked: Set<T>, enabledFor: (T) -> Boolean, onToggle: (T) -> Unit) {
     Column(verticalArrangement = rowArrangement()) {
         options.forEach { option ->
-            val enabled = enabledFor(option.value)
+            val enabled = enabledFor(option.value) && option.disabledReason == null
             val optionModifier = Modifier.semantics { option.contentDescription?.let { contentDescription = it } }
             when (LocalInterfaceStyle.current) {
                 InterfaceStyle.MIUIX -> CheckboxPreference(
@@ -755,6 +832,7 @@ fun <T> AppCheckGroup(options: List<AppOption<T>>, checked: Set<T>, enabledFor: 
                     { onToggle(option.value) },
                     modifier = optionModifier,
                     enabled = enabled,
+                    summary = option.disabledReason,
                 )
 
                 InterfaceStyle.MATERIAL3 -> ListItem(
@@ -764,6 +842,7 @@ fun <T> AppCheckGroup(options: List<AppOption<T>>, checked: Set<T>, enabledFor: 
                     enabled = enabled,
                     leadingContent = { Checkbox(option.value in checked, onCheckedChange = null, enabled = enabled) },
                     verticalAlignment = RowAlignment,
+                    supportingContent = option.disabledReason?.let { { Text(it) } },
                     colors = rowColors(),
                 ) { Text(option.label) }
             }
@@ -803,9 +882,9 @@ fun AppButton(
         }
 
         InterfaceStyle.MATERIAL3 -> if (kind == AppButtonKind.Primary) {
-            Button(onClick, modifier, enabled, shape = RoundedCornerShape(16.dp)) { Text(text) }
+            Button(onClick, modifier, enabled, shape = MaterialTheme.shapes.large) { Text(text) }
         } else {
-            OutlinedButton(onClick, modifier, enabled, shape = RoundedCornerShape(16.dp)) { Text(text) }
+            OutlinedButton(onClick, modifier, enabled, shape = MaterialTheme.shapes.large) { Text(text) }
         }
     }
 }
@@ -839,16 +918,18 @@ internal fun AppProgress(fraction: Float?) {
     }
 }
 
+/** An indeterminate spinner; [contentDescription] tells screen readers what is in progress. */
 @Composable
-fun AppBusyIndicator(size: androidx.compose.ui.unit.Dp? = null) {
+fun AppBusyIndicator(size: androidx.compose.ui.unit.Dp? = null, contentDescription: String = "正在处理") {
+    val described = Modifier.semantics { this.contentDescription = contentDescription }
     when (LocalInterfaceStyle.current) {
         InterfaceStyle.MIUIX -> if (size == null) {
-            top.yukonga.miuix.kmp.basic.InfiniteProgressIndicator()
+            top.yukonga.miuix.kmp.basic.InfiniteProgressIndicator(described)
         } else {
-            top.yukonga.miuix.kmp.basic.InfiniteProgressIndicator(size = size)
+            top.yukonga.miuix.kmp.basic.InfiniteProgressIndicator(described, size = size)
         }
 
-        InterfaceStyle.MATERIAL3 -> CircularProgressIndicator(Modifier.size(size ?: 24.dp))
+        InterfaceStyle.MATERIAL3 -> CircularProgressIndicator(described.size(size ?: 24.dp))
     }
 }
 
@@ -928,6 +1009,7 @@ private fun <T> MiuixChoiceRow(
     icon: RoseIcon?,
     isOpen: Boolean,
     setOpen: (Boolean) -> Unit,
+    pendingLabel: String?,
     select: (T) -> Unit,
 ) {
     val selectedIndex = options.indexOfFirst { it.value == selected }
@@ -940,11 +1022,19 @@ private fun <T> MiuixChoiceRow(
             title = title,
             enabled = enabled,
             startAction = iconAction(icon),
+            bottomAction = pendingLabel?.let { { PendingChoiceLine(it) } },
             onExpandedChange = expanded,
             onSelectedIndexChange = { select(options[it].value) },
         )
     }) {
-        ArrowPreference(title, summary = valueText, enabled = enabled, startAction = iconAction(icon), onClick = { setOpen(true) })
+        ArrowPreference(
+            title,
+            summary = valueText,
+            enabled = enabled,
+            startAction = iconAction(icon),
+            bottomAction = pendingLabel?.let { { PendingChoiceLine(it) } },
+            onClick = { setOpen(true) },
+        )
         OverlayDialog(show = isOpen, title = title, onDismissRequest = { setOpen(false) }) {
             Column(Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState())) {
                 AppRadioGroup(options, selected, enabled, onSelect = select)

@@ -17,8 +17,8 @@ class MaterialTopAppBarBlurUiTest {
 
     /**
      * A half-collapsed blurred bar must not tint darker than the page surface it sits on. The headless
-     * renderer cannot run the blur shader, so the bar carries only the translucent surface tint that
-     * [appBarBackdropBlur] lays under it.
+     * renderer cannot run the blur shader, so the bar carries only a translucent surface tint standing in
+     * for the one [topBarBackdropBlur] blends over the blur.
      */
     @Test
     fun blurredLargeTopAppBarKeepsSurfaceToneWhileCollapsing() = runOpenRoseUiTest(420, 400) {
@@ -28,7 +28,7 @@ class MaterialTopAppBarBlurUiTest {
                 Column {
                     LargeTopAppBar(
                         title = { Text("Title") },
-                        modifier = Modifier.background(MaterialTheme.colorScheme.surface.copy(alpha = 0.75f)),
+                        modifier = Modifier.background(MaterialTheme.colorScheme.surface.copy(alpha = BlurTokens.BAR_TINT)),
                         scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(barState),
                         colors = materialTopAppBarColors(backdropActive = true),
                     )

@@ -15,6 +15,8 @@ import io.github.dohex.openrose.circulation.RemoteControlStatus
 import io.github.dohex.openrose.circulation.RemoteReading
 import io.github.dohex.openrose.circulation.RemoteSessionReference
 import io.github.dohex.openrose.core.NoiseMode
+import io.github.dohex.openrose.core.protocol.BatteryLayout
+import io.github.dohex.openrose.core.protocol.DeviceField
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
@@ -57,11 +59,23 @@ data class RemoteHeadset(
         RemoteControlStatus.IDLE -> "未持有耳机"
         RemoteControlStatus.WAITING -> "正在读取"
     }
-}
 
-@Composable
-fun RemoteHeadsets(client: CirculationClient) {
-    rememberRemoteHeadsets(client).forEach { RemoteHeadsetCard(it) }
+    /** The peer's name and why no headphones show, for a source that reports none; never ends in "null". */
+    val offlineLabel: String get() = listOfNotNull(name, statusLabel).joinToString(" · ")
+
+    /** Battery of the held headphones in the layout of their model; a peer that sends no layout is read as earbuds and case. */
+    val batteryText: String
+        get() {
+            val slots = (reading.batteryLayout ?: BatteryLayout.EARBUDS_AND_CASE).batterySlots()
+            return batterySummary(slots, showUnknown = true) { field ->
+                when (field) {
+                    DeviceField.LEFT_BATTERY -> reading.left
+                    DeviceField.RIGHT_BATTERY -> reading.right
+                    DeviceField.CASE_BATTERY -> reading.case
+                    else -> null
+                }
+            }.orEmpty()
+        }
 }
 
 @Composable
@@ -143,21 +157,18 @@ private class RemoteHeadsetState(private val client: CirculationClient, private 
     }
 }
 
-fun remoteBatteryText(reading: RemoteReading): String = listOf("左耳" to reading.left, "右耳" to reading.right, "充电盒" to reading.case)
-    .joinToString(" · ") { (label, percent) -> "$label ${percent?.let { "$it%" } ?: "未知"}" }
-
 @Composable
 fun RemoteHeadsetCard(headset: RemoteHeadset) {
     val reading = headset.reading
     AppDashboardCard(compact = true) {
         val device = headset.deviceName
         if (device == null) {
-            AppText("${headset.name} · ${headset.statusLabel}", role = AppTextRole.Summary)
+            AppText(headset.offlineLabel, role = AppTextRole.Summary)
         } else {
             AppText(device, role = AppTextRole.Title)
             AppText(headset.sourceLabel, role = AppTextRole.Summary)
             headset.statusLabel?.let { AppText(it, role = AppTextRole.Summary) }
-            AppText(remoteBatteryText(reading))
+            AppText(headset.batteryText)
             val mode = reading.mode?.id
             AppText("降噪模式 · ${mode?.let(::noiseModeLabel) ?: "未知"}")
             val modes = reading.modes.map(NoiseMode::id).sortedBy(::noiseModeOrder)

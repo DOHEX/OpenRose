@@ -133,7 +133,7 @@ internal fun MiuixLiquidGlassBottomBar(
     val dark = colors.surface.luminance() < 0.5f
     val accentColor = colors.primary
     val contentColor = colors.onSurfaceContainer
-    val containerColor = colors.surfaceContainer.copy(alpha = 0.4f)
+    val containerColor = colors.surfaceContainer.copy(alpha = BlurTokens.LIQUID_GLASS_TINT)
     val tabsBackdrop = rememberLayerBackdrop()
 
     val density = LocalDensity.current

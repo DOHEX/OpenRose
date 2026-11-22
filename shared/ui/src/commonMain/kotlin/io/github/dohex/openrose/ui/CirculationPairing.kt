@@ -4,8 +4,11 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -22,9 +25,11 @@ import io.github.dohex.openrose.circulation.CirculationClient
 import io.github.dohex.openrose.circulation.CirculationResult
 import io.github.dohex.openrose.circulation.PairingTicket
 import io.github.dohex.openrose.circulation.PeerDirectory
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.BasicComponent
+import top.yukonga.miuix.kmp.overlay.OverlayDialog
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Composable
@@ -39,6 +44,8 @@ fun CirculationSettings(
     var result by remember(client) { mutableStateOf<CirculationResult?>(null) }
     var issued by remember(client) { mutableStateOf<PairingTicket?>(null) }
     var busy by remember(client) { mutableStateOf(false) }
+
+    @Suppress("TooGenericExceptionCaught") // Whatever the platform throws becomes the page's feedback.
     fun submit(action: suspend () -> CirculationResult) {
         if (busy) return
         busy = true
@@ -46,15 +53,19 @@ fun CirculationSettings(
             try {
                 result = action()
                 refresh++
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: Exception) {
+                result = CirculationResult(error = failure.message ?: "操作失败")
             } finally {
                 busy = false
             }
         }
     }
 
-    val ticket = rememberValidTicket(peers, issued)
+    val live = rememberLiveTicket(peers, issued)
     Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
-        Column(Modifier.widthIn(max = 640.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(Modifier.widthIn(max = ContentMaxWidth).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             if (scan != null) {
                 PhonePairing(
                     nearby = peers.nearby - peers.paired.keys,
@@ -65,7 +76,7 @@ fun CirculationSettings(
                 )
             }
             if (showQr != null) {
-                DesktopPairing(ticket, issued != null, showQr, busy) {
+                DesktopPairing(live.ticket, live.remaining, issued != null, showQr, busy) {
                     submit {
                         val reply = client.offer()
                         issued = reply.ticket
@@ -95,18 +106,31 @@ fun CirculationSettings(
     }
 }
 
+/** The offer peers still accept, with the time it has left; the page hides it and counts down on this one clock. */
+private class LiveTicket(val ticket: PairingTicket?, val remaining: LongState)
+
 @Composable
-private fun rememberValidTicket(peers: PeerDirectory, issued: PairingTicket?): PairingTicket? {
-    val ticket = peers.offer.takeIf { peers.error == null }
-    var expired by remember(ticket?.qr, issued) { mutableStateOf(false) }
-    LaunchedEffect(ticket?.qr, issued) {
-        if (ticket != null) {
-            delay(ticket.validForMillis)
-            expired = true
+private fun rememberLiveTicket(peers: PeerDirectory, issued: PairingTicket?): LiveTicket {
+    val offer = peers.offer.takeIf { peers.error == null }
+    val remaining = remember(offer?.qr, issued) { mutableLongStateOf(offer?.validForMillis ?: 0L) }
+    LaunchedEffect(remaining) {
+        if (offer != null) {
+            var left = offer.validForMillis
+            while (left > 0) {
+                remaining.longValue = left
+                val step = minOf(left, COUNTDOWN_STEP_MILLIS)
+                delay(step)
+                left -= step
+            }
+            remaining.longValue = 0L
         }
     }
-    return ticket.takeUnless { expired }
+    // Only the flip to expired recomposes the page; the seconds are read where they are shown.
+    val live by remember(remaining) { derivedStateOf { remaining.longValue > 0 } }
+    return LiveTicket(offer.takeIf { live }, remaining)
 }
+
+private const val COUNTDOWN_STEP_MILLIS = 1_000L
 
 @Composable
 internal fun PairingIntroduction(title: String, summary: String, icon: RoseIcon, action: @Composable () -> Unit) {
@@ -132,6 +156,7 @@ internal fun PairingIntroduction(title: String, summary: String, icon: RoseIcon,
 @Composable
 private fun DesktopPairing(
     ticket: PairingTicket?,
+    remaining: LongState,
     previouslyShown: Boolean,
     showQr: @Composable (String) -> Unit,
     busy: Boolean,
@@ -167,6 +192,7 @@ private fun DesktopPairing(
                                 letterSpacing = 0.12.em,
                             ),
                         )
+                        AppText("约 ${(remaining.longValue + 999) / 1000} 秒后失效", role = AppTextRole.Footnote)
                     }
                     AppButton("刷新配对码", onOffer, enabled = !busy, kind = AppButtonKind.Secondary)
                 }
@@ -191,8 +217,9 @@ private fun DesktopPairing(
 
 @Composable
 private fun PairedDeviceRow(name: String, nearby: Boolean, busy: Boolean, onForget: () -> Unit) {
+    var confirming by remember { mutableStateOf(false) }
     val availability = if (nearby) "在附近" else "未在附近发现"
-    val forget: @Composable () -> Unit = { AppButton("解除配对", onForget, enabled = !busy, kind = AppButtonKind.Secondary) }
+    val forget: @Composable () -> Unit = { AppButton("解除配对", { confirming = true }, enabled = !busy, kind = AppButtonKind.Secondary) }
     when (LocalInterfaceStyle.current) {
         InterfaceStyle.MIUIX -> BasicComponent(
             title = name,
@@ -207,6 +234,34 @@ private fun PairedDeviceRow(name: String, nearby: Boolean, busy: Boolean, onForg
             leadingContent = { AppIcon(RoseIcon.LINK) },
             trailingContent = { forget() },
             colors = rowColors(),
+        )
+    }
+    if (confirming) {
+        ForgetPeerDialog(name, onConfirm = {
+            confirming = false
+            onForget()
+        }, onDismiss = { confirming = false })
+    }
+}
+
+/** Forgetting a pairing cuts the peer off from this device's headphones until both sides pair again. */
+@Composable
+private fun ForgetPeerDialog(name: String, onConfirm: () -> Unit, onDismiss: () -> Unit) {
+    val title = "解除与「$name」的配对？"
+    val message = "解除后，这台设备与「$name」之间的耳机流转和远程控制将失效，需要重新配对才能恢复。"
+    when (LocalInterfaceStyle.current) {
+        InterfaceStyle.MIUIX -> OverlayDialog(show = true, title = title, onDismissRequest = onDismiss) {
+            AppText(message, role = AppTextRole.Summary)
+            AppButton("确认解除", onConfirm, modifier = Modifier.fillMaxWidth())
+            AppButton("取消", onDismiss, kind = AppButtonKind.Secondary, modifier = Modifier.fillMaxWidth())
+        }
+
+        InterfaceStyle.MATERIAL3 -> AlertDialog(
+            onDismissRequest = onDismiss,
+            title = { Text(title) },
+            text = { Text(message) },
+            confirmButton = { TextButton(onClick = onConfirm) { Text("确认解除") } },
+            dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
         )
     }
 }

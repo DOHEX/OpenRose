@@ -3,12 +3,17 @@ package io.github.dohex.openrose.ui
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalUriHandler
@@ -41,19 +46,40 @@ private val acknowledgements = listOf(
 @Composable
 fun AboutPage() {
     val uriHandler = LocalUriHandler.current
-    // A host without a browser leaves the row inert: the user can do nothing about it from here.
-    val open: (String) -> Unit = { url -> runCatching { uriHandler.openUri(url) } }
+    var failedLink by remember { mutableStateOf<AboutLink?>(null) }
+    val open: (AboutLink) -> Unit = { link ->
+        failedLink = if (runCatching { uriHandler.openUri(link.url) }.isSuccess) null else link
+    }
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         AboutHeader()
+        failedLink?.let { link -> LinkFailureCard(link) { failedLink = null } }
         AppGroup(title = "项目") {
-            projectLinks.forEach { link -> AppArrowRow(title = link.title, summary = link.summary, onClick = { open(link.url) }) }
+            projectLinks.forEach { link -> LinkRow(link, open) }
         }
         AppGroup(title = "致谢") {
-            acknowledgements.forEach { link -> AppArrowRow(title = link.title, summary = link.summary, onClick = { open(link.url) }) }
+            acknowledgements.forEach { link -> LinkRow(link, open) }
         }
+    }
+}
+
+@Composable
+private fun LinkRow(link: AboutLink, onOpen: (AboutLink) -> Unit) {
+    AppArrowRow(title = link.title, summary = link.summary, endIcon = RoseIcon.OPEN_IN_NEW, onClick = { onOpen(link) })
+}
+
+/** A host without a browser cannot open links; say so and show the address the user can open elsewhere. */
+@Composable
+private fun LinkFailureCard(link: AboutLink, onDismiss: () -> Unit) {
+    AppDashboardCard {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            AppIcon(RoseIcon.WARNING, tint = appColor(AppColorRole.Error))
+            AppText("无法打开“${link.title}”：当前设备没有可用的浏览器")
+        }
+        AppText(link.url, role = AppTextRole.Summary)
+        AppButton("知道了", onDismiss, kind = AppButtonKind.Secondary)
     }
 }
 

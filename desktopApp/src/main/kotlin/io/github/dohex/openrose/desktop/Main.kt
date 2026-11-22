@@ -13,6 +13,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.rememberWindowState
 import dev.nucleusframework.application.DecoratedWindow
@@ -52,6 +53,12 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import java.util.prefs.Preferences
 import kotlin.system.exitProcess
+
+/** The window opens this large, or as large as the screen allows. */
+private val MAIN_WINDOW_SIZE = DpSize(1180.dp, 820.dp)
+
+/** Below this the pages no longer lay out sensibly; it also stays within a small screen. */
+private val MAIN_WINDOW_MINIMUM_SIZE = DpSize(420.dp, 560.dp)
 
 fun main(args: Array<String>) {
     val platform = System.getProperty("os.name")
@@ -173,12 +180,16 @@ private fun NucleusApplicationScope.DesktopWindows(
                 onStarted = tray::trayStarted,
             )
         }
+        val screen = remember { usableScreenSize() }
+        val initialSize = remember { MAIN_WINDOW_SIZE.fitTo(screen) }
+        val minimumSize = remember { MAIN_WINDOW_MINIMUM_SIZE.fitTo(screen) }
         DecoratedWindow(
             title = "OpenRose",
             icon = AppLogo.painter,
             visible = window.visible,
             onCloseRequest = window::closeRequested,
-            state = rememberWindowState(width = 1180.dp, height = 820.dp),
+            state = rememberWindowState(size = initialSize),
+            minimumSize = minimumSize,
         ) {
             val current = nucleusWindow
             DisposableEffect(current) {

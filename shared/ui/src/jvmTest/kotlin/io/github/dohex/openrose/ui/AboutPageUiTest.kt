@@ -42,11 +42,15 @@ class AboutPageUiTest {
                     harness.render()
                     assertTrue(harness.hasText("版本 ${AppVersion.NAME}"), "关于 shows the build's version in $case")
                     assertTrue(harness.hasText("致谢"), "关于 lists the acknowledgements in $case")
-
                     harness.clickText("Miuix")
                     harness.render()
                     assertEquals(listOf("https://github.com/compose-miuix-ui/miuix"), opened, "Miuix opens its repository in $case")
                     assertTrue(harness.hasText("致谢"), "A failed browser launch keeps 关于 open in $case")
+                    assertTrue(harness.hasText("无法打开“Miuix”：当前设备没有可用的浏览器"), "A failed browser launch is reported in $case")
+                    assertTrue(harness.hasText("https://github.com/compose-miuix-ui/miuix"), "The failure shows the address in $case")
+                    harness.clickText("知道了")
+                    harness.render()
+                    assertFalse(harness.hasText("无法打开“Miuix”：当前设备没有可用的浏览器"), "Dismissing clears the failure in $case")
 
                     harness.clickContentDescription("返回")
                     harness.render(frames = 120)

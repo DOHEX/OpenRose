@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -50,30 +49,51 @@ internal fun TouchControlCard(
     val hasTouchSwitch = DeviceSetting.TOUCH_ENABLED in writable
     val hasDetection = DeviceSetting.EAR_DETECTION in writable
 
-    val enabled = state.isReady(device) && !state.hasPendingSetting(device)
     if (hasTouchSwitch || hasDetection) {
         AppGroup(title = "功能开关") {
             if (hasTouchSwitch) {
-                SettingToggleChoices("触控总开关", DeviceField.TOUCH_ENABLED, HeadsetCommand::TouchEnabled, device, enabled, onSet)
+                SettingToggleChoices(
+                    "触控总开关",
+                    DeviceField.TOUCH_ENABLED,
+                    HeadsetCommand::TouchEnabled,
+                    device,
+                    state.canWrite(device, DeviceSetting.TOUCH_ENABLED),
+                    onSet,
+                    pendingToggle = state.pendingToggle(device, DeviceSetting.TOUCH_ENABLED),
+                )
             }
             if (hasDetection) {
-                SettingToggleChoices("佩戴检测功能", DeviceField.EAR_DETECTION, HeadsetCommand::EarDetection, device, enabled, onSet)
+                SettingToggleChoices(
+                    "佩戴检测功能",
+                    DeviceField.EAR_DETECTION,
+                    HeadsetCommand::EarDetection,
+                    device,
+                    state.canWrite(device, DeviceSetting.EAR_DETECTION),
+                    onSet,
+                    pendingToggle = state.pendingToggle(device, DeviceSetting.EAR_DETECTION),
+                )
             }
         }
     }
 
-    TouchBindingGroup(device, enabled, selectedSide, onSideChange, selectedSlot, onSlotChange, onSet)
-    TapControlGroup(device, enabled, onSet)
+    TouchBindingGroup(state, device, selectedSide, onSideChange, selectedSlot, onSlotChange, onSet)
+    TapControlGroup(state, device, onSet)
 }
 
 private fun touchBindingStatus(
     reading: FieldReading?,
     binding: TouchBinding?,
-): String = when {
-    reading !is FieldReading.Known -> "当前绑定未知"
-    binding == null -> "设备未返回此手势"
-    binding.action == null -> "未知动作（${binding.rawAction}）"
-    else -> binding.action?.let(::semanticLabel) ?: "当前绑定未知"
+): String {
+    if (reading !is FieldReading.Known) return "当前绑定未知"
+    if (binding == null) return "设备未返回此手势"
+    val action = binding.action ?: return "未知动作（${binding.rawAction}）"
+    return semanticLabel(action)
+}
+
+/** The action being written to one slot's binding, for the row that shows its progress while the confirmed one stays. */
+private fun ControlState.pendingBinding(device: DeviceState, setting: DeviceSetting, side: String, gesture: String): String? {
+    val assignment = pendingValue<FieldValue.TouchAssignment>(device, setting)
+    return assignment?.takeIf { it.side == side && it.gesture == gesture }?.action
 }
 
 private fun touchSideOrder(side: String): Int = when (side) {
@@ -92,17 +112,16 @@ private fun touchGestureOrder(gesture: String): Int = when (gesture) {
 
 @Composable
 private fun TouchBindingRow(
+    state: ControlState,
     device: DeviceState,
     slot: TouchSlot,
     selectedSlot: TouchSlot?,
-    enabled: Boolean,
     onSet: (HeadsetCommand) -> Unit,
     onSlotChange: (TouchSlot?) -> Unit,
 ) {
     val touch = device.capabilities.touchControl
     val touchActions = touch?.actions.orEmpty()
     val knownBindings = device.knownValue(DeviceField.TOUCH_KEYS) as? FieldValue.TouchKeys
-    val isMaterial3 = LocalInterfaceStyle.current == InterfaceStyle.MATERIAL3
     val binding = knownBindings?.bindings?.firstOrNull {
         it.side == slot.side && it.gesture == slot.gesture
     }
@@ -110,7 +129,7 @@ private fun TouchBindingRow(
     val confirmedAction = binding?.action
     val isOpen = selectedSlot == slot
 
-    val rowContent: @Composable () -> Unit = {
+    ContainedBindingRow(isOpen) {
         AppChoiceRow(
             title = touch?.slotLabels?.get(slot)?.let { "$it${touchGestureLabel(slot.gesture)}" }
                 ?: touchGestureLabel(slot.gesture),
@@ -118,7 +137,8 @@ private fun TouchBindingRow(
             options = touchActions.sortedBy(::semanticLabel)
                 .map { action -> AppOption(action, semanticLabel(action)) },
             selected = confirmedAction,
-            enabled = enabled,
+            enabled = state.canWrite(device, DeviceSetting.TOUCH_BINDING),
+            pending = state.pendingBinding(device, DeviceSetting.TOUCH_BINDING, slot.side, slot.gesture),
             onSelect = { action ->
                 onSet(HeadsetCommand.TouchBinding(slot.side, slot.gesture, action))
                 onSlotChange(null)
@@ -136,60 +156,76 @@ private fun TouchBindingRow(
             },
         )
     }
+}
 
-    if (isMaterial3) {
-        val containerColor by animateColorAsState(
-            targetValue = if (isOpen) {
-                MaterialTheme.colorScheme.surfaceContainerHigh
-            } else {
-                MaterialTheme.colorScheme.surfaceContainer
-            },
-            animationSpec = spring(
-                dampingRatio = Spring.DampingRatioNoBouncy,
-                stiffness = Spring.StiffnessMedium,
+/** A binding row's frame: in Material 3 a bordered tile that lifts while its choice is open; Miuix rows need none. */
+@Composable
+private fun ContainedBindingRow(isOpen: Boolean, content: @Composable () -> Unit) {
+    if (LocalInterfaceStyle.current != InterfaceStyle.MATERIAL3) {
+        content()
+        return
+    }
+    val containerColor by animateColorAsState(
+        targetValue = if (isOpen) {
+            MaterialTheme.colorScheme.surfaceContainerHigh
+        } else {
+            MaterialTheme.colorScheme.surfaceContainer
+        },
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioNoBouncy,
+            stiffness = Spring.StiffnessMedium,
+        ),
+        label = "slotContainerColor",
+    )
+    val shape = MaterialTheme.shapes.large
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(containerColor)
+            .border(
+                width = 1.dp,
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = if (isOpen) 0.5f else 0.25f),
+                shape = shape,
             ),
-            label = "slotContainerColor",
-        )
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(16.dp))
-                .background(containerColor)
-                .border(
-                    width = 1.dp,
-                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = if (isOpen) 0.5f else 0.25f),
-                    shape = RoundedCornerShape(16.dp),
-                ),
-        ) {
-            CompositionLocalProvider(LocalRowPlacement provides RowPlacement.Contained) {
-                rowContent()
-            }
+    ) {
+        CompositionLocalProvider(LocalRowPlacement provides RowPlacement.Contained) {
+            content()
         }
-    } else {
-        rowContent()
     }
 }
 
 @Composable
-private fun TapControlGroup(device: DeviceState, enabled: Boolean, onSet: (HeadsetCommand) -> Unit) {
+private fun TapControlGroup(state: ControlState, device: DeviceState, onSet: (HeadsetCommand) -> Unit) {
     device.capabilities.tapControl?.let { tap ->
         val reading = device.reading(DeviceField.TAP_KEYS)
         val bindings = (device.knownValue(DeviceField.TAP_KEYS) as? FieldValue.TouchKeys)?.bindings.orEmpty()
         AppGroup(title = "轻拍控制") {
-            SettingToggleChoices("轻拍开关", DeviceField.TAP_ENABLED, HeadsetCommand::TapEnabled, device, enabled, onSet)
+            SettingToggleChoices(
+                "轻拍开关",
+                DeviceField.TAP_ENABLED,
+                HeadsetCommand::TapEnabled,
+                device,
+                state.canWrite(device, DeviceSetting.TAP_ENABLED),
+                onSet,
+                pendingToggle = state.pendingToggle(device, DeviceSetting.TAP_ENABLED),
+            )
             tap.slots.sortedWith(compareBy({ touchSideOrder(it.side) }, { touchGestureOrder(it.gesture) })).forEach { slot ->
                 val binding = bindings.firstOrNull { it.side == slot.side && it.gesture == slot.gesture }
-                AppChoiceRow(
-                    title = touchSlotLabel(slot.side, slot.gesture, tap),
-                    valueText = touchBindingStatus(reading, binding),
-                    options = tap.actions.sortedBy(::semanticLabel).map { AppOption(it, semanticLabel(it)) },
-                    selected = binding?.action,
-                    enabled = enabled,
-                    id = "tap:${slot.side}:${slot.gesture}",
-                    onSelect = { action ->
-                        onSet(HeadsetCommand.TapBinding(slot.side, slot.gesture, action))
-                    },
-                )
+                ContainedBindingRow(isOpen = false) {
+                    AppChoiceRow(
+                        title = touchSlotLabel(slot.side, slot.gesture, tap),
+                        valueText = touchBindingStatus(reading, binding),
+                        options = tap.actions.sortedBy(::semanticLabel).map { AppOption(it, semanticLabel(it)) },
+                        selected = binding?.action,
+                        enabled = state.canWrite(device, DeviceSetting.TAP_BINDING),
+                        pending = state.pendingBinding(device, DeviceSetting.TAP_BINDING, slot.side, slot.gesture),
+                        id = "tap:${slot.side}:${slot.gesture}",
+                        onSelect = { action ->
+                            onSet(HeadsetCommand.TapBinding(slot.side, slot.gesture, action))
+                        },
+                    )
+                }
             }
         }
     }
@@ -197,8 +233,8 @@ private fun TapControlGroup(device: DeviceState, enabled: Boolean, onSet: (Heads
 
 @Composable
 private fun TouchBindingGroup(
+    state: ControlState,
     device: DeviceState,
-    enabled: Boolean,
     selectedSide: String?,
     onSideChange: (String) -> Unit,
     selectedSlot: TouchSlot?,
@@ -256,7 +292,7 @@ private fun TouchBindingGroup(
                 verticalArrangement = if (isMaterial3) Arrangement.spacedBy(8.dp) else Arrangement.spacedBy(0.dp),
             ) {
                 currentSlots.forEach { slot ->
-                    TouchBindingRow(device, slot, selectedSlot, enabled, onSet, onSlotChange)
+                    TouchBindingRow(state, device, slot, selectedSlot, onSet, onSlotChange)
                 }
             }
         }

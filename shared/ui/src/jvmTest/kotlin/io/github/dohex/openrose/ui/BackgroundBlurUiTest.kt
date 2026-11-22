@@ -30,7 +30,7 @@ class BackgroundBlurUiTest {
                 harness.render()
 
                 assertTrue(harness.hasText("背景模糊"), "Personalization page must render Background Blur preference in $style")
-                assertTrue(harness.hasText("顶栏、底栏及浮层启用毛玻璃透视效果"), "Personalization page must describe Background Blur in $style")
+                assertTrue(harness.hasText("顶栏与底栏（含悬浮底栏）模糊其后滚动的内容；省电模式或系统不支持时自动关闭"), "Personalization page must describe Background Blur in $style")
 
                 harness.clickText("背景模糊")
                 harness.render()

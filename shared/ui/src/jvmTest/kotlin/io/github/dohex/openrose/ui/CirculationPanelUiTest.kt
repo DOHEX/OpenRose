@@ -6,6 +6,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
 import io.github.dohex.openrose.circulation.*
 import io.github.dohex.openrose.core.NoiseMode
+import io.github.dohex.openrose.core.protocol.BatteryLayout
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -97,5 +98,87 @@ class CirculationPanelUiTest {
         assertTrue(panel.hasText("QR"))
         panel.advanceTimeBy(3_050)
         assertFalse(panel.hasText("123456"))
+    }
+
+    @Test
+    fun aSourceWithoutHeadphonesNeverPrintsNull() = runOpenRoseUiTest(420, 600) {
+        setContent {
+            ProvideInterfaceStyle(InterfaceStyle.MATERIAL3, dark = false) {
+                RemoteHeadsetCard(RemoteHeadset("工作站", RemoteReading(RemoteControlStatus.READY), false, null) {})
+            }
+        }
+        val panel = OpenRoseUiTestHarness(this)
+        panel.render()
+        assertTrue(panel.hasText("工作站"))
+        assertFalse(panel.hasText("工作站 · null"))
+    }
+
+    @Test
+    fun remoteBatteryFollowsTheLayoutTheSourceReports() = runOpenRoseUiTest(420, 600) {
+        val single = RemoteReading(RemoteControlStatus.READY, deviceName = "单耳机", case = 64, batteryLayout = BatteryLayout.SINGLE_UNIT)
+        val earbuds = RemoteReading(RemoteControlStatus.READY, deviceName = "EarFree", left = 82, right = 71, batteryLayout = BatteryLayout.EARBUDS_ONLY)
+        setContent {
+            ProvideInterfaceStyle(InterfaceStyle.MATERIAL3, dark = false) {
+                RemoteHeadsetCard(RemoteHeadset("工作站", single, false, null) {})
+                RemoteHeadsetCard(RemoteHeadset("笔记本", earbuds, false, null) {})
+            }
+        }
+        val panel = OpenRoseUiTestHarness(this)
+        panel.render()
+        assertTrue(panel.hasText("电量 64%"))
+        assertTrue(panel.hasText("左耳 82% · 右耳 71%"))
+    }
+
+    @Test
+    fun unpairingNeedsAConfirmationThatNamesTheDevice() = runOpenRoseUiTest(420, 700) {
+        val commands = mutableListOf<CirculationCommand>()
+        val client = CirculationClient { command ->
+            commands += command
+            if (command == CirculationCommand.Directory) PeerDirectory(paired = mapOf("phone" to "小米 14")) else CirculationResult("已解除配对")
+        }
+        setContent {
+            ProvideInterfaceStyle(InterfaceStyle.MATERIAL3, dark = false) { CirculationSettings(client) }
+        }
+        val panel = OpenRoseUiTestHarness(this)
+        panel.render()
+        panel.clickText("解除配对")
+        panel.render()
+        assertTrue(panel.hasText("解除与「小米 14」的配对？"))
+        assertFalse(commands.any { it is CirculationCommand.Forget })
+        panel.clickText("取消")
+        panel.render()
+        assertFalse(panel.hasText("解除与「小米 14」的配对？"))
+        assertFalse(commands.any { it is CirculationCommand.Forget })
+        panel.clickText("解除配对")
+        panel.render()
+        panel.clickText("确认解除")
+        panel.render()
+        assertEquals(listOf<CirculationCommand>(CirculationCommand.Forget("phone")), commands.filterIsInstance<CirculationCommand.Forget>())
+    }
+
+    @Test
+    fun theOpenPairingOfferCountsDownItsRemainingSeconds() = runOpenRoseUiTest(420, 700) {
+        val ticket = PairingTicket("123456", "QR", 5_000L)
+        var offered = false
+        val client = CirculationClient { command ->
+            when (command) {
+                CirculationCommand.Offer -> PairingReply(ticket).also { offered = true }
+                CirculationCommand.Directory -> PeerDirectory(offer = ticket.takeIf { offered })
+                else -> error("Unexpected request $command")
+            }
+        }
+        setContent {
+            ProvideInterfaceStyle(InterfaceStyle.MATERIAL3, dark = false) {
+                CirculationSettings(client, showQr = { AppText(it) })
+            }
+        }
+        val panel = OpenRoseUiTestHarness(this)
+        panel.render()
+        panel.clickText("显示配对码")
+        panel.render()
+        assertTrue(panel.hasText("约 5 秒后失效"))
+        panel.advanceTimeBy(2_050)
+        panel.render()
+        assertTrue(panel.hasText("约 3 秒后失效"))
     }
 }

@@ -137,7 +137,7 @@ fun PersonalizationPage(model: OpenRoseModel, platformUi: PlatformUi, wide: Bool
             }
             AppSwitchRow(
                 title = "背景模糊",
-                summary = "顶栏、底栏及浮层启用毛玻璃透视效果",
+                summary = "顶栏与底栏（含悬浮底栏）模糊其后滚动的内容；省电模式或系统不支持时自动关闭",
                 checked = uiSettings.backgroundBlurEnabled,
                 onChange = { onUiSettingsChange(uiSettings.copy(backgroundBlurEnabled = it)) },
             )

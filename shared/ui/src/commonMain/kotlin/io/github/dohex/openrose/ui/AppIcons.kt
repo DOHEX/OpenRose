@@ -56,6 +56,8 @@ enum class RoseIcon(internal val material: DrawableResource, internal val miuix:
     SHIELD(Res.drawable.msr_verified_user),
     SWAP(Res.drawable.msr_swap_horiz),
     DESKTOP(Res.drawable.msr_desktop_windows),
+    WARNING(Res.drawable.msr_warning),
+    OPEN_IN_NEW(Res.drawable.msr_open_in_new),
 }
 
 /** Resolves the same action to the active interface style's official icon set. */

@@ -19,7 +19,7 @@ OpenRose 早期版本采用自建 `List<AppPage>` 状态模拟回退栈，在二
 - 引入 Compose Multiplatform 导航运行时 `top.yukonga.miuix.kmp:miuix-nav`。
 - 根级采用 `NavDisplay` 管理全屏路由栈，定义强类型序列化路由层次 `Route : NavKey`。
 - 根路由为 `Route.Main(tab: AppPage)`，承载常驻 Scaffold、TopAppBar 以及底部导航栏（宽屏为导航侧边栏 NavigationRail）。
-- 二级页面（`Route.Noise`, `Route.Equalizer`, `Route.Touch`, `Route.Audio`, `Route.Details`, `Route.Diagnostics`, `Route.Personalization`, `Route.AddDevice`）作为独立全屏路由推入，进入二级页面时自动隐藏底部导航栏，并配置 `swipeDismiss = NavSwipeDirection.LeftToRight` 支持原生边缘手势返回。
+- 二级页面作为独立全屏路由推入，进入时自动隐藏底部导航栏，并配置 `swipeDismiss = NavSwipeDirection.LeftToRight` 支持原生边缘手势返回。更新：所有二级页面共用一个路由 `Route.Secondary(page: AppPage)`，页面只在 `AppPage` 枚举里声明一次，新增页面无需再改 `Route` 或 `NavDisplay` 的条目注册；原先逐页的 `Route.Equalizer`、`Route.Touch`、`Route.Audio`、`Route.Details`、`Route.Diagnostics`、`Route.Personalization`、`Route.AddDevice` 等并入其中，本文其余处的 `Route.X` 均指 `Route.Secondary(AppPage.X)`。
 - 更新：Spec #55 曾以耳机主页内联的均衡器下拉偏好行取代 `Route.Equalizer`；它已恢复为二级路由，只供能写自定义曲线的型号进入，只有预设的型号在主页直接选择预设，见 [ADR 0016](0016-equalizer-entry-by-capability.md)。
 - 更新：设置页的界面风格、显示模式与动效偏好移入二级路由 `Route.Personalization`（个性化页），设置页顶部只保留进入它的入口。
 - 更新：设置页底部的“关于”入口进入二级路由 `Route.About`（关于页），显示版本号、项目链接与致谢；版本号为构建生成的 `AppVersion.NAME`（见 [ADR 0015](0015-single-version-source.md)）。

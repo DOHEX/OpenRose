@@ -1,9 +1,14 @@
 package io.github.dohex.openrose.ui.shell
 
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -19,16 +24,19 @@ internal fun ShellPageContent(
     scrollModifier: Modifier,
     compactHome: Boolean = false,
     bottomClearance: Dp = 0.dp,
+    animateWidth: Boolean = true,
     pageContent: @Composable () -> Unit,
     feedbackContent: @Composable (Modifier) -> Unit,
 ) {
-    val pageWidth = when {
+    // Connecting swaps the compact home for the wide dashboard; the width follows instead of jumping.
+    val targetWidth = when {
         compactHome -> 680.dp
         page == AppPage.HEADPHONES -> 1120.dp
         else -> 800.dp
     }
+    val pageWidth by animateDpAsState(targetWidth, if (animateWidth) spring(stiffness = Spring.StiffnessMediumLow) else snap())
     BoxWithConstraints(Modifier.fillMaxSize()) {
-        val maxFeedbackHeight = maxHeight / 2
+        val maxFeedbackHeight = maxHeight / 3
         Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
             Column(
                 Modifier.weight(1f).fillMaxWidth().then(scrollModifier).padding(padding).consumeWindowInsets(padding),

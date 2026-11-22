@@ -179,7 +179,7 @@ class OpenRoseNavigationUiTest {
                 assertTrue(settledPixels == railPixels(), "pages in transition must not draw over the rail in $style")
                 harness.render(frames = 120)
 
-                harness.clickTab("我的耳机")
+                harness.clickTab("耳机")
                 harness.render(frames = 120)
                 harness.clickContentDescription("添加耳机")
                 harness.render(frames = 120)
@@ -229,7 +229,7 @@ class OpenRoseNavigationUiTest {
             assertTrue(harness.settingsChanges.any { it.appearance == Appearance.DARK })
             assertTrue(harness.settingWrites.isEmpty(), "style and appearance changes must not call onSet")
 
-            harness.clickTab("我的耳机")
+            harness.clickTab("耳机")
             harness.render()
             assertTrue(harness.hasText("均衡器"))
 
@@ -264,7 +264,9 @@ class OpenRoseNavigationUiTest {
         block: suspend (NavigationHarness) -> Unit,
     ) = runOpenRoseUiTest(width, height) {
         val state = mutableStateOf(initialState)
-        val uiSettings = mutableStateOf(UiSettings(interfaceStyle = style, appearance = Appearance.SYSTEM))
+        // These tests are about layout and navigation. The headless renderer draws backdrop blur in software,
+        // where the progressive bar blur costs far more than the time the long frame runs here can afford.
+        val uiSettings = mutableStateOf(UiSettings(interfaceStyle = style, appearance = Appearance.SYSTEM, backgroundBlurEnabled = false))
         val model = FakeOpenRoseModel(state, uiSettings)
         model.onStartScan = { state.value = state.value.copy(scan = io.github.dohex.openrose.core.ScanState.Scanning) }
         model.onStopScan = { state.value = state.value.copy(scan = io.github.dohex.openrose.core.ScanState.Idle) }

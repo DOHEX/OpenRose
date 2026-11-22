@@ -66,7 +66,7 @@ class EqualizerEditorTest {
         runCurrent()
         device.editor.choose(EqualizerChoice.Curve(List(10) { 2 }))
         device.editor.choose(EqualizerChoice.Preset("hifi"))
-        assertEquals("hifi", device.editor.displayedMode("custom"))
+        assertEquals("hifi", device.editor.pendingMode)
         assertEquals(confirmedCurve, device.editor.displayedCurve(confirmedCurve), "a pending preset shows the device curve")
 
         device.writes[0].reply.complete(OperationResult.Success)
@@ -82,23 +82,23 @@ class EqualizerEditorTest {
         device.editor.choose(EqualizerChoice.Curve(requested))
         runCurrent()
         assertEquals(requested, device.editor.displayedCurve(confirmedCurve))
-        assertEquals(CUSTOM_EQUALIZER_MODE, device.editor.displayedMode("pop"))
+        assertEquals(CUSTOM_EQUALIZER_MODE, device.editor.pendingMode, "the mode being written, not a selection")
 
         device.writes.single().reply.complete(failed)
         runCurrent()
         assertNull(device.editor.pending)
         assertEquals(confirmedCurve, device.editor.displayedCurve(confirmedCurve))
-        assertEquals("pop", device.editor.displayedMode("pop"))
+        assertNull(device.editor.pendingMode)
     }
 
     @Test
     fun editingTheCurveUnderAPresetWritesTheCurveWhichSelectsCustom() = runTest {
         val device = Device(backgroundScope)
         device.editor.bind(1L)
-        assertEquals("pop", device.editor.displayedMode("pop"))
+        assertNull(device.editor.pendingMode)
         device.editor.choose(EqualizerChoice.Curve(List(10) { if (it == 0) 4 else 0 }))
         runCurrent()
-        assertEquals(CUSTOM_EQUALIZER_MODE, device.editor.displayedMode("pop"))
+        assertEquals(CUSTOM_EQUALIZER_MODE, device.editor.pendingMode)
         assertEquals(
             Write(1L, DeviceSetting.CUSTOM_EQ, FieldValue.IntegerList(List(10) { if (it == 0) 4 else 0 })),
             device.writes.single(),

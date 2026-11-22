@@ -26,6 +26,27 @@ class AddDeviceLifecycleUiTest {
     }
 
     @Test
+    fun anEmptySearchSaysItTimedOutOnlyWhenTheTimerEndedIt() {
+        val empty = ControlState(platform = PlatformState(PermissionState.GRANTED, TransportAvailability.Available))
+        for (style in InterfaceStyle.entries) {
+            withAddDeviceHarness(style, initial = empty) { harness ->
+                harness.openAddDevice()
+                harness.advanceTimeBy(20_000)
+                harness.render()
+                assertTrue(harness.hasText("搜索已超时，可重新搜索"), "timer stop in $style")
+
+                harness.clickText("重新搜索")
+                harness.render()
+                assertFalse(harness.hasText("搜索已超时，可重新搜索"), "a new round clears it in $style")
+                harness.clickText("停止搜索")
+                harness.render()
+                assertTrue(harness.hasText("暂未找到受支持的耳机"), "user stop in $style")
+                assertFalse(harness.hasText("搜索已超时，可重新搜索"), "user stop in $style")
+            }
+        }
+    }
+
+    @Test
     fun manualStopAndScanFailureKeepDiscoveredHeadsetsUsable() {
         for (style in InterfaceStyle.entries) {
             for (failScan in listOf(false, true)) {

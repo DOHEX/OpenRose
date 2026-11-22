@@ -61,7 +61,7 @@ fun OpenRoseApp(
     val canGoBack = navigation.canGoBack
     PlatformBackHandler(canGoBack, navigation::back)
     val addDeviceFlow = rememberAddDeviceFlow(model)
-    AddDeviceLifecycle(navigation.route is Route.AddDevice, state, addDeviceFlow) { navigation.navigate(AppPage.HEADPHONES) }
+    AddDeviceLifecycle(navigation.route.page == AppPage.ADD_DEVICE, state, addDeviceFlow) { navigation.navigate(AppPage.HEADPHONES) }
     LaunchedEffect(state.connection, page) {
         if (page != AppPage.HEADPHONES || state.activeDevice() == null) {
             navigation.menuExpanded = false
@@ -128,6 +128,7 @@ private class DevicePageState {
     val choiceDialog = mutableStateOf<String?>(null)
     var selectedTouchSlot by mutableStateOf<TouchSlot?>(null)
     var selectedTouchSide by mutableStateOf<String?>(null)
+    var confirmingDisconnect by mutableStateOf(false)
 }
 
 private class AppNavigation(
@@ -146,19 +147,17 @@ private class AppNavigation(
         get() = mainPages.getOrElse(tabs.selectedPage) { AppPage.HEADPHONES }
 
     val visiblePage: AppPage
-        get() = when (val current = route) {
-            is Route.Main -> selectedTab
-            else -> current.toAppPage()
-        }
+        get() = if (route is Route.Main) selectedTab else route.page
 
     val overlayOpen: Boolean
-        get() = menuExpanded || device.selectedTouchSlot != null || device.choiceDialog.value != null
+        get() = menuExpanded || device.confirmingDisconnect || device.selectedTouchSlot != null || device.choiceDialog.value != null
 
     val canGoBack: Boolean
         get() = overlayOpen || stack.size > 1 || (route is Route.Main && tabs.selectedPage != 0)
 
     private fun clearOverlays() {
         menuExpanded = false
+        device.confirmingDisconnect = false
         device.choiceDialog.value = null
         device.selectedTouchSlot = null
     }
@@ -172,26 +171,28 @@ private class AppNavigation(
         tabs.selectPage(0, animate = false)
         clearOverlays()
         when (destination) {
-            WindowDestination.ADD_DEVICE -> stack.add(Route.AddDevice)
-            WindowDestination.DIAGNOSTICS -> stack.add(Route.Diagnostics)
+            WindowDestination.ADD_DEVICE -> stack.add(Route.Secondary(AppPage.ADD_DEVICE))
+            WindowDestination.DIAGNOSTICS -> stack.add(Route.Secondary(AppPage.DIAGNOSTICS))
             WindowDestination.HEADPHONES -> Unit
         }
     }
 
+    /** A tab: switch to it, or scroll it to the top when it is already showing. A pushed page: open it. */
     fun navigate(destination: AppPage) {
         clearOverlays()
         val tab = mainPages.indexOf(destination)
         if (tab >= 0) {
+            val showingTab = stack.size == 1 && tab == tabs.selectedPage
             returnToTabs()
-            tabs.selectPage(tab, animate = animate)
-        } else {
-            val target = requireNotNull(destination.secondaryRoute)
-            if (stack.lastOrNull() != target) stack.add(target)
+            if (showingTab) tabs.requestScrollToTop(tab) else tabs.selectPage(tab, animate = animate)
+        } else if ((stack.lastOrNull() as? Route)?.page != destination) {
+            stack.add(Route.Secondary(destination))
         }
     }
 
     fun back() {
         when {
+            device.confirmingDisconnect -> device.confirmingDisconnect = false
             menuExpanded -> menuExpanded = false
             device.selectedTouchSlot != null -> device.selectedTouchSlot = null
             device.choiceDialog.value != null -> device.choiceDialog.value = null
@@ -226,6 +227,7 @@ private fun AppPageContent(
             connectionPhase = addDeviceFlow.phase(state.connection),
             connectionError = addDeviceFlow.connectionError,
             startScanError = addDeviceFlow.scanError,
+            scanTimedOut = addDeviceFlow.scanTimedOut,
             onRequestPermission = platformUi.requestBluetoothPermission,
             onOpenSystemSettings = platformUi.openBluetoothSettings,
             onStartScan = addDeviceFlow::startSearch,
@@ -316,7 +318,7 @@ private fun CirculationPairingPage(platformUi: PlatformUi, navigation: AppNaviga
     if (content != null) {
         content()
     } else {
-        LaunchedEffect(Unit) { if (navigation.route == Route.CirculationPairing) navigation.back() }
+        LaunchedEffect(Unit) { if (navigation.route.page == AppPage.CIRCULATION_PAIRING) navigation.back() }
     }
 }
 
@@ -351,7 +353,6 @@ private fun AppRouteStack(
     renderMainShell: @Composable () -> Unit,
     renderShell: @Composable (AppPage) -> Unit,
 ) {
-    val secondary: @Composable (Route) -> Unit = { renderShell(it.toAppPage()) }
     NavDisplay(
         backStack = navigation.stack,
         transition = pageTransitionOf(transition),
@@ -364,26 +365,18 @@ private fun AppRouteStack(
                 renderMainShell()
             }
         }
-        entry<Route.Touch>(swipeDismiss = NavSwipeDirection.LeftToRight, content = secondary)
-        entry<Route.Equalizer>(swipeDismiss = NavSwipeDirection.LeftToRight, content = secondary)
-        entry<Route.Audio>(swipeDismiss = NavSwipeDirection.LeftToRight, content = secondary)
-        entry<Route.Details>(swipeDismiss = NavSwipeDirection.LeftToRight, content = secondary)
-        entry<Route.Diagnostics>(swipeDismiss = NavSwipeDirection.LeftToRight, content = secondary)
-        entry<Route.Personalization>(swipeDismiss = NavSwipeDirection.LeftToRight, content = secondary)
-        entry<Route.CirculationPairing>(swipeDismiss = NavSwipeDirection.LeftToRight, content = secondary)
-        entry<Route.About>(swipeDismiss = NavSwipeDirection.LeftToRight, content = secondary)
-        entry<Route.AddDevice>(swipeDismiss = NavSwipeDirection.LeftToRight) { added ->
-            // Popped entries retain their registration while animating out.
-            if (navigation.route is Route.AddDevice || navigation.animate) {
-                Box(
-                    if (navigation.route is Route.AddDevice) {
-                        Modifier.fillMaxSize()
-                    } else {
-                        Modifier.fillMaxSize().clearAndSetSemantics { }
-                    },
-                ) {
-                    secondary(added)
+        // Every pushed page is one route; AppPage is the only place a page is declared.
+        entry<Route.Secondary>(swipeDismiss = NavSwipeDirection.LeftToRight) { pushed ->
+            if (pushed.page == AppPage.ADD_DEVICE) {
+                // Popped entries retain their registration while animating out.
+                val onTop = navigation.route.page == AppPage.ADD_DEVICE
+                if (onTop || navigation.animate) {
+                    Box(if (onTop) Modifier.fillMaxSize() else Modifier.fillMaxSize().clearAndSetSemantics { }) {
+                        renderShell(pushed.page)
+                    }
                 }
+            } else {
+                renderShell(pushed.page)
             }
         }
     }
@@ -429,6 +422,8 @@ private class AppShell(
                     connectedHome = connectedHome,
                     menuExpanded = navigation.menuExpanded,
                     onMenuExpandedChange = { navigation.menuExpanded = it },
+                    confirmingDisconnect = navigation.device.confirmingDisconnect,
+                    onConfirmingDisconnectChange = { navigation.device.confirmingDisconnect = it },
                     onDisconnect = onDisconnect,
                     platformActions = platformActions,
                     animatePageChanges = animatePageChanges,
@@ -445,6 +440,8 @@ private class AppShell(
                     connectedHome = connectedHome,
                     menuExpanded = navigation.menuExpanded,
                     onMenuExpandedChange = { navigation.menuExpanded = it },
+                    confirmingDisconnect = navigation.device.confirmingDisconnect,
+                    onConfirmingDisconnectChange = { navigation.device.confirmingDisconnect = it },
                     onDisconnect = onDisconnect,
                     platformActions = platformActions,
                     animatePageChanges = animatePageChanges,
@@ -484,7 +481,7 @@ private class AppShell(
         // The add-device flow takes the full width, as on narrow screens.
         val railMotion = navigation.animate
         AnimatedVisibility(
-            visible = navigation.route !is Route.AddDevice,
+            visible = navigation.route.page != AppPage.ADD_DEVICE,
             enter = if (railMotion) expandHorizontally(expandFrom = Alignment.Start) else EnterTransition.None,
             exit = if (railMotion) shrinkHorizontally(shrinkTowards = Alignment.Start) else ExitTransition.None,
         ) {

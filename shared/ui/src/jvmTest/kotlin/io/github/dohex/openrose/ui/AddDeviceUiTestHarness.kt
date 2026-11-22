@@ -69,6 +69,7 @@ internal fun withAddDeviceHarness(
                     onConnect = flow::connect,
                     onCancelConnection = flow::cancelConnection,
                     onDiagnostics = {},
+                    scanTimedOut = flow.scanTimedOut,
                     modifier = Modifier.verticalScroll(rememberScrollState()),
                 )
             }

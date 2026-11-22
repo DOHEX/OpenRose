@@ -1,6 +1,7 @@
 package io.github.dohex.openrose.circulation
 
 import io.github.dohex.openrose.core.NoiseMode
+import io.github.dohex.openrose.core.protocol.BatteryLayout
 import io.github.dohex.openrose.core.protocol.ModelProfile
 import io.github.dohex.openrose.core.transport.DeviceId
 import kotlinx.coroutines.CancellationException
@@ -44,6 +45,10 @@ data class HandoffStatus(
 
 enum class RemoteControlStatus { WAITING, IDLE, RECOVERING, INITIALIZING, READY, UNAVAILABLE }
 
+/**
+ * [batteryLayout] says which of [left], [right] and [case] the held headphones report. Null from peers that
+ * predate the field; the reader then assumes [BatteryLayout.EARBUDS_AND_CASE].
+ */
 data class RemoteReading(
     val status: RemoteControlStatus = RemoteControlStatus.WAITING,
     val deviceName: String? = null,
@@ -53,8 +58,12 @@ data class RemoteReading(
     val left: Int? = null,
     val right: Int? = null,
     val case: Int? = null,
+    val batteryLayout: BatteryLayout? = null,
     val error: String? = null,
 ) : CirculationReply
+
+/** The layout a peer sent under its [BatteryLayout.name]; null when absent or from a newer peer's unknown layout. */
+fun parseBatteryLayout(name: String?): BatteryLayout? = BatteryLayout.entries.firstOrNull { it.name == name }
 
 class CirculationClient(private val exchange: suspend (CirculationCommand) -> CirculationReply) {
     suspend fun directory(): PeerDirectory = request(CirculationCommand.Directory) { PeerDirectory(error = it) }

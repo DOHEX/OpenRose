@@ -1,8 +1,8 @@
 package io.github.dohex.openrose.ui
 
+import io.github.dohex.openrose.core.HeadsetCommand
 import io.github.dohex.openrose.core.TouchControlCapabilities
 import io.github.dohex.openrose.core.TouchSlot
-import io.github.dohex.openrose.core.protocol.BatteryLayout
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.dohex.openrose.core.protocol.ModelProfile
@@ -41,19 +41,6 @@ internal fun displayFieldValue(
 
 private val batteryFields = setOf(DeviceField.LEFT_BATTERY, DeviceField.RIGHT_BATTERY, DeviceField.CASE_BATTERY)
 
-/** Battery readings with their labels, in display order; a single unit reports in the case slot. */
-internal fun ModelProfile.batteryReadings(): List<Pair<String, DeviceField>> = when (batteryLayout) {
-    BatteryLayout.EARBUDS_AND_CASE -> listOf(
-        "左耳" to DeviceField.LEFT_BATTERY,
-        "右耳" to DeviceField.RIGHT_BATTERY,
-        "充电盒" to DeviceField.CASE_BATTERY,
-    )
-
-    BatteryLayout.EARBUDS_ONLY -> listOf("左耳" to DeviceField.LEFT_BATTERY, "右耳" to DeviceField.RIGHT_BATTERY)
-
-    BatteryLayout.SINGLE_UNIT -> listOf("电量" to DeviceField.CASE_BATTERY)
-}
-
 internal fun gainLevelLabel(level: Int): String = when (level) {
     0 -> "低"
     1 -> "中"
@@ -63,8 +50,7 @@ internal fun gainLevelLabel(level: Int): String = when (level) {
 
 internal fun hearingProtectionLabel(level: Int): String = when (level) {
     0 -> "关闭"
-    in 1..6 -> "${70 + level * 5} dB"
-    else -> "未知（$level）"
+    else -> HeadsetCommand.HearingProtection.thresholdDb(level)?.let { "$it dB" } ?: "未知（$level）"
 }
 
 internal fun touchSlotLabel(side: String, gesture: String, touch: TouchControlCapabilities?): String {
