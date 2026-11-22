@@ -6,7 +6,7 @@ description: 安装 OpenRose MSI，通过系统蓝牙配对耳机并启用桌面
 ## 安装与连接
 
 1. 在 [GitHub Releases](https://github.com/DOHEX/OpenRose/releases) 下载 Windows x64 的 `.msi` 安装包。开发版位于 [CI 运行记录](https://github.com/DOHEX/OpenRose/actions/workflows/ci.yml) 的 `openrose-<版本>-dev-<提交号>-windows-x64` 产物中，下载开发产物需要登录 GitHub。
-2. 运行 MSI，按安装程序提示完成安装。
+2. 运行 MSI。安装程序为当前用户安装到 `%LOCALAPPDATA%\Programs`，不需要管理员权限，完成后在开始菜单打开 OpenRose。新版本 MSI 会直接替换旧版本。
 3. 在 Windows「设置 → 蓝牙和设备」打开蓝牙，添加并连接耳机。OpenRose 的「我的耳机」未连接看板也提供「打开系统蓝牙设置」入口。
 4. 打开 OpenRose。「我的耳机」显示受支持的已配对设备；系统音频已连接后，应用会尝试建立 BLE 控制连接。可以在托盘里查看电量与降噪模式。
 

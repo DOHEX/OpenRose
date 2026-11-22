@@ -3,15 +3,14 @@ package io.github.dohex.openrose.transport.windows
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.*
+import java.io.File
 import java.io.IOException
-import java.nio.file.Files
 import kotlin.time.Duration.Companion.seconds
 
+/** Nucleus passes the installed application resources directory, where desktopApp places the helper. */
 private val executable by lazy {
-    val file = Files.createTempFile("openrose-winrt-", ".exe").toFile().apply { deleteOnExit() }
-    requireNotNull(WindowsControlTransport::class.java.getResourceAsStream("/openrose-winrt.exe")) { "缺少 OpenRose Windows 蓝牙组件" }
-        .use { source -> file.outputStream().use(source::copyTo) }
-    file
+    val resources = requireNotNull(System.getProperty("compose.application.resources.dir")) { "缺少 OpenRose Windows 蓝牙组件" }
+    File(resources, "openrose-winrt.exe").also { require(it.isFile) { "缺少 OpenRose Windows 蓝牙组件：$it" } }
 }
 
 internal fun startWindowsHelper(arguments: List<String>): Process = ProcessBuilder(listOf(executable.absolutePath) + arguments)

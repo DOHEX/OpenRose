@@ -126,6 +126,31 @@ jobs:
         if: runner.os == 'Windows'
         run: ./gradlew --no-daemon --stacktrace :desktopApp:packageDistributionForCurrentOS
 
+      # The path users take: a per-user install without elevation, the WinRT helper beside the app, a clean uninstall.
+      - name: Install and uninstall the Windows installer
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $msi = @(Get-ChildItem desktopApp/build/compose/binaries/main -Recurse -Filter *.msi)
+          if ($msi.Count -ne 1) { throw "Expected one MSI, found $($msi.Count)" }
+          function Invoke-Msi([string] $action, [string] $log) {
+            $p = Start-Process msiexec.exe -Wait -PassThru -ArgumentList $action, "`"$($msi[0].FullName)`"", '/qn', '/l*v', "`"$log`""
+            if ($p.ExitCode -ne 0) { Get-Content $log -Tail 80; throw "msiexec $action exited with $($p.ExitCode)" }
+          }
+          $installRoot = Join-Path $env:LOCALAPPDATA 'Programs'
+          Invoke-Msi '/i' "$env:RUNNER_TEMP\msi-install.log"
+          if (Test-Path (Join-Path $env:ProgramFiles 'OpenRose')) { throw 'The MSI installed per machine' }
+          $app = Get-ChildItem $installRoot -Recurse -Filter OpenRose.exe | Select-Object -First 1
+          $helper = Get-ChildItem $installRoot -Recurse -Filter openrose-winrt.exe | Select-Object -First 1
+          if (-not $app) { throw "OpenRose.exe is not under $installRoot" }
+          if (-not $helper) { throw "openrose-winrt.exe is not under $installRoot" }
+          Write-Host "Installed $($app.FullName) with $($helper.FullName)"
+          # runAfterFinish may have started the app; it must not hold files during uninstall.
+          Get-Process OpenRose, openrose-winrt -ErrorAction SilentlyContinue | Stop-Process -Force
+          Invoke-Msi '/x' "$env:RUNNER_TEMP\msi-uninstall.log"
+          if (Test-Path $app.FullName) { throw "Uninstall left $($app.FullName)" }
+
       - name: Determine whether this PR changes the Android release package
         id: android-release-check
         if: github.event_name == 'pull_request' && runner.os == 'Linux'
