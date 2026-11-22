@@ -32,15 +32,12 @@ import top.yukonga.miuix.kmp.basic.Icon as MiuixIcon
 import top.yukonga.miuix.kmp.basic.IconButton as MiuixIconButton
 
 /**
- * What the headphones tab's top-bar actions need. The app root owns the state, so an open menu or dialog
- * survives a style switch; [onAddDevice] opens the add-device page.
+ * The app root owns the headphones menu state so an open menu survives a style switch.
  */
 internal class HeadphoneMenuState(
     val connectedHome: Boolean,
     val menuExpanded: Boolean,
     val onMenuExpandedChange: (Boolean) -> Unit,
-    val confirmingDisconnect: Boolean,
-    val onConfirmingDisconnectChange: (Boolean) -> Unit,
     val onAddDevice: () -> Unit,
     val onDisconnect: () -> Unit,
 )
@@ -52,17 +49,13 @@ internal fun MainTabActions(page: AppPage, platformActions: @Composable (AppPage
     if (page == AppPage.HEADPHONES) HeadphoneActions(headphoneMenu)
 }
 
-/**
- * Top-bar actions of the headphones tab, identical in both styles: the overflow menu while connected, the
- * add-device button otherwise. 断开控制连接 sits in the menu and asks for confirmation first; only the
- * rendering of the button, menu and dialog follows the interface style.
- */
+/** The headphones tab shows the overflow menu while connected and the add-device button otherwise. */
 @Composable
 private fun HeadphoneActions(state: HeadphoneMenuState) {
     val style = LocalInterfaceStyle.current
     val onMenuDisconnect = {
         state.onMenuExpandedChange(false)
-        state.onConfirmingDisconnectChange(true)
+        state.onDisconnect()
     }
     Box {
         val icon = if (state.connectedHome) RoseIcons[RoseIcon.MORE] else RoseIcons.Plus
@@ -79,17 +72,6 @@ private fun HeadphoneActions(state: HeadphoneMenuState) {
             InterfaceStyle.MATERIAL3 -> MaterialDisconnectMenu(showMenu, dismissMenu, onMenuDisconnect)
         }
     }
-    AppConfirmDialog(
-        show = state.connectedHome && state.confirmingDisconnect,
-        title = "断开控制连接？",
-        message = "断开后无法调整耳机设置，需要重新连接才能继续控制。",
-        confirmLabel = "断开",
-        onConfirm = {
-            state.onConfirmingDisconnectChange(false)
-            state.onDisconnect()
-        },
-        onDismiss = { state.onConfirmingDisconnectChange(false) },
-    )
 }
 
 /**

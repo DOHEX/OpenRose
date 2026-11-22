@@ -49,7 +49,7 @@ gh attestation verify openrose-<version>-android.apk -R DOHEX/OpenRose
 OpenRose's **control connection** is separate from the **audio connection** the system uses for music and calls:
 
 - The control connection reads state such as battery and mode, and sends settings.
-- "Disconnect control connection" (断开控制连接) in the app asks for confirmation, then disconnects only OpenRose; playback is not affected.
+- Tapping "Disconnect control connection" (断开控制连接) immediately ends OpenRose's control connection. Audio keeps playing.
 - When the earphones connect to system audio, the control connection opens automatically; when audio disconnects (for example, the earbuds go back in the case), the control connection ends with it.
 
 ## Next steps

@@ -128,7 +128,6 @@ private class DevicePageState {
     val choiceDialog = mutableStateOf<String?>(null)
     var selectedTouchSlot by mutableStateOf<TouchSlot?>(null)
     var selectedTouchSide by mutableStateOf<String?>(null)
-    var confirmingDisconnect by mutableStateOf(false)
 }
 
 private class AppNavigation(
@@ -150,14 +149,13 @@ private class AppNavigation(
         get() = if (route is Route.Main) selectedTab else route.page
 
     val overlayOpen: Boolean
-        get() = menuExpanded || device.confirmingDisconnect || device.selectedTouchSlot != null || device.choiceDialog.value != null
+        get() = menuExpanded || device.selectedTouchSlot != null || device.choiceDialog.value != null
 
     val canGoBack: Boolean
         get() = overlayOpen || stack.size > 1 || (route is Route.Main && tabs.selectedPage != 0)
 
     private fun clearOverlays() {
         menuExpanded = false
-        device.confirmingDisconnect = false
         device.choiceDialog.value = null
         device.selectedTouchSlot = null
     }
@@ -192,7 +190,6 @@ private class AppNavigation(
 
     fun back() {
         when {
-            device.confirmingDisconnect -> device.confirmingDisconnect = false
             menuExpanded -> menuExpanded = false
             device.selectedTouchSlot != null -> device.selectedTouchSlot = null
             device.choiceDialog.value != null -> device.choiceDialog.value = null
@@ -422,8 +419,6 @@ private class AppShell(
                     connectedHome = connectedHome,
                     menuExpanded = navigation.menuExpanded,
                     onMenuExpandedChange = { navigation.menuExpanded = it },
-                    confirmingDisconnect = navigation.device.confirmingDisconnect,
-                    onConfirmingDisconnectChange = { navigation.device.confirmingDisconnect = it },
                     onDisconnect = onDisconnect,
                     platformActions = platformActions,
                     animatePageChanges = animatePageChanges,
@@ -440,8 +435,6 @@ private class AppShell(
                     connectedHome = connectedHome,
                     menuExpanded = navigation.menuExpanded,
                     onMenuExpandedChange = { navigation.menuExpanded = it },
-                    confirmingDisconnect = navigation.device.confirmingDisconnect,
-                    onConfirmingDisconnectChange = { navigation.device.confirmingDisconnect = it },
                     onDisconnect = onDisconnect,
                     platformActions = platformActions,
                     animatePageChanges = animatePageChanges,

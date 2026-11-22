@@ -193,22 +193,9 @@ class OpenRoseConnectedHomeUiTest {
                     assertTrue(harness.hasText("断开控制连接"), "the open menu survives style replacement in $style")
 
                     harness.clickText("断开控制连接")
-                    harness.render()
-                    assertTrue(harness.hasText("断开控制连接？"), "the menu entry asks before disconnecting in $style")
-                    assertTrue(harness.disconnects.isEmpty(), "nothing disconnects before confirmation in $style")
-
-                    harness.clickText("取消")
-                    // The Miuix dialog keeps drawing through its 260ms exit animation.
+                    assertEquals(1, harness.disconnects.size, "selecting disconnect sends one request in $nextStyle")
                     harness.render(frames = 40)
-                    assertFalse(harness.hasText("断开控制连接？"), "cancelling closes the dialog in $style")
-                    assertTrue(harness.disconnects.isEmpty(), "cancelling does not disconnect in $style")
-
-                    harness.clickContentDescription("耳机菜单")
-                    harness.render()
-                    harness.clickText("断开控制连接")
-                    harness.render()
-                    harness.clickText("断开")
-                    assertEquals(1, harness.disconnects.size)
+                    assertFalse(harness.hasText("断开控制连接"), "selecting disconnect closes the menu in $nextStyle")
                     assertTrue(harness.connects.isEmpty())
                     assertTrue(harness.startScans.isEmpty())
                     assertTrue(harness.settingWrites.isEmpty())

@@ -103,8 +103,6 @@ internal fun MiuixMainShell(
     connectedHome: Boolean = false,
     menuExpanded: Boolean = false,
     onMenuExpandedChange: (Boolean) -> Unit = {},
-    confirmingDisconnect: Boolean = false,
-    onConfirmingDisconnectChange: (Boolean) -> Unit = {},
     onDisconnect: () -> Unit = {},
     platformActions: @Composable (AppPage) -> Unit = {},
     animatePageChanges: Boolean = true,
@@ -126,8 +124,6 @@ internal fun MiuixMainShell(
         connectedHome = connectedHome,
         menuExpanded = menuExpanded,
         onMenuExpandedChange = onMenuExpandedChange,
-        confirmingDisconnect = confirmingDisconnect,
-        onConfirmingDisconnectChange = onConfirmingDisconnectChange,
         onAddDevice = { onNavigate(AppPage.ADD_DEVICE) },
         onDisconnect = onDisconnect,
     )
