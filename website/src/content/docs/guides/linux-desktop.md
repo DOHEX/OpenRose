@@ -11,7 +11,7 @@ Linux x64 的 BLE 控制已实现，EarFree i5 在桌面端的完整真机验收
 
 ## 安装
 
-安装包与 Android 版发布在同一处，见[快速开始](../getting-started/#获取安装包)。开发版在 `packages-linux-x64` 产物里：
+安装包与 Android 版发布在同一处，见[快速开始](../getting-started/#获取安装包)。开发版在 `openrose-<版本>-dev-<提交号>-linux-x64` 产物里：
 
 | 文件 | 适用 |
 | --- | --- |

@@ -182,9 +182,16 @@ jobs:
               { echo "::error::raw/$video was shrunk out of the release APK"; exit 1; }
           done
 
+      # Artifact names carry the version; non-release builds add -dev and the commit, since package files stay at the bare version.
       - name: Collect packages
+        id: collect
+        env:
+          COMMIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
-          mkdir -p dist
+          version="$(tr -d '[:space:]' < version.txt)"
+          if [[ -n "$RELEASE_TAG" ]]; then label="$version"; else label="$version-dev-${COMMIT_SHA::7}"; fi
+          echo "label=$label" >> "$GITHUB_OUTPUT"
+          mkdir -p dist/desktop dist/android
           collect() {
             local found
             found=$(find desktopApp/build/compose/binaries/main -mindepth 2 -maxdepth 2 -type f -name "$1")
@@ -192,25 +199,35 @@ jobs:
               echo "::error::No $1 package was built"
               exit 1
             fi
-            cp $found dist/
+            cp $found dist/desktop/
           }
           if [[ "$RUNNER_OS" == Linux ]]; then
             for pattern in '*.deb' '*.rpm' '*.pacman' '*.AppImage'; do collect "$pattern"; done
             if [[ -n "$RELEASE_TAG" ]]; then
-              cp androidApp/build/outputs/apk/release/androidApp-release.apk dist/OpenRose-android.apk
+              cp androidApp/build/outputs/apk/release/androidApp-release.apk "dist/android/openrose-$version-android.apk"
             else
-              cp androidApp/build/outputs/apk/debug/androidApp-debug.apk dist/OpenRose-android-debug.apk
+              cp androidApp/build/outputs/apk/debug/androidApp-debug.apk "dist/android/openrose-$version-android-debug.apk"
             fi
           else
             collect '*.msi'
           fi
-          ls -l dist
+          ls -lR dist
 
-      - name: Upload application packages
+      - name: Upload desktop packages
         uses: actions/upload-artifact@v7.0.2
         with:
-          name: packages-${{ matrix.platform }}
-          path: dist/*
+          name: openrose-${{ steps.collect.outputs.label }}-${{ matrix.platform }}
+          path: dist/desktop/*
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+
+      - name: Upload Android package
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: openrose-${{ steps.collect.outputs.label }}-android
+          path: dist/android/*
           if-no-files-found: error
           retention-days: 14
           compression-level: 0
@@ -245,7 +262,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@v8.0.2
         with:
-          pattern: packages-*
+          pattern: openrose-*
           path: dist
           merge-multiple: true
 

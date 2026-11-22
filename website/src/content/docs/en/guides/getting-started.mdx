@@ -21,13 +21,13 @@ The app UI is currently Chinese only, so UI labels on this site include the Chin
 ## Get the package
 
 - **Releases**: published on [GitHub Releases](https://github.com/DOHEX/OpenRose/releases) with `SHA256SUMS` and build provenance.
-- **Development builds**: open a successful run on [GitHub Actions](https://github.com/DOHEX/OpenRose/actions/workflows/ci.yml) and download the `packages-linux-x64` artifact; `OpenRose-android-debug.apk` inside it is the Android development build. Downloading requires GitHub sign-in, and artifacts are kept for 14 days.
+- **Development builds**: open a successful run on [GitHub Actions](https://github.com/DOHEX/OpenRose/actions/workflows/ci.yml) and download the `openrose-<version>-dev-<commit>-android` artifact; the `.apk` inside it is the Android development build. Downloading requires GitHub sign-in, and artifacts are kept for 14 days.
 
 To verify files downloaded from a release:
 
 ```bash
 sha256sum -c SHA256SUMS --ignore-missing
-gh attestation verify OpenRose-android.apk -R DOHEX/OpenRose
+gh attestation verify openrose-<version>-android.apk -R DOHEX/OpenRose
 ```
 
 ## Connect the earphones

@@ -19,13 +19,13 @@ import { Steps } from '@astrojs/starlight/components';
 ## 获取安装包
 
 - **正式版**：发布在 [GitHub Releases](https://github.com/DOHEX/OpenRose/releases)，附带 `SHA256SUMS` 和构建来源证明。
-- **开发版**：在 [GitHub Actions](https://github.com/DOHEX/OpenRose/actions/workflows/ci.yml) 打开一次成功的运行，下载 `packages-linux-x64` 产物，里面的 `OpenRose-android-debug.apk` 就是 Android 开发版。下载需要登录 GitHub，产物保留 14 天。
+- **开发版**：在 [GitHub Actions](https://github.com/DOHEX/OpenRose/actions/workflows/ci.yml) 打开一次成功的运行，下载 `openrose-<版本>-dev-<提交号>-android` 产物，里面的 `.apk` 就是 Android 开发版。下载需要登录 GitHub，产物保留 14 天。
 
 校验正式版下载的文件：
 
 ```bash
 sha256sum -c SHA256SUMS --ignore-missing
-gh attestation verify OpenRose-android.apk -R DOHEX/OpenRose
+gh attestation verify openrose-<版本>-android.apk -R DOHEX/OpenRose
 ```
 
 ## 连接耳机

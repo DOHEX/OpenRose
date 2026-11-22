@@ -5,7 +5,7 @@ description: Install the OpenRose MSI, pair your earphones in Windows and start 
 
 ## Install and connect
 
-1. Download the Windows x64 `.msi` from [GitHub Releases](https://github.com/DOHEX/OpenRose/releases). For a development build, sign in to GitHub and download the `packages-windows-x64` artifact from a successful [CI run](https://github.com/DOHEX/OpenRose/actions/workflows/ci.yml).
+1. Download the Windows x64 `.msi` from [GitHub Releases](https://github.com/DOHEX/OpenRose/releases). For a development build, sign in to GitHub and download the `openrose-<version>-dev-<commit>-windows-x64` artifact from a successful [CI run](https://github.com/DOHEX/OpenRose/actions/workflows/ci.yml).
 2. Run the MSI and follow the installer.
 3. In Windows Settings, open **Bluetooth & devices**, enable Bluetooth, then add and connect your earphones. When disconnected, My Earphones (我的耳机) also offers Open system Bluetooth settings (打开系统蓝牙设置).
 4. Open OpenRose. My Earphones (我的耳机) lists supported paired devices. Once system audio connects, the app attempts to establish BLE control. The tray shows battery levels and noise mode.

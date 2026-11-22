@@ -132,7 +132,7 @@ PR 标题同样遵循这一格式，并由 `.github/workflows/pr-title.yml` 检�
 
 ```bash
 sha256sum --check --ignore-missing SHA256SUMS
-gh attestation verify OpenRose-android.apk --repo DOHEX/OpenRose
+gh attestation verify openrose-X.Y.Z-android.apk --repo DOHEX/OpenRose
 ```
 
 ## 领域文档

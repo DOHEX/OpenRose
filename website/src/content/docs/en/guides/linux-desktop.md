@@ -11,7 +11,7 @@ BLE control on Linux x64 is implemented; full desktop hardware acceptance with t
 
 ## Install
 
-Desktop packages are published alongside the Android app; see [Getting started](../getting-started/#get-the-package). Development builds are in the `packages-linux-x64` artifact:
+Desktop packages are published alongside the Android app; see [Getting started](../getting-started/#get-the-package). Development builds are in the `openrose-<version>-dev-<commit>-linux-x64` artifact:
 
 | File | For |
 | --- | --- |
