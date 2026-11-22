@@ -13,3 +13,14 @@
 	--sl-color-accent: oklch(60% 0.2 var(--sl-hue-accent));
 	--sl-color-accent-high: oklch(48% 0.18 var(--sl-hue-accent));
 }
+
+/* Keep drag selection for reading and editing, including inside the search dialog. */
+:where(
+	button, select, label[for], summary,
+	nav, footer a, .site-title, .social-icons, .sl-skip-link, .sl-anchor-link,
+	.sl-link-button, .sl-link-card, .pagefind-ui__result-link,
+	[data-showcase] .art
+) {
+	-webkit-user-select: none;
+	user-select: none;
+}

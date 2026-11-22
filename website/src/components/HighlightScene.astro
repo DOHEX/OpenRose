@@ -1,0 +1,143 @@
+---
+import IslandPreview from './IslandPreview.astro';
+import PhoneFrame from './PhoneFrame.astro';
+import standard from '../assets/showcase/quick-standard.webp';
+import transparency from '../assets/showcase/quick-transparency.webp';
+import tray from '../assets/showcase/tray.webp';
+
+interface Props { scene: 'quick' | 'island' | 'tray' }
+const { scene } = Astro.props;
+// The same headphone silhouette is used for the Android tile and the connected tray icon.
+const headphones = `${import.meta.env.BASE_URL.replace(/\/$/, '')}/favicon.svg`;
+---
+
+{scene === 'island' && <IslandPreview />}
+{scene === 'quick' && (
+	<PhoneFrame variant="quick">
+		<div lang="zh-CN" class="quick">
+			<div class="tile">
+				<span class="tile-icon"><img src={headphones} alt="" /></span>
+				<span>OpenRose</span>
+			</div>
+			<div class="capture">
+				<img src={transparency.src} width={transparency.width} height={transparency.height} alt="" />
+				<img class="before" src={standard.src} width={standard.width} height={standard.height} alt="" />
+				<span class="tap"></span>
+			</div>
+		</div>
+	</PhoneFrame>
+)}
+{scene === 'tray' && (
+	<div class="tray" lang="zh-CN" style={`--panel-ratio: ${tray.width / tray.height}`}>
+		<div class="capture">
+			<img src={tray.src} width={tray.width} height={tray.height} alt="" />
+		</div>
+		<div class="taskbar"><img src={headphones} alt="" /></div>
+	</div>
+)}
+
+<style>
+	.quick, .tray {
+		position: relative;
+		width: 100%;
+		height: 100%;
+		overflow: hidden;
+	}
+	.tray {
+		container-type: size;
+		background: radial-gradient(ellipse at 15% 0%, #54505a, #3c3944 58%, #24242d);
+	}
+	.capture { position: absolute; }
+	.capture img { display: block; width: 100%; height: auto; }
+	.quick .capture {
+		inset: auto 0 var(--gesture-inset);
+		filter: drop-shadow(0 -3px 16px rgb(0 0 0 / 14%));
+	}
+	.quick .capture::after {
+		content: '';
+		position: absolute;
+		inset: 100% 0 auto;
+		height: var(--gesture-inset);
+		background: #f7f7f7;
+	}
+	.tile {
+		position: absolute;
+		inset: 50% auto auto 50%;
+		translate: -50% -50%;
+		/* MIUISystemUIPlugin's qs_tile_item_view uses a 68dp circle, 30dp icon and 12dp label. */
+		display: grid;
+		justify-items: center;
+		gap: calc(4 * var(--phone-dp));
+		color: white;
+		font: 400 calc(12 * var(--phone-dp))/1.25 system-ui, sans-serif;
+		white-space: nowrap;
+		opacity: 0;
+	}
+	.tile-icon {
+		display: grid;
+		place-items: center;
+		width: calc(68 * var(--phone-dp));
+		aspect-ratio: 1;
+		border-radius: 50%;
+		background: #3482ff;
+	}
+	.tile img { width: calc(30 * var(--phone-dp)); aspect-ratio: 1; filter: brightness(0) invert(1); }
+	.before { position: absolute; inset: 0; opacity: 0; }
+	.tap {
+		position: absolute;
+		left: 60.9%;
+		top: 42%;
+		width: 10%;
+		aspect-ratio: 1;
+		border-radius: 50%;
+		border: 2px solid currentColor;
+		color: #3482ff;
+		background: rgb(52 130 255 / 12%);
+		translate: -50% -50%;
+		opacity: 0;
+	}
+	.tray .capture {
+		width: min(93cqw, calc((88cqh - 1.6rem) * var(--panel-ratio)), 360px);
+		right: 4%;
+		bottom: calc(1.6rem + 2%);
+		overflow: hidden;
+		border-radius: clamp(8px, 2.5cqw, 12px);
+		box-shadow: 0 0 0 1px rgb(0 0 0 / 22%), 0 0.4rem 0.8rem rgb(0 0 0 / 26%);
+		transform-origin: 90% 100%;
+	}
+	.taskbar {
+		position: absolute;
+		inset: auto 0 0;
+		height: 1.6rem;
+		display: flex;
+		justify-content: flex-end;
+		align-items: center;
+		padding-inline: 7%;
+		background: #29292e;
+	}
+	.taskbar img { width: 1.08rem; height: 1.08rem; filter: brightness(0) invert(1); }
+
+	@media (prefers-reduced-motion: no-preference) {
+		.tile { animation: open-tile 0.9s both; }
+		.quick .capture { animation: open-sheet 0.5s 0.65s cubic-bezier(.2, .75, .25, 1) both; }
+		.before { animation: switch-mode 0.18s 2.45s both; }
+		.tap { animation: touch 0.55s 2.15s both; }
+		.tray .capture { animation: open-tray 0.24s 0.55s ease-out both; }
+		:is(.quick, .tray) :is(.tile, .capture, .before, .tap) {
+			animation-play-state: var(--showcase-play-state, running);
+		}
+	}
+	@keyframes open-tile {
+		0%, 64% { opacity: 1; }
+		75% { opacity: 1; transform: scale(.96); }
+		to { opacity: 0; transform: translateY(-1rem); }
+	}
+	@keyframes open-sheet { from { transform: translateY(105%); } to { transform: none; } }
+	@keyframes switch-mode { from { opacity: 1; } to { opacity: 0; } }
+	@keyframes touch {
+		from { opacity: 0; transform: scale(.5); }
+		30% { opacity: .8; }
+		to { opacity: 0; transform: scale(1.2); }
+	}
+	@keyframes open-tray { from { opacity: 0; transform: translateY(0.3rem); } to { opacity: 1; } }
+</style>

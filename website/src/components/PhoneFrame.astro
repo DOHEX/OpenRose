@@ -1,0 +1,136 @@
+---
+import statusBar from '../assets/showcase/hyperos-status.png';
+
+interface Props { variant: 'quick' | 'island' }
+const { variant } = Astro.props;
+---
+
+<!-- The frame uses Xiaomi 14 body/display measurements. The status bar, gesture area and rounded corners were measured
+     with WindowManager on a Xiaomi 14 running HyperOS OS4.0.0.27.XNCCNXM.
+     https://www.mi.com/global/product/xiaomi-14/specs/
+     https://i02.appmifile.com/mi-com-product/fly-birds/xiaomi-14/PC/2e652291f995e50dd4ffb6ed67f2e4e8.png
+     https://github.com/gm-stuffs/xiaomi_houji_dump/tree/509aab37644fc46d59bfaed1f2b3042cc7121256/product -->
+<div class="phone-preview" data-variant={variant} aria-hidden="true" lang="zh-CN">
+	<div class="chassis">
+		<div class="screen">
+			<!-- System glyphs from the reference phone's 1200 × 134 status bar. -->
+			<img class="status" src={statusBar.src} width={statusBar.width} height={statusBar.height} alt="" />
+			<slot />
+			<div class="camera"></div>
+			<div class="navigation"></div>
+		</div>
+	</div>
+</div>
+
+<style>
+	.phone-preview {
+		container-type: size;
+		display: grid;
+		place-items: center;
+		position: relative;
+		isolation: isolate;
+		width: 100%;
+		height: 100%;
+		background: radial-gradient(ellipse at 35% 24%, #66606a, #393541 65%, #292831);
+		font-family: Roboto, MiSans, system-ui, sans-serif;
+	}
+	.chassis {
+		--body-width: min(92cqw, 45cqh);
+		--body-height: calc(var(--body-width) * 152.8 / 71.5);
+		/* The 6.36-inch display is 66.22mm wide in a 71.5mm body. */
+		--display-width: calc(var(--body-width) * .9262);
+		--display-height: calc(var(--display-width) * 2670 / 1200);
+		--display-radius: calc(var(--display-width) * 134 / 1200);
+		--bezel-x: calc((var(--body-width) - var(--display-width)) / 2);
+		--bezel-y: calc((var(--body-height) - var(--display-height)) / 2);
+		--metal-edge: calc(var(--body-width) * .009);
+		position: relative;
+		box-sizing: border-box;
+		width: var(--body-width);
+		height: var(--body-height);
+		/* Offset the display arc by the bezel in each axis so the two arcs share a centre. */
+		border-radius: calc(var(--display-radius) + var(--bezel-x)) / calc(var(--display-radius) + var(--bezel-y));
+		border: var(--metal-edge) solid transparent;
+		background: linear-gradient(#101115, #08090c) padding-box,
+			linear-gradient(116deg, #a3a4a9, #707179 12%, #27282d 34%, #86868b 57%, #45464b 83%, #87898d) border-box;
+		box-shadow: 0 1.4cqh 2.8cqh #16131b66, 0 .2cqh .7cqh #14131a99;
+	}
+	/* Volume rocker and power key on the same edge of the metal frame. */
+	.chassis::before, .chassis::after {
+		content: '';
+		position: absolute;
+		left: calc(100% + var(--metal-edge) - .5px);
+		width: max(1.5px, .6%);
+		border-radius: 0 2px 2px 0;
+		background: linear-gradient(to right, #23232a, #82838a);
+		box-shadow: inset 0 1px #b9bac180, inset 0 -1px #212026;
+	}
+	.chassis::before { top: 23%; height: 12%; }
+	.chassis::after { top: 39%; height: 7%; }
+	.screen {
+		position: absolute;
+		left: 50%;
+		top: 50%;
+		translate: -50% -50%;
+		width: var(--display-width);
+		height: var(--display-height);
+		container-type: inline-size;
+		/* At the stock 480dpi this screen is 400 × 890dp. Size its UI in that coordinate system. */
+		--phone-dp: calc(100cqw / 400);
+		--gesture-inset: calc(20 * var(--phone-dp));
+		/* The lens in the product render centres at y≈71px; SystemUI centres the island at y=72px. */
+		--camera-center-y: calc(100cqw * 72 / 1200);
+		isolation: isolate;
+		overflow: hidden;
+		border-radius: var(--display-radius);
+		background:
+			radial-gradient(ellipse 145% 84% at -5% 5%, transparent 62%, #cdabb5 62.4%, #6d596d 65%, #3f384c 72%, transparent 73%),
+			radial-gradient(ellipse 145% 85% at 112% 65%, transparent 51%, #c9a2a6 52%, #877281 58%, #4c4156 71%, transparent 72%),
+			linear-gradient(150deg, #746472, #b69ba8 45%, #77687c 67%, #41374a);
+	}
+	[data-variant='quick'] .screen::before {
+		content: '';
+		position: absolute;
+		inset: 0;
+		background: rgb(0 0 0 / 32%);
+		pointer-events: none;
+	}
+	.status {
+		position: absolute;
+		inset: 0 0 auto;
+		display: block;
+		width: 100%;
+		height: auto;
+	}
+	.camera {
+		position: absolute;
+		z-index: 2;
+		left: 50%;
+		top: var(--camera-center-y);
+		translate: -50% -50%;
+		width: calc(100cqw * 74 / 1200);
+		aspect-ratio: 1;
+		border-radius: 50%;
+		background: radial-gradient(circle at 43% 42%, #586161 0%, transparent 10%),
+			radial-gradient(circle, #161a1c 0%, #040506 25%, #171a1a 38%, #020304 50%, #010102 72%);
+		pointer-events: none;
+	}
+	.navigation {
+		position: absolute;
+		inset: auto 0 0;
+		height: var(--gesture-inset);
+		display: grid;
+		place-items: center;
+		color: white;
+		pointer-events: none;
+	}
+	/* The transparent gesture area changes contrast as the light bottom sheet slides behind it. */
+	[data-variant='quick'] .navigation { mix-blend-mode: difference; }
+	.navigation::before {
+		content: '';
+		width: 30%;
+		height: .9cqw;
+		border-radius: 1em;
+		background: currentColor;
+	}
+</style>

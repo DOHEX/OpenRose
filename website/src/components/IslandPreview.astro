@@ -1,0 +1,126 @@
+---
+import PhoneFrame from './PhoneFrame.astro';
+import appIcon from '../../../desktopApp/icons/openrose.svg?raw';
+
+const left = 80;
+const right = 90;
+---
+
+<!-- The module supplies these images, strings and actions in FocusNotificationTemplate.kt.
+     SystemUI owns the container and motion. Its device-connection template places the
+     two earbud images at the outer ends of the pill, on either side of the front camera.
+     The compact pill uses a recorded Xiaomi 14 SystemUI rect (372,20)–(828,124).
+     Expanded placement and content proportions follow Xiaomi's template examples:
+     https://dev.mi.com/xiaomihyperos/documentation/detail?pId=2140
+     https://dev.mi.com/xiaomihyperos/documentation/detail?pId=2143
+     https://dev.mi.com/xiaomihyperos/documentation/detail?pId=2142 -->
+<PhoneFrame variant="island">
+	<div class="island">
+		<div class="summary">
+			{[left, right].map((level, i) => (
+				<div class:list={['reading', { right: i === 1 }]}>
+					<svg viewBox="10 0 52 72">
+						<rect x="26" y="12" width="21" height="26" rx="10" fill="white" />
+						<rect x="37" y="31" width="11" height="26" rx="5" fill="white" />
+						<circle cx="36.5" cy="25" r="4" fill="#303030" />
+					</svg>
+					<span>{level}%</span>
+				</div>
+			))}
+		</div>
+		<div class="notification-card">
+			<div class="info">
+				<span class="app-icon" set:html={appIcon}></span>
+				<div>
+					<strong>EarFree i5</strong>
+					<div class="secondary"><span>L {left}% · R {right}%</span><span>通透</span></div>
+				</div>
+			</div>
+			<div class="actions"><span>切换降噪</span><span>断开</span></div>
+		</div>
+	</div>
+</PhoneFrame>
+
+<style>
+	.island {
+		/* All lengths use the full phone screen as their coordinate system. */
+		--summary-height: calc(100cqw * 104 / 1200);
+		position: absolute;
+		left: 50%;
+		top: 14.2cqw;
+		transform: translateX(-50%);
+		width: 93%;
+		height: 32.6cqw;
+		overflow: hidden;
+		border-radius: 6.5cqw;
+		background: #333335;
+		color: white;
+		box-shadow: 0 1.4cqw 4.5cqw #261c2438;
+		font-variant-numeric: tabular-nums;
+	}
+	.summary, .notification-card {
+		position: absolute;
+		inset: 0;
+	}
+	.summary {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		padding-inline: 1cqw;
+		opacity: 0;
+	}
+	.reading { display: flex; align-items: center; gap: .4cqw; font-size: 3.6cqw; font-weight: 650; line-height: 1; }
+	/* Crop the glyph's transparent side margins to leave the centre clear for the physical lens. */
+	.reading svg { height: 6.9cqw; width: auto; flex: none; }
+	.reading.right { flex-direction: row-reverse; }
+	.reading.right svg { transform: scaleX(-1); }
+	.notification-card {
+		padding: 4.5cqw 3.5cqw 3.5cqw;
+		display: flex;
+		flex-direction: column;
+		justify-content: space-between;
+	}
+	.info { display: flex; align-items: center; gap: 3.2cqw; padding-inline: 1cqw; }
+	.app-icon { display: block; width: 12.2cqw; flex: none; }
+	.app-icon :global(svg) { display: block; width: 100%; height: auto; }
+	.info strong { display: block; font-size: 4.4cqw; line-height: 1.3; font-weight: 650; }
+	.secondary { display: flex; align-items: center; margin-top: .3cqw; color: #c4c4c6; font-size: 3.45cqw; line-height: 1.35; }
+	.secondary span + span { border-left: 1px solid #808083; margin-left: 1.4cqw; padding-left: 1.4cqw; }
+	.actions { display: flex; gap: 2.2cqw; }
+	.actions span {
+		flex: 1;
+		display: grid;
+		place-items: center;
+		height: 9.1cqw;
+		border-radius: 10cqw;
+		background: #505053;
+		text-align: center;
+		font-size: 3.7cqw;
+		font-weight: 550;
+		line-height: 1.3;
+	}
+	@media (prefers-reduced-motion: no-preference) {
+		.island { animation: expand 2s cubic-bezier(.22,.75,.23,1) both; }
+		.summary { animation: hide-summary 2s both; }
+		.notification-card { animation: show-card 2s both; }
+		.island, .summary, .notification-card { animation-play-state: var(--showcase-play-state, running); }
+	}
+	@keyframes expand {
+		0%, 48% {
+			top: calc(var(--camera-center-y) - var(--summary-height) / 2);
+			width: 38%;
+			height: var(--summary-height);
+			border-radius: 8cqw;
+			background: black;
+			box-shadow: none;
+		}
+	}
+	@keyframes hide-summary {
+		0%, 46% { opacity: 1; }
+		59%, 100% { opacity: 0; }
+	}
+	@keyframes show-card {
+		0%, 59% { opacity: 0; }
+		84%, 100% { opacity: 1; }
+	}
+</style>

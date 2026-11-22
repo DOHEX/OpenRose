@@ -1,10 +1,4 @@
 /* Splash (hero) pages only: card hover glow and scroll reveal. */
-/* The hero backdrop bleeds to the viewport edges. Clip on a full-width ancestor rather than <body>:
-   body overflow propagates to the viewport, where `clip` degrades to a still-scrollable `hidden`. */
-[data-has-hero] .main-frame {
-	overflow-x: clip;
-}
-
 [data-has-hero] .card {
 	position: relative;
 	border-radius: 0.75rem;

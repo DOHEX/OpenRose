@@ -1,4 +1,4 @@
-# OpenRose
+# ![OpenRose](docs/assets/openrose-banner.webp "A ROSE / ROSESELSA earphone control app for Android, Linux, and Windows")
 
 [![CI](https://github.com/DOHEX/OpenRose/actions/workflows/ci.yml/badge.svg)](https://github.com/DOHEX/OpenRose/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/DOHEX/OpenRose?include_prereleases)](https://github.com/DOHEX/OpenRose/releases)
