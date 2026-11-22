@@ -19,6 +19,9 @@ import io.github.dohex.openrose.ui.PrimaryDeviceSelection
 import io.github.dohex.openrose.ui.QuickPanel
 import io.github.dohex.openrose.ui.model.WindowDestination
 
+// The app behind the panel can be white. Keep white status icons legible even while the panel scrim fades.
+private val panelStatusBarStyle = SystemBarStyle.dark(0x99000000.toInt())
+
 /**
  * The 快捷面板: a translucent bottom sheet over whatever the user was doing, opened by the quick settings tile
  * and by the status notification. It lives in its own task, so it never brings the main task forward. Opening it
@@ -30,7 +33,7 @@ class QuickPanelActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+        enableEdgeToEdge(statusBarStyle = panelStatusBarStyle)
         setContent {
             val uiSettings by owner.model.uiSettings.collectAsState()
             val integration by owner.runtime.integration.collectAsState()
@@ -44,9 +47,8 @@ class QuickPanelActivity : ComponentActivity() {
                 Appearance.DARK -> true
             }
             SideEffect {
-                // The scrim darkens whatever is behind the sheet, so the status bar always keeps light icons.
                 enableEdgeToEdge(
-                    statusBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
+                    statusBarStyle = panelStatusBarStyle,
                     navigationBarStyle = if (dark) {
                         SystemBarStyle.dark(Color.TRANSPARENT)
                     } else {

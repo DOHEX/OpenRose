@@ -4,6 +4,9 @@ package io.github.dohex.openrose.ui
 
 import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
 import io.github.dohex.openrose.circulation.*
 import io.github.dohex.openrose.core.ConnectionPhase
 import io.github.dohex.openrose.core.ConnectionState
@@ -98,6 +101,13 @@ class TrayPanelUiTest {
             withTrayPanel(state, style) { panel ->
                 panel.render()
 
+                if (style == InterfaceStyle.MATERIAL3) {
+                    val group = panel.nodes().single { it.config.contains(SemanticsProperties.SelectableGroup) }
+                    val buttons = group.children.filter { it.config.getOrNull(SemanticsProperties.Role) == Role.RadioButton }
+                    assertEquals(6, buttons.size, "all six modes across both rows must form one choice")
+                    assertEquals(2, buttons.map { it.boundsInRoot.top }.distinct().size)
+                    assertEquals(1, buttons.count { it.config.getOrNull(SemanticsProperties.Selected) == true })
+                }
                 panel.clickText(confirmed.label)
                 assertEquals(emptyList<Pair<DeviceSetting, FieldValue>>(), panel.model.settingWrites, "confirmed mode in $style")
 

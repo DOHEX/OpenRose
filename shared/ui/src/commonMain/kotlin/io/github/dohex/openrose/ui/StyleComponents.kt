@@ -100,23 +100,7 @@ fun interfaceBackgroundColor(style: InterfaceStyle, dark: Boolean): Color = when
 }
 
 private fun miuixColors(dark: Boolean) = if (dark) miuixDarkColorScheme() else miuixLightColorScheme()
-private fun materialColors(dark: Boolean) = if (dark) {
-    darkColorScheme(
-        surfaceContainerLowest = Color(0xFF0F0D13),
-        surfaceContainerLow = Color(0xFF1D1B20),
-        surfaceContainer = Color(0xFF211F26),
-        surfaceContainerHigh = Color(0xFF2B2930),
-        surfaceContainerHighest = Color(0xFF36343B),
-    )
-} else {
-    lightColorScheme(
-        surfaceContainerLowest = Color(0xFFFFFFFF),
-        surfaceContainerLow = Color(0xFFF7F2FA),
-        surfaceContainer = Color(0xFFF3EDF7),
-        surfaceContainerHigh = Color(0xFFECE6F0),
-        surfaceContainerHighest = Color(0xFFE6E0E9),
-    )
-}
+private fun materialColors(dark: Boolean) = if (dark) darkColorScheme() else expressiveLightColorScheme()
 
 @Composable
 fun AppText(
@@ -751,7 +735,9 @@ internal fun <T> AppMultiChoiceRow(
                     text = {
                         LaunchedEffect(Unit) { focusRequester.requestFocus() }
                         CompositionLocalProvider(LocalRowPlacement provides RowPlacement.Contained) {
-                            AppCheckGroup(options, checked, canToggle, toggle)
+                            Column(Modifier.verticalScroll(rememberScrollState())) {
+                                AppCheckGroup(options, checked, canToggle, toggle)
+                            }
                         }
                     },
                     confirmButton = { TextButton(onClick = { setOpen(false) }) { Text("关闭") } },
@@ -813,12 +799,13 @@ internal fun AppViewTabs(tabs: List<String>, index: Int, modifier: Modifier = Mo
     when (LocalInterfaceStyle.current) {
         InterfaceStyle.MIUIX -> TabRowWithContour(tabs, index, onSelect, modifier = modifier)
 
-        InterfaceStyle.MATERIAL3 -> AppSegmented(
-            tabs.mapIndexed { i, label -> AppOption(i, label) },
-            index,
-            modifier = modifier,
-            onSelect = onSelect,
-        )
+        InterfaceStyle.MATERIAL3 -> if (tabs.isNotEmpty()) {
+            SecondaryTabRow(selectedTabIndex = index, modifier = modifier) {
+                tabs.forEachIndexed { tab, label ->
+                    Tab(selected = tab == index, onClick = { if (tab != index) onSelect(tab) }, text = { Text(label) })
+                }
+            }
+        }
     }
 }
 
@@ -885,9 +872,9 @@ fun AppButton(
         }
 
         InterfaceStyle.MATERIAL3 -> if (kind == AppButtonKind.Primary) {
-            Button(onClick, modifier, enabled, shape = MaterialTheme.shapes.large) { Text(text) }
+            Button(onClick, shapes = ButtonDefaults.shapes(), modifier = modifier, enabled = enabled) { Text(text) }
         } else {
-            OutlinedButton(onClick, modifier, enabled, shape = MaterialTheme.shapes.large) { Text(text) }
+            OutlinedButton(onClick, shapes = ButtonDefaults.shapes(), modifier = modifier, enabled = enabled) { Text(text) }
         }
     }
 }

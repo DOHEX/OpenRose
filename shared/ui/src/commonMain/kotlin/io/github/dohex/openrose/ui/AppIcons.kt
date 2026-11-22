@@ -1,9 +1,13 @@
 package io.github.dohex.openrose.ui
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.LayoutDirection
 import io.github.dohex.openrose.ui.resources.*
 import org.jetbrains.compose.resources.DrawableResource
 import org.jetbrains.compose.resources.vectorResource
@@ -59,6 +63,14 @@ enum class RoseIcon(internal val material: DrawableResource, internal val miuix:
     DESKTOP(Res.drawable.msr_desktop_windows),
     WARNING(Res.drawable.msr_warning),
     OPEN_IN_NEW(Res.drawable.msr_open_in_new),
+}
+
+@Composable
+internal fun ExpansionIcon(expanded: Boolean, modifier: Modifier, tint: Color) {
+    // This chevron points vertically in both reading directions. Rotate its unmirrored shape.
+    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+        AppIcon(RoseIcon.CHEVRON, modifier.rotate(if (expanded) -90f else 90f), tint = tint)
+    }
 }
 
 /** Resolves the same action to the active interface style's official icon set. */

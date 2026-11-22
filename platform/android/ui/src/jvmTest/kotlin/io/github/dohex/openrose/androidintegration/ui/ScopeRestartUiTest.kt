@@ -183,6 +183,39 @@ class ScopeRestartUiTest {
     }
 
     @Test
+    fun materialLandscapeDialogScrollsToLastTargetAndItsFailure() = runOpenRoseUiTest(780, 320) {
+        val settings = mutableStateOf(UiSettings(interfaceStyle = InterfaceStyle.MATERIAL3))
+        val lastTarget = INTEGRATION_SCOPE_PACKAGES.last()
+        val detail = "权限不足\n命令执行失败\n未能重启进程"
+        val harness = restartPage(settings) { targets, _ ->
+            targets.map { ScopeRestartResult(it, ScopeRestartStatus.FAILED, detail) }
+        }
+        harness.clickContentDescription("重启作用域")
+        harness.render()
+        val restartButton = harness.textBounds("重启")
+        harness.scrollToText(lastTarget)
+        assertTrue(harness.textBounds(lastTarget).height >= 48f)
+        assertEquals(restartButton, harness.textBounds("重启"))
+        harness.clickText(lastTarget)
+        harness.render()
+        harness.clickText(lastTarget)
+        harness.clickText("重启")
+        yield()
+        harness.render()
+
+        val closeButton = harness.textBounds("关闭")
+        harness.scrollToText(lastTarget)
+        val lastResult = harness.allTextBounds(detail).last()
+        assertEquals(harness.textBounds(lastTarget), lastResult)
+        assertTrue(lastResult.height >= 88f, "the final package and its three lines of detail fit after scrolling")
+        assertTrue(lastResult.bottom <= closeButton.top)
+        assertEquals(closeButton, harness.textBounds("关闭"))
+        harness.clickText("关闭")
+        harness.render()
+        assertFalse(harness.hasText(detail))
+    }
+
+    @Test
     fun failedRestartReportsEachAffectedProcess() = runOpenRoseUiTest(1200, 1000) {
         val page = mutableStateOf("操作")
         val platform = androidTestPlatform(

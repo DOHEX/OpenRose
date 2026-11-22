@@ -224,12 +224,9 @@ private fun Int?.afterFocusChange(band: Int, focused: Boolean): Int? = if (focus
 @Composable
 private fun bandColors(enabled: Boolean, active: Boolean): BandColors {
     val primary = appColor(AppColorRole.Primary)
-    val curve = when {
-        !enabled -> appColor(AppColorRole.DisabledContent)
-        active -> primary
-        else -> primary.copy(alpha = 0.45f)
-    }
-    return BandColors(track = appColor(AppColorRole.Divider), highlight = primary, curve = curve)
+    val thumb = if (enabled) primary else appColor(AppColorRole.DisabledContent)
+    val curve = if (enabled && !active) thumb.copy(alpha = 0.45f) else thumb
+    return BandColors(track = appColor(AppColorRole.Divider), highlight = primary, curve = curve, thumb = thumb)
 }
 
 /**
@@ -289,7 +286,7 @@ private fun rememberThumbs(
 }
 
 /**
- * One band's input: a slider to accessibility services, ↑/↓ while focused, and press-and-drag along its column.
+ * One band's input: a slider to accessibility services, arrow and range-end keys while focused, and drag along its column.
  * A drag that starts sideways is left to the scrolling band row. [gain] is read for semantics only.
  * [onRelease] is told whether the gesture ended with the finger lifting, rather than being cancelled.
  */
@@ -315,7 +312,7 @@ private fun BandControl(
             .fillMaxHeight()
             .bandSemantics(hz, gain, minGain, maxGain, enabled, onSet)
             .onFocusChanged { onFocusChange(it.isFocused) }
-            .bandKeys(enabled, onStep)
+            .bandKeys(enabled, minGain, maxGain, onStep, onSet)
             .focusable(enabled)
             .bandDrag(enabled, minGain, maxGain, inset, { latestDrag(it) }, { latestRelease(it) }),
     )
@@ -345,19 +342,26 @@ private fun Modifier.bandSemantics(
     }
 }
 
-private fun Modifier.bandKeys(enabled: Boolean, onStep: (Int) -> Unit): Modifier = onKeyEvent { event ->
-    val step = gainStepFor(event.key)
-    if (step != null && enabled && event.type == KeyEventType.KeyDown) onStep(step)
-    step != null
+private fun Modifier.bandKeys(
+    enabled: Boolean,
+    minGain: Int,
+    maxGain: Int,
+    onStep: (Int) -> Unit,
+    onSet: (Int) -> Unit,
+): Modifier = onKeyEvent { event ->
+    if (!enabled) return@onKeyEvent false
+    val down = event.type == KeyEventType.KeyDown
+    when (event.key) {
+        Key.DirectionUp -> if (down) onStep(1)
+        Key.DirectionDown -> if (down) onStep(-1)
+        Key.MoveHome, Key.NumPadMoveHome -> if (down) onSet(minGain)
+        Key.MoveEnd, Key.NumPadMoveEnd -> if (down) onSet(maxGain)
+        else -> return@onKeyEvent false
+    }
+    true
 }
 
-private fun gainStepFor(key: Key): Int? = when (key) {
-    Key.DirectionUp -> 1
-    Key.DirectionDown -> -1
-    else -> null
-}
-
-private class BandColors(val track: Color, val highlight: Color, val curve: Color)
+private class BandColors(val track: Color, val highlight: Color, val curve: Color, val thumb: Color)
 
 /** Gain grid, one track per band, then the curve and its thumbs; thumbs stay inside the area at either limit. */
 private fun DrawScope.drawBands(
@@ -411,7 +415,7 @@ private fun DrawScope.drawBands(
     drawPath(line, colors.curve, style = Stroke(tokens.curveWidth.toPx(), cap = StrokeCap.Round))
     points.forEachIndexed { band, point ->
         val radius = if (band == highlighted) tokens.activeThumbRadius else tokens.thumbRadius
-        drawCircle(colors.curve, radius.toPx(), point)
+        drawCircle(colors.thumb, radius.toPx(), point)
     }
 }
 

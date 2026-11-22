@@ -29,9 +29,40 @@ import kotlinx.collections.immutable.toPersistentList
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
 class NoiseControlCardUiTest {
+    @Test
+    fun materialModeButtonsMorphWhilePressedAndKeepTheConfirmedModeSelected() {
+        val state = state(mode = knownMode("anc"))
+        runOpenRoseUiTest(420, 500) {
+            setContent {
+                ProvideInterfaceStyle(InterfaceStyle.MATERIAL3, dark = false) {
+                    NoiseControlCard(state, requireNotNull(state.device)) {}
+                }
+            }
+            val harness = OpenRoseUiTestHarness(this)
+            harness.render()
+            val resting = harness.snapshot()
+            val confirmed = harness.clickableBounds("降噪")
+            val option = harness.clickableBounds("通透")
+            val rowBackground = resting.getRGB(option.left.toInt() + 2, option.top.toInt() - 1)
+            // The checked pill leaves the corner at (8, 3) clear. The idle inner corner leaves (1, 1) clear.
+            assertEquals(rowBackground, resting.getRGB(confirmed.left.toInt() + 8, confirmed.top.toInt() + 3))
+            val x = option.left.toInt() + 1
+            val y = option.top.toInt() + 1
+            assertEquals(rowBackground, resting.getRGB(x, y))
+
+            touchInput { down(option.center) }
+            harness.render(40)
+            assertNotEquals(rowBackground, harness.snapshot().getRGB(x, y), "press narrows the inner corner")
+            assertTrue(harness.hasSelectedText("降噪"))
+            assertFalse(harness.hasSelectedText("通透"))
+            touchInput { up() }
+        }
+    }
+
     @Test
     fun levelRowsFollowTheConfirmedNoiseMode() {
         val cases = listOf(

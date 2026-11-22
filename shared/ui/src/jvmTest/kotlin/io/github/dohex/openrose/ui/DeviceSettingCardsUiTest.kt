@@ -80,6 +80,31 @@ class DeviceSettingCardsUiTest {
     }
 
     @Test
+    fun materialNoiseCycleCanToggleTheLastOptionInLandscape() {
+        val profile = ModelProfile.I7_RS_V2
+        val flags = mapOf("normal" to true, "anc" to true, "transparency" to false, "wind" to false)
+        val state = readyState(
+            profile.capabilities(),
+            persistentMapOf(DeviceField.NOISE_CYCLE to FieldReading.Known(FieldValue.NoiseCycle(flags), "")),
+            profile,
+        )
+        withOpenRoseAppHarness(state, UiSettings(interfaceStyle = InterfaceStyle.MATERIAL3), width = 780, height = 320) { harness ->
+            harness.render()
+            harness.clickText("触控操作")
+            harness.render(frames = 60)
+            harness.scrollToText("降噪轮换")
+            harness.clickText("降噪轮换")
+            harness.render()
+            val closeButton = harness.textBounds("关闭")
+            harness.scrollToText("抗风噪")
+            assertTrue(harness.clickableBounds("抗风噪").height >= 48f)
+            assertEquals(closeButton, harness.textBounds("关闭"))
+            harness.clickText("抗风噪")
+            assertEquals(listOf(DeviceSetting.NOISE_CYCLE to FieldValue.NoiseCycle(flags + ("wind" to true))), harness.settingWrites)
+        }
+    }
+
+    @Test
     fun fixedNoiseCycleHasNoModeSelectionRowInTouchControls() {
         val profile = ModelProfile.OPAL_RS_V2
         val state = readyState(profile.capabilities(), profile = profile)
@@ -123,8 +148,14 @@ class DeviceSettingCardsUiTest {
                     assertTrue(harness.hasText(rightLabel))
                     assertTrue(harness.hasText("${leftLabel}双击"))
                     assertFalse(harness.hasText("左耳"))
-                    selectedSide.value = "right"
+                    if (style == InterfaceStyle.MATERIAL3) {
+                        assertTrue(harness.hasSelectedTab(leftLabel))
+                        harness.clickTab(rightLabel)
+                    } else {
+                        harness.clickText(rightLabel)
+                    }
                     harness.render()
+                    if (style == InterfaceStyle.MATERIAL3) assertTrue(harness.hasSelectedTab(rightLabel))
                     assertTrue(harness.hasText("${rightLabel}双击"))
                     System.getenv("OPENROSE_SURFACE_DIR")?.let { directory ->
                         harness.render(frames = 60)

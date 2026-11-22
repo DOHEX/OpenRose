@@ -1,12 +1,12 @@
 package io.github.dohex.openrose.ui
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.rememberTransition
 import androidx.compose.animation.core.spring
-import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.Orientation
@@ -32,9 +32,11 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.DropdownMenuGroup
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.DropdownMenuPopup
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MenuDefaults
@@ -52,13 +54,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
@@ -122,41 +125,47 @@ fun QuickPanel(
     val state by model.state.collectAsState()
     val uiSettings by model.uiSettings.collectAsState()
     val dark = uiSettings.appearance.isDark()
-    val entered = remember { MutableTransitionState(false).apply { targetState = true } }
     val dismiss by rememberUpdatedState(onDismiss)
     val scope = rememberCoroutineScope()
-    val dismissVelocity = with(LocalDensity.current) { DismissVelocity.toPx() }
-    // How far the sheet sits below its resting place, from a drag or the exit; the scrim fades along with it.
-    // Never above rest: the bound stops drags and a spring that an upward fling would carry past it alike.
-    val drop = remember { Animatable(0f, visibilityThreshold = 1f).apply { updateBounds(lowerBound = 0f) } }
-    var sheetHeight by remember { mutableIntStateOf(0) }
-    var closing by remember { mutableStateOf(false) }
     val reduceMotion = rememberReduceMotion()
-
-    // Every way out slides the sheet off first; the host only hears about it once the sheet has left the screen.
-    // With animations removed in the system settings the sheet jumps instead of sliding.
-    suspend fun settle(target: Float, velocity: Float = 0f) {
-        if (reduceMotion) drop.snapTo(target) else drop.animateTo(target, sheetSpring, initialVelocity = velocity)
-    }
-
-    fun close(velocity: Float = 0f) {
-        if (closing) return
-        closing = true
-        scope.launch {
-            settle(sheetHeight.toFloat(), velocity)
-            dismiss()
-        }
-    }
-    PlatformBackHandler(enabled = !closing) { close() }
+    val entryState = remember { MutableTransitionState(reduceMotion).apply { targetState = true } }
+    val entry = rememberTransition(entryState, "quickPanelEntry")
+    val dropped = remember { Animatable(0f, visibilityThreshold = 0.001f).apply { updateBounds(0f, 1f) } }
+    var sheetHeight by remember { mutableIntStateOf(0) }
+    var exitStart by remember { mutableStateOf<EntryFrame?>(null) }
     ProvideInterfaceStyle(uiSettings.interfaceStyle, dark, dynamicColor) {
+        val style = sheetStyle()
+        val height by entry.animateFloat({ style.spatial }, "sheetHeight") { if (it) 1f else 0f }
+        val opacity by entry.animateFloat({ style.effects }, "scrimOpacity") { if (it) 1f else 0f }
+        fun entryHeight() = exitStart?.height ?: height.coerceIn(0f, 1f)
+        fun entryOpacity() = exitStart?.opacity ?: opacity.coerceIn(0f, 1f)
+        fun visibleHeight() = (sheetHeight * entryHeight()).coerceAtLeast(1f)
+        suspend fun settle(target: Float, velocity: Float = 0f) {
+            if (reduceMotion) {
+                dropped.snapTo(target)
+            } else {
+                dropped.animateTo(target, style.spatial, initialVelocity = velocity / visibleHeight())
+            }
+        }
+
+        fun close(velocity: Float = 0f) {
+            if (exitStart != null) return
+            // An early dismissal continues from the height and opacity already shown.
+            exitStart = EntryFrame(entryHeight(), entryOpacity())
+            scope.launch {
+                settle(1f, velocity)
+                dismiss()
+            }
+        }
+
+        PlatformBackHandler(enabled = exitStart == null) { close() }
         Box(modifier.fillMaxSize()) {
             Box(
                 Modifier
                     .fillMaxSize()
                     .testTag(QUICK_PANEL_SCRIM_TAG)
                     .drawBehind {
-                        val shown = if (sheetHeight > 0) 1f - drop.value / sheetHeight else 1f
-                        drawRect(Color.Black.copy(alpha = SCRIM_ALPHA * shown.coerceIn(0f, 1f)))
+                        drawRect(style.scrim, alpha = entryOpacity() * (1f - dropped.value))
                     }
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
@@ -165,46 +174,34 @@ fun QuickPanel(
                         onClick = { close() },
                     ),
             )
-            AnimatedVisibility(
-                visibleState = entered,
-                modifier = Modifier.align(Alignment.BottomCenter),
-                enter = if (reduceMotion) EnterTransition.None else slideInVertically { it },
+            Column(
+                Modifier
+                    .align(Alignment.BottomCenter)
+                    .offset {
+                        val visible = entryHeight() * (1f - dropped.value)
+                        IntOffset(0, (sheetHeight * (1f - visible)).roundToInt())
+                    }
+                    .onSizeChanged { sheetHeight = it.height }
+                    .widthIn(max = ContentMaxWidth)
+                    .fillMaxWidth()
+                    .statusBarsPadding()
+                    .clip(style.shape)
+                    .background(style.container)
+                    // Taps on the sheet are its own; only the scrim dismisses.
+                    .pointerInput(Unit) { detectTapGestures { } }
+                    .verticalScroll(rememberScrollState())
+                    .navigationBarsPadding()
+                    .padding(bottom = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                Column(
-                    Modifier
-                        .offset { IntOffset(0, drop.value.roundToInt()) }
-                        .onSizeChanged { sheetHeight = it.height }
-                        .widthIn(max = ContentMaxWidth)
-                        .fillMaxWidth()
-                        .statusBarsPadding()
-                        .clip(RoundedCornerShape(topStart = SheetCorner, topEnd = SheetCorner))
-                        .background(sheetBackground())
-                        // Taps on the sheet are its own; only the scrim dismisses.
-                        .pointerInput(Unit) { detectTapGestures { } }
-                        .verticalScroll(rememberScrollState())
-                        .navigationBarsPadding()
-                        .padding(bottom = 12.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    SheetHandle(
-                        Modifier.draggable(
-                            state = rememberDraggableState { delta ->
-                                scope.launch { drop.snapTo(drop.value + delta) }
-                            },
-                            orientation = Orientation.Vertical,
-                            enabled = !closing,
-                            onDragStopped = { velocity ->
-                                if (drop.value > sheetHeight * DISMISS_FRACTION || velocity > dismissVelocity) {
-                                    close(velocity)
-                                } else {
-                                    settle(0f, velocity)
-                                }
-                            },
-                        ),
-                        onClose = { close() },
-                    )
-                    QuickPanelContent(model, state, selection, circulation, onOpenApp)
-                }
+                SheetHandle(
+                    isClosing = { exitStart != null },
+                    dragBy = { delta -> dropped.snapTo(dropped.value + delta / visibleHeight()) },
+                    pastDismissDistance = { dropped.value * entryHeight() > DISMISS_FRACTION },
+                    rebound = { velocity -> settle(0f, velocity) },
+                    close = ::close,
+                )
+                QuickPanelContent(model, state, selection, circulation, onOpenApp)
             }
         }
     }
@@ -212,39 +209,82 @@ fun QuickPanel(
 
 private val sheetSpring = spring<Float>(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium)
 
-/** The sheet follows the theme in use, so 动态取色 reaches its background too. */
+private data class EntryFrame(val height: Float, val opacity: Float)
+
+private class SheetStyle(
+    val shape: Shape,
+    val container: Color,
+    val scrim: Color,
+    val spatial: FiniteAnimationSpec<Float>,
+    val effects: FiniteAnimationSpec<Float>,
+)
+
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun sheetBackground(): Color = when (LocalInterfaceStyle.current) {
-    InterfaceStyle.MIUIX -> MiuixTheme.colorScheme.surface
-    InterfaceStyle.MATERIAL3 -> MaterialTheme.colorScheme.background
+private fun sheetStyle() = when (LocalInterfaceStyle.current) {
+    InterfaceStyle.MATERIAL3 -> SheetStyle(
+        BottomSheetDefaults.ExpandedShape,
+        BottomSheetDefaults.ContainerColor,
+        BottomSheetDefaults.ScrimColor,
+        MaterialTheme.motionScheme.defaultSpatialSpec(),
+        MaterialTheme.motionScheme.defaultEffectsSpec(),
+    )
+
+    InterfaceStyle.MIUIX -> SheetStyle(
+        RoundedCornerShape(topStart = SheetCorner, topEnd = SheetCorner),
+        MiuixTheme.colorScheme.surface,
+        Color.Black.copy(alpha = SCRIM_ALPHA),
+        sheetSpring,
+        sheetSpring,
+    )
 }
 
 /** The visible bar is small; the whole width above the content takes the drag. A screen reader gets the same exit as a button. */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SheetHandle(modifier: Modifier, onClose: () -> Unit) {
+private fun SheetHandle(
+    isClosing: () -> Boolean,
+    dragBy: suspend (Float) -> Unit,
+    pastDismissDistance: () -> Boolean,
+    rebound: suspend (Float) -> Unit,
+    close: (Float) -> Unit,
+) {
+    val scope = rememberCoroutineScope()
+    val dismissVelocity = with(LocalDensity.current) { DismissVelocity.toPx() }
     Box(
-        modifier
+        Modifier
+            .draggable(
+                state = rememberDraggableState { delta ->
+                    scope.launch { if (!isClosing()) dragBy(delta) }
+                },
+                orientation = Orientation.Vertical,
+                enabled = !isClosing(),
+                onDragStopped = { velocity ->
+                    if (isClosing()) return@draggable
+                    if (pastDismissDistance() || velocity > dismissVelocity) close(velocity) else rebound(velocity)
+                },
+            )
             .testTag(QUICK_PANEL_HANDLE_TAG)
             .fillMaxWidth()
-            .height(20.dp)
-            .semantics {
+            .clearAndSetSemantics {
                 role = Role.Button
                 contentDescription = "快捷面板拖动条"
                 onClick(label = "关闭快捷面板") {
-                    onClose()
+                    close(0f)
                     true
                 }
-            }
-            .padding(top = 8.dp),
-        contentAlignment = Alignment.TopCenter,
+            },
+        contentAlignment = Alignment.Center,
     ) {
-        Box(
-            Modifier
-                .width(36.dp)
-                .height(4.dp)
-                .clip(RoundedCornerShape(2.dp))
-                .background(appColor(AppColorRole.Summary).copy(alpha = 0.4f)),
-        )
+        when (LocalInterfaceStyle.current) {
+            InterfaceStyle.MATERIAL3 -> BottomSheetDefaults.DragHandle()
+
+            InterfaceStyle.MIUIX -> Box(
+                Modifier.padding(vertical = 8.dp).width(36.dp).height(4.dp)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(appColor(AppColorRole.Summary).copy(alpha = 0.4f)),
+            )
+        }
     }
 }
 
@@ -394,7 +434,7 @@ private fun QuickEqualizerMenu(state: ControlState, device: DeviceState, onSet: 
                     color = valueColor,
                     textAlign = TextAlign.End,
                 )
-                AppIcon(RoseIcon.CHEVRON, Modifier.size(20.dp).rotate(if (expanded) -90f else 90f), tint = valueColor)
+                ExpansionIcon(expanded, Modifier.size(20.dp), tint = valueColor)
             }
             when (LocalInterfaceStyle.current) {
                 InterfaceStyle.MIUIX -> WindowListPopup(

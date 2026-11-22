@@ -113,6 +113,11 @@ class BottomBarStyleUiTest {
                 harness.render()
                 val tabs = harness.tabs()
                 assertEquals(3, tabs.size, "Must have 3 floating bottom bar tabs in $style")
+                if (style == InterfaceStyle.MATERIAL3) {
+                    val group = requireNotNull(tabs.first().parent)
+                    assertTrue(group.config.contains(SemanticsProperties.SelectableGroup))
+                    assertEquals(tabs.map { it.id }, group.children.map { it.id })
+                }
                 assertTrue(tabs.none { it.hasText("耳机") }, "Floating tab bar must not render text labels in $style")
                 assertEquals(true, tabs.tabFor("耳机").config.getOrNull(SemanticsProperties.Selected))
                 assertEquals(false, tabs.tabFor("设置").config.getOrNull(SemanticsProperties.Selected))

@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -120,15 +121,23 @@ private fun TrayNoiseModes(choices: List<TrayNoiseMode>, selectMode: (NoiseMode)
             AppText("降噪模式", role = AppTextRole.Footnote)
             if (selected == null) AppText("当前状态未知", role = AppTextRole.Footnote)
         }
-        val columns = if (choices.size <= 4) 4 else 3
-        choices.chunked(columns).forEach { row ->
-            AppSegmented(
-                options = row.map { AppOption(it.mode, it.label) },
-                selected = selected,
-                enabled = row.all { it.enabled },
-                contentPadding = PaddingValues(4.dp),
-                onSelect = selectMode,
-            )
+        when (LocalInterfaceStyle.current) {
+            InterfaceStyle.MATERIAL3 -> MaterialNoiseModeGrid(
+                choices,
+                isSelected = { it.selected },
+                isEnabled = { it.enabled },
+                onSelect = { selectMode(it.mode) },
+            ) { Text(it.label) }
+
+            InterfaceStyle.MIUIX -> choices.chunked(noiseModeColumns(choices.size)).forEach { row ->
+                AppSegmented(
+                    options = row.map { AppOption(it.mode, it.label) },
+                    selected = selected,
+                    enabled = row.all { it.enabled },
+                    contentPadding = PaddingValues(4.dp),
+                    onSelect = selectMode,
+                )
+            }
         }
     }
 }

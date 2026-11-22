@@ -18,6 +18,7 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerScope
 import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
@@ -330,57 +331,59 @@ private fun MaterialFloatingTabs(
             ),
             expandedShadowElevation = if (blurred) 0.dp else 6.dp,
         ) {
-            mainPages.forEach { destination ->
-                val isSelected = currentTab == destination
-                val indicatorWidth by animateDpAsState(
-                    targetValue = if (isSelected) 56.dp else 48.dp,
-                    animationSpec = spring(
-                        dampingRatio = 0.75f,
-                        stiffness = 400f,
-                    ),
-                    label = "tabIndicatorWidth",
-                )
-                val containerColor by animateColorAsState(
-                    targetValue = if (isSelected) {
-                        MaterialTheme.colorScheme.secondaryContainer
-                    } else {
-                        MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0f)
-                    },
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioNoBouncy,
-                        stiffness = Spring.StiffnessMedium,
-                    ),
-                    label = "tabContainerColor",
-                )
-                val iconTint by animateColorAsState(
-                    targetValue = if (isSelected) {
-                        MaterialTheme.colorScheme.onSecondaryContainer
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioNoBouncy,
-                        stiffness = Spring.StiffnessMedium,
-                    ),
-                    label = "tabIconTint",
-                )
-                Box(
-                    modifier = Modifier
-                        .clip(CircleShape)
-                        .background(containerColor)
-                        .selectable(
-                            selected = isSelected,
-                            role = Role.Tab,
-                            onClick = { onSelect(destination) },
-                        )
-                        .size(width = indicatorWidth, height = 48.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    AppIcon(
-                        destination.icon,
-                        contentDescription = destination.navigationLabel,
-                        tint = iconTint,
+            Row(Modifier.selectableGroup()) {
+                mainPages.forEach { destination ->
+                    val isSelected = currentTab == destination
+                    val indicatorWidth by animateDpAsState(
+                        targetValue = if (isSelected) 56.dp else 48.dp,
+                        animationSpec = spring(
+                            dampingRatio = 0.75f,
+                            stiffness = 400f,
+                        ),
+                        label = "tabIndicatorWidth",
                     )
+                    val containerColor by animateColorAsState(
+                        targetValue = if (isSelected) {
+                            MaterialTheme.colorScheme.secondaryContainer
+                        } else {
+                            MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0f)
+                        },
+                        animationSpec = spring(
+                            dampingRatio = Spring.DampingRatioNoBouncy,
+                            stiffness = Spring.StiffnessMedium,
+                        ),
+                        label = "tabContainerColor",
+                    )
+                    val iconTint by animateColorAsState(
+                        targetValue = if (isSelected) {
+                            MaterialTheme.colorScheme.onSecondaryContainer
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                        animationSpec = spring(
+                            dampingRatio = Spring.DampingRatioNoBouncy,
+                            stiffness = Spring.StiffnessMedium,
+                        ),
+                        label = "tabIconTint",
+                    )
+                    Box(
+                        modifier = Modifier
+                            .clip(CircleShape)
+                            .background(containerColor)
+                            .selectable(
+                                selected = isSelected,
+                                role = Role.Tab,
+                                onClick = { onSelect(destination) },
+                            )
+                            .size(width = indicatorWidth, height = 48.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        AppIcon(
+                            destination.icon,
+                            contentDescription = destination.navigationLabel,
+                            tint = iconTint,
+                        )
+                    }
                 }
             }
         }

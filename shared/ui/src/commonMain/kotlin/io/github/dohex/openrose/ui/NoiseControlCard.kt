@@ -1,10 +1,5 @@
 package io.github.dohex.openrose.ui
 
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -14,42 +9,38 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.CornerBasedShape
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ButtonGroupDefaults
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.material3.ToggleButton
+import androidx.compose.material3.ToggleButtonDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
-import io.github.dohex.openrose.core.ConnectionPhase
-import io.github.dohex.openrose.core.ConnectionState
 import io.github.dohex.openrose.core.ControlState
 import io.github.dohex.openrose.core.DeviceSetting
 import io.github.dohex.openrose.core.DeviceState
 import io.github.dohex.openrose.core.HeadsetCommand
 import io.github.dohex.openrose.core.NoiseMode
-import io.github.dohex.openrose.core.PermissionState
-import io.github.dohex.openrose.core.TransportAvailability
 import io.github.dohex.openrose.core.protocol.DeviceField
-import io.github.dohex.openrose.core.protocol.FieldReading
 import io.github.dohex.openrose.core.protocol.FieldValue
 
 /**
@@ -142,13 +133,32 @@ private fun NoiseModeChoices(
     enabled: Boolean,
     onSelect: (String) -> Unit,
 ) {
-    val columns = if (options.size <= 4) options.size.coerceAtLeast(1) else 3
-    val rows = remember(options, columns) { options.chunked(columns) }
     when (LocalInterfaceStyle.current) {
-        InterfaceStyle.MIUIX -> MiuixNoiseModeGrid(rows, columns, selected, pending, enabled, onSelect)
-        InterfaceStyle.MATERIAL3 -> MaterialNoiseModeGrid(rows, columns, selected, pending, enabled, onSelect)
+        InterfaceStyle.MIUIX -> {
+            val columns = noiseModeColumns(options.size)
+            val rows = remember(options, columns) { options.chunked(columns) }
+            MiuixNoiseModeGrid(rows, columns, selected, pending, enabled, onSelect)
+        }
+
+        InterfaceStyle.MATERIAL3 -> MaterialNoiseModeGrid(
+            options,
+            isSelected = { it.value == selected },
+            isEnabled = { enabled },
+            onSelect = { onSelect(it.value) },
+        ) { option ->
+            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                if (option.value == pending) {
+                    AppBusyIndicator(24.dp, "正在设为 ${option.label}")
+                } else {
+                    AppIcon(noiseModeIcon(option.value), Modifier.size(24.dp))
+                }
+                Text(option.label, style = MaterialTheme.typography.labelMedium)
+            }
+        }
     }
 }
+
+internal fun noiseModeColumns(count: Int): Int = if (count <= 4) count.coerceAtLeast(1) else 3
 
 /** The status notification uses the same labels in the system module's RenderedSnapshot.kt; change both together. */
 fun noiseModeLabel(mode: String): String = when (mode) {
@@ -242,96 +252,49 @@ private fun MiuixNoiseModeGrid(
     }
 }
 
-/** A theme shape's corner radius as a [Dp], for corners that animate between two shape tokens. */
+/** All rows belong to the same single choice. Shape follows press and the device-confirmed selection. */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-private fun CornerBasedShape.cornerRadius(): Dp {
-    val density = LocalDensity.current
-    return with(density) { topStart.toPx(Size.Zero, density).toDp() }
-}
-
-@Composable
-private fun MaterialNoiseModeGrid(
-    rows: List<List<AppOption<String>>>,
-    columns: Int,
-    selected: String?,
-    pending: String?,
-    enabled: Boolean,
-    onSelect: (String) -> Unit,
+internal fun <T> MaterialNoiseModeGrid(
+    options: List<T>,
+    isSelected: (T) -> Boolean,
+    isEnabled: (T) -> Boolean,
+    onSelect: (T) -> Unit,
+    content: @Composable (T) -> Unit,
 ) {
-    val outerCorner = MaterialTheme.shapes.large.cornerRadius()
-    val innerCorner = MaterialTheme.shapes.small.cornerRadius()
+    val columns = noiseModeColumns(options.size)
+    val rows = remember(options, columns) { options.chunked(columns) }
+    val scheme = MaterialTheme.colorScheme
     Column(Modifier.fillMaxWidth().selectableGroup(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         rows.forEach { row ->
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)) {
                 row.forEachIndexed { index, option ->
-                    val isSelected = option.value == selected
-                    val targetStartCorner = if (isSelected || index == 0) outerCorner else innerCorner
-                    val targetEndCorner = if (isSelected || index == row.size - 1) outerCorner else innerCorner
-                    val startCorner by animateDpAsState(
-                        targetValue = targetStartCorner,
-                        animationSpec = spring(dampingRatio = 0.75f, stiffness = 500f),
-                        label = "modeStartCorner",
-                    )
-                    val endCorner by animateDpAsState(
-                        targetValue = targetEndCorner,
-                        animationSpec = spring(dampingRatio = 0.75f, stiffness = 500f),
-                        label = "modeEndCorner",
-                    )
-                    val shape = RoundedCornerShape(
-                        topStart = startCorner,
-                        bottomStart = startCorner,
-                        topEnd = endCorner,
-                        bottomEnd = endCorner,
-                    )
-                    val containerColor by animateColorAsState(
-                        targetValue = when {
-                            isSelected -> MaterialTheme.colorScheme.secondaryContainer
-                            else -> MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.5f)
+                    val chosen = isSelected(option)
+                    val shapes = when {
+                        row.size == 1 -> ToggleButtonDefaults.shapes(checkedShape = ButtonGroupDefaults.connectedButtonCheckedShape)
+                        index == 0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
+                        index == row.lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()
+                        else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
+                    }
+                    ToggleButton(
+                        checked = chosen,
+                        onCheckedChange = { checked -> if (checked) onSelect(option) },
+                        modifier = Modifier.weight(1f).semantics {
+                            role = Role.RadioButton
+                            selected = chosen
                         },
-                        animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium),
-                        label = "modeContainerColor",
-                    )
-                    val iconScale by animateFloatAsState(
-                        targetValue = if (isSelected) 1.05f else 1.0f,
-                        animationSpec = spring(dampingRatio = 0.75f, stiffness = 600f),
-                        label = "modeIconScale",
-                    )
-                    val contentColor by animateColorAsState(
-                        targetValue = when {
-                            !enabled -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-                            isSelected -> MaterialTheme.colorScheme.onSecondaryContainer
-                            else -> MaterialTheme.colorScheme.onSurfaceVariant
-                        },
-                        animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium),
-                        label = "modeContentColor",
-                    )
-                    Column(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(shape)
-                            .background(containerColor)
-                            .selectable(
-                                selected = isSelected,
-                                enabled = enabled,
-                                role = Role.RadioButton,
-                                onClick = { onSelect(option.value) },
-                            )
-                            .padding(vertical = 10.dp, horizontal = 4.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                        enabled = isEnabled(option),
+                        shapes = shapes,
+                        colors = ToggleButtonDefaults.toggleButtonColors(
+                            containerColor = scheme.surfaceContainerHigh,
+                            contentColor = scheme.onSurfaceVariant,
+                            checkedContainerColor = scheme.secondaryContainer,
+                            checkedContentColor = scheme.onSecondaryContainer,
+                            disabledContainerColor = if (chosen) scheme.secondaryContainer else scheme.surfaceContainerHigh,
+                        ),
+                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp),
                     ) {
-                        if (option.value == pending) {
-                            AppBusyIndicator(24.dp, "正在设为 ${option.label}")
-                        } else {
-                            AppIcon(
-                                noiseModeIcon(option.value),
-                                modifier = Modifier
-                                    .size(24.dp)
-                                    .graphicsLayer(scaleX = iconScale, scaleY = iconScale),
-                                tint = contentColor,
-                            )
-                        }
-                        AppText(option.label, role = AppTextRole.Footnote, color = contentColor)
+                        content(option)
                     }
                 }
                 repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }

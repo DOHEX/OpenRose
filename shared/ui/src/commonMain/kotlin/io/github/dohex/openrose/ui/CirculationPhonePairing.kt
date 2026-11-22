@@ -24,7 +24,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalFocusManager
@@ -75,11 +74,7 @@ private fun NearbyComputerRow(name: String, expanded: Boolean, enabled: Boolean,
     val action: @Composable () -> Unit = {
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
             AppText(if (expanded) "收起" else "输入配对码", role = AppTextRole.Summary)
-            AppIcon(
-                RoseIcon.CHEVRON,
-                Modifier.size(16.dp).rotate(if (expanded) -90f else 90f),
-                tint = appColor(AppColorRole.Summary),
-            )
+            ExpansionIcon(expanded, Modifier.size(16.dp), tint = appColor(AppColorRole.Summary))
         }
     }
     val button = Modifier.semantics { role = Role.Button }

@@ -8,9 +8,10 @@ description: Earphone controls, appearance, background control, and HyperOS inte
 What you see depends on the model and firmware; see [Supported earphones](../supported-earphones/).
 
 - Battery for each earbud and the case, firmware version
-- In **我的耳机** (My Earphones), change the current noise mode or adjust the ANC and transparency levels. On models with a customizable noise cycle, open **触控操作** (Touch controls) and select **降噪轮换** (Noise mode cycle) to choose which modes a gesture or button press cycles through.
+- In **我的耳机** (My Earphones), change the current noise mode or adjust the ANC and transparency levels. On models with a customizable noise cycle, open **触控操作** (Touch controls) and select **降噪轮换** (Noise mode cycle) to choose which modes a gesture or button press cycles through. In Material 3 Expressive, scroll inside the dialog to reach all options in landscape or split-screen mode.
 - Game mode, EQ presets, touch bindings, wear detection, prompt volume, multipoint, and audio codec preference
 - Some models offer custom EQ, gain, hearing protection, and bass boost. FIRST ANGEL offers different presets in music and game modes.
+- To edit custom EQ with a keyboard, press Tab to focus a frequency band. Use the up and down arrow keys to adjust its gain one step at a time, or press Home for the model’s minimum gain and End for its maximum.
 - Astro X offers spatial and content modes, ear adaptation, and tap controls. The speakfeel2 variant of SPEAKFEEL offers independent microphone controls.
 - Open the Android quick panel from the OpenRose Quick Settings tile or the focus notification to check battery levels and change noise or game mode. Tap **均衡器** (Equalizer) and choose an EQ preset from the menu that opens next to the row. The menu closes and the panel stays open. The row shows the new preset once the earphones confirm the change.
 - After pairing your phone and computer for handoff, the i5 card in My Earphones, the desktop tray, and the phone quick panel shows the audio source when known. Change noise mode remotely, or move the headset to the phone or computer you are using. See the [desktop handoff pairing guide](../../guides/linux-desktop/#pair-a-phone-and-desktop).

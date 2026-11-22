@@ -11,11 +11,14 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -181,7 +184,7 @@ private fun ScopeRestartRow(target: String, mark: ScopeRestartMark, checked: Boo
         InterfaceStyle.MATERIAL3 -> ListItem(
             headlineContent = { Text(target) },
             supportingContent = failure?.let {
-                { AppText(it, role = AppTextRole.Footnote, color = appColor(AppColorRole.Error), maxLines = 2) }
+                { AppText(it, role = AppTextRole.Footnote, color = appColor(AppColorRole.Error)) }
             },
             leadingContent = { ScopeRestartMarkSlot(mark, checked, 24.dp) },
             trailingContent = if (skipped) ({ Text("未选择") }) else null,
@@ -196,7 +199,11 @@ private fun ScopeRestartRow(target: String, mark: ScopeRestartMark, checked: Boo
 @Composable
 private fun ScopeRestartMarkSlot(mark: ScopeRestartMark, checked: Boolean, size: Dp, modifier: Modifier = Modifier) {
     Box(modifier.size(size), contentAlignment = Alignment.Center) {
-        Crossfade(mark, animationSpec = tween(150)) { shown ->
+        val fade = when (LocalInterfaceStyle.current) {
+            InterfaceStyle.MIUIX -> tween<Float>(150)
+            InterfaceStyle.MATERIAL3 -> MaterialTheme.motionScheme.fastEffectsSpec<Float>()
+        }
+        Crossfade(mark, animationSpec = fade) { shown ->
             when (shown) {
                 ScopeRestartMark.CHECKBOX -> when (LocalInterfaceStyle.current) {
                     InterfaceStyle.MIUIX -> top.yukonga.miuix.kmp.basic.Checkbox(state = ToggleableState(checked), onClick = null)
@@ -270,7 +277,7 @@ private fun MaterialRestartDialog(
         onDismissRequest = onDismiss,
         title = { Text("重启作用域") },
         text = {
-            Column {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
                 Text(summary, maxLines = 1)
                 Spacer(Modifier.height(8.dp))
                 rows()

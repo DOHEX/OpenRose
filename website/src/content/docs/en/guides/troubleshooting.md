@@ -81,6 +81,8 @@ Even when it shows 系统条件已配置 (system conditions configured), autosta
 
 The Status page shows why the module is unavailable and what to do next. When a scope restart is needed, tap 重启作用域 (Restart scopes) in the top right of the Status page (requires root), or restart the phone.
 
+In the Restart scopes dialog, select the processes to restart. When the operation finishes, any failure reason appears below the affected package name. In Material 3 Expressive, scroll inside the dialog to see the last result if the window is too short to show them all.
+
 | Status page shows | What to do |
 | --- | --- |
 | 系统模块未启用 (system module not enabled) | Enable the OpenRose module in the Xposed framework |

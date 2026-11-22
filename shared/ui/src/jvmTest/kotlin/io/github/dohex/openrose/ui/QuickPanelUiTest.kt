@@ -2,8 +2,12 @@
 
 package io.github.dohex.openrose.ui
 
+import androidx.compose.foundation.background
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.test.click
 import io.github.dohex.openrose.circulation.CirculationClient
@@ -348,6 +352,28 @@ class QuickPanelUiTest {
     }
 
     @Test
+    fun scrimDarkensWithTheOpeningSheetAndLightensAsItCloses() {
+        for (style in InterfaceStyle.entries) {
+            withQuickPanel(disconnectedAndroidState(), style) { panel ->
+                panel.render(0)
+                val initial = panel.snapshot()
+                assertEquals(Color.White.toArgb(), initial.getRGB(8, 8), "no scrim on the first frame in $style")
+                assertEquals(Color.White.toArgb(), initial.getRGB(200, 950), "sheet starts below the window in $style")
+                panel.render(1)
+                val opening = panel.snapshot().getRGB(8, 8) and 0xff
+                panel.render(30)
+                val resting = panel.snapshot().getRGB(8, 8) and 0xff
+                assertTrue(opening > resting, "the exposed white background darkens as the sheet enters in $style")
+
+                panel.clickTag(QUICK_PANEL_SCRIM_TAG)
+                panel.render(2)
+                val closing = panel.snapshot().getRGB(8, 8) and 0xff
+                assertTrue(closing in (resting + 1)..254, "the scrim fades while the sheet leaves in $style")
+            }
+        }
+    }
+
+    @Test
     fun onlyTheScrimDismissesThePanel() {
         for (style in InterfaceStyle.entries) {
             withQuickPanel(connectedI7State(), style) { panel ->
@@ -500,6 +526,7 @@ class QuickPanelUiTest {
                 dynamicColor = false,
                 onOpenApp = { panel.destinations += it },
                 onDismiss = { panel.dismissCount++ },
+                modifier = Modifier.background(Color.White),
                 circulation = circulation,
             )
         }

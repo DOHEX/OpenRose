@@ -159,7 +159,7 @@ fun AppStatusHero(verdict: StatusVerdict, badge: String?, modifier: Modifier = M
                 verdict.summary?.let { summary ->
                     StatusText(
                         summary,
-                        colors.content.copy(alpha = 0.8f),
+                        if (LocalInterfaceStyle.current == InterfaceStyle.MATERIAL3) colors.content else colors.content.copy(alpha = 0.8f),
                         miuix = { MiuixTheme.textStyles.body1 },
                         material = { MaterialTheme.typography.bodyLarge },
                         modifier = textModifier.padding(top = 2.dp),

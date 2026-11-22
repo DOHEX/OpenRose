@@ -9,6 +9,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
@@ -328,6 +329,39 @@ class EqualizerPageUiTest {
                 harness.render()
                 assertTrue(harness.hasDisabledText("重置"), "reset is disabled once the curve is flat in $style")
             }
+        }
+    }
+
+    @Test
+    fun editableBandKeepsItsThumbColorAndAcceptsRangeEndKeysBeforeModeConfirmation() {
+        val profile = ModelProfile.OPENFEEL_MK2_RS_V2
+        withHarness(InterfaceStyle.MATERIAL3, profile, listOf(1, 0, 0), Surface.APP, mode = null, curve = FLAT) { harness ->
+            harness.render()
+            harness.clickText("均衡器")
+            harness.render(frames = 30)
+            val firstBand = harness.nodes().single { "20 Hz 增益" in it.config.getOrNull(SemanticsProperties.ContentDescription).orEmpty() }
+            // Sample inside the flat curve's thumb, clear of the track and the line through its centre.
+            val x = firstBand.boundsInWindow.center.x.toInt() + 5
+            val y = firstBand.boundsInWindow.center.y.toInt() - 4
+            val editableThumb = harness.snapshot().getRGB(x, y)
+            val unknownMode = harness.state.value
+            harness.state.value = harness.withMode(CUSTOM)
+            harness.render()
+            assertEquals(harness.snapshot().getRGB(x, y), editableThumb)
+            harness.state.value = unknownMode
+            harness.render()
+
+            val custom = requireNotNull(unknownMode.device?.writableCustomCurve)
+            harness.focus("20 Hz 增益")
+            harness.sendKey(Key.MoveHome)
+            harness.render()
+            harness.sendKey(Key.MoveEnd)
+            harness.replies.single().complete(OperationResult.Success)
+            harness.render()
+            assertEquals(
+                listOf(custom.minGain, custom.maxGain).map { gain -> DeviceSetting.CUSTOM_EQ to FieldValue.IntegerList(listOf(gain) + FLAT.drop(1)) },
+                harness.writes,
+            )
         }
     }
 
