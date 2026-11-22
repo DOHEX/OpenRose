@@ -57,9 +57,9 @@ After every write, OpenRose reads back the earphones' actual state:
 
 Both are especially valuable for models not yet verified on hardware. Please send feedback with the setting operation records from the diagnostics and records page.
 
-### "设备未提供" or "当前状态未知" in readings (not provided by device / current state unknown)
+### A dash on the battery card, or “设备未提供” or “当前状态未知” in readings
 
-"Not provided by device" means these earphones or this firmware do not report the value; "current state unknown" means no usable value has been read yet.
+“设备未提供” (not provided by device) means the earphones or their firmware do not report that value. The battery card shows a dash (–) for that reading. When the earphones report zero charge, the card shows 0%. “当前状态未知” (current state unknown) means OpenRose has yet to read a usable value.
 
 ## Background control
 

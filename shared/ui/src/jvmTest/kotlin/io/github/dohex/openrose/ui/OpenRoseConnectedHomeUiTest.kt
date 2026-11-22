@@ -16,6 +16,7 @@ import io.github.dohex.openrose.core.ControlState
 import io.github.dohex.openrose.core.DeviceCapabilities
 import io.github.dohex.openrose.core.DeviceSetting
 import io.github.dohex.openrose.core.DeviceState
+import io.github.dohex.openrose.core.HostPlatform
 import io.github.dohex.openrose.core.PermissionState
 import io.github.dohex.openrose.core.PlatformState
 import io.github.dohex.openrose.core.SettingOperation
@@ -269,6 +270,38 @@ class OpenRoseConnectedHomeUiTest {
                 assertTrue(harness.hasText("型号配置"))
                 assertTrue(harness.hasText("EarFree i5 · ZT"), "型号配置 names the model and its protocol family in $style")
                 assertTrue(harness.settingWrites.isEmpty())
+            }
+        }
+    }
+
+    @Test
+    fun batteryCardsStayAlignedWhenTheCaseOmitsItsReading() {
+        val initial = connectedState()
+        val device = requireNotNull(initial.device)
+        val readings = device.diagnostics.fields + mapOf(
+            DeviceField.LEFT_BATTERY to FieldReading.Known(FieldValue.Number(0), "00"),
+            DeviceField.CASE_BATTERY to FieldReading.NotProvided("ff"),
+        )
+        val state = initial.copy(
+            platform = initial.platform.copy(hostPlatform = HostPlatform.ANDROID),
+            device = device.copy(diagnostics = device.diagnostics.copy(fields = readings)),
+        )
+        for (style in InterfaceStyle.entries) {
+            withHarness(360, 900, state, style, wholeApp = true) { harness ->
+                harness.render()
+                assertTrue("0%" in harness.tagTexts("battery-LEFT_BATTERY"), "reported empty left earbud in $style")
+                assertTrue("82%" in harness.tagTexts("battery-RIGHT_BATTERY"), "reported right earbud level in $style")
+                assertTrue("–" in harness.tagTexts("battery-CASE_BATTERY"), "omitted case level in $style")
+                assertTrue(harness.hasContentDescription("设备未提供"), "spoken explanation for the dash in $style")
+
+                val left = harness.tagBounds("battery-LEFT_BATTERY")
+                val right = harness.tagBounds("battery-RIGHT_BATTERY")
+                val case = harness.tagBounds("battery-CASE_BATTERY")
+                assertTrue(left.right <= right.left && right.right <= case.left, "battery cards are side by side in $style")
+                for (card in listOf(right, case)) {
+                    assertEquals(left.top, card.top, "battery card tops align in $style")
+                    assertEquals(left.bottom, card.bottom, "battery card bottoms align in $style")
+                }
             }
         }
     }

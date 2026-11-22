@@ -7,9 +7,12 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.text.selection.SelectionContainer
@@ -24,6 +27,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
@@ -318,11 +322,15 @@ private fun ReconnectHeadsetCard(
 internal fun BatteryStrip(device: DeviceState, initializing: Boolean, showUnknown: Boolean = false) {
     val isMaterial3 = LocalInterfaceStyle.current == InterfaceStyle.MATERIAL3
     Row(
-        Modifier.fillMaxWidth(),
+        Modifier.fillMaxWidth().height(IntrinsicSize.Min),
         horizontalArrangement = Arrangement.spacedBy(if (isMaterial3) 8.dp else 12.dp),
     ) {
         device.profile.batteryReadings().forEach { (label, field) ->
-            StyledTile(TileKind.OutlinedChip, Modifier.weight(1f), PaddingValues(horizontal = 10.dp, vertical = 8.dp)) {
+            StyledTile(
+                TileKind.OutlinedChip,
+                Modifier.weight(1f).fillMaxHeight().testTag("battery-$field"),
+                PaddingValues(horizontal = 10.dp, vertical = 8.dp),
+            ) {
                 BatteryReading(label, field, device, initializing, showUnknown)
             }
         }
@@ -331,26 +339,27 @@ internal fun BatteryStrip(device: DeviceState, initializing: Boolean, showUnknow
 
 @Composable
 private fun BatteryReading(label: String, field: DeviceField, device: DeviceState, initializing: Boolean, showUnknown: Boolean) {
+    val reading = device.reading(field)
     val percent = device.confirmedNumber(field)?.takeIf { it in 0..100 }
     val low = percent != null && percent <= LOW_BATTERY_PERCENT
-    val text = if (showUnknown && percent == null) {
-        "未知"
-    } else {
-        val error = device.diagnostics.fieldErrors[field]
-        readingText(field, device.reading(field), initializing, error, device.profile)
-    }
+    val text = readingText(field, reading, initializing, device.diagnostics.fieldErrors[field], device.profile)
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         AppText(label, role = AppTextRole.Footnote)
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            AppText(text, role = AppTextRole.Body, color = if (low) appColor(AppColorRole.Error) else null)
+            if (reading is FieldReading.NotProvided) {
+                AppText("–", Modifier.semantics { contentDescription = text })
+            } else {
+                AppText(
+                    if (showUnknown && percent == null) "未知" else text,
+                    color = if (low) appColor(AppColorRole.Error) else null,
+                )
+            }
             // A low charge also shows as a symbol, so the warning does not rest on colour alone.
             if (low) {
                 AppIcon(RoseIcon.WARNING, Modifier.size(16.dp), contentDescription = "电量低", tint = appColor(AppColorRole.Error))
             }
         }
-        if (field != DeviceField.CASE_BATTERY || percent != null) {
-            AppProgress(percent?.div(100f))
-        }
+        AppProgress(percent?.div(100f))
     }
 }
 
