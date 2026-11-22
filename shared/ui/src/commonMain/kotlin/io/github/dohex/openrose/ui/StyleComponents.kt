@@ -767,6 +767,7 @@ internal fun <T> AppSegmented(
     selected: T?,
     enabled: Boolean = true,
     modifier: Modifier = Modifier,
+    contentPadding: PaddingValues? = null,
     onSelect: (T) -> Unit,
 ) {
     if (options.isEmpty()) return
@@ -777,6 +778,7 @@ internal fun <T> AppSegmented(
                     option.label,
                     onClick = { if (option.value != selected) onSelect(option.value) },
                     enabled = enabled,
+                    insideMargin = contentPadding ?: MiuixButtonDefaults.InsideMargin,
                     modifier = Modifier.weight(1f).semantics {
                         this.selected = option.value == selected
                         role = Role.RadioButton
@@ -798,6 +800,7 @@ internal fun <T> AppSegmented(
                     onClick = { if (option.value != selected) onSelect(option.value) },
                     shape = SegmentedButtonDefaults.itemShape(i, options.size),
                     enabled = enabled,
+                    contentPadding = contentPadding ?: SegmentedButtonDefaults.ContentPadding,
                     modifier = Modifier.semantics { option.contentDescription?.let { contentDescription = it } },
                 ) { Text(option.label) }
             }

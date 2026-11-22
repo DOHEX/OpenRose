@@ -1,42 +1,51 @@
 package io.github.dohex.openrose.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import io.github.dohex.openrose.circulation.CirculationClient
-import io.github.dohex.openrose.circulation.RemoteControlStatus
 import io.github.dohex.openrose.core.ConnectionPhase
 import io.github.dohex.openrose.core.ConnectionState
 import io.github.dohex.openrose.core.ControlState
 import io.github.dohex.openrose.core.DeviceCandidate
 import io.github.dohex.openrose.core.DeviceSetting
 import io.github.dohex.openrose.core.DeviceState
+import io.github.dohex.openrose.core.HeadsetCommand
 import io.github.dohex.openrose.core.NoiseMode
 import io.github.dohex.openrose.core.TransportAvailability
+import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.dohex.openrose.core.protocol.ModelProfile
 import io.github.dohex.openrose.core.transport.DeviceId
 import io.github.dohex.openrose.ui.model.OpenRoseModel
 import io.github.dohex.openrose.ui.model.WindowDestination
-import io.github.dohex.openrose.ui.model.settingsFor
 import io.github.dohex.openrose.ui.resources.Res
 import io.github.dohex.openrose.ui.resources.app_icon
 import io.github.dohex.openrose.ui.resources.msr_headphones
@@ -51,6 +60,8 @@ data class TraySummary(
     /** A ready control session exists. */
     val connected: Boolean,
     val title: String,
+    val deviceName: String?,
+    val sourceStatus: String?,
     /** Battery readings in model order. Desktop trays explicitly mark missing values. */
     val battery: String?,
     /** Modes offered by the current control session, ordered and labelled like the main window. */
@@ -77,11 +88,13 @@ fun traySummary(state: ControlState, selection: PrimaryDeviceSelection): TraySum
     return TraySummary(
         connected = ready != null,
         title = connection.title,
+        deviceName = connection.name,
+        sourceStatus = connection.sourceStatus,
         battery = battery,
         noiseModes = noiseModes,
         noiseModeFeedback = noiseDevice?.let { state.noiseModeFeedback(it) },
         reconnectTarget = connection.reconnectTarget,
-        reconnectLabel = if (connection.audioConnected) "重试耳机控制" else "重新连接",
+        reconnectLabel = headsetReconnectLabel(connection.audioConnected, "重新连接"),
         addDevice = state.bondedRoseDevices().isEmpty() && state.connectionTarget == null,
         connectionHint = connection.hint,
     )
@@ -95,34 +108,6 @@ fun traySummary(state: ControlState, selection: PrimaryDeviceSelection): TraySum
 fun rememberTraySummary(state: ControlState, selection: PrimaryDeviceSelection): TraySummary {
     val summary by remember(state, selection) { derivedStateOf { traySummary(state, selection) } }
     return summary
-}
-
-/** What the 快捷面板 and 托盘面板 both put above the headphones' controls. */
-internal class PanelSections(
-    /** Paired audio sources' headphones. Hidden while this device holds a ready session of its own. */
-    val remoteHeadsets: List<RemoteHeadset>,
-    /** The local status card. A source that can already be controlled replaces it, unless this device has audio or a session. */
-    val statusCard: Boolean,
-)
-
-/**
- * Decides the sections once for both panels. [hostPeers] are the paired sources a host already polls for its own
- * menu; without them the sources are polled here, and only while they would show.
- */
-@Composable
-internal fun rememberPanelSections(
-    state: ControlState,
-    summary: TraySummary,
-    circulation: CirculationClient?,
-    hostPeers: List<RemoteHeadset>? = null,
-): PanelSections {
-    val holdsHeadset = state.readySession != null
-    val polled = hostPeers ?: if (circulation != null && !holdsHeadset) rememberRemoteHeadsets(circulation) else emptyList()
-    val peers = if (holdsHeadset) emptyList() else polled
-    val remoteControllable = peers.any {
-        it.reading.status == RemoteControlStatus.READY || it.reading.status == RemoteControlStatus.INITIALIZING
-    }
-    return PanelSections(peers, statusCard = summary.connected || !remoteControllable || state.audioDeviceId != null)
 }
 
 /** Why a setting cannot be written right now, for the control to say beside itself; null when it can be. */
@@ -184,18 +169,18 @@ fun TrayPanel(
     val dark = uiSettings.appearance.isDark()
     // The popup is a plain opaque canvas: no LocalAppBackdrop, so backdrop blur stays off.
     ProvideInterfaceStyle(uiSettings.interfaceStyle, dark, dynamicColor) {
-        Column(
-            modifier
-                .fillMaxSize()
-                .background(interfaceBackgroundColor(uiSettings.interfaceStyle, dark))
-                .verticalScroll(rememberScrollState())
-                .onSizeChanged { size ->
-                    if (size.height > 0) onContentHeight(with(density) { size.height.toDp() })
-                }
-                .padding(vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            TrayPanelContent(model, state, selection, onOpenApp, circulation, remoteHeadsets, sound)
+        Box(modifier.fillMaxSize().background(interfaceBackgroundColor(uiSettings.interfaceStyle, dark))) {
+            // The viewport fills the host. Only the scrollable content determines the requested height.
+            Column(
+                Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
+                    .onSizeChanged { size ->
+                        if (size.height > 0) onContentHeight(with(density) { size.height.toDp() })
+                    }
+                    .padding(start = 18.dp, end = 18.dp, top = 16.dp, bottom = 4.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                TrayPanelContent(model, state, selection, onOpenApp, circulation, remoteHeadsets, sound)
+            }
         }
     }
 }
@@ -211,87 +196,123 @@ private fun TrayPanelContent(
     sound: DesktopSoundActions?,
 ) {
     val summary = rememberTraySummary(state, selection)
-    val sections = rememberPanelSections(state, summary, circulation, remoteHeadsets)
-    val device = state.activeDevice()
-
-    sections.remoteHeadsets.forEach { RemoteHeadsetCard(it) }
-    if (sections.statusCard) TrayStatusCard(state, summary)
-
-    if (device != null && state.canControlNoiseMode(device) && device.capabilities.noiseControl != null) {
-        NoiseControlCard(state, device, showLevelControls = false, onSet = model.settingsFor(device.sessionId))
-        // While the write is pending the card shows its own progress; only an outcome needs this line.
-        if (summary.noiseModeFeedback != null && state.pendingSetting(device, DeviceSetting.NOISE_MODE) == null) {
-            AppText(
-                summary.noiseModeFeedback,
-                Modifier.padding(horizontal = 24.dp),
-                role = AppTextRole.Summary,
-                color = appColor(AppColorRole.Error),
-            )
+    val cards = rememberHeadsetCards(state, selection, circulation, remoteHeadsets)
+    if (cards.showLocal) {
+        if (cards.local.remote != null) {
+            HeadsetSourceContent(cards.local)
+        } else {
+            LocalTrayHeadset(model, state, summary, cards.local, sound)
         }
     }
-
-    if (sound != null) DesktopOutputRow(sound, state, selection)
-    circulation?.let { CirculationRow(it, state, selection, "接到这台电脑") }
-    TrayActions(model, state, summary, onOpenApp)
+    cards.others.forEachIndexed { index, source ->
+        key(source.target?.deviceId, source.remote?.reading?.session?.peer ?: source.remote?.name) {
+            if (index > 0 || cards.showLocal) TrayDivider()
+            HeadsetSourceContent(source, onRecoverControl = model::connect)
+            if (sound != null) DesktopOutputRow(sound, source)
+        }
+    }
+    TrayFooter(summary.addDevice, cards.local.remote != null || cards.others.isNotEmpty(), onOpenApp)
 }
 
-/** The headphones' title, connection progress or reason it is not connected, and the battery strip when connected. */
 @Composable
-internal fun TrayStatusCard(state: ControlState, summary: TraySummary) {
-    val device = state.activeDevice()?.takeIf { summary.connected }
-    val connecting = !summary.connected && state.isConnectingForTray()
-    AppDashboardCard {
-        AppText(summary.title, role = AppTextRole.Title)
-        when {
-            connecting -> Row(
-                verticalAlignment = Alignment.CenterVertically,
+private fun TrayFooter(offerAdd: Boolean, hasRemoteHeadset: Boolean, onOpenApp: (WindowDestination?) -> Unit) {
+    val addDevice = { onOpenApp(WindowDestination.ADD_DEVICE) }
+    if (offerAdd && !hasRemoteHeadset) AppButton("添加耳机", addDevice)
+    Column {
+        TrayDivider()
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                Modifier.weight(1f).clickable(role = Role.Button) { onOpenApp(null) }.heightIn(min = 40.dp),
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                AppBusyIndicator()
-                AppText(
-                    state.connection.phaseOrNull()?.displayText() ?: "正在连接…",
-                    role = AppTextRole.Summary,
-                    color = appColor(AppColorRole.Primary),
-                )
+                AppText("打开 OpenRose", role = AppTextRole.Summary)
+                AppIcon(RoseIcon.OPEN_IN_NEW, modifier = Modifier.size(14.dp), tint = appColor(AppColorRole.Summary))
             }
-
-            summary.connectionHint != null -> AppText(
-                summary.connectionHint,
-                role = AppTextRole.Summary,
-                color = if (state.lastError != null && state.platform.connectionBlockReason == null) appColor(AppColorRole.Error) else null,
-            )
-        }
-        if (device != null) {
-            BatteryStrip(device, initializing = false, showUnknown = state.platform.hostPlatform.isDesktop)
+            if (offerAdd && hasRemoteHeadset) TrayTextButton("添加耳机", addDevice)
         }
     }
 }
 
-/** 取消连接, 重新连接 and 添加耳机 as the state calls for, then 打开 OpenRose. */
 @Composable
-internal fun TrayActions(model: OpenRoseModel, state: ControlState, summary: TraySummary, onOpenApp: (WindowDestination?) -> Unit) {
-    val connecting = !summary.connected && state.isConnectingForTray()
-    val inset = if (LocalInterfaceStyle.current == InterfaceStyle.MATERIAL3) 16.dp else 12.dp
-    Column(
-        Modifier.fillMaxWidth().padding(horizontal = inset),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        if (connecting) {
-            AppButton("取消连接", model::disconnect, kind = AppButtonKind.Secondary, modifier = Modifier.fillMaxWidth())
+private fun LocalTrayHeadset(
+    model: OpenRoseModel,
+    state: ControlState,
+    summary: TraySummary,
+    source: HeadsetCardSource,
+    sound: DesktopSoundActions?,
+) {
+    val device = state.activeDevice()
+    HeadsetCardHeader(
+        title = summary.deviceName ?: summary.title,
+        source = source.sourceLabel ?: summary.sourceStatus?.takeUnless { summary.deviceName == null && it == summary.title },
+        batteryLayout = (device?.profile ?: source.target?.profile)?.batteryLayout,
+    )
+    if (device != null) {
+        val pending = state.pendingSetting(device, DeviceSetting.NOISE_MODE)?.requestedValue as? FieldValue.Text
+        TrayLocalReadings(summary, pending?.value?.let(NoiseMode::fromId)) { mode ->
+            model.set(device.sessionId, HeadsetCommand.NoiseMode(mode))
         }
-        summary.reconnectTarget?.let { target ->
-            AppButton(summary.reconnectLabel, { model.connect(target) }, kind = AppButtonKind.Primary, modifier = Modifier.fillMaxWidth())
-        }
-        if (summary.addDevice) {
-            AppButton(
-                "添加耳机",
-                { onOpenApp(WindowDestination.ADD_DEVICE) },
-                kind = AppButtonKind.Primary,
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
-        AppButton("打开 OpenRose", { onOpenApp(null) }, kind = AppButtonKind.Secondary, modifier = Modifier.fillMaxWidth())
     }
+    if (sound != null) DesktopOutputRow(sound, source)
+    TrayControlStatus(state, summary, source)
+    PanelConnectionActions(model, state, summary, source, compact = true)
+}
+
+@Composable
+private fun TrayControlStatus(state: ControlState, summary: TraySummary, source: HeadsetCardSource) {
+    if (source.hasLocalAudio && !summary.connected) {
+        AppText(audioWithoutControlStatus(state.isConnectingForTray()), role = AppTextRole.Summary)
+    }
+    if (!source.offersTransfer && !source.transferBusy && !state.isConnectingForTray()) {
+        val error = state.lastError?.message
+        if (error != null && !summary.connected) AppText(error, role = AppTextRole.Footnote, color = appColor(AppColorRole.Error))
+        if (!source.hasLocalAudio) {
+            summary.connectionHint?.takeUnless { it == error || it == summary.sourceStatus }?.let {
+                AppText(it, role = AppTextRole.Footnote)
+            }
+        }
+    }
+}
+
+@Composable
+internal fun PanelConnectionActions(
+    model: OpenRoseModel,
+    state: ControlState,
+    summary: TraySummary,
+    source: HeadsetCardSource,
+    compact: Boolean,
+) {
+    HeadsetTransferAction(source)
+    if (source.transferBusy) return
+    val modifier = if (compact) Modifier else Modifier.fillMaxWidth()
+    if (state.isConnectingForTray()) {
+        if (compact) {
+            TrayTextButton("取消连接", model::disconnect)
+        } else {
+            AppButton("取消连接", model::disconnect, kind = AppButtonKind.Secondary, modifier = modifier)
+        }
+    } else if (!source.offersTransfer) {
+        summary.reconnectTarget?.let { target ->
+            AppButton(source.reconnectLabel("重新连接"), { model.connect(target) }, modifier = modifier)
+        }
+    }
+}
+
+@Composable
+internal fun TrayTextButton(text: String, onClick: () -> Unit) {
+    Box(
+        Modifier.clip(RoundedCornerShape(8.dp)).clickable(role = Role.Button, onClick = onClick)
+            .heightIn(min = 36.dp).padding(horizontal = 8.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        AppText(text, role = AppTextRole.Summary, color = appColor(AppColorRole.OnSurface))
+    }
+}
+
+@Composable
+private fun TrayDivider() {
+    Box(Modifier.fillMaxWidth().height(1.dp).background(appColor(AppColorRole.Divider)))
 }
 
 /** The application icon shown by the window manager's taskbar and window switcher. */
@@ -305,13 +326,15 @@ private fun DeviceState.trayBattery(
 ): String? = batterySummary(profile.batteryReadings(), showUnknown = desktop) { confirmedNumber(it) }
 
 private fun ControlState.trayNoiseModes(device: DeviceState): List<TrayNoiseMode> {
-    val confirmed = device.confirmedNoiseMode
     val enabled = canWrite(device, DeviceSetting.NOISE_MODE) &&
         DeviceSetting.NOISE_MODE in device.capabilities.writableSettings
-    return device.noiseModes.sortedBy { noiseModeOrder(it.id) }.map { mode ->
-        TrayNoiseMode(mode, noiseModeLabel(mode.id), selected = mode == confirmed, enabled = enabled)
-    }
+    return trayNoiseModes(device.noiseModes, device.confirmedNoiseMode, enabled)
 }
+
+/** A short menu label and the source or progress line that can be shown under the headset's name. */
+private data class TrayConnectionStatus(val label: String, val source: String? = label)
+
+internal fun audioWithoutControlStatus(connecting: Boolean): String = if (connecting) "耳机已接入，正在恢复控制" else "耳机已接入，控制未连接"
 
 /** One view of the platform and the selected headset drives the tray title, reconnect action and hint. */
 private class TrayConnection(private val state: ControlState, private val primary: DeviceCandidate?) {
@@ -322,27 +345,40 @@ private class TrayConnection(private val state: ControlState, private val primar
         state.platform.transport is TransportAvailability.Unavailable
 
     private val desktop = state.platform.hostPlatform.isDesktop
-    val audioConnected = desktop && primary != null && primary.matchesAudioDevice(state.audioDeviceId)
-    val title: String
+    val audioConnected = primary?.matchesAudioDevice(state.audioDeviceId) == true
+    val name: String?
         get() = when {
-            ready != null -> "${state.trayDeviceName(ready.deviceId, ready.profile)} · 已连接"
-
-            audioConnected && connecting -> "${state.trayDeviceName(requireNotNull(primary).deviceId, primary.profile)} · 耳机已接入，正在恢复控制"
-
-            audioConnected -> "${state.trayDeviceName(requireNotNull(primary).deviceId, primary.profile)} · 耳机已接入，控制未连接"
+            ready != null -> state.trayDeviceName(ready.deviceId, ready.profile)
 
             connecting -> {
-                val deviceId = checkNotNull(state.connection.deviceIdOrNull())
-                val profile = state.device?.takeIf { it.deviceId == deviceId }?.profile
-                "${state.trayDeviceName(deviceId, profile)} · 正在连接…"
+                val id = checkNotNull(state.connection.deviceIdOrNull())
+                state.trayDeviceName(id, state.device?.takeIf { it.deviceId == id }?.profile)
             }
 
-            showPlatformReason -> requireNotNull(blockReason)
+            primary != null -> state.trayDeviceName(primary.deviceId, primary.profile)
 
-            primary == null -> "未添加耳机"
-
-            else -> "${state.trayDeviceName(primary.deviceId, primary.profile)} · 未连接"
+            else -> null
         }
+
+    private val status = when {
+        ready != null -> TrayConnectionStatus("已连接", if (state.deviceHasSystemAudio) "已连接" else "耳机控制已连接")
+        audioConnected -> TrayConnectionStatus(audioWithoutControlStatus(connecting))
+        connecting -> TrayConnectionStatus("正在连接…", state.connection.phaseOrNull()?.displayText() ?: "正在连接…")
+        showPlatformReason -> TrayConnectionStatus(requireNotNull(blockReason))
+        primary == null -> TrayConnectionStatus("未添加耳机", blockReason)
+        else -> TrayConnectionStatus("未连接", blockReason ?: "本机未连接")
+    }
+
+    private val hasLocalConnection = connecting || ready != null || audioConnected
+
+    val title: String
+        get() = if (showPlatformReason && !hasLocalConnection) {
+            status.label
+        } else {
+            listOfNotNull(name, status.label).joinToString(" · ")
+        }
+
+    val sourceStatus: String? get() = status.source
 
     val reconnectTarget: DeviceId?
         get() = if (ready == null && !connecting && blockReason == null) primary?.deviceId else null
@@ -352,7 +388,7 @@ private class TrayConnection(private val state: ControlState, private val primar
             ready != null || connecting || showPlatformReason -> null
             blockReason != null -> blockReason
             audioConnected -> state.lastError?.message
-            primary != null -> primary.profile.reconnectHint(state.lastError != null)
+            primary != null -> primary.profile.reconnectHint(state.lastError != null, includeStatus = !desktop)
             else -> null
         }
 }

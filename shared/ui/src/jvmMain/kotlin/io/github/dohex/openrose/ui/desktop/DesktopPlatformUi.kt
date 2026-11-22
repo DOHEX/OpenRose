@@ -10,11 +10,10 @@ import io.github.dohex.openrose.ui.AppFactRow
 import io.github.dohex.openrose.ui.AppGroup
 import io.github.dohex.openrose.ui.AppStatusSection
 import io.github.dohex.openrose.ui.AppSwitchRow
-import io.github.dohex.openrose.ui.CirculationRow
 import io.github.dohex.openrose.ui.CirculationSettings
+import io.github.dohex.openrose.ui.DesktopSoundActions
 import io.github.dohex.openrose.ui.PlatformSettingsPosition
 import io.github.dohex.openrose.ui.PlatformUi
-import io.github.dohex.openrose.ui.PrimaryDeviceSelection
 import io.github.dohex.openrose.ui.RoseIcon
 import io.github.dohex.openrose.ui.StatusTone
 import kotlinx.coroutines.flow.StateFlow
@@ -32,11 +31,10 @@ class DesktopPlatformUi(
     override val openBluetoothSettings: (() -> Unit)?,
     private val circulation: CirculationClient? = null,
     private val showQr: (@Composable (String) -> Unit)? = null,
+    override val desktopSound: DesktopSoundActions? = null,
 ) : PlatformUi {
-    @Composable
-    override fun CirculationAction(state: ControlState, selection: PrimaryDeviceSelection) {
-        circulation?.let { CirculationRow(it, state, selection, "接到这台电脑") }
-    }
+    override val headsetCirculation: CirculationClient?
+        @Composable get() = circulation
 
     override val circulationPairingContent: (@Composable () -> Unit)?
         @Composable get() = circulation?.let { client -> { CirculationSettings(client, showQr = showQr) } }

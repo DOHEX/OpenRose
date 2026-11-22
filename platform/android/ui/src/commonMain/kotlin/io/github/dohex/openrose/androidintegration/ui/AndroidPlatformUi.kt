@@ -57,11 +57,8 @@ class AndroidPlatformUi(
                 integration.platform.dynamicColorApplicability == PlatformApplicability.APPLICABLE
         }
 
-    @Composable
-    override fun CirculationAction(state: ControlState, selection: PrimaryDeviceSelection) {
-        val current by integration.collectAsState()
-        if (current.owner.selected == ControlWay.MODULE) circulation?.let { CirculationRow(it, state, selection, "接回手机") }
-    }
+    override val headsetCirculation: CirculationClient?
+        @Composable get() = circulation.takeIf { integration.collectAsState().value.owner.selected == ControlWay.MODULE }
 
     @Composable
     override fun BluetoothPermissionRows(platform: PlatformState) {

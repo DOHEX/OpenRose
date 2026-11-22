@@ -6,6 +6,14 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.test.click
+import io.github.dohex.openrose.circulation.CirculationClient
+import io.github.dohex.openrose.circulation.CirculationCommand
+import io.github.dohex.openrose.circulation.CirculationResult
+import io.github.dohex.openrose.circulation.HandoffStatus
+import io.github.dohex.openrose.circulation.PeerDirectory
+import io.github.dohex.openrose.circulation.RemoteControlStatus
+import io.github.dohex.openrose.circulation.RemoteReading
+import io.github.dohex.openrose.circulation.RemoteSessionReference
 import io.github.dohex.openrose.core.ConnectionPhase
 import io.github.dohex.openrose.core.ConnectionState
 import io.github.dohex.openrose.core.ControlError
@@ -13,6 +21,7 @@ import io.github.dohex.openrose.core.ControlErrorCode
 import io.github.dohex.openrose.core.ControlState
 import io.github.dohex.openrose.core.DeviceCandidate
 import io.github.dohex.openrose.core.DeviceSetting
+import io.github.dohex.openrose.core.NoiseMode
 import io.github.dohex.openrose.core.SettingOperation
 import io.github.dohex.openrose.core.SettingStage
 import io.github.dohex.openrose.core.TransportAvailability
@@ -227,6 +236,96 @@ class QuickPanelUiTest {
     }
 
     @Test
+    fun aRemoteHeadsetCanChangeNoiseModeWithoutMovingAudioAndOnlyAnExplicitTransferPullsIt() {
+        val address = "00:10:20:30:40:50"
+        val headset = bonded.copy(classicAddress = address)
+        val state = disconnectedAndroidState().copy(bondedDevices = persistentListOf(headset))
+        val peers = mapOf("desktop" to "工作站")
+        val session = RemoteSessionReference("desktop", DeviceId(address), "active-session")
+        for (style in InterfaceStyle.entries) {
+            var reading = RemoteReading(
+                RemoteControlStatus.READY,
+                deviceName = "ROSE EARFREE i5",
+                session = session,
+                mode = NoiseMode.ANC,
+                modes = listOf(NoiseMode.ANC, NoiseMode.TRANSPARENCY),
+                left = 85,
+                right = 80,
+            )
+            val writes = mutableListOf<CirculationCommand.SetNoise>()
+            val pulls = mutableListOf<String>()
+            val client = CirculationClient { command ->
+                when (command) {
+                    CirculationCommand.Directory -> PeerDirectory(peers, peers)
+
+                    is CirculationCommand.Handoff -> HandoffStatus(available = true)
+
+                    is CirculationCommand.Read -> reading
+
+                    is CirculationCommand.SetNoise -> {
+                        writes += command
+                        reading.copy(mode = command.mode).also { reading = it }
+                    }
+
+                    is CirculationCommand.Pull -> {
+                        pulls += command.address
+                        CirculationResult(error = "电脑正在使用耳机麦克风")
+                    }
+
+                    else -> error("Unexpected request $command")
+                }
+            }
+            withQuickPanel(state, style, client) { panel ->
+                panel.render()
+                assertTrue(panel.hasText("音源设备 · 工作站"))
+                assertFalse(panel.hasText("重新连接"))
+                panel.clickText("通透")
+                panel.render()
+                assertEquals(listOf(CirculationCommand.SetNoise(session, NoiseMode.TRANSPARENCY)), writes)
+                assertTrue(pulls.isEmpty())
+                panel.clickText("改连这部手机")
+                panel.render()
+                assertEquals(listOf(address), pulls)
+                assertTrue(panel.hasText("电脑正在使用耳机麦克风"))
+                assertTrue(panel.hasText("音源设备 · 工作站"))
+                assertTrue(panel.model.connectRequests.isEmpty())
+
+                panel.model.mutableState.value = withLocalHeadsetControl(state, headset)
+                panel.render()
+                assertEquals(1, panel.countText("降噪模式"))
+                assertTrue(panel.hasText("游戏模式"))
+                panel.clickText("降噪")
+                panel.render()
+                assertEquals(CirculationCommand.SetNoise(session, NoiseMode.ANC), writes.last())
+                assertTrue(panel.model.settingWrites.isEmpty())
+            }
+        }
+    }
+
+    private fun withLocalHeadsetControl(state: ControlState, headset: DeviceCandidate): ControlState {
+        val device = requireNotNull(connectedI7State().device).copy(deviceId = headset.deviceId, profile = ModelProfile.I5_ZT)
+        return state.copy(
+            connection = ConnectionState.Connected(device.deviceId, device.sessionId, device.profile, ConnectionPhase.READY),
+            device = device,
+        )
+    }
+
+    @Test
+    fun audioAlreadyOnThePhoneRecoversControlWithoutRequestingATransfer() {
+        val state = disconnectedAndroidState().copy(bondedDevices = persistentListOf(bonded), audioDeviceId = bonded.deviceId)
+        for (style in InterfaceStyle.entries) {
+            withQuickPanel(state, style) { panel ->
+                panel.render()
+                assertTrue(panel.hasText("音源设备 · 这部手机"))
+                assertFalse(panel.hasText("改连这部手机"))
+                assertFalse(panel.hasText("将耳机连接到这部手机"))
+                panel.clickText("恢复耳机控制")
+                assertEquals(listOf(bonded.deviceId), panel.model.connectRequests)
+            }
+        }
+    }
+
+    @Test
     fun connectingPanelCanCancelAndWithoutADeviceAddHeadphonesOpensTheApp() {
         for (style in InterfaceStyle.entries) {
             val connecting = disconnectedAndroidState().copy(
@@ -386,6 +485,7 @@ class QuickPanelUiTest {
     private fun withQuickPanel(
         initialState: ControlState,
         style: InterfaceStyle,
+        circulation: CirculationClient? = null,
         block: suspend (QuickHarness) -> Unit,
     ) = runOpenRoseUiTest(400, 1000) {
         val model = FakeOpenRoseModel(
@@ -400,6 +500,7 @@ class QuickPanelUiTest {
                 dynamicColor = false,
                 onOpenApp = { panel.destinations += it },
                 onDismiss = { panel.dismissCount++ },
+                circulation = circulation,
             )
         }
         block(panel)

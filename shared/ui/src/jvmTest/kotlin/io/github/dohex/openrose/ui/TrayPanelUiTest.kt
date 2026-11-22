@@ -2,6 +2,7 @@
 
 package io.github.dohex.openrose.ui
 
+import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableStateOf
 import io.github.dohex.openrose.circulation.*
 import io.github.dohex.openrose.core.ConnectionPhase
@@ -23,6 +24,8 @@ import io.github.dohex.openrose.ui.model.WindowDestination
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.persistentMapOf
 import kotlinx.collections.immutable.toPersistentList
+import java.io.File
+import javax.imageio.ImageIO
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -32,62 +35,14 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class TrayPanelUiTest {
-    private val first = candidate("rose-1", ModelProfile.I5_ZT)
-    private val second = candidate("rose-2", ModelProfile.I7_RS_V2)
-
-    @Test
-    fun remotePhoneCanConfirmTransparencyWhileTheDesktopRadioIsDisabled() {
-        for (platform in listOf(HostPlatform.LINUX, HostPlatform.WINDOWS)) {
-            val base = disconnectedAndroidState()
-            val state = base.copy(platform = base.platform.copy(hostPlatform = platform, transport = io.github.dohex.openrose.core.TransportAvailability.Disabled))
-            val session = RemoteSessionReference("phone", DeviceId("i5"), "phone/12")
-            val reading = RemoteReading(
-                RemoteControlStatus.READY,
-                deviceName = "EarFree i5",
-                session = session,
-                mode = NoiseMode.NORMAL,
-                modes = listOf(NoiseMode.NORMAL, NoiseMode.TRANSPARENCY),
-                left = 79,
-            )
-            var confirmed = reading
-            val commands = mutableListOf<CirculationCommand.SetNoise>()
-            val client = CirculationClient { request ->
-                when (request) {
-                    CirculationCommand.Directory -> PeerDirectory(mapOf("phone" to "小米 14"), mapOf("phone" to "小米 14"))
-
-                    is CirculationCommand.Read -> confirmed
-
-                    is CirculationCommand.SetNoise -> {
-                        commands.add(request)
-                        confirmed = reading.copy(mode = NoiseMode.TRANSPARENCY)
-                        confirmed
-                    }
-
-                    else -> error("Unexpected request $request")
-                }
-            }
-            withTrayPanel(state, InterfaceStyle.MIUIX, circulation = client) { panel ->
-                panel.render()
-                assertTrue(panel.hasText("音源设备 · 小米 14"))
-                assertTrue(panel.hasText("左耳 79% · 右耳 未知 · 充电盒 未知"))
-                panel.clickText("通透")
-                panel.render()
-                assertTrue(panel.hasText("降噪模式 · 通透"))
-                assertEquals(
-                    listOf(CirculationCommand.SetNoise(session, NoiseMode.TRANSPARENCY)),
-                    commands,
-                )
-                assertTrue(panel.model.settingWrites.isEmpty())
-                assertTrue(panel.model.connectRequests.isEmpty())
-            }
-        }
-    }
+    private val first = trayCandidate("rose-1", ModelProfile.I5_ZT)
+    private val second = trayCandidate("rose-2", ModelProfile.I7_RS_V2)
 
     @Test
     fun localSoundSettingsRemainAvailableWithoutCirculation() {
         val i7 = connectedI7State().let { state ->
             val device = requireNotNull(state.device)
-            val target = candidate(device.deviceId.value, device.profile)
+            val target = trayCandidate(device.deviceId.value, device.profile)
             state.copy(
                 platform = state.platform.copy(hostPlatform = HostPlatform.WINDOWS),
                 connectionTarget = target,
@@ -112,13 +67,23 @@ class TrayPanelUiTest {
 
     @Test
     fun connectedPanelShowsBatteryAndNoiseModeWithoutLevelControls() {
+        val connected = connectedI7State()
+        val device = requireNotNull(connected.device)
+        val headset = trayCandidate(device.deviceId.value, device.profile).copy(name = device.profile.displayName)
+        val state = connected.copy(
+            platform = connected.platform.copy(hostPlatform = HostPlatform.LINUX),
+            bondedDevices = persistentListOf(headset),
+            audioDeviceId = device.deviceId,
+        )
         for (style in InterfaceStyle.entries) {
-            withTrayPanel(connectedI7State(), style) { panel ->
+            withTrayPanel(state, style) { panel ->
                 panel.render()
-                assertTrue(panel.hasText("90%"), "battery readings in $style")
-                assertTrue(panel.hasText("降噪模式"), "noise mode choices in $style")
+                assertTrue(panel.hasText("左耳 90% · 右耳 90% · 充电盒 80%"))
+                assertTrue(panel.hasSelectedText("降噪"), "confirmed noise mode in $style")
+                assertTrue(panel.hasTappableText("通透"), "noise mode choices in $style")
                 assertFalse(panel.hasText("降噪档位"), "no ANC level in $style")
                 assertFalse(panel.hasText("通透档位"), "no transparency level in $style")
+                panel.capturePanel("local-headset", style)
             }
         }
     }
@@ -170,7 +135,8 @@ class TrayPanelUiTest {
         )
         withTrayPanel(state, InterfaceStyle.MIUIX) { panel ->
             panel.render()
-            panel.clickText("重试耳机控制")
+            assertFalse(panel.hasTappableText("将耳机连接到这台电脑"))
+            panel.clickText("恢复耳机控制")
             assertEquals(listOf(first.deviceId), panel.model.connectRequests)
         }
         val loading = state.copy(connection = ConnectionState.Connecting(first.deviceId, 1L, ConnectionPhase.DISCOVERING))
@@ -237,7 +203,7 @@ class TrayPanelUiTest {
                     val panel = OpenRoseUiTestHarness(this)
                     panel.render()
                     val bottom = panel.clickableBounds("打开 OpenRose").bottom
-                    assertTrue(reported > bottom, "content height $reported covers the last button ending at $bottom in $style")
+                    assertTrue(reported - bottom in 0f..24f, "content height $reported fits the last button ending at $bottom in $style")
                 }
             }
         }
@@ -292,7 +258,7 @@ class TrayPanelUiTest {
 
     @Test
     fun aChoiceIsForgottenWhenTheBondedListChangesOrTheDashboardLeaves() {
-        val third = candidate("rose-3", ModelProfile.I5_ZT)
+        val third = trayCandidate("rose-3", ModelProfile.I5_ZT)
         for (style in InterfaceStyle.entries) {
             val bonded = disconnectedAndroidState().copy(bondedDevices = persistentListOf(first, second))
 
@@ -364,7 +330,7 @@ class TrayPanelUiTest {
         assertEquals("左耳 98% · 右耳 未知 · 充电盒 未知", traySummary(state, PrimaryDeviceSelection()).battery)
         withTrayPanel(state, InterfaceStyle.MIUIX) { panel ->
             panel.render()
-            assertTrue(panel.hasText("未知"))
+            assertTrue(panel.hasText("左耳 98% · 右耳 未知 · 充电盒 未知"))
         }
     }
 
@@ -509,28 +475,6 @@ class TrayPanelUiTest {
         )
     }
 
-    private fun withTrayPanel(
-        initialState: ControlState,
-        style: InterfaceStyle,
-        selection: PrimaryDeviceSelection = PrimaryDeviceSelection(),
-        circulation: CirculationClient? = null,
-        sound: DesktopSoundActions? = null,
-        block: suspend (TrayHarness) -> Unit,
-    ) = runOpenRoseUiTest(360, 440) {
-        val model = FakeOpenRoseModel(
-            mutableStateOf(initialState),
-            mutableStateOf(UiSettings(interfaceStyle = style, appearance = Appearance.LIGHT)),
-        )
-        val panel = TrayHarness(this, model)
-        setContent { TrayPanel(model, selection, onOpenApp = { panel.destinations += it }, circulation = circulation, sound = sound) }
-        block(panel)
-    }
-
-    private class TrayHarness(scene: OpenRoseUiTestScene, val model: FakeOpenRoseModel) : OpenRoseUiTestHarness(scene) {
-        val destinations = mutableListOf<WindowDestination?>()
-        val openAppCount get() = destinations.size
-    }
-
     private class AppHarness(
         scene: OpenRoseUiTestScene,
         val state: androidx.compose.runtime.MutableState<ControlState>,
@@ -549,12 +493,57 @@ class TrayPanelUiTest {
         setContent { OpenRoseApp(model, BasicPlatformUi("Test"), primaryDeviceSelection = selection) }
         block(AppHarness(this, state, model))
     }
-
-    private fun candidate(id: String, profile: ModelProfile) = DeviceCandidate(
-        deviceId = DeviceId(id),
-        name = "Device $id",
-        rssi = null,
-        profile = profile,
-        manufacturerDataHex = "",
-    )
 }
+
+internal fun withTrayPanel(
+    initialState: ControlState,
+    style: InterfaceStyle,
+    selection: PrimaryDeviceSelection = PrimaryDeviceSelection(),
+    circulation: CirculationClient? = null,
+    sound: DesktopSoundActions? = null,
+    remoteHeadsets: State<List<RemoteHeadset>>? = null,
+    block: suspend (TrayHarness) -> Unit,
+) = runOpenRoseUiTest(360, 700) {
+    val model = FakeOpenRoseModel(
+        mutableStateOf(initialState),
+        mutableStateOf(UiSettings(interfaceStyle = style, appearance = Appearance.LIGHT)),
+    )
+    val panel = TrayHarness(this, model)
+    setContent {
+        TrayPanel(
+            model,
+            selection,
+            onOpenApp = { panel.destinations += it },
+            onContentHeight = { panel.contentHeight = it.value },
+            circulation = circulation,
+            sound = sound,
+            remoteHeadsets = remoteHeadsets?.value,
+        )
+    }
+    block(panel)
+}
+
+internal class TrayHarness(scene: OpenRoseUiTestScene, val model: FakeOpenRoseModel) : OpenRoseUiTestHarness(scene) {
+    var contentHeight = 0f
+    val destinations = mutableListOf<WindowDestination?>()
+    val openAppCount get() = destinations.size
+
+    fun capturePanel(state: String, style: InterfaceStyle) {
+        val directory = System.getenv("OPENROSE_SURFACE_DIR") ?: return
+        val fittedHeight = kotlin.math.ceil(contentHeight).toInt()
+        resize(360, fittedHeight)
+        render()
+        // captureToImage retains the test surface's initial size even after the scene is resized.
+        val image = snapshot().getSubimage(0, 0, 360, fittedHeight)
+        val target = File(directory).apply { mkdirs() }
+        ImageIO.write(image, "png", File(target, "tray-$state-${style.name.lowercase()}.png"))
+    }
+}
+
+internal fun trayCandidate(id: String, profile: ModelProfile) = DeviceCandidate(
+    deviceId = DeviceId(id),
+    name = "Device $id",
+    rssi = null,
+    profile = profile,
+    manufacturerDataHex = "",
+)

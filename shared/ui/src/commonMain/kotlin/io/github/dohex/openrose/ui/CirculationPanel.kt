@@ -156,26 +156,3 @@ private class RemoteHeadsetState(private val client: CirculationClient, private 
         revision++
     }
 }
-
-@Composable
-fun RemoteHeadsetCard(headset: RemoteHeadset) {
-    val reading = headset.reading
-    AppDashboardCard(compact = true) {
-        val device = headset.deviceName
-        if (device == null) {
-            AppText(headset.offlineLabel, role = AppTextRole.Summary)
-        } else {
-            AppText(device, role = AppTextRole.Title)
-            AppText(headset.sourceLabel, role = AppTextRole.Summary)
-            headset.statusLabel?.let { AppText(it, role = AppTextRole.Summary) }
-            AppText(headset.batteryText)
-            val mode = reading.mode?.id
-            AppText("降噪模式 · ${mode?.let(::noiseModeLabel) ?: "未知"}")
-            val modes = reading.modes.map(NoiseMode::id).sortedBy(::noiseModeOrder)
-            if (modes.isNotEmpty()) {
-                RemoteNoiseModeChoices(modes, mode, !headset.busy) { id -> NoiseMode.fromId(id)?.let(headset.selectMode) }
-            }
-        }
-        headset.feedback?.let { AppText(it, role = AppTextRole.Summary) }
-    }
-}

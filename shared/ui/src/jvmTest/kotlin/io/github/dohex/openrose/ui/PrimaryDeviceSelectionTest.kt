@@ -1,5 +1,6 @@
 package io.github.dohex.openrose.ui
 
+import io.github.dohex.openrose.core.ConnectionState
 import io.github.dohex.openrose.core.ControlState
 import io.github.dohex.openrose.core.DeviceCandidate
 import io.github.dohex.openrose.core.protocol.ModelProfile
@@ -32,6 +33,17 @@ class PrimaryDeviceSelectionTest {
         selection.select(state, second.deviceId)
 
         assertEquals(third, selection.primary(state))
+    }
+
+    @Test
+    fun aCurrentConnectionWithoutATargetRecordCannotShowAnotherHeadsetsSource() {
+        val state = disconnectedAndroidState().copy(
+            bondedDevices = persistentListOf(first, second),
+            connection = ConnectionState.Connected(second.deviceId, 1, ModelProfile.I7_RS_V2),
+        )
+        val selection = PrimaryDeviceSelection().apply { select(state, first.deviceId) }
+        assertEquals(second, selection.primary(state))
+        assertNull(selection.primary(state.copy(bondedDevices = persistentListOf(first))))
     }
 
     @Test

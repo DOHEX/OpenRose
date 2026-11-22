@@ -57,29 +57,15 @@ internal fun HeadphonesPage(
     primaryDeviceSelection: PrimaryDeviceSelection = remember { PrimaryDeviceSelection() },
 ) {
     val state by model.state.collectAsState()
-    val onRequestPermission = platformUi.requestBluetoothPermission
-    val onOpenSystemSettings = platformUi.openBluetoothSettings
-    val onStopScan = model::stopScan
-    val onConnect = model::connect
-    val onDisconnect = model::disconnect
     val device = state.activeDevice()
+    val cards = rememberHeadsetCards(state, primaryDeviceSelection, platformUi.headsetCirculation)
     Column(
         Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         NoticeBanner(model)
         if (device == null) {
-            platformUi.CirculationAction(state, primaryDeviceSelection)
-            UnconnectedHeadphonesDashboard(
-                state = state,
-                onNavigate = onNavigate,
-                onRequestPermission = onRequestPermission,
-                onOpenSystemSettings = onOpenSystemSettings,
-                onConnect = onConnect,
-                onDisconnect = onDisconnect,
-                onStopScan = onStopScan,
-                selection = primaryDeviceSelection,
-            )
+            UnconnectedHeadphonesDashboard(state, model, platformUi, cards, primaryDeviceSelection, onNavigate)
             return@Column
         }
 
@@ -87,82 +73,10 @@ internal fun HeadphonesPage(
         BoxWithConstraints(Modifier.fillMaxWidth()) {
             val wide = maxWidth >= 680.dp
             val deviceCard: @Composable () -> Unit = {
-                AppDashboardCard {
-                    Row(
-                        Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        DeviceArtwork(device.profile, Modifier.size(if (wide) 84.dp else 68.dp), compact = true)
-                        Column(
-                            Modifier.weight(1f),
-                            verticalArrangement = Arrangement.spacedBy(4.dp),
-                        ) {
-                            AppText(device.profile.shortLabel, role = AppTextRole.Title)
-                            AppText(
-                                state.connection.phaseOrNull()?.displayText() ?: "未连接",
-                                role = AppTextRole.Summary,
-                                color = if (state.isReady(device)) {
-                                    appColor(AppColorRole.Primary)
-                                } else {
-                                    appColor(AppColorRole.Summary)
-                                },
-                            )
-                        }
-                    }
-                    BatteryStrip(
-                        device = device,
-                        initializing = state.connection.phaseOrNull() == ConnectionPhase.INITIALIZING,
-                    )
-                }
+                ConnectedHeadsetCard(state, device, cards.local, platformUi.desktopSound, wide)
             }
             val controls: @Composable () -> Unit = {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    if (device.capabilities.noiseControl != null) {
-                        NoiseControlCard(state, device, onSet = onSet)
-                    }
-                    if (DeviceSetting.GAME_MODE in device.capabilities.writableSettings) {
-                        AppDashboardCard(compact = true) {
-                            SettingToggleChoices(
-                                "游戏模式",
-                                DeviceField.GAME_MODE,
-                                HeadsetCommand::GameMode,
-                                device,
-                                state.canWrite(device, DeviceSetting.GAME_MODE),
-                                onSet,
-                                icon = RoseIcon.GAME,
-                                pendingToggle = state.pendingToggle(device, DeviceSetting.GAME_MODE),
-                            )
-                        }
-                    }
-                    val hasTouch = device.capabilities.touchControl != null || device.capabilities.tapControl != null ||
-                        DeviceSetting.TOUCH_ENABLED in device.capabilities.writableSettings ||
-                        DeviceSetting.EAR_DETECTION in device.capabilities.writableSettings
-                    val hasAudio = device.capabilities.writableSettings.any { it in audioPageSettings }
-                    AppGroup(title = "功能") {
-                        EqualizerEntryRow(state, device, onSet) { onNavigate(AppPage.EQUALIZER) }
-                        if (hasTouch) {
-                            AppArrowRow(
-                                title = "触控操作",
-                                icon = RoseIcon.TOUCH,
-                                onClick = { onNavigate(AppPage.TOUCH) },
-                            )
-                        }
-                        if (hasAudio) {
-                            AppArrowRow(
-                                title = "音频与设备",
-                                value = device.confirmedText(DeviceField.AUDIO_MODE)?.let(::semanticLabel),
-                                icon = RoseIcon.AUDIO,
-                                onClick = { onNavigate(AppPage.AUDIO) },
-                            )
-                        }
-                        AppArrowRow(
-                            title = "设备详情",
-                            icon = RoseIcon.INFO,
-                            onClick = { onNavigate(AppPage.DETAILS) },
-                        )
-                    }
-                }
+                HeadsetControls(state, device, showLocalNoise = cards.local.remote == null, onSet, onNavigate)
             }
             if (wide) {
                 Row(
@@ -180,19 +94,124 @@ internal fun HeadphonesPage(
                 }
             }
         }
+        cards.others.forEach { AdditionalHeadsetCard(it, model::connect, platformUi.desktopSound) }
+    }
+}
+
+@Composable
+private fun ConnectedHeadsetCard(
+    state: ControlState,
+    device: DeviceState,
+    source: HeadsetCardSource,
+    sound: DesktopSoundActions?,
+    wide: Boolean,
+) {
+    AppDashboardCard {
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            DeviceArtwork(device.profile, Modifier.size(if (wide) 84.dp else 68.dp), compact = true)
+            Column(
+                Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                AppText(device.profile.shortLabel, role = AppTextRole.Title)
+                source.sourceLabel?.let { AppText(it, role = AppTextRole.Summary) }
+                AppText(
+                    if (source.sourceLabel != null && state.isReady(device)) {
+                        "耳机控制已连接"
+                    } else {
+                        state.connection.phaseOrNull()?.displayText() ?: "未连接"
+                    },
+                    role = AppTextRole.Summary,
+                    color = if (state.isReady(device)) {
+                        appColor(AppColorRole.Primary)
+                    } else {
+                        appColor(AppColorRole.Summary)
+                    },
+                )
+            }
+        }
+        HeadsetTransferAction(source)
+        val remote = source.remote
+        if (remote != null) {
+            RemoteHeadsetReadings(remote, enabled = !source.transferBusy)
+        } else {
+            BatteryStrip(
+                device = device,
+                initializing = state.connection.phaseOrNull() == ConnectionPhase.INITIALIZING,
+            )
+        }
+        sound?.let { DesktopOutputRow(it, source) }
+    }
+}
+
+@Composable
+private fun HeadsetControls(
+    state: ControlState,
+    device: DeviceState,
+    showLocalNoise: Boolean,
+    onSet: (HeadsetCommand) -> Unit,
+    onNavigate: (AppPage) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        if (device.capabilities.noiseControl != null && showLocalNoise) {
+            NoiseControlCard(state, device, onSet = onSet)
+        }
+        if (DeviceSetting.GAME_MODE in device.capabilities.writableSettings) {
+            AppDashboardCard(compact = true) {
+                SettingToggleChoices(
+                    "游戏模式",
+                    DeviceField.GAME_MODE,
+                    HeadsetCommand::GameMode,
+                    device,
+                    state.canWrite(device, DeviceSetting.GAME_MODE),
+                    onSet,
+                    icon = RoseIcon.GAME,
+                    pendingToggle = state.pendingToggle(device, DeviceSetting.GAME_MODE),
+                )
+            }
+        }
+        val hasTouch = device.capabilities.touchControl != null || device.capabilities.tapControl != null ||
+            DeviceSetting.TOUCH_ENABLED in device.capabilities.writableSettings ||
+            DeviceSetting.EAR_DETECTION in device.capabilities.writableSettings
+        val hasAudio = device.capabilities.writableSettings.any { it in audioPageSettings }
+        AppGroup(title = "功能") {
+            EqualizerEntryRow(state, device, onSet) { onNavigate(AppPage.EQUALIZER) }
+            if (hasTouch) {
+                AppArrowRow(
+                    title = "触控操作",
+                    icon = RoseIcon.TOUCH,
+                    onClick = { onNavigate(AppPage.TOUCH) },
+                )
+            }
+            if (hasAudio) {
+                AppArrowRow(
+                    title = "音频与设备",
+                    value = device.confirmedText(DeviceField.AUDIO_MODE)?.let(::semanticLabel),
+                    icon = RoseIcon.AUDIO,
+                    onClick = { onNavigate(AppPage.AUDIO) },
+                )
+            }
+            AppArrowRow(
+                title = "设备详情",
+                icon = RoseIcon.INFO,
+                onClick = { onNavigate(AppPage.DETAILS) },
+            )
+        }
     }
 }
 
 @Composable
 private fun UnconnectedHeadphonesDashboard(
     state: ControlState,
-    onNavigate: (AppPage) -> Unit,
-    onRequestPermission: (() -> Unit)?,
-    onOpenSystemSettings: (() -> Unit)?,
-    onConnect: (DeviceId) -> Unit,
-    onDisconnect: () -> Unit,
-    onStopScan: () -> Unit,
+    model: OpenRoseModel,
+    platformUi: PlatformUi,
+    cards: HeadsetCards,
     selection: PrimaryDeviceSelection,
+    onNavigate: (AppPage) -> Unit,
 ) {
     val platform = state.platform
     val blockReason = platform.connectionBlockReason
@@ -215,73 +234,36 @@ private fun UnconnectedHeadphonesDashboard(
                 AppBusyIndicator()
                 AppText("正在寻找耳机…", role = AppTextRole.Summary)
             }
-            AppButton("停止扫描", onStopScan, kind = AppButtonKind.Primary)
+            AppButton("停止扫描", model::stopScan, kind = AppButtonKind.Primary)
         }
+        if (cards.local.remote != null) AdditionalHeadsetCard(cards.local)
+        cards.others.forEach { AdditionalHeadsetCard(it, model::connect, platformUi.desktopSound) }
         return
     }
 
-    val primaryDevice = selection.primary(state)
-    if (primaryDevice == null) {
-        AddFirstHeadsetCard(platform, state.lastError, onNavigate, onOpenSystemSettings) { onNavigate(AppPage.DIAGNOSTICS) }
+    val primaryDevice = cards.local.target
+    if (primaryDevice == null && cards.showLocal) {
+        AddFirstHeadsetCard(platform, state.lastError, onNavigate, platformUi.openBluetoothSettings) { onNavigate(AppPage.DIAGNOSTICS) }
         return
     }
 
     val bondedRose = state.bondedRoseDevices()
     // The choice lasts only while this dashboard stays composed over an unchanged bonded list.
     DisposableEffect(selection, bondedRose) { onDispose { selection.clear() } }
-    val otherBonded = bondedRose.filter { it.deviceId != primaryDevice.deviceId }
     val connecting = state.connection as? ConnectionState.Connecting
-    val isConnecting = connecting?.deviceId == primaryDevice.deviceId
-
-    AppDashboardCard {
-        Column(
-            Modifier.fillMaxWidth().padding(vertical = 8.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            StyledTile(TileKind.ArtworkFrame, contentPadding = PaddingValues(12.dp), contentAlignment = Alignment.Center) {
-                DeviceArtwork(primaryDevice.profile)
-            }
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    AppText(
-                        primaryDevice.name?.takeIf(String::isNotBlank)
-                            ?: primaryDevice.profile?.displayName ?: primaryDevice.deviceId.value,
-                        role = AppTextRole.Title,
-                    )
-                    primaryDevice.profile?.let {
-                        AppText(
-                            it.configurationCaption,
-                            role = AppTextRole.Footnote,
-                            color = appColor(AppColorRole.Primary),
-                        )
-                    }
-                }
-                ReconnectStatus(state, primaryDevice, isConnecting)
-            }
-            ReconnectActions(
-                state,
-                primaryDevice,
-                isConnecting,
-                onConnect,
-                onDisconnect,
-                onRequestPermission,
-                onOpenSystemSettings,
-                onDiagnostics = { onNavigate(AppPage.DIAGNOSTICS) },
-            )
+    if (primaryDevice != null) {
+        ReconnectHeadsetCard(state, primaryDevice, cards.local, connecting?.deviceId == primaryDevice.deviceId, model, platformUi) {
+            onNavigate(AppPage.DIAGNOSTICS)
         }
     }
 
+    cards.others.forEach { AdditionalHeadsetCard(it, model::connect, platformUi.desktopSound) }
+    val shown = cards.others.mapNotNull { it.target?.deviceId }
+    val otherBonded = bondedRose.filter { it.deviceId != primaryDevice?.deviceId && it.deviceId !in shown }
     // One connection at a time: while any device is connecting, no other device can be switched to.
     OtherPairedDevices(otherBonded, blockReason == null && connecting == null) { id ->
         selection.select(state, id)
-        onConnect(id)
+        model.connect(id)
     }
     AppGroup {
         AppArrowRow(
@@ -290,6 +272,44 @@ private fun UnconnectedHeadphonesDashboard(
             icon = RoseIcon.PLUS,
             onClick = { onNavigate(AppPage.ADD_DEVICE) },
         )
+    }
+}
+
+@Composable
+private fun ReconnectHeadsetCard(
+    state: ControlState,
+    primaryDevice: DeviceCandidate,
+    source: HeadsetCardSource,
+    isConnecting: Boolean,
+    model: OpenRoseModel,
+    platformUi: PlatformUi,
+    onDiagnostics: () -> Unit,
+) {
+    AppDashboardCard {
+        if (source.sourceLabel != null) {
+            HeadsetSourceContent(source)
+            ReconnectStatus(state, primaryDevice, isConnecting, source)
+        } else {
+            Column(
+                Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                StyledTile(TileKind.ArtworkFrame, contentPadding = PaddingValues(12.dp), contentAlignment = Alignment.Center) {
+                    DeviceArtwork(primaryDevice.profile)
+                }
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    AppText(primaryDevice.cardName(), role = AppTextRole.Title)
+                    primaryDevice.profile?.let {
+                        AppText(it.configurationCaption, role = AppTextRole.Footnote, color = appColor(AppColorRole.Primary))
+                    }
+                }
+                ReconnectStatus(state, primaryDevice, isConnecting)
+                HeadsetTransferAction(source)
+            }
+        }
+        platformUi.desktopSound?.let { DesktopOutputRow(it, source) }
+        ReconnectActions(state, primaryDevice, source, isConnecting, model, platformUi, onDiagnostics)
     }
 }
 
@@ -578,16 +598,17 @@ private fun AddFirstHeadsetCard(
 private fun ReconnectActions(
     state: ControlState,
     primaryDevice: DeviceCandidate,
+    source: HeadsetCardSource,
     isConnecting: Boolean,
-    onConnect: (DeviceId) -> Unit,
-    onDisconnect: () -> Unit,
-    onRequestPermission: (() -> Unit)?,
-    onOpenSystemSettings: (() -> Unit)?,
+    model: OpenRoseModel,
+    platformUi: PlatformUi,
     onDiagnostics: () -> Unit,
 ) {
     val platform = state.platform
+    val onOpenSystemSettings = platformUi.openBluetoothSettings
     val blockReason = platform.connectionBlockReason
     val visibleError = state.lastError
+    if (source.transferBusy || (source.offersTransfer && visibleError == null)) return
     Column(
         Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -595,36 +616,22 @@ private fun ReconnectActions(
         if (isConnecting) {
             AppButton(
                 text = "取消连接",
-                onClick = onDisconnect,
+                onClick = model::disconnect,
                 kind = AppButtonKind.Secondary,
                 modifier = Modifier.fillMaxWidth(),
             )
-        } else if (platform.bluetoothPermissionRequired) {
-            onRequestPermission?.let { requestPermission ->
-                AppButton(
-                    text = "授予蓝牙权限",
-                    onClick = requestPermission,
-                    kind = AppButtonKind.Primary,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
         } else if (blockReason != null) {
-            onOpenSystemSettings?.let { openSettings ->
-                AppButton(
-                    text = "打开系统蓝牙设置",
-                    onClick = openSettings,
-                    kind = AppButtonKind.Primary,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
+            BluetoothConnectionRemedy(platform, platformUi.requestBluetoothPermission, onOpenSystemSettings)
         } else {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                AppButton(
-                    text = if (visibleError != null) "重试连接" else "连接",
-                    onClick = { onConnect(primaryDevice.deviceId) },
-                    kind = AppButtonKind.Primary,
-                    modifier = Modifier.weight(1f),
-                )
+                if (!source.offersTransfer) {
+                    AppButton(
+                        text = source.reconnectLabel(if (visibleError != null) "重试连接" else "连接"),
+                        onClick = { model.connect(primaryDevice.deviceId) },
+                        kind = AppButtonKind.Primary,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
                 if (visibleError != null) {
                     AppButton(
                         text = "查看诊断",
@@ -644,6 +651,12 @@ private fun ReconnectActions(
             )
         }
     }
+}
+
+@Composable
+private fun BluetoothConnectionRemedy(platform: PlatformState, requestPermission: (() -> Unit)?, openSettings: (() -> Unit)?) {
+    val (label, action) = if (platform.bluetoothPermissionRequired) "授予蓝牙权限" to requestPermission else "打开系统蓝牙设置" to openSettings
+    action?.let { AppButton(label, it, kind = AppButtonKind.Primary, modifier = Modifier.fillMaxWidth()) }
 }
 
 @Composable
@@ -690,10 +703,17 @@ private fun OtherPairedDevices(devices: List<DeviceCandidate>, enabled: Boolean,
 }
 
 @Composable
-private fun ReconnectStatus(state: ControlState, primaryDevice: DeviceCandidate, isConnecting: Boolean) {
+private fun ReconnectStatus(state: ControlState, primaryDevice: DeviceCandidate, isConnecting: Boolean, source: HeadsetCardSource? = null) {
     val blockReason = state.platform.connectionBlockReason
     // A platform block explains itself and outranks the last failure.
     val visibleError = state.lastError?.takeIf { blockReason == null }
+    val hint = when {
+        blockReason != null -> blockReason
+        source?.hasLocalAudio == true -> audioWithoutControlStatus(false)
+        source == null -> primaryDevice.profile.reconnectHint(failed = false)
+        else -> null
+    }
+    if (!isConnecting && visibleError == null && hint == null) return
     val announce = Modifier.semantics { liveRegion = LiveRegionMode.Polite }
     StyledTile(
         TileKind.Chip,
@@ -706,7 +726,8 @@ private fun ReconnectStatus(state: ControlState, primaryDevice: DeviceCandidate,
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 AppBusyIndicator()
-                AppText("正在连接…", announce, role = AppTextRole.Summary, color = appColor(AppColorRole.Primary))
+                val progress = if (source?.hasLocalAudio == true) audioWithoutControlStatus(true) else "正在连接…"
+                AppText(progress, announce, role = AppTextRole.Summary, color = appColor(AppColorRole.Primary))
             }
 
             // The failure is stated once, by the error itself; the hint only says what to check.
@@ -721,14 +742,12 @@ private fun ReconnectStatus(state: ControlState, primaryDevice: DeviceCandidate,
                     color = appColor(AppColorRole.Error),
                     textAlign = TextAlign.Center,
                 )
-                AppText(primaryDevice.profile.reconnectHint(failed = true), role = AppTextRole.Summary, textAlign = TextAlign.Center)
+                if (source == null) {
+                    AppText(primaryDevice.profile.reconnectHint(failed = true), role = AppTextRole.Summary, textAlign = TextAlign.Center)
+                }
             }
 
-            else -> AppText(
-                blockReason ?: primaryDevice.profile.reconnectHint(failed = false),
-                announce,
-                role = AppTextRole.Summary,
-            )
+            hint != null -> AppText(hint, announce, role = AppTextRole.Summary)
         }
     }
 }

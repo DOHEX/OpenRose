@@ -136,6 +136,7 @@ private fun NucleusApplicationScope.DesktopWindows(
             tray = tray.availability,
             loginLaunch = loginLaunch,
             circulation = circulation,
+            desktopSound = runtime.sound,
             openBluetoothSettings = bluetoothSettingsAction(hostPlatform),
             showQr = { PairingQr(it) },
         )

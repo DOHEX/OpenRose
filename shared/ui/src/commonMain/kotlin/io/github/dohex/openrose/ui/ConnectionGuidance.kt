@@ -28,11 +28,9 @@ internal fun HostPlatform.firstConnectionHint(): String = when (this) {
 }
 
 /** What to check or expect before connecting; after a failure it only advises, since the error states the failure. */
-internal fun ModelProfile?.reconnectHint(failed: Boolean): String = when {
-    this?.batteryLayout == BatteryLayout.EARBUDS_AND_CASE ->
-        if (failed) "请确认耳机已开盖并在附近" else "未连接 · 耳机开盖后将自动连接"
-
-    failed -> "请确认耳机已开启并在附近"
-
-    else -> "未连接 · 系统蓝牙连上耳机后将自动连接"
+internal fun ModelProfile?.reconnectHint(failed: Boolean, includeStatus: Boolean = true): String {
+    val hasCase = this?.batteryLayout == BatteryLayout.EARBUDS_AND_CASE
+    if (failed) return if (hasCase) "请确认耳机已开盖并在附近" else "请确认耳机已开启并在附近"
+    val guidance = if (hasCase) "耳机开盖后将自动连接" else "系统蓝牙连上耳机后将自动连接"
+    return if (includeStatus) "未连接 · $guidance" else guidance
 }

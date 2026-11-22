@@ -28,7 +28,7 @@ Pair and connect the earphones in the system Bluetooth settings first. If the St
 
 Enable module control on the phone. In the desktop settings, open **流转配对** and show the pairing code. The remaining validity is shown below the code. Open the same setting on the phone, then scan the QR code or select the computer and enter its six digits. Both devices need local network discovery and the phone needs access to TCP port 21871 on the desktop. Either device can remove the pairing in settings after confirming.
 
-Changing noise mode from the phone quick panel or desktop tray keeps audio at its current source. To move audio, use **接到这台电脑** on the computer or **接回手机** on the phone.
+Find the i5 card in My Earphones, the desktop tray, or the phone quick panel. **音源设备** (Audio source) shows which phone or computer is connected to this headset. Selecting a noise mode lets the original source keep playing. To use the headset on the other device, choose **改连这台电脑** (Move to this computer) or **改连这部手机** (Move to this phone) on that device. The original source disconnects first. If a call or an active headset microphone prevents the move, the card shows the reason.
 
 ## Tray and background control
 
@@ -37,7 +37,11 @@ The tray icon requires `libsystemd`, and GNOME also needs the AppIndicator exten
 - **Tray available**: closing the window only hides it and keeps the control connection; Quit in the tray menu ends it.
 - **Tray unavailable**: closing the window quits.
 
-Clicking the tray icon opens the tray panel with the control connection status, battery, and noise mode, plus a manual reconnect when disconnected; settings such as noise levels are only in the main window. On some desktop environments a left click opens the tray menu instead of the tray panel.
+Click the tray icon to see each headset with its audio source, battery readings, and noise modes. Select a mode under the headset you want to adjust. If two phones each have a headset connected, the panel lists them separately.
+
+If the audio source is unknown, choose **将耳机连接到这台电脑** (Connect the headset to this computer) to try connecting. The computer keeps its default sound output and shows that device on the headset card. If battery readings and noise controls fail to return, choose **恢复耳机控制** (Restore headset controls). The audio connection stays on the computer.
+
+To adjust noise levels, open OpenRose from the bottom of the panel. On some desktops a left click opens the tray menu.
 
 ## Window rules for tiling compositors
 

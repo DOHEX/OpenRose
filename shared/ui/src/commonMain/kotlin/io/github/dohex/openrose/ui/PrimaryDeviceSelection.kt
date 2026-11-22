@@ -4,6 +4,7 @@ import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import io.github.dohex.openrose.core.ConnectionState
 import io.github.dohex.openrose.core.ControlState
 import io.github.dohex.openrose.core.DeviceCandidate
 import io.github.dohex.openrose.core.transport.DeviceId
@@ -21,13 +22,22 @@ class PrimaryDeviceSelection {
 
     private var choice by mutableStateOf<Choice?>(null)
 
-    /** The connection target, else the manual choice, else the first bonded ROSE device. */
+    /** The current connection, else the manual choice, else the first bonded ROSE device. */
     fun primary(state: ControlState): DeviceCandidate? {
         state.connectionTarget?.let { return it }
         val bonded = state.bondedRoseDevices()
-        val chosen = choice?.takeIf { it.bonded == bonded }
-            ?.let { current -> bonded.firstOrNull { it.deviceId == current.deviceId } }
-        return chosen ?: bonded.firstOrNull()
+        val connectedId = when (val connection = state.connection) {
+            is ConnectionState.Connecting -> connection.deviceId
+            is ConnectionState.Connected -> connection.deviceId
+            ConnectionState.Disconnected -> null
+        }
+        return if (connectedId != null) {
+            bonded.firstOrNull { it.deviceId == connectedId } ?: state.candidates.firstOrNull { it.deviceId == connectedId }
+        } else {
+            val chosen = choice?.takeIf { it.bonded == bonded }
+                ?.let { current -> bonded.firstOrNull { it.deviceId == current.deviceId } }
+            chosen ?: bonded.firstOrNull()
+        }
     }
 
     /** What the dashboard's “切换” does before it connects. */

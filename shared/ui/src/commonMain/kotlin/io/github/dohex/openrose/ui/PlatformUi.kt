@@ -1,6 +1,7 @@
 package io.github.dohex.openrose.ui
 
 import androidx.compose.runtime.Composable
+import io.github.dohex.openrose.circulation.CirculationClient
 import io.github.dohex.openrose.core.ControlState
 import io.github.dohex.openrose.core.PlatformState
 
@@ -13,8 +14,9 @@ interface PlatformUi {
     val requestBluetoothPermission: (() -> Unit)? get() = null
     val openBluetoothSettings: (() -> Unit)? get() = null
 
-    @Composable
-    fun CirculationAction(state: ControlState, selection: PrimaryDeviceSelection) {}
+    val headsetCirculation: CirculationClient?
+        @Composable get() = null
+    val desktopSound: DesktopSoundActions? get() = null
 
     /** Page supplied by hosts that can pair this audio source for headset circulation. */
     val circulationPairingContent: (@Composable () -> Unit)?

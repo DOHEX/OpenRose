@@ -257,15 +257,21 @@ private fun QuickPanelContent(
     onOpenApp: (WindowDestination?) -> Unit,
 ) {
     val summary = rememberTraySummary(state, selection)
-    val sections = rememberPanelSections(state, summary, circulation)
+    val cards = rememberHeadsetCards(state, selection, circulation)
     val device = state.activeDevice()?.takeIf { summary.connected }
 
-    sections.remoteHeadsets.forEach { RemoteHeadsetCard(it) }
-    if (sections.statusCard) TrayStatusCard(state, summary)
+    if (cards.showLocal) {
+        if (cards.local.remote != null) {
+            AdditionalHeadsetCard(cards.local)
+        } else {
+            QuickPanelStatusCard(model, state, summary, cards.local)
+        }
+    }
+    cards.others.forEach { source -> AdditionalHeadsetCard(source, onRecoverControl = model::connect) }
 
     if (device != null) {
         val onSet = model.settingsFor(device.sessionId)
-        if (device.capabilities.noiseControl != null) {
+        if (cards.local.remote == null && device.capabilities.noiseControl != null) {
             NoiseControlCard(state, device, showLevelControls = false, onSet = onSet)
         }
         QuickEqualizerMenu(state, device, onSet)
@@ -286,7 +292,72 @@ private fun QuickPanelContent(
         SettingFeedback(state, device, onViewDetails = { onOpenApp(WindowDestination.DIAGNOSTICS) })
     }
 
-    TrayActions(model, state, summary, onOpenApp)
+    QuickPanelActions(summary.addDevice, onOpenApp)
+}
+
+/** The headphones' title, connection progress or reason it is not connected, and the battery strip when connected. */
+@Composable
+private fun QuickPanelStatusCard(model: OpenRoseModel, state: ControlState, summary: TraySummary, source: HeadsetCardSource) {
+    val device = state.activeDevice()?.takeIf { summary.connected }
+    AppDashboardCard {
+        val title = if (source.sourceLabel != null) summary.deviceName ?: summary.title else summary.title
+        AppText(title, role = AppTextRole.Title)
+        source.sourceLabel?.let { AppText(it, role = AppTextRole.Summary) }
+        QuickConnectionStatus(state, summary, source)
+        if (device != null) {
+            BatteryStrip(device, initializing = false, showUnknown = state.platform.hostPlatform.isDesktop)
+        }
+        PanelConnectionActions(model, state, summary, source, compact = false)
+    }
+}
+
+@Composable
+private fun QuickConnectionStatus(state: ControlState, summary: TraySummary, source: HeadsetCardSource) {
+    val connecting = !summary.connected && state.isConnectingForTray()
+    when {
+        connecting -> Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            AppBusyIndicator()
+            AppText(
+                if (source.hasLocalAudio) audioWithoutControlStatus(true) else state.connection.phaseOrNull()?.displayText() ?: "正在连接…",
+                role = AppTextRole.Summary,
+                color = appColor(AppColorRole.Primary),
+            )
+        }
+
+        source.hasLocalAudio && !summary.connected -> AppText(
+            state.lastError?.message ?: audioWithoutControlStatus(false),
+            role = AppTextRole.Summary,
+            color = if (state.lastError != null) appColor(AppColorRole.Error) else null,
+        )
+
+        !source.offersTransfer && summary.connectionHint != null -> AppText(
+            summary.connectionHint,
+            role = AppTextRole.Summary,
+            color = if (state.lastError != null && state.platform.connectionBlockReason == null) appColor(AppColorRole.Error) else null,
+        )
+    }
+}
+
+@Composable
+private fun QuickPanelActions(offerAdd: Boolean, onOpenApp: (WindowDestination?) -> Unit) {
+    val inset = if (LocalInterfaceStyle.current == InterfaceStyle.MATERIAL3) 16.dp else 12.dp
+    Column(
+        Modifier.fillMaxWidth().padding(horizontal = inset),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        if (offerAdd) {
+            AppButton(
+                "添加耳机",
+                { onOpenApp(WindowDestination.ADD_DEVICE) },
+                kind = AppButtonKind.Primary,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        AppButton("打开 OpenRose", { onOpenApp(null) }, kind = AppButtonKind.Secondary, modifier = Modifier.fillMaxWidth())
+    }
 }
 
 /** The row and the menu checkmark both follow the headset's confirmed mode. */

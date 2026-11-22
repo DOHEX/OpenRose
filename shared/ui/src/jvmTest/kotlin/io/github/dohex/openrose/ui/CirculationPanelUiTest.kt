@@ -2,11 +2,16 @@
 
 package io.github.dohex.openrose.ui
 
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
 import io.github.dohex.openrose.circulation.*
+import io.github.dohex.openrose.core.HostPlatform
 import io.github.dohex.openrose.core.NoiseMode
 import io.github.dohex.openrose.core.protocol.BatteryLayout
+import io.github.dohex.openrose.core.protocol.ModelProfile
+import io.github.dohex.openrose.core.transport.DeviceId
+import kotlinx.collections.immutable.persistentListOf
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -16,17 +21,17 @@ class CirculationPanelUiTest {
     @Test
     fun aRemoteNoiseTapUsesTheHeldDeviceWhileItsPreviouslyReportedModeStaysVisible() = runOpenRoseUiTest(420, 600) {
         var selected: NoiseMode? = null
-        val reading = RemoteReading(RemoteControlStatus.READY, deviceName = "EarFree i5", modes = listOf(NoiseMode.WIND, NoiseMode.TRANSPARENCY), mode = NoiseMode.WIND)
+        val reading = RemoteReading(RemoteControlStatus.READY, deviceName = "EarFree i5", session = RemoteSessionReference("pc", DeviceId("i5"), "1"), modes = listOf(NoiseMode.WIND, NoiseMode.TRANSPARENCY), mode = NoiseMode.WIND)
         setContent {
             ProvideInterfaceStyle(InterfaceStyle.MATERIAL3, dark = false) {
-                RemoteHeadsetCard(RemoteHeadset("工作站", reading, false, null) { selected = it })
+                RemoteCards(RemoteHeadset("工作站", reading, false, null) { selected = it })
             }
         }
         val panel = OpenRoseUiTestHarness(this)
         panel.render()
         panel.clickText("通透")
         assertEquals(NoiseMode.TRANSPARENCY, selected)
-        assertTrue(panel.hasText("降噪模式 · 抗风噪"))
+        assertTrue(panel.hasSelectedText("抗风噪"))
     }
 
     @Test
@@ -34,7 +39,7 @@ class CirculationPanelUiTest {
         setContent {
             ProvideInterfaceStyle(InterfaceStyle.MATERIAL3, dark = false) {
                 val reading = RemoteReading(RemoteControlStatus.READY, deviceName = "EarFree i5", left = 82, right = 71)
-                RemoteHeadsetCard(RemoteHeadset("工作站", reading, false, null) {})
+                RemoteCards(RemoteHeadset("工作站", reading, false, null) {})
             }
         }
         val panel = OpenRoseUiTestHarness(this)
@@ -42,6 +47,44 @@ class CirculationPanelUiTest {
         assertTrue(panel.hasText("音源设备 · 工作站"))
         assertTrue(panel.hasText("EarFree i5"))
         assertTrue(panel.hasText("左耳 82% · 右耳 71% · 充电盒 未知"))
+    }
+
+    @Test
+    fun aTransferredSecondaryHeadsetRetainsItsAudioAndRecoveryActionAfterTheResultExpires() {
+        val first = trayCandidate("first", ModelProfile.I5_ZT)
+        val second = trayCandidate("second", ModelProfile.I5_ZT)
+        val base = disconnectedAndroidState()
+        val state = base.copy(platform = base.platform.copy(hostPlatform = HostPlatform.LINUX), bondedDevices = persistentListOf(first, second))
+        val reading = RemoteReading(RemoteControlStatus.READY, deviceName = "i5", session = RemoteSessionReference("phone", second.deviceId, "1"))
+        val peers = mutableStateOf(listOf(RemoteHeadset("手机", reading, false, null) {}))
+        var connectedAddress: String? = null
+        val client = CirculationClient { command ->
+            when (command) {
+                is CirculationCommand.Handoff -> HandoffStatus(available = true, mediaReady = command.address == connectedAddress)
+
+                is CirculationCommand.Pull -> {
+                    connectedAddress = command.address
+                    peers.value = emptyList()
+                    CirculationResult("本机已接入耳机")
+                }
+
+                else -> error("Unexpected request $command")
+            }
+        }
+        withTrayPanel(state, InterfaceStyle.MIUIX, circulation = client, remoteHeadsets = peers) { panel ->
+            panel.render()
+            panel.clickText("改连这台电脑")
+            panel.render()
+            panel.advanceTimeBy(12_050)
+            assertFalse(panel.hasText("本机已接入耳机"))
+            assertTrue(panel.hasText("音源设备 · 这台电脑"))
+            panel.clickText("恢复耳机控制")
+            assertEquals(listOf(second.deviceId), panel.model.connectRequests)
+            connectedAddress = null
+            panel.advanceTimeBy(2_050)
+            assertFalse(panel.hasText("音源设备 · 这台电脑"))
+            assertFalse(panel.hasText("恢复耳机控制"))
+        }
     }
 
     @Test
@@ -101,15 +144,15 @@ class CirculationPanelUiTest {
     }
 
     @Test
-    fun aSourceWithoutHeadphonesNeverPrintsNull() = runOpenRoseUiTest(420, 600) {
+    fun aSourceWithoutHeadphonesHasNoHeadsetCard() = runOpenRoseUiTest(420, 600) {
         setContent {
             ProvideInterfaceStyle(InterfaceStyle.MATERIAL3, dark = false) {
-                RemoteHeadsetCard(RemoteHeadset("工作站", RemoteReading(RemoteControlStatus.READY), false, null) {})
+                RemoteCards(RemoteHeadset("工作站", RemoteReading(RemoteControlStatus.READY), false, null) {})
             }
         }
         val panel = OpenRoseUiTestHarness(this)
         panel.render()
-        assertTrue(panel.hasText("工作站"))
+        assertFalse(panel.hasText("音源设备 · 工作站"))
         assertFalse(panel.hasText("工作站 · null"))
     }
 
@@ -119,8 +162,7 @@ class CirculationPanelUiTest {
         val earbuds = RemoteReading(RemoteControlStatus.READY, deviceName = "EarFree", left = 82, right = 71, batteryLayout = BatteryLayout.EARBUDS_ONLY)
         setContent {
             ProvideInterfaceStyle(InterfaceStyle.MATERIAL3, dark = false) {
-                RemoteHeadsetCard(RemoteHeadset("工作站", single, false, null) {})
-                RemoteHeadsetCard(RemoteHeadset("笔记本", earbuds, false, null) {})
+                RemoteCards(RemoteHeadset("工作站", single, false, null) {}, RemoteHeadset("笔记本", earbuds, false, null) {})
             }
         }
         val panel = OpenRoseUiTestHarness(this)
@@ -181,4 +223,10 @@ class CirculationPanelUiTest {
         panel.render()
         assertTrue(panel.hasText("约 3 秒后失效"))
     }
+}
+
+@Composable
+private fun RemoteCards(vararg headsets: RemoteHeadset) {
+    val cards = rememberHeadsetCards(disconnectedAndroidState(), PrimaryDeviceSelection(), client = null, remoteHeadsets = headsets.toList())
+    cards.others.forEach { AdditionalHeadsetCard(it) }
 }
