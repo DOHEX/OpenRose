@@ -26,6 +26,7 @@ import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.FieldReading
 import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.dohex.openrose.core.protocol.ModelProfile
+import io.github.dohex.openrose.core.protocol.TouchBinding
 import io.github.dohex.openrose.core.transport.DeviceId
 import kotlinx.collections.immutable.PersistentMap
 import kotlinx.collections.immutable.persistentListOf
@@ -41,6 +42,58 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class DeviceSettingCardsUiTest {
+    @Test
+    fun noiseCycleIsEditableFromTouchControlsWithoutABoundGesture() {
+        val profile = ModelProfile.I7_RS_V2
+        val capabilities = profile.capabilities()
+        val bindings = requireNotNull(capabilities.touchControl).slots.map { TouchBinding(it.side, it.gesture, "none", 0) }
+        val flags = mapOf("normal" to true, "anc" to true, "transparency" to false, "wind" to false)
+        val state = readyState(
+            capabilities,
+            persistentMapOf(
+                DeviceField.NOISE_MODE to FieldReading.Known(FieldValue.Text("anc"), ""),
+                DeviceField.TOUCH_KEYS to FieldReading.Known(FieldValue.TouchKeys(bindings), ""),
+                DeviceField.NOISE_CYCLE to FieldReading.Known(FieldValue.NoiseCycle(flags), ""),
+            ),
+            profile,
+        )
+        for (style in InterfaceStyle.entries) {
+            withOpenRoseAppHarness(state, UiSettings(interfaceStyle = style)) { harness ->
+                harness.render()
+                assertTrue(harness.hasText("降噪模式"))
+                assertTrue(harness.hasText("降噪档位"))
+                assertFalse(harness.hasText("降噪轮换"))
+                harness.clickText("触控操作")
+                harness.render(frames = 60)
+                assertEquals(1, harness.countText("降噪轮换"))
+                harness.scrollToText("降噪轮换")
+                harness.clickText("降噪轮换")
+                harness.render()
+                harness.clickText("通透")
+                harness.render()
+                assertEquals(
+                    listOf(DeviceSetting.NOISE_CYCLE to FieldValue.NoiseCycle(flags + ("transparency" to true))),
+                    harness.settingWrites,
+                )
+            }
+        }
+    }
+
+    @Test
+    fun fixedNoiseCycleHasNoModeSelectionRowInTouchControls() {
+        val profile = ModelProfile.OPAL_RS_V2
+        val state = readyState(profile.capabilities(), profile = profile)
+        for (style in InterfaceStyle.entries) {
+            withOpenRoseAppHarness(state, UiSettings(interfaceStyle = style)) { harness ->
+                harness.render()
+                harness.clickText("触控操作")
+                harness.render(frames = 60)
+                assertTrue(harness.hasText("左右耳手势"))
+                assertFalse(harness.hasText("降噪轮换"))
+            }
+        }
+    }
+
     @Test
     fun touchSlotLabelsAndAudioModesUseCapabilityNames() {
         assertEquals("LDAC + LHDC", semanticLabel("ldac_lhdc"))
@@ -269,8 +322,8 @@ class DeviceSettingCardsUiTest {
     private fun readyState(
         capabilities: DeviceCapabilities,
         fields: PersistentMap<DeviceField, FieldReading> = persistentMapOf(),
+        profile: ModelProfile = ModelProfile.I5_ZT,
     ): ControlState {
-        val profile = ModelProfile.I5_ZT
         val id = DeviceId("setting-cards")
         return ControlState(
             platform = PlatformState(permission = PermissionState.GRANTED, transport = TransportAvailability.Available),

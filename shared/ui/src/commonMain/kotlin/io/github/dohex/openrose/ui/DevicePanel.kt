@@ -175,6 +175,7 @@ private fun HeadsetControls(
             }
         }
         val hasTouch = device.capabilities.touchControl != null || device.capabilities.tapControl != null ||
+            device.capabilities.writableNoiseCycle != null ||
             DeviceSetting.TOUCH_ENABLED in device.capabilities.writableSettings ||
             DeviceSetting.EAR_DETECTION in device.capabilities.writableSettings
         val hasAudio = device.capabilities.writableSettings.any { it in audioPageSettings }

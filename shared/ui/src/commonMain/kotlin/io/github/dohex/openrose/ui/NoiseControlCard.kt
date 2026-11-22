@@ -89,7 +89,6 @@ internal fun NoiseControlCard(
         }
         if (showLevelControls) {
             NoiseLevelControls(state, device, confirmedMode, onSet)
-            NoiseCycleRow(state, device, onSet)
         }
     }
 }
@@ -133,53 +132,6 @@ private fun NoiseLevelControls(
             }
         }
     }
-}
-
-/** The 降噪轮换 choice, which modes the headset's noise button cycles through; it belongs with the modes it picks from. */
-@Composable
-private fun NoiseCycleRow(
-    state: ControlState,
-    device: DeviceState,
-    onSet: (HeadsetCommand) -> Unit,
-) {
-    val capabilities = device.capabilities.noiseControl ?: return
-    if (DeviceSetting.NOISE_CYCLE !in device.capabilities.writableSettings || capabilities.cycleModes.isEmpty()) return
-    val enabled = state.canWrite(device, DeviceSetting.NOISE_CYCLE)
-    val flags = (device.knownValue(DeviceField.NOISE_CYCLE) as? FieldValue.NoiseCycle)?.flags
-    val cycleKnown = flags != null && capabilities.cycleModes.all { flags[it] != null }
-    val cycleModes = remember(capabilities.cycleModes) {
-        capabilities.cycleModes.sortedWith(compareBy({ noiseModeOrder(it) }, { it }))
-            .map { mode -> AppOption(mode, noiseModeLabel(mode)) }
-    }
-    val checked = remember(cycleModes, flags) {
-        cycleModes.mapNotNullTo(mutableSetOf()) { it.value.takeIf { mode -> flags?.get(mode) == true } }
-    }
-    val minimum = capabilities.minimumCycleSelections
-    val atMinimum = checked.size <= minimum
-    val cycleOptions = remember(cycleModes, checked, atMinimum, minimum) {
-        cycleModes.map { if (atMinimum && it.value in checked) it.copy(disabledReason = "至少保留 $minimum 项") else it }
-    }
-    val summary = remember(cycleKnown, cycleOptions, checked) {
-        when {
-            !cycleKnown -> "尚未读取完整状态"
-            checked.isEmpty() -> "未选择轮换模式"
-            else -> cycleOptions.filter { it.value in checked }.joinToString("、") { it.label }
-        }
-    }
-    AppMultiChoiceRow(
-        title = "降噪轮换",
-        summary = summary,
-        options = cycleOptions,
-        checked = checked,
-        enabled = enabled && cycleKnown,
-        enabledFor = { mode -> mode !in checked || !atMinimum },
-        onToggle = { mode ->
-            val requested = capabilities.cycleModes.associateWith { option ->
-                if (option == mode) option !in checked else option in checked
-            }
-            onSet(HeadsetCommand.NoiseCycle(requested))
-        },
-    )
 }
 
 @Composable

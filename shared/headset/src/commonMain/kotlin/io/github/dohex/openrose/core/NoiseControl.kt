@@ -42,3 +42,6 @@ data class NoiseControlCapabilities(
         else -> null
     }
 }
+
+val DeviceCapabilities.writableNoiseCycle: NoiseControlCapabilities?
+    get() = noiseControl?.takeIf { DeviceSetting.NOISE_CYCLE in writableSettings && it.cycleModes.isNotEmpty() }

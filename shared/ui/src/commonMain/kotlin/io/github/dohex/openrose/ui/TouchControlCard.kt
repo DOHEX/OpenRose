@@ -21,6 +21,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.IntOffset
@@ -29,11 +30,13 @@ import io.github.dohex.openrose.core.ControlState
 import io.github.dohex.openrose.core.DeviceSetting
 import io.github.dohex.openrose.core.DeviceState
 import io.github.dohex.openrose.core.HeadsetCommand
+import io.github.dohex.openrose.core.NoiseControlCapabilities
 import io.github.dohex.openrose.core.TouchSlot
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.FieldReading
 import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.dohex.openrose.core.protocol.TouchBinding
+import io.github.dohex.openrose.core.writableNoiseCycle
 
 @Composable
 internal fun TouchControlCard(
@@ -78,6 +81,56 @@ internal fun TouchControlCard(
 
     TouchBindingGroup(state, device, selectedSide, onSideChange, selectedSlot, onSlotChange, onSet)
     TapControlGroup(state, device, onSet)
+    device.capabilities.writableNoiseCycle?.let { noise ->
+        AppGroup {
+            NoiseCycleRow(state, device, noise, onSet)
+        }
+    }
+}
+
+@Composable
+private fun NoiseCycleRow(
+    state: ControlState,
+    device: DeviceState,
+    capabilities: NoiseControlCapabilities,
+    onSet: (HeadsetCommand) -> Unit,
+) {
+    val enabled = state.canWrite(device, DeviceSetting.NOISE_CYCLE)
+    val flags = (device.knownValue(DeviceField.NOISE_CYCLE) as? FieldValue.NoiseCycle)?.flags
+    val cycleKnown = flags != null && capabilities.cycleModes.all { flags[it] != null }
+    val cycleModes = remember(capabilities.cycleModes) {
+        capabilities.cycleModes.sortedWith(compareBy({ noiseModeOrder(it) }, { it }))
+            .map { mode -> AppOption(mode, noiseModeLabel(mode)) }
+    }
+    val checked = remember(cycleModes, flags) {
+        cycleModes.mapNotNullTo(mutableSetOf()) { it.value.takeIf { mode -> flags?.get(mode) == true } }
+    }
+    val minimum = capabilities.minimumCycleSelections
+    val atMinimum = checked.size <= minimum
+    val cycleOptions = remember(cycleModes, checked, atMinimum, minimum) {
+        cycleModes.map { if (atMinimum && it.value in checked) it.copy(disabledReason = "至少保留 $minimum 项") else it }
+    }
+    val summary = remember(cycleKnown, cycleOptions, checked) {
+        when {
+            !cycleKnown -> "尚未读取完整状态"
+            checked.isEmpty() -> "未选择轮换模式"
+            else -> cycleOptions.filter { it.value in checked }.joinToString("、") { it.label }
+        }
+    }
+    AppMultiChoiceRow(
+        title = "降噪轮换",
+        summary = summary,
+        options = cycleOptions,
+        checked = checked,
+        enabled = enabled && cycleKnown,
+        enabledFor = { mode -> mode !in checked || !atMinimum },
+        onToggle = { mode ->
+            val requested = capabilities.cycleModes.associateWith { option ->
+                if (option == mode) option !in checked else option in checked
+            }
+            onSet(HeadsetCommand.NoiseCycle(requested))
+        },
+    )
 }
 
 private fun touchBindingStatus(

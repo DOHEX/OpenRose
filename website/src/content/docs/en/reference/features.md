@@ -8,7 +8,7 @@ description: Earphone controls, appearance, background control, and HyperOS inte
 What you see depends on the model and firmware; see [Supported earphones](../supported-earphones/).
 
 - Battery for each earbud and the case, firmware version
-- Noise control mode, with separate ANC and transparency levels
+- In **我的耳机** (My Earphones), change the current noise mode or adjust the ANC and transparency levels. On models with a customizable noise cycle, open **触控操作** (Touch controls) and select **降噪轮换** (Noise mode cycle) to choose which modes a gesture or button press cycles through.
 - Game mode, EQ presets, touch bindings, wear detection, prompt volume, multipoint, and audio codec preference
 - Some models offer custom EQ, gain, hearing protection, and bass boost. FIRST ANGEL offers different presets in music and game modes.
 - Astro X offers spatial and content modes, ear adaptation, and tap controls. The speakfeel2 variant of SPEAKFEEL offers independent microphone controls.
