@@ -52,6 +52,7 @@ enum class RoseIcon(internal val material: DrawableResource, internal val miuix:
     CHECK_CIRCLE(Res.drawable.msr_check_circle),
     ERROR(Res.drawable.msr_error),
     LINK(Res.drawable.msr_link, { MiuixIcons.Link }),
+    LINK_OFF(Res.drawable.msr_link_off),
     MODULE(Res.drawable.msr_extension),
     SHIELD(Res.drawable.msr_verified_user),
     SWAP(Res.drawable.msr_swap_horiz),

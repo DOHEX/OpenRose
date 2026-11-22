@@ -1,11 +1,13 @@
-@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
-
 package io.github.dohex.openrose.ui
 
 import androidx.compose.foundation.layout.Box
-import androidx.compose.material3.DropdownMenu
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.material3.DropdownMenuGroup
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.DropdownMenuPopup
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MenuDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -19,6 +21,7 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.unit.dp
 import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.basic.BasicComponentDefaults
 import top.yukonga.miuix.kmp.basic.ListPopupColumn
@@ -77,7 +80,7 @@ private fun HeadphoneActions(state: HeadphoneMenuState) {
 /**
  * Both menus hold one entry in the error colour. Neither is blurred (ADR 0007's popup blur): Miuix's
  * [OverlayListPopup] paints an opaque `surfaceContainer` over whatever its `popupModifier` draws and has no colour
- * parameter, and a Material 3 [DropdownMenu] is its own window on Android, so the page backdrop would be sampled
+ * parameter, and a Material 3 [DropdownMenuPopup] is its own window on Android, so the page backdrop would be sampled
  * at the wrong offset.
  */
 @Composable
@@ -99,24 +102,35 @@ private fun MiuixDisconnectMenu(show: Boolean, onDismiss: () -> Unit, onDisconne
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun MaterialDisconnectMenu(show: Boolean, onDismiss: () -> Unit, onDisconnect: () -> Unit) {
     val focusRequester = remember { FocusRequester() }
-    DropdownMenu(expanded = show, onDismissRequest = onDismiss) {
+    DropdownMenuPopup(expanded = show, onDismissRequest = onDismiss) {
+        // The single action is inset 4 dp horizontally by DropdownMenuItem. Match that inset on all sides.
+        DropdownMenuGroup(
+            shapes = MenuDefaults.groupShapes(inactiveShape = MenuDefaults.standaloneGroupShape),
+            contentPadding = PaddingValues(vertical = 4.dp),
+        ) {
+            val actionColor = MaterialTheme.colorScheme.error
+            DropdownMenuItem(
+                onClick = onDisconnect,
+                text = { Text("断开控制连接") },
+                shape = MaterialTheme.shapes.medium,
+                leadingIcon = { AppIcon(RoseIcon.LINK_OFF) },
+                colors = MenuDefaults.itemColors(textColor = actionColor, leadingIconColor = actionColor),
+                modifier = Modifier.focusRequester(focusRequester).onPreviewKeyEvent { event ->
+                    if (event.type == KeyEventType.KeyUp && event.key == Key.Escape) {
+                        onDismiss()
+                        true
+                    } else {
+                        false
+                    }
+                },
+            )
+        }
         LaunchedEffect(show) {
             if (show) focusRequester.requestFocus()
         }
-        DropdownMenuItem(
-            modifier = Modifier.focusRequester(focusRequester).onPreviewKeyEvent { event ->
-                if (event.type == KeyEventType.KeyUp && event.key == Key.Escape) {
-                    onDismiss()
-                    true
-                } else {
-                    false
-                }
-            },
-            text = { Text("断开控制连接", color = MaterialTheme.colorScheme.error) },
-            onClick = onDisconnect,
-        )
     }
 }
