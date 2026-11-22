@@ -3,6 +3,8 @@ import IslandPreview from './IslandPreview.astro';
 import PhoneFrame from './PhoneFrame.astro';
 import standard from '../assets/showcase/quick-standard.webp';
 import transparency from '../assets/showcase/quick-transparency.webp';
+import eqMenu from '../assets/showcase/quick-eq-menu.webp';
+import eqHifi from '../assets/showcase/quick-eq-hifi.webp';
 import tray from '../assets/showcase/tray.webp';
 
 interface Props { scene: 'quick' | 'island' | 'tray' }
@@ -20,9 +22,13 @@ const headphones = `${import.meta.env.BASE_URL.replace(/\/$/, '')}/favicon.svg`;
 				<span>OpenRose</span>
 			</div>
 			<div class="capture">
-				<img src={transparency.src} width={transparency.width} height={transparency.height} alt="" />
-				<img class="before" src={standard.src} width={standard.width} height={standard.height} alt="" />
-				<span class="tap"></span>
+				<img src={eqHifi.src} width={eqHifi.width} height={eqHifi.height} alt="" />
+				<img class="frame transparency" src={transparency.src} width={transparency.width} height={transparency.height} alt="" />
+				<img class="frame standard" src={standard.src} width={standard.width} height={standard.height} alt="" />
+				<img class="frame eq-menu" src={eqMenu.src} width={eqMenu.width} height={eqMenu.height} alt="" />
+				<span class="tap noise-tap"></span>
+				<span class="tap eq-tap"></span>
+				<span class="tap preset-tap"></span>
 			</div>
 		</div>
 	</PhoneFrame>
@@ -82,11 +88,9 @@ const headphones = `${import.meta.env.BASE_URL.replace(/\/$/, '')}/favicon.svg`;
 		background: #3482ff;
 	}
 	.tile img { width: calc(30 * var(--phone-dp)); aspect-ratio: 1; filter: brightness(0) invert(1); }
-	.before { position: absolute; inset: 0; opacity: 0; }
+	.frame { position: absolute; inset: 0; opacity: 0; }
 	.tap {
 		position: absolute;
-		left: 60.9%;
-		top: 42%;
 		width: 10%;
 		aspect-ratio: 1;
 		border-radius: 50%;
@@ -96,6 +100,10 @@ const headphones = `${import.meta.env.BASE_URL.replace(/\/$/, '')}/favicon.svg`;
 		translate: -50% -50%;
 		opacity: 0;
 	}
+	/* Tap targets on the 800 × 1076 i5 panel capture. */
+	.noise-tap { left: 60.9%; top: 46.8%; --tap-delay: 1.9s; }
+	.eq-tap { left: 75%; top: 67.8%; --tap-delay: 2.95s; }
+	.preset-tap { left: 72%; top: 38.3%; --tap-delay: 4.7s; }
 	.tray .capture {
 		width: min(93cqw, calc((88cqh - 1.6rem) * var(--panel-ratio)), 360px);
 		right: 4%;
@@ -120,10 +128,12 @@ const headphones = `${import.meta.env.BASE_URL.replace(/\/$/, '')}/favicon.svg`;
 	@media (prefers-reduced-motion: no-preference) {
 		.tile { animation: open-tile 0.9s both; }
 		.quick .capture { animation: open-sheet 0.5s 0.65s cubic-bezier(.2, .75, .25, 1) both; }
-		.before { animation: switch-mode 0.18s 2.45s both; }
-		.tap { animation: touch 0.55s 2.15s both; }
+		.standard { animation: replace-frame 0.16s 2.15s both; }
+		.transparency { animation: replace-frame 0.16s 5.4s both; }
+		.eq-menu { animation: choose-preset 1.85s 3.2s both; }
+		.tap { animation: touch 0.5s var(--tap-delay) both; }
 		.tray .capture { animation: open-tray 0.24s 0.55s ease-out both; }
-		:is(.quick, .tray) :is(.tile, .capture, .before, .tap) {
+		:is(.quick, .tray) :is(.tile, .capture, .frame, .tap) {
 			animation-play-state: var(--showcase-play-state, running);
 		}
 	}
@@ -133,7 +143,11 @@ const headphones = `${import.meta.env.BASE_URL.replace(/\/$/, '')}/favicon.svg`;
 		to { opacity: 0; transform: translateY(-1rem); }
 	}
 	@keyframes open-sheet { from { transform: translateY(105%); } to { transform: none; } }
-	@keyframes switch-mode { from { opacity: 1; } to { opacity: 0; } }
+	@keyframes replace-frame { from { opacity: 1; } to { opacity: 0; } }
+	@keyframes choose-preset {
+		from, to { opacity: 0; }
+		7%, 93% { opacity: 1; }
+	}
 	@keyframes touch {
 		from { opacity: 0; transform: scale(.5); }
 		30% { opacity: .8; }

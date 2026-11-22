@@ -22,9 +22,9 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.DesktopComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.TouchInjectionScope
 import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.v2.runDesktopComposeUiTest
@@ -104,16 +104,9 @@ class OpenRoseUiTestScene(private val test: DesktopComposeUiTest) {
         }
     }
 
-    /** Touches down at [start] and drags by [delta] over [steps] moves; the finger stays down. */
-    fun pressAndDrag(start: Offset, delta: Offset, steps: Int = 10) {
-        test.onRoot().performTouchInput {
-            down(start)
-            repeat(steps) { moveBy(delta / steps.toFloat()) }
-        }
-    }
-
-    fun releaseTouch() {
-        test.onRoot().performTouchInput { up() }
+    /** Injects touch at main-window coordinates, including when a popup is covering the content. */
+    fun touchInput(block: TouchInjectionScope.() -> Unit) {
+        test.onAllNodes(isRoot())[0].performTouchInput(block)
     }
 
     fun sendKeyEvent(event: KeyEvent) {
@@ -181,9 +174,13 @@ open class OpenRoseUiTestHarness(protected val scene: OpenRoseUiTestScene) {
 
     fun scrollToText(text: String) = scene.scrollToText(text)
 
-    fun pressAndDrag(start: Offset, delta: Offset) = scene.pressAndDrag(start, delta)
+    /** Drags over ten moves, leaving the finger down until [releaseTouch]. */
+    fun pressAndDrag(start: Offset, delta: Offset) = scene.touchInput {
+        down(start)
+        repeat(10) { moveBy(delta / 10f) }
+    }
 
-    fun releaseTouch() = scene.releaseTouch()
+    fun releaseTouch() = scene.touchInput { up() }
 
     /** Every merged semantics node, main window first, then popups and dialogs; reading never settles the scene. */
     fun nodes(): List<SemanticsNode> {

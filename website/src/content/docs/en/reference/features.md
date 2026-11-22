@@ -12,7 +12,7 @@ What you see depends on the model and firmware; see [Supported earphones](../sup
 - Game mode, EQ presets, touch bindings, wear detection, prompt volume, multipoint, and audio codec preference
 - Some models offer custom EQ, gain, hearing protection, and bass boost. FIRST ANGEL offers different presets in music and game modes.
 - Astro X offers spatial and content modes, ear adaptation, and tap controls. The speakfeel2 variant of SPEAKFEEL offers independent microphone controls.
-- Android quick panel: open it from the OpenRose Quick Settings tile or the focus notification to check battery and switch noise mode, EQ preset, and game mode without opening the app
+- Open the Android quick panel from the OpenRose Quick Settings tile or the focus notification to check battery levels and change noise or game mode. Tap **均衡器** (Equalizer) and choose an EQ preset from the menu that opens next to the row. The menu closes and the panel stays open. The row shows the new preset once the earphones confirm the change.
 
 ## Appearance
 

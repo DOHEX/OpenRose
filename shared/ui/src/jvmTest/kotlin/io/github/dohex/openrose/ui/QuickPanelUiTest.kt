@@ -4,6 +4,8 @@ package io.github.dohex.openrose.ui
 
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.test.click
 import io.github.dohex.openrose.core.ConnectionPhase
 import io.github.dohex.openrose.core.ConnectionState
 import io.github.dohex.openrose.core.ControlError
@@ -64,51 +66,60 @@ class QuickPanelUiTest {
     @Test
     fun equalizerChoiceWritesThePresetAndIsSelectedOnlyOnceTheHeadsetConfirms() {
         val base = connectedI7State()
-        val presets = requireNotNull(base.device).writableEqualizerPresets()
-        assertTrue(presets.size >= 2, "the fixture model offers at least two presets")
-        val (current, other) = presets
+        val current = "pop"
+        val currentLabel = "弱水经典 · POP"
+        val other = "hifi"
+        val otherLabel = "原声再现 · HIFI"
         for (style in InterfaceStyle.entries) {
             val state = withFields(base, DeviceField.EQ to known(FieldValue.Text(current)))
             withQuickPanel(state, style) { panel ->
                 panel.render()
-                assertTrue(panel.isTagSelected(quickEqualizerTag(current)), "confirmed preset selected in $style")
-                assertFalse(panel.isTagSelected(quickEqualizerTag(other)), "other preset not selected in $style")
+                assertTrue(currentLabel in panel.tagTexts(QUICK_EQUALIZER_MENU_TAG), "current preset on the row in $style")
+                assertFalse(panel.hasRadioText(otherLabel), "options are collapsed in $style")
 
-                panel.clickTag(quickEqualizerTag(current))
+                panel.openEqualizerMenu()
+                assertTrue(panel.hasSelectedText(currentLabel), "confirmed preset selected in $style")
+                assertFalse(panel.hasSelectedText(otherLabel), "other preset not selected in $style")
+                panel.clickText(currentLabel, Role.RadioButton)
+                panel.render()
                 assertEquals(emptyList<Pair<DeviceSetting, FieldValue>>(), panel.model.settingWrites, "confirmed preset in $style")
+                assertFalse(panel.hasRadioText(currentLabel), "reselecting also closes the menu in $style")
 
-                panel.clickTag(quickEqualizerTag(other))
+                panel.openEqualizerMenu()
+                panel.clickText(otherLabel, Role.RadioButton)
+                panel.render()
                 assertEquals(
                     listOf<Pair<DeviceSetting, FieldValue>>(DeviceSetting.EQ to FieldValue.Text(other)),
                     panel.model.settingWrites,
                     "write in $style",
                 )
 
-                panel.render()
-                assertFalse(panel.isTagSelected(quickEqualizerTag(other)), "not optimistic in $style")
-                assertTrue(panel.isTagSelected(quickEqualizerTag(current)), "still the confirmed preset in $style")
+                assertFalse(panel.hasRadioText(otherLabel), "choosing closes the menu in $style")
+                assertTrue(currentLabel in panel.tagTexts(QUICK_EQUALIZER_MENU_TAG), "still the confirmed preset in $style")
 
                 panel.model.mutableState.value = withFields(base, DeviceField.EQ to known(FieldValue.Text(other)))
                 panel.render()
-                assertTrue(panel.isTagSelected(quickEqualizerTag(other)), "confirmed after read-back in $style")
-                assertFalse(panel.isTagSelected(quickEqualizerTag(current)), "previous preset released in $style")
+                assertTrue(otherLabel in panel.tagTexts(QUICK_EQUALIZER_MENU_TAG), "read-back updates the row in $style")
+                panel.openEqualizerMenu()
+                assertTrue(panel.hasSelectedText(otherLabel), "confirmed after read-back in $style")
+                assertFalse(panel.hasSelectedText(currentLabel), "previous preset released in $style")
                 assertEquals(0, panel.dismissCount, "the panel stays open after a change in $style")
             }
         }
     }
 
     @Test
-    fun equalizerChoicesAreDisabledWhileASettingIsPending() {
+    fun equalizerRowIsDisabledWhileASettingIsPending() {
         val base = connectedI7State()
         val device = requireNotNull(base.device)
-        val current = device.writableEqualizerPresets().first()
-        val pending = withFields(base, DeviceField.EQ to known(FieldValue.Text(current))).copy(
+        val current = device.writablePresetOptions().first()
+        val pending = withFields(base, DeviceField.EQ to known(FieldValue.Text(current.value))).copy(
             settingOperations = listOf(
                 SettingOperation(
                     id = 1L,
                     sessionId = device.sessionId,
                     setting = DeviceSetting.EQ,
-                    requestedValue = FieldValue.Text(device.writableEqualizerPresets().last()),
+                    requestedValue = FieldValue.Text(device.writablePresetOptions().last().value),
                     stage = SettingStage.WRITTEN,
                 ),
             ).toPersistentList(),
@@ -116,11 +127,33 @@ class QuickPanelUiTest {
         for (style in InterfaceStyle.entries) {
             withQuickPanel(pending, style) { panel ->
                 panel.render()
-                for (preset in device.writableEqualizerPresets()) {
-                    assertTrue(panel.isTagDisabled(quickEqualizerTag(preset)), "$preset disabled while pending in $style")
-                }
-                assertTrue(panel.isTagSelected(quickEqualizerTag(current)), "only the read-back is selected in $style")
+                assertTrue(panel.isTagDisabled(QUICK_EQUALIZER_MENU_TAG), "menu disabled while pending in $style")
+                assertTrue(current.label in panel.tagTexts(QUICK_EQUALIZER_MENU_TAG), "row retains the confirmed preset in $style")
                 assertTrue(panel.hasText("正在处理设置，等待设备确认"), "pending state shown in $style")
+            }
+        }
+    }
+
+    @Test
+    fun unknownEqualizerAllowsOpeningAndDismissingTheMenuWithoutSelectingAPreset() {
+        val base = connectedI7State()
+        val unknown = withFields(base, DeviceField.EQ to FieldReading.Unknown("ff"))
+        val device = requireNotNull(base.device)
+        val labels = device.writablePresetOptions().map { it.label }
+        for (style in InterfaceStyle.entries) {
+            withQuickPanel(unknown, style) { panel ->
+                panel.render()
+                assertTrue("当前状态未知" in panel.tagTexts(QUICK_EQUALIZER_MENU_TAG), "unknown preset on the row in $style")
+                panel.openEqualizerMenu()
+                for (label in labels) {
+                    assertTrue(panel.hasRadioText(label), "writable preset $label appears in $style")
+                    assertFalse(panel.hasSelectedText(label), "no confirmed preset in $style")
+                }
+                panel.tapOutsideMenu()
+                panel.render()
+                assertFalse(panel.hasRadioText(labels.first()), "dismissed the menu in $style")
+                assertEquals(0, panel.dismissCount, "dismissing the menu keeps the panel open in $style")
+                assertTrue(panel.model.settingWrites.isEmpty(), "dismissal sends no command in $style")
             }
         }
     }
@@ -159,7 +192,7 @@ class QuickPanelUiTest {
                 panel.render()
                 assertTrue(panel.hasText("降噪模式"), "noise mode stays in $style")
                 assertFalse(panel.hasText("均衡器"), "no equalizer in $style")
-                assertFalse(panel.hasTagWithPrefix("quick-eq-"), "no equalizer choices in $style")
+                assertFalse(panel.hasTag(QUICK_EQUALIZER_MENU_TAG), "no equalizer menu in $style")
                 assertFalse(panel.hasText("游戏模式"), "no game mode in $style")
             }
         }
@@ -376,5 +409,13 @@ class QuickPanelUiTest {
         val destinations = mutableListOf<WindowDestination?>()
         val openAppCount get() = destinations.size
         var dismissCount = 0
+
+        fun openEqualizerMenu() {
+            val center = tagBounds(QUICK_EQUALIZER_MENU_TAG).center
+            scene.touchInput { click(center) }
+            render()
+        }
+
+        fun tapOutsideMenu() = scene.touchInput { click(Offset(8f, 8f)) }
     }
 }

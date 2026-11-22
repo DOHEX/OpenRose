@@ -12,7 +12,6 @@ import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -21,17 +20,23 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.FilterChip
+import androidx.compose.material3.DropdownMenuGroup
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.DropdownMenuPopup
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MenuDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -46,16 +51,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.disabled
-import androidx.compose.ui.semantics.role
-import androidx.compose.ui.semantics.selected
-import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import io.github.dohex.openrose.circulation.CirculationClient
@@ -69,10 +72,12 @@ import io.github.dohex.openrose.ui.model.OpenRoseModel
 import io.github.dohex.openrose.ui.model.WindowDestination
 import io.github.dohex.openrose.ui.model.settingsFor
 import kotlinx.coroutines.launch
+import top.yukonga.miuix.kmp.basic.DropdownImpl
+import top.yukonga.miuix.kmp.basic.ListPopupColumn
+import top.yukonga.miuix.kmp.basic.PopupPositionProvider
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.window.WindowListPopup
 import kotlin.math.roundToInt
-import top.yukonga.miuix.kmp.basic.ButtonDefaults as MiuixButtonDefaults
-import top.yukonga.miuix.kmp.basic.TextButton as MiuixTextButton
 
 /** Test tag of the scrim behind the sheet; tapping it dismisses the panel. */
 internal const val QUICK_PANEL_SCRIM_TAG = "quick-panel-scrim"
@@ -80,8 +85,7 @@ internal const val QUICK_PANEL_SCRIM_TAG = "quick-panel-scrim"
 /** Test tag of the drag handle on top of the sheet; dragging it down far or fast enough dismisses the panel. */
 internal const val QUICK_PANEL_HANDLE_TAG = "quick-panel-handle"
 
-/** Test tag of the equalizer choice for [preset]. */
-internal fun quickEqualizerTag(preset: String): String = "quick-eq-$preset"
+internal const val QUICK_EQUALIZER_MENU_TAG = "quick-eq-menu"
 
 private val SheetMaxWidth = 640.dp
 private val SheetCorner = 28.dp
@@ -237,7 +241,7 @@ private fun QuickPanelContent(
         if (device.capabilities.noiseControl != null) {
             NoiseControlCard(state, device, showLevelControls = false, onSet = onSet)
         }
-        EqualizerChoices(state, device, onSet)
+        QuickEqualizerMenu(state, device, onSet)
         if (DeviceSetting.GAME_MODE in device.capabilities.writableSettings) {
             AppDashboardCard(compact = true) {
                 SettingToggleChoices(
@@ -258,63 +262,75 @@ private fun QuickPanelContent(
     TrayActions(model, state, summary, onOpenApp)
 }
 
-/** One horizontally scrolling row of the writable presets; only the device's read-back is ever selected. */
+/** The row and the menu checkmark both follow the headset's confirmed mode. */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-private fun EqualizerChoices(state: ControlState, device: DeviceState, onSet: (HeadsetCommand) -> Unit) {
-    val presets = device.writableEqualizerPresets()
-    if (presets.isEmpty()) return
-    val pending = state.hasPendingSetting(device)
-    val enabled = state.isReady(device) && !pending
+private fun QuickEqualizerMenu(state: ControlState, device: DeviceState, onSet: (HeadsetCommand) -> Unit) {
+    val options = device.writablePresetOptions()
+    if (options.isEmpty()) return
+    val enabled = state.isReady(device) && !state.hasPendingSetting(device)
     val confirmed = device.confirmedText(DeviceField.EQ)
-    AppDashboardCard {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            AppText("均衡器", Modifier.weight(1f), role = AppTextRole.Title)
-            val headerStatus = when {
-                pending -> "等待设备确认"
-                confirmed == null -> "当前状态未知"
-                else -> null
-            }
-            headerStatus?.let { AppText(it, role = AppTextRole.Summary) }
-        }
-        Row(
-            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            presets.forEach { preset ->
-                QuickChoice(
-                    label = equalizerLabel(preset, device.profile),
-                    selected = preset == confirmed,
-                    enabled = enabled,
-                    tag = quickEqualizerTag(preset),
-                    onClick = { if (preset != confirmed) onSet(HeadsetCommand.EqualizerPreset(preset)) },
-                )
-            }
-        }
+    var expanded by remember(device.sessionId, enabled) { mutableStateOf(false) }
+    fun select(preset: String) {
+        if (!enabled || !expanded) return
+        expanded = false
+        if (preset != confirmed) onSet(HeadsetCommand.EqualizerPreset(preset))
     }
-}
 
-@Composable
-private fun QuickChoice(label: String, selected: Boolean, enabled: Boolean, tag: String, onClick: () -> Unit) {
-    when (LocalInterfaceStyle.current) {
-        InterfaceStyle.MIUIX -> MiuixTextButton(
-            label,
-            onClick = onClick,
-            enabled = enabled,
-            modifier = Modifier.testTag(tag).semantics {
-                this.selected = selected
-                role = Role.RadioButton
-                if (!enabled) disabled()
-            },
-            colors = if (selected) MiuixButtonDefaults.textButtonColorsPrimary() else MiuixButtonDefaults.textButtonColors(),
-        )
+    AppDashboardCard(compact = true) {
+        Box {
+            val valueColor = appColor(if (enabled) AppColorRole.Summary else AppColorRole.DisabledContent)
+            Row(
+                Modifier.fillMaxWidth().testTag(QUICK_EQUALIZER_MENU_TAG)
+                    .clickable(enabled = enabled, role = Role.DropdownList) { expanded = true }
+                    .heightIn(min = 56.dp).padding(horizontal = 16.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                AppText("均衡器", color = if (enabled) null else valueColor)
+                AppText(
+                    confirmedChoiceValue(DeviceField.EQ, device),
+                    Modifier.weight(1f),
+                    role = AppTextRole.Summary,
+                    color = valueColor,
+                    textAlign = TextAlign.End,
+                )
+                AppIcon(RoseIcon.CHEVRON, Modifier.size(20.dp).rotate(if (expanded) -90f else 90f), tint = valueColor)
+            }
+            when (LocalInterfaceStyle.current) {
+                InterfaceStyle.MIUIX -> WindowListPopup(
+                    show = expanded,
+                    alignment = PopupPositionProvider.Align.End,
+                    enableWindowDim = false,
+                    onDismissRequest = { expanded = false },
+                ) {
+                    ListPopupColumn {
+                        options.forEachIndexed { index, option ->
+                            DropdownImpl(
+                                text = option.label,
+                                optionSize = options.size,
+                                isSelected = option.value == confirmed,
+                                index = index,
+                                onSelectedIndexChange = { select(option.value) },
+                            )
+                        }
+                    }
+                }
 
-        InterfaceStyle.MATERIAL3 -> FilterChip(
-            selected = selected,
-            onClick = onClick,
-            label = { Text(label) },
-            enabled = enabled,
-            modifier = Modifier.testTag(tag),
-        )
+                InterfaceStyle.MATERIAL3 -> DropdownMenuPopup(expanded = expanded, onDismissRequest = { expanded = false }) {
+                    DropdownMenuGroup(shapes = MenuDefaults.groupShapes(), modifier = Modifier.verticalScroll(rememberScrollState())) {
+                        options.forEachIndexed { index, option ->
+                            DropdownMenuItem(
+                                selected = option.value == confirmed,
+                                onClick = { select(option.value) },
+                                text = { Text(option.label) },
+                                selectedLeadingIcon = { AppIcon(RoseIcon.CHECK) },
+                                shapes = MenuDefaults.itemShape(index, options.size),
+                            )
+                        }
+                    }
+                }
+            }
+        }
     }
 }

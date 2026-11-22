@@ -46,7 +46,7 @@ OpenRose covers all 48 Bluetooth earphone configurations in RoseLink 3.8.6 and r
 ## Features
 
 - **Earphone controls**: battery and firmware version, ANC and transparency levels, game mode, EQ, touch bindings, wear detection, multipoint, and more; what you see depends on the model and firmware
-- **Quick panel** (Android): open it from a Quick Settings tile or the focus notification to check battery and switch noise mode, EQ preset, and game mode without opening the app
+- Open the **Android quick panel** from a Quick Settings tile or the focus notification to check battery levels, change noise or game mode, or tap the equalizer row to choose an EQ preset. The panel stays open after you choose a preset.
 - **Two UI styles**: Miuix and Material 3 Expressive; switching keeps the earphones connected
 - **Background control**: keeps the control connection after you close the app and restores it after the process is reclaimed or the phone restarts; no root needed
 - **HyperOS integration**: through the Xposed module, the system island, focus notifications, and Fusion Device Center; the system Bluetooth process can control the earphones directly

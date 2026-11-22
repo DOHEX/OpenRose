@@ -17,7 +17,9 @@ import io.github.dohex.openrose.core.writableCustomCurve
 import io.github.dohex.openrose.core.writablePresets
 
 /** The headset supplies available preset names; the application orders them for display. */
-internal fun DeviceState.writableEqualizerPresets(): List<String> = writablePresets.sortedWith(presetDisplayOrder)
+internal fun DeviceState.writablePresetOptions(): List<AppOption<String>> = writablePresets.sortedWith(presetDisplayOrder).map {
+    AppOption(it, equalizerLabel(it, profile))
+}
 
 private val presetDisplayOrder = compareBy<String>(::equalizerPresetOrder, { it })
 
@@ -41,14 +43,14 @@ internal fun EqualizerEntryRow(
     onSet: (HeadsetCommand) -> Unit,
     onOpen: () -> Unit,
 ) {
-    val presets = device.writableEqualizerPresets()
+    val presets = device.writablePresetOptions()
     if (device.writableCustomCurve != null) {
         AppArrowRow(title = "均衡器", value = confirmedChoiceValue(DeviceField.EQ, device), icon = RoseIcon.EQUALIZER, onClick = onOpen)
     } else if (presets.isNotEmpty()) {
         AppChoiceRow(
             title = "均衡器",
             valueText = confirmedChoiceValue(DeviceField.EQ, device),
-            options = device.presetOptions(presets),
+            options = presets,
             selected = device.confirmedText(DeviceField.EQ),
             enabled = state.isReady(device) && !state.hasPendingSetting(device),
             icon = RoseIcon.EQUALIZER,
@@ -64,7 +66,7 @@ internal fun EqualizerEntryRow(
 @Composable
 internal fun EqualizerPage(state: ControlState, device: DeviceState, editor: EqualizerEditor) {
     val enabled = state.isReady(device)
-    val presets = device.writableEqualizerPresets()
+    val presets = device.writablePresetOptions()
     val custom = device.writableCustomCurve
     val mode = editor.displayedMode(device.confirmedText(DeviceField.EQ))
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -77,7 +79,7 @@ internal fun EqualizerPage(state: ControlState, device: DeviceState, editor: Equ
 @Composable
 private fun EqualizerModes(
     device: DeviceState,
-    presets: List<String>,
+    presets: List<AppOption<String>>,
     custom: CustomEqualizerCapabilities?,
     mode: String?,
     enabled: Boolean,
@@ -85,8 +87,7 @@ private fun EqualizerModes(
 ) {
     AppGroup(title = "模式") {
         AppRadioGroup(
-            options = device.presetOptions(presets) +
-                listOfNotNull(custom?.let { AppOption(CUSTOM_EQUALIZER_MODE, "自定义") }),
+            options = presets + listOfNotNull(custom?.let { AppOption(CUSTOM_EQUALIZER_MODE, "自定义") }),
             selected = mode,
             enabled = enabled,
             onSelect = { choice ->
@@ -102,8 +103,6 @@ private fun EqualizerModes(
         )
     }
 }
-
-private fun DeviceState.presetOptions(presets: List<String>) = presets.map { AppOption(it, equalizerLabel(it, profile)) }
 
 @Composable
 private fun CustomCurveCard(
