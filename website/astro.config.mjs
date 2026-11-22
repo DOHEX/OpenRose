@@ -7,6 +7,7 @@ import starlightThemeRapide from 'starlight-theme-rapide';
 export default defineConfig({
 	site: process.env.SITE || 'https://dohex.github.io',
 	base: process.env.BASE || '/OpenRose',
+	trailingSlash: 'always',
 	integrations: [
 		starlight({
 			title: 'OpenRose',

@@ -25,12 +25,19 @@ const scenes = [
 			? 'On Linux, with background control on, open the tray panel to check each earbud’s charge and the selected noise mode.'
 			: '在 Linux 上开启后台控制后，从托盘打开面板，就能查看左右耳电量和当前降噪模式。',
 	},
+	{
+		id: 'circulation',
+		label: english ? 'Transfer' : '耳机流转',
+		caption: english
+			? 'Xiaomi HyperConnect moves the earphone connection between two phones through Fusion Device Center (experimental). With OpenRose over LAN, the headset card shows which device is connected. Use the card to move the connection to your computer or phone.'
+			: '小米互联通过融合设备中心在两台手机间流转耳机（实验性）。使用 OpenRose 互联时，可在耳机卡片查看所连音源，再选择「改连这台电脑」或「改连这部手机」。',
+	},
 ] as const;
 const play = english ? 'Play feature preview' : '播放亮点演示';
 const pause = english ? 'Pause feature preview' : '暂停亮点演示';
 ---
 
-<fieldset data-showcase class="showcase">
+<fieldset data-showcase class="showcase" style={`--scene-count: ${scenes.length}`}>
 	<legend class="sr-only">{english ? 'OpenRose feature preview' : 'OpenRose 亮点演示'}</legend>
 	{scenes.map(({ id, label, caption }, index) => (
 		<Fragment>
@@ -38,8 +45,8 @@ const pause = english ? 'Pause feature preview' : '暂停亮点演示';
 				aria-describedby={'caption-' + id} checked={index === 0} />
 			<label class="choice" for={'demo-' + id}>{label}</label>
 			<figure>
-				<div class="art" aria-hidden="true"><HighlightScene scene={id} /></div>
-				<figcaption id={'caption-' + id}>{caption}</figcaption>
+				<div class="art" aria-hidden="true"><HighlightScene scene={id} english={english} /></div>
+				<figcaption id={'caption-' + id} tabindex="-1">{caption}</figcaption>
 			</figure>
 		</Fragment>
 	))}
@@ -104,7 +111,7 @@ const pause = english ? 'Pause feature preview' : '暂停亮点演示';
 	.showcase {
 		position: relative;
 		display: grid;
-		grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+		grid-template-columns: repeat(var(--scene-count), minmax(0, 1fr)) auto;
 		--showcase-play-state: running;
 		--rotation-play-state: running;
 		width: 100%;
@@ -159,6 +166,8 @@ const pause = english ? 'Pause feature preview' : '暂停亮点演示';
 		font-size: 0.875rem;
 		line-height: 1.5;
 	}
+	/* The caption takes pointer focus without a tab stop. Keyboard browsing keeps its caret. */
+	figcaption:focus:not(:focus-visible) { caret-color: transparent; }
 	.choice, .playback {
 		grid-row: 3;
 		display: grid;
@@ -203,7 +212,7 @@ const pause = english ? 'Pause feature preview' : '暂停亮点演示';
 		to { transform: scaleX(1); }
 	}
 	.playback {
-		grid-column: 4;
+		grid-column: -2;
 		width: 2.75rem;
 		border: 0;
 		background: transparent;
@@ -212,6 +221,9 @@ const pause = english ? 'Pause feature preview' : '暂停亮点演示';
 	.playback[hidden], .play-icon { display: none; }
 	.showcase:not([data-playback='auto']) .pause-icon { display: none; }
 	.showcase:not([data-playback='auto']) .play-icon { display: inline; }
+	@media (max-width: 24rem) {
+		.choice { margin-inline: 1px; padding-inline: 1px; text-wrap: balance; }
+	}
 	@media (prefers-reduced-motion: reduce) {
 		.choice::after { display: none; }
 	}

@@ -32,11 +32,21 @@ import { Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
 	<Card title="HyperOS 系统集成" icon="star">
 		经 Xposed 模块接入超级岛、焦点通知和融合设备中心；模块控制下由系统蓝牙进程连接耳机，不需要打开 OpenRose。
 	</Card>
+	<Card title="小米互联" icon="mobile-android">
+		两台受支持的 HyperOS 设备登录同一小米账号并启用模块控制后，可在融合设备中心把耳机接到另一台设备。双机流转为实验性功能，真机未验证。
+
+		[查看 HyperOS 流转条件](guides/hyperos-integration/#耳机流转实验性)
+	</Card>
+	<Card title="OpenRose 互联" icon="desktop">
+		手机启用模块控制，与同一局域网内的电脑完成流转配对，就能把耳机接到电脑或接回手机。小米 14 与 Linux 已用 EarFree i5 实测双向流转，Windows 真机未验证。
+
+		[Linux 流转配对](guides/linux-desktop/#流转配对) · [Windows 流转配对](guides/windows-desktop/)
+	</Card>
 	<Card title="两种界面风格" icon="laptop">
 		Miuix 与 Material 3 Expressive，切换时不断开耳机。支持 Android，以及通过 BlueZ 控制耳机的 Linux 桌面版。
 	</Card>
 	<Card title="本地与开源" icon="open-book">
-		通过本地蓝牙直接与耳机通信，不需要任何账号。以 GPL-3.0-or-later 开源。
+		在本机通过蓝牙控制耳机，无需账号。以 GPL-3.0-or-later 开源。
 	</Card>
 </CardGrid>
 

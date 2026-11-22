@@ -32,11 +32,21 @@ Most features have not been fully tested on real hardware; see [Supported earpho
 	<Card title="HyperOS integration" icon="star">
 		Through the Xposed module: system island, focus notifications, and Fusion Device Center. Under module control, the system Bluetooth process connects to the earphones without OpenRose open.
 	</Card>
+	<Card title="Xiaomi HyperConnect" icon="mobile-android">
+		Sign in to the same Xiaomi account on two supported HyperOS devices and enable module control on both. You can then move the earphones to the other device from Fusion Device Center. This feature is experimental and awaits testing on two HyperOS devices.
+
+		[HyperOS transfer requirements](guides/hyperos-integration/#headset-circulation-experimental)
+	</Card>
+	<Card title="OpenRose over LAN" icon="desktop">
+		Enable module control on your phone and pair it with your computer on the same local network. You can then move the earphones to the computer or back to the phone. Transfers in both directions have been tested with EarFree i5 on Xiaomi 14 and Linux. Windows hardware testing is pending.
+
+		[Pair with Linux](guides/linux-desktop/#pair-a-phone-and-desktop) · [Pair with Windows](guides/windows-desktop/)
+	</Card>
 	<Card title="Two UI styles" icon="laptop">
 		Miuix and Material 3 Expressive; switching keeps the earphones connected. Runs on Android, and on the Linux desktop with control through BlueZ.
 	</Card>
 	<Card title="Local and open source" icon="open-book">
-		Talks to the earphones directly over local Bluetooth; no account needed. Licensed under GPL-3.0-or-later.
+		Local earphone controls work over Bluetooth without an account. Licensed under GPL-3.0-or-later.
 	</Card>
 </CardGrid>
 

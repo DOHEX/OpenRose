@@ -50,6 +50,7 @@ OpenRose covers all 48 Bluetooth earphone configurations in RoseLink 3.8.6 and r
 - **Two UI styles**: Miuix and Material 3 Expressive; switching keeps the earphones connected
 - **Background control**: keeps the control connection after you close the app and restores it after the process is reclaimed or the phone restarts; no root needed
 - **HyperOS integration**: through the Xposed module, the system island, focus notifications, and Fusion Device Center; the system Bluetooth process can control the earphones directly
+- **Xiaomi HyperConnect** lets you move the earphones between two HyperOS devices on the same Xiaomi account. Enable module control on both and use Fusion Device Center to move the connection. This feature is experimental and awaits verification on two HyperOS devices.
 - **OpenRose over LAN** connects a phone running module control to a Linux or Windows PC on the same local network. Once paired, the i5 card in My Earphones, the desktop tray, and the phone quick panel shows the current audio source when known. Change noise mode directly, or use the card to move the audio connection to the phone or computer you are using. Transfers in both directions and remote noise control have been tested with the i5 on Xiaomi 14 and Linux. Windows hardware testing is pending.
 - **Local control**: controls earphones over Bluetooth without an account.
 

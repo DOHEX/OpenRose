@@ -1,4 +1,5 @@
 ---
+import CirculationPreview from './CirculationPreview.astro';
 import IslandPreview from './IslandPreview.astro';
 import PhoneFrame from './PhoneFrame.astro';
 import standard from '../assets/showcase/quick-standard.webp';
@@ -7,13 +8,17 @@ import eqMenu from '../assets/showcase/quick-eq-menu.webp';
 import eqHifi from '../assets/showcase/quick-eq-hifi.webp';
 import tray from '../assets/showcase/tray.webp';
 
-interface Props { scene: 'quick' | 'island' | 'tray' }
-const { scene } = Astro.props;
-// The same headphone silhouette is used for the Android tile and the connected tray icon.
+interface Props {
+	scene: 'quick' | 'island' | 'tray' | 'circulation';
+	english: boolean;
+}
+const { scene, english } = Astro.props;
+// The Android tile, tray and circulation diagram share the earphone icon.
 const headphones = `${import.meta.env.BASE_URL.replace(/\/$/, '')}/favicon.svg`;
 ---
 
 {scene === 'island' && <IslandPreview />}
+{scene === 'circulation' && <CirculationPreview english={english} headphones={headphones} />}
 {scene === 'quick' && (
 	<PhoneFrame variant="quick">
 		<div lang="zh-CN" class="quick">
