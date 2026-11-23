@@ -49,8 +49,8 @@ internal fun decodeCapabilities(wire: Wire): DeviceCapabilities = wire.asObj().l
         hearingProtectionLevels = node.arr("hearingProtection").map { it.asInt() }.toPersistentSet(),
         bassBoostLevels = node.arr("bassBoost").map { it.asInt() }.toPersistentSet(),
         promptLanguages = node.arr("promptLanguages").map { it.asStr() }.toPersistentSet(),
-        spatialModes = node.optional("spatialModes")?.asArr().orEmpty().map { it.asStr() }.toPersistentSet(),
-        spatialContents = node.optional("spatialContents")?.asArr().orEmpty().map { it.asStr() }.toPersistentSet(),
+        spatialModes = node.arr("spatialModes").map { it.asStr() }.toPersistentSet(),
+        spatialContents = node.arr("spatialContents").map { it.asStr() }.toPersistentSet(),
     )
 }
 

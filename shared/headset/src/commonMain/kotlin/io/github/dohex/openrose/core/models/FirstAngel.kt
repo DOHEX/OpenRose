@@ -1,7 +1,7 @@
 package io.github.dohex.openrose.core.models
 
 import io.github.dohex.openrose.core.EqualizerCapabilities
-import io.github.dohex.openrose.core.firmwareComparisonInteger
+import io.github.dohex.openrose.core.promptVolumeLevels
 import io.github.dohex.openrose.core.protocol.BatteryLayout
 import kotlinx.collections.immutable.persistentSetOf
 
@@ -16,7 +16,7 @@ internal val firstAngel = rsV2Model(
 ) { firmware ->
     rsV2Capabilities(
         layout = BatteryLayout.SINGLE_UNIT,
-        promptVolume = if ((firmwareComparisonInteger(firmware) ?: 0) >= 510) 0..5 else 1..5,
+        promptVolume = promptVolumeLevels(firmware, offSince = 510),
         equalizer = EqualizerCapabilities(persistentSetOf("pop", "hifi"), rsV2Curve),
         touch = rsV2Touch(noiseCycle = false),
         touchEnabled = true,

@@ -36,6 +36,7 @@ import io.github.dohex.openrose.core.DeviceSetting
 import io.github.dohex.openrose.core.DeviceState
 import io.github.dohex.openrose.core.HeadsetCommand
 import io.github.dohex.openrose.core.NoiseControlCapabilities
+import io.github.dohex.openrose.core.NoiseMode
 import io.github.dohex.openrose.core.TouchSlot
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.FieldReading
@@ -104,7 +105,7 @@ private fun NoiseCycleRow(
     val flags = (device.knownValue(DeviceField.NOISE_CYCLE) as? FieldValue.NoiseCycle)?.flags
     val cycleKnown = flags != null && capabilities.cycleModes.all { flags[it] != null }
     val cycleModes = remember(capabilities.cycleModes) {
-        capabilities.cycleModes.sortedWith(compareBy({ noiseModeOrder(it) }, { it }))
+        capabilities.cycleModes.sortedWith(compareBy({ NoiseMode.displayOrder(it) }, { it }))
             .map { mode -> AppOption(mode, noiseModeLabel(mode)) }
     }
     val checked = remember(cycleModes, flags) {
@@ -304,7 +305,6 @@ private fun TouchBindingGroup(
 ) {
     if (DeviceSetting.TOUCH_BINDING !in device.capabilities.writableSettings) return
     val touch = device.capabilities.touchControl ?: return
-    if (touch.actions.isEmpty()) return
     val slots = touch.slots.sortedWith(
         compareBy<TouchSlot>({ touchSideOrder(it.side) }, { touchGestureOrder(it.gesture) }, { it.gesture }),
     )

@@ -25,9 +25,9 @@ internal fun DeviceControlCard(
 private fun PromptSettings(state: ControlState, device: DeviceState, onSet: (HeadsetCommand) -> Unit) {
     val writable = device.capabilities.writableSettings
     val volumeLevels = device.capabilities.promptVolumeLevels
-    val hasVolume = DeviceSetting.PROMPT_VOLUME in writable && volumeLevels.isNotEmpty()
+    val hasVolume = DeviceSetting.PROMPT_VOLUME in writable
     val languages = device.capabilities.promptLanguages
-    val hasLanguage = DeviceSetting.PROMPT_LANGUAGE in writable && languages.isNotEmpty()
+    val hasLanguage = DeviceSetting.PROMPT_LANGUAGE in writable
     val hasPrompt = hasVolume || hasLanguage
     if (hasPrompt) {
         AppGroup(title = "提示与音量") {
@@ -63,7 +63,7 @@ private fun PromptSettings(state: ControlState, device: DeviceState, onSet: (Hea
 private fun BassBoostSettings(state: ControlState, device: DeviceState, onSet: (HeadsetCommand) -> Unit) {
     val writable = device.capabilities.writableSettings
     val bassLevels = device.capabilities.bassBoostLevels
-    val hasBass = DeviceSetting.BASS_BOOST in writable && bassLevels.isNotEmpty()
+    val hasBass = DeviceSetting.BASS_BOOST in writable
     if (hasBass) {
         val confirmed = device.confirmedBassBoostLevel
         AppGroup(title = "音效") {
@@ -84,7 +84,7 @@ private fun BassBoostSettings(state: ControlState, device: DeviceState, onSet: (
 private fun AudioConnectionSettings(state: ControlState, device: DeviceState, onSet: (HeadsetCommand) -> Unit) {
     val writable = device.capabilities.writableSettings
     val audio = device.capabilities.audioControl
-    val hasAudio = DeviceSetting.AUDIO_MODE in writable && audio != null && audio.modes.isNotEmpty()
+    val hasAudio = DeviceSetting.AUDIO_MODE in writable && audio != null
     val hasMultipoint = DeviceSetting.MULTIPOINT in writable
     val hasSpatialAudio = DeviceSetting.SPATIAL_AUDIO in writable
     val hasAudioControls = hasAudio || hasMultipoint || hasSpatialAudio || writable.any { it in additionalAudioSettings }
@@ -143,9 +143,9 @@ private fun AudioConnectionSettings(state: ControlState, device: DeviceState, on
 private fun HearingSettings(state: ControlState, device: DeviceState, onSet: (HeadsetCommand) -> Unit) {
     val writable = device.capabilities.writableSettings
     val gainLevels = device.capabilities.gainLevels
-    val hasGain = DeviceSetting.GAIN in writable && gainLevels.isNotEmpty()
+    val hasGain = DeviceSetting.GAIN in writable
     val protectionLevels = device.capabilities.hearingProtectionLevels
-    val hasProtection = DeviceSetting.HEARING_PROTECTION in writable && protectionLevels.isNotEmpty()
+    val hasProtection = DeviceSetting.HEARING_PROTECTION in writable
     if (hasGain || hasProtection) {
         AppGroup(title = "输出与保护") {
             if (hasGain) {

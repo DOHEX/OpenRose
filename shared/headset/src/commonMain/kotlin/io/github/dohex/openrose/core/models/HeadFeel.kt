@@ -9,7 +9,7 @@ import io.github.dohex.openrose.core.NoiseControlCapabilities
 import io.github.dohex.openrose.core.NoiseLevelCapabilities
 import io.github.dohex.openrose.core.TouchControlCapabilities
 import io.github.dohex.openrose.core.TouchSlot
-import io.github.dohex.openrose.core.firmwareComparisonInteger
+import io.github.dohex.openrose.core.firmwareAtLeast
 import io.github.dohex.openrose.core.protocol.BatteryLayout
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.FieldValue
@@ -78,7 +78,7 @@ private val headFeelTouchControl = TouchControlCapabilities(
 
 private fun headFeelCapabilities(firmware: FieldValue.Firmware?): DeviceCapabilities {
     // RoseLink gates both the gain level and the custom EQ curve on firmware 130 (customSinceVersion / field_7).
-    val firmwareSince130 = (firmwareComparisonInteger(firmware) ?: 0) >= 130
+    val firmwareSince130 = firmwareAtLeast(firmware, 130) == true
     val settings = persistentSetOf(
         DeviceSetting.NOISE_MODE, DeviceSetting.NOISE_CYCLE, DeviceSetting.EQ, DeviceSetting.GAME_MODE,
         DeviceSetting.AUDIO_MODE, DeviceSetting.MULTIPOINT, DeviceSetting.TOUCH_BINDING, DeviceSetting.TOUCH_ENABLED,

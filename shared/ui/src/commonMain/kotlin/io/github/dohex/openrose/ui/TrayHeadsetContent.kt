@@ -108,7 +108,7 @@ internal fun RemoteHeadsetReadings(headset: RemoteHeadset, enabled: Boolean = tr
 }
 
 internal fun trayNoiseModes(modes: List<NoiseMode>, confirmed: NoiseMode?, enabled: Boolean): List<TrayNoiseMode> {
-    val ordered = modes.sortedBy { noiseModeOrder(it.id) }
+    val ordered = modes.sortedBy(NoiseMode::ordinal)
     return ordered.map { mode -> TrayNoiseMode(mode, noiseModeLabel(mode.id), mode == confirmed, enabled) }
 }
 

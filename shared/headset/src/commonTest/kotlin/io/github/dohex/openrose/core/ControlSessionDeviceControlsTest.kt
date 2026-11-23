@@ -340,9 +340,10 @@ class ControlSessionDeviceControlsTest {
                 assertEquals(ControlErrorCode.UNSUPPORTED, assertIs<OperationResult.Failure>(session.set(HeadsetCommand.Gain(1))).error.code)
                 assertEquals(ControlErrorCode.UNSUPPORTED, assertIs<OperationResult.Failure>(session.set(HeadsetCommand.HearingProtection(1))).error.code)
                 assertEquals(ControlErrorCode.UNSUPPORTED, assertIs<OperationResult.Failure>(session.set(HeadsetCommand.PromptVolume(0))).error.code)
-                assertEquals(ControlErrorCode.INVALID_ARGUMENT, assertIs<OperationResult.Failure>(session.set(HeadsetCommand.PromptVolume(6))).error.code)
+                // The firmware is unread, so prompt volume is not writable at all yet.
+                assertEquals(ControlErrorCode.UNSUPPORTED, assertIs<OperationResult.Failure>(session.set(HeadsetCommand.PromptVolume(6))).error.code)
                 assertEquals(persistentSetOf(), session.state.value.device?.capabilities?.gainLevels)
-                assertEquals(persistentSetOf(1, 2, 3, 4, 5), session.state.value.device?.capabilities?.promptVolumeLevels)
+                assertEquals(persistentSetOf(), session.state.value.device?.capabilities?.promptVolumeLevels)
             }
             assertEquals(count, link.writes.size)
             assertTrue(session.state.value.settingOperations.isEmpty())

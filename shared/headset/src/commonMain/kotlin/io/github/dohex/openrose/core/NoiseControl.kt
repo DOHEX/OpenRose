@@ -2,18 +2,22 @@ package io.github.dohex.openrose.core
 
 import kotlinx.collections.immutable.PersistentSet
 
+/** Declaration order is the display and cycling order everywhere the modes are listed. */
 enum class NoiseMode(val id: String) {
     NORMAL("normal"),
     ANC("anc"),
     TRANSPARENCY("transparency"),
     WIND("wind"),
     AUTO("auto"),
-    DEEP("deep"),
     DYNAMIC("dynamic"),
+    DEEP("deep"),
     ;
 
     companion object {
         fun fromId(id: String): NoiseMode? = entries.firstOrNull { it.id == id }
+
+        /** Position of a mode id in the display order; an id this build does not know sorts after all known ones. */
+        fun displayOrder(id: String): Int = fromId(id)?.ordinal ?: entries.size
     }
 }
 

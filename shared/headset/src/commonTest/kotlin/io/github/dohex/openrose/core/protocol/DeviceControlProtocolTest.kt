@@ -37,7 +37,8 @@ class DeviceControlProtocolTest {
         assertEquals(AudioControlCapabilities(persistentSetOf("aac_sbc", "ldac"), true), i5.audioControl)
         assertEquals(AudioControlCapabilities(persistentSetOf("aac_sbc", "ldac", "lhdc", "lc3"), false), i7.audioControl)
         assertEquals(setOf(1, 2, 3, 4, 5), i5.promptVolumeLevels)
-        assertEquals(setOf(1, 2, 3, 4, 5), i7.promptVolumeLevels)
+        // The i7 prompt-volume levels depend on firmware, which is unread here.
+        assertEquals(emptySet(), i7.promptVolumeLevels)
     }
 
     @Test
@@ -152,6 +153,7 @@ class DeviceControlProtocolTest {
             assertEquals(mapOf(DeviceField.PROMPT_VOLUME to FieldValue.Number(level)), setting.expectedValues)
         }
         // i7 sends the UI level directly; only its mute value requires firmware 304.
+        val fw213 = FieldValue.Firmware(listOf(2, 1, 3), "213")
         for ((level, tx) in listOf(
             1 to "ff00022e0130aa",
             2 to "ff00022e0231aa",
@@ -162,6 +164,7 @@ class DeviceControlProtocolTest {
             val setting = createProtocolCodec(ModelProfile.I7_RS_V2).prepareSetting(
                 DeviceSetting.PROMPT_VOLUME,
                 FieldValue.Number(level),
+                fw213,
             )
             assertEquals(tx, setting.writeFrames.single().hex())
             assertEquals("ff0102fa2e2aaa", setting.readback.bytes.hex())
@@ -169,7 +172,7 @@ class DeviceControlProtocolTest {
             assertEquals(mapOf(DeviceField.PROMPT_VOLUME to FieldValue.Number(level)), setting.expectedValues)
         }
         assertFailsWith<UnsupportedOperationException> {
-            createProtocolCodec(ModelProfile.I7_RS_V2).prepareSetting(DeviceSetting.PROMPT_VOLUME, FieldValue.Number(0))
+            createProtocolCodec(ModelProfile.I7_RS_V2).prepareSetting(DeviceSetting.PROMPT_VOLUME, FieldValue.Number(0), fw213)
         }
     }
 

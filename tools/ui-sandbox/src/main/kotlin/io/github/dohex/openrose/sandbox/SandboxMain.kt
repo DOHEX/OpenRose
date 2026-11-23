@@ -282,11 +282,12 @@ private fun Toggle(title: String, checked: Boolean, onChange: (Boolean) -> Unit)
     }
 }
 
-/** What the firmware text resolves to, and the settings the model then offers, so firmware gates are visible. */
+/** The firmware text and, once a device is connected, the settings its real readings make writable. */
 private fun capabilitySummary(scenario: SandboxScenario, capabilities: DeviceCapabilities?): String {
     val firmware = scenario.firmwareValue
-    val writable = (capabilities ?: scenario.profile.capabilities(firmware)).writableSettings.sortedBy { it.ordinal }
     val read = firmware?.let { "固件 ${it.displayText}" } ?: "未读取固件"
+    if (capabilities == null) return "$read · 未连接"
+    val writable = capabilities.writableSettings.sortedBy { it.ordinal }
     return "$read · 可写 ${writable.size} 项：${writable.joinToString("、") { it.name.lowercase() }}"
 }
 

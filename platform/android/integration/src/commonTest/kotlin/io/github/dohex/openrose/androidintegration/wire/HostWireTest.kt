@@ -176,6 +176,29 @@ class HostWireTest {
     }
 
     @Test
+    fun anOwnerPayloadMissingAFieldTheEncoderAlwaysWritesIsRejected() {
+        val profile = ModelProfile.ASTRO_X_RS_V2
+        val device = DeviceState(
+            deviceId = reference.deviceId,
+            sessionId = reference.sessionId,
+            profile = profile,
+            capabilities = profile.capabilities(),
+            fields = persistentMapOf(),
+        )
+        val facts = HostPlatformFacts(PermissionState.GRANTED, TransportAvailability.Available, PermissionState.DENIED)
+        val state = ControlState(platform = PlatformState(PermissionState.NOT_REQUIRED), device = device)
+
+        val owned = ControlWire.encodeOwned(facts, state) as Wire.Obj
+        assertFailsWith<WireFormatException> { ControlWire.decodeOwned(Wire.Obj(owned.fields - "scanPermission")) }
+
+        val capabilities = encode(device.capabilities) as Wire.Obj
+        assertEquals(device.capabilities, decodeCapabilities(capabilities))
+        for (key in listOf("spatialModes", "spatialContents")) {
+            assertFailsWith<WireFormatException> { decodeCapabilities(Wire.Obj(capabilities.fields - key)) }
+        }
+    }
+
+    @Test
     fun aCommandAddressedToAGenerationKeepsBothParts() {
         val command = HostCommand.ClaimPrompt(reference, "prompt-1")
 

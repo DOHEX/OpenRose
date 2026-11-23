@@ -8,7 +8,8 @@ import io.github.dohex.openrose.core.EqualizerCapabilities
 import io.github.dohex.openrose.core.NoiseControlCapabilities
 import io.github.dohex.openrose.core.NoiseLevelCapabilities
 import io.github.dohex.openrose.core.TouchControlCapabilities
-import io.github.dohex.openrose.core.firmwareComparisonInteger
+import io.github.dohex.openrose.core.firmwareAtLeast
+import io.github.dohex.openrose.core.promptVolumeLevels
 import io.github.dohex.openrose.core.protocol.BatteryLayout
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.FieldValue
@@ -45,9 +46,8 @@ internal val earFeelI7 = ModelSpec(
 )
 
 private fun earFeelI7Capabilities(firmware: FieldValue.Firmware?): DeviceCapabilities {
-    // Firmware gates compare RoseLink's concatenated decimal text; unread or malformed firmware opens none of them.
-    val version = firmwareComparisonInteger(firmware) ?: 0
-    val gainAndProtection = version >= 213
+    // Unread or malformed firmware opens no gate and leaves the prompt-volume levels unknown.
+    val gainAndProtection = firmwareAtLeast(firmware, 213) == true
     val presets = persistentSetOf("pop", "hifi", "rock", "light")
     return DeviceCapabilities(
         readableFields = rsReadings(
@@ -82,7 +82,7 @@ private fun earFeelI7Capabilities(firmware: FieldValue.Firmware?): DeviceCapabil
             transparencyLevel = NoiseLevelCapabilities(persistentSetOf(1, 3, 5), persistentSetOf("transparency")),
         ),
         equalizer = EqualizerCapabilities(
-            if (version >= 152) presets.adding("eap") else presets,
+            if (firmwareAtLeast(firmware, 152) == true) presets.adding("eap") else presets,
             // The i7 panel's band labels and slider bounds, not measured acoustic filter centers.
             CustomEqualizerCapabilities(persistentListOf(20, 100, 300, 500, 1000, 2000, 3000, 5000, 8000, 15000), -6, 6),
         ),
@@ -101,7 +101,7 @@ private fun earFeelI7Capabilities(firmware: FieldValue.Firmware?): DeviceCapabil
             ),
         ),
         audioControl = AudioControlCapabilities(persistentSetOf("aac_sbc", "ldac", "lhdc", "lc3"), multipointCoupled = false),
-        promptVolumeLevels = (if (version >= 304) 0..5 else 1..5).toPersistentSet(),
+        promptVolumeLevels = promptVolumeLevels(firmware, offSince = 304).toPersistentSet(),
         gainLevels = if (gainAndProtection) (0..2).toPersistentSet() else persistentSetOf(),
         hearingProtectionLevels = if (gainAndProtection) (0..6).toPersistentSet() else persistentSetOf(),
     )

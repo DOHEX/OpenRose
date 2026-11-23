@@ -4,8 +4,10 @@ import io.github.dohex.openrose.core.DeviceSetting
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class AdvancedAudioProtocolTest {
     @Test
@@ -44,7 +46,10 @@ class AdvancedAudioProtocolTest {
         assertEquals(6, custom.maxGain)
         assertEquals(emptySet(), ModelProfile.I7_RS_V2.capabilities().gainLevels)
         assertEquals(emptySet(), ModelProfile.I7_RS_V2.capabilities().hearingProtectionLevels)
-        assertEquals(setOf(1, 2, 3, 4, 5), ModelProfile.I7_RS_V2.capabilities().promptVolumeLevels)
+        // Unread firmware leaves the gated prompt-volume levels unknown rather than assuming the lowest version.
+        assertEquals(emptySet(), ModelProfile.I7_RS_V2.capabilities().promptVolumeLevels)
+        assertFalse(DeviceSetting.PROMPT_VOLUME in ModelProfile.I7_RS_V2.capabilities().writableSettings)
+        assertTrue(DeviceField.PROMPT_VOLUME in ModelProfile.I7_RS_V2.capabilities().readableFields)
         for ((parts, gainAllowed, muteAllowed) in listOf(
             Triple(listOf(2, 1, 2), false, false), Triple(listOf(2, 1, 3), true, false),
             Triple(listOf(3, 0, 3), true, false), Triple(listOf(3, 0, 4), true, true),
@@ -58,7 +63,13 @@ class AdvancedAudioProtocolTest {
             val i5 = ModelProfile.I5_ZT.capabilities(firmware)
             assertEquals(if (gainAllowed) setOf(0, 1, 2) else emptySet(), i7.gainLevels, "$parts")
             assertEquals(if (gainAllowed) setOf(0, 1, 2, 3, 4, 5, 6) else emptySet(), i7.hearingProtectionLevels, "$parts")
-            assertEquals(if (muteAllowed) setOf(0, 1, 2, 3, 4, 5) else setOf(1, 2, 3, 4, 5), i7.promptVolumeLevels, "$parts")
+            val wellFormed = parts.size == 3 && parts.all { it in 0..255 }
+            val expectedPrompt = when {
+                muteAllowed -> setOf(0, 1, 2, 3, 4, 5)
+                wellFormed -> setOf(1, 2, 3, 4, 5)
+                else -> emptySet()
+            }
+            assertEquals(expectedPrompt, i7.promptVolumeLevels, "$parts")
             assertEquals(emptySet(), i5.gainLevels)
             assertEquals(emptySet(), i5.hearingProtectionLevels)
             assertEquals(setOf(1, 2, 3, 4, 5), i5.promptVolumeLevels)
@@ -117,13 +128,7 @@ class AdvancedAudioProtocolTest {
     @Test
     fun i7PromptVolumeGatesOnlyMuteOnFirmware304() {
         val fw213 = FieldValue.Firmware(listOf(2, 1, 3), "213")
-        // The firmware gate applies only to the mute value. Basic levels work with unknown firmware.
-        val basicPrompt = createProtocolCodec(ModelProfile.I7_RS_V2)
-            .prepareSetting(DeviceSetting.PROMPT_VOLUME, FieldValue.Number(5))
-        assertEquals("ff00022e0534aa", basicPrompt.writeFrames.single().hex())
-        assertEquals("ff0102fa2e2aaa", basicPrompt.readback.bytes.hex())
-        assertEquals(mapOf(DeviceField.PROMPT_VOLUME to FieldValue.Number(5)), basicPrompt.expectedValues)
-
+        // The firmware gate applies only to the mute value.
         val promptCodec = createProtocolCodec(ModelProfile.I7_RS_V2)
         assertFailsWith<UnsupportedOperationException> {
             promptCodec.prepareSetting(DeviceSetting.PROMPT_VOLUME, FieldValue.Number(0), fw213)

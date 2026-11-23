@@ -1,6 +1,5 @@
 package io.github.dohex.openrose.androidintegration
 
-import io.github.dohex.openrose.core.ConnectionState
 import io.github.dohex.openrose.core.ControlError
 import io.github.dohex.openrose.core.ControlErrorCode
 import io.github.dohex.openrose.core.ControlRuntime
@@ -115,11 +114,8 @@ class SystemEntryRuntime(
 
     override fun readSession(reference: SessionReference): SessionSnapshotResult {
         val captured = control.state.value
-        if (captured.connection !is ConnectionState.Connected) {
-            return SessionSnapshotResult.Failure(ControlError(ControlErrorCode.NOT_READY, "设备会话尚未就绪"))
-        }
         val current = captured.readySession
-            ?: return SessionSnapshotResult.Failure(ControlError(ControlErrorCode.NOT_READY, "当前设备状态与连接会话不一致"))
+            ?: return SessionSnapshotResult.Failure(ControlError(ControlErrorCode.NOT_READY, "设备会话尚未就绪"))
         if (reference != current) return SessionSnapshotResult.Failure(STALE_REFERENCE)
         return SessionSnapshotResult.Available(requireNotNull(captured.device), present(captured).detached())
     }

@@ -285,7 +285,13 @@ class ControlSessionAdvancedAudioTest {
             val capabilities = requireNotNull(session.state.value.device).capabilities
             assertEquals(if (gainAllowed) setOf(0, 1, 2) else emptySet(), capabilities.gainLevels, "$firmware gain")
             assertEquals(if (gainAllowed) (0..6).toSet() else emptySet(), capabilities.hearingProtectionLevels, "$firmware protection")
-            assertEquals(if (muteAllowed) (0..5).toSet() else (1..5).toSet(), capabilities.promptVolumeLevels, "$firmware prompt")
+            // Unread firmware leaves the levels unknown, and prompt volume is not writable until they are known.
+            val promptLevels = when {
+                muteAllowed -> (0..5).toSet()
+                firmware == null -> emptySet()
+                else -> (1..5).toSet()
+            }
+            assertEquals(promptLevels, capabilities.promptVolumeLevels, "$firmware prompt")
             val before = link.writes.size
             val gainResult = session.set(HeadsetCommand.Gain(if (gainAllowed) 3 else 0))
             val protectionResult = session.set(HeadsetCommand.HearingProtection(if (gainAllowed) 7 else 6))
@@ -300,11 +306,8 @@ class ControlSessionAdvancedAudioTest {
                 assertIs<OperationResult.Failure>(protectionResult).error.code,
                 "$firmware protection",
             )
-            assertEquals(
-                ControlErrorCode.INVALID_ARGUMENT,
-                assertIs<OperationResult.Failure>(promptResult).error.code,
-                "$firmware prompt",
-            )
+            val badLevel = if (firmware == null) ControlErrorCode.UNSUPPORTED else ControlErrorCode.INVALID_ARGUMENT
+            assertEquals(badLevel, assertIs<OperationResult.Failure>(promptResult).error.code, "$firmware prompt")
             if (!muteAllowed) {
                 assertEquals(
                     ControlErrorCode.UNSUPPORTED,
@@ -313,7 +316,7 @@ class ControlSessionAdvancedAudioTest {
                 )
             }
             assertEquals(
-                ControlErrorCode.INVALID_ARGUMENT,
+                badLevel,
                 assertIs<OperationResult.Failure>(session.set(HeadsetCommand.PromptVolume(-1))).error.code,
                 "$firmware negative prompt",
             )

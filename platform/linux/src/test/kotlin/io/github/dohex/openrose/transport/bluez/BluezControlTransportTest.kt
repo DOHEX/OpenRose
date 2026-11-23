@@ -577,6 +577,17 @@ class BluezControlTransportTest {
         assertEquals(emptyList(), transport.bondedDevices())
         transport.close()
     }
+
+    @Test
+    fun failedPairedQueryPropagatesInsteadOfReportingNoBondedDevices() = runBlocking {
+        val bus = FakeBluezBus().also { it.snapshot = baseObjects() }
+        val transport = BluezControlTransport(this, bus)
+        transport.awaitInitialization()
+        assertEquals(1, transport.bondedDevices().size)
+        bus.objectsFailure = IllegalStateException("object tree read failed")
+        assertFailsWith<IllegalStateException> { transport.bondedDevices() }
+        transport.close()
+    }
 }
 
 private const val ADAPTER_PATH = "/org/bluez/hci0"

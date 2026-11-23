@@ -2,7 +2,7 @@ package io.github.dohex.openrose.core.models
 
 import io.github.dohex.openrose.core.EqualizerCapabilities
 import io.github.dohex.openrose.core.TouchSlot
-import io.github.dohex.openrose.core.firmwareComparisonInteger
+import io.github.dohex.openrose.core.firmwareAtLeast
 import io.github.dohex.openrose.core.protocol.BatteryLayout
 import kotlinx.collections.immutable.persistentSetOf
 
@@ -16,7 +16,7 @@ internal val astroX = rsV2Model(
     nameBrand = "astro", nameModelNumber = "astrox", nameRequiresModel = true,
     equalizerPresetLabels = mapOf("pop" to "BASS", "hifi" to "BALANCE", "rock" to "BASS+"),
 ) { firmware ->
-    val hasGainAndProtection = (firmwareComparisonInteger(firmware) ?: 0) >= 152
+    val hasGainAndProtection = firmwareAtLeast(firmware, 152) == true
     val touch = rsV2Touch(noiseCycle = false)
     rsV2Capabilities(
         layout = BatteryLayout.EARBUDS_AND_CASE,

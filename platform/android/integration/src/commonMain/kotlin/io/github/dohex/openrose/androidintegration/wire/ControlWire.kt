@@ -47,7 +47,7 @@ object ControlWire {
             platform = HostPlatformFacts(
                 node.field("permission").asEnum(),
                 decodeTransport(node.field("transport")),
-                node.optional("scanPermission")?.asEnum<PermissionState>() ?: PermissionState.NOT_REQUIRED,
+                node.field("scanPermission").asEnum(),
             ),
             state = ControlState(
                 platform = io.github.dohex.openrose.core.PlatformState(PermissionState.NOT_REQUIRED),

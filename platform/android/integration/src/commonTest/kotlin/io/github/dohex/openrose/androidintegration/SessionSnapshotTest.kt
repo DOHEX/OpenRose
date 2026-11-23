@@ -1,7 +1,11 @@
 package io.github.dohex.openrose.androidintegration
 
 import io.github.dohex.openrose.core.ConnectionPhase
+import io.github.dohex.openrose.core.ConnectionState
 import io.github.dohex.openrose.core.ControlErrorCode
+import io.github.dohex.openrose.core.ControlRuntime
+import io.github.dohex.openrose.core.ControlState
+import io.github.dohex.openrose.core.DeviceState
 import io.github.dohex.openrose.core.HeadsetCommand
 import io.github.dohex.openrose.core.LocalControlRuntime
 import io.github.dohex.openrose.core.NoiseMode
@@ -21,10 +25,13 @@ import io.github.dohex.openrose.core.transport.ControlConnection
 import io.github.dohex.openrose.core.transport.ControlTransport
 import io.github.dohex.openrose.core.transport.DeviceId
 import io.github.dohex.openrose.core.transport.TransportEndpoint
+import kotlinx.collections.immutable.persistentMapOf
 import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -101,6 +108,31 @@ class SessionSnapshotTest {
         assertFailure(ControlErrorCode.DISCONNECTED, session.readSession(firstReference))
         assertIs<SessionSnapshotResult.Available>(session.readSession(SessionReference(id, nextDevice.sessionId)))
         session.disconnect()
+    }
+
+    @Test
+    fun aConnectedSessionStillInitializingIsNotReady() = runTest {
+        val profile = ModelProfile.I5_ZT
+        val id = DeviceId("i5")
+        val device = DeviceState(id, 1, profile, profile.capabilities(), persistentMapOf())
+        val initializing = MutableStateFlow(
+            ControlState(
+                platform = PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
+                connection = ConnectionState.Connected(id, 1, profile, ConnectionPhase.INITIALIZING),
+                device = device,
+            ),
+        )
+        val real = newSession(SnapshotTransport(profile))
+        val session = SystemEntryRuntime(
+            object : ControlRuntime by real {
+                override val state: StateFlow<ControlState> = initializing
+            },
+            backgroundScope,
+        )
+
+        val failure = assertIs<SessionSnapshotResult.Failure>(session.readSession(SessionReference(id, 1)))
+        assertEquals(ControlErrorCode.NOT_READY, failure.error.code)
+        assertEquals("设备会话尚未就绪", failure.error.message)
     }
 
     @Test

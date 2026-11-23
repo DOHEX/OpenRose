@@ -153,12 +153,9 @@ class BluezControlTransport private constructor(
         mutableAvailability.value = TransportAvailability.Unavailable("BlueZ 传输已关闭")
     }
     private inner class BluezAudioDriver : AudioFactsDriver {
-        override suspend fun bondedDevices(): List<RawAudioDevice> = try {
-            devices(activeBus().objects())
-        } catch (error: CancellationException) {
-            throw error
-        } catch (_: Exception) {
-            emptyList()
+        override suspend fun bondedDevices(): List<RawAudioDevice> {
+            ready.await()
+            return devices(checkNotNull(bus) { "BlueZ 不可用" }.objects())
         }
         override suspend fun snapshot(targetAddresses: Set<String>): RawAudioSnapshot {
             ready.await()

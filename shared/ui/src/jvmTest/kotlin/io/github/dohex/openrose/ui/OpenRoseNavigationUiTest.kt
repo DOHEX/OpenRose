@@ -293,7 +293,8 @@ class OpenRoseNavigationUiTest {
                 equalizer = profile.capabilities().equalizer,
                 touchControl = profile.capabilities().touchControl,
                 audioControl = profile.capabilities().audioControl,
-                promptVolumeLevels = profile.capabilities().promptVolumeLevels,
+                // Prompt-volume levels are unknown until the firmware is read.
+                promptVolumeLevels = profile.capabilities(FieldValue.Firmware(listOf(3, 0, 4), "304")).promptVolumeLevels,
                 gainLevels = persistentSetOf(0, 1, 2),
                 hearingProtectionLevels = (0..6).toPersistentSet(),
             ),

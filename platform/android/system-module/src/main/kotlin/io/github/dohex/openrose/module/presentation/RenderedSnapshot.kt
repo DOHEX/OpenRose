@@ -4,6 +4,7 @@ import android.bluetooth.BluetoothAdapter
 import android.os.Bundle
 import io.github.dohex.openrose.androidintegration.wire.BridgePresentationWire
 import io.github.dohex.openrose.androidintegration.wire.BridgeWire
+import io.github.dohex.openrose.core.NoiseMode
 import io.github.dohex.openrose.core.protocol.ModelProfile
 
 internal data class RenderedSnapshot(
@@ -63,7 +64,7 @@ internal data class RenderedSnapshot(
     fun availableNoiseModes(): List<String> {
         val modeBundle = capabilities.getBundle("noise") ?: return emptyList()
         val modes = modeBundle.getStringArrayList("modes")?.map { it.lowercase() }?.toSet() ?: return emptyList()
-        return NOISE_MODE_ORDER.filter { it in modes }
+        return NoiseMode.entries.map(NoiseMode::id).filter { it in modes }
     }
 
     fun canControlNoise(currentMode: String): Boolean {
@@ -133,6 +134,7 @@ internal fun modeLabel(mode: String): String = when (mode) {
     "wind" -> "抗风噪"
     "auto" -> "自动"
     "dynamic" -> "动态降噪"
+    "deep" -> "深度降噪"
     else -> mode
 }
 
@@ -150,4 +152,3 @@ private const val RIGHT_BATTERY = "RIGHT_BATTERY"
 private const val CASE_BATTERY = "CASE_BATTERY"
 private const val INVALID_SESSION_ID = Long.MIN_VALUE
 private const val INVALID_BATTERY = -1
-private val NOISE_MODE_ORDER = listOf("normal", "anc", "transparency", "wind", "auto", "dynamic")

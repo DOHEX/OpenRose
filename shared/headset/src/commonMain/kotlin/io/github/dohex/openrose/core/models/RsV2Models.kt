@@ -102,7 +102,8 @@ internal fun rsV2Capabilities(
     }
     control(true, DeviceSetting.MULTIPOINT, DeviceField.MULTIPOINT)
     control(true, DeviceSetting.GAME_MODE, DeviceField.GAME_MODE)
-    control(!promptVolume.isEmpty(), DeviceSetting.PROMPT_VOLUME, DeviceField.PROMPT_VOLUME)
+    // Readable regardless of firmware: empty levels (unread firmware) only withhold the write, see ModelProfile.capabilities.
+    control(true, DeviceSetting.PROMPT_VOLUME, DeviceField.PROMPT_VOLUME)
     control(!noise?.modes.isNullOrEmpty(), DeviceSetting.NOISE_MODE, DeviceField.NOISE_MODE)
     control(!noise?.cycleModes.isNullOrEmpty(), DeviceSetting.NOISE_CYCLE, DeviceField.NOISE_CYCLE)
     control(noise?.ancLevel != null, DeviceSetting.ANC_LEVEL, DeviceField.ANC_LEVEL)

@@ -223,21 +223,25 @@ enum class ModelProfile {
     /** Control choices derived from the facts this particular headset session has confirmed. */
     fun capabilities(readings: Map<DeviceField, FieldReading>): DeviceCapabilities = CapabilityFacts(readings).resolve(this)
 
-    /** What this model offers under [firmware]; null means the firmware has not been read. */
+    /**
+     * What this model offers under [firmware]; null means the firmware has not been read. A setting that has no
+     * choices to offer is not writable here, so callers never re-check whether its options are empty.
+     */
     fun capabilities(firmware: FieldValue.Firmware? = null, gameMode: Boolean? = null): DeviceCapabilities {
         val capabilities = spec.capabilities(firmware)
-        val gamePresets = spec.gameEqualizerPresets ?: return capabilities
-        val eq = requireNotNull(capabilities.equalizer)
-        val presets = when (gameMode) {
-            true -> gamePresets
-            false -> eq.presets
-            null -> eq.presets.intersect(gamePresets)
+        val gamePresets = spec.gameEqualizerPresets
+        val offered = if (gamePresets == null) {
+            capabilities
+        } else {
+            val eq = requireNotNull(capabilities.equalizer)
+            val presets = when (gameMode) {
+                true -> gamePresets
+                false -> eq.presets
+                null -> eq.presets.intersect(gamePresets)
+            }
+            capabilities.copy(equalizer = eq.copy(presets = presets.toPersistentSet()))
         }
-        val settings = capabilities.writableSettings
-        return capabilities.copy(
-            equalizer = eq.copy(presets = presets.toPersistentSet()),
-            writableSettings = if (presets.isEmpty()) settings.removing(DeviceSetting.EQ) else settings,
-        )
+        return offered.withoutWritesWithoutOptions()
     }
 
     /** The vendor app's name for an equalizer preset on this model, when it gives one. */
@@ -334,6 +338,34 @@ internal data class CapabilityFacts(val firmware: FieldValue.Firmware?, val game
     )
 
     fun resolve(profile: ModelProfile): DeviceCapabilities = profile.capabilities(firmware, gameMode)
+}
+
+/**
+ * A setting chosen from a set of options is writable only while that set is not empty; readable fields are
+ * unaffected. This is the one place that rule is decided.
+ */
+private fun DeviceCapabilities.withoutWritesWithoutOptions(): DeviceCapabilities {
+    // Null or empty means the model offers nothing to choose from; a setting absent from the table has no options.
+    val options: Map<DeviceSetting, Collection<*>?> = mapOf(
+        DeviceSetting.NOISE_MODE to noiseControl?.modes,
+        DeviceSetting.NOISE_CYCLE to noiseControl?.cycleModes,
+        DeviceSetting.ANC_LEVEL to noiseControl?.ancLevel?.levels,
+        DeviceSetting.TRANSPARENCY_LEVEL to noiseControl?.transparencyLevel?.levels,
+        DeviceSetting.EQ to equalizer?.presets,
+        DeviceSetting.CUSTOM_EQ to equalizer?.custom?.bandsHz,
+        DeviceSetting.TOUCH_BINDING to touchControl?.takeIf { it.slots.isNotEmpty() }?.actions,
+        DeviceSetting.TAP_BINDING to tapControl?.takeIf { it.slots.isNotEmpty() }?.actions,
+        DeviceSetting.AUDIO_MODE to audioControl?.modes,
+        DeviceSetting.PROMPT_VOLUME to promptVolumeLevels,
+        DeviceSetting.PROMPT_LANGUAGE to promptLanguages,
+        DeviceSetting.GAIN to gainLevels,
+        DeviceSetting.HEARING_PROTECTION to hearingProtectionLevels,
+        DeviceSetting.BASS_BOOST to bassBoostLevels,
+        DeviceSetting.SPATIAL_MODE to spatialModes,
+        DeviceSetting.SPATIAL_CONTENT to spatialContents,
+    )
+    val writable = writableSettings.filter { options[it]?.isNotEmpty() ?: (it !in options) }
+    return if (writable.size == writableSettings.size) this else copy(writableSettings = writable.toPersistentSet())
 }
 
 object ModelIdentification {

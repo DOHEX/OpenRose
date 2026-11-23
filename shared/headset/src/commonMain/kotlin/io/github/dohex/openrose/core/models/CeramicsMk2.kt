@@ -3,7 +3,8 @@ package io.github.dohex.openrose.core.models
 import io.github.dohex.openrose.core.EqualizerCapabilities
 import io.github.dohex.openrose.core.NoiseControlCapabilities
 import io.github.dohex.openrose.core.NoiseLevelCapabilities
-import io.github.dohex.openrose.core.firmwareComparisonInteger
+import io.github.dohex.openrose.core.firmwareAtLeast
+import io.github.dohex.openrose.core.promptVolumeLevels
 import io.github.dohex.openrose.core.protocol.BatteryLayout
 import kotlinx.collections.immutable.persistentSetOf
 
@@ -16,10 +17,9 @@ internal val ceramicsMk2 = rsV2Model(
     nameModelNumber = "mk2",
     nameRequiresModel = true,
 ) { firmware ->
-    val version = firmwareComparisonInteger(firmware) ?: 0
     rsV2Capabilities(
         layout = BatteryLayout.EARBUDS_AND_CASE,
-        promptVolume = if (version >= 153) 0..5 else 1..5,
+        promptVolume = promptVolumeLevels(firmware, offSince = 153),
         noise = NoiseControlCapabilities(
             modes = basicNoiseModes,
             cycleModes = basicNoiseModes,
@@ -28,7 +28,7 @@ internal val ceramicsMk2 = rsV2Model(
         ),
         equalizer = EqualizerCapabilities(
             persistentSetOf("pop", "hifi", "rock"),
-            custom = if (version >= 154) rsV2Curve else null,
+            custom = if (firmwareAtLeast(firmware, 154) == true) rsV2Curve else null,
         ),
         touch = rsV2Touch(noiseCycle = true),
         audioModes = setOf("aac_sbc", "ldac"),

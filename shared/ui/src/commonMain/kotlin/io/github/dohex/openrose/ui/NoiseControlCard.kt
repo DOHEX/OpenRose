@@ -62,7 +62,7 @@ internal fun NoiseControlCard(
     val pendingMode = (state.pendingSetting(device, DeviceSetting.NOISE_MODE)?.requestedValue as? FieldValue.Text)?.value
 
     val modes = remember(capabilities.modes) {
-        device.noiseModes.map(NoiseMode::id).sortedWith(compareBy({ noiseModeOrder(it) }, { it }))
+        device.noiseModes.sortedBy(NoiseMode::ordinal).map(NoiseMode::id)
             .map { mode -> AppOption(mode, noiseModeLabel(mode)) }
     }
     AppDashboardCard {
@@ -175,16 +175,6 @@ private fun noiseModeIcon(mode: String): RoseIcon = when (mode) {
     "auto" -> RoseIcon.AUTO
     "dynamic" -> RoseIcon.EQUALIZER
     else -> RoseIcon.NOISE
-}
-
-internal fun noiseModeOrder(mode: String): Int = when (mode) {
-    "normal" -> 0
-    "anc" -> 1
-    "transparency" -> 2
-    "wind" -> 3
-    "auto" -> 4
-    "dynamic" -> 5
-    else -> 6
 }
 
 @Composable
