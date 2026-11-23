@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+
 package io.github.dohex.openrose.ui
 
 import androidx.compose.foundation.background
@@ -16,6 +18,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -85,7 +88,6 @@ internal fun HeadphonesPage(
             if (wide) {
                 Row(
                     Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalAlignment = Alignment.Top,
                 ) {
                     Column(Modifier.weight(0.9f)) { deviceCard() }
@@ -232,14 +234,16 @@ private fun UnconnectedHeadphonesDashboard(
             )
         }
         if (state.scan == ScanState.Scanning) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                AppBusyIndicator()
-                AppText("正在寻找耳机…", role = AppTextRole.Summary)
+            AppDashboardCard {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    AppBusyIndicator()
+                    AppText("正在寻找耳机…", role = AppTextRole.Summary)
+                }
+                AppButton("停止扫描", model::stopScan, kind = AppButtonKind.Primary)
             }
-            AppButton("停止扫描", model::stopScan, kind = AppButtonKind.Primary)
         }
         if (cards.local.remote != null) AdditionalHeadsetCard(cards.local)
         cards.others.forEach { AdditionalHeadsetCard(it, model::connect, platformUi.desktopSound) }
@@ -673,39 +677,50 @@ private fun BluetoothConnectionRemedy(platform: PlatformState, requestPermission
 private fun OtherPairedDevices(devices: List<DeviceCandidate>, enabled: Boolean, onSelect: (DeviceId) -> Unit) {
     if (devices.isNotEmpty()) {
         AppGroup(title = "其他已配对设备") {
+            val isMaterial3 = LocalInterfaceStyle.current == InterfaceStyle.MATERIAL3
             devices.forEach { paired ->
                 val name = paired.name?.takeIf(String::isNotBlank) ?: paired.profile!!.displayName
-                AppDashboardCard {
+                val rowModifier = Modifier
+                    .fillMaxWidth()
+                    .then(
+                        if (isMaterial3) {
+                            Modifier
+                                .clip(ListItemDefaults.shapes().shape)
+                                .background(MaterialTheme.colorScheme.surfaceContainer)
+                        } else {
+                            Modifier
+                        },
+                    )
+                    .padding(horizontal = 16.dp, vertical = 12.dp)
+                Row(
+                    rowModifier,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
                     Row(
-                        Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
                         verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f),
                     ) {
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.weight(1f),
-                        ) {
-                            StyledTile(TileKind.Chip, contentPadding = PaddingValues(8.dp), contentAlignment = Alignment.Center) {
-                                AppIcon(RoseIcon.HEADPHONES)
-                            }
-                            Column {
-                                AppText(name)
-                                paired.profile?.let {
-                                    AppText(it.configurationCaption, role = AppTextRole.Summary)
-                                }
+                        StyledTile(TileKind.Chip, contentPadding = PaddingValues(8.dp), contentAlignment = Alignment.Center) {
+                            AppIcon(RoseIcon.HEADPHONES)
+                        }
+                        Column {
+                            AppText(name)
+                            paired.profile?.let {
+                                AppText(it.configurationCaption, role = AppTextRole.Summary)
                             }
                         }
-                        AppButton(
-                            text = "切换",
-                            enabled = enabled,
-                            onClick = {
-                                onSelect(paired.deviceId)
-                            },
-                            kind = AppButtonKind.Secondary,
-                            modifier = Modifier.semantics { contentDescription = "切换到 $name" },
-                        )
                     }
+                    AppButton(
+                        text = "切换",
+                        enabled = enabled,
+                        onClick = {
+                            onSelect(paired.deviceId)
+                        },
+                        kind = AppButtonKind.Secondary,
+                        modifier = Modifier.semantics { contentDescription = "切换到 $name" },
+                    )
                 }
             }
         }

@@ -27,7 +27,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
@@ -40,6 +42,8 @@ import top.yukonga.miuix.kmp.basic.TextField as MiuixTextField
 internal fun PhonePairing(
     nearby: Map<String, String>,
     busy: Boolean,
+    codeErrorPeerId: String? = null,
+    codeError: String? = null,
     scan: @Composable ((String) -> Unit) -> (() -> Unit),
     onQr: (String) -> Unit,
     onPair: (String, String) -> Unit,
@@ -62,7 +66,12 @@ internal fun PhonePairing(
             key(id) {
                 val selected = selectedId == id
                 NearbyComputerRow(name, selected, !busy) { selectedId = if (selected) null else id }
-                if (selected) PairingCodeEntry(busy) { code -> onPair(id, code) }
+                if (selected) {
+                    PairingCodeEntry(
+                        busy = busy,
+                        error = codeError.takeIf { codeErrorPeerId == id },
+                    ) { code -> onPair(id, code) }
+                }
             }
         }
     }
@@ -101,7 +110,7 @@ private fun NearbyComputerRow(name: String, expanded: Boolean, enabled: Boolean,
 }
 
 @Composable
-private fun PairingCodeEntry(busy: Boolean, onPair: (String) -> Unit) {
+private fun PairingCodeEntry(busy: Boolean, error: String? = null, onPair: (String) -> Unit) {
     var code by rememberSaveable { mutableStateOf("") }
     val ready = code.length == 6 && !busy
     val focus = LocalFocusManager.current
@@ -129,6 +138,7 @@ private fun PairingCodeEntry(busy: Boolean, onPair: (String) -> Unit) {
                 onValueChange = update,
                 modifier = field,
                 enabled = !busy,
+                isError = error != null,
                 singleLine = true,
                 shape = MaterialTheme.shapes.medium,
                 label = { Text("六位配对码") },
@@ -145,6 +155,14 @@ private fun PairingCodeEntry(busy: Boolean, onPair: (String) -> Unit) {
                 label = "六位配对码",
                 keyboardOptions = keyboard,
                 keyboardActions = actions,
+            )
+        }
+        error?.let { message ->
+            AppText(
+                message,
+                Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite },
+                role = AppTextRole.Summary,
+                color = appColor(AppColorRole.Error),
             )
         }
         AppButton("确认配对", submit, enabled = ready)

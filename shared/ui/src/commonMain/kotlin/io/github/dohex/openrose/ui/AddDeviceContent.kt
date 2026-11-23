@@ -71,8 +71,9 @@ internal fun AddDeviceContent(
                 if (!canScan) {
                     AddDevicePrerequisite(state, onRequestPermission, onOpenSystemSettings)
                 } else if (supported.isEmpty() && selectedDeviceId == null) {
+                    val edgePadding = if (LocalInterfaceStyle.current == InterfaceStyle.MATERIAL3) 16.dp else 12.dp
                     Column(
-                        Modifier.fillMaxWidth().padding(horizontal = 24.dp),
+                        Modifier.fillMaxWidth().padding(horizontal = edgePadding),
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
@@ -250,15 +251,16 @@ private fun AddDeviceCandidateCard(
     val isMaterial3 = LocalInterfaceStyle.current == InterfaceStyle.MATERIAL3
     AppDashboardCard {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            val artworkShape = MaterialTheme.shapes.large
             val artworkModifier = if (isMaterial3) {
                 Modifier
                     .size(88.dp)
-                    .clip(RoundedCornerShape(16.dp))
+                    .clip(artworkShape)
                     .background(MaterialTheme.colorScheme.surfaceContainerLowest)
                     .border(
                         width = 1.dp,
                         color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
-                        shape = RoundedCornerShape(16.dp),
+                        shape = artworkShape,
                     )
             } else {
                 Modifier.width(88.dp).height(88.dp)
@@ -269,7 +271,7 @@ private fun AddDeviceCandidateCard(
             Column(
                 modifier = Modifier
                     .weight(1f)
-                    .then(if (isMaterial3) Modifier.padding(start = 12.dp) else Modifier),
+                    .padding(start = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 AppText(candidate.addDeviceName(), role = AppTextRole.Title)
@@ -336,8 +338,9 @@ private fun AddDeviceSearchStatus(
     onStopScan: () -> Unit,
 ) {
     key("search-status") {
+        val edgePadding = if (LocalInterfaceStyle.current == InterfaceStyle.MATERIAL3) 16.dp else 12.dp
         Column(
-            Modifier.fillMaxWidth().padding(horizontal = 24.dp),
+            Modifier.fillMaxWidth().padding(horizontal = edgePadding),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Row(
@@ -398,8 +401,9 @@ private fun AddDeviceTroubleshooting(
 ) {
     var troubleshootingExpanded by rememberSaveable { mutableStateOf(false) }
     key("troubleshooting") {
+        val edgePadding = if (LocalInterfaceStyle.current == InterfaceStyle.MATERIAL3) 16.dp else 12.dp
         Column(
-            Modifier.fillMaxWidth().padding(horizontal = 24.dp),
+            Modifier.fillMaxWidth().padding(horizontal = edgePadding),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             AppButton(

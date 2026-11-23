@@ -7,9 +7,8 @@
 package io.github.dohex.openrose.ui
 
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.snap
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -97,14 +96,16 @@ internal fun MaterialAppShell(
 ) {
     val backdrop = rememberAppBackdrop(MaterialTheme.colorScheme.surface, LocalBackdropBlurActive.current)
     CompositionLocalProvider(LocalAppBackdrop provides backdrop) {
+        val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
         val title = page.title
         Scaffold(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.fillMaxSize().nestedScroll(scrollBehavior.nestedScrollConnection),
             topBar = {
                 TopAppBar(
                     title = { Text(title) },
                     modifier = Modifier.topBarBackdropBlur(backdrop, MaterialTheme.colorScheme.surface),
                     navigationIcon = { IconButton(onClick = onBack) { Icon(RoseIcons.Back, "返回") } },
+                    scrollBehavior = scrollBehavior,
                     colors = materialTopAppBarColors(backdrop != null),
                 )
             },
@@ -163,6 +164,7 @@ internal fun MaterialMainShell(
             .fillMaxSize()
             .appBackdropContent(barBackdrop)
             .padding(bottom = if (contentBehindBar) 0.dp else barHeight)
+            .consumeWindowInsets(PaddingValues(bottom = barHeight))
         MaterialMainPager(pagerState, wide, pagerModifier) { pageIndex ->
             val page = mainPages[pageIndex]
             MaterialMainPage(
@@ -295,6 +297,9 @@ private fun MaterialFloatingTabs(
     onSelect: (AppPage) -> Unit,
 ) {
     val blurred = barBackdrop != null
+    val reduceMotion = rememberReduceMotion()
+    val spatialSpec = if (reduceMotion) snap<Dp>() else MaterialTheme.motionScheme.defaultSpatialSpec()
+    val effectsSpec = if (reduceMotion) snap<Color>() else MaterialTheme.motionScheme.defaultEffectsSpec()
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -336,10 +341,7 @@ private fun MaterialFloatingTabs(
                     val isSelected = currentTab == destination
                     val indicatorWidth by animateDpAsState(
                         targetValue = if (isSelected) 56.dp else 48.dp,
-                        animationSpec = spring(
-                            dampingRatio = 0.75f,
-                            stiffness = 400f,
-                        ),
+                        animationSpec = spatialSpec,
                         label = "tabIndicatorWidth",
                     )
                     val containerColor by animateColorAsState(
@@ -348,10 +350,7 @@ private fun MaterialFloatingTabs(
                         } else {
                             MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0f)
                         },
-                        animationSpec = spring(
-                            dampingRatio = Spring.DampingRatioNoBouncy,
-                            stiffness = Spring.StiffnessMedium,
-                        ),
+                        animationSpec = effectsSpec,
                         label = "tabContainerColor",
                     )
                     val iconTint by animateColorAsState(
@@ -360,10 +359,7 @@ private fun MaterialFloatingTabs(
                         } else {
                             MaterialTheme.colorScheme.onSurfaceVariant
                         },
-                        animationSpec = spring(
-                            dampingRatio = Spring.DampingRatioNoBouncy,
-                            stiffness = Spring.StiffnessMedium,
-                        ),
+                        animationSpec = effectsSpec,
                         label = "tabIconTint",
                     )
                     Box(

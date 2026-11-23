@@ -1,14 +1,21 @@
 package io.github.dohex.openrose.ui
 
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.material3.DropdownMenuGroup
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.DropdownMenuPopup
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MenuDefaults
+import androidx.compose.material3.PlainTooltip
 import androidx.compose.material3.Text
+import androidx.compose.material3.TooltipAnchorPosition
+import androidx.compose.material3.TooltipBox
+import androidx.compose.material3.TooltipDefaults
+import androidx.compose.material3.rememberTooltipState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
@@ -53,6 +60,7 @@ internal fun MainTabActions(page: AppPage, platformActions: @Composable (AppPage
 }
 
 /** The headphones tab shows the overflow menu while connected and the add-device button otherwise. */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun HeadphoneActions(state: HeadphoneMenuState) {
     val style = LocalInterfaceStyle.current
@@ -66,7 +74,14 @@ private fun HeadphoneActions(state: HeadphoneMenuState) {
         val onClick = if (state.connectedHome) ({ state.onMenuExpandedChange(true) }) else state.onAddDevice
         when (style) {
             InterfaceStyle.MIUIX -> MiuixIconButton(onClick = onClick) { MiuixIcon(icon, label) }
-            InterfaceStyle.MATERIAL3 -> MaterialIconButton(onClick = onClick) { MaterialIcon(icon, contentDescription = label) }
+
+            InterfaceStyle.MATERIAL3 -> TooltipBox(
+                positionProvider = TooltipDefaults.rememberTooltipPositionProvider(TooltipAnchorPosition.Below),
+                tooltip = { PlainTooltip { Text(label) } },
+                state = rememberTooltipState(),
+            ) {
+                MaterialIconButton(onClick = onClick) { MaterialIcon(icon, contentDescription = label) }
+            }
         }
         val showMenu = state.connectedHome && state.menuExpanded
         val dismissMenu = { state.onMenuExpandedChange(false) }
@@ -85,16 +100,19 @@ private fun HeadphoneActions(state: HeadphoneMenuState) {
  */
 @Composable
 private fun MiuixDisconnectMenu(show: Boolean, onDismiss: () -> Unit, onDisconnect: () -> Unit) {
+    val focusRequester = remember { FocusRequester() }
     OverlayListPopup(
         show = show,
         popupPositionProvider = ListPopupDefaults.ContextMenuPositionProvider,
         alignment = PopupPositionProvider.Align.TopEnd,
         onDismissRequest = onDismiss,
     ) {
+        LaunchedEffect(Unit) { focusRequester.requestFocus() }
         ListPopupColumn {
             BasicComponent(
                 title = "断开控制连接",
                 titleColor = BasicComponentDefaults.titleColor(color = MiuixTheme.colorScheme.error),
+                modifier = Modifier.focusRequester(focusRequester).closeOnEscape(onDismiss).focusable(),
                 onClick = onDisconnect,
                 role = Role.Button,
             )

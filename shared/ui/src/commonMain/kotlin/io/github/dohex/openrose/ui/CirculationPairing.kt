@@ -1,6 +1,7 @@
 package io.github.dohex.openrose.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
@@ -13,6 +14,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
@@ -42,16 +45,20 @@ fun CirculationSettings(
     val peers = rememberPeerList(client, refresh = refresh)
     val scope = rememberCoroutineScope()
     var result by remember(client) { mutableStateOf<CirculationResult?>(null) }
+    var failedCodePeerId by remember(client) { mutableStateOf<String?>(null) }
     var issued by remember(client) { mutableStateOf<PairingTicket?>(null) }
     var busy by remember(client) { mutableStateOf(false) }
 
     @Suppress("TooGenericExceptionCaught") // Whatever the platform throws becomes the page's feedback.
-    fun submit(action: suspend () -> CirculationResult) {
+    fun submit(codePeerId: String? = null, action: suspend () -> CirculationResult) {
         if (busy) return
         busy = true
+        failedCodePeerId = null
         scope.launch {
             try {
-                result = action()
+                val outcome = action()
+                result = outcome
+                failedCodePeerId = if (outcome.error != null) codePeerId else null
                 refresh++
             } catch (cancelled: CancellationException) {
                 throw cancelled
@@ -66,13 +73,16 @@ fun CirculationSettings(
     val live = rememberLiveTicket(peers, issued)
     Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
         Column(Modifier.widthIn(max = ContentMaxWidth).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            val inlineCodeError = result?.error?.takeIf { failedCodePeerId != null }
             if (scan != null) {
                 PhonePairing(
                     nearby = peers.nearby - peers.paired.keys,
                     busy = busy,
+                    codeErrorPeerId = failedCodePeerId,
+                    codeError = inlineCodeError,
                     scan = scan,
                     onQr = { qr -> submit { client.pairQr(qr) } },
-                    onPair = { peer, code -> submit { client.pair(peer, code) } },
+                    onPair = { peer, code -> submit(codePeerId = peer) { client.pair(peer, code) } },
                 )
             }
             if (showQr != null) {
@@ -84,15 +94,8 @@ fun CirculationSettings(
                     }
                 }
             }
-            val error = result?.error ?: peers.error
-            (error ?: result?.message)?.let { message ->
-                AppText(
-                    message,
-                    Modifier.padding(horizontal = 24.dp).semantics { liveRegion = LiveRegionMode.Polite },
-                    role = AppTextRole.Summary,
-                    color = if (error != null) appColor(AppColorRole.Error) else null,
-                )
-            }
+            val error = (if (inlineCodeError == null) result?.error else null) ?: peers.error
+            CirculationFeedbackBanner(error, result?.message)
             if (peers.paired.isNotEmpty()) {
                 AppGroup(title = "已配对的设备") {
                     peers.paired.forEach { (id, name) ->
@@ -104,6 +107,17 @@ fun CirculationSettings(
             }
         }
     }
+}
+
+@Composable
+private fun CirculationFeedbackBanner(error: String?, message: String?) {
+    val text = error ?: message ?: return
+    AppText(
+        text,
+        Modifier.padding(horizontal = 24.dp).semantics { liveRegion = LiveRegionMode.Polite },
+        role = AppTextRole.Summary,
+        color = if (error != null) appColor(AppColorRole.Error) else null,
+    )
 }
 
 /** The offer peers still accept, with the time it has left; the page hides it and counts down on this one clock. */
@@ -256,12 +270,19 @@ private fun ForgetPeerDialog(name: String, onConfirm: () -> Unit, onDismiss: () 
             AppButton("取消", onDismiss, kind = AppButtonKind.Secondary, modifier = Modifier.fillMaxWidth())
         }
 
-        InterfaceStyle.MATERIAL3 -> AlertDialog(
-            onDismissRequest = onDismiss,
-            title = { Text(title) },
-            text = { Text(message) },
-            confirmButton = { TextButton(onClick = onConfirm) { Text("确认解除") } },
-            dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
-        )
+        InterfaceStyle.MATERIAL3 -> {
+            val focusRequester = remember { FocusRequester() }
+            AlertDialog(
+                onDismissRequest = onDismiss,
+                modifier = Modifier.focusRequester(focusRequester).closeOnEscape(onDismiss).focusable(),
+                title = { Text(title) },
+                text = {
+                    LaunchedEffect(Unit) { focusRequester.requestFocus() }
+                    Text(message)
+                },
+                confirmButton = { TextButton(onClick = onConfirm) { Text("确认解除") } },
+                dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
+            )
+        }
     }
 }

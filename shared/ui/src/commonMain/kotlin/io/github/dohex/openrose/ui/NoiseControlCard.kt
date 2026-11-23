@@ -291,8 +291,12 @@ internal fun <T> MaterialNoiseModeGrid(
                             checkedContainerColor = scheme.secondaryContainer,
                             checkedContentColor = scheme.onSecondaryContainer,
                             disabledContainerColor = if (chosen) scheme.secondaryContainer else scheme.surfaceContainerHigh,
+                            disabledContentColor = if (chosen) {
+                                scheme.onSecondaryContainer.copy(alpha = 0.72f)
+                            } else {
+                                scheme.onSurface.copy(alpha = 0.38f)
+                            },
                         ),
-                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp),
                     ) {
                         content(option)
                     }

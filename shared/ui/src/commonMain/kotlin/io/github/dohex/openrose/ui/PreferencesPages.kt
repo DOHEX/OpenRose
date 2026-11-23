@@ -39,7 +39,7 @@ fun PreferencesPage(
         AppGroup {
             AppArrowRow(
                 title = "个性化",
-                summary = "组件风格、明暗模式、背景模糊与转场动效",
+                summary = "界面风格、明暗模式、底栏样式、背景模糊与转场动效",
                 icon = RoseIcon.PALETTE,
                 onClick = onPersonalization,
             )
@@ -116,7 +116,15 @@ fun PersonalizationPage(model: OpenRoseModel, platformUi: PlatformUi, wide: Bool
                 onSelect = { onUiSettingsChange(uiSettings.copy(appearance = it)) },
             )
             platformUi.DisplayModeRows()
-            if (!wide) {
+            AppSwitchRow(
+                title = "背景模糊",
+                summary = "顶栏与底栏（含悬浮底栏）模糊其后滚动的内容；省电模式或系统不支持时自动关闭",
+                checked = uiSettings.backgroundBlurEnabled,
+                onChange = { onUiSettingsChange(uiSettings.copy(backgroundBlurEnabled = it)) },
+            )
+        }
+        if (!wide) {
+            AppGroup(title = "导航栏") {
                 AppChoiceRow(
                     title = "底栏样式",
                     valueText = bottomBarStyleLabel(uiSettings.bottomBarStyle),
@@ -135,12 +143,6 @@ fun PersonalizationPage(model: OpenRoseModel, platformUi: PlatformUi, wide: Bool
                     )
                 }
             }
-            AppSwitchRow(
-                title = "背景模糊",
-                summary = "顶栏与底栏（含悬浮底栏）模糊其后滚动的内容；省电模式或系统不支持时自动关闭",
-                checked = uiSettings.backgroundBlurEnabled,
-                onChange = { onUiSettingsChange(uiSettings.copy(backgroundBlurEnabled = it)) },
-            )
         }
         AppGroup(title = "动效", footnote = "转场动效作用于进入和返回二级页面；关闭动效时，主页面切换也不播放动画。") {
             AppChoiceRow(

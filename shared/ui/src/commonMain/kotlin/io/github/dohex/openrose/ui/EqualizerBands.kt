@@ -5,6 +5,7 @@ import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.border
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -20,6 +21,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -30,6 +32,8 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -153,6 +157,7 @@ internal fun EqualizerBands(
                         Canvas(Modifier.fillMaxSize()) {
                             drawBands(thumbs.map { it.value }, minGain, maxGain, highlighted(), tokens, colors)
                         }
+                        val focusRequesters = remember(count) { List(count) { FocusRequester() } }
                         Row(Modifier.fillMaxSize()) {
                             capabilities.bandsHz.forEachIndexed { band, hz ->
                                 BandControl(
@@ -161,8 +166,14 @@ internal fun EqualizerBands(
                                     minGain = minGain,
                                     maxGain = maxGain,
                                     enabled = enabled,
+                                    focused = focusedBand.value == band,
                                     inset = tokens.activeThumbRadius,
+                                    focusRequester = focusRequesters[band],
                                     onFocusChange = { focusedBand.value = focusedBand.value.afterFocusChange(band, it) },
+                                    onMoveFocus = { delta ->
+                                        val target = (band + delta).coerceIn(0, count - 1)
+                                        if (target != band) focusRequesters[target].requestFocus()
+                                    },
                                     onSet = { commit(band, it) },
                                     onStep = { commit(band, latestCurve[band] + it) },
                                     onDrag = { gain ->
@@ -297,8 +308,11 @@ private fun BandControl(
     minGain: Int,
     maxGain: Int,
     enabled: Boolean,
+    focused: Boolean,
     inset: Dp,
+    focusRequester: FocusRequester,
     onFocusChange: (Boolean) -> Unit,
+    onMoveFocus: (Int) -> Unit,
     onSet: (Int) -> Unit,
     onStep: (Int) -> Unit,
     onDrag: (Int) -> Unit,
@@ -307,12 +321,21 @@ private fun BandControl(
 ) {
     val latestDrag by rememberUpdatedState(onDrag)
     val latestRelease by rememberUpdatedState(onRelease)
+    val focusRingColor = appColor(AppColorRole.Primary)
     Box(
         modifier
             .fillMaxHeight()
+            .then(
+                if (focused && enabled) {
+                    Modifier.border(2.dp, focusRingColor, RoundedCornerShape(8.dp))
+                } else {
+                    Modifier
+                },
+            )
+            .focusRequester(focusRequester)
             .bandSemantics(hz, gain, minGain, maxGain, enabled, onSet)
             .onFocusChanged { onFocusChange(it.isFocused) }
-            .bandKeys(enabled, minGain, maxGain, onStep, onSet)
+            .bandKeys(enabled, minGain, maxGain, onStep, onSet, onMoveFocus)
             .focusable(enabled)
             .bandDrag(enabled, minGain, maxGain, inset, { latestDrag(it) }, { latestRelease(it) }),
     )
@@ -348,16 +371,20 @@ private fun Modifier.bandKeys(
     maxGain: Int,
     onStep: (Int) -> Unit,
     onSet: (Int) -> Unit,
+    onMoveFocus: (Int) -> Unit,
 ): Modifier = onKeyEvent { event ->
     if (!enabled) return@onKeyEvent false
-    val down = event.type == KeyEventType.KeyDown
-    when (event.key) {
-        Key.DirectionUp -> if (down) onStep(1)
-        Key.DirectionDown -> if (down) onStep(-1)
-        Key.MoveHome, Key.NumPadMoveHome -> if (down) onSet(minGain)
-        Key.MoveEnd, Key.NumPadMoveEnd -> if (down) onSet(maxGain)
-        else -> return@onKeyEvent false
+    val action: (() -> Unit)? = when (event.key) {
+        Key.DirectionUp -> ({ onStep(1) })
+        Key.DirectionDown -> ({ onStep(-1) })
+        Key.DirectionLeft -> ({ onMoveFocus(-1) })
+        Key.DirectionRight -> ({ onMoveFocus(1) })
+        Key.MoveHome, Key.NumPadMoveHome -> ({ onSet(minGain) })
+        Key.MoveEnd, Key.NumPadMoveEnd -> ({ onSet(maxGain) })
+        else -> null
     }
+    if (action == null) return@onKeyEvent false
+    if (event.type == KeyEventType.KeyDown) action()
     true
 }
 

@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -166,7 +167,11 @@ fun AppStatusHero(verdict: StatusVerdict, badge: String?, modifier: Modifier = M
                     )
                 }
                 if (verdict.actions.isNotEmpty()) {
-                    Row(Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FlowRow(
+                        modifier = textModifier.padding(top = 12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
                         verdict.actions.forEach { AppButton(it.label, it.onClick) }
                     }
                 }
@@ -177,7 +182,7 @@ fun AppStatusHero(verdict: StatusVerdict, badge: String?, modifier: Modifier = M
                         colors.content,
                         miuix = { MiuixTheme.textStyles.headline2.copy(fontWeight = FontWeight.Medium) },
                         material = { MaterialTheme.typography.titleSmall },
-                        modifier = Modifier.padding(top = 12.dp),
+                        modifier = textModifier.padding(top = 12.dp),
                     )
                 }
             }

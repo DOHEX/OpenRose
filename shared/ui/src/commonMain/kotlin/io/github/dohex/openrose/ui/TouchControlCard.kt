@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+
 package io.github.dohex.openrose.ui
 
 import androidx.compose.animation.AnimatedContent
@@ -17,11 +19,14 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.IntOffset
@@ -253,6 +258,7 @@ private fun TapControlGroup(state: ControlState, device: DeviceState, onSet: (He
     device.capabilities.tapControl?.let { tap ->
         val reading = device.reading(DeviceField.TAP_KEYS)
         val bindings = (device.knownValue(DeviceField.TAP_KEYS) as? FieldValue.TouchKeys)?.bindings.orEmpty()
+        var openSlot by remember(device.sessionId) { mutableStateOf<TouchSlot?>(null) }
         AppGroup(title = "轻拍控制") {
             SettingToggleChoices(
                 "轻拍开关",
@@ -265,7 +271,7 @@ private fun TapControlGroup(state: ControlState, device: DeviceState, onSet: (He
             )
             tap.slots.sortedWith(compareBy({ touchSideOrder(it.side) }, { touchGestureOrder(it.gesture) })).forEach { slot ->
                 val binding = bindings.firstOrNull { it.side == slot.side && it.gesture == slot.gesture }
-                ContainedBindingRow(isOpen = false) {
+                ContainedBindingRow(isOpen = openSlot == slot) {
                     AppChoiceRow(
                         title = touchSlotLabel(slot.side, slot.gesture, tap),
                         valueText = touchBindingStatus(reading, binding),
@@ -274,6 +280,8 @@ private fun TapControlGroup(state: ControlState, device: DeviceState, onSet: (He
                         enabled = state.canWrite(device, DeviceSetting.TAP_BINDING),
                         pending = state.pendingBinding(device, DeviceSetting.TAP_BINDING, slot.side, slot.gesture),
                         id = "tap:${slot.side}:${slot.gesture}",
+                        open = openSlot == slot,
+                        onOpenChange = { openSlot = if (it) slot else null },
                         onSelect = { action ->
                             onSet(HeadsetCommand.TapBinding(slot.side, slot.gesture, action))
                         },
@@ -339,10 +347,8 @@ private fun TouchBindingGroup(
         ) { currentSide ->
             val currentSlots = slots.filter { it.side == currentSide }
             Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .then(if (isMaterial3) Modifier.padding(horizontal = 16.dp) else Modifier),
-                verticalArrangement = if (isMaterial3) Arrangement.spacedBy(8.dp) else Arrangement.spacedBy(0.dp),
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = if (isMaterial3) Arrangement.spacedBy(ListItemDefaults.SegmentedGap) else Arrangement.spacedBy(0.dp),
             ) {
                 currentSlots.forEach { slot ->
                     TouchBindingRow(state, device, slot, selectedSlot, onSet, onSlotChange)

@@ -324,12 +324,18 @@ private fun QuickPanelContent(
                     device,
                     state.canWrite(device, DeviceSetting.GAME_MODE),
                     onSet,
+                    pendingToggle = state.pendingToggle(device, DeviceSetting.GAME_MODE),
                     icon = RoseIcon.GAME,
                 )
             }
         }
         // The diagnostics live in the main window.
-        SettingFeedback(state, device, onViewDetails = { onOpenApp(WindowDestination.DIAGNOSTICS) })
+        SettingFeedback(
+            state = state,
+            device = device,
+            showPending = { it != DeviceSetting.NOISE_MODE && it != DeviceSetting.GAME_MODE },
+            onViewDetails = { onOpenApp(WindowDestination.DIAGNOSTICS) },
+        )
     }
 
     QuickPanelActions(summary.addDevice, onOpenApp)
@@ -457,7 +463,10 @@ private fun QuickEqualizerMenu(state: ControlState, device: DeviceState, onSet: 
                 }
 
                 InterfaceStyle.MATERIAL3 -> DropdownMenuPopup(expanded = expanded, onDismissRequest = { expanded = false }) {
-                    DropdownMenuGroup(shapes = MenuDefaults.groupShapes(), modifier = Modifier.verticalScroll(rememberScrollState())) {
+                    DropdownMenuGroup(
+                        shapes = MenuDefaults.groupShapes(),
+                        modifier = Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState()),
+                    ) {
                         options.forEachIndexed { index, option ->
                             DropdownMenuItem(
                                 selected = option.value == confirmed,

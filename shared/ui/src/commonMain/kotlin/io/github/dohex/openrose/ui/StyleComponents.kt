@@ -611,6 +611,7 @@ private fun <T> MaterialChoiceRow(
         modifier = Modifier.semantics { role = Role.Button },
         enabled = enabled,
         leadingContent = iconAction(icon),
+        trailingContent = { AppIcon(RoseIcon.CHEVRON) },
         verticalAlignment = RowAlignment,
         supportingContent = { ChoiceValue(valueText, pendingLabel) },
         colors = rowColors(),
@@ -649,7 +650,7 @@ private fun ChoiceValue(valueText: String, pendingLabel: String?) {
 }
 
 /** Closes a dialog on Escape, as a desktop user expects; every other key passes through. */
-private fun Modifier.closeOnEscape(close: () -> Unit): Modifier = onPreviewKeyEvent {
+internal fun Modifier.closeOnEscape(close: () -> Unit): Modifier = onPreviewKeyEvent {
     val escape = it.type == KeyEventType.KeyUp && it.key == Key.Escape
     if (escape) close()
     escape
@@ -779,19 +780,61 @@ internal fun <T> AppSegmented(
             }
         }
 
-        InterfaceStyle.MATERIAL3 -> SingleChoiceSegmentedButtonRow(modifier.fillMaxWidth()) {
-            options.forEachIndexed { i, option ->
-                SegmentedButton(
-                    selected = selected != null && option.value == selected,
-                    onClick = { if (option.value != selected) onSelect(option.value) },
-                    shape = SegmentedButtonDefaults.itemShape(i, options.size),
-                    enabled = enabled,
-                    contentPadding = contentPadding ?: SegmentedButtonDefaults.ContentPadding,
-                    modifier = Modifier.semantics { option.contentDescription?.let { contentDescription = it } },
-                ) { Text(option.label) }
-            }
+        InterfaceStyle.MATERIAL3 -> MaterialSegmented(options, selected, enabled, modifier, contentPadding, onSelect)
+    }
+}
+
+@Composable
+private fun <T> MaterialSegmented(
+    options: List<AppOption<T>>,
+    selected: T?,
+    enabled: Boolean,
+    modifier: Modifier,
+    contentPadding: PaddingValues?,
+    onSelect: (T) -> Unit,
+) {
+    val scheme = MaterialTheme.colorScheme
+    Row(
+        modifier.fillMaxWidth().selectableGroup(),
+        horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween),
+    ) {
+        options.forEachIndexed { i, option ->
+            val chosen = selected != null && option.value == selected
+            val shapes = connectedSegmentShapes(i, options.size)
+            ToggleButton(
+                checked = chosen,
+                onCheckedChange = { if (it && option.value != selected) onSelect(option.value) },
+                modifier = Modifier.weight(1f).semantics {
+                    role = Role.RadioButton
+                    this.selected = chosen
+                    option.contentDescription?.let { contentDescription = it }
+                },
+                enabled = enabled,
+                shapes = shapes,
+                colors = ToggleButtonDefaults.toggleButtonColors(
+                    containerColor = scheme.surfaceContainerHigh,
+                    contentColor = scheme.onSurfaceVariant,
+                    checkedContainerColor = scheme.secondaryContainer,
+                    checkedContentColor = scheme.onSecondaryContainer,
+                    disabledContainerColor = if (chosen) scheme.secondaryContainer else scheme.surfaceContainerHigh,
+                    disabledContentColor = if (chosen) {
+                        scheme.onSecondaryContainer.copy(alpha = 0.72f)
+                    } else {
+                        scheme.onSurface.copy(alpha = 0.38f)
+                    },
+                ),
+                contentPadding = contentPadding ?: ButtonDefaults.ContentPadding,
+            ) { Text(option.label) }
         }
     }
+}
+
+@Composable
+private fun connectedSegmentShapes(index: Int, count: Int) = when {
+    count == 1 -> ToggleButtonDefaults.shapes(checkedShape = ButtonGroupDefaults.connectedButtonCheckedShape)
+    index == 0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
+    index == count - 1 -> ButtonGroupDefaults.connectedTrailingButtonShapes()
+    else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
 }
 
 @Composable

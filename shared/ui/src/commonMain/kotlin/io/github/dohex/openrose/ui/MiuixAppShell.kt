@@ -147,6 +147,7 @@ internal fun MiuixMainShell(
             .appBackdropContent(barBackdrop)
             .liquidGlassContent(glassBackdrop)
             .padding(bottom = if (contentBehindBar) 0.dp else barHeight)
+            .consumeWindowInsets(PaddingValues(bottom = barHeight))
         MiuixMainPager(pagerState, wide, pagerModifier) { pageIndex ->
             val page = mainPages[pageIndex]
             MiuixMainPage(

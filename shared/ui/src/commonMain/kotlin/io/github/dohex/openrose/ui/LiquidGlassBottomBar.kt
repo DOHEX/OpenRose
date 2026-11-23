@@ -142,32 +142,33 @@ internal fun MiuixLiquidGlassBottomBar(
     val barWidthPx = with(density) { (TabWidth * tabsCount + BarPadding * 2).toPx() }
     val animationScope = rememberCoroutineScope()
     val currentOnSelect by rememberUpdatedState(onSelect)
+    val currentSelectedIndex by rememberUpdatedState(selectedIndex)
+    val reduceMotion = rememberReduceMotion()
 
     val offsetAnimation = remember { Animatable(0f) }
-    val panelOffset by remember(density, barWidthPx) {
-        derivedStateOf {
-            val fraction = (offsetAnimation.value / barWidthPx).coerceIn(-1f, 1f)
-            with(density) { 4.dp.toPx() } * fraction.sign * EaseOut.transform(abs(fraction))
-        }
-    }
-
-    val dragAnimation = remember(animationScope, tabsCount, tabWidthPx, isLtr) {
+    val panelOffset by rememberLiquidPanelOffset(offsetAnimation, barWidthPx, reduceMotion)
+    val dragAnimation = remember(animationScope, tabsCount, tabWidthPx, isLtr, reduceMotion) {
         DampedDragAnimation(
             animationScope = animationScope,
             initialValue = selectedIndex.toFloat(),
             valueRange = 0f..(tabsCount - 1).toFloat(),
             visibilityThreshold = 0.001f,
             initialScale = 1f,
-            pressedScale = 78f / 56f,
+            pressedScale = if (reduceMotion) 1f else 78f / 56f,
+            reduceMotion = reduceMotion,
             onDragStopped = {
                 val target = targetValue.roundToInt().coerceIn(0, tabsCount - 1)
                 animateToValue(target.toFloat())
-                animationScope.launch { offsetAnimation.animateTo(0f, spring(1f, 300f, 0.5f)) }
-                currentOnSelect(target)
+                animationScope.launch {
+                    if (reduceMotion) offsetAnimation.snapTo(0f) else offsetAnimation.animateTo(0f, spring(1f, 300f, 0.5f))
+                }
+                if (target != currentSelectedIndex) currentOnSelect(target)
             },
             onDrag = { _, dragAmount ->
                 updateValue(targetValue + dragAmount.x / tabWidthPx * if (isLtr) 1f else -1f)
-                animationScope.launch { offsetAnimation.snapTo(offsetAnimation.value + dragAmount.x) }
+                if (!reduceMotion) {
+                    animationScope.launch { offsetAnimation.snapTo(offsetAnimation.value + dragAmount.x) }
+                }
             },
         )
     }
@@ -178,9 +179,10 @@ internal fun MiuixLiquidGlassBottomBar(
         }
     }
 
-    val interactiveHighlight = remember(animationScope, dragAnimation) {
+    val interactiveHighlight = remember(animationScope, dragAnimation, reduceMotion) {
         InteractiveHighlight(
             animationScope = animationScope,
+            reduceMotion = reduceMotion,
             position = { size ->
                 val center = (dragAnimation.value + 0.5f) * tabWidthPx + panelOffset
                 Offset(if (isLtr) center else size.width - center, size.height / 2f)
@@ -188,10 +190,7 @@ internal fun MiuixLiquidGlassBottomBar(
         )
     }
 
-    val navBarBottom = WindowInsets.navigationBars.only(WindowInsetsSides.Bottom).asPaddingValues().calculateBottomPadding()
-    val captionBarBottom = WindowInsets.captionBar.only(WindowInsetsSides.Bottom).asPaddingValues().calculateBottomPadding()
-    val bottomPadding = (if (navBarBottom != 0.dp) 26.dp + navBarBottom else 36.dp) + captionBarBottom
-
+    val bottomPadding = rememberLiquidBottomPadding()
     Box(Modifier.fillMaxWidth().padding(bottom = bottomPadding), contentAlignment = Alignment.Center) {
         Box(Modifier.width(TabWidth * tabsCount + BarPadding * 2).height(BarHeight), contentAlignment = Alignment.CenterStart) {
             Row(
@@ -304,6 +303,29 @@ internal fun MiuixLiquidGlassBottomBar(
     }
 }
 
+@Composable
+private fun rememberLiquidPanelOffset(
+    offsetAnimation: Animatable<Float, *>,
+    barWidthPx: Float,
+    reduceMotion: Boolean,
+): androidx.compose.runtime.State<Float> {
+    val density = LocalDensity.current
+    return remember(density, barWidthPx, reduceMotion) {
+        derivedStateOf {
+            if (reduceMotion) return@derivedStateOf 0f
+            val fraction = (offsetAnimation.value / barWidthPx).coerceIn(-1f, 1f)
+            with(density) { 4.dp.toPx() } * fraction.sign * EaseOut.transform(abs(fraction))
+        }
+    }
+}
+
+@Composable
+private fun rememberLiquidBottomPadding() = WindowInsets.navigationBars.only(WindowInsetsSides.Bottom).asPaddingValues()
+    .calculateBottomPadding().let { navBarBottom ->
+        val captionBarBottom = WindowInsets.captionBar.only(WindowInsetsSides.Bottom).asPaddingValues().calculateBottomPadding()
+        (if (navBarBottom != 0.dp) 26.dp + navBarBottom else 16.dp) + captionBarBottom
+    }
+
 /** One icon-only tab. Only the interactive copy passes [onClick]; it alone carries the tab semantics. */
 @Composable
 private fun RowScope.LiquidTab(
@@ -355,6 +377,7 @@ private class DampedDragAnimation(
     visibilityThreshold: Float,
     private val initialScale: Float,
     private val pressedScale: Float,
+    private val reduceMotion: Boolean,
     private val onDragStopped: DampedDragAnimation.() -> Unit,
     private val onDrag: DampedDragAnimation.(size: IntSize, dragAmount: Offset) -> Unit,
 ) {
@@ -405,6 +428,7 @@ private class DampedDragAnimation(
 
     private fun press() {
         velocityTracker.resetTracking()
+        if (reduceMotion) return
         animationScope.launch {
             launch { pressProgressAnimation.animateTo(1f, pressProgressAnimationSpec) }
             launch { scaleXAnimation.animateTo(pressedScale, scaleXAnimationSpec) }
@@ -413,6 +437,7 @@ private class DampedDragAnimation(
     }
 
     private fun release() {
+        if (reduceMotion) return
         animationScope.launch {
             withFrameNanos { }
             if (value != valueAnimation.targetValue) {
@@ -431,7 +456,11 @@ private class DampedDragAnimation(
         val target = value.coerceIn(valueRange)
         targetValue = target
         animationScope.launch {
-            valueAnimation.animateTo(target, valueAnimationSpec) { updateVelocity() }
+            if (reduceMotion) {
+                valueAnimation.snapTo(target)
+            } else {
+                valueAnimation.animateTo(target, valueAnimationSpec) { updateVelocity() }
+            }
         }
     }
 
@@ -440,12 +469,17 @@ private class DampedDragAnimation(
         targetValue = target
         animationScope.launch {
             mutatorMutex.mutate {
-                press()
-                launch { valueAnimation.animateTo(target, valueAnimationSpec) }
-                if (velocity != 0f) {
-                    launch { velocityAnimation.animateTo(0f, velocityAnimationSpec) }
+                if (reduceMotion) {
+                    valueAnimation.snapTo(target)
+                    velocityAnimation.snapTo(0f)
+                } else {
+                    press()
+                    launch { valueAnimation.animateTo(target, valueAnimationSpec) }
+                    if (velocity != 0f) {
+                        launch { velocityAnimation.animateTo(0f, velocityAnimationSpec) }
+                    }
+                    release()
                 }
-                release()
             }
         }
     }
@@ -460,6 +494,7 @@ private class DampedDragAnimation(
 /** A light glow centred on the indicator while it is held. */
 private class InteractiveHighlight(
     private val animationScope: CoroutineScope,
+    private val reduceMotion: Boolean,
     private val position: (Size) -> Offset,
 ) {
     private val pressProgressAnimationSpec = spring(0.5f, 300f, 0.001f)
@@ -511,6 +546,7 @@ half4 main(float2 coord) {
     }
 
     private fun animatePress(target: Float) {
+        if (reduceMotion) return
         animationScope.launch { pressProgressAnimation.animateTo(target, pressProgressAnimationSpec) }
     }
 }

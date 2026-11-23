@@ -4,6 +4,10 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -28,12 +32,16 @@ internal fun SettingFeedback(
     modifier: Modifier = Modifier,
     onViewDetails: () -> Unit,
 ) {
+    var dismissedOperation by remember(device?.sessionId) { mutableStateOf<SettingOperation?>(null) }
+    var dismissedError by remember(device?.sessionId) { mutableStateOf<Any?>(null) }
     val operation = device?.let { activeDevice ->
         state.settingOperations.lastOrNull { it.sessionId == activeDevice.sessionId }
     }
     val operationError = operation?.error
-    val otherError = state.lastError?.takeIf { it != operationError }
-    val visibleOperation = operation?.takeIf { it.needsFeedback(showPending(it.setting)) }
+    val otherError = state.lastError?.takeIf { it != operationError && it != dismissedError }
+    val visibleOperation = operation?.takeIf {
+        it != dismissedOperation && it.needsFeedback(showPending(it.setting))
+    }
     if (visibleOperation == null && otherError == null) return
 
     Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -62,15 +70,25 @@ internal fun SettingFeedback(
                     )
                 }
                 if (failure) {
-                    AppButton("查看诊断", onViewDetails, kind = AppButtonKind.Secondary)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        AppButton("查看诊断", onViewDetails, kind = AppButtonKind.Secondary)
+                        AppButton("关闭", { dismissedOperation = it }, kind = AppButtonKind.Secondary)
+                    }
                 }
             }
         }
 
         otherError?.let { error ->
             AppDashboardCard {
-                AppText(error.message, color = appColor(AppColorRole.Error))
-                AppButton("查看诊断", onViewDetails, kind = AppButtonKind.Secondary)
+                AppText(
+                    error.message,
+                    Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                    color = appColor(AppColorRole.Error),
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    AppButton("查看诊断", onViewDetails, kind = AppButtonKind.Secondary)
+                    AppButton("关闭", { dismissedError = error }, kind = AppButtonKind.Secondary)
+                }
             }
         }
     }

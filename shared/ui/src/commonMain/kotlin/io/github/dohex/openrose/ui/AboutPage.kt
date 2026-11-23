@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -17,6 +18,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import io.github.dohex.openrose.ui.resources.Res
 import io.github.dohex.openrose.ui.resources.app_icon
@@ -76,9 +80,14 @@ private fun LinkFailureCard(link: AboutLink, onDismiss: () -> Unit) {
     AppDashboardCard {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             AppIcon(RoseIcon.WARNING, tint = appColor(AppColorRole.Error))
-            AppText("无法打开“${link.title}”：当前设备没有可用的浏览器")
+            AppText(
+                "无法打开“${link.title}”：当前设备没有可用的浏览器",
+                Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+            )
         }
-        AppText(link.url, role = AppTextRole.Summary)
+        SelectionContainer {
+            AppText(link.url, role = AppTextRole.Summary)
+        }
         AppButton("知道了", onDismiss, kind = AppButtonKind.Secondary)
     }
 }

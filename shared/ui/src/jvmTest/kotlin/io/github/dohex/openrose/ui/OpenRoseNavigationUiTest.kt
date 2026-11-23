@@ -120,7 +120,7 @@ class OpenRoseNavigationUiTest {
                     harness.render()
                     harness.clickTab("设置")
                     harness.render()
-                    assertTrue(harness.hasText("组件风格、明暗模式、背景模糊与转场动效"), "Settings shows the personalization entry in $case")
+                    assertTrue(harness.hasText("界面风格、明暗模式、底栏样式、背景模糊与转场动效"), "Settings shows the personalization entry in $case")
                     assertFalse(harness.hasText("组件风格"), "Interface preferences are not on Settings in $case")
 
                     harness.openPersonalization()
