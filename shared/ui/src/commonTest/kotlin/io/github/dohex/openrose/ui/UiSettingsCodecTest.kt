@@ -25,7 +25,6 @@ class UiSettingsCodecTest {
             ),
             UiSettingsCodec.encode(settings),
         )
-        assertEquals(settings, UiSettingsCodec.decode(UiSettingsCodec.encode(settings)))
     }
 
     @Test

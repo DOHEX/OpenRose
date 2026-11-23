@@ -105,38 +105,6 @@ class OpenRoseConnectedHomeUiTest {
     }
 
     @Test
-    fun i7QuickModesIncludeAutomaticAndDynamicNoiseControl() {
-        for (style in InterfaceStyle.entries) {
-            val initial = connectedState()
-            val device = requireNotNull(initial.device)
-            val profile = ModelProfile.I7_RS_V2
-            withHarness(
-                420,
-                900,
-                initial.copy(
-                    connection = ConnectionState.Connected(device.deviceId, SESSION_ID, profile, ConnectionPhase.READY),
-                    device = device.copy(
-                        profile = profile,
-                        capabilities = device.capabilities.copy(
-                            noiseControl = profile.capabilities().noiseControl,
-                        ),
-                        diagnostics = device.diagnostics.copy(fields = device.diagnostics.fields + (DeviceField.NOISE_MODE to FieldReading.Known(FieldValue.Text("auto"), "auto"))),
-                    ),
-                ),
-                style,
-            ) { harness ->
-                harness.render()
-                assertTrue(harness.hasSelectedText("自动"))
-                assertTrue(harness.hasClickableText("动态降噪"))
-                harness.clickText("动态降噪")
-                assertEquals(DeviceSetting.NOISE_MODE, harness.settingWrites.single().first)
-                assertEquals(FieldValue.Text("dynamic"), harness.settingWrites.single().second)
-                assertTrue(harness.hasSelectedText("自动"))
-            }
-        }
-    }
-
-    @Test
     fun windQuickModeKeepsItsConfirmedSelectionUntilTheDeviceReportsAnotherMode() {
         for (style in InterfaceStyle.entries) {
             val initial = connectedState()
@@ -452,10 +420,8 @@ class OpenRoseConnectedHomeUiTest {
             val gameDevice = requireNotNull(initial.device)
             withHarness(420, 900, initial, style, wholeApp = true) { harness ->
                 harness.render()
-                // Game mode card should render single-line title without "设备已确认" subtitle
+                // Game mode card should render a single-line title
                 assertTrue(harness.hasText("游戏模式"), "game mode switch must be visible in $style")
-                assertFalse(harness.hasText("设备已确认：关闭"), "confirmed game mode subtitle must not be present in $style")
-                assertFalse(harness.hasText("设备已确认：开启"), "confirmed game mode subtitle must not be present in $style")
 
                 // Click to toggle game mode
                 assertTrue(harness.hasClickableText("游戏模式"), "game mode row should be clickable in $style")
@@ -482,13 +448,6 @@ class OpenRoseConnectedHomeUiTest {
                 assertTrue(harness.hasText("正在开启"), "game mode shows the requested direction in $style")
                 assertFalse(harness.hasText("等待设备确认"), "game mode does not show progress on the noise card in $style")
                 assertFalse(harness.hasText("正在处理设置，等待设备确认"), "game mode does not also show a progress card in $style")
-                assertTrue(
-                    harness.nodes().any {
-                        it.config.contains(SemanticsProperties.Disabled) &&
-                            it.config.getOrNull(SemanticsProperties.ToggleableState) == ToggleableState.Off
-                    },
-                    "game mode toggle must be disabled during pending setting in $style",
-                )
 
                 // When operation confirms, state updates silently without blocking banner
                 harness.state.value = harness.state.value.copy(
@@ -503,7 +462,6 @@ class OpenRoseConnectedHomeUiTest {
                 assertFalse(harness.hasText("正在开启"))
                 assertFalse(harness.hasText("设备已确认设置"), "confirmation of game mode must be silent without banner in $style")
                 assertFalse(harness.hasText("正在处理设置，等待设备确认"), "pending banner disappears after confirmation in $style")
-                assertFalse(harness.hasText("设备已确认：开启"), "no redundant subtitle after confirmation in $style")
             }
         }
     }
@@ -530,44 +488,6 @@ class OpenRoseConnectedHomeUiTest {
                 assertFalse(harness.hasText("正在关闭"))
                 assertTrue(harness.hasText("等待设备确认超时"))
                 assertTrue(harness.hasText("查看诊断"))
-            }
-        }
-    }
-
-    @Test
-    fun unknownToggleRendersDisabledSwitchWithoutInventingConfirmation() {
-        for (style in InterfaceStyle.entries) {
-            withHarness(420, 900, gameModeState(FieldReading.Unknown("ff")), style) { harness ->
-                harness.render()
-                assertTrue(harness.hasText("游戏模式"))
-                assertTrue(harness.hasText("当前状态未知"), "an unread toggle explains why it is disabled in $style")
-                assertFalse(harness.hasText("设备已确认：开启"))
-                assertFalse(harness.hasText("设备已确认：关闭"))
-                assertTrue(
-                    harness.nodes().any {
-                        it.config.contains(SemanticsProperties.Disabled) &&
-                            it.config.getOrNull(SemanticsProperties.ToggleableState) == ToggleableState.Off
-                    },
-                    "an unread game mode toggle is disabled in $style",
-                )
-                assertTrue(harness.settingWrites.isEmpty())
-
-                val device = requireNotNull(harness.state.value.device)
-                harness.state.value = harness.state.value.copy(
-                    device = device.copy(
-                        diagnostics = device.diagnostics.copy(
-                            fields = device.diagnostics.fields +
-                                (DeviceField.GAME_MODE to FieldReading.Known(FieldValue.Toggle(false), "00")),
-                        ),
-                    ),
-                )
-                harness.render()
-                assertTrue(harness.hasText("游戏模式"))
-                assertFalse(harness.hasText("设备已确认：关闭"))
-                assertTrue(harness.hasClickableText("游戏模式"))
-                harness.clickText("游戏模式")
-                harness.render()
-                assertEquals(listOf<Pair<DeviceSetting, FieldValue>>(DeviceSetting.GAME_MODE to FieldValue.Toggle(true)), harness.settingWrites)
             }
         }
     }

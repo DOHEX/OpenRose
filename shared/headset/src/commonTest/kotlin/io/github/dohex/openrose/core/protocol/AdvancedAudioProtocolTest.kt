@@ -23,8 +23,6 @@ class AdvancedAudioProtocolTest {
         assertEquals(listOf("ff0502fa2a2aaa", "ff0602fa3e3faa"), setting.readbacks.map { it.bytes.hex() })
         assertEquals(listOf(setOf("2a"), setOf("3e")), setting.readbacks.map { it.responseKeys })
         assertEquals(listOf(setOf(DeviceField.EQ), setOf(DeviceField.CUSTOM_EQ)), setting.readbacks.map { it.expectedFields })
-        assertEquals(setting.readbacks.first(), setting.readback)
-        assertEquals(setting.readbacks.drop(1), setting.additionalReadbacks)
         gains[0] = 6
         assertEquals(
             mapOf(

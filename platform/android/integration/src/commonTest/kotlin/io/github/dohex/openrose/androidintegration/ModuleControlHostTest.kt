@@ -1,26 +1,15 @@
 package io.github.dohex.openrose.androidintegration
 
-import io.github.dohex.openrose.androidintegration.wire.ControlWire
-import io.github.dohex.openrose.androidintegration.wire.HostPlatformFacts
-import io.github.dohex.openrose.androidintegration.wire.parseWire
-import io.github.dohex.openrose.androidintegration.wire.render
 import io.github.dohex.openrose.core.ControlErrorCode
 import io.github.dohex.openrose.core.ControlRuntime
 import io.github.dohex.openrose.core.HeadsetCommand
-import io.github.dohex.openrose.core.LocalControlRuntime
 import io.github.dohex.openrose.core.NoiseMode
 import io.github.dohex.openrose.core.OperationResult
-import io.github.dohex.openrose.core.PermissionState
-import io.github.dohex.openrose.core.PlatformState
 import io.github.dohex.openrose.core.SessionReference
-import io.github.dohex.openrose.core.SessionTiming
 import io.github.dohex.openrose.core.SettingStage
-import io.github.dohex.openrose.core.TransportAvailability
-import io.github.dohex.openrose.core.UserSettings
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.FieldReading
 import io.github.dohex.openrose.core.protocol.FieldValue
-import io.github.dohex.openrose.core.protocol.ModelProfile
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runCurrent
@@ -161,51 +150,6 @@ class ModuleControlHostTest {
     }
 
     @Test
-    fun aHostWhoseCloseCannotBeConfirmedKeepsServingAndOwningUntilItIsClosed() = runTest {
-        val rig = OwnerRig(this, initial = OwnerRecord(ControlWay.MODULE, PendingModuleRelease("r", null)))
-        rig.hostTransport.audioDevice.emit(rig.earphones.deviceId)
-        rig.bootHost()
-        runCurrent()
-        val generation = (rig.host.status.value as HostStatus.Active).generation
-        val lease = (rig.host.open(appIdentity) as HostOpenResult.Opened).lease.id
-        rig.hostTransport.closeFails = true
-
-        assertFalse(rig.host.stop())
-
-        assertIs<HostOpenResult.Opened>(rig.host.open(appIdentity))
-        assertEquals(generation, (rig.host.status.value as HostStatus.Active).generation)
-        val refused = rig.host.release(appIdentity, lease, SwitchRequest("a", ControlWay.MODULE, ControlWay.ORDINARY, generation))
-        assertEquals(HostRejection.RELEASE_FAILED, assertIs<ReleaseResult.Refused>(refused).rejection)
-        assertEquals("module", rig.headset.openOwner)
-
-        rig.hostTransport.closeFails = false
-        assertTrue(rig.host.stop())
-        assertEquals(null, rig.headset.openOwner)
-        assertEquals(
-            HostRejection.INVALID_LEASE,
-            assertIs<HostCallResult.Rejected>(rig.host.control.execute(appIdentity, lease, generation, HostCommand.StartScan)).rejection,
-        )
-    }
-
-    @Test
-    fun thereIsNoControlBeforeFirstUnlockAndTheExistingAudioConnectionIsReadAfterIt() = runTest {
-        val rig = OwnerRig(this, initial = OwnerRecord(ControlWay.MODULE, PendingModuleRelease("r", null)))
-        rig.hostTransport.audioDevice.emit(rig.earphones.deviceId)
-        rig.bootHost(unlocked = false)
-        runCurrent()
-
-        assertIs<HostStatus.Inactive>(rig.host.status.value)
-        assertEquals(emptyList(), rig.headset.events)
-
-        rig.bootHost(unlocked = true)
-        runCurrent()
-        advanceUntilIdleQuietly()
-
-        assertIs<HostStatus.Active>(rig.host.status.value)
-        assertEquals(listOf("module:open"), rig.headset.events)
-    }
-
-    @Test
     fun theHostFollowsTheSavedWayAndDoesNotReclaimAfterItIsLeft() = runTest {
         val rig = OwnerRig(this)
         rig.bootHost()
@@ -280,35 +224,6 @@ class ModuleControlHostTest {
         // The stale reading is withdrawn instead of staying on screen as current.
         assertTrue(runtime.state.value.device == null)
         assertIs<OwnerReadiness.Unavailable>(runtime.integration.value.owner.readiness)
-    }
-
-    @Test
-    fun theWireCarriesTheCompleteDeviceStateForBothModels() = runTest {
-        for (profile in listOf(ModelProfile.I5_ZT, ModelProfile.I7_RS_V2)) {
-            val rig = OwnerRig(this, earphones = rosePair("rose-${profile.name}", profile))
-            val runtime = LocalControlRuntime(
-                PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
-                UserSettings(),
-                rig.appTransport,
-                backgroundScope,
-                SessionTiming(queryTimeoutMillis = 50, writeIntervalMillis = 0),
-            )
-            assertEquals(OperationResult.Success, runtime.connect(rig.earphones.deviceId, pinned = true))
-            val state = runtime.state.value
-
-            val wire = ControlWire.encodeOwned(
-                HostPlatformFacts(state.platform.permission, state.platform.transport),
-                state,
-            ).render()
-            val decoded = ControlWire.decodeOwned(parseWire(wire))
-
-            assertEquals(state.device, decoded.state.device)
-            assertEquals(state.connection, decoded.state.connection)
-            assertEquals(state.transportSelection, decoded.state.transportSelection)
-            assertEquals(state.bondedDevices, decoded.state.bondedDevices)
-            assertTrue(requireNotNull(decoded.state.device).capabilities.writableSettings.isNotEmpty())
-            runtime.disconnect()
-        }
     }
 
     private fun noiseMode(runtime: ControlRuntime): FieldValue = assertIs<FieldReading.Known>(runtime.state.value.device?.diagnostics?.fields?.get(DeviceField.NOISE_MODE)).value

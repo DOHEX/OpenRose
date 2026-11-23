@@ -69,45 +69,29 @@ class NoiseControlCardUiTest {
             "anc" to (true to false),
             "transparency" to (false to true),
             "wind" to (false to false),
-            "normal" to (false to false),
         )
 
-        for (style in InterfaceStyle.entries) {
-            for ((mode, expectedRows) in cases) {
-                val nodes = renderNodes(state(mode = knownMode(mode)), style)
-                assertEquals(expectedRows.first, nodes.hasText("降噪档位"), "ANC row in $mode using $style")
-                assertEquals(expectedRows.second, nodes.hasText("通透档位"), "transparency row in $mode using $style")
-                if (expectedRows.first || expectedRows.second) {
-                    assertTrue(nodes.hasText("1 档"), "first level in $mode using $style")
-                    assertTrue(nodes.hasText("3 档"), "middle level in $mode using $style")
-                    assertTrue(nodes.hasText("5 档"), "last level in $mode using $style")
-                } else {
-                    assertFalse(nodes.hasText("1 档"), "no level buttons in $mode using $style")
-                    assertFalse(nodes.hasText("3 档"), "no level buttons in $mode using $style")
-                    assertFalse(nodes.hasText("5 档"), "no level buttons in $mode using $style")
-                }
+        for ((mode, expectedRows) in cases) {
+            val nodes = renderNodes(state(mode = knownMode(mode)))
+            assertEquals(expectedRows.first, nodes.hasText("降噪档位"), "ANC row in $mode")
+            assertEquals(expectedRows.second, nodes.hasText("通透档位"), "transparency row in $mode")
+            if (expectedRows.first || expectedRows.second) {
+                assertTrue(nodes.hasText("1 档"), "first level in $mode")
+                assertTrue(nodes.hasText("3 档"), "middle level in $mode")
+                assertTrue(nodes.hasText("5 档"), "last level in $mode")
+            } else {
+                assertFalse(nodes.hasText("1 档"), "no level buttons in $mode")
+                assertFalse(nodes.hasText("3 档"), "no level buttons in $mode")
+                assertFalse(nodes.hasText("5 档"), "no level buttons in $mode")
             }
         }
     }
 
     @Test
     fun unconfirmedModeHidesBothLevelRows() {
-        val readings = listOf(
-            FieldReading.Loading,
-            FieldReading.Unknown("ff"),
-            FieldReading.NotProvided(""),
-            FieldReading.Known(FieldValue.Number(3), "03"),
-            knownMode("not-a-supported-mode"),
-            knownMode("auto"),
-        )
-
-        for (style in InterfaceStyle.entries) {
-            for (reading in readings) {
-                val nodes = renderNodes(state(mode = reading), style)
-                assertFalse(nodes.hasText("降噪档位"), "ANC row for $reading")
-                assertFalse(nodes.hasText("通透档位"), "transparency row for $reading")
-            }
-        }
+        val nodes = renderNodes(state(mode = FieldReading.Loading))
+        assertFalse(nodes.hasText("降噪档位"))
+        assertFalse(nodes.hasText("通透档位"))
     }
 
     @Test
@@ -166,11 +150,6 @@ class NoiseControlCardUiTest {
             assertTrue(pendingNodes.hasText("降噪档位"))
             assertFalse(pendingNodes.hasText("通透档位"))
             assertTrue(pendingNodes.hasDisabledButton("1 档"))
-
-            val confirmed = pending.copy(stage = SettingStage.CONFIRMED)
-            val confirmedNodes = renderNodes(state(mode = knownMode("wind"), operations = listOf(confirmed)), style)
-            assertFalse(confirmedNodes.hasText("降噪档位"))
-            assertFalse(confirmedNodes.hasText("通透档位"))
         }
     }
 

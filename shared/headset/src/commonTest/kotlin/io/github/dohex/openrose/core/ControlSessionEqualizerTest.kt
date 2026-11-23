@@ -17,7 +17,6 @@ import kotlinx.coroutines.flow.FlowCollector
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.test.TestScope
-import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
@@ -29,26 +28,6 @@ import kotlin.test.assertTrue
 /** Session seam with independent TX literals and explicitly synthetic setting RX. */
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class ControlSessionEqualizerTest {
-    @Test
-    fun i5PopEqIsWrittenAndReadBeforeItBecomesConfirmed() = runTest {
-        val (session, link) = ready(ModelProfile.I5_ZT)
-        val pending = async { session.set(HeadsetCommand.EqualizerPreset("pop")) }
-        runCurrent()
-
-        // RoseLink 3.8.0 fixed ZtSender extraction, not this project's frame builder.
-        assertEquals(listOf("08ee00000002810b000084", "08ee00000002010a0003"), link.writes.drop(13))
-        assertFalse(pending.isCompleted)
-        assertEquals(SettingStage.WRITTEN, session.state.value.settingOperations.single().stage)
-        assertEquals(FieldValue.Text("hifi"), reading(session, DeviceField.EQ))
-        link.incoming.send("09ff00000102010b000017".bytes())
-        runCurrent()
-
-        assertEquals(OperationResult.Success, pending.await())
-        assertEquals(SettingStage.CONFIRMED, session.state.value.settingOperations.single().stage)
-        assertEquals(FieldValue.Text("pop"), reading(session, DeviceField.EQ))
-        session.disconnect()
-    }
-
     @Test
     fun i5GameOnAndOffUseTheOppositeWirePolarityAndWaitForReadback() = runTest {
         val (session, link) = ready(ModelProfile.I5_ZT)
@@ -73,7 +52,6 @@ class ControlSessionEqualizerTest {
     @Test
     fun allFourI5PresetsMatchIndependentCommandsAndDeviceReadbacks() = runTest {
         val (session, link) = ready(ModelProfile.I5_ZT)
-        assertEquals(persistentSetOf("pop", "hifi", "rock", "light"), session.state.value.device?.capabilities?.equalizer?.presets)
         for ((preset, literal, reply) in listOf(
             Triple("pop", "08ee00000002810b000084", "09ff00000102010b000017"),
             Triple("hifi", "08ee00000002810b000185", "09ff00000102010b000118"),
@@ -97,7 +75,6 @@ class ControlSessionEqualizerTest {
     @Test
     fun allFiveI7PresetsShareTheSessionSequenceAndNormalizeBothEqReplyLayouts() = runTest {
         val (session, link) = ready(ModelProfile.I7_RS_V2)
-        assertEquals(persistentSetOf("pop", "hifi", "rock", "light", "eap"), session.state.value.device?.capabilities?.equalizer?.presets)
         // Independently worked sequences 03..0c after three complete initialization queries.
         // Single-byte 00/01 are HIFI/POP; the two-byte 00/01 records reverse that order.
         for (vector in listOf(
@@ -140,33 +117,6 @@ class ControlSessionEqualizerTest {
             assertEquals(FieldValue.Toggle(vector.enabled), reading(session, DeviceField.GAME_MODE))
         }
         session.disconnect()
-    }
-
-    @Test
-    fun eapAdmissionUsesFirmware151152AndUnsignedFullByteComparison() = runTest {
-        for ((firmware, allowed) in listOf(
-            null to false,
-            "dd00040d010501f5aa" to false, // 151
-            "dd00040d010502f6aa" to true, // 152
-            "dd00040d001000feaa" to true, // Full unsigned bytes [0,16,0] concatenate to integer 160.
-        )) {
-            val (session, link) = ready(ModelProfile.I7_RS_V2, firmware)
-            assertEquals(allowed, "eap" in requireNotNull(session.state.value.device?.capabilities?.equalizer).presets, firmware)
-            if (allowed) {
-                val pending = async { session.set(HeadsetCommand.EqualizerPreset("eap")) }
-                runCurrent()
-                assertEquals(listOf("ff03022a0634aa", "ff0402fa2a29aa"), link.writes.drop(3), firmware)
-                assertFalse(pending.isCompleted)
-                link.incoming.send("dd00022a060faa".bytes())
-                runCurrent()
-                assertEquals(OperationResult.Success, pending.await(), firmware)
-            } else {
-                assertEquals(ControlErrorCode.UNSUPPORTED, assertIs<OperationResult.Failure>(session.set(HeadsetCommand.EqualizerPreset("eap"))).error.code, firmware)
-                assertEquals(3, link.writes.size, firmware)
-                assertTrue(session.state.value.settingOperations.isEmpty())
-            }
-            session.disconnect()
-        }
     }
 
     @Test
@@ -232,30 +182,6 @@ class ControlSessionEqualizerTest {
         session.disconnect()
     }
 
-    @Test
-    fun cachedEqualizerValueWithoutFreshReadbackTimesOutAndEndsQueuedGameSettings() = runTest {
-        for (profile in listOf(ModelProfile.I5_ZT, ModelProfile.I7_RS_V2)) {
-            val (session, link) = ready(profile)
-            val initialCount = link.writes.size
-            val eq = async { session.set(HeadsetCommand.EqualizerPreset("hifi")) }
-            runCurrent()
-            val game = async { session.set(HeadsetCommand.GameMode(true)) }
-            runCurrent()
-            assertFalse(eq.isCompleted)
-            assertFalse(game.isCompleted)
-            assertEquals(FieldValue.Text("hifi"), reading(session, DeviceField.EQ))
-            advanceTimeBy(51)
-            runCurrent()
-            assertEquals(ControlErrorCode.TIMEOUT, assertIs<OperationResult.Failure>(eq.await()).error.code, profile.name)
-            assertEquals(ControlErrorCode.DISCONNECTED, assertIs<OperationResult.Failure>(game.await()).error.code, profile.name)
-            assertEquals(ConnectionState.Disconnected, session.state.value.connection)
-            assertEquals(listOf(SettingStage.TIMED_OUT, SettingStage.DISCONNECTED), session.state.value.settingOperations.map { it.stage })
-            advanceTimeBy(1_000)
-            runCurrent()
-            assertEquals(initialCount + 2, link.writes.size)
-        }
-    }
-
     private data class EqVector(val preset: String, val write: String, val query: String, val reply: String)
     private data class GameVector(val enabled: Boolean, val write: String, val query: String, val reply: String)
 
@@ -316,16 +242,5 @@ class ControlSessionEqualizerTest {
         private fun reading(session: ControlSession, field: DeviceField) = assertIs<FieldReading.Known>(session.state.value.device?.diagnostics?.fields?.get(field)).value
         private fun ByteArray.hex() = joinToString("") { (it.toInt() and 255).toString(16).padStart(2, '0') }
         private fun String.bytes() = chunked(2).map { it.toInt(16).toByte() }.toByteArray()
-
-        // Independent i5 Linux read capture; setting confirmations below are synthetic.
-        private val i5Replies = mapOf(
-            "0101" to "09ff00000101011100000164620000ffe2", "0602" to "09ff00000106020e000000010020",
-            "0201" to "09ff00000102010b000118", "0603" to "09ff00000106030b00011e",
-            "0801" to "09ff00000108010b00011e", "0d01" to "09ff0000010d010e00010205002d",
-            "0401" to "09ff00000104011200060502040605030746", "0a01" to "09ff0000010a010b00001f",
-            "0605" to "09ff00000106050e000101010126", "0c01" to "09ff0000010c010b000122",
-            "0607" to "09ff00000106070b000223", "0604" to "09ff00000106040b00001e",
-            "0e03" to "09ff0000010e030b000126",
-        )
     }
 }

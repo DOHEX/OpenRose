@@ -121,7 +121,7 @@ class HostWireTest {
     }
 
     @Test
-    fun spatialAudioStateSurvivesTheOwnerWire() {
+    fun anOwnerStateKeepsFactsOperationsAndTheTouchLayoutOnTheWire() {
         val device = DeviceState(
             deviceId = reference.deviceId,
             sessionId = reference.sessionId,
@@ -161,18 +161,19 @@ class HostWireTest {
     }
 
     @Test
-    fun spatialOptionsReachTheAppWhenTheModuleOwnsTheConnection() {
-        val profile = ModelProfile.ASTRO_X_RS_V2
-        val device = DeviceState(
-            deviceId = reference.deviceId,
-            sessionId = reference.sessionId,
-            profile = profile,
-            capabilities = profile.capabilities(),
-            fields = persistentMapOf(DeviceField.SPATIAL_MODE to FieldReading.Known(FieldValue.Text("fixed"), "02")),
-        )
+    fun everyModelsCapabilitiesSurviveTheOwnerWire() {
         val facts = HostPlatformFacts(PermissionState.GRANTED, TransportAvailability.Available)
-        val state = ControlState(platform = PlatformState(PermissionState.NOT_REQUIRED), device = device)
-        assertEquals(device, ControlWire.decodeOwned(ControlWire.encodeOwned(facts, state)).state.device)
+        for (profile in ModelProfile.entries) {
+            val device = DeviceState(
+                deviceId = reference.deviceId,
+                sessionId = reference.sessionId,
+                profile = profile,
+                capabilities = profile.capabilities(),
+                fields = persistentMapOf(),
+            )
+            val state = ControlState(platform = PlatformState(PermissionState.NOT_REQUIRED), device = device)
+            assertEquals(device, ControlWire.decodeOwned(ControlWire.encodeOwned(facts, state)).state.device, profile.name)
+        }
     }
 
     @Test

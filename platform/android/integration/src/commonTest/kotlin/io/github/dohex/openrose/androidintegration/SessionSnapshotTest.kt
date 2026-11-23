@@ -239,10 +239,10 @@ class SessionSnapshotTest {
         override suspend fun subscribe() = Unit
 
         override suspend fun write(bytes: ByteArray) {
-            val hex = bytes.toHex()
+            val hex = bytes.hex()
             writes += hex
             if (!initializing) return
-            initializationReplies(profile, hex).forEach { incoming.send(it.fromHex()) }
+            initializationReplies(profile, hex).forEach { incoming.send(it.bytes()) }
         }
 
         override suspend fun close() {
@@ -251,10 +251,7 @@ class SessionSnapshotTest {
         }
 
         suspend fun deviceReply(hex: String) {
-            incoming.send(hex.fromHex())
+            incoming.send(hex.bytes())
         }
     }
 }
-
-private fun ByteArray.toHex() = joinToString("") { (it.toInt() and 0xff).toString(16).padStart(2, '0') }
-private fun String.fromHex() = chunked(2).map { it.toInt(16).toByte() }.toByteArray()

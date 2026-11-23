@@ -241,6 +241,7 @@ class AddDeviceLifecycleUiTest {
                 assertTrue(harness.hasContentDescription("返回"))
                 assertTrue(harness.hasClickableText("取消连接"))
                 assertFalse(harness.hasText("耳机服务发现失败"))
+                assertFalse(harness.hasTab("耳机"))
                 harness.ready()
                 harness.render()
                 assertTrue(harness.hasTab("耳机"))

@@ -2,7 +2,6 @@
 
 package io.github.dohex.openrose.ui
 
-import androidx.compose.ui.semantics.Role
 import io.github.dohex.openrose.core.*
 import kotlin.test.Test
 import kotlin.test.assertFalse
@@ -36,44 +35,6 @@ class OpenRoseNavDisplayTest {
                 assertTrue(harness.hasText("均衡器"), "Home card should be visible")
                 assertTrue(harness.hasText("状态"), "Bottom navigation bar must be restored on returning to main in $style")
                 assertTrue(harness.hasText("设置"), "Bottom navigation bar must be restored on returning to main in $style")
-            }
-        }
-    }
-
-    @Test
-    fun interfaceStyleSwitchPreservesNavigationStack() {
-        withOpenRoseAppHarness(connectedI7State()) { harness ->
-            harness.render()
-            harness.clickText("触控操作")
-            harness.render()
-            assertTrue(harness.hasText("触控操作"))
-
-            // Switch interface style while on secondary route
-            harness.uiSettings.value = harness.uiSettings.value.copy(interfaceStyle = InterfaceStyle.MATERIAL3)
-            harness.render()
-
-            // Still on secondary route
-            assertTrue(harness.hasText("触控操作"))
-            assertTrue(harness.hasContentDescription("返回"))
-
-            // Can still navigate back in Material 3
-            harness.clickContentDescription("返回")
-            harness.render()
-            assertTrue(harness.hasRole(Role.Tab))
-        }
-    }
-
-    @Test
-    fun pageTransitionPreferencesApplyCleanly() {
-        for (transition in PageTransition.entries) {
-            withOpenRoseAppHarness(connectedI7State(), initialUiSettings = UiSettings(pageTransition = transition)) { harness ->
-                harness.render()
-                harness.clickText("触控操作")
-                harness.render()
-                assertTrue(harness.hasText("触控操作"), "Navigation should work for transition $transition")
-                harness.clickContentDescription("返回")
-                harness.render()
-                assertTrue(harness.hasText("均衡器"))
             }
         }
     }

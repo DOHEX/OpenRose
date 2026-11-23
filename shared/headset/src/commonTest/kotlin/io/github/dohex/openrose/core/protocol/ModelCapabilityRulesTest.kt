@@ -49,23 +49,25 @@ class ModelCapabilityRulesTest {
     @Test
     fun aWritableSettingWithoutOptionsIsNeverWritable() {
         val firmwares = listOf(null, firmware(0, 0, 1), firmware(9, 9, 9))
-        for (profile in ModelProfile.entries) for (firmware in firmwares) {
-            val capabilities = profile.capabilities(firmware)
-            val writable = capabilities.writableSettings
-            fun requireOptions(setting: DeviceSetting, options: Collection<*>?) {
-                if (setting in writable) assertTrue(options.orEmpty().isNotEmpty(), "$profile $firmware $setting")
+        for (profile in ModelProfile.entries) {
+            for (firmware in firmwares) {
+                val capabilities = profile.capabilities(firmware)
+                val writable = capabilities.writableSettings
+                fun requireOptions(setting: DeviceSetting, options: Collection<*>?) {
+                    if (setting in writable) assertTrue(options.orEmpty().isNotEmpty(), "$profile $firmware $setting")
+                }
+                requireOptions(DeviceSetting.NOISE_MODE, capabilities.noiseControl?.modes)
+                requireOptions(DeviceSetting.NOISE_CYCLE, capabilities.noiseControl?.cycleModes)
+                requireOptions(DeviceSetting.EQ, capabilities.equalizer?.presets)
+                requireOptions(DeviceSetting.CUSTOM_EQ, capabilities.equalizer?.custom?.bandsHz)
+                requireOptions(DeviceSetting.TOUCH_BINDING, capabilities.touchControl?.actions)
+                requireOptions(DeviceSetting.AUDIO_MODE, capabilities.audioControl?.modes)
+                requireOptions(DeviceSetting.PROMPT_VOLUME, capabilities.promptVolumeLevels)
+                requireOptions(DeviceSetting.PROMPT_LANGUAGE, capabilities.promptLanguages)
+                requireOptions(DeviceSetting.GAIN, capabilities.gainLevels)
+                requireOptions(DeviceSetting.HEARING_PROTECTION, capabilities.hearingProtectionLevels)
+                requireOptions(DeviceSetting.BASS_BOOST, capabilities.bassBoostLevels)
             }
-            requireOptions(DeviceSetting.NOISE_MODE, capabilities.noiseControl?.modes)
-            requireOptions(DeviceSetting.NOISE_CYCLE, capabilities.noiseControl?.cycleModes)
-            requireOptions(DeviceSetting.EQ, capabilities.equalizer?.presets)
-            requireOptions(DeviceSetting.CUSTOM_EQ, capabilities.equalizer?.custom?.bandsHz)
-            requireOptions(DeviceSetting.TOUCH_BINDING, capabilities.touchControl?.actions)
-            requireOptions(DeviceSetting.AUDIO_MODE, capabilities.audioControl?.modes)
-            requireOptions(DeviceSetting.PROMPT_VOLUME, capabilities.promptVolumeLevels)
-            requireOptions(DeviceSetting.PROMPT_LANGUAGE, capabilities.promptLanguages)
-            requireOptions(DeviceSetting.GAIN, capabilities.gainLevels)
-            requireOptions(DeviceSetting.HEARING_PROTECTION, capabilities.hearingProtectionLevels)
-            requireOptions(DeviceSetting.BASS_BOOST, capabilities.bassBoostLevels)
         }
     }
 }

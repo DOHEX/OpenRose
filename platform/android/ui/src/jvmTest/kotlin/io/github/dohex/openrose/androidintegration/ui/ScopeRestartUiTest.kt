@@ -301,14 +301,4 @@ class ScopeRestartUiTest {
         assertTrue(harness.hasText("com.milink.service"))
         assertFalse(harness.hasText("com.android.bluetooth"))
     }
-
-    @Test
-    fun basicPlatformDoesNotOfferAndroidRestart() = runOpenRoseUiTest(1200, 1000) {
-        val model = FakeOpenRoseModel()
-        val page = mutableStateOf("操作")
-        setContent { AndroidTestPage(model, BasicPlatformUi("Linux"), page) }
-        val harness = AndroidPageHarness(this, page)
-        harness.render()
-        assertFalse(harness.hasContentDescription("重启作用域"))
-    }
 }

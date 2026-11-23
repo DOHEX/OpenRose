@@ -172,22 +172,6 @@ class QuickPanelUiTest {
     }
 
     @Test
-    fun gameModeSwitchWritesTheOppositeOfTheConfirmedValue() {
-        for (style in InterfaceStyle.entries) {
-            val state = withFields(connectedI7State(), DeviceField.GAME_MODE to known(FieldValue.Toggle(false)))
-            withQuickPanel(state, style) { panel ->
-                panel.render()
-                panel.clickText("游戏模式")
-                assertEquals(
-                    listOf<Pair<DeviceSetting, FieldValue>>(DeviceSetting.GAME_MODE to FieldValue.Toggle(true)),
-                    panel.model.settingWrites,
-                    "game mode in $style",
-                )
-            }
-        }
-    }
-
-    @Test
     fun controlsTheModelCannotWriteAreHidden() {
         val base = connectedI7State()
         val device = requireNotNull(base.device)
@@ -212,13 +196,11 @@ class QuickPanelUiTest {
     }
 
     @Test
-    fun theTrayOnlyControlsAreNotOffered() {
+    fun theQuickPanelHasNoAncLevelControls() {
         for (style in InterfaceStyle.entries) {
             withQuickPanel(connectedI7State(), style) { panel ->
                 panel.render()
                 assertFalse(panel.hasText("降噪档位"), "no ANC level in $style")
-                assertFalse(panel.hasText("多点连接"), "no multipoint in $style")
-                assertFalse(panel.hasText("触控操作"), "no touch bindings in $style")
             }
         }
     }

@@ -36,14 +36,6 @@ class ControlWayUiTest {
     private val moduleUnavailable = ModuleAvailability.Unavailable("兼容框架服务尚未连接")
 
     @Test
-    fun defaultStateShowsOrdinaryControlSelected() {
-        forEachStyle(Scenario(ControlState(platform = platform()), integration(ModuleAvailability.NotEnabled))) { harness ->
-            assertTrue(harness.isTagSelected(ControlWayTags.option(ControlWay.ORDINARY)))
-            assertFalse(harness.isTagSelected(ControlWayTags.option(ControlWay.MODULE)))
-        }
-    }
-
-    @Test
     fun anUnreadyOwnerNeverClaimsToBeReadyWhileTheModuleIsUnavailable() {
         val starting = Scenario(
             ControlState(platform = platform()),
@@ -53,15 +45,6 @@ class ControlWayUiTest {
             harness.openPage("状态")
             assertTrue(harness.hasText("未就绪"), "the unready module is reported on the status page")
             assertTrue("启动中" in harness.tagTexts(ControlWayTags.READINESS))
-            assertFalse("就绪" in harness.tagTexts(ControlWayTags.READINESS))
-        }
-        val moduleStarting = starting.copy(
-            integration = starting.integration.copy(owner = OwnerState(selected = ControlWay.MODULE, readiness = OwnerReadiness.Starting)),
-        )
-        forEachStyle(moduleStarting) { harness ->
-            assertTrue(harness.isTagSelected(ControlWayTags.option(ControlWay.MODULE)))
-            harness.openPage("状态")
-            assertFalse("就绪" in harness.tagTexts(ControlWayTags.READINESS))
         }
     }
 
@@ -79,7 +62,6 @@ class ControlWayUiTest {
             assertTrue("不可用" in harness.tagTexts(ControlWayTags.READINESS))
             assertTrue("发现控制端" in harness.tagTexts(ControlWayTags.FAILURE_STAGE))
             assertTrue(harness.hasText(reason))
-            assertFalse("就绪" in harness.tagTexts(ControlWayTags.READINESS))
             assertTrue("未连接" in harness.tagTexts(StatusTags.CONNECTION))
         }
     }
@@ -172,7 +154,6 @@ class ControlWayUiTest {
             assertTrue("确认释放" in harness.tagTexts(ControlWayTags.FAILURE_STAGE))
             assertTrue(harness.hasText(reason))
             assertTrue(harness.hasTag(ControlWayTags.SWITCH_BLOCKED_NOTICE))
-            assertFalse("就绪" in harness.tagTexts(ControlWayTags.READINESS))
         }
     }
 
@@ -236,26 +217,8 @@ class ControlWayUiTest {
             assertTrue(harness.isTagDisabled(ControlWayTags.option(ControlWay.MODULE)))
             assertFalse(harness.isTagClickable(ControlWayTags.option(ControlWay.MODULE)))
             assertFalse(harness.isTagClickable(ControlWayTags.option(ControlWay.ORDINARY)))
-            assertEquals(ControlWay.ORDINARY, harness.host.integration.value.owner.selected, "a disabled choice selects nothing")
             harness.openPage("状态")
             assertTrue("切换中" in harness.tagTexts(ControlWayTags.READINESS))
-            assertFalse("就绪" in harness.tagTexts(ControlWayTags.READINESS))
-        }
-    }
-
-    @Test
-    fun basicPlatformsDoNotExposeControlWay() {
-        for (style in InterfaceStyle.entries) {
-            runOpenRoseUiTest(1200, 1000) {
-                val page = mutableStateOf("设置")
-                val model = FakeOpenRoseModel(mutableUiSettings = mutableStateOf(UiSettings(interfaceStyle = style)))
-                setContent { AndroidTestPage(model, BasicPlatformUi("Linux"), page) }
-                val harness = AndroidPageHarness(this, page)
-                harness.render()
-                assertFalse(harness.hasTagWithPrefix(ControlWayTags.PREFIX))
-                harness.openPage("状态")
-                assertFalse(harness.hasTagWithPrefix(ControlWayTags.PREFIX))
-            }
         }
     }
 

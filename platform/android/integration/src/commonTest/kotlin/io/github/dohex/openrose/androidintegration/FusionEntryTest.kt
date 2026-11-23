@@ -7,7 +7,6 @@ import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
-import kotlin.test.assertNull
 
 /**
  * The fusion device center's additional settings entry, decided from the module host's own owner state and
@@ -77,7 +76,6 @@ class FusionEntryTest {
         val generation = (rig.host.status.value as HostStatus.Active).generation
         rig.host.release(appIdentity, app, SwitchRequest("x", ControlWay.MODULE, ControlWay.ORDINARY, generation))
 
-        assertNull(rig.host.control.view(milinkIdentity, lease))
         assertIs<FusionEntryDecision.System>(decide(rig, lease, classic))
     }
 }

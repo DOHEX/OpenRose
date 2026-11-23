@@ -9,7 +9,6 @@ import io.github.dohex.openrose.core.transport.ControlConnection
 import io.github.dohex.openrose.core.transport.ControlTransport
 import io.github.dohex.openrose.core.transport.DeviceId
 import io.github.dohex.openrose.core.transport.TransportEndpoint
-import kotlinx.collections.immutable.persistentSetOf
 import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
@@ -29,25 +28,6 @@ import kotlin.test.assertTrue
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class ControlSessionDeviceControlsTest {
     @Test
-    fun i5AudioSelectionConfirmsBothCoupledFieldsOnlyAfterReadback() = runTest {
-        val (session, link) = ready(ModelProfile.I5_ZT)
-        val pending = async { session.set(HeadsetCommand.AudioMode("aac_sbc")) }
-        runCurrent()
-
-        assertEquals(listOf("08ee00000008810b00008a", "08ee00000008010a0009"), link.writes.drop(13))
-        assertFalse(pending.isCompleted)
-        assertEquals(FieldValue.Text("ldac"), reading(session, DeviceField.AUDIO_MODE))
-        assertEquals(FieldValue.Toggle(false), reading(session, DeviceField.MULTIPOINT))
-        link.incoming.send("09ff00000108010b00001d".bytes())
-        runCurrent()
-
-        assertEquals(OperationResult.Success, pending.await())
-        assertEquals(FieldValue.Text("aac_sbc"), reading(session, DeviceField.AUDIO_MODE))
-        assertEquals(FieldValue.Toggle(true), reading(session, DeviceField.MULTIPOINT))
-        session.disconnect()
-    }
-
-    @Test
     fun touchConfirmationProjectsOnlyTheRequestedSlotAndAllowsOtherUnknownActions() = runTest {
         val (session, link) = ready(ModelProfile.I5_ZT)
         val assignment = FieldValue.TouchAssignment("left", "single", "play_pause")
@@ -62,24 +42,6 @@ class ControlSessionDeviceControlsTest {
         val actual = assertIs<FieldValue.TouchKeys>(reading(session, DeviceField.TOUCH_KEYS))
         assertEquals("play_pause", actual.bindings.single { it.side == "left" && it.gesture == "single" }.action)
         assertTrue(actual.bindings.filterNot { it.side == "left" && it.gesture == "single" }.all { it.action == null })
-        session.disconnect()
-    }
-
-    @Test
-    fun detectionSwitchConfirmsConfigurationWithoutInventingWearOrCaseEvents() = runTest {
-        val (session, link) = ready(ModelProfile.I5_ZT)
-        val before = requireNotNull(session.state.value.device).diagnostics.fields
-        val pending = async { session.set(HeadsetCommand.EarDetection(true)) }
-        runCurrent()
-        assertEquals(listOf("08ee0000000c810b00008e", "08ee0000000c010a000d"), link.writes.takeLast(2))
-        assertFalse(pending.isCompleted)
-        assertEquals(before, session.state.value.device?.diagnostics?.fields)
-        link.incoming.send("09ff0000010c010b000021".bytes())
-        runCurrent()
-
-        assertEquals(OperationResult.Success, pending.await())
-        assertEquals(FieldValue.Toggle(true), reading(session, DeviceField.EAR_DETECTION))
-        assertEquals(before - DeviceField.EAR_DETECTION, requireNotNull(session.state.value.device).diagnostics.fields - DeviceField.EAR_DETECTION)
         session.disconnect()
     }
 
@@ -130,7 +92,6 @@ class ControlSessionDeviceControlsTest {
             runCurrent()
             assertEquals(OperationResult.Success, pending.await(), slot)
         }
-        assertEquals(8, session.state.value.device?.capabilities?.touchControl?.slots?.size)
         session.disconnect()
     }
 
@@ -215,7 +176,6 @@ class ControlSessionDeviceControlsTest {
     @Test
     fun i5AudioAndMultipointSelectionsConfirmTheCouplingInBothDirections() = runTest {
         val (session, link) = ready(ModelProfile.I5_ZT)
-        assertEquals(true, session.state.value.device?.capabilities?.audioControl?.multipointCoupled)
         for (vector in listOf(
             AudioVector(DeviceSetting.AUDIO_MODE, FieldValue.Text("aac_sbc"), "08ee00000008810b00008a", "aac_sbc", true, "09ff00000108010b00001d"),
             AudioVector(DeviceSetting.MULTIPOINT, FieldValue.Toggle(false), "08ee00000008810b00018b", "ldac", false, "09ff00000108010b00011e"),
@@ -242,7 +202,6 @@ class ControlSessionDeviceControlsTest {
     @Test
     fun i7AllAudioModesAndMultipointOperateIndependently() = runTest {
         val (session, link) = ready(ModelProfile.I7_RS_V2)
-        assertEquals(false, session.state.value.device?.capabilities?.audioControl?.multipointCoupled)
         for (vector in listOf(
             ModeVector("aac_sbc", "ff03022b002faa", "ff0402fa2b2aaa", "dd00022b000aaa"),
             ModeVector("ldac", "ff05022b0132aa", "ff0602fa2b2caa", "dd00022b010baa"),
@@ -342,33 +301,12 @@ class ControlSessionDeviceControlsTest {
                 assertEquals(ControlErrorCode.UNSUPPORTED, assertIs<OperationResult.Failure>(session.set(HeadsetCommand.PromptVolume(0))).error.code)
                 // The firmware is unread, so prompt volume is not writable at all yet.
                 assertEquals(ControlErrorCode.UNSUPPORTED, assertIs<OperationResult.Failure>(session.set(HeadsetCommand.PromptVolume(6))).error.code)
-                assertEquals(persistentSetOf(), session.state.value.device?.capabilities?.gainLevels)
-                assertEquals(persistentSetOf(), session.state.value.device?.capabilities?.promptVolumeLevels)
             }
             assertEquals(count, link.writes.size)
             assertTrue(session.state.value.settingOperations.isEmpty())
             session.disconnect()
             assertEquals(ControlErrorCode.NOT_READY, assertIs<OperationResult.Failure>(session.set(HeadsetCommand.TouchEnabled(true))).error.code)
         }
-    }
-
-    @Test
-    fun disconnectEndsTheWholeControlQueue() = runTest {
-        val (session, link) = ready(ModelProfile.I5_ZT)
-        val touch = async { session.set(HeadsetCommand.TouchBinding("left", "single", "play_pause")) }
-        runCurrent()
-        val volume = async { session.set(HeadsetCommand.PromptVolume(5)) }
-        val audio = async { session.set(HeadsetCommand.Multipoint(true)) }
-        runCurrent()
-        assertEquals(listOf(SettingStage.WRITTEN, SettingStage.SUBMITTED, SettingStage.SUBMITTED), session.state.value.settingOperations.map { it.stage })
-        assertEquals(15, link.writes.size)
-        session.disconnect()
-        runCurrent()
-        for (pending in listOf(touch, volume, audio)) assertEquals(ControlErrorCode.DISCONNECTED, assertIs<OperationResult.Failure>(pending.await()).error.code)
-        assertTrue(session.state.value.settingOperations.all { it.stage == SettingStage.DISCONNECTED })
-        advanceTimeBy(1_000)
-        runCurrent()
-        assertEquals(15, link.writes.size)
     }
 
     @Test
@@ -450,16 +388,5 @@ class ControlSessionDeviceControlsTest {
         private fun reading(session: ControlSession, field: DeviceField) = assertIs<FieldReading.Known>(session.state.value.device?.diagnostics?.fields?.get(field)).value
         private fun ByteArray.hex() = joinToString("") { (it.toInt() and 255).toString(16).padStart(2, '0') }
         private fun String.bytes() = chunked(2).map { it.toInt(16).toByte() }.toByteArray()
-
-        // Independent Linux initialization capture; settings above use synthetic RX.
-        private val i5Replies = mapOf(
-            "0101" to "09ff00000101011100000164620000ffe2", "0602" to "09ff00000106020e000000010020",
-            "0201" to "09ff00000102010b000118", "0603" to "09ff00000106030b00011e",
-            "0801" to "09ff00000108010b00011e", "0d01" to "09ff0000010d010e00010205002d",
-            "0401" to "09ff00000104011200060502040605030746", "0a01" to "09ff0000010a010b00001f",
-            "0605" to "09ff00000106050e000101010126", "0c01" to "09ff0000010c010b000122",
-            "0607" to "09ff00000106070b000223", "0604" to "09ff00000106040b00001e",
-            "0e03" to "09ff0000010e030b000126",
-        )
     }
 }

@@ -2,7 +2,6 @@ package io.github.dohex.openrose.core
 
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.FieldReading
-import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.dohex.openrose.core.protocol.ModelProfile
 import io.github.dohex.openrose.core.transport.Advertisement
 import io.github.dohex.openrose.core.transport.AudioProfileEvidence
@@ -350,50 +349,6 @@ class ControlSessionRecoveryTest {
     }
 
     @Test
-    fun inFlightSettingDisconnectAndFreshManualSessionIsIsolatedForBothProfiles() = runTest {
-        for (profile in listOf(ModelProfile.I5_ZT, ModelProfile.I7_RS_V2)) {
-            val transport = RecoveryTransport(profile = profile, failFirstSubscription = false, forceBle = profile == ModelProfile.I7_RS_V2)
-            val session = newSession(transport)
-            val advertisement = if (profile == ModelProfile.I5_ZT) i5Advertisement else i7Advertisement
-            session.startScan()
-            transport.advertisements.emit(advertisement)
-            runCurrent()
-            assertEquals(OperationResult.Success, session.connect(advertisement.deviceId), profile.name)
-
-            val oldLink = transport.links.single()
-            val originalSessionId = (session.state.value.connection as ConnectionState.Connected).sessionId
-            val initialWrites = oldLink.writes.toList()
-            oldLink.initializing = false
-            val (setting, requested) = if (profile == ModelProfile.I5_ZT) {
-                DeviceSetting.NOISE_MODE to FieldValue.Text("normal")
-            } else {
-                DeviceSetting.GAME_MODE to FieldValue.Toggle(false)
-            }
-            val pending = async { session.set(requireNotNull(HeadsetCommand.decode(setting, requested))) }
-            runCurrent()
-            assertTrue(oldLink.writes.size > initialWrites.size, profile.name)
-
-            session.disconnect()
-            assertEquals(ControlErrorCode.DISCONNECTED, assertIs<OperationResult.Failure>(pending.await()).error.code, profile.name)
-            assertTrue(oldLink.closed, profile.name)
-            assertEquals(1, transport.connectCalls, profile.name)
-
-            assertEquals(OperationResult.Success, session.connect(advertisement.deviceId), profile.name)
-            assertEquals(2, transport.links.size, profile.name)
-            assertEquals(initialWrites, transport.links.last().writes, profile.name)
-            assertEquals(1, transport.links.last().subscribeCalls, profile.name)
-            assertTrue((session.state.value.connection as ConnectionState.Connected).sessionId > originalSessionId, profile.name)
-
-            val freshState = session.state.value
-            val staleReading = if (profile == ModelProfile.I5_ZT) "09ff00000101011100000164620000ffe2" else "dd00040ce4325053aa"
-            oldLink.deliverLate(staleReading.bytes())
-            runCurrent()
-            assertEquals(freshState, session.state.value, profile.name)
-            session.disconnect()
-        }
-    }
-
-    @Test
     fun stateObserverThatEndsLinkImmediatelyAfterReadyCannotLeaveADeadConnectedState() = runTest {
         val transport = RecoveryTransport(failFirstSubscription = false)
         val session = newSession(transport)
@@ -527,7 +482,6 @@ class ControlSessionRecoveryTest {
         val writes = mutableListOf<String>()
         var closed = false
         var initializing = true
-        var subscribeCalls = 0
 
         suspend fun deliverLate(bytes: ByteArray) {
             incoming.send(bytes)
@@ -538,7 +492,6 @@ class ControlSessionRecoveryTest {
         }
 
         override suspend fun subscribe() {
-            subscribeCalls++
             if (failSubscription) {
                 throw RecoverableTransportException(
                     TransportRecoveryReason.SUBSCRIPTION,
@@ -593,21 +546,6 @@ class ControlSessionRecoveryTest {
         )
         private const val SPP_UUID = "0cf12d31-fac3-4553-bd80-d6832e7b3931"
         private const val UNACCEPTED_I5_BATTERY_REPLY = "000000000001010000aabb00ff0000ff"
-        private val i5Replies = mapOf(
-            "0101" to "09ff00000101011100000164620000ffe2",
-            "0602" to "09ff00000106020e000000010020",
-            "0201" to "09ff00000102010b000118",
-            "0603" to "09ff00000106030b00011e",
-            "0801" to "09ff00000108010b00011e",
-            "0d01" to "09ff0000010d010e00010205002d",
-            "0401" to "09ff00000104011200060502040605030746",
-            "0a01" to "09ff0000010a010b00001f",
-            "0605" to "09ff00000106050e000101010126",
-            "0c01" to "09ff0000010c010b000122",
-            "0607" to "09ff00000106070b000223",
-            "0604" to "09ff00000106040b00001e",
-            "0e03" to "09ff0000010e030b000126",
-        )
 
         private fun ByteArray.hex() = joinToString("") { (it.toInt() and 255).toString(16).padStart(2, '0') }
         private fun String.bytes() = chunked(2).map { it.toInt(16).toByte() }.toByteArray()

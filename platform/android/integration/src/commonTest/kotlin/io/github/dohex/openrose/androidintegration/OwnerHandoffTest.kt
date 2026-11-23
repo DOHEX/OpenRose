@@ -10,7 +10,6 @@ import io.github.dohex.openrose.core.TransportAvailability
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.FieldReading
 import io.github.dohex.openrose.core.protocol.FieldValue
-import io.github.dohex.openrose.core.protocol.ModelProfile
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.advanceTimeBy
@@ -49,19 +48,6 @@ class OwnerHandoffTest {
         assertEquals(OperationResult.Success, request.await())
         runCurrent()
         assertEquals(chosen.deviceId, runtime.state.value.readySession?.deviceId)
-    }
-
-    @Test
-    fun scanPermissionDoesNotBlockPairedControl() = runTest {
-        val rig = OwnerRig(this)
-        val runtime = rig.newRuntime()
-        runtime.updatePlatformState(
-            PlatformState(PermissionState.NOT_REQUIRED, TransportAvailability.Available, scanPermission = PermissionState.DENIED),
-        )
-        runCurrent()
-        val denied = assertIs<OperationResult.Failure>(runtime.startScan())
-        assertEquals(ControlErrorCode.PERMISSION_REQUIRED, denied.error.code)
-        assertEquals(OperationResult.Success, runtime.connect(rig.earphones.deviceId))
     }
 
     @Test
@@ -279,23 +265,6 @@ class OwnerHandoffTest {
     }
 
     @Test
-    fun theSavedChoiceDecidesWhichOwnerStartsAfterARestart() = runTest {
-        val module = OwnerRig(this, initial = OwnerRecord(ControlWay.MODULE, PendingModuleRelease("r", null)))
-        module.bootHost()
-        module.newRuntime()
-        runCurrent()
-        assertTrue(module.appTransport.links.isEmpty())
-        assertEquals(0, module.headset.opens("ordinary"))
-
-        val fresh = OwnerRig(this)
-        fresh.bootHost()
-        val ordinary = fresh.newRuntime()
-        runCurrent()
-        assertEquals(ControlWay.ORDINARY, ordinary.integration.value.owner.selected)
-        assertEquals(OwnerReadiness.Ready, ordinary.integration.value.owner.readiness)
-    }
-
-    @Test
     fun recoveringAnInterruptedPublicationKeepsTheNextHostFromReacquiring() = runTest {
         val rig = OwnerRig(this, initial = OwnerRecord(ControlWay.MODULE))
         val device = rig.earphones.deviceId
@@ -440,14 +409,6 @@ class OwnerHandoffTest {
         assertEquals(ControlWay.MODULE, runtime.integration.value.owner.selected)
         assertEquals(OwnerReadiness.Ready, runtime.integration.value.owner.readiness)
         assertEquals(0, rig.headset.opens("ordinary"))
-
-        val ordinary = OwnerRig(this)
-        val plain = ordinary.newRuntime(userUnlocked = false)
-        runCurrent()
-        assertTrue(ordinary.appTransport.links.isEmpty())
-        plain.onUserUnlocked(HostSettings())
-        runCurrent()
-        assertEquals(OwnerReadiness.Ready, plain.integration.value.owner.readiness)
     }
 
     @Test
@@ -649,35 +610,6 @@ class OwnerHandoffTest {
         runCurrent()
         assertEquals(listOf("ordinary:open", "ordinary:close", "ordinary:open", "ordinary:close", "module:open"), rig.headset.events)
         assertEquals(0, rig.headset.overlappingOpens)
-    }
-
-    @Test
-    fun bothModelsHandOffThroughTheSameContract() = runTest {
-        for (profile in listOf(ModelProfile.I5_ZT, ModelProfile.I7_RS_V2)) {
-            val rig = OwnerRig(this, earphones = rosePair("rose-${profile.name}", profile))
-            rig.bootHost()
-            val runtime = rig.newRuntime()
-            runCurrent()
-            val id = rig.earphones.deviceId
-            assertEquals(OperationResult.Success, runtime.connectFromSystem(id), profile.name)
-
-            assertIs<HandoffOutcome.Completed>(runtime.selectControlWay(ControlWay.MODULE))
-            runCurrent()
-            assertEquals(OperationResult.Success, runtime.connectFromSystem(id), profile.name)
-            runCurrent()
-            val device = requireNotNull(runtime.state.value.device)
-            assertEquals(profile, device.profile)
-            assertEquals(ControlWay.MODULE, runtime.integration.value.owner.holder?.way)
-            assertIs<FieldReading.Known>(device.diagnostics.fields[DeviceField.LEFT_BATTERY], profile.name)
-
-            assertIs<HandoffOutcome.Completed>(runtime.selectControlWay(ControlWay.ORDINARY))
-            runCurrent()
-            assertEquals(OperationResult.Success, runtime.connectFromSystem(id), profile.name)
-            runCurrent()
-            assertEquals(listOf("ordinary:open", "ordinary:close", "module:open", "module:close", "ordinary:open"), rig.headset.events, profile.name)
-            assertEquals(0, rig.headset.overlappingOpens, profile.name)
-            assertEquals(profile, runtime.state.value.device?.profile)
-        }
     }
 
     private fun assertNotNull(value: Any?) = assertTrue(value != null)

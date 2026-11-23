@@ -7,7 +7,6 @@ kotlin {
     }
     sourceSets {
         commonMain.dependencies { api(projects.shared.headset) }
-        jvmTest.dependencies { implementation(project.dependencies.testFixtures(projects.shared.circulationLan)) }
         commonTest.dependencies {
             implementation(kotlin("test"))
             implementation(libs.coroutines.test)

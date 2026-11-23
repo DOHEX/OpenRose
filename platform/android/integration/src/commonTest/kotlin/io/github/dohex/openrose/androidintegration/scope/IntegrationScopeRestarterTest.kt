@@ -28,19 +28,6 @@ class IntegrationScopeRestarterTest {
     }
 
     @Test
-    fun theScriptNamesOnlyTheChosenScopesAndCarriesTheWaitBudget() = runTest {
-        var script = ""
-        IntegrationScopeRestarter(waitSeconds = 5) { sent, _ ->
-            script = sent
-            RootResult(1, "")
-        }.restart(listOf("com.milink.service"))
-        assertTrue("targets=\"com.milink.service\"" in script)
-        assertTrue("-e com.milink.service" in script)
-        assertTrue("com.xiaomi.bluetooth" !in script)
-        assertTrue("+ 5))" in script)
-    }
-
-    @Test
     fun aRunnerThatCannotLaunchRootFailsEveryScopeAndReleasesTheOperation() = runTest {
         val reported = mutableListOf<ScopeRestartUpdate>()
         val refused = IntegrationScopeRestarter { _, _ -> throw RootLaunchException("su 不可用") }

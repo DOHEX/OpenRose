@@ -121,16 +121,20 @@ class DeviceSettingCardsUiTest {
 
     @Test
     fun touchSlotLabelsAndAudioModesUseCapabilityNames() {
-        assertEquals("LDAC + LHDC", semanticLabel("ldac_lhdc"))
+        val labelPairs = listOf("电源键" to "ANC键", "音量−" to "音量＋")
+        for ((leftLabel, rightLabel) in labelPairs) {
+            assertEquals(
+                "${rightLabel}双击绑定为播放 / 暂停",
+                displayFieldValue(
+                    DeviceField.TOUCH_KEYS,
+                    FieldValue.TouchAssignment("right", "double", "play_pause"),
+                    touch = touchWithLabels(leftLabel, rightLabel),
+                ),
+            )
+        }
         for (style in InterfaceStyle.entries) {
-            for ((leftLabel, rightLabel) in listOf("电源键" to "ANC键", "音量−" to "音量＋")) {
-                val left = TouchSlot("left", "double")
-                val right = TouchSlot("right", "double")
-                val touch = TouchControlCapabilities(
-                    persistentSetOf(left, right),
-                    persistentSetOf("play_pause"),
-                    persistentMapOf(left to leftLabel, right to rightLabel),
-                )
+            for ((leftLabel, rightLabel) in labelPairs) {
+                val touch = touchWithLabels(leftLabel, rightLabel)
                 val state = readyState(
                     DeviceCapabilities(persistentSetOf(), persistentSetOf(DeviceSetting.TOUCH_BINDING), touchControl = touch),
                 )
@@ -163,17 +167,19 @@ class DeviceSettingCardsUiTest {
                         val keys = if (leftLabel == "电源键") "headfeel" else "cambrian"
                         ImageIO.write(harness.snapshot(), "png", File(target, "touch-$keys-${style.name.lowercase()}.png"))
                     }
-                    assertEquals(
-                        "${rightLabel}双击绑定为播放 / 暂停",
-                        displayFieldValue(
-                            DeviceField.TOUCH_KEYS,
-                            FieldValue.TouchAssignment("right", "double", "play_pause"),
-                            touch = touch,
-                        ),
-                    )
                 }
             }
         }
+    }
+
+    private fun touchWithLabels(leftLabel: String, rightLabel: String): TouchControlCapabilities {
+        val left = TouchSlot("left", "double")
+        val right = TouchSlot("right", "double")
+        return TouchControlCapabilities(
+            persistentSetOf(left, right),
+            persistentSetOf("play_pause"),
+            persistentMapOf(left to leftLabel, right to rightLabel),
+        )
     }
 
     @Test

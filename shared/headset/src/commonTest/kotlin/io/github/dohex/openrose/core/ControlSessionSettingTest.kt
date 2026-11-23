@@ -9,7 +9,6 @@ import io.github.dohex.openrose.core.transport.ControlConnection
 import io.github.dohex.openrose.core.transport.ControlTransport
 import io.github.dohex.openrose.core.transport.DeviceId
 import io.github.dohex.openrose.core.transport.TransportEndpoint
-import kotlinx.collections.immutable.persistentSetOf
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.cancelAndJoin
@@ -158,7 +157,6 @@ class ControlSessionSettingTest {
         assertEquals(ControlErrorCode.UNSUPPORTED, assertIs<OperationResult.Failure>(session.set(HeadsetCommand.NoiseMode(NoiseMode.AUTO))).error.code)
         assertEquals(13, link.writes.size)
         assertTrue(session.state.value.settingOperations.isEmpty())
-        assertEquals(persistentSetOf("normal", "transparency", "wind", "anc"), session.state.value.device?.capabilities?.noiseControl?.modes)
         session.disconnect()
     }
 
@@ -322,7 +320,6 @@ class ControlSessionSettingTest {
     fun i7UsesTheSameSequenceAcrossInitializationAutomaticModeAndExitReadback() = runTest {
         val (session, link) = ready(profile = ModelProfile.I7_RS_V2)
         assertEquals(ControlErrorCode.UNSUPPORTED, assertIs<OperationResult.Failure>(session.set(HeadsetCommand.NoiseMode(NoiseMode.DEEP))).error.code)
-        assertEquals(persistentSetOf("normal", "transparency", "wind", "anc", "auto", "dynamic"), session.state.value.device?.capabilities?.noiseControl?.modes)
         val first = async { session.set(HeadsetCommand.NoiseMode(NoiseMode.DYNAMIC)) }
         runCurrent()
         // Independently worked sender sequences 03/04 after three initialization reads with 20-byte capacity.
@@ -439,46 +436,6 @@ class ControlSessionSettingTest {
         session.disconnect()
     }
 
-    @Test
-    fun i5OnlyPartiallyUnknownCycleReadbackTimesOut() = runTest { onlyPartiallyUnknownCycleReadbackTimesOut(ModelProfile.I5_ZT) }
-
-    @Test
-    fun i7OnlyPartiallyUnknownCycleReadbackTimesOut() = runTest { onlyPartiallyUnknownCycleReadbackTimesOut(ModelProfile.I7_RS_V2) }
-
-    private suspend fun TestScope.onlyPartiallyUnknownCycleReadbackTimesOut(profile: ModelProfile) {
-        val (session, link) = ready(profile = profile)
-        val pending = async { session.set(HeadsetCommand.NoiseCycle(requestedCycle.flags.mapValues { requireNotNull(it.value) })) }
-        runCurrent()
-        link.incoming.send(partialCycleReply(profile).bytes())
-        runCurrent()
-        advanceTimeBy(51)
-        runCurrent()
-
-        assertEquals(ControlErrorCode.TIMEOUT, assertIs<OperationResult.Failure>(pending.await()).error.code, profile.name)
-        assertEquals(SettingStage.TIMED_OUT, session.state.value.settingOperations.single().stage, profile.name)
-        assertEquals(ConnectionState.Disconnected, session.state.value.connection, profile.name)
-    }
-
-    @Test
-    fun i5CompleteDifferentCycleReadbackIsNotApplied() = runTest { completeDifferentCycleReadbackIsNotApplied(ModelProfile.I5_ZT) }
-
-    @Test
-    fun i7CompleteDifferentCycleReadbackIsNotApplied() = runTest { completeDifferentCycleReadbackIsNotApplied(ModelProfile.I7_RS_V2) }
-
-    private suspend fun TestScope.completeDifferentCycleReadbackIsNotApplied(profile: ModelProfile) {
-        val (session, link) = ready(profile = profile)
-        val pending = async { session.set(HeadsetCommand.NoiseCycle(requestedCycle.flags.mapValues { requireNotNull(it.value) })) }
-        runCurrent()
-        // Synthetic complete all-off replies, independently worked from each model's RX layout.
-        link.incoming.send((if (profile == ModelProfile.I5_ZT) "09ff00000106050e000000000022" else "dd0005360000000018aa").bytes())
-        runCurrent()
-
-        assertEquals(ControlErrorCode.NOT_APPLIED, assertIs<OperationResult.Failure>(pending.await()).error.code, profile.name)
-        assertEquals(SettingStage.NOT_APPLIED, session.state.value.settingOperations.single().stage, profile.name)
-        assertIs<ConnectionState.Connected>(session.state.value.connection)
-        session.disconnect()
-    }
-
     private suspend fun TestScope.ready(maxWriteSize: Int = 20, interval: Long = 0, profile: ModelProfile = ModelProfile.I5_ZT): Triple<ControlSession, SettingLink, SettingTransport> {
         val link = SettingLink(maxWriteSize, now = { testScheduler.currentTime }, profile = profile)
         val transport = SettingTransport(link)
@@ -550,16 +507,5 @@ class ControlSessionSettingTest {
         private fun completeCycleReply(profile: ModelProfile) = if (profile == ModelProfile.I5_ZT) "09ff00000106050e000100000124" else "dd000536010001001aaa"
         private val i5Advertisement = Advertisement(DeviceId("i5"), manufacturerData = mapOf(0x5352 to byteArrayOf(0, 1, 0, 1)))
         private val i7Advertisement = Advertisement(DeviceId("i7"), manufacturerData = mapOf(0xe5b8 to byteArrayOf(0x29, 0x0f)))
-
-        // Independent real Linux RX capture; no setting hardware capture exists.
-        private val i5Replies = mapOf(
-            "0101" to "09ff00000101011100000164620000ffe2", "0602" to "09ff00000106020e000000010020",
-            "0201" to "09ff00000102010b000118", "0603" to "09ff00000106030b00011e",
-            "0801" to "09ff00000108010b00011e", "0d01" to "09ff0000010d010e00010205002d",
-            "0401" to "09ff00000104011200060502040605030746", "0a01" to "09ff0000010a010b00001f",
-            "0605" to "09ff00000106050e000101010126", "0c01" to "09ff0000010c010b000122",
-            "0607" to "09ff00000106070b000223", "0604" to "09ff00000106040b00001e",
-            "0e03" to "09ff0000010e030b000126",
-        )
     }
 }

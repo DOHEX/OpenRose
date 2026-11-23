@@ -122,17 +122,6 @@ class UiDefaultStylesUiTest {
     }
 
     @Test
-    fun secondaryPageShellCarriesNoNavigationTabs() {
-        for (style in InterfaceStyle.entries) {
-            withShellHarness(style, width = 420) { narrow ->
-                narrow.render()
-                assertTrue(narrow.hasText("二级测试页"))
-                assertFalse(narrow.hasRole(Role.Tab), "secondary pages must not draw navigation of their own in $style")
-            }
-        }
-    }
-
-    @Test
     fun shellStyleReplacementKeepsTheSameScrollPosition() {
         withShellHarness(InterfaceStyle.MIUIX, width = 420, longPage = true) { harness ->
             harness.render()

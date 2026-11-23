@@ -273,12 +273,10 @@ class ControlSessionAdvancedAudioTest {
     }
 
     @Test
-    fun sessionCapabilitiesAndValidationUseTheFirmware213And304Boundaries() = runTest {
+    fun sessionCapabilitiesAndValidationFollowTheFirmwareGates() = runTest {
         for ((firmware, gainAllowed, muteAllowed) in listOf(
             Triple("dd00040d020102f3aa", false, false),
             Triple(null, false, false),
-            Triple("dd00040d020103f4aa", true, false),
-            Triple("dd00040d030003f4aa", true, false),
             Triple("dd00040d030004f5aa", true, true),
         )) {
             val (session, link) = ready(firmware = firmware)

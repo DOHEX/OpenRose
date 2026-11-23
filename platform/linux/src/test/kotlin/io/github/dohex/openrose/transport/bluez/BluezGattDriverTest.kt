@@ -22,17 +22,9 @@ import kotlin.test.assertTrue
 
 class BluezGattDriverTest {
     @Test
-    fun accessDeniedDuringConnectionIsReportedAsPermissionFailure() = runTest {
-        val bus = FakeBluezBus()
-        bus.connectFailure = org.bluez.Error.NotAuthorized("denied")
-        val driver = BluezGattDriver(bus, "/org/bluez/hci0/dev_00_11_22_33_44_55")
-        val error = assertFailsWith<GattException> { driver.connect() }
-        assertEquals(GattFailureKind.PERMISSION, error.kind)
-    }
-
-    @Test
     fun nativeErrorTypesRemainDistinct() = runTest {
         val cases = listOf(
+            org.bluez.Error.NotAuthorized("denied") to GattFailureKind.PERMISSION,
             org.bluez.Error.NotPermitted("denied") to GattFailureKind.PERMISSION,
             org.bluez.Error.NotSupported("unsupported") to GattFailureKind.UNSUPPORTED,
             org.bluez.Error.InvalidArguments("invalid") to GattFailureKind.INVALID_VALUE,

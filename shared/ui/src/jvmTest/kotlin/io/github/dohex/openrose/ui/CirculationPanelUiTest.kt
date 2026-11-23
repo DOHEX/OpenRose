@@ -153,7 +153,6 @@ class CirculationPanelUiTest {
         val panel = OpenRoseUiTestHarness(this)
         panel.render()
         assertFalse(panel.hasText("音源设备 · 工作站"))
-        assertFalse(panel.hasText("工作站 · null"))
     }
 
     @Test

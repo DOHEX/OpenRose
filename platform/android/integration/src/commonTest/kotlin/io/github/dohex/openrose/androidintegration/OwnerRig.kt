@@ -298,112 +298,14 @@ internal fun roseAdvertisement(profile: ModelProfile, id: DeviceId): Advertiseme
 private val syntheticAdvertisementPrefixes = mapOf(
     ModelProfile.I5_ZT to "525300010001",
     ModelProfile.I7_RS_V2 to "b8e5290f",
-    ModelProfile.BUDSFEEL_MK2_RS_V2 to "0b150a0b",
-    ModelProfile.OPENFEEL_MK2_RS_V2 to "0b0eb657",
-    ModelProfile.SWIFT2_RS_V2 to "5999064c",
-    ModelProfile.JASMINE_RS_V2 to "0b0a0a11",
-    ModelProfile.I3_ZT to "f10203",
-    ModelProfile.HEADFEEL_ZT to "525300020002",
-    ModelProfile.AGATE_F8 to "18840505",
-    ModelProfile.AGATE_X_F8 to "18840506",
-    ModelProfile.CERAMICS_F8 to "18840100",
-    ModelProfile.CERAMICS_X_F8 to "18840109",
-    ModelProfile.CERAMICS_X_7034_F8 to "18840112",
-    ModelProfile.EXPLORER_F8 to "18840107",
-    ModelProfile.BUDSFREE_I_RS_COMMON to "12cc3e4c",
-    ModelProfile.CAMBRIAN_RS_COMMON to "0b0c0a0c",
-    ModelProfile.OPENFEEL_LDAC_RS_COMMON to "0b0a0a0b",
-    ModelProfile.OPENFEEL_LHDC_RS_COMMON to "0b0a0a0c",
-    ModelProfile.OPENFEEL_DUAL_RS_COMMON to "0b0a0a0d",
-    ModelProfile.OPENFUN_RS_COMMON to "0b0a0a0e",
-    ModelProfile.OPENFUN_TOUCH_RS_COMMON to "0b0a0a10",
-    ModelProfile.SPORTFEEL_RS_COMMON to "0b0a0a0f",
-    ModelProfile.SWIFT_RS_COMMON to "0b0b0a0b",
-    ModelProfile.CERAMICS_MK2_RS_V2 to "0b0e0a0c",
-    ModelProfile.CERAMICS_MK2_8912F_RS_V2 to "0b0e208b",
-    ModelProfile.CERAMICS_MK2_5736_RS_V2 to "45d7b286",
-    ModelProfile.CERAMICS_U_RS_V2 to "0b0d0a0b",
-    ModelProfile.CERAMICS_U_HSC_2710_RS_V2 to "0b137957",
-    ModelProfile.SPEAKFREE_RS_V2 to "0b0f0a0b",
-    ModelProfile.MAGICIAN_RS_V2 to "0b0e0a0d",
-    ModelProfile.FURINA_RS_V2 to "0b110a0c",
-    ModelProfile.ZIRCON_RS_V2 to "0b110a0b",
-    ModelProfile.HYACINTH_RS_V2 to "0b120a0b",
-    ModelProfile.ASTRO_X_RS_V2 to "0b0e0a0b",
-    ModelProfile.OPAL_RS_V2 to "0b0a0a12",
-    ModelProfile.MIRROR_RS_V2 to "0b0a0a13",
-    ModelProfile.KY01_RS_V2 to "0a0b0a0d",
-    ModelProfile.CORAL_RS_V2 to "0b0e0a0e",
-    ModelProfile.PATAMON_RS_V2 to "0b0ae916",
-    ModelProfile.TAILMON_RS_V2 to "0b0a941f",
-    ModelProfile.GABUMON_RS_V2 to "0b0a2aed",
-    ModelProfile.AGUMON_RS_V2 to "0b0a34fd",
-    ModelProfile.SPEAKFEEL2_RS_V2 to "0b0e3ce6",
-    ModelProfile.OPENFEEL_L_RS_V2 to "45d7cbed",
-    ModelProfile.FIRST_ANGEL_RS_V2 to "0b0e64be",
-    ModelProfile.BUDSFEEL_AE_NEO_RS_V2 to "45d789b0",
-    ModelProfile.EARFEEL_IE_NEO_RS_V2 to "45d7aa12",
-    ModelProfile.EARFEEL_IE2_RS_V2 to "0b154572",
-    ModelProfile.SPORTFEEL_8912F_RS_V2 to "5d2f61f0",
-    ModelProfile.CAMBRIAN_S_RS_COMMON to "0b0c2b46",
-    ModelProfile.OPENLINK_RS_COMMON to "0b0a5b9d",
-    ModelProfile.MOKA_RS_V2 to "68f5b8eb",
 )
 
-/** What [profile]'s earphones send back for one initialization write, as hex frames. */
+/** What [profile]'s earphones send back for one initialization write, as hex frames; only the families these tests drive. */
 internal fun initializationReplies(profile: ModelProfile, writtenHex: String): List<String> = when (profile.family) {
-    ProtocolFamily.ZT -> {
-        val key = writtenHex.substring(10, 14)
-        if (profile == ModelProfile.I5_ZT) listOfNotNull(i5Replies[key]) else listOfNotNull(ztSyntheticReplies[key])
-    }
-
+    ProtocolFamily.ZT -> listOfNotNull(i5Replies[writtenHex.substring(10, 14)])
     ProtocolFamily.RS_COMMON_V2 -> i7Replies
-
-    // All legacy RS and F8 replies below are synthetic, not device captures.
-    ProtocolFamily.RS_COMMON -> rsCommonSyntheticReplies
-
-    ProtocolFamily.F8 -> {
-        val tag = writtenHex.takeLast(2)
-        listOf(
-            when (tag) {
-                "01" -> "0027010005010050da32"
-                "02" -> "002701000602000000007d"
-                "05" -> "002701001a05" + "00".repeat(25)
-                else -> "0027010003${tag}0000"
-            },
-        )
-    }
+    ProtocolFamily.RS_COMMON, ProtocolFamily.F8 -> error("${profile.name}: integration tests drive only the i5 and RS Common V2 fixtures; catalog models are covered in shared/headset")
 }
-
-/** Synthetic ZT notifications, using documented offsets; unknown fields remain unknown. */
-private val ztSyntheticReplies = mapOf(
-    "0101" to "09ff00000101011100000164640000ff00",
-    "0602" to "09ff00000106020e000100000020",
-    "0201" to "09ff00000102010a0000",
-    "0603" to "09ff00000106030a0000",
-    "0801" to "09ff00000108010a0000",
-    "0401" to "09ff000001040112000005050505050505",
-    "0a01" to "09ff0000010a010a0000",
-    "0b01" to "09ff0000010b010a0000",
-    "0202" to "09ff0000010202130000000000000000000000",
-    "0203" to "09ff00000102030a0001",
-    "0d01" to "09ff0000010d010d0001030000",
-    "0103" to "09ff00000101030a0050",
-    "0802" to "09ff00000108020a0001",
-    "0803" to "09ff00000108030a0000",
-    "0604" to "09ff00000106040a0001",
-    "0e03" to "09ff0000010e030a0003",
-    "0605" to "09ff00000106050d0001010101",
-)
-
-/** Synthetic legacy RS state covering its shared getInfo tags. */
-private val rsCommonSyntheticReplies = listOf(
-    "ff00110100010002000300000000000500060000aa",
-    "ff00020700aa", "ff00020800aa", "ff00020904aa",
-    "ff00040c32465aaa", "ff00040d010203aa", "ff00020e00aa",
-    "ff00022a00aa", "ff00022b00aa", "ff00022c01aa",
-    "ff00022d01aa", "ff00022e01aa", "ff00023300aa",
-)
 
 /** The application and the module host over one pair of earphones, built the way production wires them. */
 internal class OwnerRig(

@@ -337,6 +337,8 @@ class ModuleAutonomyTest {
             HostCallResult.Operation(OperationResult.Success),
             old.control.execute(appIdentity, newLease.id, generation, HostCommand.RefreshBondedDevices),
         )
+        val refused = old.release(appIdentity, newLease.id, SwitchRequest("a", ControlWay.MODULE, ControlWay.ORDINARY, generation))
+        assertEquals(HostRejection.RELEASE_FAILED, assertIs<ReleaseResult.Refused>(refused).rejection)
         assertEquals(1, rig.link.connections.count { it.isOpen })
         assertEquals(0, rig.headset.opens("ordinary"))
 

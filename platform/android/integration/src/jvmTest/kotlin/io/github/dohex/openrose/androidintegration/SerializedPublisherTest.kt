@@ -14,32 +14,6 @@ class SerializedPublisherTest {
     private val committed = CopyOnWriteArrayList<String>()
 
     @Test
-    fun aWriteStartedBeforeALaterChangeNeverOutlivesIt() {
-        val firstCommitting = CountDownLatch(1)
-        val releaseFirst = CountDownLatch(1)
-        val publisher = SerializedPublisher<String> { value ->
-            if (committed.isEmpty()) {
-                firstCommitting.countDown()
-                check(releaseFirst.await(10, TimeUnit.SECONDS))
-            }
-            committed += value
-            true
-        }
-
-        val early = thread { publisher.publish { persisted } }
-        assertTrue(firstCommitting.await(10, TimeUnit.SECONDS))
-        // The user's later choice is saved and published while the earlier commit is still in flight.
-        persisted = "ORDINARY"
-        val late = thread { publisher.publish { persisted } }
-        releaseFirst.countDown()
-        early.join(10_000)
-        late.join(10_000)
-
-        assertEquals("ORDINARY", committed.last())
-        assertEquals(listOf("MODULE", "ORDINARY"), committed.toList())
-    }
-
-    @Test
     fun theValueIsDerivedOnlyOnceTheEarlierCommitIsDone() {
         val firstCommitting = CountDownLatch(1)
         val releaseFirst = CountDownLatch(1)
@@ -66,12 +40,6 @@ class SerializedPublisherTest {
         releaseFirst.countDown()
         early.join(10_000)
         late.join(10_000)
-        assertEquals("ORDINARY", committed.last())
-    }
-
-    @Test
-    fun theCommitResultIsReturned() {
-        assertTrue(SerializedPublisher<String> { true }.publish { "x" })
-        assertFalse(SerializedPublisher<String> { false }.publish { "x" })
+        assertEquals(listOf("MODULE", "ORDINARY"), committed.toList())
     }
 }

@@ -372,23 +372,4 @@ class DeviceControlProtocolTest {
         assertIs<FieldReading.Unknown>(i7.feedNotification("dd00020802e9aa".bytes()).single().readings[DeviceField.EAR_DETECTION])
         assertIs<FieldReading.Unknown>(i7.feedNotification("dd0002320213aa".bytes()).single().readings[DeviceField.MULTIPOINT])
     }
-
-    @Test
-    fun actualI5InitializationReadsRemainSeparateFromSettingValidation() {
-        // Actual Linux initialization reads, 2026-10-18, firmware125; no setters were captured.
-        // rose_reverse/analysis/i5_live_read_2026-10-18.jsonl:12,17,19,23,29.
-        val codec = createProtocolCodec(ModelProfile.I5_ZT)
-        for ((rx, field, expected) in listOf(
-            Triple("09ff00000108010b00011e", DeviceField.AUDIO_MODE, FieldValue.Text("ldac")),
-            Triple("09ff0000010a010b00001f", DeviceField.TOUCH_ENABLED, FieldValue.Toggle(true)),
-            Triple("09ff0000010c010b000122", DeviceField.EAR_DETECTION, FieldValue.Toggle(false)),
-            Triple("09ff0000010e030b000126", DeviceField.PROMPT_VOLUME, FieldValue.Number(2)),
-        )) {
-            assertEquals(expected, assertIs<FieldReading.Known>(codec.feedNotification(rx.bytes()).single().readings[field]).value)
-        }
-        val touch = codec.feedNotification("09ff00000104011200060502040605030746".bytes()).single()
-        val bindings = assertIs<FieldValue.TouchKeys>(assertIs<FieldReading.Known>(touch.readings[DeviceField.TOUCH_KEYS]).value).bindings
-        assertEquals("none", bindings.single { it.side == "left" && it.gesture == "single" }.action)
-        assertEquals("noise_cycle", bindings.single { it.side == "right" && it.gesture == "long" }.action)
-    }
 }

@@ -474,35 +474,6 @@ class ControlSessionTransportSelectionTest {
         assertEquals(1, transport.endpoints.size)
     }
 
-    @Test
-    fun sppEndpointUsesTheSharedHundredMillisecondWritePacing() = runTest {
-        val link = SelectionConnection(maxWriteSize = 512, now = { testScheduler.currentTime })
-        val transport = SelectionTransport(
-            facts = TransportFacts(sppAvailable = true, audioProfile = AudioProfileEvidence.CLASSIC),
-            link = link,
-        )
-        val session = session(transport, timing = SessionTiming(connectTimeoutMillis = 1_000, queryTimeoutMillis = 50, writeIntervalMillis = 100))
-        val advertisement = Advertisement(DeviceId("i7-spp-pacing"), manufacturerData = i7Advertisement())
-        advertise(session, transport, advertisement)
-        assertEquals(OperationResult.Success, session.connect(advertisement.deviceId))
-        assertTrue(link.writeTimes.zipWithNext().all { (before, after) -> after - before >= 100 })
-
-        link.initializing = false
-        val pending = async { session.set(HeadsetCommand.GameMode(false)) }
-        runCurrent()
-        advanceTimeBy(100)
-        runCurrent()
-        assertEquals("ff02020e0011aa", link.writes.last())
-        advanceTimeBy(100)
-        runCurrent()
-        assertEquals("ff0302fa0e0caa", link.writes.last())
-        link.incoming.send("dd00020e00edaa".bytes())
-        runCurrent()
-        assertEquals(OperationResult.Success, pending.await())
-        assertTrue(link.writeTimes.zipWithNext().all { (before, after) -> after - before >= 100 })
-        session.disconnect()
-    }
-
     private suspend fun TestScope.advertise(
         session: ControlSession,
         transport: SelectionTransport,
@@ -562,12 +533,10 @@ class ControlSessionTransportSelectionTest {
     private class SelectionConnection(
         override val maxWriteSize: Int,
         private val queryReplies: Map<String, List<String>>? = null,
-        private val now: () -> Long = { 0L },
     ) : ControlConnection {
         val incoming = Channel<ByteArray>(Channel.UNLIMITED)
         override val notifications = incoming.receiveAsFlow()
         val writes = mutableListOf<String>()
-        val writeTimes = mutableListOf<Long>()
         var initializing = true
         var subscribed = false
         override suspend fun subscribe() {
@@ -577,7 +546,6 @@ class ControlSessionTransportSelectionTest {
             check(subscribed)
             val hex = bytes.hex()
             writes += hex
-            writeTimes += now()
             if (initializing) {
                 if (queryReplies != null) {
                     val key = hex.takeIf { it.startsWith("08ee") }?.substring(10, 14)

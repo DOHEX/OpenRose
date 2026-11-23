@@ -48,6 +48,8 @@ class ModelProfileTest {
         assertNull(ModelProfile.match("OpenFeel LHDC"))
         assertNull(ModelProfile.match("ROSE EarFeel iE20"))
         assertNull(ModelProfile.match("EarFree i8"))
+        assertNull(ModelProfile.match(null))
+        assertNull(ModelProfile.match(""))
         assertEquals(ModelProfile.OPENFEEL_L_RS_V2, ModelProfile.match("ROSE OpenFeel-L"))
         assertEquals(ModelProfile.I5_ZT, ModelProfile.match("EarFeeli5"))
         assertEquals(ModelProfile.I5_ZT, ModelProfile.match("ROSESELSAEarFeeli5"))

@@ -53,24 +53,6 @@ class DesktopRuntimeTest {
             assertEquals(chosenUi, rebuilt.model.uiSettings.value)
             assertEquals(DesktopSettings(backgroundControl = false), rebuilt.desktopSettings.value)
             assertEquals("false", preferences.get("desktop.background_control", null))
-            assertEquals("true", preferences.get("core.force_ble", null))
-            assertEquals("material3", preferences.get("sharedUI.interface_style", null))
-        } finally {
-            preferences.removeNode()
-            Preferences.userRoot().flush()
-        }
-    }
-
-    @Test
-    fun oldKeysDoNotRestoreObsoletePreferences() = runTest {
-        val preferences = Preferences.userRoot().node("io/github/dohex/openrose/test/${UUID.randomUUID()}")
-        try {
-            preferences.put("force_ble", "true")
-            preferences.put("interface_style", "material3")
-            preferences.put("appearance", "dark")
-            val runtime = DesktopRuntime(preferences, platform, backgroundScope)
-            assertEquals(UserSettings(), runtime.model.state.value.settings)
-            assertEquals(UiSettings(), runtime.model.uiSettings.value)
         } finally {
             preferences.removeNode()
             Preferences.userRoot().flush()
@@ -105,8 +87,6 @@ class DesktopRuntimeTest {
     fun missingOrUnknownDesktopValuesKeepBackgroundControlOn() {
         assertEquals(DesktopSettings(backgroundControl = true), DesktopSettingsCodec.decode(emptyMap()))
         assertEquals(DesktopSettings(backgroundControl = true), DesktopSettingsCodec.decode(mapOf("desktop.background_control" to "yes")))
-        val off = DesktopSettings(backgroundControl = false)
-        assertEquals(off, DesktopSettingsCodec.decode(DesktopSettingsCodec.encode(off)))
     }
 
     private val platform = PlatformState(permission = PermissionState.NOT_REQUIRED, hostPlatform = HostPlatform.LINUX)

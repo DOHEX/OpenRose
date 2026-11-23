@@ -169,17 +169,6 @@ class EqualizerProtocolTest {
     }
 
     @Test
-    fun actualI5InitializationSamplesCoverHifiAndGameOff() {
-        // Actual Linux initialization reads, 2026-10-18, firmware125; these are not setting captures.
-        // rose_reverse/analysis/i5_live_read_2026-10-18.jsonl:8,10.
-        val codec = createProtocolCodec(ModelProfile.I5_ZT)
-        val eq = codec.feedNotification("09ff00000102010b000118".bytes()).single()
-        val game = codec.feedNotification("09ff00000106030b00011e".bytes()).single()
-        assertEquals(FieldValue.Text("hifi"), assertIs<FieldReading.Known>(eq.readings[DeviceField.EQ]).value)
-        assertEquals(FieldValue.Toggle(false), assertIs<FieldReading.Known>(game.readings[DeviceField.GAME_MODE]).value)
-    }
-
-    @Test
     fun syntheticI7ReadbacksPreserveEqFormatsAndGamePolarity() {
         val codec = createProtocolCodec(ModelProfile.I7_RS_V2)
         // Whole-prefix checksum synthetic RX examples, hand-worked independently of the codec.

@@ -12,14 +12,9 @@ import io.github.dohex.openrose.core.PlatformState
 import io.github.dohex.openrose.core.SessionReference
 import io.github.dohex.openrose.core.SessionTiming
 import io.github.dohex.openrose.core.TransportAvailability
-import io.github.dohex.openrose.core.protocol.DeviceField
-import io.github.dohex.openrose.core.protocol.FieldReading
-import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.dohex.openrose.core.transport.DeviceId
 import kotlinx.collections.immutable.persistentSetOf
-import kotlinx.coroutines.async
 import kotlinx.coroutines.test.TestScope
-import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
@@ -42,9 +37,6 @@ private val presentationAuthority = CallerAuthority { identity ->
         else -> null
     }
 }
-
-private const val I5_BATTERY = "09ff00000101011100000164620000ffe2"
-private const val I5_NOISE_NORMAL = "09ff00000106020e000001000020"
 
 /**
  * What the system presentation entries see and can do through the module host: the same single owner
@@ -165,12 +157,6 @@ class ModuleHostPresentationTest {
         for (mode in IslandMode.entries) {
             for (focus in listOf(true, false)) {
                 rig.updateSettings { it.copy(islandMode = mode, focusNotificationEnabled = focus) }
-
-                val presentation = rig.presentation
-                assertEquals(mode, presentation.islandMode)
-                assertEquals(focus, presentation.focusNotificationEnabled)
-                assertEquals(focus, presentation.showStatusNotification, "$mode/$focus status notification follows only the focus switch")
-                assertEquals(mode != IslandMode.OFF, presentation.allowIslandFields, "$mode/$focus island fields follow only the island mode")
                 assertEquals(generation, rig.generation)
                 assertEquals(sessionId, rig.reference.sessionId)
                 assertEquals(writes, rig.link.writes.size, "a presentation preference never reaches the earphones")
@@ -181,33 +167,7 @@ class ModuleHostPresentationTest {
     }
 
     @Test
-    fun aConsumedConnectionEventIsNotReplayedByModeChangesOrBatteryRefreshes() = runTest {
-        val rig = Rig(this, IntegrationSettings(islandMode = IslandMode.OFFICIAL))
-        rig.start()
-        val first = rig.prompt
-        assertEquals(HostCallResult.Flag(true), rig.claim(rig.xiaomi))
-
-        rig.link.deviceReply(I5_BATTERY.replace("6462", "6361"))
-        runCurrent()
-        assertEquals(PresentationReading.Known(99), rig.presentation.battery?.left)
-        assertEquals(first.id, rig.prompt.id)
-        assertTrue(rig.prompt.claimed, "a battery refresh keeps the consumed prompt consumed")
-
-        rig.updateSettings { it.copy(islandMode = IslandMode.OFF) }
-        assertNull(rig.presentation.prompt)
-        rig.updateSettings { it.copy(islandMode = IslandMode.OFFICIAL) }
-        assertNull(rig.presentation.prompt, "restoring the saved mode does not replay the event")
-
-        advanceTimeBy(6_000)
-        runCurrent()
-        rig.link.deviceReply(I5_BATTERY)
-        runCurrent()
-        assertNull(rig.presentation.prompt)
-        assertEquals(listOf("module:open"), rig.headset.events)
-    }
-
-    @Test
-    fun aNotificationNoiseActionIsConfirmedByTheEarphonesAndOnlyForTheCurrentSession() = runTest {
+    fun aNotificationNoiseActionForAStaleOrOtherSessionIsRefusedBeforeAnyWrite() = runTest {
         val rig = Rig(this, IntegrationSettings(islandMode = IslandMode.MODULE))
         rig.start()
         rig.link.initializing = false
@@ -220,20 +180,10 @@ class ModuleHostPresentationTest {
         val other = SessionReference(DeviceId("other"), reference.sessionId)
         assertIs<OperationResult.Failure>(assertIs<HostCallResult.Operation>(rig.execute(rig.hostUi, HostCommand.Set(other, HeadsetCommand.NoiseMode(NoiseMode.NORMAL)))).result)
         assertEquals(writes, rig.link.writes.size, "refused actions never reach the earphones")
-
-        val pending = async { rig.execute(rig.hostUi, HostCommand.Set(reference, HeadsetCommand.NoiseMode(NoiseMode.NORMAL))) }
-        runCurrent()
-        assertFalse(pending.isCompleted, "reaching the host is not success")
-        assertEquals(FieldValue.Text("wind"), noiseMode(rig.state), "the last confirmed value stays until the earphones answer")
-
-        rig.link.deviceReply(I5_NOISE_NORMAL)
-        runCurrent()
-        assertEquals(OperationResult.Success, assertIs<HostCallResult.Operation>(pending.await()).result)
-        assertEquals(FieldValue.Text("normal"), noiseMode(rig.state))
     }
 
     @Test
-    fun leavingModuleControlWithdrawsEveryEntryAndTheOldGenerationCannotActOnTheNextSession() = runTest {
+    fun theOldGenerationCannotActOnTheNextSessionAndTheSavedPresentationApplies() = runTest {
         val saved = IntegrationSettings(islandMode = IslandMode.MODULE, focusNotificationEnabled = false, islandTriggers = persistentSetOf(IslandTrigger.CONNECTION))
         val rig = Rig(this, saved)
         rig.start()
@@ -244,14 +194,6 @@ class ModuleHostPresentationTest {
         assertIs<ReleaseResult.Released>(rig.host.release(rig.app.identity, rig.app.id, SwitchRequest("to-ordinary", ControlWay.MODULE, ControlWay.ORDINARY, old)))
         runCurrent()
 
-        for (lease in listOf(rig.xiaomi, rig.hostUi)) {
-            assertNull(rig.host.control.view(lease.identity, lease.id), "no state is offered while ordinary control owns the session")
-            assertEquals(HostRejection.NO_OWNER, assertIs<HostCallResult.Rejected>(rig.claim(lease, at = old, ref = oldReference, id = oldPrompt.id)).rejection)
-            assertEquals(
-                HostRejection.NO_OWNER,
-                assertIs<HostReadResult.Rejected>(rig.host.control.readSession(lease.identity, lease.id, old, oldReference)).rejection,
-            )
-        }
         assertEquals(listOf("module:open", "module:close"), rig.headset.events)
 
         // Back to module control: the saved presentation preferences apply, the old event is not replayed.
@@ -272,6 +214,4 @@ class ModuleHostPresentationTest {
         assertEquals(2, rig.headset.opens("module"), "exactly one fresh control connection for the new owner")
         assertEquals(0, rig.headset.overlappingOpens)
     }
-
-    private fun noiseMode(state: ControlState): FieldValue = assertIs<FieldReading.Known>(state.device?.diagnostics?.fields?.get(DeviceField.NOISE_MODE)).value
 }

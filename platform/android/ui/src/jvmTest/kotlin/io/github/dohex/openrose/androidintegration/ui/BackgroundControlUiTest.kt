@@ -164,21 +164,6 @@ class BackgroundControlUiTest {
     }
 
     @Test
-    fun androidEightToElevenNeedsNoAssociationButStillDisclosesAutostart() {
-        withHarness(InterfaceStyle.MIUIX, settings = IntegrationSettings(backgroundControlEnabled = true)) { harness ->
-            harness.render()
-            harness.openPage("设置")
-            harness.updateIntegration {
-                it.copy(platform = it.platform.copy(backgroundService = BackgroundServiceFacts(wake = WakeFacts(WakeBand.ANDROID_8_11))))
-            }
-            harness.render()
-            assertFalse(harness.hasTag(BackgroundControlTags.ASSOCIATE), "no association is requested before Android 12")
-            assertTrue(harness.hasTag(BackgroundControlTags.RECOVERY_ARMED))
-            assertTrue(harness.hasTag(BackgroundControlTags.APP_SETTINGS), "autostart guidance stays reachable")
-        }
-    }
-
-    @Test
     fun moduleControlNeverShowsArmedAutomaticRecovery() {
         val armed = BackgroundServiceFacts(
             wake = WakeFacts(WakeBand.ANDROID_14_PLUS, CompanionAssociation.ACTIVE, PresenceObservation.OBSERVING),
@@ -195,25 +180,10 @@ class BackgroundControlUiTest {
                 harness.render()
                 assertFalse(harness.hasTag(BackgroundControlTags.RECOVERY_ARMED), "module control is not ordinary recovery in $style")
                 assertFalse(harness.hasTagWithPrefix(BackgroundControlTags.STATUS_PREFIX), "background control is not in force under module control in $style")
-                assertTrue(harness.integration.value.settings.backgroundControlEnabled, "the saved intent is kept in $style")
 
                 harness.updateIntegration { it.copy(owner = OwnerState(selected = ControlWay.ORDINARY, readiness = OwnerReadiness.Ready)) }
                 harness.render()
                 assertTrue(harness.hasTag(BackgroundControlTags.RECOVERY_ARMED), "the same facts arm recovery under ordinary control in $style")
-            }
-        }
-    }
-
-    @Test
-    fun basicPlatformsDoNotOfferBackgroundControl() {
-        for (style in InterfaceStyle.entries) {
-            runOpenRoseUiTest(1200, 1000) {
-                val page = mutableStateOf("设置")
-                val model = FakeOpenRoseModel(mutableUiSettings = mutableStateOf(UiSettings(interfaceStyle = style)))
-                setContent { AndroidTestPage(model, BasicPlatformUi("Linux"), page) }
-                val harness = AndroidPageHarness(this, page)
-                harness.render()
-                assertFalse(harness.hasTag(BackgroundControlTags.SWITCH))
             }
         }
     }

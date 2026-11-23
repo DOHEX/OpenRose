@@ -54,27 +54,6 @@ class EqualizerPageUiTest {
     }
 
     @Test
-    fun firstAngelOffersOnlyTheConfirmedGameModesPresets() {
-        val profile = ModelProfile.FIRST_ANGEL_RS_V2
-        for (style in InterfaceStyle.entries) {
-            withHarness(style, profile, listOf(5, 1, 0), Surface.PAGE, mode = null) { harness ->
-                val state = harness.state.value
-                val device = requireNotNull(state.device)
-                for (game in listOf(false, true)) {
-                    harness.state.value = state.copy(device = device.copy(capabilities = profile.capabilities(gameMode = game)))
-                    harness.render()
-                    assertEquals(game, harness.hasRadioText("战术调律"))
-                    assertEquals(!game, harness.hasRadioText(equalizerLabel("pop", profile)))
-                    assertTrue(harness.hasRadioText("自定义"))
-                }
-                harness.clickText("战术调律")
-                harness.render()
-                assertEquals(listOf<Pair<DeviceSetting, FieldValue>>(DeviceSetting.EQ to FieldValue.Text("game_1")), harness.writes)
-            }
-        }
-    }
-
-    @Test
     fun aPresetOnlyModelChoosesItsPresetOnHome() {
         val scenarios = listOf(
             Triple(ModelProfile.I5_ZT, listOf(1, 5, 2), listOf("弱水经典 · POP", "日系柔情 · HIFI", "乐器大师 · ROCK", "清新空灵 · LIGHT")),
@@ -150,35 +129,11 @@ class EqualizerPageUiTest {
         for (style in InterfaceStyle.entries) {
             withHarness(style, ModelProfile.I5_ZT, listOf(1, 5, 2), Surface.HOME) { harness ->
                 val device = requireNotNull(harness.state.value.device)
-                for (capabilities in listOf(
-                    device.capabilities.copy(equalizer = null),
-                    device.capabilities.copy(equalizer = EqualizerCapabilities(persistentSetOf())),
-                    device.capabilities.copy(writableSettings = persistentSetOf()),
-                )) {
-                    harness.state.value = harness.state.value.copy(device = device.copy(capabilities = capabilities))
-                    harness.render()
-                    assertFalse(harness.hasText("均衡器"), "$capabilities in $style")
-                }
-            }
-        }
-    }
-
-    @Test
-    fun homeEntryFollowsTheFirmwareGatedCurve() {
-        for (style in InterfaceStyle.entries) {
-            withHarness(style, ModelProfile.HEADFEEL_ZT, listOf(1, 2, 9), Surface.HOME) { harness ->
+                harness.state.value = harness.state.value.copy(
+                    device = device.copy(capabilities = device.capabilities.copy(writableSettings = persistentSetOf())),
+                )
                 harness.render()
-                harness.clickText("均衡器")
-                harness.render()
-                assertTrue(harness.navigations.isEmpty(), "before firmware 130 the entry chooses a preset in $style")
-                harness.clickText("POP")
-                harness.render()
-
-                harness.state.value = harness.withFirmware(listOf(1, 3, 0))
-                harness.render()
-                harness.clickText("均衡器")
-                harness.render()
-                assertEquals(listOf(AppPage.EQUALIZER), harness.navigations, "from firmware 130 the entry opens the page in $style")
+                assertFalse(harness.hasText("均衡器"), "no writable preset or curve in $style")
             }
         }
     }
@@ -530,7 +485,7 @@ class EqualizerPageUiTest {
                     }
                 }
             }
-            block(EqHarness(this, state, writes, homeWrites, replies, navigations, profile, custom))
+            block(EqHarness(this, state, writes, homeWrites, replies, navigations))
         }
     }
 
@@ -542,16 +497,9 @@ class EqualizerPageUiTest {
         val homeWrites: List<Pair<DeviceSetting, FieldValue>>,
         val replies: List<CompletableDeferred<OperationResult>>,
         val navigations: List<AppPage>,
-        private val profile: ModelProfile,
-        private val custom: CustomEqualizerCapabilities?,
     ) : OpenRoseUiTestHarness(scene) {
         /** The last match is the topmost: popups and dialogs come after the window. */
         fun lastTextBounds(text: String) = allTextBounds(text).last()
-
-        fun withFirmware(parts: List<Int>): ControlState {
-            val device = requireNotNull(state.value.device)
-            return state.value.copy(device = device.copy(capabilities = capabilitiesFor(profile, parts, custom)))
-        }
 
         fun withMode(mode: String): ControlState {
             val device = requireNotNull(state.value.device)

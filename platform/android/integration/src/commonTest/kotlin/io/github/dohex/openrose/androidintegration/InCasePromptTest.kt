@@ -163,12 +163,12 @@ class InCasePromptTest {
         override suspend fun subscribe() = Unit
 
         override suspend fun write(bytes: ByteArray) {
-            initializationReplies(ModelProfile.I7_RS_V2, bytes.toHex())
+            initializationReplies(ModelProfile.I7_RS_V2, bytes.hex())
                 .map { if (it.startsWith("dd00040c")) battery else it }
-                .forEach { incoming.send(it.fromHex()) }
+                .forEach { incoming.send(it.bytes()) }
         }
 
-        suspend fun deviceReply(hex: String) = incoming.send(hex.fromHex())
+        suspend fun deviceReply(hex: String) = incoming.send(hex.bytes())
 
         override suspend fun close() {
             incoming.close()
@@ -181,6 +181,3 @@ private fun i7Battery(left: Int, right: Int, case: Int = 0x50): String {
     val body = listOf(0xdd, 0x00, 0x04, 0x0c, left, right, case)
     return (body + (body.sum() and 0xff) + 0xaa).joinToString("") { it.toString(16).padStart(2, '0') }
 }
-
-private fun ByteArray.toHex() = joinToString("") { (it.toInt() and 0xff).toString(16).padStart(2, '0') }
-private fun String.fromHex() = chunked(2).map { it.toInt(16).toByte() }.toByteArray()

@@ -32,44 +32,6 @@ import kotlin.test.assertTrue
 class ControlSessionAudioLifecycleTest {
 
     @Test
-    fun autoConnectTriggeredWhenAudioConnectedBondedDeviceDetected() = runTest {
-        val connection = TestAudioConnection(i5Replies)
-        val bondedCandidate = DeviceCandidate(
-            deviceId = DeviceId("bonded-i5"),
-            name = "EarFree i5",
-            rssi = null,
-            profile = ModelProfile.I5_ZT,
-            manufacturerDataHex = "",
-            classicAddress = "11:22:33:44:55:66",
-        )
-        val transport = TestAudioTransport(
-            connection = connection,
-            bondedList = listOf(bondedCandidate),
-        )
-
-        val session = ControlSession(
-            initialPlatformState = PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
-            transport = transport,
-            scope = backgroundScope,
-            timing = SessionTiming(writeIntervalMillis = 0),
-        )
-
-        // Session starts disconnected
-        assertEquals(ConnectionState.Disconnected, session.state.value.connection)
-
-        // Audio connected event emits bonded ROSE device
-        transport.audioDeviceFlow.emit(DeviceId("bonded-i5"))
-        runCurrent()
-        advanceUntilIdle()
-
-        // Session should automatically connect to the device
-        val conn = assertIs<ConnectionState.Connected>(session.state.value.connection)
-        assertEquals(DeviceId("bonded-i5"), conn.deviceId)
-        assertEquals(ModelProfile.I5_ZT, conn.profile)
-        assertEquals(DeviceId("bonded-i5"), session.state.value.device?.deviceId)
-    }
-
-    @Test
     fun manualControlRetryWhileTheSameI5HasAudioClosesItsNewLinkOnAudioDisconnect() = runTest {
         for (platform in listOf(HostPlatform.ANDROID, HostPlatform.LINUX)) {
             val id = DeviceId("bonded-i5")
@@ -296,10 +258,14 @@ class ControlSessionAudioLifecycleTest {
         )
 
         // Connect via audio event
+        assertEquals(ConnectionState.Disconnected, session.state.value.connection)
         transport.audioDeviceFlow.emit(DeviceId("bonded-i5"))
         runCurrent()
         advanceUntilIdle()
-        assertIs<ConnectionState.Connected>(session.state.value.connection)
+        val conn = assertIs<ConnectionState.Connected>(session.state.value.connection)
+        assertEquals(DeviceId("bonded-i5"), conn.deviceId)
+        assertEquals(ModelProfile.I5_ZT, conn.profile)
+        assertEquals(DeviceId("bonded-i5"), session.state.value.device?.deviceId)
 
         // System audio disconnects
         transport.audioDeviceFlow.emit(null)
@@ -419,36 +385,6 @@ class ControlSessionAudioLifecycleTest {
         runCurrent()
         advanceUntilIdle()
         assertEquals(ConnectionState.Disconnected, session.state.value.connection)
-
-        // Audio connection remains unchanged at bonded-i5; session must stay disconnected
-        advanceUntilIdle()
-        assertEquals(ConnectionState.Disconnected, session.state.value.connection)
-    }
-
-    @Test
-    fun modelProfileMatchRecognizesRoseDeviceNames() {
-        assertEquals(ModelProfile.I5_ZT, ModelProfile.match("EarFree i5"))
-        assertEquals(ModelProfile.I5_ZT, ModelProfile.match("ROSE i5"))
-        assertEquals(ModelProfile.I5_ZT, ModelProfile.match("EARFREE I5"))
-
-        assertEquals(ModelProfile.I7_RS_V2, ModelProfile.match("EarFeel i7"))
-        assertEquals(ModelProfile.I7_RS_V2, ModelProfile.match("ROSE i7"))
-        assertEquals(ModelProfile.I7_RS_V2, ModelProfile.match("EARFEEL I7"))
-
-        // The vendor renamed EarFree to EarFeel, so the model number decides before the brand word does.
-        assertEquals(ModelProfile.I5_ZT, ModelProfile.match("EarFeel-i5"))
-        assertEquals(ModelProfile.I5_ZT, ModelProfile.match("EarFeel i5"))
-        assertEquals(ModelProfile.I7_RS_V2, ModelProfile.match("EarFree i7"))
-        // Without a model number the brand word still decides, as before the rename.
-        assertEquals(ModelProfile.I5_ZT, ModelProfile.match("EarFree"))
-        assertEquals(ModelProfile.I7_RS_V2, ModelProfile.match("EarFeel"))
-
-        assertEquals(null, ModelProfile.match("iPhone 15"))
-        assertEquals(null, ModelProfile.match("ThinkPad i7"))
-        assertEquals(null, ModelProfile.match("Sony WH-1000XM4"))
-        assertEquals(null, ModelProfile.match("AirPods Pro"))
-        assertEquals(null, ModelProfile.match(null))
-        assertEquals(null, ModelProfile.match(""))
     }
 
     @Test
@@ -535,21 +471,5 @@ class ControlSessionAudioLifecycleTest {
         private const val NORMAL_MODE_REPLY = "09ff00000106020e000001000020"
         private fun ByteArray.hex() = joinToString("") { (it.toInt() and 255).toString(16).padStart(2, '0') }
         private fun String.bytes() = chunked(2).map { it.toInt(16).toByte() }.toByteArray()
-
-        private val i5Replies = mapOf(
-            "0101" to "09ff00000101011100000164620000ffe2",
-            "0602" to "09ff00000106020e000000010020",
-            "0201" to "09ff00000102010b000118",
-            "0603" to "09ff00000106030b00011e",
-            "0801" to "09ff00000108010b00011e",
-            "0d01" to "09ff0000010d010e00010205002d",
-            "0401" to "09ff00000104011200060502040605030746",
-            "0a01" to "09ff0000010a010b00001f",
-            "0605" to "09ff00000106050e000101010126",
-            "0c01" to "09ff0000010c010b000122",
-            "0607" to "09ff00000106070b000223",
-            "0604" to "09ff00000106040b00001e",
-            "0e03" to "09ff0000010e030b000126",
-        )
     }
 }

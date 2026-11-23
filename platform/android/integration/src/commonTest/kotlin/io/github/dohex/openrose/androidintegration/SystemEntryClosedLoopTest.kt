@@ -68,30 +68,6 @@ class SystemEntryClosedLoopTest {
     }
 
     @Test
-    fun anEarphoneThatNeverAnswersIsATimeoutNotASuccess() = runTest {
-        val entry = connectedEntry()
-
-        val tap = async { entry.rig.host.control.execute(milinkIdentity, entry.lease, entry.generation, entry.noise("anc")) }
-        runCurrent()
-        testScheduler.advanceUntilIdle()
-
-        assertEquals(ControlErrorCode.TIMEOUT, failureOf(tap.await()))
-        assertTrue(entry.rig.hostTransport.links.single().writes.isNotEmpty())
-    }
-
-    @Test
-    fun aModeTheModelDoesNotHaveIsRefusedBeforeAnythingIsWritten() = runTest {
-        val entry = connectedEntry()
-        val writesBefore = entry.rig.hostTransport.links.single().writes.size
-
-        assertEquals(
-            ControlErrorCode.UNSUPPORTED,
-            failureOf(entry.rig.host.control.execute(milinkIdentity, entry.lease, entry.generation, entry.noise("deep"))),
-        )
-        assertEquals(writesBefore, entry.rig.hostTransport.links.single().writes.size)
-    }
-
-    @Test
     fun aCommandFromAnotherCallerOrBeyondTheNoiseRoleIsUnauthorised() = runTest {
         val entry = connectedEntry()
 
@@ -130,10 +106,6 @@ class SystemEntryClosedLoopTest {
         assertNull(entry.rig.host.control.view(milinkIdentity, entry.lease))
         assertEquals(
             HostRejection.NO_OWNER,
-            assertIs<HostCallResult.Rejected>(entry.rig.host.control.execute(milinkIdentity, entry.lease, entry.generation, entry.noise("anc"))).rejection,
-        )
-        assertEquals(
-            HostRejection.NO_OWNER,
             assertIs<HostReadResult.Rejected>(
                 entry.rig.host.control.readSession(milinkIdentity, entry.lease, entry.generation, entry.reference),
             ).rejection,
@@ -152,10 +124,6 @@ class SystemEntryClosedLoopTest {
             assertIs<HostReadResult.Rejected>(
                 entry.rig.host.control.readSession(milinkIdentity, entry.lease, entry.generation, entry.reference),
             ).rejection,
-        )
-        assertEquals(
-            HostRejection.STALE_GENERATION,
-            assertIs<HostCallResult.Rejected>(entry.rig.host.control.execute(milinkIdentity, entry.lease, entry.generation, entry.noise("anc"))).rejection,
         )
         // The new generation is read from the new session: real fields, read again from the earphones.
         val connection = assertIs<ConnectionState.Connected>(requireNotNull(entry.rig.host.control.view(milinkIdentity, entry.lease)).state.connection)

@@ -1,18 +1,10 @@
-package io.github.dohex.openrose.androidintegration
+package io.github.dohex.openrose.core
 
-import io.github.dohex.openrose.core.HeadsetCommand
-import io.github.dohex.openrose.core.LocalControlRuntime
-import io.github.dohex.openrose.core.OperationResult
-import io.github.dohex.openrose.core.PermissionState
-import io.github.dohex.openrose.core.PlatformState
-import io.github.dohex.openrose.core.SessionTiming
-import io.github.dohex.openrose.core.TransportAvailability
 import io.github.dohex.openrose.core.protocol.BatteryLayout
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.FieldReading
 import io.github.dohex.openrose.core.protocol.ModelProfile
 import io.github.dohex.openrose.core.protocol.ProtocolFamily
-import io.github.dohex.openrose.core.transport.ControlTransport
 import io.github.dohex.openrose.core.transport.DeviceId
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runCurrent
@@ -29,12 +21,10 @@ class ModelCoverageTest {
     fun catalogAdvertisementsReachAReadyControlSessionWithTheDocumentedBatteryLayout() = runTest {
         for (profile in ModelProfile.entries) {
             val id = DeviceId(profile.name)
-            val transport = HeadsetTransport("client", SharedHeadset(), profile)
+            val transport = CatalogTransport(profile, advertisements = flowOf(catalogAdvertisement(profile, id)))
             val runtime = LocalControlRuntime(
                 PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
-                transport = object : ControlTransport by transport {
-                    override fun scan() = flowOf(roseAdvertisement(profile, id))
-                },
+                transport = transport,
                 scope = backgroundScope,
                 timing = SessionTiming(queryTimeoutMillis = 25, writeIntervalMillis = 0),
             )

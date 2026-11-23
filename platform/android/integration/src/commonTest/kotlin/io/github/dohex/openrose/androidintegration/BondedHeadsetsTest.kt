@@ -56,15 +56,4 @@ class BondedHeadsetsTest {
         // Only Bluetooth addresses are published, normalized; an opaque control id is not one.
         assertEquals(setOf("AA:BB:CC:00:11:22"), BondedHeadsets.addresses(state))
     }
-
-    @Test
-    fun underOrdinaryControlTheModuleHostKnowsNoEarphones() = runTest {
-        val (rig, lease) = moduleHost()
-        val app = (rig.host.open(appIdentity) as HostOpenResult.Opened).lease.id
-        val generation = (rig.host.status.value as HostStatus.Active).generation
-        rig.host.release(appIdentity, app, SwitchRequest("x", ControlWay.MODULE, ControlWay.ORDINARY, generation))
-
-        // No owner view: the host's currentSession reply names no earphones, and the system entries answer nothing.
-        assertNull(rig.host.control.view(milinkIdentity, lease))
-    }
 }

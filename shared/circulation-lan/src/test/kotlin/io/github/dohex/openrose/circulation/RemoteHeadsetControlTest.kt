@@ -1,12 +1,5 @@
-package io.github.dohex.openrose.androidintegration
+package io.github.dohex.openrose.circulation
 
-import io.github.dohex.openrose.circulation.CirculationCommand
-import io.github.dohex.openrose.circulation.CirculationNode
-import io.github.dohex.openrose.circulation.HeadsetEndpoint
-import io.github.dohex.openrose.circulation.LoopbackDiscoveryNetwork
-import io.github.dohex.openrose.circulation.RemoteControlStatus
-import io.github.dohex.openrose.circulation.RemoteReading
-import io.github.dohex.openrose.circulation.localCommand
 import io.github.dohex.openrose.core.ConnectionPhase
 import io.github.dohex.openrose.core.ConnectionState
 import io.github.dohex.openrose.core.ControlRuntime
@@ -48,13 +41,13 @@ class RemoteHeadsetControlTest {
             val pending = async(Dispatchers.IO) { phone.noise(read) }
             holder.state.first { it.settingOperations.lastOrNull()?.stage == SettingStage.WRITTEN }
             assertFalse(pending.isCompleted)
-            assertEquals("Linux", device.headset.openOwner)
+            assertEquals("Linux", device.openOwner)
             device.link.deviceReply(TRANSPARENCY)
             val confirmed = pending.await()
             assertEquals(NoiseMode.TRANSPARENCY, confirmed.mode)
             assertEquals(NoiseMode.TRANSPARENCY, phone.read().mode)
             assertEquals(device.candidate.deviceId, holder.state.value.audioDeviceId)
-            assertEquals(listOf("Linux:open"), device.headset.events)
+            assertEquals(listOf("Linux:open"), device.events)
         }
     }
 
@@ -146,8 +139,8 @@ class RemoteHeadsetControlTest {
         }
     }
 
-    private suspend fun withPair(test: suspend (ControlRuntime, CirculationNode, Headphones) -> Unit) = withTimeout(8_000) {
-        val device = Headphones()
+    private suspend fun withPair(test: suspend (ControlRuntime, CirculationNode, I5Headphones) -> Unit) = withTimeout(8_000) {
+        val device = I5Headphones()
         val owner = CoroutineScope(Dispatchers.Default + SupervisorJob())
         val holder = LocalControlRuntime(
             PlatformState(PermissionState.GRANTED, TransportAvailability.Available, hostPlatform = HostPlatform.LINUX),
@@ -173,13 +166,6 @@ class RemoteHeadsetControlTest {
             holder.release()
             owner.cancel()
         }
-    }
-
-    private class Headphones {
-        val headset = SharedHeadset()
-        val candidate = rosePair("11:22:33:44:55:66")
-        val transport = HeadsetTransport("Linux", headset, bonded = listOf(candidate))
-        val link get() = transport.links.last()
     }
 
     private fun CirculationNode.read() = localCommand(CirculationCommand.Read(peers.value.single().id)) as RemoteReading

@@ -1,15 +1,5 @@
-package io.github.dohex.openrose.androidintegration
+package io.github.dohex.openrose.core
 
-import io.github.dohex.openrose.core.ConnectionPhase
-import io.github.dohex.openrose.core.ConnectionState
-import io.github.dohex.openrose.core.ControlRuntime
-import io.github.dohex.openrose.core.HeadsetCommand
-import io.github.dohex.openrose.core.LocalControlRuntime
-import io.github.dohex.openrose.core.OperationResult
-import io.github.dohex.openrose.core.PermissionState
-import io.github.dohex.openrose.core.PlatformState
-import io.github.dohex.openrose.core.SessionTiming
-import io.github.dohex.openrose.core.TransportAvailability
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.FieldReading
 import io.github.dohex.openrose.core.protocol.FieldValue
@@ -31,7 +21,7 @@ class ModelAdaptationSessionTest {
     @Test
     fun headFeelIgnoredFirstQueryDoesNotTriggerBluetoothRecovery() = runTest {
         val (runtime, transport) = runtime(ModelProfile.HEADFEEL_ZT)
-        assertEquals(OperationResult.Success, runtime.connect(rosePair("model", ModelProfile.HEADFEEL_ZT).deviceId))
+        assertEquals(OperationResult.Success, runtime.connect(catalogCandidate("model", ModelProfile.HEADFEEL_ZT).deviceId))
         assertEquals(1, transport.links.size)
         assertEquals(ConnectionPhase.READY, assertIs<ConnectionState.Connected>(runtime.state.value.connection).phase)
         assertEquals(FieldValue.Number(80), known(runtime, DeviceField.CASE_BATTERY))
@@ -43,7 +33,7 @@ class ModelAdaptationSessionTest {
     fun cambrianRepeatsInitializationOnlyAfterItsDocumentedPause() = runTest {
         val profile = ModelProfile.CAMBRIAN_RS_COMMON
         val (runtime, transport) = runtime(profile)
-        val connected = async { runtime.connect(rosePair("model", profile).deviceId) }
+        val connected = async { runtime.connect(catalogCandidate("model", profile).deviceId) }
         runCurrent()
         val link = transport.links.single()
         assertEquals(listOf("ff000ffa010708090c0d0e122a2b2c2d2e33aa"), link.writes)
@@ -63,7 +53,7 @@ class ModelAdaptationSessionTest {
     fun spatialAudioWaitsForItsOwnFreshReadback() = runTest {
         val profile = ModelProfile.SPORTFEEL_RS_COMMON
         val (runtime, transport) = runtime(profile)
-        assertEquals(OperationResult.Success, runtime.connect(rosePair("model", profile).deviceId))
+        assertEquals(OperationResult.Success, runtime.connect(catalogCandidate("model", profile).deviceId))
         val link = transport.links.single()
         link.initializing = false
         val request = async { runtime.set(HeadsetCommand.SpatialAudio(true)) }
@@ -80,9 +70,8 @@ class ModelAdaptationSessionTest {
         runtime.disconnect()
     }
 
-    private fun TestScope.runtime(profile: ModelProfile): Pair<ControlRuntime, HeadsetTransport> {
-        val pair = rosePair("model", profile)
-        val transport = HeadsetTransport("ordinary", SharedHeadset(), profile, listOf(pair))
+    private fun TestScope.runtime(profile: ModelProfile): Pair<ControlRuntime, CatalogTransport> {
+        val transport = CatalogTransport(profile, listOf(catalogCandidate("model", profile)))
         val recovering = object : ControlTransport by transport {
             override val supportsInitializationRecovery = true
         }

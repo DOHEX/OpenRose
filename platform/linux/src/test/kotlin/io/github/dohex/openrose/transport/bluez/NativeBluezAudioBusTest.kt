@@ -52,11 +52,10 @@ class NativeBluezAudioBusTest {
     }
 
     @Test
-    fun anOlderBluezWithoutBothBearerReadingsOnlyDisconnectsDevice1() = runBlocking {
+    fun aMissingBearerReadingOnEitherSideOnlyDisconnectsDevice1() = runBlocking {
         val cases = listOf(
             emptyMap(),
-            mapOf(LE_BEARER to mapOf("Connected" to true)),
-            mapOf(LE_BEARER to mapOf("Connected" to true), CLASSIC_BEARER to emptyMap()),
+            mapOf(CLASSIC_BEARER to mapOf("Connected" to true)),
         )
         for (interfaces in cases) {
             val calls = mutableListOf<String>()

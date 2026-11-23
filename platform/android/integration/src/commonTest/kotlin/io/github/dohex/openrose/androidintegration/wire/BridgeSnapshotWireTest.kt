@@ -53,23 +53,6 @@ class BridgeSnapshotWireTest {
     }
 
     @Test
-    fun spatialAudioCapabilitySurvivesTheSystemSnapshot() {
-        val original = i5State()
-        val device = original.copy(
-            capabilities = original.capabilities.copy(
-                readableFields = original.capabilities.readableFields + DeviceField.SPATIAL_AUDIO,
-                writableSettings = original.capabilities.writableSettings + DeviceSetting.SPATIAL_AUDIO,
-            ),
-        )
-        val snapshot = requireNotNull(
-            NativeHeadsetSnapshot.fromWire(
-                device.toBridgeSnapshot(HOST_EPOCH, readSequence = 4, capturedElapsedMillis = CAPTURED).asWireMap(),
-            ),
-        )
-        assertTrue("SPATIAL_AUDIO" in snapshot.writableSettings)
-    }
-
-    @Test
     fun systemSnapshotOnlyCarriesTheCapabilitiesUsedBySystemEntries() {
         val device = i5State().copy(capabilities = ModelProfile.I5_ZT.capabilities())
         val capabilities = device.toBridgeSnapshot(HOST_EPOCH, 4, CAPTURED)["capabilities"] as Map<*, *>

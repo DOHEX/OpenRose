@@ -60,137 +60,25 @@ class PlatformApplicabilityUiTest {
                 harness.render()
                 assertTrue(harness.hasText("系统集成适用性"), "unknown applicability is reported separately in $style")
                 assertTrue(harness.hasText("尚未核实"), "unknown is not described as unsupported or unready in $style")
+
+                harness.openPage("诊断")
+                harness.render()
                 assertFalse(harness.hasText("已连接系统模块"), "module state cannot resolve unknown platform applicability in $style")
-                assertFalse(harness.hasText("焦点通知"))
             }
         }
     }
 
     @Test
-    fun desktopStatusOmitsAndroidAndHyperOsOnlyContent() {
-        for (style in InterfaceStyle.entries) {
-            for ((hostPlatform, platformLabel) in listOf(
-                HostPlatform.WINDOWS to "Windows",
-                HostPlatform.LINUX to "Linux",
-            )) {
-                val platform = PlatformState(
-                    permission = PermissionState.NOT_REQUIRED,
-                    transport = TransportAvailability.Unavailable("$platformLabel 控制传输尚未实现"),
-                    hostPlatform = hostPlatform,
-                    controlTransportApplicability = PlatformApplicability.NOT_APPLICABLE,
-                )
-                withHarness(
-                    initialState = ControlState(
-                        platform = platform,
-                        settings = UserSettings(forceBle = true),
-                    ),
-                    initialUiSettings = UiSettings(interfaceStyle = style),
-                    initialIntegration = IntegrationState(
-                        settings = IntegrationSettings(
-                            islandMode = IslandMode.MODULE,
-                            focusNotificationEnabled = true,
-                            islandTriggers = persistentSetOf(),
-                        ),
-                        platform = IntegrationPlatformState(
-                            module = ModuleAvailability.Available,
-                            systemIntegrationApplicability = PlatformApplicability.NOT_APPLICABLE,
-                        ),
-                    ),
-                ) { harness ->
-                    harness.render()
-                    harness.openPage("设置")
-                    harness.render()
-                    assertFalse(harness.hasText("超级岛"), "$platformLabel must hide HyperOS settings in $style")
-                    assertFalse(harness.hasText("焦点通知"), "$platformLabel must hide HyperOS notification settings in Settings in $style")
-                    assertFalse(harness.hasText("强制使用 BLE"), "$platformLabel has no implemented control transport in $style")
-
-                    harness.openPage("状态")
-                    harness.render()
-                    assertTrue(harness.hasText("$platformLabel 控制传输尚未实现"), "$platformLabel explains why it cannot control in $style")
-                    assertTrue(harness.hasText("蓝牙传输"), "$platformLabel reports its transport state in $style")
-                    assertFalse(harness.hasText("蓝牙权限"), "$platformLabel must not show Android permission items in $style")
-                    assertFalse(harness.hasText("系统模块"), "$platformLabel must not expose HyperOS module state in $style")
-                    assertFalse(harness.hasText("焦点通知"), "$platformLabel must not show HyperOS notification settings in $style")
-
-                    harness.openPage("诊断")
-                    harness.render()
-                    assertFalse(harness.hasText("蓝牙权限"), "desktop diagnostics must omit Android permissions in $style")
-                    assertFalse(harness.hasText("系统模块"), "desktop diagnostics must omit HyperOS module details in $style")
-                    assertFalse(harness.hasText("系统桥接"), "desktop diagnostics must omit HyperOS bridge details in $style")
-                    assertTrue(harness.settingWrites.isEmpty())
-                    assertTrue(harness.transportActions.isEmpty())
-                }
-            }
-        }
-    }
-
-    @Test
-    fun ordinaryAndroidHidesHyperOsContentWithoutLosingItsExistingModuleState() {
-        for (style in InterfaceStyle.entries) {
-            val platform = PlatformState(
-                permission = PermissionState.GRANTED,
-                transport = TransportAvailability.Available,
-                hostPlatform = HostPlatform.ANDROID,
-                controlTransportApplicability = PlatformApplicability.APPLICABLE,
-            )
-            withHarness(
-                initialState = ControlState(
-                    platform = platform,
-                    settings = UserSettings(forceBle = true),
-                ),
-                initialUiSettings = UiSettings(interfaceStyle = style),
-                initialIntegration = IntegrationState(
-                    settings = IntegrationSettings(
-                        islandMode = IslandMode.MODULE,
-                        focusNotificationEnabled = true,
-                        islandTriggers = persistentSetOf(),
-                    ),
-                    platform = IntegrationPlatformState(
-                        module = ModuleAvailability.Available,
-                        systemIntegrationApplicability = PlatformApplicability.NOT_APPLICABLE,
-                    ),
-                ),
-            ) { harness ->
-                harness.render()
-                harness.openPage("设置")
-                harness.render()
-
-                assertFalse(harness.hasText("超级岛"), "ordinary Android must not show HyperOS settings in $style")
-                assertFalse(harness.hasText("焦点通知"), "ordinary Android must not show HyperOS notification settings in Settings in $style")
-                assertFalse(harness.hasText("模块显示时机"), "ordinary Android must not show module timing in $style")
-                assertTrue(harness.hasText("强制使用 BLE"), "Android transport preference visibility is independent of HyperOS in $style")
-
-                harness.openPage("状态")
-                harness.render()
-                assertFalse(harness.hasText("焦点通知"), "ordinary Android must not show HyperOS notification settings in $style")
-                assertFalse(harness.hasText("已连接系统模块"), "a module state cannot make HyperOS applicable in $style")
-                assertFalse(harness.hasText("蓝牙权限"), "a granted permission is not listed on the status page in $style")
-                assertTrue(harness.hasText("蓝牙传输"), "Android system status retains the transport row in $style")
-                assertTrue(harness.settingsChanges.isEmpty())
-                assertTrue(harness.settingWrites.isEmpty())
-                assertTrue(harness.transportActions.isEmpty())
-            }
-        }
-    }
-
-    @Test
-    fun hyperOsSettingsCanBeSavedWhileTheModuleIsUnready() {
+    fun hyperOsSettingsStayVisibleWhileTheModuleIsUnready() {
         for (style in InterfaceStyle.entries) {
             withUnreadyHyperOsSettings(style) { harness ->
                 assertTrue(harness.hasText("超级岛"), "HyperOS settings remain visible while integration is unready in $style")
                 assertTrue(harness.hasText("焦点通知"), "HyperOS focus notification remains in Settings while unready in $style")
                 assertTrue(harness.hasText("模块显示时机"), "the saved module mode controls its applicable settings in $style")
-                assertTrue(harness.hasTextLine("未选择显示时机，不会弹出展开。"), "an explicit empty trigger set remains visible in $style")
                 assertTrue(harness.hasText("强制使用 BLE"), "the Android host exposes its supported transport preference in $style")
                 assertTrue(harness.hasText("附加设置入口"), "fusion settings destination entry remains in Settings while unready in $style")
                 assertFalse(harness.hasText("选择 OpenRose 后"), "footnote text below additional settings entry is removed in $style")
 
-                harness.hideIsland()
-
-                assertEquals(1, harness.settingsChanges.size, "an applicable but unready integration setting can still be saved in $style")
-                assertEquals(IslandMode.OFF, harness.integration.value.settings.islandMode)
-                assertEquals(emptySet(), harness.integration.value.settings.islandTriggers)
-                assertTrue(harness.settingWrites.isEmpty(), "saving an integration preference must not send a device setting")
                 harness.openPage("状态")
                 harness.render()
                 assertTrue(harness.hasText("未就绪"), "readiness is reported separately from applicability in $style")

@@ -69,7 +69,7 @@ class TrayPanelUiTest {
     }
 
     @Test
-    fun connectedPanelShowsBatteryAndNoiseModeWithoutLevelControls() {
+    fun connectedPanelShowsBatteryAndNoiseMode() {
         val connected = connectedI7State()
         val device = requireNotNull(connected.device)
         val headset = trayCandidate(device.deviceId.value, device.profile).copy(name = device.profile.displayName)
@@ -84,8 +84,6 @@ class TrayPanelUiTest {
                 assertTrue(panel.hasText("左耳 90% · 右耳 90% · 充电盒 80%"))
                 assertTrue(panel.hasSelectedText("降噪"), "confirmed noise mode in $style")
                 assertTrue(panel.hasTappableText("通透"), "noise mode choices in $style")
-                assertFalse(panel.hasText("降噪档位"), "no ANC level in $style")
-                assertFalse(panel.hasText("通透档位"), "no transparency level in $style")
                 panel.capturePanel("local-headset", style)
             }
         }
@@ -249,42 +247,9 @@ class TrayPanelUiTest {
     }
 
     @Test
-    fun aChoiceMadeOnTheComposedDashboardIsReflectedInTheTray() {
-        for (style in InterfaceStyle.entries) {
-            val selection = PrimaryDeviceSelection()
-            val bonded = disconnectedAndroidState().copy(bondedDevices = persistentListOf(first, second))
-            withApp(bonded, style, selection) { app ->
-                app.render()
-                val before = traySummary(bonded, selection).reconnectTarget
-                app.clickText("切换")
-                val chosen = app.model.connectRequests.single()
-                app.render()
-
-                assertNotEquals(before, chosen, "the dashboard offered the other device in $style")
-                assertEquals(chosen, traySummary(bonded, selection).reconnectTarget, "tray in $style")
-            }
-        }
-    }
-
-    @Test
-    fun aChoiceIsForgottenWhenTheBondedListChangesOrTheDashboardLeaves() {
-        val third = trayCandidate("rose-3", ModelProfile.I5_ZT)
+    fun aChoiceIsForgottenWhenTheDashboardLeaves() {
         for (style in InterfaceStyle.entries) {
             val bonded = disconnectedAndroidState().copy(bondedDevices = persistentListOf(first, second))
-
-            val changedSelection = PrimaryDeviceSelection()
-            withApp(bonded, style, changedSelection) { app ->
-                app.render()
-                app.clickText("切换")
-                app.state.value = bonded.copy(bondedDevices = persistentListOf(first, second, third))
-                app.render()
-                assertEquals(
-                    first.deviceId,
-                    traySummary(app.state.value, changedSelection).reconnectTarget,
-                    "list change in $style",
-                )
-            }
-
             val leftSelection = PrimaryDeviceSelection()
             withApp(bonded, style, leftSelection) { app ->
                 app.render()

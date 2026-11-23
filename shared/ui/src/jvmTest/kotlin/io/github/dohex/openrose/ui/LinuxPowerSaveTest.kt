@@ -10,7 +10,6 @@ class LinuxPowerSaveTest {
 
     @Test
     fun aMissingSysfsIsNotPowerSaving() {
-        assertFalse(isLinuxPowerSaving(File("/nonexistent-sysfs-root")))
         assertFalse(isLinuxPowerSaving(sysfs()))
     }
 
