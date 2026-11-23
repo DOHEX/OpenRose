@@ -39,9 +39,9 @@ import io.github.dohex.openrose.core.ControlState
 import io.github.dohex.openrose.core.DeviceSetting
 import io.github.dohex.openrose.core.DeviceState
 import io.github.dohex.openrose.core.HeadsetCommand
+import io.github.dohex.openrose.core.NoiseControlCapabilities
 import io.github.dohex.openrose.core.NoiseMode
 import io.github.dohex.openrose.core.protocol.DeviceField
-import io.github.dohex.openrose.core.protocol.FieldValue
 
 /**
  * Choices always come from device capabilities; selected values always come from device replies. The mode being
@@ -55,11 +55,9 @@ internal fun NoiseControlCard(
     onSet: (HeadsetCommand) -> Unit,
 ) {
     val capabilities = device.capabilities.noiseControl ?: return
-    val writable = device.capabilities.writableSettings
-    val writeOpen = state.canWrite(device, DeviceSetting.NOISE_MODE)
-    val modesEnabled = writeOpen && DeviceSetting.NOISE_MODE in writable
+    val modesEnabled = state.canChooseNoiseMode(device)
     val confirmedMode = device.confirmedNoiseMode?.id
-    val pendingMode = (state.pendingSetting(device, DeviceSetting.NOISE_MODE)?.requestedValue as? FieldValue.Text)?.value
+    val pendingMode = state.pendingText(device, DeviceSetting.NOISE_MODE)
 
     val modes = remember(capabilities.modes) {
         device.noiseModes.sortedBy(NoiseMode::ordinal).map(NoiseMode::id)
@@ -79,7 +77,7 @@ internal fun NoiseControlCard(
             if (mode != confirmedMode) NoiseMode.fromId(mode)?.let { onSet(HeadsetCommand.NoiseMode(it)) }
         }
         if (showLevelControls) {
-            NoiseLevelControls(state, device, confirmedMode, onSet)
+            NoiseLevelControls(state, device, capabilities, confirmedMode, onSet)
         }
     }
 }
@@ -89,10 +87,10 @@ internal fun NoiseControlCard(
 private fun NoiseLevelControls(
     state: ControlState,
     device: DeviceState,
+    capabilities: NoiseControlCapabilities,
     confirmedMode: String?,
     onSet: (HeadsetCommand) -> Unit,
 ) {
-    val capabilities = device.capabilities.noiseControl ?: return
     val writable = device.capabilities.writableSettings
     val levelControls = remember(capabilities) {
         listOf(
@@ -112,14 +110,12 @@ private fun NoiseLevelControls(
                 if (selected == null) AppText("当前状态未知", role = AppTextRole.Summary)
             }
             AppSegmented(levels, selected, state.canWrite(device, setting)) { level ->
-                if (level != selected) {
-                    val command = if (setting == DeviceSetting.ANC_LEVEL) {
-                        HeadsetCommand.AncLevel(level)
-                    } else {
-                        HeadsetCommand.TransparencyLevel(level)
-                    }
-                    onSet(command)
+                val command = if (setting == DeviceSetting.ANC_LEVEL) {
+                    HeadsetCommand.AncLevel(level)
+                } else {
+                    HeadsetCommand.TransparencyLevel(level)
                 }
+                onSet(command)
             }
         }
     }

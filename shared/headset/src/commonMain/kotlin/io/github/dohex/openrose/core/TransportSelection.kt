@@ -1,16 +1,14 @@
 package io.github.dohex.openrose.core
 
 import io.github.dohex.openrose.core.transport.AudioProfileEvidence
-import io.github.dohex.openrose.core.transport.ControlTransport
 import io.github.dohex.openrose.core.transport.TransportEndpoint
 import io.github.dohex.openrose.core.transport.TransportFacts
 import io.github.dohex.openrose.core.transport.TransportSelection
 import io.github.dohex.openrose.core.transport.TransportSelectionReason
-import kotlinx.coroutines.CancellationException
+import io.github.dohex.openrose.core.transport.transportOperation
 import kotlinx.coroutines.withTimeout
 
-internal suspend fun ConnectionAttempt.selectTransport(transport: ControlTransport, timeoutMillis: Long): TransportSelection {
-    val profile = requireNotNull(candidate.profile)
+internal suspend fun ConnectionAttempt.selectTransport(timeoutMillis: Long): TransportSelection {
     val gatt = profile.gatt
     val ble = TransportEndpoint.BleGatt(gatt.serviceUuid, gatt.writeUuid, gatt.notifyUuid)
     val sppUuid = profile.spec.sppControlUuid ?: return TransportSelection(ble, TransportSelectionReason.MODEL_BLE_ONLY)
@@ -18,14 +16,9 @@ internal suspend fun ConnectionAttempt.selectTransport(transport: ControlTranspo
     val address = candidate.classicAddress
         ?: return TransportSelection(ble, TransportSelectionReason.CLASSIC_ADDRESS_UNAVAILABLE)
 
-    val facts = try {
-        withTimeout(timeoutMillis) {
-            transport.connectionFacts(candidate.deviceId, address)
-        }
-    } catch (cancelled: CancellationException) {
-        throw cancelled
-    } catch (_: Exception) {
-        TransportFacts()
+    // A failed facts query cannot prove SPP is usable; BLE stays the safe default.
+    val facts = transportOperation(onFailure = { TransportFacts() }) {
+        withTimeout(timeoutMillis) { transport.connectionFacts(candidate.deviceId, address) }
     }
     if (!facts.sppAvailable) return TransportSelection(ble, TransportSelectionReason.SPP_UNAVAILABLE)
     return when (facts.audioProfile) {

@@ -163,7 +163,7 @@ private fun HeadsetControls(
     onNavigate: (AppPage) -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        if (device.capabilities.noiseControl != null && showLocalNoise) {
+        if (showLocalNoise) {
             NoiseControlCard(state, device, onSet = onSet)
         }
         if (DeviceSetting.GAME_MODE in device.capabilities.writableSettings) {
@@ -344,7 +344,7 @@ internal fun BatteryStrip(device: DeviceState, initializing: Boolean, showUnknow
 @Composable
 private fun BatteryReading(label: String, field: DeviceField, device: DeviceState, initializing: Boolean, showUnknown: Boolean) {
     val reading = device.reading(field)
-    val percent = device.confirmedNumber(field)?.takeIf { it in 0..100 }
+    val percent = device.confirmedNumber(field)
     val low = percent != null && percent <= LOW_BATTERY_PERCENT
     val text = readingText(field, reading, initializing, device.diagnostics.fieldErrors[field], device.profile)
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -679,7 +679,7 @@ private fun OtherPairedDevices(devices: List<DeviceCandidate>, enabled: Boolean,
         AppGroup(title = "其他已配对设备") {
             val isMaterial3 = LocalInterfaceStyle.current == InterfaceStyle.MATERIAL3
             devices.forEach { paired ->
-                val name = paired.name?.takeIf(String::isNotBlank) ?: paired.profile!!.displayName
+                val name = paired.cardName()
                 val rowModifier = Modifier
                     .fillMaxWidth()
                     .then(

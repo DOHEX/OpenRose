@@ -7,6 +7,7 @@ import io.github.dohex.openrose.core.SettingOperation
 import io.github.dohex.openrose.core.SettingStage
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.FieldReading
+import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.dohex.openrose.core.protocol.ModelProfile
 import io.github.dohex.openrose.core.transport.DeviceId
 import kotlinx.collections.immutable.toPersistentList
@@ -20,13 +21,22 @@ private fun encode(reading: FieldReading): Wire = when (reading) {
     is FieldReading.Known -> obj("r" to str("known"), "raw" to str(reading.rawHex), "value" to ControlWire.encode(reading.value))
 }
 
-private fun decodeReading(wire: Wire): FieldReading {
+private val BATTERY_FIELDS = setOf(DeviceField.LEFT_BATTERY, DeviceField.RIGHT_BATTERY, DeviceField.CASE_BATTERY)
+
+/** Headset decoders only confirm 0..100 battery levels; anything else across IPC is a malformed frame. */
+private fun decodeReading(field: DeviceField, wire: Wire): FieldReading {
     val node = wire.asObj()
     return when (val kind = node.str("r")) {
         "loading" -> FieldReading.Loading
         "none" -> FieldReading.NotProvided(node.str("raw"))
         "unknown" -> FieldReading.Unknown(node.str("raw"))
-        "known" -> FieldReading.Known(ControlWire.decodeValue(node.field("value")), node.str("raw"))
+        "known" -> {
+            val value = ControlWire.decodeValue(node.field("value"))
+            if (field in BATTERY_FIELDS && (value !is FieldValue.Number || value.value !in 0..100)) {
+                throw WireFormatException("电量读数超出 0～100")
+            }
+            FieldReading.Known(value, node.str("raw"))
+        }
         else -> throw WireFormatException("未知读数类型 $kind")
     }
 }
@@ -77,7 +87,8 @@ internal fun decodeDevice(wire: Wire): DeviceState = wire.asObj().let { node ->
         diagnostics = HeadsetDiagnostics(
             fields = node.arr("fields").associate {
                 val entry = it.asObj()
-                entry.field("f").asEnum<DeviceField>() to decodeReading(entry.field("reading"))
+                val field = entry.field("f").asEnum<DeviceField>()
+                field to decodeReading(field, entry.field("reading"))
             }.toPersistentMap(),
             fieldErrors = node.arr("fieldErrors").associate {
                 val entry = it.asObj()

@@ -151,7 +151,6 @@ class GattControlConnection private constructor(
 
     override suspend fun write(bytes: ByteArray) = operations.withLock {
         checkOpen()
-        require(bytes.isNotEmpty() && bytes.size <= maxWriteSize) { "协议报文必须完整适配当前写入容量" }
         val writer = requireNotNull(services.value).writer
         terminalOnFailure {
             val written = withTimeoutOrNull(GATT_OPERATION_TIMEOUT_MS) {

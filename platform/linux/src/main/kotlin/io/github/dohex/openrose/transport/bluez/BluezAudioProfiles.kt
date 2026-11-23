@@ -43,11 +43,10 @@ class BluezAudioProfiles internal constructor(
 
     suspend fun acquire(address: String) {
         val current = bus()
-        val normalized = checkNotNull(normalizeBluetoothAddress(address)) { "耳机蓝牙地址无效" }
-        val path = checkNotNull(current.objects().devicePath(normalized, pairedOnly = true)) { "Linux 尚未在已开启的适配器上配对这副耳机" }
+        val path = checkNotNull(current.objects().devicePath(address, pairedOnly = true)) { "Linux 尚未在已开启的适配器上配对这副耳机" }
         releasedLinks.resumeLocal(path)
         val objects = current.objects()
-        if (objects.hasMedia(normalized)) return
+        if (objects.hasMedia(address)) return
 
         val interfaces = objects.getValue(path)
         val classic = interfaces[CLASSIC_BEARER]?.get("Connected") ?: interfaces[DEVICE]?.get("Connected")
@@ -64,7 +63,7 @@ class BluezAudioProfiles internal constructor(
                 currentCoroutineContext().ensureActive()
                 awaitConnection("Linux 接入耳机 LE 链路超时") { current.objects()[path]?.get(LE_BEARER)?.get("Connected") == true }
             }
-            current.awaitAudioProfile(path, normalized)
+            current.awaitAudioProfile(path, address)
         }.onFailure { failure ->
             if (openedLe && leOwner != null) {
                 withContext(NonCancellable) {
@@ -113,22 +112,18 @@ class BluezAudioProfiles internal constructor(
     suspend fun release(address: String) {
         val current = bus()
         val objects = current.objects()
-        val normalized = checkNotNull(normalizeBluetoothAddress(address)) { "耳机蓝牙地址无效" }
-        checkNotNull(objects.devicePath(normalized, pairedOnly = true)) { "未找到正在让出的耳机" }
-        releasedLinks.release(current, objects.connectedPaths(normalized)) {
-            awaitConnection("Linux 尚未让出耳机的音频或蓝牙链路") { current.objects().connectedPaths(normalized).isEmpty() }
+        checkNotNull(objects.devicePath(address, pairedOnly = true)) { "未找到正在让出的耳机" }
+        releasedLinks.release(current, objects.connectedPaths(address)) {
+            awaitConnection("Linux 尚未让出耳机的音频或蓝牙链路") { current.objects().connectedPaths(address).isEmpty() }
         }
     }
 
     /** The same headset may have classic audio on one adapter and only a control link on another. */
-    private fun BluezObjects.connectedPaths(address: String): List<String> {
-        val target = normalizeBluetoothAddress(address) ?: return emptyList()
-        return keys.filter { path ->
-            val interfaces = getValue(path)
-            val device = interfaces[DEVICE] ?: return@filter false
-            onPoweredAdapter(path) && normalizeBluetoothAddress(device["Address"] as? String) == target &&
-                (hasMediaTransport(path) || interfaces.hasConnectedBearer(device))
-        }
+    private fun BluezObjects.connectedPaths(address: String): List<String> = keys.filter { path ->
+        val interfaces = getValue(path)
+        val device = interfaces[DEVICE] ?: return@filter false
+        onPoweredAdapter(path) && normalizeBluetoothAddress(device["Address"] as? String) == address &&
+            (hasMediaTransport(path) || interfaces.hasConnectedBearer(device))
     }
 
     private fun Map<String, Map<String, Any?>>.hasConnectedBearer(device: Map<String, Any?>): Boolean {

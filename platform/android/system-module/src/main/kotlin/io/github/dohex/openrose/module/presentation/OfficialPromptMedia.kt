@@ -11,7 +11,6 @@ import io.github.dohex.openrose.androidintegration.wire.BridgeWire
 import io.github.dohex.openrose.module.systemIntegrationResult
 import java.io.File
 import java.io.FileOutputStream
-import java.security.MessageDigest
 
 internal class OfficialPromptMedia(private val targetContext: Context, private val handler: Handler) {
     private val ownedAssets = linkedMapOf<Uri, OwnedAsset>()
@@ -172,10 +171,6 @@ internal class OfficialPromptMedia(private val targetContext: Context, private v
         releaseAssets(assets.map { it.clip })
     }
 
-    private fun stableDigest(value: String): String = MessageDigest.getInstance("SHA-256")
-        .digest(value.toByteArray(Charsets.UTF_8))
-        .take(12)
-        .joinToString("") { byte -> "%02x".format(byte.toInt() and 0xff) }
     private data class ClipSpec(val side: String, val targetRawName: String, val moduleRawName: String)
     private data class RawResource(val context: Context, val resourceId: Int)
     private data class OwnedAsset(

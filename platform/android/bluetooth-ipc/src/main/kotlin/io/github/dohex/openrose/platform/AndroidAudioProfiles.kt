@@ -148,8 +148,6 @@ internal class AndroidAudioProfiles(private val context: Context) : AudioFactsDr
             continuation.invokeOnCancellation { request.cancel() }
             try {
                 if (!adapter.getProfileProxy(context, request, profileId)) request.unavailable()
-            } catch (_: SecurityException) {
-                request.unavailable()
             } catch (_: RuntimeException) {
                 request.unavailable()
             }
@@ -247,8 +245,6 @@ internal class AndroidAudioProfiles(private val context: Context) : AudioFactsDr
             if (!isValid) return null
             val connected = try {
                 proxy.connectedDevices.map { device -> device.address }.toSet()
-            } catch (_: SecurityException) {
-                return null
             } catch (_: RuntimeException) {
                 return null
             }
@@ -260,8 +256,6 @@ internal class AndroidAudioProfiles(private val context: Context) : AudioFactsDr
                         else -> return null
                     }
                 }
-            } catch (_: SecurityException) {
-                return null
             } catch (_: RuntimeException) {
                 return null
             }

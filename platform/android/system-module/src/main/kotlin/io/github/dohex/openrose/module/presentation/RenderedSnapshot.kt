@@ -31,25 +31,14 @@ internal data class RenderedSnapshot(
     }
 
     /** Only a confirmed charging reading is marked; unknown charging leaves the battery text neutral. */
-    private fun chargingMark(fieldName: String): String {
-        val reading = fields.getBundle(fieldName) ?: return ""
-        if (reading.getString(BridgeWire.STATUS) != KNOWN) return ""
-        val value = reading.getBundle("value") ?: return ""
-        return if (value.getString("type") == TOGGLE && value.getBoolean("value", false)) "⚡" else ""
-    }
+    private fun chargingMark(fieldName: String): String = if (fields.knownCharging(fieldName) == true) "⚡" else ""
 
     fun aodTitle(): String? = listOfNotNull(
         batteryValue(LEFT_BATTERY)?.let { "L $it%" },
         batteryValue(RIGHT_BATTERY)?.let { "R $it%" },
     ).takeIf { it.isNotEmpty() }?.joinToString(" | ")
 
-    fun batteryValue(fieldName: String): Int? {
-        val reading = fields.getBundle(fieldName) ?: return null
-        if (reading.getString(BridgeWire.STATUS) != KNOWN) return null
-        val value = reading.getBundle("value") ?: return null
-        if (value.getString("type") != NUMBER) return null
-        return value.getInt("value", INVALID_BATTERY).takeIf { it in 0..100 }
-    }
+    fun batteryValue(fieldName: String): Int? = fields.knownBattery(fieldName)
 
     fun knownNoiseMode(): String? {
         val reading = fields.getBundle(NOISE_FIELD) ?: return null
@@ -136,6 +125,22 @@ internal fun modeLabel(mode: String): String = when (mode) {
     "dynamic" -> "动态降噪"
     "deep" -> "深度降噪"
     else -> mode
+}
+
+/** A confirmed 0..100 battery reading from the bridge `fields` bundle; any other shape is unknown. */
+internal fun Bundle.knownBattery(fieldName: String): Int? {
+    val value = knownValue(fieldName, NUMBER) ?: return null
+    return value.getInt("value", INVALID_BATTERY).takeIf { it in 0..100 }
+}
+
+/** A confirmed charging reading from the bridge `fields` bundle; null when unknown. */
+@Suppress("DEPRECATION") // The wire value is untyped; the typed Bundle.get(String, Class) needs API 33.
+internal fun Bundle.knownCharging(fieldName: String): Boolean? = knownValue(fieldName, TOGGLE)?.get("value") as? Boolean
+
+private fun Bundle.knownValue(fieldName: String, type: String): Bundle? {
+    val reading = getBundle(fieldName) ?: return null
+    if (reading.getString(BridgeWire.STATUS) != KNOWN) return null
+    return reading.getBundle("value")?.takeIf { it.getString("type") == type }
 }
 
 private const val KNOWN = "KNOWN"

@@ -16,7 +16,7 @@ internal class PairingWindow(private val id: String, private val nanoTime: () ->
         code = digits
         expires = nanoTime() + TimeUnit.MINUTES.toNanos(2)
         attempts = 0
-        return checkNotNull(current())
+        return PairingTicket(digits, "openrose://pair/$id/$digits", TimeUnit.MINUTES.toMillis(2))
     }
 
     @Synchronized

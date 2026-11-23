@@ -1,5 +1,6 @@
 package io.github.dohex.openrose.core
 
+import io.github.dohex.openrose.core.protocol.ModelProfile
 import io.github.dohex.openrose.core.transport.ControlTransport
 import io.github.dohex.openrose.core.transport.DeviceId
 import kotlinx.coroutines.CoroutineScope
@@ -137,16 +138,18 @@ internal class ConnectionTargeting(
             if (candidate != null && adoptTarget) {
                 state.update { it.copy(connectionTarget = candidate) }
             }
-            if (candidate?.profile == null) {
+            val profile = candidate?.profile
+            if (profile == null) {
                 failure(ControlError(ControlErrorCode.UNSUPPORTED, "没有受支持的型号识别证据"))
             } else {
-                connectCandidate(candidate, isAudioDriven, cancelWithCaller, requestEpoch)
+                connectCandidate(candidate, profile, isAudioDriven, cancelWithCaller, requestEpoch)
             }
         }
     }
 
     private suspend fun connectCandidate(
         candidate: DeviceCandidate,
+        profile: ModelProfile,
         isAudioDriven: Boolean,
         cancelWithCaller: Boolean,
         requestEpoch: Long,
@@ -161,6 +164,7 @@ internal class ConnectionTargeting(
         }
         return link.connect(
             candidate = candidate,
+            profile = profile,
             cancelWithCaller = cancelWithCaller,
             isSuperseded = { isRequestSuperseded(requestEpoch, isAudioDriven, candidate.deviceId) },
             onStarted = {
@@ -204,7 +208,6 @@ internal class ConnectionTargeting(
     }
 }
 
-private val PlatformState.canReadAudio: Boolean
-    get() = permission == PermissionState.GRANTED || permission == PermissionState.NOT_REQUIRED
+private val PlatformState.canReadAudio: Boolean get() = !permission.missing
 
 private fun supersededConnection() = OperationResult.Failure(ControlError(ControlErrorCode.DISCONNECTED, "连接请求已被替换"))

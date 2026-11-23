@@ -37,6 +37,7 @@ import io.github.dohex.openrose.core.DeviceState
 import io.github.dohex.openrose.core.HeadsetCommand
 import io.github.dohex.openrose.core.NoiseControlCapabilities
 import io.github.dohex.openrose.core.NoiseMode
+import io.github.dohex.openrose.core.TouchControlCapabilities
 import io.github.dohex.openrose.core.TouchSlot
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.FieldReading
@@ -173,13 +174,13 @@ private fun touchGestureOrder(gesture: String): Int = when (gesture) {
 private fun TouchBindingRow(
     state: ControlState,
     device: DeviceState,
+    touch: TouchControlCapabilities,
     slot: TouchSlot,
     selectedSlot: TouchSlot?,
     onSet: (HeadsetCommand) -> Unit,
     onSlotChange: (TouchSlot?) -> Unit,
 ) {
-    val touch = device.capabilities.touchControl
-    val touchActions = touch?.actions.orEmpty()
+    val touchActions = touch.actions
     val knownBindings = device.knownValue(DeviceField.TOUCH_KEYS) as? FieldValue.TouchKeys
     val binding = knownBindings?.bindings?.firstOrNull {
         it.side == slot.side && it.gesture == slot.gesture
@@ -190,7 +191,7 @@ private fun TouchBindingRow(
 
     ContainedBindingRow(isOpen) {
         AppChoiceRow(
-            title = touch?.slotLabels?.get(slot)?.let { "$it${touchGestureLabel(slot.gesture)}" }
+            title = touch.slotLabels[slot]?.let { "$it${touchGestureLabel(slot.gesture)}" }
                 ?: touchGestureLabel(slot.gesture),
             valueText = valueText,
             options = touchActions.sortedBy(::semanticLabel)
@@ -351,7 +352,7 @@ private fun TouchBindingGroup(
                 verticalArrangement = if (isMaterial3) Arrangement.spacedBy(ListItemDefaults.SegmentedGap) else Arrangement.spacedBy(0.dp),
             ) {
                 currentSlots.forEach { slot ->
-                    TouchBindingRow(state, device, slot, selectedSlot, onSet, onSlotChange)
+                    TouchBindingRow(state, device, touch, slot, selectedSlot, onSet, onSlotChange)
                 }
             }
         }

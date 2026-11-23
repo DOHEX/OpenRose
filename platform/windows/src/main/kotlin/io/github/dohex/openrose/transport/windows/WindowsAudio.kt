@@ -1,7 +1,6 @@
 package io.github.dohex.openrose.transport.windows
 
 import io.github.dohex.openrose.circulation.CirculationAudio
-import io.github.dohex.openrose.core.transport.normalizeBluetoothAddress
 import java.util.concurrent.TimeUnit
 
 /** Windows media routing is separate from the WinRT GATT session used to control the headset. */
@@ -15,7 +14,7 @@ class WindowsAudio internal constructor(
     private data class AudioState(val container: String, val render: Boolean, val capture: Boolean, val micInUse: Boolean)
     private data class Output(val id: String, val name: String, val container: String)
 
-    private fun key(address: String) = requireNotNull(normalizeBluetoothAddress(address)) { "Windows 蓝牙地址无效" }.replace(":", "")
+    private fun key(address: String) = address.replace(":", "")
 
     private fun state(target: String): AudioState {
         val fields = call(listOf("state", target)).single().split('/')

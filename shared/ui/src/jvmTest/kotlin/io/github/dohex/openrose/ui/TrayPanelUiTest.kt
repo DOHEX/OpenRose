@@ -355,7 +355,7 @@ class TrayPanelUiTest {
                         persistentMapOf(
                             DeviceField.LEFT_BATTERY to FieldReading.Known(FieldValue.Number(80), "80"),
                             DeviceField.RIGHT_BATTERY to FieldReading.Unknown("ff"),
-                            DeviceField.CASE_BATTERY to FieldReading.Known(FieldValue.Number(255), "ff"),
+                            DeviceField.CASE_BATTERY to FieldReading.Loading,
                         ),
                     ),
                 ),
@@ -363,7 +363,7 @@ class TrayPanelUiTest {
         )
         val battery = assertNotNull(traySummary(partial, PrimaryDeviceSelection()).battery)
         assertTrue("80%" in battery)
-        assertFalse("255" in battery)
+        assertFalse("右耳" in battery)
 
         val none = connected.copy(
             device = device.copy(

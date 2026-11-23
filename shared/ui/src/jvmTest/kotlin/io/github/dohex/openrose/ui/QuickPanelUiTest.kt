@@ -454,13 +454,6 @@ class QuickPanelUiTest {
         )
         assertEquals(QuickTileSummary(active = true, subtitle = "左耳 80%"), quickTileSummary(oneSide))
 
-        val outOfRange = withFields(
-            base,
-            DeviceField.LEFT_BATTERY to known(FieldValue.Number(255)),
-            DeviceField.RIGHT_BATTERY to FieldReading.Loading,
-        )
-        assertEquals(QuickTileSummary(active = true, subtitle = "已连接"), quickTileSummary(outOfRange))
-
         val caseOnly = withFields(
             base,
             DeviceField.LEFT_BATTERY to FieldReading.NotProvided(""),

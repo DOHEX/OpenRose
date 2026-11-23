@@ -41,7 +41,6 @@ import io.github.dohex.openrose.core.DeviceState
 import io.github.dohex.openrose.core.HeadsetCommand
 import io.github.dohex.openrose.core.NoiseMode
 import io.github.dohex.openrose.core.TransportAvailability
-import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.dohex.openrose.core.protocol.ModelProfile
 import io.github.dohex.openrose.core.transport.DeviceId
 import io.github.dohex.openrose.ui.model.OpenRoseModel
@@ -249,8 +248,7 @@ private fun LocalTrayHeadset(
         batteryLayout = (device?.profile ?: source.target?.profile)?.batteryLayout,
     )
     if (device != null) {
-        val pending = state.pendingSetting(device, DeviceSetting.NOISE_MODE)?.requestedValue as? FieldValue.Text
-        TrayLocalReadings(summary, pending?.value?.let(NoiseMode::fromId)) { mode ->
+        TrayLocalReadings(summary, state.pendingText(device, DeviceSetting.NOISE_MODE)?.let(NoiseMode::fromId)) { mode ->
             model.set(device.sessionId, HeadsetCommand.NoiseMode(mode))
         }
     }
@@ -326,9 +324,7 @@ private fun DeviceState.trayBattery(
 ): String? = batterySummary(profile.batteryReadings(), showUnknown = desktop) { confirmedNumber(it) }
 
 private fun ControlState.trayNoiseModes(device: DeviceState): List<TrayNoiseMode> {
-    val enabled = canWrite(device, DeviceSetting.NOISE_MODE) &&
-        DeviceSetting.NOISE_MODE in device.capabilities.writableSettings
-    return trayNoiseModes(device.noiseModes, device.confirmedNoiseMode, enabled)
+    return trayNoiseModes(device.noiseModes, device.confirmedNoiseMode, canChooseNoiseMode(device))
 }
 
 /** A short menu label and the source or progress line that can be shown under the headset's name. */

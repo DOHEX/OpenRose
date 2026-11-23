@@ -7,13 +7,13 @@ import android.bluetooth.le.ScanCallback
 import android.bluetooth.le.ScanResult
 import android.bluetooth.le.ScanSettings
 import android.content.Context
+import android.content.pm.PackageManager
 import android.location.LocationManager
 import android.os.Build
 import android.provider.Settings
 import io.github.dohex.openrose.core.ConnectionPhase
 import io.github.dohex.openrose.core.transport.Advertisement
 import io.github.dohex.openrose.core.transport.ControlConnection
-import io.github.dohex.openrose.core.transport.ControlTransport
 import io.github.dohex.openrose.core.transport.DeviceId
 import io.github.dohex.openrose.core.transport.GattControlConnection
 import io.github.dohex.openrose.core.transport.TransportEndpoint
@@ -22,13 +22,13 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import java.io.IOException
 
-/** Native Android BLE only; shared session/protocol code has no Android API dependency. */
+/** Native Android BLE scanning and GATT links; shared session/protocol code has no Android API dependency. */
 @SuppressLint("MissingPermission") // The public session gates permission; revocation remains an observable failure.
-internal class AndroidBleTransport(private val context: Context) : ControlTransport {
+internal class AndroidBleTransport(private val context: Context) {
     private fun adapter(): BluetoothAdapter = context.getSystemService(BluetoothManager::class.java)?.adapter
         ?: throw IOException("系统蓝牙适配器不可用")
 
-    override fun scan(): Flow<Advertisement> = callbackFlow {
+    fun scan(): Flow<Advertisement> = callbackFlow {
         requireBluetoothPermission(scan = true)
         if (Build.VERSION.SDK_INT <= 30 && !locationServicesEnabled()) {
             throw IOException("请在系统设置中开启定位服务，以便此 Android 版本扫描蓝牙设备")
@@ -67,17 +67,15 @@ internal class AndroidBleTransport(private val context: Context) : ControlTransp
         awaitClose { runCatching { scanner.stopScan(callback) } }
     }
 
-    override suspend fun connect(
+    suspend fun connect(
         deviceId: DeviceId,
-        endpoint: TransportEndpoint,
+        endpoint: TransportEndpoint.BleGatt,
         onPhase: (ConnectionPhase) -> Unit,
     ): ControlConnection {
-        val gattEndpoint = endpoint as? TransportEndpoint.BleGatt
-            ?: throw IOException("Android 尚未实现该传输类型")
         requireBluetoothPermission(scan = false)
         return GattControlConnection.open(
             AndroidGattDriver(context, adapter().getRemoteDevice(deviceId.value)),
-            gattEndpoint,
+            endpoint,
             onPhase,
         )
     }
@@ -91,18 +89,8 @@ internal class AndroidBleTransport(private val context: Context) : ControlTransp
     }
 
     private fun requireBluetoothPermission(scan: Boolean) {
-        val required = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            if (scan) {
-                listOf(android.Manifest.permission.BLUETOOTH_SCAN, android.Manifest.permission.BLUETOOTH_CONNECT)
-            } else {
-                listOf(android.Manifest.permission.BLUETOOTH_CONNECT)
-            }
-        } else if (scan) {
-            listOf(android.Manifest.permission.BLUETOOTH, android.Manifest.permission.ACCESS_FINE_LOCATION)
-        } else {
-            listOf(android.Manifest.permission.BLUETOOTH)
-        }
-        if (required.any { context.checkSelfPermission(it) != android.content.pm.PackageManager.PERMISSION_GRANTED }) {
+        val scanGranted = !scan || bluetoothPermissions().all { context.checkSelfPermission(it) == PackageManager.PERMISSION_GRANTED }
+        if (!scanGranted || !context.hasBluetoothConnectPermission()) {
             throw SecurityException("缺少 BLE ${if (scan) "扫描" else "连接"}权限")
         }
     }

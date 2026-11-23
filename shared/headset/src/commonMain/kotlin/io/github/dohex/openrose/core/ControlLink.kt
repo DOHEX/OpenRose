@@ -54,6 +54,7 @@ internal class ControlLink(
 
     suspend fun connect(
         candidate: DeviceCandidate,
+        profile: ModelProfile,
         cancelWithCaller: Boolean,
         isSuperseded: () -> Boolean,
         onStarted: () -> Unit,
@@ -68,12 +69,14 @@ internal class ControlLink(
                 ?.let { return@withLock it }
             if (!clearActive()) return OperationResult.Failure(ControlError(ControlErrorCode.NOT_READY, "之前的控制连接尚未确认释放"))
             onStarted()
-            val next = ConnectionAttempt(++generation, candidate, state.value.settings.forceBle)
+            // ConnectionTargeting admits a connection only after platformError() found the transport present.
+            val admitted = checkNotNull(transport) { "平台蓝牙传输不可用" }
+            val next = ConnectionAttempt(++generation, candidate, profile, admitted, state.value.settings.forceBle)
             ownsAttempt = true
             state.update {
                 it.copy(
                     connection = ConnectionState.Connecting(deviceId, next.id, ConnectionPhase.CONNECTING),
-                    device = candidate.loadingDevice(next.id),
+                    device = next.loadingDevice(),
                     lastError = null,
                     transportSelection = null,
                     connectionRecovery = null,
@@ -112,7 +115,7 @@ internal class ControlLink(
     /** Returns the notification revisions from immediately before the write, for fresh setting readbacks. */
     internal suspend fun writePaced(attempt: ConnectionAttempt, link: ControlConnection, bytes: ByteArray): ReadProgress {
         check(bytes.size <= link.maxWriteSize) { "完整协议报文超出传输写入容量" }
-        val interval = (timing.writeIntervalMillis ?: requireNotNull(attempt.candidate.profile).spec.writeIntervalMillis).milliseconds
+        val interval = (timing.writeIntervalMillis ?: attempt.profile.spec.writeIntervalMillis).milliseconds
         if (attempt.hasWritten) delay(attempt.nextWriteAt?.let { -it.elapsedNow() } ?: interval)
         ensureActive(attempt)
         val baseline = attempt.progress.value
@@ -120,7 +123,7 @@ internal class ControlLink(
         attempt.nextWriteAt = null
         withTimeout(timing.writeTimeoutMillis) { link.write(bytes.copyOf()) }
         val current = state.value
-        if (attempt.candidate.profile == ModelProfile.I5_ZT && current.platform.hostPlatform.isDesktop && current.deviceHasSystemAudio) {
+        if (attempt.profile == ModelProfile.I5_ZT && current.platform.hostPlatform.isDesktop && current.deviceHasSystemAudio) {
             attempt.nextWriteAt = timeSource.markNow() + interval
         }
         return baseline
@@ -153,7 +156,7 @@ internal class ControlLink(
         }
         return try {
             transportOperation(onFailure = { fail(connectionFailure(it)) }) {
-                val selected = attempt.selectTransport(requireNotNull(transport), timing.connectTimeoutMillis)
+                val selected = attempt.selectTransport(timing.connectTimeoutMillis)
                 attempt.update(state) { it.copy(transportSelection = selected) }
                 Initialization(attempt, selected).run()
             }
@@ -226,7 +229,7 @@ internal class ControlLink(
             return try {
                 openAndReadLink(epoch)
             } catch (cause: RecoverableTransportException) {
-                if (!selection.canRetry(attempt, transport, cause)) throw cause
+                if (!selection.canRetry(attempt, cause)) throw cause
                 prepareRecovery(cause, epoch)
                 openAndReadLink(beginLink())
             }
@@ -235,7 +238,7 @@ internal class ControlLink(
         private suspend fun beginLink(): Long = lifecycle.withLock {
             if (active !== attempt) throw CancellationException("Stale connection")
             attempt.linkEpoch.value += 1
-            attempt.codec = createProtocolCodec(requireNotNull(attempt.candidate.profile))
+            attempt.codec = createProtocolCodec(attempt.profile)
             attempt.progress = MutableStateFlow(ReadProgress())
             attempt.hasWritten = false
             attempt.nextWriteAt = null
@@ -251,7 +254,7 @@ internal class ControlLink(
             val progress = attempt.progress
             val opened = withTimeout(timing.connectTimeoutMillis) {
                 connections.open {
-                    requireNotNull(transport).connect(candidate.deviceId, selection.endpoint) { nextPhase ->
+                    attempt.transport.connect(candidate.deviceId, selection.endpoint) { nextPhase ->
                         attempt.phase(state, epoch, nextPhase)
                     }
                 }.also { attempt.connection = it }
@@ -288,7 +291,7 @@ internal class ControlLink(
                 if (!live || progress.value.ended) {
                     false
                 } else {
-                    val ready = ConnectionState.Connected(candidate.deviceId, attempt.id, requireNotNull(candidate.profile))
+                    val ready = ConnectionState.Connected(candidate.deviceId, attempt.id, attempt.profile)
                     state.update { it.copy(connection = ready) }
                     attempt.ready = (state.value.connection as? ConnectionState.Connected)?.sessionId == attempt.id
                     attempt.ready
@@ -348,7 +351,7 @@ internal class ControlLink(
                     } else {
                         current.copy(
                             connection = ConnectionState.Connecting(attempt.candidate.deviceId, attempt.id, ConnectionPhase.CONNECTING),
-                            device = attempt.candidate.loadingDevice(attempt.id),
+                            device = attempt.loadingDevice(),
                             lastError = null,
                             transportSelection = selection,
                             connectionRecovery = ConnectionRecovery(attempt.id, failure.reason),
@@ -426,7 +429,7 @@ internal class ControlLink(
                 settings.runNextDuringInitialization(this@ControlLink, attempt)
                 delay(query.delayBeforeMillis)
                 throwProgressFailure(progress)
-                val canRecoverQuery = selection.canRecoverFirstQuery(index, transport)
+                val canRecoverQuery = selection.canRecoverFirstQuery(attempt, index)
                 writeInitialQuery(opened, query.bytes, canRecoverQuery)
                 val waitForMeaningfulState = canRecoverQuery && query.expectedFields.isNotEmpty()
                 val observed = withTimeoutOrNull(timing.queryTimeoutMillis) {

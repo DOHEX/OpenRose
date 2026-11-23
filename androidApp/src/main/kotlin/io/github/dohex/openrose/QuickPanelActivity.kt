@@ -12,8 +12,6 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import io.github.dohex.openrose.androidintegration.ControlWay
-import io.github.dohex.openrose.core.PlatformApplicability
 import io.github.dohex.openrose.ui.Appearance
 import io.github.dohex.openrose.ui.PrimaryDeviceSelection
 import io.github.dohex.openrose.ui.QuickPanel
@@ -60,11 +58,10 @@ class QuickPanelActivity : ComponentActivity() {
                 QuickPanel(
                     model = owner.model,
                     selection = remember { PrimaryDeviceSelection() },
-                    dynamicColor = integration.settings.dynamicColor &&
-                        integration.platform.dynamicColorApplicability == PlatformApplicability.APPLICABLE,
+                    dynamicColor = integration.dynamicColorInEffect,
                     onOpenApp = ::openApp,
                     onDismiss = ::finish,
-                    circulation = owner.circulation.takeIf { integration.owner.selected == ControlWay.MODULE },
+                    circulation = owner.circulation.takeIf { integration.circulationAvailable },
                 )
             }
         }

@@ -7,7 +7,6 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.collect
-import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 
 /** Raw platform facts. A null profile snapshot means it could not be read reliably. */
@@ -53,13 +52,14 @@ fun normalizeBluetoothAddress(value: String?): String? {
     }
 }
 
-private fun supportedAudioModel(device: RawAudioDevice): ModelProfile? = ModelProfile.match(device.name)
-
-fun pairedAudioDevices(devices: List<RawAudioDevice>): List<DeviceCandidate> = devices.mapNotNull { device ->
-    val profile = supportedAudioModel(device) ?: return@mapNotNull null
-    val address = normalizeBluetoothAddress(device.address) ?: return@mapNotNull null
-    DeviceCandidate(DeviceId(address), device.name, null, profile, "", address)
+/** A bonded device counts only when its name identifies a supported model and its address is valid. */
+private fun pairedAudioDevice(device: RawAudioDevice): DeviceCandidate? {
+    val profile = ModelProfile.match(device.name) ?: return null
+    val address = normalizeBluetoothAddress(device.address) ?: return null
+    return DeviceCandidate(DeviceId(address), device.name, null, profile, "", address)
 }
+
+fun pairedAudioDevices(devices: List<RawAudioDevice>): List<DeviceCandidate> = devices.mapNotNull(::pairedAudioDevice)
 
 fun inferAudioProfile(snapshot: RawAudioSnapshot, targetAddresses: Set<String>): AudioProfileEvidence {
     if (!snapshot.enabled || !snapshot.leAudioObservable) return AudioProfileEvidence.UNKNOWN
@@ -112,6 +112,7 @@ class AudioFacts(private val driver: AudioFactsDriver) {
         var querying = true
         var enabled = true
         var ready = false
+        // Publishing only changes keeps repeated events out of the channel buffer.
         var emitted = false
         var current: DeviceId? = null
 
@@ -142,7 +143,7 @@ class AudioFacts(private val driver: AudioFactsDriver) {
                 if (hasIdentity) eventDevices[address] = device
             }
             if (hasIdentity) {
-                if (device != null && supportedAudioModel(device) != null) bonded.add(address) else bonded.remove(address)
+                if (device?.let(::pairedAudioDevice) != null) bonded.add(address) else bonded.remove(address)
             }
             val set = connected.getOrPut(event.profile) { mutableSetOf() }
             if (event.connected) set.add(address) else set.remove(address)
@@ -162,12 +163,12 @@ class AudioFacts(private val driver: AudioFactsDriver) {
                             connected.getOrPut(profile) { mutableSetOf() }.addAll(addresses)
                         }
                         for (device in snapshot.bondedDevices) {
-                            if (supportedAudioModel(device) != null) normalizeBluetoothAddress(device.address)?.let(bonded::add)
+                            pairedAudioDevice(device)?.let { bonded.add(it.deviceId.value) }
                         }
                     }
                     // An unreadable probe is not an adapter-off event. Readable broadcasts still win.
                     for ((address, device) in eventDevices) {
-                        if (device != null && supportedAudioModel(device) != null) bonded.add(address) else bonded.remove(address)
+                        if (device?.let(::pairedAudioDevice) != null) bonded.add(address) else bonded.remove(address)
                     }
                     for ((key, value) in changes) {
                         val set = connected.getOrPut(key.first) { mutableSetOf() }
@@ -210,7 +211,7 @@ class AudioFacts(private val driver: AudioFactsDriver) {
                 }
             }
         }
-    }.distinctUntilChanged()
+    }
 }
 
 private sealed interface AudioMessage {

@@ -85,7 +85,6 @@ internal class AndroidSppConnection(
 
     override suspend fun write(bytes: ByteArray) = writeLock.withLock {
         checkOpen()
-        require(bytes.isNotEmpty() && bytes.size <= maxWriteSize) { "协议报文必须适配完整 SPP 写入容量" }
         val client = requireSocket()
         performBlockingIo("写入") {
             client.outputStream.write(bytes)

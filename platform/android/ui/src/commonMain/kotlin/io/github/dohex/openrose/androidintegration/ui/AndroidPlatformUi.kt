@@ -48,17 +48,13 @@ class AndroidPlatformUi(
     private var restartPhase by mutableStateOf<ScopeRestartPhase?>(null)
 
     override val circulationPairingContent: (@Composable () -> Unit)?
-        @Composable get() = circulationSettings.takeIf { integration.collectAsState().value.owner.selected == ControlWay.MODULE }
+        @Composable get() = circulationSettings.takeIf { integration.collectAsState().value.circulationAvailable }
 
     override val dynamicColor: Boolean
-        @Composable get() {
-            val integration by integration.collectAsState()
-            return integration.settings.dynamicColor &&
-                integration.platform.dynamicColorApplicability == PlatformApplicability.APPLICABLE
-        }
+        @Composable get() = integration.collectAsState().value.dynamicColorInEffect
 
     override val headsetCirculation: CirculationClient?
-        @Composable get() = circulation.takeIf { integration.collectAsState().value.owner.selected == ControlWay.MODULE }
+        @Composable get() = circulation.takeIf { integration.collectAsState().value.circulationAvailable }
 
     @Composable
     override fun BluetoothPermissionRows(platform: PlatformState) {

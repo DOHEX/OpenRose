@@ -68,7 +68,7 @@ internal class ControlSession(
 }
 
 internal fun platformError(state: ControlState, transport: ControlTransport?): ControlError? = when {
-    state.platform.permission == PermissionState.REQUIRED || state.platform.permission == PermissionState.DENIED ->
+    state.platform.permission.missing ->
         ControlError(ControlErrorCode.PERMISSION_REQUIRED, "需要蓝牙权限")
 
     transport == null || state.platform.transport != TransportAvailability.Available ->

@@ -20,7 +20,7 @@ internal fun BatteryLayout.batterySlots(): List<Pair<String, DeviceField>> = whe
 }
 
 /**
- * One line of battery text such as "左耳 80% · 右耳 75%". [percent] gives a slot's 0..100 reading;
+ * One line of battery text such as "左耳 80% · 右耳 75%". [percent] gives a slot's confirmed reading;
  * a slot without one shows "未知" when [showUnknown], otherwise it is left out. Null when nothing shows.
  */
 internal fun batterySummary(
@@ -28,5 +28,5 @@ internal fun batterySummary(
     showUnknown: Boolean,
     percent: (DeviceField) -> Int?,
 ): String? = slots.mapNotNull { (label, field) ->
-    percent(field)?.takeIf { it in 0..100 }?.let { "$label $it%" } ?: "$label 未知".takeIf { showUnknown }
+    percent(field)?.let { "$label $it%" } ?: "$label 未知".takeIf { showUnknown }
 }.takeIf { it.isNotEmpty() }?.joinToString(" · ")

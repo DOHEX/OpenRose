@@ -204,7 +204,8 @@ internal class ModuleConnectionPrompt(
     }
 }
 
-private fun stableDigest(value: String): String = MessageDigest.getInstance("SHA-256")
+/** A short stable hex digest for notification tags and cached prompt file names. */
+internal fun stableDigest(value: String): String = MessageDigest.getInstance("SHA-256")
     .digest(value.toByteArray(Charsets.UTF_8))
     .take(12)
     .joinToString("") { byte -> "%02x".format(byte.toInt() and 0xff) }

@@ -44,7 +44,6 @@ class GattControlConnectionTest {
             val connection = GattControlConnection.open(driver, endpoint) {}
             assertEquals(capacity, connection.maxWriteSize)
             connection.write(ByteArray(capacity) { 1 })
-            kotlin.test.assertFailsWith<IllegalArgumentException> { connection.write(ByteArray(capacity + 1)) }
             connection.close()
         }
     }

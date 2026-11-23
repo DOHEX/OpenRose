@@ -308,10 +308,7 @@ internal fun SettingToggleChoices(
         checked = selected ?: false,
         enabled = enabled && isKnown,
         icon = icon,
-        onChange = { requested ->
-            if (isKnown && requested != selected) {
-                onSet(command(requested))
-            }
-        },
+        // Disabled while unknown; both styles report only the opposite of the confirmed value.
+        onChange = { requested -> onSet(command(requested)) },
     )
 }

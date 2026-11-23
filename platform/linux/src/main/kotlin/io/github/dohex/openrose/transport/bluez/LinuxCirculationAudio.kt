@@ -2,7 +2,6 @@ package io.github.dohex.openrose.transport.bluez
 
 import io.github.dohex.openrose.circulation.CirculationAudio
 import kotlinx.coroutines.runBlocking
-import java.io.File
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.TimeUnit
 
@@ -39,9 +38,11 @@ class LinuxCirculationAudio(private val profiles: BluezAudioProfiles) : Circulat
     }
 
     fun openSoundSettings() {
-        val commands = listOf(listOf("pavucontrol"), listOf("gnome-control-center", "sound"), listOf("systemsettings", "kcm_pulseaudio"))
-        val path = System.getenv("PATH").orEmpty().split(File.pathSeparatorChar)
-        val command = commands.firstOrNull { argv -> path.any { File(it, argv.first()).canExecute() } }
+        val command = firstInstalledCommand(
+            listOf("pavucontrol"),
+            listOf("gnome-control-center", "sound"),
+            listOf("systemsettings", "kcm_pulseaudio"),
+        )
         checkNotNull(command) { "未找到系统声音设置程序" }
         ProcessBuilder(command).start()
     }

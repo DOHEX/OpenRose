@@ -30,7 +30,14 @@ data class IntegrationState(
     /** Selected control way, whether its owner is ready, and who actually holds the session. */
     val owner: OwnerState = OwnerState(),
     val presentation: SystemPresentationState = SystemPresentationState(),
-)
+) {
+    /** 动态取色 applies only while the user enables it and the system provides wallpaper colors. */
+    val dynamicColorInEffect: Boolean
+        get() = settings.dynamicColor && platform.dynamicColorApplicability == PlatformApplicability.APPLICABLE
+
+    /** Headset circulation runs through the system module, so it is offered only under module control. */
+    val circulationAvailable: Boolean get() = owner.selected == ControlWay.MODULE
+}
 
 sealed interface ModuleAvailability {
     data object Available : ModuleAvailability

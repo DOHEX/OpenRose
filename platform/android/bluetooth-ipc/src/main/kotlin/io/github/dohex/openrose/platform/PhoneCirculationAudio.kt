@@ -48,7 +48,6 @@ class PhoneCirculationAudio(private val context: Context) : CirculationAudio {
     }
 
     private fun change(address: String, connect: Boolean) = withProfiles(address) { device, leases ->
-        if (!connect) checkCall()
         if (Build.VERSION.SDK_INT >= 37) {
             val status = if (connect) device.connect() else device.disconnect()
             check(status == BluetoothStatusCodes.SUCCESS) { "系统蓝牙拒绝音频操作（$status）" }

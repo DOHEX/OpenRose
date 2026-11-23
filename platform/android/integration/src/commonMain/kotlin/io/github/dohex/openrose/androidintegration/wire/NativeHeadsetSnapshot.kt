@@ -29,12 +29,11 @@ data class NativeHeadsetSnapshot(
     val supportsNoiseMode: Boolean
         get() = "NOISE_MODE" in writableSettings && noiseModes.isNotEmpty()
 
-    /** [nowElapsedMillis] is the reader's elapsed-realtime clock, the same clock the host stamped [capturedElapsedMillis] with. */
-    fun isFresh(nowElapsedMillis: Long): Boolean = hostEpoch.isNotBlank() &&
-        deviceId.isNotBlank() &&
-        sessionId > 0L &&
-        addresses.isNotEmpty() && addresses.all { normalizeBluetoothAddress(it) == it } &&
-        capturedElapsedMillis > 0L && capturedElapsedMillis <= nowElapsedMillis &&
+    /**
+     * [nowElapsedMillis] is the reader's elapsed-realtime clock, the same clock the host stamped [capturedElapsedMillis] with.
+     * Identity and address shape are established once by [fromWire]; freshness is only the clock window.
+     */
+    fun isFresh(nowElapsedMillis: Long): Boolean = capturedElapsedMillis in 1..nowElapsedMillis &&
         nowElapsedMillis - capturedElapsedMillis <= MAX_AGE_MILLIS
 
     fun matchesAddress(address: String?): Boolean {
@@ -42,7 +41,7 @@ data class NativeHeadsetSnapshot(
         return normalized in addresses
     }
 
-    fun supportsNoise(mode: String): Boolean = supportsNoiseMode && mode in noiseModes && "NOISE_MODE" in writableSettings
+    fun supportsNoise(mode: String): Boolean = "NOISE_MODE" in writableSettings && mode in noiseModes
 
     fun sameReportedState(other: NativeHeadsetSnapshot): Boolean = hostEpoch == other.hostEpoch && deviceId == other.deviceId &&
         sessionId == other.sessionId && addresses == other.addresses && profile == other.profile &&

@@ -3,8 +3,8 @@ package io.github.dohex.openrose.module.nativeheadset
 import android.bluetooth.BluetoothDevice
 import android.util.Log
 import io.github.dohex.openrose.androidintegration.SystemRequestGate
-import io.github.dohex.openrose.androidintegration.wire.BridgePresentationWire
 import io.github.dohex.openrose.androidintegration.wire.NativeHeadsetSnapshot
+import io.github.dohex.openrose.core.transport.normalizeBluetoothAddress
 import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedModule
 import java.lang.reflect.Method
@@ -108,6 +108,24 @@ internal class NativeHeadsetHooks(
         report("UNAVAILABLE", "${status.lowercase()}:$className.$method")
     }
 
+    /**
+     * Queues one vendor noise request for [snapshot]; true means locally accepted, never device-confirmed.
+     * The gate rechecks [current] when it dispatches, so the session's freshness is decided there.
+     */
+    fun submitNoise(snapshot: NativeHeadsetSnapshot, mode: String, address: String?, current: () -> NativeHeadsetSnapshot?): Boolean {
+        if (!snapshot.supportsNoise(mode)) {
+            report("UNSUPPORTED", "mode=$mode is absent from the current capability snapshot")
+            return false
+        }
+        val normalizedAddress = normalizeBluetoothAddress(address)?.takeIf(snapshot.addresses::contains) ?: run {
+            report("UNAVAILABLE", "mode=$mode request address is not in the authenticated snapshot")
+            return false
+        }
+        val result = NativeNoiseRequestGate.submit(snapshot, mode, normalizedAddress, callbacks, current)
+        reportNoiseRequest(snapshot, mode, result)
+        return result != SystemRequestGate.Result.REJECTED
+    }
+
     fun reportNoiseRequest(snapshot: NativeHeadsetSnapshot, mode: String, result: SystemRequestGate.Result) {
         if (result == SystemRequestGate.Result.REJECTED) module.log(Log.WARN, tag, "native noise dispatch rejected mode=$mode")
         val detail = when (result) {
@@ -118,10 +136,10 @@ internal class NativeHeadsetHooks(
         report(if (result == SystemRequestGate.Result.REJECTED) "UNAVAILABLE" else "SUBMITTED", detail)
     }
 
+    /** The bridge client truncates detail at encoding and the host validates the status; callers pass wire constants. */
     fun report(status: String, detail: String) {
-        val wireStatus = status.takeIf(BridgePresentationWire.COMPONENT_STATUSES::contains) ?: BridgePresentationWire.ACTION_FAILED
         hostAdapterCall(onFailure = { module.log(Log.WARN, tag, "diagnostic_callback_failed feature=$feature status=$status", it) }) {
-            callbacks.report(feature.take(64), wireStatus, detail.take(512))
+            callbacks.report(feature, status, detail)
         }
     }
 

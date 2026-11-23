@@ -5,7 +5,6 @@ import android.app.Application
 import android.content.Context
 import android.os.Bundle
 import android.os.IBinder
-import android.os.SystemClock
 import android.util.Log
 import io.github.dohex.openrose.androidintegration.SystemHeadsetMapping
 import io.github.dohex.openrose.androidintegration.wire.BridgePresentationWire
@@ -135,12 +134,12 @@ class OpenRoseBluetoothModule : XposedModule() {
 
     private fun installNativeAdapters(selected: BridgeTarget, loader: ClassLoader) {
         val callbacks = object : AuthenticatedNativeHeadsetCallbacks {
+            // NativeNoiseRequestGate already rechecked freshness and capability on the current snapshot.
             override fun submitNoise(snapshot: NativeHeadsetSnapshot, mode: String): Boolean {
-                val usable = snapshot.isFresh(SystemClock.elapsedRealtime()) && snapshot.supportsNoise(mode)
-                if (retired || !usable || nativeSnapshot?.reference != snapshot.reference) return false
+                if (retired || nativeSnapshot?.reference != snapshot.reference) return false
                 val connectedClient = client ?: return false
                 val frame = latestFrame ?: return false
-                return runCatching {
+                return try {
                     actions.execute {
                         if (retired || nativeSnapshot?.reference != snapshot.reference) return@execute
                         val result = connectedClient.calls.setNoise(frame, mode)
@@ -155,7 +154,9 @@ class OpenRoseBluetoothModule : XposedModule() {
                         }
                     }
                     true
-                }.getOrDefault(false)
+                } catch (_: RejectedExecutionException) {
+                    false
+                }
             }
             override fun report(feature: String, status: String, detail: String) {
                 presentation.componentReport(featureFor(selected), status, detail)
@@ -313,9 +314,9 @@ class OpenRoseBluetoothModule : XposedModule() {
         }
 
         fun componentReport(feature: String, status: String, detail: String) {
-            synchronized(pendingReports) { pendingReports[feature] = status to detail.take(512) }
+            synchronized(pendingReports) { pendingReports[feature] = status to detail }
             val connected = client ?: return
-            connected.handler.post { if (!retired) connected.calls.reportComponent(feature, status, detail.take(512)) }
+            connected.handler.post { if (!retired) connected.calls.reportComponent(feature, status, detail) }
         }
 
         fun closeConsumers() {

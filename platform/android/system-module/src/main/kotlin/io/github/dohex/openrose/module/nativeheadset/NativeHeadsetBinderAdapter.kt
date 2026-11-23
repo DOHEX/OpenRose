@@ -10,7 +10,6 @@ import android.util.Log
 import io.github.dohex.openrose.androidintegration.SystemHeadsetMapping
 import io.github.dohex.openrose.androidintegration.wire.NativeHeadsetDirectory
 import io.github.dohex.openrose.androidintegration.wire.NativeHeadsetSnapshot
-import io.github.dohex.openrose.core.transport.normalizeBluetoothAddress
 import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedModule
 import java.util.concurrent.ConcurrentHashMap
@@ -115,19 +114,7 @@ class NativeHeadsetBinderAdapter(
     }
 
     private fun submit(snapshot: NativeHeadsetSnapshot, mode: String, address: String?) {
-        if (!snapshot.supportsNoise(mode)) {
-            hooks.report("UNSUPPORTED", "native mode=$mode is absent from current capability snapshot")
-            return
-        }
-        val normalizedAddress = normalizeBluetoothAddress(address)
-            ?.takeIf(snapshot.addresses::contains) ?: run {
-            hooks.report("UNAVAILABLE", "native mode=$mode request address is not in the authenticated snapshot")
-            return
-        }
-        val result = NativeNoiseRequestGate.submit(snapshot, mode, normalizedAddress, callbacks) {
-            if (closed) null else directory.current()
-        }
-        hooks.reportNoiseRequest(snapshot, mode, result)
+        hooks.submitNoise(snapshot, mode, address) { if (closed) null else directory.current() }
     }
 
     private fun reportIdentified(query: String) = hooks.report("IDENTIFIED", "$query identified ROSE earphones")

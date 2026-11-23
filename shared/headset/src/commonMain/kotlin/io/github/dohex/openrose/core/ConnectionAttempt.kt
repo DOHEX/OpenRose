@@ -2,9 +2,11 @@ package io.github.dohex.openrose.core
 
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.FieldReading
+import io.github.dohex.openrose.core.protocol.ModelProfile
 import io.github.dohex.openrose.core.protocol.ProtocolCodec
 import io.github.dohex.openrose.core.protocol.ProtocolReply
 import io.github.dohex.openrose.core.transport.ControlConnection
+import io.github.dohex.openrose.core.transport.ControlTransport
 import kotlinx.collections.immutable.PersistentList
 import kotlinx.collections.immutable.PersistentMap
 import kotlinx.collections.immutable.PersistentSet
@@ -18,7 +20,14 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
 import kotlin.time.TimeMark
 
-internal class ConnectionAttempt(val id: Long, val candidate: DeviceCandidate, val forceBle: Boolean) {
+/** One connection attempt for a recognized model, over the transport that admitted it. */
+internal class ConnectionAttempt(
+    val id: Long,
+    val candidate: DeviceCandidate,
+    val profile: ModelProfile,
+    val transport: ControlTransport,
+    val forceBle: Boolean,
+) {
     lateinit var task: Deferred<OperationResult>
     var connection: ControlConnection? = null
     var observer: Job? = null
@@ -33,16 +42,15 @@ internal class ConnectionAttempt(val id: Long, val candidate: DeviceCandidate, v
 }
 
 /** A fresh device session: capabilities before any firmware read, and every readable field still loading. */
-internal fun DeviceCandidate.loadingDevice(sessionId: Long): DeviceState {
-    val profile = requireNotNull(this.profile)
+internal fun ConnectionAttempt.loadingDevice(): DeviceState {
     val capabilities = profile.capabilities()
     return DeviceState(
-        deviceId,
-        sessionId,
+        candidate.deviceId,
+        id,
         profile,
         capabilities,
         capabilities.readableFields.associateWith { FieldReading.Loading }.toPersistentMap(),
-        classicAddress = classicAddress,
+        classicAddress = candidate.classicAddress,
     )
 }
 

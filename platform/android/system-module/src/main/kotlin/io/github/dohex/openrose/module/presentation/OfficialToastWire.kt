@@ -19,52 +19,26 @@ internal fun Context.setOfficialStatus(payload: Bundle) {
     ).invoke(service, 1, "strong_toast_action", payload)
 }
 
+/** The caller has already admitted official island mode and read [promptId] from this snapshot's prompt. */
 internal fun decodeRequest(snapshot: Bundle, promptId: String): PromptRequest? {
     if (snapshot.getInt(BridgeWire.KEY_VERSION, -1) != BridgeWire.VERSION) return null
     val identity = identityOf(snapshot) ?: return null
     if (ModelProfile.fromName(snapshot.getString("profile")) == null) return null
-    val presentation = snapshot.getBundle(BridgePresentationWire.PRESENTATION) ?: return null
-    if (presentation.getString(BridgePresentationWire.MODE) != BridgePresentationWire.OFFICIAL ||
-        !presentation.getBoolean(BridgePresentationWire.ALLOW_ISLAND_FIELDS, false)
-    ) {
-        return null
-    }
-    val prompt = presentation.getBundle(BridgePresentationWire.PROMPT) ?: return null
-    if (prompt.getString(BridgePresentationWire.PROMPT_ID) != promptId ||
-        prompt.getString(BridgePresentationWire.MODE) != BridgePresentationWire.OFFICIAL
-    ) {
-        return null
-    }
+    val prompt = snapshot.getBundle(BridgePresentationWire.PRESENTATION)?.getBundle(BridgePresentationWire.PROMPT) ?: return null
+    if (prompt.getString(BridgePresentationWire.MODE) != BridgePresentationWire.OFFICIAL) return null
+    val fields = snapshot.getBundle("fields")
     return PromptRequest(
         identity = identity,
         promptId = promptId,
-        leftBattery = battery(snapshot, LEFT_BATTERY),
-        rightBattery = battery(snapshot, RIGHT_BATTERY),
-        leftCharging = charging(snapshot, LEFT_CHARGING),
-        rightCharging = charging(snapshot, RIGHT_CHARGING),
+        leftBattery = fields?.knownBattery(LEFT_BATTERY),
+        rightBattery = fields?.knownBattery(RIGHT_BATTERY),
+        leftCharging = fields?.knownCharging(LEFT_CHARGING),
+        rightCharging = fields?.knownCharging(RIGHT_CHARGING),
         key = "${identity.stableKey}:$promptId",
     )
 }
 
 internal fun identityOf(snapshot: Bundle): SessionIdentity? = sessionIdentity(snapshot)?.takeIf { it.sessionId > 0L }
-
-private fun battery(snapshot: Bundle, name: String): Int? {
-    val fields = snapshot.getBundle("fields") ?: return null
-    val reading = fields.getBundle(name) ?: return null
-    if (reading.getString(BridgeWire.STATUS) != KNOWN) return null
-    val value = reading.getBundle("value") ?: return null
-    if (value.getString("type") != NUMBER) return null
-    return value.getInt("value", INVALID_BATTERY).takeIf { it in 0..100 }
-}
-
-private fun charging(snapshot: Bundle, name: String): Boolean? {
-    val fields = snapshot.getBundle("fields") ?: return null
-    val reading = fields.getBundle(name) ?: return null
-    if (reading.getString(BridgeWire.STATUS) != KNOWN) return null
-    val value = reading.getBundle("value") ?: return null
-    if (value.getString("type") != TOGGLE) return null
-    return value.untypedValue("value") as? Boolean
-}
 
 internal fun buildShowBundle(clips: List<PreparedClip>, request: PromptRequest): Bundle {
     val param = JSONObject()
@@ -131,10 +105,6 @@ internal data class PromptRequest(
     val key: String,
 )
 
-// The wire value is untyped; the typed Bundle.get(String, Class) needs API 33.
-@Suppress("DEPRECATION")
-private fun Bundle.untypedValue(key: String): Any? = get(key)
-
 internal fun officialHideBundle() = Bundle().apply {
     putString(KEY_PACKAGE_NAME, TARGET_PACKAGE)
     putString(KEY_STATUS_BAR_STRONG_TOAST, HIDE_STRONG_TOAST)
@@ -163,9 +133,5 @@ private const val LEFT_BATTERY = "LEFT_BATTERY"
 private const val RIGHT_BATTERY = "RIGHT_BATTERY"
 private const val LEFT_CHARGING = "LEFT_CHARGING"
 private const val RIGHT_CHARGING = "RIGHT_CHARGING"
-private const val KNOWN = "KNOWN"
-private const val NUMBER = "NUMBER"
-private const val TOGGLE = "TOGGLE"
-private const val INVALID_BATTERY = -1
 private const val LOW_BATTERY_THRESHOLD = 20
 internal const val OFFICIAL_DURATION_MILLIS = 5_000L

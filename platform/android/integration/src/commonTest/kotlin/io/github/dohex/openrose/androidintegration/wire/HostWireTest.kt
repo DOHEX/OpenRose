@@ -199,6 +199,21 @@ class HostWireTest {
     }
 
     @Test
+    fun aConfirmedBatteryOutsideZeroToOneHundredIsAMalformedFrame() {
+        val profile = ModelProfile.I5_ZT
+        fun device(level: Int) = DeviceState(
+            deviceId = reference.deviceId,
+            sessionId = reference.sessionId,
+            profile = profile,
+            capabilities = profile.capabilities(),
+            fields = persistentMapOf(DeviceField.CASE_BATTERY to FieldReading.Known(FieldValue.Number(level), "ff")),
+        )
+
+        assertEquals(device(100), decodeDevice(encode(device(100))))
+        assertFailsWith<WireFormatException> { decodeDevice(encode(device(255))) }
+    }
+
+    @Test
     fun aCommandAddressedToAGenerationKeepsBothParts() {
         val command = HostCommand.ClaimPrompt(reference, "prompt-1")
 

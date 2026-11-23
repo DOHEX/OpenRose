@@ -6,7 +6,6 @@ import android.content.Intent
 import android.os.SystemClock
 import android.util.Log
 import io.github.dohex.openrose.androidintegration.SystemHeadsetMapping
-import io.github.dohex.openrose.androidintegration.SystemRequestGate
 import io.github.dohex.openrose.androidintegration.wire.BridgePresentationWire
 import io.github.dohex.openrose.androidintegration.wire.BridgeWire
 import io.github.dohex.openrose.androidintegration.wire.NativeHeadsetDirectory
@@ -74,23 +73,8 @@ class MiLinkNativeHeadsetAdapter(
         updates.close()
     }
 
-    /** The callback only enqueues work; its Boolean means locally accepted, never device-confirmed. */
-    private fun submit(snapshot: NativeHeadsetSnapshot, mode: String, address: String?): Boolean {
-        if (!snapshot.isFresh(SystemClock.elapsedRealtime()) || !snapshot.supportsNoise(mode)) {
-            hooks.report("UNSUPPORTED", "mode=$mode is not currently supported by this session")
-            return false
-        }
-        val normalizedAddress = normalizeBluetoothAddress(address)
-            ?.takeIf(snapshot.addresses::contains) ?: run {
-            hooks.report("UNAVAILABLE", "mode=$mode request address is not in the authenticated snapshot")
-            return false
-        }
-        val result = NativeNoiseRequestGate.submit(snapshot, mode, normalizedAddress, callbacks) {
-            if (closed) null else directory.current()
-        }
-        hooks.reportNoiseRequest(snapshot, mode, result)
-        return result != SystemRequestGate.Result.REJECTED
-    }
+    private fun submit(snapshot: NativeHeadsetSnapshot, mode: String, address: String?): Boolean =
+        hooks.submitNoise(snapshot, mode, address) { if (closed) null else directory.current() }
 
     /** An identity query: answered for the current session and the bonded ROSE earphones, otherwise left to the system. */
     private fun identityAnswer(address: String?, value: Any): HookDecision {
@@ -104,8 +88,8 @@ class MiLinkNativeHeadsetAdapter(
         hooks.report("UNAVAILABLE", "$reason session=${snapshot.sessionId}")
     }
 
-    private fun shouldSuppressManagedAction(address: String?): Boolean = directory.isManaged(address) &&
-        directory.session(address) == null
+    /** With no session answering, a managed address must not fall through to the vendor's own control path. */
+    private fun shouldSuppressManagedAction(address: String?): Boolean = directory.isManaged(address)
 
     private inner class DeviceMethods {
         fun installMxBluetooth(className: String) {
@@ -254,10 +238,6 @@ class MiLinkNativeHeadsetAdapter(
                     return HookDecision.Return(-1)
                 }
                 return HookDecision.Proceed
-            }
-            if (!snapshot.supportsNoise(mode)) {
-                hooks.report("UNSUPPORTED", "${chain.executable.name} is not in the current ROSE noise capability")
-                return HookDecision.Return(-1)
             }
             return if (submit(snapshot, mode, address)) HookDecision.Return(acceptedResult) else HookDecision.Return(-1)
         }

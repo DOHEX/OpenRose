@@ -311,7 +311,7 @@ private fun QuickPanelContent(
 
     if (device != null) {
         val onSet = model.settingsFor(device.sessionId)
-        if (cards.local.remote == null && device.capabilities.noiseControl != null) {
+        if (cards.local.remote == null) {
             NoiseControlCard(state, device, showLevelControls = false, onSet = onSet)
         }
         QuickEqualizerMenu(state, device, onSet)

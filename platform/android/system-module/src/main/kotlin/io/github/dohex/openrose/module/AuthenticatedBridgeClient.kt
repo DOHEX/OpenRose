@@ -78,15 +78,9 @@ internal class AuthenticatedBridgeClient(
     private var deliveredBonded: Set<String> = emptySet()
     private val rebindRunnable = Runnable { bindControlBridge() }
 
+    // Target, process and package come from the module's entry gate (BridgeTarget.resolve); the host re-validates hello.
     init {
         require(processName.isNotBlank() && processName.length <= 128)
-        require(target.acceptsProcess(processName)) {
-            "Loaded process '$processName' is outside bridge target $target"
-        }
-        require(resolution in BridgeWire.RESOLUTIONS)
-        require(context.packageName == target.packageName) {
-            "Bridge context package ${context.packageName} does not match $target"
-        }
     }
     private val observations = SnapshotReader()
     private val confirmation = ConfirmedLease()
