@@ -329,8 +329,8 @@ private class ApplicationOwners(
         private suspend fun returnToOrdinary(request: SwitchRequest): HandoffOutcome {
             client.stop()
             if (record.moduleRelease != null) {
-                val recorded = request.copy(fromGeneration = record.moduleRelease?.generation ?: request.fromGeneration)
-                when (val proof = releases.releaseModule(recorded)) {
+                // persistSelection recorded this request's generation under switchLock; the record cannot differ.
+                when (val proof = releases.releaseModule(request)) {
                     is ReleaseProof.Unproven -> {
                         releaseRetry = scope.launch { releases.retryModuleRelease() }
                         return finish(HandoffOutcome.Blocked(request, proof.stage, proof.reason))
@@ -568,7 +568,8 @@ private class ApplicationOwners(
 
     private suspend fun module(command: HostCommand): OperationResult = when (val result = client.execute(command)) {
         is HostCallResult.Operation -> result.result
-        is HostCallResult.Flag -> OperationResult.Success
+        // Only ClaimPrompt answers with a flag, and it does not go through here.
+        is HostCallResult.Flag -> OperationResult.Failure(ControlError(ControlErrorCode.FAILED, "控制宿主返回了不匹配的结果"))
         is HostCallResult.Rejected -> OperationResult.Failure(ControlError(ControlErrorCode.NOT_READY, result.message))
     }
 

@@ -117,7 +117,7 @@ class SystemEntryRuntime(
         val current = captured.readySession
             ?: return SessionSnapshotResult.Failure(ControlError(ControlErrorCode.NOT_READY, "设备会话尚未就绪"))
         if (reference != current) return SessionSnapshotResult.Failure(STALE_REFERENCE)
-        return SessionSnapshotResult.Available(requireNotNull(captured.device), present(captured).detached())
+        return SessionSnapshotResult.Available(requireNotNull(captured.device), present(captured))
     }
 
     override suspend fun set(reference: SessionReference, command: HeadsetCommand): OperationResult {

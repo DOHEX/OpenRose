@@ -143,7 +143,7 @@ private class AppNavigation(
         get() = stack.lastOrNull() as? Route ?: Route.Main()
 
     val selectedTab: AppPage
-        get() = mainPages.getOrElse(tabs.selectedPage) { AppPage.HEADPHONES }
+        get() = mainPages[tabs.selectedPage]
 
     val visiblePage: AppPage
         get() = if (route is Route.Main) selectedTab else route.page

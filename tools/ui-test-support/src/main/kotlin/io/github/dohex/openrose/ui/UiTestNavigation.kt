@@ -28,12 +28,7 @@ fun OpenRoseUiTestHarness.clickTab(text: String) {
         }
     }?.findAncestorOrSelf {
         it.config.getOrNull(SemanticsActions.OnClick) != null && it.config.getOrNull(SemanticsProperties.Role) == Role.Tab
-    }
-        ?: nodes().firstOrNull { candidate ->
-            candidate.config.getOrNull(SemanticsProperties.Role) == Role.Tab &&
-                candidate.config.getOrNull(SemanticsActions.OnClick) != null &&
-                candidate.hasTabLabel(text)
-        } ?: error("No clickable tab found for '$text'")
+    } ?: error("No clickable tab found for '$text'")
     invokeClick(clickNode, text)
 }
 

@@ -209,7 +209,8 @@ private fun MutableMap<DeviceField, FieldReading>.putReading(
     value: FieldValue?,
     index: Int = 7,
 ) {
-    val source = if (index < raw.size) byteArrayOf(raw[index]).hex() else ""
+    // Every caller has already checked the reply is long enough for [index].
+    val source = byteArrayOf(raw[index]).hex()
     this[field] = value?.let { FieldReading.Known(it, source) } ?: FieldReading.Unknown(source)
 }
 private fun toggleValue(value: Int): FieldValue? = if (value in 0..1) FieldValue.Toggle(value == 1) else null

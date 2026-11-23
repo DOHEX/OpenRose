@@ -93,7 +93,7 @@ class OwnerRecordCodecTest {
     }
 
     @Test
-    fun savingPublishesOnlyWhenTheChoiceChangesAndInvolvesTheModule() {
+    fun savingPublishesOnlyWhenTheChoiceChanges() {
         val ordinary = OwnerRecord()
         val module = OwnerRecord(ControlWay.MODULE)
         var published = 0

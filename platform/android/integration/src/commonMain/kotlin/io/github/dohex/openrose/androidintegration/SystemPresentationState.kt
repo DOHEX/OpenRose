@@ -110,12 +110,10 @@ internal fun ControlState.systemPresentation(settings: IntegrationSettings, prom
             ancLevel = device.presentationReading(DeviceField.ANC_LEVEL).normalizedNumber(),
             transparencyLevel = device.presentationReading(DeviceField.TRANSPARENCY_LEVEL).normalizedNumber(),
         ),
-        actions = device.capabilities.writableSettings.toSet(),
+        actions = device.capabilities.writableSettings,
         prompt = prompt?.takeIf { it.reference == reference && it.appliesTo(settings) },
     )
 }
-
-internal fun SystemPresentationState.detached() = copy(actions = actions.toSet())
 
 /** Whether this prompt may still show under [settings]: its mode is the saved one and that mode prompts on its trigger. */
 internal fun IslandPrompt.appliesTo(settings: IntegrationSettings): Boolean = mode == settings.islandMode &&

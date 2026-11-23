@@ -4,7 +4,6 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-import org.freedesktop.dbus.exceptions.DBusException
 import org.freedesktop.dbus.exceptions.DBusExecutionException
 
 /** Older BlueZ connections can start LE again after the Linux user has handed the headset to a peer. */
@@ -104,8 +103,6 @@ internal class ReleasedBluezLinks {
             releaseReturnedLe(bus, path, bus.objects(), release)
         } catch (_: DBusExecutionException) {
             // A disappearing bearer or daemon can reject the call. Recheck only on a subsequent event.
-        } catch (_: DBusException) {
-            // The old daemon's proxy may already be gone.
         }
     }
 

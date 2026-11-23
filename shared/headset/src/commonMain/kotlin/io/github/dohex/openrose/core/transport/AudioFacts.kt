@@ -153,7 +153,8 @@ class AudioFacts(private val driver: AudioFactsDriver) {
         for (message in inbox) {
             when (message) {
                 is AudioMessage.Result -> {
-                    if (message.epoch != epoch || !enabled) continue
+                    // AdapterOff advances the epoch before disabling, so an older query result never lands.
+                    if (message.epoch != epoch) continue
                     val snapshot = message.snapshot
                     connected.clear()
                     bonded.clear()

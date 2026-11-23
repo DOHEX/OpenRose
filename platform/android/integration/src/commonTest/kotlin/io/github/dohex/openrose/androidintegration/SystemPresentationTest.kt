@@ -73,9 +73,6 @@ class SystemPresentationTest {
         assertTrue(assertNotNull(snapshot.presentation.prompt).claimed)
         assertEquals("64", (assertIs<FieldReading.Known>(snapshot.device.diagnostics.fields[DeviceField.LEFT_BATTERY])).rawHex)
         assertEquals(PresentationReading.Known(100), snapshot.presentation.battery?.left)
-        @Suppress("UNCHECKED_CAST")
-        (snapshot.presentation.actions as MutableSet<DeviceSetting>).clear()
-        assertTrue(DeviceSetting.NOISE_MODE in session.presentation.value.actions)
 
         val writesBeforeSettingsChange = transport.connection.writes.size
         session.updateSettings(session.state.value.settings.copy(forceBle = true))

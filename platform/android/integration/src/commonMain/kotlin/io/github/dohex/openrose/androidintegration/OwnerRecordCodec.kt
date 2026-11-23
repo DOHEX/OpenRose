@@ -39,11 +39,8 @@ object OwnerRecordCodec {
         )
     }
 
-    /** Only a change that involves module control has to be visible to the module host. */
-    private fun needsPublish(previous: OwnerRecord, record: OwnerRecord): Boolean {
-        val moduleInvolved = previous.selected != ControlWay.ORDINARY || record.selected != ControlWay.ORDINARY
-        return moduleInvolved && previous.selected != record.selected
-    }
+    /** With two control ways, any change of choice enters or leaves module control, so the host must be told. */
+    private fun needsPublish(previous: OwnerRecord, record: OwnerRecord): Boolean = previous.selected != record.selected
 
     /** [canPublish] is asked only when the host would have to be told. */
     fun canSave(previous: OwnerRecord, record: OwnerRecord, canPublish: () -> Boolean): Boolean {

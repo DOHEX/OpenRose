@@ -145,7 +145,7 @@ internal fun MaterialMainShell(
     // The bottom bar, fixed or floating, blurs the pages behind it, so they run under it.
     val barBackdrop = rememberAppBackdrop(MaterialTheme.colorScheme.surface, backdropActive && !wide)
     val contentBehindBar = floating || barBackdrop != null
-    val currentTab = mainPages.getOrElse(pagerState.selectedPage) { AppPage.HEADPHONES }
+    val currentTab = mainPages[pagerState.selectedPage]
     val headphoneMenu = HeadphoneMenuState(
         connectedHome = connectedHome,
         menuExpanded = menuExpanded,
