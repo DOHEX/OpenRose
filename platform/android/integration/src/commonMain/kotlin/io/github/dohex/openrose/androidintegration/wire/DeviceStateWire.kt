@@ -28,8 +28,11 @@ private fun decodeReading(field: DeviceField, wire: Wire): FieldReading {
     val node = wire.asObj()
     return when (val kind = node.str("r")) {
         "loading" -> FieldReading.Loading
+
         "none" -> FieldReading.NotProvided(node.str("raw"))
+
         "unknown" -> FieldReading.Unknown(node.str("raw"))
+
         "known" -> {
             val value = ControlWire.decodeValue(node.field("value"))
             if (field in BATTERY_FIELDS && (value !is FieldValue.Number || value.value !in 0..100)) {
@@ -37,6 +40,7 @@ private fun decodeReading(field: DeviceField, wire: Wire): FieldReading {
             }
             FieldReading.Known(value, node.str("raw"))
         }
+
         else -> throw WireFormatException("未知读数类型 $kind")
     }
 }

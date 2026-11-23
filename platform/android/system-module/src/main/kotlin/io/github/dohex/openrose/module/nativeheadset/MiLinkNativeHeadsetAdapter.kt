@@ -73,8 +73,10 @@ class MiLinkNativeHeadsetAdapter(
         updates.close()
     }
 
-    private fun submit(snapshot: NativeHeadsetSnapshot, mode: String, address: String?): Boolean =
-        hooks.submitNoise(snapshot, mode, address) { if (closed) null else directory.current() }
+    private fun submit(snapshot: NativeHeadsetSnapshot, mode: String, address: String?): Boolean {
+        val current = { if (closed) null else directory.current() }
+        return hooks.submitNoise(snapshot, mode, address, current)
+    }
 
     /** An identity query: answered for the current session and the bonded ROSE earphones, otherwise left to the system. */
     private fun identityAnswer(address: String?, value: Any): HookDecision {

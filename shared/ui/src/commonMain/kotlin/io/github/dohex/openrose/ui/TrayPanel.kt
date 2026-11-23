@@ -324,7 +324,8 @@ private fun DeviceState.trayBattery(
 ): String? = batterySummary(profile.batteryReadings(), showUnknown = desktop) { confirmedNumber(it) }
 
 private fun ControlState.trayNoiseModes(device: DeviceState): List<TrayNoiseMode> {
-    return trayNoiseModes(device.noiseModes, device.confirmedNoiseMode, canChooseNoiseMode(device))
+    val enabled = canChooseNoiseMode(device)
+    return trayNoiseModes(device.noiseModes, device.confirmedNoiseMode, enabled)
 }
 
 /** A short menu label and the source or progress line that can be shown under the headset's name. */

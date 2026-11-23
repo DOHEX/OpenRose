@@ -117,8 +117,10 @@ internal fun ControlState.canWrite(device: DeviceState, setting: DeviceSetting):
 }
 
 /** Noise-mode choices are offered when the model can write the mode and the session accepts a write now. */
-internal fun ControlState.canChooseNoiseMode(device: DeviceState): Boolean =
-    DeviceSetting.NOISE_MODE in device.capabilities.writableSettings && canWrite(device, DeviceSetting.NOISE_MODE)
+internal fun ControlState.canChooseNoiseMode(device: DeviceState): Boolean {
+    val modelWrites = DeviceSetting.NOISE_MODE in device.capabilities.writableSettings
+    return modelWrites && canWrite(device, DeviceSetting.NOISE_MODE)
+}
 
 private fun DeviceSetting.writeGroup(): DeviceSetting = when (this) {
     DeviceSetting.ANC_LEVEL, DeviceSetting.TRANSPARENCY_LEVEL, DeviceSetting.NOISE_CYCLE -> DeviceSetting.NOISE_MODE

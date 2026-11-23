@@ -7,8 +7,10 @@ import io.github.dohex.openrose.core.transport.TransportRecoveryReason
 import io.github.dohex.openrose.core.transport.TransportSelection
 import kotlinx.coroutines.TimeoutCancellationException
 
-internal fun TransportSelection.canRecoverFirstQuery(attempt: ConnectionAttempt, index: Int?): Boolean =
-    index == 0 && endpoint is TransportEndpoint.BleGatt && attempt.transport.supportsInitializationRecovery
+internal fun TransportSelection.canRecoverFirstQuery(attempt: ConnectionAttempt, index: Int?): Boolean {
+    val firstBleQuery = index == 0 && endpoint is TransportEndpoint.BleGatt
+    return firstBleQuery && attempt.transport.supportsInitializationRecovery
+}
 
 internal fun isTerminalTransportFailure(cause: Throwable?): Boolean = when (cause) {
     is SecurityException, is IllegalArgumentException, is UnsupportedOperationException, is TerminalTransportException -> true

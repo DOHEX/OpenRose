@@ -568,8 +568,10 @@ private class ApplicationOwners(
 
     private suspend fun module(command: HostCommand): OperationResult = when (val result = client.execute(command)) {
         is HostCallResult.Operation -> result.result
+
         // Only ClaimPrompt answers with a flag, and it does not go through here.
         is HostCallResult.Flag -> OperationResult.Failure(ControlError(ControlErrorCode.FAILED, "控制宿主返回了不匹配的结果"))
+
         is HostCallResult.Rejected -> OperationResult.Failure(ControlError(ControlErrorCode.NOT_READY, result.message))
     }
 

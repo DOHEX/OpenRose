@@ -18,8 +18,10 @@ private fun firmwareComparisonInteger(firmware: FieldValue.Firmware?): Int? = fi
  * Whether [firmware] reaches a gate at [version]. Null when the firmware is unread or malformed: the gate is then
  * undecided, and a capability behind it is unknown, never assumed from the lowest version.
  */
-internal fun firmwareAtLeast(firmware: FieldValue.Firmware?, version: Int): Boolean? =
-    firmwareComparisonInteger(firmware)?.let { it >= version }
+internal fun firmwareAtLeast(firmware: FieldValue.Firmware?, version: Int): Boolean? {
+    val comparable = firmwareComparisonInteger(firmware) ?: return null
+    return comparable >= version
+}
 
 /** Prompt volume gains the off level 0 at [offSince]; the levels are empty (unknown) until the firmware is read. */
 internal fun promptVolumeLevels(firmware: FieldValue.Firmware?, offSince: Int): IntRange = when (firmwareAtLeast(firmware, offSince)) {
