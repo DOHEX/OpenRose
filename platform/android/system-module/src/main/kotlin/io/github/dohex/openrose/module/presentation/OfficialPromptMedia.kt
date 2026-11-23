@@ -32,16 +32,11 @@ internal class OfficialPromptMedia(private val targetContext: Context, private v
                     ClipSpec("left", "earphone_left", MODULE_LEFT_RAW),
                     ClipSpec("right", "earphone_right", MODULE_RIGHT_RAW),
                 ).forEach { spec ->
-                    // Prefer the Xiaomi Bluetooth app's own earbud clip so the prompt looks native; OpenRose's bundled clip is the
-                    // fallback when a ROM lacks it. Never select in-ear or no-in-ear footage from connection state: this wire
-                    // has no wear observation, so the plain `earphone_*` clip is used.
                     val resource = checkNotNull(
                         findRawResource(targetContext, spec.targetRawName)
                             ?: moduleResources?.let { findRawResource(it, spec.moduleRawName) },
                     ) { "${spec.side}_clip_missing" }
                     val name = "openrose_official_${stableDigest("${request.key}:$token:${spec.side}").take(24)}_${spec.side}.mp4"
-                    // The target's FileProvider maps `internal_files` to <filesDir>/my_internal_files/ (res/xml/file_paths.xml),
-                    // not to filesDir itself, so the clip must live there or the provider answers FileNotFoundException.
                     val directory = File(targetContext.filesDir, PROVIDER_FILES_DIRECTORY).also { it.mkdirs() }
                     val file = File(directory, name)
                     copyRawResource(resource.context, resource.resourceId, file)
@@ -54,7 +49,6 @@ internal class OfficialPromptMedia(private val targetContext: Context, private v
                     val clip = PreparedClip(file, uri)
                     clips += clip
                     synchronized(assetLock) { ownedAssets[uri] = OwnedAsset(clip) }
-                    // Verify the OEM provider path and video track using the actual target package UID.
                     probeProviderVideo(uri)
                     targetContext.grantUriPermission(SYSTEM_UI_PACKAGE, uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 }
@@ -66,7 +60,6 @@ internal class OfficialPromptMedia(private val targetContext: Context, private v
         }
     }
 
-    // Resource IDs belong to the installed Xiaomi Bluetooth or module APK and are resolved against that package's Resources.
     @SuppressLint("DiscouragedApi")
     private fun findRawResource(context: Context, name: String): RawResource? {
         val id = context.resources.getIdentifier(name, "raw", context.packageName)
@@ -155,7 +148,6 @@ internal class OfficialPromptMedia(private val targetContext: Context, private v
         }
     }
 
-    /** Cancels this presenter's delayed closures and releases only its tracked media. */
     fun close() {
         val (assets, callbacks, graceDeadline) = synchronized(assetLock) {
             val current = ownedAssets.values.toList()

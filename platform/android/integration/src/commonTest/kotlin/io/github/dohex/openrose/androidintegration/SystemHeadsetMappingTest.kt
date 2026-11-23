@@ -15,11 +15,6 @@ import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-/**
- * What the system's own headset UIs may show, derived from the readings a MiLink lease actually receives
- * from the module host over real earphone replies. The earphones' "not provided" and unknown readings
- * must never become real numbers, charging or wear state.
- */
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class SystemHeadsetMappingTest {
     private suspend fun TestScope.readAsMiLink(profile: ModelProfile = ModelProfile.I5_ZT): Map<DeviceField, FieldReading> {
@@ -42,7 +37,6 @@ class SystemHeadsetMappingTest {
         val fields = readAsMiLink()
 
         assertEquals(FieldReading.NotProvided("ff"), fields[DeviceField.CASE_BATTERY])
-        // MiLink: [case, left, right, caseCharging, leftCharging, rightCharging]; -1 is its own "unavailable".
         assertEquals(listOf(-1, 100, 98, 0, 0, 0), SystemHeadsetMapping.miLinkBattery(fields))
         assertEquals(98, SystemHeadsetMapping.miLinkSummaryBattery(fields))
     }
@@ -103,9 +97,7 @@ class SystemHeadsetMappingTest {
             DeviceField.RIGHT_BATTERY to FieldReading.Known(FieldValue.Number(61), "3d"),
             DeviceField.LEFT_CHARGING to FieldReading.Unknown("02"),
         )
-        // MiLink's list has no unknown slot for charging, so the whole list is withheld rather than sending 0.
         assertNull(SystemHeadsetMapping.miLinkBattery(chargingUnknown))
-        // The headset Binder encodes charging in the battery byte, so an unknown flag cannot be sent at all.
         assertEquals(SystemHeadsetMapping.BinderStatus.Unrepresentable, SystemHeadsetMapping.binderStatus(chargingUnknown))
     }
 
@@ -118,7 +110,6 @@ class SystemHeadsetMappingTest {
             DeviceField.RIGHT_CHARGING to FieldReading.Known(FieldValue.Toggle(false), "00"),
             DeviceField.CASE_BATTERY to FieldReading.Known(FieldValue.Number(70), "46"),
         )
-        // There is no case charging reading, so the case battery is unavailable (-1) instead of paired with a guess.
         assertEquals(listOf(-1, 90, 80, 0, 1, 0), SystemHeadsetMapping.miLinkBattery(fields))
     }
 
@@ -127,7 +118,6 @@ class SystemHeadsetMappingTest {
         val fields = readAsMiLink()
 
         val status = assertIs<SystemHeadsetMapping.BinderStatus.Payload>(SystemHeadsetMapping.binderStatus(fields))
-        // left, right, case(255 = not provided), then 13 empty positions; index 7 (mode) and 8 (wear) stay empty.
         assertEquals("100,98,255,,,,,,,,,,,,,", status.text)
         assertEquals(15, status.text.count { it == ',' })
     }

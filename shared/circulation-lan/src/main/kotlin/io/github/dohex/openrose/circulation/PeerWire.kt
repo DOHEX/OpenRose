@@ -7,7 +7,6 @@ import java.io.DataOutputStream
 import java.io.IOException
 import javax.net.ssl.SSLSocket
 
-/** One bounded transaction per authenticated TLS socket. No command is retried after delivery. */
 internal class PeerWire(socket: SSLSocket) {
     val input = DataInputStream(socket.inputStream.buffered())
     val output = DataOutputStream(socket.outputStream.buffered())

@@ -70,7 +70,6 @@ internal class ConnectionTargeting(
             return
         }
         if (candidate?.profile == null) {
-            // Connected audio device is not an authorized ROSE model; do not drop existing session
             return
         }
         if (audioDrivenSessionDeviceId != null && audioDrivenSessionDeviceId != audioDeviceId) {
@@ -96,7 +95,6 @@ internal class ConnectionTargeting(
         return connectInternal(deviceId, isAudioDriven = false, requestEpoch = requestEpoch)
     }
 
-    /** Cancelling the adding flow releases only the unfinished attempt it created. */
     suspend fun connectForAddDevice(deviceId: DeviceId): OperationResult {
         val requestEpoch = targetEpoch(deviceId)
         if (systemPinnedDeviceId != null) {
@@ -195,7 +193,6 @@ internal class ConnectionTargeting(
             platformState.transport == TransportAvailability.Available
         state.update { it.copy(platform = platformState) }
         audioPermission.value = platformState.canReadAudio
-        // Existing audio may predate unlock or asynchronous platform transport initialization.
         if (!previous.canReadAudio || !platformState.canReadAudio || !platformState.userUnlocked) return
         if ((unlocking || transportReady) && transport != null) {
             scope.launch { state.value.audioDeviceId?.let { handleAudioConnectedDevice(it) } }

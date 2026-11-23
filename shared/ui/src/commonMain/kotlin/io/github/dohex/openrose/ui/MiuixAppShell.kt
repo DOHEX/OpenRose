@@ -31,14 +31,8 @@ import top.yukonga.miuix.kmp.utils.PagerGestureNestedScrollConnection
 import top.yukonga.miuix.kmp.utils.overScrollVertical
 import top.yukonga.miuix.kmp.utils.pagerGestureOverride
 
-/**
- * Page scrolling with the Miuix bounce on every page. A scroll container's own overscroll only
- * engages while its content can scroll, so pages shorter than the viewport would never bounce;
- * [overScrollVertical] takes the leftover drag from the nested scroll chain instead.
- */
 private fun Modifier.miuixPageScroll(state: ScrollState): Modifier = overScrollVertical().verticalScroll(state, overscrollEffect = null)
 
-/** The wide-screen rail. The app root places it beside the route stack so page transitions never move it. */
 @Composable
 internal fun MiuixNavigationRail(selected: AppPage, onSelect: (AppPage) -> Unit) {
     NavigationRail(header = { AppIcon(RoseIcon.HEADPHONES, Modifier.padding(12.dp), contentDescription = "OpenRose") }) {
@@ -53,7 +47,6 @@ internal fun MiuixNavigationRail(selected: AppPage, onSelect: (AppPage) -> Unit)
     }
 }
 
-/** Renders a pushed (secondary) page; main tabs live in [MiuixMainShell]. */
 @Composable
 internal fun MiuixAppShell(
     page: AppPage,
@@ -112,12 +105,10 @@ internal fun MiuixMainShell(
     }
     val backdropActive = LocalBackdropBlurActive.current
     val floating = !wide && bottomBarStyle == BottomBarStyle.FLOATING
-    // Liquid glass needs the same shader support as blur; without it the capsule falls back to the solid frosted bar.
     val glassBackdrop = rememberLiquidGlassBackdrop(
         MiuixTheme.colorScheme.surface,
         active = floating && backdropActive && floatingBarMaterial == FloatingBarMaterial.LIQUID_GLASS,
     )
-    // The bottom bar, fixed or floating, blurs the pages behind it, so they run under it; the glass bar records its own backdrop.
     val barBackdrop = rememberAppBackdrop(MiuixTheme.colorScheme.surface, backdropActive && !wide && glassBackdrop == null)
     val contentBehindBar = floating || barBackdrop != null
     val headphoneMenu = HeadphoneMenuState(
@@ -166,7 +157,6 @@ internal fun MiuixMainShell(
     }
 }
 
-/** Wide pages sit beside the vertical rail, so they travel vertically and only on rail taps. */
 @Composable
 private fun MiuixMainPager(
     pagerState: MainTabsPagerState,
@@ -197,7 +187,6 @@ private fun MiuixMainPager(
     }
 }
 
-/** One main tab: its own collapsing top bar over its scrolling content. */
 @Composable
 private fun MiuixMainPage(
     pagerState: MainTabsPagerState,
@@ -213,7 +202,6 @@ private fun MiuixMainPage(
 ) {
     val page = mainPages[pageIndex]
     val surface = MiuixTheme.colorScheme.surface
-    // Pages kept composed beside the visible ones neither record nor blur a backdrop.
     val pageBackdrop = rememberAppBackdrop(surface, backdropActive && rememberPageVisible(pagerState, pageIndex))
     CompositionLocalProvider(LocalAppBackdrop provides pageBackdrop) {
         Box(Modifier.mainPageSemantics(pageIndex == pagerState.selectedPage)) {
@@ -249,10 +237,6 @@ private fun MiuixMainPage(
     }
 }
 
-/**
- * The narrow-screen bar: liquid glass when [glassBackdrop] is given, otherwise the floating capsule or the fixed
- * bar, each blurring [barBackdrop] or solid without it. [onSelect] receives the index into [mainPages].
- */
 @Composable
 private fun MiuixMainBottomBar(
     selectedIndex: Int,
@@ -264,8 +248,6 @@ private fun MiuixMainBottomBar(
     if (glassBackdrop != null) {
         MiuixLiquidGlassBottomBar(backdrop = glassBackdrop, selectedIndex = selectedIndex, onSelect = onSelect)
     } else if (floating) {
-        // Mirrors the Miuix example: the glass stroke highlight (or, without blur, the divider
-        // outline) separates the bar from surfaceContainer cards scrolling underneath it.
         val dark = MiuixTheme.colorScheme.surface.luminance() < 0.5f
         val tint = MiuixTheme.colorScheme.surfaceContainer
         FloatingNavigationBar(

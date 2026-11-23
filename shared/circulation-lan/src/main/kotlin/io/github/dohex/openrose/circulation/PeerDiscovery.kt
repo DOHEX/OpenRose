@@ -10,12 +10,10 @@ data class NearbyPeer(
     val name: String,
     val address: InetAddress,
     val port: Int,
-    /** Android can resolve this address on a different network from the process default. */
     val socketFactory: SocketFactory = SocketFactory.getDefault(),
 )
 
 interface PeerDiscovery : Closeable {
-    /** One current snapshot for all visible interfaces. A service can move to another address after wake. */
     fun start(id: String, name: String, port: Int, found: (List<NearbyPeer>) -> Unit)
 
     companion object {

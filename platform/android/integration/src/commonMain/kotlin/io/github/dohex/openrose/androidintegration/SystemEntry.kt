@@ -27,7 +27,6 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-/** A detached read of one specific device session, with the system view derived from the same capture. */
 sealed interface SessionSnapshotResult {
     data class Available(
         val device: DeviceState,
@@ -36,37 +35,22 @@ sealed interface SessionSnapshotResult {
     data class Failure(val error: ControlError) : SessionSnapshotResult
 }
 
-/** Deadlines of the system presentation; injectable so a virtual clock can drive them. */
 data class PresentationTiming(val promptDurationMillis: Long = 5_000) {
     init {
         require(promptDurationMillis > 0)
     }
 }
 
-/**
- * What system entries (notifications, the fusion device center, system headset UIs) do through the control
- * entry. Every operation but [connectFromSystem] names the device session it was issued for and is refused
- * unless that session is still the current one; an entry never holds a session of its own.
- */
 interface SystemEntry {
-    /** Pins [deviceId] as the target device, so later audio-connection changes do not replace it. */
     suspend fun connectFromSystem(deviceId: DeviceId): OperationResult
 
-    /** Reads a detached snapshot only when [reference] still identifies the ready device session. */
     fun readSession(reference: SessionReference): SessionSnapshotResult
 
-    /** A setting for the session [reference] names; it succeeds only after the earphones confirm it. */
     suspend fun set(reference: SessionReference, command: HeadsetCommand): OperationResult
 
-    /** The first current renderer to claim an active prompt becomes its sole trigger owner. */
     suspend fun claimPrompt(reference: SessionReference, promptId: String): Boolean
 }
 
-/**
- * One control entry with the system entries on top. It derives the system presentation from the control
- * state, decides when a session's connection prompt shows and for how long, and checks every reference
- * against the current session before calling the same control entry. It holds no session, queue or link.
- */
 class SystemEntryRuntime(
     private val control: ControlRuntime,
     private val scope: CoroutineScope,
@@ -74,10 +58,6 @@ class SystemEntryRuntime(
     initialIntegrationSettings: IntegrationSettings = IntegrationSettings(),
 ) : ControlRuntime by control,
     SystemEntry {
-    /**
-     * [consumed] is the session whose connection event was used up; it never prompts again. [inCase] holds the
-     * in-case flags last seen in [inCaseSession], so only a change inside one session counts as an in-case event.
-     */
     private data class Prompts(
         val consumed: SessionReference? = null,
         val prompt: IslandPrompt? = null,
@@ -90,22 +70,18 @@ class SystemEntryRuntime(
     private val integrationSettings = MutableStateFlow(initialIntegrationSettings)
     val settings: IntegrationSettings get() = integrationSettings.value
 
-    /** The system view of the current ready session; reading it is always current with [state]. */
     val presentation: StateFlow<SystemPresentationState> = PresentationFlow()
 
     init {
-        // Each session's connection event is consumed when it happens, whether or not anyone is reading.
         scope.launch(start = CoroutineStart.UNDISPATCHED) { control.state.collect { advance() } }
     }
 
-    /** Control and system presentation from one capture, so a replacement never mixes two sessions. */
     internal fun view(generation: OwnerGeneration): OwnerView {
         val captured = control.state.value
         val settings = integrationSettings.value
         return OwnerView(generation, captured, present(captured, settings), settings)
     }
 
-    /** Prompt claims and expiry wake readers without combining independently derived session views. */
     internal fun views(generation: OwnerGeneration): Flow<OwnerView> = combine(control.state, prompts, integrationSettings) { _, _, _ ->
         view(generation)
     }.distinctUntilChanged()
@@ -149,18 +125,10 @@ class SystemEntryRuntime(
         return state.systemPresentation(settings, prompts.value.prompt)
     }
 
-    /**
-     * Brings the prompt in line with the current control state. A ready session's connection event is consumed
-     * once, at its first trusted ear battery; an in-case event is an earbud whose flag goes from known out of the
-     * case to known in it within the same session. Each event shows only if the settings allow it at that moment
-     * and replaces any prompt still showing; a prompt whose session ended or whose mode no longer applies is
-     * dropped for good.
-     */
     private fun advance() {
         var installed: IslandPrompt? = null
         prompts.update { current ->
             installed = null
-            // Read inside the update, so a retry never acts on a state older than the one it replaces.
             val state = control.state.value
             val session = state.readySession
             var next = current.copy(prompt = current.prompt?.takeIf { it.reference == session && it.appliesTo(settings) })
@@ -202,7 +170,6 @@ class SystemEntryRuntime(
         )
     }
 
-    /** A timer clears only its own prompt, so an old session's timer can never clear the next one's. */
     private fun expireLater(prompt: IslandPrompt) {
         scope.launch {
             delay(prompt.durationMillis)

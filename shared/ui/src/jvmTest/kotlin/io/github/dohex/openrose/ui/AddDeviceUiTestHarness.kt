@@ -23,7 +23,6 @@ internal val addDeviceCandidate = DeviceCandidate(
     "",
 )
 
-/** The add-device flow on a fake control entry; each scan start records the virtual time it happened at. */
 internal fun withAddDeviceHarness(
     style: InterfaceStyle = InterfaceStyle.MIUIX,
     initial: ControlState = ControlState(

@@ -41,22 +41,9 @@ import java.lang.reflect.Method
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicReference
 
-/**
- * Hosts the single control session inside `com.android.bluetooth` with the host's own Context, uid and
- * permissions. It starts from the module's persisted configuration once the user has unlocked the device,
- * and needs no OpenRose Activity, Application, app Service or credential published by the app.
- *
- * The endpoint Binder is handed out by an existing host service for [BridgeWire.ACTION_CONTROL_HOST];
- * finding it authorises nothing, [HostEndpoint] verifies every caller.
- *
- * The system binds that service once per Intent and caches the Binder [installDiscovery] returned for as long as the
- * service lives, so a hot-reloaded generation is never asked again. Discovery therefore hands out a forwarder to
- * [endpointSlot], which outlives module generations: each one inherits the slot and points it at its own endpoint.
- */
 internal class ModuleHostRuntime(
     private val module: XposedModule,
     private val classLoader: ClassLoader,
-    /** Framework-typed so it can cross the hot reload boundary; see [OpenRoseBluetoothModule.onHotReloading]. */
     val endpointSlot: AtomicReference<IBinder?> = AtomicReference(),
 ) {
     private val lifecycle = Any()
@@ -74,8 +61,6 @@ internal class ModuleHostRuntime(
     private var receiver: BroadcastReceiver? = null
     private var closed = false
 
-    /** Hooks the discovery service so the endpoint can be bound. Safe before the host has started. */
-    // This service implements the discovery endpoint in the Bluetooth host's class loader.
     @SuppressLint("PrivateApi")
     fun installDiscovery() {
         val type = runCatching { classLoader.loadClass(BridgeWire.HOST_SERVICE_CLASS) }.getOrNull() ?: run {
@@ -115,7 +100,6 @@ internal class ModuleHostRuntime(
         return null
     }
 
-    /** Creates the host owner machinery. Control still waits for first unlock and the saved choice. */
     fun start(hostContext: Context) {
         synchronized(lifecycle) {
             if (closed || host != null) return
@@ -156,12 +140,6 @@ internal class ModuleHostRuntime(
         }
     }
 
-    /**
-     * The persisted choice is read fresh every time the host is reconfigured, never cached from an earlier
-     * moment: unlock, adapter state or a saved change each re-read it. Until the framework serves the
-     * preferences the host stays on its default (no owner), and keeps asking, so the saved module path is
-     * restored as soon as it is readable without any help from the OpenRose application.
-     */
     private fun watchConfiguration(appContext: Context, hostScope: CoroutineScope, created: ModuleControlHost) {
         val changes = Channel<Unit>(Channel.CONFLATED)
         val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, _ -> changes.trySend(Unit) }
@@ -184,7 +162,6 @@ internal class ModuleHostRuntime(
                 created.updatePlatform(appContext.readPlatformState(permissionRequested = true))
                 val configured = created.configure {
                     if (user.isUserUnlocked) {
-                        // An acquire can discover an unreadable store while this watcher is asleep.
                         readConfiguration().also { if (it == null) changes.trySend(Unit) }
                     } else {
                         HostConfiguration()
@@ -199,7 +176,6 @@ internal class ModuleHostRuntime(
         }
     }
 
-    /** A missing framework or failed read leaves the last confirmed configuration in effect until the next attempt. */
     private fun readConfiguration(): HostConfiguration? = synchronized(lifecycle) {
         if (closed) return null
         val listener = configListener ?: return null
@@ -221,12 +197,6 @@ internal class ModuleHostRuntime(
         HostConfiguration(userUnlocked = true, settings = settings)
     }
 
-    /**
-     * Releases the owner and, only once that release is confirmed, withdraws the endpoint, discovery and
-     * scope. When the release cannot be confirmed in time nothing is torn down and false is returned: the
-     * host keeps serving and keeps owning the connection, and [close] may be called again to retry. A
-     * replacement instance reads the persisted intent and owns with a new generation.
-     */
     fun close(): Boolean {
         val (current, hostScope) = synchronized(lifecycle) {
             if (closed) return true
@@ -248,7 +218,6 @@ internal class ModuleHostRuntime(
             configListener = null
         }
         endpoint?.let { retiring ->
-            // Until the next generation starts, callers of the cached discovery Binder find no host rather than a retired one.
             endpointSlot.compareAndSet(retiring, null)
             retiring.shutdown()
         }
@@ -263,11 +232,6 @@ internal class ModuleHostRuntime(
     }
 }
 
-/**
- * The Binder the system caches for discovery: every transaction goes to the endpoint currently in [slot], with the
- * caller's identity intact because an in-process transact keeps the Binder calling identity. With no endpoint (a
- * generation is between stop and start) the call fails and the caller retries as for any unreachable host.
- */
 private class EndpointForwarder(private val slot: AtomicReference<IBinder?>) : Binder() {
     override fun onTransact(code: Int, data: Parcel, reply: Parcel?, flags: Int): Boolean {
         val target = slot.get() ?: throw IllegalStateException("宿主正在重新加载")

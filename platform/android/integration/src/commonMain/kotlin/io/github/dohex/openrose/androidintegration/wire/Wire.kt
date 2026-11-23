@@ -1,12 +1,7 @@
 package io.github.dohex.openrose.androidintegration.wire
 
-/** Raised for any malformed or unexpected wire content; callers treat it as a rejected message. */
 class WireFormatException(message: String) : Exception(message)
 
-/**
- * A minimal JSON-shaped tree for the authenticated IPC payloads. Platform bindings carry the
- * rendered text, so the same codec is exercised by tests and by the Android Binder boundary.
- */
 sealed interface Wire {
     data class Obj(val fields: Map<String, Wire>) : Wire {
         fun field(key: String): Wire = fields[key] ?: throw WireFormatException("缺少字段 $key")

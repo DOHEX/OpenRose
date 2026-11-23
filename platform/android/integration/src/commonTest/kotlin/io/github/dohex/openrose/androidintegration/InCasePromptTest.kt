@@ -28,13 +28,12 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-private const val OUT = 0x64 // 100 %, out of the case
-private const val IN = 0xe4 // 100 %, bit7 in-case flag
-private const val RIGHT_OUT = 0x32 // 50 %, out of the case
-private const val RIGHT_IN = 0xb2 // 50 %, in the case
+private const val OUT = 0x64
+private const val IN = 0xe4
+private const val RIGHT_OUT = 0x32
+private const val RIGHT_IN = 0xb2
 private const val UNAVAILABLE = 0xff
 
-/** 入盒提示: an earbud's in-case flag going from known out to known in within one session, on RS Common V2 models with a case. */
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class InCasePromptTest {
     private val moduleInCase = IntegrationSettings(islandMode = IslandMode.MODULE, islandTriggers = persistentSetOf(IslandTrigger.IN_CASE))
@@ -154,7 +153,6 @@ class InCasePromptTest {
         override suspend fun connect(deviceId: DeviceId, endpoint: TransportEndpoint, onPhase: (ConnectionPhase) -> Unit): ControlConnection = link
     }
 
-    /** Answers initialization with the shared synthetic i7 state, its battery record replaced by [battery]. */
     private class I7Connection(private val battery: String) : ControlConnection {
         override val maxWriteSize = 20
         private val incoming = Channel<ByteArray>(Channel.UNLIMITED)
@@ -176,7 +174,6 @@ class InCasePromptTest {
     }
 }
 
-/** An RS Common V2 left/right/case battery record; the checksum sums every byte from `dd`. */
 private fun i7Battery(left: Int, right: Int, case: Int = 0x50): String {
     val body = listOf(0xdd, 0x00, 0x04, 0x0c, left, right, case)
     return (body + (body.sum() and 0xff) + 0xaa).joinToString("") { it.toString(16).padStart(2, '0') }

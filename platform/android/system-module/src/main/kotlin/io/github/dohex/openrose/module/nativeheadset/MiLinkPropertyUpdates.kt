@@ -24,7 +24,6 @@ internal class MiLinkPropertyUpdates(
 ) {
     private val callbackHandler = Handler(Looper.getMainLooper())
 
-    /** The last published session, kept only to tell which reported state changed. */
     @Volatile private var lastPublished: NativeHeadsetSnapshot? = null
 
     private data class Controller(
@@ -36,7 +35,6 @@ internal class MiLinkPropertyUpdates(
 
     private val remembered = AtomicReference<Controller?>()
 
-    /** Called by the authenticated bridge reader after validating a complete frame. */
     fun publish(fresh: NativeHeadsetSnapshot?) {
         val previous = lastPublished
         lastPublished = fresh

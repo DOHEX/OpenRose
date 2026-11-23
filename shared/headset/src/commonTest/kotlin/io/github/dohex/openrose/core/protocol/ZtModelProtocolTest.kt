@@ -60,7 +60,6 @@ class ZtModelProtocolTest {
     @Test
     fun headFeelSyntheticRepliesKeepSingleBatteryAndIndependentMultipoint() {
         val codec = createProtocolCodec(ModelProfile.HEADFEEL_ZT)
-        // 合成通知，仅按已恢复的字段偏移构造，并非实机抓包。
         val battery = codec.feedNotification("09ff00000101030a0050".bytes()).single()
         assertEquals(FieldValue.Number(80), assertIs<FieldReading.Known>(battery.readings[DeviceField.CASE_BATTERY]).value)
         assertFalse(DeviceField.LEFT_BATTERY in battery.readings)
@@ -81,9 +80,6 @@ class ZtModelProtocolTest {
         val firmware = FieldValue.Firmware(listOf(1, 3, 0), "130")
         val curve = mutableListOf(3, 0, -1, 2, -6, 6, 0, -2, 4, -3)
         val setting = codec.prepareSetting(DeviceSetting.CUSTOM_EQ, FieldValue.IntegerList(curve), firmware)
-        // Static evidence: setEqCustom's fixed `03` selector, then setEqCustomData's ten sign-magnitude bytes
-        // (docs/protocols/models/headfeel-protocol.md). Checksums follow the documented 08EE layout; the curve
-        // frame is 20 bytes, the default BLE write capacity.
         assertEquals(
             listOf("08ee00000002810b000387", "08ee0000000282140003008102860600820483a9"),
             setting.writeFrames.map { it.hex() },
@@ -104,7 +100,6 @@ class ZtModelProtocolTest {
         val customEqQuery = codec.initQueries(20).single { it.key == "0202" }
         assertEquals("08ee00000002020a0004", customEqQuery.bytes.hex())
         assertEquals(setOf(DeviceField.CUSTOM_EQ), customEqQuery.expectedFields)
-        // 合成通知：文档给出的 0202 字段偏移，符号位加绝对值解码。
         val reply = codec.feedNotification("09ff0000010202130003008102860600820483".bytes()).single()
         assertEquals(
             FieldValue.IntegerList(listOf(3, 0, -1, 2, -6, 6, 0, -2, 4, -3)),
@@ -126,7 +121,6 @@ class ZtModelProtocolTest {
         )) {
             assertFailsWith<IllegalArgumentException>("$bad") { codec.prepareSetting(DeviceSetting.CUSTOM_EQ, bad, firmware) }
         }
-        // The firmware gate lives in the model capabilities, so old or unread firmware has no curve to write.
         val flat = FieldValue.IntegerList(List(10) { 0 })
         assertFailsWith<UnsupportedOperationException> {
             codec.prepareSetting(DeviceSetting.CUSTOM_EQ, flat, FieldValue.Firmware(listOf(1, 2, 9), "129"))
@@ -136,7 +130,6 @@ class ZtModelProtocolTest {
 
     @Test
     fun i3HiddenSearchReplyRemainsUnknownAndHeadFeelFirmwareGatesCustomAudio() {
-        // 合成通知；隐藏搜索接收极性尚未闭合。
         val result = createProtocolCodec(ModelProfile.I3_ZT).feedNotification("09ff0000010b010a0001".bytes()).single()
         assertIs<FieldReading.Unknown>(result.readings[DeviceField.HIDE_SEARCH])
         assertFalse(result.accepted)
@@ -151,16 +144,13 @@ class ZtModelProtocolTest {
         assertFalse(DeviceSetting.CUSTOM_EQ in profile.capabilities(firmware129).writableSettings)
         assertTrue(DeviceSetting.CUSTOM_EQ in profile.capabilities(firmware130).writableSettings)
         assertTrue(DeviceSetting.CUSTOM_EQ in profile.capabilities(firmware131).writableSettings)
-        // The curve bands and bounds are the recovered panel's labels, not measured filter centers.
         assertNull(profile.capabilities(firmware129).equalizer?.custom)
         val custom = requireNotNull(profile.capabilities(firmware130).equalizer?.custom)
         assertEquals(listOf(20, 100, 300, 500, 1000, 2000, 3000, 5000, 8000, 15000), custom.bandsHz)
         assertEquals(-6, custom.minGain)
         assertEquals(6, custom.maxGain)
         assertTrue(DeviceField.CUSTOM_EQ in profile.capabilities().readableFields)
-        // EarFree i5 removes the field because its recovered configuration has no custom curve.
         assertFalse(DeviceField.CUSTOM_EQ in ModelProfile.I5_ZT.capabilities().readableFields)
-        // Selecting the custom preset is gated by the same firmware boundary.
         val codec = createProtocolCodec(profile)
         assertFailsWith<UnsupportedOperationException> { codec.prepareSetting(DeviceSetting.EQ, FieldValue.Text("custom"), firmware129) }
         assertEquals(

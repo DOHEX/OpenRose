@@ -32,7 +32,6 @@ fun OpenRoseUiTestHarness.clickTab(text: String) {
     invokeClick(clickNode, text)
 }
 
-/** From the Settings page, opens the Personalization page that holds interface preferences. */
 fun OpenRoseUiTestHarness.openPersonalization() {
     clickText("个性化")
     render()

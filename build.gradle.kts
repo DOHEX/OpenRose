@@ -1,4 +1,3 @@
-// Loads every plugin once for the whole build; modules apply them through build-logic conventions.
 plugins {
     alias(libs.plugins.kotlin.multiplatform) apply false
     alias(libs.plugins.kotlin.jvm) apply false
@@ -15,12 +14,10 @@ plugins {
     alias(libs.plugins.kover)
 }
 
-// The included build compiles the conventions. Check its sources alongside the modules that use them.
 detekt {
     source.setFrom(layout.projectDirectory.dir("build-logic/src"))
 }
 
-// ktlint formats every Kotlin source and build script; rules come from .editorconfig.
 spotless {
     kotlin {
         target(
@@ -42,8 +39,6 @@ spotless {
     }
 }
 
-// One coverage report over every module's JVM tests. Floors sit just under the coverage measured when they
-// were set (total 56.8% of lines); raise them as coverage grows, never lower them to pass.
 dependencies {
     kover(projects.shared.headset)
     kover(projects.platform.android.integration)
@@ -64,7 +59,6 @@ kover {
     }
 }
 
-// Shared control and Compose behavior run on the host JVM, without hardware.
 tasks.register("offlineCheck") {
     group = "verification"
     description = "Run hardware-independent checks (add --offline after dependencies are cached)."

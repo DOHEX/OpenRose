@@ -25,7 +25,6 @@ data class TransportFacts(
     val audioProfile: AudioProfileEvidence = AudioProfileEvidence.UNKNOWN,
 )
 
-/** Protocol endpoints remain independent of any platform Bluetooth library. */
 sealed interface TransportEndpoint {
     data class BleGatt(val serviceUuid: String, val writeUuid: String, val notifyUuid: String) : TransportEndpoint
     data class SppRfcomm(val address: String, val serviceUuid: String) : TransportEndpoint
@@ -41,7 +40,6 @@ enum class TransportSelectionReason {
     CLASSIC_AUDIO,
 }
 
-/** Failures that make a single setup retry on a fresh BLE connection worthwhile. */
 enum class TransportRecoveryReason {
     SERVICE_DISCOVERY,
     SERVICES_UNAVAILABLE,
@@ -51,14 +49,12 @@ enum class TransportRecoveryReason {
     SERVICES_CHANGED,
 }
 
-/** A platform adapter uses this only for a setup failure it has classified as recoverable. */
 class RecoverableTransportException(
     val reason: TransportRecoveryReason,
     message: String,
     cause: Throwable? = null,
 ) : Exception(message, cause)
 
-/** A transport fault explicitly classified by the adapter as terminal for this attempt. */
 class TerminalTransportException(
     message: String,
     cause: Throwable? = null,
@@ -70,10 +66,8 @@ data class TransportSelection(
 )
 
 interface ControlTransport {
-    /** Completes when scanning stops; failures are reported through the flow. */
     fun scan(): Flow<Advertisement>
 
-    /** Unclassified setup timeouts may be retried only when the adapter explicitly supports it. */
     val supportsInitializationRecovery: Boolean get() = false
     suspend fun connectionFacts(deviceId: DeviceId, classicAddress: String?): TransportFacts = TransportFacts()
     suspend fun bondedDevices(): List<DeviceCandidate> = emptyList()
@@ -86,23 +80,18 @@ interface ControlTransport {
 }
 
 interface ControlConnection {
-    /** Collect before subscribe(). Completion or failure means this connection has ended. */
     val notifications: Flow<ByteArray>
 
-    /** Maximum complete payload accepted by write(), after transport overhead. */
     val maxWriteSize: Int
     suspend fun subscribe()
 
-    /** Completes when the platform accepted the write, not when device state is confirmed. */
     suspend fun write(bytes: ByteArray)
     suspend fun close()
 }
 
-/** An interrupted open still owns this platform handle until its close succeeds. */
 internal class UnreleasedConnectionException(val connection: ControlConnection, cause: Throwable) : Exception("连接建立失败且平台尚未确认释放", cause)
 
-/** Every failed or cancelled native open must release its handle before ownership may move to another connection. */
-@Suppress("TooGenericExceptionCaught") // Preserve the original failure, or retain the exact handle if native close also fails.
+@Suppress("TooGenericExceptionCaught")
 suspend fun <T : ControlConnection> T.openSafely(open: suspend T.() -> Unit): T {
     try {
         open()
@@ -118,8 +107,7 @@ suspend fun <T : ControlConnection> T.openSafely(open: suspend T.() -> Unit): T 
     return this
 }
 
-/** A native Bluetooth adapter can fail with a platform-specific exception. The owning operation decides its result. */
-@Suppress("TooGenericExceptionCaught") // Android, BlueZ and WinRT do not share exception types. Cancellation stays with the caller.
+@Suppress("TooGenericExceptionCaught")
 internal inline fun <T> transportOperation(onFailure: (Exception) -> T, operation: () -> T): T = try {
     operation()
 } catch (cancelled: CancellationException) {

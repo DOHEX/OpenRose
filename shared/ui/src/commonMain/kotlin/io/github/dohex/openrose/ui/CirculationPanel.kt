@@ -23,7 +23,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 
-/** Only UI polls follow visibility. Bluetooth ownership and the LAN listener run independently. */
 val LocalCirculationVisible = staticCompositionLocalOf { true }
 
 internal const val VISIBLE_REFRESH_MILLIS = 2_000L
@@ -60,10 +59,8 @@ data class RemoteHeadset(
         RemoteControlStatus.WAITING -> "正在读取"
     }
 
-    /** The peer's name and why no headphones show, for a source that reports none; never ends in "null". */
     val offlineLabel: String get() = listOfNotNull(name, statusLabel).joinToString(" · ")
 
-    /** Battery of the held headphones in the layout of their model; a peer that sends no layout is read as earbuds and case. */
     val batteryText: String
         get() {
             val slots = (reading.batteryLayout ?: BatteryLayout.EARBUDS_AND_CASE).batterySlots()

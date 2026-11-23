@@ -23,7 +23,6 @@ internal class NativeBinderCallbacks(
 
     @Volatile private var lastReportedSnapshot: NativeHeadsetSnapshot? = null
 
-    /** Called by the authenticated bridge reader; status callbacks are sent only from this data. */
     fun publish(fresh: NativeHeadsetSnapshot?) {
         registeredCallbacks.values.toList().forEach { target ->
             if (fresh == null || !target.matches(fresh)) {

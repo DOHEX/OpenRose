@@ -12,7 +12,6 @@ import io.github.dohex.openrose.androidintegration.backgroundControl
 import io.github.dohex.openrose.androidintegration.mayStartBackgroundService
 import io.github.dohex.openrose.androidintegration.ordinaryBackgroundRequested
 
-/** Owns the ordinary background service's observed status and companion wake-up registration. */
 internal class OrdinaryBackgroundControl(
     private val context: Context,
     private val runtime: SwitchingControlRuntime,
@@ -30,7 +29,6 @@ internal class OrdinaryBackgroundControl(
         refreshPlatform()
     }
 
-    /** Both a settings change and a wake-up reconcile registration before checking the current service facts. */
     fun followSavedIntent() {
         syncObservation()
         startIfEnabled()
@@ -44,7 +42,6 @@ internal class OrdinaryBackgroundControl(
         tryStart { context.startForegroundService(Intent(context, ControlService::class.java)) }
     }
 
-    /** Android can reject either the launch or the service's promotion to the foreground. */
     fun tryStart(start: () -> Unit): Boolean {
         val rejection = try {
             start()

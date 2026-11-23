@@ -21,7 +21,6 @@ import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
-/** The host side of the seam: authorisation, owner generations, unlock gating and device-confirmed settings. */
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class ModuleControlHostTest {
     @Test
@@ -95,7 +94,6 @@ class ModuleControlHostTest {
             val rejected = assertIs<HostCallResult.Rejected>(rig.host.control.execute(milinkIdentity, lease, generation, command))
             assertEquals(HostRejection.FORBIDDEN, rejected.rejection, command.toString())
         }
-        // Allowed in role; a reference to no current session is still refused by the runtime itself.
         val noise = rig.host.control.execute(milinkIdentity, lease, generation, HostCommand.Set(reference, HeadsetCommand.NoiseMode(NoiseMode.ANC)))
         assertEquals(ControlErrorCode.DISCONNECTED, assertIs<OperationResult.Failure>(assertIs<HostCallResult.Operation>(noise).result).error.code)
         assertTrue(rig.host.control.frames(milinkIdentity, lease, generation).toList().isEmpty())
@@ -119,7 +117,6 @@ class ModuleControlHostTest {
             assertIs<HostCallResult.Rejected>(rig.host.control.execute(appIdentity, lease, first, HostCommand.StartScan)).rejection,
         )
         val request = SwitchRequest("b", ControlWay.ORDINARY, ControlWay.MODULE)
-        // An already-dispatched acquire using this lease cannot undo the later release.
         assertEquals(HostRejection.INVALID_LEASE, assertIs<AcquireResult.Refused>(rig.host.acquire(appIdentity, lease, request)).rejection)
         val nextLease = assertIs<HostOpenResult.Opened>(rig.host.open(appIdentity)).lease.id
         val acquired = rig.host.acquire(appIdentity, nextLease, request)
@@ -221,7 +218,6 @@ class ModuleControlHostTest {
 
         val result = assertIs<OperationResult.Failure>(pending.await())
         assertEquals(ControlErrorCode.DISCONNECTED, result.error.code)
-        // The stale reading is withdrawn instead of staying on screen as current.
         assertTrue(runtime.state.value.device == null)
         assertIs<OwnerReadiness.Unavailable>(runtime.integration.value.owner.readiness)
     }

@@ -60,7 +60,6 @@ internal class PeerIdentity(directory: File) {
     }
 
     companion object {
-        // The containing file is private to the OS account. PKCS12 uses the password for its integrity encoding.
         private val PASSWORD = "OpenRose".toCharArray()
         private fun fingerprint(cert: X509Certificate): String {
             val digest = MessageDigest.getInstance("SHA-256").digest(cert.encoded)
@@ -94,7 +93,6 @@ private fun KeyPair.nodeCertificate(): X509Certificate {
     return CertificateFactory.getInstance("X.509").generateCertificate(certificate.encoded.inputStream()) as X509Certificate
 }
 
-/** TLS proves possession. Pairing or the saved certificate pin must still authorize *every* application request. */
 private object NodeCertificateTrust : X509TrustManager {
     override fun getAcceptedIssuers(): Array<X509Certificate> = emptyArray()
     override fun checkServerTrusted(chain: Array<X509Certificate>, authType: String) = checkChain(chain)

@@ -1,6 +1,5 @@
 package io.github.dohex.openrose.core
 
-/** Checks the current model options and prerequisite readings both at submission and before the write. */
 fun DeviceState.validate(command: HeadsetCommand): ControlError? {
     if (command.setting !in capabilities.writableSettings) return unsupported("${command.setting.name} 尚不支持写入")
     return settingPrerequisite(command.setting)?.let { ControlError(ControlErrorCode.NOT_READY, it) } ?: command.checkOptions(this)

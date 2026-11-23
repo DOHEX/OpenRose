@@ -21,7 +21,6 @@ internal val rsCommonFields = linkedMapOf(
     "2e" to setOf(DeviceField.PROMPT_VOLUME), "33" to setOf(DeviceField.SPATIAL_AUDIO),
 )
 
-/** Legacy RS Common has fixed sequence bytes and no checksum. */
 internal class RsCommonCodec(override val profile: ModelProfile, private val protocol: ModelProtocol.RsCommon) : ProtocolCodec {
     private var buffer = byteArrayOf()
     private val info = "010708090c0d0e122a2b2c2d2e33".bytes()
@@ -155,8 +154,6 @@ internal class RsCommonCodec(override val profile: ModelProfile, private val pro
 
     private fun decodeTouch(value: ByteArray): Map<DeviceField, FieldReading> {
         if (value.size < 16) return emptyMap()
-        // RoseLink 按键解析读取无空格报文的字符下标 11/15/19/31/35/39 的单字符十六进制值；
-        // 换算成 value 的字节下标后取低半字节。设备响应未实测。
         val positions = listOf(1, 3, 5, 11, 13, 15)
         val bindings = positions.mapIndexed { index, pos ->
             val action = value[pos].u() and 15

@@ -49,7 +49,6 @@ internal fun ControlState.activeDevice(): DeviceState? {
     return device?.takeIf { connection.matches(it) && (targetId == null || targetId == it.deviceId) }
 }
 
-/** The 控制传输 of the current control connection: "确定中" until chosen, null with no control connection. */
 internal fun ControlState.controlTransportLabel(): String? = when (transportSelection?.endpoint) {
     is TransportEndpoint.BleGatt -> "BLE"
     is TransportEndpoint.SppRfcomm -> "蓝牙串口（SPP）"
@@ -257,7 +256,6 @@ private fun UnconnectedHeadphonesDashboard(
     }
 
     val bondedRose = state.bondedRoseDevices()
-    // The choice lasts only while this dashboard stays composed over an unchanged bonded list.
     DisposableEffect(selection, bondedRose) { onDispose { selection.clear() } }
     val connecting = state.connection as? ConnectionState.Connecting
     if (primaryDevice != null) {
@@ -269,7 +267,6 @@ private fun UnconnectedHeadphonesDashboard(
     cards.others.forEach { AdditionalHeadsetCard(it, model::connect, platformUi.desktopSound) }
     val shown = cards.others.mapNotNull { it.target?.deviceId }
     val otherBonded = bondedRose.filter { it.deviceId != primaryDevice?.deviceId && it.deviceId !in shown }
-    // One connection at a time: while any device is connecting, no other device can be switched to.
     OtherPairedDevices(otherBonded, blockReason == null && connecting == null) { id ->
         selection.select(state, id)
         model.connect(id)
@@ -358,7 +355,6 @@ private fun BatteryReading(label: String, field: DeviceField, device: DeviceStat
                     color = if (low) appColor(AppColorRole.Error) else null,
                 )
             }
-            // A low charge also shows as a symbol, so the warning does not rest on colour alone.
             if (low) {
                 AppIcon(RoseIcon.WARNING, Modifier.size(16.dp), contentDescription = "电量低", tint = appColor(AppColorRole.Error))
             }
@@ -367,7 +363,6 @@ private fun BatteryReading(label: String, field: DeviceField, device: DeviceStat
     }
 }
 
-/** User-facing identity and connection facts; troubleshooting detail lives on the diagnostics page. */
 @Composable
 internal fun DeviceDetails(state: ControlState, device: DeviceState, onDisconnect: () -> Unit, onDiagnostics: () -> Unit) {
     val initializing = state.connection.phaseOrNull() == ConnectionPhase.INITIALIZING
@@ -390,7 +385,6 @@ internal fun DeviceDetails(state: ControlState, device: DeviceState, onDisconnec
     AppGroup {
         AppArrowRow("诊断与记录", icon = RoseIcon.LOG, onClick = onDiagnostics)
     }
-    // Full width and inset like the groups above: Miuix cards sit 12dp in, Material 3 rows keep 16dp content padding.
     val inset = if (LocalInterfaceStyle.current == InterfaceStyle.MIUIX) 12.dp else 16.dp
     AppButton(
         text = if (state.connection is ConnectionState.Connecting) "取消连接" else "断开控制连接",
@@ -730,7 +724,6 @@ private fun OtherPairedDevices(devices: List<DeviceCandidate>, enabled: Boolean,
 @Composable
 private fun ReconnectStatus(state: ControlState, primaryDevice: DeviceCandidate, isConnecting: Boolean, source: HeadsetCardSource? = null) {
     val blockReason = state.platform.connectionBlockReason
-    // A platform block explains itself and outranks the last failure.
     val visibleError = state.lastError?.takeIf { blockReason == null }
     val hint = when {
         blockReason != null -> blockReason
@@ -755,7 +748,6 @@ private fun ReconnectStatus(state: ControlState, primaryDevice: DeviceCandidate,
                 AppText(progress, announce, role = AppTextRole.Summary, color = appColor(AppColorRole.Primary))
             }
 
-            // The failure is stated once, by the error itself; the hint only says what to check.
             visibleError != null -> Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(2.dp),
@@ -781,10 +773,6 @@ private const val LOW_BATTERY_PERCENT = 20
 
 private enum class TileKind { ArtworkFrame, Chip, OutlinedChip }
 
-/**
- * Material 3 sets some dashboard content on a rounded, tinted tile; Miuix sets it bare on its card. The tile is
- * owned here so every use stays alike and takes its corners from the theme's shape tokens.
- */
 @Composable
 private fun StyledTile(
     kind: TileKind,

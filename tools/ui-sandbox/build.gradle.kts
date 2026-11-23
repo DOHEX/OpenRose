@@ -1,5 +1,3 @@
-// Development-only window that shows the shared UI for any 型号配置, platform and component style on fabricated
-// state, without earphones or a platform transport. It is never packaged or released.
 plugins {
     alias(libs.plugins.openrose.jvm.library)
     alias(libs.plugins.compose.multiplatform)
@@ -8,7 +6,6 @@ plugins {
 dependencies {
     implementation(projects.platform.android.ui)
     implementation(projects.shared.ui)
-    // The desktop app's Tao window backend owns Dispatchers.Main, so the sandbox opens its windows the same way.
     implementation(compose.desktop.currentOs)
     implementation(libs.nucleus.application)
     implementation(libs.nucleus.tao)
@@ -23,11 +20,9 @@ dependencies {
 tasks.withType<Test>().configureEach {
     systemProperty("java.awt.headless", "true")
 }
-// `run` starts it; the bundled Compose Hot Reload adds `hotRun`, which reloads edits to this and every UI module.
 compose.desktop {
     application {
         mainClass = "io.github.dohex.openrose.sandbox.SandboxMainKt"
-        // The same native access the desktop app grants its window backend.
         jvmArgs += "--enable-native-access=ALL-UNNAMED"
     }
 }

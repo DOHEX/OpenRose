@@ -10,7 +10,6 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.freedesktop.dbus.exceptions.DBusExecutionException
 
-/** Linux BlueZ transport. The supplied scope owns initialization and event observation. */
 class BluezControlTransport private constructor(
     scope: CoroutineScope,
     private val openBus: suspend () -> BluezBus,
@@ -38,7 +37,6 @@ class BluezControlTransport private constructor(
             try {
                 val current = openBus()
                 bus = current
-                // Subscribe before the first object snapshot, including BlueZ owner changes.
                 launch(start = CoroutineStart.UNDISPATCHED) { releasedLinks.observe(current) }
                 val observer = launch(start = CoroutineStart.UNDISPATCHED) {
                     current.signals { it.affects(availabilityInterfaces) }.collect { updateAvailability(current) }
@@ -106,7 +104,6 @@ class BluezControlTransport private constructor(
             }
             current.startDiscovery(adapter)
             scanAdapter = adapter
-            // Every exit after StartDiscovery must release the adapter, including cancellation by the collector.
             @Suppress("TooGenericExceptionCaught")
             try {
                 for ((path, interfaces) in current.objects()) {

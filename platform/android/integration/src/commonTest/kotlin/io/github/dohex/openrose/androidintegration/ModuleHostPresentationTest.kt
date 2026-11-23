@@ -38,11 +38,6 @@ private val presentationAuthority = CallerAuthority { identity ->
     }
 }
 
-/**
- * What the system presentation entries see and can do through the module host: the same single owner
- * the application drives, with the real session and the shared headset fixture. No notification tool
- * gets a seam of its own; the entries are ordinary leases of the host.
- */
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class ModuleHostPresentationTest {
     private class Rig(private val test: TestScope, private val settings: IntegrationSettings) {
@@ -120,7 +115,6 @@ class ModuleHostPresentationTest {
                 assertIs<HostCallResult.Rejected>(rig.claim(lease), "$mode prompt must not be claimable by $role")
                 assertFalse(rig.prompt.claimed, "$mode prompt stays unclaimed after a refused $role")
             }
-            // A claim naming other earphones' session is the owner's own refusal and consumes nothing.
             val other = SessionReference(DeviceId("other"), rig.reference.sessionId)
             assertEquals(HostCallResult.Flag(false), rig.claim(entries.getValue(owner), ref = other))
             assertFalse(rig.prompt.claimed)
@@ -141,7 +135,6 @@ class ModuleHostPresentationTest {
         for (lease in listOf(rig.xiaomi, rig.hostUi)) {
             assertIs<HostCallResult.Rejected>(rig.claim(lease, id = "forged"))
         }
-        // Control keeps running for the fusion entries while nothing is presented.
         assertIs<ConnectionState.Connected>(rig.state.connection)
         assertEquals(listOf("module:open"), rig.headset.events)
     }
@@ -196,7 +189,6 @@ class ModuleHostPresentationTest {
 
         assertEquals(listOf("module:open", "module:close"), rig.headset.events)
 
-        // Back to module control: the saved presentation preferences apply, the old event is not replayed.
         val newLease = assertIs<HostOpenResult.Opened>(rig.host.open(appIdentity)).lease.id
         assertIs<AcquireResult.Acquired>(rig.host.acquire(appIdentity, newLease, SwitchRequest("to-module", ControlWay.ORDINARY, ControlWay.MODULE)))
         runCurrent()
@@ -209,7 +201,6 @@ class ModuleHostPresentationTest {
             HostRejection.STALE_GENERATION,
             assertIs<HostCallResult.Rejected>(rig.claim(rig.hostUi, at = old, ref = oldReference, id = oldPrompt.id)).rejection,
         )
-        // Session numbers restart with each owner, so only the generation tells the old prompt from this one.
         assertFalse(rig.prompt.claimed, "the old generation's refused claim consumed nothing of the new session")
         assertEquals(2, rig.headset.opens("module"), "exactly one fresh control connection for the new owner")
         assertEquals(0, rig.headset.overlappingOpens)

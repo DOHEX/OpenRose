@@ -47,6 +47,12 @@ status: accepted
 - `core/UserSettings` 增加 `backgroundBlurEnabled: Boolean = true` 属性，并在编解码器（`UserSettingsCodec`）中完成持久化与向后兼容适配。
 - 在「设置」页的「显示模式」分组中增加「背景模糊」独立开关，附带生效平台与降级说明。
 
+### 6. 栏的着色细节（2026-11 补充）
+
+- **着色在模糊内部混合**：`AppBlur.kt` 的 `barBackdropBlur` 把 `BlurTokens.BAR_TINT` 的表面着色作为 `BlurColors` 的混合色交给渐进模糊，使着色随模糊一同淡出；另加一层背景会在模糊淡出处留下硬边。
+- **Material 3 顶栏的容器色保持透明**：模糊生效时，`MaterialAppShell.kt` 的 `materialTopAppBarColors` 把 `containerColor` 与 `scrolledContainerColor` 都设为透明，只让模糊着色显示。折叠中的顶栏会把容器色向滚动后的颜色插值，从透明（全透明的黑色）插值到不透明的滚动色会经过半透明的灰，使顶栏在折叠途中变暗。未启用模糊时使用默认配色。
+- **Material 3 悬浮工具栏**（`MaterialFloatingTabs`）：工具栏默认容器色与 `surfaceContainer` 列表行相同，悬浮在列表上会“消失”，因此提高一级到 `surfaceContainerHigh`。不透明时使用 MD3 悬浮阴影（Level3，6dp）。在模糊上方时容器半透明（`BlurTokens.MATERIAL_FLOATING_TINT`），阴影会铺满整个形状并透过着色，使它变暗；因此模糊时阴影设为 0，改用 1dp、半透明的 `outlineVariant` 细线分隔。
+
 ## 验证与影响
 
 1. **核心模型测试**：扩展 `UserSettingsCodecTest`，验证新增字段的序列化、反序列化以及缺省容错。

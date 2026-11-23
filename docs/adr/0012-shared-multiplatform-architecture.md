@@ -21,6 +21,14 @@ status: accepted
 - **界面**：`OpenRoseApp(model, platformUi)`。平台通过插槽提供状态页、设置页段落与平台动作，共享界面不按平台名称分支。
 - **传输**：平台只实现 GATT 原语驱动（连接、取得服务、协商出的 MTU、开关通知、写入、关闭、事件流），并把原生错误映射为共享失败类型。共享连接层负责写入串行化、服务发现重试、MTU 回退与截断、订阅顺序与超时回滚、可恢复失败分类、服务变更处理。平台只报告原始的已配对设备与音频协议事件；型号匹配、地址规范化、音频连接推断，以及“先查询现有连接再监听、事件优先”的规则都放在 `:core`。Android 迁到同一层。
 - **构建与测试**：`build-logic` 约定插件与配置缓存。UI 测试使用官方 `runComposeUiTest` 与虚拟时间；整应用渲染只用于导航、跨页流程与风格切换连续性，双风格矩阵在页面和段落级覆盖。
+- **型号配置名称**（2026-11 补充）：`ModelProfile` 的每个条目是一个型号配置。条目名称会跨进程传递并被持久化，因此永不改名。型号之间的所有差异都放在该条目的 `ModelSpec` 中；`ModelProfile.spec` 按条目穷举，缺少 `ModelSpec` 的条目无法编译。
+- **共享 GATT 层的 Android 平台约束**（2026-11 补充）：
+  - Android 的 GATT 回调不带操作令牌。被取消的操作在其回调到达前继续占着这一类操作的槽位，迟到的回调因此不会被误认为下一次操作的结果；槽位被占用时，新操作以暂时性失败拒绝（`AndroidGattStatus` 的 `requireIdle`）。
+  - RFCOMM 的阻塞读写只能靠关闭 socket 打断，单纯取消协程打断不了（`AndroidSppConnection` 的 `readLoop`）。
+- **UI 测试支持**（2026-11 补充，`tools/ui-test-support`）：
+  - Compose 的滚动动作要靠时钟帧推进才能完成动画，`OpenRoseUiTestHarness.scrollToText` 在滚动期间临时开启时钟自动推进。
+  - 与真实触摸一致，禁用的控件不接受点击：Material 把控件标为禁用，Miuix 去掉它的点击动作，`UiTestControls` 的可点击判断两种情况都认。`UiTestTags` 的 `clickTag` 拒绝点击禁用的控件，不能只凭语义点击动作绕过禁用状态。
+  - `UiTestTags.hasTag` 判断生产代码是否以该标签暴露了节点。标签只携带状态名，不携带界面文案。
 
 ## 考虑过的方案
 

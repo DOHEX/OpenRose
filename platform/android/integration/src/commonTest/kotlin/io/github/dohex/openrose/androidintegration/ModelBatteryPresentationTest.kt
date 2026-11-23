@@ -45,7 +45,6 @@ class ModelBatteryPresentationTest {
             session.refreshBondedDevices()
             assertEquals(OperationResult.Success, session.connect(id))
             val device = requireNotNull(session.state.value.device)
-            // OwnerRig notifications are synthetic: the shared V2 parser sees a value in every battery slot.
             assertEquals(FieldValue.Number(80), (device.diagnostics.fields[DeviceField.CASE_BATTERY] as FieldReading.Known).value)
             val native = assertNotNull(NativeHeadsetSnapshot.fromWire(device.toBridgeSnapshot("host", 1, 100).asWireMap()))
             assertFalse(DeviceField.CASE_BATTERY in native.fields)

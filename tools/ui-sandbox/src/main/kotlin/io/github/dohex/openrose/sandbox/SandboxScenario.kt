@@ -4,7 +4,6 @@ import io.github.dohex.openrose.core.HostPlatform
 import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.dohex.openrose.core.protocol.ModelProfile
 
-/** How far the fabricated control connection has come; the app's own connect and disconnect move it too. */
 enum class SandboxLink(val label: String) {
     FIRST_VISIT("首访无配对"),
     PAIRED("未连接看板"),
@@ -13,7 +12,6 @@ enum class SandboxLink(val label: String) {
     READY("已就绪"),
 }
 
-/** A platform fact that keeps OpenRose from controlling earphones. */
 enum class SandboxPlatformIssue(val label: String) {
     NONE("无"),
     PERMISSION_DENIED("蓝牙权限被拒"),
@@ -21,7 +19,6 @@ enum class SandboxPlatformIssue(val label: String) {
     TRANSPORT_UNAVAILABLE("无控制传输"),
 }
 
-/** Earbud battery; the case reads a little lower, a single unit reads the earbud value. */
 enum class SandboxBattery(val label: String, val percent: Int?) {
     FULL("满电", 100),
     HALF("半电", 55),
@@ -29,7 +26,6 @@ enum class SandboxBattery(val label: String, val percent: Int?) {
     NOT_PROVIDED("未提供", null),
 }
 
-/** How every simulated setting write ends. */
 enum class SandboxWriteOutcome(val label: String) {
     CONFIRMED("回读确认"),
     TIMED_OUT("回读超时"),
@@ -70,11 +66,9 @@ enum class SandboxLoginLaunch(val label: String) {
     UNSUPPORTED("仅安装版"),
 }
 
-/** Every fact the sandbox fabricates; the preview is a pure function of it plus the writes made since. */
 data class SandboxScenario(
     val host: HostPlatform = HostPlatform.ANDROID,
     val profile: ModelProfile = ModelProfile.I7_RS_V2,
-    /** Dotted firmware parts, such as `2.1.3`; blank means the firmware has not been read. */
     val firmware: String = "2.1.3",
     val link: SandboxLink = SandboxLink.READY,
     val battery: SandboxBattery = SandboxBattery.FULL,
@@ -87,7 +81,6 @@ data class SandboxScenario(
     val tray: SandboxTray = SandboxTray.AVAILABLE,
     val loginLaunch: SandboxLoginLaunch = SandboxLoginLaunch.OFF,
 ) {
-    /** Null for blank or malformed text, which the session treats as unread firmware; shown as the codecs show it. */
     val firmwareValue: FieldValue.Firmware?
         get() {
             val parts = firmware.trim().split('.').map { it.toIntOrNull() ?: return null }
@@ -95,7 +88,6 @@ data class SandboxScenario(
             return FieldValue.Firmware(parts, parts.joinToString(""))
         }
 
-    /** A platform that cannot control earphones holds no control connection, as the runtime would drop it. */
     fun normalized(): SandboxScenario = if (issue != SandboxPlatformIssue.NONE && link > SandboxLink.PAIRED) {
         copy(link = SandboxLink.PAIRED)
     } else {
@@ -106,7 +98,6 @@ data class SandboxScenario(
 
     val desktop: Boolean get() = host == HostPlatform.LINUX || host == HostPlatform.WINDOWS
 
-    /** The name the desktop app reads from `os.name`. */
     val platformName: String
         get() = when (host) {
             HostPlatform.ANDROID -> "Android"

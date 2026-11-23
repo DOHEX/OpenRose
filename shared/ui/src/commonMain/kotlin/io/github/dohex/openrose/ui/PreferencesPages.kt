@@ -19,10 +19,6 @@ import io.github.dohex.openrose.core.PlatformState
 import io.github.dohex.openrose.core.TransportAvailability
 import io.github.dohex.openrose.ui.model.OpenRoseModel
 
-/**
- * Settings content only. The application root owns the page title, navigation, and scrolling.
- * Interface preferences live one level down in [PersonalizationPage], the app's identity and links in [AboutPage].
- */
 @Composable
 fun PreferencesPage(
     model: OpenRoseModel,
@@ -82,10 +78,6 @@ fun PreferencesPage(
     }
 }
 
-/**
- * Interface style and appearance preferences, reached from Settings.
- * [wide] mirrors the main shell: with the navigation rail shown, 底栏样式 has no effect and is hidden.
- */
 @Composable
 fun PersonalizationPage(model: OpenRoseModel, platformUi: PlatformUi, wide: Boolean = false) {
     val uiSettings by model.uiSettings.collectAsState()
@@ -132,7 +124,6 @@ fun PersonalizationPage(model: OpenRoseModel, platformUi: PlatformUi, wide: Bool
                     selected = uiSettings.bottomBarStyle,
                     onSelect = { onUiSettingsChange(uiSettings.copy(bottomBarStyle = it)) },
                 )
-                // Liquid glass is a Miuix-only capsule; Material 3's floating toolbar has no second material.
                 if (uiSettings.interfaceStyle == InterfaceStyle.MIUIX && uiSettings.bottomBarStyle == BottomBarStyle.FLOATING) {
                     AppChoiceRow(
                         title = "悬浮底栏材质",
@@ -156,11 +147,6 @@ fun PersonalizationPage(model: OpenRoseModel, platformUi: PlatformUi, wide: Bool
     }
 }
 
-/**
- * Whether OpenRose can control earphones, laid out like KernelSU's home: one verdict with its fixes, then the facts
- * behind it. The verdict is the only card that judges; a host fact that does not stop control stays a fact row.
- * Read-only apart from those fixes; preferences live in Settings.
- */
 @Composable
 fun StatusPage(model: OpenRoseModel, platformUi: PlatformUi, onDiagnostics: () -> Unit) {
     val state by model.state.collectAsState()
@@ -195,7 +181,6 @@ object StatusTags {
     const val CONNECTION = "status.connection"
 }
 
-/** Bluetooth comes first, since nothing works without it; then whatever stops the host; otherwise OpenRose works. */
 @Composable
 private fun statusVerdict(state: ControlState, platformUi: PlatformUi): StatusVerdict {
     val permission = state.platform.permission
@@ -225,7 +210,6 @@ private fun connectionLabel(connection: ConnectionState): String = when (connect
     }
 }
 
-/** Common platform facts followed by diagnostics supplied by the host. */
 @Composable
 fun PlatformDiagnosticsCard(model: OpenRoseModel, platformUi: PlatformUi) {
     val state by model.state.collectAsState()

@@ -17,7 +17,6 @@ class AboutPageUiTest {
             for (width in listOf(420, 1200)) {
                 val case = "$style width=$width"
                 val opened = mutableListOf<String>()
-                // Every request fails, as on a desktop without a browser; the page must stay usable.
                 val browserless = object : UriHandler {
                     override fun openUri(uri: String) {
                         opened += uri

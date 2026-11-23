@@ -14,21 +14,12 @@ import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.persistentMapOf
 import kotlinx.collections.immutable.persistentSetOf
 
-/** Facts supplied by the platform adapter, independent of a UI component library. */
 data class PlatformState(
     val permission: PermissionState,
     val transport: TransportAvailability = TransportAvailability.Unavailable("平台传输尚未实现"),
-    /** The host identity is a platform fact, separate from the transport state. */
     val hostPlatform: HostPlatform = HostPlatform.UNKNOWN,
-    /** Whether this host has an implemented control transport where a transport preference has effect. */
     val controlTransportApplicability: PlatformApplicability = PlatformApplicability.UNKNOWN,
-    /**
-     * True once the saved user settings are restored after first unlock. Until then the runtime
-     * observes audio connections but starts no automatic control, and the connection that
-     * predates this fact is connected as soon as it turns true.
-     */
     val userUnlocked: Boolean = true,
-    /** Additional permission used only to discover nearby headphones, such as location on Android 8–11. */
     val scanPermission: PermissionState = PermissionState.NOT_REQUIRED,
 )
 
@@ -42,7 +33,6 @@ enum class HostPlatform {
     val isDesktop: Boolean get() = this == LINUX || this == WINDOWS
 }
 
-/** Explicitly keeps unknown platform facts separate from supported and unsupported features. */
 enum class PlatformApplicability { UNKNOWN, NOT_APPLICABLE, APPLICABLE }
 
 enum class PermissionState {
@@ -140,7 +130,6 @@ enum class DeviceSetting {
     INDEPENDENT_MIC_MODE,
 }
 
-/** Transport acceptance and device state confirmation are separate facts. */
 enum class SettingStage { SUBMITTED, PARTIALLY_WRITTEN, WRITTEN, CONFIRMED, NOT_APPLIED, TIMED_OUT, DISCONNECTED, FAILED }
 
 data class SettingOperation(
@@ -172,7 +161,6 @@ data class DeviceCapabilities(
     val spatialContents: PersistentSet<String> = persistentSetOf(),
 )
 
-/** Complete device observations for diagnostics, including undecoded payloads and read failures. */
 data class HeadsetDiagnostics(
     val fields: PersistentMap<DeviceField, FieldReading>,
     val fieldErrors: PersistentMap<DeviceField, ControlError> = persistentMapOf(),
@@ -187,7 +175,6 @@ data class DeviceState(
     val profile: ModelProfile,
     val capabilities: DeviceCapabilities,
     val diagnostics: HeadsetDiagnostics,
-    /** An independently identified BR/EDR address, when the model advertisement provides it. */
     val classicAddress: String? = null,
 ) {
     constructor(
@@ -215,7 +202,6 @@ data class DeviceState(
     val confirmedNoiseMode: NoiseMode?
         get() = confirmedText(DeviceField.NOISE_MODE)?.let(NoiseMode::fromId)
 
-    /** The level carried by the latest confirmed bass-slot reading, while that slot is selected. */
     val confirmedBassBoostLevel: Int?
         get() {
             val mode = reading(DeviceField.EQ) as? FieldReading.Known ?: return null
@@ -225,7 +211,6 @@ data class DeviceState(
         }
 }
 
-/** Opaque reference to one device session; a caller holding one may address that session and no other. */
 data class SessionReference(val deviceId: DeviceId, val sessionId: Long)
 
 data class ControlState(
@@ -237,15 +222,12 @@ data class ControlState(
     val bondedDevices: PersistentList<DeviceCandidate> = persistentListOf(),
     val device: DeviceState? = null,
     val lastError: ControlError? = null,
-    /** Recent operations, including terminal outcomes across a disconnect. */
     val settingOperations: PersistentList<SettingOperation> = persistentListOf(),
     val transportSelection: TransportSelection? = null,
     val connectionRecovery: ConnectionRecovery? = null,
     val connectionTarget: DeviceCandidate? = null,
-    /** Latest system-audio observation, independent of the control connection. */
     val audioDeviceId: DeviceId? = null,
 ) {
-    /** The ready device session, present only while the connection and the device state agree on it. */
     val readySession: SessionReference?
         get() {
             val connected = connection as? ConnectionState.Connected ?: return null
@@ -259,7 +241,6 @@ data class ControlState(
             return SessionReference(current.deviceId, current.sessionId)
         }
 
-    /** Most settings require a ready session. Desktop i5 noise control may be admitted during initialization. */
     fun sessionFor(setting: DeviceSetting): SessionReference? = if (setting == DeviceSetting.NOISE_MODE) noiseModeSession else readySession
 
     fun isReady(device: DeviceState): Boolean = sessionAvailable(readySession, device)
@@ -271,7 +252,6 @@ data class ControlState(
         return matches && platform.transport == TransportAvailability.Available && !platform.permission.missing
     }
 
-    /** Whether the system audio observation belongs to the current control device (including its classic address). */
     val deviceHasSystemAudio: Boolean
         get() {
             val current = device ?: return false
@@ -281,7 +261,6 @@ data class ControlState(
             return audio.matchesHeadset(current.deviceId, current.classicAddress) || target?.matchesAudioDevice(audio) == true
         }
 
-    /** The desktop can change the i5's noise mode as soon as this audio session reports it. */
     val noiseModeSession: SessionReference?
         get() {
             if (connection is ConnectionState.Connected) return readySession
@@ -298,7 +277,6 @@ data class ControlState(
         }
 }
 
-/** Recent setting operations are kept in submission order, including terminal outcomes from an earlier session. */
 fun ControlState.withSettingOperation(operation: SettingOperation): ControlState = copy(
     settingOperations = settingOperations.mutate { history ->
         val existing = history.indexOfFirst { it.id == operation.id }
@@ -315,7 +293,6 @@ data class ConnectionRecovery(
     val attempt: Int = 1,
 )
 
-/** The dependent control is available after the headset confirms its prerequisite. */
 fun DeviceState.settingPrerequisite(setting: DeviceSetting): String? {
     val requirement = when (setting) {
         DeviceSetting.SPATIAL_CONTENT -> DeviceField.SPATIAL_MODE

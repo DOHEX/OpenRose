@@ -10,7 +10,6 @@ import android.os.Looper
 import io.github.dohex.openrose.core.transport.GattException
 import io.github.dohex.openrose.core.transport.GattFailureKind
 
-/** The driver holds its callback lock while accessing the native handle and retrying a failed release. */
 @SuppressLint("MissingPermission")
 internal class AndroidGattClient(private val context: Context, private val device: BluetoothDevice) {
     private var client: BluetoothGatt? = null
@@ -21,7 +20,6 @@ internal class AndroidGattClient(private val context: Context, private val devic
         ended?.let { throw it }
         requireIdle(client == null)
         client = androidGattCall("无法创建蓝牙连接") {
-            // Queue callbacks on the main handler until the native handle has been stored.
             @Suppress("DEPRECATION")
             device.connectGatt(
                 context,

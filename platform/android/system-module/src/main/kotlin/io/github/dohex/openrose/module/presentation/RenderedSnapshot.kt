@@ -30,7 +30,6 @@ internal data class RenderedSnapshot(
         return parts.takeIf { it.isNotEmpty() }?.joinToString(" · ") ?: "电量未知"
     }
 
-    /** Only a confirmed charging reading is marked; unknown charging leaves the battery text neutral. */
     private fun chargingMark(fieldName: String): String = if (fields.knownCharging(fieldName) == true) "⚡" else ""
 
     fun aodTitle(): String? = listOfNotNull(
@@ -61,7 +60,6 @@ internal data class RenderedSnapshot(
         return "NOISE_MODE" in writable && currentMode in availableNoiseModes()
     }
 
-    /** The mode after the confirmed one in this model's order; null when there is nothing to switch to. */
     fun nextNoiseMode(currentMode: String): String? {
         val modes = availableNoiseModes()
         if (modes.size < 2) return null
@@ -101,7 +99,6 @@ internal fun decodePresentationSnapshot(snapshot: Bundle): RenderedSnapshot? {
     )
 }
 
-/** The classic address names the system's audio device; an address-shaped control ID is the fallback. */
 private fun bluetoothAddress(snapshot: Bundle): String? {
     val address = snapshot.getString(CLASSIC_ADDRESS) ?: snapshot.getString(DEVICE_ADDRESS)
     return address?.takeIf(BluetoothAdapter::checkBluetoothAddress)
@@ -115,7 +112,6 @@ internal fun sessionIdentity(snapshot: Bundle): SessionIdentity? {
     return SessionIdentity(deviceId, sessionId, hostEpoch)
 }
 
-/** A copy of the app's `noiseModeLabel` (sharedUI `NoiseControlCard.kt`), so this process need not load the UI module. */
 internal fun modeLabel(mode: String): String = when (mode) {
     "normal" -> "标准"
     "anc" -> "降噪"
@@ -127,14 +123,12 @@ internal fun modeLabel(mode: String): String = when (mode) {
     else -> mode
 }
 
-/** A confirmed 0..100 battery reading from the bridge `fields` bundle; any other shape is unknown. */
 internal fun Bundle.knownBattery(fieldName: String): Int? {
     val value = knownValue(fieldName, NUMBER) ?: return null
     return value.getInt("value", INVALID_BATTERY).takeIf { it in 0..100 }
 }
 
-/** A confirmed charging reading from the bridge `fields` bundle; null when unknown. */
-@Suppress("DEPRECATION") // The wire value is untyped; the typed Bundle.get(String, Class) needs API 33.
+@Suppress("DEPRECATION")
 internal fun Bundle.knownCharging(fieldName: String): Boolean? = knownValue(fieldName, TOGGLE)?.get("value") as? Boolean
 
 private fun Bundle.knownValue(fieldName: String, type: String): Bundle? {

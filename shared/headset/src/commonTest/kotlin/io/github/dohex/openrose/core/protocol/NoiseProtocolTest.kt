@@ -18,7 +18,6 @@ class NoiseProtocolTest {
         val codec = createProtocolCodec(ModelProfile.I5_ZT)
         val setting = codec.prepareSetting(DeviceSetting.NOISE_MODE, FieldValue.Text("anc"))
 
-        // RoseLink APK fixed sender extraction; neither frame is computed by this test.
         assertEquals("08ee00000006820e00010000008d", setting.writeFrames.single().hex())
         assertEquals("08ee00000006020a0008", setting.readback.bytes.hex())
         assertEquals(setOf("0602"), setting.readback.responseKeys)
@@ -28,7 +27,6 @@ class NoiseProtocolTest {
     @Test
     fun onlyModelConfiguredNoiseModesHaveAnExecutablePlan() {
         val i5 = createProtocolCodec(ModelProfile.I5_ZT)
-        // Independently extracted ZtSender fixed commands from RoseLink 3.8.0.
         for ((mode, literal) in listOf(
             "normal" to "08ee00000006820e00000100008d",
             "transparency" to "08ee00000006820e00000000018d",
@@ -81,7 +79,6 @@ class NoiseProtocolTest {
 
     @Test
     fun levelCapabilityCanRepresentDifferentRangesAndUnsupportedControls() {
-        // The recovered CERAMICS-U config has ANC low/medium/high but only low/high transparency.
         val fixture = assertNotNull(ModelProfile.I5_ZT.capabilities().noiseControl).copy(
             ancLevel = NoiseLevelCapabilities(persistentSetOf(1, 3, 5), persistentSetOf("anc")),
             transparencyLevel = NoiseLevelCapabilities(persistentSetOf(1, 5), persistentSetOf("transparency")),
@@ -114,7 +111,6 @@ class NoiseProtocolTest {
             val codec = createProtocolCodec(ModelProfile.I7_RS_V2)
             val setting = codec.prepareSetting(DeviceSetting.NOISE_MODE, FieldValue.Text(mode))
             assertEquals(literal, setting.writeFrames.single().hex(), mode)
-            // A client single-field FA query, independently worked seq01 example.
             assertEquals("ff0102fa0905aa", setting.readback.bytes.hex(), mode)
             assertEquals(setOf("09"), setting.readback.responseKeys)
             assertEquals(mapOf(DeviceField.NOISE_MODE to FieldValue.Text(mode)), setting.expectedValues)
@@ -123,7 +119,6 @@ class NoiseProtocolTest {
 
     @Test
     fun ancAndTransparencyUseTheirOwnModelLevelMapping() {
-        // Dynamic worked examples from independent rose_reverse tests and sender parameter evidence.
         val vectors = listOf(
             Triple(ModelProfile.I5_ZT, DeviceSetting.ANC_LEVEL, listOf("08ee00000006870b00008e", "08ee00000006870b00018f", "08ee00000006870b000290")),
             Triple(ModelProfile.I5_ZT, DeviceSetting.TRANSPARENCY_LEVEL, listOf("08ee00000006840b00008b", "08ee00000006840b00018c", "08ee00000006840b00028d")),
@@ -148,7 +143,6 @@ class NoiseProtocolTest {
         val input = FieldValue.NoiseCycle(flags)
         val i5 = createProtocolCodec(ModelProfile.I5_ZT).prepareSetting(DeviceSetting.NOISE_CYCLE, input)
         val i7 = createProtocolCodec(ModelProfile.I7_RS_V2).prepareSetting(DeviceSetting.NOISE_CYCLE, input)
-        // i5 independent dynamic example; i7 sender order ANC/wind/normal/transparency.
         assertEquals("08ee00000006850e000100000191", i5.writeFrames.single().hex())
         assertEquals("ff000536010001003caa", i7.writeFrames.single().hex())
         assertEquals("08ee00000006050a000b", i5.readback.bytes.hex())
@@ -196,7 +190,7 @@ class NoiseProtocolTest {
     @Test
     fun i7InitializationWritesAndReadbacksShareSequenceUntilReset() {
         val codec = createProtocolCodec(ModelProfile.I7_RS_V2)
-        codec.initQueries(20) // Two FA info groups followed by the curve query use sequences 00..02.
+        codec.initQueries(20)
         val dynamic = codec.prepareSetting(DeviceSetting.NOISE_MODE, FieldValue.Text("dynamic"))
         assertEquals("ff0302090714aa", dynamic.writeFrames.single().hex())
         assertEquals("ff0402fa0908aa", dynamic.readback.bytes.hex())
@@ -213,14 +207,12 @@ class NoiseProtocolTest {
     @Test
     fun readCommandsSupplyStateAndWriteOpcodeEchoDoesNotConfirmI5() {
         val i5 = createProtocolCodec(ModelProfile.I5_ZT)
-        // Synthetic RX buffers at independently recovered offsets, not device captures.
         val echo = i5.feedNotification("0000000000068200000100000020".bytes()).single()
         assertFalse(echo.accepted)
         assertFalse(DeviceField.NOISE_MODE in echo.readings)
         val i5State = i5.feedNotification("0000000000060200000000010020".bytes()).single()
         assertEquals(setOf("0602"), i5State.responseKeys)
         assertEquals(FieldValue.Text("wind"), assertIs<FieldReading.Known>(i5State.readings[DeviceField.NOISE_MODE]).value)
-        // i7 has no captures; known field09=04 is the actual reported wind mode.
         val i7State = createProtocolCodec(ModelProfile.I7_RS_V2).feedNotification("dd00020904ecaa".bytes()).single()
         assertEquals(FieldValue.Text("wind"), assertIs<FieldReading.Known>(i7State.readings[DeviceField.NOISE_MODE]).value)
     }

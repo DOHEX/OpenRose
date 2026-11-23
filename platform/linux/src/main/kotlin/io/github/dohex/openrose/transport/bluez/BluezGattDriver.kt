@@ -83,7 +83,6 @@ internal class BluezGattDriver(private val bus: BluezBus, private val devicePath
         }
         var objects = waitForServices(2_000)
         if (objects == null) {
-            // If the first Connect chose the classic bearer, BlueZ selects the disconnected bearer on a second call.
             bus.requestGattConnection(devicePath)
             objects = waitForServices(8_000) ?: throw GattException(GattFailureKind.TRANSIENT, "等待 BlueZ GATT 服务超时")
         }
@@ -156,8 +155,6 @@ internal class BluezGattDriver(private val bus: BluezBus, private val devicePath
                 firstWrite = false
                 break
             } catch (error: org.bluez.Error.Failed) {
-                // BlueZ can accept StartNotify before attaching its GATT client. This exact
-                // WriteValue error is returned before it processes the value or transmits bytes.
                 if (error.message != "Not connected" || retries == 0) throw error
                 retries--
                 delay(125)
@@ -174,10 +171,8 @@ internal class BluezGattDriver(private val bus: BluezBus, private val devicePath
             routed.clear()
             closed = true
         }
-        // Device1.Disconnect tears down all profiles, including audio. StopNotify releases our lease.
     }
     private suspend fun releaseSubscription(path: String) {
-        // A BlueZ restart destroys the old daemon's subscriptions, even if link observation has already stopped.
         if (bus.owner == owner) bus.stopNotify(owner, path)
         synchronized(lock) { subscribed.remove(path) }
     }
@@ -207,7 +202,6 @@ internal class BluezGattDriver(private val bus: BluezBus, private val devicePath
     }
 }
 
-// Leaves time for the ATT write inside the shared five-second GATT operation deadline.
 private const val FIRST_WRITE_RETRIES = 24
 
 private suspend fun BluezBus.requestGattConnection(devicePath: String) {
@@ -223,7 +217,6 @@ private suspend fun BluezBus.requestGattConnection(devicePath: String) {
         } catch (error: org.bluez.Error.InProgress) {
             val current = objects()[devicePath].orEmpty()
             if (current[DEVICE]?.get("Connected") != true) throw error
-            // An in-flight audio profile makes BlueZ reject LE1.Connect before it queues the request.
             useLeBearer && current[CLASSIC_BEARER]?.get("Connected") == true
         }
         if (!busy || busyRetries == 0) return
@@ -237,7 +230,6 @@ private suspend fun BluezBus.requestGattConnection(devicePath: String) {
 private fun BluezObjects.gattServicesReady(devicePath: String): Boolean {
     val interfaces = this[devicePath] ?: return false
     val le = interfaces[LE_BEARER]
-    // ServicesResolved and the GATT table can outlive the LE link while classic audio is connected.
     if (le != null && le["Connected"] != true) return false
     return interfaces[DEVICE]?.get("ServicesResolved") == true && any { it.key.startsWith("$devicePath/") && SERVICE in it.value }
 }

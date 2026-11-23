@@ -7,7 +7,6 @@ import io.github.dohex.openrose.androidintegration.ReleaseReceipt
 import io.github.dohex.openrose.androidintegration.ReleaseResult
 import io.github.dohex.openrose.androidintegration.SwitchRequest
 
-/** The persisted selection request and its release or acquisition result. */
 object HandoffWire {
     fun encode(request: SwitchRequest): Wire = obj(
         "id" to str(request.id),

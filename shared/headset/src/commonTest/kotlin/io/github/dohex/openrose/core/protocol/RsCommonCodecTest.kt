@@ -47,10 +47,8 @@ class RsCommonCodecTest {
     @Test
     fun budsFreeTouchBindingsUseDocumentedSlotsAndActionCodes() {
         val codec = createProtocolCodec(ModelProfile.BUDSFREE_I_RS_COMMON)
-        // 界面动作集合与线码表必须一致，否则界面会提供写入必然失败的动作。
         val profile = ModelProfile.BUDSFREE_I_RS_COMMON
         assertEquals((profile.spec.protocol as ModelProtocol.RsCommon).touchActions.keys, requireNotNull(profile.capabilities().touchControl).actions)
-        // 独立取自 Sender：左单/右单前缀 "FF 00 03 01 01 0" / "FF 00 03 01 11 0"，动作码按单个十进制数字拼接。
         assertEquals(
             "ff0003010101aa",
             codec.prepareSetting(
@@ -65,7 +63,6 @@ class RsCommonCodecTest {
                 FieldValue.TouchAssignment("right", "single", "play_pause"),
             ).writeFrames.single().hex(),
         )
-        // 左耳三击槽位 03；型号动作表跳过语音助手 4，音量加/减为 5/6。
         for ((action, tx) in listOf(
             "none" to "ff0003010300aa",
             "play_pause" to "ff0003010301aa",
@@ -79,7 +76,6 @@ class RsCommonCodecTest {
             assertEquals(tx, setting.writeFrames.single().hex())
             assertEquals(mapOf(DeviceField.TOUCH_KEYS to assignment), setting.expectedValues)
         }
-        // 右耳槽位与左耳平行：11/12/13。
         assertEquals(
             "ff0003011206aa",
             codec.prepareSetting(
@@ -87,7 +83,6 @@ class RsCommonCodecTest {
                 FieldValue.TouchAssignment("right", "double", "volume_down"),
             ).writeFrames.single().hex(),
         )
-        // 型号的 TouchCtlType 只有单/双/三击；动作表没有语音助手与降噪切换。
         assertFailsWith<IllegalArgumentException> {
             codec.prepareSetting(DeviceSetting.TOUCH_BINDING, FieldValue.TouchAssignment("left", "long", "none"))
         }
@@ -103,7 +98,6 @@ class RsCommonCodecTest {
 
     @Test
     fun syntheticBudsFreeTouchReplyDecodesEveryBinding() {
-        // 合成：没有 BudsFree i 通知抓包；载荷按族文档的字符下标 11/15/19/31/35/39 换算成低半字节。
         val reply = createProtocolCodec(ModelProfile.BUDSFREE_I_RS_COMMON)
             .feedNotification("ff00110100010002000300000000000500060000aa".bytes())
             .single()
@@ -141,11 +135,9 @@ class RsCommonCodecTest {
     @Test
     fun syntheticRepliesDecodeAndBufferAcrossFragments() {
         val codec = createProtocolCodec(ModelProfile.OPENFEEL_DUAL_RS_COMMON)
-        // 合成：没有真实设备通知抓包，帧封装仅按文档字节位置推断。
         assertTrue(codec.feedNotification("ff00020e".bytes()).isEmpty())
         val reply = codec.feedNotification("01aa".bytes()).single()
         assertEquals(FieldValue.Toggle(true), assertIs<FieldReading.Known>(reply.readings[DeviceField.GAME_MODE]).value)
-        // 合成：2B 04 同时提供多点状态；电量为三槽。
         val multi = codec.feedNotification("ff00022b04aa".bytes()).single()
         assertEquals(FieldValue.Toggle(true), assertIs<FieldReading.Known>(multi.readings[DeviceField.MULTIPOINT]).value)
         val battery = codec.feedNotification("ff00040c32465aaa".bytes()).single()

@@ -7,10 +7,6 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-/**
- * What a system entry may answer for one Bluetooth address: identity for the current session and for the bonded ROSE
- * earphones the module host publishes, state only from a fresh current session (ADR 0017).
- */
 class NativeHeadsetDirectoryTest {
     private val ble = "AA:BB:CC:DD:EE:01"
     private val classic = "11:22:33:44:55:66"
@@ -46,7 +42,6 @@ class NativeHeadsetDirectoryTest {
     @Test
     fun onceTheModuleHostPublishesNoEarphonesNothingIsIdentified() {
         directory.publishBonded(setOf(classic))
-        // Ordinary control: the module host has no owner and publishes no earphones.
         directory.publishBonded(emptySet())
 
         assertFalse(directory.identifies(classic))
@@ -72,7 +67,6 @@ class NativeHeadsetDirectoryTest {
         directory.publishBonded(setOf(other))
         directory.publishBonded(emptySet())
 
-        // Elapsed time or a withdrawn list never reopens the vendor's own control path for these earphones.
         assertTrue(directory.isManaged(" aa:bb:cc:dd:ee:01"))
         assertTrue(directory.isManaged(classic))
         assertTrue(directory.isManaged(other))

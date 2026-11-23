@@ -8,7 +8,6 @@ import io.github.dohex.openrose.androidintegration.wire.BridgePresentationWire
 import io.github.dohex.openrose.module.systemIntegrationResult
 import java.security.MessageDigest
 
-/** Claims module prompts and owns their timeout, including prompts merged into the status island. */
 internal class ModuleConnectionPrompt(
     private val handler: Handler,
     private val callbacks: PresentationCallbacks,
@@ -44,7 +43,6 @@ internal class ModuleConnectionPrompt(
 
         val merged = activePrompt?.takeIf { it.tag == null }
         if (merged != null && !canMerge) {
-            // The status card went away mid-prompt. Carry on as a standalone notification for the remaining duration.
             val remaining = merged.deadline - SystemClock.uptimeMillis()
             cancelActivePrompt("status_notification_withdrawn")
             if (remaining > 0) publishModulePrompt(snapshot, merged.id, prompt, canMerge = false, remainingMillis = remaining)
@@ -59,7 +57,6 @@ internal class ModuleConnectionPrompt(
         }
     }
 
-    // Official prompts are claimed by the Xiaomi Bluetooth consumer.
     private fun modulePrompt(snapshot: RenderedSnapshot): Bundle? {
         if (snapshot.mode != BridgePresentationWire.MODULE) return null
         if (!snapshot.presentation.getBoolean(BridgePresentationWire.ALLOW_ISLAND_FIELDS, false)) return null
@@ -68,7 +65,6 @@ internal class ModuleConnectionPrompt(
         }
     }
 
-    // A failed RPC may have failed before submission. The next unclaimed snapshot may retry the host's atomic claim.
     private fun claimModulePrompt(snapshot: RenderedSnapshot, promptId: String): Boolean = runCatching {
         callbacks.claimPrompt(Bundle(snapshot.wire), promptId)
     }.onFailure {
@@ -102,8 +98,6 @@ internal class ModuleConnectionPrompt(
         val duration = (remainingMillis ?: prompt.getLong(BridgePresentationWire.DURATION_MILLIS, DEFAULT_PROMPT_DURATION_MILLIS))
             .coerceIn(1L, MAX_PROMPT_DURATION_MILLIS)
         if (canMerge) {
-            // One island at a time: the status island already is the prompt's battery template, so
-            // renderStatusNotification, which runs next, shows the prompt by (re)posting the status notification.
             promptAwaitingStatus = true
             processedPrompts += key
             startPrompt(ActivePrompt(snapshot.identity, promptId, null, snapshot.wire), duration)
@@ -153,7 +147,6 @@ internal class ModuleConnectionPrompt(
         active.timeout?.let(handler::removeCallbacks)
         val tag = active.tag
         if (tag == null) {
-            // Merged into the status notification, whose island stays as the summary state.
             promptAwaitingStatus = false
             reportOnce(
                 active.snapshot,
@@ -189,7 +182,6 @@ internal class ModuleConnectionPrompt(
     private data class ActivePrompt(
         val identity: SessionIdentity,
         val id: String,
-        /** The prompt's own notification tag; null while the prompt is merged into the status notification. */
         val tag: String?,
         val snapshot: Bundle,
         var timeout: Runnable? = null,
@@ -204,7 +196,6 @@ internal class ModuleConnectionPrompt(
     }
 }
 
-/** A short stable hex digest for notification tags and cached prompt file names. */
 internal fun stableDigest(value: String): String = MessageDigest.getInstance("SHA-256")
     .digest(value.toByteArray(Charsets.UTF_8))
     .take(12)

@@ -22,7 +22,6 @@ import java.util.concurrent.SynchronousQueue
 import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 
-/** The status notification's buttons and their receiver share one session-scoped registration. */
 internal class PresentationActions(
     private val appContext: Context,
     private val handler: Handler,
@@ -73,7 +72,6 @@ internal class PresentationActions(
     ): Pair<String, Notification.Action>? = registration?.button(appContext, snapshot, ACTION_KIND_DISCONNECT, null)
 
     fun register() {
-        // PendingIntent broadcasts execute with their creator's UID. Only publish usable buttons.
         if (appContext.checkSelfPermission(BLUETOOTH_PRIVILEGED_PERMISSION) != PackageManager.PERMISSION_GRANTED) return
         val token = UUID.randomUUID().toString()
         val action = "${appContext.packageName}.OPENROSE_ACTION_$token"
@@ -85,7 +83,6 @@ internal class PresentationActions(
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 appContext.registerReceiver(receiver, filter, BLUETOOTH_PRIVILEGED_PERMISSION, handler, Context.RECEIVER_NOT_EXPORTED)
             } else {
-                // Before API 33 the privileged permission, package, random action and token protect the receiver.
                 appContext.registerReceiver(receiver, filter, BLUETOOTH_PRIVILEGED_PERMISSION, handler)
             }
             registration = ActionRegistration(action, token)
@@ -109,7 +106,6 @@ internal class PresentationActions(
         executor.shutdownNow()
     }
 
-    /** Hot reload waits for synchronous Binder calls that may outlive shutdown. */
     fun awaitTermination(timeoutMillis: Long): Boolean = try {
         executor.awaitTermination(timeoutMillis, TimeUnit.MILLISECONDS)
     } catch (_: InterruptedException) {
@@ -121,7 +117,6 @@ internal class PresentationActions(
         val noise = snapshot.knownNoiseMode() ?: return
         if (!snapshot.canControlNoise(noise) || targetMode !in snapshot.availableNoiseModes() || targetMode == noise) return
         dispatch(snapshot, targetMode, "noise_action_dispatch", { callbacks.setNoise(Bundle(snapshot.wire), targetMode) }) { result ->
-            // A later authenticated snapshot supplies the confirmed device value.
             val response = result.getOrNull()
             if (response?.getString(BridgeWire.STATUS) == BridgeWire.STATUS_OK) {
                 null
@@ -134,7 +129,6 @@ internal class PresentationActions(
         }
     }
 
-    /** Drops the system audio connection from the privileged Bluetooth process. */
     private fun executeDisconnect(snapshot: RenderedSnapshot) {
         val address = snapshot.address ?: return
         dispatch(snapshot, ACTION_KIND_DISCONNECT, "disconnect_dispatch", {
@@ -178,7 +172,6 @@ internal class PresentationActions(
     }
 }
 
-/** Read on the presentation handler when receiving a tap or a worker's result. */
 internal interface PresentationActionSession {
     val currentSnapshot: RenderedSnapshot?
     val statusActive: Boolean

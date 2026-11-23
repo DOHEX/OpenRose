@@ -15,7 +15,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
-/** Reads and changes start-at-login off the UI thread; the backend may run subprocesses. */
 internal class LoginLaunch(private val scope: CoroutineScope) : LoginLaunchControl {
     private val mutableState = MutableStateFlow<LoginLaunchState>(LoginLaunchState.Reading)
     private val mutex = Mutex()
@@ -43,7 +42,6 @@ internal class LoginLaunch(private val scope: CoroutineScope) : LoginLaunchContr
     }
 
     private fun read(): LoginLaunchState {
-        // An unpackaged run would register the development JVM command as the login item.
         if (ExecutableRuntime.isDev()) return LoginLaunchState.Unsupported("仅安装版可设置登录时启动")
         return when (runCatching { AutoLaunch.state() }.getOrDefault(AutoLaunchState.UNSUPPORTED)) {
             AutoLaunchState.ENABLED -> LoginLaunchState.Ready(enabled = true)

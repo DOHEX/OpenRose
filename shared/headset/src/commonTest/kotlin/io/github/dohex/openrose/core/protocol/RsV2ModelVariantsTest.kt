@@ -20,7 +20,6 @@ class RsV2ModelVariantsTest {
         val astro = RsCommonV2Codec(profile, profile.spec.protocol as ModelProtocol.RsCommonV2) { date }
         val commands = astro.initQueries(512)
         assertEquals(2, commands.size)
-        // RoseLink setTime(2026-11-20 17:38:09), synthetic. The year is split into 20 and 26.
         assertEquals("ff010835141a0b14112609caaa", commands[1].bytes.hex())
         assertTrue(commands[1].responseKeys.isEmpty())
         assertEquals(1, createProtocolCodec(ModelProfile.KY01_RS_V2).initQueries(512).size)
@@ -60,7 +59,7 @@ class RsV2ModelVariantsTest {
             "ff00022aa0cbaa",
             codec.prepareSetting(DeviceSetting.EQ, FieldValue.Text("game_1"), currentFields = confirmedGameMode(true)).writeFrames.single().hex(),
         )
-        val reply = codec.feedNotification("dd00022aa0ccaa".bytes()).single() // synthetic records-only checksum
+        val reply = codec.feedNotification("dd00022aa0ccaa".bytes()).single()
         assertEquals(FieldValue.Text("game_1"), (reply.readings[DeviceField.EQ] as FieldReading.Known).value)
     }
 
@@ -69,7 +68,7 @@ class RsV2ModelVariantsTest {
         val codec = createProtocolCodec(ModelProfile.EARFEEL_IE_NEO_RS_V2)
         val cycle = FieldValue.NoiseCycle(mapOf("anc" to true, "normal" to false, "transparency" to true))
         assertEquals("ff000536010000013caa", codec.prepareSetting(DeviceSetting.NOISE_CYCLE, cycle).writeFrames.single().hex())
-        val reply = codec.feedNotification("dd000536010000013daa".bytes()).single() // synthetic records-only checksum
+        val reply = codec.feedNotification("dd000536010000013daa".bytes()).single()
         assertEquals(cycle, (reply.readings[DeviceField.NOISE_CYCLE] as FieldReading.Known).value)
     }
 
@@ -77,7 +76,7 @@ class RsV2ModelVariantsTest {
     fun aptxAndDeepAncAreOfferedOnlyOnModelsWhosePanelSupportsThem() {
         val speak = createProtocolCodec(ModelProfile.SPEAKFREE_RS_V2)
         assertEquals("ff00022b0632aa", speak.prepareSetting(DeviceSetting.AUDIO_MODE, FieldValue.Text("aptx_adaptive")).writeFrames.single().hex())
-        val audioReply = speak.feedNotification("dd00022b0633aa".bytes()).single() // synthetic
+        val audioReply = speak.feedNotification("dd00022b0633aa".bytes()).single()
         assertEquals(FieldValue.Text("aptx_adaptive"), (audioReply.readings[DeviceField.AUDIO_MODE] as FieldReading.Known).value)
         val furina = createProtocolCodec(ModelProfile.FURINA_RS_V2)
         assertEquals("ff0002090610aa", furina.prepareSetting(DeviceSetting.NOISE_MODE, FieldValue.Text("deep")).writeFrames.single().hex())

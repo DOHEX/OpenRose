@@ -13,7 +13,6 @@ import io.github.dohex.openrose.androidintegration.wire.BridgeWire
 import io.github.dohex.openrose.androidintegration.wire.NativeHeadsetSnapshot
 import io.github.dohex.openrose.platform.StatusTargetLaunch
 
-/** Builds the Android notifications and resolves the selected destination when the status card is tapped. */
 internal class PresentationNotificationContent(
     private val appContext: Context,
     private val actions: PresentationActions,
@@ -35,7 +34,6 @@ internal class PresentationNotificationContent(
     }
 
     fun statusNotificationBuilder(snapshot: RenderedSnapshot, card: StatusCard, showsPrompt: Boolean): Notification.Builder {
-        // The same two actions back the card's text buttons and, where the card is not rendered, the plain actions.
         val buttons = listOfNotNull(
             card.nextNoise?.let { actions.noiseAction(snapshot, it) },
             if (card.canDisconnect) actions.disconnectAction(snapshot) else null,
@@ -71,14 +69,13 @@ internal class PresentationNotificationContent(
 
     private fun cardTitle(snapshot: RenderedSnapshot): String = deviceAlias(snapshot) ?: snapshot.profileLabel()
 
-    @SuppressLint("MissingPermission") // Runs in com.android.bluetooth, which holds BLUETOOTH_CONNECT.
+    @SuppressLint("MissingPermission")
     private fun deviceAlias(snapshot: RenderedSnapshot): String? {
         val address = snapshot.address ?: return null
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return null
         return runCatching { appContext.bluetoothDevice(address)?.alias }.getOrNull()?.takeIf { it.isNotBlank() }
     }
 
-    /** Opens the chosen 状态通知点击目标; one that cannot open now opens OpenRose with the reason, never silently. */
     private fun statusContentIntent(snapshot: RenderedSnapshot): PendingIntent {
         val intent = when (val launch = statusTargetLaunch(snapshot)) {
             is StatusLaunch.Open -> launch.intent
@@ -99,7 +96,6 @@ internal class PresentationNotificationContent(
     private fun statusTargetLaunch(snapshot: RenderedSnapshot): StatusLaunch = when (snapshot.statusTarget) {
         BridgePresentationWire.TARGET_SYSTEM -> systemHeadsetLaunch(snapshot)
 
-        // The Bluetooth app holds QUERY_ALL_PACKAGES, so RoseLink resolves here.
         BridgePresentationWire.TARGET_ROSELINK -> StatusTargetLaunch.roseLinkIntent(appContext.packageManager)
             ?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             ?.let(StatusLaunch::Open)
@@ -119,7 +115,6 @@ internal class PresentationNotificationContent(
         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
     }
 
-    /** HyperOS' own headset page, opened with the extras the reference OppoPods passes for its compatibility device. */
     private fun systemHeadsetLaunch(snapshot: RenderedSnapshot): StatusLaunch {
         val address = snapshot.address
         val device = address?.let { runCatching { appContext.bluetoothDevice(it) }.getOrNull() }
@@ -139,7 +134,6 @@ internal class PresentationNotificationContent(
         return StatusLaunch.Open(intent)
     }
 
-    /** Where a status notification tap goes: the chosen target, or OpenRose with the [Fallback.reason] it could not open. */
     private sealed interface StatusLaunch {
         class Open(val intent: Intent) : StatusLaunch
         class Fallback(val reason: String) : StatusLaunch
@@ -163,5 +157,4 @@ internal data class StatusCard(
     ).joinToString("|")
 }
 
-/** The feature flags OppoPods sends with its compatibility device ID; their individual meaning is unverified. */
 private const val SYSTEM_HEADSET_SUPPORT_FLAGS = "000000000000000010000000"

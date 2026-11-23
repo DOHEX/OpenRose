@@ -5,7 +5,6 @@ import io.github.dohex.openrose.circulation.*
 import io.github.dohex.openrose.core.NoiseMode
 import io.github.dohex.openrose.core.transport.DeviceId
 
-/** Primitive Binder payloads keep both processes independent of one another's class loader. */
 fun CirculationCommand.toBundle(): Bundle = Bundle().apply {
     val operation = when (val command = this@toBundle) {
         CirculationCommand.Directory -> "list"

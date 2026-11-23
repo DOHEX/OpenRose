@@ -29,42 +29,31 @@ data class ClientTiming(
     val statusPollMillis: Long = 2_000,
     val releaseTimeoutMillis: Long = 10_000,
     val acquireTimeoutMillis: Long = 10_000,
-    /** Must outlast the owner's own connect and confirmation deadlines. */
     val commandTimeoutMillis: Long = 45_000,
-    /** How often an owned host is asked for its status; frames follow device changes, so their silence proves nothing. */
     val probeIntervalMillis: Long = 5_000,
     val probeTimeoutMillis: Long = 2_000,
-    /** Consecutive unanswered probes after which the host counts as unresponsive. */
     val probeMisses: Int = 3,
 )
 
-/** What the application knows about the module owner right now; never more than the host has told it. */
 sealed interface ModuleView {
     data object Stopped : ModuleView
     data object Connecting : ModuleView
     data class Unavailable(val stage: OwnerFailureStage, val reason: String) : ModuleView
 
-    /** Authorised, but the host currently has no owner. */
     data class Inactive(val status: HostStatus.Inactive) : ModuleView
 
-    /** The host owner holds the session; [frame] is its latest published state. */
     data class Active(val frame: HostFrame) : ModuleView
 
-    /** The host process is reachable but stopped answering; its last reading is withdrawn rather than shown as current. */
     data object Unresponsive : ModuleView
 }
 
 internal const val UNRESPONSIVE_REASON = "模块宿主未响应"
 
-/** What may be relied on to say the module owner no longer holds the session. */
 sealed interface ReleaseProof {
-    /** The owner confirmed this exact request after closing its connection. */
     data class Receipt(val receipt: ReleaseReceipt) : ReleaseProof
 
-    /** The host process of [incarnation] ended, which closes every connection it owned. */
     data class ProcessEnded(val incarnation: String) : ReleaseProof
 
-    /** A timeout, lost link or unknown remote state is not proof. */
     data class Unproven(val stage: OwnerFailureStage, val reason: String) : ReleaseProof
 }
 
@@ -73,11 +62,6 @@ sealed interface AcquireOutcome {
     data class Failed(val stage: OwnerFailureStage, val reason: String) : AcquireOutcome
 }
 
-/**
- * The application's client of the module host: keeps one authorised connection while module control
- * is selected, mirrors the host's published state and forwards commands. It never creates a
- * session and treats a command as done only when the host's owner reports the device-confirmed result.
- */
 @OptIn(ExperimentalCoroutinesApi::class)
 class ModuleControlClient(
     private val link: ModuleHostLink,
@@ -91,7 +75,6 @@ class ModuleControlClient(
     private var loop: Job? = null
     private val observedLink = MutableStateFlow<LinkOpenResult?>(null)
 
-    /** The latest module owner this client has seen; used to name the owner a release must cover. */
     var lastObservedGeneration: OwnerGeneration? = null
         private set
 
@@ -122,13 +105,6 @@ class ModuleControlClient(
         }
     }
 
-    /**
-     * Asks the module owner to release for [request]. Only the owner's receipt for exactly this request and
-     * the exact owner generation the request names, or the observed end of the process that held that owner,
-     * counts; everything else is [ReleaseProof.Unproven]. A refusal never makes the client name another
-     * generation by itself: the owner the host reports is remembered in [lastObservedGeneration] and the
-     * caller must ask again naming it.
-     */
     suspend fun release(request: SwitchRequest): ReleaseProof = withConnection(
         { ReleaseProof.Unproven(it.stage, it.reason) },
     ) { connection ->
@@ -183,7 +159,6 @@ class ModuleControlClient(
     private fun lostLinkProof(connection: HostConnection, request: SwitchRequest, detail: String?): ReleaseProof {
         val end = connection.ended.takeIf { it.isCompleted }?.getCompleted()
         val named = request.fromGeneration
-        // The death of a process only proves the owners that process held, so it must be the one the request names.
         if (end?.processDied == true && (named == null || named.incarnation == connection.incarnation)) {
             return ReleaseProof.ProcessEnded(connection.incarnation)
         }
@@ -194,8 +169,6 @@ class ModuleControlClient(
         onFailed: (LinkOpenResult.Failed) -> T,
         block: suspend (HostConnection) -> T,
     ): T {
-        // The endpoint replaces a process's previous lease on open. Share the observer's binding,
-        // including discovery in progress. Only release after stop needs a separate, temporary lease.
         if (loop?.isActive == true) {
             val observed = observedLink.filterNotNull().first { it !is LinkOpenResult.Open || !it.connection.ended.isCompleted }
             return when (observed) {
@@ -216,7 +189,6 @@ class ModuleControlClient(
 
     private suspend fun run() {
         while (scope.isActive) {
-            // [start] shows the first attempt as connecting; a retry keeps the last failure until it has its own outcome.
             val opened = link.open()
             observedLink.value = opened
             when (opened) {
@@ -231,7 +203,6 @@ class ModuleControlClient(
                         connection.close()
                     }
                     if (scope.isActive) {
-                        // A lost link must not leave the last battery or noise reading looking current.
                         mutableView.value = ModuleView.Unavailable(OwnerFailureStage.CONNECTION, "与模块宿主的连接已断开")
                     }
                 }
@@ -253,7 +224,6 @@ class ModuleControlClient(
                         is HostStatus.Active -> {
                             lastObservedGeneration = status.generation
                             observeActive(connection, status.generation)
-                            // The generation ended: nothing from it is current any more.
                             mutableView.value = ModuleView.Connecting
                         }
 
@@ -269,16 +239,10 @@ class ModuleControlClient(
             if (scope.isActive && connection.ended.isCompleted) return
             throw e
         } catch (_: HostLinkException) {
-            // The observation loop closes the lost transport and reports it before reconnecting.
             return
         }
     }
 
-    /**
-     * Mirrors the owner's frames until the generation ends while probing the host. A host that stops
-     * answering [HostConnection.status] withdraws the reading; once it answers again the frames are
-     * subscribed afresh, so nothing published before the stall is shown as current.
-     */
     private suspend fun observeActive(connection: HostConnection, generation: OwnerGeneration) = coroutineScope {
         val mirroring = launch {
             connection.frames(generation).collect { frame ->

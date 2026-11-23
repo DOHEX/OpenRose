@@ -6,7 +6,6 @@ import java.util.concurrent.locks.ReentrantLock
 
 internal class PeerUnreachable(cause: IOException) : IOException("无法联系对端 · ${cause.message}", cause)
 
-/** All commands target the classic address of the i5 selected by the receiving device. */
 class HeadsetCirculation(private val audio: CirculationAudio, private val bonded: () -> List<String>) {
     constructor(audio: CirculationAudio, control: ControlRuntime) : this(audio, {
         control.state.value.bondedDevices.filter { supportsCirculation(it.profile) }.map { it.classicAddress ?: it.deviceId.value }
@@ -56,7 +55,7 @@ class HeadsetCirculation(private val audio: CirculationAudio, private val bonded
         }
     }
 
-    @Suppress("TooGenericExceptionCaught") // The platform may report a D-Bus error, Bluetooth Binder exception or audio server failure.
+    @Suppress("TooGenericExceptionCaught")
     private inline fun <R> exclusive(onFailure: (String) -> R, action: () -> R): R {
         if (!operation.tryLock()) return onFailure("另一项耳机流转正在进行")
         return try {

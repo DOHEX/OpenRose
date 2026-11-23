@@ -295,7 +295,6 @@ class EqualizerPageUiTest {
             harness.clickText("均衡器")
             harness.render(frames = 30)
             val firstBand = harness.nodes().single { "20 Hz 增益" in it.config.getOrNull(SemanticsProperties.ContentDescription).orEmpty() }
-            // Sample inside the flat curve's thumb, clear of the track and the line through its centre.
             val x = firstBand.boundsInWindow.center.x.toInt() + 5
             val y = firstBand.boundsInWindow.center.y.toInt() - 4
             val editableThumb = harness.snapshot().getRGB(x, y)
@@ -355,7 +354,6 @@ class EqualizerPageUiTest {
     fun theCurveHasAGainScaleAndSignedBandValues() {
         val custom = CustomEqualizerCapabilities(persistentListOf(20, 100, 300, 500, 1000, 2000, 3000, 5000, 8000, 15000), -12, 10)
         for (style in InterfaceStyle.entries) {
-            // Ten bands of at least 48dp need a wide page; on a phone the row scrolls and off-screen labels have no bounds.
             withHarness(style, ModelProfile.I7_RS_V2, listOf(1, 5, 2), Surface.PAGE, mode = CUSTOM, custom = custom, width = 640) { harness ->
                 harness.render()
                 val top = harness.lastTextBounds("+10")
@@ -489,7 +487,6 @@ class EqualizerPageUiTest {
         }
     }
 
-    /** [writes] go through the equalizer page's session writes; [homeWrites] through the home rows' settings. */
     private class EqHarness(
         scene: OpenRoseUiTestScene,
         val state: MutableState<ControlState>,
@@ -498,7 +495,6 @@ class EqualizerPageUiTest {
         val replies: List<CompletableDeferred<OperationResult>>,
         val navigations: List<AppPage>,
     ) : OpenRoseUiTestHarness(scene) {
-        /** The last match is the topmost: popups and dialogs come after the window. */
         fun lastTextBounds(text: String) = allTextBounds(text).last()
 
         fun withMode(mode: String): ControlState {
@@ -524,13 +520,11 @@ class EqualizerPageUiTest {
         const val SESSION_ID = 42L
         const val CUSTOM = "custom"
 
-        /** The sandbox's phone preview, a common portrait phone in dp. */
         const val PHONE_WIDTH = 360
         const val PHONE_HEIGHT = 780
         val CURVE = persistentListOf(-2, 0, 1, 3, 0, -1, 2, 0, 4, -3)
         val FLAT = List(10) { 0 }
 
-        /** The model's equalizer as its firmware decides, readable and writable as far as the model allows. */
         fun capabilitiesFor(profile: ModelProfile, parts: List<Int>, custom: CustomEqualizerCapabilities?): DeviceCapabilities {
             val model = profile.capabilities(FieldValue.Firmware(parts, parts.joinToString("")))
             val equalizer = model.equalizer?.let { eq -> custom?.let { eq.copy(custom = it) } ?: eq }

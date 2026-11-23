@@ -86,7 +86,6 @@ sealed interface FieldValue {
         override val displayText get() = bindings.joinToString("；") { "${it.side}/${it.gesture}: ${it.action ?: "未知(${it.rawAction})"}" }
     }
 
-    /** One requested slot assignment; the device still reports its complete TouchKeys value. */
     data class TouchAssignment(val side: String, val gesture: String, val action: String) : FieldValue {
         override val displayText get() = "$side/$gesture: $action"
     }
@@ -107,11 +106,9 @@ data class ProtocolQuery(
     val bytes: ByteArray,
     val responseKeys: Set<String>,
     val expectedFields: Set<DeviceField>,
-    /** Minimum pause before this initialization query, when required by the model. */
     val delayBeforeMillis: Long = 0,
 )
 
-/** A write plan and the independent state read used to confirm its result. */
 data class ProtocolSetting(
     val writeFrames: List<ByteArray>,
     val readback: ProtocolQuery,
@@ -147,10 +144,8 @@ interface ProtocolCodec {
     val profile: ModelProfile
     fun initQueries(maxWriteSize: Int): List<ProtocolQuery>
 
-    /** Reads that become applicable once the initial batch has returned the firmware. */
     fun firmwareInitQueries(firmware: FieldValue.Firmware?): List<ProtocolQuery> = emptyList()
 
-    /** Both real and simulated writes use the facts the current device has actually reported. */
     fun prepareSetting(command: HeadsetCommand, device: DeviceState): ProtocolSetting = prepareSetting(
         command.setting,
         command.value,
@@ -190,7 +185,6 @@ internal fun validatedNoiseCycle(
     return FieldValue.NoiseCycle(flags)
 }
 
-/** ZT and RS Common V2 both encode each signed band gain in one sign-magnitude byte. */
 internal fun customCurveBytes(value: FieldValue, capability: CustomEqualizerCapabilities?): ByteArray {
     require(value is FieldValue.IntegerList) { "自定义均衡器需要整数曲线" }
     if (capability == null) throw UnsupportedOperationException("该型号不支持自定义均衡器")

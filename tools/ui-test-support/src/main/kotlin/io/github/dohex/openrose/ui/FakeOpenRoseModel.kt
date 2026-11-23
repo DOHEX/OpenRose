@@ -22,7 +22,6 @@ import kotlinx.coroutines.flow.FlowCollector
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
-/** Adapts fixture state to the same observable interface used by the real model. */
 @OptIn(InternalCoroutinesApi::class, ExperimentalForInheritanceCoroutinesApi::class)
 private class SnapshotStateFlow<T>(private val source: MutableState<T>) : StateFlow<T> {
     override val value: T get() = source.value

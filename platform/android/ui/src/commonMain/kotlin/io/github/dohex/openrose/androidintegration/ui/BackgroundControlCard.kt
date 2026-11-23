@@ -19,15 +19,10 @@ import io.github.dohex.openrose.core.ControlState
 import io.github.dohex.openrose.core.PlatformApplicability
 import io.github.dohex.openrose.ui.*
 
-/** Ordinary background control applies wherever Android hosts the control runtime. */
 internal fun ControlState.backgroundControlApplicable(integration: IntegrationState): Boolean = platform.controlTransportApplicability ==
     PlatformApplicability.APPLICABLE &&
     integration.backgroundControl(this) != BackgroundControlStatus.Unsupported
 
-/**
- * The switch only stores the user's intent. The status rows below it report what the platform
- * actually did, so a saved preference is never shown as background control being ready.
- */
 @Composable
 internal fun BackgroundControlGroup(
     state: ControlState,
@@ -100,7 +95,6 @@ internal fun BackgroundControlGroup(
     }
 }
 
-/** What the Android version really offers; the mechanisms differ per version band and are never presented as one. */
 private fun wakeGuidance(band: WakeBand?): String = when (band) {
     WakeBand.ANDROID_8_11 -> "Android 8–11：耳机音频连接时由系统广播唤起，无需关联耳机。"
     WakeBand.ANDROID_12_13 -> "Android 12–13：需先在系统中关联耳机，关联后耳机出现时系统会唤起 OpenRose。"
@@ -108,7 +102,6 @@ private fun wakeGuidance(band: WakeBand?): String = when (band) {
     null -> ""
 }
 
-/** Automatic revival readiness; "configured" never claims the ROM will actually wake the app. */
 @Composable
 private fun RecoveryRows(
     recovery: BackgroundRecovery,
@@ -148,7 +141,6 @@ private fun RecoveryRows(
                     )
                 }
             }
-            // A missing Bluetooth permission is already explained by the background status above.
         }
 
         is BackgroundRecovery.Armed -> {

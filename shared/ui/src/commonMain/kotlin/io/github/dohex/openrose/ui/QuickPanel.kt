@@ -87,31 +87,20 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.window.WindowListPopup
 import kotlin.math.roundToInt
 
-/** Test tag of the scrim behind the sheet; tapping it dismisses the panel. */
 internal const val QUICK_PANEL_SCRIM_TAG = "quick-panel-scrim"
 
-/** Test tag of the drag handle on top of the sheet; dragging it down far or fast enough dismisses the panel. */
 internal const val QUICK_PANEL_HANDLE_TAG = "quick-panel-handle"
 
 internal const val QUICK_EQUALIZER_MENU_TAG = "quick-eq-menu"
 
-/** The widest a page's centered column, or the quick panel sheet, grows on a big window. */
 internal val ContentMaxWidth = 640.dp
 private val SheetCorner = 28.dp
 private const val SCRIM_ALPHA = 0.32f
 
-/** A drag released past this share of the sheet's height dismisses it. */
 private const val DISMISS_FRACTION = 0.3f
 
-/** A downward fling faster than this dismisses the sheet however far it was dragged. */
 private val DismissVelocity = 1000.dp
 
-/**
- * The 快捷面板: a scrim over the whole window and a bottom sheet with the common headset settings. Dragging the
- * handle moves the sheet and lightens the scrim with it. A tap on the scrim, Back, or a drag released far or fast
- * enough slides the sheet out and then calls [onDismiss] once; a shorter drag springs back. The panel stays open
- * after a change. Window insets other than the bottom navigation bar belong to the host.
- */
 @Composable
 fun QuickPanel(
     model: OpenRoseModel,
@@ -150,7 +139,6 @@ fun QuickPanel(
 
         fun close(velocity: Float = 0f) {
             if (exitStart != null) return
-            // An early dismissal continues from the height and opacity already shown.
             exitStart = EntryFrame(entryHeight(), entryOpacity())
             scope.launch {
                 settle(1f, velocity)
@@ -187,7 +175,6 @@ fun QuickPanel(
                     .statusBarsPadding()
                     .clip(style.shape)
                     .background(style.container)
-                    // Taps on the sheet are its own; only the scrim dismisses.
                     .pointerInput(Unit) { detectTapGestures { } }
                     .verticalScroll(rememberScrollState())
                     .navigationBarsPadding()
@@ -239,7 +226,6 @@ private fun sheetStyle() = when (LocalInterfaceStyle.current) {
     )
 }
 
-/** The visible bar is small; the whole width above the content takes the drag. A screen reader gets the same exit as a button. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SheetHandle(
@@ -329,7 +315,6 @@ private fun QuickPanelContent(
                 )
             }
         }
-        // The diagnostics live in the main window.
         SettingFeedback(
             state = state,
             device = device,
@@ -341,7 +326,6 @@ private fun QuickPanelContent(
     QuickPanelActions(summary.addDevice, onOpenApp)
 }
 
-/** The headphones' title, connection progress or reason it is not connected, and the battery strip when connected. */
 @Composable
 private fun QuickPanelStatusCard(model: OpenRoseModel, state: ControlState, summary: TraySummary, source: HeadsetCardSource) {
     val device = state.activeDevice()?.takeIf { summary.connected }
@@ -406,7 +390,6 @@ private fun QuickPanelActions(offerAdd: Boolean, onOpenApp: (WindowDestination?)
     }
 }
 
-/** The row and the menu checkmark both follow the headset's confirmed mode. */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun QuickEqualizerMenu(state: ControlState, device: DeviceState, onSet: (HeadsetCommand) -> Unit) {

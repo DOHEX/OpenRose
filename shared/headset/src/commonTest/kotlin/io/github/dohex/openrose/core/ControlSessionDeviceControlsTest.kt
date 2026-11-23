@@ -24,7 +24,6 @@ import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
-/** Public session with independent sender literals and synthetic device notifications. */
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class ControlSessionDeviceControlsTest {
     @Test
@@ -299,7 +298,6 @@ class ControlSessionDeviceControlsTest {
                 assertEquals(ControlErrorCode.UNSUPPORTED, assertIs<OperationResult.Failure>(session.set(HeadsetCommand.Gain(1))).error.code)
                 assertEquals(ControlErrorCode.UNSUPPORTED, assertIs<OperationResult.Failure>(session.set(HeadsetCommand.HearingProtection(1))).error.code)
                 assertEquals(ControlErrorCode.UNSUPPORTED, assertIs<OperationResult.Failure>(session.set(HeadsetCommand.PromptVolume(0))).error.code)
-                // The firmware is unread, so prompt volume is not writable at all yet.
                 assertEquals(ControlErrorCode.UNSUPPORTED, assertIs<OperationResult.Failure>(session.set(HeadsetCommand.PromptVolume(6))).error.code)
             }
             assertEquals(count, link.writes.size)
@@ -314,7 +312,6 @@ class ControlSessionDeviceControlsTest {
         val (session, link) = ready(ModelProfile.I7_RS_V2)
         val pending = async { session.set(HeadsetCommand.TouchBinding("left", "single", "none")) }
         runCurrent()
-        // Complete synthetic frame omits slot01; its seven other slots cannot refresh the target.
         link.incoming.send("dd000f01020003000400110012001300140040aa".bytes())
         runCurrent()
         assertFalse(pending.isCompleted)

@@ -34,17 +34,14 @@ import top.yukonga.miuix.kmp.basic.Card as MiuixCard
 import top.yukonga.miuix.kmp.basic.CardDefaults as MiuixCardDefaults
 import top.yukonga.miuix.kmp.basic.Text as MiuixText
 
-/** The theme facts status surfaces pick their tints from; Miuix reports neither for an explicit colour scheme. */
 internal data class ThemeTone(val dark: Boolean, val dynamicColor: Boolean)
 
 internal val LocalThemeTone = staticCompositionLocalOf { ThemeTone(dark = false, dynamicColor = false) }
 
 enum class AppStatusKind { Good, Caution, Error }
 
-/** A fix the status hero offers for what it reports, such as granting the Bluetooth permission. */
 class AppStatusAction(val label: String, val onClick: () -> Unit)
 
-/** Whether OpenRose can control earphones now, as the status hero states it. */
 data class StatusVerdict(
     val kind: AppStatusKind,
     val title: String,
@@ -52,10 +49,8 @@ data class StatusVerdict(
     val actions: List<AppStatusAction> = emptyList(),
 )
 
-/** A status surface's fill, its body text, and the accent for its emblem and emphasis. */
 private class StatusColors(val container: Color, val content: Color, val accent: Color)
 
-/** KernelSU's fixed Miuix fills for a light and a dark theme, and the accent both share. */
 private class FixedTint(val light: Color, val dark: Color, val accent: Color)
 
 private fun fixedTint(kind: AppStatusKind): FixedTint = when (kind) {
@@ -64,10 +59,6 @@ private fun fixedTint(kind: AppStatusKind): FixedTint = when (kind) {
     AppStatusKind.Error -> FixedTint(Color(0xFFF8E2E2), Color(0xFF310808), Color(0xFFF72727))
 }
 
-/**
- * KernelSU's status tints: without 动态取色, Miuix uses fixed green, amber and red fills that neither of its schemes
- * provides; with it, and always in Material 3, the scheme's container roles stand in.
- */
 @Composable
 private fun statusColors(kind: AppStatusKind): StatusColors {
     val tone = LocalThemeTone.current
@@ -98,7 +89,6 @@ private fun miuixSchemeStatusColors(kind: AppStatusKind): StatusColors = with(Mi
     }
 }
 
-/** A card filled with [container], inset like [AppDashboardCard] so it lines up with the cards around it. */
 @Composable
 private fun StatusSurface(container: Color, content: Color, modifier: Modifier, body: @Composable () -> Unit) {
     when (LocalInterfaceStyle.current) {
@@ -129,10 +119,6 @@ private fun StatusText(
     }
 }
 
-/**
- * The status page's verdict, set like KernelSU's status card: the verdict large on a tinted card, one line of detail,
- * the fixes on offer, the host's [badge] in the lower start corner and an emblem bleeding off the lower end corner.
- */
 @Composable
 fun AppStatusHero(verdict: StatusVerdict, badge: String?, modifier: Modifier = Modifier) {
     val colors = statusColors(verdict.kind)
@@ -148,7 +134,6 @@ fun AppStatusHero(verdict: StatusVerdict, badge: String?, modifier: Modifier = M
                 tint = colors.accent,
             )
             Column(Modifier.fillMaxWidth().heightIn(min = 110.dp).padding(start = 16.dp, top = 14.dp, end = 16.dp, bottom = 12.dp)) {
-                // The end inset keeps the text clear of the emblem.
                 val textModifier = Modifier.padding(end = 72.dp)
                 StatusText(
                     verdict.title,
@@ -190,13 +175,11 @@ fun AppStatusHero(verdict: StatusVerdict, badge: String?, modifier: Modifier = M
     }
 }
 
-/** A titleless card of status facts or entries, as KernelSU groups the facts under its status card. */
 @Composable
 fun AppStatusSection(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
     AppDashboardCard(modifier, compact = true, content = content)
 }
 
-/** One status fact, set like KernelSU's info rows: an icon, the fact's name, and its value beneath in [tone]. */
 @Composable
 fun AppFactRow(icon: RoseIcon, label: String, value: String, tone: StatusTone = StatusTone.NEUTRAL) {
     val valueColor = tone.color()

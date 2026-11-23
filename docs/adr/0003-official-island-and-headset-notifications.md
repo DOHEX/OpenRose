@@ -57,6 +57,27 @@ OpenRose 首版在 HyperOS 3、4 提供与 OppoPods 类似的超级岛配置和�
 - OpenRose 已有官方提示、模块提示与耳机状态通知的调用实现，已在 i5 和小米 14（HyperOS 4）上观察到本文记录的通知与岛展示。入盒重弹、通知控制闭环和断开撤销仍需单独验收。i7 与 HyperOS 3 的结果另行记录。
 - 系统类与方法、资源、Provider 和 URI 授权需按目标组件版本验证，不将上游的混淆类名和资源名视为稳定接口。
 
+## 系统接口与呈现的实现约束（2026-11 补充）
+
+### 融合设备中心与系统耳机 Binder 的固定接口事实
+
+- （2026-11 补充）`MiLinkNativeHeadsetAdapter` 对 `getDeviceId` 回答固定的融合设备中心兼容标识 `NativeHeadsetSnapshot.MILINK_COMPATIBILITY_DEVICE_ID`（`01010607`），取自锁定版本的适配器源码。它与 ROSE 的型号配置及能力快照刻意分开。
+- （2026-11 补充）-1 是锁定的 MiLink 源码中明确表示“隐藏／不支持”的状态值，`MiLinkNativeHeadsetAdapter` 用它回答不支持的状态查询。
+- （2026-11 补充）在锁定的源码中，降噪设置器（`setAncStateBlock`）返回一个状态码。适配器返回最近一次已确认的模式；耳机回包后，新模式经下一次发布的快照更新。
+- （2026-11 补充）`NativeHeadsetBinderAdapter.callbackClassOrNull` 加载的回调类型 `com.android.bluetooth.ble.app.IMiuiHeadsetCallback` 由 HyperOS 蓝牙宿主定义，公开 SDK 中没有对应类型。`readCallback` 用宿主厂商 AIDL 的 `Stub.asInterface`，把回调 Binder 转成与直接注册时相同的接口。
+
+### 焦点通知模板、岛与状态通知的更新
+
+- （2026-11 补充）`SystemPresentationRenderer` 在 `com.android.bluetooth` 宿主进程内渲染模块所有者的可信快照。状态通知是焦点卡片，使用 HyperOS 3 模板“新图文＋按钮组件 1”，即 `iconTextInfo` 加至多两个文字按钮。只有快照要求时（模块模式且开启常驻电量岛），卡片才携带摘要态岛；更新时从不悬浮，所以电量刷新不会把它重新展开。这个摘要态就是模块提示的电量模板：卡片显示期间，模块提示就是岛的一次出现，靠重发卡片重播；没有卡片时，提示是一条只为该提示发出的单独通知。JSON 遵循 HyperNotification 1.4 公开的 V3 模型 schema（发布者修订 `c704a4de3e1d069e213508363303f62b5e057526`），但仅符合 schema 并不能证明 SystemUI 会接受或真正显示。
+- （2026-11 补充）`FocusNotificationTemplate.statusExtras`：焦点卡片包含 `iconTextInfo`、至多两个 `textButton`，需要时再加电量岛。`expandOnEntrance` 让卡片首次出现时进入展开态，之后合并的提示回到摘要态。SystemUI 会把每个 JSON `actionTitle` 传给 `Html.fromHtml`，缺少标题会让 SystemUI 崩溃，因此模板里的每个按钮都带非空标题。
+- （2026-11 补充）`HeadsetStatusNotification`：不带岛数据的更新是否会移除已显示的摘要态，目前没有证据；带岛数据的更新会原地改岛，用户察觉不到。因此要移除岛或重播岛的出现时，先撤销通知再重发。
+
+### 状态通知点击目标的系统查询
+
+- （2026-11 补充）蓝牙应用持有 `QUERY_ALL_PACKAGES`，所以 `PresentationNotificationContent` 能在宿主进程内解析 RoseLink。
+- （2026-11 补充）`PresentationNotificationContent.systemHeadsetLaunch` 打开 HyperOS 自己的耳机页，附带的 extras 与参考项目 OppoPods 为其兼容设备传入的相同。
+- （2026-11 补充）`SYSTEM_HEADSET_SUPPORT_FLAGS`（`000000000000000010000000`）是 OppoPods 随兼容设备 ID 一起发送的特性标志，各位的含义未经验证。
+
 ## 来源
 
 - [OppoPods 原生耳机识别、状态回调与通知修补](https://github.com/1812z/OppoPods/blob/c201e251e68b59d46b6bc2758146b2c7f13ca2a1/app/src/main/java/moe/chenxy/oppopods/hook/BluetoothUpstreamHeadsetHook.kt)

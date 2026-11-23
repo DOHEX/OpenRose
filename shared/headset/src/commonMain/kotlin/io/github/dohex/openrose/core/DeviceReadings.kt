@@ -4,7 +4,6 @@ import io.github.dohex.openrose.core.protocol.CapabilityFacts
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.FieldReading
 
-/** Applies the fields reported together by one reply, retaining other observations for diagnostics. */
 fun DeviceState.withReadings(readings: Map<DeviceField, FieldReading>): DeviceState {
     if (readings.isEmpty()) return this
     val fields = diagnostics.fields.builder()
@@ -28,7 +27,6 @@ fun DeviceState.withReadings(readings: Map<DeviceField, FieldReading>): DeviceSt
     return copy(capabilities = next, diagnostics = diagnostics.copy(fields = fields.build(), fieldErrors = errors.build()))
 }
 
-/** Switching preset banks invalidates the previous EQ unless the same reply supplies its replacement. */
 private fun DeviceState.changesPresetBank(readings: Map<DeviceField, FieldReading>): Boolean {
     if (!profile.spec.protocol.refreshEqualizerAfterGameMode || DeviceField.EQ in readings) return false
     val game = readings[DeviceField.GAME_MODE] ?: return false

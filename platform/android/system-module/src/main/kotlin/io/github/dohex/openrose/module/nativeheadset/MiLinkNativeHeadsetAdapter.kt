@@ -14,15 +14,6 @@ import io.github.dohex.openrose.core.transport.normalizeBluetoothAddress
 import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedModule
 
-/**
- * Adapts the fixed MiLink runtime entry points used by HyperOS' Fusion device page.
- *
- * This class never opens Bluetooth, sends a broadcast, or keeps a second device state. The module
- * publishes snapshots from its existing authenticated bridge reader and supplies the callback
- * which queues a mode request into the same control runtime. Identity queries (`isMiTWS`, `checkIsMiTWS`,
- * `isSupportAudioSwitch`, the model id) also answer for the module host's bonded ROSE earphones with no session
- * (ADR 0017); battery, noise and every action come only from the current session.
- */
 class MiLinkNativeHeadsetAdapter(
     private val module: XposedModule,
     classLoader: ClassLoader,
@@ -44,7 +35,6 @@ class MiLinkNativeHeadsetAdapter(
 
     val handles: List<XposedInterface.HookHandle> get() = hooks.handles
 
-    /** Install exact class and method signatures. Missing ROM APIs are reported individually. */
     @Synchronized
     fun install(): List<XposedInterface.HookHandle> {
         if (closed) return handles
@@ -59,7 +49,6 @@ class MiLinkNativeHeadsetAdapter(
 
     fun publish(snapshot: NativeHeadsetSnapshot?) = updates.publish(directory.publishSession(snapshot))
 
-    /** The module host's bonded ROSE earphones; identity queries answer for them even with no session (ADR 0017). */
     fun publishBonded(addresses: Set<String>) {
         if (!closed) directory.publishBonded(addresses)
     }
@@ -78,7 +67,6 @@ class MiLinkNativeHeadsetAdapter(
         return hooks.submitNoise(snapshot, mode, address, current)
     }
 
-    /** An identity query: answered for the current session and the bonded ROSE earphones, otherwise left to the system. */
     private fun identityAnswer(address: String?, value: Any): HookDecision {
         if (!directory.identifies(address)) return HookDecision.Proceed
         return HookDecision.Return(value)
@@ -90,7 +78,6 @@ class MiLinkNativeHeadsetAdapter(
         hooks.report("UNAVAILABLE", "$reason session=${snapshot.sessionId}")
     }
 
-    /** With no session answering, a managed address must not fall through to the vendor's own control path. */
     private fun shouldSuppressManagedAction(address: String?): Boolean = directory.isManaged(address)
 
     private inner class DeviceMethods {
@@ -106,8 +93,6 @@ class MiLinkNativeHeadsetAdapter(
                 HookDecision.Return(1)
             }
             hooks.hook(target, "getDeviceId", arrayOf(bluetoothDevice), string) { chain ->
-                // This is the fixed MiLink compatibility identifier from the pinned adapter source;
-                // it is deliberately separate from the ROSE profile/capability snapshot.
                 identityAnswer(bluetoothAddress(chain.args.getOrNull(0)), NativeHeadsetSnapshot.MILINK_COMPATIBILITY_DEVICE_ID)
             }
             hooks.hook(target, "getBatteryLevel", arrayOf(bluetoothDevice), Int::class.javaPrimitiveType!!) { chain ->
@@ -145,7 +130,6 @@ class MiLinkNativeHeadsetAdapter(
             }
             hooks.hook(target, "getRingFindState", arrayOf(string), Boolean::class.javaPrimitiveType!!) { chain ->
                 directory.session(chain.args.getOrNull(0) as? String) ?: return@hook HookDecision.Proceed
-                // Hide the unsupported find-device entry for this exact managed address only.
                 HookDecision.Return(false)
             }
             hooks.hook(target, "switchToHeadsetActivity", arrayOf(bluetoothDevice), Void.TYPE) { chain ->
@@ -186,7 +170,6 @@ class MiLinkNativeHeadsetAdapter(
             }
             hooks.hook(target, "getFindRingState", arrayOf(device), Int::class.javaPrimitiveType!!) { chain ->
                 directory.session(bluetoothAddress(chain.args.getOrNull(0))) ?: return@hook HookDecision.Proceed
-                // -1 is the pinned MiLink source's explicit hidden/unsupported state.
                 HookDecision.Return(-1)
             }
             hooks.hook(target, "getSwitchState", arrayOf(String::class.java), Int::class.javaPrimitiveType!!) { chain ->
@@ -212,8 +195,6 @@ class MiLinkNativeHeadsetAdapter(
                 }
                 val confirmedMode = SystemHeadsetMapping.miLinkAncState(snapshot.fields) ?: -1
                 submit(snapshot, requestedMode, address)
-                // This setter returns a state code in the pinned source. Keep it at the last confirmed
-                // mode; the app's device reply updates it through the next published snapshot.
                 HookDecision.Return(confirmedMode)
             }
         }
@@ -251,8 +232,6 @@ class MiLinkNativeHeadsetAdapter(
                 ?.let(::normalizeBluetoothAddress)
                 ?: return HookDecision.Proceed
 
-            // The module host decides from its own persisted destination and the earphones it owns; the answer
-            // never depends on the application process. Any doubt leaves the system's own settings page alone.
             val canonicalDeviceId = callbacks.fusionEntryDevice(normalizedAddress) ?: return HookDecision.Proceed
 
             val context = contextSupplier?.invoke()
@@ -333,7 +312,6 @@ class MiLinkNativeHeadsetAdapter(
             hookHeadsetInfo(target, methodName, returnType) { address -> identityAnswer(address, value) }
         }
 
-        /** Hooks a no-argument `HeadsetInfo` accessor, deciding from the address of the instance it reads. */
         private fun hookHeadsetInfo(
             target: Class<*>,
             methodName: String,

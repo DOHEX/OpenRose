@@ -18,7 +18,6 @@ import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.persistentSetOf
 import kotlinx.collections.immutable.toPersistentSet
 
-/** EarFeel i7, RoseLink `rs_common_v2/earfeel_i7_device_config`. */
 internal val earFeelI7 = ModelSpec(
     displayName = "EarFeel i7",
     shortLabel = "i7",
@@ -46,7 +45,6 @@ internal val earFeelI7 = ModelSpec(
 )
 
 private fun earFeelI7Capabilities(firmware: FieldValue.Firmware?): DeviceCapabilities {
-    // Unread or malformed firmware opens no gate and leaves the prompt-volume levels unknown.
     val gainAndProtection = firmwareAtLeast(firmware, 213) == true
     val presets = persistentSetOf("pop", "hifi", "rock", "light")
     return DeviceCapabilities(
@@ -75,7 +73,6 @@ private fun earFeelI7Capabilities(firmware: FieldValue.Firmware?): DeviceCapabil
             ) + if (gainAndProtection) listOf(DeviceSetting.GAIN, DeviceSetting.HEARING_PROTECTION) else emptyList()
             ).toPersistentSet(),
         noiseControl = NoiseControlCapabilities(
-            // The recovered configuration does not firmware-gate its automatic ANC modes.
             modes = basicNoiseModes.addingAll(listOf("auto", "dynamic")),
             cycleModes = basicNoiseModes,
             ancLevel = NoiseLevelCapabilities(persistentSetOf(1, 3, 5), persistentSetOf("anc")),
@@ -83,7 +80,6 @@ private fun earFeelI7Capabilities(firmware: FieldValue.Firmware?): DeviceCapabil
         ),
         equalizer = EqualizerCapabilities(
             if (firmwareAtLeast(firmware, 152) == true) presets.adding("eap") else presets,
-            // The i7 panel's band labels and slider bounds, not measured acoustic filter centers.
             CustomEqualizerCapabilities(persistentListOf(20, 100, 300, 500, 1000, 2000, 3000, 5000, 8000, 15000), -6, 6),
         ),
         touchControl = TouchControlCapabilities(

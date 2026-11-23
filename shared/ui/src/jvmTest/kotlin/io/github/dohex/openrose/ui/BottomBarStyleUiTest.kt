@@ -179,7 +179,6 @@ class BottomBarStyleUiTest {
             harness.render()
             assertEquals(true, harness.tabs().tabFor("状态").config.getOrNull(SemanticsProperties.Selected))
 
-            // Only the liquid glass indicator selects by dragging: carry it from 状态 over to 设置.
             val from = harness.tabs().tabFor("状态").boundsInRoot.center
             val to = harness.tabs().tabFor("设置").boundsInRoot.center
             harness.pressAndDrag(from, to - from)

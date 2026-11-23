@@ -2,7 +2,6 @@ package io.github.dohex.openrose.core
 
 import kotlinx.collections.immutable.PersistentSet
 
-/** Declaration order is the display and cycling order everywhere the modes are listed. */
 enum class NoiseMode(val id: String) {
     NORMAL("normal"),
     ANC("anc"),
@@ -16,28 +15,22 @@ enum class NoiseMode(val id: String) {
     companion object {
         fun fromId(id: String): NoiseMode? = entries.firstOrNull { it.id == id }
 
-        /** Position of a mode id in the display order; an id this build does not know sorts after all known ones. */
         fun displayOrder(id: String): Int = fromId(id)?.ordinal ?: entries.size
     }
 }
 
-/** A supported level control, with its own choices and mode-dependent presentation. */
 data class NoiseLevelCapabilities(
     val levels: PersistentSet<Int>,
     val visibleModes: PersistentSet<String>,
 ) {
-    /** Visibility does not impose a protocol precondition on reading or writing the level. */
     fun isVisibleIn(mode: String?): Boolean = levels.isNotEmpty() && mode != null && mode in visibleModes
 }
 
-/** Model configuration evidence, separate from read support and hardware verification. */
 data class NoiseControlCapabilities(
     val modes: PersistentSet<String>,
     val cycleModes: PersistentSet<String>,
-    /** Null means that this model does not offer the corresponding level control. */
     val ancLevel: NoiseLevelCapabilities? = null,
     val transparencyLevel: NoiseLevelCapabilities? = null,
-    /** No minimum is imposed by the recovered model UI or sender. */
     val minimumCycleSelections: Int = 0,
 ) {
     fun levelCapabilities(setting: DeviceSetting): NoiseLevelCapabilities? = when (setting) {

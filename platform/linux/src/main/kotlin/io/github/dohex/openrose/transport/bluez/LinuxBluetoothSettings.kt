@@ -8,7 +8,6 @@ fun linuxBluetoothSettingsCommand(): List<String>? = firstInstalledCommand(
     listOf("blueman-manager"),
 )
 
-/** First candidate whose program is an executable file on PATH, resolved to its full path. */
 internal fun firstInstalledCommand(vararg candidates: List<String>): List<String>? {
     val directories = System.getenv("PATH").orEmpty().split(File.pathSeparatorChar)
     return candidates.firstNotNullOfOrNull { candidate ->

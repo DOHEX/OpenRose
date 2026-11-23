@@ -37,7 +37,6 @@ private val budsFeelMk2Capabilities = DeviceCapabilities(
     ),
     audioControl = AudioControlCapabilities(persistentSetOf("aac_sbc", "ldac", "lc3"), multipointCoupled = false),
     bassBoostLevels = (0..4).toPersistentSet(),
-    // RoseLink's BudsFeel MK2 panel disables the off option and sets no firmware gate.
     promptVolumeLevels = (1..5).toPersistentSet(),
 )
 

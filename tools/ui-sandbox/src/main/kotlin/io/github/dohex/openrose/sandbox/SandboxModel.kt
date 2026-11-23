@@ -28,11 +28,6 @@ import kotlinx.coroutines.launch
 
 private const val CONNECTION_STEP_MILLIS = 700L
 
-/**
- * The shared UI's presentation model over the state a [SandboxScenario] describes. The app's own requests move the
- * scenario as a runtime would move the session: connecting steps through the connection phases on a timer, and
- * disconnecting leaves the device bonded.
- */
 internal class SandboxModel(private val scope: CoroutineScope) : OpenRoseModel {
     private val mutableScenario = MutableStateFlow(SandboxScenario())
     val scenario: StateFlow<SandboxScenario> = mutableScenario.asStateFlow()
@@ -88,7 +83,6 @@ internal class SandboxModel(private val scope: CoroutineScope) : OpenRoseModel {
         updateScenario { if (it.link > SandboxLink.PAIRED) it.copy(link = SandboxLink.PAIRED) else it }
     }
 
-    /** Cancelling the attempt leaves the earlier device bonded and disconnected, as an abandoned connection would. */
     override suspend fun connectForAddDevice(deviceId: DeviceId): OperationResult {
         val profile = mutableState.value.profileOf(deviceId)
             ?: return OperationResult.Failure(ControlError(ControlErrorCode.UNSUPPORTED, "无法识别该设备的型号"))

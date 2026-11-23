@@ -18,7 +18,6 @@ import io.github.dohex.openrose.core.transport.openSafely
 import kotlinx.coroutines.flow.Flow
 import java.io.IOException
 
-/** Routes one session over BLE or RFCOMM while preserving the shared session's single-owner model. */
 class AndroidControlTransport(context: Context) : ControlTransport {
     private val ble = AndroidBleTransport(context)
     private val audioProfiles = AudioFacts(AndroidAudioProfiles(context))
@@ -34,7 +33,7 @@ class AndroidControlTransport(context: Context) : ControlTransport {
 
     override suspend fun bondedDevices(): List<DeviceCandidate> = audioProfiles.bondedDevices()
 
-    @SuppressLint("MissingPermission") // SPP verifies runtime permission before accessing adapter state.
+    @SuppressLint("MissingPermission")
     override suspend fun connect(
         deviceId: DeviceId,
         endpoint: TransportEndpoint,

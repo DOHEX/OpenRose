@@ -32,14 +32,10 @@ private val openFeelMk2Capabilities = DeviceCapabilities(
         DeviceSetting.CUSTOM_EQ,
         DeviceSetting.PROMPT_VOLUME,
     ),
-    // Only the custom curve is writable: RoseLink offers the custom EQ panel plus the separate
-    // bass-loudness-boost preset, which OpenRose exposes as BASS_BOOST rather than an EQ preset.
     equalizer = EqualizerCapabilities(
         persistentSetOf(),
-        // The shared EQ panel's band labels and slider bounds, not measured acoustic filter centers.
         CustomEqualizerCapabilities(persistentListOf(20, 100, 300, 500, 1000, 2000, 3000, 5000, 8000, 15000), -6, 6),
     ),
-    // RoseLink's OpenFeel MK2 panel offers 1..5 plus the off option (00); it sets no firmware gate.
     promptVolumeLevels = (0..5).toPersistentSet(),
     touchControl = TouchControlCapabilities(
         earbudTouchSlots,

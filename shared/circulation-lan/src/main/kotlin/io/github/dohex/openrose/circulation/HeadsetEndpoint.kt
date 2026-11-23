@@ -12,7 +12,6 @@ import io.github.dohex.openrose.core.validate
 import kotlinx.coroutines.runBlocking
 import java.util.UUID
 
-/** A paired peer can adjust an i5 once this audio source has confirmed its noise mode. */
 class HeadsetEndpoint(private val control: ControlRuntime, private val ownerActive: () -> Boolean = { true }) {
     private val incarnation = UUID.randomUUID().toString()
 

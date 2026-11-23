@@ -4,7 +4,6 @@ import io.github.dohex.openrose.core.protocol.BatteryLayout
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.ModelProfile
 
-/** Battery readings with their labels, in display order; a single unit reports in the case slot. */
 internal fun ModelProfile.batteryReadings(): List<Pair<String, DeviceField>> = batteryLayout.batterySlots()
 
 internal fun BatteryLayout.batterySlots(): List<Pair<String, DeviceField>> = when (this) {
@@ -19,10 +18,6 @@ internal fun BatteryLayout.batterySlots(): List<Pair<String, DeviceField>> = whe
     BatteryLayout.SINGLE_UNIT -> listOf("电量" to DeviceField.CASE_BATTERY)
 }
 
-/**
- * One line of battery text such as "左耳 80% · 右耳 75%". [percent] gives a slot's confirmed reading;
- * a slot without one shows "未知" when [showUnknown], otherwise it is left out. Null when nothing shows.
- */
 internal fun batterySummary(
     slots: List<Pair<String, DeviceField>>,
     showUnknown: Boolean,

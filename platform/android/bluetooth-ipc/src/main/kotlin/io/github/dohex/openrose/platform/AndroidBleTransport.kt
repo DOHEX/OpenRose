@@ -22,8 +22,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import java.io.IOException
 
-/** Native Android BLE scanning and GATT links; shared session/protocol code has no Android API dependency. */
-@SuppressLint("MissingPermission") // The public session gates permission; revocation remains an observable failure.
+@SuppressLint("MissingPermission")
 internal class AndroidBleTransport(private val context: Context) {
     private fun adapter(): BluetoothAdapter = context.getSystemService(BluetoothManager::class.java)?.adapter
         ?: throw IOException("系统蓝牙适配器不可用")

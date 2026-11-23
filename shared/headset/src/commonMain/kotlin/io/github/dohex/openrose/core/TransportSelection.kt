@@ -16,7 +16,6 @@ internal suspend fun ConnectionAttempt.selectTransport(timeoutMillis: Long): Tra
     val address = candidate.classicAddress
         ?: return TransportSelection(ble, TransportSelectionReason.CLASSIC_ADDRESS_UNAVAILABLE)
 
-    // A failed facts query cannot prove SPP is usable; BLE stays the safe default.
     val facts = transportOperation(onFailure = { TransportFacts() }) {
         withTimeout(timeoutMillis) { transport.connectionFacts(candidate.deviceId, address) }
     }

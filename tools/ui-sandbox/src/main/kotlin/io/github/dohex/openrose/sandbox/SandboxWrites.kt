@@ -38,11 +38,6 @@ internal class SandboxSession(val id: Long) {
     val writing = Mutex()
 }
 
-/**
- * Setting writes as the control session records them: submitted, written, then ended the way the scenario says.
- * Each write is prepared by the model's real codec, so a value the codec rejects fails here as it would on a device,
- * and a confirmed write leaves exactly the readings the codec expects back.
- */
 internal class SandboxWrites(
     private val state: MutableStateFlow<ControlState>,
     private val scenario: StateFlow<SandboxScenario>,
@@ -51,7 +46,6 @@ internal class SandboxWrites(
     private val operationIds = AtomicLong()
     private val sessionEnded = ControlError(ControlErrorCode.DISCONNECTED, "请求的设备会话已结束或已被替换")
 
-    /** Record admission before returning. The sandbox owns execution even if a caller stops waiting. */
     fun submit(
         session: SandboxSession,
         expectedSessionId: Long,
@@ -117,7 +111,6 @@ internal class SandboxWrites(
         }
     }
 
-    /** A late result updates the original operation's history only. */
     private fun record(operation: SettingOperation, expected: Map<DeviceField, FieldValue> = emptyMap()): OperationResult {
         val updated = state.updateAndGet { current ->
             if (current.sessionFor(operation.setting)?.sessionId != operation.sessionId) {
@@ -134,11 +127,6 @@ internal class SandboxWrites(
     }
 }
 
-/**
- * The fields a confirmed write leaves behind: the codec's expected readback, completed the way the device's own
- * reply completes it. A touch assignment lands in its slot of the full binding table, and a bass level reads back
- * together with the custom-slot EQ mode from the same reply.
- */
 private fun DeviceState.simulateReadback(
     expected: Map<DeviceField, FieldValue>,
 ): Map<DeviceField, FieldReading> = expected.mapValues { (field, value) ->
@@ -151,7 +139,6 @@ private fun DeviceState.simulateReadback(
     FieldReading.Known(reading, "")
 }
 
-/** The binding table with [assignment] in its slot; the device keeps the slot's own raw action code. */
 private fun List<TouchBinding>.assigning(assignment: FieldValue.TouchAssignment): List<TouchBinding> {
     val assigned = TouchBinding(assignment.side, assignment.gesture, assignment.action, -1)
     val inSlot = { binding: TouchBinding -> binding.side == assignment.side && binding.gesture == assignment.gesture }

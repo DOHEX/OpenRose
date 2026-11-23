@@ -6,7 +6,6 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.freedesktop.dbus.exceptions.DBusExecutionException
 
-/** Older BlueZ connections can start LE again after the Linux user has handed the headset to a peer. */
 internal class ReleasedBluezLinks {
     private class Release(val owner: String) {
         var confirmed = false
@@ -14,7 +13,6 @@ internal class ReleasedBluezLinks {
     }
     private val lock = Mutex()
 
-    // The D-Bus listener checks this immutable snapshot before allocating a signal for the observer.
     @Volatile
     private var released = emptyMap<String, Release>()
 
@@ -34,8 +32,6 @@ internal class ReleasedBluezLinks {
                 paths.forEach { path -> initial[path]?.let { bus.disconnectAudio(path, release.owner, it) } }
                 check(bus.owner == release.owner) { "让出期间 BlueZ 服务已更换" }
                 released += paths.associateWith { release }
-                // The first snapshot can still contain classic/media from the session being released.
-                // Enroll for LE events now, but wait for the receipt before interpreting those as a new local session.
                 if (paths.isNotEmpty()) {
                     val objects = bus.objects()
                     paths.forEach { releaseReturnedLe(bus, it, objects, release) }
@@ -48,7 +44,6 @@ internal class ReleasedBluezLinks {
                 release.confirmed = true
                 val remaining = paths.filter { released[it] === release }
                 if (remaining.isNotEmpty()) {
-                    // Reconcile a connection between the last all-disconnected snapshot and the receipt.
                     val objects = bus.objects()
                     remaining.forEach { check(releaseReturnedLe(bus, it, objects, release)) { "本机已重新接入耳机音频" } }
                 }
@@ -102,7 +97,6 @@ internal class ReleasedBluezLinks {
         try {
             releaseReturnedLe(bus, path, bus.objects(), release)
         } catch (_: DBusExecutionException) {
-            // A disappearing bearer or daemon can reject the call. Recheck only on a subsequent event.
         }
     }
 

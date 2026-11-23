@@ -19,10 +19,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
-/** Pages the system and compact panels can open in the main window. */
 enum class WindowDestination { HEADPHONES, ADD_DEVICE, DIAGNOSTICS }
 
-/** Holds the latest request while the window is closed. A reopened window only receives unhandled requests. */
 class WindowNavigation {
     private val destinations = Channel<WindowDestination>(Channel.CONFLATED)
     internal val requests = destinations.receiveAsFlow()
@@ -32,16 +30,11 @@ class WindowNavigation {
     }
 }
 
-/** Presentation state and intents shared by every page and component style. */
 interface OpenRoseModel {
     val state: StateFlow<ControlState>
     val uiSettings: StateFlow<UiSettings>
     val navigation: WindowNavigation
 
-    /**
-     * A sentence the host wants the user to read on the 我的耳机 page, such as why a notification opened here.
-     * The host posts it and the page sets it back to null when the user dismisses it.
-     */
     val notice: MutableStateFlow<String?>
 
     fun updateUiSettings(settings: UiSettings)
@@ -52,30 +45,25 @@ interface OpenRoseModel {
     fun disconnect()
     fun set(sessionId: Long, command: HeadsetCommand)
 
-    /** Writes to [sessionId] only, and returns once the device confirms the setting or the write ends otherwise. */
     suspend fun setInSession(sessionId: Long, command: HeadsetCommand): OperationResult
     suspend fun connectForAddDevice(deviceId: DeviceId): OperationResult
 }
 
-/** Captures the session shown by a control, including callbacks delivered after the device changes. */
 internal fun OpenRoseModel.settingsFor(sessionId: Long): (HeadsetCommand) -> Unit = { command ->
     set(sessionId, command)
 }
 
-/** Each host preserves its persistence and control-settings publication rules here. */
 interface OpenRoseSettingsStore {
     val uiSettings: StateFlow<UiSettings>
     fun updateUiSettings(settings: UiSettings)
     fun updateSettings(settings: UserSettings)
 }
 
-/** Created with the host's control entry and scope, outside navigation and style composition. */
 class RuntimeOpenRoseModel(
     private val runtime: ControlRuntime,
     private val settingsStore: OpenRoseSettingsStore,
     private val scope: CoroutineScope,
 ) : OpenRoseModel {
-    // Enter the mutex on the caller's turn so late scan acknowledgements cannot reorder start, stop and re-entry.
     private val scanCommands = Mutex()
 
     override val state: StateFlow<ControlState> = runtime.state
@@ -103,6 +91,5 @@ class RuntimeOpenRoseModel(
 
     override suspend fun setInSession(sessionId: Long, command: HeadsetCommand) = runtime.set(command, sessionId)
 
-    // The adding flow owns cancellation of its unfinished connection attempt.
     override suspend fun connectForAddDevice(deviceId: DeviceId): OperationResult = runtime.connectForAddDevice(deviceId)
 }

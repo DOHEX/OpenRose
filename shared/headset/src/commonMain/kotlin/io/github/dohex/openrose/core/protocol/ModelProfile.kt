@@ -60,7 +60,6 @@ import kotlinx.collections.immutable.toPersistentSet
 
 data class GattProfile(val serviceUuid: String, val writeUuid: String, val notifyUuid: String)
 
-/** A control-frame family. Its codec owns framing and field semantics; each model keeps its own capabilities. */
 enum class ProtocolFamily(val displayName: String) {
     ZT("ZT"),
     RS_COMMON_V2("RS Common V2"),
@@ -68,7 +67,6 @@ enum class ProtocolFamily(val displayName: String) {
     RS_COMMON("RS Common"),
     ;
 
-    /** Fields this family's reader understands; this is not a list of enabled setting operations. */
     val readableFields: Set<DeviceField>
         get() = when (this) {
             ZT -> ZtReply.commands.values.flatMap { it.fields }.toSet()
@@ -77,7 +75,6 @@ enum class ProtocolFamily(val displayName: String) {
             RS_COMMON -> rsCommonFields.values.flatten().toSet()
         }
 
-    /** Prompt volume levels this family's frames can carry, before any model or firmware limit. */
     internal val promptVolumeLevels: IntRange
         get() = when (this) {
             ZT -> 1..5
@@ -87,22 +84,14 @@ enum class ProtocolFamily(val displayName: String) {
         }
 }
 
-/** How a model reports battery. */
 enum class BatteryLayout {
-    /** Left earbud, right earbud and charging case. */
     EARBUDS_AND_CASE,
 
-    /** Left and right earbuds, with no charging case display. */
     EARBUDS_ONLY,
 
-    /** One unit, which the protocol reports in its case slot. */
     SINGLE_UNIT,
 }
 
-/**
- * One 型号配置. Its name crosses processes and is persisted, so an entry is never renamed. Everything that differs
- * between models lives in the entry's [ModelSpec]; an entry without one does not compile.
- */
 enum class ModelProfile {
     I5_ZT,
     I7_RS_V2,
@@ -220,13 +209,8 @@ enum class ModelProfile {
     val gatt: GattProfile get() = spec.gatt
     val batteryLayout: BatteryLayout get() = spec.batteryLayout
 
-    /** Control choices derived from the facts this particular headset session has confirmed. */
     fun capabilities(readings: Map<DeviceField, FieldReading>): DeviceCapabilities = CapabilityFacts(readings).resolve(this)
 
-    /**
-     * What this model offers under [firmware]; null means the firmware has not been read. A setting that has no
-     * choices to offer is not writable here, so callers never re-check whether its options are empty.
-     */
     fun capabilities(firmware: FieldValue.Firmware? = null, gameMode: Boolean? = null): DeviceCapabilities {
         val capabilities = spec.capabilities(firmware)
         val gamePresets = spec.gameEqualizerPresets
@@ -244,17 +228,11 @@ enum class ModelProfile {
         return offered.withoutWritesWithoutOptions()
     }
 
-    /** The vendor app's name for an equalizer preset on this model, when it gives one. */
     fun equalizerPresetLabel(preset: String): String? = spec.equalizerPresetLabels[preset]
 
     companion object {
-        /** The entry with this [name], as carried across processes; null for anything else. */
         fun fromName(name: String?): ModelProfile? = entries.firstOrNull { it.name == name }
 
-        /**
-         * Name-only evidence, for paired devices and audio connections that carry no advertisement. The name must look
-         * like a ROSE device; a model number then decides, and a brand word only when the name has no model number.
-         */
         fun match(name: String?): ModelProfile? {
             val normalized = name?.trim()?.lowercase() ?: return null
             val words = nameTokens(normalized)
@@ -263,7 +241,6 @@ enum class ModelProfile {
                 profile.spec.nameModelNumber.compact() in words && (!profile.spec.nameRequiresModel || profile.hasBrand(words))
             }
             if (numbered.isNotEmpty()) {
-                // An explicit generation (MK2 / Swift 2) takes precedence over a bare retail brand.
                 val specific = numbered.filter {
                     it.spec.nameModelNumber.filter(Char::isLetterOrDigit) != it.spec.nameBrand.filter(Char::isLetterOrDigit)
                 }.ifEmpty { numbered }
@@ -283,7 +260,6 @@ enum class ModelProfile {
         private fun String.compact() = filter(Char::isLetterOrDigit)
         private fun ModelProfile.hasBrand(words: Set<String>) = brands.any { it.compact() in words }
 
-        /** Whole device-name words, including multiword brands and unseparated forms such as EarFeeli5. */
         private fun nameTokens(normalized: String): Set<String> {
             val retail = normalized.removePrefix("roseselsa").removePrefix(ROSE_NAME_PREFIX)
             val parts = retail.split(nameSeparators).filter(String::isNotEmpty)
@@ -292,7 +268,6 @@ enum class ModelProfile {
                 val joined = StringBuilder()
                 for (end in start until parts.size) {
                     joined.append(parts[end])
-                    // "Swift 20" must not fall back to "Swift" or "Swift 2".
                     if (parts.getOrNull(end + 1)?.first()?.isDigit() != true) words += joined.toString()
                 }
             }
@@ -310,7 +285,6 @@ enum class ModelProfile {
         private val compactBrands by lazy { nameBrands.map { it.compact() }.toSet() }
         private val modelNumbers by lazy { entries.map { it.spec.nameModelNumber.compact() }.toSet() }
 
-        /** Admit word-bounded retail names and their concatenated model numbers to platform scans. */
         val namePattern: String by lazy {
             fun alternatives(words: Collection<String>) = words.joinToString("|") { word ->
                 word.map { Regex.escape(it.toString()) }.joinToString("[\\s_-]*")
@@ -327,7 +301,6 @@ enum class ModelProfile {
     }
 }
 
-/** Confirmed readings that can change the controls offered by a model. */
 internal data class CapabilityFacts(val firmware: FieldValue.Firmware?, val gameMode: Boolean?) {
     constructor(
         readings: Map<DeviceField, FieldReading>,
@@ -340,12 +313,7 @@ internal data class CapabilityFacts(val firmware: FieldValue.Firmware?, val game
     fun resolve(profile: ModelProfile): DeviceCapabilities = profile.capabilities(firmware, gameMode)
 }
 
-/**
- * A setting chosen from a set of options is writable only while that set is not empty; readable fields are
- * unaffected. This is the one place that rule is decided.
- */
 private fun DeviceCapabilities.withoutWritesWithoutOptions(): DeviceCapabilities {
-    // Null or empty means the model offers nothing to choose from; a setting absent from the table has no options.
     val options: Map<DeviceSetting, Collection<*>?> = mapOf(
         DeviceSetting.NOISE_MODE to noiseControl?.modes,
         DeviceSetting.NOISE_CYCLE to noiseControl?.cycleModes,
@@ -369,7 +337,6 @@ private fun DeviceCapabilities.withoutWritesWithoutOptions(): DeviceCapabilities
 }
 
 object ModelIdentification {
-    /** RoseLink puts every sorted LE company ID before every sorted payload. */
     fun normalizedHex(manufacturerData: Map<Int, ByteArray>): String {
         require(manufacturerData.keys.all { it in 0..65535 })
         val keys = manufacturerData.keys.sorted()
@@ -378,13 +345,11 @@ object ModelIdentification {
         return bytes.toByteArray().hex()
     }
 
-    /** RoseLink looks up the first 12, then 8, then 6 hex digits, so the longest registered prefix wins. */
     fun identify(manufacturerData: Map<Int, ByteArray>): ModelProfile? {
         val normalized = normalizedHex(manufacturerData)
         return ROSELINK_PREFIX_LENGTHS.firstNotNullOfOrNull { length -> advertisementPrefixes[normalized.take(length)] }
     }
 
-    /** The classic address in [profile]'s advertisement, when its layout carries one. */
     fun classicAddress(normalizedManufacturerDataHex: String, profile: ModelProfile?): String? {
         val read = profile?.spec?.advertisedClassicAddress ?: return null
         return read(normalizedManufacturerDataHex)

@@ -20,7 +20,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
 import kotlin.time.TimeMark
 
-/** One connection attempt for a recognized model, over the transport that admitted it. */
 internal class ConnectionAttempt(
     val id: Long,
     val candidate: DeviceCandidate,
@@ -41,7 +40,6 @@ internal class ConnectionAttempt(
     var ready = false
 }
 
-/** A fresh device session: capabilities before any firmware read, and every readable field still loading. */
 internal fun ConnectionAttempt.loadingDevice(): DeviceState {
     val capabilities = profile.capabilities()
     return DeviceState(
@@ -120,7 +118,6 @@ internal fun ConnectionAttempt.receiveNotification(state: MutableStateFlow<Contr
                 warnings = diagnostics.warnings.appendRecent(replies.flatMap { it.warnings }),
             ),
         )
-        // Progress belongs to the committed observations, including when a concurrent timeout changes field errors.
         if (state.compareAndSet(current, current.copy(device = observed))) {
             progress.update { it.received(controlReplies) }
             break
@@ -136,7 +133,6 @@ private fun PersistentList<String>.appendRecent(values: Iterable<String>): Persi
 
 private fun ByteArray.hex() = joinToString("") { (it.toInt() and 255).toString(16).padStart(2, '0') }
 
-/** A decoder shared by several models can return diagnostic slots that cannot advance this model's control. */
 private fun ProtocolReply.forReadableFields(fields: Set<DeviceField>): ProtocolReply {
     val current = readings.filterKeys { it in fields }
     if (current.size == readings.size) return this

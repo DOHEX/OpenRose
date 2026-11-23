@@ -23,9 +23,6 @@ internal class PresentationNotifications(private val appContext: Context) {
     fun hasNotificationPermission(): Boolean = Build.VERSION.SDK_INT < 33 ||
         appContext.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
 
-    // This code is injected into Bluetooth and uses that package's Context/UID/manifest, not the
-    // module APK's notification permission. Lint only sees the module manifest; retain the runtime
-    // check at this one posting boundary rather than requesting an unrelated app permission.
     @SuppressLint("NotificationPermission")
     fun post(tag: String, id: Int, notification: Notification) {
         if (!hasNotificationPermission()) {

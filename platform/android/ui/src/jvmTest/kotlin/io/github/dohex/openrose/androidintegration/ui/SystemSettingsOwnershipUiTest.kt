@@ -48,7 +48,6 @@ class SystemSettingsOwnershipUiTest {
                     harness.render()
                     harness.openPage("状态")
                     harness.render()
-                    // Ordinary control does not run through the module, so its state stays a fact row, not advice.
                     module.nextStep()?.let { assertFalse(harness.hasTextLine(it), "$module gives no advice under ordinary control in $style") }
 
                     harness.integration.value = harness.integration.value.copy(

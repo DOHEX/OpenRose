@@ -4,7 +4,6 @@ import io.github.dohex.openrose.core.DeviceCapabilities
 import io.github.dohex.openrose.core.DeviceSetting
 import io.github.dohex.openrose.core.models.ModelProtocol
 
-// F8 setting encoders: each returns the command byte, the readback tag and the data bytes of one frame.
 internal fun ModelProtocol.F8.settingFrame(
     profile: ModelProfile,
     setting: DeviceSetting,
@@ -57,7 +56,6 @@ private fun toggleFrame(setting: DeviceSetting, value: FieldValue): Triple<Int, 
     return Triple(command, tag, intArrayOf(if (value.value) 1 else 0))
 }
 
-/** `setDingLevel`: `00 32 01 00 01 0N`, one decimal-digit level; the readback is the `13` query. */
 private fun promptVolumeFrame(value: FieldValue, capabilities: DeviceCapabilities): Triple<Int, Int, IntArray> {
     require(value is FieldValue.Number && value.value in ProtocolFamily.F8.promptVolumeLevels) {
         "F8 提示音仅支持 0～9 档"

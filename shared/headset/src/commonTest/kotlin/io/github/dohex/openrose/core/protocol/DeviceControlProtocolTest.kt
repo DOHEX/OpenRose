@@ -14,7 +14,6 @@ import kotlin.test.assertNotNull
 class DeviceControlProtocolTest {
     @Test
     fun capabilitiesKeepModelTouchActionsAudioCouplingAndPromptLevelsSeparate() {
-        // RoseLink model lists: pp+b6c0/i5 eight actions, pp+b228/i7 nine; both typeFull.
         val slots = setOf(
             TouchSlot("left", "single"),
             TouchSlot("left", "double"),
@@ -37,14 +36,11 @@ class DeviceControlProtocolTest {
         assertEquals(AudioControlCapabilities(persistentSetOf("aac_sbc", "ldac"), true), i5.audioControl)
         assertEquals(AudioControlCapabilities(persistentSetOf("aac_sbc", "ldac", "lhdc", "lc3"), false), i7.audioControl)
         assertEquals(setOf(1, 2, 3, 4, 5), i5.promptVolumeLevels)
-        // The i7 prompt-volume levels depend on firmware, which is unread here.
         assertEquals(emptySet(), i7.promptVolumeLevels)
     }
 
     @Test
     fun i5AudioAndMultipointUseTheSameModelCommandAndConfirmBothFields() {
-        // Independent parent ZtSender.setConnectMulOn and shared setAudioLdac literals.
-        // The shared 0882 variant is not the i5 configuration's command.
         for ((kind, value, multipoint) in listOf(
             Triple(DeviceSetting.AUDIO_MODE, FieldValue.Text("aac_sbc"), true),
             Triple(DeviceSetting.AUDIO_MODE, FieldValue.Text("ldac"), false),
@@ -68,7 +64,6 @@ class DeviceControlProtocolTest {
 
     @Test
     fun i7AudioAndMultipointWriteAndConfirmTheirIndependentFields() {
-        // Independent RsCommonV2Sender fixed literals, all seq00.
         for ((mode, tx) in listOf(
             "aac_sbc" to "ff00022b002caa",
             "ldac" to "ff00022b012daa",
@@ -118,7 +113,6 @@ class DeviceControlProtocolTest {
     fun i5SingleSlotBindingUsesItsModelActionAndProjectsOnlyTheRequestedSlot() {
         val request = FieldValue.TouchAssignment("left", "double", "play_pause")
         val setting = createProtocolCodec(ModelProfile.I5_ZT).prepareSetting(DeviceSetting.TOUCH_BINDING, request)
-        // Independent dynamic worked example in rose_reverse/tests/test_i5_protocol.py.
         assertEquals("08ee00000004810d000001058e", setting.writeFrames.single().hex())
         assertEquals("08ee00000004010a0005", setting.readback.bytes.hex())
         assertEquals(setOf("0401"), setting.readback.responseKeys)
@@ -129,7 +123,6 @@ class DeviceControlProtocolTest {
     fun i7SingleSlotBindingUsesItsOwnSlotIdsAndActionCodes() {
         val request = FieldValue.TouchAssignment("right", "long", "noise_cycle")
         val setting = createProtocolCodec(ModelProfile.I7_RS_V2).prepareSetting(DeviceSetting.TOUCH_BINDING, request)
-        // Independent dynamic worked example in rose_reverse/tests/test_i7_protocol.py.
         assertEquals("ff00030114081faa", setting.writeFrames.single().hex())
         assertEquals("ff0102fa01fdaa", setting.readback.bytes.hex())
         assertEquals(setOf("01"), setting.readback.responseKeys)
@@ -138,7 +131,6 @@ class DeviceControlProtocolTest {
 
     @Test
     fun i5PromptLevelsOneThroughFiveUseZeroThroughFourAndTheModelQuery() {
-        // Independently recovered Zt229Sender parameter rule and reference high-level vector.
         for ((level, tx) in listOf(
             1 to "08ee0000000e830b000092",
             2 to "08ee0000000e830b000193",
@@ -152,7 +144,6 @@ class DeviceControlProtocolTest {
             assertEquals(setOf("0e03"), setting.readback.responseKeys)
             assertEquals(mapOf(DeviceField.PROMPT_VOLUME to FieldValue.Number(level)), setting.expectedValues)
         }
-        // i7 sends the UI level directly; only its mute value requires firmware 304.
         val fw213 = FieldValue.Firmware(listOf(2, 1, 3), "213")
         for ((level, tx) in listOf(
             1 to "ff00022e0130aa",
@@ -178,7 +169,6 @@ class DeviceControlProtocolTest {
 
     @Test
     fun everyModelSlotUsesItsOwnAddressAndAllowsTheConfiguredActions() {
-        // Independently worked complete frames from recovered sender slot parameters.
         val slots = listOf(
             TouchSlot("left", "single"),
             TouchSlot("left", "double"),
@@ -230,7 +220,6 @@ class DeviceControlProtocolTest {
 
     @Test
     fun actionNumbersAreSpecificToEachModel() {
-        // Complete left/single setting frames, independently worked from APK action objects.
         val i5 = listOf(
             "volume_up" to "08ee00000004810d0000000088",
             "volume_down" to "08ee00000004810d0000000189",
@@ -300,7 +289,7 @@ class DeviceControlProtocolTest {
     @Test
     fun initializationTouchSwitchesAndAudioKeepOneI7Sequence() {
         val codec = createProtocolCodec(ModelProfile.I7_RS_V2)
-        codec.initQueries(20) // Three complete query frames consume 00..02.
+        codec.initQueries(20)
         val touch = codec.prepareSetting(DeviceSetting.TOUCH_BINDING, FieldValue.TouchAssignment("left", "single", "none"))
         assertEquals("ff030301010007aa", touch.writeFrames.single().hex())
         assertEquals("ff0402fa0100aa", touch.readback.bytes.hex())
@@ -314,7 +303,6 @@ class DeviceControlProtocolTest {
 
     @Test
     fun syntheticTouchReadbacksKeepOtherUnknownSlotsAndRejectStructurallyMissingSlots() {
-        // Synthetic offset buffer with only left/double known; physical i5 eight-slot structure remains.
         val i5 = createProtocolCodec(ModelProfile.I5_ZT)
         val reply = i5.feedNotification("0000000000040100000f050f0f0f0f0f0f".bytes()).single()
         val bindings = assertIs<FieldValue.TouchKeys>(assertIs<FieldReading.Known>(reply.readings[DeviceField.TOUCH_KEYS]).value).bindings
@@ -322,7 +310,6 @@ class DeviceControlProtocolTest {
         assertEquals(7, bindings.count { it.action == null })
         assertFalse(i5.feedNotification("0000000000040100000f050f0f0f0f0f".bytes()).single().accepted)
 
-        // Synthetic LTV whole-prefix checksum, only right/long known; all eight IDs are present.
         val i7 = createProtocolCodec(ModelProfile.I7_RS_V2)
         val i7Reply = i7.feedNotification("dd00110101ff02ff03ff04ff11ff12ff13ff140844aa".bytes()).single()
         val i7Bindings = assertIs<FieldValue.TouchKeys>(assertIs<FieldReading.Known>(i7Reply.readings[DeviceField.TOUCH_KEYS]).value).bindings
@@ -334,7 +321,6 @@ class DeviceControlProtocolTest {
     @Test
     fun syntheticSwitchPromptAndAudioReadbacksPreserveUnknownValuesAndModelRules() {
         val i5 = createProtocolCodec(ModelProfile.I5_ZT)
-        // Synthetic i5 byte9 high-nibble sentinels; these are not complete device capture claims.
         for ((rx, field, expected) in listOf(
             Triple("00000000000a010000a0", DeviceField.TOUCH_ENABLED, FieldValue.Toggle(true)),
             Triple("00000000000c010000a1", DeviceField.EAR_DETECTION, FieldValue.Toggle(false)),
@@ -357,7 +343,6 @@ class DeviceControlProtocolTest {
         assertIs<FieldReading.Unknown>(i5.feedNotification("00000000000e030000a5".bytes()).single().readings[DeviceField.PROMPT_VOLUME])
 
         val i7 = createProtocolCodec(ModelProfile.I7_RS_V2)
-        // Synthetic independently worked LTV records and checksums, not captures.
         for ((rx, field, expected) in listOf(
             Triple("dd00020700e6aa", DeviceField.TOUCH_ENABLED, FieldValue.Toggle(true)),
             Triple("dd00020801e8aa", DeviceField.EAR_DETECTION, FieldValue.Toggle(false)),

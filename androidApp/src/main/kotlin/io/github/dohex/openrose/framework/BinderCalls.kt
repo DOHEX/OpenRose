@@ -7,7 +7,6 @@ import kotlin.coroutines.EmptyCoroutineContext
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
-/** Cancelling a Binder wait releases the caller; a blocked transact still occupies its slot until the host replies. */
 internal class BinderCalls(maxConcurrent: Int) {
     private val slots = Semaphore(maxConcurrent)
 

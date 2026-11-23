@@ -11,14 +11,12 @@ import io.github.dohex.openrose.core.PlatformApplicability
 import io.github.dohex.openrose.core.PlatformState
 import io.github.dohex.openrose.core.TransportAvailability
 
-/** The runtime permissions Bluetooth discovery and control need on this Android version. */
 fun bluetoothPermissions(): Array<String> = if (Build.VERSION.SDK_INT >= 31) {
     arrayOf(Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT)
 } else {
     arrayOf(Manifest.permission.ACCESS_FINE_LOCATION)
 }
 
-/** Permission used for a paired device's name, audio profiles and RFCOMM control. */
 fun Context.hasBluetoothConnectPermission(): Boolean {
     val permission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
         Manifest.permission.BLUETOOTH_CONNECT
@@ -28,7 +26,6 @@ fun Context.hasBluetoothConnectPermission(): Boolean {
     return checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED
 }
 
-/** The control-relevant platform facts, read the same way in the application and in the module host. */
 fun Context.readPlatformState(
     permissionRequested: Boolean,
     userUnlocked: Boolean = true,
@@ -39,8 +36,6 @@ fun Context.readPlatformState(
         permissionRequested -> PermissionState.DENIED
         else -> PermissionState.REQUIRED
     }
-    // Before Android 12 the manifest's normal Bluetooth permissions cover an already-paired headset.
-    // Fine location is a separate prerequisite for discovering a new one.
     val legacy = Build.VERSION.SDK_INT < Build.VERSION_CODES.S
     val permission = if (legacy) PermissionState.NOT_REQUIRED else runtimePermission
     val transport = when {

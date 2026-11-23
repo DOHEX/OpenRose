@@ -9,7 +9,6 @@ import kotlin.test.assertTrue
 class RsCommon386ProfilesTest {
     @Test
     fun cambrianSRepeatsTheBatchAfterHalfASecondAndOpenLinkReadsItOnce() {
-        // RoseLink 3.8.6 RsCommonSender.getInfo and the two model-specific initialization dispatch entries.
         val frame = "ff000ffa010708090c0d0e122a2b2c2d2e33aa"
         val cambrian = createProtocolCodec(ModelProfile.CAMBRIAN_S_RS_COMMON).initQueries(20)
         val openLink = createProtocolCodec(ModelProfile.OPENLINK_RS_COMMON).initQueries(20)

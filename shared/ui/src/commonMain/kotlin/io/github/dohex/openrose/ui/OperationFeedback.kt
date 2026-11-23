@@ -20,10 +20,6 @@ import io.github.dohex.openrose.core.DeviceState
 import io.github.dohex.openrose.core.SettingOperation
 import io.github.dohex.openrose.core.SettingStage
 
-/**
- * Shows the current session's outcome without exposing the operation record kept in diagnostics.
- * [showPending] keeps the progress card for settings that the page does not already show in place.
- */
 @Composable
 internal fun SettingFeedback(
     state: ControlState,
@@ -101,13 +97,6 @@ internal fun ControlState.pendingSetting(
     it.sessionId == device.sessionId && it.stage in settingPendingStages && (setting == null || it.setting == setting)
 }
 
-/**
- * A setting accepts a new write once its session is usable and nothing in its group is still pending.
- * Settings in one group change each other's meaning (a level belongs to a noise mode, a binding to its
- * switch), so they wait for each other; unrelated settings stay writable and queue in order in the core.
- * The noise mode itself is usable as soon as the noise-mode session is, which is earlier than a ready
- * session; its levels and cycle still wait for the ready session.
- */
 internal fun ControlState.canWrite(device: DeviceState, setting: DeviceSetting): Boolean {
     val group = setting.writeGroup()
     val usable = if (setting == DeviceSetting.NOISE_MODE) canControlNoiseMode(device) else isReady(device)
@@ -116,7 +105,6 @@ internal fun ControlState.canWrite(device: DeviceState, setting: DeviceSetting):
     }
 }
 
-/** Noise-mode choices are offered when the model can write the mode and the session accepts a write now. */
 internal fun ControlState.canChooseNoiseMode(device: DeviceState): Boolean {
     val modelWrites = DeviceSetting.NOISE_MODE in device.capabilities.writableSettings
     return modelWrites && canWrite(device, DeviceSetting.NOISE_MODE)
@@ -138,7 +126,6 @@ internal fun ControlState.noiseModeFeedback(device: DeviceState): String? {
     return last.error?.message ?: last.stage.label()
 }
 
-/** Failures always show; an operation still in progress shows only where the page has no progress of its own. */
 private fun SettingOperation.needsFeedback(showPending: Boolean): Boolean {
     val pendingShown = showPending && stage in settingPendingStages
     return pendingShown || stage in settingFailureStages || error != null
@@ -157,10 +144,6 @@ private val settingFailureStages = setOf(
     SettingStage.FAILED,
 )
 
-/**
- * The one wording for a stage, shared by the feedback card and the diagnostics operation list. The three pending
- * stages read alike: how far the transport got is not something a user acts on.
- */
 internal fun SettingStage.label(): String = when (this) {
     SettingStage.SUBMITTED, SettingStage.PARTIALLY_WRITTEN, SettingStage.WRITTEN ->
         "正在处理设置，等待设备确认"
@@ -176,7 +159,6 @@ internal fun SettingStage.label(): String = when (this) {
     SettingStage.FAILED -> "设置失败"
 }
 
-/** What an operation's row leads with: the device's error when it confirmed yet failed, else its stage's wording. */
 internal fun SettingOperation.statusText(): String {
     val failure = error
     return if (stage == SettingStage.CONFIRMED && failure != null) failure.message else stage.label()

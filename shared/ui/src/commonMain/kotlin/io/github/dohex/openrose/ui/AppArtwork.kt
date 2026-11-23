@@ -22,7 +22,6 @@ import io.github.dohex.openrose.core.protocol.BatteryLayout
 import io.github.dohex.openrose.core.protocol.ModelProfile
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
-/** Only depict the charging case when the model reports one. Other shapes use the headphone glyph. */
 @Composable
 internal fun DeviceArtwork(profile: ModelProfile?, modifier: Modifier = Modifier, compact: Boolean = false) {
     if (profile?.batteryLayout == BatteryLayout.EARBUDS_AND_CASE) {
@@ -34,12 +33,6 @@ internal fun DeviceArtwork(profile: ModelProfile?, modifier: Modifier = Modifier
     }
 }
 
-/**
- * Flat illustration of a charging case flanked by both earbuds. The shapes are neutral greys
- * mixed from the card surface towards the text colour, so they stay opaque and quiet in every
- * theme; only the case's indicator light carries the accent colour. The composition keeps a
- * fixed aspect centred in whatever box the caller gives it.
- */
 @Composable
 internal fun EarbudsArtwork(
     modifier: Modifier = Modifier,
@@ -50,7 +43,6 @@ internal fun EarbudsArtwork(
         InterfaceStyle.MATERIAL3 -> MaterialTheme.colorScheme.surfaceContainerLow
     }
     val ink = appColor(AppColorRole.OnSurface)
-    // Dark text on a light surface would make near-black buds; keep them a mid grey there.
     val bud = lerp(surface, ink, if (ink.luminance() > 0.5f) 0.75f else 0.6f)
     val tip = lerp(surface, ink, 0.42f)
     val case = lerp(surface, ink, 0.14f)
@@ -95,7 +87,6 @@ internal fun EarbudsArtwork(
 
 private const val BUD_STEM = 0.36f
 
-/** One upright earbud with its eartip facing +x and its stem ending on the floor line. */
 private fun DrawScope.drawEarbud(center: Offset, unit: Float, body: Color, tip: Color) {
     val headRadius = unit * 0.105f
     val stemWidth = unit * 0.08f

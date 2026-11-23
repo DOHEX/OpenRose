@@ -18,10 +18,6 @@ import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
-/**
- * Ordinary background control is an intent the user saves plus platform facts about the service
- * that carries it. These tests observe both only through the unified control runtime.
- */
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class BackgroundControlTest {
     @Test
@@ -30,7 +26,6 @@ class BackgroundControlTest {
         assertEquals(BackgroundControlStatus.Disabled, status(runtime))
 
         runtime.updateIntegrationSettings(runtime.settings.copy(backgroundControlEnabled = true))
-        // Preference saved, nothing running yet: the host still has to start the service.
         assertEquals(BackgroundControlStatus.NotRunning, status(runtime))
 
         runtime.updatePlatformState(androidPlatform())
@@ -53,7 +48,6 @@ class BackgroundControlTest {
             )
         }
 
-        // Granting the permission later makes the pending start possible again.
         val runtime = newRuntime(roseTransport(), settings = IntegrationSettings(backgroundControlEnabled = true))
         runtime.updatePlatformState(androidPlatform(permission = PermissionState.DENIED))
         runtime.updatePlatformState(androidPlatform(permission = PermissionState.GRANTED))
@@ -123,7 +117,6 @@ class BackgroundControlTest {
         hostPlatform = HostPlatform.ANDROID,
     )
 
-    /** The background status the integration derives from the control state plus the service facts the platform reports. */
     private fun status(
         runtime: SystemEntryRuntime,
         service: BackgroundServiceFact = BackgroundServiceFact.NotRunning,

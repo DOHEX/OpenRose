@@ -2,7 +2,6 @@ package io.github.dohex.openrose.circulation
 
 import java.net.InetAddress
 
-/** Deterministic LAN advertisements; the peers still connect with real TCP, mutual TLS and their own persistent keys. */
 class LoopbackDiscoveryNetwork(private val stalePort: Int? = null) {
     private val services = mutableMapOf<NearbyPeer, (List<NearbyPeer>) -> Unit>()
 

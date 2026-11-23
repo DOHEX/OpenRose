@@ -24,11 +24,6 @@ import kotlin.test.assertNotEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-/**
- * The unified runtime is the only seam: a real [SwitchingControlRuntime] over a real ordinary
- * [LocalControlRuntime][io.github.dohex.openrose.core.LocalControlRuntime] session, a real [ModuleControlHost] over its own real session, and only the
- * earphones' transport and the IPC link faked.
- */
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class OwnerHandoffTest {
     @Test
@@ -103,7 +98,6 @@ class OwnerHandoffTest {
         assertEquals("ordinary", rig.headset.openOwner)
         val lateResult = delayedCall.invoke()
         assertIs<AcquireResult.Refused>(lateResult)
-        // Even a new lease has to honor the currently saved ordinary selection.
         val lease = assertIs<HostOpenResult.Opened>(rig.host.open(appIdentity)).lease.id
         val request = SwitchRequest("stale", ControlWay.ORDINARY, ControlWay.MODULE)
         assertIs<AcquireResult.Refused>(rig.host.acquire(appIdentity, lease, request))
@@ -166,7 +160,6 @@ class OwnerHandoffTest {
         assertEquals(ControlErrorCode.NOT_READY, assertIs<OperationResult.Failure>(runtime.connect(rig.earphones.deviceId)).error.code)
         assertFalse(runtime.disconnect(), "the unconfirmed module release still holds the connection")
 
-        // Once the host can answer, the saved choice completes without another user action.
         rig.link.releaseHangs = false
         advanceTimeBy(rig.clientTiming.retryMillis * 3)
         runCurrent()
@@ -274,7 +267,6 @@ class OwnerHandoffTest {
         runCurrent()
         assertEquals(listOf("module:open"), rig.headset.events)
 
-        // The application was killed between the local commit and publication to the framework.
         val generation = assertIs<HostStatus.Active>(rig.host.status.value).generation
         rig.store.record = OwnerRecord(ControlWay.ORDINARY, PendingModuleRelease("switch", generation))
         rig.store.publicationUnavailable = true
@@ -287,7 +279,6 @@ class OwnerHandoffTest {
         assertNotNull(rig.store.record.moduleRelease)
         assertEquals(0, rig.headset.opens("ordinary"))
 
-        // A refused change back to module control must not cancel recovery of the saved choice.
         rig.store.failSaves = true
         assertIs<HandoffOutcome.Blocked>(runtime.selectControlWay(ControlWay.MODULE))
         rig.store.failSaves = false
@@ -318,7 +309,6 @@ class OwnerHandoffTest {
         assertIs<OwnerReadiness.SwitchBlocked>(runtime.integration.value.owner.readiness)
         assertTrue(rig.appTransport.links.isEmpty())
 
-        // A later host incarnation that holds nothing proves the named earlier owner is gone.
         rig.link.reachable = true
         advanceTimeBy(rig.clientTiming.retryMillis * 2)
         runCurrent()
@@ -503,14 +493,11 @@ class OwnerHandoffTest {
 
         val blocked = assertIs<HandoffOutcome.Blocked>(runtime.selectControlWay(ControlWay.ORDINARY))
 
-        // The request named an owner generation the host never had, so its answer proved nothing about the owner
-        // that really held the connection, and ordinary control must not start on it.
         assertEquals(OwnerFailureStage.RELEASE, blocked.stage)
         assertTrue(rig.appTransport.links.isEmpty())
         assertIs<OwnerReadiness.SwitchBlocked>(runtime.integration.value.owner.readiness)
         assertNotNull(rig.store.record.moduleRelease)
 
-        // The owner the host reported is then named explicitly, and its receipt is checked against that name.
         advanceTimeBy(rig.clientTiming.retryMillis * 3)
         runCurrent()
         assertEquals(listOf("module:open", "module:close"), rig.headset.events)
@@ -532,7 +519,6 @@ class OwnerHandoffTest {
         assertTrue(rig.appTransport.links.isEmpty())
         assertNotNull(rig.store.record.moduleRelease)
 
-        // A later host incarnation that holds nothing is proof the earlier named owner is gone.
         rig.link.releaseKillsHostProcess = false
         advanceTimeBy(rig.clientTiming.retryMillis * 3)
         runCurrent()

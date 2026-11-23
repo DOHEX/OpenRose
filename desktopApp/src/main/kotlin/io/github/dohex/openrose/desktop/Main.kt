@@ -54,10 +54,8 @@ import kotlinx.coroutines.runBlocking
 import java.util.prefs.Preferences
 import kotlin.system.exitProcess
 
-/** The window opens this large, or as large as the screen allows. */
 private val MAIN_WINDOW_SIZE = DpSize(1180.dp, 820.dp)
 
-/** Below this the pages no longer lay out sensibly; it also stays within a small screen. */
 private val MAIN_WINDOW_MINIMUM_SIZE = DpSize(420.dp, 560.dp)
 
 fun main(args: Array<String>) {
@@ -141,7 +139,6 @@ private fun NucleusApplicationScope.DesktopWindows(
             showQr = { PairingQr(it) },
         )
     }
-    // One choice for the 未连接看板 and the tray, so “重新连接” targets the device the window shows.
     val selection = remember { PrimaryDeviceSelection() }
     val uiSettings by runtime.model.uiSettings.collectAsState()
     val trayAvailability by tray.availability.collectAsState()
@@ -155,7 +152,6 @@ private fun NucleusApplicationScope.DesktopWindows(
         ) { fromTray ->
             try {
                 closeResources()
-                // Tao on Linux can stall while destroying a visible EGL window on tray exit.
                 if (fromTray && hostPlatform == HostPlatform.LINUX) exitProcess(0)
             } finally {
                 exitApplication()
@@ -207,7 +203,6 @@ private fun NucleusApplicationScope.DesktopWindows(
     }
 }
 
-/** A close may hide the window only while the user's setting and a reachable tray both allow it. */
 private class DesktopWindow(
     private val runtime: DesktopRuntime,
     private val tray: TrayMonitor,

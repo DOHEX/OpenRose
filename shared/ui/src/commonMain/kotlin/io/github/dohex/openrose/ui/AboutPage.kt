@@ -26,7 +26,6 @@ import io.github.dohex.openrose.ui.resources.Res
 import io.github.dohex.openrose.ui.resources.app_icon
 import org.jetbrains.compose.resources.painterResource
 
-/** A row on 关于 that opens [url] in the system browser. */
 private data class AboutLink(val title: String, val summary: String, val url: String)
 
 private val projectLinks = listOf(
@@ -36,7 +35,6 @@ private val projectLinks = listOf(
     AboutLink("开发者", "DOHEX", "https://github.com/DOHEX"),
 )
 
-/** Keep in step with the 致谢 section of README.md and README.en.md. */
 private val acknowledgements = listOf(
     AboutLink("OppoPods", "HyperOS 系统集成参考了它的实现思路", "https://github.com/1812z/OppoPods"),
     AboutLink("Miuix", "Miuix 界面风格使用的组件库", "https://github.com/compose-miuix-ui/miuix"),
@@ -46,7 +44,6 @@ private val acknowledgements = listOf(
     AboutLink("Compose Multiplatform", "跨平台界面框架", "https://github.com/JetBrains/compose-multiplatform"),
 )
 
-/** 关于, reached from Settings: the app's identity and build version, project links, and acknowledgements. */
 @Composable
 fun AboutPage() {
     val uriHandler = LocalUriHandler.current
@@ -74,7 +71,6 @@ private fun LinkRow(link: AboutLink, onOpen: (AboutLink) -> Unit) {
     AppArrowRow(title = link.title, summary = link.summary, endIcon = RoseIcon.OPEN_IN_NEW, onClick = { onOpen(link) })
 }
 
-/** A host without a browser cannot open links; say so and show the address the user can open elsewhere. */
 @Composable
 private fun LinkFailureCard(link: AboutLink, onDismiss: () -> Unit) {
     AppDashboardCard {

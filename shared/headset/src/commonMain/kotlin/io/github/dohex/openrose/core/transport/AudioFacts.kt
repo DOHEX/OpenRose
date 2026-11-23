@@ -9,7 +9,6 @@ import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 
-/** Raw platform facts. A null profile snapshot means it could not be read reliably. */
 data class RawAudioDevice(val name: String?, val address: String)
 enum class AudioProfile { A2DP, HEADSET, LE_AUDIO }
 enum class AudioConnectionState { CONNECTED, DISCONNECTED }
@@ -36,7 +35,6 @@ sealed interface RawAudioEvent {
     ) : RawAudioEvent
 }
 interface AudioFactsDriver {
-    /** Emit Ready after registering, before completing any subsequent snapshot. */
     val events: Flow<RawAudioEvent>
     suspend fun bondedDevices(): List<RawAudioDevice>
     suspend fun snapshot(targetAddresses: Set<String>): RawAudioSnapshot
@@ -52,7 +50,6 @@ fun normalizeBluetoothAddress(value: String?): String? {
     }
 }
 
-/** A bonded device counts only when its name identifies a supported model and its address is valid. */
 private fun pairedAudioDevice(device: RawAudioDevice): DeviceCandidate? {
     val profile = ModelProfile.match(device.name) ?: return null
     val address = normalizeBluetoothAddress(device.address) ?: return null
@@ -89,7 +86,6 @@ fun inferAudioProfile(snapshot: RawAudioSnapshot, targetAddresses: Set<String>):
     }
 }
 
-/** Shared paired-device and audio policy over platform snapshots and broadcasts. */
 class AudioFacts(private val driver: AudioFactsDriver) {
     suspend fun bondedDevices(): List<DeviceCandidate> = pairedAudioDevices(driver.bondedDevices())
 
@@ -112,7 +108,6 @@ class AudioFacts(private val driver: AudioFactsDriver) {
         var querying = true
         var enabled = true
         var ready = false
-        // Publishing only changes keeps repeated events out of the channel buffer.
         var emitted = false
         var current: DeviceId? = null
 
@@ -153,7 +148,6 @@ class AudioFacts(private val driver: AudioFactsDriver) {
         for (message in inbox) {
             when (message) {
                 is AudioMessage.Result -> {
-                    // AdapterOff advances the epoch before disabling, so an older query result never lands.
                     if (message.epoch != epoch) continue
                     val snapshot = message.snapshot
                     connected.clear()
@@ -167,7 +161,6 @@ class AudioFacts(private val driver: AudioFactsDriver) {
                             pairedAudioDevice(device)?.let { bonded.add(it.deviceId.value) }
                         }
                     }
-                    // An unreadable probe is not an adapter-off event. Readable broadcasts still win.
                     for ((address, device) in eventDevices) {
                         if (device?.let(::pairedAudioDevice) != null) bonded.add(address) else bonded.remove(address)
                     }

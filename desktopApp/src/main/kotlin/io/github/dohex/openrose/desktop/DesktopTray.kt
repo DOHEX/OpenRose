@@ -55,37 +55,22 @@ import kotlinx.coroutines.launch
 
 private val screen: DpSize? by lazy { usableScreenSize() }
 
-/**
- * The panel's width, and its height until the content is measured; the host then fits the height to the content.
- * Kept within the screen, so the panel never starts larger than it.
- */
 private val trayPanelSize: DpSize by lazy { DpSize(360.dp, 440.dp).fitTo(screen) }
 
 private fun trayPanelSizeFor(contentHeight: Dp): DpSize = DpSize(trayPanelSize.width, contentHeight).fitTo(screen)
 
-/** Window rules (for example niri's `match title=`) can float the panel window by this exact title. */
 internal const val TRAY_PANEL_WINDOW_TITLE = "OpenRose 托盘面板"
 
-/** How long focus may stay elsewhere before the panel window counts as dismissed. */
 private const val FOCUS_LOSS_GRACE_MS = 1_000L
 
-/** How long the pointer may be outside the panel window, after reaching it, before the panel closes. */
 private const val POINTER_EXIT_GRACE_MS = 500L
 
-/** How the 托盘面板 reaches the screen. */
 internal enum class TrayPanelHost {
-    /** TrayApp's popup, placed beside the tray by desktop-environment convention. */
     ANCHORED_POPUP,
 
-    /** An ordinary window that the compositor places. */
     WINDOW,
 }
 
-/**
- * Unrecognised Linux desktops are mostly tiling compositors (niri, Hyprland, Sway). On niri with
- * xwayland-satellite, TrayApp's override-redirect X11 popup is never presented and wedges the UI loop,
- * so those desktops get a compositor-placed Wayland window instead.
- */
 internal fun trayPanelHost(): TrayPanelHost = if (
     Platform.Current == Platform.Linux && LinuxDesktopEnvironment.Current == LinuxDesktopEnvironment.Unknown
 ) {
@@ -94,7 +79,6 @@ internal fun trayPanelHost(): TrayPanelHost = if (
     TrayPanelHost.ANCHORED_POPUP
 }
 
-/** The tray icon, its 托盘菜单 and 托盘面板; every action goes through the shared model. */
 @Composable
 internal fun NucleusApplicationScope.DesktopTray(
     host: TrayPanelHost,
@@ -117,7 +101,6 @@ internal fun NucleusApplicationScope.DesktopTray(
     val peers = rememberRemoteHeadsets(circulation, if (panelOpen || anchoredOpen) 2_000L else 30_000L, menuRefresh)
     val remoteSource = peers.firstOrNull { it.deviceName != null }
     val icon = if (summary.connected || remoteSource != null) TrayIcons.connected else TrayIcons.disconnected
-    // The Linux tray fixes the item's Title from the first tooltip it sees, so that one names the app.
     var started by remember { mutableStateOf(false) }
     val tooltip = when {
         !started -> "OpenRose"
@@ -189,10 +172,6 @@ internal fun NucleusApplicationScope.DesktopTray(
     }
 }
 
-/**
- * Composed only while open: every DecoratedWindow is re-shown when a second instance launches,
- * and that launch must bring back the main window, not the panel.
- */
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
 private fun NucleusApplicationScope.TrayPanelWindow(
@@ -218,9 +197,6 @@ private fun NucleusApplicationScope.TrayPanelWindow(
         },
     ) {
         val window = nucleusWindow
-        // Dismiss like a popup once focus stays elsewhere. Focus-follows-mouse (the default on Hyprland
-        // and Sway) hands focus to every window the pointer crosses on its way to the panel; it returns
-        // when the pointer arrives, so only a lasting loss closes the panel.
         LaunchedEffect(window) {
             window.requestFocus()
             window.focusFlow.first { it }
@@ -231,8 +207,6 @@ private fun NucleusApplicationScope.TrayPanelWindow(
                 }
             }
         }
-        // Once the pointer has reached the panel, leaving it dismisses the panel; a click elsewhere
-        // cannot be observed on Wayland, and with focus-follows-mouse focus already left on hover.
         var pointerInside by remember { mutableStateOf<Boolean?>(null) }
         LaunchedEffect(pointerInside) {
             if (pointerInside == false) {
@@ -259,7 +233,6 @@ private fun NucleusApplicationScope.TrayPanelWindow(
     }
 }
 
-/** The 托盘菜单 as data, so both tray APIs render the same entries. */
 private sealed interface TrayMenuEntry {
     data class Label(val text: String) : TrayMenuEntry
     data object Separator : TrayMenuEntry
@@ -294,7 +267,6 @@ private fun remoteMenuEntries(peers: List<RemoteHeadset>, uiScope: CoroutineScop
     }
 }
 
-/** Native menu callbacks run off the UI thread. Bind each entry to the state shown when it was built. */
 private class TrayActions(
     private val model: OpenRoseModel,
     private val uiScope: CoroutineScope,
@@ -341,7 +313,6 @@ private fun TrayMenuBuilder.render(entries: List<TrayMenuEntry>) = entries.forEa
 
         TrayMenuEntry.Separator -> Divider()
 
-        // Choosing the checked mode again unchecks it natively; only a different mode is written.
         is TrayMenuEntry.NoiseMode -> CheckableItem(
             label = entry.label,
             checked = entry.selected,

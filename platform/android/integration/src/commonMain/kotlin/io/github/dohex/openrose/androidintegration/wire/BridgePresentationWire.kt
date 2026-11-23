@@ -1,6 +1,5 @@
 package io.github.dohex.openrose.androidintegration.wire
 
-/** Primitive presentation contract shared by the host and the target-process renderer. */
 object BridgePresentationWire {
     const val PRESENTATION = "presentation"
     const val MODE = "mode"

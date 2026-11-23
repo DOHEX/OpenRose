@@ -9,12 +9,6 @@ import android.util.Log
 import io.github.dohex.openrose.androidintegration.wire.BridgePresentationWire
 import java.util.UUID
 
-/**
- * Constructs the official HyperOS connection-toast payload inside com.xiaomi.bluetooth, where its
- * FileProvider can serve media to SystemUI, and calls that process's StatusBarManager directly.
- * Prompt claiming and local session identity reject stale OpenRose work; external strong-toast
- * replacement is not observed. CALLED records a system call, not a displayed island.
- */
 internal class OfficialConnectionPresenter(
     context: Context,
     private val handler: Handler,
@@ -26,14 +20,12 @@ internal class OfficialConnectionPresenter(
 
     @Volatile private var closed = false
 
-    /** Prepares media, then atomically claims the current prompt immediately before submission. */
     fun show(snapshot: Bundle, promptId: String) {
         handler.dispatch {
             if (!closed) showOnHandler(Bundle(snapshot), promptId)
         }
     }
 
-    /** Withdraws only the prompt/session currently held by this presenter. */
     fun withdraw(snapshot: Bundle?, promptId: String? = null, reason: String = "prompt_cancelled") {
         val copy = snapshot?.let(::Bundle)
         handler.dispatch {
@@ -47,8 +39,6 @@ internal class OfficialConnectionPresenter(
         if (Looper.myLooper() === handler.looper) {
             closeOnHandler()
         } else if (!handler.post { closeOnHandler() }) {
-            // The reader looper has already stopped. Release only this presenter's unique files
-            // and grants rather than leaving delayed cleanup behind on a dead looper.
             closed = true
             media.close()
         }
@@ -124,7 +114,6 @@ internal class OfficialConnectionPresenter(
         val record = ActiveToast(request, SystemClock.elapsedRealtime() + OFFICIAL_DURATION_MILLIS, clips, Bundle(snapshot))
         record.timeout = Runnable {
             if (active === record) {
-                // SystemUI owns the display duration. Expiry only releases this prompt's media.
                 active = null
                 media.revokeAfter(record.clips, URI_RELEASE_GRACE_MILLIS, preserveReadGrace = true)
             }
@@ -152,7 +141,6 @@ internal class OfficialConnectionPresenter(
         }
 
         val payload = officialHideBundle()
-        // Match OppoPods' immediate hide behavior. Only local OpenRose ownership is known here.
         val failure = runCatching { targetContext.setOfficialStatus(payload) }.exceptionOrNull()
         if (failure == null) {
             media.revokeAfter(record.clips, URI_RELEASE_GRACE_MILLIS, preserveReadGrace = true)

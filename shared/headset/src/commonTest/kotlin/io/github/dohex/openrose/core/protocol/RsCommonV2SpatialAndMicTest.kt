@@ -25,7 +25,6 @@ class RsCommonV2SpatialAndMicTest {
         val codec = createProtocolCodec(astro)
         val game = codec.prepareSetting(DeviceSetting.SPATIAL_CONTENT, FieldValue.Text("game"))
         assertEquals("ff00023d0341aa", game.writeFrames.single().hex())
-        // Synthetic notification with separate spatial, content, and adaptive records.
         val reply = codec.feedNotification("dd00023801023d03023a0197aa".bytes()).single()
         assertEquals(FieldReading.Known(FieldValue.Text("head_tracking"), "01"), reply.readings[DeviceField.SPATIAL_MODE])
         assertEquals(FieldReading.Known(FieldValue.Text("game"), "03"), reply.readings[DeviceField.SPATIAL_CONTENT])
@@ -42,7 +41,6 @@ class RsCommonV2SpatialAndMicTest {
         val mode = codec.prepareSetting(DeviceSetting.INDEPENDENT_MIC_MODE, FieldValue.Toggle(true))
         assertEquals("ff00034901014daa", mode.writeFrames.single().hex())
         assertEquals(setOf(DeviceField.INDEPENDENT_MIC_MODE), mode.readback.expectedFields)
-        // Synthetic notifications. An inactive microphone cannot report the independent mode as active.
         val active = codec.feedNotification("dd00034901012baa".bytes()).single()
         assertEquals(FieldReading.Known(FieldValue.Toggle(true), "0101"), active.readings[DeviceField.INDEPENDENT_MIC_MODE])
         val inactive = codec.feedNotification("dd00034900012aaa".bytes()).single()

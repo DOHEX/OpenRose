@@ -49,7 +49,7 @@ fun CirculationSettings(
     var issued by remember(client) { mutableStateOf<PairingTicket?>(null) }
     var busy by remember(client) { mutableStateOf(false) }
 
-    @Suppress("TooGenericExceptionCaught") // Whatever the platform throws becomes the page's feedback.
+    @Suppress("TooGenericExceptionCaught")
     fun submit(codePeerId: String? = null, action: suspend () -> CirculationResult) {
         if (busy) return
         busy = true
@@ -120,7 +120,6 @@ private fun CirculationFeedbackBanner(error: String?, message: String?) {
     )
 }
 
-/** The offer peers still accept, with the time it has left; the page hides it and counts down on this one clock. */
 private class LiveTicket(val ticket: PairingTicket?, val remaining: LongState)
 
 @Composable
@@ -139,7 +138,6 @@ private fun rememberLiveTicket(peers: PeerDirectory, issued: PairingTicket?): Li
             remaining.longValue = 0L
         }
     }
-    // Only the flip to expired recomposes the page; the seconds are read where they are shown.
     val live by remember(remaining) { derivedStateOf { remaining.longValue > 0 } }
     return LiveTicket(offer.takeIf { live }, remaining)
 }
@@ -258,7 +256,6 @@ private fun PairedDeviceRow(name: String, nearby: Boolean, busy: Boolean, onForg
     }
 }
 
-/** Forgetting a pairing cuts the peer off from this device's headphones until both sides pair again. */
 @Composable
 private fun ForgetPeerDialog(name: String, onConfirm: () -> Unit, onDismiss: () -> Unit) {
     val title = "解除与「$name」的配对？"

@@ -13,7 +13,6 @@ import io.github.dohex.openrose.core.protocol.GattProfile
 import kotlinx.collections.immutable.persistentSetOf
 import kotlinx.collections.immutable.toPersistentSet
 
-/** EarFree-i3, RoseLink Zt219 configuration. */
 internal val earFreeI3 = ModelSpec(
     displayName = "EarFree-i3",
     shortLabel = "i3",

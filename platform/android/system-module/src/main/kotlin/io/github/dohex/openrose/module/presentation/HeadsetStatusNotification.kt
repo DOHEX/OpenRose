@@ -5,7 +5,6 @@ import android.util.Log
 import io.github.dohex.openrose.androidintegration.wire.BridgePresentationWire
 import io.github.dohex.openrose.module.systemIntegrationResult
 
-/** Owns the persistent headset status notification and its last published content. */
 internal class HeadsetStatusNotification(
     private val notifications: PresentationNotifications,
     private val content: PresentationNotificationContent,
@@ -19,7 +18,6 @@ internal class HeadsetStatusNotification(
 
     fun render(snapshot: RenderedSnapshot, onPromptShown: (() -> Unit)?) {
         val requestedTag = prepareStatusTag(snapshot) ?: return
-        // A merged module prompt is shown as the status island's entrance, replayed by posting the notification afresh.
         systemIntegrationResult { publishStatusCard(snapshot, requestedTag, onPromptShown) }.onFailure { failure ->
             Log.w(PRESENTATION_TAG, "status_notification_failed", failure)
             runCatching { notifications.cancel(requestedTag, STATUS_NOTIFICATION_ID) }
@@ -51,8 +49,6 @@ internal class HeadsetStatusNotification(
         if (active && statusFingerprint == fingerprint && !showsPrompt) return
 
         val builder = content.statusNotificationBuilder(snapshot, card, showsPrompt)
-        // An update without island data is not known to remove a summary state already shown, and one with it changes
-        // the island in place unnoticed; withdraw first to remove the island or to replay its entrance.
         val islandShown = active && statusIslandPosted
         if (islandShown && (!snapshot.statusIsland || showsPrompt)) {
             notifications.cancel(requestedTag, STATUS_NOTIFICATION_ID)
@@ -118,7 +114,6 @@ internal class HeadsetStatusNotification(
         return tag?.takeIf { it.startsWith(STATUS_TAG_PREFIX) && it.length <= MAX_TAG_LENGTH }
     }
 
-    /** A module prompt rides on the status notification's island whenever that notification is shown with one. */
     fun canMergePrompt(snapshot: RenderedSnapshot): Boolean {
         if (!snapshot.focusEnabled || !snapshot.statusIsland || !notifications.available) return false
         return requestedStatusTag(snapshot) != null

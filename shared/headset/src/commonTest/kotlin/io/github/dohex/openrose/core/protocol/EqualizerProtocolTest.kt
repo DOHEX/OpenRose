@@ -10,7 +10,6 @@ import kotlin.test.assertIs
 class EqualizerProtocolTest {
     @Test
     fun i5FourPresetWritesAndReadbackMatchIndependentApkLiterals() {
-        // Independent fixed TX extraction: rose_reverse/analysis/i5_fixed_sender_commands.json.
         for ((preset, tx) in listOf(
             "pop" to "08ee00000002810b000084",
             "hifi" to "08ee00000002810b000185",
@@ -27,7 +26,6 @@ class EqualizerProtocolTest {
 
     @Test
     fun i5GameUsesZeroForEnabledAndItsOwnReadCommand() {
-        // Independent fixed TX extraction, not the client's frame builder.
         for ((enabled, tx) in listOf(true to "08ee00000006830b00008a", false to "08ee00000006830b00018b")) {
             val setting = createProtocolCodec(ModelProfile.I5_ZT).prepareSetting(DeviceSetting.GAME_MODE, FieldValue.Toggle(enabled))
             assertEquals(tx, setting.writeFrames.single().hex())
@@ -49,7 +47,6 @@ class EqualizerProtocolTest {
             listOf(1, 5) to false, listOf(1, 5, 2, 0) to false,
             listOf(-1, 5, 2) to false, listOf(256, 5, 2) to false,
         )) {
-            // The display label deliberately disagrees with source parts; it is not gate evidence.
             val firmware = FieldValue.Firmware(parts, if (eap) "0" else "999999")
             assertEquals(base + if (eap) setOf("eap") else emptySet(), ModelProfile.I7_RS_V2.capabilities(firmware).equalizer!!.presets, "$parts")
             assertEquals(base, ModelProfile.I5_ZT.capabilities(firmware).equalizer!!.presets)
@@ -58,7 +55,6 @@ class EqualizerProtocolTest {
 
     @Test
     fun i7PresetWritesSwapHifiPopAndUseTheEqReadback() {
-        // Independent fixed TX extraction: rose_reverse/analysis/i7_sender_commands.json, seq00.
         for ((preset, tx) in listOf(
             "hifi" to "ff00022a002baa",
             "pop" to "ff00022a012caa",
@@ -72,7 +68,6 @@ class EqualizerProtocolTest {
                 FieldValue.Firmware(listOf(1, 5, 2), "152"),
             )
             assertEquals(tx, setting.writeFrames.single().hex())
-            // getEq fixed body FA2A with the next session sequence01, independently worked literal.
             assertEquals("ff0102fa2a26aa", setting.readback.bytes.hex())
             assertEquals(setOf("2a"), setting.readback.responseKeys)
             assertEquals(mapOf(DeviceField.EQ to FieldValue.Text(preset)), setting.expectedValues)
@@ -84,7 +79,6 @@ class EqualizerProtocolTest {
         for ((enabled, tx) in listOf(true to "ff00020e0110aa", false to "ff00020e000faa")) {
             val setting = createProtocolCodec(ModelProfile.I7_RS_V2).prepareSetting(DeviceSetting.GAME_MODE, FieldValue.Toggle(enabled))
             assertEquals(tx, setting.writeFrames.single().hex())
-            // FA0E is a client inference from observed single-ID FA queries and bulk getInfo's 0E.
             assertEquals("ff0102fa0e0aaa", setting.readback.bytes.hex())
             assertEquals(setOf("0e"), setting.readback.responseKeys)
             assertEquals(mapOf(DeviceField.GAME_MODE to FieldValue.Toggle(enabled)), setting.expectedValues)
@@ -130,7 +124,7 @@ class EqualizerProtocolTest {
     @Test
     fun eqAndGameContinueTheSameI7InitializationAndAncSequence() {
         val codec = createProtocolCodec(ModelProfile.I7_RS_V2)
-        codec.initQueries(20) // Three complete queries use sequences 00..02.
+        codec.initQueries(20)
         val eq = codec.prepareSetting(DeviceSetting.EQ, FieldValue.Text("hifi"))
         assertEquals("ff03022a002eaa", eq.writeFrames.single().hex())
         assertEquals("ff0402fa2a29aa", eq.readback.bytes.hex())
@@ -145,7 +139,6 @@ class EqualizerProtocolTest {
     @Test
     fun syntheticI5ReadbacksUseLowNibblesAndNeverInterpretWriteEchoesAsState() {
         val codec = createProtocolCodec(ModelProfile.I5_ZT)
-        // Deliberately synthetic offsets and high-nibble sentinels; no RX framing claim.
         for ((rx, preset) in listOf(
             "000000000002010000a0" to "pop",
             "000000000002010000a1" to "hifi",
@@ -171,7 +164,6 @@ class EqualizerProtocolTest {
     @Test
     fun syntheticI7ReadbacksPreserveEqFormatsAndGamePolarity() {
         val codec = createProtocolCodec(ModelProfile.I7_RS_V2)
-        // Whole-prefix checksum synthetic RX examples, hand-worked independently of the codec.
         for ((rx, preset) in listOf(
             "dd00022a0009aa" to "hifi",
             "dd00022a010aaa" to "pop",

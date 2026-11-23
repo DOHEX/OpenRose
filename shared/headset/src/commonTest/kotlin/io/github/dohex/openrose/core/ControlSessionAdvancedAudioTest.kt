@@ -25,7 +25,6 @@ import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
-/** Public control session; independent fixed TX vectors and synthetic DD/LTV device RX. */
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class ControlSessionAdvancedAudioTest {
     @Test
@@ -283,7 +282,6 @@ class ControlSessionAdvancedAudioTest {
             val capabilities = requireNotNull(session.state.value.device).capabilities
             assertEquals(if (gainAllowed) setOf(0, 1, 2) else emptySet(), capabilities.gainLevels, "$firmware gain")
             assertEquals(if (gainAllowed) (0..6).toSet() else emptySet(), capabilities.hearingProtectionLevels, "$firmware protection")
-            // Unread firmware leaves the levels unknown, and prompt volume is not writable until they are known.
             val promptLevels = when {
                 muteAllowed -> (0..5).toSet()
                 firmware == null -> emptySet()
@@ -370,13 +368,11 @@ class ControlSessionAdvancedAudioTest {
             CapabilityVector(ModelProfile.JASMINE_RS_V2, DeviceSetting.PROMPT_LANGUAGE, FieldValue.Text("english"), "dd0002310111aa"),
         )) {
             val (session, link) = ready(profile = vector.profile)
-            // 合成：在提交设置前缓存相同值，不能将它作为本次写入的确认。
             link.incoming.send(vector.reply.bytes())
             runCurrent()
             val pending = async { session.set(requireNotNull(HeadsetCommand.decode(vector.setting, vector.requested))) }
             runCurrent()
             assertFalse(pending.isCompleted)
-            // 合成：普通 EQ 回包既不是低音档位，也不是语言状态。
             link.incoming.send("dd00022a0009aa".bytes())
             runCurrent()
             assertFalse(pending.isCompleted)
@@ -412,14 +408,12 @@ class ControlSessionAdvancedAudioTest {
     @Test
     fun aTapAssignmentWaitsForItsOwnFreshKeyTable() = runTest {
         val (session, link) = ready(profile = ModelProfile.ASTRO_X_RS_V2)
-        // Synthetic 3C table already has the requested right triple action (07).
         val tapReply = "dd00093c13070201030212045aaa".bytes()
         link.incoming.send(tapReply)
         runCurrent()
         val pending = async { session.set(HeadsetCommand.TapBinding("right", "triple", "voice_assistant")) }
         runCurrent()
         assertFalse(pending.isCompleted)
-        // 01 belongs to the ordinary touch sensor, even when all its actions decode.
         link.incoming.send("dd0011010100020003000400110012001300140043aa".bytes())
         runCurrent()
         assertFalse(pending.isCompleted)
@@ -439,7 +433,6 @@ class ControlSessionAdvancedAudioTest {
         link.incoming.send((gain + newFirmware).bytes())
         runCurrent()
         val enabled = requireNotNull(session.state.value.device)
-        // The gain reply was diagnostic only when it arrived, even though the next frame unlocks gain.
         assertEquals(gain, enabled.diagnostics.unknownNotifications.last())
         assertTrue(DeviceField.GAIN in enabled.capabilities.readableFields)
         assertEquals(2, enabled.confirmedNumber(DeviceField.GAIN))
@@ -457,7 +450,7 @@ class ControlSessionAdvancedAudioTest {
     @Test
     fun changingFirstAngelGameModeRefreshesEqAndRejectsTheQueuedMusicPreset() = runTest {
         val (session, link) = ready(profile = ModelProfile.FIRST_ANGEL_RS_V2)
-        link.incoming.send("dd00020e00edaa".bytes()) // Synthetic music mode.
+        link.incoming.send("dd00020e00edaa".bytes())
         runCurrent()
         assertEquals(FieldValue.Text("hifi"), reading(session, DeviceField.EQ))
         assertEquals(setOf("pop", "hifi"), session.state.value.device?.capabilities?.equalizer?.presets.orEmpty().toSet())
@@ -473,7 +466,7 @@ class ControlSessionAdvancedAudioTest {
         assertEquals(listOf("0e01", "fa0e", "fa2a"), link.writes.drop(before).map { it.substring(6, 10) })
         assertEquals(setOf("game_1"), session.state.value.device?.capabilities?.equalizer?.presets.orEmpty().toSet())
         assertEquals(FieldReading.Loading, session.state.value.device?.diagnostics?.fields?.get(DeviceField.EQ))
-        link.incoming.send("dd00022aa0ccaa".bytes()) // Synthetic FA 2A response from the new bank.
+        link.incoming.send("dd00022aa0ccaa".bytes())
         runCurrent()
         assertEquals(OperationResult.Success, toggle.await())
         assertEquals(ControlErrorCode.UNSUPPORTED, assertIs<OperationResult.Failure>(oldPreset.await()).error.code)
@@ -490,16 +483,16 @@ class ControlSessionAdvancedAudioTest {
         runCurrent()
         link.incoming.send("dd00020e01eeaa".bytes())
         runCurrent()
-        link.incoming.send("dd00022b000aaa".bytes()) // Audio mode cannot finish the EQ refresh.
+        link.incoming.send("dd00022b000aaa".bytes())
         runCurrent()
         assertFalse(toggle.isCompleted)
         assertEquals(listOf("0e01", "fa0e", "fa2a"), link.writes.drop(before).map { it.substring(6, 10) })
-        link.incoming.send("dd00022a0009aa".bytes()) // Earlier refresh reports HiFi.
+        link.incoming.send("dd00022a0009aa".bytes())
         runCurrent()
         assertEquals(OperationResult.Success, toggle.await())
         assertFalse(preset.isCompleted)
         assertEquals(listOf("2a01", "fa2a"), link.writes.takeLast(2).map { it.substring(6, 10) })
-        link.incoming.send("dd00022a010aaa".bytes()) // Queued write now receives its own POP confirmation.
+        link.incoming.send("dd00022a010aaa".bytes())
         assertEquals(OperationResult.Success, preset.await())
         session.disconnect()
     }

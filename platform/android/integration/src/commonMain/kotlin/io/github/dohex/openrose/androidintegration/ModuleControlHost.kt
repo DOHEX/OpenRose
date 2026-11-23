@@ -34,7 +34,6 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
-/** What the host knows about the user's persisted intent. Nothing is owned before [userUnlocked]. */
 data class HostConfiguration(
     val userUnlocked: Boolean = false,
     val settings: HostSettings = HostSettings(),
@@ -45,15 +44,6 @@ sealed interface HostReadResult {
     data class Rejected(val rejection: HostRejection, val message: String) : HostReadResult
 }
 
-/**
- * The module-side owner of the single control session (ADR 0011), hosted in the system Bluetooth
- * process. It owns one runtime per owner generation and nothing outside it may connect or write.
- *
- * Authority and authorisation are separate from discovery: callers are verified by the injected
- * [authority] from the platform-reported identity, every lease belongs to one verified caller and
- * one host incarnation, and every command names the owner generation it was issued for. No
- * credential is needed from the OpenRose application process.
- */
 class ModuleControlHost(
     private val packageName: String,
     private val processName: String,
@@ -105,13 +95,11 @@ class ModuleControlHost(
 
     val status: StateFlow<HostStatus> = mutableStatus.asStateFlow()
 
-    /** The current owner's state, null while nobody owns the session. For the host's own bookkeeping, not for clients. */
     @OptIn(ExperimentalCoroutinesApi::class)
     val ownerView: Flow<OwnerView?> = owner.flatMapLatest { active ->
         active?.let { current -> current.runtime.views(current.generation) } ?: flowOf(null)
     }
 
-    /** Applies persisted user intent. The selected way alone decides whether an owner exists. */
     suspend fun configure(read: () -> HostConfiguration?): Boolean = ownership.withLock {
         readConfiguration = read
         if (!reloadConfiguration()) return@withLock false
@@ -126,20 +114,11 @@ class ModuleControlHost(
         return true
     }
 
-    /** Host-side platform facts (adapter power, permissions) the owner's runtime should see. */
     suspend fun updatePlatform(next: PlatformState) = ownership.withLock {
         platform = next
         owner.value?.runtime?.updatePlatformState(next)
     }
 
-    /**
-     * Ends this host instance, e.g. on module hot reload: the owner is released like any other release
-     * and the instance never owns again. A replacement instance starts from the persisted intent. Returns
-     * whether no owner remains because its connection was confirmed closed. Only then is the instance
-     * retired (later [open] calls are refused and every lease stops meaning anything); when the close cannot
-     * be confirmed the instance keeps serving and keeps the connection owned, so it is never left without
-     * an owner, and a later [stop], release or configuration closes it again.
-     */
     suspend fun stop(): Boolean = ownership.withLock {
         stopped = true
         var released = false
@@ -153,7 +132,6 @@ class ModuleControlHost(
         released
     }
 
-    /** Verifies the caller and issues a lease. Reaching this endpoint alone grants nothing. */
     fun open(caller: CallerIdentity): HostOpenResult {
         if (retired.value) return HostOpenResult.Refused(HostRejection.INVALID_REQUEST, "控制宿主已停止，请重新发现")
         val role = authority.roleOf(caller)
@@ -176,7 +154,6 @@ class ModuleControlHost(
         leases.update { current -> current[leaseId]?.takeIf { it.caller == caller }?.let { current - leaseId } ?: current }
     }
 
-    /** Commands, reads and subscriptions addressed to an authenticated caller and the current owner. */
     val control = ClientControl()
 
     inner class ClientControl internal constructor() {
@@ -203,7 +180,6 @@ class ModuleControlHost(
             }
         }
 
-        /** A system entry's "off" tap follows the user's choice of writing wind reduction. */
         private fun systemRouted(role: ClientRole, runtime: SystemEntryRuntime, command: HostCommand): HostCommand {
             if (role != ClientRole.MILINK && role != ClientRole.XIAOMI_BLUETOOTH) return command
             if (command !is HostCommand.Set || command.reference == null) return command
@@ -216,7 +192,6 @@ class ModuleControlHost(
             return command.copy(command = HeadsetCommand.NoiseMode(requireNotNull(NoiseMode.fromId(mode))))
         }
 
-        /** Reads a detached snapshot, only for the named owner generation and a still-current device session. */
         suspend fun readSession(
             caller: CallerIdentity,
             leaseId: String,
@@ -230,17 +205,12 @@ class ModuleControlHost(
             }
         }
 
-        /** The current owner state for any authorised role; null when the lease is invalid or nobody owns the session. */
         fun view(caller: CallerIdentity, leaseId: String): OwnerView? {
             leaseFor(caller, leaseId) ?: return null
             val active = owner.value ?: return null
             return active.runtime.view(active.generation)
         }
 
-        /**
-         * A wake-up whenever the named owner's state changes, for any authorised role; completes when the
-         * generation ends. Consumers still read through an authorised, reference-checked read.
-         */
         fun changes(caller: CallerIdentity, leaseId: String, generation: OwnerGeneration): Flow<OwnerView> {
             val lease = leaseFor(caller, leaseId)
             val active = owner.value?.takeIf { it.generation == generation }
@@ -261,10 +231,6 @@ class ModuleControlHost(
             }
         }
 
-        /**
-         * The owner's state, only for a lease of the app role. Completes when the owner generation ends
-         * or the caller is not authorised, so a consumer never keeps treating an ended owner as current.
-         */
         fun frames(caller: CallerIdentity, leaseId: String, generation: OwnerGeneration): Flow<HostFrame> {
             val lease = leaseFor(caller, leaseId)
             val active = owner.value?.takeIf { it.generation == generation }
@@ -345,10 +311,6 @@ class ModuleControlHost(
         }
     }
 
-    /**
-     * Releases the current owner for [request]: authority is given up only after the old connection is
-     * closed and its operations are invalidated. The receipt is the only proof a requester may use.
-     */
     suspend fun release(caller: CallerIdentity, leaseId: String, request: SwitchRequest): ReleaseResult {
         val lease = leaseFor(caller, leaseId)
             ?: return ReleaseResult.Refused(HostRejection.INVALID_LEASE, "控制宿主授权无效或已过期")
@@ -357,7 +319,6 @@ class ModuleControlHost(
             val current = owner.value
             val named = request.fromGeneration
             if (current != null) {
-                // A proof must cover the owner that really holds the session; an unnamed or other generation proves nothing.
                 if (named != current.generation) {
                     return@withLock ReleaseResult.Refused(
                         HostRejection.STALE_GENERATION,
@@ -376,7 +337,6 @@ class ModuleControlHost(
                 if (named != null && named.incarnation == incarnation && named != lastGeneration) {
                     return@withLock ReleaseResult.Refused(HostRejection.STALE_GENERATION, "请求引用的所有者代际未知", status.value)
                 }
-                // Hold the release against a lagging selection until a newer explicit acquire.
                 confirmRelease(request.id)
                 ReleaseResult.Released(
                     ReleaseReceipt(
@@ -397,7 +357,6 @@ class ModuleControlHost(
         lifecycle.publishStatus()
     }
 
-    /** A release receipt fences off acquires already in transit on every earlier application lease. */
     suspend fun acquire(caller: CallerIdentity, leaseId: String, request: SwitchRequest): AcquireResult = ownership.withLock {
         val lease = leaseFor(caller, leaseId)
         if (lease == null || lease.releaseEpoch != releaseEpoch.value) {
@@ -421,11 +380,8 @@ class ModuleControlHost(
         !retired.value && it.caller == caller && authority.roleOf(caller) == it.role
     }
 
-    /** Changes to the active generation run under the host ownership lock. */
     private inner class OwnerLifecycle {
-        /** Caller holds [ownership]. */
         suspend fun reconcile() {
-            // An owner whose close was refused earlier is closed again before anything else is decided.
             owner.value?.takeIf { it.releasePending }?.let {
                 if (!stop(it)) {
                     publishStatus()
@@ -450,7 +406,6 @@ class ModuleControlHost(
             publishStatus()
         }
 
-        /** Caller holds [ownership]. */
         private fun activate() {
             sequence += 1
             val generation = OwnerGeneration(incarnation, sequence)
@@ -468,10 +423,6 @@ class ModuleControlHost(
             owner.value = Owner(generation, holder, job, runtime)
         }
 
-        /**
-         * Stop in-flight commands before releasing. Keep the runtime and its observers alive on a refused close
-         * so the same owner generation can still serve requests and retry its transport handle.
-         */
         suspend fun stop(current: Owner): Boolean {
             current.commands.value.cancelAndJoin()
             if (!current.runtime.release()) {

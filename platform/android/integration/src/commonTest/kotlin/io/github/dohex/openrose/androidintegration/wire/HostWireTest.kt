@@ -41,7 +41,6 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
 
-/** What one side of the module-host IPC encodes, the other side decodes to the same value. */
 class HostWireTest {
     private val generation = OwnerGeneration("incarnation-a", 3)
     private val holder = OwnerHolder(ControlWay.MODULE, generation, "io.github.dohex.openrose", ":control", uid = 10_123, pid = 4_567)

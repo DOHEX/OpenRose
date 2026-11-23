@@ -7,7 +7,6 @@ import kotlinx.collections.immutable.toPersistentList
 import kotlinx.collections.immutable.toPersistentMap
 import io.github.dohex.openrose.core.NoiseMode as HeadsetNoiseMode
 
-/** A write intent. The session validates model options and waits for a fresh device confirmation. */
 sealed class HeadsetCommand(val setting: DeviceSetting, val value: FieldValue) {
     internal open fun checkOptions(device: DeviceState): ControlError? = null
 
@@ -95,7 +94,6 @@ sealed class HeadsetCommand(val setting: DeviceSetting, val value: FieldValue) {
         override fun checkOptions(device: DeviceState): ControlError? = invalidUnless(level in device.capabilities.hearingProtectionLevels)
 
         companion object {
-            /** The volume ceiling in dB a protection level stands for; level 0 is off and levels outside 1..6 have none. */
             fun thresholdDb(level: Int): Int? = if (level in 1..6) 70 + level * 5 else null
         }
     }
@@ -146,7 +144,6 @@ sealed class HeadsetCommand(val setting: DeviceSetting, val value: FieldValue) {
     }
 
     companion object {
-        /** Decode only at the process boundary; ordinary callers construct a typed intent directly. */
         fun decode(setting: DeviceSetting, value: FieldValue): HeadsetCommand? = when (value) {
             is FieldValue.Toggle -> decodeToggle(setting, value.value)
 

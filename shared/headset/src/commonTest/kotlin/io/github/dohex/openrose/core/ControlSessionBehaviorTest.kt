@@ -90,7 +90,7 @@ class ControlSessionBehaviorTest {
 
         val connected = async { session.connect(id) }
         runCurrent()
-        assertIs<ConnectionState.Connecting>(session.state.value.connection) // The short firmware payload is still missing a reading.
+        assertIs<ConnectionState.Connecting>(session.state.value.connection)
         link.incoming.send("ff00040d010203aa".bytes())
         assertEquals(OperationResult.Success, connected.await())
         assertEquals(listOf("ff000ffa010708090c0d0e122a2b2c2d2e33aa"), link.writes)
@@ -151,7 +151,6 @@ class ControlSessionBehaviorTest {
 
     @Test
     fun readingsFromAbsentEarbudSlotsCannotMakeASingleUnitReady() = runTest {
-        // Synthetic 0C: valid left/right percentages, unavailable single-unit battery in the third slot.
         val connection = RecordedConnection(emptyMap(), repeatedNotifications = listOf("dd00040c6432ff82aa"))
         val transport = RecordedTransport(connection)
         val session = ControlSession(
@@ -250,7 +249,6 @@ class ControlSessionBehaviorTest {
         assertTrue(results.all { it == OperationResult.Success })
         assertEquals(13, connection.writes.size)
 
-        // Synthetic unknown command and enum, distinct from the recorded initialization capture.
         connection.incoming.send("0000000000ffff".bytes())
         connection.incoming.send("000000000006030000a2".bytes())
         runCurrent()
@@ -262,7 +260,6 @@ class ControlSessionBehaviorTest {
 
     @Test
     fun i7SmallMtuReadsReassembledMeaningfulStateWhileMissingFieldsStayUnavailable() = runTest {
-        // Synthetic DD framing around independent research values. Split battery, then coalesced firmware+mode.
         val connection = RecordedConnection(emptyMap(), repeatedNotifications = listOf("dd00040ce4", "325053aa", "dd00040d010502f6aadd00020901020e01faaa"), now = { testScheduler.currentTime })
         val transport = RecordedTransport(connection)
         val session = ControlSession(

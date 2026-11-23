@@ -16,7 +16,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import io.github.dohex.openrose.ui.AppPage
 
-/** Feedback owns the space it occupies, so scrolling to the last row leaves its full touch target exposed. */
 @Composable
 internal fun ShellPageContent(
     page: AppPage,
@@ -28,7 +27,6 @@ internal fun ShellPageContent(
     pageContent: @Composable () -> Unit,
     feedbackContent: @Composable (Modifier) -> Unit,
 ) {
-    // Connecting swaps the compact home for the wide dashboard; the width follows instead of jumping.
     val targetWidth = when {
         compactHome -> 680.dp
         page == AppPage.HEADPHONES -> 1120.dp

@@ -97,7 +97,6 @@ class ControlSessionAudioLifecycleTest {
         val initializationWrites = link.writes.toList()
         val pending = async { session.set(HeadsetCommand.NoiseMode(NoiseMode.NORMAL), modeSession.sessionId) }
 
-        // The unanswered 0201 owns the link until its normal response deadline.
         advanceTimeBy(1_499)
         runCurrent()
         assertEquals(initializationWrites, link.writes)
@@ -257,7 +256,6 @@ class ControlSessionAudioLifecycleTest {
             timing = SessionTiming(writeIntervalMillis = 0),
         )
 
-        // Connect via audio event
         assertEquals(ConnectionState.Disconnected, session.state.value.connection)
         transport.audioDeviceFlow.emit(DeviceId("bonded-i5"))
         runCurrent()
@@ -267,11 +265,9 @@ class ControlSessionAudioLifecycleTest {
         assertEquals(ModelProfile.I5_ZT, conn.profile)
         assertEquals(DeviceId("bonded-i5"), session.state.value.device?.deviceId)
 
-        // System audio disconnects
         transport.audioDeviceFlow.emit(null)
         runCurrent()
         advanceUntilIdle()
-        // Session should automatically disconnect
         assertEquals(ConnectionState.Disconnected, session.state.value.connection)
         assertEquals(null, session.state.value.device)
         assertTrue(connection.closed)
@@ -299,22 +295,18 @@ class ControlSessionAudioLifecycleTest {
             timing = SessionTiming(writeIntervalMillis = 0),
         )
 
-        // Audio is not connected (null)
         assertEquals(null, transport.audioDeviceFlow.replayCache.firstOrNull())
 
-        // Manual connect
         val result = session.connect(DeviceId("manual-i5"))
         runCurrent()
         assertEquals(OperationResult.Success, result)
         assertIs<ConnectionState.Connected>(session.state.value.connection)
 
-        // When audio emits null, manual connection must NOT disconnect
         transport.audioDeviceFlow.emit(null)
         runCurrent()
         assertIs<ConnectionState.Connected>(session.state.value.connection)
         assertFalse(connection.closed)
 
-        // Manual disconnect works
         session.disconnect()
         runCurrent()
         assertEquals(ConnectionState.Disconnected, session.state.value.connection)
@@ -347,7 +339,6 @@ class ControlSessionAudioLifecycleTest {
         runCurrent()
         advanceUntilIdle()
 
-        // Session should remain disconnected
         assertEquals(ConnectionState.Disconnected, session.state.value.connection)
         assertEquals(0, connection.writes.size)
     }
@@ -380,7 +371,6 @@ class ControlSessionAudioLifecycleTest {
         advanceUntilIdle()
         assertIs<ConnectionState.Connected>(session.state.value.connection)
 
-        // User manually disconnects
         session.disconnect()
         runCurrent()
         advanceUntilIdle()
@@ -398,17 +388,14 @@ class ControlSessionAudioLifecycleTest {
             timing = SessionTiming(writeIntervalMillis = 0),
         )
 
-        // Auto-connects to i5
         transport.audioDeviceFlow.emit(DeviceId("i5-mac"))
         runCurrent()
         advanceUntilIdle()
         assertIs<ConnectionState.Connected>(session.state.value.connection)
 
-        // Non-ROSE audio device connects (e.g. car bluetooth, external speaker)
         transport.audioDeviceFlow.emit(DeviceId("car-bluetooth"))
         runCurrent()
         advanceUntilIdle()
-        // Active ROSE session must NOT be disconnected!
         assertIs<ConnectionState.Connected>(session.state.value.connection)
         assertEquals(DeviceId("i5-mac"), (session.state.value.connection as ConnectionState.Connected).deviceId)
     }

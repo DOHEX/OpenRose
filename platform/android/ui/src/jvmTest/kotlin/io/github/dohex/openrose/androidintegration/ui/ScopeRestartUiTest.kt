@@ -108,7 +108,6 @@ class ScopeRestartUiTest {
                 authorized.complete(Unit)
                 yield()
                 harness.render()
-                // All processes are signalled together: the unfinished one is in progress while the others already have results.
                 assertTrue(harness.hasText("等待新进程出现，还剩 8 秒"))
                 assertTrue(harness.hasContentDescription("未运行，无需重启"))
                 assertTrue(harness.hasContentDescription("已重启"))
@@ -118,7 +117,6 @@ class ScopeRestartUiTest {
                 yield()
                 harness.render()
                 assertTrue(harness.hasText("等待新进程出现，还剩 7 秒"))
-                // The countdown is the restart's own state, so switching the interface style keeps it.
                 settings.value = settings.value.copy(interfaceStyle = InterfaceStyle.entries.first { it != style })
                 harness.render()
                 assertTrue(harness.hasText("等待新进程出现，还剩 7 秒"))
@@ -166,7 +164,6 @@ class ScopeRestartUiTest {
                 yield()
                 harness.render(60)
                 assertEquals(listOf("com.android.bluetooth", "com.milink.service"), requested)
-                // Mid-run every row, the unticked one included, sits exactly where its checkbox row was.
                 assertTrue(harness.hasText("未选择"))
                 assertTrue(harness.hasContentDescription("失败"))
                 assertTrue(harness.hasContentDescription("正在重启"))

@@ -16,7 +16,6 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-/** The system-module facts a platform reports reach the integration state, apart from the control state. */
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class IntegrationPlatformTest {
     @Test
@@ -36,7 +35,6 @@ class IntegrationPlatformTest {
             (it.platform.module as? ModuleAvailability.Unavailable)?.cause == ModuleUnavailableCause.HOST_NOT_FOUND
         }
         assertTrue(firstFailure >= 0)
-        // Every later attempt fails the same way, so the status page must not fall back to "connecting" in between.
         val shown = states.drop(firstFailure).map { it.platform.module to it.owner.readiness }.distinct()
         assertEquals(listOf(states[firstFailure].platform.module to states[firstFailure].owner.readiness), shown)
     }

@@ -8,7 +8,6 @@ import io.github.dohex.openrose.core.DeviceSetting
 import io.github.dohex.openrose.core.HeadsetCommand
 import io.github.dohex.openrose.core.transport.DeviceId
 
-/** Wire form of the module-host protocol. Every IPC binding carries these rendered strings. */
 object HostWire {
     fun encode(command: HostCommand): Wire = when (command) {
         HostCommand.RefreshBondedDevices -> obj("t" to str("refresh"))
@@ -90,7 +89,6 @@ object HostWire {
         }
     }
 
-    /** A command addressed to one owner generation. */
     fun encodeCall(generation: OwnerGeneration, command: HostCommand): Wire = obj(
         "generation" to HostIdentityWire.encode(generation),
         "command" to encode(command),

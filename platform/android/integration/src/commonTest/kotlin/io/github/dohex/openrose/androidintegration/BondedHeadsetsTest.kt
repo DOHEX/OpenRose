@@ -15,10 +15,6 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 
-/**
- * On the target source device of a headset circulation the earphones are not connected yet, so there is no current
- * session; the module host still knows them from the system's bonded devices (ADR 0017).
- */
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class BondedHeadsetsTest {
     private val ble = "AA:BB:CC:DD:EE:01"
@@ -53,7 +49,6 @@ class BondedHeadsetsTest {
             ),
         )
 
-        // Only Bluetooth addresses are published, normalized; an opaque control id is not one.
         assertEquals(setOf("AA:BB:CC:00:11:22"), BondedHeadsets.addresses(state))
     }
 }

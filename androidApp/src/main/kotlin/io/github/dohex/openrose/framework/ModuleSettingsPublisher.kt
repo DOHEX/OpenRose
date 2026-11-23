@@ -7,7 +7,6 @@ import io.github.dohex.openrose.androidintegration.SerializedPublisher
 import io.github.dohex.openrose.androidintegration.wire.BridgeWire
 import io.github.dohex.openrose.commitEntries
 
-/** Serializes writes and derives the current persisted settings only when the writer is held. */
 internal class ModuleSettingsPublisher(preferences: () -> SharedPreferences?) {
     private val publisher = SerializedPublisher<HostSettings> { settings ->
         val prefs = preferences() ?: return@SerializedPublisher false

@@ -8,10 +8,6 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 
-/**
- * The fusion device center's additional settings entry, decided from the module host's own owner state and
- * the settings it persisted, so it needs neither the application process nor a mirrored copy of either.
- */
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class FusionEntryTest {
     private val ble = "AA:BB:CC:DD:EE:01"
@@ -21,7 +17,6 @@ class FusionEntryTest {
         val rig = OwnerRig(this, earphones = rosePair(ble), initial = OwnerRecord(ControlWay.MODULE, PendingModuleRelease("r", null)))
         if (connected) rig.hostTransport.audioDevice.emit(rig.earphones.deviceId)
         rig.bootHost()
-        // The user's persisted choice as the host reads it, not anything the application publishes at run time.
         rig.host.configure { HostConfiguration(true, HostSettings(integration = IntegrationSettings(controlWay = ControlWay.MODULE, fusionSettingsDestination = destination))) }
         runCurrent()
         testScheduler.advanceUntilIdle()

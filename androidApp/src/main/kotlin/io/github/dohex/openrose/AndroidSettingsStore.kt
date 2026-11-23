@@ -13,7 +13,6 @@ internal data class AppSettings(
     val ui: UiSettings = UiSettings(),
 )
 
-/** App and host preferences share one platform store; each codec reads and writes only its own keys. */
 internal class AndroidSettingsStore(private val preferences: () -> SharedPreferences) {
     fun loadHost(): HostSettings = HostSettingsCodec.decode(values())
 
@@ -38,8 +37,7 @@ internal class AndroidSettingsStore(private val preferences: () -> SharedPrefere
     }
 }
 
-/** Ownership handoff and host publication require the acknowledgement from SharedPreferences.commit(). */
-@SuppressLint("UseKtx") // The KTX edit(commit = true) overload discards the Boolean acknowledgement.
+@SuppressLint("UseKtx")
 internal fun SharedPreferences.commitEntries(values: Map<String, String?>): Boolean = edit().apply {
     values.forEach { (key, value) -> if (value == null) remove(key) else putString(key, value) }
 }.commit()

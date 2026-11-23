@@ -8,7 +8,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import top.yukonga.miuix.kmp.basic.Scaffold
 
-/** Page and section tests keep the component style's surface and popup host without app navigation. */
 @Composable
 fun TestPageContent(
     style: InterfaceStyle,

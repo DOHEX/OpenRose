@@ -13,11 +13,6 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-/**
- * The ordinary session lives exactly as long as someone needs it: the visible interface and the
- * background-control service each hold it. Observed only through the unified runtime, over a real
- * ordinary session and a transport that stands for the earphones.
- */
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class OrdinarySessionHoldTest {
     @Test
@@ -46,7 +41,6 @@ class OrdinarySessionHoldTest {
         assertIs<OwnerReadiness.Idle>(runtime.integration.value.owner.readiness)
         assertEquals(ControlWay.ORDINARY, runtime.integration.value.owner.selected)
 
-        // The earphones keep their audio connection and connect again later; a cached process must not react.
         rig.appTransport.audioDevice.emit(null)
         rig.appTransport.audioDevice.emit(rig.earphones.deviceId)
         runCurrent()
@@ -116,7 +110,6 @@ class OrdinarySessionHoldTest {
         assertEquals(session, assertNotNull(runtime.state.value.device).sessionId)
         assertEquals(generation, assertNotNull(runtime.integration.value.owner.holder).generation)
 
-        // Turning the intent off ends the service; with the interface gone too the connection ends.
         service.release()
         ui.release()
         runCurrent()
@@ -137,7 +130,6 @@ class OrdinarySessionHoldTest {
         advanceUntilIdle()
         val generation = assertNotNull(runtime.integration.value.owner.holder).generation
 
-        // Holds taken while a session exists and an idempotent double release change nothing.
         val again = runtime.holdOrdinarySession()
         assertEquals(generation, assertNotNull(runtime.integration.value.owner.holder).generation)
         ui.release()
@@ -194,7 +186,6 @@ class OrdinarySessionHoldTest {
         assertEquals(0, module.headset.opens("ordinary"))
         assertTrue(runtime.integration.value.owner.holder?.way != ControlWay.ORDINARY)
 
-        // Switching to module control ends the ordinary session although holds remain, and new holds add none.
         val rig = OwnerRig(this)
         rig.bootHost()
         val held = rig.newRuntime()
@@ -208,7 +199,6 @@ class OrdinarySessionHoldTest {
         assertTrue(held.integration.value.owner.holder?.way != ControlWay.ORDINARY)
         assertTrue(rig.appTransport.links.isEmpty())
 
-        // Returning to ordinary control starts the session because the holds are still open.
         assertIs<HandoffOutcome.Completed>(held.selectControlWay(ControlWay.ORDINARY))
         runCurrent()
         assertEquals(ControlWay.ORDINARY, held.integration.value.owner.holder?.way)

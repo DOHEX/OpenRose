@@ -25,13 +25,8 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
 
-/**
- * Whether the module owner may still hold the session. It is set when module control is selected and
- * cleared only after ordinary control is published to the host and its previous owner is covered by [ReleaseProof].
- */
 data class PendingModuleRelease(val requestId: String?, val generation: OwnerGeneration?)
 
-/** The user's durable choice plus the handoff bookkeeping that must survive a restart. */
 data class OwnerRecord(
     val selected: ControlWay = ControlWay.ORDINARY,
     val moduleRelease: PendingModuleRelease? = null,
@@ -42,23 +37,15 @@ private val OwnerRecord.awaitingModuleRelease: Boolean get() = selected == Contr
 interface OwnerSelectionStore {
     fun load(): OwnerRecord
 
-    /** True only when the record is durable and visible to the module host; false changes nothing. */
     fun save(record: OwnerRecord): Boolean
 
-    /** Re-publishes the durable selection after a process interruption between the local and remote writes. */
     suspend fun publishSelection(): Boolean
 
-    /** Whether [save] could succeed now, so a handoff can refuse before it closes anything. */
     fun canSave(record: OwnerRecord): Boolean = true
 }
 
-/** Who the local application owner is, for diagnostics. */
 data class LocalOwnerIdentity(val packageName: String, val processName: String, val uid: Int? = null, val pid: Int? = null)
 
-/**
- * One claim on the ordinary control session. The session exists while at least one claim is open and
- * ends, closing its control connection, when the last one is released. Releasing twice is harmless.
- */
 class OrdinarySessionHold internal constructor(private val onRelease: () -> Unit) {
     private var released = false
 
@@ -69,13 +56,6 @@ class OrdinarySessionHold internal constructor(private val onRelease: () -> Unit
     }
 }
 
-/**
- * The runtime the application's interface uses. It routes to exactly one owner: the ordinary session
- * built in this process, or the module host reached through [moduleLink]. A switch first releases the
- * old owner (with proof) and only then establishes the new one, so there is never a second owner.
- * [state] is the owner's control state; [integration] says who that owner is, how the system module
- * stands and what the current owner's system presentation shows.
- */
 class SwitchingControlRuntime private constructor(private val owners: ApplicationOwners) :
     ControlRuntime by owners.control,
     SystemEntry by owners.system,
@@ -170,10 +150,6 @@ private class ApplicationOwners(
         refresh()
     }
 
-    /**
-     * Credential-protected preferences exist only after first unlock; until then nothing owns the session.
-     * [persisted] are the user's stored settings, whose saved control way decides which owner starts.
-     */
     fun onUserUnlocked(persisted: HostSettings) {
         if (unlocked) return
         unlocked = true
@@ -208,20 +184,12 @@ private class ApplicationOwners(
         refresh()
     }
 
-    /** Platform facts about the system module and the background service; the module ones yield to the live host link. */
     fun updateIntegrationPlatform(platformState: IntegrationPlatformState) {
         integrationPlatform = platformState
         refresh()
     }
 
     inner class OrdinarySessions {
-        /**
-         * Claims the ordinary session for the caller: the visible interface and the background-control
-         * service each take one. The session is created by a claim only while ordinary control is the saved
-         * choice and the user has unlocked, and ends when the last claim is released, so a cached process
-         * with no interface and no service keeps no control connection. Module control never creates it.
-         * Call from the runtime's dispatcher like every other member.
-         */
         fun holdOrdinarySession(): OrdinarySessionHold {
             holds += 1
             startOrdinary()
@@ -237,7 +205,6 @@ private class ApplicationOwners(
                 val retiring = switchLock.withLock {
                     ordinary?.takeIf { holds == 0 && it.job.isActive }?.also { it.job.cancelAndJoin() }
                 } ?: return@launch
-                // A cached process must not react to audio while the platform refuses to close its last handle.
                 while (!finishIdleRelease(retiring)) delay(timing.retryMillis)
             }
         }
@@ -245,7 +212,7 @@ private class ApplicationOwners(
         private suspend fun finishIdleRelease(retiring: Ordinary): Boolean = switchLock.withLock {
             if (ordinary !== retiring) return@withLock true
             val closed = stopOrdinary(retiring)
-            if (closed) startOrdinary() // A new claim may have arrived while the old handle was closing.
+            if (closed) startOrdinary()
             refresh()
             closed
         }
@@ -268,7 +235,6 @@ private class ApplicationOwners(
             ownerScope.launch { runtime.presentation.collect { refresh() } }
         }
 
-        /** A failed handoff leaves the held runtime usable. A successful release prohibits any later connection on it. */
         private suspend fun stopOrdinary(current: Ordinary): Boolean {
             if (!current.runtime.release()) return false
             current.job.cancelAndJoin()
@@ -277,7 +243,6 @@ private class ApplicationOwners(
             return true
         }
 
-        /** Null once no ordinary connection remains; otherwise the handoff is blocked because its close was not confirmed. */
         suspend fun closeOrdinary(request: SwitchRequest): HandoffOutcome? {
             val current = ordinary ?: return null
             return if (stopOrdinary(current)) {
@@ -321,7 +286,6 @@ private class ApplicationOwners(
                     finish(HandoffOutcome.Completed(request))
                 }
 
-                // The choice stays module control; the client keeps trying and nothing else takes over.
                 is AcquireOutcome.Failed -> finish(HandoffOutcome.Blocked(request, outcome.stage, outcome.reason))
             }
         }
@@ -329,7 +293,6 @@ private class ApplicationOwners(
         private suspend fun returnToOrdinary(request: SwitchRequest): HandoffOutcome {
             client.stop()
             if (record.moduleRelease != null) {
-                // persistSelection recorded this request's generation under switchLock; the record cannot differ.
                 when (val proof = releases.releaseModule(request)) {
                     is ReleaseProof.Unproven -> {
                         releaseRetry = scope.launch { releases.retryModuleRelease() }
@@ -360,9 +323,6 @@ private class ApplicationOwners(
             }
             releaseRetry?.cancelAndJoin()
             releaseRetry = null
-            // Saving module control tells the module host, which then connects by itself. So while an ordinary
-            // connection is open it is closed first; in every other direction the intent is made durable first,
-            // so a restarted module host never reclaims what the user left.
             val closeFirst = target == ControlWay.MODULE && ordinary != null
             if (closeFirst) sessions.closeOrdinary(request)?.let { return it }
             return if (saves && !store.save(next)) {
@@ -381,8 +341,6 @@ private class ApplicationOwners(
     private inner class ModuleRelease {
         suspend fun releaseModule(request: SwitchRequest): ReleaseProof {
             if (needsSelectionPublication) {
-                // A prior process may have written the local record and exited before the framework acknowledged it.
-                // Publish first, so a restarted host cannot reacquire after the current incarnation supplies its proof.
                 if (!store.publishSelection()) {
                     return ReleaseProof.Unproven(OwnerFailureStage.SELECTION_PERSISTENCE, "尚未向模块宿主保存普通控制")
                 }
@@ -393,18 +351,15 @@ private class ApplicationOwners(
 
         fun clearModuleRelease() {
             record = record.copy(moduleRelease = null)
-            // If saving fails the proof still holds now; after a restart the host simply confirms it again.
             store.save(record)
         }
 
-        /** Ordinary control stays blocked until the module owner is proven released; keeps asking while module control is not selected. */
         fun resumeModuleRelease() {
             val request = SwitchRequest(newId(), ControlWay.MODULE, record.selected, record.moduleRelease?.generation)
             blocked = OwnerReadiness.SwitchBlocked(request, OwnerFailureStage.RELEASE, "尚未确认模块已释放控制连接")
             releaseRetry = scope.launch { retryModuleRelease() }
         }
 
-        /** The owner the host last reported is the one a release must name; it is recorded, then asked for explicitly. */
         private fun adoptObservedOwner() {
             val observed = client.lastObservedGeneration ?: return
             val pending = record.moduleRelease ?: return
@@ -448,7 +403,6 @@ private class ApplicationOwners(
                 OwnerHolder(ControlWay.ORDINARY, it.generation, local.packageName, local.processName, local.uid, local.pid)
             }
             val moduleHolder = (view as? ModuleView.Active)?.frame?.holder
-            // While module control is the saved choice, the live link view is more current than an earlier acquire failure.
             val activeBlock = blocked?.takeUnless { selected == ControlWay.MODULE && it.request.to == ControlWay.MODULE }
             val readiness = if (!unlocked) {
                 OwnerReadiness.Idle("用户解锁后才会控制耳机")
@@ -493,7 +447,6 @@ private class ApplicationOwners(
             val view = client.view.value
             return IntegrationState(
                 settings = integrationSettings,
-                // While module control is chosen the module/bridge facts are the live host link, not a guess.
                 platform = if (record.selected == ControlWay.MODULE) moduleFacts(integrationPlatform, view) else integrationPlatform,
                 owner = ownerState(view),
                 presentation = servingOrdinary?.runtime?.presentation?.value
@@ -568,10 +521,7 @@ private class ApplicationOwners(
 
     private suspend fun module(command: HostCommand): OperationResult = when (val result = client.execute(command)) {
         is HostCallResult.Operation -> result.result
-
-        // Only ClaimPrompt answers with a flag, and it does not go through here.
         is HostCallResult.Flag -> OperationResult.Failure(ControlError(ControlErrorCode.FAILED, "控制宿主返回了不匹配的结果"))
-
         is HostCallResult.Rejected -> OperationResult.Failure(ControlError(ControlErrorCode.NOT_READY, result.message))
     }
 

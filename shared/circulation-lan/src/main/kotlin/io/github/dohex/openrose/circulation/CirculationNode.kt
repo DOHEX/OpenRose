@@ -93,7 +93,6 @@ class CirculationNode internal constructor(
 
     fun forget(id: String) {
         val grant = synchronized(trust) { trust.grant(id)?.also { trust.remove(id) } } ?: return
-        // Local revocation is durable even when the remote machine is asleep.
         runCatching {
             connect(id) { wire ->
                 wire.send(mapOf("action" to "forget", "grant" to grant.token))
@@ -104,7 +103,6 @@ class CirculationNode internal constructor(
 
     private fun <T> connect(id: String, operation: (PeerWire) -> T): T {
         check(server.running) { "互联服务已关闭" }
-        // Multihomed mDNS can publish several service names for one peer, each resolving to a single address.
         val candidates = routes.filter { it.id == id }.distinctBy { it.address to it.port }.sortedBy { it.address !is Inet4Address }
         val failures = mutableListOf<String>()
         for (address in candidates) {
@@ -115,7 +113,6 @@ class CirculationNode internal constructor(
                 failures += "$family · ${failure.localizedMessage}"
                 continue
             }
-            // No retry once application data may have reached the peer.
             try {
                 return secure.use { operation(PeerWire(it)) }
             } finally {
@@ -137,7 +134,6 @@ class CirculationNode internal constructor(
             val secure = identity.tls.socketFactory.createSocket(raw, address.address.hostAddress, address.port, true) as SSLSocket
             secure.soTimeout = PeerServer.RESPONSE_TIMEOUT_MS
             check(PeerIdentity.peer(secure) == id) { "对端证书与所选设备不匹配" }
-            // Track the TLS wrapper before untracking its underlying socket so close() can always interrupt it.
             synchronized(this) {
                 check(server.running) { "互联服务已关闭" }
                 outgoing.add(secure)

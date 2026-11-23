@@ -39,7 +39,6 @@ internal fun rememberHeadsetCards(
         others.add(card(localAudio, null))
     }
 
-    // A non-primary headset may disappear from remote readings as soon as the old source releases it.
     val transferring = actions?.retainedTarget(bonded)
     if (transferring != null && !actions.isTarget(local.target) && others.none { actions.isTarget(it.target) }) {
         others.add(card(transferring, null))
@@ -47,7 +46,6 @@ internal fun rememberHeadsetCards(
     return HeadsetCards(local, others, primary != null || state.connection != ConnectionState.Disconnected || others.isEmpty())
 }
 
-/** Associate a peer with a bonded headset only when the session identifies that individual headset. */
 private fun remoteHeadsetCards(
     peers: List<RemoteHeadset>,
     bonded: List<DeviceCandidate>,

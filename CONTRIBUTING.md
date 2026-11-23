@@ -77,7 +77,7 @@ cd OpenRose
 | --- | --- |
 | `./gradlew spotlessApply` | 格式化全部 Kotlin 与 Gradle Kotlin DSL（Spotless + ktlint，规则在 `.editorconfig`） |
 | `./gradlew spotlessCheck` | 检查格式 |
-| `./gradlew detekt` | 产品模块和构建约定的 Kotlin 静态分析，配置为 `config/detekt/detekt.yml` |
+| `./gradlew detekt` | 产品模块和构建约定的 Kotlin 静态分析，配置为 `config/detekt/detekt.yml`，自定义规则在 `tools/detekt-rules` |
 | `./gradlew koverHtmlReport` | 生成根项目聚合的覆盖率 HTML 报告 |
 | `./gradlew koverVerify` | 校验行覆盖率不低于下限 |
 | `./gradlew offlineCheck` | 运行全部不依赖硬件的测试，以及 `spotlessCheck`、`detekt`、lint 与 `koverVerify`。CI 执行的就是它 |
@@ -87,8 +87,9 @@ cd OpenRose
 约束：
 
 - Kotlin 编译器警告会使构建失败（`allWarningsAsErrors`），请直接修复警告。
-- Android lint 的警告按错误处理。上游发布新版本的提示列为信息，依赖升级由 Dependabot 每周提出。detekt 与 Android lint 直接检查源码。必须依赖宿主私有 API 或实现固定 AIDL 契约时，将例外限定到相应调用或适配器，并在源码中说明原因。
+- Android lint 的警告按错误处理。上游发布新版本的提示列为信息，依赖升级由 Dependabot 每周提出。detekt 与 Android lint 直接检查源码。必须依赖宿主私有 API 或实现固定 AIDL 契约时，将例外限定到相应调用或适配器，原因写进相关 ADR 或 issue。
 - detekt 不检查测试源码的行宽（`MaxLineLength`），`ReturnCount` 不计开头的守卫语句；规则见 `config/detekt/detekt.yml`。
+- 源码不写注释（[ADR 0021](docs/adr/0021-no-code-comments.md)）：决策写进 ADR，绕路实现登记为 issue。遗留注释的预算在 `config/detekt/comment-budget.txt` 中，只降不升；清理流程用 `/delete-comment` 技能。
 - Spotless 不会把 `.editorconfig` 的改动当作输入变化：修改 `.editorconfig` 后请运行 `./gradlew spotlessApply --rerun-tasks`。
 - 全仓格式化提交记录在 `.git-blame-ignore-revs` 中。GitHub 的 blame 会自动跳过它；本地运行一次 `git config blame.ignoreRevsFile .git-blame-ignore-revs` 即可同样跳过。
 

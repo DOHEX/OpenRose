@@ -2,7 +2,6 @@ package io.github.dohex.openrose.desktop
 
 import io.github.dohex.openrose.ui.desktop.DesktopSettings
 
-/** Layer-prefixed storage format; missing and unrecognized values use product defaults. */
 internal object DesktopSettingsCodec {
     private const val BACKGROUND_CONTROL = "desktop.background_control"
 

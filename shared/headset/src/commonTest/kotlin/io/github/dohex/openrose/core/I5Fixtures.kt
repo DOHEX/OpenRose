@@ -1,10 +1,5 @@
 package io.github.dohex.openrose.core
 
-/**
- * Independent real i5 Linux initialization capture (rose_reverse/analysis/i5_live_read_2026-10-18.jsonl),
- * keyed by the query's response key. No setting hardware capture exists, so setting confirmations in the
- * session tests are synthetic.
- */
 internal val i5Replies = mapOf(
     "0101" to "09ff00000101011100000164620000ffe2",
     "0602" to "09ff00000106020e000000010020",

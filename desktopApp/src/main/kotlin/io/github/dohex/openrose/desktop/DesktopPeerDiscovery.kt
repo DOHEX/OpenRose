@@ -8,7 +8,6 @@ import javax.jmdns.ServiceEvent
 import javax.jmdns.ServiceInfo
 import javax.jmdns.ServiceListener
 
-/** JmmDNS follows interface additions/removals, including Ethernet and Wi-Fi changes after sleep. */
 class DesktopPeerDiscovery : PeerDiscovery {
     private var dns: JmmDNS? = null
     private val seen = mutableMapOf<Pair<String, String>, List<NearbyPeer>>()

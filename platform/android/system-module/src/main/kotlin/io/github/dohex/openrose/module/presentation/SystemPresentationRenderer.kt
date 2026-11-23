@@ -7,24 +7,12 @@ import android.os.Looper
 import android.util.Log
 import io.github.dohex.openrose.androidintegration.wire.BridgePresentationWire
 
-/** Actions go back to the module host's single owner through this entry's authorised lease; nothing is queued or connected here. */
 internal interface PresentationCallbacks {
     fun claimPrompt(snapshot: Bundle, promptId: String): Boolean
     fun setNoise(snapshot: Bundle, mode: String): Bundle
     fun report(snapshot: Bundle, feature: String, status: String, detail: String)
 }
 
-/**
- * Renders the module owner's trusted snapshot in com.android.bluetooth, the host process itself.
- *
- * The status notification is a focus card (HyperOS 3 template "new image-text + button component 1", `iconTextInfo`
- * plus up to two text buttons). It carries a summary-state island only while the snapshot asks for one (module mode
- * with a display timing) and never floats on update, so battery refreshes cannot re-expand it. That summary state is
- * the module prompt's battery template, so while the card is shown a module prompt is the island's entrance, replayed
- * by re-posting the card; without the card, the prompt is its own prompt-scoped notification. The JSON follows
- * HyperNotification 1.4's public V3 model schema (publisher revision c704a4de3e1d069e213508363303f62b5e057526); that
- * schema alone does not prove SystemUI acceptance or actual display.
- */
 internal class SystemPresentationRenderer(
     context: Context,
     private val handler: Handler,
@@ -56,7 +44,6 @@ internal class SystemPresentationRenderer(
         ::reportOnce,
     )
 
-    /** Accepts snapshots from any thread; all Android presentation state is serialized on handler. */
     fun render(snapshot: Bundle) {
         if (closed) return
         val safeSnapshot = Bundle(snapshot)
@@ -65,7 +52,6 @@ internal class SystemPresentationRenderer(
         }
     }
 
-    /** Withdraws only notifications and module prompts created by this renderer. */
     fun clear() {
         if (closed) return
         dispatchOnHandler(::clearOnHandler)
@@ -80,7 +66,6 @@ internal class SystemPresentationRenderer(
         dispatchOnHandler(::clearOnHandler)
     }
 
-    /** Hot reload must know whether an in-flight synchronous Binder wait actually released us. */
     fun awaitActionTermination(timeoutMillis: Long): Boolean = actions.awaitTermination(timeoutMillis)
 
     private fun renderOnHandler(snapshot: Bundle) {
@@ -97,7 +82,6 @@ internal class SystemPresentationRenderer(
         current = decoded
         if (newSession) actions.register()
 
-        // A merged module prompt makes the status island replay its entrance on this frame.
         prompt.render(decoded, statusNotification.canMergePrompt(decoded))
         val onPromptShown = if (prompt.awaitsStatus(decoded)) prompt::markStatusShown else null
         statusNotification.render(decoded, onPromptShown)

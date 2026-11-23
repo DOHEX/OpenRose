@@ -3,7 +3,6 @@ package io.github.dohex.openrose.core.protocol
 import io.github.dohex.openrose.core.DeviceSetting
 import io.github.dohex.openrose.core.models.ModelProtocol
 
-/** ZT models with independent multipoint carry the custom curve in slot 3 instead of the light preset. */
 internal val ModelProtocol.Zt.eqPresets: List<String>
     get() = if (independentMultipoint) {
         listOf("pop", "hifi", "rock", "custom")

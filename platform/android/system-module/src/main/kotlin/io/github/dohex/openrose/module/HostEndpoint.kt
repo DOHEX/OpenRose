@@ -74,21 +74,12 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import java.util.concurrent.atomic.AtomicLong
 
-/**
- * Who may use the host. Roles come from the verified Binder uid/pid and the packages that own the uid;
- * nothing the caller says about itself (package, process, resolution) can raise its role, and the
- * application needs no cooperation from anything running in its process.
- *
- * com.xiaomi.bluetooth shares android.uid.bluetooth (uid 1002) with the host's com.android.bluetooth, so
- * the uid alone cannot tell the host's own presentation code from the Xiaomi Bluetooth process; the pid does.
- */
 internal class AndroidCallerAuthority(
     private val context: Context,
     private val hostUid: Int = Process.myUid(),
     private val hostPid: Int = Process.myPid(),
 ) : CallerAuthority {
     override fun roleOf(identity: CallerIdentity): ClientRole? = when {
-        // The module's own presentation code runs in the host process: same uid and same pid.
         identity.uid == hostUid && identity.pid == hostPid -> ClientRole.HOST_PRESENTATION
 
         BridgeWire.APP_PACKAGE in identity.packages -> ClientRole.APP
@@ -113,12 +104,6 @@ internal class OwnerCirculation(
     val call: (CirculationCommand) -> CirculationReply,
 )
 
-/**
- * The Binder surface of the module host. It translates the AIDL to the core [ModuleControlHost] and keeps
- * only what is specific to the transport: leases per Binder client, the system entries' read → acknowledge
- * handshake and their reported diagnostics. Authority, ownership and every command stay in the core host.
- */
-// IControlBridge's AIDL fixes its 17 entry points. The stub delegates each call without changing its Binder caller identity.
 @Suppress("TooManyFunctions")
 internal class HostEndpoint(
     private val context: Context,
@@ -165,7 +150,6 @@ internal class HostEndpoint(
     private val application = ApplicationControl()
 
     init {
-        // A report belongs to the session it described; a new owner or an ended one starts clean.
         scope.launch {
             host.ownerView.map { it?.generation }.distinctUntilChanged().collect {
                 facts.update { it.copy(presentation = emptyMap()) }
@@ -242,7 +226,6 @@ internal class HostEndpoint(
 
                 is HostOpenResult.Refused -> {
                     Log.w(TAG, "open_refused uid=${caller.uid} ${result.rejection}")
-                    // A retired instance (module hot reload) must be rediscovered.
                     val status = if (result.rejection == HostRejection.UNAUTHORIZED) {
                         BridgeWire.STATUS_UNAUTHORIZED
                     } else {
@@ -256,7 +239,6 @@ internal class HostEndpoint(
         private fun validateTarget(hello: Bundle, lease: EndpointLease): Bundle? {
             val target = lease.target ?: return null
             val process = lease.processName
-            // The claimed scope must match the verified caller; it can never widen what the role allows.
             if (hello.getString(BridgeWire.PACKAGE) != target.packageName || process == null || !target.acceptsProcess(process)) {
                 host.close(lease.caller, lease.id)
                 return BridgeBundles.response(BridgeWire.STATUS_UNAUTHORIZED, "目标包或运行进程与已验证的调用者不一致")
@@ -278,16 +260,13 @@ internal class HostEndpoint(
         }
 
         private fun registerLease(lease: EndpointLease, opened: HostOpenResult.Opened): Bundle {
-            // The lease is registered before the death link, so a death in between finds and drops it.
             synchronized(lock) {
-                // One lease per caller process; a reconnecting client replaces its earlier lease.
                 leases.values.filter { it.caller == lease.caller }.map { it.id }.forEach { dropLease(it) }
                 leases[lease.id] = lease
             }
             try {
                 lease.client.linkToDeath(lease.death, 0)
             } catch (failure: RemoteException) {
-                // Drops the endpoint lease and closes the host lease.
                 synchronized(lock) { dropLease(lease.id) }
                 Log.w(TAG, "lease_link_failed uid=${lease.caller.uid}", failure)
                 return BridgeBundles.response(BridgeWire.STATUS_UNAVAILABLE, "调用者已不存在")
@@ -321,12 +300,10 @@ internal class HostEndpoint(
             synchronized(lock) { dropLease(lease.id) }
         }
 
-        /** Revokes every lease, e.g. when the host owner or the whole endpoint goes away. */
         fun shutdown() {
             synchronized(lock) { leases.keys.toList().forEach(::dropLease) }
         }
 
-        /** Caller holds [lock]. */
         private fun dropLease(leaseId: String) {
             val lease = leases.remove(leaseId) ?: return
             lease.watchJob?.cancel()
@@ -375,8 +352,6 @@ internal class HostEndpoint(
             val lease = leaseTable.consumerLease(leaseId)
             val capturedAt = SystemClock.elapsedRealtime()
             val view = host.control.view(lease.caller, lease.id) ?: return BridgeBundles.response(BridgeWire.STATUS_NO_SESSION)
-            // Bonded ROSE earphones are named with or without a session: on the target source device of a headset
-            // circulation they are not connected yet (ADR 0017).
             val bonded = ArrayList(BondedHeadsets.addresses(view.state))
             val reference = view.state.readySession
             if (reference == null) {
@@ -494,7 +469,6 @@ internal class HostEndpoint(
                 when (result) {
                     is HostCallResult.Flag -> BridgeBundles.response(if (result.value) BridgeWire.STATUS_OK else "STALE_PROMPT")
 
-                    // The host decides which entry presents the saved island mode; a refusal is not a stale generation.
                     is HostCallResult.Rejected -> if (result.rejection == HostRejection.FORBIDDEN) {
                         BridgeBundles.response(BridgeWire.STATUS_UNAVAILABLE, result.message)
                     } else {
@@ -512,8 +486,6 @@ internal class HostEndpoint(
             return withSessionReference(request) { generation, reference ->
                 val mode = request.getString(BridgePresentationWire.NOISE_MODE)?.let(NoiseMode::fromId)
                     ?: return@withSessionReference BridgeBundles.response(BridgeWire.STATUS_INVALID_ARGUMENT)
-                // The owner validates the generation and session reference under its own lifecycle lock, and the
-                // result is the earphones' confirmation, never that this call arrived.
                 val command = HostCommand.Set(reference, HeadsetCommand.NoiseMode(mode))
                 val result = runBlocking { host.control.execute(lease.caller, lease.id, generation, command) }
                 when (result) {
@@ -534,11 +506,6 @@ internal class HostEndpoint(
             }
         }
 
-        /**
-         * The fusion device center's additional settings entry. Decided only from the owner's own state (the user's
-         * persisted destination and the earphones it knows), so it needs nothing from the application process and
-         * never names a device the owner does not know.
-         */
         fun fusionEntry(request: Bundle): Bundle {
             val lease = leaseTable.consumerLease(request.getString(BridgeWire.LEASE_ID))
             requireVersion(request)
@@ -585,8 +552,6 @@ internal class HostEndpoint(
             requireVersion(report)
             val feature = report.getString(BridgePresentationWire.FEATURE)?.takeIf { it in BridgePresentationWire.FEATURES }
                 ?: return BridgeBundles.response(BridgeWire.STATUS_INVALID_ARGUMENT)
-            // Each entry reports only the presentation features it renders itself: the host's own renderer the
-            // status notification and the connection prompts, the Xiaomi system app only the official prompt.
             val allowed = when (lease.target) {
                 BridgeTarget.BLUETOOTH -> setOf(
                     BridgePresentationWire.STATUS_NOTIFICATION,
@@ -622,8 +587,6 @@ internal class HostEndpoint(
     }
 
     private inner class ApplicationControl {
-        // --- application role: the full client surface ---
-
         fun circulation(request: Bundle): Bundle {
             leaseTable.appLease(request)
             requireVersion(request)
@@ -637,8 +600,6 @@ internal class HostEndpoint(
             return if (payload == null) BridgeBundles.response(BridgeWire.STATUS_INVALID_ARGUMENT) else circulationResponse(owner, payload)
         }
 
-        // The LAN service may fail in TLS, persistent pairing or any platform audio driver.
-        // Marshal that failure for the Binder client. Cancellation and fatal VM errors retain their meaning.
         @Suppress("TooGenericExceptionCaught")
         private fun circulationResponse(owner: OwnerCirculation, data: Bundle): Bundle {
             val command = try {
@@ -647,7 +608,6 @@ internal class HostEndpoint(
                 return BridgeBundles.response(BridgeWire.STATUS_INVALID_ARGUMENT, malformed.message)
             }
             val response = try {
-                // Authorize on the incoming Binder thread. System calls must run under the Bluetooth host identity.
                 runBlocking {
                     owner.scope.async(Dispatchers.IO) {
                         check((host.status.value as? HostStatus.Active)?.generation == owner.generation) { "所有者代际已过期" }
@@ -709,7 +669,6 @@ internal class HostEndpoint(
                             frames.onFrame(Bundle().apply { putString(BridgeWire.PAYLOAD, HostFrameWire.encode(frame).render()) })
                         }
                     } catch (_: RemoteException) {
-                        // An application that has exited can no longer receive this subscription.
                     } finally {
                         runCatching { frames.onEnded(Bundle().apply { putString(BridgeWire.GENERATION, generation.toString()) }) }
                     }

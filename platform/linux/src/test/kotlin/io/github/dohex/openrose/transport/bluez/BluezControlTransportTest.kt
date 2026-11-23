@@ -72,7 +72,7 @@ class BluezControlTransportTest {
         }
         val released = CompletableDeferred<String>()
         bus.onStopNotify = { released.complete(it) }
-        var firstWriteRejections = 16 // 2 s at the BlueZ driver's 125 ms retry interval.
+        var firstWriteRejections = 16
         bus.onWrite = { bytes ->
             if (firstWriteRejections > 0) {
                 firstWriteRejections--

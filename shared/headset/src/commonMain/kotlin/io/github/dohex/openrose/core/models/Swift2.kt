@@ -22,7 +22,6 @@ private val swift2Capabilities = DeviceCapabilities(
         DeviceSetting.TOUCH_ENABLED,
         DeviceSetting.PROMPT_VOLUME,
     ),
-    // RoseLink's Swift 2 panel disables the off option and sets no firmware gate.
     promptVolumeLevels = (1..5).toPersistentSet(),
 )
 

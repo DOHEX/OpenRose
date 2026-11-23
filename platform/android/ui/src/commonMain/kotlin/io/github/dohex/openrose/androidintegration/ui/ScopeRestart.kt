@@ -46,18 +46,11 @@ import top.yukonga.miuix.kmp.layout.DialogDefaults
 import top.yukonga.miuix.kmp.overlay.OverlayDialog
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
-// Every summary fits on one line, so the line under the title keeps its height and the rows never move.
 private const val SCOPE_RESTART_NOTICE = "蓝牙可能短暂断开"
 private const val SCOPE_RESTART_DONE = "已完成"
 
 private enum class ScopeRestartStage { SELECTING, RUNNING, DONE }
 
-/**
- * One dialog carries the whole restart: choosing the scopes, the run, and its results. Rows keep their place
- * throughout and only the leading mark changes, so a ticked checkbox turns into that process's progress.
- * While it runs the dialog cannot be dismissed and its buttons stay in place, disabled. [open] only shows or
- * hides the dialog; the stage comes from the run itself, so closing does not change what is animating out.
- */
 @Composable
 internal fun ScopeRestartAction(
     open: Boolean,
@@ -94,7 +87,6 @@ internal fun ScopeRestartAction(
                 top.yukonga.miuix.kmp.basic.Icon(restartIcon, contentDescription = "重启作用域")
             }
             OverlayDialog(show = open, title = "重启作用域", onDismissRequest = onDismiss) {
-                // Drawn like the dialog's own summary, but held to one line, so the rows below never move.
                 top.yukonga.miuix.kmp.basic.Text(
                     text = summary,
                     modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
@@ -134,7 +126,6 @@ private fun phaseText(phase: ScopeRestartPhase): String = when (phase) {
     is ScopeRestartPhase.Waiting -> "等待新进程出现，还剩 ${phase.secondsLeft} 秒"
 }
 
-/** The leading mark of a process row: its checkbox while choosing, then its progress or result. */
 private enum class ScopeRestartMark {
     CHECKBOX,
     SKIPPED,
@@ -156,11 +147,6 @@ private enum class ScopeRestartMark {
     }
 }
 
-/**
- * The style's own checkbox row, kept for the whole restart so its height and padding never change.
- * A process left unticked stays in place, dimmed and marked as not chosen at its end; a failure's [detail]
- * goes below the package. The row is one semantic node in every stage, like the checkbox row it starts as.
- */
 @Composable
 private fun ScopeRestartRow(target: String, mark: ScopeRestartMark, checked: Boolean, detail: String?, onToggle: (String) -> Unit) {
     val selecting = mark == ScopeRestartMark.CHECKBOX
@@ -171,7 +157,6 @@ private fun ScopeRestartRow(target: String, mark: ScopeRestartMark, checked: Boo
         InterfaceStyle.MIUIX -> BasicComponent(
             modifier = row,
             title = target,
-            // Same footprint as the Miuix checkbox and its trailing gap, so the mark replaces it in place.
             startAction = { ScopeRestartMarkSlot(mark, checked, 26.dp, Modifier.padding(end = 5.dp)) },
             endActions = if (skipped) ({ AppText("未选择", role = AppTextRole.Summary) }) else null,
             summary = failure,
@@ -255,7 +240,6 @@ private fun ScopeRestartRows(
                         ScopeRestartMark.WORKING
                     }
             }
-            // Reasons appear once the run is over: a row growing mid-run would move every row of the dialog.
             val detail = byTarget[target]?.detail?.takeIf { stage == ScopeRestartStage.DONE }
             ScopeRestartRow(target, mark, target in selected, detail, onToggle)
         }

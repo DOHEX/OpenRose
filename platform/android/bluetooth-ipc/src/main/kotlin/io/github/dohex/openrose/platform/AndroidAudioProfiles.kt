@@ -32,7 +32,6 @@ import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.coroutines.resume
 
-/** Exposes public Android Bluetooth facts; interpretation belongs to the shared core. */
 internal class AndroidAudioProfiles(private val context: Context) : AudioFactsDriver {
     override val events: Flow<RawAudioEvent> = callbackFlow {
         val receiver = object : BroadcastReceiver() {
@@ -56,7 +55,6 @@ internal class AndroidAudioProfiles(private val context: Context) : AudioFactsDr
             addAction(BluetoothHeadset.ACTION_CONNECTION_STATE_CHANGED)
             addAction(BluetoothAdapter.ACTION_STATE_CHANGED)
         }
-        // Bluetooth broadcasts come from a privileged app with its own UID.
         ContextCompat.registerReceiver(context, receiver, filter, ContextCompat.RECEIVER_EXPORTED)
         trySend(RawAudioEvent.Ready)
         awaitClose { runCatching { context.unregisterReceiver(receiver) } }
@@ -124,7 +122,6 @@ internal class AndroidAudioProfiles(private val context: Context) : AudioFactsDr
                 }
                 for ((profile, id) in ids) leases[profile] = requestProfileProxy(adapter, id)
             }
-            // A stalled proxy must not discard facts from profiles that already arrived.
             val profiles = leases.mapValues { (_, lease) -> lease?.snapshot(targetAddresses) }.toMutableMap()
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
                 profiles[AudioProfile.LE_AUDIO] = RawProfileSnapshot(
@@ -141,7 +138,8 @@ internal class AndroidAudioProfiles(private val context: Context) : AudioFactsDr
         }
     }
 
-    @SuppressLint("MissingPermission") // connectionFacts checks BLUETOOTH_CONNECT (or legacy BLUETOOTH) first.
+    @SuppressLint("MissingPermission")
+    @Suppress("ktlint:standard:function-signature")
     internal suspend fun requestProfileProxy(adapter: BluetoothAdapter, profileId: Int): ProfileProxyLease? =
         suspendCancellableCoroutine { continuation ->
             val request = ProfileProxyRequest(adapter, profileId, continuation)
@@ -240,7 +238,7 @@ internal class AndroidAudioProfiles(private val context: Context) : AudioFactsDr
         val isValid: Boolean get() = !disconnected.get()
         fun owns(other: BluetoothProfile): Boolean = proxy === other
 
-        @SuppressLint("MissingPermission") // Only queried after the public Bluetooth permission check.
+        @SuppressLint("MissingPermission")
         fun snapshot(targetAddresses: Set<String>): RawProfileSnapshot? {
             if (!isValid) return null
             val connected = try {

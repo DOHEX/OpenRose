@@ -5,21 +5,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withContext
 
-/** Outcome of one Root shell run: its exit code and every line it printed. */
 data class RootResult(val exitCode: Int, val output: String)
 
-/**
- * Thrown by a Root runner that could not start the shell at all (no `su`, or the launch was refused). The platform
- * adapter maps its own I/O and security failures to this type, because those exceptions are not common code.
- */
 class RootLaunchException(message: String, cause: Throwable? = null) : Exception(message, cause)
 
-/**
- * Runs one Root shell for the chosen scopes, so authorization is requested only after the user confirms.
- * All chosen scopes are signalled together and share one wait of [waitSeconds]; `onUpdate` receives the
- * phase once Root is granted and each second of the wait, and each result the moment its line arrives.
- * [runRoot] executes the script as Root, forwarding each output line to `onLine` as it arrives.
- */
 class IntegrationScopeRestarter(
     private val waitSeconds: Int = 8,
     private val runRoot: (script: String, onLine: (String) -> Unit) -> RootResult,
@@ -99,13 +88,6 @@ private fun parseResult(line: String, targets: List<String>): ScopeRestartResult
 
 val INTEGRATION_SCOPE_PACKAGES = persistentListOf("com.android.bluetooth", "com.xiaomi.bluetooth", "com.milink.service")
 
-// scan() prints pid:target for every process of a chosen scope. One grep over all cmdlines finds the candidates,
-// so only processes that mention a scope are read in full; the first NUL-delimited argv value must then be the
-// package name alone for Bluetooth, package or package:child for the other scopes, matching
-// BridgeTarget.acceptsProcess. Every scope is snapshotted, then all are signalled with SIGTERM (never force-stop)
-// and share one deadline. A scope counts as restarted when a pid that was not there before appears; pids that are
-// still alive at the deadline mean the process ignored the signal. The seconds left are printed whenever they drop.
-// Targets are only ever members of INTEGRATION_SCOPE_PACKAGES, so they are safe to inline into the script.
 private fun restartScript(targets: List<String>, waitSeconds: Int) = """
     if [ "${'$'}(id -u)" != 0 ]; then exit 1; fi
     echo $ROOT_OK

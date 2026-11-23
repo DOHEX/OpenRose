@@ -14,8 +14,7 @@ internal sealed interface HookDecision {
     data class Return(val value: Any?) : HookDecision
 }
 
-/** The host must retain its normal behavior if optional ROM code or a module callback fails, including at linkage. */
-@Suppress("TooGenericExceptionCaught") // Only wraps optional module work. Failures from chain.proceed() belong to the host.
+@Suppress("TooGenericExceptionCaught")
 internal inline fun <T> hostAdapterCall(onFailure: (Throwable) -> T, call: () -> T): T = try {
     call()
 } catch (failure: Throwable) {
@@ -34,7 +33,6 @@ internal fun resolveMethod(target: Class<*>, name: String, parameters: Array<Cla
 
 internal fun bluetoothAddress(value: Any?): String? = (value as? BluetoothDevice)?.let { runCatching { it.address }.getOrNull() }
 
-/** Owns the exact ROM method registrations and diagnostics belonging to one headset adapter. */
 internal class NativeHeadsetHooks(
     private val module: XposedModule,
     private val loader: ClassLoader,
@@ -108,10 +106,6 @@ internal class NativeHeadsetHooks(
         report("UNAVAILABLE", "${status.lowercase()}:$className.$method")
     }
 
-    /**
-     * Queues one vendor noise request for [snapshot]; true means locally accepted, never device-confirmed.
-     * The gate rechecks [current] when it dispatches, so the session's freshness is decided there.
-     */
     fun submitNoise(snapshot: NativeHeadsetSnapshot, mode: String, address: String?, current: () -> NativeHeadsetSnapshot?): Boolean {
         if (!snapshot.supportsNoise(mode)) {
             report("UNSUPPORTED", "mode=$mode is absent from the current capability snapshot")
@@ -136,7 +130,6 @@ internal class NativeHeadsetHooks(
         report(if (result == SystemRequestGate.Result.REJECTED) "UNAVAILABLE" else "SUBMITTED", detail)
     }
 
-    /** The bridge client truncates detail at encoding and the host validates the status; callers pass wire constants. */
     fun report(status: String, detail: String) {
         hostAdapterCall(onFailure = { module.log(Log.WARN, tag, "diagnostic_callback_failed feature=$feature status=$status", it) }) {
             callbacks.report(feature, status, detail)

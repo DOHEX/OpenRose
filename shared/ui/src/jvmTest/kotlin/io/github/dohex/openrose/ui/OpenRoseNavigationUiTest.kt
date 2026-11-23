@@ -264,8 +264,6 @@ class OpenRoseNavigationUiTest {
         block: suspend (NavigationHarness) -> Unit,
     ) = runOpenRoseUiTest(width, height) {
         val state = mutableStateOf(initialState)
-        // These tests are about layout and navigation. The headless renderer draws backdrop blur in software,
-        // where the progressive bar blur costs far more than the time the long frame runs here can afford.
         val uiSettings = mutableStateOf(UiSettings(interfaceStyle = style, appearance = Appearance.SYSTEM, backgroundBlurEnabled = false))
         val model = FakeOpenRoseModel(state, uiSettings)
         model.onStartScan = { state.value = state.value.copy(scan = io.github.dohex.openrose.core.ScanState.Scanning) }
@@ -293,7 +291,6 @@ class OpenRoseNavigationUiTest {
                 equalizer = profile.capabilities().equalizer,
                 touchControl = profile.capabilities().touchControl,
                 audioControl = profile.capabilities().audioControl,
-                // Prompt-volume levels are unknown until the firmware is read.
                 promptVolumeLevels = profile.capabilities(FieldValue.Firmware(listOf(3, 0, 4), "304")).promptVolumeLevels,
                 gainLevels = persistentSetOf(0, 1, 2),
                 hearingProtectionLevels = (0..6).toPersistentSet(),

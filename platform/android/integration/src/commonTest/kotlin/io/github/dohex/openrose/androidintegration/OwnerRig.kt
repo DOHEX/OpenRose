@@ -44,7 +44,6 @@ import kotlinx.coroutines.test.runCurrent
 internal const val APP_PACKAGE = "io.github.dohex.openrose"
 internal const val HOST_PACKAGE = "com.android.bluetooth"
 
-/** The physical earphones: exactly one control link may be open at a time, whoever owns it. */
 internal class SharedHeadset {
     val events = mutableListOf<String>()
     var openOwner: String? = null
@@ -76,10 +75,8 @@ internal class HeadsetTransport(
     val links = mutableListOf<HeadsetConnection>()
     var autoReplyOnOpen = true
 
-    /** Closing a real link takes time; the owner is not released before it has actually finished. */
     var closeDelayMillis = 0L
 
-    /** The platform could not close the link: it stays open at the earphones although the owner gave it up. */
     var closeFails = false
 
     override val audioConnectedDevice: Flow<DeviceId?> get() = audioDevice
@@ -180,7 +177,6 @@ internal val testAuthority = CallerAuthority { identity ->
     }
 }
 
-/** Binds the app-side client to a host in the same JVM, carrying every message through the wire codec. */
 internal class InProcessHostLink(
     var host: ModuleControlHost,
     private val scope: CoroutineScope,
@@ -192,14 +188,11 @@ internal class InProcessHostLink(
     var delayedAcquire: (suspend () -> AcquireResult)? = null
     var releaseKillsHostProcess = false
 
-    /** The host process is alive and the link open, but it never answers a status call. */
     var statusHangs = false
 
-    /** Rewrites the receipt the host issued on its way back, as a faulty or hostile link could. */
     var tamperReceipt: (ReleaseReceipt) -> ReleaseReceipt = { it }
     val connections = mutableListOf<Connection>()
 
-    /** How long finding the host takes, as binding a real Binder service does; every attempt is counted in [opens]. */
     var openMillis = 0L
     var opens = 0
         private set
@@ -282,7 +275,6 @@ internal class InProcessHostLink(
 
 internal fun rosePair(name: String, profile: ModelProfile = ModelProfile.I5_ZT) = DeviceCandidate(DeviceId(name), profile.displayName, null, profile, "", "11:22:33:44:55:66")
 
-/** An advertisement that identifies [profile] by its manufacturer data. */
 internal fun roseAdvertisement(profile: ModelProfile, id: DeviceId): Advertisement {
     val prefix = syntheticAdvertisementPrefixes.getValue(profile).bytes()
     val company = (prefix[0].toInt() and 255) or ((prefix[1].toInt() and 255) shl 8)
@@ -294,20 +286,17 @@ internal fun roseAdvertisement(profile: ModelProfile, id: DeviceId): Advertiseme
     return Advertisement(id, name, manufacturerData = mapOf(company to prefix.copyOfRange(2, prefix.size)))
 }
 
-/** Synthetic prefixes from the protocol identification tables; not captured advertisements. */
 private val syntheticAdvertisementPrefixes = mapOf(
     ModelProfile.I5_ZT to "525300010001",
     ModelProfile.I7_RS_V2 to "b8e5290f",
 )
 
-/** What [profile]'s earphones send back for one initialization write, as hex frames; only the families these tests drive. */
 internal fun initializationReplies(profile: ModelProfile, writtenHex: String): List<String> = when (profile.family) {
     ProtocolFamily.ZT -> listOfNotNull(i5Replies[writtenHex.substring(10, 14)])
     ProtocolFamily.RS_COMMON_V2 -> i7Replies
     ProtocolFamily.RS_COMMON, ProtocolFamily.F8 -> error("${profile.name}: integration tests drive only the i5 and RS Common V2 fixtures; catalog models are covered in shared/headset")
 }
 
-/** The application and the module host over one pair of earphones, built the way production wires them. */
 internal class OwnerRig(
     private val test: TestScope,
     val earphones: DeviceCandidate = rosePair("rose-a"),
@@ -322,7 +311,6 @@ internal class OwnerRig(
     private val sessionTiming = SessionTiming(queryTimeoutMillis = 50, writeIntervalMillis = 0)
     private val platform = PlatformState(PermissionState.GRANTED, TransportAvailability.Available)
 
-    /** The module host process: everything it started stops with it, like a process that was killed. */
     private var hostScope: CoroutineScope = newHostScope()
     private var hostCount = 0
     var host = newHost()
@@ -342,18 +330,12 @@ internal class OwnerRig(
         )
     }
 
-    /**
-     * Replaces the host with a fresh instance of a new incarnation, which knows only what [bootHost] tells
-     * it. A killed process takes its connection and every link to it down without any release; a hot
-     * reload releases first and then withdraws the endpoint.
-     */
     suspend fun replaceHost(processDied: Boolean): Boolean {
         if (processDied) {
             hostScope.cancel()
             hostTransport.links.filter { !it.closed }.forEach { it.close() }
             hostScope = newHostScope()
         } else if (!host.stop()) {
-            // An unconfirmed release refuses the reload: the old host keeps serving and nothing is withdrawn.
             return false
         }
         link.connections.filter { it.isOpen }.forEach { it.sever(processDied) }
@@ -362,7 +344,6 @@ internal class OwnerRig(
         return true
     }
 
-    /** Mirrors the saved choice to the host the way the framework's remote preferences do, asynchronously. */
     private var hostUnlocked = true
 
     init {
@@ -379,16 +360,13 @@ internal class OwnerRig(
         host.configure { HostConfiguration(unlocked, HostSettings(integration = IntegrationSettings(controlWay = store.hostSelection))) }
     }
 
-    /** The first unlock of a boot, as the host learns it. */
     suspend fun unlockHost() {
         hostUnlocked = true
         host.configure { HostConfiguration(true, HostSettings(integration = IntegrationSettings(controlWay = store.hostSelection))) }
     }
 
-    /** A scope standing for one application process; cancelling it is that process disappearing. */
     fun newAppProcess() = CoroutineScope(test.backgroundScope.coroutineContext + SupervisorJob(test.backgroundScope.coroutineContext[Job]))
 
-    /** [interfaceOpen] stands for the visible interface, which holds the ordinary session like the real one does. */
     fun newRuntime(
         userUnlocked: Boolean = true,
         process: CoroutineScope = test.backgroundScope,
