@@ -57,7 +57,7 @@ class ControlWayUiTest {
             integration(moduleUnavailable, OwnerState(selected = ControlWay.MODULE, readiness = unavailable)),
         )
         forEachStyle(state) { harness ->
-            assertTrue(harness.isTagSelected(ControlWayTags.option(ControlWay.MODULE)))
+            assertTrue("模块控制" in harness.tagTexts(ControlWayTags.CARD))
             harness.openPage("状态")
             assertTrue("不可用" in harness.tagTexts(ControlWayTags.READINESS))
             assertTrue("发现控制端" in harness.tagTexts(ControlWayTags.FAILURE_STAGE))
@@ -85,7 +85,7 @@ class ControlWayUiTest {
             ),
         )
         forEachStyle(state) { harness ->
-            assertTrue(harness.isTagSelected(ControlWayTags.option(ControlWay.MODULE)))
+            assertTrue("模块控制" in harness.tagTexts(ControlWayTags.CARD))
             harness.openPage("状态")
             assertTrue("就绪" in harness.tagTexts(ControlWayTags.READINESS))
             assertTrue("已连接 · i5 ZT" in harness.tagTexts(StatusTags.CONNECTION))
@@ -120,15 +120,19 @@ class ControlWayUiTest {
             integration(ModuleAvailability.NotEnabled, OwnerState(selected = ControlWay.ORDINARY, readiness = OwnerReadiness.Ready)),
         )
         forEachStyle(state) { harness ->
-            harness.clickTag(ControlWayTags.option(ControlWay.ORDINARY))
+            harness.clickText("控制方式")
+            harness.render()
+            harness.clickText("普通控制")
             harness.render()
             assertEquals(OwnerState(selected = ControlWay.ORDINARY, readiness = OwnerReadiness.Ready), harness.host.integration.value.owner)
 
-            harness.clickTag(ControlWayTags.option(ControlWay.MODULE))
+            harness.clickText("控制方式")
+            harness.render()
+            harness.clickText("模块控制")
             harness.render()
             assertEquals(ControlWay.MODULE, harness.host.integration.value.owner.selected)
-            assertTrue(harness.isTagSelected(ControlWayTags.option(ControlWay.MODULE)))
-            assertFalse(harness.isTagSelected(ControlWayTags.option(ControlWay.ORDINARY)))
+            assertTrue("模块控制" in harness.tagTexts(ControlWayTags.CARD))
+            assertFalse("普通控制" in harness.tagTexts(ControlWayTags.CARD))
             harness.openPage("状态")
             assertTrue("启动中" in harness.tagTexts(ControlWayTags.READINESS))
         }
@@ -145,8 +149,11 @@ class ControlWayUiTest {
         )
         forEachStyle(state) { harness ->
             assertTrue(harness.hasText("已选择普通控制，正在等待模块释放控制连接。"))
-            assertTrue(harness.isTagClickable(ControlWayTags.option(ControlWay.ORDINARY)))
-            assertTrue(harness.isTagClickable(ControlWayTags.option(ControlWay.MODULE)))
+            assertTrue(harness.hasTappableText("控制方式"))
+            harness.clickText("控制方式")
+            harness.render()
+            assertTrue(harness.hasTappableText("普通控制"))
+            assertTrue(harness.hasTappableText("模块控制"))
             assertFalse(harness.hasText(reason), "settings does not repeat the failure reason")
             harness.openPage("状态")
             assertTrue("切换未完成" in harness.tagTexts(ControlWayTags.READINESS))
@@ -212,10 +219,7 @@ class ControlWayUiTest {
         )
         forEachStyle(state) { harness ->
             assertTrue(harness.hasTag(ControlWayTags.SWITCH_FEEDBACK))
-            assertTrue(harness.isTagDisabled(ControlWayTags.option(ControlWay.ORDINARY)))
-            assertTrue(harness.isTagDisabled(ControlWayTags.option(ControlWay.MODULE)))
-            assertFalse(harness.isTagClickable(ControlWayTags.option(ControlWay.MODULE)))
-            assertFalse(harness.isTagClickable(ControlWayTags.option(ControlWay.ORDINARY)))
+            assertFalse(harness.hasTappableText("控制方式"))
             harness.openPage("状态")
             assertTrue("切换中" in harness.tagTexts(ControlWayTags.READINESS))
         }

@@ -19,8 +19,8 @@ import io.github.dohex.openrose.androidintegration.OwnerState
 import io.github.dohex.openrose.ui.*
 
 private val controlWayOptions = listOf(
-    AppOption(ControlWay.ORDINARY, "普通控制", testTag = ControlWayTags.option(ControlWay.ORDINARY)),
-    AppOption(ControlWay.MODULE, "模块控制", testTag = ControlWayTags.option(ControlWay.MODULE)),
+    AppOption(ControlWay.ORDINARY, "普通控制"),
+    AppOption(ControlWay.MODULE, "模块控制"),
 )
 
 internal object ControlWayTags {
@@ -30,8 +30,6 @@ internal object ControlWayTags {
     const val SWITCH_BLOCKED_NOTICE = "${PREFIX}switch-blocked-notice"
     const val LAST_HANDOFF = "${PREFIX}last-handoff"
     const val HOLDER = "${PREFIX}holder"
-
-    fun option(way: ControlWay) = "${PREFIX}option.${way.name}"
     const val FAILURE_STAGE = "${PREFIX}failure-stage"
     const val READINESS = "${PREFIX}readiness"
 }
@@ -45,14 +43,16 @@ internal fun ControlWayGroup(
     val readiness = owner.readiness
     val switching = readiness is OwnerReadiness.Switching
     Column(Modifier.fillMaxWidth().testTag(ControlWayTags.CARD)) {
-        AppGroup(title = "控制方式") {
-            AppRadioGroup(
+        AppGroup {
+            AppChoiceRow(
+                title = "控制方式",
+                valueText = wayLabel(owner.selected),
                 options = controlWayOptions,
                 selected = owner.selected,
                 enabled = !switching,
-            ) { way ->
-                if (way != owner.selected) onSelectControlWay(way)
-            }
+                icon = RoseIcon.SWAP,
+                onSelect = onSelectControlWay,
+            )
             switchFeedback(readiness)?.let {
                 AppText(it, Modifier.controlWayTextPadding().testTag(ControlWayTags.SWITCH_FEEDBACK), role = AppTextRole.Summary)
             }
