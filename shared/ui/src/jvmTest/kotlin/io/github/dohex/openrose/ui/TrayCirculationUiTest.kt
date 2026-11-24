@@ -2,6 +2,7 @@ package io.github.dohex.openrose.ui
 
 import androidx.compose.runtime.mutableStateOf
 import io.github.dohex.openrose.circulation.*
+import io.github.dohex.openrose.core.HeadsetCommand
 import io.github.dohex.openrose.core.HostPlatform
 import io.github.dohex.openrose.core.NoiseMode
 import io.github.dohex.openrose.core.TransportAvailability
@@ -31,7 +32,7 @@ class TrayCirculationUiTest {
                 val available = if (session == sessions.first()) NoiseMode.TRANSPARENCY else NoiseMode.ANC
                 session.peer to i5Reading(session, listOf(NoiseMode.NORMAL, available))
             }.toMutableMap()
-            val commands = mutableListOf<CirculationCommand.SetNoise>()
+            val commands = mutableListOf<CirculationCommand.SetSetting>()
             val nearby = mapOf("xiaomi" to "Xiaomi 14", "redmi" to "Redmi K70")
             val client = CirculationClient { request ->
                 when (request) {
@@ -39,9 +40,10 @@ class TrayCirculationUiTest {
 
                     is CirculationCommand.Read -> readings.getValue(request.peer)
 
-                    is CirculationCommand.SetNoise -> {
+                    is CirculationCommand.SetSetting -> {
                         commands.add(request)
-                        readings.getValue(request.session.peer).copy(mode = request.mode).also { readings[request.session.peer] = it }
+                        val mode = (request.command as HeadsetCommand.NoiseMode).mode
+                        readings.getValue(request.session.peer).copy(mode = mode).also { readings[request.session.peer] = it }
                     }
 
                     else -> error("Unexpected request $request")
@@ -65,7 +67,10 @@ class TrayCirculationUiTest {
                     assertTrue(panel.hasSelectedText("通透"))
                     assertTrue(panel.hasSelectedText("降噪"))
                     assertEquals(
-                        listOf(CirculationCommand.SetNoise(sessions[0], NoiseMode.TRANSPARENCY), CirculationCommand.SetNoise(sessions[1], NoiseMode.ANC)),
+                        listOf(
+                            CirculationCommand.SetSetting(sessions[0], HeadsetCommand.NoiseMode(NoiseMode.TRANSPARENCY)),
+                            CirculationCommand.SetSetting(sessions[1], HeadsetCommand.NoiseMode(NoiseMode.ANC)),
+                        ),
                         commands,
                     )
                     assertTrue(panel.model.settingWrites.isEmpty())

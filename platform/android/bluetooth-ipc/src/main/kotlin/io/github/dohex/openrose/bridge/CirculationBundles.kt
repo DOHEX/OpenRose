@@ -32,10 +32,11 @@ fun CirculationCommand.toBundle(): Bundle = Bundle().apply {
             "read"
         }
 
-        is CirculationCommand.SetNoise -> {
+        is CirculationCommand.SetSetting -> {
             putSession(command.session)
-            putString("mode", command.mode.id)
-            "noise"
+            putString("setting", command.command.setting.name)
+            putString("value", requireNotNull(encodeRemoteValue(command.command)) { "不支持远程设置 ${command.command.setting.name}" })
+            "set"
         }
 
         is CirculationCommand.Handoff -> {
@@ -58,7 +59,10 @@ fun Bundle.circulationCommand(): CirculationCommand = when (required("op")) {
     "pairQr" -> CirculationCommand.PairQr(required("qr"))
     "forget" -> CirculationCommand.Forget(required("peer"))
     "read" -> CirculationCommand.Read(required("peer"))
-    "noise" -> CirculationCommand.SetNoise(session(), requireNotNull(NoiseMode.fromId(required("mode"))))
+    "set" -> CirculationCommand.SetSetting(
+        session(),
+        requireNotNull(decodeRemoteCommand(required("setting"), required("value"))) { "无效的远程设置" },
+    )
     "handoff" -> CirculationCommand.Handoff(getString("address"))
     "pull" -> CirculationCommand.Pull(required("address"))
     else -> throw IllegalArgumentException("未知的互联操作")
@@ -92,35 +96,34 @@ fun CirculationReply.toBundle(): Bundle = Bundle().apply {
             putString("progress", reply.progress)
         }
 
-        is RemoteReading -> {
-            putString("status", reply.status.name)
-            putString("name", reply.deviceName)
-            reply.session?.let(::putSession)
-            putString("mode", reply.mode?.id)
-            putStringArrayList("modes", ArrayList(reply.modes.map(NoiseMode::id)))
-            reply.left?.let { putInt("left", it) }
-            reply.right?.let { putInt("right", it) }
-            reply.case?.let { putInt("case", it) }
-            putString("batteryLayout", reply.batteryLayout?.name)
-            putString("error", reply.error)
-        }
+        is RemoteReading -> putRemoteReading(reply)
     }
 }
 
 fun Bundle.circulationReply(command: CirculationCommand): CirculationReply {
     getString("error")?.let { return CirculationFailure(it) }
-    fun battery(key: String) = if (containsKey(key)) getInt(key).takeIf { it in 0..100 } else null
+    val battery: (String) -> Int? = { key -> if (containsKey(key)) getInt(key).takeIf { it in 0..100 } else null }
+    val ticket = getString("code")?.let { PairingTicket(it, required("qr"), getLong("validForMillis")) }
     return when (command) {
-        CirculationCommand.Directory -> PeerDirectory(peers("paired"), peers("nearby"), ticket())
+        CirculationCommand.Directory -> PeerDirectory(peers("paired"), peers("nearby"), ticket)
 
-        CirculationCommand.Offer -> PairingReply(ticket())
-
-        is CirculationCommand.Read, is CirculationCommand.SetNoise -> RemoteReading(
+        CirculationCommand.Offer -> PairingReply(ticket)
+        is CirculationCommand.Read, is CirculationCommand.SetSetting -> RemoteReading(
             status = RemoteControlStatus.valueOf(required("status")),
             deviceName = getString("name"),
+            profile = parseModelProfile(getString("profile")),
             session = getString("session")?.let { session() },
             mode = getString("mode")?.let(NoiseMode::fromId),
             modes = getStringArrayList("modes").orEmpty().mapNotNull(NoiseMode::fromId),
+            ancLevel = if (containsKey("ancLevel")) getInt("ancLevel") else null,
+            ancLevels = getIntegerArrayList("ancLevels").orEmpty(),
+            transparencyLevel = if (containsKey("transparencyLevel")) getInt("transparencyLevel") else null,
+            transparencyLevels = getIntegerArrayList("transparencyLevels").orEmpty(),
+            eqPreset = getString("eqPreset"),
+            eqPresets = getStringArrayList("eqPresets").orEmpty(),
+            gameModeSupported = getBoolean("gameModeSupported"),
+            gameMode = if (containsKey("gameMode")) getBoolean("gameMode") else null,
+            blockedReasons = peers("blocked").mapNotNull { (key, reason) -> parseDeviceSetting(key)?.let { it to reason } }.toMap(),
             left = battery("left"),
             right = battery("right"),
             case = battery("case"),
@@ -164,4 +167,27 @@ private fun Bundle.putTicket(ticket: PairingTicket?) {
     }
 }
 
-private fun Bundle.ticket(): PairingTicket? = getString("code")?.let { PairingTicket(it, required("qr"), getLong("validForMillis")) }
+private fun Bundle.putRemoteReading(reply: RemoteReading) {
+    putString("status", reply.status.name)
+    putString("name", reply.deviceName)
+    putString("profile", reply.profile?.name)
+    reply.session?.let(::putSession)
+    putString("mode", reply.mode?.id)
+    putStringArrayList("modes", ArrayList(reply.modes.map(NoiseMode::id)))
+    reply.ancLevel?.let { putInt("ancLevel", it) }
+    putIntegerArrayList("ancLevels", ArrayList(reply.ancLevels))
+    reply.transparencyLevel?.let { putInt("transparencyLevel", it) }
+    putIntegerArrayList("transparencyLevels", ArrayList(reply.transparencyLevels))
+    putString("eqPreset", reply.eqPreset)
+    putStringArrayList("eqPresets", ArrayList(reply.eqPresets))
+    putBoolean("gameModeSupported", reply.gameModeSupported)
+    reply.gameMode?.let { putBoolean("gameMode", it) }
+    if (reply.blockedReasons.isNotEmpty()) {
+        putBundle("blocked", reply.blockedReasons.mapKeys { it.key.name }.peerBundle())
+    }
+    reply.left?.let { putInt("left", it) }
+    reply.right?.let { putInt("right", it) }
+    reply.case?.let { putInt("case", it) }
+    putString("batteryLayout", reply.batteryLayout?.name)
+    putString("error", reply.error)
+}

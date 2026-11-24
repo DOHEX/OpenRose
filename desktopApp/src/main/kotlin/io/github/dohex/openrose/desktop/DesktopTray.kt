@@ -33,6 +33,7 @@ import dev.nucleusframework.composenativetray.trayapp.rememberTrayAppState
 import dev.nucleusframework.core.runtime.LinuxDesktopEnvironment
 import dev.nucleusframework.core.runtime.Platform
 import io.github.dohex.openrose.circulation.CirculationClient
+import io.github.dohex.openrose.core.DeviceSetting
 import io.github.dohex.openrose.core.HeadsetCommand
 import io.github.dohex.openrose.ui.DesktopSoundActions
 import io.github.dohex.openrose.ui.LocalCirculationVisible
@@ -207,7 +208,9 @@ private fun NucleusApplicationScope.TrayPanelWindow(
     ) {
         val window = nucleusWindow
         var pointerInside by remember { mutableStateOf<Boolean?>(null) }
-        LaunchedEffect(window) {
+        var openPopups by remember { mutableIntStateOf(0) }
+        LaunchedEffect(window, openPopups) {
+            if (openPopups > 0) return@LaunchedEffect
             window.requestFocus()
             val gainedFocus = withTimeoutOrNull(FOCUS_LOSS_GRACE_MS) { window.focusFlow.first { it } } != null
             window.focusFlow.collectLatest { focused ->
@@ -217,8 +220,8 @@ private fun NucleusApplicationScope.TrayPanelWindow(
                 }
             }
         }
-        LaunchedEffect(pointerInside) {
-            if (pointerInside == false) {
+        LaunchedEffect(pointerInside, openPopups) {
+            if (openPopups == 0 && pointerInside == false) {
                 delay(POINTER_EXIT_GRACE_MS)
                 onDismiss()
             }
@@ -241,6 +244,9 @@ private fun NucleusApplicationScope.TrayPanelWindow(
                     onContentHeight(height)
                     val target = trayPanelSizeFor(height)
                     if (windowState.size != target) windowState.size = target
+                },
+                onPopupOpenChange = { open ->
+                    openPopups = (openPopups + if (open) 1 else -1).coerceAtLeast(0)
                 },
             )
         }
@@ -267,9 +273,10 @@ private fun remoteMenuEntries(peers: List<RemoteHeadset>, uiScope: CoroutineScop
             add(TrayMenuEntry.Label("$device · ${peer.sourceLabel}"))
             peer.statusLabel?.let { add(TrayMenuEntry.Label(it)) }
             add(TrayMenuEntry.Label(peer.compactBatteryText))
+            val modeEnabled = !peer.busy && reading.blockedReasons[DeviceSetting.NOISE_MODE] == null
             reading.modes.forEach { mode ->
-                val entry = TrayMenuEntry.NoiseMode(noiseModeLabel(mode.id), mode == reading.mode, !peer.busy) {
-                    uiScope.launch { peer.selectMode(mode) }
+                val entry = TrayMenuEntry.NoiseMode(noiseModeLabel(mode.id), mode == reading.mode, modeEnabled) {
+                    uiScope.launch { peer.setSetting(HeadsetCommand.NoiseMode(mode)) }
                 }
                 add(entry)
             }

@@ -1,30 +1,39 @@
 package io.github.dohex.openrose.ui
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.DropdownMenuGroup
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.DropdownMenuPopup
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.MenuDefaults
 import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.role
-import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.toggleableState
 import androidx.compose.ui.state.ToggleableState
@@ -36,9 +45,14 @@ import io.github.dohex.openrose.core.DeviceState
 import io.github.dohex.openrose.core.HeadsetCommand
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.settingPrerequisite
-import top.yukonga.miuix.kmp.basic.Switch as MiuixSwitch
+import top.yukonga.miuix.kmp.basic.DropdownEntry
+import top.yukonga.miuix.kmp.basic.DropdownItem
+import top.yukonga.miuix.kmp.preference.OverlayDropdownPreference
+import top.yukonga.miuix.kmp.preference.SwitchPreference
 
 internal const val TRAY_EQUALIZER_ROW_TAG = "tray-eq-row"
+
+internal val LocalTrayPopupChange = staticCompositionLocalOf<(Boolean) -> Unit> { {} }
 
 @Composable
 internal fun TrayNoiseLevelControls(
@@ -110,7 +124,7 @@ private fun TrayEqualizerControl(
 ) {
     val options = device.writablePresetOptions()
     if (options.isEmpty()) return
-    TrayExpandableChoiceRow(
+    TrayDropdownChoiceRow(
         title = "均衡器",
         valueText = confirmedChoiceValue(DeviceField.EQ, device),
         options = options,
@@ -132,7 +146,7 @@ private fun TraySpatialAudioControl(
     val writable = device.capabilities.writableSettings
     if (DeviceSetting.SPATIAL_MODE in writable) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            TrayExpandableChoiceRow(
+            TrayDropdownChoiceRow(
                 title = DeviceField.SPATIAL_MODE.displayName,
                 valueText = confirmedChoiceValue(DeviceField.SPATIAL_MODE, device),
                 options = device.capabilities.spatialModes.map { AppOption(it, semanticLabel(it)) },
@@ -145,7 +159,7 @@ private fun TraySpatialAudioControl(
             if (DeviceSetting.SPATIAL_CONTENT in writable &&
                 device.settingPrerequisite(DeviceSetting.SPATIAL_CONTENT) == null
             ) {
-                TrayExpandableChoiceRow(
+                TrayDropdownChoiceRow(
                     title = DeviceField.SPATIAL_CONTENT.displayName,
                     valueText = confirmedChoiceValue(DeviceField.SPATIAL_CONTENT, device),
                     options = device.capabilities.spatialContents.map { AppOption(it, semanticLabel(it)) },
@@ -212,39 +226,60 @@ private fun TrayToggleControl(
         else -> null
     }
     val checked = selected ?: false
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp))
-            .clickable(enabled = enabled, role = Role.Switch) { onSet(command(!checked)) }
-            .semantics {
-                role = Role.Switch
-                toggleableState = ToggleableState(checked)
-                if (!enabled) disabled()
-            }
-            .heightIn(min = 40.dp)
-            .padding(vertical = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
-        ) {
-            AppText(
-                label,
-                color = if (enabled) null else appColor(AppColorRole.DisabledContent),
-            )
-            summary?.let { AppText(it, role = AppTextRole.Footnote) }
-        }
-        when (LocalInterfaceStyle.current) {
-            InterfaceStyle.MIUIX -> MiuixSwitch(
-                checked = checked,
-                onCheckedChange = null,
-                enabled = enabled,
-            )
+    TrayToggleRow(
+        label = label,
+        checked = checked,
+        enabled = enabled,
+        summary = summary,
+        onToggle = { onSet(command(it)) },
+    )
+}
 
-            InterfaceStyle.MATERIAL3 -> Switch(
+@Composable
+internal fun TrayToggleRow(
+    label: String,
+    checked: Boolean,
+    enabled: Boolean,
+    summary: String?,
+    onToggle: (Boolean) -> Unit,
+) {
+    when (LocalInterfaceStyle.current) {
+        InterfaceStyle.MIUIX -> SwitchPreference(
+            checked = checked,
+            onCheckedChange = onToggle,
+            title = label,
+            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)),
+            summary = summary,
+            insideMargin = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+            enabled = enabled,
+        )
+
+        InterfaceStyle.MATERIAL3 -> Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(10.dp))
+                .clickable(enabled = enabled, role = Role.Switch) { onToggle(!checked) }
+                .semantics {
+                    role = Role.Switch
+                    toggleableState = ToggleableState(checked)
+                    if (!enabled) disabled()
+                }
+                .heightIn(min = 48.dp)
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                AppText(
+                    label,
+                    color = if (enabled) null else appColor(AppColorRole.DisabledContent),
+                )
+                summary?.let { AppText(it, role = AppTextRole.Footnote) }
+            }
+            Switch(
                 checked = checked,
                 onCheckedChange = null,
                 enabled = enabled,
@@ -253,127 +288,141 @@ private fun TrayToggleControl(
     }
 }
 
+private data class TrayDropdownSpec(
+    val title: String,
+    val valueText: String,
+    val options: List<AppOption<String>>,
+    val selected: String?,
+    val summary: String?,
+    val headerTag: String?,
+    val enabled: Boolean,
+)
+
 @Composable
-private fun TrayExpandableChoiceRow(
+internal fun TrayDropdownChoiceRow(
     title: String,
     valueText: String,
     options: List<AppOption<String>>,
     selected: String?,
     pending: String?,
     blockedReason: String?,
-    sessionKey: Long,
+    sessionKey: Any?,
     onSelect: (String) -> Unit,
     headerTag: String? = null,
+    enabled: Boolean = blockedReason == null,
 ) {
     if (options.isEmpty()) return
-    val enabled = blockedReason == null
+    val onPopupChange = LocalTrayPopupChange.current
     var expanded by remember(sessionKey, enabled) { mutableStateOf(false) }
-    val valueColor = appColor(if (enabled) AppColorRole.Summary else AppColorRole.DisabledContent)
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        val headerModifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp))
-            .let { base -> headerTag?.let { base.testTag(it) } ?: base }
-            .clickable(enabled = enabled, role = Role.DropdownList) { expanded = !expanded }
-            .semantics { if (!enabled) disabled() }
-            .heightIn(min = 40.dp)
-            .padding(vertical = 4.dp)
-        Row(
-            modifier = headerModifier,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            AppText(title, color = if (enabled) null else valueColor)
-            AppText(
-                valueText,
-                Modifier.weight(1f),
-                role = AppTextRole.Summary,
-                color = valueColor,
-                textAlign = TextAlign.End,
-            )
-            ExpansionIcon(expanded, Modifier.size(18.dp), tint = valueColor)
+    DisposableEffect(expanded, onPopupChange) {
+        if (expanded) onPopupChange(true)
+        onDispose {
+            if (expanded) onPopupChange(false)
         }
-        if (expanded && enabled) {
-            TrayExpandableOptions(
-                options = options,
-                selected = selected,
-                pending = pending,
-                onChoose = { value ->
-                    expanded = false
-                    if (value != selected) onSelect(value)
-                },
-            )
-        }
-        blockedReason?.let { AppText(it, role = AppTextRole.Footnote) }
+    }
+    val pendingLabel = pending?.let { requested -> options.firstOrNull { it.value == requested }?.label }
+    val spec = TrayDropdownSpec(
+        title = title,
+        valueText = valueText,
+        options = options,
+        selected = selected,
+        summary = blockedReason ?: pendingLabel?.let { "正在设为 $it" },
+        headerTag = headerTag,
+        enabled = enabled,
+    )
+    when (LocalInterfaceStyle.current) {
+        InterfaceStyle.MIUIX -> MiuixTrayDropdownRow(spec, { expanded = it }, onSelect)
+        InterfaceStyle.MATERIAL3 -> MaterialTrayDropdownRow(spec, expanded, { expanded = it }, onSelect)
     }
 }
 
 @Composable
-private fun TrayExpandableOptions(
-    options: List<AppOption<String>>,
-    selected: String?,
-    pending: String?,
-    onChoose: (String) -> Unit,
+private fun MiuixTrayDropdownRow(
+    spec: TrayDropdownSpec,
+    onExpandedChange: (Boolean) -> Unit,
+    onSelect: (String) -> Unit,
 ) {
-    Column(
+    val entry = remember(spec.options, spec.selected, spec.enabled, onSelect) {
+        DropdownEntry(
+            spec.options.map { option ->
+                DropdownItem(
+                    text = option.label,
+                    selected = spec.selected != null && option.value == spec.selected,
+                    enabled = spec.enabled,
+                    onClick = { if (option.value != spec.selected) onSelect(option.value) },
+                )
+            },
+        )
+    }
+    OverlayDropdownPreference(
+        entry = entry,
+        title = spec.title,
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(10.dp))
-            .background(appColor(AppColorRole.Divider).copy(alpha = 0.25f))
-            .padding(4.dp),
-        verticalArrangement = Arrangement.spacedBy(2.dp),
-    ) {
-        options.forEach { option ->
-            TrayExpandableOptionItem(
-                option = option,
-                chosen = selected != null && option.value == selected,
-                writing = pending != null && option.value == pending,
-                onClick = { onChoose(option.value) },
-            )
-        }
-    }
+            .let { base -> spec.headerTag?.let { base.testTag(it) } ?: base },
+        summary = spec.summary ?: spec.valueText.takeIf { spec.selected == null },
+        insideMargin = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+        showValue = spec.selected != null,
+        enabled = spec.enabled,
+        onExpandedChange = onExpandedChange,
+    )
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-private fun TrayExpandableOptionItem(
-    option: AppOption<String>,
-    chosen: Boolean,
-    writing: Boolean,
-    onClick: () -> Unit,
+private fun MaterialTrayDropdownRow(
+    spec: TrayDropdownSpec,
+    expanded: Boolean,
+    onExpandedChange: (Boolean) -> Unit,
+    onSelect: (String) -> Unit,
 ) {
-    val itemBackground = if (chosen) {
-        appColor(AppColorRole.SelectedContainer)
-    } else {
-        androidx.compose.ui.graphics.Color.Transparent
-    }
-    val itemContent = if (chosen) {
-        appColor(AppColorRole.SelectedContent)
-    } else {
-        appColor(AppColorRole.OnSurface)
-    }
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
-            .background(itemBackground)
-            .clickable(role = Role.RadioButton, onClick = onClick)
-            .semantics {
-                this.selected = chosen
-                option.contentDescription?.let { contentDescription = it }
+    val valueColor = appColor(if (spec.enabled) AppColorRole.Summary else AppColorRole.DisabledContent)
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Box(Modifier.fillMaxWidth()) {
+            val headerModifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(10.dp))
+                .let { base -> spec.headerTag?.let { base.testTag(it) } ?: base }
+                .clickable(enabled = spec.enabled, role = Role.DropdownList) { onExpandedChange(true) }
+                .semantics { if (!spec.enabled) disabled() }
+                .heightIn(min = 48.dp)
+                .padding(horizontal = 12.dp, vertical = 8.dp)
+            Row(
+                modifier = headerModifier,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                AppText(spec.title, color = if (spec.enabled) null else valueColor)
+                AppText(
+                    spec.valueText,
+                    Modifier.weight(1f),
+                    role = AppTextRole.Summary,
+                    color = valueColor,
+                    textAlign = TextAlign.End,
+                )
+                ExpansionIcon(expanded, Modifier.size(18.dp), tint = valueColor)
             }
-            .heightIn(min = 36.dp)
-            .padding(horizontal = 10.dp, vertical = 6.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        AppText(option.label, Modifier.weight(1f), color = itemContent)
-        if (writing) {
-            AppBusyIndicator(16.dp, "正在设为 ${option.label}")
-        } else if (chosen) {
-            AppIcon(RoseIcon.CHECK, Modifier.size(16.dp), tint = itemContent)
+            DropdownMenuPopup(expanded = expanded, onDismissRequest = { onExpandedChange(false) }) {
+                DropdownMenuGroup(
+                    shapes = MenuDefaults.groupShapes(),
+                    modifier = Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState()),
+                ) {
+                    spec.options.forEachIndexed { index, option ->
+                        DropdownMenuItem(
+                            selected = spec.selected != null && option.value == spec.selected,
+                            onClick = {
+                                onExpandedChange(false)
+                                if (option.value != spec.selected) onSelect(option.value)
+                            },
+                            text = { Text(option.label) },
+                            selectedLeadingIcon = { AppIcon(RoseIcon.CHECK) },
+                            shapes = MenuDefaults.itemShape(index, spec.options.size),
+                        )
+                    }
+                }
+            }
         }
+        spec.summary?.let { AppText(it, Modifier.padding(horizontal = 12.dp), role = AppTextRole.Footnote) }
     }
 }

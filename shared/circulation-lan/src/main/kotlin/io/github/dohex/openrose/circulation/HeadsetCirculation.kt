@@ -26,7 +26,7 @@ class HeadsetCirculation(private val audio: CirculationAudio, private val bonded
     }
 
     internal fun pull(node: CirculationNode, address: String): CirculationResult = exclusive({ CirculationResult(error = it) }) {
-        check(address in bonded()) { "请先在系统蓝牙配对这副 i5" }
+        check(address in bonded()) { "请先在系统蓝牙配对这副耳机" }
         val peers = node.peers.value
         check(peers.isNotEmpty()) { "请先完成流转配对" }
         if (audio.isMediaConnected(address)) return@exclusive CirculationResult("本机已接入耳机")

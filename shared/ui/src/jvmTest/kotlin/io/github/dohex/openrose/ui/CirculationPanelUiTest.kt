@@ -6,6 +6,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
 import io.github.dohex.openrose.circulation.*
+import io.github.dohex.openrose.core.DeviceSetting
+import io.github.dohex.openrose.core.HeadsetCommand
 import io.github.dohex.openrose.core.HostPlatform
 import io.github.dohex.openrose.core.NoiseMode
 import io.github.dohex.openrose.core.protocol.BatteryLayout
@@ -20,8 +22,14 @@ import kotlin.test.assertTrue
 class CirculationPanelUiTest {
     @Test
     fun aRemoteNoiseTapUsesTheHeldDeviceWhileItsPreviouslyReportedModeStaysVisible() = runOpenRoseUiTest(420, 600) {
-        var selected: NoiseMode? = null
-        val reading = RemoteReading(RemoteControlStatus.READY, deviceName = "EarFree i5", session = RemoteSessionReference("pc", DeviceId("i5"), "1"), modes = listOf(NoiseMode.WIND, NoiseMode.TRANSPARENCY), mode = NoiseMode.WIND)
+        var selected: HeadsetCommand? = null
+        val reading = RemoteReading(
+            status = RemoteControlStatus.READY,
+            deviceName = "EarFree i5",
+            session = RemoteSessionReference("pc", DeviceId("i5"), "1"),
+            modes = listOf(NoiseMode.WIND, NoiseMode.TRANSPARENCY),
+            mode = NoiseMode.WIND,
+        )
         setContent {
             ProvideInterfaceStyle(InterfaceStyle.MATERIAL3, dark = false) {
                 RemoteCards(RemoteHeadset("工作站", reading, false, null) { selected = it })
@@ -30,8 +38,56 @@ class CirculationPanelUiTest {
         val panel = OpenRoseUiTestHarness(this)
         panel.render()
         panel.clickText("通透")
-        assertEquals(NoiseMode.TRANSPARENCY, selected)
+        assertEquals(HeadsetCommand.NoiseMode(NoiseMode.TRANSPARENCY), selected)
         assertTrue(panel.hasSelectedText("抗风噪"))
+    }
+
+    @Test
+    fun remoteHeadsetRendersHighFrequencyControlsAndDispatchesCommands() = runOpenRoseUiTest(420, 900) {
+        val sent = mutableListOf<HeadsetCommand>()
+        val reading = RemoteReading(
+            status = RemoteControlStatus.READY,
+            deviceName = "ROSE EARFREE i5",
+            profile = ModelProfile.I5_ZT,
+            session = RemoteSessionReference("pc", DeviceId("mk2"), "1"),
+            mode = NoiseMode.ANC,
+            modes = listOf(NoiseMode.ANC, NoiseMode.NORMAL, NoiseMode.TRANSPARENCY),
+            ancLevel = 1,
+            ancLevels = listOf(1, 2, 3),
+            transparencyLevel = 2,
+            transparencyLevels = listOf(1, 2),
+            eqPreset = "pop",
+            eqPresets = listOf("pop", "hifi", "rock"),
+            gameModeSupported = true,
+            gameMode = false,
+        )
+        setContent {
+            ProvideInterfaceStyle(InterfaceStyle.MATERIAL3, dark = false) {
+                RemoteCards(RemoteHeadset("工作站", reading, false, null) { sent += it })
+            }
+        }
+        val panel = OpenRoseUiTestHarness(this)
+        panel.render()
+        assertTrue(panel.hasText("降噪档位"))
+        assertTrue(panel.hasText("通透档位"))
+        assertTrue(panel.hasText("均衡器"))
+        assertTrue(panel.hasText("游戏模式"))
+        panel.clickText("3 档")
+        panel.render()
+        panel.clickText("均衡器")
+        panel.render()
+        panel.clickText("乐器大师 · ROCK")
+        panel.render()
+        panel.clickText("游戏模式")
+        panel.render()
+        assertEquals(
+            listOf(
+                HeadsetCommand.AncLevel(3),
+                HeadsetCommand.EqualizerPreset("rock"),
+                HeadsetCommand.GameMode(true),
+            ),
+            sent,
+        )
     }
 
     @Test

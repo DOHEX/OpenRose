@@ -238,7 +238,7 @@ class QuickPanelUiTest {
                 left = 85,
                 right = 80,
             )
-            val writes = mutableListOf<CirculationCommand.SetNoise>()
+            val writes = mutableListOf<CirculationCommand.SetSetting>()
             val pulls = mutableListOf<String>()
             val client = CirculationClient { command ->
                 when (command) {
@@ -248,9 +248,9 @@ class QuickPanelUiTest {
 
                     is CirculationCommand.Read -> reading
 
-                    is CirculationCommand.SetNoise -> {
+                    is CirculationCommand.SetSetting -> {
                         writes += command
-                        reading.copy(mode = command.mode).also { reading = it }
+                        reading.copy(mode = (command.command as io.github.dohex.openrose.core.HeadsetCommand.NoiseMode).mode).also { reading = it }
                     }
 
                     is CirculationCommand.Pull -> {
@@ -267,7 +267,7 @@ class QuickPanelUiTest {
                 assertFalse(panel.hasText("重新连接"))
                 panel.clickText("通透")
                 panel.render()
-                assertEquals(listOf(CirculationCommand.SetNoise(session, NoiseMode.TRANSPARENCY)), writes)
+                assertEquals(listOf(CirculationCommand.SetSetting(session, io.github.dohex.openrose.core.HeadsetCommand.NoiseMode(NoiseMode.TRANSPARENCY))), writes)
                 assertTrue(pulls.isEmpty())
                 panel.clickText("改连这部手机")
                 panel.render()
@@ -282,7 +282,7 @@ class QuickPanelUiTest {
                 assertTrue(panel.hasText("游戏模式"))
                 panel.clickText("降噪")
                 panel.render()
-                assertEquals(CirculationCommand.SetNoise(session, NoiseMode.ANC), writes.last())
+                assertEquals(CirculationCommand.SetSetting(session, io.github.dohex.openrose.core.HeadsetCommand.NoiseMode(NoiseMode.ANC)), writes.last())
                 assertTrue(panel.model.settingWrites.isEmpty())
             }
         }

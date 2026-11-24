@@ -16,6 +16,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -52,6 +53,7 @@ import io.github.dohex.openrose.ui.resources.msr_headphones
 import io.github.dohex.openrose.ui.resources.msr_headset_off
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.vectorResource
+import top.yukonga.miuix.kmp.basic.Scaffold as MiuixScaffold
 
 data class TrayNoiseMode(val mode: NoiseMode, val label: String, val selected: Boolean, val enabled: Boolean)
 
@@ -148,22 +150,35 @@ fun TrayPanel(
     sound: DesktopSoundActions? = null,
     trayPanelSettings: TrayPanelSettings = TrayPanelSettings.DEFAULT,
     dynamicColor: Boolean = false,
+    onPopupOpenChange: (Boolean) -> Unit = {},
 ) {
     val density = LocalDensity.current
     val state by model.state.collectAsState()
     val uiSettings by model.uiSettings.collectAsState()
     val dark = uiSettings.appearance.isDark()
+    val background = interfaceBackgroundColor(uiSettings.interfaceStyle, dark)
     ProvideInterfaceStyle(uiSettings.interfaceStyle, dark, dynamicColor) {
-        Box(modifier.fillMaxSize().background(interfaceBackgroundColor(uiSettings.interfaceStyle, dark))) {
-            Column(
-                Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
-                    .onSizeChanged { size ->
-                        if (size.height > 0) onContentHeight(with(density) { size.height.toDp() })
+        CompositionLocalProvider(LocalTrayPopupChange provides onPopupOpenChange) {
+            val body: @Composable (Modifier) -> Unit = { contentModifier ->
+                Box(contentModifier.fillMaxSize().background(background)) {
+                    Column(
+                        Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
+                            .onSizeChanged { size ->
+                                if (size.height > 0) onContentHeight(with(density) { size.height.toDp() })
+                            }
+                            .padding(start = 18.dp, end = 18.dp, top = 16.dp, bottom = 4.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        TrayPanelContent(model, state, selection, onOpenApp, circulation, remoteHeadsets, sound, trayPanelSettings)
                     }
-                    .padding(start = 18.dp, end = 18.dp, top = 16.dp, bottom = 4.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                TrayPanelContent(model, state, selection, onOpenApp, circulation, remoteHeadsets, sound, trayPanelSettings)
+                }
+            }
+            when (uiSettings.interfaceStyle) {
+                InterfaceStyle.MIUIX -> MiuixScaffold(modifier.fillMaxSize(), containerColor = background) { padding ->
+                    body(Modifier.padding(padding))
+                }
+
+                InterfaceStyle.MATERIAL3 -> body(modifier)
             }
         }
     }
@@ -207,7 +222,12 @@ private fun TrayFooter(offerAdd: Boolean, hasRemoteHeadset: Boolean, onOpenApp: 
         TrayDivider()
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Row(
-                Modifier.weight(1f).clickable(role = Role.Button) { onOpenApp(null) }.heightIn(min = 40.dp),
+                Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable(role = Role.Button) { onOpenApp(null) }
+                    .heightIn(min = 36.dp)
+                    .padding(horizontal = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {

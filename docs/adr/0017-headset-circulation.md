@@ -35,6 +35,7 @@ status: accepted
 - **通道与流转配对**：同一局域网内直连，经 mDNS 发现，用 TLS 并固定对端证书。电脑显示二维码与 6 位配对码，手机在 OpenRose「设置」中扫码或输入；每条消息都要认证，任一端删除流转配对后，拒绝对方的一切请求。手机端端点在模块宿主（`com.android.bluetooth`）内：单独的线程，限制报文长度，只接受流转配对过的对端。
   - （2026-11 补充）**局域网 mDNS 发现**：桌面端用 JmmDNS，它跟随网卡的增减，包括睡眠唤醒后以太网与 Wi-Fi 的变化（`DesktopPeerDiscovery`）。一个 DNS-SD 服务实例在每条链路上只有一个 SRV 目标，Wi-Fi 网卡有多个 IPv6 地址时也一样，因此 `DesktopNetworkTopology` 每个网卡只取一个地址（优先 IPv4、非链路本地）。多宿主的 mDNS 可能为同一对端发布多个服务名，每个只解析出一个地址；`CirculationNode.connect` 按对端 ID 汇总这些地址并去重。`PeerDiscovery` 回报的是所有可见网卡的一份当前快照；唤醒后服务可能换到别的地址。Android 解析出的地址可能位于与进程默认网络不同的网络上，因此 `NearbyPeer` 携带该网络的 socket 工厂（API 33 起取 `NsdServiceInfo.network`）。Android NSD 自己持有组播套接字；API 26–33 上同一时间只能进行一次解析，`AndroidPeerDiscovery` 逐个串行解析。
   - （2026-11 补充）**事务与兼容规则**：`PeerWire` 让每个已认证的 TLS 套接字只承载一次有界事务（报文不超过 16 384 字节、64 个字段），命令送达后不重试。`CirculationNode.connect` 依次尝试对端的各个地址（IPv4 优先），只在 TCP 或 TLS 建立失败时换下一个地址；应用数据一旦可能已到达对端，就不再重试。远端读数 `RemoteReading.batteryLayout` 说明所持耳机上报左耳、右耳、充电盒中的哪几项。该字段出现之前的对端不发送它，读取方按 `BatteryLayout.EARBUDS_AND_CASE` 处理。`parseBatteryLayout` 按布局的枚举名解析，字段缺失或是更新版本对端发来的未知布局时得到空值。
+  - （2026-11 补充）**全型号放开与通用远程写入**：`supportsCirculation` 放开至所有已识别的 ROSE 型号（不再限定 i5），耳机流转与远程控制同步覆盖全型号。远程控制扩展为 5 项高频听感与延迟设置（降噪模式、降噪档位、通透档位、EQ 预设、游戏模式），不追求兼容旧版对端：通信继续保持短连接 TLS 请求-响应与定时轮询，写入原语从特化的降噪命令收敛为通用 `set(setting, value)`，经音源端 `HeadsetCommand.decode` 与 `DeviceState.validate` 统一校验执行；`read` 响应中各高频项的可选项、当前已确认值、档位可见性及前置条件阻断原因均由音源端依据本地 `DeviceCapabilities` 裁决后下发，远端仅作薄展示。`INITIALIZING` 阶段维持降噪模式优先可调，其余高频项在 `READY` 后开放；同一副远端耳机保持单次串行写入，桌面托盘、手机快捷面板与主页卡片统一复用一套远端控制组件。
 
 ## 考虑过的方案
 

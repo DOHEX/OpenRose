@@ -14,7 +14,8 @@ import io.github.dohex.openrose.circulation.PeerDirectory
 import io.github.dohex.openrose.circulation.RemoteControlStatus
 import io.github.dohex.openrose.circulation.RemoteReading
 import io.github.dohex.openrose.circulation.RemoteSessionReference
-import io.github.dohex.openrose.core.NoiseMode
+import io.github.dohex.openrose.core.DeviceSetting
+import io.github.dohex.openrose.core.HeadsetCommand
 import io.github.dohex.openrose.core.protocol.BatteryLayout
 import io.github.dohex.openrose.core.protocol.DeviceField
 import kotlinx.coroutines.CoroutineScope
@@ -46,7 +47,8 @@ data class RemoteHeadset(
     val reading: RemoteReading,
     val busy: Boolean,
     val feedback: String?,
-    val selectMode: (NoiseMode) -> Unit,
+    val pendingCommand: HeadsetCommand? = null,
+    val setSetting: (HeadsetCommand) -> Unit,
 ) {
     val deviceName: String? get() = reading.deviceName
     val sourceLabel: String get() = "音源设备 · $name"
@@ -101,7 +103,7 @@ private fun rememberRemoteHeadset(
     interval: Long,
     refresh: Int,
 ): RemoteHeadset {
-    if (!nearby) return RemoteHeadset(name, RemoteReading(RemoteControlStatus.UNAVAILABLE), false, null) {}
+    if (!nearby) return RemoteHeadset(name, RemoteReading(RemoteControlStatus.UNAVAILABLE), false, null, null) {}
     val state = remember(client, id) { RemoteHeadsetState(client, id) }
     val scope = rememberCoroutineScope()
     if (LocalCirculationVisible.current) {
@@ -113,7 +115,7 @@ private fun rememberRemoteHeadset(
 private class RemoteHeadsetState(private val client: CirculationClient, private val id: String) {
     private var reading by mutableStateOf(RemoteReading())
     private var feedback by mutableStateOf<Pair<RemoteSessionReference, String>?>(null)
-    private var pending by mutableStateOf<RemoteSessionReference?>(null)
+    private var pending by mutableStateOf<Pair<RemoteSessionReference, HeadsetCommand>?>(null)
     var revision by mutableStateOf(0)
         private set
 
@@ -131,30 +133,40 @@ private class RemoteHeadsetState(private val client: CirculationClient, private 
 
     fun presentation(name: String, scope: CoroutineScope): RemoteHeadset {
         val session = reading.session
-        val busy = session != null && session == pending
+        val activePending = pending?.takeIf { session != null && it.first == session }
+        val busy = activePending != null
         val message = when {
-            busy -> "等待耳机确认"
+            activePending != null -> "正在设置${remoteSettingLabel(activePending.second.setting)} · 等待耳机确认"
             session == null || feedback?.first == session -> feedback?.second
             else -> null
         }
-        return RemoteHeadset(name, reading, busy, message) { mode ->
-            if (pending != session && session != null) {
+        return RemoteHeadset(name, reading, busy, message, activePending?.second) { command ->
+            if (pending?.first != session && session != null) {
                 if (session == reading.session) {
-                    pending = session
+                    pending = session to command
                     feedback = null
-                    scope.launch { select(session, mode) }
+                    scope.launch { apply(session, command) }
                 }
             }
         }
     }
 
-    private suspend fun select(session: RemoteSessionReference, mode: NoiseMode) {
-        val reply = client.setNoise(session, mode)
+    private suspend fun apply(session: RemoteSessionReference, command: HeadsetCommand) {
+        val reply = client.setSetting(session, command)
         currentCoroutineContext().ensureActive()
-        if (pending != session) return
+        if (pending?.first != session) return
         pending = null
         feedback = reply.error?.let { session to "操作未确认 · $it" }
         if (reading.session == session && reply.session == session) reading = reply
         revision++
     }
+}
+
+private fun remoteSettingLabel(setting: DeviceSetting): String = when (setting) {
+    DeviceSetting.NOISE_MODE -> "降噪模式"
+    DeviceSetting.ANC_LEVEL -> "降噪档位"
+    DeviceSetting.TRANSPARENCY_LEVEL -> "通透档位"
+    DeviceSetting.EQ -> "均衡器"
+    DeviceSetting.GAME_MODE -> "游戏模式"
+    else -> "设置"
 }

@@ -41,11 +41,21 @@ fun CirculationNode.localCommand(command: CirculationCommand): CirculationReply 
 
     is CirculationCommand.Read -> request(command.peer, mapOf("op" to "read")).remoteReading(command.peer)
 
-    is CirculationCommand.SetNoise -> {
-        val reference = command.session
-        val message = mapOf("op" to "noise", "device" to reference.device.value, "session" to reference.token, "mode" to command.mode.id)
-        request(reference.peer, message).remoteReading(reference.peer)
-    }
+    is CirculationCommand.SetSetting -> setSetting(command)
+}
+
+private fun CirculationNode.setSetting(command: CirculationCommand.SetSetting): RemoteReading {
+    val reference = command.session
+    val rawValue = encodeRemoteValue(command.command)
+        ?: return RemoteReading(RemoteControlStatus.UNAVAILABLE, error = "不支持远程设置该项")
+    val message = mapOf(
+        "op" to "set",
+        "device" to reference.device.value,
+        "session" to reference.token,
+        "setting" to command.command.setting.name,
+        "value" to rawValue,
+    )
+    return request(reference.peer, message).remoteReading(reference.peer)
 }
 
 private fun Map<String, String>.remoteReading(peer: String): RemoteReading {
@@ -59,12 +69,26 @@ private fun Map<String, String>.remoteReading(peer: String): RemoteReading {
     val device = get("device")
     val token = get("session")
     fun battery(key: String) = get(key)?.toIntOrNull()?.takeIf { it in 0..100 }
+    val blocked = entries.mapNotNull { (key, value) ->
+        if (!key.startsWith("blocked.")) return@mapNotNull null
+        parseDeviceSetting(key.removePrefix("blocked."))?.let { it to value }
+    }.toMap()
     return RemoteReading(
         status = status,
         deviceName = get("deviceName"),
+        profile = parseModelProfile(get("profile")),
         session = if (device != null && token != null) RemoteSessionReference(peer, DeviceId(device), token) else null,
         mode = get("mode")?.let(NoiseMode::fromId),
         modes = get("modes").orEmpty().split(',').mapNotNull(NoiseMode::fromId),
+        ancLevel = get("ancLevel")?.toIntOrNull(),
+        ancLevels = get("ancLevels").orEmpty().split(',').mapNotNull(String::toIntOrNull),
+        transparencyLevel = get("transparencyLevel")?.toIntOrNull(),
+        transparencyLevels = get("transparencyLevels").orEmpty().split(',').mapNotNull(String::toIntOrNull),
+        eqPreset = get("eqPreset"),
+        eqPresets = get("eqPresets").orEmpty().split(',').filter(String::isNotBlank),
+        gameModeSupported = get("gameModeSupported") == "true",
+        gameMode = get("gameMode")?.toBooleanStrictOrNull(),
+        blockedReasons = blocked,
         left = battery("left"),
         right = battery("right"),
         case = battery("case"),

@@ -14,7 +14,7 @@ What you see depends on the model and firmware; see [Supported earphones](../sup
 - To edit custom EQ with a keyboard, press Tab to focus a frequency band. Use the up and down arrow keys to adjust its gain one step at a time, or press Home for the model’s minimum gain and End for its maximum.
 - Astro X offers spatial and content modes, ear adaptation, and tap controls. The speakfeel2 variant of SPEAKFEEL offers independent microphone controls.
 - Open the Android quick panel from the OpenRose Quick Settings tile or the focus notification to check battery levels and change noise or game mode. Tap **均衡器** (Equalizer) and choose an EQ preset from the menu that opens next to the row. The menu closes and the panel stays open. The row shows the new preset once the earphones confirm the change.
-- After pairing your phone and computer for handoff, the i5 card in My Earphones, the desktop tray, and the phone quick panel shows the audio source when known. Change noise mode remotely, or move the headset to the phone or computer you are using. See the [desktop handoff pairing guide](../../guides/desktop/#pair-a-phone-and-desktop).
+- After pairing your phone and computer for handoff, cards for recognized ROSE headsets in My Earphones, the desktop tray, and the phone quick panel show the audio source when known. Adjust noise mode, ANC and transparency levels, EQ presets, and game mode remotely (availability depends on model capabilities), or move the headset to the phone or computer you are using. See the [desktop handoff pairing guide](../../guides/desktop/#pair-a-phone-and-desktop).
 
 ## Appearance
 

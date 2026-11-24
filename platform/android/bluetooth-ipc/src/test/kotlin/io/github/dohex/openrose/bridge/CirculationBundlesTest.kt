@@ -1,8 +1,11 @@
 package io.github.dohex.openrose.bridge
 
 import io.github.dohex.openrose.circulation.*
+import io.github.dohex.openrose.core.DeviceSetting
+import io.github.dohex.openrose.core.HeadsetCommand
 import io.github.dohex.openrose.core.NoiseMode
 import io.github.dohex.openrose.core.protocol.BatteryLayout
+import io.github.dohex.openrose.core.protocol.ModelProfile
 import io.github.dohex.openrose.core.transport.DeviceId
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -21,11 +24,21 @@ class CirculationBundlesTest {
     @Test
     fun commandAndReplySurviveTheBinderBoundary() {
         val reading = RemoteReading(
-            RemoteControlStatus.READY,
-            "EarFree i5",
-            session,
-            NoiseMode.WIND,
-            listOf(NoiseMode.WIND, NoiseMode.TRANSPARENCY),
+            status = RemoteControlStatus.READY,
+            deviceName = "EarFree i5",
+            profile = ModelProfile.I5_ZT,
+            session = session,
+            mode = NoiseMode.WIND,
+            modes = listOf(NoiseMode.WIND, NoiseMode.TRANSPARENCY),
+            ancLevel = 2,
+            ancLevels = listOf(1, 2, 3),
+            transparencyLevel = 1,
+            transparencyLevels = listOf(1, 2),
+            eqPreset = "pop",
+            eqPresets = listOf("pop", "hifi", "rock"),
+            gameModeSupported = true,
+            gameMode = false,
+            blockedReasons = mapOf(DeviceSetting.GAME_MODE to "前置条件未满足"),
             left = 0,
             right = 100,
             batteryLayout = BatteryLayout.EARBUDS_ONLY,
@@ -38,7 +51,11 @@ class CirculationBundlesTest {
             CirculationCommand.PairQr("qr") to ok,
             CirculationCommand.Forget("laptop") to ok,
             CirculationCommand.Read("laptop") to reading,
-            CirculationCommand.SetNoise(session, NoiseMode.TRANSPARENCY) to reading,
+            CirculationCommand.SetSetting(session, HeadsetCommand.NoiseMode(NoiseMode.TRANSPARENCY)) to reading,
+            CirculationCommand.SetSetting(session, HeadsetCommand.AncLevel(2)) to reading,
+            CirculationCommand.SetSetting(session, HeadsetCommand.TransparencyLevel(1)) to reading,
+            CirculationCommand.SetSetting(session, HeadsetCommand.EqualizerPreset("hifi")) to reading,
+            CirculationCommand.SetSetting(session, HeadsetCommand.GameMode(true)) to reading,
             CirculationCommand.Handoff(null) to HandoffStatus(available = true, offline = true),
             CirculationCommand.Pull("address") to ok,
         )
@@ -53,7 +70,13 @@ class CirculationBundlesTest {
     @Test
     fun aReadingFromAPeerWithoutABatteryLayoutStaysUnspecified() {
         val command = CirculationCommand.Read("laptop")
-        val reading = RemoteReading(RemoteControlStatus.READY, "EarFree i5", session, left = 80, batteryLayout = BatteryLayout.SINGLE_UNIT)
+        val reading = RemoteReading(
+            status = RemoteControlStatus.READY,
+            deviceName = "EarFree i5",
+            session = session,
+            left = 80,
+            batteryLayout = BatteryLayout.SINGLE_UNIT,
+        )
         assertEquals(BatteryLayout.SINGLE_UNIT, reading.toBundle().circulationReply(command).let { (it as RemoteReading).batteryLayout })
         val old = reading.toBundle().apply { remove("batteryLayout") }
         assertNull((old.circulationReply(command) as RemoteReading).batteryLayout)
@@ -63,8 +86,8 @@ class CirculationBundlesTest {
 
     @Test
     fun remoteWritesCannotOmitThePeerDeviceOrOwnerSession() {
-        val command = CirculationCommand.SetNoise(session, NoiseMode.TRANSPARENCY)
-        for (key in listOf("peer", "device", "session", "mode")) {
+        val command = CirculationCommand.SetSetting(session, HeadsetCommand.NoiseMode(NoiseMode.TRANSPARENCY))
+        for (key in listOf("peer", "device", "session", "setting", "value")) {
             val incomplete = command.toBundle().apply { remove(key) }
             assertFailsWith<IllegalArgumentException> { incomplete.circulationCommand() }
         }

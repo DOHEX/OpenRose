@@ -3,6 +3,7 @@ package io.github.dohex.openrose.circulation
 import io.github.dohex.openrose.core.ConnectionPhase
 import io.github.dohex.openrose.core.ConnectionState
 import io.github.dohex.openrose.core.ControlRuntime
+import io.github.dohex.openrose.core.HeadsetCommand
 import io.github.dohex.openrose.core.HostPlatform
 import io.github.dohex.openrose.core.LocalControlRuntime
 import io.github.dohex.openrose.core.NoiseMode
@@ -12,6 +13,7 @@ import io.github.dohex.openrose.core.SessionTiming
 import io.github.dohex.openrose.core.SettingStage
 import io.github.dohex.openrose.core.TransportAvailability
 import io.github.dohex.openrose.core.protocol.BatteryLayout
+import io.github.dohex.openrose.core.protocol.ModelProfile
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -59,7 +61,7 @@ class RemoteHeadsetControlTest {
             val before = holder.state.value
             val writes = device.link.writes.toList()
             val result = phone.noise(read, NoiseMode.DEEP)
-            assertEquals("耳机不支持该降噪模式", result.error)
+            assertEquals("该型号不支持 deep 模式", result.error)
             assertEquals(writes, device.link.writes)
             assertEquals(before.lastError, holder.state.value.lastError)
             assertEquals(before.settingOperations, holder.state.value.settingOperations)
@@ -88,6 +90,9 @@ class RemoteHeadsetControlTest {
             assertEquals(RemoteControlStatus.INITIALIZING, reading.status)
             assertEquals(NoiseMode.WIND, reading.mode)
             assertTrue(NoiseMode.TRANSPARENCY in reading.modes)
+            assertTrue(reading.eqPresets.isEmpty())
+            assertFalse(reading.gameModeSupported)
+            assertEquals("控制会话尚未就绪，暂不能设置", phone.set(reading, HeadsetCommand.GameMode(false)).error)
             assertNotEquals(previous.session, reading.session)
 
             val pending = async(Dispatchers.IO) { phone.noise(reading) }
@@ -139,6 +144,40 @@ class RemoteHeadsetControlTest {
         }
     }
 
+    @Test
+    fun remoteCanAdjustEqPresetAndGameModeAfterReady() = runBlocking {
+        withPair { holder, phone, device ->
+            val initial = phone.read()
+            assertEquals(ModelProfile.I5_ZT, initial.profile)
+            assertTrue(initial.eqPresets.containsAll(listOf("pop", "hifi", "rock")))
+            assertTrue(initial.gameModeSupported)
+            assertEquals(false, initial.gameMode)
+            assertTrue(initial.ancLevels.isEmpty())
+            assertTrue(initial.transparencyLevels.isEmpty())
+
+            val eqPending = async(Dispatchers.IO) { phone.set(initial, HeadsetCommand.EqualizerPreset("rock")) }
+            holder.state.first { it.settingOperations.lastOrNull()?.stage == SettingStage.WRITTEN }
+            device.link.deviceReply(EQ_ROCK)
+            val eqConfirmed = eqPending.await()
+            assertEquals("rock", eqConfirmed.eqPreset)
+
+            val gamePending = async(Dispatchers.IO) { phone.set(eqConfirmed, HeadsetCommand.GameMode(true)) }
+            holder.state.first {
+                val last = it.settingOperations.lastOrNull()
+                last?.stage == SettingStage.WRITTEN && last.setting == io.github.dohex.openrose.core.DeviceSetting.GAME_MODE
+            }
+            device.link.deviceReply(GAME_MODE_ON)
+            val gameConfirmed = gamePending.await()
+            assertEquals(true, gameConfirmed.gameMode)
+        }
+    }
+
+    @Test
+    fun supportsCirculationCoversAllRecognizedModels() {
+        assertTrue(ModelProfile.entries.all(::supportsCirculation))
+        assertFalse(supportsCirculation(null))
+    }
+
     private suspend fun withPair(test: suspend (ControlRuntime, CirculationNode, I5Headphones) -> Unit) = withTimeout(8_000) {
         val device = I5Headphones()
         val owner = CoroutineScope(Dispatchers.Default + SupervisorJob())
@@ -170,11 +209,16 @@ class RemoteHeadsetControlTest {
 
     private fun CirculationNode.read() = localCommand(CirculationCommand.Read(peers.value.single().id)) as RemoteReading
 
-    private fun CirculationNode.noise(read: RemoteReading, mode: NoiseMode = NoiseMode.TRANSPARENCY) = localCommand(
-        CirculationCommand.SetNoise(requireNotNull(read.session), mode),
+    private fun CirculationNode.noise(read: RemoteReading, mode: NoiseMode = NoiseMode.TRANSPARENCY) =
+        set(read, HeadsetCommand.NoiseMode(mode))
+
+    private fun CirculationNode.set(read: RemoteReading, command: HeadsetCommand) = localCommand(
+        CirculationCommand.SetSetting(requireNotNull(read.session), command),
     ) as RemoteReading
 
     private companion object {
         const val TRANSPARENCY = "09ff00000106020e000000000120"
+        const val EQ_ROCK = "09ff00000102010b000219"
+        const val GAME_MODE_ON = "09ff00000106030b00001d"
     }
 }

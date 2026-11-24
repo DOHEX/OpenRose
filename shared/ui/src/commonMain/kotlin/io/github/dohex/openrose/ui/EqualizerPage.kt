@@ -21,7 +21,7 @@ internal fun DeviceState.writablePresetOptions(): List<AppOption<String>> = writ
     AppOption(it, equalizerLabel(it, profile))
 }
 
-private val presetDisplayOrder = compareBy<String>(::equalizerPresetOrder, { it })
+internal val presetDisplayOrder = compareBy<String>(::equalizerPresetOrder, { it })
 
 private fun equalizerPresetOrder(preset: String): Int = when (preset) {
     "pop" -> 0

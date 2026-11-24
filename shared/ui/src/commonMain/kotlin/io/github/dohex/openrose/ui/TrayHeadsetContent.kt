@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -18,9 +19,13 @@ import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import io.github.dohex.openrose.core.DeviceCandidate
+import io.github.dohex.openrose.core.DeviceSetting
+import io.github.dohex.openrose.core.HeadsetCommand
 import io.github.dohex.openrose.core.NoiseMode
 import io.github.dohex.openrose.core.protocol.BatteryLayout
 import io.github.dohex.openrose.core.transport.DeviceId
+
+internal const val REMOTE_EQUALIZER_ROW_TAG = "remote-eq-row"
 
 internal fun DeviceCandidate.cardName(): String = name?.takeIf(String::isNotBlank) ?: profile?.displayName ?: deviceId.value
 
@@ -94,16 +99,118 @@ internal fun TrayLocalReadings(summary: TraySummary, pendingMode: NoiseMode?, se
 @Composable
 internal fun RemoteHeadsetReadings(headset: RemoteHeadset, enabled: Boolean = true) {
     val reading = headset.reading
+    val baseEnabled = enabled && reading.session != null && !headset.busy
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         headset.statusLabel?.let { AppText(it, role = AppTextRole.Summary) }
         AppText(headset.batteryText, role = AppTextRole.Summary, color = appColor(AppColorRole.OnSurface))
-        val choices = trayNoiseModes(reading.modes, reading.mode, enabled && reading.session != null && !headset.busy)
-        if (choices.isEmpty()) {
-            reading.mode?.let { AppText("降噪模式 · ${noiseModeLabel(it.id)}", role = AppTextRole.Summary) }
-        } else {
-            TrayNoiseModes(choices, headset.selectMode)
-        }
+        RemoteNoiseModeSection(headset, baseEnabled)
+        RemoteNoiseLevelsSection(headset, baseEnabled)
+        RemoteEqualizerControl(headset, baseEnabled)
+        RemoteGameModeControl(headset, baseEnabled)
         (headset.feedback ?: reading.error)?.let { TrayModeFeedback(it, error = !headset.busy) }
+    }
+}
+
+@Composable
+private fun RemoteNoiseModeSection(headset: RemoteHeadset, baseEnabled: Boolean) {
+    val reading = headset.reading
+    val noiseBlocked = reading.blockedReasons[DeviceSetting.NOISE_MODE]
+    val choices = trayNoiseModes(reading.modes, reading.mode, baseEnabled && noiseBlocked == null)
+    if (choices.isEmpty()) {
+        reading.mode?.let { AppText("降噪模式 · ${noiseModeLabel(it.id)}", role = AppTextRole.Summary) }
+    } else {
+        TrayNoiseModes(choices) { headset.setSetting(HeadsetCommand.NoiseMode(it)) }
+    }
+    noiseBlocked?.let { AppText(it, role = AppTextRole.Footnote) }
+}
+
+@Composable
+private fun RemoteNoiseLevelsSection(headset: RemoteHeadset, baseEnabled: Boolean) {
+    val reading = headset.reading
+    if (reading.ancLevels.isNotEmpty()) {
+        RemoteNoiseLevelControl(
+            title = "降噪档位",
+            levels = reading.ancLevels,
+            selected = reading.ancLevel,
+            enabled = baseEnabled,
+            blockedReason = reading.blockedReasons[DeviceSetting.ANC_LEVEL],
+            onSelect = { headset.setSetting(HeadsetCommand.AncLevel(it)) },
+        )
+    }
+    if (reading.transparencyLevels.isNotEmpty()) {
+        RemoteNoiseLevelControl(
+            title = "通透档位",
+            levels = reading.transparencyLevels,
+            selected = reading.transparencyLevel,
+            enabled = baseEnabled,
+            blockedReason = reading.blockedReasons[DeviceSetting.TRANSPARENCY_LEVEL],
+            onSelect = { headset.setSetting(HeadsetCommand.TransparencyLevel(it)) },
+        )
+    }
+}
+
+@Composable
+private fun RemoteEqualizerControl(headset: RemoteHeadset, baseEnabled: Boolean) {
+    val reading = headset.reading
+    if (reading.eqPresets.isEmpty()) return
+    val eqBlocked = reading.blockedReasons[DeviceSetting.EQ]
+    val options = remember(reading.eqPresets, reading.profile) {
+        reading.eqPresets.sortedWith(presetDisplayOrder).map { AppOption(it, equalizerLabel(it, reading.profile)) }
+    }
+    TrayDropdownChoiceRow(
+        title = "均衡器",
+        valueText = reading.eqPreset?.let { equalizerLabel(it, reading.profile) } ?: "未知",
+        options = options,
+        selected = reading.eqPreset,
+        pending = (headset.pendingCommand as? HeadsetCommand.EqualizerPreset)?.preset,
+        blockedReason = eqBlocked,
+        sessionKey = reading.session,
+        onSelect = { headset.setSetting(HeadsetCommand.EqualizerPreset(it)) },
+        headerTag = REMOTE_EQUALIZER_ROW_TAG,
+        enabled = baseEnabled && eqBlocked == null,
+    )
+}
+
+@Composable
+private fun RemoteGameModeControl(headset: RemoteHeadset, baseEnabled: Boolean) {
+    val reading = headset.reading
+    if (!reading.gameModeSupported) return
+    val gameBlocked = reading.blockedReasons[DeviceSetting.GAME_MODE]
+    val isKnown = reading.gameMode != null
+    val pendingToggle = (headset.pendingCommand as? HeadsetCommand.GameMode)?.enabled
+    val summary = when {
+        gameBlocked != null -> gameBlocked
+        pendingToggle == true -> "正在开启"
+        pendingToggle == false -> "正在关闭"
+        !isKnown -> "当前状态未知"
+        else -> null
+    }
+    TrayToggleRow(
+        label = "游戏模式",
+        checked = reading.gameMode ?: false,
+        enabled = baseEnabled && gameBlocked == null && isKnown,
+        summary = summary,
+        onToggle = { headset.setSetting(HeadsetCommand.GameMode(it)) },
+    )
+}
+
+@Composable
+private fun RemoteNoiseLevelControl(
+    title: String,
+    levels: List<Int>,
+    selected: Int?,
+    enabled: Boolean,
+    blockedReason: String?,
+    onSelect: (Int) -> Unit,
+) {
+    val options = remember(levels) { levels.sorted().map { AppOption(it, "$it 档") } }
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            AppText(title, Modifier.weight(1f), role = AppTextRole.Footnote)
+            if (selected == null) AppText("当前状态未知", role = AppTextRole.Footnote)
+        }
+        AppSegmented(options, selected, enabled && blockedReason == null, onSelect = onSelect)
+        blockedReason?.let { AppText(it, role = AppTextRole.Footnote) }
     }
 }
 

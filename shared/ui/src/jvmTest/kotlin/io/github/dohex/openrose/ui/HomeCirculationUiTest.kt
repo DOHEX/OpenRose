@@ -3,6 +3,7 @@ package io.github.dohex.openrose.ui
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
 import io.github.dohex.openrose.circulation.*
+import io.github.dohex.openrose.core.HeadsetCommand
 import io.github.dohex.openrose.core.HostPlatform
 import io.github.dohex.openrose.core.NoiseMode
 import io.github.dohex.openrose.core.protocol.ModelProfile
@@ -29,14 +30,9 @@ class HomeCirculationUiTest {
         for (style in InterfaceStyle.entries) {
             val writes = mutableListOf<CirculationCommand>()
             var reading = RemoteReading(
-                RemoteControlStatus.READY,
-                headset.name,
-                session,
-                NoiseMode.ANC,
-                listOf(NoiseMode.ANC, NoiseMode.TRANSPARENCY),
-                left = 87,
-                right = 89,
-                batteryLayout = ModelProfile.I5_ZT.batteryLayout,
+                status = RemoteControlStatus.READY, deviceName = headset.name, session = session,
+                mode = NoiseMode.ANC, modes = listOf(NoiseMode.ANC, NoiseMode.TRANSPARENCY),
+                left = 87, right = 89, batteryLayout = ModelProfile.I5_ZT.batteryLayout,
             )
             val client = CirculationClient { command ->
                 when (command) {
@@ -46,9 +42,10 @@ class HomeCirculationUiTest {
 
                     is CirculationCommand.Handoff -> HandoffStatus(available = true)
 
-                    is CirculationCommand.SetNoise -> {
+                    is CirculationCommand.SetSetting -> {
                         writes += command
-                        reading.copy(mode = command.mode).also { reading = it }
+                        val mode = (command.command as HeadsetCommand.NoiseMode).mode
+                        reading.copy(mode = mode).also { reading = it }
                     }
 
                     is CirculationCommand.Pull -> {
@@ -77,7 +74,7 @@ class HomeCirculationUiTest {
                 }
                 home.clickText("通透")
                 home.render()
-                assertEquals(listOf<CirculationCommand>(CirculationCommand.SetNoise(session, NoiseMode.TRANSPARENCY)), writes)
+                assertEquals(listOf<CirculationCommand>(CirculationCommand.SetSetting(session, HeadsetCommand.NoiseMode(NoiseMode.TRANSPARENCY))), writes)
                 assertTrue(home.hasSelectedText("通透"))
                 home.clickText("改连这台电脑")
                 home.render()
@@ -144,7 +141,7 @@ class HomeCirculationUiTest {
             when (command) {
                 CirculationCommand.Directory -> PeerDirectory(peer, peer)
 
-                is CirculationCommand.Read -> RemoteReading(RemoteControlStatus.READY, target.name, session)
+                is CirculationCommand.Read -> RemoteReading(RemoteControlStatus.READY, target.name, session = session)
 
                 is CirculationCommand.Handoff -> HandoffStatus(available = true)
 
