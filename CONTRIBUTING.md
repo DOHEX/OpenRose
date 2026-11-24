@@ -78,9 +78,9 @@ cd OpenRose
 | `./gradlew spotlessApply` | 格式化全部 Kotlin 与 Gradle Kotlin DSL（Spotless + ktlint，规则在 `.editorconfig`） |
 | `./gradlew spotlessCheck` | 检查格式 |
 | `./gradlew detekt` | 产品模块和构建约定的 Kotlin 静态分析，配置为 `config/detekt/detekt.yml`，自定义规则在 `tools/detekt-rules` |
-| `./gradlew koverHtmlReport` | 生成根项目聚合的覆盖率 HTML 报告 |
-| `./gradlew koverVerify` | 校验行覆盖率不低于下限 |
-| `./gradlew offlineCheck` | 运行全部不依赖硬件的测试，以及 `spotlessCheck`、`detekt`、lint 与 `koverVerify`。CI 执行的就是它 |
+| `./gradlew koverHtmlReportCoverage` | 生成根项目聚合的覆盖率 HTML 报告 |
+| `./gradlew koverVerifyCoverage` | 校验行覆盖率不低于下限 |
+| `./gradlew offlineCheck` | 运行全部不依赖硬件的测试，以及 `spotlessCheck`、`detekt`、lint 与 `koverVerifyCoverage`。CI 执行的就是它 |
 
 **提 PR 前必须通过 `./gradlew offlineCheck`。**
 

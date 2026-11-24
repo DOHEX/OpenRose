@@ -32,7 +32,8 @@ status: accepted
 ### 覆盖率下限
 
 - **一份覆盖率报告**：根构建通过 `kover(...)` 汇总每个模块的 JVM 测试，生成一份报告。
-- **下限只升不降**：下限设在设定时实测覆盖率之下一点，根报告设定时总行覆盖率为 56.8%，下限 `minBound(55)`。模块级下限另有 `shared/headset` 93、`platform/android/integration` 90，均在 `offlineCheck` 中经 `koverVerify` 检查。覆盖率提高后上调下限；不得为通过检查而下调。
+- **只统计 `coverage` 变体**：`KoverConventionPlugin` 在每个模块和根构建创建 `coverage` 报告变体，包含 JVM 目标（`jvm`）、KMP 的 Android 目标（`android`）与 Android 模块的 `debug` 构建变体；`check` 只校验这个变体，关闭 total 变体的校验。total 变体包含 Android `release` 构建变体，会让 `check` 额外编译三个 Android 模块的 release 代码，而单元测试只跑 debug。报告与校验用 `koverHtmlReportCoverage`、`koverVerifyCoverage`。
+- **下限只升不降**：下限设在设定时实测覆盖率之下一点，根报告设定时总行覆盖率为 56.8%，下限 `minBound(55)`。模块级下限另有 `shared/headset` 93、`platform/android/integration` 90，均在 `offlineCheck` 中经 `koverVerifyCoverage` 检查。覆盖率提高后上调下限；不得为通过检查而下调。
 
 ### 工具版本
 

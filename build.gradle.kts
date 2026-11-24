@@ -12,6 +12,7 @@ plugins {
     alias(libs.plugins.openrose.detekt)
     alias(libs.plugins.spotless)
     alias(libs.plugins.kover)
+    alias(libs.plugins.openrose.kover)
 }
 
 detekt {
@@ -69,7 +70,7 @@ tasks.register("offlineCheck") {
         ":shared:circulation:jvmTest", ":tools:ui-sandbox:test", ":tools:ui-test-support:test",
         ":desktopApp:compileKotlin", ":platform:android:system-module:compileDebugKotlin", ":androidApp:compileDebugKotlin", ":tools:ui-sandbox:compileKotlin",
         ":androidApp:lintDebug", "spotlessCheck", ":detekt",
-        "koverVerify", ":shared:headset:koverVerify", ":platform:android:integration:koverVerify",
+        ":koverVerifyCoverage", ":shared:headset:koverVerifyCoverage", ":platform:android:integration:koverVerifyCoverage",
     )
     dependsOn(subprojects.filter { it.childProjects.isEmpty() }.map { "${it.path}:detekt" })
 }

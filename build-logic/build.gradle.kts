@@ -18,6 +18,10 @@ gradlePlugin {
             id = libs.plugins.openrose.detekt.get().pluginId
             implementationClass = "DetektConventionPlugin"
         }
+        register("kover") {
+            id = libs.plugins.openrose.kover.get().pluginId
+            implementationClass = "KoverConventionPlugin"
+        }
         register("kmpLibrary") {
             id = libs.plugins.openrose.kmp.library.get().pluginId
             implementationClass = "KmpLibraryConventionPlugin"

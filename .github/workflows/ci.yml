@@ -16,28 +16,227 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  # Opens or updates the release PR from Conventional Commits; merging it tags vX.Y.Z and drafts the
+  # On main, opens or updates the release PR from Conventional Commits; merging it tags vX.Y.Z and drafts the
   # GitHub release. A tag pushed with GITHUB_TOKEN starts no workflow, so this run builds the release.
+  # On every run, decides whether this is a release build and names the artifacts.
   release-please:
-    name: Release PR
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    name: Release PR and version
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       contents: write
       pull-requests: write
     outputs:
-      release_created: ${{ steps.release.outputs.release_created }}
-      tag_name: ${{ steps.release.outputs.tag_name }}
+      release_tag: ${{ steps.version.outputs.release_tag }}
+      label: ${{ steps.version.outputs.label }}
     steps:
       - id: release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: googleapis/release-please-action@v5.0.0
 
-  build:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: version.txt
+          sparse-checkout-cone-mode: false
+
+      # The version itself comes from version.txt (build-logic AppVersion); a release only drops the -dev suffix.
+      # Artifact names carry the version; non-release builds add -dev and the commit, since package files stay at the bare version.
+      - id: version
+        env:
+          RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || steps.release.outputs.tag_name }}
+          COMMIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          version="$(tr -d '[:space:]' < version.txt)"
+          if [[ -n "$RELEASE_TAG" ]]; then
+            if [[ "$RELEASE_TAG" != "v$version" ]]; then
+              echo "::error::Release tag $RELEASE_TAG does not match version.txt ($version)."
+              exit 1
+            fi
+            label="$version"
+          else
+            label="$version-dev-${COMMIT_SHA::7}"
+          fi
+          echo "release_tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+          echo "label=$label" >> "$GITHUB_OUTPUT"
+
+  # Shared JVM and Android checks; independent of the release, so they start at once.
+  checks:
+    name: Checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      SKIKO_RENDER_API: SOFTWARE
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+
+      # The JDK version comes from .mise.toml, the same pin developers use locally.
+      - uses: jdx/mise-action@v5.2.10
+        with:
+          version: 2026.11.5
+
+      - name: Read Android SDK versions from the version catalog
+        id: android-sdk
+        run: |
+          version() { sed -n "s/^$1 = \"\(.*\)\"$/\1/p" gradle/libs.versions.toml; }
+          echo "platform=$(version android-compileSdk)" >> "$GITHUB_OUTPUT"
+          echo "build-tools=$(version android-buildTools)" >> "$GITHUB_OUTPUT"
+
+      - uses: android-actions/setup-android@v4.0.4
+        with:
+          packages: 'platform-tools platforms;android-${{ steps.android-sdk.outputs.platform }}.0 build-tools;${{ steps.android-sdk.outputs.build-tools }}'
+
+      - uses: gradle/actions/setup-gradle@v6.4.1
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
+
+      - name: Install Linux runtime libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes libgtk-3-0t64 libegl1 libgl1 libfontconfig1
+
+      - name: Run checks
+        run: ./gradlew --no-daemon --stacktrace check offlineCheck
+
+      - name: Upload test and lint reports
+        if: always()
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: reports-checks
+          path: |
+            **/build/reports/tests/**
+            **/build/test-results/**
+            **/build/reports/lint-results*
+          if-no-files-found: ignore
+          retention-days: 14
+
+  android:
+    name: Build (android)
+    needs: release-please
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      RELEASE_TAG: ${{ needs.release-please.outputs.release_tag }}
+      ORG_GRADLE_PROJECT_releaseBuild: ${{ needs.release-please.outputs.release_tag != '' }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - uses: jdx/mise-action@v5.2.10
+        with:
+          version: 2026.11.5
+
+      - name: Read Android SDK versions from the version catalog
+        id: android-sdk
+        run: |
+          version() { sed -n "s/^$1 = \"\(.*\)\"$/\1/p" gradle/libs.versions.toml; }
+          echo "platform=$(version android-compileSdk)" >> "$GITHUB_OUTPUT"
+          echo "build-tools=$(version android-buildTools)" >> "$GITHUB_OUTPUT"
+
+      - uses: android-actions/setup-android@v4.0.4
+        with:
+          packages: 'platform-tools platforms;android-${{ steps.android-sdk.outputs.platform }}.0 build-tools;${{ steps.android-sdk.outputs.build-tools }}'
+
+      - uses: gradle/actions/setup-gradle@v6.4.1
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
+
+      - name: Determine whether this PR changes the Android release package
+        id: android-release-check
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          git diff --name-only "$BASE_SHA" HEAD -- androidApp platform/android shared \
+            build-logic gradle build.gradle.kts settings.gradle.kts gradle.properties .github/workflows/ci.yml \
+            > "$RUNNER_TEMP/android-inputs.txt"
+          if [[ -s "$RUNNER_TEMP/android-inputs.txt" ]]; then echo 'required=true' >> "$GITHUB_OUTPUT"; fi
+
+      - name: Build Android debug package
+        if: env.RELEASE_TAG == '' && steps.android-release-check.outputs.required != 'true'
+        run: ./gradlew --no-daemon --stacktrace :androidApp:assembleDebug
+
+      - name: Build Android debug package, check release lint and build unsigned release package
+        if: steps.android-release-check.outputs.required == 'true'
+        run: ./gradlew --no-daemon --stacktrace :androidApp:assembleDebug :androidApp:lintRelease :androidApp:assembleRelease
+
+      - name: Build signed Android release
+        if: env.RELEASE_TAG != ''
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          OPENROSE_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          OPENROSE_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          OPENROSE_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          BUILD_TOOLS: ${{ steps.android-sdk.outputs.build-tools }}
+        run: |
+          : "${ANDROID_KEYSTORE_BASE64:?Set the ANDROID_KEYSTORE_BASE64 repository secret}"
+          : "${OPENROSE_KEYSTORE_PASSWORD:?Set the ANDROID_KEYSTORE_PASSWORD repository secret}"
+          : "${OPENROSE_KEY_ALIAS:?Set the ANDROID_KEY_ALIAS repository secret}"
+          : "${OPENROSE_KEY_PASSWORD:?Set the ANDROID_KEY_PASSWORD repository secret}"
+          export OPENROSE_KEYSTORE_PATH="$RUNNER_TEMP/openrose-release.jks"
+          trap 'rm -f "$OPENROSE_KEYSTORE_PATH"' EXIT
+          umask 077
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$OPENROSE_KEYSTORE_PATH"
+          ./gradlew --no-daemon --stacktrace :androidApp:assembleRelease
+          "$ANDROID_HOME/build-tools/$BUILD_TOOLS/apksigner" verify androidApp/build/outputs/apk/release/androidApp-release.apk
+
+      # R8 and the resource shrinker cannot see reflective or by-name use; fail if they dropped any of it.
+      - name: Check what R8 must keep
+        if: env.RELEASE_TAG != '' || steps.android-release-check.outputs.required == 'true'
+        env:
+          BUILD_TOOLS: ${{ steps.android-sdk.outputs.build-tools }}
+        run: |
+          packages=(androidApp/build/outputs/apk/release/*.apk)
+          [[ ${#packages[@]} -eq 1 && -f "${packages[0]}" ]]
+          apk="${packages[0]}"
+          tools="$ANDROID_HOME/build-tools/$BUILD_TOOLS"
+          entry=$(unzip -p "$apk" META-INF/xposed/java_init.list)
+          unzip -q -o "$apk" 'classes*.dex' -d "$RUNNER_TEMP/dex"
+          "$tools/dexdump" -l plain "$RUNNER_TEMP"/dex/classes*.dex > "$RUNNER_TEMP/classes.txt"
+          awk -v entry="'L${entry//.//};'" '$1 == "Class" && $2 == "descriptor" && $4 == entry { found = 1 } END { exit !found }' "$RUNNER_TEMP/classes.txt" ||
+            { echo "::error::Xposed entry $entry is missing from the release APK"; exit 1; }
+          "$tools/aapt2" dump resources "$apk" > "$RUNNER_TEMP/resources.txt"
+          for video in openrose_earbud_left openrose_earbud_right; do
+            grep -q "raw/$video\$" "$RUNNER_TEMP/resources.txt" ||
+              { echo "::error::raw/$video was shrunk out of the release APK"; exit 1; }
+          done
+
+      - name: Collect package
+        run: |
+          version="$(tr -d '[:space:]' < version.txt)"
+          mkdir -p dist/android
+          if [[ -n "$RELEASE_TAG" ]]; then
+            cp androidApp/build/outputs/apk/release/androidApp-release.apk "dist/android/openrose-$version-android.apk"
+          else
+            cp androidApp/build/outputs/apk/debug/androidApp-debug.apk "dist/android/openrose-$version-android-debug.apk"
+          fi
+          ls -lR dist
+
+      - name: Upload Android package
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: openrose-${{ needs.release-please.outputs.label }}-android
+          path: dist/android/*
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+
+      - name: Upload lint reports
+        if: always()
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: reports-android
+          path: '**/build/reports/lint-results*'
+          if-no-files-found: ignore
+          retention-days: 14
+
+  desktop:
     name: Build (${{ matrix.platform }})
     needs: release-please
-    # release-please is skipped outside main pushes; build still runs then.
-    if: ${{ !cancelled() && !failure() }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     strategy:
@@ -52,27 +251,12 @@ jobs:
       run:
         shell: bash
     env:
-      SKIKO_RENDER_API: SOFTWARE
-      # Set for a pushed release tag or a release that release-please just created; empty otherwise.
-      RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || needs.release-please.outputs.tag_name }}
+      ORG_GRADLE_PROJECT_releaseBuild: ${{ needs.release-please.outputs.release_tag != '' }}
     steps:
       - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
-          fetch-depth: 0
 
-      # The version itself comes from version.txt (build-logic AppVersion); a release only drops the -dev suffix.
-      - name: Mark release build
-        if: env.RELEASE_TAG != ''
-        run: |
-          version="$(tr -d '[:space:]' < version.txt)"
-          if [[ "$RELEASE_TAG" != "v$version" ]]; then
-            echo "::error::Release tag $RELEASE_TAG does not match version.txt ($version)."
-            exit 1
-          fi
-          echo "ORG_GRADLE_PROJECT_releaseBuild=true" >> "$GITHUB_ENV"
-
-      # The JDK version comes from .mise.toml, the same pin developers use locally.
       - uses: jdx/mise-action@v5.2.10
         with:
           version: 2026.11.5
@@ -82,37 +266,23 @@ jobs:
         with:
           node-version: '24'
 
-      - name: Read Android SDK versions from the version catalog
-        if: runner.os == 'Linux'
-        id: android-sdk
-        run: |
-          version() { sed -n "s/^$1 = \"\(.*\)\"$/\1/p" gradle/libs.versions.toml; }
-          echo "platform=$(version android-compileSdk)" >> "$GITHUB_OUTPUT"
-          echo "build-tools=$(version android-buildTools)" >> "$GITHUB_OUTPUT"
-
-      - uses: android-actions/setup-android@v4.0.4
-        if: runner.os == 'Linux'
-        with:
-          packages: 'platform-tools platforms;android-${{ steps.android-sdk.outputs.platform }}.0 build-tools;${{ steps.android-sdk.outputs.build-tools }}'
-
       - uses: gradle/actions/setup-gradle@v6.4.1
         with:
           cache-read-only: ${{ github.ref != 'refs/heads/main' }}
 
-      - name: Install Linux runtime libraries and packaging tools
+      - name: Install Linux packaging tools
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install --yes libgtk-3-0t64 libegl1 libgl1 libfontconfig1 rpm libarchive-tools
+          sudo apt-get install --yes rpm libarchive-tools
 
-      # Shared JVM and Android checks run on Linux. Windows also tests the native WinRT helper.
-      - name: Run checks and build Android package
-        if: runner.os == 'Linux'
-        run: ./gradlew --no-daemon --stacktrace check offlineCheck :androidApp:assembleDebug
-
-      - name: Build Linux packages
-        if: runner.os == 'Linux'
-        run: ./gradlew --no-daemon --stacktrace :desktopApp:packageDistributionForCurrentOS
+      # Covers both cargo target dirs: the check below and the release build that platform/windows runs from Gradle.
+      - uses: Swatinem/rust-cache@v2.9.3
+        if: runner.os == 'Windows'
+        with:
+          workspaces: platform/windows/native -> target
+          cache-directories: platform/windows/build/cargo
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Check the native WinRT helper
         if: runner.os == 'Windows'
@@ -122,8 +292,7 @@ jobs:
           cargo clippy --locked --all-targets -- -D warnings
           cargo test --locked
 
-      - name: Build Windows installer
-        if: runner.os == 'Windows'
+      - name: Build desktop packages
         run: ./gradlew --no-daemon --stacktrace :desktopApp:packageDistributionForCurrentOS
 
       # The path users take: a per-user install without elevation, the WinRT helper beside the app, a clean uninstall.
@@ -151,72 +320,9 @@ jobs:
           Invoke-Msi '/x' "$env:RUNNER_TEMP\msi-uninstall.log"
           if (Test-Path $app.FullName) { throw "Uninstall left $($app.FullName)" }
 
-      - name: Determine whether this PR changes the Android release package
-        id: android-release-check
-        if: github.event_name == 'pull_request' && runner.os == 'Linux'
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-        run: |
-          git diff --name-only "$BASE_SHA" HEAD -- androidApp platform/android shared \
-            build-logic gradle build.gradle.kts settings.gradle.kts gradle.properties .github/workflows/ci.yml \
-            > "$RUNNER_TEMP/android-inputs.txt"
-          if [[ -s "$RUNNER_TEMP/android-inputs.txt" ]]; then echo 'required=true' >> "$GITHUB_OUTPUT"; fi
-
-      - name: Check release lint and build unsigned Android package
-        if: steps.android-release-check.outputs.required == 'true'
-        run: ./gradlew --no-daemon --stacktrace :androidApp:lintRelease :androidApp:assembleRelease
-
-      - name: Build signed Android release
-        if: env.RELEASE_TAG != '' && runner.os == 'Linux'
-        env:
-          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-          OPENROSE_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          OPENROSE_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          OPENROSE_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-          BUILD_TOOLS: ${{ steps.android-sdk.outputs.build-tools }}
-        run: |
-          : "${ANDROID_KEYSTORE_BASE64:?Set the ANDROID_KEYSTORE_BASE64 repository secret}"
-          : "${OPENROSE_KEYSTORE_PASSWORD:?Set the ANDROID_KEYSTORE_PASSWORD repository secret}"
-          : "${OPENROSE_KEY_ALIAS:?Set the ANDROID_KEY_ALIAS repository secret}"
-          : "${OPENROSE_KEY_PASSWORD:?Set the ANDROID_KEY_PASSWORD repository secret}"
-          export OPENROSE_KEYSTORE_PATH="$RUNNER_TEMP/openrose-release.jks"
-          trap 'rm -f "$OPENROSE_KEYSTORE_PATH"' EXIT
-          umask 077
-          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$OPENROSE_KEYSTORE_PATH"
-          ./gradlew --no-daemon --stacktrace :androidApp:assembleRelease
-          "$ANDROID_HOME/build-tools/$BUILD_TOOLS/apksigner" verify androidApp/build/outputs/apk/release/androidApp-release.apk
-
-      # R8 and the resource shrinker cannot see reflective or by-name use; fail if they dropped any of it.
-      - name: Check what R8 must keep
-        if: runner.os == 'Linux' && (env.RELEASE_TAG != '' || steps.android-release-check.outputs.required == 'true')
-        env:
-          BUILD_TOOLS: ${{ steps.android-sdk.outputs.build-tools }}
-        run: |
-          packages=(androidApp/build/outputs/apk/release/*.apk)
-          [[ ${#packages[@]} -eq 1 && -f "${packages[0]}" ]]
-          apk="${packages[0]}"
-          tools="$ANDROID_HOME/build-tools/$BUILD_TOOLS"
-          entry=$(unzip -p "$apk" META-INF/xposed/java_init.list)
-          unzip -q -o "$apk" 'classes*.dex' -d "$RUNNER_TEMP/dex"
-          "$tools/dexdump" -l plain "$RUNNER_TEMP"/dex/classes*.dex > "$RUNNER_TEMP/classes.txt"
-          awk -v entry="'L${entry//.//};'" '$1 == "Class" && $2 == "descriptor" && $4 == entry { found = 1 } END { exit !found }' "$RUNNER_TEMP/classes.txt" ||
-            { echo "::error::Xposed entry $entry is missing from the release APK"; exit 1; }
-          "$tools/aapt2" dump resources "$apk" > "$RUNNER_TEMP/resources.txt"
-          for video in openrose_earbud_left openrose_earbud_right; do
-            grep -q "raw/$video\$" "$RUNNER_TEMP/resources.txt" ||
-              { echo "::error::raw/$video was shrunk out of the release APK"; exit 1; }
-          done
-
-      # Artifact names carry the version; non-release builds add -dev and the commit, since package files stay at the bare version.
       - name: Collect packages
-        id: collect
-        env:
-          COMMIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
-          version="$(tr -d '[:space:]' < version.txt)"
-          if [[ -n "$RELEASE_TAG" ]]; then label="$version"; else label="$version-dev-${COMMIT_SHA::7}"; fi
-          echo "label=$label" >> "$GITHUB_OUTPUT"
-          mkdir -p dist/desktop dist/android
+          mkdir -p dist/desktop
           collect() {
             local found
             found=$(find desktopApp/build/compose/binaries/main -mindepth 2 -maxdepth 2 -type f -name "$1")
@@ -228,11 +334,6 @@ jobs:
           }
           if [[ "$RUNNER_OS" == Linux ]]; then
             for pattern in '*.deb' '*.rpm' '*.pacman' '*.AppImage'; do collect "$pattern"; done
-            if [[ -n "$RELEASE_TAG" ]]; then
-              cp androidApp/build/outputs/apk/release/androidApp-release.apk "dist/android/openrose-$version-android.apk"
-            else
-              cp androidApp/build/outputs/apk/debug/androidApp-debug.apk "dist/android/openrose-$version-android-debug.apk"
-            fi
           else
             collect '*.msi'
           fi
@@ -241,40 +342,16 @@ jobs:
       - name: Upload desktop packages
         uses: actions/upload-artifact@v7.0.2
         with:
-          name: openrose-${{ steps.collect.outputs.label }}-${{ matrix.platform }}
+          name: openrose-${{ needs.release-please.outputs.label }}-${{ matrix.platform }}
           path: dist/desktop/*
           if-no-files-found: error
           retention-days: 14
           compression-level: 0
 
-      - name: Upload Android package
-        if: runner.os == 'Linux'
-        uses: actions/upload-artifact@v7.0.2
-        with:
-          name: openrose-${{ steps.collect.outputs.label }}-android
-          path: dist/android/*
-          if-no-files-found: error
-          retention-days: 14
-          compression-level: 0
-
-      - name: Upload test and lint reports
-        if: always() && runner.os == 'Linux'
-        uses: actions/upload-artifact@v7.0.2
-        with:
-          name: reports-${{ matrix.platform }}
-          path: |
-            **/build/reports/tests/**
-            **/build/test-results/**
-            **/build/reports/lint-results*
-          if-no-files-found: ignore
-          retention-days: 14
-
   release:
     name: Attach packages to draft release
-    needs: [release-please, build]
-    if: >-
-      ${{ !cancelled() && needs.build.result == 'success' &&
-      (github.ref_type == 'tag' || needs.release-please.outputs.release_created == 'true') }}
+    needs: [release-please, checks, android, desktop]
+    if: needs.release-please.outputs.release_tag != ''
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -283,7 +360,7 @@ jobs:
       id-token: write
       attestations: write
     env:
-      RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || needs.release-please.outputs.tag_name }}
+      RELEASE_TAG: ${{ needs.release-please.outputs.release_tag }}
     steps:
       - uses: actions/download-artifact@v8.0.2
         with:
