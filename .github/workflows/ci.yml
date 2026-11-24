@@ -266,6 +266,15 @@ jobs:
         with:
           node-version: '24'
 
+      - name: Cache electron-builder tools and npm downloads
+        uses: actions/cache@v6.1.0
+        with:
+          path: |
+            ${{ runner.os == 'Linux' && '~/.cache/electron-builder' || '~/AppData/Local/electron-builder/Cache' }}
+            ${{ runner.os == 'Linux' && '~/.npm' || '~/AppData/Local/npm-cache' }}
+          key: electron-builder-${{ matrix.platform }}-${{ hashFiles('gradle/libs.versions.toml') }}
+          restore-keys: electron-builder-${{ matrix.platform }}-
+
       - uses: gradle/actions/setup-gradle@v6.4.1
         with:
           cache-read-only: ${{ github.ref != 'refs/heads/main' }}
