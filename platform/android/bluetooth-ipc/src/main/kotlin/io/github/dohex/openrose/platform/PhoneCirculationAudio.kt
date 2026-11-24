@@ -14,7 +14,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeoutOrNull
 
-/** System audio handoff runs with the module owner's Bluetooth permissions on a peer worker thread. */
 @SuppressLint("MissingPermission")
 class PhoneCirculationAudio(private val context: Context) : CirculationAudio {
     private val profiles = AndroidAudioProfiles(context)
@@ -52,7 +51,6 @@ class PhoneCirculationAudio(private val context: Context) : CirculationAudio {
             val status = if (connect) device.connect() else device.disconnect()
             check(status == BluetoothStatusCodes.SUCCESS) { "系统蓝牙拒绝音频操作（$status）" }
         } else {
-            // On older releases these are Bluetooth stack profile APIs; the module runs inside that stack.
             val operation = if (connect) "connect" else "disconnect"
             leases.map { it.currentProxy() }.forEach { profile ->
                 val target = if (connect) BluetoothProfile.STATE_CONNECTED else BluetoothProfile.STATE_DISCONNECTED
@@ -65,7 +63,6 @@ class PhoneCirculationAudio(private val context: Context) : CirculationAudio {
         val observed = withTimeoutOrNull(12_000L) {
             while (true) {
                 val states = leases.map { it.currentProxy().getConnectionState(device) }
-                // A2DP is the media source. On release, HFP must be gone too.
                 val reached = if (connect) {
                     states.first() == BluetoothProfile.STATE_CONNECTED
                 } else {

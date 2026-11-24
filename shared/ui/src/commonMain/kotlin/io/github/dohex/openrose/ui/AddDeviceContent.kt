@@ -36,7 +36,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
-/** Presentation only: the route owns scanning, connection attempts, and their lifetimes. */
 @Composable
 internal fun AddDeviceContent(
     state: ControlState,
@@ -104,7 +103,6 @@ internal fun AddDeviceContent(
     }
 }
 
-/** Where the search pulse rests when the system asks for no animation. */
 private const val STILL_PULSE = 0.4f
 
 @Composable
@@ -375,7 +373,6 @@ private fun AddDeviceSearchStatus(
     }
 }
 
-/** The one line under the headline: what the search is doing, or why and how it ended. */
 private fun searchStatusText(
     count: Int,
     pending: Boolean,

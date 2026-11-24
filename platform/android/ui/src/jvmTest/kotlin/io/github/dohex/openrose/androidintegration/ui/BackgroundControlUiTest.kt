@@ -227,7 +227,6 @@ class BackgroundControlUiTest {
         block(Harness(this, page, state, integration, fake))
     }
 
-    /** A host that answers each request the way the platform would, so tests read the resulting facts. */
     private class FakeBackgroundHost(
         private val state: MutableState<ControlState>,
         private val integration: MutableStateFlow<IntegrationState>,

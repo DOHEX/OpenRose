@@ -12,16 +12,10 @@ import io.github.dohex.openrose.core.protocol.TouchBinding
 import kotlinx.collections.immutable.PersistentMap
 import kotlinx.collections.immutable.toPersistentMap
 
-/** Every noise cycle a codec reads or writes carries these four modes. */
 private val noiseCycleModes = listOf("normal", "transparency", "wind", "anc")
 
-/** The case reads this much below the earbuds, as it usually does after charging them. */
 private const val CASE_BATTERY_OFFSET = 20
 
-/**
- * What a connected device of [profile] would report for each field it can read, chosen among the options its
- * capabilities offer. A field with nothing to offer reads as not provided, as a device that omits it would.
- */
 internal fun sandboxFields(
     profile: ModelProfile,
     capabilities: DeviceCapabilities,
@@ -38,7 +32,6 @@ internal fun sandboxFields(
     }
 }.toPersistentMap()
 
-/** Battery follows the model's layout: a single unit reports in the case slot, and earbuds-only models have no case. */
 internal fun batteryReading(field: DeviceField, layout: BatteryLayout, battery: SandboxBattery): FieldReading {
     val percent = when (field) {
         DeviceField.CASE_BATTERY -> when (layout) {
@@ -52,7 +45,6 @@ internal fun batteryReading(field: DeviceField, layout: BatteryLayout, battery: 
     return percent?.let { known(FieldValue.Number(it)) } ?: FieldReading.NotProvided("ff")
 }
 
-/** A field with nothing to offer, or one only an event fills, has no value here. */
 private fun fieldValue(field: DeviceField, capabilities: DeviceCapabilities): FieldValue? = when (field) {
     DeviceField.NOISE_MODE, DeviceField.ANC_LEVEL, DeviceField.TRANSPARENCY_LEVEL, DeviceField.NOISE_CYCLE ->
         capabilities.noiseControl?.let { noiseValue(field, it) }
@@ -83,10 +75,6 @@ private fun noiseValue(field: DeviceField, noise: NoiseControlCapabilities): Fie
     else -> FieldValue.NoiseCycle(noiseCycleModes.associateWith { it in noise.cycleModes })
 }
 
-/**
- * One of the options the model offers for a setting chosen from a list. A bass level reads only together with the
- * custom-slot EQ reply and a find event only when one happens, so neither has a value until then.
- */
 private fun choiceValue(field: DeviceField, capabilities: DeviceCapabilities): FieldValue? = when (field) {
     DeviceField.AUDIO_MODE -> capabilities.audioControl?.modes?.preferring("aac_sbc")?.let(FieldValue::Text)
     DeviceField.PROMPT_VOLUME -> capabilities.promptVolumeLevels.middle()?.let(FieldValue::Number)

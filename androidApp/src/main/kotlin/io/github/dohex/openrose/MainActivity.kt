@@ -44,7 +44,6 @@ class MainActivity : ComponentActivity() {
         owner.refreshPlatform()
     }
     private val associationChooser = registerForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) {
-        // Whether the user confirmed or cancelled, the platform facts are re-read from the system.
         owner.background.syncObservation()
     }
 
@@ -111,10 +110,8 @@ class MainActivity : ComponentActivity() {
         }
         val address = intent.getStringExtra(BridgeWire.EXTRA_HEADPHONE_ADDRESS)?.uppercase(Locale.ROOT)
             ?.takeIf(BluetoothAdapter::checkBluetoothAddress)
-        // Consume the request so Activity recreation does not retry a failed connection.
         intent.removeExtra(BridgeWire.EXTRA_HEADPHONE_ADDRESS)
         address?.let { owner.connectFromSystem(DeviceId(it)) }
-        // The same goes for the reason: a recreated Activity must not announce an old fallback again.
         intent.getStringExtra(BridgeWire.EXTRA_FALLBACK_REASON)?.takeIf { it.isNotBlank() }?.let { owner.model.notice.value = it }
         intent.removeExtra(BridgeWire.EXTRA_FALLBACK_REASON)
         owner.model.navigation.open(WindowDestination.HEADPHONES)
@@ -128,11 +125,9 @@ class MainActivity : ComponentActivity() {
 
     override fun onStop() {
         super.onStop()
-        // Discovery is a foreground interaction; control ownership and active links stay in the host.
         owner.model.stopScan()
     }
 
-    /** The system shows its own chooser; the association is the user's explicit consent, never created silently. */
     private fun requestAssociation() {
         owner.background.companion.requestAssociation(
             onChooser = { associationChooser.launch(IntentSenderRequest.Builder(it).build()) },
@@ -140,7 +135,6 @@ class MainActivity : ComponentActivity() {
         )
     }
 
-    /** Autostart and battery limits cannot be queried, so the user is sent to the app's system page. */
     private fun openAppSettings() {
         startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", packageName, null)))
     }
@@ -164,7 +158,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    /** Enabling background control asks for the notification permission once, in context. */
     private fun onIntegrationSettingsChanged(settings: IntegrationSettings) {
         val enabling = settings.backgroundControlEnabled && !owner.runtime.integration.value.settings.backgroundControlEnabled
         owner.updateIntegrationSettings(settings)

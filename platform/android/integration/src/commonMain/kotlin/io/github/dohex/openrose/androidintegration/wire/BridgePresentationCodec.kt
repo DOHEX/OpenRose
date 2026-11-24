@@ -2,7 +2,6 @@ package io.github.dohex.openrose.androidintegration.wire
 
 import io.github.dohex.openrose.androidintegration.SystemPresentationState
 
-/** Encoded from the same authority capture as the device fields in its enclosing snapshot. */
 fun SystemPresentationState.toBridgePresentation(): Map<String, Any?> = buildMap {
     put(BridgePresentationWire.MODE, islandMode.name)
     put(BridgePresentationWire.FOCUS_ENABLED, focusNotificationEnabled)

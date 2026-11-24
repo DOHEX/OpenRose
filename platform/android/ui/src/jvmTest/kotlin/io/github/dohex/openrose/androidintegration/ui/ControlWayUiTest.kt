@@ -122,7 +122,6 @@ class ControlWayUiTest {
         forEachStyle(state) { harness ->
             harness.clickTag(ControlWayTags.option(ControlWay.ORDINARY))
             harness.render()
-            // The fake host starts a new owner on every selection it receives, so a forwarded reselect would show.
             assertEquals(OwnerState(selected = ControlWay.ORDINARY, readiness = OwnerReadiness.Ready), harness.host.integration.value.owner)
 
             harness.clickTag(ControlWayTags.option(ControlWay.MODULE))
@@ -222,7 +221,6 @@ class ControlWayUiTest {
         }
     }
 
-    /** The control facts and the Android-integration facts a scenario starts from. */
     private data class Scenario(val control: ControlState, val integration: IntegrationState)
 
     private fun platform() = PlatformState(
@@ -263,10 +261,6 @@ class ControlWayUiTest {
         block(Harness(this, page, host))
     }
 
-    /**
-     * Stands in for the application's owner: a selection starts the new owner, which is not ready
-     * yet. Tests read the resulting state.
-     */
     private class FakeOwnerHost(initial: Scenario) {
         val state = mutableStateOf(initial.control)
         val integration = MutableStateFlow(initial.integration)

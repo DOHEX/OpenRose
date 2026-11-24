@@ -11,7 +11,6 @@ class ModelProfileTest {
     fun everyModelIsIdentifiedByEachOfItsOwnAdvertisementPrefixes() {
         for (profile in ModelProfile.entries) {
             for (prefix in profile.spec.advertisementPrefixes) {
-                // Normalized data is the little-endian company ID followed by the payload; a trailing byte keeps it a prefix.
                 val bytes = (prefix + "99").chunked(2).map { it.toInt(16) }
                 val manufacturerData = mapOf((bytes[0] or (bytes[1] shl 8)) to bytes.drop(2).map(Int::toByte).toByteArray())
                 assertEquals(profile, ModelIdentification.identify(manufacturerData), "$profile $prefix")

@@ -18,7 +18,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
 
-/** Validation, ordered writes and fresh readback confirmation for the current device session. */
 internal class SettingQueue(
     private val state: MutableStateFlow<ControlState>,
     private val scope: CoroutineScope,
@@ -44,13 +43,11 @@ internal class SettingQueue(
         }
     }
 
-    /** A caller owns its wait; the platform session owns the queued operation. */
     suspend fun set(link: ControlLink, command: HeadsetCommand, expectedSessionId: Long?): OperationResult {
         val request = link.lifecycle.withLock {
             val attempt = link.active?.takeIf { it.connection != null && !it.progress.value.ended }
             val current = state.value
             val session = current.sessionFor(command.setting)
-            // Check the caller's reference under the same lock as admission.
             if (expectedSessionId != null && (attempt?.id != expectedSessionId || session?.sessionId != expectedSessionId)) {
                 return OperationResult.Failure(ControlError(ControlErrorCode.DISCONNECTED, "请求的设备会话已结束或已被替换"))
             }
@@ -58,7 +55,6 @@ internal class SettingQueue(
             if (attempt == null || session?.sessionId != attempt.id) {
                 return failure(ControlError(ControlErrorCode.NOT_READY, "设备尚未就绪"))
             }
-            // Validate before submission without allocating codec sequence numbers.
             requireNotNull(current.device).validate(command)?.let { return failure(it) }
             if (attempt.settings.requests.size >= 32) return failure(ControlError(ControlErrorCode.NOT_READY, "设置队列已满"))
             val operation = SettingOperation(++operationId, attempt.id, command.setting, command.value, SettingStage.SUBMITTED)
@@ -71,7 +67,6 @@ internal class SettingQueue(
         return request.result.await()
     }
 
-    /** The initialization loop owns the wire until READY. Give a user command the next complete exchange. */
     suspend fun runNextDuringInitialization(link: ControlLink, attempt: ConnectionAttempt) {
         val request = attempt.settings.commands.tryReceive().getOrNull() ?: return
         execute(link, attempt, request)
@@ -95,15 +90,12 @@ internal class SettingQueue(
             request.result.complete(result)
             val error = (result as? OperationResult.Failure)?.error
             if (link.active === attempt && error?.code in setOf(ControlErrorCode.TIMEOUT, ControlErrorCode.FAILED)) {
-                // Neither protocol correlates a late readback with a transaction. End this
-                // link before another setting can consume an old response or native write.
                 link.clearActive()
                 state.update { it.copy(lastError = error) }
             }
         }
     }
 
-    /** A queued write belongs to its original session and must still be valid for the latest readings. */
     private suspend fun validateAndApply(link: ControlLink, attempt: ConnectionAttempt, request: Request): OperationResult {
         val current = state.value
         val device = current.device?.takeIf { it.sessionId == attempt.id } ?: throw LinkEnded()
@@ -152,13 +144,11 @@ internal class SettingQueue(
     ): OperationResult {
         val confirmation = SettingConfirmation(prepared.expectedValues)
         for (query in prepared.readbacks) {
-            // A later field query gets its own baseline; earlier unsolicited data cannot confirm it.
             val baseline = owner.writePaced(attempt, link, query.bytes)
             confirmation.beginQuery(query, baseline)
             val observed = withTimeoutOrNull(timing.queryTimeoutMillis) {
                 attempt.progress.first { progress ->
                     if (progress.ended) return@first true
-                    // A refresh with no requested value still owns its reply before the next write can run.
                     val fields = state.value.device?.diagnostics?.fields.orEmpty()
                     val finished = confirmation.observe(query, baseline, progress, fields)
                     settingStage(attempt, request, SettingStage.WRITTEN, confirmedFields = confirmation.confirmedFields)
@@ -227,7 +217,6 @@ internal class SettingQueue(
         return OperationResult.Failure(error)
     }
 
-    /** Caller holds lifecycle; complete every waiter before cancelling the owned worker. */
     fun end(attempt: ConnectionAttempt) {
         val error = ControlError(ControlErrorCode.DISCONNECTED, "连接会话已结束")
         val ids = attempt.settings.requests.keys.toSet()

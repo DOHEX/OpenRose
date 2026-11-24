@@ -13,11 +13,6 @@ internal class NativeBinderBindings(private val directory: NativeHeadsetDirector
 
     fun clear() = binderAddress.clear()
 
-    /**
-     * Binds a binder instance to the ROSE address it identified. Without a session the binding carries no reference: its
-     * address-less calls (`register`) stay off the vendor path until a session for that address exists, which it then
-     * admits, as on the target source device of a headset circulation (ADR 0017).
-     */
     fun rememberAddress(owner: Any?, address: String?) {
         if (owner == null || !directory.identifies(address)) return
         val normalized = normalizeBluetoothAddress(address) ?: return
@@ -59,10 +54,8 @@ internal class NativeBinderBindings(private val directory: NativeHeadsetDirector
 
     private data class BinderAddress(
         val address: String,
-        /** Null when bound to bonded earphones with no session. */
         val reference: NativeSessionReference?,
     ) {
-        /** A binding made in a session keeps to that session; one made with none admits the session for its address. */
         fun admits(snapshot: NativeHeadsetSnapshot): Boolean = reference == null || reference == snapshot.reference
     }
 }

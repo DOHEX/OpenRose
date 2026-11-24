@@ -3,7 +3,6 @@ package io.github.dohex.openrose.ui
 import kotlinx.serialization.Serializable
 import top.yukonga.miuix.kmp.nav.core.NavKey
 
-/** The back stack holds the main tabs once and then one [Secondary] entry per pushed page. */
 @Serializable
 internal sealed interface Route : NavKey {
     val page: AppPage

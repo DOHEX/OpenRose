@@ -11,7 +11,6 @@ dependencies {
     testImplementation(libs.coroutines.test)
 }
 
-// desktopApp installs the helper beside the application; desktop run and the MSI both start it from there.
 val winrtHelper = configurations.consumable("winrtHelper") {
     attributes { attribute(Usage.USAGE_ATTRIBUTE, objects.named(WINRT_HELPER_USAGE)) }
 }

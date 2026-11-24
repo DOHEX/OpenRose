@@ -18,11 +18,6 @@ import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
-/**
- * Ordinary background recovery: what the integration derives from the control state and the Android
- * wake facts. The simulated lifecycle events here are contract evidence only and say nothing about a
- * ROM actually waking the process. The unlock gate itself is a core rule with its own tests.
- */
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class OrdinaryRecoveryTest {
     private var integration = IntegrationState()
@@ -89,7 +84,6 @@ class OrdinaryRecoveryTest {
             runtime.report(androidPlatform(), WakeFacts(band, CompanionAssociation.ACTIVE, PresenceObservation.OBSERVING))
             assertEquals(BackgroundRecovery.Armed(band), integration.backgroundRecovery(runtime.state.value))
 
-            // The user cancels the association in system settings: readiness disappears again.
             runtime.report(androidPlatform(), WakeFacts(band, CompanionAssociation.MISSING, PresenceObservation.NOT_OBSERVING))
             assertIs<BackgroundRecovery.Incomplete>(integration.backgroundRecovery(runtime.state.value))
         }
@@ -106,7 +100,6 @@ class OrdinaryRecoveryTest {
         runCurrent()
         advanceUntilIdle()
 
-        // Not ready for unattended recovery, yet the ordinary foreground path is unaffected.
         assertIs<BackgroundRecovery.Incomplete>(integration.backgroundRecovery(runtime.state.value))
         assertIs<ConnectionState.Connected>(runtime.state.value.connection)
         assertTrue(integration.mayStartBackgroundService(runtime.state.value))
@@ -134,7 +127,6 @@ class OrdinaryRecoveryTest {
         userUnlocked = unlocked,
     )
 
-    /** The platform reports its control facts to the runtime and its Android wake facts to the integration state. */
     private fun SystemEntryRuntime.report(platform: PlatformState, wake: WakeFacts = WakeFacts()) {
         integration = IntegrationState(settings = settings, platform = IntegrationPlatformState(backgroundService = BackgroundServiceFacts(wake = wake)))
         updatePlatformState(platform)

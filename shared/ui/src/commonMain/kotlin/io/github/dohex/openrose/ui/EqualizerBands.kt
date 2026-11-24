@@ -68,7 +68,6 @@ import io.github.dohex.openrose.core.CustomEqualizerCapabilities
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
-/** What each interface style varies on the band editor; layout, gestures and drawing are shared. */
 private data class EqualizerTokens(
     val trackWidth: Dp,
     val thumbRadius: Dp,
@@ -83,24 +82,14 @@ private fun equalizerTokens(): EqualizerTokens = when (LocalInterfaceStyle.curre
     InterfaceStyle.MATERIAL3 -> EqualizerTokens(6.dp, 8.dp, 11.dp, 3.dp, springThumbs = true)
 }
 
-/** Low enough that the i7 page, all six modes and the curve, fits a 360×780dp phone without scrolling down. */
 private val BAND_AREA_HEIGHT = 136.dp
 
-/** A band's touch target is at least this wide; bands that do not all fit at this width scroll sideways. */
 private val MIN_BAND_WIDTH = 48.dp
 
-/** The gain scale's least width; it grows with the font so its labels are never cut. */
 private val SCALE_WIDTH = 28.dp
 
 private val LABEL_GAP = 6.dp
 
-/**
- * One vertical control per band on a shared gain axis, with the curve drawn through the thumbs and the model's gain
- * bounds and zero marked on the left. Pressing anywhere in a band's column moves its thumb there; the band is sent
- * when the finger lifts, or at once from keys and accessibility actions. Bands are at least [MIN_BAND_WIDTH] wide, so
- * a row that does not fit scrolls sideways while the gain scale stays put. [active] false draws the curve faded, for
- * a curve the device is not playing.
- */
 @Composable
 internal fun EqualizerBands(
     curve: List<Int>,
@@ -115,8 +104,6 @@ internal fun EqualizerBands(
     val maxGain = capabilities.maxGain
     val haptics = LocalHapticFeedback.current
     val density = LocalDensity.current
-    // A drag changes these many times a second, so they are read where they are drawn, measured or described and
-    // never while composing: the page does not recompose for every finger movement.
     val drag = remember { mutableStateOf<Pair<Int, Int>?>(null) }
     val focusedBand = remember { mutableStateOf<Int?>(null) }
     val latestCurve by rememberUpdatedState(curve)
@@ -133,7 +120,6 @@ internal fun EqualizerBands(
 
     val colors = bandColors(enabled, active)
     val thumbs = rememberThumbs(curve, shown, { drag.value?.first }, eased = tokens.springThumbs)
-    // The scale sits beside the band area, so it starts below the gain labels however tall the font makes them.
     var gainLabelsHeight by remember { mutableIntStateOf(0) }
     Row(modifier) {
         Column(Modifier.widthIn(min = SCALE_WIDTH)) {
@@ -205,7 +191,6 @@ internal fun EqualizerBands(
     }
 }
 
-/** [maxGain], zero and [minGain] at the heights the band area draws them, ending just left of it; there is no unit. */
 @Composable
 private fun GainScale(minGain: Int, maxGain: Int, inset: Dp, modifier: Modifier) {
     val marks = listOf(maxGain, 0, minGain).filter { it in minGain..maxGain }.distinct()
@@ -240,10 +225,6 @@ private fun bandColors(enabled: Boolean, active: Boolean): BandColors {
     return BandColors(track = appColor(AppColorRole.Divider), highlight = primary, curve = curve, thumb = thumb)
 }
 
-/**
- * One label per band column, each as wide as its band and as tall as its text needs at the current font size, the
- * [highlighted] one in [highlight]. [labels] and [highlighted] are read here, so a drag recomposes only the labels.
- */
 @Composable
 private fun BandLabels(
     labels: () -> List<String>,
@@ -267,11 +248,6 @@ private fun BandLabels(
     }
 }
 
-/**
- * Thumb positions, one per band, eased toward the [shown] gains when [eased]; the [dragged] thumb follows the finger
- * exactly. They are animated outside composition and read when drawing, so a drag or an easing step redraws without
- * recomposing.
- */
 @Composable
 private fun rememberThumbs(
     curve: List<Int>,
@@ -296,11 +272,6 @@ private fun rememberThumbs(
     return thumbs
 }
 
-/**
- * One band's input: a slider to accessibility services, arrow and range-end keys while focused, and drag along its column.
- * A drag that starts sideways is left to the scrolling band row. [gain] is read for semantics only.
- * [onRelease] is told whether the gesture ended with the finger lifting, rather than being cancelled.
- */
 @Composable
 private fun BandControl(
     hz: Int,
@@ -341,7 +312,6 @@ private fun BandControl(
     )
 }
 
-/** A band as a slider to accessibility services; [gain] is read in the semantics phase, not while composing. */
 private fun Modifier.bandSemantics(
     hz: Int,
     gain: () -> Int,
@@ -390,7 +360,6 @@ private fun Modifier.bandKeys(
 
 private class BandColors(val track: Color, val highlight: Color, val curve: Color, val thumb: Color)
 
-/** Gain grid, one track per band, then the curve and its thumbs; thumbs stay inside the area at either limit. */
 private fun DrawScope.drawBands(
     gains: List<Float>,
     minGain: Int,
@@ -446,7 +415,6 @@ private fun DrawScope.drawBands(
     }
 }
 
-/** Joins [points] with horizontal-tangent cubics, so the curve never overshoots a thumb. */
 private fun Path.smoothThrough(points: List<Offset>) {
     points.zipWithNext { from, to ->
         val midX = (from.x + to.x) / 2
@@ -454,7 +422,6 @@ private fun Path.smoothThrough(points: List<Offset>) {
     }
 }
 
-/** How far [gain] sits below [maxGain], from 0 at the maximum to 1 at [minGain]. */
 private fun gainFraction(gain: Float, minGain: Int, maxGain: Int): Float = (maxGain - gain) / (maxGain - minGain).coerceAtLeast(1)
 
 private fun gainLabel(gain: Int): String = when {

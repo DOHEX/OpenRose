@@ -16,10 +16,7 @@ class AdvancedAudioProtocolTest {
         assertEquals(3, codec.initQueries(20).size)
         val gains = mutableListOf(-6, -3, -1, 0, 1, 2, 3, 4, 5, 6)
         val setting = codec.prepareSetting(DeviceSetting.CUSTOM_EQ, FieldValue.IntegerList(gains))
-        // APK setEqCustom fixed literal + independent dynamic curve example in
-        // rose_reverse/docs/earfeel-i7-protocol.md §4.4, advanced by session seq03/04.
         assertEquals(listOf("ff03022a0432aa", "ff040b3e86838100010203040506ebaa"), setting.writeFrames.map { it.hex() })
-        // APK getEq/getCustomEq fixed bodies, independently worked seq05/06 literals.
         assertEquals(listOf("ff0502fa2a2aaa", "ff0602fa3e3faa"), setting.readbacks.map { it.bytes.hex() })
         assertEquals(listOf(setOf("2a"), setOf("3e")), setting.readbacks.map { it.responseKeys })
         assertEquals(listOf(setOf(DeviceField.EQ), setOf(DeviceField.CUSTOM_EQ)), setting.readbacks.map { it.expectedFields })
@@ -38,13 +35,11 @@ class AdvancedAudioProtocolTest {
     fun advancedCapabilitiesUseModelAndCompleteFirmwareBytesForTheirSeparateGates() {
         assertNull(ModelProfile.I5_ZT.capabilities().equalizer?.custom)
         val custom = ModelProfile.I7_RS_V2.capabilities().equalizer?.custom!!
-        // Original i7 panel frequencies and gain limits; these are UI labels, not measured DSP data.
         assertEquals(listOf(20, 100, 300, 500, 1000, 2000, 3000, 5000, 8000, 15000), custom.bandsHz)
         assertEquals(-6, custom.minGain)
         assertEquals(6, custom.maxGain)
         assertEquals(emptySet(), ModelProfile.I7_RS_V2.capabilities().gainLevels)
         assertEquals(emptySet(), ModelProfile.I7_RS_V2.capabilities().hearingProtectionLevels)
-        // Unread firmware leaves the gated prompt-volume levels unknown rather than assuming the lowest version.
         assertEquals(emptySet(), ModelProfile.I7_RS_V2.capabilities().promptVolumeLevels)
         assertFalse(DeviceSetting.PROMPT_VOLUME in ModelProfile.I7_RS_V2.capabilities().writableSettings)
         assertTrue(DeviceField.PROMPT_VOLUME in ModelProfile.I7_RS_V2.capabilities().readableFields)
@@ -126,7 +121,6 @@ class AdvancedAudioProtocolTest {
     @Test
     fun i7PromptVolumeGatesOnlyMuteOnFirmware304() {
         val fw213 = FieldValue.Firmware(listOf(2, 1, 3), "213")
-        // The firmware gate applies only to the mute value.
         val promptCodec = createProtocolCodec(ModelProfile.I7_RS_V2)
         assertFailsWith<UnsupportedOperationException> {
             promptCodec.prepareSetting(DeviceSetting.PROMPT_VOLUME, FieldValue.Number(0), fw213)
@@ -175,7 +169,6 @@ class AdvancedAudioProtocolTest {
     fun i7CustomModeSlotAndCurveReadbacksKeepTheirDistinctValuesAndRawBytes() {
         val codec = createProtocolCodec(ModelProfile.I7_RS_V2)
 
-        // Synthetic LTV notifications: one-byte 04 is custom; 05 + slot is custom_slot.
         val customReply = codec.feedNotification("dd00022a040daa".bytes()).single()
         assertEquals(FieldReading.Known(FieldValue.Text("custom"), "04"), customReply.readings[DeviceField.EQ])
         assertNull(customReply.readings[DeviceField.EQ_SLOT])
@@ -186,7 +179,6 @@ class AdvancedAudioProtocolTest {
         assertEquals(FieldReading.Known(FieldValue.Number(4), "0504"), slotReply.readings[DeviceField.EQ_SLOT])
         assertEquals(setOf("2a"), slotReply.responseKeys)
 
-        // Synthetic curve record reuses the independent TX example's ten symbol+absolute values.
         val curveReply = codec.feedNotification("dd000b3e86838100010203040506c5aa".bytes()).single()
         assertEquals(
             FieldReading.Known(FieldValue.IntegerList(listOf(-6, -3, -1, 0, 1, 2, 3, 4, 5, 6)), "86838100010203040506"),
@@ -237,7 +229,6 @@ class AdvancedAudioProtocolTest {
             assertEquals("ff0102fa312daa", setting.readback.bytes.hex())
             assertEquals(mapOf(DeviceField.PROMPT_LANGUAGE to FieldValue.Text(language)), setting.expectedValues)
         }
-        // Synthetic notifications represent independent language and slot records.
         val codec = createProtocolCodec(ModelProfile.JASMINE_RS_V2)
         assertEquals(
             FieldReading.Known(FieldValue.Text("english"), "01"),

@@ -1,6 +1,5 @@
 package io.github.dohex.openrose.androidintegration
 
-/** Observed platform facts; framework presence alone never establishes a live system bridge. */
 data class SystemBridgeDiagnostics(
     val frameworkName: String? = null,
     val frameworkVersion: String? = null,
@@ -12,7 +11,6 @@ data class SystemBridgeDiagnostics(
     val ipc: BridgeIpcState = BridgeIpcState.DISCONNECTED,
     val session: BridgeSessionState = BridgeSessionState.NONE,
     val detail: String? = null,
-    /** Target-process calls and compatibility failures; these never assert visible SystemUI output. */
     val presentation: Map<String, String> = emptyMap(),
     val endpoints: Map<String, SystemEndpointDiagnostics> = emptyMap(),
 )

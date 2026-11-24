@@ -96,7 +96,6 @@ class ControlSessionTransportSelectionTest {
 
     @Test
     fun expandedV2ModelsUseTheAddressAdvertisedByTheEarphonesForSpp() = runTest {
-        // Synthetic manufacturer records: product prefix, V2 status bytes, BR/EDR address in wire order.
         val records = mapOf(
             ModelProfile.BUDSFEEL_MK2_RS_V2 to (0x150b to "0a0b00000101000000a1b2c3d4e5f6"),
             ModelProfile.OPENFEEL_MK2_RS_V2 to (0x0e0b to "b65700000101000000a1b2c3d4e5f6"),

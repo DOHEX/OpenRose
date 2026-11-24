@@ -13,10 +13,6 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 
-/**
- * The quick settings tile of the 快捷面板. It only mirrors the control state while the tile is visible and never
- * holds a control session; a tap always opens [QuickPanelActivity], connected or not.
- */
 class QuickPanelTileService : TileService() {
     private val owner get() = application as OpenRoseApplication
     private var scope: CoroutineScope? = null
@@ -49,7 +45,6 @@ class QuickPanelTileService : TileService() {
         if (isLocked) unlockAndRun(::openPanel) else openPanel()
     }
 
-    // The Intent overload is only reached below Android 14, where it is the supported call.
     @SuppressLint("StartActivityAndCollapseDeprecated")
     private fun openPanel() {
         val intent = Intent(this, QuickPanelActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)

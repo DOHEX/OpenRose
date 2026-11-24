@@ -12,7 +12,6 @@ android {
     }
     buildTypes {
         getByName("release") {
-            // Shrinks code and resources; names stay readable (proguard-rules.pro).
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
@@ -42,9 +41,7 @@ dependencies {
     implementation(libs.activity.compose)
     implementation(libs.zxing.embedded)
     implementation(projects.platform.android.bluetoothIpc)
-    // Packaged into the APK for LSPosed, but invisible to the application's sources (ADR 0018).
     runtimeOnly(projects.platform.android.systemModule)
-    // LSPosed supplies the API at runtime; R8 needs it as library classes to keep the module entry's overrides.
     compileOnly(libs.libxposed.api)
     implementation(libs.libxposed.service)
     testImplementation(kotlin("test-junit"))

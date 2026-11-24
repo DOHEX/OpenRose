@@ -39,13 +39,6 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import java.util.UUID
 
-/**
- * Hosts the application's side of control. Activities, interface styles and [ControlService] only use or
- * observe [runtime], which routes to exactly one owner: the ordinary session this process creates while
- * ordinary control is the saved choice, or the module host in the system Bluetooth process. The ordinary
- * session exists only while it is held: by the started interface ([VisibleInterfaceHold]) or by
- * [ControlService]. A task being removed never decides whether a control session exists.
- */
 class OpenRoseApplication : Application() {
     private val controlScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val moduleSettingsChanges = Channel<Unit>(Channel.CONFLATED)
@@ -121,7 +114,6 @@ class OpenRoseApplication : Application() {
         framework.start()
         refreshPlatform()
         registerPlatformReceiver()
-        // Unlock may complete between the initial check and receiver registration.
         if (unlocked) background.syncObservation() else loadUnlockedSettings()
     }
 
@@ -150,14 +142,12 @@ class OpenRoseApplication : Application() {
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context, intent: Intent) {
                 if (intent.action == Intent.ACTION_USER_UNLOCKED) loadUnlockedSettings()
-                // Re-read system facts instead of trusting broadcast extras.
                 if (intent.action == BluetoothAdapter.ACTION_STATE_CHANGED) refreshPlatform()
             }
         }
         val filter = IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED).apply {
             addAction(Intent.ACTION_USER_UNLOCKED)
         }
-        // Bluetooth broadcasts may originate in a privileged app with a non-system UID.
         if (Build.VERSION.SDK_INT >= 33) {
             registerReceiver(receiver, filter, RECEIVER_EXPORTED)
         } else {
@@ -168,8 +158,6 @@ class OpenRoseApplication : Application() {
     fun connectFromSystem(deviceId: DeviceId) {
         systemConnectionRequest?.cancel()
         systemConnectionRequest = controlScope.launch(start = CoroutineStart.UNDISPATCHED) {
-            // The request arrives while the launching activity is not started yet; the claim bridges that gap
-            // and ends with the call, by which time the started interface holds the session itself.
             val hold = runtime.holdOrdinarySession()
             try {
                 val result = runtime.connectFromSystem(deviceId)
@@ -180,10 +168,6 @@ class OpenRoseApplication : Application() {
         }
     }
 
-    /**
-     * Moves the single control session to [way]; the outcome is visible in the runtime state's owner.
-     * Whatever the outcome, wake-up observation and the background service follow the saved choice after.
-     */
     fun selectControlWay(way: ControlWay) {
         controlScope.launch {
             runtime.selectControlWay(way)
@@ -194,9 +178,7 @@ class OpenRoseApplication : Application() {
     fun updateIntegrationSettings(settings: IntegrationSettings) {
         if (!permissions.unlocked) return
         val backgroundIntentChanged = runtime.integration.value.settings.backgroundControlEnabled != settings.backgroundControlEnabled
-        // Only the explicit handoff changes the saved control way.
         runtime.updateIntegrationSettings(settings)
-        // A stop choice must be on disk before the user can leave the application.
         settingsStore.saveHost(hostSettings(), commit = backgroundIntentChanged)
         moduleSettingsChanges.trySend(Unit)
         background.followSavedIntent()
@@ -208,13 +190,6 @@ class OpenRoseApplication : Application() {
         updateIntegrationSettings(runtime.integration.value.settings.copy(backgroundControlEnabled = enabled))
     }
 
-    /**
-     * Entry of the system-delivered wake-ups (first unlock of a boot, an audio connection while the
-     * process was gone, device presence). It only starts the service when ordinary control is the saved
-     * choice and the restored saved intent, first unlock and Bluetooth permission allow it, so a disabled,
-     * locked or module-controlled state is never revived. It creates no session itself: the service it
-     * starts holds the ordinary session, and the session ends when the service does.
-     */
     fun wakeOrdinaryControl() {
         loadUnlockedSettings()
         if (!background.ordinarySelected) return

@@ -19,7 +19,6 @@ import kotlinx.collections.immutable.persistentMapOf
 import kotlinx.collections.immutable.persistentSetOf
 import kotlinx.collections.immutable.toPersistentSet
 
-/** HeadFeel, RoseLink Headfree / Zt231 configuration. */
 internal val headFeel = ModelSpec(
     displayName = "HeadFeel",
     shortLabel = "HeadFeel",
@@ -77,7 +76,6 @@ private val headFeelTouchControl = TouchControlCapabilities(
 )
 
 private fun headFeelCapabilities(firmware: FieldValue.Firmware?): DeviceCapabilities {
-    // RoseLink gates both the gain level and the custom EQ curve on firmware 130 (customSinceVersion / field_7).
     val firmwareSince130 = firmwareAtLeast(firmware, 130) == true
     val settings = persistentSetOf(
         DeviceSetting.NOISE_MODE, DeviceSetting.NOISE_CYCLE, DeviceSetting.EQ, DeviceSetting.GAME_MODE,
@@ -104,7 +102,6 @@ private fun headFeelCapabilities(firmware: FieldValue.Firmware?): DeviceCapabili
         ),
         equalizer = EqualizerCapabilities(
             if (firmwareSince130) persistentSetOf("pop", "hifi", "rock", "custom") else persistentSetOf("pop", "hifi", "rock"),
-            // The recovered panel's band labels and slider bounds, not measured acoustic filter centers.
             if (firmwareSince130) {
                 CustomEqualizerCapabilities(
                     persistentListOf(20, 100, 300, 500, 1000, 2000, 3000, 5000, 8000, 15000),

@@ -10,7 +10,6 @@ import io.github.dohex.openrose.circulation.NearbyPeer
 import io.github.dohex.openrose.circulation.PeerDiscovery
 import javax.net.SocketFactory
 
-/** Android NSD owns the multicast socket. Serialize resolutions for API 26–33, where only one may run at once. */
 @Suppress("DEPRECATION")
 internal class AndroidPeerDiscovery(context: Context) : PeerDiscovery {
     private val nsd = context.getSystemService(NsdManager::class.java)

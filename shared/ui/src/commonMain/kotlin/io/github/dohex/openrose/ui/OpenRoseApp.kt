@@ -27,8 +27,6 @@ import top.yukonga.miuix.kmp.nav.core.NavDisplay
 import top.yukonga.miuix.kmp.nav.core.rememberNavBackStack
 import top.yukonga.miuix.kmp.nav.transition.NavSwipeDirection
 
-/** Navigation, scroll positions and drafts survive replacement of either component style.
- * The host remains the sole owner of the control session and transport. */
 @Composable
 fun OpenRoseApp(
     model: OpenRoseModel,
@@ -175,7 +173,6 @@ private class AppNavigation(
         }
     }
 
-    /** A tab: switch to it, or scroll it to the top when it is already showing. A pushed page: open it. */
     fun navigate(destination: AppPage) {
         clearOverlays()
         val tab = mainPages.indexOf(destination)
@@ -354,7 +351,6 @@ private fun AppRouteStack(
         backStack = navigation.stack,
         transition = pageTransitionOf(transition),
         onBack = navigation::back,
-        // Outgoing pages slide past the stack's edge; clipping keeps them off the rail.
         modifier = modifier.fillMaxSize().clipToBounds(),
     ) {
         entry<Route.Main> {
@@ -362,10 +358,8 @@ private fun AppRouteStack(
                 renderMainShell()
             }
         }
-        // Every pushed page is one route; AppPage is the only place a page is declared.
         entry<Route.Secondary>(swipeDismiss = NavSwipeDirection.LeftToRight) { pushed ->
             if (pushed.page == AppPage.ADD_DEVICE) {
-                // Popped entries retain their registration while animating out.
                 val onTop = navigation.route.page == AppPage.ADD_DEVICE
                 if (onTop || navigation.animate) {
                     Box(if (onTop) Modifier.fillMaxSize() else Modifier.fillMaxSize().clearAndSetSemantics { }) {
@@ -379,7 +373,6 @@ private fun AppRouteStack(
     }
 }
 
-/** The main canvas, secondary pages and wide rail share a style and one set of page slots. */
 private class AppShell(
     private val uiSettings: UiSettings,
     private val platformUi: PlatformUi,
@@ -470,8 +463,6 @@ private class AppShell(
 
     @Composable
     fun Rail() {
-        // Beside the route stack, not inside it, so page transitions never carry the rail.
-        // The add-device flow takes the full width, as on narrow screens.
         val railMotion = navigation.animate
         AnimatedVisibility(
             visible = navigation.route.page != AppPage.ADD_DEVICE,

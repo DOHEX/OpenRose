@@ -20,19 +20,16 @@ class MainTabsPagerUiTest {
                 assertTrue(harness.hasText("均衡器"), "Initial tab is Headphones in $style")
                 assertFalse(harness.hasText("个性化"), "Settings must not be active on startup in $style")
 
-                // Navigate to Status tab
                 harness.clickTab("状态")
                 harness.render()
                 assertTrue(harness.hasText("诊断与记录"), "Status active in $style")
                 assertFalse(harness.hasText("均衡器"), "Headphones content quarantined in $style")
 
-                // Navigate to Settings tab
                 harness.clickTab("设置")
                 harness.render()
                 assertTrue(harness.hasText("个性化"), "Settings tab active in $style")
                 assertFalse(harness.hasText("诊断与记录"), "System content quarantined in $style")
 
-                // Back key returns to Headphones home
                 harness.sendKey(Key.Escape)
                 harness.render()
                 assertTrue(harness.hasText("均衡器"), "Pressing back from Settings returns to Headphones in $style")

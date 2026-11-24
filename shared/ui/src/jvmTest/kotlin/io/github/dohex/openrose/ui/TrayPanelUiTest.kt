@@ -198,7 +198,6 @@ class TrayPanelUiTest {
     fun reportedContentHeightShowsEveryButtonWithoutScrolling() {
         for (style in InterfaceStyle.entries) {
             for (state in listOf(disconnectedAndroidState(), connectedI7State())) {
-                // Taller than any content, so nothing is clipped or scrolled while measuring.
                 runOpenRoseUiTest(360, 1400) {
                     var reported = 0f
                     val model = FakeOpenRoseModel(
@@ -234,7 +233,6 @@ class TrayPanelUiTest {
                 app.render()
 
                 val trayTarget = traySummary(bonded, selection).reconnectTarget
-                // The dashboard offers 切换 only for the device that is not its primary.
                 app.clickText("切换")
                 val offered = app.model.connectRequests.last()
                 assertEquals(
@@ -290,7 +288,6 @@ class TrayPanelUiTest {
         val waiting = traySummary(pending, selection).noiseModes
         assertEquals(idle.map { it.mode }, waiting.map { it.mode })
         assertTrue(waiting.none { it.enabled })
-        // Only the device's read-back is ever selected, never the requested value.
         assertEquals(idle.single { it.selected }.mode, waiting.single { it.selected }.mode)
     }
 
@@ -456,7 +453,6 @@ class TrayPanelUiTest {
         val model: FakeOpenRoseModel,
     ) : OpenRoseUiTestHarness(scene)
 
-    /** The main window sharing [selection] with the tray; connecting does nothing, so the dashboard stays composed. */
     private fun withApp(
         initialState: ControlState,
         style: InterfaceStyle,
@@ -508,7 +504,6 @@ internal class TrayHarness(scene: OpenRoseUiTestScene, val model: FakeOpenRoseMo
         val fittedHeight = kotlin.math.ceil(contentHeight).toInt()
         resize(360, fittedHeight)
         render()
-        // captureToImage retains the test surface's initial size even after the scene is resized.
         val image = snapshot().getSubimage(0, 0, 360, fittedHeight)
         val target = File(directory).apply { mkdirs() }
         ImageIO.write(image, "png", File(target, "tray-$state-${style.name.lowercase()}.png"))

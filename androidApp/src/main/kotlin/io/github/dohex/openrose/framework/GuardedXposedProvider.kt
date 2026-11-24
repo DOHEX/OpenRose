@@ -11,12 +11,10 @@ import android.os.Bundle
 import android.os.Process
 import io.github.libxposed.service.XposedProvider
 
-/** Only a root/system framework dispatcher may supply the framework service Binder. */
 class GuardedXposedProvider : ContentProvider() {
     private val delegate = XposedProvider()
 
     override fun attachInfo(context: Context, info: ProviderInfo) {
-        // Retain the library's Direct Boot/RemotePreferences initialization, behind our transport.
         delegate.attachInfo(context, info)
         super.attachInfo(context, info)
     }

@@ -40,6 +40,8 @@ status: accepted
 
 - `AddDevicePage` 采用进入页面自动检查蓝牙并触发扫描（`onStartScan`）、退出页面（返回手势或点击返回）时自动停止扫描（`onStopScan`）的生命周期绑定，杜绝后台无谓耗电。
 - 当用户在设备列表中点击并成功建立控制连接且进入就绪状态（`ConnectionPhase.READY`）时，自动回退至根主页，主页无缝展示主控制看板（降噪、均衡器、电量等）。
+- **扫描命令的顺序**（2026-11 补充）：`RuntimeOpenRoseModel` 的 `startScan`／`stopScan` 在调用者的回合（`CoroutineStart.UNDISPATCHED`）立即进入扫描命令互斥锁，迟到的扫描确认不会打乱开始、停止与再次进入页面的顺序。
+- **扫描附近耳机的额外权限**（2026-11 补充）：`PlatformState.scanPermission` 表示只用于发现附近耳机的额外权限，例如 Android 8–11 的位置权限；其他平台与 Android 12 起为不需要（`NOT_REQUIRED`）。缺少该权限时，Android 平台段落（`AndroidPlatformUi`）显示 `ScanPermissionRow`。
 
 ## 验证与影响
 

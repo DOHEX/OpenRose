@@ -13,12 +13,7 @@ import androidx.core.graphics.PathParser
 import org.json.JSONArray
 import org.json.JSONObject
 
-/** Encodes the HyperOS focus card and battery island, including their picture and action bundles. */
 internal class FocusNotificationTemplate(private val appContext: Context) {
-    /**
-     * A module prompt of its own: the battery island, plus the focus card as its expanded state, which the first
-     * appearance opens before the island settles to the summary.
-     */
     fun promptExtras(snapshot: RenderedSnapshot, title: String, durationMillis: Long): Bundle {
         val durationSeconds = ((durationMillis + 999L) / 1_000L).coerceIn(1L, 5L).toInt()
         val template = JSONObject()
@@ -44,17 +39,12 @@ internal class FocusNotificationTemplate(private val appContext: Context) {
         }
     }
 
-    /** The focus card's `iconTextInfo`: the card body and the expanded state of either island. */
     private fun cardInfo(title: String, content: String, noiseText: String?): JSONObject = JSONObject()
         .put("title", title)
         .put("content", content)
         .put("animIconInfo", JSONObject().put("type", 0).put("src", STATUS_CARD_PICTURE))
         .apply { if (noiseText != null) put("subContent", noiseText) }
 
-    /**
-     * The battery island, as in OppoPods' `showBatteryIsland`: each earbud's picture with its battery. It is both the
-     * module prompt and the status notification's summary state.
-     */
     private fun promptIsland(snapshot: RenderedSnapshot): JSONObject {
         val left = snapshot.batteryValue("LEFT_BATTERY")
         val right = snapshot.batteryValue("RIGHT_BATTERY")
@@ -112,12 +102,6 @@ internal class FocusNotificationTemplate(private val appContext: Context) {
 
     private fun squareBitmap(size: Int): Bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
 
-    /**
-     * The focus card carries `iconTextInfo`, up to two `textButton` entries and, when requested, the battery island.
-     * [expandOnEntrance] opens the expanded state on first appearance, then settles to the summary for a merged prompt.
-     * SystemUI passes each JSON `actionTitle` to Html.fromHtml. A missing title crashes SystemUI, so each button
-     * carries a non-blank title in the template.
-     */
     fun statusExtras(
         snapshot: RenderedSnapshot,
         card: StatusCard,
@@ -135,7 +119,6 @@ internal class FocusNotificationTemplate(private val appContext: Context) {
             .put("updatable", true)
             .put("iconTextInfo", info)
         if (aodTitle != null) template.put("aodTitle", aodTitle).put("aodPic", STATUS_CARD_PICTURE)
-        // Without param_island, HyperOS 4 SystemUI still derives a summary state from the ticker and title.
         template.put("param_island", if (snapshot.statusIsland) promptIsland(snapshot) else JSONObject().put("dismissIsland", true))
         val titled = buttons.filter { it.first.isNotBlank() }.take(MAX_CARD_BUTTONS)
         if (titled.isNotEmpty()) {
@@ -162,15 +145,10 @@ internal class FocusNotificationTemplate(private val appContext: Context) {
         }
     }
 
-    /**
-     * The app icon from `shared/ui/.../drawable/app_icon.xml` at 224px in [colors]; the template requires a picture, so this
-     * stands in for the app icon. Keep the path data and transforms in sync with that file.
-     */
     private fun createStatusCardBitmap(colors: IconColors): Bitmap {
         val bitmap = squareBitmap(STATUS_CARD_PICTURE_SIZE)
         val canvas = Canvas(bitmap)
         val scale = STATUS_CARD_PICTURE_SIZE / APP_ICON_VIEWPORT
-        // The canvas is discarded after drawing, so the transforms need no save/restore.
         canvas.scale(scale, scale)
         canvas.drawPath(
             PathParser.createPathFromPathData(APP_ICON_TILE_PATH),
@@ -186,10 +164,6 @@ internal class FocusNotificationTemplate(private val appContext: Context) {
         return bitmap
     }
 
-    /**
-     * The app icon's tones (tile 90, glyph 30) under 动态取色 from the system wallpaper palette, whose shade N is tone
-     * (1000 - N) / 10; otherwise, and before Android 12, from the rose palette of the static icon.
-     */
     fun statusCardColors(snapshot: RenderedSnapshot): IconColors {
         if (!snapshot.dynamicColor || Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
             return IconColors(tile = APP_ICON_TILE_COLOR, glyph = APP_ICON_GLYPH_COLOR)

@@ -8,7 +8,6 @@ import java.io.DataInputStream
 import java.io.DataOutputStream
 import java.math.BigInteger
 
-/** The participant IDs are the certificates on this TLS connection, never identities supplied by the network. */
 internal fun authenticatePairing(localId: String, remoteId: String, code: String, input: DataInputStream, output: DataOutputStream) {
     val participant = JPAKEParticipant(localId, code.toCharArray())
     val first = participant.createRound1PayloadToSend()

@@ -24,15 +24,6 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 
-/**
- * The foreground host of ordinary background control (`connectedDevice`). It holds the ordinary session
- * of the one control runtime owned by [OpenRoseApplication] while it runs, so background control keeps
- * the session without any interface and the session ends with the service (unless the interface is open).
- * It never replaces or disconnects a session itself: audio-driven connection, release and manual
- * operations stay entirely in the runtime. It stops when the user turns the intent off and is not
- * restarted by the system after the process is gone (that needs a separate, user-visible wake-up path and
- * never bypasses a force stop).
- */
 class ControlService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var observer: Job? = null
@@ -43,12 +34,10 @@ class ControlService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_DISABLE) {
-            // The notification action is the same user choice as the settings switch.
             app.setBackgroundControlEnabled(false)
             leaveForeground()
             return START_NOT_STICKY
         }
-        // Every start request must reach startForeground, including repeated ones.
         if (!enterForeground(notification(app.runtime.state.value))) return START_NOT_STICKY
         if (!app.runtime.integration.value.ordinaryBackgroundRequested) {
             leaveForeground()
@@ -58,8 +47,6 @@ class ControlService : Service() {
         if (sessionHold == null) sessionHold = app.runtime.holdOrdinarySession()
         if (observer == null) {
             observer = scope.launch {
-                // Background control exists only while ordinary control is the saved choice; module control
-                // (or none) ends it without touching the saved intent.
                 combine(app.runtime.state, app.runtime.integration) { state, integration ->
                     integration.ordinaryBackgroundRequested to notificationText(state)
                 }
@@ -74,8 +61,6 @@ class ControlService : Service() {
                     }
             }
         }
-        // Not sticky: reviving after process death belongs to a user-granted wake-up mechanism,
-        // and a stopped or force-stopped app must stay stopped.
         return START_NOT_STICKY
     }
 

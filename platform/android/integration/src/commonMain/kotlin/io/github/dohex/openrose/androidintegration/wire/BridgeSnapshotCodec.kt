@@ -8,11 +8,6 @@ import io.github.dohex.openrose.core.protocol.FieldReading
 import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.dohex.openrose.core.transport.normalizeBluetoothAddress
 
-/**
- * Explicit primitive-only tree keeps Kotlin classes and protocol numbers out of the IPC API. Values are String, Int, Long,
- * Boolean, nested maps and lists of String, Int or maps, so the Android boundary can pick the matching Bundle put call.
- * [capturedElapsedMillis] is the device's elapsed-realtime clock at capture; the reader judges freshness against it.
- */
 fun DeviceState.toBridgeSnapshot(hostEpoch: String, readSequence: Long, capturedElapsedMillis: Long): Map<String, Any?> = buildMap {
     put(BridgeWire.KEY_VERSION, BridgeWire.VERSION)
     put(BridgeWire.HOST_EPOCH, hostEpoch)

@@ -130,7 +130,6 @@ class ControlSessionTargetedConnectionTest {
         val candidateA = DeviceCandidate(idA, "EarFree i5 A", null, ModelProfile.I5_ZT, "")
         val candidateB = DeviceCandidate(idB, "EarFree i5 B", null, ModelProfile.I5_ZT, "")
 
-        // Case A: Platform error (Permission denied)
         val sessionWithPermissionDenied = ControlSession(
             initialPlatformState = PlatformState(PermissionState.DENIED, TransportAvailability.Available),
             transport = TargetedAudioTransport(bondedList = listOf(candidateA, candidateB)),
@@ -143,7 +142,6 @@ class ControlSessionTargetedConnectionTest {
         assertEquals(idA, sessionWithPermissionDenied.state.value.connectionTarget?.deviceId)
         assertEquals(ControlErrorCode.PERMISSION_REQUIRED, sessionWithPermissionDenied.state.value.lastError?.code)
 
-        // Case B: Identification/unsupported failure (unknown device placeholder)
         val unknownId = DeviceId("unknown-rose-model")
         val transport = TargetedAudioTransport(bondedList = listOf(candidateA, candidateB))
         val session = ControlSession(
@@ -160,12 +158,10 @@ class ControlSessionTargetedConnectionTest {
         assertEquals(ControlErrorCode.UNSUPPORTED, session.state.value.lastError?.code)
         assertEquals(ConnectionState.Disconnected, session.state.value.connection)
 
-        // System audio connects to another bonded ROSE device (idB)
         transport.audioDeviceFlow.emit(idB)
         runCurrent()
         advanceUntilIdle()
 
-        // Must NOT auto-connect to device B; retained target is still unknownId
         assertEquals(ConnectionState.Disconnected, session.state.value.connection)
         assertEquals(unknownId, session.state.value.connectionTarget?.deviceId)
         assertEquals(0, transport.connectCalls)
@@ -198,12 +194,10 @@ class ControlSessionTargetedConnectionTest {
         assertEquals(ControlErrorCode.TIMEOUT, session.state.value.lastError?.code)
         assertEquals(1, transport.connectCalls)
 
-        // System audio connects to another bonded ROSE device (idB)
         transport.audioDeviceFlow.emit(idB)
         runCurrent()
         advanceUntilIdle()
 
-        // Must NOT auto-connect to device B; retained target is still candidateA
         assertEquals(ConnectionState.Disconnected, session.state.value.connection)
         assertEquals(idA, session.state.value.connectionTarget?.deviceId)
         assertEquals(1, transport.connectCalls)
@@ -228,18 +222,15 @@ class ControlSessionTargetedConnectionTest {
         advanceUntilIdle()
 
         try {
-            // In-flight reuse: first call suspends at connectGate
             val firstAttempt = async { session.connect(idA, pinned = true) }
             runCurrent()
             assertEquals(ConnectionPhase.DISCOVERING, (session.state.value.connection as? ConnectionState.Connecting)?.phase)
             assertEquals(1, transport.connectCalls)
 
-            // Second call while in-flight: reuses in-flight attempt without extra connect call
             val secondAttempt = async { session.connect(idA, pinned = true) }
             runCurrent()
             assertEquals(1, transport.connectCalls)
 
-            // Release gate
             gate.complete(Unit)
             runCurrent()
             advanceUntilIdle()
@@ -249,7 +240,6 @@ class ControlSessionTargetedConnectionTest {
             assertIs<ConnectionState.Connected>(session.state.value.connection)
             assertEquals(1, transport.connectCalls)
 
-            // Ready reuse: third call when already Connected
             val thirdResult = session.connect(idA, pinned = true)
             assertEquals(OperationResult.Success, thirdResult)
             assertIs<ConnectionState.Connected>(session.state.value.connection)
@@ -275,7 +265,6 @@ class ControlSessionTargetedConnectionTest {
             timing = SessionTiming(writeIntervalMillis = 0),
         )
 
-        // Connect to A
         val resA = session.connect(idA, pinned = true)
         assertEquals(OperationResult.Success, resA)
         assertEquals(idA, (session.state.value.connection as ConnectionState.Connected).deviceId)
@@ -283,10 +272,9 @@ class ControlSessionTargetedConnectionTest {
         val connA = transport.openConnections[0]
         assertFalse(connA.closed)
 
-        // Switch to B via a pinned connection
         val resB = session.connect(idB, pinned = true)
         assertEquals(OperationResult.Success, resB)
-        assertTrue(connA.closed) // Old connection to A was closed
+        assertTrue(connA.closed)
         assertEquals(idB, (session.state.value.connection as ConnectionState.Connected).deviceId)
         assertEquals(candidateB, session.state.value.connectionTarget)
         assertEquals(2, transport.connectCalls)
@@ -307,36 +295,28 @@ class ControlSessionTargetedConnectionTest {
             scope = backgroundScope,
             timing = SessionTiming(writeIntervalMillis = 0),
         )
-        // Prime recognized state for A
         runCurrent()
         advanceUntilIdle()
         assertEquals(listOf(candidateA), session.state.value.bondedDevices)
 
-        // Now update transport's bondedList so B is only discoverable on next refresh
         transport.bondedList = listOf(candidateA, candidateB)
         val audioLookupGate = CompletableDeferred<Unit>()
         transport.gateOnNextBondedLookup = audioLookupGate
 
         try {
-            // Audio event for B arrives; findCandidate does not have B in memory yet,
-            // so it suspends at transport.bondedDevices() waiting on audioLookupGate
             transport.audioDeviceFlow.emit(idB)
             runCurrent()
 
-            // User explicitly targets A via a pinned connection while B lookup is suspended.
-            // A is already recognized in bondedDevices, so it connects without delay.
             val targetResult = session.connect(idA, pinned = true)
             assertEquals(OperationResult.Success, targetResult)
             val connected = assertIs<ConnectionState.Connected>(session.state.value.connection)
             assertEquals(idA, connected.deviceId)
             assertEquals(candidateA, session.state.value.connectionTarget)
 
-            // Now release B's suspended lookup
             audioLookupGate.complete(Unit)
             runCurrent()
             advanceUntilIdle()
 
-            // B's resumed lookup must NOT replace A or trigger connection to B
             assertEquals(idA, (session.state.value.connection as ConnectionState.Connected).deviceId)
             assertEquals(candidateA, session.state.value.connectionTarget)
             assertEquals(listOf(idA), transport.connectedDeviceIds)
@@ -368,23 +348,19 @@ class ControlSessionTargetedConnectionTest {
         advanceUntilIdle()
 
         try {
-            // Start connect to A; suspends at gateA
             val attemptA = async { session.connect(idA, pinned = true) }
             runCurrent()
             assertEquals(idA, (session.state.value.connection as? ConnectionState.Connecting)?.deviceId)
 
-            // Before A finishes, a pinned connection for B is requested with connectGate cleared
             transport.connectGate = null
             val attemptB = async { session.connect(idB, pinned = true) }
             runCurrent()
             advanceUntilIdle()
 
-            // B finishes successfully
             assertEquals(OperationResult.Success, attemptB.await())
             assertEquals(idB, (session.state.value.connection as ConnectionState.Connected).deviceId)
             assertEquals(candidateB, session.state.value.connectionTarget)
 
-            // Release gateA; attemptA should fail with DISCONNECTED
             gateA.complete(Unit)
             runCurrent()
             advanceUntilIdle()
@@ -393,7 +369,6 @@ class ControlSessionTargetedConnectionTest {
             val failureA = assertIs<OperationResult.Failure>(resultA)
             assertEquals(ControlErrorCode.DISCONNECTED, failureA.error.code)
 
-            // Session remains on B
             assertEquals(idB, (session.state.value.connection as ConnectionState.Connected).deviceId)
             assertEquals(candidateB, session.state.value.connectionTarget)
         } finally {
@@ -426,12 +401,10 @@ class ControlSessionTargetedConnectionTest {
             runCurrent()
             assertEquals(idA, (session.state.value.connection as? ConnectionState.Connecting)?.deviceId)
 
-            // Explicit disconnect
             session.disconnect()
             runCurrent()
             assertEquals(ConnectionState.Disconnected, session.state.value.connection)
 
-            // Release gateA
             gateA.complete(Unit)
             runCurrent()
             advanceUntilIdle()
@@ -461,28 +434,23 @@ class ControlSessionTargetedConnectionTest {
             timing = SessionTiming(writeIntervalMillis = 0),
         )
 
-        // Connect to A
         session.connect(idA, pinned = true)
         assertEquals(idA, session.state.value.connectionTarget?.deviceId)
 
-        // Manual connect to B replaces pin and connects to B
         val resB = session.connect(idB)
         assertEquals(OperationResult.Success, resB)
         assertEquals(idB, session.state.value.connectionTarget?.deviceId)
         assertEquals(idB, (session.state.value.connection as ConnectionState.Connected).deviceId)
 
-        // Audio emits A; since B is pinned target, it stays on B
         transport.audioDeviceFlow.emit(idA)
         runCurrent()
         advanceUntilIdle()
         assertEquals(idB, (session.state.value.connection as ConnectionState.Connected).deviceId)
 
-        // Disconnect retains B target and pin
         session.disconnect()
         assertEquals(ConnectionState.Disconnected, session.state.value.connection)
         assertEquals(idB, session.state.value.connectionTarget?.deviceId)
 
-        // Audio event still does not auto-connect to A
         transport.audioDeviceFlow.emit(idA)
         runCurrent()
         advanceUntilIdle()
@@ -503,20 +471,17 @@ class ControlSessionTargetedConnectionTest {
             timing = SessionTiming(writeIntervalMillis = 0),
         )
 
-        // Audio connects to A
         transport.audioDeviceFlow.emit(idA)
         runCurrent()
         advanceUntilIdle()
         assertIs<ConnectionState.Connected>(session.state.value.connection)
         assertEquals(idA, (session.state.value.connection as ConnectionState.Connected).deviceId)
 
-        // System entry reuses ready A session
         val result = session.connect(idA, pinned = true)
         assertEquals(OperationResult.Success, result)
         assertEquals(1, transport.connectCalls)
         assertEquals(idA, session.state.value.connectionTarget?.deviceId)
 
-        // System audio disconnects -> closes inherited audio-bound session per ADR0005
         transport.audioDeviceFlow.emit(null)
         runCurrent()
         advanceUntilIdle()
@@ -524,7 +489,6 @@ class ControlSessionTargetedConnectionTest {
         assertEquals(ConnectionState.Disconnected, session.state.value.connection)
         assertEquals(idA, session.state.value.connectionTarget?.deviceId)
 
-        // Another device B connects to audio -> must NOT auto-connect
         transport.audioDeviceFlow.emit(idB)
         runCurrent()
         advanceUntilIdle()
@@ -547,7 +511,6 @@ class ControlSessionTargetedConnectionTest {
         )
         runCurrent()
 
-        // Hold the add caller's continuation after its session-owned connection succeeds.
         val addContinuations = ArrayDeque<Runnable>()
         val addDispatcher = object : CoroutineDispatcher() {
             override fun dispatch(context: CoroutineContext, block: Runnable) {

@@ -56,7 +56,6 @@ class AndroidSettingsStoreTest {
                     backgroundBlurEnabled = false,
                     bottomBarStyle = BottomBarStyle.FLOATING,
                 )
-                // Start from the saved owner selection, then change preferences through the real runtime.
                 store.saveHost(HostSettings(integration = IntegrationSettings(controlWay = way)), commit = true)
                 val process = CoroutineScope(backgroundScope.coroutineContext + SupervisorJob(backgroundScope.coroutineContext[Job]))
                 val first = runtime(file, process)
@@ -159,7 +158,6 @@ class AndroidSettingsStoreTest {
         )
     }
 
-    /** File-backed substitute for the Android storage API; application codecs and runtimes are real. */
     private fun preferences(file: Path, commitAccepted: Boolean = true): SharedPreferences {
         fun load() = Properties().apply { Files.newInputStream(file).use(::load) }
         return Proxy.newProxyInstance(SharedPreferences::class.java.classLoader, arrayOf(SharedPreferences::class.java)) { _, method, args ->

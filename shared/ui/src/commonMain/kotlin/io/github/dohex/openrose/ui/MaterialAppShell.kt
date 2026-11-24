@@ -51,11 +51,6 @@ private fun MaterialRailHeader() {
     }
 }
 
-/**
- * Top bar colors. With backdrop blur both container colors stay clear so only the blur tint shows:
- * a collapsing bar lerps container toward scrolled color, and Transparent (clear black) into an opaque
- * scrolled color passes through translucent grey, darkening the bar mid-collapse.
- */
 @Composable
 internal fun materialTopAppBarColors(backdropActive: Boolean): TopAppBarColors = if (backdropActive) {
     TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent, scrolledContainerColor = Color.Transparent)
@@ -63,7 +58,6 @@ internal fun materialTopAppBarColors(backdropActive: Boolean): TopAppBarColors =
     TopAppBarDefaults.topAppBarColors()
 }
 
-/** The wide-screen rail. The app root places it beside the route stack so page transitions never move it. */
 @Composable
 internal fun MaterialNavigationRail(selected: AppPage, onSelect: (AppPage) -> Unit) {
     NavigationRail(
@@ -85,7 +79,6 @@ internal fun MaterialNavigationRail(selected: AppPage, onSelect: (AppPage) -> Un
     }
 }
 
-/** Renders a pushed (secondary) page; main tabs live in [MaterialMainShell]. */
 @Composable
 internal fun MaterialAppShell(
     page: AppPage,
@@ -142,7 +135,6 @@ internal fun MaterialMainShell(
     }
     val backdropActive = LocalBackdropBlurActive.current
     val floating = !wide && bottomBarStyle == BottomBarStyle.FLOATING
-    // The bottom bar, fixed or floating, blurs the pages behind it, so they run under it.
     val barBackdrop = rememberAppBackdrop(MaterialTheme.colorScheme.surface, backdropActive && !wide)
     val contentBehindBar = floating || barBackdrop != null
     val currentTab = mainPages[pagerState.selectedPage]
@@ -183,7 +175,6 @@ internal fun MaterialMainShell(
     }
 }
 
-/** The narrow-screen bar: the floating toolbar or the fixed navigation bar, each blurring [barBackdrop] or solid without it. */
 @Composable
 private fun MaterialBottomBar(floating: Boolean, currentTab: AppPage, barBackdrop: Backdrop?, onNavigate: (AppPage) -> Unit) {
     if (floating) {
@@ -210,7 +201,6 @@ private fun MaterialBottomBar(floating: Boolean, currentTab: AppPage, barBackdro
     }
 }
 
-/** Wide pages sit beside the vertical rail, so they travel vertically and only on rail taps. */
 @Composable
 private fun MaterialMainPager(
     pagerState: MainTabsPagerState,
@@ -239,7 +229,6 @@ private fun MaterialMainPager(
     }
 }
 
-/** One main tab: its own collapsing top bar over its scrolling content. */
 @Composable
 private fun MaterialMainPage(
     pagerState: MainTabsPagerState,
@@ -255,7 +244,6 @@ private fun MaterialMainPage(
 ) {
     val page = mainPages[pageIndex]
     val surface = MaterialTheme.colorScheme.surface
-    // Pages kept composed beside the visible ones neither record nor blur a backdrop.
     val pageBackdrop = rememberAppBackdrop(surface, backdropActive && rememberPageVisible(pagerState, pageIndex))
     CompositionLocalProvider(LocalAppBackdrop provides pageBackdrop) {
         Box(Modifier.mainPageSemantics(pageIndex == pagerState.selectedPage)) {
@@ -307,11 +295,6 @@ private fun MaterialFloatingTabs(
             .padding(bottom = 16.dp),
         contentAlignment = Alignment.Center,
     ) {
-        // The toolbar's default container matches surfaceContainer list rows, so it vanishes
-        // over them: lift it one tone (surfaceContainerHigh). Opaque, it gets MD3 floating
-        // elevation (Level3, 6dp). Translucent over the blur, an elevation shadow fills the
-        // whole shape and shows through the tint, darkening it, so the blurred toolbar uses
-        // an outlineVariant hairline for separation instead.
         HorizontalFloatingToolbar(
             expanded = true,
             modifier = if (barBackdrop != null) {

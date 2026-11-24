@@ -27,8 +27,7 @@ import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.coroutines.resume
 
-/** One secure RFCOMM connection carrying the same V2 byte stream as the BLE control service. */
-@SuppressLint("MissingPermission") // The session gates Bluetooth permission; revocation fails the operation.
+@SuppressLint("MissingPermission")
 internal class AndroidSppConnection(
     private val adapter: BluetoothAdapter,
     private val address: String,
@@ -108,13 +107,11 @@ internal class AndroidSppConnection(
                 if (cause == null) {
                     continuation.resume(Unit) { _, _, _ -> terminate(IOException("SPP ${action}结果已取消")) }
                 } else if (continuation.isActive) {
-                    // Closing the connection cancels its I/O job, even if the caller is still waiting.
                     val error = if (cause is CancellationException) IOException("SPP ${action}操作已结束", cause) else cause
                     continuation.resumeWith(Result.failure(error))
                 }
             }
             continuation.invokeOnCancellation {
-                // Closing the socket interrupts a blocked RFCOMM operation; cancelling the coroutine alone does not.
                 terminate(IOException("SPP ${action}已取消"))
                 ioJob.cancel()
             }
@@ -151,7 +148,6 @@ internal class AndroidSppConnection(
 
     private fun terminate(error: Throwable) {
         stopIo(error)
-        // A cancellation callback cannot deliver a close failure. Explicit close retries the same socket.
         runCatching { releaseSocket() }
     }
 

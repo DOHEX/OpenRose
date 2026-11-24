@@ -9,7 +9,6 @@ import io.github.dohex.openrose.core.transport.GattFailureKind
 import io.github.dohex.openrose.core.transport.GattService
 import java.util.IdentityHashMap
 
-/** Matches shared characteristics to the exact native instances in the latest discovered service table. */
 internal class AndroidGattServices {
     private var characteristics = IdentityHashMap<GattCharacteristic, BluetoothGattCharacteristic>()
     private var sharedCharacteristics = IdentityHashMap<BluetoothGattCharacteristic, GattCharacteristic>()

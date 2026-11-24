@@ -5,10 +5,6 @@ import io.github.dohex.openrose.core.DeviceSetting
 import io.github.dohex.openrose.core.DeviceState
 import io.github.dohex.openrose.core.protocol.FieldValue
 
-// What a row shows while a write to its setting is pending: the confirmed value stays selected and the requested
-// value, read here, gets the progress indicator.
-
-/** The value being written to [setting] when it is a [T]. */
 internal inline fun <reified T : FieldValue> ControlState.pendingValue(
     device: DeviceState,
     setting: DeviceSetting,

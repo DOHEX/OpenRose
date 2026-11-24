@@ -18,7 +18,6 @@ internal fun rsCommonClassicAddress(hex: String, start: Int): String? {
     return address.chunked(2).joinToString(":")
 }
 
-/** RS battery slots follow the hardware layout. Other fields must have evidence for the model. */
 internal fun rsReadings(layout: BatteryLayout, vararg fields: DeviceField): PersistentSet<DeviceField> = buildSet {
     add(DeviceField.FIRMWARE)
     add(DeviceField.GAME_MODE)

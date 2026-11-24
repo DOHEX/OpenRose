@@ -7,7 +7,6 @@ pluginManagement {
     }
 }
 plugins {
-    // Provisions the JDK 21 toolchain when the machine has none.
     id("org.gradle.toolchains.foojay-resolver-convention") version "1.0.0"
 }
 dependencyResolutionManagement {
@@ -34,4 +33,5 @@ include(
     ":platform:windows",
     ":tools:ui-sandbox",
     ":tools:ui-test-support",
+    ":tools:detekt-rules",
 )

@@ -19,11 +19,6 @@ import kotlin.test.assertNotEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-/**
- * The fusion device center and the system headset entries as callers of the module host over real earphone
- * replies: a command is a success only when the earphones confirm it, every refusal stays observable, and
- * nothing a revoked owner produced can still be read or driven.
- */
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class SystemEntryClosedLoopTest {
     private class Entry(val rig: OwnerRig, val lease: String, val generation: OwnerGeneration, val reference: SessionReference)
@@ -118,14 +113,12 @@ class SystemEntryClosedLoopTest {
         testScheduler.advanceUntilIdle()
 
         assertNotEquals(entry.generation, next)
-        // The old generation can never be read or driven again, even though the device is the same.
         assertEquals(
             HostRejection.STALE_GENERATION,
             assertIs<HostReadResult.Rejected>(
                 entry.rig.host.control.readSession(milinkIdentity, entry.lease, entry.generation, entry.reference),
             ).rejection,
         )
-        // The new generation is read from the new session: real fields, read again from the earphones.
         val connection = assertIs<ConnectionState.Connected>(requireNotNull(entry.rig.host.control.view(milinkIdentity, entry.lease)).state.connection)
         val fresh = assertIs<HostReadResult.Available>(
             entry.rig.host.control.readSession(milinkIdentity, entry.lease, next, SessionReference(connection.deviceId, connection.sessionId)),

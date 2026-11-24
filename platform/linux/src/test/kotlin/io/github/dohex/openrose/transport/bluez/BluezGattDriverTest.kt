@@ -188,7 +188,6 @@ class BluezGattDriverTest {
         }
         driver.write(characteristic, byteArrayOf(1), true)
         assertEquals(listOf<Byte>(1), delivered)
-        // Once initialized, user writes keep the ordinary failure path.
         attached = false
         assertFailsWith<GattException> { driver.write(characteristic, byteArrayOf(2), true) }
         assertEquals(listOf<Byte>(1), delivered)

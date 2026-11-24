@@ -7,7 +7,6 @@ import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.dohex.openrose.core.protocol.ModelProfile
 
-/** Presentation labels only; protocol numeric values and capability decisions stay in the core. */
 internal fun displayFieldValue(
     field: DeviceField?,
     value: FieldValue,
@@ -137,11 +136,9 @@ private val semanticLabels = mapOf(
 
 internal fun semanticLabel(value: String): String = semanticLabels[value] ?: value
 
-/** The retail name with its hardware qualifier when more than one configuration shares it. */
 val ModelProfile.configurationLabel: String
     get() = branchLabel?.let { "$displayName · $it" } ?: displayName
 
-/** The caption below a device's Bluetooth name. */
 internal val ModelProfile.configurationCaption: String
     get() = listOfNotNull(branchLabel, family.displayName).joinToString(" · ")
 

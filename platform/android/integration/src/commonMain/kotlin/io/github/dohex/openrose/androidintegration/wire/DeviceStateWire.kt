@@ -23,7 +23,6 @@ private fun encode(reading: FieldReading): Wire = when (reading) {
 
 private val BATTERY_FIELDS = setOf(DeviceField.LEFT_BATTERY, DeviceField.RIGHT_BATTERY, DeviceField.CASE_BATTERY)
 
-/** Headset decoders only confirm 0..100 battery levels; anything else across IPC is a malformed frame. */
 private fun decodeReading(field: DeviceField, wire: Wire): FieldReading {
     val node = wire.asObj()
     return when (val kind = node.str("r")) {

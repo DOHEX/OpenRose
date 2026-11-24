@@ -16,8 +16,6 @@ internal fun connectionFailure(status: Int): GattException {
     return GattException(kind, "蓝牙连接失败（$status）")
 }
 
-// Android callbacks have no operation token. A cancelled operation keeps its slot until its
-// callback arrives, so that callback cannot be mistaken for a subsequent operation.
 internal fun requireIdle(idle: Boolean) {
     if (!idle) throw GattException(GattFailureKind.TRANSIENT, "已有同类蓝牙操作等待回调")
 }
@@ -71,7 +69,6 @@ internal fun CompletableDeferred<Unit>.completeWrite(status: Int, message: Strin
     }
 }
 
-/** Vendor GATT calls can surface arbitrary Binder runtime errors. Normalize them at the Android API boundary. */
 @Suppress("TooGenericExceptionCaught")
 internal inline fun <T> androidGattCall(message: String, action: () -> T): T = try {
     action()

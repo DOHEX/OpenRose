@@ -5,7 +5,6 @@ import org.gradle.api.plugins.ExtensionAware
 import org.gradle.kotlin.dsl.configure
 import org.jetbrains.kotlin.gradle.dsl.KotlinMultiplatformExtension
 
-/** Kotlin Multiplatform library with JVM and Android targets; modules add only their namespace. */
 class KmpLibraryConventionPlugin : Plugin<Project> {
     override fun apply(target: Project): Unit = with(target) {
         pluginManager.apply("org.jetbrains.kotlin.multiplatform")

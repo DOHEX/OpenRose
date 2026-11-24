@@ -16,7 +16,6 @@ import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.receiveAsFlow
 
-/** One bonded i5 whose control link records every write and answers the initialization queries like the device. */
 internal class I5Headphones {
     val events = mutableListOf<String>()
     var openOwner: String? = null
@@ -92,7 +91,6 @@ private fun ByteArray.toHex() = joinToString("") { (it.toInt() and 0xff).toStrin
 
 private fun String.fromHex() = chunked(2).map { it.toInt(16).toByte() }.toByteArray()
 
-/** Notifications the i5 sends for each initialization query, keyed by the query's command bytes. */
 internal val i5Replies = mapOf(
     "0101" to "09ff00000101011100000164620000ffe2",
     "0602" to "09ff00000106020e000000010020",

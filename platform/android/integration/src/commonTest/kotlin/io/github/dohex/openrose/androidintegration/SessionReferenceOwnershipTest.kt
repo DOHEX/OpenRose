@@ -12,10 +12,6 @@ import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
 
-/**
- * A reference names one device session of one owner. Each hold cycle builds a new ordinary session and a
- * module owner builds its own, so a reference from a released owner must never match the next one.
- */
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class SessionReferenceOwnershipTest {
     private fun SwitchingControlRuntime.currentReference(): SessionReference {

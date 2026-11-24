@@ -54,23 +54,16 @@ import org.jetbrains.compose.resources.vectorResource
 
 data class TrayNoiseMode(val mode: NoiseMode, val label: String, val selected: Boolean, val enabled: Boolean)
 
-/** What the 托盘菜单 and 托盘面板 say about the headphones right now. */
 data class TraySummary(
-    /** A ready control session exists. */
     val connected: Boolean,
     val title: String,
     val deviceName: String?,
     val sourceStatus: String?,
-    /** Battery readings in model order. Desktop trays explicitly mark missing values. */
     val battery: String?,
-    /** Modes offered by the current control session, ordered and labelled like the main window. */
     val noiseModes: List<TrayNoiseMode>,
-    /** The primary device to reconnect, only when neither connected nor connecting and the transport is usable. */
     val reconnectTarget: DeviceId?,
     val reconnectLabel: String,
-    /** There is no bonded ROSE device and no connection target. */
     val addDevice: Boolean,
-    /** Reason or guidance to display below the primary device while disconnected. */
     val connectionHint: String?,
     val noiseModeFeedback: String? = null,
 )
@@ -99,24 +92,18 @@ fun traySummary(state: ControlState, selection: PrimaryDeviceSelection): TraySum
     )
 }
 
-/**
- * [traySummary] for one composition: reused while the state and the selection it reads are unchanged, so a
- * recomposition driven by something else (a peer poll, a countdown) does not rebuild it.
- */
 @Composable
 fun rememberTraySummary(state: ControlState, selection: PrimaryDeviceSelection): TraySummary {
     val summary by remember(state, selection) { derivedStateOf { traySummary(state, selection) } }
     return summary
 }
 
-/** Why a setting cannot be written right now, for the control to say beside itself; null when it can be. */
 internal fun ControlState.writeBlockedReason(device: DeviceState, setting: DeviceSetting): String? = when {
     canWrite(device, setting) -> null
     pendingSetting(device) != null -> "正在设置，等待设备确认"
     else -> "控制会话尚未就绪，暂不能设置。"
 }
 
-/** A connection attempt is under way, including a session that is not yet ready for control. */
 internal fun ControlState.isConnectingForTray(): Boolean = when (val current = connection) {
     ConnectionState.Disconnected -> false
     is ConnectionState.Connecting -> true
@@ -138,7 +125,6 @@ private fun ControlState.trayDeviceName(deviceId: DeviceId, profile: ModelProfil
         ?: deviceId.value
 }
 
-/** Monochrome tray glyphs (Material Symbols Rounded); the tray host tints them. */
 object TrayIcons {
     val connected: ImageVector
         @Composable get() = vectorResource(Res.drawable.msr_headphones)
@@ -146,10 +132,6 @@ object TrayIcons {
         @Composable get() = vectorResource(Res.drawable.msr_headset_off)
 }
 
-/**
- * Fills the popup the host sizes. [onContentHeight] reports the height that shows all content, so the host
- * can size the popup to fit; the panel still scrolls vertically if the host keeps it smaller.
- */
 @Composable
 fun TrayPanel(
     model: OpenRoseModel,
@@ -166,10 +148,8 @@ fun TrayPanel(
     val state by model.state.collectAsState()
     val uiSettings by model.uiSettings.collectAsState()
     val dark = uiSettings.appearance.isDark()
-    // The popup is a plain opaque canvas: no LocalAppBackdrop, so backdrop blur stays off.
     ProvideInterfaceStyle(uiSettings.interfaceStyle, dark, dynamicColor) {
         Box(modifier.fillMaxSize().background(interfaceBackgroundColor(uiSettings.interfaceStyle, dark))) {
-            // The viewport fills the host. Only the scrollable content determines the requested height.
             Column(
                 Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
                     .onSizeChanged { size ->
@@ -313,7 +293,6 @@ private fun TrayDivider() {
     Box(Modifier.fillMaxWidth().height(1.dp).background(appColor(AppColorRole.Divider)))
 }
 
-/** The application icon shown by the window manager's taskbar and window switcher. */
 object AppLogo {
     val painter: Painter
         @Composable get() = painterResource(Res.drawable.app_icon)
@@ -328,12 +307,10 @@ private fun ControlState.trayNoiseModes(device: DeviceState): List<TrayNoiseMode
     return trayNoiseModes(device.noiseModes, device.confirmedNoiseMode, enabled)
 }
 
-/** A short menu label and the source or progress line that can be shown under the headset's name. */
 private data class TrayConnectionStatus(val label: String, val source: String? = label)
 
 internal fun audioWithoutControlStatus(connecting: Boolean): String = if (connecting) "耳机已接入，正在恢复控制" else "耳机已接入，控制未连接"
 
-/** One view of the platform and the selected headset drives the tray title, reconnect action and hint. */
 private class TrayConnection(private val state: ControlState, private val primary: DeviceCandidate?) {
     val ready = state.activeDevice()?.takeIf { state.isReady(it) }
     private val connecting = ready == null && state.isConnectingForTray()

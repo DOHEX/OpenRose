@@ -22,7 +22,6 @@ class ModelCapabilityRulesTest {
             val unread = profile.capabilities()
             assertEquals(emptySet(), unread.promptVolumeLevels, "$profile")
             assertFalse(DeviceSetting.PROMPT_VOLUME in unread.writableSettings, "$profile")
-            // The reading is how the level is learned, so it must not wait for the firmware.
             assertTrue(DeviceField.PROMPT_VOLUME in unread.readableFields, "$profile")
             assertEquals(unread, profile.capabilities(firmware(1, 2)), "$profile malformed firmware is also unread")
         }

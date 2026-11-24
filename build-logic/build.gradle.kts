@@ -2,8 +2,6 @@ plugins {
     `kotlin-dsl`
 }
 
-// The root build puts these plugins on the classpath (`apply false`); compiling against them
-// here keeps a single copy loaded for every project.
 dependencies {
     compileOnly(libs.plugins.kotlin.multiplatform.asDependency())
     compileOnly(libs.plugins.android.application.asDependency())

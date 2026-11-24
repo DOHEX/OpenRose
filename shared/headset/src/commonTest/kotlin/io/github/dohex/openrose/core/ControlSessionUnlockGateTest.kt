@@ -11,10 +11,6 @@ import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
-/**
- * Automatic control starts only once the saved settings are restored after first unlock: audio connections
- * are observed meanwhile, and the one that predates the unlock is connected as soon as it happens.
- */
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class ControlSessionUnlockGateTest {
     private val rose = catalogCandidate("rose", ModelProfile.I5_ZT)
@@ -41,7 +37,6 @@ class ControlSessionUnlockGateTest {
         advanceUntilIdle()
         assertTrue(transport.links.isEmpty())
 
-        // Settings are restored first, then the platform reports the unlocked storage.
         runtime.updateSettings(UserSettings(forceBle = true))
         runtime.updatePlatformState(androidPlatform(unlocked = true))
         runCurrent()

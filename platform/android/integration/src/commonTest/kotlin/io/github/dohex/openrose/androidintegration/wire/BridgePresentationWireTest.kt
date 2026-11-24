@@ -13,10 +13,6 @@ import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-/**
- * The system-side consumers read the presentation through typed Bundle getters and compare the mode with the wire
- * constants, so each value must carry the getter's type: a duration sent as Int would read as the default.
- */
 class BridgePresentationWireTest {
     private val reference = SessionReference(DeviceId("AA:BB:CC:DD:EE:01"), 7)
 

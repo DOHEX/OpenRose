@@ -14,15 +14,6 @@ import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedModule
 import java.util.concurrent.ConcurrentHashMap
 
-/**
- * Hooks the native `IMiuiHeadsetService` binder used by HyperOS' Bluetooth headset page.
- *
- * Identity queries (`isMiTWS`, `checkIsMiTWS`, `isSupportAudioSwitch`, `checkSupport`, `getDeviceInfo`) answer with
- * the pinned OppoPods reference's values for the current session and for the module host's bonded ROSE earphones, so
- * a source device the earphones are not connected to yet still offers headset circulation (ADR 0017). Status and
- * actions come only from the latest authenticated session. The adapter does not create a Bluetooth client, send Xiaomi
- * broadcasts, or synthesize wear or spatial state.
- */
 class NativeHeadsetBinderAdapter(
     private val module: XposedModule,
     private val classLoader: ClassLoader,
@@ -39,7 +30,6 @@ class NativeHeadsetBinderAdapter(
 
     val hookHandles: List<XposedInterface.HookHandle> get() = hooks.handles
 
-    /** Install the service entry hook plus exact binder APIs available in this ROM process. */
     @Synchronized
     fun install(): List<XposedInterface.HookHandle> {
         if (closed) return hookHandles
@@ -53,7 +43,6 @@ class NativeHeadsetBinderAdapter(
 
     fun publish(snapshot: NativeHeadsetSnapshot?) = listeners.publish(directory.publishSession(snapshot))
 
-    /** The module host's bonded ROSE earphones; identity queries answer for them even with no session (ADR 0017). */
     fun publishBonded(addresses: Set<String>) {
         if (!closed) directory.publishBonded(addresses)
     }
@@ -77,7 +66,6 @@ class NativeHeadsetBinderAdapter(
         } else {
             action(snapshot)
         }
-        // A managed action must not fall through to a second vendor control path for ROSE.
         return true
     }
 
@@ -224,14 +212,12 @@ class NativeHeadsetBinderAdapter(
             }
         }
 
-        /** An identity query: answered for the current session and the bonded ROSE earphones, otherwise left to the system. */
         private fun identityAnswer(query: String, address: String?, value: Any): HookDecision {
             if (!directory.identifies(address)) return HookDecision.Proceed
             reportIdentified(query)
             return HookDecision.Return(value)
         }
 
-        // This callback type is defined by the HyperOS Bluetooth host and has no public SDK counterpart.
         @SuppressLint("PrivateApi")
         private fun callbackClassOrNull(): Class<*>? = hostAdapterCall(onFailure = { failure ->
             module.log(Log.WARN, TAG, "callback_class_missing class=$CALLBACK_CLASS", failure)
@@ -349,7 +335,6 @@ class NativeHeadsetBinderAdapter(
             }
         }
 
-        /** [BinderMethods] for the `onTransact` fallback; true when the reply was written. */
         private fun replyIdentity(query: String, address: String?, reply: Parcel, write: Parcel.() -> Unit): Boolean {
             if (!directory.identifies(address)) return false
             reply.writeNoException()
@@ -365,7 +350,6 @@ class NativeHeadsetBinderAdapter(
             if (readInt() != 0) BluetoothDevice.CREATOR.createFromParcel(this) else null
         }
 
-        // The host's vendor AIDL Stub converts its callback binder into the same interface used for direct registration.
         @SuppressLint("PrivateApi")
         private fun Parcel.readCallback(): Any? {
             val binder = runCatching { readStrongBinder() }.getOrNull() ?: return null

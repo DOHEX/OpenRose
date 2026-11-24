@@ -3,10 +3,6 @@ import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.kotlin.dsl.configure
 
-/**
- * Android application on the catalog SDK levels and the shared JDK; Kotlin is AGP's built-in support.
- * Its version comes from [appVersion]. Lint checks the application and its library dependencies and fails on warnings.
- */
 class AndroidApplicationConventionPlugin : Plugin<Project> {
     override fun apply(target: Project): Unit = with(target) {
         pluginManager.apply("com.android.application")
@@ -27,7 +23,6 @@ class AndroidApplicationConventionPlugin : Plugin<Project> {
             lint {
                 warningsAsErrors = true
                 checkDependencies = true
-                // Dependabot proposes upgrades. Publishing a newer version must not fail a pinned build.
                 informational += setOf("AndroidGradlePluginVersion", "GradleDependency", "NewerVersionAvailable")
             }
         }

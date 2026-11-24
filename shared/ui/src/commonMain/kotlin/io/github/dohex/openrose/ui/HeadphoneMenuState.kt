@@ -41,9 +41,6 @@ import androidx.compose.material3.IconButton as MaterialIconButton
 import top.yukonga.miuix.kmp.basic.Icon as MiuixIcon
 import top.yukonga.miuix.kmp.basic.IconButton as MiuixIconButton
 
-/**
- * The app root owns the headphones menu state so an open menu survives a style switch.
- */
 internal class HeadphoneMenuState(
     val connectedHome: Boolean,
     val menuExpanded: Boolean,
@@ -52,14 +49,12 @@ internal class HeadphoneMenuState(
     val onDisconnect: () -> Unit,
 )
 
-/** The top-bar actions of a main tab: the platform's own, and on the headphones tab the headphone menu. */
 @Composable
 internal fun MainTabActions(page: AppPage, platformActions: @Composable (AppPage) -> Unit, headphoneMenu: HeadphoneMenuState) {
     platformActions(page)
     if (page == AppPage.HEADPHONES) HeadphoneActions(headphoneMenu)
 }
 
-/** The headphones tab shows the overflow menu while connected and the add-device button otherwise. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun HeadphoneActions(state: HeadphoneMenuState) {
@@ -92,12 +87,6 @@ private fun HeadphoneActions(state: HeadphoneMenuState) {
     }
 }
 
-/**
- * Both menus hold one entry in the error colour. Neither is blurred (ADR 0007's popup blur): Miuix's
- * [OverlayListPopup] paints an opaque `surfaceContainer` over whatever its `popupModifier` draws and has no colour
- * parameter, and a Material 3 [DropdownMenuPopup] is its own window on Android, so the page backdrop would be sampled
- * at the wrong offset.
- */
 @Composable
 private fun MiuixDisconnectMenu(show: Boolean, onDismiss: () -> Unit, onDisconnect: () -> Unit) {
     val focusRequester = remember { FocusRequester() }
@@ -125,7 +114,6 @@ private fun MiuixDisconnectMenu(show: Boolean, onDismiss: () -> Unit, onDisconne
 private fun MaterialDisconnectMenu(show: Boolean, onDismiss: () -> Unit, onDisconnect: () -> Unit) {
     val focusRequester = remember { FocusRequester() }
     DropdownMenuPopup(expanded = show, onDismissRequest = onDismiss) {
-        // The single action is inset 4 dp horizontally by DropdownMenuItem. Match that inset on all sides.
         DropdownMenuGroup(
             shapes = MenuDefaults.groupShapes(inactiveShape = MenuDefaults.standaloneGroupShape),
             contentPadding = PaddingValues(vertical = 4.dp),

@@ -9,17 +9,14 @@ import kotlinx.collections.immutable.toPersistentSet
 enum class ControlWay { ORDINARY, MODULE }
 enum class IslandMode { OFF, OFFICIAL, MODULE }
 
-/** 显示时机: the earphone events that show a short module-mode prompt. */
 enum class IslandTrigger { CONNECTION, IN_CASE }
 enum class FusionSettingsDestination { SYSTEM, OPENROSE }
 
-/** 状态通知点击目标: where tapping the status notification card or its expanded island goes. */
 enum class StatusNotificationTarget { OPENROSE, SYSTEM, ROSELINK, QUICK_PANEL }
 
 data class IntegrationSettings(
     val islandMode: IslandMode = IslandMode.OFFICIAL,
     val focusNotificationEnabled: Boolean = true,
-    /** 常驻电量岛: in module mode, the status notification keeps the battery island for the whole connection. */
     val islandSummaryEnabled: Boolean = true,
     val islandTriggers: PersistentSet<IslandTrigger> = persistentSetOf(IslandTrigger.CONNECTION),
     val statusNotificationTarget: StatusNotificationTarget = StatusNotificationTarget.OPENROSE,
@@ -27,7 +24,6 @@ data class IntegrationSettings(
     val fusionOffAsWind: Boolean = false,
     val backgroundControlEnabled: Boolean = false,
     val controlWay: ControlWay = ControlWay.ORDINARY,
-    /** 动态取色: on Android 12+, the application's colors and the status notification icon follow the system wallpaper. */
     val dynamicColor: Boolean = false,
 )
 
@@ -117,7 +113,6 @@ object IntegrationSettingsCodec {
         else -> null
     }
 
-    /** An explicit empty value stays empty; a missing value or any unknown entry falls back to the default. */
     private fun decodeTriggers(value: String?): PersistentSet<IslandTrigger>? {
         value ?: return null
         if (value.isEmpty()) return persistentSetOf()
@@ -137,7 +132,6 @@ data class HostSettings(
 )
 
 object HostSettingsCodec {
-    /** The preference entries a codec can read: raw preferences also hold other types, which are not settings. */
     fun stringEntries(values: Map<String, Any?>): Map<String, String> = values.mapNotNull { (key, value) ->
         (value as? String)?.let { key to it }
     }.toMap()

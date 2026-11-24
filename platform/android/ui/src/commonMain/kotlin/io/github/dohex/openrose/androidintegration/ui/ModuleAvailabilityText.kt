@@ -3,10 +3,6 @@ package io.github.dohex.openrose.androidintegration.ui
 import io.github.dohex.openrose.androidintegration.ModuleAvailability
 import io.github.dohex.openrose.androidintegration.ModuleUnavailableCause
 
-/**
- * Why the system module cannot act now, or null when it can. Every surface that explains the module
- * (diagnostics, readiness, control way) builds on this one clause so they never disagree.
- */
 internal fun ModuleAvailability.unreadyClause(): String? = when (this) {
     ModuleAvailability.Available -> null
     ModuleAvailability.NotEnabled -> "系统模块未启用"
@@ -14,10 +10,6 @@ internal fun ModuleAvailability.unreadyClause(): String? = when (this) {
     ModuleAvailability.Unresponsive -> "系统模块已连接但未响应"
 }
 
-/**
- * What the user can do about [unreadyClause], or null when nothing is known to help. Only causes the
- * application can tell apart get advice; the restart action it names lives in the Status page's top bar.
- */
 internal fun ModuleAvailability.nextStep(): String? = when (this) {
     ModuleAvailability.Available -> null
 

@@ -15,11 +15,6 @@ import kotlin.test.assertTrue
 
 class MaterialTopAppBarBlurUiTest {
 
-    /**
-     * A half-collapsed blurred bar must not tint darker than the page surface it sits on. The headless
-     * renderer cannot run the blur shader, so the bar carries only a translucent surface tint standing in
-     * for the one [topBarBackdropBlur] blends over the blur.
-     */
     @Test
     fun blurredLargeTopAppBarKeepsSurfaceToneWhileCollapsing() = runOpenRoseUiTest(420, 400) {
         val barState = TopAppBarState(-Float.MAX_VALUE, 0f, 0f)

@@ -9,11 +9,16 @@ status: accepted
 ## 决策
 
 - **后台控制**：设置页提供开关，默认开启。开启且托盘可用时，关闭窗口只隐藏界面，控制连接保留；托盘菜单的“退出”结束控制连接并退出进程。系统音频断开仍按 ADR 0005 释放控制连接。托盘不可用（会话总线上没有 `org.kde.StatusNotifierWatcher`，或托盘原生库加载失败）时，无论开关如何，关闭窗口都直接退出，状态页说明原因。托盘图标只要托盘可用就显示，不随该开关变化。
-- **托盘实现**：使用 Nucleus 的 ComposeNativeTray（`composenativetray-app` 的 `TrayApp`）。Linux 走 StatusNotifierItem，Windows 走 `Shell_NotifyIcon`；两端行为一致，不按平台分支。
+- **托盘实现**：使用 Nucleus 的 ComposeNativeTray（`composenativetray-app` 的 `TrayApp`）。Linux 走 StatusNotifierItem，Windows 走 `Shell_NotifyIcon`；两端呈现给用户的托盘行为一致。托盘可用性检测与面板宿主依平台实现，见下文。
+  - （2026-11 补充）**托盘可用性**：Windows 的通知区域属于 shell，始终存在（`ShellTrayMonitor`）。Linux 托盘遵循 StatusNotifierItem：只有当某个已有注册宿主的 watcher 列出本进程的条目时，图标才可见。原生库把条目命名为 `org.kde.StatusNotifierItem-<pid>-1`，watcher 记录的可能是这个名字，也可能是它的唯一总线名，`StatusNotifierTrayMonitor` 两种都认。
+  - （2026-11 补充）**tooltip**：Linux 托盘用收到的第一个 tooltip 固定条目的 Title，因此 `DesktopTray` 的首个 tooltip 是应用名“OpenRose”，启动后才换成连接状态与电量。
 - **托盘面板**：点击托盘图标弹出，内容为控制连接状态、电量与降噪模式；未连接时“重新连接”连接未连接看板展示的主设备，没有已配对设备时引导进入添加耳机流程。降噪档位等配置性项目只在主窗口。面板跟随界面风格，不使用背景模糊；组件位于 `:sharedUI`，与主窗口共用同一模型与控制入口。
+  - （2026-11 补充）原生面板窗口 `TrayPanelWindow` 只在打开时组合：第二个实例启动时，每个 `DecoratedWindow` 都会被重新显示，而这次启动应唤回主窗口，不是面板。面板与主窗口的尺寸不超过默认屏幕上窗口可用的区域（不含任务栏和面板，`usableScreenSize`）。Java 报告不出该区域时（没有 X 显示，例如没有 XWayland 的 Wayland 会话）取空值，不设上限。这只是尽力而为：数值采用 Java 报告的单位，只有平台把缩放比例传给 Java 时才与 dp 一致。
 - **托盘菜单**：控制连接状态、电量、降噪模式，以及“托盘面板”“打开 OpenRose”“退出”。GNOME 的 AppIndicator 扩展在左键单击时弹出菜单、双击才激活，因此菜单同样承载快捷控制。
+  - （2026-11 补充）原生菜单的回调不在界面线程上运行，`TrayActions` 让每个条目绑定构建时所显示的状态。原生实现中再次选择已勾选的降噪模式会将其取消勾选，因此只有选择不同的模式才写入（降噪模式菜单项）。
 - Windows 和 Linux 的首个日用目标是在主窗口关闭时完成常用操作。两端分别用 EarFree i5 验收：开启后台控制，系统音频连上耳机后从托盘看到设备上报的电量；在托盘切换降噪模式后收到耳机确认；系统音频断开再连后，托盘恢复读数与控制。
 - **启动**：“登录时启动”默认关闭，经 `nucleus.autolaunch` 实现；后台控制开启且托盘可用时，登录启动只驻留托盘。再次启动应用唤回主窗口。
+  - （2026-11 补充）登录时启动只对安装版开放（`LoginLaunch.read`）：未打包运行时登记的登录项会是开发用的 JVM 命令。
 - **支持范围**：GNOME（需 AppIndicator 扩展）与 KDE Plasma 依据库文档与扩展源码支持，未经实机验证。未识别的 Linux 桌面（niri、Hyprland、Sway 等平铺式合成器）不使用 `TrayApp` 弹窗，改用普通托盘图标，点击后打开一个由合成器摆放的 Wayland 原生面板窗口（标题固定为“OpenRose 托盘面板”，可用合成器窗口规则让它浮动到托盘附近）。Wayland 下看不到窗口外的点击，面板在鼠标进入后又移出 0.5 秒、或焦点持续离开 1 秒时收起；宽限是因为焦点跟随鼠标会把焦点交给鼠标途经的窗口。
 
 ## 考虑过的方案

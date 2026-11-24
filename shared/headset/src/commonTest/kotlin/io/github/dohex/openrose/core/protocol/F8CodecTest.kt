@@ -36,7 +36,6 @@ class F8CodecTest {
 
     @Test
     fun syntheticRepliesAreBufferedAndDecodedWithoutChecksum() {
-        // Synthetic RX, using the documented header, tag and byte offsets; not a hardware capture.
         val frame = "0027010005010050da32".bytes()
         val codec = createProtocolCodec(ModelProfile.CERAMICS_X_F8)
         assertTrue(codec.feedNotification(frame.copyOfRange(0, 4)).isEmpty())
@@ -67,7 +66,6 @@ class F8CodecTest {
 
     @Test
     fun syntheticUnknownValuesDoNotConfirmSettings() {
-        // Synthetic RX: 0x28 shares the same dispatch as 0x27.
         val codec = createProtocolCodec(ModelProfile.CERAMICS_F8)
         val ambiguous = codec.feedNotification("0028010003040002".bytes()).single()
         assertIs<FieldReading.Unknown>(ambiguous.readings[DeviceField.EQ])
@@ -82,7 +80,6 @@ class F8CodecTest {
         val ldac = codec.prepareSetting(DeviceSetting.AUDIO_MODE, FieldValue.Text("ldac"))
         assertEquals("002b01000101", ldac.writeFrames.single().hex())
         assertEquals("00270100010b", ldac.readback.bytes.hex())
-        // Synthetic notifications: LDAC disables multipoint, while wire 00 enables it with AAC/SBC.
         val audio = codec.feedNotification("00270100030b0001".bytes()).single().readings
         val expectedAudio = mapOf(
             DeviceField.AUDIO_MODE to FieldValue.Text("ldac"),
@@ -112,7 +109,6 @@ class F8CodecTest {
         val language = codec.prepareSetting(DeviceSetting.PROMPT_LANGUAGE, FieldValue.Text("english"))
         assertEquals("002901000101", language.writeFrames.single().hex())
         assertEquals("00270100010a", language.readback.bytes.hex())
-        // Synthetic language and detection records, not device captures.
         val reply = codec.feedNotification("00270100030a0001".bytes()).single()
         assertEquals(FieldValue.Text("english"), assertIs<FieldReading.Known>(reply.readings[DeviceField.PROMPT_LANGUAGE]).value)
         val detection = codec.prepareSetting(DeviceSetting.EAR_DETECTION, FieldValue.Toggle(true))
@@ -133,7 +129,6 @@ class F8CodecTest {
             assertEquals("002701000113", setting.readback.bytes.hex())
             assertEquals(mapOf(DeviceField.PROMPT_VOLUME to FieldValue.Number(level)), setting.expectedValues)
         }
-        // Synthetic ding-level reply, not a device capture.
         val reply = codec.feedNotification("0027010003130003".bytes()).single()
         assertEquals(FieldValue.Number(3), assertIs<FieldReading.Known>(reply.readings[DeviceField.PROMPT_VOLUME]).value)
         for (level in listOf(0, 6)) {
@@ -157,7 +152,6 @@ class F8CodecTest {
             assertEquals("002701000112", transparency.readback.bytes.hex())
             assertEquals(mapOf(DeviceField.TRANSPARENCY_LEVEL to FieldValue.Number(level)), transparency.expectedValues)
         }
-        // Synthetic 11/12 replies, not device captures: wire 0/1/2 are the UI levels 5/3/1.
         for ((raw, level) in listOf(0 to 5, 1 to 3, 2 to 1)) {
             val wire = raw.toString(16).padStart(2, '0')
             val anc = codec.feedNotification("00270100031100$wire".bytes()).single()
@@ -185,7 +179,6 @@ class F8CodecTest {
                     codec.prepareSetting(setting, FieldValue.Number(3))
                 }
             }
-            // The shared CERAMICS-X receive handler leaves both level tags Unknown for these models.
             for ((tag, field) in listOf("11" to DeviceField.ANC_LEVEL, "12" to DeviceField.TRANSPARENCY_LEVEL)) {
                 val reply = codec.feedNotification("0027010003${tag}0001".bytes()).single()
                 assertIs<FieldReading.Unknown>(reply.readings[field])

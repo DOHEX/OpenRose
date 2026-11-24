@@ -24,7 +24,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 
-/** One operation survives the source changing from remote to local while its reply is in flight. */
 internal class CirculationActions(private val client: CirculationClient, private val scope: CoroutineScope) {
     private var status by mutableStateOf(HandoffStatus())
     private var mediaAddress by mutableStateOf<String?>(null)
@@ -74,7 +73,6 @@ internal class CirculationActions(private val client: CirculationClient, private
             currentCoroutineContext().ensureActive()
             mediaAddress = audioAddress.takeIf { reply.mediaReady }
             status = reply
-            // Only the request active when this poll started may receive its progress.
             if (pending != null && busy && pending == target) {
                 reply.progress?.let { feedback = it }
             }
@@ -93,14 +91,12 @@ internal fun rememberCirculationActions(
     if (client == null) return null
     val scope = rememberCoroutineScope()
     val actions = remember(client) { CirculationActions(client, scope) }
-    // Continue observing a confirmed audio connection even when its transfer feedback has expired.
     val address = actions.target?.circulationAddress ?: audioTarget?.circulationAddress
         ?: bonded.firstOrNull(actions::hasMedia)?.circulationAddress ?: primary?.circulationAddress
         ?: bonded.firstNotNullOfOrNull { it.circulationAddress }
     if (address != null && LocalCirculationVisible.current) {
         LaunchedEffect(actions, address, actions.busy) { actions.poll(address) }
     }
-    // Once the user has seen the outcome, the live source and its current action explain the card again.
     LaunchedEffect(actions, actions.target, actions.feedback, actions.busy) {
         if (actions.target != null && !actions.busy) {
             delay(10_000)
@@ -129,7 +125,6 @@ class DesktopSoundActions(val currentOutput: suspend () -> String?, val openSoun
 internal fun DesktopOutputRow(sound: DesktopSoundActions, source: HeadsetCardSource) {
     if (!source.hasLocalAudio) return
     var output by remember(sound) { mutableStateOf<String?>(null) }
-    // The poll and the button report separately, so a good poll does not erase a failed 打开系统声音设置.
     var pollError by remember(sound) { mutableStateOf<String?>(null) }
     var actionError by remember(sound) { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
@@ -153,8 +148,7 @@ internal fun DesktopOutputRow(sound: DesktopSoundActions, source: HeadsetCardSou
     }
 }
 
-/** Runs a platform sound call: null when it worked, otherwise the failure's message or [fallback]. */
-@Suppress("TooGenericExceptionCaught") // Platform sound services report operating-system specific failures.
+@Suppress("TooGenericExceptionCaught")
 private suspend fun soundFailure(fallback: String, call: suspend () -> Unit): String? = try {
     call()
     null

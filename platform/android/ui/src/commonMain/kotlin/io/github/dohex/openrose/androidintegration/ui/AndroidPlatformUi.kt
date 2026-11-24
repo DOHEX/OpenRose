@@ -40,7 +40,6 @@ class AndroidPlatformUi(
     override val platformName: String = "Android"
     private var restartRunning by mutableStateOf(false)
 
-    // Whether the restart dialog is shown; its content stays until the next opening so the dialog can animate out.
     private var restartDialogOpen by mutableStateOf(false)
     private var restartSelection by mutableStateOf(emptySet<String>())
     private var restartTargets by mutableStateOf(emptyList<String>())
@@ -179,7 +178,6 @@ class AndroidPlatformUi(
                     val selectedTarget = settings.statusNotificationTarget
                     AppChoiceRow(
                         title = "点击通知打开",
-                        // The saved target stays selected; while it cannot open, the row says what the tap does instead.
                         valueText = unavailable[selectedTarget]
                             ?.let { "${statusNotificationTargetLabel(selectedTarget)}（$it，点击通知将打开 OpenRose）" }
                             ?: statusNotificationTargetLabel(selectedTarget),
@@ -376,7 +374,6 @@ class AndroidPlatformUi(
         )
     }
 
-    /** Keep terminal results already reported by the host if its restart call fails partway. */
     private suspend fun restart(targets: List<String>): List<ScopeRestartResult> {
         val outcome = runCatching {
             onRestartScope(targets) { update ->

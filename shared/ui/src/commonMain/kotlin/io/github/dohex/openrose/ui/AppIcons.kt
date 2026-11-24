@@ -67,13 +67,11 @@ enum class RoseIcon(internal val material: DrawableResource, internal val miuix:
 
 @Composable
 internal fun ExpansionIcon(expanded: Boolean, modifier: Modifier, tint: Color) {
-    // This chevron points vertically in both reading directions. Rotate its unmirrored shape.
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
         AppIcon(RoseIcon.CHEVRON, modifier.rotate(if (expanded) -90f else 90f), tint = tint)
     }
 }
 
-/** Resolves the same action to the active interface style's official icon set. */
 internal object RoseIcons {
     @Composable
     operator fun get(icon: RoseIcon): ImageVector = when (LocalInterfaceStyle.current) {

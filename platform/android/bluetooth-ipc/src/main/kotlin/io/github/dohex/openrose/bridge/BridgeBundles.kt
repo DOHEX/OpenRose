@@ -3,7 +3,6 @@ package io.github.dohex.openrose.bridge
 import android.os.Bundle
 import io.github.dohex.openrose.androidintegration.wire.BridgeWire
 
-/** Bundle builders for the bridge's hello and reply envelopes; the keys and values are [BridgeWire]'s. */
 object BridgeBundles {
     fun hello(processName: String?, target: BridgeTarget?, resolution: String = BridgeWire.RESOLUTION_MATCHED): Bundle = Bundle().apply {
         putInt(BridgeWire.KEY_VERSION, BridgeWire.VERSION)

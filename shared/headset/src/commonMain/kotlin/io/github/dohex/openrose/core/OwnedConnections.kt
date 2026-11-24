@@ -9,7 +9,6 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
-/** Serializes native opens and releases, including handles left behind by an unsuccessful open. */
 internal class OwnedConnections {
     private val lifecycle = Mutex()
     private val held = mutableSetOf<ControlConnection>()

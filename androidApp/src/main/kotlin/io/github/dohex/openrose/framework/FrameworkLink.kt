@@ -9,11 +9,6 @@ import io.github.dohex.openrose.androidintegration.wire.BridgeWire
 import io.github.libxposed.service.XposedService
 import io.github.libxposed.service.XposedServiceHelper
 
-/**
- * The application's side of the Xposed framework service: the only way to write the persisted intent
- * the module host reads (remote preferences are read-only inside the host). It carries user intent and
- * display preferences only; it carries no credential, and the host does not depend on it being alive.
- */
 class FrameworkLink(
     private val onChanged: () -> Unit,
 ) {
@@ -38,7 +33,6 @@ class FrameworkLink(
         })
     }
 
-    /** True when the framework service can currently take persisted module configuration. */
     fun canPublish(): Boolean = synchronized(lock) { framework?.apiVersion ?: 0 } >= 102
 
     fun availability(): ModuleAvailability = synchronized(lock) {
@@ -64,13 +58,6 @@ class FrameworkLink(
         }
     }
 
-    /**
-     * Persists the settings, including the saved control way, where the host reads them. [settings] is
-     * evaluated while the single writer is held, so it must read the newest persisted truth at that
-     * moment (the saved control way included) and a late caller can never write an older snapshot over a
-     * newer one. Returns whether the framework acknowledged the write, which is the only time the host
-     * can be said to know it.
-     */
     fun publishConfig(settings: () -> HostSettings): Boolean = runCatching { publisher.publish(settings) }
         .onFailure { Log.w(TAG, "Failed to publish module configuration", it) }.getOrDefault(false)
 

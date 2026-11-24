@@ -12,17 +12,14 @@ import io.github.dohex.openrose.core.protocol.TouchBinding
 import io.github.dohex.openrose.core.transport.DeviceId
 import kotlinx.collections.immutable.toPersistentList
 
-/** Facts about the host's own Bluetooth platform that the application mirrors, never re-derives. */
 data class HostPlatformFacts(
     val permission: PermissionState,
     val transport: TransportAvailability,
     val scanPermission: PermissionState = PermissionState.NOT_REQUIRED,
 )
 
-/** The part of a [ControlState] only the session owner can know. Settings, presentation and owner are composed locally. */
 data class OwnedControlState(val platform: HostPlatformFacts, val state: ControlState)
 
-/** Wire form of the owner's control state, session references and operations. */
 object ControlWire {
     fun encodeOwned(platform: HostPlatformFacts, state: ControlState): Wire = obj(
         "permission" to Wire.Str(platform.permission.name),

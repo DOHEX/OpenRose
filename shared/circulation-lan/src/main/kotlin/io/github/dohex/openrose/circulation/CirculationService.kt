@@ -8,13 +8,12 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 
-/** Each activation owns a fresh listener. Cancelling its owner also releases discovery and all connections. */
 class CirculationService {
     @Volatile private var current: CirculationNode? = null
 
     @Volatile private var unavailable = "互联服务尚未就绪"
 
-    @Suppress("TooGenericExceptionCaught") // Platform discovery, disk-backed credentials and TLS can each fail independently.
+    @Suppress("TooGenericExceptionCaught")
     suspend fun serve(listenPort: Int = 0, create: () -> CirculationNode): Unit = withContext(Dispatchers.IO) {
         while (currentCoroutineContext().isActive) {
             try {

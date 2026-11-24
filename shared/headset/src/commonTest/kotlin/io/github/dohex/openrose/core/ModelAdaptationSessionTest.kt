@@ -15,7 +15,6 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
 
-/** Real sessions driven by documented synthetic notifications, never hardware captures. */
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class ModelAdaptationSessionTest {
     @Test

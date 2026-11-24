@@ -29,7 +29,6 @@ fun OpenRoseUiTestHarness.hasDisabledText(expected: String): Boolean = textNodes
 
 fun OpenRoseUiTestHarness.hasDisabledButton(expected: String): Boolean = hasDisabledText(expected)
 
-/** As with a real touch, a disabled control takes no taps: Material marks it disabled, Miuix drops its click action. */
 fun OpenRoseUiTestHarness.hasTappableText(expected: String): Boolean = hasClickableText(expected) && !hasDisabledText(expected)
 
 fun OpenRoseUiTestHarness.hasRadioText(expected: String): Boolean = textNodes(expected).any { node ->

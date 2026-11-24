@@ -20,7 +20,6 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-/** What the host encodes is what the system-side reader parses; anything incomplete or foreign is rejected whole. */
 class BridgeSnapshotWireTest {
     @Test
     fun anI5SnapshotSurvivesTheWireWithItsAddressesCapabilitiesAndReadableValues() {
@@ -42,7 +41,6 @@ class BridgeSnapshotWireTest {
                 DeviceField.NOISE_MODE to FieldReading.Known(FieldValue.Text("anc"), ""),
                 DeviceField.RIGHT_BATTERY to FieldReading.Loading,
                 DeviceField.CASE_BATTERY to FieldReading.NotProvided(""),
-                // Values the system side cannot present are passed on as unknown, never as a guess.
                 DeviceField.CUSTOM_EQ to FieldReading.Unknown(""),
             ),
             snapshot.fields,
@@ -78,7 +76,6 @@ class BridgeSnapshotWireTest {
             "unknown model" to valid + ("profile" to "I9"),
             "no address" to valid - "device_address" + (BridgeWire.DEVICE_ID to "rose-a"),
             "blank host epoch" to valid + (BridgeWire.HOST_EPOCH to " "),
-            // A Bundle keeps an Int as an Int; reading it as the session id must fail rather than coerce.
             "session id as Int" to valid + (BridgeWire.SESSION_ID to 7),
             "no capabilities" to valid - "capabilities",
         )

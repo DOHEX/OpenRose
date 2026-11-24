@@ -43,10 +43,6 @@ import io.github.dohex.openrose.core.NoiseControlCapabilities
 import io.github.dohex.openrose.core.NoiseMode
 import io.github.dohex.openrose.core.protocol.DeviceField
 
-/**
- * Choices always come from device capabilities; selected values always come from device replies. The mode being
- * written shows its progress on its own option while the selection stays on the confirmed mode.
- */
 @Composable
 internal fun NoiseControlCard(
     state: ControlState,
@@ -82,7 +78,6 @@ internal fun NoiseControlCard(
     }
 }
 
-/** The 降噪档位 and 通透档位 selectors, each only while the confirmed mode is one it applies to. */
 @Composable
 private fun NoiseLevelControls(
     state: ControlState,
@@ -156,7 +151,6 @@ private fun NoiseModeChoices(
 
 internal fun noiseModeColumns(count: Int): Int = if (count <= 4) count.coerceAtLeast(1) else 3
 
-/** The status notification uses the same labels in the system module's RenderedSnapshot.kt; change both together. */
 fun noiseModeLabel(mode: String): String = when (mode) {
     "normal" -> "标准"
     "anc" -> "降噪"
@@ -203,7 +197,6 @@ private fun MiuixNoiseModeGrid(
                         enabled && (pressed || hovered) -> appColor(AppColorRole.OnSurface).copy(alpha = 0.08f)
                         else -> Color.Transparent
                     }
-                    // The grid draws no indication of its own, so keyboard focus needs a ring of its own.
                     val focusRing = if (focused) Modifier.border(2.dp, appColor(AppColorRole.Primary), CircleShape) else Modifier
                     Column(
                         modifier = Modifier.weight(1f)
@@ -238,7 +231,6 @@ private fun MiuixNoiseModeGrid(
     }
 }
 
-/** All rows belong to the same single choice. Shape follows press and the device-confirmed selection. */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 internal fun <T> MaterialNoiseModeGrid(

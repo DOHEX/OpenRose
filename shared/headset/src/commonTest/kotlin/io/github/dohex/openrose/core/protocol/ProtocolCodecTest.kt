@@ -11,7 +11,6 @@ import kotlin.test.assertTrue
 class ProtocolCodecTest {
     @Test
     fun fragmentedUnknownPayloadCannotBecomeAnInnerKnownFrame() {
-        // Synthetic independent example: type99 contains a complete DD/09 frame as opaque V.
         val whole = createProtocolCodec(ModelProfile.I7_RS_V2)
             .feedNotification("dd000899dd00020901e9aafaaa".bytes())
         val split = createProtocolCodec(ModelProfile.I7_RS_V2)
@@ -46,7 +45,6 @@ class ProtocolCodecTest {
     fun i5InitialReadMatchesIndependentSenderAndActualBatteryCapture() {
         val codec = createProtocolCodec(ModelProfile.I5_ZT)
         val queries = codec.initQueries(20)
-        // Independent APK literal extraction: analysis/i5_fixed_sender_commands.json.
         assertEquals(
             listOf(
                 "08ee00000001010a0002", "08ee00000006020a0008", "08ee00000002010a0003",
@@ -57,7 +55,6 @@ class ProtocolCodecTest {
             ),
             queries.map { it.bytes.toHex() },
         )
-        // Actual Linux sample, 2026-10-18, firmware 125. Case FF is missing, not zero.
         val reply = codec.feedNotification(hex("09ff00000101011100000164620000ffe2")).single()
         assertEquals(setOf("0101"), reply.responseKeys)
         assertEquals(FieldValue.Number(100), assertIs<FieldReading.Known>(reply.readings[DeviceField.LEFT_BATTERY]).value)
@@ -102,7 +99,6 @@ class ProtocolCodecTest {
         val unknown = codec.feedNotification(hex("000000000006030000a2")).single()
         assertIs<FieldReading.Unknown>(unknown.readings[DeviceField.GAME_MODE])
         assertFalse(unknown.accepted)
-        // Synthetic high nibble and arbitrary RX header are intentionally accepted at this offset seam.
         val recognized = codec.feedNotification(hex("000000000006030000a0")).single()
         assertEquals(FieldValue.Toggle(true), assertIs<FieldReading.Known>(recognized.readings[DeviceField.GAME_MODE]).value)
         assertFalse(codec.feedNotification(hex("0000000000ffff")).single().accepted)
@@ -114,7 +110,6 @@ class ProtocolCodecTest {
     fun i7InitialQueryUsesIndependentLiteralAndCompleteSmallMtuQueries() {
         val codec = createProtocolCodec(ModelProfile.I7_RS_V2)
         val initial = codec.initQueries(512)
-        // RoseLink 3.8.6 i7 panel command order, with OpenRose's independent FA 3E supplement.
         assertEquals(listOf("ff0012fa0d0c092c2d2a45460e322b01072f082e3649aa", "ff0102fa3e3aaa"), initial.map { it.bytes.toHex() })
         codec.reset()
         val small = codec.initQueries(20)
@@ -136,14 +131,13 @@ class ProtocolCodecTest {
         )
         codec.reset()
         val small = codec.initQueries(20)
-        // The final status group contains only the unsupported 49 tag and requires no state reply.
         assertTrue(small.single { it.key == "fa49" }.responseKeys.isEmpty())
     }
 
     @Test
     fun i7SyntheticStreamKeepsDelimitersAndAcceptsOnlyDocumentedChecksumFamilies() {
         val codec = createProtocolCodec(ModelProfile.I7_RS_V2)
-        val sample = hex("dd000599aadd010003aa") // Synthetic unknown record, embedded AA/DD.
+        val sample = hex("dd000599aadd010003aa")
         assertTrue(codec.feedNotification(sample.copyOfRange(0, 5)).isEmpty())
         assertTrue(codec.feedNotification(sample.copyOfRange(5, 8)).isEmpty())
         val unknown = codec.feedNotification(sample.copyOfRange(8, sample.size)).single()
@@ -233,7 +227,6 @@ class ProtocolCodecTest {
 
     @Test
     fun suppliedBatteryBytesKeepUnavailableCurrentCaseAndZeroDistinctFromFf() {
-        // Source field example from independent i5 test: charging case 50; synthetic contexts below.
         val i5 = createProtocolCodec(ModelProfile.I5_ZT)
         val noCharging = i5.feedNotification(hex("000000000001010000aabb6432000050")).single()
         assertIs<FieldReading.Unknown>(noCharging.readings[DeviceField.CASE_BATTERY])
@@ -252,7 +245,6 @@ class ProtocolCodecTest {
         assertFalse(allUnknown.accepted)
     }
 
-    // Constructed framing around independent research field examples; never a captured RX sample.
     private fun syntheticI7(type: Int, value: ByteArray): ByteArray {
         val prefix = byteArrayOf(0xdd.toByte(), 0, (value.size + 1).toByte(), type.toByte()) + value
         return prefix + byteArrayOf(prefix.sumOf { it.toInt() and 255 }.toByte(), 0xaa.toByte())

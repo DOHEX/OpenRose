@@ -3,7 +3,6 @@ package io.github.dohex.openrose.core.protocol
 import io.github.dohex.openrose.core.DeviceSetting
 import io.github.dohex.openrose.core.models.ModelProtocol
 
-/** ZT family frames: 08EE requests, fixed command keys and nibble-encoded replies. */
 internal class ZtCodec(override val profile: ModelProfile, private val protocol: ModelProtocol.Zt) : ProtocolCodec {
     override fun prepareSetting(
         setting: DeviceSetting,

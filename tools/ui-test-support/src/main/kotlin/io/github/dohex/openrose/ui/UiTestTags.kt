@@ -12,7 +12,6 @@ private fun OpenRoseUiTestHarness.taggedNodes(tag: String) = nodes().filter {
 
 private fun SemanticsNode.subtree(): List<SemanticsNode> = listOf(this) + children.flatMap { it.subtree() }
 
-/** Whether production exposed a node under [tag]; tags carry state names, never wording. */
 fun OpenRoseUiTestHarness.hasTag(tag: String): Boolean = taggedNodes(tag).isNotEmpty()
 
 fun OpenRoseUiTestHarness.tagBounds(tag: String): Rect {
@@ -24,7 +23,6 @@ fun OpenRoseUiTestHarness.hasTagWithPrefix(prefix: String): Boolean = nodes().an
     it.config.getOrNull(SemanticsProperties.TestTag)?.startsWith(prefix) == true
 }
 
-/** The radio option publishes Selected on its tagged node; a component may also publish it on a child. */
 fun OpenRoseUiTestHarness.isTagSelected(tag: String): Boolean = taggedNodes(tag).any { node ->
     node.subtree().any { it.config.getOrNull(SemanticsProperties.Selected) == true }
 }
@@ -39,7 +37,6 @@ private fun OpenRoseUiTestHarness.clickNodeFor(tag: String): SemanticsNode? = ta
         ?: node.findAncestorOrSelf { it.config.getOrNull(SemanticsActions.OnClick) != null }
 }
 
-/** A disabled control is not tappable, as with a real touch: the semantic action alone must not bypass it. */
 fun OpenRoseUiTestHarness.isTagClickable(tag: String): Boolean = clickNodeFor(tag) != null && !isTagDisabled(tag)
 
 fun OpenRoseUiTestHarness.clickTag(tag: String) {
@@ -47,7 +44,6 @@ fun OpenRoseUiTestHarness.clickTag(tag: String) {
     invokeClick(clickNodeFor(tag) ?: error("No clickable node found for tag '$tag'"), tag)
 }
 
-/** Text rendered under [tag]; callers compare it with text their own fixture supplied. */
 fun OpenRoseUiTestHarness.tagTexts(tag: String): List<String> = taggedNodes(tag).flatMap { node ->
     node.subtree().flatMap { it.config.getOrNull(SemanticsProperties.Text).orEmpty().map { text -> text.text } }
 }

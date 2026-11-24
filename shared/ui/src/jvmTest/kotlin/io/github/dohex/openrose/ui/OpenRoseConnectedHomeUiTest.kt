@@ -420,10 +420,8 @@ class OpenRoseConnectedHomeUiTest {
             val gameDevice = requireNotNull(initial.device)
             withHarness(420, 900, initial, style, wholeApp = true) { harness ->
                 harness.render()
-                // Game mode card should render a single-line title
                 assertTrue(harness.hasText("游戏模式"), "game mode switch must be visible in $style")
 
-                // Click to toggle game mode
                 assertTrue(harness.hasClickableText("游戏模式"), "game mode row should be clickable in $style")
                 harness.clickText("游戏模式")
                 harness.render()
@@ -433,7 +431,6 @@ class OpenRoseConnectedHomeUiTest {
                     "toggling game mode dispatches setting command in $style",
                 )
 
-                // When pending operation is in flight, toggle is disabled and pending feedback is shown
                 val pendingOp = SettingOperation(
                     id = 101,
                     sessionId = gameDevice.sessionId,
@@ -449,7 +446,6 @@ class OpenRoseConnectedHomeUiTest {
                 assertFalse(harness.hasText("等待设备确认"), "game mode does not show progress on the noise card in $style")
                 assertFalse(harness.hasText("正在处理设置，等待设备确认"), "game mode does not also show a progress card in $style")
 
-                // When operation confirms, state updates silently without blocking banner
                 harness.state.value = harness.state.value.copy(
                     device = gameDevice.copy(
                         diagnostics = gameDevice.diagnostics.copy(fields = gameDevice.diagnostics.fields + (DeviceField.GAME_MODE to FieldReading.Known(FieldValue.Toggle(true), "01"))),

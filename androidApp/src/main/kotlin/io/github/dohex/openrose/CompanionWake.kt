@@ -19,14 +19,6 @@ import io.github.dohex.openrose.androidintegration.WakeFacts
 import io.github.dohex.openrose.core.protocol.ModelProfile
 import java.util.regex.Pattern
 
-/**
- * The public system mechanism that revives OpenRose when the earphones appear and the process is
- * gone. It differs by Android version and nothing here assumes one mechanism covers all of them:
- * before Android 12 there is no presence API (the manifest receiver for audio-connection broadcasts
- * is the only path and no association is needed); from Android 12 an association plus presence
- * observation wakes a [OpenRoseCompanionService], and the association also carries the foreground
- * service start exemption.
- */
 internal class CompanionWake(private val context: Context) {
     private data class Association(val id: Int?, val address: String)
 
@@ -45,7 +37,6 @@ internal class CompanionWake(private val context: Context) {
     private val supported: Boolean
         get() = context.packageManager.hasSystemFeature(PackageManager.FEATURE_COMPANION_DEVICE_SETUP) && manager != null
 
-    /** Facts re-read from the system on every call, so a cancelled association stops reading as ready. */
     fun facts(): WakeFacts {
         if (band == WakeBand.ANDROID_8_11) return WakeFacts(band)
         if (!supported) return WakeFacts(band, CompanionAssociation.MISSING, PresenceObservation.REFUSED)
@@ -57,12 +48,7 @@ internal class CompanionWake(private val context: Context) {
         }
     }
 
-    /**
-     * Aligns the system's presence observation with the saved intent: observing while background
-     * control is enabled, withdrawn when the user disables it. Repeating it is harmless.
-     */
     fun syncObservation(enabled: Boolean) {
-        // The same boundary as WakeBand.ANDROID_8_11, written as an SDK check so lint sees the API 31 guard.
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S || !supported) return
         val associated = associations()
         if (associated.isEmpty()) {
@@ -80,7 +66,6 @@ internal class CompanionWake(private val context: Context) {
         }
     }
 
-    /** Asks the system to show its device chooser; [onChooser] launches it from an Activity. */
     fun requestAssociation(onChooser: (IntentSender) -> Unit, onFailure: () -> Unit) {
         val manager = manager?.takeIf { supported } ?: return onFailure()
         val request = associationRequest()
@@ -110,7 +95,6 @@ internal class CompanionWake(private val context: Context) {
         }
     }
 
-    // CompanionDeviceManager rethrows Binder and vendor service failures as RuntimeException.
     @Suppress("TooGenericExceptionCaught")
     private inline fun <T> companionCall(onUnavailable: () -> T, call: () -> T): T = try {
         call()
@@ -120,7 +104,6 @@ internal class CompanionWake(private val context: Context) {
     }
 
     private fun associationRequest(): AssociationRequest {
-        // The same admission rule as ModelProfile.match, so the system wakes OpenRose for exactly the names it controls.
         val name = Pattern.compile(ModelProfile.namePattern)
         return AssociationRequest.Builder()
             .addDeviceFilter(BluetoothDeviceFilter.Builder().setNamePattern(name).build())

@@ -19,7 +19,6 @@ internal fun Context.setOfficialStatus(payload: Bundle) {
     ).invoke(service, 1, "strong_toast_action", payload)
 }
 
-/** The caller has already admitted official island mode and read [promptId] from this snapshot's prompt. */
 internal fun decodeRequest(snapshot: Bundle, promptId: String): PromptRequest? {
     if (snapshot.getInt(BridgeWire.KEY_VERSION, -1) != BridgeWire.VERSION) return null
     val identity = identityOf(snapshot) ?: return null
@@ -71,13 +70,8 @@ private fun sidePayload(clip: PreparedClip, battery: Int?, charging: Boolean?, i
         .put("fileType", MP4_FILE_TYPE)
         .put("iconName", clip.uri.toString())
         .put("iconType", if (island) 0 else 1)
-    // The island model of the HyperOS SystemUI (17.03.260226) reads `iconFormat`/`iconResName`, not `fileType`/`iconName`;
-    // without them toIconInfo logs "Unknown icon type: null" and the whole island is dropped ("Failed to
-    // parseDynamicIslandParam"). Older builds ignore the extra keys and keep reading the legacy pair.
     if (island) icon.put("iconFormat", MP4_FILE_TYPE).put("iconResName", clip.uri.toString())
     val side = JSONObject().put("iconParams", icon)
-    // Only a confirmed true charging field adds the charging color. Neutral battery text
-    // remains useful when charging is unknown and does not claim a false charging flag.
     if (battery != null) {
         val text = JSONObject()
             .put("text", "$battery%")

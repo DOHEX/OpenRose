@@ -2,10 +2,6 @@ package io.github.dohex.openrose.androidintegration
 
 import io.github.dohex.openrose.core.PlatformApplicability
 
-/**
- * Classify the currently targeted HyperOS 3/4 builds from Android build identity. This adapter
- * helper deliberately does not inspect module, bridge, or target-package state.
- */
 fun classifyHyperOsBuild(
     manufacturer: String,
     brand: String,

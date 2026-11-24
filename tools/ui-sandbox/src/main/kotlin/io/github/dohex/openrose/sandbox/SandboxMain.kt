@@ -57,7 +57,6 @@ import io.github.dohex.openrose.ui.configurationLabel
 import io.github.dohex.openrose.ui.interfaceBackgroundColor
 import io.github.dohex.openrose.ui.isDark
 
-/** Preview sizes in dp: a phone, the narrow layout the UI tests use, a tablet, and the desktop window's default. */
 private val previewSizes = listOf(
     "手机" to DpSize(360.dp, 780.dp),
     "窄屏" to DpSize(420.dp, 900.dp),
@@ -65,14 +64,8 @@ private val previewSizes = listOf(
     "桌面" to DpSize(1180.dp, 820.dp),
 )
 
-/** The width the desktop app gives its tray popup, and the height it starts from before fitting it to the content. */
 private val trayPanelSize = DpSize(360.dp, 440.dp)
 
-/**
- * A control window that edits one [SandboxScenario], a preview window running the shared app on it, and on desktop
- * hosts the tray panel. Every window shares one model, so a write in either one shows in both. The windows open on
- * the desktop app's backend; it is a separate instance, so a running OpenRose is left alone.
- */
 fun main(args: Array<String>) = nucleusApplication(args = args, backend = NucleusBackend.Tao, enableSingleInstance = false) {
     val scope = rememberCoroutineScope()
     val model = remember { SandboxModel(scope) }
@@ -102,7 +95,6 @@ fun main(args: Array<String>) = nucleusApplication(args = args, backend = Nucleu
         background = appBackground,
         onCloseRequest = ::exitApplication,
     ) {
-        // Each host is its own app: switching it starts from the first page, as launching that app would.
         key(scenario.host) {
             OpenRoseApp(model = model, platformUi = platforms.forScenario(scenario), primaryDeviceSelection = selection)
         }
@@ -130,7 +122,6 @@ fun main(args: Array<String>) = nucleusApplication(args = args, backend = Nucleu
     }
 }
 
-/** A window dressed the way the desktop app dresses its own: a title bar in the content's background color. */
 @Composable
 private fun NucleusApplicationScope.SandboxWindow(
     title: String,
@@ -242,7 +233,6 @@ private fun DesktopControls(model: SandboxModel, scenario: SandboxScenario, tray
     ScenarioChoice(model, "登录时启动", SandboxLoginLaunch.entries, scenario.loginLaunch, { it.label }) { copy(loginLaunch = it) }
 }
 
-/** One titled row of options that each set one scenario fact. */
 @Composable
 private fun <T> ScenarioChoice(
     model: SandboxModel,
@@ -282,7 +272,6 @@ private fun Toggle(title: String, checked: Boolean, onChange: (Boolean) -> Unit)
     }
 }
 
-/** The firmware text and, once a device is connected, the settings its real readings make writable. */
 private fun capabilitySummary(scenario: SandboxScenario, capabilities: DeviceCapabilities?): String {
     val firmware = scenario.firmwareValue
     val read = firmware?.let { "固件 ${it.displayText}" } ?: "未读取固件"

@@ -10,6 +10,7 @@ local.properties
 .agents/skills/*
 !.agents/skills/md3e/
 !.agents/skills/add-model/
+!.agents/skills/delete-comment/
 
 # Cargo CLI output for the Windows helper.
 /platform/windows/native/target/

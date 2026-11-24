@@ -4,16 +4,13 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
 import kotlin.enums.enumEntries
 
-/** Component style is independent of light/dark appearance. */
 enum class InterfaceStyle { MIUIX, MATERIAL3 }
 enum class Appearance { SYSTEM, LIGHT, DARK }
 enum class PageTransition { MIUIX_SPRING, SLIDE, FADE, NONE }
 enum class BottomBarStyle { FIXED, FLOATING }
 
-/** What the Miuix floating capsule is made of; Material 3 and the fixed bar ignore it. */
 enum class FloatingBarMaterial { FROSTED, LIQUID_GLASS }
 
-/** Whether this appearance draws dark, following the system only for [Appearance.SYSTEM]. */
 @Composable
 fun Appearance.isDark(): Boolean = when (this) {
     Appearance.SYSTEM -> isSystemInDarkTheme()
@@ -30,7 +27,6 @@ data class UiSettings(
     val floatingBarMaterial: FloatingBarMaterial = FloatingBarMaterial.FROSTED,
 )
 
-/** Layer-prefixed storage format; missing and unrecognized values use product defaults. */
 object UiSettingsCodec {
     fun encode(settings: UiSettings): Map<String, String> = mapOf(
         "sharedUI.interface_style" to settings.interfaceStyle.name.lowercase(),

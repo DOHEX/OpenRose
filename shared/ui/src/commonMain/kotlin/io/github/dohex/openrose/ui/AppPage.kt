@@ -1,6 +1,5 @@
 package io.github.dohex.openrose.ui
 
-/** Every page of the app. Adding one is a single entry here; [Route] needs no change. */
 internal enum class AppPage(
     val title: String,
     val icon: RoseIcon,

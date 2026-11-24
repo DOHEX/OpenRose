@@ -36,7 +36,6 @@ class RsCommonV2TapControlTest {
     @Test
     fun tapNotificationsRequireAllFourSlotsAndPreserveUnknownActions() {
         val codec = createProtocolCodec(ModelProfile.ASTRO_X_RS_V2)
-        // Synthetic LTV notifications. The binding pairs may arrive in any order.
         val enabled = codec.feedNotification("dd00023b011baa".bytes()).single()
         assertEquals(FieldReading.Known(FieldValue.Toggle(true), "01"), enabled.readings[DeviceField.TAP_ENABLED])
         val complete = codec.feedNotification("dd00093c13070201030212045aaa".bytes()).single()

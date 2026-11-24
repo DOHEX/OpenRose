@@ -103,7 +103,6 @@ private val IndicatorHeight = 56.dp
 private val BarPadding = 4.dp
 private val IconSize = 28.dp
 
-/** The pager content the liquid-glass bar refracts, or null when [active] is false; it draws [surfaceColor] where pages leave gaps. */
 @Composable
 internal fun rememberLiquidGlassBackdrop(surfaceColor: Color, active: Boolean): LayerBackdrop? = if (active) {
     rememberLayerBackdrop {
@@ -116,12 +115,6 @@ internal fun rememberLiquidGlassBackdrop(surfaceColor: Color, active: Boolean): 
 
 internal fun Modifier.liquidGlassContent(backdrop: LayerBackdrop?): Modifier = if (backdrop != null) layerBackdrop(backdrop) else this
 
-/**
- * The Miuix floating capsule in its liquid-glass material: icon-only tabs on a refracting glass capsule, plus a
- * glass indicator that follows the selected page and can be dragged across tabs. [selectedIndex] is owned by the
- * caller; a tap or a finished drag reports the new index through [onSelect], and the indicator then follows.
- * Sits where [top.yukonga.miuix.kmp.basic.FloatingNavigationBar] would, with the same bottom inset rule.
- */
 @Composable
 internal fun MiuixLiquidGlassBottomBar(
     backdrop: LayerBackdrop,
@@ -172,7 +165,6 @@ internal fun MiuixLiquidGlassBottomBar(
             },
         )
     }
-    // Taps and pager swipes change the selection from outside; a finished drag has already aimed here.
     LaunchedEffect(dragAnimation, selectedIndex) {
         if (dragAnimation.targetValue != selectedIndex.toFloat()) {
             dragAnimation.animateToValue(selectedIndex.toFloat())
@@ -227,7 +219,6 @@ internal fun MiuixLiquidGlassBottomBar(
                 }
             }
 
-            // An invisible accent-tinted copy of the tabs; the indicator refracts it so the selected icon turns accent.
             Row(
                 Modifier
                     .clearAndSetSemantics {}
@@ -326,7 +317,6 @@ private fun rememberLiquidBottomPadding() = WindowInsets.navigationBars.only(Win
         (if (navBarBottom != 0.dp) 26.dp + navBarBottom else 16.dp) + captionBarBottom
     }
 
-/** One icon-only tab. Only the interactive copy passes [onClick]; it alone carries the tab semantics. */
 @Composable
 private fun RowScope.LiquidTab(
     page: AppPage,
@@ -369,7 +359,6 @@ private fun RowScope.LiquidTab(
     }
 }
 
-/** Spring-damped value, press and squash state for the draggable indicator. */
 private class DampedDragAnimation(
     private val animationScope: CoroutineScope,
     initialValue: Float,
@@ -399,10 +388,6 @@ private class DampedDragAnimation(
 
     val value: Float get() = valueAnimation.value
 
-    /**
-     * Where the indicator is headed, set the moment a drag or selection asks for it. The animation's own target only
-     * moves once its launched coroutine runs, so several drag events within one frame would otherwise lose distance.
-     */
     var targetValue: Float = initialValue
         private set
     val pressProgress: Float get() = pressProgressAnimation.value
@@ -491,7 +476,6 @@ private class DampedDragAnimation(
     }
 }
 
-/** A light glow centred on the indicator while it is held. */
 private class InteractiveHighlight(
     private val animationScope: CoroutineScope,
     private val reduceMotion: Boolean,
@@ -551,10 +535,6 @@ half4 main(float2 coord) {
     }
 }
 
-/**
- * Drag detection that, unlike detectDragGestures, starts on the first down without touch slop and never consumes,
- * so the indicator's press and highlight run alongside each other on the same pointer.
- */
 private suspend fun PointerInputScope.inspectDragGestures(
     onDragStart: (down: PointerInputChange) -> Unit = {},
     onDragEnd: (change: PointerInputChange) -> Unit = {},

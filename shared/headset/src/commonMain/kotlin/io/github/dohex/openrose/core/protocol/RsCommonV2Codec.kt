@@ -9,7 +9,6 @@ import kotlinx.datetime.number
 import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Clock
 
-/** RS Common V2 frames: FF/DD framing, LTV records and a per-session sequence. */
 internal class RsCommonV2Codec(
     override val profile: ModelProfile,
     private val protocol: ModelProtocol.RsCommonV2,
@@ -18,7 +17,6 @@ internal class RsCommonV2Codec(
     private var sequence = 0
     private var buffer = byteArrayOf()
 
-    /** RoseLink 3.8.6 builds getInfo from the panel order; 3.8.0 used the sender default. */
     private val infoTypes = (protocol.infoIds ?: "010708090c0d0e122a2b2c2d2e2f313233363738393a3b3c3d3f454649").bytes()
 
     override fun prepareSetting(
@@ -29,7 +27,6 @@ internal class RsCommonV2Codec(
     ): ProtocolSetting {
         val capabilities = CapabilityFacts(currentFields, firmware).resolve(profile)
         if (setting == DeviceSetting.CUSTOM_EQ) return customEqualizer(value, capabilities)
-        // Validate the complete record before allocating either sequence number.
         val (type, payload, values) = rsV2Setting(capabilities, setting, value)
         val write = frame(byteArrayOf(type) + payload)
         val followUp = protocol.spatialFollowUp(setting, value, currentFields)
@@ -125,7 +122,6 @@ internal class RsCommonV2Codec(
                     replies += ProtocolReply(buffer.copyOfRange(0, start).hex(), warnings = listOf("忽略帧前数据"))
                     buffer = buffer.copyOfRange(start, buffer.size)
                 }
-                // A DD byte can be opaque data inside an incomplete field. Wait for the current frame's checksum.
                 val (end, reply) = findComplete() ?: break
                 replies += reply
                 buffer = buffer.copyOfRange(end, buffer.size)

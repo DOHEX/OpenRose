@@ -47,10 +47,6 @@ private const val BLUETOOTH_PACKAGE = "com.android.bluetooth"
 private const val OWNER_SWITCH_MILLIS = 800L
 private const val RESTART_STEP_MILLIS = 500L
 
-/**
- * The real platform sections of each host, fed from the scenario instead of a platform. A scenario change
- * rebuilds every platform fact; what the user saves through these sections lasts until the next change.
- */
 internal class SandboxPlatforms(private val model: SandboxModel, private val scope: CoroutineScope) {
     private val integration = MutableStateFlow(IntegrationState())
     private val desktopSettings = MutableStateFlow(DesktopSettings())
@@ -120,7 +116,6 @@ internal class SandboxPlatforms(private val model: SandboxModel, private val sco
         loginLaunch.show(scenario.loginLaunch)
     }
 
-    /** A handoff passes through Switching, then lands where the scenario says the new owner ends up. */
     private fun selectControlWay(way: ControlWay) {
         val from = integration.value.owner.selected
         integration.update {
@@ -143,7 +138,6 @@ internal class SandboxPlatforms(private val model: SandboxModel, private val sco
         return targets.map { ScopeRestartResult(it, ScopeRestartStatus.RESTARTED).also(report) }
     }
 
-    /** Stands for the user fixing [issue] through the platform action the page offers. */
     private fun resolve(issue: SandboxPlatformIssue) = model.updateScenario {
         if (it.issue == issue) it.copy(issue = SandboxPlatformIssue.NONE) else it
     }
@@ -177,7 +171,6 @@ private class SandboxLoginLaunchControl(private val model: SandboxModel) : Login
         it.copy(loginLaunch = if (enabled) SandboxLoginLaunch.ON else SandboxLoginLaunch.OFF)
     }
 
-    /** Stands for the user allowing OpenRose again in the system's startup settings. */
     override fun openSystemSettings() = model.updateScenario { it.copy(loginLaunch = SandboxLoginLaunch.OFF) }
 }
 
@@ -237,7 +230,6 @@ private fun SandboxModule.bridge(): SystemBridgeDiagnostics? = when (this) {
     SandboxModule.NOT_ENABLED, SandboxModule.FRAMEWORK_MISSING -> null
 }
 
-/** Android 14 facts with the association still missing, so the association action shows until it is granted. */
 private fun SandboxBackgroundService.facts(): BackgroundServiceFacts {
     val wake = WakeFacts(WakeBand.ANDROID_14_PLUS, CompanionAssociation.MISSING, PresenceObservation.NOT_OBSERVING)
     return when (this) {

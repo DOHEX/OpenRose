@@ -13,7 +13,6 @@ import io.github.dohex.openrose.core.protocol.GattProfile
 import kotlinx.collections.immutable.persistentSetOf
 import kotlinx.collections.immutable.toPersistentSet
 
-/** The recovered EarFree i5 configuration gates nothing on firmware. */
 private val earFreeI5Capabilities = DeviceCapabilities(
     readableFields = persistentSetOf(
         DeviceField.LEFT_BATTERY, DeviceField.RIGHT_BATTERY, DeviceField.CASE_BATTERY, DeviceField.LEFT_CHARGING,
@@ -56,12 +55,10 @@ private val earFreeI5Capabilities = DeviceCapabilities(
             "noise_cycle",
         ),
     ),
-    // One ZT field carries both: LDAC turns multipoint off.
     audioControl = AudioControlCapabilities(persistentSetOf("aac_sbc", "ldac"), multipointCoupled = true),
     promptVolumeLevels = (1..5).toPersistentSet(),
 )
 
-/** EarFree i5 / EarFeel-i5, RoseLink `zt/earfree_i5_device_config`. */
 internal val earFreeI5 = ModelSpec(
     displayName = "EarFree i5",
     shortLabel = "i5",

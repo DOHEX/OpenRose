@@ -6,7 +6,6 @@ import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.dohex.openrose.core.protocol.ModelProfile
 import io.github.dohex.openrose.core.transport.normalizeBluetoothAddress
 
-/** A value copied from the authenticated bridge's latest device snapshot. */
 data class NativeHeadsetSnapshot(
     val hostEpoch: String,
     val deviceId: String,
@@ -17,9 +16,7 @@ data class NativeHeadsetSnapshot(
     val writableSettings: Set<String>,
     val readableFields: Set<String>,
     val noiseModes: Set<String>,
-    /** Null means the model does not expose this setting as a capability. */
     val ancLevel: NativeNoiseLevelCapabilities?,
-    /** Null means the model does not expose this setting as a capability. */
     val transparencyLevel: NativeNoiseLevelCapabilities?,
     val fields: Map<DeviceField, FieldReading>,
 ) {
@@ -29,10 +26,6 @@ data class NativeHeadsetSnapshot(
     val supportsNoiseMode: Boolean
         get() = "NOISE_MODE" in writableSettings && noiseModes.isNotEmpty()
 
-    /**
-     * [nowElapsedMillis] is the reader's elapsed-realtime clock, the same clock the host stamped [capturedElapsedMillis] with.
-     * Identity and address shape are established once by [fromWire]; freshness is only the clock window.
-     */
     fun isFresh(nowElapsedMillis: Long): Boolean = capturedElapsedMillis in 1..nowElapsedMillis &&
         nowElapsedMillis - capturedElapsedMillis <= MAX_AGE_MILLIS
 
@@ -48,16 +41,10 @@ data class NativeHeadsetSnapshot(
         writableSettings == other.writableSettings && readableFields == other.readableFields && noiseModes == other.noiseModes &&
         ancLevel == other.ancLevel && transparencyLevel == other.transparencyLevel && fields == other.fields
 
-    /**
-     * Parse only the primitive bridge wire fields needed by the native adapters. Every nested
-     * tree is consumed immediately and copied into immutable Kotlin values so callers cannot
-     * mutate an adapter's published state afterward.
-     */
     companion object {
         const val MAX_AGE_MILLIS = 3_000L
         const val MILINK_COMPATIBILITY_DEVICE_ID = "01010607"
 
-        /** Null for an absent, foreign-version, incomplete or unreadable snapshot. */
         fun fromWire(wire: WireMap?): NativeHeadsetSnapshot? = runCatching { parseWire(wire) }.getOrNull()
 
         private fun parseWire(wire: WireMap?): NativeHeadsetSnapshot? {
@@ -97,7 +84,6 @@ data class NativeHeadsetSnapshot(
             normalizeBluetoothAddress(wire.string("device_address"))?.let(::add)
             normalizeBluetoothAddress(wire.string("classic_address"))?.let(::add)
             stringValues(wire, "addresses").mapNotNullTo(this, ::normalizeBluetoothAddress)
-            // Android DeviceId is commonly the BLE address. An opaque ID is never an address.
             normalizeBluetoothAddress(deviceId)?.let(::add)
         }
 
@@ -120,7 +106,6 @@ data class NativeHeadsetSnapshot(
 
         private fun integerValues(wire: WireMap?, key: String): List<Int> = wire?.ints(key).orEmpty()
 
-        // The wire carries values only; the raw device bytes never reach a system entry.
         private fun parseReading(wire: WireMap): FieldReading? = when (wire.string(BridgeWire.STATUS)) {
             "LOADING" -> FieldReading.Loading
             "UNKNOWN" -> FieldReading.Unknown("")
@@ -140,7 +125,6 @@ data class NativeHeadsetSnapshot(
     }
 }
 
-/** A copied, setting-specific noise-level capability from the authenticated bridge snapshot. */
 data class NativeNoiseLevelCapabilities(
     val levels: Set<Int>,
     val visibleModes: Set<String>,

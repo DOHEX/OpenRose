@@ -1,10 +1,5 @@
 package io.github.dohex.openrose.androidintegration.wire
 
-/**
- * Versioned wire constants for the module host's authenticated endpoint. There is no shared secret:
- * the host authorises each caller from the Binder uid and package, so nothing here is a credential.
- * Protocol commands and device state travel as the core module's rendered wire text in [PAYLOAD].
- */
 object BridgeWire {
     const val VERSION = 7
     const val KEY_VERSION = "version"
@@ -21,13 +16,10 @@ object BridgeWire {
     const val READ_SEQUENCE = "read_sequence"
     const val CAPTURED_ELAPSED_MILLIS = "captured_elapsed_millis"
 
-    /** Rendered core wire text: a command, request, result, status or frame. */
     const val PAYLOAD = "payload"
 
-    /** The owner generation (incarnation#sequence) a request was issued for. */
     const val GENERATION = "generation"
 
-    /** On `open` replies: the host incarnation. On every session-scoped request/reply: the owner generation. */
     const val HOST_EPOCH = "host_epoch"
     const val STATUS_OK = "OK"
     const val STATUS_NO_SESSION = "NO_SESSION"
@@ -53,18 +45,12 @@ object BridgeWire {
     const val TARGET_COMPONENT_METHOD = "onCreate"
     const val COMPONENT_MATCH = "$TARGET_COMPONENT_CLASS#$TARGET_COMPONENT_METHOD():void"
 
-    /**
-     * Discovery: an existing service in the host process hands out the endpoint Binder for this action.
-     * Reaching it is not authorisation; the endpoint's `open` verifies the caller.
-     */
     const val ACTION_CONTROL_HOST = "io.github.dohex.openrose.action.CONTROL_HOST"
     const val HOST_SERVICE_CLASS = "com.android.bluetooth.agClient.BluetoothAgClientService"
 
-    /** Settings the application mirrors for the host, in the core settings codec's own keys. */
     const val CONFIG_GROUP = "module_config"
     const val CONFIG_REVISION = "config_revision"
 
-    /** Request: the Bluetooth address the fusion center asked about. Reply: [FUSION_DECISION] and, for OpenRose, [DEVICE_ID]. */
     const val FUSION_ADDRESS = "fusion_address"
     const val FUSION_DECISION = "fusion_decision"
     const val FUSION_SYSTEM = "SYSTEM"
@@ -72,13 +58,8 @@ object BridgeWire {
     const val ACTION_SHOW_HEADPHONES = "io.github.dohex.openrose.SHOW_HEADPHONES"
     const val EXTRA_HEADPHONE_ADDRESS = "io.github.dohex.openrose.extra.HEADPHONE_ADDRESS"
 
-    /** On a SHOW_HEADPHONES intent: why the chosen 状态通知点击目标 could not open and OpenRose opened instead, as a sentence for the user. */
     const val EXTRA_FALLBACK_REASON = "io.github.dohex.openrose.extra.FALLBACK_REASON"
 
-    /**
-     * On `currentSession` replies (OK or NO_SESSION): the module owner's bonded ROSE earphones, by every address they
-     * answer to, as a string list. Absent without a module owner. System entries answer identity queries for them.
-     */
     const val BONDED_ADDRESSES = "bonded_addresses"
     val RESOLUTIONS = setOf(RESOLUTION_MATCHED, RESOLUTION_CLASS_MISSING, RESOLUTION_METHOD_MISSING, RESOLUTION_HOOK_FAILED)
 }

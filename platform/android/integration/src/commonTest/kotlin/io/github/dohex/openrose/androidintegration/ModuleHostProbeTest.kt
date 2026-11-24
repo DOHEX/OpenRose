@@ -9,10 +9,6 @@ import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 
-/**
- * A host process that is alive but no longer answers is not "connected": the application must stop
- * showing its last reading as current, and must take the readings afresh once the host answers again.
- */
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class ModuleHostProbeTest {
     private val saved = OwnerRecord(ControlWay.MODULE, PendingModuleRelease("r", null))
@@ -33,7 +29,6 @@ class ModuleHostProbeTest {
         val (rig, runtime) = connected()
         rig.link.statusHangs = true
 
-        // Two unanswered probes are not yet enough: one slow answer must not flip a healthy host.
         advanceTimeBy(20_000)
         runCurrent()
         assertEquals(OwnerReadiness.Ready, runtime.integration.value.owner.readiness)
@@ -72,7 +67,6 @@ class ModuleHostProbeTest {
     fun aQuietHostThatStillAnswersStaysAvailable() = runTest {
         val (_, runtime) = connected()
 
-        // Frames follow device changes; minutes without one say nothing about the host.
         advanceTimeBy(5 * 60_000)
         runCurrent()
 

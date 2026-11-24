@@ -1,6 +1,5 @@
 package io.github.dohex.openrose.core.protocol
 
-/** Fields requested by this tag and the decoder for its complete LTV value. */
 private class Record(val fields: Set<DeviceField>, val read: RsV2Readings.() -> Unit)
 
 private fun singleField(field: DeviceField, read: RsV2Readings.(DeviceField) -> Unit): Record = Record(setOf(field)) { read(field) }
@@ -13,7 +12,6 @@ private fun toggle(field: DeviceField, on: Int): Record = singleByte(field) { ra
     if (raw in 0..1) FieldValue.Toggle(raw == on) else null
 }
 
-/** These records interpret the whole hex string as decimal digits, even when the value has more than one byte. */
 private fun decimal(field: DeviceField, decode: (Int) -> FieldValue?): Record = singleField(field) { target ->
     if (value.isNotEmpty()) put(target, value.hex().toIntOrNull()?.let(decode))
 }
@@ -75,7 +73,6 @@ internal fun readRsV2Record(key: String, profile: ModelProfile, value: ByteArray
 
 private fun noiseLevel(number: Int): FieldValue? = number.takeIf { it == 1 || it == 3 || it == 5 }?.let(FieldValue::Number)
 
-/** Decodes a single RS Common V2 record into the fields reported together by the device. */
 private class RsV2Readings(val profile: ModelProfile, val value: ByteArray) {
     val readings = linkedMapOf<DeviceField, FieldReading>()
     fun put(field: DeviceField, semantic: FieldValue?, source: ByteArray = value) {
@@ -156,7 +153,6 @@ private class RsV2Readings(val profile: ModelProfile, val value: ByteArray) {
     }
 
     fun microphone() {
-        // Longer 49 records carry extended firmware versions, not microphone states.
         if (value.size != 2 || value.any { it.u() !in 0..1 }) return
         val activated = value[0].u() == 1
         put(DeviceField.INDEPENDENT_MIC_ACTIVATION, FieldValue.Toggle(activated))

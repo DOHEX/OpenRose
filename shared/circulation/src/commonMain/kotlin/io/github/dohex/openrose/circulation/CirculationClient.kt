@@ -8,7 +8,6 @@ import kotlinx.coroutines.CancellationException
 
 fun supportsCirculation(profile: ModelProfile?): Boolean = profile == ModelProfile.I5_ZT
 
-/** The source device, headphones and owner-issued token observed in the same authenticated reading. */
 data class RemoteSessionReference(val peer: String, val device: DeviceId, val token: String)
 
 sealed interface CirculationCommand {
@@ -45,10 +44,6 @@ data class HandoffStatus(
 
 enum class RemoteControlStatus { WAITING, IDLE, RECOVERING, INITIALIZING, READY, UNAVAILABLE }
 
-/**
- * [batteryLayout] says which of [left], [right] and [case] the held headphones report. Null from peers that
- * predate the field; the reader then assumes [BatteryLayout.EARBUDS_AND_CASE].
- */
 data class RemoteReading(
     val status: RemoteControlStatus = RemoteControlStatus.WAITING,
     val deviceName: String? = null,
@@ -62,7 +57,6 @@ data class RemoteReading(
     val error: String? = null,
 ) : CirculationReply
 
-/** The layout a peer sent under its [BatteryLayout.name]; null when absent or from a newer peer's unknown layout. */
 fun parseBatteryLayout(name: String?): BatteryLayout? = BatteryLayout.entries.firstOrNull { it.name == name }
 
 class CirculationClient(private val exchange: suspend (CirculationCommand) -> CirculationReply) {
@@ -81,7 +75,7 @@ class CirculationClient(private val exchange: suspend (CirculationCommand) -> Ci
 
     private suspend fun action(command: CirculationCommand): CirculationResult = request(command) { CirculationResult(error = it) }
 
-    @Suppress("TooGenericExceptionCaught") // Socket, Binder and platform failures become operation feedback at the calling boundary.
+    @Suppress("TooGenericExceptionCaught")
     private suspend inline fun <reified T : CirculationReply> request(command: CirculationCommand, failure: (String) -> T): T = try {
         when (val reply = exchange(command)) {
             is T -> reply

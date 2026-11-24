@@ -18,10 +18,6 @@ import io.github.dohex.openrose.ui.RoseIcon
 import io.github.dohex.openrose.ui.StatusTone
 import kotlinx.coroutines.flow.StateFlow
 
-/**
- * Desktop sections: the tray on the status page, 后台控制 and 登录时启动 in settings. Facts arrive as states and
- * changes leave through callbacks, so a host other than the desktop app can show these sections.
- */
 class DesktopPlatformUi(
     override val platformName: String,
     private val desktopSettings: StateFlow<DesktopSettings>,

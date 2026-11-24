@@ -3,7 +3,6 @@ package io.github.dohex.openrose.androidintegration
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
-/** One tap in the system UI must become one user operation, however many vendor entry points it reaches. */
 class SystemRequestGateTest {
     private var now = 1_000L
     private val gate = SystemRequestGate({ now }, windowMillis = 250)

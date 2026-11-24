@@ -17,6 +17,8 @@ status: accepted
 - **应用只在运行时依赖模块**：`runtimeOnly(projects.androidModule)` 把模块代码打进同一 APK，应用源码却引用不到模块的类；模块侧也编译不到应用与界面。跨进程只经 AIDL、Bundle 编码与组件类名字符串。
 - **两个库用普通 `com.android.library`**：Android-KMP 库插件不支持 AIDL，而这两处代码只面向 Android，不需要 JVM 目标。纯逻辑仍放 `:androidIntegration`，在 JVM 上测试。
 - **包与模块一一对应**：不再有跨模块的同名包。`:androidIntegrationUI` 的段落从 `io.github.dohex.openrose.ui` 移到 `io.github.dohex.openrose.androidintegration.ui`。
+- （2026-11 补充）**Android 12 前的蓝牙权限与定位**：`PlatformFacts` 中，Android 12 前清单里的普通蓝牙权限已足以控制已配对的耳机；发现新耳机另需精确定位权限，这是一项独立的前提条件。
+- （2026-11 补充）**Bundle 编码**：`BundleWire` 构建 Bundle 时按每个值的 Kotlin 类型选择 put 调用，生成的 parcel 与手工组装的相同。空列表没有元素类型，写成字符串列表；任何列表读取方读回的都是空列表。
 
 ## 考虑过的方案
 

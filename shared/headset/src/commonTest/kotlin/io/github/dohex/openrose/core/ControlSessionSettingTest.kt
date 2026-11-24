@@ -27,7 +27,6 @@ import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
-/** Public session + literal transport vectors, never a replacement codec or confirmation path. */
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class ControlSessionSettingTest {
     @Test
@@ -51,7 +50,6 @@ class ControlSessionSettingTest {
         assertEquals(listOf("08ee00000006820e00000100008d", "08ee00000006020a0008"), link.writes.drop(13))
         assertFalse(setting.isCompleted)
         assertEquals(FieldValue.Text("wind"), assertIs<FieldReading.Known>(session.state.value.device?.diagnostics?.fields?.get(DeviceField.NOISE_MODE)).value)
-        // Synthetic known normal tail from the independent reverse-engineering receiver table.
         link.incoming.send("09ff00000106020e000001000020".bytes())
         runCurrent()
 
@@ -322,18 +320,15 @@ class ControlSessionSettingTest {
         assertEquals(ControlErrorCode.UNSUPPORTED, assertIs<OperationResult.Failure>(session.set(HeadsetCommand.NoiseMode(NoiseMode.DEEP))).error.code)
         val first = async { session.set(HeadsetCommand.NoiseMode(NoiseMode.DYNAMIC)) }
         runCurrent()
-        // Independently worked sender sequences 03/04 after three initialization reads with 20-byte capacity.
         assertEquals(listOf("ff0302090714aa", "ff0402fa0908aa"), link.writes.drop(3))
         assertFalse(first.isCompleted)
         assertEquals(FieldValue.Text("auto"), assertIs<FieldReading.Known>(session.state.value.device?.diagnostics?.fields?.get(DeviceField.NOISE_MODE)).value)
-        // All i7 RX in this suite is synthetic, per recovered DD/LTV receiver rules.
         link.incoming.send("dd00020907efaa".bytes())
         runCurrent()
         assertEquals(OperationResult.Success, first.await())
         val second = async { session.set(HeadsetCommand.NoiseMode(NoiseMode.NORMAL)) }
         runCurrent()
         assertEquals(listOf("ff0502090211aa", "ff0602fa090aaa"), link.writes.takeLast(2))
-        // A vendor automatic-mode exit can report wind; retain the actual result.
         link.incoming.send("dd00020904ecaa".bytes())
         runCurrent()
         assertEquals(ControlErrorCode.NOT_APPLIED, assertIs<OperationResult.Failure>(second.await()).error.code)
@@ -377,7 +372,6 @@ class ControlSessionSettingTest {
         val (session, link) = ready()
         link.onWrite = { hex ->
             if (hex == "08ee00000006820e00000100008d") {
-                // Synthetic high-op echo: no device rejection or acknowledgment semantics inferred.
                 link.incoming.send("09ff00000106820e000001000020".bytes())
             }
         }
@@ -502,7 +496,6 @@ class ControlSessionSettingTest {
         private fun String.bytes() = chunked(2).map { it.toInt(16).toByte() }.toByteArray()
         private val requestedCycle = FieldValue.NoiseCycle(mapOf("normal" to true, "transparency" to false, "wind" to false, "anc" to true))
 
-        // Synthetic replies preserve i5 normal/transparency/wind/ANC vs i7 ANC/wind/normal/transparency.
         private fun partialCycleReply(profile: ModelProfile) = if (profile == ModelProfile.I5_ZT) "09ff00000106050e0001ff000123" else "dd000536010001ff19aa"
         private fun completeCycleReply(profile: ModelProfile) = if (profile == ModelProfile.I5_ZT) "09ff00000106050e000100000124" else "dd000536010001001aaa"
         private val i5Advertisement = Advertisement(DeviceId("i5"), manufacturerData = mapOf(0x5352 to byteArrayOf(0, 1, 0, 1)))

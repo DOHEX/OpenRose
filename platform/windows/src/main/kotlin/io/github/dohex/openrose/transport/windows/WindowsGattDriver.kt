@@ -8,7 +8,6 @@ import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 
-/** Each helper owns one WinRT GATT device. Ending it also releases blocked native operations. */
 internal class WindowsGattDriver(private val process: Process, private val serviceUuid: String) : GattDriver {
     private val pending = ConcurrentHashMap<Long, CompletableDeferred<List<String>>>()
     private val sequence = AtomicLong()

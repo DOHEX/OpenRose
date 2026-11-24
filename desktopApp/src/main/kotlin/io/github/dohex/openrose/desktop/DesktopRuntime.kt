@@ -31,7 +31,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.prefs.Preferences
 
-/** Window, tray and appearance changes share this process's single control entry and preference store. */
 internal class DesktopRuntime(
     private val preferences: Preferences,
     platform: PlatformState,

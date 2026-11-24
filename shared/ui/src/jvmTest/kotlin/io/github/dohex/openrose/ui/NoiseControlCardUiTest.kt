@@ -48,7 +48,6 @@ class NoiseControlCardUiTest {
             val confirmed = harness.clickableBounds("降噪")
             val option = harness.clickableBounds("通透")
             val rowBackground = resting.getRGB(option.left.toInt() + 2, option.top.toInt() - 1)
-            // The checked pill leaves the corner at (8, 3) clear. The idle inner corner leaves (1, 1) clear.
             assertEquals(rowBackground, resting.getRGB(confirmed.left.toInt() + 8, confirmed.top.toInt() + 3))
             val x = option.left.toInt() + 1
             val y = option.top.toInt() + 1
@@ -199,7 +198,6 @@ class NoiseControlCardUiTest {
             ),
             fields = persistentMapOf(
                 DeviceField.NOISE_MODE to mode,
-                // Retain both cached values across modes; only the active capability is rendered.
                 DeviceField.ANC_LEVEL to FieldReading.Known(FieldValue.Number(5), "02"),
                 DeviceField.TRANSPARENCY_LEVEL to FieldReading.Known(FieldValue.Number(1), "00"),
             ),

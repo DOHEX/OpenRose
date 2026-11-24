@@ -1,5 +1,3 @@
-// The OpenRose module: code LSPosed loads into the scoped system processes. It cannot see the application or the
-// shared UI; the application packages it with runtimeOnly. See ADR 0018.
 plugins {
     alias(libs.plugins.openrose.android.library)
 }

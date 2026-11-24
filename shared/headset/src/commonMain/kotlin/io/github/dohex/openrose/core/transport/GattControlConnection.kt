@@ -20,7 +20,6 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 
-/** Shared control protocol policy over one platform GATT connection. */
 class GattControlConnection private constructor(
     private val driver: GattDriver,
     private val endpoint: TransportEndpoint.BleGatt,
@@ -81,7 +80,6 @@ class GattControlConnection private constructor(
                 }
                 end(TerminalTransportException("蓝牙事件流已结束"))
             } finally {
-                // A failed release remains retryable through close(), as required by ControlLink.
                 withContext(NonCancellable) { runCatching { releaseDriver() } }
             }
         }
@@ -195,7 +193,6 @@ class GattControlConnection private constructor(
     private suspend fun <T> native(reason: TransportRecoveryReason, block: suspend () -> T): T {
         checkOpen()
         return try {
-            // close() releases pending native calls, so no extra coroutine is needed per packet.
             block().also { checkOpen() }
         } catch (error: GattException) {
             checkOpen()
@@ -235,7 +232,6 @@ private fun GattException.classify(reason: TransportRecoveryReason): Exception =
 }
 
 private suspend fun GattDriver.undoSubscription(notifier: GattCharacteristic) = withContext(NonCancellable) {
-    // Even if an outstanding CCCD write prevents remote rollback, always undo local routing.
     try {
         withTimeoutOrNull(GATT_OPERATION_TIMEOUT_MS) { runCatching { configureSubscription(notifier, GattSubscription.DISABLED) } }
     } finally {

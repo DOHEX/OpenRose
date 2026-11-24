@@ -3,7 +3,6 @@ package io.github.dohex.openrose.circulation
 import io.github.dohex.openrose.core.NoiseMode
 import io.github.dohex.openrose.core.transport.DeviceId
 
-/** Local operations use the domain contract. Only authenticated peer requests use the LAN message format. */
 fun CirculationNode.localCommand(command: CirculationCommand): CirculationReply = when (command) {
     CirculationCommand.Directory -> PeerDirectory(
         paired = peers.value.associate { it.id to it.name },

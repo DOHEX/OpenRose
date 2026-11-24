@@ -3,7 +3,6 @@ package io.github.dohex.openrose.transport.windows
 import io.github.dohex.openrose.circulation.CirculationAudio
 import java.util.concurrent.TimeUnit
 
-/** Windows media routing is separate from the WinRT GATT session used to control the headset. */
 class WindowsAudio internal constructor(
     private val call: (List<String>) -> List<String>,
     private val wait: () -> Unit = { Thread.sleep(250) },
@@ -54,8 +53,6 @@ class WindowsAudio internal constructor(
             call(listOf("connect", target))
             awaitStatus(target, "等待 Windows 连接耳机音频超时") { it.render }
         } finally {
-            // The Bluetooth driver can promote the new endpoint separately for multimedia, calls or console.
-            // Only restore a role if it moved to this headset and had a previous output.
             val current = defaults()
             for ((role, original) in outputs) {
                 val now = current[role]

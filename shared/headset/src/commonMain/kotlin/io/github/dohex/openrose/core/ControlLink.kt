@@ -34,7 +34,6 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.TimeSource
 
-/** Owns connection attempts, including every native link opened during initialization recovery. */
 internal class ControlLink(
     private val state: MutableStateFlow<ControlState>,
     private val transport: ControlTransport?,
@@ -69,7 +68,6 @@ internal class ControlLink(
                 ?.let { return@withLock it }
             if (!clearActive()) return OperationResult.Failure(ControlError(ControlErrorCode.NOT_READY, "之前的控制连接尚未确认释放"))
             onStarted()
-            // ConnectionTargeting admits a connection only after platformError() found the transport present.
             val admitted = checkNotNull(transport) { "平台蓝牙传输不可用" }
             val next = ConnectionAttempt(++generation, candidate, profile, admitted, state.value.settings.forceBle)
             ownsAttempt = true
@@ -87,7 +85,6 @@ internal class ControlLink(
             next
         } ?: return OperationResult.Failure(ControlError(ControlErrorCode.DISCONNECTED, "连接请求已被替换"))
         val result = awaitAttempt(attempt, cancelWithCaller && ownsAttempt)
-        // Revalidating an old add-flow success must not clear a newer audio-driven session.
         if (result !is OperationResult.Success) onAttemptFailed()
         if (cancelWithCaller && result is OperationResult.Success) {
             return lifecycle.withLock {
@@ -112,7 +109,6 @@ internal class ControlLink(
         if (!attempt.matches(state.value) || attempt.progress.value.ended) throw LinkEnded()
     }
 
-    /** Returns the notification revisions from immediately before the write, for fresh setting readbacks. */
     internal suspend fun writePaced(attempt: ConnectionAttempt, link: ControlConnection, bytes: ByteArray): ReadProgress {
         check(bytes.size <= link.maxWriteSize) { "完整协议报文超出传输写入容量" }
         val interval = (timing.writeIntervalMillis ?: attempt.profile.spec.writeIntervalMillis).milliseconds
@@ -145,7 +141,6 @@ internal class ControlLink(
             }
             throw cancelled
         }
-        // Disconnect cancels the owned operation, without cancelling another caller's scope.
         OperationResult.Failure(ControlError(ControlErrorCode.DISCONNECTED, "连接会话已结束"))
     }
 
@@ -202,11 +197,6 @@ internal class ControlLink(
         oldObserver?.join()
     }
 
-    /**
-     * Caller holds lifecycle. Invalidate before closing so old callbacks cannot update a new session. Returns
-     * whether every connection this session ever opened is confirmed closed: a close the platform refused is
-     * remembered and tried again on the next call instead of being forgotten.
-     */
     internal suspend fun clearActive(): Boolean {
         val previous = active
         active = null
@@ -325,7 +315,6 @@ internal class ControlLink(
         ) {
             val (oldConnection, oldObserver) = lifecycle.withLock {
                 if (active !== attempt || attempt.linkEpoch.value != failedEpoch) throw CancellationException("Stale recovery")
-                // Invalidate callbacks before cancellation so an old finally cannot clear the new link.
                 attempt.linkEpoch.value += 1
                 settings.end(attempt)
                 attempt.settings = SettingQueue.Pending()
@@ -387,8 +376,6 @@ internal class ControlLink(
                 } finally {
                     withContext(NonCancellable) {
                         lifecycle.withLock {
-                            // Publish link termination under the same lock as the READY commit so a
-                            // final notification cannot race into a dead Connected state.
                             progress.update { it.copy(ended = true, failure = failure) }
                             if (active === attempt && attempt.linkEpoch.value == epoch) {
                                 val setupRecovery = failure is RecoverableTransportException && !attempt.ready &&
@@ -424,7 +411,6 @@ internal class ControlLink(
             for ((index, query) in queries.withIndex()) {
                 attempt.initializationQueryIndex = index
                 throwProgressFailure(progress)
-                // A mode change queued during the inter-write gap gets this slot before the next initialization query.
                 attempt.nextWriteAt?.let { delay(-it.elapsedNow()) }
                 settings.runNextDuringInitialization(this@ControlLink, attempt)
                 delay(query.delayBeforeMillis)

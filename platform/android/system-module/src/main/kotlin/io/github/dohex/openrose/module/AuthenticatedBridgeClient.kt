@@ -20,19 +20,6 @@ import io.github.dohex.openrose.bridge.IControlBridge
 import io.github.dohex.openrose.bridge.IControlObserver
 import java.util.concurrent.CancellationException
 
-/**
- * Consumer of the module host's single control session, running in a target process.
- *
- * The host lives in `com.android.bluetooth`; this client discovers its endpoint by binding an
- * existing exported service there and is authorised by the host from the Binder caller's uid, so it
- * holds no credential. This class never creates a ControlSession or transport. The snapshot callback
- * is invoked only after the host has authorised this client, confirmed the current owner generation
- * and acknowledged the exact read.
- *
- * Two epochs exist and must not be mixed: the `open` reply's [BridgeWire.HOST_EPOCH] is the host
- * incarnation (diagnostics only), while `currentSession` reports the current owner generation, which
- * every later request carries and every snapshot echoes.
- */
 internal class AuthenticatedBridgeClient(
     context: Context,
     private val target: BridgeTarget,
@@ -57,10 +44,8 @@ internal class AuthenticatedBridgeClient(
 
     @Volatile private var closed = false
 
-    /** Host incarnation from `open`; diagnostics only, never sent back. */
     @Volatile private var hostIncarnation: String? = null
 
-    /** The owner generation last confirmed by `currentSession`; the only epoch commands may carry. */
     @Volatile private var generation: String? = null
 
     @Volatile private var leaseId: String? = null
@@ -78,7 +63,6 @@ internal class AuthenticatedBridgeClient(
     private var deliveredBonded: Set<String> = emptySet()
     private val rebindRunnable = Runnable { bindControlBridge() }
 
-    // Target, process and package come from the module's entry gate (BridgeTarget.resolve); the host re-validates hello.
     init {
         require(processName.isNotBlank() && processName.length <= 128)
     }
@@ -86,7 +70,6 @@ internal class AuthenticatedBridgeClient(
     private val confirmation = ConfirmedLease()
     val calls = SystemCalls()
 
-    /** Binds the host discovery service and starts one serialized reader loop. */
     fun start() {
         synchronized(lock) {
             if (started || closing || closed) return
@@ -104,7 +87,6 @@ internal class AuthenticatedBridgeClient(
         val intent = Intent(BridgeWire.ACTION_CONTROL_HOST)
             .setComponent(ComponentName(BridgeWire.TARGET_PACKAGE, BridgeWire.HOST_SERVICE_CLASS))
         val bound = binderReply { context.bindService(intent, binding, Context.BIND_AUTO_CREATE) }
-            // A connection registered with a failed bind must still be unbound.
             .onSuccess { binding.isBound = true }
             .getOrElse { failure ->
                 Log.w(TAG, "bridge_bind_failed target=$target", failure)
@@ -149,7 +131,6 @@ internal class AuthenticatedBridgeClient(
         return true
     }
 
-    /** A timeout leaves shutdown in progress. A later reload observes the reader's actual termination. */
     fun close(timeoutMillis: Long = CLOSE_TIMEOUT_MILLIS): Boolean {
         synchronized(lock) {
             if (!closing && !closed) {
@@ -189,10 +170,6 @@ internal class AuthenticatedBridgeClient(
         }
     }
 
-    /**
-     * The host connection was lost: consumers are revoked at once and a fresh bind is scheduled with a
-     * fixed backoff for as long as this client is open, because the host may start (or restart) later.
-     */
     private fun dropBinding(binding: BridgeBinding, status: String) {
         if (currentBinding !== binding || closing || closed) return
         recordStatus(status)
@@ -222,8 +199,6 @@ internal class AuthenticatedBridgeClient(
         val pollRunnable = Runnable { observations.pollBridge(this) }
         val observer = object : IControlObserver.Stub() {
             override fun onChanged(identity: Bundle) {
-                // The generation in the notice is not trusted; any valid notice for this lease only
-                // prompts a re-read, which re-confirms the generation through currentSession.
                 if (identity.getInt(BridgeWire.KEY_VERSION, INVALID_WIRE_VERSION) != BridgeWire.VERSION ||
                     identity.getString(BridgeWire.LEASE_ID) != leaseId
                 ) {
@@ -296,7 +271,6 @@ internal class AuthenticatedBridgeClient(
             }
         }
 
-        /** Returns the delay before the next poll, allowing a rejected client to back off. */
         private fun openLease(binding: BridgeBinding, bridge: IControlBridge): Long {
             val opened = bridge.open(BridgeBundles.hello(processName, target, resolution), binding.clientToken)
             val status = opened.getString(BridgeWire.STATUS) ?: STATUS_MISSING
@@ -337,7 +311,6 @@ internal class AuthenticatedBridgeClient(
                 recordStatus("session_identity_mismatch")
                 return
             }
-            // A different generation revokes everything delivered for the previous one before any read.
             confirmation.confirmGeneration(ownerGeneration)
             if (watchGeneration(binding, bridge, lease, ownerGeneration)) {
                 val alreadyDelivered = currentReference == reference && deliveredSequence > 0L &&
@@ -367,7 +340,6 @@ internal class AuthenticatedBridgeClient(
                 BridgeWire.STATUS_OK -> true
 
                 BridgeWire.STATUS_NO_SESSION -> {
-                    // No owner or no ready device: revoke consumers, keep the lease for component reports.
                     confirmation.clearSnapshot()
                     confirmation.confirmGeneration(generationOf(current))
                     recordStatus("no_session")
@@ -471,7 +443,6 @@ internal class AuthenticatedBridgeClient(
             ownerGeneration: String,
         ): Boolean = isCurrentBinding(binding) && leaseId == lease && generation == ownerGeneration
 
-        /** A rejected read or acknowledgement revokes consumers; the next poll re-confirms the generation. */
         private fun failRequest(bridge: IControlBridge, status: String) {
             confirmation.unconfirm()
             if (status == BridgeWire.STATUS_UNAUTHORIZED) confirmation.closeLease(bridge)
@@ -479,11 +450,6 @@ internal class AuthenticatedBridgeClient(
     }
 
     private inner class ConfirmedLease {
-        /**
-         * Adopts the owner generation reported by `currentSession`. A change revokes every consumer of
-         * the previous generation and invalidates its watch; the new generation is then re-announced so
-         * pending component reports reach the new owner.
-         */
         fun confirmGeneration(confirmed: String?) {
             if (generation == confirmed) return
             clearSnapshot()
@@ -499,7 +465,6 @@ internal class AuthenticatedBridgeClient(
                 .onFailure { Log.w(TAG, "authenticated_callback_failed target=$target", it) }
         }
 
-        /** No generation is confirmed any more: consumers are revoked and commands are refused. */
         fun unconfirm() {
             clearSnapshot()
             confirmGeneration(null)
@@ -507,7 +472,6 @@ internal class AuthenticatedBridgeClient(
 
         fun closeLease(bridge: IControlBridge?) {
             val lease = leaseId
-            // Clear the target-process presentation before releasing its authenticated lease.
             clearSnapshot()
             invalidateLeaseLocal()
             if (lease != null && bridge != null) {
@@ -516,7 +480,6 @@ internal class AuthenticatedBridgeClient(
             }
         }
 
-        /** Clear on the reader looper only; a stale binding can never clear a newer target adapter. */
         fun clearSnapshot() {
             currentReference = null
             deliveredSequence = INVALID_READ_SEQUENCE
@@ -530,7 +493,6 @@ internal class AuthenticatedBridgeClient(
                 .onFailure { Log.w(TAG, "bridge_clear_callback_failed target=$target", it) }
         }
 
-        /** The host's bonded ROSE earphones from its last `currentSession` reply; empty once that answer is lost. */
         fun publishBonded(addresses: Set<String>) {
             if (addresses == deliveredBonded) return
             deliveredBonded = addresses
@@ -552,10 +514,6 @@ internal class AuthenticatedBridgeClient(
     }
 
     inner class SystemCalls {
-        /**
-         * A command may only address the snapshot it was built from, and only while that snapshot's
-         * generation is still the one `currentSession` last confirmed.
-         */
         private fun snapshotRequest(snapshot: Bundle): Bundle? {
             if (!isLeaseUsable()) return null
             val confirmed = generation ?: return null
@@ -568,7 +526,6 @@ internal class AuthenticatedBridgeClient(
 
         private fun isLeaseUsable(): Boolean = started && !closed && !closing && leaseId != null && targetBridge != null
 
-        /** Atomically claims the current connection prompt for this authorised session. */
         fun claimPrompt(snapshot: Bundle, promptId: String): Boolean {
             if (!promptId.isWireText(MAX_PROMPT_ID_LENGTH)) return false
             val request = snapshotRequest(snapshot) ?: return false
@@ -577,7 +534,6 @@ internal class AuthenticatedBridgeClient(
             return hasWireVersion(response) && response.getString(BridgeWire.STATUS) == BridgeWire.STATUS_OK
         }
 
-        /** The caller must invoke this synchronous write from its separate bounded action executor. */
         fun setNoise(snapshot: Bundle, mode: String): Bundle {
             if (!mode.isWireText(MAX_NOISE_MODE_LENGTH)) return BridgeBundles.response(BridgeWire.STATUS_INVALID_ARGUMENT)
             val request = snapshotRequest(snapshot)
@@ -600,10 +556,6 @@ internal class AuthenticatedBridgeClient(
             callRemote(request) { bridge, call -> bridge.reportPresentation(call) }
         }
 
-        /**
-         * Component capability reports are lease-scoped and remain available with no ready session; they
-         * carry the owner generation only while one is confirmed.
-         */
         fun reportComponent(feature: String, status: String, detail: String) {
             if (!feature.isWireText(MAX_FEATURE_LENGTH) || !status.isWireText(MAX_STATUS_LENGTH)) return
             val request = currentLeaseRequest() ?: return
@@ -613,11 +565,6 @@ internal class AuthenticatedBridgeClient(
             callRemote(request) { bridge, call -> bridge.reportComponent(call) }
         }
 
-        /**
-         * Asks the host whether the fusion center's settings entry for [address] belongs to OpenRose. Returns the
-         * control device to open, or null when the system's own entry must run (no owner, system chosen, unknown
-         * address, or any failure). A blocking Binder call: use it from the bounded action executor.
-         */
         fun fusionEntryDevice(address: String): String? {
             val request = currentLeaseRequest() ?: return null
             request.putString(BridgeWire.FUSION_ADDRESS, address)
@@ -640,7 +587,6 @@ internal class AuthenticatedBridgeClient(
         ): Bundle? {
             if (!isLeaseUsable()) return null
             val lease = leaseId ?: return null
-            // The generation may have moved since the request was built; never send an old one.
             if (request.getString(BridgeWire.LEASE_ID) != lease || request.getString(BridgeWire.HOST_EPOCH) != generation) return null
             val bridge = targetBridge ?: return null
             return binderReply { call(bridge, Bundle(request)) }.getOrElse { failure ->
@@ -665,7 +611,6 @@ private fun replyStatus(reply: Bundle): String = if (hasWireVersion(reply)) {
 private fun generationOf(bundle: Bundle): String? = bundle.getString(BridgeWire.HOST_EPOCH)
     ?.takeIf { it.isWireText(MAX_GENERATION_LENGTH) }
 
-/** Bounded like every other reply field; the adapters normalize each address themselves. */
 private fun bondedOf(reply: Bundle): Set<String> = reply.getStringArrayList(BridgeWire.BONDED_ADDRESSES).orEmpty()
     .take(MAX_BONDED_ADDRESSES)
     .toSet()
@@ -718,9 +663,6 @@ private const val INVALID_READ_SEQUENCE = -1L
 private const val INVALID_SESSION_ID = Long.MIN_VALUE
 private const val MAX_BONDED_ADDRESSES = 32
 
-// Parcel unmarshals service rejections on the caller's thread. Polling and commands consume
-// the same failures, distinguishing a refused lease from a missing or malformed host reply.
-// Remote services also rethrow SDK-hidden runtime exceptions through Parcel.
 @Suppress("TooGenericExceptionCaught")
 private inline fun <T> binderReply(action: () -> T): Result<T> = try {
     Result.success(action())

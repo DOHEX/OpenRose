@@ -29,7 +29,6 @@ internal class PeerServer(private val tls: SSLContext, private val accept: (SSLS
             try {
                 while (running) dispatch(server.accept() as SSLSocket)
             } catch (_: IOException) {
-                // Closing the server socket wakes accept.
             }
         }
         return server.localPort
@@ -45,7 +44,6 @@ internal class PeerServer(private val tls: SSLContext, private val accept: (SSLS
                         accept(it)
                     }
                 } catch (_: Exception) {
-                    // Invalid credentials, partial frames and disconnected clients end only their own transaction.
                 } finally {
                     sockets.remove(socket)
                 }

@@ -96,7 +96,6 @@ class IntegrationScopeRestarterProcessTest {
         val reported = mutableListOf<ScopeRestartUpdate>()
         val results = stubbedRestarter(dir.resolve("signals"), "RESPAWN_PID" to xiaomi, "RESPAWN_NAME" to "com.xiaomi.bluetooth")
             .restart(onUpdate = { reported += it })
-        // Bluetooth uses up the whole shared wait, yet Xiaomi Bluetooth, signalled at the same time, is reported first.
         assertEquals(ScopeRestartPhase.Signalling, reported.first())
         assertEquals(
             listOf(
@@ -106,7 +105,6 @@ class IntegrationScopeRestarterProcessTest {
             ),
             reported.filterIsInstance<ScopeRestartResult>(),
         )
-        // The shared wait counts down within its length, each value once, and starts before the early result.
         val countdown = reported.filterIsInstance<ScopeRestartPhase.Waiting>().map { it.secondsLeft }
         assertTrue(countdown.isNotEmpty())
         assertEquals(countdown.sortedDescending().distinct(), countdown)
@@ -124,8 +122,6 @@ class IntegrationScopeRestarterProcessTest {
     }
 
     private fun stubbedRestarter(signals: Path, vararg env: Pair<String, String>) = IntegrationScopeRestarter(waitSeconds = 2) { script, onLine ->
-        // Same script, with Root and signalling replaced: kill really signals unless the scenario says otherwise,
-        // and a respawn starts a fresh process under the old name.
         val stub = """
             id() { echo 0; }
             kill() {

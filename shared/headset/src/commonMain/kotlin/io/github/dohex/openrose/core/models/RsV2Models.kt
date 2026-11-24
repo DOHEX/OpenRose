@@ -71,7 +71,6 @@ internal fun rsV2Touch(noiseCycle: Boolean): TouchControlCapabilities {
     return TouchControlCapabilities(earbudTouchSlots, if (noiseCycle) actions.adding("noise_cycle") else actions)
 }
 
-/** Bind the settings a model offers to the fields which confirm them. Firmware gates are resolved by the model. */
 internal fun rsV2Capabilities(
     layout: BatteryLayout,
     promptVolume: IntRange,
@@ -102,7 +101,6 @@ internal fun rsV2Capabilities(
     }
     control(true, DeviceSetting.MULTIPOINT, DeviceField.MULTIPOINT)
     control(true, DeviceSetting.GAME_MODE, DeviceField.GAME_MODE)
-    // Readable regardless of firmware: empty levels (unread firmware) only withhold the write, see ModelProfile.capabilities.
     control(true, DeviceSetting.PROMPT_VOLUME, DeviceField.PROMPT_VOLUME)
     control(!noise?.modes.isNullOrEmpty(), DeviceSetting.NOISE_MODE, DeviceField.NOISE_MODE)
     control(!noise?.cycleModes.isNullOrEmpty(), DeviceSetting.NOISE_CYCLE, DeviceField.NOISE_CYCLE)
@@ -140,7 +138,6 @@ internal fun rsV2Capabilities(
     )
 }
 
-/** The RS Common V2 advertisement carries its BR/EDR address after a type byte of 01. */
 internal fun rsV2ClassicAddress(normalizedManufacturerDataHex: String): String? {
     if (normalizedManufacturerDataHex.length < 34) return null
     val normalized = normalizedManufacturerDataHex.uppercase()

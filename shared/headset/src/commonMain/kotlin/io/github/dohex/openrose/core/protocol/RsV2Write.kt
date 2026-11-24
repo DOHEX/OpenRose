@@ -5,7 +5,6 @@ import io.github.dohex.openrose.core.DeviceSetting
 import io.github.dohex.openrose.core.NoiseLevelCapabilities
 import io.github.dohex.openrose.core.TouchControlCapabilities
 
-/** One validated record, with the fields the device must report in reply. */
 internal data class RsV2Write(val type: Byte, val payload: ByteArray, val expected: Map<DeviceField, FieldValue>)
 
 private class RsV2Writer(

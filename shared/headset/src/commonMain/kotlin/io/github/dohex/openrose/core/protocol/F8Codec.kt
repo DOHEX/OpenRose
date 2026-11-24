@@ -4,7 +4,6 @@ import io.github.dohex.openrose.core.DeviceCapabilities
 import io.github.dohex.openrose.core.DeviceSetting
 import io.github.dohex.openrose.core.models.ModelProtocol
 
-/** F8 has a five-byte header and no application checksum. */
 internal val f8Fields = linkedMapOf(
     "01" to setOf(
         DeviceField.LEFT_BATTERY,
@@ -209,17 +208,11 @@ private fun MutableMap<DeviceField, FieldReading>.putReading(
     value: FieldValue?,
     index: Int = 7,
 ) {
-    // Every caller has already checked the reply is long enough for [index].
     val source = byteArrayOf(raw[index]).hex()
     this[field] = value?.let { FieldReading.Known(it, source) } ?: FieldReading.Unknown(source)
 }
 private fun toggleValue(value: Int): FieldValue? = if (value in 0..1) FieldValue.Toggle(value == 1) else null
 
-/**
- * RoseLink's F8 receive handler maps the reduced wire level of the `11`/`12` replies to the UI level: 0/1/2 become
- * 5/3/1. The 10/6/2 immediates in the recovered class dump are tagged Dart Smis of the same three values, not levels
- * 10/6/2. Wire levels outside 0/1/2 stay undecoded; nothing here is confirmed against hardware.
- */
 private fun noiseLevelValue(value: Int): FieldValue? = when (value) {
     0 -> FieldValue.Number(5)
     1 -> FieldValue.Number(3)
@@ -227,8 +220,6 @@ private fun noiseLevelValue(value: Int): FieldValue? = when (value) {
     else -> null
 }
 
-// Only a model whose configuration offers the level control decodes it; the shared CERAMICS-X receiver
-// keeps the 0x11/0x12 tags Unknown for models whose level flags are off (CERAMICS-X and 7034).
 private fun decodeNoiseLevel(
     profile: ModelProfile,
     tag: Int,

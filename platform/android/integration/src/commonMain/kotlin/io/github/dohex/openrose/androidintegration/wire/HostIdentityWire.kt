@@ -9,7 +9,6 @@ import io.github.dohex.openrose.androidintegration.HostStatus
 import io.github.dohex.openrose.androidintegration.OwnerGeneration
 import io.github.dohex.openrose.androidintegration.OwnerHolder
 
-/** Ownership, lease and availability announced by the host. */
 object HostIdentityWire {
     fun encode(generation: OwnerGeneration): Wire = obj(
         "incarnation" to str(generation.incarnation),

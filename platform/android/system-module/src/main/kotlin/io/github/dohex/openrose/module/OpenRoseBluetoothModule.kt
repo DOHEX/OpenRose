@@ -34,11 +34,6 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeoutException
 import java.util.concurrent.atomic.AtomicReference
 
-/**
- * Scoped system module. In `com.android.bluetooth` it hosts the single module-controlled session
- * ([ModuleHostRuntime]); every scoped target, including that one, consumes it through the
- * authorised bridge client. No Bluetooth control connection is opened by the consumers.
- */
 class OpenRoseBluetoothModule : XposedModule() {
     private val lifecycle = Any()
     private val presentation = HeadsetPresentation()
@@ -86,7 +81,6 @@ class OpenRoseBluetoothModule : XposedModule() {
             target = selected
         }
         if (selected == BridgeTarget.BLUETOOTH) {
-            // Discovery must exist before the entry hook can start the host owner.
             hostRuntime = ModuleHostRuntime(this, param.classLoader).also { it.installDiscovery() }
         }
         installNativeAdapters(selected, param.classLoader)
@@ -104,7 +98,6 @@ class OpenRoseBluetoothModule : XposedModule() {
         installEntry(entry, selected)
     }
 
-    // AdapterService is private to the Bluetooth host. Its lifecycle method must come from that host's class loader.
     @SuppressLint("PrivateApi")
     private fun bluetoothServiceEntry(loader: ClassLoader): Method? {
         val type = runCatching { loader.loadClass(BridgeWire.TARGET_COMPONENT_CLASS) }.getOrNull()
@@ -134,7 +127,6 @@ class OpenRoseBluetoothModule : XposedModule() {
 
     private fun installNativeAdapters(selected: BridgeTarget, loader: ClassLoader) {
         val callbacks = object : AuthenticatedNativeHeadsetCallbacks {
-            // NativeNoiseRequestGate already rechecked freshness and capability on the current snapshot.
             override fun submitNoise(snapshot: NativeHeadsetSnapshot, mode: String): Boolean {
                 if (retired || nativeSnapshot?.reference != snapshot.reference) return false
                 val connectedClient = client ?: return false
@@ -144,7 +136,6 @@ class OpenRoseBluetoothModule : XposedModule() {
                         if (retired || nativeSnapshot?.reference != snapshot.reference) return@execute
                         val result = connectedClient.calls.setNoise(frame, mode)
                         if (!retired && nativeSnapshot?.reference == snapshot.reference) {
-                            // Only the earphones' confirmation is a success; every refusal keeps its own status.
                             val outcome = SystemHeadsetMapping.commandReport(
                                 mode,
                                 result.getString(BridgeWire.STATUS),
@@ -223,7 +214,6 @@ class OpenRoseBluetoothModule : XposedModule() {
         }
     }
 
-    /** Starts the host owner once per runtime, before the in-process consumer client exists. */
     private fun startHost(context: Context) {
         if (hostStarted) return
         val runtime = hostRuntime ?: return
@@ -281,8 +271,6 @@ class OpenRoseBluetoothModule : XposedModule() {
                 output.clear()
                 return
             }
-            // A prompt that expired on the host can no longer be claimed; SystemUI owns the rest of its display
-            // time, and only a disconnect, mode change or new session withdraws it early (ADR 0004).
             val prompt = spec.getBundle(BridgePresentationWire.PROMPT)
             val id = prompt?.getString(BridgePresentationWire.PROMPT_ID) ?: return
             if (consumedOfficialPrompts.add(id) && !prompt.getBoolean(BridgePresentationWire.CLAIMED)) output.show(snapshot, id)
@@ -297,7 +285,6 @@ class OpenRoseBluetoothModule : XposedModule() {
             fusionAdapter?.publish(fresh)
         }
 
-        /** The module host's bonded ROSE earphones, for the identity queries of the system entries (ADR 0017). */
         fun publishBonded(addresses: Set<String>) {
             if (retired) return
             binderAdapter?.publishBonded(addresses)
@@ -342,9 +329,6 @@ class OpenRoseBluetoothModule : XposedModule() {
     }
 
     override fun onHotReloading(param: HotReloadingParam): Boolean {
-        // Release the host owner first so no consumer outlives or races its source. When the release is
-        // unconfirmed the reload is refused before anything changes: the old instance keeps serving and
-        // keeps its hooks, host and consumers, and the framework may retry the reload.
         val runtime = hostRuntime
         if (runtime?.close() == false) return false
         retired = true
@@ -357,8 +341,6 @@ class OpenRoseBluetoothModule : XposedModule() {
         hostRuntime = null
         renderer = null
         official = null
-        // Only framework/target-owned values cross the generation boundary: the target Context and, in the host process,
-        // the slot behind the discovery Binder the system has cached, which the next generation points at its endpoint.
         targetContext?.let { context ->
             param.setSavedInstanceState(
                 HashMap<String, Any>().apply {
@@ -371,8 +353,6 @@ class OpenRoseBluetoothModule : XposedModule() {
             entryHooks.forEach { runCatching { it.unhook() } }
             entryHooks.clear()
         }
-        // The framework holds its hook lock for this whole call, so unhooking must happen on this thread: left to the
-        // client's reader thread, unhook() would block until the close timeout and the reload would be refused.
         closeNativeAdapters()
         return true
     }
@@ -381,7 +361,6 @@ class OpenRoseBluetoothModule : XposedModule() {
         processName = param.processName
         param.oldHookHandles.forEach { runCatching { it.unhook() } }
         val saved = param.savedInstanceState as? Map<*, *>
-        // A generation from before the endpoint slot saved the bare Context.
         val context = (saved?.get(SAVED_CONTEXT) ?: param.savedInstanceState) as? Context
         if (context == null) {
             log(Log.WARN, TAG, "hot_reload_context_unavailable")
@@ -412,7 +391,6 @@ class OpenRoseBluetoothModule : XposedModule() {
     private companion object {
         const val TAG = "OpenRoseSystemModule"
 
-        /** A settings-entry tap waits this long for the host before the system's own page runs. */
         const val FUSION_ENTRY_TIMEOUT_MILLIS = 750L
 
         const val SAVED_CONTEXT = "context"
@@ -420,6 +398,5 @@ class OpenRoseBluetoothModule : XposedModule() {
     }
 }
 
-// Application.attach supplies the host Context before its components start and onCreate may already be overridden by the ROM.
 @SuppressLint("DiscouragedPrivateApi")
 private fun applicationAttach(): Method = Application::class.java.getDeclaredMethod("attach", Context::class.java)

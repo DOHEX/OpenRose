@@ -16,7 +16,6 @@ import io.github.dohex.openrose.androidintegration.scope.INTEGRATION_SCOPE_PACKA
 import io.github.dohex.openrose.core.PlatformApplicability
 import io.github.dohex.openrose.platform.StatusTargetLaunch
 
-/** The Android integration facts of this host; [IntegrationPlatformState.module] keeps its default until the framework reports in. */
 internal fun Context.readIntegrationPlatform(
     backgroundService: BackgroundServiceFact = BackgroundServiceFact.NotRunning,
     wake: WakeFacts = WakeFacts(),
@@ -43,7 +42,6 @@ internal fun Context.readIntegrationPlatform(
     unavailableStatusTargets = StatusTargetLaunch.unavailableTargets(packageManager),
 )
 
-/** The required service notification is independent of the focus notification setting and has its own channel. */
 private fun Context.runningNotification(): RunningNotification {
     val manager = getSystemService(NotificationManager::class.java) ?: return RunningNotification.UNKNOWN
     val importance = manager.getNotificationChannel(ControlService.CHANNEL_ID)?.importance

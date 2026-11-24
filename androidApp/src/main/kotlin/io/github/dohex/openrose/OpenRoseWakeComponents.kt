@@ -18,12 +18,6 @@ import io.github.dohex.openrose.platform.hasBluetoothConnectPermission
 
 private fun Context.ordinaryOwner() = applicationContext as OpenRoseApplication
 
-/**
- * Manifest receiver for the broadcasts that may revive ordinary background control when no process
- * exists: the first unlock of a boot, and an audio connection of a supported earphone. It only asks
- * the application to start the control service; it never connects anything and every decision about
- * whether to start (saved intent, unlock, permission) stays in the unified runtime state.
- */
 class OrdinaryWakeReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         when (intent.action) {
@@ -38,7 +32,6 @@ class OrdinaryWakeReceiver : BroadcastReceiver() {
         }
     }
 
-    /** Other Bluetooth audio devices must not wake OpenRose; the name needs the connect permission on Android 12+. */
     @SuppressLint("MissingPermission")
     private fun isSupportedEarphone(context: Context, intent: Intent): Boolean {
         if (!context.hasBluetoothConnectPermission()) return false
@@ -52,11 +45,6 @@ class OrdinaryWakeReceiver : BroadcastReceiver() {
     }
 }
 
-/**
- * Bound by the system when an associated earphone appears (Android 12+), including when the app
- * process does not exist. Presence of a paired device is a wake-up only: the control connection is
- * still driven by the audio connection inside the runtime.
- */
 @RequiresApi(Build.VERSION_CODES.S)
 class OpenRoseCompanionService : CompanionDeviceService() {
     @Deprecated("Replaced by the association-based callback from Android 13")
@@ -77,7 +65,6 @@ class OpenRoseCompanionService : CompanionDeviceService() {
         }
     }
 
-    // The service only wakes; losing presence never stops or restarts anything.
     @Deprecated("Presence loss is handled by audio disconnection inside the runtime")
     override fun onDeviceDisappeared(address: String) = Unit
 

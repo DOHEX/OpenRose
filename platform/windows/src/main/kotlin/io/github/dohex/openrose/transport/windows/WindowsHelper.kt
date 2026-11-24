@@ -7,7 +7,6 @@ import java.io.File
 import java.io.IOException
 import kotlin.time.Duration.Companion.seconds
 
-/** Nucleus passes the installed application resources directory, where desktopApp places the helper. */
 private val executable by lazy {
     val resources = requireNotNull(System.getProperty("compose.application.resources.dir")) { "缺少 OpenRose Windows 蓝牙组件" }
     File(resources, "openrose-winrt.exe").also { require(it.isFile) { "缺少 OpenRose Windows 蓝牙组件：$it" } }

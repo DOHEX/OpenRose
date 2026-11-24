@@ -24,7 +24,6 @@ private val controlWayOptions = listOf(
 )
 
 internal object ControlWayTags {
-    /** Every control-way tag starts with this, so a host without the choice can be shown to expose none. */
     const val PREFIX = "control-way."
     const val CARD = "${PREFIX}card"
     const val SWITCH_FEEDBACK = "${PREFIX}switch-feedback"
@@ -37,10 +36,6 @@ internal object ControlWayTags {
     const val READINESS = "${PREFIX}readiness"
 }
 
-/**
- * Settings side of the control way: the saved choice only. Whether its owner is ready is reported by
- * [ControlStatusRows] and [ownerVerdict]; selecting never implies the owner exists.
- */
 @Composable
 internal fun ControlWayGroup(
     integration: IntegrationState,
@@ -65,7 +60,6 @@ internal fun ControlWayGroup(
     }
 }
 
-/** One line for a handoff in flight or stuck; stage and reason are shown on the status page only. */
 private fun switchFeedback(readiness: OwnerReadiness): String? = when (readiness) {
     is OwnerReadiness.Switching -> "正在切换到${wayLabel(readiness.request.to)}…"
 
@@ -81,10 +75,6 @@ private fun switchFeedback(readiness: OwnerReadiness): String? = when (readiness
     else -> null
 }
 
-/**
- * Status side of the control way, as rows of the host's status card: the saved selection and whether its owner is
- * ready. Why it is not ready is the status hero's, through [ownerVerdict].
- */
 @Composable
 internal fun ControlStatusRows(owner: OwnerState) {
     val readiness = owner.readiness
@@ -119,10 +109,6 @@ internal fun ControlStatusRows(owner: OwnerState) {
     }
 }
 
-/**
- * The status hero's verdict while the selected owner cannot act, with the reason it gives; null once it is ready. An
- * unavailable module owner adds what [module] says to do about it, so the hero is the one place the failure is told.
- */
 internal fun ownerVerdict(owner: OwnerState, module: ModuleAvailability): StatusVerdict? = when (val readiness = owner.readiness) {
     OwnerReadiness.Ready -> null
 
@@ -141,7 +127,6 @@ internal fun ownerVerdict(owner: OwnerState, module: ModuleAvailability): Status
     is OwnerReadiness.SwitchBlocked -> StatusVerdict(AppStatusKind.Error, "切换未完成", readiness.reason)
 }
 
-/** Developer-grade owner facts for the diagnostics page: who holds the connection and the last blocked handoff. */
 @Composable
 internal fun ControlOwnerDiagnostics(integration: IntegrationState) {
     val owner = integration.owner

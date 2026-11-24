@@ -2,7 +2,6 @@ package io.github.dohex.openrose.core.protocol
 
 import io.github.dohex.openrose.core.models.ModelProtocol
 
-/** The layout of one ZT reply supplies both the query's expected fields and its length-checked decoder. */
 internal class ZtReply private constructor(
     val fields: Set<DeviceField>,
     private val minimumSize: Int,

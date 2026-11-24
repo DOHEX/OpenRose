@@ -9,7 +9,6 @@ import kotlin.test.assertTrue
 class OwnerRecordCodecTest {
     private val way = IntegrationSettingsCodec.CONTROL_WAY_KEY
 
-    /** What a preference store holds after applying the encoded entries: null removes the key. */
     private fun apply(stored: Map<String, Any?>, record: OwnerRecord): Map<String, Any?> {
         val next = stored.toMutableMap()
         OwnerRecordCodec.encode(record).forEach { (key, value) -> if (value == null) next.remove(key) else next[key] = value }

@@ -24,7 +24,6 @@ internal val f8Actions = persistentSetOf(
 )
 internal val f8ActionsWithoutNoise = f8Actions.removing("noise_cycle")
 
-/** Fields decoded by the basic F8 receiver; these earbuds do not report a case slot. */
 internal val f8BasicReadings = persistentSetOf(
     DeviceField.LEFT_BATTERY,
     DeviceField.RIGHT_BATTERY,

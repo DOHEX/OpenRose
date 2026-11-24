@@ -18,22 +18,17 @@ import org.freedesktop.dbus.interfaces.DBus
 import org.freedesktop.dbus.interfaces.Properties
 import java.util.concurrent.atomic.AtomicBoolean
 
-/** Observes the tray for one process; [nativeReady] gates composing the tray at all. */
 internal interface TrayMonitor : AutoCloseable {
-    /** False when the tray library cannot run here; composing the tray would then fail. */
     val nativeReady: Boolean
     val availability: StateFlow<TrayAvailability>
 
-    /** Checks whether hiding the window would leave a reachable tray icon. */
     suspend fun refresh(): TrayAvailability
 
-    /** The tray icon was handed to the native library; registration with the host follows. */
     fun trayStarted()
 }
 
 internal fun trayMonitor(hostIsLinux: Boolean): TrayMonitor = if (hostIsLinux) StatusNotifierTrayMonitor() else ShellTrayMonitor
 
-/** Windows' notification area is part of the shell and always present. */
 private object ShellTrayMonitor : TrayMonitor {
     override val nativeReady = true
     override val availability: StateFlow<TrayAvailability> = MutableStateFlow(TrayAvailability.Available)
@@ -42,18 +37,12 @@ private object ShellTrayMonitor : TrayMonitor {
     override fun close() = Unit
 }
 
-/**
- * Linux trays follow StatusNotifierItem: the icon is visible only while a watcher with a registered
- * host lists this process's item. The native library names it `org.kde.StatusNotifierItem-<pid>-1`;
- * watchers record either that name or its unique bus name.
- */
 private class StatusNotifierTrayMonitor : TrayMonitor {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val mutableAvailability = MutableStateFlow<TrayAvailability>(TrayAvailability.Checking)
     private val started = AtomicBoolean(false)
     private val itemName = "org.kde.StatusNotifierItem-${ProcessHandle.current().pid()}-1"
     private val nativeFailure: String? = runCatching {
-        // Same loader path the tray uses; a missing libsystemd fails here instead of inside composition.
         Class.forName(NATIVE_BRIDGE, true, StatusNotifierTrayMonitor::class.java.classLoader)
     }.exceptionOrNull()?.let { error ->
         generateSequence(error) { it.cause }.last().message ?: error.toString()
@@ -65,7 +54,6 @@ private class StatusNotifierTrayMonitor : TrayMonitor {
             runCatching { DBusConnectionBuilder.forSessionBus().build() }
         }
 
-    /** While the item is still registering, interim misses are not published as unavailable. */
     private val registering = AtomicBoolean(false)
 
     @Volatile private var recheck: Job? = null
@@ -93,7 +81,6 @@ private class StatusNotifierTrayMonitor : TrayMonitor {
     override fun trayStarted() {
         if (!started.compareAndSet(false, true) || connection.isFailure) return
         registering.set(true)
-        // The item registers asynchronously after the native loop starts; wait for it before deciding.
         scope.launch {
             var result: TrayAvailability = TrayAvailability.Checking
             for (attempt in 1..REGISTRATION_ATTEMPTS) {

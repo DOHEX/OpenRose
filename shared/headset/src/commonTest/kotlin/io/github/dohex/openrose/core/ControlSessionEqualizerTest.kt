@@ -25,7 +25,6 @@ import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
-/** Session seam with independent TX literals and explicitly synthetic setting RX. */
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class ControlSessionEqualizerTest {
     @Test
@@ -75,8 +74,6 @@ class ControlSessionEqualizerTest {
     @Test
     fun allFiveI7PresetsShareTheSessionSequenceAndNormalizeBothEqReplyLayouts() = runTest {
         val (session, link) = ready(ModelProfile.I7_RS_V2)
-        // Independently worked sequences 03..0c after three complete initialization queries.
-        // Single-byte 00/01 are HIFI/POP; the two-byte 00/01 records reverse that order.
         for (vector in listOf(
             EqVector("hifi", "ff03022a002eaa", "ff0402fa2a29aa", "dd00032a01000baa"),
             EqVector("pop", "ff05022a0131aa", "ff0602fa2a2baa", "dd00032a00000aaa"),
@@ -227,7 +224,6 @@ class ControlSessionEqualizerTest {
                 if (profile == ModelProfile.I5_ZT) {
                     i5Replies[hex.substring(10, 14)]?.let { incoming.send(it.bytes()) }
                 } else {
-                    // Synthetic i7 mode + game off + single-byte HIFI, then optional firmware.
                     incoming.send("dd00020901e9aadd00020e00edaadd00022a0009aa".bytes())
                     firmwareReply?.let { incoming.send(it.bytes()) }
                 }

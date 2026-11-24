@@ -27,7 +27,6 @@ internal fun HostPlatform.firstConnectionHint(): String = when (this) {
     HostPlatform.UNKNOWN -> "打开耳机并靠近设备，必要时让耳机进入配对模式。"
 }
 
-/** What to check or expect before connecting; after a failure it only advises, since the error states the failure. */
 internal fun ModelProfile?.reconnectHint(failed: Boolean, includeStatus: Boolean = true): String {
     val hasCase = this?.batteryLayout == BatteryLayout.EARBUDS_AND_CASE
     if (failed) return if (hasCase) "请确认耳机已开盖并在附近" else "请确认耳机已开启并在附近"

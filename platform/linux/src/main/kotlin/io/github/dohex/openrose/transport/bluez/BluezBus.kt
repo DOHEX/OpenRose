@@ -13,7 +13,6 @@ internal fun BluezObjects.onPoweredAdapter(devicePath: String): Boolean {
     return adapter?.get("Powered") == true
 }
 
-/** Any MediaTransport1 owned by this Device1, across all audio profiles. */
 internal fun BluezObjects.hasMediaTransport(devicePath: String): Boolean = any { (path, interfaces) ->
     interfaces[MEDIA_TRANSPORT]?.let { mediaBelongsTo(devicePath, path, it) } == true
 }
@@ -23,7 +22,6 @@ internal fun mediaBelongsTo(devicePath: String, mediaPath: String, properties: M
     return owner == devicePath
 }
 
-/** BlueZ exposes a separate Device1 for each adapter that has seen the same address. */
 internal fun BluezObjects.devicePath(address: String, pairedOnly: Boolean = false, scanAdapter: String? = null): String? {
     val candidates = keys.filter { path ->
         val device = getValue(path)[DEVICE] ?: return@filter false
@@ -53,12 +51,10 @@ internal interface BluezAudioBus {
     suspend fun disconnectLe(path: String, owner: String = "org.bluez")
 }
 
-/** BlueZ and the bus daemon use different errors for a denied operation. */
 internal val Throwable.isBluezAccessDenied: Boolean
     get() = this is NotAuthorized || this is NotPermitted || this is AccessDenied
 
 internal interface BluezBus : BluezAudioBus {
-    /** Unique D-Bus name of the process serving org.bluez. */
     val owner: String?
     fun signals(accepts: (BluezSignal) -> Boolean): Flow<BluezSignal>
     suspend fun objects(): BluezObjects

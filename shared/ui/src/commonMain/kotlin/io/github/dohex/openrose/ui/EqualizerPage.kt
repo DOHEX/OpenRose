@@ -17,7 +17,6 @@ import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.writableCustomCurve
 import io.github.dohex.openrose.core.writablePresets
 
-/** The headset supplies available preset names; the application orders them for display. */
 internal fun DeviceState.writablePresetOptions(): List<AppOption<String>> = writablePresets.sortedWith(presetDisplayOrder).map {
     AppOption(it, equalizerLabel(it, profile))
 }
@@ -33,10 +32,6 @@ private fun equalizerPresetOrder(preset: String): Int = when (preset) {
     else -> 5
 }
 
-/**
- * The home 均衡器 entry, showing the confirmed mode only. A model with a writable curve opens the equalizer page; a
- * model with presets only picks one here, written at once and reported by the home setting feedback.
- */
 @Composable
 internal fun EqualizerEntryRow(
     state: ControlState,
@@ -61,10 +56,6 @@ internal fun EqualizerEntryRow(
     }
 }
 
-/**
- * Mode choice and, while the confirmed mode is custom, the custom curve; a model without presets has only the curve.
- * The page renders what the device can do now, so a curve that stops being writable takes its card with it.
- */
 @Composable
 internal fun EqualizerPage(state: ControlState, device: DeviceState, editor: EqualizerEditor) {
     val enabled = state.isReady(device)
@@ -77,10 +68,6 @@ internal fun EqualizerPage(state: ControlState, device: DeviceState, editor: Equ
     }
 }
 
-/**
- * The presets in order, then custom when the model has a curve; choosing custom writes the curve the page shows. The
- * selection stays on the confirmed [mode]; the option being written shows its progress.
- */
 @Composable
 private fun EqualizerModes(
     device: DeviceState,
@@ -142,7 +129,6 @@ private fun CustomCurveCard(
     }
 }
 
-/** The curve to show, and to write on choosing custom: the pending one, else the device's, else a flat one. */
 private fun EqualizerEditor.shownCurve(device: DeviceState, custom: CustomEqualizerCapabilities): List<Int> {
     val confirmed = device.confirmedCurve(custom)
     return displayedCurve(confirmed) ?: custom.flatCurve()

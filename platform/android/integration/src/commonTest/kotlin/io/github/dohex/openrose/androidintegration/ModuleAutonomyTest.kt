@@ -18,11 +18,6 @@ import kotlin.test.assertNull
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
-/**
- * Module control must run without the OpenRose application. These tests drive the module host from the
- * persisted choice and the unlock fact alone, and only afterwards bring up an application runtime to read
- * what the host did by itself; the earphones' transport and the IPC link are the only fakes.
- */
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class ModuleAutonomyTest {
     private val saved = OwnerRecord(ControlWay.MODULE, PendingModuleRelease("earlier", null))
@@ -44,7 +39,6 @@ class ModuleAutonomyTest {
         assertIs<HostStatus.Active>(rig.host.status.value)
         assertTrue(rig.link.connections.isEmpty(), "nothing from the application was needed")
 
-        // A runtime that appears later only reads: the real remote state and the earphones' own reply.
         val runtime = rig.newRuntime()
         runCurrent()
         advanceTimeBy(1)
@@ -62,7 +56,6 @@ class ModuleAutonomyTest {
         rig.bootHost()
         rig.hostTransport.audioDevice.emit(rig.earphones.deviceId)
         runCurrent()
-        // The module becoming available again, a hot reload and a killed host all start from the saved choice.
         rig.replaceHost(processDied = false)
         rig.bootHost()
         rig.replaceHost(processDied = true)
@@ -91,7 +84,6 @@ class ModuleAutonomyTest {
         assertEquals(OwnerReadiness.Ready, runtime.integration.value.owner.readiness)
         val generation = (rig.host.status.value as HostStatus.Active).generation
 
-        // The system reclaims the process, and a force stop kills it with its Binder links.
         process.cancel()
         rig.link.connections.filter { it.isOpen }.forEach { it.close() }
         runCurrent()
@@ -100,7 +92,6 @@ class ModuleAutonomyTest {
         assertEquals(HostStatus.Active(generation, (rig.host.status.value as HostStatus.Active).holder), rig.host.status.value)
         assertEquals(listOf("module:open"), rig.headset.events)
 
-        // A later start of the application finds the same owner and does not reconnect or fall back.
         val again = rig.newRuntime(process = rig.newAppProcess())
         runCurrent()
         advanceTimeBy(1)
@@ -152,7 +143,6 @@ class ModuleAutonomyTest {
 
         rig.replaceHost(processDied = true)
         runCurrent()
-        // Until the new instance is told the saved choice nothing owns the session and nothing claims a release.
         assertEquals(OwnerFailureStage.CONNECTION, assertIs<OwnerReadiness.Unavailable>(runtime.integration.value.owner.readiness).stage)
         assertEquals(0, rig.headset.opens("ordinary"))
 
@@ -169,7 +159,6 @@ class ModuleAutonomyTest {
         assertEquals(listOf("module:open", "module:close", "module:open"), rig.headset.events)
         assertEquals(0, rig.headset.overlappingOpens)
         assertEquals(0, rig.headset.opens("ordinary"))
-        // The old lease, generation and session mean nothing to the new owner.
         assertEquals(
             HostRejection.INVALID_LEASE,
             assertIs<HostCallResult.Rejected>(rig.host.control.execute(appIdentity, oldLease, newGeneration, HostCommand.StartScan)).rejection,
@@ -179,7 +168,6 @@ class ModuleAutonomyTest {
             HostRejection.STALE_GENERATION,
             assertIs<HostCallResult.Rejected>(rig.host.control.execute(appIdentity, fresh, oldGeneration, HostCommand.StartScan)).rejection,
         )
-        // Every read names the generation it was issued for, so a pre-restart reference cannot reach the new owner.
         assertIs<HostReadResult.Rejected>(rig.host.control.readSession(appIdentity, fresh, oldGeneration, oldReference))
     }
 
@@ -301,9 +289,7 @@ class ModuleAutonomyTest {
         assertTrue(old.stop(), "the owner was confirmed released")
         assertEquals(listOf("module:open", "module:close"), rig.headset.events)
 
-        // A client that still holds the old endpoint cannot attach to an instance that will never own again.
         assertIs<HostOpenResult.Refused>(old.open(appIdentity))
-        // Leases die with the instance that issued them, whatever the owner state is.
         assertEquals(
             HostRejection.INVALID_LEASE,
             assertIs<HostCallResult.Rejected>(old.control.execute(appIdentity, lease, generation, HostCommand.StartScan)).rejection,
@@ -328,7 +314,6 @@ class ModuleAutonomyTest {
 
         assertFalse(rig.replaceHost(processDied = false))
 
-        // Nothing was withdrawn: the connection is still owned by the old host, which still takes new leases.
         assertSame(old, rig.host)
         assertEquals("module", rig.headset.openOwner)
         assertEquals(generation, (old.status.value as HostStatus.Active).generation)
@@ -342,7 +327,6 @@ class ModuleAutonomyTest {
         assertEquals(1, rig.link.connections.count { it.isOpen })
         assertEquals(0, rig.headset.opens("ordinary"))
 
-        // Once the close can be confirmed the reload goes ahead and the replacement owns with a new generation.
         rig.hostTransport.closeFails = false
         assertTrue(rig.replaceHost(processDied = false))
         rig.bootHost()

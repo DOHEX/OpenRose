@@ -17,7 +17,6 @@ internal val budsFreeI = ModelSpec(
     shortLabel = "BudsFree i",
     protocol = ModelProtocol.RsCommon(
         initialization = RsCommonInit.BUDS_FREE,
-        // RoseLink 的触控动作表从 0 起编号且跳过语音助手 4：音量加/减为 5/6。
         touchActions = mapOf(
             "none" to 0,
             "play_pause" to 1,
@@ -62,7 +61,6 @@ internal val budsFreeI = ModelSpec(
             ),
             noiseControl = NoiseControlCapabilities(persistentSetOf("anc", "normal", "transparency"), persistentSetOf()),
             equalizer = EqualizerCapabilities(persistentSetOf("pop", "hifi", "rock")),
-            // RTouchInfoModel 的 TouchCtlType 只有单/双/三击，不开放长按。
             touchControl = TouchControlCapabilities(
                 rsCommonTouchSlots,
                 persistentSetOf("none", "play_pause", "previous_track", "next_track", "volume_up", "volume_down"),

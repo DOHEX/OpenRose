@@ -18,7 +18,6 @@ class LinuxCirculationAudio(private val profiles: BluezAudioProfiles) : Circulat
     override fun acquire(address: String) {
         val previous = pactl("get-default-sink").trim()
         check(previous.isNotEmpty()) { "无法读取当前系统输出" }
-        // WirePlumber may auto-select a newly connected A2DP sink. Keep the user's current choice.
         pactl("set-default-sink", previous)
         try {
             runBlocking { profiles.acquire(address) }

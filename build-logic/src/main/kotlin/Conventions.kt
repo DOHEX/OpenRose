@@ -14,12 +14,10 @@ import org.jetbrains.kotlin.gradle.dsl.kotlinExtension
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompilationTask
 import org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile
 
-/** The JDK every module compiles and packages with; JVM and Android bytecode targets the same level. */
 private const val JAVA_RELEASE = 21
 
 internal val javaVersion: JavaVersion = JavaVersion.toVersion(JAVA_RELEASE)
 
-/** Temurin, because desktop packaging bundles this JDK and needs its `jpackage`, which IDE runtimes lack. */
 private fun JavaToolchainSpec.openRoseJdk() {
     languageVersion.set(JavaLanguageVersion.of(JAVA_RELEASE))
     vendor.set(JvmVendorSpec.ADOPTIUM)
@@ -35,10 +33,6 @@ internal fun VersionCatalog.stringVersion(alias: String): String {
     return version.requiredVersion
 }
 
-/**
- * Compiles every Kotlin JVM and Android compilation with the shared JDK and bytecode target, and fails every
- * Kotlin compilation, common metadata included, on any compiler warning.
- */
 internal fun Project.configureKotlinJvm() {
     kotlinExtension.jvmToolchain { openRoseJdk() }
     tasks.withType<KotlinJvmCompile>().configureEach {
@@ -49,6 +43,5 @@ internal fun Project.configureKotlinJvm() {
     }
 }
 
-/** Installation directory of the shared JDK, independent of the JVM running Gradle. */
 internal fun Project.openRoseJdkHome(): Provider<String> = extensions.getByType<JavaToolchainService>().launcherFor { openRoseJdk() }
     .map { it.metadata.installationPath.asFile.absolutePath }

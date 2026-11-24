@@ -2,7 +2,6 @@ plugins {
     alias(libs.plugins.openrose.kmp.compose.library)
     alias(libs.plugins.kotlin.serialization)
 }
-// 关于 shows the application version; build-logic derives it from version.txt.
 val generateAppVersion = tasks.register<GenerateAppVersionSource>("generateAppVersion") {
     packageName.set("io.github.dohex.openrose.ui")
     versionName.set(appVersion.name)
@@ -57,6 +56,5 @@ compose.resources {
 
 tasks.withType<Test>().configureEach {
     systemProperty("java.awt.headless", "true")
-    // Each UI test drives its own scene on a virtual clock, so test classes can run side by side.
     maxParallelForks = (Runtime.getRuntime().availableProcessors() / 2).coerceAtLeast(1)
 }

@@ -24,7 +24,6 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.withContext
 import java.util.UUID
 
-/** Android's native GATT operations; connection policy is owned by the shared layer. */
 @SuppressLint("MissingPermission")
 internal class AndroidGattDriver(
     context: Context,
@@ -270,8 +269,6 @@ internal class AndroidGattDriver(
 
     private fun terminateFromCallback(error: GattException, notify: Boolean, closeWithCause: Boolean = false) {
         terminate(error, notify, closeWithCause)
-        // Binder callbacks cannot report a release failure to the caller. Keep the handle so
-        // explicit close can retry and report the failure if it still cannot be released.
         runCatching { handle.release() }
     }
 

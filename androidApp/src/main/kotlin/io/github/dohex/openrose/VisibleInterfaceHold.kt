@@ -10,12 +10,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-/**
- * The visible interface's claim on the ordinary control session: held from the first activity being
- * created or started until the last one stops or is destroyed. The release waits a short grace period so
- * an activity recreation (rotation, theme, locale) does not close the control connection; a task merely
- * moving to the background does, and with background control off nothing then keeps the session.
- */
 internal class VisibleInterfaceHold(
     private val runtime: SwitchingControlRuntime,
     private val scope: CoroutineScope,
@@ -42,7 +36,6 @@ internal class VisibleInterfaceHold(
         }
     }
 
-    // Created counts as well: the activity may act on its launch intent before it is started.
     override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) = enter(activity)
     override fun onActivityStarted(activity: Activity) = enter(activity)
     override fun onActivityStopped(activity: Activity) = leave(activity)

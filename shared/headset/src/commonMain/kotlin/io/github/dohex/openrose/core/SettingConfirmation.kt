@@ -5,7 +5,6 @@ import io.github.dohex.openrose.core.protocol.FieldReading
 import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.dohex.openrose.core.protocol.ProtocolQuery
 
-/** Tracks each requested field from its own query until the device supplies a fresh reading. */
 internal class SettingConfirmation(private val expected: Map<DeviceField, FieldValue>) {
     private val fieldBaselines = mutableMapOf<DeviceField, Long>()
     private var actualValues = emptyMap<DeviceField, FieldValue>()
@@ -28,7 +27,6 @@ internal class SettingConfirmation(private val expected: Map<DeviceField, FieldV
         return received && actualValues.size == fieldBaselines.size
     }
 
-    /** A touch assignment confirms only its target; the device still retains its full bindings. */
     private fun confirmationValue(reading: FieldReading?, expected: FieldValue): FieldValue? {
         val actual = (reading as? FieldReading.Known)?.value ?: return null
         return when {

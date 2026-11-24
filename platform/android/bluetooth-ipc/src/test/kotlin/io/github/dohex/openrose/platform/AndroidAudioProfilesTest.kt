@@ -53,7 +53,6 @@ class AndroidAudioProfilesTest {
         assertNull(snapshot.profiles[AudioProfile.LE_AUDIO])
     }
 
-    /** Model a platform request that starts successfully but never delivers its LE Audio proxy. */
     @Implements(BluetoothAdapter::class)
     class StallingLeAudioAdapter : ShadowBluetoothAdapter() {
         @Implementation

@@ -15,10 +15,6 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.receiveAsFlow
 
-/**
- * A transport whose control links answer initialization like [profile]'s earphones, for any catalog model.
- * Every notification except the i5's is synthetic (documented offsets, not hardware captures).
- */
 internal class CatalogTransport(
     private val profile: ModelProfile,
     private val bonded: List<DeviceCandidate> = emptyList(),
@@ -61,7 +57,6 @@ internal class CatalogConnection(private val profile: ModelProfile) : ControlCon
 
 internal fun catalogCandidate(name: String, profile: ModelProfile) = DeviceCandidate(DeviceId(name), profile.displayName, null, profile, "", "11:22:33:44:55:66")
 
-/** An advertisement that identifies [profile] by the first manufacturer-data prefix its configuration declares. */
 internal fun catalogAdvertisement(profile: ModelProfile, id: DeviceId): Advertisement {
     val prefix = profile.spec.advertisementPrefixes.first().bytes()
     val company = (prefix[0].toInt() and 255) or ((prefix[1].toInt() and 255) shl 8)
@@ -73,7 +68,6 @@ internal fun catalogAdvertisement(profile: ModelProfile, id: DeviceId): Advertis
     return Advertisement(id, name, manufacturerData = mapOf(company to prefix.copyOfRange(2, prefix.size)))
 }
 
-/** What [profile]'s earphones send back for one initialization write, as hex frames. */
 internal fun catalogInitializationReplies(profile: ModelProfile, writtenHex: String): List<String> = when (profile.family) {
     ProtocolFamily.ZT -> {
         val key = writtenHex.substring(10, 14)
@@ -97,7 +91,6 @@ internal fun catalogInitializationReplies(profile: ModelProfile, writtenHex: Str
     }
 }
 
-/** Synthetic ZT notifications, using documented offsets; unknown fields remain unknown. */
 private val ztSyntheticReplies = mapOf(
     "0101" to "09ff00000101011100000164640000ff00",
     "0602" to "09ff00000106020e000100000020",
@@ -118,7 +111,6 @@ private val ztSyntheticReplies = mapOf(
     "0605" to "09ff00000106050d0001010101",
 )
 
-/** Synthetic legacy RS state covering its shared getInfo tags. */
 private val rsCommonSyntheticReplies = listOf(
     "ff00110100010002000300000000000500060000aa",
     "ff00020700aa", "ff00020800aa", "ff00020904aa",
@@ -127,7 +119,6 @@ private val rsCommonSyntheticReplies = listOf(
     "ff00022d01aa", "ff00022e01aa", "ff00023300aa",
 )
 
-/** Synthetic RS Common V2 getInfo state, sent whole for every initialization write. */
 private val rsCommonV2SyntheticReplies = listOf(
     "dd0011010100020003000400110012001300140043aa",
     "dd00020700e6aa",

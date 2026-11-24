@@ -54,11 +54,6 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.coroutines.EmptyCoroutineContext
 
-/**
- * Binder binding from the application to the module host in `com.android.bluetooth`. Discovery binds an
- * existing host service for [BridgeWire.ACTION_CONTROL_HOST]; authorisation is a separate `open` that the
- * host decides from this app's verified uid. Every failure names the stage it happened at.
- */
 class ModuleHostBinderLink(
     context: Context,
     private val bindTimeoutMillis: Long = 5_000,
@@ -82,7 +77,6 @@ class ModuleHostBinderLink(
                 connected.complete(service)
             }
             override fun onServiceDisconnected(name: ComponentName) {
-                // The binding is gone; only a Binder death notification proves the process ended.
                 ended.complete(LinkEnd(processDied = false, reason = "宿主服务绑定已断开"))
             }
             override fun onNullBinding(name: ComponentName) {
@@ -153,7 +147,6 @@ class ModuleHostBinderLink(
             return LinkOpenResult.Failed(OwnerFailureStage.CONNECTION, "应用与模块宿主版本不匹配，请重启系统集成作用域以加载当前模块")
         }
         if (status == BridgeWire.STATUS_UNAVAILABLE) {
-            // A reloaded or stopped host instance still answers on its old Binder; rebind to find the new one.
             return LinkOpenResult.Failed(OwnerFailureStage.CONNECTION, opened.getString(BridgeWire.MESSAGE) ?: "宿主暂不可用，等待重新发现")
         }
         val result = try {
@@ -198,8 +191,6 @@ class ModuleHostBinderLink(
             payload?.let { putString(BridgeWire.PAYLOAD, it.render()) }
         }
 
-        // Parcel.readException can rethrow a host-specific runtime failure. All failed transactions
-        // leave the outcome unknown to the client, while caller cancellation still ends its own wait.
         @Suppress("TooGenericExceptionCaught")
         private suspend fun transact(block: () -> Bundle): Bundle {
             val failure = try {
@@ -263,7 +254,6 @@ class ModuleHostBinderLink(
         override fun frames(generation: OwnerGeneration): Flow<HostFrame> = callbackFlow {
             val receiver = object : IControlFrames.Stub() {
                 override fun onFrame(frame: Bundle) {
-                    // A frame that cannot be decoded ends the stream rather than showing unverifiable state.
                     val decoded = runCatching {
                         HostFrameWire.decodeFrame(parseWire(frame.getString(BridgeWire.PAYLOAD).orEmpty()))
                     }.getOrNull()
@@ -283,7 +273,6 @@ class ModuleHostBinderLink(
 
         override fun close() {
             connection.compareAndSet(this, null)
-            // The synchronous transaction carries our pid. A stalled host must not block the application main thread.
             closeDispatcher.dispatch(EmptyCoroutineContext) { runCatching { bridge.close(lease.id) } }
             runCatching { binder.unlinkToDeath(death, 0) }
             unbind()
@@ -291,7 +280,6 @@ class ModuleHostBinderLink(
     }
 
     private companion object {
-        // Commands, discovery and probe calls can overlap. Retries share these slots across all bindings.
         val calls = BinderCalls(4)
         val closeDispatcher = Dispatchers.IO.limitedParallelism(2)
     }

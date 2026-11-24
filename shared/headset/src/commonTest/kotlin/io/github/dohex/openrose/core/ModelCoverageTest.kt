@@ -36,7 +36,6 @@ class ModelCoverageTest {
             val battery = if (profile.batteryLayout == BatteryLayout.SINGLE_UNIT) DeviceField.CASE_BATTERY else DeviceField.LEFT_BATTERY
             assertIs<FieldReading.Known>(device.diagnostics.fields[battery], profile.name)
             if (profile.family == ProtocolFamily.RS_COMMON_V2) {
-                // The synthetic getInfo and FA 0E notifications both report game mode off.
                 assertEquals(OperationResult.Success, runtime.set(HeadsetCommand.GameMode(false)), profile.name)
                 val commands = transport.links.single().writes.map { it.substring(6, 10) }
                 val expected = if (profile in setOf(ModelProfile.FIRST_ANGEL_RS_V2, ModelProfile.MOKA_RS_V2)) {

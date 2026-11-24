@@ -11,13 +11,10 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlin.time.TimeSource
 
-/** Deadlines are injectable so public behavior can be tested with a virtual clock. */
 data class SessionTiming(
     val connectTimeoutMillis: Long = 15_000,
     val queryTimeoutMillis: Long = 1_500,
-    /** Overrides every model's own pause between control writes; null keeps each model's interval. */
     val writeIntervalMillis: Long? = null,
-    /** Time for the platform to accept a write. The response deadline starts after acceptance. */
     val writeTimeoutMillis: Long = 5_000,
 ) {
     init {
@@ -25,17 +22,12 @@ data class SessionTiming(
     }
 }
 
-/**
- * Platform-owned authority behind [ControlRuntime]. Replacing a page or its interface style never
- * replaces this owner; callers outside the core module can only reach it through the runtime.
- */
 internal class ControlSession(
     initialPlatformState: PlatformState,
     initialSettings: UserSettings = UserSettings(),
     transport: ControlTransport? = null,
     scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
     timing: SessionTiming = SessionTiming(),
-    /** Device session ids count up from here, so a reference from another owner instance never matches. */
     sessionIdBase: Long = 0L,
     timeSource: TimeSource = TimeSource.Monotonic,
 ) : ControlRuntime {

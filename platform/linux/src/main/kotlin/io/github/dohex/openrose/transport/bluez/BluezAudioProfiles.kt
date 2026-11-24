@@ -32,7 +32,6 @@ internal const val CLASSIC_BEARER = "org.bluez.Bearer.BREDR1"
 internal const val LE_BEARER = "org.bluez.Bearer.LE1"
 internal const val AUDIO_SINK_UUID = "0000110b-0000-1000-8000-00805f9b34fb"
 
-/** Explicit user handoff is the only operation allowed to release system audio. */
 class BluezAudioProfiles internal constructor(
     private val releasedLinks: ReleasedBluezLinks = ReleasedBluezLinks(),
     private val bus: suspend () -> BluezBus,
@@ -51,13 +50,11 @@ class BluezAudioProfiles internal constructor(
         val interfaces = objects.getValue(path)
         val classic = interfaces[CLASSIC_BEARER]?.get("Connected") ?: interfaces[DEVICE]?.get("Connected")
         val startLe = classic == false && interfaces[LE_BEARER]?.get("Connected") == false
-        // On an idle dual-bearer i5, establish LE first so BlueZ records classic as the last-used bearer.
         val leOwner = current.owner
         var openedLe = false
         runCatching {
             if (startLe) {
                 currentCoroutineContext().ensureActive()
-                // Capture BlueZ's bounded reply before responding to cancellation, so cleanup owns only an accepted request.
                 checkNotNull(leOwner) { "BlueZ 服务不可用" }
                 withContext(NonCancellable) { openedLe = current.requestLe(path) }
                 currentCoroutineContext().ensureActive()
@@ -91,7 +88,6 @@ class BluezAudioProfiles internal constructor(
                     connectAudio(path)
                     true
                 } catch (_: org.bluez.Error.InProgress) {
-                    // BlueZ can reject ConnectProfile without queuing it while it browses the new LE link.
                     false
                 } catch (_: org.bluez.Error.AlreadyConnected) {
                     true
@@ -118,7 +114,6 @@ class BluezAudioProfiles internal constructor(
         }
     }
 
-    /** The same headset may have classic audio on one adapter and only a control link on another. */
     private fun BluezObjects.connectedPaths(address: String): List<String> = keys.filter { path ->
         val interfaces = getValue(path)
         val device = interfaces[DEVICE] ?: return@filter false
@@ -131,10 +126,7 @@ class BluezAudioProfiles internal constructor(
         val le = get(LE_BEARER)?.get("Connected") as? Boolean
         return when {
             classic == true || le == true -> true
-
             classic == false && le == false -> false
-
-            // Older BlueZ exposes only Device1.Connected. A missing reading cannot prove release.
             else -> checkNotNull(device["Connected"] as? Boolean) { "无法确认耳机蓝牙链路状态" }
         }
     }
@@ -161,7 +153,6 @@ internal class NativeBluezAudioBus(
             disconnectIfConnected { deviceAt(owner, path).Disconnect() }
             return
         }
-        // Device1's shared disconnect timer can be cancelled when the first bearer drops.
         if (classic) disconnectIfConnected { classicAt(owner, path).disconnect() }
         if (le) disconnectLe(path, owner)
     }
@@ -171,7 +162,6 @@ internal class NativeBluezAudioBus(
         try {
             disconnect()
         } catch (_: org.bluez.Error.NotConnected) {
-            // The bearer has already followed the other one down. The caller still verifies the actual links.
         }
     }
 }

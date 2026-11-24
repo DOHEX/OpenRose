@@ -150,8 +150,6 @@ internal class NativeBluezBus private constructor(private val connection: DBusCo
             }
         }
 
-        // D-Bus transports and proxy factories can throw checked or implementation-specific exceptions.
-        // Consumers see one D-Bus error family, retaining specific remote replies such as NotConnected.
         @Suppress("TooGenericExceptionCaught")
         internal suspend fun <T> call(block: () -> T): T = try {
             withTimeout(10_000) { runInterruptible(Dispatchers.IO) { block() } }

@@ -5,7 +5,6 @@ import android.content.SharedPreferences
 import android.os.UserManager
 import androidx.core.content.edit
 
-/** Credential-protected preferences and flags for Android permission prompts. */
 internal class AppPreferences(private val context: Context) {
     val unlocked: Boolean get() = context.getSystemService(UserManager::class.java).isUserUnlocked
     fun open(): SharedPreferences = context.getSharedPreferences(FILE, Context.MODE_PRIVATE)

@@ -3,14 +3,8 @@ package io.github.dohex.openrose.bridge
 import android.os.Bundle
 import io.github.dohex.openrose.androidintegration.wire.WireMap
 
-/** Reads a [Bundle] in place; an absent or mistyped value reads as null instead of the Bundle getters' defaults. */
 fun Bundle.asWireMap(): WireMap = BundleWireMap(this)
 
-/**
- * Builds the Bundle for an encoded wire tree. The Bundle put call follows the Kotlin type of each value, so the parcel is
- * identical to one assembled by hand. An empty list has no element type and is written as a string list, which reads back
- * as an empty list for every list reader.
- */
 fun Map<String, Any?>.toBundle(): Bundle = Bundle().also { bundle ->
     for ((key, value) in this) {
         when (value) {
@@ -60,7 +54,6 @@ private class BundleWireMap(private val bundle: Bundle) : WireMap {
 
     override fun ints(key: String): List<Int>? = (value(key) as? ArrayList<*>)?.filterIsInstance<Int>()
 
-    // The typed getters cannot tell a mistyped value from their default, and the typed Bundle.get(String, Class) needs API 33.
     @Suppress("DEPRECATION")
     override fun value(key: String): Any? = if (bundle.containsKey(key)) bundle.get(key) else null
 }

@@ -25,10 +25,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 
-/** How long a search runs before it stops by itself. */
 private const val SEARCH_TIMEOUT_MILLIS = 20_000L
 
-/** Lives above the style and navigation-entry compositions, so rendering never owns a connection. */
 @Stable
 internal class AddDeviceFlow(
     private val scope: CoroutineScope,
@@ -43,7 +41,6 @@ internal class AddDeviceFlow(
     var scanError by mutableStateOf<ControlError?>(null)
         private set
 
-    /** The search ended because [SEARCH_TIMEOUT_MILLIS] ran out, not because the user or the screen stopped it. */
     var scanTimedOut by mutableStateOf(false)
         private set
     private var scanRequest: Deferred<OperationResult>? = null
@@ -75,7 +72,6 @@ internal class AddDeviceFlow(
         model.stopScan()
     }
 
-    /** The search timer ran out: stops like [stopSearch] and lets the screen say so. */
     fun stopSearchAfterTimeout() {
         if (scanRequest == null) return
         scanTimedOut = true
@@ -164,7 +160,6 @@ internal class AddDeviceFlow(
 @Composable
 internal expect fun rememberAddDeviceFlow(model: OpenRoseModel): AddDeviceFlow
 
-/** Detaching a rendition stops discovery. Leaving the route also cancels the attempt it started. */
 @Composable
 internal fun AddDeviceLifecycle(active: Boolean, state: ControlState, flow: AddDeviceFlow, onReady: () -> Unit) {
     val canScan = state.canSearchForHeadphones()

@@ -150,7 +150,6 @@ private fun touchBindingStatus(
     return semanticLabel(action)
 }
 
-/** The action being written to one slot's binding, for the row that shows its progress while the confirmed one stays. */
 private fun ControlState.pendingBinding(device: DeviceState, setting: DeviceSetting, side: String, gesture: String): String? {
     val assignment = pendingValue<FieldValue.TouchAssignment>(device, setting)
     return assignment?.takeIf { it.side == side && it.gesture == gesture }?.action
@@ -218,7 +217,6 @@ private fun TouchBindingRow(
     }
 }
 
-/** A binding row's frame: in Material 3 a bordered tile that lifts while its choice is open; Miuix rows need none. */
 @Composable
 private fun ContainedBindingRow(isOpen: Boolean, content: @Composable () -> Unit) {
     if (LocalInterfaceStyle.current != InterfaceStyle.MATERIAL3) {

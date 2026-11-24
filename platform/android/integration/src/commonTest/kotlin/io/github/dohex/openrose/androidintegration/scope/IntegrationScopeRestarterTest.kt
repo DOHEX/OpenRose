@@ -35,7 +35,6 @@ class IntegrationScopeRestarterTest {
         assertEquals(3, results.size)
         assertTrue(results.all { it.status == ScopeRestartStatus.FAILED && it.detail == "无法启动 Root：su 不可用" })
         assertEquals<List<ScopeRestartUpdate>>(results, reported)
-        // The failed launch must not leave the operation locked.
         assertEquals(
             ScopeRestartStatus.NOT_RUNNING,
             scripted("OPENROSE_ROOT_OK", "OPENROSE_RESULT:com.milink.service:NOT_RUNNING")
@@ -91,7 +90,6 @@ class IntegrationScopeRestarterTest {
             ),
             results,
         )
-        // Updates arrive in output order, the first result of a scope wins, and unmatched scopes are reported last.
         assertEquals(
             listOf(
                 ScopeRestartPhase.Signalling,

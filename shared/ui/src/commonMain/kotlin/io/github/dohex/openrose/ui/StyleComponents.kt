@@ -45,10 +45,8 @@ import top.yukonga.miuix.kmp.theme.lightColorScheme as miuixLightColorScheme
 
 val LocalInterfaceStyle = staticCompositionLocalOf { InterfaceStyle.MIUIX }
 
-// Owned above the style branch so an open picker survives component replacement.
 internal val LocalChoiceDialog = staticCompositionLocalOf<MutableState<String?>?> { null }
 
-/** What Material rows sit on: the page, a tile of a segmented [AppGroup], or a container that draws their background. */
 internal enum class RowPlacement { Page, Segmented, Contained }
 internal val LocalRowPlacement = staticCompositionLocalOf { RowPlacement.Page }
 
@@ -56,7 +54,6 @@ enum class AppColorRole { Primary, OnSurface, Summary, Error, Divider, SelectedC
 enum class AppTextRole { Display, Title, Body, Summary, Footnote }
 enum class AppButtonKind { Primary, Secondary }
 
-/** [disabledReason] makes the option unselectable in the radio and check groups, with the reason beside it; other components ignore it. */
 data class AppOption<T>(
     val value: T,
     val label: String,
@@ -65,7 +62,6 @@ data class AppOption<T>(
     val disabledReason: String? = null,
 )
 
-/** A small text button on a group's title line, for an action on the whole group such as resetting it. */
 class AppTitleAction(val label: String, val enabled: Boolean, val onClick: () -> Unit)
 
 @Composable
@@ -74,7 +70,6 @@ fun appColor(role: AppColorRole): Color = when (LocalInterfaceStyle.current) {
     InterfaceStyle.MATERIAL3 -> materialColor(role)
 }
 
-/** [dynamicColor] takes the system wallpaper colors (动态取色) where the platform provides them, else the style defaults. */
 @Composable
 fun ProvideInterfaceStyle(style: InterfaceStyle, dark: Boolean, dynamicColor: Boolean = false, content: @Composable () -> Unit) {
     CompositionLocalProvider(LocalInterfaceStyle provides style, LocalThemeTone provides ThemeTone(dark, dynamicColor)) {
@@ -93,7 +88,6 @@ fun ProvideInterfaceStyle(style: InterfaceStyle, dark: Boolean, dynamicColor: Bo
     }
 }
 
-/** Matches platform window decorations to the application's canvas. */
 fun interfaceBackgroundColor(style: InterfaceStyle, dark: Boolean): Color = when (style) {
     InterfaceStyle.MIUIX -> miuixColors(dark).surface
     InterfaceStyle.MATERIAL3 -> materialColors(dark).background
@@ -201,10 +195,6 @@ fun AppGroup(
     }
 }
 
-/**
- * Miuix has no text-only button, so the action is primary text set like the [SmallTitle] beside it: the same style and
- * vertical margin put both on one line, and its end margin ends the text on the card content's edge.
- */
 @Composable
 private fun MiuixGroupTitle(label: String, action: AppTitleAction?) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -223,10 +213,6 @@ private fun MiuixGroupTitle(label: String, action: AppTitleAction?) {
     }
 }
 
-/**
- * The action is an extra-small text button. Its 48dp touch target stands in for the line's vertical padding, and the
- * end padding ends its text on the content edge.
- */
 @Composable
 private fun MaterialGroupTitle(label: String, action: AppTitleAction?) {
     val padding = if (action == null) PaddingValues(16.dp, 8.dp) else PaddingValues(start = 16.dp, end = 4.dp)
@@ -249,11 +235,6 @@ private fun MaterialGroupTitle(label: String, action: AppTitleAction?) {
     }
 }
 
-/**
- * MD3E segmented list: every row is its own tile, [ListItemDefaults.SegmentedGap] apart. A row cannot know its position
- * in the group, so the group clips the outer corners to the list container shape and each row keeps the small resting
- * corners between tiles; pressing or selecting a row still morphs its own shape.
- */
 @Composable
 private fun MaterialSegmentedList(content: @Composable ColumnScope.() -> Unit) {
     CompositionLocalProvider(LocalRowPlacement provides RowPlacement.Segmented) {
@@ -296,12 +277,10 @@ internal fun AppDashboardCard(
 internal fun rowColors(): ListItemColors = when (LocalRowPlacement.current) {
     RowPlacement.Page -> ListItemDefaults.colors()
 
-    // Tiles take the list-item container role so they stand out from the page surface, enabled or not.
     RowPlacement.Segmented -> MaterialTheme.colorScheme.surfaceContainer.let { tile ->
         ListItemDefaults.segmentedColors(containerColor = tile, disabledContainerColor = tile)
     }
 
-    // The container shows through; a choice is marked by its control, not by a filled row.
     RowPlacement.Contained -> ListItemDefaults.colors(
         containerColor = Color.Transparent,
         disabledContainerColor = Color.Transparent,
@@ -309,7 +288,6 @@ internal fun rowColors(): ListItemColors = when (LocalRowPlacement.current) {
     )
 }
 
-/** Static rows have no interaction shapes, so inside a segmented group they clip to the resting tile shape. */
 @Composable
 private fun staticRowModifier(): Modifier = if (LocalRowPlacement.current == RowPlacement.Segmented) {
     Modifier.clip(ListItemDefaults.shapes().shape)
@@ -317,7 +295,6 @@ private fun staticRowModifier(): Modifier = if (LocalRowPlacement.current == Row
     Modifier
 }
 
-/** Rows one helper emits together are separate tiles inside a segmented group, so they keep the segment gap. */
 @Composable
 private fun rowArrangement(): Arrangement.Vertical = if (LocalRowPlacement.current == RowPlacement.Segmented) {
     Arrangement.spacedBy(ListItemDefaults.SegmentedGap)
@@ -327,13 +304,8 @@ private fun rowArrangement(): Arrangement.Vertical = if (LocalRowPlacement.curre
 
 private fun iconAction(icon: RoseIcon?): (@Composable () -> Unit)? = icon?.let { { AppIcon(it) } }
 
-/**
- * Interactive rows keep their leading and trailing content centred however far the text wraps, as Miuix rows do.
- * The MD3E default top-aligns them once a row reaches three-line height, which a wrapped summary does on a phone.
- */
 private val RowAlignment = Alignment.CenterVertically
 
-/** [endIcon] replaces the chevron, for a row that leaves the app, such as [RoseIcon.OPEN_IN_NEW]. */
 @Composable
 fun AppArrowRow(
     title: String,
@@ -353,7 +325,6 @@ fun AppArrowRow(
                 onClick = onClick,
             )
         } else {
-            // ArrowPreference always draws its own arrow, so a row with another end icon is a BasicComponent.
             BasicComponent(
                 title = title,
                 summary = summary,
@@ -387,7 +358,6 @@ fun AppArrowRow(
     }
 }
 
-/** Short values sit at the row end in both styles, coloured or not; long or multi-line values go under the title. */
 @Composable
 fun AppInfoRow(label: String, value: String, valueColor: Color? = null, summary: String? = null) {
     val trailing = value.length <= 32 && '\n' !in value
@@ -487,7 +457,6 @@ fun <T> AppRadioGroup(
     }
 }
 
-/** One option of [AppRadioGroup]; [writing] shows a spinner while the option is being written to the device. */
 @Composable
 private fun <T> RadioOption(option: AppOption<T>, chosen: Boolean, writing: Boolean, enabled: Boolean, onSelect: () -> Unit) {
     val modifier = Modifier.semantics {
@@ -528,7 +497,6 @@ private fun <T> RadioOption(option: AppOption<T>, chosen: Boolean, writing: Bool
     }
 }
 
-/** Miuix reports expansion but cannot restore it. An already-open choice uses the controlled dialog in a new shell. */
 @Composable
 private fun MiuixChoicePopup(
     isOpen: Boolean,
@@ -636,7 +604,6 @@ private fun <T> MaterialChoiceRow(
     }
 }
 
-/** The confirmed value of a choice row, with the progress line under it while a choice is being written. */
 @Composable
 private fun ChoiceValue(valueText: String, pendingLabel: String?) {
     if (pendingLabel == null) {
@@ -649,14 +616,12 @@ private fun ChoiceValue(valueText: String, pendingLabel: String?) {
     }
 }
 
-/** Closes a dialog on Escape, as a desktop user expects; every other key passes through. */
 internal fun Modifier.closeOnEscape(close: () -> Unit): Modifier = onPreviewKeyEvent {
     val escape = it.type == KeyEventType.KeyUp && it.key == Key.Escape
     if (escape) close()
     escape
 }
 
-/** What a choice row shows while a choice is written: the confirmed value stays, this says what is on its way. */
 @Composable
 private fun PendingChoiceLine(label: String) {
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -883,7 +848,6 @@ fun <T> AppCheckGroup(options: List<AppOption<T>>, checked: Set<T>, enabledFor: 
     }
 }
 
-/** A thin indeterminate bar while [active]; it keeps its height when idle so the layout does not jump. */
 @Composable
 internal fun AppSyncIndicator(active: Boolean, modifier: Modifier = Modifier) {
     Box(modifier.fillMaxWidth().height(4.dp)) {
@@ -922,7 +886,6 @@ fun AppButton(
     }
 }
 
-/** Makes a row observable by tag, so tests can assert the state it reports instead of its wording. */
 @Composable
 fun Tagged(tag: String, content: @Composable () -> Unit) {
     Box(Modifier.fillMaxWidth().testTag(tag)) { content() }
@@ -951,7 +914,6 @@ internal fun AppProgress(fraction: Float?) {
     }
 }
 
-/** An indeterminate spinner; [contentDescription] tells screen readers what is in progress. */
 @Composable
 fun AppBusyIndicator(size: androidx.compose.ui.unit.Dp? = null, contentDescription: String = "正在处理") {
     val described = Modifier.semantics { this.contentDescription = contentDescription }
@@ -1046,7 +1008,6 @@ private fun <T> MiuixChoiceRow(
     select: (T) -> Unit,
 ) {
     val selectedIndex = options.indexOfFirst { it.value == selected }
-    // The dropdown lists labels only, so a list with an unavailable option takes the dialog that can say why.
     val dropdownFits = selected != null && selectedIndex >= 0 && options.none { it.disabledReason != null }
     MiuixChoicePopup(isOpen, setOpen, dropdownFits, dropdown = { expanded ->
         OverlayDropdownPreference(

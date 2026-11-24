@@ -7,29 +7,17 @@ import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.OutputDirectory
 import org.gradle.api.tasks.TaskAction
 
-/**
- * The application version. `version.txt` at the repository root holds the latest release as `MAJOR.MINOR.PATCH`;
- * release-please rewrites it in each release PR. Every form a platform needs is derived here, so nothing else in
- * the build holds a version. CI sets the Gradle property `releaseBuild` only for a release tag matching the file.
- */
 class AppVersion internal constructor(major: Int, minor: Int, patch: Int, release: Boolean, commit: String?) {
-    /** `MAJOR.MINOR.PATCH`, the only form every desktop package accepts (MSI allows no suffix). */
     val packageVersion: String = "$major.$minor.$patch"
 
-    /** What users see: the release itself, or `-dev` and the commit for any other build. */
     val name: String = if (release) packageVersion else "$packageVersion-dev" + commit?.let { "+$it" }.orEmpty()
 
-    /**
-     * Android's versionCode, ordered like the versions it stands for. Android rejects 0, which only 0.0.0 maps to:
-     * the placeholder before the first release.
-     */
     val code: Int = (major * MAJOR_STEP + minor * MINOR_STEP + patch).coerceAtLeast(1)
 }
 
 private const val MAJOR_STEP = 1_000_000
 private const val MINOR_STEP = 1_000
 
-/** MSI caps major and minor at 255; [AppVersion.code] leaves three digits each to minor and patch. */
 private const val MAX_MAJOR_OR_MINOR = 255
 private const val MAX_PATCH = MINOR_STEP - 1
 
@@ -48,7 +36,6 @@ val Project.appVersion: AppVersion
         return AppVersion(major, minor, patch, release, if (release) null else currentCommit())
     }
 
-/** The checked-out commit, or null outside a git checkout (a source archive), where the version names no commit. */
 private fun Project.currentCommit(): String? = runCatching {
     providers.exec {
         commandLine("git", "rev-parse", "--short", "HEAD")
@@ -56,7 +43,6 @@ private fun Project.currentCommit(): String? = runCatching {
     }.standardOutput.asText.get().trim()
 }.getOrNull()?.ifEmpty { null }
 
-/** Writes `internal object AppVersion { const val NAME }` for a module's common code. */
 @CacheableTask
 abstract class GenerateAppVersionSource : DefaultTask() {
     @get:Input

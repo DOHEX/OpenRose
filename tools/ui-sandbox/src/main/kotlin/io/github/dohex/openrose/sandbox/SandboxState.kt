@@ -22,17 +22,11 @@ import kotlinx.collections.immutable.persistentMapOf
 
 private val batteryFields = listOf(DeviceField.LEFT_BATTERY, DeviceField.RIGHT_BATTERY, DeviceField.CASE_BATTERY)
 
-/** Advancing the same connection keeps its session. Restarting at an earlier phase creates another. */
 internal fun sameSession(previous: SandboxScenario, next: SandboxScenario): Boolean = previous.link >= SandboxLink.CONNECTING &&
     next.link >= previous.link &&
     previous.profile == next.profile &&
     previous.firmware == next.firmware
 
-/**
- * This state rebuilt for [scenario]: the platform, connection and device follow it, while settings, scans and
- * operations stay. With [keepReadings] a ready device keeps the readings its confirmed writes left and only takes the
- * scenario's battery.
- */
 internal fun ControlState.showing(scenario: SandboxScenario, sessionId: Long, keepReadings: Boolean): ControlState {
     val target = sandboxCandidate(scenario.profile)
     val kept = device?.diagnostics?.fields?.takeIf { keepReadings && scenario.link == SandboxLink.READY }
@@ -57,11 +51,9 @@ internal fun ControlState.showing(scenario: SandboxScenario, sessionId: Long, ke
     )
 }
 
-/** The model of a bonded or discovered device, for the app's own connect requests. */
 internal fun ControlState.profileOf(deviceId: DeviceId): ModelProfile? = (bondedDevices + candidates)
     .firstOrNull { it.deviceId == deviceId }?.profile
 
-/** What a scan finds: one device of every model, and one that is not a ROSE device. */
 internal val sandboxScanResults: List<DeviceCandidate>
     get() = ModelProfile.entries.map(::sandboxCandidate) + DeviceCandidate(DeviceId("sandbox-other"), "其他蓝牙耳机", -71, null, "")
 
@@ -81,7 +73,6 @@ private fun sandboxConnection(scenario: SandboxScenario, deviceId: DeviceId, ses
     SandboxLink.READY -> ConnectionState.Connected(deviceId, sessionId, scenario.profile)
 }
 
-/** An initializing device has read nothing yet. */
 private fun deviceReadings(
     scenario: SandboxScenario,
     capabilities: DeviceCapabilities,
@@ -97,7 +88,6 @@ private fun deviceReadings(
     else -> sandboxFields(scenario.profile, capabilities, scenario.firmwareValue, scenario.battery)
 }
 
-/** The platform facts each host reports, with the scenario's issue applied the way that host would show it. */
 private fun sandboxPlatform(scenario: SandboxScenario): PlatformState {
     val issue = scenario.issue
     return PlatformState(
