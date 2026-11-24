@@ -1,36 +1,17 @@
 package io.github.dohex.openrose.ui
 
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.FiniteAnimationSpec
-import androidx.compose.animation.core.MutableTransitionState
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.rememberTransition
-import androidx.compose.animation.core.spring
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.Orientation
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.draggable
-import androidx.compose.foundation.gestures.rememberDraggableState
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.DropdownMenuGroup
@@ -38,36 +19,27 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.DropdownMenuPopup
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ListItem
 import androidx.compose.material3.MenuDefaults
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Shape
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.clearAndSetSemantics
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import io.github.dohex.openrose.circulation.CirculationClient
 import io.github.dohex.openrose.core.ControlState
@@ -79,27 +51,14 @@ import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.ui.model.OpenRoseModel
 import io.github.dohex.openrose.ui.model.WindowDestination
 import io.github.dohex.openrose.ui.model.settingsFor
-import kotlinx.coroutines.launch
-import top.yukonga.miuix.kmp.basic.DropdownImpl
-import top.yukonga.miuix.kmp.basic.ListPopupColumn
-import top.yukonga.miuix.kmp.basic.PopupPositionProvider
+import top.yukonga.miuix.kmp.basic.DropdownEntry
+import top.yukonga.miuix.kmp.basic.DropdownItem
+import top.yukonga.miuix.kmp.preference.WindowDropdownPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import top.yukonga.miuix.kmp.window.WindowListPopup
-import kotlin.math.roundToInt
-
-internal const val QUICK_PANEL_SCRIM_TAG = "quick-panel-scrim"
-
-internal const val QUICK_PANEL_HANDLE_TAG = "quick-panel-handle"
-
+import top.yukonga.miuix.kmp.window.WindowBottomSheet
 internal const val QUICK_EQUALIZER_MENU_TAG = "quick-eq-menu"
 
 internal val ContentMaxWidth = 640.dp
-private val SheetCorner = 28.dp
-private const val SCRIM_ALPHA = 0.32f
-
-private const val DISMISS_FRACTION = 0.3f
-
-private val DismissVelocity = 1000.dp
 
 @Composable
 fun QuickPanel(
@@ -115,165 +74,91 @@ fun QuickPanel(
     val uiSettings by model.uiSettings.collectAsState()
     val dark = uiSettings.appearance.isDark()
     val dismiss by rememberUpdatedState(onDismiss)
-    val scope = rememberCoroutineScope()
-    val reduceMotion = rememberReduceMotion()
-    val entryState = remember { MutableTransitionState(reduceMotion).apply { targetState = true } }
-    val entry = rememberTransition(entryState, "quickPanelEntry")
-    val dropped = remember { Animatable(0f, visibilityThreshold = 0.001f).apply { updateBounds(0f, 1f) } }
-    var sheetHeight by remember { mutableIntStateOf(0) }
-    var exitStart by remember { mutableStateOf<EntryFrame?>(null) }
     ProvideInterfaceStyle(uiSettings.interfaceStyle, dark, dynamicColor) {
-        val style = sheetStyle()
-        val height by entry.animateFloat({ style.spatial }, "sheetHeight") { if (it) 1f else 0f }
-        val opacity by entry.animateFloat({ style.effects }, "scrimOpacity") { if (it) 1f else 0f }
-        fun entryHeight() = exitStart?.height ?: height.coerceIn(0f, 1f)
-        fun entryOpacity() = exitStart?.opacity ?: opacity.coerceIn(0f, 1f)
-        fun visibleHeight() = (sheetHeight * entryHeight()).coerceAtLeast(1f)
-        suspend fun settle(target: Float, velocity: Float = 0f) {
-            if (reduceMotion) {
-                dropped.snapTo(target)
-            } else {
-                dropped.animateTo(target, style.spatial, initialVelocity = velocity / visibleHeight())
-            }
-        }
-
-        fun close(velocity: Float = 0f) {
-            if (exitStart != null) return
-            exitStart = EntryFrame(entryHeight(), entryOpacity())
-            scope.launch {
-                settle(1f, velocity)
-                dismiss()
-            }
-        }
-
-        PlatformBackHandler(enabled = exitStart == null) { close() }
         Box(modifier.fillMaxSize()) {
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .testTag(QUICK_PANEL_SCRIM_TAG)
-                    .drawBehind {
-                        drawRect(style.scrim, alpha = entryOpacity() * (1f - dropped.value))
-                    }
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClickLabel = "关闭快捷面板",
-                        onClick = { close() },
-                    ),
-            )
-            Column(
-                Modifier
-                    .align(Alignment.BottomCenter)
-                    .offset {
-                        val visible = entryHeight() * (1f - dropped.value)
-                        IntOffset(0, (sheetHeight * (1f - visible)).roundToInt())
-                    }
-                    .onSizeChanged { sheetHeight = it.height }
-                    .widthIn(max = ContentMaxWidth)
-                    .fillMaxWidth()
-                    .statusBarsPadding()
-                    .clip(style.shape)
-                    .background(style.container)
-                    .pointerInput(Unit) { detectTapGestures { } }
-                    .verticalScroll(rememberScrollState())
-                    .navigationBarsPadding()
-                    .padding(bottom = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                SheetHandle(
-                    isClosing = { exitStart != null },
-                    dragBy = { delta -> dropped.snapTo(dropped.value + delta / visibleHeight()) },
-                    pastDismissDistance = { dropped.value * entryHeight() > DISMISS_FRACTION },
-                    rebound = { velocity -> settle(0f, velocity) },
-                    close = ::close,
-                )
-                QuickPanelContent(model, state, selection, circulation, onOpenApp)
+            when (uiSettings.interfaceStyle) {
+                InterfaceStyle.MIUIX -> MiuixQuickPanelSheet(onDismiss = { dismiss() }) {
+                    QuickPanelContent(model, state, selection, circulation, onOpenApp)
+                }
+
+                InterfaceStyle.MATERIAL3 -> MaterialQuickPanelSheet(onDismiss = { dismiss() }) {
+                    QuickPanelContent(model, state, selection, circulation, onOpenApp)
+                }
             }
         }
     }
 }
 
-private val sheetSpring = spring<Float>(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium)
-
-private data class EntryFrame(val height: Float, val opacity: Float)
-
-private class SheetStyle(
-    val shape: Shape,
-    val container: Color,
-    val scrim: Color,
-    val spatial: FiniteAnimationSpec<Float>,
-    val effects: FiniteAnimationSpec<Float>,
-)
-
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun sheetStyle() = when (LocalInterfaceStyle.current) {
-    InterfaceStyle.MATERIAL3 -> SheetStyle(
-        BottomSheetDefaults.ExpandedShape,
-        BottomSheetDefaults.ContainerColor,
-        BottomSheetDefaults.ScrimColor,
-        MaterialTheme.motionScheme.defaultSpatialSpec(),
-        MaterialTheme.motionScheme.defaultEffectsSpec(),
-    )
-
-    InterfaceStyle.MIUIX -> SheetStyle(
-        RoundedCornerShape(topStart = SheetCorner, topEnd = SheetCorner),
-        MiuixTheme.colorScheme.surface,
-        Color.Black.copy(alpha = SCRIM_ALPHA),
-        sheetSpring,
-        sheetSpring,
-    )
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun SheetHandle(
-    isClosing: () -> Boolean,
-    dragBy: suspend (Float) -> Unit,
-    pastDismissDistance: () -> Boolean,
-    rebound: suspend (Float) -> Unit,
-    close: (Float) -> Unit,
+private fun MiuixQuickPanelSheet(
+    onDismiss: () -> Unit,
+    content: @Composable ColumnScope.() -> Unit,
 ) {
-    val scope = rememberCoroutineScope()
-    val dismissVelocity = with(LocalDensity.current) { DismissVelocity.toPx() }
-    Box(
-        Modifier
-            .draggable(
-                state = rememberDraggableState { delta ->
-                    scope.launch { if (!isClosing()) dragBy(delta) }
-                },
-                orientation = Orientation.Vertical,
-                enabled = !isClosing(),
-                onDragStopped = { velocity ->
-                    if (isClosing()) return@draggable
-                    if (pastDismissDistance() || velocity > dismissVelocity) close(velocity) else rebound(velocity)
-                },
-            )
-            .testTag(QUICK_PANEL_HANDLE_TAG)
-            .fillMaxWidth()
-            .clearAndSetSemantics {
-                role = Role.Button
-                contentDescription = "快捷面板拖动条"
-                onClick(label = "关闭快捷面板") {
-                    close(0f)
-                    true
-                }
-            },
-        contentAlignment = Alignment.Center,
+    var show by remember { mutableStateOf(true) }
+    var dismissed by remember { mutableStateOf(false) }
+    WindowBottomSheet(
+        show = show,
+        backgroundColor = MiuixTheme.colorScheme.surface,
+        sheetMaxWidth = ContentMaxWidth,
+        insideMargin = DpSize(0.dp, 0.dp),
+        onDismissRequest = { show = false },
+        onDismissFinished = {
+            if (!dismissed) {
+                dismissed = true
+                onDismiss()
+            }
+        },
     ) {
-        when (LocalInterfaceStyle.current) {
-            InterfaceStyle.MATERIAL3 -> BottomSheetDefaults.DragHandle()
-
-            InterfaceStyle.MIUIX -> Box(
-                Modifier.padding(vertical = 8.dp).width(36.dp).height(4.dp)
-                    .clip(RoundedCornerShape(2.dp))
-                    .background(appColor(AppColorRole.Summary).copy(alpha = 0.4f)),
-            )
-        }
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .navigationBarsPadding()
+                .padding(bottom = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            content = content,
+        )
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun MaterialQuickPanelSheet(
+    onDismiss: () -> Unit,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    val sheetState = rememberBottomSheetState(
+        initialValue = SheetValue.Hidden,
+        enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded),
+    )
+    var show by remember { mutableStateOf(true) }
+    var dismissed by remember { mutableStateOf(false) }
+    if (!show) return
+    ModalBottomSheet(
+        onDismissRequest = {
+            show = false
+            if (!dismissed) {
+                dismissed = true
+                onDismiss()
+            }
+        },
+        sheetState = sheetState,
+        sheetMaxWidth = ContentMaxWidth,
+        shape = BottomSheetDefaults.ExpandedShape,
+        containerColor = BottomSheetDefaults.ContainerColor,
+        scrimColor = BottomSheetDefaults.ScrimColor,
+        dragHandle = { BottomSheetDefaults.DragHandle() },
+    ) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(bottom = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            content = content,
+        )
+    }
+}
 @Composable
 private fun QuickPanelContent(
     model: OpenRoseModel,
@@ -390,7 +275,6 @@ private fun QuickPanelActions(offerAdd: Boolean, onOpenApp: (WindowDestination?)
     }
 }
 
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun QuickEqualizerMenu(state: ControlState, device: DeviceState, onSet: (HeadsetCommand) -> Unit) {
     val options = device.writablePresetOptions()
@@ -398,71 +282,103 @@ private fun QuickEqualizerMenu(state: ControlState, device: DeviceState, onSet: 
     val blocked = state.writeBlockedReason(device, DeviceSetting.EQ)
     val enabled = blocked == null
     val confirmed = device.confirmedText(DeviceField.EQ)
-    var expanded by remember(device.sessionId, enabled) { mutableStateOf(false) }
-    fun select(preset: String) {
-        if (!enabled || !expanded) return
-        expanded = false
-        if (preset != confirmed) onSet(HeadsetCommand.EqualizerPreset(preset))
+    val valueText = confirmedChoiceValue(DeviceField.EQ, device)
+    val select: (String) -> Unit = { preset ->
+        if (enabled && preset != confirmed) onSet(HeadsetCommand.EqualizerPreset(preset))
     }
 
     AppDashboardCard(compact = true) {
-        Box {
-            val valueColor = appColor(if (enabled) AppColorRole.Summary else AppColorRole.DisabledContent)
-            Row(
-                Modifier.fillMaxWidth().testTag(QUICK_EQUALIZER_MENU_TAG)
-                    .clickable(enabled = enabled, role = Role.DropdownList) { expanded = true }
-                    .heightIn(min = 56.dp).padding(horizontal = 16.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                AppText("均衡器", color = if (enabled) null else valueColor)
-                AppText(
-                    confirmedChoiceValue(DeviceField.EQ, device),
-                    Modifier.weight(1f),
-                    role = AppTextRole.Summary,
-                    color = valueColor,
-                    textAlign = TextAlign.End,
-                )
-                ExpansionIcon(expanded, Modifier.size(20.dp), tint = valueColor)
-            }
-            when (LocalInterfaceStyle.current) {
-                InterfaceStyle.MIUIX -> WindowListPopup(
-                    show = expanded,
-                    alignment = PopupPositionProvider.Align.End,
-                    enableWindowDim = false,
-                    onDismissRequest = { expanded = false },
-                ) {
-                    ListPopupColumn {
-                        options.forEachIndexed { index, option ->
-                            DropdownImpl(
-                                text = option.label,
-                                optionSize = options.size,
-                                isSelected = option.value == confirmed,
-                                index = index,
-                                onSelectedIndexChange = { select(option.value) },
-                            )
-                        }
-                    }
-                }
+        when (LocalInterfaceStyle.current) {
+            InterfaceStyle.MIUIX -> MiuixQuickEqualizerRow(options, confirmed, valueText, enabled, select)
+            InterfaceStyle.MATERIAL3 -> MaterialQuickEqualizerRow(device.sessionId, options, confirmed, valueText, enabled, select)
+        }
+        blocked?.let { AppText(it, Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp), role = AppTextRole.Footnote) }
+    }
+}
 
-                InterfaceStyle.MATERIAL3 -> DropdownMenuPopup(expanded = expanded, onDismissRequest = { expanded = false }) {
-                    DropdownMenuGroup(
-                        shapes = MenuDefaults.groupShapes(),
-                        modifier = Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState()),
-                    ) {
-                        options.forEachIndexed { index, option ->
-                            DropdownMenuItem(
-                                selected = option.value == confirmed,
-                                onClick = { select(option.value) },
-                                text = { Text(option.label) },
-                                selectedLeadingIcon = { AppIcon(RoseIcon.CHECK) },
-                                shapes = MenuDefaults.itemShape(index, options.size),
-                            )
-                        }
-                    }
+@Composable
+private fun MiuixQuickEqualizerRow(
+    options: List<AppOption<String>>,
+    confirmed: String?,
+    valueText: String,
+    enabled: Boolean,
+    onSelect: (String) -> Unit,
+) {
+    val hasSelected = confirmed != null && options.any { it.value == confirmed }
+    val entry = remember(options, confirmed, enabled, onSelect) {
+        DropdownEntry(
+            options.map { option ->
+                DropdownItem(
+                    text = option.label,
+                    selected = confirmed != null && option.value == confirmed,
+                    enabled = enabled,
+                    onClick = { onSelect(option.value) },
+                )
+            },
+        )
+    }
+    WindowDropdownPreference(
+        entry = entry,
+        title = "均衡器",
+        modifier = Modifier
+            .heightIn(min = 60.dp)
+            .testTag(QUICK_EQUALIZER_MENU_TAG)
+            .semantics { if (!enabled) disabled() },
+        summary = valueText.takeIf { !hasSelected },
+        startAction = { AppIcon(RoseIcon.EQUALIZER) },
+        enabled = enabled,
+        showValue = hasSelected,
+    )
+}
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun MaterialQuickEqualizerRow(
+    sessionId: Any,
+    options: List<AppOption<String>>,
+    confirmed: String?,
+    valueText: String,
+    enabled: Boolean,
+    onSelect: (String) -> Unit,
+) {
+    var expanded by remember(sessionId, enabled) { mutableStateOf(false) }
+    val valueColor = appColor(if (enabled) AppColorRole.Summary else AppColorRole.DisabledContent)
+    Box {
+        ListItem(
+            onClick = { expanded = true },
+            modifier = Modifier.testTag(QUICK_EQUALIZER_MENU_TAG).semantics { role = Role.DropdownList },
+            enabled = enabled,
+            leadingContent = { AppIcon(RoseIcon.EQUALIZER) },
+            verticalAlignment = Alignment.CenterVertically,
+            trailingContent = {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(valueText)
+                    ExpansionIcon(expanded, Modifier.size(20.dp), tint = valueColor)
+                }
+            },
+            colors = rowColors(),
+        ) { Text("均衡器") }
+        DropdownMenuPopup(expanded = expanded, onDismissRequest = { expanded = false }) {
+            DropdownMenuGroup(
+                shapes = MenuDefaults.groupShapes(),
+                modifier = Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState()),
+            ) {
+                options.forEachIndexed { index, option ->
+                    DropdownMenuItem(
+                        selected = option.value == confirmed,
+                        onClick = {
+                            expanded = false
+                            onSelect(option.value)
+                        },
+                        text = { Text(option.label) },
+                        selectedLeadingIcon = { AppIcon(RoseIcon.CHECK) },
+                        shapes = MenuDefaults.itemShape(index, options.size),
+                    )
                 }
             }
         }
-        blocked?.let { AppText(it, Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp), role = AppTextRole.Footnote) }
     }
 }

@@ -17,7 +17,7 @@ import io.github.dohex.openrose.ui.PrimaryDeviceSelection
 import io.github.dohex.openrose.ui.QuickPanel
 import io.github.dohex.openrose.ui.model.WindowDestination
 
-private val panelStatusBarStyle = SystemBarStyle.dark(0x99000000.toInt())
+private val panelStatusBarStyle = SystemBarStyle.dark(Color.TRANSPARENT)
 
 class QuickPanelActivity : ComponentActivity() {
     private val owner get() = application as OpenRoseApplication

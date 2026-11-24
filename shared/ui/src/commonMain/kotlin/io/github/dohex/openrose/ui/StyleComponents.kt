@@ -200,14 +200,22 @@ private fun MiuixGroupTitle(label: String, action: AppTitleAction?) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         SmallTitle(label, Modifier.weight(1f).semantics { heading() })
         action?.let {
-            MiuixText(
-                it.label,
-                modifier = Modifier.padding(end = 16.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .clickable(enabled = it.enabled, role = Role.Button, onClick = it.onClick)
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
-                color = if (it.enabled) MiuixTheme.colorScheme.primary else MiuixTheme.colorScheme.disabledOnSurface,
-                style = MiuixTheme.textStyles.subtitle,
+            MiuixTextButton(
+                text = it.label,
+                onClick = it.onClick,
+                modifier = Modifier.padding(end = 16.dp),
+                enabled = it.enabled,
+                cornerRadius = 8.dp,
+                minWidth = 0.dp,
+                minHeight = 0.dp,
+                colors = MiuixButtonDefaults.textButtonColors(
+                    color = Color.Transparent,
+                    disabledColor = Color.Transparent,
+                    textColor = MiuixTheme.colorScheme.primary,
+                    disabledTextColor = MiuixTheme.colorScheme.disabledOnSurface,
+                ),
+                insideMargin = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                textStyle = MiuixTheme.textStyles.subtitle,
             )
         }
     }

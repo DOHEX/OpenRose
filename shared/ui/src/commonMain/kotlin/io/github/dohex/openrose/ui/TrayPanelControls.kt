@@ -1,6 +1,5 @@
 package io.github.dohex.openrose.ui
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -8,7 +7,6 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -17,6 +15,7 @@ import androidx.compose.material3.DropdownMenuGroup
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.DropdownMenuPopup
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.ListItem
 import androidx.compose.material3.MenuDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -37,7 +36,6 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.toggleableState
 import androidx.compose.ui.state.ToggleableState
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import io.github.dohex.openrose.core.ControlState
 import io.github.dohex.openrose.core.DeviceSetting
@@ -235,6 +233,7 @@ private fun TrayToggleControl(
     )
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 internal fun TrayToggleRow(
     label: String,
@@ -254,37 +253,28 @@ internal fun TrayToggleRow(
             enabled = enabled,
         )
 
-        InterfaceStyle.MATERIAL3 -> Row(
+        InterfaceStyle.MATERIAL3 -> ListItem(
+            onClick = { onToggle(!checked) },
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(10.dp))
-                .clickable(enabled = enabled, role = Role.Switch) { onToggle(!checked) }
                 .semantics {
                     role = Role.Switch
                     toggleableState = ToggleableState(checked)
                     if (!enabled) disabled()
-                }
-                .heightIn(min = 36.dp)
-                .padding(horizontal = 8.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                },
+            enabled = enabled,
             verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(2.dp),
-            ) {
-                AppText(
-                    label,
-                    color = if (enabled) null else appColor(AppColorRole.DisabledContent),
+            supportingContent = summary?.let { { Text(it) } },
+            trailingContent = {
+                Switch(
+                    checked = checked,
+                    onCheckedChange = null,
+                    enabled = enabled,
                 )
-                summary?.let { AppText(it, role = AppTextRole.Footnote) }
-            }
-            Switch(
-                checked = checked,
-                onCheckedChange = null,
-                enabled = enabled,
-            )
-        }
+            },
+            colors = rowColors(),
+        ) { Text(label) }
     }
 }
 
@@ -378,51 +368,50 @@ private fun MaterialTrayDropdownRow(
     onSelect: (String) -> Unit,
 ) {
     val valueColor = appColor(if (spec.enabled) AppColorRole.Summary else AppColorRole.DisabledContent)
-    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Box(Modifier.fillMaxWidth()) {
-            val headerModifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(10.dp))
-                .let { base -> spec.headerTag?.let { base.testTag(it) } ?: base }
-                .clickable(enabled = spec.enabled, role = Role.DropdownList) { onExpandedChange(true) }
-                .semantics { if (!spec.enabled) disabled() }
-                .heightIn(min = 36.dp)
-                .padding(horizontal = 8.dp, vertical = 4.dp)
-            Row(
-                modifier = headerModifier,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                AppText(spec.title, color = if (spec.enabled) null else valueColor)
-                AppText(
-                    spec.valueText,
-                    Modifier.weight(1f),
-                    role = AppTextRole.Summary,
-                    color = valueColor,
-                    textAlign = TextAlign.End,
-                )
-                ExpansionIcon(expanded, Modifier.size(18.dp), tint = valueColor)
+    Box(Modifier.fillMaxWidth()) {
+        val headerModifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .let { base -> spec.headerTag?.let { base.testTag(it) } ?: base }
+            .semantics {
+                role = Role.DropdownList
+                if (!spec.enabled) disabled()
             }
-            DropdownMenuPopup(expanded = expanded, onDismissRequest = { onExpandedChange(false) }) {
-                DropdownMenuGroup(
-                    shapes = MenuDefaults.groupShapes(),
-                    modifier = Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState()),
+        ListItem(
+            onClick = { onExpandedChange(true) },
+            modifier = headerModifier,
+            enabled = spec.enabled,
+            verticalAlignment = Alignment.CenterVertically,
+            supportingContent = spec.summary?.let { { Text(it) } },
+            trailingContent = {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    spec.options.forEachIndexed { index, option ->
-                        DropdownMenuItem(
-                            selected = spec.selected != null && option.value == spec.selected,
-                            onClick = {
-                                onExpandedChange(false)
-                                if (option.value != spec.selected) onSelect(option.value)
-                            },
-                            text = { Text(option.label) },
-                            selectedLeadingIcon = { AppIcon(RoseIcon.CHECK) },
-                            shapes = MenuDefaults.itemShape(index, spec.options.size),
-                        )
-                    }
+                    Text(spec.valueText)
+                    ExpansionIcon(expanded, Modifier.size(18.dp), tint = valueColor)
+                }
+            },
+            colors = rowColors(),
+        ) { Text(spec.title) }
+        DropdownMenuPopup(expanded = expanded, onDismissRequest = { onExpandedChange(false) }) {
+            DropdownMenuGroup(
+                shapes = MenuDefaults.groupShapes(),
+                modifier = Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState()),
+            ) {
+                spec.options.forEachIndexed { index, option ->
+                    DropdownMenuItem(
+                        selected = spec.selected != null && option.value == spec.selected,
+                        onClick = {
+                            onExpandedChange(false)
+                            if (option.value != spec.selected) onSelect(option.value)
+                        },
+                        text = { Text(option.label) },
+                        selectedLeadingIcon = { AppIcon(RoseIcon.CHECK) },
+                        shapes = MenuDefaults.itemShape(index, spec.options.size),
+                    )
                 }
             }
         }
-        spec.summary?.let { AppText(it, Modifier.padding(horizontal = 12.dp), role = AppTextRole.Footnote) }
     }
 }

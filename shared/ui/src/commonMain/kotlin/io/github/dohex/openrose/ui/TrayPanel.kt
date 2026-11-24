@@ -1,25 +1,28 @@
 package io.github.dohex.openrose.ui
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.PlainTooltip
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TooltipAnchorPosition
 import androidx.compose.material3.TooltipBox
 import androidx.compose.material3.TooltipDefaults
@@ -41,7 +44,6 @@ import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import io.github.dohex.openrose.circulation.CirculationClient
@@ -67,7 +69,12 @@ import io.github.dohex.openrose.ui.resources.msr_headset_off
 import io.github.dohex.openrose.ui.resources.tray_headphones_remote
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.vectorResource
+import top.yukonga.miuix.kmp.basic.Button as MiuixButton
+import top.yukonga.miuix.kmp.basic.ButtonDefaults as MiuixButtonDefaults
+import top.yukonga.miuix.kmp.basic.HorizontalDivider as MiuixHorizontalDivider
 import top.yukonga.miuix.kmp.basic.Scaffold as MiuixScaffold
+import top.yukonga.miuix.kmp.basic.TextButton as MiuixTextButton
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 data class TrayNoiseMode(val mode: NoiseMode, val label: String, val selected: Boolean, val enabled: Boolean)
 
@@ -248,23 +255,24 @@ private fun TrayFooter(offerAdd: Boolean, hasRemoteHeadset: Boolean, onOpenApp: 
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         TrayDivider()
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Row(
-                Modifier
-                    .weight(1f)
-                    .clip(RoundedCornerShape(8.dp))
-                    .clickable(role = Role.Button) { onOpenApp(null) }
-                    .heightIn(min = 32.dp)
-                    .padding(horizontal = 6.dp),
-                horizontalArrangement = Arrangement.spacedBy(5.dp),
-                verticalAlignment = Alignment.CenterVertically,
+            TrayContentTextButton(
+                onClick = { onOpenApp(null) },
+                modifier = Modifier.weight(1f),
+                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp),
             ) {
-                AppText("打开 OpenRose", role = AppTextRole.Footnote)
-                AppIcon(RoseIcon.OPEN_IN_NEW, modifier = Modifier.size(13.dp), tint = appColor(AppColorRole.Summary))
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(5.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    AppText("打开 OpenRose", role = AppTextRole.Footnote)
+                    AppIcon(RoseIcon.OPEN_IN_NEW, modifier = Modifier.size(13.dp), tint = appColor(AppColorRole.Summary))
+                }
             }
             if (offerAdd && hasRemoteHeadset) {
                 TrayTextButton("添加耳机", addDevice)
             } else if (!offerAdd) {
-                TrayTextButton("自定义") { onOpenApp(WindowDestination.TRAY_PANEL_SETTINGS) }
+                TrayTextButton("自定义", { onOpenApp(WindowDestination.TRAY_PANEL_SETTINGS) })
             }
         }
     }
@@ -338,18 +346,18 @@ private fun TraySecondaryHeadset(
     )
     source.transferFeedback?.let { AppText(it, role = AppTextRole.Footnote) }
     if (remote != null) {
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(6.dp))
-                .clickable(role = Role.Button) { expanded = !expanded }
-                .heightIn(min = 26.dp)
-                .padding(horizontal = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterHorizontally),
-            verticalAlignment = Alignment.CenterVertically,
+        TrayContentTextButton(
+            onClick = { expanded = !expanded },
+            modifier = Modifier.fillMaxWidth(),
+            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
         ) {
-            AppText(if (expanded) "收起远端控制" else "展开远端控制", role = AppTextRole.Footnote)
-            ExpansionIcon(expanded, Modifier.size(14.dp), tint = appColor(AppColorRole.Summary))
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterHorizontally),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                AppText(if (expanded) "收起远端控制" else "展开远端控制", role = AppTextRole.Footnote)
+                ExpansionIcon(expanded, Modifier.size(14.dp), tint = appColor(AppColorRole.Summary))
+            }
         }
         if (expanded) {
             TrayBatteryPills(remote.trayBatteryItems())
@@ -495,7 +503,7 @@ private fun TrayHeadsetHeader(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun TrayInlineActionButton(
     text: String,
@@ -504,35 +512,35 @@ private fun TrayInlineActionButton(
     emphasized: Boolean = true,
     tooltip: String? = null,
 ) {
-    val shape = RoundedCornerShape(8.dp)
-    val primary = appColor(AppColorRole.Primary)
-    val background = when {
-        !enabled -> appColor(AppColorRole.OnSurface).copy(alpha = 0.05f)
-        emphasized -> primary.copy(alpha = 0.14f)
-        else -> appColor(AppColorRole.OnSurface).copy(alpha = 0.06f)
-    }
-    val borderColor = when {
-        !enabled -> appColor(AppColorRole.Divider)
-        emphasized -> primary.copy(alpha = 0.35f)
-        else -> appColor(AppColorRole.Divider)
-    }
-    val textColor = when {
-        !enabled -> appColor(AppColorRole.DisabledContent)
-        emphasized -> primary
-        else -> appColor(AppColorRole.OnSurface)
-    }
     val button: @Composable () -> Unit = {
-        Box(
-            Modifier
-                .clip(shape)
-                .background(background, shape)
-                .border(BorderStroke(1.dp, borderColor), shape)
-                .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
-                .heightIn(min = 28.dp)
-                .padding(horizontal = 10.dp, vertical = 4.dp),
-            contentAlignment = Alignment.Center,
-        ) {
-            AppText(text, role = AppTextRole.Footnote, color = textColor, maxLines = 1)
+        when (LocalInterfaceStyle.current) {
+            InterfaceStyle.MIUIX -> MiuixTextButton(
+                text = text,
+                onClick = onClick,
+                enabled = enabled,
+                cornerRadius = 8.dp,
+                minWidth = 0.dp,
+                minHeight = 28.dp,
+                colors = if (emphasized) MiuixButtonDefaults.textButtonColorsPrimary() else MiuixButtonDefaults.textButtonColors(),
+                insideMargin = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                textStyle = MiuixTheme.textStyles.footnote1,
+            )
+
+            InterfaceStyle.MATERIAL3 -> if (emphasized) {
+                FilledTonalButton(
+                    onClick = onClick,
+                    shapes = ButtonDefaults.shapesFor(ButtonDefaults.ExtraSmallContainerHeight),
+                    enabled = enabled,
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                ) { Text(text) }
+            } else {
+                OutlinedButton(
+                    onClick = onClick,
+                    shapes = ButtonDefaults.shapesFor(ButtonDefaults.ExtraSmallContainerHeight),
+                    enabled = enabled,
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                ) { Text(text) }
+            }
         }
     }
     if (tooltip != null) {
@@ -548,22 +556,27 @@ private fun TrayInlineActionButton(
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun TrayCompactPrimaryButton(text: String, onClick: () -> Unit) {
-    val shape = RoundedCornerShape(9.dp)
-    val primary = appColor(AppColorRole.Primary)
-    Box(
-        Modifier
-            .fillMaxWidth()
-            .clip(shape)
-            .background(primary.copy(alpha = 0.14f), shape)
-            .border(BorderStroke(1.dp, primary.copy(alpha = 0.35f)), shape)
-            .clickable(role = Role.Button, onClick = onClick)
-            .heightIn(min = 34.dp)
-            .padding(horizontal = 12.dp, vertical = 6.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        AppText(text, role = AppTextRole.Summary, color = primary, maxLines = 1)
+    when (LocalInterfaceStyle.current) {
+        InterfaceStyle.MIUIX -> MiuixTextButton(
+            text = text,
+            onClick = onClick,
+            modifier = Modifier.fillMaxWidth(),
+            cornerRadius = 9.dp,
+            minHeight = 34.dp,
+            colors = MiuixButtonDefaults.textButtonColorsPrimary(),
+            insideMargin = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+            textStyle = MiuixTheme.textStyles.body2,
+        )
+
+        InterfaceStyle.MATERIAL3 -> FilledTonalButton(
+            onClick = onClick,
+            shapes = ButtonDefaults.shapesFor(ButtonDefaults.ExtraSmallContainerHeight),
+            modifier = Modifier.fillMaxWidth(),
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+        ) { Text(text) }
     }
 }
 
@@ -607,20 +620,74 @@ internal fun PanelConnectionActions(
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-internal fun TrayTextButton(text: String, onClick: () -> Unit) {
-    Box(
-        Modifier.clip(RoundedCornerShape(8.dp)).clickable(role = Role.Button, onClick = onClick)
-            .heightIn(min = 32.dp).padding(horizontal = 8.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        AppText(text, role = AppTextRole.Footnote, color = appColor(AppColorRole.OnSurface))
+internal fun TrayTextButton(text: String, onClick: () -> Unit, emphasized: Boolean = false) {
+    when (LocalInterfaceStyle.current) {
+        InterfaceStyle.MIUIX -> MiuixTextButton(
+            text = text,
+            onClick = onClick,
+            cornerRadius = 8.dp,
+            minWidth = 0.dp,
+            minHeight = 32.dp,
+            colors = MiuixButtonDefaults.textButtonColors(
+                color = Color.Transparent,
+                disabledColor = Color.Transparent,
+                textColor = if (emphasized) MiuixTheme.colorScheme.primary else MiuixTheme.colorScheme.onSurface,
+                disabledTextColor = MiuixTheme.colorScheme.disabledOnSurface,
+            ),
+            insideMargin = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+            textStyle = MiuixTheme.textStyles.footnote1,
+        )
+
+        InterfaceStyle.MATERIAL3 -> TextButton(
+            onClick = onClick,
+            shapes = ButtonDefaults.shapesFor(ButtonDefaults.ExtraSmallContainerHeight),
+            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+        ) { Text(text) }
+    }
+}
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun TrayContentTextButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    contentPadding: PaddingValues = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+    content: @Composable () -> Unit,
+) {
+    when (LocalInterfaceStyle.current) {
+        InterfaceStyle.MIUIX -> MiuixButton(
+            onClick = onClick,
+            modifier = modifier,
+            cornerRadius = 8.dp,
+            minWidth = 0.dp,
+            minHeight = 28.dp,
+            colors = MiuixButtonDefaults.buttonColors(
+                color = Color.Transparent,
+                disabledColor = Color.Transparent,
+                contentColor = MiuixTheme.colorScheme.onSurface,
+                disabledContentColor = MiuixTheme.colorScheme.disabledOnSurface,
+            ),
+            insideMargin = contentPadding,
+            content = { content() },
+        )
+
+        InterfaceStyle.MATERIAL3 -> TextButton(
+            onClick = onClick,
+            shapes = ButtonDefaults.shapesFor(ButtonDefaults.ExtraSmallContainerHeight),
+            modifier = modifier,
+            contentPadding = contentPadding,
+        ) { content() }
     }
 }
 
 @Composable
 private fun TrayDivider() {
-    Box(Modifier.fillMaxWidth().height(1.dp).background(appColor(AppColorRole.Divider)))
+    when (LocalInterfaceStyle.current) {
+        InterfaceStyle.MIUIX -> MiuixHorizontalDivider()
+        InterfaceStyle.MATERIAL3 -> HorizontalDivider()
+    }
 }
 
 object AppLogo {

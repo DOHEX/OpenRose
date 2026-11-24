@@ -1,7 +1,6 @@
 package io.github.dohex.openrose.ui
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -19,7 +18,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import io.github.dohex.openrose.circulation.CirculationClient
 import io.github.dohex.openrose.circulation.HandoffStatus
@@ -175,15 +173,7 @@ internal fun DesktopOutputRow(sound: DesktopSoundActions, source: HeadsetCardSou
                     role = AppTextRole.Footnote,
                     maxLines = 1,
                 )
-                AppText(
-                    "声音设置",
-                    Modifier
-                        .clip(RoundedCornerShape(6.dp))
-                        .clickable(role = Role.Button, onClick = openSettings)
-                        .padding(horizontal = 4.dp, vertical = 2.dp),
-                    role = AppTextRole.Footnote,
-                    color = appColor(AppColorRole.Primary),
-                )
+                TrayTextButton("声音设置", openSettings, emphasized = true)
             }
         } else {
             Row(

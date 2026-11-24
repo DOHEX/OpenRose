@@ -18,8 +18,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.text.selection.SelectionContainer
-import androidx.compose.material3.ListItemDefaults
+import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
@@ -43,6 +44,7 @@ import io.github.dohex.openrose.core.protocol.*
 import io.github.dohex.openrose.core.transport.*
 import io.github.dohex.openrose.ui.model.OpenRoseModel
 import io.github.dohex.openrose.ui.model.settingsFor
+import top.yukonga.miuix.kmp.basic.BasicComponent
 
 internal fun ControlState.activeDevice(): DeviceState? {
     val targetId = connectionTarget?.deviceId
@@ -671,49 +673,37 @@ private fun BluetoothConnectionRemedy(platform: PlatformState, requestPermission
 private fun OtherPairedDevices(devices: List<DeviceCandidate>, enabled: Boolean, onSelect: (DeviceId) -> Unit) {
     if (devices.isNotEmpty()) {
         AppGroup(title = "其他已配对设备") {
-            val isMaterial3 = LocalInterfaceStyle.current == InterfaceStyle.MATERIAL3
             devices.forEach { paired ->
                 val name = paired.cardName()
-                val rowModifier = Modifier
-                    .fillMaxWidth()
-                    .then(
-                        if (isMaterial3) {
-                            Modifier
-                                .clip(ListItemDefaults.shapes().shape)
-                                .background(MaterialTheme.colorScheme.surfaceContainer)
-                        } else {
-                            Modifier
-                        },
-                    )
-                    .padding(horizontal = 16.dp, vertical = 12.dp)
-                Row(
-                    rowModifier,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.weight(1f),
-                    ) {
-                        StyledTile(TileKind.Chip, contentPadding = PaddingValues(8.dp), contentAlignment = Alignment.Center) {
-                            AppIcon(RoseIcon.HEADPHONES)
-                        }
-                        Column {
-                            AppText(name)
-                            paired.profile?.let {
-                                AppText(it.configurationCaption, role = AppTextRole.Summary)
-                            }
-                        }
+                val summary = paired.profile?.configurationCaption
+                val leading: @Composable () -> Unit = {
+                    StyledTile(TileKind.Chip, contentPadding = PaddingValues(8.dp), contentAlignment = Alignment.Center) {
+                        AppIcon(RoseIcon.HEADPHONES)
                     }
+                }
+                val action: @Composable () -> Unit = {
                     AppButton(
                         text = "切换",
                         enabled = enabled,
-                        onClick = {
-                            onSelect(paired.deviceId)
-                        },
+                        onClick = { onSelect(paired.deviceId) },
                         kind = AppButtonKind.Secondary,
                         modifier = Modifier.semantics { contentDescription = "切换到 $name" },
+                    )
+                }
+                when (LocalInterfaceStyle.current) {
+                    InterfaceStyle.MIUIX -> BasicComponent(
+                        title = name,
+                        summary = summary,
+                        startAction = leading,
+                        endActions = { action() },
+                    )
+
+                    InterfaceStyle.MATERIAL3 -> ListItem(
+                        headlineContent = { Text(name) },
+                        supportingContent = summary?.let { { Text(it) } },
+                        leadingContent = leading,
+                        trailingContent = action,
+                        colors = rowColors(),
                     )
                 }
             }

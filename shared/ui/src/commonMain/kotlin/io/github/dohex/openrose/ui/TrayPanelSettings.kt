@@ -1,14 +1,13 @@
 package io.github.dohex.openrose.ui
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -16,7 +15,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.Role
@@ -29,6 +27,7 @@ import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import top.yukonga.miuix.kmp.basic.BasicComponent
+import top.yukonga.miuix.kmp.basic.IconButton as MiuixIconButton
 import top.yukonga.miuix.kmp.basic.Switch as MiuixSwitch
 
 enum class TrayPanelControl(val id: String, val label: String, val summary: String) {
@@ -213,6 +212,7 @@ private fun TrayControlOrderRow(
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun OrderStepButton(
     directionUp: Boolean,
@@ -221,17 +221,11 @@ private fun OrderStepButton(
     onClick: () -> Unit,
 ) {
     val tint = appColor(if (enabled) AppColorRole.OnSurface else AppColorRole.DisabledContent)
-    Box(
-        modifier = Modifier
-            .size(32.dp)
-            .clip(RoundedCornerShape(8.dp))
-            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
-            .semantics {
-                contentDescription = description
-                if (!enabled) disabled()
-            },
-        contentAlignment = Alignment.Center,
-    ) {
+    val buttonModifier = Modifier.semantics {
+        contentDescription = description
+        if (!enabled) disabled()
+    }
+    val icon: @Composable () -> Unit = {
         CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
             AppIcon(
                 RoseIcon.CHEVRON,
@@ -239,5 +233,23 @@ private fun OrderStepButton(
                 tint = tint,
             )
         }
+    }
+    when (LocalInterfaceStyle.current) {
+        InterfaceStyle.MIUIX -> MiuixIconButton(
+            onClick = onClick,
+            modifier = buttonModifier,
+            enabled = enabled,
+            minWidth = 32.dp,
+            minHeight = 32.dp,
+            content = icon,
+        )
+
+        InterfaceStyle.MATERIAL3 -> IconButton(
+            onClick = onClick,
+            shapes = IconButtonDefaults.shapes(),
+            modifier = buttonModifier.size(32.dp),
+            enabled = enabled,
+            content = icon,
+        )
     }
 }
