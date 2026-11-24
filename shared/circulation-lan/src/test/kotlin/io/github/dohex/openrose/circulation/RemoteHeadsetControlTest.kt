@@ -209,8 +209,7 @@ class RemoteHeadsetControlTest {
 
     private fun CirculationNode.read() = localCommand(CirculationCommand.Read(peers.value.single().id)) as RemoteReading
 
-    private fun CirculationNode.noise(read: RemoteReading, mode: NoiseMode = NoiseMode.TRANSPARENCY) =
-        set(read, HeadsetCommand.NoiseMode(mode))
+    private fun CirculationNode.noise(read: RemoteReading, mode: NoiseMode = NoiseMode.TRANSPARENCY) = set(read, HeadsetCommand.NoiseMode(mode))
 
     private fun CirculationNode.set(read: RemoteReading, command: HeadsetCommand) = localCommand(
         CirculationCommand.SetSetting(requireNotNull(read.session), command),

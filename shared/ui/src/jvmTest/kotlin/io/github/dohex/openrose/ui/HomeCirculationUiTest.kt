@@ -30,9 +30,14 @@ class HomeCirculationUiTest {
         for (style in InterfaceStyle.entries) {
             val writes = mutableListOf<CirculationCommand>()
             var reading = RemoteReading(
-                status = RemoteControlStatus.READY, deviceName = headset.name, session = session,
-                mode = NoiseMode.ANC, modes = listOf(NoiseMode.ANC, NoiseMode.TRANSPARENCY),
-                left = 87, right = 89, batteryLayout = ModelProfile.I5_ZT.batteryLayout,
+                status = RemoteControlStatus.READY,
+                deviceName = headset.name,
+                session = session,
+                mode = NoiseMode.ANC,
+                modes = listOf(NoiseMode.ANC, NoiseMode.TRANSPARENCY),
+                left = 87,
+                right = 89,
+                batteryLayout = ModelProfile.I5_ZT.batteryLayout,
             )
             val client = CirculationClient { command ->
                 when (command) {

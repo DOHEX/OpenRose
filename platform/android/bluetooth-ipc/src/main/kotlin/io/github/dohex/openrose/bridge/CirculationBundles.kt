@@ -54,17 +54,26 @@ fun CirculationCommand.toBundle(): Bundle = Bundle().apply {
 
 fun Bundle.circulationCommand(): CirculationCommand = when (required("op")) {
     "list" -> CirculationCommand.Directory
+
     "offer" -> CirculationCommand.Offer
+
     "pair" -> CirculationCommand.Pair(required("peer"), required("code"))
+
     "pairQr" -> CirculationCommand.PairQr(required("qr"))
+
     "forget" -> CirculationCommand.Forget(required("peer"))
+
     "read" -> CirculationCommand.Read(required("peer"))
+
     "set" -> CirculationCommand.SetSetting(
         session(),
         requireNotNull(decodeRemoteCommand(required("setting"), required("value"))) { "无效的远程设置" },
     )
+
     "handoff" -> CirculationCommand.Handoff(getString("address"))
+
     "pull" -> CirculationCommand.Pull(required("address"))
+
     else -> throw IllegalArgumentException("未知的互联操作")
 }
 
@@ -108,6 +117,7 @@ fun Bundle.circulationReply(command: CirculationCommand): CirculationReply {
         CirculationCommand.Directory -> PeerDirectory(peers("paired"), peers("nearby"), ticket)
 
         CirculationCommand.Offer -> PairingReply(ticket)
+
         is CirculationCommand.Read, is CirculationCommand.SetSetting -> RemoteReading(
             status = RemoteControlStatus.valueOf(required("status")),
             deviceName = getString("name"),
