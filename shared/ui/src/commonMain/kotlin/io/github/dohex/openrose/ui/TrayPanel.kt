@@ -57,7 +57,6 @@ import io.github.dohex.openrose.core.HeadsetCommand
 import io.github.dohex.openrose.core.NoiseMode
 import io.github.dohex.openrose.core.TransportAvailability
 import io.github.dohex.openrose.core.protocol.BatteryLayout
-import io.github.dohex.openrose.core.protocol.ModelProfile
 import io.github.dohex.openrose.core.transport.DeviceId
 import io.github.dohex.openrose.ui.model.OpenRoseModel
 import io.github.dohex.openrose.ui.model.WindowDestination
@@ -69,12 +68,12 @@ import io.github.dohex.openrose.ui.resources.msr_headset_off
 import io.github.dohex.openrose.ui.resources.tray_headphones_remote
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.vectorResource
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.basic.Button as MiuixButton
 import top.yukonga.miuix.kmp.basic.ButtonDefaults as MiuixButtonDefaults
 import top.yukonga.miuix.kmp.basic.HorizontalDivider as MiuixHorizontalDivider
 import top.yukonga.miuix.kmp.basic.Scaffold as MiuixScaffold
 import top.yukonga.miuix.kmp.basic.TextButton as MiuixTextButton
-import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 data class TrayNoiseMode(val mode: NoiseMode, val label: String, val selected: Boolean, val enabled: Boolean)
 
@@ -141,15 +140,6 @@ private fun ConnectionState.deviceIdOrNull(): DeviceId? = when (this) {
     ConnectionState.Disconnected -> null
     is ConnectionState.Connecting -> deviceId
     is ConnectionState.Connected -> deviceId
-}
-
-private fun ControlState.trayDeviceName(deviceId: DeviceId, profile: ModelProfile?): String {
-    val candidate = connectionTarget?.takeIf { it.deviceId == deviceId }
-        ?: bondedDevices.firstOrNull { it.deviceId == deviceId }
-    return candidate?.name?.takeIf(String::isNotBlank)
-        ?: profile?.displayName
-        ?: candidate?.profile?.displayName
-        ?: deviceId.value
 }
 
 object TrayIcons {
@@ -280,7 +270,7 @@ private fun TrayFooter(offerAdd: Boolean, hasRemoteHeadset: Boolean, onOpenApp: 
 
 @Composable
 private fun TrayPrimaryRemoteHeadset(source: HeadsetCardSource, remote: RemoteHeadset) {
-    val name = source.target?.cardName() ?: remote.deviceName ?: return
+    val name = source.target?.displayName() ?: remote.deviceName ?: return
     val profile = source.target?.profile
     TrayHeadsetHeader(
         title = name,
@@ -311,7 +301,7 @@ private fun TraySecondaryHeadset(
     sound: DesktopSoundActions?,
 ) {
     val remote = source.remote
-    val name = source.target?.cardName() ?: remote?.deviceName ?: return
+    val name = source.target?.displayName() ?: remote?.deviceName ?: return
     val profile = source.target?.profile
     var expanded by remember(itemKey) { mutableStateOf(false) }
     val subtitle = if (remote != null) {
@@ -725,14 +715,15 @@ private class TrayConnection(private val state: ControlState, private val primar
     val audioConnected = primary?.matchesAudioDevice(state.audioDeviceId) == true
     val name: String?
         get() = when {
-            ready != null -> state.trayDeviceName(ready.deviceId, ready.profile)
+            ready != null -> state.deviceDisplayName(ready)
 
             connecting -> {
                 val id = checkNotNull(state.connection.deviceIdOrNull())
-                state.trayDeviceName(id, state.device?.takeIf { it.deviceId == id }?.profile)
+                val current = state.device?.takeIf { it.deviceId == id }
+                state.deviceDisplayName(id, current?.profile, current?.classicAddress)
             }
 
-            primary != null -> state.trayDeviceName(primary.deviceId, primary.profile)
+            primary != null -> state.deviceDisplayName(primary.deviceId, primary.profile, primary.classicAddress)
 
             else -> null
         }

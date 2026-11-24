@@ -7,9 +7,11 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
-data class RawAudioDevice(val name: String?, val address: String)
+data class RawAudioDevice(val name: String?, val address: String, val alias: String? = null)
 enum class AudioProfile { A2DP, HEADSET, LE_AUDIO }
 enum class AudioConnectionState { CONNECTED, DISCONNECTED }
 data class RawProfileSnapshot(
@@ -33,6 +35,7 @@ sealed interface RawAudioEvent {
         val bonded: Boolean,
         val connected: Boolean,
     ) : RawAudioEvent
+    data object BondedDevicesChanged : RawAudioEvent
 }
 interface AudioFactsDriver {
     val events: Flow<RawAudioEvent>
@@ -51,9 +54,10 @@ fun normalizeBluetoothAddress(value: String?): String? {
 }
 
 private fun pairedAudioDevice(device: RawAudioDevice): DeviceCandidate? {
-    val profile = ModelProfile.match(device.name) ?: return null
+    val profile = ModelProfile.match(device.name ?: device.alias) ?: return null
     val address = normalizeBluetoothAddress(device.address) ?: return null
-    return DeviceCandidate(DeviceId(address), device.name, null, profile, "", address)
+    val displayName = device.alias?.takeIf(String::isNotBlank) ?: device.name?.takeIf(String::isNotBlank)
+    return DeviceCandidate(DeviceId(address), displayName, null, profile, "", address)
 }
 
 fun pairedAudioDevices(devices: List<RawAudioDevice>): List<DeviceCandidate> = devices.mapNotNull(::pairedAudioDevice)
@@ -88,6 +92,10 @@ fun inferAudioProfile(snapshot: RawAudioSnapshot, targetAddresses: Set<String>):
 
 class AudioFacts(private val driver: AudioFactsDriver) {
     suspend fun bondedDevices(): List<DeviceCandidate> = pairedAudioDevices(driver.bondedDevices())
+
+    val bondedDevicesChanged: Flow<Unit> = driver.events
+        .filter { it is RawAudioEvent.BondedDevicesChanged }
+        .map { }
 
     suspend fun connectionFacts(deviceId: DeviceId, classicAddress: String?): TransportFacts {
         val targets = listOfNotNull(normalizeBluetoothAddress(deviceId.value), normalizeBluetoothAddress(classicAddress)).toSet()
@@ -202,6 +210,8 @@ class AudioFacts(private val driver: AudioFactsDriver) {
                     is RawAudioEvent.ProfileChanged -> {
                         profileChanged(event)
                     }
+
+                    RawAudioEvent.BondedDevicesChanged -> Unit
                 }
             }
         }

@@ -47,6 +47,8 @@ internal class AndroidAudioProfiles(private val context: Context) : AudioFactsDr
                         BluetoothAdapter.STATE_TURNING_OFF, BluetoothAdapter.STATE_OFF -> trySend(RawAudioEvent.AdapterOff)
                         BluetoothAdapter.STATE_ON -> trySend(RawAudioEvent.AdapterOn)
                     }
+
+                    BluetoothDevice.ACTION_ALIAS_CHANGED -> trySend(RawAudioEvent.BondedDevicesChanged)
                 }
             }
         }
@@ -54,6 +56,7 @@ internal class AndroidAudioProfiles(private val context: Context) : AudioFactsDr
             addAction(BluetoothA2dp.ACTION_CONNECTION_STATE_CHANGED)
             addAction(BluetoothHeadset.ACTION_CONNECTION_STATE_CHANGED)
             addAction(BluetoothAdapter.ACTION_STATE_CHANGED)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) addAction(BluetoothDevice.ACTION_ALIAS_CHANGED)
         }
         ContextCompat.registerReceiver(context, receiver, filter, ContextCompat.RECEIVER_EXPORTED)
         trySend(RawAudioEvent.Ready)
@@ -71,7 +74,7 @@ internal class AndroidAudioProfiles(private val context: Context) : AudioFactsDr
         return try {
             RawAudioEvent.ProfileChanged(
                 profile,
-                RawAudioDevice(device.name, device.address),
+                device.rawAudioDevice(),
                 device.bondState == BluetoothDevice.BOND_BONDED,
                 connected,
             )
@@ -99,9 +102,19 @@ internal class AndroidAudioProfiles(private val context: Context) : AudioFactsDr
 
     @SuppressLint("MissingPermission")
     private fun readBondedDevices(adapter: BluetoothAdapter): List<RawAudioDevice> = try {
-        adapter.bondedDevices?.map { RawAudioDevice(it.name, it.address) }.orEmpty()
+        adapter.bondedDevices?.map { it.rawAudioDevice() }.orEmpty()
     } catch (_: SecurityException) {
         emptyList()
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun BluetoothDevice.rawAudioDevice(): RawAudioDevice {
+        val deviceAlias = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            runCatching { alias }.getOrNull()
+        } else {
+            null
+        }
+        return RawAudioDevice(name, address, deviceAlias)
     }
 
     @SuppressLint("MissingPermission")

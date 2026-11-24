@@ -142,7 +142,10 @@ class ControlService : Service() {
     }
 
     private fun notificationText(state: ControlState): String = when (val connection = state.connection) {
-        is ConnectionState.Connected -> "已连接 ${connection.profile.displayName}"
+        is ConnectionState.Connected -> {
+            val name = state.deviceDisplayName(connection.deviceId, connection.profile, state.device?.classicAddress)
+            "已连接 $name"
+        }
 
         is ConnectionState.Connecting -> "正在连接耳机"
 

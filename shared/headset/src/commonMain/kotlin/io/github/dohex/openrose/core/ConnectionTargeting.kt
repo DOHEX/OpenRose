@@ -37,6 +37,7 @@ internal class ConnectionTargeting(
                     if (permitted) {
                         coroutineScope {
                             launch { discovery.refreshBondedDevices() }
+                            launch { transport.bondedDevicesChanged.collect { discovery.refreshBondedDevices() } }
                             transport.audioConnectedDevice.collect { audioDeviceId ->
                                 state.update { it.copy(audioDeviceId = audioDeviceId) }
                                 discovery.refreshBondedDevices()

@@ -124,7 +124,7 @@ private fun ConnectedHeadsetCard(
                 Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                AppText(device.profile.shortLabel, role = AppTextRole.Title)
+                AppText(state.deviceDisplayName(device), role = AppTextRole.Title)
                 source.sourceLabel?.let { AppText(it, role = AppTextRole.Summary) }
                 AppText(
                     if (source.sourceLabel != null && state.isReady(device)) {
@@ -307,7 +307,7 @@ private fun ReconnectHeadsetCard(
                     DeviceArtwork(primaryDevice.profile)
                 }
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    AppText(primaryDevice.cardName(), role = AppTextRole.Title)
+                    AppText(primaryDevice.displayName(), role = AppTextRole.Title)
                     primaryDevice.profile?.let {
                         AppText(it.configurationCaption, role = AppTextRole.Footnote, color = appColor(AppColorRole.Primary))
                     }
@@ -674,7 +674,7 @@ private fun OtherPairedDevices(devices: List<DeviceCandidate>, enabled: Boolean,
     if (devices.isNotEmpty()) {
         AppGroup(title = "其他已配对设备") {
             devices.forEach { paired ->
-                val name = paired.cardName()
+                val name = paired.displayName()
                 val summary = paired.profile?.configurationCaption
                 val leading: @Composable () -> Unit = {
                     StyledTile(TileKind.Chip, contentPadding = PaddingValues(8.dp), contentAlignment = Alignment.Center) {

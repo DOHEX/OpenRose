@@ -27,7 +27,15 @@ internal class DeviceDiscovery(
 
     suspend fun refreshBondedDevices() {
         val bonded = transportOperation(onFailure = { return }) { transport?.bondedDevices().orEmpty() }
-        state.update { it.copy(bondedDevices = bonded.toPersistentList()) }
+        state.update { current ->
+            val updated = bonded.toPersistentList()
+            val target = current.connectionTarget?.let { existing ->
+                val refreshed = updated.firstOrNull { it.matchesIdentity(existing.deviceId, existing.classicAddress) }
+                val updatedName = refreshed?.name?.takeIf(String::isNotBlank)
+                if (updatedName != null && updatedName != existing.name) existing.copy(name = updatedName) else existing
+            }
+            current.copy(bondedDevices = updated, connectionTarget = target)
+        }
     }
 
     suspend fun findCandidate(deviceId: DeviceId): DeviceCandidate? {

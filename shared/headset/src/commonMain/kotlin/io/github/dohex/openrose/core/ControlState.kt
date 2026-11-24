@@ -79,6 +79,13 @@ data class DeviceCandidate(
     val classicAddress: String? = null,
 ) {
     fun matchesAudioDevice(audio: DeviceId?): Boolean = audio.matchesHeadset(deviceId, classicAddress)
+
+    fun displayName(): String = name?.takeIf(String::isNotBlank) ?: profile?.displayName ?: deviceId.value
+
+    internal fun matchesIdentity(id: DeviceId, classic: String?): Boolean {
+        if (deviceId == id) return true
+        return classic != null && (deviceId.value == classic || classicAddress == classic)
+    }
 }
 
 private fun DeviceId?.matchesHeadset(id: DeviceId, classic: String?) = this != null && (this == id || value == classic)
@@ -275,6 +282,24 @@ data class ControlState(
             if (current.confirmedNoiseMode !in current.noiseModes) return null
             return SessionReference(current.deviceId, current.sessionId)
         }
+
+    fun deviceDisplayName(
+        deviceId: DeviceId,
+        profile: ModelProfile? = null,
+        classicAddress: String? = null,
+    ): String {
+        val matches = listOfNotNull(
+            bondedDevices.firstOrNull { it.matchesIdentity(deviceId, classicAddress) },
+            connectionTarget?.takeIf { it.matchesIdentity(deviceId, classicAddress) },
+            candidates.firstOrNull { it.matchesIdentity(deviceId, classicAddress) },
+        )
+        return matches.firstNotNullOfOrNull { it.name?.takeIf(String::isNotBlank) }
+            ?: profile?.displayName
+            ?: matches.firstNotNullOfOrNull { it.profile?.displayName }
+            ?: deviceId.value
+    }
+
+    fun deviceDisplayName(device: DeviceState): String = deviceDisplayName(device.deviceId, device.profile, device.classicAddress)
 }
 
 fun ControlState.withSettingOperation(operation: SettingOperation): ControlState = copy(

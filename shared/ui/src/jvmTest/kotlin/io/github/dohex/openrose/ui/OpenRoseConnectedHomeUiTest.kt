@@ -13,6 +13,7 @@ import androidx.compose.ui.state.ToggleableState
 import io.github.dohex.openrose.core.ConnectionPhase
 import io.github.dohex.openrose.core.ConnectionState
 import io.github.dohex.openrose.core.ControlState
+import io.github.dohex.openrose.core.DeviceCandidate
 import io.github.dohex.openrose.core.DeviceCapabilities
 import io.github.dohex.openrose.core.DeviceSetting
 import io.github.dohex.openrose.core.DeviceState
@@ -219,7 +220,7 @@ class OpenRoseConnectedHomeUiTest {
         for (style in InterfaceStyle.entries) {
             withHarness(420, 900, connectedState(), style, wholeApp = true) { harness ->
                 harness.render()
-                assertTrue(harness.hasText("i5"))
+                assertTrue(harness.hasText("EarFree i5"))
                 assertTrue(harness.hasText("已连接"))
                 assertTrue(harness.hasText("左耳"))
                 assertTrue(harness.hasText("86%"))
@@ -238,6 +239,23 @@ class OpenRoseConnectedHomeUiTest {
                 assertTrue(harness.hasText("型号配置"))
                 assertTrue(harness.hasText("EarFree i5 · ZT"), "型号配置 names the model and its protocol family in $style")
                 assertTrue(harness.settingWrites.isEmpty())
+            }
+        }
+    }
+
+    @Test
+    fun connectedHomeShowsSystemAliasFromBondedDevices() {
+        val initial = connectedState()
+        val device = requireNotNull(initial.device)
+        val aliased = initial.copy(
+            bondedDevices = persistentListOf(
+                DeviceCandidate(device.deviceId, "主力耳机", null, device.profile, "", device.deviceId.value),
+            ),
+        )
+        for (style in InterfaceStyle.entries) {
+            withHarness(420, 900, aliased, style, wholeApp = true) { harness ->
+                harness.render()
+                assertTrue(harness.hasText("主力耳机"), "connected home should show system alias in $style")
             }
         }
     }

@@ -4,6 +4,9 @@ import android.Manifest
 import android.app.Application
 import android.app.Notification
 import android.app.NotificationManager
+import android.bluetooth.BluetoothDevice
+import android.bluetooth.BluetoothManager
+import android.content.Intent
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -96,9 +99,32 @@ class SystemPresentationRendererTest {
         assertEquals(listOf(1L to "connection", 2L to "connection", 3L to "connection"), claims)
     }
 
+    @Test
+    fun aliasIsUsedForPromptTitleAndUpdatesStatusNotificationLive() {
+        val adapter = requireNotNull(app.getSystemService(BluetoothManager::class.java)?.adapter)
+        val address = "AA:BB:CC:DD:EE:FF"
+        val device = adapter.getRemoteDevice(address)
+        shadowOf(device).setName("ROSE EarFree i5")
+        shadowOf(device).setAlias("主力耳机")
+
+        val frame = snapshot(sequence = 5, address = address)
+        renderer.render(frame)
+        val status = manager.activeNotifications.single()
+        assertEquals("主力耳机", status.notification.extras.getString(Notification.EXTRA_TITLE))
+
+        shadowOf(device).setAlias("通勤耳机")
+        app.sendBroadcast(Intent(BluetoothDevice.ACTION_ALIAS_CHANGED).putExtra(BluetoothDevice.EXTRA_DEVICE, device))
+        shadowOf(handler.looper).idle()
+        assertEquals("通勤耳机", manager.activeNotifications.single().notification.extras.getString(Notification.EXTRA_TITLE))
+
+        renderer.render(snapshot(sequence = 6, focusEnabled = false, address = address))
+        val prompt = manager.activeNotifications.single()
+        assertEquals("通勤耳机", prompt.notification.extras.getString(Notification.EXTRA_TITLE))
+    }
+
     private fun template(notification: Notification): JSONObject = JSONObject(requireNotNull(notification.extras.getString("miui.focus.param"))).getJSONObject("param_v2")
 
-    private fun snapshot(sequence: Long, sessionId: Long = 1, focusEnabled: Boolean = true): Bundle {
+    private fun snapshot(sequence: Long, sessionId: Long = 1, focusEnabled: Boolean = true, address: String? = null): Bundle {
         val reference = SessionReference(DeviceId("headset"), sessionId)
         val presentation = SystemPresentationState(
             reference = reference,
@@ -112,6 +138,7 @@ class SystemPresentationRendererTest {
             putInt(BridgeWire.KEY_VERSION, BridgeWire.VERSION)
             putString(BridgeWire.HOST_EPOCH, "host")
             putString(BridgeWire.DEVICE_ID, reference.deviceId.value)
+            address?.let { putString("device_address", it) }
             putLong(BridgeWire.SESSION_ID, sessionId)
             putLong(BridgeWire.READ_SEQUENCE, sequence)
             putBundle("fields", Bundle())

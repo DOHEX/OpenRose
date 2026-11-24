@@ -135,6 +135,14 @@ class BluezControlTransport private constructor(
         classicAddress,
     )
     override val audioConnectedDevice: Flow<DeviceId?> = audio.audioConnectedDevice
+    override val bondedDevicesChanged: Flow<Unit> = channelFlow {
+        ready.await()
+        val current = bus ?: return@channelFlow
+        current.signals { signal ->
+            signal is BluezSignal.Changed && signal.interfaceName == DEVICE &&
+                ("Alias" in signal.values || "Name" in signal.values)
+        }.collect { send(Unit) }
+    }
     override suspend fun connect(deviceId: DeviceId, endpoint: TransportEndpoint, onPhase: (ConnectionPhase) -> Unit): ControlConnection {
         val current = activeBus()
         require(endpoint is TransportEndpoint.BleGatt) { "Linux 不支持 SPP 控制连接" }
@@ -281,7 +289,7 @@ private fun devices(objects: BluezObjects): List<RawAudioDevice> = objects.mapNo
     val properties = interfaces[DEVICE] ?: return@mapNotNull null
     if (properties["Paired"] != true || !objects.onPoweredAdapter(path)) return@mapNotNull null
     val address = normalizeBluetoothAddress(properties["Address"] as? String) ?: return@mapNotNull null
-    RawAudioDevice(properties["Name"] as? String ?: properties["Alias"] as? String, address)
+    RawAudioDevice(properties["Name"] as? String, address, properties["Alias"] as? String)
 }
 internal fun BluezObjects.hasMedia(address: String): Boolean {
     val a2dp = audioSnapshot(this, setOf(address)).profiles[AudioProfile.A2DP]

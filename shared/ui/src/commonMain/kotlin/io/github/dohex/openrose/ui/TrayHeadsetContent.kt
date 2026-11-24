@@ -29,8 +29,6 @@ import io.github.dohex.openrose.core.transport.DeviceId
 
 internal const val REMOTE_EQUALIZER_ROW_TAG = "remote-eq-row"
 
-internal fun DeviceCandidate.cardName(): String = name?.takeIf(String::isNotBlank) ?: profile?.displayName ?: deviceId.value
-
 @Composable
 internal fun AdditionalHeadsetCard(
     source: HeadsetCardSource,
@@ -46,7 +44,7 @@ internal fun AdditionalHeadsetCard(
 @Composable
 internal fun HeadsetSourceContent(source: HeadsetCardSource, onRecoverControl: ((DeviceId) -> Unit)? = null) {
     val remote = source.remote
-    val name = source.target?.cardName() ?: remote?.deviceName ?: return
+    val name = source.target?.displayName() ?: remote?.deviceName ?: return
     val profile = source.target?.profile
     HeadsetCardHeader(name, source.sourceLabel, profile?.batteryLayout ?: remote?.reading?.batteryLayout, profile?.configurationCaption)
     HeadsetTransferAction(source)

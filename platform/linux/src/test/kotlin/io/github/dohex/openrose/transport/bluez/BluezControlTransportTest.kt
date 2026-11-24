@@ -588,6 +588,33 @@ class BluezControlTransportTest {
         assertFailsWith<IllegalStateException> { transport.bondedDevices() }
         transport.close()
     }
+
+    @Test
+    fun bondedDevicesMatchByBluezNameDisplayAliasAndEmitOnAliasChange() = runBlocking {
+        val bus = FakeBluezBus().also {
+            it.snapshot = mapOf(
+                ADAPTER_PATH to mapOf(ADAPTER to mapOf("Powered" to true)),
+                DEVICE_PATH to mapOf(
+                    DEVICE to mapOf(
+                        "Address" to "00:11:22:33:44:55",
+                        "Name" to "ROSE EarFree i5",
+                        "Alias" to "主力耳机",
+                        "Paired" to true,
+                    ),
+                ),
+            )
+        }
+        val transport = BluezControlTransport(this, bus)
+        transport.awaitInitialization()
+        assertEquals("主力耳机", transport.bondedDevices().single().name)
+
+        val subscribers = bus.events.subscriptionCount.value
+        val changed = async { transport.bondedDevicesChanged.first() }
+        withTimeout(2_000) { bus.events.subscriptionCount.first { it > subscribers } }
+        bus.events.emit(BluezSignal.Changed(DEVICE_PATH, DEVICE, mapOf("Alias" to "通勤耳机")))
+        withTimeout(2_000) { changed.await() }
+        transport.close()
+    }
 }
 
 private const val ADAPTER_PATH = "/org/bluez/hci0"

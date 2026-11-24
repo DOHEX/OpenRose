@@ -63,7 +63,9 @@ class HeadsetEndpoint(private val control: ControlRuntime, private val ownerActi
         val held = candidates.firstOrNull {
             supportsCirculation(it.profile) && it.matchesAudioDevice(id)
         }
-        return held?.profile?.let { mapOf("status" to "recovering", "deviceName" to it.displayName) } ?: mapOf("status" to "idle")
+        return held?.let {
+            mapOf("status" to "recovering", "deviceName" to state.deviceDisplayName(it.deviceId, it.profile, it.classicAddress))
+        } ?: mapOf("status" to "idle")
     }
 
     private fun read(state: ControlState): Map<String, String> {
@@ -77,7 +79,7 @@ class HeadsetEndpoint(private val control: ControlRuntime, private val ownerActi
         return buildMap {
             put("status", if (ready) "ready" else "initializing")
             put("device", device.deviceId.value)
-            put("deviceName", device.profile.displayName)
+            put("deviceName", state.deviceDisplayName(device))
             put("profile", device.profile.name)
             put("session", token(session))
             val parts = mapOf("left" to DeviceField.LEFT_BATTERY, "right" to DeviceField.RIGHT_BATTERY, "case" to DeviceField.CASE_BATTERY)

@@ -29,6 +29,29 @@ class AudioFactsTest {
     }
 
     @Test
+    fun pairedAudioDevicesMatchByOriginalNameAndDisplayAlias() {
+        val devices = pairedAudioDevices(
+            listOf(
+                RawAudioDevice("ROSE EarFree i5", "aa:bb:cc:dd:ee:ff", alias = "主力耳机"),
+                RawAudioDevice("ROSE EarFree i5", "11:22:33:44:55:66", alias = "   "),
+            ),
+        )
+        assertEquals(listOf("主力耳机", "ROSE EarFree i5"), devices.map { it.name })
+    }
+
+    @Test
+    fun bondedDevicesChangedEmitsOnAliasUpdateEvent() = runTest {
+        val driver = FakeAudioDriver()
+        val facts = AudioFacts(driver)
+        var changes = 0
+        backgroundScope.launch { facts.bondedDevicesChanged.collect { changes++ } }
+        runCurrent()
+        driver.eventsFlow.emit(RawAudioEvent.BondedDevicesChanged)
+        runCurrent()
+        assertEquals(1, changes)
+    }
+
+    @Test
     fun profileEvidenceRequiresConsistentCompleteSnapshots() {
         val classic = snapshot(a2dp = setOf(ADDRESS))
         assertEquals(AudioProfileEvidence.CLASSIC, inferAudioProfile(classic, setOf(ADDRESS)))

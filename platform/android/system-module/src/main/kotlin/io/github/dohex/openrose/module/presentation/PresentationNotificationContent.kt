@@ -60,7 +60,7 @@ internal class PresentationNotificationContent(
 
     fun promptNotification(snapshot: RenderedSnapshot, extras: Bundle): Notification = Notification.Builder(appContext, PROMPT_CHANNEL_ID)
         .setSmallIcon(android.R.drawable.stat_sys_data_bluetooth)
-        .setContentTitle(snapshot.profileLabel())
+        .setContentTitle(cardTitle(snapshot))
         .setContentText(snapshot.batterySummary())
         .setTicker("OpenRose")
         .setWhen(0L)
@@ -72,8 +72,13 @@ internal class PresentationNotificationContent(
     @SuppressLint("MissingPermission")
     private fun deviceAlias(snapshot: RenderedSnapshot): String? {
         val address = snapshot.address ?: return null
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return null
-        return runCatching { appContext.bluetoothDevice(address)?.alias }.getOrNull()?.takeIf { it.isNotBlank() }
+        val device = runCatching { appContext.bluetoothDevice(address) }.getOrNull() ?: return null
+        val alias = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            runCatching { device.alias }.getOrNull()?.takeIf { it.isNotBlank() }
+        } else {
+            null
+        }
+        return alias ?: runCatching { device.name }.getOrNull()?.takeIf { it.isNotBlank() }
     }
 
     private fun statusContentIntent(snapshot: RenderedSnapshot): PendingIntent {

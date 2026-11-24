@@ -7,12 +7,18 @@ import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothProfile
 import android.content.Context
+import android.content.Intent
 import io.github.dohex.openrose.core.transport.AudioConnectionState
 import io.github.dohex.openrose.core.transport.AudioProfile
+import io.github.dohex.openrose.core.transport.RawAudioEvent
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
+import org.robolectric.Shadows
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.Implementation
@@ -51,6 +57,39 @@ class AndroidAudioProfilesTest {
             assertEquals(AudioConnectionState.CONNECTED, snapshot.profiles[profile]?.states?.get(device.address))
         }
         assertNull(snapshot.profiles[AudioProfile.LE_AUDIO])
+    }
+
+    @Test
+    fun bondedDevicesKeepOriginalNameAndAliasAndListenForAliasChanges() = runBlocking {
+        val context = RuntimeEnvironment.getApplication()
+        shadowOf(context).grantPermissions(Manifest.permission.BLUETOOTH_CONNECT)
+        val adapter = context.getSystemService(BluetoothManager::class.java).adapter
+        val device = adapter.getRemoteDevice("AA:BB:CC:DD:EE:FF")
+        shadowOf(device).setName("ROSE EarFree i5")
+        shadowOf(device).setAlias("主力耳机")
+        shadowOf(adapter).apply {
+            setState(BluetoothAdapter.STATE_ON)
+            setBondedDevices(setOf(device))
+        }
+
+        val profiles = AndroidAudioProfiles(context)
+        val bonded = profiles.bondedDevices().single()
+        assertEquals("ROSE EarFree i5", bonded.name)
+        assertEquals("主力耳机", bonded.alias)
+
+        val ready = CompletableDeferred<Unit>()
+        val changed = CompletableDeferred<RawAudioEvent.BondedDevicesChanged>()
+        val job = launch {
+            profiles.events.collect { event ->
+                if (event == RawAudioEvent.Ready) ready.complete(Unit)
+                if (event is RawAudioEvent.BondedDevicesChanged) changed.complete(event)
+            }
+        }
+        withTimeout(2_000) { ready.await() }
+        context.sendBroadcast(Intent(BluetoothDevice.ACTION_ALIAS_CHANGED).putExtra(BluetoothDevice.EXTRA_DEVICE, device))
+        Shadows.shadowOf(context.mainLooper).idle()
+        assertEquals(RawAudioEvent.BondedDevicesChanged, withTimeout(2_000) { changed.await() })
+        job.cancel()
     }
 
     @Implements(BluetoothAdapter::class)

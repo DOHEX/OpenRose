@@ -72,6 +72,7 @@ interface ControlTransport {
     suspend fun connectionFacts(deviceId: DeviceId, classicAddress: String?): TransportFacts = TransportFacts()
     suspend fun bondedDevices(): List<DeviceCandidate> = emptyList()
     val audioConnectedDevice: Flow<DeviceId?> get() = emptyFlow()
+    val bondedDevicesChanged: Flow<Unit> get() = emptyFlow()
     suspend fun connect(
         deviceId: DeviceId,
         endpoint: TransportEndpoint,

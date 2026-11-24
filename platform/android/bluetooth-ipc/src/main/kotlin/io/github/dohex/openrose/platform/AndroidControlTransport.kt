@@ -30,6 +30,7 @@ class AndroidControlTransport(context: Context) : ControlTransport {
     override suspend fun connectionFacts(deviceId: DeviceId, classicAddress: String?): TransportFacts = audioProfiles
         .connectionFacts(deviceId, classicAddress)
     override val audioConnectedDevice: Flow<DeviceId?> = audioProfiles.audioConnectedDevice
+    override val bondedDevicesChanged: Flow<Unit> = audioProfiles.bondedDevicesChanged
 
     override suspend fun bondedDevices(): List<DeviceCandidate> = audioProfiles.bondedDevices()
 

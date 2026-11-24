@@ -1,6 +1,11 @@
 package io.github.dohex.openrose.module.presentation
 
+import android.bluetooth.BluetoothDevice
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -24,6 +29,16 @@ internal class SystemPresentationRenderer(
     @Volatile private var closed = false
     private var current: RenderedSnapshot? = null
     private val reportedStatus = mutableMapOf<String, String>()
+    private var aliasReceiverRegistered = false
+    private val aliasReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action != BluetoothDevice.ACTION_ALIAS_CHANGED) return
+            dispatchOnHandler {
+                val active = current ?: return@dispatchOnHandler
+                if (!closed && statusNotification.active) statusNotification.render(active, null)
+            }
+        }
+    }
     private val notifications = PresentationNotifications(appContext)
     private val actionSession: PresentationActionSession = object : PresentationActionSession {
         override val currentSnapshot: RenderedSnapshot? get() = if (closed) null else current
@@ -80,7 +95,10 @@ internal class SystemPresentationRenderer(
             }
         }
         current = decoded
-        if (newSession) actions.register()
+        if (newSession) {
+            actions.register()
+            registerAliasReceiver()
+        }
 
         prompt.render(decoded, statusNotification.canMergePrompt(decoded))
         val onPromptShown = if (prompt.awaitsStatus(decoded)) prompt::markStatusShown else null
@@ -92,6 +110,7 @@ internal class SystemPresentationRenderer(
         prompt.clear()
         current = null
         actions.unregister()
+        unregisterAliasReceiver()
         reportedStatus.clear()
     }
 
@@ -107,5 +126,26 @@ internal class SystemPresentationRenderer(
 
     private fun dispatchOnHandler(block: () -> Unit) {
         if (Looper.myLooper() === handler.looper) block() else handler.post { block() }
+    }
+
+    private fun registerAliasReceiver() {
+        if (aliasReceiverRegistered || Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return
+        val filter = IntentFilter(BluetoothDevice.ACTION_ALIAS_CHANGED)
+        runCatching {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                appContext.registerReceiver(aliasReceiver, filter, null, handler, Context.RECEIVER_EXPORTED)
+            } else {
+                appContext.registerReceiver(aliasReceiver, filter, null, handler)
+            }
+            aliasReceiverRegistered = true
+        }.onFailure { failure ->
+            Log.w(PRESENTATION_TAG, "alias_receiver_registration_failed", failure)
+        }
+    }
+
+    private fun unregisterAliasReceiver() {
+        if (!aliasReceiverRegistered) return
+        aliasReceiverRegistered = false
+        runCatching { appContext.unregisterReceiver(aliasReceiver) }
     }
 }
