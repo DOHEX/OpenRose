@@ -69,6 +69,28 @@ class TrayPanelUiTest {
     }
 
     @Test
+    fun reopeningPanelShowsLastKnownDesktopOutputBeforeNextPollCompletes() {
+        val gate = kotlinx.coroutines.CompletableDeferred<String>()
+        var calls = 0
+        val sound = DesktopSoundActions(
+            currentOutput = {
+                calls++
+                if (calls == 1) "桌面音箱" else gate.await()
+            },
+            openSoundSettings = {},
+        )
+        val state = initializingDesktopI5()
+        withTrayPanel(state, InterfaceStyle.MIUIX, sound = sound) { panel ->
+            panel.render()
+            assertTrue(panel.hasText("系统默认输出 · 桌面音箱"))
+        }
+        withTrayPanel(state, InterfaceStyle.MIUIX, sound = sound) { panel ->
+            panel.render()
+            assertTrue(panel.hasText("系统默认输出 · 桌面音箱"))
+        }
+    }
+
+    @Test
     fun connectedPanelShowsBatteryAndNoiseMode() {
         val connected = connectedI7State()
         val device = requireNotNull(connected.device)

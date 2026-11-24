@@ -34,7 +34,6 @@ import dev.nucleusframework.core.runtime.LinuxDesktopEnvironment
 import dev.nucleusframework.core.runtime.Platform
 import io.github.dohex.openrose.circulation.CirculationClient
 import io.github.dohex.openrose.core.HeadsetCommand
-import io.github.dohex.openrose.ui.AppLogo
 import io.github.dohex.openrose.ui.DesktopSoundActions
 import io.github.dohex.openrose.ui.LocalCirculationVisible
 import io.github.dohex.openrose.ui.PrimaryDeviceSelection
@@ -52,6 +51,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 private val screen: DpSize? by lazy { usableScreenSize() }
 
@@ -97,6 +97,7 @@ internal fun NucleusApplicationScope.DesktopTray(
     val trayState = rememberTrayAppState(initialWindowSize = trayPanelSize)
     val anchoredOpen by trayState.isVisible.collectAsState()
     var panelOpen by remember { mutableStateOf(false) }
+    var panelHeight by remember { mutableStateOf<Dp?>(null) }
     var menuRefresh by remember { mutableIntStateOf(0) }
     val peers = rememberRemoteHeadsets(circulation, if (panelOpen || anchoredOpen) 2_000L else 30_000L, menuRefresh)
     val remoteSource = peers.firstOrNull { it.deviceName != null }
@@ -157,6 +158,8 @@ internal fun NucleusApplicationScope.DesktopTray(
                     circulation = circulation,
                     sound = sound,
                     peers = peers,
+                    initialSize = panelHeight?.let(::trayPanelSizeFor) ?: trayPanelSize,
+                    onContentHeight = { panelHeight = it },
                     onDismiss = { panelOpen = false },
                     onOpenApp = {
                         panelOpen = false
@@ -180,15 +183,16 @@ private fun NucleusApplicationScope.TrayPanelWindow(
     circulation: CirculationClient,
     sound: DesktopSoundActions?,
     peers: List<RemoteHeadset>,
+    initialSize: DpSize,
+    onContentHeight: (Dp) -> Unit,
     onDismiss: () -> Unit,
     onOpenApp: (WindowDestination?) -> Unit,
 ) {
-    val windowState = rememberWindowState(size = trayPanelSize)
+    val windowState = rememberWindowState(size = initialSize)
     DecoratedWindow(
         onCloseRequest = onDismiss,
         state = windowState,
         title = TRAY_PANEL_WINDOW_TITLE,
-        icon = AppLogo.painter,
         resizable = false,
         alwaysOnTop = true,
         undecorated = true,
@@ -197,17 +201,17 @@ private fun NucleusApplicationScope.TrayPanelWindow(
         },
     ) {
         val window = nucleusWindow
+        var pointerInside by remember { mutableStateOf<Boolean?>(null) }
         LaunchedEffect(window) {
             window.requestFocus()
-            window.focusFlow.first { it }
+            val gainedFocus = withTimeoutOrNull(FOCUS_LOSS_GRACE_MS) { window.focusFlow.first { it } } != null
             window.focusFlow.collectLatest { focused ->
                 if (!focused) {
                     delay(FOCUS_LOSS_GRACE_MS)
-                    onDismiss()
+                    if (gainedFocus || pointerInside != true) onDismiss()
                 }
             }
         }
-        var pointerInside by remember { mutableStateOf<Boolean?>(null) }
         LaunchedEffect(pointerInside) {
             if (pointerInside == false) {
                 delay(POINTER_EXIT_GRACE_MS)
@@ -227,7 +231,11 @@ private fun NucleusApplicationScope.TrayPanelWindow(
                 circulation = circulation,
                 sound = sound,
                 remoteHeadsets = peers,
-                onContentHeight = { windowState.size = trayPanelSizeFor(it) },
+                onContentHeight = { height ->
+                    onContentHeight(height)
+                    val target = trayPanelSizeFor(height)
+                    if (windowState.size != target) windowState.size = target
+                },
             )
         }
     }

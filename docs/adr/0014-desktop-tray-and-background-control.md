@@ -35,6 +35,8 @@ status: accepted
 
 2026-11-06 在 niri + xwayland-satellite 上实测：`TrayApp` 的 X11 弹窗已映射但从未呈现，弹出一次后界面事件循环卡住，关窗请求不再送达，SIGTERM 也无法结束进程。因此未识别的桌面改走原生面板窗口；换用后关窗驻留、再次启动唤回、托盘退出与 SIGTERM 退出均正常。
 
+2026-11-24 在 niri 原生 Wayland 上实测：主窗口开启但滚出视口时，niri 暂停派发 `wl_surface.frame`，Nucleus 2.5.18 的 `TaoComposeSceneHostLinux` 对非 popup 窗口固定使用 `swapInterval = 1`，主窗口重绘会使 `TaoSwapThread` 停在 `NativeTaoEglBridge.nativePresent`（`eglSwapBuffers`）；此时打开或关闭 `TrayPanelWindow` 在主线程调用 `nativeAttachWayland` / `nativeDetach` 会与共享 Wayland `EGLDisplay` 互锁，直到主窗口滚回视口。客户端通过 `Main.kt` 按主窗口焦点收敛 `LocalCirculationVisible` 减少视口外轮询重绘，并保持 `TrayPanelWindow` 走原生 Wayland（不启用 `forceX11`，避免 XWayland 依赖与分数缩放退化）；彻底修复依赖上游 [NucleusFramework/Nucleus#958](https://github.com/NucleusFramework/Nucleus/issues/958)。
+
 托盘原生库 `libLinuxTray.so` 经 sd-bus 与托盘宿主通信，链接 `libsystemd.so.0`，Linux 安装包需声明该依赖。`composenativetray-app` 2.1.7 依赖 Nucleus 2.5.5，应用使用 Nucleus 2.5.18，两者须在同一 2.5.x 线上保持兼容。
 
 Android 行为不变：托盘依赖只在 `:desktopApp`，桌面设置使用独立的 `desktop.` 前缀，平台内容经现有 `PlatformUi` 插槽提供。

@@ -189,6 +189,7 @@ private fun NucleusApplicationScope.DesktopWindows(
             minimumSize = minimumSize,
         ) {
             val current = nucleusWindow
+            val focused by current.focusFlow.collectAsState()
             DisposableEffect(current) {
                 window.native = current
                 onDispose { if (window.native === current) window.native = null }
@@ -196,7 +197,7 @@ private fun NucleusApplicationScope.DesktopWindows(
             TitleBar {
                 BasicText("OpenRose", style = TextStyle(color = LocalTitleBarStyle.current.colors.content))
             }
-            CompositionLocalProvider(LocalCirculationVisible provides window.visible) {
+            CompositionLocalProvider(LocalCirculationVisible provides (window.visible && focused)) {
                 OpenRoseApp(model = runtime.model, platformUi = platformUi, primaryDeviceSelection = selection)
             }
         }

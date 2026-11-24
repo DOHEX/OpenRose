@@ -119,12 +119,14 @@ internal fun HeadsetTransferAction(source: HeadsetCardSource) {
     }
 }
 
-class DesktopSoundActions(val currentOutput: suspend () -> String?, val openSoundSettings: suspend () -> Unit)
+class DesktopSoundActions(val currentOutput: suspend () -> String?, val openSoundSettings: suspend () -> Unit) {
+    internal var lastOutput: String? = null
+}
 
 @Composable
 internal fun DesktopOutputRow(sound: DesktopSoundActions, source: HeadsetCardSource) {
     if (!source.hasLocalAudio) return
-    var output by remember(sound) { mutableStateOf<String?>(null) }
+    var output by remember(sound) { mutableStateOf(sound.lastOutput) }
     var pollError by remember(sound) { mutableStateOf<String?>(null) }
     var actionError by remember(sound) { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
@@ -132,8 +134,15 @@ internal fun DesktopOutputRow(sound: DesktopSoundActions, source: HeadsetCardSou
     LaunchedEffect(sound, visible) {
         if (!visible) return@LaunchedEffect
         while (true) {
-            pollError = soundFailure("读取系统默认输出失败") { output = sound.currentOutput() }
-            if (pollError != null) output = null
+            pollError = soundFailure("读取系统默认输出失败") {
+                val resolved = sound.currentOutput()
+                sound.lastOutput = resolved
+                output = resolved
+            }
+            if (pollError != null) {
+                sound.lastOutput = null
+                output = null
+            }
             delay(2_000)
         }
     }
