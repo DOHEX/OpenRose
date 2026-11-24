@@ -38,3 +38,7 @@ Use the five default triage labels. Read `docs/agents/triage-labels.md` when int
 ### Domain docs
 
 Use a single-context layout. Read `docs/agents/domain.md` before exploring the codebase.
+
+### Release
+
+Releases use `release-please` and `.github/workflows/ci.yml`. Read `docs/agents/release.md` before cutting, recovering, or publishing a release.
