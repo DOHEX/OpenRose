@@ -107,3 +107,12 @@ OpenRose 每次写入设置后都会读回耳机的实际状态：
 | 托盘图标：不可用 | 安装 `libsystemd`；GNOME 需要启用 AppIndicator 扩展 |
 
 托盘面板在 niri、Hyprland、Sway 等桌面上位置不对时，见[桌面版](../desktop/#平铺式合成器的窗口规则)。
+
+## Windows 桌面版
+
+| 提示 | 处理 |
+| --- | --- |
+| Windows 蓝牙适配器不支持 BLE | 确认电脑内置或外接的蓝牙适配器支持低功耗蓝牙（BLE），并在设备管理器中状态正常 |
+| 缺少 OpenRose Windows 蓝牙组件 | 重新安装 Windows `.msi` 安装包；从源码运行时需先完成 `platform/windows/native` 的构建 |
+| Windows 蓝牙状态不可用 / Windows 蓝牙组件已退出 | 检查系统蓝牙服务是否运行，重开 OpenRose；若被安全软件拦截了 `openrose-winrt.exe`，请放行 |
+| Windows 未找到可操作的蓝牙音频端点 | 确认耳机已在 Windows「设置 → 蓝牙和设备」配对，并在声音设置中未被禁用 |

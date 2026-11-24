@@ -35,7 +35,7 @@ OpenRose covers all 48 Bluetooth earphone configurations in RoseLink 3.8.6 and r
 
 ## Notes
 
-- The **control transport** is the Bluetooth link carrying the control connection. For models that support both, each connection picks one automatically from the model's capabilities, platform conditions, and the "Force BLE" preference; the preference only affects the next connection. The Linux app supports BLE only.
+- The **control transport** is the Bluetooth link carrying the control connection. For models that support both, each connection picks one automatically from the model's capabilities, platform conditions, and the "Force BLE" preference; the preference only affects the next connection. The desktop apps (Linux and Windows) support BLE only.
 - **Hardware branches with the same retail name** are identified by advertisement prefixes. When the name is not enough to tell them apart, OpenRose does not pick a branch automatically.
 - **Available settings** depend on the model and firmware version: settings without research evidence are neither shown nor written.
 

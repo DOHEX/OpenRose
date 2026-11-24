@@ -5,7 +5,7 @@ description: Build OpenRose from source, plus developer docs, license, and ackno
 
 ## Building from source
 
-Requires JDK 21 and the Android SDK (Platform 37, Build Tools 37.0.0; set `ANDROID_HOME` or `sdk.dir` in `local.properties`). On Windows, replace `./gradlew` with `.\gradlew.bat`.
+Requires JDK 21 and the Android SDK (Platform 37, Build Tools 37.0.0; set `ANDROID_HOME` or `sdk.dir` in `local.properties`). Building the Windows desktop app also requires Rust stable (MSVC toolchain) and Visual Studio C++ Build Tools. On Windows, replace `./gradlew` with `.\gradlew.bat`.
 
 ```bash
 git clone https://github.com/DOHEX/OpenRose.git
@@ -39,6 +39,7 @@ OpenRose is licensed under [GPL-3.0-or-later](https://github.com/DOHEX/OpenRose/
 
 - [OppoPods](https://github.com/1812z/OppoPods): the HyperOS integration draws on its approach
 - [Miuix](https://github.com/compose-miuix-ui/miuix): UI library behind the Miuix style
+- [Backdrop](https://github.com/Kyant0/AndroidLiquidGlass): liquid glass effect library behind the Miuix floating bottom bar
 - [LSPosed](https://github.com/LSPosed/LSPosed): Xposed framework that runs the system-integration module
 - [libxposed API](https://github.com/libxposed/api): Xposed API used by the module
 - [Compose Multiplatform](https://github.com/JetBrains/compose-multiplatform): cross-platform UI framework

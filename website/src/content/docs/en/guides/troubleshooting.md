@@ -107,3 +107,12 @@ Fusion Device Center showing Off for the noise mode or hiding battery levels are
 | 托盘图标：不可用 (tray icon unavailable) | Install `libsystemd`; GNOME needs the AppIndicator extension |
 
 If the tray panel appears in the wrong place on niri, Hyprland, Sway, or similar, see [Desktop](../desktop/#window-rules-for-tiling-compositors).
+
+## Windows desktop
+
+| Message | What to do |
+| --- | --- |
+| Windows 蓝牙适配器不支持 BLE (Bluetooth adapter does not support BLE) | Make sure the computer's Bluetooth adapter supports BLE and is working in Device Manager |
+| 缺少 OpenRose Windows 蓝牙组件 (missing Windows Bluetooth helper) | Reinstall the Windows `.msi` package; when running from source, build `platform/windows/native` first |
+| Windows 蓝牙状态不可用 / Windows 蓝牙组件已退出 (Bluetooth state unavailable / helper exited) | Check that the Windows Bluetooth service is running and reopen OpenRose; allow `openrose-winrt.exe` if security software blocked it |
+| Windows 未找到可操作的蓝牙音频端点 (no operable Bluetooth audio endpoint found) | Confirm the earphones are paired in Windows Settings → Bluetooth & devices and not disabled in Sound settings |

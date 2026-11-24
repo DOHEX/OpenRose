@@ -33,7 +33,7 @@ description: OpenRose 提供的耳机控制、外观、后台控制与 HyperOS �
 需要 Xposed 框架，详见 [HyperOS 系统集成](../../guides/hyperos-integration/)。
 
 - 系统超级岛和焦点通知呈现连接提示与耳机状态；点按焦点通知可打开 OpenRose、系统耳机详情页、RoseLink 或快捷面板
-- 融合设备中心显示耳机电量、切换降噪模式，“附加设置”直接跳转到 OpenRose
+- 融合设备中心显示耳机电量、切换降噪模式；在“设置 → 附加设置入口”选择 OpenRose 后，“附加设置”可直接跳转到 OpenRose
 - 模块控制：由系统蓝牙进程连接耳机，不需要打开 OpenRose
 - 耳机流转（实验性）：经融合设备中心，把耳机从一台 HyperOS 音源设备转到另一台
 

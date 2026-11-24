@@ -5,7 +5,7 @@ description: 从源码构建 OpenRose，以及开发文档、许可与致谢。
 
 ## 从源码构建
 
-需要 JDK 21 和 Android SDK（Platform 37、Build Tools 37.0.0，设置 `ANDROID_HOME` 或 `local.properties` 的 `sdk.dir`）。Windows 下把 `./gradlew` 换成 `.\gradlew.bat`。
+需要 JDK 21 和 Android SDK（Platform 37、Build Tools 37.0.0，设置 `ANDROID_HOME` 或 `local.properties` 的 `sdk.dir`）。构建 Windows 桌面版还需 Rust stable（MSVC 工具链）和 Visual Studio C++ Build Tools。Windows 下把 `./gradlew` 换成 `.\gradlew.bat`。
 
 ```bash
 git clone https://github.com/DOHEX/OpenRose.git
@@ -37,6 +37,7 @@ OpenRose 以 [GPL-3.0-or-later](https://github.com/DOHEX/OpenRose/blob/main/LICE
 
 - [OppoPods](https://github.com/1812z/OppoPods)：HyperOS 系统集成参考了它的实现思路
 - [Miuix](https://github.com/compose-miuix-ui/miuix)：Miuix 界面风格使用的组件库
+- [Backdrop](https://github.com/Kyant0/AndroidLiquidGlass)：Miuix 液态玻璃底栏使用的效果库
 - [LSPosed](https://github.com/LSPosed/LSPosed)：运行系统集成模块的 Xposed 框架
 - [libxposed API](https://github.com/libxposed/api)：模块使用的 Xposed API
 - [Compose Multiplatform](https://github.com/JetBrains/compose-multiplatform)：跨平台界面框架
