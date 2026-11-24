@@ -51,6 +51,7 @@ import io.github.dohex.openrose.ui.resources.Res
 import io.github.dohex.openrose.ui.resources.app_icon
 import io.github.dohex.openrose.ui.resources.msr_headphones
 import io.github.dohex.openrose.ui.resources.msr_headset_off
+import io.github.dohex.openrose.ui.resources.tray_headphones_remote
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.vectorResource
 import top.yukonga.miuix.kmp.basic.Scaffold as MiuixScaffold
@@ -134,6 +135,8 @@ private fun ControlState.trayDeviceName(deviceId: DeviceId, profile: ModelProfil
 object TrayIcons {
     val connected: ImageVector
         @Composable get() = vectorResource(Res.drawable.msr_headphones)
+    val remote: ImageVector
+        @Composable get() = vectorResource(Res.drawable.tray_headphones_remote)
     val disconnected: ImageVector
         @Composable get() = vectorResource(Res.drawable.msr_headset_off)
 }

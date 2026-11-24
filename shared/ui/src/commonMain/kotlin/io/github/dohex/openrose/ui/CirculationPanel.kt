@@ -67,19 +67,27 @@ data class RemoteHeadset(
         get() = formatBattery((reading.batteryLayout ?: BatteryLayout.EARBUDS_AND_CASE).batterySlots(), "未知")
 
     val compactBatteryText: String
-        get() = formatBattery((reading.batteryLayout ?: BatteryLayout.EARBUDS_AND_CASE).compactBatterySlots(), "-")
+        get() = formatBattery(effectiveBatteryLayout().compactBatterySlots(), "-")
+
+    val compactBatteryOrNull: String?
+        get() {
+            val slots = effectiveBatteryLayout().compactBatterySlots()
+            return formatBattery(slots, "-").takeIf { slots.any { (_, field) -> batteryPercent(field) != null } }
+        }
+
+    private fun effectiveBatteryLayout(): BatteryLayout = reading.batteryLayout ?: BatteryLayout.EARBUDS_AND_CASE
+
+    private fun batteryPercent(field: DeviceField): Int? = when (field) {
+        DeviceField.LEFT_BATTERY -> reading.left
+        DeviceField.RIGHT_BATTERY -> reading.right
+        DeviceField.CASE_BATTERY -> reading.case
+        else -> null
+    }
 
     private fun formatBattery(
         slots: List<Pair<String, DeviceField>>,
         unknownText: String,
-    ): String = batterySummary(slots, showUnknown = true, unknownText = unknownText) { field ->
-        when (field) {
-            DeviceField.LEFT_BATTERY -> reading.left
-            DeviceField.RIGHT_BATTERY -> reading.right
-            DeviceField.CASE_BATTERY -> reading.case
-            else -> null
-        }
-    }.orEmpty()
+    ): String = batterySummary(slots, showUnknown = true, unknownText = unknownText, percent = ::batteryPercent).orEmpty()
 }
 
 @Composable

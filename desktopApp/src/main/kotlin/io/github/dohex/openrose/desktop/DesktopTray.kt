@@ -1,5 +1,6 @@
 package io.github.dohex.openrose.desktop
 
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
@@ -13,6 +14,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -81,6 +83,39 @@ internal fun trayPanelHost(): TrayPanelHost = if (
     TrayPanelHost.ANCHORED_POPUP
 }
 
+internal enum class TrayIconState {
+    CONNECTED,
+    REMOTE,
+    DISCONNECTED,
+}
+
+internal fun trayIconState(summary: TraySummary, remoteSource: RemoteHeadset?): TrayIconState = when {
+    summary.connected -> TrayIconState.CONNECTED
+    remoteSource != null -> TrayIconState.REMOTE
+    else -> TrayIconState.DISCONNECTED
+}
+
+internal fun trayTooltip(started: Boolean, summary: TraySummary, remoteSource: RemoteHeadset?): String = when {
+    !started -> "OpenRose"
+
+    !summary.connected && remoteSource != null -> listOfNotNull(
+        "${remoteSource.deviceName} · ${remoteSource.name}",
+        remoteSource.compactBatteryOrNull ?: remoteSource.statusLabel,
+    ).joinToString("\n")
+
+    else -> listOfNotNull(summary.title, summary.compactBattery).joinToString("\n")
+}
+
+internal fun trayIconTint(
+    platform: Platform,
+    desktopEnvironment: LinuxDesktopEnvironment,
+    systemDark: Boolean,
+): Color? = if (platform == Platform.Linux && desktopEnvironment == LinuxDesktopEnvironment.Unknown) {
+    if (systemDark) Color.White else Color.Black
+} else {
+    null
+}
+
 @Composable
 internal fun NucleusApplicationScope.DesktopTray(
     host: TrayPanelHost,
@@ -104,13 +139,14 @@ internal fun NucleusApplicationScope.DesktopTray(
     var menuRefresh by remember { mutableIntStateOf(0) }
     val peers = rememberRemoteHeadsets(circulation, if (panelOpen || anchoredOpen) 2_000L else 30_000L, menuRefresh)
     val remoteSource = peers.firstOrNull { it.deviceName != null }
-    val icon = if (summary.connected || remoteSource != null) TrayIcons.connected else TrayIcons.disconnected
-    var started by remember { mutableStateOf(false) }
-    val tooltip = when {
-        !started -> "OpenRose"
-        !summary.connected && remoteSource != null -> "${remoteSource.deviceName} · ${remoteSource.name}"
-        else -> listOfNotNull(summary.title, summary.compactBattery).joinToString("\n")
+    val icon = when (trayIconState(summary, remoteSource)) {
+        TrayIconState.CONNECTED -> TrayIcons.connected
+        TrayIconState.REMOTE -> TrayIcons.remote
+        TrayIconState.DISCONNECTED -> TrayIcons.disconnected
     }
+    val iconTint = trayIconTint(Platform.Current, LinuxDesktopEnvironment.Current, isSystemInDarkTheme())
+    var started by remember { mutableStateOf(false) }
+    val tooltip = trayTooltip(started, summary, remoteSource)
 
     val actions = remember(model, uiScope, onOpenApp, onExit) { TrayActions(model, uiScope, onOpenApp, onExit) }
     fun entries(showPanel: () -> Unit) = remoteMenuEntries(peers, uiScope) +
@@ -121,6 +157,7 @@ internal fun NucleusApplicationScope.DesktopTray(
             val menu = entries { trayState.show() }
             TrayApp(
                 icon = icon,
+                tint = iconTint,
                 tooltip = tooltip,
                 state = trayState,
                 windowSize = trayPanelSize,
@@ -149,6 +186,7 @@ internal fun NucleusApplicationScope.DesktopTray(
             val menu = entries { panelOpen = true }
             Tray(
                 icon = icon,
+                tint = iconTint,
                 tooltip = tooltip,
                 onMenuOpened = { uiScope.launch { menuRefresh++ } },
                 primaryAction = {
