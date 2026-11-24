@@ -62,17 +62,22 @@ data class RemoteHeadset(
     val offlineLabel: String get() = listOfNotNull(name, statusLabel).joinToString(" · ")
 
     val batteryText: String
-        get() {
-            val slots = (reading.batteryLayout ?: BatteryLayout.EARBUDS_AND_CASE).batterySlots()
-            return batterySummary(slots, showUnknown = true) { field ->
-                when (field) {
-                    DeviceField.LEFT_BATTERY -> reading.left
-                    DeviceField.RIGHT_BATTERY -> reading.right
-                    DeviceField.CASE_BATTERY -> reading.case
-                    else -> null
-                }
-            }.orEmpty()
+        get() = formatBattery((reading.batteryLayout ?: BatteryLayout.EARBUDS_AND_CASE).batterySlots(), "未知")
+
+    val compactBatteryText: String
+        get() = formatBattery((reading.batteryLayout ?: BatteryLayout.EARBUDS_AND_CASE).compactBatterySlots(), "-")
+
+    private fun formatBattery(
+        slots: List<Pair<String, DeviceField>>,
+        unknownText: String,
+    ): String = batterySummary(slots, showUnknown = true, unknownText = unknownText) { field ->
+        when (field) {
+            DeviceField.LEFT_BATTERY -> reading.left
+            DeviceField.RIGHT_BATTERY -> reading.right
+            DeviceField.CASE_BATTERY -> reading.case
+            else -> null
         }
+    }.orEmpty()
 }
 
 @Composable

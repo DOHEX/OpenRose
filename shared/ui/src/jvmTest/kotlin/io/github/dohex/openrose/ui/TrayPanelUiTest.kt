@@ -321,7 +321,9 @@ class TrayPanelUiTest {
             platform = connected.platform.copy(hostPlatform = HostPlatform.LINUX),
             device = device.copy(diagnostics = device.diagnostics.copy(fields = persistentMapOf(DeviceField.LEFT_BATTERY to FieldReading.Known(FieldValue.Number(98), "62")))),
         )
-        assertEquals("左耳 98% · 右耳 未知 · 充电盒 未知", traySummary(state, PrimaryDeviceSelection()).battery)
+        val summary = traySummary(state, PrimaryDeviceSelection())
+        assertEquals("左耳 98% · 右耳 未知 · 充电盒 未知", summary.battery)
+        assertEquals("L 98% · R - · C -", summary.compactBattery)
         withTrayPanel(state, InterfaceStyle.MIUIX) { panel ->
             panel.render()
             assertTrue(panel.hasText("左耳 98% · 右耳 未知 · 充电盒 未知"))

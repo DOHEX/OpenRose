@@ -60,6 +60,7 @@ data class TraySummary(
     val deviceName: String?,
     val sourceStatus: String?,
     val battery: String?,
+    val compactBattery: String? = battery,
     val noiseModes: List<TrayNoiseMode>,
     val reconnectTarget: DeviceId?,
     val reconnectLabel: String,
@@ -73,6 +74,7 @@ fun traySummary(state: ControlState, selection: PrimaryDeviceSelection): TraySum
     val ready = connection.ready
     val desktop = state.platform.hostPlatform.isDesktop
     val battery = ready?.trayBattery(desktop)
+    val compactBattery = ready?.trayCompactBattery(desktop)
 
     val noiseDevice = state.activeDevice()?.takeIf(state::canControlNoiseMode)
     val noiseModes = noiseDevice?.let { state.trayNoiseModes(it) }.orEmpty()
@@ -83,6 +85,7 @@ fun traySummary(state: ControlState, selection: PrimaryDeviceSelection): TraySum
         deviceName = connection.name,
         sourceStatus = connection.sourceStatus,
         battery = battery,
+        compactBattery = compactBattery,
         noiseModes = noiseModes,
         noiseModeFeedback = noiseDevice?.let { state.noiseModeFeedback(it) },
         reconnectTarget = connection.reconnectTarget,
@@ -301,6 +304,12 @@ object AppLogo {
 private fun DeviceState.trayBattery(
     desktop: Boolean,
 ): String? = batterySummary(profile.batteryReadings(), showUnknown = desktop) { confirmedNumber(it) }
+
+private fun DeviceState.trayCompactBattery(
+    desktop: Boolean,
+): String? = batterySummary(profile.batteryLayout.compactBatterySlots(), showUnknown = desktop, unknownText = "-") {
+    confirmedNumber(it)
+}
 
 private fun ControlState.trayNoiseModes(device: DeviceState): List<TrayNoiseMode> {
     val enabled = canChooseNoiseMode(device)

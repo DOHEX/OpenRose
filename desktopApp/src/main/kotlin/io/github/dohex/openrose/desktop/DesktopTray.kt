@@ -106,7 +106,7 @@ internal fun NucleusApplicationScope.DesktopTray(
     val tooltip = when {
         !started -> "OpenRose"
         !summary.connected && remoteSource != null -> "${remoteSource.deviceName} · ${remoteSource.name}"
-        else -> listOfNotNull(summary.title, summary.battery).joinToString(" · ")
+        else -> listOfNotNull(summary.title, summary.compactBattery).joinToString("\n")
     }
 
     val actions = remember(model, uiScope, onOpenApp, onExit) { TrayActions(model, uiScope, onOpenApp, onExit) }
@@ -260,7 +260,7 @@ private fun remoteMenuEntries(peers: List<RemoteHeadset>, uiScope: CoroutineScop
         if (device != null) {
             add(TrayMenuEntry.Label("$device · ${peer.sourceLabel}"))
             peer.statusLabel?.let { add(TrayMenuEntry.Label(it)) }
-            add(TrayMenuEntry.Label(peer.batteryText))
+            add(TrayMenuEntry.Label(peer.compactBatteryText))
             reading.modes.forEach { mode ->
                 val entry = TrayMenuEntry.NoiseMode(noiseModeLabel(mode.id), mode == reading.mode, !peer.busy) {
                     uiScope.launch { peer.selectMode(mode) }
@@ -294,7 +294,7 @@ private class TrayActions(
     ): List<TrayMenuEntry> = buildList {
         fun action(label: String, perform: () -> Unit) = add(TrayMenuEntry.Action(label) { uiScope.launch { perform() } })
         add(TrayMenuEntry.Label(if (hasRemoteSource) "本机 · ${summary.title}" else summary.title))
-        summary.battery?.let { add(TrayMenuEntry.Label(it)) }
+        summary.compactBattery?.let { add(TrayMenuEntry.Label(it)) }
         if (summary.noiseModes.isNotEmpty()) {
             add(TrayMenuEntry.Separator)
             summary.noiseModeFeedback?.let { add(TrayMenuEntry.Label(it)) }
