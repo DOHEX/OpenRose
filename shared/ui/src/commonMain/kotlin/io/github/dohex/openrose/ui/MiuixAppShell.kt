@@ -65,7 +65,7 @@ internal fun MiuixAppShell(
                 TopAppBar(
                     title = title,
                     largeTitle = title,
-                    modifier = Modifier.topBarBackdropBlur(backdrop, MiuixTheme.colorScheme.surface),
+                    modifier = Modifier.barBackdropBlur(backdrop, MiuixTheme.colorScheme.surface),
                     color = if (backdrop != null) Color.Transparent else MiuixTheme.colorScheme.surface,
                     scrollBehavior = scrollBehavior,
                     navigationIcon = { IconButton(onClick = onBack) { Icon(RoseIcons.Back, "返回") } },
@@ -215,7 +215,7 @@ private fun MiuixMainPage(
                     TopAppBar(
                         title = page.title,
                         largeTitle = page.title,
-                        modifier = Modifier.topBarBackdropBlur(pageBackdrop, surface),
+                        modifier = Modifier.barBackdropBlur(pageBackdrop, surface),
                         color = if (pageBackdrop != null) Color.Transparent else surface,
                         scrollBehavior = scrollBehavior,
                         actions = { MainTabActions(page, platformActions, headphoneMenu) },
@@ -279,9 +279,8 @@ private fun MiuixMainBottomBar(
     } else {
         val surface = MiuixTheme.colorScheme.surface
         NavigationBar(
-            modifier = Modifier.bottomBarBackdropBlur(barBackdrop, surface),
+            modifier = Modifier.barBackdropBlur(barBackdrop, surface),
             color = if (barBackdrop != null) Color.Transparent else surface,
-            showDivider = barBackdrop == null,
         ) {
             mainPages.forEachIndexed { index, destination ->
                 NavigationBarItem(

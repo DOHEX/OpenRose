@@ -10,11 +10,10 @@ import top.yukonga.miuix.kmp.blur.Backdrop
 import top.yukonga.miuix.kmp.blur.BlendColorEntry
 import top.yukonga.miuix.kmp.blur.BlurColors
 import top.yukonga.miuix.kmp.blur.LayerBackdrop
-import top.yukonga.miuix.kmp.blur.ProgressiveBlur
 import top.yukonga.miuix.kmp.blur.isRuntimeShaderSupported
 import top.yukonga.miuix.kmp.blur.layerBackdrop
-import top.yukonga.miuix.kmp.blur.progressiveTextureBlur
 import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
+import top.yukonga.miuix.kmp.blur.textureBlur
 
 internal val LocalAppBackdrop = compositionLocalOf<Backdrop?> { null }
 internal val LocalBackdropBlurActive = compositionLocalOf { false }
@@ -29,12 +28,6 @@ internal object BlurTokens {
     const val MATERIAL_FLOATING_TINT = 0.85f
 
     const val LIQUID_GLASS_TINT = 0.65f
-
-    private const val BAR_HOLD = 0.7f
-
-    val TopBarFade: ProgressiveBlur = ProgressiveBlur.Top.copy(startFraction = BAR_HOLD)
-
-    val BottomBarFade: ProgressiveBlur = ProgressiveBlur.Bottom.copy(startFraction = BAR_HOLD)
 }
 
 @Composable
@@ -56,28 +49,15 @@ internal fun rememberAppBackdrop(surfaceColor: Color, active: Boolean): Backdrop
 internal fun Modifier.appBackdropContent(backdrop: Backdrop?): Modifier = if (backdrop is LayerBackdrop) layerBackdrop(backdrop) else this
 
 @Composable
-internal fun Modifier.topBarBackdropBlur(
-    backdrop: Backdrop?,
-    surfaceColor: Color,
-): Modifier = barBackdropBlur(backdrop, surfaceColor, BlurTokens.TopBarFade)
-
-@Composable
-internal fun Modifier.bottomBarBackdropBlur(
-    backdrop: Backdrop?,
-    surfaceColor: Color,
-): Modifier = barBackdropBlur(backdrop, surfaceColor, BlurTokens.BottomBarFade)
-
-@Composable
-private fun Modifier.barBackdropBlur(backdrop: Backdrop?, surfaceColor: Color, fade: ProgressiveBlur): Modifier {
+internal fun Modifier.barBackdropBlur(backdrop: Backdrop?, surfaceColor: Color): Modifier {
     if (backdrop == null) return this
     val colors = remember(surfaceColor) {
         BlurColors(blendColors = listOf(BlendColorEntry(surfaceColor.copy(alpha = BlurTokens.BAR_TINT))))
     }
-    return progressiveTextureBlur(
+    return textureBlur(
         backdrop = backdrop,
         shape = RectangleShape,
         blurRadius = BlurTokens.RADIUS,
-        gradient = fade,
         colors = colors,
     )
 }

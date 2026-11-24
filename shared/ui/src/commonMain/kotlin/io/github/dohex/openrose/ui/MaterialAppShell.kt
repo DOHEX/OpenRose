@@ -96,7 +96,7 @@ internal fun MaterialAppShell(
             topBar = {
                 TopAppBar(
                     title = { Text(title) },
-                    modifier = Modifier.topBarBackdropBlur(backdrop, MaterialTheme.colorScheme.surface),
+                    modifier = Modifier.barBackdropBlur(backdrop, MaterialTheme.colorScheme.surface),
                     navigationIcon = { IconButton(onClick = onBack) { Icon(RoseIcons.Back, "返回") } },
                     scrollBehavior = scrollBehavior,
                     colors = materialTopAppBarColors(backdrop != null),
@@ -183,7 +183,7 @@ private fun MaterialBottomBar(floating: Boolean, currentTab: AppPage, barBackdro
     }
     val barColor = MaterialTheme.colorScheme.surfaceContainer
     NavigationBar(
-        modifier = Modifier.bottomBarBackdropBlur(barBackdrop, barColor),
+        modifier = Modifier.barBackdropBlur(barBackdrop, barColor),
         containerColor = if (barBackdrop != null) Color.Transparent else barColor,
     ) {
         mainPages.forEach { destination ->
@@ -256,7 +256,7 @@ private fun MaterialMainPage(
                 topBar = {
                     LargeTopAppBar(
                         title = { Text(page.title) },
-                        modifier = Modifier.topBarBackdropBlur(pageBackdrop, surface),
+                        modifier = Modifier.barBackdropBlur(pageBackdrop, surface),
                         actions = { MainTabActions(page, platformActions, headphoneMenu) },
                         scrollBehavior = scrollBehavior,
                         colors = materialTopAppBarColors(pageBackdrop != null),

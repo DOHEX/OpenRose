@@ -21,18 +21,18 @@ status: accepted
 - 引入跨平台着色器库 `top.yukonga.miuix.kmp:miuix-blur:0.9.4`，利用其在 Android API 33+ 的 `RuntimeShader` 实现与桌面端（Desktop JVM）的 Skia 着色器管线。
 - 在 Android 清单中声明 `<uses-sdk tools:overrideLibrary="top.yukonga.miuix.kmp.blur" />`，维持应用整体 `minSdk = 26` 的发布要求不变，通过运行时硬件与平台特性探测实现安全门禁。
 
-### 2. 统一修饰符封装与形态分流（Progressive 与 Uniform）
+### 2. 统一修饰符封装与形态选择
 
-在 `composeApp` 应用层抽象统一度量的 `Modifier.appBackdropBlur(...)`：
-- **顶栏与底栏（单向滚动穿透）**：采用边缘渐进模糊（`ProgressiveBlur.Top` / `ProgressiveBlur.Bottom`）。利用渐变着色器将视效边缘向内容区域平滑过渡淡出，消除内容进出栏底时的几何生硬切边。
+在 `shared/ui` 的 `AppBlur.kt` 封装统一的 `Modifier.barBackdropBlur(...)`：
+- **顶栏与固定底栏**：采用全域均匀模糊（`textureBlur`）叠加半透明表面着色（`BlurTokens.BAR_TINT`），Miuix 固定底栏保留原生顶边细分割线。相较于渐进模糊（`progressiveTextureBlur`），均匀模糊避免在窄高度的导航栏图标后方出现急剧淡出断层，并省去全分辨率叠加 pass。
 - **浮层弹窗与菜单（独立悬浮）**：理想形态是在 Dialog、OverlayListPopup 等浮层上使用全域均匀模糊。当前未实现：Miuix 0.9.4 的 `OverlayListPopup` 在 `popupModifier` 之后固定绘制不透明的 `surfaceContainer` 底色且无颜色参数，模糊会被完全遮住；Material 3 的 `DropdownMenu` 与 `AlertDialog` 在 Android 上是独立窗口，背景图层按窗口坐标采样会错位。待组件支持容器颜色与跨窗口坐标后再启用。
 - **常规内容列表卡片排除**：常规卡片严禁启用背景模糊，保持实体卡片底色，避免深层重叠引发的 GPU 填充率雪崩与文本对比度受损。
 
 ### 3. 布局穿透与表面透明度动态绑定
 
-- **模糊激活状态**：顶底栏的 `surface` 半透明着色（`BlurTokens.BarTint`）混入渐进模糊内部，随模糊一同淡出，不另加会留下硬边的背景层。Scaffold 内容区域填充穿透至窗口边缘（固定底栏同悬浮胶囊一样，页面在栏底之下，列表末尾追加底栏高度的留白），使滚动列表自然垫入栏底。
+- **模糊激活状态**：顶底栏的 `surface` 半透明着色（`BlurTokens.BAR_TINT`）通过 `BlurColors` 混入均匀模糊内部，容器底色保持透明。Scaffold 内容区域填充穿透至窗口边缘（固定底栏同悬浮胶囊一样，页面在栏底之下，列表末尾追加底栏高度的留白），使滚动列表自然垫入栏底。
 - **降级/关闭状态**：当环境不支持或用户关闭模糊时，顶底栏表面立即恢复为预设实体底色（`alpha = 1.0f`），页面回到栏之上，阻断穿透视效，确保低版本设备上的文字排版与对比度绝对清晰。
-- **统一取值**：模糊半径与各表面的着色不透明度集中在 `AppBlur.kt` 的 `BlurTokens`。渐进模糊在栏自身图标与文字所在的外缘 70% 保持满强度，其余部分淡出。只有当前可见的页面录入背景，Pager 预加载但不在屏幕上的页面不录入。
+- **统一取值**：模糊半径与各表面的着色不透明度集中在 `AppBlur.kt` 的 `BlurTokens`。只有当前可见的页面录入背景，Pager 预加载但不在屏幕上的页面不录入。
 
 ### 4. 省电模式感知与自适应降级矩阵
 
@@ -49,7 +49,7 @@ status: accepted
 
 ### 6. 栏的着色细节（2026-11 补充）
 
-- **着色在模糊内部混合**：`AppBlur.kt` 的 `barBackdropBlur` 把 `BlurTokens.BAR_TINT` 的表面着色作为 `BlurColors` 的混合色交给渐进模糊，使着色随模糊一同淡出；另加一层背景会在模糊淡出处留下硬边。
+- **着色在模糊内部混合**：`AppBlur.kt` 的 `barBackdropBlur` 把 `BlurTokens.BAR_TINT` 的表面着色作为 `BlurColors` 的混合色交给 `textureBlur`。
 - **Material 3 顶栏的容器色保持透明**：模糊生效时，`MaterialAppShell.kt` 的 `materialTopAppBarColors` 把 `containerColor` 与 `scrolledContainerColor` 都设为透明，只让模糊着色显示。折叠中的顶栏会把容器色向滚动后的颜色插值，从透明（全透明的黑色）插值到不透明的滚动色会经过半透明的灰，使顶栏在折叠途中变暗。未启用模糊时使用默认配色。
 - **Material 3 悬浮工具栏**（`MaterialFloatingTabs`）：工具栏默认容器色与 `surfaceContainer` 列表行相同，悬浮在列表上会“消失”，因此提高一级到 `surfaceContainerHigh`。不透明时使用 MD3 悬浮阴影（Level3，6dp）。在模糊上方时容器半透明（`BlurTokens.MATERIAL_FLOATING_TINT`），阴影会铺满整个形状并透过着色，使它变暗；因此模糊时阴影设为 0，改用 1dp、半透明的 `outlineVariant` 细线分隔。
 
