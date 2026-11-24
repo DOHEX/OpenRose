@@ -159,6 +159,7 @@ private fun MaterialQuickPanelSheet(
         )
     }
 }
+
 @Composable
 private fun QuickPanelContent(
     model: OpenRoseModel,
