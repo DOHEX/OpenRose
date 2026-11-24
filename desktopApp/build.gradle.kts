@@ -50,6 +50,9 @@ nucleus {
                 debDepends = listOf("bluez", "pulseaudio-utils", "libgtk-3-0", "libegl1", "libgl1", "libfontconfig1", "libsystemd0")
                 rpmRequires = listOf("bluez", "pulseaudio-utils", "gtk3", "mesa-libEGL", "mesa-libGL", "fontconfig", "systemd-libs")
                 pacmanDepends = listOf("bluez", "libpulse", "gtk3", "libglvnd", "fontconfig", "systemd-libs")
+                appImage {
+                    desktopEntries = mapOf("Name" to "OpenRose")
+                }
             }
             windows {
                 iconFile.set(project.file("icons/openrose.png"))

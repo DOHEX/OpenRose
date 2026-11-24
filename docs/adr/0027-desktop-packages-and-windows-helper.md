@@ -12,6 +12,7 @@ status: accepted
 - **dbus-java 的日志**：dbus-java 只通过 `slf4j-api` 记录日志，`desktopApp` 以 `runtimeOnly` 引入 `slf4j-simple`，`simplelogger.properties` 把默认级别设为 `warn`，只保留其警告与错误，输出到 stderr（9e0e424）。
 - **打包的 JDK 模块**：`nativeDistributions` 的 `modules(...)` 包含 `jdk.security.auth`，因为 dbus-java 通过 `com.sun.security.auth.module.UnixSystem` 认证 Unix 套接字。
 - **Linux 包依赖写全**：`debDepends`、`rpmRequires`（以及 `pacmanDepends`）是自定义列表，会整体替换 electron-builder 的默认依赖，因此除 `bluez`、PulseAudio 工具外，还要列出 JVM 与 GTK 运行所需的库（GTK 3、EGL/GL、fontconfig；`libsystemd` 见 [ADR 0014](0014-desktop-tray-and-background-control.md)）。
+- **Linux 桌面入口名称**：`linux { packageName = "openrose" }` 保持小写包名与 `/opt/openrose` 安装路径；Nucleus 在 Linux 上会把 `executableName`（即 `linux.packageName`）传给 electron-builder 作为 `productName`，导致 `.desktop` 默认生成 `Name=openrose`。通过 `linux { appImage { desktopEntries = mapOf("Name" to "OpenRose") } }` 覆写 `linux.desktop.entry`（对 deb、rpm、pacman 与 AppImage 均生效），使桌面启动器与任务栏显示 `OpenRose`。
 - **MSI 升级代码永久固定**：`windows { upgradeUuid }` 取 `07a3acd9-577c-4b4e-9e8e-dbca1d107e25`，此后不再更改。MSI 只有在新旧安装包带有同一升级代码时，才会替换旧安装。
 - **按用户安装**：`msi { perMachine = false }`，安装到 `%LOCALAPPDATA%\Programs`，不弹 UAC，升级也从不需要提权；同时不创建桌面快捷方式。
 
