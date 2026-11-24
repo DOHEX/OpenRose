@@ -1,0 +1,74 @@
+---
+title: Desktop
+description: Install OpenRose on Windows and Linux for Bluetooth control, handoff pairing, and the tray panel.
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+The desktop app provides BLE control through WinRT on Windows and through the system BlueZ service and D-Bus on Linux, without SPP, OTA, or system integration. The desktop has no control way to choose; the app holds the control connection directly.
+
+:::caution[Verification status]
+BLE control is implemented on both Windows x64 and Linux x64; full desktop hardware acceptance with the EarFree i5 is pending. See [Platform support](../../reference/platforms/) for verification status.
+:::
+
+## Install and connect
+
+Desktop packages are published alongside the Android app; see [Getting started](../getting-started/#get-the-package).
+
+<Tabs>
+<TabItem label="Windows">
+
+1. Download the Windows x64 `.msi` from [GitHub Releases](https://github.com/DOHEX/OpenRose/releases). For a development build, sign in to GitHub and download the `openrose-<version>-dev-<commit>-windows-x64` artifact from a successful [CI run](https://github.com/DOHEX/OpenRose/actions/workflows/ci.yml).
+2. Run the MSI. It installs for the current user under `%LOCALAPPDATA%\Programs` without administrator rights; open OpenRose from the Start menu. A newer MSI replaces the installed version.
+3. In Windows Settings, open **Bluetooth & devices**, enable Bluetooth, then add and connect your earphones. When disconnected, My Earphones (我的耳机) also offers Open system Bluetooth settings (打开系统蓝牙设置).
+4. Open OpenRose. My Earphones (我的耳机) lists supported paired devices. Once system audio connects, the app attempts to establish BLE control.
+
+</TabItem>
+<TabItem label="Linux">
+
+Development builds are in the `openrose-<version>-dev-<commit>-linux-x64` artifact:
+
+| File | For |
+| --- | --- |
+| `*.deb` | Debian, Ubuntu, and derivatives |
+| `*.rpm` | Fedora, openSUSE, and similar |
+| `*.pacman` | Arch Linux and derivatives |
+| `*.AppImage` | Other distributions, no installation |
+
+The packages declare dependencies on `bluez`, GTK 3, and `libsystemd`. The AppImage needs BlueZ installed on the system with the Bluetooth service running. For headset circulation with the AppImage, install the host's `pactl` command (`pulseaudio-utils` on Debian and Fedora, `libpulse` on Arch Linux).
+
+Pair and connect the earphones in the system Bluetooth settings first. If the Status page shows “D-Bus 拒绝访问蓝牙” during discovery, check whether your desktop account has permission to use the system BlueZ service.
+
+</TabItem>
+</Tabs>
+
+## Pair a phone and desktop
+
+Enable module control on the phone. In the desktop settings, open **流转配对** (Handoff pairing) and show the pairing code. The remaining validity is shown below the code. Open the same setting on the phone, then scan the QR code or select the computer and enter its six digits. Both devices need to be reachable on the same local network, and the host firewall needs to allow the phone to reach TCP port 21871 on the desktop. Either device can remove the pairing in settings after confirming.
+
+Find the headset card in My Earphones, the desktop tray, or the phone quick panel. **音源设备** (Audio source) shows which phone or computer is connected to this headset. Selecting a noise mode lets the original source keep playing. To use the headset on the other device, choose **改连这台电脑** (Move to this computer) or **改连这部手机** (Move to this phone) on that device. The original source disconnects first. If a call or an active headset microphone prevents the move, the card shows the reason.
+
+## Tray and background control
+
+Click the tray icon to see each headset with its audio source, battery readings, and noise modes. Select a mode under the headset you want to adjust. If two phones each have a headset connected, the panel lists them separately.
+
+If the audio source is unknown, choose **将耳机连接到这台电脑** (Connect the headset to this computer) to try connecting. The computer keeps its default sound output and shows that device on the headset card. If battery readings and noise controls fail to return, choose **恢复耳机控制** (Restore headset controls). The audio connection stays on the computer.
+
+To adjust noise levels, open OpenRose from the bottom of the panel.
+
+On Linux, the tray icon requires `libsystemd`, and GNOME also needs the AppIndicator extension (the tray is not verified on hardware under GNOME or KDE). On some desktops a left click opens the tray menu:
+
+- **Tray available**: closing the window only hides it and keeps the control connection; Quit in the tray menu ends it.
+- **Tray unavailable**: closing the window quits.
+
+## Window rules for tiling compositors
+
+On Linux desktops such as niri, Hyprland, or Sway, the tray panel is an ordinary window placed by the compositor, titled `OpenRose 托盘面板`. A window rule can float it near the tray, for example in niri:
+
+```kdl
+window-rule {
+    match title="^OpenRose 托盘面板$"
+    open-floating true
+    default-floating-position x=12 y=12 relative-to="top-right"
+}
+```

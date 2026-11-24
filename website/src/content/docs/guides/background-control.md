@@ -32,4 +32,4 @@ description: 关闭 OpenRose 界面后保持控制连接，并在进程被回收
 
 后台控制属于普通控制，由 OpenRose 应用自己的前台服务承载。启用 HyperOS 模块并选择[模块控制](../hyperos-integration/#控制方式)后，控制连接由系统蓝牙进程持有，不需要 OpenRose 在后台运行。
 
-桌面端的后台控制由托盘承载，见 [Linux 桌面版](../linux-desktop/#托盘与后台控制)。
+桌面端的后台控制由托盘承载，见[桌面版](../desktop/#托盘与后台控制)。

@@ -1,0 +1,74 @@
+---
+title: 桌面版
+description: 在 Windows 和 Linux 上安装 OpenRose，使用蓝牙控制、流转配对与托盘面板。
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+桌面版在 Windows 上通过 WinRT、在 Linux 上通过系统 BlueZ 和 D-Bus 提供 BLE 控制，不含 SPP、OTA 和系统集成。桌面端没有控制方式可选，应用直接持有控制连接。
+
+:::caution[验证状态]
+Windows x64 和 Linux x64 的 BLE 控制均已实现，EarFree i5 在桌面端的完整真机验收尚未完成。读数、控制与音频播放的验证情况见[平台支持](../../reference/platforms/)。
+:::
+
+## 安装与连接
+
+安装包与 Android 版发布在同一处，见[快速开始](../getting-started/#获取安装包)。
+
+<Tabs>
+<TabItem label="Windows">
+
+1. 在 [GitHub Releases](https://github.com/DOHEX/OpenRose/releases) 下载 Windows x64 的 `.msi` 安装包。开发版位于 [CI 运行记录](https://github.com/DOHEX/OpenRose/actions/workflows/ci.yml) 的 `openrose-<版本>-dev-<提交号>-windows-x64` 产物中，下载开发产物需要登录 GitHub。
+2. 运行 MSI。安装程序为当前用户安装到 `%LOCALAPPDATA%\Programs`，不需要管理员权限，完成后在开始菜单打开 OpenRose。新版本 MSI 会直接替换旧版本。
+3. 在 Windows「设置 → 蓝牙和设备」打开蓝牙，添加并连接耳机。OpenRose 的「我的耳机」未连接看板也提供「打开系统蓝牙设置」入口。
+4. 打开 OpenRose。「我的耳机」显示受支持的已配对设备；系统音频已连接后，应用会尝试建立 BLE 控制连接。
+
+</TabItem>
+<TabItem label="Linux">
+
+开发版在 `openrose-<版本>-dev-<提交号>-linux-x64` 产物里：
+
+| 文件 | 适用 |
+| --- | --- |
+| `*.deb` | Debian、Ubuntu 及其衍生发行版 |
+| `*.rpm` | Fedora、openSUSE 等 |
+| `*.pacman` | Arch Linux 及其衍生发行版 |
+| `*.AppImage` | 其他发行版，免安装 |
+
+软件包会声明对 `bluez`、GTK 3 和 `libsystemd` 的依赖。AppImage 需要系统已装好 BlueZ 并运行蓝牙服务；使用 AppImage 进行耳机流转时，还需要系统提供 `pactl`（Debian 和 Fedora 对应 `pulseaudio-utils`，Arch Linux 对应 `libpulse`）。
+
+使用前先在系统蓝牙设置里配对并连接耳机。如果扫描时状态页显示「D-Bus 拒绝访问蓝牙」，请检查当前桌面用户访问系统 BlueZ 服务的权限。
+
+</TabItem>
+</Tabs>
+
+## 流转配对
+
+手机启用模块并选择「模块控制」。在电脑的「设置 → 流转配对」显示配对码，再在手机的同一位置扫码，或选择电脑并输入六位码。配对码下方显示剩余有效时间。两端须在可互访的局域网内，主机防火墙需允许手机访问桌面的 TCP 21871 端口。在任一端的配对列表中可解除配对，解除前需确认。
+
+在「我的耳机」、电脑托盘或手机快捷面板找到耳机卡片。「音源设备」显示当前连接这副耳机的手机或电脑。耳机连着手机时，点「通透」等降噪模式可直接切换，原音源继续播放。要把耳机用于另一端，在目标设备的卡片上点「改连这台电脑」或「改连这部手机」。原音源会先断开耳机，通话或耳机麦克风占用时，卡片会显示原因。
+
+## 托盘与后台控制
+
+点击托盘图标打开面板，查看每副耳机的名称、所连音源和电量。点选耳机下方的降噪模式即可切换。如果两台手机各连着一副耳机，面板会分别列出两副耳机。
+
+暂时无法确认音源时，可点「将耳机连接到这台电脑」尝试接入。电脑接入后保留原有的系统默认输出，卡片会显示输出设备名称。若电量和降噪尚未恢复，可点「恢复耳机控制」重试，音频连接保持在电脑上。
+
+需要调节降噪档位时，从面板底部打开 OpenRose。
+
+在 Linux 上，托盘图标需要 `libsystemd`；GNOME 还需要启用 AppIndicator 扩展（GNOME 与 KDE 上的托盘尚未实机验证）。部分桌面环境左键单击会打开托盘菜单：
+
+- **托盘可用**：关闭窗口只隐藏界面、保留控制连接；从托盘菜单“退出”才结束。
+- **托盘不可用**：关闭窗口即退出。
+
+## 平铺式合成器的窗口规则
+
+在 Linux 的 niri、Hyprland、Sway 等桌面上，托盘面板是由合成器摆放的普通窗口，窗口标题为 `OpenRose 托盘面板`。可以用窗口规则让它浮动到托盘附近，例如 niri：
+
+```kdl
+window-rule {
+    match title="^OpenRose 托盘面板$"
+    open-floating true
+    default-floating-position x=12 y=12 relative-to="top-right"
+}
+```

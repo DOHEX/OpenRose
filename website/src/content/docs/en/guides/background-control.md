@@ -32,4 +32,4 @@ Force-stopping OpenRose in system settings ends background control, and it does 
 
 Background control belongs to ordinary control and runs in the OpenRose app's foreground service. With the HyperOS module enabled and [module control](../hyperos-integration/#control-way) selected, the system Bluetooth process holds the control connection, and OpenRose does not need to run in the background.
 
-On the desktop, background control runs in the tray; see [Linux desktop](../linux-desktop/#tray-and-background-control).
+On the desktop, background control runs in the tray; see [Desktop](../desktop/#tray-and-background-control).

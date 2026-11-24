@@ -70,8 +70,7 @@ OpenRose 已接入 RoseLink 3.8.6 的全部 48 个蓝牙耳机配置，并保留
 
 - [后台控制](https://dohex.github.io/OpenRose/guides/background-control/)
 - [HyperOS 系统集成](https://dohex.github.io/OpenRose/guides/hyperos-integration/)：前提条件、控制方式、耳机流转与已知限制
-- [Windows 桌面版](https://dohex.github.io/OpenRose/guides/windows-desktop/)：MSI 安装与系统蓝牙配对
-- [Linux 桌面版](https://dohex.github.io/OpenRose/guides/linux-desktop/)：安装包、托盘与窗口规则
+- [桌面版](https://dohex.github.io/OpenRose/guides/desktop/)：Windows 与 Linux 安装、流转配对、托盘与窗口规则
 - [常见问题](https://dohex.github.io/OpenRose/guides/troubleshooting/)
 - [权限与隐私](https://dohex.github.io/OpenRose/reference/permissions/)
 

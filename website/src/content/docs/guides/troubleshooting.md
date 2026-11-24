@@ -106,4 +106,4 @@ OpenRose 每次写入设置后都会读回耳机的实际状态：
 | BlueZ 运行环境缺少依赖 | 安装缺失的库；使用 AppImage 时尤其要检查 |
 | 托盘图标：不可用 | 安装 `libsystemd`；GNOME 需要启用 AppIndicator 扩展 |
 
-托盘面板在 niri、Hyprland、Sway 等桌面上位置不对时，见 [Linux 桌面版](../linux-desktop/#平铺式合成器的窗口规则)。
+托盘面板在 niri、Hyprland、Sway 等桌面上位置不对时，见[桌面版](../desktop/#平铺式合成器的窗口规则)。

@@ -106,4 +106,4 @@ Fusion Device Center showing Off for the noise mode or hiding battery levels are
 | BlueZ 运行环境缺少依赖 (BlueZ runtime missing dependencies) | Install the missing libraries; check especially when using the AppImage |
 | 托盘图标：不可用 (tray icon unavailable) | Install `libsystemd`; GNOME needs the AppIndicator extension |
 
-If the tray panel appears in the wrong place on niri, Hyprland, Sway, or similar, see [Linux desktop](../linux-desktop/#window-rules-for-tiling-compositors).
+If the tray panel appears in the wrong place on niri, Hyprland, Sway, or similar, see [Desktop](../desktop/#window-rules-for-tiling-compositors).

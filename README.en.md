@@ -70,8 +70,7 @@ See [Getting started](https://dohex.github.io/OpenRose/en/guides/getting-started
 
 - [Background control](https://dohex.github.io/OpenRose/en/guides/background-control/)
 - [HyperOS integration](https://dohex.github.io/OpenRose/en/guides/hyperos-integration/): requirements, control way, headset circulation, and known limitations
-- [Windows desktop](https://dohex.github.io/OpenRose/en/guides/windows-desktop/) for MSI installation and Bluetooth pairing
-- [Linux desktop](https://dohex.github.io/OpenRose/en/guides/linux-desktop/): packages, tray, and window rules
+- [Desktop](https://dohex.github.io/OpenRose/en/guides/desktop/): Windows and Linux installation, handoff pairing, tray, and window rules
 - [Troubleshooting](https://dohex.github.io/OpenRose/en/guides/troubleshooting/)
 - [Permissions and privacy](https://dohex.github.io/OpenRose/en/reference/permissions/)
 
