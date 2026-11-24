@@ -129,7 +129,7 @@ class CirculationPanelUiTest {
         }
         withTrayPanel(state, InterfaceStyle.MIUIX, circulation = client, remoteHeadsets = peers) { panel ->
             panel.render()
-            panel.clickText("改连这台电脑")
+            panel.clickText("改连本机")
             panel.render()
             panel.advanceTimeBy(12_050)
             assertFalse(panel.hasText("本机已接入耳机"))

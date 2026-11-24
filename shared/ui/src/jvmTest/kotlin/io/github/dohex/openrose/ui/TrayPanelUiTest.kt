@@ -59,8 +59,8 @@ class TrayPanelUiTest {
                 val sound = DesktopSoundActions(currentOutput = { "桌面音箱" }, openSoundSettings = { opened++ })
                 withTrayPanel(state, style, sound = sound) { panel ->
                     panel.render()
-                    assertTrue(panel.hasText("系统默认输出 · 桌面音箱"))
-                    panel.clickText("打开系统声音设置")
+                    assertTrue(panel.hasText("输出 · 桌面音箱"))
+                    panel.clickText("声音设置")
                     panel.render()
                     assertEquals(1, opened)
                 }
@@ -82,11 +82,11 @@ class TrayPanelUiTest {
         val state = initializingDesktopI5()
         withTrayPanel(state, InterfaceStyle.MIUIX, sound = sound) { panel ->
             panel.render()
-            assertTrue(panel.hasText("系统默认输出 · 桌面音箱"))
+            assertTrue(panel.hasText("输出 · 桌面音箱"))
         }
         withTrayPanel(state, InterfaceStyle.MIUIX, sound = sound) { panel ->
             panel.render()
-            assertTrue(panel.hasText("系统默认输出 · 桌面音箱"))
+            assertTrue(panel.hasText("输出 · 桌面音箱"))
         }
     }
 
@@ -103,7 +103,9 @@ class TrayPanelUiTest {
         for (style in InterfaceStyle.entries) {
             withTrayPanel(state, style) { panel ->
                 panel.render()
-                assertTrue(panel.hasText("左耳 90% · 右耳 90% · 充电盒 80%"))
+                assertTrue(panel.hasText("左 90%"))
+                assertTrue(panel.hasText("右 90%"))
+                assertTrue(panel.hasText("盒 80%"))
                 assertTrue(panel.hasSelectedText("降噪"), "confirmed noise mode in $style")
                 assertTrue(panel.hasTappableText("通透"), "noise mode choices in $style")
                 panel.capturePanel("local-headset", style)
@@ -457,7 +459,9 @@ class TrayPanelUiTest {
         assertEquals("L 98% · R - · C -", summary.compactBattery)
         withTrayPanel(state, InterfaceStyle.MIUIX) { panel ->
             panel.render()
-            assertTrue(panel.hasText("左耳 98% · 右耳 未知 · 充电盒 未知"))
+            assertTrue(panel.hasText("左 98%"))
+            assertTrue(panel.hasText("右 未知"))
+            assertTrue(panel.hasText("盒 未知"))
         }
     }
 
@@ -630,7 +634,7 @@ internal fun withTrayPanel(
     remoteHeadsets: State<List<RemoteHeadset>>? = null,
     trayPanelSettings: TrayPanelSettings = TrayPanelSettings.DEFAULT,
     block: suspend (TrayHarness) -> Unit,
-) = runOpenRoseUiTest(360, 700) {
+) = runOpenRoseUiTest(340, 700) {
     val model = FakeOpenRoseModel(
         mutableStateOf(initialState),
         mutableStateOf(UiSettings(interfaceStyle = style, appearance = Appearance.LIGHT)),
@@ -659,9 +663,9 @@ internal class TrayHarness(scene: OpenRoseUiTestScene, val model: FakeOpenRoseMo
     fun capturePanel(state: String, style: InterfaceStyle) {
         val directory = System.getenv("OPENROSE_SURFACE_DIR") ?: return
         val fittedHeight = kotlin.math.ceil(contentHeight).toInt()
-        resize(360, fittedHeight)
+        resize(340, fittedHeight)
         render()
-        val image = snapshot().getSubimage(0, 0, 360, fittedHeight)
+        val image = snapshot().getSubimage(0, 0, 340, fittedHeight)
         val target = File(directory).apply { mkdirs() }
         ImageIO.write(image, "png", File(target, "tray-$state-${style.name.lowercase()}.png"))
     }

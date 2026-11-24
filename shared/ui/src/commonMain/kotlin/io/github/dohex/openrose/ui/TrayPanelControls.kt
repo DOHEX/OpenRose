@@ -82,7 +82,7 @@ internal fun TrayCustomControls(
     if (controls.isEmpty()) return
     Column(
         modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         controls.forEach { control ->
             when (control) {
@@ -250,7 +250,7 @@ internal fun TrayToggleRow(
             title = label,
             modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)),
             summary = summary,
-            insideMargin = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+            insideMargin = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
             enabled = enabled,
         )
 
@@ -264,8 +264,8 @@ internal fun TrayToggleRow(
                     toggleableState = ToggleableState(checked)
                     if (!enabled) disabled()
                 }
-                .heightIn(min = 48.dp)
-                .padding(horizontal = 12.dp, vertical = 8.dp),
+                .heightIn(min = 36.dp)
+                .padding(horizontal = 8.dp, vertical = 4.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -362,7 +362,7 @@ private fun MiuixTrayDropdownRow(
             .clip(RoundedCornerShape(10.dp))
             .let { base -> spec.headerTag?.let { base.testTag(it) } ?: base },
         summary = spec.summary ?: spec.valueText.takeIf { spec.selected == null },
-        insideMargin = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+        insideMargin = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
         showValue = spec.selected != null,
         enabled = spec.enabled,
         onExpandedChange = onExpandedChange,
@@ -386,8 +386,8 @@ private fun MaterialTrayDropdownRow(
                 .let { base -> spec.headerTag?.let { base.testTag(it) } ?: base }
                 .clickable(enabled = spec.enabled, role = Role.DropdownList) { onExpandedChange(true) }
                 .semantics { if (!spec.enabled) disabled() }
-                .heightIn(min = 48.dp)
-                .padding(horizontal = 12.dp, vertical = 8.dp)
+                .heightIn(min = 36.dp)
+                .padding(horizontal = 8.dp, vertical = 4.dp)
             Row(
                 modifier = headerModifier,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),

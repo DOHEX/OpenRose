@@ -59,7 +59,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 
 private val screen: DpSize? by lazy { usableScreenSize() }
 
-private val trayPanelSize: DpSize by lazy { DpSize(360.dp, 520.dp).fitTo(screen) }
+private val trayPanelSize: DpSize by lazy { DpSize(340.dp, 520.dp).fitTo(screen) }
 
 private fun trayPanelSizeFor(contentHeight: Dp): DpSize = DpSize(trayPanelSize.width, contentHeight).fitTo(screen)
 

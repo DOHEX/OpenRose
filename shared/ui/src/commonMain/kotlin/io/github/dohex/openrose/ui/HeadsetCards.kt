@@ -108,6 +108,7 @@ internal class HeadsetCardSource(
     val transferFeedback: String? get() = actions?.feedback?.takeIf { actions.isTarget(target) }
 
     val transferLabel: String get() = if (remote == null) "将耳机连接到$localName" else "改连$localName"
+    val trayTransferLabel: String get() = if (remote == null) "连接本机" else "改连本机"
     val transferHint: String?
         get() = when {
             !offersTransfer -> null

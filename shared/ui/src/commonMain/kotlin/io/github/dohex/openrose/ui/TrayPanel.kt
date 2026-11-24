@@ -1,6 +1,8 @@
 package io.github.dohex.openrose.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -12,19 +14,29 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.PlainTooltip
+import androidx.compose.material3.TooltipAnchorPosition
+import androidx.compose.material3.TooltipBox
+import androidx.compose.material3.TooltipDefaults
+import androidx.compose.material3.rememberTooltipState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.onSizeChanged
@@ -42,6 +54,7 @@ import io.github.dohex.openrose.core.DeviceState
 import io.github.dohex.openrose.core.HeadsetCommand
 import io.github.dohex.openrose.core.NoiseMode
 import io.github.dohex.openrose.core.TransportAvailability
+import io.github.dohex.openrose.core.protocol.BatteryLayout
 import io.github.dohex.openrose.core.protocol.ModelProfile
 import io.github.dohex.openrose.core.transport.DeviceId
 import io.github.dohex.openrose.ui.model.OpenRoseModel
@@ -169,8 +182,8 @@ fun TrayPanel(
                             .onSizeChanged { size ->
                                 if (size.height > 0) onContentHeight(with(density) { size.height.toDp() })
                             }
-                            .padding(start = 18.dp, end = 18.dp, top = 16.dp, bottom = 4.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                            .padding(start = 14.dp, end = 14.dp, top = 14.dp, bottom = 6.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
                         TrayPanelContent(model, state, selection, onOpenApp, circulation, remoteHeadsets, sound, trayPanelSettings)
                     }
@@ -201,17 +214,28 @@ private fun TrayPanelContent(
     val summary = rememberTraySummary(state, selection)
     val cards = rememberHeadsetCards(state, selection, circulation, remoteHeadsets)
     if (cards.showLocal) {
-        if (cards.local.remote != null) {
-            HeadsetSourceContent(cards.local)
+        val localRemote = cards.local.remote
+        if (localRemote != null) {
+            TrayPrimaryRemoteHeadset(cards.local, localRemote)
         } else {
             LocalTrayHeadset(model, state, summary, cards.local, sound, trayPanelSettings, onOpenApp)
         }
     }
     cards.others.forEachIndexed { index, source ->
-        key(source.target?.deviceId, source.remote?.reading?.session?.peer ?: source.remote?.name) {
+        val itemKey = source.target?.deviceId ?: source.remote?.reading?.session?.peer ?: source.remote?.name ?: index
+        key(itemKey) {
             if (index > 0 || cards.showLocal) TrayDivider()
-            HeadsetSourceContent(source, onRecoverControl = model::connect)
-            if (sound != null) DesktopOutputRow(sound, source)
+            val remote = source.remote
+            if (!cards.showLocal && index == 0 && remote != null) {
+                TrayPrimaryRemoteHeadset(source, remote)
+            } else {
+                TraySecondaryHeadset(
+                    source = source,
+                    itemKey = itemKey,
+                    onRecoverControl = model::connect,
+                    sound = sound,
+                )
+            }
         }
     }
     TrayFooter(summary.addDevice, cards.local.remote != null || cards.others.isNotEmpty(), onOpenApp)
@@ -220,8 +244,8 @@ private fun TrayPanelContent(
 @Composable
 private fun TrayFooter(offerAdd: Boolean, hasRemoteHeadset: Boolean, onOpenApp: (WindowDestination?) -> Unit) {
     val addDevice = { onOpenApp(WindowDestination.ADD_DEVICE) }
-    if (offerAdd && !hasRemoteHeadset) AppButton("添加耳机", addDevice)
-    Column {
+    if (offerAdd && !hasRemoteHeadset) TrayCompactPrimaryButton("添加耳机", addDevice)
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         TrayDivider()
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Row(
@@ -229,13 +253,13 @@ private fun TrayFooter(offerAdd: Boolean, hasRemoteHeadset: Boolean, onOpenApp: 
                     .weight(1f)
                     .clip(RoundedCornerShape(8.dp))
                     .clickable(role = Role.Button) { onOpenApp(null) }
-                    .heightIn(min = 36.dp)
-                    .padding(horizontal = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    .heightIn(min = 32.dp)
+                    .padding(horizontal = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(5.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                AppText("打开 OpenRose", role = AppTextRole.Summary)
-                AppIcon(RoseIcon.OPEN_IN_NEW, modifier = Modifier.size(14.dp), tint = appColor(AppColorRole.Summary))
+                AppText("打开 OpenRose", role = AppTextRole.Footnote)
+                AppIcon(RoseIcon.OPEN_IN_NEW, modifier = Modifier.size(13.dp), tint = appColor(AppColorRole.Summary))
             }
             if (offerAdd && hasRemoteHeadset) {
                 TrayTextButton("添加耳机", addDevice)
@@ -244,6 +268,95 @@ private fun TrayFooter(offerAdd: Boolean, hasRemoteHeadset: Boolean, onOpenApp: 
             }
         }
     }
+}
+
+@Composable
+private fun TrayPrimaryRemoteHeadset(source: HeadsetCardSource, remote: RemoteHeadset) {
+    val name = source.target?.cardName() ?: remote.deviceName ?: return
+    val profile = source.target?.profile
+    TrayHeadsetHeader(
+        title = name,
+        subtitle = "音源 · ${remote.name}",
+        batteryLayout = profile?.batteryLayout ?: remote.reading.batteryLayout,
+        configuration = profile?.configurationCaption,
+        action = {
+            if (source.offersTransfer) {
+                TrayInlineActionButton(
+                    text = source.trayTransferLabel,
+                    onClick = source::pull,
+                    enabled = source.transferEnabled,
+                    tooltip = source.transferHint,
+                )
+            }
+        },
+    )
+    source.transferFeedback?.let { AppText(it, role = AppTextRole.Footnote) }
+    TrayBatteryPills(remote.trayBatteryItems())
+    RemoteHeadsetReadings(remote, enabled = !source.transferBusy, showBattery = false)
+}
+
+@Composable
+private fun TraySecondaryHeadset(
+    source: HeadsetCardSource,
+    itemKey: Any,
+    onRecoverControl: (DeviceId) -> Unit,
+    sound: DesktopSoundActions?,
+) {
+    val remote = source.remote
+    val name = source.target?.cardName() ?: remote?.deviceName ?: return
+    val profile = source.target?.profile
+    var expanded by remember(itemKey) { mutableStateOf(false) }
+    val subtitle = if (remote != null) {
+        listOfNotNull("音源 · ${remote.name}", remote.compactBatteryOrNull).joinToString(" · ")
+    } else {
+        source.sourceLabel
+    }
+    TrayHeadsetHeader(
+        title = name,
+        subtitle = subtitle,
+        batteryLayout = profile?.batteryLayout ?: remote?.reading?.batteryLayout,
+        configuration = profile?.configurationCaption,
+        compact = true,
+        action = {
+            when {
+                source.offersTransfer -> TrayInlineActionButton(
+                    text = source.trayTransferLabel,
+                    onClick = source::pull,
+                    enabled = source.transferEnabled,
+                    tooltip = source.transferHint,
+                )
+
+                source.canRecoverControl -> {
+                    val target = requireNotNull(source.target)
+                    TrayInlineActionButton(
+                        text = source.reconnectLabel("连接"),
+                        onClick = { onRecoverControl(target.deviceId) },
+                    )
+                }
+            }
+        },
+    )
+    source.transferFeedback?.let { AppText(it, role = AppTextRole.Footnote) }
+    if (remote != null) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(6.dp))
+                .clickable(role = Role.Button) { expanded = !expanded }
+                .heightIn(min = 26.dp)
+                .padding(horizontal = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterHorizontally),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            AppText(if (expanded) "收起远端控制" else "展开远端控制", role = AppTextRole.Footnote)
+            ExpansionIcon(expanded, Modifier.size(14.dp), tint = appColor(AppColorRole.Summary))
+        }
+        if (expanded) {
+            TrayBatteryPills(remote.trayBatteryItems())
+            RemoteHeadsetReadings(remote, enabled = !source.transferBusy, showBattery = false)
+        }
+    }
+    if (sound != null) DesktopOutputRow(sound, source, compact = true)
 }
 
 @Composable
@@ -257,14 +370,26 @@ private fun LocalTrayHeadset(
     onOpenApp: (WindowDestination?) -> Unit,
 ) {
     val device = state.activeDevice()
-    HeadsetCardHeader(
+    val desktop = state.platform.hostPlatform.isDesktop
+    val subtitle = source.sourceLabel ?: summary.sourceStatus?.takeUnless { summary.deviceName == null && it == summary.title }
+    TrayHeadsetHeader(
         title = summary.deviceName ?: summary.title,
-        source = source.sourceLabel ?: summary.sourceStatus?.takeUnless { summary.deviceName == null && it == summary.title },
+        subtitle = subtitle,
         batteryLayout = (device?.profile ?: source.target?.profile)?.batteryLayout,
+        connectedDot = summary.connected,
+        action = { LocalTrayHeaderAction(model, state, summary, source) },
     )
+    source.transferFeedback?.let { AppText(it, role = AppTextRole.Footnote) }
     if (device != null) {
         val onSet = model.settingsFor(device.sessionId)
-        TrayLocalReadings(summary, state.pendingText(device, DeviceSetting.NOISE_MODE)?.let(NoiseMode::fromId)) { mode ->
+        val batteryItems = trayBatteryItems(device.profile.batteryLayout.trayBatterySlots(), showUnknown = desktop) {
+            device.confirmedNumber(it)
+        }
+        TrayLocalReadings(
+            summary = summary,
+            batteryItems = batteryItems,
+            pendingMode = state.pendingText(device, DeviceSetting.NOISE_MODE)?.let(NoiseMode::fromId),
+        ) { mode ->
             onSet(HeadsetCommand.NoiseMode(mode))
         }
         if (trayPanelSettings.showNoiseLevels) {
@@ -284,9 +409,162 @@ private fun LocalTrayHeadset(
             onViewDetails = { onOpenApp(WindowDestination.DIAGNOSTICS) },
         )
     }
-    if (sound != null) DesktopOutputRow(sound, source)
+    if (sound != null) DesktopOutputRow(sound, source, compact = true)
     TrayControlStatus(state, summary, source)
-    PanelConnectionActions(model, state, summary, source, compact = true)
+}
+
+@Composable
+private fun LocalTrayHeaderAction(
+    model: OpenRoseModel,
+    state: ControlState,
+    summary: TraySummary,
+    source: HeadsetCardSource,
+) {
+    when {
+        source.offersTransfer -> TrayInlineActionButton(
+            text = source.trayTransferLabel,
+            onClick = source::pull,
+            enabled = source.transferEnabled,
+            tooltip = source.transferHint,
+        )
+
+        !source.transferBusy && state.isConnectingForTray() -> TrayInlineActionButton(
+            text = "取消连接",
+            onClick = model::disconnect,
+            emphasized = false,
+        )
+
+        !source.transferBusy && !source.offersTransfer -> summary.reconnectTarget?.let { target ->
+            TrayInlineActionButton(
+                text = source.reconnectLabel("重新连接"),
+                onClick = { model.connect(target) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun TrayHeadsetHeader(
+    title: String,
+    subtitle: String?,
+    batteryLayout: BatteryLayout?,
+    configuration: String? = null,
+    connectedDot: Boolean = false,
+    compact: Boolean = false,
+    action: (@Composable () -> Unit)? = null,
+) {
+    val iconContainerSize = if (compact) 34.dp else 38.dp
+    val iconRadius = if (compact) 9.dp else 10.dp
+    val artworkSize = if (compact) 30.dp else 34.dp
+    val fallbackIconSize = if (compact) 18.dp else 20.dp
+    Row(
+        Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Box(
+            Modifier.size(iconContainerSize).background(appColor(AppColorRole.Summary).copy(alpha = 0.08f), RoundedCornerShape(iconRadius)),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (batteryLayout == BatteryLayout.EARBUDS_AND_CASE) {
+                EarbudsArtwork(Modifier.size(artworkSize))
+            } else {
+                AppIcon(RoseIcon.HEADPHONES, Modifier.size(fallbackIconSize), tint = appColor(AppColorRole.Summary))
+            }
+        }
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                AppText(
+                    title,
+                    Modifier.weight(1f, fill = false),
+                    role = if (compact) AppTextRole.Body else AppTextRole.Title,
+                    maxLines = 1,
+                )
+                configuration?.let { AppText(it, role = AppTextRole.Footnote, color = appColor(AppColorRole.Primary), maxLines = 1) }
+            }
+            subtitle?.let { text ->
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                    if (connectedDot) {
+                        Box(Modifier.size(7.dp).clip(CircleShape).background(Color(0xFF34C759)))
+                    }
+                    AppText(text, role = AppTextRole.Footnote, maxLines = 1)
+                }
+            }
+        }
+        action?.invoke()
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun TrayInlineActionButton(
+    text: String,
+    onClick: () -> Unit,
+    enabled: Boolean = true,
+    emphasized: Boolean = true,
+    tooltip: String? = null,
+) {
+    val shape = RoundedCornerShape(8.dp)
+    val primary = appColor(AppColorRole.Primary)
+    val background = when {
+        !enabled -> appColor(AppColorRole.OnSurface).copy(alpha = 0.05f)
+        emphasized -> primary.copy(alpha = 0.14f)
+        else -> appColor(AppColorRole.OnSurface).copy(alpha = 0.06f)
+    }
+    val borderColor = when {
+        !enabled -> appColor(AppColorRole.Divider)
+        emphasized -> primary.copy(alpha = 0.35f)
+        else -> appColor(AppColorRole.Divider)
+    }
+    val textColor = when {
+        !enabled -> appColor(AppColorRole.DisabledContent)
+        emphasized -> primary
+        else -> appColor(AppColorRole.OnSurface)
+    }
+    val button: @Composable () -> Unit = {
+        Box(
+            Modifier
+                .clip(shape)
+                .background(background, shape)
+                .border(BorderStroke(1.dp, borderColor), shape)
+                .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+                .heightIn(min = 28.dp)
+                .padding(horizontal = 10.dp, vertical = 4.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            AppText(text, role = AppTextRole.Footnote, color = textColor, maxLines = 1)
+        }
+    }
+    if (tooltip != null) {
+        TooltipBox(
+            positionProvider = TooltipDefaults.rememberTooltipPositionProvider(TooltipAnchorPosition.Above),
+            tooltip = { PlainTooltip { AppText(tooltip, role = AppTextRole.Footnote) } },
+            state = rememberTooltipState(),
+        ) {
+            button()
+        }
+    } else {
+        button()
+    }
+}
+
+@Composable
+private fun TrayCompactPrimaryButton(text: String, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(9.dp)
+    val primary = appColor(AppColorRole.Primary)
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(primary.copy(alpha = 0.14f), shape)
+            .border(BorderStroke(1.dp, primary.copy(alpha = 0.35f)), shape)
+            .clickable(role = Role.Button, onClick = onClick)
+            .heightIn(min = 34.dp)
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        AppText(text, role = AppTextRole.Summary, color = primary, maxLines = 1)
+    }
 }
 
 @Composable
@@ -333,10 +611,10 @@ internal fun PanelConnectionActions(
 internal fun TrayTextButton(text: String, onClick: () -> Unit) {
     Box(
         Modifier.clip(RoundedCornerShape(8.dp)).clickable(role = Role.Button, onClick = onClick)
-            .heightIn(min = 36.dp).padding(horizontal = 8.dp),
+            .heightIn(min = 32.dp).padding(horizontal = 8.dp),
         contentAlignment = Alignment.Center,
     ) {
-        AppText(text, role = AppTextRole.Summary, color = appColor(AppColorRole.OnSurface))
+        AppText(text, role = AppTextRole.Footnote, color = appColor(AppColorRole.OnSurface))
     }
 }
 

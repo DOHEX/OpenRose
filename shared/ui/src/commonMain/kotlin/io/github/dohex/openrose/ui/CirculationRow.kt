@@ -1,8 +1,13 @@
 package io.github.dohex.openrose.ui
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -13,6 +18,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import io.github.dohex.openrose.circulation.CirculationClient
 import io.github.dohex.openrose.circulation.HandoffStatus
@@ -124,7 +131,7 @@ class DesktopSoundActions(val currentOutput: suspend () -> String?, val openSoun
 }
 
 @Composable
-internal fun DesktopOutputRow(sound: DesktopSoundActions, source: HeadsetCardSource) {
+internal fun DesktopOutputRow(sound: DesktopSoundActions, source: HeadsetCardSource, compact: Boolean = false) {
     if (!source.hasLocalAudio) return
     var output by remember(sound) { mutableStateOf(sound.lastOutput) }
     var pollError by remember(sound) { mutableStateOf<String?>(null) }
@@ -146,11 +153,46 @@ internal fun DesktopOutputRow(sound: DesktopSoundActions, source: HeadsetCardSou
             delay(2_000)
         }
     }
-    Column {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            AppText(output?.let { "系统默认输出 · $it" } ?: "系统默认输出", Modifier.weight(1f), role = AppTextRole.Summary)
-            TrayTextButton("打开系统声音设置") {
-                scope.launch { actionError = soundFailure("打开声音设置失败") { sound.openSoundSettings() } }
+    val openSettings = {
+        scope.launch { actionError = soundFailure("打开声音设置失败") { sound.openSoundSettings() } }
+        Unit
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        if (compact) {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(appColor(AppColorRole.OnSurface).copy(alpha = 0.04f))
+                    .heightIn(min = 30.dp)
+                    .padding(horizontal = 10.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                AppText(
+                    output?.let { "输出 · $it" } ?: "系统默认输出",
+                    Modifier.weight(1f),
+                    role = AppTextRole.Footnote,
+                    maxLines = 1,
+                )
+                AppText(
+                    "声音设置",
+                    Modifier
+                        .clip(RoundedCornerShape(6.dp))
+                        .clickable(role = Role.Button, onClick = openSettings)
+                        .padding(horizontal = 4.dp, vertical = 2.dp),
+                    role = AppTextRole.Footnote,
+                    color = appColor(AppColorRole.Primary),
+                )
+            }
+        } else {
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                AppText(output?.let { "系统默认输出 · $it" } ?: "系统默认输出", Modifier.weight(1f), role = AppTextRole.Summary)
+                TrayTextButton("打开系统声音设置", openSettings)
             }
         }
         (actionError ?: pollError)?.let { AppText(it, role = AppTextRole.Footnote, color = appColor(AppColorRole.Error)) }

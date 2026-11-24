@@ -75,6 +75,9 @@ data class RemoteHeadset(
             return formatBattery(slots, "-").takeIf { slots.any { (_, field) -> batteryPercent(field) != null } }
         }
 
+    internal fun trayBatteryItems(): List<TrayBatteryItem> =
+        trayBatteryItems(effectiveBatteryLayout().trayBatterySlots(), showUnknown = true, percent = ::batteryPercent)
+
     private fun effectiveBatteryLayout(): BatteryLayout = reading.batteryLayout ?: BatteryLayout.EARBUDS_AND_CASE
 
     private fun batteryPercent(field: DeviceField): Int? = when (field) {

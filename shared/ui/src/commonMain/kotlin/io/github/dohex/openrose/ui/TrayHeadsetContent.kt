@@ -7,6 +7,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -82,9 +84,51 @@ internal fun HeadsetCardHeader(title: String, source: String?, batteryLayout: Ba
     }
 }
 
+internal data class TrayBatteryItem(val label: String, val percent: Int?) {
+    val isLow: Boolean get() = percent != null && percent <= 20
+    val text: String get() = percent?.let { "$label $it%" } ?: "$label 未知"
+}
+
 @Composable
-internal fun TrayLocalReadings(summary: TraySummary, pendingMode: NoiseMode?, selectMode: (NoiseMode) -> Unit) {
-    summary.battery?.let { AppText(it, role = AppTextRole.Summary, color = appColor(AppColorRole.OnSurface)) }
+internal fun TrayBatteryPills(items: List<TrayBatteryItem>, modifier: Modifier = Modifier) {
+    if (items.isEmpty()) return
+    Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        items.forEach { item ->
+            val background = if (item.isLow) {
+                appColor(AppColorRole.Error).copy(alpha = 0.12f)
+            } else {
+                appColor(AppColorRole.OnSurface).copy(alpha = 0.05f)
+            }
+            val contentColor = when {
+                item.isLow -> appColor(AppColorRole.Error)
+                item.percent == null -> appColor(AppColorRole.Summary)
+                else -> appColor(AppColorRole.OnSurface)
+            }
+            Box(
+                Modifier
+                    .background(background, RoundedCornerShape(6.dp))
+                    .heightIn(min = 24.dp)
+                    .padding(horizontal = 8.dp, vertical = 3.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                AppText(item.text, role = AppTextRole.Footnote, color = contentColor, maxLines = 1)
+            }
+        }
+    }
+}
+
+@Composable
+internal fun TrayLocalReadings(
+    summary: TraySummary,
+    batteryItems: List<TrayBatteryItem>,
+    pendingMode: NoiseMode?,
+    selectMode: (NoiseMode) -> Unit,
+) {
+    if (batteryItems.isNotEmpty()) {
+        TrayBatteryPills(batteryItems)
+    } else {
+        summary.battery?.let { AppText(it, role = AppTextRole.Summary, color = appColor(AppColorRole.OnSurface)) }
+    }
     TrayNoiseModes(summary.noiseModes, selectMode)
     if (pendingMode != null) {
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -97,12 +141,14 @@ internal fun TrayLocalReadings(summary: TraySummary, pendingMode: NoiseMode?, se
 }
 
 @Composable
-internal fun RemoteHeadsetReadings(headset: RemoteHeadset, enabled: Boolean = true) {
+internal fun RemoteHeadsetReadings(headset: RemoteHeadset, enabled: Boolean = true, showBattery: Boolean = true) {
     val reading = headset.reading
     val baseEnabled = enabled && reading.session != null && !headset.busy
-    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(if (showBattery) 10.dp else 8.dp)) {
         headset.statusLabel?.let { AppText(it, role = AppTextRole.Summary) }
-        AppText(headset.batteryText, role = AppTextRole.Summary, color = appColor(AppColorRole.OnSurface))
+        if (showBattery) {
+            AppText(headset.batteryText, role = AppTextRole.Summary, color = appColor(AppColorRole.OnSurface))
+        }
         RemoteNoiseModeSection(headset, baseEnabled)
         RemoteNoiseLevelsSection(headset, baseEnabled)
         RemoteEqualizerControl(headset, baseEnabled)
