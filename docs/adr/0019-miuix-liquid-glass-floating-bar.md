@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: accepted
 ---
 
 # Miuix 悬浮底栏的液态玻璃材质

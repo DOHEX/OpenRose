@@ -9,7 +9,7 @@ status: accepted
 ## 决策
 
 - **后台控制**：设置页提供开关，默认开启。开启且托盘可用时，关闭窗口只隐藏界面，控制连接保留；托盘菜单的“退出”结束控制连接并退出进程。系统音频断开仍按 ADR 0005 释放控制连接。托盘不可用（会话总线上没有 `org.kde.StatusNotifierWatcher`，或托盘原生库加载失败）时，无论开关如何，关闭窗口都直接退出，状态页说明原因。托盘图标只要托盘可用就显示，不随该开关变化。
-- **托盘实现**：使用 Nucleus 的 ComposeNativeTray（`composenativetray-app` 的 `TrayApp`）。Linux 走 StatusNotifierItem，Windows 走 `Shell_NotifyIcon`；两端行为一致，不按平台分支。
+- **托盘实现**：使用 Nucleus 的 ComposeNativeTray（`composenativetray-app` 的 `TrayApp`）。Linux 走 StatusNotifierItem，Windows 走 `Shell_NotifyIcon`；两端呈现给用户的托盘行为一致。托盘可用性检测与面板宿主依平台实现，见下文。
   - （2026-11 补充）**托盘可用性**：Windows 的通知区域属于 shell，始终存在（`ShellTrayMonitor`）。Linux 托盘遵循 StatusNotifierItem：只有当某个已有注册宿主的 watcher 列出本进程的条目时，图标才可见。原生库把条目命名为 `org.kde.StatusNotifierItem-<pid>-1`，watcher 记录的可能是这个名字，也可能是它的唯一总线名，`StatusNotifierTrayMonitor` 两种都认。
   - （2026-11 补充）**tooltip**：Linux 托盘用收到的第一个 tooltip 固定条目的 Title，因此 `DesktopTray` 的首个 tooltip 是应用名“OpenRose”，启动后才换成连接状态与电量。
 - **托盘面板**：点击托盘图标弹出，内容为控制连接状态、电量与降噪模式；未连接时“重新连接”连接未连接看板展示的主设备，没有已配对设备时引导进入添加耳机流程。降噪档位等配置性项目只在主窗口。面板跟随界面风格，不使用背景模糊；组件位于 `:sharedUI`，与主窗口共用同一模型与控制入口。

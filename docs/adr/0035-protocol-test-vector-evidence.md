@@ -52,4 +52,4 @@ status: accepted
 
 ## 后果
 
-新增协议测试向量时，在本 ADR 对应条目登记其证据等级与来源。只有实机抓包能作为实机验证的依据，验证情况以 [docs/protocols/](../protocols/README.md) 为准。上述 `rose_reverse/...` 路径指作者本地的研究工作区，没有随仓库发布。
+新增协议测试向量时，在本 ADR 对应条目登记其证据等级与来源。只有实机抓包能作为实机验证的依据，验证情况以 [docs/protocols/](../protocols/README.md) 为准。上述 `rose_reverse/...` 路径指作者本地的研究工作区，在仓库外，没有随仓库发布。需要让读者核对的证据，由 `rose_reverse` 导出后按 `docs/protocols/` 的副本流程复制进仓库，再把本 ADR 的引用改为仓库内路径。
