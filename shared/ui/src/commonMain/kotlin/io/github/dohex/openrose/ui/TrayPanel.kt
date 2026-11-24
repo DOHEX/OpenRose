@@ -45,6 +45,7 @@ import io.github.dohex.openrose.core.protocol.ModelProfile
 import io.github.dohex.openrose.core.transport.DeviceId
 import io.github.dohex.openrose.ui.model.OpenRoseModel
 import io.github.dohex.openrose.ui.model.WindowDestination
+import io.github.dohex.openrose.ui.model.settingsFor
 import io.github.dohex.openrose.ui.resources.Res
 import io.github.dohex.openrose.ui.resources.app_icon
 import io.github.dohex.openrose.ui.resources.msr_headphones
@@ -145,6 +146,7 @@ fun TrayPanel(
     circulation: CirculationClient? = null,
     remoteHeadsets: List<RemoteHeadset>? = null,
     sound: DesktopSoundActions? = null,
+    trayPanelSettings: TrayPanelSettings = TrayPanelSettings.DEFAULT,
     dynamicColor: Boolean = false,
 ) {
     val density = LocalDensity.current
@@ -161,7 +163,7 @@ fun TrayPanel(
                     .padding(start = 18.dp, end = 18.dp, top = 16.dp, bottom = 4.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                TrayPanelContent(model, state, selection, onOpenApp, circulation, remoteHeadsets, sound)
+                TrayPanelContent(model, state, selection, onOpenApp, circulation, remoteHeadsets, sound, trayPanelSettings)
             }
         }
     }
@@ -176,6 +178,7 @@ private fun TrayPanelContent(
     circulation: CirculationClient?,
     remoteHeadsets: List<RemoteHeadset>?,
     sound: DesktopSoundActions?,
+    trayPanelSettings: TrayPanelSettings,
 ) {
     val summary = rememberTraySummary(state, selection)
     val cards = rememberHeadsetCards(state, selection, circulation, remoteHeadsets)
@@ -183,7 +186,7 @@ private fun TrayPanelContent(
         if (cards.local.remote != null) {
             HeadsetSourceContent(cards.local)
         } else {
-            LocalTrayHeadset(model, state, summary, cards.local, sound)
+            LocalTrayHeadset(model, state, summary, cards.local, sound, trayPanelSettings, onOpenApp)
         }
     }
     cards.others.forEachIndexed { index, source ->
@@ -211,7 +214,11 @@ private fun TrayFooter(offerAdd: Boolean, hasRemoteHeadset: Boolean, onOpenApp: 
                 AppText("打开 OpenRose", role = AppTextRole.Summary)
                 AppIcon(RoseIcon.OPEN_IN_NEW, modifier = Modifier.size(14.dp), tint = appColor(AppColorRole.Summary))
             }
-            if (offerAdd && hasRemoteHeadset) TrayTextButton("添加耳机", addDevice)
+            if (offerAdd && hasRemoteHeadset) {
+                TrayTextButton("添加耳机", addDevice)
+            } else if (!offerAdd) {
+                TrayTextButton("自定义") { onOpenApp(WindowDestination.TRAY_PANEL_SETTINGS) }
+            }
         }
     }
 }
@@ -223,6 +230,8 @@ private fun LocalTrayHeadset(
     summary: TraySummary,
     source: HeadsetCardSource,
     sound: DesktopSoundActions?,
+    trayPanelSettings: TrayPanelSettings,
+    onOpenApp: (WindowDestination?) -> Unit,
 ) {
     val device = state.activeDevice()
     HeadsetCardHeader(
@@ -231,9 +240,26 @@ private fun LocalTrayHeadset(
         batteryLayout = (device?.profile ?: source.target?.profile)?.batteryLayout,
     )
     if (device != null) {
+        val onSet = model.settingsFor(device.sessionId)
         TrayLocalReadings(summary, state.pendingText(device, DeviceSetting.NOISE_MODE)?.let(NoiseMode::fromId)) { mode ->
-            model.set(device.sessionId, HeadsetCommand.NoiseMode(mode))
+            onSet(HeadsetCommand.NoiseMode(mode))
         }
+        if (trayPanelSettings.showNoiseLevels) {
+            TrayNoiseLevelControls(state, device, onSet)
+        }
+        TrayCustomControls(state, device, trayPanelSettings, onSet)
+        SettingFeedback(
+            state = state,
+            device = device,
+            showPending = { setting ->
+                setting != DeviceSetting.NOISE_MODE &&
+                    setting != DeviceSetting.GAME_MODE &&
+                    setting != DeviceSetting.SPATIAL_AUDIO &&
+                    setting != DeviceSetting.INDEPENDENT_MIC_MODE
+            },
+            includeOperation = { it != DeviceSetting.NOISE_MODE },
+            onViewDetails = { onOpenApp(WindowDestination.DIAGNOSTICS) },
+        )
     }
     if (sound != null) DesktopOutputRow(sound, source)
     TrayControlStatus(state, summary, source)

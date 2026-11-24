@@ -79,7 +79,7 @@ internal fun NoiseControlCard(
 }
 
 @Composable
-private fun NoiseLevelControls(
+internal fun NoiseLevelControls(
     state: ControlState,
     device: DeviceState,
     capabilities: NoiseControlCapabilities,

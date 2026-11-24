@@ -16,6 +16,7 @@ import io.github.dohex.openrose.ui.PlatformSettingsPosition
 import io.github.dohex.openrose.ui.PlatformUi
 import io.github.dohex.openrose.ui.RoseIcon
 import io.github.dohex.openrose.ui.StatusTone
+import io.github.dohex.openrose.ui.TrayPanelSettingsPage
 import kotlinx.coroutines.flow.StateFlow
 
 class DesktopPlatformUi(
@@ -34,6 +35,21 @@ class DesktopPlatformUi(
 
     override val circulationPairingContent: (@Composable () -> Unit)?
         @Composable get() = circulation?.let { client -> { CirculationSettings(client, showQr = showQr) } }
+
+    override val trayPanelSettingsSummary: String
+        @Composable get() {
+            val settings by desktopSettings.collectAsState()
+            return settings.trayPanel.summaryText()
+        }
+
+    override val trayPanelSettingsContent: @Composable () -> Unit
+        @Composable get() = {
+            val settings by desktopSettings.collectAsState()
+            TrayPanelSettingsPage(
+                settings = settings.trayPanel,
+                onChange = { onDesktopSettingsChange(settings.copy(trayPanel = it)) },
+            )
+        }
 
     @Composable
     override fun StatusSections(state: ControlState) {

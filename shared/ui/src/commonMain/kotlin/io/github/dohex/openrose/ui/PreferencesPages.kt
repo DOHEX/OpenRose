@@ -25,6 +25,7 @@ fun PreferencesPage(
     platformUi: PlatformUi,
     onPersonalization: () -> Unit,
     onCirculationPairing: () -> Unit,
+    onTrayPanelSettings: () -> Unit = {},
     onAbout: () -> Unit,
 ) {
     val state by model.state.collectAsState()
@@ -66,6 +67,17 @@ fun PreferencesPage(
         }
 
         platformUi.SettingsSections(state, PlatformSettingsPosition.AFTER_CONNECTION)
+
+        if (platformUi.trayPanelSettingsContent != null) {
+            AppGroup(title = "托盘面板") {
+                AppArrowRow(
+                    title = "托盘面板控制项",
+                    summary = platformUi.trayPanelSettingsSummary,
+                    icon = RoseIcon.DESKTOP,
+                    onClick = onTrayPanelSettings,
+                )
+            }
+        }
 
         AppGroup {
             AppArrowRow(

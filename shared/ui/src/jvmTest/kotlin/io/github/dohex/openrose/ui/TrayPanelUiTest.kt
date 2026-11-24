@@ -112,6 +112,132 @@ class TrayPanelUiTest {
     }
 
     @Test
+    fun connectedPanelShowsDefaultCustomControlsAndOpensCustomization() {
+        val connected = connectedI7State()
+        val device = requireNotNull(connected.device)
+        val headset = trayCandidate(device.deviceId.value, device.profile).copy(name = device.profile.displayName)
+        val state = connected.copy(
+            platform = connected.platform.copy(hostPlatform = HostPlatform.LINUX),
+            bondedDevices = persistentListOf(headset),
+            audioDeviceId = device.deviceId,
+            device = device.copy(
+                diagnostics = device.diagnostics.copy(
+                    fields = device.diagnostics.fields.puttingAll(
+                        mapOf(
+                            DeviceField.NOISE_MODE to FieldReading.Known(FieldValue.Text("anc"), "anc"),
+                            DeviceField.ANC_LEVEL to FieldReading.Known(FieldValue.Number(1), "01"),
+                            DeviceField.GAME_MODE to FieldReading.Known(FieldValue.Toggle(false), "00"),
+                            DeviceField.EQ to FieldReading.Known(FieldValue.Text("pop"), "00"),
+                        ),
+                    ),
+                ),
+            ),
+        )
+        for (style in InterfaceStyle.entries) {
+            withTrayPanel(state, style) { panel ->
+                panel.render()
+                assertTrue(panel.hasText("降噪档位"), "noise level shown in $style")
+                assertTrue(panel.hasText("游戏模式"), "game mode shown in $style")
+                assertTrue(panel.hasText("均衡器"), "equalizer shown in $style")
+                assertTrue(panel.hasText("自定义"), "customize action shown in $style")
+
+                panel.clickText("游戏模式")
+                panel.render()
+                assertTrue(
+                    DeviceSetting.GAME_MODE to FieldValue.Toggle(true) in panel.model.settingWrites,
+                    "toggling game mode writes setting in $style",
+                )
+
+                panel.clickTag(TRAY_EQUALIZER_ROW_TAG)
+                panel.render()
+                val options = device.writablePresetOptions()
+                val target = options.first { it.value != "pop" }
+                panel.clickText(target.label)
+                panel.render()
+                assertTrue(
+                    DeviceSetting.EQ to FieldValue.Text(target.value) in panel.model.settingWrites,
+                    "inline equalizer expands and writes preset in $style",
+                )
+
+                panel.clickText("自定义")
+                panel.render()
+                assertEquals(WindowDestination.TRAY_PANEL_SETTINGS, panel.destinations.last())
+            }
+        }
+    }
+
+    @Test
+    fun customTrayPanelSettingsHideLevelsAndReorderControls() {
+        val connected = connectedI7State()
+        val device = requireNotNull(connected.device)
+        val headset = trayCandidate(device.deviceId.value, device.profile).copy(name = device.profile.displayName)
+        val state = connected.copy(
+            platform = connected.platform.copy(hostPlatform = HostPlatform.LINUX),
+            bondedDevices = persistentListOf(headset),
+            audioDeviceId = device.deviceId,
+            device = device.copy(
+                diagnostics = device.diagnostics.copy(
+                    fields = device.diagnostics.fields.puttingAll(
+                        mapOf(
+                            DeviceField.NOISE_MODE to FieldReading.Known(FieldValue.Text("anc"), "anc"),
+                            DeviceField.ANC_LEVEL to FieldReading.Known(FieldValue.Number(1), "01"),
+                            DeviceField.GAME_MODE to FieldReading.Known(FieldValue.Toggle(false), "00"),
+                            DeviceField.EQ to FieldReading.Known(FieldValue.Text("pop"), "00"),
+                        ),
+                    ),
+                ),
+            ),
+        )
+        val customSettings = TrayPanelSettings(
+            showNoiseLevels = false,
+            enabledControls = setOf(TrayPanelControl.EQUALIZER, TrayPanelControl.GAME_MODE),
+            controlOrder = listOf(
+                TrayPanelControl.EQUALIZER,
+                TrayPanelControl.GAME_MODE,
+                TrayPanelControl.SPATIAL_AUDIO,
+                TrayPanelControl.INDEPENDENT_MIC,
+            ),
+        )
+        withTrayPanel(state, InterfaceStyle.MIUIX, trayPanelSettings = customSettings) { panel ->
+            panel.render()
+            assertFalse(panel.hasText("降噪档位"))
+            val eqTop = panel.textBounds("均衡器").top
+            val gameTop = panel.textBounds("游戏模式").top
+            assertTrue(eqTop < gameTop, "expected equalizer ($eqTop) above game mode ($gameTop)")
+        }
+    }
+
+    @Test
+    fun trayPanelSettingsPageEditsOrderToggleAndResets() {
+        for (style in InterfaceStyle.entries) {
+            runOpenRoseUiTest(420, 900) {
+                val settings = mutableStateOf(TrayPanelSettings.DEFAULT)
+                setContent {
+                    ProvideInterfaceStyle(style, dark = false) {
+                        TrayPanelSettingsPage(
+                            settings = settings.value,
+                            onChange = { settings.value = it },
+                        )
+                    }
+                }
+                val harness = OpenRoseUiTestHarness(this)
+                harness.render()
+                harness.clickText("降噪／通透档位")
+                harness.render()
+                assertFalse(settings.value.showNoiseLevels, "toggles noise levels in $style")
+
+                harness.clickContentDescription("上移 EQ 预设")
+                harness.render()
+                assertEquals(TrayPanelControl.EQUALIZER, settings.value.controlOrder.first(), "reorders equalizer up in $style")
+
+                harness.clickText("恢复默认")
+                harness.render()
+                assertEquals(TrayPanelSettings.DEFAULT, settings.value, "resets to defaults in $style")
+            }
+        }
+    }
+
+    @Test
     fun selectingAnotherNoiseModeWritesItAndSelectingTheConfirmedOneDoesNot() {
         for (style in InterfaceStyle.entries) {
             val state = connectedI7State()
@@ -122,7 +248,12 @@ class TrayPanelUiTest {
                 panel.render()
 
                 if (style == InterfaceStyle.MATERIAL3) {
-                    val group = panel.nodes().single { it.config.contains(SemanticsProperties.SelectableGroup) }
+                    val group = panel.nodes().single {
+                        it.config.contains(SemanticsProperties.SelectableGroup) &&
+                            it.children.any { child ->
+                                child.config.getOrNull(SemanticsProperties.Text).orEmpty().any { text -> text.text.contains(confirmed.label) }
+                            }
+                    }
                     val buttons = group.children.filter { it.config.getOrNull(SemanticsProperties.Role) == Role.RadioButton }
                     assertEquals(6, buttons.size, "all six modes across both rows must form one choice")
                     assertEquals(2, buttons.map { it.boundsInRoot.top }.distinct().size)
@@ -497,6 +628,7 @@ internal fun withTrayPanel(
     circulation: CirculationClient? = null,
     sound: DesktopSoundActions? = null,
     remoteHeadsets: State<List<RemoteHeadset>>? = null,
+    trayPanelSettings: TrayPanelSettings = TrayPanelSettings.DEFAULT,
     block: suspend (TrayHarness) -> Unit,
 ) = runOpenRoseUiTest(360, 700) {
     val model = FakeOpenRoseModel(
@@ -513,6 +645,7 @@ internal fun withTrayPanel(
             circulation = circulation,
             sound = sound,
             remoteHeadsets = remoteHeadsets?.value,
+            trayPanelSettings = trayPanelSettings,
         )
     }
     block(panel)

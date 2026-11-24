@@ -19,6 +19,12 @@ interface PlatformUi {
     val circulationPairingContent: (@Composable () -> Unit)?
         @Composable get() = null
 
+    val trayPanelSettingsSummary: String?
+        @Composable get() = null
+
+    val trayPanelSettingsContent: (@Composable () -> Unit)?
+        @Composable get() = null
+
     val dynamicColor: Boolean
         @Composable get() = false
 

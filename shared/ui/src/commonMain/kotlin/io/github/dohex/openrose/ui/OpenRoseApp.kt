@@ -168,7 +168,14 @@ private class AppNavigation(
         clearOverlays()
         when (destination) {
             WindowDestination.ADD_DEVICE -> stack.add(Route.Secondary(AppPage.ADD_DEVICE))
+
             WindowDestination.DIAGNOSTICS -> stack.add(Route.Secondary(AppPage.DIAGNOSTICS))
+
+            WindowDestination.TRAY_PANEL_SETTINGS -> {
+                tabs.selectPage(mainPages.indexOf(AppPage.SETTINGS), animate = false)
+                stack.add(Route.Secondary(AppPage.TRAY_PANEL_SETTINGS))
+            }
+
             WindowDestination.HEADPHONES -> Unit
         }
     }
@@ -242,12 +249,15 @@ private fun AppPageContent(
             platformUi = platformUi,
             onPersonalization = { navigation.navigate(AppPage.PERSONALIZATION) },
             onCirculationPairing = { navigation.navigate(AppPage.CIRCULATION_PAIRING) },
+            onTrayPanelSettings = { navigation.navigate(AppPage.TRAY_PANEL_SETTINGS) },
             onAbout = { navigation.navigate(AppPage.ABOUT) },
         )
 
         AppPage.PERSONALIZATION -> PersonalizationPage(model, platformUi, wide = wide)
 
         AppPage.CIRCULATION_PAIRING -> CirculationPairingPage(platformUi, navigation)
+
+        AppPage.TRAY_PANEL_SETTINGS -> TrayPanelSettingsRoutePage(platformUi, navigation)
 
         AppPage.ABOUT -> AboutPage()
 
@@ -313,6 +323,16 @@ private fun CirculationPairingPage(platformUi: PlatformUi, navigation: AppNaviga
         content()
     } else {
         LaunchedEffect(Unit) { if (navigation.route.page == AppPage.CIRCULATION_PAIRING) navigation.back() }
+    }
+}
+
+@Composable
+private fun TrayPanelSettingsRoutePage(platformUi: PlatformUi, navigation: AppNavigation) {
+    val content = platformUi.trayPanelSettingsContent
+    if (content != null) {
+        content()
+    } else {
+        LaunchedEffect(Unit) { if (navigation.route.page == AppPage.TRAY_PANEL_SETTINGS) navigation.back() }
     }
 }
 

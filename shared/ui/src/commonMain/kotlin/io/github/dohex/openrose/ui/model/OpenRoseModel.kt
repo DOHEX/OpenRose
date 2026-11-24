@@ -19,7 +19,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
-enum class WindowDestination { HEADPHONES, ADD_DEVICE, DIAGNOSTICS }
+enum class WindowDestination { HEADPHONES, ADD_DEVICE, DIAGNOSTICS, TRAY_PANEL_SETTINGS }
 
 class WindowNavigation {
     private val destinations = Channel<WindowDestination>(Channel.CONFLATED)

@@ -8,6 +8,8 @@ import io.github.dohex.openrose.ui.Appearance
 import io.github.dohex.openrose.ui.BottomBarStyle
 import io.github.dohex.openrose.ui.InterfaceStyle
 import io.github.dohex.openrose.ui.PageTransition
+import io.github.dohex.openrose.ui.TrayPanelControl
+import io.github.dohex.openrose.ui.TrayPanelSettings
 import io.github.dohex.openrose.ui.UiSettings
 import io.github.dohex.openrose.ui.desktop.DesktopSettings
 import kotlinx.coroutines.CompletableDeferred
@@ -87,6 +89,44 @@ class DesktopRuntimeTest {
     fun missingOrUnknownDesktopValuesKeepBackgroundControlOn() {
         assertEquals(DesktopSettings(backgroundControl = true), DesktopSettingsCodec.decode(emptyMap()))
         assertEquals(DesktopSettings(backgroundControl = true), DesktopSettingsCodec.decode(mapOf("desktop.background_control" to "yes")))
+    }
+
+    @Test
+    fun trayPanelSettingsEncodeDecodeAndNormalize() {
+        val custom = DesktopSettings(
+            backgroundControl = true,
+            trayPanel = TrayPanelSettings(
+                showNoiseLevels = false,
+                enabledControls = setOf(TrayPanelControl.SPATIAL_AUDIO, TrayPanelControl.GAME_MODE),
+                controlOrder = listOf(
+                    TrayPanelControl.SPATIAL_AUDIO,
+                    TrayPanelControl.INDEPENDENT_MIC,
+                    TrayPanelControl.GAME_MODE,
+                    TrayPanelControl.EQUALIZER,
+                ),
+            ),
+        )
+        val encoded = DesktopSettingsCodec.encode(custom)
+        assertEquals(custom, DesktopSettingsCodec.decode(encoded))
+
+        val emptyEnabled = DesktopSettingsCodec.decode(
+            mapOf(
+                "desktop.tray_panel.noise_levels" to "false",
+                "desktop.tray_panel.enabled" to "",
+                "desktop.tray_panel.order" to "equalizer,unknown",
+            ),
+        )
+        assertEquals(false, emptyEnabled.trayPanel.showNoiseLevels)
+        assertEquals(emptySet(), emptyEnabled.trayPanel.enabledControls)
+        assertEquals(
+            listOf(
+                TrayPanelControl.EQUALIZER,
+                TrayPanelControl.GAME_MODE,
+                TrayPanelControl.SPATIAL_AUDIO,
+                TrayPanelControl.INDEPENDENT_MIC,
+            ),
+            emptyEnabled.trayPanel.controlOrder,
+        )
     }
 
     private val platform = PlatformState(permission = PermissionState.NOT_REQUIRED, hostPlatform = HostPlatform.LINUX)

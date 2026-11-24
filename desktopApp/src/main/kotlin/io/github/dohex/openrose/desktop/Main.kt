@@ -141,6 +141,7 @@ private fun NucleusApplicationScope.DesktopWindows(
     }
     val selection = remember { PrimaryDeviceSelection() }
     val uiSettings by runtime.model.uiSettings.collectAsState()
+    val desktopSettings by runtime.desktopSettings.collectAsState()
     val trayAvailability by tray.availability.collectAsState()
     val uiScope = rememberCoroutineScope()
     val window = remember {
@@ -172,6 +173,7 @@ private fun NucleusApplicationScope.DesktopWindows(
                 uiScope = uiScope,
                 circulation = circulation,
                 sound = runtime.sound,
+                trayPanelSettings = desktopSettings.trayPanel,
                 onOpenApp = window::show,
                 onExit = { window.exit(fromTray = true) },
                 onStarted = tray::trayStarted,

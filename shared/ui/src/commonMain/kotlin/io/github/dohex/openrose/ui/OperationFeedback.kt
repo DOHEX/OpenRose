@@ -25,6 +25,7 @@ internal fun SettingFeedback(
     state: ControlState,
     device: DeviceState?,
     showPending: (DeviceSetting) -> Boolean = { true },
+    includeOperation: (DeviceSetting) -> Boolean = { true },
     modifier: Modifier = Modifier,
     onViewDetails: () -> Unit,
 ) {
@@ -36,7 +37,7 @@ internal fun SettingFeedback(
     val operationError = operation?.error
     val otherError = state.lastError?.takeIf { it != operationError && it != dismissedError }
     val visibleOperation = operation?.takeIf {
-        it != dismissedOperation && it.needsFeedback(showPending(it.setting))
+        includeOperation(it.setting) && it != dismissedOperation && it.needsFeedback(showPending(it.setting))
     }
     if (visibleOperation == null && otherError == null) return
 

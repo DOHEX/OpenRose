@@ -40,6 +40,7 @@ import io.github.dohex.openrose.ui.PrimaryDeviceSelection
 import io.github.dohex.openrose.ui.RemoteHeadset
 import io.github.dohex.openrose.ui.TrayIcons
 import io.github.dohex.openrose.ui.TrayPanel
+import io.github.dohex.openrose.ui.TrayPanelSettings
 import io.github.dohex.openrose.ui.TraySummary
 import io.github.dohex.openrose.ui.model.OpenRoseModel
 import io.github.dohex.openrose.ui.model.WindowDestination
@@ -55,7 +56,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 
 private val screen: DpSize? by lazy { usableScreenSize() }
 
-private val trayPanelSize: DpSize by lazy { DpSize(360.dp, 440.dp).fitTo(screen) }
+private val trayPanelSize: DpSize by lazy { DpSize(360.dp, 520.dp).fitTo(screen) }
 
 private fun trayPanelSizeFor(contentHeight: Dp): DpSize = DpSize(trayPanelSize.width, contentHeight).fitTo(screen)
 
@@ -87,6 +88,7 @@ internal fun NucleusApplicationScope.DesktopTray(
     uiScope: CoroutineScope,
     circulation: CirculationClient,
     sound: DesktopSoundActions?,
+    trayPanelSettings: TrayPanelSettings,
     onOpenApp: () -> Unit,
     onExit: () -> Unit,
     onStarted: () -> Unit,
@@ -134,6 +136,7 @@ internal fun NucleusApplicationScope.DesktopTray(
                         },
                         circulation = circulation,
                         sound = sound,
+                        trayPanelSettings = trayPanelSettings,
                         remoteHeadsets = peers,
                         onContentHeight = { trayState.setWindowSize(trayPanelSizeFor(it)) },
                     )
@@ -157,6 +160,7 @@ internal fun NucleusApplicationScope.DesktopTray(
                     selection = selection,
                     circulation = circulation,
                     sound = sound,
+                    trayPanelSettings = trayPanelSettings,
                     peers = peers,
                     initialSize = panelHeight?.let(::trayPanelSizeFor) ?: trayPanelSize,
                     onContentHeight = { panelHeight = it },
@@ -182,6 +186,7 @@ private fun NucleusApplicationScope.TrayPanelWindow(
     selection: PrimaryDeviceSelection,
     circulation: CirculationClient,
     sound: DesktopSoundActions?,
+    trayPanelSettings: TrayPanelSettings,
     peers: List<RemoteHeadset>,
     initialSize: DpSize,
     onContentHeight: (Dp) -> Unit,
@@ -230,6 +235,7 @@ private fun NucleusApplicationScope.TrayPanelWindow(
                 onOpenApp,
                 circulation = circulation,
                 sound = sound,
+                trayPanelSettings = trayPanelSettings,
                 remoteHeadsets = peers,
                 onContentHeight = { height ->
                     onContentHeight(height)

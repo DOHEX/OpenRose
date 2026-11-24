@@ -17,6 +17,7 @@ internal enum class AppPage(
     DIAGNOSTICS("诊断与记录", RoseIcon.LOG),
     PERSONALIZATION("个性化", RoseIcon.PALETTE),
     CIRCULATION_PAIRING("流转配对", RoseIcon.LINK),
+    TRAY_PANEL_SETTINGS("托盘面板控制项", RoseIcon.DESKTOP),
     ABOUT("关于", RoseIcon.INFO),
 }
 
