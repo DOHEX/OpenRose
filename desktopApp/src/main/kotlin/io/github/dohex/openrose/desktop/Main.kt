@@ -51,7 +51,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
-import java.util.prefs.Preferences
 import kotlin.system.exitProcess
 
 private val MAIN_WINDOW_SIZE = DpSize(1180.dp, 820.dp)
@@ -97,7 +96,7 @@ private fun startRuntime(platform: String, hostPlatform: HostPlatform, scope: Co
         else -> null
     }
     return DesktopRuntime(
-        preferences = Preferences.userRoot().node("io/github/dohex/openrose"),
+        paths = desktopPaths(hostPlatform),
         platform = PlatformState(
             permission = PermissionState.NOT_REQUIRED,
             transport = transport?.availability?.value

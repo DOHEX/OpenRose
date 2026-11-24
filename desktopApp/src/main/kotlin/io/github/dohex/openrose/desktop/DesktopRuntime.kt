@@ -29,14 +29,14 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.util.prefs.Preferences
 
 internal class DesktopRuntime(
-    private val preferences: Preferences,
+    private val paths: DesktopPaths,
     platform: PlatformState,
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
     private val transport: DesktopControlTransport? = null,
 ) {
+    private val settingsFile = DesktopSettingsFile(paths.settingsFile)
     private val control: ControlRuntime
     private val availabilityJob: Job?
     private val mutableDesktopSettings: MutableStateFlow<DesktopSettings>
@@ -44,7 +44,7 @@ internal class DesktopRuntime(
     val desktopSettings: StateFlow<DesktopSettings>
 
     init {
-        val saved = preferences.keys().associateWith { preferences.get(it, "") }
+        val saved = settingsFile.load()
         control = LocalControlRuntime(platform, UserSettingsCodec.decode(saved), transport = transport, scope = scope)
         mutableDesktopSettings = MutableStateFlow(DesktopSettingsCodec.decode(saved))
         desktopSettings = mutableDesktopSettings.asStateFlow()
@@ -86,7 +86,7 @@ internal class DesktopRuntime(
 
     val sound: DesktopSoundActions? get() = audio?.sound
 
-    fun startCirculation(): CirculationClient = desktopCirculation(scope, control, audio?.circulation)
+    fun startCirculation(): CirculationClient = desktopCirculation(scope, control, audio?.circulation, paths.circulationDirectory)
 
     fun updateDesktopSettings(settings: DesktopSettings) {
         mutableDesktopSettings.value = settings
@@ -116,7 +116,7 @@ internal class DesktopRuntime(
     }
 
     private fun save(values: Map<String, String>) {
-        values.forEach { (key, value) -> preferences.put(key, value) }
+        settingsFile.save(values)
     }
 }
 

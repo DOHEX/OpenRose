@@ -23,8 +23,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
-import java.util.UUID
-import java.util.prefs.Preferences
+import java.io.File
+import java.nio.file.Files
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -32,10 +32,10 @@ import kotlin.test.assertTrue
 class DesktopRuntimeTest {
     @Test
     fun controlAndAppearanceSurviveRebuildingTheRuntime() = runTest {
-        val path = "io/github/dohex/openrose/test/${UUID.randomUUID()}"
-        val preferences = Preferences.userRoot().node(path)
+        val root = Files.createTempDirectory("openrose-desktop-test").toFile()
+        val paths = DesktopPaths(File(root, "config/settings.properties"), File(root, "data/circulation"))
         try {
-            val first = DesktopRuntime(preferences, platform, backgroundScope)
+            val first = DesktopRuntime(paths, platform, backgroundScope)
             val chosenControl = UserSettings(forceBle = true)
             val chosenUi = UiSettings(
                 interfaceStyle = InterfaceStyle.MATERIAL3,
@@ -50,24 +50,24 @@ class DesktopRuntimeTest {
             first.model.updateUiSettings(chosenUi)
             assertEquals(observed, first.model.state.value)
 
-            val rebuilt = DesktopRuntime(Preferences.userRoot().node(path), platform, backgroundScope)
+            val rebuilt = DesktopRuntime(paths, platform, backgroundScope)
             assertEquals(chosenControl, rebuilt.model.state.value.settings)
             assertEquals(chosenUi, rebuilt.model.uiSettings.value)
             assertEquals(DesktopSettings(backgroundControl = false), rebuilt.desktopSettings.value)
-            assertEquals("false", preferences.get("desktop.background_control", null))
+            assertEquals("false", DesktopSettingsFile(paths.settingsFile).load()["desktop.background_control"])
         } finally {
-            preferences.removeNode()
-            Preferences.userRoot().flush()
+            root.deleteRecursively()
         }
     }
 
     @Test
     fun closingTheDesktopWaitsForItsBackgroundServicesToReleaseTheirResources() = runTest {
         val scope = CoroutineScope(SupervisorJob() + StandardTestDispatcher(testScheduler))
-        val preferences = Preferences.userRoot().node("io/github/dohex/openrose/test/${UUID.randomUUID()}")
+        val root = Files.createTempDirectory("openrose-desktop-test").toFile()
+        val paths = DesktopPaths(File(root, "settings.properties"), File(root, "circulation"))
         val released = CompletableDeferred<Unit>()
         try {
-            val runtime = DesktopRuntime(preferences, platform, scope)
+            val runtime = DesktopRuntime(paths, platform, scope)
             scope.launch(start = CoroutineStart.UNDISPATCHED) {
                 try {
                     awaitCancellation()
@@ -81,8 +81,46 @@ class DesktopRuntimeTest {
             runtime.close()
             assertTrue(released.isCompleted)
         } finally {
-            preferences.removeNode()
+            root.deleteRecursively()
         }
+    }
+
+    @Test
+    fun desktopPathsFollowPlatformConventions() {
+        val home = File(System.getProperty("java.io.tmpdir"), "openrose-home").absoluteFile
+        val customConfig = File(home, "custom-config")
+        val customData = File(home, "custom-data")
+        val linuxDefault = desktopPaths(HostPlatform.LINUX, home = home, env = { null })
+        assertEquals(File(home, ".config/openrose/settings.properties"), linuxDefault.settingsFile)
+        assertEquals(File(home, ".local/share/openrose/circulation"), linuxDefault.circulationDirectory)
+
+        val linuxXdg = desktopPaths(
+            HostPlatform.LINUX,
+            home = home,
+            env = mapOf("XDG_CONFIG_HOME" to customConfig.path, "XDG_DATA_HOME" to customData.path)::get,
+        )
+        assertEquals(File(customConfig, "openrose/settings.properties"), linuxXdg.settingsFile)
+        assertEquals(File(customData, "openrose/circulation"), linuxXdg.circulationDirectory)
+
+        val linuxRelativeXdg = desktopPaths(
+            HostPlatform.LINUX,
+            home = home,
+            env = mapOf("XDG_CONFIG_HOME" to "relative/config", "XDG_DATA_HOME" to "relative/data")::get,
+        )
+        assertEquals(File(home, ".config/openrose/settings.properties"), linuxRelativeXdg.settingsFile)
+        assertEquals(File(home, ".local/share/openrose/circulation"), linuxRelativeXdg.circulationDirectory)
+
+        val windowsEnv = desktopPaths(
+            HostPlatform.WINDOWS,
+            home = home,
+            env = mapOf("APPDATA" to customConfig.path, "LOCALAPPDATA" to customData.path)::get,
+        )
+        assertEquals(File(customConfig, "OpenRose/settings.properties"), windowsEnv.settingsFile)
+        assertEquals(File(customData, "OpenRose/circulation"), windowsEnv.circulationDirectory)
+
+        val windowsFallback = desktopPaths(HostPlatform.WINDOWS, home = home, env = { null })
+        assertEquals(File(home, "AppData/Roaming/OpenRose/settings.properties"), windowsFallback.settingsFile)
+        assertEquals(File(home, "AppData/Local/OpenRose/circulation"), windowsFallback.circulationDirectory)
     }
 
     @Test
