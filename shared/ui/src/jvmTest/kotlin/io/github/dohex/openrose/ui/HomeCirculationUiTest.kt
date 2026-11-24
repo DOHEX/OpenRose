@@ -25,42 +25,10 @@ class HomeCirculationUiTest {
 
     @Test
     fun knownSourceOffersRemoteNoiseControlAndExplicitTransferInsideOneHeadsetCard() {
-        val peer = mapOf("phone" to "小米 14")
         val session = RemoteSessionReference("phone", DeviceId(requireNotNull(headset.classicAddress)), "session")
         for (style in InterfaceStyle.entries) {
             val writes = mutableListOf<CirculationCommand>()
-            var reading = RemoteReading(
-                status = RemoteControlStatus.READY,
-                deviceName = headset.name,
-                session = session,
-                mode = NoiseMode.ANC,
-                modes = listOf(NoiseMode.ANC, NoiseMode.TRANSPARENCY),
-                left = 87,
-                right = 89,
-                batteryLayout = ModelProfile.I5_ZT.batteryLayout,
-            )
-            val client = CirculationClient { command ->
-                when (command) {
-                    CirculationCommand.Directory -> PeerDirectory(peer, peer)
-
-                    is CirculationCommand.Read -> reading
-
-                    is CirculationCommand.Handoff -> HandoffStatus(available = true)
-
-                    is CirculationCommand.SetSetting -> {
-                        writes += command
-                        val mode = (command.command as HeadsetCommand.NoiseMode).mode
-                        reading.copy(mode = mode).also { reading = it }
-                    }
-
-                    is CirculationCommand.Pull -> {
-                        writes += command
-                        CirculationResult(error = "手机正在通话，无法让出耳机")
-                    }
-
-                    else -> error("Unexpected request $command")
-                }
-            }
+            val client = knownSourceClient(session, writes)
             val model = FakeOpenRoseModel(mutableStateOf(linux), mutableStateOf(UiSettings(interfaceStyle = style)))
             runOpenRoseUiTest(900, 800) {
                 setContent { OpenRoseApp(model, HomePlatform(client)) }
@@ -87,6 +55,45 @@ class HomeCirculationUiTest {
                 assertTrue(home.hasText("手机正在通话，无法让出耳机"))
                 assertTrue(home.hasText("音源设备 · 小米 14"))
                 assertTrue(model.connectRequests.isEmpty())
+            }
+        }
+    }
+
+    private fun knownSourceClient(
+        session: RemoteSessionReference,
+        writes: MutableList<CirculationCommand>,
+    ): CirculationClient {
+        val peer = mapOf("phone" to "小米 14")
+        var reading = RemoteReading(
+            status = RemoteControlStatus.READY,
+            deviceName = headset.name,
+            session = session,
+            mode = NoiseMode.ANC,
+            modes = listOf(NoiseMode.ANC, NoiseMode.TRANSPARENCY),
+            left = 87,
+            right = 89,
+            batteryLayout = ModelProfile.I5_ZT.batteryLayout,
+        )
+        return CirculationClient { command ->
+            when (command) {
+                CirculationCommand.Directory -> PeerDirectory(peer, peer)
+
+                is CirculationCommand.Read -> reading
+
+                is CirculationCommand.Handoff -> HandoffStatus(available = true)
+
+                is CirculationCommand.SetSetting -> {
+                    writes += command
+                    val mode = (command.command as HeadsetCommand.NoiseMode).mode
+                    reading.copy(mode = mode).also { reading = it }
+                }
+
+                is CirculationCommand.Pull -> {
+                    writes += command
+                    CirculationResult(error = "手机正在通话，无法让出耳机")
+                }
+
+                else -> error("Unexpected request $command")
             }
         }
     }
