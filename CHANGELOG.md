@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.1.1](https://github.com/DOHEX/OpenRose/compare/v0.1.0...v0.1.1) (2026-11-24)
+
+
+### Features
+
+* **headset:** unify device display names with system Bluetooth aliases ([2f6c560](https://github.com/DOHEX/OpenRose/commit/2f6c560d1f85dfd8b459356543bab32553163638))
+* **ui:** redesign add-headset page with unified search stage and grouped lists ([f07d4cf](https://github.com/DOHEX/OpenRose/commit/f07d4cf7cbf4a481b58245175f17941cd00a7012))
+* **ui:** reorganize settings page and move HyperOS integration to subpage ([0eac1b2](https://github.com/DOHEX/OpenRose/commit/0eac1b27f6d44454771d60131c3d389bac329bdc))
+
+
+### Bug Fixes
+
+* **desktop:** set Linux desktop entry Name to OpenRose ([b0e8d69](https://github.com/DOHEX/OpenRose/commit/b0e8d69b966c505f4998d8be3e39ed15a9cb7e88))
+* **ui:** adopt standard Miuix/MD3E sheets and controls in quick and tray panels ([f27feee](https://github.com/DOHEX/OpenRose/commit/f27feeea70de0d047e88963c4c7194ebb490b6f9))
+
+
+### Style
+
+* **ui:** fix spotless spacing in QuickPanel ([9865723](https://github.com/DOHEX/OpenRose/commit/98657235c40bb4f41b248889976bedaa07654fb3))
+
 ## 0.1.0 (2026-11-24)
 
 
