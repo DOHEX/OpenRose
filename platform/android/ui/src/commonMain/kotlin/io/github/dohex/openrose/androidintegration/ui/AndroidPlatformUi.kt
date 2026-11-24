@@ -1,5 +1,8 @@
 package io.github.dohex.openrose.androidintegration.ui
 
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -12,7 +15,6 @@ import io.github.dohex.openrose.androidintegration.scope.ScopeRestartStatus
 import io.github.dohex.openrose.androidintegration.scope.ScopeRestartUpdate
 import io.github.dohex.openrose.circulation.CirculationClient
 import io.github.dohex.openrose.core.*
-import io.github.dohex.openrose.core.protocol.ModelProfile
 import io.github.dohex.openrose.ui.*
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -119,26 +121,35 @@ class AndroidPlatformUi(
         }
     }
 
-    @Composable
-    override fun SettingsSections(state: ControlState, position: PlatformSettingsPosition) {
-        val integration by integration.collectAsState()
-        val settings = integration.settings
-        if (position == PlatformSettingsPosition.BEFORE_CONNECTION) {
-            ControlWayGroup(integration, onSelectControlWay)
-            return
+    override val hasControlSettings: Boolean
+        @Composable get() = true
+
+    override val systemIntegrationSummary: String?
+        @Composable get() {
+            val current by integration.collectAsState()
+            if (!hyperOsIntegrationApplicable(current.platform)) return null
+            return systemIntegrationSummary(current.settings)
         }
-        var systemPreferenceFeedback by remember { mutableStateOf<String?>(null) }
-        LaunchedEffect(integration.platform.systemIntegrationApplicability, integration.platform.module) {
-            systemPreferenceFeedback = null
-        }
-        val saveSystemPreference: (IntegrationSettings) -> Unit = { nextSettings ->
-            onIntegrationSettingsChange(nextSettings)
-            systemPreferenceFeedback = if (integration.platform.module == ModuleAvailability.Available) {
-                "偏好已保存。系统状态请查看状态页。"
-            } else {
-                "偏好已保存，待系统就绪后生效。"
+
+    override val systemIntegrationContent: (@Composable () -> Unit)?
+        @Composable get() {
+            val current by integration.collectAsState()
+            if (!hyperOsIntegrationApplicable(current.platform)) return null
+            return {
+                val live by integration.collectAsState()
+                SystemIntegrationSettingsContent(live, onIntegrationSettingsChange)
             }
         }
+
+    @Composable
+    override fun ControlSettingsRows(state: ControlState) {
+        val integration by integration.collectAsState()
+        ControlWayRows(integration, onSelectControlWay)
+    }
+
+    @Composable
+    override fun BackgroundSettingsSection(state: ControlState) {
+        val integration by integration.collectAsState()
         if (state.backgroundControlApplicable(integration)) {
             BackgroundControlGroup(
                 state,
@@ -149,101 +160,6 @@ class AndroidPlatformUi(
                 onRequestAssociation,
                 onOpenAppSettings,
             )
-        }
-        if (hyperOsIntegrationApplicable(integration.platform)) {
-            AppGroup(title = "系统呈现") {
-                AppChoiceRow(
-                    title = "超级岛",
-                    valueText = islandModeLabel(settings.islandMode),
-                    options = IslandMode.entries.map { AppOption(it, islandModeLabel(it)) },
-                    selected = settings.islandMode,
-                    onSelect = { saveSystemPreference(settings.copy(islandMode = it)) },
-                )
-                AppSwitchRow(
-                    title = "焦点通知",
-                    summary = "连接期间保留耳机状态通知",
-                    checked = settings.focusNotificationEnabled,
-                    onChange = { saveSystemPreference(settings.copy(focusNotificationEnabled = it)) },
-                )
-                if (settings.focusNotificationEnabled && settings.islandMode == IslandMode.MODULE) {
-                    AppSwitchRow(
-                        title = "常驻电量岛",
-                        summary = "连接期间超级岛一直显示电量；关闭后只在显示时机弹出几秒",
-                        checked = settings.islandSummaryEnabled,
-                        onChange = { saveSystemPreference(settings.copy(islandSummaryEnabled = it)) },
-                    )
-                }
-                if (settings.focusNotificationEnabled) {
-                    val unavailable = integration.platform.unavailableStatusTargets
-                    val selectedTarget = settings.statusNotificationTarget
-                    AppChoiceRow(
-                        title = "点击通知打开",
-                        valueText = unavailable[selectedTarget]
-                            ?.let { "${statusNotificationTargetLabel(selectedTarget)}（$it，点击通知将打开 OpenRose）" }
-                            ?: statusNotificationTargetLabel(selectedTarget),
-                        options = StatusNotificationTarget.entries.map {
-                            AppOption(it, statusNotificationTargetLabel(it), disabledReason = unavailable[it])
-                        },
-                        selected = selectedTarget,
-                        onSelect = { saveSystemPreference(settings.copy(statusNotificationTarget = it)) },
-                    )
-                }
-            }
-
-            if (settings.islandMode == IslandMode.MODULE) {
-                val footnote = listOfNotNull(
-                    "未选择显示时机，不会弹出展开。".takeIf { settings.islandTriggers.isEmpty() },
-                    "入盒时仅对 $inCaseModels 生效。",
-                ).joinToString("\n")
-                AppGroup(title = "模块显示时机", footnote = footnote) {
-                    AppCheckGroup(
-                        options = listOf(
-                            AppOption(
-                                value = IslandTrigger.CONNECTION,
-                                label = "连接时",
-                                contentDescription = "新连接会话开始时显示连接提示",
-                            ),
-                            AppOption(
-                                value = IslandTrigger.IN_CASE,
-                                label = "入盒时",
-                                contentDescription = "耳机放进充电盒时显示入盒提示",
-                            ),
-                        ),
-                        checked = settings.islandTriggers,
-                        enabledFor = { true },
-                        onToggle = { trigger ->
-                            val triggers = if (trigger in settings.islandTriggers) {
-                                settings.islandTriggers.removing(trigger)
-                            } else {
-                                settings.islandTriggers.adding(trigger)
-                            }
-                            saveSystemPreference(settings.copy(islandTriggers = triggers))
-                        },
-                    )
-                }
-            }
-
-            AppGroup(title = "融合设备中心") {
-                AppChoiceRow(
-                    title = "附加设置入口",
-                    valueText = fusionSettingsDestinationLabel(settings.fusionSettingsDestination),
-                    options = FusionSettingsDestination.entries.map {
-                        AppOption(it, fusionSettingsDestinationLabel(it))
-                    },
-                    selected = settings.fusionSettingsDestination,
-                    onSelect = { saveSystemPreference(settings.copy(fusionSettingsDestination = it)) },
-                )
-                AppSwitchRow(
-                    title = "关闭降噪使用抗风噪",
-                    summary = "点“关闭”时改用抗风噪模式；仅支持抗风噪的型号生效，其余仍为标准模式",
-                    checked = settings.fusionOffAsWind,
-                    onChange = { saveSystemPreference(settings.copy(fusionOffAsWind = it)) },
-                )
-            }
-
-            systemPreferenceFeedback?.let { message ->
-                AppText(message, Modifier.padding(horizontal = 16.dp), role = AppTextRole.Summary)
-            }
         }
     }
 
@@ -454,8 +370,6 @@ private fun statusNotificationTargetLabel(target: StatusNotificationTarget): Str
     StatusNotificationTarget.QUICK_PANEL -> "快捷面板"
 }
 
-private val inCaseModels: String = ModelProfile.entries.filter { it.reportsInCase }.joinToString("、") { it.displayName }
-
 private fun bridgeIpcLabel(state: BridgeIpcState): String = when (state) {
     BridgeIpcState.DISCONNECTED -> "未连接"
     BridgeIpcState.WAITING -> "等待目标进程"
@@ -516,3 +430,111 @@ private val diagnosticStatusLabels = mapOf(
     "UNAVAILABLE" to "当前系统路径不可用",
     "ACTION_FAILED" to "操作失败",
 )
+
+@Composable
+private fun SystemIntegrationSettingsContent(
+    integration: IntegrationState,
+    onIntegrationSettingsChange: (IntegrationSettings) -> Unit,
+) {
+    val settings = integration.settings
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        AppGroup(title = "超级岛与通知") {
+            AppChoiceRow(
+                title = "超级岛",
+                valueText = islandModeLabel(settings.islandMode),
+                options = IslandMode.entries.map { AppOption(it, islandModeLabel(it)) },
+                selected = settings.islandMode,
+                onSelect = { onIntegrationSettingsChange(settings.copy(islandMode = it)) },
+            )
+            AppSwitchRow(
+                title = "焦点通知",
+                summary = "连接期间保留耳机状态通知",
+                checked = settings.focusNotificationEnabled,
+                onChange = { onIntegrationSettingsChange(settings.copy(focusNotificationEnabled = it)) },
+            )
+            if (settings.focusNotificationEnabled && settings.islandMode == IslandMode.MODULE) {
+                AppSwitchRow(
+                    title = "常驻电量岛",
+                    summary = "连接期间超级岛一直显示电量；关闭后只在显示时机弹出几秒",
+                    checked = settings.islandSummaryEnabled,
+                    onChange = { onIntegrationSettingsChange(settings.copy(islandSummaryEnabled = it)) },
+                )
+            }
+            if (settings.focusNotificationEnabled) {
+                val unavailable = integration.platform.unavailableStatusTargets
+                val selectedTarget = settings.statusNotificationTarget
+                AppChoiceRow(
+                    title = "点击通知打开",
+                    valueText = unavailable[selectedTarget]
+                        ?.let { "${statusNotificationTargetLabel(selectedTarget)}（$it，点击通知将打开 OpenRose）" }
+                        ?: statusNotificationTargetLabel(selectedTarget),
+                    options = StatusNotificationTarget.entries.map {
+                        AppOption(it, statusNotificationTargetLabel(it), disabledReason = unavailable[it])
+                    },
+                    selected = selectedTarget,
+                    onSelect = { onIntegrationSettingsChange(settings.copy(statusNotificationTarget = it)) },
+                )
+            }
+        }
+
+        if (settings.islandMode == IslandMode.MODULE) {
+            val footnote = listOfNotNull(
+                "未选择显示时机，不会弹出展开。".takeIf { settings.islandTriggers.isEmpty() },
+                "入盒时仅对支持上报盒内状态的型号生效。",
+            ).joinToString("\n")
+            AppGroup(title = "模块显示时机", footnote = footnote) {
+                AppCheckGroup(
+                    options = listOf(
+                        AppOption(
+                            value = IslandTrigger.CONNECTION,
+                            label = "连接时",
+                            contentDescription = "新连接会话开始时显示连接提示",
+                        ),
+                        AppOption(
+                            value = IslandTrigger.IN_CASE,
+                            label = "入盒时",
+                            contentDescription = "耳机放进充电盒时显示入盒提示",
+                        ),
+                    ),
+                    checked = settings.islandTriggers,
+                    enabledFor = { true },
+                    onToggle = { trigger ->
+                        val triggers = if (trigger in settings.islandTriggers) {
+                            settings.islandTriggers.removing(trigger)
+                        } else {
+                            settings.islandTriggers.adding(trigger)
+                        }
+                        onIntegrationSettingsChange(settings.copy(islandTriggers = triggers))
+                    },
+                )
+            }
+        }
+
+        AppGroup(title = "融合设备中心") {
+            AppChoiceRow(
+                title = "附加设置入口",
+                valueText = fusionSettingsDestinationLabel(settings.fusionSettingsDestination),
+                options = FusionSettingsDestination.entries.map {
+                    AppOption(it, fusionSettingsDestinationLabel(it))
+                },
+                selected = settings.fusionSettingsDestination,
+                onSelect = { onIntegrationSettingsChange(settings.copy(fusionSettingsDestination = it)) },
+            )
+            AppSwitchRow(
+                title = "关闭降噪使用抗风噪",
+                summary = "点“关闭”时改用抗风噪模式；仅支持抗风噪的型号生效，其余仍为标准模式",
+                checked = settings.fusionOffAsWind,
+                onChange = { onIntegrationSettingsChange(settings.copy(fusionOffAsWind = it)) },
+            )
+        }
+    }
+}
+
+private fun systemIntegrationSummary(settings: IntegrationSettings): String {
+    val island = "超级岛：${islandModeLabel(settings.islandMode)}"
+    val focus = if (settings.focusNotificationEnabled) "焦点通知已开启" else "焦点通知已关闭"
+    return "$island · $focus"
+}

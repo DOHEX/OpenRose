@@ -33,7 +33,7 @@ No root needed; see [Background control](../../guides/background-control/).
 Requires an Xposed framework; see [HyperOS integration](../../guides/hyperos-integration/).
 
 - Connection prompts and earphone status shown through the system island and focus notifications; tapping the focus notification opens OpenRose, the system headset page, RoseLink, or the quick panel
-- Earbud battery and noise mode switching in Fusion Device Center; when set under Settings → Additional Settings entry (附加设置入口), "Additional Settings" opens OpenRose directly
+- Earbud battery and noise mode switching in Fusion Device Center; when set under Settings → System integration (系统集成) → Additional Settings entry (附加设置入口), "Additional Settings" opens OpenRose directly
 - Module control: the system Bluetooth process connects to the earphones, and OpenRose does not need to be open
 - Headset circulation (experimental): move the earphones from one HyperOS audio source device to another through Fusion Device Center
 

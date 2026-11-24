@@ -215,9 +215,6 @@ private fun AppPageContent(
     navigation: AppNavigation,
     equalizerEditor: EqualizerEditor,
 ) {
-    val withHeadset: @Composable (@Composable (DeviceState) -> Unit) -> Unit = { content ->
-        HeadsetPage(state, targetPage, navigation, content)
-    }
     when (targetPage) {
         AppPage.HEADPHONES -> HeadphonesPage(model, platformUi, navigation::navigate, selection)
 
@@ -250,42 +247,55 @@ private fun AppPageContent(
             onPersonalization = { navigation.navigate(AppPage.PERSONALIZATION) },
             onCirculationPairing = { navigation.navigate(AppPage.CIRCULATION_PAIRING) },
             onTrayPanelSettings = { navigation.navigate(AppPage.TRAY_PANEL_SETTINGS) },
+            onSystemIntegration = { navigation.navigate(AppPage.SYSTEM_INTEGRATION) },
             onAbout = { navigation.navigate(AppPage.ABOUT) },
         )
 
         AppPage.PERSONALIZATION -> PersonalizationPage(model, platformUi, wide = wide)
 
-        AppPage.CIRCULATION_PAIRING -> CirculationPairingPage(platformUi, navigation)
+        AppPage.CIRCULATION_PAIRING -> PlatformRoutePage(AppPage.CIRCULATION_PAIRING, platformUi.circulationPairingContent, navigation)
 
-        AppPage.TRAY_PANEL_SETTINGS -> TrayPanelSettingsRoutePage(platformUi, navigation)
+        AppPage.TRAY_PANEL_SETTINGS -> PlatformRoutePage(AppPage.TRAY_PANEL_SETTINGS, platformUi.trayPanelSettingsContent, navigation)
+
+        AppPage.SYSTEM_INTEGRATION -> PlatformRoutePage(AppPage.SYSTEM_INTEGRATION, platformUi.systemIntegrationContent, navigation)
 
         AppPage.ABOUT -> AboutPage()
 
         AppPage.DIAGNOSTICS -> DiagnosticsPage(model, platformUi, state)
 
-        AppPage.TOUCH -> withHeadset { device ->
-            TouchControlCard(
-                state,
-                device,
-                navigation.device.selectedTouchSlot,
-                { navigation.device.selectedTouchSlot = it },
-                model.settingsFor(device.sessionId),
-                navigation.device.selectedTouchSide,
-                { navigation.device.selectedTouchSide = it },
-            )
+        AppPage.TOUCH, AppPage.EQUALIZER, AppPage.AUDIO, AppPage.DETAILS -> HeadsetPage(state, targetPage, navigation) { device ->
+            HeadsetPageContent(targetPage, state, device, model, navigation, equalizerEditor)
         }
+    }
+}
 
-        AppPage.EQUALIZER -> withHeadset { device ->
-            EqualizerPage(state, device, equalizerEditor)
-        }
+@Composable
+private fun HeadsetPageContent(
+    targetPage: AppPage,
+    state: ControlState,
+    device: DeviceState,
+    model: OpenRoseModel,
+    navigation: AppNavigation,
+    equalizerEditor: EqualizerEditor,
+) {
+    when (targetPage) {
+        AppPage.TOUCH -> TouchControlCard(
+            state,
+            device,
+            navigation.device.selectedTouchSlot,
+            { navigation.device.selectedTouchSlot = it },
+            model.settingsFor(device.sessionId),
+            navigation.device.selectedTouchSide,
+            { navigation.device.selectedTouchSide = it },
+        )
 
-        AppPage.AUDIO -> withHeadset { device ->
-            DeviceControlCard(state, device, model.settingsFor(device.sessionId))
-        }
+        AppPage.EQUALIZER -> EqualizerPage(state, device, equalizerEditor)
 
-        AppPage.DETAILS -> withHeadset { device ->
-            DeviceDetails(state, device, model::disconnect) { navigation.navigate(AppPage.DIAGNOSTICS) }
-        }
+        AppPage.AUDIO -> DeviceControlCard(state, device, model.settingsFor(device.sessionId))
+
+        AppPage.DETAILS -> DeviceDetails(state, device, model::disconnect) { navigation.navigate(AppPage.DIAGNOSTICS) }
+
+        else -> Unit
     }
 }
 
@@ -317,22 +327,15 @@ private fun DiagnosticsPage(model: OpenRoseModel, platformUi: PlatformUi, state:
 }
 
 @Composable
-private fun CirculationPairingPage(platformUi: PlatformUi, navigation: AppNavigation) {
-    val content = platformUi.circulationPairingContent
+private fun PlatformRoutePage(
+    page: AppPage,
+    content: (@Composable () -> Unit)?,
+    navigation: AppNavigation,
+) {
     if (content != null) {
         content()
     } else {
-        LaunchedEffect(Unit) { if (navigation.route.page == AppPage.CIRCULATION_PAIRING) navigation.back() }
-    }
-}
-
-@Composable
-private fun TrayPanelSettingsRoutePage(platformUi: PlatformUi, navigation: AppNavigation) {
-    val content = platformUi.trayPanelSettingsContent
-    if (content != null) {
-        content()
-    } else {
-        LaunchedEffect(Unit) { if (navigation.route.page == AppPage.TRAY_PANEL_SETTINGS) navigation.back() }
+        LaunchedEffect(page) { if (navigation.route.page == page) navigation.back() }
     }
 }
 

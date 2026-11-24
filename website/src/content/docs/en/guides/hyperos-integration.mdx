@@ -8,7 +8,7 @@ import { Steps } from '@astrojs/starlight/components';
 On HyperOS, OpenRose can run as an Xposed module and bring the earphones into the system UI:
 
 - Connection prompts and earphone status shown through the system island and focus notifications.
-- Earbud battery and noise mode switching in Fusion Device Center; "Additional Settings" can be set in Settings → Additional Settings entry (附加设置入口) to open OpenRose directly (defaults to the system page).
+- Earbud battery and noise mode switching in Fusion Device Center; "Additional Settings" can be set in Settings → System integration (系统集成) → Additional Settings entry (附加设置入口) to open OpenRose directly (defaults to the system page).
 - Module control: the system Bluetooth process connects to the earphones, and OpenRose does not need to be open.
 - Headset circulation (experimental): move the earphones from one HyperOS audio source device to another through Fusion Device Center.
 
@@ -57,7 +57,7 @@ In module mode, turn on focus notifications and the persistent battery island to
 
 ## Focus notification tap target
 
-On the Settings page, choose what tapping the earphone status notification opens: the OpenRose earphones page (default), the system headset page, RoseLink, or the quick panel. The quick panel is an OpenRose bottom sheet for switching noise mode, EQ preset, and game mode without opening the app; the OpenRose Quick Settings tile opens it too.
+On the Settings → System integration (系统集成) page, choose what tapping the earphone status notification opens: the OpenRose earphones page (default), the system headset page, RoseLink, or the quick panel. The quick panel is an OpenRose bottom sheet for switching noise mode, EQ preset, and game mode without opening the app; the OpenRose Quick Settings tile opens it too.
 
 Options that cannot open right now (RoseLink not installed, or the system has no headset page) are disabled with the reason. If the chosen target later stops opening (for example, RoseLink was uninstalled), tapping the notification opens the OpenRose earphones page and says why at the top.
 
@@ -71,7 +71,7 @@ Between HyperOS audio source devices, Fusion Device Center can circulate the ear
 
 ## Known limitations
 
-- **Noise mode mapping**: the system only knows Off / ANC / Transparency. When the earphones are in wind-noise reduction, Fusion Device Center shows Off and the real mode is unchanged. Turn on "Off uses wind-noise reduction" (关闭降噪使用抗风噪) on the Settings page to make tapping Off write wind-noise reduction instead of normal mode.
+- **Noise mode mapping**: the system only knows Off / ANC / Transparency. When the earphones are in wind-noise reduction, Fusion Device Center shows Off and the real mode is unchanged. Turn on "Off uses wind-noise reduction" (关闭降噪使用抗风噪) on the Settings → System integration (系统集成) page to make tapping Off write wind-noise reduction instead of normal mode.
 - **Battery display**: when an earbud's battery is known but its charging state is unknown, Fusion Device Center does not show that battery; the case battery is not shown either.
 
 When reporting system integration problems, include the Xposed framework version and the bridge status shown in diagnostics (reached from the Status page); see [Feedback](../feedback/).

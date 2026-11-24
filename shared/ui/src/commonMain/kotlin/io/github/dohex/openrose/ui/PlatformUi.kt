@@ -5,8 +5,6 @@ import io.github.dohex.openrose.circulation.CirculationClient
 import io.github.dohex.openrose.core.ControlState
 import io.github.dohex.openrose.core.PlatformState
 
-enum class PlatformSettingsPosition { BEFORE_CONNECTION, AFTER_CONNECTION }
-
 interface PlatformUi {
     val platformName: String
     val requestBluetoothPermission: (() -> Unit)? get() = null
@@ -25,6 +23,15 @@ interface PlatformUi {
     val trayPanelSettingsContent: (@Composable () -> Unit)?
         @Composable get() = null
 
+    val systemIntegrationSummary: String?
+        @Composable get() = null
+
+    val systemIntegrationContent: (@Composable () -> Unit)?
+        @Composable get() = null
+
+    val hasControlSettings: Boolean
+        @Composable get() = false
+
     val dynamicColor: Boolean
         @Composable get() = false
 
@@ -41,7 +48,10 @@ interface PlatformUi {
     fun StatusSections(state: ControlState) {}
 
     @Composable
-    fun SettingsSections(state: ControlState, position: PlatformSettingsPosition) {}
+    fun ControlSettingsRows(state: ControlState) {}
+
+    @Composable
+    fun BackgroundSettingsSection(state: ControlState) {}
 
     @Composable
     fun DisplayModeRows() {}

@@ -56,10 +56,13 @@ internal fun AndroidTestPage(model: FakeOpenRoseModel, platform: PlatformUi, pag
                     platform,
                     onPersonalization = {},
                     onCirculationPairing = { page.value = "流转配对" },
+                    onSystemIntegration = { page.value = "系统集成" },
                     onAbout = {},
                 )
 
                 "流转配对" -> platform.circulationPairingContent?.invoke()
+
+                "系统集成" -> platform.systemIntegrationContent?.invoke()
 
                 "个性化" -> PersonalizationPage(model, platform)
 

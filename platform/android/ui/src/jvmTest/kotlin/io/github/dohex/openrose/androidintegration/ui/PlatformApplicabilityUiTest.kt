@@ -52,6 +52,7 @@ class PlatformApplicabilityUiTest {
                 harness.render()
                 harness.openPage("设置")
                 harness.render()
+                assertFalse(harness.hasText("系统集成"), "unverified integration applicability does not expose HyperOS entry in $style")
                 assertFalse(harness.hasText("超级岛"), "unverified integration applicability does not expose HyperOS controls in $style")
                 assertFalse(harness.hasText("焦点通知"), "unverified integration applicability does not expose focus notification in $style")
                 assertTrue(harness.hasText("强制使用 BLE"), "known Android transport applicability remains independent in $style")
@@ -72,11 +73,15 @@ class PlatformApplicabilityUiTest {
     fun hyperOsSettingsStayVisibleWhileTheModuleIsUnready() {
         for (style in InterfaceStyle.entries) {
             withUnreadyHyperOsSettings(style) { harness ->
-                assertTrue(harness.hasText("超级岛"), "HyperOS settings remain visible while integration is unready in $style")
-                assertTrue(harness.hasText("焦点通知"), "HyperOS focus notification remains in Settings while unready in $style")
-                assertTrue(harness.hasText("模块显示时机"), "the saved module mode controls its applicable settings in $style")
+                assertTrue(harness.hasText("系统集成"), "HyperOS integration entry remains visible while integration is unready in $style")
+                assertTrue(harness.hasText("超级岛：模块 · 焦点通知已开启"), "system integration summary reflects saved settings in $style")
                 assertTrue(harness.hasText("强制使用 BLE"), "the Android host exposes its supported transport preference in $style")
-                assertTrue(harness.hasText("附加设置入口"), "fusion settings destination entry remains in Settings while unready in $style")
+                harness.clickText("系统集成")
+                harness.render()
+                assertTrue(harness.hasText("超级岛"), "HyperOS settings remain visible while integration is unready in $style")
+                assertTrue(harness.hasText("焦点通知"), "HyperOS focus notification remains in System Integration while unready in $style")
+                assertTrue(harness.hasText("模块显示时机"), "the saved module mode controls its applicable settings in $style")
+                assertTrue(harness.hasText("附加设置入口"), "fusion settings destination entry remains in System Integration while unready in $style")
                 assertFalse(harness.hasText("选择 OpenRose 后"), "footnote text below additional settings entry is removed in $style")
 
                 harness.openPage("状态")
@@ -90,6 +95,8 @@ class PlatformApplicabilityUiTest {
     fun hidingAndRestoringHyperOsSettingsPreservesTheSavedSelection() {
         for (style in InterfaceStyle.entries) {
             withUnreadyHyperOsSettings(style) { harness ->
+                harness.clickText("系统集成")
+                harness.render()
                 harness.hideIsland()
                 harness.openPage("状态")
                 harness.render()
@@ -100,10 +107,15 @@ class PlatformApplicabilityUiTest {
 
                 harness.openPage("设置")
                 harness.render()
+                assertFalse(harness.hasText("系统集成"), "HyperOS entry is hidden while inapplicable in $style")
                 assertFalse(harness.hasText("超级岛"), "HyperOS controls are hidden while inapplicable in $style")
                 assertEquals(savedSettings, harness.integration.value.settings)
 
                 harness.setApplicability(PlatformApplicability.APPLICABLE)
+                assertTrue(harness.hasText("系统集成"), "entry returns when the host becomes applicable again in $style")
+                assertTrue(harness.hasText("超级岛：不显示 · 焦点通知已开启"), "summary reflects saved mode when entry reappears in $style")
+                harness.clickText("系统集成")
+                harness.render()
                 assertTrue(harness.hasText("超级岛"), "settings return when the host becomes applicable again in $style")
                 assertTrue(harness.hasText("焦点通知"), "focus notification returns with HyperOS applicability in $style")
                 assertTrue(harness.hasText("不显示"), "the saved mode is restored when settings reappear in $style")

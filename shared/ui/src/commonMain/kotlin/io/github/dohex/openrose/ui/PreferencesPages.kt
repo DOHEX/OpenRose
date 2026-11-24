@@ -26,34 +26,60 @@ fun PreferencesPage(
     onPersonalization: () -> Unit,
     onCirculationPairing: () -> Unit,
     onTrayPanelSettings: () -> Unit = {},
+    onSystemIntegration: () -> Unit = {},
     onAbout: () -> Unit,
 ) {
     val state by model.state.collectAsState()
+    val hasControlSettings = platformUi.hasControlSettings
+    val hasCirculation = platformUi.circulationPairingContent != null
+    val hasSystemIntegration = platformUi.systemIntegrationContent != null
+    val hasTrayPanel = platformUi.trayPanelSettingsContent != null
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        AppGroup {
+        AppGroup(title = "界面") {
             AppArrowRow(
                 title = "个性化",
                 summary = "界面风格、明暗模式、底栏样式、背景模糊与转场动效",
                 icon = RoseIcon.PALETTE,
                 onClick = onPersonalization,
             )
-        }
-
-        platformUi.SettingsSections(state, PlatformSettingsPosition.BEFORE_CONNECTION)
-
-        if (platformUi.circulationPairingContent != null) {
-            AppGroup {
+            if (hasTrayPanel) {
                 AppArrowRow(
-                    title = "流转配对",
-                    summary = "配对手机与电脑，让耳机在两端之间流转",
-                    icon = RoseIcon.LINK,
-                    onClick = onCirculationPairing,
+                    title = "托盘面板控制项",
+                    summary = platformUi.trayPanelSettingsSummary,
+                    icon = RoseIcon.DESKTOP,
+                    onClick = onTrayPanelSettings,
                 )
             }
         }
+
+        if (hasControlSettings || hasCirculation || hasSystemIntegration) {
+            AppGroup(title = "控制与连接") {
+                if (hasControlSettings) {
+                    platformUi.ControlSettingsRows(state)
+                }
+                if (hasCirculation) {
+                    AppArrowRow(
+                        title = "流转配对",
+                        summary = "配对手机与电脑，让耳机在两端之间流转",
+                        icon = RoseIcon.LINK,
+                        onClick = onCirculationPairing,
+                    )
+                }
+                if (hasSystemIntegration) {
+                    AppArrowRow(
+                        title = "系统集成",
+                        summary = platformUi.systemIntegrationSummary,
+                        icon = RoseIcon.MODULE,
+                        onClick = onSystemIntegration,
+                    )
+                }
+            }
+        }
+
+        platformUi.BackgroundSettingsSection(state)
 
         if (state.platform.controlTransportApplicability == PlatformApplicability.APPLICABLE) {
             AppGroup(title = "高级") {
@@ -62,19 +88,6 @@ fun PreferencesPage(
                     summary = "连接不稳定时再开启；仅影响下一次连接",
                     checked = state.settings.forceBle,
                     onChange = { model.updateSettings(state.settings.copy(forceBle = it)) },
-                )
-            }
-        }
-
-        platformUi.SettingsSections(state, PlatformSettingsPosition.AFTER_CONNECTION)
-
-        if (platformUi.trayPanelSettingsContent != null) {
-            AppGroup(title = "托盘面板") {
-                AppArrowRow(
-                    title = "托盘面板控制项",
-                    summary = platformUi.trayPanelSettingsSummary,
-                    icon = RoseIcon.DESKTOP,
-                    onClick = onTrayPanelSettings,
                 )
             }
         }

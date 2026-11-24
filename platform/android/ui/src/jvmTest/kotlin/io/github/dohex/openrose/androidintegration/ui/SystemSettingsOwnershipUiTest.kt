@@ -62,21 +62,6 @@ class SystemSettingsOwnershipUiTest {
     }
 
     @Test
-    fun savedPreferenceMessageUsesThePageSurface() {
-        for (style in InterfaceStyle.entries) {
-            withHarness(1200, style, height = 1800) { harness ->
-                harness.render()
-                harness.clickText("焦点通知")
-                harness.render()
-                val message = harness.textBounds("偏好已保存，待系统就绪后生效。")
-                val image = harness.snapshot()
-                val y = message.center.y.toInt()
-                assertEquals(image.getRGB(2, y), image.getRGB(image.width - 3, y))
-            }
-        }
-    }
-
-    @Test
     fun hyperOsPreferencesLiveInSettingsAndDiagnosticsIsReachedOnlyFromStatus() {
         for (style in InterfaceStyle.entries) {
             for (width in listOf(420, 1200)) {
@@ -85,17 +70,21 @@ class SystemSettingsOwnershipUiTest {
                     harness.openPage("设置")
                     harness.render()
 
-                    assertTrue(harness.hasText("超级岛"), "HyperOS settings remain in Settings for $style at ${width}dp")
-                    assertTrue(harness.hasText("焦点通知"), "focus notification belongs to Settings for $style at ${width}dp")
-                    assertTrue(harness.hasText("官方"), "the existing island default remains visible for $style at ${width}dp")
+                    assertTrue(harness.hasText("系统集成"), "HyperOS entry lives in Settings for $style at ${width}dp")
+                    assertTrue(harness.hasText("超级岛：官方 · 焦点通知已开启"), "summary shows saved HyperOS state for $style at ${width}dp")
                     assertTrue(harness.hasText("版本、项目链接与致谢"), "the 关于 entry remains at the bottom of Settings for $style at ${width}dp")
                     assertFalse(harness.hasText("诊断与记录"), "Settings has no fixed diagnostics entry for $style at ${width}dp")
+
+                    harness.clickText("系统集成")
+                    harness.render()
+                    assertTrue(harness.hasText("超级岛"), "HyperOS settings live in System Integration for $style at ${width}dp")
+                    assertTrue(harness.hasText("焦点通知"), "focus notification belongs to System Integration for $style at ${width}dp")
+                    assertTrue(harness.hasText("官方"), "the existing island default remains visible for $style at ${width}dp")
 
                     harness.clickText("焦点通知")
                     harness.render()
                     assertFalse(harness.integration.value.settings.focusNotificationEnabled, "the moved switch still saves its setting in $style")
                     assertTrue(harness.settingsChanges.any { !it.focusNotificationEnabled }, "the preference crosses the public callback in $style")
-                    assertTrue(harness.hasText("偏好已保存，待系统就绪后生效。"), "unready integrations report a saved pending preference in $style")
                     assertFalse(harness.hasText("功能已生效"), "a save callback does not claim system presentation is active in $style")
 
                     harness.openPage("状态")
@@ -129,7 +118,7 @@ class SystemSettingsOwnershipUiTest {
                 ),
             ) { harness ->
                 harness.render()
-                harness.openPage("设置")
+                harness.openPage("系统集成")
                 harness.render()
                 assertFalse(harness.hasText("模块显示时机"), "trigger settings stay hidden outside module mode in $style")
 
@@ -173,6 +162,7 @@ class SystemSettingsOwnershipUiTest {
                 style = style,
                 settings = IntegrationSettings(islandMode = IslandMode.MODULE, islandTriggers = persistentSetOf()),
             ) { harness ->
+                harness.openPage("系统集成")
                 harness.render()
                 harness.clickText("连接时")
                 harness.render()
@@ -210,6 +200,7 @@ class SystemSettingsOwnershipUiTest {
         for (style in InterfaceStyle.entries) {
             withHarness(width = 1200, height = 2600, style = style) { harness ->
                 harness.markUnavailable(StatusNotificationTarget.ROSELINK to "RoseLink 未安装")
+                harness.openPage("系统集成")
                 harness.render()
                 harness.clickText("点击通知打开")
                 harness.render()
@@ -236,6 +227,7 @@ class SystemSettingsOwnershipUiTest {
                 settings = IntegrationSettings(focusNotificationEnabled = true, statusNotificationTarget = StatusNotificationTarget.ROSELINK),
             ) { harness ->
                 harness.markUnavailable(StatusNotificationTarget.ROSELINK to "RoseLink 未安装")
+                harness.openPage("系统集成")
                 harness.render()
 
                 assertTrue(harness.hasText("RoseLink（RoseLink 未安装，点击通知将打开 OpenRose）"), "the row reports the fallback in $style")
@@ -253,14 +245,13 @@ class SystemSettingsOwnershipUiTest {
                 module = ModuleAvailability.Available,
             ) { harness ->
                 harness.render()
-                harness.openPage("设置")
+                harness.openPage("系统集成")
                 harness.render()
                 harness.clickText("焦点通知")
                 harness.render()
 
-                assertTrue(harness.hasText("偏好已保存。系统状态请查看状态页。"), "ready integrations report save without claiming effect in $style")
                 assertFalse(harness.hasText("功能已生效"), "module readiness alone does not prove system presentation in $style")
-                assertFalse(harness.hasText("偏好已保存，待系统就绪后生效。"), "ready integrations do not report a pending readiness state in $style")
+                assertFalse(harness.hasText("偏好已保存"), "saving a system preference does not show a save banner in $style")
                 assertTrue(harness.integration.value.settings.focusNotificationEnabled.not())
             }
         }

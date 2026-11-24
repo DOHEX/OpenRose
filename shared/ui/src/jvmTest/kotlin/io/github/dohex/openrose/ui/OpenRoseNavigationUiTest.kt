@@ -112,6 +112,47 @@ class OpenRoseNavigationUiTest {
     }
 
     @Test
+    fun systemIntegrationOpensFromSettingsOnlyWhileApplicable() {
+        for (style in InterfaceStyle.entries) {
+            val applicable = mutableStateOf(true)
+            val platform = object : PlatformUi {
+                override val platformName = "Test"
+                override val systemIntegrationSummary: String?
+                    @Composable get() = if (applicable.value) "超级岛：模块 · 焦点通知已开启" else null
+                override val systemIntegrationContent: (@Composable () -> Unit)?
+                    @Composable get() = if (applicable.value) {
+                        { AppText("系统集成测试内容") }
+                    } else {
+                        null
+                    }
+            }
+            withHarness(420, 900, state(connected = false), style, platform) { harness ->
+                harness.render()
+                harness.clickTab("设置")
+                harness.render()
+                assertTrue(harness.hasClickableText("系统集成"))
+                assertTrue(harness.hasText("超级岛：模块 · 焦点通知已开启"))
+                assertFalse(harness.hasText("系统集成测试内容"))
+
+                harness.clickText("系统集成")
+                harness.render()
+                assertTrue(harness.hasText("系统集成测试内容"))
+                harness.clickContentDescription("返回")
+                harness.render(frames = 120)
+                assertTrue(harness.hasClickableText("系统集成"))
+
+                harness.clickText("系统集成")
+                harness.render()
+                applicable.value = false
+                harness.render(frames = 120)
+                assertTrue(harness.hasText("个性化"))
+                assertFalse(harness.hasText("系统集成"))
+                assertFalse(harness.hasText("系统集成测试内容"))
+            }
+        }
+    }
+
+    @Test
     fun settingsOpensPersonalizationWhichSurvivesStyleSwitchesAndReturnsToSettings() {
         for (style in InterfaceStyle.entries) {
             for (width in listOf(420, 1200)) {

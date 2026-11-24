@@ -12,7 +12,6 @@ import io.github.dohex.openrose.ui.AppStatusSection
 import io.github.dohex.openrose.ui.AppSwitchRow
 import io.github.dohex.openrose.ui.CirculationSettings
 import io.github.dohex.openrose.ui.DesktopSoundActions
-import io.github.dohex.openrose.ui.PlatformSettingsPosition
 import io.github.dohex.openrose.ui.PlatformUi
 import io.github.dohex.openrose.ui.RoseIcon
 import io.github.dohex.openrose.ui.StatusTone
@@ -65,8 +64,7 @@ class DesktopPlatformUi(
     }
 
     @Composable
-    override fun SettingsSections(state: ControlState, position: PlatformSettingsPosition) {
-        if (position != PlatformSettingsPosition.AFTER_CONNECTION) return
+    override fun BackgroundSettingsSection(state: ControlState) {
         val settings by desktopSettings.collectAsState()
         val availability by tray.collectAsState()
         val login by loginLaunch.state.collectAsState()

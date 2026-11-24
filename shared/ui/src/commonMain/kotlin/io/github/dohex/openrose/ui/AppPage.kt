@@ -18,6 +18,7 @@ internal enum class AppPage(
     PERSONALIZATION("个性化", RoseIcon.PALETTE),
     CIRCULATION_PAIRING("流转配对", RoseIcon.LINK),
     TRAY_PANEL_SETTINGS("托盘面板控制项", RoseIcon.DESKTOP),
+    SYSTEM_INTEGRATION("系统集成", RoseIcon.MODULE),
     ABOUT("关于", RoseIcon.INFO),
 }
 
