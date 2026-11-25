@@ -13,6 +13,7 @@ import kotlinx.collections.immutable.persistentSetOf
 internal val openFeelLhdc = ModelSpec(
     displayName = "OpenFeel",
     shortLabel = "OpenFeel",
+    versionName = "LHDC",
     protocol = ModelProtocol.RsCommon(initialization = RsCommonInit.OPEN_FEEL),
     advertisementPrefixes = listOf("0b0a0a0c"),
     nameBrand = "openfeel",

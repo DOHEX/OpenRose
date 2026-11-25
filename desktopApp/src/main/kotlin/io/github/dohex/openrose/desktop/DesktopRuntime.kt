@@ -6,6 +6,7 @@ import io.github.dohex.openrose.core.ControlRuntime
 import io.github.dohex.openrose.core.LocalControlRuntime
 import io.github.dohex.openrose.core.PlatformState
 import io.github.dohex.openrose.core.TransportAvailability
+import io.github.dohex.openrose.core.TransportUnavailableCode
 import io.github.dohex.openrose.core.UserSettings
 import io.github.dohex.openrose.core.UserSettingsCodec
 import io.github.dohex.openrose.core.transport.DesktopControlTransport
@@ -97,7 +98,7 @@ internal class DesktopRuntime(
         availabilityJob?.cancelAndJoin()
         control.updatePlatformState(
             control.state.value.platform.copy(
-                transport = TransportAvailability.Unavailable("应用正在关闭"),
+                transport = TransportAvailability.Unavailable(TransportUnavailableCode.SHUTTING_DOWN),
             ),
         )
         try {

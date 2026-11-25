@@ -63,7 +63,6 @@ internal val ContentMaxWidth = 640.dp
 @Composable
 fun QuickPanel(
     model: OpenRoseModel,
-    selection: PrimaryDeviceSelection,
     dynamicColor: Boolean,
     onOpenApp: (WindowDestination?) -> Unit,
     onDismiss: () -> Unit,
@@ -78,11 +77,11 @@ fun QuickPanel(
         Box(modifier.fillMaxSize()) {
             when (uiSettings.interfaceStyle) {
                 InterfaceStyle.MIUIX -> MiuixQuickPanelSheet(onDismiss = { dismiss() }) {
-                    QuickPanelContent(model, state, selection, circulation, onOpenApp)
+                    QuickPanelContent(model, state, circulation, onOpenApp)
                 }
 
                 InterfaceStyle.MATERIAL3 -> MaterialQuickPanelSheet(onDismiss = { dismiss() }) {
-                    QuickPanelContent(model, state, selection, circulation, onOpenApp)
+                    QuickPanelContent(model, state, circulation, onOpenApp)
                 }
             }
         }
@@ -164,12 +163,11 @@ private fun MaterialQuickPanelSheet(
 private fun QuickPanelContent(
     model: OpenRoseModel,
     state: ControlState,
-    selection: PrimaryDeviceSelection,
     circulation: CirculationClient?,
     onOpenApp: (WindowDestination?) -> Unit,
 ) {
-    val summary = rememberTraySummary(state, selection)
-    val cards = rememberHeadsetCards(state, selection, circulation)
+    val summary = rememberTraySummary(state)
+    val cards = rememberHeadsetCards(state, circulation)
     val device = state.activeDevice()?.takeIf { summary.connected }
 
     if (cards.showLocal) {
@@ -252,7 +250,7 @@ private fun QuickConnectionStatus(state: ControlState, summary: TraySummary, sou
         !source.offersTransfer && summary.connectionHint != null -> AppText(
             summary.connectionHint,
             role = AppTextRole.Summary,
-            color = if (state.lastError != null && state.platform.connectionBlockReason == null) appColor(AppColorRole.Error) else null,
+            color = if (state.lastError != null && state.connectionBlockReason == null) appColor(AppColorRole.Error) else null,
         )
     }
 }

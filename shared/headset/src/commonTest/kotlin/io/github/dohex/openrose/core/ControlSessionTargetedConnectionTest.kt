@@ -69,7 +69,7 @@ class ControlSessionTargetedConnectionTest {
     fun grantingPermissionReadsAlreadyConnectedAudioWithoutANewEvent() = runTest {
         val id = DeviceId("audio-before-permission")
         val paired = DeviceCandidate(id, "EarFree i5", null, ModelProfile.I5_ZT, "")
-        val platform = PlatformState(PermissionState.REQUIRED, TransportAvailability.Unavailable("permission"))
+        val platform = PlatformState(PermissionState.REQUIRED, TransportAvailability.Unavailable(TransportUnavailableCode.PERMISSION_REQUIRED))
         val base = TargetedAudioTransport(bondedList = listOf(paired))
         var granted = false
         val transport = object : ControlTransport by base {

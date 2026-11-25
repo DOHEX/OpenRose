@@ -28,13 +28,13 @@ fn main() -> Result<()> {
             let mut last = Instant::now();
             loop {
                 if last.elapsed() > Duration::from_secs(12) {
-                    println!("unavailable\tWindows 正在恢复蓝牙状态");
+                    println!("unavailable\trecovering");
                     std::thread::sleep(Duration::from_millis(250));
                 }
                 last = Instant::now();
                 println!(
                     "{}",
-                    facts::snapshot().unwrap_or_else(|e| format!("unavailable\t{}", clean(e)))
+                    facts::snapshot().unwrap_or_else(|e| format!("unavailable\tbackend_unavailable\t{}", clean(e)))
                 );
                 std::thread::sleep(Duration::from_secs(2));
             }

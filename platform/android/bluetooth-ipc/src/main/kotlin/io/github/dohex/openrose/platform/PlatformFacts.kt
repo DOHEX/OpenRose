@@ -10,6 +10,7 @@ import io.github.dohex.openrose.core.PermissionState
 import io.github.dohex.openrose.core.PlatformApplicability
 import io.github.dohex.openrose.core.PlatformState
 import io.github.dohex.openrose.core.TransportAvailability
+import io.github.dohex.openrose.core.TransportUnavailableCode
 
 fun bluetoothPermissions(): Array<String> = if (Build.VERSION.SDK_INT >= 31) {
     arrayOf(Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT)
@@ -40,14 +41,14 @@ fun Context.readPlatformState(
     val permission = if (legacy) PermissionState.NOT_REQUIRED else runtimePermission
     val transport = when {
         !packageManager.hasSystemFeature(PackageManager.FEATURE_BLUETOOTH_LE) ->
-            TransportAvailability.Unavailable("此设备没有 BLE 硬件")
+            TransportAvailability.Unavailable(TransportUnavailableCode.BLE_UNSUPPORTED)
 
-        permission.missing -> TransportAvailability.Unavailable("授予权限后可检测蓝牙并发现耳机")
+        permission.missing -> TransportAvailability.Unavailable(TransportUnavailableCode.PERMISSION_REQUIRED)
 
         else -> {
             val adapter = getSystemService(BluetoothManager::class.java)?.adapter
             when {
-                adapter == null -> TransportAvailability.Unavailable("系统蓝牙适配器不可用")
+                adapter == null -> TransportAvailability.Unavailable(TransportUnavailableCode.NO_ADAPTER)
                 !adapter.isEnabled -> TransportAvailability.Disabled
                 else -> TransportAvailability.Available
             }

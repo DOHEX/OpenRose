@@ -85,6 +85,7 @@ class ModuleControlHostTest {
         val reference = SessionReference(rig.earphones.deviceId, 1)
 
         for (command in listOf(
+            HostCommand.SelectCurrentHeadset(rig.earphones.deviceId),
             HostCommand.Connect(rig.earphones.deviceId),
             HostCommand.Disconnect,
             HostCommand.StartScan,

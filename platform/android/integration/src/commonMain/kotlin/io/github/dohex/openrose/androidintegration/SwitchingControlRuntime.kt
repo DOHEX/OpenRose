@@ -555,6 +555,13 @@ private class ApplicationOwners(
             }, HostCommand.StopScan)
         }
 
+        override suspend fun selectCurrentHeadset(deviceId: DeviceId) {
+            route({
+                it.selectCurrentHeadset(deviceId)
+                OperationResult.Success
+            }, HostCommand.SelectCurrentHeadset(deviceId))
+        }
+
         override suspend fun connect(deviceId: DeviceId, pinned: Boolean) = route(
             { it.connect(deviceId, pinned) },
             if (pinned) HostCommand.ConnectFromSystem(deviceId) else HostCommand.Connect(deviceId),
