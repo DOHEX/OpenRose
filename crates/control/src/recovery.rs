@@ -1,5 +1,6 @@
 use crate::core::{Attempt, Core, Interrupt};
 use crate::error::{ControlError, ControlErrorCode};
+use crate::selection::{TransportEndpoint, TransportSelection};
 use crate::snapshot::{ConnectionPhase, ConnectionRecovery, ConnectionState};
 use crate::transport::{TransportError, TransportRecoveryReason};
 use std::sync::Arc;
@@ -12,14 +13,28 @@ pub(crate) fn recoverable_reason(interrupt: &Interrupt) -> Option<TransportRecov
 }
 
 impl Core {
-    pub(crate) fn can_recover_first_query(&self, index: Option<usize>) -> bool {
-        index == Some(0) && self.transport.supports_initialization_recovery()
+    pub(crate) fn can_recover_first_query(
+        &self,
+        selection: &TransportSelection,
+        index: Option<usize>,
+    ) -> bool {
+        index == Some(0)
+            && matches!(selection.endpoint, TransportEndpoint::BleGatt { .. })
+            && self.transport.supports_initialization_recovery()
     }
 
-    pub(crate) fn can_retry(&self, attempt: &Attempt, reason: TransportRecoveryReason) -> bool {
+    pub(crate) fn can_retry(
+        &self,
+        attempt: &Attempt,
+        selection: &TransportSelection,
+        reason: TransportRecoveryReason,
+    ) -> bool {
+        if !matches!(selection.endpoint, TransportEndpoint::BleGatt { .. }) {
+            return false;
+        }
         match reason {
             TransportRecoveryReason::WriteFailed | TransportRecoveryReason::NoInitialResponse => {
-                self.can_recover_first_query(attempt.query_index())
+                self.can_recover_first_query(selection, attempt.query_index())
             }
             TransportRecoveryReason::ServiceDiscovery
             | TransportRecoveryReason::ServicesUnavailable
@@ -41,6 +56,7 @@ impl Core {
     pub(crate) async fn prepare_recovery(
         &self,
         attempt: &Arc<Attempt>,
+        selection: &TransportSelection,
         failed_epoch: u64,
         reason: TransportRecoveryReason,
     ) -> Result<(), Interrupt> {
@@ -83,7 +99,9 @@ impl Core {
                 session_id: attempt.id,
                 phase: ConnectionPhase::Connecting,
             };
-            snapshot.headset = Some(attempt.loading_headset());
+            let mut headset = attempt.loading_headset();
+            headset.transport_selection = Some(selection.clone());
+            snapshot.headset = Some(headset);
             snapshot.last_error = None;
             snapshot.connection_recovery = Some(ConnectionRecovery {
                 session_id: attempt.id,

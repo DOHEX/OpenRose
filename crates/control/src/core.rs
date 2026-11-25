@@ -165,6 +165,7 @@ pub(crate) struct Attempt {
     pub(crate) profile: ModelProfile,
     pub(crate) origin: Origin,
     audio_bound: AtomicBool,
+    pub(crate) force_ble: bool,
     pub(crate) cancel: CancellationToken,
     pub(crate) link_epoch: AtomicU64,
     pub(crate) outcome: watch::Sender<Option<ControlResult>>,
@@ -181,6 +182,7 @@ impl Attempt {
         origin: Origin,
         audio_bound: bool,
         cancel: CancellationToken,
+        force_ble: bool,
     ) -> Self {
         Self {
             id,
@@ -188,6 +190,7 @@ impl Attempt {
             profile,
             origin,
             audio_bound: AtomicBool::new(audio_bound),
+            force_ble,
             queue: Mutex::new(Arc::new(Pending::new(cancel.child_token()))),
             cancel,
             link_epoch: AtomicU64::new(0),
@@ -253,6 +256,7 @@ impl Attempt {
             readings: HeadsetReadings::new(self.profile),
             diagnostics: HeadsetDiagnostics::default(),
             classic_address: self.candidate.classic_address.clone(),
+            transport_selection: None,
         }
     }
 

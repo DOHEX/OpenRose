@@ -1,6 +1,7 @@
-use crate::audio::AudioFactsDriver;
+use crate::audio::{self, AudioFactsDriver};
 use crate::gatt::GattDriver;
 use crate::scan::ScanDriver;
+use crate::spp::SppDriver;
 use async_trait::async_trait;
 use openrose_headset::HeadsetId;
 use serde::{Deserialize, Serialize};
@@ -15,6 +16,20 @@ pub enum TransportRecoveryReason {
     WriteFailed,
     ServicesChanged,
     NoInitialResponse,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum AudioProfileEvidence {
+    #[default]
+    Unknown,
+    Classic,
+    LeAudio,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct TransportFacts {
+    pub spp_available: bool,
+    pub audio_profile: AudioProfileEvidence,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -87,6 +102,25 @@ pub trait ControlTransport: Send + Sync {
     async fn open_gatt(&self, headset: &HeadsetId) -> Result<Box<dyn GattDriver>, TransportError>;
 
     async fn start_scan(&self) -> Result<Box<dyn ScanDriver>, TransportError>;
+
+    async fn open_spp(
+        &self,
+        _headset: &HeadsetId,
+        _address: &str,
+        _service_uuid: &str,
+    ) -> Result<Box<dyn SppDriver>, TransportError> {
+        Err(TransportError::Unsupported(
+            "此平台不支持 SPP 控制连接".to_string(),
+        ))
+    }
+
+    async fn connection_facts(
+        &self,
+        headset: &HeadsetId,
+        classic_address: &str,
+    ) -> Result<TransportFacts, TransportError> {
+        Ok(audio::connection_facts(&*self.audio_facts(), headset, Some(classic_address)).await)
+    }
 
     fn audio_facts(&self) -> Arc<dyn AudioFactsDriver>;
 

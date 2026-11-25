@@ -17,7 +17,6 @@ const NOISE_REPLY: &str = "09ff00000106020e000000010020";
 const UNACCEPTED_BATTERY_REPLY: &str = "000000000001010000aabb00ff0000ff";
 
 struct Rig {
-    sim: Arc<SimulatedTransport>,
     transport: Arc<FaultyTransport>,
     runtime: Arc<ControlRuntime>,
     headset: SimulatedHeadsetHandle,
@@ -42,7 +41,6 @@ fn rig(
     let transport = FaultyTransport::new(Arc::clone(&sim), recovery, plan);
     let (runtime, _) = runtime_timed(transport.clone(), available(), timing(query_ms));
     Rig {
-        sim,
         transport,
         runtime,
         headset,

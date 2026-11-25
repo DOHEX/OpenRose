@@ -82,6 +82,14 @@ impl Options {
         }
     }
 
+    pub fn i7() -> Self {
+        Self {
+            profile: ModelProfile::I7RsV2,
+            id: "A1:B2:C3:D4:E5:F6",
+            ..Self::i5()
+        }
+    }
+
     pub fn paced(mut self) -> Self {
         self.timing = SessionTiming::default();
         self

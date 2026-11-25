@@ -1,5 +1,6 @@
 use crate::core::{Core, LinkInner, LocalClock, OwnedConnections, SessionTiming, detached};
 use crate::error::ControlResult;
+use crate::settings::ControlSettings;
 use crate::snapshot::{ControlSnapshot, PlatformState, TransportAvailability};
 use crate::state::StateCell;
 use crate::targeting::{Origin, Pin, Targeting};
@@ -16,6 +17,7 @@ pub trait ControlObserver: Send + Sync + 'static {
 
 pub struct ControlConfig {
     pub platform: PlatformState,
+    pub settings: ControlSettings,
     pub clock: Arc<dyn LocalClock>,
     pub timing: SessionTiming,
     pub session_id_base: u64,
@@ -25,6 +27,7 @@ impl ControlConfig {
     pub fn new(platform: PlatformState, clock: Arc<dyn LocalClock>) -> Self {
         Self {
             platform,
+            settings: ControlSettings::default(),
             clock,
             timing: SessionTiming::default(),
             session_id_base: 0,
@@ -43,7 +46,8 @@ impl ControlRuntime {
         config: ControlConfig,
     ) -> Self {
         let audio_readable = !config.platform.permission.missing();
-        let (state, mut published) = StateCell::new(ControlSnapshot::initial(config.platform));
+        let (state, mut published) =
+            StateCell::new(ControlSnapshot::initial(config.platform, config.settings));
         let core = Arc::new(Core {
             state,
             audio: transport.audio_facts(),
@@ -99,6 +103,12 @@ impl ControlRuntime {
         self.core
             .state
             .update(|snapshot| snapshot.select_current_headset(&headset));
+    }
+
+    pub fn update_settings(&self, settings: ControlSettings) {
+        self.core
+            .state
+            .update(|snapshot| snapshot.settings = settings);
     }
 
     pub async fn refresh_bonded_headsets(&self) {

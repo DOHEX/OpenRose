@@ -1,5 +1,5 @@
 use crate::snapshot::HeadsetCandidate;
-use crate::transport::TransportError;
+use crate::transport::{AudioProfileEvidence, TransportError, TransportFacts};
 use async_trait::async_trait;
 use openrose_headset::{HeadsetId, ModelProfile};
 use std::collections::{BTreeMap, BTreeSet};
@@ -83,19 +83,6 @@ pub trait AudioFactsDriver: Send + Sync {
     async fn bonded_devices(&self) -> Result<Vec<RawAudioDevice>, TransportError>;
 
     async fn snapshot(&self, target_addresses: &[String]) -> RawAudioSnapshot;
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum AudioProfileEvidence {
-    Unknown,
-    LeAudio,
-    Classic,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct TransportFacts {
-    pub spp_available: bool,
-    pub audio_profile: AudioProfileEvidence,
 }
 
 pub fn normalize_bluetooth_address(value: &str) -> Option<String> {

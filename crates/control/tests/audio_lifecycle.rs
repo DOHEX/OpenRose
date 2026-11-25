@@ -2,8 +2,10 @@ mod support;
 
 use openrose_control::ControlErrorCode;
 use openrose_control::audio::{AudioProfile, RawAudioDevice};
+use openrose_control::scan::Advertisement;
 use openrose_control::snapshot::{ConnectionState, HostPlatform};
-use openrose_headset::{HeadsetCommand, HeadsetId, NoiseMode};
+use openrose_control::transport::{AudioProfileEvidence, TransportFacts};
+use openrose_headset::{FirmwareVersion, HeadsetCommand, HeadsetId, ModelProfile, NoiseMode};
 use std::sync::Arc;
 use std::time::Duration;
 use support::scripted::{A, B, add_i5, id, simulated};
@@ -379,4 +381,63 @@ async fn android_i5_keeps_its_existing_pause_after_the_battery_reply() {
         Duration::from_millis(170),
         harness.headset.writes()[1].at - start
     );
+}
+
+#[tokio::test(start_paused = true)]
+async fn losing_classic_audio_closes_the_i7_control_connection_opened_by_its_ble_address() {
+    const BLE: &str = "11:22:33:44:55:66";
+    const CLASSIC: &str = "A1:B2:C3:D4:E5:F6";
+    let advertised = || {
+        let mut payload = vec![0u8; 15];
+        payload[0] = 0x29;
+        payload[1] = 0x0f;
+        payload[5] = 1;
+        payload[9..15].copy_from_slice(&[0xa1, 0xb2, 0xc3, 0xd4, 0xe5, 0xf6]);
+        Advertisement {
+            manufacturer_data: [(0xe5b8, payload)].into(),
+            ..Advertisement::new(id(BLE))
+        }
+    };
+    for audio_first in [true, false] {
+        let (transport, runtime, _) = simulated(available());
+        let headset = transport
+            .add_headset(
+                id(BLE),
+                ModelProfile::I7RsV2,
+                FirmwareVersion::new(vec![1, 2, 5], "125"),
+            )
+            .expect("simulated i7");
+        headset.set_connection_facts(TransportFacts {
+            spp_available: false,
+            audio_profile: AudioProfileEvidence::Classic,
+        });
+        transport.audio().unpair(BLE);
+        transport
+            .audio()
+            .pair(RawAudioDevice::new(Some("EarFree i7"), CLASSIC));
+        settle().await;
+        runtime.start_scan().await.expect("scan");
+        transport.scan().advertise(advertised());
+        settle().await;
+
+        if !audio_first {
+            runtime.connect(id(BLE)).await.expect("connected");
+        }
+        transport.set_audio_connected(Some(id(CLASSIC)));
+        settle().await;
+        if audio_first {
+            runtime.connect(id(BLE)).await.expect("connected");
+        }
+        assert!(runtime.snapshot().headset_has_system_audio());
+        assert!(headset.link_open());
+
+        transport.set_audio_connected(None);
+        settle().await;
+        assert_eq!(
+            ConnectionState::Disconnected,
+            runtime.snapshot().connection,
+            "audio first: {audio_first}"
+        );
+        assert!(!headset.link_open(), "audio first: {audio_first}");
+    }
 }

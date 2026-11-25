@@ -241,3 +241,58 @@ async fn connecting_stops_the_scan() {
     assert_eq!(0, transport.scan().active_scans());
     assert_eq!(ScanState::Idle, runtime.snapshot().scan);
 }
+
+fn i7_payload(flag: u8, address: [u8; 6], size: usize) -> Vec<u8> {
+    let mut payload = vec![0u8; size];
+    payload[0] = 0x29;
+    payload[1] = 0x0f;
+    if size > 5 {
+        payload[5] = flag;
+    }
+    if size >= 15 {
+        payload[9..15].copy_from_slice(&address);
+    }
+    payload
+}
+
+#[tokio::test(start_paused = true)]
+async fn candidates_expose_only_complete_usable_i7_classic_addresses() {
+    let (transport, runtime, _) = simulated(available());
+    let usable = [0xa1, 0xb2, 0xc3, 0xd4, 0xe5, 0xf6];
+    let advertise = |id: &str, payload: Vec<u8>| {
+        transport.scan().advertise(Advertisement {
+            manufacturer_data: [(0xe5b8, payload)].into(),
+            ..Advertisement::new(HeadsetId::new(id))
+        });
+    };
+    runtime.start_scan().await.expect("scan");
+    advertise("i7-valid", i7_payload(1, usable, 15));
+    advertise("i7-flag", i7_payload(0, usable, 15));
+    advertise("i7-short", i7_payload(1, usable, 14));
+    advertise("i7-zero", i7_payload(1, [0; 6], 15));
+    advertise("i7-ff", i7_payload(1, [0xff; 6], 15));
+    let mut i5 = vec![0, 1, 0, 1];
+    i5.extend((0..12).map(|byte| byte as u8));
+    transport.scan().advertise(Advertisement {
+        manufacturer_data: [(0x5352, i5)].into(),
+        ..Advertisement::new(HeadsetId::new("i5"))
+    });
+    settle().await;
+
+    let candidates = runtime.snapshot().candidates;
+    let find = |id: &str| {
+        candidates
+            .iter()
+            .find(|candidate| candidate.id.as_str() == id)
+            .unwrap_or_else(|| panic!("{id} was not discovered"))
+    };
+    assert_eq!(Some(ModelProfile::I7RsV2), find("i7-valid").profile);
+    assert_eq!(
+        Some("A1:B2:C3:D4:E5:F6".to_string()),
+        find("i7-valid").classic_address
+    );
+    for id in ["i7-flag", "i7-short", "i7-zero", "i7-ff", "i5"] {
+        assert_eq!(None, find(id).classic_address, "{id}");
+    }
+    runtime.stop_scan().await;
+}

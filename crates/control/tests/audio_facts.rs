@@ -1,12 +1,13 @@
 mod support;
 
 use openrose_control::audio::{
-    AudioConnectionState, AudioProfile, AudioProfileEvidence, RawAudioDevice, RawAudioEvent,
-    RawAudioSnapshot, RawProfileSnapshot, connection_facts, infer_audio_profile,
-    normalize_bluetooth_address, paired_headsets,
+    AudioConnectionState, AudioProfile, RawAudioDevice, RawAudioEvent, RawAudioSnapshot,
+    RawProfileSnapshot, connection_facts, infer_audio_profile, normalize_bluetooth_address,
+    paired_headsets,
 };
 use openrose_control::simulator::SimulatedTransport;
 use openrose_control::snapshot::{PermissionState, PlatformState, TransportAvailability};
+use openrose_control::transport::AudioProfileEvidence;
 use openrose_headset::{HeadsetId, ModelProfile};
 use std::collections::BTreeMap;
 use std::sync::Arc;
