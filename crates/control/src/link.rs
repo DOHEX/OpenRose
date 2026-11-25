@@ -1,9 +1,9 @@
 use crate::confirmation::ReadProgress;
 use crate::core::{Attempt, Core, Interrupt, LinkInner};
 use crate::error::{ControlError, ControlErrorCode, ControlResult};
-use crate::gatt::GattConnection;
+use crate::selection::TransportSelection;
 use crate::snapshot::{ConnectionPhase, ConnectionState, ControlSnapshot, HeadsetCandidate};
-use crate::transport::{ControlConnection, OpenFailure, OpenFailureKind, TransportError};
+use crate::transport::{ControlConnection, OpenFailureKind, TransportError};
 use openrose_headset::{FieldReading, HeadsetField, ModelProfile, ProtocolQuery, ProtocolReply};
 use std::collections::BTreeSet;
 use std::sync::Arc;
@@ -77,7 +77,7 @@ impl Core {
         });
     }
 
-    fn phase(&self, attempt: &Attempt, epoch: u64, phase: ConnectionPhase) {
+    pub(crate) fn phase(&self, attempt: &Attempt, epoch: u64, phase: ConnectionPhase) {
         self.update_attempt(attempt, Some(epoch), |snapshot| {
             if let ConnectionState::Connecting { phase: current, .. } = &mut snapshot.connection
                 && phase != ConnectionPhase::Ready
@@ -122,6 +122,7 @@ impl Core {
                         candidate.clone(),
                         profile,
                         self.shutdown.child_token(),
+                        self.state.read(|s| s.settings.force_ble),
                     ));
                     self.state.update(|s| {
                         s.connection = ConnectionState::Connecting {
@@ -236,7 +237,8 @@ impl Core {
             }
             attempt.bump_epoch()
         };
-        let opened = self.open_link(attempt, epoch).await?;
+        let selection = self.select_transport(attempt, epoch).await?;
+        let opened = self.open_link(attempt, epoch, &selection).await?;
         {
             let inner = self.lifecycle.lock().await;
             if !inner.is_active(attempt) || attempt.epoch() != epoch {
@@ -273,22 +275,13 @@ impl Core {
         self: &Arc<Self>,
         attempt: &Arc<Attempt>,
         epoch: u64,
+        selection: &TransportSelection,
     ) -> Result<Arc<dyn ControlConnection>, Interrupt> {
         let open_cancel = attempt.cancel.child_token();
         let create = || async {
-            let driver = self
-                .transport
-                .open_gatt(&attempt.candidate.id)
-                .await
-                .map_err(|error| OpenFailure {
-                    kind: OpenFailureKind::Transport(error),
-                    unreleased: None,
-                })?;
-            let on_phase = |phase| self.phase(attempt, epoch, phase);
-            let connection =
-                GattConnection::open(driver, attempt.profile.gatt(), &on_phase, &open_cancel)
-                    .await?;
-            let connection: Arc<dyn ControlConnection> = connection;
+            let connection = self
+                .open_endpoint(attempt, epoch, &selection.endpoint, &open_cancel)
+                .await?;
             attempt.link.lock().expect("link lock").connection = Some(Arc::clone(&connection));
             Ok(connection)
         };

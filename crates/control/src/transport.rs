@@ -1,5 +1,6 @@
 use crate::gatt::GattDriver;
 use crate::snapshot::HeadsetCandidate;
+use crate::spp::SppDriver;
 use async_trait::async_trait;
 use openrose_headset::HeadsetId;
 use std::fmt;
@@ -13,6 +14,20 @@ pub enum TransportRecoveryReason {
     Subscription,
     WriteFailed,
     ServicesChanged,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum AudioProfileEvidence {
+    #[default]
+    Unknown,
+    Classic,
+    LeAudio,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct TransportFacts {
+    pub spp_available: bool,
+    pub audio_profile: AudioProfileEvidence,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -83,6 +98,25 @@ impl fmt::Debug for OpenFailure {
 #[async_trait]
 pub trait ControlTransport: Send + Sync {
     async fn open_gatt(&self, headset: &HeadsetId) -> Result<Box<dyn GattDriver>, TransportError>;
+
+    async fn open_spp(
+        &self,
+        _headset: &HeadsetId,
+        _address: &str,
+        _service_uuid: &str,
+    ) -> Result<Box<dyn SppDriver>, TransportError> {
+        Err(TransportError::Unsupported(
+            "此平台不支持 SPP 控制连接".to_string(),
+        ))
+    }
+
+    async fn connection_facts(
+        &self,
+        _headset: &HeadsetId,
+        _classic_address: &str,
+    ) -> Result<TransportFacts, TransportError> {
+        Ok(TransportFacts::default())
+    }
 
     async fn bonded_headsets(&self) -> Vec<HeadsetCandidate> {
         Vec::new()

@@ -126,6 +126,7 @@ pub(crate) struct Attempt {
     pub(crate) id: u64,
     pub(crate) candidate: HeadsetCandidate,
     pub(crate) profile: ModelProfile,
+    pub(crate) force_ble: bool,
     pub(crate) cancel: CancellationToken,
     pub(crate) link_epoch: AtomicU64,
     pub(crate) outcome: watch::Sender<Option<ControlResult>>,
@@ -140,11 +141,13 @@ impl Attempt {
         candidate: HeadsetCandidate,
         profile: ModelProfile,
         cancel: CancellationToken,
+        force_ble: bool,
     ) -> Self {
         Self {
             id,
             candidate,
             profile,
+            force_ble,
             queue: Pending::new(cancel.child_token()),
             cancel,
             link_epoch: AtomicU64::new(0),
@@ -195,6 +198,7 @@ impl Attempt {
             readings: HeadsetReadings::new(self.profile),
             diagnostics: HeadsetDiagnostics::default(),
             classic_address: self.candidate.classic_address.clone(),
+            transport_selection: None,
         }
     }
 

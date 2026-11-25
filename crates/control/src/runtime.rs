@@ -1,5 +1,6 @@
 use crate::core::{Core, LinkInner, LocalClock, OwnedConnections, SessionTiming, platform_error};
 use crate::error::{ControlError, ControlErrorCode, ControlResult};
+use crate::settings::ControlSettings;
 use crate::snapshot::{ControlSnapshot, PlatformState};
 use crate::state::StateCell;
 use crate::transport::ControlTransport;
@@ -15,6 +16,7 @@ pub trait ControlObserver: Send + Sync + 'static {
 
 pub struct ControlConfig {
     pub platform: PlatformState,
+    pub settings: ControlSettings,
     pub clock: Arc<dyn LocalClock>,
     pub timing: SessionTiming,
     pub session_id_base: u64,
@@ -24,6 +26,7 @@ impl ControlConfig {
     pub fn new(platform: PlatformState, clock: Arc<dyn LocalClock>) -> Self {
         Self {
             platform,
+            settings: ControlSettings::default(),
             clock,
             timing: SessionTiming::default(),
             session_id_base: 0,
@@ -48,7 +51,8 @@ impl ControlRuntime {
         observer: Arc<dyn ControlObserver>,
         config: ControlConfig,
     ) -> Self {
-        let (state, mut published) = StateCell::new(ControlSnapshot::initial(config.platform));
+        let (state, mut published) =
+            StateCell::new(ControlSnapshot::initial(config.platform, config.settings));
         let core = Arc::new(Core {
             state,
             transport,
@@ -80,6 +84,12 @@ impl ControlRuntime {
         self.core
             .state
             .update(|snapshot| snapshot.platform = platform);
+    }
+
+    pub fn update_settings(&self, settings: ControlSettings) {
+        self.core
+            .state
+            .update(|snapshot| snapshot.settings = settings);
     }
 
     pub async fn refresh_bonded_headsets(&self) {

@@ -1,9 +1,11 @@
 mod support;
 
+use openrose_control::settings::ControlSettings;
 use openrose_control::snapshot::{
-    ConnectionBlockReason, ControlSnapshot, HostPlatform, PermissionState, PlatformState,
-    TransportAvailability, TransportUnavailableCode,
+    ConnectionBlockReason, ControlSnapshot, HostPlatform, PermissionState, PlatformApplicability,
+    PlatformState, TransportAvailability, TransportUnavailableCode,
 };
+use openrose_control::transport::{AudioProfileEvidence, TransportFacts};
 use openrose_headset::{HeadsetCommand, ModelProfile, NoiseMode, ReconnectGuidance};
 use support::{Harness, Options, settle};
 
@@ -193,5 +195,59 @@ async fn the_snapshot_gives_the_reconnect_guidance_of_the_headset_model() {
     assert_eq!(
         Some(ReconnectGuidance::WaitSystemBluetooth),
         single_unit.snapshot().reconnect_guidance
+    );
+}
+
+#[tokio::test(start_paused = true)]
+async fn control_settings_transport_selection_and_applicability_are_part_of_the_encoded_snapshot() {
+    let mut options = Options::i7();
+    options.platform =
+        PlatformState::new(PermissionState::Granted, TransportAvailability::Available)
+            .with_control_transport(PlatformApplicability::Applicable);
+    let harness = Harness::new(options);
+    harness
+        .headset
+        .set_classic_address(Some("A1:B2:C3:D4:E5:F6"));
+    harness.headset.set_connection_facts(TransportFacts {
+        spp_available: true,
+        audio_profile: AudioProfileEvidence::Classic,
+    });
+    harness
+        .runtime
+        .update_settings(ControlSettings { force_ble: false });
+    harness.runtime.refresh_bonded_headsets().await;
+    harness
+        .runtime
+        .connect(harness.id())
+        .await
+        .expect("connect");
+
+    let snapshot = harness.snapshot();
+    assert_eq!(
+        PlatformApplicability::Applicable,
+        snapshot.platform.control_transport_applicability
+    );
+    assert!(
+        snapshot
+            .headset
+            .as_ref()
+            .and_then(|headset| headset.transport_selection.as_ref())
+            .is_some()
+    );
+    round_trip(&snapshot);
+    let value: serde_json::Value = serde_json::from_slice(&snapshot.encode()).expect("json");
+    assert_eq!(
+        serde_json::json!("Applicable"),
+        value["platform"]["control_transport_applicability"]
+    );
+    assert_eq!(serde_json::json!(false), value["settings"]["force_ble"]);
+    assert_eq!(
+        serde_json::json!("ClassicAudio"),
+        value["headset"]["transport_selection"]["reason"]
+    );
+    assert_eq!(
+        PlatformApplicability::Unknown,
+        PlatformState::new(PermissionState::Granted, TransportAvailability::Available)
+            .control_transport_applicability
     );
 }

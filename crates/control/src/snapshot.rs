@@ -1,4 +1,6 @@
 use crate::error::ControlError;
+use crate::selection::TransportSelection;
+use crate::settings::ControlSettings;
 use openrose_headset::{
     FieldValue, HeadsetField, HeadsetId, HeadsetReadings, HeadsetSetting, ModelProfile, NoiseMode,
     ReconnectGuidance,
@@ -75,11 +77,20 @@ pub enum ConnectionBlockReason {
     },
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum PlatformApplicability {
+    #[default]
+    Unknown,
+    NotApplicable,
+    Applicable,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PlatformState {
     pub permission: PermissionState,
     pub transport: TransportAvailability,
     pub host_platform: HostPlatform,
+    pub control_transport_applicability: PlatformApplicability,
 }
 
 impl PlatformState {
@@ -88,11 +99,17 @@ impl PlatformState {
             permission,
             transport,
             host_platform: HostPlatform::Unknown,
+            control_transport_applicability: PlatformApplicability::Unknown,
         }
     }
 
     pub fn on(mut self, host_platform: HostPlatform) -> Self {
         self.host_platform = host_platform;
+        self
+    }
+
+    pub fn with_control_transport(mut self, applicability: PlatformApplicability) -> Self {
+        self.control_transport_applicability = applicability;
         self
     }
 
@@ -213,6 +230,7 @@ pub struct HeadsetState {
     pub readings: HeadsetReadings,
     pub diagnostics: HeadsetDiagnostics,
     pub classic_address: Option<String>,
+    pub transport_selection: Option<TransportSelection>,
 }
 
 impl HeadsetState {
@@ -225,6 +243,7 @@ impl HeadsetState {
 pub struct ControlSnapshot {
     pub revision: u64,
     pub platform: PlatformState,
+    pub settings: ControlSettings,
     pub connection: ConnectionState,
     pub bonded_headsets: Vec<HeadsetCandidate>,
     pub headset: Option<HeadsetState>,
@@ -247,10 +266,11 @@ impl std::fmt::Display for SnapshotDecodeError {
 impl std::error::Error for SnapshotDecodeError {}
 
 impl ControlSnapshot {
-    pub(crate) fn initial(platform: PlatformState) -> Self {
+    pub(crate) fn initial(platform: PlatformState, settings: ControlSettings) -> Self {
         let mut snapshot = Self {
             revision: 0,
             platform,
+            settings,
             connection: ConnectionState::Disconnected,
             bonded_headsets: Vec::new(),
             headset: None,

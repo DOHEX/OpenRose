@@ -1,3 +1,4 @@
+use crate::lifeline::Lifeline;
 use crate::snapshot::ConnectionPhase;
 use crate::transport::{
     ControlConnection, OpenFailure, OpenFailureKind, TransportError, TransportRecoveryReason,
@@ -7,7 +8,6 @@ use openrose_headset::GattProfile;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
 const MTU_TIMEOUT: Duration = Duration::from_millis(1_500);
@@ -132,13 +132,9 @@ struct Inner {
     driver: Box<dyn GattDriver>,
     profile: GattProfile,
     operations: tokio::sync::Mutex<()>,
-    release: tokio::sync::Mutex<bool>,
     discovery: Mutex<Discovery>,
     capacity: AtomicUsize,
-    failure: Mutex<Option<TransportError>>,
-    notifications_tx: Mutex<Option<mpsc::Sender<Vec<u8>>>>,
-    notifications_rx: tokio::sync::Mutex<mpsc::Receiver<Vec<u8>>>,
-    pump: CancellationToken,
+    lifeline: Lifeline,
 }
 
 pub struct GattConnection {
@@ -172,22 +168,6 @@ fn classify(error: GattError, reason: TransportRecoveryReason) -> TransportError
 }
 
 impl Inner {
-    fn check_open(&self) -> Result<(), TransportError> {
-        match self.failure.lock().expect("failure lock").clone() {
-            Some(error) => Err(error),
-            None => Ok(()),
-        }
-    }
-
-    fn end(&self, error: TransportError) {
-        let mut failure = self.failure.lock().expect("failure lock");
-        if failure.is_none() {
-            *failure = Some(error);
-            self.notifications_tx.lock().expect("sender lock").take();
-            self.pump.cancel();
-        }
-    }
-
     fn services(&self) -> Option<Services> {
         self.discovery
             .lock()
@@ -201,33 +181,33 @@ impl Inner {
         reason: TransportRecoveryReason,
         operation: impl Future<Output = Result<T, GattError>>,
     ) -> Result<T, TransportError> {
-        self.check_open()?;
+        self.lifeline.check_open()?;
         let outcome = operation.await;
-        self.check_open()?;
+        self.lifeline.check_open()?;
         outcome.map_err(|error| classify(error, reason))
     }
 
     async fn release_driver(&self) -> Result<(), TransportError> {
-        let mut released = self.release.lock().await;
-        if !*released {
-            self.driver
-                .close()
-                .await
-                .map_err(|error| classify(error, TransportRecoveryReason::ServiceDiscovery))?;
-            *released = true;
-        }
-        Ok(())
+        self.lifeline
+            .release(async {
+                self.driver
+                    .close()
+                    .await
+                    .map_err(|error| classify(error, TransportRecoveryReason::ServiceDiscovery))
+            })
+            .await
     }
 
     async fn run_pump(self: Arc<Self>) {
         loop {
             let event = tokio::select! {
-                _ = self.pump.cancelled() => break,
+                _ = self.lifeline.ended() => break,
                 event = self.driver.next_event() => event,
             };
             match event {
                 None => {
-                    self.end(TransportError::Terminal("蓝牙事件流已结束".to_string()));
+                    self.lifeline
+                        .end(TransportError::Terminal("蓝牙事件流已结束".to_string()));
                     break;
                 }
                 Some(GattEvent::Notification { instance_id, value }) => {
@@ -235,17 +215,7 @@ impl Inner {
                         .services()
                         .is_some_and(|services| services.notifier.instance_id == instance_id);
                     if selected {
-                        let sent = self
-                            .notifications_tx
-                            .lock()
-                            .expect("sender lock")
-                            .as_ref()
-                            .is_some_and(|sender| sender.try_send(value).is_ok());
-                        if !sent {
-                            self.end(TransportError::Terminal(
-                                "通知接收缓冲区已满或已关闭".to_string(),
-                            ));
-                        }
+                        self.lifeline.deliver(value);
                     }
                 }
                 Some(GattEvent::ServicesChanged) => {
@@ -255,14 +225,15 @@ impl Inner {
                         discovery.services.is_some()
                     };
                     if invalidated {
-                        self.end(TransportError::Recoverable {
+                        self.lifeline.end(TransportError::Recoverable {
                             reason: TransportRecoveryReason::ServicesChanged,
                             message: "蓝牙服务数据库已变化；需要重新建立连接".to_string(),
                         });
                     }
                 }
                 Some(GattEvent::Disconnected(failure)) => {
-                    self.end(classify(failure, TransportRecoveryReason::ServiceDiscovery));
+                    self.lifeline
+                        .end(classify(failure, TransportRecoveryReason::ServiceDiscovery));
                 }
             }
         }
@@ -300,7 +271,7 @@ impl Inner {
             Ok(Err(TransportError::Recoverable { .. } | TransportError::Unsupported(_))) => None,
             Ok(Err(error)) => return Err(error),
         };
-        self.check_open()?;
+        self.lifeline.check_open()?;
         let capacity = (usize::from(mtu.unwrap_or(23).max(23)) - 3).min(512);
         self.capacity.store(capacity, Ordering::SeqCst);
         Ok(())
@@ -330,7 +301,7 @@ impl Inner {
         });
         let writer = characteristic(&service, &self.profile.write_uuid);
         let notifier = characteristic(&service, &self.profile.notify_uuid);
-        self.check_open()?;
+        self.lifeline.check_open()?;
         let mut discovery = self.discovery.lock().expect("discovery lock");
         if before != discovery.generation {
             return Err(TransportError::Recoverable {
@@ -357,7 +328,7 @@ impl Inner {
         match operation.await {
             Ok(value) => Ok(value),
             Err(error) => {
-                self.end(error.clone());
+                self.lifeline.end(error.clone());
                 Err(error)
             }
         }
@@ -385,21 +356,16 @@ impl GattConnection {
         on_phase: &(dyn Fn(ConnectionPhase) + Send + Sync),
         cancel: &CancellationToken,
     ) -> Result<Arc<Self>, OpenFailure> {
-        let (sender, receiver) = mpsc::channel(NOTIFICATION_BUFFER);
         let inner = Arc::new(Inner {
             driver,
             profile,
             operations: tokio::sync::Mutex::new(()),
-            release: tokio::sync::Mutex::new(false),
             discovery: Mutex::new(Discovery {
                 generation: 0,
                 services: None,
             }),
             capacity: AtomicUsize::new(20),
-            failure: Mutex::new(None),
-            notifications_tx: Mutex::new(Some(sender)),
-            notifications_rx: tokio::sync::Mutex::new(receiver),
-            pump: CancellationToken::new(),
+            lifeline: Lifeline::new(NOTIFICATION_BUFFER),
         });
         let connection = Arc::new(Self { inner });
         tokio::spawn(Arc::clone(&connection.inner).run_pump());
@@ -434,7 +400,7 @@ impl ControlConnection for GattConnection {
     async fn subscribe(&self) -> Result<(), TransportError> {
         let inner = &self.inner;
         let _operation = inner.operations.lock().await;
-        inner.check_open()?;
+        inner.lifeline.check_open()?;
         let notifier = inner
             .services()
             .expect("subscribe follows a successful open")
@@ -459,7 +425,7 @@ impl ControlConnection for GattConnection {
                                 .await
                         })
                         .await?;
-                    inner.check_open()
+                    inner.lifeline.check_open()
                 })
                 .await;
                 let outcome = match configured {
@@ -480,7 +446,7 @@ impl ControlConnection for GattConnection {
     async fn write(&self, bytes: &[u8]) -> Result<(), TransportError> {
         let inner = &self.inner;
         let _operation = inner.operations.lock().await;
-        inner.check_open()?;
+        inner.lifeline.check_open()?;
         let writer = inner
             .services()
             .expect("write follows a successful open")
@@ -506,27 +472,21 @@ impl ControlConnection for GattConnection {
                         });
                     }
                 }
-                inner.check_open()
+                inner.lifeline.check_open()
             })
             .await
     }
 
     async fn next_notification(&self) -> Result<Vec<u8>, TransportError> {
-        let mut receiver = self.inner.notifications_rx.lock().await;
-        match receiver.recv().await {
-            Some(bytes) => Ok(bytes),
-            None => Err(self
-                .inner
-                .failure
-                .lock()
-                .expect("failure lock")
-                .clone()
-                .unwrap_or_else(|| TransportError::Terminal("蓝牙连接已关闭".to_string()))),
-        }
+        self.inner
+            .lifeline
+            .next_notification("蓝牙连接已关闭")
+            .await
     }
 
     async fn close(&self) -> Result<(), TransportError> {
         self.inner
+            .lifeline
             .end(TransportError::Terminal("蓝牙连接已关闭".to_string()));
         self.inner.release_driver().await
     }
