@@ -1,0 +1,22 @@
+{
+  "name": "OpenRose Prototype",
+  "id": "io.github.dohex.openrose.prototype",
+  "version": "0.1.0",
+  "build": 1,
+  "icon": "icon.png",
+  "singleInstance": true,
+  "application": {
+    "quitMode": "explicit"
+  },
+  "window": {
+    "title": "OpenRose 原型",
+    "defaultSize": { "width": 560, "height": 560 },
+    "minSize": { "width": 420, "height": 420 },
+    "closeOnPress": false
+  },
+  "dependencies": {
+    "openrose-prototype-native": {
+      "path": "ext/openrose-prototype-native"
+    }
+  }
+}
