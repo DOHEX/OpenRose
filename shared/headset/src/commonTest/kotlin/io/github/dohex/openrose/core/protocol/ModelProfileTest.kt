@@ -86,4 +86,17 @@ class ModelProfileTest {
         assertEquals(ModelProfile.SPORTFEEL_RS_COMMON, ModelProfile.match("SportFree"))
         assertEquals(ModelProfile.I3_ZT, ModelProfile.match("EarFree i3"))
     }
+
+    @Test
+    fun modelVersionNamesComeFromModelSpec() {
+        assertEquals("标准版", ModelProfile.CERAMICS_X_F8.versionName)
+        assertEquals("7034", ModelProfile.CERAMICS_X_7034_F8.versionName)
+        assertEquals("LDAC", ModelProfile.OPENFEEL_LDAC_RS_COMMON.versionName)
+        assertEquals("LHDC", ModelProfile.OPENFEEL_LHDC_RS_COMMON.versionName)
+        assertEquals("LDAC + LHDC", ModelProfile.OPENFEEL_DUAL_RS_COMMON.versionName)
+        assertEquals("无触控开关", ModelProfile.OPENFUN_RS_COMMON.versionName)
+        assertEquals("有触控开关", ModelProfile.OPENFUN_TOUCH_RS_COMMON.versionName)
+        assertNull(ModelProfile.I5_ZT.versionName)
+        assertNull(ModelProfile.I7_RS_V2.versionName)
+    }
 }

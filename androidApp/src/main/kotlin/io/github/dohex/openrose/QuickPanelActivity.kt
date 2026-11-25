@@ -11,9 +11,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import io.github.dohex.openrose.ui.Appearance
-import io.github.dohex.openrose.ui.PrimaryDeviceSelection
 import io.github.dohex.openrose.ui.QuickPanel
 import io.github.dohex.openrose.ui.model.WindowDestination
 
@@ -50,7 +48,6 @@ class QuickPanelActivity : ComponentActivity() {
             CirculationVisibility {
                 QuickPanel(
                     model = owner.model,
-                    selection = remember { PrimaryDeviceSelection() },
                     dynamicColor = integration.dynamicColorInEffect,
                     onOpenApp = ::openApp,
                     onDismiss = ::finish,

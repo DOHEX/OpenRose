@@ -65,12 +65,12 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import io.github.dohex.openrose.core.ConnectionBlockReason
 import io.github.dohex.openrose.core.ConnectionPhase
 import io.github.dohex.openrose.core.ControlError
 import io.github.dohex.openrose.core.ControlState
 import io.github.dohex.openrose.core.DeviceCandidate
 import io.github.dohex.openrose.core.ScanState
-import io.github.dohex.openrose.core.TransportAvailability
 import io.github.dohex.openrose.core.transport.DeviceId
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -493,37 +493,42 @@ private fun prerequisiteSpec(
     state: ControlState,
     onRequestPermission: (() -> Unit)?,
     onOpenSystemSettings: (() -> Unit)?,
-): PrerequisiteSpec = when {
-    state.platform.bluetoothPermissionRequired -> PrerequisiteSpec(
-        title = "需要蓝牙权限",
-        summary = "允许访问附近设备后，才能搜索并连接耳机。",
-        actionLabel = "授予蓝牙权限",
-        onAction = onRequestPermission,
-    )
+): PrerequisiteSpec {
+    val blockReason = state.connectionBlockReason
+    return when {
+        blockReason == ConnectionBlockReason.BluetoothPermissionRequired -> PrerequisiteSpec(
+            title = "需要蓝牙权限",
+            summary = "允许访问附近设备后，才能搜索并连接耳机。",
+            actionLabel = "授予蓝牙权限",
+            onAction = onRequestPermission,
+        )
 
-    state.platform.scanPermission.missing -> PrerequisiteSpec(
-        title = "搜索耳机需要定位权限",
-        summary = if (onRequestPermission == null) {
-            "当前宿主未获得扫描权限，可在设置中切回应用控制后搜索。"
-        } else {
-            "此 Android 版本需要定位权限来扫描附近耳机。已配对耳机仍可直接连接。"
-        },
-        actionLabel = "授予定位权限",
-        onAction = onRequestPermission,
-    )
+        state.platform.scanPermission.missing -> PrerequisiteSpec(
+            title = "搜索耳机需要定位权限",
+            summary = if (onRequestPermission == null) {
+                "当前宿主未获得扫描权限，可在设置中切回应用控制后搜索。"
+            } else {
+                "此 Android 版本需要定位权限来扫描附近耳机。已配对耳机仍可直接连接。"
+            },
+            actionLabel = "授予定位权限",
+            onAction = onRequestPermission,
+        )
 
-    state.platform.transport == TransportAvailability.Disabled -> PrerequisiteSpec(
-        title = "系统蓝牙已关闭",
-        summary = "请先在系统设置中打开蓝牙，再回来搜索耳机。",
-        actionLabel = "打开蓝牙设置",
-        onAction = onOpenSystemSettings,
-    )
+        blockReason == ConnectionBlockReason.BluetoothDisabled -> PrerequisiteSpec(
+            title = "系统蓝牙已关闭",
+            summary = "请先在系统设置中打开蓝牙，再回来搜索耳机。",
+            actionLabel = "打开蓝牙设置",
+            onAction = onOpenSystemSettings,
+        )
 
-    else -> PrerequisiteSpec(
-        title = "蓝牙传输不可用",
-        summary = (state.platform.transport as? TransportAvailability.Unavailable)?.reason ?: "当前蓝牙传输不可用",
-        isUnavailable = true,
-    )
+        else -> PrerequisiteSpec(
+            title = "蓝牙传输不可用",
+            summary = (blockReason as? ConnectionBlockReason.TransportUnavailable)
+                ?.displayText(state.platform.hostPlatform)
+                ?: "当前蓝牙传输不可用",
+            isUnavailable = true,
+        )
+    }
 }
 
 @Composable

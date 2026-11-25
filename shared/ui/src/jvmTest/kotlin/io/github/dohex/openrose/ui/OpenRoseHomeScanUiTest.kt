@@ -18,6 +18,7 @@ import io.github.dohex.openrose.core.PermissionState
 import io.github.dohex.openrose.core.PlatformState
 import io.github.dohex.openrose.core.ScanState
 import io.github.dohex.openrose.core.TransportAvailability
+import io.github.dohex.openrose.core.TransportUnavailableCode
 import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.dohex.openrose.core.protocol.ModelProfile
 import io.github.dohex.openrose.core.transport.DeviceId
@@ -81,7 +82,12 @@ class OpenRoseHomeScanUiTest {
                 420,
                 900,
                 style,
-                state().copy(platform = PlatformState(PermissionState.NOT_REQUIRED, TransportAvailability.Unavailable(reason))),
+                state().copy(
+                    platform = PlatformState(
+                        PermissionState.NOT_REQUIRED,
+                        TransportAvailability.Unavailable(TransportUnavailableCode.BACKEND_UNAVAILABLE, reason),
+                    ),
+                ),
             ) { harness ->
                 harness.render()
                 assertTrue(harness.hasText(reason), "the host's reason should be visible in $style")
@@ -114,7 +120,10 @@ class OpenRoseHomeScanUiTest {
 
                 val reason = "蓝牙扫描所需的定位服务已关闭"
                 harness.state.value = harness.state.value.copy(
-                    platform = PlatformState(PermissionState.GRANTED, TransportAvailability.Unavailable(reason)),
+                    platform = PlatformState(
+                        PermissionState.GRANTED,
+                        TransportAvailability.Unavailable(TransportUnavailableCode.BACKEND_UNAVAILABLE, reason),
+                    ),
                 )
                 harness.render()
                 assertTrue(harness.hasText(reason))
@@ -152,7 +161,12 @@ class OpenRoseHomeScanUiTest {
                     420,
                     900,
                     style,
-                    state().copy(platform = PlatformState(permission, TransportAvailability.Unavailable(reason))),
+                    state().copy(
+                        platform = PlatformState(
+                            permission,
+                            TransportAvailability.Unavailable(TransportUnavailableCode.BACKEND_UNAVAILABLE, reason),
+                        ),
+                    ),
                     page = AppPage.ADD_DEVICE,
                 ) { harness ->
                     harness.render()
@@ -247,7 +261,10 @@ class OpenRoseHomeScanUiTest {
 
                 val unavailableReason = "当前平台未提供耳机控制传输"
                 harness.state.value = harness.state.value.copy(
-                    platform = PlatformState(PermissionState.NOT_REQUIRED, TransportAvailability.Unavailable(unavailableReason)),
+                    platform = PlatformState(
+                        PermissionState.NOT_REQUIRED,
+                        TransportAvailability.Unavailable(TransportUnavailableCode.BACKEND_UNAVAILABLE, unavailableReason),
+                    ),
                 )
                 harness.render()
                 assertTrue(harness.hasText(unavailableReason))
@@ -278,13 +295,11 @@ class OpenRoseHomeScanUiTest {
     fun unavailableHomeOpensDetailsAndRestoresManualActionsWhenTransportBecomesAvailable() {
         for (style in InterfaceStyle.entries) {
             val reason = "主机报告的实际传输原因"
-            withHarness(
-                420,
-                900,
-                style,
-                state().copy(platform = PlatformState(PermissionState.GRANTED, TransportAvailability.Unavailable(reason))),
-                app = true,
-            ) { harness ->
+            val unavailable = PlatformState(
+                PermissionState.GRANTED,
+                TransportAvailability.Unavailable(TransportUnavailableCode.BACKEND_UNAVAILABLE, reason),
+            )
+            withHarness(420, 900, style, state().copy(platform = unavailable), app = true) { harness ->
                 harness.render()
                 harness.focus("诊断与记录")
                 harness.sendKey(Key.Enter)
@@ -316,9 +331,7 @@ class OpenRoseHomeScanUiTest {
                 harness.clickContentDescription("返回")
                 harness.render()
 
-                harness.state.value = harness.state.value.copy(
-                    platform = PlatformState(PermissionState.GRANTED, TransportAvailability.Unavailable(reason)),
-                )
+                harness.state.value = harness.state.value.copy(platform = unavailable)
                 harness.render()
                 assertTrue(harness.hasContentDescription("添加耳机"))
                 harness.focus("诊断与记录")

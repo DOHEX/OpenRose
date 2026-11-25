@@ -44,6 +44,7 @@ class FakeOpenRoseModel(
     val settingsChanges = mutableListOf<UiSettings>()
     val controlSettingsChanges = mutableListOf<UserSettings>()
     val settingWrites = mutableListOf<Pair<DeviceSetting, FieldValue>>()
+    val selectedHeadsetRequests = mutableListOf<DeviceId>()
     val connectRequests = mutableListOf<DeviceId>()
     var disconnectCount = 0
         private set
@@ -51,6 +52,7 @@ class FakeOpenRoseModel(
     var onStartScan: () -> Unit = {}
     var startScanResult: OperationResult = OperationResult.Success
     var onStopScan: () -> Unit = {}
+    var onSelectCurrentHeadset: (DeviceId) -> Unit = {}
     var onConnect: (DeviceId) -> Unit = {}
     var onDisconnect: () -> Unit = {}
     var onSet: (DeviceSetting, FieldValue) -> Unit = { _, _ -> }
@@ -77,6 +79,12 @@ class FakeOpenRoseModel(
         return CompletableDeferred(startScanResult)
     }
     override fun stopScan() = onStopScan()
+    override fun selectCurrentHeadset(deviceId: DeviceId) {
+        selectedHeadsetRequests += deviceId
+        val target = mutableState.value.bondedHeadsets.firstOrNull { it.deviceId == deviceId }?.deviceId
+        mutableState.value = mutableState.value.copy(selectedHeadsetId = target)
+        onSelectCurrentHeadset(deviceId)
+    }
     override fun connect(deviceId: DeviceId) {
         connectRequests += deviceId
         onConnect(deviceId)

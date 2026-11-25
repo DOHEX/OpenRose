@@ -15,6 +15,7 @@ import io.github.dohex.openrose.androidintegration.appBackgroundRequested
 import io.github.dohex.openrose.core.ConnectionState
 import io.github.dohex.openrose.core.ControlState
 import io.github.dohex.openrose.core.TransportAvailability
+import io.github.dohex.openrose.ui.displayText
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -152,7 +153,7 @@ class ControlService : Service() {
         ConnectionState.Disconnected -> when (val transport = state.platform.transport) {
             TransportAvailability.Available -> "等待耳机音频连接"
             TransportAvailability.Disabled -> "系统蓝牙已关闭"
-            is TransportAvailability.Unavailable -> transport.reason
+            is TransportAvailability.Unavailable -> transport.displayText(state.platform.hostPlatform)
         }
     }
 

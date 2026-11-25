@@ -50,7 +50,6 @@ import io.github.dohex.openrose.core.HostPlatform
 import io.github.dohex.openrose.ui.Appearance
 import io.github.dohex.openrose.ui.InterfaceStyle
 import io.github.dohex.openrose.ui.OpenRoseApp
-import io.github.dohex.openrose.ui.PrimaryDeviceSelection
 import io.github.dohex.openrose.ui.TrayPanel
 import io.github.dohex.openrose.ui.UiSettings
 import io.github.dohex.openrose.ui.configurationLabel
@@ -70,7 +69,6 @@ fun main(args: Array<String>) = nucleusApplication(args = args, backend = Nucleu
     val scope = rememberCoroutineScope()
     val model = remember { SandboxModel(scope) }
     val platforms = remember { SandboxPlatforms(model, scope) }
-    val selection = remember { PrimaryDeviceSelection() }
     val scenario by model.scenario.collectAsState()
     val uiSettings by model.uiSettings.collectAsState()
     val dark = uiSettings.appearance.isDark()
@@ -96,7 +94,7 @@ fun main(args: Array<String>) = nucleusApplication(args = args, backend = Nucleu
         onCloseRequest = ::exitApplication,
     ) {
         key(scenario.host) {
-            OpenRoseApp(model = model, platformUi = platforms.forScenario(scenario), primaryDeviceSelection = selection)
+            OpenRoseApp(model = model, platformUi = platforms.forScenario(scenario))
         }
     }
     if (scenario.desktop && trayShown) {
@@ -111,7 +109,6 @@ fun main(args: Array<String>) = nucleusApplication(args = args, backend = Nucleu
         ) {
             TrayPanel(
                 model = model,
-                selection = selection,
                 onOpenApp = { destination ->
                     destination?.let(model.navigation::open)
                     preview.isMinimized = false

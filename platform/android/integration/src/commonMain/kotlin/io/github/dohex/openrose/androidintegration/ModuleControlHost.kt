@@ -285,6 +285,11 @@ class ModuleControlHost(
                 HostCallResult.Operation(OperationResult.Success)
             }
 
+            is HostCommand.SelectCurrentHeadset -> {
+                runtime.selectCurrentHeadset(command.deviceId)
+                HostCallResult.Operation(OperationResult.Success)
+            }
+
             is HostCommand.Connect -> HostCallResult.Operation(runtime.connect(command.deviceId))
 
             is HostCommand.ConnectFromSystem -> HostCallResult.Operation(runtime.connectFromSystem(command.deviceId))

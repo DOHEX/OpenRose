@@ -422,7 +422,6 @@ class QuickPanelUiTest {
         setContent {
             QuickPanel(
                 model,
-                PrimaryDeviceSelection(),
                 dynamicColor = false,
                 onOpenApp = { panel.destinations += it },
                 onDismiss = { panel.dismissCount++ },

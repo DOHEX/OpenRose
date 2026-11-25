@@ -24,6 +24,7 @@ sealed interface HostCommand {
     data object RefreshBondedDevices : HostCommand
     data object StartScan : HostCommand
     data object StopScan : HostCommand
+    data class SelectCurrentHeadset(val deviceId: DeviceId) : HostCommand
     data class Connect(val deviceId: DeviceId) : HostCommand
     data class ConnectFromSystem(val deviceId: DeviceId) : HostCommand
     data class ConnectForAddDevice(val deviceId: DeviceId) : HostCommand

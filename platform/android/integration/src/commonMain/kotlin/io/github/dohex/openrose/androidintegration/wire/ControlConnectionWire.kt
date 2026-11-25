@@ -5,6 +5,7 @@ import io.github.dohex.openrose.core.ConnectionRecovery
 import io.github.dohex.openrose.core.ConnectionState
 import io.github.dohex.openrose.core.ScanState
 import io.github.dohex.openrose.core.TransportAvailability
+import io.github.dohex.openrose.core.TransportUnavailableCode
 import io.github.dohex.openrose.core.protocol.ModelProfile
 import io.github.dohex.openrose.core.transport.DeviceId
 import io.github.dohex.openrose.core.transport.TransportEndpoint
@@ -14,16 +15,28 @@ import io.github.dohex.openrose.core.transport.TransportSelectionReason
 
 internal fun encode(availability: TransportAvailability): Wire = when (availability) {
     TransportAvailability.Available -> obj("t" to str("available"))
+
     TransportAvailability.Disabled -> obj("t" to str("disabled"))
-    is TransportAvailability.Unavailable -> obj("t" to str("unavailable"), "reason" to str(availability.reason))
+
+    is TransportAvailability.Unavailable -> obj(
+        "t" to str("unavailable"),
+        "code" to Wire.Str(availability.code.name),
+        "detail" to availability.detail?.let(::str),
+    )
 }
 
 internal fun decodeTransport(wire: Wire): TransportAvailability {
     val node = wire.asObj()
     return when (val kind = node.str("t")) {
         "available" -> TransportAvailability.Available
+
         "disabled" -> TransportAvailability.Disabled
-        "unavailable" -> TransportAvailability.Unavailable(node.str("reason"))
+
+        "unavailable" -> TransportAvailability.Unavailable(
+            node.field("code").asEnum<TransportUnavailableCode>(),
+            node.optional("detail")?.asStr(),
+        )
+
         else -> throw WireFormatException("未知传输状态 $kind")
     }
 }
