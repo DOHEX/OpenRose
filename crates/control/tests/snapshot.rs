@@ -183,7 +183,7 @@ async fn the_snapshot_gives_the_reconnect_guidance_of_the_headset_model() {
 
     let mut options = Options::i5();
     options.profile = ModelProfile::HeadFeelZt;
-    options.id = "headfeel";
+    options.id = "AA:BB:CC:00:00:F1";
     let single_unit = Harness::new(options);
     single_unit
         .runtime

@@ -1,5 +1,8 @@
 #![allow(dead_code)]
 
+pub mod faults;
+pub mod scripted;
+
 use openrose_control::simulator::{SimulatedClock, SimulatedHeadsetHandle, SimulatedTransport};
 use openrose_control::snapshot::{
     ConnectionState, ControlSnapshot, HostPlatform, PermissionState, PlatformState, SettingStage,
@@ -67,7 +70,7 @@ impl Options {
     pub fn i5() -> Self {
         Self {
             profile: ModelProfile::I5Zt,
-            id: "i5",
+            id: "AA:BB:CC:00:00:05",
             platform: available(),
             timing: SessionTiming {
                 write_interval: Some(Duration::ZERO),
