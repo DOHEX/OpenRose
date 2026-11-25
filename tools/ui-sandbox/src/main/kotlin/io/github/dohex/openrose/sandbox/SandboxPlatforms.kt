@@ -176,7 +176,7 @@ private class SandboxLoginLaunchControl(private val model: SandboxModel) : Login
 
 private fun ownerState(selected: ControlWay, owner: SandboxOwner, previous: ControlWay = selected.other()): OwnerState {
     val holder = { way: ControlWay ->
-        val packageName = if (way == ControlWay.ORDINARY) APP_PACKAGE else BLUETOOTH_PACKAGE
+        val packageName = if (way == ControlWay.APP) APP_PACKAGE else BLUETOOTH_PACKAGE
         OwnerHolder(way, OwnerGeneration("sandbox", 1), packageName, packageName)
     }
     return when (owner) {
@@ -201,7 +201,7 @@ private fun ownerState(selected: ControlWay, owner: SandboxOwner, previous: Cont
     }
 }
 
-private fun ControlWay.other(): ControlWay = if (this == ControlWay.ORDINARY) ControlWay.MODULE else ControlWay.ORDINARY
+private fun ControlWay.other(): ControlWay = if (this == ControlWay.APP) ControlWay.MODULE else ControlWay.APP
 
 private fun SandboxModule.availability(): ModuleAvailability = when (this) {
     SandboxModule.AVAILABLE -> ModuleAvailability.Available

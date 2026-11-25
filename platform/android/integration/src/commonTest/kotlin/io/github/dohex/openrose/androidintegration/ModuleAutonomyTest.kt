@@ -51,8 +51,8 @@ class ModuleAutonomyTest {
     }
 
     @Test
-    fun theOrdinaryChoiceIsNeverTakenOverByTheHostWhateverStartsOrReturns() = runTest {
-        val rig = OwnerRig(this, initial = OwnerRecord(ControlWay.ORDINARY))
+    fun theAppChoiceIsNeverTakenOverByTheHostWhateverStartsOrReturns() = runTest {
+        val rig = OwnerRig(this, initial = OwnerRecord(ControlWay.APP))
         rig.bootHost()
         rig.hostTransport.audioDevice.emit(rig.earphones.deviceId)
         runCurrent()
@@ -249,7 +249,7 @@ class ModuleAutonomyTest {
     }
 
     @Test
-    fun aSwitchToOrdinaryInterruptedByTheHostDyingEndsWithExactlyOneOrdinaryOwnerAndNoModuleRevival() = runTest {
+    fun aSwitchToAppInterruptedByTheHostDyingEndsWithExactlyOneAppOwnerAndNoModuleRevival() = runTest {
         val rig = OwnerRig(this, initial = saved)
         rig.bootHost()
         rig.hostTransport.audioDevice.emit(rig.earphones.deviceId)
@@ -260,7 +260,7 @@ class ModuleAutonomyTest {
         runCurrent()
         rig.link.releaseKillsHostProcess = true
 
-        runtime.selectControlWay(ControlWay.ORDINARY)
+        runtime.selectControlWay(ControlWay.APP)
         runCurrent()
         rig.link.releaseKillsHostProcess = false
         rig.replaceHost(processDied = true)
@@ -271,7 +271,7 @@ class ModuleAutonomyTest {
         runCurrent()
 
         assertEquals(0, rig.headset.overlappingOpens)
-        assertEquals(ControlWay.ORDINARY, runtime.integration.value.owner.holder?.way)
+        assertEquals(ControlWay.APP, runtime.integration.value.owner.holder?.way)
         assertEquals(1, rig.headset.opens("module"))
         assertIs<HostStatus.Inactive>(rig.host.status.value)
     }
@@ -322,7 +322,7 @@ class ModuleAutonomyTest {
             HostCallResult.Operation(OperationResult.Success),
             old.control.execute(appIdentity, newLease.id, generation, HostCommand.RefreshBondedDevices),
         )
-        val refused = old.release(appIdentity, newLease.id, SwitchRequest("a", ControlWay.MODULE, ControlWay.ORDINARY, generation))
+        val refused = old.release(appIdentity, newLease.id, SwitchRequest("a", ControlWay.MODULE, ControlWay.APP, generation))
         assertEquals(HostRejection.RELEASE_FAILED, assertIs<ReleaseResult.Refused>(refused).rejection)
         assertEquals(1, rig.link.connections.count { it.isOpen })
         assertEquals(0, rig.headset.opens("ordinary"))

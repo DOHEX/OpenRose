@@ -93,7 +93,7 @@ class OpenRoseConnectedHomeUiTest {
                 val harness = OpenRoseUiTestHarness(this)
                 model.navigation.open(WindowDestination.HEADPHONES)
                 harness.render()
-                harness.clickText("设备详情")
+                harness.clickText("耳机信息")
                 harness.render(frames = 50)
                 assertTrue(harness.hasText("断开控制连接"))
                 visible.value = false
@@ -173,7 +173,7 @@ class OpenRoseConnectedHomeUiTest {
                     harness.state.value = harness.state.value.copy(connection = ConnectionState.Disconnected)
                     harness.render()
                     assertTrue(harness.hasText("搜索并添加耳机"))
-                    assertFalse(harness.hasText("设备详情"))
+                    assertFalse(harness.hasText("耳机信息"))
                 }
             }
         }
@@ -234,7 +234,7 @@ class OpenRoseConnectedHomeUiTest {
                 assertFalse(harness.hasText("ZT"), "model configuration stays out of the daily home in $style")
                 assertFalse(harness.hasText("RS Common V2"), "model configuration stays out of the daily home in $style")
 
-                harness.clickText("设备详情")
+                harness.clickText("耳机信息")
                 harness.render()
                 assertTrue(harness.hasText("型号配置"))
                 assertTrue(harness.hasText("EarFree i5 · ZT"), "型号配置 names the model and its protocol family in $style")
@@ -390,7 +390,7 @@ class OpenRoseConnectedHomeUiTest {
                 assertFalse(harness.hasText("均衡器"))
                 assertFalse(harness.hasText("触控操作"))
                 assertFalse(harness.hasText("音频与设备"))
-                assertTrue(harness.hasText("设备详情"))
+                assertTrue(harness.hasText("耳机信息"))
 
                 harness.state.value = state.copy(
                     device = device.copy(
@@ -409,7 +409,7 @@ class OpenRoseConnectedHomeUiTest {
                 assertFalse(harness.hasText("均衡器"), "game-only capability has its own home control in $style")
                 assertTrue(harness.hasText("触控操作"))
                 assertTrue(harness.hasText("音频与设备"))
-                assertTrue(harness.hasText("设备详情"))
+                assertTrue(harness.hasText("耳机信息"))
                 assertTrue(harness.settingWrites.isEmpty())
             }
         }

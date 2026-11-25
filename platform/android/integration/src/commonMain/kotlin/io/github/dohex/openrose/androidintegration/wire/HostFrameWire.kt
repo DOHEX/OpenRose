@@ -35,7 +35,7 @@ object HostFrameWire {
 
     private fun encodePresentation(state: SystemPresentationState): Wire = obj(
         "reference" to state.reference?.let(ControlWire::encode), "tag" to state.notificationTag?.let(::str),
-        "mode" to Wire.Str(state.islandMode.name), "focus" to bool(state.focusNotificationEnabled),
+        "mode" to Wire.Str(state.islandMode.name), "statusNotification" to bool(state.statusNotificationEnabled),
         "summary" to bool(state.islandSummaryEnabled),
         "islandFields" to bool(state.allowIslandFields), "target" to Wire.Str(state.statusNotificationTarget.name),
         "dynamic" to bool(state.dynamicColor),
@@ -57,7 +57,7 @@ object HostFrameWire {
         "prompt" to state.prompt?.let { prompt ->
             obj(
                 "id" to str(prompt.id),
-                "trigger" to Wire.Str(prompt.trigger.name),
+                "timing" to Wire.Str(prompt.timing.name),
                 "mode" to Wire.Str(prompt.mode.name),
                 "reference" to ControlWire.encode(prompt.reference),
                 "claimed" to bool(prompt.claimed),
@@ -70,7 +70,7 @@ object HostFrameWire {
         SystemPresentationState(
             reference = node.optional("reference")?.let(ControlWire::decodeReference),
             notificationTag = node.optional("tag")?.asStr(), islandMode = node.field("mode").asEnum(),
-            focusNotificationEnabled = node.bool("focus"), islandSummaryEnabled = node.bool("summary"),
+            statusNotificationEnabled = node.bool("statusNotification"), islandSummaryEnabled = node.bool("summary"),
             allowIslandFields = node.bool("islandFields"),
             statusNotificationTarget = node.field("target").asEnum(), dynamicColor = node.bool("dynamic"),
             battery = node.optional("battery")?.asObj()?.let {
@@ -91,7 +91,7 @@ object HostFrameWire {
             prompt = node.optional("prompt")?.asObj()?.let {
                 IslandPrompt(
                     it.str("id"),
-                    it.field("trigger").asEnum(),
+                    it.field("timing").asEnum(),
                     it.field("mode").asEnum(),
                     ControlWire.decodeReference(it.field("reference")),
                     it.bool("claimed"),

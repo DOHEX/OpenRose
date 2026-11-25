@@ -52,8 +52,8 @@ class SystemPresentationTest {
         val presentation = session.presentation.value
         assertEquals(reference, presentation.reference)
         assertEquals("i5", presentation.notificationTag)
-        assertEquals(IslandMode.OFFICIAL, presentation.islandMode)
-        assertTrue(presentation.focusNotificationEnabled)
+        assertEquals(IslandMode.SYSTEM, presentation.islandMode)
+        assertTrue(presentation.statusNotificationEnabled)
         assertTrue(presentation.allowIslandFields)
         assertEquals(PresentationReading.Known(100), presentation.battery?.left)
         assertEquals(PresentationReading.Known(98), presentation.battery?.right)
@@ -63,7 +63,7 @@ class SystemPresentationTest {
 
         val prompt = assertNotNull(presentation.prompt)
         assertEquals(reference, prompt.reference)
-        assertEquals(IslandMode.OFFICIAL, prompt.mode)
+        assertEquals(IslandMode.SYSTEM, prompt.mode)
         assertFalse(prompt.claimed)
         assertEquals(5_000L, prompt.durationMillis)
         assertTrue(session.claimPrompt(reference, prompt.id))
@@ -94,53 +94,53 @@ class SystemPresentationTest {
     }
 
     @Test
-    fun theSixIslandAndFocusCombinationsKeepTheirOutputsIndependent() = runTest {
+    fun theSixIslandAndStatusNotificationCombinationsKeepTheirOutputsIndependent() = runTest {
         val combinations = listOf(
             IslandMode.OFF to true,
             IslandMode.OFF to false,
-            IslandMode.OFFICIAL to true,
-            IslandMode.OFFICIAL to false,
-            IslandMode.MODULE to true,
-            IslandMode.MODULE to false,
+            IslandMode.SYSTEM to true,
+            IslandMode.SYSTEM to false,
+            IslandMode.OPENROSE to true,
+            IslandMode.OPENROSE to false,
         )
-        for ((mode, focusEnabled) in combinations) {
+        for ((mode, statusEnabled) in combinations) {
             val transport = PresentationTransport(PresentationConnection(i5Replies))
-            val settings = IntegrationSettings(islandMode = mode, focusNotificationEnabled = focusEnabled)
+            val settings = IntegrationSettings(islandMode = mode, statusNotificationEnabled = statusEnabled)
             val session = newSession(transport, settings)
-            val id = DeviceId("${mode.name.lowercase()}-$focusEnabled")
+            val id = DeviceId("${mode.name.lowercase()}-$statusEnabled")
             connect(session, transport, id)
 
             val presentation = session.presentation.value
-            assertEquals(focusEnabled, presentation.showStatusNotification, "$mode / focus=$focusEnabled")
-            assertEquals(mode != IslandMode.OFF, presentation.allowIslandFields, "$mode / focus=$focusEnabled")
+            assertEquals(statusEnabled, presentation.showStatusNotification, "$mode / status=$statusEnabled")
+            assertEquals(mode != IslandMode.OFF, presentation.allowIslandFields, "$mode / status=$statusEnabled")
             assertEquals(
-                mode == IslandMode.MODULE,
+                mode == IslandMode.OPENROSE,
                 presentation.statusSummaryIsland,
-                "$mode / focus=$focusEnabled: official mode's connection prompt is its only island",
+                "$mode / status=$statusEnabled: system style's connection prompt is its only island",
             )
-            assertEquals(mode != IslandMode.OFF, presentation.prompt != null, "$mode / focus=$focusEnabled")
+            assertEquals(mode != IslandMode.OFF, presentation.prompt != null, "$mode / status=$statusEnabled")
             assertEquals(id.value, presentation.notificationTag)
 
             if (mode != IslandMode.OFF) {
                 assertNotNull(presentation.prompt)
-                val otherMode = if (mode == IslandMode.OFFICIAL) IslandMode.MODULE else IslandMode.OFFICIAL
+                val otherMode = if (mode == IslandMode.SYSTEM) IslandMode.OPENROSE else IslandMode.SYSTEM
                 session.updateIntegrationSettings(session.settings.copy(islandMode = otherMode))
                 assertNull(session.presentation.value.prompt)
                 session.updateIntegrationSettings(session.settings.copy(islandMode = mode))
                 assertNull(session.presentation.value.prompt)
             }
 
-            session.updateIntegrationSettings(session.settings.copy(focusNotificationEnabled = !focusEnabled))
-            assertEquals(!focusEnabled, session.presentation.value.showStatusNotification)
+            session.updateIntegrationSettings(session.settings.copy(statusNotificationEnabled = !statusEnabled))
+            assertEquals(!statusEnabled, session.presentation.value.showStatusNotification)
             assertNull(session.presentation.value.prompt)
             session.disconnect()
         }
     }
 
     @Test
-    fun anEmptyModuleTriggerSetKeepsTheSummaryIslandWithoutReplayingTheConnection() = runTest {
+    fun anEmptyOpenRoseTimingSetKeepsTheSummaryIslandWithoutReplayingTheConnection() = runTest {
         val transport = PresentationTransport(PresentationConnection(i5Replies))
-        val session = newSession(transport, IntegrationSettings(islandMode = IslandMode.MODULE, islandTriggers = persistentSetOf()))
+        val session = newSession(transport, IntegrationSettings(islandMode = IslandMode.OPENROSE, islandTimings = persistentSetOf()))
         connect(session, transport, DeviceId("i5"))
 
         assertNull(session.presentation.value.prompt)
@@ -148,20 +148,20 @@ class SystemPresentationTest {
         assertTrue(session.presentation.value.statusSummaryIsland, "the summary island stays without any display timing")
         assertTrue(session.presentation.value.showStatusNotification)
 
-        session.updateIntegrationSettings(session.settings.copy(islandTriggers = persistentSetOf(IslandTrigger.CONNECTION)))
+        session.updateIntegrationSettings(session.settings.copy(islandTimings = persistentSetOf(IslandTiming.CONNECTION)))
         assertNull(session.presentation.value.prompt, "the already-connected session does not replay its connection")
         assertTrue(session.presentation.value.statusSummaryIsland)
 
-        session.updateIntegrationSettings(session.settings.copy(islandTriggers = persistentSetOf(), islandSummaryEnabled = false))
-        assertFalse(session.presentation.value.allowIslandFields, "no timing and no summary leaves module mode without an island")
+        session.updateIntegrationSettings(session.settings.copy(islandTimings = persistentSetOf(), islandSummaryEnabled = false))
+        assertFalse(session.presentation.value.allowIslandFields, "no timing and no summary leaves OpenRose style without an island")
         assertFalse(session.presentation.value.statusSummaryIsland)
         session.disconnect()
     }
 
     @Test
-    fun turningOffTheSummaryIslandKeepsTheModulePromptButDropsThePersistentIsland() = runTest {
+    fun turningOffTheSummaryIslandKeepsTheOpenRosePromptButDropsThePersistentIsland() = runTest {
         val transport = PresentationTransport(PresentationConnection(i5Replies))
-        val session = newSession(transport, IntegrationSettings(islandMode = IslandMode.MODULE, islandSummaryEnabled = false))
+        val session = newSession(transport, IntegrationSettings(islandMode = IslandMode.OPENROSE, islandSummaryEnabled = false))
         connect(session, transport, DeviceId("i5"))
 
         val presentation = session.presentation.value

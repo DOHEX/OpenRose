@@ -13,7 +13,7 @@ internal enum class AppPage(
     TOUCH("触控操作", RoseIcon.TOUCH, editsHeadset = true),
     EQUALIZER("均衡器", RoseIcon.EQUALIZER, editsHeadset = true),
     AUDIO("音频与设备", RoseIcon.AUDIO, editsHeadset = true),
-    DETAILS("设备详情", RoseIcon.INFO),
+    HEADSET_INFO("耳机信息", RoseIcon.INFO),
     DIAGNOSTICS("诊断与记录", RoseIcon.LOG),
     PERSONALIZATION("个性化", RoseIcon.PALETTE),
     CIRCULATION_PAIRING("流转配对", RoseIcon.LINK),

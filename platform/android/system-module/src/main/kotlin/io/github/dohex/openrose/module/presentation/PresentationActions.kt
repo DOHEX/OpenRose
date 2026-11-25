@@ -53,7 +53,7 @@ internal class PresentationActions(
                 val active = session.currentSnapshot ?: return@post
                 val binding = registration ?: return@post
                 if (action != binding.action || token != binding.token) return@post
-                if (active.identity != sender || !active.focusEnabled || !session.statusActive) return@post
+                if (active.identity != sender || !active.statusNotificationEnabled || !session.statusActive) return@post
                 when (kind) {
                     ACTION_KIND_NOISE -> targetMode?.let { executeNoise(active, it) }
                     ACTION_KIND_DISCONNECT -> executeDisconnect(active)

@@ -40,9 +40,9 @@ class AndroidSettingsStoreTest {
                 val chosen = HostSettings(
                     UserSettings(forceBle = true),
                     IntegrationSettings(
-                        islandMode = IslandMode.MODULE,
-                        focusNotificationEnabled = false,
-                        islandTriggers = persistentSetOf(),
+                        islandMode = IslandMode.OPENROSE,
+                        statusNotificationEnabled = false,
+                        islandTimings = persistentSetOf(),
                         fusionSettingsDestination = FusionSettingsDestination.OPENROSE,
                         fusionOffAsWind = true,
                         backgroundControlEnabled = true,
@@ -148,7 +148,7 @@ class AndroidSettingsStoreTest {
             initialSettings = saved.control,
             initialIntegrationSettings = saved.integration,
             store = AndroidOwnerStore({ preferences(file) }, FrameworkLink {}),
-            ordinaryFactory = { scope, settings, platform, base ->
+            appFactory = { scope, settings, platform, base ->
                 LocalControlRuntime(platform, settings, scope = scope, sessionIdBase = base)
             },
             moduleLink = ModuleHostLink { LinkOpenResult.Failed(OwnerFailureStage.DISCOVERY, "No hardware in this storage test") },

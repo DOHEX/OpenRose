@@ -20,7 +20,7 @@ internal fun Context.readIntegrationPlatform(
     backgroundService: BackgroundServiceFact = BackgroundServiceFact.NotRunning,
     wake: WakeFacts = WakeFacts(),
 ): IntegrationPlatformState = IntegrationPlatformState(
-    module = ModuleAvailability.Unavailable("尚未收到兼容框架服务，普通客户端可独立运行"),
+    module = ModuleAvailability.Unavailable("尚未收到兼容框架服务，应用控制可独立运行"),
     systemIntegrationApplicability = classifyHyperOsBuild(
         manufacturer = Build.MANUFACTURER,
         brand = Build.BRAND,

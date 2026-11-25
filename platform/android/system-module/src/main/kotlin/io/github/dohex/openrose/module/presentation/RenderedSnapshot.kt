@@ -15,7 +15,7 @@ internal data class RenderedSnapshot(
     val capabilities: Bundle,
     val presentation: Bundle,
     val mode: String,
-    val focusEnabled: Boolean,
+    val statusNotificationEnabled: Boolean,
     val statusIsland: Boolean,
     val statusTarget: String,
     val dynamicColor: Boolean,
@@ -80,9 +80,9 @@ internal fun decodePresentationSnapshot(snapshot: Bundle): RenderedSnapshot? {
     val capabilities = snapshot.getBundle("capabilities") ?: return null
     val presentation = snapshot.getBundle(BridgePresentationWire.PRESENTATION) ?: return null
     val mode = presentation.getString(BridgePresentationWire.MODE)?.takeIf {
-        it == BridgePresentationWire.OFF || it == BridgePresentationWire.OFFICIAL || it == BridgePresentationWire.MODULE
+        it == BridgePresentationWire.OFF || it == BridgePresentationWire.SYSTEM || it == BridgePresentationWire.OPENROSE
     } ?: return null
-    if (!presentation.containsKey(BridgePresentationWire.FOCUS_ENABLED)) return null
+    if (!presentation.containsKey(BridgePresentationWire.STATUS_NOTIFICATION_ENABLED)) return null
     return RenderedSnapshot(
         wire = Bundle(snapshot),
         identity = identity,
@@ -91,7 +91,7 @@ internal fun decodePresentationSnapshot(snapshot: Bundle): RenderedSnapshot? {
         capabilities = Bundle(capabilities),
         presentation = Bundle(presentation),
         mode = mode,
-        focusEnabled = presentation.getBoolean(BridgePresentationWire.FOCUS_ENABLED),
+        statusNotificationEnabled = presentation.getBoolean(BridgePresentationWire.STATUS_NOTIFICATION_ENABLED),
         statusIsland = presentation.getBoolean(BridgePresentationWire.STATUS_SUMMARY_ISLAND, false),
         statusTarget = presentation.getString(BridgePresentationWire.STATUS_TARGET, BridgePresentationWire.TARGET_OPENROSE),
         dynamicColor = presentation.getBoolean(BridgePresentationWire.DYNAMIC_COLOR, false),

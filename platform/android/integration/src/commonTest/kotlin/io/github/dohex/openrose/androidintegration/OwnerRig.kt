@@ -377,7 +377,7 @@ internal class OwnerRig(
         initialPlatformState = platform,
         initialSettings = settings.control,
         store = store,
-        ordinaryFactory = { scope, settings, state, base -> LocalControlRuntime(state, settings, appTransport, scope, sessionTiming, base) },
+        appFactory = { scope, settings, state, base -> LocalControlRuntime(state, settings, appTransport, scope, sessionTiming, base) },
         moduleLink = link,
         scope = process,
         local = LocalOwnerIdentity(APP_PACKAGE, APP_PACKAGE, 10_123, 4_321),
@@ -386,7 +386,7 @@ internal class OwnerRig(
         userUnlocked = userUnlocked,
         initialIntegrationPlatform = integrationPlatform,
         initialIntegrationSettings = settings.integration,
-    ).also { if (interfaceOpen) it.holdOrdinarySession() }
+    ).also { if (interfaceOpen) it.holdAppSession() }
 
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     fun settle() = test.runCurrent()

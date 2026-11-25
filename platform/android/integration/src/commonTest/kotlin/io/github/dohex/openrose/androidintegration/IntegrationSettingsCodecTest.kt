@@ -15,38 +15,62 @@ class IntegrationSettingsCodecTest {
             IntegrationSettings(),
             IntegrationSettingsCodec.decode(
                 mapOf(
-                    "island_mode" to "module", "control_way" to "module", "background_control_enabled" to "true",
+                    "island_mode" to "openrose", "control_way" to "module", "background_control_enabled" to "true",
                     "androidIntegration.island_mode" to "invalid", "androidIntegration.control_way" to "invalid",
-                    "androidIntegration.focus_notification_enabled" to "yes", "androidIntegration.island_triggers" to "unknown",
+                    "androidIntegration.status_notification_enabled" to "yes", "androidIntegration.island_timings" to "unknown",
                     "androidIntegration.background_control_enabled" to "yes", "androidIntegration.fusion_off_as_wind" to "yes",
                     "androidIntegration.fusion_settings_destination" to "invalid", "androidIntegration.status_notification_target" to "invalid",
                 ),
             ),
         )
-        assertEquals(persistentSetOf(), IntegrationSettingsCodec.decode(mapOf("androidIntegration.island_triggers" to "")).islandTriggers)
         assertEquals(
-            IntegrationSettings().islandTriggers,
-            IntegrationSettingsCodec.decode(mapOf("androidIntegration.island_triggers" to "in_case,wearing")).islandTriggers,
+            IntegrationSettings(),
+            IntegrationSettingsCodec.decode(
+                mapOf(
+                    "androidIntegration.control_way" to "ordinary",
+                    "androidIntegration.island_mode" to "module",
+                    "androidIntegration.focus_notification_enabled" to "false",
+                    "androidIntegration.island_triggers" to "in_case",
+                ),
+            ),
+            "old persisted keys and values are ignored rather than migrated",
+        )
+        assertEquals(
+            IslandMode.SYSTEM,
+            IntegrationSettingsCodec.decode(mapOf("androidIntegration.island_mode" to "official")).islandMode,
+        )
+        assertEquals(persistentSetOf(), IntegrationSettingsCodec.decode(mapOf("androidIntegration.island_timings" to "")).islandTimings)
+        assertEquals(
+            IntegrationSettings().islandTimings,
+            IntegrationSettingsCodec.decode(mapOf("androidIntegration.island_timings" to "in_case,wearing")).islandTimings,
             "one unknown display timing makes the whole saved value unreadable",
         )
     }
 
     @Test
     fun eachChoiceRoundTripsWithNamespacedKeys() {
-        val base = IntegrationSettings(focusNotificationEnabled = false, fusionOffAsWind = true, backgroundControlEnabled = true)
+        val base = IntegrationSettings(statusNotificationEnabled = false, fusionOffAsWind = true, backgroundControlEnabled = true)
         val variants = ControlWay.entries.map { base.copy(controlWay = it) } +
             IslandMode.entries.map { base.copy(islandMode = it) } +
             FusionSettingsDestination.entries.map { base.copy(fusionSettingsDestination = it) } +
             StatusNotificationTarget.entries.map { base.copy(statusNotificationTarget = it) } +
             listOf(base.copy(islandSummaryEnabled = false)) +
-            listOf(persistentSetOf(), persistentSetOf(IslandTrigger.IN_CASE), persistentSetOf(IslandTrigger.IN_CASE, IslandTrigger.CONNECTION))
-                .map { base.copy(islandTriggers = it) }
+            listOf(persistentSetOf(), persistentSetOf(IslandTiming.IN_CASE), persistentSetOf(IslandTiming.IN_CASE, IslandTiming.CONNECTION))
+                .map { base.copy(islandTimings = it) }
         for (settings in variants) {
             val encoded = IntegrationSettingsCodec.encode(settings)
             assertTrue(encoded.keys.all { it.startsWith("androidIntegration.") })
             assertEquals(settings, IntegrationSettingsCodec.decode(encoded))
         }
-        assertEquals("connection", IntegrationSettingsCodec.encode(IntegrationSettings())["androidIntegration.island_triggers"])
+        val defaultsEncoded = IntegrationSettingsCodec.encode(IntegrationSettings())
+        assertEquals("app", defaultsEncoded["androidIntegration.control_way"])
+        assertEquals("system", defaultsEncoded["androidIntegration.island_mode"])
+        assertEquals("true", defaultsEncoded["androidIntegration.status_notification_enabled"])
+        assertEquals("connection", defaultsEncoded["androidIntegration.island_timings"])
+        assertEquals(
+            "openrose",
+            IntegrationSettingsCodec.encode(IntegrationSettings(islandMode = IslandMode.OPENROSE))["androidIntegration.island_mode"],
+        )
     }
 
     @Test
@@ -55,13 +79,14 @@ class IntegrationSettingsCodecTest {
             UserSettings(forceBle = true),
             IntegrationSettings(
                 controlWay = ControlWay.MODULE,
-                islandMode = IslandMode.MODULE,
+                islandMode = IslandMode.OPENROSE,
                 backgroundControlEnabled = true,
             ),
         )
         val encoded = HostSettingsCodec.encode(settings)
         assertEquals("true", encoded["core.force_ble"])
         assertEquals("module", encoded["androidIntegration.control_way"])
+        assertEquals("openrose", encoded["androidIntegration.island_mode"])
         assertFalse(encoded.keys.any { it.startsWith("sharedUI.") })
         assertEquals(settings, HostSettingsCodec.decode(encoded + ("sharedUI.appearance" to "dark")))
         assertEquals(HostSettings(), HostSettingsCodec.decode(mapOf("force_ble" to "true", "control_way" to "module")))

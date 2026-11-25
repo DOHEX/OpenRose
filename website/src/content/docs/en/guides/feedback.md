@@ -7,7 +7,7 @@ Report bugs and request features in [GitHub Issues](https://github.com/DOHEX/Ope
 
 ## What to include
 
-- Earphone model and firmware version (earphone home → device details)
+- Earphone model and firmware version (earphone home → headset info (耳机信息))
 - Phone model and OS version
 - OpenRose version (Settings (设置) → About (关于))
 - Steps to reproduce

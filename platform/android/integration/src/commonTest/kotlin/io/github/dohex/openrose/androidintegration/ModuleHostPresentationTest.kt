@@ -102,7 +102,7 @@ class ModuleHostPresentationTest {
 
     @Test
     fun onlyTheEntryThatOwnsTheSavedIslandModeMayClaimTheConnectionPromptAndOnlyOnce() = runTest {
-        for ((mode, owner) in listOf(IslandMode.OFFICIAL to ClientRole.XIAOMI_BLUETOOTH, IslandMode.MODULE to ClientRole.HOST_PRESENTATION)) {
+        for ((mode, owner) in listOf(IslandMode.SYSTEM to ClientRole.XIAOMI_BLUETOOTH, IslandMode.OPENROSE to ClientRole.HOST_PRESENTATION)) {
             val rig = Rig(this, IntegrationSettings(islandMode = mode))
             rig.start()
             val entries = mapOf(
@@ -148,8 +148,8 @@ class ModuleHostPresentationTest {
         val writes = rig.link.writes.size
 
         for (mode in IslandMode.entries) {
-            for (focus in listOf(true, false)) {
-                rig.updateSettings { it.copy(islandMode = mode, focusNotificationEnabled = focus) }
+            for (statusEnabled in listOf(true, false)) {
+                rig.updateSettings { it.copy(islandMode = mode, statusNotificationEnabled = statusEnabled) }
                 assertEquals(generation, rig.generation)
                 assertEquals(sessionId, rig.reference.sessionId)
                 assertEquals(writes, rig.link.writes.size, "a presentation preference never reaches the earphones")
@@ -161,7 +161,7 @@ class ModuleHostPresentationTest {
 
     @Test
     fun aNotificationNoiseActionForAStaleOrOtherSessionIsRefusedBeforeAnyWrite() = runTest {
-        val rig = Rig(this, IntegrationSettings(islandMode = IslandMode.MODULE))
+        val rig = Rig(this, IntegrationSettings(islandMode = IslandMode.OPENROSE))
         rig.start()
         rig.link.initializing = false
         val reference = rig.reference
@@ -177,26 +177,26 @@ class ModuleHostPresentationTest {
 
     @Test
     fun theOldGenerationCannotActOnTheNextSessionAndTheSavedPresentationApplies() = runTest {
-        val saved = IntegrationSettings(islandMode = IslandMode.MODULE, focusNotificationEnabled = false, islandTriggers = persistentSetOf(IslandTrigger.CONNECTION))
+        val saved = IntegrationSettings(islandMode = IslandMode.OPENROSE, statusNotificationEnabled = false, islandTimings = persistentSetOf(IslandTiming.CONNECTION))
         val rig = Rig(this, saved)
         rig.start()
         val old = rig.generation
         val oldPrompt = rig.prompt
         val oldReference = rig.reference
 
-        assertIs<ReleaseResult.Released>(rig.host.release(rig.app.identity, rig.app.id, SwitchRequest("to-ordinary", ControlWay.MODULE, ControlWay.ORDINARY, old)))
+        assertIs<ReleaseResult.Released>(rig.host.release(rig.app.identity, rig.app.id, SwitchRequest("to-app", ControlWay.MODULE, ControlWay.APP, old)))
         runCurrent()
 
         assertEquals(listOf("module:open", "module:close"), rig.headset.events)
 
         val newLease = assertIs<HostOpenResult.Opened>(rig.host.open(appIdentity)).lease.id
-        assertIs<AcquireResult.Acquired>(rig.host.acquire(appIdentity, newLease, SwitchRequest("to-module", ControlWay.ORDINARY, ControlWay.MODULE)))
+        assertIs<AcquireResult.Acquired>(rig.host.acquire(appIdentity, newLease, SwitchRequest("to-module", ControlWay.APP, ControlWay.MODULE)))
         runCurrent()
         rig.connect()
         val next = rig.generation
         assertNotEquals(old, next)
-        assertEquals(IslandMode.MODULE, rig.presentation.islandMode)
-        assertFalse(rig.presentation.focusNotificationEnabled)
+        assertEquals(IslandMode.OPENROSE, rig.presentation.islandMode)
+        assertFalse(rig.presentation.statusNotificationEnabled)
         assertEquals(
             HostRejection.STALE_GENERATION,
             assertIs<HostCallResult.Rejected>(rig.claim(rig.hostUi, at = old, ref = oldReference, id = oldPrompt.id)).rejection,

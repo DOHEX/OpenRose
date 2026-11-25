@@ -41,7 +41,7 @@ cd OpenRose
 | `:shared:ui` | 共享页面、快捷面板、托盘面板和外观。桌面展示段落在 `jvmMain`，由应用或沙盒提供平台动作 |
 | `:shared:circulation` | 跨端流转契约、型号资格、配对与远端会话引用 |
 | `:shared:circulation-lan` | 局域网发现、配对认证、网络收发、流转与远端控制的 JVM 实现 |
-| `:platform:android:integration` | 普通／模块控制与所有者交接、系统入口及呈现规则，在 JVM 上测试 |
+| `:platform:android:integration` | 应用／模块控制与所有者交接、系统入口及呈现规则，在 JVM 上测试 |
 | `:platform:android:bluetooth-ipc` | 应用与模块共用的 Android 蓝牙驱动、音频连接事实、AIDL 与 Binder 编解码 |
 | `:platform:android:system-module` | LSPosed 在作用域进程内加载的模块、模块宿主、耳机系统集成和手机流转端点 |
 | `:platform:android:ui` | 手机与 JVM 沙盒共用的 Android 设置、状态和诊断界面段落 |

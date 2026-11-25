@@ -27,7 +27,7 @@ class DeviceConfigurationUiTest {
                     )
                     ProvideInterfaceStyle(style, dark = false) {
                         Column {
-                            DeviceDetails(state, device, {}, {})
+                            HeadsetInfo(state, device, {}, {})
                             ConnectionDetailsCard(state)
                         }
                     }

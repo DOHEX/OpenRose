@@ -36,7 +36,7 @@ private const val UNAVAILABLE = 0xff
 
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class InCasePromptTest {
-    private val moduleInCase = IntegrationSettings(islandMode = IslandMode.MODULE, islandTriggers = persistentSetOf(IslandTrigger.IN_CASE))
+    private val openRoseInCase = IntegrationSettings(islandMode = IslandMode.OPENROSE, islandTimings = persistentSetOf(IslandTiming.IN_CASE))
 
     @Test
     fun onlyModelsWithACaseAndInCaseFlagsCanShowAnInCasePrompt() {
@@ -70,9 +70,9 @@ class InCasePromptTest {
 
     @Test
     fun theFirstReadingIsNotAnEventAndEachLaterEntryReplacesThePromptOnce() = runTest {
-        val (session, link) = connected(moduleInCase, initial = i7Battery(IN, RIGHT_OUT))
+        val (session, link) = connected(openRoseInCase, initial = i7Battery(IN, RIGHT_OUT))
         assertNull(session.presentation.value.prompt, "an earbud already in the case at connection is not an in-case event")
-        assertTrue(session.presentation.value.allowIslandFields, "a module display timing other than connection still allows island content")
+        assertTrue(session.presentation.value.allowIslandFields, "an OpenRose display timing other than connection still allows island content")
 
         link.deviceReply(i7Battery(OUT, RIGHT_OUT))
         runCurrent()
@@ -81,8 +81,8 @@ class InCasePromptTest {
         link.deviceReply(i7Battery(IN, RIGHT_OUT))
         runCurrent()
         val left = assertNotNull(session.presentation.value.prompt)
-        assertEquals(IslandTrigger.IN_CASE, left.trigger)
-        assertEquals(IslandMode.MODULE, left.mode)
+        assertEquals(IslandTiming.IN_CASE, left.timing)
+        assertEquals(IslandMode.OPENROSE, left.mode)
 
         link.deviceReply(i7Battery(IN, RIGHT_OUT))
         runCurrent()
@@ -91,14 +91,14 @@ class InCasePromptTest {
         link.deviceReply(i7Battery(IN, RIGHT_IN))
         runCurrent()
         val right = assertNotNull(session.presentation.value.prompt)
-        assertEquals(IslandTrigger.IN_CASE, right.trigger)
+        assertEquals(IslandTiming.IN_CASE, right.timing)
         assertNotEquals(left.id, right.id, "the other earbud entering replaces the showing prompt")
         session.disconnect()
     }
 
     @Test
     fun anUnavailableFlagBeforeEnteringIsNotAKnownExit() = runTest {
-        val (session, link) = connected(moduleInCase, initial = i7Battery(OUT, RIGHT_OUT))
+        val (session, link) = connected(openRoseInCase, initial = i7Battery(OUT, RIGHT_OUT))
         link.deviceReply(i7Battery(UNAVAILABLE, RIGHT_OUT))
         runCurrent()
         link.deviceReply(i7Battery(IN, RIGHT_OUT))
@@ -108,17 +108,17 @@ class InCasePromptTest {
     }
 
     @Test
-    fun officialModeAndAnUnselectedTimingConsumeTheEventWithoutPrompting() = runTest {
-        for (settings in listOf(IntegrationSettings(islandMode = IslandMode.OFFICIAL), IntegrationSettings(islandMode = IslandMode.MODULE))) {
+    fun systemStyleAndAnUnselectedTimingConsumeTheEventWithoutPrompting() = runTest {
+        for (settings in listOf(IntegrationSettings(islandMode = IslandMode.SYSTEM), IntegrationSettings(islandMode = IslandMode.OPENROSE))) {
             val (session, link) = connected(settings, initial = i7Battery(OUT, RIGHT_OUT))
             val connection = session.presentation.value.prompt
-            assertEquals(IslandTrigger.CONNECTION, connection?.trigger)
+            assertEquals(IslandTiming.CONNECTION, connection?.timing)
 
             link.deviceReply(i7Battery(IN, RIGHT_OUT))
             runCurrent()
             assertEquals(connection, session.presentation.value.prompt, "${settings.islandMode} shows no in-case prompt")
 
-            session.updateIntegrationSettings(moduleInCase)
+            session.updateIntegrationSettings(openRoseInCase)
             assertNull(session.presentation.value.prompt, "selecting the timing later does not replay the event")
             session.disconnect()
         }
