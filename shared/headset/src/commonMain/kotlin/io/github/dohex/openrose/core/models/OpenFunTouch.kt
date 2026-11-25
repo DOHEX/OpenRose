@@ -13,6 +13,7 @@ import kotlinx.collections.immutable.toPersistentSet
 internal val openFunTouch = ModelSpec(
     displayName = "OpenFun",
     shortLabel = "OpenFun",
+    versionName = "有触控开关",
     protocol = ModelProtocol.RsCommon(initialization = RsCommonInit.DEFAULT),
     advertisementPrefixes = listOf("0b0a0a10"),
     nameBrand = "openfun",

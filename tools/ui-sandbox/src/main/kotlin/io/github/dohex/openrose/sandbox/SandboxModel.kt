@@ -72,6 +72,13 @@ internal class SandboxModel(private val scope: CoroutineScope) : OpenRoseModel {
 
     override fun stopScan() = mutableState.update { it.copy(scan = ScanState.Idle) }
 
+    override fun selectCurrentHeadset(deviceId: DeviceId) {
+        mutableState.update { current ->
+            val target = current.bondedHeadsets.firstOrNull { it.deviceId == deviceId }?.deviceId
+            current.copy(selectedHeadsetId = target)
+        }
+    }
+
     override fun connect(deviceId: DeviceId) {
         val profile = mutableState.value.profileOf(deviceId) ?: return
         connection?.cancel()

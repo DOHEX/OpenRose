@@ -12,6 +12,7 @@ import kotlinx.collections.immutable.toPersistentSet
 internal class ModelSpec(
     val displayName: String,
     val shortLabel: String,
+    val versionName: String? = null,
     val protocol: ModelProtocol,
     val advertisementPrefixes: List<String>,
     val nameBrand: String,
@@ -35,6 +36,7 @@ internal class ModelSpec(
         require(nameBrand.isNotBlank() && nameBrand == nameBrand.lowercase()) { "$displayName 的品牌词须为小写" }
         require(nameModelNumber.isNotBlank() && nameModelNumber == nameModelNumber.lowercase()) { "$displayName 的型号词须为小写" }
         require(writeIntervalMillis >= 0) { "$displayName 的写入间隔不能为负" }
+        require(versionName == null || versionName.isNotBlank()) { "$displayName 的版本名不能为空白" }
     }
 }
 

@@ -16,6 +16,8 @@ object HostWire {
 
         HostCommand.StopScan -> obj("t" to str("stopScan"))
 
+        is HostCommand.SelectCurrentHeadset -> obj("t" to str("selectCurrentHeadset"), "device" to str(command.deviceId.value))
+
         is HostCommand.Connect -> obj("t" to str("connect"), "device" to str(command.deviceId.value))
 
         is HostCommand.ConnectFromSystem -> obj("t" to str("connectSystem"), "device" to str(command.deviceId.value))
@@ -46,6 +48,8 @@ object HostWire {
             "startScan" -> HostCommand.StartScan
 
             "stopScan" -> HostCommand.StopScan
+
+            "selectCurrentHeadset" -> HostCommand.SelectCurrentHeadset(DeviceId(node.str("device")))
 
             "connect" -> HostCommand.Connect(DeviceId(node.str("device")))
 

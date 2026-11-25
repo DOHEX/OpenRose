@@ -243,7 +243,7 @@ class TrayPanelUiTest {
     fun selectingAnotherNoiseModeWritesItAndSelectingTheConfirmedOneDoesNot() {
         for (style in InterfaceStyle.entries) {
             val state = connectedI7State()
-            val modes = traySummary(state, PrimaryDeviceSelection()).noiseModes
+            val modes = traySummary(state).noiseModes
             val confirmed = modes.single { it.selected }
             val other = modes.first { !it.selected }
             withTrayPanel(state, style) { panel ->
@@ -275,15 +275,16 @@ class TrayPanelUiTest {
     }
 
     @Test
-    fun reconnectConnectsThePrimaryDeviceTheDashboardWouldOffer() {
+    fun reconnectConnectsTheCurrentHeadsetTheDashboardWouldOffer() {
         for (style in InterfaceStyle.entries) {
-            val selection = PrimaryDeviceSelection()
-            val state = disconnectedAndroidState().copy(bondedDevices = persistentListOf(first, second))
-            selection.select(state, second.deviceId)
-            withTrayPanel(state, style, selection) { panel ->
+            val state = disconnectedAndroidState().copy(
+                bondedDevices = persistentListOf(first, second),
+                selectedHeadsetId = second.deviceId,
+            )
+            withTrayPanel(state, style) { panel ->
                 panel.render()
                 panel.clickText("重新连接")
-                assertEquals(listOf(second.deviceId), panel.model.connectRequests, "primary device in $style")
+                assertEquals(listOf(second.deviceId), panel.model.connectRequests, "current headset in $style")
             }
         }
     }
@@ -303,7 +304,7 @@ class TrayPanelUiTest {
             assertEquals(listOf(first.deviceId), panel.model.connectRequests)
         }
         val loading = state.copy(connection = ConnectionState.Connecting(first.deviceId, 1L, ConnectionPhase.DISCOVERING))
-        assertTrue("耳机已接入，正在恢复控制" in traySummary(loading, PrimaryDeviceSelection()).title)
+        assertTrue("耳机已接入，正在恢复控制" in traySummary(loading).title)
     }
 
     @Test
@@ -360,7 +361,7 @@ class TrayPanelUiTest {
                         mutableStateOf(UiSettings(interfaceStyle = style, appearance = Appearance.LIGHT)),
                     )
                     setContent {
-                        TrayPanel(model, PrimaryDeviceSelection(), onOpenApp = {}, onContentHeight = { reported = it.value })
+                        TrayPanel(model, onOpenApp = {}, onContentHeight = { reported = it.value })
                     }
                     val panel = OpenRoseUiTestHarness(this)
                     panel.render()
@@ -372,49 +373,28 @@ class TrayPanelUiTest {
     }
 
     @Test
-    fun dashboardAndTrayAgreeOnThePrimaryDeviceAfterSwitchingAndDisconnecting() {
+    fun dashboardAndTrayAgreeOnTheCurrentHeadsetAfterSwitchingAndDisconnecting() {
         for (style in InterfaceStyle.entries) {
-            val selection = PrimaryDeviceSelection()
             val bonded = disconnectedAndroidState().copy(bondedDevices = persistentListOf(first, second))
-            withApp(bonded, style, selection) { app ->
+            withApp(bonded, style) { app ->
                 app.render()
                 app.clickText("切换")
-                app.state.value = bonded.copy(
+                assertEquals(listOf(second.deviceId), app.model.selectedHeadsetRequests, "switch command in $style")
+                app.state.value = app.state.value.copy(
                     connectionTarget = second,
                     connection = ConnectionState.Connecting(second.deviceId, 1L, ConnectionPhase.CONNECTING),
                 )
                 app.render()
-                app.state.value = bonded
+                app.state.value = bonded.copy(selectedHeadsetId = app.state.value.selectedHeadsetId)
                 app.render()
 
-                val trayTarget = traySummary(bonded, selection).reconnectTarget
+                val trayTarget = traySummary(app.state.value).reconnectTarget
                 app.clickText("切换")
                 val offered = app.model.connectRequests.last()
                 assertEquals(
                     listOf(first.deviceId, second.deviceId).single { it != offered },
                     trayTarget,
-                    "tray and dashboard primary in $style",
-                )
-            }
-        }
-    }
-
-    @Test
-    fun aChoiceIsForgottenWhenTheDashboardLeaves() {
-        for (style in InterfaceStyle.entries) {
-            val bonded = disconnectedAndroidState().copy(bondedDevices = persistentListOf(first, second))
-            val leftSelection = PrimaryDeviceSelection()
-            withApp(bonded, style, leftSelection) { app ->
-                app.render()
-                app.clickText("切换")
-                app.state.value = connectedI7State().copy(bondedDevices = bonded.bondedDevices)
-                app.render()
-                app.state.value = bonded
-                app.render()
-                assertEquals(
-                    first.deviceId,
-                    traySummary(bonded, leftSelection).reconnectTarget,
-                    "dashboard left composition in $style",
+                    "tray and dashboard current headset in $style",
                 )
             }
         }
@@ -423,8 +403,7 @@ class TrayPanelUiTest {
     @Test
     fun noiseModesAreDisabledWhileASettingIsPending() {
         val connected = connectedI7State()
-        val selection = PrimaryDeviceSelection()
-        val idle = traySummary(connected, selection).noiseModes
+        val idle = traySummary(connected).noiseModes
         assertTrue(idle.isNotEmpty())
         assertTrue(idle.all { it.enabled })
         assertEquals(1, idle.count { it.selected })
@@ -440,7 +419,7 @@ class TrayPanelUiTest {
                 ),
             ).toPersistentList(),
         )
-        val waiting = traySummary(pending, selection).noiseModes
+        val waiting = traySummary(pending).noiseModes
         assertEquals(idle.map { it.mode }, waiting.map { it.mode })
         assertTrue(waiting.none { it.enabled })
         assertEquals(idle.single { it.selected }.mode, waiting.single { it.selected }.mode)
@@ -454,7 +433,7 @@ class TrayPanelUiTest {
             platform = connected.platform.copy(hostPlatform = HostPlatform.LINUX),
             device = device.copy(diagnostics = device.diagnostics.copy(fields = persistentMapOf(DeviceField.LEFT_BATTERY to FieldReading.Known(FieldValue.Number(98), "62")))),
         )
-        val summary = traySummary(state, PrimaryDeviceSelection())
+        val summary = traySummary(state)
         assertEquals("左耳 98% · 右耳 未知 · 充电盒 未知", summary.battery)
         assertEquals("L 98% · R - · C -", summary.compactBattery)
         withTrayPanel(state, InterfaceStyle.MIUIX) { panel ->
@@ -482,7 +461,7 @@ class TrayPanelUiTest {
                 ),
             ),
         )
-        val battery = assertNotNull(traySummary(partial, PrimaryDeviceSelection()).battery)
+        val battery = assertNotNull(traySummary(partial).battery)
         assertTrue("80%" in battery)
         assertFalse("右耳" in battery)
 
@@ -500,13 +479,13 @@ class TrayPanelUiTest {
                 ),
             ),
         )
-        assertNull(traySummary(none, PrimaryDeviceSelection()).battery)
+        assertNull(traySummary(none).battery)
     }
 
     @Test
     fun desktopTrayShowsTheConfirmedModeAndWriteFeedbackDuringInitialization() {
         val state = initializingDesktopI5()
-        val summary = traySummary(state, PrimaryDeviceSelection())
+        val summary = traySummary(state)
         assertFalse(summary.connected)
         assertTrue(summary.title.contains("正在恢复控制"))
         assertEquals(NoiseMode.ANC, summary.noiseModes.single { it.selected }.mode)
@@ -541,7 +520,7 @@ class TrayPanelUiTest {
         val state = initializingDesktopI5()
         val expected = listOf<Pair<DeviceSetting, FieldValue>>(DeviceSetting.NOISE_MODE to FieldValue.Text("transparency"))
         for (style in InterfaceStyle.entries) {
-            withApp(state, style, PrimaryDeviceSelection()) { app ->
+            withApp(state, style) { app ->
                 app.render()
                 assertTrue(app.hasText("正在初始化并读取状态…"), "$style should still report initialization")
                 assertTrue(app.hasTappableText("通透"), "$style should allow changing noise mode")
@@ -558,10 +537,9 @@ class TrayPanelUiTest {
 
     @Test
     fun onlyAReadySessionCountsAsConnected() {
-        val selection = PrimaryDeviceSelection()
         val connected = connectedI7State()
-        assertTrue(traySummary(connected, selection).connected)
-        assertNull(traySummary(connected, selection).reconnectTarget)
+        assertTrue(traySummary(connected).connected)
+        assertNull(traySummary(connected).reconnectTarget)
 
         val initializing = connected.copy(
             connection = ConnectionState.Connected(
@@ -571,16 +549,16 @@ class TrayPanelUiTest {
                 ConnectionPhase.INITIALIZING,
             ),
         )
-        val summary = traySummary(initializing, selection)
+        val summary = traySummary(initializing)
         assertFalse(summary.connected)
         assertTrue(summary.noiseModes.isEmpty())
         assertNull(summary.battery)
         assertNull(summary.reconnectTarget)
 
         val disconnected = disconnectedAndroidState().copy(bondedDevices = persistentListOf(first))
-        assertEquals(first.deviceId, traySummary(disconnected, selection).reconnectTarget)
-        assertFalse(traySummary(disconnected, selection).addDevice)
-        assertTrue(traySummary(disconnectedAndroidState(), selection).addDevice)
+        assertEquals(first.deviceId, traySummary(disconnected).reconnectTarget)
+        assertFalse(traySummary(disconnected).addDevice)
+        assertTrue(traySummary(disconnectedAndroidState()).addDevice)
     }
 
     private fun initializingDesktopI5(): ControlState {
@@ -615,12 +593,11 @@ class TrayPanelUiTest {
     private fun withApp(
         initialState: ControlState,
         style: InterfaceStyle,
-        selection: PrimaryDeviceSelection,
         block: suspend (AppHarness) -> Unit,
     ) = runOpenRoseUiTest(420, 900) {
         val state = mutableStateOf(initialState)
         val model = FakeOpenRoseModel(state, mutableStateOf(UiSettings(interfaceStyle = style)))
-        setContent { OpenRoseApp(model, BasicPlatformUi("Test"), primaryDeviceSelection = selection) }
+        setContent { OpenRoseApp(model, BasicPlatformUi("Test")) }
         block(AppHarness(this, state, model))
     }
 }
@@ -628,7 +605,6 @@ class TrayPanelUiTest {
 internal fun withTrayPanel(
     initialState: ControlState,
     style: InterfaceStyle,
-    selection: PrimaryDeviceSelection = PrimaryDeviceSelection(),
     circulation: CirculationClient? = null,
     sound: DesktopSoundActions? = null,
     remoteHeadsets: State<List<RemoteHeadset>>? = null,
@@ -643,7 +619,6 @@ internal fun withTrayPanel(
     setContent {
         TrayPanel(
             model,
-            selection,
             onOpenApp = { panel.destinations += it },
             onContentHeight = { panel.contentHeight = it.value },
             circulation = circulation,

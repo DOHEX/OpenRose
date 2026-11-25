@@ -1,6 +1,7 @@
 package io.github.dohex.openrose.transport.windows
 
 import io.github.dohex.openrose.core.TransportAvailability
+import io.github.dohex.openrose.core.TransportUnavailableCode
 import io.github.dohex.openrose.core.transport.DeviceId
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -30,6 +31,18 @@ class WindowsControlTransportTest {
         runCurrent()
         assertEquals(TransportAvailability.Disabled, transport.availability.value)
         assertNull(transport.audioConnectedDevice.first())
+        snapshots.emit("unavailable\tble_unsupported")
+        runCurrent()
+        assertEquals(TransportAvailability.Unavailable(TransportUnavailableCode.BLE_UNSUPPORTED), transport.availability.value)
+        snapshots.emit("unavailable\trecovering")
+        runCurrent()
+        assertEquals(TransportAvailability.Unavailable(TransportUnavailableCode.RECOVERING), transport.availability.value)
+        snapshots.emit("unavailable\tbackend_unavailable\thelper exited")
+        runCurrent()
+        assertEquals(
+            TransportAvailability.Unavailable(TransportUnavailableCode.BACKEND_UNAVAILABLE, "helper exited"),
+            transport.availability.value,
+        )
         transport.close()
     }
 }

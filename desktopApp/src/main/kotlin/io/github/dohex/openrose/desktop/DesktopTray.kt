@@ -39,7 +39,6 @@ import io.github.dohex.openrose.core.DeviceSetting
 import io.github.dohex.openrose.core.HeadsetCommand
 import io.github.dohex.openrose.ui.DesktopSoundActions
 import io.github.dohex.openrose.ui.LocalCirculationVisible
-import io.github.dohex.openrose.ui.PrimaryDeviceSelection
 import io.github.dohex.openrose.ui.RemoteHeadset
 import io.github.dohex.openrose.ui.TrayIcons
 import io.github.dohex.openrose.ui.TrayPanel
@@ -120,7 +119,6 @@ internal fun trayIconTint(
 internal fun NucleusApplicationScope.DesktopTray(
     host: TrayPanelHost,
     model: OpenRoseModel,
-    selection: PrimaryDeviceSelection,
     uiScope: CoroutineScope,
     circulation: CirculationClient,
     sound: DesktopSoundActions?,
@@ -130,7 +128,7 @@ internal fun NucleusApplicationScope.DesktopTray(
     onStarted: () -> Unit,
 ) {
     val state by model.state.collectAsState()
-    val summary = rememberTraySummary(state, selection)
+    val summary = rememberTraySummary(state)
     val sessionId = state.noiseModeSession?.sessionId
     val trayState = rememberTrayAppState(initialWindowSize = trayPanelSize)
     val anchoredOpen by trayState.isVisible.collectAsState()
@@ -167,7 +165,6 @@ internal fun NucleusApplicationScope.DesktopTray(
                 CompositionLocalProvider(LocalCirculationVisible provides anchoredOpen) {
                     TrayPanel(
                         model,
-                        selection,
                         onOpenApp = {
                             trayState.hide()
                             actions.open(it)
@@ -196,7 +193,6 @@ internal fun NucleusApplicationScope.DesktopTray(
             if (panelOpen) {
                 TrayPanelWindow(
                     model = model,
-                    selection = selection,
                     circulation = circulation,
                     sound = sound,
                     trayPanelSettings = trayPanelSettings,
@@ -222,7 +218,6 @@ internal fun NucleusApplicationScope.DesktopTray(
 @Composable
 private fun NucleusApplicationScope.TrayPanelWindow(
     model: OpenRoseModel,
-    selection: PrimaryDeviceSelection,
     circulation: CirculationClient,
     sound: DesktopSoundActions?,
     trayPanelSettings: TrayPanelSettings,
@@ -272,7 +267,6 @@ private fun NucleusApplicationScope.TrayPanelWindow(
         ) {
             TrayPanel(
                 model,
-                selection,
                 onOpenApp,
                 circulation = circulation,
                 sound = sound,

@@ -34,6 +34,7 @@ private val ceramicsXCapabilities = DeviceCapabilities(
 internal val ceramicsX = ModelSpec(
     displayName = "CERAMICS-X",
     shortLabel = "CERAMICS-X",
+    versionName = "标准版",
     protocol = ModelProtocol.F8(
         extendedInit = true,
         noiseNormalWire = 3,

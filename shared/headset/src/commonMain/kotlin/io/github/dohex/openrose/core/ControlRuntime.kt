@@ -15,6 +15,8 @@ interface ControlRuntime {
     suspend fun startScan(): OperationResult
     suspend fun stopScan()
 
+    suspend fun selectCurrentHeadset(deviceId: DeviceId)
+
     suspend fun connect(deviceId: DeviceId, pinned: Boolean = false): OperationResult
 
     suspend fun connectForAddDevice(deviceId: DeviceId): OperationResult

@@ -28,6 +28,7 @@ import io.github.dohex.openrose.core.SettingStage
 import io.github.dohex.openrose.core.TouchControlCapabilities
 import io.github.dohex.openrose.core.TouchSlot
 import io.github.dohex.openrose.core.TransportAvailability
+import io.github.dohex.openrose.core.TransportUnavailableCode
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.FieldReading
 import io.github.dohex.openrose.core.protocol.FieldValue
@@ -52,6 +53,7 @@ class HostWireTest {
             HostCommand.RefreshBondedDevices,
             HostCommand.StartScan,
             HostCommand.StopScan,
+            HostCommand.SelectCurrentHeadset(DeviceId("AA:BB:CC:DD:EE:00")),
             HostCommand.Connect(DeviceId("AA:BB:CC:DD:EE:01")),
             HostCommand.ConnectFromSystem(DeviceId("AA:BB:CC:DD:EE:02")),
             HostCommand.ConnectForAddDevice(DeviceId("AA:BB:CC:DD:EE:03")),
@@ -150,6 +152,7 @@ class HostWireTest {
             device = device,
             settingOperations = persistentListOf(operation),
             audioDeviceId = reference.deviceId,
+            selectedHeadsetId = reference.deviceId,
         )
 
         val decoded = ControlWire.decodeOwned(ControlWire.encodeOwned(facts, state))
@@ -157,6 +160,15 @@ class HostWireTest {
         assertEquals(device, decoded.state.device)
         assertEquals(listOf(operation), decoded.state.settingOperations)
         assertEquals(reference.deviceId, decoded.state.audioDeviceId)
+        assertEquals(reference.deviceId, decoded.state.selectedHeadsetId)
+
+        for (transport in listOf(
+            TransportAvailability.Unavailable(TransportUnavailableCode.NO_ADAPTER),
+            TransportAvailability.Unavailable(TransportUnavailableCode.BACKEND_UNAVAILABLE, "dbus error"),
+        )) {
+            val unavailableFacts = HostPlatformFacts(PermissionState.GRANTED, transport)
+            assertEquals(unavailableFacts, ControlWire.decodeOwned(ControlWire.encodeOwned(unavailableFacts, state)).platform)
+        }
     }
 
     @Test
