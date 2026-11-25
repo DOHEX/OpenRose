@@ -6,6 +6,11 @@ use openrose_headset::{
 };
 use std::collections::{BTreeMap, BTreeSet};
 
+fn connect_time() -> openrose_headset::LocalDateTime {
+    openrose_headset::LocalDateTime::new(2026, 11, 20, 17, 38, 9).expect("valid time")
+}
+
+
 const F8_PROFILES: [ModelProfile; 6] = [
     ModelProfile::AgateF8,
     ModelProfile::AgateXF8,
@@ -74,7 +79,7 @@ fn assert_unknown(reply: &ProtocolReply, field: HeadsetField) {
 
 fn query_hexes(profile: ModelProfile) -> Vec<String> {
     codec(profile)
-        .init_queries(6)
+        .init_queries(6, connect_time())
         .expect("init queries")
         .iter()
         .map(|query| encode_hex(&query.bytes))
@@ -530,10 +535,10 @@ fn f8_capabilities_expose_each_models_readable_and_writable_surface() {
 fn initialization_uses_documented_queries_and_capacity() {
     let mut agate = codec(ModelProfile::AgateF8);
     assert!(matches!(
-        agate.init_queries(5),
+        agate.init_queries(5, connect_time()),
         Err(ProtocolError::InvalidArgument(_))
     ));
-    let queries = agate.init_queries(6).expect("init queries");
+    let queries = agate.init_queries(6, connect_time()).expect("init queries");
     assert_eq!(
         vec![
             "002701000101",

@@ -35,9 +35,12 @@ pub(super) struct ZtDevice {
     gain: u8,
 }
 
-fn zt_protocol(profile: ModelProfile) -> ZtProtocol {
+fn zt_protocol(profile: ModelProfile) -> Result<ZtProtocol, SimulatorError> {
     match profile.spec().protocol {
-        ModelProtocol::Zt(protocol) => protocol,
+        ModelProtocol::Zt(protocol) => Ok(protocol),
+        ModelProtocol::RsCommonV2(_) | ModelProtocol::RsCommon(_) | ModelProtocol::F8(_) => {
+            Err(SimulatorError::UnsupportedFamily(profile.family()))
+        }
     }
 }
 
@@ -84,7 +87,7 @@ impl ZtDevice {
         let single_unit = profile.battery_layout() == BatteryLayout::SingleUnit;
         Ok(Self {
             profile,
-            protocol: zt_protocol(profile),
+            protocol: zt_protocol(profile)?,
             firmware,
             acknowledge_writes: false,
             left_battery: if single_unit { NOT_PROVIDED } else { 100 },

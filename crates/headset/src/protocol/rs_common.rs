@@ -3,6 +3,7 @@ use crate::error::ProtocolError;
 use crate::field::{
     FieldReading, FieldValue, FirmwareVersion, HeadsetField, HeadsetSetting, TouchBinding,
 };
+use crate::local_time::LocalDateTime;
 use crate::hex::encode_hex;
 use crate::model::rs_common::{RsCommonInit, RsCommonProtocol, TOUCH_GESTURES};
 use crate::model::{BatteryLayout, ModelProfile};
@@ -262,7 +263,11 @@ impl ProtocolCodec for RsCommonCodec {
         self.profile
     }
 
-    fn init_queries(&mut self, max_write_size: usize) -> Result<Vec<ProtocolQuery>, ProtocolError> {
+    fn init_queries(
+        &mut self,
+        max_write_size: usize,
+        _now: LocalDateTime,
+    ) -> Result<Vec<ProtocolQuery>, ProtocolError> {
         if max_write_size < MIN_INIT_WRITE_SIZE {
             return Err(ProtocolError::InvalidArgument(
                 "RS Common getInfo requires a 19-byte write capacity".to_string(),

@@ -101,13 +101,15 @@ impl ProtocolReply {
 pub trait ProtocolCodec: Send {
     fn profile(&self) -> ModelProfile;
 
-    fn init_queries(&mut self, max_write_size: usize) -> Result<Vec<ProtocolQuery>, ProtocolError>;
+    fn init_queries(
+        &mut self,
+        max_write_size: usize,
+        now: LocalDateTime,
+    ) -> Result<Vec<ProtocolQuery>, ProtocolError>;
 
     fn firmware_init_queries(&mut self, _firmware: Option<&FirmwareVersion>) -> Vec<ProtocolQuery> {
         Vec::new()
     }
-
-    fn set_local_time(&mut self, _now: LocalDateTime) {}
 
     fn prepare_setting(
         &mut self,

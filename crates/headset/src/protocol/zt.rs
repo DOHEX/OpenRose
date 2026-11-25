@@ -3,6 +3,7 @@ use crate::error::ProtocolError;
 use crate::field::{
     FieldReading, FieldValue, FirmwareVersion, HeadsetField, HeadsetSetting, TouchBinding,
 };
+use crate::local_time::LocalDateTime;
 use crate::hex::{decode_hex, encode_hex};
 use crate::model::{BatteryLayout, ModelProfile, ProtocolFamily, ZtProtocol};
 use crate::protocol::{
@@ -97,7 +98,11 @@ impl ProtocolCodec for ZtCodec {
         self.profile
     }
 
-    fn init_queries(&mut self, max_write_size: usize) -> Result<Vec<ProtocolQuery>, ProtocolError> {
+    fn init_queries(
+        &mut self,
+        max_write_size: usize,
+        _now: LocalDateTime,
+    ) -> Result<Vec<ProtocolQuery>, ProtocolError> {
         if max_write_size < 10 {
             return Err(ProtocolError::InvalidArgument(
                 "ZT queries require a 10-byte write capacity".to_string(),

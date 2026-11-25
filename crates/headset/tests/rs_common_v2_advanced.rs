@@ -5,6 +5,11 @@ use openrose_headset::{
 };
 use std::collections::{BTreeMap, BTreeSet};
 
+fn connect_time() -> openrose_headset::LocalDateTime {
+    openrose_headset::LocalDateTime::new(2026, 11, 20, 17, 38, 9).expect("valid time")
+}
+
+
 fn hex_bytes(hex: &str) -> Vec<u8> {
     decode_hex(hex).expect("valid test hex")
 }
@@ -100,7 +105,7 @@ fn invalid_curves() -> Vec<FieldValue> {
 #[test]
 fn custom_curve_uses_two_ordered_writes_and_two_independent_readbacks_after_initialization() {
     let mut codec = codec(ModelProfile::I7RsV2);
-    assert_eq!(3, codec.init_queries(20).expect("init queries").len());
+    assert_eq!(3, codec.init_queries(20, connect_time()).expect("init queries").len());
     let mut gains = REFERENCE_CURVE.to_vec();
     let setting = prepare(
         codec.as_mut(),
@@ -430,10 +435,10 @@ fn bass_boost_uses_slot_readback_and_language_uses_its_own_record() {
 #[test]
 fn each_mk2_starts_with_its_own_panel_queries_at_default_ble_capacity() {
     let buds = codec(ModelProfile::BudsFeelMk2RsV2)
-        .init_queries(20)
+        .init_queries(20, connect_time())
         .expect("buds init");
     let open = codec(ModelProfile::OpenFeelMk2RsV2)
-        .init_queries(20)
+        .init_queries(20, connect_time())
         .expect("open init");
     assert_eq!(
         vec!["ff000dfa0d0c092a0e322b01072f2e3658aa"],
@@ -877,11 +882,11 @@ fn tap_notifications_require_all_four_slots_and_preserve_unknown_actions() {
 }
 
 #[test]
-fn clock_sync_uses_local_calendar_bytes_and_only_the_model_that_requests_it() {
+fn clock_sync_uses_the_supplied_local_calendar_bytes_and_only_the_model_that_requests_it() {
     let now = LocalDateTime::new(2026, 11, 20, 17, 38, 9).expect("valid time");
-    let mut astro = codec(ModelProfile::AstroXRsV2);
-    astro.set_local_time(now);
-    let commands = astro.init_queries(512).expect("init queries");
+    let commands = codec(ModelProfile::AstroXRsV2)
+        .init_queries(512, now)
+        .expect("init queries");
     assert_eq!(2, commands.len());
     assert_eq!("ff010835141a0b14112609caaa", encode_hex(&commands[1].bytes));
     assert_eq!("35", commands[1].key);
@@ -890,23 +895,22 @@ fn clock_sync_uses_local_calendar_bytes_and_only_the_model_that_requests_it() {
     assert_eq!(
         1,
         codec(ModelProfile::Ky01RsV2)
-            .init_queries(512)
+            .init_queries(512, now)
             .expect("ky01 init")
             .len()
     );
-    let mut ky01 = codec(ModelProfile::Ky01RsV2);
-    ky01.set_local_time(now);
-    assert_eq!(1, ky01.init_queries(512).expect("ky01 init").len());
 }
 
 #[test]
-fn clock_sync_without_a_supplied_time_fails_before_any_sequence_is_allocated() {
+fn clock_sync_carries_the_time_of_each_connection_without_any_hidden_state() {
+    let first = LocalDateTime::new(2026, 11, 20, 17, 38, 9).expect("valid time");
+    let second = LocalDateTime::new(2027, 1, 2, 3, 4, 5).expect("valid time");
     let mut astro = codec(ModelProfile::AstroXRsV2);
-    assert!(is_invalid(&astro.init_queries(512)));
-    astro.set_local_time(LocalDateTime::new(2026, 11, 20, 17, 38, 9).expect("valid time"));
-    let queries = astro.init_queries(512).expect("init queries");
+    let queries = astro.init_queries(512, first).expect("first connection");
     assert_eq!(0, queries[0].bytes[1]);
-    assert!(is_invalid(&astro.init_queries(512)));
+    assert_eq!("ff010835141a0b14112609caaa", encode_hex(&queries[1].bytes));
+    let again = astro.init_queries(512, second).expect("second connection");
+    assert_eq!("ff030835141b01020304057daa", encode_hex(&again[1].bytes));
 }
 
 #[test]
@@ -947,7 +951,7 @@ fn local_time_accepts_only_real_calendar_times() {
 #[test]
 fn custom_curve_read_follows_the_firmware_gate_and_confirmations_use_both_tags() {
     let mut ceramic = codec(ModelProfile::CeramicsMk2RsV2);
-    assert_eq!(1, ceramic.init_queries(512).expect("init").len());
+    assert_eq!(1, ceramic.init_queries(512, connect_time()).expect("init").len());
     assert!(
         ceramic
             .firmware_init_queries(Some(&fw(&[1, 5, 3])))
@@ -985,7 +989,7 @@ fn custom_curve_read_follows_the_firmware_gate_and_confirmations_use_both_tags()
     assert_eq!(
         "fa3e",
         newer_branch
-            .init_queries(512)
+            .init_queries(512, connect_time())
             .expect("init")
             .last()
             .expect("curve query")

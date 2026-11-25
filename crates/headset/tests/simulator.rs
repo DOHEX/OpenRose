@@ -1,6 +1,11 @@
 use openrose_headset::simulator::SimulatedHeadset;
 use openrose_headset::{FirmwareVersion, ModelProfile, decode_hex, encode_hex};
 
+fn connect_time() -> openrose_headset::LocalDateTime {
+    openrose_headset::LocalDateTime::new(2026, 11, 20, 17, 38, 9).expect("valid time")
+}
+
+
 fn i5() -> SimulatedHeadset {
     SimulatedHeadset::new(
         ModelProfile::I5Zt,
@@ -159,6 +164,7 @@ fn firmware_must_be_three_hex_digits_and_families_without_a_device_side_are_repo
 }
 
 mod codec_agreement {
+    use super::connect_time;
     use openrose_headset::simulator::SimulatedHeadset;
     use openrose_headset::{
         FieldReading, FirmwareVersion, HeadsetCapabilities, HeadsetCommand, HeadsetField,
@@ -281,7 +287,7 @@ mod codec_agreement {
                     .expect("simulator");
             let mut codec = create_protocol_codec(profile);
             let mut readings = BTreeMap::new();
-            for query in codec.init_queries(20).expect("queries") {
+            for query in codec.init_queries(20, connect_time()).expect("queries") {
                 let replies = talk(&mut headset, codec.as_mut(), &query.bytes, &mut readings);
                 if !query.response_keys.is_empty() {
                     assert_eq!(1, replies, "{profile:?} {}", query.key);
@@ -320,7 +326,7 @@ mod codec_agreement {
                     .expect("simulator");
             let mut codec = create_protocol_codec(profile);
             let mut fields = BTreeMap::new();
-            for query in codec.init_queries(20).expect("queries") {
+            for query in codec.init_queries(20, connect_time()).expect("queries") {
                 talk(&mut headset, codec.as_mut(), &query.bytes, &mut fields);
             }
             let state = HeadsetReadings::from_fields(profile, fields.clone());

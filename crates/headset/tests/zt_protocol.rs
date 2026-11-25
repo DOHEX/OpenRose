@@ -6,6 +6,11 @@ use openrose_headset::{
 };
 use std::collections::{BTreeMap, BTreeSet};
 
+fn connect_time() -> openrose_headset::LocalDateTime {
+    openrose_headset::LocalDateTime::new(2026, 11, 20, 17, 38, 9).expect("valid time")
+}
+
+
 fn hex_bytes(hex: &str) -> Vec<u8> {
     decode_hex(hex).expect("valid test hex")
 }
@@ -33,10 +38,10 @@ fn single_reply(
 fn i5_initial_read_matches_independent_sender_and_actual_battery_capture() {
     let mut codec = create_protocol_codec(ModelProfile::I5Zt);
     assert!(matches!(
-        codec.init_queries(9),
+        codec.init_queries(9, connect_time()),
         Err(ProtocolError::InvalidArgument(_))
     ));
-    let queries = codec.init_queries(20).expect("init queries");
+    let queries = codec.init_queries(20, connect_time()).expect("init queries");
     let query_hexes: Vec<String> = queries.iter().map(|q| encode_hex(&q.bytes)).collect();
     assert_eq!(
         vec![
@@ -205,7 +210,7 @@ fn supplied_i5_battery_bytes_keep_unavailable_case_and_zero_distinct_from_ff() {
 #[test]
 fn zt_initialization_uses_each_models_documented_order() {
     let i3 = create_protocol_codec(ModelProfile::I3Zt)
-        .init_queries(20)
+        .init_queries(20, connect_time())
         .expect("i3 init");
     assert_eq!(
         vec![
@@ -222,7 +227,7 @@ fn zt_initialization_uses_each_models_documented_order() {
     );
 
     let head = create_protocol_codec(ModelProfile::HeadFeelZt)
-        .init_queries(20)
+        .init_queries(20, connect_time())
         .expect("headfeel init");
     assert_eq!(
         vec![
@@ -241,7 +246,7 @@ fn zt_initialization_uses_each_models_documented_order() {
     assert_eq!(
         13,
         create_protocol_codec(ModelProfile::I5Zt)
-            .init_queries(20)
+            .init_queries(20, connect_time())
             .expect("i5 init")
             .len()
     );
@@ -423,7 +428,7 @@ fn headfeel_custom_eq_selects_curve_slot_then_writes_ten_signed_bytes() {
         setting.expected_values
     );
 
-    let init = codec.init_queries(20).expect("init");
+    let init = codec.init_queries(20, connect_time()).expect("init");
     let custom_eq_query = init.iter().find(|q| q.key == "0202").expect("0202 query");
     assert_eq!("08ee00000002020a0004", encode_hex(&custom_eq_query.bytes));
     assert_eq!(

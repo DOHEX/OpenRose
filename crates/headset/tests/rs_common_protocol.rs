@@ -6,6 +6,11 @@ use openrose_headset::{
 };
 use std::collections::{BTreeMap, BTreeSet};
 
+fn connect_time() -> openrose_headset::LocalDateTime {
+    openrose_headset::LocalDateTime::new(2026, 11, 20, 17, 38, 9).expect("valid time")
+}
+
+
 const SPP_UUID: &str = "0cf12d31-fac3-4553-bd80-d6832e7b3931";
 const INFO_FRAME: &str = "ff000ffa010708090c0d0e122a2b2c2d2e33aa";
 const SYNTHETIC_REPLIES: [&str; 13] = [
@@ -66,7 +71,7 @@ fn write_hex(codec: &mut dyn ProtocolCodec, setting: HeadsetSetting, value: Fiel
 
 fn init_frames(profile: ModelProfile) -> Vec<(String, u64)> {
     create_protocol_codec(profile)
-        .init_queries(20)
+        .init_queries(20, connect_time())
         .expect("init queries")
         .iter()
         .map(|query| (encode_hex(&query.bytes), query.delay_before_millis))
@@ -681,8 +686,8 @@ fn initialization_uses_documented_fixed_frames_and_delay() {
 fn initialization_requires_the_documented_write_capacity() {
     for profile in rs_common_profiles() {
         let mut codec = create_protocol_codec(profile);
-        assert!(invalid_argument(codec.init_queries(18)), "{profile:?}");
-        assert!(codec.init_queries(19).is_ok(), "{profile:?}");
+        assert!(invalid_argument(codec.init_queries(18, connect_time())), "{profile:?}");
+        assert!(codec.init_queries(19, connect_time()).is_ok(), "{profile:?}");
     }
 }
 
@@ -691,7 +696,7 @@ fn initial_read_covers_exactly_the_readable_fields_of_every_model() {
     for profile in rs_common_profiles() {
         let readable = profile.capabilities(None, None).readable_fields;
         let queries = create_protocol_codec(profile)
-            .init_queries(20)
+            .init_queries(20, connect_time())
             .expect("init queries");
         let mut covered = BTreeSet::new();
         for query in &queries {
@@ -715,7 +720,7 @@ fn initial_read_covers_exactly_the_readable_fields_of_every_model() {
 #[test]
 fn queries_only_expect_the_replies_the_model_can_read() {
     let swift = create_protocol_codec(ModelProfile::SwiftRsCommon)
-        .init_queries(20)
+        .init_queries(20, connect_time())
         .expect("swift init");
     assert_eq!("fa010708090c0d0e122a2b2c2d2e33", swift[0].key);
     assert_eq!(
@@ -737,7 +742,7 @@ fn queries_only_expect_the_replies_the_model_can_read() {
     );
 
     let open_link = create_protocol_codec(ModelProfile::OpenLinkRsCommon)
-        .init_queries(20)
+        .init_queries(20, connect_time())
         .expect("open link init");
     assert!(
         open_link[0]
@@ -749,7 +754,7 @@ fn queries_only_expect_the_replies_the_model_can_read() {
     );
 
     let open_feel = create_protocol_codec(ModelProfile::OpenFeelLdacRsCommon)
-        .init_queries(20)
+        .init_queries(20, connect_time())
         .expect("open feel init");
     assert_eq!("fa2b", open_feel[1].key);
     assert_eq!(
@@ -762,7 +767,7 @@ fn queries_only_expect_the_replies_the_model_can_read() {
     );
 
     let buds = create_protocol_codec(ModelProfile::BudsFreeIRsCommon)
-        .init_queries(20)
+        .init_queries(20, connect_time())
         .expect("buds free init");
     assert_eq!("fa2a090c0e07012b", buds[1].key);
     assert_eq!(
