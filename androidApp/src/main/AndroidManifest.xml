@@ -11,7 +11,7 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <!-- Waking ordinary background control after the process is gone or the phone restarted (#78). -->
+    <!-- Waking app background control after the process is gone or the phone restarted (#78). -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.REQUEST_OBSERVE_COMPANION_DEVICE_PRESENCE" />
     <uses-permission android:name="android.permission.REQUEST_COMPANION_START_FOREGROUND_SERVICES_FROM_BACKGROUND" />
@@ -39,7 +39,7 @@
             android:permission="${applicationId}.permission.FRAMEWORK_DISPATCH"
             android:directBootAware="true"
             android:exported="true" />
-        <!-- Ordinary background control: a connected-device foreground service, never exported. -->
+        <!-- App background control: a connected-device foreground service, never exported. -->
         <service
             android:name=".ControlService"
             android:exported="false"
@@ -51,7 +51,7 @@
             receiver must be exported; it only asks the application to start its own service after checking the
             saved settings, and a stopped (force-stopped) package receives nothing.
         -->
-        <receiver android:name=".OrdinaryWakeReceiver" android:exported="true">
+        <receiver android:name=".AppWakeReceiver" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
                 <action android:name="android.bluetooth.a2dp.profile.action.CONNECTION_STATE_CHANGED" />

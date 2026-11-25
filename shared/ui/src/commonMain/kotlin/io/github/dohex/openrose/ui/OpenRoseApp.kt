@@ -260,7 +260,7 @@ private fun AppPageContent(
 
         AppPage.DIAGNOSTICS -> DiagnosticsPage(model, platformUi, state)
 
-        AppPage.TOUCH, AppPage.EQUALIZER, AppPage.AUDIO, AppPage.DETAILS -> HeadsetPage(state, targetPage, navigation) { device ->
+        AppPage.TOUCH, AppPage.EQUALIZER, AppPage.AUDIO, AppPage.HEADSET_INFO -> HeadsetPage(state, targetPage, navigation) { device ->
             HeadsetPageContent(targetPage, state, device, model, navigation, equalizerEditor)
         }
     }
@@ -290,7 +290,7 @@ private fun HeadsetPageContent(
 
         AppPage.AUDIO -> DeviceControlCard(state, device, model.settingsFor(device.sessionId))
 
-        AppPage.DETAILS -> DeviceDetails(state, device, model::disconnect) { navigation.navigate(AppPage.DIAGNOSTICS) }
+        AppPage.HEADSET_INFO -> HeadsetInfo(state, device, model::disconnect) { navigation.navigate(AppPage.DIAGNOSTICS) }
 
         else -> Unit
     }

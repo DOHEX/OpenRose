@@ -31,7 +31,7 @@ data class SystemNoiseState(
 
 data class IslandPrompt(
     val id: String,
-    val trigger: IslandTrigger,
+    val timing: IslandTiming,
     val mode: IslandMode,
     val reference: SessionReference,
     val claimed: Boolean = false,
@@ -41,8 +41,8 @@ data class IslandPrompt(
 data class SystemPresentationState(
     val reference: SessionReference? = null,
     val notificationTag: String? = null,
-    val islandMode: IslandMode = IslandMode.OFFICIAL,
-    val focusNotificationEnabled: Boolean = true,
+    val islandMode: IslandMode = IslandMode.SYSTEM_STYLE,
+    val statusNotificationEnabled: Boolean = true,
     val islandSummaryEnabled: Boolean = true,
     val allowIslandFields: Boolean = false,
     val statusNotificationTarget: StatusNotificationTarget = StatusNotificationTarget.OPENROSE,
@@ -53,21 +53,21 @@ data class SystemPresentationState(
     val prompt: IslandPrompt? = null,
 ) {
     val showStatusNotification: Boolean
-        get() = reference != null && focusNotificationEnabled
+        get() = reference != null && statusNotificationEnabled
 
     val statusSummaryIsland: Boolean
-        get() = allowIslandFields && islandMode == IslandMode.MODULE && islandSummaryEnabled
+        get() = allowIslandFields && islandMode == IslandMode.OPENROSE_STYLE && islandSummaryEnabled
 }
 
 internal fun ControlState.systemPresentation(settings: IntegrationSettings, prompt: IslandPrompt?): SystemPresentationState {
     val reference = readySession
     val mode = settings.islandMode
-    val moduleIsland = settings.islandTriggers.isNotEmpty() || (settings.islandSummaryEnabled && settings.focusNotificationEnabled)
-    val allowIslandFields = mode != IslandMode.OFF && (mode != IslandMode.MODULE || moduleIsland)
+    val openRoseIsland = settings.islandTimings.isNotEmpty() || (settings.islandSummaryEnabled && settings.statusNotificationEnabled)
+    val allowIslandFields = mode != IslandMode.OFF && (mode != IslandMode.OPENROSE_STYLE || openRoseIsland)
     val device = device?.takeIf { reference != null }
         ?: return SystemPresentationState(
             islandMode = mode,
-            focusNotificationEnabled = settings.focusNotificationEnabled,
+            statusNotificationEnabled = settings.statusNotificationEnabled,
             islandSummaryEnabled = settings.islandSummaryEnabled,
             allowIslandFields = allowIslandFields,
             statusNotificationTarget = settings.statusNotificationTarget,
@@ -77,7 +77,7 @@ internal fun ControlState.systemPresentation(settings: IntegrationSettings, prom
         reference = reference,
         notificationTag = device.deviceId.value,
         islandMode = mode,
-        focusNotificationEnabled = settings.focusNotificationEnabled,
+        statusNotificationEnabled = settings.statusNotificationEnabled,
         islandSummaryEnabled = settings.islandSummaryEnabled,
         allowIslandFields = allowIslandFields,
         statusNotificationTarget = settings.statusNotificationTarget,
@@ -102,12 +102,12 @@ internal fun ControlState.systemPresentation(settings: IntegrationSettings, prom
 }
 
 internal fun IslandPrompt.appliesTo(settings: IntegrationSettings): Boolean = mode == settings.islandMode &&
-    settings.allowsPrompt(trigger)
+    settings.allowsPrompt(timing)
 
-internal fun IntegrationSettings.allowsPrompt(trigger: IslandTrigger): Boolean = when (islandMode) {
+internal fun IntegrationSettings.allowsPrompt(timing: IslandTiming): Boolean = when (islandMode) {
     IslandMode.OFF -> false
-    IslandMode.OFFICIAL -> trigger == IslandTrigger.CONNECTION
-    IslandMode.MODULE -> trigger in islandTriggers
+    IslandMode.SYSTEM_STYLE -> timing == IslandTiming.CONNECTION
+    IslandMode.OPENROSE_STYLE -> timing in islandTimings
 }
 
 val ModelProfile.reportsInCase: Boolean

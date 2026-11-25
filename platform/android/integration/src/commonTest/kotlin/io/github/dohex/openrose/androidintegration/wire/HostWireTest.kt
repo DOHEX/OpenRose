@@ -234,7 +234,7 @@ class HostWireTest {
 
     @Test
     fun aSwitchRequestWithoutAnObservedGenerationKeepsThatAbsence() {
-        val request = SwitchRequest("switch-2", ControlWay.MODULE, ControlWay.ORDINARY)
+        val request = SwitchRequest("switch-2", ControlWay.MODULE, ControlWay.APP)
 
         assertEquals(request, HandoffWire.decodeRequest(HandoffWire.encode(request)))
     }

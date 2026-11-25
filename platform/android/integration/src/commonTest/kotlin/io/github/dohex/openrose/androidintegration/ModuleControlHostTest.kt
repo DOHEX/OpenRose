@@ -32,7 +32,7 @@ class ModuleControlHostTest {
 
         assertFalse(rig.host.configure { null })
         assertEquals(before, rig.host.status.value)
-        assertIs<AcquireResult.Refused>(rig.host.acquire(appIdentity, lease.id, SwitchRequest("new", ControlWay.ORDINARY, ControlWay.MODULE)))
+        assertIs<AcquireResult.Refused>(rig.host.acquire(appIdentity, lease.id, SwitchRequest("new", ControlWay.APP, ControlWay.MODULE)))
 
         assertTrue(rig.host.configure { HostConfiguration(true, HostSettings()) })
         assertIs<HostStatus.Inactive>(rig.host.status.value)
@@ -98,7 +98,7 @@ class ModuleControlHostTest {
         val noise = rig.host.control.execute(milinkIdentity, lease, generation, HostCommand.Set(reference, HeadsetCommand.NoiseMode(NoiseMode.ANC)))
         assertEquals(ControlErrorCode.DISCONNECTED, assertIs<OperationResult.Failure>(assertIs<HostCallResult.Operation>(noise).result).error.code)
         assertTrue(rig.host.control.frames(milinkIdentity, lease, generation).toList().isEmpty())
-        val release = rig.host.release(milinkIdentity, lease, SwitchRequest("x", ControlWay.MODULE, ControlWay.ORDINARY))
+        val release = rig.host.release(milinkIdentity, lease, SwitchRequest("x", ControlWay.MODULE, ControlWay.APP))
         assertEquals(HostRejection.FORBIDDEN, assertIs<ReleaseResult.Refused>(release).rejection)
         assertIs<HostStatus.Active>(rig.host.status.value)
     }
@@ -111,13 +111,13 @@ class ModuleControlHostTest {
         val first = (rig.host.status.value as HostStatus.Active).generation
         val lease = (rig.host.open(appIdentity) as HostOpenResult.Opened).lease.id
 
-        val released = rig.host.release(appIdentity, lease, SwitchRequest("a", ControlWay.MODULE, ControlWay.ORDINARY, first))
+        val released = rig.host.release(appIdentity, lease, SwitchRequest("a", ControlWay.MODULE, ControlWay.APP, first))
         assertEquals(first, assertIs<ReleaseResult.Released>(released).receipt.generation)
         assertEquals(
             HostRejection.NO_OWNER,
             assertIs<HostCallResult.Rejected>(rig.host.control.execute(appIdentity, lease, first, HostCommand.StartScan)).rejection,
         )
-        val request = SwitchRequest("b", ControlWay.ORDINARY, ControlWay.MODULE)
+        val request = SwitchRequest("b", ControlWay.APP, ControlWay.MODULE)
         assertEquals(HostRejection.INVALID_LEASE, assertIs<AcquireResult.Refused>(rig.host.acquire(appIdentity, lease, request)).rejection)
         val nextLease = assertIs<HostOpenResult.Opened>(rig.host.open(appIdentity)).lease.id
         val acquired = rig.host.acquire(appIdentity, nextLease, request)
@@ -129,7 +129,7 @@ class ModuleControlHostTest {
             assertIs<HostCallResult.Rejected>(rig.host.control.execute(appIdentity, lease, first, HostCommand.StartScan)).rejection,
         )
         assertIs<HostCallResult.Operation>(rig.host.control.execute(appIdentity, lease, second, HostCommand.StopScan))
-        val stale = rig.host.release(appIdentity, lease, SwitchRequest("c", ControlWay.MODULE, ControlWay.ORDINARY, first))
+        val stale = rig.host.release(appIdentity, lease, SwitchRequest("c", ControlWay.MODULE, ControlWay.APP, first))
         assertEquals(HostRejection.STALE_GENERATION, assertIs<ReleaseResult.Refused>(stale).rejection)
         assertIs<HostStatus.Active>(rig.host.status.value)
     }
@@ -141,7 +141,7 @@ class ModuleControlHostTest {
         runCurrent()
         val lease = (rig.host.open(appIdentity) as HostOpenResult.Opened).lease.id
 
-        val refused = rig.host.release(appIdentity, lease, SwitchRequest("a", ControlWay.MODULE, ControlWay.ORDINARY))
+        val refused = rig.host.release(appIdentity, lease, SwitchRequest("a", ControlWay.MODULE, ControlWay.APP))
 
         assertEquals(HostRejection.STALE_GENERATION, assertIs<ReleaseResult.Refused>(refused).rejection)
         assertIs<HostStatus.Active>(rig.host.status.value)
@@ -161,7 +161,7 @@ class ModuleControlHostTest {
         runCurrent()
         assertEquals(listOf("module:open"), rig.headset.events)
 
-        rig.host.configure { HostConfiguration(true, HostSettings(integration = IntegrationSettings(controlWay = ControlWay.ORDINARY))) }
+        rig.host.configure { HostConfiguration(true, HostSettings(integration = IntegrationSettings(controlWay = ControlWay.APP))) }
         runCurrent()
         assertEquals(listOf("module:open", "module:close"), rig.headset.events)
         assertIs<HostStatus.Inactive>(rig.host.status.value)

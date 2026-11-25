@@ -87,13 +87,13 @@ class SystemEntryClosedLoopTest {
     }
 
     @Test
-    fun switchingToOrdinaryControlRevokesTheCardAndItsReferencesThenAFreshSessionIsReadAfterSwitchingBack() = runTest {
+    fun switchingToAppControlRevokesTheCardAndItsReferencesThenAFreshSessionIsReadAfterSwitchingBack() = runTest {
         val entry = connectedEntry()
         val app = (entry.rig.host.open(appIdentity) as HostOpenResult.Opened).lease.id
         val ended = async { entry.rig.host.control.changes(milinkIdentity, entry.lease, entry.generation).collect { } }
         runCurrent()
 
-        val released = entry.rig.host.release(appIdentity, app, SwitchRequest("to-ordinary", ControlWay.MODULE, ControlWay.ORDINARY, entry.generation))
+        val released = entry.rig.host.release(appIdentity, app, SwitchRequest("to-app", ControlWay.MODULE, ControlWay.APP, entry.generation))
         assertIs<ReleaseResult.Released>(released)
         runCurrent()
 
@@ -107,7 +107,7 @@ class SystemEntryClosedLoopTest {
         )
 
         val freshApp = assertIs<HostOpenResult.Opened>(entry.rig.host.open(appIdentity)).lease.id
-        val acquired = entry.rig.host.acquire(appIdentity, freshApp, SwitchRequest("to-module", ControlWay.ORDINARY, ControlWay.MODULE))
+        val acquired = entry.rig.host.acquire(appIdentity, freshApp, SwitchRequest("to-module", ControlWay.APP, ControlWay.MODULE))
         val next = assertIs<AcquireResult.Acquired>(acquired).generation
         runCurrent()
         testScheduler.advanceUntilIdle()

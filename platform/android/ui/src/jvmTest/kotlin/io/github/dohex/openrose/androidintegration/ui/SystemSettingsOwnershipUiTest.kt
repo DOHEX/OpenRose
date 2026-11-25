@@ -9,7 +9,7 @@ import io.github.dohex.openrose.androidintegration.IntegrationPlatformState
 import io.github.dohex.openrose.androidintegration.IntegrationSettings
 import io.github.dohex.openrose.androidintegration.IntegrationState
 import io.github.dohex.openrose.androidintegration.IslandMode
-import io.github.dohex.openrose.androidintegration.IslandTrigger
+import io.github.dohex.openrose.androidintegration.IslandTiming
 import io.github.dohex.openrose.androidintegration.ModuleAvailability
 import io.github.dohex.openrose.androidintegration.ModuleUnavailableCause
 import io.github.dohex.openrose.androidintegration.OwnerFailureStage
@@ -71,28 +71,28 @@ class SystemSettingsOwnershipUiTest {
                     harness.render()
 
                     assertTrue(harness.hasText("系统集成"), "HyperOS entry lives in Settings for $style at ${width}dp")
-                    assertTrue(harness.hasText("超级岛：官方 · 焦点通知已开启"), "summary shows saved HyperOS state for $style at ${width}dp")
+                    assertTrue(harness.hasText("超级岛：系统样式 · 耳机状态通知已开启"), "summary shows saved HyperOS state for $style at ${width}dp")
                     assertTrue(harness.hasText("版本、项目链接与致谢"), "the 关于 entry remains at the bottom of Settings for $style at ${width}dp")
                     assertFalse(harness.hasText("诊断与记录"), "Settings has no fixed diagnostics entry for $style at ${width}dp")
 
                     harness.clickText("系统集成")
                     harness.render()
                     assertTrue(harness.hasText("超级岛"), "HyperOS settings live in System Integration for $style at ${width}dp")
-                    assertTrue(harness.hasText("焦点通知"), "focus notification belongs to System Integration for $style at ${width}dp")
-                    assertTrue(harness.hasText("官方"), "the existing island default remains visible for $style at ${width}dp")
+                    assertTrue(harness.hasText("耳机状态通知"), "status notification belongs to System Integration for $style at ${width}dp")
+                    assertTrue(harness.hasText("系统样式"), "the existing island default remains visible for $style at ${width}dp")
 
-                    harness.clickText("焦点通知")
+                    harness.clickText("耳机状态通知")
                     harness.render()
-                    assertFalse(harness.integration.value.settings.focusNotificationEnabled, "the moved switch still saves its setting in $style")
-                    assertTrue(harness.settingsChanges.any { !it.focusNotificationEnabled }, "the preference crosses the public callback in $style")
+                    assertFalse(harness.integration.value.settings.statusNotificationEnabled, "the moved switch still saves its setting in $style")
+                    assertTrue(harness.settingsChanges.any { !it.statusNotificationEnabled }, "the preference crosses the public callback in $style")
                     assertFalse(harness.hasText("功能已生效"), "a save callback does not claim system presentation is active in $style")
 
                     harness.openPage("状态")
                     harness.render()
                     assertFalse(harness.hasText("超级岛"), "Status contains no preferences for $style at ${width}dp")
-                    assertFalse(harness.hasText("焦点通知"), "Status contains no notification control for $style at ${width}dp")
+                    assertFalse(harness.hasText("耳机状态通知"), "Status contains no notification control for $style at ${width}dp")
                     assertFalse(harness.hasText("强制使用 BLE"), "Status contains no connection preference for $style at ${width}dp")
-                    assertFalse(harness.hasText("模块显示时机"), "Status contains no module timing control for $style at ${width}dp")
+                    assertFalse(harness.hasText("显示时机"), "Status contains no island timing control for $style at ${width}dp")
                     assertTrue(harness.hasText("未就绪"), "Status keeps the real readiness state for $style at ${width}dp")
                     assertTrue(harness.hasText("诊断与记录"), "Status owns the fixed diagnostics entry for $style at ${width}dp")
 
@@ -106,31 +106,31 @@ class SystemSettingsOwnershipUiTest {
     }
 
     @Test
-    fun moduleModeDoesNotInventTriggersWhenTheSavedSetIsEmpty() {
+    fun openRoseStyleDoesNotInventTimingsWhenTheSavedSetIsEmpty() {
         for (style in InterfaceStyle.entries) {
             withHarness(
                 width = 1200,
                 style = style,
                 settings = IntegrationSettings(
                     islandMode = IslandMode.OFF,
-                    focusNotificationEnabled = true,
-                    islandTriggers = persistentSetOf(),
+                    statusNotificationEnabled = true,
+                    islandTimings = persistentSetOf(),
                 ),
             ) { harness ->
                 harness.render()
                 harness.openPage("系统集成")
                 harness.render()
-                assertFalse(harness.hasText("模块显示时机"), "trigger settings stay hidden outside module mode in $style")
+                assertFalse(harness.hasText("显示时机"), "timing settings stay hidden outside OpenRose style in $style")
 
                 harness.scrollToText("超级岛")
                 harness.render()
                 harness.clickText("超级岛")
                 harness.render()
-                harness.clickText("模块")
+                harness.clickText("OpenRose 样式")
                 harness.render()
-                assertTrue(harness.hasText("模块显示时机"), "trigger settings appear in module mode in $style")
-                assertTrue(harness.hasTextLine("未选择显示时机，不会弹出展开。"), "an empty trigger set stays explicit in $style")
-                assertTrue(harness.integration.value.settings.islandTriggers.isEmpty())
+                assertTrue(harness.hasText("显示时机"), "timing settings appear in OpenRose style in $style")
+                assertTrue(harness.hasTextLine("未选择显示时机，不会弹出展开。"), "an empty timing set stays explicit in $style")
+                assertTrue(harness.integration.value.settings.islandTimings.isEmpty())
 
                 harness.scrollToText("超级岛")
                 harness.render()
@@ -138,16 +138,16 @@ class SystemSettingsOwnershipUiTest {
                 harness.render()
                 harness.clickText("不显示")
                 harness.render()
-                assertFalse(harness.hasText("模块显示时机"))
-                assertTrue(harness.integration.value.settings.islandTriggers.isEmpty(), "hiding trigger settings does not reset values in $style")
+                assertFalse(harness.hasText("显示时机"))
+                assertTrue(harness.integration.value.settings.islandTimings.isEmpty(), "hiding timing settings does not reset values in $style")
 
                 harness.scrollToText("超级岛")
                 harness.render()
                 harness.clickText("超级岛")
                 harness.render()
-                harness.clickText("模块")
+                harness.clickText("OpenRose 样式")
                 harness.render()
-                assertTrue(harness.hasTextLine("未选择显示时机，不会弹出展开。"), "the empty trigger set survives hiding and restoring in $style")
+                assertTrue(harness.hasTextLine("未选择显示时机，不会弹出展开。"), "the empty timing set survives hiding and restoring in $style")
                 assertTrue(harness.settingWrites.isEmpty())
             }
         }
@@ -160,7 +160,7 @@ class SystemSettingsOwnershipUiTest {
                 width = 1200,
                 height = 2600,
                 style = style,
-                settings = IntegrationSettings(islandMode = IslandMode.MODULE, islandTriggers = persistentSetOf()),
+                settings = IntegrationSettings(islandMode = IslandMode.OPENROSE_STYLE, islandTimings = persistentSetOf()),
             ) { harness ->
                 harness.openPage("系统集成")
                 harness.render()
@@ -168,8 +168,7 @@ class SystemSettingsOwnershipUiTest {
                 harness.render()
                 harness.clickText("入盒时")
                 harness.render()
-                assertEquals(persistentSetOf(IslandTrigger.CONNECTION, IslandTrigger.IN_CASE), harness.integration.value.settings.islandTriggers)
-
+                assertEquals(persistentSetOf(IslandTiming.CONNECTION, IslandTiming.IN_CASE), harness.integration.value.settings.islandTimings)
                 harness.clickText("点击通知打开")
                 harness.render()
                 harness.clickText("RoseLink", Role.RadioButton)
@@ -186,7 +185,7 @@ class SystemSettingsOwnershipUiTest {
                 harness.render()
                 assertTrue(harness.integration.value.settings.fusionOffAsWind)
 
-                harness.clickText("焦点通知")
+                harness.clickText("耳机状态通知")
                 harness.render()
                 assertFalse(harness.hasText("点击通知打开"), "the click target belongs to the status notification in $style")
                 assertEquals(StatusNotificationTarget.ROSELINK, harness.integration.value.settings.statusNotificationTarget)
@@ -224,7 +223,7 @@ class SystemSettingsOwnershipUiTest {
                 width = 1200,
                 height = 2600,
                 style = style,
-                settings = IntegrationSettings(focusNotificationEnabled = true, statusNotificationTarget = StatusNotificationTarget.ROSELINK),
+                settings = IntegrationSettings(statusNotificationEnabled = true, statusNotificationTarget = StatusNotificationTarget.ROSELINK),
             ) { harness ->
                 harness.markUnavailable(StatusNotificationTarget.ROSELINK to "RoseLink 未安装")
                 harness.openPage("系统集成")
@@ -247,12 +246,12 @@ class SystemSettingsOwnershipUiTest {
                 harness.render()
                 harness.openPage("系统集成")
                 harness.render()
-                harness.clickText("焦点通知")
+                harness.clickText("耳机状态通知")
                 harness.render()
 
                 assertFalse(harness.hasText("功能已生效"), "module readiness alone does not prove system presentation in $style")
                 assertFalse(harness.hasText("偏好已保存"), "saving a system preference does not show a save banner in $style")
-                assertTrue(harness.integration.value.settings.focusNotificationEnabled.not())
+                assertTrue(harness.integration.value.settings.statusNotificationEnabled.not())
             }
         }
     }
@@ -260,7 +259,7 @@ class SystemSettingsOwnershipUiTest {
     private fun withHarness(
         width: Int,
         style: InterfaceStyle,
-        settings: IntegrationSettings = IntegrationSettings(focusNotificationEnabled = true),
+        settings: IntegrationSettings = IntegrationSettings(statusNotificationEnabled = true),
         module: ModuleAvailability = ModuleAvailability.Unavailable("兼容框架服务尚未连接"),
         height: Int = 1000,
         block: suspend (Harness) -> Unit,

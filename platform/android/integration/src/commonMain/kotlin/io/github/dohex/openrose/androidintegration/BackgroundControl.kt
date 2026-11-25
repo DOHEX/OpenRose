@@ -64,12 +64,12 @@ sealed interface BackgroundControlStatus {
     data class Blocked(val reason: BackgroundControlBlock) : BackgroundControlStatus
 }
 
-val IntegrationState.ordinaryBackgroundRequested: Boolean
-    get() = owner.selected == ControlWay.ORDINARY && settings.backgroundControlEnabled
+val IntegrationState.appBackgroundRequested: Boolean
+    get() = owner.selected == ControlWay.APP && settings.backgroundControlEnabled
 
 fun IntegrationState.backgroundControl(control: ControlState): BackgroundControlStatus {
     if (!control.platform.hasBackgroundService()) return BackgroundControlStatus.Unsupported
-    if (!ordinaryBackgroundRequested) return BackgroundControlStatus.Disabled
+    if (!appBackgroundRequested) return BackgroundControlStatus.Disabled
     if (control.platform.bluetoothPermissionMissing()) {
         return BackgroundControlStatus.Blocked(BackgroundControlBlock.BLUETOOTH_PERMISSION)
     }
@@ -92,7 +92,7 @@ fun IntegrationState.backgroundRecovery(control: ControlState): BackgroundRecove
     val band = wake.band
     if (!control.platform.hasBackgroundService() || band == null) return BackgroundRecovery.Unsupported
     if (!control.platform.userUnlocked) return BackgroundRecovery.WaitingForUnlock
-    if (!ordinaryBackgroundRequested) return BackgroundRecovery.Disabled
+    if (!appBackgroundRequested) return BackgroundRecovery.Disabled
     val missing = buildList {
         if (control.platform.bluetoothPermissionMissing()) add(WakePrerequisite.BLUETOOTH_PERMISSION)
         if (wake.association == CompanionAssociation.MISSING) add(WakePrerequisite.COMPANION_ASSOCIATION)
@@ -103,7 +103,7 @@ fun IntegrationState.backgroundRecovery(control: ControlState): BackgroundRecove
     return if (missing.isEmpty()) BackgroundRecovery.Armed(band) else BackgroundRecovery.Incomplete(missing)
 }
 
-fun IntegrationState.mayStartBackgroundService(control: ControlState): Boolean = ordinaryBackgroundRequested &&
+fun IntegrationState.mayStartBackgroundService(control: ControlState): Boolean = appBackgroundRequested &&
     control.platform.hasBackgroundService() &&
     control.platform.userUnlocked &&
     !control.platform.bluetoothPermissionMissing()

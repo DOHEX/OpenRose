@@ -20,12 +20,12 @@ class SessionReferenceOwnershipTest {
     }
 
     @Test
-    fun aReferenceFromAReleasedOrdinarySessionIsRefusedByTheNextOneWithoutTouchingTheLink() = runTest {
+    fun aReferenceFromAReleasedAppSessionIsRefusedByTheNextOneWithoutTouchingTheLink() = runTest {
         val rig = OwnerRig(this)
         rig.bootHost()
         val runtime = rig.newRuntime(interfaceOpen = false)
         val id = rig.earphones.deviceId
-        val first = runtime.holdOrdinarySession()
+        val first = runtime.holdAppSession()
         runCurrent()
         assertEquals(OperationResult.Success, runtime.connectFromSystem(id))
         runCurrent()
@@ -35,7 +35,7 @@ class SessionReferenceOwnershipTest {
         runCurrent()
         assertEquals(null, runtime.state.value.device)
 
-        val second = runtime.holdOrdinarySession()
+        val second = runtime.holdAppSession()
         runCurrent()
         assertEquals(OperationResult.Success, runtime.connectFromSystem(id))
         runCurrent()
@@ -53,7 +53,7 @@ class SessionReferenceOwnershipTest {
     }
 
     @Test
-    fun aReferenceNeverCrossesBetweenTheOrdinaryAndTheModuleOwner() = runTest {
+    fun aReferenceNeverCrossesBetweenTheAppAndTheModuleOwner() = runTest {
         val rig = OwnerRig(this)
         rig.bootHost()
         val runtime = rig.newRuntime()
@@ -72,7 +72,7 @@ class SessionReferenceOwnershipTest {
         assertIs<SessionSnapshotResult.Failure>(runtime.readSession(ordinaryReference))
         assertIs<SessionSnapshotResult.Available>(runtime.readSession(moduleReference))
 
-        assertIs<HandoffOutcome.Completed>(runtime.selectControlWay(ControlWay.ORDINARY))
+        assertIs<HandoffOutcome.Completed>(runtime.selectControlWay(ControlWay.APP))
         runCurrent()
         assertEquals(OperationResult.Success, runtime.connectFromSystem(id))
         runCurrent()

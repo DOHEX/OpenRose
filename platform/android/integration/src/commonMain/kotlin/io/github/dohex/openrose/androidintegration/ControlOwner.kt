@@ -10,7 +10,7 @@ data class OwnerGeneration(val incarnation: String, val sequence: Long) {
 internal object SessionIdBase {
     private const val MODULE_BAND = 1L shl 62
 
-    fun ordinary(sequence: Long): Long = sequence shl 32
+    fun app(sequence: Long): Long = sequence shl 32
     fun module(sequence: Long): Long = MODULE_BAND or (sequence shl 32)
 }
 
@@ -71,7 +71,7 @@ sealed interface HandoffOutcome {
 }
 
 data class OwnerState(
-    val selected: ControlWay = ControlWay.ORDINARY,
+    val selected: ControlWay = ControlWay.APP,
     val readiness: OwnerReadiness = OwnerReadiness.Ready,
     val holder: OwnerHolder? = null,
     val lastHandoff: HandoffOutcome? = null,

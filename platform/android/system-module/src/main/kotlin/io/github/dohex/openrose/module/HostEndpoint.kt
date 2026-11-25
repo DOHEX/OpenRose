@@ -158,13 +158,13 @@ internal class HostEndpoint(
         scope.launch {
             host.ownerView.collect { view ->
                 val prompt = view?.presentation?.prompt
-                if (prompt?.mode == IslandMode.OFFICIAL &&
+                if (prompt?.mode == IslandMode.SYSTEM_STYLE &&
                     synchronized(lock) { leases.values.none { it.target == BridgeTarget.XIAOMI_BLUETOOTH } }
                 ) {
                     facts.update {
                         it.copy(
                             presentation = it.presentation +
-                                (BridgePresentationWire.OFFICIAL_CONNECTION to "UNAVAILABLE · official_target_not_connected"),
+                                (BridgePresentationWire.SYSTEM_CONNECTION to "UNAVAILABLE · system_style_target_not_connected"),
                         )
                     }
                 }
@@ -534,7 +534,7 @@ internal class HostEndpoint(
                 ?: return BridgeBundles.response(BridgeWire.STATUS_INVALID_ARGUMENT)
             val allowed = when (lease.target) {
                 BridgeTarget.MILINK -> setOf(BridgePresentationWire.FUSION_CENTER)
-                else -> setOf(BridgePresentationWire.SYSTEM_HEADSET, BridgePresentationWire.OFFICIAL_CONNECTION)
+                else -> setOf(BridgePresentationWire.SYSTEM_HEADSET, BridgePresentationWire.SYSTEM_CONNECTION)
             }
             if (feature !in allowed) throw SecurityException("系统入口不能代其他组件报告状态")
             return recordReport(report, BridgePresentationWire.COMPONENT_STATUSES) { description ->
@@ -555,11 +555,11 @@ internal class HostEndpoint(
             val allowed = when (lease.target) {
                 BridgeTarget.BLUETOOTH -> setOf(
                     BridgePresentationWire.STATUS_NOTIFICATION,
-                    BridgePresentationWire.MODULE_CONNECTION,
-                    BridgePresentationWire.OFFICIAL_CONNECTION,
+                    BridgePresentationWire.OPENROSE_CONNECTION,
+                    BridgePresentationWire.SYSTEM_CONNECTION,
                 )
 
-                BridgeTarget.XIAOMI_BLUETOOTH -> setOf(BridgePresentationWire.OFFICIAL_CONNECTION)
+                BridgeTarget.XIAOMI_BLUETOOTH -> setOf(BridgePresentationWire.SYSTEM_CONNECTION)
 
                 else -> emptySet()
             }

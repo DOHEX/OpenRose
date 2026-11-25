@@ -119,9 +119,7 @@ fn zt_model_names_follow_adr_0032_rules() {
 fn model_display_names_and_preset_labels_come_from_model_spec() {
     assert_eq!("EarFree i5", ModelProfile::I5Zt.display_name());
     assert_eq!("i5", ModelProfile::I5Zt.short_label());
-    assert_eq!(None, ModelProfile::I5Zt.variant_label());
-    assert_eq!("EarFree i5", ModelProfile::I5Zt.configuration_label());
-    assert_eq!("ZT", ModelProfile::I5Zt.configuration_caption());
+    assert_eq!(None, ModelProfile::I5Zt.version_name());
     assert_eq!(
         Some("弱水经典"),
         ModelProfile::I5Zt.equalizer_preset_label("pop")

@@ -5,7 +5,7 @@ description: 已适配的 ROSE / ROSESELSA 耳机型号、控制传输与真机�
 
 | 耳机 | 控制传输 | 状态 |
 | --- | --- | --- |
-| EarFree i5（EarFeel i5） | BLE | 真机读取已验证。Android 普通与模块控制均已验证通透、抗风噪写入和设备回读；其他设置写入待验证 |
+| EarFree i5（EarFeel i5） | BLE | 真机读取已验证。Android 应用控制与模块控制均已验证通透、抗风噪写入和设备回读；其他设置写入待验证 |
 | EarFeel i7 | BLE 或 SPP | 仅有离线测试，未经真机验证 |
 | BudsFeel MK2 | BLE 或 SPP | 未经真机验证 |
 | OpenFeel MK2 | BLE 或 SPP | 未经真机验证 |

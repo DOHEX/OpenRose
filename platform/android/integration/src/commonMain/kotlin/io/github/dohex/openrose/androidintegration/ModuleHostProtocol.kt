@@ -45,8 +45,8 @@ fun ClientRole.allows(command: HostCommand): Boolean = when (this) {
 }
 
 fun ClientRole.presents(mode: IslandMode): Boolean = when (mode) {
-    IslandMode.MODULE -> this == ClientRole.HOST_PRESENTATION
-    IslandMode.OFFICIAL -> this == ClientRole.XIAOMI_BLUETOOTH
+    IslandMode.OPENROSE_STYLE -> this == ClientRole.HOST_PRESENTATION
+    IslandMode.SYSTEM_STYLE -> this == ClientRole.XIAOMI_BLUETOOTH
     IslandMode.OFF -> false
 }
 

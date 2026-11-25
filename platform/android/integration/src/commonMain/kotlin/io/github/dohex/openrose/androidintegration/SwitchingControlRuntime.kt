@@ -28,11 +28,11 @@ import kotlinx.coroutines.withTimeoutOrNull
 data class PendingModuleRelease(val requestId: String?, val generation: OwnerGeneration?)
 
 data class OwnerRecord(
-    val selected: ControlWay = ControlWay.ORDINARY,
+    val selected: ControlWay = ControlWay.APP,
     val moduleRelease: PendingModuleRelease? = null,
 )
 
-private val OwnerRecord.awaitingModuleRelease: Boolean get() = selected == ControlWay.ORDINARY && moduleRelease != null
+private val OwnerRecord.awaitingModuleRelease: Boolean get() = selected == ControlWay.APP && moduleRelease != null
 
 interface OwnerSelectionStore {
     fun load(): OwnerRecord
@@ -46,7 +46,7 @@ interface OwnerSelectionStore {
 
 data class LocalOwnerIdentity(val packageName: String, val processName: String, val uid: Int? = null, val pid: Int? = null)
 
-class OrdinarySessionHold internal constructor(private val onRelease: () -> Unit) {
+class AppSessionHold internal constructor(private val onRelease: () -> Unit) {
     private var released = false
 
     fun release() {
@@ -64,7 +64,7 @@ class SwitchingControlRuntime private constructor(private val owners: Applicatio
         initialPlatformState: PlatformState,
         initialSettings: UserSettings,
         store: OwnerSelectionStore,
-        ordinaryFactory: (CoroutineScope, UserSettings, PlatformState, Long) -> ControlRuntime,
+        appFactory: (CoroutineScope, UserSettings, PlatformState, Long) -> ControlRuntime,
         moduleLink: ModuleHostLink,
         scope: CoroutineScope,
         local: LocalOwnerIdentity,
@@ -79,7 +79,7 @@ class SwitchingControlRuntime private constructor(private val owners: Applicatio
             initialPlatformState,
             initialSettings,
             store,
-            ordinaryFactory,
+            appFactory,
             moduleLink,
             scope,
             local,
@@ -93,7 +93,7 @@ class SwitchingControlRuntime private constructor(private val owners: Applicatio
     )
 
     val integration get() = owners.integration
-    fun holdOrdinarySession() = owners.sessions.holdOrdinarySession()
+    fun holdAppSession() = owners.sessions.holdAppSession()
     fun onUserUnlocked(persisted: HostSettings) = owners.onUserUnlocked(persisted)
     fun updateIntegrationSettings(settings: IntegrationSettings) = owners.updateIntegrationSettings(settings)
     fun updateIntegrationPlatform(platformState: IntegrationPlatformState) = owners.updateIntegrationPlatform(platformState)
@@ -103,7 +103,7 @@ private class ApplicationOwners(
     initialPlatformState: PlatformState,
     initialSettings: UserSettings,
     private val store: OwnerSelectionStore,
-    private val ordinaryFactory: (CoroutineScope, UserSettings, PlatformState, Long) -> ControlRuntime,
+    private val appFactory: (CoroutineScope, UserSettings, PlatformState, Long) -> ControlRuntime,
     moduleLink: ModuleHostLink,
     private val scope: CoroutineScope,
     private val local: LocalOwnerIdentity,
@@ -114,7 +114,7 @@ private class ApplicationOwners(
     initialIntegrationSettings: IntegrationSettings,
     private val presentationTiming: PresentationTiming,
 ) {
-    private class Ordinary(val generation: OwnerGeneration, val job: Job, val runtime: SystemEntryRuntime)
+    private class AppOwner(val generation: OwnerGeneration, val job: Job, val runtime: SystemEntryRuntime)
 
     private val client = ModuleControlClient(moduleLink, scope, timing)
     private val switchLock = Mutex()
@@ -126,15 +126,15 @@ private class ApplicationOwners(
     private var integrationSettings = initialIntegrationSettings.copy(controlWay = record.selected)
     private var platform = initialPlatformState
     private var integrationPlatform = initialIntegrationPlatform
-    private var ordinary: Ordinary? = null
-    private val servingOrdinary: Ordinary? get() = ordinary?.takeIf { holds > 0 && it.job.isActive }
+    private var appOwner: AppOwner? = null
+    private val servingApp: AppOwner? get() = appOwner?.takeIf { holds > 0 && it.job.isActive }
     private var holds = 0
     private var switching: SwitchRequest? = null
     private var blocked: OwnerReadiness.SwitchBlocked? = null
     private var lastHandoff: HandoffOutcome? = null
     private var releaseRetry: Job? = null
     private var needsSelectionPublication = false
-    val sessions = OrdinarySessions()
+    val sessions = AppSessions()
     val handoff = Handoff()
     private val releases = ModuleRelease()
     private val projection = OwnerProjection()
@@ -169,7 +169,7 @@ private class ApplicationOwners(
                 releases.resumeModuleRelease()
             }
 
-            else -> sessions.startOrdinary()
+            else -> sessions.startApp()
         }
     }
 
@@ -180,7 +180,7 @@ private class ApplicationOwners(
 
     fun updateIntegrationSettings(settings: IntegrationSettings) {
         integrationSettings = settings.copy(controlWay = record.selected)
-        ordinary?.runtime?.updateIntegrationSettings(integrationSettings)
+        appOwner?.runtime?.updateIntegrationSettings(integrationSettings)
         refresh()
     }
 
@@ -189,12 +189,12 @@ private class ApplicationOwners(
         refresh()
     }
 
-    inner class OrdinarySessions {
-        fun holdOrdinarySession(): OrdinarySessionHold {
+    inner class AppSessions {
+        fun holdAppSession(): AppSessionHold {
             holds += 1
-            startOrdinary()
+            startApp()
             refresh()
-            return OrdinarySessionHold(::releaseHold)
+            return AppSessionHold(::releaseHold)
         }
 
         private fun releaseHold() {
@@ -203,52 +203,52 @@ private class ApplicationOwners(
             if (holds > 0) return
             scope.launch {
                 val retiring = switchLock.withLock {
-                    ordinary?.takeIf { holds == 0 && it.job.isActive }?.also { it.job.cancelAndJoin() }
+                    appOwner?.takeIf { holds == 0 && it.job.isActive }?.also { it.job.cancelAndJoin() }
                 } ?: return@launch
                 while (!finishIdleRelease(retiring)) delay(timing.retryMillis)
             }
         }
 
-        private suspend fun finishIdleRelease(retiring: Ordinary): Boolean = switchLock.withLock {
-            if (ordinary !== retiring) return@withLock true
-            val closed = stopOrdinary(retiring)
-            if (closed) startOrdinary()
+        private suspend fun finishIdleRelease(retiring: AppOwner): Boolean = switchLock.withLock {
+            if (appOwner !== retiring) return@withLock true
+            val closed = stopApp(retiring)
+            if (closed) startApp()
             refresh()
             closed
         }
 
-        fun startOrdinary() {
-            if (ordinary != null || holds == 0 || !unlocked) return
-            if (record.selected != ControlWay.ORDINARY || record.moduleRelease != null) return
+        fun startApp() {
+            if (appOwner != null || holds == 0 || !unlocked) return
+            if (record.selected != ControlWay.APP || record.moduleRelease != null) return
             localSequence += 1
             val generation = OwnerGeneration(localIncarnation, localSequence)
             val job = SupervisorJob(scope.coroutineContext[Job])
             val ownerScope = CoroutineScope(scope.coroutineContext + job)
             val runtime = SystemEntryRuntime(
-                ordinaryFactory(ownerScope, settings, platform, SessionIdBase.ordinary(localSequence)),
+                appFactory(ownerScope, settings, platform, SessionIdBase.app(localSequence)),
                 ownerScope,
                 presentationTiming,
                 integrationSettings,
             )
-            ordinary = Ordinary(generation, job, runtime)
+            appOwner = AppOwner(generation, job, runtime)
             ownerScope.launch { runtime.state.collect { refresh() } }
             ownerScope.launch { runtime.presentation.collect { refresh() } }
         }
 
-        private suspend fun stopOrdinary(current: Ordinary): Boolean {
+        private suspend fun stopApp(current: AppOwner): Boolean {
             if (!current.runtime.release()) return false
             current.job.cancelAndJoin()
-            ordinary = null
+            appOwner = null
             refresh()
             return true
         }
 
-        suspend fun closeOrdinary(request: SwitchRequest): HandoffOutcome? {
-            val current = ordinary ?: return null
-            return if (stopOrdinary(current)) {
+        suspend fun closeApp(request: SwitchRequest): HandoffOutcome? {
+            val current = appOwner ?: return null
+            return if (stopApp(current)) {
                 null
             } else {
-                handoff.finish(HandoffOutcome.Blocked(request, OwnerFailureStage.RELEASE, "普通控制连接未能确认关闭"))
+                handoff.finish(HandoffOutcome.Blocked(request, OwnerFailureStage.RELEASE, "应用控制连接未能确认关闭"))
             }
         }
     }
@@ -273,7 +273,7 @@ private class ApplicationOwners(
             persistSelection(request, next)?.let { return it }
             return when (target) {
                 ControlWay.MODULE -> establishModule(request)
-                ControlWay.ORDINARY -> returnToOrdinary(request)
+                ControlWay.APP -> returnToApp(request)
             }
         }
 
@@ -290,7 +290,7 @@ private class ApplicationOwners(
             }
         }
 
-        private suspend fun returnToOrdinary(request: SwitchRequest): HandoffOutcome {
+        private suspend fun returnToApp(request: SwitchRequest): HandoffOutcome {
             client.stop()
             if (record.moduleRelease != null) {
                 when (val proof = releases.releaseModule(request)) {
@@ -302,7 +302,7 @@ private class ApplicationOwners(
                     is ReleaseProof.Receipt, is ReleaseProof.ProcessEnded -> releases.clearModuleRelease()
                 }
             }
-            sessions.startOrdinary()
+            sessions.startApp()
             return finish(HandoffOutcome.Completed(request))
         }
 
@@ -323,17 +323,17 @@ private class ApplicationOwners(
             }
             releaseRetry?.cancelAndJoin()
             releaseRetry = null
-            val closeFirst = target == ControlWay.MODULE && ordinary != null
-            if (closeFirst) sessions.closeOrdinary(request)?.let { return it }
+            val closeFirst = target == ControlWay.MODULE && appOwner != null
+            if (closeFirst) sessions.closeApp(request)?.let { return it }
             return if (saves && !store.save(next)) {
-                if (closeFirst) sessions.startOrdinary()
+                if (closeFirst) sessions.startApp()
                 if (previous.awaitingModuleRelease) releases.resumeModuleRelease()
                 finish(HandoffOutcome.Blocked(request, OwnerFailureStage.SELECTION_PERSISTENCE, "无法保存控制方式，未做任何切换"))
             } else {
                 if (previous.selected != target) needsSelectionPublication = false
                 record = next
                 integrationSettings = integrationSettings.copy(controlWay = target)
-                sessions.closeOrdinary(request)
+                sessions.closeApp(request)
             }
         }
     }
@@ -342,7 +342,7 @@ private class ApplicationOwners(
         suspend fun releaseModule(request: SwitchRequest): ReleaseProof {
             if (needsSelectionPublication) {
                 if (!store.publishSelection()) {
-                    return ReleaseProof.Unproven(OwnerFailureStage.SELECTION_PERSISTENCE, "尚未向模块宿主保存普通控制")
+                    return ReleaseProof.Unproven(OwnerFailureStage.SELECTION_PERSISTENCE, "尚未向模块宿主保存应用控制")
                 }
                 needsSelectionPublication = false
             }
@@ -385,7 +385,7 @@ private class ApplicationOwners(
                                 clearModuleRelease()
                                 blocked = null
                                 lastHandoff = HandoffOutcome.Completed(request)
-                                sessions.startOrdinary()
+                                sessions.startApp()
                             }
                         }
                         refresh()
@@ -399,8 +399,8 @@ private class ApplicationOwners(
     private inner class OwnerProjection {
         private fun ownerState(view: ModuleView): OwnerState {
             val selected = record.selected
-            val localHolder = ordinary?.let {
-                OwnerHolder(ControlWay.ORDINARY, it.generation, local.packageName, local.processName, local.uid, local.pid)
+            val localHolder = appOwner?.let {
+                OwnerHolder(ControlWay.APP, it.generation, local.packageName, local.processName, local.uid, local.pid)
             }
             val moduleHolder = (view as? ModuleView.Active)?.frame?.holder
             val activeBlock = blocked?.takeUnless { selected == ControlWay.MODULE && it.request.to == ControlWay.MODULE }
@@ -408,9 +408,9 @@ private class ApplicationOwners(
                 OwnerReadiness.Idle("用户解锁后才会控制耳机")
             } else {
                 switching?.let { OwnerReadiness.Switching(it) } ?: activeBlock ?: when (selected) {
-                    ControlWay.ORDINARY -> when {
-                        ordinary?.job?.isCancelled == true -> OwnerReadiness.Unavailable(OwnerFailureStage.RELEASE, "正在等待普通控制连接释放")
-                        servingOrdinary != null -> OwnerReadiness.Ready
+                    ControlWay.APP -> when {
+                        appOwner?.job?.isCancelled == true -> OwnerReadiness.Unavailable(OwnerFailureStage.RELEASE, "正在等待应用控制连接释放")
+                        servingApp != null -> OwnerReadiness.Ready
                         holds == 0 -> OwnerReadiness.Idle("没有界面或后台控制服务需要控制会话")
                         else -> OwnerReadiness.Starting
                     }
@@ -423,7 +423,7 @@ private class ApplicationOwners(
 
         fun composeControl(): ControlState {
             val view = client.view.value
-            val local = servingOrdinary
+            val local = servingApp
             return when {
                 local != null -> local.runtime.state.value.copy(platform = platform, settings = settings)
 
@@ -449,7 +449,7 @@ private class ApplicationOwners(
                 settings = integrationSettings,
                 platform = if (record.selected == ControlWay.MODULE) moduleFacts(integrationPlatform, view) else integrationPlatform,
                 owner = ownerState(view),
-                presentation = servingOrdinary?.runtime?.presentation?.value
+                presentation = servingApp?.runtime?.presentation?.value
                     ?: if (record.selected == ControlWay.MODULE && view is ModuleView.Active) {
                         view.frame.presentation
                     } else {
@@ -526,12 +526,12 @@ private class ApplicationOwners(
     }
 
     private suspend fun route(
-        ordinaryCall: suspend (SystemEntryRuntime) -> OperationResult,
+        appCall: suspend (SystemEntryRuntime) -> OperationResult,
         command: HostCommand,
     ): OperationResult {
-        val local = servingOrdinary
+        val local = servingApp
         return when {
-            local != null -> ordinaryCall(local.runtime)
+            local != null -> appCall(local.runtime)
             record.selected == ControlWay.MODULE -> module(command)
             else -> noOwner()
         }
@@ -573,7 +573,7 @@ private class ApplicationOwners(
         )
 
         override suspend fun disconnect(): Boolean {
-            ordinary?.let { return it.runtime.disconnect() }
+            appOwner?.let { return it.runtime.disconnect() }
             return if (record.selected == ControlWay.MODULE) {
                 module(HostCommand.Disconnect) == OperationResult.Success
             } else {
@@ -592,13 +592,13 @@ private class ApplicationOwners(
 
         override fun updateSettings(settings: UserSettings) {
             this@ApplicationOwners.settings = settings
-            ordinary?.runtime?.updateSettings(settings)
+            appOwner?.runtime?.updateSettings(settings)
             refresh()
         }
 
         override fun updatePlatformState(platformState: PlatformState) {
             platform = platformState
-            ordinary?.runtime?.updatePlatformState(platformState)
+            appOwner?.runtime?.updatePlatformState(platformState)
             refresh()
         }
     }
@@ -633,7 +633,7 @@ private class ApplicationOwners(
         )
 
         override fun readSession(reference: SessionReference): SessionSnapshotResult {
-            servingOrdinary?.let { return it.runtime.readSession(reference) }
+            servingApp?.let { return it.runtime.readSession(reference) }
             val frame = (client.view.value as? ModuleView.Active)?.frame
             return if (record.selected == ControlWay.MODULE && frame?.state?.readySession == reference) {
                 SessionSnapshotResult.Available(requireNotNull(frame.state.device), frame.presentation)
@@ -643,7 +643,7 @@ private class ApplicationOwners(
         }
 
         override suspend fun claimPrompt(reference: SessionReference, promptId: String): Boolean {
-            servingOrdinary?.let { return it.runtime.claimPrompt(reference, promptId) }
+            servingApp?.let { return it.runtime.claimPrompt(reference, promptId) }
             return record.selected == ControlWay.MODULE &&
                 (client.execute(HostCommand.ClaimPrompt(reference, promptId)) as? HostCallResult.Flag)?.value == true
         }

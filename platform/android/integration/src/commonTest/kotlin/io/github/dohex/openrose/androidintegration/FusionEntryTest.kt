@@ -69,7 +69,7 @@ class FusionEntryTest {
         val (rig, lease) = moduleRig(FusionSettingsDestination.OPENROSE)
         val app = (rig.host.open(appIdentity) as HostOpenResult.Opened).lease.id
         val generation = (rig.host.status.value as HostStatus.Active).generation
-        rig.host.release(appIdentity, app, SwitchRequest("x", ControlWay.MODULE, ControlWay.ORDINARY, generation))
+        rig.host.release(appIdentity, app, SwitchRequest("x", ControlWay.MODULE, ControlWay.APP, generation))
 
         assertIs<FusionEntryDecision.System>(decide(rig, lease, classic))
     }

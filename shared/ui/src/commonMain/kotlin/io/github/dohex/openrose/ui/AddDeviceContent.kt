@@ -506,7 +506,7 @@ private fun prerequisiteSpec(
         state.platform.scanPermission.missing -> PrerequisiteSpec(
             title = "搜索耳机需要定位权限",
             summary = if (onRequestPermission == null) {
-                "当前宿主未获得扫描权限，可在设置中切回普通控制后搜索。"
+                "当前宿主未获得扫描权限，可在设置中切回应用控制后搜索。"
             } else {
                 "此 Android 版本需要定位权限来扫描附近耳机。已配对耳机仍可直接连接。"
             },

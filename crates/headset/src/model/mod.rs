@@ -118,7 +118,7 @@ impl ModelProtocol {
 pub struct ModelSpec {
     pub display_name: &'static str,
     pub short_label: &'static str,
-    pub variant_label: Option<&'static str>,
+    pub version_name: Option<&'static str>,
     pub protocol: ModelProtocol,
     pub advertisement_prefixes: &'static [&'static str],
     pub name_brand: &'static str,
@@ -176,22 +176,8 @@ impl ModelProfile {
         self.spec().short_label
     }
 
-    pub fn variant_label(self) -> Option<&'static str> {
-        self.spec().variant_label
-    }
-
-    pub fn configuration_label(self) -> String {
-        match self.variant_label() {
-            Some(variant) => format!("{} · {variant}", self.display_name()),
-            None => self.display_name().to_string(),
-        }
-    }
-
-    pub fn configuration_caption(self) -> String {
-        match self.variant_label() {
-            Some(variant) => format!("{variant} · {}", self.family().display_name()),
-            None => self.family().display_name().to_string(),
-        }
+    pub fn version_name(self) -> Option<&'static str> {
+        self.spec().version_name
     }
 
     pub fn family(self) -> ProtocolFamily {

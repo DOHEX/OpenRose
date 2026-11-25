@@ -31,7 +31,7 @@ Other models may show "未连接 · 系统蓝牙连上耳机后将自动连接" 
 
 ### "连接未成功 · 请确认耳机已开盖并在附近" (connection failed; make sure the case is open and nearby)
 
-The control connection did not open. For models with a charging case, close and reopen the case. For headphones without a case, turn the headphones on again and wait for system audio to reconnect. If it keeps failing, check which stage the control connection stopped at under earphone home → device details → diagnostics and records (诊断与记录):
+The control connection did not open. For models with a charging case, close and reopen the case. For headphones without a case, turn the headphones on again and wait for system audio to reconnect. If it keeps failing, check which stage the control connection stopped at under earphone home → headset info (耳机信息) → diagnostics and records (诊断与记录):
 
 | Reason in diagnostics | Meaning |
 | --- | --- |
@@ -86,7 +86,7 @@ In the Restart scopes dialog, select the processes to restart. When the operatio
 | Status page shows | What to do |
 | --- | --- |
 | 系统模块未启用 (system module not enabled) | Enable the OpenRose module in the Xposed framework |
-| 系统模块暂不可用：尚未收到兼容框架服务 (no compatible framework service yet) | Make sure the Xposed framework is running with the OpenRose module enabled. Ordinary control is unaffected |
+| 系统模块暂不可用：尚未收到兼容框架服务 (no compatible framework service yet) | Make sure the Xposed framework is running with the OpenRose module enabled. App control is unaffected |
 | 系统模块暂不可用：框架服务 API 低于 102 (framework API below 102) | Update the framework to one supporting libxposed API 102, for example LSPosed 2.2.0 or later |
 | Advice to select the system Bluetooth (`com.android.bluetooth`) scope | The module host was not found: make sure that scope is selected, then restart scopes |
 | 系统模块已连接但未响应 (module connected but not responding) | The host process is running but not answering; restart scopes |
