@@ -2,12 +2,15 @@ use crate::gatt::{
     GattCharacteristic, GattDriver, GattError, GattEvent, GattFailureKind, GattService,
     GattSubscription,
 };
+use crate::core::LocalClock;
 use crate::snapshot::HeadsetCandidate;
 use crate::transport::{ControlTransport, TransportError};
 use async_trait::async_trait;
 use openrose_headset::simulator::{SimulatedHeadset, SimulatorError};
-use openrose_headset::{FieldValue, FirmwareVersion, GattProfile, HeadsetField, HeadsetId, ModelProfile};
-use std::collections::BTreeMap;
+use openrose_headset::{
+    FieldValue, FirmwareVersion, GattProfile, HeadsetField, HeadsetId, LocalDateTime, ModelProfile,
+};
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
 use tokio::sync::{mpsc, watch};
@@ -30,6 +33,8 @@ impl LoggedWrite {
 
 struct Conditions {
     muted: bool,
+    ignored_keys: BTreeSet<[u8; 2]>,
+    open_delay: Duration,
     reply_latency: Duration,
     mtu: Option<u16>,
     missing_discoveries: usize,
@@ -90,6 +95,15 @@ impl SimulatedHeadsetHandle {
 
     pub fn inject(&self, bytes: Vec<u8>) -> bool {
         self.shared.deliver(bytes)
+    }
+
+    pub fn ignore_key(&self, key_hex: &str) {
+        let bytes = openrose_headset::decode_hex(key_hex).expect("key hex");
+        self.conditions().ignored_keys.insert([bytes[0], bytes[1]]);
+    }
+
+    pub fn open_delay(&self, delay: Duration) {
+        self.conditions().open_delay = delay;
     }
 
     pub fn mute(&self, muted: bool) {
@@ -213,6 +227,8 @@ impl SimulatedTransport {
                 device: Mutex::new(device),
                 conditions: Mutex::new(Conditions {
                     muted: false,
+                    ignored_keys: BTreeSet::new(),
+                    open_delay: Duration::ZERO,
                     reply_latency: Duration::ZERO,
                     mtu: Some(185),
                     missing_discoveries: 0,
@@ -295,6 +311,10 @@ impl GattDriver for SimulatedGattDriver {
     }
 
     async fn connect(&self) -> Result<(), GattError> {
+        let delay = self.conditions().open_delay;
+        if !delay.is_zero() {
+            tokio::time::sleep(delay).await;
+        }
         Ok(())
     }
 
@@ -373,11 +393,13 @@ impl GattDriver for SimulatedGattDriver {
         if let Some(mut gate) = gate {
             let _ = gate.wait_for(|open| *open).await;
         }
-        let (muted, latency) = {
+        let (muted, latency, ignored) = {
             let conditions = self.conditions();
-            (conditions.muted, conditions.reply_latency)
+            let ignored = value.len() >= 7
+                && conditions.ignored_keys.contains(&[value[5], value[6]]);
+            (conditions.muted, conditions.reply_latency, ignored)
         };
-        if muted {
+        if muted || ignored {
             return Ok(());
         }
         let replies = self.shared.device.lock().expect("device lock").receive(value);
@@ -406,5 +428,27 @@ impl GattDriver for SimulatedGattDriver {
             links.current = None;
         }
         Ok(())
+    }
+}
+
+pub struct SimulatedClock {
+    now: Mutex<LocalDateTime>,
+}
+
+impl SimulatedClock {
+    pub fn new(now: LocalDateTime) -> Self {
+        Self {
+            now: Mutex::new(now),
+        }
+    }
+
+    pub fn set(&self, now: LocalDateTime) {
+        *self.now.lock().expect("clock lock") = now;
+    }
+}
+
+impl LocalClock for SimulatedClock {
+    fn now(&self) -> LocalDateTime {
+        *self.now.lock().expect("clock lock")
     }
 }
