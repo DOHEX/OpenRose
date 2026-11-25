@@ -1,5 +1,6 @@
 pub mod f8;
 pub mod rs_common;
+pub mod rs_common_v2;
 pub mod zt;
 
 use crate::capabilities::{CustomEqualizerCapabilities, TouchControlCapabilities};
@@ -7,6 +8,7 @@ use crate::error::ProtocolError;
 use crate::field::{
     FieldReading, FieldValue, FirmwareVersion, HeadsetField, HeadsetSetting, TouchSlot,
 };
+use crate::local_time::LocalDateTime;
 use crate::model::{ModelProfile, ModelProtocol};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
@@ -105,6 +107,8 @@ pub trait ProtocolCodec: Send {
         Vec::new()
     }
 
+    fn set_local_time(&mut self, _now: LocalDateTime) {}
+
     fn prepare_setting(
         &mut self,
         setting: HeadsetSetting,
@@ -121,6 +125,9 @@ pub trait ProtocolCodec: Send {
 pub fn create_protocol_codec(profile: ModelProfile) -> Box<dyn ProtocolCodec> {
     match profile.spec().protocol {
         ModelProtocol::Zt(protocol) => Box::new(zt::ZtCodec::new(profile, protocol)),
+        ModelProtocol::RsCommonV2(protocol) => {
+            Box::new(rs_common_v2::RsCommonV2Codec::new(profile, protocol))
+        }
         ModelProtocol::RsCommon(protocol) => {
             Box::new(rs_common::RsCommonCodec::new(profile, protocol))
         }

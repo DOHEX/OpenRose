@@ -192,7 +192,7 @@ fn all_eleven_rs_common_models_are_registered_and_identified_by_prefix_and_name(
         ("Cambrian-S", Some(ModelProfile::CambrianSRsCommon)),
         ("OpenLink", Some(ModelProfile::OpenLinkRsCommon)),
         ("ROSE OpenLink", Some(ModelProfile::OpenLinkRsCommon)),
-        ("SportFeel", Some(ModelProfile::SportFeelRsCommon)),
+        ("SportFeel", None),
         ("SportFree", Some(ModelProfile::SportFeelRsCommon)),
         ("SWIFT", Some(ModelProfile::SwiftRsCommon)),
         ("ROSE Swift", Some(ModelProfile::SwiftRsCommon)),
