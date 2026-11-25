@@ -34,6 +34,9 @@ class WindowsControlTransportTest {
         snapshots.emit("unavailable\tble_unsupported")
         runCurrent()
         assertEquals(TransportAvailability.Unavailable(TransportUnavailableCode.BLE_UNSUPPORTED), transport.availability.value)
+        snapshots.emit("unavailable\tadapter_state_unknown")
+        runCurrent()
+        assertEquals(TransportAvailability.Unavailable(TransportUnavailableCode.ADAPTER_STATE_UNKNOWN), transport.availability.value)
         snapshots.emit("unavailable\trecovering")
         runCurrent()
         assertEquals(TransportAvailability.Unavailable(TransportUnavailableCode.RECOVERING), transport.availability.value)
@@ -43,6 +46,9 @@ class WindowsControlTransportTest {
             TransportAvailability.Unavailable(TransportUnavailableCode.BACKEND_UNAVAILABLE, "helper exited"),
             transport.availability.value,
         )
+        snapshots.emit("unavailable\tunrecognized_code")
+        runCurrent()
+        assertEquals(TransportAvailability.Unavailable(TransportUnavailableCode.BACKEND_UNAVAILABLE), transport.availability.value)
         transport.close()
     }
 }

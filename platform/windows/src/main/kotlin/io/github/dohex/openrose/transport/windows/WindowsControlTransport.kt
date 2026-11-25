@@ -76,22 +76,14 @@ private fun snapshot(line: String): Snapshot {
 }
 
 private fun unavailableSnapshot(args: List<String>): TransportAvailability.Unavailable {
-    val first = args.firstOrNull()?.takeIf(String::isNotBlank)
+    val code = args.firstOrNull()?.takeIf(String::isNotBlank)
     val detail = args.getOrNull(1)?.takeIf(String::isNotBlank)
-    return when (first) {
-        "ble_unsupported", "Windows 蓝牙适配器不支持 BLE" ->
-            TransportAvailability.Unavailable(TransportUnavailableCode.BLE_UNSUPPORTED)
-
-        "adapter_state_unknown", "Windows 蓝牙适配器状态未知" ->
-            TransportAvailability.Unavailable(TransportUnavailableCode.ADAPTER_STATE_UNKNOWN)
-
-        "recovering", "Windows 正在恢复蓝牙状态" ->
-            TransportAvailability.Unavailable(TransportUnavailableCode.RECOVERING)
-
-        "backend_unavailable" ->
-            TransportAvailability.Unavailable(TransportUnavailableCode.BACKEND_UNAVAILABLE, detail)
-
-        else -> TransportAvailability.Unavailable(TransportUnavailableCode.BACKEND_UNAVAILABLE, first)
+    return when (code) {
+        "ble_unsupported" -> TransportAvailability.Unavailable(TransportUnavailableCode.BLE_UNSUPPORTED)
+        "adapter_state_unknown" -> TransportAvailability.Unavailable(TransportUnavailableCode.ADAPTER_STATE_UNKNOWN)
+        "recovering" -> TransportAvailability.Unavailable(TransportUnavailableCode.RECOVERING)
+        "backend_unavailable" -> TransportAvailability.Unavailable(TransportUnavailableCode.BACKEND_UNAVAILABLE, detail)
+        else -> TransportAvailability.Unavailable(TransportUnavailableCode.BACKEND_UNAVAILABLE)
     }
 }
 
