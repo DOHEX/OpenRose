@@ -1,0 +1,5 @@
+[tools]
+"github:longbridge/nsh" = "0.7.0"
+
+[env]
+RUSTUP_TOOLCHAIN = "stable"

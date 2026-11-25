@@ -1,0 +1,11 @@
+{
+  "version": 2,
+  "packages": [
+    {
+      "name": "openrose-prototype-native",
+      "version": "0.1.0",
+      "path": "ext/openrose-prototype-native",
+      "module": "openrose-prototype-native"
+    }
+  ]
+}
