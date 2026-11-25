@@ -4,6 +4,8 @@ status: accepted
 
 # 桌面端托盘：后台控制、托盘面板与托盘菜单
 
+> 托盘实现（ComposeNativeTray）与“面板跟随界面风格、组件位于 `:sharedUI`”已由 [ADR 0038](0038-rust-core-and-nsh-desktop.md) 取代；托盘面板、托盘菜单与后台控制的行为保留。
+
 [ADR 0013](0013-linux-desktop-control.md) 规定桌面端没有后台控制，关闭窗口即结束控制连接。为了不打开主窗口也能查看电量、切换降噪模式，桌面端引入托盘图标，并由它承载后台控制，取代 0013 中“关闭窗口即结束控制连接”这一条。单实例运行与音频驱动的控制连接生命周期（[ADR 0005](0005-miuix-nav-and-audio-bound-control-lifecycle.md)）不变。
 
 ## 决策

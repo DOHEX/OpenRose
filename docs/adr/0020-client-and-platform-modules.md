@@ -4,6 +4,8 @@ status: accepted
 
 # 分离耳机控制、耳机流转与平台入口
 
+> 模块布局已由 [ADR 0038](0038-rust-core-and-nsh-desktop.md) 改定；新结构接管前本文仍描述现有代码。
+
 OpenRose 的 Android 应用、系统蓝牙进程与桌面应用消费同一套耳机能力，只有应用界面需要 Compose。重构前，FirstAngel 的沙盒按固件推导预设，漏掉了真实会话所用的游戏模式读数。沙盒为复用桌面设置段落还引入了桌面应用、两个蓝牙驱动与流转服务。我们以这些实际消费者确定模块职责。[KMP 推荐结构](https://kotlinlang.org/docs/multiplatform/multiplatform-project-recommended-structure.html)
 
 ## 决策

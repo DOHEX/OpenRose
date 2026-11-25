@@ -4,6 +4,8 @@ status: accepted
 
 # 模块宿主的加载、Binder 缓存与热重载约束
 
+> Android 切到 Rust 核心后，系统模块不再支持热重载，见 [ADR 0038](0038-rust-core-and-nsh-desktop.md)；届时本文的转发器与跨代传值随之删除。
+
 模块控制的唯一控制会话由 `com.android.bluetooth` 内的模块宿主持有（[ADR 0011](0011-dual-host-single-control-session.md)）。宿主必须在系统蓝牙进程的类加载器与生命周期中启动；系统会缓存绑定服务返回的 Binder；LSPosed 还会热重载模块。这三点决定了宿主怎样加载、发现端点和跨代际交接。
 
 ## 决策

@@ -4,6 +4,8 @@ status: accepted
 
 # 桌面端 Linux 控制：BLE、BlueZ D-Bus 与音频驱动生命周期
 
+> 平台范围与 dbus-java 蓝牙栈已由 [ADR 0038](0038-rust-core-and-nsh-desktop.md) 取代：macOS 纳入范围，Linux 驱动改用 Rust（bluer、zbus）。
+
 按 [ADR 0002](0002-shared-kotlin-core-and-platform-adapters.md) 的分阶段交付，桌面端先在 Linux 上建立控制连接，Windows 第二阶段另行决策，macOS 不在范围内。首版只实现 BLE：i5 只走 BLE；i7 尚无实机验证，SPP 待 i7 有实机后再做。架构边界见 [ADR 0012](0012-shared-multiplatform-architecture.md)。
 
 ## 决策

@@ -48,7 +48,7 @@ C、D 分支的改动面见 [new-capability.md](new-capability.md)。
 | 协议族及族内差异（开头、初始化、设置命令） | `protocol` | 选用 `ModelProtocol.Zt`、`F8`、`RsCommon` 或 `RsCommonV2`，填入该族的查询顺序和编码差异。V2 型号工厂 `rsV2Model` 将这些选项组装成 `RsCommonV2`。 |
 | 控制传输（传输） | `gatt`、`sppControlUuid`、`writeIntervalMillis` | 只有协议文档给出 RFCOMM UUID 时才填 SPP；SPP 连接还要有经典地址（广播解析或已配对设备地址），否则回退 BLE |
 | 广播里的经典地址（传输） | `advertisedClassicAddress` | 有文档给出偏移时才写解析函数，否则为 `null` |
-| 电量槽（电量） | `batteryLayout` | 左右耳与仓 → `EARBUDS_AND_CASE`；仅左右耳 → `EARBUDS_ONLY`，系统界面不发布仓电量；单体（复用 charge 槽）→ `SINGLE_UNIT`，应用显示一行“电量”，系统超级岛、焦点通知和融合设备中心不发布其电量 |
+| 电量槽（电量） | `batteryLayout` | 左右耳与仓 → `EARBUDS_AND_CASE`；仅左右耳 → `EARBUDS_ONLY`，系统界面不发布仓电量；单体（复用 charge 槽）→ `SINGLE_UNIT`，应用显示一行“电量”，超级岛、焦点通知和融合设备中心不发布其电量 |
 | EQ 预设的 App 显示名（设置命令的取值列） | `equalizerPresetLabels` | |
 | 能力与固件门槛（设置命令） | `capabilities` | `writableSettings` 只列 A/B 类且有字节级证据的设置；固件门槛用 `firmwareAtLeast` / `promptVolumeLevels`（RoseLink 拼接十进制比较；固件未读时返回未知，门槛能力不出现）；`readableFields` 只列该型号有证据且解码器可返回的字段 |
 

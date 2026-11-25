@@ -58,7 +58,7 @@ cd OpenRose
 1. 在 `ModelProfile` 增加枚举项，并在其 `spec` 中映射到新的 `ModelSpec`；缺少映射无法编译。枚举名跨进程传递，确定后不要改名。
 2. 写全 `ModelSpec` 的各项。能力只列有研究证据的设置：未声明的设置不会出现在界面，也不会被写入。
 3. 在 `createProtocolCodec` 查到现有协议族编解码器时直接复用；族内型号的帧、字段或枚举有差异时，在 `ModelSpec` 增加对应字段，由该族编解码读取。新协议族需要新增 `ProtocolFamily` 项与编解码。
-4. 单体型号（`BatteryLayout.SINGLE_UNIT`）在应用和托盘里显示一行“电量”；在有实机证据之前，系统超级岛、焦点通知和融合设备中心不发布其电量。
+4. 单体型号（`BatteryLayout.SINGLE_UNIT`）在应用和托盘里显示一行“电量”；在有实机证据之前，超级岛、焦点通知和融合设备中心不发布其电量。
 5. 在 `platform/android/integration` 测试夹具的 `initializationReplies`、`roseAdvertisement` 中登记该型号的回包与广播。`ModelProfileTest` 会检查每个型号都能凭自己的广播前缀和名称被识别。
 6. 在界面沙盒中选中该型号，按有能力差异的固件分别检查各页面；这是离线验证，不能代替真机验证。
 
@@ -69,7 +69,7 @@ cd OpenRose
 - 型号能力与真实会话共用同一推导规则，输入包括固件和已确认的读数，电量按型号的电量布局给出；固件框留空表示未读取，控制台下方列出当前可写的设置，便于看出固件门槛。
 - 应用内的操作照常生效：连接按阶段推进，断开后回到未连接看板，添加耳机流程能扫描到每个型号。设置写入经该型号的 `createProtocolCodec(...).prepareSetting(...)` 准备，确认后写回编解码器预期的读回值；编解码器拒绝的值以失败结束，界面传错值时能直接看到。
 - `./gradlew :tools:ui-sandbox:hotRun --autoReload` 启用 Compose Hot Reload，修改 `:shared:ui`、`:platform:android:ui` 或沙盒自身后，运行中的窗口直接刷新，当前状态保留。
-- 沙盒只运行 JVM 实现：Android 的背景模糊与返回手势、系统超级岛、焦点通知、融合设备中心和桌面托盘菜单需要在真机或真实桌面环境上检查。
+- 沙盒只运行 JVM 实现：Android 的背景模糊与返回手势、超级岛、焦点通知、融合设备中心和桌面托盘菜单需要在真机或真实桌面环境上检查。
 
 ## 日常命令
 

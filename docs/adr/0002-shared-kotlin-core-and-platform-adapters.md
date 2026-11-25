@@ -4,6 +4,8 @@ status: accepted
 
 # 以 Kotlin 共享核心和独立适配层初始化项目
 
+> Kotlin 共享核心与共享界面已由 [ADR 0038](0038-rust-core-and-nsh-desktop.md) 改为 Rust 核心与 NSH 桌面端；新结构接管前本文仍描述现有代码。
+
 OpenRose 以 Android 为首个交付平台，Windows、Linux 分阶段验收。首版同时包含 i5、i7 的型号支持，并从初始化开始考虑更多型号；Android 系统集成首版包含系统超级岛和融合设备中心，适配目标为 HyperOS 3、4。超级岛提供“不显示／官方／模块”配置，官方与模块两种模式均由系统界面呈现，不创建自绘浮层。界面风格的已确认约束见 [ADR 0001](0001-preserve-control-session-on-style-switch.md)。
 
 超级岛模式表示呈现策略，不等同于“纯原生生成／模块主动构造”的技术路线选择。各模式与焦点通知的行为见 [ADR 0003](0003-official-island-and-headset-notifications.md)。

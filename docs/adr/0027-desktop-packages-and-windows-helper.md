@@ -4,6 +4,8 @@ status: accepted
 
 # 桌面安装包与 Windows 辅助程序
 
+> 已由 [ADR 0038](0038-rust-core-and-nsh-desktop.md) 取代：Nucleus 打包与 `openrose-winrt.exe` 子进程在新桌面端接管后删除。
+
 桌面应用由 `desktopApp` 经 Nucleus 打成 deb、rpm、pacman、AppImage 与 MSI。Windows 的蓝牙读数与控制由 Rust 编写的 WinRT 辅助程序 `openrose-winrt.exe` 完成（`platform/windows`），JVM 进程以子进程方式启动它。Linux 的 BlueZ 控制依赖 dbus-java（[ADR 0013](0013-linux-desktop-control.md)）。打包配置中有几处取值不能从代码看出原因，在此记录。
 
 ## 决策
