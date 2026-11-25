@@ -377,7 +377,7 @@ class OpenRoseHomeScanUiTest {
                     device = device,
                 )
                 harness.render()
-                assertTrue(harness.hasText("设备详情"))
+                assertTrue(harness.hasText("耳机信息"))
                 assertFalse(harness.hasText("附近设备"))
                 assertTrue(harness.startScans.isEmpty())
                 assertTrue(harness.connects.isEmpty())
@@ -386,7 +386,7 @@ class OpenRoseHomeScanUiTest {
                 harness.state.value = harness.state.value.copy(connection = ConnectionState.Disconnected, device = null)
                 harness.render()
                 assertTrue(harness.hasText("搜索并添加耳机"))
-                assertFalse(harness.hasText("设备详情"))
+                assertFalse(harness.hasText("耳机信息"))
             }
         }
     }

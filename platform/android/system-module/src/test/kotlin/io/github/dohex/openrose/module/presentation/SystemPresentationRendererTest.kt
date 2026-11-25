@@ -12,7 +12,7 @@ import android.os.Handler
 import android.os.Looper
 import io.github.dohex.openrose.androidintegration.IslandMode
 import io.github.dohex.openrose.androidintegration.IslandPrompt
-import io.github.dohex.openrose.androidintegration.IslandTrigger
+import io.github.dohex.openrose.androidintegration.IslandTiming
 import io.github.dohex.openrose.androidintegration.SystemPresentationState
 import io.github.dohex.openrose.androidintegration.wire.BridgePresentationWire
 import io.github.dohex.openrose.androidintegration.wire.BridgeWire
@@ -64,12 +64,12 @@ class SystemPresentationRendererTest {
         assertTrue(template(status.notification).getBoolean("islandFirstFloat"))
 
         renderer.render(frame)
-        renderer.render(snapshot(sequence = 4, focusEnabled = false))
+        renderer.render(snapshot(sequence = 4, statusNotificationEnabled = false))
         assertEquals(status.tag, manager.activeNotifications.single().tag)
 
         val looper = shadowOf(handler.looper)
         looper.idleFor(1_500, TimeUnit.MILLISECONDS)
-        renderer.render(snapshot(sequence = 6, focusEnabled = false))
+        renderer.render(snapshot(sequence = 6, statusNotificationEnabled = false))
         val prompt = manager.activeNotifications.single()
         assertTrue(prompt.tag.startsWith("openrose:module:"))
         assertEquals(3, template(prompt.notification).getJSONObject("param_island").getInt("islandTimeout"))
@@ -91,7 +91,7 @@ class SystemPresentationRendererTest {
 
         renderer.clear()
         assertEquals("another-device", manager.activeNotifications.single().tag)
-        renderer.render(snapshot(sequence = 1, sessionId = 3, focusEnabled = false))
+        renderer.render(snapshot(sequence = 1, sessionId = 3, statusNotificationEnabled = false))
         assertTrue(manager.activeNotifications.any { it.tag.startsWith("openrose:module:") })
         renderer.close()
         renderer.render(snapshot(sequence = 1, sessionId = 4))
@@ -117,22 +117,22 @@ class SystemPresentationRendererTest {
         shadowOf(handler.looper).idle()
         assertEquals("通勤耳机", manager.activeNotifications.single().notification.extras.getString(Notification.EXTRA_TITLE))
 
-        renderer.render(snapshot(sequence = 6, focusEnabled = false, address = address))
+        renderer.render(snapshot(sequence = 6, statusNotificationEnabled = false, address = address))
         val prompt = manager.activeNotifications.single()
         assertEquals("通勤耳机", prompt.notification.extras.getString(Notification.EXTRA_TITLE))
     }
 
     private fun template(notification: Notification): JSONObject = JSONObject(requireNotNull(notification.extras.getString("miui.focus.param"))).getJSONObject("param_v2")
 
-    private fun snapshot(sequence: Long, sessionId: Long = 1, focusEnabled: Boolean = true, address: String? = null): Bundle {
+    private fun snapshot(sequence: Long, sessionId: Long = 1, statusNotificationEnabled: Boolean = true, address: String? = null): Bundle {
         val reference = SessionReference(DeviceId("headset"), sessionId)
         val presentation = SystemPresentationState(
             reference = reference,
             notificationTag = "headset",
-            islandMode = IslandMode.MODULE,
-            focusNotificationEnabled = focusEnabled,
+            islandMode = IslandMode.OPENROSE_STYLE,
+            statusNotificationEnabled = statusNotificationEnabled,
             allowIslandFields = true,
-            prompt = IslandPrompt("connection", IslandTrigger.CONNECTION, IslandMode.MODULE, reference, durationMillis = 4_000),
+            prompt = IslandPrompt("connection", IslandTiming.CONNECTION, IslandMode.OPENROSE_STYLE, reference, durationMillis = 4_000),
         )
         return Bundle().apply {
             putInt(BridgeWire.KEY_VERSION, BridgeWire.VERSION)

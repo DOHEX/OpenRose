@@ -53,7 +53,7 @@ body:
         仅 Android 填写。
         - 手机型号、系统 / ROM 及版本（HyperOS 请写完整版本号）、Android 版本
         - Xposed 框架及版本（例如 LSPosed），是否启用了 OpenRose 模块
-        - 控制方式：普通控制 / 模块控制（“设置”页）
+        - 控制方式：应用控制 / 模块控制（“设置”页）
         - 是否开启后台控制
       placeholder: |
         手机 / 系统：

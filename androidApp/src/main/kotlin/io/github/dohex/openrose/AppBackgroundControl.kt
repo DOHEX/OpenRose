@@ -8,11 +8,11 @@ import io.github.dohex.openrose.androidintegration.BackgroundControlStatus
 import io.github.dohex.openrose.androidintegration.BackgroundServiceFact
 import io.github.dohex.openrose.androidintegration.ControlWay
 import io.github.dohex.openrose.androidintegration.SwitchingControlRuntime
+import io.github.dohex.openrose.androidintegration.appBackgroundRequested
 import io.github.dohex.openrose.androidintegration.backgroundControl
 import io.github.dohex.openrose.androidintegration.mayStartBackgroundService
-import io.github.dohex.openrose.androidintegration.ordinaryBackgroundRequested
 
-internal class OrdinaryBackgroundControl(
+internal class AppBackgroundControl(
     private val context: Context,
     private val runtime: SwitchingControlRuntime,
     val companion: CompanionWake,
@@ -21,11 +21,11 @@ internal class OrdinaryBackgroundControl(
     var service: BackgroundServiceFact = BackgroundServiceFact.NotRunning
         private set
 
-    val ordinarySelected: Boolean get() = runtime.integration.value.owner.selected == ControlWay.ORDINARY
+    val appSelected: Boolean get() = runtime.integration.value.owner.selected == ControlWay.APP
 
     fun syncObservation() {
         if (!runtime.state.value.platform.userUnlocked) return
-        companion.syncObservation(runtime.integration.value.ordinaryBackgroundRequested)
+        companion.syncObservation(runtime.integration.value.appBackgroundRequested)
         refreshPlatform()
     }
 

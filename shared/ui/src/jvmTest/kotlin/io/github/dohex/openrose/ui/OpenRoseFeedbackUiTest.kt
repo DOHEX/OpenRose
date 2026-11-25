@@ -65,9 +65,9 @@ class OpenRoseFeedbackUiTest {
                 scene.setContent { OpenRoseApp(model, BasicPlatformUi("Test")) }
                 val harness = OpenRoseUiTestHarness(scene)
                 harness.render()
-                harness.scrollToText("设备详情")
+                harness.scrollToText("耳机信息")
                 harness.render()
-                val row = harness.clickableBounds("设备详情")
+                val row = harness.clickableBounds("耳机信息")
                 val diagnosticButton = harness.clickableBounds("查看诊断")
                 assertTrue(row.bottom <= diagnosticButton.top, "Last row $row overlaps feedback button $diagnosticButton in $style")
                 onRoot().performTouchInput { click(Offset(diagnosticButton.center.x, row.center.y)) }
@@ -123,7 +123,7 @@ class OpenRoseFeedbackUiTest {
             )
             withHarness(state(operation), style) { harness ->
                 harness.render()
-                harness.clickText("设备详情")
+                harness.clickText("耳机信息")
                 harness.render()
                 assertFalse(harness.hasText("设备已确认设置"), "a historical confirmation is not feedback for this page in $style")
             }

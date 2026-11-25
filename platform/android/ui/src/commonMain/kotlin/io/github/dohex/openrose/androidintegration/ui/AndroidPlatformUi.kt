@@ -37,7 +37,7 @@ class AndroidPlatformUi(
 ) : PlatformUi {
     private val requestAppPermission = requestBluetoothPermission
     override val requestBluetoothPermission: (() -> Unit)?
-        get() = requestAppPermission.takeIf { integration.value.owner.selected == ControlWay.ORDINARY }
+        get() = requestAppPermission.takeIf { integration.value.owner.selected == ControlWay.APP }
 
     override val platformName: String = "Android"
     private var restartRunning by mutableStateOf(false)
@@ -85,7 +85,7 @@ class AndroidPlatformUi(
     @Composable
     private fun ScanPermissionRow() {
         val request = requestBluetoothPermission
-        val guidance = if (request == null) "模块宿主未获得扫描权限，可切回普通控制后搜索" else "仅搜索新耳机时需要，已配对耳机可直接连接"
+        val guidance = if (request == null) "模块宿主未获得扫描权限，可切回应用控制后搜索" else "仅搜索新耳机时需要，已配对耳机可直接连接"
         ToneInfoRow("扫描定位权限", guidance, StatusTone.CAUTION)
         request?.let { AppButton("授予定位权限", it, modifier = Modifier.padding(start = 16.dp)) }
     }
@@ -354,8 +354,8 @@ private fun DiagnosticPresentationRow(label: String, result: String) {
 
 private fun islandModeLabel(mode: IslandMode): String = when (mode) {
     IslandMode.OFF -> "不显示"
-    IslandMode.OFFICIAL -> "官方"
-    IslandMode.MODULE -> "模块"
+    IslandMode.SYSTEM_STYLE -> "系统样式"
+    IslandMode.OPENROSE_STYLE -> "OpenRose 样式"
 }
 
 private fun fusionSettingsDestinationLabel(destination: FusionSettingsDestination): String = when (destination) {
@@ -388,13 +388,13 @@ private fun bridgeSessionLabel(state: BridgeSessionState): String = when (state)
 private fun featureLabel(feature: String): String = when (feature) {
     "SYSTEM_HEADSET" -> "原生耳机接入"
     "FUSION_CENTER" -> "融合状态与操作"
-    "OFFICIAL_CONNECTION" -> "官方连接提示"
+    "SYSTEM_CONNECTION" -> "系统样式连接提示"
     else -> feature
 }
 
 private fun presentationLabel(feature: String): String = when (feature) {
-    "OFFICIAL_CONNECTION" -> "官方连接提示"
-    "MODULE_CONNECTION" -> "模块连接提示"
+    "SYSTEM_CONNECTION" -> "系统样式连接提示"
+    "OPENROSE_CONNECTION" -> "OpenRose 样式连接提示"
     "STATUS_NOTIFICATION" -> "耳机状态通知"
     else -> feature
 }
@@ -450,12 +450,12 @@ private fun SystemIntegrationSettingsContent(
                 onSelect = { onIntegrationSettingsChange(settings.copy(islandMode = it)) },
             )
             AppSwitchRow(
-                title = "焦点通知",
-                summary = "连接期间保留耳机状态通知",
-                checked = settings.focusNotificationEnabled,
-                onChange = { onIntegrationSettingsChange(settings.copy(focusNotificationEnabled = it)) },
+                title = "耳机状态通知",
+                summary = "连接期间保留耳机状态卡片",
+                checked = settings.statusNotificationEnabled,
+                onChange = { onIntegrationSettingsChange(settings.copy(statusNotificationEnabled = it)) },
             )
-            if (settings.focusNotificationEnabled && settings.islandMode == IslandMode.MODULE) {
+            if (settings.statusNotificationEnabled && settings.islandMode == IslandMode.OPENROSE_STYLE) {
                 AppSwitchRow(
                     title = "常驻电量岛",
                     summary = "连接期间超级岛一直显示电量；关闭后只在显示时机弹出几秒",
@@ -463,7 +463,7 @@ private fun SystemIntegrationSettingsContent(
                     onChange = { onIntegrationSettingsChange(settings.copy(islandSummaryEnabled = it)) },
                 )
             }
-            if (settings.focusNotificationEnabled) {
+            if (settings.statusNotificationEnabled) {
                 val unavailable = integration.platform.unavailableStatusTargets
                 val selectedTarget = settings.statusNotificationTarget
                 AppChoiceRow(
@@ -480,34 +480,34 @@ private fun SystemIntegrationSettingsContent(
             }
         }
 
-        if (settings.islandMode == IslandMode.MODULE) {
+        if (settings.islandMode == IslandMode.OPENROSE_STYLE) {
             val footnote = listOfNotNull(
-                "未选择显示时机，不会弹出展开。".takeIf { settings.islandTriggers.isEmpty() },
+                "未选择显示时机，不会弹出展开。".takeIf { settings.islandTimings.isEmpty() },
                 "入盒时仅对支持上报盒内状态的型号生效。",
             ).joinToString("\n")
-            AppGroup(title = "模块显示时机", footnote = footnote) {
+            AppGroup(title = "显示时机", footnote = footnote) {
                 AppCheckGroup(
                     options = listOf(
                         AppOption(
-                            value = IslandTrigger.CONNECTION,
+                            value = IslandTiming.CONNECTION,
                             label = "连接时",
                             contentDescription = "新连接会话开始时显示连接提示",
                         ),
                         AppOption(
-                            value = IslandTrigger.IN_CASE,
+                            value = IslandTiming.IN_CASE,
                             label = "入盒时",
                             contentDescription = "耳机放进充电盒时显示入盒提示",
                         ),
                     ),
-                    checked = settings.islandTriggers,
+                    checked = settings.islandTimings,
                     enabledFor = { true },
-                    onToggle = { trigger ->
-                        val triggers = if (trigger in settings.islandTriggers) {
-                            settings.islandTriggers.removing(trigger)
+                    onToggle = { timing ->
+                        val timings = if (timing in settings.islandTimings) {
+                            settings.islandTimings.removing(timing)
                         } else {
-                            settings.islandTriggers.adding(trigger)
+                            settings.islandTimings.adding(timing)
                         }
-                        onIntegrationSettingsChange(settings.copy(islandTriggers = triggers))
+                        onIntegrationSettingsChange(settings.copy(islandTimings = timings))
                     },
                 )
             }
@@ -535,6 +535,6 @@ private fun SystemIntegrationSettingsContent(
 
 private fun systemIntegrationSummary(settings: IntegrationSettings): String {
     val island = "超级岛：${islandModeLabel(settings.islandMode)}"
-    val focus = if (settings.focusNotificationEnabled) "焦点通知已开启" else "焦点通知已关闭"
-    return "$island · $focus"
+    val statusNotification = if (settings.statusNotificationEnabled) "耳机状态通知已开启" else "耳机状态通知已关闭"
+    return "$island · $statusNotification"
 }

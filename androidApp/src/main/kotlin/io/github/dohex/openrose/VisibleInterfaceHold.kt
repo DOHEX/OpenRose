@@ -3,7 +3,7 @@ package io.github.dohex.openrose
 import android.app.Activity
 import android.app.Application
 import android.os.Bundle
-import io.github.dohex.openrose.androidintegration.OrdinarySessionHold
+import io.github.dohex.openrose.androidintegration.AppSessionHold
 import io.github.dohex.openrose.androidintegration.SwitchingControlRuntime
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -15,14 +15,14 @@ internal class VisibleInterfaceHold(
     private val scope: CoroutineScope,
 ) : Application.ActivityLifecycleCallbacks {
     private val live = mutableSetOf<Activity>()
-    private var hold: OrdinarySessionHold? = null
+    private var hold: AppSessionHold? = null
     private var pendingRelease: Job? = null
 
     private fun enter(activity: Activity) {
         live += activity
         pendingRelease?.cancel()
         pendingRelease = null
-        if (hold == null) hold = runtime.holdOrdinarySession()
+        if (hold == null) hold = runtime.holdAppSession()
     }
 
     private fun leave(activity: Activity) {

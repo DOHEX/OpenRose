@@ -16,18 +16,18 @@ import androidx.annotation.RequiresApi
 import io.github.dohex.openrose.core.protocol.ModelProfile
 import io.github.dohex.openrose.platform.hasBluetoothConnectPermission
 
-private fun Context.ordinaryOwner() = applicationContext as OpenRoseApplication
+private fun Context.appOwner() = applicationContext as OpenRoseApplication
 
-class OrdinaryWakeReceiver : BroadcastReceiver() {
+class AppWakeReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         when (intent.action) {
-            Intent.ACTION_BOOT_COMPLETED -> context.ordinaryOwner().wakeOrdinaryControl()
+            Intent.ACTION_BOOT_COMPLETED -> context.appOwner().wakeAppControl()
 
             BluetoothA2dp.ACTION_CONNECTION_STATE_CHANGED,
             BluetoothHeadset.ACTION_CONNECTION_STATE_CHANGED,
             -> {
                 if (intent.getIntExtra(BluetoothProfile.EXTRA_STATE, -1) != BluetoothProfile.STATE_CONNECTED) return
-                if (isSupportedEarphone(context, intent)) context.ordinaryOwner().wakeOrdinaryControl()
+                if (isSupportedEarphone(context, intent)) context.appOwner().wakeAppControl()
             }
         }
     }
@@ -49,24 +49,24 @@ class OrdinaryWakeReceiver : BroadcastReceiver() {
 class OpenRoseCompanionService : CompanionDeviceService() {
     @Deprecated("Replaced by the association-based callback from Android 13")
     override fun onDeviceAppeared(address: String) {
-        if (Build.VERSION.SDK_INT < 33) ordinaryOwner().wakeOrdinaryControl()
+        if (Build.VERSION.SDK_INT < 33) appOwner().wakeAppControl()
     }
 
     @Suppress("OVERRIDE_DEPRECATION")
     @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     override fun onDeviceAppeared(associationInfo: AssociationInfo) {
-        if (Build.VERSION.SDK_INT < 36) ordinaryOwner().wakeOrdinaryControl()
+        if (Build.VERSION.SDK_INT < 36) appOwner().wakeAppControl()
     }
 
     @RequiresApi(36)
     override fun onDevicePresenceEvent(event: DevicePresenceEvent) {
         if (event.event == DevicePresenceEvent.EVENT_BLE_APPEARED || event.event == DevicePresenceEvent.EVENT_BT_CONNECTED) {
-            ordinaryOwner().wakeOrdinaryControl()
+            appOwner().wakeAppControl()
         }
     }
 
     @Deprecated("Presence loss is handled by audio disconnection inside the runtime")
     override fun onDeviceDisappeared(address: String) = Unit
 
-    private fun ordinaryOwner() = applicationContext as OpenRoseApplication
+    private fun appOwner() = applicationContext as OpenRoseApplication
 }

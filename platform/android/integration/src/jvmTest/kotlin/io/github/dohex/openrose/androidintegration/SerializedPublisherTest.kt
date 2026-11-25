@@ -27,7 +27,7 @@ class SerializedPublisherTest {
         }
         val early = thread { publisher.publish { persisted } }
         assertTrue(firstCommitting.await(10, TimeUnit.SECONDS))
-        persisted = "ORDINARY"
+        persisted = "APP"
         val derivedWhileFirstRunning = CountDownLatch(1)
         val late = thread {
             publisher.publish {
@@ -40,6 +40,6 @@ class SerializedPublisherTest {
         releaseFirst.countDown()
         early.join(10_000)
         late.join(10_000)
-        assertEquals(listOf("MODULE", "ORDINARY"), committed.toList())
+        assertEquals(listOf("MODULE", "APP"), committed.toList())
     }
 }

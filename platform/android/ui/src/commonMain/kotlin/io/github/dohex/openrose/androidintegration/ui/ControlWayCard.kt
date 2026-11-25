@@ -19,7 +19,7 @@ import io.github.dohex.openrose.androidintegration.OwnerState
 import io.github.dohex.openrose.ui.*
 
 private val controlWayOptions = listOf(
-    AppOption(ControlWay.ORDINARY, "普通控制"),
+    AppOption(ControlWay.APP, "应用控制"),
     AppOption(ControlWay.MODULE, "模块控制"),
 )
 
@@ -63,8 +63,8 @@ private fun switchFeedback(readiness: OwnerReadiness): String? = when (readiness
 
     is OwnerReadiness.SwitchBlocked -> if (readiness.stage == OwnerFailureStage.RELEASE) {
         when (readiness.request.to) {
-            ControlWay.ORDINARY -> "已选择普通控制，正在等待模块释放控制连接。"
-            ControlWay.MODULE -> "正在等待普通控制释放连接，之后才能切换到模块控制。"
+            ControlWay.APP -> "已选择应用控制，正在等待模块释放控制连接。"
+            ControlWay.MODULE -> "正在等待应用控制释放连接，之后才能切换到模块控制。"
         }
     } else {
         "切换未完成，详情见状态页。"
@@ -166,7 +166,7 @@ private fun HandoffOutcome.Blocked.duplicatesReadiness(readiness: OwnerReadiness
     readiness.reason == reason
 
 internal fun wayLabel(way: ControlWay): String = when (way) {
-    ControlWay.ORDINARY -> "普通控制"
+    ControlWay.APP -> "应用控制"
     ControlWay.MODULE -> "模块控制"
 }
 

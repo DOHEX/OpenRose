@@ -10,8 +10,8 @@ import android.content.pm.ServiceInfo
 import android.graphics.drawable.Icon
 import android.os.Build
 import android.os.IBinder
-import io.github.dohex.openrose.androidintegration.OrdinarySessionHold
-import io.github.dohex.openrose.androidintegration.ordinaryBackgroundRequested
+import io.github.dohex.openrose.androidintegration.AppSessionHold
+import io.github.dohex.openrose.androidintegration.appBackgroundRequested
 import io.github.dohex.openrose.core.ConnectionState
 import io.github.dohex.openrose.core.ControlState
 import io.github.dohex.openrose.core.TransportAvailability
@@ -27,7 +27,7 @@ import kotlinx.coroutines.launch
 class ControlService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var observer: Job? = null
-    private var sessionHold: OrdinarySessionHold? = null
+    private var sessionHold: AppSessionHold? = null
     private val app get() = application as OpenRoseApplication
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -39,16 +39,16 @@ class ControlService : Service() {
             return START_NOT_STICKY
         }
         if (!enterForeground(notification(app.runtime.state.value))) return START_NOT_STICKY
-        if (!app.runtime.integration.value.ordinaryBackgroundRequested) {
+        if (!app.runtime.integration.value.appBackgroundRequested) {
             leaveForeground()
             return START_NOT_STICKY
         }
         app.background.running()
-        if (sessionHold == null) sessionHold = app.runtime.holdOrdinarySession()
+        if (sessionHold == null) sessionHold = app.runtime.holdAppSession()
         if (observer == null) {
             observer = scope.launch {
                 combine(app.runtime.state, app.runtime.integration) { state, integration ->
-                    integration.ordinaryBackgroundRequested to notificationText(state)
+                    integration.appBackgroundRequested to notificationText(state)
                 }
                     .distinctUntilChanged()
                     .collect { (enabled, _) ->

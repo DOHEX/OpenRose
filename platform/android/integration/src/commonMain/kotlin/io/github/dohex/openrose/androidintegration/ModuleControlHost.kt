@@ -110,7 +110,7 @@ class ModuleControlHost(
     private fun reloadConfiguration(): Boolean {
         val previous = configuration.settings.integration.controlWay
         configuration = readConfiguration() ?: return false
-        if (previous == ControlWay.ORDINARY && configuration.settings.integration.controlWay == ControlWay.MODULE) held = null
+        if (previous == ControlWay.APP && configuration.settings.integration.controlWay == ControlWay.MODULE) held = null
         return true
     }
 

@@ -181,7 +181,7 @@ class BackgroundControlUiTest {
                 assertFalse(harness.hasTag(BackgroundControlTags.RECOVERY_ARMED), "module control is not ordinary recovery in $style")
                 assertFalse(harness.hasTagWithPrefix(BackgroundControlTags.STATUS_PREFIX), "background control is not in force under module control in $style")
 
-                harness.updateIntegration { it.copy(owner = OwnerState(selected = ControlWay.ORDINARY, readiness = OwnerReadiness.Ready)) }
+                harness.updateIntegration { it.copy(owner = OwnerState(selected = ControlWay.APP, readiness = OwnerReadiness.Ready)) }
                 harness.render()
                 assertTrue(harness.hasTag(BackgroundControlTags.RECOVERY_ARMED), "the same facts arm recovery under ordinary control in $style")
             }

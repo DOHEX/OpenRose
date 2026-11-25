@@ -166,7 +166,7 @@ internal class OfficialConnectionPresenter(
 
     private fun report(snapshot: Bundle, status: String, detail: String) {
         runCatching {
-            callbacks.report(Bundle(snapshot), BridgePresentationWire.OFFICIAL_CONNECTION, status, detail)
+            callbacks.report(Bundle(snapshot), BridgePresentationWire.SYSTEM_CONNECTION, status, detail)
         }.onFailure { Log.w(TAG, "official_connection_report_failed status=$status", it) }
     }
 

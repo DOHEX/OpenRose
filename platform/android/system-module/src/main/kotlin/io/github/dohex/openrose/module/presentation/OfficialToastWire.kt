@@ -24,7 +24,7 @@ internal fun decodeRequest(snapshot: Bundle, promptId: String): PromptRequest? {
     val identity = identityOf(snapshot) ?: return null
     if (ModelProfile.fromName(snapshot.getString("profile")) == null) return null
     val prompt = snapshot.getBundle(BridgePresentationWire.PRESENTATION)?.getBundle(BridgePresentationWire.PROMPT) ?: return null
-    if (prompt.getString(BridgePresentationWire.MODE) != BridgePresentationWire.OFFICIAL) return null
+    if (prompt.getString(BridgePresentationWire.MODE) != BridgePresentationWire.SYSTEM_STYLE) return null
     val fields = snapshot.getBundle("fields")
     return PromptRequest(
         identity = identity,

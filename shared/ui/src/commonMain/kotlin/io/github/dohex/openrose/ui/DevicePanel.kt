@@ -204,9 +204,9 @@ private fun HeadsetControls(
                 )
             }
             AppArrowRow(
-                title = "设备详情",
+                title = "耳机信息",
                 icon = RoseIcon.INFO,
-                onClick = { onNavigate(AppPage.DETAILS) },
+                onClick = { onNavigate(AppPage.HEADSET_INFO) },
             )
         }
     }
@@ -366,7 +366,7 @@ private fun BatteryReading(label: String, field: DeviceField, device: DeviceStat
 }
 
 @Composable
-internal fun DeviceDetails(state: ControlState, device: DeviceState, onDisconnect: () -> Unit, onDiagnostics: () -> Unit) {
+internal fun HeadsetInfo(state: ControlState, device: DeviceState, onDisconnect: () -> Unit, onDiagnostics: () -> Unit) {
     val initializing = state.connection.phaseOrNull() == ConnectionPhase.INITIALIZING
     AppGroup {
         AppInfoRow("型号配置", "${device.profile.configurationLabel} · ${device.profile.family.displayName}")

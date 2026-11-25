@@ -118,7 +118,7 @@ class OpenRoseNavigationUiTest {
             val platform = object : PlatformUi {
                 override val platformName = "Test"
                 override val systemIntegrationSummary: String?
-                    @Composable get() = if (applicable.value) "超级岛：模块 · 焦点通知已开启" else null
+                    @Composable get() = if (applicable.value) "超级岛：OpenRose 样式 · 耳机状态通知已开启" else null
                 override val systemIntegrationContent: (@Composable () -> Unit)?
                     @Composable get() = if (applicable.value) {
                         { AppText("系统集成测试内容") }
@@ -131,7 +131,7 @@ class OpenRoseNavigationUiTest {
                 harness.clickTab("设置")
                 harness.render()
                 assertTrue(harness.hasClickableText("系统集成"))
-                assertTrue(harness.hasText("超级岛：模块 · 焦点通知已开启"))
+                assertTrue(harness.hasText("超级岛：OpenRose 样式 · 耳机状态通知已开启"))
                 assertFalse(harness.hasText("系统集成测试内容"))
 
                 harness.clickText("系统集成")
@@ -274,7 +274,7 @@ class OpenRoseNavigationUiTest {
             harness.render()
             assertTrue(harness.hasText("均衡器"))
 
-            harness.clickText("设备详情")
+            harness.clickText("耳机信息")
             harness.render()
             assertTrue(harness.hasText("型号配置"))
             assertTrue(harness.hasText("控制传输"))
