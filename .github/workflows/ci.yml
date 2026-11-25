@@ -60,7 +60,7 @@ jobs:
           echo "release_tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
           echo "label=$label" >> "$GITHUB_OUTPUT"
 
-  # Shared JVM and Android checks; independent of the release, so they start at once.
+  # Shared Rust, JVM and Android checks; independent of the release, so they start at once.
   checks:
     name: Checks
     runs-on: ubuntu-24.04
@@ -92,13 +92,17 @@ jobs:
         with:
           cache-read-only: ${{ github.ref != 'refs/heads/main' }}
 
+      - uses: Swatinem/rust-cache@v2.9.3
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
       - name: Install Linux runtime libraries
         run: |
           sudo apt-get update
           sudo apt-get install --yes libgtk-3-0t64 libegl1 libgl1 libfontconfig1
 
       - name: Run checks
-        run: ./gradlew --no-daemon --stacktrace check offlineCheck
+        run: cargo xtask check
 
       - name: Upload test and lint reports
         if: always()
