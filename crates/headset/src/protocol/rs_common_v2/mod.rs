@@ -1,10 +1,9 @@
 mod readings;
-mod wire;
+pub(crate) mod wire;
 mod write;
 
-pub(crate) use readings::rs_common_v2_readable_fields;
+pub(crate) use readings::{read_record, record_fields, record_ids, rs_common_v2_readable_fields};
 
-use self::readings::{read_record, record_fields};
 use self::wire::{DEFAULT_INFO_IDS, key_hex};
 use self::write::rs_v2_setting;
 use crate::error::ProtocolError;

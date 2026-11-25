@@ -227,8 +227,12 @@ fn record(id: u8) -> Option<&'static Record> {
     RECORDS.iter().find(|record| record.id == id)
 }
 
-pub(super) fn record_fields(id: u8) -> &'static [HeadsetField] {
+pub(crate) fn record_fields(id: u8) -> &'static [HeadsetField] {
     record(id).map_or(&[], |record| record.fields)
+}
+
+pub(crate) fn record_ids() -> impl Iterator<Item = u8> {
+    RECORDS.iter().map(|record| record.id)
 }
 
 pub(crate) fn rs_common_v2_readable_fields() -> BTreeSet<HeadsetField> {
@@ -238,7 +242,7 @@ pub(crate) fn rs_common_v2_readable_fields() -> BTreeSet<HeadsetField> {
         .collect()
 }
 
-pub(super) fn read_record(
+pub(crate) fn read_record(
     id: u8,
     profile: ModelProfile,
     value: &[u8],

@@ -1,7 +1,7 @@
 pub(super) const DEFAULT_INFO_IDS: &str =
     "010708090c0d0e122a2b2c2d2e2f313233363738393a3b3c3d3f454649";
 
-pub(super) const NOISE_MODES: [&str; 7] = [
+pub(crate) const NOISE_MODES: [&str; 7] = [
     "anc",
     "normal",
     "transparency",
@@ -11,7 +11,7 @@ pub(super) const NOISE_MODES: [&str; 7] = [
     "dynamic",
 ];
 
-pub(super) const FIND_STATES: [(u8, &str); 6] = [
+pub(crate) const FIND_STATES: [(u8, &str); 6] = [
     (1, "start_left"),
     (2, "start_right"),
     (3, "start_both"),
@@ -72,11 +72,11 @@ pub(super) const READ_PRESETS: [(u8, &str); 8] = [
     (0xa0, "game_1"),
 ];
 
-pub(super) const TOUCH_SLOTS: [u8; 8] = [1, 2, 3, 4, 0x11, 0x12, 0x13, 0x14];
+pub(crate) const TOUCH_SLOTS: [u8; 8] = [1, 2, 3, 4, 0x11, 0x12, 0x13, 0x14];
 
-pub(super) const TAP_SLOTS: [u8; 4] = [2, 3, 0x12, 0x13];
+pub(crate) const TAP_SLOTS: [u8; 4] = [2, 3, 0x12, 0x13];
 
-pub(super) const CUSTOM_EQ_BANDS: usize = 10;
+pub(crate) const CUSTOM_EQ_BANDS: usize = 10;
 
 pub(super) fn key_hex(id: u8) -> String {
     format!("{id:02x}")
