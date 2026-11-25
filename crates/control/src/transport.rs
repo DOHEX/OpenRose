@@ -1,18 +1,20 @@
+use crate::audio::AudioFactsDriver;
 use crate::gatt::GattDriver;
-use crate::snapshot::HeadsetCandidate;
+use crate::scan::ScanDriver;
 use async_trait::async_trait;
 use openrose_headset::HeadsetId;
+use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::sync::Arc;
-use tokio::sync::watch;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TransportRecoveryReason {
     ServiceDiscovery,
     ServicesUnavailable,
     Subscription,
     WriteFailed,
     ServicesChanged,
+    NoInitialResponse,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -84,11 +86,11 @@ impl fmt::Debug for OpenFailure {
 pub trait ControlTransport: Send + Sync {
     async fn open_gatt(&self, headset: &HeadsetId) -> Result<Box<dyn GattDriver>, TransportError>;
 
-    async fn bonded_headsets(&self) -> Vec<HeadsetCandidate> {
-        Vec::new()
-    }
+    async fn start_scan(&self) -> Result<Box<dyn ScanDriver>, TransportError>;
 
-    fn audio_connected_headset(&self) -> watch::Receiver<Option<HeadsetId>> {
-        watch::channel(None).1
+    fn audio_facts(&self) -> Arc<dyn AudioFactsDriver>;
+
+    fn supports_initialization_recovery(&self) -> bool {
+        false
     }
 }

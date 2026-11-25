@@ -1,13 +1,18 @@
+use crate::audio::AudioFactsDriver;
 use crate::confirmation::ReadProgress;
+use crate::discovery::ScanSlot;
 use crate::error::{ControlError, ControlErrorCode, ControlResult};
 use crate::queue::Pending;
 use crate::snapshot::{
     ControlSnapshot, HeadsetCandidate, HeadsetDiagnostics, HeadsetState, TransportAvailability,
 };
 use crate::state::StateCell;
-use crate::transport::{ControlConnection, ControlTransport, OpenFailure, TransportError};
+use crate::targeting::{Origin, Targeting};
+use crate::transport::{
+    ControlConnection, ControlTransport, OpenFailure, TransportError, TransportRecoveryReason,
+};
 use openrose_headset::{HeadsetReadings, LocalDateTime, ModelProfile, ProtocolCodec};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::sync::watch;
@@ -65,6 +70,10 @@ pub(crate) fn connection_failure(error: &TransportError) -> ControlError {
             ControlErrorCode::Unsupported
         }
         TransportError::PermissionDenied(_) => ControlErrorCode::PermissionRequired,
+        TransportError::Recoverable {
+            reason: TransportRecoveryReason::NoInitialResponse,
+            ..
+        } => ControlErrorCode::Timeout,
         TransportError::Recoverable { .. } | TransportError::Terminal(_) => {
             ControlErrorCode::Disconnected
         }
@@ -105,12 +114,25 @@ impl LinkInner {
 pub(crate) struct Core {
     pub(crate) state: StateCell,
     pub(crate) transport: Arc<dyn ControlTransport>,
+    pub(crate) audio: Arc<dyn AudioFactsDriver>,
+    pub(crate) audio_readable: watch::Sender<bool>,
     pub(crate) clock: Arc<dyn LocalClock>,
     pub(crate) timing: SessionTiming,
     pub(crate) lifecycle: tokio::sync::Mutex<LinkInner>,
     pub(crate) connections: OwnedConnections,
     pub(crate) operation_ids: AtomicU64,
     pub(crate) shutdown: CancellationToken,
+    pub(crate) scan: tokio::sync::Mutex<ScanSlot>,
+    pub(crate) targeting: Targeting,
+}
+
+pub(crate) async fn detached<T: Send + 'static>(
+    work: impl Future<Output = T> + Send + 'static,
+) -> T {
+    match tokio::spawn(work).await {
+        Ok(value) => value,
+        Err(error) => std::panic::resume_unwind(error.into_panic()),
+    }
 }
 
 pub(crate) struct LinkSlot {
@@ -118,20 +140,37 @@ pub(crate) struct LinkSlot {
     pub(crate) codec: Box<dyn ProtocolCodec>,
     pub(crate) has_written: bool,
     pub(crate) next_write_at: Option<Instant>,
+    pub(crate) query_index: Option<usize>,
     pub(crate) ready: bool,
     pub(crate) observer: Option<(CancellationToken, JoinHandle<()>)>,
+}
+
+impl LinkSlot {
+    fn fresh(profile: ModelProfile) -> Self {
+        Self {
+            connection: None,
+            codec: openrose_headset::create_protocol_codec(profile),
+            has_written: false,
+            next_write_at: None,
+            query_index: None,
+            ready: false,
+            observer: None,
+        }
+    }
 }
 
 pub(crate) struct Attempt {
     pub(crate) id: u64,
     pub(crate) candidate: HeadsetCandidate,
     pub(crate) profile: ModelProfile,
+    pub(crate) origin: Origin,
+    audio_bound: AtomicBool,
     pub(crate) cancel: CancellationToken,
     pub(crate) link_epoch: AtomicU64,
     pub(crate) outcome: watch::Sender<Option<ControlResult>>,
     pub(crate) progress: watch::Sender<ReadProgress>,
     pub(crate) link: Mutex<LinkSlot>,
-    pub(crate) queue: Pending,
+    queue: Mutex<Arc<Pending>>,
 }
 
 impl Attempt {
@@ -139,25 +178,22 @@ impl Attempt {
         id: u64,
         candidate: HeadsetCandidate,
         profile: ModelProfile,
+        origin: Origin,
+        audio_bound: bool,
         cancel: CancellationToken,
     ) -> Self {
         Self {
             id,
             candidate,
             profile,
-            queue: Pending::new(cancel.child_token()),
+            origin,
+            audio_bound: AtomicBool::new(audio_bound),
+            queue: Mutex::new(Arc::new(Pending::new(cancel.child_token()))),
             cancel,
             link_epoch: AtomicU64::new(0),
             outcome: watch::channel(None).0,
             progress: watch::channel(ReadProgress::default()).0,
-            link: Mutex::new(LinkSlot {
-                connection: None,
-                codec: openrose_headset::create_protocol_codec(profile),
-                has_written: false,
-                next_write_at: None,
-                ready: false,
-                observer: None,
-            }),
+            link: Mutex::new(LinkSlot::fresh(profile)),
         }
     }
 
@@ -167,6 +203,28 @@ impl Attempt {
 
     pub(crate) fn bump_epoch(&self) -> u64 {
         self.link_epoch.fetch_add(1, Ordering::SeqCst) + 1
+    }
+
+    pub(crate) fn queue(&self) -> Arc<Pending> {
+        Arc::clone(&self.queue.lock().expect("queue lock"))
+    }
+
+    pub(crate) fn reset_link(&self) {
+        *self.queue.lock().expect("queue lock") = Arc::new(Pending::new(self.cancel.child_token()));
+        self.progress.send_replace(ReadProgress::default());
+        *self.link.lock().expect("link lock") = LinkSlot::fresh(self.profile);
+    }
+
+    pub(crate) fn query_index(&self) -> Option<usize> {
+        self.link.lock().expect("link lock").query_index
+    }
+
+    pub(crate) fn is_audio_bound(&self) -> bool {
+        self.audio_bound.load(Ordering::SeqCst)
+    }
+
+    pub(crate) fn bind_audio(&self) {
+        self.audio_bound.store(true, Ordering::SeqCst);
     }
 
     pub(crate) fn matches(&self, snapshot: &ControlSnapshot) -> bool {

@@ -1,12 +1,13 @@
-use crate::core::{Core, LinkInner, LocalClock, OwnedConnections, SessionTiming, platform_error};
-use crate::error::{ControlError, ControlErrorCode, ControlResult};
-use crate::snapshot::{ControlSnapshot, PlatformState};
+use crate::core::{Core, LinkInner, LocalClock, OwnedConnections, SessionTiming, detached};
+use crate::error::ControlResult;
+use crate::snapshot::{ControlSnapshot, PlatformState, TransportAvailability};
 use crate::state::StateCell;
+use crate::targeting::{Origin, Pin, Targeting};
 use crate::transport::ControlTransport;
 use openrose_headset::{HeadsetCommand, HeadsetId};
-use std::future::Future;
 use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
+use tokio::sync::watch;
 use tokio_util::sync::CancellationToken;
 
 pub trait ControlObserver: Send + Sync + 'static {
@@ -35,22 +36,18 @@ pub struct ControlRuntime {
     core: Arc<Core>,
 }
 
-async fn detached<T: Send + 'static>(work: impl Future<Output = T> + Send + 'static) -> T {
-    match tokio::spawn(work).await {
-        Ok(value) => value,
-        Err(error) => std::panic::resume_unwind(error.into_panic()),
-    }
-}
-
 impl ControlRuntime {
     pub fn new(
         transport: Arc<dyn ControlTransport>,
         observer: Arc<dyn ControlObserver>,
         config: ControlConfig,
     ) -> Self {
+        let audio_readable = !config.platform.permission.missing();
         let (state, mut published) = StateCell::new(ControlSnapshot::initial(config.platform));
         let core = Arc::new(Core {
             state,
+            audio: transport.audio_facts(),
+            audio_readable: watch::channel(audio_readable).0,
             transport,
             clock: config.clock,
             timing: config.timing,
@@ -62,13 +59,15 @@ impl ControlRuntime {
             connections: OwnedConnections::default(),
             operation_ids: AtomicU64::new(0),
             shutdown: CancellationToken::new(),
+            scan: Default::default(),
+            targeting: Targeting::default(),
         });
         tokio::spawn(async move {
             while let Some(snapshot) = published.recv().await {
                 observer.state_changed(&snapshot);
             }
         });
-        tokio::spawn(Arc::clone(&core).observe_audio_connection());
+        tokio::spawn(Arc::clone(&core).observe_audio_facts());
         Self { core }
     }
 
@@ -77,9 +76,29 @@ impl ControlRuntime {
     }
 
     pub fn update_platform_state(&self, platform: PlatformState) {
+        let readable = !platform.permission.missing();
+        let unlocked = platform.user_unlocked;
+        let transport_available = platform.transport == TransportAvailability::Available;
+        let mut previous = None;
+        self.core.state.update(|snapshot| {
+            previous = Some(std::mem::replace(&mut snapshot.platform, platform));
+        });
+        let previous = previous.expect("the platform update ran");
+        self.core.audio_readable.send_replace(readable);
+        let unlocking = !previous.user_unlocked && unlocked;
+        let transport_ready =
+            previous.transport != TransportAvailability::Available && transport_available;
+        if !previous.permission.missing() && readable && unlocked && (unlocking || transport_ready)
+        {
+            let core = Arc::clone(&self.core);
+            tokio::spawn(async move { core.handle_current_audio().await });
+        }
+    }
+
+    pub fn select_current_headset(&self, headset: HeadsetId) {
         self.core
             .state
-            .update(|snapshot| snapshot.platform = platform);
+            .update(|snapshot| snapshot.select_current_headset(&headset));
     }
 
     pub async fn refresh_bonded_headsets(&self) {
@@ -87,14 +106,43 @@ impl ControlRuntime {
         detached(async move { core.refresh_bonded_headsets().await }).await
     }
 
-    pub async fn connect(&self, headset: HeadsetId) -> ControlResult {
+    pub async fn start_scan(&self) -> ControlResult {
         let core = Arc::clone(&self.core);
-        detached(async move { core.connect_headset(headset).await }).await
+        detached(async move { core.start_scan().await }).await
+    }
+
+    pub async fn stop_scan(&self) {
+        let core = Arc::clone(&self.core);
+        detached(async move { core.stop_scan().await }).await
+    }
+
+    pub async fn connect(&self, headset: HeadsetId) -> ControlResult {
+        self.connect_as(headset, Origin::Manual, Pin::Follow).await
+    }
+
+    pub async fn connect_pinned(&self, headset: HeadsetId) -> ControlResult {
+        self.connect_as(headset, Origin::Manual, Pin::Force).await
+    }
+
+    pub async fn connect_for_add_device(&self, headset: HeadsetId) -> ControlResult {
+        self.connect_as(headset, Origin::AddDevice, Pin::Follow)
+            .await
+    }
+
+    async fn connect_as(&self, headset: HeadsetId, origin: Origin, pin: Pin) -> ControlResult {
+        let request = self.core.begin_explicit(&headset, origin, pin);
+        let core = Arc::clone(&self.core);
+        detached(async move { core.connect_requested(request).await }).await
+    }
+
+    pub async fn cancel_add_device(&self) {
+        let core = Arc::clone(&self.core);
+        detached(async move { core.cancel_add_device().await }).await
     }
 
     pub async fn disconnect(&self) -> bool {
         let core = Arc::clone(&self.core);
-        detached(async move { core.disconnect(false).await }).await
+        detached(async move { core.disconnect_target().await }).await
     }
 
     pub async fn release(&self) -> bool {
@@ -114,53 +162,5 @@ impl ControlRuntime {
 impl Drop for ControlRuntime {
     fn drop(&mut self) {
         self.core.shutdown.cancel();
-    }
-}
-
-impl Core {
-    async fn refresh_bonded_headsets(&self) {
-        let bonded = self.transport.bonded_headsets().await;
-        self.state
-            .update(|snapshot| snapshot.bonded_headsets = bonded);
-    }
-
-    async fn connect_headset(self: &Arc<Self>, id: HeadsetId) -> ControlResult {
-        if let Some(error) = self.state.read(platform_error) {
-            return self.reject(error);
-        }
-        let find = |core: &Core| {
-            core.state
-                .read(|s| s.bonded_headsets.iter().find(|c| c.id == id).cloned())
-        };
-        let mut candidate = find(self);
-        if candidate.as_ref().and_then(|c| c.profile).is_none() {
-            self.refresh_bonded_headsets().await;
-            candidate = find(self);
-        }
-        match candidate.and_then(|candidate| candidate.profile.map(|profile| (candidate, profile)))
-        {
-            Some((candidate, profile)) => self.connect_candidate(candidate, profile).await,
-            None => self.reject(ControlError::new(
-                ControlErrorCode::Unsupported,
-                "没有受支持的型号识别证据",
-            )),
-        }
-    }
-
-    async fn observe_audio_connection(self: Arc<Self>) {
-        let mut audio = self.transport.audio_connected_headset();
-        loop {
-            let headset = audio.borrow_and_update().clone();
-            self.state
-                .update(|snapshot| snapshot.audio_headset_id = headset);
-            tokio::select! {
-                _ = self.shutdown.cancelled() => break,
-                changed = audio.changed() => {
-                    if changed.is_err() {
-                        break;
-                    }
-                }
-            }
-        }
     }
 }
