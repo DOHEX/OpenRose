@@ -1,3 +1,4 @@
+pub mod f8;
 pub mod zt;
 
 use crate::capabilities::{CustomEqualizerCapabilities, TouchControlCapabilities};
@@ -119,6 +120,7 @@ pub trait ProtocolCodec: Send {
 pub fn create_protocol_codec(profile: ModelProfile) -> Box<dyn ProtocolCodec> {
     match profile.spec().protocol {
         ModelProtocol::Zt(protocol) => Box::new(zt::ZtCodec::new(profile, protocol)),
+        ModelProtocol::F8(protocol) => Box::new(f8::F8Codec::new(profile, protocol)),
     }
 }
 

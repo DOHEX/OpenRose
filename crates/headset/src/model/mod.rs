@@ -1,3 +1,4 @@
+pub mod f8;
 pub mod identification;
 pub mod zt;
 
@@ -63,7 +64,8 @@ impl ProtocolFamily {
     pub fn readable_fields(self) -> BTreeSet<HeadsetField> {
         match self {
             Self::Zt => crate::protocol::zt::zt_readable_fields(),
-            Self::RsCommonV2 | Self::F8 | Self::RsCommon => BTreeSet::new(),
+            Self::F8 => crate::protocol::f8::f8_readable_fields(),
+            Self::RsCommonV2 | Self::RsCommon => BTreeSet::new(),
         }
     }
 }
@@ -97,20 +99,29 @@ impl ZtProtocol {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct F8Protocol {
+    pub extended_init: bool,
+    pub noise_normal_wire: u8,
+    pub eq_at_two: Option<&'static str>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ModelProtocol {
     Zt(ZtProtocol),
+    F8(F8Protocol),
 }
 
 impl ModelProtocol {
     pub fn family(self) -> ProtocolFamily {
         match self {
             Self::Zt(_) => ProtocolFamily::Zt,
+            Self::F8(_) => ProtocolFamily::F8,
         }
     }
 
     pub fn refresh_equalizer_after_game_mode(self) -> bool {
         match self {
-            Self::Zt(_) => false,
+            Self::Zt(_) | Self::F8(_) => false,
         }
     }
 }
@@ -143,16 +154,44 @@ pub enum ModelProfile {
     I3Zt,
     #[serde(rename = "HEADFEEL_ZT")]
     HeadFeelZt,
+    #[serde(rename = "AGATE_F8")]
+    AgateF8,
+    #[serde(rename = "AGATE_X_F8")]
+    AgateXF8,
+    #[serde(rename = "CERAMICS_F8")]
+    CeramicsF8,
+    #[serde(rename = "CERAMICS_X_F8")]
+    CeramicsXF8,
+    #[serde(rename = "CERAMICS_X_7034_F8")]
+    CeramicsX7034F8,
+    #[serde(rename = "EXPLORER_F8")]
+    ExplorerF8,
 }
 
 impl ModelProfile {
-    pub const ALL: &'static [Self] = &[Self::I5Zt, Self::I3Zt, Self::HeadFeelZt];
+    pub const ALL: &'static [Self] = &[
+        Self::I5Zt,
+        Self::I3Zt,
+        Self::HeadFeelZt,
+        Self::AgateF8,
+        Self::AgateXF8,
+        Self::CeramicsF8,
+        Self::CeramicsXF8,
+        Self::CeramicsX7034F8,
+        Self::ExplorerF8,
+    ];
 
     pub fn spec(self) -> &'static ModelSpec {
         match self {
             Self::I5Zt => &zt::EAR_FREE_I5,
             Self::I3Zt => &zt::EAR_FREE_I3,
             Self::HeadFeelZt => &zt::HEAD_FEEL,
+            Self::AgateF8 => &f8::AGATE,
+            Self::AgateXF8 => &f8::AGATE_X,
+            Self::CeramicsF8 => &f8::CERAMICS,
+            Self::CeramicsXF8 => &f8::CERAMICS_X,
+            Self::CeramicsX7034F8 => &f8::CERAMICS_X_7034,
+            Self::ExplorerF8 => &f8::EXPLORER,
         }
     }
 
@@ -161,6 +200,12 @@ impl ModelProfile {
             Self::I5Zt => "I5_ZT",
             Self::I3Zt => "I3_ZT",
             Self::HeadFeelZt => "HEADFEEL_ZT",
+            Self::AgateF8 => "AGATE_F8",
+            Self::AgateXF8 => "AGATE_X_F8",
+            Self::CeramicsF8 => "CERAMICS_F8",
+            Self::CeramicsXF8 => "CERAMICS_X_F8",
+            Self::CeramicsX7034F8 => "CERAMICS_X_7034_F8",
+            Self::ExplorerF8 => "EXPLORER_F8",
         }
     }
 
