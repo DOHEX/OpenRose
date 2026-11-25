@@ -16,7 +16,7 @@ const ZT_GATT: GattSpec = GattSpec {
 pub static EAR_FREE_I5: ModelSpec = ModelSpec {
     display_name: "EarFree i5",
     short_label: "i5",
-    variant_label: None,
+    version_name: None,
     protocol: ModelProtocol::Zt(ZtProtocol::default_i5()),
     advertisement_prefixes: &["525300010001"],
     name_brand: "earfree",
@@ -41,7 +41,7 @@ pub static EAR_FREE_I5: ModelSpec = ModelSpec {
 pub static EAR_FREE_I3: ModelSpec = ModelSpec {
     display_name: "EarFree-i3",
     short_label: "i3",
-    variant_label: None,
+    version_name: None,
     protocol: ModelProtocol::Zt(ZtProtocol {
         init_keys: &[
             "0101", "0602", "0201", "0603", "0801", "0401", "0a01", "0b01",
@@ -69,7 +69,7 @@ pub static EAR_FREE_I3: ModelSpec = ModelSpec {
 pub static HEAD_FEEL: ModelSpec = ModelSpec {
     display_name: "HeadFeel",
     short_label: "HeadFeel",
-    variant_label: None,
+    version_name: None,
     protocol: ModelProtocol::Zt(ZtProtocol {
         init_keys: &[
             "0101", "0602", "0201", "0202", "0203", "0603", "0801", "0d01", "0401", "0a01", "0103",
