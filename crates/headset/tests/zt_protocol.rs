@@ -674,7 +674,15 @@ fn i5_noise_modes_levels_cycle_and_echo_rejection_match_independent_literals() {
             .expect("transparency level");
         assert_eq!(BTreeSet::from([1, 3, 5]), anc_cap.levels);
         assert_eq!(BTreeSet::from(["anc".to_string()]), anc_cap.visible_modes);
-        assert_eq!(BTreeSet::from([1, 3, 5]), trans_cap.levels);
+        let expected_transparency_levels = if matches!(
+            profile,
+            ModelProfile::CeramicsURsV2 | ModelProfile::CeramicsUHsc2710RsV2
+        ) {
+            BTreeSet::from([1, 5])
+        } else {
+            BTreeSet::from([1, 3, 5])
+        };
+        assert_eq!(expected_transparency_levels, trans_cap.levels);
         assert_eq!(
             BTreeSet::from(["transparency".to_string()]),
             trans_cap.visible_modes
