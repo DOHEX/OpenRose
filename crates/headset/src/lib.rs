@@ -24,9 +24,10 @@ pub use hex::{HexError, decode_hex, encode_hex, is_lower_hex};
 pub use local_time::LocalDateTime;
 pub use model::RsCommonV2Protocol;
 pub use model::identification::ModelIdentification;
+pub use model::rs_common::{RsCommonInit, RsCommonProtocol};
 pub use model::{
-    BatteryLayout, CapabilityFacts, GattProfile, GattSpec, ModelProfile, ModelProtocol, ModelSpec,
-    ProtocolFamily, ROSELINK_PREFIX_LENGTHS, ZtProtocol, rs_readings,
+    BatteryLayout, CapabilityFacts, F8Protocol, GattProfile, GattSpec, ModelProfile, ModelProtocol,
+    ModelSpec, ProtocolFamily, ROSELINK_PREFIX_LENGTHS, ZtProtocol, rs_readings,
 };
 pub use protocol::{
     ProtocolCodec, ProtocolQuery, ProtocolReply, ProtocolSetting, create_protocol_codec,

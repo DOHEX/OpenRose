@@ -1,9 +1,12 @@
+pub mod f8;
 pub mod identification;
+pub mod rs_common;
 pub mod rs_common_v2;
 pub mod zt;
 
 use crate::capabilities::HeadsetCapabilities;
 use crate::field::{FieldReading, FieldValue, FirmwareVersion, HeadsetField};
+use rs_common::RsCommonProtocol;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::ops::RangeInclusive;
@@ -64,8 +67,9 @@ impl ProtocolFamily {
     pub fn readable_fields(self) -> BTreeSet<HeadsetField> {
         match self {
             Self::Zt => crate::protocol::zt::zt_readable_fields(),
+            Self::RsCommon => crate::protocol::rs_common::rs_common_readable_fields(),
+            Self::F8 => crate::protocol::f8::f8_readable_fields(),
             Self::RsCommonV2 => crate::protocol::rs_common_v2::rs_common_v2_readable_fields(),
-            Self::F8 | Self::RsCommon => BTreeSet::new(),
         }
     }
 }
@@ -118,9 +122,18 @@ impl RsCommonV2Protocol {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct F8Protocol {
+    pub extended_init: bool,
+    pub noise_normal_wire: u8,
+    pub eq_at_two: Option<&'static str>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ModelProtocol {
     Zt(ZtProtocol),
     RsCommonV2(RsCommonV2Protocol),
+    RsCommon(RsCommonProtocol),
+    F8(F8Protocol),
 }
 
 impl ModelProtocol {
@@ -128,12 +141,14 @@ impl ModelProtocol {
         match self {
             Self::Zt(_) => ProtocolFamily::Zt,
             Self::RsCommonV2(_) => ProtocolFamily::RsCommonV2,
+            Self::RsCommon(_) => ProtocolFamily::RsCommon,
+            Self::F8(_) => ProtocolFamily::F8,
         }
     }
 
     pub fn refresh_equalizer_after_game_mode(self) -> bool {
         match self {
-            Self::Zt(_) => false,
+            Self::Zt(_) | Self::RsCommon(_) | Self::F8(_) => false,
             Self::RsCommonV2(protocol) => protocol.refresh_equalizer_after_game_mode,
         }
     }
@@ -231,6 +246,40 @@ pub enum ModelProfile {
     SportFeel8912fRsV2,
     #[serde(rename = "MOKA_RS_V2")]
     MokaRsV2,
+    #[serde(rename = "BUDSFREE_I_RS_COMMON")]
+    BudsFreeIRsCommon,
+    #[serde(rename = "CAMBRIAN_RS_COMMON")]
+    CambrianRsCommon,
+    #[serde(rename = "OPENFEEL_LDAC_RS_COMMON")]
+    OpenFeelLdacRsCommon,
+    #[serde(rename = "OPENFEEL_LHDC_RS_COMMON")]
+    OpenFeelLhdcRsCommon,
+    #[serde(rename = "OPENFEEL_DUAL_RS_COMMON")]
+    OpenFeelDualRsCommon,
+    #[serde(rename = "OPENFUN_RS_COMMON")]
+    OpenFunRsCommon,
+    #[serde(rename = "OPENFUN_TOUCH_RS_COMMON")]
+    OpenFunTouchRsCommon,
+    #[serde(rename = "SPORTFEEL_RS_COMMON")]
+    SportFeelRsCommon,
+    #[serde(rename = "SWIFT_RS_COMMON")]
+    SwiftRsCommon,
+    #[serde(rename = "OPENLINK_RS_COMMON")]
+    OpenLinkRsCommon,
+    #[serde(rename = "CAMBRIAN_S_RS_COMMON")]
+    CambrianSRsCommon,
+    #[serde(rename = "AGATE_F8")]
+    AgateF8,
+    #[serde(rename = "AGATE_X_F8")]
+    AgateXF8,
+    #[serde(rename = "CERAMICS_F8")]
+    CeramicsF8,
+    #[serde(rename = "CERAMICS_X_F8")]
+    CeramicsXF8,
+    #[serde(rename = "CERAMICS_X_7034_F8")]
+    CeramicsX7034F8,
+    #[serde(rename = "EXPLORER_F8")]
+    ExplorerF8,
 }
 
 impl ModelProfile {
@@ -270,6 +319,23 @@ impl ModelProfile {
         Self::EarFeelIe2RsV2,
         Self::SportFeel8912fRsV2,
         Self::MokaRsV2,
+        Self::BudsFreeIRsCommon,
+        Self::CambrianRsCommon,
+        Self::OpenFeelLdacRsCommon,
+        Self::OpenFeelLhdcRsCommon,
+        Self::OpenFeelDualRsCommon,
+        Self::OpenFunRsCommon,
+        Self::OpenFunTouchRsCommon,
+        Self::SportFeelRsCommon,
+        Self::SwiftRsCommon,
+        Self::OpenLinkRsCommon,
+        Self::CambrianSRsCommon,
+        Self::AgateF8,
+        Self::AgateXF8,
+        Self::CeramicsF8,
+        Self::CeramicsXF8,
+        Self::CeramicsX7034F8,
+        Self::ExplorerF8,
     ];
 
     pub fn spec(self) -> &'static ModelSpec {
@@ -309,6 +375,23 @@ impl ModelProfile {
             Self::EarFeelIe2RsV2 => &rs_common_v2::EAR_FEEL_IE2,
             Self::SportFeel8912fRsV2 => &rs_common_v2::SPORT_FEEL_8912F,
             Self::MokaRsV2 => &rs_common_v2::MOKA,
+            Self::BudsFreeIRsCommon => &rs_common::BUDS_FREE_I,
+            Self::CambrianRsCommon => &rs_common::CAMBRIAN,
+            Self::OpenFeelLdacRsCommon => &rs_common::OPEN_FEEL_LDAC,
+            Self::OpenFeelLhdcRsCommon => &rs_common::OPEN_FEEL_LHDC,
+            Self::OpenFeelDualRsCommon => &rs_common::OPEN_FEEL_DUAL,
+            Self::OpenFunRsCommon => &rs_common::OPEN_FUN,
+            Self::OpenFunTouchRsCommon => &rs_common::OPEN_FUN_TOUCH,
+            Self::SportFeelRsCommon => &rs_common::SPORT_FEEL,
+            Self::SwiftRsCommon => &rs_common::SWIFT,
+            Self::OpenLinkRsCommon => &rs_common::OPEN_LINK,
+            Self::CambrianSRsCommon => &rs_common::CAMBRIAN_S,
+            Self::AgateF8 => &f8::AGATE,
+            Self::AgateXF8 => &f8::AGATE_X,
+            Self::CeramicsF8 => &f8::CERAMICS,
+            Self::CeramicsXF8 => &f8::CERAMICS_X,
+            Self::CeramicsX7034F8 => &f8::CERAMICS_X_7034,
+            Self::ExplorerF8 => &f8::EXPLORER,
         }
     }
 
@@ -349,6 +432,23 @@ impl ModelProfile {
             Self::EarFeelIe2RsV2 => "EARFEEL_IE2_RS_V2",
             Self::SportFeel8912fRsV2 => "SPORTFEEL_8912F_RS_V2",
             Self::MokaRsV2 => "MOKA_RS_V2",
+            Self::BudsFreeIRsCommon => "BUDSFREE_I_RS_COMMON",
+            Self::CambrianRsCommon => "CAMBRIAN_RS_COMMON",
+            Self::OpenFeelLdacRsCommon => "OPENFEEL_LDAC_RS_COMMON",
+            Self::OpenFeelLhdcRsCommon => "OPENFEEL_LHDC_RS_COMMON",
+            Self::OpenFeelDualRsCommon => "OPENFEEL_DUAL_RS_COMMON",
+            Self::OpenFunRsCommon => "OPENFUN_RS_COMMON",
+            Self::OpenFunTouchRsCommon => "OPENFUN_TOUCH_RS_COMMON",
+            Self::SportFeelRsCommon => "SPORTFEEL_RS_COMMON",
+            Self::SwiftRsCommon => "SWIFT_RS_COMMON",
+            Self::OpenLinkRsCommon => "OPENLINK_RS_COMMON",
+            Self::CambrianSRsCommon => "CAMBRIAN_S_RS_COMMON",
+            Self::AgateF8 => "AGATE_F8",
+            Self::AgateXF8 => "AGATE_X_F8",
+            Self::CeramicsF8 => "CERAMICS_F8",
+            Self::CeramicsXF8 => "CERAMICS_X_F8",
+            Self::CeramicsX7034F8 => "CERAMICS_X_7034_F8",
+            Self::ExplorerF8 => "EXPLORER_F8",
         }
     }
 

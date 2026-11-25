@@ -280,6 +280,29 @@ fn rs_v2_model_names_are_matched_without_crossing_hardware_branches() {
 }
 
 #[test]
+fn names_shared_across_families_stay_ambiguous_and_longer_retail_names_win() {
+    for (name, expected) in [
+        ("ROSE SportFeel", None),
+        ("SportFree", Some(ModelProfile::SportFeelRsCommon)),
+        ("SWIFT", Some(ModelProfile::SwiftRsCommon)),
+        ("ROSE Swift", Some(ModelProfile::SwiftRsCommon)),
+        ("ROSE Cambrian S", Some(ModelProfile::CambrianSRsCommon)),
+        ("ROSE AGATE X", Some(ModelProfile::AgateXF8)),
+        ("CERAMICS", Some(ModelProfile::CeramicsF8)),
+        ("HeadFree", Some(ModelProfile::HeadFeelZt)),
+        ("EarFree i3", Some(ModelProfile::I3Zt)),
+        ("CERAMICS-X", None),
+        ("ROSE Ceramics X", None),
+        ("OpenFree", None),
+        ("OpenFun", None),
+        ("ROSE OpenFeel LDAC", None),
+        ("OpenFeel LHDC", None),
+    ] {
+        assert_eq!(expected, ModelProfile::match_name(Some(name)), "{name}");
+    }
+}
+
+#[test]
 fn rs_v2_names_are_admitted_by_the_wake_name_pattern() {
     let pattern = ModelProfile::name_pattern();
     for brand in [
