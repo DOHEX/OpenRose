@@ -1,6 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
+    "crates/control",
     "crates/headset",
     "xtask",
 ]
@@ -18,3 +19,6 @@ publish = false
 [workspace.dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+tokio = "1"
+tokio-util = "0.7"
+async-trait = "0.1"
