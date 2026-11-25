@@ -17,8 +17,10 @@ pub(crate) struct ReadProgress {
 impl ReadProgress {
     pub(crate) fn received(&mut self, replies: &[ProtocolReply]) {
         let keys: BTreeSet<&String> = replies.iter().flat_map(|r| &r.response_keys).collect();
-        let fields: BTreeSet<HeadsetField> =
-            replies.iter().flat_map(|r| r.readings.keys().copied()).collect();
+        let fields: BTreeSet<HeadsetField> = replies
+            .iter()
+            .flat_map(|r| r.readings.keys().copied())
+            .collect();
         for key in keys {
             self.keys.insert(key.clone());
             *self.key_revisions.entry(key.clone()).or_default() += 1;

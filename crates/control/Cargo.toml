@@ -18,4 +18,4 @@ tokio-util.workspace = true
 
 [dev-dependencies]
 openrose-control = { path = ".", features = ["simulator"] }
-tokio = { workspace = true, features = ["test-util", "rt", "macros", "sync", "time"] }
+tokio = { workspace = true, features = ["test-util", "rt", "rt-multi-thread", "macros", "sync", "time"] }

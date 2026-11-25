@@ -77,7 +77,9 @@ impl ControlRuntime {
     }
 
     pub fn update_platform_state(&self, platform: PlatformState) {
-        self.core.state.update(|snapshot| snapshot.platform = platform);
+        self.core
+            .state
+            .update(|snapshot| snapshot.platform = platform);
     }
 
     pub async fn refresh_bonded_headsets(&self) {
@@ -118,7 +120,8 @@ impl Drop for ControlRuntime {
 impl Core {
     async fn refresh_bonded_headsets(&self) {
         let bonded = self.transport.bonded_headsets().await;
-        self.state.update(|snapshot| snapshot.bonded_headsets = bonded);
+        self.state
+            .update(|snapshot| snapshot.bonded_headsets = bonded);
     }
 
     async fn connect_headset(self: &Arc<Self>, id: HeadsetId) -> ControlResult {
@@ -134,7 +137,8 @@ impl Core {
             self.refresh_bonded_headsets().await;
             candidate = find(self);
         }
-        match candidate.and_then(|candidate| candidate.profile.map(|profile| (candidate, profile))) {
+        match candidate.and_then(|candidate| candidate.profile.map(|profile| (candidate, profile)))
+        {
             Some((candidate, profile)) => self.connect_candidate(candidate, profile).await,
             None => self.reject(ControlError::new(
                 ControlErrorCode::Unsupported,
@@ -147,7 +151,8 @@ impl Core {
         let mut audio = self.transport.audio_connected_headset();
         loop {
             let headset = audio.borrow_and_update().clone();
-            self.state.update(|snapshot| snapshot.audio_headset_id = headset);
+            self.state
+                .update(|snapshot| snapshot.audio_headset_id = headset);
             tokio::select! {
                 _ = self.shutdown.cancelled() => break,
                 changed = audio.changed() => {

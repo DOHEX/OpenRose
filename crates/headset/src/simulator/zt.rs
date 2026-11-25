@@ -1,12 +1,13 @@
 use super::SimulatorError;
 use crate::capabilities::NoiseMode;
-use crate::field::{FieldValue, FirmwareVersion, HeadsetField};
+use crate::field::{FieldValue, FirmwareVersion, HeadsetField, TouchBinding};
 use crate::model::{BatteryLayout, ModelProfile, ModelProtocol, ZtProtocol};
+use crate::protocol::zt::{
+    ZT_ACTIONS, ZT_CYCLE_ORDER, ZT_GESTURES, ZT_NOISE_LEVELS, audio_modes, eq_presets,
+};
 use std::collections::BTreeMap;
 
 const NOT_PROVIDED: u8 = 0xff;
-const CYCLE_ORDER: [&str; 4] = ["normal", "transparency", "wind", "anc"];
-const LEVELS: [i32; 3] = [1, 3, 5];
 const EQ_BANDS: usize = 10;
 
 pub(super) struct ZtDevice {
@@ -206,7 +207,7 @@ impl ZtDevice {
 
     fn level_from_write(&self, byte: u8) -> u8 {
         let index = i32::from(byte) - self.protocol.level_write_offset;
-        index.clamp(0, LEVELS.len() as i32 - 1) as u8
+        index.clamp(0, ZT_NOISE_LEVELS.len() as i32 - 1) as u8
     }
 
     fn reply(&self, key: [u8; 2]) -> Option<Vec<u8>> {
@@ -296,6 +297,15 @@ impl ZtDevice {
             FieldValue::text(self.noise_mode.id()),
         );
         readings.insert(HeadsetField::GameMode, FieldValue::Toggle(self.game_mode));
+        let presets = eq_presets(self.protocol);
+        readings.insert(
+            HeadsetField::Eq,
+            FieldValue::text(presets[usize::from(self.eq_preset).min(presets.len() - 1)]),
+        );
+        readings.insert(
+            HeadsetField::TouchKeys,
+            FieldValue::TouchKeys(self.touch_bindings()),
+        );
         readings.insert(
             HeadsetField::AudioMode,
             FieldValue::text(self.audio_mode_name()),
@@ -315,7 +325,7 @@ impl ZtDevice {
         readings.insert(
             HeadsetField::NoiseCycle,
             FieldValue::NoiseCycle(
-                CYCLE_ORDER
+                ZT_CYCLE_ORDER
                     .iter()
                     .zip(self.noise_cycle)
                     .map(|(&mode, flag)| (mode.to_string(), Some(flag)))
@@ -324,11 +334,11 @@ impl ZtDevice {
         );
         readings.insert(
             HeadsetField::AncLevel,
-            FieldValue::Number(LEVELS[usize::from(self.anc_level)]),
+            FieldValue::Number(ZT_NOISE_LEVELS[usize::from(self.anc_level)]),
         );
         readings.insert(
             HeadsetField::TransparencyLevel,
-            FieldValue::Number(LEVELS[usize::from(self.transparency_level)]),
+            FieldValue::Number(ZT_NOISE_LEVELS[usize::from(self.transparency_level)]),
         );
         readings.insert(
             HeadsetField::PromptVolume,
@@ -343,12 +353,21 @@ impl ZtDevice {
     }
 
     fn audio_mode_name(&self) -> &'static str {
-        let modes: &[&str] = if self.protocol.independent_multipoint {
-            &["aac_sbc", "ldac", "lhdc", "ldac_lhdc"]
-        } else {
-            &["aac_sbc", "ldac"]
-        };
+        let modes = audio_modes(self.protocol);
         modes[usize::from(self.audio_mode).min(modes.len() - 1)]
+    }
+
+    fn touch_bindings(&self) -> Vec<TouchBinding> {
+        self.touch_actions
+            .iter()
+            .enumerate()
+            .map(|(index, &code)| TouchBinding {
+                side: if index < 4 { "left" } else { "right" }.to_string(),
+                gesture: ZT_GESTURES[index % 4].to_string(),
+                action: ZT_ACTIONS.get(usize::from(code)).map(|name| name.to_string()),
+                raw_action: i32::from(code),
+            })
+            .collect()
     }
 
     pub(super) fn set(
@@ -433,7 +452,7 @@ fn percentage(level: i32) -> Option<u8> {
 }
 
 fn level_index(level: i32) -> Option<u8> {
-    LEVELS
+    ZT_NOISE_LEVELS
         .iter()
         .position(|&item| item == level)
         .map(|index| index as u8)

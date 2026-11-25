@@ -148,7 +148,10 @@ pub struct GattConnection {
 impl std::fmt::Debug for GattConnection {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("GattConnection")
-            .field("max_write_size", &self.inner.capacity.load(Ordering::SeqCst))
+            .field(
+                "max_write_size",
+                &self.inner.capacity.load(Ordering::SeqCst),
+            )
             .finish()
     }
 }
@@ -320,9 +323,11 @@ impl Inner {
                     .cloned()
             })
         };
-        let service = found
-            .iter()
-            .find(|service| service.uuid.eq_ignore_ascii_case(&self.profile.service_uuid));
+        let service = found.iter().find(|service| {
+            service
+                .uuid
+                .eq_ignore_ascii_case(&self.profile.service_uuid)
+        });
         let writer = characteristic(&service, &self.profile.write_uuid);
         let notifier = characteristic(&service, &self.profile.notify_uuid);
         self.check_open()?;
@@ -439,7 +444,10 @@ impl ControlConnection for GattConnection {
                 let configured = tokio::time::timeout(GATT_OPERATION_TIMEOUT, async {
                     inner
                         .native(TransportRecoveryReason::Subscription, async {
-                            inner.driver.set_notification_routing(&notifier, true).await?;
+                            inner
+                                .driver
+                                .set_notification_routing(&notifier, true)
+                                .await?;
                             let subscription = if notifier.can_notify {
                                 GattSubscription::Notify
                             } else {

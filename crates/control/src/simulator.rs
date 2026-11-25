@@ -1,8 +1,8 @@
+use crate::core::LocalClock;
 use crate::gatt::{
     GattCharacteristic, GattDriver, GattError, GattEvent, GattFailureKind, GattService,
     GattSubscription,
 };
-use crate::core::LocalClock;
 use crate::snapshot::HeadsetCandidate;
 use crate::transport::{ControlTransport, TransportError};
 use async_trait::async_trait;
@@ -161,7 +161,12 @@ impl SimulatedHeadsetHandle {
     }
 
     pub fn link_open(&self) -> bool {
-        self.shared.links.lock().expect("links lock").current.is_some()
+        self.shared
+            .links
+            .lock()
+            .expect("links lock")
+            .current
+            .is_some()
     }
 
     fn conditions(&self) -> MutexGuard<'_, Conditions> {
@@ -386,23 +391,32 @@ impl GattDriver for SimulatedGattDriver {
         if let Some(failure) = failure {
             return Err(failure);
         }
-        self.shared.writes.lock().expect("writes lock").push(LoggedWrite {
-            at: Instant::now(),
-            bytes: value.to_vec(),
-        });
+        self.shared
+            .writes
+            .lock()
+            .expect("writes lock")
+            .push(LoggedWrite {
+                at: Instant::now(),
+                bytes: value.to_vec(),
+            });
         if let Some(mut gate) = gate {
             let _ = gate.wait_for(|open| *open).await;
         }
         let (muted, latency, ignored) = {
             let conditions = self.conditions();
-            let ignored = value.len() >= 7
-                && conditions.ignored_keys.contains(&[value[5], value[6]]);
+            let ignored =
+                value.len() >= 7 && conditions.ignored_keys.contains(&[value[5], value[6]]);
             (conditions.muted, conditions.reply_latency, ignored)
         };
         if muted || ignored {
             return Ok(());
         }
-        let replies = self.shared.device.lock().expect("device lock").receive(value);
+        let replies = self
+            .shared
+            .device
+            .lock()
+            .expect("device lock")
+            .receive(value);
         if latency.is_zero() {
             for reply in replies {
                 self.shared.deliver(reply);

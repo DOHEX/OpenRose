@@ -123,7 +123,10 @@ struct FakeGattDriver {
     events: tokio::sync::Mutex<mpsc::UnboundedReceiver<GattEvent>>,
 }
 
-fn gate_of(state: &FakeState, pick: impl FnOnce(&Config) -> Option<Arc<Gate>>) -> Option<Arc<Gate>> {
+fn gate_of(
+    state: &FakeState,
+    pick: impl FnOnce(&Config) -> Option<Arc<Gate>>,
+) -> Option<Arc<Gate>> {
     pick(&state.config.lock().unwrap())
 }
 
@@ -176,10 +179,10 @@ impl GattDriver for FakeGattDriver {
             "local routing must precede remote configuration"
         );
         *self.state.remote.lock().unwrap() = subscription;
-        if subscription != GattSubscription::Disabled {
-            if let Some(gate) = gate_of(&self.state, |c| c.subscription_gate.clone()) {
-                gate.wait().await?;
-            }
+        if subscription != GattSubscription::Disabled
+            && let Some(gate) = gate_of(&self.state, |c| c.subscription_gate.clone())
+        {
+            gate.wait().await?;
         }
         Ok(())
     }
@@ -193,7 +196,11 @@ impl GattDriver for FakeGattDriver {
         if let Some(error) = self.state.config.lock().unwrap().write_failure.clone() {
             return Err(error);
         }
-        self.state.writes.lock().unwrap().push(openrose_headset::encode_hex(value));
+        self.state
+            .writes
+            .lock()
+            .unwrap()
+            .push(openrose_headset::encode_hex(value));
         if let Some(gate) = gate_of(&self.state, |c| c.write_gate.clone()) {
             gate.wait().await?;
         }
@@ -246,9 +253,14 @@ fn profile() -> GattProfile {
 }
 
 async fn open(state: &Arc<FakeState>) -> Arc<GattConnection> {
-    GattConnection::open(state.driver(), profile(), &|_| {}, &CancellationToken::new())
-        .await
-        .expect("open")
+    GattConnection::open(
+        state.driver(),
+        profile(),
+        &|_| {},
+        &CancellationToken::new(),
+    )
+    .await
+    .expect("open")
 }
 
 fn recoverable(error: &TransportError) -> TransportRecoveryReason {
@@ -272,7 +284,13 @@ async fn missing_services_are_retried_twice_before_the_connection_can_write() {
 
 #[tokio::test(start_paused = true)]
 async fn negotiated_mtu_bounds_complete_packets_and_falls_back_when_unavailable() {
-    for (mtu, capacity) in [(None, 20), (Some(22), 20), (Some(23), 20), (Some(185), 182), (Some(517), 512)] {
+    for (mtu, capacity) in [
+        (None, 20),
+        (Some(22), 20),
+        (Some(23), 20),
+        (Some(185), 182),
+        (Some(517), 512),
+    ] {
         let state = FakeState::new();
         state.configure(|c| c.negotiated_mtu = mtu);
         let connection = open(&state).await;
@@ -298,7 +316,10 @@ async fn subscription_deadline_rolls_back_remote_and_local_delivery_before_faili
     assert!(!subscribing.is_finished());
     advance(Duration::from_millis(1)).await;
     settle().await;
-    assert!(subscribing.is_finished(), "subscription must fail at 5 seconds");
+    assert!(
+        subscribing.is_finished(),
+        "subscription must fail at 5 seconds"
+    );
     let failure = subscribing.await.unwrap().expect_err("deadline");
     assert_eq!(TransportRecoveryReason::Subscription, recoverable(&failure));
     assert!(!state.routing.load(Ordering::SeqCst));
@@ -327,7 +348,10 @@ async fn write_failures_only_recover_for_explicitly_transient_native_errors() {
             (GattFailureKind::Permission, TransportError::PermissionDenied(_))
             | (GattFailureKind::Unsupported, TransportError::Unsupported(_))
             | (GattFailureKind::InvalidValue, TransportError::InvalidArgument(_))
-            | (GattFailureKind::Disconnected | GattFailureKind::Unknown, TransportError::Terminal(_)) => {}
+            | (
+                GattFailureKind::Disconnected | GattFailureKind::Unknown,
+                TransportError::Terminal(_),
+            ) => {}
             other => panic!("unexpected classification {other:?}"),
         }
         connection.close().await.expect("close");
@@ -341,9 +365,7 @@ async fn services_changed_during_discovery_discard_the_snapshot_and_later_invali
     state.configure(|c| c.discovery_gate = Some(gate.clone()));
     let opening = tokio::spawn({
         let driver = state.driver();
-        async move {
-            GattConnection::open(driver, profile(), &|_| {}, &CancellationToken::new()).await
-        }
+        async move { GattConnection::open(driver, profile(), &|_| {}, &CancellationToken::new()).await }
     });
     settle().await;
     state.send(GattEvent::ServicesChanged);
@@ -358,11 +380,23 @@ async fn services_changed_during_discovery_discard_the_snapshot_and_later_invali
     });
     state.send(GattEvent::ServicesChanged);
     settle().await;
-    assert!(receiving.is_finished(), "a changed service database must end the old connection");
+    assert!(
+        receiving.is_finished(),
+        "a changed service database must end the old connection"
+    );
     let ended = receiving.await.unwrap().expect_err("ended");
-    assert_eq!(TransportRecoveryReason::ServicesChanged, recoverable(&ended));
-    let failure = connection.write(&[1]).await.expect_err("write after change");
-    assert_eq!(TransportRecoveryReason::ServicesChanged, recoverable(&failure));
+    assert_eq!(
+        TransportRecoveryReason::ServicesChanged,
+        recoverable(&ended)
+    );
+    let failure = connection
+        .write(&[1])
+        .await
+        .expect_err("write after change");
+    assert_eq!(
+        TransportRecoveryReason::ServicesChanged,
+        recoverable(&failure)
+    );
     assert!(state.writes().is_empty());
     connection.close().await.expect("close");
 }
@@ -396,13 +430,21 @@ async fn concurrent_commands_wait_for_native_completion_in_submission_order() {
 async fn exhausted_discovery_closes_the_driver_and_preserves_the_recovery_reason() {
     let state = FakeState::new();
     state.configure(|c| c.missing_discoveries = 10);
-    let failure = GattConnection::open(state.driver(), profile(), &|_| {}, &CancellationToken::new())
-        .await
-        .expect_err("no services");
+    let failure = GattConnection::open(
+        state.driver(),
+        profile(),
+        &|_| {},
+        &CancellationToken::new(),
+    )
+    .await
+    .expect_err("no services");
     let OpenFailureKind::Transport(error) = failure.kind else {
         panic!("expected a transport failure");
     };
-    assert_eq!(TransportRecoveryReason::ServicesUnavailable, recoverable(&error));
+    assert_eq!(
+        TransportRecoveryReason::ServicesUnavailable,
+        recoverable(&error)
+    );
     assert!(failure.unreleased.is_none());
     assert_eq!(3, state.discoveries.load(Ordering::SeqCst));
     assert!(state.closed.load(Ordering::SeqCst));
@@ -415,9 +457,14 @@ async fn a_driver_that_refuses_to_close_is_handed_back_as_unreleased_and_closes_
         c.missing_discoveries = 10;
         c.refuse_close = true;
     });
-    let failure = GattConnection::open(state.driver(), profile(), &|_| {}, &CancellationToken::new())
-        .await
-        .expect_err("no services");
+    let failure = GattConnection::open(
+        state.driver(),
+        profile(),
+        &|_| {},
+        &CancellationToken::new(),
+    )
+    .await
+    .expect_err("no services");
     let unreleased = failure.unreleased.expect("close was refused");
     assert!(!state.closed.load(Ordering::SeqCst));
     state.configure(|c| c.refuse_close = false);
@@ -470,7 +517,10 @@ async fn service_change_during_a_pending_write_preserves_the_shared_failure() {
     state.send(GattEvent::ServicesChanged);
     settle().await;
     let failure = writing.await.unwrap().expect_err("pending write");
-    assert_eq!(TransportRecoveryReason::ServicesChanged, recoverable(&failure));
+    assert_eq!(
+        TransportRecoveryReason::ServicesChanged,
+        recoverable(&failure)
+    );
     connection.close().await.expect("close");
 }
 

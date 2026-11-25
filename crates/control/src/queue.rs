@@ -77,15 +77,18 @@ impl Core {
     ) -> ControlResult {
         let receiver = {
             let inner = self.lifecycle.lock().await;
-            let attempt = inner
-                .active
-                .clone()
-                .filter(|attempt| attempt.connection().is_some() && !attempt.progress.borrow().ended);
+            let attempt = inner.active.clone().filter(|attempt| {
+                attempt.connection().is_some() && !attempt.progress.borrow().ended
+            });
             let snapshot = self.state.snapshot();
             let session = snapshot.session_for(command.setting());
             if let Some(expected) = expected_session {
-                let current = attempt.as_ref().is_some_and(|attempt| attempt.id == expected)
-                    && session.as_ref().is_some_and(|session| session.session_id == expected);
+                let current = attempt
+                    .as_ref()
+                    .is_some_and(|attempt| attempt.id == expected)
+                    && session
+                        .as_ref()
+                        .is_some_and(|session| session.session_id == expected);
                 if !current {
                     return Err(ControlError::new(
                         ControlErrorCode::Disconnected,
@@ -97,22 +100,37 @@ impl Core {
                 return self.reject(error);
             }
             let (Some(attempt), Some(session)) = (attempt, session) else {
-                return self.reject(ControlError::new(ControlErrorCode::NotReady, "设备尚未就绪"));
+                return self.reject(ControlError::new(
+                    ControlErrorCode::NotReady,
+                    "设备尚未就绪",
+                ));
             };
             if session.session_id != attempt.id {
-                return self.reject(ControlError::new(ControlErrorCode::NotReady, "设备尚未就绪"));
+                return self.reject(ControlError::new(
+                    ControlErrorCode::NotReady,
+                    "设备尚未就绪",
+                ));
             }
-            let headset = snapshot.headset.as_ref().expect("a session implies a headset");
+            let headset = snapshot
+                .headset
+                .as_ref()
+                .expect("a session implies a headset");
             if let Err(error) = headset.readings.validate(&command) {
                 return self.reject(validation_error(error));
             }
             let mut requests = attempt.queue.requests.lock().expect("requests lock");
             if requests.len() >= QUEUE_CAPACITY {
                 drop(requests);
-                return self.reject(ControlError::new(ControlErrorCode::NotReady, "设置队列已满"));
+                return self.reject(ControlError::new(
+                    ControlErrorCode::NotReady,
+                    "设置队列已满",
+                ));
             }
             let operation = SettingOperation {
-                id: self.operation_ids.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1,
+                id: self
+                    .operation_ids
+                    .fetch_add(1, std::sync::atomic::Ordering::SeqCst)
+                    + 1,
                 session_id: attempt.id,
                 setting: command.setting(),
                 requested_value: command.value(),
@@ -150,9 +168,12 @@ impl Core {
             });
             receiver
         };
-        receiver
-            .await
-            .unwrap_or_else(|_| Err(ControlError::new(ControlErrorCode::Disconnected, "连接会话已结束")))
+        receiver.await.unwrap_or_else(|_| {
+            Err(ControlError::new(
+                ControlErrorCode::Disconnected,
+                "连接会话已结束",
+            ))
+        })
     }
 
     pub(crate) fn reject(&self, error: ControlError) -> ControlResult {
@@ -172,7 +193,8 @@ impl Core {
                     request = receiver.recv() => request,
                 };
                 let Some(request) = request else { break };
-                core.execute(&attempt, &request, &attempt.queue.cancel).await;
+                core.execute(&attempt, &request, &attempt.queue.cancel)
+                    .await;
             }
         });
     }
@@ -191,7 +213,12 @@ impl Core {
         Ok(())
     }
 
-    async fn execute(&self, attempt: &Arc<Attempt>, request: &Arc<Request>, cancel: &CancellationToken) {
+    async fn execute(
+        &self,
+        attempt: &Arc<Attempt>,
+        request: &Arc<Request>,
+        cancel: &CancellationToken,
+    ) {
         if request.is_completed() {
             return;
         }
@@ -243,7 +270,10 @@ impl Core {
         request.complete(result.clone());
         if let Err(error) = &result
             && inner.is_active(attempt)
-            && matches!(error.code, ControlErrorCode::Timeout | ControlErrorCode::Failed)
+            && matches!(
+                error.code,
+                ControlErrorCode::Timeout | ControlErrorCode::Failed
+            )
         {
             self.clear_active(&mut inner).await;
             let error = error.clone();
@@ -269,9 +299,16 @@ impl Core {
             .session_for(request.command.setting())
             .is_some_and(|session| session.session_id == attempt.id);
         let rejection = if session_matches {
-            headset.readings.validate(&request.command).err().map(validation_error)
+            headset
+                .readings
+                .validate(&request.command)
+                .err()
+                .map(validation_error)
         } else {
-            Some(ControlError::new(ControlErrorCode::NotReady, "设备尚未就绪"))
+            Some(ControlError::new(
+                ControlErrorCode::NotReady,
+                "设备尚未就绪",
+            ))
         };
         match rejection {
             None => self.apply_setting(attempt, request, snapshot, cancel).await,
@@ -323,15 +360,25 @@ impl Core {
         }
         let last = prepared.write_frames.len().saturating_sub(1);
         for (index, frame) in prepared.write_frames.iter().enumerate() {
-            self.write_paced(attempt, &connection, frame, cancel).await?;
+            self.write_paced(attempt, &connection, frame, cancel)
+                .await?;
             let stage = if index == last {
                 SettingStage::Written
             } else {
                 SettingStage::PartiallyWritten
             };
-            self.setting_stage(attempt, request, stage, None, Some(index as u32 + 1), None, None);
+            self.setting_stage(
+                attempt,
+                request,
+                stage,
+                None,
+                Some(index as u32 + 1),
+                None,
+                None,
+            );
         }
-        self.confirm_readbacks(attempt, request, &connection, &prepared, cancel).await
+        self.confirm_readbacks(attempt, request, &connection, &prepared, cancel)
+            .await
     }
 
     async fn confirm_readbacks(
@@ -379,7 +426,11 @@ impl Core {
                     }
                 }
             };
-            let observed = guarded(cancel, tokio::time::timeout(self.timing.query_timeout, waiting)).await?;
+            let observed = guarded(
+                cancel,
+                tokio::time::timeout(self.timing.query_timeout, waiting),
+            )
+            .await?;
             match observed {
                 Ok(Some(_)) => return Err(Interrupt::Ended),
                 Ok(None) => {}
@@ -396,7 +447,15 @@ impl Core {
             self.ensure_active(attempt)?;
         }
         if confirmation.applied() {
-            self.setting_stage(attempt, request, SettingStage::Confirmed, None, None, None, None);
+            self.setting_stage(
+                attempt,
+                request,
+                SettingStage::Confirmed,
+                None,
+                None,
+                None,
+                None,
+            );
             Ok(Ok(()))
         } else {
             Ok(self.setting_failure(
@@ -455,18 +514,28 @@ impl Core {
         error: ControlError,
         stage: SettingStage,
     ) -> ControlResult {
-        self.setting_stage(attempt, request, stage, Some(error.clone()), None, None, None);
+        self.setting_stage(
+            attempt,
+            request,
+            stage,
+            Some(error.clone()),
+            None,
+            None,
+            None,
+        );
         Err(error)
     }
 
     pub(crate) fn end_settings(&self, attempt: &Attempt) {
         let error = ControlError::new(ControlErrorCode::Disconnected, "连接会话已结束");
-        let requests: Vec<Arc<Request>> = std::mem::take(
-            &mut *attempt.queue.requests.lock().expect("requests lock"),
-        )
-        .into_values()
-        .collect();
-        let ids: BTreeSet<u64> = requests.iter().map(|request| request.operation_id).collect();
+        let requests: Vec<Arc<Request>> =
+            std::mem::take(&mut *attempt.queue.requests.lock().expect("requests lock"))
+                .into_values()
+                .collect();
+        let ids: BTreeSet<u64> = requests
+            .iter()
+            .map(|request| request.operation_id)
+            .collect();
         self.state.update(|snapshot| {
             for operation in &mut snapshot.setting_operations {
                 if ids.contains(&operation.id) {

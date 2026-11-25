@@ -6,11 +6,13 @@ use openrose_control::snapshot::{
     ConnectionPhase, ConnectionState, PermissionState, PlatformState, TransportAvailability,
     TransportUnavailableCode,
 };
-use openrose_headset::{FieldReading, FieldValue, HeadsetCommand, HeadsetField, HeadsetId, NoiseMode};
+use openrose_headset::{
+    FieldReading, FieldValue, HeadsetCommand, HeadsetField, HeadsetId, NoiseMode,
+};
 use std::sync::Arc;
 use std::time::Duration;
 use support::{Harness, I5_INIT_WRITES, Options, settle};
-use tokio::time::{advance, Instant};
+use tokio::time::{Instant, advance};
 
 const I5_INIT_QUERIES: [&str; 13] = [
     "08ee00000001010a0002",
@@ -28,14 +30,17 @@ const I5_INIT_QUERIES: [&str; 13] = [
     "08ee0000000e030a0011",
 ];
 
-fn error_code<T: std::fmt::Debug>(result: Result<T, openrose_control::ControlError>) -> ControlErrorCode {
+fn error_code<T: std::fmt::Debug>(
+    result: Result<T, openrose_control::ControlError>,
+) -> ControlErrorCode {
     result.expect_err("expected a failure").code
 }
 
 #[tokio::test(start_paused = true)]
 async fn permission_is_required_before_connecting() {
     let mut options = Options::i5();
-    options.platform = PlatformState::new(PermissionState::Denied, TransportAvailability::Available);
+    options.platform =
+        PlatformState::new(PermissionState::Denied, TransportAvailability::Available);
     let harness = Harness::new(options);
     assert_eq!(
         ControlErrorCode::PermissionRequired,
@@ -74,12 +79,23 @@ async fn a_headset_without_model_evidence_never_receives_a_connection() {
 }
 
 #[tokio::test(start_paused = true)]
-async fn i5_connects_after_subscription_and_exposes_confirmed_values_without_inventing_case_battery() {
+async fn i5_connects_after_subscription_and_exposes_confirmed_values_without_inventing_case_battery()
+ {
     let harness = Harness::new(Options::i5().paced());
-    harness.runtime.connect(harness.id()).await.expect("connect");
+    harness
+        .runtime
+        .connect(harness.id())
+        .await
+        .expect("connect");
 
-    assert!(matches!(harness.connection(), ConnectionState::Connected { .. }));
-    assert_eq!(Some(FieldValue::Number(100)), harness.value(HeadsetField::LeftBattery));
+    assert!(matches!(
+        harness.connection(),
+        ConnectionState::Connected { .. }
+    ));
+    assert_eq!(
+        Some(FieldValue::Number(100)),
+        harness.value(HeadsetField::LeftBattery)
+    );
     assert!(matches!(
         harness.reading(HeadsetField::CaseBattery),
         Some(FieldReading::NotProvided { raw_hex }) if raw_hex == "ff"
@@ -99,7 +115,11 @@ async fn i5_connects_after_subscription_and_exposes_confirmed_values_without_inv
             .all(|reading| *reading != FieldReading::Loading)
     );
     let times: Vec<Instant> = harness.headset.writes().iter().map(|w| w.at).collect();
-    assert!(times.windows(2).all(|pair| pair[1] - pair[0] >= Duration::from_millis(100)));
+    assert!(
+        times
+            .windows(2)
+            .all(|pair| pair[1] - pair[0] >= Duration::from_millis(100))
+    );
     assert_eq!(
         ControlErrorCode::Unsupported,
         error_code(
@@ -118,11 +138,24 @@ async fn i5_connects_after_subscription_and_exposes_confirmed_values_without_inv
 async fn partial_read_timeout_keeps_confirmed_fields_and_reports_the_unavailable_field() {
     let harness = Harness::new(Options::i5());
     harness.headset.ignore_key("0d01");
-    harness.runtime.connect(harness.id()).await.expect("connect");
+    harness
+        .runtime
+        .connect(harness.id())
+        .await
+        .expect("connect");
 
-    assert!(matches!(harness.connection(), ConnectionState::Connected { .. }));
-    assert_eq!(Some(FieldValue::Number(100)), harness.value(HeadsetField::LeftBattery));
-    assert_eq!(Some(FieldReading::Loading), harness.reading(HeadsetField::Firmware));
+    assert!(matches!(
+        harness.connection(),
+        ConnectionState::Connected { .. }
+    ));
+    assert_eq!(
+        Some(FieldValue::Number(100)),
+        harness.value(HeadsetField::LeftBattery)
+    );
+    assert_eq!(
+        Some(FieldReading::Loading),
+        harness.reading(HeadsetField::Firmware)
+    );
     let snapshot = harness.snapshot();
     let diagnostics = snapshot.headset.expect("headset").diagnostics;
     assert_eq!(
@@ -140,17 +173,30 @@ async fn remote_disconnect_allows_a_fresh_connection_and_rejects_old_callbacks()
     let harness = Harness::ready(Options::i5()).await;
     let first_session = harness.session_id();
     let first_link = harness.headset.connections_opened();
-    harness.headset.disconnect(GattError::new(GattFailureKind::Disconnected, "Device powered off"));
+    harness.headset.disconnect(GattError::new(
+        GattFailureKind::Disconnected,
+        "Device powered off",
+    ));
     settle().await;
     let snapshot = harness.snapshot();
     assert_eq!(ConnectionState::Disconnected, snapshot.connection);
     assert!(snapshot.headset.is_none());
-    assert_eq!(ControlErrorCode::Disconnected, snapshot.last_error.expect("error").code);
+    assert_eq!(
+        ControlErrorCode::Disconnected,
+        snapshot.last_error.expect("error").code
+    );
 
     harness.headset.ignore_key("0d01");
-    harness.runtime.connect(harness.id()).await.expect("reconnect");
+    harness
+        .runtime
+        .connect(harness.id())
+        .await
+        .expect("reconnect");
     assert!(harness.session_id() > first_session);
-    assert_eq!(Some(FieldReading::Loading), harness.reading(HeadsetField::Firmware));
+    assert_eq!(
+        Some(FieldReading::Loading),
+        harness.reading(HeadsetField::Firmware)
+    );
     let before = harness.snapshot();
     let late = openrose_headset::decode_hex("09ff0000010d010e00010205002d").unwrap();
     assert!(
@@ -181,14 +227,24 @@ async fn concurrent_entrypoints_share_one_connection_and_unknown_notifications_r
     settle().await;
     let headset = harness.snapshot().headset.expect("headset");
     assert_eq!(
-        Some(&FieldReading::Unknown { raw_hex: "a2".into() }),
+        Some(&FieldReading::Unknown {
+            raw_hex: "a2".into()
+        }),
         headset.readings.fields.get(&HeadsetField::GameMode)
     );
     assert_eq!(
-        vec!["0000000000ffff".to_string(), "000000000006030000a2".to_string()],
+        vec![
+            "0000000000ffff".to_string(),
+            "000000000006030000a2".to_string()
+        ],
         headset.diagnostics.unknown_notifications
     );
-    assert!(headset.diagnostics.raw_notifications.contains(&"0000000000ffff".to_string()));
+    assert!(
+        headset
+            .diagnostics
+            .raw_notifications
+            .contains(&"0000000000ffff".to_string())
+    );
 }
 
 #[tokio::test(start_paused = true)]
@@ -230,7 +286,10 @@ async fn an_unresponsive_device_times_out_without_claiming_protocol_readiness() 
     );
     settle().await;
     let snapshot = harness.snapshot();
-    assert_eq!(ControlErrorCode::Timeout, snapshot.last_error.expect("error").code);
+    assert_eq!(
+        ControlErrorCode::Timeout,
+        snapshot.last_error.expect("error").code
+    );
     assert_eq!(ConnectionState::Disconnected, snapshot.connection);
     assert!(!harness.headset.link_open());
 }
@@ -252,8 +311,14 @@ async fn dropping_one_entrypoint_does_not_cancel_the_shared_connection() {
     });
     settle().await;
     first.abort();
-    second.await.unwrap().expect("the shared connection survives");
-    assert!(matches!(harness.connection(), ConnectionState::Connected { .. }));
+    second
+        .await
+        .unwrap()
+        .expect("the shared connection survives");
+    assert!(matches!(
+        harness.connection(),
+        ConnectionState::Connected { .. }
+    ));
     assert_eq!(I5_INIT_WRITES, harness.headset.written_hex().len());
     assert!(harness.runtime.disconnect().await);
 }
@@ -327,7 +392,11 @@ async fn release_during_setup_waits_for_the_driver_close_and_retires_the_owner()
 #[tokio::test(start_paused = true)]
 async fn the_observer_receives_every_revision_in_order_starting_with_the_initial_state() {
     let harness = Harness::i5();
-    harness.runtime.connect(harness.id()).await.expect("connect");
+    harness
+        .runtime
+        .connect(harness.id())
+        .await
+        .expect("connect");
     harness
         .runtime
         .set(HeadsetCommand::NoiseMode(NoiseMode::Anc), None)
@@ -341,5 +410,8 @@ async fn the_observer_receives_every_revision_in_order_starting_with_the_initial
         harness.snapshot().revision,
         *revisions.last().expect("revisions")
     );
-    assert_eq!(ConnectionState::Disconnected, harness.recorder.all()[0].connection);
+    assert_eq!(
+        ConnectionState::Disconnected,
+        harness.recorder.all()[0].connection
+    );
 }

@@ -17,10 +17,10 @@ const DEFAULT_INIT_KEYS: &[&str] = &[
     "0e03",
 ];
 
-const ZT_NOISE_LEVELS: [i32; 3] = [1, 3, 5];
-const ZT_CYCLE_ORDER: [&str; 4] = ["normal", "transparency", "wind", "anc"];
-const ZT_GESTURES: [&str; 4] = ["single", "double", "triple", "long"];
-const ZT_ACTIONS: [&str; 8] = [
+pub(crate) const ZT_NOISE_LEVELS: [i32; 3] = [1, 3, 5];
+pub(crate) const ZT_CYCLE_ORDER: [&str; 4] = ["normal", "transparency", "wind", "anc"];
+pub(crate) const ZT_GESTURES: [&str; 4] = ["single", "double", "triple", "long"];
+pub(crate) const ZT_ACTIONS: [&str; 8] = [
     "volume_up",
     "volume_down",
     "previous_track",
@@ -166,7 +166,7 @@ struct ZtWrite {
     payload: Vec<u8>,
 }
 
-fn eq_presets(protocol: ZtProtocol) -> &'static [&'static str] {
+pub(crate) fn eq_presets(protocol: ZtProtocol) -> &'static [&'static str] {
     if protocol.independent_multipoint {
         &["pop", "hifi", "rock", "custom"]
     } else {
@@ -174,7 +174,7 @@ fn eq_presets(protocol: ZtProtocol) -> &'static [&'static str] {
     }
 }
 
-fn audio_modes(protocol: ZtProtocol) -> &'static [&'static str] {
+pub(crate) fn audio_modes(protocol: ZtProtocol) -> &'static [&'static str] {
     if protocol.independent_multipoint {
         &["aac_sbc", "ldac", "lhdc", "ldac_lhdc"]
     } else {

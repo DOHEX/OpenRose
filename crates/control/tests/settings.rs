@@ -39,14 +39,23 @@ async fn i5_setting_writes_then_reads_before_confirming_actual_state() {
     let setting = spawn_set(&harness, HeadsetCommand::NoiseMode(NoiseMode::Normal));
     settle().await;
 
-    assert_eq!(hex(&[NOISE_NORMAL_WRITE, NOISE_READBACK]), harness.writes_after_init());
+    assert_eq!(
+        hex(&[NOISE_NORMAL_WRITE, NOISE_READBACK]),
+        harness.writes_after_init()
+    );
     assert!(!setting.is_finished());
-    assert_eq!(Some(FieldValue::text("wind")), harness.value(HeadsetField::NoiseMode));
+    assert_eq!(
+        Some(FieldValue::text("wind")),
+        harness.value(HeadsetField::NoiseMode)
+    );
     assert!(harness.inject_hex(NOISE_REPLY_NORMAL));
     settle().await;
 
     setting.await.unwrap().expect("confirmed");
-    assert_eq!(Some(FieldValue::text("normal")), harness.value(HeadsetField::NoiseMode));
+    assert_eq!(
+        Some(FieldValue::text("normal")),
+        harness.value(HeadsetField::NoiseMode)
+    );
     harness.runtime.disconnect().await;
 }
 
@@ -77,7 +86,10 @@ async fn uncertain_transport_write_timeout_closes_the_link_and_never_starts_queu
     settle().await;
 
     assert_eq!(ControlErrorCode::Timeout, error_code(first.await.unwrap()));
-    assert_eq!(ControlErrorCode::Disconnected, error_code(second.await.unwrap()));
+    assert_eq!(
+        ControlErrorCode::Disconnected,
+        error_code(second.await.unwrap())
+    );
     assert_eq!(ConnectionState::Disconnected, harness.connection());
     assert_eq!(hex(&[NOISE_ANC_WRITE]), harness.writes_after_init());
     assert_eq!(
@@ -125,7 +137,10 @@ async fn cached_matching_value_cannot_confirm_and_unknown_fresh_value_times_out(
     ));
     advance(Duration::from_millis(51)).await;
     settle().await;
-    assert_eq!(ControlErrorCode::Timeout, error_code(pending.await.unwrap()));
+    assert_eq!(
+        ControlErrorCode::Timeout,
+        error_code(pending.await.unwrap())
+    );
     assert_eq!(vec![SettingStage::TimedOut], harness.stages());
     assert_eq!(ConnectionState::Disconnected, harness.connection());
 }
@@ -137,10 +152,19 @@ async fn different_fresh_device_state_is_not_applied_and_remains_authoritative()
     settle().await;
     harness.inject_hex(NOISE_REPLY_NORMAL);
     settle().await;
-    assert_eq!(ControlErrorCode::NotApplied, error_code(pending.await.unwrap()));
+    assert_eq!(
+        ControlErrorCode::NotApplied,
+        error_code(pending.await.unwrap())
+    );
     assert_eq!(vec![SettingStage::NotApplied], harness.stages());
-    assert_eq!(Some(FieldValue::text("normal")), harness.value(HeadsetField::NoiseMode));
-    assert!(matches!(harness.connection(), ConnectionState::Connected { .. }));
+    assert_eq!(
+        Some(FieldValue::text("normal")),
+        harness.value(HeadsetField::NoiseMode)
+    );
+    assert!(matches!(
+        harness.connection(),
+        ConnectionState::Connected { .. }
+    ));
 }
 
 #[tokio::test(start_paused = true)]
@@ -169,14 +193,21 @@ async fn invalid_values_and_unsupported_model_modes_never_produce_wire_traffic()
     assert!(harness.snapshot().setting_operations.is_empty());
     assert_eq!(
         ControlErrorCode::Unsupported,
-        harness.snapshot().last_error.expect("rejection is observable").code
+        harness
+            .snapshot()
+            .last_error
+            .expect("rejection is observable")
+            .code
     );
 }
 
 #[tokio::test(start_paused = true)]
 async fn i5_noise_level_writes_remain_independent_of_current_mode_and_other_confirmed_level() {
     let harness = Harness::ready_i5().await;
-    assert_eq!(Some(FieldValue::text("wind")), harness.value(HeadsetField::NoiseMode));
+    assert_eq!(
+        Some(FieldValue::text("wind")),
+        harness.value(HeadsetField::NoiseMode)
+    );
 
     let anc = spawn_set(&harness, HeadsetCommand::AncLevel(3));
     settle().await;
@@ -187,9 +218,18 @@ async fn i5_noise_level_writes_remain_independent_of_current_mode_and_other_conf
     harness.inject_hex("09ff00000106070b000122");
     settle().await;
     anc.await.unwrap().expect("anc level");
-    assert_eq!(Some(FieldValue::text("wind")), harness.value(HeadsetField::NoiseMode));
-    assert_eq!(Some(FieldValue::Number(3)), harness.value(HeadsetField::AncLevel));
-    assert_eq!(Some(FieldValue::Number(1)), harness.value(HeadsetField::TransparencyLevel));
+    assert_eq!(
+        Some(FieldValue::text("wind")),
+        harness.value(HeadsetField::NoiseMode)
+    );
+    assert_eq!(
+        Some(FieldValue::Number(3)),
+        harness.value(HeadsetField::AncLevel)
+    );
+    assert_eq!(
+        Some(FieldValue::Number(1)),
+        harness.value(HeadsetField::TransparencyLevel)
+    );
 
     let transparency = spawn_set(&harness, HeadsetCommand::TransparencyLevel(3));
     settle().await;
@@ -205,9 +245,18 @@ async fn i5_noise_level_writes_remain_independent_of_current_mode_and_other_conf
     harness.inject_hex("09ff00000106040b00011f");
     settle().await;
     transparency.await.unwrap().expect("transparency level");
-    assert_eq!(Some(FieldValue::text("wind")), harness.value(HeadsetField::NoiseMode));
-    assert_eq!(Some(FieldValue::Number(3)), harness.value(HeadsetField::AncLevel));
-    assert_eq!(Some(FieldValue::Number(3)), harness.value(HeadsetField::TransparencyLevel));
+    assert_eq!(
+        Some(FieldValue::text("wind")),
+        harness.value(HeadsetField::NoiseMode)
+    );
+    assert_eq!(
+        Some(FieldValue::Number(3)),
+        harness.value(HeadsetField::AncLevel)
+    );
+    assert_eq!(
+        Some(FieldValue::Number(3)),
+        harness.value(HeadsetField::TransparencyLevel)
+    );
 }
 
 #[tokio::test(start_paused = true)]
@@ -217,7 +266,10 @@ async fn simultaneous_settings_stay_fifo_even_when_one_caller_cancels() {
     settle().await;
     let second = spawn_set(&harness, HeadsetCommand::AncLevel(5));
     settle().await;
-    assert_eq!(vec![SettingStage::Written, SettingStage::Submitted], harness.stages());
+    assert_eq!(
+        vec![SettingStage::Written, SettingStage::Submitted],
+        harness.stages()
+    );
     assert_eq!(I5_INIT_WRITES + 2, harness.headset.written_hex().len());
     first.abort();
     settle().await;
@@ -237,7 +289,10 @@ async fn simultaneous_settings_stay_fifo_even_when_one_caller_cancels() {
     harness.inject_hex("09ff00000106070b000223");
     settle().await;
     second.await.unwrap().expect("second setting");
-    assert_eq!(vec![SettingStage::Confirmed, SettingStage::Confirmed], harness.stages());
+    assert_eq!(
+        vec![SettingStage::Confirmed, SettingStage::Confirmed],
+        harness.stages()
+    );
 }
 
 #[tokio::test(start_paused = true)]
@@ -249,8 +304,14 @@ async fn disconnect_ends_both_active_and_queued_settings_and_reconnect_never_rep
     settle().await;
     harness.runtime.disconnect().await;
     settle().await;
-    assert_eq!(ControlErrorCode::Disconnected, error_code(first.await.unwrap()));
-    assert_eq!(ControlErrorCode::Disconnected, error_code(second.await.unwrap()));
+    assert_eq!(
+        ControlErrorCode::Disconnected,
+        error_code(first.await.unwrap())
+    );
+    assert_eq!(
+        ControlErrorCode::Disconnected,
+        error_code(second.await.unwrap())
+    );
     assert_eq!(
         vec![SettingStage::Disconnected, SettingStage::Disconnected],
         harness.stages()
@@ -286,7 +347,11 @@ async fn all_setting_and_readback_writes_keep_the_initialization_pacing() {
     );
     assert_eq!(vec![SettingStage::Written], harness.stages());
     let writes = harness.headset.writes();
-    assert!(writes.windows(2).all(|pair| pair[1].at - pair[0].at >= Duration::from_millis(100)));
+    assert!(
+        writes
+            .windows(2)
+            .all(|pair| pair[1].at - pair[0].at >= Duration::from_millis(100))
+    );
     assert!(writes[I5_INIT_WRITES].at - before >= Duration::from_millis(100));
     harness.inject_hex("09ff00000106040b00011f");
     settle().await;
@@ -314,7 +379,8 @@ async fn a_submitted_cycle_keeps_the_values_the_caller_gave() {
         hex(&["08ee00000006850e000100000191", "08ee00000006050a000b"]),
         harness.writes_after_init().split_off(2)
     );
-    let FieldValue::NoiseCycle(requested) = &harness.snapshot().setting_operations[1].requested_value
+    let FieldValue::NoiseCycle(requested) =
+        &harness.snapshot().setting_operations[1].requested_value
     else {
         panic!("expected a cycle");
     };
@@ -331,18 +397,28 @@ async fn timeout_and_late_old_reply_cannot_change_a_reconnected_session() {
     settle().await;
     advance(Duration::from_millis(51)).await;
     settle().await;
-    assert_eq!(ControlErrorCode::Timeout, error_code(pending.await.unwrap()));
+    assert_eq!(
+        ControlErrorCode::Timeout,
+        error_code(pending.await.unwrap())
+    );
     let old_link = harness.headset.connections_opened();
 
     harness.headset.mute(false);
-    harness.runtime.connect(harness.id()).await.expect("fresh session");
+    harness
+        .runtime
+        .connect(harness.id())
+        .await
+        .expect("fresh session");
     harness.headset.mute(true);
     let before = harness.snapshot();
     let late = openrose_headset::decode_hex(NOISE_REPLY_ANC).unwrap();
     assert!(!harness.headset.inject_late(old_link, late));
     settle().await;
     assert_eq!(before, harness.snapshot());
-    assert_eq!(I5_INIT_WRITES, harness.headset.written_hex().len() - I5_INIT_WRITES - 2);
+    assert_eq!(
+        I5_INIT_WRITES,
+        harness.headset.written_hex().len() - I5_INIT_WRITES - 2
+    );
     harness.runtime.disconnect().await;
 }
 
@@ -353,9 +429,15 @@ async fn setter_echo_cannot_replace_the_mandatory_fresh_readback() {
     settle().await;
     harness.inject_hex("09ff00000106820e000001000020");
     settle().await;
-    assert_eq!(hex(&[NOISE_NORMAL_WRITE, NOISE_READBACK]), harness.writes_after_init());
+    assert_eq!(
+        hex(&[NOISE_NORMAL_WRITE, NOISE_READBACK]),
+        harness.writes_after_init()
+    );
     assert_eq!(vec![SettingStage::Written], harness.stages());
-    assert_eq!(Some(FieldValue::text("wind")), harness.value(HeadsetField::NoiseMode));
+    assert_eq!(
+        Some(FieldValue::text("wind")),
+        harness.value(HeadsetField::NoiseMode)
+    );
     assert!(!pending.is_finished());
     harness.inject_hex(NOISE_REPLY_NORMAL);
     settle().await;
@@ -372,7 +454,10 @@ async fn a_device_that_echoes_every_write_is_still_confirmed_only_by_its_readbac
         .await
         .expect("confirmed");
     assert_eq!(vec![SettingStage::Confirmed], harness.stages());
-    assert_eq!(Some(FieldValue::text("normal")), harness.value(HeadsetField::NoiseMode));
+    assert_eq!(
+        Some(FieldValue::text("normal")),
+        harness.value(HeadsetField::NoiseMode)
+    );
 }
 
 #[tokio::test(start_paused = true)]
@@ -380,7 +465,10 @@ async fn the_public_queue_has_a_bound_and_disconnect_completes_every_accepted_ca
     let harness = Harness::ready_i5().await;
     let mut pending = Vec::new();
     for _ in 0..33 {
-        pending.push(spawn_set(&harness, HeadsetCommand::NoiseMode(NoiseMode::Anc)));
+        pending.push(spawn_set(
+            &harness,
+            HeadsetCommand::NoiseMode(NoiseMode::Anc),
+        ));
         settle().await;
     }
     let last = pending.pop().expect("33 callers");
@@ -390,9 +478,17 @@ async fn the_public_queue_has_a_bound_and_disconnect_completes_every_accepted_ca
     harness.runtime.disconnect().await;
     settle().await;
     for accepted in pending {
-        assert_eq!(ControlErrorCode::Disconnected, error_code(accepted.await.unwrap()));
+        assert_eq!(
+            ControlErrorCode::Disconnected,
+            error_code(accepted.await.unwrap())
+        );
     }
-    assert!(harness.stages().iter().all(|stage| *stage == SettingStage::Disconnected));
+    assert!(
+        harness
+            .stages()
+            .iter()
+            .all(|stage| *stage == SettingStage::Disconnected)
+    );
     advance(Duration::from_secs(1)).await;
     settle().await;
     assert_eq!(I5_INIT_WRITES + 2, harness.headset.written_hex().len());
@@ -424,7 +520,10 @@ async fn i5_partially_unknown_cycle_readback_waits_for_complete_device_state() {
     assert_eq!(vec![SettingStage::Confirmed], harness.stages());
     assert_eq!(
         Some(FieldValue::NoiseCycle(
-            requested.iter().map(|(k, v)| (k.clone(), Some(*v))).collect()
+            requested
+                .iter()
+                .map(|(k, v)| (k.clone(), Some(*v)))
+                .collect()
         )),
         harness.value(HeadsetField::NoiseCycle)
     );

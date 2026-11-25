@@ -3,9 +3,7 @@ use crate::core::{Attempt, Core, Interrupt, LinkInner};
 use crate::error::{ControlError, ControlErrorCode, ControlResult};
 use crate::gatt::GattConnection;
 use crate::snapshot::{ConnectionPhase, ConnectionState, ControlSnapshot, HeadsetCandidate};
-use crate::transport::{
-    ControlConnection, OpenFailure, OpenFailureKind, TransportError,
-};
+use crate::transport::{ControlConnection, OpenFailure, OpenFailureKind, TransportError};
 use openrose_headset::{FieldReading, HeadsetField, ModelProfile, ProtocolQuery, ProtocolReply};
 use std::collections::BTreeSet;
 use std::sync::Arc;
@@ -25,7 +23,12 @@ fn restrict(reply: &ProtocolReply, readable: &BTreeSet<HeadsetField>) -> Protoco
     } else {
         reply.response_keys.clone()
     };
-    ProtocolReply::new(reply.raw_hex.clone(), keys, readings, reply.warnings.clone())
+    ProtocolReply::new(
+        reply.raw_hex.clone(),
+        keys,
+        readings,
+        reply.warnings.clone(),
+    )
 }
 
 fn append_recent(list: &mut Vec<String>, values: impl IntoIterator<Item = String>) {
@@ -66,7 +69,8 @@ impl Core {
         change: impl FnOnce(&mut ControlSnapshot),
     ) {
         self.state.update(|snapshot| {
-            let live = epoch.is_none_or(|epoch| attempt.epoch() == epoch) && attempt.matches(snapshot);
+            let live =
+                epoch.is_none_or(|epoch| attempt.epoch() == epoch) && attempt.matches(snapshot);
             if live {
                 change(snapshot);
             }
@@ -241,13 +245,16 @@ impl Core {
         }
         self.observe(attempt, Arc::clone(&opened), epoch);
         self.phase(attempt, epoch, ConnectionPhase::Subscribing);
-        within(&attempt.cancel, self.timing.connect_timeout, opened.subscribe()).await?;
+        within(
+            &attempt.cancel,
+            self.timing.connect_timeout,
+            opened.subscribe(),
+        )
+        .await?;
         self.throw_progress_failure(attempt)?;
         self.phase(attempt, epoch, ConnectionPhase::Initializing);
         self.read_initial_queries(attempt, epoch, &opened).await?;
-        let live = self.state.read(|s| {
-            attempt.matches(s)
-        });
+        let live = self.state.read(|s| attempt.matches(s));
         if !live {
             return Err(Interrupt::Ended);
         }
@@ -278,13 +285,9 @@ impl Core {
                     unreleased: None,
                 })?;
             let on_phase = |phase| self.phase(attempt, epoch, phase);
-            let connection = GattConnection::open(
-                driver,
-                attempt.profile.gatt(),
-                &on_phase,
-                &open_cancel,
-            )
-            .await?;
+            let connection =
+                GattConnection::open(driver, attempt.profile.gatt(), &on_phase, &open_cancel)
+                    .await?;
             let connection: Arc<dyn ControlConnection> = connection;
             attempt.link.lock().expect("link lock").connection = Some(Arc::clone(&connection));
             Ok(connection)
@@ -402,11 +405,7 @@ impl Core {
         });
         attempt.link.lock().expect("link lock").ready = ready;
         drop(inner);
-        if ready {
-            Ok(())
-        } else {
-            Err(Interrupt::Ended)
-        }
+        if ready { Ok(()) } else { Err(Interrupt::Ended) }
     }
 
     fn observe(
@@ -453,9 +452,9 @@ impl Core {
             }
         }
         let error = match &failure {
-            Some(TransportError::Unsupported(message) | TransportError::InvalidArgument(message)) => {
-                ControlError::new(ControlErrorCode::Unsupported, message.clone())
-            }
+            Some(
+                TransportError::Unsupported(message) | TransportError::InvalidArgument(message),
+            ) => ControlError::new(ControlErrorCode::Unsupported, message.clone()),
             Some(TransportError::PermissionDenied(message)) => {
                 ControlError::new(ControlErrorCode::PermissionRequired, message.clone())
             }
@@ -552,9 +551,11 @@ impl Core {
             self.run_initial_query(attempt, epoch, connection, query)
                 .await?;
         }
-        let firmware = self
-            .state
-            .read(|s| s.headset.as_ref().and_then(|h| h.readings.confirmed_firmware().cloned()));
+        let firmware = self.state.read(|s| {
+            s.headset
+                .as_ref()
+                .and_then(|h| h.readings.confirmed_firmware().cloned())
+        });
         let firmware_queries = attempt
             .link
             .lock()
@@ -595,7 +596,11 @@ impl Core {
             tokio::time::timeout(
                 self.timing.query_timeout,
                 progress.wait_for(|progress| {
-                    progress.ended || query.response_keys.iter().all(|key| progress.keys.contains(key))
+                    progress.ended
+                        || query
+                            .response_keys
+                            .iter()
+                            .all(|key| progress.keys.contains(key))
                 }),
             ),
         )

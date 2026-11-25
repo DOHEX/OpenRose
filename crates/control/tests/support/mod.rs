@@ -2,13 +2,12 @@
 
 use openrose_control::simulator::{SimulatedClock, SimulatedHeadsetHandle, SimulatedTransport};
 use openrose_control::snapshot::{
-    ConnectionState, ControlSnapshot, HostPlatform, PermissionState, PlatformState,
-    SettingStage, TransportAvailability,
+    ConnectionState, ControlSnapshot, HostPlatform, PermissionState, PlatformState, SettingStage,
+    TransportAvailability,
 };
 use openrose_control::{ControlConfig, ControlObserver, ControlRuntime, SessionTiming};
 use openrose_headset::{
-    FieldReading, FieldValue, FirmwareVersion, HeadsetField, HeadsetId, LocalDateTime,
-    ModelProfile,
+    FieldReading, FieldValue, FirmwareVersion, HeadsetField, HeadsetId, LocalDateTime, ModelProfile,
 };
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -41,7 +40,10 @@ impl Recorder {
 
 impl ControlObserver for Recorder {
     fn state_changed(&self, snapshot: &ControlSnapshot) {
-        self.snapshots.lock().unwrap().push(Arc::new(snapshot.clone()));
+        self.snapshots
+            .lock()
+            .unwrap()
+            .push(Arc::new(snapshot.clone()));
     }
 }
 
@@ -111,7 +113,11 @@ impl Harness {
         let mut config = ControlConfig::new(options.platform, clock.clone());
         config.timing = options.timing;
         config.session_id_base = options.session_id_base;
-        let runtime = Arc::new(ControlRuntime::new(transport.clone(), recorder.clone(), config));
+        let runtime = Arc::new(ControlRuntime::new(
+            transport.clone(),
+            recorder.clone(),
+            config,
+        ));
         Self {
             runtime,
             transport,
@@ -164,7 +170,11 @@ pub const I5_INIT_WRITES: usize = 13;
 impl Harness {
     pub async fn ready(options: Options) -> Self {
         let harness = Self::new(options);
-        harness.runtime.connect(harness.id()).await.expect("ready session");
+        harness
+            .runtime
+            .connect(harness.id())
+            .await
+            .expect("ready session");
         harness
     }
 
