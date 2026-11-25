@@ -117,7 +117,7 @@ async fn connecting_to_another_headset_replaces_the_only_control_session() {
     let second_headset = harness
         .transport
         .add_headset(
-            HeadsetId::new("second"),
+            HeadsetId::new("AA:BB:CC:00:00:06"),
             ModelProfile::I5Zt,
             FirmwareVersion::new(vec![1, 2, 5], "125"),
         )

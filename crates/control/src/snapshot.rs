@@ -1,6 +1,7 @@
 use crate::error::ControlError;
 use crate::selection::TransportSelection;
 use crate::settings::ControlSettings;
+use crate::transport::TransportRecoveryReason;
 use openrose_headset::{
     FieldValue, HeadsetField, HeadsetId, HeadsetReadings, HeadsetSetting, ModelProfile, NoiseMode,
     ReconnectGuidance,
@@ -90,6 +91,8 @@ pub struct PlatformState {
     pub permission: PermissionState,
     pub transport: TransportAvailability,
     pub host_platform: HostPlatform,
+    pub user_unlocked: bool,
+    pub scan_permission: PermissionState,
     pub control_transport_applicability: PlatformApplicability,
 }
 
@@ -99,12 +102,24 @@ impl PlatformState {
             permission,
             transport,
             host_platform: HostPlatform::Unknown,
+            user_unlocked: true,
+            scan_permission: PermissionState::NotRequired,
             control_transport_applicability: PlatformApplicability::Unknown,
         }
     }
 
     pub fn on(mut self, host_platform: HostPlatform) -> Self {
         self.host_platform = host_platform;
+        self
+    }
+
+    pub fn with_user_unlocked(mut self, user_unlocked: bool) -> Self {
+        self.user_unlocked = user_unlocked;
+        self
+    }
+
+    pub fn with_scan_permission(mut self, scan_permission: PermissionState) -> Self {
+        self.scan_permission = scan_permission;
         self
     }
 
@@ -182,12 +197,67 @@ impl HeadsetCandidate {
         }
     }
 
+    pub fn unidentified(id: HeadsetId) -> Self {
+        Self {
+            id,
+            name: None,
+            rssi: None,
+            profile: None,
+            manufacturer_data_hex: String::new(),
+            classic_address: None,
+        }
+    }
+
     pub fn reconnect_guidance(&self) -> ReconnectGuidance {
         self.profile
             .map_or(ReconnectGuidance::WaitSystemBluetooth, |profile| {
                 profile.reconnect_guidance()
             })
     }
+
+    pub fn matches_audio(&self, audio: Option<&HeadsetId>) -> bool {
+        audio.is_some_and(|audio| {
+            *audio == self.id || self.classic_address.as_deref() == Some(audio.as_str())
+        })
+    }
+
+    pub(crate) fn matches_identity(&self, id: &HeadsetId, classic: Option<&str>) -> bool {
+        self.id == *id
+            || classic.is_some_and(|classic| {
+                self.id.as_str() == classic || self.classic_address.as_deref() == Some(classic)
+            })
+    }
+
+    pub(crate) fn with_evidence(mut self, previous: Option<&HeadsetCandidate>) -> Self {
+        let Some(previous) = previous else {
+            return self;
+        };
+        if self.profile.is_some() && previous.profile != self.profile {
+            return self;
+        }
+        if self.profile.is_none() && previous.profile.is_some() {
+            self.manufacturer_data_hex = previous.manufacturer_data_hex.clone();
+        }
+        self.name = self.name.or_else(|| previous.name.clone());
+        self.profile = self.profile.or(previous.profile);
+        self.classic_address = self
+            .classic_address
+            .or_else(|| previous.classic_address.clone());
+        self
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ScanState {
+    Idle,
+    Scanning,
+    Failed(ControlError),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ConnectionRecovery {
+    pub session_id: u64,
+    pub reason: TransportRecoveryReason,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -246,10 +316,15 @@ pub struct ControlSnapshot {
     pub settings: ControlSettings,
     pub connection: ConnectionState,
     pub bonded_headsets: Vec<HeadsetCandidate>,
+    pub candidates: Vec<HeadsetCandidate>,
+    pub scan: ScanState,
     pub headset: Option<HeadsetState>,
     pub last_error: Option<ControlError>,
     pub setting_operations: Vec<SettingOperation>,
     pub audio_headset_id: Option<HeadsetId>,
+    pub connection_target: Option<HeadsetCandidate>,
+    pub selected_headset_id: Option<HeadsetId>,
+    pub connection_recovery: Option<ConnectionRecovery>,
     pub connection_block_reason: Option<ConnectionBlockReason>,
     pub reconnect_guidance: Option<ReconnectGuidance>,
 }
@@ -273,10 +348,15 @@ impl ControlSnapshot {
             settings,
             connection: ConnectionState::Disconnected,
             bonded_headsets: Vec::new(),
+            candidates: Vec::new(),
+            scan: ScanState::Idle,
             headset: None,
             last_error: None,
             setting_operations: Vec::new(),
             audio_headset_id: None,
+            connection_target: None,
+            selected_headset_id: None,
+            connection_recovery: None,
             connection_block_reason: None,
             reconnect_guidance: None,
         };
@@ -287,9 +367,87 @@ impl ControlSnapshot {
     pub(crate) fn refresh_reasons(&mut self) {
         self.connection_block_reason = self.platform.connection_block_reason();
         self.reconnect_guidance = self
+            .current_headset()
+            .map(|headset| headset.reconnect_guidance());
+    }
+
+    pub fn current_headset(&self) -> Option<HeadsetCandidate> {
+        if let Some(target) = &self.connection_target {
+            return Some(target.clone());
+        }
+        let (ConnectionState::Connecting { headset_id, .. }
+        | ConnectionState::Connected { headset_id, .. }) = &self.connection
+        else {
+            return self
+                .selected_headset_id
+                .as_ref()
+                .and_then(|chosen| self.bonded_headsets.iter().find(|c| c.id == *chosen))
+                .or_else(|| self.bonded_headsets.first())
+                .cloned();
+        };
+        self.bonded_headsets
+            .iter()
+            .chain(&self.candidates)
+            .find(|candidate| candidate.id == *headset_id)
+            .cloned()
+    }
+
+    pub(crate) fn known_candidate(&self, id: &HeadsetId) -> Option<HeadsetCandidate> {
+        let active = self
             .headset
             .as_ref()
-            .map(|headset| headset.profile().reconnect_guidance());
+            .filter(|headset| headset.headset_id == *id)
+            .map(|headset| HeadsetCandidate {
+                profile: Some(headset.profile()),
+                classic_address: headset.classic_address.clone(),
+                ..HeadsetCandidate::unidentified(id.clone())
+            });
+        let known = self
+            .bonded_headsets
+            .iter()
+            .find(|candidate| candidate.id == *id)
+            .cloned()
+            .into_iter()
+            .chain(active)
+            .chain(
+                self.connection_target
+                    .clone()
+                    .filter(|target| target.id == *id),
+            )
+            .find(|candidate| candidate.profile.is_some());
+        match self.candidates.iter().find(|candidate| candidate.id == *id) {
+            Some(scanned) => Some(scanned.clone().with_evidence(known.as_ref())),
+            None => known,
+        }
+    }
+
+    pub(crate) fn select_current_headset(&mut self, headset: &HeadsetId) {
+        self.selected_headset_id = self
+            .bonded_headsets
+            .iter()
+            .find(|candidate| candidate.id == *headset)
+            .map(|candidate| candidate.id.clone());
+    }
+
+    pub(crate) fn apply_bonded_headsets(&mut self, bonded: Vec<HeadsetCandidate>) {
+        if let Some(target) = self.connection_target.as_mut() {
+            let refreshed_name = bonded
+                .iter()
+                .find(|candidate| {
+                    candidate.matches_identity(&target.id, target.classic_address.as_deref())
+                })
+                .and_then(|candidate| candidate.name.clone())
+                .filter(|name| !name.trim().is_empty());
+            if let Some(name) = refreshed_name
+                && target.name.as_ref() != Some(&name)
+            {
+                target.name = Some(name);
+            }
+        }
+        if bonded != self.bonded_headsets {
+            self.selected_headset_id = None;
+        }
+        self.bonded_headsets = bonded;
     }
 
     pub fn encode(&self) -> Vec<u8> {
@@ -353,11 +511,13 @@ impl ControlSnapshot {
         let (Some(current), Some(audio)) = (&self.headset, &self.audio_headset_id) else {
             return false;
         };
+        let target = self.connection_target.as_ref();
+        if target.is_some_and(|target| target.id != current.headset_id) {
+            return false;
+        }
         *audio == current.headset_id
-            || current
-                .classic_address
-                .as_deref()
-                .is_some_and(|classic| audio.as_str() == classic)
+            || current.classic_address.as_deref() == Some(audio.as_str())
+            || target.is_some_and(|target| target.matches_audio(Some(audio)))
     }
 
     pub fn noise_mode_session(&self) -> Option<SessionReference> {

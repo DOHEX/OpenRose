@@ -1,8 +1,14 @@
+mod discovery;
+
+pub use discovery::{SimulatedAudio, SimulatedScan};
+
+use crate::audio::{AudioFactsDriver, RawAudioDevice};
 use crate::core::LocalClock;
 use crate::gatt::{
     GattCharacteristic, GattDriver, GattError, GattEvent, GattFailureKind, GattService,
     GattSubscription,
 };
+use crate::scan::ScanDriver;
 use crate::selection::TransportEndpoint;
 use crate::snapshot::HeadsetCandidate;
 use crate::spp::{SppDriver, SppError, SppFailureKind};
@@ -40,6 +46,7 @@ struct Conditions {
     ignored_keys: BTreeSet<[u8; 2]>,
     open_delay: Duration,
     reply_latency: Duration,
+    write_duration: Duration,
     mtu: Option<u16>,
     missing_discoveries: usize,
     write_failure: Option<GattError>,
@@ -147,6 +154,11 @@ impl SimulatedHeadsetHandle {
         self.conditions().ignored_keys.insert([bytes[0], bytes[1]]);
     }
 
+    pub fn answer_key(&self, key_hex: &str) {
+        let bytes = openrose_headset::decode_hex(key_hex).expect("key hex");
+        self.conditions().ignored_keys.remove(&[bytes[0], bytes[1]]);
+    }
+
     pub fn open_delay(&self, delay: Duration) {
         self.conditions().open_delay = delay;
     }
@@ -157,6 +169,10 @@ impl SimulatedHeadsetHandle {
 
     pub fn reply_latency(&self, latency: Duration) {
         self.conditions().reply_latency = latency;
+    }
+
+    pub fn write_duration(&self, duration: Duration) {
+        self.conditions().write_duration = duration;
     }
 
     pub fn negotiated_mtu(&self, mtu: Option<u16>) {
@@ -331,6 +347,10 @@ impl Shared {
         if let Some(mut gate) = gate {
             let _ = gate.wait_for(|open| *open).await;
         }
+        let duration = self.conditions().write_duration;
+        if !duration.is_zero() {
+            tokio::time::sleep(duration).await;
+        }
         let (muted, latency, ignored) = {
             let conditions = self.conditions();
             let ignored =
@@ -359,7 +379,9 @@ impl Shared {
 
 pub struct SimulatedTransport {
     headsets: Mutex<BTreeMap<HeadsetId, SimulatedHeadsetHandle>>,
-    audio: watch::Sender<Option<HeadsetId>>,
+    audio: Arc<SimulatedAudio>,
+    scan: Arc<SimulatedScan>,
+    initialization_recovery: AtomicBool,
 }
 
 impl Default for SimulatedTransport {
@@ -372,7 +394,9 @@ impl SimulatedTransport {
     pub fn new() -> Self {
         Self {
             headsets: Mutex::new(BTreeMap::new()),
-            audio: watch::channel(None).0,
+            audio: Arc::new(SimulatedAudio::new()),
+            scan: Arc::new(SimulatedScan::default()),
+            initialization_recovery: AtomicBool::new(false),
         }
     }
 
@@ -394,6 +418,7 @@ impl SimulatedTransport {
                     ignored_keys: BTreeSet::new(),
                     open_delay: Duration::ZERO,
                     reply_latency: Duration::ZERO,
+                    write_duration: Duration::ZERO,
                     mtu: Some(185),
                     missing_discoveries: 0,
                     write_failure: None,
@@ -414,6 +439,10 @@ impl SimulatedTransport {
                 facts_cancelled: AtomicBool::new(false),
             }),
         };
+        self.audio.pair(RawAudioDevice::new(
+            Some(profile.display_name()),
+            id.as_str(),
+        ));
         self.headsets
             .lock()
             .expect("headsets lock")
@@ -421,8 +450,22 @@ impl SimulatedTransport {
         Ok(handle)
     }
 
+    pub fn audio(&self) -> &SimulatedAudio {
+        &self.audio
+    }
+
+    pub fn scan(&self) -> &SimulatedScan {
+        &self.scan
+    }
+
     pub fn set_audio_connected(&self, headset: Option<HeadsetId>) {
-        self.audio.send_replace(headset);
+        self.audio
+            .set_audio_connected(headset.as_ref().map(HeadsetId::as_str));
+    }
+
+    pub fn support_initialization_recovery(&self, supported: bool) {
+        self.initialization_recovery
+            .store(supported, Ordering::SeqCst);
     }
 
     fn handle(&self, headset: &HeadsetId) -> Result<SimulatedHeadsetHandle, TransportError> {
@@ -471,6 +514,10 @@ impl ControlTransport for SimulatedTransport {
             events: tokio::sync::Mutex::new(receiver),
             discoveries: Mutex::new(0),
         }))
+    }
+
+    async fn start_scan(&self) -> Result<Box<dyn ScanDriver>, TransportError> {
+        self.scan.open()
     }
 
     async fn open_spp(
@@ -539,17 +586,12 @@ impl ControlTransport for SimulatedTransport {
         Ok(conditions.facts)
     }
 
-    async fn bonded_headsets(&self) -> Vec<HeadsetCandidate> {
-        self.headsets
-            .lock()
-            .expect("headsets lock")
-            .values()
-            .map(SimulatedHeadsetHandle::candidate)
-            .collect()
+    fn audio_facts(&self) -> Arc<dyn AudioFactsDriver> {
+        self.audio.clone()
     }
 
-    fn audio_connected_headset(&self) -> watch::Receiver<Option<HeadsetId>> {
-        self.audio.subscribe()
+    fn supports_initialization_recovery(&self) -> bool {
+        self.initialization_recovery.load(Ordering::SeqCst)
     }
 }
 

@@ -1,9 +1,13 @@
 use crate::confirmation::ReadProgress;
 use crate::core::{Attempt, Core, Interrupt, LinkInner};
-use crate::error::{ControlError, ControlErrorCode, ControlResult};
+use crate::error::{ControlError, ControlErrorCode};
+use crate::recovery::recoverable_reason;
 use crate::selection::TransportSelection;
 use crate::snapshot::{ConnectionPhase, ConnectionState, ControlSnapshot, HeadsetCandidate};
-use crate::transport::{ControlConnection, OpenFailureKind, TransportError};
+use crate::targeting::{Origin, superseded_error};
+use crate::transport::{
+    ControlConnection, OpenFailureKind, TransportError, TransportRecoveryReason,
+};
 use openrose_headset::{FieldReading, HeadsetField, ModelProfile, ProtocolQuery, ProtocolReply};
 use std::collections::BTreeSet;
 use std::sync::Arc;
@@ -12,6 +16,13 @@ use tokio::time::Instant;
 use tokio_util::sync::CancellationToken;
 
 const RECENT_NOTIFICATIONS: usize = 128;
+
+pub(crate) struct AttemptRequest<'a> {
+    pub(crate) candidate: HeadsetCandidate,
+    pub(crate) profile: ModelProfile,
+    pub(crate) origin: Origin,
+    pub(crate) superseded: &'a (dyn Fn() -> bool + Send + Sync),
+}
 
 fn restrict(reply: &ProtocolReply, readable: &BTreeSet<HeadsetField>) -> ProtocolReply {
     let readings = reply.for_readable_fields(readable);
@@ -88,63 +99,72 @@ impl Core {
         });
     }
 
-    pub(crate) async fn connect_candidate(
+    pub(crate) async fn begin_attempt(
         self: &Arc<Self>,
-        candidate: HeadsetCandidate,
-        profile: ModelProfile,
-    ) -> ControlResult {
-        let attempt = {
-            let mut inner = self.lifecycle.lock().await;
-            if inner.released {
-                return Err(ControlError::new(
-                    ControlErrorCode::NotReady,
-                    "控制所有者已释放",
-                ));
-            }
-            let shared = inner.active.clone().filter(|active| {
-                active.candidate.id == candidate.id
-                    && self
-                        .state
-                        .read(|s| !matches!(s.connection, ConnectionState::Disconnected))
-            });
-            match shared {
-                Some(active) => active,
-                None => {
-                    if !self.clear_active(&mut inner).await {
-                        return Err(ControlError::new(
-                            ControlErrorCode::NotReady,
-                            "之前的控制连接尚未确认释放",
-                        ));
-                    }
-                    inner.generation += 1;
-                    let attempt = Arc::new(Attempt::new(
-                        inner.generation,
-                        candidate.clone(),
-                        profile,
-                        self.shutdown.child_token(),
-                        self.state.read(|s| s.settings.force_ble),
-                    ));
-                    self.state.update(|s| {
-                        s.connection = ConnectionState::Connecting {
-                            headset_id: candidate.id.clone(),
-                            session_id: attempt.id,
-                            phase: ConnectionPhase::Connecting,
-                        };
-                        s.headset = Some(attempt.loading_headset());
-                        s.last_error = None;
-                    });
-                    inner.active = Some(Arc::clone(&attempt));
-                    tokio::spawn(Arc::clone(self).run_attempt(Arc::clone(&attempt)));
-                    attempt
-                }
-            }
-        };
-        attempt.wait().await
+        request: AttemptRequest<'_>,
+    ) -> Result<Arc<Attempt>, ControlError> {
+        let mut inner = self.lifecycle.lock().await;
+        if inner.released {
+            return Err(ControlError::new(
+                ControlErrorCode::NotReady,
+                "控制所有者已释放",
+            ));
+        }
+        if (request.superseded)() {
+            return Err(superseded_error());
+        }
+        let candidate = request.candidate;
+        let shared = inner.active.clone().filter(|active| {
+            active.candidate.id == candidate.id
+                && self
+                    .state
+                    .read(|s| !matches!(s.connection, ConnectionState::Disconnected))
+        });
+        if let Some(active) = shared {
+            return Ok(active);
+        }
+        if !self.clear_active(&mut inner).await {
+            return Err(ControlError::new(
+                ControlErrorCode::NotReady,
+                "之前的控制连接尚未确认释放",
+            ));
+        }
+        inner.generation += 1;
+        let audio_bound = request.origin == Origin::Audio
+            || self
+                .state
+                .read(|s| candidate.matches_audio(s.audio_headset_id.as_ref()));
+        let attempt = Arc::new(Attempt::new(
+            inner.generation,
+            candidate.clone(),
+            request.profile,
+            request.origin,
+            audio_bound,
+            self.shutdown.child_token(),
+            self.state.read(|s| s.settings.force_ble),
+        ));
+        self.state.update(|s| {
+            s.connection = ConnectionState::Connecting {
+                headset_id: candidate.id.clone(),
+                session_id: attempt.id,
+                phase: ConnectionPhase::Connecting,
+            };
+            s.headset = Some(attempt.loading_headset());
+            s.last_error = None;
+            s.connection_recovery = None;
+        });
+        inner.active = Some(Arc::clone(&attempt));
+        tokio::spawn(Arc::clone(self).run_attempt(Arc::clone(&attempt)));
+        Ok(attempt)
     }
 
     pub(crate) async fn disconnect(self: &Arc<Self>, retire: bool) -> bool {
         let mut inner = self.lifecycle.lock().await;
-        let closed = self.clear_active(&mut inner).await;
+        self.disconnect_locked(&mut inner, retire).await
+    }
+
+    pub(crate) async fn disconnect_locked(&self, inner: &mut LinkInner, retire: bool) -> bool {
+        let closed = self.clear_active(inner).await;
         if retire && closed {
             inner.released = true;
         }
@@ -152,6 +172,7 @@ impl Core {
             s.connection = ConnectionState::Disconnected;
             s.headset = None;
             s.last_error = None;
+            s.connection_recovery = None;
         });
         closed
     }
@@ -230,15 +251,29 @@ impl Core {
     }
 
     async fn open_and_read(self: &Arc<Self>, attempt: &Arc<Attempt>) -> Result<(), Interrupt> {
-        let epoch = {
-            let inner = self.lifecycle.lock().await;
-            if !inner.is_active(attempt) {
-                return Err(Interrupt::Cancelled);
-            }
-            attempt.bump_epoch()
-        };
+        let epoch = self.begin_link(attempt).await?;
         let selection = self.select_transport(attempt, epoch).await?;
-        let opened = self.open_link(attempt, epoch, &selection).await?;
+        let Err(failure) = self.open_and_read_link(attempt, epoch, &selection).await else {
+            return Ok(());
+        };
+        match recoverable_reason(&failure) {
+            Some(reason) if self.can_retry(attempt, &selection, reason) => {
+                self.prepare_recovery(attempt, &selection, epoch, reason)
+                    .await?;
+                let epoch = self.begin_link(attempt).await?;
+                self.open_and_read_link(attempt, epoch, &selection).await
+            }
+            _ => Err(failure),
+        }
+    }
+
+    async fn open_and_read_link(
+        self: &Arc<Self>,
+        attempt: &Arc<Attempt>,
+        epoch: u64,
+        selection: &TransportSelection,
+    ) -> Result<(), Interrupt> {
+        let opened = self.open_link(attempt, epoch, selection).await?;
         {
             let inner = self.lifecycle.lock().await;
             if !inner.is_active(attempt) || attempt.epoch() != epoch {
@@ -255,7 +290,8 @@ impl Core {
         .await?;
         self.throw_progress_failure(attempt)?;
         self.phase(attempt, epoch, ConnectionPhase::Initializing);
-        self.read_initial_queries(attempt, epoch, &opened).await?;
+        self.read_initial_queries(attempt, epoch, &opened, selection)
+            .await?;
         let live = self.state.read(|s| attempt.matches(s));
         if !live {
             return Err(Interrupt::Ended);
@@ -460,7 +496,9 @@ impl Core {
                 progress.ended = true;
                 progress.failure = failure.clone();
             });
-            if inner.is_active(&attempt) && attempt.epoch() == epoch {
+            let setup_recovery =
+                matches!(failure, Some(TransportError::Recoverable { .. })) && !attempt.is_ready();
+            if inner.is_active(&attempt) && attempt.epoch() == epoch && !setup_recovery {
                 self.end_settings(&attempt);
                 inner.active = None;
                 self.update_attempt(&attempt, Some(epoch), |s| {
@@ -526,6 +564,7 @@ impl Core {
         attempt: &Arc<Attempt>,
         epoch: u64,
         connection: &Arc<dyn ControlConnection>,
+        selection: &TransportSelection,
     ) -> Result<(), Interrupt> {
         let now = self.clock.now();
         let queries = attempt
@@ -540,9 +579,11 @@ impl Core {
                     error.to_string(),
                 ))
             })?;
+        let mut index = 0;
         for query in &queries {
-            self.run_initial_query(attempt, epoch, connection, query)
+            self.run_initial_query(attempt, epoch, connection, selection, query, index)
                 .await?;
+            index += 1;
         }
         let firmware = self.state.read(|s| {
             s.headset
@@ -556,8 +597,9 @@ impl Core {
             .codec
             .firmware_init_queries(firmware.as_ref());
         for query in &firmware_queries {
-            self.run_initial_query(attempt, epoch, connection, query)
+            self.run_initial_query(attempt, epoch, connection, selection, query, index)
                 .await?;
+            index += 1;
         }
         Ok(())
     }
@@ -567,8 +609,12 @@ impl Core {
         attempt: &Arc<Attempt>,
         epoch: u64,
         connection: &Arc<dyn ControlConnection>,
+        selection: &TransportSelection,
         query: &ProtocolQuery,
+        index: usize,
     ) -> Result<(), Interrupt> {
+        attempt.link.lock().expect("link lock").query_index = Some(index);
+        let recoverable = self.can_recover_first_query(selection, Some(index));
         self.throw_progress_failure(attempt)?;
         let next_write_at = attempt.link.lock().expect("link lock").next_write_at;
         if let Some(at) = next_write_at {
@@ -581,8 +627,19 @@ impl Core {
         )
         .await?;
         self.throw_progress_failure(attempt)?;
-        self.write_paced(attempt, connection, &query.bytes, &attempt.cancel)
-            .await?;
+        match self
+            .write_paced(attempt, connection, &query.bytes, &attempt.cancel)
+            .await
+        {
+            Err(Interrupt::Timeout) if recoverable => {
+                return Err(Interrupt::Transport(TransportError::Recoverable {
+                    reason: TransportRecoveryReason::WriteFailed,
+                    message: "首条初始化读取写入超时".to_string(),
+                }));
+            }
+            written => written?,
+        };
+        let wait_for_meaningful = recoverable && !query.expected_fields.is_empty();
         let mut progress = attempt.progress.subscribe();
         let observed = guarded(
             &attempt.cancel,
@@ -590,10 +647,11 @@ impl Core {
                 self.timing.query_timeout,
                 progress.wait_for(|progress| {
                     progress.ended
-                        || query
+                        || (query
                             .response_keys
                             .iter()
                             .all(|key| progress.keys.contains(key))
+                            && (!wait_for_meaningful || progress.meaningful))
                 }),
             ),
         )
@@ -606,6 +664,12 @@ impl Core {
             Ok(Ok(_)) => Ok(()),
             Ok(Err(_)) => Err(Interrupt::Ended),
             Err(_) => {
+                if recoverable && !attempt.progress.borrow().meaningful {
+                    return Err(Interrupt::Transport(TransportError::Recoverable {
+                        reason: TransportRecoveryReason::NoInitialResponse,
+                        message: "首条初始化读取没有收到有效设备状态".to_string(),
+                    }));
+                }
                 let timeout = ControlError::new(
                     ControlErrorCode::Timeout,
                     format!("{} 部分字段读取超时", query.key),

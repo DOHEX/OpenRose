@@ -1,6 +1,7 @@
 mod support;
 
 use openrose_control::ControlErrorCode;
+use openrose_control::scan::Advertisement;
 use openrose_control::selection::{
     TransportEndpoint, TransportSelection, TransportSelectionReason,
 };
@@ -39,6 +40,24 @@ fn classic_i7() -> Harness {
     harness.headset.set_classic_address(Some(CLASSIC));
     harness.headset.set_connection_facts(classic_audio());
     harness
+}
+
+fn i7_advertised_without_address() -> BTreeMap<u16, Vec<u8>> {
+    BTreeMap::from([(
+        0xe5b8,
+        decode_hex("290f00000001000000000000000000").expect("payload hex"),
+    )])
+}
+
+async fn advertise_unpaired(harness: &Harness, manufacturer_data: BTreeMap<u16, Vec<u8>>) {
+    harness.transport.audio().unpair(harness.id().as_str());
+    settle().await;
+    harness.runtime.start_scan().await.expect("scan");
+    harness.transport.scan().advertise(Advertisement {
+        manufacturer_data,
+        ..Advertisement::new(harness.id())
+    });
+    settle().await;
 }
 
 #[tokio::test(start_paused = true)]
@@ -225,7 +244,10 @@ async fn control_falls_back_to_ble_for_every_reason_it_cannot_prove_spp_usable()
         },
         Fallback {
             name: "model has no SPP identifier",
-            options: Options::i5(),
+            options: Options {
+                id: CLASSIC,
+                ..Options::i5()
+            },
             address: Some(CLASSIC),
             facts: facts(true, AudioProfileEvidence::Classic),
             force_ble: false,
@@ -241,6 +263,9 @@ async fn control_falls_back_to_ble_for_every_reason_it_cannot_prove_spp_usable()
             force_ble: scenario.force_ble,
         });
         harness.runtime.refresh_bonded_headsets().await;
+        if scenario.address.is_none() {
+            advertise_unpaired(&harness, i7_advertised_without_address()).await;
+        }
 
         harness
             .runtime
@@ -717,12 +742,12 @@ async fn expanded_v2_models_use_the_address_their_earphones_advertise_for_spp() 
 
         let harness = Harness::new(Options {
             profile,
-            id: "v2",
+            id: "ble-v2",
             ..Options::i5()
         });
         harness.headset.set_classic_address(address.as_deref());
         harness.headset.set_connection_facts(classic_audio());
-        harness.runtime.refresh_bonded_headsets().await;
+        advertise_unpaired(&harness, advertisement.clone()).await;
         harness
             .runtime
             .connect(harness.id())

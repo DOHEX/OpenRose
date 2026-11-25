@@ -118,7 +118,8 @@ impl Core {
             if let Err(error) = headset.readings.validate(&command) {
                 return self.reject(validation_error(error));
             }
-            let mut requests = attempt.queue.requests.lock().expect("requests lock");
+            let queue = attempt.queue();
+            let mut requests = queue.requests.lock().expect("requests lock");
             if requests.len() >= QUEUE_CAPACITY {
                 drop(requests);
                 return self.reject(ControlError::new(
@@ -146,8 +147,7 @@ impl Core {
                 operation_id: operation.id,
                 result: Mutex::new(Some(result)),
             });
-            let sent = attempt
-                .queue
+            let sent = queue
                 .sender
                 .lock()
                 .expect("sender lock")
@@ -185,16 +185,16 @@ impl Core {
         let core = Arc::clone(self);
         let attempt = Arc::clone(attempt);
         tokio::spawn(async move {
-            let mut receiver = attempt.queue.receiver.lock().await;
+            let queue = attempt.queue();
+            let mut receiver = queue.receiver.lock().await;
             loop {
                 let request = tokio::select! {
                     biased;
-                    _ = attempt.queue.cancel.cancelled() => break,
+                    _ = queue.cancel.cancelled() => break,
                     request = receiver.recv() => request,
                 };
                 let Some(request) = request else { break };
-                core.execute(&attempt, &request, &attempt.queue.cancel)
-                    .await;
+                core.execute(&attempt, &request, &queue.cancel).await;
             }
         });
     }
@@ -203,7 +203,7 @@ impl Core {
         &self,
         attempt: &Arc<Attempt>,
     ) -> Result<(), Interrupt> {
-        let request = match attempt.queue.receiver.try_lock() {
+        let request = match attempt.queue().receiver.try_lock() {
             Ok(mut receiver) => receiver.try_recv().ok(),
             Err(_) => None,
         };
@@ -262,7 +262,7 @@ impl Core {
         };
         let mut inner = self.lifecycle.lock().await;
         attempt
-            .queue
+            .queue()
             .requests
             .lock()
             .expect("requests lock")
@@ -528,8 +528,9 @@ impl Core {
 
     pub(crate) fn end_settings(&self, attempt: &Attempt) {
         let error = ControlError::new(ControlErrorCode::Disconnected, "连接会话已结束");
+        let queue = attempt.queue();
         let requests: Vec<Arc<Request>> =
-            std::mem::take(&mut *attempt.queue.requests.lock().expect("requests lock"))
+            std::mem::take(&mut *queue.requests.lock().expect("requests lock"))
                 .into_values()
                 .collect();
         let ids: BTreeSet<u64> = requests
@@ -547,7 +548,7 @@ impl Core {
         for request in requests {
             request.complete(Err(error.clone()));
         }
-        attempt.queue.sender.lock().expect("sender lock").take();
-        attempt.queue.cancel.cancel();
+        queue.sender.lock().expect("sender lock").take();
+        queue.cancel.cancel();
     }
 }

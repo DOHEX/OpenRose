@@ -131,7 +131,7 @@ async fn the_early_admission_belongs_to_desktop_i5_with_system_audio_and_a_confi
 
     let mut options = Options::i5().desktop();
     options.profile = ModelProfile::I3Zt;
-    options.id = "i3";
+    options.id = "AA:BB:CC:00:00:03";
     let (other_model, connecting) = initializing_with_system_audio(options, "0a01").await;
     assert!(
         other_model.snapshot().noise_mode_session().is_none(),
