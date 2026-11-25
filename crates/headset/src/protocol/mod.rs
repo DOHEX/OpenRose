@@ -1,3 +1,4 @@
+pub mod f8;
 pub mod rs_common;
 pub mod zt;
 
@@ -123,6 +124,7 @@ pub fn create_protocol_codec(profile: ModelProfile) -> Box<dyn ProtocolCodec> {
         ModelProtocol::RsCommon(protocol) => {
             Box::new(rs_common::RsCommonCodec::new(profile, protocol))
         }
+        ModelProtocol::F8(protocol) => Box::new(f8::F8Codec::new(profile, protocol)),
     }
 }
 

@@ -1,3 +1,4 @@
+pub mod f8;
 pub mod identification;
 pub mod rs_common;
 pub mod zt;
@@ -66,7 +67,8 @@ impl ProtocolFamily {
         match self {
             Self::Zt => crate::protocol::zt::zt_readable_fields(),
             Self::RsCommon => crate::protocol::rs_common::rs_common_readable_fields(),
-            Self::RsCommonV2 | Self::F8 => BTreeSet::new(),
+            Self::F8 => crate::protocol::f8::f8_readable_fields(),
+            Self::RsCommonV2 => BTreeSet::new(),
         }
     }
 }
@@ -100,9 +102,17 @@ impl ZtProtocol {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct F8Protocol {
+    pub extended_init: bool,
+    pub noise_normal_wire: u8,
+    pub eq_at_two: Option<&'static str>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ModelProtocol {
     Zt(ZtProtocol),
     RsCommon(RsCommonProtocol),
+    F8(F8Protocol),
 }
 
 impl ModelProtocol {
@@ -110,13 +120,13 @@ impl ModelProtocol {
         match self {
             Self::Zt(_) => ProtocolFamily::Zt,
             Self::RsCommon(_) => ProtocolFamily::RsCommon,
+            Self::F8(_) => ProtocolFamily::F8,
         }
     }
 
     pub fn refresh_equalizer_after_game_mode(self) -> bool {
         match self {
-            Self::Zt(_) => false,
-            Self::RsCommon(_) => false,
+            Self::Zt(_) | Self::RsCommon(_) | Self::F8(_) => false,
         }
     }
 }
@@ -171,6 +181,18 @@ pub enum ModelProfile {
     OpenLinkRsCommon,
     #[serde(rename = "CAMBRIAN_S_RS_COMMON")]
     CambrianSRsCommon,
+    #[serde(rename = "AGATE_F8")]
+    AgateF8,
+    #[serde(rename = "AGATE_X_F8")]
+    AgateXF8,
+    #[serde(rename = "CERAMICS_F8")]
+    CeramicsF8,
+    #[serde(rename = "CERAMICS_X_F8")]
+    CeramicsXF8,
+    #[serde(rename = "CERAMICS_X_7034_F8")]
+    CeramicsX7034F8,
+    #[serde(rename = "EXPLORER_F8")]
+    ExplorerF8,
 }
 
 impl ModelProfile {
@@ -189,6 +211,12 @@ impl ModelProfile {
         Self::SwiftRsCommon,
         Self::OpenLinkRsCommon,
         Self::CambrianSRsCommon,
+        Self::AgateF8,
+        Self::AgateXF8,
+        Self::CeramicsF8,
+        Self::CeramicsXF8,
+        Self::CeramicsX7034F8,
+        Self::ExplorerF8,
     ];
 
     pub fn spec(self) -> &'static ModelSpec {
@@ -207,6 +235,12 @@ impl ModelProfile {
             Self::SwiftRsCommon => &rs_common::SWIFT,
             Self::OpenLinkRsCommon => &rs_common::OPEN_LINK,
             Self::CambrianSRsCommon => &rs_common::CAMBRIAN_S,
+            Self::AgateF8 => &f8::AGATE,
+            Self::AgateXF8 => &f8::AGATE_X,
+            Self::CeramicsF8 => &f8::CERAMICS,
+            Self::CeramicsXF8 => &f8::CERAMICS_X,
+            Self::CeramicsX7034F8 => &f8::CERAMICS_X_7034,
+            Self::ExplorerF8 => &f8::EXPLORER,
         }
     }
 
@@ -226,6 +260,12 @@ impl ModelProfile {
             Self::SwiftRsCommon => "SWIFT_RS_COMMON",
             Self::OpenLinkRsCommon => "OPENLINK_RS_COMMON",
             Self::CambrianSRsCommon => "CAMBRIAN_S_RS_COMMON",
+            Self::AgateF8 => "AGATE_F8",
+            Self::AgateXF8 => "AGATE_X_F8",
+            Self::CeramicsF8 => "CERAMICS_F8",
+            Self::CeramicsXF8 => "CERAMICS_X_F8",
+            Self::CeramicsX7034F8 => "CERAMICS_X_7034_F8",
+            Self::ExplorerF8 => "EXPLORER_F8",
         }
     }
 
