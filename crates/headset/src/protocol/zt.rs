@@ -3,6 +3,7 @@ use crate::error::ProtocolError;
 use crate::field::{
     FieldReading, FieldValue, FirmwareVersion, HeadsetField, HeadsetSetting, TouchBinding,
 };
+use crate::local_time::LocalDateTime;
 use crate::hex::{decode_hex, encode_hex};
 use crate::model::{BatteryLayout, ModelProfile, ProtocolFamily, ZtProtocol};
 use crate::protocol::{
@@ -16,10 +17,10 @@ const DEFAULT_INIT_KEYS: &[&str] = &[
     "0e03",
 ];
 
-const ZT_NOISE_LEVELS: [i32; 3] = [1, 3, 5];
-const ZT_CYCLE_ORDER: [&str; 4] = ["normal", "transparency", "wind", "anc"];
-const ZT_GESTURES: [&str; 4] = ["single", "double", "triple", "long"];
-const ZT_ACTIONS: [&str; 8] = [
+pub(crate) const ZT_NOISE_LEVELS: [i32; 3] = [1, 3, 5];
+pub(crate) const ZT_CYCLE_ORDER: [&str; 4] = ["normal", "transparency", "wind", "anc"];
+pub(crate) const ZT_GESTURES: [&str; 4] = ["single", "double", "triple", "long"];
+pub(crate) const ZT_ACTIONS: [&str; 8] = [
     "volume_up",
     "volume_down",
     "previous_track",
@@ -97,7 +98,11 @@ impl ProtocolCodec for ZtCodec {
         self.profile
     }
 
-    fn init_queries(&mut self, max_write_size: usize) -> Result<Vec<ProtocolQuery>, ProtocolError> {
+    fn init_queries(
+        &mut self,
+        max_write_size: usize,
+        _now: LocalDateTime,
+    ) -> Result<Vec<ProtocolQuery>, ProtocolError> {
         if max_write_size < 10 {
             return Err(ProtocolError::InvalidArgument(
                 "ZT queries require a 10-byte write capacity".to_string(),
@@ -161,7 +166,7 @@ struct ZtWrite {
     payload: Vec<u8>,
 }
 
-fn eq_presets(protocol: ZtProtocol) -> &'static [&'static str] {
+pub(crate) fn eq_presets(protocol: ZtProtocol) -> &'static [&'static str] {
     if protocol.independent_multipoint {
         &["pop", "hifi", "rock", "custom"]
     } else {
@@ -169,7 +174,7 @@ fn eq_presets(protocol: ZtProtocol) -> &'static [&'static str] {
     }
 }
 
-fn audio_modes(protocol: ZtProtocol) -> &'static [&'static str] {
+pub(crate) fn audio_modes(protocol: ZtProtocol) -> &'static [&'static str] {
     if protocol.independent_multipoint {
         &["aac_sbc", "ldac", "lhdc", "ldac_lhdc"]
     } else {

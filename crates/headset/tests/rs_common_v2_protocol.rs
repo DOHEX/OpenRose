@@ -5,6 +5,11 @@ use openrose_headset::{
 };
 use std::collections::{BTreeMap, BTreeSet};
 
+fn connect_time() -> openrose_headset::LocalDateTime {
+    openrose_headset::LocalDateTime::new(2026, 11, 20, 17, 38, 9).expect("valid time")
+}
+
+
 const RS_V2_MODELS: [ModelProfile; 32] = [
     ModelProfile::I7RsV2,
     ModelProfile::BudsFeelMk2RsV2,
@@ -145,7 +150,7 @@ fn fragmented_unknown_payload_cannot_become_an_inner_known_frame() {
 #[test]
 fn i7_initial_query_uses_independent_literal_and_complete_small_mtu_queries() {
     let mut codec = codec(ModelProfile::I7RsV2);
-    let initial = codec.init_queries(512).expect("init queries");
+    let initial = codec.init_queries(512, connect_time()).expect("init queries");
     assert_eq!(
         vec![
             "ff0012fa0d0c092c2d2a45460e322b01072f082e3649aa",
@@ -157,7 +162,7 @@ fn i7_initial_query_uses_independent_literal_and_complete_small_mtu_queries() {
             .collect::<Vec<_>>()
     );
     codec.reset();
-    let small = codec.init_queries(20).expect("small init queries");
+    let small = codec.init_queries(20, connect_time()).expect("small init queries");
     assert_eq!(
         vec![
             "ff000ffa0d0c092c2d2a45460e322b01072fdaaa",
@@ -171,19 +176,19 @@ fn i7_initial_query_uses_independent_literal_and_complete_small_mtu_queries() {
     );
     assert_eq!(keys(&["08", "2e", "36"]), small[1].response_keys);
     assert!(small.iter().all(|query| query.bytes.len() <= 20));
-    assert!(is_invalid(&codec.init_queries(6)));
+    assert!(is_invalid(&codec.init_queries(6, connect_time())));
 }
 
 #[test]
 fn magician_retains_the_legacy_fixed_info_query() {
     let mut codec = codec(ModelProfile::MagicianRsV2);
-    let initial = codec.init_queries(512).expect("init queries");
+    let initial = codec.init_queries(512, connect_time()).expect("init queries");
     assert_eq!(
         "ff001efa010708090c0d0e122a2b2c2d2e2f313233363738393a3b3c3d3f454649e9aa",
         encode_hex(&initial[0].bytes)
     );
     codec.reset();
-    let small = codec.init_queries(20).expect("small init queries");
+    let small = codec.init_queries(20, connect_time()).expect("small init queries");
     let mic = small
         .iter()
         .find(|query| query.key == "fa49")
@@ -411,7 +416,7 @@ fn i7_sequence_belongs_to_the_codec_session_and_wraps_at_255() {
     let mut codec = codec(ModelProfile::I7RsV2);
     let mut requests = Vec::new();
     for _ in 0..=128 {
-        requests.extend(codec.init_queries(512).expect("init queries"));
+        requests.extend(codec.init_queries(512, connect_time()).expect("init queries"));
     }
     assert_eq!(
         vec![0, 1, 2],
@@ -426,7 +431,7 @@ fn i7_sequence_belongs_to_the_codec_session_and_wraps_at_255() {
     codec.reset();
     assert_eq!(
         0,
-        codec.init_queries(512).expect("init queries")[0].bytes[1]
+        codec.init_queries(512, connect_time()).expect("init queries")[0].bytes[1]
     );
 }
 
@@ -667,7 +672,7 @@ fn ie_neo_cycle_keeps_only_its_three_choices_and_encodes_the_unused_wind_byte() 
 #[test]
 fn i7_initialization_writes_and_readbacks_share_the_sequence_until_reset() {
     let mut codec = codec(ModelProfile::I7RsV2);
-    codec.init_queries(20).expect("init queries");
+    codec.init_queries(20, connect_time()).expect("init queries");
     let dynamic = prepare(
         codec.as_mut(),
         HeadsetSetting::NoiseMode,
@@ -808,7 +813,7 @@ fn invalid_types_and_unavailable_presets_are_rejected_before_allocating_a_sequen
 #[test]
 fn eq_and_game_continue_the_same_i7_initialization_and_anc_sequence() {
     let mut codec = codec(ModelProfile::I7RsV2);
-    codec.init_queries(20).expect("init queries");
+    codec.init_queries(20, connect_time()).expect("init queries");
     let eq = prepare(
         codec.as_mut(),
         HeadsetSetting::Eq,
@@ -1173,7 +1178,7 @@ fn invalid_control_requests_are_rejected_before_i7_sequence_allocation() {
 #[test]
 fn initialization_touch_switches_and_audio_keep_one_i7_sequence() {
     let mut codec = codec(ModelProfile::I7RsV2);
-    codec.init_queries(20).expect("init queries");
+    codec.init_queries(20, connect_time()).expect("init queries");
     let touch = prepare(
         codec.as_mut(),
         HeadsetSetting::TouchBinding,

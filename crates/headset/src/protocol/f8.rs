@@ -3,6 +3,7 @@ use crate::error::ProtocolError;
 use crate::field::{
     FieldReading, FieldValue, FirmwareVersion, HeadsetField, HeadsetSetting, TouchBinding,
 };
+use crate::local_time::LocalDateTime;
 use crate::hex::encode_hex;
 use crate::model::{BatteryLayout, F8Protocol, ModelProfile, ProtocolFamily};
 use crate::protocol::{
@@ -437,7 +438,11 @@ impl ProtocolCodec for F8Codec {
         self.profile
     }
 
-    fn init_queries(&mut self, max_write_size: usize) -> Result<Vec<ProtocolQuery>, ProtocolError> {
+    fn init_queries(
+        &mut self,
+        max_write_size: usize,
+        _now: LocalDateTime,
+    ) -> Result<Vec<ProtocolQuery>, ProtocolError> {
         if max_write_size < HEADER_LENGTH + 1 {
             return Err(ProtocolError::InvalidArgument(
                 "F8 queries require a 6-byte write capacity".to_string(),

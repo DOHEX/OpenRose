@@ -1,0 +1,21 @@
+[package]
+name = "openrose-control"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[features]
+simulator = []
+
+[dependencies]
+openrose-headset = { path = "../headset" }
+serde.workspace = true
+serde_json.workspace = true
+async-trait.workspace = true
+tokio = { workspace = true, features = ["sync", "time", "rt", "macros"] }
+tokio-util.workspace = true
+
+[dev-dependencies]
+openrose-control = { path = ".", features = ["simulator"] }
+tokio = { workspace = true, features = ["test-util", "rt", "rt-multi-thread", "macros", "sync", "time"] }

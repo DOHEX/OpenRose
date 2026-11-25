@@ -34,7 +34,6 @@ pub struct RsCommonV2Codec {
     info_types: Vec<u8>,
     sequence: u8,
     buffer: Vec<u8>,
-    local_time: Option<LocalDateTime>,
 }
 
 impl RsCommonV2Codec {
@@ -47,7 +46,6 @@ impl RsCommonV2Codec {
             info_types,
             sequence: 0,
             buffer: Vec::new(),
-            local_time: None,
         }
     }
 
@@ -186,20 +184,17 @@ impl ProtocolCodec for RsCommonV2Codec {
         self.profile
     }
 
-    fn init_queries(&mut self, max_write_size: usize) -> Result<Vec<ProtocolQuery>, ProtocolError> {
+    fn init_queries(
+        &mut self,
+        max_write_size: usize,
+        now: LocalDateTime,
+    ) -> Result<Vec<ProtocolQuery>, ProtocolError> {
         if max_write_size < 7 {
             return Err(ProtocolError::InvalidArgument(
                 "RS Common V2 queries require at least a 7-byte write capacity".to_string(),
             ));
         }
-        let clock = if self.protocol.synchronize_clock_on_connect {
-            let now = self.local_time.take().ok_or_else(|| {
-                ProtocolError::InvalidArgument("该型号连接时需要先提供本地时间".to_string())
-            })?;
-            Some(now)
-        } else {
-            None
-        };
+        let clock = self.protocol.synchronize_clock_on_connect.then_some(now);
         let info_types = self.info_types.clone();
         let mut queries: Vec<ProtocolQuery> = info_types
             .chunks(max_write_size - 6)
@@ -238,10 +233,6 @@ impl ProtocolCodec for RsCommonV2Codec {
         } else {
             Vec::new()
         }
-    }
-
-    fn set_local_time(&mut self, now: LocalDateTime) {
-        self.local_time = Some(now);
     }
 
     fn prepare_setting(

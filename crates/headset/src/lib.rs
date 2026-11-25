@@ -2,10 +2,12 @@ pub mod capabilities;
 pub mod command;
 pub mod error;
 pub mod field;
+pub mod guidance;
 pub mod hex;
 pub mod local_time;
 pub mod model;
 pub mod protocol;
+pub mod simulator;
 pub mod state;
 
 pub use capabilities::{
@@ -20,6 +22,7 @@ pub use field::{
     FieldReading, FieldValue, FirmwareVersion, HeadsetField, HeadsetId, HeadsetSetting,
     TouchBinding, TouchSlot,
 };
+pub use guidance::ReconnectGuidance;
 pub use hex::{HexError, decode_hex, encode_hex, is_lower_hex};
 pub use local_time::LocalDateTime;
 pub use model::RsCommonV2Protocol;
