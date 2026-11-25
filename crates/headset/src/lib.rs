@@ -3,6 +3,7 @@ pub mod command;
 pub mod error;
 pub mod field;
 pub mod hex;
+pub mod local_time;
 pub mod model;
 pub mod protocol;
 pub mod state;
@@ -20,6 +21,8 @@ pub use field::{
     TouchBinding, TouchSlot,
 };
 pub use hex::{HexError, decode_hex, encode_hex, is_lower_hex};
+pub use local_time::LocalDateTime;
+pub use model::RsCommonV2Protocol;
 pub use model::identification::ModelIdentification;
 pub use model::{
     BatteryLayout, CapabilityFacts, GattProfile, GattSpec, ModelProfile, ModelProtocol, ModelSpec,

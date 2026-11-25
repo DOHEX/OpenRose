@@ -1,4 +1,5 @@
 pub mod identification;
+pub mod rs_common_v2;
 pub mod zt;
 
 use crate::capabilities::HeadsetCapabilities;
@@ -63,7 +64,8 @@ impl ProtocolFamily {
     pub fn readable_fields(self) -> BTreeSet<HeadsetField> {
         match self {
             Self::Zt => crate::protocol::zt::zt_readable_fields(),
-            Self::RsCommonV2 | Self::F8 | Self::RsCommon => BTreeSet::new(),
+            Self::RsCommonV2 => crate::protocol::rs_common_v2::rs_common_v2_readable_fields(),
+            Self::F8 | Self::RsCommon => BTreeSet::new(),
         }
     }
 }
@@ -97,20 +99,42 @@ impl ZtProtocol {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RsCommonV2Protocol {
+    pub info_ids: Option<&'static str>,
+    pub spatial_needs_ear_adaptive: bool,
+    pub synchronize_clock_on_connect: bool,
+    pub refresh_equalizer_after_game_mode: bool,
+}
+
+impl RsCommonV2Protocol {
+    pub const fn with_info_ids(info_ids: &'static str) -> Self {
+        Self {
+            info_ids: Some(info_ids),
+            spatial_needs_ear_adaptive: false,
+            synchronize_clock_on_connect: false,
+            refresh_equalizer_after_game_mode: false,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ModelProtocol {
     Zt(ZtProtocol),
+    RsCommonV2(RsCommonV2Protocol),
 }
 
 impl ModelProtocol {
     pub fn family(self) -> ProtocolFamily {
         match self {
             Self::Zt(_) => ProtocolFamily::Zt,
+            Self::RsCommonV2(_) => ProtocolFamily::RsCommonV2,
         }
     }
 
     pub fn refresh_equalizer_after_game_mode(self) -> bool {
         match self {
             Self::Zt(_) => false,
+            Self::RsCommonV2(protocol) => protocol.refresh_equalizer_after_game_mode,
         }
     }
 }
@@ -143,16 +167,148 @@ pub enum ModelProfile {
     I3Zt,
     #[serde(rename = "HEADFEEL_ZT")]
     HeadFeelZt,
+    #[serde(rename = "I7_RS_V2")]
+    I7RsV2,
+    #[serde(rename = "BUDSFEEL_MK2_RS_V2")]
+    BudsFeelMk2RsV2,
+    #[serde(rename = "OPENFEEL_MK2_RS_V2")]
+    OpenFeelMk2RsV2,
+    #[serde(rename = "SWIFT2_RS_V2")]
+    Swift2RsV2,
+    #[serde(rename = "JASMINE_RS_V2")]
+    JasmineRsV2,
+    #[serde(rename = "CERAMICS_MK2_RS_V2")]
+    CeramicsMk2RsV2,
+    #[serde(rename = "CERAMICS_MK2_8912F_RS_V2")]
+    CeramicsMk28912fRsV2,
+    #[serde(rename = "CERAMICS_MK2_5736_RS_V2")]
+    CeramicsMk25736RsV2,
+    #[serde(rename = "CERAMICS_U_RS_V2")]
+    CeramicsURsV2,
+    #[serde(rename = "CERAMICS_U_HSC_2710_RS_V2")]
+    CeramicsUHsc2710RsV2,
+    #[serde(rename = "SPEAKFREE_RS_V2")]
+    SpeakFreeRsV2,
+    #[serde(rename = "MAGICIAN_RS_V2")]
+    MagicianRsV2,
+    #[serde(rename = "FURINA_RS_V2")]
+    FurinaRsV2,
+    #[serde(rename = "ZIRCON_RS_V2")]
+    ZirconRsV2,
+    #[serde(rename = "HYACINTH_RS_V2")]
+    HyacinthRsV2,
+    #[serde(rename = "ASTRO_X_RS_V2")]
+    AstroXRsV2,
+    #[serde(rename = "OPAL_RS_V2")]
+    OpalRsV2,
+    #[serde(rename = "MIRROR_RS_V2")]
+    MirrorRsV2,
+    #[serde(rename = "KY01_RS_V2")]
+    Ky01RsV2,
+    #[serde(rename = "CORAL_RS_V2")]
+    CoralRsV2,
+    #[serde(rename = "PATAMON_RS_V2")]
+    PatamonRsV2,
+    #[serde(rename = "TAILMON_RS_V2")]
+    TailmonRsV2,
+    #[serde(rename = "GABUMON_RS_V2")]
+    GabumonRsV2,
+    #[serde(rename = "AGUMON_RS_V2")]
+    AgumonRsV2,
+    #[serde(rename = "SPEAKFEEL2_RS_V2")]
+    SpeakFeel2RsV2,
+    #[serde(rename = "OPENFEEL_L_RS_V2")]
+    OpenFeelLRsV2,
+    #[serde(rename = "FIRST_ANGEL_RS_V2")]
+    FirstAngelRsV2,
+    #[serde(rename = "BUDSFEEL_AE_NEO_RS_V2")]
+    BudsFeelAeNeoRsV2,
+    #[serde(rename = "EARFEEL_IE_NEO_RS_V2")]
+    EarFeelIeNeoRsV2,
+    #[serde(rename = "EARFEEL_IE2_RS_V2")]
+    EarFeelIe2RsV2,
+    #[serde(rename = "SPORTFEEL_8912F_RS_V2")]
+    SportFeel8912fRsV2,
+    #[serde(rename = "MOKA_RS_V2")]
+    MokaRsV2,
 }
 
 impl ModelProfile {
-    pub const ALL: &'static [Self] = &[Self::I5Zt, Self::I3Zt, Self::HeadFeelZt];
+    pub const ALL: &'static [Self] = &[
+        Self::I5Zt,
+        Self::I3Zt,
+        Self::HeadFeelZt,
+        Self::I7RsV2,
+        Self::BudsFeelMk2RsV2,
+        Self::OpenFeelMk2RsV2,
+        Self::Swift2RsV2,
+        Self::JasmineRsV2,
+        Self::CeramicsMk2RsV2,
+        Self::CeramicsMk28912fRsV2,
+        Self::CeramicsMk25736RsV2,
+        Self::CeramicsURsV2,
+        Self::CeramicsUHsc2710RsV2,
+        Self::SpeakFreeRsV2,
+        Self::MagicianRsV2,
+        Self::FurinaRsV2,
+        Self::ZirconRsV2,
+        Self::HyacinthRsV2,
+        Self::AstroXRsV2,
+        Self::OpalRsV2,
+        Self::MirrorRsV2,
+        Self::Ky01RsV2,
+        Self::CoralRsV2,
+        Self::PatamonRsV2,
+        Self::TailmonRsV2,
+        Self::GabumonRsV2,
+        Self::AgumonRsV2,
+        Self::SpeakFeel2RsV2,
+        Self::OpenFeelLRsV2,
+        Self::FirstAngelRsV2,
+        Self::BudsFeelAeNeoRsV2,
+        Self::EarFeelIeNeoRsV2,
+        Self::EarFeelIe2RsV2,
+        Self::SportFeel8912fRsV2,
+        Self::MokaRsV2,
+    ];
 
     pub fn spec(self) -> &'static ModelSpec {
         match self {
             Self::I5Zt => &zt::EAR_FREE_I5,
             Self::I3Zt => &zt::EAR_FREE_I3,
             Self::HeadFeelZt => &zt::HEAD_FEEL,
+            Self::I7RsV2 => &rs_common_v2::EAR_FEEL_I7,
+            Self::BudsFeelMk2RsV2 => &rs_common_v2::BUDS_FEEL_MK2,
+            Self::OpenFeelMk2RsV2 => &rs_common_v2::OPEN_FEEL_MK2,
+            Self::Swift2RsV2 => &rs_common_v2::SWIFT_2,
+            Self::JasmineRsV2 => &rs_common_v2::JASMINE,
+            Self::CeramicsMk2RsV2 => &rs_common_v2::CERAMICS_MK2,
+            Self::CeramicsMk28912fRsV2 => &rs_common_v2::CERAMICS_MK2_8912F,
+            Self::CeramicsMk25736RsV2 => &rs_common_v2::CERAMICS_MK2_5736,
+            Self::CeramicsURsV2 => &rs_common_v2::CERAMICS_U,
+            Self::CeramicsUHsc2710RsV2 => &rs_common_v2::CERAMICS_U_HSC_2710,
+            Self::SpeakFreeRsV2 => &rs_common_v2::SPEAK_FREE,
+            Self::MagicianRsV2 => &rs_common_v2::MAGICIAN,
+            Self::FurinaRsV2 => &rs_common_v2::FURINA,
+            Self::ZirconRsV2 => &rs_common_v2::ZIRCON,
+            Self::HyacinthRsV2 => &rs_common_v2::HYACINTH,
+            Self::AstroXRsV2 => &rs_common_v2::ASTRO_X,
+            Self::OpalRsV2 => &rs_common_v2::OPAL,
+            Self::MirrorRsV2 => &rs_common_v2::MIRROR,
+            Self::Ky01RsV2 => &rs_common_v2::KY01,
+            Self::CoralRsV2 => &rs_common_v2::CORAL,
+            Self::PatamonRsV2 => &rs_common_v2::PATAMON,
+            Self::TailmonRsV2 => &rs_common_v2::TAILMON,
+            Self::GabumonRsV2 => &rs_common_v2::GABUMON,
+            Self::AgumonRsV2 => &rs_common_v2::AGUMON,
+            Self::SpeakFeel2RsV2 => &rs_common_v2::SPEAK_FEEL_2,
+            Self::OpenFeelLRsV2 => &rs_common_v2::OPEN_FEEL_L,
+            Self::FirstAngelRsV2 => &rs_common_v2::FIRST_ANGEL,
+            Self::BudsFeelAeNeoRsV2 => &rs_common_v2::BUDS_FEEL_AE_NEO,
+            Self::EarFeelIeNeoRsV2 => &rs_common_v2::EAR_FEEL_IE_NEO,
+            Self::EarFeelIe2RsV2 => &rs_common_v2::EAR_FEEL_IE2,
+            Self::SportFeel8912fRsV2 => &rs_common_v2::SPORT_FEEL_8912F,
+            Self::MokaRsV2 => &rs_common_v2::MOKA,
         }
     }
 
@@ -161,6 +317,38 @@ impl ModelProfile {
             Self::I5Zt => "I5_ZT",
             Self::I3Zt => "I3_ZT",
             Self::HeadFeelZt => "HEADFEEL_ZT",
+            Self::I7RsV2 => "I7_RS_V2",
+            Self::BudsFeelMk2RsV2 => "BUDSFEEL_MK2_RS_V2",
+            Self::OpenFeelMk2RsV2 => "OPENFEEL_MK2_RS_V2",
+            Self::Swift2RsV2 => "SWIFT2_RS_V2",
+            Self::JasmineRsV2 => "JASMINE_RS_V2",
+            Self::CeramicsMk2RsV2 => "CERAMICS_MK2_RS_V2",
+            Self::CeramicsMk28912fRsV2 => "CERAMICS_MK2_8912F_RS_V2",
+            Self::CeramicsMk25736RsV2 => "CERAMICS_MK2_5736_RS_V2",
+            Self::CeramicsURsV2 => "CERAMICS_U_RS_V2",
+            Self::CeramicsUHsc2710RsV2 => "CERAMICS_U_HSC_2710_RS_V2",
+            Self::SpeakFreeRsV2 => "SPEAKFREE_RS_V2",
+            Self::MagicianRsV2 => "MAGICIAN_RS_V2",
+            Self::FurinaRsV2 => "FURINA_RS_V2",
+            Self::ZirconRsV2 => "ZIRCON_RS_V2",
+            Self::HyacinthRsV2 => "HYACINTH_RS_V2",
+            Self::AstroXRsV2 => "ASTRO_X_RS_V2",
+            Self::OpalRsV2 => "OPAL_RS_V2",
+            Self::MirrorRsV2 => "MIRROR_RS_V2",
+            Self::Ky01RsV2 => "KY01_RS_V2",
+            Self::CoralRsV2 => "CORAL_RS_V2",
+            Self::PatamonRsV2 => "PATAMON_RS_V2",
+            Self::TailmonRsV2 => "TAILMON_RS_V2",
+            Self::GabumonRsV2 => "GABUMON_RS_V2",
+            Self::AgumonRsV2 => "AGUMON_RS_V2",
+            Self::SpeakFeel2RsV2 => "SPEAKFEEL2_RS_V2",
+            Self::OpenFeelLRsV2 => "OPENFEEL_L_RS_V2",
+            Self::FirstAngelRsV2 => "FIRST_ANGEL_RS_V2",
+            Self::BudsFeelAeNeoRsV2 => "BUDSFEEL_AE_NEO_RS_V2",
+            Self::EarFeelIeNeoRsV2 => "EARFEEL_IE_NEO_RS_V2",
+            Self::EarFeelIe2RsV2 => "EARFEEL_IE2_RS_V2",
+            Self::SportFeel8912fRsV2 => "SPORTFEEL_8912F_RS_V2",
+            Self::MokaRsV2 => "MOKA_RS_V2",
         }
     }
 
