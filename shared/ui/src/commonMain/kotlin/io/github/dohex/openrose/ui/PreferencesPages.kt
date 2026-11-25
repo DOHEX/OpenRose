@@ -10,6 +10,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import io.github.dohex.openrose.core.ConnectionBlockReason
 import io.github.dohex.openrose.core.ConnectionPhase
 import io.github.dohex.openrose.core.ConnectionState
 import io.github.dohex.openrose.core.ControlState
@@ -209,18 +210,27 @@ object StatusTags {
 @Composable
 private fun statusVerdict(state: ControlState, platformUi: PlatformUi): StatusVerdict {
     val permission = state.platform.permission
-    val transport = state.platform.transport
-    val permissionMissing = state.platform.bluetoothPermissionRequired
+    val blockReason = state.connectionBlockReason
     val fixes = listOfNotNull(
-        platformUi.requestBluetoothPermission?.takeIf { permissionMissing }?.let { AppStatusAction("授予蓝牙权限", it) },
-        platformUi.openBluetoothSettings?.takeIf { transport == TransportAvailability.Disabled }?.let { AppStatusAction("打开蓝牙设置", it) },
+        platformUi.requestBluetoothPermission?.takeIf { blockReason == ConnectionBlockReason.BluetoothPermissionRequired }
+            ?.let { AppStatusAction("授予蓝牙权限", it) },
+        platformUi.openBluetoothSettings?.takeIf { state.platform.transport == TransportAvailability.Disabled }
+            ?.let { AppStatusAction("打开蓝牙设置", it) },
     )
-    return when {
-        permission == PermissionState.DENIED -> StatusVerdict(AppStatusKind.Error, "未获得蓝牙权限", "授予权限后才能连接耳机", fixes)
-        permission == PermissionState.REQUIRED -> StatusVerdict(AppStatusKind.Caution, "需要蓝牙权限", "授予权限后才能连接耳机", fixes)
-        transport is TransportAvailability.Unavailable -> StatusVerdict(AppStatusKind.Error, "蓝牙不可用", transport.reason)
-        transport == TransportAvailability.Disabled -> StatusVerdict(AppStatusKind.Caution, "系统蓝牙已关闭", "打开系统蓝牙后才能连接耳机", fixes)
-        else -> platformUi.controlVerdict(state) ?: StatusVerdict(AppStatusKind.Good, "工作中", "版本 ${AppVersion.NAME}")
+    return when (blockReason) {
+        ConnectionBlockReason.BluetoothPermissionRequired -> if (permission == PermissionState.DENIED) {
+            StatusVerdict(AppStatusKind.Error, "未获得蓝牙权限", "授予权限后才能连接耳机", fixes)
+        } else {
+            StatusVerdict(AppStatusKind.Caution, "需要蓝牙权限", "授予权限后才能连接耳机", fixes)
+        }
+
+        is ConnectionBlockReason.TransportUnavailable ->
+            StatusVerdict(AppStatusKind.Error, "蓝牙不可用", blockReason.displayText(state.platform.hostPlatform))
+
+        ConnectionBlockReason.BluetoothDisabled ->
+            StatusVerdict(AppStatusKind.Caution, "系统蓝牙已关闭", "打开系统蓝牙后才能连接耳机", fixes)
+
+        null -> platformUi.controlVerdict(state) ?: StatusVerdict(AppStatusKind.Good, "工作中", "版本 ${AppVersion.NAME}")
     }
 }
 
@@ -257,7 +267,7 @@ private fun TransportRow(platform: PlatformState, onOpenSystemSettings: (() -> U
     val transportValue = when (val transport = platform.transport) {
         TransportAvailability.Available -> "可用"
         TransportAvailability.Disabled -> "系统蓝牙已关闭"
-        is TransportAvailability.Unavailable -> transport.reason
+        is TransportAvailability.Unavailable -> transport.displayText(platform.hostPlatform)
     }
     val transportTone = when (platform.transport) {
         TransportAvailability.Available -> StatusTone.GOOD

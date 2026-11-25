@@ -47,6 +47,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import io.github.dohex.openrose.circulation.CirculationClient
+import io.github.dohex.openrose.core.ConnectionBlockReason
 import io.github.dohex.openrose.core.ConnectionPhase
 import io.github.dohex.openrose.core.ConnectionState
 import io.github.dohex.openrose.core.ControlState
@@ -55,7 +56,6 @@ import io.github.dohex.openrose.core.DeviceSetting
 import io.github.dohex.openrose.core.DeviceState
 import io.github.dohex.openrose.core.HeadsetCommand
 import io.github.dohex.openrose.core.NoiseMode
-import io.github.dohex.openrose.core.TransportAvailability
 import io.github.dohex.openrose.core.protocol.BatteryLayout
 import io.github.dohex.openrose.core.transport.DeviceId
 import io.github.dohex.openrose.ui.model.OpenRoseModel
@@ -92,8 +92,8 @@ data class TraySummary(
     val noiseModeFeedback: String? = null,
 )
 
-fun traySummary(state: ControlState, selection: PrimaryDeviceSelection): TraySummary {
-    val connection = TrayConnection(state, selection.primary(state))
+fun traySummary(state: ControlState): TraySummary {
+    val connection = TrayConnection(state, state.currentHeadset)
     val ready = connection.ready
     val desktop = state.platform.hostPlatform.isDesktop
     val battery = ready?.trayBattery(desktop)
@@ -113,14 +113,14 @@ fun traySummary(state: ControlState, selection: PrimaryDeviceSelection): TraySum
         noiseModeFeedback = noiseDevice?.let { state.noiseModeFeedback(it) },
         reconnectTarget = connection.reconnectTarget,
         reconnectLabel = headsetReconnectLabel(connection.audioConnected, "重新连接"),
-        addDevice = state.bondedRoseDevices().isEmpty() && state.connectionTarget == null,
+        addDevice = state.bondedHeadsets.isEmpty() && state.connectionTarget == null,
         connectionHint = connection.hint,
     )
 }
 
 @Composable
-fun rememberTraySummary(state: ControlState, selection: PrimaryDeviceSelection): TraySummary {
-    val summary by remember(state, selection) { derivedStateOf { traySummary(state, selection) } }
+fun rememberTraySummary(state: ControlState): TraySummary {
+    val summary by remember(state) { derivedStateOf { traySummary(state) } }
     return summary
 }
 
@@ -154,7 +154,6 @@ object TrayIcons {
 @Composable
 fun TrayPanel(
     model: OpenRoseModel,
-    selection: PrimaryDeviceSelection,
     onOpenApp: (WindowDestination?) -> Unit,
     modifier: Modifier = Modifier,
     onContentHeight: (Dp) -> Unit = {},
@@ -182,7 +181,7 @@ fun TrayPanel(
                             .padding(start = 14.dp, end = 14.dp, top = 14.dp, bottom = 6.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
-                        TrayPanelContent(model, state, selection, onOpenApp, circulation, remoteHeadsets, sound, trayPanelSettings)
+                        TrayPanelContent(model, state, onOpenApp, circulation, remoteHeadsets, sound, trayPanelSettings)
                     }
                 }
             }
@@ -201,15 +200,14 @@ fun TrayPanel(
 private fun TrayPanelContent(
     model: OpenRoseModel,
     state: ControlState,
-    selection: PrimaryDeviceSelection,
     onOpenApp: (WindowDestination?) -> Unit,
     circulation: CirculationClient?,
     remoteHeadsets: List<RemoteHeadset>?,
     sound: DesktopSoundActions?,
     trayPanelSettings: TrayPanelSettings,
 ) {
-    val summary = rememberTraySummary(state, selection)
-    val cards = rememberHeadsetCards(state, selection, circulation, remoteHeadsets)
+    val summary = rememberTraySummary(state)
+    val cards = rememberHeadsetCards(state, circulation, remoteHeadsets)
     if (cards.showLocal) {
         val localRemote = cards.local.remote
         if (localRemote != null) {
@@ -707,10 +705,9 @@ internal fun audioWithoutControlStatus(connecting: Boolean): String = if (connec
 private class TrayConnection(private val state: ControlState, private val primary: DeviceCandidate?) {
     val ready = state.activeDevice()?.takeIf { state.isReady(it) }
     private val connecting = ready == null && state.isConnectingForTray()
-    private val blockReason = state.platform.connectionBlockReason
-    private val showPlatformReason = state.connectionTarget == null && !state.platform.bluetoothPermissionRequired &&
-        state.platform.transport is TransportAvailability.Unavailable
-
+    private val blockReason = state.connectionBlockReason
+    private val blockReasonText = blockReason?.displayText(state.platform.hostPlatform)
+    private val showPlatformReason = state.connectionTarget == null && blockReason is ConnectionBlockReason.TransportUnavailable
     private val desktop = state.platform.hostPlatform.isDesktop
     val audioConnected = primary?.matchesAudioDevice(state.audioDeviceId) == true
     val name: String?
@@ -732,9 +729,9 @@ private class TrayConnection(private val state: ControlState, private val primar
         ready != null -> TrayConnectionStatus("已连接", if (state.deviceHasSystemAudio) "已连接" else "耳机控制已连接")
         audioConnected -> TrayConnectionStatus(audioWithoutControlStatus(connecting))
         connecting -> TrayConnectionStatus("正在连接…", state.connection.phaseOrNull()?.displayText() ?: "正在连接…")
-        showPlatformReason -> TrayConnectionStatus(requireNotNull(blockReason))
-        primary == null -> TrayConnectionStatus("未添加耳机", blockReason)
-        else -> TrayConnectionStatus("未连接", blockReason ?: "本机未连接")
+        showPlatformReason -> TrayConnectionStatus(requireNotNull(blockReasonText))
+        primary == null -> TrayConnectionStatus("未添加耳机", blockReasonText)
+        else -> TrayConnectionStatus("未连接", blockReasonText ?: "本机未连接")
     }
 
     private val hasLocalConnection = connecting || ready != null || audioConnected
@@ -754,9 +751,9 @@ private class TrayConnection(private val state: ControlState, private val primar
     val hint: String?
         get() = when {
             ready != null || connecting || showPlatformReason -> null
-            blockReason != null -> blockReason
+            blockReasonText != null -> blockReasonText
             audioConnected -> state.lastError?.message
-            primary != null -> primary.profile.reconnectHint(state.lastError != null, includeStatus = !desktop)
+            primary != null -> primary.reconnectGuidance.reconnectHint(state.lastError != null, includeStatus = !desktop)
             else -> null
         }
 }

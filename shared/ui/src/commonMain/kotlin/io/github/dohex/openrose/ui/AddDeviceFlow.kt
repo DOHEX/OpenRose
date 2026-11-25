@@ -189,4 +189,4 @@ internal fun AddDeviceLifecycle(active: Boolean, state: ControlState, flow: AddD
     SideEffect { flow.observe(state.connection) }
 }
 
-internal fun ControlState.canSearchForHeadphones(): Boolean = platform.connectionBlockReason == null && !platform.scanPermission.missing
+internal fun ControlState.canSearchForHeadphones(): Boolean = connectionBlockReason == null && !platform.scanPermission.missing

@@ -16,12 +16,23 @@ import kotlinx.collections.immutable.persistentSetOf
 
 data class PlatformState(
     val permission: PermissionState,
-    val transport: TransportAvailability = TransportAvailability.Unavailable("平台传输尚未实现"),
+    val transport: TransportAvailability = TransportAvailability.Unavailable(TransportUnavailableCode.UNSUPPORTED_PLATFORM),
     val hostPlatform: HostPlatform = HostPlatform.UNKNOWN,
     val controlTransportApplicability: PlatformApplicability = PlatformApplicability.UNKNOWN,
     val userUnlocked: Boolean = true,
     val scanPermission: PermissionState = PermissionState.NOT_REQUIRED,
-)
+) {
+    val connectionBlockReason: ConnectionBlockReason?
+        get() = when {
+            permission.missing -> ConnectionBlockReason.BluetoothPermissionRequired
+
+            else -> when (val availability = transport) {
+                TransportAvailability.Available -> null
+                TransportAvailability.Disabled -> ConnectionBlockReason.BluetoothDisabled
+                is TransportAvailability.Unavailable -> ConnectionBlockReason.TransportUnavailable(availability.code, availability.detail)
+            }
+        }
+}
 
 enum class HostPlatform {
     UNKNOWN,
@@ -45,10 +56,38 @@ enum class PermissionState {
     val missing: Boolean get() = this == REQUIRED || this == DENIED
 }
 
+enum class TransportUnavailableCode {
+    UNSUPPORTED_PLATFORM,
+    BLE_UNSUPPORTED,
+    PERMISSION_REQUIRED,
+    NO_ADAPTER,
+    ADAPTER_POWERED_OFF,
+    ADAPTER_STATE_UNKNOWN,
+    ACCESS_DENIED,
+    SERVICE_UNAVAILABLE,
+    MISSING_DEPENDENCY,
+    INITIALIZING,
+    RECOVERING,
+    SHUTTING_DOWN,
+    CLOSED,
+    BACKEND_UNAVAILABLE,
+}
+
 sealed interface TransportAvailability {
     data object Available : TransportAvailability
     data object Disabled : TransportAvailability
-    data class Unavailable(val reason: String) : TransportAvailability
+    data class Unavailable(val code: TransportUnavailableCode, val detail: String? = null) : TransportAvailability
+}
+
+sealed interface ConnectionBlockReason {
+    data object BluetoothPermissionRequired : ConnectionBlockReason
+    data object BluetoothDisabled : ConnectionBlockReason
+    data class TransportUnavailable(val code: TransportUnavailableCode, val detail: String? = null) : ConnectionBlockReason
+}
+
+enum class ReconnectGuidance {
+    OPEN_CASE_AUTO_CONNECT,
+    WAIT_SYSTEM_BLUETOOTH,
 }
 
 enum class ConnectionPhase { CONNECTING, DISCOVERING, SUBSCRIBING, INITIALIZING, READY }
@@ -81,6 +120,9 @@ data class DeviceCandidate(
     fun matchesAudioDevice(audio: DeviceId?): Boolean = audio.matchesHeadset(deviceId, classicAddress)
 
     fun displayName(): String = name?.takeIf(String::isNotBlank) ?: profile?.displayName ?: deviceId.value
+
+    val reconnectGuidance: ReconnectGuidance
+        get() = profile?.reconnectGuidance ?: ReconnectGuidance.WAIT_SYSTEM_BLUETOOTH
 
     internal fun matchesIdentity(id: DeviceId, classic: String?): Boolean {
         if (deviceId == id) return true
@@ -234,6 +276,7 @@ data class ControlState(
     val connectionRecovery: ConnectionRecovery? = null,
     val connectionTarget: DeviceCandidate? = null,
     val audioDeviceId: DeviceId? = null,
+    val selectedHeadsetId: DeviceId? = null,
 ) {
     val readySession: SessionReference?
         get() {
@@ -300,6 +343,33 @@ data class ControlState(
     }
 
     fun deviceDisplayName(device: DeviceState): String = deviceDisplayName(device.deviceId, device.profile, device.classicAddress)
+
+    val bondedHeadsets: List<DeviceCandidate>
+        get() = bondedDevices.filter { it.profile != null }
+
+    val currentHeadset: DeviceCandidate?
+        get() {
+            connectionTarget?.let { return it }
+            val bonded = bondedHeadsets
+            val connectedId = when (val current = connection) {
+                is ConnectionState.Connecting -> current.deviceId
+                is ConnectionState.Connected -> current.deviceId
+                ConnectionState.Disconnected -> null
+            }
+            return if (connectedId != null) {
+                bonded.firstOrNull { it.deviceId == connectedId }
+                    ?: candidates.firstOrNull { it.deviceId == connectedId }
+            } else {
+                selectedHeadsetId?.let { chosen -> bonded.firstOrNull { it.deviceId == chosen } }
+                    ?: bonded.firstOrNull()
+            }
+        }
+
+    val connectionBlockReason: ConnectionBlockReason?
+        get() = platform.connectionBlockReason
+
+    val reconnectGuidance: ReconnectGuidance?
+        get() = currentHeadset?.reconnectGuidance
 }
 
 fun ControlState.withSettingOperation(operation: SettingOperation): ControlState = copy(

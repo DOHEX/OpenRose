@@ -13,6 +13,7 @@ import kotlinx.collections.immutable.persistentSetOf
 internal val openFeelDual = ModelSpec(
     displayName = "OpenFeel",
     shortLabel = "OpenFeel",
+    versionName = "LDAC + LHDC",
     protocol = ModelProtocol.RsCommon(initialization = RsCommonInit.OPEN_FEEL),
     advertisementPrefixes = listOf("0b0a0a0d"),
     nameBrand = "openfeel",

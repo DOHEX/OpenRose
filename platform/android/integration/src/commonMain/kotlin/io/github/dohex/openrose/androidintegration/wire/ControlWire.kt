@@ -36,6 +36,7 @@ object ControlWire {
         "recovery" to state.connectionRecovery?.let(::encode),
         "target" to state.connectionTarget?.let(::encode),
         "audioDevice" to state.audioDeviceId?.value?.let(::str),
+        "selectedHeadset" to state.selectedHeadsetId?.value?.let(::str),
     )
 
     fun decodeOwned(wire: Wire): OwnedControlState {
@@ -59,6 +60,7 @@ object ControlWire {
                 connectionRecovery = node.optional("recovery")?.let(::decodeRecovery),
                 connectionTarget = node.optional("target")?.let(::decodeCandidate),
                 audioDeviceId = node.optional("audioDevice")?.let { DeviceId(it.asStr()) },
+                selectedHeadsetId = node.optional("selectedHeadset")?.let { DeviceId(it.asStr()) },
             ),
         )
     }

@@ -116,8 +116,7 @@ class TrayCirculationUiTest {
                 else -> error("Unexpected request $command")
             }
         }
-        val selection = PrimaryDeviceSelection().apply { select(state, second.deviceId) }
-        withTrayPanel(state, InterfaceStyle.MIUIX, selection, circulation = client) { panel ->
+        withTrayPanel(state.copy(selectedHeadsetId = second.deviceId), InterfaceStyle.MIUIX, circulation = client) { panel ->
             panel.render()
             assertEquals(2, panel.countText("ROSE EARFREE i5"))
             assertEquals(1, panel.countText("改连本机"))
