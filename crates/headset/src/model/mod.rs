@@ -1,8 +1,10 @@
 pub mod identification;
+pub mod rs_common;
 pub mod zt;
 
 use crate::capabilities::HeadsetCapabilities;
 use crate::field::{FieldReading, FieldValue, FirmwareVersion, HeadsetField};
+use rs_common::RsCommonProtocol;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::ops::RangeInclusive;
@@ -63,7 +65,8 @@ impl ProtocolFamily {
     pub fn readable_fields(self) -> BTreeSet<HeadsetField> {
         match self {
             Self::Zt => crate::protocol::zt::zt_readable_fields(),
-            Self::RsCommonV2 | Self::F8 | Self::RsCommon => BTreeSet::new(),
+            Self::RsCommon => crate::protocol::rs_common::rs_common_readable_fields(),
+            Self::RsCommonV2 | Self::F8 => BTreeSet::new(),
         }
     }
 }
@@ -99,18 +102,21 @@ impl ZtProtocol {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ModelProtocol {
     Zt(ZtProtocol),
+    RsCommon(RsCommonProtocol),
 }
 
 impl ModelProtocol {
     pub fn family(self) -> ProtocolFamily {
         match self {
             Self::Zt(_) => ProtocolFamily::Zt,
+            Self::RsCommon(_) => ProtocolFamily::RsCommon,
         }
     }
 
     pub fn refresh_equalizer_after_game_mode(self) -> bool {
         match self {
             Self::Zt(_) => false,
+            Self::RsCommon(_) => false,
         }
     }
 }
@@ -143,16 +149,64 @@ pub enum ModelProfile {
     I3Zt,
     #[serde(rename = "HEADFEEL_ZT")]
     HeadFeelZt,
+    #[serde(rename = "BUDSFREE_I_RS_COMMON")]
+    BudsFreeIRsCommon,
+    #[serde(rename = "CAMBRIAN_RS_COMMON")]
+    CambrianRsCommon,
+    #[serde(rename = "OPENFEEL_LDAC_RS_COMMON")]
+    OpenFeelLdacRsCommon,
+    #[serde(rename = "OPENFEEL_LHDC_RS_COMMON")]
+    OpenFeelLhdcRsCommon,
+    #[serde(rename = "OPENFEEL_DUAL_RS_COMMON")]
+    OpenFeelDualRsCommon,
+    #[serde(rename = "OPENFUN_RS_COMMON")]
+    OpenFunRsCommon,
+    #[serde(rename = "OPENFUN_TOUCH_RS_COMMON")]
+    OpenFunTouchRsCommon,
+    #[serde(rename = "SPORTFEEL_RS_COMMON")]
+    SportFeelRsCommon,
+    #[serde(rename = "SWIFT_RS_COMMON")]
+    SwiftRsCommon,
+    #[serde(rename = "OPENLINK_RS_COMMON")]
+    OpenLinkRsCommon,
+    #[serde(rename = "CAMBRIAN_S_RS_COMMON")]
+    CambrianSRsCommon,
 }
 
 impl ModelProfile {
-    pub const ALL: &'static [Self] = &[Self::I5Zt, Self::I3Zt, Self::HeadFeelZt];
+    pub const ALL: &'static [Self] = &[
+        Self::I5Zt,
+        Self::I3Zt,
+        Self::HeadFeelZt,
+        Self::BudsFreeIRsCommon,
+        Self::CambrianRsCommon,
+        Self::OpenFeelLdacRsCommon,
+        Self::OpenFeelLhdcRsCommon,
+        Self::OpenFeelDualRsCommon,
+        Self::OpenFunRsCommon,
+        Self::OpenFunTouchRsCommon,
+        Self::SportFeelRsCommon,
+        Self::SwiftRsCommon,
+        Self::OpenLinkRsCommon,
+        Self::CambrianSRsCommon,
+    ];
 
     pub fn spec(self) -> &'static ModelSpec {
         match self {
             Self::I5Zt => &zt::EAR_FREE_I5,
             Self::I3Zt => &zt::EAR_FREE_I3,
             Self::HeadFeelZt => &zt::HEAD_FEEL,
+            Self::BudsFreeIRsCommon => &rs_common::BUDS_FREE_I,
+            Self::CambrianRsCommon => &rs_common::CAMBRIAN,
+            Self::OpenFeelLdacRsCommon => &rs_common::OPEN_FEEL_LDAC,
+            Self::OpenFeelLhdcRsCommon => &rs_common::OPEN_FEEL_LHDC,
+            Self::OpenFeelDualRsCommon => &rs_common::OPEN_FEEL_DUAL,
+            Self::OpenFunRsCommon => &rs_common::OPEN_FUN,
+            Self::OpenFunTouchRsCommon => &rs_common::OPEN_FUN_TOUCH,
+            Self::SportFeelRsCommon => &rs_common::SPORT_FEEL,
+            Self::SwiftRsCommon => &rs_common::SWIFT,
+            Self::OpenLinkRsCommon => &rs_common::OPEN_LINK,
+            Self::CambrianSRsCommon => &rs_common::CAMBRIAN_S,
         }
     }
 
@@ -161,6 +215,17 @@ impl ModelProfile {
             Self::I5Zt => "I5_ZT",
             Self::I3Zt => "I3_ZT",
             Self::HeadFeelZt => "HEADFEEL_ZT",
+            Self::BudsFreeIRsCommon => "BUDSFREE_I_RS_COMMON",
+            Self::CambrianRsCommon => "CAMBRIAN_RS_COMMON",
+            Self::OpenFeelLdacRsCommon => "OPENFEEL_LDAC_RS_COMMON",
+            Self::OpenFeelLhdcRsCommon => "OPENFEEL_LHDC_RS_COMMON",
+            Self::OpenFeelDualRsCommon => "OPENFEEL_DUAL_RS_COMMON",
+            Self::OpenFunRsCommon => "OPENFUN_RS_COMMON",
+            Self::OpenFunTouchRsCommon => "OPENFUN_TOUCH_RS_COMMON",
+            Self::SportFeelRsCommon => "SPORTFEEL_RS_COMMON",
+            Self::SwiftRsCommon => "SWIFT_RS_COMMON",
+            Self::OpenLinkRsCommon => "OPENLINK_RS_COMMON",
+            Self::CambrianSRsCommon => "CAMBRIAN_S_RS_COMMON",
         }
     }
 

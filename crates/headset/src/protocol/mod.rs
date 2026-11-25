@@ -1,3 +1,4 @@
+pub mod rs_common;
 pub mod zt;
 
 use crate::capabilities::{CustomEqualizerCapabilities, TouchControlCapabilities};
@@ -119,6 +120,9 @@ pub trait ProtocolCodec: Send {
 pub fn create_protocol_codec(profile: ModelProfile) -> Box<dyn ProtocolCodec> {
     match profile.spec().protocol {
         ModelProtocol::Zt(protocol) => Box::new(zt::ZtCodec::new(profile, protocol)),
+        ModelProtocol::RsCommon(protocol) => {
+            Box::new(rs_common::RsCommonCodec::new(profile, protocol))
+        }
     }
 }
 
