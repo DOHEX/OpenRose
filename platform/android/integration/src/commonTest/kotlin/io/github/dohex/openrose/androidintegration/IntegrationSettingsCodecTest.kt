@@ -15,7 +15,7 @@ class IntegrationSettingsCodecTest {
             IntegrationSettings(),
             IntegrationSettingsCodec.decode(
                 mapOf(
-                    "island_mode" to "openrose", "control_way" to "module", "background_control_enabled" to "true",
+                    "island_mode" to "openrose_style", "control_way" to "module", "background_control_enabled" to "true",
                     "androidIntegration.island_mode" to "invalid", "androidIntegration.control_way" to "invalid",
                     "androidIntegration.status_notification_enabled" to "yes", "androidIntegration.island_timings" to "unknown",
                     "androidIntegration.background_control_enabled" to "yes", "androidIntegration.fusion_off_as_wind" to "yes",
@@ -36,7 +36,7 @@ class IntegrationSettingsCodecTest {
             "old persisted keys and values are ignored rather than migrated",
         )
         assertEquals(
-            IslandMode.SYSTEM,
+            IslandMode.SYSTEM_STYLE,
             IntegrationSettingsCodec.decode(mapOf("androidIntegration.island_mode" to "official")).islandMode,
         )
         assertEquals(persistentSetOf(), IntegrationSettingsCodec.decode(mapOf("androidIntegration.island_timings" to "")).islandTimings)
@@ -64,12 +64,12 @@ class IntegrationSettingsCodecTest {
         }
         val defaultsEncoded = IntegrationSettingsCodec.encode(IntegrationSettings())
         assertEquals("app", defaultsEncoded["androidIntegration.control_way"])
-        assertEquals("system", defaultsEncoded["androidIntegration.island_mode"])
+        assertEquals("system_style", defaultsEncoded["androidIntegration.island_mode"])
         assertEquals("true", defaultsEncoded["androidIntegration.status_notification_enabled"])
         assertEquals("connection", defaultsEncoded["androidIntegration.island_timings"])
         assertEquals(
-            "openrose",
-            IntegrationSettingsCodec.encode(IntegrationSettings(islandMode = IslandMode.OPENROSE))["androidIntegration.island_mode"],
+            "openrose_style",
+            IntegrationSettingsCodec.encode(IntegrationSettings(islandMode = IslandMode.OPENROSE_STYLE))["androidIntegration.island_mode"],
         )
     }
 
@@ -79,14 +79,14 @@ class IntegrationSettingsCodecTest {
             UserSettings(forceBle = true),
             IntegrationSettings(
                 controlWay = ControlWay.MODULE,
-                islandMode = IslandMode.OPENROSE,
+                islandMode = IslandMode.OPENROSE_STYLE,
                 backgroundControlEnabled = true,
             ),
         )
         val encoded = HostSettingsCodec.encode(settings)
         assertEquals("true", encoded["core.force_ble"])
         assertEquals("module", encoded["androidIntegration.control_way"])
-        assertEquals("openrose", encoded["androidIntegration.island_mode"])
+        assertEquals("openrose_style", encoded["androidIntegration.island_mode"])
         assertFalse(encoded.keys.any { it.startsWith("sharedUI.") })
         assertEquals(settings, HostSettingsCodec.decode(encoded + ("sharedUI.appearance" to "dark")))
         assertEquals(HostSettings(), HostSettingsCodec.decode(mapOf("force_ble" to "true", "control_way" to "module")))

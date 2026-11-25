@@ -372,7 +372,7 @@ class OwnerHandoffTest {
         val saved = runtime.integration.value.settings
         assertEquals(ControlWay.MODULE, saved.controlWay)
         val hostView = requireNotNull(rig.host.ownerView.first())
-        assertEquals(IslandMode.SYSTEM, hostView.settings.islandMode)
+        assertEquals(IslandMode.SYSTEM_STYLE, hostView.settings.islandMode)
         rig.host.configure { HostConfiguration(true, HostSettings(integration = saved)) }
         assertEquals(IslandMode.OFF, requireNotNull(rig.host.ownerView.first()).settings.islandMode)
         assertEquals(ControlWay.MODULE, runtime.integration.value.owner.selected)

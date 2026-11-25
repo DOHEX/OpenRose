@@ -158,7 +158,7 @@ internal class HostEndpoint(
         scope.launch {
             host.ownerView.collect { view ->
                 val prompt = view?.presentation?.prompt
-                if (prompt?.mode == IslandMode.SYSTEM &&
+                if (prompt?.mode == IslandMode.SYSTEM_STYLE &&
                     synchronized(lock) { leases.values.none { it.target == BridgeTarget.XIAOMI_BLUETOOTH } }
                 ) {
                     facts.update {

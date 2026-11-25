@@ -58,10 +58,10 @@ internal class ModuleConnectionPrompt(
     }
 
     private fun modulePrompt(snapshot: RenderedSnapshot): Bundle? {
-        if (snapshot.mode != BridgePresentationWire.OPENROSE) return null
+        if (snapshot.mode != BridgePresentationWire.OPENROSE_STYLE) return null
         if (!snapshot.presentation.getBoolean(BridgePresentationWire.ALLOW_ISLAND_FIELDS, false)) return null
         return snapshot.presentation.getBundle(BridgePresentationWire.PROMPT)?.takeIf {
-            it.getString(BridgePresentationWire.MODE) == BridgePresentationWire.OPENROSE
+            it.getString(BridgePresentationWire.MODE) == BridgePresentationWire.OPENROSE_STYLE
         }
     }
 

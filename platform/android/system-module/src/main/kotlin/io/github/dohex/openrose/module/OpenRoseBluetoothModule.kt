@@ -265,7 +265,7 @@ class OpenRoseBluetoothModule : XposedModule() {
                 lastOfficialIdentity = identity
             }
             val spec = snapshot.getBundle(BridgePresentationWire.PRESENTATION)
-            if (spec?.getString(BridgePresentationWire.MODE) != BridgePresentationWire.SYSTEM ||
+            if (spec?.getString(BridgePresentationWire.MODE) != BridgePresentationWire.SYSTEM_STYLE ||
                 !spec.getBoolean(BridgePresentationWire.ALLOW_ISLAND_FIELDS)
             ) {
                 output.clear()

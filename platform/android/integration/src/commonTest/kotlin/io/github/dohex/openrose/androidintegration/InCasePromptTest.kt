@@ -36,7 +36,7 @@ private const val UNAVAILABLE = 0xff
 
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class InCasePromptTest {
-    private val openRoseInCase = IntegrationSettings(islandMode = IslandMode.OPENROSE, islandTimings = persistentSetOf(IslandTiming.IN_CASE))
+    private val openRoseInCase = IntegrationSettings(islandMode = IslandMode.OPENROSE_STYLE, islandTimings = persistentSetOf(IslandTiming.IN_CASE))
 
     @Test
     fun onlyModelsWithACaseAndInCaseFlagsCanShowAnInCasePrompt() {
@@ -82,7 +82,7 @@ class InCasePromptTest {
         runCurrent()
         val left = assertNotNull(session.presentation.value.prompt)
         assertEquals(IslandTiming.IN_CASE, left.timing)
-        assertEquals(IslandMode.OPENROSE, left.mode)
+        assertEquals(IslandMode.OPENROSE_STYLE, left.mode)
 
         link.deviceReply(i7Battery(IN, RIGHT_OUT))
         runCurrent()
@@ -109,7 +109,7 @@ class InCasePromptTest {
 
     @Test
     fun systemStyleAndAnUnselectedTimingConsumeTheEventWithoutPrompting() = runTest {
-        for (settings in listOf(IntegrationSettings(islandMode = IslandMode.SYSTEM), IntegrationSettings(islandMode = IslandMode.OPENROSE))) {
+        for (settings in listOf(IntegrationSettings(islandMode = IslandMode.SYSTEM_STYLE), IntegrationSettings(islandMode = IslandMode.OPENROSE_STYLE))) {
             val (session, link) = connected(settings, initial = i7Battery(OUT, RIGHT_OUT))
             val connection = session.presentation.value.prompt
             assertEquals(IslandTiming.CONNECTION, connection?.timing)

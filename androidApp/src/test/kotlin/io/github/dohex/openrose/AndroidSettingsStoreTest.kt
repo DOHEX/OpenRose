@@ -40,7 +40,7 @@ class AndroidSettingsStoreTest {
                 val chosen = HostSettings(
                     UserSettings(forceBle = true),
                     IntegrationSettings(
-                        islandMode = IslandMode.OPENROSE,
+                        islandMode = IslandMode.OPENROSE_STYLE,
                         statusNotificationEnabled = false,
                         islandTimings = persistentSetOf(),
                         fusionSettingsDestination = FusionSettingsDestination.OPENROSE,

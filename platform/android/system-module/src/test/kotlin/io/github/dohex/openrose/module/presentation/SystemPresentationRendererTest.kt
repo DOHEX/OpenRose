@@ -129,10 +129,10 @@ class SystemPresentationRendererTest {
         val presentation = SystemPresentationState(
             reference = reference,
             notificationTag = "headset",
-            islandMode = IslandMode.OPENROSE,
+            islandMode = IslandMode.OPENROSE_STYLE,
             statusNotificationEnabled = statusNotificationEnabled,
             allowIslandFields = true,
-            prompt = IslandPrompt("connection", IslandTiming.CONNECTION, IslandMode.OPENROSE, reference, durationMillis = 4_000),
+            prompt = IslandPrompt("connection", IslandTiming.CONNECTION, IslandMode.OPENROSE_STYLE, reference, durationMillis = 4_000),
         )
         return Bundle().apply {
             putInt(BridgeWire.KEY_VERSION, BridgeWire.VERSION)

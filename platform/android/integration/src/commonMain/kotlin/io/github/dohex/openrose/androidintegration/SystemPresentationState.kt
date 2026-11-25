@@ -41,7 +41,7 @@ data class IslandPrompt(
 data class SystemPresentationState(
     val reference: SessionReference? = null,
     val notificationTag: String? = null,
-    val islandMode: IslandMode = IslandMode.SYSTEM,
+    val islandMode: IslandMode = IslandMode.SYSTEM_STYLE,
     val statusNotificationEnabled: Boolean = true,
     val islandSummaryEnabled: Boolean = true,
     val allowIslandFields: Boolean = false,
@@ -56,14 +56,14 @@ data class SystemPresentationState(
         get() = reference != null && statusNotificationEnabled
 
     val statusSummaryIsland: Boolean
-        get() = allowIslandFields && islandMode == IslandMode.OPENROSE && islandSummaryEnabled
+        get() = allowIslandFields && islandMode == IslandMode.OPENROSE_STYLE && islandSummaryEnabled
 }
 
 internal fun ControlState.systemPresentation(settings: IntegrationSettings, prompt: IslandPrompt?): SystemPresentationState {
     val reference = readySession
     val mode = settings.islandMode
     val openRoseIsland = settings.islandTimings.isNotEmpty() || (settings.islandSummaryEnabled && settings.statusNotificationEnabled)
-    val allowIslandFields = mode != IslandMode.OFF && (mode != IslandMode.OPENROSE || openRoseIsland)
+    val allowIslandFields = mode != IslandMode.OFF && (mode != IslandMode.OPENROSE_STYLE || openRoseIsland)
     val device = device?.takeIf { reference != null }
         ?: return SystemPresentationState(
             islandMode = mode,
@@ -106,8 +106,8 @@ internal fun IslandPrompt.appliesTo(settings: IntegrationSettings): Boolean = mo
 
 internal fun IntegrationSettings.allowsPrompt(timing: IslandTiming): Boolean = when (islandMode) {
     IslandMode.OFF -> false
-    IslandMode.SYSTEM -> timing == IslandTiming.CONNECTION
-    IslandMode.OPENROSE -> timing in islandTimings
+    IslandMode.SYSTEM_STYLE -> timing == IslandTiming.CONNECTION
+    IslandMode.OPENROSE_STYLE -> timing in islandTimings
 }
 
 val ModelProfile.reportsInCase: Boolean

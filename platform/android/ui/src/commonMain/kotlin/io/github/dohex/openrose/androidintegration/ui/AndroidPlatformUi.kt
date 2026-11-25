@@ -354,8 +354,8 @@ private fun DiagnosticPresentationRow(label: String, result: String) {
 
 private fun islandModeLabel(mode: IslandMode): String = when (mode) {
     IslandMode.OFF -> "不显示"
-    IslandMode.SYSTEM -> "系统样式"
-    IslandMode.OPENROSE -> "OpenRose 样式"
+    IslandMode.SYSTEM_STYLE -> "系统样式"
+    IslandMode.OPENROSE_STYLE -> "OpenRose 样式"
 }
 
 private fun fusionSettingsDestinationLabel(destination: FusionSettingsDestination): String = when (destination) {
@@ -455,7 +455,7 @@ private fun SystemIntegrationSettingsContent(
                 checked = settings.statusNotificationEnabled,
                 onChange = { onIntegrationSettingsChange(settings.copy(statusNotificationEnabled = it)) },
             )
-            if (settings.statusNotificationEnabled && settings.islandMode == IslandMode.OPENROSE) {
+            if (settings.statusNotificationEnabled && settings.islandMode == IslandMode.OPENROSE_STYLE) {
                 AppSwitchRow(
                     title = "常驻电量岛",
                     summary = "连接期间超级岛一直显示电量；关闭后只在显示时机弹出几秒",
@@ -480,7 +480,7 @@ private fun SystemIntegrationSettingsContent(
             }
         }
 
-        if (settings.islandMode == IslandMode.OPENROSE) {
+        if (settings.islandMode == IslandMode.OPENROSE_STYLE) {
             val footnote = listOfNotNull(
                 "未选择显示时机，不会弹出展开。".takeIf { settings.islandTimings.isEmpty() },
                 "入盒时仅对支持上报盒内状态的型号生效。",

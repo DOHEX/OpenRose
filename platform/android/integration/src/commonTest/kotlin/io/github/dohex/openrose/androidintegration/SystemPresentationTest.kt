@@ -52,7 +52,7 @@ class SystemPresentationTest {
         val presentation = session.presentation.value
         assertEquals(reference, presentation.reference)
         assertEquals("i5", presentation.notificationTag)
-        assertEquals(IslandMode.SYSTEM, presentation.islandMode)
+        assertEquals(IslandMode.SYSTEM_STYLE, presentation.islandMode)
         assertTrue(presentation.statusNotificationEnabled)
         assertTrue(presentation.allowIslandFields)
         assertEquals(PresentationReading.Known(100), presentation.battery?.left)
@@ -63,7 +63,7 @@ class SystemPresentationTest {
 
         val prompt = assertNotNull(presentation.prompt)
         assertEquals(reference, prompt.reference)
-        assertEquals(IslandMode.SYSTEM, prompt.mode)
+        assertEquals(IslandMode.SYSTEM_STYLE, prompt.mode)
         assertFalse(prompt.claimed)
         assertEquals(5_000L, prompt.durationMillis)
         assertTrue(session.claimPrompt(reference, prompt.id))
@@ -98,10 +98,10 @@ class SystemPresentationTest {
         val combinations = listOf(
             IslandMode.OFF to true,
             IslandMode.OFF to false,
-            IslandMode.SYSTEM to true,
-            IslandMode.SYSTEM to false,
-            IslandMode.OPENROSE to true,
-            IslandMode.OPENROSE to false,
+            IslandMode.SYSTEM_STYLE to true,
+            IslandMode.SYSTEM_STYLE to false,
+            IslandMode.OPENROSE_STYLE to true,
+            IslandMode.OPENROSE_STYLE to false,
         )
         for ((mode, statusEnabled) in combinations) {
             val transport = PresentationTransport(PresentationConnection(i5Replies))
@@ -114,7 +114,7 @@ class SystemPresentationTest {
             assertEquals(statusEnabled, presentation.showStatusNotification, "$mode / status=$statusEnabled")
             assertEquals(mode != IslandMode.OFF, presentation.allowIslandFields, "$mode / status=$statusEnabled")
             assertEquals(
-                mode == IslandMode.OPENROSE,
+                mode == IslandMode.OPENROSE_STYLE,
                 presentation.statusSummaryIsland,
                 "$mode / status=$statusEnabled: system style's connection prompt is its only island",
             )
@@ -123,7 +123,7 @@ class SystemPresentationTest {
 
             if (mode != IslandMode.OFF) {
                 assertNotNull(presentation.prompt)
-                val otherMode = if (mode == IslandMode.SYSTEM) IslandMode.OPENROSE else IslandMode.SYSTEM
+                val otherMode = if (mode == IslandMode.SYSTEM_STYLE) IslandMode.OPENROSE_STYLE else IslandMode.SYSTEM_STYLE
                 session.updateIntegrationSettings(session.settings.copy(islandMode = otherMode))
                 assertNull(session.presentation.value.prompt)
                 session.updateIntegrationSettings(session.settings.copy(islandMode = mode))
@@ -140,7 +140,7 @@ class SystemPresentationTest {
     @Test
     fun anEmptyOpenRoseTimingSetKeepsTheSummaryIslandWithoutReplayingTheConnection() = runTest {
         val transport = PresentationTransport(PresentationConnection(i5Replies))
-        val session = newSession(transport, IntegrationSettings(islandMode = IslandMode.OPENROSE, islandTimings = persistentSetOf()))
+        val session = newSession(transport, IntegrationSettings(islandMode = IslandMode.OPENROSE_STYLE, islandTimings = persistentSetOf()))
         connect(session, transport, DeviceId("i5"))
 
         assertNull(session.presentation.value.prompt)
@@ -161,7 +161,7 @@ class SystemPresentationTest {
     @Test
     fun turningOffTheSummaryIslandKeepsTheOpenRosePromptButDropsThePersistentIsland() = runTest {
         val transport = PresentationTransport(PresentationConnection(i5Replies))
-        val session = newSession(transport, IntegrationSettings(islandMode = IslandMode.OPENROSE, islandSummaryEnabled = false))
+        val session = newSession(transport, IntegrationSettings(islandMode = IslandMode.OPENROSE_STYLE, islandSummaryEnabled = false))
         connect(session, transport, DeviceId("i5"))
 
         val presentation = session.presentation.value

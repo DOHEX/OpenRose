@@ -21,16 +21,16 @@ class BridgePresentationWireTest {
         val state = SystemPresentationState(
             reference = reference,
             notificationTag = "rose-a",
-            islandMode = IslandMode.OPENROSE,
+            islandMode = IslandMode.OPENROSE_STYLE,
             statusNotificationEnabled = true,
             allowIslandFields = true,
             statusNotificationTarget = StatusNotificationTarget.ROSELINK,
-            prompt = IslandPrompt("p1", IslandTiming.IN_CASE, IslandMode.OPENROSE, reference, claimed = true, durationMillis = 4_000),
+            prompt = IslandPrompt("p1", IslandTiming.IN_CASE, IslandMode.OPENROSE_STYLE, reference, claimed = true, durationMillis = 4_000),
         )
 
         val wire = state.toBridgePresentation().asWireMap()
 
-        assertEquals(BridgePresentationWire.OPENROSE, wire.string(BridgePresentationWire.MODE))
+        assertEquals(BridgePresentationWire.OPENROSE_STYLE, wire.string(BridgePresentationWire.MODE))
         assertEquals(true, wire.boolean(BridgePresentationWire.STATUS_NOTIFICATION_ENABLED))
         assertEquals(true, wire.boolean(BridgePresentationWire.ALLOW_ISLAND_FIELDS))
         assertEquals(true, wire.boolean(BridgePresentationWire.STATUS_SUMMARY_ISLAND))
@@ -38,7 +38,7 @@ class BridgePresentationWireTest {
         assertEquals("openrose:rose-a", wire.child(BridgePresentationWire.NOTIFICATION)?.string(BridgePresentationWire.TAG))
         val prompt = requireNotNull(wire.child(BridgePresentationWire.PROMPT))
         assertEquals("p1", prompt.string(BridgePresentationWire.PROMPT_ID))
-        assertEquals(BridgePresentationWire.OPENROSE, prompt.string(BridgePresentationWire.MODE))
+        assertEquals(BridgePresentationWire.OPENROSE_STYLE, prompt.string(BridgePresentationWire.MODE))
         assertEquals(BridgePresentationWire.TIMING_IN_CASE, prompt.string(BridgePresentationWire.TIMING))
         assertEquals(true, prompt.boolean(BridgePresentationWire.CLAIMED))
         assertIs<Long>(prompt.value(BridgePresentationWire.DURATION_MILLIS))
@@ -57,7 +57,7 @@ class BridgePresentationWireTest {
 
     @Test
     fun everyIslandModeIsOneOfTheModesTheConsumersRecognise() {
-        val recognised = setOf(BridgePresentationWire.OFF, BridgePresentationWire.SYSTEM, BridgePresentationWire.OPENROSE)
+        val recognised = setOf(BridgePresentationWire.OFF, BridgePresentationWire.SYSTEM_STYLE, BridgePresentationWire.OPENROSE_STYLE)
         IslandMode.entries.forEach { mode ->
             val sent = SystemPresentationState(islandMode = mode).toBridgePresentation().asWireMap().string(BridgePresentationWire.MODE)
             assertTrue(sent in recognised, "$mode is sent as $sent")

@@ -45,7 +45,7 @@ class RenderedSnapshotNoiseTest {
                 putStringArrayList("writable_settings", arrayListOf("NOISE_MODE"))
             },
             presentation = Bundle(),
-            mode = BridgePresentationWire.OPENROSE,
+            mode = BridgePresentationWire.OPENROSE_STYLE,
             statusNotificationEnabled = true,
             statusIsland = false,
             statusTarget = BridgePresentationWire.TARGET_OPENROSE,

@@ -160,7 +160,7 @@ class SystemSettingsOwnershipUiTest {
                 width = 1200,
                 height = 2600,
                 style = style,
-                settings = IntegrationSettings(islandMode = IslandMode.OPENROSE, islandTimings = persistentSetOf()),
+                settings = IntegrationSettings(islandMode = IslandMode.OPENROSE_STYLE, islandTimings = persistentSetOf()),
             ) { harness ->
                 harness.openPage("系统集成")
                 harness.render()

@@ -39,7 +39,7 @@ class PlatformApplicabilityUiTest {
                 initialUiSettings = UiSettings(interfaceStyle = style),
                 initialIntegration = IntegrationState(
                     settings = IntegrationSettings(
-                        islandMode = IslandMode.OPENROSE,
+                        islandMode = IslandMode.OPENROSE_STYLE,
                         statusNotificationEnabled = true,
                         islandTimings = persistentSetOf(),
                     ),
@@ -129,7 +129,7 @@ class PlatformApplicabilityUiTest {
 
     private fun withUnreadyHyperOsSettings(style: InterfaceStyle, block: suspend (Harness) -> Unit) {
         val initialSettings = IntegrationSettings(
-            islandMode = IslandMode.OPENROSE,
+            islandMode = IslandMode.OPENROSE_STYLE,
             statusNotificationEnabled = true,
             islandTimings = persistentSetOf(),
         )

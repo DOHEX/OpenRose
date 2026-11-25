@@ -7,7 +7,7 @@ import kotlinx.collections.immutable.persistentSetOf
 import kotlinx.collections.immutable.toPersistentSet
 
 enum class ControlWay { APP, MODULE }
-enum class IslandMode { OFF, SYSTEM, OPENROSE }
+enum class IslandMode { OFF, SYSTEM_STYLE, OPENROSE_STYLE }
 
 enum class IslandTiming { CONNECTION, IN_CASE }
 enum class FusionSettingsDestination { SYSTEM, OPENROSE }
@@ -15,7 +15,7 @@ enum class FusionSettingsDestination { SYSTEM, OPENROSE }
 enum class StatusNotificationTarget { OPENROSE, SYSTEM, ROSELINK, QUICK_PANEL }
 
 data class IntegrationSettings(
-    val islandMode: IslandMode = IslandMode.SYSTEM,
+    val islandMode: IslandMode = IslandMode.SYSTEM_STYLE,
     val statusNotificationEnabled: Boolean = true,
     val islandSummaryEnabled: Boolean = true,
     val islandTimings: PersistentSet<IslandTiming> = persistentSetOf(IslandTiming.CONNECTION),
@@ -44,8 +44,8 @@ object IntegrationSettingsCodec {
     fun encode(settings: IntegrationSettings): Map<String, String> = mapOf(
         "androidIntegration.island_mode" to when (settings.islandMode) {
             IslandMode.OFF -> "off"
-            IslandMode.SYSTEM -> "system"
-            IslandMode.OPENROSE -> "openrose"
+            IslandMode.SYSTEM_STYLE -> "system_style"
+            IslandMode.OPENROSE_STYLE -> "openrose_style"
         },
         "androidIntegration.status_notification_enabled" to settings.statusNotificationEnabled.toString(),
         "androidIntegration.island_summary_enabled" to settings.islandSummaryEnabled.toString(),
@@ -94,8 +94,8 @@ object IntegrationSettingsCodec {
 
     private fun decodeIslandMode(value: String?): IslandMode? = when (value) {
         "off" -> IslandMode.OFF
-        "system" -> IslandMode.SYSTEM
-        "openrose" -> IslandMode.OPENROSE
+        "system_style" -> IslandMode.SYSTEM_STYLE
+        "openrose_style" -> IslandMode.OPENROSE_STYLE
         else -> null
     }
 

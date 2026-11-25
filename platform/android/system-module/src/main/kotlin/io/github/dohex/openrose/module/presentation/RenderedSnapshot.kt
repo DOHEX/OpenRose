@@ -80,7 +80,7 @@ internal fun decodePresentationSnapshot(snapshot: Bundle): RenderedSnapshot? {
     val capabilities = snapshot.getBundle("capabilities") ?: return null
     val presentation = snapshot.getBundle(BridgePresentationWire.PRESENTATION) ?: return null
     val mode = presentation.getString(BridgePresentationWire.MODE)?.takeIf {
-        it == BridgePresentationWire.OFF || it == BridgePresentationWire.SYSTEM || it == BridgePresentationWire.OPENROSE
+        it == BridgePresentationWire.OFF || it == BridgePresentationWire.SYSTEM_STYLE || it == BridgePresentationWire.OPENROSE_STYLE
     } ?: return null
     if (!presentation.containsKey(BridgePresentationWire.STATUS_NOTIFICATION_ENABLED)) return null
     return RenderedSnapshot(

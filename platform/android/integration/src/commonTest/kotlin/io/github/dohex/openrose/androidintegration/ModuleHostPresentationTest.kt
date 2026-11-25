@@ -102,7 +102,7 @@ class ModuleHostPresentationTest {
 
     @Test
     fun onlyTheEntryThatOwnsTheSavedIslandModeMayClaimTheConnectionPromptAndOnlyOnce() = runTest {
-        for ((mode, owner) in listOf(IslandMode.SYSTEM to ClientRole.XIAOMI_BLUETOOTH, IslandMode.OPENROSE to ClientRole.HOST_PRESENTATION)) {
+        for ((mode, owner) in listOf(IslandMode.SYSTEM_STYLE to ClientRole.XIAOMI_BLUETOOTH, IslandMode.OPENROSE_STYLE to ClientRole.HOST_PRESENTATION)) {
             val rig = Rig(this, IntegrationSettings(islandMode = mode))
             rig.start()
             val entries = mapOf(
@@ -161,7 +161,7 @@ class ModuleHostPresentationTest {
 
     @Test
     fun aNotificationNoiseActionForAStaleOrOtherSessionIsRefusedBeforeAnyWrite() = runTest {
-        val rig = Rig(this, IntegrationSettings(islandMode = IslandMode.OPENROSE))
+        val rig = Rig(this, IntegrationSettings(islandMode = IslandMode.OPENROSE_STYLE))
         rig.start()
         rig.link.initializing = false
         val reference = rig.reference
@@ -177,7 +177,7 @@ class ModuleHostPresentationTest {
 
     @Test
     fun theOldGenerationCannotActOnTheNextSessionAndTheSavedPresentationApplies() = runTest {
-        val saved = IntegrationSettings(islandMode = IslandMode.OPENROSE, statusNotificationEnabled = false, islandTimings = persistentSetOf(IslandTiming.CONNECTION))
+        val saved = IntegrationSettings(islandMode = IslandMode.OPENROSE_STYLE, statusNotificationEnabled = false, islandTimings = persistentSetOf(IslandTiming.CONNECTION))
         val rig = Rig(this, saved)
         rig.start()
         val old = rig.generation
@@ -195,7 +195,7 @@ class ModuleHostPresentationTest {
         rig.connect()
         val next = rig.generation
         assertNotEquals(old, next)
-        assertEquals(IslandMode.OPENROSE, rig.presentation.islandMode)
+        assertEquals(IslandMode.OPENROSE_STYLE, rig.presentation.islandMode)
         assertFalse(rig.presentation.statusNotificationEnabled)
         assertEquals(
             HostRejection.STALE_GENERATION,
