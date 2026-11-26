@@ -12,13 +12,7 @@ val generatedBindingsDir = layout.buildDirectory.dir("generated/uniffi/kotlin")
 val buildHostRustFfi = tasks.register<BuildHostRustFfiTask>("buildHostRustFfi") {
     workspaceRoot.set(rootProject.layout.projectDirectory)
     offline.set(gradle.startParameter.isOffline)
-    rustInputs.from(
-        rootProject.layout.projectDirectory.file("Cargo.toml"),
-        rootProject.layout.projectDirectory.file("Cargo.lock"),
-        fileTree(rootProject.layout.projectDirectory.dir("crates/headset")) { exclude("target/**") },
-        fileTree(rootProject.layout.projectDirectory.dir("crates/control")) { exclude("target/**") },
-        fileTree(rootProject.layout.projectDirectory.dir("crates/ffi")) { exclude("target/**") },
-    )
+    rustInputs.from(rustFfiSourceInputs())
     outputLibrary.set(hostLibraryFile)
 }
 
@@ -38,6 +32,10 @@ val generateUniffiBindings = tasks.register<GenerateUniffiBindingsTask>("generat
 kotlin {
     android {
         namespace = "io.github.dohex.openrose.ffi"
+        optimization {
+            consumerKeepRules.publish = true
+            consumerKeepRules.files.add(file("consumer-rules.pro"))
+        }
     }
     sourceSets {
         commonMain {

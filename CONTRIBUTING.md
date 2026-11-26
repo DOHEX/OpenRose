@@ -11,7 +11,13 @@
 ## 开发环境
 
 - **JDK 21**：`.mise.toml` 固定 Temurin 的精确版本，CI 也读取它安装 JDK；可用 [mise](https://mise.jdx.dev/) 安装同一版本。构建和 Gradle 守护进程都要求 Temurin 21，机器上没有时，`settings.gradle.kts` 中的 foojay 工具链解析插件会自动下载。Gradle 不会自动发现 mise 安装的 JDK，只有它正好是启动 Gradle 的 JVM 时才会被选中；想让终端和 IDE 用同一个 JDK，在 `~/.gradle/gradle.properties` 中把它加入 `org.gradle.java.installations.paths`。
-- **Android SDK**：Platform 37、Build Tools 37.0.0。设置 `ANDROID_HOME`，或在 `local.properties` 中写入 `sdk.dir=/path/to/android-sdk`。`offlineCheck` 同样需要 Android SDK。
+- **Android SDK 与 NDK**：Platform 37、Build Tools 37.0.0、NDK `28.2.13676358`（版本固定在 `gradle/libs.versions.toml`）。设置 `ANDROID_HOME`，或在 `local.properties` 中写入 `sdk.dir=/path/to/android-sdk`。`offlineCheck` 需要 Android SDK；首次执行 `:androidApp:assembleDebug` 时，AGP 会按固定版本自动下载 NDK。
+- **Rust 与 Android 交叉编译**：`cargo xtask check` 与主机 JVM FFI 测试需要 Rust stable 工具链；构建 Android APK 还需要 `aarch64-linux-android` 目标和 `cargo-ndk` `4.1.2`：
+
+  ```bash
+  rustup target add aarch64-linux-android
+  cargo install --locked cargo-ndk --version 4.1.2
+  ```
 - **Linux 运行库**：运行或测试桌面版需要 GTK 3、EGL / OpenGL 和 fontconfig。CI 在 Ubuntu 24.04 上安装的是：
 
   ```bash
