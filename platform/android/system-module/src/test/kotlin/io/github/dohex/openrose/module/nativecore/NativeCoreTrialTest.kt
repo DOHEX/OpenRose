@@ -156,4 +156,21 @@ class NativeCoreTrialTest {
         assertEquals(0, rig.started)
         assertTrue(trial.allowsHotReload)
     }
+
+    @Test
+    fun reportsTheSwitchOnlyWhenItChangesAndSaysTurningItOffNeedsAScopeRestart() {
+        val rig = Rig()
+        val trial = rig.trial()
+
+        trial.apply(enabled = false)
+        trial.apply(enabled = false)
+        trial.apply(enabled = true)
+        trial.apply(enabled = false)
+        trial.apply(enabled = false)
+
+        assertEquals(
+            listOf("switch value=false", "switch value=true", "switch value=false", "switch_off_ignored_until_scope_restart"),
+            rig.lines.map { it.message }.filter { it.startsWith("switch") },
+        )
+    }
 }

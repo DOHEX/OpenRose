@@ -19,6 +19,7 @@ internal class NativeCoreTrial(
     private var attempted = false
     private var closed = false
     private var running: AutoCloseable? = null
+    private var lastSwitch: Boolean? = null
 
     @Volatile private var nativeLoaded = false
 
@@ -26,17 +27,20 @@ internal class NativeCoreTrial(
 
     fun apply(enabled: Boolean) {
         synchronized(lock) {
-            when {
-                closed -> Unit
-
-                !enabled -> if (attempted) log.write(Log.INFO, "switch_off_ignored_until_scope_restart", null)
-
-                !attempted -> {
-                    attempted = true
-                    start()
-                }
+            if (closed) return
+            observe(enabled)
+            if (enabled && !attempted) {
+                attempted = true
+                start()
             }
         }
+    }
+
+    private fun observe(enabled: Boolean) {
+        if (enabled == lastSwitch) return
+        lastSwitch = enabled
+        log.write(Log.INFO, "switch value=$enabled", null)
+        if (!enabled && attempted) log.write(Log.INFO, "switch_off_ignored_until_scope_restart", null)
     }
 
     fun close() {
