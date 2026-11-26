@@ -26,14 +26,16 @@ internal class NativeCoreTrial(
 
     fun apply(enabled: Boolean) {
         synchronized(lock) {
-            if (closed) return
-            if (!enabled) {
-                if (attempted) log.write(Log.INFO, "switch_off_ignored_until_scope_restart", null)
-                return
+            when {
+                closed -> Unit
+
+                !enabled -> if (attempted) log.write(Log.INFO, "switch_off_ignored_until_scope_restart", null)
+
+                !attempted -> {
+                    attempted = true
+                    start()
+                }
             }
-            if (attempted) return
-            attempted = true
-            start()
         }
     }
 
@@ -45,6 +47,7 @@ internal class NativeCoreTrial(
         current?.close()
     }
 
+    @Suppress("TooGenericExceptionCaught")
     private fun start() {
         log.write(Log.INFO, "trial_start", null)
         for (name in LIBRARIES) {

@@ -143,4 +143,17 @@ class NativeCoreTrialTest {
         trial.close()
         assertEquals(0, rig.stopped)
     }
+
+    @Test
+    fun aRetiredHostNeverStartsTheTrialLate() {
+        val rig = Rig()
+        val trial = rig.trial()
+        trial.close()
+
+        trial.apply(enabled = true)
+
+        assertEquals(emptyList(), rig.loaded)
+        assertEquals(0, rig.started)
+        assertTrue(trial.allowsHotReload)
+    }
 }
