@@ -55,6 +55,7 @@ dependencies {
     implementation(libs.activity.compose)
     implementation(libs.zxing.embedded)
     implementation(projects.platform.android.bluetoothIpc)
+    implementation(projects.platform.android.ffi)
     runtimeOnly(projects.platform.android.systemModule)
     compileOnly(libs.libxposed.api)
     implementation(libs.libxposed.service)
