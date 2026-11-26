@@ -8,6 +8,9 @@ import android.util.Log
 import dalvik.system.BaseDexClassLoader
 import io.github.dohex.openrose.ffi.RustControlResult
 import io.github.dohex.openrose.ffi.RustControlRuntime
+import io.github.dohex.openrose.ffi.kotlincore.KotlinCoreTransport
+import io.github.dohex.openrose.ffi.kotlincore.toRust
+import io.github.dohex.openrose.platform.androidCoreTransport
 import io.github.dohex.openrose.platform.readPlatformState
 import io.github.libxposed.api.XposedModule
 import kotlinx.coroutines.CoroutineScope
@@ -72,7 +75,7 @@ private class AndroidNativeLibraries(private val module: XposedModule, private v
 }
 
 private fun startTrialSession(context: Context, log: TrialLog): AutoCloseable {
-    val transport = RustAndroidTransport(context)
+    val transport = androidCoreTransport(context)
     var started = false
     try {
         val runtime = RustControlRuntime(
@@ -91,7 +94,7 @@ private fun startTrialSession(context: Context, log: TrialLog): AutoCloseable {
 private class TrialSession(
     private val context: Context,
     private val runtime: RustControlRuntime,
-    private val transport: RustAndroidTransport,
+    private val transport: KotlinCoreTransport,
     private val log: TrialLog,
 ) : AutoCloseable {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)

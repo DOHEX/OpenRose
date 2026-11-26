@@ -14,13 +14,13 @@ import io.github.dohex.openrose.androidintegration.IntegrationSettings
 import io.github.dohex.openrose.androidintegration.LocalOwnerIdentity
 import io.github.dohex.openrose.androidintegration.SwitchingControlRuntime
 import io.github.dohex.openrose.circulation.CirculationClient
-import io.github.dohex.openrose.core.LocalControlRuntime
 import io.github.dohex.openrose.core.OperationResult
 import io.github.dohex.openrose.core.UserSettings
 import io.github.dohex.openrose.core.transport.DeviceId
+import io.github.dohex.openrose.ffi.kotlincore.CoreControlRuntime
 import io.github.dohex.openrose.framework.FrameworkLink
 import io.github.dohex.openrose.framework.ModuleHostBinderLink
-import io.github.dohex.openrose.platform.AndroidControlTransport
+import io.github.dohex.openrose.platform.androidCoreTransport
 import io.github.dohex.openrose.platform.readPlatformState
 import io.github.dohex.openrose.ui.UiSettings
 import io.github.dohex.openrose.ui.model.OpenRoseSettingsStore
@@ -80,10 +80,10 @@ class OpenRoseApplication : Application() {
             initialIntegrationSettings = saved.host.integration,
             store = ownerStore,
             appFactory = { scope, settings, platform, sessionIdBase ->
-                LocalControlRuntime(
+                CoreControlRuntime(
+                    transport = androidCoreTransport(applicationContext),
                     initialPlatformState = platform,
                     initialSettings = settings,
-                    transport = AndroidControlTransport(applicationContext),
                     scope = scope,
                     sessionIdBase = sessionIdBase,
                 )

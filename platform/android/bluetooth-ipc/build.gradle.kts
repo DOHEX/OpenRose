@@ -11,6 +11,7 @@ dependencies {
     implementation(libs.androidx.core)
     api(projects.platform.android.integration)
     api(projects.shared.circulation)
+    implementation(projects.platform.android.ffi)
     testImplementation(kotlin("test-junit"))
     testImplementation(libs.coroutines.test)
     testImplementation(libs.robolectric)

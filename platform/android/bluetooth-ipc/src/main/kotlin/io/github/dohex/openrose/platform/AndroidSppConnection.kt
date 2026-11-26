@@ -5,7 +5,7 @@ import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothSocket
 import io.github.dohex.openrose.core.ConnectionPhase
-import io.github.dohex.openrose.core.transport.ControlConnection
+import io.github.dohex.openrose.ffi.kotlincore.SppLink
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -32,7 +32,7 @@ internal class AndroidSppConnection(
     private val adapter: BluetoothAdapter,
     private val address: String,
     serviceUuid: String,
-) : ControlConnection {
+) : SppLink {
     private val device: BluetoothDevice = adapter.getRemoteDevice(address)
     private val serviceId: UUID = UUID.fromString(serviceUuid)
     private val incoming = Channel<ByteArray>(INCOMING_CAPACITY)
@@ -59,7 +59,7 @@ internal class AndroidSppConnection(
 
     override val maxWriteSize: Int = MAX_WRITE_SIZE
 
-    suspend fun open(onPhase: (ConnectionPhase) -> Unit) {
+    override suspend fun open(onPhase: (ConnectionPhase) -> Unit) {
         checkOpen()
         val client = device.createRfcommSocketToServiceRecord(serviceId)
         socket = client
