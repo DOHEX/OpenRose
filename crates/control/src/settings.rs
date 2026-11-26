@@ -4,6 +4,7 @@ use std::collections::BTreeMap;
 const FORCE_BLE_KEY: &str = "core.force_ble";
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct ControlSettings {
     pub force_ble: bool,
 }

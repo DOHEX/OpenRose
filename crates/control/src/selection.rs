@@ -3,6 +3,7 @@ use openrose_headset::ModelProfile;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 pub enum TransportEndpoint {
     BleGatt {
         service_uuid: String,
@@ -16,6 +17,7 @@ pub enum TransportEndpoint {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 pub enum TransportSelectionReason {
     ModelBleOnly,
     ForcedBle,
@@ -27,6 +29,7 @@ pub enum TransportSelectionReason {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct TransportSelection {
     pub endpoint: TransportEndpoint,
     pub reason: TransportSelectionReason,

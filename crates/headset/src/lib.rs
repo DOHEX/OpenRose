@@ -1,6 +1,11 @@
+#[cfg(feature = "uniffi")]
+uniffi::setup_scaffolding!();
+
 pub mod capabilities;
 pub mod command;
 pub mod error;
+#[cfg(feature = "uniffi")]
+pub mod ffi;
 pub mod field;
 pub mod guidance;
 pub mod hex;

@@ -1,6 +1,7 @@
 use crate::error::ProtocolError;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct LocalDateTime {
     year: u16,
     month: u8,

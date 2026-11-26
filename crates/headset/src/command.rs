@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 pub enum HeadsetCommand {
     NoiseMode(NoiseMode),
     AncLevel(i32),
@@ -263,7 +264,7 @@ impl HeadsetCommand {
                 let keys_match = flags.len() == noise.cycle_modes.len()
                     && flags.keys().all(|k| noise.cycle_modes.contains(k));
                 let enabled_count = flags.values().filter(|&&v| v).count();
-                invalid_unless(keys_match && enabled_count >= noise.minimum_cycle_selections)
+                invalid_unless(keys_match && enabled_count >= noise.minimum_cycle_selections as usize)
             }
             Self::EqualizerPreset(preset) => {
                 if capabilities

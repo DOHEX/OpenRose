@@ -21,6 +21,7 @@ pub struct GattSpec {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct GattProfile {
     pub service_uuid: String,
     pub write_uuid: String,
@@ -38,6 +39,7 @@ impl From<GattSpec> for GattProfile {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 pub enum ProtocolFamily {
     Zt,
     RsCommonV2,
@@ -75,6 +77,7 @@ impl ProtocolFamily {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 pub enum BatteryLayout {
     EarbudsAndCase,
     EarbudsOnly,
@@ -175,6 +178,7 @@ pub struct ModelSpec {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 pub enum ModelProfile {
     #[serde(rename = "I5_ZT")]
     I5Zt,

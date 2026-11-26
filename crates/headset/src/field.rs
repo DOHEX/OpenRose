@@ -4,6 +4,9 @@ use std::collections::BTreeMap;
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct HeadsetId(pub String);
 
+#[cfg(feature = "uniffi")]
+uniffi::custom_newtype!(HeadsetId, String);
+
 impl HeadsetId {
     pub fn new(value: impl Into<String>) -> Self {
         Self(value.into())
@@ -15,6 +18,7 @@ impl HeadsetId {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 pub enum HeadsetField {
     LeftBattery,
     RightBattery,
@@ -109,6 +113,7 @@ impl HeadsetField {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 pub enum HeadsetSetting {
     NoiseMode,
     AncLevel,
@@ -170,6 +175,7 @@ impl HeadsetSetting {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct TouchSlot {
     pub side: String,
     pub gesture: String,
@@ -185,6 +191,7 @@ impl TouchSlot {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct TouchBinding {
     pub side: String,
     pub gesture: String,
@@ -193,6 +200,7 @@ pub struct TouchBinding {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct FirmwareVersion {
     pub parts: Vec<i32>,
     pub display_text: String,
@@ -216,6 +224,7 @@ impl FirmwareVersion {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 pub enum FieldValue {
     Number(i32),
     Toggle(bool),
@@ -293,6 +302,7 @@ impl FieldValue {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 pub enum FieldReading {
     Loading,
     NotProvided { raw_hex: String },

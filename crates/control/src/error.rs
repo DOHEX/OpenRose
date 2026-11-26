@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::fmt;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 pub enum ControlErrorCode {
     PermissionRequired,
     TransportUnavailable,
@@ -15,6 +16,7 @@ pub enum ControlErrorCode {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct ControlError {
     pub code: ControlErrorCode,
     pub message: String,

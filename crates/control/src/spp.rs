@@ -9,6 +9,7 @@ const NOTIFICATION_BUFFER: usize = 64;
 const CLOSED: &str = "SPP 连接已关闭";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 pub enum SppFailureKind {
     Permission,
     Unsupported,

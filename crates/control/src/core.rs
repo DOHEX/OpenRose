@@ -21,6 +21,7 @@ use tokio::time::Instant;
 use tokio_util::sync::CancellationToken;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct SessionTiming {
     pub connect_timeout: Duration,
     pub query_timeout: Duration,

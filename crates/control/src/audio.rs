@@ -5,6 +5,7 @@ use openrose_headset::{HeadsetId, ModelProfile};
 use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct RawAudioDevice {
     pub name: Option<String>,
     pub address: String,
@@ -26,7 +27,8 @@ impl RawAudioDevice {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 pub enum AudioProfile {
     A2dp,
     Headset,
@@ -38,18 +40,21 @@ impl AudioProfile {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 pub enum AudioConnectionState {
     Connected,
     Disconnected,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct RawProfileSnapshot {
     pub connected_addresses: Vec<String>,
     pub states: BTreeMap<String, AudioConnectionState>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct RawAudioSnapshot {
     pub enabled: bool,
     pub spp_available: bool,
@@ -59,6 +64,7 @@ pub struct RawAudioSnapshot {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 pub enum RawAudioEvent {
     AdapterOff,
     AdapterOn,

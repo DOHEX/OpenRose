@@ -17,6 +17,7 @@ const DISCOVERY_ATTEMPTS: u32 = 3;
 const NOTIFICATION_BUFFER: usize = 64;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct GattCharacteristic {
     pub instance_id: u64,
     pub uuid: String,
@@ -27,12 +28,14 @@ pub struct GattCharacteristic {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct GattService {
     pub uuid: String,
     pub characteristics: Vec<GattCharacteristic>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 pub enum GattSubscription {
     Disabled,
     Notify,
@@ -40,6 +43,7 @@ pub enum GattSubscription {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 pub enum GattFailureKind {
     Permission,
     Unsupported,
@@ -50,6 +54,7 @@ pub enum GattFailureKind {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct GattError {
     pub kind: GattFailureKind,
     pub message: String,
@@ -65,6 +70,7 @@ impl GattError {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 pub enum GattEvent {
     Notification { instance_id: u64, value: Vec<u8> },
     ServicesChanged,

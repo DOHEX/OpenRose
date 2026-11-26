@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct HeadsetReadings {
     pub profile: ModelProfile,
     pub capabilities: HeadsetCapabilities,
