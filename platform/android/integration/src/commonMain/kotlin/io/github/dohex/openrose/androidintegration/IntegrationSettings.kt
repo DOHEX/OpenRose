@@ -25,6 +25,7 @@ data class IntegrationSettings(
     val backgroundControlEnabled: Boolean = false,
     val controlWay: ControlWay = ControlWay.APP,
     val dynamicColor: Boolean = false,
+    val nativeCoreTrial: Boolean = false,
 )
 
 object IntegrationSettingsCodec {
@@ -69,6 +70,7 @@ object IntegrationSettingsCodec {
         "androidIntegration.background_control_enabled" to settings.backgroundControlEnabled.toString(),
         CONTROL_WAY_KEY to encodeControlWay(settings.controlWay),
         "androidIntegration.dynamic_color" to settings.dynamicColor.toString(),
+        "androidIntegration.native_core_trial" to settings.nativeCoreTrial.toString(),
     )
 
     fun decode(values: Map<String, String>): IntegrationSettings {
@@ -89,6 +91,7 @@ object IntegrationSettingsCodec {
                 ?: defaults.backgroundControlEnabled,
             controlWay = decodeControlWay(values[CONTROL_WAY_KEY]),
             dynamicColor = values["androidIntegration.dynamic_color"]?.toBooleanStrictOrNull() ?: defaults.dynamicColor,
+            nativeCoreTrial = values["androidIntegration.native_core_trial"]?.toBooleanStrictOrNull() ?: defaults.nativeCoreTrial,
         )
     }
 
