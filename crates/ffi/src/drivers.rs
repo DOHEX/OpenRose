@@ -10,26 +10,84 @@ use openrose_control::gatt::{
 use openrose_control::scan::{Advertisement, ScanDriver as CoreScanDriver};
 use openrose_control::snapshot::ControlSnapshot;
 use openrose_control::spp::{SppDriver as CoreSppDriver, SppError, SppFailureKind};
-use openrose_control::transport::{ControlTransport as CoreControlTransport, TransportError};
-use openrose_control::{
-    ControlObserver as CoreControlObserver, LocalClock as CoreLocalClock,
+use openrose_control::transport::{
+    ControlTransport as CoreControlTransport, TransportError, TransportRecoveryReason,
 };
+use openrose_control::{ControlObserver as CoreControlObserver, LocalClock as CoreLocalClock};
 use openrose_headset::{HeadsetId, LocalDateTime};
+use std::collections::BTreeMap;
 use std::fmt;
 use std::sync::Arc;
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
+pub enum TransportDriverError {
+    Recoverable {
+        reason: TransportRecoveryReason,
+        detail: String,
+    },
+    Terminal {
+        detail: String,
+    },
+    PermissionDenied {
+        detail: String,
+    },
+    Unsupported {
+        detail: String,
+    },
+    InvalidArgument {
+        detail: String,
+    },
+}
+
+impl fmt::Display for TransportDriverError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Recoverable { detail, .. }
+            | Self::Terminal { detail }
+            | Self::PermissionDenied { detail }
+            | Self::Unsupported { detail }
+            | Self::InvalidArgument { detail } => f.write_str(detail),
+        }
+    }
+}
+
+impl std::error::Error for TransportDriverError {}
+
+impl From<uniffi::UnexpectedUniFFICallbackError> for TransportDriverError {
+    fn from(error: uniffi::UnexpectedUniFFICallbackError) -> Self {
+        Self::Terminal {
+            detail: error.reason,
+        }
+    }
+}
+
+impl From<TransportDriverError> for TransportError {
+    fn from(error: TransportDriverError) -> Self {
+        match error {
+            TransportDriverError::Recoverable { reason, detail } => Self::Recoverable {
+                reason,
+                message: detail,
+            },
+            TransportDriverError::Terminal { detail } => Self::Terminal(detail),
+            TransportDriverError::PermissionDenied { detail } => Self::PermissionDenied(detail),
+            TransportDriverError::Unsupported { detail } => Self::Unsupported(detail),
+            TransportDriverError::InvalidArgument { detail } => Self::InvalidArgument(detail),
+        }
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum GattDriverError {
     Failed {
         kind: GattFailureKind,
-        message: String,
+        detail: String,
     },
 }
 
 impl fmt::Display for GattDriverError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Failed { message, .. } => f.write_str(message),
+            Self::Failed { detail, .. } => f.write_str(detail),
         }
     }
 }
@@ -40,7 +98,7 @@ impl From<uniffi::UnexpectedUniFFICallbackError> for GattDriverError {
     fn from(error: uniffi::UnexpectedUniFFICallbackError) -> Self {
         Self::Failed {
             kind: GattFailureKind::Unknown,
-            message: error.reason,
+            detail: error.reason,
         }
     }
 }
@@ -48,7 +106,7 @@ impl From<uniffi::UnexpectedUniFFICallbackError> for GattDriverError {
 impl From<GattDriverError> for GattError {
     fn from(error: GattDriverError) -> Self {
         match error {
-            GattDriverError::Failed { kind, message } => Self::new(kind, message),
+            GattDriverError::Failed { kind, detail } => Self::new(kind, detail),
         }
     }
 }
@@ -57,14 +115,14 @@ impl From<GattDriverError> for GattError {
 pub enum SppDriverError {
     Failed {
         kind: SppFailureKind,
-        message: String,
+        detail: String,
     },
 }
 
 impl fmt::Display for SppDriverError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Failed { message, .. } => f.write_str(message),
+            Self::Failed { detail, .. } => f.write_str(detail),
         }
     }
 }
@@ -75,7 +133,7 @@ impl From<uniffi::UnexpectedUniFFICallbackError> for SppDriverError {
     fn from(error: uniffi::UnexpectedUniFFICallbackError) -> Self {
         Self::Failed {
             kind: SppFailureKind::Unknown,
-            message: error.reason,
+            detail: error.reason,
         }
     }
 }
@@ -83,7 +141,7 @@ impl From<uniffi::UnexpectedUniFFICallbackError> for SppDriverError {
 impl From<SppDriverError> for SppError {
     fn from(error: SppDriverError) -> Self {
         match error {
-            SppDriverError::Failed { kind, message } => Self::new(kind, message),
+            SppDriverError::Failed { kind, detail } => Self::new(kind, detail),
         }
     }
 }
@@ -109,15 +167,15 @@ pub trait AudioEvents: Send + Sync + 'static {
 pub trait AudioFactsDriver: Send + Sync + 'static {
     fn subscribe(&self) -> Arc<dyn AudioEvents>;
 
-    async fn bonded_devices(&self) -> Result<Vec<RawAudioDevice>, TransportError>;
+    async fn bonded_devices(&self) -> Result<Vec<RawAudioDevice>, TransportDriverError>;
 
-    async fn snapshot(&self, target_addresses: Vec<String>) -> RawAudioSnapshot;
+    async fn snapshot(&self, target_addresses: Vec<String>) -> Option<RawAudioSnapshot>;
 }
 
 #[uniffi::export(foreign)]
 #[async_trait]
 pub trait ScanDriver: Send + Sync + 'static {
-    async fn next_advertisement(&self) -> Result<Option<Advertisement>, TransportError>;
+    async fn next_advertisement(&self) -> Result<Option<Advertisement>, TransportDriverError>;
 
     async fn stop(&self);
 }
@@ -152,7 +210,7 @@ pub trait GattDriver: Send + Sync + 'static {
         with_response: bool,
     ) -> Result<(), GattDriverError>;
 
-    async fn close(&self) -> Result<(), GattDriverError>;
+    async fn close_link(&self) -> Result<(), GattDriverError>;
 }
 
 #[uniffi::export(foreign)]
@@ -166,26 +224,27 @@ pub trait SppDriver: Send + Sync + 'static {
 
     async fn write(&self, value: Vec<u8>) -> Result<(), SppDriverError>;
 
-    async fn close(&self) -> Result<(), SppDriverError>;
+    async fn close_link(&self) -> Result<(), SppDriverError>;
 }
 
 #[uniffi::export(foreign)]
 pub trait ControlTransport: Send + Sync + 'static {
-    fn open_gatt(&self, headset: HeadsetId) -> Result<Arc<dyn GattDriver>, TransportError>;
+    fn open_gatt(&self, headset: HeadsetId) -> Result<Arc<dyn GattDriver>, TransportDriverError>;
 
-    fn start_scan(&self) -> Result<Arc<dyn ScanDriver>, TransportError>;
+    fn start_scan(&self) -> Result<Arc<dyn ScanDriver>, TransportDriverError>;
 
     fn open_spp(
         &self,
         headset: HeadsetId,
         address: String,
         service_uuid: String,
-    ) -> Result<Arc<dyn SppDriver>, TransportError>;
+    ) -> Result<Arc<dyn SppDriver>, TransportDriverError>;
 
     fn audio_facts(&self) -> Arc<dyn AudioFactsDriver>;
 
     fn supports_initialization_recovery(&self) -> bool;
 }
+
 pub(crate) struct ObserverAdapter(pub(crate) Arc<dyn ControlObserver>);
 
 impl CoreControlObserver for ObserverAdapter {
@@ -220,11 +279,23 @@ impl CoreAudioFactsDriver for AudioFactsAdapter {
     }
 
     async fn bonded_devices(&self) -> Result<Vec<RawAudioDevice>, TransportError> {
-        self.0.bonded_devices().await
+        self.0
+            .bonded_devices()
+            .await
+            .map_err(TransportError::from)
     }
 
     async fn snapshot(&self, target_addresses: &[String]) -> RawAudioSnapshot {
-        self.0.snapshot(target_addresses.to_vec()).await
+        self.0
+            .snapshot(target_addresses.to_vec())
+            .await
+            .unwrap_or_else(|| RawAudioSnapshot {
+                enabled: false,
+                spp_available: false,
+                le_audio_observable: false,
+                bonded_devices: Vec::new(),
+                profiles: BTreeMap::new(),
+            })
     }
 }
 
@@ -233,7 +304,10 @@ struct ScanDriverAdapter(Arc<dyn ScanDriver>);
 #[async_trait]
 impl CoreScanDriver for ScanDriverAdapter {
     async fn next_advertisement(&self) -> Result<Option<Advertisement>, TransportError> {
-        self.0.next_advertisement().await
+        self.0
+            .next_advertisement()
+            .await
+            .map_err(TransportError::from)
     }
 
     async fn stop(&self) {
@@ -299,7 +373,7 @@ impl CoreGattDriver for GattDriverAdapter {
     }
 
     async fn close(&self) -> Result<(), GattError> {
-        self.0.close().await.map_err(GattError::from)
+        self.0.close_link().await.map_err(GattError::from)
     }
 }
 
@@ -324,7 +398,7 @@ impl CoreSppDriver for SppDriverAdapter {
     }
 
     async fn close(&self) -> Result<(), SppError> {
-        self.0.close().await.map_err(SppError::from)
+        self.0.close_link().await.map_err(SppError::from)
     }
 }
 
@@ -332,13 +406,19 @@ pub(crate) struct TransportAdapter(pub(crate) Arc<dyn ControlTransport>);
 
 #[async_trait]
 impl CoreControlTransport for TransportAdapter {
-    async fn open_gatt(&self, headset: &HeadsetId) -> Result<Box<dyn CoreGattDriver>, TransportError> {
-        let driver = self.0.open_gatt(headset.clone())?;
+    async fn open_gatt(
+        &self,
+        headset: &HeadsetId,
+    ) -> Result<Box<dyn CoreGattDriver>, TransportError> {
+        let driver = self
+            .0
+            .open_gatt(headset.clone())
+            .map_err(TransportError::from)?;
         Ok(Box::new(GattDriverAdapter(driver)))
     }
 
     async fn start_scan(&self) -> Result<Box<dyn CoreScanDriver>, TransportError> {
-        let driver = self.0.start_scan()?;
+        let driver = self.0.start_scan().map_err(TransportError::from)?;
         Ok(Box::new(ScanDriverAdapter(driver)))
     }
 
@@ -348,11 +428,14 @@ impl CoreControlTransport for TransportAdapter {
         address: &str,
         service_uuid: &str,
     ) -> Result<Box<dyn CoreSppDriver>, TransportError> {
-        let driver = self.0.open_spp(
-            headset.clone(),
-            address.to_string(),
-            service_uuid.to_string(),
-        )?;
+        let driver = self
+            .0
+            .open_spp(
+                headset.clone(),
+                address.to_string(),
+                service_uuid.to_string(),
+            )
+            .map_err(TransportError::from)?;
         Ok(Box::new(SppDriverAdapter(driver)))
     }
 

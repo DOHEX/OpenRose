@@ -26,6 +26,7 @@ include(
     ":shared:circulation",
     ":shared:circulation-lan",
     ":platform:android:integration",
+    ":platform:android:ffi",
     ":platform:android:bluetooth-ipc",
     ":platform:android:system-module",
     ":platform:android:ui",

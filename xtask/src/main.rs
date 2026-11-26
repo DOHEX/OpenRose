@@ -55,6 +55,15 @@ fn run_check() -> ExitCode {
         return ExitCode::FAILURE;
     }
 
+    if !run_step(
+        "Rust FFI host library",
+        &cargo,
+        &["build", "--locked", "-p", "openrose-ffi"],
+        &root,
+    ) {
+        return ExitCode::FAILURE;
+    }
+
     let (gradle_program, gradle_args) = gradle_offline_check_command(&root);
     let gradle_arg_refs: Vec<&str> = gradle_args.iter().map(String::as_str).collect();
     if !run_step(

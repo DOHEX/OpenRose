@@ -114,7 +114,7 @@ async fn a_platform_failure_reaches_the_caller_in_the_core_error_taxonomy() {
         .headset
         .fail_connect_with(Some(GattDriverError::Failed {
             kind: GattFailureKind::Permission,
-            message: "BLUETOOTH_CONNECT was revoked".to_string(),
+            detail: "BLUETOOTH_CONNECT was revoked".to_string(),
         }));
 
     let result = world.runtime.connect(world.id()).await;

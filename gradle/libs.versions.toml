@@ -16,6 +16,7 @@ immutable-collections = "0.5.2"
 activity = "1.13.0"
 androidx-core = "1.18.0"
 libxposed-api = "102.0.0"
+jna = "5.19.1"
 libxposed-service = "102.0.0"
 nucleus = "2.5.18"
 composenativetray = "2.1.7"
@@ -55,6 +56,7 @@ lifecycle-viewmodel-compose = { module = "androidx.lifecycle:lifecycle-viewmodel
 activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activity" }
 androidx-core = { module = "androidx.core:core", version.ref = "androidx-core" }
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "androidx-core" }
+jna = { module = "net.java.dev.jna:jna", version.ref = "jna" }
 libxposed-api = { module = "io.github.libxposed:api", version.ref = "libxposed-api" }
 libxposed-service = { module = "io.github.libxposed:service", version.ref = "libxposed-service" }
 nucleus-application = { module = "dev.nucleusframework:nucleus.nucleus-application", version.ref = "nucleus" }

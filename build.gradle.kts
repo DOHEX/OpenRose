@@ -43,6 +43,7 @@ spotless {
 dependencies {
     kover(projects.shared.headset)
     kover(projects.platform.android.integration)
+    kover(projects.platform.android.ffi)
     kover(projects.shared.ui)
     kover(projects.platform.android.ui)
     kover(projects.platform.android.bluetoothIpc)
@@ -56,6 +57,11 @@ dependencies {
 }
 kover {
     reports {
+        filters {
+            excludes {
+                packages("uniffi")
+            }
+        }
         verify { rule { minBound(55) } }
     }
 }
@@ -64,7 +70,7 @@ tasks.register("offlineCheck") {
     group = "verification"
     description = "Run hardware-independent checks (add --offline after dependencies are cached)."
     dependsOn(
-        ":shared:headset:jvmTest", ":platform:android:integration:jvmTest", ":shared:ui:jvmTest", ":platform:android:ui:jvmTest",
+        ":shared:headset:jvmTest", ":platform:android:ffi:jvmTest", ":platform:android:integration:jvmTest", ":shared:ui:jvmTest", ":platform:android:ui:jvmTest",
         ":desktopApp:test", ":platform:android:bluetooth-ipc:testDebugUnitTest", ":platform:android:system-module:testDebugUnitTest",
         ":androidApp:testDebugUnitTest", ":platform:linux:test", ":platform:windows:test", ":shared:circulation-lan:test",
         ":shared:circulation:jvmTest", ":tools:ui-sandbox:test", ":tools:ui-test-support:test",

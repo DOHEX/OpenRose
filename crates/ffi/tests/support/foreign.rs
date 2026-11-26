@@ -4,10 +4,9 @@ use openrose_control::gatt::{
     GattCharacteristic, GattEvent, GattFailureKind, GattService, GattSubscription,
 };
 use openrose_control::snapshot::ControlSnapshot;
-use openrose_control::transport::TransportError;
 use openrose_ffi::{
     AudioEvents, AudioFactsDriver, ControlObserver, ControlTransport, GattDriver, GattDriverError,
-    ScanDriver, SppDriver,
+    ScanDriver, SppDriver, TransportDriverError,
 };
 use openrose_headset::simulator::SimulatedHeadset;
 use openrose_headset::{FirmwareVersion, HeadsetId, ModelProfile, encode_hex};
@@ -132,7 +131,7 @@ impl FakeHeadset {
 struct FakeTransport(Arc<FakeHeadset>);
 
 impl ControlTransport for FakeTransport {
-    fn open_gatt(&self, _headset: HeadsetId) -> Result<Arc<dyn GattDriver>, TransportError> {
+    fn open_gatt(&self, _headset: HeadsetId) -> Result<Arc<dyn GattDriver>, TransportDriverError> {
         if self.0.panic_on_open.load(Ordering::SeqCst) {
             panic!("the platform driver crashed");
         }
@@ -140,8 +139,10 @@ impl ControlTransport for FakeTransport {
         Ok(Arc::new(FakeGatt(Arc::clone(&self.0))))
     }
 
-    fn start_scan(&self) -> Result<Arc<dyn ScanDriver>, TransportError> {
-        Err(TransportError::Unsupported("no scanner".to_string()))
+    fn start_scan(&self) -> Result<Arc<dyn ScanDriver>, TransportDriverError> {
+        Err(TransportDriverError::Unsupported {
+            detail: "no scanner".to_string(),
+        })
     }
 
     fn open_spp(
@@ -149,8 +150,10 @@ impl ControlTransport for FakeTransport {
         _headset: HeadsetId,
         _address: String,
         _service_uuid: String,
-    ) -> Result<Arc<dyn SppDriver>, TransportError> {
-        Err(TransportError::Unsupported("no RFCOMM".to_string()))
+    ) -> Result<Arc<dyn SppDriver>, TransportDriverError> {
+        Err(TransportDriverError::Unsupported {
+            detail: "no RFCOMM".to_string(),
+        })
     }
 
     fn audio_facts(&self) -> Arc<dyn AudioFactsDriver> {
@@ -210,7 +213,7 @@ impl GattDriver for FakeGatt {
         if characteristic.instance_id != WRITER {
             return Err(GattDriverError::Failed {
                 kind: GattFailureKind::InvalidValue,
-                message: "not the writer".to_string(),
+                detail: "not the writer".to_string(),
             });
         }
         self.0.writes.lock().unwrap().push(encode_hex(&value));
@@ -226,7 +229,7 @@ impl GattDriver for FakeGatt {
         Ok(())
     }
 
-    async fn close(&self) -> Result<(), GattDriverError> {
+    async fn close_link(&self) -> Result<(), GattDriverError> {
         Ok(())
     }
 }
@@ -254,17 +257,17 @@ impl AudioFactsDriver for FakeAudio {
         Arc::new(Silence)
     }
 
-    async fn bonded_devices(&self) -> Result<Vec<RawAudioDevice>, TransportError> {
+    async fn bonded_devices(&self) -> Result<Vec<RawAudioDevice>, TransportDriverError> {
         Ok(vec![self.paired()])
     }
 
-    async fn snapshot(&self, _target_addresses: Vec<String>) -> RawAudioSnapshot {
-        RawAudioSnapshot {
+    async fn snapshot(&self, _target_addresses: Vec<String>) -> Option<RawAudioSnapshot> {
+        Some(RawAudioSnapshot {
             enabled: true,
             spp_available: false,
             le_audio_observable: false,
             bonded_devices: vec![self.paired()],
             profiles: BTreeMap::new(),
-        }
+        })
     }
 }

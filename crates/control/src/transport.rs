@@ -36,7 +36,6 @@ pub struct TransportFacts {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "uniffi", derive(uniffi::Error))]
 pub enum TransportError {
     Recoverable {
         reason: TransportRecoveryReason,

@@ -6,7 +6,7 @@ mod simulator;
 
 pub use drivers::{
     AudioEvents, AudioFactsDriver, ControlObserver, ControlTransport, GattDriver, GattDriverError,
-    LocalClock, ScanDriver, SppDriver, SppDriverError,
+    LocalClock, ScanDriver, SppDriver, SppDriverError, TransportDriverError,
 };
 pub use openrose_control::settings::ControlSettings;
 pub use runtime::ControlRuntime;
