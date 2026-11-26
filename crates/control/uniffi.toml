@@ -1,0 +1,5 @@
+[bindings.kotlin]
+cdylib_name = "openrose_ffi"
+generate_immutable_records = true
+disable_java_cleaner = true
+kotlin_target_version = "2.4.21"

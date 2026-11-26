@@ -21,6 +21,7 @@ use tokio::time::Instant;
 use tokio_util::sync::CancellationToken;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct SessionTiming {
     pub connect_timeout: Duration,
     pub query_timeout: Duration,
@@ -159,6 +160,12 @@ impl LinkSlot {
     }
 }
 
+#[derive(Debug, Clone)]
+pub(crate) enum AttemptOutcome {
+    Finished(ControlResult),
+    Panicked,
+}
+
 pub(crate) struct Attempt {
     pub(crate) id: u64,
     pub(crate) candidate: HeadsetCandidate,
@@ -168,7 +175,7 @@ pub(crate) struct Attempt {
     pub(crate) force_ble: bool,
     pub(crate) cancel: CancellationToken,
     pub(crate) link_epoch: AtomicU64,
-    pub(crate) outcome: watch::Sender<Option<ControlResult>>,
+    pub(crate) outcome: watch::Sender<Option<AttemptOutcome>>,
     pub(crate) progress: watch::Sender<ReadProgress>,
     pub(crate) link: Mutex<LinkSlot>,
     queue: Mutex<Arc<Pending>>,
@@ -266,7 +273,10 @@ impl Attempt {
             .wait_for(Option::is_some)
             .await
             .expect("the attempt owns its outcome sender");
-        finished.clone().expect("waited for a finished outcome")
+        match finished.clone().expect("waited for a finished outcome") {
+            AttemptOutcome::Finished(result) => result,
+            AttemptOutcome::Panicked => panic!("control connection attempt panicked"),
+        }
     }
 }
 

@@ -1,9 +1,14 @@
+#[cfg(feature = "uniffi")]
+uniffi::setup_scaffolding!();
+
 pub mod audio;
 mod audio_facts;
 mod confirmation;
 mod core;
 mod discovery;
 pub mod error;
+#[cfg(feature = "uniffi")]
+mod ffi;
 pub mod gatt;
 mod lifeline;
 mod link;

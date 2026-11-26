@@ -4,6 +4,7 @@ use openrose_headset::HeadsetId;
 use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct Advertisement {
     pub headset_id: HeadsetId,
     pub name: Option<String>,

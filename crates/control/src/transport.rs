@@ -9,6 +9,7 @@ use std::fmt;
 use std::sync::Arc;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 pub enum TransportRecoveryReason {
     ServiceDiscovery,
     ServicesUnavailable,
@@ -19,6 +20,7 @@ pub enum TransportRecoveryReason {
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 pub enum AudioProfileEvidence {
     #[default]
     Unknown,
@@ -27,6 +29,7 @@ pub enum AudioProfileEvidence {
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct TransportFacts {
     pub spp_available: bool,
     pub audio_profile: AudioProfileEvidence,

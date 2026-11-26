@@ -1,0 +1,28 @@
+[package]
+name = "openrose-ffi"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lib]
+name = "openrose_ffi"
+crate-type = ["cdylib", "lib"]
+
+[[bin]]
+name = "uniffi-bindgen"
+path = "src/bin/uniffi-bindgen.rs"
+required-features = ["bindgen"]
+
+[features]
+bindgen = ["uniffi/cli", "uniffi/cargo-metadata"]
+
+[dependencies]
+openrose-control = { path = "../control", features = ["uniffi"] }
+openrose-headset = { path = "../headset", features = ["uniffi"] }
+async-trait.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread", "time"] }
+uniffi = { workspace = true, features = ["tokio"] }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync", "time"] }

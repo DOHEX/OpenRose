@@ -25,7 +25,7 @@ import kotlinx.coroutines.withContext
 import java.util.UUID
 
 @SuppressLint("MissingPermission")
-internal class AndroidGattDriver(
+class AndroidGattDriver(
     context: Context,
     device: BluetoothDevice,
 ) : GattDriver {

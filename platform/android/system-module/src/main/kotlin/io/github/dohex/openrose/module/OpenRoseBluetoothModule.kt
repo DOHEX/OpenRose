@@ -329,6 +329,10 @@ class OpenRoseBluetoothModule : XposedModule() {
     }
 
     override fun onHotReloading(param: HotReloadingParam): Boolean {
+        if (hostRuntime?.allowsHotReload == false) {
+            log(Log.WARN, TAG, "hot_reload_refused native_core_loaded; restart the integration scope to apply the update")
+            return false
+        }
         val runtime = hostRuntime
         if (runtime?.close() == false) return false
         retired = true

@@ -17,10 +17,13 @@ import android.os.UserManager
 import android.util.Log
 import io.github.dohex.openrose.androidintegration.HostConfiguration
 import io.github.dohex.openrose.androidintegration.HostFacts
+import io.github.dohex.openrose.androidintegration.HostSettings
 import io.github.dohex.openrose.androidintegration.ModuleControlHost
 import io.github.dohex.openrose.androidintegration.wire.BridgeWire
 import io.github.dohex.openrose.bridge.readHostSettings
 import io.github.dohex.openrose.core.LocalControlRuntime
+import io.github.dohex.openrose.module.nativecore.NativeCoreTrial
+import io.github.dohex.openrose.module.nativecore.androidNativeCoreTrial
 import io.github.dohex.openrose.platform.AndroidControlTransport
 import io.github.dohex.openrose.platform.readPlatformState
 import io.github.libxposed.api.XposedInterface
@@ -36,6 +39,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import java.lang.reflect.Method
 import java.util.UUID
@@ -60,6 +64,10 @@ internal class ModuleHostRuntime(
     private var configListener: SharedPreferences.OnSharedPreferenceChangeListener? = null
     private var receiver: BroadcastReceiver? = null
     private var closed = false
+
+    @Volatile private var nativeCore: NativeCoreTrial? = null
+
+    val allowsHotReload: Boolean get() = nativeCore?.allowsHotReload != false
 
     @SuppressLint("PrivateApi")
     fun installDiscovery() {
@@ -107,6 +115,8 @@ internal class ModuleHostRuntime(
             context = appContext
             val hostScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
             scope = hostScope
+            val trial = androidNativeCoreTrial(module, appContext)
+            nativeCore = trial
             val facts = MutableStateFlow(HostFacts())
             val created = ModuleControlHost(
                 packageName = appContext.packageName,
@@ -136,11 +146,16 @@ internal class ModuleHostRuntime(
             val served = HostEndpoint(appContext, created, facts, hostScope) { circulation }
             endpoint = served
             endpointSlot.set(served)
-            watchConfiguration(appContext, hostScope, created)
+            watchConfiguration(appContext, hostScope, created, trial)
         }
     }
 
-    private fun watchConfiguration(appContext: Context, hostScope: CoroutineScope, created: ModuleControlHost) {
+    private fun watchConfiguration(
+        appContext: Context,
+        hostScope: CoroutineScope,
+        created: ModuleControlHost,
+        trial: NativeCoreTrial,
+    ) {
         val changes = Channel<Unit>(Channel.CONFLATED)
         val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, _ -> changes.trySend(Unit) }
         configListener = listener
@@ -160,13 +175,15 @@ internal class ModuleHostRuntime(
             val user = appContext.getSystemService(UserManager::class.java)
             while (isActive) {
                 created.updatePlatform(appContext.readPlatformState(permissionRequested = true))
+                var observed: HostSettings? = null
                 val configured = created.configure {
                     if (user.isUserUnlocked) {
-                        readConfiguration().also { if (it == null) changes.trySend(Unit) }
+                        readConfiguration().also { if (it == null) changes.trySend(Unit) else observed = it.settings }
                     } else {
                         HostConfiguration()
                     }
                 }
+                observed?.let { settings -> withContext(Dispatchers.Default) { trial.apply(settings.integration.nativeCoreTrial) } }
                 if (configured && user.isUserUnlocked) {
                     changes.receive()
                 } else {
@@ -217,6 +234,7 @@ internal class ModuleHostRuntime(
             configListener?.let { l -> runCatching { config?.unregisterOnSharedPreferenceChangeListener(l) } }
             configListener = null
         }
+        nativeCore?.close()
         endpoint?.let { retiring ->
             endpointSlot.compareAndSet(retiring, null)
             retiring.shutdown()

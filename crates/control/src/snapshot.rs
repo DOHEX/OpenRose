@@ -12,6 +12,7 @@ use std::collections::{BTreeMap, BTreeSet};
 const SETTING_HISTORY_LIMIT: usize = 64;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 pub enum HostPlatform {
     Unknown,
     Android,
@@ -27,6 +28,7 @@ impl HostPlatform {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 pub enum PermissionState {
     NotRequired,
     Required,
@@ -41,6 +43,7 @@ impl PermissionState {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 pub enum TransportUnavailableCode {
     UnsupportedPlatform,
     BleUnsupported,
@@ -59,6 +62,7 @@ pub enum TransportUnavailableCode {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 pub enum TransportAvailability {
     Available,
     Disabled,
@@ -69,6 +73,7 @@ pub enum TransportAvailability {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 pub enum ConnectionBlockReason {
     BluetoothPermissionRequired,
     BluetoothDisabled,
@@ -79,6 +84,7 @@ pub enum ConnectionBlockReason {
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 pub enum PlatformApplicability {
     #[default]
     Unknown,
@@ -87,6 +93,7 @@ pub enum PlatformApplicability {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct PlatformState {
     pub permission: PermissionState,
     pub transport: TransportAvailability,
@@ -146,6 +153,7 @@ impl PlatformState {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 pub enum ConnectionPhase {
     Connecting,
     Discovering,
@@ -155,6 +163,7 @@ pub enum ConnectionPhase {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 pub enum ConnectionState {
     Disconnected,
     Connecting {
@@ -170,12 +179,14 @@ pub enum ConnectionState {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct SessionReference {
     pub headset_id: HeadsetId,
     pub session_id: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct HeadsetCandidate {
     pub id: HeadsetId,
     pub name: Option<String>,
@@ -248,6 +259,7 @@ impl HeadsetCandidate {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 pub enum ScanState {
     Idle,
     Scanning,
@@ -255,12 +267,14 @@ pub enum ScanState {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct ConnectionRecovery {
     pub session_id: u64,
     pub reason: TransportRecoveryReason,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 pub enum SettingStage {
     Submitted,
     PartiallyWritten,
@@ -273,6 +287,7 @@ pub enum SettingStage {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct SettingOperation {
     pub id: u64,
     pub session_id: u64,
@@ -286,6 +301,7 @@ pub struct SettingOperation {
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct HeadsetDiagnostics {
     pub field_errors: BTreeMap<HeadsetField, ControlError>,
     pub raw_notifications: Vec<String>,
@@ -294,6 +310,7 @@ pub struct HeadsetDiagnostics {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct HeadsetState {
     pub headset_id: HeadsetId,
     pub session_id: u64,
@@ -310,6 +327,7 @@ impl HeadsetState {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct ControlSnapshot {
     pub revision: u64,
     pub platform: PlatformState,

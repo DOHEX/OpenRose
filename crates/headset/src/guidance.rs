@@ -2,6 +2,7 @@ use crate::model::{BatteryLayout, ModelProfile};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 pub enum ReconnectGuidance {
     OpenCaseAutoConnect,
     WaitSystemBluetooth,

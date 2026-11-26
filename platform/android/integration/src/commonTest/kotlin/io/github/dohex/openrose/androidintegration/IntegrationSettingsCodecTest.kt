@@ -91,4 +91,17 @@ class IntegrationSettingsCodecTest {
         assertEquals(settings, HostSettingsCodec.decode(encoded + ("sharedUI.appearance" to "dark")))
         assertEquals(HostSettings(), HostSettingsCodec.decode(mapOf("force_ble" to "true", "control_way" to "module")))
     }
+
+    @Test
+    fun nativeCoreTrialIsOffUnlessTheHostConfigurationSaysOn() {
+        assertFalse(IntegrationSettings().nativeCoreTrial)
+        assertFalse(IntegrationSettingsCodec.decode(emptyMap()).nativeCoreTrial)
+        assertFalse(IntegrationSettingsCodec.decode(mapOf("androidIntegration.native_core_trial" to "yes")).nativeCoreTrial)
+        assertFalse(IntegrationSettingsCodec.decode(mapOf("native_core_trial" to "true")).nativeCoreTrial)
+        assertEquals("false", IntegrationSettingsCodec.encode(IntegrationSettings())["androidIntegration.native_core_trial"])
+        val on = IntegrationSettings(nativeCoreTrial = true)
+        assertEquals("true", IntegrationSettingsCodec.encode(on)["androidIntegration.native_core_trial"])
+        assertEquals(on, IntegrationSettingsCodec.decode(IntegrationSettingsCodec.encode(on)))
+        assertTrue(HostSettingsCodec.decode(HostSettingsCodec.encode(HostSettings(integration = on))).integration.nativeCoreTrial)
+    }
 }

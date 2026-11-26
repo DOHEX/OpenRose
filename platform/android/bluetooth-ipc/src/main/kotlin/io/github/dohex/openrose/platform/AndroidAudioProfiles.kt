@@ -32,7 +32,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.coroutines.resume
 
-internal class AndroidAudioProfiles(private val context: Context) : AudioFactsDriver {
+class AndroidAudioProfiles(private val context: Context) : AudioFactsDriver {
     override val events: Flow<RawAudioEvent> = callbackFlow {
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(receiverContext: Context, intent: Intent) {

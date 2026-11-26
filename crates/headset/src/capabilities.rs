@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 pub enum NoiseMode {
     Normal,
     Anc,
@@ -49,6 +50,7 @@ impl NoiseMode {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct NoiseLevelCapabilities {
     pub levels: BTreeSet<i32>,
     pub visible_modes: BTreeSet<String>,
@@ -61,12 +63,13 @@ impl NoiseLevelCapabilities {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct NoiseControlCapabilities {
     pub modes: BTreeSet<String>,
     pub cycle_modes: BTreeSet<String>,
     pub anc_level: Option<NoiseLevelCapabilities>,
     pub transparency_level: Option<NoiseLevelCapabilities>,
-    pub minimum_cycle_selections: usize,
+    pub minimum_cycle_selections: u32,
 }
 
 impl NoiseControlCapabilities {
@@ -80,6 +83,7 @@ impl NoiseControlCapabilities {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct CustomEqualizerCapabilities {
     pub bands_hz: Vec<i32>,
     pub min_gain: i32,
@@ -87,12 +91,14 @@ pub struct CustomEqualizerCapabilities {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct EqualizerCapabilities {
     pub presets: BTreeSet<String>,
     pub custom: Option<CustomEqualizerCapabilities>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct TouchControlCapabilities {
     pub slots: BTreeSet<TouchSlot>,
     pub actions: BTreeSet<String>,
@@ -138,12 +144,14 @@ mod slot_labels_serde {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct AudioControlCapabilities {
     pub modes: BTreeSet<String>,
     pub multipoint_coupled: bool,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct HeadsetCapabilities {
     pub readable_fields: BTreeSet<HeadsetField>,
     pub writable_settings: BTreeSet<HeadsetSetting>,
