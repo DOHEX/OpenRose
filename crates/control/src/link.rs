@@ -1,5 +1,5 @@
 use crate::confirmation::ReadProgress;
-use crate::core::{Attempt, Core, Interrupt, LinkInner};
+use crate::core::{Attempt, AttemptOutcome, Core, Interrupt, LinkInner};
 use crate::error::{ControlError, ControlErrorCode};
 use crate::recovery::recoverable_reason;
 use crate::selection::TransportSelection;
@@ -195,6 +195,30 @@ impl Core {
     }
 
     async fn run_attempt(self: Arc<Self>, attempt: Arc<Attempt>) {
+        struct UnwindGuard {
+            core: Arc<Core>,
+            attempt: Arc<Attempt>,
+            finished: bool,
+        }
+        impl Drop for UnwindGuard {
+            fn drop(&mut self) {
+                if self.finished {
+                    return;
+                }
+                self.core.update_attempt(&self.attempt, None, |s| {
+                    s.connection = ConnectionState::Disconnected;
+                    s.headset = None;
+                });
+                self.attempt
+                    .outcome
+                    .send_replace(Some(AttemptOutcome::Panicked));
+            }
+        }
+        let mut guard = UnwindGuard {
+            core: Arc::clone(&self),
+            attempt: Arc::clone(&attempt),
+            finished: false,
+        };
         let outcome = match self.open_and_read(&attempt).await {
             Ok(()) => Ok(()),
             Err(Interrupt::Cancelled) => {
@@ -228,7 +252,10 @@ impl Core {
                 inner.active = None;
             }
         }
-        attempt.outcome.send_replace(Some(outcome));
+        guard.finished = true;
+        attempt
+            .outcome
+            .send_replace(Some(AttemptOutcome::Finished(outcome)));
     }
 
     async fn close_attempt_link(&self, attempt: &Arc<Attempt>) {
