@@ -274,24 +274,47 @@ class CoreControlRuntimeTest {
         }
     }
 
+    private class ClosableTransport(private val delegate: KotlinCoreTransport) :
+        ControlTransport by delegate,
+        AutoCloseable {
+        val closed = AtomicBoolean(false)
+
+        override fun close() {
+            closed.set(true)
+            delegate.close()
+        }
+    }
+
     @Test
-    fun closingTheOwnerScopeClosesTheRuntimeAndItsTransport() = runBlocking<Unit> {
+    fun theRuntimeAndItsTransportCloseOnceTheLinkIsReleasedAndTheOwnerScopeEnded() = runBlocking<Unit> {
         Rig().use { rig ->
-            val closed = AtomicBoolean(false)
-            val delegate = KotlinCoreTransport(rig)
-            val transport = object :
-                ControlTransport by delegate,
-                AutoCloseable {
-                override fun close() {
-                    closed.set(true)
-                    delegate.close()
-                }
-            }
+            val transport = ClosableTransport(KotlinCoreTransport(rig))
             val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-            CoreControlRuntime(transport, kotlinPlatform(), scope = scope, timing = rig.timing(), clock = rig.clock())
-            assertFalse(closed.get())
+            val runtime = CoreControlRuntime(transport, kotlinPlatform(), scope = scope, timing = rig.timing(), clock = rig.clock())
+            assertEquals(OperationResult.Success, runtime.connect(DeviceId(ADDRESS)))
+            assertTrue(runtime.release())
+            assertEquals(1, rig.gatts.single().closes.size)
+            assertFalse(transport.closed.get())
             scope.cancel()
-            withTimeout(3_000) { while (!closed.get()) delay(5) }
+            withTimeout(3_000) { while (!transport.closed.get()) delay(5) }
+        }
+    }
+
+    @Test
+    fun anOwnerScopeThatEndedFirstStillLetsTheRuntimeReleaseItsLinkBeforeClosing() = runBlocking<Unit> {
+        Rig().use { rig ->
+            val transport = ClosableTransport(KotlinCoreTransport(rig))
+            val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+            val runtime = CoreControlRuntime(transport, kotlinPlatform(), scope = scope, timing = rig.timing(), clock = rig.clock())
+            assertEquals(OperationResult.Success, runtime.connect(DeviceId(ADDRESS)))
+            scope.cancel()
+            delay(100)
+            assertFalse(transport.closed.get())
+            assertTrue(rig.gatts.single().closes.isEmpty())
+
+            assertTrue(runtime.release())
+            assertEquals(1, rig.gatts.single().closes.size)
+            withTimeout(3_000) { while (!transport.closed.get()) delay(5) }
         }
     }
 

@@ -19,20 +19,29 @@ import uniffi.openrose_control.SessionTiming
 import uniffi.openrose_ffi.ControlTransport
 import uniffi.openrose_ffi.LocalClock
 import uniffi.openrose_ffi.defaultSessionTiming
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 import uniffi.openrose_control.ControlSnapshot as RustSnapshot
 
+@Suppress("TooManyFunctions")
 class CoreControlRuntime internal constructor(
     private val rust: RustControlRuntime,
     scope: CoroutineScope,
-    onClose: () -> Unit,
+    private val onClose: () -> Unit,
 ) : ControlRuntime {
+    private val linkReleased = AtomicBoolean(false)
+    private val pendingEnds = AtomicInteger(ENDS_BEFORE_CLOSE)
+
     override val state: StateFlow<ControlState> = ProjectedStateFlow(rust.state, RustSnapshot::toControlState)
 
     init {
-        scope.coroutineContext.job.invokeOnCompletion {
-            rust.close()
-            onClose()
-        }
+        scope.coroutineContext.job.invokeOnCompletion { ended() }
+    }
+
+    private fun ended() {
+        if (pendingEnds.decrementAndGet() > 0) return
+        rust.close()
+        onClose()
     }
 
     override suspend fun refreshBondedDevices() = rust.refreshBondedHeadsets()
@@ -49,7 +58,11 @@ class CoreControlRuntime internal constructor(
 
     override suspend fun disconnect(): Boolean = rust.disconnect()
 
-    override suspend fun release(): Boolean = rust.release()
+    override suspend fun release(): Boolean {
+        val released = rust.release()
+        if (released && linkReleased.compareAndSet(false, true)) ended()
+        return released
+    }
 
     override suspend fun set(command: HeadsetCommand, expectedSessionId: Long?): OperationResult {
         val result = rust.set(command.toRust(), expectedSessionId?.toULong())
@@ -59,6 +72,10 @@ class CoreControlRuntime internal constructor(
     override fun updateSettings(settings: UserSettings) = rust.updateSettings(settings.toRust())
 
     override fun updatePlatformState(platformState: PlatformState) = rust.updatePlatformState(platformState.toRust())
+
+    private companion object {
+        const val ENDS_BEFORE_CLOSE = 2
+    }
 }
 
 @Suppress("ktlint:standard:function-naming", "FunctionNaming")

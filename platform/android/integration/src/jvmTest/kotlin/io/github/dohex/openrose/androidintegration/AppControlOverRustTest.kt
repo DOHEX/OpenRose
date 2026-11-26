@@ -26,6 +26,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import uniffi.openrose_ffi.ControlTransport
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -34,7 +36,17 @@ import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 class AppControlOverRustTest {
+    private class ClosableTransport(private val delegate: KotlinCoreTransport, private val closed: AtomicBoolean) :
+        ControlTransport by delegate,
+        AutoCloseable {
+        override fun close() {
+            closed.set(true)
+            delegate.close()
+        }
+    }
+
     private class Fixture(val drivers: SimulatedDrivers, scope: CoroutineScope) {
+        val transportClosed = AtomicBoolean(false)
         val ids = AtomicInteger(0)
         val runtime = SwitchingControlRuntime(
             initialPlatformState = platform(),
@@ -42,7 +54,7 @@ class AppControlOverRustTest {
             store = MemoryOwnerStore(),
             appFactory = { ownerScope, settings, platformState, sessionIdBase ->
                 CoreControlRuntime(
-                    transport = KotlinCoreTransport(drivers),
+                    transport = ClosableTransport(KotlinCoreTransport(drivers), transportClosed),
                     initialPlatformState = platformState,
                     initialSettings = settings,
                     scope = ownerScope,
@@ -92,6 +104,7 @@ class AppControlOverRustTest {
             second.release()
             app.runtime.state.eventually { it.connection is ConnectionState.Disconnected }
             withTimeout(3_000) { while (app.drivers.gatts.single().closes.isEmpty()) delay(10) }
+            withTimeout(3_000) { while (!app.transportClosed.get()) delay(10) }
             app.runtime.integration.eventually { it.owner.readiness is OwnerReadiness.Idle }
         }
     }
