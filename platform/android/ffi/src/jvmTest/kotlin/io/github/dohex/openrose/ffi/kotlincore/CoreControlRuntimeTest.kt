@@ -79,7 +79,7 @@ class CoreControlRuntimeTest {
         applicability: RustPlatformApplicability = RustPlatformApplicability.UNKNOWN,
     ) = RustPlatformState(permission, transport, host, true, RustPermissionState.NOT_REQUIRED, applicability)
 
-    private inline fun withRuntime(rig: Rig, block: (CoreControlRuntime, RustControlRuntime) -> Unit) {
+    private inline fun withRuntime(rig: SimulatedDrivers, block: (CoreControlRuntime, RustControlRuntime) -> Unit) {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         val transport = KotlinCoreTransport(rig)
         val rust = RustControlRuntime(transport, kotlinPlatform().toRust(), clock = rig.clock(), timing = rig.timing())
