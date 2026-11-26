@@ -42,6 +42,7 @@ kotlin {
             kotlin.srcDir(generateUniffiBindings.map { it.outputDir })
             dependencies {
                 api(libs.coroutines.core)
+                api(projects.shared.headset)
                 compileOnly(libs.jna)
             }
         }

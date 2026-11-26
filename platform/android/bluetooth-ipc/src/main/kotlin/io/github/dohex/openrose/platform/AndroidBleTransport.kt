@@ -16,6 +16,7 @@ import io.github.dohex.openrose.core.transport.Advertisement
 import io.github.dohex.openrose.core.transport.ControlConnection
 import io.github.dohex.openrose.core.transport.DeviceId
 import io.github.dohex.openrose.core.transport.GattControlConnection
+import io.github.dohex.openrose.core.transport.GattDriver
 import io.github.dohex.openrose.core.transport.TransportEndpoint
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -66,18 +67,16 @@ internal class AndroidBleTransport(private val context: Context) {
         awaitClose { runCatching { scanner.stopScan(callback) } }
     }
 
+    fun driver(address: String): GattDriver {
+        requireBluetoothPermission(scan = false)
+        return AndroidGattDriver(context, adapter().getRemoteDevice(address))
+    }
+
     suspend fun connect(
         deviceId: DeviceId,
         endpoint: TransportEndpoint.BleGatt,
         onPhase: (ConnectionPhase) -> Unit,
-    ): ControlConnection {
-        requireBluetoothPermission(scan = false)
-        return GattControlConnection.open(
-            AndroidGattDriver(context, adapter().getRemoteDevice(deviceId.value)),
-            endpoint,
-            onPhase,
-        )
-    }
+    ): ControlConnection = GattControlConnection.open(driver(deviceId.value), endpoint, onPhase)
 
     private fun locationServicesEnabled(): Boolean = if (Build.VERSION.SDK_INT >= 28) {
         context.getSystemService(LocationManager::class.java)?.isLocationEnabled == true
