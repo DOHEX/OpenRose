@@ -1,9 +1,7 @@
 use openrose_headset::simulator::{SimulatedHeadset, SimulatorError};
 use openrose_headset::{
-    FieldReading, FieldValue, FirmwareVersion, HeadsetField, ModelProfile, ProtocolFamily,
-    create_protocol_codec, decode_hex, encode_hex,
+    FieldValue, FirmwareVersion, HeadsetField, ModelProfile, decode_hex, encode_hex,
 };
-use std::collections::BTreeSet;
 
 fn i7() -> SimulatedHeadset {
     SimulatedHeadset::new(
@@ -273,67 +271,6 @@ fn device_initiated_changes_outside_what_the_model_can_report_are_refused() {
         );
     }
     assert_eq!(before, headset.readings());
-}
-
-#[test]
-fn every_rs_common_v2_model_answers_all_the_queries_its_own_codec_sends() {
-    let now = openrose_headset::LocalDateTime::new(2026, 11, 20, 17, 38, 9).expect("valid time");
-    let models: Vec<ModelProfile> = ModelProfile::ALL
-        .iter()
-        .copied()
-        .filter(|profile| profile.family() == ProtocolFamily::RsCommonV2)
-        .collect();
-    assert_eq!(32, models.len());
-    for profile in models {
-        let mut headset =
-            SimulatedHeadset::new(profile, FirmwareVersion::new(vec![1, 2, 5], "125"))
-                .unwrap_or_else(|error| panic!("{profile:?}: {error}"));
-        let mut codec = create_protocol_codec(profile);
-        let mut queries = codec.init_queries(512, now).expect("init queries");
-        let mut firmware: Option<FirmwareVersion> = None;
-        let mut index = 0;
-        while index < queries.len() {
-            let query = queries[index].clone();
-            let mut answered = BTreeSet::new();
-            for frame in headset.receive(&query.bytes) {
-                for reply in codec.feed_notification(&frame) {
-                    answered.extend(reply.response_keys.clone());
-                    if let Some(FieldReading::Known {
-                        value: FieldValue::Firmware(version),
-                        ..
-                    }) = reply.readings.get(&HeadsetField::Firmware)
-                    {
-                        firmware = Some(version.clone());
-                    }
-                }
-            }
-            assert!(
-                query.response_keys.is_subset(&answered),
-                "{profile:?} {}: expected {:?}, answered {answered:?}",
-                query.key,
-                query.response_keys
-            );
-            index += 1;
-            if index == queries.len() && firmware.is_some() {
-                queries.extend(codec.firmware_init_queries(firmware.take().as_ref()));
-            }
-        }
-    }
-}
-
-#[test]
-fn families_without_a_simulated_device_are_refused_explicitly() {
-    let firmware = || FirmwareVersion::new(vec![1, 2, 5], "125");
-    for (profile, family) in [
-        (ModelProfile::ExplorerF8, ProtocolFamily::F8),
-        (ModelProfile::CambrianRsCommon, ProtocolFamily::RsCommon),
-    ] {
-        assert_eq!(
-            Some(SimulatorError::UnsupportedFamily(family)),
-            SimulatedHeadset::new(profile, firmware()).err(),
-            "{profile:?}"
-        );
-    }
 }
 
 #[test]

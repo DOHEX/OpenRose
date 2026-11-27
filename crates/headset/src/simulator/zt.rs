@@ -1,7 +1,7 @@
-use super::SimulatorError;
-use crate::capabilities::NoiseMode;
+use super::{HeadsetSide, SimulatorError, preferred_index, preferred_level, preferred_level_index};
+use crate::capabilities::{HeadsetCapabilities, NoiseLevelCapabilities, NoiseMode};
 use crate::field::{FieldValue, FirmwareVersion, HeadsetField, TouchBinding};
-use crate::model::{BatteryLayout, ModelProfile, ModelProtocol, ZtProtocol};
+use crate::model::{BatteryLayout, ModelProfile, ZtProtocol};
 use crate::protocol::zt::{
     ZT_ACTIONS, ZT_CYCLE_ORDER, ZT_GESTURES, ZT_NOISE_LEVELS, audio_modes, eq_presets,
 };
@@ -9,8 +9,15 @@ use std::collections::BTreeMap;
 
 const NOT_PROVIDED: u8 = 0xff;
 const EQ_BANDS: usize = 10;
+const CAPTURED_NOISE_MODE: NoiseMode = NoiseMode::Wind;
+const CAPTURED_EQ_PRESET: usize = 1;
+const CAPTURED_AUDIO_MODE: usize = 1;
+const CAPTURED_TOUCH_ACTIONS: [u8; 8] = [6, 5, 2, 4, 6, 5, 3, 7];
+const CAPTURED_ANC_LEVEL: usize = 2;
+const CAPTURED_TRANSPARENCY_LEVEL: usize = 0;
+const CAPTURED_PROMPT_VOLUME: i32 = 2;
 
-pub(super) struct ZtDevice {
+pub(super) struct ZtHeadsetSide {
     profile: ModelProfile,
     protocol: ZtProtocol,
     firmware: FirmwareVersion,
@@ -34,15 +41,6 @@ pub(super) struct ZtDevice {
     prompt_volume: i32,
     custom_curve: [i32; EQ_BANDS],
     gain: u8,
-}
-
-fn zt_protocol(profile: ModelProfile) -> Result<ZtProtocol, SimulatorError> {
-    match profile.spec().protocol {
-        ModelProtocol::Zt(protocol) => Ok(protocol),
-        ModelProtocol::RsCommonV2(_) | ModelProtocol::RsCommon(_) | ModelProtocol::F8(_) => {
-            Err(SimulatorError::UnsupportedFamily(profile.family()))
-        }
-    }
 }
 
 fn reply_frame(key: [u8; 2], payload: &[u8]) -> Vec<u8> {
@@ -75,10 +73,52 @@ fn decode_gain(encoded: u8) -> i32 {
     }
 }
 
-impl ZtDevice {
+fn noise_payload_of(mode: NoiseMode) -> Option<Vec<u8>> {
+    match mode {
+        NoiseMode::Anc => Some(vec![1, 0, 0, 0]),
+        NoiseMode::Normal => Some(vec![0, 1, 0, 0]),
+        NoiseMode::Wind => Some(vec![0, 0, 1, 0]),
+        NoiseMode::Transparency => Some(vec![0, 0, 0, 1]),
+        NoiseMode::Auto => Some(vec![2, 0, 0, 0]),
+        NoiseMode::Dynamic | NoiseMode::Deep => None,
+    }
+}
+
+fn initial_noise_mode(capabilities: &HeadsetCapabilities) -> NoiseMode {
+    let ids: Vec<&str> = NoiseMode::ALL.iter().map(|mode| mode.id()).collect();
+    let captured = NoiseMode::ALL
+        .iter()
+        .position(|&mode| mode == CAPTURED_NOISE_MODE)
+        .unwrap_or(0);
+    let modes = capabilities
+        .noise_control
+        .as_ref()
+        .map(|noise| noise.modes.clone())
+        .unwrap_or_default();
+    NoiseMode::ALL[preferred_index(&ids, captured, &modes)]
+}
+
+fn initial_touch_actions(capabilities: &HeadsetCapabilities) -> [u8; 8] {
+    let actions = capabilities
+        .touch_control
+        .as_ref()
+        .map(|touch| touch.actions.clone())
+        .unwrap_or_default();
+    CAPTURED_TOUCH_ACTIONS
+        .map(|code| preferred_index(&ZT_ACTIONS, usize::from(code), &actions) as u8)
+}
+
+fn initial_level_index(levels: Option<&NoiseLevelCapabilities>, captured: usize) -> u8 {
+    let levels = levels.map(|noise| noise.levels.clone()).unwrap_or_default();
+    preferred_level_index(&ZT_NOISE_LEVELS, captured, &levels) as u8
+}
+
+impl ZtHeadsetSide {
     pub(super) fn new(
         profile: ModelProfile,
-        firmware: FirmwareVersion,
+        protocol: ZtProtocol,
+        firmware: &FirmwareVersion,
+        capabilities: &HeadsetCapabilities,
     ) -> Result<Self, SimulatorError> {
         if firmware.parts.len() != 3 || firmware.parts.iter().any(|part| !(0..=15).contains(part)) {
             return Err(SimulatorError::InvalidFirmware(
@@ -86,58 +126,61 @@ impl ZtDevice {
             ));
         }
         let single_unit = profile.battery_layout() == BatteryLayout::SingleUnit;
+        let presets = capabilities
+            .equalizer
+            .as_ref()
+            .map(|equalizer| equalizer.presets.clone())
+            .unwrap_or_default();
+        let audio = capabilities
+            .audio_control
+            .as_ref()
+            .map(|audio| audio.modes.clone())
+            .unwrap_or_default();
+        let cycle_modes = capabilities
+            .noise_control
+            .as_ref()
+            .map(|noise| noise.cycle_modes.clone())
+            .unwrap_or_default();
         Ok(Self {
             profile,
-            protocol: zt_protocol(profile)?,
-            firmware,
+            protocol,
+            firmware: firmware.clone(),
             acknowledge_writes: false,
             left_battery: if single_unit { NOT_PROVIDED } else { 100 },
             right_battery: if single_unit { NOT_PROVIDED } else { 98 },
             case_battery: if single_unit { 80 } else { NOT_PROVIDED },
             left_charging: false,
             right_charging: false,
-            noise_mode: NoiseMode::Wind,
-            eq_preset: 1,
+            noise_mode: initial_noise_mode(capabilities),
+            eq_preset: preferred_index(eq_presets(protocol), CAPTURED_EQ_PRESET, &presets) as u8,
             game_mode: false,
-            audio_mode: 1,
+            audio_mode: preferred_index(audio_modes(protocol), CAPTURED_AUDIO_MODE, &audio) as u8,
             multipoint: false,
-            touch_actions: [6, 5, 2, 4, 6, 5, 3, 7],
+            touch_actions: initial_touch_actions(capabilities),
             touch_enabled: true,
-            noise_cycle: [true; 4],
+            noise_cycle: ZT_CYCLE_ORDER.map(|mode| cycle_modes.contains(mode)),
             ear_detection: false,
-            anc_level: 2,
-            transparency_level: 0,
-            prompt_volume: 2,
+            anc_level: initial_level_index(
+                capabilities
+                    .noise_control
+                    .as_ref()
+                    .and_then(|noise| noise.anc_level.as_ref()),
+                CAPTURED_ANC_LEVEL,
+            ),
+            transparency_level: initial_level_index(
+                capabilities
+                    .noise_control
+                    .as_ref()
+                    .and_then(|noise| noise.transparency_level.as_ref()),
+                CAPTURED_TRANSPARENCY_LEVEL,
+            ),
+            prompt_volume: preferred_level(
+                CAPTURED_PROMPT_VOLUME,
+                &capabilities.prompt_volume_levels,
+            ),
             custom_curve: [0; EQ_BANDS],
             gain: 1,
         })
-    }
-
-    pub(super) fn profile(&self) -> ModelProfile {
-        self.profile
-    }
-
-    pub(super) fn firmware(&self) -> &FirmwareVersion {
-        &self.firmware
-    }
-
-    pub(super) fn acknowledge_writes(&mut self, enabled: bool) {
-        self.acknowledge_writes = enabled;
-    }
-
-    pub(super) fn receive(&mut self, frame: &[u8]) -> Vec<Vec<u8>> {
-        let Some((key, payload)) = parse_request(frame) else {
-            return Vec::new();
-        };
-        let is_write = key[1] & 0x80 != 0 || (key == [0x0e, 0x03] && !payload.is_empty());
-        if is_write {
-            self.apply_write(key, payload);
-            if self.acknowledge_writes {
-                return vec![reply_frame(key, payload)];
-            }
-            return Vec::new();
-        }
-        self.reply(key).into_iter().collect()
     }
 
     fn apply_write(&mut self, key: [u8; 2], payload: &[u8]) {
@@ -224,7 +267,7 @@ impl ZtDevice {
                 self.case_battery,
             ],
             [0x01, 0x03] => vec![self.case_battery],
-            [0x06, 0x02] => self.noise_payload()?,
+            [0x06, 0x02] => noise_payload_of(self.noise_mode)?,
             [0x02, 0x01] => vec![self.eq_preset],
             [0x02, 0x02] => self.custom_curve.iter().map(|&g| encode_gain(g)).collect(),
             [0x02, 0x03] => vec![self.gain + 1],
@@ -256,18 +299,48 @@ impl ZtDevice {
         Some(reply_frame(key, &payload))
     }
 
-    fn noise_payload(&self) -> Option<Vec<u8>> {
-        match self.noise_mode {
-            NoiseMode::Anc => Some(vec![1, 0, 0, 0]),
-            NoiseMode::Normal => Some(vec![0, 1, 0, 0]),
-            NoiseMode::Wind => Some(vec![0, 0, 1, 0]),
-            NoiseMode::Transparency => Some(vec![0, 0, 0, 1]),
-            NoiseMode::Auto => Some(vec![2, 0, 0, 0]),
-            NoiseMode::Dynamic | NoiseMode::Deep => None,
-        }
+    fn audio_mode_name(&self) -> &'static str {
+        let modes = audio_modes(self.protocol);
+        modes[usize::from(self.audio_mode).min(modes.len() - 1)]
     }
 
-    pub(super) fn readings(&self) -> BTreeMap<HeadsetField, FieldValue> {
+    fn touch_bindings(&self) -> Vec<TouchBinding> {
+        self.touch_actions
+            .iter()
+            .enumerate()
+            .map(|(index, &code)| TouchBinding {
+                side: if index < 4 { "left" } else { "right" }.to_string(),
+                gesture: ZT_GESTURES[index % 4].to_string(),
+                action: ZT_ACTIONS
+                    .get(usize::from(code))
+                    .map(|name| name.to_string()),
+                raw_action: i32::from(code),
+            })
+            .collect()
+    }
+}
+
+impl HeadsetSide for ZtHeadsetSide {
+    fn acknowledge_writes(&mut self, enabled: bool) {
+        self.acknowledge_writes = enabled;
+    }
+
+    fn receive(&mut self, frame: &[u8]) -> Vec<Vec<u8>> {
+        let Some((key, payload)) = parse_request(frame) else {
+            return Vec::new();
+        };
+        let is_write = key[1] & 0x80 != 0 || (key == [0x0e, 0x03] && !payload.is_empty());
+        if is_write {
+            self.apply_write(key, payload);
+            if self.acknowledge_writes {
+                return vec![reply_frame(key, payload)];
+            }
+            return Vec::new();
+        }
+        self.reply(key).into_iter().collect()
+    }
+
+    fn readings(&self) -> BTreeMap<HeadsetField, FieldValue> {
         let single_unit = self.profile.battery_layout() == BatteryLayout::SingleUnit;
         let mut readings = BTreeMap::new();
         let mut battery = |field, value: u8| {
@@ -352,43 +425,23 @@ impl ZtDevice {
         readings
     }
 
-    fn audio_mode_name(&self) -> &'static str {
-        let modes = audio_modes(self.protocol);
-        modes[usize::from(self.audio_mode).min(modes.len() - 1)]
-    }
-
-    fn touch_bindings(&self) -> Vec<TouchBinding> {
-        self.touch_actions
-            .iter()
-            .enumerate()
-            .map(|(index, &code)| TouchBinding {
-                side: if index < 4 { "left" } else { "right" }.to_string(),
-                gesture: ZT_GESTURES[index % 4].to_string(),
-                action: ZT_ACTIONS.get(usize::from(code)).map(|name| name.to_string()),
-                raw_action: i32::from(code),
-            })
-            .collect()
-    }
-
-    pub(super) fn set(
+    fn set(
         &mut self,
         field: HeadsetField,
         value: FieldValue,
     ) -> Result<Vec<Vec<u8>>, SimulatorError> {
-        let invalid = || {
-            SimulatorError::InvalidValue(format!("模拟耳机不能把 {field:?} 设为 {value:?}"))
-        };
+        let refused = || SimulatorError::refused(field, &value);
         let key = match (field, &value) {
             (HeadsetField::LeftBattery, FieldValue::Number(level)) => {
-                self.left_battery = percentage(*level).ok_or_else(invalid)?;
+                self.left_battery = percentage(*level).ok_or_else(refused)?;
                 [0x01, 0x01]
             }
             (HeadsetField::RightBattery, FieldValue::Number(level)) => {
-                self.right_battery = percentage(*level).ok_or_else(invalid)?;
+                self.right_battery = percentage(*level).ok_or_else(refused)?;
                 [0x01, 0x01]
             }
             (HeadsetField::CaseBattery, FieldValue::Number(level)) => {
-                self.case_battery = percentage(*level).ok_or_else(invalid)?;
+                self.case_battery = percentage(*level).ok_or_else(refused)?;
                 if self.profile.battery_layout() == BatteryLayout::SingleUnit {
                     [0x01, 0x03]
                 } else {
@@ -404,13 +457,9 @@ impl ZtDevice {
                 [0x01, 0x01]
             }
             (HeadsetField::NoiseMode, FieldValue::Text(id)) => {
-                let mode = NoiseMode::from_id(id).ok_or_else(invalid)?;
-                let previous = self.noise_mode;
+                let mode = NoiseMode::from_id(id).ok_or_else(refused)?;
+                noise_payload_of(mode).ok_or_else(refused)?;
                 self.noise_mode = mode;
-                if self.noise_payload().is_none() {
-                    self.noise_mode = previous;
-                    return Err(invalid());
-                }
                 [0x06, 0x02]
             }
             (HeadsetField::GameMode, FieldValue::Toggle(on)) => {
@@ -426,18 +475,18 @@ impl ZtDevice {
                 [0x0c, 0x01]
             }
             (HeadsetField::AncLevel, FieldValue::Number(level)) => {
-                self.anc_level = level_index(*level).ok_or_else(invalid)?;
+                self.anc_level = level_index(*level).ok_or_else(refused)?;
                 [0x06, 0x07]
             }
             (HeadsetField::TransparencyLevel, FieldValue::Number(level)) => {
-                self.transparency_level = level_index(*level).ok_or_else(invalid)?;
+                self.transparency_level = level_index(*level).ok_or_else(refused)?;
                 [0x06, 0x04]
             }
-            (HeadsetField::PromptVolume, FieldValue::Number(level)) if (1..=5).contains(level) => {
+            (HeadsetField::PromptVolume, FieldValue::Number(level)) => {
                 self.prompt_volume = *level;
                 [0x0e, 0x03]
             }
-            _ => return Err(invalid()),
+            _ => return Err(refused()),
         };
         Ok(self.reply(key).into_iter().collect())
     }
