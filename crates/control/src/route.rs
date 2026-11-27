@@ -54,6 +54,12 @@ impl Core {
         endpoint: &TransportEndpoint,
         cancel: &CancellationToken,
     ) -> Result<Arc<dyn ControlConnection>, OpenFailure> {
+        if cancel.is_cancelled() {
+            return Err(OpenFailure {
+                kind: OpenFailureKind::Cancelled,
+                unreleased: None,
+            });
+        }
         let on_phase = |phase| self.phase(attempt, epoch, phase);
         match endpoint {
             TransportEndpoint::BleGatt { .. } => {
