@@ -194,7 +194,12 @@ impl RsCommonV2HeadsetSide {
         };
         match (id, payload) {
             (0x01 | 0x3c, &[slot, action]) => {
-                if let Some(pair) = record.chunks_exact_mut(2).find(|pair| pair[0] == slot) {
+                if let Some(pair) = record
+                    .as_chunks_mut::<2>()
+                    .0
+                    .iter_mut()
+                    .find(|pair| pair[0] == slot)
+                {
                     pair[1] = action;
                 }
             }

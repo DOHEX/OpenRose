@@ -14,6 +14,11 @@ status: accepted
 - **桌面打包显式指定 JDK**：`DesktopApplicationConventionPlugin` 把 Nucleus 的 `application.javaHome` 设为 `openRoseJdkHome()`。不设置时，Nucleus 会用启动 Gradle 守护进程的那个 JVM 来运行和打包。
 - **约定插件只编译、不加载第三方插件**：`build-logic/build.gradle.kts` 以 `compileOnly` 依赖 Kotlin Multiplatform、Android 应用、Nucleus、detekt 与 Kover 插件。根构建已用 `apply false` 把这些插件放上类路径，`build-logic` 只针对它们编译，所有项目因此只加载同一份插件。
 
+### Rust 工具链
+
+- **本地与 CI 用同一个 Rust 版本**：根目录的 `rust-toolchain.toml` 固定 Rust 版本，并带上 clippy 与 rustfmt；rustup 在仓库内自动安装它，CI 不另装 Rust。不固定时，CI runner 的 stable 比本地新，新版 clippy 的 lint（例如 1.100.0 的 `chunks_exact_to_as_chunks`）在 `-D warnings` 下让 CI 失败，而本地 `cargo xtask check` 照常通过。升级 Rust 时改这一个文件，并在同一次提交里修复新 lint。
+- **Android 目标不写进工具链文件**：Android ABI 列表只在 `gradle/libs.versions.toml` 的 `android-abis`，CI 按它在固定的工具链上安装 Rust 目标。
+
 ### lint、格式与 detekt
 
 - **不使用 baseline**：f91b9ae 撤掉了 baseline 文件与比较插件；`DetektConventionPlugin` 调用 `baseline.unsetConvention()`。`build-logic` 自身用与产品模块相同的 detekt 约定检查（根构建的 `detekt` 指向 `build-logic/src`）。

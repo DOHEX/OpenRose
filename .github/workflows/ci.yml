@@ -71,7 +71,7 @@ jobs:
         if: steps.release.outputs.pr != ''
         working-directory: release-pr
         env:
-          PR_BRANCH: ${{ fromJSON(steps.release.outputs.pr).headBranchName }}
+          PR_BRANCH: ${{ fromJSON(steps.release.outputs.pr || '{}').headBranchName }}
         run: |
           cargo xtask sync-version
           cargo xtask check-version

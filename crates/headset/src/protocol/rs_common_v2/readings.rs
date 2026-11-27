@@ -378,8 +378,10 @@ impl Payload<'_> {
         }
         let pairs: BTreeMap<u8, u8> = self
             .value
-            .chunks_exact(2)
-            .map(|pair| (pair[0], pair[1]))
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|&[slot, action]| (slot, action))
             .collect();
         if !slots.iter().all(|slot| pairs.contains_key(slot)) {
             return;
