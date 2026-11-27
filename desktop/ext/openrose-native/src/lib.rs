@@ -302,7 +302,21 @@ impl OpenRoseClient {
         dev.transport
             .scan()
             .advertise(catalog_advertisement(profile, &id));
-        tokio::task::yield_now().await;
+        let observed = tokio::time::timeout(Duration::from_secs(2), async {
+            while !runtime
+                .snapshot()
+                .candidates
+                .iter()
+                .any(|candidate| candidate.id == id)
+            {
+                tokio::time::sleep(Duration::from_millis(5)).await;
+            }
+        })
+        .await;
+        if observed.is_err() {
+            runtime.stop_scan().await;
+            return Err("模拟耳机广播未被扫描到".to_string());
+        }
         let result = runtime.connect_for_add_headset(id).await;
         runtime.stop_scan().await;
         result.map_err(|err| err.message)
