@@ -1,3 +1,5 @@
+mod tray;
+
 use nsh_core::prelude::*;
 use nsh_core::JsonValue;
 use nsh_core::element::Ret;
@@ -31,7 +33,10 @@ const DEFAULT_DEV_REPLY_LATENCY_MS: u64 = 160;
 
 #[native_module("openrose-native")]
 fn native(registry: &mut Registry) {
-    registry.module::<OpenRoseCatalog>().class::<OpenRoseClient>();
+    registry
+        .module::<OpenRoseCatalog>()
+        .module::<tray::OpenRoseTray>()
+        .class::<OpenRoseClient>();
 }
 
 struct SystemClock;
