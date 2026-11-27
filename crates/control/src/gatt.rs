@@ -8,6 +8,7 @@ use openrose_headset::GattProfile;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
+use tokio::sync::watch;
 use tokio_util::sync::CancellationToken;
 
 const MTU_TIMEOUT: Duration = Duration::from_millis(1_500);
@@ -137,7 +138,8 @@ struct Discovery {
 struct Inner {
     driver: Box<dyn GattDriver>,
     profile: GattProfile,
-    operations: tokio::sync::Mutex<()>,
+    operations: Arc<tokio::sync::Mutex<()>>,
+    rollback: Mutex<Option<watch::Receiver<bool>>>,
     discovery: Mutex<Discovery>,
     capacity: AtomicUsize,
     lifeline: Lifeline,
@@ -194,6 +196,10 @@ impl Inner {
     }
 
     async fn release_driver(&self) -> Result<(), TransportError> {
+        let rollback = self.rollback.lock().expect("rollback lock").clone();
+        if let Some(mut rollback) = rollback {
+            let _ = rollback.wait_for(|done| *done).await;
+        }
         self.lifeline
             .release(async {
                 self.driver
@@ -340,6 +346,32 @@ impl Inner {
         }
     }
 
+    fn start_undo_subscription(
+        self: &Arc<Self>,
+        notifier: GattCharacteristic,
+        operation: tokio::sync::OwnedMutexGuard<()>,
+    ) -> watch::Receiver<bool> {
+        let (done_tx, done_rx) = watch::channel(false);
+        *self.rollback.lock().expect("rollback lock") = Some(done_rx.clone());
+        let inner = Arc::clone(self);
+        if let Ok(handle) = tokio::runtime::Handle::try_current() {
+            handle.spawn(async move {
+                struct Signal(watch::Sender<bool>);
+                impl Drop for Signal {
+                    fn drop(&mut self) {
+                        self.0.send_replace(true);
+                    }
+                }
+                let _signal = Signal(done_tx);
+                let _operation = operation;
+                inner.undo_subscription(&notifier).await;
+            });
+        } else {
+            done_tx.send_replace(true);
+        }
+        done_rx
+    }
+
     async fn undo_subscription(&self, notifier: &GattCharacteristic) {
         let _ = tokio::time::timeout(
             GATT_OPERATION_TIMEOUT,
@@ -355,6 +387,30 @@ impl Inner {
     }
 }
 
+struct SubscriptionGuard {
+    inner: Arc<Inner>,
+    notifier: GattCharacteristic,
+    operation: Option<tokio::sync::OwnedMutexGuard<()>>,
+    armed: bool,
+}
+
+impl SubscriptionGuard {
+    fn rollback(&mut self) -> watch::Receiver<bool> {
+        self.armed = false;
+        let operation = self.operation.take().expect("rollback runs at most once");
+        self.inner
+            .start_undo_subscription(self.notifier.clone(), operation)
+    }
+}
+
+impl Drop for SubscriptionGuard {
+    fn drop(&mut self) {
+        if self.armed {
+            let _ = self.rollback();
+        }
+    }
+}
+
 impl GattConnection {
     pub async fn open(
         driver: Box<dyn GattDriver>,
@@ -365,7 +421,8 @@ impl GattConnection {
         let inner = Arc::new(Inner {
             driver,
             profile,
-            operations: tokio::sync::Mutex::new(()),
+            operations: Arc::new(tokio::sync::Mutex::new(())),
+            rollback: Mutex::new(None),
             discovery: Mutex::new(Discovery {
                 generation: 0,
                 services: None,
@@ -405,7 +462,7 @@ impl ControlConnection for GattConnection {
 
     async fn subscribe(&self) -> Result<(), TransportError> {
         let inner = &self.inner;
-        let _operation = inner.operations.lock().await;
+        let operation = Arc::clone(&inner.operations).lock_owned().await;
         inner.lifeline.check_open()?;
         let notifier = inner
             .services()
@@ -413,6 +470,12 @@ impl ControlConnection for GattConnection {
             .notifier;
         inner
             .terminal_on_failure(async {
+                let mut guard = SubscriptionGuard {
+                    inner: Arc::clone(inner),
+                    notifier: notifier.clone(),
+                    operation: Some(operation),
+                    armed: true,
+                };
                 let configured = tokio::time::timeout(GATT_OPERATION_TIMEOUT, async {
                     inner
                         .native(TransportRecoveryReason::Subscription, async {
@@ -441,8 +504,11 @@ impl ControlConnection for GattConnection {
                         message: "通知订阅超时".to_string(),
                     }),
                 };
-                if outcome.is_err() {
-                    inner.undo_subscription(&notifier).await;
+                if outcome.is_ok() {
+                    guard.armed = false;
+                } else {
+                    let mut rollback = guard.rollback();
+                    let _ = rollback.wait_for(|done| *done).await;
                 }
                 outcome
             })
