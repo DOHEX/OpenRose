@@ -1,8 +1,16 @@
 use openrose_headset::{
     FieldReading, FieldValue, HeadsetField, HeadsetReadings, HeadsetSetting, ModelProfile,
-    ReconnectGuidance, SettingPrerequisite, setting_prerequisite,
+    ReconnectGuidance, SettingPrerequisite, hearing_protection_threshold_db, setting_prerequisite,
 };
 use std::collections::BTreeMap;
+
+#[test]
+fn hearing_protection_levels_map_to_threshold_decibels() {
+    assert_eq!(None, hearing_protection_threshold_db(0));
+    assert_eq!(Some(75), hearing_protection_threshold_db(1));
+    assert_eq!(Some(100), hearing_protection_threshold_db(6));
+    assert_eq!(None, hearing_protection_threshold_db(7));
+}
 
 #[test]
 fn only_models_with_a_charging_case_ask_the_user_to_open_it() {
