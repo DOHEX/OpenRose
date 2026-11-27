@@ -185,7 +185,7 @@ jobs:
 
       - name: Install Android Rust target and cargo-ndk
         run: |
-          rustup target add aarch64-linux-android
+          rustup target add aarch64-linux-android armv7-linux-androideabi x86_64-linux-android
           if ! cargo ndk --version 2>/dev/null | grep -qx 'cargo-ndk 4\.1\.2'; then
             cargo install --locked cargo-ndk --version 4.1.2
           fi
@@ -266,9 +266,12 @@ jobs:
           packages=(dist/android/*.apk)
           [[ ${#packages[@]} -eq 1 && -f "${packages[0]}" ]]
           apk="${packages[0]}"
-          for lib in lib/arm64-v8a/libopenrose_ffi.so lib/arm64-v8a/libjnidispatch.so; do
-            unzip -v "$apk" "$lib" | awk -v path="$lib" '$2 == "Stored" && $NF == path { found = 1 } END { exit !found }' ||
-              { echo "::error::$lib is missing or compressed in $apk"; exit 1; }
+          for abi in arm64-v8a armeabi-v7a x86_64; do
+            for name in libopenrose_ffi.so libjnidispatch.so; do
+              lib="lib/$abi/$name"
+              unzip -v "$apk" "$lib" | awk -v path="$lib" '$2 == "Stored" && $NF == path { found = 1 } END { exit !found }' ||
+                { echo "::error::$lib is missing or compressed in $apk"; exit 1; }
+            done
           done
 
       - name: Upload Android package

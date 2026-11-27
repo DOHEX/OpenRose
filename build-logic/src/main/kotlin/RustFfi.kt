@@ -19,6 +19,8 @@ import org.gradle.api.tasks.TaskAction
 import org.gradle.process.ExecOperations
 import javax.inject.Inject
 
+val androidRustAbis = listOf("arm64-v8a", "armeabi-v7a", "x86_64")
+
 fun Project.rustFfiSourceInputs(): ConfigurableFileCollection = files(
     rootProject.layout.projectDirectory.file("Cargo.toml"),
     rootProject.layout.projectDirectory.file("Cargo.lock"),
@@ -145,7 +147,7 @@ abstract class BuildAndroidRustFfiTask : DefaultTask() {
     abstract val ndkVersion: Property<String>
 
     @get:Input
-    abstract val abi: Property<String>
+    abstract val abis: ListProperty<String>
 
     @get:Input
     abstract val platformLevel: Property<Int>
@@ -175,11 +177,9 @@ abstract class BuildAndroidRustFfiTask : DefaultTask() {
         fileSystemOperations.delete { delete(destination) }
         destination.mkdirs()
         val ndkDir = ndkDirectory.get().asFile
-        val args = mutableListOf(
-            "cargo",
-            "ndk",
-            "-t",
-            abi.get(),
+        val args = mutableListOf("cargo", "ndk")
+        abis.get().forEach { args += listOf("-t", it) }
+        args += listOf(
             "-P",
             platformLevel.get().toString(),
             "-o",
@@ -209,7 +209,7 @@ fun Project.configureAndroidRustFfi(androidComponents: ApplicationAndroidCompone
             workspaceRoot.set(rootProject.layout.projectDirectory)
             ndkDirectory.set(sdkNdkDirectory)
             ndkVersion.set(pinnedNdkVersion)
-            abi.set("arm64-v8a")
+            abis.set(androidRustAbis)
             platformLevel.set(minSdkLevel)
             release.set(variant.buildType == "release")
             offline.set(gradle.startParameter.isOffline)

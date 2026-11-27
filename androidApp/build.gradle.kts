@@ -15,11 +15,9 @@ android {
             useLegacyPackaging = false
             excludes += setOf(
                 "lib/armeabi/**",
-                "lib/armeabi-v7a/**",
                 "lib/mips/**",
                 "lib/mips64/**",
                 "lib/x86/**",
-                "lib/x86_64/**",
             )
         }
     }

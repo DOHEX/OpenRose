@@ -76,7 +76,7 @@ OpenRose 已接入 RoseLink 3.8.6 的全部 48 个蓝牙耳机配置，并保留
 
 ## 从源码构建
 
-需要 JDK 21、Rust stable 工具链和 Android SDK（Platform 37、Build Tools 37.0.0，设置 `ANDROID_HOME` 或 `local.properties` 的 `sdk.dir`）。构建 Android APK 还需 `aarch64-linux-android` 目标与 `cargo-ndk`；构建 Windows 桌面版还需 Rust MSVC 工具链和 Visual Studio C++ Build Tools。Windows 下把 `./gradlew` 换成 `.\gradlew.bat`。开发环境、各项检查与提交规范见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+需要 JDK 21、Rust stable 工具链和 Android SDK（Platform 37、Build Tools 37.0.0，设置 `ANDROID_HOME` 或 `local.properties` 的 `sdk.dir`）。构建 Android APK 还需 `aarch64-linux-android`、`armv7-linux-androideabi`、`x86_64-linux-android` 三个目标与 `cargo-ndk`；构建 Windows 桌面版还需 Rust MSVC 工具链和 Visual Studio C++ Build Tools。Windows 下把 `./gradlew` 换成 `.\gradlew.bat`。开发环境、各项检查与提交规范见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
 ```bash
 ./gradlew :androidApp:assembleDebug   # Android 调试 APK
