@@ -99,22 +99,23 @@ class ModuleAutonomyTest {
         assertEquals(OwnerReadiness.Ready, again.integration.value.owner.readiness)
         assertEquals(generation, (rig.host.status.value as HostStatus.Active).generation)
         assertEquals(listOf("module:open"), rig.headset.events)
-        assertEquals(0, rig.appTransport.links.size)
+        assertEquals(0, rig.app.connections)
     }
 
     @Test
     fun enteringModuleControlNeverOverlapsAnAppConnectionThatAudioHasAlreadyOpened() = runTest {
         val rig = OwnerRig(this)
         rig.bootHost()
-        rig.appTransport.audioDevice.emit(rig.earphones.deviceId)
         rig.hostTransport.audioDevice.emit(rig.earphones.deviceId)
+        rig.app.audioConnected = true
         val runtime = rig.newRuntime()
         runCurrent()
         advanceTimeBy(1)
         runCurrent()
+        rig.eventually("the app connection") { rig.headset.events == listOf("app:open") }
         assertEquals(listOf("app:open"), rig.headset.events)
 
-        rig.appTransport.closeDelayMillis = 300
+        rig.app.closeDelayMillis = 300
         assertIs<HandoffOutcome.Completed>(runtime.selectControlWay(ControlWay.MODULE))
         runCurrent()
         advanceTimeBy(1)
@@ -203,7 +204,7 @@ class ModuleAutonomyTest {
         val rig = OwnerRig(this, initial = saved)
         rig.bootHost()
         rig.hostTransport.audioDevice.emit(rig.earphones.deviceId)
-        rig.appTransport.audioDevice.emit(rig.earphones.deviceId)
+        rig.app.audioConnected = true
         val runtime = rig.newRuntime()
         runCurrent()
         advanceTimeBy(1)
@@ -253,7 +254,7 @@ class ModuleAutonomyTest {
         val rig = OwnerRig(this, initial = saved)
         rig.bootHost()
         rig.hostTransport.audioDevice.emit(rig.earphones.deviceId)
-        rig.appTransport.audioDevice.emit(rig.earphones.deviceId)
+        rig.app.audioConnected = true
         val runtime = rig.newRuntime()
         runCurrent()
         advanceTimeBy(1)
@@ -269,6 +270,7 @@ class ModuleAutonomyTest {
         runCurrent()
         advanceTimeBy(rig.clientTiming.retryMillis * 3)
         runCurrent()
+        rig.eventually("the app connection") { rig.headset.openOwner == "app" }
 
         assertEquals(0, rig.headset.overlappingOpens)
         assertEquals(ControlWay.APP, runtime.integration.value.owner.holder?.way)

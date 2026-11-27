@@ -80,9 +80,9 @@ class OwnerHandoffTest {
     fun anAcquireArrivingAfterTimeoutCannotUndoALaterRelease() = runTest {
         val rig = OwnerRig(this)
         rig.bootHost()
+        rig.app.audioConnected = true
         val runtime = rig.newRuntime()
         val id = rig.earphones.deviceId
-        rig.appTransport.audioDevice.emit(id)
         rig.hostTransport.audioDevice.emit(id)
         runCurrent()
         advanceTimeBy(1)
@@ -95,6 +95,7 @@ class OwnerHandoffTest {
         runCurrent()
         advanceTimeBy(1)
         runCurrent()
+        rig.eventually("the app connection") { rig.headset.openOwner == "app" }
         assertEquals("app", rig.headset.openOwner)
         val lateResult = delayedCall.invoke()
         assertIs<AcquireResult.Refused>(lateResult)
@@ -181,7 +182,7 @@ class OwnerHandoffTest {
         val outcome = runtime.selectControlWay(ControlWay.APP)
 
         assertIs<HandoffOutcome.Blocked>(outcome)
-        assertTrue(rig.appTransport.links.isEmpty())
+        assertEquals(0, rig.app.connections)
         assertNotEquals(OwnerReadiness.Ready, runtime.integration.value.owner.readiness)
         assertNotNull(rig.store.record.moduleRelease)
     }
@@ -230,7 +231,7 @@ class OwnerHandoffTest {
         assertEquals(OwnerFailureStage.DISCOVERY, assertIs<OwnerReadiness.Unavailable>(owner.readiness).stage)
         assertEquals(ModuleUnavailableCause.HOST_NOT_FOUND, assertIs<ModuleAvailability.Unavailable>(runtime.integration.value.platform.module).cause)
         assertNull(owner.holder)
-        assertTrue(rig.appTransport.links.isEmpty())
+        assertEquals(0, rig.app.connections)
 
         rig.link.reachable = true
         advanceTimeBy(rig.clientTiming.retryMillis * 3)
@@ -253,7 +254,7 @@ class OwnerHandoffTest {
 
         assertEquals(OwnerFailureStage.SELECTION_PERSISTENCE, assertIs<HandoffOutcome.Blocked>(outcome).stage)
         assertEquals(ControlWay.APP, runtime.integration.value.owner.selected)
-        assertIs<ConnectionState.Connected>(runtime.state.value.connection)
+        rig.eventually("the app connection to stay up") { runtime.state.value.connection is ConnectionState.Connected }
         assertEquals(listOf("app:open"), rig.headset.events)
     }
 
@@ -262,7 +263,7 @@ class OwnerHandoffTest {
         val rig = OwnerRig(this, initial = OwnerRecord(ControlWay.MODULE))
         val device = rig.earphones.deviceId
         rig.hostTransport.audioDevice.emit(device)
-        rig.appTransport.audioDevice.emit(device)
+        rig.app.audioConnected = true
         rig.bootHost()
         runCurrent()
         assertEquals(listOf("module:open"), rig.headset.events)
@@ -287,6 +288,7 @@ class OwnerHandoffTest {
         runCurrent()
         assertEquals(ControlWay.APP, rig.store.hostSelection)
         assertNull(rig.store.record.moduleRelease)
+        rig.eventually("the app connection") { rig.headset.events.lastOrNull() == "app:open" }
         assertEquals(listOf("module:open", "module:close", "app:open"), rig.headset.events)
 
         rig.replaceHost(processDied = true)
@@ -307,7 +309,7 @@ class OwnerHandoffTest {
         advanceTimeBy(rig.clientTiming.retryMillis * 2)
 
         assertIs<OwnerReadiness.SwitchBlocked>(runtime.integration.value.owner.readiness)
-        assertTrue(rig.appTransport.links.isEmpty())
+        assertEquals(0, rig.app.connections)
 
         rig.link.reachable = true
         advanceTimeBy(rig.clientTiming.retryMillis * 2)
@@ -446,7 +448,7 @@ class OwnerHandoffTest {
         val blocked = assertIs<HandoffOutcome.Blocked>(runtime.selectControlWay(ControlWay.APP))
 
         assertEquals(OwnerFailureStage.RELEASE, blocked.stage)
-        assertTrue(rig.appTransport.links.isEmpty())
+        assertEquals(0, rig.app.connections)
         assertNotNull(rig.store.record.moduleRelease)
         assertIs<OwnerReadiness.SwitchBlocked>(runtime.integration.value.owner.readiness)
 
@@ -471,7 +473,7 @@ class OwnerHandoffTest {
         val blocked = assertIs<HandoffOutcome.Blocked>(runtime.selectControlWay(ControlWay.APP))
 
         assertEquals(OwnerFailureStage.RELEASE, blocked.stage)
-        assertTrue(rig.appTransport.links.isEmpty())
+        assertEquals(0, rig.app.connections)
         assertNotNull(rig.store.record.moduleRelease)
 
         rig.link.tamperReceipt = { it }
@@ -494,7 +496,7 @@ class OwnerHandoffTest {
         val blocked = assertIs<HandoffOutcome.Blocked>(runtime.selectControlWay(ControlWay.APP))
 
         assertEquals(OwnerFailureStage.RELEASE, blocked.stage)
-        assertTrue(rig.appTransport.links.isEmpty())
+        assertEquals(0, rig.app.connections)
         assertIs<OwnerReadiness.SwitchBlocked>(runtime.integration.value.owner.readiness)
         assertNotNull(rig.store.record.moduleRelease)
 
@@ -516,7 +518,7 @@ class OwnerHandoffTest {
         runCurrent()
 
         assertIs<OwnerReadiness.SwitchBlocked>(runtime.integration.value.owner.readiness)
-        assertTrue(rig.appTransport.links.isEmpty())
+        assertEquals(0, rig.app.connections)
         assertNotNull(rig.store.record.moduleRelease)
 
         rig.link.releaseKillsHostProcess = false
@@ -577,7 +579,7 @@ class OwnerHandoffTest {
         val runtime = rig.newRuntime()
         runCurrent()
         assertEquals(OperationResult.Success, runtime.connectFromSystem(rig.earphones.deviceId))
-        rig.appTransport.closeFails = true
+        rig.app.closeFails = true
 
         val blocked = assertIs<HandoffOutcome.Blocked>(runtime.selectControlWay(ControlWay.MODULE))
 
@@ -586,7 +588,7 @@ class OwnerHandoffTest {
         assertEquals(ControlWay.APP, rig.store.record.selected)
         assertEquals(ControlWay.APP, runtime.integration.value.owner.selected)
 
-        rig.appTransport.closeFails = false
+        rig.app.closeFails = false
         assertEquals(OperationResult.Success, runtime.connectFromSystem(rig.earphones.deviceId))
         assertIs<HandoffOutcome.Completed>(runtime.selectControlWay(ControlWay.MODULE))
         runCurrent()
