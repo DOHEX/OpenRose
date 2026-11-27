@@ -28,7 +28,7 @@ pub(super) const SPATIAL_MODES: [&str; 3] = ["off", "head_tracking", "fixed"];
 
 pub(super) const SPATIAL_CONTENTS: [&str; 4] = ["tv", "music", "movie", "game"];
 
-pub(super) const AUDIO_MODES: [&str; 7] = [
+pub(crate) const AUDIO_MODES: [&str; 7] = [
     "aac_sbc",
     "ldac",
     "lhdc",
@@ -40,7 +40,7 @@ pub(super) const AUDIO_MODES: [&str; 7] = [
 
 pub(super) const GESTURES: [&str; 4] = ["single", "double", "triple", "long"];
 
-pub(super) const ACTIONS: [&str; 9] = [
+pub(crate) const ACTIONS: [&str; 9] = [
     "none",
     "play_pause",
     "previous_track",
@@ -52,7 +52,7 @@ pub(super) const ACTIONS: [&str; 9] = [
     "noise_cycle",
 ];
 
-pub(super) const PRESET_CODES: [(&str, u8); 6] = [
+pub(crate) const PRESET_CODES: [(&str, u8); 6] = [
     ("hifi", 0),
     ("pop", 1),
     ("rock", 2),
@@ -61,7 +61,7 @@ pub(super) const PRESET_CODES: [(&str, u8); 6] = [
     ("game_1", 0xa0),
 ];
 
-pub(super) const READ_PRESETS: [(u8, &str); 8] = [
+pub(crate) const READ_PRESETS: [(u8, &str); 8] = [
     (0, "pop"),
     (1, "hifi"),
     (2, "rock"),

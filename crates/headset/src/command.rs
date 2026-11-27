@@ -215,7 +215,7 @@ impl HeadsetCommand {
         self.check_options(profile, capabilities)
     }
 
-    fn check_options(
+    pub fn check_options(
         &self,
         profile: ModelProfile,
         capabilities: &HeadsetCapabilities,
