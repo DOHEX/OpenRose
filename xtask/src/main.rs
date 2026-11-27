@@ -1,4 +1,5 @@
 mod no_comments;
+mod version;
 
 use std::env;
 use std::path::{Path, PathBuf};
@@ -8,9 +9,14 @@ fn main() -> ExitCode {
     let mut args = env::args().skip(1);
     match args.next().as_deref() {
         Some("check") => run_check(),
+        Some("check-version") => run_check_version(&workspace_root()),
+        Some("sync-version") => run_sync_version(&workspace_root()),
         Some("no-comments") => run_no_comments(&workspace_root()),
         other => {
-            eprintln!("Unknown xtask command: {:?}. Expected: check", other);
+            eprintln!(
+                "Unknown xtask command: {:?}. Expected: check | check-version | sync-version | no-comments",
+                other
+            );
             ExitCode::FAILURE
         }
     }
@@ -31,7 +37,16 @@ fn run_check() -> ExitCode {
     let root = workspace_root();
     let cargo = cargo_bin();
 
-    if !run_step("Rust tests", &cargo, &["test", "--workspace"], &root) {
+    if run_check_version(&root) != ExitCode::SUCCESS {
+        return ExitCode::FAILURE;
+    }
+
+    if !run_step(
+        "Rust tests",
+        &cargo,
+        &["test", "--locked", "--workspace"],
+        &root,
+    ) {
         return ExitCode::FAILURE;
     }
 
@@ -40,6 +55,7 @@ fn run_check() -> ExitCode {
         &cargo,
         &[
             "clippy",
+            "--locked",
             "--workspace",
             "--all-targets",
             "--",
@@ -79,13 +95,16 @@ fn run_check() -> ExitCode {
 }
 
 fn gradle_offline_check_command(root: &Path) -> (String, Vec<String>) {
-    let is_ci = env::var_os("CI").is_some();
+    gradle_offline_check_command_for(root, env::var_os("CI").is_some())
+}
+
+fn gradle_offline_check_command_for(root: &Path, is_ci: bool) -> (String, Vec<String>) {
     let mut args = Vec::new();
     if is_ci {
         args.push("--no-daemon".to_string());
         args.push("--stacktrace".to_string());
-        args.push("check".to_string());
     }
+    args.push("check".to_string());
     args.push("offlineCheck".to_string());
 
     if cfg!(windows) {
@@ -96,6 +115,37 @@ fn gradle_offline_check_command(root: &Path) -> (String, Vec<String>) {
     } else {
         let script = root.join("gradlew").to_string_lossy().into_owned();
         (script, args)
+    }
+}
+
+fn run_check_version(root: &Path) -> ExitCode {
+    eprintln!("==> Workspace version check");
+    match version::check_workspace_version(root) {
+        Ok(ver) => {
+            eprintln!("Cargo workspace version matches version.txt ({ver}).");
+            ExitCode::SUCCESS
+        }
+        Err(errors) => {
+            for error in &errors {
+                eprintln!("{error}");
+            }
+            eprintln!("Run `cargo xtask sync-version` to derive Cargo.toml and Cargo.lock from version.txt.");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+fn run_sync_version(root: &Path) -> ExitCode {
+    eprintln!("==> Sync Cargo workspace version from version.txt");
+    match version::sync_workspace_version(root) {
+        Ok(ver) => {
+            eprintln!("Synced Cargo.toml and Cargo.lock to {ver}.");
+            ExitCode::SUCCESS
+        }
+        Err(error) => {
+            eprintln!("{error}");
+            ExitCode::FAILURE
+        }
     }
 }
 
@@ -131,5 +181,23 @@ fn run_step(label: &str, program: &str, args: &[&str], cwd: &Path) -> bool {
             eprintln!("Step '{label}' failed to start '{program}': {error}");
             false
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::gradle_offline_check_command_for;
+    use std::path::Path;
+
+    #[test]
+    fn local_and_ci_both_run_check_and_offline_check() {
+        let root = Path::new("/repo");
+        let (_, local_args) = gradle_offline_check_command_for(root, false);
+        let (_, ci_args) = gradle_offline_check_command_for(root, true);
+
+        assert!(local_args.ends_with(&["check".to_string(), "offlineCheck".to_string()]));
+        assert!(ci_args.ends_with(&["check".to_string(), "offlineCheck".to_string()]));
+        assert!(!local_args.contains(&"--no-daemon".to_string()));
+        assert!(ci_args.contains(&"--no-daemon".to_string()));
     }
 }

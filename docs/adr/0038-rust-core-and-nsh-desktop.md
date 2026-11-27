@@ -50,7 +50,7 @@ status: accepted
   - `android/`：Gradle 根目录。`desktop/`：NSH 应用，`desktop/ext/openrose-native` 是组合核心与本机驱动的 nshm 适配层。
 - **核心分层**：`headset` 是 sans-IO 纯逻辑；`control` 与 `circulation` 是 async，经 trait 注入 IO，运行时为 tokio，UniFFI 以 `async_runtime = "tokio"` 导出。跨 crate 使用的项须为 `pub`，这是用编译器保证分层的代价。
 - **构建入口**：`cargo xtask check` 取代 `./gradlew offlineCheck`，运行 Rust 测试、clippy、Kotlin 测试、`nsh check` 与 `nsh test`。不用 justfile，因为它的命令依赖 shell，在 Windows 上不便。
-- **版本**：版本号仍只来自 `version.txt`（[ADR 0015](0015-single-version-source.md)）。xtask 从它推导 Cargo workspace 版本、`nsh.json` 版本与 Android `versionCode`，取代 `build-logic` 的 `AppVersion`；安装包版本只用 `X.Y.Z`。
+- **版本**：版本号仍只来自 `version.txt`（[ADR 0015](0015-single-version-source.md)）。`xtask/src/version.rs` 提供 `sync_workspace_version`（`cargo xtask sync-version`）从 `version.txt` 推导根 `Cargo.toml` 的 `[workspace.package].version` 与 `Cargo.lock` 中所有继承工作区版本的成员包版本，并提供 `check_workspace_version`（`cargo xtask check-version`，由 `cargo xtask check` 首位执行）在漂移时使检查失败；发布流中 `release-please-config.json` 通过 `extra-files` 更新 `Cargo.toml`，`.github/workflows/ci.yml` 的 `release-please` 任务在创建或更新发布 PR 后于该分支运行 `cargo xtask sync-version` 自动保持 `Cargo.toml` 与 `Cargo.lock` 与 `version.txt` 一致。桌面端迁入 NSH 后，`nsh.json` 版本与 Android `versionCode` 亦由 xtask 推导并取代 `build-logic` 的 `AppVersion`；安装包版本只用 `X.Y.Z`。
 - **不写注释**：[ADR 0021](0021-no-code-comments.md) 扩展到 Rust 与 TSX，由 xtask 检查，取代 detekt 的 `openrose:NoComments`。Rust 的 `///` 同样禁止，只有 `#[native_module]` 导出的 API 例外，因为 `nsh build` 会把缺文档的导出报为警告。
 - **迁移**：按阶段进行，Android 最后切换：
   0. 原型门槛：NSH 原型（见“桌面界面”），并验证 Windows 与 macOS 能否按设备观察音频连接。

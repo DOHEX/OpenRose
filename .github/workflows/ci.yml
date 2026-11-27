@@ -60,6 +60,29 @@ jobs:
           echo "release_tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
           echo "label=$label" >> "$GITHUB_OUTPUT"
 
+      - name: Checkout release PR branch to sync Cargo version
+        if: steps.release.outputs.pr != ''
+        uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ fromJSON(steps.release.outputs.pr).headBranchName }}
+          path: release-pr
+
+      - name: Sync Cargo version on release PR
+        if: steps.release.outputs.pr != ''
+        working-directory: release-pr
+        env:
+          PR_BRANCH: ${{ fromJSON(steps.release.outputs.pr).headBranchName }}
+        run: |
+          cargo xtask sync-version
+          cargo xtask check-version
+          if ! git diff --quiet Cargo.toml Cargo.lock; then
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git add Cargo.toml Cargo.lock
+            git commit -m 'chore: sync Cargo version with version.txt'
+            git push origin "HEAD:$PR_BRANCH"
+          fi
+
   # Shared Rust, JVM and Android checks; independent of the release, so they start at once.
   checks:
     name: Checks
