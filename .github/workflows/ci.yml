@@ -205,9 +205,9 @@ jobs:
 
       - name: Ensure autotools for patched JNA arm64 build
         run: |
-          if ! command -v autoreconf >/dev/null 2>&1; then
+          if ! command -v autoreconf >/dev/null 2>&1 || [[ ! -f /usr/share/aclocal/ltdl.m4 ]]; then
             sudo apt-get update
-            sudo apt-get install --yes autoconf automake libtool
+            sudo apt-get install --yes autoconf automake libtool libltdl-dev
           fi
 
       - name: Determine whether this PR changes the Android release package
