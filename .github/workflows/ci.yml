@@ -164,6 +164,7 @@ jobs:
           echo "platform=$(version android-compileSdk)" >> "$GITHUB_OUTPUT"
           echo "build-tools=$(version android-buildTools)" >> "$GITHUB_OUTPUT"
           echo "ndk=$(version android-ndk)" >> "$GITHUB_OUTPUT"
+          echo "abis=$(version android-abis)" >> "$GITHUB_OUTPUT"
 
       - uses: android-actions/setup-android@v4.0.4
         with:
@@ -183,9 +184,21 @@ jobs:
           path: ~/.cargo/bin/cargo-ndk
           key: cargo-ndk-4.1.2-${{ runner.os }}
 
-      - name: Install Android Rust target and cargo-ndk
+      - name: Install Android Rust targets and cargo-ndk
+        env:
+          ABIS: ${{ steps.android-sdk.outputs.abis }}
         run: |
-          rustup target add aarch64-linux-android armv7-linux-androideabi x86_64-linux-android
+          targets=()
+          for abi in $ABIS; do
+            case "$abi" in
+              arm64-v8a) targets+=(aarch64-linux-android) ;;
+              armeabi-v7a) targets+=(armv7-linux-androideabi) ;;
+              x86_64) targets+=(x86_64-linux-android) ;;
+              x86) targets+=(i686-linux-android) ;;
+              *) echo "::error::no Rust target for Android ABI $abi"; exit 1 ;;
+            esac
+          done
+          rustup target add "${targets[@]}"
           if ! cargo ndk --version 2>/dev/null | grep -qx 'cargo-ndk 4\.1\.2'; then
             cargo install --locked cargo-ndk --version 4.1.2
           fi
@@ -262,11 +275,13 @@ jobs:
           ls -lR dist
 
       - name: Verify uncompressed native libraries in APK
+        env:
+          ABIS: ${{ steps.android-sdk.outputs.abis }}
         run: |
           packages=(dist/android/*.apk)
           [[ ${#packages[@]} -eq 1 && -f "${packages[0]}" ]]
           apk="${packages[0]}"
-          for abi in arm64-v8a armeabi-v7a x86_64; do
+          for abi in $ABIS; do
             for name in libopenrose_ffi.so libjnidispatch.so; do
               lib="lib/$abi/$name"
               unzip -v "$apk" "$lib" | awk -v path="$lib" '$2 == "Stored" && $NF == path { found = 1 } END { exit !found }' ||

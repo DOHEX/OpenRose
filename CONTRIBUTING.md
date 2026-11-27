@@ -12,7 +12,7 @@
 
 - **JDK 21**：`.mise.toml` 固定 Temurin 的精确版本，CI 也读取它安装 JDK；可用 [mise](https://mise.jdx.dev/) 安装同一版本。构建和 Gradle 守护进程都要求 Temurin 21，机器上没有时，`settings.gradle.kts` 中的 foojay 工具链解析插件会自动下载。Gradle 不会自动发现 mise 安装的 JDK，只有它正好是启动 Gradle 的 JVM 时才会被选中；想让终端和 IDE 用同一个 JDK，在 `~/.gradle/gradle.properties` 中把它加入 `org.gradle.java.installations.paths`。
 - **Android SDK 与 NDK**：Platform 37、Build Tools 37.0.0、NDK `28.2.13676358`（版本固定在 `gradle/libs.versions.toml`）。设置 `ANDROID_HOME`，或在 `local.properties` 中写入 `sdk.dir=/path/to/android-sdk`。`offlineCheck` 需要 Android SDK；首次执行 `:androidApp:assembleDebug` 时，AGP 会按固定版本自动下载 NDK。
-- **Rust 与 Android 交叉编译**：`cargo xtask check` 与主机 JVM FFI 测试需要 Rust stable 工具链；构建 Android APK 还需要 `aarch64-linux-android`、`armv7-linux-androideabi`、`x86_64-linux-android` 三个目标和 `cargo-ndk` `4.1.2`。APK 为 `arm64-v8a`、`armeabi-v7a`、`x86_64` 各带一份 Rust 核心（`libopenrose_ffi.so`），不含 32 位 x86（`build-logic` 的 `androidRustAbis`，打包排除项在 `androidApp/build.gradle.kts`）；CI 逐个 ABI 检查 `libopenrose_ffi.so` 与 `libjnidispatch.so` 以未压缩（`Stored`）方式存放：
+- **Rust 与 Android 交叉编译**：`cargo xtask check` 与主机 JVM FFI 测试需要 Rust stable 工具链；构建 Android APK 还需要 `aarch64-linux-android`、`armv7-linux-androideabi`、`x86_64-linux-android` 三个目标和 `cargo-ndk` `4.1.2`。APK 为 `arm64-v8a`、`armeabi-v7a`、`x86_64` 各带一份 Rust 核心（`libopenrose_ffi.so`），不含 32 位 x86。ABI 列表只写在 `gradle/libs.versions.toml` 的 `android-abis`：cargo-ndk 按它构建，`abiFilters` 按它筛选打包的原生库，CI 按它安装 Rust 目标，并逐个 ABI 检查 `libopenrose_ffi.so` 与 `libjnidispatch.so` 以未压缩（`Stored`）方式存放。增减 ABI 时只改这一项，并同步下面的本地安装命令：
 
   ```bash
   rustup target add aarch64-linux-android armv7-linux-androideabi x86_64-linux-android

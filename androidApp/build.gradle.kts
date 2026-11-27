@@ -14,12 +14,6 @@ android {
     packaging {
         jniLibs {
             useLegacyPackaging = false
-            excludes += setOf(
-                "lib/armeabi/**",
-                "lib/mips/**",
-                "lib/mips64/**",
-                "lib/x86/**",
-            )
         }
     }
     buildTypes {

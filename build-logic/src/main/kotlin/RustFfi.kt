@@ -23,8 +23,6 @@ import org.gradle.kotlin.dsl.register
 import org.gradle.process.ExecOperations
 import javax.inject.Inject
 
-val androidRustAbis = listOf("arm64-v8a", "armeabi-v7a", "x86_64")
-
 private const val HOST_RUST_FFI_TASK = "buildHostRustFfi"
 
 abstract class RustFfiCargoTask : DefaultTask() {
