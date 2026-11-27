@@ -46,5 +46,9 @@ gradlePlugin {
             id = libs.plugins.openrose.android.library.get().pluginId
             implementationClass = "AndroidLibraryConventionPlugin"
         }
+        register("rustFfi") {
+            id = libs.plugins.openrose.rust.ffi.get().pluginId
+            implementationClass = "RustFfiConventionPlugin"
+        }
     }
 }

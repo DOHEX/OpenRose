@@ -1,12 +1,13 @@
-import com.android.build.api.variant.ApplicationAndroidComponentsExtension
 import org.gradle.api.DefaultTask
 import org.gradle.api.Project
 import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.file.FileSystemOperations
+import org.gradle.api.file.RegularFile
 import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.provider.ListProperty
 import org.gradle.api.provider.Property
+import org.gradle.api.provider.Provider
 import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.InputFile
 import org.gradle.api.tasks.InputFiles
@@ -16,29 +17,17 @@ import org.gradle.api.tasks.OutputFile
 import org.gradle.api.tasks.PathSensitive
 import org.gradle.api.tasks.PathSensitivity
 import org.gradle.api.tasks.TaskAction
+import org.gradle.api.tasks.TaskProvider
+import org.gradle.kotlin.dsl.named
+import org.gradle.kotlin.dsl.register
 import org.gradle.process.ExecOperations
 import javax.inject.Inject
 
 val androidRustAbis = listOf("arm64-v8a", "armeabi-v7a", "x86_64")
 
-fun Project.rustFfiSourceInputs(): ConfigurableFileCollection = files(
-    rootProject.layout.projectDirectory.file("Cargo.toml"),
-    rootProject.layout.projectDirectory.file("Cargo.lock"),
-    fileTree(rootProject.layout.projectDirectory.dir("crates/headset")) { exclude("target/**") },
-    fileTree(rootProject.layout.projectDirectory.dir("crates/control")) { exclude("target/**") },
-    fileTree(rootProject.layout.projectDirectory.dir("crates/ffi")) { exclude("target/**") },
-)
+private const val HOST_RUST_FFI_TASK = "buildHostRustFfi"
 
-fun hostRustLibraryFileName(): String {
-    val os = System.getProperty("os.name").lowercase()
-    return when {
-        os.contains("win") -> "openrose_ffi.dll"
-        os.contains("mac") -> "libopenrose_ffi.dylib"
-        else -> "libopenrose_ffi.so"
-    }
-}
-
-abstract class BuildHostRustFfiTask : DefaultTask() {
+abstract class RustFfiCargoTask : DefaultTask() {
     @get:Internal
     abstract val workspaceRoot: DirectoryProperty
 
@@ -49,31 +38,40 @@ abstract class BuildHostRustFfiTask : DefaultTask() {
     @get:Input
     abstract val offline: Property<Boolean>
 
+    @get:Inject
+    abstract val execOperations: ExecOperations
+
+    protected fun cargo(
+        subcommand: List<String>,
+        flags: List<String> = emptyList(),
+        programArguments: List<String> = emptyList(),
+        environment: Map<String, String> = emptyMap(),
+    ) {
+        val offlineFlags = if (offline.get()) listOf("--offline") else emptyList()
+        val command = listOf("cargo") + subcommand + listOf("--locked", "-p", "openrose-ffi") + flags + offlineFlags + programArguments
+        execOperations.exec {
+            workingDir(workspaceRoot.get().asFile)
+            environment(environment)
+            commandLine(command)
+        }
+    }
+}
+
+abstract class BuildHostRustFfiTask : RustFfiCargoTask() {
     @get:Input
     abstract val features: ListProperty<String>
 
     @get:OutputFile
     abstract val outputLibrary: RegularFileProperty
 
-    @get:Inject
-    abstract val execOperations: ExecOperations
-
     @TaskAction
     fun build() {
-        val args = mutableListOf("cargo", "build", "--locked", "-p", "openrose-ffi")
-        if (features.get().isNotEmpty()) args += listOf("--features", features.get().joinToString(","))
-        if (offline.get()) args += "--offline"
-        execOperations.exec {
-            workingDir(workspaceRoot.get().asFile)
-            commandLine(args)
-        }
+        val featureFlags = if (features.get().isEmpty()) emptyList() else listOf("--features", features.get().joinToString(","))
+        cargo(listOf("build"), featureFlags)
     }
 }
 
-abstract class GenerateUniffiBindingsTask : DefaultTask() {
-    @get:Internal
-    abstract val workspaceRoot: DirectoryProperty
-
+abstract class GenerateUniffiBindingsTask : RustFfiCargoTask() {
     @get:InputFile
     @get:PathSensitive(PathSensitivity.NONE)
     abstract val libraryFile: RegularFileProperty
@@ -83,16 +81,10 @@ abstract class GenerateUniffiBindingsTask : DefaultTask() {
     abstract val uniffiConfigs: ConfigurableFileCollection
 
     @get:Input
-    abstract val offline: Property<Boolean>
-
-    @get:Input
     abstract val crates: ListProperty<String>
 
     @get:OutputDirectory
     abstract val outputDir: DirectoryProperty
-
-    @get:Inject
-    abstract val execOperations: ExecOperations
 
     @get:Inject
     abstract val fileSystemOperations: FileSystemOperations
@@ -103,43 +95,28 @@ abstract class GenerateUniffiBindingsTask : DefaultTask() {
         fileSystemOperations.delete { delete(destination) }
         destination.mkdirs()
         crates.get().forEach { crate ->
-            val args = mutableListOf(
-                "cargo",
-                "run",
-                "--locked",
-                "-p",
-                "openrose-ffi",
-                "--features",
-                "bindgen",
-                "--bin",
-                "uniffi-bindgen",
+            cargo(
+                subcommand = listOf("run"),
+                flags = listOf("--features", "bindgen", "--bin", "uniffi-bindgen"),
+                programArguments = listOf(
+                    "--",
+                    "generate",
+                    "--library",
+                    libraryFile.get().asFile.absolutePath,
+                    "--crate",
+                    crate,
+                    "--language",
+                    "kotlin",
+                    "--no-format",
+                    "--out-dir",
+                    destination.absolutePath,
+                ),
             )
-            if (offline.get()) args += "--offline"
-            args += listOf(
-                "--",
-                "generate",
-                "--library",
-                libraryFile.get().asFile.absolutePath,
-                "--crate",
-                crate,
-                "--language",
-                "kotlin",
-                "--no-format",
-                "--out-dir",
-                destination.absolutePath,
-            )
-            execOperations.exec {
-                workingDir(workspaceRoot.get().asFile)
-                commandLine(args)
-            }
         }
     }
 }
 
-abstract class BuildAndroidRustFfiTask : DefaultTask() {
-    @get:Internal
-    abstract val workspaceRoot: DirectoryProperty
-
+abstract class BuildAndroidRustFfiTask : RustFfiCargoTask() {
     @get:Internal
     abstract val ndkDirectory: DirectoryProperty
 
@@ -155,18 +132,8 @@ abstract class BuildAndroidRustFfiTask : DefaultTask() {
     @get:Input
     abstract val release: Property<Boolean>
 
-    @get:Input
-    abstract val offline: Property<Boolean>
-
-    @get:InputFiles
-    @get:PathSensitive(PathSensitivity.RELATIVE)
-    abstract val rustInputs: ConfigurableFileCollection
-
     @get:OutputDirectory
     abstract val outputDir: DirectoryProperty
-
-    @get:Inject
-    abstract val execOperations: ExecOperations
 
     @get:Inject
     abstract val fileSystemOperations: FileSystemOperations
@@ -176,46 +143,43 @@ abstract class BuildAndroidRustFfiTask : DefaultTask() {
         val destination = outputDir.get().asFile
         fileSystemOperations.delete { delete(destination) }
         destination.mkdirs()
-        val ndkDir = ndkDirectory.get().asFile
-        val args = mutableListOf("cargo", "ndk")
-        abis.get().forEach { args += listOf("-t", it) }
-        args += listOf(
-            "-P",
-            platformLevel.get().toString(),
-            "-o",
-            destination.absolutePath,
-            "build",
-            "--locked",
-            "-p",
-            "openrose-ffi",
+        val targets = abis.get().flatMap { listOf("-t", it) }
+        cargo(
+            subcommand = listOf("ndk") + targets + listOf("-P", platformLevel.get().toString(), "-o", destination.absolutePath, "build"),
+            flags = if (release.get()) listOf("--release") else emptyList(),
+            environment = mapOf("ANDROID_NDK_HOME" to ndkDirectory.get().asFile.absolutePath),
         )
-        if (release.get()) args += "--release"
-        if (offline.get()) args += "--offline"
-        execOperations.exec {
-            workingDir(workspaceRoot.get().asFile)
-            environment("ANDROID_NDK_HOME", ndkDir.absolutePath)
-            commandLine(args)
-        }
     }
 }
 
-fun Project.configureAndroidRustFfi(androidComponents: ApplicationAndroidComponentsExtension) {
-    val sdkNdkDirectory = androidComponents.sdkComponents.ndkDirectory
-    val pinnedNdkVersion = libs.stringVersion("android-ndk")
-    val minSdkLevel = libs.intVersion("android-minSdk")
-    androidComponents.onVariants { variant ->
-        val variantName = variant.name.replaceFirstChar { it.uppercase() }
-        val buildRustFfi = tasks.register("buildAndroidRustFfi$variantName", BuildAndroidRustFfiTask::class.java) {
-            workspaceRoot.set(rootProject.layout.projectDirectory)
-            ndkDirectory.set(sdkNdkDirectory)
-            ndkVersion.set(pinnedNdkVersion)
-            abis.set(androidRustAbis)
-            platformLevel.set(minSdkLevel)
-            release.set(variant.buildType == "release")
-            offline.set(gradle.startParameter.isOffline)
-            rustInputs.from(rustFfiSourceInputs())
-            outputDir.set(layout.buildDirectory.dir("generated/rustJniLibs/${variant.name}"))
-        }
-        variant.sources.jniLibs?.addGeneratedSourceDirectory(buildRustFfi, BuildAndroidRustFfiTask::outputDir)
+inline fun <reified T : RustFfiCargoTask> Project.registerRustFfiTask(name: String, crossinline configure: T.() -> Unit): TaskProvider<T> = tasks.register<T>(name) {
+    workspaceRoot.set(rootProject.layout.projectDirectory)
+    offline.set(gradle.startParameter.isOffline)
+    rustInputs.from(rustFfiSourceInputs())
+    configure()
+}
+
+fun Project.rustFfiSourceInputs(): ConfigurableFileCollection = files(
+    rootProject.layout.projectDirectory.file("Cargo.toml"),
+    rootProject.layout.projectDirectory.file("Cargo.lock"),
+    fileTree(rootProject.layout.projectDirectory.dir("crates/headset")) { exclude("target/**") },
+    fileTree(rootProject.layout.projectDirectory.dir("crates/control")) { exclude("target/**") },
+    fileTree(rootProject.layout.projectDirectory.dir("crates/ffi")) { exclude("target/**") },
+)
+
+fun Project.registerHostRustFfi(): TaskProvider<BuildHostRustFfiTask> = registerRustFfiTask(HOST_RUST_FFI_TASK) {
+    features.add("simulator")
+    rustInputs.from(fileTree(rootProject.layout.projectDirectory.dir("crates/ffi-simulator")))
+    outputLibrary.set(rootProject.layout.projectDirectory.file("target/debug/${hostRustLibraryFileName()}"))
+}
+
+fun Project.hostRustFfiLibrary(): Provider<RegularFile> = rootProject.tasks.named<BuildHostRustFfiTask>(HOST_RUST_FFI_TASK).flatMap { it.outputLibrary }
+
+private fun hostRustLibraryFileName(): String {
+    val os = System.getProperty("os.name").lowercase()
+    return when {
+        os.contains("win") -> "openrose_ffi.dll"
+        os.contains("mac") -> "libopenrose_ffi.dylib"
+        else -> "libopenrose_ffi.so"
     }
 }

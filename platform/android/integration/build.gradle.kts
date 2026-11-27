@@ -1,7 +1,6 @@
-import org.gradle.api.tasks.testing.Test
-
 plugins {
     alias(libs.plugins.openrose.kmp.library)
+    alias(libs.plugins.openrose.rust.ffi)
 }
 kotlin {
     android {
@@ -22,10 +21,6 @@ tasks.named<ProcessResources>("jvmTestProcessResources") {
     from(rootProject.layout.projectDirectory.dir("docs/protocols")) {
         include("supported-devices.json", "supported-devices-3.8.6.json")
     }
-}
-tasks.named<Test>("jvmTest") {
-    dependsOn(":platform:android:ffi:buildHostRustFfi")
-    systemProperty("jna.library.path", rootProject.layout.projectDirectory.dir("target/debug").asFile.absolutePath)
 }
 kover {
     reports {
