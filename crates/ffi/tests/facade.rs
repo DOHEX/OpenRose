@@ -6,12 +6,11 @@ use openrose_control::snapshot::{
 };
 use openrose_control::{ControlError, ControlErrorCode};
 use openrose_ffi::{
-    ControlFailure, DriverError, SimulatedHeadset, current_headset, default_session_timing,
-    model_display_name, model_gatt_profile, ready_session, session_for,
+    ControlFailure, DriverError, current_headset, default_session_timing, model_display_name,
+    model_gatt_profile, ready_session, session_for,
 };
 use openrose_headset::{
-    FieldValue, FirmwareVersion, HeadsetCommand, HeadsetField, HeadsetSetting, ModelProfile,
-    NoiseMode, decode_hex,
+    FieldValue, HeadsetCommand, HeadsetField, HeadsetSetting, ModelProfile, NoiseMode,
 };
 use std::sync::Arc;
 use support::{NOISE_READBACK_QUERY, NOISE_REPLY_ANC, World, eventually};
@@ -247,7 +246,7 @@ fn constructing_and_updating_platform_state_from_a_plain_thread_uses_the_shared_
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn snapshot_helpers_and_simulated_headset_facade_round_trip() {
+async fn snapshot_helpers_and_model_facts_round_trip() {
     let world = World::i5();
     world.runtime.connect(world.id()).await.expect("ready");
     let snapshot = world.snapshot();
@@ -266,18 +265,6 @@ async fn snapshot_helpers_and_simulated_headset_facade_round_trip() {
             .is_empty()
     );
     assert!(default_session_timing().connect_timeout.as_millis() > 0);
-
-    let simulated = SimulatedHeadset::new(
-        ModelProfile::I5Zt,
-        FirmwareVersion::new(vec![1, 2, 5], "125"),
-    )
-    .expect("i5 simulator");
-    let replies = simulated.receive(decode_hex(NOISE_READBACK_QUERY).expect("query hex"));
-    assert!(!replies.is_empty());
-    assert_eq!(
-        Some(&FieldValue::text("wind")),
-        simulated.readings().get(&HeadsetField::NoiseMode)
-    );
     assert!(world.runtime.disconnect().await);
 }
 

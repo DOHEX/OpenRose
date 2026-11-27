@@ -16,10 +16,12 @@ required-features = ["bindgen"]
 
 [features]
 bindgen = ["uniffi/cli", "uniffi/cargo-metadata"]
+simulator = ["dep:openrose-ffi-simulator"]
 
 [dependencies]
 openrose-control = { path = "../control", features = ["uniffi"] }
 openrose-headset = { path = "../headset", features = ["uniffi"] }
+openrose-ffi-simulator = { path = "../ffi-simulator", optional = true }
 async-trait.workspace = true
 tokio = { workspace = true, features = ["rt-multi-thread", "time"] }
 uniffi = { workspace = true, features = ["tokio"] }

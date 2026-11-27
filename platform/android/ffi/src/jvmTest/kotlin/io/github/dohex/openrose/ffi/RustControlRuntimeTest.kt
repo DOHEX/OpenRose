@@ -33,10 +33,10 @@ import uniffi.openrose_ffi.DriverException
 import uniffi.openrose_ffi.GattDriver
 import uniffi.openrose_ffi.LocalClock
 import uniffi.openrose_ffi.ScanDriver
-import uniffi.openrose_ffi.SimulatedHeadset
 import uniffi.openrose_ffi.SppDriver
 import uniffi.openrose_ffi.modelDisplayName
 import uniffi.openrose_ffi.modelGattProfile
+import uniffi.openrose_ffi_simulator.SimulatedHeadset
 import uniffi.openrose_headset.FieldReading
 import uniffi.openrose_headset.FieldValue
 import uniffi.openrose_headset.FirmwareVersion

@@ -2,7 +2,6 @@ uniffi::setup_scaffolding!();
 
 mod drivers;
 mod runtime;
-mod simulator;
 
 pub use drivers::{
     AudioEvents, AudioFactsDriver, ControlObserver, ControlTransport, DriverError, GattDriver,
@@ -10,11 +9,12 @@ pub use drivers::{
 };
 pub use openrose_control::settings::ControlSettings;
 pub use runtime::ControlRuntime;
-pub use simulator::SimulatedHeadset;
 
 use openrose_control::audio::normalize_bluetooth_address as core_normalize_bluetooth_address;
 use openrose_control::snapshot::{ControlSnapshot, HeadsetCandidate, SessionReference};
 use openrose_control::{ControlError, SessionTiming};
+#[cfg(feature = "simulator")]
+use openrose_ffi_simulator as _;
 use openrose_headset::{GattProfile, HeadsetSetting, ModelProfile};
 use std::fmt;
 
