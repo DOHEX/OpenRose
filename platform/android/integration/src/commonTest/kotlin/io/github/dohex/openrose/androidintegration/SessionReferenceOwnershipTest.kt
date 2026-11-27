@@ -61,15 +61,15 @@ class SessionReferenceOwnershipTest {
         val id = rig.earphones.deviceId
         assertEquals(OperationResult.Success, runtime.connectFromSystem(id))
         runCurrent()
-        val ordinaryReference = runtime.currentReference()
+        val appReference = runtime.currentReference()
 
         assertIs<HandoffOutcome.Completed>(runtime.selectControlWay(ControlWay.MODULE))
         runCurrent()
         assertEquals(OperationResult.Success, runtime.connectFromSystem(id))
         runCurrent()
         val moduleReference = runtime.currentReference()
-        assertNotEquals(ordinaryReference.sessionId, moduleReference.sessionId)
-        assertIs<SessionSnapshotResult.Failure>(runtime.readSession(ordinaryReference))
+        assertNotEquals(appReference.sessionId, moduleReference.sessionId)
+        assertIs<SessionSnapshotResult.Failure>(runtime.readSession(appReference))
         assertIs<SessionSnapshotResult.Available>(runtime.readSession(moduleReference))
 
         assertIs<HandoffOutcome.Completed>(runtime.selectControlWay(ControlWay.APP))
@@ -77,7 +77,7 @@ class SessionReferenceOwnershipTest {
         assertEquals(OperationResult.Success, runtime.connectFromSystem(id))
         runCurrent()
         val laterReference = runtime.currentReference()
-        assertIs<SessionSnapshotResult.Failure>(runtime.readSession(ordinaryReference))
+        assertIs<SessionSnapshotResult.Failure>(runtime.readSession(appReference))
         assertIs<SessionSnapshotResult.Failure>(runtime.readSession(moduleReference))
         assertIs<SessionSnapshotResult.Available>(runtime.readSession(laterReference))
     }

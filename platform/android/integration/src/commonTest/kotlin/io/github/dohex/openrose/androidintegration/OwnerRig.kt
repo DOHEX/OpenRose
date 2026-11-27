@@ -304,7 +304,7 @@ internal class OwnerRig(
     bonded: List<DeviceCandidate> = listOf(earphones),
 ) {
     val headset = SharedHeadset()
-    val appTransport = HeadsetTransport("ordinary", headset, earphones.profile!!, bonded)
+    val appTransport = HeadsetTransport("app", headset, earphones.profile!!, bonded)
     val hostTransport = HeadsetTransport("module", headset, earphones.profile!!, bonded)
     val store = MemoryOwnerStore(initial)
     private val ids = generateSequence(1) { it + 1 }.map { "id-$it" }.iterator()

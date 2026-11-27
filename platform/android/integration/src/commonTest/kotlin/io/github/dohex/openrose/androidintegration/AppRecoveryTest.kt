@@ -19,7 +19,7 @@ import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
-class OrdinaryRecoveryTest {
+class AppRecoveryTest {
     private var integration = IntegrationState()
 
     @Test

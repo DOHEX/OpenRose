@@ -14,7 +14,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
-class OrdinarySessionHoldTest {
+class AppSessionHoldTest {
     @Test
     fun closingTheInterfaceWithBackgroundControlOffReleasesTheControlConnectionAndNothingReconnects() = runTest {
         val rig = OwnerRig(this)
@@ -35,7 +35,7 @@ class OrdinarySessionHoldTest {
         runCurrent()
         advanceUntilIdle()
 
-        assertEquals(listOf("ordinary:open", "ordinary:close"), rig.headset.events)
+        assertEquals(listOf("app:open", "app:close"), rig.headset.events)
         assertEquals(ConnectionState.Disconnected, runtime.state.value.connection)
         assertNull(runtime.integration.value.owner.holder)
         assertIs<OwnerReadiness.Idle>(runtime.integration.value.owner.readiness)
@@ -45,7 +45,7 @@ class OrdinarySessionHoldTest {
         rig.appTransport.audioDevice.emit(rig.earphones.deviceId)
         runCurrent()
         advanceUntilIdle()
-        assertEquals(1, rig.headset.opens("ordinary"))
+        assertEquals(1, rig.headset.opens("app"))
         assertEquals(ConnectionState.Disconnected, runtime.state.value.connection)
     }
 
@@ -62,13 +62,13 @@ class OrdinarySessionHoldTest {
         runCurrent()
         rig.appTransport.audioDevice.emit(device)
         runCurrent()
-        assertEquals(1, rig.headset.opens("ordinary"))
+        assertEquals(1, rig.headset.opens("app"))
 
         val reopened = runtime.holdAppSession()
         val waiting = assertIs<OwnerReadiness.Unavailable>(runtime.integration.value.owner.readiness)
         assertEquals(OwnerFailureStage.RELEASE, waiting.stage)
         assertIs<OperationResult.Failure>(runtime.connect(device))
-        assertEquals(1, rig.headset.opens("ordinary"))
+        assertEquals(1, rig.headset.opens("app"))
 
         rig.appTransport.closeFails = false
         advanceTimeBy(rig.clientTiming.retryMillis)
@@ -77,7 +77,7 @@ class OrdinarySessionHoldTest {
         assertEquals(OperationResult.Success, runtime.connect(device))
         runCurrent()
         assertIs<ConnectionState.Connected>(runtime.state.value.connection)
-        assertEquals(listOf("ordinary:open", "ordinary:close", "ordinary:open"), rig.headset.events)
+        assertEquals(listOf("app:open", "app:close", "app:open"), rig.headset.events)
         assertEquals(0, rig.headset.overlappingOpens)
         reopened.release()
     }
@@ -100,13 +100,13 @@ class OrdinarySessionHoldTest {
         runCurrent()
         advanceUntilIdle()
         assertIs<ConnectionState.Connected>(runtime.state.value.connection)
-        assertEquals(listOf("ordinary:open"), rig.headset.events)
+        assertEquals(listOf("app:open"), rig.headset.events)
 
         ui = runtime.holdAppSession()
         runCurrent()
         advanceUntilIdle()
 
-        assertEquals(listOf("ordinary:open"), rig.headset.events)
+        assertEquals(listOf("app:open"), rig.headset.events)
         assertEquals(session, assertNotNull(runtime.state.value.device).sessionId)
         assertEquals(generation, assertNotNull(runtime.integration.value.owner.holder).generation)
 
@@ -114,7 +114,7 @@ class OrdinarySessionHoldTest {
         ui.release()
         runCurrent()
         advanceUntilIdle()
-        assertEquals(listOf("ordinary:open", "ordinary:close"), rig.headset.events)
+        assertEquals(listOf("app:open", "app:close"), rig.headset.events)
     }
 
     @Test
@@ -140,14 +140,14 @@ class OrdinarySessionHoldTest {
         runCurrent()
         advanceUntilIdle()
 
-        assertEquals(listOf("ordinary:open"), rig.headset.events)
+        assertEquals(listOf("app:open"), rig.headset.events)
         assertEquals(0, rig.headset.overlappingOpens)
         assertIs<ConnectionState.Connected>(runtime.state.value.connection)
 
         again.release()
         runCurrent()
         advanceUntilIdle()
-        assertEquals(listOf("ordinary:open", "ordinary:close"), rig.headset.events)
+        assertEquals(listOf("app:open", "app:close"), rig.headset.events)
     }
 
     @Test
@@ -168,12 +168,12 @@ class OrdinarySessionHoldTest {
         rig.appTransport.audioDevice.emit(rig.earphones.deviceId)
         runCurrent()
         advanceUntilIdle()
-        assertEquals(listOf("ordinary:open"), rig.headset.events)
+        assertEquals(listOf("app:open"), rig.headset.events)
         second.release()
     }
 
     @Test
-    fun moduleControlNeverCreatesTheOrdinarySessionWhateverHoldsExist() = runTest {
+    fun moduleControlNeverCreatesTheAppSessionWhateverHoldsExist() = runTest {
         val module = OwnerRig(this, initial = OwnerRecord(ControlWay.MODULE, PendingModuleRelease("r", null)))
         module.bootHost()
         val runtime = module.newRuntime(interfaceOpen = false)
@@ -183,7 +183,7 @@ class OrdinarySessionHoldTest {
         runCurrent()
         advanceUntilIdle()
         assertTrue(module.appTransport.links.isEmpty())
-        assertEquals(0, module.headset.opens("ordinary"))
+        assertEquals(0, module.headset.opens("app"))
         assertTrue(runtime.integration.value.owner.holder?.way != ControlWay.APP)
 
         val rig = OwnerRig(this)
@@ -220,10 +220,10 @@ class OrdinarySessionHoldTest {
         advanceUntilIdle()
 
         assertEquals(ControlWay.APP, runtime.integration.value.owner.holder?.way)
-        assertEquals(listOf("ordinary:open"), rig.headset.events)
+        assertEquals(listOf("app:open"), rig.headset.events)
         hold.release()
         runCurrent()
         advanceUntilIdle()
-        assertEquals(listOf("ordinary:open", "ordinary:close"), rig.headset.events)
+        assertEquals(listOf("app:open", "app:close"), rig.headset.events)
     }
 }

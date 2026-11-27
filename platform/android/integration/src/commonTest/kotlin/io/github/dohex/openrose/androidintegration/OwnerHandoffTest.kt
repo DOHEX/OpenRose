@@ -46,7 +46,7 @@ class OwnerHandoffTest {
     }
 
     @Test
-    fun ordinaryToModuleReleasesTheOrdinaryConnectionBeforeTheHostConnects() = runTest {
+    fun appToModuleReleasesTheAppConnectionBeforeTheHostConnects() = runTest {
         val rig = OwnerRig(this)
         rig.bootHost()
         val runtime = rig.newRuntime()
@@ -61,7 +61,7 @@ class OwnerHandoffTest {
         assertIs<HandoffOutcome.Completed>(outcome)
         assertEquals(OperationResult.Success, runtime.connectFromSystem(id))
         runCurrent()
-        assertEquals(listOf("ordinary:open", "ordinary:close", "module:open"), rig.headset.events)
+        assertEquals(listOf("app:open", "app:close", "module:open"), rig.headset.events)
         assertEquals(0, rig.headset.overlappingOpens)
         val owner = runtime.integration.value.owner
         assertEquals(ControlWay.MODULE, owner.selected)
@@ -72,7 +72,7 @@ class OwnerHandoffTest {
         assertEquals(rig.earphones.deviceId, device.deviceId)
         val left = assertIs<FieldReading.Known>(device.diagnostics.fields[DeviceField.LEFT_BATTERY])
         assertEquals(FieldValue.Number(100), left.value)
-        assertEquals(1, rig.headset.opens("ordinary"))
+        assertEquals(1, rig.headset.opens("app"))
         assertEquals(1, rig.headset.opens("module"))
     }
 
@@ -95,7 +95,7 @@ class OwnerHandoffTest {
         runCurrent()
         advanceTimeBy(1)
         runCurrent()
-        assertEquals("ordinary", rig.headset.openOwner)
+        assertEquals("app", rig.headset.openOwner)
         val lateResult = delayedCall.invoke()
         assertIs<AcquireResult.Refused>(lateResult)
         val lease = assertIs<HostOpenResult.Opened>(rig.host.open(appIdentity)).lease.id
@@ -112,7 +112,7 @@ class OwnerHandoffTest {
     }
 
     @Test
-    fun moduleToOrdinaryClosesTheHostConnectionBeforeOrdinaryConnects() = runTest {
+    fun moduleToAppClosesTheHostConnectionBeforeTheAppConnects() = runTest {
         val rig = OwnerRig(this, initial = OwnerRecord(ControlWay.MODULE, PendingModuleRelease("earlier", null)))
         rig.bootHost()
         val runtime = rig.newRuntime()
@@ -130,7 +130,7 @@ class OwnerHandoffTest {
         assertEquals(OperationResult.Success, runtime.connectFromSystem(id))
         runCurrent()
 
-        assertEquals(listOf("module:open", "module:close", "ordinary:open"), rig.headset.events)
+        assertEquals(listOf("module:open", "module:close", "app:open"), rig.headset.events)
         assertEquals(0, rig.headset.overlappingOpens)
         assertNull(rig.store.record.moduleRelease)
         assertEquals(ControlWay.APP, runtime.integration.value.owner.holder?.way)
@@ -154,7 +154,7 @@ class OwnerHandoffTest {
         val blocked = assertIs<HandoffOutcome.Blocked>(outcome)
         assertEquals(OwnerFailureStage.RELEASE, blocked.stage)
         assertEquals(1, rig.headset.opens("module"))
-        assertEquals(0, rig.headset.opens("ordinary"))
+        assertEquals(0, rig.headset.opens("app"))
         assertEquals(ControlWay.APP, runtime.integration.value.owner.selected)
         assertIs<OwnerReadiness.SwitchBlocked>(runtime.integration.value.owner.readiness)
         assertEquals(ControlErrorCode.NOT_READY, assertIs<OperationResult.Failure>(runtime.connect(rig.earphones.deviceId)).error.code)
@@ -169,7 +169,7 @@ class OwnerHandoffTest {
     }
 
     @Test
-    fun ordinaryControlNeverStartsWhileTheModuleCannotBeProvenReleased() = runTest {
+    fun appControlNeverStartsWhileTheModuleCannotBeProvenReleased() = runTest {
         val rig = OwnerRig(this)
         rig.bootHost()
         val runtime = rig.newRuntime()
@@ -199,7 +199,7 @@ class OwnerHandoffTest {
         rig.link.reachable = false
 
         assertIs<HandoffOutcome.Blocked>(runtime.selectControlWay(ControlWay.APP))
-        assertEquals(0, rig.headset.opens("ordinary"))
+        assertEquals(0, rig.headset.opens("app"))
 
         rig.link.reachable = true
         rig.link.releaseKillsHostProcess = true
@@ -212,7 +212,7 @@ class OwnerHandoffTest {
     }
 
     @Test
-    fun anUnavailableModuleKeepsModuleControlAndRecoversWithoutFallingBackToOrdinary() = runTest {
+    fun anUnavailableModuleKeepsModuleControlAndRecoversWithoutFallingBackToAppControl() = runTest {
         val rig = OwnerRig(this)
         rig.bootHost()
         val runtime = rig.newRuntime()
@@ -237,7 +237,7 @@ class OwnerHandoffTest {
         runCurrent()
         assertEquals(OwnerReadiness.Ready, runtime.integration.value.owner.readiness)
         assertEquals(ControlWay.MODULE, runtime.integration.value.owner.selected)
-        assertEquals(0, rig.headset.opens("ordinary"))
+        assertEquals(0, rig.headset.opens("app"))
     }
 
     @Test
@@ -254,7 +254,7 @@ class OwnerHandoffTest {
         assertEquals(OwnerFailureStage.SELECTION_PERSISTENCE, assertIs<HandoffOutcome.Blocked>(outcome).stage)
         assertEquals(ControlWay.APP, runtime.integration.value.owner.selected)
         assertIs<ConnectionState.Connected>(runtime.state.value.connection)
-        assertEquals(listOf("ordinary:open"), rig.headset.events)
+        assertEquals(listOf("app:open"), rig.headset.events)
     }
 
     @Test
@@ -277,7 +277,7 @@ class OwnerHandoffTest {
         val blocked = assertIs<OwnerReadiness.SwitchBlocked>(runtime.integration.value.owner.readiness)
         assertEquals(OwnerFailureStage.SELECTION_PERSISTENCE, blocked.stage)
         assertNotNull(rig.store.record.moduleRelease)
-        assertEquals(0, rig.headset.opens("ordinary"))
+        assertEquals(0, rig.headset.opens("app"))
 
         rig.store.failSaves = true
         assertIs<HandoffOutcome.Blocked>(runtime.selectControlWay(ControlWay.MODULE))
@@ -287,7 +287,7 @@ class OwnerHandoffTest {
         runCurrent()
         assertEquals(ControlWay.APP, rig.store.hostSelection)
         assertNull(rig.store.record.moduleRelease)
-        assertEquals(listOf("module:open", "module:close", "ordinary:open"), rig.headset.events)
+        assertEquals(listOf("module:open", "module:close", "app:open"), rig.headset.events)
 
         rig.replaceHost(processDied = true)
         rig.bootHost()
@@ -298,7 +298,7 @@ class OwnerHandoffTest {
     }
 
     @Test
-    fun aRestartThatCannotConfirmTheModuleReleaseKeepsOrdinaryControlBlocked() = runTest {
+    fun aRestartThatCannotConfirmTheModuleReleaseKeepsAppControlBlocked() = runTest {
         val rig = OwnerRig(this, initial = OwnerRecord(ControlWay.APP, PendingModuleRelease("r", OwnerGeneration("host-0", 4))))
         rig.bootHost()
         rig.link.reachable = false
@@ -360,7 +360,7 @@ class OwnerHandoffTest {
     }
 
     @Test
-    fun aPreferenceUpdateCannotMoveTheOwnerBackToOrdinary() = runTest {
+    fun aPreferenceUpdateCannotMoveTheOwnerBackToAppControl() = runTest {
         val rig = OwnerRig(this)
         rig.bootHost()
         val runtime = rig.newRuntime()
@@ -398,11 +398,11 @@ class OwnerHandoffTest {
 
         assertEquals(ControlWay.MODULE, runtime.integration.value.owner.selected)
         assertEquals(OwnerReadiness.Ready, runtime.integration.value.owner.readiness)
-        assertEquals(0, rig.headset.opens("ordinary"))
+        assertEquals(0, rig.headset.opens("app"))
     }
 
     @Test
-    fun ordinaryBackgroundControlIsNotInForceUnderModuleControlAndKeepsItsSavedIntent() = runTest {
+    fun appBackgroundControlIsNotInForceUnderModuleControlAndKeepsItsSavedIntent() = runTest {
         val rig = OwnerRig(this)
         rig.bootHost()
         val runtime = rig.newRuntime()
@@ -434,7 +434,7 @@ class OwnerHandoffTest {
     }
 
     @Test
-    fun aReceiptForAnotherRequestIsNotProofAndOrdinaryControlWaitsForARealOne() = runTest {
+    fun aReceiptForAnotherRequestIsNotProofAndAppControlWaitsForARealOne() = runTest {
         val rig = OwnerRig(this)
         rig.bootHost()
         val runtime = rig.newRuntime()
@@ -556,12 +556,12 @@ class OwnerHandoffTest {
         val expected = buildList {
             add("module:open")
             add("module:close")
-            add("ordinary:open")
+            add("app:open")
             repeat(2) {
-                add("ordinary:close")
+                add("app:close")
                 add("module:open")
                 add("module:close")
-                add("ordinary:open")
+                add("app:open")
             }
         }
         assertEquals(expected, rig.headset.events)
@@ -571,7 +571,7 @@ class OwnerHandoffTest {
     }
 
     @Test
-    fun anOrdinaryConnectionThatCannotBeConfirmedClosedBlocksTheTakeoverUntilItCloses() = runTest {
+    fun anAppConnectionThatCannotBeConfirmedClosedBlocksTheTakeoverUntilItCloses() = runTest {
         val rig = OwnerRig(this)
         rig.bootHost()
         val runtime = rig.newRuntime()
@@ -594,7 +594,7 @@ class OwnerHandoffTest {
         runCurrent()
         assertEquals(OperationResult.Success, runtime.connectFromSystem(rig.earphones.deviceId))
         runCurrent()
-        assertEquals(listOf("ordinary:open", "ordinary:close", "ordinary:open", "ordinary:close", "module:open"), rig.headset.events)
+        assertEquals(listOf("app:open", "app:close", "app:open", "app:close", "module:open"), rig.headset.events)
         assertEquals(0, rig.headset.overlappingOpens)
     }
 
