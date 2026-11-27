@@ -6,10 +6,10 @@ use openrose_control::gatt::{
 use openrose_control::snapshot::ControlSnapshot;
 use openrose_ffi::{
     AudioEvents, AudioFactsDriver, ControlObserver, ControlTransport, DriverError, GattDriver,
-    ScanDriver, SppDriver,
+    LocalClock, ScanDriver, SppDriver,
 };
 use openrose_headset::simulator::SimulatedHeadset;
-use openrose_headset::{FirmwareVersion, HeadsetId, ModelProfile, encode_hex};
+use openrose_headset::{FirmwareVersion, HeadsetId, LocalDateTime, ModelProfile, encode_hex};
 use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
@@ -32,6 +32,25 @@ impl Recorder {
 impl ControlObserver for Recorder {
     fn state_changed(&self, snapshot: ControlSnapshot) {
         self.snapshots.lock().unwrap().push(snapshot);
+    }
+}
+
+pub struct FixedClock {
+    time: LocalDateTime,
+}
+
+impl FixedClock {
+    pub fn new(year: u16, month: u8, day: u8, hour: u8, minute: u8, second: u8) -> Self {
+        Self {
+            time: LocalDateTime::new(year, month, day, hour, minute, second)
+                .expect("valid fixed local date time"),
+        }
+    }
+}
+
+impl LocalClock for FixedClock {
+    fn now(&self) -> LocalDateTime {
+        self.time
     }
 }
 

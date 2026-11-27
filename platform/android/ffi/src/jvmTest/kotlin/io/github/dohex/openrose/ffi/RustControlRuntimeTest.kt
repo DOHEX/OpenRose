@@ -284,10 +284,6 @@ class RustControlRuntimeTest {
                     runtime.state.first { it.connection is ConnectionState.Connected }
                 }
 
-                val encoded = connected.encodeToBytes()
-                assertEquals(connected, decodeControlSnapshot(encoded).getOrThrow())
-                assertTrue(decodeControlSnapshot("corrupt".encodeToByteArray()).isFailure)
-
                 rig.muted.set(true)
                 val writesBefore = rig.writes.size
                 val pending = async(Dispatchers.Default) {

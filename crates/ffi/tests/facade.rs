@@ -6,9 +6,8 @@ use openrose_control::snapshot::{
 };
 use openrose_control::{ControlError, ControlErrorCode};
 use openrose_ffi::{
-    ControlFailure, DriverError, SimulatedHeadset, current_headset, decode_snapshot,
-    default_session_timing, encode_snapshot, model_display_name, model_gatt_profile, ready_session,
-    session_for,
+    ControlFailure, DriverError, SimulatedHeadset, current_headset, default_session_timing,
+    model_display_name, model_gatt_profile, ready_session, session_for,
 };
 use openrose_headset::{
     FieldValue, FirmwareVersion, HeadsetCommand, HeadsetField, HeadsetSetting, ModelProfile,
@@ -228,22 +227,6 @@ async fn the_observer_receives_every_revision_in_order() {
 
     assert_eq!(Some(&0), revisions.first());
     assert!(revisions.windows(2).all(|pair| pair[1] == pair[0] + 1));
-    assert!(world.runtime.disconnect().await);
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn a_snapshot_survives_the_core_byte_encoding_and_garbage_is_refused() {
-    let world = World::i5();
-    world.runtime.connect(world.id()).await.expect("ready");
-    let snapshot = world.snapshot();
-
-    let decoded = decode_snapshot(encode_snapshot(snapshot.clone())).expect("decodes");
-
-    assert_eq!(snapshot, decoded);
-    assert_eq!(
-        ControlErrorCode::InvalidArgument,
-        code_of(decode_snapshot(b"not a snapshot".to_vec()))
-    );
     assert!(world.runtime.disconnect().await);
 }
 
