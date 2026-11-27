@@ -34,7 +34,10 @@ fn main() -> Result<()> {
                 last = Instant::now();
                 println!(
                     "{}",
-                    facts::snapshot().unwrap_or_else(|e| format!("unavailable\tbackend_unavailable\t{}", clean(e)))
+                    facts::snapshot().unwrap_or_else(|e| format!(
+                        "unavailable\tbackend_unavailable\t{}",
+                        clean(e)
+                    ))
                 );
                 std::thread::sleep(Duration::from_secs(2));
             }

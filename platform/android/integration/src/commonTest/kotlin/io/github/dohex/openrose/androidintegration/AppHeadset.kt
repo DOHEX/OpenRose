@@ -22,8 +22,8 @@ internal interface AppHeadset : AutoCloseable {
     fun runtime(scope: CoroutineScope, settings: UserSettings, platform: PlatformState, sessionIdBase: Long): ControlRuntime
 }
 
-internal fun TestScope.appHeadset(headset: SharedHeadset = SharedHeadset(), earphones: DeviceCandidate = rosePair(APP_HEADSET_ADDRESS)): AppHeadset = newAppHeadset(headset, earphones).also { app -> backgroundScope.coroutineContext[Job]?.invokeOnCompletion { app.close() } }
+internal fun TestScope.appHeadset(headset: SharedHeadset = SharedHeadset(), earphones: DeviceCandidate = rosePair(APP_HEADSET_ADDRESS)): AppHeadset = newAppHeadset(this, headset, earphones).also { app -> backgroundScope.coroutineContext[Job]?.invokeOnCompletion { app.close() } }
 
-internal expect fun newAppHeadset(headset: SharedHeadset, earphones: DeviceCandidate): AppHeadset
+internal expect fun newAppHeadset(test: TestScope, headset: SharedHeadset, earphones: DeviceCandidate): AppHeadset
 
 internal expect fun blockFor(millis: Long)

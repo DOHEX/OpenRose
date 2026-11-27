@@ -23,13 +23,14 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
+import kotlin.test.fail
 
 class RustSystemEntryClosedLoopTest {
     private suspend fun createConnectedHost(simulated: SimulatedDrivers, hostScope: CoroutineScope): ModuleControlHost {
@@ -118,7 +119,8 @@ class RustSystemEntryClosedLoopTest {
                 assertEquals(0, SystemHeadsetMapping.miLinkAncState(pendingFields))
 
                 gatt.inject(NOISE_REPLY_ANC)
-                assertEquals(HostCallResult.Operation(OperationResult.Success), withTimeout(2_000) { tap.await() })
+                val tapped = withTimeoutOrNull(2_000) { tap.await() } ?: fail("timed out waiting for the noise tap to be confirmed")
+                assertEquals(HostCallResult.Operation(OperationResult.Success), tapped)
                 val confirmedMode = awaitValue("confirmed anc mode") {
                     val read = host.control.readSession(milinkIdentity, lease, generation, reference) as? HostReadResult.Available
                     val snapshot = read?.snapshot as? SessionSnapshotResult.Available
@@ -132,21 +134,21 @@ class RustSystemEntryClosedLoopTest {
         }
     }
 
-    private suspend fun <T : Any> awaitValue(description: String, read: suspend () -> T?): T = withTimeout(3_000) {
-        while (true) {
-            read()?.let { return@withTimeout it }
+    private suspend fun <T : Any> awaitValue(description: String, read: suspend () -> T?): T = withTimeoutOrNull(3_000) {
+        var value = read()
+        while (value == null) {
             delay(10)
+            value = read()
         }
-        error("unreachable: $description")
-    }
+        value
+    } ?: fail("timed out waiting for $description")
 
     private suspend fun awaitCondition(description: String, check: () -> Boolean) {
-        withTimeout(3_000) {
+        withTimeoutOrNull(3_000) {
             while (!check()) {
                 delay(5)
             }
-        }
-        assertTrue(check(), "expected $description")
+        } ?: fail("timed out waiting for $description")
     }
 
     private companion object {

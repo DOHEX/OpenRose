@@ -2,9 +2,12 @@ package io.github.dohex.openrose.androidintegration
 
 import io.github.dohex.openrose.core.ControlRuntime
 import io.github.dohex.openrose.core.DeviceCandidate
+import io.github.dohex.openrose.core.HeadsetCommand
+import io.github.dohex.openrose.core.OperationResult
 import io.github.dohex.openrose.core.PlatformState
 import io.github.dohex.openrose.core.UserSettings
 import io.github.dohex.openrose.core.transport.AudioProfile
+import io.github.dohex.openrose.core.transport.DeviceId
 import io.github.dohex.openrose.core.transport.GattDriver
 import io.github.dohex.openrose.core.transport.GattException
 import io.github.dohex.openrose.core.transport.GattFailureKind
@@ -14,18 +17,23 @@ import io.github.dohex.openrose.ffi.drivers.PlatformDrivers
 import io.github.dohex.openrose.ffi.drivers.SimulatedDrivers
 import io.github.dohex.openrose.ffi.kotlincore.CoreControlRuntime
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.async
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.test.TestScope
 import uniffi.openrose_ffi.ControlTransport
 import uniffi.openrose_headset.ModelProfile
 import java.util.concurrent.atomic.AtomicInteger
 
-internal actual fun newAppHeadset(headset: SharedHeadset, earphones: DeviceCandidate): AppHeadset = RustAppHeadset(headset, earphones)
+internal actual fun newAppHeadset(test: TestScope, headset: SharedHeadset, earphones: DeviceCandidate): AppHeadset = RustAppHeadset(test, headset, earphones)
 
 internal actual fun blockFor(millis: Long) = Thread.sleep(millis)
 
 private const val OWNER = "app"
 
-private class RustAppHeadset(private val shared: SharedHeadset, earphones: DeviceCandidate) : AppHeadset {
+private class RustAppHeadset(private val test: TestScope, private val shared: SharedHeadset, earphones: DeviceCandidate) : AppHeadset {
     private val drivers = SimulatedDrivers(ModelProfile.valueOf(requireNotNull(earphones.profile).name), earphones.deviceId.value).also {
         it.audioConnected = false
     }
@@ -57,9 +65,34 @@ private class RustAppHeadset(private val shared: SharedHeadset, earphones: Devic
             sessionIdBase = sessionIdBase,
             clock = drivers.fixedClock(),
         )
-        return object : ControlRuntime by core {
-            override suspend fun release(): Boolean = core.release().also { released -> if (!released) refused.incrementAndGet() }
-        }
+        return CoreAwaitedInRealTime(core)
+    }
+
+    private inner class CoreAwaitedInRealTime(private val core: ControlRuntime) : ControlRuntime by core {
+        override suspend fun refreshBondedDevices() = awaitingCore { core.refreshBondedDevices() }
+
+        override suspend fun startScan(): OperationResult = awaitingCore { core.startScan() }
+
+        override suspend fun stopScan() = awaitingCore { core.stopScan() }
+
+        override suspend fun selectCurrentHeadset(deviceId: DeviceId) = awaitingCore { core.selectCurrentHeadset(deviceId) }
+
+        override suspend fun connect(deviceId: DeviceId, pinned: Boolean): OperationResult = awaitingCore { core.connect(deviceId, pinned) }
+
+        override suspend fun connectForAddDevice(deviceId: DeviceId): OperationResult = awaitingCore { core.connectForAddDevice(deviceId) }
+
+        override suspend fun disconnect(): Boolean = awaitingCore { core.disconnect() }
+
+        override suspend fun release(): Boolean = awaitingCore { core.release() }.also { released -> if (!released) refused.incrementAndGet() }
+
+        override suspend fun set(command: HeadsetCommand, expectedSessionId: Long?): OperationResult = awaitingCore { core.set(command, expectedSessionId) }
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private suspend fun <T> awaitingCore(call: suspend () -> T): T {
+        val pending = CoroutineScope(currentCoroutineContext()).async(start = CoroutineStart.UNDISPATCHED) { call() }
+        test.eventually("the Rust core to answer") { pending.isCompleted }
+        return pending.getCompleted()
     }
 
     override fun close() = drivers.close()
