@@ -7,8 +7,8 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
 import uniffi.openrose_control.Advertisement
+import uniffi.openrose_ffi.DriverException
 import uniffi.openrose_ffi.ScanDriver
-import uniffi.openrose_ffi.TransportDriverException
 import io.github.dohex.openrose.core.transport.Advertisement as KotlinAdvertisement
 
 private const val ADVERTISEMENT_BUFFER = 256
@@ -37,9 +37,9 @@ internal class KotlinCoreScanDriver(private val source: Flow<KotlinAdvertisement
             advertisements.close()
             throw cancelled
         } catch (failure: SecurityException) {
-            advertisements.close(TransportDriverException.PermissionDenied(failure.message.orEmpty()))
+            advertisements.close(DriverException.PermissionDenied(failure.message.orEmpty()))
         } catch (failure: Exception) {
-            advertisements.close(TransportDriverException.Terminal(failure.message.orEmpty()))
+            advertisements.close(DriverException.Terminal(failure.message.orEmpty()))
         }
     }
 }

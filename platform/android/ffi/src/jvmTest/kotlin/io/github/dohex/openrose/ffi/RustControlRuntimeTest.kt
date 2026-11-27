@@ -29,13 +29,12 @@ import uniffi.openrose_control.TransportAvailability
 import uniffi.openrose_ffi.AudioEvents
 import uniffi.openrose_ffi.AudioFactsDriver
 import uniffi.openrose_ffi.ControlTransport
+import uniffi.openrose_ffi.DriverException
 import uniffi.openrose_ffi.GattDriver
-import uniffi.openrose_ffi.GattDriverException
 import uniffi.openrose_ffi.LocalClock
 import uniffi.openrose_ffi.ScanDriver
 import uniffi.openrose_ffi.SimulatedHeadset
 import uniffi.openrose_ffi.SppDriver
-import uniffi.openrose_ffi.TransportDriverException
 import uniffi.openrose_ffi.modelDisplayName
 import uniffi.openrose_ffi.modelGattProfile
 import uniffi.openrose_headset.FieldReading
@@ -105,7 +104,7 @@ class RustControlRuntimeTest {
 
                     override suspend fun connect() {
                         if (failNextConnect.compareAndSet(true, false)) {
-                            throw GattDriverException.Failed(GattFailureKind.PERMISSION, "BLUETOOTH_CONNECT revoked")
+                            throw DriverException.Gatt(GattFailureKind.PERMISSION, "BLUETOOTH_CONNECT revoked")
                         }
                     }
 
@@ -158,9 +157,9 @@ class RustControlRuntimeTest {
                 }
             }
 
-            override fun startScan(): ScanDriver = throw TransportDriverException.Unsupported("scan unused")
+            override fun startScan(): ScanDriver = throw DriverException.Unsupported("scan unused")
 
-            override fun openSpp(headset: HeadsetId, address: String, serviceUuid: String): SppDriver = throw TransportDriverException.Unsupported("spp unused")
+            override fun openSpp(headset: HeadsetId, address: String, serviceUuid: String): SppDriver = throw DriverException.Unsupported("spp unused")
             override fun audioFacts(): AudioFactsDriver = object : AudioFactsDriver {
                 override fun subscribe(): AudioEvents = object : AudioEvents {
                     override suspend fun nextEvent(): RawAudioEvent? = audioEvents.receiveCatching().getOrNull()

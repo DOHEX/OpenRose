@@ -18,9 +18,7 @@ import uniffi.openrose_control.GattEvent
 import uniffi.openrose_control.GattFailureKind
 import uniffi.openrose_control.GattSubscription
 import uniffi.openrose_control.SppFailureKind
-import uniffi.openrose_ffi.GattDriverException
-import uniffi.openrose_ffi.SppDriverException
-import uniffi.openrose_ffi.TransportDriverException
+import uniffi.openrose_ffi.DriverException
 import uniffi.openrose_headset.FieldReading
 import uniffi.openrose_headset.FieldValue
 import uniffi.openrose_headset.HeadsetField
@@ -66,7 +64,7 @@ class KotlinCoreTransportTest {
             KotlinCoreTransport(rig).use { transport ->
                 rig.connectFailure = KotlinGattException(KotlinGattFailureKind.PERMISSION, "BLUETOOTH_CONNECT revoked")
                 val gatt = transport.openGatt(ADDRESS)
-                val failure = assertFailsWith<GattDriverException.Failed> { gatt.connect() }
+                val failure = assertFailsWith<DriverException.Gatt> { gatt.connect() }
                 assertEquals(GattFailureKind.PERMISSION, failure.kind)
                 assertEquals("BLUETOOTH_CONNECT revoked", failure.detail)
                 assertIs<KotlinGattException>(failure.cause)
@@ -95,12 +93,12 @@ class KotlinCoreTransportTest {
         Rig().use { rig ->
             KotlinCoreTransport(rig).use { transport ->
                 rig.gattFailure = IllegalArgumentException("not an address")
-                val invalid = assertFailsWith<TransportDriverException.InvalidArgument> { transport.openGatt("nope") }
+                val invalid = assertFailsWith<DriverException.InvalidArgument> { transport.openGatt("nope") }
                 assertEquals("not an address", invalid.detail)
                 rig.gattFailure = SecurityException("no BLUETOOTH_CONNECT")
-                assertFailsWith<TransportDriverException.PermissionDenied> { transport.openGatt(ADDRESS) }
+                assertFailsWith<DriverException.PermissionDenied> { transport.openGatt(ADDRESS) }
                 rig.gattFailure = IOException("adapter missing")
-                assertFailsWith<TransportDriverException.Terminal> { transport.openGatt(ADDRESS) }
+                assertFailsWith<DriverException.Terminal> { transport.openGatt(ADDRESS) }
             }
         }
     }
@@ -122,7 +120,7 @@ class KotlinCoreTransportTest {
                 val notification = assertIs<GattEvent.Notification>(event)
                 assertEquals(notifier.instanceId, notification.instanceId)
                 val missing = GattCharacteristic(999uL, "x", false, false, false, false)
-                val unknown = assertFailsWith<GattDriverException.Failed> { gatt.write(missing, byteArrayOf(1), true) }
+                val unknown = assertFailsWith<DriverException.Gatt> { gatt.write(missing, byteArrayOf(1), true) }
                 assertEquals(GattFailureKind.UNSUPPORTED, unknown.kind)
             }
         }
@@ -216,14 +214,14 @@ class KotlinCoreTransportTest {
             KotlinCoreTransport(rig).use { transport ->
                 rig.scanFailure = SecurityException("缺少 BLE 扫描权限")
                 val scan = transport.startScan()
-                assertFailsWith<TransportDriverException.PermissionDenied> { withTimeout(2_000) { scan.nextAdvertisement() } }
+                assertFailsWith<DriverException.PermissionDenied> { withTimeout(2_000) { scan.nextAdvertisement() } }
             }
         }
         Rig().use { rig ->
             KotlinCoreTransport(rig).use { transport ->
                 rig.scanFailure = IOException("请在系统设置中开启定位服务")
                 val scan = transport.startScan()
-                val failure = assertFailsWith<TransportDriverException.Terminal> { withTimeout(2_000) { scan.nextAdvertisement() } }
+                val failure = assertFailsWith<DriverException.Terminal> { withTimeout(2_000) { scan.nextAdvertisement() } }
                 assertEquals("请在系统设置中开启定位服务", failure.detail)
             }
         }
@@ -260,7 +258,7 @@ class KotlinCoreTransportTest {
                 assertFalse(pending.isCompleted)
                 spp.closeLink()
                 val failure = withTimeout(2_000) { pending.await() }.exceptionOrNull()
-                assertIs<SppDriverException.Failed>(failure)
+                assertIs<DriverException.Spp>(failure)
                 assertEquals(SppFailureKind.DISCONNECTED, failure.kind)
             }
         }
@@ -274,7 +272,7 @@ class KotlinCoreTransportTest {
                 val link = checkNotNull(rig.sppLink)
                 spp.connect()
                 link.closeFailure = IOException("socket still open")
-                val refused = assertFailsWith<SppDriverException.Failed> { spp.closeLink() }
+                val refused = assertFailsWith<DriverException.Spp> { spp.closeLink() }
                 assertEquals("socket still open", refused.detail)
                 assertFalse(link.closed)
                 link.closeFailure = null
@@ -291,17 +289,17 @@ class KotlinCoreTransportTest {
                 val spp = transport.openSpp(ADDRESS, ADDRESS, "uuid")
                 val link = checkNotNull(rig.sppLink)
                 link.openFailure = SecurityException("no BLUETOOTH_CONNECT")
-                assertEquals(SppFailureKind.PERMISSION, assertFailsWith<SppDriverException.Failed> { spp.connect() }.kind)
+                assertEquals(SppFailureKind.PERMISSION, assertFailsWith<DriverException.Spp> { spp.connect() }.kind)
                 link.openFailure = UnsupportedOperationException("classic Bluetooth unavailable")
-                assertEquals(SppFailureKind.UNSUPPORTED, assertFailsWith<SppDriverException.Failed> { spp.connect() }.kind)
+                assertEquals(SppFailureKind.UNSUPPORTED, assertFailsWith<DriverException.Spp> { spp.connect() }.kind)
                 link.openFailure = IOException("connect refused")
-                assertEquals(SppFailureKind.DISCONNECTED, assertFailsWith<SppDriverException.Failed> { spp.connect() }.kind)
+                assertEquals(SppFailureKind.DISCONNECTED, assertFailsWith<DriverException.Spp> { spp.connect() }.kind)
                 link.openFailure = null
                 spp.connect()
                 link.writeFailure = IOException("broken pipe")
-                assertEquals("broken pipe", assertFailsWith<SppDriverException.Failed> { spp.write(byteArrayOf(1)) }.detail)
+                assertEquals("broken pipe", assertFailsWith<DriverException.Spp> { spp.write(byteArrayOf(1)) }.detail)
                 link.breakLink(IOException("SPP 连接已断开"))
-                val lost = assertFailsWith<SppDriverException.Failed> { withTimeout(2_000) { spp.read() } }
+                val lost = assertFailsWith<DriverException.Spp> { withTimeout(2_000) { spp.read() } }
                 assertEquals(SppFailureKind.DISCONNECTED, lost.kind)
                 assertEquals("SPP 连接已断开", lost.detail)
             }
@@ -313,11 +311,11 @@ class KotlinCoreTransportTest {
         Rig(ModelProfile.I7_RS_V2).use { rig ->
             KotlinCoreTransport(rig).use { transport ->
                 rig.sppFailure = IllegalArgumentException("invalid address")
-                assertFailsWith<TransportDriverException.InvalidArgument> { transport.openSpp("x", "x", "uuid") }
+                assertFailsWith<DriverException.InvalidArgument> { transport.openSpp("x", "x", "uuid") }
                 rig.sppFailure = SecurityException("no BLUETOOTH_CONNECT")
-                assertFailsWith<TransportDriverException.PermissionDenied> { transport.openSpp(ADDRESS, ADDRESS, "uuid") }
+                assertFailsWith<DriverException.PermissionDenied> { transport.openSpp(ADDRESS, ADDRESS, "uuid") }
                 rig.sppFailure = UnsupportedOperationException("classic Bluetooth unavailable")
-                assertFailsWith<TransportDriverException.Unsupported> { transport.openSpp(ADDRESS, ADDRESS, "uuid") }
+                assertFailsWith<DriverException.Unsupported> { transport.openSpp(ADDRESS, ADDRESS, "uuid") }
             }
         }
     }

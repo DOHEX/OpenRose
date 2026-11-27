@@ -5,8 +5,8 @@ mod runtime;
 mod simulator;
 
 pub use drivers::{
-    AudioEvents, AudioFactsDriver, ControlObserver, ControlTransport, GattDriver, GattDriverError,
-    LocalClock, ScanDriver, SppDriver, SppDriverError, TransportDriverError,
+    AudioEvents, AudioFactsDriver, ControlObserver, ControlTransport, DriverError, GattDriver,
+    LocalClock, ScanDriver, SppDriver,
 };
 pub use openrose_control::settings::ControlSettings;
 pub use runtime::ControlRuntime;
@@ -83,10 +83,7 @@ pub fn ready_session(snapshot: ControlSnapshot) -> Option<SessionReference> {
 }
 
 #[uniffi::export]
-pub fn session_for(
-    snapshot: ControlSnapshot,
-    setting: HeadsetSetting,
-) -> Option<SessionReference> {
+pub fn session_for(snapshot: ControlSnapshot, setting: HeadsetSetting) -> Option<SessionReference> {
     snapshot.session_for(setting)
 }
 
