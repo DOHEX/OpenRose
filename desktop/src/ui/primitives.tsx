@@ -65,7 +65,6 @@ export function Row(props: { children?: JSX.Element; class?: string; testID?: st
     </View>
   );
 }
-
 export function Card(props: {
   children?: JSX.Element;
   class?: string;

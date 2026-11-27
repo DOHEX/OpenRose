@@ -1,9 +1,12 @@
 export {
   ActionButton,
+  CollapsibleSection,
+  InfoRow,
   MetricGrid,
   NoticeBanner,
   SegmentedTabs,
   SelectField,
+  SidebarNav,
   StatusBadge,
   TextField,
   ToggleSwitch,
@@ -13,6 +16,7 @@ export type {
   MetricItem,
   SegmentOption,
   SelectFieldOption,
+  SidebarNavItem,
   ToneVariant,
 } from "./controls";
 export {

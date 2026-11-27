@@ -26,7 +26,6 @@ import {
 export interface TraySettingsPageProps {
   settings: DesktopSettingsStore;
   availability: TrayAvailability;
-  highlightControls: boolean;
   panelOpen: boolean;
   onTogglePanel: () => void;
 }
@@ -70,7 +69,7 @@ export function TraySettingsPage(props: TraySettingsPageProps) {
         ) : null}
       </Card>
 
-      <Card testID="tray-controls-section" class={props.highlightControls ? "border-primary" : ""}>
+      <Card testID="tray-controls-section">
         <Row class="items-center justify-between gap-2">
           <Column class="flex-1 gap-0.5">
             <SectionTitle>托盘面板控制项</SectionTitle>

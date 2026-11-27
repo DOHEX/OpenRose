@@ -261,6 +261,7 @@ export interface ConnectionStatusView {
 }
 
 export interface HeadsetController {
+  client: OpenRoseClient;
   catalog: ModelCatalogEntry[];
   catalogById: Map<string, ModelCatalogEntry>;
   snapshot: () => ControlSnapshot;
@@ -284,6 +285,8 @@ export interface HeadsetController {
   executeCommand: (commandJson: string, expectedSession: number | null) => Promise<void>;
   switchSimulatedHeadset: (modelId: string, firmware: string) => Promise<boolean>;
   setSimulatedLatencyMs: (millis: number) => void;
+  selectCurrentHeadset: (headsetId: string) => void;
+  refreshBondedHeadsets: () => Promise<void>;
 }
 
 export function createHeadsetController(): HeadsetController {
@@ -305,6 +308,7 @@ export function createHeadsetController(): HeadsetController {
   const stop = client.subscribe((next) => {
     snapshot.set(next as ControlSnapshot);
   });
+  void client.refreshBondedHeadsets();
   cleanup(() => {
     stop();
     client.dispose();
@@ -570,8 +574,20 @@ export function createHeadsetController(): HeadsetController {
       devError.set(error instanceof Error ? error.message : String(error));
     }
   }
+  function selectCurrentHeadset(headsetId: string) {
+    connectionError.set(null);
+    client.selectCurrentHeadset(headsetId);
+    snapshot.set(client.snapshot() as ControlSnapshot);
+  }
+
+  async function refreshBondedHeadsets() {
+    await client.refreshBondedHeadsets();
+    snapshot.set(client.snapshot() as ControlSnapshot);
+  }
+
 
   return {
+    client,
     catalog,
     catalogById,
     snapshot,
@@ -591,6 +607,8 @@ export function createHeadsetController(): HeadsetController {
     devError,
     connect,
     disconnect,
+    selectCurrentHeadset,
+    refreshBondedHeadsets,
     setNoiseMode,
     executeCommand,
     switchSimulatedHeadset,

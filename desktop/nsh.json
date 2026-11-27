@@ -12,8 +12,8 @@
   },
   "window": {
     "title": "OpenRose",
-    "defaultSize": { "width": 720, "height": 640 },
-    "minSize": { "width": 440, "height": 520 },
+    "defaultSize": { "width": 880, "height": 640 },
+    "minSize": { "width": 640, "height": 520 },
     "titleBar": { "style": "hidden", "height": 44 }
   },
   "dependencies": {

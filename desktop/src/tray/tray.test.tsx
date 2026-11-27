@@ -4,12 +4,14 @@ import type { App } from "nsh/test";
 const TRAY_AVAILABLE = { available: true, reason: null };
 
 async function openApp(tray: { available: boolean; reason: string | null } = TRAY_AVAILABLE) {
-  return open("../../App.tsx", {
+  const app = await open("../../App.tsx", {
     platform: "linux",
-    width: 720,
-    height: 640,
+    width: 880,
+    height: 700,
     modules: { "openrose-native": { "OpenRoseTray.checkAvailability": tray } },
   });
+  await app.waitFor("id:headset-status-card");
+  return app;
 }
 
 async function waitForQuit(app: App) {
@@ -19,25 +21,50 @@ async function waitForQuit(app: App) {
   expect(app.quit()).toBe(true);
 }
 
+async function openPanel(app: App) {
+  await app.press("id:nav-tray");
+  await app.press("id:btn-toggle-tray-panel");
+  expect(app.windowIds()).toContain("tray-panel");
+}
+
+async function connectFromPanel(app: App) {
+  await openPanel(app);
+  await app.press("id:tray-btn-reconnect");
+  await app.waitFor("id:tray-status-badge");
+}
 
 async function switchModel(app: App, search: string, title: string) {
+  await app.press("id:nav-dev");
   await app.press("id:dev-model-select");
   await app.type("id:dev-model-search", search);
   await app.press(`text:${title}`);
   await app.press("id:btn-apply-dev");
-  await app.waitFor("text:已连接");
+  await app.waitFor("id:tray-status-badge");
+  await app.press("id:nav-tray");
 }
 
-test("tray panel guides to adding a headset, then shows state, battery, noise modes and default controls", async () => {
+test("panel without a bonded headset guides to the add-headset flow", async () => {
   const app = await openApp();
-  expect(app.windowIds()).toEqual(["main"]);
-  await app.press("id:btn-toggle-tray-panel");
-  expect(app.windowIds()).toEqual(["main", "tray-panel"]);
+  await app.press("id:nav-dev");
+  await app.press("id:bonded-none");
+  await openPanel(app);
   expect(app.shows("text:未添加耳机")).toBe(true);
   expect(app.shows("id:tray-btn-add-headset")).toBe(true);
   expect(app.shows("id:tray-noise-anc")).toBe(false);
+  expect(app.shows("id:tray-btn-control-settings")).toBe(false);
 
-  await app.press("id:btn-connect");
+  await app.press("id:tray-btn-add-headset");
+  expect(app.windowIds()).not.toContain("tray-panel");
+  expect(app.shows("id:add-headset-card")).toBe(true);
+});
+
+test("disconnected panel reconnects the current headset and shows state, battery, noise modes and default controls", async () => {
+  const app = await openApp();
+  await openPanel(app);
+  expect(app.shows("id:tray-btn-reconnect")).toBe(true);
+  expect(app.shows("id:tray-noise-anc")).toBe(false);
+
+  await app.press("id:tray-btn-reconnect");
   await app.waitFor("id:tray-status-badge");
   expect(app.shows("id:tray-battery")).toBe(true);
   expect(app.shows("id:tray-noise-anc")).toBe(true);
@@ -46,29 +73,24 @@ test("tray panel guides to adding a headset, then shows state, battery, noise mo
   expect(app.shows("id:tray-control-spatial_audio")).toBe(false);
   expect(app.shows("id:tray-control-independent_mic")).toBe(false);
   expect(app.shows("id:tray-control-noise_level")).toBe(false);
-});
+  expect(app.shows("id:tray-btn-reconnect")).toBe(false);
 
-test("disconnected panel reconnects the current headset", async () => {
-  const app = await openApp();
-  await app.press("id:btn-connect");
-  await app.waitFor("text:已连接");
-  await app.press("id:btn-toggle-tray-panel");
+  await app.press("id:nav-headset");
   await app.press("id:btn-disconnect");
   await app.waitFor("id:tray-btn-reconnect");
   expect(app.shows("id:tray-noise-anc")).toBe(false);
-  await app.press("id:tray-btn-reconnect");
-  await app.waitFor("id:tray-status-badge");
 });
 
 test("panel noise mode writes once and ignores choosing the confirmed mode again", async () => {
   const app = await openApp();
-  await app.press("id:btn-connect");
-  await app.waitFor("text:已连接");
+  await connectFromPanel(app);
+  await app.press("id:nav-dev");
   await app.press("id:latency-400");
-  await app.press("id:btn-toggle-tray-panel");
+  await app.press("id:nav-tray");
   await app.press("id:tray-noise-normal");
   expect(app.shows("text:正在切换至关闭…")).toBe(true);
-  await app.waitFor("text:已确认：关闭");
+  await app.press("id:nav-headset");
+  await app.waitFor("text:当前：关闭");
   expect(app.shows("text:正在切换至关闭…")).toBe(false);
 
   await app.press("id:tray-noise-normal");
@@ -76,18 +98,17 @@ test("panel noise mode writes once and ignores choosing the confirmed mode again
   expect(app.shows("text:当前：关闭")).toBe(true);
 });
 
-test("panel controls toggle and EQ presets are written through the control entry", async () => {
+test("panel game mode toggle is written through the control entry without errors", async () => {
   const app = await openApp();
-  await app.press("id:btn-connect");
-  await app.waitFor("text:已连接");
-  await app.press("id:btn-toggle-tray-panel");
+  await connectFromPanel(app);
   await app.press("id:tray-toggle-game_mode");
-  await app.waitFor("id:tray-toggle-game_mode");
   expect(app.shows("id:tray-command-error")).toBe(false);
+  expect(app.shows("id:tray-control-equalizer")).toBe(true);
 });
 
 test("control settings enable, reorder and reset panel controls and intersect with the model", async () => {
   const app = await openApp();
+  await app.press("id:nav-tray");
   expect(app.shows("text:降噪／通透档位 · 游戏模式 · EQ 预设")).toBe(true);
 
   await app.press("id:tray-setting-up-equalizer");
@@ -97,9 +118,7 @@ test("control settings enable, reorder and reset panel controls and intersect wi
   await app.press("id:tray-setting-toggle-noise_level");
   expect(app.shows("text:EQ 预设 · 游戏模式 · 空间音频")).toBe(true);
 
-  await app.press("id:btn-connect");
-  await app.waitFor("text:已连接");
-  await app.press("id:btn-toggle-tray-panel");
+  await connectFromPanel(app);
   expect(app.shows("id:tray-control-spatial_audio")).toBe(false);
 
   await switchModel(app, "Astro X", "Astro X");
@@ -113,6 +132,7 @@ test("control settings enable, reorder and reset panel controls and intersect wi
 
 test("independent microphone mode explains its prerequisite and noise levels follow the mode", async () => {
   const app = await openApp();
+  await app.press("id:nav-tray");
   await app.press("id:tray-setting-toggle-independent_mic");
   await app.press("id:btn-toggle-tray-panel");
   await switchModel(app, "speakfeel2", "SPEAKFEEL (speakfeel2)");
@@ -127,9 +147,7 @@ test("independent microphone mode explains its prerequisite and noise levels fol
 
 test("closing the main window keeps the control connection in the tray and reopening raises it without the panel", async () => {
   const app = await openApp();
-  await app.press("id:btn-connect");
-  await app.waitFor("text:已连接");
-  await app.press("id:btn-toggle-tray-panel");
+  await connectFromPanel(app);
   await app.window("main").pressClose();
   expect(app.quit()).toBe(false);
   expect(app.window("main").state()?.visible).toBe(false);
@@ -141,15 +159,22 @@ test("closing the main window keeps the control connection in the tray and reope
   expect(app.shows("text:已连接")).toBe(true);
 });
 
-test("panel opens the main window and quit from the panel ends the app", async () => {
+test("panel opens the main window, jumps to the control settings and quit ends the app", async () => {
   const app = await openApp();
-  await app.press("id:btn-connect");
-  await app.waitFor("text:已连接");
-  await app.press("id:btn-toggle-tray-panel");
+  await connectFromPanel(app);
+  await app.press("id:nav-headset");
   await app.window("main").pressClose();
   await app.press("id:tray-btn-open-main");
   expect(app.window("main").state()?.visible).toBe(true);
   expect(app.windowIds()).not.toContain("tray-panel");
+  expect(app.shows("id:tray-settings-page")).toBe(false);
+
+  await app.press("id:nav-tray");
+  await app.press("id:btn-toggle-tray-panel");
+  await app.press("id:nav-headset");
+  await app.press("id:tray-btn-control-settings");
+  expect(app.windowIds()).not.toContain("tray-panel");
+  expect(app.shows("id:tray-settings-page")).toBe(true);
 
   await app.press("id:btn-toggle-tray-panel");
   await app.press("id:tray-btn-quit");
@@ -158,11 +183,13 @@ test("panel opens the main window and quit from the panel ends the app", async (
 
 test("without background control, or without a tray, closing the window quits", async () => {
   const off = await openApp();
+  await off.press("id:nav-tray");
   await off.press("id:toggle-background-control");
   await off.window("main").pressClose();
   await waitForQuit(off);
 
   const unavailable = await openApp({ available: false, reason: "没有已注册的系统托盘宿主" });
+  await unavailable.press("id:nav-tray");
   expect(unavailable.shows("text:托盘不可用，关闭窗口将直接退出：没有已注册的系统托盘宿主")).toBe(true);
   await unavailable.window("main").pressClose();
   await waitForQuit(unavailable);
