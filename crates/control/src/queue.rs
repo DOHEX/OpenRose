@@ -92,7 +92,7 @@ impl Core {
                 if !current {
                     return Err(ControlError::new(
                         ControlErrorCode::Disconnected,
-                        "请求的设备会话已结束或已被替换",
+                        "请求的控制会话已结束或已被替换",
                     ));
                 }
             }
@@ -102,13 +102,13 @@ impl Core {
             let (Some(attempt), Some(session)) = (attempt, session) else {
                 return self.reject(ControlError::new(
                     ControlErrorCode::NotReady,
-                    "设备尚未就绪",
+                    "耳机尚未就绪",
                 ));
             };
             if session.session_id != attempt.id {
                 return self.reject(ControlError::new(
                     ControlErrorCode::NotReady,
-                    "设备尚未就绪",
+                    "耳机尚未就绪",
                 ));
             }
             let headset = snapshot
@@ -157,7 +157,7 @@ impl Core {
                 drop(requests);
                 return self.reject(ControlError::new(
                     ControlErrorCode::Disconnected,
-                    "连接会话已结束",
+                    "控制会话已结束",
                 ));
             }
             requests.insert(operation.id, request);
@@ -171,7 +171,7 @@ impl Core {
         receiver.await.unwrap_or_else(|_| {
             Err(ControlError::new(
                 ControlErrorCode::Disconnected,
-                "连接会话已结束",
+                "控制会话已结束",
             ))
         })
     }
@@ -229,13 +229,13 @@ impl Core {
             Err(Interrupt::Timeout) => self.setting_failure(
                 attempt,
                 request,
-                ControlError::new(ControlErrorCode::Timeout, "设置或设备回读超时"),
+                ControlError::new(ControlErrorCode::Timeout, "设置或耳机回读超时"),
                 SettingStage::TimedOut,
             ),
             Err(Interrupt::Ended) => self.setting_failure(
                 attempt,
                 request,
-                ControlError::new(ControlErrorCode::Disconnected, "设备连接已结束"),
+                ControlError::new(ControlErrorCode::Disconnected, "控制连接已结束"),
                 SettingStage::Disconnected,
             ),
             Err(Interrupt::Control(error)) => {
@@ -307,7 +307,7 @@ impl Core {
         } else {
             Some(ControlError::new(
                 ControlErrorCode::NotReady,
-                "设备尚未就绪",
+                "耳机尚未就绪",
             ))
         };
         match rejection {
@@ -461,7 +461,7 @@ impl Core {
             Ok(self.setting_failure(
                 attempt,
                 request,
-                ControlError::new(ControlErrorCode::NotApplied, "设备回读与请求不一致"),
+                ControlError::new(ControlErrorCode::NotApplied, "耳机回读与请求不一致"),
                 SettingStage::NotApplied,
             ))
         }
@@ -527,7 +527,7 @@ impl Core {
     }
 
     pub(crate) fn end_settings(&self, attempt: &Attempt) {
-        let error = ControlError::new(ControlErrorCode::Disconnected, "连接会话已结束");
+        let error = ControlError::new(ControlErrorCode::Disconnected, "控制会话已结束");
         let queue = attempt.queue();
         let requests: Vec<Arc<Request>> =
             std::mem::take(&mut *queue.requests.lock().expect("requests lock"))

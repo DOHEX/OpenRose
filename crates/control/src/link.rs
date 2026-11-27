@@ -232,7 +232,7 @@ impl Core {
                 });
                 Err(ControlError::new(
                     ControlErrorCode::Disconnected,
-                    "连接会话已结束",
+                    "控制会话已结束",
                 ))
             }
             Err(other) => {
@@ -326,7 +326,7 @@ impl Core {
         if !attempt.progress.borrow().meaningful {
             return Err(Interrupt::Control(ControlError::new(
                 ControlErrorCode::Timeout,
-                "没有收到可用的设备状态",
+                "没有收到可用的耳机状态",
             )));
         }
         self.commit_ready(attempt, epoch).await?;
@@ -515,7 +515,7 @@ impl Core {
                 ControlError::new(ControlErrorCode::PermissionRequired, message.clone())
             }
             Some(other) => ControlError::new(ControlErrorCode::Disconnected, other.message()),
-            None => ControlError::new(ControlErrorCode::Disconnected, "设备已断开"),
+            None => ControlError::new(ControlErrorCode::Disconnected, "控制连接已断开"),
         };
         {
             let mut inner = self.lifecycle.lock().await;
@@ -694,7 +694,7 @@ impl Core {
                 if recoverable && !attempt.progress.borrow().meaningful {
                     return Err(Interrupt::Transport(TransportError::Recoverable {
                         reason: TransportRecoveryReason::NoInitialResponse,
-                        message: "首条初始化读取没有收到有效设备状态".to_string(),
+                        message: "首条初始化读取没有收到有效耳机状态".to_string(),
                     }));
                 }
                 let timeout = ControlError::new(

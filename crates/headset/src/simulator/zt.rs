@@ -376,11 +376,7 @@ impl ZtDevice {
         value: FieldValue,
     ) -> Result<Vec<Vec<u8>>, SimulatorError> {
         let invalid = || {
-            SimulatorError::InvalidValue(format!(
-                "模拟耳机不能把{}设为 {}",
-                field.display_name(),
-                value.display_text()
-            ))
+            SimulatorError::InvalidValue(format!("模拟耳机不能把 {field:?} 设为 {value:?}"))
         };
         let key = match (field, &value) {
             (HeadsetField::LeftBattery, FieldValue::Number(level)) => {

@@ -189,9 +189,7 @@ impl RsV2Device {
     ) -> Result<Vec<Vec<u8>>, SimulatorError> {
         let Some((id, bytes)) = self.encode(field, &value) else {
             return Err(SimulatorError::InvalidValue(format!(
-                "模拟耳机不能把{}设为 {}",
-                field.display_name(),
-                value.display_text()
+                "模拟耳机不能把 {field:?} 设为 {value:?}"
             )));
         };
         self.records.insert(id, bytes);
