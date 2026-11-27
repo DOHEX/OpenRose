@@ -31,6 +31,7 @@ class SystemEntryClosedLoopTest {
         testScheduler.advanceUntilIdle()
         val generation = (rig.host.status.value as HostStatus.Active).generation
         val lease = (rig.host.open(identity) as HostOpenResult.Opened).lease.id
+        rig.eventually("the host core to connect") { rig.host.control.view(identity, lease)?.state?.connection is ConnectionState.Connected }
         val connection = assertIs<ConnectionState.Connected>(requireNotNull(rig.host.control.view(identity, lease)).state.connection)
         rig.hostHeadset.links.single().initializing = false
         return Entry(rig, lease, generation, SessionReference(connection.deviceId, connection.sessionId))
@@ -119,6 +120,7 @@ class SystemEntryClosedLoopTest {
                 entry.rig.host.control.readSession(milinkIdentity, entry.lease, entry.generation, entry.reference),
             ).rejection,
         )
+        entry.rig.eventually("the new owner's core to connect") { entry.rig.host.control.view(milinkIdentity, entry.lease)?.state?.connection is ConnectionState.Connected }
         val connection = assertIs<ConnectionState.Connected>(requireNotNull(entry.rig.host.control.view(milinkIdentity, entry.lease)).state.connection)
         val fresh = assertIs<HostReadResult.Available>(
             entry.rig.host.control.readSession(milinkIdentity, entry.lease, next, SessionReference(connection.deviceId, connection.sessionId)),

@@ -115,6 +115,7 @@ class ModuleAutonomyTest {
         runCurrent()
         advanceTimeBy(1)
         runCurrent()
+        rig.eventually("the module connection") { rig.headset.events.lastOrNull() == "module:open" }
 
         assertEquals(0, rig.headset.overlappingOpens)
         assertEquals(listOf("app:open", "app:close", "module:open"), rig.headset.events)

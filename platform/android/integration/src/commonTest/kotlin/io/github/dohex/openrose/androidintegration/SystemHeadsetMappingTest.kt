@@ -18,13 +18,14 @@ import kotlin.test.assertTrue
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class SystemHeadsetMappingTest {
     private suspend fun TestScope.readAsMiLink(profile: ModelProfile = ModelProfile.I5_ZT): Map<DeviceField, FieldReading> {
-        val rig = OwnerRig(this, earphones = rosePair("rose-a", profile), initial = OwnerRecord(ControlWay.MODULE, PendingModuleRelease("r", null)))
+        val rig = OwnerRig(this, earphones = rosePair(APP_HEADSET_ADDRESS, profile), initial = OwnerRecord(ControlWay.MODULE, PendingModuleRelease("r", null)))
         rig.hostHeadset.connectAudio(rig.earphones.deviceId)
         rig.bootHost()
         runCurrent()
         testScheduler.advanceUntilIdle()
         val generation = (rig.host.status.value as HostStatus.Active).generation
         val lease = (rig.host.open(milinkIdentity) as HostOpenResult.Opened).lease.id
+        rig.eventually("the host core to connect") { rig.host.control.view(milinkIdentity, lease)?.state?.connection is ConnectionState.Connected }
         val view = requireNotNull(rig.host.control.view(milinkIdentity, lease))
         val connection = assertIs<ConnectionState.Connected>(view.state.connection)
         val read = rig.host.control.readSession(milinkIdentity, lease, generation, SessionReference(connection.deviceId, connection.sessionId))

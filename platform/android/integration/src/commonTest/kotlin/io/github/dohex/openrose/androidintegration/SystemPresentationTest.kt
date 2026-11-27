@@ -1,31 +1,17 @@
 package io.github.dohex.openrose.androidintegration
 
-import io.github.dohex.openrose.core.ConnectionPhase
 import io.github.dohex.openrose.core.ConnectionState
 import io.github.dohex.openrose.core.ControlErrorCode
 import io.github.dohex.openrose.core.DeviceSetting
 import io.github.dohex.openrose.core.HeadsetCommand
-import io.github.dohex.openrose.core.LocalControlRuntime
 import io.github.dohex.openrose.core.NoiseMode
 import io.github.dohex.openrose.core.OperationResult
-import io.github.dohex.openrose.core.PermissionState
-import io.github.dohex.openrose.core.PlatformState
 import io.github.dohex.openrose.core.SessionReference
-import io.github.dohex.openrose.core.SessionTiming
-import io.github.dohex.openrose.core.TransportAvailability
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.FieldReading
 import io.github.dohex.openrose.core.protocol.ModelProfile
-import io.github.dohex.openrose.core.transport.Advertisement
-import io.github.dohex.openrose.core.transport.ControlConnection
-import io.github.dohex.openrose.core.transport.ControlTransport
 import io.github.dohex.openrose.core.transport.DeviceId
-import io.github.dohex.openrose.core.transport.TransportEndpoint
 import kotlinx.collections.immutable.persistentSetOf
-import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -42,16 +28,16 @@ import kotlin.test.assertTrue
 class SystemPresentationTest {
     @Test
     fun readySessionPublishesNormalizedStateAndClaimsOneConnectionPrompt() = runTest {
-        val transport = PresentationTransport(PresentationConnection(i5Replies))
+        val transport = presentationHeadset(i5)
         val session = newSession(transport)
-        val id = DeviceId("i5")
-        connect(session, transport, id)
+        val id = i5
+        connect(session, id)
 
         val connected = assertIs<ConnectionState.Connected>(session.state.value.connection)
         val reference = SessionReference(id, connected.sessionId)
         val presentation = session.presentation.value
         assertEquals(reference, presentation.reference)
-        assertEquals("i5", presentation.notificationTag)
+        assertEquals(i5.value, presentation.notificationTag)
         assertEquals(IslandMode.SYSTEM_STYLE, presentation.islandMode)
         assertTrue(presentation.statusNotificationEnabled)
         assertTrue(presentation.allowIslandFields)
@@ -104,11 +90,11 @@ class SystemPresentationTest {
             IslandMode.OPENROSE_STYLE to false,
         )
         for ((mode, statusEnabled) in combinations) {
-            val transport = PresentationTransport(PresentationConnection(i5Replies))
+            val transport = presentationHeadset(i5)
             val settings = IntegrationSettings(islandMode = mode, statusNotificationEnabled = statusEnabled)
             val session = newSession(transport, settings)
-            val id = DeviceId("${mode.name.lowercase()}-$statusEnabled")
-            connect(session, transport, id)
+            val id = i5
+            connect(session, id)
 
             val presentation = session.presentation.value
             assertEquals(statusEnabled, presentation.showStatusNotification, "$mode / status=$statusEnabled")
@@ -139,9 +125,9 @@ class SystemPresentationTest {
 
     @Test
     fun anEmptyOpenRoseTimingSetKeepsTheSummaryIslandWithoutReplayingTheConnection() = runTest {
-        val transport = PresentationTransport(PresentationConnection(i5Replies))
+        val transport = presentationHeadset(i5)
         val session = newSession(transport, IntegrationSettings(islandMode = IslandMode.OPENROSE_STYLE, islandTimings = persistentSetOf()))
-        connect(session, transport, DeviceId("i5"))
+        connect(session, i5)
 
         assertNull(session.presentation.value.prompt)
         assertTrue(session.presentation.value.allowIslandFields)
@@ -160,9 +146,9 @@ class SystemPresentationTest {
 
     @Test
     fun turningOffTheSummaryIslandKeepsTheOpenRosePromptButDropsThePersistentIsland() = runTest {
-        val transport = PresentationTransport(PresentationConnection(i5Replies))
+        val transport = presentationHeadset(i5)
         val session = newSession(transport, IntegrationSettings(islandMode = IslandMode.OPENROSE_STYLE, islandSummaryEnabled = false))
-        connect(session, transport, DeviceId("i5"))
+        connect(session, i5)
 
         val presentation = session.presentation.value
         assertNotNull(presentation.prompt, "the connection prompt still shows as its own timed island")
@@ -177,10 +163,9 @@ class SystemPresentationTest {
 
     @Test
     fun anUnknownBatteryWaitsForARealReadingAndKeepsUnavailableValuesDistinct() = runTest {
-        val unknownBattery = i5Replies.getValue("0101").replace("6462", "ffff")
-        val transport = PresentationTransport(PresentationConnection(i5Replies + ("0101" to unknownBattery)))
+        val transport = presentationHeadset(i5) { if (it.startsWith("09ff00000101")) it.replace("6462", "ffff") else it }
         val session = newSession(transport)
-        connect(session, transport, DeviceId("i5"))
+        connect(session, i5)
 
         val initial = session.presentation.value
         assertNull(initial.prompt)
@@ -200,17 +185,16 @@ class SystemPresentationTest {
 
     @Test
     fun anExpiredOldPromptTimerCannotClearTheNextSessionPrompt() = runTest {
-        val transport = PresentationTransport(PresentationConnection(i5Replies))
+        val transport = presentationHeadset(i5)
         val session = newSession(transport, promptDurationMillis = 100)
-        val id = DeviceId("i5")
-        connect(session, transport, id)
+        val id = i5
+        connect(session, id)
         val first = assertNotNull(session.presentation.value.prompt)
 
         advanceTimeBy(40)
         runCurrent()
         session.disconnect()
-        transport.connection = PresentationConnection(i5Replies)
-        connect(session, transport, id)
+        connect(session, id)
         val second = assertNotNull(session.presentation.value.prompt)
         assertNotEquals(first.id, second.id)
 
@@ -225,16 +209,15 @@ class SystemPresentationTest {
 
     @Test
     fun sessionBoundSetRejectsAStaleNotificationWithoutWritingAndUsesTheCurrentQueue() = runTest {
-        val transport = PresentationTransport(PresentationConnection(i5Replies))
+        val transport = presentationHeadset(i5)
         val session = newSession(transport)
-        val id = DeviceId("i5")
-        connect(session, transport, id)
+        val id = i5
+        connect(session, id)
         val firstConnection = assertIs<ConnectionState.Connected>(session.state.value.connection)
         val staleReference = SessionReference(id, firstConnection.sessionId)
 
         session.disconnect()
-        transport.connection = PresentationConnection(i5Replies)
-        connect(session, transport, id)
+        connect(session, id)
         val currentConnection = assertIs<ConnectionState.Connected>(session.state.value.connection)
         val currentReference = SessionReference(id, currentConnection.sessionId)
         val link = transport.connection
@@ -254,31 +237,20 @@ class SystemPresentationTest {
     }
 
     private fun kotlinx.coroutines.test.TestScope.newSession(
-        transport: PresentationTransport,
+        transport: HostHeadset,
         settings: IntegrationSettings = IntegrationSettings(),
         promptDurationMillis: Long = 5_000,
     ) = SystemEntryRuntime(
-        LocalControlRuntime(
-            PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
-            transport = transport,
-            scope = backgroundScope,
-            timing = SessionTiming(writeIntervalMillis = 0),
-        ),
+        transport.runtime(backgroundScope),
         backgroundScope,
         PresentationTiming(promptDurationMillis = promptDurationMillis),
         initialIntegrationSettings = settings,
     )
 
-    private suspend fun kotlinx.coroutines.test.TestScope.connect(
-        session: SystemEntryRuntime,
-        transport: PresentationTransport,
-        id: DeviceId,
-    ) {
-        session.startScan()
-        runCurrent()
-        transport.advertisements.emit(Advertisement(id, "i5", manufacturerData = mapOf(0x5352 to byteArrayOf(0, 1, 0, 1))))
-        runCurrent()
+    private suspend fun kotlinx.coroutines.test.TestScope.connect(session: SystemEntryRuntime, id: DeviceId) {
+        session.refreshBondedDevices()
         assertEquals(OperationResult.Success, session.connect(id))
+        eventually("the presentation to follow the core") { session.presentation.value.reference != null }
     }
 
     private class PresentationTransport(var connection: PresentationConnection) : ControlTransport {
@@ -291,24 +263,7 @@ class SystemPresentationTest {
         ): ControlConnection = connection
     }
 
-    private class PresentationConnection(private val replies: Map<String, String>) : ControlConnection {
-        override val maxWriteSize = 20
-        private val incoming = Channel<ByteArray>(Channel.UNLIMITED)
-        override val notifications = incoming.receiveAsFlow()
-        val writes = mutableListOf<String>()
+    private val HostHeadset.connection: HostLink get() = links.last()
 
-        override suspend fun subscribe() = Unit
-
-        override suspend fun write(bytes: ByteArray) {
-            val hex = bytes.hex()
-            writes += hex
-            val key = hex.substring(10, 14)
-            replies[key]?.let { incoming.send(it.bytes()) }
-        }
-
-        suspend fun deviceReply(hex: String) = incoming.send(hex.bytes())
-        override suspend fun close() {
-            incoming.close()
-        }
-    }
+    private val i5 = DeviceId(APP_HEADSET_ADDRESS)
 }

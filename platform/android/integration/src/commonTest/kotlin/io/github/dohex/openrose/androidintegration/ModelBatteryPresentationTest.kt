@@ -4,12 +4,7 @@ import io.github.dohex.openrose.androidintegration.wire.NativeHeadsetSnapshot
 import io.github.dohex.openrose.androidintegration.wire.asWireMap
 import io.github.dohex.openrose.androidintegration.wire.toBridgeSnapshot
 import io.github.dohex.openrose.core.DeviceCandidate
-import io.github.dohex.openrose.core.LocalControlRuntime
 import io.github.dohex.openrose.core.OperationResult
-import io.github.dohex.openrose.core.PermissionState
-import io.github.dohex.openrose.core.PlatformState
-import io.github.dohex.openrose.core.SessionTiming
-import io.github.dohex.openrose.core.TransportAvailability
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.FieldReading
 import io.github.dohex.openrose.core.protocol.FieldValue
@@ -19,6 +14,7 @@ import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 
@@ -27,25 +23,18 @@ class ModelBatteryPresentationTest {
     fun singleUnitBatteryStaysInTheAppAndEarbudsWithoutACaseDoNotPublishOne() = runTest {
         for (profile in listOf(ModelProfile.SWIFT2_RS_V2, ModelProfile.JASMINE_RS_V2)) {
             val id = DeviceId("11:22:33:44:55:66")
-            val transport = HeadsetTransport(
-                "app",
-                SharedHeadset(),
-                profile,
-                bonded = listOf(DeviceCandidate(id, profile.displayName, null, profile, "")),
-            )
-            val session = SystemEntryRuntime(
-                LocalControlRuntime(
-                    PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
-                    transport = transport,
-                    scope = backgroundScope,
-                    timing = SessionTiming(writeIntervalMillis = 0),
-                ),
-                backgroundScope,
-            )
+            val earphones = DeviceCandidate(id, profile.displayName, null, profile, "")
+            val session = SystemEntryRuntime(hostHeadset(SharedHeadset(), earphones).runtime(backgroundScope), backgroundScope)
             session.refreshBondedDevices()
             assertEquals(OperationResult.Success, session.connect(id))
+            eventually("the battery to be read") { session.state.value.device?.diagnostics?.fields?.get(DeviceField.LEFT_BATTERY).let { it != null && it !is FieldReading.Loading } }
             val device = requireNotNull(session.state.value.device)
-            assertEquals(FieldValue.Number(80), (device.diagnostics.fields[DeviceField.CASE_BATTERY] as FieldReading.Known).value)
+            val caseBattery = device.diagnostics.fields[DeviceField.CASE_BATTERY]
+            if (profile == ModelProfile.SWIFT2_RS_V2) {
+                assertEquals(FieldValue.Number(80), (caseBattery as FieldReading.Known).value)
+            } else {
+                assertIs<FieldReading.NotProvided>(caseBattery)
+            }
             val native = assertNotNull(NativeHeadsetSnapshot.fromWire(device.toBridgeSnapshot("host", 1, 100).asWireMap()))
             assertFalse(DeviceField.CASE_BATTERY in native.fields)
             assertFalse(DeviceField.CASE_FLAG in native.fields)

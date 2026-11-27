@@ -6,22 +6,13 @@ import io.github.dohex.openrose.androidintegration.wire.HostIdentityWire
 import io.github.dohex.openrose.androidintegration.wire.HostWire
 import io.github.dohex.openrose.androidintegration.wire.parseWire
 import io.github.dohex.openrose.androidintegration.wire.render
-import io.github.dohex.openrose.core.ConnectionPhase
 import io.github.dohex.openrose.core.DeviceCandidate
-import io.github.dohex.openrose.core.HostPlatform
-import io.github.dohex.openrose.core.LocalControlRuntime
-import io.github.dohex.openrose.core.PermissionState
 import io.github.dohex.openrose.core.PlatformState
-import io.github.dohex.openrose.core.SessionTiming
-import io.github.dohex.openrose.core.TransportAvailability
 import io.github.dohex.openrose.core.UserSettings
 import io.github.dohex.openrose.core.protocol.ModelProfile
 import io.github.dohex.openrose.core.protocol.ProtocolFamily
 import io.github.dohex.openrose.core.transport.Advertisement
-import io.github.dohex.openrose.core.transport.ControlConnection
-import io.github.dohex.openrose.core.transport.ControlTransport
 import io.github.dohex.openrose.core.transport.DeviceId
-import io.github.dohex.openrose.core.transport.TransportEndpoint
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
@@ -29,15 +20,10 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.emptyFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
@@ -63,75 +49,6 @@ internal class SharedHeadset {
     }
 
     fun opens(owner: String) = events.count { it == "$owner:open" }
-}
-
-internal class HeadsetTransport(
-    private val owner: String,
-    private val headset: SharedHeadset,
-    private val profile: ModelProfile = ModelProfile.I5_ZT,
-    private val bonded: List<DeviceCandidate> = emptyList(),
-) : ControlTransport {
-    val audioDevice = MutableSharedFlow<DeviceId?>(replay = 1, extraBufferCapacity = 8)
-    val links = mutableListOf<HeadsetConnection>()
-    var autoReplyOnOpen = true
-
-    var closeDelayMillis = 0L
-
-    var closeFails = false
-
-    override val audioConnectedDevice: Flow<DeviceId?> get() = audioDevice
-    override suspend fun bondedDevices(): List<DeviceCandidate> = bonded
-    override fun scan(): Flow<Advertisement> = emptyFlow()
-
-    override suspend fun connect(deviceId: DeviceId, endpoint: TransportEndpoint, onPhase: (ConnectionPhase) -> Unit): ControlConnection {
-        headset.opened(owner)
-        return HeadsetConnection(owner, headset, profile, { closeDelayMillis }, { closeFails }).also {
-            it.initializing = autoReplyOnOpen
-            links.add(it)
-        }
-    }
-}
-
-internal class HeadsetConnection(
-    private val owner: String,
-    private val headset: SharedHeadset,
-    private val profile: ModelProfile,
-    private val closeDelayMillis: () -> Long = { 0L },
-    private val closeFails: () -> Boolean = { false },
-) : ControlConnection {
-    override val maxWriteSize = 20
-    private val incoming = Channel<ByteArray>(Channel.UNLIMITED)
-    override val notifications = incoming.receiveAsFlow()
-    private val sent = MutableStateFlow(emptyList<String>())
-    val writes: List<String> get() = sent.value
-    var initializing = true
-    var closed = false
-
-    override suspend fun subscribe() = Unit
-
-    override suspend fun write(bytes: ByteArray) {
-        val hex = bytes.hex()
-        sent.value += hex
-        if (!initializing) return
-        initializationReplies(profile, hex).forEach { incoming.send(it.bytes()) }
-    }
-
-    override suspend fun close() {
-        if (closed) return
-        closeDelayMillis().takeIf { it > 0 }?.let { kotlinx.coroutines.delay(it) }
-        if (closeFails()) throw IllegalStateException("the platform could not close the link")
-        closed = true
-        initializing = false
-        incoming.close()
-        headset.closed(owner)
-    }
-
-    suspend fun replyToWrite(frame: String, reply: String) {
-        sent.first { it.lastOrNull() == frame }
-        deviceReply(reply)
-    }
-
-    suspend fun deviceReply(hex: String) = incoming.send(hex.bytes())
 }
 
 internal class MemoryOwnerStore(var record: OwnerRecord = OwnerRecord()) : OwnerSelectionStore {
@@ -308,12 +225,7 @@ internal class OwnerRig(
     val hostHeadset = test.hostHeadset(headset, earphones, bonded)
     val store = MemoryOwnerStore(initial)
     private val ids = generateSequence(1) { it + 1 }.map { "id-$it" }.iterator()
-    private val platform = PlatformState(
-        PermissionState.GRANTED,
-        TransportAvailability.Available,
-        hostPlatform = HostPlatform.ANDROID,
-        scanPermission = PermissionState.GRANTED,
-    )
+    private val platform = grantedAndroidPlatform
 
     private var hostScope: CoroutineScope = newHostScope()
     private var hostCount = 0
@@ -336,7 +248,7 @@ internal class OwnerRig(
 
     suspend fun replaceHost() {
         hostScope.cancel()
-        eventually("the killed host's links to drop") { hostHeadset.links.all { it.closed } }
+        hostHeadset.endProcess()
         hostScope = newHostScope()
         link.connections.filter { it.isOpen }.forEach { it.sever(processDied = true) }
         host = newHost()
@@ -357,11 +269,13 @@ internal class OwnerRig(
         hostUnlocked = unlocked
         host.updatePlatform(platform)
         host.configure { HostConfiguration(unlocked, HostSettings(integration = IntegrationSettings(controlWay = store.hostSelection))) }
+        test.quiesce()
     }
 
     suspend fun unlockHost() {
         hostUnlocked = true
         host.configure { HostConfiguration(true, HostSettings(integration = IntegrationSettings(controlWay = store.hostSelection))) }
+        test.quiesce()
     }
 
     fun newAppProcess() = CoroutineScope(test.backgroundScope.coroutineContext + SupervisorJob(test.backgroundScope.coroutineContext[Job]))

@@ -28,8 +28,8 @@ import kotlin.test.assertTrue
 class OwnerHandoffTest {
     @Test
     fun fusionEntryWaitsForTheFirstModuleFrameAndConnectsTheChosenHeadphones() = runTest {
-        val playing = rosePair("playing")
-        val chosen = rosePair("chosen").copy(classicAddress = "11:22:33:44:55:77")
+        val playing = rosePair("AA:BB:CC:00:00:11")
+        val chosen = rosePair("AA:BB:CC:00:00:22")
         val rig = OwnerRig(this, playing, OwnerRecord(ControlWay.MODULE), listOf(playing, chosen))
         rig.hostHeadset.connectAudio(playing.deviceId)
         rig.bootHost()
@@ -108,6 +108,7 @@ class OwnerHandoffTest {
         runCurrent()
         advanceTimeBy(1)
         runCurrent()
+        rig.eventually("the module connection") { rig.headset.openOwner == "module" }
         assertEquals("module", rig.headset.openOwner)
         assertEquals(0, rig.headset.overlappingOpens)
     }
@@ -328,6 +329,7 @@ class OwnerHandoffTest {
         runCurrent()
         assertEquals(OperationResult.Success, runtime.connectFromSystem(rig.earphones.deviceId))
         runCurrent()
+        rig.eventually("the host link to be ready") { runtime.state.value.readySession != null }
         val connectionBefore = runtime.state.value.connection
 
         repeat(3) {

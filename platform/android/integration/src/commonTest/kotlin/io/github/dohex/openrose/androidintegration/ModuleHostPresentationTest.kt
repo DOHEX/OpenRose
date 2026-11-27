@@ -39,7 +39,7 @@ private val presentationAuthority = CallerAuthority { identity ->
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class ModuleHostPresentationTest {
     private class Rig(private val test: TestScope, private val settings: IntegrationSettings) {
-        val earphones = rosePair("rose-a")
+        val earphones = rosePair(APP_HEADSET_ADDRESS)
         val headset = SharedHeadset()
         val hostHeadset = test.hostHeadset(headset, earphones, listOf(earphones))
         private val ids = generateSequence(1) { it + 1 }.map { "lease-$it" }.iterator()
@@ -66,10 +66,13 @@ class ModuleHostPresentationTest {
         val reference: SessionReference get() = requireNotNull(presentation.reference)
 
         suspend fun start() {
-            host.updatePlatform(PlatformState(PermissionState.GRANTED, TransportAvailability.Available))
+            host.updatePlatform(
+                PlatformState(PermissionState.GRANTED, TransportAvailability.Available, hostPlatform = HostPlatform.ANDROID, scanPermission = PermissionState.GRANTED),
+            )
             host.configure { HostConfiguration(true, HostSettings(integration = settings.copy(controlWay = ControlWay.MODULE))) }
             test.runCurrent()
             connect()
+            test.eventually("the host presentation to follow the core") { host.control.view(app.identity, app.id)?.presentation?.reference != null }
         }
 
         suspend fun connect() {

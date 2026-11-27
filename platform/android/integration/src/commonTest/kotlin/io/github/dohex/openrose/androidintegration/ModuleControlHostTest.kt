@@ -12,6 +12,7 @@ import io.github.dohex.openrose.core.protocol.FieldReading
 import io.github.dohex.openrose.core.protocol.FieldValue
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
@@ -180,10 +181,15 @@ class ModuleControlHostTest {
         runCurrent()
         assertEquals(OperationResult.Success, runtime.connectFromSystem(rig.earphones.deviceId))
         runCurrent()
+        rig.eventually("the host link to be ready") { runtime.state.value.readySession != null }
         val link = rig.hostHeadset.links.single()
         link.initializing = false
 
+        val writesBefore = link.writes.size
         val pending = async { runtime.set(HeadsetCommand.NoiseMode(NoiseMode.NORMAL)) }
+        runCurrent()
+        rig.eventually("the setting to be written") { link.writes.size > writesBefore }
+        advanceTimeBy(rig.clientTiming.statusPollMillis)
         runCurrent()
 
         assertFalse(pending.isCompleted)
@@ -207,6 +213,7 @@ class ModuleControlHostTest {
         runCurrent()
         assertEquals(OperationResult.Success, runtime.connectFromSystem(rig.earphones.deviceId))
         runCurrent()
+        rig.eventually("the host link to be ready") { runtime.state.value.readySession != null }
         rig.hostHeadset.links.single().initializing = false
 
         val pending = async { runtime.set(HeadsetCommand.NoiseMode(NoiseMode.NORMAL)) }

@@ -2,12 +2,22 @@ package io.github.dohex.openrose.androidintegration
 
 import io.github.dohex.openrose.core.ControlRuntime
 import io.github.dohex.openrose.core.DeviceCandidate
+import io.github.dohex.openrose.core.HostPlatform
+import io.github.dohex.openrose.core.PermissionState
 import io.github.dohex.openrose.core.PlatformState
+import io.github.dohex.openrose.core.TransportAvailability
 import io.github.dohex.openrose.core.UserSettings
 import io.github.dohex.openrose.core.transport.DeviceId
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.test.TestScope
+
+internal val grantedAndroidPlatform = PlatformState(
+    PermissionState.GRANTED,
+    TransportAvailability.Available,
+    hostPlatform = HostPlatform.ANDROID,
+    scanPermission = PermissionState.GRANTED,
+)
 
 internal interface HostLink {
     val writes: List<String>
@@ -22,11 +32,26 @@ internal interface HostHeadset : AutoCloseable {
 
     fun connectAudio(deviceId: DeviceId)
 
+    suspend fun endProcess()
+
     fun runtime(scope: CoroutineScope, settings: UserSettings, platform: PlatformState, sessionIdBase: Long): ControlRuntime
 }
 
-internal fun TestScope.hostHeadset(headset: SharedHeadset, earphones: DeviceCandidate, bonded: List<DeviceCandidate>): HostHeadset = newHostHeadset(this, headset, earphones, bonded).also { host ->
+internal fun HostHeadset.runtime(scope: CoroutineScope): ControlRuntime = runtime(scope, UserSettings(), grantedAndroidPlatform, 0L)
+
+internal fun TestScope.hostHeadset(
+    headset: SharedHeadset,
+    earphones: DeviceCandidate,
+    bonded: List<DeviceCandidate> = listOf(earphones),
+    rewriteReply: ((String) -> String)? = null,
+): HostHeadset = newHostHeadset(this, headset, earphones, bonded, rewriteReply).also { host ->
     backgroundScope.coroutineContext[Job]?.invokeOnCompletion { host.close() }
 }
 
-internal expect fun newHostHeadset(test: TestScope, headset: SharedHeadset, earphones: DeviceCandidate, bonded: List<DeviceCandidate>): HostHeadset
+internal expect fun newHostHeadset(
+    test: TestScope,
+    headset: SharedHeadset,
+    earphones: DeviceCandidate,
+    bonded: List<DeviceCandidate>,
+    rewriteReply: ((String) -> String)?,
+): HostHeadset

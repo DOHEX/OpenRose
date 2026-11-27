@@ -1,5 +1,11 @@
 package io.github.dohex.openrose.androidintegration
 
+import io.github.dohex.openrose.core.ControlState
+import io.github.dohex.openrose.core.DeviceCandidate
+import io.github.dohex.openrose.core.PermissionState
+import io.github.dohex.openrose.core.PlatformState
+import io.github.dohex.openrose.core.TransportAvailability
+import io.github.dohex.openrose.core.protocol.ModelProfile
 import io.github.dohex.openrose.core.transport.DeviceId
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runCurrent
@@ -11,7 +17,21 @@ import kotlin.test.assertIs
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class FusionEntryTest {
     private val ble = "AA:BB:CC:DD:EE:01"
-    private val classic = "11:22:33:44:55:66"
+    private val classic = ble
+
+    @Test
+    fun aPairWhoseClassicAddressDiffersFromItsDeviceIdOpensTheOwnedEarphonesByEither() {
+        val pair = "11:22:33:44:55:66"
+        val state = ControlState(
+            platform = PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
+            bondedDevices = persistentListOf(DeviceCandidate(DeviceId(ble), "ROSE i5", null, ModelProfile.I5_ZT, "", pair)),
+        )
+        val settings = IntegrationSettings(fusionSettingsDestination = FusionSettingsDestination.OPENROSE)
+
+        assertEquals(FusionEntryDecision.OpenRose(DeviceId(ble)), FusionEntry.resolve(state, settings, pair))
+        assertEquals(FusionEntryDecision.OpenRose(DeviceId(ble)), FusionEntry.resolve(state, settings, pair.lowercase()))
+        assertEquals(FusionEntryDecision.OpenRose(DeviceId(ble)), FusionEntry.resolve(state, settings, ble))
+    }
 
     private suspend fun TestScope.moduleRig(destination: FusionSettingsDestination, connected: Boolean = true): Pair<OwnerRig, String> {
         val rig = OwnerRig(this, earphones = rosePair(ble), initial = OwnerRecord(ControlWay.MODULE, PendingModuleRelease("r", null)))
