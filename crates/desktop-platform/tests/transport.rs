@@ -161,8 +161,8 @@ async fn availability_after_open(snapshot: impl FnOnce(&FakeBluezBus)) -> Transp
     snapshot(&bus);
     let transport = BluezControlTransport::with_bus(bus);
     transport.await_initialization().await;
-    let availability = transport.availability().borrow().clone();
-    availability
+    let availability = transport.availability();
+    availability.borrow().clone()
 }
 
 fn unavailable(reason: TransportUnavailableReason) -> TransportAvailability {
