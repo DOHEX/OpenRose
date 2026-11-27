@@ -8,11 +8,16 @@ val workspaceRoot = rootProject.layout.projectDirectory
 val hostTargetDir = workspaceRoot.dir("target/debug")
 val hostLibraryFile = hostTargetDir.file(hostRustLibraryFileName())
 val generatedBindingsDir = layout.buildDirectory.dir("generated/uniffi/kotlin")
+val generatedSimulatorBindingsDir = layout.buildDirectory.dir("generated/uniffi/simulator")
 
 val buildHostRustFfi = tasks.register<BuildHostRustFfiTask>("buildHostRustFfi") {
     workspaceRoot.set(rootProject.layout.projectDirectory)
     offline.set(gradle.startParameter.isOffline)
-    rustInputs.from(rustFfiSourceInputs())
+    features.add("simulator")
+    rustInputs.from(
+        rustFfiSourceInputs(),
+        fileTree(rootProject.layout.projectDirectory.dir("crates/ffi-simulator")),
+    )
     outputLibrary.set(hostLibraryFile)
 }
 
@@ -26,7 +31,18 @@ val generateUniffiBindings = tasks.register<GenerateUniffiBindingsTask>("generat
         rootProject.layout.projectDirectory.file("crates/control/uniffi.toml"),
         rootProject.layout.projectDirectory.file("crates/ffi/uniffi.toml"),
     )
+    crates.set(listOf("openrose_headset", "openrose_control", "openrose_ffi"))
     outputDir.set(generatedBindingsDir)
+}
+
+val generateSimulatorBindings = tasks.register<GenerateUniffiBindingsTask>("generateSimulatorBindings") {
+    dependsOn(buildHostRustFfi)
+    workspaceRoot.set(rootProject.layout.projectDirectory)
+    offline.set(gradle.startParameter.isOffline)
+    libraryFile.set(buildHostRustFfi.flatMap { it.outputLibrary })
+    uniffiConfigs.from(rootProject.layout.projectDirectory.file("crates/ffi-simulator/uniffi.toml"))
+    crates.set(listOf("openrose_ffi_simulator"))
+    outputDir.set(generatedSimulatorBindingsDir)
 }
 
 kotlin {
@@ -46,8 +62,11 @@ kotlin {
                 compileOnly(libs.jna)
             }
         }
-        jvmMain.dependencies {
-            implementation(libs.jna)
+        jvmMain {
+            kotlin.srcDir(generateSimulatorBindings.map { it.outputDir })
+            dependencies {
+                implementation(libs.jna)
+            }
         }
         androidMain.dependencies {
             implementation("${libs.jna.get()}@aar")

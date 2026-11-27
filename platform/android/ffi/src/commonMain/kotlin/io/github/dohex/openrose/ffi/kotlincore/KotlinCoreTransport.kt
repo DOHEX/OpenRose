@@ -6,10 +6,10 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import uniffi.openrose_ffi.AudioFactsDriver
 import uniffi.openrose_ffi.ControlTransport
+import uniffi.openrose_ffi.DriverException
 import uniffi.openrose_ffi.GattDriver
 import uniffi.openrose_ffi.ScanDriver
 import uniffi.openrose_ffi.SppDriver
-import uniffi.openrose_ffi.TransportDriverException
 import uniffi.openrose_headset.HeadsetId
 import java.io.IOException
 
@@ -37,13 +37,13 @@ class KotlinCoreTransport(
     private inline fun <T> opening(block: () -> T): T = try {
         block()
     } catch (failure: IllegalArgumentException) {
-        throw TransportDriverException.InvalidArgument(failure.message.orEmpty()).causedBy(failure)
+        throw DriverException.InvalidArgument(failure.message.orEmpty()).causedBy(failure)
     } catch (failure: SecurityException) {
-        throw TransportDriverException.PermissionDenied(failure.message.orEmpty()).causedBy(failure)
+        throw DriverException.PermissionDenied(failure.message.orEmpty()).causedBy(failure)
     } catch (failure: UnsupportedOperationException) {
-        throw TransportDriverException.Unsupported(failure.message.orEmpty()).causedBy(failure)
+        throw DriverException.Unsupported(failure.message.orEmpty()).causedBy(failure)
     } catch (failure: IOException) {
-        throw TransportDriverException.Terminal(failure.message.orEmpty()).causedBy(failure)
+        throw DriverException.Terminal(failure.message.orEmpty()).causedBy(failure)
     }
 }
 

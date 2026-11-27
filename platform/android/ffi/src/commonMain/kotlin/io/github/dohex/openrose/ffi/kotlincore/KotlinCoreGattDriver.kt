@@ -11,8 +11,8 @@ import uniffi.openrose_control.GattEvent
 import uniffi.openrose_control.GattFailureKind
 import uniffi.openrose_control.GattService
 import uniffi.openrose_control.GattSubscription
+import uniffi.openrose_ffi.DriverException
 import uniffi.openrose_ffi.GattDriver
-import uniffi.openrose_ffi.GattDriverException
 import java.util.IdentityHashMap
 import io.github.dohex.openrose.core.transport.GattCharacteristic as KotlinGattCharacteristic
 import io.github.dohex.openrose.core.transport.GattDriver as KotlinGattDriver
@@ -76,7 +76,7 @@ internal class KotlinCoreGattDriver(private val driver: KotlinGattDriver, scope:
     }
 
     private fun resolve(characteristic: GattCharacteristic): KotlinGattCharacteristic = table.byId[characteristic.instanceId]
-        ?: throw GattDriverException.Failed(GattFailureKind.UNSUPPORTED, "蓝牙特征不可用")
+        ?: throw DriverException.Gatt(GattFailureKind.UNSUPPORTED, "蓝牙特征不可用")
 
     private fun publish(services: List<KotlinGattService>): List<GattService> {
         val byId = LinkedHashMap<ULong, KotlinGattCharacteristic>()
@@ -107,7 +107,7 @@ internal class KotlinCoreGattDriver(private val driver: KotlinGattDriver, scope:
     private inline fun <T> guarded(block: () -> T): T = try {
         block()
     } catch (failure: KotlinGattException) {
-        throw GattDriverException.Failed(failure.kind.toRust(), failure.message.orEmpty()).also { it.initCause(failure) }
+        throw DriverException.Gatt(failure.kind.toRust(), failure.message.orEmpty()).also { it.initCause(failure) }
     }
 }
 

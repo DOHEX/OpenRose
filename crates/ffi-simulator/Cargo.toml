@@ -1,0 +1,13 @@
+[package]
+name = "openrose-ffi-simulator"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lib]
+name = "openrose_ffi_simulator"
+
+[dependencies]
+openrose-headset = { path = "../headset", features = ["uniffi"] }
+uniffi.workspace = true

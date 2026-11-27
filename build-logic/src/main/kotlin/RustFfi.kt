@@ -5,6 +5,7 @@ import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.file.FileSystemOperations
 import org.gradle.api.file.RegularFileProperty
+import org.gradle.api.provider.ListProperty
 import org.gradle.api.provider.Property
 import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.InputFile
@@ -46,6 +47,9 @@ abstract class BuildHostRustFfiTask : DefaultTask() {
     @get:Input
     abstract val offline: Property<Boolean>
 
+    @get:Input
+    abstract val features: ListProperty<String>
+
     @get:OutputFile
     abstract val outputLibrary: RegularFileProperty
 
@@ -55,6 +59,7 @@ abstract class BuildHostRustFfiTask : DefaultTask() {
     @TaskAction
     fun build() {
         val args = mutableListOf("cargo", "build", "--locked", "-p", "openrose-ffi")
+        if (features.get().isNotEmpty()) args += listOf("--features", features.get().joinToString(","))
         if (offline.get()) args += "--offline"
         execOperations.exec {
             workingDir(workspaceRoot.get().asFile)
@@ -78,6 +83,9 @@ abstract class GenerateUniffiBindingsTask : DefaultTask() {
     @get:Input
     abstract val offline: Property<Boolean>
 
+    @get:Input
+    abstract val crates: ListProperty<String>
+
     @get:OutputDirectory
     abstract val outputDir: DirectoryProperty
 
@@ -92,32 +100,36 @@ abstract class GenerateUniffiBindingsTask : DefaultTask() {
         val destination = outputDir.get().asFile
         fileSystemOperations.delete { delete(destination) }
         destination.mkdirs()
-        val args = mutableListOf(
-            "cargo",
-            "run",
-            "--locked",
-            "-p",
-            "openrose-ffi",
-            "--features",
-            "bindgen",
-            "--bin",
-            "uniffi-bindgen",
-        )
-        if (offline.get()) args += "--offline"
-        args += listOf(
-            "--",
-            "generate",
-            "--library",
-            libraryFile.get().asFile.absolutePath,
-            "--language",
-            "kotlin",
-            "--no-format",
-            "--out-dir",
-            destination.absolutePath,
-        )
-        execOperations.exec {
-            workingDir(workspaceRoot.get().asFile)
-            commandLine(args)
+        crates.get().forEach { crate ->
+            val args = mutableListOf(
+                "cargo",
+                "run",
+                "--locked",
+                "-p",
+                "openrose-ffi",
+                "--features",
+                "bindgen",
+                "--bin",
+                "uniffi-bindgen",
+            )
+            if (offline.get()) args += "--offline"
+            args += listOf(
+                "--",
+                "generate",
+                "--library",
+                libraryFile.get().asFile.absolutePath,
+                "--crate",
+                crate,
+                "--language",
+                "kotlin",
+                "--no-format",
+                "--out-dir",
+                destination.absolutePath,
+            )
+            execOperations.exec {
+                workingDir(workspaceRoot.get().asFile)
+                commandLine(args)
+            }
         }
     }
 }

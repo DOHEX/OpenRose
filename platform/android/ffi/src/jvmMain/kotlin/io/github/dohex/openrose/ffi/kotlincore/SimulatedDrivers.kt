@@ -23,9 +23,9 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import uniffi.openrose_control.SessionTiming
 import uniffi.openrose_ffi.LocalClock
-import uniffi.openrose_ffi.SimulatedHeadset
 import uniffi.openrose_ffi.modelDisplayName
 import uniffi.openrose_ffi.modelGattProfile
+import uniffi.openrose_ffi_simulator.SimulatedHeadset
 import uniffi.openrose_headset.FirmwareVersion
 import uniffi.openrose_headset.LocalDateTime
 import uniffi.openrose_headset.ModelProfile

@@ -10,9 +10,7 @@ use openrose_control::gatt::{
 use openrose_control::scan::{Advertisement, ScanDriver as CoreScanDriver};
 use openrose_control::snapshot::ControlSnapshot;
 use openrose_control::spp::{SppDriver as CoreSppDriver, SppError, SppFailureKind};
-use openrose_control::transport::{
-    ControlTransport as CoreControlTransport, TransportError, TransportRecoveryReason,
-};
+use openrose_control::transport::{ControlTransport as CoreControlTransport, TransportError};
 use openrose_control::{ControlObserver as CoreControlObserver, LocalClock as CoreLocalClock};
 use openrose_headset::{HeadsetId, LocalDateTime};
 use std::collections::BTreeMap;
@@ -20,9 +18,13 @@ use std::fmt;
 use std::sync::Arc;
 
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
-pub enum TransportDriverError {
-    Recoverable {
-        reason: TransportRecoveryReason,
+pub enum DriverError {
+    Gatt {
+        kind: GattFailureKind,
+        detail: String,
+    },
+    Spp {
+        kind: SppFailureKind,
         detail: String,
     },
     Terminal {
@@ -39,21 +41,28 @@ pub enum TransportDriverError {
     },
 }
 
-impl fmt::Display for TransportDriverError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl DriverError {
+    fn detail(&self) -> &str {
         match self {
-            Self::Recoverable { detail, .. }
+            Self::Gatt { detail, .. }
+            | Self::Spp { detail, .. }
             | Self::Terminal { detail }
             | Self::PermissionDenied { detail }
             | Self::Unsupported { detail }
-            | Self::InvalidArgument { detail } => f.write_str(detail),
+            | Self::InvalidArgument { detail } => detail,
         }
     }
 }
 
-impl std::error::Error for TransportDriverError {}
+impl fmt::Display for DriverError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.detail())
+    }
+}
 
-impl From<uniffi::UnexpectedUniFFICallbackError> for TransportDriverError {
+impl std::error::Error for DriverError {}
+
+impl From<uniffi::UnexpectedUniFFICallbackError> for DriverError {
     fn from(error: uniffi::UnexpectedUniFFICallbackError) -> Self {
         Self::Terminal {
             detail: error.reason,
@@ -61,87 +70,31 @@ impl From<uniffi::UnexpectedUniFFICallbackError> for TransportDriverError {
     }
 }
 
-impl From<TransportDriverError> for TransportError {
-    fn from(error: TransportDriverError) -> Self {
+impl From<DriverError> for TransportError {
+    fn from(error: DriverError) -> Self {
         match error {
-            TransportDriverError::Recoverable { reason, detail } => Self::Recoverable {
-                reason,
-                message: detail,
-            },
-            TransportDriverError::Terminal { detail } => Self::Terminal(detail),
-            TransportDriverError::PermissionDenied { detail } => Self::PermissionDenied(detail),
-            TransportDriverError::Unsupported { detail } => Self::Unsupported(detail),
-            TransportDriverError::InvalidArgument { detail } => Self::InvalidArgument(detail),
+            DriverError::PermissionDenied { detail } => Self::PermissionDenied(detail),
+            DriverError::Unsupported { detail } => Self::Unsupported(detail),
+            DriverError::InvalidArgument { detail } => Self::InvalidArgument(detail),
+            other => Self::Terminal(other.to_string()),
         }
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
-pub enum GattDriverError {
-    Failed {
-        kind: GattFailureKind,
-        detail: String,
-    },
-}
-
-impl fmt::Display for GattDriverError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Failed { detail, .. } => f.write_str(detail),
-        }
-    }
-}
-
-impl std::error::Error for GattDriverError {}
-
-impl From<uniffi::UnexpectedUniFFICallbackError> for GattDriverError {
-    fn from(error: uniffi::UnexpectedUniFFICallbackError) -> Self {
-        Self::Failed {
-            kind: GattFailureKind::Unknown,
-            detail: error.reason,
-        }
-    }
-}
-
-impl From<GattDriverError> for GattError {
-    fn from(error: GattDriverError) -> Self {
+impl From<DriverError> for GattError {
+    fn from(error: DriverError) -> Self {
         match error {
-            GattDriverError::Failed { kind, detail } => Self::new(kind, detail),
+            DriverError::Gatt { kind, detail } => Self::new(kind, detail),
+            other => Self::new(GattFailureKind::Unknown, other.to_string()),
         }
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
-pub enum SppDriverError {
-    Failed {
-        kind: SppFailureKind,
-        detail: String,
-    },
-}
-
-impl fmt::Display for SppDriverError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Failed { detail, .. } => f.write_str(detail),
-        }
-    }
-}
-
-impl std::error::Error for SppDriverError {}
-
-impl From<uniffi::UnexpectedUniFFICallbackError> for SppDriverError {
-    fn from(error: uniffi::UnexpectedUniFFICallbackError) -> Self {
-        Self::Failed {
-            kind: SppFailureKind::Unknown,
-            detail: error.reason,
-        }
-    }
-}
-
-impl From<SppDriverError> for SppError {
-    fn from(error: SppDriverError) -> Self {
+impl From<DriverError> for SppError {
+    fn from(error: DriverError) -> Self {
         match error {
-            SppDriverError::Failed { kind, detail } => Self::new(kind, detail),
+            DriverError::Spp { kind, detail } => Self::new(kind, detail),
+            other => Self::new(SppFailureKind::Unknown, other.to_string()),
         }
     }
 }
@@ -167,7 +120,7 @@ pub trait AudioEvents: Send + Sync + 'static {
 pub trait AudioFactsDriver: Send + Sync + 'static {
     fn subscribe(&self) -> Arc<dyn AudioEvents>;
 
-    async fn bonded_devices(&self) -> Result<Vec<RawAudioDevice>, TransportDriverError>;
+    async fn bonded_devices(&self) -> Result<Vec<RawAudioDevice>, DriverError>;
 
     async fn snapshot(&self, target_addresses: Vec<String>) -> Option<RawAudioSnapshot>;
 }
@@ -175,7 +128,7 @@ pub trait AudioFactsDriver: Send + Sync + 'static {
 #[uniffi::export(foreign)]
 #[async_trait]
 pub trait ScanDriver: Send + Sync + 'static {
-    async fn next_advertisement(&self) -> Result<Option<Advertisement>, TransportDriverError>;
+    async fn next_advertisement(&self) -> Result<Option<Advertisement>, DriverError>;
 
     async fn stop(&self);
 }
@@ -185,32 +138,32 @@ pub trait ScanDriver: Send + Sync + 'static {
 pub trait GattDriver: Send + Sync + 'static {
     async fn next_event(&self) -> Option<GattEvent>;
 
-    async fn connect(&self) -> Result<(), GattDriverError>;
+    async fn connect(&self) -> Result<(), DriverError>;
 
-    async fn discover_services(&self) -> Result<Vec<GattService>, GattDriverError>;
+    async fn discover_services(&self) -> Result<Vec<GattService>, DriverError>;
 
-    async fn request_mtu(&self, preferred: u16) -> Result<Option<u16>, GattDriverError>;
+    async fn request_mtu(&self, preferred: u16) -> Result<Option<u16>, DriverError>;
 
     async fn set_notification_routing(
         &self,
         characteristic: GattCharacteristic,
         enabled: bool,
-    ) -> Result<(), GattDriverError>;
+    ) -> Result<(), DriverError>;
 
     async fn configure_subscription(
         &self,
         characteristic: GattCharacteristic,
         subscription: GattSubscription,
-    ) -> Result<(), GattDriverError>;
+    ) -> Result<(), DriverError>;
 
     async fn write(
         &self,
         characteristic: GattCharacteristic,
         value: Vec<u8>,
         with_response: bool,
-    ) -> Result<(), GattDriverError>;
+    ) -> Result<(), DriverError>;
 
-    async fn close_link(&self) -> Result<(), GattDriverError>;
+    async fn close_link(&self) -> Result<(), DriverError>;
 }
 
 #[uniffi::export(foreign)]
@@ -218,27 +171,27 @@ pub trait GattDriver: Send + Sync + 'static {
 pub trait SppDriver: Send + Sync + 'static {
     fn max_write_size(&self) -> u32;
 
-    async fn connect(&self) -> Result<(), SppDriverError>;
+    async fn connect(&self) -> Result<(), DriverError>;
 
-    async fn read(&self) -> Result<Vec<u8>, SppDriverError>;
+    async fn read(&self) -> Result<Vec<u8>, DriverError>;
 
-    async fn write(&self, value: Vec<u8>) -> Result<(), SppDriverError>;
+    async fn write(&self, value: Vec<u8>) -> Result<(), DriverError>;
 
-    async fn close_link(&self) -> Result<(), SppDriverError>;
+    async fn close_link(&self) -> Result<(), DriverError>;
 }
 
 #[uniffi::export(foreign)]
 pub trait ControlTransport: Send + Sync + 'static {
-    fn open_gatt(&self, headset: HeadsetId) -> Result<Arc<dyn GattDriver>, TransportDriverError>;
+    fn open_gatt(&self, headset: HeadsetId) -> Result<Arc<dyn GattDriver>, DriverError>;
 
-    fn start_scan(&self) -> Result<Arc<dyn ScanDriver>, TransportDriverError>;
+    fn start_scan(&self) -> Result<Arc<dyn ScanDriver>, DriverError>;
 
     fn open_spp(
         &self,
         headset: HeadsetId,
         address: String,
         service_uuid: String,
-    ) -> Result<Arc<dyn SppDriver>, TransportDriverError>;
+    ) -> Result<Arc<dyn SppDriver>, DriverError>;
 
     fn audio_facts(&self) -> Arc<dyn AudioFactsDriver>;
 
@@ -279,10 +232,7 @@ impl CoreAudioFactsDriver for AudioFactsAdapter {
     }
 
     async fn bonded_devices(&self) -> Result<Vec<RawAudioDevice>, TransportError> {
-        self.0
-            .bonded_devices()
-            .await
-            .map_err(TransportError::from)
+        self.0.bonded_devices().await.map_err(TransportError::from)
     }
 
     async fn snapshot(&self, target_addresses: &[String]) -> RawAudioSnapshot {
@@ -332,10 +282,7 @@ impl CoreGattDriver for GattDriverAdapter {
     }
 
     async fn request_mtu(&self, preferred: u16) -> Result<Option<u16>, GattError> {
-        self.0
-            .request_mtu(preferred)
-            .await
-            .map_err(GattError::from)
+        self.0.request_mtu(preferred).await.map_err(GattError::from)
     }
 
     async fn set_notification_routing(

@@ -10,7 +10,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
-import uniffi.openrose_ffi.TransportDriverException
+import uniffi.openrose_ffi.DriverException
 import kotlin.test.Test
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
@@ -29,9 +29,9 @@ class AndroidCoreDriversTest {
     fun aGattLinkNeedsTheConnectPermissionAndAValidAddress() {
         androidCoreTransport(app).use { transport ->
             shadowOf(app).denyPermissions(Manifest.permission.BLUETOOTH_CONNECT)
-            assertFailsWith<TransportDriverException.PermissionDenied> { transport.openGatt(ADDRESS) }
+            assertFailsWith<DriverException.PermissionDenied> { transport.openGatt(ADDRESS) }
             shadowOf(app).grantPermissions(Manifest.permission.BLUETOOTH_CONNECT)
-            assertFailsWith<TransportDriverException.InvalidArgument> { transport.openGatt("not an address") }
+            assertFailsWith<DriverException.InvalidArgument> { transport.openGatt("not an address") }
             transport.openGatt(ADDRESS)
         }
     }
@@ -40,18 +40,18 @@ class AndroidCoreDriversTest {
     fun anSppLinkReportsWhyItCannotStartWithTypedTransportErrors() {
         androidCoreTransport(app).use { transport ->
             shadowOf(app).denyPermissions(Manifest.permission.BLUETOOTH_CONNECT)
-            assertFailsWith<TransportDriverException.PermissionDenied> { transport.openSpp(ADDRESS, ADDRESS, SPP_UUID) }
+            assertFailsWith<DriverException.PermissionDenied> { transport.openSpp(ADDRESS, ADDRESS, SPP_UUID) }
 
             shadowOf(app).grantPermissions(Manifest.permission.BLUETOOTH_CONNECT)
             shadowOf(app.getSystemService(BluetoothManager::class.java).adapter).setState(BluetoothAdapter.STATE_OFF)
-            assertFailsWith<TransportDriverException.Unsupported> { transport.openSpp(ADDRESS, ADDRESS, SPP_UUID) }
+            assertFailsWith<DriverException.Unsupported> { transport.openSpp(ADDRESS, ADDRESS, SPP_UUID) }
 
             shadowOf(app.getSystemService(BluetoothManager::class.java).adapter).setState(BluetoothAdapter.STATE_ON)
             shadowOf(app.packageManager).setSystemFeature(PackageManager.FEATURE_BLUETOOTH, false)
-            assertFailsWith<TransportDriverException.Unsupported> { transport.openSpp(ADDRESS, ADDRESS, SPP_UUID) }
+            assertFailsWith<DriverException.Unsupported> { transport.openSpp(ADDRESS, ADDRESS, SPP_UUID) }
 
             shadowOf(app.packageManager).setSystemFeature(PackageManager.FEATURE_BLUETOOTH, true)
-            assertFailsWith<TransportDriverException.InvalidArgument> { transport.openSpp("not an address", "not an address", SPP_UUID) }
+            assertFailsWith<DriverException.InvalidArgument> { transport.openSpp("not an address", "not an address", SPP_UUID) }
             transport.openSpp(ADDRESS, ADDRESS, SPP_UUID)
         }
     }

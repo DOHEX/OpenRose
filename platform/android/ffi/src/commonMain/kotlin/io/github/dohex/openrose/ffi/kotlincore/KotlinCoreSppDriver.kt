@@ -7,8 +7,8 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
 import uniffi.openrose_control.SppFailureKind
+import uniffi.openrose_ffi.DriverException
 import uniffi.openrose_ffi.SppDriver
-import uniffi.openrose_ffi.SppDriverException
 import java.io.IOException
 
 internal class KotlinCoreSppDriver(private val link: SppLink, private val scope: CoroutineScope) : SppDriver {
@@ -28,7 +28,7 @@ internal class KotlinCoreSppDriver(private val link: SppLink, private val scope:
         val result = chunks.receiveCatching()
         result.getOrNull()?.let { return it }
         val cause = result.exceptionOrNull()
-        throw SppDriverException.Failed(SppFailureKind.DISCONNECTED, cause?.message ?: LINK_CLOSED).also { failure ->
+        throw DriverException.Spp(SppFailureKind.DISCONNECTED, cause?.message ?: LINK_CLOSED).also { failure ->
             cause?.let { failure.initCause(it) }
         }
     }
@@ -63,7 +63,7 @@ internal class KotlinCoreSppDriver(private val link: SppLink, private val scope:
         throw failed(SppFailureKind.DISCONNECTED, failure)
     }
 
-    private fun failed(kind: SppFailureKind, cause: Throwable) = SppDriverException.Failed(kind, cause.message.orEmpty()).causedBy(cause)
+    private fun failed(kind: SppFailureKind, cause: Throwable) = DriverException.Spp(kind, cause.message.orEmpty()).causedBy(cause)
 
     private companion object {
         const val LINK_CLOSED = "SPP 连接已关闭"
