@@ -76,12 +76,12 @@ See [Getting started](https://dohex.github.io/OpenRose/en/guides/getting-started
 
 ## Building from source
 
-Requires JDK 21 and the Android SDK (Platform 37, Build Tools 37.0.0; set `ANDROID_HOME` or `sdk.dir` in `local.properties`). Building the Windows desktop app also requires stable Rust with the MSVC toolchain and Visual Studio C++ Build Tools. On Windows, replace `./gradlew` with `.\gradlew.bat`. For the development environment, checks, and commit conventions, see [CONTRIBUTING.md](CONTRIBUTING.md) (Chinese).
+Requires JDK 21, the stable Rust toolchain, and the Android SDK (Platform 37, Build Tools 37.0.0; set `ANDROID_HOME` or `sdk.dir` in `local.properties`). Building the Android APK also requires the `aarch64-linux-android` target and `cargo-ndk`; building the Windows desktop app also requires the Rust MSVC toolchain and Visual Studio C++ Build Tools. On Windows, replace `./gradlew` with `.\gradlew.bat`. For the development environment, checks, and commit conventions, see [CONTRIBUTING.md](CONTRIBUTING.md) (Chinese).
 
 ```bash
 ./gradlew :androidApp:assembleDebug   # Android debug APK
 ./gradlew :desktopApp:run             # run the desktop app
-./gradlew offlineCheck                # all checks that need no earphone hardware
+cargo xtask check                     # all checks that need no earphone hardware (Rust and Gradle)
 ```
 
 Developer docs (mostly Chinese): [protocol implementation](docs/protocols.md), [protocol research](docs/protocols/), [architecture decisions](docs/adr/), [glossary](GLOSSARY.md).

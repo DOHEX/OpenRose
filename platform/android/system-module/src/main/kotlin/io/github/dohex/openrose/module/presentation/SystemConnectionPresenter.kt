@@ -9,14 +9,14 @@ import android.util.Log
 import io.github.dohex.openrose.androidintegration.wire.BridgePresentationWire
 import java.util.UUID
 
-internal class OfficialConnectionPresenter(
+internal class SystemConnectionPresenter(
     context: Context,
     private val handler: Handler,
     private val callbacks: PresentationCallbacks,
 ) : AutoCloseable {
     private val targetContext = context.applicationContext ?: context
     private var active: ActiveToast? = null
-    private val media = OfficialPromptMedia(targetContext, handler)
+    private val media = SystemPromptMedia(targetContext, handler)
 
     @Volatile private var closed = false
 
@@ -60,10 +60,10 @@ internal class OfficialConnectionPresenter(
     private fun showOnHandler(snapshot: Bundle, promptId: String) {
         val request = decodeRequest(snapshot, promptId)
         when {
-            request == null -> report(snapshot, BridgePresentationWire.UNAVAILABLE, "official_prompt_or_session_not_ready")
+            request == null -> report(snapshot, BridgePresentationWire.UNAVAILABLE, "system_prompt_or_session_not_ready")
 
             targetContext.packageName != TARGET_PACKAGE ->
-                report(snapshot, BridgePresentationWire.UNAVAILABLE, "official_target_context_must_be_com_xiaomi_bluetooth")
+                report(snapshot, BridgePresentationWire.UNAVAILABLE, "system_target_context_must_be_com_xiaomi_bluetooth")
 
             active?.request?.key != request.key -> {
                 active?.let { withdrawActive(it, "superseded_by_new_openrose_prompt", report = false) }
@@ -78,7 +78,7 @@ internal class OfficialConnectionPresenter(
             report(
                 snapshot,
                 BridgePresentationWire.UNAVAILABLE,
-                "official_clip_or_provider_probe_failed:${failure.javaClass.simpleName}",
+                "system_clip_or_provider_probe_failed:${failure.javaClass.simpleName}",
             )
             return
         }
@@ -88,7 +88,7 @@ internal class OfficialConnectionPresenter(
             media.revoke(clips)
             return
         }
-        val failure = runCatching { targetContext.setOfficialStatus(payload) }.exceptionOrNull()
+        val failure = runCatching { targetContext.setSystemStatus(payload) }.exceptionOrNull()
         if (failure == null) {
             active = activateToast(request, clips, snapshot)
             report(
@@ -97,11 +97,11 @@ internal class OfficialConnectionPresenter(
                 "xiaomi_bluetooth_set_status_returned;provider_and_uri_grant_probed;systemui_display_unverified",
             )
         } else {
-            media.revokeAfter(clips, OFFICIAL_DURATION_MILLIS + URI_RELEASE_GRACE_MILLIS)
+            media.revokeAfter(clips, SYSTEM_TOAST_DURATION_MILLIS + URI_RELEASE_GRACE_MILLIS)
             report(
                 snapshot,
                 BridgePresentationWire.UNAVAILABLE,
-                "official_set_status_failed:${failure.cause?.javaClass?.simpleName ?: failure.javaClass.simpleName}",
+                "system_set_status_failed:${failure.cause?.javaClass?.simpleName ?: failure.javaClass.simpleName}",
             )
         }
     }
@@ -111,14 +111,14 @@ internal class OfficialConnectionPresenter(
         clips: List<PreparedClip>,
         snapshot: Bundle,
     ): ActiveToast {
-        val record = ActiveToast(request, SystemClock.elapsedRealtime() + OFFICIAL_DURATION_MILLIS, clips, Bundle(snapshot))
+        val record = ActiveToast(request, SystemClock.elapsedRealtime() + SYSTEM_TOAST_DURATION_MILLIS, clips, Bundle(snapshot))
         record.timeout = Runnable {
             if (active === record) {
                 active = null
                 media.revokeAfter(record.clips, URI_RELEASE_GRACE_MILLIS, preserveReadGrace = true)
             }
         }
-        handler.postDelayed(record.timeout!!, OFFICIAL_DURATION_MILLIS)
+        handler.postDelayed(record.timeout!!, SYSTEM_TOAST_DURATION_MILLIS)
         return record
     }
 
@@ -140,8 +140,8 @@ internal class OfficialConnectionPresenter(
             return
         }
 
-        val payload = officialHideBundle()
-        val failure = runCatching { targetContext.setOfficialStatus(payload) }.exceptionOrNull()
+        val payload = systemHideBundle()
+        val failure = runCatching { targetContext.setSystemStatus(payload) }.exceptionOrNull()
         if (failure == null) {
             media.revokeAfter(record.clips, URI_RELEASE_GRACE_MILLIS, preserveReadGrace = true)
             if (report) {
@@ -158,7 +158,7 @@ internal class OfficialConnectionPresenter(
                 report(
                     record.snapshot,
                     BridgePresentationWire.ACTION_FAILED,
-                    "official_hide_failed:$detail:$reason",
+                    "system_hide_failed:$detail:$reason",
                 )
             }
         }
@@ -167,7 +167,7 @@ internal class OfficialConnectionPresenter(
     private fun report(snapshot: Bundle, status: String, detail: String) {
         runCatching {
             callbacks.report(Bundle(snapshot), BridgePresentationWire.SYSTEM_CONNECTION, status, detail)
-        }.onFailure { Log.w(TAG, "official_connection_report_failed status=$status", it) }
+        }.onFailure { Log.w(TAG, "system_connection_report_failed status=$status", it) }
     }
 
     private data class ActiveToast(
@@ -183,4 +183,4 @@ private fun Handler.dispatch(block: () -> Unit) {
     if (Looper.myLooper() === looper) block() else post(block)
 }
 
-private const val TAG = "OpenRoseOfficialToast"
+private const val TAG = "OpenRoseSystemToast"
