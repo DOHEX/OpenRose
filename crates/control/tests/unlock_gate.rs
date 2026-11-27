@@ -15,7 +15,7 @@ fn android(unlocked: bool) -> PlatformState {
 }
 
 #[tokio::test(start_paused = true)]
-async fn nothing_connects_before_the_first_unlock_even_when_the_earphones_already_have_audio() {
+async fn nothing_connects_before_the_first_unlock_even_when_the_headset_already_has_audio() {
     let (transport, runtime, _) = simulated(android(false));
     let headset = add_i5(&transport, A);
     transport.set_audio_connected(Some(id(A)));

@@ -9,7 +9,7 @@ use std::sync::{Arc, Mutex};
 pub(crate) enum Origin {
     Manual,
     Audio,
-    AddDevice,
+    AddHeadset,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -161,7 +161,7 @@ impl Core {
 
     async fn finish_connect(&self, attempt: &Arc<Attempt>, origin: Origin) -> ControlResult {
         let outcome = attempt.wait().await;
-        if origin != Origin::AddDevice || outcome.is_err() {
+        if origin != Origin::AddHeadset || outcome.is_err() {
             return outcome;
         }
         let inner = self.lifecycle.lock().await;
@@ -183,12 +183,12 @@ impl Core {
         }
     }
 
-    pub(crate) async fn cancel_add_device(&self) {
+    pub(crate) async fn cancel_add_headset(&self) {
         let mut inner = self.lifecycle.lock().await;
         let owned = inner
             .active
             .as_ref()
-            .is_some_and(|active| active.origin == Origin::AddDevice && !active.is_ready());
+            .is_some_and(|active| active.origin == Origin::AddHeadset && !active.is_ready());
         if !owned {
             return;
         }

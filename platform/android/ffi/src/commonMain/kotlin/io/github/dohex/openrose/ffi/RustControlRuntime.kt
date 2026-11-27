@@ -119,15 +119,15 @@ class RustControlRuntime(
         if (pinned) handle.connectPinned(headset) else handle.connect(headset)
     }
 
-    suspend fun connectForAddDevice(headset: HeadsetId): RustControlResult = try {
-        runControl { handle.connectForAddDevice(headset) }
+    suspend fun connectForAddHeadset(headset: HeadsetId): RustControlResult = try {
+        runControl { handle.connectForAddHeadset(headset) }
     } catch (cancelled: CancellationException) {
-        withContext(NonCancellable) { handle.cancelAddDevice() }
+        withContext(NonCancellable) { handle.cancelAddHeadset() }
         throw cancelled
     }
 
-    suspend fun cancelAddDevice() {
-        handle.cancelAddDevice()
+    suspend fun cancelAddHeadset() {
+        handle.cancelAddHeadset()
     }
 
     suspend fun disconnect(): Boolean = handle.disconnect()

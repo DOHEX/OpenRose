@@ -246,7 +246,7 @@ class RustControlRuntimeTest {
     }
 
     @Test
-    fun cancellingAddDeviceCoroutineExplicitlyCancelsCoreAttempt() = runBlocking {
+    fun cancellingAddHeadsetCoroutineExplicitlyCancelsCoreAttempt() = runBlocking {
         SimulatedBleRig().use { rig ->
             RustControlRuntime(
                 transport = rig.transport(),
@@ -256,7 +256,7 @@ class RustControlRuntimeTest {
             ).use { runtime ->
                 rig.muted.set(true)
                 val add = async(Dispatchers.Default) {
-                    runtime.connectForAddDevice(I5_ADDRESS)
+                    runtime.connectForAddHeadset(I5_ADDRESS)
                 }
                 withTimeout(2_000) {
                     runtime.state.first { it.connection is ConnectionState.Connecting }

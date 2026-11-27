@@ -233,12 +233,12 @@ async fn snapshot_helpers_and_simulated_headset_facade_round_trip() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn cancel_add_device_ends_an_in_flight_add_attempt() {
+async fn cancel_add_headset_ends_an_in_flight_add_attempt() {
     let world = World::i5();
     world.headset.mute(true);
     let runtime = Arc::clone(&world.runtime);
     let id = world.id();
-    let add = tokio::spawn(async move { runtime.connect_for_add_device(id).await });
+    let add = tokio::spawn(async move { runtime.connect_for_add_headset(id).await });
     eventually("connecting state", || {
         matches!(
             world.snapshot().connection,
@@ -247,8 +247,7 @@ async fn cancel_add_device_ends_an_in_flight_add_attempt() {
     })
     .await;
 
-    world.runtime.cancel_add_device().await;
-
+    world.runtime.cancel_add_headset().await;
     assert_eq!(ControlErrorCode::Disconnected, code_of(add.await.unwrap()));
     assert!(matches!(
         world.snapshot().connection,

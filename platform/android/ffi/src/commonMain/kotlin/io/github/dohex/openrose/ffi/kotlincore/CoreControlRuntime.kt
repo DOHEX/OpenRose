@@ -54,7 +54,7 @@ class CoreControlRuntime internal constructor(
 
     override suspend fun connect(deviceId: DeviceId, pinned: Boolean): OperationResult = rust.connect(deviceId.value, pinned).toOperation()
 
-    override suspend fun connectForAddDevice(deviceId: DeviceId): OperationResult = rust.connectForAddDevice(deviceId.value).toOperation()
+    override suspend fun connectForAddDevice(deviceId: DeviceId): OperationResult = rust.connectForAddHeadset(deviceId.value).toOperation()
 
     override suspend fun disconnect(): Boolean = rust.disconnect()
 

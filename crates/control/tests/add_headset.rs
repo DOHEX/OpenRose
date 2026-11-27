@@ -16,7 +16,7 @@ async fn the_add_flow_reports_success_only_for_the_session_that_is_still_current
     let harness = Harness::i5();
     harness
         .runtime
-        .connect_for_add_device(harness.id())
+        .connect_for_add_headset(harness.id())
         .await
         .expect("added");
     let snapshot = harness.snapshot();
@@ -31,7 +31,7 @@ async fn cancelling_the_add_flow_closes_its_unfinished_link_and_stops_initializa
     let adding = tokio::spawn({
         let runtime = Arc::clone(&harness.runtime);
         let id = harness.id();
-        async move { runtime.connect_for_add_device(id).await }
+        async move { runtime.connect_for_add_headset(id).await }
     });
     settle().await;
     elapse(200).await;
@@ -41,7 +41,7 @@ async fn cancelling_the_add_flow_closes_its_unfinished_link_and_stops_initializa
     assert_eq!(ConnectionPhase::Initializing, phase);
     let writes_before_cancel = harness.headset.written_hex();
 
-    harness.runtime.cancel_add_device().await;
+    harness.runtime.cancel_add_headset().await;
     assert_eq!(
         ControlErrorCode::Disconnected,
         adding.await.unwrap().expect_err("cancelled").code
@@ -71,11 +71,11 @@ async fn cancelling_the_add_flow_does_not_cancel_a_connection_another_entry_star
     settle().await;
     let adding = tokio::spawn({
         let runtime = Arc::clone(&runtime);
-        async move { runtime.connect_for_add_device(id(A)).await }
+        async move { runtime.connect_for_add_headset(id(A)).await }
     });
     settle().await;
 
-    runtime.cancel_add_device().await;
+    runtime.cancel_add_headset().await;
     elapse(1_500).await;
 
     original
@@ -99,7 +99,7 @@ async fn a_failed_old_add_flow_never_unbinds_the_newer_audio_session_of_the_same
 
     let adding = tokio::spawn({
         let runtime = Arc::clone(&runtime);
-        async move { runtime.connect_for_add_device(id(A)).await }
+        async move { runtime.connect_for_add_headset(id(A)).await }
     });
     settle().await;
     assert!(matches!(
