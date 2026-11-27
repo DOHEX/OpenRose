@@ -305,10 +305,9 @@ internal class OwnerRig(
 ) {
     val headset = SharedHeadset()
     val app = test.appHeadset(headset, earphones)
-    val hostTransport = HeadsetTransport("module", headset, earphones.profile!!, bonded)
+    val hostHeadset = test.hostHeadset(headset, earphones, bonded)
     val store = MemoryOwnerStore(initial)
     private val ids = generateSequence(1) { it + 1 }.map { "id-$it" }.iterator()
-    private val sessionTiming = SessionTiming(queryTimeoutMillis = 50, writeIntervalMillis = 0)
     private val platform = PlatformState(
         PermissionState.GRANTED,
         TransportAvailability.Available,
@@ -330,14 +329,14 @@ internal class OwnerRig(
         return ModuleControlHost(
             packageName = HOST_PACKAGE, processName = HOST_PACKAGE, incarnation = "host-$hostCount",
             authority = testAuthority,
-            runtimeFactory = { scope, settings, state, base -> LocalControlRuntime(state, settings, hostTransport, scope, sessionTiming, base) },
+            runtimeFactory = hostHeadset::runtime,
             parentScope = hostScope, newId = { "lease-${ids.next()}" }, uid = 1002, pid = 777 + hostCount,
         )
     }
 
     suspend fun replaceHost() {
         hostScope.cancel()
-        hostTransport.links.filter { !it.closed }.forEach { it.close() }
+        eventually("the killed host's links to drop") { hostHeadset.links.all { it.closed } }
         hostScope = newHostScope()
         link.connections.filter { it.isOpen }.forEach { it.sever(processDied = true) }
         host = newHost()

@@ -4,13 +4,11 @@ import io.github.dohex.openrose.core.ConnectionState
 import io.github.dohex.openrose.core.ControlErrorCode
 import io.github.dohex.openrose.core.ControlState
 import io.github.dohex.openrose.core.HeadsetCommand
-import io.github.dohex.openrose.core.LocalControlRuntime
 import io.github.dohex.openrose.core.NoiseMode
 import io.github.dohex.openrose.core.OperationResult
 import io.github.dohex.openrose.core.PermissionState
 import io.github.dohex.openrose.core.PlatformState
 import io.github.dohex.openrose.core.SessionReference
-import io.github.dohex.openrose.core.SessionTiming
 import io.github.dohex.openrose.core.TransportAvailability
 import io.github.dohex.openrose.core.transport.DeviceId
 import kotlinx.collections.immutable.persistentSetOf
@@ -43,21 +41,12 @@ class ModuleHostPresentationTest {
     private class Rig(private val test: TestScope, private val settings: IntegrationSettings) {
         val earphones = rosePair("rose-a")
         val headset = SharedHeadset()
-        val transport = HeadsetTransport("module", headset, earphones.profile!!, listOf(earphones))
+        val hostHeadset = test.hostHeadset(headset, earphones, listOf(earphones))
         private val ids = generateSequence(1) { it + 1 }.map { "lease-$it" }.iterator()
         val host = ModuleControlHost(
             packageName = HOST_PACKAGE, processName = HOST_PACKAGE, incarnation = "host-1",
             authority = presentationAuthority,
-            runtimeFactory = { scope, saved, platform, base ->
-                LocalControlRuntime(
-                    platform,
-                    saved,
-                    transport,
-                    scope,
-                    SessionTiming(queryTimeoutMillis = 50, writeIntervalMillis = 0),
-                    base,
-                )
-            },
+            runtimeFactory = hostHeadset::runtime,
             parentScope = test.backgroundScope, newId = { ids.next() }, uid = 1_002, pid = 777,
         )
         val app = lease(appIdentity)
@@ -72,7 +61,7 @@ class ModuleHostPresentationTest {
         val generation: OwnerGeneration get() = (host.status.value as HostStatus.Active).generation
         val state: ControlState get() = requireNotNull(host.control.view(app.identity, app.id)).state
         val presentation: SystemPresentationState get() = requireNotNull(host.control.view(app.identity, app.id)).presentation
-        val link: HeadsetConnection get() = transport.links.last()
+        val link: HostLink get() = hostHeadset.links.last()
         val prompt: IslandPrompt get() = requireNotNull(presentation.prompt)
         val reference: SessionReference get() = requireNotNull(presentation.reference)
 

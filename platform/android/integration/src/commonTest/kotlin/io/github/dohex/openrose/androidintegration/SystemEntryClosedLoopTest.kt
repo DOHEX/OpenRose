@@ -25,14 +25,14 @@ class SystemEntryClosedLoopTest {
 
     private suspend fun TestScope.connectedEntry(identity: CallerIdentity = milinkIdentity): Entry {
         val rig = OwnerRig(this, initial = OwnerRecord(ControlWay.MODULE, PendingModuleRelease("r", null)))
-        rig.hostTransport.audioDevice.emit(rig.earphones.deviceId)
+        rig.hostHeadset.connectAudio(rig.earphones.deviceId)
         rig.bootHost()
         runCurrent()
         testScheduler.advanceUntilIdle()
         val generation = (rig.host.status.value as HostStatus.Active).generation
         val lease = (rig.host.open(identity) as HostOpenResult.Opened).lease.id
         val connection = assertIs<ConnectionState.Connected>(requireNotNull(rig.host.control.view(identity, lease)).state.connection)
-        rig.hostTransport.links.single().initializing = false
+        rig.hostHeadset.links.single().initializing = false
         return Entry(rig, lease, generation, SessionReference(connection.deviceId, connection.sessionId))
     }
 
@@ -55,7 +55,7 @@ class SystemEntryClosedLoopTest {
 
         assertFalse(tap.isCompleted)
         assertEquals(0, entry.mappedMode())
-        entry.rig.hostTransport.links.single().deviceReply("09ff00000106020e000100000020")
+        entry.rig.hostHeadset.links.single().deviceReply("09ff00000106020e000100000020")
         runCurrent()
 
         assertEquals(HostCallResult.Operation(OperationResult.Success), tap.await())
@@ -124,7 +124,7 @@ class SystemEntryClosedLoopTest {
             entry.rig.host.control.readSession(milinkIdentity, entry.lease, next, SessionReference(connection.deviceId, connection.sessionId)),
         )
         val device = assertIs<SessionSnapshotResult.Available>(fresh.snapshot).device
-        assertEquals(2, entry.rig.hostTransport.links.size, "the new owner opened its own link")
+        assertEquals(2, entry.rig.hostHeadset.links.size, "the new owner opened its own link")
         assertTrue(device.diagnostics.fields.containsKey(DeviceField.LEFT_BATTERY))
     }
 
@@ -132,7 +132,7 @@ class SystemEntryClosedLoopTest {
         val entry = connectedEntry()
         entry.rig.host.configure { HostConfiguration(true, HostSettings(integration = IntegrationSettings(controlWay = ControlWay.MODULE, fusionOffAsWind = offAsWind))) }
         runCurrent()
-        val link = entry.rig.hostTransport.links.single()
+        val link = entry.rig.hostHeadset.links.single()
         val before = link.writes.size
         val tap = async { entry.rig.host.control.execute(milinkIdentity, entry.lease, entry.generation, entry.noise(mode)) }
         runCurrent()

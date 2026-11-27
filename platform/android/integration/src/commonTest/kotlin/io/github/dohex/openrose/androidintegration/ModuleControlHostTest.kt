@@ -165,7 +165,7 @@ class ModuleControlHostTest {
         runCurrent()
         assertEquals(listOf("module:open", "module:close"), rig.headset.events)
         assertIs<HostStatus.Inactive>(rig.host.status.value)
-        rig.hostTransport.audioDevice.emit(rig.earphones.deviceId)
+        rig.hostHeadset.connectAudio(rig.earphones.deviceId)
         runCurrent()
         assertEquals(listOf("module:open", "module:close"), rig.headset.events)
     }
@@ -180,7 +180,7 @@ class ModuleControlHostTest {
         runCurrent()
         assertEquals(OperationResult.Success, runtime.connectFromSystem(rig.earphones.deviceId))
         runCurrent()
-        val link = rig.hostTransport.links.single()
+        val link = rig.hostHeadset.links.single()
         link.initializing = false
 
         val pending = async { runtime.set(HeadsetCommand.NoiseMode(NoiseMode.NORMAL)) }
@@ -207,14 +207,14 @@ class ModuleControlHostTest {
         runCurrent()
         assertEquals(OperationResult.Success, runtime.connectFromSystem(rig.earphones.deviceId))
         runCurrent()
-        rig.hostTransport.links.single().initializing = false
+        rig.hostHeadset.links.single().initializing = false
 
         val pending = async { runtime.set(HeadsetCommand.NoiseMode(NoiseMode.NORMAL)) }
         runCurrent()
         rig.link.connections.last { it.isOpen }.sever(processDied = false)
         runCurrent()
         rig.link.reachable = false
-        rig.hostTransport.links.single().deviceReply("09ff00000106020e000001000020")
+        rig.hostHeadset.links.single().deviceReply("09ff00000106020e000001000020")
         runCurrent()
 
         val result = assertIs<OperationResult.Failure>(pending.await())

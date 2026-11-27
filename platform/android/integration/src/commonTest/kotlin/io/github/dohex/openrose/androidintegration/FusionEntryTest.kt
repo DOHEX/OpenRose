@@ -15,7 +15,7 @@ class FusionEntryTest {
 
     private suspend fun TestScope.moduleRig(destination: FusionSettingsDestination, connected: Boolean = true): Pair<OwnerRig, String> {
         val rig = OwnerRig(this, earphones = rosePair(ble), initial = OwnerRecord(ControlWay.MODULE, PendingModuleRelease("r", null)))
-        if (connected) rig.hostTransport.audioDevice.emit(rig.earphones.deviceId)
+        if (connected) rig.hostHeadset.connectAudio(rig.earphones.deviceId)
         rig.bootHost()
         rig.host.configure { HostConfiguration(true, HostSettings(integration = IntegrationSettings(controlWay = ControlWay.MODULE, fusionSettingsDestination = destination))) }
         runCurrent()

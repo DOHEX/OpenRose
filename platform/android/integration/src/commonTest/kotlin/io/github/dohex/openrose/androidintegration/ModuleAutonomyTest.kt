@@ -23,7 +23,7 @@ class ModuleAutonomyTest {
     fun theHostControlsAnAlreadyConnectedHeadsetAfterFirstUnlockWithoutAnyApplicationProcess() = runTest {
         val rig = OwnerRig(this, initial = saved)
         rig.bootHost(unlocked = false)
-        rig.hostTransport.audioDevice.emit(rig.earphones.deviceId)
+        rig.hostHeadset.connectAudio(rig.earphones.deviceId)
         runCurrent()
 
         assertTrue(rig.headset.events.isEmpty())
@@ -51,11 +51,11 @@ class ModuleAutonomyTest {
     fun theAppChoiceIsNeverTakenOverByTheHostWhateverStartsOrReturns() = runTest {
         val rig = OwnerRig(this, initial = OwnerRecord(ControlWay.APP))
         rig.bootHost()
-        rig.hostTransport.audioDevice.emit(rig.earphones.deviceId)
+        rig.hostHeadset.connectAudio(rig.earphones.deviceId)
         runCurrent()
         rig.replaceHost()
         rig.bootHost()
-        rig.hostTransport.audioDevice.emit(rig.earphones.deviceId)
+        rig.hostHeadset.connectAudio(rig.earphones.deviceId)
         rig.unlockHost()
         runCurrent()
         advanceTimeBy(60_000)
@@ -69,7 +69,7 @@ class ModuleAutonomyTest {
     fun leavingTheApplicationNeverStopsTheEnabledHostWhetherItIsClosedReclaimedOrForceStopped() = runTest {
         val rig = OwnerRig(this, initial = saved)
         rig.bootHost()
-        rig.hostTransport.audioDevice.emit(rig.earphones.deviceId)
+        rig.hostHeadset.connectAudio(rig.earphones.deviceId)
         runCurrent()
         val process = rig.newAppProcess()
         val runtime = rig.newRuntime(process = process)
@@ -101,7 +101,7 @@ class ModuleAutonomyTest {
     fun enteringModuleControlNeverOverlapsAnAppConnectionThatAudioHasAlreadyOpened() = runTest {
         val rig = OwnerRig(this)
         rig.bootHost()
-        rig.hostTransport.audioDevice.emit(rig.earphones.deviceId)
+        rig.hostHeadset.connectAudio(rig.earphones.deviceId)
         rig.app.audioConnected = true
         val runtime = rig.newRuntime()
         runCurrent()
@@ -124,7 +124,7 @@ class ModuleAutonomyTest {
     fun aKilledHostIsReplacedFromTheSavedChoiceAndEverythingOfTheOldOwnerIsInvalid() = runTest {
         val rig = OwnerRig(this, initial = saved)
         rig.bootHost()
-        rig.hostTransport.audioDevice.emit(rig.earphones.deviceId)
+        rig.hostHeadset.connectAudio(rig.earphones.deviceId)
         val runtime = rig.newRuntime()
         runCurrent()
         advanceTimeBy(1)
@@ -143,7 +143,7 @@ class ModuleAutonomyTest {
         assertEquals(0, rig.headset.opens("app"))
 
         rig.bootHost()
-        rig.hostTransport.audioDevice.emit(rig.earphones.deviceId)
+        rig.hostHeadset.connectAudio(rig.earphones.deviceId)
         runCurrent()
         advanceTimeBy(rig.clientTiming.retryMillis * 2)
         runCurrent()
@@ -171,7 +171,7 @@ class ModuleAutonomyTest {
     fun anUnavailableHostIsReportedHonestlyAndNeverReplacedByTheApplicationConnection() = runTest {
         val rig = OwnerRig(this, initial = saved)
         rig.bootHost()
-        rig.hostTransport.audioDevice.emit(rig.earphones.deviceId)
+        rig.hostHeadset.connectAudio(rig.earphones.deviceId)
         rig.app.audioConnected = true
         val runtime = rig.newRuntime()
         runCurrent()
@@ -194,7 +194,7 @@ class ModuleAutonomyTest {
     @Test
     fun repeatedRecoveryAndConfigurationNeverCreateASecondOwner() = runTest {
         val rig = OwnerRig(this, initial = saved)
-        rig.hostTransport.audioDevice.emit(rig.earphones.deviceId)
+        rig.hostHeadset.connectAudio(rig.earphones.deviceId)
         repeat(3) {
             rig.bootHost()
             rig.unlockHost()
@@ -206,7 +206,7 @@ class ModuleAutonomyTest {
         repeat(2) {
             rig.replaceHost()
             rig.bootHost()
-            rig.hostTransport.audioDevice.emit(rig.earphones.deviceId)
+            rig.hostHeadset.connectAudio(rig.earphones.deviceId)
             rig.bootHost()
             runCurrent()
             advanceTimeBy(1)
@@ -221,7 +221,7 @@ class ModuleAutonomyTest {
     fun aSwitchToAppInterruptedByTheHostDyingEndsWithExactlyOneAppOwnerAndNoModuleRevival() = runTest {
         val rig = OwnerRig(this, initial = saved)
         rig.bootHost()
-        rig.hostTransport.audioDevice.emit(rig.earphones.deviceId)
+        rig.hostHeadset.connectAudio(rig.earphones.deviceId)
         rig.app.audioConnected = true
         val runtime = rig.newRuntime()
         runCurrent()
@@ -234,7 +234,7 @@ class ModuleAutonomyTest {
         rig.link.releaseKillsHostProcess = false
         rig.replaceHost()
         rig.bootHost()
-        rig.hostTransport.audioDevice.emit(rig.earphones.deviceId)
+        rig.hostHeadset.connectAudio(rig.earphones.deviceId)
         runCurrent()
         advanceTimeBy(rig.clientTiming.retryMillis * 3)
         runCurrent()

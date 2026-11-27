@@ -19,7 +19,7 @@ import kotlin.test.assertTrue
 class SystemHeadsetMappingTest {
     private suspend fun TestScope.readAsMiLink(profile: ModelProfile = ModelProfile.I5_ZT): Map<DeviceField, FieldReading> {
         val rig = OwnerRig(this, earphones = rosePair("rose-a", profile), initial = OwnerRecord(ControlWay.MODULE, PendingModuleRelease("r", null)))
-        rig.hostTransport.audioDevice.emit(rig.earphones.deviceId)
+        rig.hostHeadset.connectAudio(rig.earphones.deviceId)
         rig.bootHost()
         runCurrent()
         testScheduler.advanceUntilIdle()
