@@ -21,7 +21,7 @@
 ## OpenRose 项目约定
 
 - **型号能力**由 `shared/headset` 根据型号、固件和已确认的设备读数推导。界面使用推导结果，沙盒以模拟读数调用同一套规则。新增型号或调整型号配置时，使用 [add-model 技能](.agents/skills/add-model/SKILL.md)。模块职责见 [ADR 0020](docs/adr/0020-client-and-platform-modules.md)。
-- **验证改动**时先运行受影响模块的测试，例如耳机控制模块的 `./gradlew :shared:headset:jvmTest`。提 PR 前须通过 `./gradlew offlineCheck`。涉及型号或平台适配时，分别记录离线和真机验证结果，未实测的功能标明“未验证”。见[日常命令](CONTRIBUTING.md#日常命令)和[验证与真机测试](CONTRIBUTING.md#验证与真机测试)。
+- **验证改动**时先运行受影响模块的测试，例如 `cargo test --locked -p openrose-control` 或 `./gradlew :shared:headset:jvmTest`。提 PR 前须通过 `cargo xtask check`（含版本一致性校验、Rust 测试与 clippy、源码无注释检查，以及 Gradle `check offlineCheck`）。涉及型号或平台适配时，分别记录离线和真机验证结果，未实测的功能标明“未验证”。见[日常命令](CONTRIBUTING.md#日常命令)和[验证与真机测试](CONTRIBUTING.md#验证与真机测试)。
 - **源码不写注释**，由 detekt 的 `openrose:NoComments` 检查。代码看不出的决策、协议事实与证据写进 `docs/adr/` 并注明符号，绕路实现登记为 issue。见 [ADR 0021](docs/adr/0021-no-code-comments.md)。
 - **用户可见行为或说明**变化时，同步更新网站对应的中英文页面。涉及支持型号表、功能概要或安装步骤时，同时更新 `README.md` 和 `README.en.md`。见[贡献指南的文档同步约定](CONTRIBUTING.md#领域文档)。
 

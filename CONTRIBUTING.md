@@ -86,9 +86,10 @@ cd OpenRose
 | `./gradlew detekt` | 产品模块和构建约定的 Kotlin 静态分析，配置为 `config/detekt/detekt.yml`，自定义规则在 `tools/detekt-rules` |
 | `./gradlew koverHtmlReportCoverage` | 生成根项目聚合的覆盖率 HTML 报告 |
 | `./gradlew koverVerifyCoverage` | 校验行覆盖率不低于下限 |
-| `./gradlew offlineCheck` | 运行全部不依赖硬件的测试，以及 `spotlessCheck`、`detekt`、lint 与 `koverVerifyCoverage`。CI 执行的就是它 |
+| `./gradlew offlineCheck` | 运行 Gradle 侧全部不依赖硬件的测试，以及 `spotlessCheck`、`detekt`、lint 与 `koverVerifyCoverage`（不含 Rust 侧检查） |
+| `cargo xtask check` | 全仓离线检查门禁：版本一致性校验、`cargo test --locked --workspace`、`cargo clippy --locked --workspace --all-targets -- -D warnings`、`cargo xtask no-comments`，以及 Gradle `check offlineCheck`。CI 执行的就是它 |
 
-**提 PR 前必须通过 `./gradlew offlineCheck`。**
+**提 PR 前必须通过 `cargo xtask check`。**
 
 约束：
 
@@ -104,7 +105,8 @@ CI 还会构建 Android 调试 APK 并打包桌面版。Windows 作业对 WinRT 
 本地构建命令：
 
 ```bash
-./gradlew check offlineCheck :androidApp:assembleDebug
+cargo xtask check
+./gradlew :androidApp:assembleDebug
 ./gradlew :desktopApp:packageDistributionForCurrentOS
 ```
 
@@ -117,7 +119,7 @@ feat(desktop): add tray panel and background control
 
 <describe the behaviour change>
 
-Validation: :shared:ui:jvmTest and :desktopApp:test pass; check offlineCheck
+Validation: :shared:ui:jvmTest and :desktopApp:test pass; cargo xtask check
 passes. GNOME and KDE are not verified on hardware.
 ```
 
@@ -153,7 +155,7 @@ gh attestation verify openrose-X.Y.Z-android.apk --repo DOHEX/OpenRose
 
 OpenRose 区分两类验证，请在 PR 描述和文档中分别如实记录，不要把离线测试当作真机验证：
 
-- **离线验证**：协议编解码、控制会话、BlueZ 假 D-Bus 驱动、界面测试等，由 `offlineCheck` 覆盖，不需要耳机。
+- **离线验证**：协议编解码、控制会话、BlueZ 假 D-Bus 驱动、界面测试、Rust 核心测试与静态检查等，由 `cargo xtask check` 覆盖，不需要耳机。
 - **真机验证**：在真实耳机、真实设备或桌面环境上执行。请写明耳机型号、设备 / 系统（或桌面环境与 BlueZ 版本）、OpenRose 版本，以及具体验证了哪些功能。
 
 新增型号或系统适配时，请分别记录协议依据、离线测试结果和真机测试结果；没有测过的部分明确写“未验证”。网站“支持的耳机”和“平台支持”页（以及 README 的支持表）中的状态列就是这种写法：已在真机验证的部分和只有离线测试的部分分开标注。型号协议研究位于 [docs/protocols/](docs/protocols/)。
