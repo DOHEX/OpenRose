@@ -9,10 +9,10 @@ import io.github.dohex.openrose.core.transport.GattDriver
 import io.github.dohex.openrose.core.transport.GattException
 import io.github.dohex.openrose.core.transport.GattFailureKind
 import io.github.dohex.openrose.core.transport.RawAudioEvent
+import io.github.dohex.openrose.ffi.drivers.ControlTransportAdapter
+import io.github.dohex.openrose.ffi.drivers.PlatformDrivers
+import io.github.dohex.openrose.ffi.drivers.SimulatedDrivers
 import io.github.dohex.openrose.ffi.kotlincore.CoreControlRuntime
-import io.github.dohex.openrose.ffi.kotlincore.KotlinCoreDrivers
-import io.github.dohex.openrose.ffi.kotlincore.KotlinCoreTransport
-import io.github.dohex.openrose.ffi.kotlincore.SimulatedDrivers
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import uniffi.openrose_ffi.ControlTransport
@@ -49,7 +49,7 @@ private class RustAppHeadset(private val shared: SharedHeadset, earphones: Devic
 
     override fun runtime(scope: CoroutineScope, settings: UserSettings, platform: PlatformState, sessionIdBase: Long): ControlRuntime {
         val core = CoreControlRuntime(
-            transport = CountedTransport(KotlinCoreTransport(RefusableDrivers()), closed),
+            transport = CountedTransport(ControlTransportAdapter(RefusableDrivers()), closed),
             initialPlatformState = platform,
             initialSettings = settings,
             scope = scope,
@@ -64,7 +64,7 @@ private class RustAppHeadset(private val shared: SharedHeadset, earphones: Devic
 
     override fun close() = drivers.close()
 
-    private inner class RefusableDrivers : KotlinCoreDrivers by drivers {
+    private inner class RefusableDrivers : PlatformDrivers by drivers {
         override fun gatt(address: String): GattDriver = SharedGatt(drivers.gatt(address))
     }
 
@@ -83,7 +83,7 @@ private class RustAppHeadset(private val shared: SharedHeadset, earphones: Devic
     }
 }
 
-private class CountedTransport(private val delegate: KotlinCoreTransport, private val closed: AtomicInteger) :
+private class CountedTransport(private val delegate: ControlTransportAdapter, private val closed: AtomicInteger) :
     ControlTransport by delegate,
     AutoCloseable {
     override fun close() {
