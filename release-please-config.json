@@ -27,6 +27,16 @@
           "type": "toml",
           "path": "Cargo.toml",
           "jsonpath": "$.workspace.package.version"
+        },
+        {
+          "type": "toml",
+          "path": "desktop/ext/openrose-native/Cargo.toml",
+          "jsonpath": "$.package.version"
+        },
+        {
+          "type": "json",
+          "path": "desktop/nsh.json",
+          "jsonpath": "$.version"
         }
       ]
     }

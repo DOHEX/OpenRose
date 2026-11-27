@@ -87,7 +87,7 @@ cd OpenRose
 | `./gradlew koverHtmlReportCoverage` | 生成根项目聚合的覆盖率 HTML 报告 |
 | `./gradlew koverVerifyCoverage` | 校验行覆盖率不低于下限 |
 | `./gradlew offlineCheck` | 运行 Gradle 侧全部不依赖硬件的测试，以及 `spotlessCheck`、`detekt`、lint 与 `koverVerifyCoverage`（不含 Rust 侧检查） |
-| `cargo xtask check` | 全仓离线检查门禁：版本一致性校验、`cargo test --locked --workspace`、`cargo clippy --locked --workspace --all-targets -- -D warnings`、`cargo xtask no-comments`，以及 Gradle `check offlineCheck`。CI 执行的就是它 |
+| `cargo xtask check` | 全仓离线检查门禁：版本一致性校验、`cargo test --locked --workspace`、`cargo clippy --locked --workspace --all-targets -- -D warnings`、`desktop/ext/*` 的 `cargo test --locked` 与 clippy、`cargo xtask no-comments`（Rust 与 TSX）、`desktop/` 的 `nsh check` 与 `nsh test`，以及 Gradle `check offlineCheck`。CI 执行的就是它 |
 
 **提 PR 前必须通过 `cargo xtask check`。**
 

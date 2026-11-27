@@ -60,14 +60,14 @@ jobs:
           echo "release_tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
           echo "label=$label" >> "$GITHUB_OUTPUT"
 
-      - name: Checkout release PR branch to sync Cargo version
+      - name: Checkout release PR branch to sync Cargo and desktop versions
         if: steps.release.outputs.pr != ''
         uses: actions/checkout@v7.0.1
         with:
           ref: ${{ fromJSON(steps.release.outputs.pr).headBranchName }}
           path: release-pr
 
-      - name: Sync Cargo version on release PR
+      - name: Sync Cargo and desktop versions on release PR
         if: steps.release.outputs.pr != ''
         working-directory: release-pr
         env:
@@ -75,11 +75,11 @@ jobs:
         run: |
           cargo xtask sync-version
           cargo xtask check-version
-          if ! git diff --quiet Cargo.toml Cargo.lock; then
+          if ! git diff --quiet Cargo.toml Cargo.lock desktop/nsh.json desktop/ext/openrose-native/Cargo.toml desktop/ext/openrose-native/Cargo.lock; then
             git config user.name 'github-actions[bot]'
             git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-            git add Cargo.toml Cargo.lock
-            git commit -m 'chore: sync Cargo version with version.txt'
+            git add Cargo.toml Cargo.lock desktop/nsh.json desktop/ext/openrose-native/Cargo.toml desktop/ext/openrose-native/Cargo.lock
+            git commit -m 'chore: sync Cargo and desktop versions with version.txt'
             git push origin "HEAD:$PR_BRANCH"
           fi
 
@@ -123,6 +123,11 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install --yes libgtk-3-0t64 libegl1 libgl1 libfontconfig1
+
+      - name: Install nsh 0.7.0
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: mise use --global github:longbridge/nsh@0.7.0
 
       - name: Run checks
         run: cargo xtask check
