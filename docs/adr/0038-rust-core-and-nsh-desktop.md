@@ -44,6 +44,8 @@ status: accepted
     - Windows：托盘与单实例。
 
     niri 上任一项卡死或无法退出，就不采用 NSH，重新选择界面方案。
+
+    **2026-11-27 结论**：niri 原生 Wayland 各项已通过（[#144 记录](https://github.com/DOHEX/OpenRose/issues/144#issuecomment-7215960176)），采用 NSH，Linux 桌面端从 #152 起开工。macOS x64、Windows 两项与这两个平台的音频连接观察探针移到 #160、#161 开工前验收；某一平台不通过时，只为该平台另选界面方案，Linux 桌面端不受影响。Linux 托盘面板不用原生 `closeOnBlur`：`focus-follows-mouse` 下指针从状态栏移向面板时会掠过底层窗口，面板须等指针首次移入后才响应失焦（原型 `db3f73f`）。
 - **打包**：
   - Linux：NSH 产出 AppImage，CI 再用 nfpm 打 deb、rpm 与 pacman 包。
   - Windows：Inno Setup 安装程序。
