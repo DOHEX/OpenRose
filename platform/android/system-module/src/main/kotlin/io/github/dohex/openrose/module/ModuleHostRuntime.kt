@@ -13,17 +13,13 @@ import android.os.IBinder
 import android.os.Process
 import android.os.UserManager
 import android.util.Log
-import io.github.dohex.openrose.androidintegration.ControlWay
 import io.github.dohex.openrose.androidintegration.HostConfiguration
 import io.github.dohex.openrose.androidintegration.HostFacts
-import io.github.dohex.openrose.androidintegration.HostStatus
 import io.github.dohex.openrose.androidintegration.ModuleControlHost
 import io.github.dohex.openrose.androidintegration.wire.BridgeWire
 import io.github.dohex.openrose.bridge.readHostSettings
-import io.github.dohex.openrose.core.LocalControlRuntime
-import io.github.dohex.openrose.module.nativecore.NativeCoreTrial
-import io.github.dohex.openrose.module.nativecore.androidNativeCoreTrial
-import io.github.dohex.openrose.platform.AndroidControlTransport
+import io.github.dohex.openrose.ffi.kotlincore.CoreControlRuntime
+import io.github.dohex.openrose.platform.androidCoreTransport
 import io.github.dohex.openrose.platform.readPlatformState
 import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedModule
@@ -31,13 +27,11 @@ import io.github.libxposed.api.error.HookFailedError
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import java.lang.reflect.Method
 import java.util.UUID
 
@@ -99,7 +93,6 @@ internal class ModuleHostRuntime(
             val appContext = hostContext.applicationContext ?: hostContext
             val hostScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
             scope = hostScope
-            val trial = androidNativeCoreTrial(module, appContext)
             val facts = MutableStateFlow(HostFacts())
             val created = ModuleControlHost(
                 packageName = appContext.packageName,
@@ -107,10 +100,11 @@ internal class ModuleHostRuntime(
                 incarnation = UUID.randomUUID().toString(),
                 authority = AndroidCallerAuthority(appContext),
                 runtimeFactory = { runtimeScope, settings, platform, sessionIdBase ->
-                    LocalControlRuntime(
+                    System.setProperty("jna.nounpack", "true")
+                    CoreControlRuntime(
+                        transport = androidCoreTransport(appContext),
                         initialPlatformState = platform,
                         initialSettings = settings,
-                        transport = AndroidControlTransport(appContext),
                         scope = runtimeScope,
                         sessionIdBase = sessionIdBase,
                     )
@@ -128,7 +122,7 @@ internal class ModuleHostRuntime(
             host = created
             val served = HostEndpoint(appContext, created, facts, hostScope) { circulation }
             endpoint = served
-            watchConfiguration(appContext, hostScope, created, trial)
+            watchConfiguration(appContext, hostScope, created)
         }
     }
 
@@ -136,7 +130,6 @@ internal class ModuleHostRuntime(
         appContext: Context,
         hostScope: CoroutineScope,
         created: ModuleControlHost,
-        trial: NativeCoreTrial,
     ) {
         val changes = Channel<Unit>(Channel.CONFLATED)
         val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, _ -> changes.trySend(Unit) }
@@ -156,7 +149,7 @@ internal class ModuleHostRuntime(
             val user = appContext.getSystemService(UserManager::class.java)
             while (isActive) {
                 created.updatePlatform(appContext.readPlatformState(permissionRequested = true))
-                val configured = reconcileConfiguration(user, created, trial, changes)
+                val configured = reconcileConfiguration(user, created, changes)
                 if (configured && user.isUserUnlocked) {
                     changes.receive()
                 } else {
@@ -169,19 +162,12 @@ internal class ModuleHostRuntime(
     private suspend fun reconcileConfiguration(
         user: UserManager,
         created: ModuleControlHost,
-        trial: NativeCoreTrial,
         changes: Channel<Unit>,
     ): Boolean {
         val initial = if (user.isUserUnlocked) readConfiguration() else HostConfiguration()
-        if (initial == null) {
-            changes.trySend(Unit)
-        } else if (initial.userUnlocked && initial.settings.integration.controlWay == ControlWay.MODULE) {
-            withContext(Dispatchers.Default) {
-                trial.apply(initial.settings.integration.nativeCoreTrial, ControlWay.MODULE)
-            }
-        }
+        if (initial == null) changes.trySend(Unit)
         var firstRead = true
-        val configured = created.configure {
+        return created.configure {
             if (firstRead) {
                 firstRead = false
                 initial
@@ -191,17 +177,6 @@ internal class ModuleHostRuntime(
                 HostConfiguration()
             }
         }
-        if (initial != null && initial.userUnlocked) {
-            val effectiveWay = if (created.status.value is HostStatus.Active) {
-                ControlWay.MODULE
-            } else {
-                initial.settings.integration.controlWay
-            }
-            withContext(Dispatchers.Default) {
-                trial.apply(initial.settings.integration.nativeCoreTrial, effectiveWay)
-            }
-        }
-        return configured
     }
 
     private fun readConfiguration(): HostConfiguration? = synchronized(lifecycle) {

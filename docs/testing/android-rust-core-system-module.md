@@ -1,41 +1,23 @@
-# 小米 14 系统模块加载 Rust 核心的试验步骤
+# 小米 14 系统模块加载 Rust 核心的门槛记录（#167）
 
-**门槛已于 2026-11-27 实测通过（见文末[实测结果](#实测结果)）；热重载拒绝核对尚未实测，未验证。** 本页是 [ADR 0038](../adr/0038-rust-core-and-nsh-desktop.md) 的 Android 切换门槛（#167）的操作步骤与判据：系统模块在 `com.android.bluetooth` 内把 `libjnidispatch.so` 与 `libopenrose_ffi.so` 从模块 APK 加载进来，用 Rust 控制入口完成一次 i5 连接与读数，且 SELinux 与 linker 没有拒绝。离线测试只覆盖开关与控制方式判定、仅选择 `I5_ZT` 目标及热重载拒绝，不证明库能在系统蓝牙进程里加载。
+**门槛已于 2026-11-27 实测通过（见文末[实测结果](#实测结果)）；热重载拒绝核对尚未实测，未验证。** 本页记录 [ADR 0038](../adr/0038-rust-core-and-nsh-desktop.md) 的 Android 切换门槛（#167）：系统模块在 `com.android.bluetooth` 内把 `libjnidispatch.so` 与 `libopenrose_ffi.so` 从模块 APK 加载进来，用 Rust 控制入口完成一次 i5 连接与读数，且 SELinux 与 linker 没有拒绝。门槛通过后，#169 已将模块控制切到 Rust 核心并删除试验开关与试验会话；下文的日志判据与实测结果仅作历史记录保留。
 
-门槛失败时（ADR 0038）：控制会话移到应用进程，模块只转发 GATT／SPP 原语，并重开 [ADR 0011](../adr/0011-dual-host-single-control-session.md)。
+## 历史试验条件
 
-## 试验对象与前提
-
-| 项 | 要求 |
+| 项 | 当时要求 |
 | --- | --- |
 | 手机 | 小米 14，HyperOS，已 root；LSPosed 已启用 OpenRose 模块，作用域勾选系统蓝牙（`com.android.bluetooth`）。 |
-| 耳机 | EarFree i5（`I5_ZT`），已与手机经典蓝牙配对；Linux 桌面、另一部手机等没有持有它的 LE 链路（参见 [android-i5-control-regressions.md](android-i5-control-regressions.md) 中 Linux 回连 LE 的复现）。试验只会挑选已识别为 `I5_ZT` 的耳机，已配对的其他型号（例如 i7）或未识别设备会被忽略。 |
-| 控制方式 | 应用控制（默认），后台控制关闭。试验只在未选择模块控制时启动；若选择模块控制，试验会跳过加载与启动（`trial_skipped reason=module_control_selected`），运行中切到模块控制会停止试验会话（`trial_stopped reason=module_control_selected`），确保 `com.android.bluetooth` 内只有一个控制会话（[ADR 0011](../adr/0011-dual-host-single-control-session.md)）。 |
+| 耳机 | EarFree i5（`I5_ZT`），已与手机经典蓝牙配对；Linux 桌面、另一部手机等没有持有它的 LE 链路（参见 [android-i5-control-regressions.md](android-i5-control-regressions.md) 中 Linux 回连 LE 的复现）。当时试验只挑选已识别为 `I5_ZT` 的耳机，已配对的其他型号（例如 i7）或未识别设备被忽略。 |
+| 控制方式 | 应用控制（默认），后台控制关闭。当时试验仅在未选择模块控制时启动，选择或切到模块控制时跳过或停止，确保 `com.android.bluetooth` 内只有一个控制会话（[ADR 0011](../adr/0011-dual-host-single-control-session.md)）。 |
 | 电脑 | `adb`；按 [CONTRIBUTING.md](../../CONTRIBUTING.md) 配好 Rust 与 `cargo-ndk`，`./gradlew :androidApp:assembleDebug` 可构建。 |
-| 开关 | `androidIntegration.native_core_trial`，默认 `false`。它与其他集成设置同属 `HostSettings`，由应用经 `module_config` 远程偏好发布给模块；界面没有入口，下面用 `run-as` 写应用的偏好文件。 |
 
-试验自己的输出只用日志标签 `OpenRoseNativeTrial`，热重载拒绝的一行除外，它用模块的标签 `OpenRoseSystemModule`；JNA 的加载调试输出在 `System.err`。
+试验输出使用日志标签 `OpenRoseNativeTrial`，热重载拒绝的一行用模块的标签 `OpenRoseSystemModule`；JNA 的加载调试输出在 `System.err`。
 
-## 步骤
+当时试验的开关与步骤已随 #169 移除，当前模块控制直接在 `com.android.bluetooth` 内运行 Rust 核心；更新模块后仍通过应用状态页「重启作用域」（[ADR 0025](../adr/0025-integration-scope-root-restart.md)）或重启 `com.android.bluetooth` 生效。
 
-| 步 | 操作 | 预期观察 |
-| --- | --- | --- |
-| 1 | `./gradlew :androidApp:assembleDebug`，记下 `sha256sum androidApp/build/outputs/apk/debug/androidApp-debug.apk`。`adb install -r androidApp/build/outputs/apk/debug/androidApp-debug.apk`。 | 安装成功。`adb shell pm path io.github.dohex.openrose` 给出的 APK 与本地哈希一致（`adb shell sha256sum <路径>`）。 |
-| 2 | 开一个终端抓日志，整个试验期间保持：`adb logcat -c && adb logcat -b all -v threadtime \| tee trial.log`。 | 开始滚动。 |
-| 3 | 在应用状态页点右上角的「重启作用域」，让新模块代码加载（[ADR 0025](../adr/0025-integration-scope-root-restart.md)）。没有界面时的 Root 替代：`adb shell su -c 'kill -TERM $(pidof com.android.bluetooth)'`。 | 系统蓝牙进程换了新 pid，蓝牙短暂中断后恢复。 |
-| 4 | 过滤 `OpenRoseNativeTrial`，等用户解锁后的第一次配置读取。 | `switch value=false`。这一行证明新代码已在 `com.android.bluetooth` 内运行并读到了配置。其后没有 `trial_start`。 |
-| 5 | 强停应用并打开开关：`adb shell am force-stop io.github.dohex.openrose`，再执行 `adb shell run-as io.github.dohex.openrose sh -c "grep -v native_core_trial shared_prefs/openrose.xml \| grep -v '</map>' > shared_prefs/openrose.xml.new; echo '    <string name=\"androidIntegration.native_core_trial\">true</string>' >> shared_prefs/openrose.xml.new; echo '</map>' >> shared_prefs/openrose.xml.new; mv shared_prefs/openrose.xml.new shared_prefs/openrose.xml"`。先用 `adb shell run-as io.github.dohex.openrose cat shared_prefs/openrose.xml` 确认文件存在并以 `<map>` 开头；不存在时先打开一次应用并改动任一设置。 | `cat` 的结果含 `androidIntegration.native_core_trial` 的值 `true`，其余条目不变。 |
-| 6 | `adb shell am start -n io.github.dohex.openrose/.MainActivity` 打开应用，让它把设置发布到 `module_config`，看到右列的日志后立刻 `adb shell am force-stop io.github.dohex.openrose`，避免应用的应用控制抢占 i5。 | `switch value=true`。若此时仍选着模块控制，会看到 `trial_skipped reason=module_control_selected` 而不启动试验；若已选应用控制，试验可能已在这个进程里启动，这一段的结果也计入失败证据，但判定以第 8 步为准。 |
-| 7 | 再次「重启作用域」（或第 3 步的 Root 命令）。应用保持强停状态。 | 系统蓝牙进程换新 pid。 |
-| 8 | 在新 pid 内观察 `OpenRoseNativeTrial`（`adb logcat -b all -v threadtime --pid=$(adb shell pidof com.android.bluetooth)` 或 `-s OpenRoseNativeTrial:V System.err:W`），最长等 2 分钟。 | 见下一节的行序。 |
-| 9 | 附加核对：保持试验在运行，`adb install -r` 重装同一 APK。 | 模块不热重载：系统蓝牙 pid 不变，没有第二个 `trial_start`；在 LSPosed 管理器里手动请求重载时，模块日志出现 `hot_reload_refused`（标签 `OpenRoseSystemModule`，经 Xposed 日志写出，LSPosed 管理器的日志页也能看到）。再「重启作用域」后新代码才生效。 |
-| 10 | 收尾：把偏好里的值改回 `false`（同第 5 步，把 `true` 换成 `false`），打开应用发布，再「重启作用域」。 | 新 pid 的第一行是 `switch value=false`，没有 `trial_start`。 |
+## 预期日志（历史参考）
 
-关闭开关在运行中不生效：已加载的库不能卸载，试验会继续，日志出现 `switch_off_ignored_until_scope_restart`，重启作用域后才真正关闭。若在试验运行中切到模块控制，试验会立即停止其控制会话并记录 `trial_stopped reason=module_control_selected`，但已加载的库仍要等重启作用域才会卸载。
-
-## 预期日志
-
-第 8 步的新 pid 内，`OpenRoseNativeTrial` 应按下面的顺序出现。方括号内是可变部分。
+当时门槛试验期间，在 `com.android.bluetooth` 的新 pid 内，`OpenRoseNativeTrial` 按下面的顺序出现。方括号内是可变部分。
 
 | 行（节选） | 含义与判读 |
 | --- | --- |
