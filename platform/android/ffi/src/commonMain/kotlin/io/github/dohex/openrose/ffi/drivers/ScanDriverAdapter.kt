@@ -1,4 +1,4 @@
-package io.github.dohex.openrose.ffi.kotlincore
+package io.github.dohex.openrose.ffi.drivers
 
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.BufferOverflow
@@ -12,7 +12,7 @@ import io.github.dohex.openrose.core.transport.Advertisement as KotlinAdvertisem
 
 private const val ADVERTISEMENT_BUFFER = 256
 
-internal class KotlinCoreScanDriver(source: Flow<KotlinAdvertisement>, scope: CoroutineScope) : ScanDriver {
+internal class ScanDriverAdapter(source: Flow<KotlinAdvertisement>, scope: CoroutineScope) : ScanDriver {
     private val advertisements = Channel<Advertisement>(ADVERTISEMENT_BUFFER, BufferOverflow.DROP_OLDEST)
     private val collector = scope.launch {
         source.pumpInto(advertisements, onFailure = { advertisements.close(it.toScanFailure()) }) { advertisements.send(it.toRust()) }

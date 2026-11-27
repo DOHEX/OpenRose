@@ -1,4 +1,4 @@
-package io.github.dohex.openrose.ffi.kotlincore
+package io.github.dohex.openrose.ffi
 
 internal class EnumNames<T : Enum<T>>(entries: List<T>) {
     private val byKey = entries.associateBy { it.name.withoutSeparators() }

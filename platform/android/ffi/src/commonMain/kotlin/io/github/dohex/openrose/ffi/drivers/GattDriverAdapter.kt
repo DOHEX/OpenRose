@@ -1,5 +1,6 @@
-package io.github.dohex.openrose.ffi.kotlincore
+package io.github.dohex.openrose.ffi.drivers
 
+import io.github.dohex.openrose.ffi.EnumNames
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
@@ -45,7 +46,7 @@ private class CharacteristicTable(services: List<KotlinGattService>) {
     }
 }
 
-internal class KotlinCoreGattDriver(private val driver: KotlinGattDriver, scope: CoroutineScope) : GattDriver {
+internal class GattDriverAdapter(private val driver: KotlinGattDriver, scope: CoroutineScope) : GattDriver {
     private val incoming = Channel<GattEvent>(Channel.UNLIMITED)
 
     @Volatile private var table = CharacteristicTable(emptyList())

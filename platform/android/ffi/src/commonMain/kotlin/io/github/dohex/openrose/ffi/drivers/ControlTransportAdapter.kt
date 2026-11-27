@@ -1,4 +1,4 @@
-package io.github.dohex.openrose.ffi.kotlincore
+package io.github.dohex.openrose.ffi.drivers
 
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -12,20 +12,20 @@ import uniffi.openrose_ffi.ScanDriver
 import uniffi.openrose_ffi.SppDriver
 import uniffi.openrose_headset.HeadsetId
 
-class KotlinCoreTransport(
-    private val drivers: KotlinCoreDrivers,
+class ControlTransportAdapter(
+    private val drivers: PlatformDrivers,
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
 ) : ControlTransport,
     AutoCloseable {
-    override fun openGatt(headset: HeadsetId): GattDriver = opening { KotlinCoreGattDriver(drivers.gatt(headset), scope) }
+    override fun openGatt(headset: HeadsetId): GattDriver = opening { GattDriverAdapter(drivers.gatt(headset), scope) }
 
-    override fun startScan(): ScanDriver = KotlinCoreScanDriver(drivers.scan(), scope)
+    override fun startScan(): ScanDriver = ScanDriverAdapter(drivers.scan(), scope)
 
     override fun openSpp(headset: HeadsetId, address: String, serviceUuid: String): SppDriver = opening {
-        KotlinCoreSppDriver(drivers.spp(address, serviceUuid), scope)
+        SppDriverAdapter(drivers.spp(address, serviceUuid), scope)
     }
 
-    override fun audioFacts(): AudioFactsDriver = KotlinCoreAudioFacts(drivers.audio, scope)
+    override fun audioFacts(): AudioFactsDriver = AudioFactsDriverAdapter(drivers.audio, scope)
 
     override fun supportsInitializationRecovery(): Boolean = drivers.supportsInitializationRecovery
 

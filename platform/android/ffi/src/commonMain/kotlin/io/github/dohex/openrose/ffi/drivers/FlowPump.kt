@@ -1,4 +1,4 @@
-package io.github.dohex.openrose.ffi.kotlincore
+package io.github.dohex.openrose.ffi.drivers
 
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.channels.SendChannel

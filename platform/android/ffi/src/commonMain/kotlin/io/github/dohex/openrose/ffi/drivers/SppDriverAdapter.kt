@@ -1,4 +1,4 @@
-package io.github.dohex.openrose.ffi.kotlincore
+package io.github.dohex.openrose.ffi.drivers
 
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
@@ -10,7 +10,7 @@ import uniffi.openrose_ffi.DriverException
 import uniffi.openrose_ffi.SppDriver
 import java.io.IOException
 
-internal class KotlinCoreSppDriver(private val link: SppLink, private val scope: CoroutineScope) : SppDriver {
+internal class SppDriverAdapter(private val link: SppLink, private val scope: CoroutineScope) : SppDriver {
     private val chunks = Channel<ByteArray>(Channel.UNLIMITED)
 
     @Volatile private var collector: Job? = null

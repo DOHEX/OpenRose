@@ -13,9 +13,9 @@ import io.github.dohex.openrose.core.TransportAvailability
 import io.github.dohex.openrose.core.UserSettings
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.transport.DeviceId
+import io.github.dohex.openrose.ffi.drivers.ControlTransportAdapter
+import io.github.dohex.openrose.ffi.drivers.SimulatedDrivers
 import io.github.dohex.openrose.ffi.kotlincore.CoreControlRuntime
-import io.github.dohex.openrose.ffi.kotlincore.KotlinCoreTransport
-import io.github.dohex.openrose.ffi.kotlincore.SimulatedDrivers
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -36,7 +36,7 @@ import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 class AppControlOverRustTest {
-    private class ClosableTransport(private val delegate: KotlinCoreTransport, private val closed: AtomicBoolean) :
+    private class ClosableTransport(private val delegate: ControlTransportAdapter, private val closed: AtomicBoolean) :
         ControlTransport by delegate,
         AutoCloseable {
         override fun close() {
@@ -54,7 +54,7 @@ class AppControlOverRustTest {
             store = MemoryOwnerStore(),
             appFactory = { ownerScope, settings, platformState, sessionIdBase ->
                 CoreControlRuntime(
-                    transport = ClosableTransport(KotlinCoreTransport(drivers), transportClosed),
+                    transport = ClosableTransport(ControlTransportAdapter(drivers), transportClosed),
                     initialPlatformState = platformState,
                     initialSettings = settings,
                     scope = ownerScope,

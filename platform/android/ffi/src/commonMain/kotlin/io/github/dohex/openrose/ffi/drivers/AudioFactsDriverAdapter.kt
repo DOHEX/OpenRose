@@ -1,5 +1,6 @@
-package io.github.dohex.openrose.ffi.kotlincore
+package io.github.dohex.openrose.ffi.drivers
 
+import io.github.dohex.openrose.ffi.EnumNames
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -25,7 +26,7 @@ import io.github.dohex.openrose.core.transport.RawProfileSnapshot as KotlinRawPr
 
 private const val REGISTRATION_TIMEOUT_MILLIS = 5_000L
 
-internal class KotlinCoreAudioFacts(private val source: KotlinAudioFactsDriver, private val scope: CoroutineScope) : AudioFactsDriver {
+internal class AudioFactsDriverAdapter(private val source: KotlinAudioFactsDriver, private val scope: CoroutineScope) : AudioFactsDriver {
     private var subscription: Job? = null
 
     @Synchronized

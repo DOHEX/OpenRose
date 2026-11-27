@@ -23,6 +23,12 @@ import io.github.dohex.openrose.core.protocol.ModelProfile
 import io.github.dohex.openrose.core.transport.DeviceId
 import io.github.dohex.openrose.ffi.RustControlRuntime
 import io.github.dohex.openrose.ffi.currentHeadset
+import io.github.dohex.openrose.ffi.drivers.ADDRESS
+import io.github.dohex.openrose.ffi.drivers.ControlTransportAdapter
+import io.github.dohex.openrose.ffi.drivers.SimulatedDrivers
+import io.github.dohex.openrose.ffi.drivers.clock
+import io.github.dohex.openrose.ffi.drivers.rig
+import io.github.dohex.openrose.ffi.drivers.timing
 import io.github.dohex.openrose.ffi.hasSystemAudio
 import io.github.dohex.openrose.ffi.readySession
 import io.github.dohex.openrose.ffi.sessionFor
@@ -81,7 +87,7 @@ class CoreControlRuntimeTest {
 
     private inline fun withRuntime(rig: SimulatedDrivers, block: (CoreControlRuntime, RustControlRuntime) -> Unit) {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-        val transport = KotlinCoreTransport(rig)
+        val transport = ControlTransportAdapter(rig)
         val rust = RustControlRuntime(transport, kotlinPlatform().toRust(), clock = rig.clock(), timing = rig.timing())
         try {
             block(CoreControlRuntime(rust, scope) { transport.close() }, rust)
@@ -289,7 +295,7 @@ class CoreControlRuntimeTest {
         }
     }
 
-    private class ClosableTransport(private val delegate: KotlinCoreTransport) :
+    private class ClosableTransport(private val delegate: ControlTransportAdapter) :
         ControlTransport by delegate,
         AutoCloseable {
         val closed = AtomicBoolean(false)
@@ -303,7 +309,7 @@ class CoreControlRuntimeTest {
     @Test
     fun theRuntimeAndItsTransportCloseOnceTheLinkIsReleasedAndTheOwnerScopeEnded() = runBlocking<Unit> {
         rig().use { rig ->
-            val transport = ClosableTransport(KotlinCoreTransport(rig))
+            val transport = ClosableTransport(ControlTransportAdapter(rig))
             val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
             val runtime = CoreControlRuntime(transport, kotlinPlatform(), scope = scope, timing = rig.timing(), clock = rig.clock())
             assertEquals(OperationResult.Success, runtime.connect(DeviceId(ADDRESS)))
@@ -318,7 +324,7 @@ class CoreControlRuntimeTest {
     @Test
     fun anOwnerScopeThatEndedFirstStillLetsTheRuntimeReleaseItsLinkBeforeClosing() = runBlocking<Unit> {
         rig().use { rig ->
-            val transport = ClosableTransport(KotlinCoreTransport(rig))
+            val transport = ClosableTransport(ControlTransportAdapter(rig))
             val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
             val runtime = CoreControlRuntime(transport, kotlinPlatform(), scope = scope, timing = rig.timing(), clock = rig.clock())
             assertEquals(OperationResult.Success, runtime.connect(DeviceId(ADDRESS)))

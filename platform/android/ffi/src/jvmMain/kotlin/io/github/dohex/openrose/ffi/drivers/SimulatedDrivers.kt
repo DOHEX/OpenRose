@@ -1,4 +1,4 @@
-package io.github.dohex.openrose.ffi.kotlincore
+package io.github.dohex.openrose.ffi.drivers
 
 import io.github.dohex.openrose.core.ConnectionPhase
 import io.github.dohex.openrose.core.transport.Advertisement
@@ -136,7 +136,7 @@ class SimulatedDrivers(
     val profile: ModelProfile = ModelProfile.I5_ZT,
     val address: String = DEFAULT_ADDRESS,
     private val alias: String? = null,
-) : KotlinCoreDrivers,
+) : PlatformDrivers,
     AutoCloseable {
     val device = SimulatedHeadset(profile, FirmwareVersion(listOf(1, 2, 5), "125"))
     val gatts = CopyOnWriteArrayList<SimulatedGatt>()

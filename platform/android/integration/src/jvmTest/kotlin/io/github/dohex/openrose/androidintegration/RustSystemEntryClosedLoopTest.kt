@@ -13,9 +13,9 @@ import io.github.dohex.openrose.core.TransportAvailability
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.FieldReading
 import io.github.dohex.openrose.core.transport.DeviceId
+import io.github.dohex.openrose.ffi.drivers.ControlTransportAdapter
+import io.github.dohex.openrose.ffi.drivers.SimulatedDrivers
 import io.github.dohex.openrose.ffi.kotlincore.CoreControlRuntime
-import io.github.dohex.openrose.ffi.kotlincore.KotlinCoreTransport
-import io.github.dohex.openrose.ffi.kotlincore.SimulatedDrivers
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -41,7 +41,7 @@ class RustSystemEntryClosedLoopTest {
             authority = testAuthority,
             runtimeFactory = { runtimeScope, settings, platform, sessionIdBase ->
                 CoreControlRuntime(
-                    transport = KotlinCoreTransport(simulated),
+                    transport = ControlTransportAdapter(simulated),
                     initialPlatformState = platform,
                     initialSettings = settings,
                     scope = runtimeScope,

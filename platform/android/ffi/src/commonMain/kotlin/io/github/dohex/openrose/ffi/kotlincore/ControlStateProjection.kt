@@ -20,6 +20,7 @@ import io.github.dohex.openrose.core.transport.TransportEndpoint
 import io.github.dohex.openrose.core.transport.TransportRecoveryReason
 import io.github.dohex.openrose.core.transport.TransportSelection
 import io.github.dohex.openrose.core.transport.TransportSelectionReason
+import io.github.dohex.openrose.ffi.EnumNames
 import kotlinx.collections.immutable.toPersistentList
 import kotlinx.collections.immutable.toPersistentSet
 import uniffi.openrose_control.ConnectionRecovery as RustConnectionRecovery

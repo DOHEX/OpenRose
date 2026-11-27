@@ -1,4 +1,4 @@
-package io.github.dohex.openrose.ffi.kotlincore
+package io.github.dohex.openrose.ffi.drivers
 
 import uniffi.openrose_control.HostPlatform
 import uniffi.openrose_control.PermissionState
