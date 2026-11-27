@@ -203,6 +203,13 @@ jobs:
             cargo install --locked cargo-ndk --version 4.1.2
           fi
 
+      - name: Ensure autotools for patched JNA arm64 build
+        run: |
+          if ! command -v autoreconf >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install --yes autoconf automake libtool
+          fi
+
       - name: Determine whether this PR changes the Android release package
         id: android-release-check
         if: github.event_name == 'pull_request'
@@ -277,6 +284,7 @@ jobs:
       - name: Verify uncompressed native libraries in APK
         env:
           ABIS: ${{ steps.android-sdk.outputs.abis }}
+          NDK_VERSION: ${{ steps.android-sdk.outputs.ndk }}
         run: |
           packages=(dist/android/*.apk)
           [[ ${#packages[@]} -eq 1 && -f "${packages[0]}" ]]
@@ -288,6 +296,13 @@ jobs:
                 { echo "::error::$lib is missing or compressed in $apk"; exit 1; }
             done
           done
+          if [[ " $ABIS " == *" arm64-v8a "* ]]; then
+            unzip -p "$apk" lib/arm64-v8a/libjnidispatch.so > "$RUNNER_TEMP/arm64-libjnidispatch.so"
+            if "$ANDROID_HOME/ndk/$NDK_VERSION/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-objdump" -d "$RUNNER_TEMP/arm64-libjnidispatch.so" | grep -Eq '\b[xw]18\b'; then
+              echo "::error::lib/arm64-v8a/libjnidispatch.so in $apk references reserved register x18/w18"
+              exit 1
+            fi
+          fi
 
       - name: Upload Android package
         uses: actions/upload-artifact@v7.0.2

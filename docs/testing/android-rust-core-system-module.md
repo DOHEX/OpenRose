@@ -1,6 +1,6 @@
 # 小米 14 系统模块加载 Rust 核心的试验步骤
 
-**尚未实测，未验证。** 本页是 [ADR 0038](../adr/0038-rust-core-and-nsh-desktop.md) 的 Android 切换门槛（#167）的操作步骤与判据：系统模块在 `com.android.bluetooth` 内把 `libjnidispatch.so` 与 `libopenrose_ffi.so` 从模块 APK 加载进来，用 Rust 控制入口完成一次 i5 连接与读数，且 SELinux 与 linker 没有拒绝。离线测试只覆盖开关与控制方式判定、仅选择 `I5_ZT` 目标及热重载拒绝，不证明库能在系统蓝牙进程里加载。
+**门槛已于 2026-11-27 实测通过（见文末[实测结果](#实测结果)）；热重载拒绝核对尚未实测，未验证。** 本页是 [ADR 0038](../adr/0038-rust-core-and-nsh-desktop.md) 的 Android 切换门槛（#167）的操作步骤与判据：系统模块在 `com.android.bluetooth` 内把 `libjnidispatch.so` 与 `libopenrose_ffi.so` 从模块 APK 加载进来，用 Rust 控制入口完成一次 i5 连接与读数，且 SELinux 与 linker 没有拒绝。离线测试只覆盖开关与控制方式判定、仅选择 `I5_ZT` 目标及热重载拒绝，不证明库能在系统蓝牙进程里加载。
 
 门槛失败时（ADR 0038）：控制会话移到应用进程，模块只转发 GATT／SPP 原语，并重开 [ADR 0011](../adr/0011-dual-host-single-control-session.md)。
 
@@ -102,3 +102,48 @@ linker 报错出现在 `UnsatisfiedLinkError` 的消息里（`native_library_loa
 ## 记录
 
 实测后在本页补一个「实测结果」小节，不改上面的步骤。按 [CONTRIBUTING.md](../../CONTRIBUTING.md) 的要求写明：耳机型号与固件、手机型号与系统版本、LSPosed 版本、OpenRose 版本与 APK 的 SHA-256、每一步的实际观察，再把 `trial.log` 里的关键行、`avc`／linker 的原文和 pid 变化附上。没有做的步骤写“未验证”。结论为失败时，在 #167 记下失败的判据与原文，由 ADR 0038 的失败处理重开 ADR 0011。
+
+## 实测结果
+
+### 测试环境
+
+| 项 | 实际值 |
+| --- | --- |
+| 日期 | 2026-11-27 |
+| 手机与系统 | 小米 14（`23127PN0CC` / `houji`），Android 17（SDK 37），HyperOS `OS4.0.0.27.XNCCNXM`（`Xiaomi/houji/houji:17/CP2A.260605.016/OS4.0.0.27.XNCCNXM:user/release-keys`） |
+| 耳机与固件 | ROSE EARFREE i5（`I5_ZT`），固件 `125`（`[1, 2, 5]`） |
+| OpenRose 版本 | `0.1.1`（合入构建期修补后的 debug APK SHA-256：`359bcf9ba7afe667d054dbf655e2fa3d5539d740988632462dc310138c4df661`） |
+| LSPosed / 宿主上下文 | `LspModuleClassLoader`，`com.android.bluetooth`，`uid=1002`，SELinux `u:r:bluetooth:s0`，`extract_native_libs=false` |
+
+### 发现与绕路（#179）
+
+首次使用 `net.java.dev.jna:jna:5.19.1@aar` 原版 `lib/arm64-v8a/libjnidispatch.so` 实测时，两个原生库均可经 `LspModuleClassLoader` 从 `base.apk!/lib/arm64-v8a/` 正常 `dlopen`，无 SELinux / linker 拒绝；但在进入 JNA / `libffi` 回调路径时，`com.android.bluetooth` 发生 `SIGSEGV`。反汇编确认上游 `libjnidispatch.so` 中的 `ffi_closure_trampoline_table_page` 使用了 Android arm64 保留给 Shadow Call Stack 的 `x18` 寄存器（根因为 `native/libffi/src/aarch64/ffitarget.h` 对 Android 未禁用 `FFI_EXEC_STATIC_TRAMP`）。
+
+以 JNA `5.19.1` 源码对 `ffitarget.h` 的 `#elif !defined(_WIN32)` 补上 `&& !defined(__ANDROID__)`，并配合 NDK `28.2.13676358`、`--disable-exec-static-tramp`、`-ffixed-x18`、`-Wl,-z,max-page-size=16384` 重新编译 `lib/arm64-v8a/libjnidispatch.so`（`llvm-objdump` 确认 0 条 `x18`/`w18` 引用，`llvm-readelf` 确认全部 `LOAD` 段按 `0x4000` 对齐）后复测通过。该构建期绕路已合入 `build-logic/src/main/kotlin/PatchedJna.kt` 并在 #179 跟踪移除。
+
+### 门槛判据与关键日志
+
+| 判据 | 结果 | 观察摘要 |
+| --- | --- | --- |
+| 加载 | **通过** | `native_library_loaded library=jnidispatch` 与 `native_library_loaded library=openrose_ffi` 均出现，均直接从 `base.apk!/lib/arm64-v8a/` 加载。 |
+| 连接与读数 | **通过** | `CONNECTING` → `DISCOVERING` → `SUBSCRIBING` → `INITIALIZING` → `connected (headset=D1:02:03:04:14:87, profile=I5_ZT)`，约 2 秒内完成全量读数（`LEFT_BATTERY=93`、`RIGHT_BATTERY=92`、`CASE_BATTERY=NotProvided(ff)`、`NOISE_MODE=wind`、`EQ=hifi`、`AUDIO_MODE=ldac`、`FIRMWARE=125` 等）并返回 `connect_result ... result=success`。 |
+| SELinux 与 linker | **通过** | `u:r:bluetooth:s0` 下无针对模块 APK 或两库的 `avc: denied`，无 `dlopen failed` / `UnsatisfiedLinkError`。 |
+| 进程稳定性 | **通过** | `com.android.bluetooth` PID 全程保持 `29915`，无 `SIGSEGV` / `FATAL EXCEPTION`；还原 `control_way=module` 后触发 `trial_stopped reason=module_control_selected` 干净退出。 |
+| 第 9 步热重载拒绝 | **未验证** | 本次试验未执行第 9 步 LSPosed 模块热重载测试。 |
+
+关键日志摘录（PID `29915`）：
+
+```text
+11-27 17:41:32.786 I/OpenRoseNativeTrial(29915): switch value=true
+11-27 17:41:32.786 I/OpenRoseNativeTrial(29915): trial_start
+11-27 17:41:32.788 I/OpenRoseNativeTrial(29915): native_library_resolve library=jnidispatch path=/data/app/.../base.apk!/lib/arm64-v8a/libjnidispatch.so
+11-27 17:41:32.790 I/OpenRoseNativeTrial(29915): native_library_loaded library=jnidispatch
+11-27 17:41:32.791 I/OpenRoseNativeTrial(29915): native_library_resolve library=openrose_ffi path=/data/app/.../base.apk!/lib/arm64-v8a/libopenrose_ffi.so
+11-27 17:41:32.792 I/OpenRoseNativeTrial(29915): native_library_loaded library=openrose_ffi
+11-27 17:41:32.954 I/OpenRoseNativeTrial(29915): reading field=LEFT_BATTERY value=Known(value=Number(v1=93), rawHex=5d)
+11-27 17:41:32.954 I/OpenRoseNativeTrial(29915): reading field=RIGHT_BATTERY value=Known(value=Number(v1=92), rawHex=5c)
+11-27 17:41:33.666 I/OpenRoseNativeTrial(29915): reading field=FIRMWARE value=Known(value=Firmware(v1=FirmwareVersion(parts=[1, 2, 5], displayText=125)), rawHex=010205)
+11-27 17:41:34.663 I/OpenRoseNativeTrial(29915): state revision=36 connection=connected headset=D1:02:03:04:14:87 session=2 profile=I5_ZT
+11-27 17:41:37.882 I/OpenRoseNativeTrial(29915): connect_result headset=D1:02:03:04:14:87 result=success
+11-27 17:41:54.746 I/OpenRoseNativeTrial(29915): trial_stopped reason=module_control_selected
+```

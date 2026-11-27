@@ -14,6 +14,7 @@ android {
     packaging {
         jniLibs {
             useLegacyPackaging = false
+            pickFirsts += "lib/arm64-v8a/libjnidispatch.so"
         }
     }
     buildTypes {

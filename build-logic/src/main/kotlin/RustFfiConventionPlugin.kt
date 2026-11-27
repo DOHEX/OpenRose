@@ -38,6 +38,10 @@ private fun Project.registerAndroidRustFfi(
     val sdkNdkDirectory = androidComponents.sdkComponents.ndkDirectory
     val pinnedNdkVersion = libs.stringVersion("android-ndk")
     val minSdkLevel = libs.intVersion("android-minSdk")
+    val jnaVersion = libs.stringVersion("jna")
+    val jnaSha256 = patchedJnaSourceSha256(jnaVersion)
+    val jnaCacheDir = gradle.gradleUserHomeDir.resolve("caches/openrose-jna")
+    val buildPatchedJna = "arm64-v8a" in shippedAbis
     androidComponents.onVariants { variant ->
         val variantName = variant.name.replaceFirstChar { it.uppercase() }
         val buildRustFfi = registerRustFfiTask<BuildAndroidRustFfiTask>("buildAndroidRustFfi$variantName") {
@@ -49,5 +53,19 @@ private fun Project.registerAndroidRustFfi(
             outputDir.set(layout.buildDirectory.dir("generated/rustJniLibs/${variant.name}"))
         }
         variant.sources.jniLibs?.addGeneratedSourceDirectory(buildRustFfi, BuildAndroidRustFfiTask::outputDir)
+        if (buildPatchedJna) {
+            val patchedJna = tasks.register("buildPatchedJnaArm64$variantName", BuildPatchedJnaArm64Task::class.java) {
+                ndkDirectory.set(sdkNdkDirectory)
+                ndkVersion.set(pinnedNdkVersion)
+                this.jnaVersion.set(jnaVersion)
+                jnaSourceSha256.set(jnaSha256)
+                platformLevel.set(minSdkLevel)
+                offline.set(gradle.startParameter.isOffline)
+                cacheDir.set(jnaCacheDir)
+                workDir.set(layout.buildDirectory.dir("intermediates/patchedJnaArm64/${variant.name}"))
+                outputDir.set(layout.buildDirectory.dir("generated/patchedJnaJniLibs/${variant.name}"))
+            }
+            variant.sources.jniLibs?.addGeneratedSourceDirectory(patchedJna, BuildPatchedJnaArm64Task::outputDir)
+        }
     }
 }
