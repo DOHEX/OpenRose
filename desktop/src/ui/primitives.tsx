@@ -41,17 +41,25 @@ export function ScrollArea(props: { children?: JSX.Element; class?: string }) {
   );
 }
 
-export function Column(props: { children?: JSX.Element; class?: string }) {
-  return <View class={`flex-col ${props.class ?? ""}`}>{props.children}</View>;
+export function Column(props: { children?: JSX.Element; class?: string; testID?: string }) {
+  return (
+    <View testID={props.testID} class={`flex-col ${props.class ?? ""}`}>
+      {props.children}
+    </View>
+  );
 }
 
-export function Row(props: { children?: JSX.Element; class?: string }) {
-  return <View class={`flex-row ${props.class ?? ""}`}>{props.children}</View>;
+export function Row(props: { children?: JSX.Element; class?: string; testID?: string }) {
+  return (
+    <View testID={props.testID} class={`flex-row ${props.class ?? ""}`}>
+      {props.children}
+    </View>
+  );
 }
-
 export function Card(props: {
   children?: JSX.Element;
   class?: string;
+  testID?: string;
   animateEntrance?: boolean;
   entrance?: MotionName;
   delay?: number;
@@ -61,6 +69,7 @@ export function Card(props: {
     : null;
   return (
     <View
+      testID={props.testID}
       style={motion?.style}
       class={`gap-3 rounded-(--radius-lg) border border-border bg-card p-4 ${props.class ?? ""}`}
     >

@@ -250,6 +250,7 @@ export function createHeadsetController() {
   const stop = client.subscribe((next) => {
     snapshot.set(next as ControlSnapshot);
   });
+  void client.refreshBondedHeadsets();
   cleanup(() => {
     stop();
     client.dispose();
@@ -428,13 +429,13 @@ export function createHeadsetController() {
     return { kind: "idle" };
   });
 
-  async function connect() {
+  async function connect(headsetId: string | null = null) {
     if (connectionBusy()) return;
     connectionBusy.set(true);
     connectionError.set(null);
     localNoiseError.set(null);
     try {
-      await client.connect(null);
+      await client.connect(headsetId);
     } catch (error) {
       const snapErr = snapshot().last_error;
       connectionError.set(
@@ -510,8 +511,20 @@ export function createHeadsetController() {
       devError.set(error instanceof Error ? error.message : String(error));
     }
   }
+  function selectCurrentHeadset(headsetId: string) {
+    connectionError.set(null);
+    client.selectCurrentHeadset(headsetId);
+    snapshot.set(client.snapshot() as ControlSnapshot);
+  }
+
+  async function refreshBondedHeadsets() {
+    await client.refreshBondedHeadsets();
+    snapshot.set(client.snapshot() as ControlSnapshot);
+  }
+
 
   return {
+    client,
     catalog,
     catalogById,
     snapshot,
@@ -531,6 +544,8 @@ export function createHeadsetController() {
     devError,
     connect,
     disconnect,
+    selectCurrentHeadset,
+    refreshBondedHeadsets,
     setNoiseMode,
     switchSimulatedHeadset,
     setSimulatedLatencyMs,
