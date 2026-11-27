@@ -59,47 +59,6 @@ pub enum HeadsetField {
 }
 
 impl HeadsetField {
-    pub fn display_name(self) -> &'static str {
-        match self {
-            Self::LeftBattery => "左耳电量",
-            Self::RightBattery => "右耳电量",
-            Self::CaseBattery => "盒电量",
-            Self::LeftCharging => "左耳充电",
-            Self::RightCharging => "右耳充电",
-            Self::LeftInCase => "左耳盒内标志",
-            Self::RightInCase => "右耳盒内标志",
-            Self::CaseFlag => "盒原始标志",
-            Self::Firmware => "固件",
-            Self::NoiseMode => "降噪模式",
-            Self::Eq => "均衡器",
-            Self::EqSlot => "自定义 EQ 槽位",
-            Self::GameMode => "游戏模式",
-            Self::AudioMode => "音频模式",
-            Self::Multipoint => "多点连接",
-            Self::TouchKeys => "触摸绑定",
-            Self::TapEnabled => "轻拍开关",
-            Self::TapKeys => "轻拍绑定",
-            Self::TouchEnabled => "触摸开关",
-            Self::NoiseCycle => "降噪轮换",
-            Self::EarDetection => "佩戴检测功能",
-            Self::AncLevel => "降噪档位",
-            Self::TransparencyLevel => "通透档位",
-            Self::PromptVolume => "提示音档位",
-            Self::CustomEq => "自定义 EQ",
-            Self::Gain => "增益档位",
-            Self::HearingProtection => "听力保护档位",
-            Self::PromptLanguage => "提示音语言",
-            Self::FindState => "寻机事件",
-            Self::SpatialAudio => "空间音频",
-            Self::HideSearch => "隐藏搜索",
-            Self::SpatialMode => "空间模式",
-            Self::SpatialContent => "空间音频内容",
-            Self::EarAdaptive => "耳道自适应",
-            Self::IndependentMicActivation => "独立麦克风激活",
-            Self::IndependentMicMode => "独立麦克风模式",
-        }
-    }
-
     pub fn is_battery_flag(self) -> bool {
         matches!(
             self,
@@ -254,49 +213,6 @@ impl FieldValue {
             side: side.into(),
             gesture: gesture.into(),
             action: action.into(),
-        }
-    }
-
-    pub fn display_text(&self) -> String {
-        match self {
-            Self::Number(value) => value.to_string(),
-            Self::Toggle(true) => "开启".to_string(),
-            Self::Toggle(false) => "关闭".to_string(),
-            Self::Text(value) => value.clone(),
-            Self::IntegerList(values) => values
-                .iter()
-                .map(i32::to_string)
-                .collect::<Vec<_>>()
-                .join(", "),
-            Self::Firmware(firmware) => firmware.display_text.clone(),
-            Self::TouchKeys(bindings) => bindings
-                .iter()
-                .map(|binding| {
-                    let action = binding
-                        .action
-                        .clone()
-                        .unwrap_or_else(|| format!("未知({})", binding.raw_action));
-                    format!("{}/{}: {action}", binding.side, binding.gesture)
-                })
-                .collect::<Vec<_>>()
-                .join("；"),
-            Self::TouchAssignment {
-                side,
-                gesture,
-                action,
-            } => format!("{side}/{gesture}: {action}"),
-            Self::NoiseCycle(flags) => flags
-                .iter()
-                .map(|(mode, flag)| {
-                    let state = match flag {
-                        Some(true) => "开",
-                        Some(false) => "关",
-                        None => "未知",
-                    };
-                    format!("{mode}: {state}")
-                })
-                .collect::<Vec<_>>()
-                .join("，"),
         }
     }
 }

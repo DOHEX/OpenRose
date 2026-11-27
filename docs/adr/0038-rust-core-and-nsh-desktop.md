@@ -13,7 +13,7 @@ status: accepted
   - UniFFI 没有流类型，Future 也不能取消。核心以回调接口推送状态，Android 侧把回调包成 Flow；取消由核心接口显式提供。
   - **控制入口**：保留 `ControlRuntime` 的语义：只有一个门面对象；对外推送完整的不可变状态快照；命令是带类型的 async 方法，以耳机读回确认为结果。NSH 适配层把快照转成 signal，Android 转成 `StateFlow`，两端都不另存一份状态。[ADR 0011](0011-dual-host-single-control-session.md) 与 [ADR 0029](0029-control-link-and-setting-queue-invariants.md) 的不变量随核心迁移。
   - **当前耳机**：由核心状态给出，用户在多副耳机之间切换是一条命令，取代 `shared/ui` 的 `PrimaryDeviceSelection`。
-  - **显示名称与原因**：型号相关的显示名称（版本名、EQ 预设名、触控槽位名）放在 `ModelSpec`，新增型号只改一处；与型号无关的文案由各界面维护并各自国际化。核心只输出原因类别，如不能连接的原因、重连引导方式；平台报告传输不可用时给原因代码与细节，文字由界面写。
+  - **显示名称与原因**：型号相关的显示名称（版本名、EQ 预设名、触控槽位名）放在 `ModelSpec`，新增型号只改一处；与型号无关的文案由各界面维护并各自国际化，核心不提供字段名或字段值的界面显示文本。核心只输出原因类别，如 `ConnectionBlockReason`、`ReconnectGuidance`、`TransportUnavailableReason`、`SettingPrerequisite`、`ControlErrorCode` 与 `ValidationErrorKind`；平台报告传输不可用时给原因代码与细节，文字由界面写。在现有共享界面（`shared/ui` 的 `DevicePanel`、`OperationFeedback`、`QuickPanel`、`AddDeviceContent`）仍直接呈现 `ControlError.message` 期间，`ControlError.message`（含 `crates/control` 的连接与设置队列错误，以及 `crates/headset/src/command.rs` 的 `ValidationError.message` 与协议层 `ProtocolError`）保留为随原因代码附带的细节文本，措辞严格遵循 [GLOSSARY](../../GLOSSARY.md)（耳机称“耳机”、“会话”只指控制会话），待各端按错误类别渲染后退化为诊断细节。
   - **序列化**：控制状态快照由核心用 serde 编码。Android 的 Binder IPC 与局域网流转直接传这些字节，删除 Kotlin 的 `*Wire` 编解码，握手版本重新编号。
   - **传输接口**：从一开始就同时覆盖 GATT 与 SPP。桌面驱动先做 GATT，有 i7 实机后再做 RFCOMM。
   - **沙盒**：`headset::simulator` 是模拟耳机的设备端，按型号回应协议帧，属于 sans-IO；`control` 在 `simulator` feature 下把它包成驱动。沙盒与测试用模拟读数走同一套规则，新桌面端的开发模式接入它，删除 `tools/ui-sandbox`；Android 界面测试仍用假模型，不经过 FFI。不单独建 `simulator` crate：它要依赖 `control`，`control` 的测试又依赖它，会形成开发依赖循环，同一类型被编译两份。

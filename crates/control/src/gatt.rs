@@ -124,7 +124,7 @@ impl Services {
             Ok(())
         } else {
             Err(TransportError::Unsupported(
-                "设备特征不提供所需的写入或订阅能力".to_string(),
+                "耳机特征不提供所需的写入或订阅能力".to_string(),
             ))
         }
     }

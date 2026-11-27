@@ -641,3 +641,46 @@ async fn an_unsolicited_matching_report_between_write_and_readback_cannot_confir
     );
     assert_eq!(ConnectionState::Disconnected, harness.connection());
 }
+
+#[tokio::test(start_paused = true)]
+async fn core_control_errors_follow_glossary_wording_without_device_or_non_control_session_terms() {
+    let harness = Harness::new(Options::i5());
+    let not_ready = harness
+        .runtime
+        .set(HeadsetCommand::NoiseMode(NoiseMode::Anc), None)
+        .await
+        .expect_err("disconnected set rejects");
+    assert_eq!(ControlErrorCode::NotReady, not_ready.code);
+    assert_eq!("耳机尚未就绪", not_ready.message);
+
+    let harness = Harness::ready_i5().await;
+    let stale = harness
+        .runtime
+        .set(HeadsetCommand::NoiseMode(NoiseMode::Anc), Some(999))
+        .await
+        .expect_err("stale session rejects");
+    assert_eq!(ControlErrorCode::Disconnected, stale.code);
+    assert_eq!("请求的控制会话已结束或已被替换", stale.message);
+
+    let mismatched = spawn_set(&harness, HeadsetCommand::NoiseMode(NoiseMode::Normal));
+    settle().await;
+    assert!(harness.inject_hex(NOISE_REPLY_ANC));
+    settle().await;
+    let not_applied = mismatched
+        .await
+        .unwrap()
+        .expect_err("mismatch rejects");
+    assert_eq!(ControlErrorCode::NotApplied, not_applied.code);
+    assert_eq!("耳机回读与请求不一致", not_applied.message);
+
+    let pending = spawn_set(&harness, HeadsetCommand::NoiseMode(NoiseMode::Anc));
+    settle().await;
+    harness.runtime.disconnect().await;
+    settle().await;
+    let ended = pending
+        .await
+        .unwrap()
+        .expect_err("disconnect fails pending setting");
+    assert_eq!(ControlErrorCode::Disconnected, ended.code);
+    assert_eq!("控制会话已结束", ended.message);
+}

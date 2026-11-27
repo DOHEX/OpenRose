@@ -56,7 +56,7 @@ impl Interrupt {
     pub(crate) fn into_connection_error(self) -> ControlError {
         match self {
             Self::Cancelled | Self::Ended => {
-                ControlError::new(ControlErrorCode::Disconnected, "设备连接已结束")
+                ControlError::new(ControlErrorCode::Disconnected, "控制连接已结束")
             }
             Self::Timeout => ControlError::new(ControlErrorCode::Timeout, "蓝牙连接或读取超时"),
             Self::Transport(error) => connection_failure(&error),
