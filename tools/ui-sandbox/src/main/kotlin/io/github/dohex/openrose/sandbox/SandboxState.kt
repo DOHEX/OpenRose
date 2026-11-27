@@ -11,7 +11,7 @@ import io.github.dohex.openrose.core.PermissionState
 import io.github.dohex.openrose.core.PlatformApplicability
 import io.github.dohex.openrose.core.PlatformState
 import io.github.dohex.openrose.core.TransportAvailability
-import io.github.dohex.openrose.core.TransportUnavailableCode
+import io.github.dohex.openrose.core.TransportUnavailableReason
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.FieldReading
 import io.github.dohex.openrose.core.protocol.FieldValue
@@ -112,8 +112,8 @@ private fun sandboxPlatform(scenario: SandboxScenario): PlatformState {
 }
 
 private fun unavailableTransport(scenario: SandboxScenario): TransportAvailability.Unavailable = when (scenario.host) {
-    HostPlatform.ANDROID -> TransportAvailability.Unavailable(TransportUnavailableCode.BLE_UNSUPPORTED)
-    HostPlatform.LINUX -> TransportAvailability.Unavailable(TransportUnavailableCode.BACKEND_UNAVAILABLE, "系统总线不可用")
-    HostPlatform.WINDOWS -> TransportAvailability.Unavailable(TransportUnavailableCode.BLE_UNSUPPORTED)
-    HostPlatform.UNKNOWN -> TransportAvailability.Unavailable(TransportUnavailableCode.UNSUPPORTED_PLATFORM, scenario.platformName)
+    HostPlatform.ANDROID -> TransportAvailability.Unavailable(TransportUnavailableReason.BleUnsupported)
+    HostPlatform.LINUX -> TransportAvailability.Unavailable(TransportUnavailableReason.BackendUnavailable("系统总线不可用"))
+    HostPlatform.WINDOWS -> TransportAvailability.Unavailable(TransportUnavailableReason.BleUnsupported)
+    HostPlatform.UNKNOWN -> TransportAvailability.Unavailable(TransportUnavailableReason.UnsupportedPlatform(scenario.platformName))
 }

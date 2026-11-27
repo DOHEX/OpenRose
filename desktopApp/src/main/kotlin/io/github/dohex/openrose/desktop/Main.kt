@@ -32,7 +32,7 @@ import io.github.dohex.openrose.core.PermissionState
 import io.github.dohex.openrose.core.PlatformApplicability
 import io.github.dohex.openrose.core.PlatformState
 import io.github.dohex.openrose.core.TransportAvailability
-import io.github.dohex.openrose.core.TransportUnavailableCode
+import io.github.dohex.openrose.core.TransportUnavailableReason
 import io.github.dohex.openrose.transport.bluez.BluezControlTransport
 import io.github.dohex.openrose.transport.bluez.linuxBluetoothSettingsCommand
 import io.github.dohex.openrose.transport.windows.WindowsControlTransport
@@ -100,7 +100,7 @@ private fun startRuntime(platform: String, hostPlatform: HostPlatform, scope: Co
         platform = PlatformState(
             permission = PermissionState.NOT_REQUIRED,
             transport = transport?.availability?.value
-                ?: TransportAvailability.Unavailable(TransportUnavailableCode.UNSUPPORTED_PLATFORM, platform),
+                ?: TransportAvailability.Unavailable(TransportUnavailableReason.UnsupportedPlatform(platform)),
             hostPlatform = hostPlatform,
             controlTransportApplicability = if (transport != null) {
                 PlatformApplicability.APPLICABLE

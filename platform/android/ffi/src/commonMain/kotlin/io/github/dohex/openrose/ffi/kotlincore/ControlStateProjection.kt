@@ -13,7 +13,7 @@ import io.github.dohex.openrose.core.ScanState
 import io.github.dohex.openrose.core.SettingOperation
 import io.github.dohex.openrose.core.SettingStage
 import io.github.dohex.openrose.core.TransportAvailability
-import io.github.dohex.openrose.core.TransportUnavailableCode
+import io.github.dohex.openrose.core.TransportUnavailableReason
 import io.github.dohex.openrose.core.UserSettings
 import io.github.dohex.openrose.core.transport.DeviceId
 import io.github.dohex.openrose.core.transport.TransportEndpoint
@@ -32,9 +32,9 @@ import uniffi.openrose_control.SettingOperation as RustSettingOperation
 import uniffi.openrose_control.TransportAvailability as RustTransportAvailability
 import uniffi.openrose_control.TransportEndpoint as RustTransportEndpoint
 import uniffi.openrose_control.TransportSelection as RustTransportSelection
+import uniffi.openrose_control.TransportUnavailableReason as RustUnavailableReason
 
 private val permissionStates = EnumNames(PermissionState.entries)
-private val unavailableCodes = EnumNames(TransportUnavailableCode.entries)
 private val hostPlatforms = EnumNames(HostPlatform.entries)
 private val applicabilities = EnumNames(PlatformApplicability.entries)
 private val connectionPhases = EnumNames(ConnectionPhase.entries)
@@ -71,7 +71,43 @@ internal fun RustPlatformState.toKotlin(): PlatformState = PlatformState(
 private fun RustTransportAvailability.toKotlin(): TransportAvailability = when (this) {
     RustTransportAvailability.Available -> TransportAvailability.Available
     RustTransportAvailability.Disabled -> TransportAvailability.Disabled
-    is RustTransportAvailability.Unavailable -> TransportAvailability.Unavailable(unavailableCodes.of(code), detail)
+    is RustTransportAvailability.Unavailable -> TransportAvailability.Unavailable(reason.toKotlin())
+}
+
+private fun RustUnavailableReason.toKotlin(): TransportUnavailableReason = when (this) {
+    is RustUnavailableReason.UnsupportedPlatform -> TransportUnavailableReason.UnsupportedPlatform(platform)
+    is RustUnavailableReason.MissingDependency -> TransportUnavailableReason.MissingDependency(detail)
+    is RustUnavailableReason.BackendUnavailable -> TransportUnavailableReason.BackendUnavailable(detail)
+    else -> toFixedKotlinReason()
+}
+
+private fun RustUnavailableReason.toFixedKotlinReason(): TransportUnavailableReason = when (this) {
+    RustUnavailableReason.BleUnsupported -> TransportUnavailableReason.BleUnsupported
+
+    RustUnavailableReason.PermissionRequired -> TransportUnavailableReason.PermissionRequired
+
+    RustUnavailableReason.NoAdapter -> TransportUnavailableReason.NoAdapter
+
+    RustUnavailableReason.AdapterPoweredOff -> TransportUnavailableReason.AdapterPoweredOff
+
+    RustUnavailableReason.AdapterStateUnknown -> TransportUnavailableReason.AdapterStateUnknown
+
+    RustUnavailableReason.AccessDenied -> TransportUnavailableReason.AccessDenied
+
+    RustUnavailableReason.ServiceUnavailable -> TransportUnavailableReason.ServiceUnavailable
+
+    RustUnavailableReason.Initializing -> TransportUnavailableReason.Initializing
+
+    RustUnavailableReason.Recovering -> TransportUnavailableReason.Recovering
+
+    RustUnavailableReason.ShuttingDown -> TransportUnavailableReason.ShuttingDown
+
+    RustUnavailableReason.Closed -> TransportUnavailableReason.Closed
+
+    is RustUnavailableReason.UnsupportedPlatform,
+    is RustUnavailableReason.MissingDependency,
+    is RustUnavailableReason.BackendUnavailable,
+    -> error("handled by toKotlin")
 }
 
 private fun RustConnectionState.toKotlin(): ConnectionState = when (this) {

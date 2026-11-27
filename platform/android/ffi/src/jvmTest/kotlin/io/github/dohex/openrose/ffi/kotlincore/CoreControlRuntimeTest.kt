@@ -15,7 +15,7 @@ import io.github.dohex.openrose.core.ReconnectGuidance
 import io.github.dohex.openrose.core.ScanState
 import io.github.dohex.openrose.core.SettingStage
 import io.github.dohex.openrose.core.TransportAvailability
-import io.github.dohex.openrose.core.TransportUnavailableCode
+import io.github.dohex.openrose.core.TransportUnavailableReason
 import io.github.dohex.openrose.core.UserSettings
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.FieldValue
@@ -53,7 +53,7 @@ import uniffi.openrose_control.PermissionState as RustPermissionState
 import uniffi.openrose_control.PlatformApplicability as RustPlatformApplicability
 import uniffi.openrose_control.PlatformState as RustPlatformState
 import uniffi.openrose_control.TransportAvailability as RustTransportAvailability
-import uniffi.openrose_control.TransportUnavailableCode as RustUnavailableCode
+import uniffi.openrose_control.TransportUnavailableReason as RustUnavailableReason
 import uniffi.openrose_headset.HeadsetField as RustHeadsetField
 import uniffi.openrose_headset.HeadsetSetting as RustHeadsetSetting
 import uniffi.openrose_headset.ModelProfile as RustModelProfile
@@ -160,9 +160,9 @@ class CoreControlRuntimeTest {
                 val denied = runtime.state.eventually { it.platform.permission == PermissionState.DENIED }
                 assertEquals(ConnectionBlockReason.BluetoothPermissionRequired, denied.connectionBlockReason)
 
-                runtime.updatePlatformState(kotlinPlatform(transport = TransportAvailability.Unavailable(TransportUnavailableCode.NO_ADAPTER, "none")))
+                runtime.updatePlatformState(kotlinPlatform(transport = TransportAvailability.Unavailable(TransportUnavailableReason.BackendUnavailable("none"))))
                 val unavailable = runtime.state.eventually { it.platform.transport is TransportAvailability.Unavailable }
-                assertEquals(ConnectionBlockReason.TransportUnavailable(TransportUnavailableCode.NO_ADAPTER, "none"), unavailable.connectionBlockReason)
+                assertEquals(ConnectionBlockReason.TransportUnavailable(TransportUnavailableReason.BackendUnavailable("none")), unavailable.connectionBlockReason)
 
                 runtime.updateSettings(UserSettings(forceBle = true))
                 assertTrue(runtime.state.eventually { it.settings.forceBle }.settings.forceBle)
@@ -255,8 +255,23 @@ class CoreControlRuntimeTest {
         assertEquals(RustHeadsetSetting.entries.size, RustHeadsetSetting.entries.map { it.toKotlin() }.toSet().size)
         assertEquals(DeviceField.entries.size, RustHeadsetField.entries.size)
         assertEquals(DeviceSetting.entries.size, RustHeadsetSetting.entries.size)
-        for (code in RustUnavailableCode.entries) {
-            val platform = rustPlatform(transport = RustTransportAvailability.Unavailable(code, null)).toKotlin()
+        for (reason in listOf(
+            RustUnavailableReason.UnsupportedPlatform("macOS"),
+            RustUnavailableReason.BleUnsupported,
+            RustUnavailableReason.PermissionRequired,
+            RustUnavailableReason.NoAdapter,
+            RustUnavailableReason.AdapterPoweredOff,
+            RustUnavailableReason.AdapterStateUnknown,
+            RustUnavailableReason.AccessDenied,
+            RustUnavailableReason.ServiceUnavailable,
+            RustUnavailableReason.MissingDependency("libdbus"),
+            RustUnavailableReason.Initializing,
+            RustUnavailableReason.Recovering,
+            RustUnavailableReason.ShuttingDown,
+            RustUnavailableReason.Closed,
+            RustUnavailableReason.BackendUnavailable("error"),
+        )) {
+            val platform = rustPlatform(transport = RustTransportAvailability.Unavailable(reason)).toKotlin()
             assertIs<TransportAvailability.Unavailable>(platform.transport)
         }
         for (permission in RustPermissionState.entries) {

@@ -5,7 +5,7 @@ import io.github.dohex.openrose.core.ConnectionRecovery
 import io.github.dohex.openrose.core.ConnectionState
 import io.github.dohex.openrose.core.ScanState
 import io.github.dohex.openrose.core.TransportAvailability
-import io.github.dohex.openrose.core.TransportUnavailableCode
+import io.github.dohex.openrose.core.TransportUnavailableReason
 import io.github.dohex.openrose.core.protocol.ModelProfile
 import io.github.dohex.openrose.core.transport.DeviceId
 import io.github.dohex.openrose.core.transport.TransportEndpoint
@@ -15,28 +15,66 @@ import io.github.dohex.openrose.core.transport.TransportSelectionReason
 
 internal fun encode(availability: TransportAvailability): Wire = when (availability) {
     TransportAvailability.Available -> obj("t" to str("available"))
-
     TransportAvailability.Disabled -> obj("t" to str("disabled"))
+    is TransportAvailability.Unavailable -> UnavailableReasonWire.encode(availability.reason)
+}
 
-    is TransportAvailability.Unavailable -> obj(
-        "t" to str("unavailable"),
-        "code" to Wire.Str(availability.code.name),
-        "detail" to availability.detail?.let(::str),
+private object UnavailableReasonWire {
+    private val fixedReasons = mapOf(
+        "BLE_UNSUPPORTED" to TransportUnavailableReason.BleUnsupported,
+        "PERMISSION_REQUIRED" to TransportUnavailableReason.PermissionRequired,
+        "NO_ADAPTER" to TransportUnavailableReason.NoAdapter,
+        "ADAPTER_POWERED_OFF" to TransportUnavailableReason.AdapterPoweredOff,
+        "ADAPTER_STATE_UNKNOWN" to TransportUnavailableReason.AdapterStateUnknown,
+        "ACCESS_DENIED" to TransportUnavailableReason.AccessDenied,
+        "SERVICE_UNAVAILABLE" to TransportUnavailableReason.ServiceUnavailable,
+        "INITIALIZING" to TransportUnavailableReason.Initializing,
+        "RECOVERING" to TransportUnavailableReason.Recovering,
+        "SHUTTING_DOWN" to TransportUnavailableReason.ShuttingDown,
+        "CLOSED" to TransportUnavailableReason.Closed,
     )
+
+    private val fixedCodes = fixedReasons.entries.associate { (code, reason) -> reason to code }
+
+    fun encode(reason: TransportUnavailableReason): Wire = when (reason) {
+        is TransportUnavailableReason.UnsupportedPlatform -> obj(
+            "t" to str("unavailable"),
+            "code" to str("UNSUPPORTED_PLATFORM"),
+            "platform" to reason.platform?.let(::str),
+        )
+
+        is TransportUnavailableReason.MissingDependency -> obj(
+            "t" to str("unavailable"),
+            "code" to str("MISSING_DEPENDENCY"),
+            "detail" to reason.detail?.let(::str),
+        )
+
+        is TransportUnavailableReason.BackendUnavailable -> obj(
+            "t" to str("unavailable"),
+            "code" to str("BACKEND_UNAVAILABLE"),
+            "detail" to reason.detail?.let(::str),
+        )
+
+        else -> obj(
+            "t" to str("unavailable"),
+            "code" to str(fixedCodes.getValue(reason)),
+        )
+    }
+
+    fun decode(node: Wire.Obj): TransportUnavailableReason = when (val code = node.str("code")) {
+        "UNSUPPORTED_PLATFORM" -> TransportUnavailableReason.UnsupportedPlatform(node.optional("platform")?.asStr())
+        "MISSING_DEPENDENCY" -> TransportUnavailableReason.MissingDependency(node.optional("detail")?.asStr())
+        "BACKEND_UNAVAILABLE" -> TransportUnavailableReason.BackendUnavailable(node.optional("detail")?.asStr())
+        else -> fixedReasons[code] ?: throw WireFormatException("未知传输不可用原因 $code")
+    }
 }
 
 internal fun decodeTransport(wire: Wire): TransportAvailability {
     val node = wire.asObj()
     return when (val kind = node.str("t")) {
         "available" -> TransportAvailability.Available
-
         "disabled" -> TransportAvailability.Disabled
-
-        "unavailable" -> TransportAvailability.Unavailable(
-            node.field("code").asEnum<TransportUnavailableCode>(),
-            node.optional("detail")?.asStr(),
-        )
-
+        "unavailable" -> TransportAvailability.Unavailable(UnavailableReasonWire.decode(node))
         else -> throw WireFormatException("未知传输状态 $kind")
     }
 }

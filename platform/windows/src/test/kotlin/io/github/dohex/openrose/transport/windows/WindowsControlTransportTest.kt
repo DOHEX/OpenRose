@@ -1,7 +1,7 @@
 package io.github.dohex.openrose.transport.windows
 
 import io.github.dohex.openrose.core.TransportAvailability
-import io.github.dohex.openrose.core.TransportUnavailableCode
+import io.github.dohex.openrose.core.TransportUnavailableReason
 import io.github.dohex.openrose.core.transport.DeviceId
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -33,22 +33,31 @@ class WindowsControlTransportTest {
         assertNull(transport.audioConnectedDevice.first())
         snapshots.emit("unavailable\tble_unsupported")
         runCurrent()
-        assertEquals(TransportAvailability.Unavailable(TransportUnavailableCode.BLE_UNSUPPORTED), transport.availability.value)
+        assertEquals(TransportAvailability.Unavailable(TransportUnavailableReason.BleUnsupported), transport.availability.value)
         snapshots.emit("unavailable\tadapter_state_unknown")
         runCurrent()
-        assertEquals(TransportAvailability.Unavailable(TransportUnavailableCode.ADAPTER_STATE_UNKNOWN), transport.availability.value)
+        assertEquals(TransportAvailability.Unavailable(TransportUnavailableReason.AdapterStateUnknown), transport.availability.value)
         snapshots.emit("unavailable\trecovering")
         runCurrent()
-        assertEquals(TransportAvailability.Unavailable(TransportUnavailableCode.RECOVERING), transport.availability.value)
+        assertEquals(TransportAvailability.Unavailable(TransportUnavailableReason.Recovering), transport.availability.value)
         snapshots.emit("unavailable\tbackend_unavailable\thelper exited")
         runCurrent()
         assertEquals(
-            TransportAvailability.Unavailable(TransportUnavailableCode.BACKEND_UNAVAILABLE, "helper exited"),
+            TransportAvailability.Unavailable(TransportUnavailableReason.BackendUnavailable("helper exited")),
             transport.availability.value,
         )
         snapshots.emit("unavailable\tunrecognized_code")
         runCurrent()
-        assertEquals(TransportAvailability.Unavailable(TransportUnavailableCode.BACKEND_UNAVAILABLE), transport.availability.value)
+        assertEquals(
+            TransportAvailability.Unavailable(TransportUnavailableReason.BackendUnavailable("unrecognized_code")),
+            transport.availability.value,
+        )
+        snapshots.emit("unavailable")
+        runCurrent()
+        assertEquals(
+            TransportAvailability.Unavailable(TransportUnavailableReason.BackendUnavailable()),
+            transport.availability.value,
+        )
         transport.close()
     }
 }

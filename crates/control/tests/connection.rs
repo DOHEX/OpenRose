@@ -4,7 +4,7 @@ use openrose_control::ControlErrorCode;
 use openrose_control::gatt::{GattError, GattFailureKind};
 use openrose_control::snapshot::{
     ConnectionPhase, ConnectionState, PermissionState, PlatformState, TransportAvailability,
-    TransportUnavailableCode,
+    TransportUnavailableReason,
 };
 use openrose_headset::{
     FieldReading, FieldValue, HeadsetCommand, HeadsetField, HeadsetId, NoiseMode,
@@ -56,8 +56,7 @@ async fn an_unavailable_platform_transport_blocks_connecting_with_its_reason() {
     options.platform = PlatformState::new(
         PermissionState::Granted,
         TransportAvailability::Unavailable {
-            code: TransportUnavailableCode::AdapterPoweredOff,
-            detail: Some("hci0".to_string()),
+            reason: TransportUnavailableReason::AdapterPoweredOff,
         },
     );
     let harness = Harness::new(options);

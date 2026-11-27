@@ -18,7 +18,7 @@ import io.github.dohex.openrose.core.PermissionState
 import io.github.dohex.openrose.core.PlatformState
 import io.github.dohex.openrose.core.ScanState
 import io.github.dohex.openrose.core.TransportAvailability
-import io.github.dohex.openrose.core.TransportUnavailableCode
+import io.github.dohex.openrose.core.TransportUnavailableReason
 import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.dohex.openrose.core.protocol.ModelProfile
 import io.github.dohex.openrose.core.transport.DeviceId
@@ -85,7 +85,7 @@ class OpenRoseHomeScanUiTest {
                 state().copy(
                     platform = PlatformState(
                         PermissionState.NOT_REQUIRED,
-                        TransportAvailability.Unavailable(TransportUnavailableCode.BACKEND_UNAVAILABLE, reason),
+                        TransportAvailability.Unavailable(TransportUnavailableReason.BackendUnavailable(reason)),
                     ),
                 ),
             ) { harness ->
@@ -122,7 +122,7 @@ class OpenRoseHomeScanUiTest {
                 harness.state.value = harness.state.value.copy(
                     platform = PlatformState(
                         PermissionState.GRANTED,
-                        TransportAvailability.Unavailable(TransportUnavailableCode.BACKEND_UNAVAILABLE, reason),
+                        TransportAvailability.Unavailable(TransportUnavailableReason.BackendUnavailable(reason)),
                     ),
                 )
                 harness.render()
@@ -164,7 +164,7 @@ class OpenRoseHomeScanUiTest {
                     state().copy(
                         platform = PlatformState(
                             permission,
-                            TransportAvailability.Unavailable(TransportUnavailableCode.BACKEND_UNAVAILABLE, reason),
+                            TransportAvailability.Unavailable(TransportUnavailableReason.BackendUnavailable(reason)),
                         ),
                     ),
                     page = AppPage.ADD_DEVICE,
@@ -263,7 +263,7 @@ class OpenRoseHomeScanUiTest {
                 harness.state.value = harness.state.value.copy(
                     platform = PlatformState(
                         PermissionState.NOT_REQUIRED,
-                        TransportAvailability.Unavailable(TransportUnavailableCode.BACKEND_UNAVAILABLE, unavailableReason),
+                        TransportAvailability.Unavailable(TransportUnavailableReason.BackendUnavailable(unavailableReason)),
                     ),
                 )
                 harness.render()
@@ -297,7 +297,7 @@ class OpenRoseHomeScanUiTest {
             val reason = "主机报告的实际传输原因"
             val unavailable = PlatformState(
                 PermissionState.GRANTED,
-                TransportAvailability.Unavailable(TransportUnavailableCode.BACKEND_UNAVAILABLE, reason),
+                TransportAvailability.Unavailable(TransportUnavailableReason.BackendUnavailable(reason)),
             )
             withHarness(420, 900, style, state().copy(platform = unavailable), app = true) { harness ->
                 harness.render()
