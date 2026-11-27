@@ -12,7 +12,7 @@ import io.github.dohex.openrose.module.systemIntegrationResult
 import java.io.File
 import java.io.FileOutputStream
 
-internal class OfficialPromptMedia(private val targetContext: Context, private val handler: Handler) {
+internal class SystemPromptMedia(private val targetContext: Context, private val handler: Handler) {
     private val ownedAssets = linkedMapOf<Uri, OwnedAsset>()
     private val assetLock = Any()
 
@@ -36,7 +36,7 @@ internal class OfficialPromptMedia(private val targetContext: Context, private v
                         findRawResource(targetContext, spec.targetRawName)
                             ?: moduleResources?.let { findRawResource(it, spec.moduleRawName) },
                     ) { "${spec.side}_clip_missing" }
-                    val name = "openrose_official_${stableDigest("${request.key}:$token:${spec.side}").take(24)}_${spec.side}.mp4"
+                    val name = "openrose_system_${stableDigest("${request.key}:$token:${spec.side}").take(24)}_${spec.side}.mp4"
                     val directory = File(targetContext.filesDir, PROVIDER_FILES_DIRECTORY).also { it.mkdirs() }
                     val file = File(directory, name)
                     copyRawResource(resource.context, resource.resourceId, file)
@@ -72,8 +72,8 @@ internal class OfficialPromptMedia(private val targetContext: Context, private v
             context.resources.openRawResource(resourceId).use { input ->
                 FileOutputStream(temporary).use { output -> input.copyTo(output) }
             }
-            if (!temporary.isFile || temporary.length() <= 0L) throw IllegalStateException("empty_official_clip")
-            if (!temporary.renameTo(target)) throw IllegalStateException("official_clip_copy_commit_failed")
+            if (!temporary.isFile || temporary.length() <= 0L) throw IllegalStateException("empty_system_clip")
+            if (!temporary.renameTo(target)) throw IllegalStateException("system_clip_copy_commit_failed")
         } finally {
             if (temporary.exists()) temporary.delete()
         }

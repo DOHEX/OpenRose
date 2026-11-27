@@ -8,7 +8,7 @@ import io.github.dohex.openrose.androidintegration.wire.BridgeWire
 import io.github.dohex.openrose.core.protocol.ModelProfile
 import org.json.JSONObject
 
-internal fun Context.setOfficialStatus(payload: Bundle) {
+internal fun Context.setSystemStatus(payload: Bundle) {
     val service = getSystemService("statusbar")
         ?: throw IllegalStateException("statusbar_service_missing")
     service.javaClass.getMethod(
@@ -55,7 +55,7 @@ internal fun buildShowBundle(clips: List<PreparedClip>, request: PromptRequest):
         putString(KEY_PARAM, param)
         putString(KEY_ISLAND_PARAM, islandParam)
         putString(KEY_NOTIFY_ID, HEADSET_NOTIFY_ID)
-        putLong(KEY_DURATION, OFFICIAL_DURATION_MILLIS)
+        putLong(KEY_DURATION, SYSTEM_TOAST_DURATION_MILLIS)
         putFloat(KEY_LEVEL, 0f)
         putFloat(KEY_RAPID_RATE, 0f)
         putString(KEY_CHARGE, null)
@@ -99,7 +99,7 @@ internal data class PromptRequest(
     val key: String,
 )
 
-internal fun officialHideBundle() = Bundle().apply {
+internal fun systemHideBundle() = Bundle().apply {
     putString(KEY_PACKAGE_NAME, TARGET_PACKAGE)
     putString(KEY_STATUS_BAR_STRONG_TOAST, HIDE_STRONG_TOAST)
 }
@@ -128,4 +128,4 @@ private const val RIGHT_BATTERY = "RIGHT_BATTERY"
 private const val LEFT_CHARGING = "LEFT_CHARGING"
 private const val RIGHT_CHARGING = "RIGHT_CHARGING"
 private const val LOW_BATTERY_THRESHOLD = 20
-internal const val OFFICIAL_DURATION_MILLIS = 5_000L
+internal const val SYSTEM_TOAST_DURATION_MILLIS = 5_000L
