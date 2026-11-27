@@ -24,7 +24,7 @@ bluez-dbus = "0.3.5"
 dbus-java = "5.2.2"
 slf4j = "2.0.20"
 detekt = "2.0.0-alpha.6"
-spotless = "8.11.0"
+spotless = "8.12.0"
 ktlint = "1.8.0"
 kover = "0.9.11"
 
