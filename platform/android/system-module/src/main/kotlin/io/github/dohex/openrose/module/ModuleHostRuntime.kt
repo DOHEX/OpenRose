@@ -8,10 +8,8 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.SharedPreferences
-import android.os.Binder
 import android.os.Build
 import android.os.IBinder
-import android.os.Parcel
 import android.os.Process
 import android.os.UserManager
 import android.util.Log
@@ -39,36 +37,22 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeoutOrNull
 import java.lang.reflect.Method
 import java.util.UUID
-import java.util.concurrent.atomic.AtomicReference
 
 internal class ModuleHostRuntime(
     private val module: XposedModule,
     private val classLoader: ClassLoader,
-    val endpointSlot: AtomicReference<IBinder?> = AtomicReference(),
 ) {
     private val lifecycle = Any()
-    private val hooks = mutableListOf<XposedInterface.HookHandle>()
-    private val discoveryBinder = EndpointForwarder(endpointSlot)
 
     @Volatile private var endpoint: HostEndpoint? = null
 
     @Volatile private var circulation: OwnerCirculation? = null
     private var host: ModuleControlHost? = null
     private var scope: CoroutineScope? = null
-    private var context: Context? = null
     private var config: SharedPreferences? = null
     private var configListener: SharedPreferences.OnSharedPreferenceChangeListener? = null
-    private var receiver: BroadcastReceiver? = null
-    private var closed = false
-
-    @Volatile private var nativeCore: NativeCoreTrial? = null
-
-    val allowsHotReload: Boolean get() = nativeCore?.allowsHotReload != false
 
     @SuppressLint("PrivateApi")
     fun installDiscovery() {
@@ -81,16 +65,15 @@ internal class ModuleHostRuntime(
             return
         }
         try {
-            val handle = module.hook(onBind).setId("openrose.host.discovery")
+            module.hook(onBind).setId("openrose.host.discovery")
                 .setExceptionMode(XposedInterface.ExceptionMode.PROTECTIVE).intercept { chain ->
                     val intent = chain.getArg(0) as? Intent
                     if (intent?.action == BridgeWire.ACTION_CONTROL_HOST) {
-                        discoveryBinder
+                        endpoint ?: chain.proceed()
                     } else {
                         chain.proceed()
                     }
                 }
-            synchronized(lifecycle) { hooks += handle }
         } catch (failure: IllegalArgumentException) {
             module.log(Log.ERROR, TAG, "discovery_hook_failed", failure)
         } catch (failure: HookFailedError) {
@@ -111,13 +94,11 @@ internal class ModuleHostRuntime(
 
     fun start(hostContext: Context) {
         synchronized(lifecycle) {
-            if (closed || host != null) return
+            if (host != null) return
             val appContext = hostContext.applicationContext ?: hostContext
-            context = appContext
             val hostScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
             scope = hostScope
             val trial = androidNativeCoreTrial(module, appContext)
-            nativeCore = trial
             val facts = MutableStateFlow(HostFacts())
             val created = ModuleControlHost(
                 packageName = appContext.packageName,
@@ -146,7 +127,6 @@ internal class ModuleHostRuntime(
             host = created
             val served = HostEndpoint(appContext, created, facts, hostScope) { circulation }
             endpoint = served
-            endpointSlot.set(served)
             watchConfiguration(appContext, hostScope, created, trial)
         }
     }
@@ -165,7 +145,6 @@ internal class ModuleHostRuntime(
                 changes.trySend(Unit)
             }
         }
-        receiver = unlockReceiver
         val filter = IntentFilter(Intent.ACTION_USER_UNLOCKED).apply { addAction(BluetoothAdapter.ACTION_STATE_CHANGED) }
         if (Build.VERSION.SDK_INT >= 33) {
             appContext.registerReceiver(unlockReceiver, filter, Context.RECEIVER_EXPORTED)
@@ -225,7 +204,6 @@ internal class ModuleHostRuntime(
     }
 
     private fun readConfiguration(): HostConfiguration? = synchronized(lifecycle) {
-        if (closed) return null
         val listener = configListener ?: return null
         val prefs = config ?: runCatching {
             module.getRemotePreferences(BridgeWire.CONFIG_GROUP).also {
@@ -245,45 +223,8 @@ internal class ModuleHostRuntime(
         HostConfiguration(userUnlocked = true, settings = settings)
     }
 
-    fun close(): Boolean {
-        val (current, hostScope) = synchronized(lifecycle) {
-            if (closed) return true
-            host to scope
-        }
-        val released = current == null || runBlocking { withTimeoutOrNull(CLOSE_TIMEOUT_MILLIS) { current.stop() } } == true
-        if (released) retire(hostScope)
-        return released
-    }
-
-    private fun retire(hostScope: CoroutineScope?) {
-        synchronized(lifecycle) {
-            closed = true
-            hooks.forEach { runCatching { it.unhook() } }
-            hooks.clear()
-            receiver?.let { r -> runCatching { context?.unregisterReceiver(r) } }
-            receiver = null
-            configListener?.let { l -> runCatching { config?.unregisterOnSharedPreferenceChangeListener(l) } }
-            configListener = null
-        }
-        nativeCore?.close()
-        endpoint?.let { retiring ->
-            endpointSlot.compareAndSet(retiring, null)
-            retiring.shutdown()
-        }
-        endpoint = null
-        hostScope?.cancel()
-    }
-
     private companion object {
         const val TAG = "OpenRoseModuleHost"
-        const val CLOSE_TIMEOUT_MILLIS = 2_000L
         const val CONFIG_RETRY_MILLIS = 5_000L
-    }
-}
-
-private class EndpointForwarder(private val slot: AtomicReference<IBinder?>) : Binder() {
-    override fun onTransact(code: Int, data: Parcel, reply: Parcel?, flags: Int): Boolean {
-        val target = slot.get() ?: throw IllegalStateException("宿主正在重新加载")
-        return target.transact(code, data, reply, flags)
     }
 }

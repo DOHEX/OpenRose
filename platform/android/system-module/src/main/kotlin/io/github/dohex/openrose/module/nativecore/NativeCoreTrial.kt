@@ -52,10 +52,6 @@ internal class NativeCoreTrial(
     private var lastSwitch: Boolean? = null
     private var skippedForModuleControl = false
 
-    @Volatile private var nativeLoaded = false
-
-    val allowsHotReload: Boolean get() = !nativeLoaded
-
     fun apply(enabled: Boolean, controlWay: ControlWay) {
         var toStop: AutoCloseable? = null
         synchronized(lock) {
@@ -110,7 +106,6 @@ internal class NativeCoreTrial(
                 log.write(Log.ERROR, "native_library_load_failed library=$name", failure)
                 return
             }
-            nativeLoaded = true
             log.write(Log.INFO, "native_library_loaded library=$name", null)
         }
         try {
