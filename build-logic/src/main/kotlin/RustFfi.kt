@@ -152,7 +152,10 @@ abstract class BuildAndroidRustFfiTask : RustFfiCargoTask() {
     }
 }
 
-inline fun <reified T : RustFfiCargoTask> Project.registerRustFfiTask(name: String, crossinline configure: T.() -> Unit): TaskProvider<T> = tasks.register<T>(name) {
+inline fun <reified T : RustFfiCargoTask> Project.registerRustFfiTask(
+    name: String,
+    crossinline configure: T.() -> Unit,
+): TaskProvider<T> = tasks.register<T>(name) {
     workspaceRoot.set(rootProject.layout.projectDirectory)
     offline.set(gradle.startParameter.isOffline)
     rustInputs.from(rustFfiSourceInputs())
@@ -173,7 +176,10 @@ fun Project.registerHostRustFfi(): TaskProvider<BuildHostRustFfiTask> = register
     outputLibrary.set(rootProject.layout.projectDirectory.file("target/debug/${hostRustLibraryFileName()}"))
 }
 
-fun Project.hostRustFfiLibrary(): Provider<RegularFile> = rootProject.tasks.named<BuildHostRustFfiTask>(HOST_RUST_FFI_TASK).flatMap { it.outputLibrary }
+fun Project.hostRustFfiLibrary(): Provider<RegularFile> {
+    val buildHost = rootProject.tasks.named<BuildHostRustFfiTask>(HOST_RUST_FFI_TASK)
+    return buildHost.flatMap { it.outputLibrary }
+}
 
 private fun hostRustLibraryFileName(): String {
     val os = System.getProperty("os.name").lowercase()
