@@ -1,12 +1,17 @@
 mod support;
 
 use openrose_control::ControlErrorCode;
+use openrose_control::gatt::{GattError, GattFailureKind};
+use openrose_control::simulator::SimulatedTransport;
 use openrose_control::snapshot::{ConnectionState, SettingStage};
+use openrose_control::SessionTiming;
 use openrose_headset::{FieldReading, FieldValue, HeadsetCommand, HeadsetField, NoiseMode};
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Duration;
-use support::{Harness, I5_INIT_WRITES, Options, elapse, settle};
+use support::faults::{FaultyTransport, LinkFaults};
+use support::scripted::{A, add_i5, id, runtime_timed};
+use support::{Harness, I5_INIT_WRITES, Options, available, elapse, settle};
 use tokio::time::{Instant, advance};
 
 fn error_code<T: std::fmt::Debug>(
@@ -527,4 +532,112 @@ async fn i5_partially_unknown_cycle_readback_waits_for_complete_device_state() {
         )),
         harness.value(HeadsetField::NoiseCycle)
     );
+}
+
+#[tokio::test(start_paused = true)]
+async fn transport_write_failure_records_failed_stage_and_closes_the_link() {
+    let sim = Arc::new(SimulatedTransport::new());
+    let headset = add_i5(&sim, A);
+    let transport = FaultyTransport::new(Arc::clone(&sim), false, |_| LinkFaults {
+        fail_write_at: Some((
+            I5_INIT_WRITES,
+            GattError::new(GattFailureKind::Disconnected, "synthetic write failure"),
+        )),
+        ..LinkFaults::default()
+    });
+    let timing = SessionTiming {
+        write_interval: Some(Duration::ZERO),
+        query_timeout: Duration::from_millis(50),
+        write_timeout: Duration::from_millis(50),
+        ..SessionTiming::default()
+    };
+    let (runtime, _) = runtime_timed(transport.clone(), available(), timing);
+    runtime.connect(id(A)).await.expect("initial connect");
+    assert!(matches!(
+        runtime.snapshot().connection,
+        ConnectionState::Connected { .. }
+    ));
+
+    let error = runtime
+        .set(HeadsetCommand::NoiseMode(NoiseMode::Anc), None)
+        .await
+        .expect_err("write failure must fail the setting");
+    assert_eq!(ControlErrorCode::Failed, error.code);
+    let snapshot = runtime.snapshot();
+    assert_eq!(
+        vec![SettingStage::Failed],
+        snapshot
+            .setting_operations
+            .iter()
+            .map(|op| op.stage)
+            .collect::<Vec<_>>()
+    );
+    assert_eq!(ConnectionState::Disconnected, snapshot.connection);
+    assert!(!headset.link_open());
+    assert!(transport.links()[0].closed());
+}
+
+#[tokio::test(start_paused = true)]
+async fn an_unsolicited_matching_report_between_write_and_readback_cannot_confirm() {
+    let mut options = Options::i5();
+    options.timing.write_interval = Some(Duration::from_millis(100));
+    options.timing.query_timeout = Duration::from_millis(50);
+    let harness = Harness::ready(options).await;
+    harness.headset.mute(true);
+
+    let pending = spawn_set(&harness, HeadsetCommand::NoiseMode(NoiseMode::Normal));
+    settle().await;
+    elapse(100).await;
+    assert_eq!(hex(&[NOISE_NORMAL_WRITE]), harness.writes_after_init());
+    assert_eq!(vec![SettingStage::Written], harness.stages());
+
+    assert!(harness.inject_hex(NOISE_REPLY_NORMAL));
+    settle().await;
+    assert_eq!(
+        Some(FieldValue::text("normal")),
+        harness.value(HeadsetField::NoiseMode)
+    );
+    assert!(!pending.is_finished());
+    assert_eq!(vec![SettingStage::Written], harness.stages());
+
+    elapse(100).await;
+    assert_eq!(
+        hex(&[NOISE_NORMAL_WRITE, NOISE_READBACK]),
+        harness.writes_after_init()
+    );
+    assert!(!pending.is_finished());
+    elapse(30).await;
+    assert!(!pending.is_finished());
+
+    assert!(harness.inject_hex(NOISE_REPLY_NORMAL));
+    settle().await;
+    pending
+        .await
+        .unwrap()
+        .expect("fresh readback reply after query confirms");
+    assert_eq!(vec![SettingStage::Confirmed], harness.stages());
+
+    let second = spawn_set(&harness, HeadsetCommand::NoiseMode(NoiseMode::Anc));
+    settle().await;
+    elapse(100).await;
+    assert!(harness.inject_hex(NOISE_REPLY_ANC));
+    settle().await;
+    assert_eq!(
+        Some(FieldValue::text("anc")),
+        harness.value(HeadsetField::NoiseMode)
+    );
+    assert!(!second.is_finished());
+
+    elapse(100).await;
+    assert!(!second.is_finished());
+    elapse(51).await;
+    assert_eq!(
+        ControlErrorCode::Timeout,
+        error_code(second.await.unwrap())
+    );
+    assert_eq!(
+        vec![SettingStage::Confirmed, SettingStage::TimedOut],
+        harness.stages()
+    );
+    assert_eq!(ConnectionState::Disconnected, harness.connection());
 }
