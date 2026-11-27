@@ -75,6 +75,7 @@ class KotlinCoreTransportTest {
     @Test
     fun theCoreReportsARevokedPermissionDuringConnectAsPermissionRequired() = runBlocking<Unit> {
         Rig().use { rig ->
+            rig.audioConnected = false
             KotlinCoreTransport(rig).use { transport ->
                 RustControlRuntime(transport, rig.platformState(), clock = rig.clock(), timing = rig.timing()).use { runtime ->
                     rig.connectFailure = KotlinGattException(KotlinGattFailureKind.PERMISSION, "BLUETOOTH_CONNECT revoked")
