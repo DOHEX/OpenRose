@@ -24,3 +24,4 @@ All motion values are centralized in [motion.ts](motion.ts). Transitions run nat
 | `MOTION_SCALE.popupClosed` | `0.96` / `scale-95` | `SelectField` popup | Subtle scale-in / scale-out over `bg-popover` | Appears immediately |
 | `MOTION_DISTANCE.popupOffset` | `4 pt` | `SelectField` | Gap between trigger and dropdown list | Static `4 pt` |
 | `MOTION_DISTANCE.entranceOffset` | `8 pt` | `createSurfaceMotion` | Initial surface reveal offset | `0 pt` |
+| `MOTION_CLASS.colorTransition` / `interactiveTransition` | `150 ms` (`MOTION_DURATION.fast`) | `ToggleSwitch` (tray controls, background control) | Track color and thumb travel when a switch toggles | `motion-reduce:transition-none` |

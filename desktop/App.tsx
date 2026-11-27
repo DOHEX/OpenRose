@@ -1,12 +1,15 @@
 import { colorScheme, mount, signal } from "nsh";
 import { Window } from "nsh/desktop";
-import {
-  createHeadsetController,
-  errorCategoryLabel,
-  noiseModeLabel,
-} from "./src/model/headset";
+import { createHeadsetController, errorCategoryLabel, noiseModeLabel } from "./src/model/headset";
+import type { HeadsetController } from "./src/model/headset";
+import { createDesktopSettingsStore, createTrayAvailabilityStore } from "./src/model/trayPanelSettings";
+import type { DesktopSettingsStore, TrayAvailabilityStore } from "./src/model/trayPanelSettings";
 import { DevModePage } from "./src/pages/DevModePage";
 import { MainPage } from "./src/pages/MainPage";
+import { TraySettingsPage } from "./src/pages/settings/TrayControlsSettingsPage";
+import { TrayHost } from "./src/tray/TrayHost";
+import { createDesktopLifecycle } from "./src/tray/lifecycle";
+import type { DesktopLifecycle } from "./src/tray/lifecycle";
 import { Column, PageShell, ScrollArea, StatusBadge, TitleBar } from "./src/ui";
 import type { MetricItem, SegmentOption, SelectFieldOption, ToneVariant } from "./src/ui";
 
@@ -16,8 +19,13 @@ const LATENCY_OPTIONS: SegmentOption[] = [
   { value: "400", label: "400 ms", testID: "latency-400" },
 ];
 
-function DesktopApp() {
-  const controller = createHeadsetController();
+function DesktopApp(props: {
+  controller: HeadsetController;
+  settings: DesktopSettingsStore;
+  tray: TrayAvailabilityStore;
+  lifecycle: DesktopLifecycle;
+}) {
+  const controller = props.controller;
   const initialConfig = controller.devConfig();
   const selectedModelId = signal<string>(initialConfig?.modelId ?? "I5_ZT");
   const firmwareInput = signal<string>(initialConfig?.firmware ?? "125");
@@ -179,19 +187,39 @@ function DesktopApp() {
               onChangeLatency={handleLatencyChange}
             />
           ) : null}
+          <TraySettingsPage
+            settings={props.settings}
+            availability={props.tray.availability()}
+            highlightControls={props.lifecycle.requestedView() === "tray-controls"}
+            panelOpen={props.lifecycle.panelOpen()}
+            onTogglePanel={() => props.lifecycle.setPanelOpen(!props.lifecycle.panelOpen())}
+          />
         </Column>
       </ScrollArea>
     </PageShell>
   );
 }
 
-mount(() => (
-  <Window
-    id="main"
-    title="OpenRose"
-    defaultSize={{ width: 720, height: 640 }}
-    minSize={{ width: 440, height: 520 }}
-  >
-    <DesktopApp />
-  </Window>
-));
+function DesktopRoot() {
+  const controller = createHeadsetController();
+  const settings = createDesktopSettingsStore();
+  const tray = createTrayAvailabilityStore();
+  const lifecycle = createDesktopLifecycle({ controller, settings, tray });
+  return (
+    <>
+      <TrayHost controller={controller} settings={settings} tray={tray} lifecycle={lifecycle} />
+      <Window
+        id="main"
+        title="OpenRose"
+        closeOnPress={false}
+        onClosePress={lifecycle.closeMainWindow}
+        defaultSize={{ width: 720, height: 640 }}
+        minSize={{ width: 440, height: 520 }}
+      >
+        <DesktopApp controller={controller} settings={settings} tray={tray} lifecycle={lifecycle} />
+      </Window>
+    </>
+  );
+}
+
+mount(() => <DesktopRoot />);
