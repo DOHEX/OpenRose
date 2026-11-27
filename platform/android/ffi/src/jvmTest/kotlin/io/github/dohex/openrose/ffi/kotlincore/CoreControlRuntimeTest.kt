@@ -15,7 +15,7 @@ import io.github.dohex.openrose.core.ReconnectGuidance
 import io.github.dohex.openrose.core.ScanState
 import io.github.dohex.openrose.core.SettingStage
 import io.github.dohex.openrose.core.TransportAvailability
-import io.github.dohex.openrose.core.TransportUnavailableCode
+import io.github.dohex.openrose.core.TransportUnavailableReason
 import io.github.dohex.openrose.core.UserSettings
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.FieldValue
@@ -23,6 +23,12 @@ import io.github.dohex.openrose.core.protocol.ModelProfile
 import io.github.dohex.openrose.core.transport.DeviceId
 import io.github.dohex.openrose.ffi.RustControlRuntime
 import io.github.dohex.openrose.ffi.currentHeadset
+import io.github.dohex.openrose.ffi.drivers.ADDRESS
+import io.github.dohex.openrose.ffi.drivers.ControlTransportAdapter
+import io.github.dohex.openrose.ffi.drivers.SimulatedDrivers
+import io.github.dohex.openrose.ffi.drivers.clock
+import io.github.dohex.openrose.ffi.drivers.rig
+import io.github.dohex.openrose.ffi.drivers.timing
 import io.github.dohex.openrose.ffi.hasSystemAudio
 import io.github.dohex.openrose.ffi.readySession
 import io.github.dohex.openrose.ffi.sessionFor
@@ -53,7 +59,7 @@ import uniffi.openrose_control.PermissionState as RustPermissionState
 import uniffi.openrose_control.PlatformApplicability as RustPlatformApplicability
 import uniffi.openrose_control.PlatformState as RustPlatformState
 import uniffi.openrose_control.TransportAvailability as RustTransportAvailability
-import uniffi.openrose_control.TransportUnavailableCode as RustUnavailableCode
+import uniffi.openrose_control.TransportUnavailableReason as RustUnavailableReason
 import uniffi.openrose_headset.HeadsetField as RustHeadsetField
 import uniffi.openrose_headset.HeadsetSetting as RustHeadsetSetting
 import uniffi.openrose_headset.ModelProfile as RustModelProfile
@@ -81,7 +87,7 @@ class CoreControlRuntimeTest {
 
     private inline fun withRuntime(rig: SimulatedDrivers, block: (CoreControlRuntime, RustControlRuntime) -> Unit) {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-        val transport = KotlinCoreTransport(rig)
+        val transport = ControlTransportAdapter(rig)
         val rust = RustControlRuntime(transport, kotlinPlatform().toRust(), clock = rig.clock(), timing = rig.timing())
         try {
             block(CoreControlRuntime(rust, scope) { transport.close() }, rust)
@@ -94,7 +100,7 @@ class CoreControlRuntimeTest {
 
     @Test
     fun theKotlinStateFollowsTheSnapshotsTheCorePushes() = runBlocking<Unit> {
-        Rig().use { rig ->
+        rig().use { rig ->
             withRuntime(rig) { runtime, _ ->
                 assertEquals(OperationResult.Success, runtime.connect(DeviceId(ADDRESS)))
                 val state = runtime.state.eventually { it.connection is ConnectionState.Connected }
@@ -114,7 +120,7 @@ class CoreControlRuntimeTest {
 
     @Test
     fun aSettingIsConfirmedOnlyAfterTheHeadsetReadsBackTheValue() = runBlocking<Unit> {
-        Rig().use { rig ->
+        rig().use { rig ->
             withRuntime(rig) { runtime, _ ->
                 assertEquals(OperationResult.Success, runtime.connect(DeviceId(ADDRESS)))
                 val connected = runtime.state.eventually { it.connection is ConnectionState.Connected }
@@ -141,7 +147,7 @@ class CoreControlRuntimeTest {
 
     @Test
     fun aSettingForAnEndedSessionFailsWithTheCoreError() = runBlocking<Unit> {
-        Rig().use { rig ->
+        rig().use { rig ->
             withRuntime(rig) { runtime, _ ->
                 assertEquals(OperationResult.Success, runtime.connect(DeviceId(ADDRESS)))
                 val connected = runtime.state.eventually { it.connection is ConnectionState.Connected }
@@ -154,15 +160,15 @@ class CoreControlRuntimeTest {
 
     @Test
     fun platformAndSettingChangesReachTheCoreAndTheStateReflectsThem() = runBlocking<Unit> {
-        Rig().use { rig ->
+        rig().use { rig ->
             withRuntime(rig) { runtime, _ ->
                 runtime.updatePlatformState(kotlinPlatform(permission = PermissionState.DENIED))
                 val denied = runtime.state.eventually { it.platform.permission == PermissionState.DENIED }
                 assertEquals(ConnectionBlockReason.BluetoothPermissionRequired, denied.connectionBlockReason)
 
-                runtime.updatePlatformState(kotlinPlatform(transport = TransportAvailability.Unavailable(TransportUnavailableCode.NO_ADAPTER, "none")))
+                runtime.updatePlatformState(kotlinPlatform(transport = TransportAvailability.Unavailable(TransportUnavailableReason.BackendUnavailable("none"))))
                 val unavailable = runtime.state.eventually { it.platform.transport is TransportAvailability.Unavailable }
-                assertEquals(ConnectionBlockReason.TransportUnavailable(TransportUnavailableCode.NO_ADAPTER, "none"), unavailable.connectionBlockReason)
+                assertEquals(ConnectionBlockReason.TransportUnavailable(TransportUnavailableReason.BackendUnavailable("none")), unavailable.connectionBlockReason)
 
                 runtime.updateSettings(UserSettings(forceBle = true))
                 assertTrue(runtime.state.eventually { it.settings.forceBle }.settings.forceBle)
@@ -172,7 +178,7 @@ class CoreControlRuntimeTest {
 
     @Test
     fun scanStateIsServedFromTheCore() = runBlocking<Unit> {
-        Rig().use { rig ->
+        rig().use { rig ->
             withRuntime(rig) { runtime, _ ->
                 assertEquals(OperationResult.Success, runtime.startScan())
                 runtime.state.eventually { it.scan == ScanState.Scanning }
@@ -184,23 +190,23 @@ class CoreControlRuntimeTest {
 
     @Test
     fun theCurrentHeadsetTheKotlinStateShowsIsTheOneTheCoreNames() = runBlocking<Unit> {
-        Rig().use { rig ->
+        rig().use { rig ->
             rig.audioConnected = false
             rig.pairedDevices.add(KotlinRawAudioDevice(modelDisplayName(RustModelProfile.I7_RS_V2), I7_ADDRESS, alias = null))
             withRuntime(rig) { runtime, rust ->
                 runtime.refreshBondedDevices()
                 var state = runtime.state.eventually { it.bondedHeadsets.size == 2 }
-                assertEquals(rust.snapshot().currentHeadset()?.id, state.currentHeadset?.deviceId?.value)
+                assertEquals(rust.handle.snapshot().currentHeadset()?.id, state.currentHeadset?.deviceId?.value)
                 assertEquals(DeviceId(ADDRESS), state.currentHeadset?.deviceId)
 
                 runtime.selectCurrentHeadset(DeviceId(I7_ADDRESS))
                 state = runtime.state.eventually { it.selectedHeadsetId == DeviceId(I7_ADDRESS) }
-                assertEquals(rust.snapshot().currentHeadset()?.id, state.currentHeadset?.deviceId?.value)
+                assertEquals(rust.handle.snapshot().currentHeadset()?.id, state.currentHeadset?.deviceId?.value)
                 assertEquals(DeviceId(I7_ADDRESS), state.currentHeadset?.deviceId)
 
                 assertEquals(OperationResult.Success, runtime.connect(DeviceId(ADDRESS)))
                 state = runtime.state.eventually { it.connection is ConnectionState.Connected }
-                assertEquals(rust.snapshot().currentHeadset()?.id, state.currentHeadset?.deviceId?.value)
+                assertEquals(rust.handle.snapshot().currentHeadset()?.id, state.currentHeadset?.deviceId?.value)
                 assertEquals(DeviceId(ADDRESS), state.currentHeadset?.deviceId)
             }
         }
@@ -208,11 +214,11 @@ class CoreControlRuntimeTest {
 
     @Test
     fun theReadySessionAndSystemAudioFactsMatchTheCoreRules() = runBlocking<Unit> {
-        Rig().use { rig ->
+        rig().use { rig ->
             withRuntime(rig) { runtime, rust ->
                 assertEquals(OperationResult.Success, runtime.connect(DeviceId(ADDRESS)))
                 val state = runtime.state.eventually { it.connection is ConnectionState.Connected }
-                val snapshot = rust.snapshot()
+                val snapshot = rust.handle.snapshot()
                 assertEquals(snapshot.readySession()?.sessionId?.toLong(), state.readySession?.sessionId)
                 assertEquals(snapshot.sessionFor(RustHeadsetSetting.NOISE_MODE)?.sessionId?.toLong(), state.noiseModeSession?.sessionId)
                 assertEquals(snapshot.hasSystemAudio(), state.deviceHasSystemAudio)
@@ -222,11 +228,11 @@ class CoreControlRuntimeTest {
 
     @Test
     fun theConnectionBlockReasonAndReconnectGuidanceMatchTheCore() = runBlocking<Unit> {
-        Rig().use { rig ->
+        rig().use { rig ->
             withRuntime(rig) { runtime, rust ->
                 runtime.refreshBondedDevices()
                 var state = runtime.state.eventually { it.bondedHeadsets.isNotEmpty() }
-                var snapshot = rust.snapshot()
+                var snapshot = rust.handle.snapshot()
                 assertNull(snapshot.connectionBlockReason)
                 assertNull(state.connectionBlockReason)
                 assertEquals(snapshot.reconnectGuidance?.name?.replace("_", ""), state.reconnectGuidance?.name?.replace("_", ""))
@@ -234,7 +240,7 @@ class CoreControlRuntimeTest {
 
                 runtime.updatePlatformState(kotlinPlatform(transport = TransportAvailability.Disabled))
                 state = runtime.state.eventually { it.platform.transport == TransportAvailability.Disabled }
-                snapshot = rust.snapshot()
+                snapshot = rust.handle.snapshot()
                 assertEquals(RustBlockReason.BluetoothDisabled, snapshot.connectionBlockReason)
                 assertEquals(ConnectionBlockReason.BluetoothDisabled, state.connectionBlockReason)
             }
@@ -255,8 +261,23 @@ class CoreControlRuntimeTest {
         assertEquals(RustHeadsetSetting.entries.size, RustHeadsetSetting.entries.map { it.toKotlin() }.toSet().size)
         assertEquals(DeviceField.entries.size, RustHeadsetField.entries.size)
         assertEquals(DeviceSetting.entries.size, RustHeadsetSetting.entries.size)
-        for (code in RustUnavailableCode.entries) {
-            val platform = rustPlatform(transport = RustTransportAvailability.Unavailable(code, null)).toKotlin()
+        for (reason in listOf(
+            RustUnavailableReason.UnsupportedPlatform("macOS"),
+            RustUnavailableReason.BleUnsupported,
+            RustUnavailableReason.PermissionRequired,
+            RustUnavailableReason.NoAdapter,
+            RustUnavailableReason.AdapterPoweredOff,
+            RustUnavailableReason.AdapterStateUnknown,
+            RustUnavailableReason.AccessDenied,
+            RustUnavailableReason.ServiceUnavailable,
+            RustUnavailableReason.MissingDependency("libdbus"),
+            RustUnavailableReason.Initializing,
+            RustUnavailableReason.Recovering,
+            RustUnavailableReason.ShuttingDown,
+            RustUnavailableReason.Closed,
+            RustUnavailableReason.BackendUnavailable("error"),
+        )) {
+            val platform = rustPlatform(transport = RustTransportAvailability.Unavailable(reason)).toKotlin()
             assertIs<TransportAvailability.Unavailable>(platform.transport)
         }
         for (permission in RustPermissionState.entries) {
@@ -274,7 +295,7 @@ class CoreControlRuntimeTest {
         }
     }
 
-    private class ClosableTransport(private val delegate: KotlinCoreTransport) :
+    private class ClosableTransport(private val delegate: ControlTransportAdapter) :
         ControlTransport by delegate,
         AutoCloseable {
         val closed = AtomicBoolean(false)
@@ -287,8 +308,8 @@ class CoreControlRuntimeTest {
 
     @Test
     fun theRuntimeAndItsTransportCloseOnceTheLinkIsReleasedAndTheOwnerScopeEnded() = runBlocking<Unit> {
-        Rig().use { rig ->
-            val transport = ClosableTransport(KotlinCoreTransport(rig))
+        rig().use { rig ->
+            val transport = ClosableTransport(ControlTransportAdapter(rig))
             val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
             val runtime = CoreControlRuntime(transport, kotlinPlatform(), scope = scope, timing = rig.timing(), clock = rig.clock())
             assertEquals(OperationResult.Success, runtime.connect(DeviceId(ADDRESS)))
@@ -302,8 +323,8 @@ class CoreControlRuntimeTest {
 
     @Test
     fun anOwnerScopeThatEndedFirstStillLetsTheRuntimeReleaseItsLinkBeforeClosing() = runBlocking<Unit> {
-        Rig().use { rig ->
-            val transport = ClosableTransport(KotlinCoreTransport(rig))
+        rig().use { rig ->
+            val transport = ClosableTransport(ControlTransportAdapter(rig))
             val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
             val runtime = CoreControlRuntime(transport, kotlinPlatform(), scope = scope, timing = rig.timing(), clock = rig.clock())
             assertEquals(OperationResult.Success, runtime.connect(DeviceId(ADDRESS)))

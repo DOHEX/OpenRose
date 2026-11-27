@@ -707,7 +707,7 @@ async fn disconnecting_closes_the_spp_socket_and_a_refused_close_is_reported() {
 }
 
 #[tokio::test(start_paused = true)]
-async fn expanded_v2_models_use_the_address_their_earphones_advertise_for_spp() {
+async fn expanded_v2_models_use_the_address_their_headset_advertises_for_spp() {
     let records = [
         (
             ModelProfile::BudsFeelMk2RsV2,

@@ -1,4 +1,4 @@
-package io.github.dohex.openrose.ffi.kotlincore
+package io.github.dohex.openrose.ffi.drivers
 
 import io.github.dohex.openrose.core.ConnectionPhase
 import io.github.dohex.openrose.core.transport.Advertisement
@@ -11,7 +11,7 @@ interface SppLink : ControlConnection {
     suspend fun open(onPhase: (ConnectionPhase) -> Unit)
 }
 
-interface KotlinCoreDrivers {
+interface PlatformDrivers {
     val supportsInitializationRecovery: Boolean
     val audio: AudioFactsDriver
 

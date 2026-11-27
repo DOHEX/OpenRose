@@ -8,6 +8,7 @@ import io.github.dohex.openrose.androidintegration.wire.parseWire
 import io.github.dohex.openrose.androidintegration.wire.render
 import io.github.dohex.openrose.core.ConnectionPhase
 import io.github.dohex.openrose.core.DeviceCandidate
+import io.github.dohex.openrose.core.HostPlatform
 import io.github.dohex.openrose.core.LocalControlRuntime
 import io.github.dohex.openrose.core.PermissionState
 import io.github.dohex.openrose.core.PlatformState
@@ -37,6 +38,7 @@ import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runCurrent
@@ -45,21 +47,19 @@ internal const val APP_PACKAGE = "io.github.dohex.openrose"
 internal const val HOST_PACKAGE = "com.android.bluetooth"
 
 internal class SharedHeadset {
-    val events = mutableListOf<String>()
-    var openOwner: String? = null
-        private set
-    var overlappingOpens = 0
-        private set
+    private data class Log(val events: List<String> = emptyList(), val openOwner: String? = null, val overlappingOpens: Int = 0)
 
-    fun opened(owner: String) {
-        events += "$owner:open"
-        if (openOwner != null) overlappingOpens++
-        openOwner = owner
+    private val log = MutableStateFlow(Log())
+    val events: List<String> get() = log.value.events
+    val openOwner: String? get() = log.value.openOwner
+    val overlappingOpens: Int get() = log.value.overlappingOpens
+
+    fun opened(owner: String) = log.update {
+        Log(it.events + "$owner:open", owner, if (it.openOwner != null) it.overlappingOpens + 1 else it.overlappingOpens)
     }
 
-    fun closed(owner: String) {
-        events += "$owner:close"
-        if (openOwner == owner) openOwner = null
+    fun closed(owner: String) = log.update {
+        Log(it.events + "$owner:close", it.openOwner.takeUnless { open -> open == owner }, it.overlappingOpens)
     }
 
     fun opens(owner: String) = events.count { it == "$owner:open" }
@@ -299,17 +299,22 @@ internal fun initializationReplies(profile: ModelProfile, writtenHex: String): L
 
 internal class OwnerRig(
     private val test: TestScope,
-    val earphones: DeviceCandidate = rosePair("rose-a"),
+    val earphones: DeviceCandidate = rosePair(APP_HEADSET_ADDRESS),
     initial: OwnerRecord = OwnerRecord(),
     bonded: List<DeviceCandidate> = listOf(earphones),
 ) {
     val headset = SharedHeadset()
-    val appTransport = HeadsetTransport("ordinary", headset, earphones.profile!!, bonded)
+    val app = test.appHeadset(headset, earphones)
     val hostTransport = HeadsetTransport("module", headset, earphones.profile!!, bonded)
     val store = MemoryOwnerStore(initial)
     private val ids = generateSequence(1) { it + 1 }.map { "id-$it" }.iterator()
     private val sessionTiming = SessionTiming(queryTimeoutMillis = 50, writeIntervalMillis = 0)
-    private val platform = PlatformState(PermissionState.GRANTED, TransportAvailability.Available)
+    private val platform = PlatformState(
+        PermissionState.GRANTED,
+        TransportAvailability.Available,
+        hostPlatform = HostPlatform.ANDROID,
+        scanPermission = PermissionState.GRANTED,
+    )
 
     private var hostScope: CoroutineScope = newHostScope()
     private var hostCount = 0
@@ -377,7 +382,7 @@ internal class OwnerRig(
         initialPlatformState = platform,
         initialSettings = settings.control,
         store = store,
-        appFactory = { scope, settings, state, base -> LocalControlRuntime(state, settings, appTransport, scope, sessionTiming, base) },
+        appFactory = app::runtime,
         moduleLink = link,
         scope = process,
         local = LocalOwnerIdentity(APP_PACKAGE, APP_PACKAGE, 10_123, 4_321),
@@ -390,6 +395,10 @@ internal class OwnerRig(
 
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     fun settle() = test.runCurrent()
+
+    fun eventually(what: String, condition: () -> Boolean) = test.eventually(what, condition)
+
+    fun quiesce() = test.quiesce()
 }
 
 internal val i5Replies = mapOf(

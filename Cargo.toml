@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "crates/control",
     "crates/ffi",
+    "crates/ffi-simulator",
     "crates/headset",
     "xtask",
 ]

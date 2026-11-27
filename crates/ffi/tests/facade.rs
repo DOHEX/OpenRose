@@ -1,26 +1,28 @@
 mod support;
 
-use openrose_control::ControlErrorCode;
 use openrose_control::gatt::GattFailureKind;
 use openrose_control::snapshot::{
     ConnectionState, PermissionState, PlatformState, TransportAvailability,
 };
+use openrose_control::{ControlError, ControlErrorCode};
 use openrose_ffi::{
-    ControlFailure, GattDriverError, SimulatedHeadset, current_headset, decode_snapshot,
-    default_session_timing, encode_snapshot, model_display_name, model_gatt_profile,
-    ready_session, session_for,
+    ControlFailure, DriverError, current_headset, default_session_timing, model_display_name,
+    model_gatt_profile, ready_session, session_for,
 };
 use openrose_headset::{
-    FieldValue, FirmwareVersion, HeadsetCommand, HeadsetField, HeadsetSetting, ModelProfile,
-    NoiseMode, decode_hex,
+    FieldValue, HeadsetCommand, HeadsetField, HeadsetSetting, ModelProfile, NoiseMode,
 };
 use std::sync::Arc;
 use support::{NOISE_READBACK_QUERY, NOISE_REPLY_ANC, World, eventually};
 
-fn code_of<T: std::fmt::Debug>(result: Result<T, ControlFailure>) -> ControlErrorCode {
+fn error_of<T: std::fmt::Debug>(result: Result<T, ControlFailure>) -> ControlError {
     match result.expect_err("expected a failure") {
-        ControlFailure::Failed { error } => error.code,
+        ControlFailure::Failed { error } => error,
     }
+}
+
+fn code_of<T: std::fmt::Debug>(result: Result<T, ControlFailure>) -> ControlErrorCode {
+    error_of(result).code
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -110,12 +112,10 @@ async fn disconnecting_completes_a_pending_setting_instead_of_leaving_it_hanging
 #[tokio::test(flavor = "multi_thread")]
 async fn a_platform_failure_reaches_the_caller_in_the_core_error_taxonomy() {
     let world = World::i5();
-    world
-        .headset
-        .fail_connect_with(Some(GattDriverError::Failed {
-            kind: GattFailureKind::Permission,
-            detail: "BLUETOOTH_CONNECT was revoked".to_string(),
-        }));
+    world.headset.fail_connect_with(Some(DriverError::Gatt {
+        kind: GattFailureKind::Permission,
+        detail: "BLUETOOTH_CONNECT was revoked".to_string(),
+    }));
 
     let result = world.runtime.connect(world.id()).await;
 
@@ -124,6 +124,63 @@ async fn a_platform_failure_reaches_the_caller_in_the_core_error_taxonomy() {
         world.snapshot().connection,
         ConnectionState::Disconnected
     ));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_driver_that_cannot_open_the_link_reports_why_in_the_core_error_taxonomy() {
+    let cases = [
+        (
+            DriverError::PermissionDenied {
+                detail: "BLUETOOTH_CONNECT was revoked".to_string(),
+            },
+            "BLUETOOTH_CONNECT was revoked",
+            ControlErrorCode::PermissionRequired,
+        ),
+        (
+            DriverError::Unsupported {
+                detail: "no LE radio".to_string(),
+            },
+            "no LE radio",
+            ControlErrorCode::Unsupported,
+        ),
+        (
+            DriverError::InvalidArgument {
+                detail: "malformed address".to_string(),
+            },
+            "malformed address",
+            ControlErrorCode::Unsupported,
+        ),
+        (
+            DriverError::Terminal {
+                detail: "adapter reset".to_string(),
+            },
+            "adapter reset",
+            ControlErrorCode::Disconnected,
+        ),
+    ];
+
+    for (failure, detail, code) in cases {
+        let world = World::i5();
+        world.headset.fail_open_with(Some(failure));
+
+        let error = error_of(world.runtime.connect(world.id()).await);
+
+        assert_eq!(code, error.code, "{detail}");
+        assert_eq!(detail, error.message);
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_terminal_failure_during_a_gatt_call_ends_the_connection_with_the_drivers_detail() {
+    let world = World::i5();
+    world.headset.fail_connect_with(Some(DriverError::Terminal {
+        detail: "the callback crashed".to_string(),
+    }));
+
+    let error = error_of(world.runtime.connect(world.id()).await);
+
+    assert_eq!(ControlErrorCode::Disconnected, error.code);
+    assert_eq!("the callback crashed", error.message);
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -172,22 +229,6 @@ async fn the_observer_receives_every_revision_in_order() {
     assert!(world.runtime.disconnect().await);
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn a_snapshot_survives_the_core_byte_encoding_and_garbage_is_refused() {
-    let world = World::i5();
-    world.runtime.connect(world.id()).await.expect("ready");
-    let snapshot = world.snapshot();
-
-    let decoded = decode_snapshot(encode_snapshot(snapshot.clone())).expect("decodes");
-
-    assert_eq!(snapshot, decoded);
-    assert_eq!(
-        ControlErrorCode::InvalidArgument,
-        code_of(decode_snapshot(b"not a snapshot".to_vec()))
-    );
-    assert!(world.runtime.disconnect().await);
-}
-
 #[test]
 fn constructing_and_updating_platform_state_from_a_plain_thread_uses_the_shared_runtime() {
     let handle = std::thread::spawn(|| {
@@ -205,7 +246,7 @@ fn constructing_and_updating_platform_state_from_a_plain_thread_uses_the_shared_
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn snapshot_helpers_and_simulated_headset_facade_round_trip() {
+async fn snapshot_helpers_and_model_facts_round_trip() {
     let world = World::i5();
     world.runtime.connect(world.id()).await.expect("ready");
     let snapshot = world.snapshot();
@@ -213,32 +254,27 @@ async fn snapshot_helpers_and_simulated_headset_facade_round_trip() {
     let current = current_headset(snapshot.clone()).expect("current headset");
     assert_eq!(world.id(), current.id);
     let ready = ready_session(snapshot.clone()).expect("ready session");
-    assert_eq!(Some(ready.clone()), session_for(snapshot, HeadsetSetting::NoiseMode));
-    assert_eq!("EarFree i5", model_display_name(ModelProfile::I5Zt));
-    assert!(!model_gatt_profile(ModelProfile::I5Zt).service_uuid.is_empty());
-    assert!(default_session_timing().connect_timeout.as_millis() > 0);
-
-    let simulated = SimulatedHeadset::new(
-        ModelProfile::I5Zt,
-        FirmwareVersion::new(vec![1, 2, 5], "125"),
-    )
-    .expect("i5 simulator");
-    let replies = simulated.receive(decode_hex(NOISE_READBACK_QUERY).expect("query hex"));
-    assert!(!replies.is_empty());
     assert_eq!(
-        Some(&FieldValue::text("wind")),
-        simulated.readings().get(&HeadsetField::NoiseMode)
+        Some(ready.clone()),
+        session_for(snapshot, HeadsetSetting::NoiseMode)
     );
+    assert_eq!("EarFree i5", model_display_name(ModelProfile::I5Zt));
+    assert!(
+        !model_gatt_profile(ModelProfile::I5Zt)
+            .service_uuid
+            .is_empty()
+    );
+    assert!(default_session_timing().connect_timeout.as_millis() > 0);
     assert!(world.runtime.disconnect().await);
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn cancel_add_device_ends_an_in_flight_add_attempt() {
+async fn cancel_add_headset_ends_an_in_flight_add_attempt() {
     let world = World::i5();
     world.headset.mute(true);
     let runtime = Arc::clone(&world.runtime);
     let id = world.id();
-    let add = tokio::spawn(async move { runtime.connect_for_add_device(id).await });
+    let add = tokio::spawn(async move { runtime.connect_for_add_headset(id).await });
     eventually("connecting state", || {
         matches!(
             world.snapshot().connection,
@@ -247,8 +283,7 @@ async fn cancel_add_device_ends_an_in_flight_add_attempt() {
     })
     .await;
 
-    world.runtime.cancel_add_device().await;
-
+    world.runtime.cancel_add_headset().await;
     assert_eq!(ControlErrorCode::Disconnected, code_of(add.await.unwrap()));
     assert!(matches!(
         world.snapshot().connection,

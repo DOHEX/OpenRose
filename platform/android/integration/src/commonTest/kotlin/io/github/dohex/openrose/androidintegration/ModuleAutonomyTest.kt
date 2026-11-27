@@ -47,7 +47,7 @@ class ModuleAutonomyTest {
         val left = assertIs<FieldReading.Known>(requireNotNull(runtime.state.value.device).diagnostics.fields[DeviceField.LEFT_BATTERY])
         assertEquals(FieldValue.Number(100), left.value)
         assertEquals(listOf("module:open"), rig.headset.events)
-        assertEquals(0, rig.headset.opens("ordinary"))
+        assertEquals(0, rig.headset.opens("app"))
     }
 
     @Test
@@ -99,29 +99,30 @@ class ModuleAutonomyTest {
         assertEquals(OwnerReadiness.Ready, again.integration.value.owner.readiness)
         assertEquals(generation, (rig.host.status.value as HostStatus.Active).generation)
         assertEquals(listOf("module:open"), rig.headset.events)
-        assertEquals(0, rig.appTransport.links.size)
+        assertEquals(0, rig.app.connections)
     }
 
     @Test
-    fun enteringModuleControlNeverOverlapsAnOrdinaryConnectionThatAudioHasAlreadyOpened() = runTest {
+    fun enteringModuleControlNeverOverlapsAnAppConnectionThatAudioHasAlreadyOpened() = runTest {
         val rig = OwnerRig(this)
         rig.bootHost()
-        rig.appTransport.audioDevice.emit(rig.earphones.deviceId)
         rig.hostTransport.audioDevice.emit(rig.earphones.deviceId)
+        rig.app.audioConnected = true
         val runtime = rig.newRuntime()
         runCurrent()
         advanceTimeBy(1)
         runCurrent()
-        assertEquals(listOf("ordinary:open"), rig.headset.events)
+        rig.eventually("the app connection") { rig.headset.events == listOf("app:open") }
+        assertEquals(listOf("app:open"), rig.headset.events)
 
-        rig.appTransport.closeDelayMillis = 300
+        rig.app.closeDelayMillis = 300
         assertIs<HandoffOutcome.Completed>(runtime.selectControlWay(ControlWay.MODULE))
         runCurrent()
         advanceTimeBy(1)
         runCurrent()
 
         assertEquals(0, rig.headset.overlappingOpens)
-        assertEquals(listOf("ordinary:open", "ordinary:close", "module:open"), rig.headset.events)
+        assertEquals(listOf("app:open", "app:close", "module:open"), rig.headset.events)
     }
 
     @Test
@@ -144,7 +145,7 @@ class ModuleAutonomyTest {
         rig.replaceHost(processDied = true)
         runCurrent()
         assertEquals(OwnerFailureStage.CONNECTION, assertIs<OwnerReadiness.Unavailable>(runtime.integration.value.owner.readiness).stage)
-        assertEquals(0, rig.headset.opens("ordinary"))
+        assertEquals(0, rig.headset.opens("app"))
 
         rig.bootHost()
         rig.hostTransport.audioDevice.emit(rig.earphones.deviceId)
@@ -158,7 +159,7 @@ class ModuleAutonomyTest {
         assertEquals(newGeneration, runtime.integration.value.owner.holder?.generation)
         assertEquals(listOf("module:open", "module:close", "module:open"), rig.headset.events)
         assertEquals(0, rig.headset.overlappingOpens)
-        assertEquals(0, rig.headset.opens("ordinary"))
+        assertEquals(0, rig.headset.opens("app"))
         assertEquals(
             HostRejection.INVALID_LEASE,
             assertIs<HostCallResult.Rejected>(rig.host.control.execute(appIdentity, oldLease, newGeneration, HostCommand.StartScan)).rejection,
@@ -194,7 +195,7 @@ class ModuleAutonomyTest {
         assertEquals(OwnerReadiness.Ready, runtime.integration.value.owner.readiness)
         assertEquals(ControlWay.MODULE, runtime.integration.value.owner.selected)
         assertNotEquals(oldGeneration, runtime.integration.value.owner.holder?.generation)
-        assertEquals(0, rig.headset.opens("ordinary"))
+        assertEquals(0, rig.headset.opens("app"))
         assertEquals(0, rig.headset.overlappingOpens)
     }
 
@@ -203,7 +204,7 @@ class ModuleAutonomyTest {
         val rig = OwnerRig(this, initial = saved)
         rig.bootHost()
         rig.hostTransport.audioDevice.emit(rig.earphones.deviceId)
-        rig.appTransport.audioDevice.emit(rig.earphones.deviceId)
+        rig.app.audioConnected = true
         val runtime = rig.newRuntime()
         runCurrent()
         advanceTimeBy(1)
@@ -218,7 +219,7 @@ class ModuleAutonomyTest {
         assertEquals(ControlWay.MODULE, owner.selected)
         assertIs<OwnerReadiness.Unavailable>(owner.readiness)
         assertNull(owner.holder)
-        assertEquals(0, rig.headset.opens("ordinary"))
+        assertEquals(0, rig.headset.opens("app"))
         assertEquals(ControlWay.MODULE, rig.store.record.selected)
     }
 
@@ -253,7 +254,7 @@ class ModuleAutonomyTest {
         val rig = OwnerRig(this, initial = saved)
         rig.bootHost()
         rig.hostTransport.audioDevice.emit(rig.earphones.deviceId)
-        rig.appTransport.audioDevice.emit(rig.earphones.deviceId)
+        rig.app.audioConnected = true
         val runtime = rig.newRuntime()
         runCurrent()
         advanceTimeBy(1)
@@ -269,6 +270,7 @@ class ModuleAutonomyTest {
         runCurrent()
         advanceTimeBy(rig.clientTiming.retryMillis * 3)
         runCurrent()
+        rig.eventually("the app connection") { rig.headset.openOwner == "app" }
 
         assertEquals(0, rig.headset.overlappingOpens)
         assertEquals(ControlWay.APP, runtime.integration.value.owner.holder?.way)
@@ -325,7 +327,7 @@ class ModuleAutonomyTest {
         val refused = old.release(appIdentity, newLease.id, SwitchRequest("a", ControlWay.MODULE, ControlWay.APP, generation))
         assertEquals(HostRejection.RELEASE_FAILED, assertIs<ReleaseResult.Refused>(refused).rejection)
         assertEquals(1, rig.link.connections.count { it.isOpen })
-        assertEquals(0, rig.headset.opens("ordinary"))
+        assertEquals(0, rig.headset.opens("app"))
 
         rig.hostTransport.closeFails = false
         assertTrue(rig.replaceHost(processDied = false))

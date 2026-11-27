@@ -206,12 +206,16 @@ impl HeadsetCommand {
             )));
         }
         if let Some(prerequisite) = setting_prerequisite(fields, setting) {
-            return Err(ValidationError::not_ready(prerequisite));
+            let detail = match prerequisite {
+                SettingPrerequisite::SpatialModeRequired => "请先开启空间模式",
+                SettingPrerequisite::IndependentMicActivationRequired => "请先激活独立麦克风",
+            };
+            return Err(ValidationError::not_ready(detail));
         }
         self.check_options(profile, capabilities)
     }
 
-    fn check_options(
+    pub fn check_options(
         &self,
         profile: ModelProfile,
         capabilities: &HeadsetCapabilities,
@@ -361,10 +365,17 @@ impl HeadsetCommand {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
+pub enum SettingPrerequisite {
+    SpatialModeRequired,
+    IndependentMicActivationRequired,
+}
+
 pub fn setting_prerequisite(
     fields: &BTreeMap<HeadsetField, FieldReading>,
     setting: HeadsetSetting,
-) -> Option<&'static str> {
+) -> Option<SettingPrerequisite> {
     let requirement = match setting {
         HeadsetSetting::SpatialContent => HeadsetField::SpatialMode,
         HeadsetSetting::IndependentMicMode => HeadsetField::IndependentMicActivation,
@@ -376,11 +387,11 @@ pub fn setting_prerequisite(
             Some(FieldValue::Text(mode)) if matches!(mode.as_str(), "head_tracking" | "fixed") => {
                 None
             }
-            _ => Some("请先开启空间模式"),
+            _ => Some(SettingPrerequisite::SpatialModeRequired),
         },
         _ => match current {
             Some(FieldValue::Toggle(true)) => None,
-            _ => Some("请先激活独立麦克风"),
+            _ => Some(SettingPrerequisite::IndependentMicActivationRequired),
         },
     }
 }

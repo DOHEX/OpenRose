@@ -369,8 +369,17 @@ version = "0.1.1"
 dependencies = [
  "async-trait",
  "openrose-control",
+ "openrose-ffi-simulator",
  "openrose-headset",
  "tokio",
+ "uniffi",
+]
+
+[[package]]
+name = "openrose-ffi-simulator"
+version = "0.1.1"
+dependencies = [
+ "openrose-headset",
  "uniffi",
 ]
 

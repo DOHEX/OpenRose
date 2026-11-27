@@ -20,7 +20,7 @@ import kotlin.test.assertNull
 class ControlGuidanceTest {
     @Test
     fun connectionBlockReasonPrioritizesPermissionThenBluetoothDisabledThenTransportUnavailable() = runTest {
-        val unavailable = TransportAvailability.Unavailable(TransportUnavailableCode.BACKEND_UNAVAILABLE, "dbus error")
+        val unavailable = TransportAvailability.Unavailable(TransportUnavailableReason.BackendUnavailable("dbus error"))
         val runtime = LocalControlRuntime(
             PlatformState(PermissionState.REQUIRED, unavailable),
             scope = backgroundScope,
@@ -35,7 +35,7 @@ class ControlGuidanceTest {
 
         runtime.updatePlatformState(PlatformState(PermissionState.NOT_REQUIRED, unavailable))
         assertEquals(
-            ConnectionBlockReason.TransportUnavailable(TransportUnavailableCode.BACKEND_UNAVAILABLE, "dbus error"),
+            ConnectionBlockReason.TransportUnavailable(TransportUnavailableReason.BackendUnavailable("dbus error")),
             runtime.state.value.connectionBlockReason,
         )
 

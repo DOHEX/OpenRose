@@ -29,15 +29,14 @@ import uniffi.openrose_control.TransportAvailability
 import uniffi.openrose_ffi.AudioEvents
 import uniffi.openrose_ffi.AudioFactsDriver
 import uniffi.openrose_ffi.ControlTransport
+import uniffi.openrose_ffi.DriverException
 import uniffi.openrose_ffi.GattDriver
-import uniffi.openrose_ffi.GattDriverException
 import uniffi.openrose_ffi.LocalClock
 import uniffi.openrose_ffi.ScanDriver
-import uniffi.openrose_ffi.SimulatedHeadset
 import uniffi.openrose_ffi.SppDriver
-import uniffi.openrose_ffi.TransportDriverException
 import uniffi.openrose_ffi.modelDisplayName
 import uniffi.openrose_ffi.modelGattProfile
+import uniffi.openrose_ffi_simulator.SimulatedHeadset
 import uniffi.openrose_headset.FieldReading
 import uniffi.openrose_headset.FieldValue
 import uniffi.openrose_headset.FirmwareVersion
@@ -105,7 +104,7 @@ class RustControlRuntimeTest {
 
                     override suspend fun connect() {
                         if (failNextConnect.compareAndSet(true, false)) {
-                            throw GattDriverException.Failed(GattFailureKind.PERMISSION, "BLUETOOTH_CONNECT revoked")
+                            throw DriverException.Gatt(GattFailureKind.PERMISSION, "BLUETOOTH_CONNECT revoked")
                         }
                     }
 
@@ -158,9 +157,9 @@ class RustControlRuntimeTest {
                 }
             }
 
-            override fun startScan(): ScanDriver = throw TransportDriverException.Unsupported("scan unused")
+            override fun startScan(): ScanDriver = throw DriverException.Unsupported("scan unused")
 
-            override fun openSpp(headset: HeadsetId, address: String, serviceUuid: String): SppDriver = throw TransportDriverException.Unsupported("spp unused")
+            override fun openSpp(headset: HeadsetId, address: String, serviceUuid: String): SppDriver = throw DriverException.Unsupported("spp unused")
             override fun audioFacts(): AudioFactsDriver = object : AudioFactsDriver {
                 override fun subscribe(): AudioEvents = object : AudioEvents {
                     override suspend fun nextEvent(): RawAudioEvent? = audioEvents.receiveCatching().getOrNull()
@@ -240,13 +239,13 @@ class RustControlRuntimeTest {
                     }
                 }
                 assertTrue(updated.revision > connected.revision)
-                assertTrue(runtime.disconnect())
+                assertTrue(runtime.handle.disconnect())
             }
         }
     }
 
     @Test
-    fun cancellingAddDeviceCoroutineExplicitlyCancelsCoreAttempt() = runBlocking {
+    fun cancellingAddHeadsetCoroutineExplicitlyCancelsCoreAttempt() = runBlocking {
         SimulatedBleRig().use { rig ->
             RustControlRuntime(
                 transport = rig.transport(),
@@ -256,7 +255,7 @@ class RustControlRuntimeTest {
             ).use { runtime ->
                 rig.muted.set(true)
                 val add = async(Dispatchers.Default) {
-                    runtime.connectForAddDevice(I5_ADDRESS)
+                    runtime.connectForAddHeadset(I5_ADDRESS)
                 }
                 withTimeout(2_000) {
                     runtime.state.first { it.connection is ConnectionState.Connecting }
@@ -266,7 +265,7 @@ class RustControlRuntimeTest {
                 withTimeout(2_000) {
                     runtime.state.first { it.connection is ConnectionState.Disconnected }
                 }
-                assertTrue(runtime.release())
+                assertTrue(runtime.handle.release())
             }
         }
     }
@@ -285,10 +284,6 @@ class RustControlRuntimeTest {
                     runtime.state.first { it.connection is ConnectionState.Connected }
                 }
 
-                val encoded = connected.encodeToBytes()
-                assertEquals(connected, decodeControlSnapshot(encoded).getOrThrow())
-                assertTrue(decodeControlSnapshot("corrupt".encodeToByteArray()).isFailure)
-
                 rig.muted.set(true)
                 val writesBefore = rig.writes.size
                 val pending = async(Dispatchers.Default) {
@@ -298,7 +293,7 @@ class RustControlRuntimeTest {
                     rig.writes.drop(writesBefore).any { it == NOISE_READBACK_QUERY }
                 }
 
-                assertTrue(runtime.disconnect())
+                assertTrue(runtime.handle.disconnect())
                 val failure = assertIs<RustControlResult.Failure>(withTimeout(2_000) { pending.await() })
                 assertEquals(ControlErrorCode.DISCONNECTED, failure.error.code)
             }
@@ -323,7 +318,7 @@ class RustControlRuntimeTest {
                 assertEquals(ControlErrorCode.DISCONNECTED, crashed.error.code)
 
                 assertEquals(RustControlResult.Success, runtime.connect(I5_ADDRESS))
-                assertTrue(runtime.disconnect())
+                assertTrue(runtime.handle.disconnect())
             }
         }
     }

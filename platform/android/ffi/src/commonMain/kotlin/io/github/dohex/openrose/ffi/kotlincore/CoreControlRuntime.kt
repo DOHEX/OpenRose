@@ -23,44 +23,61 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import uniffi.openrose_control.ControlSnapshot as RustSnapshot
 
-@Suppress("TooManyFunctions")
 class CoreControlRuntime internal constructor(
     private val rust: RustControlRuntime,
     scope: CoroutineScope,
-    private val onClose: () -> Unit,
+    onClose: () -> Unit,
 ) : ControlRuntime {
     private val linkReleased = AtomicBoolean(false)
-    private val pendingEnds = AtomicInteger(ENDS_BEFORE_CLOSE)
-
-    override val state: StateFlow<ControlState> = ProjectedStateFlow(rust.state, RustSnapshot::toControlState)
-
-    init {
-        scope.coroutineContext.job.invokeOnCompletion { ended() }
-    }
-
-    private fun ended() {
-        if (pendingEnds.decrementAndGet() > 0) return
+    private val closing = ClosingBarrier {
         rust.close()
         onClose()
     }
 
-    override suspend fun refreshBondedDevices() = rust.refreshBondedHeadsets()
+    override val state: StateFlow<ControlState> = ProjectedStateFlow(rust.state, RustSnapshot::toControlState)
+
+    init {
+        scope.coroutineContext.job.invokeOnCompletion { closing.end() }
+    }
+
+    constructor(
+        transport: ControlTransport,
+        initialPlatformState: PlatformState,
+        initialSettings: UserSettings = UserSettings(),
+        scope: CoroutineScope,
+        timing: SessionTiming = defaultSessionTiming(),
+        sessionIdBase: Long = 0L,
+        clock: LocalClock = SystemLocalClock(),
+    ) : this(
+        RustControlRuntime(
+            transport = transport,
+            initialPlatformState = initialPlatformState.toRust(),
+            initialSettings = initialSettings.toRust(),
+            clock = clock,
+            timing = timing,
+            sessionIdBase = sessionIdBase.toULong(),
+        ),
+        scope,
+        { (transport as? AutoCloseable)?.close() },
+    )
+
+    override suspend fun refreshBondedDevices() = rust.handle.refreshBondedHeadsets()
 
     override suspend fun startScan(): OperationResult = rust.startScan().toOperation()
 
-    override suspend fun stopScan() = rust.stopScan()
+    override suspend fun stopScan() = rust.handle.stopScan()
 
-    override suspend fun selectCurrentHeadset(deviceId: DeviceId) = rust.selectCurrentHeadset(deviceId.value)
+    override suspend fun selectCurrentHeadset(deviceId: DeviceId) = rust.handle.selectCurrentHeadset(deviceId.value)
 
     override suspend fun connect(deviceId: DeviceId, pinned: Boolean): OperationResult = rust.connect(deviceId.value, pinned).toOperation()
 
-    override suspend fun connectForAddDevice(deviceId: DeviceId): OperationResult = rust.connectForAddDevice(deviceId.value).toOperation()
+    override suspend fun connectForAddDevice(deviceId: DeviceId): OperationResult = rust.connectForAddHeadset(deviceId.value).toOperation()
 
-    override suspend fun disconnect(): Boolean = rust.disconnect()
+    override suspend fun disconnect(): Boolean = rust.handle.disconnect()
 
     override suspend fun release(): Boolean {
-        val released = rust.release()
-        if (released && linkReleased.compareAndSet(false, true)) ended()
+        val released = rust.handle.release()
+        if (released && linkReleased.compareAndSet(false, true)) closing.end()
         return released
     }
 
@@ -69,34 +86,22 @@ class CoreControlRuntime internal constructor(
         return result.toOperation()
     }
 
-    override fun updateSettings(settings: UserSettings) = rust.updateSettings(settings.toRust())
+    override fun updateSettings(settings: UserSettings) = rust.handle.updateSettings(settings.toRust())
 
-    override fun updatePlatformState(platformState: PlatformState) = rust.updatePlatformState(platformState.toRust())
+    override fun updatePlatformState(platformState: PlatformState) = rust.handle.updatePlatformState(platformState.toRust())
+}
+
+private class ClosingBarrier(private val close: () -> Unit) {
+    private val pendingEnds = AtomicInteger(ENDS_BEFORE_CLOSE)
+
+    fun end() {
+        if (pendingEnds.decrementAndGet() > 0) return
+        close()
+    }
 
     private companion object {
         const val ENDS_BEFORE_CLOSE = 2
     }
-}
-
-@Suppress("ktlint:standard:function-naming", "FunctionNaming")
-fun CoreControlRuntime(
-    transport: ControlTransport,
-    initialPlatformState: PlatformState,
-    initialSettings: UserSettings = UserSettings(),
-    scope: CoroutineScope,
-    timing: SessionTiming = defaultSessionTiming(),
-    sessionIdBase: Long = 0L,
-    clock: LocalClock = SystemLocalClock(),
-): ControlRuntime {
-    val rust = RustControlRuntime(
-        transport = transport,
-        initialPlatformState = initialPlatformState.toRust(),
-        initialSettings = initialSettings.toRust(),
-        clock = clock,
-        timing = timing,
-        sessionIdBase = sessionIdBase.toULong(),
-    )
-    return CoreControlRuntime(rust, scope) { (transport as? AutoCloseable)?.close() }
 }
 
 private fun RustControlResult.toOperation(): OperationResult = when (this) {

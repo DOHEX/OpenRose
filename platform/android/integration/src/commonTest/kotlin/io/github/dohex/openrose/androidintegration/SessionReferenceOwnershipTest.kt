@@ -28,26 +28,26 @@ class SessionReferenceOwnershipTest {
         val first = runtime.holdAppSession()
         runCurrent()
         assertEquals(OperationResult.Success, runtime.connectFromSystem(id))
-        runCurrent()
+        rig.eventually("a ready session with its prompt") { runtime.state.value.readySession != null && runtime.integration.value.presentation.prompt != null }
         val oldReference = runtime.currentReference()
         val oldPrompt = requireNotNull(runtime.integration.value.presentation.prompt).id
         first.release()
-        runCurrent()
+        rig.eventually("the released session to end") { runtime.state.value.device == null }
         assertEquals(null, runtime.state.value.device)
 
         val second = runtime.holdAppSession()
-        runCurrent()
+        rig.eventually("the app owner to take over again") { runtime.integration.value.owner.readiness == OwnerReadiness.Ready }
         assertEquals(OperationResult.Success, runtime.connectFromSystem(id))
-        runCurrent()
+        rig.eventually("a ready session") { runtime.state.value.readySession != null }
         val current = runtime.currentReference()
         assertNotEquals(oldReference, current)
-        val writes = rig.appTransport.links.sumOf { it.writes.size }
+        val writes = rig.app.writes
 
         assertIs<SessionSnapshotResult.Failure>(runtime.readSession(oldReference))
         assertIs<OperationResult.Failure>(runtime.set(oldReference, HeadsetCommand.NoiseMode(NoiseMode.ANC)))
         assertFalse(runtime.claimPrompt(oldReference, oldPrompt))
 
-        assertEquals(writes, rig.appTransport.links.sumOf { it.writes.size }, "a stale reference reaches no earphones")
+        assertEquals(writes, rig.app.writes, "a stale reference reaches no earphones")
         assertIs<SessionSnapshotResult.Available>(runtime.readSession(current))
         second.release()
     }
@@ -60,24 +60,24 @@ class SessionReferenceOwnershipTest {
         runCurrent()
         val id = rig.earphones.deviceId
         assertEquals(OperationResult.Success, runtime.connectFromSystem(id))
-        runCurrent()
-        val ordinaryReference = runtime.currentReference()
+        rig.eventually("a ready app session") { runtime.state.value.readySession != null }
+        val appReference = runtime.currentReference()
 
         assertIs<HandoffOutcome.Completed>(runtime.selectControlWay(ControlWay.MODULE))
         runCurrent()
         assertEquals(OperationResult.Success, runtime.connectFromSystem(id))
-        runCurrent()
+        rig.eventually("a ready module session") { runtime.state.value.readySession?.let { it.sessionId != appReference.sessionId } == true }
         val moduleReference = runtime.currentReference()
-        assertNotEquals(ordinaryReference.sessionId, moduleReference.sessionId)
-        assertIs<SessionSnapshotResult.Failure>(runtime.readSession(ordinaryReference))
+        assertNotEquals(appReference.sessionId, moduleReference.sessionId)
+        assertIs<SessionSnapshotResult.Failure>(runtime.readSession(appReference))
         assertIs<SessionSnapshotResult.Available>(runtime.readSession(moduleReference))
 
         assertIs<HandoffOutcome.Completed>(runtime.selectControlWay(ControlWay.APP))
         runCurrent()
         assertEquals(OperationResult.Success, runtime.connectFromSystem(id))
-        runCurrent()
+        rig.eventually("a ready app session") { runtime.state.value.readySession?.let { it.sessionId != moduleReference.sessionId } == true }
         val laterReference = runtime.currentReference()
-        assertIs<SessionSnapshotResult.Failure>(runtime.readSession(ordinaryReference))
+        assertIs<SessionSnapshotResult.Failure>(runtime.readSession(appReference))
         assertIs<SessionSnapshotResult.Failure>(runtime.readSession(moduleReference))
         assertIs<SessionSnapshotResult.Available>(runtime.readSession(laterReference))
     }

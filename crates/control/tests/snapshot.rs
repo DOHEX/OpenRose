@@ -3,7 +3,7 @@ mod support;
 use openrose_control::settings::ControlSettings;
 use openrose_control::snapshot::{
     ConnectionBlockReason, ControlSnapshot, HostPlatform, PermissionState, PlatformApplicability,
-    PlatformState, TransportAvailability, TransportUnavailableCode,
+    PlatformState, TransportAvailability, TransportUnavailableReason,
 };
 use openrose_control::transport::{AudioProfileEvidence, TransportFacts};
 use openrose_headset::{HeadsetCommand, ModelProfile, NoiseMode, ReconnectGuidance};
@@ -103,13 +103,15 @@ async fn the_snapshot_names_why_a_connection_is_blocked_with_the_priority_of_the
             PlatformState::new(
                 PermissionState::NotRequired,
                 TransportAvailability::Unavailable {
-                    code: TransportUnavailableCode::AccessDenied,
-                    detail: Some("org.bluez".to_string()),
+                    reason: TransportUnavailableReason::BackendUnavailable {
+                        detail: Some("org.bluez".to_string()),
+                    },
                 },
             ),
             Some(ConnectionBlockReason::TransportUnavailable {
-                code: TransportUnavailableCode::AccessDenied,
-                detail: Some("org.bluez".to_string()),
+                reason: TransportUnavailableReason::BackendUnavailable {
+                    detail: Some("org.bluez".to_string()),
+                },
             }),
         ),
         (
@@ -135,34 +137,42 @@ async fn the_snapshot_names_why_a_connection_is_blocked_with_the_priority_of_the
 }
 
 #[tokio::test(start_paused = true)]
-async fn every_transport_unavailable_code_survives_encoding() {
+async fn every_transport_unavailable_reason_survives_encoding() {
     let harness = Harness::new(Options::i5());
-    for code in [
-        TransportUnavailableCode::UnsupportedPlatform,
-        TransportUnavailableCode::BleUnsupported,
-        TransportUnavailableCode::PermissionRequired,
-        TransportUnavailableCode::NoAdapter,
-        TransportUnavailableCode::AdapterPoweredOff,
-        TransportUnavailableCode::AdapterStateUnknown,
-        TransportUnavailableCode::AccessDenied,
-        TransportUnavailableCode::ServiceUnavailable,
-        TransportUnavailableCode::MissingDependency,
-        TransportUnavailableCode::Initializing,
-        TransportUnavailableCode::Recovering,
-        TransportUnavailableCode::ShuttingDown,
-        TransportUnavailableCode::Closed,
-        TransportUnavailableCode::BackendUnavailable,
+    for reason in [
+        TransportUnavailableReason::UnsupportedPlatform {
+            platform: Some("macOS".to_string()),
+        },
+        TransportUnavailableReason::BleUnsupported,
+        TransportUnavailableReason::PermissionRequired,
+        TransportUnavailableReason::NoAdapter,
+        TransportUnavailableReason::AdapterPoweredOff,
+        TransportUnavailableReason::AdapterStateUnknown,
+        TransportUnavailableReason::AccessDenied,
+        TransportUnavailableReason::ServiceUnavailable,
+        TransportUnavailableReason::MissingDependency {
+            detail: Some("libdbus".to_string()),
+        },
+        TransportUnavailableReason::Initializing,
+        TransportUnavailableReason::Recovering,
+        TransportUnavailableReason::ShuttingDown,
+        TransportUnavailableReason::Closed,
+        TransportUnavailableReason::BackendUnavailable {
+            detail: Some("helper exited".to_string()),
+        },
     ] {
         harness.runtime.update_platform_state(
             PlatformState::new(
                 PermissionState::Granted,
-                TransportAvailability::Unavailable { code, detail: None },
+                TransportAvailability::Unavailable {
+                    reason: reason.clone(),
+                },
             )
             .on(HostPlatform::MacOs),
         );
         let snapshot = harness.snapshot();
         assert_eq!(
-            Some(ConnectionBlockReason::TransportUnavailable { code, detail: None }),
+            Some(ConnectionBlockReason::TransportUnavailable { reason }),
             snapshot.connection_block_reason
         );
         round_trip(&snapshot);

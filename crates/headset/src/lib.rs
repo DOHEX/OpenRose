@@ -21,7 +21,7 @@ pub use capabilities::{
     TouchControlCapabilities, basic_noise_modes, earbud_touch_slots, firmware_at_least,
     firmware_comparison_integer, prompt_volume_levels,
 };
-pub use command::{HeadsetCommand, setting_prerequisite};
+pub use command::{HeadsetCommand, SettingPrerequisite, setting_prerequisite};
 pub use error::{ProtocolError, ValidationError, ValidationErrorKind};
 pub use field::{
     FieldReading, FieldValue, FirmwareVersion, HeadsetField, HeadsetId, HeadsetSetting,

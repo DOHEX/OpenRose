@@ -216,6 +216,21 @@ async fn the_core_registers_for_events_before_it_queries() {
 }
 
 #[tokio::test(start_paused = true)]
+async fn an_audio_event_after_the_initial_query_reaches_the_core() {
+    let rig = Rig::new();
+    settle().await;
+    rig.audio
+        .next_query()
+        .await
+        .send(snapshot(&[], &[], &[]))
+        .unwrap();
+    settle().await;
+    rig.audio.emit(changed(AudioProfile::A2dp, ADDRESS, true));
+    settle().await;
+    assert_eq!(address(), rig.audio_headset());
+}
+
+#[tokio::test(start_paused = true)]
 async fn a_changed_paired_list_event_reads_the_paired_headsets_again() {
     let rig = Rig::new();
     rig.audio.set_bonded(vec![i5(ADDRESS)]);

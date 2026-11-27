@@ -3,7 +3,7 @@ mod support;
 use openrose_control::ControlErrorCode;
 use openrose_control::snapshot::{
     ConnectionState, HostPlatform, PermissionState, PlatformState, TransportAvailability,
-    TransportUnavailableCode,
+    TransportUnavailableReason,
 };
 use support::scripted::{A, add_i5, id, simulated};
 use support::{available, elapse, settle};
@@ -15,7 +15,7 @@ fn android(unlocked: bool) -> PlatformState {
 }
 
 #[tokio::test(start_paused = true)]
-async fn nothing_connects_before_the_first_unlock_even_when_the_earphones_already_have_audio() {
+async fn nothing_connects_before_the_first_unlock_even_when_the_headset_already_has_audio() {
     let (transport, runtime, _) = simulated(android(false));
     let headset = add_i5(&transport, A);
     transport.set_audio_connected(Some(id(A)));
@@ -117,8 +117,7 @@ async fn an_audio_connection_found_while_the_transport_was_unavailable_connects_
     let unavailable = PlatformState::new(
         PermissionState::Granted,
         TransportAvailability::Unavailable {
-            code: TransportUnavailableCode::Initializing,
-            detail: None,
+            reason: TransportUnavailableReason::Initializing,
         },
     );
     let (transport, runtime, _) = simulated(unavailable);
@@ -147,8 +146,7 @@ async fn granting_the_permission_reads_an_already_connected_audio_without_a_new_
     let denied = PlatformState::new(
         PermissionState::Required,
         TransportAvailability::Unavailable {
-            code: TransportUnavailableCode::PermissionRequired,
-            detail: None,
+            reason: TransportUnavailableReason::PermissionRequired,
         },
     );
     let (transport, runtime, _) = simulated(denied);

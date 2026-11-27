@@ -80,30 +80,30 @@ class OwnerRecordCodecTest {
             asked++
             false
         }
-        val ordinary = OwnerRecord()
+        val app = OwnerRecord()
         val module = OwnerRecord(ControlWay.MODULE)
-        assertTrue(OwnerRecordCodec.canSave(ordinary, ordinary, canPublish))
+        assertTrue(OwnerRecordCodec.canSave(app, app, canPublish))
         assertTrue(OwnerRecordCodec.canSave(module, module.copy(moduleRelease = PendingModuleRelease("r", null)), canPublish))
         assertEquals(0, asked)
-        assertFalse(OwnerRecordCodec.canSave(ordinary, module, canPublish))
-        assertFalse(OwnerRecordCodec.canSave(module, ordinary, canPublish))
+        assertFalse(OwnerRecordCodec.canSave(app, module, canPublish))
+        assertFalse(OwnerRecordCodec.canSave(module, app, canPublish))
         assertEquals(2, asked)
-        assertTrue(OwnerRecordCodec.canSave(ordinary, module) { true })
+        assertTrue(OwnerRecordCodec.canSave(app, module) { true })
     }
 
     @Test
     fun savingPublishesOnlyWhenTheChoiceChanges() {
-        val ordinary = OwnerRecord()
+        val app = OwnerRecord()
         val module = OwnerRecord(ControlWay.MODULE)
         var published = 0
         val publish = {
             published++
             true
         }
-        assertTrue(OwnerRecordCodec.save(ordinary, ordinary.copy(moduleRelease = PendingModuleRelease("r", null)), publish) { true })
+        assertTrue(OwnerRecordCodec.save(app, app.copy(moduleRelease = PendingModuleRelease("r", null)), publish) { true })
         assertTrue(OwnerRecordCodec.save(module, module.copy(moduleRelease = PendingModuleRelease("r", null)), publish) { true })
         assertEquals(0, published)
-        assertTrue(OwnerRecordCodec.save(ordinary, module, publish) { true })
+        assertTrue(OwnerRecordCodec.save(app, module, publish) { true })
         assertEquals(1, published)
     }
 

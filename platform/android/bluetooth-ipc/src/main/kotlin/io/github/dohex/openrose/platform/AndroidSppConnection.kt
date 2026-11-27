@@ -5,7 +5,7 @@ import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothSocket
 import io.github.dohex.openrose.core.ConnectionPhase
-import io.github.dohex.openrose.ffi.kotlincore.SppLink
+import io.github.dohex.openrose.ffi.drivers.SppLink
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers

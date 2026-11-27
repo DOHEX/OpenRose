@@ -12,10 +12,10 @@
 
 - **JDK 21**：`.mise.toml` 固定 Temurin 的精确版本，CI 也读取它安装 JDK；可用 [mise](https://mise.jdx.dev/) 安装同一版本。构建和 Gradle 守护进程都要求 Temurin 21，机器上没有时，`settings.gradle.kts` 中的 foojay 工具链解析插件会自动下载。Gradle 不会自动发现 mise 安装的 JDK，只有它正好是启动 Gradle 的 JVM 时才会被选中；想让终端和 IDE 用同一个 JDK，在 `~/.gradle/gradle.properties` 中把它加入 `org.gradle.java.installations.paths`。
 - **Android SDK 与 NDK**：Platform 37、Build Tools 37.0.0、NDK `28.2.13676358`（版本固定在 `gradle/libs.versions.toml`）。设置 `ANDROID_HOME`，或在 `local.properties` 中写入 `sdk.dir=/path/to/android-sdk`。`offlineCheck` 需要 Android SDK；首次执行 `:androidApp:assembleDebug` 时，AGP 会按固定版本自动下载 NDK。
-- **Rust 与 Android 交叉编译**：`cargo xtask check` 与主机 JVM FFI 测试需要 Rust stable 工具链；构建 Android APK 还需要 `aarch64-linux-android` 目标和 `cargo-ndk` `4.1.2`：
+- **Rust 与 Android 交叉编译**：`cargo xtask check` 与主机 JVM FFI 测试需要 Rust stable 工具链；构建 Android APK 还需要 `aarch64-linux-android`、`armv7-linux-androideabi`、`x86_64-linux-android` 三个目标和 `cargo-ndk` `4.1.2`。APK 为 `arm64-v8a`、`armeabi-v7a`、`x86_64` 各带一份 Rust 核心（`libopenrose_ffi.so`），不含 32 位 x86。ABI 列表只写在 `gradle/libs.versions.toml` 的 `android-abis`：cargo-ndk 按它构建，`abiFilters` 按它筛选打包的原生库，CI 按它安装 Rust 目标，并逐个 ABI 检查 `libopenrose_ffi.so` 与 `libjnidispatch.so` 以未压缩（`Stored`）方式存放。增减 ABI 时只改这一项，并同步下面的本地安装命令：
 
   ```bash
-  rustup target add aarch64-linux-android
+  rustup target add aarch64-linux-android armv7-linux-androideabi x86_64-linux-android
   cargo install --locked cargo-ndk --version 4.1.2
   ```
 - **Linux 运行库**：运行或测试桌面版需要 GTK 3、EGL / OpenGL 和 fontconfig。CI 在 Ubuntu 24.04 上安装的是：
@@ -86,9 +86,10 @@ cd OpenRose
 | `./gradlew detekt` | 产品模块和构建约定的 Kotlin 静态分析，配置为 `config/detekt/detekt.yml`，自定义规则在 `tools/detekt-rules` |
 | `./gradlew koverHtmlReportCoverage` | 生成根项目聚合的覆盖率 HTML 报告 |
 | `./gradlew koverVerifyCoverage` | 校验行覆盖率不低于下限 |
-| `./gradlew offlineCheck` | 运行全部不依赖硬件的测试，以及 `spotlessCheck`、`detekt`、lint 与 `koverVerifyCoverage`。CI 执行的就是它 |
+| `./gradlew offlineCheck` | 运行 Gradle 侧全部不依赖硬件的测试，以及 `spotlessCheck`、`detekt`、lint 与 `koverVerifyCoverage`（不含 Rust 侧检查） |
+| `cargo xtask check` | 全仓离线检查门禁：版本一致性校验、`cargo test --locked --workspace`、`cargo clippy --locked --workspace --all-targets -- -D warnings`、`cargo xtask no-comments`，以及 Gradle `check offlineCheck`。CI 执行的就是它 |
 
-**提 PR 前必须通过 `./gradlew offlineCheck`。**
+**提 PR 前必须通过 `cargo xtask check`。**
 
 约束：
 
@@ -104,7 +105,8 @@ CI 还会构建 Android 调试 APK 并打包桌面版。Windows 作业对 WinRT 
 本地构建命令：
 
 ```bash
-./gradlew check offlineCheck :androidApp:assembleDebug
+cargo xtask check
+./gradlew :androidApp:assembleDebug
 ./gradlew :desktopApp:packageDistributionForCurrentOS
 ```
 
@@ -117,7 +119,7 @@ feat(desktop): add tray panel and background control
 
 <describe the behaviour change>
 
-Validation: :shared:ui:jvmTest and :desktopApp:test pass; check offlineCheck
+Validation: :shared:ui:jvmTest and :desktopApp:test pass; cargo xtask check
 passes. GNOME and KDE are not verified on hardware.
 ```
 
@@ -153,7 +155,7 @@ gh attestation verify openrose-X.Y.Z-android.apk --repo DOHEX/OpenRose
 
 OpenRose 区分两类验证，请在 PR 描述和文档中分别如实记录，不要把离线测试当作真机验证：
 
-- **离线验证**：协议编解码、控制会话、BlueZ 假 D-Bus 驱动、界面测试等，由 `offlineCheck` 覆盖，不需要耳机。
+- **离线验证**：协议编解码、控制会话、BlueZ 假 D-Bus 驱动、界面测试、Rust 核心测试与静态检查等，由 `cargo xtask check` 覆盖，不需要耳机。
 - **真机验证**：在真实耳机、真实设备或桌面环境上执行。请写明耳机型号、设备 / 系统（或桌面环境与 BlueZ 版本）、OpenRose 版本，以及具体验证了哪些功能。
 
 新增型号或系统适配时，请分别记录协议依据、离线测试结果和真机测试结果；没有测过的部分明确写“未验证”。网站“支持的耳机”和“平台支持”页（以及 README 的支持表）中的状态列就是这种写法：已在真机验证的部分和只有离线测试的部分分开标注。型号协议研究位于 [docs/protocols/](docs/protocols/)。

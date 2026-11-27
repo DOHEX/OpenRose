@@ -3,7 +3,7 @@ package io.github.dohex.openrose.transport.bluez
 import io.github.dohex.openrose.core.ConnectionPhase
 import io.github.dohex.openrose.core.DeviceCandidate
 import io.github.dohex.openrose.core.TransportAvailability
-import io.github.dohex.openrose.core.TransportUnavailableCode
+import io.github.dohex.openrose.core.TransportUnavailableReason
 import io.github.dohex.openrose.core.transport.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
@@ -22,7 +22,7 @@ class BluezControlTransport private constructor(
     private val work = CoroutineScope(scope.coroutineContext + job + Dispatchers.IO)
     private val ready = CompletableDeferred<Unit>()
     private val mutableAvailability = MutableStateFlow<TransportAvailability>(
-        TransportAvailability.Unavailable(TransportUnavailableCode.INITIALIZING),
+        TransportAvailability.Unavailable(TransportUnavailableReason.Initializing),
     )
     override val availability: StateFlow<TransportAvailability> = mutableAvailability.asStateFlow()
 
@@ -49,8 +49,7 @@ class BluezControlTransport private constructor(
                 observer.join()
             } catch (error: LinkageError) {
                 mutableAvailability.value = TransportAvailability.Unavailable(
-                    TransportUnavailableCode.MISSING_DEPENDENCY,
-                    error.message ?: error.javaClass.simpleName,
+                    TransportUnavailableReason.MissingDependency(error.message ?: error.javaClass.simpleName),
                 )
             } catch (error: DBusExecutionException) {
                 mutableAvailability.value = unavailable(error)
@@ -65,20 +64,20 @@ class BluezControlTransport private constructor(
     private suspend fun activeBus(): BluezBus {
         ready.await()
         val current = checkNotNull(bus) {
-            (availability.value as? TransportAvailability.Unavailable)?.let { it.detail ?: it.code.name } ?: "BlueZ 不可用"
+            (availability.value as? TransportAvailability.Unavailable)?.reason?.let(::reasonSummary) ?: "BlueZ 不可用"
         }
         return when (val status = availability.value) {
             TransportAvailability.Available -> current
             TransportAvailability.Disabled -> error("蓝牙适配器已关闭")
-            is TransportAvailability.Unavailable -> error(status.detail ?: status.code.name)
+            is TransportAvailability.Unavailable -> error(reasonSummary(status.reason))
         }
     }
     private suspend fun updateAvailability(current: BluezBus) {
         mutableAvailability.value = try {
             val adapters = current.objects().values.mapNotNull { it[ADAPTER] }
             when {
-                adapters.isEmpty() -> TransportAvailability.Unavailable(TransportUnavailableCode.NO_ADAPTER)
-                adapters.none { it["Powered"] == true } -> TransportAvailability.Unavailable(TransportUnavailableCode.ADAPTER_POWERED_OFF)
+                adapters.isEmpty() -> TransportAvailability.Unavailable(TransportUnavailableReason.NoAdapter)
+                adapters.none { it["Powered"] == true } -> TransportAvailability.Unavailable(TransportUnavailableReason.AdapterPoweredOff)
                 else -> TransportAvailability.Available
             }
         } catch (error: DBusExecutionException) {
@@ -88,12 +87,12 @@ class BluezControlTransport private constructor(
     private fun unavailable(error: Throwable): TransportAvailability.Unavailable {
         val name = error.javaClass.simpleName
         return when {
-            error.isBluezAccessDenied -> TransportAvailability.Unavailable(TransportUnavailableCode.ACCESS_DENIED)
+            error.isBluezAccessDenied -> TransportAvailability.Unavailable(TransportUnavailableReason.AccessDenied)
 
             name.contains("ServiceUnknown") || name.contains("NameHasNoOwner") ->
-                TransportAvailability.Unavailable(TransportUnavailableCode.SERVICE_UNAVAILABLE)
+                TransportAvailability.Unavailable(TransportUnavailableReason.ServiceUnavailable)
 
-            else -> TransportAvailability.Unavailable(TransportUnavailableCode.BACKEND_UNAVAILABLE, error.message ?: name)
+            else -> TransportAvailability.Unavailable(TransportUnavailableReason.BackendUnavailable(error.message ?: name))
         }
     }
     override fun scan(): Flow<Advertisement> = channelFlow {
@@ -163,7 +162,13 @@ class BluezControlTransport private constructor(
         job.cancelAndJoin()
         bus?.close()
         bus = null
-        mutableAvailability.value = TransportAvailability.Unavailable(TransportUnavailableCode.CLOSED)
+        mutableAvailability.value = TransportAvailability.Unavailable(TransportUnavailableReason.Closed)
+    }
+    private fun reasonSummary(reason: TransportUnavailableReason): String = when (reason) {
+        is TransportUnavailableReason.BackendUnavailable -> reason.detail ?: "BACKEND_UNAVAILABLE"
+        is TransportUnavailableReason.MissingDependency -> reason.detail ?: "MISSING_DEPENDENCY"
+        is TransportUnavailableReason.UnsupportedPlatform -> reason.platform ?: "UNSUPPORTED_PLATFORM"
+        else -> reason::class.simpleName ?: "UNAVAILABLE"
     }
     private inner class BluezAudioDriver : AudioFactsDriver {
         override suspend fun bondedDevices(): List<RawAudioDevice> {

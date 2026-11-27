@@ -28,7 +28,7 @@ import io.github.dohex.openrose.core.SettingStage
 import io.github.dohex.openrose.core.TouchControlCapabilities
 import io.github.dohex.openrose.core.TouchSlot
 import io.github.dohex.openrose.core.TransportAvailability
-import io.github.dohex.openrose.core.TransportUnavailableCode
+import io.github.dohex.openrose.core.TransportUnavailableReason
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.FieldReading
 import io.github.dohex.openrose.core.protocol.FieldValue
@@ -163,8 +163,10 @@ class HostWireTest {
         assertEquals(reference.deviceId, decoded.state.selectedHeadsetId)
 
         for (transport in listOf(
-            TransportAvailability.Unavailable(TransportUnavailableCode.NO_ADAPTER),
-            TransportAvailability.Unavailable(TransportUnavailableCode.BACKEND_UNAVAILABLE, "dbus error"),
+            TransportAvailability.Unavailable(TransportUnavailableReason.NoAdapter),
+            TransportAvailability.Unavailable(TransportUnavailableReason.UnsupportedPlatform("macOS")),
+            TransportAvailability.Unavailable(TransportUnavailableReason.MissingDependency("libdbus")),
+            TransportAvailability.Unavailable(TransportUnavailableReason.BackendUnavailable("dbus error")),
         )) {
             val unavailableFacts = HostPlatformFacts(PermissionState.GRANTED, transport)
             assertEquals(unavailableFacts, ControlWire.decodeOwned(ControlWire.encodeOwned(unavailableFacts, state)).platform)

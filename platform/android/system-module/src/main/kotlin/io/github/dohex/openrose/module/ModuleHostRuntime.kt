@@ -15,9 +15,10 @@ import android.os.Parcel
 import android.os.Process
 import android.os.UserManager
 import android.util.Log
+import io.github.dohex.openrose.androidintegration.ControlWay
 import io.github.dohex.openrose.androidintegration.HostConfiguration
 import io.github.dohex.openrose.androidintegration.HostFacts
-import io.github.dohex.openrose.androidintegration.HostSettings
+import io.github.dohex.openrose.androidintegration.HostStatus
 import io.github.dohex.openrose.androidintegration.ModuleControlHost
 import io.github.dohex.openrose.androidintegration.wire.BridgeWire
 import io.github.dohex.openrose.bridge.readHostSettings
@@ -175,15 +176,7 @@ internal class ModuleHostRuntime(
             val user = appContext.getSystemService(UserManager::class.java)
             while (isActive) {
                 created.updatePlatform(appContext.readPlatformState(permissionRequested = true))
-                var observed: HostSettings? = null
-                val configured = created.configure {
-                    if (user.isUserUnlocked) {
-                        readConfiguration().also { if (it == null) changes.trySend(Unit) else observed = it.settings }
-                    } else {
-                        HostConfiguration()
-                    }
-                }
-                observed?.let { settings -> withContext(Dispatchers.Default) { trial.apply(settings.integration.nativeCoreTrial) } }
+                val configured = reconcileConfiguration(user, created, trial, changes)
                 if (configured && user.isUserUnlocked) {
                     changes.receive()
                 } else {
@@ -191,6 +184,44 @@ internal class ModuleHostRuntime(
                 }
             }
         }
+    }
+
+    private suspend fun reconcileConfiguration(
+        user: UserManager,
+        created: ModuleControlHost,
+        trial: NativeCoreTrial,
+        changes: Channel<Unit>,
+    ): Boolean {
+        val initial = if (user.isUserUnlocked) readConfiguration() else HostConfiguration()
+        if (initial == null) {
+            changes.trySend(Unit)
+        } else if (initial.userUnlocked && initial.settings.integration.controlWay == ControlWay.MODULE) {
+            withContext(Dispatchers.Default) {
+                trial.apply(initial.settings.integration.nativeCoreTrial, ControlWay.MODULE)
+            }
+        }
+        var firstRead = true
+        val configured = created.configure {
+            if (firstRead) {
+                firstRead = false
+                initial
+            } else if (user.isUserUnlocked) {
+                readConfiguration().also { if (it == null) changes.trySend(Unit) }
+            } else {
+                HostConfiguration()
+            }
+        }
+        if (initial != null && initial.userUnlocked) {
+            val effectiveWay = if (created.status.value is HostStatus.Active) {
+                ControlWay.MODULE
+            } else {
+                initial.settings.integration.controlWay
+            }
+            withContext(Dispatchers.Default) {
+                trial.apply(initial.settings.integration.nativeCoreTrial, effectiveWay)
+            }
+        }
+        return configured
     }
 
     private fun readConfiguration(): HostConfiguration? = synchronized(lifecycle) {

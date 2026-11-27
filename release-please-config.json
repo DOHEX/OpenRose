@@ -21,6 +21,14 @@
     { "type": "chore", "section": "Chores", "hidden": true }
   ],
   "packages": {
-    ".": {}
+    ".": {
+      "extra-files": [
+        {
+          "type": "toml",
+          "path": "Cargo.toml",
+          "jsonpath": "$.workspace.package.version"
+        }
+      ]
+    }
   }
 }

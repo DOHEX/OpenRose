@@ -34,12 +34,8 @@ internal class DeviceDiscovery(
                 val updatedName = refreshed?.name?.takeIf(String::isNotBlank)
                 if (updatedName != null && updatedName != existing.name) existing.copy(name = updatedName) else existing
             }
-            val bondedHeadsetsChanged = updated.filter { it.profile != null } != current.bondedHeadsets
-            current.copy(
-                bondedDevices = updated,
-                connectionTarget = target,
-                selectedHeadsetId = if (bondedHeadsetsChanged) null else current.selectedHeadsetId,
-            )
+            val next = current.copy(bondedDevices = updated, connectionTarget = target)
+            if (next.bondedHeadsets != current.bondedHeadsets) next.copy(selectedHeadsetId = null) else next
         }
     }
 

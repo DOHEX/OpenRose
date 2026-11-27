@@ -42,10 +42,10 @@ impl PermissionState {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
-pub enum TransportUnavailableCode {
-    UnsupportedPlatform,
+pub enum TransportUnavailableReason {
+    UnsupportedPlatform { platform: Option<String> },
     BleUnsupported,
     PermissionRequired,
     NoAdapter,
@@ -53,12 +53,12 @@ pub enum TransportUnavailableCode {
     AdapterStateUnknown,
     AccessDenied,
     ServiceUnavailable,
-    MissingDependency,
+    MissingDependency { detail: Option<String> },
     Initializing,
     Recovering,
     ShuttingDown,
     Closed,
-    BackendUnavailable,
+    BackendUnavailable { detail: Option<String> },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -66,10 +66,7 @@ pub enum TransportUnavailableCode {
 pub enum TransportAvailability {
     Available,
     Disabled,
-    Unavailable {
-        code: TransportUnavailableCode,
-        detail: Option<String>,
-    },
+    Unavailable { reason: TransportUnavailableReason },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -77,12 +74,8 @@ pub enum TransportAvailability {
 pub enum ConnectionBlockReason {
     BluetoothPermissionRequired,
     BluetoothDisabled,
-    TransportUnavailable {
-        code: TransportUnavailableCode,
-        detail: Option<String>,
-    },
+    TransportUnavailable { reason: TransportUnavailableReason },
 }
-
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 pub enum PlatformApplicability {
@@ -142,10 +135,9 @@ impl PlatformState {
         match &self.transport {
             TransportAvailability::Available => None,
             TransportAvailability::Disabled => Some(ConnectionBlockReason::BluetoothDisabled),
-            TransportAvailability::Unavailable { code, detail } => {
+            TransportAvailability::Unavailable { reason } => {
                 Some(ConnectionBlockReason::TransportUnavailable {
-                    code: *code,
-                    detail: detail.clone(),
+                    reason: reason.clone(),
                 })
             }
         }

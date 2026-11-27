@@ -1,5 +1,5 @@
 use crate::capabilities::{CustomEqualizerCapabilities, HeadsetCapabilities, NoiseMode};
-use crate::command::{HeadsetCommand, setting_prerequisite};
+use crate::command::{HeadsetCommand, SettingPrerequisite, setting_prerequisite};
 use crate::error::ValidationError;
 use crate::field::{
     FieldReading, FieldValue, FirmwareVersion, HeadsetField, HeadsetSetting, TouchBinding,
@@ -190,7 +190,7 @@ impl HeadsetReadings {
         }
     }
 
-    pub fn setting_prerequisite(&self, setting: HeadsetSetting) -> Option<&'static str> {
+    pub fn setting_prerequisite(&self, setting: HeadsetSetting) -> Option<SettingPrerequisite> {
         setting_prerequisite(&self.fields, setting)
     }
 

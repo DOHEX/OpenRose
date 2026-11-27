@@ -28,17 +28,18 @@ const INFO_IDS: [u8; 14] = [
 const BUDS_FREE_FOLLOW_UP_IDS: [u8; 7] = [0x2a, 0x09, 0x0c, 0x0e, 0x07, 0x01, 0x2b];
 const AUDIO_MODE_ID: u8 = 0x2b;
 
-const AUDIO_MODES: [&str; 4] = ["aac_sbc", "ldac", "lhdc", "lc3"];
-const NOISE_WRITES: [(&str, u8); 4] = [("anc", 2), ("normal", 4), ("transparency", 6), ("wind", 8)];
-const NOISE_READS: [&str; 4] = ["anc", "normal", "transparency", "wind"];
-const EQ_PRESETS: [&str; 3] = ["hifi", "pop", "rock"];
+pub(crate) const AUDIO_MODES: [&str; 4] = ["aac_sbc", "ldac", "lhdc", "lc3"];
+pub(crate) const NOISE_READS: [&str; 4] = ["anc", "normal", "transparency", "wind"];
+pub(crate) const EQ_PRESETS: [&str; 3] = ["hifi", "pop", "rock"];
+pub(crate) const NOISE_WRITES: [(&str, u8); 4] =
+    [("anc", 2), ("normal", 4), ("transparency", 6), ("wind", 8)];
 const BATTERY_FIELDS: [HeadsetField; 3] = [
     HeadsetField::LeftBattery,
     HeadsetField::RightBattery,
     HeadsetField::CaseBattery,
 ];
-const TOUCH_VALUE_OFFSETS: [usize; 6] = [1, 3, 5, 11, 13, 15];
-const TOUCH_REPLY_MIN_SIZE: usize = 16;
+pub(crate) const TOUCH_VALUE_OFFSETS: [usize; 6] = [1, 3, 5, 11, 13, 15];
+pub(crate) const TOUCH_REPLY_MIN_SIZE: usize = 16;
 
 const FIELDS_BY_KEY: &[(u8, &[HeadsetField])] = &[
     (0x01, &[HeadsetField::TouchKeys]),
@@ -65,11 +66,15 @@ const FIELDS_BY_KEY: &[(u8, &[HeadsetField])] = &[
     (0x33, &[HeadsetField::SpatialAudio]),
 ];
 
-fn fields_for_key(key: u8) -> &'static [HeadsetField] {
+pub(crate) fn fields_for_key(key: u8) -> &'static [HeadsetField] {
     FIELDS_BY_KEY
         .iter()
         .find_map(|&(candidate, fields)| (candidate == key).then_some(fields))
         .unwrap_or(&[])
+}
+
+pub(crate) fn record_ids() -> impl Iterator<Item = u8> {
+    FIELDS_BY_KEY.iter().map(|&(id, _)| id)
 }
 
 pub(crate) fn rs_common_readable_fields() -> BTreeSet<HeadsetField> {
@@ -173,15 +178,7 @@ impl RsCommonCodec {
         if value.is_empty() {
             return ProtocolReply::new(hex, BTreeSet::new(), BTreeMap::new(), Vec::new());
         }
-        let readings = match tag {
-            0x0c => self.decode_battery(value),
-            0x0d => decode_firmware(value),
-            0x01 => self.decode_touch(value),
-            0x07 | 0x08 | 0x0e | 0x33 => decode_toggle(tag, value),
-            0x09 | 0x2a | 0x2b => decode_mode(tag, value),
-            0x2c..=0x2e => decode_level(tag, value),
-            _ => BTreeMap::new(),
-        };
+        let readings = read_record(self.profile, &self.protocol, tag, value);
         let response_keys = if readings.is_empty() {
             BTreeSet::new()
         } else {
@@ -189,73 +186,90 @@ impl RsCommonCodec {
         };
         ProtocolReply::new(hex, response_keys, readings, Vec::new())
     }
+}
 
-    fn decode_battery(&self, value: &[u8]) -> BTreeMap<HeadsetField, FieldReading> {
-        if value.len() < 3 {
-            return BTreeMap::new();
-        }
-        let indices: &[usize] = match self.profile.battery_layout() {
-            BatteryLayout::SingleUnit => &[2],
-            BatteryLayout::EarbudsOnly => &[0, 1],
-            BatteryLayout::EarbudsAndCase => &[0, 1, 2],
-        };
-        let mut readings = BTreeMap::new();
-        for &index in indices {
-            let byte = value[index];
-            let amount = if index < 2 { byte & 0x7f } else { byte };
-            let raw = encode_hex(&[byte]);
+pub(crate) fn read_record(
+    profile: ModelProfile,
+    protocol: &RsCommonProtocol,
+    tag: u8,
+    value: &[u8],
+) -> BTreeMap<HeadsetField, FieldReading> {
+    match tag {
+        0x0c => decode_battery(profile, value),
+        0x0d => decode_firmware(value),
+        0x01 => decode_touch(protocol, value),
+        0x07 | 0x08 | 0x0e | 0x33 => decode_toggle(tag, value),
+        0x09 | 0x2a | 0x2b => decode_mode(tag, value),
+        0x2c..=0x2e => decode_level(tag, value),
+        _ => BTreeMap::new(),
+    }
+}
+
+fn decode_battery(profile: ModelProfile, value: &[u8]) -> BTreeMap<HeadsetField, FieldReading> {
+    if value.len() < 3 {
+        return BTreeMap::new();
+    }
+    let indices: &[usize] = match profile.battery_layout() {
+        BatteryLayout::SingleUnit => &[2],
+        BatteryLayout::EarbudsOnly => &[0, 1],
+        BatteryLayout::EarbudsAndCase => &[0, 1, 2],
+    };
+    let mut readings = BTreeMap::new();
+    for &index in indices {
+        let byte = value[index];
+        let amount = if index < 2 { byte & 0x7f } else { byte };
+        let raw = encode_hex(&[byte]);
+        readings.insert(
+            BATTERY_FIELDS[index],
+            reading(
+                (1..=100)
+                    .contains(&amount)
+                    .then(|| FieldValue::Number(i32::from(amount))),
+                raw.clone(),
+            ),
+        );
+        if index < 2 {
+            let field = if index == 0 {
+                HeadsetField::LeftInCase
+            } else {
+                HeadsetField::RightInCase
+            };
             readings.insert(
-                BATTERY_FIELDS[index],
+                field,
                 reading(
-                    (1..=100)
-                        .contains(&amount)
-                        .then(|| FieldValue::Number(i32::from(amount))),
-                    raw.clone(),
+                    (byte != 0xff).then_some(FieldValue::Toggle(byte & 0x80 != 0)),
+                    raw,
                 ),
             );
-            if index < 2 {
-                let field = if index == 0 {
-                    HeadsetField::LeftInCase
-                } else {
-                    HeadsetField::RightInCase
-                };
-                readings.insert(
-                    field,
-                    reading(
-                        (byte != 0xff).then_some(FieldValue::Toggle(byte & 0x80 != 0)),
-                        raw,
-                    ),
-                );
-            }
         }
-        readings
     }
+    readings
+}
 
-    fn decode_touch(&self, value: &[u8]) -> BTreeMap<HeadsetField, FieldReading> {
-        if value.len() < TOUCH_REPLY_MIN_SIZE {
-            return BTreeMap::new();
-        }
-        let bindings =
-            TOUCH_VALUE_OFFSETS
-                .iter()
-                .enumerate()
-                .map(|(index, &offset)| {
-                    let code = value[offset] & 0x0f;
-                    TouchBinding {
-                        side: if index < 3 { "left" } else { "right" }.to_string(),
-                        gesture: TOUCH_GESTURES[index % 3].to_string(),
-                        action: self.protocol.touch_actions.iter().find_map(
-                            |&(name, candidate)| (candidate == code).then(|| name.to_string()),
-                        ),
-                        raw_action: i32::from(code),
-                    }
-                })
-                .collect();
-        BTreeMap::from([(
-            HeadsetField::TouchKeys,
-            FieldReading::known(FieldValue::TouchKeys(bindings), encode_hex(value)),
-        )])
+fn decode_touch(protocol: &RsCommonProtocol, value: &[u8]) -> BTreeMap<HeadsetField, FieldReading> {
+    if value.len() < TOUCH_REPLY_MIN_SIZE {
+        return BTreeMap::new();
     }
+    let bindings = TOUCH_VALUE_OFFSETS
+        .iter()
+        .enumerate()
+        .map(|(index, &offset)| {
+            let code = value[offset] & 0x0f;
+            TouchBinding {
+                side: if index < 3 { "left" } else { "right" }.to_string(),
+                gesture: TOUCH_GESTURES[index % 3].to_string(),
+                action: protocol
+                    .touch_actions
+                    .iter()
+                    .find_map(|&(name, candidate)| (candidate == code).then(|| name.to_string())),
+                raw_action: i32::from(code),
+            }
+        })
+        .collect();
+    BTreeMap::from([(
+        HeadsetField::TouchKeys,
+        FieldReading::known(FieldValue::TouchKeys(bindings), encode_hex(value)),
+    )])
 }
 
 impl ProtocolCodec for RsCommonCodec {

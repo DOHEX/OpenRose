@@ -4,7 +4,7 @@ status: accepted
 
 # 版本号只来自仓库内的 version.txt
 
-> `version.txt` 仍是唯一来源；推导改由 xtask 完成，见 [ADR 0038](0038-rust-core-and-nsh-desktop.md)。
+> `version.txt` 仍是唯一来源；Cargo workspace 的版本推导与漂移检查由 xtask（`xtask/src/version.rs`）完成，桌面端迁移完成后其余平台亦迁入 xtask，见 [ADR 0038](0038-rust-core-and-nsh-desktop.md)。
 
 此前版本号由 CI 从发布标签拼出（Gradle 属性 `releaseVersion` / `releaseVersionCode`），各模块再各自写死非发布构建的默认值：Android 为 `0.1.0-dev`，桌面为 `0.1.0`，`versionCode` 取 CI 运行序号。结果是本地与 CI 构建的版本号不同，开发版看不出来自哪次提交，桌面开发版看上去像正式版，默认值也不会随发布前进。
 

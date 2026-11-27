@@ -3,7 +3,7 @@ package io.github.dohex.openrose.transport.windows
 import io.github.dohex.openrose.core.ConnectionPhase
 import io.github.dohex.openrose.core.DeviceCandidate
 import io.github.dohex.openrose.core.TransportAvailability
-import io.github.dohex.openrose.core.TransportUnavailableCode
+import io.github.dohex.openrose.core.TransportUnavailableReason
 import io.github.dohex.openrose.core.transport.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
@@ -16,7 +16,7 @@ class WindowsControlTransport internal constructor(
 ) : DesktopControlTransport {
     constructor(scope: CoroutineScope) : this(scope, windowsSnapshots(), ::startWindowsHelper)
 
-    private val initial = Snapshot(TransportAvailability.Unavailable(TransportUnavailableCode.INITIALIZING))
+    private val initial = Snapshot(TransportAvailability.Unavailable(TransportUnavailableReason.Initializing))
     private val facts = MutableStateFlow(initial)
     private val monitor = scope.launch { snapshots.collect { facts.value = snapshot(it) } }
     override val availability = facts.map { it.availability }.stateIn(scope, SharingStarted.Eagerly, initial.availability)
@@ -44,7 +44,7 @@ class WindowsControlTransport internal constructor(
 
     override suspend fun close() {
         monitor.cancelAndJoin()
-        facts.value = Snapshot(TransportAvailability.Unavailable(TransportUnavailableCode.CLOSED))
+        facts.value = Snapshot(TransportAvailability.Unavailable(TransportUnavailableReason.Closed))
     }
 }
 
@@ -78,13 +78,14 @@ private fun snapshot(line: String): Snapshot {
 private fun unavailableSnapshot(args: List<String>): TransportAvailability.Unavailable {
     val code = args.firstOrNull()?.takeIf(String::isNotBlank)
     val detail = args.getOrNull(1)?.takeIf(String::isNotBlank)
-    return when (code) {
-        "ble_unsupported" -> TransportAvailability.Unavailable(TransportUnavailableCode.BLE_UNSUPPORTED)
-        "adapter_state_unknown" -> TransportAvailability.Unavailable(TransportUnavailableCode.ADAPTER_STATE_UNKNOWN)
-        "recovering" -> TransportAvailability.Unavailable(TransportUnavailableCode.RECOVERING)
-        "backend_unavailable" -> TransportAvailability.Unavailable(TransportUnavailableCode.BACKEND_UNAVAILABLE, detail)
-        else -> TransportAvailability.Unavailable(TransportUnavailableCode.BACKEND_UNAVAILABLE)
+    val reason = when (code) {
+        "ble_unsupported" -> TransportUnavailableReason.BleUnsupported
+        "adapter_state_unknown" -> TransportUnavailableReason.AdapterStateUnknown
+        "recovering" -> TransportUnavailableReason.Recovering
+        "backend_unavailable" -> TransportUnavailableReason.BackendUnavailable(detail)
+        else -> TransportUnavailableReason.BackendUnavailable(code)
     }
+    return TransportAvailability.Unavailable(reason)
 }
 
 private fun address(id: String): String = requireNotNull(normalizeBluetoothAddress(id.chunked(2).joinToString(":")))

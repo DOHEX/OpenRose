@@ -106,15 +106,15 @@ impl ControlRuntime {
             .map_err(ControlFailure::from)
     }
 
-    pub async fn connect_for_add_device(&self, headset: HeadsetId) -> Result<(), ControlFailure> {
+    pub async fn connect_for_add_headset(&self, headset: HeadsetId) -> Result<(), ControlFailure> {
         self.inner
-            .connect_for_add_device(headset)
+            .connect_for_add_headset(headset)
             .await
             .map_err(ControlFailure::from)
     }
 
-    pub async fn cancel_add_device(&self) {
-        self.inner.cancel_add_device().await;
+    pub async fn cancel_add_headset(&self) {
+        self.inner.cancel_add_headset().await;
     }
 
     pub async fn disconnect(&self) -> bool {

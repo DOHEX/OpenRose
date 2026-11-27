@@ -11,35 +11,35 @@ use crate::protocol::{
 };
 use std::collections::{BTreeMap, BTreeSet};
 
-const TAG_BATTERY: u8 = 0x01;
-const TAG_FIRMWARE: u8 = 0x02;
-const TAG_EQ: u8 = 0x04;
-const TAG_TOUCH: u8 = 0x05;
-const TAG_GAME_MODE: u8 = 0x08;
-const TAG_EAR_DETECTION: u8 = 0x09;
-const TAG_PROMPT_LANGUAGE: u8 = 0x0a;
-const TAG_AUDIO: u8 = 0x0b;
-const TAG_NOISE_MODE: u8 = 0x0c;
-const TAG_ANC_LEVEL: u8 = 0x11;
-const TAG_TRANSPARENCY_LEVEL: u8 = 0x12;
-const TAG_PROMPT_VOLUME: u8 = 0x13;
-const TAG_TOUCH_ENABLED: u8 = 0x16;
+pub(crate) const TAG_BATTERY: u8 = 0x01;
+pub(crate) const TAG_FIRMWARE: u8 = 0x02;
+pub(crate) const TAG_EQ: u8 = 0x04;
+pub(crate) const TAG_TOUCH: u8 = 0x05;
+pub(crate) const TAG_GAME_MODE: u8 = 0x08;
+pub(crate) const TAG_EAR_DETECTION: u8 = 0x09;
+pub(crate) const TAG_PROMPT_LANGUAGE: u8 = 0x0a;
+pub(crate) const TAG_AUDIO: u8 = 0x0b;
+pub(crate) const TAG_NOISE_MODE: u8 = 0x0c;
+pub(crate) const TAG_ANC_LEVEL: u8 = 0x11;
+pub(crate) const TAG_TRANSPARENCY_LEVEL: u8 = 0x12;
+pub(crate) const TAG_PROMPT_VOLUME: u8 = 0x13;
+pub(crate) const TAG_TOUCH_ENABLED: u8 = 0x16;
 
-const COMMAND_EQ: u8 = 0x20;
-const COMMAND_TOUCH: u8 = 0x22;
-const COMMAND_GAME_MODE: u8 = 0x25;
-const COMMAND_EAR_DETECTION: u8 = 0x26;
-const COMMAND_QUERY: u8 = 0x27;
+pub(crate) const COMMAND_EQ: u8 = 0x20;
+pub(crate) const COMMAND_TOUCH: u8 = 0x22;
+pub(crate) const COMMAND_GAME_MODE: u8 = 0x25;
+pub(crate) const COMMAND_EAR_DETECTION: u8 = 0x26;
+pub(crate) const COMMAND_QUERY: u8 = 0x27;
+pub(crate) const COMMAND_PROMPT_LANGUAGE: u8 = 0x29;
+pub(crate) const COMMAND_AUDIO: u8 = 0x2b;
+pub(crate) const COMMAND_NOISE_MODE: u8 = 0x2c;
+pub(crate) const COMMAND_ANC_LEVEL: u8 = 0x30;
+pub(crate) const COMMAND_TRANSPARENCY_LEVEL: u8 = 0x31;
+pub(crate) const COMMAND_PROMPT_VOLUME: u8 = 0x32;
+pub(crate) const COMMAND_TOUCH_ENABLED: u8 = 0x33;
 const COMMAND_REPLY: u8 = 0x28;
-const COMMAND_PROMPT_LANGUAGE: u8 = 0x29;
-const COMMAND_AUDIO: u8 = 0x2b;
-const COMMAND_NOISE_MODE: u8 = 0x2c;
-const COMMAND_ANC_LEVEL: u8 = 0x30;
-const COMMAND_TRANSPARENCY_LEVEL: u8 = 0x31;
-const COMMAND_PROMPT_VOLUME: u8 = 0x32;
-const COMMAND_TOUCH_ENABLED: u8 = 0x33;
 
-const HEADER_LENGTH: usize = 5;
+pub(crate) const HEADER_LENGTH: usize = 5;
 
 const FIELD_TAGS: &[(u8, &[HeadsetField])] = &[
     (
@@ -83,12 +83,13 @@ const BASIC_INIT_TAGS: [u8; 11] = [
     TAG_TOUCH_ENABLED,
 ];
 
-const TOUCH_GESTURES: [&str; 4] = ["single", "double", "triple", "long"];
-const BASIC_TOUCH_GESTURES: [&str; 3] = ["single", "double", "long"];
-const BASIC_TOUCH_OFFSETS: [usize; 6] = [7, 9, 11, 8, 10, 12];
-const EXTENDED_TOUCH_OFFSETS: [usize; 8] = [9, 15, 21, 27, 12, 18, 24, 30];
+pub(crate) const TOUCH_GESTURES: [&str; 4] = ["single", "double", "triple", "long"];
+pub(crate) const BASIC_TOUCH_GESTURES: [&str; 3] = ["single", "double", "long"];
+pub(crate) const BASIC_TOUCH_OFFSETS: [usize; 6] = [7, 9, 11, 8, 10, 12];
+pub(crate) const EXTENDED_TOUCH_OFFSETS: [usize; 8] = [9, 15, 21, 27, 12, 18, 24, 30];
+pub(crate) const NOISE_LEVEL_BY_WIRE: [i32; 3] = [5, 3, 1];
 
-const TOUCH_ACTIONS: [(u8, &str); 8] = [
+pub(crate) const TOUCH_ACTIONS: [(u8, &str); 8] = [
     (0, "none"),
     (2, "voice_assistant"),
     (3, "previous_track"),
@@ -578,6 +579,18 @@ pub(crate) fn f8_readable_fields() -> BTreeSet<HeadsetField> {
         .collect()
 }
 
+pub(crate) fn record_tags() -> impl Iterator<Item = u8> {
+    FIELD_TAGS.iter().map(|&(tag, _)| tag)
+}
+
+pub(crate) fn read_frame(
+    profile: ModelProfile,
+    protocol: F8Protocol,
+    raw: &[u8],
+) -> BTreeMap<HeadsetField, FieldReading> {
+    F8Codec::new(profile, protocol).decode(raw).readings
+}
+
 fn touch_action_name(code: u8) -> Option<&'static str> {
     TOUCH_ACTIONS
         .iter()
@@ -597,12 +610,9 @@ fn toggle_value(value: u8) -> Option<FieldValue> {
 }
 
 fn noise_level_value(wire: u8) -> Option<FieldValue> {
-    match wire {
-        0 => Some(FieldValue::Number(5)),
-        1 => Some(FieldValue::Number(3)),
-        2 => Some(FieldValue::Number(1)),
-        _ => None,
-    }
+    NOISE_LEVEL_BY_WIRE
+        .get(usize::from(wire))
+        .map(|&level| FieldValue::Number(level))
 }
 
 fn put_reading(
@@ -775,16 +785,11 @@ fn noise_level_write(
             ));
         }
     };
-    let wire = match level {
-        1 => 2,
-        3 => 1,
-        5 => 0,
-        _ => {
-            return Err(ProtocolError::InvalidArgument(
-                "F8 档位仅支持 1、3、5".to_string(),
-            ));
-        }
-    };
+    let wire = NOISE_LEVEL_BY_WIRE
+        .iter()
+        .position(|&candidate| candidate == level)
+        .ok_or_else(|| ProtocolError::InvalidArgument("F8 档位仅支持 1、3、5".to_string()))?
+        as u8;
     let (command, tag) = if setting == HeadsetSetting::AncLevel {
         (COMMAND_ANC_LEVEL, TAG_ANC_LEVEL)
     } else {

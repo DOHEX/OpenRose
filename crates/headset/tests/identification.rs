@@ -148,3 +148,18 @@ fn model_display_names_and_preset_labels_come_from_model_spec() {
     );
     assert_eq!(None, ModelProfile::from_id("UNKNOWN"));
 }
+
+#[test]
+fn name_matching_treats_unicode_decimal_digits_like_kotlin_is_digit() {
+    assert_eq!(
+        Some(ModelProfile::SwiftRsCommon),
+        ModelProfile::match_name(Some("ROSE Swift"))
+    );
+    assert_eq!(None, ModelProfile::match_name(Some("ROSE Swift ２")));
+    assert_eq!(None, ModelProfile::match_name(Some("ROSE Swift ٢")));
+    assert_eq!(None, ModelProfile::match_name(Some("EarFeel ２")));
+    assert_eq!(
+        Some(ModelProfile::SwiftRsCommon),
+        ModelProfile::match_name(Some("ROSE Swift Ⅱ"))
+    );
+}

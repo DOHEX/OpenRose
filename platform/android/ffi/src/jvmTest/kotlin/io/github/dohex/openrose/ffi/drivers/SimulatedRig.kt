@@ -1,4 +1,4 @@
-package io.github.dohex.openrose.ffi.kotlincore
+package io.github.dohex.openrose.ffi.drivers
 
 import uniffi.openrose_control.HostPlatform
 import uniffi.openrose_control.PermissionState
@@ -9,8 +9,7 @@ import uniffi.openrose_headset.ModelProfile
 
 internal const val ADDRESS = SimulatedDrivers.DEFAULT_ADDRESS
 
-@Suppress("ktlint:standard:function-naming", "FunctionNaming")
-internal fun Rig(profile: ModelProfile = ModelProfile.I5_ZT) = SimulatedDrivers(profile, alias = "My i5")
+internal fun rig(profile: ModelProfile = ModelProfile.I5_ZT) = SimulatedDrivers(profile, alias = "My i5")
 
 internal fun SimulatedDrivers.platformState(): PlatformState = PlatformState(
     permission = PermissionState.GRANTED,

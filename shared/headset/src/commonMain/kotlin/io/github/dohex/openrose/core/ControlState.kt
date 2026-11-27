@@ -16,7 +16,7 @@ import kotlinx.collections.immutable.persistentSetOf
 
 data class PlatformState(
     val permission: PermissionState,
-    val transport: TransportAvailability = TransportAvailability.Unavailable(TransportUnavailableCode.UNSUPPORTED_PLATFORM),
+    val transport: TransportAvailability = TransportAvailability.Unavailable(TransportUnavailableReason.UnsupportedPlatform()),
     val hostPlatform: HostPlatform = HostPlatform.UNKNOWN,
     val controlTransportApplicability: PlatformApplicability = PlatformApplicability.UNKNOWN,
     val userUnlocked: Boolean = true,
@@ -29,7 +29,7 @@ data class PlatformState(
             else -> when (val availability = transport) {
                 TransportAvailability.Available -> null
                 TransportAvailability.Disabled -> ConnectionBlockReason.BluetoothDisabled
-                is TransportAvailability.Unavailable -> ConnectionBlockReason.TransportUnavailable(availability.code, availability.detail)
+                is TransportAvailability.Unavailable -> ConnectionBlockReason.TransportUnavailable(availability.reason)
             }
         }
 }
@@ -56,33 +56,33 @@ enum class PermissionState {
     val missing: Boolean get() = this == REQUIRED || this == DENIED
 }
 
-enum class TransportUnavailableCode {
-    UNSUPPORTED_PLATFORM,
-    BLE_UNSUPPORTED,
-    PERMISSION_REQUIRED,
-    NO_ADAPTER,
-    ADAPTER_POWERED_OFF,
-    ADAPTER_STATE_UNKNOWN,
-    ACCESS_DENIED,
-    SERVICE_UNAVAILABLE,
-    MISSING_DEPENDENCY,
-    INITIALIZING,
-    RECOVERING,
-    SHUTTING_DOWN,
-    CLOSED,
-    BACKEND_UNAVAILABLE,
+sealed interface TransportUnavailableReason {
+    data class UnsupportedPlatform(val platform: String? = null) : TransportUnavailableReason
+    data object BleUnsupported : TransportUnavailableReason
+    data object PermissionRequired : TransportUnavailableReason
+    data object NoAdapter : TransportUnavailableReason
+    data object AdapterPoweredOff : TransportUnavailableReason
+    data object AdapterStateUnknown : TransportUnavailableReason
+    data object AccessDenied : TransportUnavailableReason
+    data object ServiceUnavailable : TransportUnavailableReason
+    data class MissingDependency(val detail: String? = null) : TransportUnavailableReason
+    data object Initializing : TransportUnavailableReason
+    data object Recovering : TransportUnavailableReason
+    data object ShuttingDown : TransportUnavailableReason
+    data object Closed : TransportUnavailableReason
+    data class BackendUnavailable(val detail: String? = null) : TransportUnavailableReason
 }
 
 sealed interface TransportAvailability {
     data object Available : TransportAvailability
     data object Disabled : TransportAvailability
-    data class Unavailable(val code: TransportUnavailableCode, val detail: String? = null) : TransportAvailability
+    data class Unavailable(val reason: TransportUnavailableReason) : TransportAvailability
 }
 
 sealed interface ConnectionBlockReason {
     data object BluetoothPermissionRequired : ConnectionBlockReason
     data object BluetoothDisabled : ConnectionBlockReason
-    data class TransportUnavailable(val code: TransportUnavailableCode, val detail: String? = null) : ConnectionBlockReason
+    data class TransportUnavailable(val reason: TransportUnavailableReason) : ConnectionBlockReason
 }
 
 enum class ReconnectGuidance {
