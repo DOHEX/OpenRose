@@ -40,17 +40,9 @@ pub struct BluezControlTransport {
 }
 
 impl BluezControlTransport {
+    #[cfg(target_os = "linux")]
     pub fn open() -> Arc<Self> {
-        #[cfg(target_os = "linux")]
-        {
-            Self::with_opener(|| Box::pin(async { super::native::NativeBluezBus::open().await }))
-        }
-        #[cfg(not(target_os = "linux"))]
-        {
-            Self::with_opener(|| {
-                Box::pin(async { Err(BluezError::Other("仅支持 Linux BlueZ".to_string())) })
-            })
-        }
+        Self::with_opener(|| Box::pin(async { super::native::NativeBluezBus::open().await }))
     }
 
     pub fn with_bus(bus: Arc<dyn BluezBus>) -> Arc<Self> {

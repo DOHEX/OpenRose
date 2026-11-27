@@ -1,6 +1,9 @@
 pub mod linux;
+pub mod unsupported;
 
-use openrose_control::snapshot::{HostPlatform, PermissionState, PlatformState, TransportAvailability, TransportUnavailableReason};
+use openrose_control::snapshot::{
+    HostPlatform, PermissionState, PlatformState, TransportAvailability, TransportUnavailableReason,
+};
 use openrose_control::transport::ControlTransport;
 use std::sync::Arc;
 use tokio::sync::watch;
@@ -17,30 +20,38 @@ impl DesktopBluetooth {
     }
 }
 
-pub fn create_linux_bluetooth() -> DesktopBluetooth {
+#[cfg(target_os = "linux")]
+pub fn create_desktop_bluetooth() -> DesktopBluetooth {
     let transport = linux::transport::BluezControlTransport::open();
     let mut availability = transport.availability();
-    let initial_availability = availability.borrow().clone();
-    let initial_state = linux_platform_state(initial_availability);
-    let (tx, rx) = watch::channel(initial_state);
-    let watcher_transport = Arc::clone(&transport);
-    let handle = tokio::spawn(async move {
+    let initial = linux_platform_state(availability.borrow().clone());
+    let (tx, rx) = watch::channel(initial);
+    let watcher = tokio::spawn(async move {
         while availability.changed().await.is_ok() {
             let next = linux_platform_state(availability.borrow().clone());
             if tx.send(next).is_err() {
                 break;
             }
         }
-        drop(watcher_transport);
     });
-    let close_transport = Arc::clone(&transport);
+    let closing = Arc::clone(&transport);
     DesktopBluetooth {
         transport,
         platform_states: rx,
         shutdown: Box::new(move || {
-            handle.abort();
-            close_transport.close_now();
+            watcher.abort();
+            closing.close_now();
         }),
+    }
+}
+
+#[cfg(not(target_os = "linux"))]
+pub fn create_desktop_bluetooth() -> DesktopBluetooth {
+    let (_, rx) = watch::channel(unsupported_platform_state());
+    DesktopBluetooth {
+        transport: Arc::new(unsupported::UnsupportedTransport),
+        platform_states: rx,
+        shutdown: Box::new(|| {}),
     }
 }
 
@@ -48,7 +59,13 @@ pub fn linux_platform_state(transport: TransportAvailability) -> PlatformState {
     PlatformState::new(PermissionState::NotRequired, transport).on(HostPlatform::Linux)
 }
 
-pub fn initial_unavailable_state(platform: HostPlatform) -> PlatformState {
+pub fn unsupported_platform_state() -> PlatformState {
+    let host = match std::env::consts::OS {
+        "macos" => HostPlatform::MacOs,
+        "windows" => HostPlatform::Windows,
+        "linux" => HostPlatform::Linux,
+        _ => HostPlatform::Unknown,
+    };
     PlatformState::new(
         PermissionState::NotRequired,
         TransportAvailability::Unavailable {
@@ -57,7 +74,7 @@ pub fn initial_unavailable_state(platform: HostPlatform) -> PlatformState {
             },
         },
     )
-    .on(platform)
+    .on(host)
 }
 
 pub fn bluetooth_settings_command() -> Option<Vec<String>> {
@@ -72,7 +89,8 @@ pub fn bluetooth_settings_command() -> Option<Vec<String>> {
 }
 
 pub fn open_bluetooth_settings() -> Result<(), String> {
-    let command = bluetooth_settings_command().ok_or_else(|| "未找到系统蓝牙设置程序".to_string())?;
+    let command =
+        bluetooth_settings_command().ok_or_else(|| "未找到系统蓝牙设置程序".to_string())?;
     let (program, args) = command
         .split_first()
         .ok_or_else(|| "蓝牙设置命令为空".to_string())?;
