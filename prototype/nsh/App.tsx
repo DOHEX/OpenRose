@@ -49,6 +49,7 @@ const BLUR_TOGGLE_SUPPRESS_MS = 250;
 
 let eventCounter = 1;
 let lastBlurClosedAt = 0;
+let trayPanelPointerEntered = false;
 
 function recordEvent(message: string) {
   eventCounter += 1;
@@ -110,6 +111,7 @@ function openTrayPanel(bounds: Bounds | null, source: string) {
   } else {
     trayPanelPosition.set("center");
   }
+  trayPanelPointerEntered = false;
   trayPanelOpen.set(true);
   Window.get("tray-panel")?.focus();
   recordEvent(`${source}: 打开托盘面板`);
@@ -279,7 +281,12 @@ function MainWindowContent() {
 
 function TrayPanelContent() {
   return (
-    <View class="flex-1 justify-between bg-background p-4">
+    <View
+      class="flex-1 justify-between bg-background p-4"
+      onMouseEnter={() => {
+        trayPanelPointerEntered = true;
+      }}
+    >
       <View class="gap-3">
         <View class="flex-row items-center justify-between">
           <Text class="text-base font-semibold text-foreground">{TRAY_PANEL_TITLE}</Text>
@@ -408,10 +415,19 @@ function PrototypeRoot() {
         maximizable={false}
         minimizable={false}
         closeOnEscape={true}
-        closeOnBlur={true}
+        closeOnBlur={platform.os !== "linux"}
+        onFocusChange={({ focused }) => {
+          if (platform.os === "linux" && !focused && trayPanelOpen() && trayPanelPointerEntered) {
+            trayPanelPointerEntered = false;
+            lastBlurClosedAt = Date.now();
+            trayPanelOpen.set(false);
+            recordEvent("托盘面板收起 (blur)");
+          }
+        }}
         onOpenChange={({ open, reason }) => {
           trayPanelOpen.set(open);
           if (!open) {
+            trayPanelPointerEntered = false;
             if (reason === "blur") {
               lastBlurClosedAt = Date.now();
             }
