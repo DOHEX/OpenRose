@@ -253,15 +253,7 @@ class SystemPresentationTest {
         eventually("the presentation to follow the core") { session.presentation.value.reference != null }
     }
 
-    private class PresentationTransport(var connection: PresentationConnection) : ControlTransport {
-        val advertisements = MutableSharedFlow<Advertisement>(extraBufferCapacity = 1)
-        override fun scan(): Flow<Advertisement> = advertisements
-        override suspend fun connect(
-            deviceId: DeviceId,
-            endpoint: TransportEndpoint,
-            onPhase: (ConnectionPhase) -> Unit,
-        ): ControlConnection = connection
-    }
+    private fun kotlinx.coroutines.test.TestScope.presentationHeadset(id: DeviceId, rewriteReply: ((String) -> String)? = null) = hostHeadset(SharedHeadset(), rosePair(id.value), rewriteReply = rewriteReply)
 
     private val HostHeadset.connection: HostLink get() = links.last()
 

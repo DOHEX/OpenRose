@@ -4,6 +4,7 @@ import io.github.dohex.openrose.core.ConnectionState
 import io.github.dohex.openrose.core.ControlErrorCode
 import io.github.dohex.openrose.core.ControlState
 import io.github.dohex.openrose.core.HeadsetCommand
+import io.github.dohex.openrose.core.HostPlatform
 import io.github.dohex.openrose.core.NoiseMode
 import io.github.dohex.openrose.core.OperationResult
 import io.github.dohex.openrose.core.PermissionState
