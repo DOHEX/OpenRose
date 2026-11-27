@@ -620,14 +620,13 @@ export function createHeadsetSettingsModel(controller: HeadsetController): Heads
     return { kind: "idle" };
   }
 
-  async function submitCommand(setting: string, commandPayload: Record<string, unknown>) {
-    const expectedSession = sessionId();
+  async function trackWrite(setting: string, write: () => Promise<void>) {
     inFlight.set({ ...inFlight(), [setting]: true });
     const nextErrors = { ...localErrors() };
     delete nextErrors[setting];
     localErrors.set(nextErrors);
     try {
-      await controller.executeCommand(JSON.stringify(commandPayload), expectedSession);
+      await write();
     } catch (error) {
       const snapErr = controller.snapshot().last_error;
       localErrors.set({
@@ -642,6 +641,13 @@ export function createHeadsetSettingsModel(controller: HeadsetController): Heads
       delete updated[setting];
       inFlight.set(updated);
     }
+  }
+
+  function submitCommand(setting: string, commandPayload: Record<string, unknown>) {
+    const expectedSession = sessionId();
+    return trackWrite(setting, () =>
+      controller.executeCommand(JSON.stringify(commandPayload), expectedSession),
+    );
   }
 
   async function runEqQueue() {
@@ -1065,7 +1071,8 @@ export function createHeadsetSettingsModel(controller: HeadsetController): Heads
     canWrite,
     feedback: (...settings: string[]) => feedbackFor(settings),
     selectTouchSide: (side: string) => selectedTouchSide.set(side),
-    setNoiseMode: (mode: string) => void controller.setNoiseMode(mode),
+    setNoiseMode: (mode: string) =>
+      void trackWrite("NoiseMode", () => controller.setNoiseMode(mode)),
     setAncLevel: (level: number) => void submitCommand("AncLevel", { AncLevel: level }),
     setTransparencyLevel: (level: number) =>
       void submitCommand("TransparencyLevel", { TransparencyLevel: level }),

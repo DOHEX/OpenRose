@@ -10,7 +10,7 @@ export function HeadsetSettingsPage(props: { model: HeadsetSettingsModel }) {
   const model = props.model;
 
   return (
-    <Column class="flex-1 gap-4">
+    <Column class="gap-4">
       {!model.connected() ? (
         <NoticeBanner
           testID="settings-disconnected"

@@ -24,3 +24,11 @@ All motion values are centralized in [motion.ts](motion.ts). Transitions run nat
 | `MOTION_SCALE.popupClosed` | `0.96` / `scale-95` | `SelectField` popup | Subtle scale-in / scale-out over `bg-popover` | Appears immediately |
 | `MOTION_DISTANCE.popupOffset` | `4 pt` | `SelectField` | Gap between trigger and dropdown list | Static `4 pt` |
 | `MOTION_DISTANCE.entranceOffset` | `8 pt` | `createSurfaceMotion` | Initial surface reveal offset | `0 pt` |
+
+## Information Architecture
+
+The main window is a sidebar (`SidebarNav`, vertical `Tabs`: arrow keys move between pages, Tab leaves the list) plus one scrolling page. Pages: 我的耳机 (dashboard and noise control), 添加耳机, 耳机信息, 诊断与记录, and 开发模式 (only with the simulator). #154 (tray controls) and #156 (headset settings) add their pages as further `NAV_ITEMS` entries and page branches in `App.tsx`.
+
+- The sidebar footer always shows the current headset, its control state and the appearance; the title bar stays free for the platform's window controls.
+- Reason categories from the control core (`connection_block_reason`, `reconnect_guidance`, `scan`, `connection_recovery`) are mapped to text only in `src/model/desktopPages.ts`; no page decides a rule.
+- Every control has a `testID` and a readable `accessibilityLabel`; dev-only scenario controls (bonded headsets, platform state, scan advertisements) live on the 开发模式 page and drive the core through `OpenRoseHeadsetFlow`.

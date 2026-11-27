@@ -5,10 +5,12 @@ async function openConnected(): Promise<App> {
   const app = await open("./App.tsx", { platform: "linux", width: 1400, height: 3200 });
   await app.press("id:btn-connect");
   await app.waitFor("text:已连接");
+  await app.press("id:nav-settings");
   return app;
 }
 
 async function applySimulator(app: App, displayName: string, firmware: string) {
+  await app.press("id:nav-dev");
   await app.clear("id:dev-firmware-input");
   await app.type("id:dev-firmware-input", firmware);
   await app.press("id:btn-apply-dev");
@@ -16,9 +18,11 @@ async function applySimulator(app: App, displayName: string, firmware: string) {
     app.texts().some((text) => text.startsWith(`${displayName} · ${firmware} (`)),
   );
   await app.waitFor("text:已连接");
+  await app.press("id:nav-settings");
 }
 
 async function switchModel(app: App, search: string, displayName: string, firmware: string) {
+  await app.press("id:nav-dev");
   await app.press("id:dev-model-select");
   await app.type("id:dev-model-search", search);
   await app.press(`text:${displayName}`);
@@ -28,6 +32,7 @@ async function switchModel(app: App, search: string, displayName: string, firmwa
 
 test("settings page asks to connect before showing capability-gated settings", async () => {
   const app = await open("./App.tsx", { platform: "linux", width: 1400, height: 3200 });
+  await app.press("id:nav-settings");
   expect(app.shows("id:settings-disconnected")).toBe(true);
   expect(app.shows("id:setting-game-mode")).toBe(false);
 });
@@ -36,7 +41,9 @@ test("segmented settings show in-progress then confirmed and depend on the confi
   const app = await openConnected();
   expect(app.shows("id:setting-anc-level-3")).toBe(false);
 
+  await app.press("id:nav-dev");
   await app.press("id:latency-400");
+  await app.press("id:nav-settings");
   await app.press("id:setting-noise-mode-anc");
   expect(app.shows("text:降噪模式写入中…")).toBe(true);
   await app.waitFor("text:降噪模式已确认");

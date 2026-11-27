@@ -1,5 +1,18 @@
 import { Text, View } from "nsh";
-import { Button, Checkbox, Input, Radio, RadioGroup, Select, Slider, Switch, Tab, Tabs } from "nsh/base";
+import type { JSX } from "nsh";
+import {
+  Button,
+  Checkbox,
+  Collapsible,
+  Input,
+  Radio,
+  RadioGroup,
+  Select,
+  Slider,
+  Switch,
+  Tab,
+  Tabs,
+} from "nsh/base";
 import type { SelectItem } from "nsh/base";
 import { MOTION_CLASS, MOTION_DISTANCE, createSurfaceMotion } from "../../motion";
 
@@ -433,5 +446,118 @@ export function SliderField(props: {
         thumbClass="size-4 rounded-full border border-primary bg-background shadow-xs focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
       />
     </View>
+  );
+}
+
+export interface SidebarNavItem {
+  id: string;
+  label: string;
+  badge?: string | null;
+  testID?: string;
+  accessibilityLabel?: string;
+}
+
+export function SidebarNav(props: {
+  items: SidebarNavItem[];
+  value: string;
+  onChange: (id: string) => void;
+  accessibilityLabel: string;
+  class?: string;
+}) {
+  return (
+    <Tabs
+      orientation="vertical"
+      accessibilityLabel={props.accessibilityLabel}
+      class={`flex-col gap-1 ${props.class ?? ""}`}
+      indicatorClass="inset-x-0 rounded-(--radius) border border-sidebar-border bg-sidebar-accent shadow-xs"
+    >
+      <Each of={props.items} key={(item: SidebarNavItem) => item.id}>
+        {(item) => (
+          <Tab
+            testID={item().testID ?? `nav-${item().id}`}
+            selected={props.value === item().id}
+            accessibilityLabel={item().accessibilityLabel ?? item().label}
+            onPress={() => props.onChange(item().id)}
+            class={`group flex-row items-center justify-between gap-2 rounded-(--radius) px-3 py-2 focus-visible:ring-2 focus-visible:ring-sidebar-ring ${MOTION_CLASS.colorTransition}`}
+          >
+            <Text class="text-sm font-medium text-sidebar-foreground/75 group-selected:text-sidebar-accent-foreground">
+              {item().label}
+            </Text>
+            {item().badge ? (
+              <Text class="text-xs text-muted-foreground">{item().badge}</Text>
+            ) : null}
+          </Tab>
+        )}
+      </Each>
+    </Tabs>
+  );
+}
+
+const INFO_VALUE_TEXT: Record<ToneVariant, string> = {
+  neutral: "text-foreground",
+  accent: "text-primary",
+  success: "text-success",
+  warning: "text-warning",
+  danger: "text-destructive",
+};
+
+export function InfoRow(props: {
+  label: string;
+  value: string;
+  detail?: string | null;
+  mono?: boolean;
+  tone?: ToneVariant;
+  testID?: string;
+}) {
+  const tone = () => props.tone ?? "neutral";
+  return (
+    <View testID={props.testID} class="gap-1 py-1.5">
+      <View class="flex-row items-start justify-between gap-3">
+        <Text class="text-xs font-medium text-muted-foreground">{props.label}</Text>
+        <Text
+          class={`flex-1 text-right text-xs font-medium ${props.mono ? "font-mono" : ""} ${INFO_VALUE_TEXT[tone()]}`}
+        >
+          {props.value}
+        </Text>
+      </View>
+      {props.detail ? (
+        <Text class={`text-xs text-muted-foreground ${props.mono ? "font-mono" : ""}`}>
+          {props.detail}
+        </Text>
+      ) : null}
+    </View>
+  );
+}
+
+export function CollapsibleSection(props: {
+  title: string;
+  summary?: string | null;
+  open: boolean;
+  onToggle: () => void;
+  testID?: string;
+  accessibilityLabel?: string;
+  children?: JSX.Element;
+}) {
+  return (
+    <Collapsible open={props.open} reveal={true} class="gap-2" content={props.children}>
+      <Button
+        testID={props.testID}
+        selected={props.open}
+        accessibilityLabel={props.accessibilityLabel ?? props.title}
+        accessibilityHint={props.open ? "收起内容" : "展开内容"}
+        onPress={props.onToggle}
+        class={`flex-row items-center justify-between gap-2 rounded-(--radius) border border-border bg-muted/50 px-3 py-2 hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring ${MOTION_CLASS.colorTransition}`}
+      >
+        <View class="flex-1 gap-0.5">
+          <Text class="text-xs font-medium text-foreground">{props.title}</Text>
+          {props.summary ? (
+            <Text class="text-xs text-muted-foreground">{props.summary}</Text>
+          ) : null}
+        </View>
+        <Text class="text-xs font-medium text-muted-foreground">
+          {props.open ? "收起 ▴" : "展开 ▾"}
+        </Text>
+      </Button>
+    </Collapsible>
   );
 }
