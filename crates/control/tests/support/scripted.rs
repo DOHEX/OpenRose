@@ -10,12 +10,13 @@ use openrose_control::snapshot::PlatformState;
 use openrose_control::transport::{ControlTransport, TransportError};
 use openrose_control::{ControlConfig, ControlRuntime, SessionTiming};
 use openrose_headset::{FirmwareVersion, HeadsetId, LocalDateTime, ModelProfile};
-use std::sync::{Arc, Mutex};
+use std::collections::VecDeque;
+use std::sync::{Arc, Mutex, Weak};
 use std::time::Duration;
 use tokio::sync::{mpsc, oneshot, watch};
 
 pub struct ScriptedAudio {
-    subscribers: Mutex<Vec<mpsc::UnboundedSender<RawAudioEvent>>>,
+    subscribers: Mutex<Vec<Weak<EventQueue>>>,
     queries: tokio::sync::Mutex<mpsc::UnboundedReceiver<oneshot::Sender<RawAudioSnapshot>>>,
     query_sender: mpsc::UnboundedSender<oneshot::Sender<RawAudioSnapshot>>,
     bonded: Mutex<Vec<RawAudioDevice>>,
@@ -35,10 +36,13 @@ impl ScriptedAudio {
     }
 
     pub fn emit(&self, event: RawAudioEvent) {
-        self.subscribers
-            .lock()
-            .unwrap()
-            .retain(|subscriber| subscriber.send(event.clone()).is_ok());
+        self.subscribers.lock().unwrap().retain(|subscriber| match subscriber.upgrade() {
+            Some(queue) => {
+                queue.deliver(event.clone());
+                true
+            }
+            None => false,
+        });
     }
 
     pub async fn next_query(&self) -> oneshot::Sender<RawAudioSnapshot> {
@@ -59,22 +63,49 @@ impl ScriptedAudio {
     }
 }
 
-struct ScriptedEvents(tokio::sync::Mutex<mpsc::UnboundedReceiver<RawAudioEvent>>);
+#[derive(Default)]
+struct EventQueue {
+    waiting: Mutex<VecDeque<oneshot::Sender<RawAudioEvent>>>,
+    buffered: Mutex<VecDeque<RawAudioEvent>>,
+}
+
+impl EventQueue {
+    fn deliver(&self, event: RawAudioEvent) {
+        let mut waiting = self.waiting.lock().unwrap();
+        match waiting.pop_front() {
+            Some(waiter) => {
+                let _ = waiter.send(event);
+            }
+            None => self.buffered.lock().unwrap().push_back(event),
+        }
+    }
+}
+
+struct ScriptedEvents(Arc<EventQueue>);
 
 #[async_trait]
 impl AudioEvents for ScriptedEvents {
     async fn next_event(&self) -> Option<RawAudioEvent> {
-        self.0.lock().await.recv().await
+        let waiter = {
+            let mut waiting = self.0.waiting.lock().unwrap();
+            if let Some(event) = self.0.buffered.lock().unwrap().pop_front() {
+                return Some(event);
+            }
+            let (sender, receiver) = oneshot::channel();
+            waiting.push_back(sender);
+            receiver
+        };
+        waiter.await.ok()
     }
 }
 
 #[async_trait]
 impl AudioFactsDriver for ScriptedAudio {
     async fn subscribe(&self) -> Box<dyn AudioEvents> {
-        let (sender, receiver) = mpsc::unbounded_channel();
-        self.subscribers.lock().unwrap().push(sender);
+        let queue = Arc::new(EventQueue::default());
+        self.subscribers.lock().unwrap().push(Arc::downgrade(&queue));
         self.order.lock().unwrap().push("subscribe");
-        Box::new(ScriptedEvents(tokio::sync::Mutex::new(receiver)))
+        Box::new(ScriptedEvents(queue))
     }
 
     async fn bonded_devices(&self) -> Result<Vec<RawAudioDevice>, TransportError> {

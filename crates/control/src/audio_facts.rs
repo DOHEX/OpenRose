@@ -200,27 +200,31 @@ impl Core {
         let mut tracker = Tracker::new();
         let mut query: Slot<'_, RawAudioSnapshot> = Some(self.audio.snapshot(&[]));
         let mut refresh: Slot<'_, ()> = Some(Box::pin(self.refresh_bonded_headsets()));
+        let mut pending_event = events.next_event();
         loop {
             let published = tokio::select! {
-                event = events.next_event() => match event {
-                    None => return,
-                    Some(RawAudioEvent::ProfileChanged { profile, device, bonded, connected }) => {
-                        tracker.profile_changed(profile, &device, bonded, connected)
+                event = &mut pending_event => {
+                    pending_event = events.next_event();
+                    match event {
+                        None => return,
+                        Some(RawAudioEvent::ProfileChanged { profile, device, bonded, connected }) => {
+                            tracker.profile_changed(profile, &device, bonded, connected)
+                        }
+                        Some(RawAudioEvent::AdapterOff) => {
+                            query = None;
+                            tracker.adapter_off()
+                        }
+                        Some(RawAudioEvent::AdapterOn) => {
+                            tracker.adapter_on();
+                            query = Some(self.audio.snapshot(&[]));
+                            None
+                        }
+                        Some(RawAudioEvent::BondedDevicesChanged) => {
+                            refresh = Some(Box::pin(self.refresh_bonded_headsets()));
+                            None
+                        }
                     }
-                    Some(RawAudioEvent::AdapterOff) => {
-                        query = None;
-                        tracker.adapter_off()
-                    }
-                    Some(RawAudioEvent::AdapterOn) => {
-                        tracker.adapter_on();
-                        query = Some(self.audio.snapshot(&[]));
-                        None
-                    }
-                    Some(RawAudioEvent::BondedDevicesChanged) => {
-                        refresh = Some(Box::pin(self.refresh_bonded_headsets()));
-                        None
-                    }
-                },
+                }
                 snapshot = next(&mut query) => tracker.snapshot_arrived(&snapshot),
                 () = next(&mut refresh) => None,
             };
