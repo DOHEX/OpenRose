@@ -13,8 +13,8 @@ import android.os.IBinder
 import android.os.ParcelFileDescriptor
 import android.util.Log
 import io.github.dohex.openrose.androidintegration.wire.BridgeWire
-import io.github.dohex.openrose.bridge.BridgeTarget
 import io.github.dohex.openrose.bridge.BridgeBundles
+import io.github.dohex.openrose.bridge.BridgeTarget
 import io.github.dohex.openrose.bridge.IControlBridge
 import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedModuleInterface

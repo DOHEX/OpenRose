@@ -1,6 +1,5 @@
 package io.github.dohex.openrose.androidintegration
 
-import io.github.dohex.openrose.core.OperationResult
 import io.github.dohex.openrose.core.SessionReference
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.FieldReading
@@ -11,11 +10,9 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNull
-import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
@@ -56,9 +53,7 @@ class ModuleAutonomyTest {
         rig.bootHost()
         rig.hostTransport.audioDevice.emit(rig.earphones.deviceId)
         runCurrent()
-        rig.replaceHost(processDied = false)
-        rig.bootHost()
-        rig.replaceHost(processDied = true)
+        rig.replaceHost()
         rig.bootHost()
         rig.hostTransport.audioDevice.emit(rig.earphones.deviceId)
         rig.unlockHost()
@@ -142,7 +137,7 @@ class ModuleAutonomyTest {
             requireNotNull(runtime.state.value.device).sessionId,
         )
 
-        rig.replaceHost(processDied = true)
+        rig.replaceHost()
         runCurrent()
         assertEquals(OwnerFailureStage.CONNECTION, assertIs<OwnerReadiness.Unavailable>(runtime.integration.value.owner.readiness).stage)
         assertEquals(0, rig.headset.opens("app"))
@@ -173,33 +168,6 @@ class ModuleAutonomyTest {
     }
 
     @Test
-    fun aHotReloadReleasesFirstThenTheReplacementRestoresTheSameSavedModulePath() = runTest {
-        val rig = OwnerRig(this, initial = saved)
-        rig.bootHost()
-        rig.hostTransport.audioDevice.emit(rig.earphones.deviceId)
-        val runtime = rig.newRuntime()
-        runCurrent()
-        advanceTimeBy(1)
-        runCurrent()
-        val oldGeneration = (rig.host.status.value as HostStatus.Active).generation
-
-        rig.replaceHost(processDied = false)
-        assertEquals(listOf("module:open", "module:close"), rig.headset.events)
-        rig.bootHost()
-        rig.hostTransport.audioDevice.emit(rig.earphones.deviceId)
-        runCurrent()
-        advanceTimeBy(rig.clientTiming.retryMillis * 2)
-        runCurrent()
-
-        assertEquals(listOf("module:open", "module:close", "module:open"), rig.headset.events)
-        assertEquals(OwnerReadiness.Ready, runtime.integration.value.owner.readiness)
-        assertEquals(ControlWay.MODULE, runtime.integration.value.owner.selected)
-        assertNotEquals(oldGeneration, runtime.integration.value.owner.holder?.generation)
-        assertEquals(0, rig.headset.opens("app"))
-        assertEquals(0, rig.headset.overlappingOpens)
-    }
-
-    @Test
     fun anUnavailableHostIsReportedHonestlyAndNeverReplacedByTheApplicationConnection() = runTest {
         val rig = OwnerRig(this, initial = saved)
         rig.bootHost()
@@ -209,7 +177,7 @@ class ModuleAutonomyTest {
         runCurrent()
         advanceTimeBy(1)
         runCurrent()
-        rig.replaceHost(processDied = true)
+        rig.replaceHost()
         rig.link.reachable = false
         runCurrent()
         advanceTimeBy(60_000)
@@ -236,7 +204,7 @@ class ModuleAutonomyTest {
         assertEquals(listOf("module:open"), rig.headset.events)
         assertEquals(1, (rig.host.status.value as HostStatus.Active).generation.sequence)
         repeat(2) {
-            rig.replaceHost(processDied = it == 0)
+            rig.replaceHost()
             rig.bootHost()
             rig.hostTransport.audioDevice.emit(rig.earphones.deviceId)
             rig.bootHost()
@@ -264,7 +232,7 @@ class ModuleAutonomyTest {
         runtime.selectControlWay(ControlWay.APP)
         runCurrent()
         rig.link.releaseKillsHostProcess = false
-        rig.replaceHost(processDied = true)
+        rig.replaceHost()
         rig.bootHost()
         rig.hostTransport.audioDevice.emit(rig.earphones.deviceId)
         runCurrent()
@@ -276,69 +244,5 @@ class ModuleAutonomyTest {
         assertEquals(ControlWay.APP, runtime.integration.value.owner.holder?.way)
         assertEquals(1, rig.headset.opens("module"))
         assertIs<HostStatus.Inactive>(rig.host.status.value)
-    }
-
-    @Test
-    fun aReloadedHostRefusesNewLeasesAndItsOldLeasesStopMeaningAnything() = runTest {
-        val rig = OwnerRig(this, initial = saved)
-        rig.bootHost()
-        rig.hostTransport.audioDevice.emit(rig.earphones.deviceId)
-        runCurrent()
-        val old = rig.host
-        val generation = (old.status.value as HostStatus.Active).generation
-        val lease = (old.open(appIdentity) as HostOpenResult.Opened).lease.id
-
-        assertTrue(old.stop(), "the owner was confirmed released")
-        assertEquals(listOf("module:open", "module:close"), rig.headset.events)
-
-        assertIs<HostOpenResult.Refused>(old.open(appIdentity))
-        assertEquals(
-            HostRejection.INVALID_LEASE,
-            assertIs<HostCallResult.Rejected>(old.control.execute(appIdentity, lease, generation, HostCommand.StartScan)).rejection,
-        )
-        old.configure { HostConfiguration(true, HostSettings(integration = IntegrationSettings(controlWay = ControlWay.MODULE))) }
-        assertIs<HostStatus.Inactive>(old.status.value)
-        assertEquals(listOf("module:open", "module:close"), rig.headset.events)
-    }
-
-    @Test
-    fun aHotReloadThatCannotConfirmTheReleaseIsRefusedAndTheOldHostKeepsServing() = runTest {
-        val rig = OwnerRig(this, initial = saved)
-        rig.bootHost()
-        rig.hostTransport.audioDevice.emit(rig.earphones.deviceId)
-        val runtime = rig.newRuntime()
-        runCurrent()
-        advanceTimeBy(1)
-        runCurrent()
-        val old = rig.host
-        val generation = (old.status.value as HostStatus.Active).generation
-        rig.hostTransport.closeFails = true
-
-        assertFalse(rig.replaceHost(processDied = false))
-
-        assertSame(old, rig.host)
-        assertEquals("module", rig.headset.openOwner)
-        assertEquals(generation, (old.status.value as HostStatus.Active).generation)
-        val newLease = assertIs<HostOpenResult.Opened>(old.open(appIdentity)).lease
-        assertEquals(
-            HostCallResult.Operation(OperationResult.Success),
-            old.control.execute(appIdentity, newLease.id, generation, HostCommand.RefreshBondedDevices),
-        )
-        val refused = old.release(appIdentity, newLease.id, SwitchRequest("a", ControlWay.MODULE, ControlWay.APP, generation))
-        assertEquals(HostRejection.RELEASE_FAILED, assertIs<ReleaseResult.Refused>(refused).rejection)
-        assertEquals(1, rig.link.connections.count { it.isOpen })
-        assertEquals(0, rig.headset.opens("app"))
-
-        rig.hostTransport.closeFails = false
-        assertTrue(rig.replaceHost(processDied = false))
-        rig.bootHost()
-        rig.hostTransport.audioDevice.emit(rig.earphones.deviceId)
-        runCurrent()
-        advanceTimeBy(rig.clientTiming.retryMillis * 2)
-        runCurrent()
-        assertEquals(OwnerReadiness.Ready, runtime.integration.value.owner.readiness)
-        assertNotEquals(generation, runtime.integration.value.owner.holder?.generation)
-        assertEquals(listOf("module:open", "module:close", "module:open"), rig.headset.events)
-        assertEquals(0, rig.headset.overlappingOpens)
     }
 }

@@ -107,7 +107,6 @@ class AndroidSettingsStoreTest {
             val owner = requireNotNull(host.ownerView.first())
             assertEquals(chosen.control, owner.state.settings)
             assertEquals(chosen.integration, owner.settings)
-            host.stop()
         } finally {
             Files.deleteIfExists(file)
             Files.deleteIfExists(remoteFile)

@@ -28,10 +28,10 @@
 | 6 | `adb shell am start -n io.github.dohex.openrose/.MainActivity` 打开应用，让它把设置发布到 `module_config`，看到右列的日志后立刻 `adb shell am force-stop io.github.dohex.openrose`，避免应用的应用控制抢占 i5。 | `switch value=true`。若此时仍选着模块控制，会看到 `trial_skipped reason=module_control_selected` 而不启动试验；若已选应用控制，试验可能已在这个进程里启动，这一段的结果也计入失败证据，但判定以第 8 步为准。 |
 | 7 | 再次「重启作用域」（或第 3 步的 Root 命令）。应用保持强停状态。 | 系统蓝牙进程换新 pid。 |
 | 8 | 在新 pid 内观察 `OpenRoseNativeTrial`（`adb logcat -b all -v threadtime --pid=$(adb shell pidof com.android.bluetooth)` 或 `-s OpenRoseNativeTrial:V System.err:W`），最长等 2 分钟。 | 见下一节的行序。 |
-| 9 | 附加核对：保持试验在运行，`adb install -r` 重装同一 APK。 | LSPosed 的自动热重载被拒绝：模块日志出现 `hot_reload_refused native_core_loaded`（标签 `OpenRoseSystemModule`，经 Xposed 日志写出，LSPosed 管理器的日志页也能看到）；系统蓝牙 pid 不变，没有第二个 `trial_start`。再「重启作用域」后新代码才生效。 |
+| 9 | 附加核对：保持试验在运行，`adb install -r` 重装同一 APK。 | 模块不热重载：系统蓝牙 pid 不变，没有第二个 `trial_start`；在 LSPosed 管理器里手动请求重载时，模块日志出现 `hot_reload_refused`（标签 `OpenRoseSystemModule`，经 Xposed 日志写出，LSPosed 管理器的日志页也能看到）。再「重启作用域」后新代码才生效。 |
 | 10 | 收尾：把偏好里的值改回 `false`（同第 5 步，把 `true` 换成 `false`），打开应用发布，再「重启作用域」。 | 新 pid 的第一行是 `switch value=false`，没有 `trial_start`。 |
 
-关闭开关在运行中不生效：已加载的库不能卸载，试验会继续，日志出现 `switch_off_ignored_until_scope_restart`，重启作用域后才真正关闭。若在试验运行中切到模块控制，试验会立即停止其控制会话并记录 `trial_stopped reason=module_control_selected`，但已加载的库仍不会卸载，热重载依然保持拒绝直到重启作用域。
+关闭开关在运行中不生效：已加载的库不能卸载，试验会继续，日志出现 `switch_off_ignored_until_scope_restart`，重启作用域后才真正关闭。若在试验运行中切到模块控制，试验会立即停止其控制会话并记录 `trial_stopped reason=module_control_selected`，但已加载的库仍要等重启作用域才会卸载。
 
 ## 预期日志
 

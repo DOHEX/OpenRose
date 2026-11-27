@@ -291,7 +291,7 @@ class OwnerHandoffTest {
         rig.eventually("the app connection") { rig.headset.events.lastOrNull() == "app:open" }
         assertEquals(listOf("module:open", "module:close", "app:open"), rig.headset.events)
 
-        rig.replaceHost(processDied = true)
+        rig.replaceHost()
         rig.bootHost()
         runCurrent()
         assertIs<HostStatus.Inactive>(rig.host.status.value)

@@ -335,18 +335,13 @@ internal class OwnerRig(
         )
     }
 
-    suspend fun replaceHost(processDied: Boolean): Boolean {
-        if (processDied) {
-            hostScope.cancel()
-            hostTransport.links.filter { !it.closed }.forEach { it.close() }
-            hostScope = newHostScope()
-        } else if (!host.stop()) {
-            return false
-        }
-        link.connections.filter { it.isOpen }.forEach { it.sever(processDied) }
+    suspend fun replaceHost() {
+        hostScope.cancel()
+        hostTransport.links.filter { !it.closed }.forEach { it.close() }
+        hostScope = newHostScope()
+        link.connections.filter { it.isOpen }.forEach { it.sever(processDied = true) }
         host = newHost()
         link.host = host
-        return true
     }
 
     private var hostUnlocked = true
