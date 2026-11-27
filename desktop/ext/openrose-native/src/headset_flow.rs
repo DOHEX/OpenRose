@@ -1,5 +1,6 @@
 use crate::{DevState, OpenRoseClient, catalog_advertisement, run_on_core};
 use nsh_core::prelude::*;
+use nsh_core::JsonValue;
 use openrose_control::ControlRuntime;
 use openrose_control::scan::Advertisement;
 use openrose_control::snapshot::PlatformState;
@@ -177,8 +178,18 @@ impl OpenRoseHeadsetFlow {
         let _dev = require_dev(dev).map_err(JsError::Error)?;
         let state: PlatformState = serde_json::from_str(&state_json)
             .map_err(|err| JsError::Error(format!("无效的平台状态: {err}")))?;
+        let _guard = crate::SHARED_RUNTIME.enter();
         runtime.update_platform_state(state);
         Ok(())
+    }
+
+    /// Returns the current headset chosen by the control core rule (connection target, active session, selection, first bonded).
+    pub fn current_headset(client: Instance<OpenRoseClient>) -> Result<Option<JsonValue>, JsError> {
+        let (runtime, _) = client_parts(&client)?;
+        Ok(runtime
+            .snapshot()
+            .current_headset()
+            .map(|headset| serde_json::to_value(headset).expect("headset candidate serializes")))
     }
 }
 
