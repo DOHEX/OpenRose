@@ -35,7 +35,7 @@ export interface DevModePageProps {
 
 export function DevModePage(props: DevModePageProps) {
   return (
-    <Column class="gap-4 sm:w-72">
+    <Column class="gap-4 sm:w-56 lg:w-72">
       <Card animateEntrance={true} delay={80}>
         <Row class="items-center justify-between gap-2">
           <SectionTitle>开发模式 · 模拟耳机</SectionTitle>
