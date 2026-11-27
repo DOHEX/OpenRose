@@ -2,6 +2,7 @@ use super::{HeadsetSide, SimulatorError, preferred_index, preferred_level, rs_ba
 use crate::capabilities::HeadsetCapabilities;
 use crate::field::{FieldReading, FieldValue, FirmwareVersion, HeadsetField};
 use crate::model::ModelProfile;
+use crate::model::ProtocolFamily;
 use crate::model::rs_common::{RsCommonProtocol, TOUCH_GESTURES};
 use crate::protocol::rs_common::{
     AUDIO_MODES, EQ_PRESETS, NOISE_READS, NOISE_WRITES, TOUCH_REPLY_MIN_SIZE, TOUCH_VALUE_OFFSETS,
@@ -142,16 +143,9 @@ impl RsCommonHeadsetSide {
         firmware: &FirmwareVersion,
         capabilities: &HeadsetCapabilities,
     ) -> Result<Self, SimulatorError> {
-        if firmware.parts.len() != 3
-            || !(0..=15).contains(&firmware.parts[0])
-            || firmware.parts[1..]
-                .iter()
-                .any(|part| !(0..=255).contains(part))
-        {
-            return Err(SimulatorError::InvalidFirmware(
-                "RS Common 固件版本需要 0 到 15 与两个 0 到 255 的数字".to_string(),
-            ));
-        }
+        ProtocolFamily::RsCommon
+            .validate_firmware(firmware)
+            .map_err(|err| SimulatorError::InvalidFirmware(err.to_string()))?;
         let records = record_ids()
             .filter(|&id| {
                 fields_for_key(id)

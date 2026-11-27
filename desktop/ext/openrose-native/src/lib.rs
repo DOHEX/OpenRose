@@ -165,93 +165,6 @@ struct DevHeadsetConfig {
     reply_latency_ms: u64,
 }
 
-fn default_firmware_for(profile: ModelProfile) -> FirmwareVersion {
-    match profile.family() {
-        ProtocolFamily::F8 => FirmwareVersion::new(vec![125], "125"),
-        ProtocolFamily::Zt | ProtocolFamily::RsCommonV2 | ProtocolFamily::RsCommon => {
-            FirmwareVersion::new(vec![1, 2, 5], "125")
-        }
-    }
-}
-
-fn firmware_hint_for(family: ProtocolFamily) -> &'static str {
-    match family {
-        ProtocolFamily::Zt => "三位 0–15 数字或十六进制（如 125 或 1.2.5）",
-        ProtocolFamily::RsCommonV2 => "三段 0–255 版本（如 2.1.3 或 125）",
-        ProtocolFamily::RsCommon => "三段版本（首段 0–15，后两段 0–255，如 1.2.5 或 125）",
-        ProtocolFamily::F8 => "单个 0–65535 整数（如 125 或 300）",
-    }
-}
-
-fn parse_firmware(profile: ModelProfile, raw: &str) -> Result<FirmwareVersion, String> {
-    let trimmed = raw.trim();
-    if trimmed.is_empty() {
-        return Err("固件版本不能为空".to_string());
-    }
-    match profile.family() {
-        ProtocolFamily::F8 => {
-            let value = trimmed
-                .parse::<i32>()
-                .map_err(|_| "F8 固件版本需要一个 0 到 65535 的数字".to_string())?;
-            if !(0..=i32::from(u16::MAX)).contains(&value) {
-                return Err("F8 固件版本需要一个 0 到 65535 的数字".to_string());
-            }
-            Ok(FirmwareVersion::new(vec![value], trimmed))
-        }
-        ProtocolFamily::Zt => parse_three_part_firmware(
-            trimmed,
-            16,
-            |p| p.len() == 3 && p.iter().all(|v| (0..=15).contains(v)),
-            "ZT 固件版本需要三个 0 到 15 的数字（如 125 或 1.2.5）",
-        ),
-        ProtocolFamily::RsCommonV2 => parse_three_part_firmware(
-            trimmed,
-            10,
-            |p| p.len() == 3 && p.iter().all(|v| (0..=255).contains(v)),
-            "RS Common V2 固件版本需要三个 0 到 255 的数字（如 2.1.3 或 125）",
-        ),
-        ProtocolFamily::RsCommon => parse_three_part_firmware(
-            trimmed,
-            10,
-            |p| {
-                p.len() == 3
-                    && (0..=15).contains(&p[0])
-                    && p[1..].iter().all(|v| (0..=255).contains(v))
-            },
-            "RS Common 固件版本需要 0 到 15 与两个 0 到 255 的数字（如 1.2.5 或 125）",
-        ),
-    }
-}
-
-fn parse_three_part_firmware(
-    trimmed: &str,
-    compact_radix: u32,
-    valid: impl FnOnce(&[i32]) -> bool,
-    err_msg: &str,
-) -> Result<FirmwareVersion, String> {
-    let parts = if trimmed.contains('.') {
-        trimmed
-            .split('.')
-            .map(|seg| seg.trim().parse::<i32>().map_err(|_| err_msg.to_string()))
-            .collect::<Result<Vec<_>, _>>()?
-    } else if trimmed.len() == 3 && trimmed.bytes().all(|b| b.is_ascii_alphanumeric()) {
-        trimmed
-            .chars()
-            .map(|ch| {
-                ch.to_digit(compact_radix)
-                    .map(|d| d as i32)
-                    .ok_or_else(|| err_msg.to_string())
-            })
-            .collect::<Result<Vec<_>, _>>()?
-    } else {
-        return Err(err_msg.to_string());
-    };
-    if !valid(&parts) {
-        return Err(err_msg.to_string());
-    }
-    Ok(FirmwareVersion::new(parts, trimmed))
-}
-
 fn catalog_advertisement(profile: ModelProfile, id: &HeadsetId) -> Advertisement {
     let prefix = decode_hex(profile.advertisement_prefixes()[0]).expect("advertisement prefix");
     let company = u16::from(prefix[0]) | (u16::from(prefix[1]) << 8);
@@ -320,7 +233,7 @@ impl OpenRoseCatalog {
                 family_label: profile.family().display_name(),
                 battery_layout: profile.battery_layout(),
                 default_firmware: "125",
-                firmware_hint: firmware_hint_for(profile.family()),
+                firmware_hint: profile.family().firmware_hint(),
             })
             .collect();
         serde_json::to_value(entries).expect("model catalog serializes")
@@ -339,7 +252,7 @@ impl OpenRoseClient {
     fn create_dev(reply_latency_ms: u64) -> Self {
         let transport = Arc::new(SimulatedTransport::new());
         let profile = ModelProfile::I5Zt;
-        let firmware = default_firmware_for(profile);
+        let firmware = profile.family().default_firmware();
         let id = HeadsetId::new("sim:I5_ZT:1");
         let handle = transport
             .add_headset(id.clone(), profile, firmware.clone())
@@ -508,7 +421,10 @@ impl OpenRoseClient {
             let dev = dev.ok_or_else(|| "当前未启用开发模式模拟器".to_string())?;
             let profile =
                 ModelProfile::from_id(&model_id).ok_or_else(|| format!("未知型号: {model_id}"))?;
-            let parsed_fw = parse_firmware(profile, &firmware)?;
+            let parsed_fw = profile
+                .family()
+                .parse_firmware(&firmware)
+                .map_err(|err| err.to_string())?;
             let seq = dev.sequence.fetch_add(1, Ordering::SeqCst) + 1;
             let new_id = HeadsetId::new(format!("sim:{}:{seq}", profile.id()));
             let handle = dev
@@ -552,6 +468,12 @@ impl OpenRoseClient {
         self.dev
             .as_ref()
             .map(|dev| serde_json::to_value(dev.config_snapshot()).expect("dev config serializes"))
+    }
+}
+
+impl Default for OpenRoseClient {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -626,13 +548,4 @@ mod tests {
         });
     }
 
-    #[test]
-    fn validates_firmware_per_protocol_family() {
-        assert!(parse_firmware(ModelProfile::I5Zt, "125").is_ok());
-        assert!(parse_firmware(ModelProfile::I5Zt, "1.2.5").is_ok());
-        assert!(parse_firmware(ModelProfile::I5Zt, "1160").is_err());
-        assert!(parse_firmware(ModelProfile::I7RsV2, "2.1.3").is_ok());
-        assert!(parse_firmware(ModelProfile::CeramicsXF8, "300").is_ok());
-        assert!(parse_firmware(ModelProfile::CeramicsXF8, "1.2.5").is_err());
-    }
 }
