@@ -1,3 +1,5 @@
+mod settings;
+
 use nsh_core::prelude::*;
 use nsh_core::JsonValue;
 use nsh_core::element::Ret;
@@ -31,7 +33,10 @@ const DEFAULT_DEV_REPLY_LATENCY_MS: u64 = 160;
 
 #[native_module("openrose-native")]
 fn native(registry: &mut Registry) {
-    registry.module::<OpenRoseCatalog>().class::<OpenRoseClient>();
+    registry
+        .module::<OpenRoseCatalog>()
+        .module::<settings::OpenRoseSettings>()
+        .class::<OpenRoseClient>();
 }
 
 struct SystemClock;
@@ -293,7 +298,17 @@ impl OpenRoseClient {
         dev.transport
             .scan()
             .advertise(catalog_advertisement(profile, &id));
-        tokio::task::yield_now().await;
+        for _ in 0..100 {
+            let seen = runtime
+                .snapshot()
+                .candidates
+                .iter()
+                .any(|candidate| candidate.id == id && candidate.profile.is_some());
+            if seen {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
         let result = runtime.connect_for_add_headset(id).await;
         runtime.stop_scan().await;
         result.map_err(|err| err.message)
@@ -391,23 +406,6 @@ impl OpenRoseClient {
                 NoiseMode::from_id(&mode).ok_or_else(|| format!("不支持的降噪模式: {mode}"))?;
             runtime
                 .set(HeadsetCommand::NoiseMode(parsed), expected_session)
-                .await
-                .map_err(|err| err.message)
-        })
-    }
-
-    /// Executes a serialized HeadsetCommand against ControlRuntime for feature settings.
-    pub fn execute_command(
-        &self,
-        command_json: String,
-        expected_session: Option<u64>,
-    ) -> Later<()> {
-        let runtime = Arc::clone(&self.runtime);
-        run_on_core(async move {
-            let command: HeadsetCommand = serde_json::from_str(&command_json)
-                .map_err(|err| format!("无效的控制命令: {err}"))?;
-            runtime
-                .set(command, expected_session)
                 .await
                 .map_err(|err| err.message)
         })

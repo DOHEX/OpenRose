@@ -1,9 +1,13 @@
 export {
+  CheckboxRow,
   ActionButton,
   MetricGrid,
   NoticeBanner,
   SegmentedTabs,
   SelectField,
+  RadioGroupField,
+  SliderField,
+  SwitchRow,
   StatusBadge,
   TextField,
 } from "./controls";
@@ -11,6 +15,7 @@ export type {
   ButtonVariant,
   MetricItem,
   SegmentOption,
+  RadioOption,
   SelectFieldOption,
   ToneVariant,
 } from "./controls";

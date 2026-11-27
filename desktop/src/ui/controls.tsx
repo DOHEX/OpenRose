@@ -1,5 +1,5 @@
 import { Text, View } from "nsh";
-import { Button, Input, Select, Tab, Tabs } from "nsh/base";
+import { Button, Checkbox, Input, Radio, RadioGroup, Select, Slider, Switch, Tab, Tabs } from "nsh/base";
 import type { SelectItem } from "nsh/base";
 import { MOTION_CLASS, MOTION_DISTANCE, createSurfaceMotion } from "../../motion";
 
@@ -293,6 +293,145 @@ export function MetricGrid(props: { items: MetricItem[] }) {
           </View>
         )}
       </Each>
+    </View>
+  );
+}
+
+export function SwitchRow(props: {
+  label: string;
+  summary?: string | null;
+  checked: boolean;
+  disabled?: boolean;
+  testID?: string;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <View class="flex-row items-center justify-between gap-3 rounded-(--radius) border border-border bg-muted/40 px-3 py-2.5">
+      <View class="flex-1 gap-0.5">
+        <Text class="text-sm font-medium text-foreground">{props.label}</Text>
+        {props.summary ? <Text class="text-xs text-muted-foreground">{props.summary}</Text> : null}
+      </View>
+      <Switch
+        testID={props.testID}
+        checked={props.checked}
+        disabled={props.disabled}
+        accessibilityLabel={props.label}
+        onChange={({ checked }) => props.onChange(checked)}
+        trackClass={`h-6 w-11 rounded-full border border-input bg-muted p-0.5 checked:border-primary checked:bg-primary disabled:opacity-50 ${MOTION_CLASS.colorTransition}`}
+        thumbClass={`size-4.5 rounded-full bg-background shadow-xs transition-transform duration-150 motion-reduce:transition-none checked:translate-x-5`}
+      />
+    </View>
+  );
+}
+
+export function CheckboxRow(props: {
+  label: string;
+  caption?: string | null;
+  checked: boolean;
+  disabled?: boolean;
+  testID?: string;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <Checkbox
+      testID={props.testID}
+      checked={props.checked}
+      disabled={props.disabled}
+      accessibilityLabel={props.label}
+      onChange={({ checked }) => props.onChange(checked)}
+      class={`group flex-row items-center gap-2.5 rounded-(--radius) border border-border bg-muted/40 px-3 py-2 disabled:opacity-50 ${MOTION_CLASS.colorTransition}`}
+      indicatorClass={`size-4 items-center justify-center rounded-(--radius-sm) border border-input bg-background checked:border-primary checked:bg-primary ${MOTION_CLASS.colorTransition}`}
+      indicator={
+        props.checked ? <Text class="text-xs font-bold text-primary-foreground">✓</Text> : undefined
+      }
+    >
+      <View class="flex-1 gap-0.5">
+        <Text class="text-sm text-foreground">{props.label}</Text>
+        {props.caption ? <Text class="text-xs text-muted-foreground">{props.caption}</Text> : null}
+      </View>
+    </Checkbox>
+  );
+}
+
+export interface RadioOption {
+  value: string;
+  label: string;
+  disabled?: boolean;
+  testID?: string;
+}
+
+export function RadioGroupField(props: {
+  accessibilityLabel: string;
+  options: RadioOption[];
+  value: string | null;
+  disabled?: boolean;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <RadioGroup
+      accessibilityLabel={props.accessibilityLabel}
+      class="flex-row flex-wrap gap-2"
+    >
+      <Each of={props.options} key={(option: RadioOption) => option.value}>
+        {(option) => (
+          <Radio
+            testID={option().testID}
+            checked={props.value === option().value}
+            disabled={props.disabled || option().disabled}
+            accessibilityLabel={option().label}
+            onChange={({ checked }) => {
+              if (checked) props.onChange(option().value);
+            }}
+            class={`group flex-row items-center gap-2 rounded-(--radius) border border-border bg-muted/40 px-3 py-1.5 checked:border-primary checked:bg-accent disabled:opacity-50 ${MOTION_CLASS.colorTransition}`}
+          >
+            <View class="size-3.5 items-center justify-center rounded-full border border-input bg-background group-checked:border-primary">
+              <View class="size-2 rounded-full bg-transparent group-checked:bg-primary" />
+            </View>
+            <Text class="text-xs font-medium text-foreground">{option().label}</Text>
+          </Radio>
+        )}
+      </Each>
+    </RadioGroup>
+  );
+}
+
+export function SliderField(props: {
+  label: string;
+  valueText: string;
+  value: number;
+  min: number;
+  max: number;
+  step?: number;
+  disabled?: boolean;
+  testID?: string;
+  onChange: (value: number) => void;
+  onChangeEnd: (value: number) => void;
+}) {
+  return (
+    <View class="gap-1">
+      <View class="flex-row items-center justify-between gap-2">
+        <Text class="text-xs font-medium text-foreground">{props.label}</Text>
+        <Text class="font-mono text-xs text-muted-foreground">{props.valueText}</Text>
+      </View>
+      <Slider
+        testID={props.testID}
+        value={props.value}
+        min={props.min}
+        max={props.max}
+        step={props.step ?? 1}
+        disabled={props.disabled}
+        accessibilityLabel={props.label}
+        onChange={({ value }) => {
+          if (typeof value === "number") props.onChange(value);
+        }}
+        onChangeEnd={({ value }) => {
+          if (typeof value === "number") props.onChangeEnd(value);
+        }}
+        trackClass="group h-6 justify-center"
+        indicatorClass="h-1.5 rounded-full bg-muted"
+        rangeClass="rounded-full bg-primary"
+        thumbClass="size-4 rounded-full border border-primary bg-background shadow-xs focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+      />
     </View>
   );
 }

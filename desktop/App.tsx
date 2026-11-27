@@ -5,8 +5,10 @@ import {
   errorCategoryLabel,
   noiseModeLabel,
 } from "./src/model/headset";
+import { createHeadsetSettingsModel } from "./src/model/settings";
 import { DevModePage } from "./src/pages/DevModePage";
 import { MainPage } from "./src/pages/MainPage";
+import { HeadsetSettingsPage } from "./src/pages/settings/headset";
 import { Column, PageShell, ScrollArea, StatusBadge, TitleBar } from "./src/ui";
 import type { MetricItem, SegmentOption, SelectFieldOption, ToneVariant } from "./src/ui";
 
@@ -18,6 +20,7 @@ const LATENCY_OPTIONS: SegmentOption[] = [
 
 function DesktopApp() {
   const controller = createHeadsetController();
+  const settingsModel = createHeadsetSettingsModel(controller);
   const initialConfig = controller.devConfig();
   const selectedModelId = signal<string>(initialConfig?.modelId ?? "I5_ZT");
   const firmwareInput = signal<string>(initialConfig?.firmware ?? "125");
@@ -158,6 +161,7 @@ function DesktopApp() {
             onDisconnect={() => void controller.disconnect()}
             onSelectNoiseMode={(mode) => void controller.setNoiseMode(mode)}
           />
+          <HeadsetSettingsPage model={settingsModel} />
           {activeDevConfig() ? (
             <DevModePage
               modelOptions={modelOptions}
