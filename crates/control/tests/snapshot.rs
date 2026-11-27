@@ -1,5 +1,6 @@
 mod support;
 
+use openrose_control::codec::{CodecError, WIRE_FORMAT_VERSION};
 use openrose_control::settings::ControlSettings;
 use openrose_control::snapshot::{
     ConnectionBlockReason, ControlSnapshot, HostPlatform, PermissionState, PlatformApplicability,
@@ -59,10 +60,12 @@ async fn snapshots_survive_the_serde_round_trip_in_every_stage_of_a_session() {
 }
 
 #[tokio::test(start_paused = true)]
-async fn the_encoding_is_self_describing_and_garbage_is_rejected() {
+async fn the_encoding_is_versioned_self_describing_and_rejects_malformed_or_wrong_version_bytes() {
     let harness = Harness::ready(Options::i5()).await;
-    let value: serde_json::Value =
-        serde_json::from_slice(&harness.snapshot().encode()).expect("json");
+    let encoded = harness.snapshot().encode();
+    assert_eq!(b"ORC", &encoded[..3]);
+    assert_eq!(WIRE_FORMAT_VERSION, encoded[3]);
+    let value: serde_json::Value = serde_json::from_slice(&encoded[4..]).expect("json");
     for key in [
         "revision",
         "platform",
@@ -77,8 +80,27 @@ async fn the_encoding_is_self_describing_and_garbage_is_rejected() {
     ] {
         assert!(value.get(key).is_some(), "missing {key}");
     }
-    assert!(ControlSnapshot::decode(b"{\"revision\":").is_err());
-    assert!(ControlSnapshot::decode(b"").is_err());
+    assert!(matches!(
+        ControlSnapshot::decode(b"ORC\x01{\"revision\":"),
+        Err(CodecError::Malformed { .. })
+    ));
+    assert!(matches!(
+        ControlSnapshot::decode(b"corrupt"),
+        Err(CodecError::Malformed { .. })
+    ));
+    assert!(matches!(
+        ControlSnapshot::decode(b""),
+        Err(CodecError::Malformed { .. })
+    ));
+    let mut wrong_version = encoded;
+    wrong_version[3] = WIRE_FORMAT_VERSION.wrapping_add(1);
+    assert_eq!(
+        Err(CodecError::UnsupportedVersion {
+            expected: WIRE_FORMAT_VERSION,
+            actual: WIRE_FORMAT_VERSION.wrapping_add(1),
+        }),
+        ControlSnapshot::decode(&wrong_version)
+    );
 }
 
 #[tokio::test(start_paused = true)]
@@ -245,7 +267,9 @@ async fn control_settings_transport_selection_and_applicability_are_part_of_the_
             .is_some()
     );
     round_trip(&snapshot);
-    let value: serde_json::Value = serde_json::from_slice(&snapshot.encode()).expect("json");
+    let encoded = snapshot.encode();
+    assert_eq!(WIRE_FORMAT_VERSION, encoded[3]);
+    let value: serde_json::Value = serde_json::from_slice(&encoded[4..]).expect("json");
     assert_eq!(
         serde_json::json!("Applicable"),
         value["platform"]["control_transport_applicability"]

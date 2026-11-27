@@ -1,3 +1,4 @@
+use crate::codec::{CodecError, decode_framed, encode_framed};
 use crate::error::ControlError;
 use crate::selection::TransportSelection;
 use crate::settings::ControlSettings;
@@ -339,17 +340,6 @@ pub struct ControlSnapshot {
     pub reconnect_guidance: Option<ReconnectGuidance>,
 }
 
-#[derive(Debug)]
-pub struct SnapshotDecodeError(serde_json::Error);
-
-impl std::fmt::Display for SnapshotDecodeError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "状态快照无法解码: {}", self.0)
-    }
-}
-
-impl std::error::Error for SnapshotDecodeError {}
-
 impl ControlSnapshot {
     pub(crate) fn initial(platform: PlatformState, settings: ControlSettings) -> Self {
         let mut snapshot = Self {
@@ -461,11 +451,11 @@ impl ControlSnapshot {
     }
 
     pub fn encode(&self) -> Vec<u8> {
-        serde_json::to_vec(self).expect("a control snapshot always serializes")
+        encode_framed(self)
     }
 
-    pub fn decode(bytes: &[u8]) -> Result<Self, SnapshotDecodeError> {
-        serde_json::from_slice(bytes).map_err(SnapshotDecodeError)
+    pub fn decode(bytes: &[u8]) -> Result<Self, CodecError> {
+        decode_framed(bytes)
     }
 
     pub fn ready_session(&self) -> Option<SessionReference> {

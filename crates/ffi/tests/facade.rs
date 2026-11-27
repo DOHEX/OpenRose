@@ -1,13 +1,15 @@
 mod support;
 
+use openrose_control::codec::{CodecError, ControlCommand, WIRE_FORMAT_VERSION};
 use openrose_control::gatt::GattFailureKind;
 use openrose_control::snapshot::{
     ConnectionState, PermissionState, PlatformState, TransportAvailability,
 };
 use openrose_control::{ControlError, ControlErrorCode};
 use openrose_ffi::{
-    ControlFailure, DriverError, current_headset, default_session_timing, model_display_name,
-    model_gatt_profile, ready_session, session_for,
+    ControlFailure, DriverError, current_headset, decode_command, decode_snapshot,
+    default_session_timing, encode_command, encode_snapshot, model_display_name,
+    model_gatt_profile, ready_session, session_for, wire_format_version,
 };
 use openrose_headset::{
     FieldValue, HeadsetCommand, HeadsetField, HeadsetSetting, ModelProfile, NoiseMode,
@@ -265,6 +267,54 @@ async fn snapshot_helpers_and_model_facts_round_trip() {
             .is_empty()
     );
     assert!(default_session_timing().connect_timeout.as_millis() > 0);
+    assert!(world.runtime.disconnect().await);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn snapshot_and_command_round_trip_through_ffi_with_typed_errors() {
+    assert_eq!(WIRE_FORMAT_VERSION, wire_format_version());
+
+    let world = World::i5();
+    world.runtime.connect(world.id()).await.expect("ready");
+    let snapshot = world.snapshot();
+    let snapshot_bytes = encode_snapshot(snapshot.clone());
+    assert_eq!(snapshot, decode_snapshot(snapshot_bytes.clone()).expect("snapshot decodes"));
+
+    let mut wrong_snapshot_version = snapshot_bytes;
+    wrong_snapshot_version[3] = WIRE_FORMAT_VERSION.wrapping_add(1);
+    assert_eq!(
+        Err(CodecError::UnsupportedVersion {
+            expected: WIRE_FORMAT_VERSION,
+            actual: WIRE_FORMAT_VERSION.wrapping_add(1),
+        }),
+        decode_snapshot(wrong_snapshot_version)
+    );
+    assert!(matches!(
+        decode_snapshot(b"corrupt".to_vec()),
+        Err(CodecError::Malformed { .. })
+    ));
+
+    let reference = ready_session(snapshot).expect("ready session");
+    let command = ControlCommand::Set {
+        reference: Some(reference),
+        command: HeadsetCommand::NoiseMode(NoiseMode::Anc),
+    };
+    let command_bytes = encode_command(command.clone());
+    assert_eq!(command, decode_command(command_bytes.clone()).expect("command decodes"));
+
+    let mut wrong_command_version = command_bytes;
+    wrong_command_version[3] = WIRE_FORMAT_VERSION.wrapping_add(1);
+    assert_eq!(
+        Err(CodecError::UnsupportedVersion {
+            expected: WIRE_FORMAT_VERSION,
+            actual: WIRE_FORMAT_VERSION.wrapping_add(1),
+        }),
+        decode_command(wrong_command_version)
+    );
+    assert!(matches!(
+        decode_command(b"corrupt".to_vec()),
+        Err(CodecError::Malformed { .. })
+    ));
     assert!(world.runtime.disconnect().await);
 }
 
