@@ -1,18 +1,23 @@
 mod support;
 
 use async_trait::async_trait;
+use openrose_control::audio::AudioFactsDriver;
 use openrose_control::gatt::{
     GattCharacteristic, GattConnection, GattDriver, GattError, GattEvent, GattFailureKind,
     GattService, GattSubscription,
 };
+use openrose_control::scan::ScanDriver;
+use openrose_control::simulator::SimulatedTransport;
 use openrose_control::transport::{
-    ControlConnection, OpenFailureKind, TransportError, TransportRecoveryReason,
+    ControlConnection, ControlTransport, OpenFailureKind, TransportError, TransportRecoveryReason,
 };
-use openrose_headset::GattProfile;
+use openrose_control::{ControlErrorCode, SessionTiming};
+use openrose_headset::{GattProfile, HeadsetId};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use support::settle;
+use support::scripted::{A, add_i5, id, runtime_timed};
+use support::{available, elapse, settle};
 use tokio::sync::{mpsc, watch};
 use tokio::time::{Instant, advance};
 use tokio_util::sync::CancellationToken;
@@ -61,6 +66,7 @@ struct Config {
     write_failure: Option<GattError>,
     discovery_gate: Option<Arc<Gate>>,
     subscription_gate: Option<Arc<Gate>>,
+    rollback_gate: Option<Arc<Gate>>,
     write_gate: Option<Arc<Gate>>,
     mtu_gate: Option<Arc<Gate>>,
     close_gate: Option<Arc<Gate>>,
@@ -179,9 +185,11 @@ impl GattDriver for FakeGattDriver {
             "local routing must precede remote configuration"
         );
         *self.state.remote.lock().unwrap() = subscription;
-        if subscription != GattSubscription::Disabled
-            && let Some(gate) = gate_of(&self.state, |c| c.subscription_gate.clone())
-        {
+        if subscription == GattSubscription::Disabled {
+            if let Some(gate) = gate_of(&self.state, |c| c.rollback_gate.clone()) {
+                gate.wait().await?;
+            }
+        } else if let Some(gate) = gate_of(&self.state, |c| c.subscription_gate.clone()) {
             gate.wait().await?;
         }
         Ok(())
@@ -558,4 +566,177 @@ async fn notifications_retain_characteristic_identity_when_services_reuse_a_uuid
     });
     assert_eq!(vec![0x12], next.await.unwrap().expect("notification"));
     connection.close().await.expect("close");
+}
+
+#[tokio::test(start_paused = true)]
+async fn dropping_subscribe_on_an_outer_deadline_rolls_back_remote_and_local_delivery() {
+    let state = FakeState::new();
+    state.configure(|c| c.subscription_gate = Some(Gate::closed()));
+    let connection = open(&state).await;
+    let subscribing = tokio::spawn({
+        let connection = Arc::clone(&connection);
+        async move { tokio::time::timeout(Duration::from_millis(100), connection.subscribe()).await }
+    });
+    settle().await;
+    assert!(state.routing.load(Ordering::SeqCst));
+
+    advance(Duration::from_millis(100)).await;
+    settle().await;
+    assert!(
+        subscribing.await.unwrap().is_err(),
+        "outer deadline drops subscribe"
+    );
+    assert!(
+        !state.routing.load(Ordering::SeqCst),
+        "local notification routing must roll back when subscribe is dropped"
+    );
+    assert_eq!(
+        GattSubscription::Disabled,
+        *state.remote.lock().unwrap(),
+        "remote subscription must roll back when subscribe is dropped"
+    );
+    connection.close().await.expect("close");
+}
+
+#[tokio::test(start_paused = true)]
+async fn closing_after_a_dropped_subscribe_waits_for_non_cancellable_rollback_before_closing_driver()
+{
+    let state = FakeState::new();
+    let rollback = Gate::closed();
+    state.configure(|c| {
+        c.subscription_gate = Some(Gate::closed());
+        c.rollback_gate = Some(rollback.clone());
+    });
+    let connection = open(&state).await;
+    let subscribing = tokio::spawn({
+        let connection = Arc::clone(&connection);
+        async move { tokio::time::timeout(Duration::from_millis(100), connection.subscribe()).await }
+    });
+    settle().await;
+    assert!(state.routing.load(Ordering::SeqCst));
+
+    advance(Duration::from_millis(100)).await;
+    settle().await;
+    assert!(subscribing.await.unwrap().is_err());
+
+    let closing = tokio::spawn({
+        let connection = Arc::clone(&connection);
+        async move { connection.close().await }
+    });
+    settle().await;
+    assert!(
+        !closing.is_finished(),
+        "close must wait for the in-flight subscription rollback"
+    );
+    assert!(!state.closed.load(Ordering::SeqCst));
+
+    rollback.open();
+    closing.await.unwrap().expect("close");
+    assert!(!state.routing.load(Ordering::SeqCst));
+    assert_eq!(GattSubscription::Disabled, *state.remote.lock().unwrap());
+    assert!(state.closed.load(Ordering::SeqCst));
+}
+
+struct FixedGattTransport {
+    sim: Arc<SimulatedTransport>,
+    state: Arc<FakeState>,
+}
+
+#[async_trait]
+impl ControlTransport for FixedGattTransport {
+    async fn open_gatt(&self, _headset: &HeadsetId) -> Result<Box<dyn GattDriver>, TransportError> {
+        Ok(self.state.driver())
+    }
+
+    async fn start_scan(&self) -> Result<Box<dyn ScanDriver>, TransportError> {
+        self.sim.start_scan().await
+    }
+
+    fn audio_facts(&self) -> Arc<dyn AudioFactsDriver> {
+        self.sim.audio_facts()
+    }
+}
+
+fn i5_services() -> Vec<GattService> {
+    let gatt = openrose_headset::ModelProfile::I5Zt.gatt();
+    vec![GattService {
+        uuid: gatt.service_uuid,
+        characteristics: vec![
+            characteristic(1, &gatt.write_uuid, true, false),
+            characteristic(2, &gatt.notify_uuid, false, true),
+        ],
+    }]
+}
+
+#[tokio::test(start_paused = true)]
+async fn connect_deadline_during_subscription_rolls_back_remote_and_local_delivery() {
+    let sim = Arc::new(SimulatedTransport::new());
+    add_i5(&sim, A);
+    let state = FakeState::new();
+    state.configure(|c| {
+        c.discovered_services = i5_services();
+        c.subscription_gate = Some(Gate::closed());
+    });
+    let transport = Arc::new(FixedGattTransport {
+        sim,
+        state: Arc::clone(&state),
+    });
+    let timing = SessionTiming {
+        connect_timeout: Duration::from_millis(100),
+        ..SessionTiming::default()
+    };
+    let (runtime, _) = runtime_timed(transport, available(), timing);
+    settle().await;
+
+    let connecting = tokio::spawn({
+        let runtime = Arc::clone(&runtime);
+        async move { runtime.connect(id(A)).await }
+    });
+    settle().await;
+    assert!(state.routing.load(Ordering::SeqCst));
+
+    elapse(100).await;
+    let error = connecting
+        .await
+        .unwrap()
+        .expect_err("connect deadline should expire during subscription");
+    assert_eq!(ControlErrorCode::Timeout, error.code);
+    assert!(!state.routing.load(Ordering::SeqCst));
+    assert_eq!(GattSubscription::Disabled, *state.remote.lock().unwrap());
+    assert!(state.closed.load(Ordering::SeqCst));
+}
+
+#[tokio::test(start_paused = true)]
+async fn disconnect_during_subscription_rolls_back_remote_and_local_delivery() {
+    let sim = Arc::new(SimulatedTransport::new());
+    add_i5(&sim, A);
+    let state = FakeState::new();
+    state.configure(|c| {
+        c.discovered_services = i5_services();
+        c.subscription_gate = Some(Gate::closed());
+    });
+    let transport = Arc::new(FixedGattTransport {
+        sim,
+        state: Arc::clone(&state),
+    });
+    let (runtime, _) = runtime_timed(transport, available(), SessionTiming::default());
+    settle().await;
+
+    let connecting = tokio::spawn({
+        let runtime = Arc::clone(&runtime);
+        async move { runtime.connect(id(A)).await }
+    });
+    settle().await;
+    assert!(state.routing.load(Ordering::SeqCst));
+
+    assert!(runtime.disconnect().await);
+    settle().await;
+    let error = connecting
+        .await
+        .unwrap()
+        .expect_err("disconnect should abort subscription");
+    assert_eq!(ControlErrorCode::Disconnected, error.code);
+    assert!(!state.routing.load(Ordering::SeqCst));
+    assert_eq!(GattSubscription::Disabled, *state.remote.lock().unwrap());
+    assert!(state.closed.load(Ordering::SeqCst));
 }

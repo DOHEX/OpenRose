@@ -1,12 +1,22 @@
 mod support;
 
-use openrose_control::gatt::{GattError, GattEvent, GattFailureKind};
+use async_trait::async_trait;
+use openrose_control::audio::AudioFactsDriver;
+use openrose_control::gatt::{GattDriver, GattError, GattEvent, GattFailureKind};
+use openrose_control::scan::ScanDriver;
+use openrose_control::selection::TransportEndpoint;
 use openrose_control::simulator::{SimulatedHeadsetHandle, SimulatedTransport};
 use openrose_control::snapshot::{ConnectionState, ControlSnapshot};
-use openrose_control::transport::TransportRecoveryReason;
+use openrose_control::spp::SppDriver;
+use openrose_control::transport::{
+    AudioProfileEvidence, ControlTransport, TransportError, TransportFacts, TransportRecoveryReason,
+};
 use openrose_control::{ControlErrorCode, ControlObserver, ControlRuntime, SessionTiming};
-use openrose_headset::{FieldReading, HeadsetCommand, HeadsetField, NoiseMode};
-use std::sync::Arc;
+use openrose_headset::{
+    FieldReading, FirmwareVersion, HeadsetCommand, HeadsetField, HeadsetId, ModelProfile, NoiseMode,
+};
+use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 use support::faults::{FaultyTransport, LinkFaults};
 use support::scripted::{A, add_i5, id, runtime_timed};
@@ -524,4 +534,142 @@ async fn a_disconnect_during_recovery_cancels_the_reconnect_until_the_user_conne
         .await
         .expect("the user connects again");
     assert_eq!(3, rig.transport.opens());
+}
+
+struct RecoverableSppTransport {
+    sim: Arc<SimulatedTransport>,
+    fail_spp: bool,
+    gatt_opens: AtomicUsize,
+    spp_opens: AtomicUsize,
+    endpoints: Mutex<Vec<TransportEndpoint>>,
+}
+
+#[async_trait]
+impl ControlTransport for RecoverableSppTransport {
+    async fn open_gatt(&self, headset: &HeadsetId) -> Result<Box<dyn GattDriver>, TransportError> {
+        self.gatt_opens.fetch_add(1, Ordering::SeqCst);
+        self.sim.open_gatt(headset).await
+    }
+
+    async fn open_spp(
+        &self,
+        headset: &HeadsetId,
+        address: &str,
+        service_uuid: &str,
+    ) -> Result<Box<dyn SppDriver>, TransportError> {
+        self.spp_opens.fetch_add(1, Ordering::SeqCst);
+        self.endpoints
+            .lock()
+            .unwrap()
+            .push(TransportEndpoint::SppRfcomm {
+                address: address.to_string(),
+                service_uuid: service_uuid.to_string(),
+            });
+        if self.fail_spp {
+            return Err(TransportError::Recoverable {
+                reason: TransportRecoveryReason::Subscription,
+                message: "synthetic SPP recoverable failure".to_string(),
+            });
+        }
+        self.sim.open_spp(headset, address, service_uuid).await
+    }
+
+    async fn connection_facts(
+        &self,
+        headset: &HeadsetId,
+        classic_address: &str,
+    ) -> Result<TransportFacts, TransportError> {
+        self.sim.connection_facts(headset, classic_address).await
+    }
+
+    async fn start_scan(&self) -> Result<Box<dyn ScanDriver>, TransportError> {
+        self.sim.start_scan().await
+    }
+
+    fn audio_facts(&self) -> Arc<dyn AudioFactsDriver> {
+        self.sim.audio_facts()
+    }
+
+    fn supports_initialization_recovery(&self) -> bool {
+        true
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn adapter_recovery_support_does_not_retry_or_switch_an_spp_endpoint() {
+    const CLASSIC: &str = "A1:B2:C3:D4:E5:F6";
+    const SPP_UUID: &str = "0cf12d31-fac3-4553-bd80-d6832e7b3931";
+
+    let sim = Arc::new(SimulatedTransport::new());
+    let headset = sim
+        .add_headset(
+            id(CLASSIC),
+            ModelProfile::I7RsV2,
+            FirmwareVersion::new(vec![1, 0, 0], "1.0.0"),
+        )
+        .expect("i7 headset");
+    headset.set_classic_address(Some(CLASSIC));
+    headset.set_connection_facts(TransportFacts {
+        spp_available: true,
+        audio_profile: AudioProfileEvidence::Classic,
+    });
+    let transport = Arc::new(RecoverableSppTransport {
+        sim,
+        fail_spp: true,
+        gatt_opens: AtomicUsize::new(0),
+        spp_opens: AtomicUsize::new(0),
+        endpoints: Mutex::new(Vec::new()),
+    });
+    let (runtime, _) = runtime_timed(transport.clone(), available(), timing(20));
+    runtime.refresh_bonded_headsets().await;
+
+    let error = error_of(runtime.connect(id(CLASSIC)).await);
+    assert_eq!(ControlErrorCode::Disconnected, error.code);
+    assert_eq!(1, transport.spp_opens.load(Ordering::SeqCst));
+    assert_eq!(0, transport.gatt_opens.load(Ordering::SeqCst));
+    assert_eq!(
+        vec![TransportEndpoint::SppRfcomm {
+            address: CLASSIC.to_string(),
+            service_uuid: SPP_UUID.to_string(),
+        }],
+        *transport.endpoints.lock().unwrap()
+    );
+    assert_eq!(None, recovery_reason(&runtime.snapshot()));
+
+    let silent_sim = Arc::new(SimulatedTransport::new());
+    let silent_headset = silent_sim
+        .add_headset(
+            id(CLASSIC),
+            ModelProfile::I7RsV2,
+            FirmwareVersion::new(vec![1, 0, 0], "1.0.0"),
+        )
+        .expect("i7 headset");
+    silent_headset.set_classic_address(Some(CLASSIC));
+    silent_headset.set_connection_facts(TransportFacts {
+        spp_available: true,
+        audio_profile: AudioProfileEvidence::Classic,
+    });
+    silent_headset.mute(true);
+    let silent_transport = Arc::new(RecoverableSppTransport {
+        sim: silent_sim,
+        fail_spp: false,
+        gatt_opens: AtomicUsize::new(0),
+        spp_opens: AtomicUsize::new(0),
+        endpoints: Mutex::new(Vec::new()),
+    });
+    let (silent_runtime, _) = runtime_timed(silent_transport.clone(), available(), timing(20));
+    silent_runtime.refresh_bonded_headsets().await;
+
+    let timeout_error = error_of(silent_runtime.connect(id(CLASSIC)).await);
+    assert_eq!(ControlErrorCode::Timeout, timeout_error.code);
+    assert_eq!(1, silent_transport.spp_opens.load(Ordering::SeqCst));
+    assert_eq!(0, silent_transport.gatt_opens.load(Ordering::SeqCst));
+    assert_eq!(
+        vec![TransportEndpoint::SppRfcomm {
+            address: CLASSIC.to_string(),
+            service_uuid: SPP_UUID.to_string(),
+        }],
+        silent_headset.endpoints()
+    );
+    assert_eq!(None, recovery_reason(&silent_runtime.snapshot()));
 }

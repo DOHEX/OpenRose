@@ -1,11 +1,21 @@
 mod support;
 
+use async_trait::async_trait;
 use openrose_control::ControlErrorCode;
-use openrose_control::snapshot::{ConnectionPhase, ConnectionState};
+use openrose_control::audio::{AudioEvents, AudioFactsDriver, RawAudioDevice, RawAudioSnapshot};
+use openrose_control::gatt::GattDriver;
+use openrose_control::scan::{Advertisement, ScanDriver};
+use openrose_control::simulator::SimulatedTransport;
+use openrose_control::snapshot::{ConnectionPhase, ConnectionState, ScanState};
+use openrose_control::transport::{ControlTransport, TransportError};
+use openrose_headset::HeadsetId;
+use std::collections::BTreeMap;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
-use support::scripted::{A, add_i5, id, simulated};
+use support::scripted::{A, ScriptedTransport, add_i5, id, runtime_over, simulated};
 use support::{Harness, Options, available, elapse, settle};
+use tokio::sync::watch;
 
 fn is_connected(snapshot: &openrose_control::snapshot::ControlSnapshot) -> bool {
     matches!(snapshot.connection, ConnectionState::Connected { .. })
@@ -123,4 +133,235 @@ async fn a_failed_old_add_flow_never_unbinds_the_newer_audio_session_of_the_same
     settle().await;
     assert_eq!(ConnectionState::Disconnected, runtime.snapshot().connection);
     assert!(!headset.link_open());
+}
+
+#[tokio::test(start_paused = true)]
+async fn replaced_add_completion_keeps_new_audio_session_bound_to_audio_disconnect() {
+    let (transport, runtime, _) = simulated(available());
+    let headset = add_i5(&transport, A);
+    headset.open_delay(Duration::from_millis(500));
+    settle().await;
+
+    let mut adding = Box::pin(runtime.connect_for_add_headset(id(A)));
+    let waker = std::task::Waker::noop();
+    let mut context = std::task::Context::from_waker(waker);
+    assert!(adding.as_mut().poll(&mut context).is_pending());
+    settle().await;
+    assert!(adding.as_mut().poll(&mut context).is_pending());
+    assert!(matches!(
+        runtime.snapshot().connection,
+        ConnectionState::Connecting { .. }
+    ));
+
+    elapse(1_000).await;
+    let original = runtime.snapshot().connection;
+    let ConnectionState::Connected {
+        session_id: original_id,
+        ..
+    } = original
+    else {
+        panic!("original add session should be connected before resuming add completion");
+    };
+
+    assert!(runtime.disconnect().await);
+    assert!(!headset.link_open());
+    headset.open_delay(Duration::ZERO);
+    transport.set_audio_connected(Some(id(A)));
+    settle().await;
+    let replacement = runtime.snapshot().connection;
+    let ConnectionState::Connected {
+        session_id: replacement_id,
+        ..
+    } = replacement
+    else {
+        panic!("replacement audio session should be connected");
+    };
+    assert!(replacement_id > original_id);
+    assert_eq!(2, headset.connections_opened());
+
+    let error = adding.await.expect_err("replaced add completion must fail");
+    assert_eq!(ControlErrorCode::Disconnected, error.code);
+    assert_eq!("本次连接已被替换", error.message);
+    assert_eq!(replacement, runtime.snapshot().connection);
+
+    transport.set_audio_connected(None);
+    settle().await;
+    assert_eq!(ConnectionState::Disconnected, runtime.snapshot().connection);
+    assert!(!headset.link_open());
+}
+
+struct GateBondedAudio {
+    inner: Arc<dyn AudioFactsDriver>,
+    open: watch::Receiver<bool>,
+}
+
+#[async_trait]
+impl AudioFactsDriver for GateBondedAudio {
+    async fn subscribe(&self) -> Box<dyn AudioEvents> {
+        self.inner.subscribe().await
+    }
+
+    async fn bonded_devices(&self) -> Result<Vec<RawAudioDevice>, TransportError> {
+        let _ = self.open.clone().wait_for(|open| *open).await;
+        self.inner.bonded_devices().await
+    }
+
+    async fn snapshot(&self, target_addresses: &[String]) -> RawAudioSnapshot {
+        self.inner.snapshot(target_addresses).await
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn cancelling_the_add_flow_during_candidate_lookup_prevents_any_link_from_opening() {
+    let sim = Arc::new(SimulatedTransport::new());
+    let (gate, open) = watch::channel(true);
+    let audio = Arc::new(GateBondedAudio {
+        inner: sim.audio_facts(),
+        open,
+    });
+    let transport = ScriptedTransport::new(Arc::clone(&sim), audio);
+    let (runtime, _) = runtime_over(transport, available());
+    settle().await;
+
+    gate.send_replace(false);
+    let headset = add_i5(&sim, A);
+    let adding = tokio::spawn({
+        let runtime = Arc::clone(&runtime);
+        async move { runtime.connect_for_add_headset(id(A)).await }
+    });
+    settle().await;
+    assert!(!adding.is_finished());
+    assert_eq!(0, headset.connections_opened());
+
+    runtime.cancel_add_headset().await;
+    settle().await;
+    assert!(
+        adding.is_finished(),
+        "cancel_add_headset must stop an add flow waiting in candidate lookup"
+    );
+    assert_eq!(
+        ControlErrorCode::Disconnected,
+        adding
+            .await
+            .unwrap()
+            .expect_err("cancelled during lookup")
+            .code
+    );
+
+    gate.send_replace(true);
+    settle().await;
+    elapse(1_000).await;
+
+    assert_eq!(0, headset.connections_opened());
+    assert!(!headset.link_open());
+    assert_eq!(ConnectionState::Disconnected, runtime.snapshot().connection);
+    assert_eq!(None, runtime.snapshot().last_error);
+
+    runtime
+        .connect_for_add_headset(id(A))
+        .await
+        .expect("a later add flow can still connect");
+    assert!(is_connected(&runtime.snapshot()));
+}
+
+struct GatedStopScan {
+    inner: Box<dyn ScanDriver>,
+    stop_started: Arc<AtomicBool>,
+    stop_gate: watch::Receiver<bool>,
+}
+
+#[async_trait]
+impl ScanDriver for GatedStopScan {
+    async fn next_advertisement(&self) -> Result<Option<Advertisement>, TransportError> {
+        self.inner.next_advertisement().await
+    }
+
+    async fn stop(&self) {
+        self.stop_started.store(true, Ordering::SeqCst);
+        let _ = self.stop_gate.clone().wait_for(|open| *open).await;
+        self.inner.stop().await;
+    }
+}
+
+struct GatedStopScanTransport {
+    sim: Arc<SimulatedTransport>,
+    stop_started: Arc<AtomicBool>,
+    stop_gate: watch::Receiver<bool>,
+}
+
+#[async_trait]
+impl ControlTransport for GatedStopScanTransport {
+    async fn open_gatt(&self, headset: &HeadsetId) -> Result<Box<dyn GattDriver>, TransportError> {
+        self.sim.open_gatt(headset).await
+    }
+
+    async fn start_scan(&self) -> Result<Box<dyn ScanDriver>, TransportError> {
+        let inner = self.sim.start_scan().await?;
+        Ok(Box::new(GatedStopScan {
+            inner,
+            stop_started: Arc::clone(&self.stop_started),
+            stop_gate: self.stop_gate.clone(),
+        }))
+    }
+
+    fn audio_facts(&self) -> Arc<dyn AudioFactsDriver> {
+        self.sim.audio_facts()
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn cancelling_the_add_flow_during_scan_stop_prevents_any_link_from_opening() {
+    let sim = Arc::new(SimulatedTransport::new());
+    let headset = add_i5(&sim, A);
+    sim.audio().unpair(A);
+    let stop_started = Arc::new(AtomicBool::new(false));
+    let (release_stop, stop_gate) = watch::channel(false);
+    let transport = Arc::new(GatedStopScanTransport {
+        sim: Arc::clone(&sim),
+        stop_started: Arc::clone(&stop_started),
+        stop_gate,
+    });
+    let (runtime, _) = runtime_over(transport, available());
+    settle().await;
+
+    runtime.start_scan().await.expect("scan started");
+    sim.scan().advertise(Advertisement {
+        manufacturer_data: BTreeMap::from([(0x5352, vec![0x00, 0x01, 0x00, 0x01])]),
+        ..Advertisement::new(id(A))
+    });
+    settle().await;
+
+    let adding = tokio::spawn({
+        let runtime = Arc::clone(&runtime);
+        async move { runtime.connect_for_add_headset(id(A)).await }
+    });
+    settle().await;
+    assert!(stop_started.load(Ordering::SeqCst));
+    assert!(!adding.is_finished());
+    assert_eq!(0, headset.connections_opened());
+
+    runtime.cancel_add_headset().await;
+    settle().await;
+    assert!(
+        adding.is_finished(),
+        "cancel_add_headset must stop an add flow waiting in scan stop"
+    );
+    assert_eq!(
+        ControlErrorCode::Disconnected,
+        adding
+            .await
+            .unwrap()
+            .expect_err("cancelled during scan stop")
+            .code
+    );
+
+    let _ = release_stop.send(true);
+    settle().await;
+    elapse(1_000).await;
+
+    assert_eq!(0, headset.connections_opened());
+    assert!(!headset.link_open());
+    assert_eq!(ConnectionState::Disconnected, runtime.snapshot().connection);
+    assert_eq!(ScanState::Idle, runtime.snapshot().scan);
+    assert_eq!(None, runtime.snapshot().last_error);
 }

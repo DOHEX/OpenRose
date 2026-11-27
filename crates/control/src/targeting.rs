@@ -4,6 +4,7 @@ use crate::link::AttemptRequest;
 use crate::snapshot::{ConnectionState, HeadsetCandidate, SessionReference};
 use openrose_headset::HeadsetId;
 use std::sync::{Arc, Mutex};
+use tokio_util::sync::CancellationToken;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Origin {
@@ -23,6 +24,7 @@ struct Intent {
     epoch: u64,
     headset: Option<HeadsetId>,
     pinned: Option<HeadsetId>,
+    add_cancel: CancellationToken,
 }
 
 #[derive(Default)]
@@ -44,13 +46,28 @@ impl Targeting {
         intent.epoch
     }
 
-    fn begin(&self, headset: &HeadsetId, pin: Pin) -> u64 {
-        let epoch = self.intend(headset);
+    fn begin(
+        &self,
+        headset: &HeadsetId,
+        origin: Origin,
+        pin: Pin,
+    ) -> (u64, Option<CancellationToken>) {
         let mut intent = self.intent();
+        if intent.headset.as_ref() != Some(headset) {
+            intent.epoch += 1;
+            intent.headset = Some(headset.clone());
+        }
         if pin == Pin::Force || intent.pinned.is_some() {
             intent.pinned = Some(headset.clone());
         }
-        epoch
+        let cancel = (origin == Origin::AddHeadset).then(|| intent.add_cancel.clone());
+        (intent.epoch, cancel)
+    }
+
+    fn cancel_add(&self) {
+        let mut intent = self.intent();
+        let previous = std::mem::replace(&mut intent.add_cancel, CancellationToken::new());
+        previous.cancel();
     }
 
     pub(crate) fn reset(&self) {
@@ -82,6 +99,15 @@ pub(crate) struct Request {
     epoch: u64,
     headset: HeadsetId,
     origin: Origin,
+    cancel: Option<CancellationToken>,
+}
+
+impl Request {
+    fn is_cancelled(&self) -> bool {
+        self.cancel
+            .as_ref()
+            .is_some_and(CancellationToken::is_cancelled)
+    }
 }
 
 pub(crate) fn superseded_error() -> ControlError {
@@ -90,7 +116,7 @@ pub(crate) fn superseded_error() -> ControlError {
 
 impl Core {
     pub(crate) fn begin_explicit(&self, headset: &HeadsetId, origin: Origin, pin: Pin) -> Request {
-        let epoch = self.targeting.begin(headset, pin);
+        let (epoch, cancel) = self.targeting.begin(headset, origin, pin);
         let target = self
             .state
             .read(|snapshot| snapshot.known_candidate(headset))
@@ -101,10 +127,14 @@ impl Core {
             epoch,
             headset: headset.clone(),
             origin,
+            cancel,
         }
     }
 
     fn superseded(&self, request: &Request, headset: Option<&HeadsetId>) -> bool {
+        if request.is_cancelled() {
+            return true;
+        }
         let audio_driven = request.origin == Origin::Audio;
         self.targeting
             .superseded(request.epoch, audio_driven, headset)
@@ -114,14 +144,40 @@ impl Core {
                     .read(|snapshot| snapshot.audio_headset_id.as_ref() != Some(&request.headset)))
     }
 
+    async fn guarded_add<T>(
+        &self,
+        request: &Request,
+        operation: impl Future<Output = T>,
+    ) -> Result<T, ControlError> {
+        match &request.cancel {
+            Some(cancel) => tokio::select! {
+                biased;
+                _ = cancel.cancelled() => Err(superseded_error()),
+                value = operation => Ok(value),
+            },
+            None => Ok(operation.await),
+        }
+    }
+
     pub(crate) async fn connect_requested(self: &Arc<Self>, request: Request) -> ControlResult {
+        let origin = request.origin;
+        let attempt = self.start_requested(request).await?;
+        self.finish_connect(&attempt, origin).await
+    }
+
+    pub(crate) async fn start_requested(
+        self: &Arc<Self>,
+        request: Request,
+    ) -> Result<Arc<Attempt>, ControlError> {
         if self.superseded(&request, None) {
             return Err(superseded_error());
         }
         if let Some(error) = self.state.read(platform_error) {
-            return self.reject(error);
+            return Err(self.reject(error).unwrap_err());
         }
-        let candidate = self.find_candidate(&request.headset).await;
+        let candidate = self
+            .guarded_add(&request, self.find_candidate(&request.headset))
+            .await?;
         if self.superseded(&request, None) {
             return Err(superseded_error());
         }
@@ -138,28 +194,37 @@ impl Core {
         let Some((candidate, profile)) =
             candidate.and_then(|candidate| candidate.profile.map(|profile| (candidate, profile)))
         else {
-            return self.reject(ControlError::new(
-                ControlErrorCode::Unsupported,
-                "没有受支持的型号识别证据",
-            ));
+            return Err(self
+                .reject(ControlError::new(
+                    ControlErrorCode::Unsupported,
+                    "没有受支持的型号识别证据",
+                ))
+                .unwrap_err());
         };
-        self.stop_scan().await;
+        if request.cancel.is_some() {
+            let core = Arc::clone(self);
+            let stop = tokio::spawn(async move { core.stop_scan().await });
+            self.guarded_add(&request, async move {
+                let _ = stop.await;
+            })
+            .await?;
+        } else {
+            self.stop_scan().await;
+        }
         if self.superseded(&request, None) {
             return Err(superseded_error());
         }
         let id = candidate.id.clone();
-        let attempt = self
-            .begin_attempt(AttemptRequest {
-                candidate,
-                profile,
-                origin: request.origin,
-                superseded: &|| self.superseded(&request, Some(&id)),
-            })
-            .await?;
-        self.finish_connect(&attempt, request.origin).await
+        self.begin_attempt(AttemptRequest {
+            candidate,
+            profile,
+            origin: request.origin,
+            superseded: &|| self.superseded(&request, Some(&id)),
+        })
+        .await
     }
 
-    async fn finish_connect(&self, attempt: &Arc<Attempt>, origin: Origin) -> ControlResult {
+    pub(crate) async fn finish_connect(&self, attempt: &Arc<Attempt>, origin: Origin) -> ControlResult {
         let outcome = attempt.wait().await;
         if origin != Origin::AddHeadset || outcome.is_err() {
             return outcome;
@@ -185,6 +250,7 @@ impl Core {
 
     pub(crate) async fn cancel_add_headset(&self) {
         let mut inner = self.lifecycle.lock().await;
+        self.targeting.cancel_add();
         let owned = inner
             .active
             .as_ref()
@@ -242,6 +308,7 @@ impl Core {
             epoch: self.targeting.intend(&audio),
             headset: audio.clone(),
             origin: Origin::Audio,
+            cancel: None,
         };
         let candidate = self.find_candidate(&audio).await;
         if self.superseded(&lookup, None)
@@ -258,6 +325,7 @@ impl Core {
                 epoch: self.targeting.intend(&audio),
                 headset: audio,
                 origin: Origin::Audio,
+                cancel: None,
             };
             let core = Arc::clone(self);
             tokio::spawn(async move { core.connect_requested(request).await });
