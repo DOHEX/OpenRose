@@ -21,6 +21,15 @@ status: accepted
 - **桌面平台层**：桌面平台代码用 Rust 写，与核心同进程运行，按职责分为 `bluetooth`（GATT、SPP、已配对耳机、音频连接事实）、`audio`（流转时让出或接入本机音频、打开声音设置）与 `discovery`（mDNS），每块再按 `target_os` 分为三个平台。蓝牙方面，Linux 用 bluer 与 zbus，Windows 用 windows-rs 调 WinRT，macOS 用 objc2 调 CoreBluetooth 与 IOBluetooth；Windows 不再启动 `openrose-winrt.exe` 子进程。Android 的平台实现仍用 Kotlin，实现核心定义的 trait。
 - **Android 系统模块**：系统模块在 `com.android.bluetooth` 内加载 Rust cdylib。ART 不允许另一个 ClassLoader 再次加载同一个 `.so`，libxposed 也不卸载旧代的原生代码，因此系统模块不再支持 LSPosed 热重载，`onHotReloading` 拒绝重载；更新时用 [ADR 0025](0025-integration-scope-root-restart.md) 的作用域重启。绑定先用 UniFFI 默认的 JNA，官方 JNI 绑定正式发布后再评估。Rust 侧保持 `panic = "unwind"`，panic 不能越过 FFI 结束系统蓝牙进程。
   - **切换门槛**：Android 切换前，在小米 14 上由系统模块把 `libopenrose_ffi.so` 与 `libjnidispatch.so` 加载进 `com.android.bluetooth`，完成一次 i5 连接与读数，且 SELinux 与 linker 没有拒绝。失败时控制会话移到应用进程，模块只转发 GATT／SPP 原语，并重开 ADR 0011。
+- **Android 驱动适配层的约定**（`:platform:android:ffi`、`:platform:android:system-module`）：
+  - **枚举名称契约**：Kotlin 与 Rust 的枚举一律经 `EnumNames` 按名称（忽略 `_`）一一对应，包内不手写 `when`：`GattFailureKind`、`GattSubscription`、`AudioProfile`、`AudioConnectionState`、`ModelProfile`、`DeviceField`、`DeviceSetting`、`ControlErrorCode` 等。任一侧改名、增删枚举项，`EnumNames.of` 在映射该值时抛 `NoSuchElementException`；驱动方向的全部枚举项由 `KotlinCoreTransportTest.everyPlatformEnumEntryCrossesTheBoundaryUnderItsOwnName` 覆盖。
+  - **`REGISTRATION_TIMEOUT_MILLIS` 与 `runBlocking`**：UniFFI 的 `AudioFactsDriver.subscribe` 是同步的外部 trait 方法（异步工厂方法触发 rustc HRTB 缺陷），而核心要求它返回时接收器已经注册。`KotlinCoreAudioFacts.subscribe` 因此在 `runBlocking` 内最多等 `REGISTRATION_TIMEOUT_MILLIS`（5 秒）驱动发出 `RawAudioEvent.Ready`；超时不报错，订阅照常继续，只是不再保证先注册后返回。
+  - **`ENDS_BEFORE_CLOSE`**：`CoreControlRuntime` 要等两件事各发生一次才关闭 `RustControlRuntime` 与传输：所有者作用域结束，以及 `release()` 成功释放连接，所以 `ClosingBarrier.ENDS_BEFORE_CLOSE = 2`；两件事谁先谁后都可以，`release()` 只计一次。
+  - **`@Suppress` 的理由**：
+    - `TooGenericExceptionCaught`：`pumpInto`（`FlowPump.kt`，GATT、扫描、SPP 与音频事实四个驱动共用）把平台 Flow 中抛出的任何 `Exception` 变成通道关闭或断开事件，`CancellationException` 原样重抛，驱动协程的异常因此不会越过 FFI；`NativeCoreTrial.start` 捕获 `RuntimeException`：试用路径上任何启动失败都只记录一次，不能结束 `com.android.bluetooth`。
+    - `CyclomaticComplexMethod`：`HeadsetCommand.toRust`（`CoreInputs.kt`）为每个 Kotlin `HeadsetCommand` 子类型写一个分支。
+
+    `CoreInputs` 与 `ControlStateProjection` 随 #172 和 #169 删除，`CyclomaticComplexMethod` 一条随之失效；`pumpInto` 与 `NativeCoreTrial.start` 的理由不受影响。
 - **macOS 设备身份**：CoreBluetooth 只提供本机 UUID，不提供地址。不使用私有接口 `retrieveAddressForPeripheral:`，改用广播前缀与名称规则（[ADR 0032](0032-roselink-firmware-advertisement-and-name-rules.md)）把 BLE 外设对应到已配对的音频设备；协议没有可读出的唯一标识。同一台 Mac 配对了多副同型号同名的耳机时，连接前无法区分：优先有系统音频连接的一副；仍不能确定时由用户选择，不猜。
 - **桌面界面**：使用 NSH 混合模式。界面用 TSX 写，Rust nshm 适配层把核心状态转成 signal；核心 crate 不依赖 NSH。
   - 桌面端用自己固定的一套设计，不提供界面风格，明暗跟随系统。

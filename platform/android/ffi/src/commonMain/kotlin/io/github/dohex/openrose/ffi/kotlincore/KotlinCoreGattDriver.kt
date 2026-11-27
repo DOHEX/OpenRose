@@ -1,6 +1,5 @@
 package io.github.dohex.openrose.ffi.kotlincore
 
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
@@ -22,23 +21,50 @@ import io.github.dohex.openrose.core.transport.GattFailureKind as KotlinGattFail
 import io.github.dohex.openrose.core.transport.GattService as KotlinGattService
 import io.github.dohex.openrose.core.transport.GattSubscription as KotlinGattSubscription
 
-private class CharacteristicTable(
-    val byId: Map<ULong, KotlinGattCharacteristic>,
-    val ids: IdentityHashMap<KotlinGattCharacteristic, ULong>,
-)
+private class CharacteristicTable(services: List<KotlinGattService>) {
+    val byId = LinkedHashMap<ULong, KotlinGattCharacteristic>()
+    val ids = IdentityHashMap<KotlinGattCharacteristic, ULong>()
+    val published: List<GattService> = services.map { service ->
+        GattService(
+            service.uuid,
+            service.characteristics.map { characteristic ->
+                val id = ids[characteristic] ?: (ids.size + 1).toULong().also {
+                    ids[characteristic] = it
+                    byId[it] = characteristic
+                }
+                GattCharacteristic(
+                    id,
+                    characteristic.uuid,
+                    characteristic.canWrite,
+                    characteristic.canWriteWithoutResponse,
+                    characteristic.canNotify,
+                    characteristic.canIndicate,
+                )
+            },
+        )
+    }
+}
 
-@Suppress("TooManyFunctions")
 internal class KotlinCoreGattDriver(private val driver: KotlinGattDriver, scope: CoroutineScope) : GattDriver {
     private val incoming = Channel<GattEvent>(Channel.UNLIMITED)
-    private val pump: Job = scope.launch { pumpEvents() }
 
-    @Volatile private var table = CharacteristicTable(emptyMap(), IdentityHashMap())
+    @Volatile private var table = CharacteristicTable(emptyList())
+
+    private val pump: Job = scope.launch {
+        driver.events.pumpInto(incoming, onFailure = { incoming.send(GattEvent.Disconnected(it.toGattError())) }) { event ->
+            event.toRust(table)?.let { incoming.send(it) }
+        }
+    }
 
     override suspend fun nextEvent(): GattEvent? = incoming.receiveCatching().getOrNull()
 
     override suspend fun connect() = guarded { driver.connect() }
 
-    override suspend fun discoverServices(): List<GattService> = publish(guarded { driver.discoverServices() })
+    override suspend fun discoverServices(): List<GattService> {
+        val discovered = CharacteristicTable(guarded { driver.discoverServices() })
+        table = discovered
+        return discovered.published
+    }
 
     override suspend fun requestMtu(preferred: UShort): UShort? = guarded { driver.requestMtu(preferred.toInt()) }?.toUShort()
 
@@ -60,54 +86,13 @@ internal class KotlinCoreGattDriver(private val driver: KotlinGattDriver, scope:
         incoming.close()
     }
 
-    @Suppress("TooGenericExceptionCaught")
-    private suspend fun pumpEvents() {
-        try {
-            driver.events.collect { event -> event.toRust(table)?.let { incoming.send(it) } }
-        } catch (cancelled: CancellationException) {
-            throw cancelled
-        } catch (failure: KotlinGattException) {
-            incoming.send(GattEvent.Disconnected(failure.toGattError()))
-        } catch (failure: Exception) {
-            incoming.send(GattEvent.Disconnected(GattError(GattFailureKind.UNKNOWN, failure.message.orEmpty())))
-        } finally {
-            incoming.close()
-        }
-    }
-
     private fun resolve(characteristic: GattCharacteristic): KotlinGattCharacteristic = table.byId[characteristic.instanceId]
         ?: throw DriverException.Gatt(GattFailureKind.UNSUPPORTED, "蓝牙特征不可用")
-
-    private fun publish(services: List<KotlinGattService>): List<GattService> {
-        val byId = LinkedHashMap<ULong, KotlinGattCharacteristic>()
-        val ids = IdentityHashMap<KotlinGattCharacteristic, ULong>()
-        val published = services.map { service ->
-            GattService(
-                service.uuid,
-                service.characteristics.map { characteristic ->
-                    val id = ids[characteristic] ?: (ids.size + 1).toULong().also {
-                        ids[characteristic] = it
-                        byId[it] = characteristic
-                    }
-                    GattCharacteristic(
-                        id,
-                        characteristic.uuid,
-                        characteristic.canWrite,
-                        characteristic.canWriteWithoutResponse,
-                        characteristic.canNotify,
-                        characteristic.canIndicate,
-                    )
-                },
-            )
-        }
-        table = CharacteristicTable(byId, ids)
-        return published
-    }
 
     private inline fun <T> guarded(block: () -> T): T = try {
         block()
     } catch (failure: KotlinGattException) {
-        throw DriverException.Gatt(failure.kind.toRust(), failure.message.orEmpty()).also { it.initCause(failure) }
+        throw DriverException.Gatt(failure.kind.toRust(), failure.message.orEmpty()).causedBy(failure)
     }
 }
 
@@ -117,19 +102,15 @@ private fun KotlinGattEvent.toRust(table: CharacteristicTable): GattEvent? = whe
     is KotlinGattEvent.Disconnected -> GattEvent.Disconnected(failure.toGattError())
 }
 
-private fun KotlinGattException.toGattError(): GattError = GattError(kind.toRust(), message.orEmpty())
-
-private fun KotlinGattFailureKind.toRust(): GattFailureKind = when (this) {
-    KotlinGattFailureKind.PERMISSION -> GattFailureKind.PERMISSION
-    KotlinGattFailureKind.UNSUPPORTED -> GattFailureKind.UNSUPPORTED
-    KotlinGattFailureKind.INVALID_VALUE -> GattFailureKind.INVALID_VALUE
-    KotlinGattFailureKind.DISCONNECTED -> GattFailureKind.DISCONNECTED
-    KotlinGattFailureKind.TRANSIENT -> GattFailureKind.TRANSIENT
-    KotlinGattFailureKind.UNKNOWN -> GattFailureKind.UNKNOWN
+private fun Throwable.toGattError(): GattError = when (this) {
+    is KotlinGattException -> GattError(kind.toRust(), message.orEmpty())
+    else -> GattError(GattFailureKind.UNKNOWN, message.orEmpty())
 }
 
-private fun GattSubscription.toKotlin(): KotlinGattSubscription = when (this) {
-    GattSubscription.DISABLED -> KotlinGattSubscription.DISABLED
-    GattSubscription.NOTIFY -> KotlinGattSubscription.NOTIFY
-    GattSubscription.INDICATE -> KotlinGattSubscription.INDICATE
-}
+private val gattFailureKinds = EnumNames(GattFailureKind.entries)
+
+private val kotlinGattSubscriptions = EnumNames(KotlinGattSubscription.entries)
+
+private fun KotlinGattFailureKind.toRust(): GattFailureKind = gattFailureKinds.of(this)
+
+private fun GattSubscription.toKotlin(): KotlinGattSubscription = kotlinGattSubscriptions.of(this)

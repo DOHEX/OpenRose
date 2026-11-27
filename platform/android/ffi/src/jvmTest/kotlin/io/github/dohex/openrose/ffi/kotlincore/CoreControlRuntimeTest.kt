@@ -94,7 +94,7 @@ class CoreControlRuntimeTest {
 
     @Test
     fun theKotlinStateFollowsTheSnapshotsTheCorePushes() = runBlocking<Unit> {
-        Rig().use { rig ->
+        rig().use { rig ->
             withRuntime(rig) { runtime, _ ->
                 assertEquals(OperationResult.Success, runtime.connect(DeviceId(ADDRESS)))
                 val state = runtime.state.eventually { it.connection is ConnectionState.Connected }
@@ -114,7 +114,7 @@ class CoreControlRuntimeTest {
 
     @Test
     fun aSettingIsConfirmedOnlyAfterTheHeadsetReadsBackTheValue() = runBlocking<Unit> {
-        Rig().use { rig ->
+        rig().use { rig ->
             withRuntime(rig) { runtime, _ ->
                 assertEquals(OperationResult.Success, runtime.connect(DeviceId(ADDRESS)))
                 val connected = runtime.state.eventually { it.connection is ConnectionState.Connected }
@@ -141,7 +141,7 @@ class CoreControlRuntimeTest {
 
     @Test
     fun aSettingForAnEndedSessionFailsWithTheCoreError() = runBlocking<Unit> {
-        Rig().use { rig ->
+        rig().use { rig ->
             withRuntime(rig) { runtime, _ ->
                 assertEquals(OperationResult.Success, runtime.connect(DeviceId(ADDRESS)))
                 val connected = runtime.state.eventually { it.connection is ConnectionState.Connected }
@@ -154,7 +154,7 @@ class CoreControlRuntimeTest {
 
     @Test
     fun platformAndSettingChangesReachTheCoreAndTheStateReflectsThem() = runBlocking<Unit> {
-        Rig().use { rig ->
+        rig().use { rig ->
             withRuntime(rig) { runtime, _ ->
                 runtime.updatePlatformState(kotlinPlatform(permission = PermissionState.DENIED))
                 val denied = runtime.state.eventually { it.platform.permission == PermissionState.DENIED }
@@ -172,7 +172,7 @@ class CoreControlRuntimeTest {
 
     @Test
     fun scanStateIsServedFromTheCore() = runBlocking<Unit> {
-        Rig().use { rig ->
+        rig().use { rig ->
             withRuntime(rig) { runtime, _ ->
                 assertEquals(OperationResult.Success, runtime.startScan())
                 runtime.state.eventually { it.scan == ScanState.Scanning }
@@ -184,23 +184,23 @@ class CoreControlRuntimeTest {
 
     @Test
     fun theCurrentHeadsetTheKotlinStateShowsIsTheOneTheCoreNames() = runBlocking<Unit> {
-        Rig().use { rig ->
+        rig().use { rig ->
             rig.audioConnected = false
             rig.pairedDevices.add(KotlinRawAudioDevice(modelDisplayName(RustModelProfile.I7_RS_V2), I7_ADDRESS, alias = null))
             withRuntime(rig) { runtime, rust ->
                 runtime.refreshBondedDevices()
                 var state = runtime.state.eventually { it.bondedHeadsets.size == 2 }
-                assertEquals(rust.snapshot().currentHeadset()?.id, state.currentHeadset?.deviceId?.value)
+                assertEquals(rust.handle.snapshot().currentHeadset()?.id, state.currentHeadset?.deviceId?.value)
                 assertEquals(DeviceId(ADDRESS), state.currentHeadset?.deviceId)
 
                 runtime.selectCurrentHeadset(DeviceId(I7_ADDRESS))
                 state = runtime.state.eventually { it.selectedHeadsetId == DeviceId(I7_ADDRESS) }
-                assertEquals(rust.snapshot().currentHeadset()?.id, state.currentHeadset?.deviceId?.value)
+                assertEquals(rust.handle.snapshot().currentHeadset()?.id, state.currentHeadset?.deviceId?.value)
                 assertEquals(DeviceId(I7_ADDRESS), state.currentHeadset?.deviceId)
 
                 assertEquals(OperationResult.Success, runtime.connect(DeviceId(ADDRESS)))
                 state = runtime.state.eventually { it.connection is ConnectionState.Connected }
-                assertEquals(rust.snapshot().currentHeadset()?.id, state.currentHeadset?.deviceId?.value)
+                assertEquals(rust.handle.snapshot().currentHeadset()?.id, state.currentHeadset?.deviceId?.value)
                 assertEquals(DeviceId(ADDRESS), state.currentHeadset?.deviceId)
             }
         }
@@ -208,11 +208,11 @@ class CoreControlRuntimeTest {
 
     @Test
     fun theReadySessionAndSystemAudioFactsMatchTheCoreRules() = runBlocking<Unit> {
-        Rig().use { rig ->
+        rig().use { rig ->
             withRuntime(rig) { runtime, rust ->
                 assertEquals(OperationResult.Success, runtime.connect(DeviceId(ADDRESS)))
                 val state = runtime.state.eventually { it.connection is ConnectionState.Connected }
-                val snapshot = rust.snapshot()
+                val snapshot = rust.handle.snapshot()
                 assertEquals(snapshot.readySession()?.sessionId?.toLong(), state.readySession?.sessionId)
                 assertEquals(snapshot.sessionFor(RustHeadsetSetting.NOISE_MODE)?.sessionId?.toLong(), state.noiseModeSession?.sessionId)
                 assertEquals(snapshot.hasSystemAudio(), state.deviceHasSystemAudio)
@@ -222,11 +222,11 @@ class CoreControlRuntimeTest {
 
     @Test
     fun theConnectionBlockReasonAndReconnectGuidanceMatchTheCore() = runBlocking<Unit> {
-        Rig().use { rig ->
+        rig().use { rig ->
             withRuntime(rig) { runtime, rust ->
                 runtime.refreshBondedDevices()
                 var state = runtime.state.eventually { it.bondedHeadsets.isNotEmpty() }
-                var snapshot = rust.snapshot()
+                var snapshot = rust.handle.snapshot()
                 assertNull(snapshot.connectionBlockReason)
                 assertNull(state.connectionBlockReason)
                 assertEquals(snapshot.reconnectGuidance?.name?.replace("_", ""), state.reconnectGuidance?.name?.replace("_", ""))
@@ -234,7 +234,7 @@ class CoreControlRuntimeTest {
 
                 runtime.updatePlatformState(kotlinPlatform(transport = TransportAvailability.Disabled))
                 state = runtime.state.eventually { it.platform.transport == TransportAvailability.Disabled }
-                snapshot = rust.snapshot()
+                snapshot = rust.handle.snapshot()
                 assertEquals(RustBlockReason.BluetoothDisabled, snapshot.connectionBlockReason)
                 assertEquals(ConnectionBlockReason.BluetoothDisabled, state.connectionBlockReason)
             }
@@ -302,7 +302,7 @@ class CoreControlRuntimeTest {
 
     @Test
     fun theRuntimeAndItsTransportCloseOnceTheLinkIsReleasedAndTheOwnerScopeEnded() = runBlocking<Unit> {
-        Rig().use { rig ->
+        rig().use { rig ->
             val transport = ClosableTransport(KotlinCoreTransport(rig))
             val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
             val runtime = CoreControlRuntime(transport, kotlinPlatform(), scope = scope, timing = rig.timing(), clock = rig.clock())
@@ -317,7 +317,7 @@ class CoreControlRuntimeTest {
 
     @Test
     fun anOwnerScopeThatEndedFirstStillLetsTheRuntimeReleaseItsLinkBeforeClosing() = runBlocking<Unit> {
-        Rig().use { rig ->
+        rig().use { rig ->
             val transport = ClosableTransport(KotlinCoreTransport(rig))
             val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
             val runtime = CoreControlRuntime(transport, kotlinPlatform(), scope = scope, timing = rig.timing(), clock = rig.clock())

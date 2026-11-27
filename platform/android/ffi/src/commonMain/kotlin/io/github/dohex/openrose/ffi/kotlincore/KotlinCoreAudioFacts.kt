@@ -1,6 +1,5 @@
 package io.github.dohex.openrose.ffi.kotlincore
 
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -45,19 +44,13 @@ internal class KotlinCoreAudioFacts(private val source: KotlinAudioFactsDriver, 
 
     override suspend fun snapshot(targetAddresses: List<String>): RawAudioSnapshot? = source.snapshot(targetAddresses.toSet()).toRust()
 
-    @Suppress("TooGenericExceptionCaught")
     private suspend fun forward(registered: CompletableDeferred<Unit>, events: Channel<RawAudioEvent>) {
         try {
-            source.events.collect { event ->
+            source.events.pumpInto(events) { event ->
                 if (event == KotlinRawAudioEvent.Ready) registered.complete(Unit) else event.toRust()?.let { events.send(it) }
             }
-        } catch (cancelled: CancellationException) {
-            throw cancelled
-        } catch (_: Exception) {
-            events.close()
         } finally {
             registered.complete(Unit)
-            events.close()
         }
     }
 }
@@ -72,16 +65,13 @@ private fun KotlinRawAudioEvent.toRust(): RawAudioEvent? = when (this) {
 
 private fun KotlinRawAudioDevice.toRust(): RawAudioDevice = RawAudioDevice(name, address, alias)
 
-private fun KotlinAudioProfile.toRust(): AudioProfile = when (this) {
-    KotlinAudioProfile.A2DP -> AudioProfile.A2DP
-    KotlinAudioProfile.HEADSET -> AudioProfile.HEADSET
-    KotlinAudioProfile.LE_AUDIO -> AudioProfile.LE_AUDIO
-}
+private val audioProfiles = EnumNames(AudioProfile.entries)
 
-private fun KotlinAudioConnectionState.toRust(): AudioConnectionState = when (this) {
-    KotlinAudioConnectionState.CONNECTED -> AudioConnectionState.CONNECTED
-    KotlinAudioConnectionState.DISCONNECTED -> AudioConnectionState.DISCONNECTED
-}
+private val audioConnectionStates = EnumNames(AudioConnectionState.entries)
+
+private fun KotlinAudioProfile.toRust(): AudioProfile = audioProfiles.of(this)
+
+private fun KotlinAudioConnectionState.toRust(): AudioConnectionState = audioConnectionStates.of(this)
 
 private fun KotlinRawProfileSnapshot.toRust(): RawProfileSnapshot = RawProfileSnapshot(
     connectedAddresses,

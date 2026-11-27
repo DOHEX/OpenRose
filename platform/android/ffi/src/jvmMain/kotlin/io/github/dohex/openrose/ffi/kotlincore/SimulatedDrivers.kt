@@ -41,6 +41,7 @@ class SimulatedGatt internal constructor(profile: ModelProfile, private val devi
     val notifier = GattCharacteristic(gatt.notifyUuid, canNotify = true)
     val writes = CopyOnWriteArrayList<String>()
     val closes = CopyOnWriteArrayList<String>()
+    val subscriptions = CopyOnWriteArrayList<GattSubscription>()
 
     @Volatile var connectFailure: GattException? = null
 
@@ -62,6 +63,7 @@ class SimulatedGatt internal constructor(profile: ModelProfile, private val devi
 
     override suspend fun configureSubscription(characteristic: GattCharacteristic, subscription: GattSubscription) {
         check(characteristic === notifier)
+        subscriptions.add(subscription)
     }
 
     override suspend fun write(characteristic: GattCharacteristic, value: ByteArray, withResponse: Boolean) {

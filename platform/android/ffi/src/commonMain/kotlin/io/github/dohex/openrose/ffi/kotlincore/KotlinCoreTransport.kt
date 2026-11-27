@@ -11,7 +11,6 @@ import uniffi.openrose_ffi.GattDriver
 import uniffi.openrose_ffi.ScanDriver
 import uniffi.openrose_ffi.SppDriver
 import uniffi.openrose_headset.HeadsetId
-import java.io.IOException
 
 class KotlinCoreTransport(
     private val drivers: KotlinCoreDrivers,
@@ -34,17 +33,11 @@ class KotlinCoreTransport(
         scope.cancel()
     }
 
-    private inline fun <T> opening(block: () -> T): T = try {
-        block()
-    } catch (failure: IllegalArgumentException) {
-        throw DriverException.InvalidArgument(failure.message.orEmpty()).causedBy(failure)
-    } catch (failure: SecurityException) {
-        throw DriverException.PermissionDenied(failure.message.orEmpty()).causedBy(failure)
-    } catch (failure: UnsupportedOperationException) {
-        throw DriverException.Unsupported(failure.message.orEmpty()).causedBy(failure)
-    } catch (failure: IOException) {
-        throw DriverException.Terminal(failure.message.orEmpty()).causedBy(failure)
-    }
+    private inline fun <T> opening(block: () -> T): T = translatingFailures(
+        onSecurity = { DriverException.PermissionDenied(it.message.orEmpty()) },
+        onUnsupported = { DriverException.Unsupported(it.message.orEmpty()) },
+        onIo = { DriverException.Terminal(it.message.orEmpty()) },
+        onInvalidArgument = { DriverException.InvalidArgument(it.message.orEmpty()) },
+        block = block,
+    )
 }
-
-internal fun <T : Throwable> T.causedBy(cause: Throwable): T = also { it.initCause(cause) }

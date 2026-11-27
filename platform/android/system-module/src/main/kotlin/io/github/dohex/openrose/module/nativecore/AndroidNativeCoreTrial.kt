@@ -76,11 +76,11 @@ private fun openAndroidTrialControl(context: Context): TrialControl {
             override val state: StateFlow<ControlSnapshot> get() = runtime.state
 
             override fun updatePlatformState() {
-                runtime.updatePlatformState(context.readPlatformState(permissionRequested = true).toRust())
+                runtime.handle.updatePlatformState(context.readPlatformState(permissionRequested = true).toRust())
             }
 
             override suspend fun refreshBondedHeadsets() {
-                runtime.refreshBondedHeadsets()
+                runtime.handle.refreshBondedHeadsets()
             }
 
             override suspend fun connect(headsetId: HeadsetId): RustControlResult = runtime.connect(headsetId)
