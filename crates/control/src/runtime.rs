@@ -142,7 +142,8 @@ impl ControlRuntime {
     async fn connect_as(&self, headset: HeadsetId, origin: Origin, pin: Pin) -> ControlResult {
         let request = self.core.begin_explicit(&headset, origin, pin);
         let core = Arc::clone(&self.core);
-        detached(async move { core.connect_requested(request).await }).await
+        let attempt = detached(async move { core.start_requested(request).await }).await?;
+        self.core.finish_connect(&attempt, origin).await
     }
 
     pub async fn cancel_add_headset(&self) {

@@ -160,11 +160,20 @@ impl Core {
     }
 
     pub(crate) async fn connect_requested(self: &Arc<Self>, request: Request) -> ControlResult {
+        let origin = request.origin;
+        let attempt = self.start_requested(request).await?;
+        self.finish_connect(&attempt, origin).await
+    }
+
+    pub(crate) async fn start_requested(
+        self: &Arc<Self>,
+        request: Request,
+    ) -> Result<Arc<Attempt>, ControlError> {
         if self.superseded(&request, None) {
             return Err(superseded_error());
         }
         if let Some(error) = self.state.read(platform_error) {
-            return self.reject(error);
+            return Err(self.reject(error).unwrap_err());
         }
         let candidate = self
             .guarded_add(&request, self.find_candidate(&request.headset))
@@ -185,10 +194,12 @@ impl Core {
         let Some((candidate, profile)) =
             candidate.and_then(|candidate| candidate.profile.map(|profile| (candidate, profile)))
         else {
-            return self.reject(ControlError::new(
-                ControlErrorCode::Unsupported,
-                "没有受支持的型号识别证据",
-            ));
+            return Err(self
+                .reject(ControlError::new(
+                    ControlErrorCode::Unsupported,
+                    "没有受支持的型号识别证据",
+                ))
+                .unwrap_err());
         };
         if request.cancel.is_some() {
             let core = Arc::clone(self);
@@ -204,18 +215,16 @@ impl Core {
             return Err(superseded_error());
         }
         let id = candidate.id.clone();
-        let attempt = self
-            .begin_attempt(AttemptRequest {
-                candidate,
-                profile,
-                origin: request.origin,
-                superseded: &|| self.superseded(&request, Some(&id)),
-            })
-            .await?;
-        self.finish_connect(&attempt, request.origin).await
+        self.begin_attempt(AttemptRequest {
+            candidate,
+            profile,
+            origin: request.origin,
+            superseded: &|| self.superseded(&request, Some(&id)),
+        })
+        .await
     }
 
-    async fn finish_connect(&self, attempt: &Arc<Attempt>, origin: Origin) -> ControlResult {
+    pub(crate) async fn finish_connect(&self, attempt: &Arc<Attempt>, origin: Origin) -> ControlResult {
         let outcome = attempt.wait().await;
         if origin != Origin::AddHeadset || outcome.is_err() {
             return outcome;

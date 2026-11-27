@@ -135,6 +135,61 @@ async fn a_failed_old_add_flow_never_unbinds_the_newer_audio_session_of_the_same
     assert!(!headset.link_open());
 }
 
+#[tokio::test(start_paused = true)]
+async fn replaced_add_completion_keeps_new_audio_session_bound_to_audio_disconnect() {
+    let (transport, runtime, _) = simulated(available());
+    let headset = add_i5(&transport, A);
+    headset.open_delay(Duration::from_millis(500));
+    settle().await;
+
+    let mut adding = Box::pin(runtime.connect_for_add_headset(id(A)));
+    let waker = std::task::Waker::noop();
+    let mut context = std::task::Context::from_waker(waker);
+    assert!(adding.as_mut().poll(&mut context).is_pending());
+    settle().await;
+    assert!(adding.as_mut().poll(&mut context).is_pending());
+    assert!(matches!(
+        runtime.snapshot().connection,
+        ConnectionState::Connecting { .. }
+    ));
+
+    elapse(1_000).await;
+    let original = runtime.snapshot().connection;
+    let ConnectionState::Connected {
+        session_id: original_id,
+        ..
+    } = original
+    else {
+        panic!("original add session should be connected before resuming add completion");
+    };
+
+    assert!(runtime.disconnect().await);
+    assert!(!headset.link_open());
+    headset.open_delay(Duration::ZERO);
+    transport.set_audio_connected(Some(id(A)));
+    settle().await;
+    let replacement = runtime.snapshot().connection;
+    let ConnectionState::Connected {
+        session_id: replacement_id,
+        ..
+    } = replacement
+    else {
+        panic!("replacement audio session should be connected");
+    };
+    assert!(replacement_id > original_id);
+    assert_eq!(2, headset.connections_opened());
+
+    let error = adding.await.expect_err("replaced add completion must fail");
+    assert_eq!(ControlErrorCode::Disconnected, error.code);
+    assert_eq!("本次连接已被替换", error.message);
+    assert_eq!(replacement, runtime.snapshot().connection);
+
+    transport.set_audio_connected(None);
+    settle().await;
+    assert_eq!(ConnectionState::Disconnected, runtime.snapshot().connection);
+    assert!(!headset.link_open());
+}
+
 struct GateBondedAudio {
     inner: Arc<dyn AudioFactsDriver>,
     open: watch::Receiver<bool>,
