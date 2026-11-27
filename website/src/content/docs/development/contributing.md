@@ -5,7 +5,7 @@ description: 从源码构建 OpenRose，以及开发文档、许可与致谢。
 
 ## 从源码构建
 
-需要 JDK 21、Rust stable 工具链和 Android SDK（Platform 37、Build Tools 37.0.0，设置 `ANDROID_HOME` 或 `local.properties` 的 `sdk.dir`）。构建 Android APK 还需 `aarch64-linux-android` 目标与 `cargo-ndk`；构建 Windows 桌面版还需 Rust MSVC 工具链和 Visual Studio C++ Build Tools。Windows 下把 `./gradlew` 换成 `.\gradlew.bat`。
+需要 JDK 21、Rust stable 工具链和 Android SDK（Platform 37、Build Tools 37.0.0，设置 `ANDROID_HOME` 或 `local.properties` 的 `sdk.dir`）。构建 Android APK 还需 `aarch64-linux-android`、`armv7-linux-androideabi`、`x86_64-linux-android` 三个目标与 `cargo-ndk`；构建 Windows 桌面版还需 Rust MSVC 工具链和 Visual Studio C++ Build Tools。Windows 下把 `./gradlew` 换成 `.\gradlew.bat`。
 
 ```bash
 git clone https://github.com/DOHEX/OpenRose.git

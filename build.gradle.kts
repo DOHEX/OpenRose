@@ -15,6 +15,8 @@ plugins {
     alias(libs.plugins.openrose.kover)
 }
 
+registerHostRustFfi()
+
 detekt {
     source.setFrom(layout.projectDirectory.dir("build-logic/src"))
 }

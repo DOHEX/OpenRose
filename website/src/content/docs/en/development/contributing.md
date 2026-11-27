@@ -5,7 +5,7 @@ description: Build OpenRose from source, plus developer docs, license, and ackno
 
 ## Building from source
 
-Requires JDK 21, the stable Rust toolchain, and the Android SDK (Platform 37, Build Tools 37.0.0; set `ANDROID_HOME` or `sdk.dir` in `local.properties`). Building the Android APK also requires the `aarch64-linux-android` target and `cargo-ndk`; building the Windows desktop app also requires the Rust MSVC toolchain and Visual Studio C++ Build Tools. On Windows, replace `./gradlew` with `.\gradlew.bat`.
+Requires JDK 21, the stable Rust toolchain, and the Android SDK (Platform 37, Build Tools 37.0.0; set `ANDROID_HOME` or `sdk.dir` in `local.properties`). Building the Android APK also requires the `aarch64-linux-android`, `armv7-linux-androideabi` and `x86_64-linux-android` targets and `cargo-ndk`; building the Windows desktop app also requires the Rust MSVC toolchain and Visual Studio C++ Build Tools. On Windows, replace `./gradlew` with `.\gradlew.bat`.
 
 ```bash
 git clone https://github.com/DOHEX/OpenRose.git

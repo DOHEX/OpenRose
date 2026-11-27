@@ -1,5 +1,6 @@
 plugins {
     alias(libs.plugins.openrose.android.application)
+    alias(libs.plugins.openrose.rust.ffi)
     alias(libs.plugins.compose.compiler)
 }
 android {
@@ -13,14 +14,6 @@ android {
     packaging {
         jniLibs {
             useLegacyPackaging = false
-            excludes += setOf(
-                "lib/armeabi/**",
-                "lib/armeabi-v7a/**",
-                "lib/mips/**",
-                "lib/mips64/**",
-                "lib/x86/**",
-                "lib/x86_64/**",
-            )
         }
     }
     buildTypes {
@@ -46,7 +39,6 @@ android {
         }
     }
 }
-configureAndroidRustFfi(androidComponents)
 dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(projects.platform.android.integration)
