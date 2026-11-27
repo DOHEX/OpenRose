@@ -1,4 +1,4 @@
-package io.github.dohex.openrose.ffi.kotlincore
+package io.github.dohex.openrose.ffi.drivers
 
 import io.github.dohex.openrose.ffi.RustControlResult
 import io.github.dohex.openrose.ffi.RustControlRuntime
@@ -39,11 +39,11 @@ import io.github.dohex.openrose.core.transport.GattFailureKind as KotlinGattFail
 import io.github.dohex.openrose.core.transport.RawAudioDevice as KotlinRawAudioDevice
 import io.github.dohex.openrose.core.transport.RawAudioEvent as KotlinRawAudioEvent
 
-class KotlinCoreTransportTest {
+class ControlTransportAdapterTest {
     @Test
     fun theCoreConnectsAndReadsThroughTheKotlinGattDriver() = runBlocking<Unit> {
-        Rig().use { rig ->
-            KotlinCoreTransport(rig).use { transport ->
+        rig().use { rig ->
+            ControlTransportAdapter(rig).use { transport ->
                 RustControlRuntime(transport, rig.platformState(), clock = rig.clock(), timing = rig.timing()).use { runtime ->
                     assertEquals(RustControlResult.Success, runtime.connect(ADDRESS))
                     val connected = withTimeout(2_000) { runtime.state.first { it.connection is ConnectionState.Connected } }
@@ -51,7 +51,7 @@ class KotlinCoreTransportTest {
                     assertEquals(FieldValue.Text("wind"), (reading as? FieldReading.Known)?.value)
                     assertEquals(listOf(ADDRESS), rig.gattRequests)
                     assertTrue(rig.gatts.single().writes.isNotEmpty())
-                    assertTrue(runtime.disconnect())
+                    assertTrue(runtime.handle.disconnect())
                     assertEquals(1, rig.gatts.single().closes.size)
                 }
             }
@@ -60,8 +60,8 @@ class KotlinCoreTransportTest {
 
     @Test
     fun aGattFailureKindKeepsItsTypeAndCauseAcrossTheBoundary() = runBlocking<Unit> {
-        Rig().use { rig ->
-            KotlinCoreTransport(rig).use { transport ->
+        rig().use { rig ->
+            ControlTransportAdapter(rig).use { transport ->
                 rig.connectFailure = KotlinGattException(KotlinGattFailureKind.PERMISSION, "BLUETOOTH_CONNECT revoked")
                 val gatt = transport.openGatt(ADDRESS)
                 val failure = assertFailsWith<DriverException.Gatt> { gatt.connect() }
@@ -74,15 +74,16 @@ class KotlinCoreTransportTest {
 
     @Test
     fun theCoreReportsARevokedPermissionDuringConnectAsPermissionRequired() = runBlocking<Unit> {
-        Rig().use { rig ->
-            KotlinCoreTransport(rig).use { transport ->
+        rig().use { rig ->
+            rig.audioConnected = false
+            ControlTransportAdapter(rig).use { transport ->
                 RustControlRuntime(transport, rig.platformState(), clock = rig.clock(), timing = rig.timing()).use { runtime ->
                     rig.connectFailure = KotlinGattException(KotlinGattFailureKind.PERMISSION, "BLUETOOTH_CONNECT revoked")
                     val denied = assertIs<RustControlResult.Failure>(runtime.connect(ADDRESS))
                     assertEquals(ControlErrorCode.PERMISSION_REQUIRED, denied.error.code)
                     rig.connectFailure = null
                     assertEquals(RustControlResult.Success, runtime.connect(ADDRESS))
-                    assertTrue(runtime.disconnect())
+                    assertTrue(runtime.handle.disconnect())
                 }
             }
         }
@@ -90,8 +91,8 @@ class KotlinCoreTransportTest {
 
     @Test
     fun gattFactoryFailuresAreTypedTransportErrors() {
-        Rig().use { rig ->
-            KotlinCoreTransport(rig).use { transport ->
+        rig().use { rig ->
+            ControlTransportAdapter(rig).use { transport ->
                 rig.gattFailure = IllegalArgumentException("not an address")
                 val invalid = assertFailsWith<DriverException.InvalidArgument> { transport.openGatt("nope") }
                 assertEquals("not an address", invalid.detail)
@@ -105,8 +106,8 @@ class KotlinCoreTransportTest {
 
     @Test
     fun characteristicsKeepTheirIdentityAcrossDiscoveryAndNotifications() = runBlocking<Unit> {
-        Rig().use { rig ->
-            KotlinCoreTransport(rig).use { transport ->
+        rig().use { rig ->
+            ControlTransportAdapter(rig).use { transport ->
                 val gatt = transport.openGatt(ADDRESS)
                 val services = gatt.discoverServices()
                 val characteristics = services.single().characteristics
@@ -128,8 +129,8 @@ class KotlinCoreTransportTest {
 
     @Test
     fun linkLossAndServicesChangedArriveAsEventsAndTheEventStreamEndsAfterClose() = runBlocking<Unit> {
-        Rig().use { rig ->
-            KotlinCoreTransport(rig).use { transport ->
+        rig().use { rig ->
+            ControlTransportAdapter(rig).use { transport ->
                 val gatt = transport.openGatt(ADDRESS)
                 gatt.discoverServices()
                 rig.gatts.single().servicesChanged()
@@ -146,8 +147,8 @@ class KotlinCoreTransportTest {
 
     @Test
     fun subscribeReturnsOnlyAfterTheDriverRegisteredItsReceiversAndDropsTheReadyEvent() = runBlocking<Unit> {
-        Rig().use { rig ->
-            KotlinCoreTransport(rig).use { transport ->
+        rig().use { rig ->
+            ControlTransportAdapter(rig).use { transport ->
                 val events = transport.audioFacts().subscribe()
                 assertTrue(rig.registered.get())
                 rig.audioEvents.trySend(KotlinRawAudioEvent.AdapterOff)
@@ -165,8 +166,8 @@ class KotlinCoreTransportTest {
 
     @Test
     fun audioFactsMapBondedDevicesAndSnapshots() = runBlocking<Unit> {
-        Rig().use { rig ->
-            KotlinCoreTransport(rig).use { transport ->
+        rig().use { rig ->
+            ControlTransportAdapter(rig).use { transport ->
                 val audio = transport.audioFacts()
                 val bonded = audio.bondedDevices()
                 assertEquals(listOf(ADDRESS), bonded.map { it.address })
@@ -181,11 +182,42 @@ class KotlinCoreTransportTest {
     }
 
     @Test
+    fun everyPlatformEnumEntryCrossesTheBoundaryUnderItsOwnName() = runBlocking<Unit> {
+        rig().use { rig ->
+            ControlTransportAdapter(rig).use { transport ->
+                for (kind in KotlinGattFailureKind.entries) {
+                    rig.connectFailure = KotlinGattException(kind, "failed")
+                    val failure = assertFailsWith<DriverException.Gatt> { transport.openGatt(ADDRESS).connect() }
+                    assertEquals(kind.name, failure.kind.name)
+                }
+                rig.connectFailure = null
+                val gatt = transport.openGatt(ADDRESS)
+                val notifier = gatt.discoverServices().single().characteristics.single { it.canNotify }
+                GattSubscription.entries.forEach { gatt.configureSubscription(notifier, it) }
+                assertEquals(GattSubscription.entries.map { it.name }, rig.gatts.last().subscriptions.map { it.name })
+                val events = transport.audioFacts().subscribe()
+                for (profile in KotlinAudioProfile.entries) {
+                    val device = KotlinRawAudioDevice("i5", ADDRESS)
+                    rig.audioEvents.trySend(KotlinRawAudioEvent.ProfileChanged(profile, device, bonded = true, connected = true))
+                    val changed = assertIs<uniffi.openrose_control.RawAudioEvent.ProfileChanged>(withTimeout(2_000) { events.nextEvent() })
+                    assertEquals(profile.name, changed.profile.name)
+                }
+                val observedStates = listOf(true, false).map { connected ->
+                    rig.audioConnected = connected
+                    val snapshot = assertNotNullSnapshot(transport.audioFacts().snapshot(listOf(ADDRESS)))
+                    snapshot.profiles.getValue(uniffi.openrose_control.AudioProfile.A2DP)?.states?.getValue(ADDRESS)?.name
+                }
+                assertEquals(io.github.dohex.openrose.core.transport.AudioConnectionState.entries.map { it.name }, observedStates)
+            }
+        }
+    }
+
+    @Test
     fun coreDiscoversPairedHeadsetsAndFollowsAudioThroughTheKotlinAudioDriver() = runBlocking<Unit> {
-        Rig().use { rig ->
-            KotlinCoreTransport(rig).use { transport ->
+        rig().use { rig ->
+            ControlTransportAdapter(rig).use { transport ->
                 RustControlRuntime(transport, rig.platformState(), clock = rig.clock(), timing = rig.timing()).use { runtime ->
-                    runtime.refreshBondedHeadsets()
+                    runtime.handle.refreshBondedHeadsets()
                     val state = withTimeout(2_000) { runtime.state.first { it.bondedHeadsets.isNotEmpty() } }
                     assertEquals(listOf(ADDRESS), state.bondedHeadsets.map { it.id })
                     assertEquals("My i5", state.bondedHeadsets.single().name)
@@ -196,8 +228,8 @@ class KotlinCoreTransportTest {
 
     @Test
     fun scanDeliversAdvertisementsUntilStoppedAndReportsStartFailuresAsTransportErrors() = runBlocking<Unit> {
-        Rig().use { rig ->
-            KotlinCoreTransport(rig).use { transport ->
+        rig().use { rig ->
+            ControlTransportAdapter(rig).use { transport ->
                 val scan = transport.startScan()
                 rig.scans.trySend(KotlinAdvertisement(KotlinDeviceId(ADDRESS), "i5", -40, mapOf(0x5352 to byteArrayOf(0, 1))))
                 val advertisement = withTimeout(2_000) { scan.nextAdvertisement() }
@@ -210,15 +242,15 @@ class KotlinCoreTransportTest {
                 assertNull(withTimeout(2_000) { scan.nextAdvertisement() })
             }
         }
-        Rig().use { rig ->
-            KotlinCoreTransport(rig).use { transport ->
+        rig().use { rig ->
+            ControlTransportAdapter(rig).use { transport ->
                 rig.scanFailure = SecurityException("缺少 BLE 扫描权限")
                 val scan = transport.startScan()
                 assertFailsWith<DriverException.PermissionDenied> { withTimeout(2_000) { scan.nextAdvertisement() } }
             }
         }
-        Rig().use { rig ->
-            KotlinCoreTransport(rig).use { transport ->
+        rig().use { rig ->
+            ControlTransportAdapter(rig).use { transport ->
                 rig.scanFailure = IOException("请在系统设置中开启定位服务")
                 val scan = transport.startScan()
                 val failure = assertFailsWith<DriverException.Terminal> { withTimeout(2_000) { scan.nextAdvertisement() } }
@@ -229,8 +261,8 @@ class KotlinCoreTransportTest {
 
     @Test
     fun sppLinkOpensSubscribesReadsWritesAndClosesThroughTheKotlinConnection() = runBlocking<Unit> {
-        Rig(ModelProfile.I7_RS_V2).use { rig ->
-            KotlinCoreTransport(rig).use { transport ->
+        rig(ModelProfile.I7_RS_V2).use { rig ->
+            ControlTransportAdapter(rig).use { transport ->
                 val spp = transport.openSpp(ADDRESS, ADDRESS, "00001101-0000-1000-8000-00805f9b34fb")
                 assertEquals(ADDRESS to "00001101-0000-1000-8000-00805f9b34fb", rig.sppRequest)
                 assertEquals(260u, spp.maxWriteSize())
@@ -249,8 +281,8 @@ class KotlinCoreTransportTest {
 
     @Test
     fun closingTheSppLinkUnblocksAPendingRead() = runBlocking<Unit> {
-        Rig(ModelProfile.I7_RS_V2).use { rig ->
-            KotlinCoreTransport(rig).use { transport ->
+        rig(ModelProfile.I7_RS_V2).use { rig ->
+            ControlTransportAdapter(rig).use { transport ->
                 val spp = transport.openSpp(ADDRESS, ADDRESS, "uuid")
                 spp.connect()
                 val pending = async(Dispatchers.Default) { runCatching { spp.read() } }
@@ -266,8 +298,8 @@ class KotlinCoreTransportTest {
 
     @Test
     fun aRefusedSppCloseIsReportedSoTheCoreRetriesAndLaterSucceeds() = runBlocking<Unit> {
-        Rig(ModelProfile.I7_RS_V2).use { rig ->
-            KotlinCoreTransport(rig).use { transport ->
+        rig(ModelProfile.I7_RS_V2).use { rig ->
+            ControlTransportAdapter(rig).use { transport ->
                 val spp = transport.openSpp(ADDRESS, ADDRESS, "uuid")
                 val link = checkNotNull(rig.sppLink)
                 spp.connect()
@@ -284,8 +316,8 @@ class KotlinCoreTransportTest {
 
     @Test
     fun sppFailuresKeepTheirKindAndRemoteLossEndsReads() = runBlocking<Unit> {
-        Rig(ModelProfile.I7_RS_V2).use { rig ->
-            KotlinCoreTransport(rig).use { transport ->
+        rig(ModelProfile.I7_RS_V2).use { rig ->
+            ControlTransportAdapter(rig).use { transport ->
                 val spp = transport.openSpp(ADDRESS, ADDRESS, "uuid")
                 val link = checkNotNull(rig.sppLink)
                 link.openFailure = SecurityException("no BLUETOOTH_CONNECT")
@@ -308,8 +340,8 @@ class KotlinCoreTransportTest {
 
     @Test
     fun sppFactoryFailuresAreTypedTransportErrors() {
-        Rig(ModelProfile.I7_RS_V2).use { rig ->
-            KotlinCoreTransport(rig).use { transport ->
+        rig(ModelProfile.I7_RS_V2).use { rig ->
+            ControlTransportAdapter(rig).use { transport ->
                 rig.sppFailure = IllegalArgumentException("invalid address")
                 assertFailsWith<DriverException.InvalidArgument> { transport.openSpp("x", "x", "uuid") }
                 rig.sppFailure = SecurityException("no BLUETOOTH_CONNECT")
@@ -322,8 +354,8 @@ class KotlinCoreTransportTest {
 
     @Test
     fun recoverySupportComesFromTheDriverSource() {
-        Rig().use { rig ->
-            KotlinCoreTransport(rig).use { transport ->
+        rig().use { rig ->
+            ControlTransportAdapter(rig).use { transport ->
                 assertFalse(transport.supportsInitializationRecovery())
                 rig.supportsInitializationRecovery = true
                 assertTrue(transport.supportsInitializationRecovery())
@@ -333,9 +365,9 @@ class KotlinCoreTransportTest {
 
     @Test
     fun closingTheTransportEndsItsBackgroundWork() = runBlocking<Unit> {
-        Rig().use { rig ->
+        rig().use { rig ->
             val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-            val transport = KotlinCoreTransport(rig, scope)
+            val transport = ControlTransportAdapter(rig, scope)
             transport.openGatt(ADDRESS)
             transport.close()
             assertTrue(scope.coroutineContext[kotlinx.coroutines.Job]!!.isCancelled)

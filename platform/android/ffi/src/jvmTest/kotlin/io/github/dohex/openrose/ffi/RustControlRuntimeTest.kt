@@ -239,7 +239,7 @@ class RustControlRuntimeTest {
                     }
                 }
                 assertTrue(updated.revision > connected.revision)
-                assertTrue(runtime.disconnect())
+                assertTrue(runtime.handle.disconnect())
             }
         }
     }
@@ -265,7 +265,7 @@ class RustControlRuntimeTest {
                 withTimeout(2_000) {
                     runtime.state.first { it.connection is ConnectionState.Disconnected }
                 }
-                assertTrue(runtime.release())
+                assertTrue(runtime.handle.release())
             }
         }
     }
@@ -293,7 +293,7 @@ class RustControlRuntimeTest {
                     rig.writes.drop(writesBefore).any { it == NOISE_READBACK_QUERY }
                 }
 
-                assertTrue(runtime.disconnect())
+                assertTrue(runtime.handle.disconnect())
                 val failure = assertIs<RustControlResult.Failure>(withTimeout(2_000) { pending.await() })
                 assertEquals(ControlErrorCode.DISCONNECTED, failure.error.code)
             }
@@ -318,7 +318,7 @@ class RustControlRuntimeTest {
                 assertEquals(ControlErrorCode.DISCONNECTED, crashed.error.code)
 
                 assertEquals(RustControlResult.Success, runtime.connect(I5_ADDRESS))
-                assertTrue(runtime.disconnect())
+                assertTrue(runtime.handle.disconnect())
             }
         }
     }

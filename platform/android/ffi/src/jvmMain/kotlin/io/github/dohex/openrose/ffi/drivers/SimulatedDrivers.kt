@@ -1,4 +1,4 @@
-package io.github.dohex.openrose.ffi.kotlincore
+package io.github.dohex.openrose.ffi.drivers
 
 import io.github.dohex.openrose.core.ConnectionPhase
 import io.github.dohex.openrose.core.transport.Advertisement
@@ -41,6 +41,7 @@ class SimulatedGatt internal constructor(profile: ModelProfile, private val devi
     val notifier = GattCharacteristic(gatt.notifyUuid, canNotify = true)
     val writes = CopyOnWriteArrayList<String>()
     val closes = CopyOnWriteArrayList<String>()
+    val subscriptions = CopyOnWriteArrayList<GattSubscription>()
 
     @Volatile var connectFailure: GattException? = null
 
@@ -62,6 +63,7 @@ class SimulatedGatt internal constructor(profile: ModelProfile, private val devi
 
     override suspend fun configureSubscription(characteristic: GattCharacteristic, subscription: GattSubscription) {
         check(characteristic === notifier)
+        subscriptions.add(subscription)
     }
 
     override suspend fun write(characteristic: GattCharacteristic, value: ByteArray, withResponse: Boolean) {
@@ -134,7 +136,7 @@ class SimulatedDrivers(
     val profile: ModelProfile = ModelProfile.I5_ZT,
     val address: String = DEFAULT_ADDRESS,
     private val alias: String? = null,
-) : KotlinCoreDrivers,
+) : PlatformDrivers,
     AutoCloseable {
     val device = SimulatedHeadset(profile, FirmwareVersion(listOf(1, 2, 5), "125"))
     val gatts = CopyOnWriteArrayList<SimulatedGatt>()

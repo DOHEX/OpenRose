@@ -41,7 +41,6 @@ class SystemLocalClock : LocalClock {
     }
 }
 
-@Suppress("TooManyFunctions")
 class RustControlRuntime(
     transport: ControlTransport,
     initialPlatformState: PlatformState,
@@ -70,7 +69,7 @@ class RustControlRuntime(
         }
     }
 
-    private val handle = ControlRuntime(
+    val handle = ControlRuntime(
         transport = transport,
         observer = observer,
         clock = clock,
@@ -91,29 +90,7 @@ class RustControlRuntime(
         state = flow.asStateFlow()
     }
 
-    fun snapshot(): ControlSnapshot = handle.snapshot()
-
-    fun updatePlatformState(platform: PlatformState) {
-        handle.updatePlatformState(platform)
-    }
-
-    fun selectCurrentHeadset(headset: HeadsetId) {
-        handle.selectCurrentHeadset(headset)
-    }
-
-    fun updateSettings(settings: ControlSettings) {
-        handle.updateSettings(settings)
-    }
-
-    suspend fun refreshBondedHeadsets() {
-        handle.refreshBondedHeadsets()
-    }
-
     suspend fun startScan(): RustControlResult = runControl { handle.startScan() }
-
-    suspend fun stopScan() {
-        handle.stopScan()
-    }
 
     suspend fun connect(headset: HeadsetId, pinned: Boolean = false): RustControlResult = runControl {
         if (pinned) handle.connectPinned(headset) else handle.connect(headset)
@@ -125,14 +102,6 @@ class RustControlRuntime(
         withContext(NonCancellable) { handle.cancelAddHeadset() }
         throw cancelled
     }
-
-    suspend fun cancelAddHeadset() {
-        handle.cancelAddHeadset()
-    }
-
-    suspend fun disconnect(): Boolean = handle.disconnect()
-
-    suspend fun release(): Boolean = handle.release()
 
     suspend fun set(command: HeadsetCommand, expectedSession: ULong? = null): RustControlResult = runControl {
         handle.set(command, expectedSession)

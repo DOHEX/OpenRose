@@ -1,6 +1,5 @@
-package io.github.dohex.openrose.ffi.kotlincore
+package io.github.dohex.openrose.ffi.drivers
 
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
@@ -11,7 +10,7 @@ import uniffi.openrose_ffi.DriverException
 import uniffi.openrose_ffi.SppDriver
 import java.io.IOException
 
-internal class KotlinCoreSppDriver(private val link: SppLink, private val scope: CoroutineScope) : SppDriver {
+internal class SppDriverAdapter(private val link: SppLink, private val scope: CoroutineScope) : SppDriver {
     private val chunks = Channel<ByteArray>(Channel.UNLIMITED)
 
     @Volatile private var collector: Job? = null
@@ -20,7 +19,9 @@ internal class KotlinCoreSppDriver(private val link: SppLink, private val scope:
 
     override suspend fun connect() = guarded {
         link.open { }
-        collector = scope.launch(start = CoroutineStart.UNDISPATCHED) { collectChunks() }
+        collector = scope.launch(start = CoroutineStart.UNDISPATCHED) {
+            link.notifications.pumpInto(chunks, onFailure = { chunks.close(it) }) { chunks.send(it) }
+        }
         link.subscribe()
     }
 
@@ -37,33 +38,18 @@ internal class KotlinCoreSppDriver(private val link: SppLink, private val scope:
 
     override suspend fun closeLink() {
         guarded { link.close() }
-        collector?.cancel()
         chunks.close(IOException(LINK_CLOSED))
+        collector?.cancel()
     }
 
-    @Suppress("TooGenericExceptionCaught")
-    private suspend fun collectChunks() {
-        try {
-            link.notifications.collect { chunks.send(it) }
-            chunks.close()
-        } catch (cancelled: CancellationException) {
-            throw cancelled
-        } catch (failure: Exception) {
-            chunks.close(failure)
-        }
-    }
+    private inline fun <T> guarded(block: () -> T): T = translatingFailures(
+        onSecurity = { failed(SppFailureKind.PERMISSION, it) },
+        onUnsupported = { failed(SppFailureKind.UNSUPPORTED, it) },
+        onIo = { failed(SppFailureKind.DISCONNECTED, it) },
+        block = block,
+    )
 
-    private inline fun <T> guarded(block: () -> T): T = try {
-        block()
-    } catch (failure: SecurityException) {
-        throw failed(SppFailureKind.PERMISSION, failure)
-    } catch (failure: UnsupportedOperationException) {
-        throw failed(SppFailureKind.UNSUPPORTED, failure)
-    } catch (failure: IOException) {
-        throw failed(SppFailureKind.DISCONNECTED, failure)
-    }
-
-    private fun failed(kind: SppFailureKind, cause: Throwable) = DriverException.Spp(kind, cause.message.orEmpty()).causedBy(cause)
+    private fun failed(kind: SppFailureKind, cause: Throwable) = DriverException.Spp(kind, cause.message.orEmpty())
 
     private companion object {
         const val LINK_CLOSED = "SPP 连接已关闭"

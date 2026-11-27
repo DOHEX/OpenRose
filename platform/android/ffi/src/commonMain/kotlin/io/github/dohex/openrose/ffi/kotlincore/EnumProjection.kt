@@ -5,6 +5,7 @@ import io.github.dohex.openrose.core.ControlErrorCode
 import io.github.dohex.openrose.core.DeviceSetting
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.ModelProfile
+import io.github.dohex.openrose.ffi.EnumNames
 import uniffi.openrose_control.ControlError as RustControlError
 import uniffi.openrose_control.ControlErrorCode as RustControlErrorCode
 import uniffi.openrose_headset.HeadsetField as RustHeadsetField

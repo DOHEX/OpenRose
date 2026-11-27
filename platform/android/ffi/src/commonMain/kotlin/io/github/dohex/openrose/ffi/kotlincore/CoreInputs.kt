@@ -8,6 +8,7 @@ import io.github.dohex.openrose.core.PlatformState
 import io.github.dohex.openrose.core.TransportAvailability
 import io.github.dohex.openrose.core.TransportUnavailableReason
 import io.github.dohex.openrose.core.UserSettings
+import io.github.dohex.openrose.ffi.EnumNames
 import uniffi.openrose_control.ControlSettings
 import uniffi.openrose_control.HostPlatform as RustHostPlatform
 import uniffi.openrose_control.PermissionState as RustPermissionState

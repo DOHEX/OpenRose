@@ -8,15 +8,15 @@ import android.content.pm.PackageManager
 import io.github.dohex.openrose.core.transport.Advertisement
 import io.github.dohex.openrose.core.transport.AudioFactsDriver
 import io.github.dohex.openrose.core.transport.GattDriver
-import io.github.dohex.openrose.ffi.kotlincore.KotlinCoreDrivers
-import io.github.dohex.openrose.ffi.kotlincore.KotlinCoreTransport
-import io.github.dohex.openrose.ffi.kotlincore.SppLink
+import io.github.dohex.openrose.ffi.drivers.ControlTransportAdapter
+import io.github.dohex.openrose.ffi.drivers.PlatformDrivers
+import io.github.dohex.openrose.ffi.drivers.SppLink
 import kotlinx.coroutines.flow.Flow
 
-fun androidCoreTransport(context: Context): KotlinCoreTransport = KotlinCoreTransport(AndroidCoreDrivers(context))
+fun androidCoreTransport(context: Context): ControlTransportAdapter = ControlTransportAdapter(AndroidCoreDrivers(context))
 
 @SuppressLint("MissingPermission")
-internal class AndroidCoreDrivers(context: Context) : KotlinCoreDrivers {
+internal class AndroidCoreDrivers(context: Context) : PlatformDrivers {
     private val appContext = context.applicationContext
     private val ble = AndroidBleTransport(appContext)
 

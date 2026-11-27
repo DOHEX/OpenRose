@@ -1,6 +1,5 @@
-package io.github.dohex.openrose.ffi.kotlincore
+package io.github.dohex.openrose.ffi.drivers
 
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
@@ -13,9 +12,11 @@ import io.github.dohex.openrose.core.transport.Advertisement as KotlinAdvertisem
 
 private const val ADVERTISEMENT_BUFFER = 256
 
-internal class KotlinCoreScanDriver(private val source: Flow<KotlinAdvertisement>, scope: CoroutineScope) : ScanDriver {
+internal class ScanDriverAdapter(source: Flow<KotlinAdvertisement>, scope: CoroutineScope) : ScanDriver {
     private val advertisements = Channel<Advertisement>(ADVERTISEMENT_BUFFER, BufferOverflow.DROP_OLDEST)
-    private val collector = scope.launch { collect() }
+    private val collector = scope.launch {
+        source.pumpInto(advertisements, onFailure = { advertisements.close(it.toScanFailure()) }) { advertisements.send(it.toRust()) }
+    }
 
     override suspend fun nextAdvertisement(): Advertisement? {
         val result = advertisements.receiveCatching()
@@ -27,21 +28,11 @@ internal class KotlinCoreScanDriver(private val source: Flow<KotlinAdvertisement
         collector.cancel()
         advertisements.close()
     }
+}
 
-    @Suppress("TooGenericExceptionCaught")
-    private suspend fun collect() {
-        try {
-            source.collect { advertisements.send(it.toRust()) }
-            advertisements.close()
-        } catch (cancelled: CancellationException) {
-            advertisements.close()
-            throw cancelled
-        } catch (failure: SecurityException) {
-            advertisements.close(DriverException.PermissionDenied(failure.message.orEmpty()))
-        } catch (failure: Exception) {
-            advertisements.close(DriverException.Terminal(failure.message.orEmpty()))
-        }
-    }
+private fun Exception.toScanFailure(): DriverException = when (this) {
+    is SecurityException -> DriverException.PermissionDenied(message.orEmpty())
+    else -> DriverException.Terminal(message.orEmpty())
 }
 
 private fun KotlinAdvertisement.toRust(): Advertisement = Advertisement(
