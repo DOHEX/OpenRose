@@ -1,15 +1,17 @@
+mod f8;
+mod rs_battery;
+mod rs_common;
 mod rs_common_v2;
 mod zt;
 
 use crate::command::HeadsetCommand;
 use crate::field::{FieldValue, FirmwareVersion, HeadsetField, HeadsetSetting};
-use crate::model::{ModelProfile, ModelProtocol, ProtocolFamily};
+use crate::model::{ModelProfile, ModelProtocol};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SimulatorError {
-    UnsupportedFamily(ProtocolFamily),
     InvalidFirmware(String),
     InvalidValue(String),
 }
@@ -23,9 +25,6 @@ impl SimulatorError {
 impl fmt::Display for SimulatorError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::UnsupportedFamily(family) => {
-                write!(f, "模拟耳机尚不支持 {} 协议族", family.display_name())
-            }
             Self::InvalidFirmware(message) | Self::InvalidValue(message) => f.write_str(message),
         }
     }
@@ -65,9 +64,18 @@ impl SimulatedHeadset {
                 &firmware,
                 &capabilities,
             )?),
-            ModelProtocol::RsCommon(_) | ModelProtocol::F8(_) => {
-                return Err(SimulatorError::UnsupportedFamily(profile.family()));
-            }
+            ModelProtocol::RsCommon(protocol) => Box::new(rs_common::RsCommonHeadsetSide::new(
+                profile,
+                protocol,
+                &firmware,
+                &capabilities,
+            )?),
+            ModelProtocol::F8(protocol) => Box::new(f8::F8HeadsetSide::new(
+                profile,
+                protocol,
+                &firmware,
+                &capabilities,
+            )?),
         };
         Ok(Self {
             profile,

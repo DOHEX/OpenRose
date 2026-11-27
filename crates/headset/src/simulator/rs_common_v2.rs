@@ -1,4 +1,4 @@
-use super::{HeadsetSide, SimulatorError, preferred_index, preferred_level};
+use super::{HeadsetSide, SimulatorError, preferred_index, preferred_level, rs_battery};
 use crate::capabilities::{HeadsetCapabilities, TouchControlCapabilities};
 use crate::field::{FieldReading, FieldValue, FirmwareVersion, HeadsetField};
 use crate::model::{BatteryLayout, ModelProfile};
@@ -10,8 +10,6 @@ use crate::protocol::rs_common_v2::{read_record, record_fields, record_ids};
 use std::collections::BTreeMap;
 
 const BATTERY_RECORD: u8 = 0x0c;
-const NOT_PROVIDED: u8 = 0xff;
-const IN_CASE_FLAG: u8 = 0x80;
 const REQUEST_HEADER: u8 = 0xff;
 const RESPONSE_HEADER: u8 = 0xdd;
 const FRAME_TRAILER: u8 = 0xaa;
@@ -122,11 +120,7 @@ fn initial_record(
             let modes = noise.map(|noise| noise.modes.clone()).unwrap_or_default();
             vec![preferred_index(&NOISE_MODES, CAPTURED_NOISE_MODE, &modes) as u8 + 1]
         }
-        0x0c => match layout {
-            BatteryLayout::SingleUnit => vec![0xff, 0xff, 0x50],
-            BatteryLayout::EarbudsOnly => vec![0x64, 0x32, 0xff],
-            BatteryLayout::EarbudsAndCase => vec![0xe4, 0x32, 0x50],
-        },
+        0x0c => rs_battery::initial_bytes(layout),
         0x0d => firmware.parts.iter().map(|&part| part as u8).collect(),
         0x2a => equalizer_record(capabilities),
         0x2b => {
@@ -228,41 +222,13 @@ impl RsCommonV2HeadsetSide {
     }
 
     fn encode(&self, field: HeadsetField, value: &FieldValue) -> Option<(u8, Vec<u8>)> {
-        match (field, value) {
-            (HeadsetField::LeftBattery, FieldValue::Number(level)) => {
-                self.battery(0, |byte| battery_level(byte, *level))
-            }
-            (HeadsetField::RightBattery, FieldValue::Number(level)) => {
-                self.battery(1, |byte| battery_level(byte, *level))
-            }
-            (HeadsetField::CaseBattery, FieldValue::Number(level)) => {
-                self.battery(2, |byte| battery_level(byte, *level))
-            }
-            (HeadsetField::LeftInCase, FieldValue::Toggle(inside)) => {
-                self.battery(0, |byte| Some(in_case_flag(byte, *inside)))
-            }
-            (HeadsetField::RightInCase, FieldValue::Toggle(inside)) => {
-                self.battery(1, |byte| Some(in_case_flag(byte, *inside)))
-            }
-            _ => {
-                let (id, byte) = single_byte(field, value)?;
-                self.records.contains_key(&id).then(|| (id, vec![byte]))
-            }
+        if let Some(bytes) = self.records.get(&BATTERY_RECORD)
+            && let Some(changed) = rs_battery::changed(bytes, field, value)
+        {
+            return Some((BATTERY_RECORD, changed));
         }
-    }
-
-    fn battery(
-        &self,
-        index: usize,
-        change: impl FnOnce(u8) -> Option<u8>,
-    ) -> Option<(u8, Vec<u8>)> {
-        let mut bytes = self.records.get(&BATTERY_RECORD)?.clone();
-        let current = *bytes.get(index)?;
-        if current == NOT_PROVIDED {
-            return None;
-        }
-        bytes[index] = change(current)?;
-        Some((BATTERY_RECORD, bytes))
+        let (id, byte) = single_byte(field, value)?;
+        self.records.contains_key(&id).then(|| (id, vec![byte]))
     }
 }
 
@@ -333,19 +299,5 @@ fn single_byte(field: HeadsetField, value: &FieldValue) -> Option<(u8, u8)> {
             .find(|(_, name)| *name == state.as_str())
             .map(|(code, _)| (0x2f, *code)),
         _ => None,
-    }
-}
-
-fn battery_level(byte: u8, level: i32) -> Option<u8> {
-    (1..=100)
-        .contains(&level)
-        .then_some((byte & IN_CASE_FLAG) | level as u8)
-}
-
-fn in_case_flag(byte: u8, inside: bool) -> u8 {
-    if inside {
-        byte | IN_CASE_FLAG
-    } else {
-        byte & !IN_CASE_FLAG
     }
 }

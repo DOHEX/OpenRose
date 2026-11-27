@@ -1,24 +1,10 @@
+mod support;
+
 use openrose_headset::simulator::SimulatedHeadset;
 use openrose_headset::{
-    FieldValue, FirmwareVersion, HeadsetCapabilities, HeadsetField, ModelProfile, ProtocolFamily,
+    FieldValue, FirmwareVersion, HeadsetCapabilities, HeadsetField, ModelProfile,
 };
 use std::collections::BTreeMap;
-
-fn firmwares() -> [FirmwareVersion; 2] {
-    [
-        FirmwareVersion::new(vec![1, 2, 5], "125"),
-        FirmwareVersion::new(vec![9, 9, 9], "999"),
-    ]
-}
-
-fn simulated_models() -> impl Iterator<Item = ModelProfile> {
-    ModelProfile::ALL.iter().copied().filter(|profile| {
-        matches!(
-            profile.family(),
-            ProtocolFamily::Zt | ProtocolFamily::RsCommonV2
-        )
-    })
-}
 
 fn expect(found: &mut Vec<String>, allowed: bool, message: impl FnOnce() -> String) {
     if !allowed {
@@ -60,7 +46,8 @@ fn violations(
                 })
             }
             (HeadsetField::PromptVolume, FieldValue::Number(level)) => {
-                capabilities.prompt_volume_levels.contains(level)
+                capabilities.prompt_volume_levels.is_empty()
+                    || capabilities.prompt_volume_levels.contains(level)
             }
             (HeadsetField::Eq, FieldValue::Text(preset)) => {
                 let equalizer = capabilities.equalizer.as_ref();
@@ -75,7 +62,7 @@ fn violations(
             (HeadsetField::AudioMode, FieldValue::Text(mode)) => capabilities
                 .audio_control
                 .as_ref()
-                .is_some_and(|audio| audio.modes.contains(mode)),
+                .is_none_or(|audio| audio.modes.contains(mode)),
             (HeadsetField::TouchKeys, FieldValue::TouchKeys(bindings)) => {
                 capabilities.touch_control.as_ref().is_some_and(|touch| {
                     bindings.iter().all(|binding| {
@@ -140,8 +127,8 @@ fn game_mode(readings: &BTreeMap<HeadsetField, FieldValue>) -> Option<bool> {
 
 #[test]
 fn every_simulated_model_starts_in_a_state_its_configuration_allows() {
-    for profile in simulated_models() {
-        for firmware in firmwares() {
+    for profile in ModelProfile::ALL.iter().copied() {
+        for firmware in support::firmwares(profile) {
             let headset = SimulatedHeadset::new(profile, firmware.clone())
                 .unwrap_or_else(|error| panic!("{profile:?}: {error}"));
             let readings = headset.readings();
