@@ -122,7 +122,7 @@ jobs:
       - name: Install Linux runtime libraries
         run: |
           sudo apt-get update
-          sudo apt-get install --yes libgtk-3-0t64 libegl1 libgl1 libfontconfig1
+          sudo apt-get install --yes libgtk-3-0t64 libegl1 libgl1 libfontconfig1 libdbus-1-dev pkg-config
 
       - name: Install nsh 0.7.0
         env:
