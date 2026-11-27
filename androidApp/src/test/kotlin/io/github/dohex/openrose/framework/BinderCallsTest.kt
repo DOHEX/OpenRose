@@ -80,11 +80,11 @@ class BinderCallsTest {
     }
 
     @Test
-    fun discoveryDuringHostReloadIsAConnectionFailure() = runBlocking {
-        val reloading = object : Binder() {
-            override fun onTransact(code: Int, data: Parcel, reply: Parcel?, flags: Int): Boolean = throw IllegalStateException("宿主正在重新加载")
+    fun discoveryTheHostRejectsIsAConnectionFailure() = runBlocking {
+        val rejecting = object : Binder() {
+            override fun onTransact(code: Int, data: Parcel, reply: Parcel?, flags: Int): Boolean = throw IllegalStateException("宿主拒绝了发现请求")
         }
-        val result = assertIs<LinkOpenResult.Failed>(ModuleHostBinderLink(boundContext(reloading)).open())
+        val result = assertIs<LinkOpenResult.Failed>(ModuleHostBinderLink(boundContext(rejecting)).open())
         assertEquals(OwnerFailureStage.CONNECTION, result.stage)
     }
 

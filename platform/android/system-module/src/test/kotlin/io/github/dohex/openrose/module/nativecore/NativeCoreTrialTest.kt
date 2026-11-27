@@ -80,7 +80,7 @@ class NativeCoreTrialTest {
     }
 
     @Test
-    fun switchOffLoadsNothingStartsNothingAndAllowsHotReload() {
+    fun switchOffLoadsNothingAndStartsNothing() {
         val rig = Rig()
         val trial = rig.trial()
 
@@ -88,7 +88,6 @@ class NativeCoreTrialTest {
 
         assertEquals(emptyList(), rig.loaded)
         assertEquals(0, rig.started)
-        assertTrue(trial.allowsHotReload)
     }
 
     @Test
@@ -104,20 +103,17 @@ class NativeCoreTrialTest {
     }
 
     @Test
-    fun loadedNativeCoreRefusesHotReloadEvenAfterTheTrialStops() {
+    fun closeStopsARunningTrial() {
         val rig = Rig()
         val trial = rig.trial()
 
         trial.apply(enabled = true, controlWay = ControlWay.APP)
-        assertFalse(trial.allowsHotReload)
-
         trial.close()
         assertEquals(1, rig.stopped)
-        assertFalse(trial.allowsHotReload)
     }
 
     @Test
-    fun turningTheSwitchOffAfterStartKeepsRunningAndKeepsRefusingHotReload() {
+    fun turningTheSwitchOffAfterStartKeepsRunning() {
         val rig = Rig()
         val trial = rig.trial()
         trial.apply(enabled = true, controlWay = ControlWay.APP)
@@ -126,11 +122,10 @@ class NativeCoreTrialTest {
 
         assertEquals(0, rig.stopped)
         assertEquals(1, rig.started)
-        assertFalse(trial.allowsHotReload)
     }
 
     @Test
-    fun failingToLoadDispatchLogsTheExactErrorStartsNothingAndAllowsHotReload() {
+    fun failingToLoadDispatchLogsTheExactErrorAndStartsNothing() {
         val rig = Rig()
         val denied = UnsatisfiedLinkError("dlopen failed: couldn't map segment 1: Permission denied")
         rig.loadFailures["jnidispatch"] = denied
@@ -140,7 +135,6 @@ class NativeCoreTrialTest {
 
         assertEquals(emptyList(), rig.loaded)
         assertEquals(0, rig.started)
-        assertTrue(trial.allowsHotReload)
         val error = rig.lines.single { it.priority == Log.ERROR }
         assertTrue("jnidispatch" in error.message)
         assertSame(denied, error.failure)
@@ -161,7 +155,7 @@ class NativeCoreTrialTest {
     }
 
     @Test
-    fun loadedDispatchAloneStillRefusesHotReloadWhenTheCoreFailsToLoad() {
+    fun failingToLoadCoreAfterDispatchLogsTheExactErrorAndStartsNothing() {
         val rig = Rig()
         val missing = UnsatisfiedLinkError("dlopen failed: library \"libopenrose_ffi.so\" not found")
         rig.loadFailures["openrose_ffi"] = missing
@@ -171,12 +165,11 @@ class NativeCoreTrialTest {
 
         assertEquals(listOf("jnidispatch"), rig.loaded)
         assertEquals(0, rig.started)
-        assertFalse(trial.allowsHotReload)
         assertSame(missing, rig.lines.single { it.priority == Log.ERROR }.failure)
     }
 
     @Test
-    fun controlStartFailureIsLoggedAndTheLoadedCoreStillRefusesHotReload() {
+    fun controlStartFailureIsLoggedAndCloseDoesNotStopUnstartedControl() {
         val rig = Rig()
         val broken = IllegalStateException("UniFFI contract mismatch")
         rig.controlFailure = broken
@@ -185,7 +178,6 @@ class NativeCoreTrialTest {
         trial.apply(enabled = true, controlWay = ControlWay.APP)
 
         assertEquals(listOf("jnidispatch", "openrose_ffi"), rig.loaded)
-        assertFalse(trial.allowsHotReload)
         assertSame(broken, rig.lines.single { it.priority == Log.ERROR }.failure)
         trial.close()
         assertEquals(0, rig.stopped)
@@ -201,7 +193,6 @@ class NativeCoreTrialTest {
 
         assertEquals(emptyList(), rig.loaded)
         assertEquals(0, rig.started)
-        assertTrue(trial.allowsHotReload)
     }
 
     @Test
@@ -231,7 +222,6 @@ class NativeCoreTrialTest {
 
         assertEquals(emptyList(), rig.loaded)
         assertEquals(0, rig.started)
-        assertTrue(trial.allowsHotReload)
         assertEquals(
             listOf("trial_skipped reason=module_control_selected"),
             rig.lines.map { it.message }.filter { it.startsWith("trial_skipped") },
@@ -241,11 +231,10 @@ class NativeCoreTrialTest {
 
         assertEquals(listOf("jnidispatch", "openrose_ffi"), rig.loaded)
         assertEquals(1, rig.started)
-        assertFalse(trial.allowsHotReload)
     }
 
     @Test
-    fun switchingToModuleControlStopsARunningTrialWithoutReAllowingHotReload() {
+    fun switchingToModuleControlStopsARunningTrialAndDoesNotRestartOnAppControl() {
         val rig = Rig()
         val trial = rig.trial()
 
@@ -258,7 +247,6 @@ class NativeCoreTrialTest {
 
         assertEquals(1, rig.started)
         assertEquals(1, rig.stopped)
-        assertFalse(trial.allowsHotReload)
         assertTrue(rig.lines.any { it.message == "trial_stopped reason=module_control_selected" })
     }
 

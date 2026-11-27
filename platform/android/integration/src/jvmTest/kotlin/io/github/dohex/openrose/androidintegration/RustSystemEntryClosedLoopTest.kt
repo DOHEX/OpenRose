@@ -128,7 +128,6 @@ class RustSystemEntryClosedLoopTest {
                 }
                 assertEquals(1, confirmedMode)
             } finally {
-                assertTrue(host.stop())
                 hostScope.cancel()
             }
         }

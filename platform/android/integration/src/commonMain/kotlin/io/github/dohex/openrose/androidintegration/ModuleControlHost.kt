@@ -87,8 +87,6 @@ class ModuleControlHost(
     private val releaseEpoch = MutableStateFlow(0L)
     private var platform = PlatformState(PermissionState.NOT_REQUIRED)
     private var held: String? = null
-    private var stopped = false
-    private val retired = MutableStateFlow(false)
     private var lastGeneration: OwnerGeneration? = null
     private var sequence = 0L
     private val mutableStatus = MutableStateFlow<HostStatus>(HostStatus.Inactive(incarnation, null, "尚未配置"))
@@ -119,21 +117,7 @@ class ModuleControlHost(
         owner.value?.runtime?.updatePlatformState(next)
     }
 
-    suspend fun stop(): Boolean = ownership.withLock {
-        stopped = true
-        var released = false
-        try {
-            lifecycle.reconcile()
-            released = owner.value == null
-        } finally {
-            if (released) retired.value = true else stopped = false
-            lifecycle.publishStatus()
-        }
-        released
-    }
-
     fun open(caller: CallerIdentity): HostOpenResult {
-        if (retired.value) return HostOpenResult.Refused(HostRejection.INVALID_REQUEST, "控制宿主已停止，请重新发现")
         val role = authority.roleOf(caller)
             ?: return HostOpenResult.Refused(HostRejection.UNAUTHORIZED, "调用者未被授权使用控制宿主")
         var refused = false
@@ -382,7 +366,7 @@ class ModuleControlHost(
     }
 
     private fun leaseFor(caller: CallerIdentity, leaseId: String): Lease? = leases.value[leaseId]?.takeIf {
-        !retired.value && it.caller == caller && authority.roleOf(caller) == it.role
+        it.caller == caller && authority.roleOf(caller) == it.role
     }
 
     private inner class OwnerLifecycle {
@@ -393,8 +377,7 @@ class ModuleControlHost(
                     return
                 }
             }
-            val wanted = !stopped &&
-                configuration.userUnlocked &&
+            val wanted = configuration.userUnlocked &&
                 configuration.settings.integration.controlWay == ControlWay.MODULE &&
                 held == null
             val current = owner.value
@@ -452,7 +435,6 @@ class ModuleControlHost(
                     lastGeneration,
                     when {
                         !configuration.userUnlocked -> "用户尚未解锁"
-                        stopped -> "宿主已停止"
                         held != null -> "已按切换请求释放"
                         configuration.settings.integration.controlWay != ControlWay.MODULE -> "当前未选择模块控制"
                         else -> "模块控制尚未启动"
