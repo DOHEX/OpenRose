@@ -2,6 +2,7 @@ use super::{HeadsetSide, SimulatorError, preferred_index, preferred_level, rs_ba
 use crate::capabilities::{HeadsetCapabilities, TouchControlCapabilities};
 use crate::field::{FieldReading, FieldValue, FirmwareVersion, HeadsetField};
 use crate::model::{BatteryLayout, ModelProfile};
+use crate::model::ProtocolFamily;
 use crate::protocol::rs_common_v2::wire::{
     ACTIONS, AUDIO_MODES, FIND_STATES, NOISE_MODES, PRESET_CODES, READ_PRESETS, TAP_SLOTS,
     TOUCH_SLOTS,
@@ -166,12 +167,9 @@ impl RsCommonV2HeadsetSide {
         firmware: &FirmwareVersion,
         capabilities: &HeadsetCapabilities,
     ) -> Result<Self, SimulatorError> {
-        if firmware.parts.len() != 3 || firmware.parts.iter().any(|part| !(0..=255).contains(part))
-        {
-            return Err(SimulatorError::InvalidFirmware(
-                "RS Common V2 固件版本需要三个 0 到 255 的数字".to_string(),
-            ));
-        }
+        ProtocolFamily::RsCommonV2
+            .validate_firmware(firmware)
+            .map_err(|err| SimulatorError::InvalidFirmware(err.to_string()))?;
         let layout = profile.battery_layout();
         let records = record_ids()
             .filter(|&id| {
