@@ -16,6 +16,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, LazyLock, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::runtime::{Builder, Runtime};
+mod headset_flow;
 use tokio::sync::{mpsc, oneshot};
 
 static SHARED_RUNTIME: LazyLock<Runtime> = LazyLock::new(|| {
@@ -31,7 +32,10 @@ const DEFAULT_DEV_REPLY_LATENCY_MS: u64 = 160;
 
 #[native_module("openrose-native")]
 fn native(registry: &mut Registry) {
-    registry.module::<OpenRoseCatalog>().class::<OpenRoseClient>();
+    registry
+        .module::<OpenRoseCatalog>()
+        .class::<OpenRoseClient>()
+        .module::<headset_flow::OpenRoseHeadsetFlow>();
 }
 
 struct SystemClock;
@@ -93,14 +97,14 @@ impl ControlObserver for ObserverHub {
     }
 }
 
-struct DevState {
-    transport: Arc<SimulatedTransport>,
-    active_id: Mutex<HeadsetId>,
-    active_profile: Mutex<ModelProfile>,
-    active_firmware: Mutex<FirmwareVersion>,
-    active_handle: Mutex<SimulatedHeadsetHandle>,
-    reply_latency_ms: AtomicU64,
-    sequence: AtomicU64,
+pub(crate) struct DevState {
+    pub(crate) transport: Arc<SimulatedTransport>,
+    pub(crate) active_id: Mutex<HeadsetId>,
+    pub(crate) active_profile: Mutex<ModelProfile>,
+    pub(crate) active_firmware: Mutex<FirmwareVersion>,
+    pub(crate) active_handle: Mutex<SimulatedHeadsetHandle>,
+    pub(crate) reply_latency_ms: AtomicU64,
+    pub(crate) sequence: AtomicU64,
 }
 
 impl DevState {
@@ -165,7 +169,7 @@ struct DevHeadsetConfig {
     reply_latency_ms: u64,
 }
 
-fn catalog_advertisement(profile: ModelProfile, id: &HeadsetId) -> Advertisement {
+pub(crate) fn catalog_advertisement(profile: ModelProfile, id: &HeadsetId) -> Advertisement {
     let prefix = decode_hex(profile.advertisement_prefixes()[0]).expect("advertisement prefix");
     let company = u16::from(prefix[0]) | (u16::from(prefix[1]) << 8);
     let name = match profile {
@@ -198,7 +202,7 @@ fn snapshot_to_json(snapshot: &ControlSnapshot) -> JsonValue {
     serde_json::to_value(snapshot).expect("control snapshot serializes to json")
 }
 
-fn run_on_core<T: Send + Ret + 'static>(
+pub(crate) fn run_on_core<T: Send + Ret + 'static>(
     work: impl Future<Output = Result<T, String>> + Send + 'static,
 ) -> Later<T> {
     Later::new(async move {
@@ -243,9 +247,9 @@ impl OpenRoseCatalog {
 /// Composes OpenRose ControlRuntime and the active transport without storing a snapshot copy.
 #[class]
 pub struct OpenRoseClient {
-    runtime: Arc<ControlRuntime>,
+    pub(crate) runtime: Arc<ControlRuntime>,
     observer: Arc<ObserverHub>,
-    dev: Option<Arc<DevState>>,
+    pub(crate) dev: Option<Arc<DevState>>,
 }
 
 impl OpenRoseClient {
