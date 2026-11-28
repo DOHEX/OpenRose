@@ -966,6 +966,7 @@ dependencies = [
  "spake2",
  "tokio",
  "tokio-rustls",
+ "uniffi",
 ]
 
 [[package]]
@@ -1005,6 +1006,7 @@ name = "openrose-ffi"
 version = "0.1.1"
 dependencies = [
  "async-trait",
+ "openrose-circulation",
  "openrose-control",
  "openrose-ffi-simulator",
  "openrose-headset",

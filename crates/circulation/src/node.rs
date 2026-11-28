@@ -1,11 +1,12 @@
 use crate::contract::{
-    DEFAULT_PORT, LocalAudio, NearbyPeer, PairingOffer, Peer, PeerDiscovery, PeerId, PullOutcome,
-    RemoteCommand, RemoteError, RemoteReading, RemoteSessionReference, YieldRefusal,
-    YieldResponse, same_address,
+    DEFAULT_PORT, HandoffStatus, LocalAudio, NearbyPeer, PairingOffer, Peer, PeerDiscovery, PeerId,
+    PullOutcome, PullStage, RemoteCommand, RemoteError, RemoteReading, RemoteSessionReference,
+    RouteDialer, RouteStream, YieldRefusal, YieldResponse, same_address,
 };
 use crate::endpoint::{HeadsetEndpoint, RemoteHandler, yield_via_local_audio};
 use crate::identity::{PeerIdentity, cert_fingerprint};
 use crate::pairing::{PairingRequest, PairingWindow, initiate_pairing, parse_qr_payload, respond_pairing};
+use async_trait::async_trait;
 use crate::trust::PeerTrust;
 use crate::wire::{WireBody, recv_frame, send_frame};
 use openrose_control::ControlRuntime;
@@ -77,12 +78,14 @@ struct NodeInner {
     trust: PeerTrust,
     pairing: PairingWindow,
     discovery: Arc<dyn PeerDiscovery>,
+    dialer: Arc<dyn RouteDialer>,
     handler: Option<Arc<dyn RemoteHandler>>,
     local_audio: Option<Arc<dyn LocalAudio>>,
     nearby_tx: watch::Sender<Vec<NearbyPeer>>,
     _nearby_rx: watch::Receiver<Vec<NearbyPeer>>,
     readings_tx: watch::Sender<BTreeMap<PeerId, RemoteReading>>,
     _readings_rx: watch::Receiver<BTreeMap<PeerId, RemoteReading>>,
+    pull_stage: Mutex<Option<PullStage>>,
     running: AsyncMutex<Option<RunningState>>,
     bound_addr_sync: Mutex<Option<SocketAddr>>,
     pull_lock: AsyncMutex<()>,
@@ -100,7 +103,15 @@ impl CirculationNode {
         config: CirculationConfig,
         discovery: Arc<dyn PeerDiscovery>,
     ) -> Result<Self, RemoteError> {
-        Self::build(config, discovery, None, None)
+        Self::build(config, discovery, None, None, None)
+    }
+
+    pub fn with_dialer(
+        config: CirculationConfig,
+        discovery: Arc<dyn PeerDiscovery>,
+        dialer: Arc<dyn RouteDialer>,
+    ) -> Result<Self, RemoteError> {
+        Self::build(config, discovery, None, None, Some(dialer))
     }
 
     pub fn with_control(
@@ -111,7 +122,7 @@ impl CirculationNode {
         let identity = PeerIdentity::load_or_create(&config.storage_dir)?;
         let handler: Arc<dyn RemoteHandler> =
             Arc::new(HeadsetEndpoint::new(identity.id().clone(), control));
-        Self::build_with_identity(config, identity, discovery, Some(handler), None)
+        Self::build_with_identity(config, identity, discovery, Some(handler), None, None)
     }
 
     pub fn with_audio(
@@ -119,7 +130,7 @@ impl CirculationNode {
         discovery: Arc<dyn PeerDiscovery>,
         audio: Arc<dyn LocalAudio>,
     ) -> Result<Self, RemoteError> {
-        Self::build(config, discovery, None, Some(audio))
+        Self::build(config, discovery, None, Some(audio), None)
     }
 
     pub fn with_control_and_audio(
@@ -128,11 +139,37 @@ impl CirculationNode {
         control: Arc<ControlRuntime>,
         audio: Arc<dyn LocalAudio>,
     ) -> Result<Self, RemoteError> {
+        Self::with_control_and_audio_for_owner(
+            config,
+            discovery,
+            control,
+            audio,
+            Arc::new(|| true),
+            Arc::new(TcpRouteDialer),
+        )
+    }
+
+    pub fn with_control_and_audio_for_owner(
+        config: CirculationConfig,
+        discovery: Arc<dyn PeerDiscovery>,
+        control: Arc<ControlRuntime>,
+        audio: Arc<dyn LocalAudio>,
+        owner_active: Arc<dyn Fn() -> bool + Send + Sync>,
+        dialer: Arc<dyn RouteDialer>,
+    ) -> Result<Self, RemoteError> {
         let identity = PeerIdentity::load_or_create(&config.storage_dir)?;
         let handler: Arc<dyn RemoteHandler> = Arc::new(
-            HeadsetEndpoint::new(identity.id().clone(), control).with_local_audio(Arc::clone(&audio)),
+            HeadsetEndpoint::with_owner_active(identity.id().clone(), control, owner_active)
+                .with_local_audio(Arc::clone(&audio)),
         );
-        Self::build_with_identity(config, identity, discovery, Some(handler), Some(audio))
+        Self::build_with_identity(
+            config,
+            identity,
+            discovery,
+            Some(handler),
+            Some(audio),
+            Some(dialer),
+        )
     }
 
     pub fn with_handler(
@@ -140,7 +177,7 @@ impl CirculationNode {
         discovery: Arc<dyn PeerDiscovery>,
         handler: Arc<dyn RemoteHandler>,
     ) -> Result<Self, RemoteError> {
-        Self::build(config, discovery, Some(handler), None)
+        Self::build(config, discovery, Some(handler), None, None)
     }
 
     fn build(
@@ -148,9 +185,10 @@ impl CirculationNode {
         discovery: Arc<dyn PeerDiscovery>,
         handler: Option<Arc<dyn RemoteHandler>>,
         local_audio: Option<Arc<dyn LocalAudio>>,
+        dialer: Option<Arc<dyn RouteDialer>>,
     ) -> Result<Self, RemoteError> {
         let identity = PeerIdentity::load_or_create(&config.storage_dir)?;
-        Self::build_with_identity(config, identity, discovery, handler, local_audio)
+        Self::build_with_identity(config, identity, discovery, handler, local_audio, dialer)
     }
 
     fn build_with_identity(
@@ -159,6 +197,7 @@ impl CirculationNode {
         discovery: Arc<dyn PeerDiscovery>,
         handler: Option<Arc<dyn RemoteHandler>>,
         local_audio: Option<Arc<dyn LocalAudio>>,
+        dialer: Option<Arc<dyn RouteDialer>>,
     ) -> Result<Self, RemoteError> {
         let trust = PeerTrust::load(&config.storage_dir)?;
         let (nearby_tx, nearby_rx) = watch::channel(Vec::new());
@@ -177,6 +216,7 @@ impl CirculationNode {
                 trust,
                 pairing: PairingWindow::new(),
                 discovery,
+                dialer: dialer.unwrap_or_else(|| Arc::new(TcpRouteDialer)),
                 handler,
                 local_audio,
                 nearby_tx,
@@ -186,6 +226,7 @@ impl CirculationNode {
                 running: AsyncMutex::new(None),
                 bound_addr_sync: Mutex::new(None),
                 pull_lock: AsyncMutex::new(()),
+                pull_stage: Mutex::new(None),
                 yield_lock: AsyncMutex::new(()),
                 response_timeout: config.response_timeout,
             }),
@@ -456,6 +497,31 @@ impl CirculationNode {
         result
     }
 
+    pub async fn handoff_status(&self, address: Option<&str>) -> HandoffStatus {
+        let paired = self.inner.trust.list();
+        let offline = {
+            let nearby = self.inner.nearby_tx.borrow();
+            !paired.is_empty()
+                && paired
+                    .iter()
+                    .all(|peer| !nearby.iter().any(|n| n.id == peer.id))
+        };
+        let media_ready = match (&self.inner.local_audio, address) {
+            (Some(audio), Some(addr)) => {
+                let trimmed = addr.trim();
+                !trimmed.is_empty() && audio.is_media_connected(trimmed).await
+            }
+            _ => false,
+        };
+        let progress = *self.inner.pull_stage.lock().expect("pull stage lock");
+        HandoffStatus {
+            available: self.inner.local_audio.is_some() && !paired.is_empty(),
+            media_ready,
+            offline,
+            progress,
+        }
+    }
+
     pub async fn pull(&self, address: &str) -> Result<PullOutcome, RemoteError> {
         let Ok(_guard) = self.inner.pull_lock.try_lock() else {
             return Err(RemoteError::PullInProgress);
@@ -475,6 +541,15 @@ impl CirculationNode {
         if local_audio.is_media_connected(address).await {
             return Ok(PullOutcome::AlreadyConnected);
         }
+
+        struct PullStageGuard<'a>(&'a Mutex<Option<PullStage>>);
+        impl Drop for PullStageGuard<'_> {
+            fn drop(&mut self) {
+                *self.0.lock().expect("pull stage lock") = None;
+            }
+        }
+        *self.inner.pull_stage.lock().expect("pull stage lock") = Some(PullStage::ContactingPeers);
+        let _stage_guard = PullStageGuard(&self.inner.pull_stage);
 
         let mut reachable = 0usize;
         for peer in &peers {
@@ -496,6 +571,11 @@ impl CirculationNode {
             }
         }
 
+        *self.inner.pull_stage.lock().expect("pull stage lock") = Some(if reachable == 0 {
+            PullStage::AcquiringOffline
+        } else {
+            PullStage::Acquiring
+        });
         local_audio
             .acquire(address)
             .await
@@ -609,7 +689,7 @@ impl CirculationNode {
         &self,
         peer_id: &PeerId,
         addrs: &[SocketAddr],
-    ) -> Result<tokio_rustls::client::TlsStream<TcpStream>, RemoteError> {
+    ) -> Result<tokio_rustls::client::TlsStream<Box<dyn RouteStream>>, RemoteError> {
         self.require_bound_addr()?;
         let mut sorted = addrs.to_vec();
         sort_socket_addrs(&mut sorted);
@@ -622,12 +702,13 @@ impl CirculationNode {
             ServerName::try_from("openrose.peer").map_err(|_| RemoteError::IdentityError)?;
         for addr in sorted {
             let connect_limit = CONNECT_TIMEOUT.min(self.inner.response_timeout);
-            let Ok(Ok(tcp)) = timeout(connect_limit, TcpStream::connect(addr)).await else {
+            let Ok(Ok(stream)) = timeout(connect_limit, self.inner.dialer.connect(addr)).await
+            else {
                 continue;
             };
             let Ok(Ok(tls)) = timeout(
                 self.inner.response_timeout,
-                connector.connect(server_name.clone(), tcp),
+                connector.connect(server_name.clone(), stream),
             )
             .await
             else {
@@ -637,6 +718,18 @@ impl CirculationNode {
             return Ok(tls);
         }
         Err(RemoteError::PeerOffline)
+    }
+}
+
+struct TcpRouteDialer;
+
+#[async_trait]
+impl RouteDialer for TcpRouteDialer {
+    async fn connect(&self, addr: SocketAddr) -> Result<Box<dyn RouteStream>, RemoteError> {
+        let stream = TcpStream::connect(addr)
+            .await
+            .map_err(|_| RemoteError::PeerOffline)?;
+        Ok(Box::new(stream))
     }
 }
 

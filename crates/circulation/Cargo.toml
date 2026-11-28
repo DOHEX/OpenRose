@@ -5,6 +5,9 @@ edition.workspace = true
 license.workspace = true
 publish = false
 
+[features]
+uniffi = ["dep:uniffi", "openrose-control/uniffi", "openrose-headset/uniffi"]
+
 [dependencies]
 openrose-control = { path = "../control" }
 openrose-headset = { path = "../headset" }
@@ -19,6 +22,7 @@ sha2 = "0.10.9"
 spake2 = "0.4.0"
 tokio = { workspace = true, features = ["io-util", "net", "sync", "time", "rt"] }
 tokio-rustls = { version = "0.26.6", default-features = false, features = ["ring", "tls12"] }
+uniffi = { workspace = true, optional = true }
 
 [dev-dependencies]
 openrose-control = { path = "../control", features = ["simulator"] }

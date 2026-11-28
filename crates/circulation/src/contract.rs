@@ -7,9 +7,9 @@ use openrose_headset::{
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fmt;
-use std::net::IpAddr;
+use std::net::{IpAddr, SocketAddr};
+use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::sync::watch;
-
 pub const WIRE_VERSION: u32 = 1;
 pub const DEFAULT_PORT: u16 = 21871;
 pub const MDNS_SERVICE_TYPE: &str = "_openrose._tcp.local.";
@@ -33,6 +33,9 @@ pub fn is_remote_control_setting(setting: HeadsetSetting) -> bool {
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct PeerId(pub String);
+
+#[cfg(feature = "uniffi")]
+uniffi::custom_newtype!(PeerId, String);
 
 impl PeerId {
     pub fn new(id: impl Into<String>) -> Self {
@@ -77,6 +80,7 @@ impl AsRef<str> for PeerId {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct Peer {
     pub id: PeerId,
     pub name: String,
@@ -93,12 +97,34 @@ pub struct NearbyPeer {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+pub struct NearbyPeerRecord {
+    pub id: PeerId,
+    pub name: String,
+    pub addresses: Vec<String>,
+    pub port: u16,
+}
+
+impl From<&NearbyPeer> for NearbyPeerRecord {
+    fn from(peer: &NearbyPeer) -> Self {
+        Self {
+            id: peer.id.clone(),
+            name: peer.name.clone(),
+            addresses: peer.addresses.iter().map(ToString::to_string).collect(),
+            port: peer.port,
+        }
+    }
+}
+
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PairingOffer {
     pub code: String,
     pub qr: String,
     pub valid_for_millis: u64,
 }
 
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RemoteSessionReference {
     pub peer_id: PeerId,
@@ -106,6 +132,7 @@ pub struct RemoteSessionReference {
     pub token: String,
 }
 
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum RemoteCommand {
     Read,
@@ -115,6 +142,7 @@ pub enum RemoteCommand {
     },
 }
 
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum RemoteControlStatus {
     Waiting,
@@ -125,6 +153,7 @@ pub enum RemoteControlStatus {
     Unavailable,
 }
 
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BatterySlots {
     pub left: Option<i32>,
@@ -133,6 +162,7 @@ pub struct BatterySlots {
     pub layout: BatteryLayout,
 }
 
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RemoteReading {
     pub status: RemoteControlStatus,
@@ -186,6 +216,7 @@ impl RemoteReading {
     }
 }
 
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum RemoteError {
     UnsupportedVersion,
@@ -230,11 +261,13 @@ pub trait PeerDiscovery: Send + Sync {
     async fn close(&self);
 }
 
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct YieldReceipt {
     pub address: String,
 }
 
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum YieldRefusal {
     InCall,
@@ -250,6 +283,7 @@ pub trait LocalAudio: Send + Sync {
     async fn acquire(&self, address: &str) -> Result<(), YieldRefusal>;
 }
 
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum YieldResponse {
     Yielded(YieldReceipt),
@@ -257,11 +291,38 @@ pub enum YieldResponse {
     Refused(YieldRefusal),
 }
 
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum PullOutcome {
     AlreadyConnected,
     Acquired,
     AcquiredWithPeersUnreachable,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
+pub enum PullStage {
+    ContactingPeers,
+    Acquiring,
+    AcquiringOffline,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+pub struct HandoffStatus {
+    pub available: bool,
+    pub media_ready: bool,
+    pub offline: bool,
+    pub progress: Option<PullStage>,
+}
+
+pub trait RouteStream: AsyncRead + AsyncWrite + Send + Unpin {}
+
+impl<T: AsyncRead + AsyncWrite + Send + Unpin> RouteStream for T {}
+
+#[async_trait]
+pub trait RouteDialer: Send + Sync {
+    async fn connect(&self, addr: SocketAddr) -> Result<Box<dyn RouteStream>, RemoteError>;
 }
 
 pub(crate) fn same_address(left: &str, right: &str) -> bool {

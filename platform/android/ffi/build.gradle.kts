@@ -11,9 +11,10 @@ val generateUniffiBindings = registerRustFfiTask<GenerateUniffiBindingsTask>("ge
     uniffiConfigs.from(
         rootProject.layout.projectDirectory.file("crates/headset/uniffi.toml"),
         rootProject.layout.projectDirectory.file("crates/control/uniffi.toml"),
+        rootProject.layout.projectDirectory.file("crates/circulation/uniffi.toml"),
         rootProject.layout.projectDirectory.file("crates/ffi/uniffi.toml"),
     )
-    crates.set(listOf("openrose_headset", "openrose_control", "openrose_ffi"))
+    crates.set(listOf("openrose_headset", "openrose_control", "openrose_circulation", "openrose_ffi"))
     outputDir.set(generatedBindingsDir)
 }
 

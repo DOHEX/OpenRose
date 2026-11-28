@@ -1,7 +1,8 @@
+use openrose_circulation::YieldRefusal;
 use openrose_control::gatt::{GattError, GattFailureKind};
 use openrose_control::spp::{SppError, SppFailureKind};
 use openrose_control::transport::TransportError;
-use openrose_ffi::DriverError;
+use openrose_ffi::{DriverError, YieldRefusalKind};
 
 #[test]
 fn a_gatt_failure_keeps_its_kind_and_detail() {
@@ -97,4 +98,35 @@ fn a_driver_error_displays_its_detail() {
     };
 
     assert_eq!("BLUETOOTH_CONNECT was revoked", error.to_string());
+}
+
+#[test]
+fn a_yield_refusal_keeps_its_kind_and_detail() {
+    assert_eq!(
+        YieldRefusal::InCall,
+        YieldRefusal::from(DriverError::YieldRefused {
+            kind: YieldRefusalKind::InCall,
+            detail: "in call".to_string(),
+        })
+    );
+    assert_eq!(
+        YieldRefusal::MicInUse,
+        YieldRefusal::from(DriverError::YieldRefused {
+            kind: YieldRefusalKind::MicInUse,
+            detail: "mic busy".to_string(),
+        })
+    );
+    assert_eq!(
+        YieldRefusal::Unavailable("audio_changing".to_string()),
+        YieldRefusal::from(DriverError::YieldRefused {
+            kind: YieldRefusalKind::Unavailable,
+            detail: "audio_changing".to_string(),
+        })
+    );
+    assert_eq!(
+        YieldRefusal::Unavailable("link lost".to_string()),
+        YieldRefusal::from(DriverError::Terminal {
+            detail: "link lost".to_string(),
+        })
+    );
 }

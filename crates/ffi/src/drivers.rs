@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use openrose_circulation::YieldRefusal;
 use openrose_control::audio::{
     AudioEvents as CoreAudioEvents, AudioFactsDriver as CoreAudioFactsDriver, RawAudioDevice,
     RawAudioEvent, RawAudioSnapshot,
@@ -17,6 +18,13 @@ use std::collections::BTreeMap;
 use std::fmt;
 use std::sync::Arc;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+pub enum YieldRefusalKind {
+    InCall,
+    MicInUse,
+    Unavailable,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
 pub enum DriverError {
     Gatt {
@@ -25,6 +33,10 @@ pub enum DriverError {
     },
     Spp {
         kind: SppFailureKind,
+        detail: String,
+    },
+    YieldRefused {
+        kind: YieldRefusalKind,
         detail: String,
     },
     Terminal {
@@ -46,6 +58,7 @@ impl DriverError {
         match self {
             Self::Gatt { detail, .. }
             | Self::Spp { detail, .. }
+            | Self::YieldRefused { detail, .. }
             | Self::Terminal { detail }
             | Self::PermissionDenied { detail }
             | Self::Unsupported { detail }
@@ -98,6 +111,26 @@ impl From<DriverError> for SppError {
         }
     }
 }
+impl From<DriverError> for YieldRefusal {
+    fn from(error: DriverError) -> Self {
+        match error {
+            DriverError::YieldRefused {
+                kind: YieldRefusalKind::InCall,
+                ..
+            } => Self::InCall,
+            DriverError::YieldRefused {
+                kind: YieldRefusalKind::MicInUse,
+                ..
+            } => Self::MicInUse,
+            DriverError::YieldRefused {
+                kind: YieldRefusalKind::Unavailable,
+                detail,
+            } => Self::Unavailable(detail),
+            other => Self::Unavailable(other.to_string()),
+        }
+    }
+}
+
 
 #[uniffi::export(foreign)]
 pub trait ControlObserver: Send + Sync + 'static {
