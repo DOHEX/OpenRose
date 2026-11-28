@@ -1,7 +1,7 @@
-use crate::{DevState, OpenRoseClient, catalog_advertisement, run_on_core};
+use crate::{DevState, OpenRoseClient, catalog_advertisement, control_error_code, error_code, run_on_core};
 use nsh_core::prelude::*;
 use nsh_core::JsonValue;
-use openrose_control::ControlRuntime;
+use openrose_control::{ControlErrorCode, ControlRuntime};
 use openrose_control::scan::Advertisement;
 use openrose_control::snapshot::PlatformState;
 use openrose_headset::{HeadsetId, ModelProfile};
@@ -22,13 +22,13 @@ fn client_parts(
     client: &Instance<OpenRoseClient>,
 ) -> Result<(Arc<ControlRuntime>, Option<Arc<DevState>>), JsError> {
     if client.is_disposed() {
-        return Err(JsError::Error("OpenRoseClient 已释放".to_string()));
+        return Err(JsError::Error(error_code(ControlErrorCode::Disconnected)));
     }
     Ok(client.with(|borrowed| (Arc::clone(&borrowed.runtime), borrowed.dev.clone())))
 }
 
 fn require_dev(dev: Option<Arc<DevState>>) -> Result<Arc<DevState>, String> {
-    dev.ok_or_else(|| "当前未启用开发模式模拟器".to_string())
+    dev.ok_or_else(|| error_code(ControlErrorCode::Unsupported))
 }
 
 /// Add-headset control flow and dev-mode simulation helpers exported to the desktop UI.
@@ -50,7 +50,7 @@ impl OpenRoseHeadsetFlow {
             runtime
                 .connect_for_add_headset(HeadsetId::new(headset_id))
                 .await
-                .map_err(|err| err.message)
+                .map_err(control_error_code)
         })
     }
 
@@ -78,7 +78,7 @@ impl OpenRoseHeadsetFlow {
         run_on_core(async move {
             let dev = require_dev(dev)?;
             let entries: Vec<DevBondedEntry> = serde_json::from_str(&entries_json)
-                .map_err(|err| format!("无效的已配对耳机配置: {err}"))?;
+                .map_err(|_| error_code(ControlErrorCode::InvalidArgument))?;
             let _ = runtime.disconnect().await;
             let existing = runtime.snapshot().bonded_headsets;
             for item in existing {
@@ -93,19 +93,19 @@ impl OpenRoseHeadsetFlow {
             )> = None;
             for entry in entries {
                 let profile = ModelProfile::from_id(&entry.model_id)
-                    .ok_or_else(|| format!("未知型号: {}", entry.model_id))?;
+                    .ok_or_else(|| error_code(ControlErrorCode::InvalidArgument))?;
                 let firmware = match entry.firmware {
                     Some(text) => profile
                         .family()
                         .parse_firmware(&text)
-                        .map_err(|err| err.to_string())?,
+                        .map_err(|_| error_code(ControlErrorCode::InvalidArgument))?,
                     None => profile.family().default_firmware(),
                 };
                 let id = HeadsetId::new(entry.id);
                 let handle = dev
                     .transport
                     .add_headset(id.clone(), profile, firmware.clone())
-                    .map_err(|err| err.to_string())?;
+                    .map_err(|_| error_code(ControlErrorCode::Failed))?;
                 handle.reply_latency(Duration::from_millis(latency));
                 if first_entry.is_none() {
                     first_entry = Some((id, profile, firmware, handle));
@@ -142,12 +142,12 @@ impl OpenRoseHeadsetFlow {
             .any(|candidate| candidate.id == id);
         let mut advertisement = if let Some(model_id) = model_id {
             let profile = ModelProfile::from_id(&model_id)
-                .ok_or_else(|| JsError::Error(format!("未知型号: {model_id}")))?;
+                .ok_or_else(|| JsError::Error(error_code(ControlErrorCode::InvalidArgument)))?;
             let firmware = profile.family().default_firmware();
             let handle = dev
                 .transport
                 .add_headset(id.clone(), profile, firmware)
-                .map_err(|err| JsError::Error(err.to_string()))?;
+                .map_err(|_| JsError::Error(error_code(ControlErrorCode::Failed)))?;
             let latency = dev.reply_latency_ms.load(Ordering::SeqCst);
             handle.reply_latency(Duration::from_millis(latency));
             if !already_bonded {
@@ -177,7 +177,7 @@ impl OpenRoseHeadsetFlow {
         let (runtime, dev) = client_parts(&client)?;
         let _dev = require_dev(dev).map_err(JsError::Error)?;
         let state: PlatformState = serde_json::from_str(&state_json)
-            .map_err(|err| JsError::Error(format!("无效的平台状态: {err}")))?;
+            .map_err(|_| JsError::Error(error_code(ControlErrorCode::InvalidArgument)))?;
         let _guard = crate::SHARED_RUNTIME.enter();
         runtime.update_platform_state(state);
         Ok(())
