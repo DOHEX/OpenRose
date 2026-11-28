@@ -14,13 +14,14 @@ import io.github.dohex.openrose.circulation.RemoteReading
 import io.github.dohex.openrose.circulation.RemoteSessionReference
 import io.github.dohex.openrose.core.DeviceSetting
 import io.github.dohex.openrose.core.HeadsetCommand
-import io.github.dohex.openrose.core.NoiseMode
 import io.github.dohex.openrose.core.protocol.BatteryLayout
 import io.github.dohex.openrose.core.protocol.ModelProfile
 import io.github.dohex.openrose.core.transport.DeviceId
 import io.github.dohex.openrose.ffi.CoreDecodeResult
 import io.github.dohex.openrose.ffi.EnumNames
 import io.github.dohex.openrose.ffi.decodeCirculationReply
+import io.github.dohex.openrose.ffi.kotlincore.toKotlin
+import io.github.dohex.openrose.ffi.kotlincore.toRust
 import uniffi.openrose_circulation.RemoteError
 import uniffi.openrose_circulation.CirculationCommand as RustCommand
 import uniffi.openrose_circulation.CirculationReply as RustReply
@@ -28,11 +29,8 @@ import uniffi.openrose_circulation.HandoffStatus as RustHandoff
 import uniffi.openrose_circulation.PairingOffer as RustOffer
 import uniffi.openrose_circulation.RemoteReading as RustReading
 import uniffi.openrose_circulation.RemoteSessionReference as RustSession
-import uniffi.openrose_headset.HeadsetCommand as RustHeadsetCommand
 import uniffi.openrose_headset.NoiseMode as RustNoiseMode
 
-private val rustNoiseModes = EnumNames(RustNoiseMode.entries)
-private val kotlinNoiseModes = EnumNames(NoiseMode.entries)
 private val kotlinProfiles = EnumNames(ModelProfile.entries)
 private val kotlinLayouts = EnumNames(BatteryLayout.entries)
 private val kotlinSettings = EnumNames(DeviceSetting.entries)
@@ -45,7 +43,7 @@ internal fun CirculationCommand.toRust(): RustCommand? = when (this) {
     is CirculationCommand.PairQr -> RustCommand.PairQr(qr)
     is CirculationCommand.Forget -> RustCommand.Forget(peer)
     is CirculationCommand.Read -> RustCommand.Read(peer)
-    is CirculationCommand.SetSetting -> command.toRust()?.let { RustCommand.Set(session.toRust(), it) }
+    is CirculationCommand.SetSetting -> if (command.isRemoteControllable()) RustCommand.Set(session.toRust(), command.toRust()) else null
     is CirculationCommand.Handoff -> RustCommand.Handoff(address)
     is CirculationCommand.Pull -> RustCommand.Pull(address)
 }
@@ -73,13 +71,15 @@ private fun RustReply.Directory.toDirectory(): PeerDirectory = PeerDirectory(
     offer = offer?.toClient(),
 )
 
-private fun HeadsetCommand.toRust(): RustHeadsetCommand? = when (this) {
-    is HeadsetCommand.NoiseMode -> RustHeadsetCommand.NoiseMode(rustNoiseModes.of(mode))
-    is HeadsetCommand.AncLevel -> RustHeadsetCommand.AncLevel(level)
-    is HeadsetCommand.TransparencyLevel -> RustHeadsetCommand.TransparencyLevel(level)
-    is HeadsetCommand.EqualizerPreset -> RustHeadsetCommand.EqualizerPreset(preset)
-    is HeadsetCommand.GameMode -> RustHeadsetCommand.GameMode(enabled)
-    else -> null
+private fun HeadsetCommand.isRemoteControllable(): Boolean = when (this) {
+    is HeadsetCommand.NoiseMode,
+    is HeadsetCommand.AncLevel,
+    is HeadsetCommand.TransparencyLevel,
+    is HeadsetCommand.EqualizerPreset,
+    is HeadsetCommand.GameMode,
+    -> true
+
+    else -> false
 }
 
 private fun RemoteSessionReference.toRust(): RustSession = RustSession(peer, device.value, token)
@@ -95,8 +95,8 @@ private fun RustReading.toClient(): RemoteReading = RemoteReading(
     deviceName = headsetName,
     profile = profile?.let(kotlinProfiles::of),
     session = session?.toClient(),
-    mode = noiseMode?.let(kotlinNoiseModes::of),
-    modes = noiseModes.map(kotlinNoiseModes::of),
+    mode = noiseMode?.let(RustNoiseMode::toKotlin),
+    modes = noiseModes.map(RustNoiseMode::toKotlin),
     ancLevel = ancLevel,
     ancLevels = ancLevels,
     transparencyLevel = transparencyLevel,
