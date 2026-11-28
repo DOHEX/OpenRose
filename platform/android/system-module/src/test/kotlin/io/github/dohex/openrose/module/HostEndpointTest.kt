@@ -25,7 +25,6 @@ import io.github.dohex.openrose.bridge.BridgeBundles
 import io.github.dohex.openrose.bridge.BridgeTarget
 import io.github.dohex.openrose.bridge.IControlBridge
 import io.github.dohex.openrose.bridge.IControlFrames
-import io.github.dohex.openrose.circulation.CirculationResult
 import io.github.dohex.openrose.core.HostPlatform
 import io.github.dohex.openrose.core.PermissionState
 import io.github.dohex.openrose.core.PlatformApplicability
@@ -51,6 +50,7 @@ import io.github.dohex.openrose.ffi.coreWireFormatVersion
 import io.github.dohex.openrose.ffi.drivers.ControlTransportAdapter
 import io.github.dohex.openrose.ffi.drivers.PlatformDrivers
 import io.github.dohex.openrose.ffi.drivers.SppLink
+import io.github.dohex.openrose.ffi.encodeToBytes
 import io.github.dohex.openrose.ffi.kotlincore.CoreControlRuntime
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -72,6 +72,8 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
+import uniffi.openrose_circulation.CirculationCommand
+import uniffi.openrose_circulation.CirculationReply
 import uniffi.openrose_control.SessionTiming
 import uniffi.openrose_ffi.LocalClock
 import uniffi.openrose_ffi.modelDisplayName
@@ -152,7 +154,7 @@ class HostEndpointTest {
         var calls = 0
         var service = OwnerCirculation(active.copy(sequence = active.sequence + 1), backgroundScope) {
             calls++
-            CirculationResult("已解除配对")
+            CirculationReply.Forgotten
         }
         val endpoint = HostEndpoint(RuntimeEnvironment.getApplication(), host, MutableStateFlow(HostFacts()), backgroundScope) { service }
         val previousVersion = BridgeBundles.hello(null, null).apply { putInt(BridgeWire.KEY_VERSION, BridgeWire.VERSION - 1) }
@@ -163,14 +165,8 @@ class HostEndpointTest {
         val request = Bundle().apply {
             putString(BridgeWire.LEASE_ID, lease)
             putInt(BridgeWire.KEY_VERSION, BridgeWire.VERSION)
-            putString(BridgeWire.HOST_EPOCH, active.toString())
-            putBundle(
-                BridgeWire.PAYLOAD,
-                Bundle().apply {
-                    putString("op", "forget")
-                    putString("peer", "peer")
-                },
-            )
+            putString(BridgeWire.PAYLOAD, HostIdentityWire.encode(active).render())
+            putByteArray(BridgeWire.CIRCULATION, CirculationCommand.Forget("peer").encodeToBytes())
         }
         assertEquals(BridgeWire.STATUS_UNAVAILABLE, endpoint.circulation(request).getString(BridgeWire.STATUS))
         assertEquals(0, calls)
@@ -179,7 +175,7 @@ class HostEndpointTest {
         service = OwnerCirculation(active, backgroundScope) {
             assertFalse(Thread.currentThread() === callerThread)
             calls++
-            CirculationResult("已解除配对")
+            CirculationReply.Forgotten
         }
         assertEquals(BridgeWire.STATUS_OK, endpoint.circulation(request).getString(BridgeWire.STATUS))
         assertEquals(1, calls)

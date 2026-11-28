@@ -12,6 +12,7 @@ import android.os.Build
 import android.os.IBinder
 import android.os.Process
 import android.os.UserManager
+import android.provider.Settings
 import android.util.Log
 import io.github.dohex.openrose.androidintegration.HostConfiguration
 import io.github.dohex.openrose.androidintegration.HostFacts
@@ -19,6 +20,7 @@ import io.github.dohex.openrose.androidintegration.ModuleControlHost
 import io.github.dohex.openrose.androidintegration.wire.BridgeWire
 import io.github.dohex.openrose.bridge.readHostSettings
 import io.github.dohex.openrose.ffi.kotlincore.CoreControlRuntime
+import io.github.dohex.openrose.platform.PhoneCirculationAudio
 import io.github.dohex.openrose.platform.androidCoreTransport
 import io.github.dohex.openrose.platform.readPlatformState
 import io.github.libxposed.api.XposedInterface
@@ -32,6 +34,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import uniffi.openrose_ffi.OwnerActive
+import java.io.File
 import java.lang.reflect.Method
 import java.util.UUID
 
@@ -110,8 +114,8 @@ internal class ModuleHostRuntime(
                     )
                 },
                 onOwnerStarted = { generation, runtimeScope, control ->
-                    val service = startPhoneCirculation(appContext, runtimeScope, control)
-                    circulation = OwnerCirculation(generation, runtimeScope, service::call)
+                    val supervisor = startPhoneCirculation(appContext, runtimeScope, control as CoreControlRuntime)
+                    circulation = OwnerCirculation(generation, runtimeScope, supervisor::execute)
                 },
                 parentScope = hostScope,
                 newId = { UUID.randomUUID().toString() },
@@ -199,8 +203,29 @@ internal class ModuleHostRuntime(
         HostConfiguration(userUnlocked = true, settings = settings)
     }
 
+    private fun startPhoneCirculation(
+        appContext: Context,
+        runtimeScope: CoroutineScope,
+        control: CoreControlRuntime,
+    ): CirculationSupervisor = CirculationSupervisor(runtimeScope) {
+        val name = Settings.Global.getString(appContext.contentResolver, Settings.Global.DEVICE_NAME) ?: Build.MODEL
+        val network = AndroidPeerDiscovery(appContext)
+        control.circulationNode(
+            storageDir = File(appContext.noBackupFilesDir, CIRCULATION_STORAGE).path,
+            name = name,
+            listenPort = 0u,
+            discovery = network,
+            audio = PhoneCirculationAudio(appContext),
+            dialer = network,
+            ownerActive = object : OwnerActive {
+                override fun isActive(): Boolean = runtimeScope.isActive
+            },
+        )
+    }
+
     private companion object {
         const val TAG = "OpenRoseModuleHost"
+        const val CIRCULATION_STORAGE = "openrose-circulation"
         const val CONFIG_RETRY_MILLIS = 5_000L
     }
 }
