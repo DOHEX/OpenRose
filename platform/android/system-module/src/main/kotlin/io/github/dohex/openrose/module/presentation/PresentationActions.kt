@@ -102,17 +102,6 @@ internal class PresentationActions(
         registration = null
     }
 
-    fun shutdown() {
-        executor.shutdownNow()
-    }
-
-    fun awaitTermination(timeoutMillis: Long): Boolean = try {
-        executor.awaitTermination(timeoutMillis, TimeUnit.MILLISECONDS)
-    } catch (_: InterruptedException) {
-        Thread.currentThread().interrupt()
-        false
-    }
-
     private fun executeNoise(snapshot: RenderedSnapshot, targetMode: String) {
         val noise = snapshot.knownNoiseMode() ?: return
         if (!snapshot.canControlNoise(noise) || targetMode !in snapshot.availableNoiseModes() || targetMode == noise) return

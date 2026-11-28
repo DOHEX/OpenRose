@@ -16,7 +16,6 @@ internal class NativeBinderCallbacks(
     private val directory: NativeHeadsetDirectory,
     private val hooks: NativeHeadsetHooks,
     private val module: XposedModule,
-    private val isClosed: () -> Boolean,
 ) {
     private val registeredCallbacks = ConcurrentHashMap<IBinder, RegisteredCallback>()
     private val callbackHandler = Handler(Looper.getMainLooper())
@@ -86,7 +85,7 @@ internal class NativeBinderCallbacks(
 
     private fun sendRefresh(target: RegisteredCallback, snapshot: NativeHeadsetSnapshot, payload: String) {
         callbackHandler.post {
-            if (isClosed() || registeredCallbacks[target.binder] !== target) return@post
+            if (registeredCallbacks[target.binder] !== target) return@post
             if (directory.session(target.address)?.reference != target.reference) return@post
             hostAdapterCall(onFailure = { failure ->
                 registeredCallbacks.remove(target.binder, target)
@@ -117,13 +116,6 @@ internal class NativeBinderCallbacks(
 
     private fun unlinkDeath(callback: RegisteredCallback) {
         runCatching { callback.binder.unlinkToDeath(callback.death, 0) }
-    }
-
-    fun close() {
-        registeredCallbacks.values.forEach(::unlinkDeath)
-        registeredCallbacks.clear()
-        lastReportedSnapshot = null
-        callbackHandler.removeCallbacksAndMessages(null)
     }
 
     private data class RegisteredCallback(

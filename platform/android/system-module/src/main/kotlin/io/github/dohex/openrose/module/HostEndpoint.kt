@@ -191,7 +191,6 @@ internal class HostEndpoint(
     override fun release(request: Bundle): Bundle = application.release(request)
     override fun acquire(request: Bundle): Bundle = application.acquire(request)
     override fun watchFrames(request: Bundle, frames: IControlFrames): Bundle = application.watchFrames(request, frames)
-    fun shutdown() = leaseTable.shutdown()
 
     private inner class EndpointLeases {
         private fun caller(): CallerIdentity {
@@ -302,10 +301,6 @@ internal class HostEndpoint(
         fun close(leaseId: String) {
             val lease = lease(leaseId)
             synchronized(lock) { dropLease(lease.id) }
-        }
-
-        fun shutdown() {
-            synchronized(lock) { leases.keys.toList().forEach(::dropLease) }
         }
 
         private fun dropLease(leaseId: String) {
@@ -621,22 +616,16 @@ internal class HostEndpoint(
         }
 
         private fun circulationResponse(owner: OwnerCirculation, command: CirculationCommand): Bundle {
+            fun ownerIsCurrent() = (host.status.value as? HostStatus.Active)?.generation == owner.generation
             val reply = try {
                 runBlocking {
-                    owner.scope.async(Dispatchers.IO) {
-                        check((host.status.value as? HostStatus.Active)?.generation == owner.generation) { "owner generation expired" }
-                        owner.call(command)
-                    }.await()
+                    owner.scope.async(Dispatchers.IO) { if (ownerIsCurrent()) owner.call(command) else null }.await()
                 }
             } catch (cancelled: CancellationException) {
                 if (owner.scope.isActive) throw cancelled
-                return BridgeBundles.response(BridgeWire.STATUS_UNAVAILABLE)
-            } catch (_: IllegalStateException) {
-                return BridgeBundles.response(BridgeWire.STATUS_UNAVAILABLE)
+                null
             }
-            if ((host.status.value as? HostStatus.Active)?.generation != owner.generation) {
-                return BridgeBundles.response(BridgeWire.STATUS_UNAVAILABLE)
-            }
+            if (reply == null || !ownerIsCurrent()) return BridgeBundles.response(BridgeWire.STATUS_UNAVAILABLE)
             return BridgeBundles.response(BridgeWire.STATUS_OK).apply {
                 putByteArray(BridgeWire.CIRCULATION, reply.encodeToBytes())
             }
@@ -687,7 +676,13 @@ internal class HostEndpoint(
                 lease.framesJob = scope.launch {
                     try {
                         host.control.frames(lease.caller, lease.id, generation).collect { frame ->
-                            frames.onFrame(Bundle().apply { putString(BridgeWire.PAYLOAD, HostFrameWire.encode(frame).render()) })
+                            val encoded = HostFrameWire.encode(frame)
+                            frames.onFrame(
+                                Bundle().apply {
+                                    putString(BridgeWire.PAYLOAD, encoded.payload.render())
+                                    putByteArray(BridgeWire.CORE_SNAPSHOT, encoded.snapshot)
+                                },
+                            )
                         }
                     } catch (_: RemoteException) {
                     } finally {

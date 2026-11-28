@@ -29,7 +29,6 @@ import org.robolectric.RuntimeEnvironment
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import java.util.concurrent.TimeUnit
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -53,9 +52,6 @@ class SystemPresentationRendererTest {
     fun grantNotificationPermission() {
         shadowOf(app).grantPermissions(Manifest.permission.POST_NOTIFICATIONS)
     }
-
-    @AfterTest
-    fun closeRenderer() = renderer.close()
 
     @Test
     fun withdrawingTheStatusCardTransfersTheClaimedPromptForItsRemainingTime() {
@@ -95,8 +91,7 @@ class SystemPresentationRendererTest {
         assertEquals("another-device", manager.activeNotifications.single().tag)
         renderer.renderFrame(snapshot(sequence = 1, sessionId = 3, statusNotificationEnabled = false))
         assertTrue(manager.activeNotifications.any { it.tag.startsWith("openrose:module:") })
-        renderer.close()
-        renderer.renderFrame(snapshot(sequence = 1, sessionId = 4))
+        renderer.clear()
         assertEquals("another-device", manager.activeNotifications.single().tag)
         assertEquals(listOf(1L to "connection", 2L to "connection", 3L to "connection"), claims)
     }

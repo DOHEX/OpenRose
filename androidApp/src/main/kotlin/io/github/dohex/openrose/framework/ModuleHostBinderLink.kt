@@ -26,6 +26,7 @@ import io.github.dohex.openrose.androidintegration.OwnerGeneration
 import io.github.dohex.openrose.androidintegration.ReleaseResult
 import io.github.dohex.openrose.androidintegration.SwitchRequest
 import io.github.dohex.openrose.androidintegration.wire.BridgeWire
+import io.github.dohex.openrose.androidintegration.wire.EncodedHostFrame
 import io.github.dohex.openrose.androidintegration.wire.HandoffWire
 import io.github.dohex.openrose.androidintegration.wire.HostFrameWire
 import io.github.dohex.openrose.androidintegration.wire.HostIdentityWire
@@ -270,7 +271,9 @@ class ModuleHostBinderLink(
             val receiver = object : IControlFrames.Stub() {
                 override fun onFrame(frame: Bundle) {
                     try {
-                        trySend(HostFrameWire.decodeFrame(parseWire(frame.getString(BridgeWire.PAYLOAD).orEmpty())))
+                        val payload = parseWire(frame.getString(BridgeWire.PAYLOAD).orEmpty())
+                        val snapshot = frame.getByteArray(BridgeWire.CORE_SNAPSHOT) ?: ByteArray(0)
+                        trySend(HostFrameWire.decodeFrame(EncodedHostFrame(payload, snapshot)))
                     } catch (failure: WireFormatException) {
                         this@callbackFlow.close(HostLinkException("宿主返回了无法识别的状态帧", failure))
                     }

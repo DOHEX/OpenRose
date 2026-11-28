@@ -429,12 +429,12 @@ private class ApplicationOwners(
                 local != null -> local.runtime.state.value.copy(platform = platform, settings = settings)
 
                 record.selected == ControlWay.MODULE && view is ModuleView.Active -> {
-                    val frame = view.frame
-                    frame.snapshot.toControlState().copy(
+                    val reported = view.frame.snapshot.toControlState()
+                    reported.copy(
                         platform = platform.copy(
-                            permission = frame.platform.permission,
-                            transport = frame.platform.transport,
-                            scanPermission = frame.platform.scanPermission,
+                            permission = reported.platform.permission,
+                            transport = reported.platform.transport,
+                            scanPermission = reported.platform.scanPermission,
                         ),
                         settings = settings,
                     )

@@ -6,6 +6,7 @@ import io.github.dohex.openrose.androidintegration.HostConfiguration
 import io.github.dohex.openrose.androidintegration.HostSettings
 import io.github.dohex.openrose.androidintegration.IntegrationSettings
 import io.github.dohex.openrose.androidintegration.ModuleControlHost
+import io.github.dohex.openrose.ffi.CirculationNodeSetup
 import io.github.dohex.openrose.ffi.kotlincore.CoreControlRuntime
 import kotlinx.coroutines.CoroutineScope
 import uniffi.openrose_ffi.CirculationNode
@@ -44,7 +45,7 @@ internal class AlwaysActive : OwnerActive {
 
 internal fun CoreControlRuntime.isolatedCirculationNode(): CirculationNode {
     val dir = Files.createTempDirectory("openrose-circulation").toFile().apply { deleteOnExit() }
-    return circulationNode(dir.path, "Phone", 0u, SilentDiscovery(), IdleAudio(), UnreachableDialer(), AlwaysActive())
+    return circulationNode(CirculationNodeSetup(dir.path, "Phone", 0u, SilentDiscovery(), IdleAudio(), UnreachableDialer(), AlwaysActive()))
 }
 
 internal suspend fun hostedCoreRuntime(scope: CoroutineScope): CoreControlRuntime {

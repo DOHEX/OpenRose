@@ -7,6 +7,7 @@ import io.github.dohex.openrose.core.OperationResult
 import io.github.dohex.openrose.core.PlatformState
 import io.github.dohex.openrose.core.UserSettings
 import io.github.dohex.openrose.core.transport.DeviceId
+import io.github.dohex.openrose.ffi.CirculationNodeSetup
 import io.github.dohex.openrose.ffi.RustControlResult
 import io.github.dohex.openrose.ffi.RustControlRuntime
 import io.github.dohex.openrose.ffi.SystemLocalClock
@@ -18,11 +19,7 @@ import kotlinx.coroutines.job
 import uniffi.openrose_control.SessionTiming
 import uniffi.openrose_ffi.CirculationNode
 import uniffi.openrose_ffi.ControlTransport
-import uniffi.openrose_ffi.LocalAudio
 import uniffi.openrose_ffi.LocalClock
-import uniffi.openrose_ffi.OwnerActive
-import uniffi.openrose_ffi.PeerDiscovery
-import uniffi.openrose_ffi.PeerRouteDialer
 import uniffi.openrose_ffi.defaultSessionTiming
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
@@ -30,6 +27,8 @@ import uniffi.openrose_control.ControlSnapshot as RustSnapshot
 
 interface CoreBackedRuntime : ControlRuntime {
     val coreState: StateFlow<RustSnapshot>
+
+    fun circulationNode(setup: CirculationNodeSetup): CirculationNode
 }
 
 @Suppress("TooManyFunctions")
@@ -102,23 +101,7 @@ class CoreControlRuntime internal constructor(
 
     override fun updatePlatformState(platformState: PlatformState) = rust.command { it.updatePlatformState(platformState.toRust()) }
 
-    fun circulationNode(
-        storageDir: String,
-        name: String,
-        listenPort: UShort? = null,
-        discovery: PeerDiscovery,
-        audio: LocalAudio,
-        dialer: PeerRouteDialer,
-        ownerActive: OwnerActive,
-    ): CirculationNode = rust.circulationNode(
-        storageDir = storageDir,
-        name = name,
-        listenPort = listenPort,
-        discovery = discovery,
-        audio = audio,
-        dialer = dialer,
-        ownerActive = ownerActive,
-    )
+    override fun circulationNode(setup: CirculationNodeSetup): CirculationNode = rust.circulationNode(setup)
 }
 
 private class ClosingBarrier(private val close: () -> Unit) {

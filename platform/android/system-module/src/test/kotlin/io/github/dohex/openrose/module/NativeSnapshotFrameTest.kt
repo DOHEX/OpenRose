@@ -3,11 +3,13 @@ package io.github.dohex.openrose.module
 import android.app.Application
 import android.os.Bundle
 import io.github.dohex.openrose.androidintegration.wire.BridgeWire
+import io.github.dohex.openrose.core.DeviceSetting
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.FieldReading
 import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.dohex.openrose.core.protocol.ModelProfile
 import io.github.dohex.openrose.ffi.coreWireFormatVersion
+import io.github.dohex.openrose.ffi.drivers.SimulatedDrivers
 import io.github.dohex.openrose.ffi.kotlincore.toControlState
 import kotlinx.coroutines.runBlocking
 import org.junit.runner.RunWith
@@ -32,8 +34,8 @@ class NativeSnapshotFrameTest {
         assertEquals(frame.getString(BridgeWire.HOST_EPOCH), native.hostEpoch)
         assertEquals(frame.getLong(BridgeWire.SESSION_ID), native.sessionId)
         assertEquals(frame.getLong(BridgeWire.CAPTURED_ELAPSED_MILLIS), native.capturedElapsedMillis)
-        assertEquals("AA:BB:CC:DD:EE:FF", native.deviceId)
-        assertEquals(setOf("AA:BB:CC:DD:EE:FF"), native.addresses)
+        assertEquals(SimulatedDrivers.DEFAULT_ADDRESS, native.deviceId)
+        assertEquals(setOf(SimulatedDrivers.DEFAULT_ADDRESS), native.addresses)
         assertEquals(ModelProfile.I5_ZT, native.profile)
         for (field in listOf(DeviceField.LEFT_BATTERY, DeviceField.RIGHT_BATTERY, DeviceField.NOISE_MODE)) {
             val hostReading = assertIs<FieldReading.Known>(host.diagnostics.fields[field])
@@ -42,8 +44,8 @@ class NativeSnapshotFrameTest {
         assertIs<FieldValue.Number>(assertIs<FieldReading.Known>(native.fields[DeviceField.LEFT_BATTERY]).value)
         assertTrue(native.noiseModes.isNotEmpty())
         assertEquals(host.capabilities.noiseControl?.modes.orEmpty().toSet(), native.noiseModes)
-        assertEquals(host.capabilities.writableSettings.map { it.name }.toSet(), native.writableSettings)
-        assertTrue("NOISE_MODE" in native.writableSettings)
+        assertEquals(host.capabilities.writableSettings.toSet(), native.writableSettings)
+        assertTrue(DeviceSetting.NOISE_MODE in native.writableSettings)
     }
 
     @Test
