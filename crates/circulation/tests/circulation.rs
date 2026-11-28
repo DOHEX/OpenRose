@@ -1,8 +1,9 @@
 use async_trait::async_trait;
 use openrose_circulation::{
-    CirculationConfig, CirculationNode, HeadsetEndpoint, LocalAudio, NearbyPeer, PeerDiscovery,
-    PeerId, PullOutcome, RemoteCommand, RemoteControlStatus, RemoteError, RemoteHandler,
-    YieldReceipt, YieldRefusal,
+    CirculationConfig, CirculationNode, HeadsetEndpoint, LocalAudio, NearbyPeer, NearbyPeerRecord,
+    PeerDiscovery, PeerId, PullOutcome, PullStage, RemoteCommand, RemoteControlStatus,
+    RemoteError, RemoteHandler, RouteDialer, RouteStream, YieldReceipt, YieldRefusal,
+    codec::{CIRCULATION_WIRE_FORMAT_VERSION, CirculationCommand, CirculationReply},
 };
 use openrose_control::audio::RawAudioDevice;
 use openrose_control::simulator::{SimulatedClock, SimulatedHeadsetHandle, SimulatedTransport};
@@ -983,4 +984,225 @@ async fn concurrent_pull_is_refused() {
     assert!(!pair.phone_audio.is_holding());
 
     pair.close().await;
+}
+
+#[tokio::test]
+async fn dialer_seam_carries_pairing_and_remote_read() {
+    struct RecordingDialer {
+        dialed: Arc<Mutex<Vec<std::net::SocketAddr>>>,
+    }
+
+    #[async_trait]
+    impl RouteDialer for RecordingDialer {
+        async fn connect(
+            &self,
+            addr: std::net::SocketAddr,
+        ) -> Result<Box<dyn RouteStream>, RemoteError> {
+            self.dialed.lock().expect("dialed lock").push(addr);
+            let stream = tokio::net::TcpStream::connect(addr)
+                .await
+                .map_err(|_| RemoteError::PeerOffline)?;
+            Ok(Box::new(stream))
+        }
+    }
+
+    let hub = LoopbackDiscoveryHub::new();
+    let rig = ControlRig::ready_i5("AA:BB:CC:00:00:10").await;
+    let holder_dir = TempDir::new("dialer-holder");
+    let requester_dir = TempDir::new("dialer-requester");
+    let holder = CirculationNode::with_control(
+        CirculationConfig::loopback(&holder_dir.path, "Holder"),
+        hub.client(),
+        Arc::clone(&rig.runtime),
+    )
+    .expect("holder node");
+    let dialed = Arc::new(Mutex::new(Vec::new()));
+    let requester = CirculationNode::with_dialer(
+        CirculationConfig::loopback(&requester_dir.path, "Requester"),
+        hub.client(),
+        Arc::new(RecordingDialer {
+            dialed: Arc::clone(&dialed),
+        }),
+    )
+    .expect("requester node");
+
+    let holder_port = holder.start().await.expect("start holder");
+    requester.start().await.expect("start requester");
+    wait_until(|| requester.nearby().iter().any(|p| p.id == *holder.id())).await;
+
+    let offer = holder.offer_pairing().expect("offer");
+    requester
+        .pair(holder.id(), &offer.code)
+        .await
+        .expect("pair through custom dialer");
+    let reading = requester
+        .remote_read(holder.id())
+        .await
+        .expect("read through custom dialer");
+    assert_eq!(reading.status, RemoteControlStatus::Ready);
+    assert!(!dialed.lock().expect("dialed lock").is_empty());
+    assert!(
+        dialed
+            .lock()
+            .expect("dialed lock")
+            .iter()
+            .all(|addr| addr.port() == holder_port)
+    );
+
+    requester.close().await;
+    holder.close().await;
+}
+
+#[tokio::test]
+async fn owner_gate_constructor_refuses_when_inactive_and_allows_when_active() {
+    struct NoopAudio;
+
+    #[async_trait]
+    impl LocalAudio for NoopAudio {
+        async fn is_connected(&self, _address: &str) -> bool {
+            false
+        }
+        async fn is_media_connected(&self, _address: &str) -> bool {
+            false
+        }
+        async fn yield_audio(&self, address: &str) -> Result<YieldReceipt, YieldRefusal> {
+            Ok(YieldReceipt {
+                address: address.to_string(),
+            })
+        }
+        async fn acquire(&self, _address: &str) -> Result<(), YieldRefusal> {
+            Ok(())
+        }
+    }
+
+    struct DefaultDialer;
+
+    #[async_trait]
+    impl RouteDialer for DefaultDialer {
+        async fn connect(
+            &self,
+            addr: std::net::SocketAddr,
+        ) -> Result<Box<dyn RouteStream>, RemoteError> {
+            let stream = tokio::net::TcpStream::connect(addr)
+                .await
+                .map_err(|_| RemoteError::PeerOffline)?;
+            Ok(Box::new(stream))
+        }
+    }
+
+    let hub = LoopbackDiscoveryHub::new();
+    let rig = ControlRig::ready_i5("AA:BB:CC:00:00:11").await;
+    let owner_active = Arc::new(AtomicBool::new(false));
+    let gate = Arc::clone(&owner_active);
+    let phone_dir = TempDir::new("owner-phone");
+    let desktop_dir = TempDir::new("owner-desktop");
+    let phone = CirculationNode::with_control_and_audio_for_owner(
+        CirculationConfig::loopback(&phone_dir.path, "Phone"),
+        hub.client(),
+        Arc::clone(&rig.runtime),
+        Arc::new(NoopAudio),
+        Arc::new(move || gate.load(Ordering::SeqCst)),
+        Arc::new(DefaultDialer),
+    )
+    .expect("phone node");
+    let desktop = CirculationNode::new(
+        CirculationConfig::loopback(&desktop_dir.path, "Desktop"),
+        hub.client(),
+    )
+    .expect("desktop node");
+
+    phone.start().await.expect("start phone");
+    desktop.start().await.expect("start desktop");
+    wait_until(|| desktop.nearby().iter().any(|p| p.id == *phone.id())).await;
+
+    let offer = phone.offer_pairing().expect("offer");
+    desktop.pair(phone.id(), &offer.code).await.expect("pair");
+
+    assert_eq!(
+        desktop.remote_read(phone.id()).await,
+        Err(RemoteError::OwnerInactive)
+    );
+    owner_active.store(true, Ordering::SeqCst);
+    let reading = desktop
+        .remote_read(phone.id())
+        .await
+        .expect("read once active");
+    assert_eq!(reading.status, RemoteControlStatus::Ready);
+
+    desktop.close().await;
+    phone.close().await;
+}
+
+#[tokio::test]
+async fn handoff_status_tracks_availability_media_offline_and_pull_progress() {
+    let headset = "AA:BB:CC:00:00:12";
+    let pair = PullPair::paired(headset, false, true, None).await;
+
+    let initial = pair.desktop.handoff_status(Some(headset)).await;
+    assert!(initial.available);
+    assert!(!initial.media_ready);
+    assert!(!initial.offline);
+    assert_eq!(initial.progress, None);
+
+    pair.phone_audio
+        .set_yield_delay(Duration::from_millis(120));
+    let first_notified = pair.phone_audio.yield_gate.notified();
+    let desktop_pull = pair.desktop.clone();
+    let pull_task = tokio::spawn(async move { desktop_pull.pull(headset).await });
+    first_notified.await;
+
+    let during = pair.desktop.handoff_status(Some(headset)).await;
+    assert_eq!(during.progress, Some(PullStage::ContactingPeers));
+    assert_eq!(pull_task.await.expect("join"), Ok(PullOutcome::Acquired));
+
+    let after = pair.desktop.handoff_status(Some(headset)).await;
+    assert!(after.available);
+    assert!(after.media_ready);
+    assert_eq!(after.progress, None);
+
+    pair.phone.close().await;
+    wait_until(|| pair.desktop.nearby().is_empty()).await;
+    let offline = pair.desktop.handoff_status(Some(headset)).await;
+    assert!(offline.offline);
+
+    pair.desktop.close().await;
+}
+
+#[test]
+fn circulation_codec_round_trips_and_rejects_bad_bytes() {
+    let peer = PeerId::new("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef");
+    let cmd = CirculationCommand::Pair {
+        peer_id: peer.clone(),
+        code: "123456".to_string(),
+    };
+    let cmd_bytes = cmd.encode();
+    assert_eq!(cmd_bytes[3], CIRCULATION_WIRE_FORMAT_VERSION);
+    assert_eq!(CirculationCommand::decode(&cmd_bytes), Ok(cmd));
+
+    let reply = CirculationReply::Directory {
+        paired: vec![openrose_circulation::Peer {
+            id: peer.clone(),
+            name: "Desktop".to_string(),
+        }],
+        nearby: vec![NearbyPeerRecord {
+            id: peer,
+            name: "Desktop".to_string(),
+            addresses: vec!["127.0.0.1".to_string()],
+            port: 21871,
+        }],
+        offer: None,
+    };
+    let reply_bytes = reply.encode();
+    assert_eq!(CirculationReply::decode(&reply_bytes), Ok(reply));
+
+    assert!(matches!(
+        CirculationCommand::decode(b"bad"),
+        Err(openrose_control::codec::CodecError::Malformed { .. })
+    ));
+    let mut bad_ver = cmd_bytes;
+    bad_ver[3] = CIRCULATION_WIRE_FORMAT_VERSION + 1;
+    assert!(matches!(
+        CirculationCommand::decode(&bad_ver),
+        Err(openrose_control::codec::CodecError::UnsupportedVersion { .. })
+    ));
 }

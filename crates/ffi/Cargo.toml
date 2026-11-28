@@ -19,6 +19,7 @@ bindgen = ["uniffi/cli", "uniffi/cargo-metadata"]
 simulator = ["dep:openrose-ffi-simulator"]
 
 [dependencies]
+openrose-circulation = { path = "../circulation", features = ["uniffi"] }
 openrose-control = { path = "../control", features = ["uniffi"] }
 openrose-headset = { path = "../headset", features = ["uniffi"] }
 openrose-ffi-simulator = { path = "../ffi-simulator", optional = true }
@@ -27,4 +28,4 @@ tokio = { workspace = true, features = ["rt-multi-thread", "time"] }
 uniffi = { workspace = true, features = ["tokio"] }
 
 [dev-dependencies]
-tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync", "time"] }
+tokio = { workspace = true, features = ["io-util", "macros", "net", "rt-multi-thread", "sync", "time"] }
