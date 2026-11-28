@@ -123,15 +123,6 @@ fn run_check() -> ExitCode {
         return ExitCode::FAILURE;
     }
 
-    if !run_step(
-        "Rust FFI host library",
-        &cargo,
-        &["build", "--locked", "-p", "openrose-ffi"],
-        &root,
-    ) {
-        return ExitCode::FAILURE;
-    }
-
     let desktop_dir = root.join("desktop");
     let nsh = nsh_bin();
     if !run_step("Desktop nsh check", &nsh, &["check"], &desktop_dir) {

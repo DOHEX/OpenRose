@@ -21,6 +21,8 @@ use tokio::runtime::{Builder, Runtime};
 mod headset_flow;
 use tokio::sync::{mpsc, oneshot};
 
+mod desktop_bluetooth;
+
 static SHARED_RUNTIME: LazyLock<Runtime> = LazyLock::new(|| {
     Builder::new_multi_thread()
         .worker_threads(2)
@@ -37,6 +39,7 @@ fn native(registry: &mut Registry) {
     registry
         .module::<OpenRoseCatalog>()
         .module::<tray::OpenRoseTray>()
+        .module::<desktop_bluetooth::OpenRoseBluetooth>()
         .class::<OpenRoseClient>()
         .module::<headset_flow::OpenRoseHeadsetFlow>();
 }
@@ -253,6 +256,7 @@ pub struct OpenRoseClient {
     pub(crate) runtime: Arc<ControlRuntime>,
     observer: Arc<ObserverHub>,
     pub(crate) dev: Option<Arc<DevState>>,
+    desktop: Option<desktop_bluetooth::DesktopLink>,
 }
 
 impl OpenRoseClient {
@@ -287,6 +291,7 @@ impl OpenRoseClient {
             runtime,
             observer,
             dev: Some(dev),
+            desktop: None,
         }
     }
 
@@ -300,7 +305,21 @@ impl OpenRoseClient {
         dev.transport
             .scan()
             .advertise(catalog_advertisement(profile, &id));
-        tokio::task::yield_now().await;
+        let observed = tokio::time::timeout(Duration::from_secs(2), async {
+            while !runtime
+                .snapshot()
+                .candidates
+                .iter()
+                .any(|candidate| candidate.id == id)
+            {
+                tokio::time::sleep(Duration::from_millis(5)).await;
+            }
+        })
+        .await;
+        if observed.is_err() {
+            runtime.stop_scan().await;
+            return Err("模拟耳机广播未被扫描到".to_string());
+        }
         let result = runtime.connect_for_add_headset(id).await;
         runtime.stop_scan().await;
         result.map_err(|err| err.message)
@@ -309,9 +328,13 @@ impl OpenRoseClient {
 
 #[class]
 impl OpenRoseClient {
-    /// Creates an OpenRose client running in dev mode with a simulated ROSE EarFree i5.
-    pub fn new() -> Self {
-        Self::create_dev(DEFAULT_DEV_REPLY_LATENCY_MS)
+    /// Creates an OpenRose client: a simulated ROSE EarFree i5 in development, the desktop Bluetooth transport otherwise.
+    pub fn new(development: bool) -> Self {
+        if development {
+            Self::create_dev(DEFAULT_DEV_REPLY_LATENCY_MS)
+        } else {
+            Self::create_desktop()
+        }
     }
 
     /// Reads the latest ControlSnapshot directly from ControlRuntime without a local copy.
@@ -475,12 +498,6 @@ impl OpenRoseClient {
         self.dev
             .as_ref()
             .map(|dev| serde_json::to_value(dev.config_snapshot()).expect("dev config serializes"))
-    }
-}
-
-impl Default for OpenRoseClient {
-    fn default() -> Self {
-        Self::new()
     }
 }
 

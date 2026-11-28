@@ -18,10 +18,10 @@
   rustup target add aarch64-linux-android armv7-linux-androideabi x86_64-linux-android
   cargo install --locked cargo-ndk --version 4.1.2
   ```
-- **Linux 运行库**：运行或测试桌面版需要 GTK 3、EGL / OpenGL 和 fontconfig。CI 在 Ubuntu 24.04 上安装的是：
+- **Linux 运行库**：运行或测试桌面版需要 GTK 3、EGL / OpenGL 和 fontconfig；构建 Linux 蓝牙实现（bluer 经 libdbus 访问 BlueZ）还需要 `libdbus-1-dev` 与 `pkg-config`。CI 在 Ubuntu 24.04 上安装的是：
 
   ```bash
-  sudo apt-get install --yes libgtk-3-0t64 libegl1 libgl1 libfontconfig1 rpm libarchive-tools
+  sudo apt-get install --yes libgtk-3-0t64 libegl1 libgl1 libfontconfig1 libdbus-1-dev pkg-config rpm libarchive-tools
   ```
 
   其中 `rpm` 和 `libarchive-tools` 用于打包 RPM / Pacman。真实运行桌面版控制耳机还需要已运行的 BlueZ、可访问的系统 D-Bus 和已开启且支持 BLE 的适配器；DEB、RPM、Pacman 声明 `bluez` 依赖，AppImage 依赖宿主的 BlueZ。Linux 托盘需要 `libsystemd`。

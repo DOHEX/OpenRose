@@ -1,4 +1,4 @@
-import { cleanup, computed, signal } from "nsh";
+import { appInfo, cleanup, computed, signal } from "nsh";
 import { OpenRoseCatalog, OpenRoseClient } from "openrose-native";
 
 export type BatteryLayout = "EarbudsAndCase" | "EarbudsOnly" | "SingleUnit";
@@ -292,7 +292,7 @@ export interface HeadsetController {
 export function createHeadsetController(): HeadsetController {
   const catalog = OpenRoseCatalog.listModels() as ModelCatalogEntry[];
   const catalogById = new Map(catalog.map((entry) => [entry.id, entry]));
-  const client = new OpenRoseClient();
+  const client = new OpenRoseClient(appInfo().development);
 
   const snapshot = signal<ControlSnapshot>(client.snapshot() as ControlSnapshot);
   const devConfig = signal<DevHeadsetConfig | null>(
