@@ -278,7 +278,10 @@ async fn snapshot_and_command_round_trip_through_ffi_with_typed_errors() {
     world.runtime.connect(world.id()).await.expect("ready");
     let snapshot = world.snapshot();
     let snapshot_bytes = encode_snapshot(snapshot.clone());
-    assert_eq!(snapshot, decode_snapshot(snapshot_bytes.clone()).expect("snapshot decodes"));
+    assert_eq!(
+        snapshot,
+        decode_snapshot(snapshot_bytes.clone()).expect("snapshot decodes")
+    );
 
     let mut wrong_snapshot_version = snapshot_bytes;
     wrong_snapshot_version[3] = WIRE_FORMAT_VERSION.wrapping_add(1);
@@ -300,7 +303,10 @@ async fn snapshot_and_command_round_trip_through_ffi_with_typed_errors() {
         command: HeadsetCommand::NoiseMode(NoiseMode::Anc),
     };
     let command_bytes = encode_command(command.clone());
-    assert_eq!(command, decode_command(command_bytes.clone()).expect("command decodes"));
+    assert_eq!(
+        command,
+        decode_command(command_bytes.clone()).expect("command decodes")
+    );
 
     let mut wrong_command_version = command_bytes;
     wrong_command_version[3] = WIRE_FORMAT_VERSION.wrapping_add(1);
