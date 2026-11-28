@@ -1,6 +1,5 @@
 package io.github.dohex.openrose.androidintegration
 
-import io.github.dohex.openrose.core.ControlRuntime
 import io.github.dohex.openrose.core.HeadsetCommand
 import io.github.dohex.openrose.core.OperationResult
 import io.github.dohex.openrose.core.transport.DeviceId
@@ -8,6 +7,7 @@ import io.github.dohex.openrose.core.transport.GattDriver
 import io.github.dohex.openrose.core.transport.GattException
 import io.github.dohex.openrose.core.transport.GattFailureKind
 import io.github.dohex.openrose.ffi.drivers.PlatformDrivers
+import io.github.dohex.openrose.ffi.kotlincore.CoreBackedRuntime
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -42,10 +42,10 @@ internal class SharedDrivers(
 
 internal class CoreAwaitedInRealTime(
     private val test: TestScope,
-    private val core: ControlRuntime,
+    private val core: CoreBackedRuntime,
     private val onRelease: (Boolean) -> Unit = {},
     private val replyWithheld: () -> Boolean = { false },
-) : ControlRuntime by core {
+) : CoreBackedRuntime by core {
     override suspend fun refreshBondedDevices() = awaitingCore { core.refreshBondedDevices() }
 
     override suspend fun startScan(): OperationResult = awaitingCore { core.startScan() }

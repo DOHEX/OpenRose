@@ -4,6 +4,7 @@ import io.github.dohex.openrose.androidintegration.wire.HandoffWire
 import io.github.dohex.openrose.androidintegration.wire.HostFrameWire
 import io.github.dohex.openrose.androidintegration.wire.HostIdentityWire
 import io.github.dohex.openrose.androidintegration.wire.HostWire
+import io.github.dohex.openrose.androidintegration.wire.WireFormatException
 import io.github.dohex.openrose.androidintegration.wire.parseWire
 import io.github.dohex.openrose.androidintegration.wire.render
 import io.github.dohex.openrose.core.DeviceCandidate
@@ -14,6 +15,7 @@ import io.github.dohex.openrose.core.protocol.ProtocolFamily
 import io.github.dohex.openrose.core.transport.Advertisement
 import io.github.dohex.openrose.core.transport.DeviceId
 import io.github.dohex.openrose.ffi.CoreDecodeResult
+import io.github.dohex.openrose.ffi.kotlincore.CoreBackedRuntime
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
@@ -109,6 +111,7 @@ internal class InProcessHostLink(
     var statusHangs = false
 
     var tamperReceipt: (ReleaseReceipt) -> ReleaseReceipt = { it }
+    var tamperFrame: (String) -> String = { it }
     val connections = mutableListOf<Connection>()
 
     var openMillis = 0L
@@ -185,7 +188,12 @@ internal class InProcessHostLink(
 
         override fun frames(generation: OwnerGeneration): Flow<HostFrame> = host.control.frames(identity, lease.id, generation).map { frame ->
             ensureOpen()
-            HostFrameWire.decodeFrame(parseWire(HostFrameWire.encode(frame).render()))
+            val wire = tamperFrame(HostFrameWire.encode(frame).render())
+            try {
+                HostFrameWire.decodeFrame(parseWire(wire))
+            } catch (failure: WireFormatException) {
+                throw HostLinkException("宿主返回了无法识别的状态帧", failure)
+            }
         }
 
         override fun close() {
@@ -232,6 +240,9 @@ internal class OwnerRig(
     private val ids = generateSequence(1) { it + 1 }.map { "id-$it" }.iterator()
     private val platform = grantedAndroidPlatform
 
+    var hostCore: CoreBackedRuntime? = null
+        private set
+
     private var hostScope: CoroutineScope = newHostScope()
     private var hostCount = 0
     var host = newHost()
@@ -246,7 +257,9 @@ internal class OwnerRig(
         return ModuleControlHost(
             packageName = HOST_PACKAGE, processName = HOST_PACKAGE, incarnation = "host-$hostCount",
             authority = testAuthority,
-            runtimeFactory = hostHeadset::runtime,
+            runtimeFactory = { scope, settings, initialPlatform, sessionIdBase ->
+                hostHeadset.runtime(scope, settings, initialPlatform, sessionIdBase).also { hostCore = it }
+            },
             parentScope = hostScope, newId = { "lease-${ids.next()}" }, uid = 1002, pid = 777 + hostCount,
         )
     }

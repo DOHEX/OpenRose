@@ -260,10 +260,11 @@ class ModuleHostBinderLink(
         override fun frames(generation: OwnerGeneration): Flow<HostFrame> = callbackFlow {
             val receiver = object : IControlFrames.Stub() {
                 override fun onFrame(frame: Bundle) {
-                    val decoded = runCatching {
-                        HostFrameWire.decodeFrame(parseWire(frame.getString(BridgeWire.PAYLOAD).orEmpty()))
-                    }.getOrNull()
-                    if (decoded == null) this@callbackFlow.close() else trySend(decoded)
+                    try {
+                        trySend(HostFrameWire.decodeFrame(parseWire(frame.getString(BridgeWire.PAYLOAD).orEmpty())))
+                    } catch (failure: WireFormatException) {
+                        this@callbackFlow.close(HostLinkException("宿主返回了无法识别的状态帧", failure))
+                    }
                 }
 
                 override fun onEnded(end: Bundle) {
