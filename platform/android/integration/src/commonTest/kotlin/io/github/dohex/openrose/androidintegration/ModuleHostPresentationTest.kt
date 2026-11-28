@@ -73,12 +73,11 @@ class ModuleHostPresentationTest {
             host.configure { HostConfiguration(true, HostSettings(integration = settings.copy(controlWay = ControlWay.MODULE))) }
             test.runCurrent()
             connect()
-            test.eventually("the host presentation to follow the core") { host.control.view(app.identity, app.id)?.presentation?.reference != null }
         }
 
         suspend fun connect() {
             host.control.execute(app.identity, app.id, generation, HostCommand.ConnectFromSystem(earphones.deviceId))
-            test.runCurrent()
+            test.eventually("the host presentation to follow the core") { host.control.view(app.identity, app.id)?.presentation?.reference != null }
         }
 
         suspend fun execute(lease: Lease, command: HostCommand, at: OwnerGeneration = generation) = host.control.execute(lease.identity, lease.id, at, command)
