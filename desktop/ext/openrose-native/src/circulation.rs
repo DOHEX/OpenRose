@@ -8,7 +8,7 @@ use openrose_circulation::{
 };
 use openrose_control::simulator::{SimulatedHeadsetHandle, SimulatedTransport};
 use openrose_control::snapshot::{
-    ControlSnapshot, PermissionState, PlatformState, TransportAvailability,
+    ConnectionState, ControlSnapshot, PermissionState, PlatformState, TransportAvailability,
 };
 use openrose_control::{ControlConfig, ControlObserver, ControlRuntime, SessionTiming};
 use openrose_headset::{HeadsetCommand, HeadsetId, ModelProfile, NoiseMode};
@@ -872,42 +872,30 @@ async fn connect_dev_remote_headset(
 ) -> Result<(), String> {
     let profile = ModelProfile::I5Zt;
     runtime.refresh_bonded_headsets().await;
-    let _ = runtime.start_scan().await;
-    transport
-        .scan()
-        .advertise(catalog_advertisement(profile, headset_id));
-    let observed = tokio::time::timeout(Duration::from_secs(2), async {
-        while !runtime
-            .snapshot()
-            .candidates
-            .iter()
-            .any(|candidate| candidate.id == *headset_id && candidate.profile.is_some())
-        {
-            tokio::time::sleep(Duration::from_millis(5)).await;
+    let ready = tokio::time::timeout(Duration::from_secs(10), async {
+        loop {
+            let snapshot = runtime.snapshot();
+            if snapshot.ready_session().is_some() {
+                return;
+            }
+            let observed = snapshot
+                .candidates
+                .iter()
+                .any(|candidate| candidate.id == *headset_id && candidate.profile.is_some());
+            if !observed {
+                let _ = runtime.start_scan().await;
+                transport
+                    .scan()
+                    .advertise(catalog_advertisement(profile, headset_id));
+            } else if matches!(snapshot.connection, ConnectionState::Disconnected) {
+                let _ = runtime.connect(headset_id.clone()).await;
+            }
+            tokio::time::sleep(Duration::from_millis(20)).await;
         }
     })
     .await;
-    let result = if observed.is_ok() {
-        runtime
-            .connect(headset_id.clone())
-            .await
-            .map_err(|_| remote_error_code(&RemoteError::SessionNotReady))
-    } else {
-        Err(remote_error_code(&RemoteError::SessionNotReady))
-    };
     runtime.stop_scan().await;
-    result?;
-
-    let ready = tokio::time::timeout(Duration::from_secs(2), async {
-        while runtime.snapshot().ready_session().is_none() {
-            tokio::time::sleep(Duration::from_millis(5)).await;
-        }
-    })
-    .await;
-    if ready.is_err() {
-        return Err(remote_error_code(&RemoteError::SessionNotReady));
-    }
-    Ok(())
+    ready.map_err(|_| remote_error_code(&RemoteError::SessionNotReady))
 }
 
 /// Circulation pairing and remote headset control node tied to the desktop app lifecycle.

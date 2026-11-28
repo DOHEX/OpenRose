@@ -585,3 +585,71 @@ export function CollapsibleSection(props: {
     </Collapsible>
   );
 }
+
+interface QrRun {
+  dark: boolean;
+  length: number;
+}
+
+function buildQrRows(size: number, modules: string): QrRun[][] {
+  const rows: QrRun[][] = [];
+  for (let y = 0; y < size; y += 1) {
+    const runs: QrRun[] = [];
+    const offset = y * size;
+    let currentDark = modules[offset] === "1";
+    let runLength = 0;
+    for (let x = 0; x < size; x += 1) {
+      const dark = modules[offset + x] === "1";
+      if (dark === currentDark) {
+        runLength += 1;
+      } else {
+        runs.push({ dark: currentDark, length: runLength });
+        currentDark = dark;
+        runLength = 1;
+      }
+    }
+    if (runLength > 0) {
+      runs.push({ dark: currentDark, length: runLength });
+    }
+    rows.push(runs);
+  }
+  return rows;
+}
+
+export function QrCodeMatrix(props: {
+  size: number;
+  modules: string;
+  cellSize?: number;
+  testID?: string;
+  accessibilityLabel?: string;
+}) {
+  const size = props.size;
+  if (size <= 0 || props.modules.length < size * size) {
+    return null;
+  }
+  const cellSize = props.cellSize ?? 4;
+  const rows = buildQrRows(size, props.modules);
+  return (
+    <View
+      testID={props.testID}
+      accessible={Boolean(props.accessibilityLabel)}
+      accessibilityLabel={props.accessibilityLabel}
+      class="self-start rounded-(--radius) border border-border p-2"
+      style={{ backgroundColor: "#ffffff" }}
+    >
+      {rows.map((runs) => (
+        <View class="flex-row">
+          {runs.map((run) => (
+            <View
+              style={{
+                width: run.length * cellSize,
+                height: cellSize,
+                backgroundColor: run.dark ? "#000000" : "#ffffff",
+              }}
+            />
+          ))}
+        </View>
+      ))}
+    </View>
+  );
+}

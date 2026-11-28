@@ -14,6 +14,7 @@ export {
   StatusBadge,
   TextField,
   ToggleSwitch,
+  QrCodeMatrix,
 } from "./controls";
 export type {
   ButtonVariant,
