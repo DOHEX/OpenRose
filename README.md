@@ -58,6 +58,8 @@ OpenRose 已接入 RoseLink 3.8.6 的全部 48 个蓝牙耳机配置，并保留
 
 ## 安装
 
+### Android
+
 要求 Android 8.0（API 26）及以上。
 
 1. 从 [Releases](https://github.com/DOHEX/OpenRose/releases) 下载 APK；开发版可在 [GitHub Actions](https://github.com/DOHEX/OpenRose/actions/workflows/ci.yml) 的构建产物中下载（需登录 GitHub）。
@@ -66,22 +68,36 @@ OpenRose 已接入 RoseLink 3.8.6 的全部 48 个蓝牙耳机配置，并保留
 
 详细步骤见[快速开始](https://dohex.github.io/OpenRose/guides/getting-started/)。
 
+### Linux 桌面版
+
+要求 **GTK 4.14+** 与 **BlueZ**（运行蓝牙服务）。Windows 新版 NSH 安装包将在后续版本（#160）恢复发布，旧版 JVM 桌面端已停止发布。
+
+1. 从 [Releases](https://github.com/DOHEX/OpenRose/releases)（或 [GitHub Actions](https://github.com/DOHEX/OpenRose/actions/workflows/ci.yml) 的 `openrose-<版本>-dev-<提交号>-linux-x64` 产物）下载对应格式：
+   - `.deb`（Debian / Ubuntu 24.04+）：`sudo apt install ./openrose_*.deb`
+   - `.rpm`（Fedora 等）：`sudo dnf install ./openrose-*.rpm`
+   - `.pkg.tar.zst`（Arch Linux）：`sudo pacman -U ./openrose-*.pkg.tar.zst`
+   - `.AppImage`（通用免安装）：赋予可执行权限后直接运行
+2. 先在系统蓝牙设置里配对并连接耳机，再从应用菜单启动 **OpenRose** 或运行 `openrose`。
+
+详细说明见[桌面版](https://dohex.github.io/OpenRose/guides/desktop/)。
+
 ## 文档
 
 - [后台控制](https://dohex.github.io/OpenRose/guides/background-control/)
 - [HyperOS 系统集成](https://dohex.github.io/OpenRose/guides/hyperos-integration/)：前提条件、控制方式、耳机流转与已知限制
-- [桌面版](https://dohex.github.io/OpenRose/guides/desktop/)：Windows 与 Linux 安装、流转配对、托盘与窗口规则
+- [桌面版](https://dohex.github.io/OpenRose/guides/desktop/)：Linux 安装、流转配对、托盘与窗口规则
 - [常见问题](https://dohex.github.io/OpenRose/guides/troubleshooting/)
 - [权限与隐私](https://dohex.github.io/OpenRose/reference/permissions/)
 
 ## 从源码构建
 
-需要 JDK 21、Rust stable 工具链和 Android SDK（Platform 37、Build Tools 37.0.0，设置 `ANDROID_HOME` 或 `local.properties` 的 `sdk.dir`）。构建 Android APK 还需 `aarch64-linux-android`、`armv7-linux-androideabi`、`x86_64-linux-android` 三个目标与 `cargo-ndk`；构建 Windows 桌面版还需 Rust MSVC 工具链和 Visual Studio C++ Build Tools。Windows 下把 `./gradlew` 换成 `.\gradlew.bat`。开发环境、各项检查与提交规范见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+需要 JDK 21、Rust stable 工具链、[nsh](https://nsh.dev/) 0.7+ 和 Android SDK（Platform 37、Build Tools 37.0.0，设置 `ANDROID_HOME` 或 `local.properties` 的 `sdk.dir`）。构建 Android APK 还需 `aarch64-linux-android`、`armv7-linux-androideabi`、`x86_64-linux-android` 三个目标与 `cargo-ndk`；打包 Linux 桌面端还需 `nfpm`、`appimagetool` 以及 GTK 4.14+、GStreamer 和 D-Bus 开发库（`libgtk-4-dev`、`libgstreamer1.0-dev`、`libgstreamer-plugins-base1.0-dev`、`libdbus-1-dev`、`pkg-config`）。开发环境、各项检查与提交规范见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
 ```bash
 ./gradlew :androidApp:assembleDebug   # Android 调试 APK
-./gradlew :desktopApp:run             # 运行桌面版
-cargo xtask check                     # 不依赖耳机硬件的全部检查（含 Rust 与 Gradle）
+(cd desktop && nsh run)               # 运行 NSH 桌面端
+cargo xtask package-linux             # 构建 Linux AppImage / deb / rpm / pacman
+cargo xtask check                     # 不依赖耳机硬件的全部检查（含 Rust、NSH 与 Gradle）
 ```
 
 开发文档：[协议实现说明](docs/protocols.md)、[协议研究](docs/protocols/)、[架构决策记录](docs/adr/)、[术语表](GLOSSARY.md)。

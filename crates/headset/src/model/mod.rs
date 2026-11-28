@@ -4,6 +4,7 @@ pub mod rs_common;
 pub mod rs_common_v2;
 pub mod zt;
 
+use crate::error::ProtocolError;
 use crate::capabilities::HeadsetCapabilities;
 use crate::field::{FieldReading, FieldValue, FirmwareVersion, HeadsetField};
 use rs_common::RsCommonProtocol;
@@ -72,6 +73,78 @@ impl ProtocolFamily {
             Self::RsCommon => crate::protocol::rs_common::rs_common_readable_fields(),
             Self::F8 => crate::protocol::f8::f8_readable_fields(),
             Self::RsCommonV2 => crate::protocol::rs_common_v2::rs_common_v2_readable_fields(),
+        }
+    }
+    pub fn default_firmware(self) -> FirmwareVersion {
+        match self {
+            Self::F8 => FirmwareVersion::new(vec![125], "125"),
+            Self::Zt | Self::RsCommonV2 | Self::RsCommon => {
+                FirmwareVersion::new(vec![1, 2, 5], "125")
+            }
+        }
+    }
+
+    pub fn firmware_hint(self) -> &'static str {
+        match self {
+            Self::Zt => "三位 0–15 数字或十六进制（如 125 或 1.2.5）",
+            Self::RsCommonV2 => "三段 0–255 版本（如 2.1.3 或 125）",
+            Self::RsCommon => "三段版本（首段 0–15，后两段 0–255，如 1.2.5 或 125）",
+            Self::F8 => "单个 0–65535 整数（如 125 或 300）",
+        }
+    }
+
+    pub fn validate_firmware(self, firmware: &FirmwareVersion) -> Result<(), ProtocolError> {
+        let valid = match self {
+            Self::F8 => {
+                firmware.parts.len() == 1
+                    && (0..=i32::from(u16::MAX)).contains(&firmware.parts[0])
+            }
+            Self::Zt => {
+                firmware.parts.len() == 3 && firmware.parts.iter().all(|v| (0..=15).contains(v))
+            }
+            Self::RsCommonV2 => {
+                firmware.parts.len() == 3 && firmware.parts.iter().all(|v| (0..=255).contains(v))
+            }
+            Self::RsCommon => {
+                firmware.parts.len() == 3
+                    && (0..=15).contains(&firmware.parts[0])
+                    && firmware.parts[1..].iter().all(|v| (0..=255).contains(v))
+            }
+        };
+        if !valid {
+            return Err(ProtocolError::InvalidArgument(self.firmware_invalid_message().to_string()));
+        }
+        Ok(())
+    }
+
+    pub fn parse_firmware(self, raw: &str) -> Result<FirmwareVersion, ProtocolError> {
+        let trimmed = raw.trim();
+        if trimmed.is_empty() {
+            return Err(ProtocolError::InvalidArgument("固件版本不能为空".to_string()));
+        }
+        let parts = match self {
+            Self::F8 => {
+                let value = trimmed
+                    .parse::<i32>()
+                    .map_err(|_| ProtocolError::InvalidArgument(self.firmware_invalid_message().to_string()))?;
+                vec![value]
+            }
+            Self::Zt => parse_three_part_firmware(trimmed, 16, self.firmware_invalid_message())?,
+            Self::RsCommonV2 | Self::RsCommon => {
+                parse_three_part_firmware(trimmed, 10, self.firmware_invalid_message())?
+            }
+        };
+        let version = FirmwareVersion::new(parts, trimmed);
+        self.validate_firmware(&version)?;
+        Ok(version)
+    }
+
+    fn firmware_invalid_message(self) -> &'static str {
+        match self {
+            Self::F8 => "F8 固件版本需要一个 0 到 65535 的数字",
+            Self::Zt => "ZT 固件版本需要三个 0 到 15 的数字（如 125 或 1.2.5）",
+            Self::RsCommonV2 => "RS Common V2 固件版本需要三个 0 到 255 的数字（如 2.1.3 或 125）",
+            Self::RsCommon => "RS Common 固件版本需要 0 到 15 与两个 0 到 255 的数字（如 1.2.5 或 125）",
         }
     }
 }
@@ -594,4 +667,32 @@ pub fn rs_readings(layout: BatteryLayout, extra: &[HeadsetField]) -> BTreeSet<He
     }
     fields.extend(extra.iter().copied());
     fields
+}
+
+fn parse_three_part_firmware(
+    trimmed: &str,
+    compact_radix: u32,
+    err_msg: &str,
+) -> Result<Vec<i32>, ProtocolError> {
+    if trimmed.contains('.') {
+        trimmed
+            .split('.')
+            .map(|seg| {
+                seg.trim()
+                    .parse::<i32>()
+                    .map_err(|_| ProtocolError::InvalidArgument(err_msg.to_string()))
+            })
+            .collect()
+    } else if trimmed.len() == 3 && trimmed.bytes().all(|b| b.is_ascii_alphanumeric()) {
+        trimmed
+            .chars()
+            .map(|ch| {
+                ch.to_digit(compact_radix)
+                    .map(|d| d as i32)
+                    .ok_or_else(|| ProtocolError::InvalidArgument(err_msg.to_string()))
+            })
+            .collect()
+    } else {
+        Err(ProtocolError::InvalidArgument(err_msg.to_string()))
+    }
 }

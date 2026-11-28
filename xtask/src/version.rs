@@ -18,7 +18,7 @@ pub fn check_workspace_version(workspace_root: &Path) -> Result<String, Vec<Stri
     };
 
     let mut errors = Vec::new();
-    match parse_workspace_package_version(&root_toml) {
+    match parse_toml_section_version(&root_toml, "workspace.package", "Cargo.toml") {
         Ok(actual) if actual == expected => {}
         Ok(actual) => errors.push(format!(
             "Cargo.toml [workspace.package].version is '{actual}', expected '{expected}' from version.txt"
@@ -40,11 +40,33 @@ pub fn check_workspace_version(workspace_root: &Path) -> Result<String, Vec<Stri
             errors.extend(check_cargo_lock_versions(
                 &lock_content,
                 &inherited_packages,
+                &[],
                 &expected,
+                "Cargo.lock",
             ));
         }
         Err(error) => errors.push(format!("failed to read Cargo.lock: {error}")),
     }
+
+    let nsh_json_path = workspace_root.join("desktop/nsh.json");
+    match fs::read_to_string(&nsh_json_path) {
+        Ok(content) => match parse_nsh_json_version(&content) {
+            Ok(actual) if actual == expected => {}
+            Ok(actual) => errors.push(format!(
+                "desktop/nsh.json version is '{actual}', expected '{expected}' from version.txt"
+            )),
+            Err(error) => errors.push(error),
+        },
+        Err(error) => errors.push(format!("failed to read desktop/nsh.json: {error}")),
+    }
+
+    check_standalone_crate_version(
+        workspace_root,
+        "desktop/ext/openrose-native",
+        &inherited_packages,
+        &expected,
+        &mut errors,
+    );
 
     if errors.is_empty() {
         Ok(expected)
@@ -59,7 +81,7 @@ pub fn sync_workspace_version(workspace_root: &Path) -> Result<String, String> {
     let root_toml_path = workspace_root.join("Cargo.toml");
     let root_toml = fs::read_to_string(&root_toml_path)
         .map_err(|error| format!("failed to read Cargo.toml: {error}"))?;
-    let updated_toml = rewrite_workspace_package_version(&root_toml, &expected)?;
+    let updated_toml = rewrite_toml_section_version(&root_toml, "workspace.package", "Cargo.toml", &expected)?;
     if updated_toml != root_toml {
         fs::write(&root_toml_path, &updated_toml)
             .map_err(|error| format!("failed to write Cargo.toml: {error}"))?;
@@ -70,11 +92,33 @@ pub fn sync_workspace_version(workspace_root: &Path) -> Result<String, String> {
     let lock_path = workspace_root.join("Cargo.lock");
     let lock_content = fs::read_to_string(&lock_path)
         .map_err(|error| format!("failed to read Cargo.lock: {error}"))?;
-    let updated_lock = rewrite_cargo_lock_versions(&lock_content, &inherited_packages, &expected)?;
+    let updated_lock = rewrite_cargo_lock_versions(
+        &lock_content,
+        &inherited_packages,
+        &[],
+        &expected,
+        "Cargo.lock",
+    )?;
     if updated_lock != lock_content {
         fs::write(&lock_path, &updated_lock)
             .map_err(|error| format!("failed to write Cargo.lock: {error}"))?;
     }
+
+    let nsh_json_path = workspace_root.join("desktop/nsh.json");
+    let nsh_json = fs::read_to_string(&nsh_json_path)
+        .map_err(|error| format!("failed to read desktop/nsh.json: {error}"))?;
+    let updated_nsh_json = rewrite_nsh_json_version(&nsh_json, &expected)?;
+    if updated_nsh_json != nsh_json {
+        fs::write(&nsh_json_path, &updated_nsh_json)
+            .map_err(|error| format!("failed to write desktop/nsh.json: {error}"))?;
+    }
+
+    sync_standalone_crate_version(
+        workspace_root,
+        "desktop/ext/openrose-native",
+        &inherited_packages,
+        &expected,
+    )?;
 
     Ok(expected)
 }
@@ -88,7 +132,7 @@ pub fn read_version_txt(workspace_root: &Path) -> Result<String, String> {
     Ok(trimmed.to_string())
 }
 
-fn validate_semver_triple(text: &str) -> Result<(), String> {
+pub(crate) fn validate_semver_triple(text: &str) -> Result<(), String> {
     let mut parts = text.split('.');
     let Some(major_str) = parts.next() else {
         return Err(format!("version.txt must hold MAJOR.MINOR.PATCH, found '{text}'"));
@@ -123,40 +167,130 @@ fn parse_digits(segment: &str, full: &str) -> Result<u32, String> {
         .map_err(|_| format!("version.txt '{full}' has an out-of-range component"))
 }
 
-fn parse_workspace_package_version(root_toml: &str) -> Result<String, String> {
-    let mut in_workspace_package = false;
-    for line in root_toml.lines() {
+fn check_standalone_crate_version(
+    workspace_root: &Path,
+    crate_rel: &str,
+    inherited_packages: &[String],
+    expected: &str,
+    errors: &mut Vec<String>,
+) {
+    let toml_rel = format!("{crate_rel}/Cargo.toml");
+    let toml_path = workspace_root.join(&toml_rel);
+    let toml_content = match fs::read_to_string(&toml_path) {
+        Ok(content) => content,
+        Err(error) => {
+            errors.push(format!("failed to read {toml_rel}: {error}"));
+            return;
+        }
+    };
+
+    match parse_toml_section_version(&toml_content, "package", &toml_rel) {
+        Ok(actual) if actual == expected => {}
+        Ok(actual) => errors.push(format!(
+            "{toml_rel} [package].version is '{actual}', expected '{expected}' from version.txt"
+        )),
+        Err(error) => errors.push(error),
+    }
+
+    let pkg_name = match parse_member_package(&toml_content, crate_rel) {
+        Ok((name, _)) => name,
+        Err(error) => {
+            errors.push(error);
+            return;
+        }
+    };
+
+    let lock_rel = format!("{crate_rel}/Cargo.lock");
+    let lock_path = workspace_root.join(&lock_rel);
+    match fs::read_to_string(&lock_path) {
+        Ok(lock_content) => {
+            errors.extend(check_cargo_lock_versions(
+                &lock_content,
+                &[pkg_name],
+                inherited_packages,
+                expected,
+                &lock_rel,
+            ));
+        }
+        Err(error) => errors.push(format!("failed to read {lock_rel}: {error}")),
+    }
+}
+
+fn sync_standalone_crate_version(
+    workspace_root: &Path,
+    crate_rel: &str,
+    inherited_packages: &[String],
+    expected: &str,
+) -> Result<(), String> {
+    let toml_rel = format!("{crate_rel}/Cargo.toml");
+    let toml_path = workspace_root.join(&toml_rel);
+    let toml_content = fs::read_to_string(&toml_path)
+        .map_err(|error| format!("failed to read {toml_rel}: {error}"))?;
+    let updated_toml = rewrite_toml_section_version(&toml_content, "package", &toml_rel, expected)?;
+    if updated_toml != toml_content {
+        fs::write(&toml_path, &updated_toml)
+            .map_err(|error| format!("failed to write {toml_rel}: {error}"))?;
+    }
+
+    let (pkg_name, _) = parse_member_package(&updated_toml, crate_rel)?;
+    let lock_rel = format!("{crate_rel}/Cargo.lock");
+    let lock_path = workspace_root.join(&lock_rel);
+    let lock_content = fs::read_to_string(&lock_path)
+        .map_err(|error| format!("failed to read {lock_rel}: {error}"))?;
+    let updated_lock = rewrite_cargo_lock_versions(
+        &lock_content,
+        &[pkg_name],
+        inherited_packages,
+        expected,
+        &lock_rel,
+    )?;
+    if updated_lock != lock_content {
+        fs::write(&lock_path, &updated_lock)
+            .map_err(|error| format!("failed to write {lock_rel}: {error}"))?;
+    }
+
+    Ok(())
+}
+
+fn parse_toml_section_version(content: &str, target_section: &str, label: &str) -> Result<String, String> {
+    let mut in_target = false;
+    for line in content.lines() {
         let trimmed = strip_toml_comment(line).trim();
         if let Some(section) = parse_section_header(trimmed) {
-            in_workspace_package = section == "workspace.package";
+            in_target = section == target_section;
             continue;
         }
-        if in_workspace_package
+        if in_target
             && let Some((key, value)) = split_key_value(trimmed)
             && key == "version"
         {
             return parse_quoted_string(value).ok_or_else(|| {
-                format!("Cargo.toml [workspace.package].version must be a quoted string, found '{value}'")
+                format!("{label} [{target_section}].version must be a quoted string, found '{value}'")
             });
         }
     }
-    Err("Cargo.toml is missing [workspace.package].version".to_string())
+    Err(format!("{label} is missing [{target_section}].version"))
 }
 
-fn rewrite_workspace_package_version(root_toml: &str, expected: &str) -> Result<String, String> {
-    let mut in_workspace_package = false;
+fn rewrite_toml_section_version(
+    content: &str,
+    target_section: &str,
+    label: &str,
+    expected: &str,
+) -> Result<String, String> {
+    let mut in_target = false;
     let mut replaced = false;
-    let mut out = String::with_capacity(root_toml.len() + 16);
+    let mut out = String::with_capacity(content.len() + 16);
 
-    for segment in root_toml.split_inclusive('\n') {
+    for segment in content.split_inclusive('\n') {
         let (line, newline) = split_line_ending(segment);
         let trimmed = strip_toml_comment(line).trim();
         if let Some(section) = parse_section_header(trimmed) {
-            in_workspace_package = section == "workspace.package";
+            in_target = section == target_section;
             out.push_str(segment);
             continue;
         }
-        if in_workspace_package
+        if in_target
             && !replaced
             && let Some(updated_line) = replace_quoted_assignment(line, "version", expected)
         {
@@ -171,7 +305,7 @@ fn rewrite_workspace_package_version(root_toml: &str, expected: &str) -> Result<
     if replaced {
         Ok(out)
     } else {
-        Err("Cargo.toml is missing [workspace.package].version".to_string())
+        Err(format!("{label} is missing [{target_section}].version"))
     }
 }
 
@@ -306,10 +440,16 @@ fn is_inline_workspace_true(value: &str) -> bool {
 
 fn check_cargo_lock_versions(
     lock_content: &str,
-    packages: &[String],
+    required_packages: &[String],
+    optional_packages: &[String],
     expected: &str,
+    lock_label: &str,
 ) -> Vec<String> {
-    let targets: BTreeSet<&str> = packages.iter().map(String::as_str).collect();
+    let targets: BTreeSet<&str> = required_packages
+        .iter()
+        .chain(optional_packages.iter())
+        .map(String::as_str)
+        .collect();
     let mut seen: BTreeSet<String> = BTreeSet::new();
     let mut errors = Vec::new();
 
@@ -323,15 +463,15 @@ fn check_cargo_lock_versions(
         seen.insert(name.clone());
         if version != expected {
             errors.push(format!(
-                "Cargo.lock package '{name}' has version '{version}', expected '{expected}' from version.txt"
+                "{lock_label} package '{name}' has version '{version}', expected '{expected}' from version.txt"
             ));
         }
     }
 
-    for package in packages {
+    for package in required_packages {
         if !seen.contains(package) {
             errors.push(format!(
-                "Cargo.lock is missing workspace package '{package}'"
+                "{lock_label} is missing workspace package '{package}'"
             ));
         }
     }
@@ -341,10 +481,16 @@ fn check_cargo_lock_versions(
 
 fn rewrite_cargo_lock_versions(
     lock_content: &str,
-    packages: &[String],
+    required_packages: &[String],
+    optional_packages: &[String],
     expected: &str,
+    lock_label: &str,
 ) -> Result<String, String> {
-    let targets: BTreeSet<&str> = packages.iter().map(String::as_str).collect();
+    let targets: BTreeSet<&str> = required_packages
+        .iter()
+        .chain(optional_packages.iter())
+        .map(String::as_str)
+        .collect();
     let mut seen: BTreeSet<String> = BTreeSet::new();
     let mut out = String::with_capacity(lock_content.len() + 32);
 
@@ -369,7 +515,7 @@ fn rewrite_cargo_lock_versions(
             }
             if !replaced {
                 return Err(format!(
-                    "Cargo.lock package '{name}' is missing a version line"
+                    "{lock_label} package '{name}' is missing a version line"
                 ));
             }
         } else {
@@ -377,10 +523,10 @@ fn rewrite_cargo_lock_versions(
         }
     }
 
-    for package in packages {
+    for package in required_packages {
         if !seen.contains(package) {
             return Err(format!(
-                "Cargo.lock is missing workspace package '{package}'"
+                "{lock_label} is missing workspace package '{package}'"
             ));
         }
     }
@@ -516,6 +662,125 @@ fn split_line_ending(segment: &str) -> (&str, &str) {
     }
 }
 
+fn parse_nsh_json_version(content: &str) -> Result<String, String> {
+    let (start, end) = find_json_top_level_string_value_span(content, "version", "desktop/nsh.json")?;
+    Ok(content[start..end].to_string())
+}
+
+fn rewrite_nsh_json_version(content: &str, expected: &str) -> Result<String, String> {
+    let (start, end) = find_json_top_level_string_value_span(content, "version", "desktop/nsh.json")?;
+    let mut out = String::with_capacity(content.len() + expected.len());
+    out.push_str(&content[..start]);
+    out.push_str(expected);
+    out.push_str(&content[end..]);
+    Ok(out)
+}
+
+fn find_json_top_level_string_value_span(
+    content: &str,
+    target_key: &str,
+    label: &str,
+) -> Result<(usize, usize), String> {
+    let bytes = content.as_bytes();
+    let mut i = skip_json_ws(bytes, 0);
+    if i >= bytes.len() || bytes[i] != b'{' {
+        return Err(format!("{label} must be a JSON object"));
+    }
+    i += 1;
+    loop {
+        i = skip_json_ws(bytes, i);
+        if i >= bytes.len() {
+            return Err(format!("{label} has an unterminated JSON object"));
+        }
+        if bytes[i] == b'}' {
+            return Err(format!("{label} is missing top-level \"{target_key}\""));
+        }
+        if bytes[i] == b',' {
+            i += 1;
+            continue;
+        }
+        let (key_start, key_end, after_key) = parse_json_string_span(bytes, i, label)?;
+        i = skip_json_ws(bytes, after_key);
+        if i >= bytes.len() || bytes[i] != b':' {
+            return Err(format!("{label} is malformed after key"));
+        }
+        i = skip_json_ws(bytes, i + 1);
+        if &content[key_start..key_end] == target_key {
+            if i >= bytes.len() || bytes[i] != b'"' {
+                return Err(format!("{label} \"{target_key}\" must be a string"));
+            }
+            let (val_start, val_end, _) = parse_json_string_span(bytes, i, label)?;
+            return Ok((val_start, val_end));
+        }
+        i = skip_json_value(bytes, i, label)?;
+    }
+}
+
+fn skip_json_ws(bytes: &[u8], mut i: usize) -> usize {
+    while i < bytes.len() && matches!(bytes[i], b' ' | b'\t' | b'\n' | b'\r') {
+        i += 1;
+    }
+    i
+}
+
+fn parse_json_string_span(bytes: &[u8], start: usize, label: &str) -> Result<(usize, usize, usize), String> {
+    if start >= bytes.len() || bytes[start] != b'"' {
+        return Err(format!("{label} expected JSON string"));
+    }
+    let mut i = start + 1;
+    while i < bytes.len() {
+        match bytes[i] {
+            b'\\' => i += 2,
+            b'"' => return Ok((start + 1, i, i + 1)),
+            _ => i += 1,
+        }
+    }
+    Err(format!("{label} has an unterminated string"))
+}
+
+fn skip_json_value(bytes: &[u8], mut i: usize, label: &str) -> Result<usize, String> {
+    i = skip_json_ws(bytes, i);
+    if i >= bytes.len() {
+        return Err(format!("{label} has an unexpected end of file"));
+    }
+    match bytes[i] {
+        b'"' => {
+            let (_, _, next) = parse_json_string_span(bytes, i, label)?;
+            Ok(next)
+        }
+        b'{' | b'[' => {
+            let mut depth = 0usize;
+            while i < bytes.len() {
+                match bytes[i] {
+                    b'"' => {
+                        let (_, _, next) = parse_json_string_span(bytes, i, label)?;
+                        i = next;
+                    }
+                    b'{' | b'[' => {
+                        depth += 1;
+                        i += 1;
+                    }
+                    b'}' | b']' => {
+                        depth -= 1;
+                        i += 1;
+                        if depth == 0 {
+                            return Ok(i);
+                        }
+                    }
+                    _ => i += 1,
+                }
+            }
+            Err(format!("{label} has an unterminated container"))
+        }
+        _ => {
+            while i < bytes.len() && !matches!(bytes[i], b',' | b'}' | b']' | b' ' | b'\t' | b'\n' | b'\r') {
+                i += 1;
+            }
+            Ok(i)
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{check_workspace_version, sync_workspace_version};
@@ -601,6 +866,52 @@ mod tests {
                 ),
             )
             .unwrap();
+            fs::create_dir_all(dir.join("desktop")).unwrap();
+            fs::write(
+                dir.join("desktop/nsh.json"),
+                format!("{{\n  \"name\": \"OpenRose\",\n  \"version\": \"{version_txt}\"\n}}\n"),
+            )
+            .unwrap();
+            fs::create_dir_all(dir.join("desktop/ext/openrose-native")).unwrap();
+            fs::write(
+                dir.join("desktop/ext/openrose-native/Cargo.toml"),
+                format!(
+                    concat!(
+                        "[package]\n",
+                        "name = \"openrose-native\"\n",
+                        "version = \"{v}\"\n",
+                        "edition = \"2024\"\n",
+                        "\n",
+                        "[dependencies]\n",
+                        "openrose-headset = {{ path = \"../../../crates/headset\" }}\n",
+                    ),
+                    v = version_txt,
+                ),
+            )
+            .unwrap();
+            fs::write(
+                dir.join("desktop/ext/openrose-native/Cargo.lock"),
+                format!(
+                    concat!(
+                        "version = 4\n",
+                        "\n",
+                        "[[package]]\n",
+                        "name = \"openrose-headset\"\n",
+                        "version = \"{v}\"\n",
+                        "\n",
+                        "[[package]]\n",
+                        "name = \"openrose-native\"\n",
+                        "version = \"{v}\"\n",
+                        "\n",
+                        "[[package]]\n",
+                        "name = \"serde\"\n",
+                        "version = \"1.0.228\"\n",
+                        "source = \"registry+https://github.com/rust-lang/crates.io-index\"\n",
+                    ),
+                    v = version_txt,
+                ),
+            )
+            .unwrap();
 
             Self { dir }
         }
@@ -654,6 +965,84 @@ mod tests {
         let ws = TempWorkspace::new("1.2", "0.1.1", "0.1.1");
         assert!(check_workspace_version(ws.path()).is_err());
         assert!(sync_workspace_version(ws.path()).is_err());
+    }
+
+    #[test]
+    fn drifted_nsh_json_fails_version_check_and_sync_updates_only_top_level_version() {
+        let ws = TempWorkspace::new("0.3.0", "0.3.0", "0.3.0");
+        fs::write(
+            ws.path().join("desktop/nsh.json"),
+            concat!(
+                "{\n",
+                "  \"name\": \"OpenRose\",\n",
+                "  \"dependencies\": {\n",
+                "    \"other\": { \"version\": \"9.9.9\" }\n",
+                "  },\n",
+                "  \"version\": \"0.1.1\"\n",
+                "}\n",
+            ),
+        )
+        .unwrap();
+
+        let errors = check_workspace_version(ws.path()).unwrap_err();
+        assert_eq!(errors.len(), 1);
+        assert!(errors[0].contains("desktop/nsh.json"));
+
+        assert_eq!(sync_workspace_version(ws.path()), Ok("0.3.0".to_string()));
+        assert_eq!(check_workspace_version(ws.path()), Ok("0.3.0".to_string()));
+
+        let updated = fs::read_to_string(ws.path().join("desktop/nsh.json")).unwrap();
+        assert!(updated.contains("\"version\": \"0.3.0\""));
+        assert!(updated.contains("\"other\": { \"version\": \"9.9.9\" }"));
+    }
+
+    #[test]
+    fn drifted_desktop_native_cargo_toml_and_lock_fail_check_and_sync_updates_them() {
+        let ws = TempWorkspace::new("0.4.0", "0.4.0", "0.4.0");
+        fs::write(
+            ws.path().join("desktop/ext/openrose-native/Cargo.toml"),
+            concat!(
+                "[package]\n",
+                "name = \"openrose-native\"\n",
+                "version = \"0.1.1\"\n",
+                "\n",
+                "[dependencies]\n",
+                "openrose-headset = { path = \"../../../crates/headset\" }\n",
+            ),
+        )
+        .unwrap();
+        fs::write(
+            ws.path().join("desktop/ext/openrose-native/Cargo.lock"),
+            concat!(
+                "version = 4\n",
+                "\n",
+                "[[package]]\n",
+                "name = \"openrose-headset\"\n",
+                "version = \"0.1.1\"\n",
+                "\n",
+                "[[package]]\n",
+                "name = \"openrose-native\"\n",
+                "version = \"0.2.0\"\n",
+                "\n",
+                "[[package]]\n",
+                "name = \"serde\"\n",
+                "version = \"1.0.228\"\n",
+                "source = \"registry+https://github.com/rust-lang/crates.io-index\"\n",
+            ),
+        )
+        .unwrap();
+
+        let errors = check_workspace_version(ws.path()).unwrap_err();
+        assert_eq!(errors.len(), 3);
+        assert!(errors.iter().any(|e| e.contains("desktop/ext/openrose-native/Cargo.toml")));
+        assert!(errors.iter().any(|e| e.contains("desktop/ext/openrose-native/Cargo.lock") && e.contains("openrose-headset")));
+        assert!(errors.iter().any(|e| e.contains("desktop/ext/openrose-native/Cargo.lock") && e.contains("openrose-native")));
+
+        assert_eq!(sync_workspace_version(ws.path()), Ok("0.4.0".to_string()));
+        assert_eq!(check_workspace_version(ws.path()), Ok("0.4.0".to_string()));
+
+        let native_lock = fs::read_to_string(ws.path().join("desktop/ext/openrose-native/Cargo.lock")).unwrap();
+        assert!(native_lock.contains("name = \"serde\"\nversion = \"1.0.228\""));
     }
 
     #[test]

@@ -2,6 +2,7 @@ use super::{HeadsetSide, SimulatorError, preferred_index, preferred_level, prefe
 use crate::capabilities::HeadsetCapabilities;
 use crate::field::{FieldReading, FieldValue, FirmwareVersion, HeadsetField};
 use crate::model::{BatteryLayout, F8Protocol, ModelProfile};
+use crate::model::ProtocolFamily;
 use crate::protocol::f8::{
     BASIC_TOUCH_GESTURES, BASIC_TOUCH_OFFSETS, COMMAND_ANC_LEVEL, COMMAND_AUDIO,
     COMMAND_EAR_DETECTION, COMMAND_EQ, COMMAND_GAME_MODE, COMMAND_NOISE_MODE,
@@ -185,11 +186,9 @@ impl F8HeadsetSide {
         firmware: &FirmwareVersion,
         capabilities: &HeadsetCapabilities,
     ) -> Result<Self, SimulatorError> {
-        if firmware.parts.len() != 1 || !(0..=i32::from(u16::MAX)).contains(&firmware.parts[0]) {
-            return Err(SimulatorError::InvalidFirmware(
-                "F8 固件版本需要一个 0 到 65535 的数字".to_string(),
-            ));
-        }
+        ProtocolFamily::F8
+            .validate_firmware(firmware)
+            .map_err(|err| SimulatorError::InvalidFirmware(err.to_string()))?;
         let records = record_tags()
             .map(|tag| {
                 (

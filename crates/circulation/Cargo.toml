@@ -1,0 +1,25 @@
+[package]
+name = "openrose-circulation"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+openrose-control = { path = "../control" }
+openrose-headset = { path = "../headset" }
+async-trait.workspace = true
+rcgen = { version = "0.14.10", default-features = false, features = ["crypto", "ring"] }
+ring = "0.17.14"
+rustls = { version = "0.23.46", default-features = false, features = ["ring", "std", "tls12"] }
+rustls-pki-types = { version = "1.16.0", features = ["std"] }
+serde.workspace = true
+serde_json.workspace = true
+sha2 = "0.10.9"
+spake2 = "0.4.0"
+tokio = { workspace = true, features = ["io-util", "net", "sync", "time", "rt"] }
+tokio-rustls = { version = "0.26.6", default-features = false, features = ["ring", "tls12"] }
+
+[dev-dependencies]
+openrose-control = { path = "../control", features = ["simulator"] }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync", "time"] }

@@ -58,7 +58,11 @@ See [Features](https://dohex.github.io/OpenRose/en/reference/features/) for the 
 
 ## Getting started
 
-Requires Android 8.0 (API 26) or later. The app UI is currently Chinese only.
+The app UI is currently Chinese only.
+
+### Android
+
+Requires Android 8.0 (API 26) or later.
 
 1. Download the APK from [Releases](https://github.com/DOHEX/OpenRose/releases); development builds are available as artifacts on [GitHub Actions](https://github.com/DOHEX/OpenRose/actions/workflows/ci.yml) (GitHub sign-in required).
 2. Pair and connect the earphones in the **system Bluetooth settings** first. OpenRose does not handle audio pairing.
@@ -66,22 +70,36 @@ Requires Android 8.0 (API 26) or later. The app UI is currently Chinese only.
 
 See [Getting started](https://dohex.github.io/OpenRose/en/guides/getting-started/) for the full steps.
 
+### Linux desktop
+
+Requires **GTK 4.14+** and **BlueZ** (with the Bluetooth service running). Legacy JVM desktop packages are no longer released; the Windows NSH installer will arrive in #160.
+
+1. Download the package for your distribution from [Releases](https://github.com/DOHEX/OpenRose/releases) (or the `openrose-<version>-dev-<commit>-linux-x64` artifact in [GitHub Actions](https://github.com/DOHEX/OpenRose/actions/workflows/ci.yml)):
+   - `.deb` (Debian / Ubuntu 24.04+): `sudo apt install ./openrose_*.deb`
+   - `.rpm` (Fedora, etc.): `sudo dnf install ./openrose-*.rpm`
+   - `.pkg.tar.zst` (Arch Linux): `sudo pacman -U ./openrose-*.pkg.tar.zst`
+   - `.AppImage` (portable): mark executable and run directly
+2. Pair and connect the earphones in your system Bluetooth settings first, then launch **OpenRose** from your application menu or run `openrose`.
+
+See [Desktop](https://dohex.github.io/OpenRose/en/guides/desktop/) for full details.
+
 ## Documentation
 
 - [Background control](https://dohex.github.io/OpenRose/en/guides/background-control/)
 - [HyperOS integration](https://dohex.github.io/OpenRose/en/guides/hyperos-integration/): requirements, control way, headset circulation, and known limitations
-- [Desktop](https://dohex.github.io/OpenRose/en/guides/desktop/): Windows and Linux installation, handoff pairing, tray, and window rules
+- [Desktop](https://dohex.github.io/OpenRose/en/guides/desktop/): Linux installation, handoff pairing, tray, and window rules
 - [Troubleshooting](https://dohex.github.io/OpenRose/en/guides/troubleshooting/)
 - [Permissions and privacy](https://dohex.github.io/OpenRose/en/reference/permissions/)
 
 ## Building from source
 
-Requires JDK 21, the stable Rust toolchain, and the Android SDK (Platform 37, Build Tools 37.0.0; set `ANDROID_HOME` or `sdk.dir` in `local.properties`). Building the Android APK also requires the `aarch64-linux-android`, `armv7-linux-androideabi` and `x86_64-linux-android` targets and `cargo-ndk`; building the Windows desktop app also requires the Rust MSVC toolchain and Visual Studio C++ Build Tools. On Windows, replace `./gradlew` with `.\gradlew.bat`. For the development environment, checks, and commit conventions, see [CONTRIBUTING.md](CONTRIBUTING.md) (Chinese).
+Requires JDK 21, the stable Rust toolchain, [nsh](https://nsh.dev/) 0.7+, and the Android SDK (Platform 37, Build Tools 37.0.0; set `ANDROID_HOME` or `sdk.dir` in `local.properties`). Building the Android APK also requires the `aarch64-linux-android`, `armv7-linux-androideabi` and `x86_64-linux-android` targets and `cargo-ndk`; packaging the Linux desktop app also requires `nfpm`, `appimagetool`, and the GTK 4.14+, GStreamer, and D-Bus development libraries (`libgtk-4-dev`, `libgstreamer1.0-dev`, `libgstreamer-plugins-base1.0-dev`, `libdbus-1-dev`, `pkg-config`). For the development environment, checks, and commit conventions, see [CONTRIBUTING.md](CONTRIBUTING.md) (Chinese).
 
 ```bash
 ./gradlew :androidApp:assembleDebug   # Android debug APK
-./gradlew :desktopApp:run             # run the desktop app
-cargo xtask check                     # all checks that need no earphone hardware (Rust and Gradle)
+(cd desktop && nsh run)               # run the NSH desktop app
+cargo xtask package-linux             # build Linux AppImage / deb / rpm / pacman
+cargo xtask check                     # all checks that need no earphone hardware (Rust, NSH, and Gradle)
 ```
 
 Developer docs (mostly Chinese): [protocol implementation](docs/protocols.md), [protocol research](docs/protocols/), [architecture decisions](docs/adr/), [glossary](GLOSSARY.md).

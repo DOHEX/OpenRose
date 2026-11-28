@@ -1,3 +1,4 @@
+use openrose_headset::ProtocolFamily;
 use openrose_headset::{
     CustomEqualizerCapabilities, EqualizerCapabilities, FirmwareVersion, HeadsetCapabilities,
     HeadsetField, HeadsetSetting, ModelProfile, NoiseMode, firmware_at_least,
@@ -7,6 +8,41 @@ use std::collections::BTreeSet;
 
 fn fw(parts: &[i32]) -> FirmwareVersion {
     FirmwareVersion::from_parts(parts.to_vec())
+}
+
+#[test]
+fn parses_and_validates_firmware_per_protocol_family() {
+    assert_eq!(
+        ProtocolFamily::Zt.parse_firmware("125").unwrap(),
+        FirmwareVersion::new(vec![1, 2, 5], "125")
+    );
+    assert_eq!(
+        ProtocolFamily::Zt.parse_firmware("1.2.5").unwrap(),
+        FirmwareVersion::new(vec![1, 2, 5], "1.2.5")
+    );
+    assert_eq!(
+        ProtocolFamily::Zt.parse_firmware("1a5").unwrap(),
+        FirmwareVersion::new(vec![1, 10, 5], "1a5")
+    );
+    assert!(ProtocolFamily::Zt.parse_firmware("1160").is_err());
+    assert!(ProtocolFamily::Zt.parse_firmware("1.16.0").is_err());
+    assert_eq!(
+        ProtocolFamily::RsCommonV2.parse_firmware("2.1.3").unwrap(),
+        FirmwareVersion::new(vec![2, 1, 3], "2.1.3")
+    );
+    assert!(ProtocolFamily::RsCommonV2.parse_firmware("1.256.0").is_err());
+    assert_eq!(
+        ProtocolFamily::RsCommon.parse_firmware("1.200.5").unwrap(),
+        FirmwareVersion::new(vec![1, 200, 5], "1.200.5")
+    );
+    assert!(ProtocolFamily::RsCommon.parse_firmware("16.0.0").is_err());
+    assert_eq!(
+        ProtocolFamily::F8.parse_firmware("300").unwrap(),
+        FirmwareVersion::new(vec![300], "300")
+    );
+    assert!(ProtocolFamily::F8.parse_firmware("1.2.5").is_err());
+    assert!(ProtocolFamily::F8.parse_firmware("").is_err());
+    assert!(!ProtocolFamily::Zt.firmware_hint().is_empty());
 }
 
 #[test]

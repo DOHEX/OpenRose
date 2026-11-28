@@ -1,7 +1,9 @@
 [workspace]
 resolver = "2"
 members = [
+    "crates/circulation",
     "crates/control",
+    "crates/desktop-platform",
     "crates/ffi",
     "crates/ffi-simulator",
     "crates/headset",

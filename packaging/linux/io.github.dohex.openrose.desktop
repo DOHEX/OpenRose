@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=OpenRose
+Comment=Third-party control client for ROSE / ROSESELSA earphones
+Exec=openrose
+Icon=io.github.dohex.openrose
+StartupWMClass=io.github.dohex.openrose
+Terminal=false
+Categories=Utility;

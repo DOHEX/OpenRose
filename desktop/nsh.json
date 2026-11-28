@@ -1,0 +1,24 @@
+{
+  "name": "OpenRose",
+  "id": "io.github.dohex.openrose",
+  "version": "0.1.1",
+  "build": 1,
+  "nsh": ">=0.7",
+  "theme": "theme.json",
+  "appearance": "system",
+  "singleInstance": true,
+  "application": {
+    "quitMode": "explicit"
+  },
+  "window": {
+    "title": "OpenRose",
+    "defaultSize": { "width": 880, "height": 640 },
+    "minSize": { "width": 640, "height": 520 },
+    "titleBar": { "style": "hidden", "height": 44 }
+  },
+  "dependencies": {
+    "openrose-native": {
+      "path": "ext/openrose-native"
+    }
+  }
+}

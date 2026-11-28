@@ -2,6 +2,7 @@ use super::{HeadsetSide, SimulatorError, preferred_index, preferred_level, prefe
 use crate::capabilities::{HeadsetCapabilities, NoiseLevelCapabilities, NoiseMode};
 use crate::field::{FieldValue, FirmwareVersion, HeadsetField, TouchBinding};
 use crate::model::{BatteryLayout, ModelProfile, ZtProtocol};
+use crate::model::ProtocolFamily;
 use crate::protocol::zt::{
     ZT_ACTIONS, ZT_CYCLE_ORDER, ZT_GESTURES, ZT_NOISE_LEVELS, audio_modes, eq_presets,
 };
@@ -120,11 +121,9 @@ impl ZtHeadsetSide {
         firmware: &FirmwareVersion,
         capabilities: &HeadsetCapabilities,
     ) -> Result<Self, SimulatorError> {
-        if firmware.parts.len() != 3 || firmware.parts.iter().any(|part| !(0..=15).contains(part)) {
-            return Err(SimulatorError::InvalidFirmware(
-                "ZT 固件版本需要三个 0 到 15 的数字".to_string(),
-            ));
-        }
+        ProtocolFamily::Zt
+            .validate_firmware(firmware)
+            .map_err(|err| SimulatorError::InvalidFirmware(err.to_string()))?;
         let single_unit = profile.battery_layout() == BatteryLayout::SingleUnit;
         let presets = capabilities
             .equalizer
