@@ -4,24 +4,18 @@ import io.github.dohex.openrose.androidintegration.wire.HandoffWire
 import io.github.dohex.openrose.androidintegration.wire.HostFrameWire
 import io.github.dohex.openrose.androidintegration.wire.HostIdentityWire
 import io.github.dohex.openrose.androidintegration.wire.HostWire
+import io.github.dohex.openrose.androidintegration.wire.WireFormatException
 import io.github.dohex.openrose.androidintegration.wire.parseWire
 import io.github.dohex.openrose.androidintegration.wire.render
-import io.github.dohex.openrose.core.ConnectionPhase
 import io.github.dohex.openrose.core.DeviceCandidate
-import io.github.dohex.openrose.core.HostPlatform
-import io.github.dohex.openrose.core.LocalControlRuntime
-import io.github.dohex.openrose.core.PermissionState
 import io.github.dohex.openrose.core.PlatformState
-import io.github.dohex.openrose.core.SessionTiming
-import io.github.dohex.openrose.core.TransportAvailability
 import io.github.dohex.openrose.core.UserSettings
 import io.github.dohex.openrose.core.protocol.ModelProfile
 import io.github.dohex.openrose.core.protocol.ProtocolFamily
 import io.github.dohex.openrose.core.transport.Advertisement
-import io.github.dohex.openrose.core.transport.ControlConnection
-import io.github.dohex.openrose.core.transport.ControlTransport
 import io.github.dohex.openrose.core.transport.DeviceId
-import io.github.dohex.openrose.core.transport.TransportEndpoint
+import io.github.dohex.openrose.ffi.CoreDecodeResult
+import io.github.dohex.openrose.ffi.kotlincore.CoreBackedRuntime
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
@@ -29,15 +23,10 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.emptyFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
@@ -63,75 +52,6 @@ internal class SharedHeadset {
     }
 
     fun opens(owner: String) = events.count { it == "$owner:open" }
-}
-
-internal class HeadsetTransport(
-    private val owner: String,
-    private val headset: SharedHeadset,
-    private val profile: ModelProfile = ModelProfile.I5_ZT,
-    private val bonded: List<DeviceCandidate> = emptyList(),
-) : ControlTransport {
-    val audioDevice = MutableSharedFlow<DeviceId?>(replay = 1, extraBufferCapacity = 8)
-    val links = mutableListOf<HeadsetConnection>()
-    var autoReplyOnOpen = true
-
-    var closeDelayMillis = 0L
-
-    var closeFails = false
-
-    override val audioConnectedDevice: Flow<DeviceId?> get() = audioDevice
-    override suspend fun bondedDevices(): List<DeviceCandidate> = bonded
-    override fun scan(): Flow<Advertisement> = emptyFlow()
-
-    override suspend fun connect(deviceId: DeviceId, endpoint: TransportEndpoint, onPhase: (ConnectionPhase) -> Unit): ControlConnection {
-        headset.opened(owner)
-        return HeadsetConnection(owner, headset, profile, { closeDelayMillis }, { closeFails }).also {
-            it.initializing = autoReplyOnOpen
-            links.add(it)
-        }
-    }
-}
-
-internal class HeadsetConnection(
-    private val owner: String,
-    private val headset: SharedHeadset,
-    private val profile: ModelProfile,
-    private val closeDelayMillis: () -> Long = { 0L },
-    private val closeFails: () -> Boolean = { false },
-) : ControlConnection {
-    override val maxWriteSize = 20
-    private val incoming = Channel<ByteArray>(Channel.UNLIMITED)
-    override val notifications = incoming.receiveAsFlow()
-    private val sent = MutableStateFlow(emptyList<String>())
-    val writes: List<String> get() = sent.value
-    var initializing = true
-    var closed = false
-
-    override suspend fun subscribe() = Unit
-
-    override suspend fun write(bytes: ByteArray) {
-        val hex = bytes.hex()
-        sent.value += hex
-        if (!initializing) return
-        initializationReplies(profile, hex).forEach { incoming.send(it.bytes()) }
-    }
-
-    override suspend fun close() {
-        if (closed) return
-        closeDelayMillis().takeIf { it > 0 }?.let { kotlinx.coroutines.delay(it) }
-        if (closeFails()) throw IllegalStateException("the platform could not close the link")
-        closed = true
-        initializing = false
-        incoming.close()
-        headset.closed(owner)
-    }
-
-    suspend fun replyToWrite(frame: String, reply: String) {
-        sent.first { it.lastOrNull() == frame }
-        deviceReply(reply)
-    }
-
-    suspend fun deviceReply(hex: String) = incoming.send(hex.bytes())
 }
 
 internal class MemoryOwnerStore(var record: OwnerRecord = OwnerRecord()) : OwnerSelectionStore {
@@ -191,6 +111,7 @@ internal class InProcessHostLink(
     var statusHangs = false
 
     var tamperReceipt: (ReleaseReceipt) -> ReleaseReceipt = { it }
+    var tamperFrame: (String) -> String = { it }
     val connections = mutableListOf<Connection>()
 
     var openMillis = 0L
@@ -230,7 +151,11 @@ internal class InProcessHostLink(
 
         override suspend fun execute(generation: OwnerGeneration, command: HostCommand): HostCallResult {
             ensureOpen()
-            val sent = HostWire.decodeCommand(parseWire(HostWire.encode(command).render()))
+            val sent = when (val decoded = HostWire.decodeCommand(HostWire.encode(command))) {
+                is CoreDecodeResult.Ok -> decoded.value
+                is CoreDecodeResult.Error.Malformed -> throw HostLinkException("无效命令：${decoded.detail}")
+                is CoreDecodeResult.Error.UnsupportedVersion -> throw HostLinkException("协议版本不匹配")
+            }
             val result = host.control.execute(identity, lease.id, generation, sent)
             ensureOpen()
             return HostWire.decodeCallResult(parseWire(HostWire.encode(result).render()))
@@ -263,7 +188,12 @@ internal class InProcessHostLink(
 
         override fun frames(generation: OwnerGeneration): Flow<HostFrame> = host.control.frames(identity, lease.id, generation).map { frame ->
             ensureOpen()
-            HostFrameWire.decodeFrame(parseWire(HostFrameWire.encode(frame).render()))
+            val wire = tamperFrame(HostFrameWire.encode(frame).render())
+            try {
+                HostFrameWire.decodeFrame(parseWire(wire))
+            } catch (failure: WireFormatException) {
+                throw HostLinkException("宿主返回了无法识别的状态帧", failure)
+            }
         }
 
         override fun close() {
@@ -305,16 +235,13 @@ internal class OwnerRig(
 ) {
     val headset = SharedHeadset()
     val app = test.appHeadset(headset, earphones)
-    val hostTransport = HeadsetTransport("module", headset, earphones.profile!!, bonded)
+    val hostHeadset = test.hostHeadset(headset, earphones, bonded)
     val store = MemoryOwnerStore(initial)
     private val ids = generateSequence(1) { it + 1 }.map { "id-$it" }.iterator()
-    private val sessionTiming = SessionTiming(queryTimeoutMillis = 50, writeIntervalMillis = 0)
-    private val platform = PlatformState(
-        PermissionState.GRANTED,
-        TransportAvailability.Available,
-        hostPlatform = HostPlatform.ANDROID,
-        scanPermission = PermissionState.GRANTED,
-    )
+    private val platform = grantedAndroidPlatform
+
+    var hostCore: CoreBackedRuntime? = null
+        private set
 
     private var hostScope: CoroutineScope = newHostScope()
     private var hostCount = 0
@@ -330,23 +257,20 @@ internal class OwnerRig(
         return ModuleControlHost(
             packageName = HOST_PACKAGE, processName = HOST_PACKAGE, incarnation = "host-$hostCount",
             authority = testAuthority,
-            runtimeFactory = { scope, settings, state, base -> LocalControlRuntime(state, settings, hostTransport, scope, sessionTiming, base) },
+            runtimeFactory = { scope, settings, initialPlatform, sessionIdBase ->
+                hostHeadset.runtime(scope, settings, initialPlatform, sessionIdBase).also { hostCore = it }
+            },
             parentScope = hostScope, newId = { "lease-${ids.next()}" }, uid = 1002, pid = 777 + hostCount,
         )
     }
 
-    suspend fun replaceHost(processDied: Boolean): Boolean {
-        if (processDied) {
-            hostScope.cancel()
-            hostTransport.links.filter { !it.closed }.forEach { it.close() }
-            hostScope = newHostScope()
-        } else if (!host.stop()) {
-            return false
-        }
-        link.connections.filter { it.isOpen }.forEach { it.sever(processDied) }
+    suspend fun replaceHost() {
+        hostScope.cancel()
+        hostHeadset.endProcess()
+        hostScope = newHostScope()
+        link.connections.filter { it.isOpen }.forEach { it.sever(processDied = true) }
         host = newHost()
         link.host = host
-        return true
     }
 
     private var hostUnlocked = true
@@ -363,11 +287,13 @@ internal class OwnerRig(
         hostUnlocked = unlocked
         host.updatePlatform(platform)
         host.configure { HostConfiguration(unlocked, HostSettings(integration = IntegrationSettings(controlWay = store.hostSelection))) }
+        test.quiesce()
     }
 
     suspend fun unlockHost() {
         hostUnlocked = true
         host.configure { HostConfiguration(true, HostSettings(integration = IntegrationSettings(controlWay = store.hostSelection))) }
+        test.quiesce()
     }
 
     fun newAppProcess() = CoroutineScope(test.backgroundScope.coroutineContext + SupervisorJob(test.backgroundScope.coroutineContext[Job]))

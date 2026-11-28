@@ -3,6 +3,7 @@ uniffi::setup_scaffolding!();
 
 pub mod audio;
 mod audio_facts;
+pub mod codec;
 mod confirmation;
 mod core;
 mod discovery;

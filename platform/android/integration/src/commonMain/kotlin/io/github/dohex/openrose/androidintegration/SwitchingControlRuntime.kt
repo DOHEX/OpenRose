@@ -10,6 +10,7 @@ import io.github.dohex.openrose.core.PlatformState
 import io.github.dohex.openrose.core.SessionReference
 import io.github.dohex.openrose.core.UserSettings
 import io.github.dohex.openrose.core.transport.DeviceId
+import io.github.dohex.openrose.ffi.kotlincore.toControlState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
@@ -429,7 +430,7 @@ private class ApplicationOwners(
 
                 record.selected == ControlWay.MODULE && view is ModuleView.Active -> {
                     val frame = view.frame
-                    frame.state.copy(
+                    frame.snapshot.toControlState().copy(
                         platform = platform.copy(
                             permission = frame.platform.permission,
                             transport = frame.platform.transport,
@@ -465,7 +466,7 @@ private class ApplicationOwners(
                     targetPackage = view.frame.holder.packageName,
                     targetProcess = view.frame.holder.processName,
                     ipc = BridgeIpcState.AUTHENTICATED,
-                    session = if (view.frame.state.device != null) BridgeSessionState.READY else BridgeSessionState.NONE,
+                    session = if (view.frame.snapshot.headset != null) BridgeSessionState.READY else BridgeSessionState.NONE,
                     detail = "模块控制所有者 ${view.frame.generation}",
                     presentation = view.frame.facts.presentation,
                     endpoints = view.frame.facts.endpoints,
@@ -635,8 +636,9 @@ private class ApplicationOwners(
         override fun readSession(reference: SessionReference): SessionSnapshotResult {
             servingApp?.let { return it.runtime.readSession(reference) }
             val frame = (client.view.value as? ModuleView.Active)?.frame
-            return if (record.selected == ControlWay.MODULE && frame?.state?.readySession == reference) {
-                SessionSnapshotResult.Available(requireNotNull(frame.state.device), frame.presentation)
+            val state = frame?.snapshot?.toControlState()
+            return if (record.selected == ControlWay.MODULE && state?.readySession == reference) {
+                SessionSnapshotResult.Available(requireNotNull(state.device), frame.presentation)
             } else {
                 SessionSnapshotResult.Failure(ControlError(ControlErrorCode.NOT_READY, "设备会话已结束或尚未就绪"))
             }

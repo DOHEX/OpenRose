@@ -1,11 +1,13 @@
 package io.github.dohex.openrose.androidintegration
 
-import io.github.dohex.openrose.androidintegration.wire.HostPlatformFacts
 import io.github.dohex.openrose.core.ControlState
 import io.github.dohex.openrose.core.HeadsetCommand
 import io.github.dohex.openrose.core.OperationResult
+import io.github.dohex.openrose.core.PermissionState
 import io.github.dohex.openrose.core.SessionReference
+import io.github.dohex.openrose.core.TransportAvailability
 import io.github.dohex.openrose.core.transport.DeviceId
+import uniffi.openrose_control.ControlSnapshot
 
 enum class ClientRole { APP, MILINK, XIAOMI_BLUETOOTH, HOST_PRESENTATION }
 
@@ -115,11 +117,17 @@ data class HostFacts(
     val presentation: Map<String, String> = emptyMap(),
 )
 
+data class HostPlatformFacts(
+    val permission: PermissionState,
+    val transport: TransportAvailability,
+    val scanPermission: PermissionState = PermissionState.NOT_REQUIRED,
+)
+
 data class HostFrame(
     val generation: OwnerGeneration,
     val holder: OwnerHolder,
     val platform: HostPlatformFacts,
-    val state: ControlState,
+    val snapshot: ControlSnapshot,
     val presentation: SystemPresentationState,
     val facts: HostFacts = HostFacts(),
 )

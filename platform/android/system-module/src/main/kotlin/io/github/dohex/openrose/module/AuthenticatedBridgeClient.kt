@@ -672,4 +672,6 @@ private inline fun <T> binderReply(action: () -> T): Result<T> = try {
     Result.failure(lost)
 } catch (refused: RuntimeException) {
     Result.failure(refused)
+} catch (nativeCoreMissing: LinkageError) {
+    Result.failure(nativeCoreMissing)
 }

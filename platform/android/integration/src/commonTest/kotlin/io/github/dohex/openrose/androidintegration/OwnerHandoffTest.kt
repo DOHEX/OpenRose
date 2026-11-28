@@ -28,10 +28,10 @@ import kotlin.test.assertTrue
 class OwnerHandoffTest {
     @Test
     fun fusionEntryWaitsForTheFirstModuleFrameAndConnectsTheChosenHeadphones() = runTest {
-        val playing = rosePair("playing")
-        val chosen = rosePair("chosen").copy(classicAddress = "11:22:33:44:55:77")
+        val playing = rosePair("AA:BB:CC:00:00:11")
+        val chosen = rosePair("AA:BB:CC:00:00:22")
         val rig = OwnerRig(this, playing, OwnerRecord(ControlWay.MODULE), listOf(playing, chosen))
-        rig.hostTransport.audioDevice.emit(playing.deviceId)
+        rig.hostHeadset.connectAudio(playing.deviceId)
         rig.bootHost()
         runCurrent()
         rig.link.openMillis = 300
@@ -83,7 +83,7 @@ class OwnerHandoffTest {
         rig.app.audioConnected = true
         val runtime = rig.newRuntime()
         val id = rig.earphones.deviceId
-        rig.hostTransport.audioDevice.emit(id)
+        rig.hostHeadset.connectAudio(id)
         runCurrent()
         advanceTimeBy(1)
         runCurrent()
@@ -108,6 +108,7 @@ class OwnerHandoffTest {
         runCurrent()
         advanceTimeBy(1)
         runCurrent()
+        rig.eventually("the module connection") { rig.headset.openOwner == "module" }
         assertEquals("module", rig.headset.openOwner)
         assertEquals(0, rig.headset.overlappingOpens)
     }
@@ -262,7 +263,7 @@ class OwnerHandoffTest {
     fun recoveringAnInterruptedPublicationKeepsTheNextHostFromReacquiring() = runTest {
         val rig = OwnerRig(this, initial = OwnerRecord(ControlWay.MODULE))
         val device = rig.earphones.deviceId
-        rig.hostTransport.audioDevice.emit(device)
+        rig.hostHeadset.connectAudio(device)
         rig.app.audioConnected = true
         rig.bootHost()
         runCurrent()
@@ -291,7 +292,7 @@ class OwnerHandoffTest {
         rig.eventually("the app connection") { rig.headset.events.lastOrNull() == "app:open" }
         assertEquals(listOf("module:open", "module:close", "app:open"), rig.headset.events)
 
-        rig.replaceHost(processDied = true)
+        rig.replaceHost()
         rig.bootHost()
         runCurrent()
         assertIs<HostStatus.Inactive>(rig.host.status.value)
@@ -328,6 +329,7 @@ class OwnerHandoffTest {
         runCurrent()
         assertEquals(OperationResult.Success, runtime.connectFromSystem(rig.earphones.deviceId))
         runCurrent()
+        rig.eventually("the host link to be ready") { runtime.state.value.readySession != null }
         val connectionBefore = runtime.state.value.connection
 
         repeat(3) {
@@ -486,7 +488,7 @@ class OwnerHandoffTest {
     fun aStaleNamedGenerationIsNeverSilentlyRetargetedWithinTheSameRequest() = runTest {
         val rig = OwnerRig(this, initial = OwnerRecord(ControlWay.MODULE, PendingModuleRelease("r", OwnerGeneration("host-1", 7))))
         rig.bootHost()
-        rig.hostTransport.audioDevice.emit(rig.earphones.deviceId)
+        rig.hostHeadset.connectAudio(rig.earphones.deviceId)
         val runtime = rig.newRuntime()
         runCurrent()
         advanceTimeBy(1)

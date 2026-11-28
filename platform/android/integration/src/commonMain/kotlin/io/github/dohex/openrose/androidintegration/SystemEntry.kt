@@ -72,6 +72,9 @@ class SystemEntryRuntime(
 
     val presentation: StateFlow<SystemPresentationState> = PresentationFlow()
 
+    internal val presentationInputs: Flow<Pair<IslandPrompt?, IntegrationSettings>> =
+        combine(prompts, integrationSettings) { state, settings -> state.prompt to settings }.distinctUntilChanged()
+
     init {
         scope.launch(start = CoroutineStart.UNDISPATCHED) { control.state.collect { advance() } }
     }
@@ -120,7 +123,7 @@ class SystemEntryRuntime(
         advance()
     }
 
-    private fun present(state: ControlState, settings: IntegrationSettings = integrationSettings.value): SystemPresentationState {
+    internal fun present(state: ControlState, settings: IntegrationSettings = integrationSettings.value): SystemPresentationState {
         advance()
         return state.systemPresentation(settings, prompts.value.prompt)
     }

@@ -59,6 +59,8 @@ import io.github.dohex.openrose.core.NoiseMode
 import io.github.dohex.openrose.core.OperationResult
 import io.github.dohex.openrose.core.SessionReference
 import io.github.dohex.openrose.core.transport.DeviceId
+import io.github.dohex.openrose.ffi.CoreDecodeResult
+import io.github.dohex.openrose.ffi.coreWireFormatVersion
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -200,7 +202,9 @@ internal class HostEndpoint(
 
         fun open(hello: Bundle, clientToken: IBinder): Bundle {
             val caller = caller()
-            if (hello.getInt(BridgeWire.KEY_VERSION) != BridgeWire.VERSION) {
+            if (hello.getInt(BridgeWire.KEY_VERSION, -1) != BridgeWire.VERSION ||
+                hello.getInt(BridgeWire.WIRE_FORMAT_VERSION, -1) != coreWireFormatVersion().toInt()
+            ) {
                 return BridgeBundles.response(BridgeWire.STATUS_UNSUPPORTED_VERSION)
             }
             return when (val result = host.open(caller)) {
@@ -635,8 +639,15 @@ internal class HostEndpoint(
 
         fun execute(request: Bundle): Bundle {
             val lease = leaseTable.appLease(request)
-            val (generation, command) = decodeOrNull { HostWire.decodeCall(parseWire(request.getString(BridgeWire.PAYLOAD).orEmpty())) }
+            val generation = decodeOrNull { HostIdentityWire.decodeGeneration(parseWire(request.getString(BridgeWire.PAYLOAD).orEmpty())) }
                 ?: return BridgeBundles.response(BridgeWire.STATUS_INVALID_ARGUMENT)
+            val commandBytes = request.getByteArray(BridgeWire.COMMAND)
+                ?: return BridgeBundles.response(BridgeWire.STATUS_INVALID_ARGUMENT)
+            val command = when (val decoded = HostWire.decodeCommand(commandBytes)) {
+                is CoreDecodeResult.Ok -> decoded.value
+                is CoreDecodeResult.Error.Malformed -> return BridgeBundles.response(BridgeWire.STATUS_INVALID_ARGUMENT, decoded.detail)
+                is CoreDecodeResult.Error.UnsupportedVersion -> return BridgeBundles.response(BridgeWire.STATUS_UNSUPPORTED_VERSION)
+            }
             val result = runBlocking { host.control.execute(lease.caller, lease.id, generation, command) }
             return BridgeBundles.payload(BridgeWire.STATUS_OK, HostWire.encode(result).render())
         }

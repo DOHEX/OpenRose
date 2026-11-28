@@ -2,10 +2,12 @@ package io.github.dohex.openrose.bridge
 
 import android.os.Bundle
 import io.github.dohex.openrose.androidintegration.wire.BridgeWire
+import io.github.dohex.openrose.ffi.coreWireFormatVersion
 
 object BridgeBundles {
     fun hello(processName: String?, target: BridgeTarget?, resolution: String = BridgeWire.RESOLUTION_MATCHED): Bundle = Bundle().apply {
         putInt(BridgeWire.KEY_VERSION, BridgeWire.VERSION)
+        putInt(BridgeWire.WIRE_FORMAT_VERSION, coreWireFormatVersion().toInt())
         target?.let {
             putString(BridgeWire.PACKAGE, it.packageName)
             putString(BridgeWire.COMPONENT_MATCH_KEY, it.componentMatch)

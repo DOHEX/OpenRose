@@ -1,9 +1,10 @@
 package io.github.dohex.openrose.androidintegration.wire
 
 object BridgeWire {
-    const val VERSION = 7
+    const val VERSION = 8
     const val KEY_VERSION = "version"
     const val STATUS = "status"
+    const val WIRE_FORMAT_VERSION = "wire_format_version"
     const val MESSAGE = "message"
     const val PACKAGE = "package"
     const val PROCESS = "process"
@@ -17,6 +18,7 @@ object BridgeWire {
     const val CAPTURED_ELAPSED_MILLIS = "captured_elapsed_millis"
 
     const val PAYLOAD = "payload"
+    const val COMMAND = "command"
 
     const val GENERATION = "generation"
 

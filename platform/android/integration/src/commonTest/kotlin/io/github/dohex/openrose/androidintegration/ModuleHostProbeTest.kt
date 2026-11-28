@@ -15,7 +15,7 @@ class ModuleHostProbeTest {
 
     private suspend fun kotlinx.coroutines.test.TestScope.connected(): Pair<OwnerRig, SwitchingControlRuntime> {
         val rig = OwnerRig(this, initial = saved)
-        rig.hostTransport.audioDevice.emit(rig.earphones.deviceId)
+        rig.hostHeadset.connectAudio(rig.earphones.deviceId)
         rig.bootHost()
         val runtime = rig.newRuntime()
         runCurrent()

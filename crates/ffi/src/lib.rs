@@ -11,6 +11,7 @@ pub use openrose_control::settings::ControlSettings;
 pub use runtime::ControlRuntime;
 
 use openrose_control::audio::normalize_bluetooth_address as core_normalize_bluetooth_address;
+use openrose_control::codec::{CodecError, ControlCommand, WIRE_FORMAT_VERSION};
 use openrose_control::snapshot::{ControlSnapshot, HeadsetCandidate, SessionReference};
 use openrose_control::{ControlError, SessionTiming};
 #[cfg(feature = "simulator")]
@@ -39,6 +40,31 @@ impl From<ControlError> for ControlFailure {
     }
 }
 
+
+#[uniffi::export]
+pub fn wire_format_version() -> u8 {
+    WIRE_FORMAT_VERSION
+}
+
+#[uniffi::export]
+pub fn encode_snapshot(snapshot: ControlSnapshot) -> Vec<u8> {
+    snapshot.encode()
+}
+
+#[uniffi::export]
+pub fn decode_snapshot(bytes: Vec<u8>) -> Result<ControlSnapshot, CodecError> {
+    ControlSnapshot::decode(&bytes)
+}
+
+#[uniffi::export]
+pub fn encode_command(command: ControlCommand) -> Vec<u8> {
+    command.encode()
+}
+
+#[uniffi::export]
+pub fn decode_command(bytes: Vec<u8>) -> Result<ControlCommand, CodecError> {
+    ControlCommand::decode(&bytes)
+}
 #[uniffi::export]
 pub fn current_headset(snapshot: ControlSnapshot) -> Option<HeadsetCandidate> {
     snapshot.current_headset()

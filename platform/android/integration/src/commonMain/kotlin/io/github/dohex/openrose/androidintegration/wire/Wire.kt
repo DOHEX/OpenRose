@@ -1,6 +1,6 @@
 package io.github.dohex.openrose.androidintegration.wire
 
-class WireFormatException(message: String) : Exception(message)
+open class WireFormatException(message: String, cause: Throwable? = null) : Exception(message, cause)
 
 sealed interface Wire {
     data class Obj(val fields: Map<String, Wire>) : Wire {

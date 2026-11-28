@@ -5,8 +5,11 @@ import io.github.dohex.openrose.androidintegration.ClientRole
 import io.github.dohex.openrose.androidintegration.ControlWay
 import io.github.dohex.openrose.androidintegration.HostCallResult
 import io.github.dohex.openrose.androidintegration.HostCommand
+import io.github.dohex.openrose.androidintegration.HostFacts
+import io.github.dohex.openrose.androidintegration.HostFrame
 import io.github.dohex.openrose.androidintegration.HostLease
 import io.github.dohex.openrose.androidintegration.HostOpenResult
+import io.github.dohex.openrose.androidintegration.HostPlatformFacts
 import io.github.dohex.openrose.androidintegration.HostRejection
 import io.github.dohex.openrose.androidintegration.HostStatus
 import io.github.dohex.openrose.androidintegration.OwnerGeneration
@@ -14,33 +17,31 @@ import io.github.dohex.openrose.androidintegration.OwnerHolder
 import io.github.dohex.openrose.androidintegration.ReleaseReceipt
 import io.github.dohex.openrose.androidintegration.ReleaseResult
 import io.github.dohex.openrose.androidintegration.SwitchRequest
-import io.github.dohex.openrose.core.ControlState
-import io.github.dohex.openrose.core.DeviceCapabilities
+import io.github.dohex.openrose.androidintegration.SystemPresentationState
 import io.github.dohex.openrose.core.DeviceSetting
-import io.github.dohex.openrose.core.DeviceState
 import io.github.dohex.openrose.core.HeadsetCommand
 import io.github.dohex.openrose.core.NoiseMode
 import io.github.dohex.openrose.core.PermissionState
-import io.github.dohex.openrose.core.PlatformState
 import io.github.dohex.openrose.core.SessionReference
-import io.github.dohex.openrose.core.SettingOperation
-import io.github.dohex.openrose.core.SettingStage
-import io.github.dohex.openrose.core.TouchControlCapabilities
-import io.github.dohex.openrose.core.TouchSlot
 import io.github.dohex.openrose.core.TransportAvailability
 import io.github.dohex.openrose.core.TransportUnavailableReason
-import io.github.dohex.openrose.core.protocol.DeviceField
-import io.github.dohex.openrose.core.protocol.FieldReading
 import io.github.dohex.openrose.core.protocol.FieldValue
-import io.github.dohex.openrose.core.protocol.ModelProfile
 import io.github.dohex.openrose.core.transport.DeviceId
-import kotlinx.collections.immutable.persistentListOf
-import kotlinx.collections.immutable.persistentMapOf
-import kotlinx.collections.immutable.persistentSetOf
+import io.github.dohex.openrose.ffi.CoreDecodeResult
+import io.github.dohex.openrose.ffi.coreWireFormatVersion
+import io.github.dohex.openrose.ffi.encodeToBytes
+import uniffi.openrose_control.ConnectionState
+import uniffi.openrose_control.ControlSettings
+import uniffi.openrose_control.ControlSnapshot
+import uniffi.openrose_control.HostPlatform
+import uniffi.openrose_control.PlatformApplicability
+import uniffi.openrose_control.PlatformState
+import uniffi.openrose_control.ScanState
+import kotlin.io.encoding.Base64
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
-import kotlin.test.assertNull
+import kotlin.test.assertIs
 
 class HostWireTest {
     private val generation = OwnerGeneration("incarnation-a", 3)
@@ -65,7 +66,8 @@ class HostWireTest {
         )
 
         for (command in commands) {
-            assertEquals(command, HostWire.decodeCommand(HostWire.encode(command)))
+            val decoded = assertIs<CoreDecodeResult.Ok<HostCommand>>(HostWire.decodeCommand(HostWire.encode(command)))
+            assertEquals(command, decoded.value)
         }
     }
 
@@ -86,81 +88,34 @@ class HostWireTest {
         assertEquals(DeviceSetting.entries.toSet(), writes.map { it.setting }.toSet())
         for (write in writes) {
             val expected = HostCommand.Set(reference, write)
-            assertEquals(expected, HostWire.decodeCommand(HostWire.encode(expected)))
+            val decoded = assertIs<CoreDecodeResult.Ok<HostCommand>>(HostWire.decodeCommand(HostWire.encode(expected)))
+            assertEquals(expected, decoded.value)
         }
     }
 
     @Test
-    fun malformedHeadsetSettingNeverReachesTheHost() {
-        for ((setting, value) in listOf(
-            DeviceSetting.BASS_BOOST to FieldValue.Toggle(true),
-            DeviceSetting.PROMPT_LANGUAGE to FieldValue.Number(0),
-            DeviceSetting.PROMPT_VOLUME to FieldValue.Toggle(false),
-            DeviceSetting.NOISE_MODE to FieldValue.Toggle(true),
-            DeviceSetting.NOISE_CYCLE to FieldValue.NoiseCycle(mapOf("normal" to true, "transparency" to null, "wind" to false, "anc" to true)),
-            DeviceSetting.EQ to FieldValue.Number(0),
-            DeviceSetting.EQ to FieldValue.Toggle(true),
-            DeviceSetting.GAME_MODE to FieldValue.Number(1),
-            DeviceSetting.GAME_MODE to FieldValue.Text("on"),
-            DeviceSetting.TOUCH_BINDING to FieldValue.Text("play_pause"),
-            DeviceSetting.TOUCH_ENABLED to FieldValue.Number(1),
-            DeviceSetting.EAR_DETECTION to FieldValue.Text("on"),
-            DeviceSetting.AUDIO_MODE to FieldValue.Toggle(true),
-            DeviceSetting.MULTIPOINT to FieldValue.Number(1),
-        )) {
-            assertNull(HeadsetCommand.decode(setting, value), "$setting/$value")
-            val malformed = Wire.Obj(
-                mapOf(
-                    "t" to Wire.Str("set"),
-                    "reference" to Wire.Null,
-                    "setting" to Wire.Str(setting.name),
-                    "value" to ControlWire.encode(value),
-                ),
-            )
-            assertFailsWith<WireFormatException> { HostWire.decodeCommand(malformed) }
+    fun malformedOrUnsupportedCoreCommandBytesAreRejectedWithTypedErrors() {
+        assertIs<CoreDecodeResult.Error.Malformed>(HostWire.decodeCommand("corrupt".encodeToByteArray()))
+        val wrongVersion = HostWire.encode(HostCommand.StartScan).apply {
+            this[3] = (coreWireFormatVersion().toInt() + 1).toByte()
         }
+        val versionError = assertIs<CoreDecodeResult.Error.UnsupportedVersion>(HostWire.decodeCommand(wrongVersion))
+        assertEquals(coreWireFormatVersion(), versionError.expected)
+        assertEquals((coreWireFormatVersion().toInt() + 1).toUByte(), versionError.actual)
     }
 
     @Test
-    fun anOwnerStateKeepsFactsOperationsAndTheTouchLayoutOnTheWire() {
-        val device = DeviceState(
-            deviceId = reference.deviceId,
-            sessionId = reference.sessionId,
-            profile = ModelProfile.I5_ZT,
-            capabilities = DeviceCapabilities(
-                readableFields = persistentSetOf(DeviceField.SPATIAL_AUDIO),
-                writableSettings = persistentSetOf(DeviceSetting.SPATIAL_AUDIO),
-                touchControl = TouchControlCapabilities(
-                    slots = persistentSetOf(TouchSlot("left", "single")),
-                    actions = persistentSetOf("play_pause"),
-                    slotLabels = persistentMapOf(TouchSlot("left", "single") to "电源键"),
-                ),
-            ),
-            fields = persistentMapOf(DeviceField.SPATIAL_AUDIO to FieldReading.Known(FieldValue.Toggle(false), "00")),
-        )
-        val operation = SettingOperation(
-            id = 12,
-            sessionId = reference.sessionId,
-            setting = DeviceSetting.SPATIAL_AUDIO,
-            requestedValue = FieldValue.Toggle(true),
-            stage = SettingStage.WRITTEN,
-            confirmedFields = persistentSetOf(DeviceField.SPATIAL_AUDIO),
-        )
+    fun aHostFrameCarriesPlatformFactsAndSnapshotBytesAcrossTheWire() {
+        val snapshot = testSnapshot()
         val facts = HostPlatformFacts(PermissionState.GRANTED, TransportAvailability.Available, scanPermission = PermissionState.DENIED)
-        val state = ControlState(
-            platform = PlatformState(PermissionState.NOT_REQUIRED),
-            device = device,
-            settingOperations = persistentListOf(operation),
-            audioDeviceId = reference.deviceId,
-            selectedHeadsetId = reference.deviceId,
-        )
+        val frame = HostFrame(generation, holder, facts, snapshot, SystemPresentationState(), HostFacts(presentation = mapOf("k" to "v")))
 
-        val decoded = ControlWire.decodeOwned(ControlWire.encodeOwned(facts, state))
-        assertEquals(facts, decoded.platform)
-        assertEquals(device, decoded.state.device)
-        assertEquals(listOf(operation), decoded.state.settingOperations)
-        assertEquals(reference.deviceId, decoded.state.audioDeviceId)
-        assertEquals(reference.deviceId, decoded.state.selectedHeadsetId)
+        val encoded = HostFrameWire.encode(frame) as Wire.Obj
+        assertEquals(frame, HostFrameWire.decodeFrame(parseWire(encoded.render())))
+
+        val platformObj = encoded.field("platform") as Wire.Obj
+        val withoutScanPermission = Wire.Obj(encoded.fields + ("platform" to Wire.Obj(platformObj.fields - "scanPermission")))
+        assertFailsWith<WireFormatException> { HostFrameWire.decodeFrame(withoutScanPermission) }
 
         for (transport in listOf(
             TransportAvailability.Unavailable(TransportUnavailableReason.NoAdapter),
@@ -169,70 +124,60 @@ class HostWireTest {
             TransportAvailability.Unavailable(TransportUnavailableReason.BackendUnavailable("dbus error")),
         )) {
             val unavailableFacts = HostPlatformFacts(PermissionState.GRANTED, transport)
-            assertEquals(unavailableFacts, ControlWire.decodeOwned(ControlWire.encodeOwned(unavailableFacts, state)).platform)
+            val unavailableFrame = frame.copy(platform = unavailableFacts)
+            assertEquals(unavailableFacts, HostFrameWire.decodeFrame(HostFrameWire.encode(unavailableFrame)).platform)
         }
     }
 
     @Test
-    fun everyModelsCapabilitiesSurviveTheOwnerWire() {
-        val facts = HostPlatformFacts(PermissionState.GRANTED, TransportAvailability.Available)
-        for (profile in ModelProfile.entries) {
-            val device = DeviceState(
-                deviceId = reference.deviceId,
-                sessionId = reference.sessionId,
-                profile = profile,
-                capabilities = profile.capabilities(),
-                fields = persistentMapOf(),
-            )
-            val state = ControlState(platform = PlatformState(PermissionState.NOT_REQUIRED), device = device)
-            assertEquals(device, ControlWire.decodeOwned(ControlWire.encodeOwned(facts, state)).state.device, profile.name)
+    fun malformedAndUnsupportedSnapshotBytesFailWithATypedException() {
+        val snapshot = testSnapshot()
+        val wire = HostFrameWire.encode(
+            HostFrame(generation, holder, HostPlatformFacts(PermissionState.GRANTED, TransportAvailability.Available), snapshot, SystemPresentationState()),
+        ) as Wire.Obj
+
+        val malformedPayload = Wire.Obj(wire.fields + ("snapshot" to str(Base64.encode("corrupt".encodeToByteArray()))))
+        val malformedError = assertFailsWith<HostSnapshotFormatException> { HostFrameWire.decodeFrame(malformedPayload) }
+        assertIs<CoreDecodeResult.Error.Malformed>(malformedError.error)
+
+        val wrongVersionBytes = snapshot.encodeToBytes().apply {
+            this[3] = (coreWireFormatVersion().toInt() + 1).toByte()
         }
+        val unsupportedPayload = Wire.Obj(wire.fields + ("snapshot" to str(Base64.encode(wrongVersionBytes))))
+        val versionError = assertFailsWith<HostSnapshotFormatException> { HostFrameWire.decodeFrame(unsupportedPayload) }
+        val unsupported = assertIs<CoreDecodeResult.Error.UnsupportedVersion>(versionError.error)
+        assertEquals(coreWireFormatVersion(), unsupported.expected)
+        assertEquals((coreWireFormatVersion().toInt() + 1).toUByte(), unsupported.actual)
+
+        val badBase64 = Wire.Obj(wire.fields + ("snapshot" to str("%%%")))
+        assertFailsWith<WireFormatException> { HostFrameWire.decodeFrame(badBase64) }
     }
 
-    @Test
-    fun anOwnerPayloadMissingAFieldTheEncoderAlwaysWritesIsRejected() {
-        val profile = ModelProfile.ASTRO_X_RS_V2
-        val device = DeviceState(
-            deviceId = reference.deviceId,
-            sessionId = reference.sessionId,
-            profile = profile,
-            capabilities = profile.capabilities(),
-            fields = persistentMapOf(),
-        )
-        val facts = HostPlatformFacts(PermissionState.GRANTED, TransportAvailability.Available, PermissionState.DENIED)
-        val state = ControlState(platform = PlatformState(PermissionState.NOT_REQUIRED), device = device)
-
-        val owned = ControlWire.encodeOwned(facts, state) as Wire.Obj
-        assertFailsWith<WireFormatException> { ControlWire.decodeOwned(Wire.Obj(owned.fields - "scanPermission")) }
-
-        val capabilities = encode(device.capabilities) as Wire.Obj
-        assertEquals(device.capabilities, decodeCapabilities(capabilities))
-        for (key in listOf("spatialModes", "spatialContents")) {
-            assertFailsWith<WireFormatException> { decodeCapabilities(Wire.Obj(capabilities.fields - key)) }
-        }
-    }
-
-    @Test
-    fun aConfirmedBatteryOutsideZeroToOneHundredIsAMalformedFrame() {
-        val profile = ModelProfile.I5_ZT
-        fun device(level: Int) = DeviceState(
-            deviceId = reference.deviceId,
-            sessionId = reference.sessionId,
-            profile = profile,
-            capabilities = profile.capabilities(),
-            fields = persistentMapOf(DeviceField.CASE_BATTERY to FieldReading.Known(FieldValue.Number(level), "ff")),
-        )
-
-        assertEquals(device(100), decodeDevice(encode(device(100))))
-        assertFailsWith<WireFormatException> { decodeDevice(encode(device(255))) }
-    }
-
-    @Test
-    fun aCommandAddressedToAGenerationKeepsBothParts() {
-        val command = HostCommand.ClaimPrompt(reference, "prompt-1")
-
-        assertEquals(generation to command, HostWire.decodeCall(HostWire.encodeCall(generation, command)))
-    }
+    private fun testSnapshot(): ControlSnapshot = ControlSnapshot(
+        revision = 4u,
+        platform = PlatformState(
+            permission = uniffi.openrose_control.PermissionState.GRANTED,
+            transport = uniffi.openrose_control.TransportAvailability.Available,
+            hostPlatform = HostPlatform.ANDROID,
+            userUnlocked = true,
+            scanPermission = uniffi.openrose_control.PermissionState.DENIED,
+            controlTransportApplicability = PlatformApplicability.APPLICABLE,
+        ),
+        settings = ControlSettings(forceBle = false),
+        connection = ConnectionState.Disconnected,
+        bondedHeadsets = emptyList(),
+        candidates = emptyList(),
+        scan = ScanState.Idle,
+        headset = null,
+        lastError = null,
+        settingOperations = emptyList(),
+        audioHeadsetId = reference.deviceId.value,
+        connectionTarget = null,
+        selectedHeadsetId = reference.deviceId.value,
+        connectionRecovery = null,
+        connectionBlockReason = null,
+        reconnectGuidance = null,
+    )
 
     @Test
     fun aSwitchRequestWithoutAnObservedGenerationKeepsThatAbsence() {
@@ -316,7 +261,6 @@ class HostWireTest {
     fun aKindFromAnotherVersionIsRejectedInsteadOfGuessed() {
         val foreign = Wire.Obj(mapOf("t" to Wire.Str("teleport")))
 
-        assertFailsWith<WireFormatException> { HostWire.decodeCommand(foreign) }
         assertFailsWith<WireFormatException> { HostWire.decodeCallResult(foreign) }
         assertFailsWith<WireFormatException> { HandoffWire.decodeReleaseResult(foreign) }
         assertFailsWith<WireFormatException> { HandoffWire.decodeAcquireResult(foreign) }

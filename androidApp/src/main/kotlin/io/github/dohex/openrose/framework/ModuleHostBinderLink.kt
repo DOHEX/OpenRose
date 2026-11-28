@@ -237,7 +237,13 @@ class ModuleHostBinderLink(
         override suspend fun status(): HostStatus = call({ bridge.ownerStatus(request()) }, HostIdentityWire::decodeStatus)
 
         override suspend fun execute(generation: OwnerGeneration, command: HostCommand): HostCallResult = call(
-            { bridge.execute(request(HostWire.encodeCall(generation, command))) },
+            {
+                bridge.execute(
+                    request(HostIdentityWire.encode(generation)).apply {
+                        putByteArray(BridgeWire.COMMAND, HostWire.encode(command))
+                    },
+                )
+            },
             HostWire::decodeCallResult,
         )
 
@@ -254,10 +260,11 @@ class ModuleHostBinderLink(
         override fun frames(generation: OwnerGeneration): Flow<HostFrame> = callbackFlow {
             val receiver = object : IControlFrames.Stub() {
                 override fun onFrame(frame: Bundle) {
-                    val decoded = runCatching {
-                        HostFrameWire.decodeFrame(parseWire(frame.getString(BridgeWire.PAYLOAD).orEmpty()))
-                    }.getOrNull()
-                    if (decoded == null) this@callbackFlow.close() else trySend(decoded)
+                    try {
+                        trySend(HostFrameWire.decodeFrame(parseWire(frame.getString(BridgeWire.PAYLOAD).orEmpty())))
+                    } catch (failure: WireFormatException) {
+                        this@callbackFlow.close(HostLinkException("宿主返回了无法识别的状态帧", failure))
+                    }
                 }
 
                 override fun onEnded(end: Bundle) {

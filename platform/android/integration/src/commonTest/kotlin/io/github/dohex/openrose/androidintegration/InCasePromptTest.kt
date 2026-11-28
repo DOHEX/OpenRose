@@ -1,23 +1,8 @@
 package io.github.dohex.openrose.androidintegration
 
-import io.github.dohex.openrose.core.ConnectionPhase
-import io.github.dohex.openrose.core.LocalControlRuntime
 import io.github.dohex.openrose.core.OperationResult
-import io.github.dohex.openrose.core.PermissionState
-import io.github.dohex.openrose.core.PlatformState
-import io.github.dohex.openrose.core.SessionTiming
-import io.github.dohex.openrose.core.TransportAvailability
 import io.github.dohex.openrose.core.protocol.ModelProfile
-import io.github.dohex.openrose.core.transport.Advertisement
-import io.github.dohex.openrose.core.transport.ControlConnection
-import io.github.dohex.openrose.core.transport.ControlTransport
-import io.github.dohex.openrose.core.transport.DeviceId
-import io.github.dohex.openrose.core.transport.TransportEndpoint
 import kotlinx.collections.immutable.persistentSetOf
-import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -124,53 +109,15 @@ class InCasePromptTest {
         }
     }
 
-    private suspend fun TestScope.connected(settings: IntegrationSettings, initial: String): Pair<SystemEntryRuntime, I7Connection> {
-        val link = I7Connection(initial)
-        val transport = I7Transport(link)
-        val session = SystemEntryRuntime(
-            LocalControlRuntime(
-                PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
-                transport = transport,
-                scope = backgroundScope,
-                timing = SessionTiming(writeIntervalMillis = 0),
-            ),
-            backgroundScope,
-            initialIntegrationSettings = settings,
-        )
-        val id = DeviceId("i7")
-        session.startScan()
+    private suspend fun TestScope.connected(settings: IntegrationSettings, initial: String): Pair<SystemEntryRuntime, HostLink> {
+        val earphones = rosePair(APP_HEADSET_ADDRESS, ModelProfile.I7_RS_V2)
+        val headset = hostHeadset(SharedHeadset(), earphones, rewriteReply = { if (it.startsWith("dd00040c")) initial else it })
+        val session = SystemEntryRuntime(headset.runtime(backgroundScope), backgroundScope, initialIntegrationSettings = settings)
+        session.refreshBondedDevices()
+        assertEquals(OperationResult.Success, session.connect(earphones.deviceId))
         runCurrent()
-        transport.advertisements.emit(roseAdvertisement(ModelProfile.I7_RS_V2, id))
-        runCurrent()
-        assertEquals(OperationResult.Success, session.connect(id))
-        runCurrent()
-        return session to link
-    }
-
-    private class I7Transport(private val link: I7Connection) : ControlTransport {
-        val advertisements = MutableSharedFlow<Advertisement>(extraBufferCapacity = 1)
-        override fun scan(): Flow<Advertisement> = advertisements
-        override suspend fun connect(deviceId: DeviceId, endpoint: TransportEndpoint, onPhase: (ConnectionPhase) -> Unit): ControlConnection = link
-    }
-
-    private class I7Connection(private val battery: String) : ControlConnection {
-        override val maxWriteSize = 20
-        private val incoming = Channel<ByteArray>(Channel.UNLIMITED)
-        override val notifications = incoming.receiveAsFlow()
-
-        override suspend fun subscribe() = Unit
-
-        override suspend fun write(bytes: ByteArray) {
-            initializationReplies(ModelProfile.I7_RS_V2, bytes.hex())
-                .map { if (it.startsWith("dd00040c")) battery else it }
-                .forEach { incoming.send(it.bytes()) }
-        }
-
-        suspend fun deviceReply(hex: String) = incoming.send(hex.bytes())
-
-        override suspend fun close() {
-            incoming.close()
-        }
+        eventually("the presentation to follow the core") { session.presentation.value.reference != null }
+        return session to headset.links.single()
     }
 }
 

@@ -18,10 +18,16 @@ private class JnaLibraryPath(@get:Internal val directory: Provider<String>) : Co
 
 class RustFfiConventionPlugin : Plugin<Project> {
     override fun apply(target: Project): Unit = with(target) {
-        tasks.withType<Test>().matching { it.name == JVM_TEST_TASK }.configureEach {
+        tasks.withType<Test>().matching { it.name == JVM_TEST_TASK || it.name.endsWith("UnitTest") }.configureEach {
             val library = hostRustFfiLibrary()
             inputs.file(library).withPropertyName("hostRustFfiLibrary")
             jvmArgumentProviders.add(JnaLibraryPath(library.map { it.asFile.parentFile.absolutePath }))
+        }
+        val jna = libs.findLibrary("jna").get()
+        for (androidPlugin in listOf("com.android.library", "com.android.application")) {
+            pluginManager.withPlugin(androidPlugin) {
+                dependencies.add("testImplementation", jna)
+            }
         }
         pluginManager.withPlugin("com.android.application") {
             val shippedAbis = libs.stringVersion("android-abis").split(' ')
