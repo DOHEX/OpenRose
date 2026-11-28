@@ -230,7 +230,7 @@ class ModuleHostBinderLink(
         suspend fun circulation(command: CirculationCommand): CirculationReply {
             val rustCommand = command.toRust() ?: return CirculationFailure(UNSUPPORTED_REMOTE_SETTING)
             return try {
-                val active = status() as? HostStatus.Active ?: return CirculationFailure("模块控制尚未就绪")
+                val active = status() as? HostStatus.Active ?: return CirculationFailure(MODULE_CONTROL_NOT_READY)
                 val reply = okReply {
                     bridge.circulation(
                         request(HostIdentityWire.encode(active.generation)).apply {
@@ -240,7 +240,7 @@ class ModuleHostBinderLink(
                 }
                 reply.getByteArray(BridgeWire.CIRCULATION).toCirculationReply()
             } catch (failure: HostLinkException) {
-                CirculationFailure(failure.message ?: "互联服务不可用")
+                CirculationFailure(failure.message ?: CIRCULATION_UNAVAILABLE)
             }
         }
 

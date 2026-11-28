@@ -10,6 +10,8 @@ import uniffi.openrose_headset.SettingPrerequisite
 internal const val UNSUPPORTED_REMOTE_SETTING = "不支持远程设置该项"
 internal const val PAIRED_MESSAGE = "已配对"
 internal const val FORGOTTEN_MESSAGE = "已解除配对"
+internal const val MODULE_CONTROL_NOT_READY = "模块控制尚未就绪"
+internal const val CIRCULATION_UNAVAILABLE = "流转服务不可用"
 
 @Suppress("CyclomaticComplexMethod")
 internal fun RemoteError.text(): String = when (this) {
