@@ -78,7 +78,7 @@ impl PeerDiscovery for ForeignDiscovery {
         Ok(())
     }
 
-    async fn close(&self) {
+    async fn stop(&self) {
         *self.sink.lock().expect("sink lock") = None;
     }
 }
@@ -449,7 +449,7 @@ async fn phone_facade_pairs_serves_remote_read_set_gates_owner_and_yields_on_pul
     assert_eq!(err, CirculationFailure::Failed { error: RemoteError::InvalidArgument });
 
     let _ = phone_dialer.dials();
-    phone.close().await;
+    phone.close_node().await;
     desktop.close().await;
 }
 
@@ -523,7 +523,7 @@ async fn phone_facade_uses_foreign_dialer_for_outbound_route_and_pull() {
     phone.forget(desktop.id().clone()).await.expect("forget");
     assert!(phone.peers().is_empty());
 
-    phone.close().await;
+    phone.close_node().await;
     desktop.close().await;
 }
 

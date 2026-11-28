@@ -82,7 +82,7 @@ pub trait PeerDiscovery: Send + Sync + 'static {
         sink: Arc<NearbySink>,
     ) -> Result<(), DriverError>;
 
-    async fn close(&self);
+    async fn stop(&self);
 }
 
 #[uniffi::export(foreign)]
@@ -154,7 +154,7 @@ impl CorePeerDiscovery for PeerDiscoveryAdapter {
     }
 
     async fn close(&self) {
-        self.foreign.close().await;
+        self.foreign.stop().await;
         self.sink.tx.send_replace(Vec::new());
     }
 }
@@ -452,7 +452,7 @@ impl CirculationNode {
         self.inner.start().await.map_err(CirculationFailure::from)
     }
 
-    pub async fn close(&self) {
+    pub async fn close_node(&self) {
         self.inner.close().await;
     }
 
