@@ -20,6 +20,7 @@ import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 @RunWith(RobolectricTestRunner::class)
@@ -68,10 +69,50 @@ class AuthenticatedBridgeClientPollTest {
         }
     }
 
+    @Test
+    fun aNativeCoreThatFailsToLoadIsABridgeFailureAndTheClientKeepsPolling() {
+        val target = BridgeTarget.MILINK
+        val events = mutableListOf<String>()
+        val host = PollingHost(events).apply { openFailure = UnsatisfiedLinkError("dlopen failed: libopenrose_ffi.so") }
+        val binder = Binder().apply { attachInterface(host, IControlBridge.DESCRIPTOR) }
+        val context = object : ContextWrapper(RuntimeEnvironment.getApplication()) {
+            override fun getApplicationContext(): Context = this
+            override fun getPackageName(): String = target.packageName
+            override fun bindService(service: Intent, connection: ServiceConnection, flags: Int): Boolean {
+                connection.onServiceConnected(requireNotNull(service.component), binder)
+                return true
+            }
+            override fun unbindService(connection: ServiceConnection) = Unit
+        }
+        val client = AuthenticatedBridgeClient(
+            context,
+            target,
+            target.packageName,
+            onSnapshot = { events += "snapshot ${it.getString(BridgeWire.HOST_EPOCH)}" },
+            onSnapshotFresh = {},
+            onClear = {},
+            onBonded = {},
+        )
+        val reader = shadowOf(client.handler.looper)
+        reader.pause()
+        try {
+            client.start()
+            reader.idle()
+            assertFalse(events.any { it.startsWith("watch") }, "$events")
+            host.openFailure = null
+            reader.runToNextTask()
+            assertTrue("snapshot host#1" in events, "$events")
+        } finally {
+            reader.unPause()
+            assertTrue(client.close())
+        }
+    }
+
     private class PollingHost(private val events: MutableList<String>) : IControlBridge.Default() {
         var generation = "host#1"
+        var openFailure: Throwable? = null
 
-        override fun open(hello: Bundle, clientToken: IBinder): Bundle = BridgeBundles.response(BridgeWire.STATUS_OK).apply {
+        override fun open(hello: Bundle, clientToken: IBinder): Bundle = openFailure?.let { throw it } ?: BridgeBundles.response(BridgeWire.STATUS_OK).apply {
             putString(BridgeWire.LEASE_ID, "lease")
             putString(BridgeWire.HOST_EPOCH, "host")
         }
