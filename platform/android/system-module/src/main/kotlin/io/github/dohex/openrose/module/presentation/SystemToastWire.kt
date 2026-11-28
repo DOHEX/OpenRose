@@ -5,7 +5,8 @@ import android.graphics.Color
 import android.os.Bundle
 import io.github.dohex.openrose.androidintegration.wire.BridgePresentationWire
 import io.github.dohex.openrose.androidintegration.wire.BridgeWire
-import io.github.dohex.openrose.core.protocol.ModelProfile
+import io.github.dohex.openrose.androidintegration.wire.NativeHeadsetSnapshot
+import io.github.dohex.openrose.core.protocol.DeviceField
 import org.json.JSONObject
 
 internal fun Context.setSystemStatus(payload: Bundle) {
@@ -19,20 +20,18 @@ internal fun Context.setSystemStatus(payload: Bundle) {
     ).invoke(service, 1, "strong_toast_action", payload)
 }
 
-internal fun decodeRequest(snapshot: Bundle, promptId: String): PromptRequest? {
+internal fun decodeRequest(snapshot: Bundle, native: NativeHeadsetSnapshot, promptId: String): PromptRequest? {
     if (snapshot.getInt(BridgeWire.KEY_VERSION, -1) != BridgeWire.VERSION) return null
     val identity = identityOf(snapshot) ?: return null
-    if (ModelProfile.fromName(snapshot.getString("profile")) == null) return null
     val prompt = snapshot.getBundle(BridgePresentationWire.PRESENTATION)?.getBundle(BridgePresentationWire.PROMPT) ?: return null
     if (prompt.getString(BridgePresentationWire.MODE) != BridgePresentationWire.SYSTEM_STYLE) return null
-    val fields = snapshot.getBundle("fields")
     return PromptRequest(
         identity = identity,
         promptId = promptId,
-        leftBattery = fields?.knownBattery(LEFT_BATTERY),
-        rightBattery = fields?.knownBattery(RIGHT_BATTERY),
-        leftCharging = fields?.knownCharging(LEFT_CHARGING),
-        rightCharging = fields?.knownCharging(RIGHT_CHARGING),
+        leftBattery = native.knownBattery(DeviceField.LEFT_BATTERY),
+        rightBattery = native.knownBattery(DeviceField.RIGHT_BATTERY),
+        leftCharging = native.knownCharging(DeviceField.LEFT_CHARGING),
+        rightCharging = native.knownCharging(DeviceField.RIGHT_CHARGING),
         key = "${identity.stableKey}:$promptId",
     )
 }
@@ -123,9 +122,5 @@ private const val KEY_RAPID_RATE = "rapid_rate"
 private const val KEY_CHARGE = "charge"
 private const val KEY_CHARGE_FLAG = "string_toast_charge_flag"
 private const val KEY_STATUS_BAR_STRONG_TOAST = "status_bar_strong_toast"
-private const val LEFT_BATTERY = "LEFT_BATTERY"
-private const val RIGHT_BATTERY = "RIGHT_BATTERY"
-private const val LEFT_CHARGING = "LEFT_CHARGING"
-private const val RIGHT_CHARGING = "RIGHT_CHARGING"
 private const val LOW_BATTERY_THRESHOLD = 20
 internal const val SYSTEM_TOAST_DURATION_MILLIS = 5_000L

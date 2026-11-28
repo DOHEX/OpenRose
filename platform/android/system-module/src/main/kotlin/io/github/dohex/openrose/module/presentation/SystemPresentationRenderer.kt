@@ -11,6 +11,7 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import io.github.dohex.openrose.androidintegration.wire.BridgePresentationWire
+import io.github.dohex.openrose.androidintegration.wire.NativeHeadsetSnapshot
 
 internal interface PresentationCallbacks {
     fun claimPrompt(snapshot: Bundle, promptId: String): Boolean
@@ -59,11 +60,11 @@ internal class SystemPresentationRenderer(
         ::reportOnce,
     )
 
-    fun render(snapshot: Bundle) {
+    fun render(snapshot: Bundle, native: NativeHeadsetSnapshot) {
         if (closed) return
         val safeSnapshot = Bundle(snapshot)
         dispatchOnHandler {
-            if (!closed) renderOnHandler(safeSnapshot)
+            if (!closed) renderOnHandler(safeSnapshot, native)
         }
     }
 
@@ -83,8 +84,8 @@ internal class SystemPresentationRenderer(
 
     fun awaitActionTermination(timeoutMillis: Long): Boolean = actions.awaitTermination(timeoutMillis)
 
-    private fun renderOnHandler(snapshot: Bundle) {
-        val decoded = decodePresentationSnapshot(snapshot) ?: return
+    private fun renderOnHandler(snapshot: Bundle, native: NativeHeadsetSnapshot) {
+        val decoded = decodePresentationSnapshot(snapshot, native) ?: return
         val previous = current
         val newSession = previous?.identity != decoded.identity
         if (previous != null) {
