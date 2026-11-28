@@ -1,3 +1,4 @@
+import type { RemoteHeadsetView } from "./circulation";
 import { noiseModeLabel } from "./headset";
 import type {
   BatterySlotView,
@@ -44,6 +45,7 @@ export interface TraySummary {
   reconnectLabel: string;
   addHeadset: boolean;
   errorText: string | null;
+  remote: { title: string; batteryText: string | null } | null;
 }
 
 const BATTERY_SHORT_LABELS: Record<BatterySlotView["id"], string> = {
@@ -70,7 +72,10 @@ function headsetName(
   return target?.id ?? null;
 }
 
-export function computeTraySummary(controller: TrayHeadsetController): TraySummary {
+export function computeTraySummary(
+  controller: TrayHeadsetController,
+  remoteHolder: RemoteHeadsetView | null = null,
+): TraySummary {
   const snapshot = controller.snapshot();
   const connection = snapshot.connection;
   const headset = snapshot.headset;
@@ -133,15 +138,24 @@ export function computeTraySummary(controller: TrayHeadsetController): TraySumma
     reconnectLabel: audioConnected ? "恢复控制" : "重新连接",
     addHeadset: snapshot.bonded_headsets.length === 0 && snapshot.connection_target === null,
     errorText: !connected && !connecting ? (snapshot.last_error?.message ?? null) : null,
+    remote:
+      !connected && remoteHolder?.headsetName
+        ? {
+            title: `${remoteHolder.headsetName} · ${remoteHolder.peerName}`,
+            batteryText: remoteHolder.batteryText,
+          }
+        : null,
   };
 }
 
-export function trayIconState(summary: TraySummary): "connected" | "disconnected" {
-  return summary.connected ? "connected" : "disconnected";
+export function trayIconState(summary: TraySummary): "connected" | "remote" | "disconnected" {
+  if (summary.connected) return "connected";
+  return summary.remote ? "remote" : "disconnected";
 }
 
 export function trayTooltip(started: boolean, summary: TraySummary): string {
   if (!started) return TRAY_APP_NAME;
+  if (summary.remote) return [summary.remote.title, summary.remote.batteryText].filter(Boolean).join("\n");
   return [summary.title, summary.batteryText].filter(Boolean).join("\n");
 }
 

@@ -2,6 +2,8 @@ import type { Bounds, Point, Size } from "nsh";
 import { cleanup, computed, effect, platform, signal } from "nsh";
 import type { MenuItem } from "nsh/desktop";
 import { Tray, Window, displays } from "nsh/desktop";
+import { firstRemoteHolder } from "../model/circulation";
+import type { CirculationController } from "../model/circulation";
 import {
   TRAY_PANEL_TITLE,
   buildTrayMenuEntries,
@@ -19,12 +21,14 @@ import { TrayPanel } from "./TrayPanel";
 import { computeTrayPanelPosition } from "./panelPosition";
 import trayConnected from "./tray-connected.svg";
 import trayDisconnected from "./tray-disconnected.svg";
+import trayRemote from "./tray-remote.svg";
 
 const TRAY_PANEL_SIZE: Size = { width: 340, height: 460 };
 const BLUR_TOGGLE_SUPPRESS_MS = 250;
 
 export interface TrayHostProps {
   controller: TrayHeadsetController;
+  circulation: CirculationController;
   settings: DesktopSettingsStore;
   tray: TrayAvailabilityStore;
   lifecycle: DesktopLifecycle;
@@ -79,7 +83,9 @@ export function TrayHost(props: TrayHostProps) {
     lifecycle.setPanelOpen(false);
   };
 
-  const summary = computed(() => computeTraySummary(props.controller));
+  const summary = computed(() =>
+    computeTraySummary(props.controller, firstRemoteHolder(props.circulation.snapshot())),
+  );
 
   effect(() => {
     if (props.tray.availability().status === "unavailable") {
@@ -109,7 +115,9 @@ export function TrayHost(props: TrayHostProps) {
       return { label: entry.label ?? "", onSelect: entry.onSelect };
     });
     Tray.set({
-      icon: trayIconState(current) === "connected" ? trayConnected : trayDisconnected,
+      icon: { connected: trayConnected, remote: trayRemote, disconnected: trayDisconnected }[
+        trayIconState(current)
+      ],
       tooltip: trayTooltip(tooltipStarted(), current),
       onClick: ({ bounds }) => togglePanel(bounds),
       menu,

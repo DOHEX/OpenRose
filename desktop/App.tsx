@@ -700,7 +700,13 @@ function DesktopRoot() {
   });
   return (
     <>
-      <TrayHost controller={controller} settings={settings} tray={tray} lifecycle={lifecycle} />
+      <TrayHost
+        controller={controller}
+        circulation={circulation}
+        settings={settings}
+        tray={tray}
+        lifecycle={lifecycle}
+      />
       <Window
         id="main"
         open={lifecycle.mainOpen()}
