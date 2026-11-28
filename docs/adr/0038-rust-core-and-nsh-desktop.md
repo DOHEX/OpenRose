@@ -32,10 +32,11 @@ status: accepted
   - **驱动的等待调用不必可取消**：外部实现的 `AudioEvents.next_event`、`GattDriver.next_event`、`SppDriver.read` 与 `ScanDriver.next_advertisement` 被 Rust 丢弃时，Kotlin 一侧的协程不会随之取消，它仍会取走下一个事件，结果被丢掉。核心因此在订阅或连接存续期间不丢弃已发出的等待：`Core::track_audio_facts` 为每次订阅只保留一个进行中的 `next_event`，取到结果后才发出下一个；GATT、SPP 与扫描的读取循环只在连接或扫描结束时放弃等待。测试用的 `ScriptedAudio`（`crates/control/tests/support/scripted.rs`）按同样的方式实现：被丢弃的等待仍按先后顺序取走事件。
   - **集成测试中等核心时不挂起**：`OwnerRig` 的所有者代码跑在 `runTest` 的虚拟时间上，Rust 核心跑在真实时间的线程上。测试协程挂起等核心时，`runTest` 见调度器空闲，会把虚拟时间直接跳到下一个计时器，例如连接提示 5 秒后的过期（`SystemEntry.expireLater`），核心一返回提示已被清掉。`RustAppHeadset.CoreAwaitedInRealTime` 因此把 `ControlRuntime` 的每个挂起方法改为在调用方协程下启动，再用 `eventually` 阻塞线程等结果：等待期间只执行当前时刻到期的任务，虚拟时间不动；调用方被取消时这次调用随之取消。
   - **`@Suppress` 的理由**：
-    - `TooGenericExceptionCaught`：`pumpInto`（`FlowPump.kt`，GATT、扫描、SPP 与音频事实四个驱动共用）把平台 Flow 中抛出的任何 `Exception` 变成通道关闭或断开事件，`CancellationException` 原样重抛，驱动协程的异常因此不会越过 FFI。
+    - `TooGenericExceptionCaught`：`pumpInto`（`FlowPump.kt`，GATT、扫描、SPP 与音频事实四个驱动共用）把平台 Flow 中抛出的任何 `Exception` 变成通道关闭或断开事件，`CancellationException` 原样重抛，驱动协程的异常因此不会越过 FFI。`CirculationSupervisor.restart`（system-module）同理：创建或启动 Rust 流转节点时抛出的任何 `Exception` 都只让它在 5 秒后重试，不能结束 `com.android.bluetooth`。
     - `CyclomaticComplexMethod`：`HeadsetCommand.toRust`（`CoreInputs.kt`）为每个 Kotlin `HeadsetCommand` 子类型写一个分支。
+    - `TooManyFunctions`：`CoreControlRuntime` 实现 Kotlin `ControlRuntime` 的全部方法，另带创建流转节点的 `circulationNode`（节点必须拿到同一个 Rust 运行时，`RustControlRuntime.handle` 不出 ffi 模块）；`AndroidPeerDiscovery` 同时实现 `PeerDiscovery`、`PeerRouteDialer` 与 NSD 的注册、发现、解析回调。`DEPRECATION` 是 NSD 的 `resolveService`（Android 14 起由 `registerServiceInfoCallback` 取代），沿用原 Kotlin 实现，真机验收（#171）后再换。
 
-    `CoreInputs` 与 `ControlStateProjection` 随 #172 删除，`CyclomaticComplexMethod` 一条随之失效；`pumpInto` 的理由不受影响。
+    `CoreInputs` 与 `ControlStateProjection` 随 #172 删除，`CyclomaticComplexMethod` 一条与 `CoreControlRuntime` 的 `TooManyFunctions` 随之失效；其余理由不受影响。
 - **macOS 设备身份**：CoreBluetooth 只提供本机 UUID，不提供地址。不使用私有接口 `retrieveAddressForPeripheral:`，改用广播前缀与名称规则（[ADR 0032](0032-roselink-firmware-advertisement-and-name-rules.md)）把 BLE 外设对应到已配对的音频设备；协议没有可读出的唯一标识。同一台 Mac 配对了多副同型号同名的耳机时，连接前无法区分：优先有系统音频连接的一副；仍不能确定时由用户选择，不猜。
 - **桌面界面**：使用 NSH 混合模式。界面用 TSX 写，Rust nshm 适配层把核心状态转成 signal；核心 crate 不依赖 NSH。
   - 桌面端用自己固定的一套设计，不提供界面风格，明暗跟随系统。

@@ -205,7 +205,9 @@ class ModuleControlHostTest {
         runCurrent()
 
         assertFalse(pending.isCompleted)
-        assertEquals(SettingStage.WRITTEN, runtime.state.value.settingOperations.last().stage)
+        rig.eventually("the host frame to show the setting written") {
+            runtime.state.value.settingOperations.lastOrNull()?.stage == SettingStage.WRITTEN
+        }
         assertEquals(FieldValue.Text("wind"), noiseMode(runtime))
         link.deviceReply("09ff00000106020e000001000020")
         runCurrent()
