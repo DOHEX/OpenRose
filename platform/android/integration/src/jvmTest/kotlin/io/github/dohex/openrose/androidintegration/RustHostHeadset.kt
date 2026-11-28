@@ -1,6 +1,5 @@
 package io.github.dohex.openrose.androidintegration
 
-import io.github.dohex.openrose.core.ControlRuntime
 import io.github.dohex.openrose.core.DeviceCandidate
 import io.github.dohex.openrose.core.PlatformState
 import io.github.dohex.openrose.core.UserSettings
@@ -12,6 +11,7 @@ import io.github.dohex.openrose.ffi.drivers.ControlTransportAdapter
 import io.github.dohex.openrose.ffi.drivers.PlatformDrivers
 import io.github.dohex.openrose.ffi.drivers.SimulatedDrivers
 import io.github.dohex.openrose.ffi.drivers.SimulatedGatt
+import io.github.dohex.openrose.ffi.kotlincore.CoreBackedRuntime
 import io.github.dohex.openrose.ffi.kotlincore.CoreControlRuntime
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.test.TestScope
@@ -44,7 +44,7 @@ private class RustHostHeadset(
     }
     private val scripted = rewriteReply?.let { ScriptedDrivers(drivers, test, profile, drivers.device, it) }
     private val platformDrivers: PlatformDrivers = scripted ?: drivers
-    private val runtimes = CopyOnWriteArrayList<ControlRuntime>()
+    private val runtimes = CopyOnWriteArrayList<CoreBackedRuntime>()
 
     override val links: List<HostLink> get() = scripted?.links ?: drivers.gatts.map { SimulatedHostLink(test, it) }
 
@@ -54,7 +54,7 @@ private class RustHostHeadset(
         test.quiesce()
     }
 
-    override fun runtime(scope: CoroutineScope, settings: UserSettings, platform: PlatformState, sessionIdBase: Long): ControlRuntime {
+    override fun runtime(scope: CoroutineScope, settings: UserSettings, platform: PlatformState, sessionIdBase: Long): CoreBackedRuntime {
         val core = CoreControlRuntime(
             transport = ControlTransportAdapter(SharedDrivers(platformDrivers, shared, OWNER)),
             initialPlatformState = platform,
@@ -64,7 +64,7 @@ private class RustHostHeadset(
             sessionIdBase = sessionIdBase,
             clock = drivers.fixedClock(),
         )
-        lateinit var awaited: ControlRuntime
+        lateinit var awaited: CoreBackedRuntime
         awaited = CoreAwaitedInRealTime(test, core, onRelease = { released -> if (released) runtimes.remove(awaited) }, replyWithheld = { links.any { !it.initializing } })
         return awaited.also(runtimes::add)
     }

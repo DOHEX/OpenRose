@@ -11,6 +11,7 @@ import io.github.dohex.openrose.core.PermissionState
 import io.github.dohex.openrose.core.PlatformState
 import io.github.dohex.openrose.core.SessionReference
 import io.github.dohex.openrose.core.UserSettings
+import io.github.dohex.openrose.ffi.kotlincore.CoreBackedRuntime
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -49,7 +50,7 @@ class ModuleControlHost(
     private val processName: String,
     private val incarnation: String,
     private val authority: CallerAuthority,
-    private val runtimeFactory: (CoroutineScope, UserSettings, PlatformState, Long) -> ControlRuntime,
+    private val runtimeFactory: (CoroutineScope, UserSettings, PlatformState, Long) -> CoreBackedRuntime,
     parentScope: CoroutineScope,
     private val newId: () -> String,
     private val uid: Int? = null,

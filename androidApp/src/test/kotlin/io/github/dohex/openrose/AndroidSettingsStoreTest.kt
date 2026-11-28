@@ -7,6 +7,18 @@ import io.github.dohex.openrose.core.LocalControlRuntime
 import io.github.dohex.openrose.core.PermissionState
 import io.github.dohex.openrose.core.PlatformState
 import io.github.dohex.openrose.core.UserSettings
+import io.github.dohex.openrose.core.transport.Advertisement
+import io.github.dohex.openrose.core.transport.AudioFactsDriver
+import io.github.dohex.openrose.core.transport.GattDriver
+import io.github.dohex.openrose.core.transport.GattException
+import io.github.dohex.openrose.core.transport.GattFailureKind
+import io.github.dohex.openrose.core.transport.RawAudioDevice
+import io.github.dohex.openrose.core.transport.RawAudioEvent
+import io.github.dohex.openrose.core.transport.RawAudioSnapshot
+import io.github.dohex.openrose.ffi.drivers.ControlTransportAdapter
+import io.github.dohex.openrose.ffi.drivers.PlatformDrivers
+import io.github.dohex.openrose.ffi.drivers.SppLink
+import io.github.dohex.openrose.ffi.kotlincore.CoreControlRuntime
 import io.github.dohex.openrose.framework.FrameworkLink
 import io.github.dohex.openrose.framework.ModuleSettingsPublisher
 import io.github.dohex.openrose.ui.*
@@ -15,6 +27,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runCurrent
@@ -96,7 +109,13 @@ class AndroidSettingsStoreTest {
                 incarnation = "settings-host",
                 authority = CallerAuthority { ClientRole.APP },
                 runtimeFactory = { scope, settings, platform, base ->
-                    LocalControlRuntime(platform, settings, scope = scope, sessionIdBase = base)
+                    CoreControlRuntime(
+                        transport = ControlTransportAdapter(idleDrivers()),
+                        initialPlatformState = platform,
+                        initialSettings = settings,
+                        scope = scope,
+                        sessionIdBase = base,
+                    )
                 },
                 parentScope = backgroundScope,
                 newId = { "lease" },
@@ -193,5 +212,23 @@ class AndroidSettingsStoreTest {
                 else -> error("Unsupported editor operation: ${method.name}")
             }
         } as SharedPreferences.Editor
+    }
+
+    private fun idleDrivers() = object : PlatformDrivers {
+        override val supportsInitializationRecovery = true
+        override val audio = object : AudioFactsDriver {
+            override val events = emptyFlow<RawAudioEvent>()
+            override suspend fun bondedDevices() = emptyList<RawAudioDevice>()
+            override suspend fun snapshot(targetAddresses: Set<String>) = RawAudioSnapshot(
+                enabled = true,
+                sppAvailable = false,
+                leAudioObservable = false,
+                bondedDevices = emptyList(),
+                profiles = emptyMap(),
+            )
+        }
+        override fun gatt(address: String): GattDriver = throw GattException(GattFailureKind.TRANSIENT, "no gatt in storage test")
+        override fun scan() = emptyFlow<Advertisement>()
+        override fun spp(address: String, serviceUuid: String): SppLink = throw UnsupportedOperationException("no spp in storage test")
     }
 }

@@ -1,6 +1,5 @@
 package io.github.dohex.openrose.androidintegration
 
-import io.github.dohex.openrose.core.ControlRuntime
 import io.github.dohex.openrose.core.DeviceCandidate
 import io.github.dohex.openrose.core.HostPlatform
 import io.github.dohex.openrose.core.PermissionState
@@ -8,6 +7,7 @@ import io.github.dohex.openrose.core.PlatformState
 import io.github.dohex.openrose.core.TransportAvailability
 import io.github.dohex.openrose.core.UserSettings
 import io.github.dohex.openrose.core.transport.DeviceId
+import io.github.dohex.openrose.ffi.kotlincore.CoreBackedRuntime
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.test.TestScope
@@ -34,10 +34,10 @@ internal interface HostHeadset : AutoCloseable {
 
     suspend fun endProcess()
 
-    fun runtime(scope: CoroutineScope, settings: UserSettings, platform: PlatformState, sessionIdBase: Long): ControlRuntime
+    fun runtime(scope: CoroutineScope, settings: UserSettings, platform: PlatformState, sessionIdBase: Long): CoreBackedRuntime
 }
 
-internal fun HostHeadset.runtime(scope: CoroutineScope): ControlRuntime = runtime(scope, UserSettings(), grantedAndroidPlatform, 0L)
+internal fun HostHeadset.runtime(scope: CoroutineScope): CoreBackedRuntime = runtime(scope, UserSettings(), grantedAndroidPlatform, 0L)
 
 internal fun TestScope.hostHeadset(
     headset: SharedHeadset,

@@ -16,6 +16,7 @@ dependencies {
     compileOnly(libs.libxposed.api)
     testImplementation(libs.libxposed.api)
     testImplementation(kotlin("test-junit"))
+    testImplementation(libs.jna)
     testImplementation(libs.coroutines.test)
     testImplementation(libs.robolectric)
 }
