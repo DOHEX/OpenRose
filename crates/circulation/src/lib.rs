@@ -1,4 +1,5 @@
 pub mod contract;
+pub mod pairing;
 pub mod identity;
 pub mod trust;
 pub mod wire;
