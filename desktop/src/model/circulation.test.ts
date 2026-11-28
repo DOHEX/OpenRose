@@ -2,6 +2,7 @@ import { expect, test } from "nsh/test";
 import {
   circulationErrorText,
   firstRemoteHolder,
+  pullOutcomeFeedback,
   remoteBatteryText,
   remoteHeadsetView,
 } from "./circulation";
@@ -97,4 +98,29 @@ test("the first holder in paired order is the remote headset shown by the tray",
   expect(firstRemoteHolder(holders)).toMatchObject({ peerId: "b", headsetName: "EarFree i7" });
   expect(firstRemoteHolder(snapshot([peer("a", "平板", { available: false })]))).toBeNull();
   expect(firstRemoteHolder(snapshot([]))).toBeNull();
+});
+
+test("pull error and outcome codes map to expected Chinese feedback", () => {
+  expect(circulationErrorText("YieldRefused:InCall")).toBe("对方正在通话，暂时无法切换");
+  expect(circulationErrorText("YieldRefused:MicInUse")).toBe("麦克风正在使用，暂时无法切换");
+  expect(circulationErrorText("AcquireFailed:Unavailable")).toBe("本机接入耳机失败");
+  expect(circulationErrorText("PullInProgress")).toBe("正在将耳机接到这台电脑，请稍候");
+  expect(circulationErrorText("Timeout")).toBe("对端响应超时");
+
+  expect(pullOutcomeFeedback("Acquired")).toEqual({
+    kind: "success",
+    tone: "success",
+    title: "已接到这台电脑",
+  });
+  expect(pullOutcomeFeedback("AlreadyConnected")).toEqual({
+    kind: "success",
+    tone: "success",
+    title: "耳机已连接到这台电脑",
+  });
+  expect(pullOutcomeFeedback("AcquiredWithPeersUnreachable")).toEqual({
+    kind: "unreachable",
+    tone: "warning",
+    title: "已接到这台电脑",
+    detail: "联系不上任何对端",
+  });
 });

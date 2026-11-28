@@ -36,7 +36,13 @@ export interface TrayHostProps {
 
 export function TrayHost(props: TrayHostProps) {
   const lifecycle = props.lifecycle;
-  const panelModel = createTrayPanelModel(props.controller, props.settings.trayPanel);
+  const summary = computed(() =>
+    computeTraySummary(props.controller, firstRemoteHolder(props.circulation.snapshot()), {
+      currentOutput: props.circulation.currentOutput(),
+      soundSettingsAvailable: props.circulation.soundSettingsAvailable(),
+    }),
+  );
+  const panelModel = createTrayPanelModel(props.controller, props.settings.trayPanel, summary);
   const tooltipStarted = signal(false);
   const panelPosition = signal<Point | "center">("center");
   const lastTrayBounds = signal<Bounds | null>(null);
@@ -60,10 +66,10 @@ export function TrayHost(props: TrayHostProps) {
         : "center",
     );
     resetPanelPointer();
+    void props.circulation.refreshAudioState();
     lifecycle.setPanelOpen(true);
     Window.get("tray-panel")?.focus();
   };
-
   const togglePanel = (bounds: Bounds | null) => {
     if (lifecycle.panelOpen()) {
       resetPanelPointer();
@@ -83,10 +89,6 @@ export function TrayHost(props: TrayHostProps) {
     lifecycle.setPanelOpen(false);
   };
 
-  const summary = computed(() =>
-    computeTraySummary(props.controller, firstRemoteHolder(props.circulation.snapshot())),
-  );
-
   effect(() => {
     if (props.tray.availability().status === "unavailable") {
       Tray.set(null);
@@ -97,6 +99,7 @@ export function TrayHost(props: TrayHostProps) {
       togglePanel: () => togglePanel(null),
       openMain: () => lifecycle.raiseMainWindow(),
       openAddHeadset: () => lifecycle.raiseMainWindow("add-headset"),
+      openSoundSettings: () => props.circulation.openSoundSettings(),
       reconnect: (headsetId) => void props.controller.connect(headsetId),
       selectNoiseMode: (mode, sessionId) => void props.controller.setNoiseMode(mode, sessionId),
       quit: () => void lifecycle.quit(),
@@ -161,6 +164,10 @@ export function TrayHost(props: TrayHostProps) {
     >
       <TrayPanel
         model={panelModel}
+        pulling={props.circulation.pullingAddress() !== null}
+        pullFeedback={props.circulation.pullFeedback()}
+        onPull={(address) => void props.circulation.pull(address)}
+        onOpenSoundSettings={() => props.circulation.openSoundSettings()}
         onConnect={(headsetId) => void props.controller.connect(headsetId)}
         onDisconnect={() => void props.controller.disconnect()}
         onSelectNoiseMode={(mode, sessionId) => void props.controller.setNoiseMode(mode, sessionId)}

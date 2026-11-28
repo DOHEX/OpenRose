@@ -151,6 +151,8 @@ const REMOTE_HOLDER: RemoteHeadsetView = {
   peerId: "p1",
   peerName: "模拟手机",
   available: true,
+  holds: true,
+  headsetId: "sim:1",
   headsetName: "EarFree i7",
   batteryText: "左 80% · 右 78% · 盒 90%",
   confirmedMode: "anc",
@@ -355,4 +357,40 @@ test("login launch skips the main window only when started at login with backgro
       availability: { status: "unavailable", reason: "no watcher" },
     }),
   ).toBe(true);
+});
+
+test("tray summary and menu include current output and only show sound settings when available", () => {
+  let openedSettings = 0;
+  const { actions } = recorder();
+  const withSettings = computeTraySummary(controller(snapshot({ connected: true })), null, {
+    currentOutput: "EarFree i5",
+    soundSettingsAvailable: true,
+  });
+  expect(withSettings.currentOutput).toBe("EarFree i5");
+  expect(withSettings.soundSettingsAvailable).toBe(true);
+  const entriesWithSettings = buildTrayMenuEntries(withSettings, false, {
+    ...actions,
+    openSoundSettings: () => {
+      openedSettings += 1;
+    },
+  });
+  expect(entriesWithSettings.map((entry) => entry.label)).toContain("当前输出：EarFree i5");
+  const settingsEntry = entriesWithSettings.find((entry) => entry.label === "打开声音设置");
+  expect(settingsEntry).toBeDefined();
+  settingsEntry?.onSelect?.();
+  expect(openedSettings).toBe(1);
+
+  const withoutSettings = computeTraySummary(controller(snapshot({ connected: false })), REMOTE_HOLDER, {
+    currentOutput: "Built-in Speaker",
+    soundSettingsAvailable: false,
+  });
+  expect(withoutSettings.remote?.address).toBe("sim:1");
+  const entriesWithoutSettings = buildTrayMenuEntries(withoutSettings, false, {
+    ...actions,
+    openSoundSettings: () => {
+      openedSettings += 1;
+    },
+  });
+  expect(entriesWithoutSettings.map((entry) => entry.label)).toContain("当前输出：Built-in Speaker");
+  expect(entriesWithoutSettings.map((entry) => entry.label)).not.toContain("打开声音设置");
 });

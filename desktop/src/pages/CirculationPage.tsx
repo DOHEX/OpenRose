@@ -22,12 +22,21 @@ function offerValidText(validForMillis: number): string {
   return `配对码约 ${minutes} 分钟内有效`;
 }
 
-export function CirculationPage(props: { controller: CirculationController }) {
+export function CirculationPage(props: {
+  controller: CirculationController;
+  localConnected?: boolean;
+  localHeadsetAddress?: string | null;
+}) {
   const controller = props.controller;
   const unpairedNearby = () =>
     controller.snapshot().nearbyPeers.filter((peer) => !peer.paired);
   const offer = () => controller.snapshot().pairingOffer;
-
+  const offlinePullAddress = () => {
+    if (props.localConnected) return null;
+    if (controller.remoteHeadsets().some((peer) => peer.holds)) return null;
+    if (controller.snapshot().pairedPeers.length === 0) return null;
+    return controller.lastRemoteAddress() ?? props.localHeadsetAddress ?? null;
+  };
   return (
     <Column class="flex-1 gap-4">
       <Card testID="circulation-card" animateEntrance={true}>
@@ -65,6 +74,14 @@ export function CirculationPage(props: { controller: CirculationController }) {
 
       <Card testID="circ-peers-card" animateEntrance={true} delay={40}>
         <SectionTitle>已配对对端</SectionTitle>
+        {controller.pullFeedback() ? (
+          <NoticeBanner
+            testID="circ-pull-feedback"
+            tone={controller.pullFeedback()!.tone}
+            title={controller.pullFeedback()!.title}
+            detail={controller.pullFeedback()!.detail}
+          />
+        ) : null}
         {controller.remoteHeadsets().length === 0 ? (
           <NoticeBanner
             testID="circ-peers-empty"
@@ -131,7 +148,17 @@ export function CirculationPage(props: { controller: CirculationController }) {
                       对端回到局域网后会自动重新读取
                     </MutedText>
                   ) : null}
-                  <Row class="gap-2">
+                  <Row class="flex-wrap gap-2">
+                    {peer().holds && peer().headsetId ? (
+                      <ActionButton
+                        testID={`btn-circ-pull-${index()}`}
+                        label="接到这台电脑"
+                        variant="primary"
+                        busy={controller.pullingAddress() === peer().headsetId}
+                        disabled={controller.pullingAddress() !== null}
+                        onPress={() => void controller.pull(peer().headsetId!)}
+                      />
+                    ) : null}
                     <ActionButton
                       testID={`btn-circ-refresh-${index()}`}
                       label="刷新"
@@ -151,6 +178,16 @@ export function CirculationPage(props: { controller: CirculationController }) {
             </Each>
           </Column>
         )}
+        {offlinePullAddress() ? (
+          <ActionButton
+            testID="btn-circ-pull-offline"
+            label="接到这台电脑"
+            variant="primary"
+            busy={controller.pullingAddress() !== null}
+            disabled={controller.pullingAddress() !== null}
+            onPress={() => void controller.pull(offlinePullAddress()!)}
+          />
+        ) : null}
       </Card>
 
       <Card testID="circ-pair-card" animateEntrance={true} delay={80}>
@@ -263,6 +300,37 @@ export function CirculationPage(props: { controller: CirculationController }) {
               variant="secondary"
               disabled={controller.devPeer() === null}
               onPress={() => void controller.devSetPeerOnline(true)}
+            />
+            <ActionButton
+              testID="btn-circ-dev-in-call"
+              label="模拟对端通话中"
+              variant="secondary"
+              disabled={controller.devPeer() === null}
+              onPress={() => controller.devSetPeerYieldRefusal("in_call")}
+            />
+            <ActionButton
+              testID="btn-circ-dev-mic-in-use"
+              label="模拟对端麦克风占用"
+              variant="secondary"
+              disabled={controller.devPeer() === null}
+              onPress={() => controller.devSetPeerYieldRefusal("mic_in_use")}
+            />
+            <ActionButton
+              testID="btn-circ-dev-no-answer"
+              label="模拟对端无响应"
+              variant="secondary"
+              disabled={controller.devPeer() === null}
+              onPress={() => controller.devSetPeerNoAnswer(true)}
+            />
+            <ActionButton
+              testID="btn-circ-dev-allow-yield"
+              label="恢复对端可让出"
+              variant="secondary"
+              disabled={controller.devPeer() === null}
+              onPress={() => {
+                controller.devSetPeerYieldRefusal(null);
+                controller.devSetPeerNoAnswer(false);
+              }}
             />
           </Row>
           {controller.devPeer() ? (
