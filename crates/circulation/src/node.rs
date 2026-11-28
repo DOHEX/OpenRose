@@ -70,7 +70,9 @@ struct NodeInner {
     discovery: Arc<dyn PeerDiscovery>,
     handler: Option<Arc<dyn RemoteHandler>>,
     nearby_tx: watch::Sender<Vec<NearbyPeer>>,
+    _nearby_rx: watch::Receiver<Vec<NearbyPeer>>,
     readings_tx: watch::Sender<BTreeMap<PeerId, RemoteReading>>,
+    _readings_rx: watch::Receiver<BTreeMap<PeerId, RemoteReading>>,
     running: AsyncMutex<Option<RunningState>>,
     bound_addr_sync: Mutex<Option<SocketAddr>>,
 }
@@ -123,13 +125,13 @@ impl CirculationNode {
         handler: Option<Arc<dyn RemoteHandler>>,
     ) -> Result<Self, RemoteError> {
         let trust = PeerTrust::load(&config.storage_dir)?;
-        let (nearby_tx, _) = watch::channel(Vec::new());
+        let (nearby_tx, nearby_rx) = watch::channel(Vec::new());
         let initial_readings = trust
             .list()
             .into_iter()
             .map(|peer| (peer.id, RemoteReading::unavailable()))
             .collect();
-        let (readings_tx, _) = watch::channel(initial_readings);
+        let (readings_tx, readings_rx) = watch::channel(initial_readings);
         Ok(Self {
             inner: Arc::new(NodeInner {
                 name: config.name,
@@ -141,7 +143,9 @@ impl CirculationNode {
                 discovery,
                 handler,
                 nearby_tx,
+                _nearby_rx: nearby_rx,
                 readings_tx,
+                _readings_rx: readings_rx,
                 running: AsyncMutex::new(None),
                 bound_addr_sync: Mutex::new(None),
             }),
@@ -268,7 +272,7 @@ impl CirculationNode {
             let _ = state.watch_task.await;
         }
         self.inner.discovery.close().await;
-        let _ = self.inner.nearby_tx.send(Vec::new());
+        self.inner.nearby_tx.send_replace(Vec::new());
         self.reset_readings_to_unavailable();
     }
 
@@ -278,7 +282,7 @@ impl CirculationNode {
             .into_iter()
             .map(|p| (p.id, RemoteReading::unavailable()))
             .collect();
-        let _ = self.inner.readings_tx.send(next);
+        self.inner.readings_tx.send_replace(next);
     }
 
     fn require_bound_addr(&self) -> Result<SocketAddr, RemoteError> {
@@ -723,7 +727,7 @@ fn sync_nearby(node: &CirculationNode, raw: &[NearbyPeer]) {
             filtered.push(peer.clone());
         }
     }
-    let _ = node.inner.nearby_tx.send(filtered);
+    node.inner.nearby_tx.send_replace(filtered);
 }
 
 fn refresh_availability(

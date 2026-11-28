@@ -24,6 +24,7 @@ pub struct PeerTrust {
     file: PathBuf,
     grants: Mutex<BTreeMap<PeerId, PeerGrant>>,
     peers_tx: watch::Sender<Vec<Peer>>,
+    _peers_rx: watch::Receiver<Vec<Peer>>,
 }
 
 impl PeerTrust {
@@ -40,11 +41,12 @@ impl PeerTrust {
             }
         }
         let list = sorted_peers(&map);
-        let (peers_tx, _) = watch::channel(list);
+        let (peers_tx, peers_rx) = watch::channel(list);
         Ok(Self {
             file,
             grants: Mutex::new(map),
             peers_tx,
+            _peers_rx: peers_rx,
         })
     }
 
@@ -95,7 +97,7 @@ impl PeerTrust {
         replace_file_secure(&self.file, &bytes)?;
         let list = sorted_peers(&next);
         *guard = next;
-        let _ = self.peers_tx.send(list);
+        self.peers_tx.send_replace(list);
         Ok(())
     }
 }
