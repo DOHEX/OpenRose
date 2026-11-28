@@ -23,6 +23,12 @@ class RustFfiConventionPlugin : Plugin<Project> {
             inputs.file(library).withPropertyName("hostRustFfiLibrary")
             jvmArgumentProviders.add(JnaLibraryPath(library.map { it.asFile.parentFile.absolutePath }))
         }
+        val jna = libs.findLibrary("jna").get()
+        for (androidPlugin in listOf("com.android.library", "com.android.application")) {
+            pluginManager.withPlugin(androidPlugin) {
+                dependencies.add("testImplementation", jna)
+            }
+        }
         pluginManager.withPlugin("com.android.application") {
             val shippedAbis = libs.stringVersion("android-abis").split(' ')
             extensions.configure<ApplicationExtension> { defaultConfig.ndk.abiFilters += shippedAbis }
