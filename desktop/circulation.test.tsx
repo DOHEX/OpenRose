@@ -103,6 +103,7 @@ test("an unavailable peer is marked and read again when it is back", async () =>
 test("unpairing removes the peer from the list", async () => {
   const app = await openCirculation();
   await pairSimulatedPeer(app);
+  await app.waitFor("id:circ-remote-battery-0");
   await app.press("id:btn-circ-forget-0");
   await app.waitFor("id:circ-peers-empty");
   expect(app.shows("id:circ-peer-0")).toBe(false);

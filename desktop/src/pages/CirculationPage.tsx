@@ -1,6 +1,6 @@
-import { noiseModeLabel } from "../model/headset";
 import { remoteNoiseFeedbackText } from "../model/circulation";
 import type { CirculationController } from "../model/circulation";
+import { noiseModeLabel } from "../model/headset";
 import {
   ActionButton,
   Card,
@@ -136,14 +136,13 @@ export function CirculationPage(props: { controller: CirculationController }) {
                       testID={`btn-circ-refresh-${index()}`}
                       label="刷新"
                       variant="secondary"
-                      disabled={!peer().available || controller.busy()}
+                      disabled={!peer().available}
                       onPress={() => void controller.refreshPeer(peer().peerId)}
                     />
                     <ActionButton
                       testID={`btn-circ-forget-${index()}`}
                       label="取消配对"
                       variant="destructive"
-                      disabled={controller.busy()}
                       onPress={() => void controller.forget(peer().peerId)}
                     />
                   </Row>
