@@ -9,6 +9,7 @@ class AndroidApplicationConventionPlugin : Plugin<Project> {
         extensions.configure<ApplicationExtension> {
             compileSdk = libs.intVersion("android-compileSdk")
             buildToolsVersion = libs.stringVersion("android-buildTools")
+            ndkVersion = libs.stringVersion("android-ndk")
             defaultConfig {
                 minSdk = libs.intVersion("android-minSdk")
                 targetSdk = libs.intVersion("android-targetSdk")

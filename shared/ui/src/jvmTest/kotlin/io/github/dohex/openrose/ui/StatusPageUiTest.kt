@@ -2,10 +2,13 @@ package io.github.dohex.openrose.ui
 
 import androidx.compose.runtime.mutableStateOf
 import io.github.dohex.openrose.core.ControlState
+import io.github.dohex.openrose.core.HostPlatform
 import io.github.dohex.openrose.core.PermissionState
 import io.github.dohex.openrose.core.PlatformState
 import io.github.dohex.openrose.core.TransportAvailability
+import io.github.dohex.openrose.core.TransportUnavailableReason
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -18,7 +21,7 @@ class StatusPageUiTest {
                 ControlState(
                     platform = PlatformState(
                         permission = PermissionState.NOT_REQUIRED,
-                        transport = TransportAvailability.Unavailable(reason),
+                        transport = TransportAvailability.Unavailable(TransportUnavailableReason.BackendUnavailable(reason)),
                     ),
                 ),
             )
@@ -47,5 +50,72 @@ class StatusPageUiTest {
                 assertTrue(harness.hasText(reason), "diagnostics explain transport unavailability in $style")
             }
         }
+    }
+
+    @Test
+    fun structuredTransportUnavailableReasonRendersLocalizedText() {
+        val state = mutableStateOf(
+            ControlState(
+                platform = PlatformState(
+                    permission = PermissionState.NOT_REQUIRED,
+                    transport = TransportAvailability.Unavailable(TransportUnavailableReason.AccessDenied),
+                    hostPlatform = HostPlatform.LINUX,
+                ),
+            ),
+        )
+        val model = FakeOpenRoseModel(state, mutableStateOf(UiSettings(interfaceStyle = InterfaceStyle.MIUIX)))
+        runOpenRoseUiTest(420, 900) {
+            val harness = OpenRoseUiTestHarness(this)
+            setContent {
+                ProvideInterfaceStyle(InterfaceStyle.MIUIX, dark = false) {
+                    StatusPage(model, BasicPlatformUi("Linux"), onDiagnostics = {})
+                }
+            }
+            harness.render()
+            assertTrue(harness.hasText("D-Bus 拒绝访问蓝牙"))
+        }
+    }
+
+    @Test
+    fun everyTransportUnavailableReasonProducesHostLocalizedDisplayText() {
+        val allReasons = listOf(
+            TransportUnavailableReason.UnsupportedPlatform(),
+            TransportUnavailableReason.UnsupportedPlatform("macOS"),
+            TransportUnavailableReason.BleUnsupported,
+            TransportUnavailableReason.PermissionRequired,
+            TransportUnavailableReason.NoAdapter,
+            TransportUnavailableReason.AdapterPoweredOff,
+            TransportUnavailableReason.AdapterStateUnknown,
+            TransportUnavailableReason.AccessDenied,
+            TransportUnavailableReason.ServiceUnavailable,
+            TransportUnavailableReason.MissingDependency(),
+            TransportUnavailableReason.MissingDependency("libdbus"),
+            TransportUnavailableReason.Initializing,
+            TransportUnavailableReason.Recovering,
+            TransportUnavailableReason.ShuttingDown,
+            TransportUnavailableReason.Closed,
+            TransportUnavailableReason.BackendUnavailable(),
+            TransportUnavailableReason.BackendUnavailable("backend error"),
+        )
+        for (reason in allReasons) {
+            for (host in HostPlatform.entries) {
+                assertTrue(TransportAvailability.Unavailable(reason).displayText(host).isNotBlank(), "$reason on $host")
+            }
+        }
+        assertEquals(
+            "macOS 控制传输尚未实现",
+            TransportAvailability.Unavailable(TransportUnavailableReason.UnsupportedPlatform("macOS"))
+                .displayText(HostPlatform.UNKNOWN),
+        )
+        assertEquals(
+            "WinRT access denied",
+            TransportAvailability.Unavailable(TransportUnavailableReason.BackendUnavailable("WinRT access denied"))
+                .displayText(HostPlatform.WINDOWS),
+        )
+        assertEquals(
+            "Windows 蓝牙不可用",
+            TransportAvailability.Unavailable(TransportUnavailableReason.BackendUnavailable())
+                .displayText(HostPlatform.WINDOWS),
+        )
     }
 }

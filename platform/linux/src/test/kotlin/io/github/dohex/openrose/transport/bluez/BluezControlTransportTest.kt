@@ -8,6 +8,7 @@ import io.github.dohex.openrose.core.PermissionState
 import io.github.dohex.openrose.core.PlatformState
 import io.github.dohex.openrose.core.SessionTiming
 import io.github.dohex.openrose.core.TransportAvailability
+import io.github.dohex.openrose.core.TransportUnavailableReason
 import io.github.dohex.openrose.core.transport.Advertisement
 import io.github.dohex.openrose.core.transport.DeviceId
 import io.github.dohex.openrose.core.transport.TransportEndpoint
@@ -50,7 +51,7 @@ class BluezControlTransportTest {
             val transport = BluezControlTransport(this, bus)
             transport.awaitInitialization()
             assertEquals(denied::class, assertFails { transport.scan().first() }::class)
-            assertEquals(TransportAvailability.Unavailable("D-Bus 拒绝访问蓝牙"), transport.availability.value)
+            assertEquals(TransportAvailability.Unavailable(TransportUnavailableReason.AccessDenied), transport.availability.value)
             assertEquals(0, bus.scanStops)
             transport.close()
         }
@@ -84,7 +85,7 @@ class BluezControlTransportTest {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         val transport = BluezControlTransport(scope, bus)
         transport.awaitInitialization()
-        val initial = PlatformState(PermissionState.NOT_REQUIRED, TransportAvailability.Unavailable("initializing"))
+        val initial = PlatformState(PermissionState.NOT_REQUIRED, TransportAvailability.Unavailable(TransportUnavailableReason.Initializing))
         val runtime = LocalControlRuntime(initial, transport = transport, scope = scope, timing = SessionTiming(writeIntervalMillis = 0))
         withTimeout(5_000) { runtime.state.first { it.bondedDevices.isNotEmpty() } }
         withTimeout(5_000) { runtime.state.first { it.lastError?.code == ControlErrorCode.TRANSPORT_UNAVAILABLE } }

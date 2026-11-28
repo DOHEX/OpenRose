@@ -10,11 +10,12 @@ import android.content.pm.ServiceInfo
 import android.graphics.drawable.Icon
 import android.os.Build
 import android.os.IBinder
-import io.github.dohex.openrose.androidintegration.OrdinarySessionHold
-import io.github.dohex.openrose.androidintegration.ordinaryBackgroundRequested
+import io.github.dohex.openrose.androidintegration.AppSessionHold
+import io.github.dohex.openrose.androidintegration.appBackgroundRequested
 import io.github.dohex.openrose.core.ConnectionState
 import io.github.dohex.openrose.core.ControlState
 import io.github.dohex.openrose.core.TransportAvailability
+import io.github.dohex.openrose.ui.displayText
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -27,7 +28,7 @@ import kotlinx.coroutines.launch
 class ControlService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var observer: Job? = null
-    private var sessionHold: OrdinarySessionHold? = null
+    private var sessionHold: AppSessionHold? = null
     private val app get() = application as OpenRoseApplication
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -39,16 +40,16 @@ class ControlService : Service() {
             return START_NOT_STICKY
         }
         if (!enterForeground(notification(app.runtime.state.value))) return START_NOT_STICKY
-        if (!app.runtime.integration.value.ordinaryBackgroundRequested) {
+        if (!app.runtime.integration.value.appBackgroundRequested) {
             leaveForeground()
             return START_NOT_STICKY
         }
         app.background.running()
-        if (sessionHold == null) sessionHold = app.runtime.holdOrdinarySession()
+        if (sessionHold == null) sessionHold = app.runtime.holdAppSession()
         if (observer == null) {
             observer = scope.launch {
                 combine(app.runtime.state, app.runtime.integration) { state, integration ->
-                    integration.ordinaryBackgroundRequested to notificationText(state)
+                    integration.appBackgroundRequested to notificationText(state)
                 }
                     .distinctUntilChanged()
                     .collect { (enabled, _) ->
@@ -152,7 +153,7 @@ class ControlService : Service() {
         ConnectionState.Disconnected -> when (val transport = state.platform.transport) {
             TransportAvailability.Available -> "等待耳机音频连接"
             TransportAvailability.Disabled -> "系统蓝牙已关闭"
-            is TransportAvailability.Unavailable -> transport.reason
+            is TransportAvailability.Unavailable -> transport.displayText(state.platform.hostPlatform)
         }
     }
 

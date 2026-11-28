@@ -15,7 +15,7 @@ OpenRose 是 ROSE / ROSESELSA（弱水时砂）耳机的第三方控制客户端
 
 | 耳机 | 连接 | 状态 |
 | --- | --- | --- |
-| EarFree i5（EarFeel i5） | BLE | 真机读取已验证。Android 普通与模块控制均已验证通透、抗风噪写入和设备回读；其他设置写入待验证 |
+| EarFree i5（EarFeel i5） | BLE | 真机读取已验证。Android 应用控制与模块控制均已验证通透、抗风噪写入和设备回读；其他设置写入待验证 |
 | EarFeel i7 | BLE 或 SPP | 仅有离线测试，未经真机验证 |
 | BudsFeel MK2 | BLE 或 SPP | 未经真机验证 |
 | OpenFeel MK2 | BLE 或 SPP | 未经真机验证 |
@@ -46,17 +46,20 @@ OpenRose 已接入 RoseLink 3.8.6 的全部 48 个蓝牙耳机配置，并保留
 ## 功能
 
 - **耳机控制**：电量与固件版本、降噪与通透档位、游戏模式、EQ、触控按键、佩戴检测、多点连接等，可用项随型号和固件变化
-- 从控制中心磁贴或焦点通知打开 **Android 快捷面板**，即可查看电量、切换降噪与游戏模式，或点按「均衡器」选择 EQ 预设。选完预设后面板保持打开。
+- 从控制中心磁贴或耳机状态通知打开 **Android 快捷面板**，即可查看电量、切换降噪与游戏模式，或点按「均衡器」选择 EQ 预设。选完预设后面板保持打开。
 - **两种界面风格**：Miuix 与 Material 3 Expressive，切换时不断开耳机
 - **后台控制**：关闭界面后保持控制连接，进程被回收或重启后自动恢复，无需 root
 - **HyperOS 系统集成**：经 Xposed 模块接入超级岛、焦点通知和融合设备中心，可由系统蓝牙进程直接控制耳机
 - **小米互联**支持在同一小米账号下的两台 HyperOS 设备之间流转耳机。两端启用模块控制后，从融合设备中心发起流转。双机流转为实验性功能，真机未验证。
 - **OpenRose 互联**通过局域网连接启用模块控制的手机与 Linux 或 Windows 电脑，覆盖所有已识别的 ROSE 型号。完成流转配对后，在「我的耳机」、电脑托盘或手机快捷面板查看耳机当前连接的音源，远程调节降噪模式、降噪与通透档位、EQ 预设和游戏模式（可用项随型号能力变化），也可在耳机卡片上将音频连接转到本机。小米 14 与 Linux 已用 i5 验证双向流转和远程降噪，其余型号与新增远程控制项以及 Windows 真机未验证。
+- **耳机流转（桌面版）**：桌面版「耳机流转」页支持开始配对（配对码与二维码）、输入对端配对码完成配对、查看对端正在使用的耳机与电量并远程切换降噪模式；对端持有机时可在对端卡片或托盘面板点「接到这台电脑」把耳机音频与控制接到本机（显示对方通话/麦克风占用/无响应或联系不上任何对端等提示，不自动切回），托盘同时显示当前系统输出并在检测到声音设置程序时提供「打开声音设置」入口。已在同机回环模拟环境中测试，两台真机配对与真实流转切换未验证。
 - **本地运行**：本机通过蓝牙控制耳机，无需账号。
 
 完整说明见[功能一览](https://dohex.github.io/OpenRose/reference/features/)。
 
 ## 安装
+
+### Android
 
 要求 Android 8.0（API 26）及以上。
 
@@ -66,22 +69,36 @@ OpenRose 已接入 RoseLink 3.8.6 的全部 48 个蓝牙耳机配置，并保留
 
 详细步骤见[快速开始](https://dohex.github.io/OpenRose/guides/getting-started/)。
 
+### Linux 桌面版
+
+要求 **GTK 4.14+** 与 **BlueZ**（运行蓝牙服务）。Windows 新版 NSH 安装包将在后续版本（#160）恢复发布，旧版 JVM 桌面端已停止发布。
+
+1. 从 [Releases](https://github.com/DOHEX/OpenRose/releases)（或 [GitHub Actions](https://github.com/DOHEX/OpenRose/actions/workflows/ci.yml) 的 `openrose-<版本>-dev-<提交号>-linux-x64` 产物）下载对应格式：
+   - `.deb`（Debian / Ubuntu 24.04+）：`sudo apt install ./openrose_*.deb`
+   - `.rpm`（Fedora 等）：`sudo dnf install ./openrose-*.rpm`
+   - `.pkg.tar.zst`（Arch Linux）：`sudo pacman -U ./openrose-*.pkg.tar.zst`
+   - `.AppImage`（通用免安装）：赋予可执行权限后直接运行
+2. 先在系统蓝牙设置里配对并连接耳机，再从应用菜单启动 **OpenRose** 或运行 `openrose`。
+
+详细说明见[桌面版](https://dohex.github.io/OpenRose/guides/desktop/)。
+
 ## 文档
 
 - [后台控制](https://dohex.github.io/OpenRose/guides/background-control/)
 - [HyperOS 系统集成](https://dohex.github.io/OpenRose/guides/hyperos-integration/)：前提条件、控制方式、耳机流转与已知限制
-- [桌面版](https://dohex.github.io/OpenRose/guides/desktop/)：Windows 与 Linux 安装、流转配对、托盘与窗口规则
+- [桌面版](https://dohex.github.io/OpenRose/guides/desktop/)：Linux 安装、流转配对、托盘与窗口规则
 - [常见问题](https://dohex.github.io/OpenRose/guides/troubleshooting/)
 - [权限与隐私](https://dohex.github.io/OpenRose/reference/permissions/)
 
 ## 从源码构建
 
-需要 JDK 21 和 Android SDK（Platform 37、Build Tools 37.0.0，设置 `ANDROID_HOME` 或 `local.properties` 的 `sdk.dir`）。构建 Windows 桌面版还需 Rust stable（MSVC 工具链）和 Visual Studio C++ Build Tools。Windows 下把 `./gradlew` 换成 `.\gradlew.bat`。开发环境、各项检查与提交规范见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+需要 JDK 21、Rust stable 工具链、[nsh](https://nsh.dev/) 0.7+ 和 Android SDK（Platform 37、Build Tools 37.0.0，设置 `ANDROID_HOME` 或 `local.properties` 的 `sdk.dir`）。构建 Android APK 还需 `aarch64-linux-android`、`armv7-linux-androideabi`、`x86_64-linux-android` 三个目标与 `cargo-ndk`；打包 Linux 桌面端还需 `nfpm`、`appimagetool` 以及 GTK 4.14+、GStreamer 和 D-Bus 开发库（`libgtk-4-dev`、`libwebkitgtk-6.0-dev`、`libgstreamer1.0-dev`、`libgstreamer-plugins-base1.0-dev`、`libdbus-1-dev`、`pkg-config`）。开发环境、各项检查与提交规范见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
 ```bash
 ./gradlew :androidApp:assembleDebug   # Android 调试 APK
-./gradlew :desktopApp:run             # 运行桌面版
-./gradlew offlineCheck                # 不依赖耳机硬件的全部检查
+(cd desktop && nsh run)               # 运行 NSH 桌面端
+cargo xtask package-linux             # 构建 Linux AppImage / deb / rpm / pacman
+cargo xtask check                     # 不依赖耳机硬件的全部检查（含 Rust、NSH 与 Gradle）
 ```
 
 开发文档：[协议实现说明](docs/protocols.md)、[协议研究](docs/protocols/)、[架构决策记录](docs/adr/)、[术语表](GLOSSARY.md)。

@@ -20,7 +20,7 @@ internal fun startWindowsHelper(arguments: List<String>): Process = ProcessBuild
 internal fun windowsSnapshots(): Flow<String> = helperLines { startWindowsHelper(listOf("facts")) }
     .timeout(15.seconds)
     .retryWhen { cause, _ ->
-        emit("unavailable\tWindows 蓝牙状态不可用：${cause.message}")
+        emit("unavailable\tbackend_unavailable\tWindows 蓝牙状态不可用：${cause.message}")
         delay(2_000)
         true
     }

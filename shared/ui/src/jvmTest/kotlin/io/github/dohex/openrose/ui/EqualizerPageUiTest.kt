@@ -393,7 +393,7 @@ class EqualizerPageUiTest {
                 assertFalse(harness.hasContentDescription("20 Hz 增益"), "no curve editor without a writable curve in $style")
                 assertFalse(harness.hasText("自定义"), "no custom mode without a writable curve in $style")
                 assertTrue(harness.hasRadioText("弱水经典 · POP"), "the page stays open with its modes in $style")
-                assertFalse(harness.hasText("设备详情"), "the page does not return home in $style")
+                assertFalse(harness.hasText("耳机信息"), "the page does not return home in $style")
             }
         }
     }

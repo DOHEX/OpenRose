@@ -137,22 +137,10 @@ private val semanticLabels = mapOf(
 internal fun semanticLabel(value: String): String = semanticLabels[value] ?: value
 
 val ModelProfile.configurationLabel: String
-    get() = branchLabel?.let { "$displayName · $it" } ?: displayName
+    get() = versionName?.let { "$displayName · $it" } ?: displayName
 
 internal val ModelProfile.configurationCaption: String
-    get() = listOfNotNull(branchLabel, family.displayName).joinToString(" · ")
-
-private val ModelProfile.branchLabel: String?
-    get() = when (this) {
-        ModelProfile.CERAMICS_X_F8 -> "标准版"
-        ModelProfile.CERAMICS_X_7034_F8 -> "7034"
-        ModelProfile.OPENFEEL_LDAC_RS_COMMON -> "LDAC"
-        ModelProfile.OPENFEEL_LHDC_RS_COMMON -> "LHDC"
-        ModelProfile.OPENFEEL_DUAL_RS_COMMON -> "LDAC + LHDC"
-        ModelProfile.OPENFUN_RS_COMMON -> "无触控开关"
-        ModelProfile.OPENFUN_TOUCH_RS_COMMON -> "有触控开关"
-        else -> null
-    }
+    get() = listOfNotNull(versionName, family.displayName).joinToString(" · ")
 
 private fun numberLabel(field: DeviceField?, value: FieldValue.Number): String = when {
     field in batteryFields -> "${value.value}%"

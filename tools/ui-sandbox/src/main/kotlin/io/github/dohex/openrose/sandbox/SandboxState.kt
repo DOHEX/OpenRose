@@ -11,6 +11,7 @@ import io.github.dohex.openrose.core.PermissionState
 import io.github.dohex.openrose.core.PlatformApplicability
 import io.github.dohex.openrose.core.PlatformState
 import io.github.dohex.openrose.core.TransportAvailability
+import io.github.dohex.openrose.core.TransportUnavailableReason
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.FieldReading
 import io.github.dohex.openrose.core.protocol.FieldValue
@@ -99,7 +100,7 @@ private fun sandboxPlatform(scenario: SandboxScenario): PlatformState {
         transport = when (issue) {
             SandboxPlatformIssue.NONE, SandboxPlatformIssue.PERMISSION_DENIED -> TransportAvailability.Available
             SandboxPlatformIssue.BLUETOOTH_OFF -> TransportAvailability.Disabled
-            SandboxPlatformIssue.TRANSPORT_UNAVAILABLE -> TransportAvailability.Unavailable(unavailableReason(scenario))
+            SandboxPlatformIssue.TRANSPORT_UNAVAILABLE -> unavailableTransport(scenario)
         },
         hostPlatform = scenario.host,
         controlTransportApplicability = if (scenario.host == HostPlatform.UNKNOWN) {
@@ -110,9 +111,9 @@ private fun sandboxPlatform(scenario: SandboxScenario): PlatformState {
     )
 }
 
-private fun unavailableReason(scenario: SandboxScenario): String = when (scenario.host) {
-    HostPlatform.ANDROID -> "此设备不支持低功耗蓝牙"
-    HostPlatform.LINUX -> "无法连接 BlueZ：系统总线不可用"
-    HostPlatform.WINDOWS -> "Windows 蓝牙适配器不支持 BLE"
-    HostPlatform.UNKNOWN -> "${scenario.platformName} 控制传输尚未实现"
+private fun unavailableTransport(scenario: SandboxScenario): TransportAvailability.Unavailable = when (scenario.host) {
+    HostPlatform.ANDROID -> TransportAvailability.Unavailable(TransportUnavailableReason.BleUnsupported)
+    HostPlatform.LINUX -> TransportAvailability.Unavailable(TransportUnavailableReason.BackendUnavailable("系统总线不可用"))
+    HostPlatform.WINDOWS -> TransportAvailability.Unavailable(TransportUnavailableReason.BleUnsupported)
+    HostPlatform.UNKNOWN -> TransportAvailability.Unavailable(TransportUnavailableReason.UnsupportedPlatform(scenario.platformName))
 }

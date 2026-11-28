@@ -42,7 +42,6 @@ internal class NativeHeadsetHooks(
     private val idPrefix: String,
 ) {
     private val registered = mutableMapOf<String, XposedInterface.HookHandle>()
-    private var closed = false
     val handles: List<XposedInterface.HookHandle>
         @Synchronized get() = registered.values.toList()
 
@@ -84,7 +83,7 @@ internal class NativeHeadsetHooks(
     @Synchronized
     private fun install(method: Method, intercept: (XposedInterface.Chain) -> Any?) {
         val id = "openrose.native_headset.$idPrefix.${method.declaringClass.name}.${method.name}".replace('-', '_')
-        if (closed || id in registered) return
+        if (id in registered) return
         hostAdapterCall(onFailure = { failure ->
             module.log(Log.ERROR, tag, "hook_install_failed class=${method.declaringClass.name} method=${method.name}", failure)
             report("UNAVAILABLE", "hook_failed:${method.declaringClass.name}.${method.name}")
@@ -134,12 +133,5 @@ internal class NativeHeadsetHooks(
         hostAdapterCall(onFailure = { module.log(Log.WARN, tag, "diagnostic_callback_failed feature=$feature status=$status", it) }) {
             callbacks.report(feature, status, detail)
         }
-    }
-
-    @Synchronized
-    fun close() {
-        closed = true
-        registered.values.forEach { runCatching { it.unhook() } }
-        registered.clear()
     }
 }

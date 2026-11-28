@@ -41,6 +41,12 @@ internal class ControlSession(
     override suspend fun refreshBondedDevices() = discovery.refreshBondedDevices()
     override suspend fun startScan(): OperationResult = discovery.startScan()
     override suspend fun stopScan() = discovery.stopScan()
+    override suspend fun selectCurrentHeadset(deviceId: DeviceId) {
+        mutableState.update { current ->
+            val target = current.bondedHeadsets.firstOrNull { it.deviceId == deviceId }?.deviceId
+            current.copy(selectedHeadsetId = target)
+        }
+    }
     override suspend fun connect(deviceId: DeviceId, pinned: Boolean): OperationResult = targeting.connect(deviceId, pinned)
     override suspend fun connectForAddDevice(deviceId: DeviceId): OperationResult = targeting.connectForAddDevice(deviceId)
     override suspend fun disconnect(): Boolean = targeting.disconnect()

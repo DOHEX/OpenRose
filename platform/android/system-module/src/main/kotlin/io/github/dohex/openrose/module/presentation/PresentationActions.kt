@@ -53,7 +53,7 @@ internal class PresentationActions(
                 val active = session.currentSnapshot ?: return@post
                 val binding = registration ?: return@post
                 if (action != binding.action || token != binding.token) return@post
-                if (active.identity != sender || !active.focusEnabled || !session.statusActive) return@post
+                if (active.identity != sender || !active.statusNotificationEnabled || !session.statusActive) return@post
                 when (kind) {
                     ACTION_KIND_NOISE -> targetMode?.let { executeNoise(active, it) }
                     ACTION_KIND_DISCONNECT -> executeDisconnect(active)
@@ -100,17 +100,6 @@ internal class PresentationActions(
             }
         }
         registration = null
-    }
-
-    fun shutdown() {
-        executor.shutdownNow()
-    }
-
-    fun awaitTermination(timeoutMillis: Long): Boolean = try {
-        executor.awaitTermination(timeoutMillis, TimeUnit.MILLISECONDS)
-    } catch (_: InterruptedException) {
-        Thread.currentThread().interrupt()
-        false
     }
 
     private fun executeNoise(snapshot: RenderedSnapshot, targetMode: String) {

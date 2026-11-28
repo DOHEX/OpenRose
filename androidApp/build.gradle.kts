@@ -1,5 +1,6 @@
 plugins {
     alias(libs.plugins.openrose.android.application)
+    alias(libs.plugins.openrose.rust.ffi)
     alias(libs.plugins.compose.compiler)
 }
 android {
@@ -9,6 +10,12 @@ android {
     }
     buildFeatures {
         compose = true
+    }
+    packaging {
+        jniLibs {
+            useLegacyPackaging = false
+            pickFirsts += "lib/arm64-v8a/libjnidispatch.so"
+        }
     }
     buildTypes {
         getByName("release") {
@@ -41,6 +48,8 @@ dependencies {
     implementation(libs.activity.compose)
     implementation(libs.zxing.embedded)
     implementation(projects.platform.android.bluetoothIpc)
+    implementation(projects.platform.android.ffi)
+    implementation(projects.shared.circulation)
     runtimeOnly(projects.platform.android.systemModule)
     compileOnly(libs.libxposed.api)
     implementation(libs.libxposed.service)

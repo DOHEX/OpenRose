@@ -19,12 +19,11 @@ internal class HeadsetCards(val local: HeadsetCardSource, val others: List<Heads
 @Composable
 internal fun rememberHeadsetCards(
     state: ControlState,
-    selection: PrimaryDeviceSelection,
     client: CirculationClient?,
     remoteHeadsets: List<RemoteHeadset>? = null,
 ): HeadsetCards {
-    val primary = selection.primary(state)
-    val bonded = state.bondedRoseDevices()
+    val primary = state.currentHeadset
+    val bonded = state.bondedHeadsets
     val peers = remoteHeadsets ?: client?.let { rememberRemoteHeadsets(it) }.orEmpty()
     val audioTarget = bonded.firstOrNull { it.matchesAudioDevice(state.audioDeviceId) }
     val actions = rememberCirculationActions(client, audioTarget, primary, bonded)
@@ -82,7 +81,7 @@ internal class HeadsetCardSource(
         actions?.hasMedia(target) == true
 
     private val canAcquire = actions?.available == true && target?.circulationAddress != null &&
-        state.bondedDevices.any { it.hasCirculationAddress(target.circulationAddress) } && state.platform.connectionBlockReason == null
+        state.bondedDevices.any { it.hasCirculationAddress(target.circulationAddress) } && state.connectionBlockReason == null
 
     private val localControlConnecting = state.isConnectingForTray() && when (val connection = state.connection) {
         is ConnectionState.Connecting -> connection.deviceId == target?.deviceId
@@ -93,7 +92,7 @@ internal class HeadsetCardSource(
     val offersTransfer: Boolean = canAcquire && !hasLocalAudio && !localControlConnecting
     val canRecoverControl: Boolean
         get() = target != null && hasLocalAudio && state.connection == ConnectionState.Disconnected &&
-            state.platform.connectionBlockReason == null && actions?.busy != true
+            state.connectionBlockReason == null && actions?.busy != true
 
     val sourceLabel: String?
         get() = when {

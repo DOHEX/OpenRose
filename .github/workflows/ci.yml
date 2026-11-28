@@ -60,7 +60,30 @@ jobs:
           echo "release_tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
           echo "label=$label" >> "$GITHUB_OUTPUT"
 
-  # Shared JVM and Android checks; independent of the release, so they start at once.
+      - name: Checkout release PR branch to sync Cargo and desktop versions
+        if: steps.release.outputs.pr != ''
+        uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ fromJSON(steps.release.outputs.pr).headBranchName }}
+          path: release-pr
+
+      - name: Sync Cargo and desktop versions on release PR
+        if: steps.release.outputs.pr != ''
+        working-directory: release-pr
+        env:
+          PR_BRANCH: ${{ fromJSON(steps.release.outputs.pr || '{}').headBranchName }}
+        run: |
+          cargo xtask sync-version
+          cargo xtask check-version
+          if ! git diff --quiet; then
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git add --update
+            git commit -m 'chore: sync Cargo and desktop versions with version.txt'
+            git push origin "HEAD:$PR_BRANCH"
+          fi
+
+  # Shared Rust, JVM and Android checks; independent of the release, so they start at once.
   checks:
     name: Checks
     runs-on: ubuntu-24.04
@@ -92,13 +115,17 @@ jobs:
         with:
           cache-read-only: ${{ github.ref != 'refs/heads/main' }}
 
+      - uses: Swatinem/rust-cache@v2.9.3
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
       - name: Install Linux runtime libraries
         run: |
           sudo apt-get update
-          sudo apt-get install --yes libgtk-3-0t64 libegl1 libgl1 libfontconfig1
+          sudo apt-get install --yes libgtk-3-0t64 libegl1 libgl1 libfontconfig1 libdbus-1-dev pkg-config
 
       - name: Run checks
-        run: ./gradlew --no-daemon --stacktrace check offlineCheck
+        run: cargo xtask check
 
       - name: Upload test and lint reports
         if: always()
@@ -136,14 +163,52 @@ jobs:
           version() { sed -n "s/^$1 = \"\(.*\)\"$/\1/p" gradle/libs.versions.toml; }
           echo "platform=$(version android-compileSdk)" >> "$GITHUB_OUTPUT"
           echo "build-tools=$(version android-buildTools)" >> "$GITHUB_OUTPUT"
+          echo "ndk=$(version android-ndk)" >> "$GITHUB_OUTPUT"
+          echo "abis=$(version android-abis)" >> "$GITHUB_OUTPUT"
 
       - uses: android-actions/setup-android@v4.0.4
         with:
-          packages: 'platform-tools platforms;android-${{ steps.android-sdk.outputs.platform }}.0 build-tools;${{ steps.android-sdk.outputs.build-tools }}'
+          packages: 'platform-tools platforms;android-${{ steps.android-sdk.outputs.platform }}.0 build-tools;${{ steps.android-sdk.outputs.build-tools }} ndk;${{ steps.android-sdk.outputs.ndk }}'
 
       - uses: gradle/actions/setup-gradle@v6.4.1
         with:
           cache-read-only: ${{ github.ref != 'refs/heads/main' }}
+
+      - uses: Swatinem/rust-cache@v2.9.3
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: Cache cargo-ndk
+        uses: actions/cache@v6.1.0
+        with:
+          path: ~/.cargo/bin/cargo-ndk
+          key: cargo-ndk-4.1.2-${{ runner.os }}
+
+      - name: Install Android Rust targets and cargo-ndk
+        env:
+          ABIS: ${{ steps.android-sdk.outputs.abis }}
+        run: |
+          targets=()
+          for abi in $ABIS; do
+            case "$abi" in
+              arm64-v8a) targets+=(aarch64-linux-android) ;;
+              armeabi-v7a) targets+=(armv7-linux-androideabi) ;;
+              x86_64) targets+=(x86_64-linux-android) ;;
+              x86) targets+=(i686-linux-android) ;;
+              *) echo "::error::no Rust target for Android ABI $abi"; exit 1 ;;
+            esac
+          done
+          rustup target add "${targets[@]}"
+          if ! cargo ndk --version 2>/dev/null | grep -qx 'cargo-ndk 4\.1\.2'; then
+            cargo install --locked cargo-ndk --version 4.1.2
+          fi
+
+      - name: Ensure autotools for patched JNA arm64 build
+        run: |
+          if ! command -v autoreconf >/dev/null 2>&1 || [[ ! -f /usr/share/aclocal/ltdl.m4 ]]; then
+            sudo apt-get update
+            sudo apt-get install --yes autoconf automake libtool libltdl-dev
+          fi
 
       - name: Determine whether this PR changes the Android release package
         id: android-release-check
@@ -151,7 +216,7 @@ jobs:
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
-          git diff --name-only "$BASE_SHA" HEAD -- androidApp platform/android shared \
+          git diff --name-only "$BASE_SHA" HEAD -- androidApp platform/android shared crates Cargo.toml Cargo.lock \
             build-logic gradle build.gradle.kts settings.gradle.kts gradle.properties .github/workflows/ci.yml \
             > "$RUNNER_TEMP/android-inputs.txt"
           if [[ -s "$RUNNER_TEMP/android-inputs.txt" ]]; then echo 'required=true' >> "$GITHUB_OUTPUT"; fi
@@ -216,6 +281,29 @@ jobs:
           fi
           ls -lR dist
 
+      - name: Verify uncompressed native libraries in APK
+        env:
+          ABIS: ${{ steps.android-sdk.outputs.abis }}
+          NDK_VERSION: ${{ steps.android-sdk.outputs.ndk }}
+        run: |
+          packages=(dist/android/*.apk)
+          [[ ${#packages[@]} -eq 1 && -f "${packages[0]}" ]]
+          apk="${packages[0]}"
+          for abi in $ABIS; do
+            for name in libopenrose_ffi.so libjnidispatch.so; do
+              lib="lib/$abi/$name"
+              unzip -v "$apk" "$lib" | awk -v path="$lib" '$2 == "Stored" && $NF == path { found = 1 } END { exit !found }' ||
+                { echo "::error::$lib is missing or compressed in $apk"; exit 1; }
+            done
+          done
+          if [[ " $ABIS " == *" arm64-v8a "* ]]; then
+            unzip -p "$apk" lib/arm64-v8a/libjnidispatch.so > "$RUNNER_TEMP/arm64-libjnidispatch.so"
+            if "$ANDROID_HOME/ndk/$NDK_VERSION/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-objdump" -d "$RUNNER_TEMP/arm64-libjnidispatch.so" | grep -Eq '\b[xw]18\b'; then
+              echo "::error::lib/arm64-v8a/libjnidispatch.so in $apk references reserved register x18/w18"
+              exit 1
+            fi
+          fi
+
       - name: Upload Android package
         uses: actions/upload-artifact@v7.0.2
         with:
@@ -235,23 +323,10 @@ jobs:
           retention-days: 14
 
   desktop:
-    name: Build (${{ matrix.platform }})
+    name: Build (linux-x64)
     needs: release-please
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: ubuntu-24.04
-            platform: linux-x64
-          - os: windows-2025
-            platform: windows-x64
-    defaults:
-      run:
-        shell: bash
-    env:
-      ORG_GRADLE_PROJECT_releaseBuild: ${{ needs.release-please.outputs.release_tag != '' }}
     steps:
       - uses: actions/checkout@v7.0.1
         with:
@@ -261,97 +336,44 @@ jobs:
         with:
           version: 2026.11.5
 
-      # Nucleus drives electron-builder to turn the jpackage image into installers.
-      - uses: actions/setup-node@v7.1.0
-        with:
-          node-version: '24'
-
-      - name: Cache electron-builder tools and npm downloads
-        uses: actions/cache@v6.1.0
-        with:
-          path: |
-            ${{ runner.os == 'Linux' && '~/.cache/electron-builder' || '~/AppData/Local/electron-builder/Cache' }}
-            ${{ runner.os == 'Linux' && '~/.npm' || '~/AppData/Local/npm-cache' }}
-          key: electron-builder-${{ matrix.platform }}-${{ hashFiles('gradle/libs.versions.toml') }}
-          restore-keys: electron-builder-${{ matrix.platform }}-
-
-      - uses: gradle/actions/setup-gradle@v6.4.1
-        with:
-          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
-
-      - name: Install Linux packaging tools
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install --yes rpm libarchive-tools
-
-      # Covers both cargo target dirs: the check below and the release build that platform/windows runs from Gradle.
       - uses: Swatinem/rust-cache@v2.9.3
-        if: runner.os == 'Windows'
         with:
-          workspaces: platform/windows/native -> target
-          cache-directories: platform/windows/build/cargo
+          workspaces: |
+            . -> target
+            desktop/ext/openrose-native -> target
+          cache-directories: desktop/target
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
-      - name: Check the native WinRT helper
-        if: runner.os == 'Windows'
-        working-directory: platform/windows/native
+      - name: Install Linux build dependencies
         run: |
-          cargo fmt -- --check
-          cargo clippy --locked --all-targets -- -D warnings
-          cargo test --locked
+          sudo apt-get update
+          sudo apt-get install --yes libgtk-4-dev libwebkitgtk-6.0-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libdbus-1-dev pkg-config
 
-      - name: Build desktop packages
-        run: ./gradlew --no-daemon --stacktrace :desktopApp:packageDistributionForCurrentOS
-
-      # The path users take: a per-user install without elevation, the WinRT helper beside the app, a clean uninstall.
-      - name: Install and uninstall the Windows installer
-        if: runner.os == 'Windows'
-        shell: pwsh
+      - name: Build Linux packages
+        env:
+          APPIMAGE_EXTRACT_AND_RUN: '1'
         run: |
-          $ErrorActionPreference = 'Stop'
-          $msi = @(Get-ChildItem desktopApp/build/compose/binaries/main -Recurse -Filter *.msi)
-          if ($msi.Count -ne 1) { throw "Expected one MSI, found $($msi.Count)" }
-          function Invoke-Msi([string] $action, [string] $log) {
-            $p = Start-Process msiexec.exe -Wait -PassThru -ArgumentList $action, "`"$($msi[0].FullName)`"", '/qn', '/l*v', "`"$log`""
-            if ($p.ExitCode -ne 0) { Get-Content $log -Tail 80; throw "msiexec $action exited with $($p.ExitCode)" }
-          }
-          $installRoot = Join-Path $env:LOCALAPPDATA 'Programs'
-          Invoke-Msi '/i' "$env:RUNNER_TEMP\msi-install.log"
-          if (Test-Path (Join-Path $env:ProgramFiles 'OpenRose')) { throw 'The MSI installed per machine' }
-          $app = Get-ChildItem $installRoot -Recurse -Filter OpenRose.exe | Select-Object -First 1
-          $helper = Get-ChildItem $installRoot -Recurse -Filter openrose-winrt.exe | Select-Object -First 1
-          if (-not $app) { throw "OpenRose.exe is not under $installRoot" }
-          if (-not $helper) { throw "openrose-winrt.exe is not under $installRoot" }
-          Write-Host "Installed $($app.FullName) with $($helper.FullName)"
-          # runAfterFinish may have started the app; it must not hold files during uninstall.
-          Get-Process OpenRose, openrose-winrt -ErrorAction SilentlyContinue | Stop-Process -Force
-          Invoke-Msi '/x' "$env:RUNNER_TEMP\msi-uninstall.log"
-          if (Test-Path $app.FullName) { throw "Uninstall left $($app.FullName)" }
+          cargo xtask package-linux
+          ls -lR dist/desktop
 
-      - name: Collect packages
+      - name: Install deb package in clean ubuntu:24.04 container
         run: |
-          mkdir -p dist/desktop
-          collect() {
-            local found
-            found=$(find desktopApp/build/compose/binaries/main -mindepth 2 -maxdepth 2 -type f -name "$1")
-            if [[ -z "$found" ]]; then
-              echo "::error::No $1 package was built"
-              exit 1
-            fi
-            cp $found dist/desktop/
-          }
-          if [[ "$RUNNER_OS" == Linux ]]; then
-            for pattern in '*.deb' '*.rpm' '*.pacman' '*.AppImage'; do collect "$pattern"; done
-          else
-            collect '*.msi'
-          fi
-          ls -lR dist
+          docker run --rm -v "$PWD/dist/desktop:/pkg:ro" ubuntu:24.04 bash -c '
+            set -euo pipefail
+            export DEBIAN_FRONTEND=noninteractive
+            apt-get update
+            (cd /pkg && apt-get install --yes ./openrose_*.deb)
+            command -v openrose
+            test -x "$(command -v openrose)"
+            ! ldd "$(readlink -f "$(command -v openrose)")" 2>&1 | grep 'not found'
+            test -f /usr/share/applications/io.github.dohex.openrose.desktop
+            test -f /usr/share/icons/hicolor/512x512/apps/io.github.dohex.openrose.png
+          '
 
-      - name: Upload desktop packages
+      - name: Upload Linux desktop packages
         uses: actions/upload-artifact@v7.0.2
         with:
-          name: openrose-${{ needs.release-please.outputs.label }}-${{ matrix.platform }}
+          name: openrose-${{ needs.release-please.outputs.label }}-linux-x64
           path: dist/desktop/*
           if-no-files-found: error
           retention-days: 14

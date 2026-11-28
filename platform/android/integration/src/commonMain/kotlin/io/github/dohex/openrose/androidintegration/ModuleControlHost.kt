@@ -1,9 +1,7 @@
 package io.github.dohex.openrose.androidintegration
 
-import io.github.dohex.openrose.androidintegration.wire.HostPlatformFacts
 import io.github.dohex.openrose.core.ControlError
 import io.github.dohex.openrose.core.ControlErrorCode
-import io.github.dohex.openrose.core.ControlRuntime
 import io.github.dohex.openrose.core.HeadsetCommand
 import io.github.dohex.openrose.core.NoiseMode
 import io.github.dohex.openrose.core.OperationResult
@@ -11,6 +9,8 @@ import io.github.dohex.openrose.core.PermissionState
 import io.github.dohex.openrose.core.PlatformState
 import io.github.dohex.openrose.core.SessionReference
 import io.github.dohex.openrose.core.UserSettings
+import io.github.dohex.openrose.ffi.kotlincore.CoreBackedRuntime
+import io.github.dohex.openrose.ffi.kotlincore.toControlState
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -25,6 +25,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
@@ -33,6 +34,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import uniffi.openrose_control.ControlSnapshot
 
 data class HostConfiguration(
     val userUnlocked: Boolean = false,
@@ -40,7 +42,7 @@ data class HostConfiguration(
 )
 
 sealed interface HostReadResult {
-    data class Available(val snapshot: SessionSnapshotResult) : HostReadResult
+    data class Available(val snapshot: SessionSnapshotResult, val core: ControlSnapshot) : HostReadResult
     data class Rejected(val rejection: HostRejection, val message: String) : HostReadResult
 }
 
@@ -49,7 +51,7 @@ class ModuleControlHost(
     private val processName: String,
     private val incarnation: String,
     private val authority: CallerAuthority,
-    private val runtimeFactory: (CoroutineScope, UserSettings, PlatformState, Long) -> ControlRuntime,
+    private val runtimeFactory: (CoroutineScope, UserSettings, PlatformState, Long) -> CoreBackedRuntime,
     parentScope: CoroutineScope,
     private val newId: () -> String,
     private val uid: Int? = null,
@@ -57,13 +59,14 @@ class ModuleControlHost(
     private val maxLeases: Int = 16,
     private val facts: StateFlow<HostFacts> = MutableStateFlow(HostFacts()),
     private val presentationTiming: PresentationTiming = PresentationTiming(),
-    private val onOwnerStarted: (OwnerGeneration, CoroutineScope, ControlRuntime) -> Unit = { _, _, _ -> },
+    private val onOwnerStarted: (OwnerGeneration, CoroutineScope, CoreBackedRuntime) -> Unit = { _, _, _ -> },
 ) {
     private class Owner(
         val generation: OwnerGeneration,
         val holder: OwnerHolder,
         val job: Job,
         val runtime: SystemEntryRuntime,
+        val coreState: StateFlow<ControlSnapshot>,
         val ended: CompletableDeferred<Unit> = CompletableDeferred(),
     ) {
         val commands = MutableStateFlow<Job>(SupervisorJob(job))
@@ -87,8 +90,6 @@ class ModuleControlHost(
     private val releaseEpoch = MutableStateFlow(0L)
     private var platform = PlatformState(PermissionState.NOT_REQUIRED)
     private var held: String? = null
-    private var stopped = false
-    private val retired = MutableStateFlow(false)
     private var lastGeneration: OwnerGeneration? = null
     private var sequence = 0L
     private val mutableStatus = MutableStateFlow<HostStatus>(HostStatus.Inactive(incarnation, null, "尚未配置"))
@@ -110,7 +111,7 @@ class ModuleControlHost(
     private fun reloadConfiguration(): Boolean {
         val previous = configuration.settings.integration.controlWay
         configuration = readConfiguration() ?: return false
-        if (previous == ControlWay.ORDINARY && configuration.settings.integration.controlWay == ControlWay.MODULE) held = null
+        if (previous == ControlWay.APP && configuration.settings.integration.controlWay == ControlWay.MODULE) held = null
         return true
     }
 
@@ -119,21 +120,7 @@ class ModuleControlHost(
         owner.value?.runtime?.updatePlatformState(next)
     }
 
-    suspend fun stop(): Boolean = ownership.withLock {
-        stopped = true
-        var released = false
-        try {
-            lifecycle.reconcile()
-            released = owner.value == null
-        } finally {
-            if (released) retired.value = true else stopped = false
-            lifecycle.publishStatus()
-        }
-        released
-    }
-
     fun open(caller: CallerIdentity): HostOpenResult {
-        if (retired.value) return HostOpenResult.Refused(HostRejection.INVALID_REQUEST, "控制宿主已停止，请重新发现")
         val role = authority.roleOf(caller)
             ?: return HostOpenResult.Refused(HostRejection.UNAUTHORIZED, "调用者未被授权使用控制宿主")
         var refused = false
@@ -201,7 +188,11 @@ class ModuleControlHost(
             leaseFor(caller, leaseId) ?: return HostReadResult.Rejected(HostRejection.INVALID_LEASE, "控制宿主授权无效或已过期")
             return when (val current = currentOwner(generation)) {
                 is OwnerCheck.Rejected -> HostReadResult.Rejected(current.rejection, current.message)
-                is OwnerCheck.Current -> HostReadResult.Available(current.owner.runtime.readSession(reference))
+
+                is OwnerCheck.Current -> {
+                    val session = current.owner.runtime.readSession(reference)
+                    HostReadResult.Available(session, current.owner.coreState.value)
+                }
             }
         }
 
@@ -242,20 +233,10 @@ class ModuleControlHost(
             }
             return callbackFlow {
                 val collector = launch {
-                    combine(active.runtime.views(active.generation), facts) { view, reported ->
-                        HostFrame(
-                            view.generation,
-                            active.holder,
-                            HostPlatformFacts(
-                                view.state.platform.permission,
-                                view.state.platform.transport,
-                                view.state.platform.scanPermission,
-                            ),
-                            view.state,
-                            view.presentation,
-                            reported,
-                        )
-                    }.collect { send(it) }
+                    val presented = active.runtime.presented(active.coreState) { it.toControlState() }
+                    combine(presented, facts) { (snapshot, presentation), reported ->
+                        HostFrame(active.generation, active.holder, snapshot, presentation, reported)
+                    }.distinctUntilChanged().collect { send(it) }
                 }
                 launch {
                     active.ended.await()
@@ -282,6 +263,11 @@ class ModuleControlHost(
 
             HostCommand.StopScan -> {
                 runtime.stopScan()
+                HostCallResult.Operation(OperationResult.Success)
+            }
+
+            is HostCommand.SelectCurrentHeadset -> {
+                runtime.selectCurrentHeadset(command.deviceId)
                 HostCallResult.Operation(OperationResult.Success)
             }
 
@@ -377,7 +363,7 @@ class ModuleControlHost(
     }
 
     private fun leaseFor(caller: CallerIdentity, leaseId: String): Lease? = leases.value[leaseId]?.takeIf {
-        !retired.value && it.caller == caller && authority.roleOf(caller) == it.role
+        it.caller == caller && authority.roleOf(caller) == it.role
     }
 
     private inner class OwnerLifecycle {
@@ -388,8 +374,7 @@ class ModuleControlHost(
                     return
                 }
             }
-            val wanted = !stopped &&
-                configuration.userUnlocked &&
+            val wanted = configuration.userUnlocked &&
                 configuration.settings.integration.controlWay == ControlWay.MODULE &&
                 held == null
             val current = owner.value
@@ -411,16 +396,17 @@ class ModuleControlHost(
             val generation = OwnerGeneration(incarnation, sequence)
             val job = SupervisorJob(hostContext[Job])
             val scope = CoroutineScope(hostContext + job)
+            val backed = runtimeFactory(scope, configuration.settings.control, platform, SessionIdBase.module(sequence)).also {
+                onOwnerStarted(generation, scope, it)
+            }
             val runtime = SystemEntryRuntime(
-                runtimeFactory(scope, configuration.settings.control, platform, SessionIdBase.module(sequence)).also {
-                    onOwnerStarted(generation, scope, it)
-                },
+                backed,
                 scope,
                 presentationTiming,
                 configuration.settings.integration,
             )
             val holder = OwnerHolder(ControlWay.MODULE, generation, packageName, processName, uid, pid)
-            owner.value = Owner(generation, holder, job, runtime)
+            owner.value = Owner(generation, holder, job, runtime, backed.coreState)
         }
 
         suspend fun stop(current: Owner): Boolean {
@@ -447,7 +433,6 @@ class ModuleControlHost(
                     lastGeneration,
                     when {
                         !configuration.userUnlocked -> "用户尚未解锁"
-                        stopped -> "宿主已停止"
                         held != null -> "已按切换请求释放"
                         configuration.settings.integration.controlWay != ControlWay.MODULE -> "当前未选择模块控制"
                         else -> "模块控制尚未启动"

@@ -32,6 +32,7 @@ import io.github.dohex.openrose.core.PermissionState
 import io.github.dohex.openrose.core.PlatformApplicability
 import io.github.dohex.openrose.core.PlatformState
 import io.github.dohex.openrose.core.TransportAvailability
+import io.github.dohex.openrose.core.TransportUnavailableReason
 import io.github.dohex.openrose.transport.bluez.BluezControlTransport
 import io.github.dohex.openrose.transport.bluez.linuxBluetoothSettingsCommand
 import io.github.dohex.openrose.transport.windows.WindowsControlTransport
@@ -39,7 +40,6 @@ import io.github.dohex.openrose.transport.windows.windowsBluetoothSettingsComman
 import io.github.dohex.openrose.ui.AppLogo
 import io.github.dohex.openrose.ui.LocalCirculationVisible
 import io.github.dohex.openrose.ui.OpenRoseApp
-import io.github.dohex.openrose.ui.PrimaryDeviceSelection
 import io.github.dohex.openrose.ui.UiSettings
 import io.github.dohex.openrose.ui.desktop.DesktopPlatformUi
 import io.github.dohex.openrose.ui.desktop.TrayAvailability
@@ -100,7 +100,7 @@ private fun startRuntime(platform: String, hostPlatform: HostPlatform, scope: Co
         platform = PlatformState(
             permission = PermissionState.NOT_REQUIRED,
             transport = transport?.availability?.value
-                ?: TransportAvailability.Unavailable("$platform 控制传输尚未实现"),
+                ?: TransportAvailability.Unavailable(TransportUnavailableReason.UnsupportedPlatform(platform)),
             hostPlatform = hostPlatform,
             controlTransportApplicability = if (transport != null) {
                 PlatformApplicability.APPLICABLE
@@ -138,7 +138,6 @@ private fun NucleusApplicationScope.DesktopWindows(
             showQr = { PairingQr(it) },
         )
     }
-    val selection = remember { PrimaryDeviceSelection() }
     val uiSettings by runtime.model.uiSettings.collectAsState()
     val desktopSettings by runtime.desktopSettings.collectAsState()
     val trayAvailability by tray.availability.collectAsState()
@@ -168,7 +167,6 @@ private fun NucleusApplicationScope.DesktopWindows(
             DesktopTray(
                 host = remember { trayPanelHost() },
                 model = runtime.model,
-                selection = selection,
                 uiScope = uiScope,
                 circulation = circulation,
                 sound = runtime.sound,
@@ -199,7 +197,7 @@ private fun NucleusApplicationScope.DesktopWindows(
                 BasicText("OpenRose", style = TextStyle(color = LocalTitleBarStyle.current.colors.content))
             }
             CompositionLocalProvider(LocalCirculationVisible provides (window.visible && focused)) {
-                OpenRoseApp(model = runtime.model, platformUi = platformUi, primaryDeviceSelection = selection)
+                OpenRoseApp(model = runtime.model, platformUi = platformUi)
             }
         }
     }

@@ -39,12 +39,12 @@ pub fn property(device: &DeviceInformation, name: &str) -> windows::core::Result
 pub fn snapshot() -> Result<String> {
     let adapter = BluetoothAdapter::GetDefaultAsync()?.get()?;
     if !adapter.IsLowEnergySupported()? {
-        return Ok("unavailable\tWindows 蓝牙适配器不支持 BLE".into());
+        return Ok("unavailable\tble_unsupported".into());
     }
     match adapter.GetRadioAsync()?.get()?.State()? {
         RadioState::On => (),
         RadioState::Off | RadioState::Disabled => return Ok("disabled".into()),
-        _ => return Ok("unavailable\tWindows 蓝牙适配器状态未知".into()),
+        _ => return Ok("unavailable\tadapter_state_unknown".into()),
     }
     let selector = BluetoothDevice::GetDeviceSelectorFromPairingState(true)?;
     let properties: IIterable<HSTRING> = vec![CONTAINER.into(), ADDRESS.into()].into();

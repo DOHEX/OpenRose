@@ -58,10 +58,10 @@ internal class ModuleConnectionPrompt(
     }
 
     private fun modulePrompt(snapshot: RenderedSnapshot): Bundle? {
-        if (snapshot.mode != BridgePresentationWire.MODULE) return null
+        if (snapshot.mode != BridgePresentationWire.OPENROSE_STYLE) return null
         if (!snapshot.presentation.getBoolean(BridgePresentationWire.ALLOW_ISLAND_FIELDS, false)) return null
         return snapshot.presentation.getBundle(BridgePresentationWire.PROMPT)?.takeIf {
-            it.getString(BridgePresentationWire.MODE) == BridgePresentationWire.MODULE
+            it.getString(BridgePresentationWire.MODE) == BridgePresentationWire.OPENROSE_STYLE
         }
     }
 
@@ -71,7 +71,7 @@ internal class ModuleConnectionPrompt(
         Log.w(PRESENTATION_TAG, "prompt_claim_failed", it)
         reportOnce(
             snapshot.wire,
-            BridgePresentationWire.MODULE_CONNECTION,
+            BridgePresentationWire.OPENROSE_CONNECTION,
             BridgePresentationWire.UNAVAILABLE,
             "prompt_claim_temporarily_unavailable",
         )
@@ -89,7 +89,7 @@ internal class ModuleConnectionPrompt(
             processedPrompts += key
             reportOnce(
                 snapshot.wire,
-                BridgePresentationWire.MODULE_CONNECTION,
+                BridgePresentationWire.OPENROSE_CONNECTION,
                 BridgePresentationWire.UNAVAILABLE,
                 "target_process_notification_permission_missing",
             )
@@ -111,7 +111,7 @@ internal class ModuleConnectionPrompt(
             processedPrompts += key
             reportOnce(
                 snapshot.wire,
-                BridgePresentationWire.MODULE_CONNECTION,
+                BridgePresentationWire.OPENROSE_CONNECTION,
                 BridgePresentationWire.CALLED,
                 "notification_manager_notify_returned",
             )
@@ -123,7 +123,7 @@ internal class ModuleConnectionPrompt(
             processedPrompts += key
             reportOnce(
                 snapshot.wire,
-                BridgePresentationWire.MODULE_CONNECTION,
+                BridgePresentationWire.OPENROSE_CONNECTION,
                 BridgePresentationWire.UNAVAILABLE,
                 "module_template_or_publish_failed:${failure.javaClass.simpleName}",
             )
@@ -150,7 +150,7 @@ internal class ModuleConnectionPrompt(
             promptAwaitingStatus = false
             reportOnce(
                 active.snapshot,
-                BridgePresentationWire.MODULE_CONNECTION,
+                BridgePresentationWire.OPENROSE_CONNECTION,
                 BridgePresentationWire.WITHDRAWN,
                 "merged_module_prompt_ended:$reason",
             )
@@ -161,7 +161,7 @@ internal class ModuleConnectionPrompt(
                 .onSuccess {
                     reportOnce(
                         active.snapshot,
-                        BridgePresentationWire.MODULE_CONNECTION,
+                        BridgePresentationWire.OPENROSE_CONNECTION,
                         BridgePresentationWire.WITHDRAWN,
                         "owned_module_prompt_cancel_returned:$reason",
                     )
@@ -169,7 +169,7 @@ internal class ModuleConnectionPrompt(
                 .onFailure { failure ->
                     reportOnce(
                         active.snapshot,
-                        BridgePresentationWire.MODULE_CONNECTION,
+                        BridgePresentationWire.OPENROSE_CONNECTION,
                         BridgePresentationWire.ACTION_FAILED,
                         "module_prompt_cancel:${failure.javaClass.simpleName}",
                     )

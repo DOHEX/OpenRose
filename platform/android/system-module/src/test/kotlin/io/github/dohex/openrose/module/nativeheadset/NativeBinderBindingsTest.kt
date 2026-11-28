@@ -39,7 +39,5 @@ class NativeBinderBindingsTest {
         directory.publishSession(current.copy(sessionId = 2))
         assertNull(bindings.boundHeadset(owner)?.snapshot)
         assertTrue(bindings.shouldSuppressManagedAction(owner, address))
-        bindings.clear()
-        assertNull(bindings.boundHeadset(owner))
     }
 }

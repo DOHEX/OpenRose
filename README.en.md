@@ -15,7 +15,7 @@ OpenRose is an unofficial control app for ROSE / ROSESELSA (弱水时砂) earpho
 
 | Earphones | Connection | Status |
 | --- | --- | --- |
-| EarFree i5 (EarFeel i5) | BLE | Hardware reads verified. Android ordinary and module control both confirmed transparency and wind-noise mode writes by device read-back. Other setting writes await verification |
+| EarFree i5 (EarFeel i5) | BLE | Hardware reads verified. Android app control and module control both confirmed transparency and wind-noise mode writes by device read-back. Other setting writes await verification |
 | EarFeel i7 | BLE or SPP | Offline tests only; not tested on a real device |
 | BudsFeel MK2 | BLE or SPP | Not tested on a real device |
 | OpenFeel MK2 | BLE or SPP | Not tested on a real device |
@@ -46,19 +46,24 @@ OpenRose covers all 48 Bluetooth earphone configurations in RoseLink 3.8.6 and r
 ## Features
 
 - **Earphone controls**: battery and firmware version, ANC and transparency levels, game mode, EQ, touch bindings, wear detection, multipoint, and more; what you see depends on the model and firmware
-- Open the **Android quick panel** from a Quick Settings tile or the focus notification to check battery levels, change noise or game mode, or tap the equalizer row to choose an EQ preset. The panel stays open after you choose a preset.
+- Open the **Android quick panel** from a Quick Settings tile or the earphone status notification to check battery levels, change noise or game mode, or tap the equalizer row to choose an EQ preset. The panel stays open after you choose a preset.
 - **Two UI styles**: Miuix and Material 3 Expressive; switching keeps the earphones connected
 - **Background control**: keeps the control connection after you close the app and restores it after the process is reclaimed or the phone restarts; no root needed
 - **HyperOS integration**: through the Xposed module, the system island, focus notifications, and Fusion Device Center; the system Bluetooth process can control the earphones directly
 - **Xiaomi HyperConnect** lets you move the earphones between two HyperOS devices on the same Xiaomi account. Enable module control on both and use Fusion Device Center to move the connection. This feature is experimental and awaits verification on two HyperOS devices.
 - **OpenRose over LAN** connects a phone running module control to a Linux or Windows PC on the same local network for all recognized ROSE models. Once paired, the headset card in My Earphones, the desktop tray, and the phone quick panel shows the current audio source when known. Adjust noise mode, ANC and transparency levels, EQ presets, and game mode remotely (availability depends on model capabilities), or use the card to move the audio connection to the phone or computer you are using. Transfers in both directions and remote noise control have been tested with the i5 on Xiaomi 14 and Linux; other models, newly added remote settings, and Windows hardware testing are pending.
+- **Headset handoff on desktop**: the desktop app has a Headset handoff page (耳机流转) to start pairing with a code and QR code, pair with a peer by its code, see the headset and battery a peer is using, switch its noise mode remotely, and click **接到这台电脑** (Move to this computer) on a peer card or in the tray panel when a peer holds the headset (with in-progress, refusal, unreachable-peer, and failure notices; never switches back automatically). The tray also shows the current system audio output and an **打开声音设置** (Open sound settings) entry when a known program is installed. Tested on a single machine over loopback; pairing and real handoff between two real machines are not verified.
 - **Local control**: controls earphones over Bluetooth without an account.
 
 See [Features](https://dohex.github.io/OpenRose/en/reference/features/) for the full list.
 
 ## Getting started
 
-Requires Android 8.0 (API 26) or later. The app UI is currently Chinese only.
+The app UI is currently Chinese only.
+
+### Android
+
+Requires Android 8.0 (API 26) or later.
 
 1. Download the APK from [Releases](https://github.com/DOHEX/OpenRose/releases); development builds are available as artifacts on [GitHub Actions](https://github.com/DOHEX/OpenRose/actions/workflows/ci.yml) (GitHub sign-in required).
 2. Pair and connect the earphones in the **system Bluetooth settings** first. OpenRose does not handle audio pairing.
@@ -66,22 +71,36 @@ Requires Android 8.0 (API 26) or later. The app UI is currently Chinese only.
 
 See [Getting started](https://dohex.github.io/OpenRose/en/guides/getting-started/) for the full steps.
 
+### Linux desktop
+
+Requires **GTK 4.14+** and **BlueZ** (with the Bluetooth service running). Legacy JVM desktop packages are no longer released; the Windows NSH installer will arrive in #160.
+
+1. Download the package for your distribution from [Releases](https://github.com/DOHEX/OpenRose/releases) (or the `openrose-<version>-dev-<commit>-linux-x64` artifact in [GitHub Actions](https://github.com/DOHEX/OpenRose/actions/workflows/ci.yml)):
+   - `.deb` (Debian / Ubuntu 24.04+): `sudo apt install ./openrose_*.deb`
+   - `.rpm` (Fedora, etc.): `sudo dnf install ./openrose-*.rpm`
+   - `.pkg.tar.zst` (Arch Linux): `sudo pacman -U ./openrose-*.pkg.tar.zst`
+   - `.AppImage` (portable): mark executable and run directly
+2. Pair and connect the earphones in your system Bluetooth settings first, then launch **OpenRose** from your application menu or run `openrose`.
+
+See [Desktop](https://dohex.github.io/OpenRose/en/guides/desktop/) for full details.
+
 ## Documentation
 
 - [Background control](https://dohex.github.io/OpenRose/en/guides/background-control/)
 - [HyperOS integration](https://dohex.github.io/OpenRose/en/guides/hyperos-integration/): requirements, control way, headset circulation, and known limitations
-- [Desktop](https://dohex.github.io/OpenRose/en/guides/desktop/): Windows and Linux installation, handoff pairing, tray, and window rules
+- [Desktop](https://dohex.github.io/OpenRose/en/guides/desktop/): Linux installation, handoff pairing, tray, and window rules
 - [Troubleshooting](https://dohex.github.io/OpenRose/en/guides/troubleshooting/)
 - [Permissions and privacy](https://dohex.github.io/OpenRose/en/reference/permissions/)
 
 ## Building from source
 
-Requires JDK 21 and the Android SDK (Platform 37, Build Tools 37.0.0; set `ANDROID_HOME` or `sdk.dir` in `local.properties`). Building the Windows desktop app also requires stable Rust with the MSVC toolchain and Visual Studio C++ Build Tools. On Windows, replace `./gradlew` with `.\gradlew.bat`. For the development environment, checks, and commit conventions, see [CONTRIBUTING.md](CONTRIBUTING.md) (Chinese).
+Requires JDK 21, the stable Rust toolchain, [nsh](https://nsh.dev/) 0.7+, and the Android SDK (Platform 37, Build Tools 37.0.0; set `ANDROID_HOME` or `sdk.dir` in `local.properties`). Building the Android APK also requires the `aarch64-linux-android`, `armv7-linux-androideabi` and `x86_64-linux-android` targets and `cargo-ndk`; packaging the Linux desktop app also requires `nfpm`, `appimagetool`, and the GTK 4.14+, GStreamer, and D-Bus development libraries (`libgtk-4-dev`, `libwebkitgtk-6.0-dev`, `libgstreamer1.0-dev`, `libgstreamer-plugins-base1.0-dev`, `libdbus-1-dev`, `pkg-config`). For the development environment, checks, and commit conventions, see [CONTRIBUTING.md](CONTRIBUTING.md) (Chinese).
 
 ```bash
 ./gradlew :androidApp:assembleDebug   # Android debug APK
-./gradlew :desktopApp:run             # run the desktop app
-./gradlew offlineCheck                # all checks that need no earphone hardware
+(cd desktop && nsh run)               # run the NSH desktop app
+cargo xtask package-linux             # build Linux AppImage / deb / rpm / pacman
+cargo xtask check                     # all checks that need no earphone hardware (Rust, NSH, and Gradle)
 ```
 
 Developer docs (mostly Chinese): [protocol implementation](docs/protocols.md), [protocol research](docs/protocols/), [architecture decisions](docs/adr/), [glossary](GLOSSARY.md).

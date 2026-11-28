@@ -282,6 +282,6 @@ class CirculationPanelUiTest {
 
 @Composable
 private fun RemoteCards(vararg headsets: RemoteHeadset) {
-    val cards = rememberHeadsetCards(disconnectedAndroidState(), PrimaryDeviceSelection(), client = null, remoteHeadsets = headsets.toList())
+    val cards = rememberHeadsetCards(disconnectedAndroidState(), client = null, remoteHeadsets = headsets.toList())
     cards.others.forEach { AdditionalHeadsetCard(it) }
 }

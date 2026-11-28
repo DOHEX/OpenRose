@@ -14,3 +14,5 @@ local.properties
 
 # Cargo CLI output for the Windows helper.
 /platform/windows/native/target/
+/target/
+/dist/

@@ -9,11 +9,12 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.HandlerThread
 import android.os.IBinder
-import android.os.Looper
 import android.os.RemoteException
 import android.util.Log
 import io.github.dohex.openrose.androidintegration.wire.BridgePresentationWire
 import io.github.dohex.openrose.androidintegration.wire.BridgeWire
+import io.github.dohex.openrose.androidintegration.wire.NativeHeadsetSnapshot
+import io.github.dohex.openrose.androidintegration.wire.NativeSessionReference
 import io.github.dohex.openrose.bridge.BridgeBundles
 import io.github.dohex.openrose.bridge.BridgeTarget
 import io.github.dohex.openrose.bridge.IControlBridge
@@ -24,12 +25,11 @@ internal class AuthenticatedBridgeClient(
     context: Context,
     private val target: BridgeTarget,
     private val processName: String,
-    private val onSnapshot: (Bundle) -> Unit,
+    private val onSnapshot: (Bundle, NativeHeadsetSnapshot) -> Unit,
     private val onSnapshotFresh: (Long) -> Unit,
     private val onClear: () -> Unit,
     private val onBonded: (Set<String>) -> Unit,
     private val onAuthenticated: (AuthenticatedBridgeClient) -> Unit = {},
-    private val onClosing: () -> Unit = {},
     private val resolution: String = BridgeWire.RESOLUTION_MATCHED,
 ) {
     private val context = context.applicationContext ?: context
@@ -39,10 +39,6 @@ internal class AuthenticatedBridgeClient(
     internal val handler: Handler = Handler(readerThread.looper)
 
     @Volatile private var started = false
-
-    @Volatile private var closing = false
-
-    @Volatile private var closed = false
 
     @Volatile private var hostIncarnation: String? = null
 
@@ -72,7 +68,7 @@ internal class AuthenticatedBridgeClient(
 
     fun start() {
         synchronized(lock) {
-            if (started || closing || closed) return
+            if (started) return
             started = true
         }
         handler.post { bindControlBridge() }
@@ -92,7 +88,7 @@ internal class AuthenticatedBridgeClient(
                 Log.w(TAG, "bridge_bind_failed target=$target", failure)
                 false
             }
-        if (currentBinding !== binding || closing || closed) {
+        if (currentBinding !== binding) {
             unbindQuietly(binding)
             return
         }
@@ -121,7 +117,7 @@ internal class AuthenticatedBridgeClient(
 
     private fun isCurrentBinding(binding: BridgeBinding): Boolean = canRun() && currentBinding === binding
 
-    private fun canRun(): Boolean = started && !closing && !closed
+    private fun canRun(): Boolean = started
 
     private fun recordStatus(status: String): Boolean {
         val binding = currentBinding
@@ -131,47 +127,8 @@ internal class AuthenticatedBridgeClient(
         return true
     }
 
-    fun close(timeoutMillis: Long = CLOSE_TIMEOUT_MILLIS): Boolean {
-        synchronized(lock) {
-            if (!closing && !closed) {
-                closing = true
-                if (!handler.post(::finishClose)) closing = false
-            }
-        }
-        if (Looper.myLooper() != handler.looper) {
-            try {
-                readerThread.join(timeoutMillis)
-            } catch (interrupted: InterruptedException) {
-                Thread.currentThread().interrupt()
-                return false
-            }
-        }
-        return closed && !readerThread.isAlive
-    }
-
-    private fun finishClose() {
-        runCatching {
-            handler.removeCallbacks(rebindRunnable)
-            val binding = currentBinding
-            binding?.pollRunnable?.let(handler::removeCallbacks)
-            confirmation.clearSnapshot()
-            onClosing()
-            confirmation.closeLease(binding?.bridge ?: targetBridge)
-            if (binding != null) {
-                currentBinding = null
-                unbindQuietly(binding)
-            }
-            started = false
-            closed = true
-            readerThread.quitSafely()
-        }.onFailure { failure ->
-            Log.e(TAG, "bridge_close_failed target=$target", failure)
-            synchronized(lock) { closing = false }
-        }
-    }
-
     private fun dropBinding(binding: BridgeBinding, status: String) {
-        if (currentBinding !== binding || closing || closed) return
+        if (currentBinding !== binding) return
         recordStatus(status)
         currentBinding = null
         binding.bridge = null
@@ -381,8 +338,8 @@ internal class AuthenticatedBridgeClient(
             reference: SessionReference,
         ) {
             val response = bridge.read(sessionRequest(lease, ownerGeneration, reference))
-            val snapshot = snapshotFromRead(bridge, response, ownerGeneration, reference) ?: return
-            val sequence = snapshot.getLong(BridgeWire.READ_SEQUENCE, INVALID_READ_SEQUENCE)
+            val frame = snapshotFromRead(bridge, response, ownerGeneration, reference) ?: return
+            val sequence = frame.bundle.getLong(BridgeWire.READ_SEQUENCE, INVALID_READ_SEQUENCE)
             if (sequence <= 0L) {
                 confirmation.clearSnapshot()
                 recordStatus("snapshot_read_sequence_missing")
@@ -400,7 +357,7 @@ internal class AuthenticatedBridgeClient(
                 deliveredSequence = sequence
                 deliveredSnapshot = true
                 systemIntegrationResult {
-                    onSnapshot(Bundle(snapshot))
+                    onSnapshot(Bundle(frame.bundle), frame.native)
                     recordStatus("snapshot_acknowledged session=${reference.sessionId}")
                 }.onFailure { failure ->
                     Log.e(TAG, "snapshot_callback_failed target=$target", failure)
@@ -414,7 +371,7 @@ internal class AuthenticatedBridgeClient(
             response: Bundle,
             ownerGeneration: String,
             reference: SessionReference,
-        ): Bundle? {
+        ): ReadFrame? {
             if (!hasWireVersion(response)) {
                 confirmation.clearSnapshot()
                 recordStatus("read_invalid_version")
@@ -426,14 +383,30 @@ internal class AuthenticatedBridgeClient(
                 recordStatus("read_$status")
                 null
             } else {
-                val snapshot = response.getBundle(BridgeWire.SNAPSHOT)?.takeIf {
+                val frame = response.getBundle(BridgeWire.SNAPSHOT)?.takeIf {
                     hasWireVersion(it) && it.getString(BridgeWire.HOST_EPOCH) == ownerGeneration && sessionReferenceOf(it) == reference
                 }
-                if (snapshot == null) {
+                if (frame == null) {
                     confirmation.clearSnapshot()
                     recordStatus("snapshot_identity_mismatch")
+                    null
+                } else {
+                    when (val decoded = decodeNativeSnapshot(frame)) {
+                        is NativeSnapshotDecode.Rejected -> {
+                            confirmation.clearSnapshot()
+                            recordStatus(decoded.reason)
+                            null
+                        }
+
+                        is NativeSnapshotDecode.Decoded -> if (decoded.native.reference == reference.native(ownerGeneration)) {
+                            ReadFrame(frame, decoded.native)
+                        } else {
+                            confirmation.clearSnapshot()
+                            recordStatus("snapshot_identity_mismatch")
+                            null
+                        }
+                    }
                 }
-                snapshot
             }
         }
 
@@ -524,7 +497,7 @@ internal class AuthenticatedBridgeClient(
             return sessionRequest(lease, confirmed, reference)
         }
 
-        private fun isLeaseUsable(): Boolean = started && !closed && !closing && leaseId != null && targetBridge != null
+        private fun isLeaseUsable(): Boolean = started && leaseId != null && targetBridge != null
 
         fun claimPrompt(snapshot: Bundle, promptId: String): Boolean {
             if (!promptId.isWireText(MAX_PROMPT_ID_LENGTH)) return false
@@ -649,7 +622,6 @@ private const val READER_THREAD_NAME = "OpenRoseAuthenticatedBridge"
 private const val POLL_INTERVAL_MILLIS = 1_000L
 private const val REBIND_BACKOFF_MILLIS = 5_000L
 private const val REJECTED_RETRY_MILLIS = 5_000L
-private const val CLOSE_TIMEOUT_MILLIS = 3_000L
 private const val MAX_GENERATION_LENGTH = 64
 private const val MAX_DEVICE_ID_LENGTH = 128
 private const val MAX_PROMPT_ID_LENGTH = 128
@@ -672,4 +644,10 @@ private inline fun <T> binderReply(action: () -> T): Result<T> = try {
     Result.failure(lost)
 } catch (refused: RuntimeException) {
     Result.failure(refused)
+} catch (nativeCoreMissing: LinkageError) {
+    Result.failure(nativeCoreMissing)
 }
+
+private class ReadFrame(val bundle: Bundle, val native: NativeHeadsetSnapshot)
+
+private fun SessionReference.native(generation: String) = NativeSessionReference(generation, deviceId, sessionId)

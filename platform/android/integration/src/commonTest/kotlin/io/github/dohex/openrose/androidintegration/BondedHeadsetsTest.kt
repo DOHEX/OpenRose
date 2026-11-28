@@ -36,6 +36,16 @@ class BondedHeadsetsTest {
 
         val state = assertNotNull(view).state
         assertNull(state.readySession)
+        assertEquals(setOf(ble), BondedHeadsets.addresses(state))
+    }
+
+    @Test
+    fun aBondedPairIsKnownByItsDeviceIdAndItsClassicAddress() {
+        val state = ControlState(
+            platform = PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
+            bondedDevices = persistentListOf(DeviceCandidate(DeviceId(ble), "ROSE i5", null, io.github.dohex.openrose.core.protocol.ModelProfile.I5_ZT, "", classic)),
+        )
+
         assertEquals(setOf(ble, classic), BondedHeadsets.addresses(state))
     }
 

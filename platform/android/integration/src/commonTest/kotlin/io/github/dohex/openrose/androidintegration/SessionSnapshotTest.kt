@@ -7,32 +7,22 @@ import io.github.dohex.openrose.core.ControlRuntime
 import io.github.dohex.openrose.core.ControlState
 import io.github.dohex.openrose.core.DeviceState
 import io.github.dohex.openrose.core.HeadsetCommand
-import io.github.dohex.openrose.core.LocalControlRuntime
 import io.github.dohex.openrose.core.NoiseMode
 import io.github.dohex.openrose.core.OperationResult
 import io.github.dohex.openrose.core.PermissionState
 import io.github.dohex.openrose.core.PlatformState
 import io.github.dohex.openrose.core.SessionReference
-import io.github.dohex.openrose.core.SessionTiming
 import io.github.dohex.openrose.core.SettingStage
 import io.github.dohex.openrose.core.TransportAvailability
 import io.github.dohex.openrose.core.protocol.DeviceField
 import io.github.dohex.openrose.core.protocol.FieldReading
 import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.dohex.openrose.core.protocol.ModelProfile
-import io.github.dohex.openrose.core.transport.Advertisement
-import io.github.dohex.openrose.core.transport.ControlConnection
-import io.github.dohex.openrose.core.transport.ControlTransport
 import io.github.dohex.openrose.core.transport.DeviceId
-import io.github.dohex.openrose.core.transport.TransportEndpoint
 import kotlinx.collections.immutable.persistentMapOf
 import kotlinx.coroutines.async
-import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
@@ -45,21 +35,10 @@ class SessionSnapshotTest {
     @Test
     fun currentI5AndI7SessionCanBeReadWithoutChangingProtocolState() = runTest {
         for (profile in listOf(ModelProfile.I5_ZT, ModelProfile.I7_RS_V2)) {
-            val transport = SnapshotTransport(profile)
-            val session = SystemEntryRuntime(
-                LocalControlRuntime(
-                    PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
-                    transport = transport,
-                    scope = backgroundScope,
-                    timing = SessionTiming(writeIntervalMillis = 0),
-                ),
-                backgroundScope,
-            )
-            session.startScan()
-            runCurrent()
-            val id = if (profile == ModelProfile.I5_ZT) DeviceId("i5") else DeviceId("i7")
-            transport.advertisements.emit(roseAdvertisement(profile, id))
-            runCurrent()
+            val id = earphonesId
+            val transport = snapshotHeadset(profile, id)
+            val session = SystemEntryRuntime(transport.runtime(backgroundScope), backgroundScope)
+            session.refreshBondedDevices()
             assertEquals(OperationResult.Success, session.connect(id))
 
             val device = requireNotNull(session.state.value.device)
@@ -74,7 +53,7 @@ class SessionSnapshotTest {
             assertEquals(PresentationReading.Known(100), available.presentation.battery?.left)
             assertEquals(PresentationReading.Known(if (profile == ModelProfile.I5_ZT) 98 else 50), available.presentation.battery?.right)
             assertEquals(if (profile == ModelProfile.I5_ZT) PresentationReading.NotProvided else PresentationReading.Known(80), available.presentation.battery?.case)
-            assertEquals(PresentationReading.Known("wind"), available.presentation.noise?.mode)
+            assertEquals(PresentationReading.Known(if (profile == ModelProfile.I5_ZT) "wind" else "anc"), available.presentation.noise?.mode)
             assertEquals(device.capabilities.writableSettings, available.presentation.actions)
             assertEquals(writesBeforeRead, transport.links.single().writes)
             if (profile == ModelProfile.I5_ZT) {
@@ -87,13 +66,13 @@ class SessionSnapshotTest {
     @Test
     fun aReferenceMustMatchTheReadyDeviceAndCurrentSession() = runTest {
         val profile = ModelProfile.I5_ZT
-        val transport = SnapshotTransport(profile)
+        val id = earphonesId
+        val transport = snapshotHeadset(profile, id)
         val session = newSession(transport)
-        val id = DeviceId("i5")
         val initialReference = SessionReference(id, 1)
 
         assertFailure(ControlErrorCode.NOT_READY, session.readSession(initialReference))
-        connect(session, transport, profile, id)
+        connect(session, id)
         val firstDevice = requireNotNull(session.state.value.device)
         val firstReference = SessionReference(firstDevice.deviceId, firstDevice.sessionId)
 
@@ -102,7 +81,7 @@ class SessionSnapshotTest {
         session.disconnect()
         assertFailure(ControlErrorCode.NOT_READY, session.readSession(firstReference))
 
-        connect(session, transport, profile, id)
+        connect(session, id)
         val nextDevice = requireNotNull(session.state.value.device)
         assertFalse(nextDevice.sessionId == firstDevice.sessionId)
         assertFailure(ControlErrorCode.DISCONNECTED, session.readSession(firstReference))
@@ -113,7 +92,7 @@ class SessionSnapshotTest {
     @Test
     fun aConnectedSessionStillInitializingIsNotReady() = runTest {
         val profile = ModelProfile.I5_ZT
-        val id = DeviceId("i5")
+        val id = earphonesId
         val device = DeviceState(id, 1, profile, profile.capabilities(), persistentMapOf())
         val initializing = MutableStateFlow(
             ControlState(
@@ -122,7 +101,7 @@ class SessionSnapshotTest {
                 device = device,
             ),
         )
-        val real = newSession(SnapshotTransport(profile))
+        val real = newSession(snapshotHeadset(profile, id))
         val session = SystemEntryRuntime(
             object : ControlRuntime by real {
                 override val state: StateFlow<ControlState> = initializing
@@ -138,10 +117,10 @@ class SessionSnapshotTest {
     @Test
     fun readDuringPendingSettingAndSettingsChangeKeepsTheConfirmedStateAndSession() = runTest {
         val profile = ModelProfile.I5_ZT
-        val transport = SnapshotTransport(profile)
+        val id = earphonesId
+        val transport = snapshotHeadset(profile, id)
         val session = newSession(transport)
-        val id = DeviceId("i5")
-        connect(session, transport, profile, id)
+        connect(session, id)
         val device = requireNotNull(session.state.value.device)
         val reference = SessionReference(device.deviceId, device.sessionId)
         val link = transport.links.single()
@@ -150,11 +129,12 @@ class SessionSnapshotTest {
 
         val pending = async { session.set(HeadsetCommand.NoiseMode(NoiseMode.NORMAL)) }
         runCurrent()
+        eventually("the setting to be written") { session.state.value.settingOperations.lastOrNull()?.stage == SettingStage.WRITTEN }
         assertFalse(pending.isCompleted)
-        assertEquals(SettingStage.WRITTEN, session.state.value.settingOperations.last().stage)
 
         val beforeConfirmation = assertIs<SessionSnapshotResult.Available>(session.readSession(reference)).device
         assertEquals(FieldValue.Text("wind"), (beforeConfirmation.diagnostics.fields[DeviceField.NOISE_MODE] as FieldReading.Known).value)
+        eventually("the setting and its read-back query to reach the earphones") { link.writes.size >= initialWrites + 2 }
         assertEquals(initialWrites + 2, link.writes.size)
 
         session.updateSettings(session.state.value.settings.copy(forceBle = true))
@@ -164,7 +144,7 @@ class SessionSnapshotTest {
         assertEquals(initialWrites + 2, link.writes.size)
         assertFalse(pending.isCompleted)
 
-        session.updateIntegrationSettings(session.settings.copy(islandMode = IslandMode.OFF, focusNotificationEnabled = false))
+        session.updateIntegrationSettings(session.settings.copy(islandMode = IslandMode.OFF, statusNotificationEnabled = false))
         val hidden = assertIs<SessionSnapshotResult.Available>(session.readSession(reference))
         assertFalse(hidden.presentation.showStatusNotification)
         assertEquals(null, hidden.presentation.prompt)
@@ -173,7 +153,7 @@ class SessionSnapshotTest {
         assertEquals(initialWrites + 2, link.writes.size)
         assertFalse(pending.isCompleted)
 
-        session.updateIntegrationSettings(session.settings.copy(islandMode = IslandMode.MODULE, focusNotificationEnabled = true))
+        session.updateIntegrationSettings(session.settings.copy(islandMode = IslandMode.OPENROSE_STYLE, statusNotificationEnabled = true))
         val switched = assertIs<SessionSnapshotResult.Available>(session.readSession(reference))
         assertEquals(null, switched.presentation.prompt, "Mode changes must not replay the connection event")
         assertEquals(beforeConfirmation, switched.device)
@@ -189,69 +169,19 @@ class SessionSnapshotTest {
         session.disconnect()
     }
 
-    private fun kotlinx.coroutines.test.TestScope.newSession(transport: SnapshotTransport) = SystemEntryRuntime(
-        LocalControlRuntime(
-            PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
-            transport = transport,
-            scope = backgroundScope,
-            timing = SessionTiming(writeIntervalMillis = 0),
-        ),
-        backgroundScope,
-    )
+    private fun kotlinx.coroutines.test.TestScope.newSession(transport: HostHeadset) = SystemEntryRuntime(transport.runtime(backgroundScope), backgroundScope)
 
-    private suspend fun kotlinx.coroutines.test.TestScope.connect(
-        session: SystemEntryRuntime,
-        transport: SnapshotTransport,
-        profile: ModelProfile,
-        id: DeviceId,
-    ) {
-        session.startScan()
-        runCurrent()
-        transport.advertisements.emit(roseAdvertisement(profile, id))
-        runCurrent()
+    private suspend fun kotlinx.coroutines.test.TestScope.connect(session: SystemEntryRuntime, id: DeviceId) {
+        session.refreshBondedDevices()
         assertEquals(OperationResult.Success, session.connect(id))
+        eventually("the session to be ready") { session.state.value.readySession != null }
     }
 
     private fun assertFailure(code: ControlErrorCode, result: SessionSnapshotResult) {
         assertEquals(code, assertIs<SessionSnapshotResult.Failure>(result).error.code)
     }
 
-    private class SnapshotTransport(private val profile: ModelProfile) : ControlTransport {
-        val advertisements = MutableSharedFlow<Advertisement>(extraBufferCapacity = 1)
-        val links = mutableListOf<SnapshotConnection>()
+    private fun kotlinx.coroutines.test.TestScope.snapshotHeadset(profile: ModelProfile, id: DeviceId) = hostHeadset(SharedHeadset(), rosePair(id.value, profile))
 
-        override fun scan(): Flow<Advertisement> = advertisements
-
-        override suspend fun connect(
-            deviceId: DeviceId,
-            endpoint: TransportEndpoint,
-            onPhase: (ConnectionPhase) -> Unit,
-        ): ControlConnection = SnapshotConnection(profile).also(links::add)
-    }
-
-    private class SnapshotConnection(private val profile: ModelProfile) : ControlConnection {
-        override val maxWriteSize = 20
-        private val incoming = Channel<ByteArray>(Channel.UNLIMITED)
-        override val notifications = incoming.receiveAsFlow()
-        val writes = mutableListOf<String>()
-        var initializing = true
-
-        override suspend fun subscribe() = Unit
-
-        override suspend fun write(bytes: ByteArray) {
-            val hex = bytes.hex()
-            writes += hex
-            if (!initializing) return
-            initializationReplies(profile, hex).forEach { incoming.send(it.bytes()) }
-        }
-
-        override suspend fun close() {
-            initializing = false
-            incoming.close()
-        }
-
-        suspend fun deviceReply(hex: String) {
-            incoming.send(hex.bytes())
-        }
-    }
+    private val earphonesId = DeviceId(APP_HEADSET_ADDRESS)
 }

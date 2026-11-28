@@ -1,11 +1,13 @@
 package io.github.dohex.openrose.androidintegration
 
-import io.github.dohex.openrose.androidintegration.wire.HostPlatformFacts
 import io.github.dohex.openrose.core.ControlState
 import io.github.dohex.openrose.core.HeadsetCommand
 import io.github.dohex.openrose.core.OperationResult
+import io.github.dohex.openrose.core.PermissionState
 import io.github.dohex.openrose.core.SessionReference
+import io.github.dohex.openrose.core.TransportAvailability
 import io.github.dohex.openrose.core.transport.DeviceId
+import uniffi.openrose_control.ControlSnapshot
 
 enum class ClientRole { APP, MILINK, XIAOMI_BLUETOOTH, HOST_PRESENTATION }
 
@@ -24,6 +26,7 @@ sealed interface HostCommand {
     data object RefreshBondedDevices : HostCommand
     data object StartScan : HostCommand
     data object StopScan : HostCommand
+    data class SelectCurrentHeadset(val deviceId: DeviceId) : HostCommand
     data class Connect(val deviceId: DeviceId) : HostCommand
     data class ConnectFromSystem(val deviceId: DeviceId) : HostCommand
     data class ConnectForAddDevice(val deviceId: DeviceId) : HostCommand
@@ -44,8 +47,8 @@ fun ClientRole.allows(command: HostCommand): Boolean = when (this) {
 }
 
 fun ClientRole.presents(mode: IslandMode): Boolean = when (mode) {
-    IslandMode.MODULE -> this == ClientRole.HOST_PRESENTATION
-    IslandMode.OFFICIAL -> this == ClientRole.XIAOMI_BLUETOOTH
+    IslandMode.OPENROSE_STYLE -> this == ClientRole.HOST_PRESENTATION
+    IslandMode.SYSTEM_STYLE -> this == ClientRole.XIAOMI_BLUETOOTH
     IslandMode.OFF -> false
 }
 
@@ -117,8 +120,7 @@ data class HostFacts(
 data class HostFrame(
     val generation: OwnerGeneration,
     val holder: OwnerHolder,
-    val platform: HostPlatformFacts,
-    val state: ControlState,
+    val snapshot: ControlSnapshot,
     val presentation: SystemPresentationState,
     val facts: HostFacts = HostFacts(),
 )

@@ -33,7 +33,7 @@ internal class HeadsetStatusNotification(
             if (onPromptShown != null) {
                 reportOnce(
                     snapshot.wire,
-                    BridgePresentationWire.MODULE_CONNECTION,
+                    BridgePresentationWire.OPENROSE_CONNECTION,
                     BridgePresentationWire.UNAVAILABLE,
                     "status_notification_island_publish_failed:${failure.javaClass.simpleName}",
                 )
@@ -68,7 +68,7 @@ internal class HeadsetStatusNotification(
             onPromptShown()
             reportOnce(
                 snapshot.wire,
-                BridgePresentationWire.MODULE_CONNECTION,
+                BridgePresentationWire.OPENROSE_CONNECTION,
                 BridgePresentationWire.CALLED,
                 "status_notification_island_notify_returned",
             )
@@ -85,7 +85,7 @@ internal class HeadsetStatusNotification(
 
     private fun prepareStatusTag(snapshot: RenderedSnapshot): String? {
         val tag = requestedStatusTag(snapshot)
-        if (!snapshot.focusEnabled) {
+        if (!snapshot.statusNotificationEnabled) {
             withdraw(snapshot.wire)
             return null
         }
@@ -115,7 +115,7 @@ internal class HeadsetStatusNotification(
     }
 
     fun canMergePrompt(snapshot: RenderedSnapshot): Boolean {
-        if (!snapshot.focusEnabled || !snapshot.statusIsland || !notifications.available) return false
+        if (!snapshot.statusNotificationEnabled || !snapshot.statusIsland || !notifications.available) return false
         return requestedStatusTag(snapshot) != null
     }
 

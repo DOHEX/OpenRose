@@ -3,68 +3,22 @@ package io.github.dohex.openrose.androidintegration.wire
 import io.github.dohex.openrose.androidintegration.HostCallResult
 import io.github.dohex.openrose.androidintegration.HostCommand
 import io.github.dohex.openrose.androidintegration.HostRejection
-import io.github.dohex.openrose.androidintegration.OwnerGeneration
-import io.github.dohex.openrose.core.DeviceSetting
-import io.github.dohex.openrose.core.HeadsetCommand
+import io.github.dohex.openrose.core.SessionReference
 import io.github.dohex.openrose.core.transport.DeviceId
+import io.github.dohex.openrose.ffi.CoreDecodeResult
+import io.github.dohex.openrose.ffi.decodeControlCommand
+import io.github.dohex.openrose.ffi.encodeToBytes
+import io.github.dohex.openrose.ffi.kotlincore.toKotlin
+import io.github.dohex.openrose.ffi.kotlincore.toRust
+import uniffi.openrose_control.ControlCommand
+import uniffi.openrose_control.SessionReference as RustSessionReference
 
 object HostWire {
-    fun encode(command: HostCommand): Wire = when (command) {
-        HostCommand.RefreshBondedDevices -> obj("t" to str("refresh"))
+    fun encode(command: HostCommand): ByteArray = command.toRust().encodeToBytes()
 
-        HostCommand.StartScan -> obj("t" to str("startScan"))
-
-        HostCommand.StopScan -> obj("t" to str("stopScan"))
-
-        is HostCommand.Connect -> obj("t" to str("connect"), "device" to str(command.deviceId.value))
-
-        is HostCommand.ConnectFromSystem -> obj("t" to str("connectSystem"), "device" to str(command.deviceId.value))
-
-        is HostCommand.ConnectForAddDevice -> obj("t" to str("connectAdd"), "device" to str(command.deviceId.value))
-
-        HostCommand.Disconnect -> obj("t" to str("disconnect"))
-
-        is HostCommand.Set -> obj(
-            "t" to str("set"),
-            "reference" to command.reference?.let(ControlWire::encode),
-            "setting" to Wire.Str(command.command.setting.name),
-            "value" to ControlWire.encode(command.command.value),
-        )
-
-        is HostCommand.ClaimPrompt -> obj(
-            "t" to str("claim"),
-            "reference" to ControlWire.encode(command.reference),
-            "prompt" to str(command.promptId),
-        )
-    }
-
-    fun decodeCommand(wire: Wire): HostCommand {
-        val node = wire.asObj()
-        return when (val kind = node.str("t")) {
-            "refresh" -> HostCommand.RefreshBondedDevices
-
-            "startScan" -> HostCommand.StartScan
-
-            "stopScan" -> HostCommand.StopScan
-
-            "connect" -> HostCommand.Connect(DeviceId(node.str("device")))
-
-            "connectSystem" -> HostCommand.ConnectFromSystem(DeviceId(node.str("device")))
-
-            "connectAdd" -> HostCommand.ConnectForAddDevice(DeviceId(node.str("device")))
-
-            "disconnect" -> HostCommand.Disconnect
-
-            "set" -> HostCommand.Set(
-                node.optional("reference")?.let(ControlWire::decodeReference),
-                HeadsetCommand.decode(node.field("setting").asEnum<DeviceSetting>(), ControlWire.decodeValue(node.field("value")))
-                    ?: throw WireFormatException("耳机设置与参数类型不符"),
-            )
-
-            "claim" -> HostCommand.ClaimPrompt(ControlWire.decodeReference(node.field("reference")), node.str("prompt"))
-
-            else -> throw WireFormatException("未知命令 $kind")
-        }
+    fun decodeCommand(bytes: ByteArray): CoreDecodeResult<HostCommand> = when (val result = decodeControlCommand(bytes)) {
+        is CoreDecodeResult.Ok -> CoreDecodeResult.Ok(result.value.toKotlin())
+        is CoreDecodeResult.Error -> result
     }
 
     fun encode(result: HostCallResult): Wire = when (result) {
@@ -88,12 +42,34 @@ object HostWire {
             else -> throw WireFormatException("未知调用结果 $kind")
         }
     }
-
-    fun encodeCall(generation: OwnerGeneration, command: HostCommand): Wire = obj(
-        "generation" to HostIdentityWire.encode(generation),
-        "command" to encode(command),
-    )
-
-    fun decodeCall(wire: Wire): Pair<OwnerGeneration, HostCommand> = wire.asObj()
-        .let { HostIdentityWire.decodeGeneration(it.field("generation")) to decodeCommand(it.field("command")) }
 }
+
+private fun HostCommand.toRust(): ControlCommand = when (this) {
+    HostCommand.RefreshBondedDevices -> ControlCommand.RefreshBondedHeadsets
+    HostCommand.StartScan -> ControlCommand.StartScan
+    HostCommand.StopScan -> ControlCommand.StopScan
+    is HostCommand.SelectCurrentHeadset -> ControlCommand.SelectCurrentHeadset(deviceId.value)
+    is HostCommand.Connect -> ControlCommand.Connect(deviceId.value)
+    is HostCommand.ConnectFromSystem -> ControlCommand.ConnectPinned(deviceId.value)
+    is HostCommand.ConnectForAddDevice -> ControlCommand.ConnectForAddHeadset(deviceId.value)
+    HostCommand.Disconnect -> ControlCommand.Disconnect
+    is HostCommand.Set -> ControlCommand.Set(reference?.toRust(), command.toRust())
+    is HostCommand.ClaimPrompt -> ControlCommand.ClaimPrompt(reference.toRust(), promptId)
+}
+
+private fun ControlCommand.toKotlin(): HostCommand = when (this) {
+    ControlCommand.RefreshBondedHeadsets -> HostCommand.RefreshBondedDevices
+    ControlCommand.StartScan -> HostCommand.StartScan
+    ControlCommand.StopScan -> HostCommand.StopScan
+    is ControlCommand.SelectCurrentHeadset -> HostCommand.SelectCurrentHeadset(DeviceId(headsetId))
+    is ControlCommand.Connect -> HostCommand.Connect(DeviceId(headsetId))
+    is ControlCommand.ConnectPinned -> HostCommand.ConnectFromSystem(DeviceId(headsetId))
+    is ControlCommand.ConnectForAddHeadset -> HostCommand.ConnectForAddDevice(DeviceId(headsetId))
+    ControlCommand.Disconnect -> HostCommand.Disconnect
+    is ControlCommand.Set -> HostCommand.Set(reference?.toKotlin(), command.toKotlin())
+    is ControlCommand.ClaimPrompt -> HostCommand.ClaimPrompt(reference.toKotlin(), promptId)
+}
+
+private fun SessionReference.toRust(): RustSessionReference = RustSessionReference(deviceId.value, sessionId.toULong())
+
+private fun RustSessionReference.toKotlin(): SessionReference = SessionReference(DeviceId(headsetId), sessionId.toLong())

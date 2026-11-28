@@ -6,24 +6,24 @@ import kotlinx.collections.immutable.PersistentSet
 import kotlinx.collections.immutable.persistentSetOf
 import kotlinx.collections.immutable.toPersistentSet
 
-enum class ControlWay { ORDINARY, MODULE }
-enum class IslandMode { OFF, OFFICIAL, MODULE }
+enum class ControlWay { APP, MODULE }
+enum class IslandMode { OFF, SYSTEM_STYLE, OPENROSE_STYLE }
 
-enum class IslandTrigger { CONNECTION, IN_CASE }
+enum class IslandTiming { CONNECTION, IN_CASE }
 enum class FusionSettingsDestination { SYSTEM, OPENROSE }
 
 enum class StatusNotificationTarget { OPENROSE, SYSTEM, ROSELINK, QUICK_PANEL }
 
 data class IntegrationSettings(
-    val islandMode: IslandMode = IslandMode.OFFICIAL,
-    val focusNotificationEnabled: Boolean = true,
+    val islandMode: IslandMode = IslandMode.SYSTEM_STYLE,
+    val statusNotificationEnabled: Boolean = true,
     val islandSummaryEnabled: Boolean = true,
-    val islandTriggers: PersistentSet<IslandTrigger> = persistentSetOf(IslandTrigger.CONNECTION),
+    val islandTimings: PersistentSet<IslandTiming> = persistentSetOf(IslandTiming.CONNECTION),
     val statusNotificationTarget: StatusNotificationTarget = StatusNotificationTarget.OPENROSE,
     val fusionSettingsDestination: FusionSettingsDestination = FusionSettingsDestination.SYSTEM,
     val fusionOffAsWind: Boolean = false,
     val backgroundControlEnabled: Boolean = false,
-    val controlWay: ControlWay = ControlWay.ORDINARY,
+    val controlWay: ControlWay = ControlWay.APP,
     val dynamicColor: Boolean = false,
 )
 
@@ -31,28 +31,28 @@ object IntegrationSettingsCodec {
     const val CONTROL_WAY_KEY = "androidIntegration.control_way"
 
     fun encodeControlWay(way: ControlWay): String = when (way) {
-        ControlWay.ORDINARY -> "ordinary"
+        ControlWay.APP -> "app"
         ControlWay.MODULE -> "module"
     }
 
     fun decodeControlWay(value: String?): ControlWay = when (value) {
-        "ordinary" -> ControlWay.ORDINARY
+        "app" -> ControlWay.APP
         "module" -> ControlWay.MODULE
-        else -> ControlWay.ORDINARY
+        else -> ControlWay.APP
     }
 
     fun encode(settings: IntegrationSettings): Map<String, String> = mapOf(
         "androidIntegration.island_mode" to when (settings.islandMode) {
             IslandMode.OFF -> "off"
-            IslandMode.OFFICIAL -> "official"
-            IslandMode.MODULE -> "module"
+            IslandMode.SYSTEM_STYLE -> "system_style"
+            IslandMode.OPENROSE_STYLE -> "openrose_style"
         },
-        "androidIntegration.focus_notification_enabled" to settings.focusNotificationEnabled.toString(),
+        "androidIntegration.status_notification_enabled" to settings.statusNotificationEnabled.toString(),
         "androidIntegration.island_summary_enabled" to settings.islandSummaryEnabled.toString(),
-        "androidIntegration.island_triggers" to settings.islandTriggers.joinToString(",") {
+        "androidIntegration.island_timings" to settings.islandTimings.joinToString(",") {
             when (it) {
-                IslandTrigger.CONNECTION -> "connection"
-                IslandTrigger.IN_CASE -> "in_case"
+                IslandTiming.CONNECTION -> "connection"
+                IslandTiming.IN_CASE -> "in_case"
             }
         },
         "androidIntegration.status_notification_target" to when (settings.statusNotificationTarget) {
@@ -75,11 +75,11 @@ object IntegrationSettingsCodec {
         val defaults = IntegrationSettings()
         return IntegrationSettings(
             islandMode = decodeIslandMode(values["androidIntegration.island_mode"]) ?: defaults.islandMode,
-            focusNotificationEnabled = values["androidIntegration.focus_notification_enabled"]?.toBooleanStrictOrNull()
-                ?: defaults.focusNotificationEnabled,
+            statusNotificationEnabled = values["androidIntegration.status_notification_enabled"]?.toBooleanStrictOrNull()
+                ?: defaults.statusNotificationEnabled,
             islandSummaryEnabled = values["androidIntegration.island_summary_enabled"]?.toBooleanStrictOrNull()
                 ?: defaults.islandSummaryEnabled,
-            islandTriggers = decodeTriggers(values["androidIntegration.island_triggers"]) ?: defaults.islandTriggers,
+            islandTimings = decodeTimings(values["androidIntegration.island_timings"]) ?: defaults.islandTimings,
             statusNotificationTarget = decodeStatusTarget(values["androidIntegration.status_notification_target"])
                 ?: defaults.statusNotificationTarget,
             fusionSettingsDestination = decodeFusionDestination(values["androidIntegration.fusion_settings_destination"])
@@ -94,8 +94,8 @@ object IntegrationSettingsCodec {
 
     private fun decodeIslandMode(value: String?): IslandMode? = when (value) {
         "off" -> IslandMode.OFF
-        "official" -> IslandMode.OFFICIAL
-        "module" -> IslandMode.MODULE
+        "system_style" -> IslandMode.SYSTEM_STYLE
+        "openrose_style" -> IslandMode.OPENROSE_STYLE
         else -> null
     }
 
@@ -113,13 +113,13 @@ object IntegrationSettingsCodec {
         else -> null
     }
 
-    private fun decodeTriggers(value: String?): PersistentSet<IslandTrigger>? {
+    private fun decodeTimings(value: String?): PersistentSet<IslandTiming>? {
         value ?: return null
         if (value.isEmpty()) return persistentSetOf()
         return value.split(",").map { token ->
             when (token) {
-                "connection" -> IslandTrigger.CONNECTION
-                "in_case" -> IslandTrigger.IN_CASE
+                "connection" -> IslandTiming.CONNECTION
+                "in_case" -> IslandTiming.IN_CASE
                 else -> return null
             }
         }.toPersistentSet()

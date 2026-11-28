@@ -11,22 +11,29 @@
 ## 开发环境
 
 - **JDK 21**：`.mise.toml` 固定 Temurin 的精确版本，CI 也读取它安装 JDK；可用 [mise](https://mise.jdx.dev/) 安装同一版本。构建和 Gradle 守护进程都要求 Temurin 21，机器上没有时，`settings.gradle.kts` 中的 foojay 工具链解析插件会自动下载。Gradle 不会自动发现 mise 安装的 JDK，只有它正好是启动 Gradle 的 JVM 时才会被选中；想让终端和 IDE 用同一个 JDK，在 `~/.gradle/gradle.properties` 中把它加入 `org.gradle.java.installations.paths`。
-- **Android SDK**：Platform 37、Build Tools 37.0.0。设置 `ANDROID_HOME`，或在 `local.properties` 中写入 `sdk.dir=/path/to/android-sdk`。`offlineCheck` 同样需要 Android SDK。
-- **Linux 运行库**：运行或测试桌面版需要 GTK 3、EGL / OpenGL 和 fontconfig。CI 在 Ubuntu 24.04 上安装的是：
+- **Android SDK 与 NDK**：Platform 37、Build Tools 37.0.0、NDK `28.2.13676358`（版本固定在 `gradle/libs.versions.toml`）。设置 `ANDROID_HOME`，或在 `local.properties` 中写入 `sdk.dir=/path/to/android-sdk`。`offlineCheck` 需要 Android SDK；首次执行 `:androidApp:assembleDebug` 时，AGP 会按固定版本自动下载 NDK。
+- **Rust 与 Android 交叉编译**：`cargo xtask check` 与主机 JVM FFI 测试使用根目录 `rust-toolchain.toml` 固定的 Rust 版本，rustup 进入仓库时自动安装；构建 Android APK 还需要为这个工具链安装 `aarch64-linux-android`、`armv7-linux-androideabi`、`x86_64-linux-android` 三个目标（在仓库目录内执行下面的命令）和 `cargo-ndk` `4.1.2`。APK 为 `arm64-v8a`、`armeabi-v7a`、`x86_64` 各带一份 Rust 核心（`libopenrose_ffi.so`），不含 32 位 x86。ABI 列表只写在 `gradle/libs.versions.toml` 的 `android-abis`：cargo-ndk 按它构建，`abiFilters` 按它筛选打包的原生库，CI 按它安装 Rust 目标，并逐个 ABI 检查 `libopenrose_ffi.so` 与 `libjnidispatch.so` 以未压缩（`Stored`）方式存放。增减 ABI 时只改这一项，并同步下面的本地安装命令：
 
   ```bash
-  sudo apt-get install --yes libgtk-3-0t64 libegl1 libgl1 libfontconfig1 rpm libarchive-tools
+  rustup target add aarch64-linux-android armv7-linux-androideabi x86_64-linux-android
+  cargo install --locked cargo-ndk --version 4.1.2
+  ```
+- **Linux 运行库与打包工具**：运行或测试 NSH 桌面端需要 GTK 4.14+、GStreamer、D-Bus 与 GLib；编译 NSH 桌面端和 Linux 蓝牙实现（bluer 经 libdbus 访问 BlueZ）还需要开发库及 `pkg-config`。Ubuntu 24.04 上需要：
+
+  ```bash
+  sudo apt-get install --yes libgtk-4-dev libwebkitgtk-6.0-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libdbus-1-dev pkg-config
   ```
 
-  其中 `rpm` 和 `libarchive-tools` 用于打包 RPM / Pacman。真实运行桌面版控制耳机还需要已运行的 BlueZ、可访问的系统 D-Bus 和已开启且支持 BLE 的适配器；DEB、RPM、Pacman 声明 `bluez` 依赖，AppImage 依赖宿主的 BlueZ。Linux 托盘需要 `libsystemd`。
-- Windows 桌面构建需要 Rust stable（MSVC 工具链）和 Visual Studio C++ Build Tools。Gradle 会编译 WinRT 蓝牙组件并随 MSI 分发。
+  打包 Linux 安装包需要 [nsh](https://nsh.dev/) 0.7+、`nfpm` 与 `appimagetool`，由 `cargo xtask package-linux` 生成 AppImage、deb、rpm 与 pacman 包；deb/rpm/pacman 包会声明 `bluez`、GTK 4.14+、D-Bus、GStreamer 与 GLib 依赖，AppImage 依赖宿主系统的这些运行库与蓝牙服务。目前 `cargo xtask check` 中的 Gradle 桌面测试仍保留，CI 的 `Checks` 作业为此额外安装 `libgtk-3-0t64 libegl1 libgl1 libfontconfig1`。
+- Windows 桌面构建需要 `rust-toolchain.toml` 固定的 Rust（MSVC 工具链）和 Visual Studio C++ Build Tools。
 - 仓库自带 Gradle Wrapper。Windows 下把 `./gradlew` 换成 `.\gradlew.bat`。
 
 ```bash
 git clone https://github.com/DOHEX/OpenRose.git
 cd OpenRose
-./gradlew :desktopApp:run              # 运行桌面版
-./gradlew :androidApp:assembleDebug    # 构建 Android 调试 APK
+(cd desktop && nsh run)               # 运行 NSH 桌面端
+cargo xtask package-linux             # 构建 Linux AppImage / deb / rpm / pacman
+./gradlew :androidApp:assembleDebug   # 构建 Android 调试 APK
 ```
 
 ## 模块结构
@@ -41,7 +48,7 @@ cd OpenRose
 | `:shared:ui` | 共享页面、快捷面板、托盘面板和外观。桌面展示段落在 `jvmMain`，由应用或沙盒提供平台动作 |
 | `:shared:circulation` | 跨端流转契约、型号资格、配对与远端会话引用 |
 | `:shared:circulation-lan` | 局域网发现、配对认证、网络收发、流转与远端控制的 JVM 实现 |
-| `:platform:android:integration` | 普通／模块控制与所有者交接、系统入口及呈现规则，在 JVM 上测试 |
+| `:platform:android:integration` | 应用／模块控制与所有者交接、系统入口及呈现规则，在 JVM 上测试 |
 | `:platform:android:bluetooth-ipc` | 应用与模块共用的 Android 蓝牙驱动、音频连接事实、AIDL 与 Binder 编解码 |
 | `:platform:android:system-module` | LSPosed 在作用域进程内加载的模块、模块宿主、耳机系统集成和手机流转端点 |
 | `:platform:android:ui` | 手机与 JVM 沙盒共用的 Android 设置、状态和诊断界面段落 |
@@ -80,9 +87,10 @@ cd OpenRose
 | `./gradlew detekt` | 产品模块和构建约定的 Kotlin 静态分析，配置为 `config/detekt/detekt.yml`，自定义规则在 `tools/detekt-rules` |
 | `./gradlew koverHtmlReportCoverage` | 生成根项目聚合的覆盖率 HTML 报告 |
 | `./gradlew koverVerifyCoverage` | 校验行覆盖率不低于下限 |
-| `./gradlew offlineCheck` | 运行全部不依赖硬件的测试，以及 `spotlessCheck`、`detekt`、lint 与 `koverVerifyCoverage`。CI 执行的就是它 |
+| `./gradlew offlineCheck` | 运行 Gradle 侧全部不依赖硬件的测试，以及 `spotlessCheck`、`detekt`、lint 与 `koverVerifyCoverage`（不含 Rust 侧检查） |
+| `cargo xtask check` | 全仓离线检查门禁：版本一致性校验、`cargo test --locked --workspace`、`cargo clippy --locked --workspace --all-targets -- -D warnings`、`desktop/ext/*` 的 `cargo test --locked` 与 clippy、`cargo xtask no-comments`（Rust 与 TSX）、`desktop/` 的 `nsh check` 与 `nsh test`，以及 Gradle `check offlineCheck`。CI 执行的就是它 |
 
-**提 PR 前必须通过 `./gradlew offlineCheck`。**
+**提 PR 前必须通过 `cargo xtask check`。**
 
 约束：
 
@@ -93,13 +101,14 @@ cd OpenRose
 - Spotless 不会把 `.editorconfig` 的改动当作输入变化：修改 `.editorconfig` 后请运行 `./gradlew spotlessApply --rerun-tasks`。
 - 全仓格式化提交记录在 `.git-blame-ignore-revs` 中。GitHub 的 blame 会自动跳过它；本地运行一次 `git config blame.ignoreRevsFile .git-blame-ignore-revs` 即可同样跳过。
 
-CI 还会构建 Android 调试 APK 并打包桌面版。Windows 作业对 WinRT 助手运行 `cargo fmt -- --check`、`cargo clippy --locked --all-targets -- -D warnings` 和 `cargo test --locked`。影响 Android 安装包的 PR 会运行 release 变体的完整 lint、构建未签名的 release APK，并核对 R8 后的模块入口和系统呈现资源。文档 PR 在部署前运行站点构建与站内链接检查。
+CI 还会构建 Android 调试 APK、构建 Linux 桌面安装包（AppImage、deb、rpm、pacman），并在干净的 `ubuntu:24.04` 容器中安装验证 `.deb` 包。影响 Android 安装包的 PR 会运行 release 变体的完整 lint、构建未签名的 release APK，并核对 R8 后的模块入口和系统呈现资源。旧版 JVM 桌面端已不再发布，Windows NSH 安装包将在 #160 接入。文档 PR 在部署前运行站点构建与站内链接检查。
 
 本地构建命令：
 
 ```bash
-./gradlew check offlineCheck :androidApp:assembleDebug
-./gradlew :desktopApp:packageDistributionForCurrentOS
+cargo xtask check
+cargo xtask package-linux
+./gradlew :androidApp:assembleDebug
 ```
 
 ## 提交规范
@@ -111,7 +120,7 @@ feat(desktop): add tray panel and background control
 
 <describe the behaviour change>
 
-Validation: :shared:ui:jvmTest and :desktopApp:test pass; check offlineCheck
+Validation: :shared:ui:jvmTest and :desktopApp:test pass; cargo xtask check
 passes. GNOME and KDE are not verified on hardware.
 ```
 
@@ -127,7 +136,7 @@ PR 标题同样遵循这一格式，并由 `.github/workflows/pr-title.yml` 检�
 
 因此提交类型要如实反映变更性质：`feat` 对应新功能，`fix` 对应缺陷修复。
 
-版本号只来自 `version.txt`，不要手动修改它，也不要在别处写版本号。`build-logic` 的 `AppVersion` 由它推导各平台的版本：发布构建为 `X.Y.Z`，其他构建为 `X.Y.Z-dev+<短提交号>`；Android `versionCode` 为 `MAJOR×1000000 + MINOR×1000 + PATCH`；桌面安装包只用 `X.Y.Z`。CI 构建发布标签时会检查标签与 `version.txt` 一致。依据见 [ADR 0015](docs/adr/0015-single-version-source.md)。
+版本号只来自 `version.txt`，不要手动修改它，也不要在别处写版本号。`cargo xtask sync-version` 与 `build-logic` 的 `AppVersion` 由它推导各平台的版本：Rust/NSH 工作区与桌面安装包使用 `X.Y.Z`，Android 构建在发布时为 `X.Y.Z`，其余构建为 `X.Y.Z-dev+<短提交号>`，`versionCode` 为 `MAJOR×1000000 + MINOR×1000 + PATCH`。CI 构建发布标签时会检查标签与 `version.txt` 一致。依据见 [ADR 0015](docs/adr/0015-single-version-source.md)。
 
 每个发布附带 `SHA256SUMS`，所有安装包还带有由发布工作流签名的构建来源证明（SLSA provenance）。下载后可以这样校验：
 
@@ -147,7 +156,7 @@ gh attestation verify openrose-X.Y.Z-android.apk --repo DOHEX/OpenRose
 
 OpenRose 区分两类验证，请在 PR 描述和文档中分别如实记录，不要把离线测试当作真机验证：
 
-- **离线验证**：协议编解码、控制会话、BlueZ 假 D-Bus 驱动、界面测试等，由 `offlineCheck` 覆盖，不需要耳机。
+- **离线验证**：协议编解码、控制会话、BlueZ 假 D-Bus 驱动、界面测试、Rust 核心测试与静态检查等，由 `cargo xtask check` 覆盖，不需要耳机。
 - **真机验证**：在真实耳机、真实设备或桌面环境上执行。请写明耳机型号、设备 / 系统（或桌面环境与 BlueZ 版本）、OpenRose 版本，以及具体验证了哪些功能。
 
 新增型号或系统适配时，请分别记录协议依据、离线测试结果和真机测试结果；没有测过的部分明确写“未验证”。网站“支持的耳机”和“平台支持”页（以及 README 的支持表）中的状态列就是这种写法：已在真机验证的部分和只有离线测试的部分分开标注。型号协议研究位于 [docs/protocols/](docs/protocols/)。

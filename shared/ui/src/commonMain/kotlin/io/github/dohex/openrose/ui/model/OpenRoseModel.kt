@@ -41,6 +41,7 @@ interface OpenRoseModel {
     fun updateSettings(settings: UserSettings)
     fun startScan(): Deferred<OperationResult>
     fun stopScan()
+    fun selectCurrentHeadset(deviceId: DeviceId)
     fun connect(deviceId: DeviceId)
     fun disconnect()
     fun set(sessionId: Long, command: HeadsetCommand)
@@ -78,6 +79,9 @@ class RuntimeOpenRoseModel(
     }
     override fun stopScan() {
         scope.launch(start = CoroutineStart.UNDISPATCHED) { scanCommands.withLock { runtime.stopScan() } }
+    }
+    override fun selectCurrentHeadset(deviceId: DeviceId) {
+        scope.launch { runtime.selectCurrentHeadset(deviceId) }
     }
     override fun connect(deviceId: DeviceId) {
         scope.launch { runtime.connect(deviceId) }

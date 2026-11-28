@@ -44,7 +44,7 @@ C、D 分支的改动面见 [new-capability.md](new-capability.md)。
 | 证据（FORMAT 章节） | 字段 | 注意 |
 | --- | --- | --- |
 | 识别前缀（识别） | `advertisementPrefixes` | 小写十六进制，长度 12 / 8 / 6；清单中的前缀即规范化后的“company ID 小端 + payload” |
-| 零售名称（识别） | `nameBrand`、`nameModelNumber`、`nameRequiresModel`、`displayName`、`shortLabel` | `match` 先按型号词判定，型号词被多个型号共用时（如 BudsFeel MK2 与 OpenFeel MK2 都含 `mk2`）再看品牌词；品牌词或型号词单独出现会认错型号时，设 `nameRequiresModel = true`，要求两者同时出现。规则不够用时扩展 `ModelProfile.match`，不要换个词绕过 |
+| 零售名称（识别） | `nameBrand`、`nameModelNumber`、`nameRequiresModel`、`displayName`、`shortLabel`、`versionName` | `match` 先按型号词判定，型号词被多个型号共用时（如 BudsFeel MK2 与 OpenFeel MK2 都含 `mk2`）再看品牌词；品牌词或型号词单独出现会认错型号时，设 `nameRequiresModel = true`，要求两者同时出现。规则不够用时扩展 `ModelProfile.match`，不要换个词绕过。同一零售名有多个硬件分支时在 `versionName` 填版本名（如“标准版”“7034”“LDAC”） |
 | 协议族及族内差异（开头、初始化、设置命令） | `protocol` | 选用 `ModelProtocol.Zt`、`F8`、`RsCommon` 或 `RsCommonV2`，填入该族的查询顺序和编码差异。V2 型号工厂 `rsV2Model` 将这些选项组装成 `RsCommonV2`。 |
 | 控制传输（传输） | `gatt`、`sppControlUuid`、`writeIntervalMillis` | 只有协议文档给出 RFCOMM UUID 时才填 SPP；SPP 连接还要有经典地址（广播解析或已配对设备地址），否则回退 BLE |
 | 广播里的经典地址（传输） | `advertisedClassicAddress` | 有文档给出偏移时才写解析函数，否则为 `null` |

@@ -14,13 +14,13 @@ import io.github.dohex.openrose.androidintegration.IntegrationSettings
 import io.github.dohex.openrose.androidintegration.LocalOwnerIdentity
 import io.github.dohex.openrose.androidintegration.SwitchingControlRuntime
 import io.github.dohex.openrose.circulation.CirculationClient
-import io.github.dohex.openrose.core.LocalControlRuntime
 import io.github.dohex.openrose.core.OperationResult
 import io.github.dohex.openrose.core.UserSettings
 import io.github.dohex.openrose.core.transport.DeviceId
+import io.github.dohex.openrose.ffi.kotlincore.CoreControlRuntime
 import io.github.dohex.openrose.framework.FrameworkLink
 import io.github.dohex.openrose.framework.ModuleHostBinderLink
-import io.github.dohex.openrose.platform.AndroidControlTransport
+import io.github.dohex.openrose.platform.androidCoreTransport
 import io.github.dohex.openrose.platform.readPlatformState
 import io.github.dohex.openrose.ui.UiSettings
 import io.github.dohex.openrose.ui.model.OpenRoseSettingsStore
@@ -58,7 +58,7 @@ class OpenRoseApplication : Application() {
     private val companionWake by lazy { CompanionWake(this) }
     private var systemConnectionRequest: Job? = null
     private var preferencesLoaded = false
-    internal lateinit var background: OrdinaryBackgroundControl
+    internal lateinit var background: AppBackgroundControl
         private set
 
     override fun onCreate() {
@@ -79,11 +79,11 @@ class OpenRoseApplication : Application() {
             initialSettings = saved.host.control,
             initialIntegrationSettings = saved.host.integration,
             store = ownerStore,
-            ordinaryFactory = { scope, settings, platform, sessionIdBase ->
-                LocalControlRuntime(
+            appFactory = { scope, settings, platform, sessionIdBase ->
+                CoreControlRuntime(
+                    transport = androidCoreTransport(applicationContext),
                     initialPlatformState = platform,
                     initialSettings = settings,
-                    transport = AndroidControlTransport(applicationContext),
                     scope = scope,
                     sessionIdBase = sessionIdBase,
                 )
@@ -99,13 +99,13 @@ class OpenRoseApplication : Application() {
             newId = { UUID.randomUUID().toString() },
             userUnlocked = unlocked,
         )
-        background = OrdinaryBackgroundControl(this, runtime, companionWake, ::refreshPlatform)
+        background = AppBackgroundControl(this, runtime, companionWake, ::refreshPlatform)
         model = createModel()
         preferencesLoaded = unlocked
         registerActivityLifecycleCallbacks(VisibleInterfaceHold(runtime, controlScope))
         controlScope.launch {
             moduleSettingsChanges.receiveAsFlow().collectLatest {
-                while (preferencesLoaded && !background.ordinarySelected && framework.canPublish()) {
+                while (preferencesLoaded && !background.appSelected && framework.canPublish()) {
                     if (ownerStore.publishSelection()) break
                     delay(3_000)
                 }
@@ -158,7 +158,7 @@ class OpenRoseApplication : Application() {
     fun connectFromSystem(deviceId: DeviceId) {
         systemConnectionRequest?.cancel()
         systemConnectionRequest = controlScope.launch(start = CoroutineStart.UNDISPATCHED) {
-            val hold = runtime.holdOrdinarySession()
+            val hold = runtime.holdAppSession()
             try {
                 val result = runtime.connectFromSystem(deviceId)
                 if (result is OperationResult.Failure) model.notice.value = "无法打开所选耳机：${result.error.message}"
@@ -190,9 +190,9 @@ class OpenRoseApplication : Application() {
         updateIntegrationSettings(runtime.integration.value.settings.copy(backgroundControlEnabled = enabled))
     }
 
-    fun wakeOrdinaryControl() {
+    fun wakeAppControl() {
         loadUnlockedSettings()
-        if (!background.ordinarySelected) return
+        if (!background.appSelected) return
         background.followSavedIntent()
     }
 

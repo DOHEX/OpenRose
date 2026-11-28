@@ -9,7 +9,7 @@ Operational runbook for cutting, recovering, and publishing OpenRose releases. F
 
 ## Cut a release
 
-1. Inspect the open `release-please` PR (`chore: release X.Y.Z`) and confirm `version.txt`, `.release-please-manifest.json`, and `CHANGELOG.md` match the intended release.
+1. Inspect the open `release-please` PR (`chore: release X.Y.Z`) and confirm `version.txt`, `.release-please-manifest.json`, `CHANGELOG.md`, `Cargo.toml`, and `Cargo.lock` match the intended release (`release-please` updates `version.txt` and `Cargo.toml`, and the `release-please` job runs `cargo xtask sync-version` on the PR branch so `Cargo.toml` and `Cargo.lock` stay equal to `version.txt`).
    - An `action_required` (0s) status on the release PR is GitHub's normal `GITHUB_TOKEN` anti-recursion guard, not a CI failure. Use the latest `main` `CI / Release` run as the green gate.
 2. Squash-merge the release PR (`gh pr merge <N> --squash --delete-branch`).
 3. Wait for the `main` `CI / Release` run triggered by the merge commit to finish. It creates tag `vX.Y.Z`, drafts the GitHub Release, builds all packages, generates `SHA256SUMS` and SLSA provenance, and uploads them to the draft.

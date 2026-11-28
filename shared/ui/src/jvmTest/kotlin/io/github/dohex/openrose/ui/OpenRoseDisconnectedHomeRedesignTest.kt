@@ -105,7 +105,7 @@ class OpenRoseDisconnectedHomeRedesignTest {
                 harness.clickText("音频与设备")
                 harness.render()
                 assertFalse(harness.hasText("断开控制连接"), "Audio page should not show secondary Disconnect button")
-                assertFalse(harness.hasText("设备详情"), "Audio page should not repeat the 设备详情 entry")
+                assertFalse(harness.hasText("耳机信息"), "Audio page should not repeat the 耳机信息 entry")
                 harness.clickContentDescription("返回")
                 harness.render()
 
@@ -120,9 +120,9 @@ class OpenRoseDisconnectedHomeRedesignTest {
                 harness.clickTab("耳机")
                 harness.render()
 
-                harness.clickText("设备详情")
+                harness.clickText("耳机信息")
                 harness.render()
-                assertTrue(harness.hasText("断开控制连接"), "Device Details must retain 断开控制连接")
+                assertTrue(harness.hasText("断开控制连接"), "Headset Info must retain 断开控制连接")
                 harness.clickText("断开控制连接")
                 assertEquals(1, harness.disconnectCount)
             }

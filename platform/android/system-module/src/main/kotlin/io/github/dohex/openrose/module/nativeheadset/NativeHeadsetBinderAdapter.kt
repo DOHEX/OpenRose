@@ -22,17 +22,14 @@ class NativeHeadsetBinderAdapter(
     private val directory = NativeHeadsetDirectory(SystemClock::elapsedRealtime)
     private val bindings = NativeBinderBindings(directory)
     private val hooks = NativeHeadsetHooks(module, classLoader, callbacks, FEATURE, TAG, "binder")
-    private val listeners = NativeBinderCallbacks(directory, hooks, module) { closed }
+    private val listeners = NativeBinderCallbacks(directory, hooks, module)
     private val methods = BinderMethods()
     private val transactions = Transactions()
-
-    @Volatile private var closed = false
 
     val hookHandles: List<XposedInterface.HookHandle> get() = hooks.handles
 
     @Synchronized
     fun install(): List<XposedInterface.HookHandle> {
-        if (closed) return hookHandles
         methods.installServiceEntry()
         methods.installBinderClass("com.android.bluetooth.ble.app.headset.BinderC6776v")
         methods.installBinderClass("com.android.bluetooth.ble.app.headset.v")
@@ -43,20 +40,7 @@ class NativeHeadsetBinderAdapter(
 
     fun publish(snapshot: NativeHeadsetSnapshot?) = listeners.publish(directory.publishSession(snapshot))
 
-    fun publishBonded(addresses: Set<String>) {
-        if (!closed) directory.publishBonded(addresses)
-    }
-
-    @Synchronized
-    fun close() {
-        if (closed) return
-        closed = true
-        hooks.close()
-        methods.clear()
-        listeners.close()
-        bindings.clear()
-        directory.clear()
-    }
+    fun publishBonded(addresses: Set<String>) = directory.publishBonded(addresses)
 
     private fun handleNoiseAction(owner: Any?, device: Any?, operation: String, action: (NativeHeadsetSnapshot) -> Unit): Boolean {
         val snapshot = bindings.snapshotForActionDevice(owner, device)
@@ -102,14 +86,13 @@ class NativeHeadsetBinderAdapter(
     }
 
     private fun submit(snapshot: NativeHeadsetSnapshot, mode: String, address: String?) {
-        hooks.submitNoise(snapshot, mode, address) { if (closed) null else directory.current() }
+        hooks.submitNoise(snapshot, mode, address) { directory.current() }
     }
 
     private fun reportIdentified(query: String) = hooks.report("IDENTIFIED", "$query identified ROSE earphones")
 
     private inner class BinderMethods {
         private val installedBinderClasses = ConcurrentHashMap.newKeySet<String>()
-        fun clear() = installedBinderClasses.clear()
 
         fun installServiceEntry() {
             val service = hooks.loadClass("com.android.bluetooth.ble.app.headset.BluetoothHeadsetService") ?: return

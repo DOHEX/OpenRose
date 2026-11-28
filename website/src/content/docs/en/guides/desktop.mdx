@@ -1,6 +1,6 @@
 ---
 title: Desktop
-description: Install OpenRose on Windows and Linux for Bluetooth control, handoff pairing, and the tray panel.
+description: Install OpenRose on Windows and Linux for Bluetooth control, circulation pairing, and the tray panel.
 ---
 
 import { Tabs, TabItem } from '@astrojs/starlight/components';
@@ -16,49 +16,50 @@ BLE control is implemented on both Windows x64 and Linux x64; full desktop hardw
 Desktop packages are published alongside the Android app; see [Getting started](../getting-started/#get-the-package).
 
 <Tabs>
-<TabItem label="Windows">
-
-1. Download the Windows x64 `.msi` from [GitHub Releases](https://github.com/DOHEX/OpenRose/releases). For a development build, sign in to GitHub and download the `openrose-<version>-dev-<commit>-windows-x64` artifact from a successful [CI run](https://github.com/DOHEX/OpenRose/actions/workflows/ci.yml).
-2. Run the MSI. It installs for the current user under `%LOCALAPPDATA%\Programs` without administrator rights; open OpenRose from the Start menu. A newer MSI replaces the installed version.
-3. In Windows Settings, open **Bluetooth & devices**, enable Bluetooth, then add and connect your earphones. When disconnected, My Earphones (我的耳机) also offers Open system Bluetooth settings (打开系统蓝牙设置).
-4. Open OpenRose. My Earphones (我的耳机) lists supported paired devices. Once system audio connects, the app attempts to establish BLE control.
-
-</TabItem>
 <TabItem label="Linux">
 
-Development builds are in the `openrose-<version>-dev-<commit>-linux-x64` artifact:
+Linux x64 packages are published on [GitHub Releases](https://github.com/DOHEX/OpenRose/releases). For development builds, sign in to GitHub and download the `openrose-<version>-dev-<commit>-linux-x64` artifact from a successful [CI run](https://github.com/DOHEX/OpenRose/actions/workflows/ci.yml):
 
-| File | For |
-| --- | --- |
-| `*.deb` | Debian, Ubuntu, and derivatives |
-| `*.rpm` | Fedora, openSUSE, and similar |
-| `*.pacman` | Arch Linux and derivatives |
-| `*.AppImage` | Other distributions, no installation |
+| File | For | Install example |
+| --- | --- | --- |
+| `openrose_<version>_amd64.deb` | Debian, Ubuntu 24.04+, and derivatives | `sudo apt install ./openrose_*.deb` |
+| `openrose-<version>-1.x86_64.rpm` | Fedora and other RPM distributions | `sudo dnf install ./openrose-*.rpm` |
+| `openrose-<version>-1-x86_64.pkg.tar.zst` | Arch Linux and derivatives | `sudo pacman -U ./openrose-*.pkg.tar.zst` |
+| `openrose-<version>-x86_64.AppImage` | Other distributions, no installation | `chmod +x openrose-*.AppImage && ./openrose-*.AppImage` |
 
-The packages declare dependencies on `bluez`, GTK 3, and `libsystemd`. The AppImage needs BlueZ installed on the system with the Bluetooth service running. For headset circulation with the AppImage, install the host's `pactl` command (`pulseaudio-utils` on Debian and Fedora, `libpulse` on Arch Linux).
+OpenRose requires **GTK 4.14 or later**. The native packages (`openrose`) declare dependencies on `bluez`, GTK 4.14+, D-Bus, GStreamer, and GLib, and install the `openrose` command alongside an **OpenRose** desktop entry. The AppImage does not bundle system libraries and expects GTK 4.14+, D-Bus, GStreamer, and BlueZ (with the Bluetooth service running) on the host.
 
 Pair and connect the earphones in the system Bluetooth settings first. If the Status page shows “D-Bus 拒绝访问蓝牙” during discovery, check whether your desktop account has permission to use the system BlueZ service.
+
+</TabItem>
+<TabItem label="Windows">
+
+The legacy JVM desktop installer is no longer released. The Windows NSH installer will arrive in #160.
 
 </TabItem>
 </Tabs>
 
 ## Pair a phone and desktop
 
-Enable module control on the phone. In the desktop settings, open **流转配对** (Handoff pairing) and show the pairing code. The remaining validity is shown below the code. Open the same setting on the phone, then scan the QR code or select the computer and enter its six digits. Both devices need to be reachable on the same local network, and the host firewall needs to allow the phone to reach TCP port 21871 on the desktop. Either device can remove the pairing in settings after confirming.
+Enable module control on the phone. On the computer, open the **耳机流转** (Headset circulation) page in the sidebar and choose **开始流转配对** (Start circulation pairing) to show a six-digit code and QR code; the remaining validity is shown below the code. On the phone, open the circulation pairing entry, then scan the QR code or select the computer and enter its six digits. When the phone or another computer is the one starting circulation pairing, select the nearby peer it appears as under **流转配对新对端** (Pair a new peer) on the computer, enter its code, and choose **流转配对** (Circulation pairing). Both devices need to be reachable on the same local network, and the host firewall needs to allow the phone to reach TCP port 21871 on the desktop.
 
-Find the headset card in My Earphones, the desktop tray, or the phone quick panel. **音源设备** (Audio source) shows which phone or computer is connected to this headset. While the headset is connected to the other device, you can adjust noise mode, ANC and transparency levels, EQ presets, and game mode remotely (depending on model capabilities) while the original source keeps playing. To use the headset on the other device, choose **改连这台电脑** (Move to this computer) or **改连这部手机** (Move to this phone) on that device. The original source disconnects first. If a call or an active headset microphone prevents the move, the card shows the reason.
+Peers that completed circulation pairing are listed under **已流转配对的对端** (Paired peers). Each card shows the peer name, the headset it currently holds, its battery, and whether it is online (**在线**) or offline (**不在线**); choose **刷新** (Refresh) to read it again, and an offline peer is read again automatically when it returns to the network. While the peer is online, the **降噪模式** (Noise mode) control on its card switches the noise mode remotely; the switch stays in progress until the peer's headset confirms it, and the audio keeps coming from the original source. Choose **取消流转配对** (Remove circulation pairing) to remove the peer.
+
+When a peer holds the headset, its card offers **接到这台电脑** (Pull to this computer): the original source yields first, then the headset's audio connection and control move to this computer. The tray panel's peer card has the same button. Calls, active microphones, timeouts, or unreachable peers are reported directly, and the app never switches back automatically.
 
 ## Tray and background control
 
-Click the tray icon to see the primary headset with its audio source, battery pills, and noise modes, with inline actions such as **改连本机** (Move here) or **重新连接** (Reconnect) in the header. When multiple headsets are available, secondary headsets stay collapsed by default; choose **展开远端控制** (Expand remote controls) to adjust them.
+Click the tray icon to see the current headset with its name, connection state, battery, and noise modes. While connecting, choose **取消连接** (Cancel) to stop; when not connected, use the reconnect button to retry.
 
-If the audio source is unknown, choose **连接本机** (Connect here) to try connecting. The computer keeps its default sound output and shows it with a **声音设置** (Sound settings) shortcut in the panel. If battery readings and noise controls fail to return, choose **恢复耳机控制** (Restore headset controls). The audio connection stays on the computer.
+When this computer has no headset connected and a paired peer is using one, the tray icon switches to its remote state and the tooltip reads "headset name · source device name" with the battery, and the tray panel offers **接到这台电脑**; with several peers the first in paired order is shown. A local connection always takes precedence.
 
-On supported headsets, the panel also shows noise or transparency levels (when in the matching mode), game mode, and EQ presets by default. Open **设置 → 托盘面板控制项** (or choose **自定义** at the bottom of the panel) to toggle noise/transparency levels and choose or reorder game mode, EQ presets, spatial audio, and independent mic mode. Open OpenRose from the bottom of the panel for other settings.
+The tray panel and menu show the current system audio output and offer **打开声音设置** when a known sound settings program (such as `pavucontrol`, GNOME/KDE sound settings, or Windows Sound Settings) is installed. If battery readings and noise controls fail to return, choose **恢复耳机控制** (Restore headset controls). The audio connection stays on the computer.
 
-On Linux, the tray icon requires `libsystemd`, and GNOME also needs the AppIndicator extension (the tray is not verified on hardware under GNOME or KDE). On some desktops a left click opens the tray menu:
+On supported headsets, the panel also shows noise or transparency levels (when in the matching mode), game mode, and EQ presets by default. Open **托盘面板控制项** on the **托盘与后台** page in the sidebar (or choose **控制项设置** at the bottom of the panel) to toggle noise/transparency levels and choose or reorder game mode, EQ presets, spatial audio, and independent mic mode. Open OpenRose from the bottom of the panel for other settings.
 
-- **Background control (设置 → 后台控制, on by default) enabled and tray available**: closing the window only hides it and keeps the control connection; Quit in the tray menu ends it.
+On Linux, the tray icon uses D-Bus StatusNotifierItem and availability probing calls GLib's `gdbus`; GNOME also needs the AppIndicator extension (the tray is not verified on hardware under GNOME or KDE). On some desktops a left click opens the tray menu:
+
+- **Background control (托盘与后台 → 后台控制, on by default) enabled and tray available**: closing the window only hides it and keeps the control connection; Quit in the tray menu ends it.
 - **Background control off, or tray unavailable**: closing the window quits.
 
 ## Window rules for tiling compositors

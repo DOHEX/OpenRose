@@ -1,23 +1,8 @@
 package io.github.dohex.openrose.androidintegration
 
-import io.github.dohex.openrose.core.ConnectionPhase
-import io.github.dohex.openrose.core.LocalControlRuntime
 import io.github.dohex.openrose.core.OperationResult
-import io.github.dohex.openrose.core.PermissionState
-import io.github.dohex.openrose.core.PlatformState
-import io.github.dohex.openrose.core.SessionTiming
-import io.github.dohex.openrose.core.TransportAvailability
 import io.github.dohex.openrose.core.protocol.ModelProfile
-import io.github.dohex.openrose.core.transport.Advertisement
-import io.github.dohex.openrose.core.transport.ControlConnection
-import io.github.dohex.openrose.core.transport.ControlTransport
-import io.github.dohex.openrose.core.transport.DeviceId
-import io.github.dohex.openrose.core.transport.TransportEndpoint
 import kotlinx.collections.immutable.persistentSetOf
-import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -36,7 +21,7 @@ private const val UNAVAILABLE = 0xff
 
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class InCasePromptTest {
-    private val moduleInCase = IntegrationSettings(islandMode = IslandMode.MODULE, islandTriggers = persistentSetOf(IslandTrigger.IN_CASE))
+    private val openRoseInCase = IntegrationSettings(islandMode = IslandMode.OPENROSE_STYLE, islandTimings = persistentSetOf(IslandTiming.IN_CASE))
 
     @Test
     fun onlyModelsWithACaseAndInCaseFlagsCanShowAnInCasePrompt() {
@@ -70,9 +55,9 @@ class InCasePromptTest {
 
     @Test
     fun theFirstReadingIsNotAnEventAndEachLaterEntryReplacesThePromptOnce() = runTest {
-        val (session, link) = connected(moduleInCase, initial = i7Battery(IN, RIGHT_OUT))
+        val (session, link) = connected(openRoseInCase, initial = i7Battery(IN, RIGHT_OUT))
         assertNull(session.presentation.value.prompt, "an earbud already in the case at connection is not an in-case event")
-        assertTrue(session.presentation.value.allowIslandFields, "a module display timing other than connection still allows island content")
+        assertTrue(session.presentation.value.allowIslandFields, "an OpenRose display timing other than connection still allows island content")
 
         link.deviceReply(i7Battery(OUT, RIGHT_OUT))
         runCurrent()
@@ -81,8 +66,8 @@ class InCasePromptTest {
         link.deviceReply(i7Battery(IN, RIGHT_OUT))
         runCurrent()
         val left = assertNotNull(session.presentation.value.prompt)
-        assertEquals(IslandTrigger.IN_CASE, left.trigger)
-        assertEquals(IslandMode.MODULE, left.mode)
+        assertEquals(IslandTiming.IN_CASE, left.timing)
+        assertEquals(IslandMode.OPENROSE_STYLE, left.mode)
 
         link.deviceReply(i7Battery(IN, RIGHT_OUT))
         runCurrent()
@@ -91,14 +76,14 @@ class InCasePromptTest {
         link.deviceReply(i7Battery(IN, RIGHT_IN))
         runCurrent()
         val right = assertNotNull(session.presentation.value.prompt)
-        assertEquals(IslandTrigger.IN_CASE, right.trigger)
+        assertEquals(IslandTiming.IN_CASE, right.timing)
         assertNotEquals(left.id, right.id, "the other earbud entering replaces the showing prompt")
         session.disconnect()
     }
 
     @Test
     fun anUnavailableFlagBeforeEnteringIsNotAKnownExit() = runTest {
-        val (session, link) = connected(moduleInCase, initial = i7Battery(OUT, RIGHT_OUT))
+        val (session, link) = connected(openRoseInCase, initial = i7Battery(OUT, RIGHT_OUT))
         link.deviceReply(i7Battery(UNAVAILABLE, RIGHT_OUT))
         runCurrent()
         link.deviceReply(i7Battery(IN, RIGHT_OUT))
@@ -108,69 +93,31 @@ class InCasePromptTest {
     }
 
     @Test
-    fun officialModeAndAnUnselectedTimingConsumeTheEventWithoutPrompting() = runTest {
-        for (settings in listOf(IntegrationSettings(islandMode = IslandMode.OFFICIAL), IntegrationSettings(islandMode = IslandMode.MODULE))) {
+    fun systemStyleAndAnUnselectedTimingConsumeTheEventWithoutPrompting() = runTest {
+        for (settings in listOf(IntegrationSettings(islandMode = IslandMode.SYSTEM_STYLE), IntegrationSettings(islandMode = IslandMode.OPENROSE_STYLE))) {
             val (session, link) = connected(settings, initial = i7Battery(OUT, RIGHT_OUT))
             val connection = session.presentation.value.prompt
-            assertEquals(IslandTrigger.CONNECTION, connection?.trigger)
+            assertEquals(IslandTiming.CONNECTION, connection?.timing)
 
             link.deviceReply(i7Battery(IN, RIGHT_OUT))
             runCurrent()
             assertEquals(connection, session.presentation.value.prompt, "${settings.islandMode} shows no in-case prompt")
 
-            session.updateIntegrationSettings(moduleInCase)
+            session.updateIntegrationSettings(openRoseInCase)
             assertNull(session.presentation.value.prompt, "selecting the timing later does not replay the event")
             session.disconnect()
         }
     }
 
-    private suspend fun TestScope.connected(settings: IntegrationSettings, initial: String): Pair<SystemEntryRuntime, I7Connection> {
-        val link = I7Connection(initial)
-        val transport = I7Transport(link)
-        val session = SystemEntryRuntime(
-            LocalControlRuntime(
-                PlatformState(PermissionState.GRANTED, TransportAvailability.Available),
-                transport = transport,
-                scope = backgroundScope,
-                timing = SessionTiming(writeIntervalMillis = 0),
-            ),
-            backgroundScope,
-            initialIntegrationSettings = settings,
-        )
-        val id = DeviceId("i7")
-        session.startScan()
+    private suspend fun TestScope.connected(settings: IntegrationSettings, initial: String): Pair<SystemEntryRuntime, HostLink> {
+        val earphones = rosePair(APP_HEADSET_ADDRESS, ModelProfile.I7_RS_V2)
+        val headset = hostHeadset(SharedHeadset(), earphones, rewriteReply = { if (it.startsWith("dd00040c")) initial else it })
+        val session = SystemEntryRuntime(headset.runtime(backgroundScope), backgroundScope, initialIntegrationSettings = settings)
+        session.refreshBondedDevices()
+        assertEquals(OperationResult.Success, session.connect(earphones.deviceId))
         runCurrent()
-        transport.advertisements.emit(roseAdvertisement(ModelProfile.I7_RS_V2, id))
-        runCurrent()
-        assertEquals(OperationResult.Success, session.connect(id))
-        runCurrent()
-        return session to link
-    }
-
-    private class I7Transport(private val link: I7Connection) : ControlTransport {
-        val advertisements = MutableSharedFlow<Advertisement>(extraBufferCapacity = 1)
-        override fun scan(): Flow<Advertisement> = advertisements
-        override suspend fun connect(deviceId: DeviceId, endpoint: TransportEndpoint, onPhase: (ConnectionPhase) -> Unit): ControlConnection = link
-    }
-
-    private class I7Connection(private val battery: String) : ControlConnection {
-        override val maxWriteSize = 20
-        private val incoming = Channel<ByteArray>(Channel.UNLIMITED)
-        override val notifications = incoming.receiveAsFlow()
-
-        override suspend fun subscribe() = Unit
-
-        override suspend fun write(bytes: ByteArray) {
-            initializationReplies(ModelProfile.I7_RS_V2, bytes.hex())
-                .map { if (it.startsWith("dd00040c")) battery else it }
-                .forEach { incoming.send(it.bytes()) }
-        }
-
-        suspend fun deviceReply(hex: String) = incoming.send(hex.bytes())
-
-        override suspend fun close() {
-            incoming.close()
-        }
+        eventually("the presentation to follow the core") { session.presentation.value.reference != null }
+        return session to headset.links.single()
     }
 }
 

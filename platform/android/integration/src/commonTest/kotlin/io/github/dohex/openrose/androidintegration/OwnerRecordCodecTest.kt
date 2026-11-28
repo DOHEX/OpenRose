@@ -20,10 +20,10 @@ class OwnerRecordCodecTest {
         val records = listOf(
             OwnerRecord(),
             OwnerRecord(ControlWay.MODULE),
-            OwnerRecord(ControlWay.ORDINARY, PendingModuleRelease("r", null)),
+            OwnerRecord(ControlWay.APP, PendingModuleRelease("r", null)),
             OwnerRecord(ControlWay.MODULE, PendingModuleRelease(null, null)),
             OwnerRecord(ControlWay.MODULE, PendingModuleRelease("r", OwnerGeneration("host-1", 7))),
-            OwnerRecord(ControlWay.ORDINARY, PendingModuleRelease(null, OwnerGeneration("host-2", Long.MAX_VALUE))),
+            OwnerRecord(ControlWay.APP, PendingModuleRelease(null, OwnerGeneration("host-2", Long.MAX_VALUE))),
         )
         records.forEach { assertEquals(it, OwnerRecordCodec.decode(apply(emptyMap(), it))) }
     }
@@ -46,7 +46,7 @@ class OwnerRecordCodecTest {
     }
 
     @Test
-    fun missingOrMistypedEntriesFallBackToOrdinaryWithoutRelease() {
+    fun missingOrMistypedEntriesFallBackToAppWithoutRelease() {
         assertEquals(OwnerRecord(), OwnerRecordCodec.decode(emptyMap()))
         assertEquals(OwnerRecord(), OwnerRecordCodec.decode(mapOf(way to 1, "module_release_request" to true)))
         assertEquals(OwnerRecord(), OwnerRecordCodec.decode(mapOf(way to "unknown")))
@@ -80,30 +80,30 @@ class OwnerRecordCodecTest {
             asked++
             false
         }
-        val ordinary = OwnerRecord()
+        val app = OwnerRecord()
         val module = OwnerRecord(ControlWay.MODULE)
-        assertTrue(OwnerRecordCodec.canSave(ordinary, ordinary, canPublish))
+        assertTrue(OwnerRecordCodec.canSave(app, app, canPublish))
         assertTrue(OwnerRecordCodec.canSave(module, module.copy(moduleRelease = PendingModuleRelease("r", null)), canPublish))
         assertEquals(0, asked)
-        assertFalse(OwnerRecordCodec.canSave(ordinary, module, canPublish))
-        assertFalse(OwnerRecordCodec.canSave(module, ordinary, canPublish))
+        assertFalse(OwnerRecordCodec.canSave(app, module, canPublish))
+        assertFalse(OwnerRecordCodec.canSave(module, app, canPublish))
         assertEquals(2, asked)
-        assertTrue(OwnerRecordCodec.canSave(ordinary, module) { true })
+        assertTrue(OwnerRecordCodec.canSave(app, module) { true })
     }
 
     @Test
     fun savingPublishesOnlyWhenTheChoiceChanges() {
-        val ordinary = OwnerRecord()
+        val app = OwnerRecord()
         val module = OwnerRecord(ControlWay.MODULE)
         var published = 0
         val publish = {
             published++
             true
         }
-        assertTrue(OwnerRecordCodec.save(ordinary, ordinary.copy(moduleRelease = PendingModuleRelease("r", null)), publish) { true })
+        assertTrue(OwnerRecordCodec.save(app, app.copy(moduleRelease = PendingModuleRelease("r", null)), publish) { true })
         assertTrue(OwnerRecordCodec.save(module, module.copy(moduleRelease = PendingModuleRelease("r", null)), publish) { true })
         assertEquals(0, published)
-        assertTrue(OwnerRecordCodec.save(ordinary, module, publish) { true })
+        assertTrue(OwnerRecordCodec.save(app, module, publish) { true })
         assertEquals(1, published)
     }
 
@@ -125,7 +125,7 @@ class OwnerRecordCodecTest {
 
     @Test
     fun aRejectedPublishRestoresThePreviousRecordAndPublishesItAgain() {
-        val previous = OwnerRecord(ControlWay.ORDINARY, PendingModuleRelease("earlier", null))
+        val previous = OwnerRecord(ControlWay.APP, PendingModuleRelease("earlier", null))
         val next = OwnerRecord(ControlWay.MODULE)
         val events = mutableListOf<String>()
         val saved = OwnerRecordCodec.save(

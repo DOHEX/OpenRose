@@ -32,7 +32,6 @@ fun OpenRoseApp(
     model: OpenRoseModel,
     platformUi: PlatformUi,
     modifier: Modifier = Modifier,
-    primaryDeviceSelection: PrimaryDeviceSelection = remember { PrimaryDeviceSelection() },
 ) {
     val state by model.state.collectAsState()
     val uiSettings by model.uiSettings.collectAsState()
@@ -91,7 +90,6 @@ fun OpenRoseApp(
                     state,
                     model,
                     platformUi,
-                    primaryDeviceSelection,
                     wide,
                     addDeviceFlow,
                     navigation,
@@ -209,14 +207,13 @@ private fun AppPageContent(
     state: ControlState,
     model: OpenRoseModel,
     platformUi: PlatformUi,
-    selection: PrimaryDeviceSelection,
     wide: Boolean,
     addDeviceFlow: AddDeviceFlow,
     navigation: AppNavigation,
     equalizerEditor: EqualizerEditor,
 ) {
     when (targetPage) {
-        AppPage.HEADPHONES -> HeadphonesPage(model, platformUi, navigation::navigate, selection)
+        AppPage.HEADPHONES -> HeadphonesPage(model, platformUi, navigation::navigate)
 
         AppPage.ADD_DEVICE -> AddDeviceContent(
             state = state,
@@ -263,7 +260,7 @@ private fun AppPageContent(
 
         AppPage.DIAGNOSTICS -> DiagnosticsPage(model, platformUi, state)
 
-        AppPage.TOUCH, AppPage.EQUALIZER, AppPage.AUDIO, AppPage.DETAILS -> HeadsetPage(state, targetPage, navigation) { device ->
+        AppPage.TOUCH, AppPage.EQUALIZER, AppPage.AUDIO, AppPage.HEADSET_INFO -> HeadsetPage(state, targetPage, navigation) { device ->
             HeadsetPageContent(targetPage, state, device, model, navigation, equalizerEditor)
         }
     }
@@ -293,7 +290,7 @@ private fun HeadsetPageContent(
 
         AppPage.AUDIO -> DeviceControlCard(state, device, model.settingsFor(device.sessionId))
 
-        AppPage.DETAILS -> DeviceDetails(state, device, model::disconnect) { navigation.navigate(AppPage.DIAGNOSTICS) }
+        AppPage.HEADSET_INFO -> HeadsetInfo(state, device, model::disconnect) { navigation.navigate(AppPage.DIAGNOSTICS) }
 
         else -> Unit
     }

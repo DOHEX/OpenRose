@@ -9,7 +9,8 @@ status: accepted
 ## 决策
 
 - **按顺序判定，任何一步不满足都走 BLE**：型号配置没有 SPP 控制 UUID（`MODEL_BLE_ONLY`）；用户开启了“强制使用 BLE”（`FORCED_BLE`）；没有经典蓝牙地址（`CLASSIC_ADDRESS_UNAVAILABLE`）；平台报告 SPP 不可用（`SPP_UNAVAILABLE`）；音频协议未知（`AUDIO_PROFILE_UNKNOWN`）或为 LE Audio（`LE_AUDIO`）。只有确认当前是经典蓝牙音频连接（`CLASSIC_AUDIO`）时才走 SPP。
-- **平台事实不可得时回退 BLE**：`connectionFacts` 查询失败或超时，不能证明 SPP 可用。`transportOperation` 此时返回默认的 `TransportFacts()`（`sppAvailable = false`、音频协议未知），选择结果为 BLE。
+- **平台事实不可得时回退 BLE**：`connectionFacts` 查询失败，不能证明 SPP 可用。`transportOperation` 此时返回默认的 `TransportFacts()`（`sppAvailable = false`、音频协议未知），选择结果为 BLE。
+- **查询超时即连接超时**：查询的时限就是本次建立连接的时限（`connectTimeoutMillis`）。查询超过它时没有剩余时间再建立 BLE，本次连接尝试以超时结束，BLE 与 SPP 都不建立，测试见 `factsLookupDeadlineEndsTheAttemptWithoutStartingEitherLink`。
 
 ## 后果
 

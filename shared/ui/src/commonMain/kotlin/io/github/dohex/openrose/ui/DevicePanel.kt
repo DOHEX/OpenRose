@@ -22,7 +22,6 @@ import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -62,18 +61,17 @@ internal fun HeadphonesPage(
     model: OpenRoseModel,
     platformUi: PlatformUi,
     onNavigate: (AppPage) -> Unit,
-    primaryDeviceSelection: PrimaryDeviceSelection = remember { PrimaryDeviceSelection() },
 ) {
     val state by model.state.collectAsState()
     val device = state.activeDevice()
-    val cards = rememberHeadsetCards(state, primaryDeviceSelection, platformUi.headsetCirculation)
+    val cards = rememberHeadsetCards(state, platformUi.headsetCirculation)
     Column(
         Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         NoticeBanner(model)
         if (device == null) {
-            UnconnectedHeadphonesDashboard(state, model, platformUi, cards, primaryDeviceSelection, onNavigate)
+            UnconnectedHeadphonesDashboard(state, model, platformUi, cards, onNavigate)
             return@Column
         }
 
@@ -204,9 +202,9 @@ private fun HeadsetControls(
                 )
             }
             AppArrowRow(
-                title = "设备详情",
+                title = "耳机信息",
                 icon = RoseIcon.INFO,
-                onClick = { onNavigate(AppPage.DETAILS) },
+                onClick = { onNavigate(AppPage.HEADSET_INFO) },
             )
         }
     }
@@ -218,18 +216,15 @@ private fun UnconnectedHeadphonesDashboard(
     model: OpenRoseModel,
     platformUi: PlatformUi,
     cards: HeadsetCards,
-    selection: PrimaryDeviceSelection,
     onNavigate: (AppPage) -> Unit,
 ) {
     val platform = state.platform
-    val blockReason = platform.connectionBlockReason
-    if (state.connectionTarget == null && !platform.bluetoothPermissionRequired &&
-        platform.transport is TransportAvailability.Unavailable
-    ) {
+    val blockReason = state.connectionBlockReason
+    if (state.connectionTarget == null && blockReason is ConnectionBlockReason.TransportUnavailable) {
         AppGroup {
             AppArrowRow(
                 title = "诊断与记录",
-                summary = blockReason,
+                summary = blockReason.displayText(platform.hostPlatform),
                 icon = RoseIcon.BLUETOOTH,
                 onClick = { onNavigate(AppPage.DIAGNOSTICS) },
             )
@@ -257,8 +252,7 @@ private fun UnconnectedHeadphonesDashboard(
         return
     }
 
-    val bondedRose = state.bondedRoseDevices()
-    DisposableEffect(selection, bondedRose) { onDispose { selection.clear() } }
+    val bondedRose = state.bondedHeadsets
     val connecting = state.connection as? ConnectionState.Connecting
     if (primaryDevice != null) {
         ReconnectHeadsetCard(state, primaryDevice, cards.local, connecting?.deviceId == primaryDevice.deviceId, model, platformUi) {
@@ -270,7 +264,7 @@ private fun UnconnectedHeadphonesDashboard(
     val shown = cards.others.mapNotNull { it.target?.deviceId }
     val otherBonded = bondedRose.filter { it.deviceId != primaryDevice?.deviceId && it.deviceId !in shown }
     OtherPairedDevices(otherBonded, blockReason == null && connecting == null) { id ->
-        selection.select(state, id)
+        model.selectCurrentHeadset(id)
         model.connect(id)
     }
     AppGroup {
@@ -366,7 +360,7 @@ private fun BatteryReading(label: String, field: DeviceField, device: DeviceStat
 }
 
 @Composable
-internal fun DeviceDetails(state: ControlState, device: DeviceState, onDisconnect: () -> Unit, onDiagnostics: () -> Unit) {
+internal fun HeadsetInfo(state: ControlState, device: DeviceState, onDisconnect: () -> Unit, onDiagnostics: () -> Unit) {
     val initializing = state.connection.phaseOrNull() == ConnectionPhase.INITIALIZING
     AppGroup {
         AppInfoRow("型号配置", "${device.profile.configurationLabel} · ${device.profile.family.displayName}")
@@ -557,7 +551,7 @@ private fun AddFirstHeadsetCard(
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 AppText("添加你的 ROSE 耳机", role = AppTextRole.Title, textAlign = TextAlign.Center)
-                val hint = if (platform.transport == TransportAvailability.Disabled) {
+                val hint = if (platform.connectionBlockReason == ConnectionBlockReason.BluetoothDisabled) {
                     "系统蓝牙已关闭"
                 } else {
                     platform.hostPlatform.firstConnectionHint()
@@ -616,7 +610,7 @@ private fun ReconnectActions(
 ) {
     val platform = state.platform
     val onOpenSystemSettings = platformUi.openBluetoothSettings
-    val blockReason = platform.connectionBlockReason
+    val blockReason = state.connectionBlockReason
     val visibleError = state.lastError
     if (source.transferBusy || (source.offersTransfer && visibleError == null)) return
     Column(
@@ -631,7 +625,7 @@ private fun ReconnectActions(
                 modifier = Modifier.fillMaxWidth(),
             )
         } else if (blockReason != null) {
-            BluetoothConnectionRemedy(platform, platformUi.requestBluetoothPermission, onOpenSystemSettings)
+            BluetoothConnectionRemedy(blockReason, platformUi.requestBluetoothPermission, onOpenSystemSettings)
         } else {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (!source.offersTransfer) {
@@ -664,8 +658,15 @@ private fun ReconnectActions(
 }
 
 @Composable
-private fun BluetoothConnectionRemedy(platform: PlatformState, requestPermission: (() -> Unit)?, openSettings: (() -> Unit)?) {
-    val (label, action) = if (platform.bluetoothPermissionRequired) "授予蓝牙权限" to requestPermission else "打开系统蓝牙设置" to openSettings
+private fun BluetoothConnectionRemedy(
+    blockReason: ConnectionBlockReason,
+    requestPermission: (() -> Unit)?,
+    openSettings: (() -> Unit)?,
+) {
+    val (label, action) = when (blockReason) {
+        ConnectionBlockReason.BluetoothPermissionRequired -> "授予蓝牙权限" to requestPermission
+        ConnectionBlockReason.BluetoothDisabled, is ConnectionBlockReason.TransportUnavailable -> "打开系统蓝牙设置" to openSettings
+    }
     action?.let { AppButton(label, it, kind = AppButtonKind.Primary, modifier = Modifier.fillMaxWidth()) }
 }
 
@@ -713,12 +714,12 @@ private fun OtherPairedDevices(devices: List<DeviceCandidate>, enabled: Boolean,
 
 @Composable
 private fun ReconnectStatus(state: ControlState, primaryDevice: DeviceCandidate, isConnecting: Boolean, source: HeadsetCardSource? = null) {
-    val blockReason = state.platform.connectionBlockReason
+    val blockReason = state.connectionBlockReason
     val visibleError = state.lastError?.takeIf { blockReason == null }
     val hint = when {
-        blockReason != null -> blockReason
+        blockReason != null -> blockReason.displayText(state.platform.hostPlatform)
         source?.hasLocalAudio == true -> audioWithoutControlStatus(false)
-        source == null -> primaryDevice.profile.reconnectHint(failed = false)
+        source == null -> primaryDevice.reconnectGuidance.reconnectHint(failed = false)
         else -> null
     }
     if (!isConnecting && visibleError == null && hint == null) return
@@ -750,7 +751,11 @@ private fun ReconnectStatus(state: ControlState, primaryDevice: DeviceCandidate,
                     textAlign = TextAlign.Center,
                 )
                 if (source == null) {
-                    AppText(primaryDevice.profile.reconnectHint(failed = true), role = AppTextRole.Summary, textAlign = TextAlign.Center)
+                    AppText(
+                        primaryDevice.reconnectGuidance.reconnectHint(failed = true),
+                        role = AppTextRole.Summary,
+                        textAlign = TextAlign.Center,
+                    )
                 }
             }
 

@@ -2,6 +2,7 @@ package io.github.dohex.openrose.core.protocol
 
 import io.github.dohex.openrose.core.DeviceCapabilities
 import io.github.dohex.openrose.core.DeviceSetting
+import io.github.dohex.openrose.core.ReconnectGuidance
 import io.github.dohex.openrose.core.models.ModelSpec
 import io.github.dohex.openrose.core.models.ROSELINK_PREFIX_LENGTHS
 import io.github.dohex.openrose.core.models.agate
@@ -205,8 +206,15 @@ enum class ModelProfile {
 
     val displayName: String get() = spec.displayName
     val shortLabel: String get() = spec.shortLabel
+    val versionName: String? get() = spec.versionName
     val family: ProtocolFamily get() = spec.protocol.family
     val gatt: GattProfile get() = spec.gatt
+    val reconnectGuidance: ReconnectGuidance
+        get() = if (batteryLayout == BatteryLayout.EARBUDS_AND_CASE) {
+            ReconnectGuidance.OPEN_CASE_AUTO_CONNECT
+        } else {
+            ReconnectGuidance.WAIT_SYSTEM_BLUETOOTH
+        }
     val batteryLayout: BatteryLayout get() = spec.batteryLayout
 
     fun capabilities(readings: Map<DeviceField, FieldReading>): DeviceCapabilities = CapabilityFacts(readings).resolve(this)

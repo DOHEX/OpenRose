@@ -26,6 +26,7 @@ import io.github.dohex.openrose.androidintegration.OwnerGeneration
 import io.github.dohex.openrose.androidintegration.ReleaseResult
 import io.github.dohex.openrose.androidintegration.SwitchRequest
 import io.github.dohex.openrose.androidintegration.wire.BridgeWire
+import io.github.dohex.openrose.androidintegration.wire.EncodedHostFrame
 import io.github.dohex.openrose.androidintegration.wire.HandoffWire
 import io.github.dohex.openrose.androidintegration.wire.HostFrameWire
 import io.github.dohex.openrose.androidintegration.wire.HostIdentityWire
@@ -37,11 +38,10 @@ import io.github.dohex.openrose.androidintegration.wire.render
 import io.github.dohex.openrose.bridge.BridgeBundles
 import io.github.dohex.openrose.bridge.IControlBridge
 import io.github.dohex.openrose.bridge.IControlFrames
-import io.github.dohex.openrose.bridge.circulationReply
-import io.github.dohex.openrose.bridge.toBundle
 import io.github.dohex.openrose.circulation.CirculationCommand
 import io.github.dohex.openrose.circulation.CirculationFailure
 import io.github.dohex.openrose.circulation.CirculationReply
+import io.github.dohex.openrose.ffi.encodeToBytes
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Deferred
@@ -211,11 +211,15 @@ class ModuleHostBinderLink(
             throw failure
         }
 
-        private suspend fun <T> call(block: () -> Bundle, decode: (Wire) -> T): T {
+        private suspend fun okReply(block: () -> Bundle): Bundle {
             val reply = transact(block)
-            if (reply.getString(BridgeWire.STATUS) != BridgeWire.STATUS_OK) {
-                throw HostLinkException("宿主返回 ${reply.getString(BridgeWire.STATUS)}")
-            }
+            val status = reply.getString(BridgeWire.STATUS)
+            if (status != BridgeWire.STATUS_OK) throw HostLinkException("宿主返回 $status")
+            return reply
+        }
+
+        private suspend fun <T> call(block: () -> Bundle, decode: (Wire) -> T): T {
+            val reply = okReply(block)
             return try {
                 decode(parseWire(reply.getString(BridgeWire.PAYLOAD).orEmpty()))
             } catch (failure: WireFormatException) {
@@ -224,20 +228,32 @@ class ModuleHostBinderLink(
         }
 
         suspend fun circulation(command: CirculationCommand): CirculationReply {
-            val active = status() as? HostStatus.Active ?: return CirculationFailure("模块控制尚未就绪")
-            val query = request().apply {
-                putString(BridgeWire.HOST_EPOCH, active.generation.toString())
-                putBundle(BridgeWire.PAYLOAD, command.toBundle())
+            val rustCommand = command.toRust() ?: return CirculationFailure(UNSUPPORTED_REMOTE_SETTING)
+            return try {
+                val active = status() as? HostStatus.Active ?: return CirculationFailure(MODULE_CONTROL_NOT_READY)
+                val reply = okReply {
+                    bridge.circulation(
+                        request(HostIdentityWire.encode(active.generation)).apply {
+                            putByteArray(BridgeWire.CIRCULATION, rustCommand.encodeToBytes())
+                        },
+                    )
+                }
+                reply.getByteArray(BridgeWire.CIRCULATION).toCirculationReply()
+            } catch (failure: HostLinkException) {
+                CirculationFailure(failure.message ?: CIRCULATION_UNAVAILABLE)
             }
-            val reply = calls.run { bridge.circulation(query) }
-            val data = reply.getBundle(BridgeWire.PAYLOAD) ?: return CirculationFailure(reply.getString(BridgeWire.MESSAGE) ?: "互联服务不可用")
-            return data.circulationReply(command)
         }
 
         override suspend fun status(): HostStatus = call({ bridge.ownerStatus(request()) }, HostIdentityWire::decodeStatus)
 
         override suspend fun execute(generation: OwnerGeneration, command: HostCommand): HostCallResult = call(
-            { bridge.execute(request(HostWire.encodeCall(generation, command))) },
+            {
+                bridge.execute(
+                    request(HostIdentityWire.encode(generation)).apply {
+                        putByteArray(BridgeWire.COMMAND, HostWire.encode(command))
+                    },
+                )
+            },
             HostWire::decodeCallResult,
         )
 
@@ -254,10 +270,13 @@ class ModuleHostBinderLink(
         override fun frames(generation: OwnerGeneration): Flow<HostFrame> = callbackFlow {
             val receiver = object : IControlFrames.Stub() {
                 override fun onFrame(frame: Bundle) {
-                    val decoded = runCatching {
-                        HostFrameWire.decodeFrame(parseWire(frame.getString(BridgeWire.PAYLOAD).orEmpty()))
-                    }.getOrNull()
-                    if (decoded == null) this@callbackFlow.close() else trySend(decoded)
+                    try {
+                        val payload = parseWire(frame.getString(BridgeWire.PAYLOAD).orEmpty())
+                        val snapshot = frame.getByteArray(BridgeWire.CORE_SNAPSHOT) ?: ByteArray(0)
+                        trySend(HostFrameWire.decodeFrame(EncodedHostFrame(payload, snapshot)))
+                    } catch (failure: WireFormatException) {
+                        this@callbackFlow.close(HostLinkException("宿主返回了无法识别的状态帧", failure))
+                    }
                 }
 
                 override fun onEnded(end: Bundle) {

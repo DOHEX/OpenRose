@@ -51,6 +51,7 @@ interface SystemEntry {
     suspend fun claimPrompt(reference: SessionReference, promptId: String): Boolean
 }
 
+@Suppress("TooManyFunctions")
 class SystemEntryRuntime(
     private val control: ControlRuntime,
     private val scope: CoroutineScope,
@@ -71,6 +72,11 @@ class SystemEntryRuntime(
     val settings: IntegrationSettings get() = integrationSettings.value
 
     val presentation: StateFlow<SystemPresentationState> = PresentationFlow()
+
+    internal fun <T> presented(source: Flow<T>, state: (T) -> ControlState): Flow<Pair<T, SystemPresentationState>> {
+        val inputs = combine(source, prompts, integrationSettings) { value, _, settings -> value to present(state(value), settings) }
+        return inputs.distinctUntilChanged()
+    }
 
     init {
         scope.launch(start = CoroutineStart.UNDISPATCHED) { control.state.collect { advance() } }
@@ -120,7 +126,7 @@ class SystemEntryRuntime(
         advance()
     }
 
-    private fun present(state: ControlState, settings: IntegrationSettings = integrationSettings.value): SystemPresentationState {
+    internal fun present(state: ControlState, settings: IntegrationSettings = integrationSettings.value): SystemPresentationState {
         advance()
         return state.systemPresentation(settings, prompts.value.prompt)
     }
@@ -136,7 +142,7 @@ class SystemEntryRuntime(
                 val device = requireNotNull(state.device)
                 val trusted = device.hasTrustedEarBattery()
                 if (next.consumed != session && trusted) {
-                    val prompt = newPrompt(IslandTrigger.CONNECTION, session, "connection")
+                    val prompt = newPrompt(IslandTiming.CONNECTION, session, "connection")
                     installed = prompt
                     next = next.copy(consumed = session, prompt = prompt)
                 }
@@ -148,7 +154,7 @@ class SystemEntryRuntime(
                 if (entered && trusted) {
                     val event = next.inCaseEvents + 1
                     next = next.copy(inCaseEvents = event)
-                    newPrompt(IslandTrigger.IN_CASE, session, "in_case:$event")?.let { prompt ->
+                    newPrompt(IslandTiming.IN_CASE, session, "in_case:$event")?.let { prompt ->
                         installed = prompt
                         next = next.copy(prompt = prompt)
                     }
@@ -159,14 +165,14 @@ class SystemEntryRuntime(
         installed?.let(::expireLater)
     }
 
-    private fun newPrompt(trigger: IslandTrigger, session: SessionReference, event: String): IslandPrompt? {
-        if (!settings.allowsPrompt(trigger)) return null
+    private fun newPrompt(timing: IslandTiming, session: SessionReference, event: String): IslandPrompt? {
+        if (!settings.allowsPrompt(timing)) return null
         return IslandPrompt(
             id = "${session.deviceId.value}:${session.sessionId}:$event",
-            trigger = trigger,
+            timing = timing,
             mode = settings.islandMode,
             reference = session,
-            durationMillis = timing.promptDurationMillis,
+            durationMillis = this.timing.promptDurationMillis,
         )
     }
 
