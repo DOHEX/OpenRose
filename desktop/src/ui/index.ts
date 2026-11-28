@@ -1,4 +1,5 @@
 export {
+  CheckboxRow,
   ActionButton,
   CollapsibleSection,
   InfoRow,
@@ -6,6 +7,9 @@ export {
   NoticeBanner,
   SegmentedTabs,
   SelectField,
+  RadioGroupField,
+  SliderField,
+  SwitchRow,
   SidebarNav,
   StatusBadge,
   TextField,
@@ -15,6 +19,7 @@ export type {
   ButtonVariant,
   MetricItem,
   SegmentOption,
+  RadioOption,
   SelectFieldOption,
   SidebarNavItem,
   ToneVariant,

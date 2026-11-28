@@ -15,7 +15,7 @@ All motion values are centralized in [motion.ts](motion.ts). Transitions run nat
 | Token / Pattern | Value | Used By | Purpose | Reduced Motion |
 |---|---|---|---|---|
 | `MOTION_DURATION.press` | `120 ms` | `ActionButton` | Tactile press feedback (`active:scale-[0.98]`) | Instant; scale stays `1.0` |
-| `MOTION_DURATION.fast` | `150 ms` | `ActionButton`, `TextField`, `SelectField` | Color/border/focus transitions (`colorTransition`, `interactiveTransition`) | `motion-reduce:transition-none` |
+| `MOTION_DURATION.fast` | `150 ms` | `ActionButton`, `TextField`, `SelectField`, `SwitchRow`, `CheckboxRow`, `RadioGroupField` | Color/border/focus transitions (`colorTransition`, `interactiveTransition`); the switch thumb slides with `transition-transform` | `motion-reduce:transition-none` |
 | `MOTION_DURATION.normal` | `200 ms` | `Card`, `NoticeBanner`, `SelectField` popup | Entrance (`fadeInUp`) and popup fade/scale (`popupStarting` / `popupEnding`) | Lands immediately at rest |
 | `MOTION_DURATION.emphasis` | `260 ms` | `StatusBadge` / noise confirmation feedback | Brief `pulse` or `shake` attention feedback on state transition | Skipped (`reduceMotion()`) |
 | `MOTION_SPRING.snappy` | `stiffness: 520, damping: 34, mass: 1` | `SegmentedTabs` indicator | Native pill indicator travel between selected noise modes | Snaps immediately |

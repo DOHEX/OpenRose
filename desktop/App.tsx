@@ -22,11 +22,13 @@ import {
   settingDisplayLabel,
   settingStageLabel,
 } from "./src/model/desktopPages";
+import { createHeadsetSettingsModel } from "./src/model/settings";
 import type {
   AddHeadsetCandidateView,
   UnsupportedCandidateView,
 } from "./src/pages/AddHeadsetPage";
 import { AddHeadsetPage } from "./src/pages/AddHeadsetPage";
+import { HeadsetSettingsPage } from "./src/pages/settings/headset";
 import type {
   DiagnosticsOperationItem,
   DiagnosticsReadingItem,
@@ -69,7 +71,7 @@ import type {
   ToneVariant,
 } from "./src/ui";
 
-type DesktopPageId = "headset" | "add-headset" | "info" | "diagnostics" | "tray" | "dev";
+type DesktopPageId = "headset" | "add-headset" | "settings" | "info" | "diagnostics" | "tray" | "dev";
 
 const LATENCY_OPTIONS: SegmentOption[] = [
   { value: "40", label: "40 ms", testID: "latency-40" },
@@ -84,6 +86,12 @@ const NAV_ITEMS: SidebarNavItem[] = [
     label: "添加耳机",
     testID: "nav-add-headset",
     accessibilityLabel: "添加耳机",
+  },
+  {
+    id: "settings",
+    label: "耳机设置",
+    testID: "nav-settings",
+    accessibilityLabel: "耳机设置",
   },
   { id: "info", label: "耳机信息", testID: "nav-info", accessibilityLabel: "耳机信息" },
   {
@@ -123,6 +131,7 @@ function DesktopApp(props: {
 }) {
   const controller = props.controller;
   const addModel = createAddHeadsetModel(controller);
+  const settingsModel = createHeadsetSettingsModel(controller);
   const scenarios = createDevScenarioModel(controller);
   const initialConfig = controller.devConfig();
   const activePage = signal<DesktopPageId>("headset");
@@ -630,6 +639,8 @@ function DesktopApp(props: {
                 }}
                 onOpenDiagnostics={() => navigateTo("diagnostics")}
               />
+            ) : activePage() === "settings" ? (
+              <HeadsetSettingsPage model={settingsModel} />
             ) : activePage() === "info" ? (
               <HeadsetInfoPage
                 {...infoView()}

@@ -372,6 +372,10 @@ pub enum SettingPrerequisite {
     IndependentMicActivationRequired,
 }
 
+pub fn hearing_protection_threshold_db(level: i32) -> Option<i32> {
+    (1..=6).contains(&level).then_some(70 + level * 5)
+}
+
 pub fn setting_prerequisite(
     fields: &BTreeMap<HeadsetField, FieldReading>,
     setting: HeadsetSetting,

@@ -1,4 +1,5 @@
 mod tray;
+mod settings;
 
 use nsh_core::prelude::*;
 use nsh_core::JsonValue;
@@ -39,6 +40,7 @@ fn native(registry: &mut Registry) {
     registry
         .module::<OpenRoseCatalog>()
         .module::<tray::OpenRoseTray>()
+        .module::<settings::OpenRoseSettings>()
         .module::<desktop_bluetooth::OpenRoseBluetooth>()
         .class::<OpenRoseClient>()
         .module::<headset_flow::OpenRoseHeadsetFlow>();
@@ -310,7 +312,7 @@ impl OpenRoseClient {
                 .snapshot()
                 .candidates
                 .iter()
-                .any(|candidate| candidate.id == id)
+                .any(|candidate| candidate.id == id && candidate.profile.is_some())
             {
                 tokio::time::sleep(Duration::from_millis(5)).await;
             }
@@ -421,23 +423,6 @@ impl OpenRoseClient {
                 NoiseMode::from_id(&mode).ok_or_else(|| format!("不支持的降噪模式: {mode}"))?;
             runtime
                 .set(HeadsetCommand::NoiseMode(parsed), expected_session)
-                .await
-                .map_err(|err| err.message)
-        })
-    }
-
-    /// Executes a serialized HeadsetCommand against ControlRuntime for feature settings.
-    pub fn execute_command(
-        &self,
-        command_json: String,
-        expected_session: Option<u64>,
-    ) -> Later<()> {
-        let runtime = Arc::clone(&self.runtime);
-        run_on_core(async move {
-            let command: HeadsetCommand = serde_json::from_str(&command_json)
-                .map_err(|err| format!("无效的控制命令: {err}"))?;
-            runtime
-                .set(command, expected_session)
                 .await
                 .map_err(|err| err.message)
         })

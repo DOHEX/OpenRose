@@ -1,5 +1,5 @@
 import { appInfo, cleanup, computed, signal } from "nsh";
-import { OpenRoseCatalog, OpenRoseClient } from "openrose-native";
+import { OpenRoseCatalog, OpenRoseClient, OpenRoseSettings } from "openrose-native";
 
 export type BatteryLayout = "EarbudsAndCase" | "EarbudsOnly" | "SingleUnit";
 export type ProtocolFamilyId = "Zt" | "RsCommonV2" | "F8" | "RsCommon";
@@ -51,11 +51,22 @@ export interface ControlError {
   message: string;
 }
 
+export interface TouchBinding {
+  side: string;
+  gesture: string;
+  action: string | null;
+  raw_action: number;
+}
+
 export type FieldValue =
   | { Number: number }
   | { Toggle: boolean }
   | { Text: string }
-  | { Firmware: { parts: number[]; display_text: string } };
+  | { IntegerList: number[] }
+  | { Firmware: { parts: number[]; display_text: string } }
+  | { TouchKeys: TouchBinding[] }
+  | { TouchAssignment: { side: string; gesture: string; action: string } }
+  | { NoiseCycle: Record<string, boolean | null> };
 
 export type FieldReading =
   | "Loading"
@@ -68,6 +79,28 @@ export interface NoiseLevelCapabilities {
   visible_modes: string[];
 }
 
+export interface TouchSlot {
+  side: string;
+  gesture: string;
+}
+
+export interface TouchSlotLabelEntry {
+  slot: TouchSlot;
+  label: string;
+}
+
+export interface TouchControlCapabilities {
+  slots: TouchSlot[];
+  actions: string[];
+  slot_labels: TouchSlotLabelEntry[];
+}
+
+export interface CustomEqualizerCapabilities {
+  bands_hz: number[];
+  min_gain: number;
+  max_gain: number;
+}
+
 export interface HeadsetCapabilities {
   readable_fields: string[];
   writable_settings: string[];
@@ -78,7 +111,21 @@ export interface HeadsetCapabilities {
     transparency_level: NoiseLevelCapabilities | null;
     minimum_cycle_selections: number;
   } | null;
-  equalizer: { presets: string[] } | null;
+  equalizer: {
+    presets: string[];
+    custom: CustomEqualizerCapabilities | null;
+  } | null;
+  touch_control: TouchControlCapabilities | null;
+  tap_control: TouchControlCapabilities | null;
+  audio_control: {
+    modes: string[];
+    multipoint_coupled: boolean;
+  } | null;
+  prompt_volume_levels: number[];
+  gain_levels: number[];
+  hearing_protection_levels: number[];
+  bass_boost_levels: number[];
+  prompt_languages: string[];
   spatial_modes: string[];
   spatial_contents: string[];
 }
@@ -585,6 +632,10 @@ export function createHeadsetController(): HeadsetController {
     snapshot.set(client.snapshot() as ControlSnapshot);
   }
 
+
+  async function executeCommand(commandJson: string, expectedSession: number | null) {
+    await OpenRoseSettings.executeCommand(client, commandJson, expectedSession);
+  }
 
   return {
     client,
