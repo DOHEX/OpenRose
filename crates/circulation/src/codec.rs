@@ -2,40 +2,24 @@ use crate::contract::{
     HandoffStatus, NearbyPeerRecord, PairingOffer, Peer, PeerId, PullOutcome, RemoteError,
     RemoteReading, RemoteSessionReference,
 };
-use openrose_control::codec::CodecError;
+use openrose_control::codec::{CodecError, FrameHeader, decode_with_header, encode_with_header};
 use openrose_headset::HeadsetCommand;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
 pub const CIRCULATION_WIRE_FORMAT_VERSION: u8 = 1;
 
-const CIRCULATION_MAGIC: [u8; 3] = *b"ORL";
-const HEADER_LEN: usize = 4;
+const CIRCULATION_FRAME: FrameHeader = FrameHeader {
+    magic: *b"ORL",
+    version: CIRCULATION_WIRE_FORMAT_VERSION,
+};
 
 fn encode_framed<T: Serialize>(value: &T) -> Vec<u8> {
-    let mut bytes = Vec::with_capacity(256);
-    bytes.extend_from_slice(&CIRCULATION_MAGIC);
-    bytes.push(CIRCULATION_WIRE_FORMAT_VERSION);
-    serde_json::to_writer(&mut bytes, value).expect("circulation wire value always serializes");
-    bytes
+    encode_with_header(CIRCULATION_FRAME, value)
 }
 
 fn decode_framed<T: DeserializeOwned>(bytes: &[u8]) -> Result<T, CodecError> {
-    if bytes.len() < HEADER_LEN || bytes[..3] != CIRCULATION_MAGIC {
-        return Err(CodecError::Malformed {
-            detail: "无效的互联编码帧头".to_string(),
-        });
-    }
-    let version = bytes[3];
-    if version != CIRCULATION_WIRE_FORMAT_VERSION {
-        return Err(CodecError::UnsupportedVersion {
-            expected: CIRCULATION_WIRE_FORMAT_VERSION,
-            actual: version,
-        });
-    }
-    serde_json::from_slice(&bytes[HEADER_LEN..]).map_err(|error| CodecError::Malformed {
-        detail: error.to_string(),
-    })
+    decode_with_header(CIRCULATION_FRAME, bytes)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

@@ -29,30 +29,52 @@ impl fmt::Display for CodecError {
 
 impl std::error::Error for CodecError {}
 
-pub fn encode_framed<T: Serialize>(value: &T) -> Vec<u8> {
+#[derive(Debug, Clone, Copy)]
+pub struct FrameHeader {
+    pub magic: [u8; 3],
+    pub version: u8,
+}
+
+pub const CONTROL_FRAME: FrameHeader = FrameHeader {
+    magic: WIRE_MAGIC,
+    version: WIRE_FORMAT_VERSION,
+};
+
+pub fn encode_with_header<T: Serialize>(header: FrameHeader, value: &T) -> Vec<u8> {
     let mut bytes = Vec::with_capacity(256);
-    bytes.extend_from_slice(&WIRE_MAGIC);
-    bytes.push(WIRE_FORMAT_VERSION);
-    serde_json::to_writer(&mut bytes, value).expect("control wire value always serializes");
+    bytes.extend_from_slice(&header.magic);
+    bytes.push(header.version);
+    serde_json::to_writer(&mut bytes, value).expect("wire value always serializes");
     bytes
 }
 
-pub fn decode_framed<T: DeserializeOwned>(bytes: &[u8]) -> Result<T, CodecError> {
-    if bytes.len() < HEADER_LEN || bytes[..3] != WIRE_MAGIC {
+pub fn decode_with_header<T: DeserializeOwned>(
+    header: FrameHeader,
+    bytes: &[u8],
+) -> Result<T, CodecError> {
+    if bytes.len() < HEADER_LEN || bytes[..3] != header.magic {
         return Err(CodecError::Malformed {
-            detail: "无效的核心编码帧头".to_string(),
+            detail: "invalid frame header".to_string(),
         });
     }
     let version = bytes[3];
-    if version != WIRE_FORMAT_VERSION {
+    if version != header.version {
         return Err(CodecError::UnsupportedVersion {
-            expected: WIRE_FORMAT_VERSION,
+            expected: header.version,
             actual: version,
         });
     }
     serde_json::from_slice(&bytes[HEADER_LEN..]).map_err(|error| CodecError::Malformed {
         detail: error.to_string(),
     })
+}
+
+pub fn encode_framed<T: Serialize>(value: &T) -> Vec<u8> {
+    encode_with_header(CONTROL_FRAME, value)
+}
+
+pub fn decode_framed<T: DeserializeOwned>(bytes: &[u8]) -> Result<T, CodecError> {
+    decode_with_header(CONTROL_FRAME, bytes)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

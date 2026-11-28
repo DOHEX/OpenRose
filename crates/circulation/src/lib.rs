@@ -1,6 +1,7 @@
 #[cfg(feature = "uniffi")]
 uniffi::setup_scaffolding!();
 
+pub mod addresses;
 pub mod codec;
 pub mod contract;
 pub mod endpoint;
@@ -12,6 +13,10 @@ pub mod pairing;
 pub mod trust;
 pub mod wire;
 
+pub use addresses::{
+    InterfaceAddress, advertised_addresses, filter_resolved_addresses, select_interface_addresses,
+    sort_ipv4_first,
+};
 pub use contract::{
     BatterySlots, DEFAULT_PORT, HandoffStatus, LocalAudio, MAX_ADVERTISED_NAME_LEN,
     MDNS_SERVICE_TYPE, NearbyPeer, NearbyPeerRecord, PairingOffer, Peer, PeerDiscovery, PeerId,

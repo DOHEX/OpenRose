@@ -1,3 +1,4 @@
+use crate::addresses::{advertised_addresses, sort_ipv4_first};
 use crate::contract::{
     DEFAULT_PORT, HandoffStatus, LocalAudio, NearbyPeer, PairingOffer, Peer, PeerDiscovery, PeerId,
     PullOutcome, PullStage, RemoteCommand, RemoteError, RemoteReading, RemoteSessionReference,
@@ -16,7 +17,7 @@ use openrose_headset::HeadsetCommand;
 use rustls::pki_types::ServerName;
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::ErrorKind;
-use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -371,9 +372,7 @@ impl CirculationNode {
         if !bound_addr.ip().is_unspecified() {
             return vec![bound_addr.ip()];
         }
-        detect_local_ip()
-            .map(|ip| vec![ip])
-            .unwrap_or_else(|| vec![IpAddr::V4(Ipv4Addr::LOCALHOST)])
+        advertised_addresses()
     }
 
     pub fn offer_pairing(&self) -> Result<PairingOffer, RemoteError> {
@@ -676,7 +675,7 @@ impl CirculationNode {
         if addrs.is_empty() {
             return Err(RemoteError::PeerOffline);
         }
-        sort_socket_addrs(&mut addrs);
+        sort_ipv4_first(&mut addrs);
         Ok(addrs)
     }
 
@@ -687,7 +686,7 @@ impl CirculationNode {
     ) -> Result<tokio_rustls::client::TlsStream<Box<dyn RouteStream>>, RemoteError> {
         self.require_bound_addr()?;
         let mut sorted = addrs.to_vec();
-        sort_socket_addrs(&mut sorted);
+        sort_ipv4_first(&mut sorted);
         if sorted.is_empty() {
             return Err(RemoteError::PeerOffline);
         }
@@ -742,18 +741,6 @@ async fn bind_listener(
         }
         Err(_) => Err(RemoteError::ServiceClosed),
     }
-}
-
-fn detect_local_ip() -> Option<IpAddr> {
-    let socket = UdpSocket::bind((Ipv4Addr::UNSPECIFIED, 0)).ok()?;
-    socket.connect("192.0.2.1:80").ok()?;
-    let ip = socket.local_addr().ok()?.ip();
-    if ip.is_unspecified() { None } else { Some(ip) }
-}
-
-fn sort_socket_addrs(addrs: &mut Vec<SocketAddr>) {
-    addrs.sort_by_key(|addr| (!addr.is_ipv4(), addr.to_string()));
-    addrs.dedup();
 }
 
 async fn accept_loop(

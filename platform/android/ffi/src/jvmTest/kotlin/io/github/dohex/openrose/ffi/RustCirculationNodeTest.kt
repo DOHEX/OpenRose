@@ -21,7 +21,6 @@ import uniffi.openrose_circulation.RemoteControlStatus
 import uniffi.openrose_circulation.RemoteError
 import uniffi.openrose_circulation.RemoteSessionReference
 import uniffi.openrose_control.ConnectionState
-import uniffi.openrose_ffi.CirculationFailure
 import uniffi.openrose_ffi.CirculationNode
 import uniffi.openrose_ffi.DriverException
 import uniffi.openrose_ffi.LocalAudio
@@ -163,10 +162,11 @@ class RustCirculationNodeTest {
             phoneDiscovery.publish(listOf(NearbyPeerRecord(id = peerNode.id(), name = "Peer", addresses = listOf("127.0.0.1"), port = peerPort)))
             peerDiscovery.publish(listOf(NearbyPeerRecord(id = phoneNode.id(), name = "Phone", addresses = listOf("127.0.0.1"), port = phonePort)))
             withTimeout(2_000) {
-                while (phoneNode.nearby().isEmpty() || peerNode.nearby().isEmpty()) delay(10)
+                while (phoneNode.directory().nearby.isEmpty() || peerNode.directory().nearby.isEmpty()) delay(10)
             }
-            val offer = phoneNode.offerPairing()
-            assertEquals(phoneNode.id(), peerNode.pair(phoneNode.id(), offer.code).id)
+            val offer = assertIs<CirculationReply.Offer>(phoneNode.execute(CirculationCommand.Offer)).offer
+            val paired = assertIs<CirculationReply.Paired>(peerNode.execute(CirculationCommand.Pair(phoneNode.id(), offer.code)))
+            assertEquals(phoneNode.id(), paired.peer.id)
         }
 
         suspend fun close() {
@@ -178,30 +178,31 @@ class RustCirculationNodeTest {
     @Test
     fun aPeerPairsWithThePhoneAndControlsItsHeadsetThroughUniffi() = withPairedNodes {
         assertEquals(1u, phoneDiscovery.startedWireVersion.get())
-        assertEquals(1, phoneNode.peers().size)
+        assertEquals(1, phoneNode.directory().paired.size)
         assertTrue(peerDialer.dialedCount.get() >= 1)
 
-        val reading = peerNode.remoteRead(phoneNode.id())
+        val reading = assertIs<CirculationReply.Reading>(peerNode.execute(CirculationCommand.Read(phoneNode.id()))).reading
         assertEquals(RemoteControlStatus.READY, reading.status)
-        val updated = peerNode.remoteSet(phoneNode.id(), requireNotNull(reading.session), HeadsetCommand.NoiseMode(NoiseMode.TRANSPARENCY))
+        val updated = assertIs<CirculationReply.Reading>(
+            peerNode.execute(CirculationCommand.Set(requireNotNull(reading.session), HeadsetCommand.NoiseMode(NoiseMode.TRANSPARENCY))),
+        ).reading
         assertEquals(NoiseMode.TRANSPARENCY, updated.noiseMode)
     }
 
     @Test
     fun thePhoneRefusesRemoteRequestsWhileItsOwnerIsInactive() = withPairedNodes {
         phoneOwnerActive.set(false)
-        val failure = assertFailsWith<CirculationFailure.Failed> { peerNode.remoteRead(phoneNode.id()) }
-        assertEquals(RemoteError.OwnerInactive, failure.error)
+        assertEquals(CirculationReply.Failed(RemoteError.OwnerInactive), peerNode.execute(CirculationCommand.Read(phoneNode.id())))
     }
 
     @Test
     fun aPullFromThePeerMakesThePhoneYieldAndItsControlFollowsTheAudio() = withPairedNodes {
-        val before = phoneNode.handoffStatus(ADDRESS)
+        val before = assertIs<CirculationReply.Handoff>(phoneNode.execute(CirculationCommand.Handoff(ADDRESS))).status
         assertTrue(before.available)
         assertTrue(before.mediaReady)
         assertFalse(before.offline)
 
-        assertEquals(PullOutcome.ACQUIRED, peerNode.pull(ADDRESS))
+        assertEquals(CirculationReply.Pulled(PullOutcome.ACQUIRED), peerNode.execute(CirculationCommand.Pull(ADDRESS)))
         assertEquals(listOf(ADDRESS), phoneAudio.yieldCalls.toList())
         assertEquals(listOf(ADDRESS), peerAudio.acquireCalls.toList())
         withTimeout(2_000) {
@@ -277,6 +278,9 @@ class RustCirculationNodeTest {
         assertEquals(YieldRefusalKind.IN_CALL, refused.kind)
     }
 }
+
+private suspend fun CirculationNode.directory(): CirculationReply.Directory =
+    assertIs<CirculationReply.Directory>(execute(CirculationCommand.Directory))
 
 private fun runtime(rig: SimulatedDrivers, transport: ControlTransportAdapter) = RustControlRuntime(
     transport = transport,

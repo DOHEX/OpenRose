@@ -1,13 +1,12 @@
 use async_trait::async_trait;
-use if_addrs::IfAddr;
 use mdns_sd::{ServiceDaemon, ServiceEvent, ServiceInfo, TxtProperties};
 use openrose_circulation::{
     MAX_ADVERTISED_NAME_LEN, MDNS_SERVICE_TYPE, NearbyPeer, PeerDiscovery, PeerId, RemoteError,
-    WIRE_VERSION,
+    WIRE_VERSION, advertised_addresses, filter_resolved_addresses,
 };
 use std::collections::BTreeMap;
 use std::fmt;
-use std::net::{IpAddr, Ipv4Addr};
+use std::net::IpAddr;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::sync::{Mutex as AsyncMutex, watch};
@@ -41,16 +40,6 @@ pub(crate) struct AdvertisedPeer {
     pub version: u32,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct InterfaceAddress {
-    pub interface_key: String,
-    pub is_up: bool,
-    pub is_p2p: bool,
-    pub is_loopback: bool,
-    pub is_link_local: bool,
-    pub addr: IpAddr,
-}
-
 pub(crate) fn truncate_advertised_name(name: &str) -> String {
     name.chars().take(MAX_ADVERTISED_NAME_LEN).collect()
 }
@@ -79,88 +68,6 @@ pub(crate) fn decode_txt_properties(props: &TxtProperties) -> Option<AdvertisedP
         name: truncate_advertised_name(name),
         version,
     })
-}
-
-pub(crate) fn is_link_local(addr: IpAddr) -> bool {
-    match addr {
-        IpAddr::V4(v4) => v4.is_link_local(),
-        IpAddr::V6(v6) => (v6.segments()[0] & 0xffc0) == 0xfe80,
-    }
-}
-
-pub(crate) fn is_usable_unicast(addr: IpAddr) -> bool {
-    !addr.is_unspecified() && !addr.is_multicast() && !is_link_local(addr)
-}
-
-pub(crate) fn select_interface_addresses(candidates: &[InterfaceAddress]) -> Vec<IpAddr> {
-    let mut by_interface: BTreeMap<&str, IpAddr> = BTreeMap::new();
-    for candidate in candidates {
-        if !candidate.is_up
-            || candidate.is_p2p
-            || candidate.is_loopback
-            || candidate.is_link_local
-            || !is_usable_unicast(candidate.addr)
-        {
-            continue;
-        }
-        by_interface
-            .entry(candidate.interface_key.as_str())
-            .and_modify(|current| {
-                if (!candidate.addr.is_ipv4(), candidate.addr) < (!current.is_ipv4(), *current) {
-                    *current = candidate.addr;
-                }
-            })
-            .or_insert(candidate.addr);
-    }
-    let mut addrs: Vec<IpAddr> = by_interface.into_values().collect();
-    addrs.sort_by_key(|addr| (!addr.is_ipv4(), *addr));
-    addrs.dedup();
-    addrs
-}
-
-pub(crate) fn filter_resolved_addresses(addrs: impl IntoIterator<Item = IpAddr>) -> Vec<IpAddr> {
-    let mut selected: Vec<IpAddr> = addrs
-        .into_iter()
-        .filter(|addr| is_usable_unicast(*addr))
-        .collect();
-    selected.sort_by_key(|addr| (!addr.is_ipv4(), *addr));
-    selected.dedup();
-    selected
-}
-
-fn discover_advertised_addresses() -> Vec<IpAddr> {
-    let interfaces = if_addrs::get_if_addrs().unwrap_or_default();
-    let candidates: Vec<InterfaceAddress> = interfaces
-        .into_iter()
-        .map(|iface| {
-            let interface_key = match iface.index {
-                Some(idx) => format!("{idx}:{}", iface.name),
-                None => format!("name:{}", iface.name),
-            };
-            let is_up = iface.is_oper_up();
-            let is_p2p = iface.is_p2p();
-            let is_loopback = iface.is_loopback();
-            let is_link_local = iface.is_link_local() || is_link_local(iface.ip());
-            let addr = match iface.addr {
-                IfAddr::V4(v4) => IpAddr::V4(v4.ip),
-                IfAddr::V6(v6) => IpAddr::V6(v6.ip),
-            };
-            InterfaceAddress {
-                interface_key,
-                is_up,
-                is_p2p,
-                is_loopback,
-                is_link_local,
-                addr,
-            }
-        })
-        .collect();
-    let selected = select_interface_addresses(&candidates);
-    if selected.is_empty() {
-        vec![IpAddr::V4(Ipv4Addr::LOCALHOST)]
-    } else {
-        selected
-    }
 }
 
 #[derive(Default)]
@@ -324,7 +231,7 @@ impl PeerDiscovery for MdnsDiscovery {
         }
         self.nearby_tx.send_replace(Vec::new());
 
-        let addresses = discover_advertised_addresses();
+        let addresses = advertised_addresses();
         let props = encode_txt_properties(id, name, WIRE_VERSION);
         let service_info = ServiceInfo::new(
             MDNS_SERVICE_TYPE,
@@ -421,7 +328,7 @@ impl PeerDiscovery for MdnsDiscovery {
 mod tests {
     use super::*;
     use mdns_sd::IntoTxtProperties;
-    use std::net::Ipv6Addr;
+    use std::net::{Ipv4Addr, Ipv6Addr};
 
     fn peer_id(ch: char) -> PeerId {
         PeerId::new(std::iter::repeat_n(ch, 64).collect::<String>())
@@ -457,87 +364,6 @@ mod tests {
         for props in cases {
             assert_eq!(decode_txt_properties(&(*props).into_txt_properties()), None);
         }
-    }
-
-    #[test]
-    fn interface_selection_picks_one_non_link_local_address_per_interface_with_ipv4_preferred() {
-        let wifi4: IpAddr = "192.0.2.4".parse().unwrap();
-        let wifi6: IpAddr = "2001:db8:1::4".parse().unwrap();
-        let wifi_ll6: IpAddr = "fe80::1".parse().unwrap();
-        let eth6: IpAddr = "2001:db8:2::4".parse().unwrap();
-        let eth_ll4: IpAddr = "169.254.10.1".parse().unwrap();
-        let lo4: IpAddr = Ipv4Addr::LOCALHOST.into();
-        let down4: IpAddr = "192.0.2.99".parse().unwrap();
-        let p2p4: IpAddr = "10.0.0.2".parse().unwrap();
-
-        let candidates = vec![
-            InterfaceAddress {
-                interface_key: "wlan0".to_string(),
-                is_up: true,
-                is_p2p: false,
-                is_loopback: false,
-                is_link_local: false,
-                addr: wifi6,
-            },
-            InterfaceAddress {
-                interface_key: "wlan0".to_string(),
-                is_up: true,
-                is_p2p: false,
-                is_loopback: false,
-                is_link_local: true,
-                addr: wifi_ll6,
-            },
-            InterfaceAddress {
-                interface_key: "wlan0".to_string(),
-                is_up: true,
-                is_p2p: false,
-                is_loopback: false,
-                is_link_local: false,
-                addr: wifi4,
-            },
-            InterfaceAddress {
-                interface_key: "eth0".to_string(),
-                is_up: true,
-                is_p2p: false,
-                is_loopback: false,
-                is_link_local: false,
-                addr: eth_ll4,
-            },
-            InterfaceAddress {
-                interface_key: "eth0".to_string(),
-                is_up: true,
-                is_p2p: false,
-                is_loopback: false,
-                is_link_local: false,
-                addr: eth6,
-            },
-            InterfaceAddress {
-                interface_key: "lo".to_string(),
-                is_up: true,
-                is_p2p: false,
-                is_loopback: true,
-                is_link_local: false,
-                addr: lo4,
-            },
-            InterfaceAddress {
-                interface_key: "eth1".to_string(),
-                is_up: false,
-                is_p2p: false,
-                is_loopback: false,
-                is_link_local: false,
-                addr: down4,
-            },
-            InterfaceAddress {
-                interface_key: "tun0".to_string(),
-                is_up: true,
-                is_p2p: true,
-                is_loopback: false,
-                is_link_local: false,
-                addr: p2p4,
-            },
-        ];
-
-        assert_eq!(select_interface_addresses(&candidates), vec![wifi4, eth6]);
     }
 
     #[test]

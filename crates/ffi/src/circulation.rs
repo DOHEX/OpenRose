@@ -441,7 +441,27 @@ impl CirculationNode {
     pub fn bound_port(&self) -> Option<u16> {
         self.inner.bound_port()
     }
+}
 
+#[uniffi::export(async_runtime = "tokio")]
+impl CirculationNode {
+    pub async fn start(&self) -> Result<u16, CirculationFailure> {
+        self.inner.start().await.map_err(CirculationFailure::from)
+    }
+
+    pub async fn close_node(&self) {
+        self.inner.close().await;
+    }
+
+    pub async fn execute(&self, command: CirculationCommand) -> CirculationReply {
+        match self.dispatch(command).await {
+            Ok(reply) => reply,
+            Err(CirculationFailure::Failed { error }) => CirculationReply::Failed { error },
+        }
+    }
+}
+
+impl CirculationNode {
     pub fn peers(&self) -> Vec<Peer> {
         self.inner.peers()
     }
@@ -460,17 +480,6 @@ impl CirculationNode {
 
     pub fn current_pairing_offer(&self) -> Option<PairingOffer> {
         self.inner.current_pairing_offer()
-    }
-}
-
-#[uniffi::export(async_runtime = "tokio")]
-impl CirculationNode {
-    pub async fn start(&self) -> Result<u16, CirculationFailure> {
-        self.inner.start().await.map_err(CirculationFailure::from)
-    }
-
-    pub async fn close_node(&self) {
-        self.inner.close().await;
     }
 
     pub async fn pair(&self, peer_id: PeerId, code: String) -> Result<Peer, CirculationFailure> {
@@ -524,15 +533,6 @@ impl CirculationNode {
             .map_err(CirculationFailure::from)
     }
 
-    pub async fn execute(&self, command: CirculationCommand) -> CirculationReply {
-        match self.dispatch(command).await {
-            Ok(reply) => reply,
-            Err(CirculationFailure::Failed { error }) => CirculationReply::Failed { error },
-        }
-    }
-}
-
-impl CirculationNode {
     async fn dispatch(
         &self,
         command: CirculationCommand,
