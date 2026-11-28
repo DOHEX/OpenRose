@@ -25,11 +25,11 @@ impl PactlRunner for SystemPactl {
             .kill_on_drop(true);
         let child = command
             .spawn()
-            .map_err(|error| format!("系统音频服务不可用: {error}"))?;
+            .map_err(|error| format!("pactl unavailable: {error}"))?;
         let output = tokio::time::timeout(Duration::from_secs(3), child.wait_with_output())
             .await
-            .map_err(|_| "读取系统音频服务超时".to_string())?
-            .map_err(|error| format!("系统音频服务不可用: {error}"))?;
+            .map_err(|_| "pactl timed out".to_string())?
+            .map_err(|error| format!("pactl unavailable: {error}"))?;
         let stdout = String::from_utf8_lossy(&output.stdout);
         let stderr = String::from_utf8_lossy(&output.stderr);
         if output.status.success() {
@@ -41,7 +41,7 @@ impl PactlRunner for SystemPactl {
             stderr.trim()
         };
         if detail.is_empty() {
-            Err("系统音频服务不可用".to_string())
+            Err("pactl failed without output".to_string())
         } else {
             Err(detail.to_string())
         }

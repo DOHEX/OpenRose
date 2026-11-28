@@ -136,6 +136,7 @@ const ERROR_TEXT: Record<string, string> = {
   NotPaired: "尚未与该对端配对，或对端已取消配对",
   PeerOffline: "对端不在线",
   ServiceClosed: "耳机流转服务已关闭",
+  Disconnected: "耳机流转服务已关闭",
   OwnerInactive: "对端当前没有接入耳机",
   PairingNotOpen: "对端尚未开始配对，请先在对端点击“开始配对”",
   PairingExpired: "配对码已过期，请在对端重新开始配对",
@@ -153,12 +154,18 @@ const ERROR_TEXT: Record<string, string> = {
   IdentityError: "无法读取本机的流转身份",
   StorageError: "无法保存配对信息",
   DiscoveryError: "无法在局域网中发现对端，请检查网络",
-  "YieldRefused:InCall": "对方正在通话，暂时无法切换",
-  "YieldRefused:MicInUse": "麦克风正在使用，暂时无法切换",
-  "YieldRefused:Unavailable": "对端暂时无法让出耳机",
+  "YieldRefused:InCall": "对方正在通话，暂时无法流转",
+  "YieldRefused:MicInUse": "麦克风正在使用，暂时无法流转",
+  "YieldRefused:StillConnected": "对端让出后仍与耳机保持连接，请稍后重试",
+  "YieldRefused:AudioStateUnreadable": "对端读不到耳机的音频状态，暂时无法流转",
+  "YieldRefused:PlatformUnavailable": "对端暂时无法让出耳机",
   "AcquireFailed:InCall": "本机正在通话，无法接入耳机",
   "AcquireFailed:MicInUse": "本机麦克风正在使用，无法接入耳机",
-  "AcquireFailed:Unavailable": "本机接入耳机失败",
+  "AcquireFailed:MediaNotConnected": "耳机已连接，但没有接入音频，请重试",
+  "AcquireFailed:AudioStateUnreadable": "无法读取本机的音频状态，接入耳机失败",
+  "AcquireFailed:PlatformUnavailable": "本机接入耳机失败",
+  SettingsNotInstalled: "未找到系统设置程序",
+  SettingsLaunchFailed: "无法打开系统设置",
   PullInProgress: "正在将耳机接到这台电脑，请稍候",
 };
 
@@ -455,7 +462,7 @@ export function createCirculationController(
       try {
         circulation.openSoundSettings();
       } catch (cause) {
-        actionError.set(cause instanceof Error ? cause.message : String(cause));
+        actionError.set(circulationErrorText(cause instanceof Error ? cause.message : String(cause)));
       }
     },
     clearError: () => {

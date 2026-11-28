@@ -84,15 +84,6 @@ impl ProtocolFamily {
         }
     }
 
-    pub fn firmware_hint(self) -> &'static str {
-        match self {
-            Self::Zt => "三位 0–15 数字或十六进制（如 125 或 1.2.5）",
-            Self::RsCommonV2 => "三段 0–255 版本（如 2.1.3 或 125）",
-            Self::RsCommon => "三段版本（首段 0–15，后两段 0–255，如 1.2.5 或 125）",
-            Self::F8 => "单个 0–65535 整数（如 125 或 300）",
-        }
-    }
-
     pub fn validate_firmware(self, firmware: &FirmwareVersion) -> Result<(), ProtocolError> {
         let valid = match self {
             Self::F8 => {
@@ -112,7 +103,7 @@ impl ProtocolFamily {
             }
         };
         if !valid {
-            return Err(ProtocolError::InvalidArgument(self.firmware_invalid_message().to_string()));
+            return Err(ProtocolError::InvalidArgument(self.invalid_firmware_code()));
         }
         Ok(())
     }
@@ -120,18 +111,18 @@ impl ProtocolFamily {
     pub fn parse_firmware(self, raw: &str) -> Result<FirmwareVersion, ProtocolError> {
         let trimmed = raw.trim();
         if trimmed.is_empty() {
-            return Err(ProtocolError::InvalidArgument("固件版本不能为空".to_string()));
+            return Err(ProtocolError::InvalidArgument("invalid_firmware:empty".to_string()));
         }
         let parts = match self {
             Self::F8 => {
                 let value = trimmed
                     .parse::<i32>()
-                    .map_err(|_| ProtocolError::InvalidArgument(self.firmware_invalid_message().to_string()))?;
+                    .map_err(|_| ProtocolError::InvalidArgument(self.invalid_firmware_code()))?;
                 vec![value]
             }
-            Self::Zt => parse_three_part_firmware(trimmed, 16, self.firmware_invalid_message())?,
+            Self::Zt => parse_three_part_firmware(trimmed, 16, &self.invalid_firmware_code())?,
             Self::RsCommonV2 | Self::RsCommon => {
-                parse_three_part_firmware(trimmed, 10, self.firmware_invalid_message())?
+                parse_three_part_firmware(trimmed, 10, &self.invalid_firmware_code())?
             }
         };
         let version = FirmwareVersion::new(parts, trimmed);
@@ -139,13 +130,8 @@ impl ProtocolFamily {
         Ok(version)
     }
 
-    fn firmware_invalid_message(self) -> &'static str {
-        match self {
-            Self::F8 => "F8 固件版本需要一个 0 到 65535 的数字",
-            Self::Zt => "ZT 固件版本需要三个 0 到 15 的数字（如 125 或 1.2.5）",
-            Self::RsCommonV2 => "RS Common V2 固件版本需要三个 0 到 255 的数字（如 2.1.3 或 125）",
-            Self::RsCommon => "RS Common 固件版本需要 0 到 15 与两个 0 到 255 的数字（如 1.2.5 或 125）",
-        }
+    fn invalid_firmware_code(self) -> String {
+        format!("invalid_firmware:{self:?}")
     }
 }
 

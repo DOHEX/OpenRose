@@ -1,4 +1,4 @@
-import type { ConnectionPhase } from "./headset";
+import type { ConnectionPhase, ProtocolFamilyId } from "./headset";
 
 const NOISE_MODE_ORDER = ["anc", "wind", "transparency", "normal", "auto", "dynamic", "deep"];
 
@@ -134,6 +134,17 @@ const PHASE_LABELS: Record<ConnectionPhase, string> = {
   Initializing: "正在初始化并读取状态…",
   Ready: "已连接",
 };
+
+const FIRMWARE_HINT_TEXT: Record<ProtocolFamilyId, string> = {
+  Zt: "三位 0–15 数字或十六进制（如 125 或 1.2.5）",
+  RsCommonV2: "三段 0–255 版本（如 2.1.3 或 125）",
+  RsCommon: "三段版本（首段 0–15，后两段 0–255，如 1.2.5 或 125）",
+  F8: "单个 0–65535 整数（如 125 或 300）",
+};
+
+export function firmwareHintText(family: ProtocolFamilyId): string {
+  return FIRMWARE_HINT_TEXT[family];
+}
 
 export function sortNoiseModes(modes: string[]): string[] {
   const rank = (mode: string) => {

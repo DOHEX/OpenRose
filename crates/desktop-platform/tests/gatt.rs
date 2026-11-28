@@ -336,7 +336,7 @@ async fn close_never_disconnects_the_device() {
         .await
         .expect("subscribe");
     driver.close().await.expect("close");
-    assert!(bus.with(|inner| inner.on_le_disconnect.is_none() && inner.on_audio_disconnect.is_none()));
+    assert!(bus.disconnects().is_empty());
     assert_eq!(bus.notifications(), vec![format!("start:{CHAR_PATH}"), format!("stop:{CHAR_PATH}")]);
 }
 

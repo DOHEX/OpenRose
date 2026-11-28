@@ -6,8 +6,9 @@ mod runtime;
 
 pub use circulation::{
     CirculationFailure, CirculationNode, LocalAudio, NearbySink, OwnerActive, PeerDiscovery,
-    PeerRoute, PeerRouteDialer, circulation_wire_format_version, decode_circulation_command,
-    decode_circulation_reply, encode_circulation_command, encode_circulation_reply,
+    PeerRoute, PeerRouteDialer, circulation_discovery_contract, circulation_service_instance_name,
+    circulation_wire_format_version, decode_circulation_command, decode_circulation_reply,
+    encode_circulation_command, encode_circulation_reply,
 };
 pub use drivers::{
     AudioEvents, AudioFactsDriver, ControlObserver, ControlTransport, DriverError, GattDriver,

@@ -42,7 +42,6 @@ fn parses_and_validates_firmware_per_protocol_family() {
     );
     assert!(ProtocolFamily::F8.parse_firmware("1.2.5").is_err());
     assert!(ProtocolFamily::F8.parse_firmware("").is_err());
-    assert!(!ProtocolFamily::Zt.firmware_hint().is_empty());
 }
 
 #[test]

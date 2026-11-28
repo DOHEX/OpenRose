@@ -34,7 +34,6 @@ export interface ModelCatalogEntry {
   familyLabel: string;
   batteryLayout: BatteryLayout;
   defaultFirmware: string;
-  firmwareHint: string;
 }
 
 export interface DevHeadsetConfig {

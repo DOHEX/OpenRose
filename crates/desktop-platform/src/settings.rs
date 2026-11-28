@@ -1,16 +1,36 @@
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 
-pub fn bluetooth_settings_command() -> Option<Vec<String>> {
-    let path_var = std::env::var_os("PATH")?;
-    first_installed_command(
-        &path_var,
-        &[
-            &["gnome-control-center", "bluetooth"],
-            &["systemsettings", "kcm_bluetooth"],
-            &["blueman-manager"],
-        ],
-    )
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum OpenSettingsError {
+    NotInstalled,
+    LaunchFailed { detail: String },
+}
+
+impl OpenSettingsError {
+    pub fn code(&self) -> &'static str {
+        match self {
+            Self::NotInstalled => "SettingsNotInstalled",
+            Self::LaunchFailed { .. } => "SettingsLaunchFailed",
+        }
+    }
+}
+
+pub fn open_settings(command: Option<Vec<String>>) -> Result<(), OpenSettingsError> {
+    let command = command.ok_or(OpenSettingsError::NotInstalled)?;
+    let (program, args) = command
+        .split_first()
+        .ok_or(OpenSettingsError::NotInstalled)?;
+    std::process::Command::new(program)
+        .args(args)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .map(|_| ())
+        .map_err(|error| OpenSettingsError::LaunchFailed {
+            detail: error.to_string(),
+        })
 }
 
 pub fn first_installed_command(path_var: &OsStr, candidates: &[&[&str]]) -> Option<Vec<String>> {

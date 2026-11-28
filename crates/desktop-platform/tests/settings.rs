@@ -1,6 +1,6 @@
 #![cfg(unix)]
 
-use openrose_desktop_platform::bluetooth::linux::settings::first_installed_command;
+use openrose_desktop_platform::settings::first_installed_command;
 use openrose_desktop_platform::audio::linux::settings::sound_settings_command_in;
 use std::ffi::OsString;
 use std::fs;

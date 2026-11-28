@@ -1,4 +1,4 @@
-use crate::bluetooth::linux::settings::first_installed_command;
+use crate::settings::first_installed_command;
 use std::ffi::OsStr;
 
 pub const SOUND_SETTINGS_CANDIDATES: &[&[&str]] = &[

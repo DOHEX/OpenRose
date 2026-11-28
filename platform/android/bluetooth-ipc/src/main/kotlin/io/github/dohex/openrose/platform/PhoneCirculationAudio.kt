@@ -16,15 +16,18 @@ import uniffi.openrose_ffi.DriverException
 import uniffi.openrose_ffi.LocalAudio
 import uniffi.openrose_ffi.YieldRefusalKind
 
+private val unreadableState = YieldRefusalKind.AUDIO_STATE_UNREADABLE
+private val platformUnavailable = YieldRefusalKind.PLATFORM_UNAVAILABLE
+
 @SuppressLint("MissingPermission")
 class PhoneCirculationAudio(private val context: Context) : LocalAudio {
     private val profiles = AndroidAudioProfiles(context)
 
-    override suspend fun isConnected(address: String): Boolean = withProfiles(address) { device, leases ->
+    override suspend fun isConnected(address: String): Boolean = withProfiles(address, unreadableState) { device, leases ->
         leases.any { it.currentProxy().getConnectionState(device) == BluetoothProfile.STATE_CONNECTED }
     }
 
-    override suspend fun isMediaConnected(address: String): Boolean = withProfiles(address) { device, leases ->
+    override suspend fun isMediaConnected(address: String): Boolean = withProfiles(address, platformUnavailable) { device, leases ->
         leases.first().currentProxy().getConnectionState(device) == BluetoothProfile.STATE_CONNECTED
     }
 
@@ -42,16 +45,16 @@ class PhoneCirculationAudio(private val context: Context) : LocalAudio {
             mode == AudioManager.MODE_IN_COMMUNICATION ||
             mode == AudioManager.MODE_RINGTONE ||
             context.getSystemService(TelecomManager::class.java)?.isInCall == true
-        if (inCall) throw refused(YieldRefusalKind.IN_CALL, "手机通话中，无法让出耳机")
+        if (inCall) throw refused(YieldRefusalKind.IN_CALL, "phone in call")
         if (audioManager?.activeRecordingConfigurations?.isNotEmpty() == true) {
-            throw refused(YieldRefusalKind.MIC_IN_USE, "麦克风正在使用中，无法让出耳机")
+            throw refused(YieldRefusalKind.MIC_IN_USE, "active recording")
         }
     }
 
-    private suspend fun change(address: String, connect: Boolean) = withProfiles(address) { device, leases ->
+    private suspend fun change(address: String, connect: Boolean) = withProfiles(address, platformUnavailable) { device, leases ->
         val initialStates = leases.map { it.currentProxy().getConnectionState(device) }
         if (initialStates.any { it == BluetoothProfile.STATE_CONNECTING || it == BluetoothProfile.STATE_DISCONNECTING }) {
-            throw refused(YieldRefusalKind.UNAVAILABLE, "耳机音频连接正在变化，请稍后重试")
+            throw refused(platformUnavailable, "audio connection is changing")
         }
         issueChange(device, leases, connect)
         val observed = withTimeoutOrNull(12_000L) {
@@ -68,7 +71,8 @@ class PhoneCirculationAudio(private val context: Context) : LocalAudio {
             true
         }
         if (observed != true) {
-            throw refused(YieldRefusalKind.UNAVAILABLE, if (connect) "手机接入耳机音频超时" else "手机尚未让出耳机音频")
+            val timedOut = if (connect) "audio connect timed out" else "audio disconnect timed out"
+            throw refused(platformUnavailable, timedOut)
         }
     }
 
@@ -80,7 +84,7 @@ class PhoneCirculationAudio(private val context: Context) : LocalAudio {
         if (Build.VERSION.SDK_INT >= 37) {
             val status = if (connect) device.connect() else device.disconnect()
             if (status != BluetoothStatusCodes.SUCCESS) {
-                throw refused(YieldRefusalKind.UNAVAILABLE, "系统蓝牙拒绝音频操作（$status）")
+                throw refused(platformUnavailable, "bluetooth rejected the audio operation ($status)")
             }
             return
         }
@@ -89,22 +93,23 @@ class PhoneCirculationAudio(private val context: Context) : LocalAudio {
         leases.map { it.currentProxy() }.forEach { profile ->
             if (profile.getConnectionState(device) != target) {
                 val accepted = profile.javaClass.getMethod(operation, BluetoothDevice::class.java).invoke(profile, device)
-                if (accepted != true) throw refused(YieldRefusalKind.UNAVAILABLE, "系统蓝牙未受理音频操作")
+                if (accepted != true) throw refused(platformUnavailable, "bluetooth did not accept the audio operation")
             }
         }
     }
 
     private suspend fun <T> withProfiles(
         address: String,
+        failure: YieldRefusalKind,
         action: suspend (BluetoothDevice, List<AndroidAudioProfiles.ProfileProxyLease>) -> T,
     ): T {
         val adapter = context.getSystemService(BluetoothManager::class.java)?.adapter
-            ?: throw refused(YieldRefusalKind.UNAVAILABLE, "系统蓝牙不可用")
+            ?: throw refused(failure, "bluetooth adapter unavailable")
         val device = adapter.bondedDevices.firstOrNull { it.address.equals(address, ignoreCase = true) }
-            ?: throw refused(YieldRefusalKind.UNAVAILABLE, "手机尚未配对这副耳机")
+            ?: throw refused(failure, "headset is not bonded to the phone")
         val leases = mutableListOf<AndroidAudioProfiles.ProfileProxyLease>()
         try {
-            requestLeases(adapter, leases)
+            requestLeases(adapter, leases, failure)
             return action(device, leases)
         } finally {
             leases.forEach { it.close() }
@@ -114,15 +119,16 @@ class PhoneCirculationAudio(private val context: Context) : LocalAudio {
     private suspend fun requestLeases(
         adapter: BluetoothAdapter,
         leases: MutableList<AndroidAudioProfiles.ProfileProxyLease>,
+        failure: YieldRefusalKind,
     ) {
         val ready = withTimeoutOrNull(2_500L) {
             listOf(BluetoothProfile.A2DP, BluetoothProfile.HEADSET).forEach { profile ->
                 leases += profiles.requestProfileProxy(adapter, profile)
-                    ?: throw refused(YieldRefusalKind.UNAVAILABLE, "系统音频服务不可用")
+                    ?: throw refused(failure, "audio profile proxy unavailable")
             }
             true
         }
-        if (ready != true) throw refused(YieldRefusalKind.UNAVAILABLE, "读取系统音频连接超时")
+        if (ready != true) throw refused(failure, "audio profile proxy timed out")
     }
 
     private fun refused(kind: YieldRefusalKind, detail: String) = DriverException.YieldRefused(kind, detail)

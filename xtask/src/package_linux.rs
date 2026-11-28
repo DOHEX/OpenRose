@@ -87,7 +87,7 @@ fn package_linux(root: &Path) -> Result<(), String> {
         nsh_cmd.env("NSH_APPIMAGETOOL", appimagetool);
     }
 
-    run_command("Package Linux AppImage with nsh", nsh_cmd)?;
+    crate::run_command("Package Linux AppImage with nsh", nsh_cmd)?;
 
     let built_appimage = desktop_dir.join(".nsh/out/OpenRose-x86_64.AppImage");
     if !built_appimage.is_file() {
@@ -130,7 +130,7 @@ fn package_linux(root: &Path) -> Result<(), String> {
                 "dist/desktop",
             ])
             .current_dir(root);
-        run_command(&format!("Package Linux {packager} with nfpm"), nfpm_cmd)?;
+        crate::run_command(&format!("Package Linux {packager} with nfpm"), nfpm_cmd)?;
     }
 
     for path in outputs.all() {
@@ -149,15 +149,6 @@ fn package_linux(root: &Path) -> Result<(), String> {
         eprintln!("  - {}", path.display());
     }
     Ok(())
-}
-
-fn run_command(label: &str, mut cmd: Command) -> Result<(), String> {
-    eprintln!("==> {label}");
-    match cmd.status() {
-        Ok(status) if status.success() => Ok(()),
-        Ok(status) => Err(format!("Step '{label}' failed with exit status: {status}")),
-        Err(error) => Err(format!("Step '{label}' failed to start: {error}")),
-    }
 }
 
 fn resolve_nfpm_bin() -> String {
@@ -189,10 +180,7 @@ fn resolve_appimagetool_path() -> Option<PathBuf> {
     if is_on_path("appimagetool") {
         return None;
     }
-    let dir = mise_where(&[
-        "github:AppImage/appimagetool",
-        "github:AppImage/appimagetool@1.9.1",
-    ])?;
+    let dir = mise_where(&["github:AppImage/appimagetool"])?;
     for name in ["appimagetool", "appimagetool.AppImage"] {
         let candidate = dir.join(name);
         if candidate.is_file() {

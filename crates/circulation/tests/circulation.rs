@@ -1,8 +1,8 @@
 use async_trait::async_trait;
 use openrose_circulation::{
     CirculationConfig, CirculationNode, HeadsetEndpoint, LocalAudio, NearbyPeer, NearbyPeerRecord,
-    PeerDiscovery, PeerId, PullOutcome, PullStage, RemoteCommand, RemoteControlStatus,
-    RemoteError, RemoteHandler, RouteDialer, RouteStream, YieldReceipt, YieldRefusal,
+    PeerDiscovery, PeerId, PullOutcome, PullStage, RemoteCommand, RemoteControlStatus, RemoteError,
+    RemoteHandler, RouteDialer, RouteStream, YieldReceipt, YieldRefusal,
     codec::{CIRCULATION_WIRE_FORMAT_VERSION, CirculationCommand, CirculationReply},
 };
 use openrose_control::audio::RawAudioDevice;
@@ -252,10 +252,7 @@ async fn pairing_by_code_and_by_qr() {
     assert!(node_b.peers().iter().any(|p| &p.id == node_a.id()));
 
     let offer_qr = node_a.offer_pairing().expect("offer qr");
-    let paired_qr = node_c
-        .pair_qr(&offer_qr.qr)
-        .await
-        .expect("pair by qr");
+    let paired_qr = node_c.pair_qr(&offer_qr.qr).await.expect("pair by qr");
     assert_eq!(&paired_qr.id, node_a.id());
     assert!(node_a.peers().iter().any(|p| &p.id == node_c.id()));
     assert!(node_c.peers().iter().any(|p| &p.id == node_a.id()));
@@ -350,7 +347,10 @@ async fn revocation_both_directions() {
     );
 
     let offer2 = node_a.offer_pairing().expect("offer 2");
-    node_b.pair(node_a.id(), &offer2.code).await.expect("pair 2");
+    node_b
+        .pair(node_a.id(), &offer2.code)
+        .await
+        .expect("pair 2");
     assert_eq!(node_a.peers().len(), 1);
     assert_eq!(node_b.peers().len(), 1);
 
@@ -388,10 +388,7 @@ async fn remote_read_battery_and_noise_mode_and_remote_set_confirmed() {
     let offer = node_a.offer_pairing().expect("offer");
     node_b.pair(node_a.id(), &offer.code).await.expect("pair");
 
-    let reading = node_b
-        .remote_read(node_a.id())
-        .await
-        .expect("remote read");
+    let reading = node_b.remote_read(node_a.id()).await.expect("remote read");
     assert_eq!(reading.status, RemoteControlStatus::Ready);
     assert_eq!(reading.profile, Some(ModelProfile::I5Zt));
     assert_eq!(reading.noise_mode, Some(NoiseMode::Wind));
@@ -465,7 +462,8 @@ async fn peer_offline_unavailable_then_back_rereads() {
     node_a.start().await.expect("restart a");
     wait_until(|| {
         let reading = node_b.peer_reading(node_a.id());
-        reading.status == RemoteControlStatus::Ready && reading.noise_mode == Some(NoiseMode::Normal)
+        reading.status == RemoteControlStatus::Ready
+            && reading.noise_mode == Some(NoiseMode::Normal)
     })
     .await;
 
@@ -583,6 +581,9 @@ struct ScriptedAudioState {
     media_connected: bool,
     yield_refusal: Option<YieldRefusal>,
     acquire_refusal: Option<YieldRefusal>,
+    unreadable: bool,
+    sticky_link: bool,
+    acquire_without_media: bool,
     yield_delay: Duration,
     acquire_delay: Duration,
 }
@@ -613,6 +614,9 @@ impl ScriptedAudio {
                 media_connected: connected,
                 yield_refusal: None,
                 acquire_refusal: None,
+                unreadable: false,
+                sticky_link: false,
+                acquire_without_media: false,
                 yield_delay: Duration::ZERO,
                 acquire_delay: Duration::ZERO,
             }),
@@ -634,6 +638,21 @@ impl ScriptedAudio {
         self.state.lock().expect("audio state lock").acquire_refusal = refusal;
     }
 
+    fn set_unreadable(&self, unreadable: bool) {
+        self.state.lock().expect("audio state lock").unreadable = unreadable;
+    }
+
+    fn set_sticky_link(&self, sticky: bool) {
+        self.state.lock().expect("audio state lock").sticky_link = sticky;
+    }
+
+    fn set_acquire_without_media(&self, without_media: bool) {
+        self.state
+            .lock()
+            .expect("audio state lock")
+            .acquire_without_media = without_media;
+    }
+
     fn set_yield_delay(&self, delay: Duration) {
         self.state.lock().expect("audio state lock").yield_delay = delay;
     }
@@ -646,9 +665,14 @@ impl ScriptedAudio {
 
 #[async_trait]
 impl LocalAudio for ScriptedAudio {
-    async fn is_connected(&self, address: &str) -> bool {
+    async fn is_connected(&self, address: &str) -> Result<bool, YieldRefusal> {
         let state = self.state.lock().expect("audio state lock");
-        state.connected && state.headset.eq_ignore_ascii_case(address)
+        if state.unreadable {
+            return Err(YieldRefusal::AudioStateUnreadable {
+                detail: "proxy timeout".to_string(),
+            });
+        }
+        Ok(state.connected && state.headset.eq_ignore_ascii_case(address))
     }
 
     async fn is_media_connected(&self, address: &str) -> bool {
@@ -670,7 +694,7 @@ impl LocalAudio for ScriptedAudio {
         }
         {
             let mut state = self.state.lock().expect("audio state lock");
-            state.connected = false;
+            state.connected = state.sticky_link;
             state.media_connected = false;
         }
         self.transport.audio().set_audio_connected(None);
@@ -697,11 +721,9 @@ impl LocalAudio for ScriptedAudio {
         {
             let mut state = self.state.lock().expect("audio state lock");
             state.connected = true;
-            state.media_connected = true;
+            state.media_connected = !state.acquire_without_media;
         }
-        self.transport
-            .audio()
-            .set_audio_connected(Some(address));
+        self.transport.audio().set_audio_connected(Some(address));
         self.events
             .lock()
             .expect("events lock")
@@ -803,7 +825,11 @@ async fn pull_receipt_then_acquire_moves_audio_and_control() {
     let pair = PullPair::paired(headset, false, true, None).await;
 
     pair.desktop_audio.set_connected_only(true);
-    let outcome = pair.desktop.pull(headset).await.expect("pull should succeed");
+    let outcome = pair
+        .desktop
+        .pull(headset)
+        .await
+        .expect("pull should succeed");
     assert_eq!(outcome, PullOutcome::Acquired);
     assert_eq!(
         *pair.events.lock().expect("events lock"),
@@ -816,7 +842,12 @@ async fn pull_receipt_then_acquire_moves_audio_and_control() {
         matches!(
             pair.phone_rig.runtime.snapshot().connection,
             ConnectionState::Disconnected
-        ) && pair.desktop_rig.runtime.snapshot().ready_session().is_some()
+        ) && pair
+            .desktop_rig
+            .runtime
+            .snapshot()
+            .ready_session()
+            .is_some()
     })
     .await;
 
@@ -825,11 +856,7 @@ async fn pull_receipt_then_acquire_moves_audio_and_control() {
         PullOutcome::AlreadyConnected
     );
 
-    let back = pair
-        .phone
-        .pull(headset)
-        .await
-        .expect("pull back to phone");
+    let back = pair.phone.pull(headset).await.expect("pull back to phone");
     assert_eq!(back, PullOutcome::Acquired);
     wait_until(|| {
         matches!(
@@ -856,7 +883,13 @@ async fn pull_refused_in_call_and_mic_in_use_keep_holder_connected() {
     assert!(pair.phone_audio.is_holding());
     assert!(!pair.desktop_audio.is_holding());
     assert!(pair.phone_rig.runtime.snapshot().ready_session().is_some());
-    assert!(pair.desktop_rig.runtime.snapshot().ready_session().is_none());
+    assert!(
+        pair.desktop_rig
+            .runtime
+            .snapshot()
+            .ready_session()
+            .is_none()
+    );
     assert!(pair.events.lock().expect("events lock").is_empty());
 
     pair.phone_audio
@@ -868,8 +901,64 @@ async fn pull_refused_in_call_and_mic_in_use_keep_holder_connected() {
     assert!(pair.phone_audio.is_holding());
     assert!(!pair.desktop_audio.is_holding());
     assert!(pair.phone_rig.runtime.snapshot().ready_session().is_some());
-    assert!(pair.desktop_rig.runtime.snapshot().ready_session().is_none());
+    assert!(
+        pair.desktop_rig
+            .runtime
+            .snapshot()
+            .ready_session()
+            .is_none()
+    );
     assert!(pair.events.lock().expect("events lock").is_empty());
+
+    pair.close().await;
+}
+
+#[tokio::test]
+async fn holder_that_cannot_read_its_audio_state_refuses_and_the_puller_never_acquires() {
+    let headset = "AA:BB:CC:00:00:0E";
+    let pair = PullPair::paired(headset, false, true, None).await;
+    pair.phone_audio.set_unreadable(true);
+
+    assert_eq!(
+        pair.desktop.pull(headset).await,
+        Err(RemoteError::YieldRefused(
+            YieldRefusal::AudioStateUnreadable {
+                detail: "proxy timeout".to_string(),
+            }
+        ))
+    );
+    assert!(pair.phone_audio.is_holding());
+    assert!(!pair.desktop_audio.is_holding());
+    assert!(pair.events.lock().expect("events lock").is_empty());
+
+    pair.close().await;
+}
+
+#[tokio::test]
+async fn holder_still_connected_after_yielding_refuses_with_a_code() {
+    let headset = "AA:BB:CC:00:00:0F";
+    let pair = PullPair::paired(headset, false, true, None).await;
+    pair.phone_audio.set_sticky_link(true);
+
+    assert_eq!(
+        pair.desktop.pull(headset).await,
+        Err(RemoteError::YieldRefused(YieldRefusal::StillConnected))
+    );
+    assert!(!pair.desktop_audio.is_holding());
+
+    pair.close().await;
+}
+
+#[tokio::test]
+async fn acquire_that_brings_up_no_media_fails_with_a_code() {
+    let headset = "AA:BB:CC:00:00:10";
+    let pair = PullPair::paired(headset, false, false, None).await;
+    pair.desktop_audio.set_acquire_without_media(true);
+
+    assert_eq!(
+        pair.desktop.pull(headset).await,
+        Err(RemoteError::AcquireFailed(YieldRefusal::MediaNotConnected))
+    );
 
     pair.close().await;
 }
@@ -879,17 +968,21 @@ async fn pull_when_nobody_holds_acquires_directly() {
     let headset = "AA:BB:CC:00:00:07";
     let pair = PullPair::paired(headset, false, false, None).await;
 
-    assert_eq!(
-        pair.desktop.pull(headset).await,
-        Ok(PullOutcome::Acquired)
-    );
+    assert_eq!(pair.desktop.pull(headset).await, Ok(PullOutcome::Acquired));
     assert_eq!(
         *pair.events.lock().expect("events lock"),
         vec!["Desktop acquire".to_string()]
     );
     assert!(pair.desktop_audio.is_holding());
     assert!(!pair.phone_audio.is_holding());
-    wait_until(|| pair.desktop_rig.runtime.snapshot().ready_session().is_some()).await;
+    wait_until(|| {
+        pair.desktop_rig
+            .runtime
+            .snapshot()
+            .ready_session()
+            .is_some()
+    })
+    .await;
 
     pair.close().await;
 }
@@ -911,7 +1004,14 @@ async fn pull_when_nobody_reachable_still_attempts_acquire() {
         vec!["Desktop acquire".to_string()]
     );
     assert!(pair.desktop_audio.is_holding());
-    wait_until(|| pair.desktop_rig.runtime.snapshot().ready_session().is_some()).await;
+    wait_until(|| {
+        pair.desktop_rig
+            .runtime
+            .snapshot()
+            .ready_session()
+            .is_some()
+    })
+    .await;
 
     pair.desktop.close().await;
 }
@@ -920,7 +1020,9 @@ async fn pull_when_nobody_reachable_still_attempts_acquire() {
 async fn pull_acquire_failure_returns_error_and_never_switches_back() {
     let headset = "AA:BB:CC:00:00:09";
     let pair = PullPair::paired(headset, false, true, None).await;
-    let refusal = YieldRefusal::Unavailable("a2dp_connect_failed".to_string());
+    let refusal = YieldRefusal::PlatformUnavailable {
+        detail: "a2dp_connect_failed".to_string(),
+    };
     pair.desktop_audio
         .set_acquire_refusal(Some(refusal.clone()));
 
@@ -941,7 +1043,13 @@ async fn pull_acquire_failure_returns_error_and_never_switches_back() {
         )
     })
     .await;
-    assert!(pair.desktop_rig.runtime.snapshot().ready_session().is_none());
+    assert!(
+        pair.desktop_rig
+            .runtime
+            .snapshot()
+            .ready_session()
+            .is_none()
+    );
 
     pair.close().await;
 }
@@ -950,12 +1058,17 @@ async fn pull_acquire_failure_returns_error_and_never_switches_back() {
 async fn pull_timeout_returns_error_without_acquiring() {
     let headset = "AA:BB:CC:00:00:0A";
     let pair = PullPair::paired(headset, false, true, Some(Duration::from_millis(120))).await;
-    pair.phone_audio
-        .set_yield_delay(Duration::from_millis(350));
+    pair.phone_audio.set_yield_delay(Duration::from_millis(350));
 
     assert_eq!(pair.desktop.pull(headset).await, Err(RemoteError::Timeout));
     assert!(!pair.desktop_audio.is_holding());
-    assert!(pair.desktop_rig.runtime.snapshot().ready_session().is_none());
+    assert!(
+        pair.desktop_rig
+            .runtime
+            .snapshot()
+            .ready_session()
+            .is_none()
+    );
 
     pair.close().await;
 }
@@ -964,8 +1077,7 @@ async fn pull_timeout_returns_error_without_acquiring() {
 async fn concurrent_pull_is_refused() {
     let headset = "AA:BB:CC:00:00:0B";
     let pair = PullPair::paired(headset, false, true, None).await;
-    pair.phone_audio
-        .set_yield_delay(Duration::from_millis(120));
+    pair.phone_audio.set_yield_delay(Duration::from_millis(120));
 
     let first_notified = pair.phone_audio.yield_gate.notified();
     let desktop_first = pair.desktop.clone();
@@ -1059,8 +1171,8 @@ async fn owner_gate_constructor_refuses_when_inactive_and_allows_when_active() {
 
     #[async_trait]
     impl LocalAudio for NoopAudio {
-        async fn is_connected(&self, _address: &str) -> bool {
-            false
+        async fn is_connected(&self, _address: &str) -> Result<bool, YieldRefusal> {
+            Ok(false)
         }
         async fn is_media_connected(&self, _address: &str) -> bool {
             false
@@ -1144,8 +1256,7 @@ async fn handoff_status_tracks_availability_media_offline_and_pull_progress() {
     assert!(!initial.offline);
     assert_eq!(initial.progress, None);
 
-    pair.phone_audio
-        .set_yield_delay(Duration::from_millis(120));
+    pair.phone_audio.set_yield_delay(Duration::from_millis(120));
     let first_notified = pair.phone_audio.yield_gate.notified();
     let desktop_pull = pair.desktop.clone();
     let pull_task = tokio::spawn(async move { desktop_pull.pull(headset).await });

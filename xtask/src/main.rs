@@ -195,9 +195,7 @@ fn run_sync_version(root: &Path) -> ExitCode {
     eprintln!("==> Sync Cargo workspace and desktop versions from version.txt");
     match version::sync_workspace_version(root) {
         Ok(ver) => {
-            eprintln!(
-                "Synced Cargo.toml, Cargo.lock, desktop/nsh.json, and desktop/ext/openrose-native to {ver}."
-            );
+            eprintln!("Synced {} to {ver}.", version::SYNCED_FILES.join(", "));
             ExitCode::SUCCESS
         }
         Err(error) => {
@@ -227,16 +225,22 @@ fn run_no_comments(root: &Path) -> ExitCode {
     }
 }
 
-fn run_step(label: &str, program: &str, args: &[&str], cwd: &Path) -> bool {
+pub(crate) fn run_command(label: &str, mut command: Command) -> Result<(), String> {
     eprintln!("==> {label}");
-    match Command::new(program).args(args).current_dir(cwd).status() {
-        Ok(status) if status.success() => true,
-        Ok(status) => {
-            eprintln!("Step '{label}' failed with exit status: {status}");
-            false
-        }
+    match command.status() {
+        Ok(status) if status.success() => Ok(()),
+        Ok(status) => Err(format!("Step '{label}' failed with exit status: {status}")),
+        Err(error) => Err(format!("Step '{label}' failed to start: {error}")),
+    }
+}
+
+fn run_step(label: &str, program: &str, args: &[&str], cwd: &Path) -> bool {
+    let mut command = Command::new(program);
+    command.args(args).current_dir(cwd);
+    match run_command(label, command) {
+        Ok(()) => true,
         Err(error) => {
-            eprintln!("Step '{label}' failed to start '{program}': {error}");
+            eprintln!("{error}");
             false
         }
     }

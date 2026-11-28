@@ -14,6 +14,7 @@ use tokio::time::Instant;
 
 pub const PAIRING_WINDOW_TTL: Duration = Duration::from_secs(120);
 pub const MAX_PAIRING_ATTEMPTS: u32 = 5;
+const MAX_PAIRING_NAME_LEN: usize = 128;
 
 struct WindowState {
     code: String,
@@ -225,8 +226,8 @@ fn transcript_confirmations(
     (confirm_a, confirm_b)
 }
 
-fn truncate_name(name: &str, max_chars: usize) -> String {
-    name.chars().take(max_chars).collect()
+fn truncate_name(name: &str) -> String {
+    name.chars().take(MAX_PAIRING_NAME_LEN).collect()
 }
 
 pub async fn initiate_pairing<S: AsyncRead + AsyncWrite + Unpin>(
@@ -248,7 +249,7 @@ pub async fn initiate_pairing<S: AsyncRead + AsyncWrite + Unpin>(
     send_frame(
         stream,
         WireBody::PairStart {
-            name: truncate_name(local_name, 128),
+            name: truncate_name(local_name),
             spake_msg: msg_a.clone(),
         },
     )
@@ -294,7 +295,7 @@ pub async fn initiate_pairing<S: AsyncRead + AsyncWrite + Unpin>(
     let grant = PeerGrant {
         peer: Peer {
             id: remote_id.clone(),
-            name: truncate_name(&remote_name, 128),
+            name: truncate_name(&remote_name),
         },
         token,
     };
@@ -365,7 +366,7 @@ pub async fn respond_pairing<S: AsyncRead + AsyncWrite + Unpin>(
     let pending = PeerGrant {
         peer: Peer {
             id: request.peer_id,
-            name: truncate_name(&request.name, 128),
+            name: truncate_name(&request.name),
         },
         token: encode_hex(&token_bytes),
     };
@@ -373,7 +374,7 @@ pub async fn respond_pairing<S: AsyncRead + AsyncWrite + Unpin>(
     send_frame(
         stream,
         WireBody::PairGrant {
-            name: truncate_name(local_name, 128),
+            name: truncate_name(local_name),
             grant: pending.token.clone(),
         },
     )

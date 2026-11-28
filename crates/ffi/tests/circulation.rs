@@ -301,8 +301,8 @@ impl CoreAudio {
 
 #[async_trait]
 impl CoreLocalAudio for CoreAudio {
-    async fn is_connected(&self, _address: &str) -> bool {
-        self.media_connected.load(Ordering::SeqCst)
+    async fn is_connected(&self, _address: &str) -> Result<bool, YieldRefusal> {
+        Ok(self.media_connected.load(Ordering::SeqCst))
     }
 
     async fn is_media_connected(&self, _address: &str) -> bool {

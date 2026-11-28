@@ -47,6 +47,7 @@ pub struct Inner {
     pub connect_paths: Vec<String>,
     pub connects: usize,
     pub notifications: Vec<String>,
+    pub disconnects: Vec<String>,
     pub writes: Vec<(String, Vec<u8>, bool)>,
     pub scans: usize,
     pub scan_stops: usize,
@@ -95,6 +96,10 @@ impl FakeBluezBus {
         self.with(|inner| inner.notifications.clone())
     }
 
+    pub fn disconnects(&self) -> Vec<String> {
+        self.with(|inner| inner.disconnects.clone())
+    }
+
     pub fn connects(&self) -> usize {
         self.with(|inner| inner.connects)
     }
@@ -129,12 +134,14 @@ impl BluezAudioBus for FakeBluezBus {
         _interfaces: &BluezInterfaces,
     ) -> Result<(), BluezError> {
         assert!(self.owner().as_deref() == Some(owner) || owner == "org.bluez");
+        self.with(|inner| inner.disconnects.push(format!("audio:{path}")));
         let hook = self.hook_of(|inner| inner.on_audio_disconnect.clone());
         run(hook, path.to_string()).await
     }
 
     async fn disconnect_le(&self, path: &str, owner: &str) -> Result<(), BluezError> {
         assert!(self.owner().as_deref() == Some(owner) || owner == "org.bluez");
+        self.with(|inner| inner.disconnects.push(format!("le:{path}")));
         let hook = self.hook_of(|inner| inner.on_le_disconnect.clone());
         run(hook, path.to_string()).await
     }

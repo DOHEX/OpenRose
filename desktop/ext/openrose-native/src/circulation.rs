@@ -13,6 +13,7 @@ use openrose_control::snapshot::{
     ConnectionState, ControlSnapshot, PermissionState, PlatformState, TransportAvailability,
 };
 use openrose_control::{ControlConfig, ControlObserver, ControlRuntime, SessionTiming};
+use openrose_desktop_platform::settings::OpenSettingsError;
 use openrose_headset::{HeadsetCommand, HeadsetId, ModelProfile, NoiseMode};
 use qrcode::{Color, QrCode};
 use serde::Serialize;
@@ -289,8 +290,8 @@ impl DevLocalAudio {
 
 #[async_trait]
 impl LocalAudio for DevLocalAudio {
-    async fn is_connected(&self, address: &str) -> bool {
-        self.profile_connected(address, true).await
+    async fn is_connected(&self, address: &str) -> Result<bool, YieldRefusal> {
+        Ok(self.profile_connected(address, true).await)
     }
 
     async fn is_media_connected(&self, address: &str) -> bool {
@@ -309,7 +310,9 @@ impl LocalAudio for DevLocalAudio {
                 rx.wait_for(|hanging| !*hanging),
             )
             .await;
-            return Err(YieldRefusal::Unavailable("no_answer".to_string()));
+            return Err(YieldRefusal::PlatformUnavailable {
+                detail: "no_answer".to_string(),
+            });
         }
         if let Some(refusal) = refusal {
             return Err(refusal);
@@ -906,7 +909,10 @@ fn yield_refusal_code(refusal: &YieldRefusal) -> &'static str {
     match refusal {
         YieldRefusal::InCall => "InCall",
         YieldRefusal::MicInUse => "MicInUse",
-        YieldRefusal::Unavailable(_) => "Unavailable",
+        YieldRefusal::StillConnected => "StillConnected",
+        YieldRefusal::MediaNotConnected => "MediaNotConnected",
+        YieldRefusal::AudioStateUnreadable { .. } => "AudioStateUnreadable",
+        YieldRefusal::PlatformUnavailable { .. } => "PlatformUnavailable",
     }
 }
 
@@ -918,7 +924,12 @@ fn parse_yield_refusal(raw: &str) -> Option<YieldRefusal> {
     match raw.trim().to_ascii_lowercase().as_str() {
         "in_call" | "incall" => Some(YieldRefusal::InCall),
         "mic_in_use" | "micinuse" => Some(YieldRefusal::MicInUse),
-        "unavailable" => Some(YieldRefusal::Unavailable("simulated".to_string())),
+        "audio_state_unreadable" => Some(YieldRefusal::AudioStateUnreadable {
+            detail: "simulated".to_string(),
+        }),
+        "unavailable" | "platform_unavailable" => Some(YieldRefusal::PlatformUnavailable {
+            detail: "simulated".to_string(),
+        }),
         _ => None,
     }
 }
@@ -1114,7 +1125,17 @@ impl OpenRoseCirculation {
                 dev.reply_latency_ms.load(Ordering::SeqCst),
             )
         } else {
-            Self::create_production(control, production_storage_dir(), default_device_name())
+            let local_audio = client
+                .desktop
+                .as_ref()
+                .map(|desktop| desktop.local_audio())
+                .ok_or_else(|| JsError::Error(remote_error_code(&RemoteError::ServiceClosed)))?;
+            Self::create_production(
+                control,
+                local_audio,
+                production_storage_dir(),
+                default_device_name(),
+            )
         }
     }
 
@@ -1160,6 +1181,7 @@ impl OpenRoseCirculation {
 
     fn create_production(
         control: Arc<ControlRuntime>,
+        local_audio: Arc<dyn LocalAudio>,
         storage_dir: PathBuf,
         name: String,
     ) -> Result<Self, JsError> {
@@ -1171,10 +1193,6 @@ impl OpenRoseCirculation {
                 UnavailableDiscovery::new() as Arc<dyn PeerDiscovery>,
                 Some(remote_error_code(&err)),
             ),
-        };
-        let local_audio = {
-            let _guard = SHARED_RUNTIME.enter();
-            openrose_desktop_platform::audio::create_local_audio()
         };
         let node = CirculationNode::with_control_and_audio(
             CirculationConfig::new(storage_dir, name),
@@ -1385,9 +1403,10 @@ impl OpenRoseCirculation {
             if dev.sound_settings_available.load(Ordering::SeqCst) {
                 return Ok(());
             }
-            return Err(JsError::Error("SettingsNotInstalled".to_string()));
+            return Err(JsError::Error(OpenSettingsError::NotInstalled.code().to_string()));
         }
-        openrose_desktop_platform::audio::open_sound_settings().map_err(JsError::Error)
+        openrose_desktop_platform::audio::open_sound_settings()
+            .map_err(|error| JsError::Error(error.code().to_string()))
     }
 
     /// Clears the last recorded error code in the circulation snapshot.
@@ -1511,6 +1530,7 @@ impl OpenRoseCirculation {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use openrose_desktop_platform::audio::unsupported::UnsupportedLocalAudio;
     use openrose_circulation::RemoteControlStatus;
 
     struct TempDir(PathBuf);
@@ -1768,6 +1788,7 @@ mod tests {
         let client = OpenRoseClient::create_dev(10);
         let circ1 = OpenRoseCirculation::create_production(
             Arc::clone(&client.runtime),
+            Arc::new(UnsupportedLocalAudio),
             dir.0.clone(),
             "Desktop 1".to_string(),
         )
@@ -1794,6 +1815,7 @@ mod tests {
 
         let circ2 = OpenRoseCirculation::create_production(
             Arc::clone(&client.runtime),
+            Arc::new(UnsupportedLocalAudio),
             dir.0.clone(),
             "Desktop 1".to_string(),
         )
@@ -1974,10 +1996,12 @@ mod tests {
 
             dev_state
                 .local_audio
-                .set_acquire_refusal(Some(YieldRefusal::Unavailable("a2dp_failed".to_string())));
+                .set_acquire_refusal(Some(YieldRefusal::PlatformUnavailable {
+                    detail: "a2dp_failed".to_string(),
+                }));
             assert_eq!(
                 inner.pull(headset2.as_str().to_string()).await,
-                Err("AcquireFailed:Unavailable".to_string())
+                Err("AcquireFailed:PlatformUnavailable".to_string())
             );
             let peer2_ref = dev_state.get_peer(Some(&dev2_id)).expect("peer2 ref");
             assert!(matches!(

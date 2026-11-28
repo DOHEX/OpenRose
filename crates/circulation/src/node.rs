@@ -1,3 +1,4 @@
+use crate::addresses::{advertised_addresses, sort_ipv4_first};
 use crate::contract::{
     DEFAULT_PORT, HandoffStatus, LocalAudio, NearbyPeer, PairingOffer, Peer, PeerDiscovery, PeerId,
     PullOutcome, PullStage, RemoteCommand, RemoteError, RemoteReading, RemoteSessionReference,
@@ -5,16 +6,18 @@ use crate::contract::{
 };
 use crate::endpoint::{HeadsetEndpoint, RemoteHandler, yield_via_local_audio};
 use crate::identity::{PeerIdentity, cert_fingerprint};
-use crate::pairing::{PairingRequest, PairingWindow, initiate_pairing, parse_qr_payload, respond_pairing};
-use async_trait::async_trait;
+use crate::pairing::{
+    PairingRequest, PairingWindow, initiate_pairing, parse_qr_payload, respond_pairing,
+};
 use crate::trust::PeerTrust;
 use crate::wire::{WireBody, recv_frame, send_frame};
+use async_trait::async_trait;
 use openrose_control::ControlRuntime;
 use openrose_headset::HeadsetCommand;
 use rustls::pki_types::ServerName;
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::ErrorKind;
-use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -120,8 +123,11 @@ impl CirculationNode {
         control: Arc<ControlRuntime>,
     ) -> Result<Self, RemoteError> {
         let identity = PeerIdentity::load_or_create(&config.storage_dir)?;
-        let handler: Arc<dyn RemoteHandler> =
-            Arc::new(HeadsetEndpoint::new(identity.id().clone(), control));
+        let handler: Arc<dyn RemoteHandler> = Arc::new(HeadsetEndpoint::with_owner_active(
+            identity.id().clone(),
+            control,
+            Arc::new(|| true),
+        ));
         Self::build_with_identity(config, identity, discovery, Some(handler), None, None)
     }
 
@@ -170,14 +176,6 @@ impl CirculationNode {
             Some(audio),
             Some(dialer),
         )
-    }
-
-    pub fn with_handler(
-        config: CirculationConfig,
-        discovery: Arc<dyn PeerDiscovery>,
-        handler: Arc<dyn RemoteHandler>,
-    ) -> Result<Self, RemoteError> {
-        Self::build(config, discovery, Some(handler), None, None)
     }
 
     fn build(
@@ -298,18 +296,18 @@ impl CirculationNode {
         if let Err(err) = self
             .inner
             .discovery
-            .start(self.inner.identity.id(), &self.inner.name, bound_addr.port())
+            .start(
+                self.inner.identity.id(),
+                &self.inner.name,
+                bound_addr.port(),
+            )
             .await
         {
             drop(listener);
             return Err(err);
         }
 
-        *self
-            .inner
-            .bound_addr_sync
-            .lock()
-            .expect("bound addr lock") = Some(bound_addr);
+        *self.inner.bound_addr_sync.lock().expect("bound addr lock") = Some(bound_addr);
 
         let (shutdown_tx, shutdown_rx) = watch::channel(false);
         let accept_task = tokio::spawn(accept_loop(
@@ -339,11 +337,7 @@ impl CirculationNode {
             let mut running_guard = self.inner.running.lock().await;
             running_guard.take()
         };
-        *self
-            .inner
-            .bound_addr_sync
-            .lock()
-            .expect("bound addr lock") = None;
+        *self.inner.bound_addr_sync.lock().expect("bound addr lock") = None;
 
         if let Some(state) = state {
             let _ = state.shutdown_tx.send(true);
@@ -378,9 +372,7 @@ impl CirculationNode {
         if !bound_addr.ip().is_unspecified() {
             return vec![bound_addr.ip()];
         }
-        detect_local_ip()
-            .map(|ip| vec![ip])
-            .unwrap_or_else(|| vec![IpAddr::V4(Ipv4Addr::LOCALHOST)])
+        advertised_addresses()
     }
 
     pub fn offer_pairing(&self) -> Result<PairingOffer, RemoteError> {
@@ -581,9 +573,7 @@ impl CirculationNode {
             .await
             .map_err(RemoteError::AcquireFailed)?;
         if !local_audio.is_media_connected(address).await {
-            return Err(RemoteError::AcquireFailed(YieldRefusal::Unavailable(
-                "media_not_connected".to_string(),
-            )));
+            return Err(RemoteError::AcquireFailed(YieldRefusal::MediaNotConnected));
         }
 
         if reachable == 0 {
@@ -676,12 +666,16 @@ impl CirculationNode {
         let mut addrs: Vec<SocketAddr> = nearby
             .iter()
             .filter(|peer| &peer.id == peer_id)
-            .flat_map(|peer| peer.addresses.iter().map(|&ip| SocketAddr::new(ip, peer.port)))
+            .flat_map(|peer| {
+                peer.addresses
+                    .iter()
+                    .map(|&ip| SocketAddr::new(ip, peer.port))
+            })
             .collect();
         if addrs.is_empty() {
             return Err(RemoteError::PeerOffline);
         }
-        sort_socket_addrs(&mut addrs);
+        sort_ipv4_first(&mut addrs);
         Ok(addrs)
     }
 
@@ -692,7 +686,7 @@ impl CirculationNode {
     ) -> Result<tokio_rustls::client::TlsStream<Box<dyn RouteStream>>, RemoteError> {
         self.require_bound_addr()?;
         let mut sorted = addrs.to_vec();
-        sort_socket_addrs(&mut sorted);
+        sort_ipv4_first(&mut sorted);
         if sorted.is_empty() {
             return Err(RemoteError::PeerOffline);
         }
@@ -747,18 +741,6 @@ async fn bind_listener(
         }
         Err(_) => Err(RemoteError::ServiceClosed),
     }
-}
-
-fn detect_local_ip() -> Option<IpAddr> {
-    let socket = UdpSocket::bind((Ipv4Addr::UNSPECIFIED, 0)).ok()?;
-    socket.connect("192.0.2.1:80").ok()?;
-    let ip = socket.local_addr().ok()?.ip();
-    if ip.is_unspecified() { None } else { Some(ip) }
-}
-
-fn sort_socket_addrs(addrs: &mut Vec<SocketAddr>) {
-    addrs.sort_by_key(|addr| (!addr.is_ipv4(), addr.to_string()));
-    addrs.dedup();
 }
 
 async fn accept_loop(
@@ -877,11 +859,7 @@ async fn handle_connection(
             let _ = timeout(inner.response_timeout, send_frame(&mut tls, WireBody::Ack)).await;
         }
         _ => {
-            let _ = send_frame(
-                &mut tls,
-                WireBody::Error(RemoteError::UnsupportedOperation),
-            )
-            .await;
+            let _ = send_frame(&mut tls, WireBody::Error(RemoteError::UnsupportedOperation)).await;
         }
     }
     Ok(())
@@ -894,11 +872,7 @@ async fn watch_loop(
     mut shutdown: watch::Receiver<bool>,
 ) {
     let mut online_peers: BTreeSet<PeerId> = BTreeSet::new();
-    let mut paired_ids: BTreeSet<PeerId> = peers_rx
-        .borrow()
-        .iter()
-        .map(|p| p.id.clone())
-        .collect();
+    let mut paired_ids: BTreeSet<PeerId> = peers_rx.borrow().iter().map(|p| p.id.clone()).collect();
 
     sync_nearby(&node, &discovery_rx.borrow());
     refresh_availability(

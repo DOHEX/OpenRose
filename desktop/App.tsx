@@ -12,6 +12,7 @@ import { HeadsetSettingsPage } from "./src/pages/settings/headset";
 import { DiagnosticsPage } from "./src/pages/DiagnosticsPage";
 import { HeadsetInfoPage } from "./src/pages/HeadsetInfoPage";
 import { createHeadsetController } from "./src/model/headset";
+import { firmwareHintText } from "./src/model/labels";
 import type { HeadsetController } from "./src/model/headset";
 import { createDesktopSettingsStore, createTrayAvailabilityStore } from "./src/model/trayPanelSettings";
 import type { DesktopSettingsStore, TrayAvailabilityStore } from "./src/model/trayPanelSettings";
@@ -265,7 +266,7 @@ function DesktopApp(props: {
                   familyHint={
                     selectedEntry() ? `协议族：${selectedEntry()!.familyLabel}` : undefined
                   }
-                  firmwareHint={selectedEntry()?.firmwareHint}
+                  firmwareHint={selectedEntry() ? firmwareHintText(selectedEntry()!.family) : undefined}
                   devError={controller.devError()}
                   devBusy={controller.devBusy()}
                   latencyOptions={LATENCY_OPTIONS}

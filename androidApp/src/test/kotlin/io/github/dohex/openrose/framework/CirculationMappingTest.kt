@@ -211,10 +211,10 @@ class CirculationMappingTest {
     @Test
     fun everyRemoteErrorCodeHasItsText() {
         val expected = listOf(
-            RemoteError.UnsupportedVersion to "对端互联协议版本不兼容",
+            RemoteError.UnsupportedVersion to "对端流转协议版本不兼容",
             RemoteError.NotPaired to "对端尚未完成流转配对",
             RemoteError.PeerOffline to "无法联系对端",
-            RemoteError.ServiceClosed to "互联服务已关闭",
+            RemoteError.ServiceClosed to "流转服务已关闭",
             RemoteError.OwnerInactive to "控制所有者已结束",
             RemoteError.PairingNotOpen to "请先在电脑显示配对码",
             RemoteError.PairingExpired to "配对码已失效",
@@ -227,7 +227,7 @@ class CirculationMappingTest {
             RemoteError.UnsupportedOperation to "该平台暂不支持流转",
             RemoteError.UnsupportedSetting to "耳机不支持该设置",
             RemoteError.InvalidArgument to "参数无效",
-            RemoteError.Protocol to "互联报文无效",
+            RemoteError.Protocol to "流转报文无效",
             RemoteError.Timeout to "连接超时",
             RemoteError.IdentityError to "流转身份无效",
             RemoteError.StorageError to "流转配对存储不可用",
@@ -242,9 +242,11 @@ class CirculationMappingTest {
 
     @Test
     fun nestedErrorsExplainTheirCause() {
-        assertEquals("原音源未让出耳机 · 手机通话中，无法让出耳机", RemoteError.YieldRefused(YieldRefusal.InCall).text())
-        assertEquals("本机未能接入耳机 · 麦克风正在使用中，无法让出耳机", RemoteError.AcquireFailed(YieldRefusal.MicInUse).text())
-        assertEquals("原音源未让出耳机 · 蓝牙繁忙", RemoteError.YieldRefused(YieldRefusal.Unavailable("蓝牙繁忙")).text())
+        assertEquals("原音源未让出耳机 · 对方正在通话", RemoteError.YieldRefused(YieldRefusal.InCall).text())
+        assertEquals("本机未能接入耳机 · 麦克风正在使用", RemoteError.AcquireFailed(YieldRefusal.MicInUse).text())
+        assertEquals("原音源未让出耳机 · 对方读不到耳机的音频状态", RemoteError.YieldRefused(YieldRefusal.AudioStateUnreadable("proxy timeout")).text())
+        assertEquals("本机未能接入耳机 · 系统蓝牙暂时不可用", RemoteError.AcquireFailed(YieldRefusal.PlatformUnavailable("a2dp")).text())
+        assertEquals("本机未能接入耳机 · 耳机已连接但没有接入音频", RemoteError.AcquireFailed(YieldRefusal.MediaNotConnected).text())
         val control = ControlErrorCode.entries.map { RemoteError.ControlFailed(it).text() }
         assertEquals(ControlErrorCode.entries.size, control.toSet().size)
         assertEquals("耳机未确认 · 耳机响应超时", RemoteError.ControlFailed(ControlErrorCode.TIMEOUT).text())

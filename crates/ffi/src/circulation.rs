@@ -7,10 +7,10 @@ use openrose_circulation::codec::{
 };
 use openrose_circulation::node::{CirculationConfig, CirculationNode as CoreCirculationNode};
 use openrose_circulation::{
-    HandoffStatus, LocalAudio as CoreLocalAudio, NearbyPeer, NearbyPeerRecord, PairingOffer, Peer,
-    PeerDiscovery as CorePeerDiscovery, PeerId, PullOutcome, RemoteError, RemoteReading,
-    RemoteSessionReference, RouteDialer as CoreRouteDialer, RouteStream, WIRE_VERSION,
-    YieldReceipt, YieldRefusal,
+    DiscoveryContract, HandoffStatus, LocalAudio as CoreLocalAudio, NearbyPeer, NearbyPeerRecord,
+    PairingOffer, Peer, PeerDiscovery as CorePeerDiscovery, PeerId, PullOutcome, RemoteError,
+    RemoteReading, RemoteSessionReference, RouteDialer as CoreRouteDialer, RouteStream,
+    WIRE_VERSION, YieldReceipt, YieldRefusal, service_instance_name,
 };
 use openrose_control::codec::CodecError;
 use openrose_headset::HeadsetCommand;
@@ -163,11 +163,13 @@ struct LocalAudioAdapter(Arc<dyn LocalAudio>);
 
 #[async_trait]
 impl CoreLocalAudio for LocalAudioAdapter {
-    async fn is_connected(&self, address: &str) -> bool {
+    async fn is_connected(&self, address: &str) -> Result<bool, YieldRefusal> {
         self.0
             .is_connected(address.to_string())
             .await
-            .unwrap_or(false)
+            .map_err(|error| YieldRefusal::AudioStateUnreadable {
+                detail: error.to_string(),
+            })
     }
 
     async fn is_media_connected(&self, address: &str) -> bool {
@@ -439,7 +441,27 @@ impl CirculationNode {
     pub fn bound_port(&self) -> Option<u16> {
         self.inner.bound_port()
     }
+}
 
+#[uniffi::export(async_runtime = "tokio")]
+impl CirculationNode {
+    pub async fn start(&self) -> Result<u16, CirculationFailure> {
+        self.inner.start().await.map_err(CirculationFailure::from)
+    }
+
+    pub async fn close_node(&self) {
+        self.inner.close().await;
+    }
+
+    pub async fn execute(&self, command: CirculationCommand) -> CirculationReply {
+        match self.dispatch(command).await {
+            Ok(reply) => reply,
+            Err(CirculationFailure::Failed { error }) => CirculationReply::Failed { error },
+        }
+    }
+}
+
+impl CirculationNode {
     pub fn peers(&self) -> Vec<Peer> {
         self.inner.peers()
     }
@@ -458,17 +480,6 @@ impl CirculationNode {
 
     pub fn current_pairing_offer(&self) -> Option<PairingOffer> {
         self.inner.current_pairing_offer()
-    }
-}
-
-#[uniffi::export(async_runtime = "tokio")]
-impl CirculationNode {
-    pub async fn start(&self) -> Result<u16, CirculationFailure> {
-        self.inner.start().await.map_err(CirculationFailure::from)
-    }
-
-    pub async fn close_node(&self) {
-        self.inner.close().await;
     }
 
     pub async fn pair(&self, peer_id: PeerId, code: String) -> Result<Peer, CirculationFailure> {
@@ -522,15 +533,6 @@ impl CirculationNode {
             .map_err(CirculationFailure::from)
     }
 
-    pub async fn execute(&self, command: CirculationCommand) -> CirculationReply {
-        match self.dispatch(command).await {
-            Ok(reply) => reply,
-            Err(CirculationFailure::Failed { error }) => CirculationReply::Failed { error },
-        }
-    }
-}
-
-impl CirculationNode {
     async fn dispatch(
         &self,
         command: CirculationCommand,
@@ -570,6 +572,16 @@ impl CirculationNode {
             },
         })
     }
+}
+
+#[uniffi::export]
+pub fn circulation_discovery_contract() -> DiscoveryContract {
+    DiscoveryContract::current()
+}
+
+#[uniffi::export]
+pub fn circulation_service_instance_name(peer_id: String) -> String {
+    service_instance_name(&peer_id)
 }
 
 #[uniffi::export]

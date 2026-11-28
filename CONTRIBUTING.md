@@ -21,7 +21,7 @@
 - **Linux 运行库与打包工具**：运行或测试 NSH 桌面端需要 GTK 4.14+、GStreamer、D-Bus 与 GLib；编译 NSH 桌面端和 Linux 蓝牙实现（bluer 经 libdbus 访问 BlueZ）还需要开发库及 `pkg-config`。Ubuntu 24.04 上需要：
 
   ```bash
-  sudo apt-get install --yes libgtk-4-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libdbus-1-dev pkg-config
+  sudo apt-get install --yes libgtk-4-dev libwebkitgtk-6.0-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libdbus-1-dev pkg-config
   ```
 
   打包 Linux 安装包需要 [nsh](https://nsh.dev/) 0.7+、`nfpm` 与 `appimagetool`，由 `cargo xtask package-linux` 生成 AppImage、deb、rpm 与 pacman 包；deb/rpm/pacman 包会声明 `bluez`、GTK 4.14+、D-Bus、GStreamer 与 GLib 依赖，AppImage 依赖宿主系统的这些运行库与蓝牙服务。目前 `cargo xtask check` 中的 Gradle 桌面测试仍保留，CI 的 `Checks` 作业为此额外安装 `libgtk-3-0t64 libegl1 libgl1 libfontconfig1`。

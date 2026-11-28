@@ -1,4 +1,5 @@
 use super::{ControlConfig, ControlRuntime, ObserverHub, OpenRoseClient, SHARED_RUNTIME, SystemClock};
+use openrose_circulation::LocalAudio;
 use openrose_desktop_platform::bluetooth::{DesktopBluetooth, create_desktop_bluetooth};
 use std::sync::Arc;
 use tokio::task::JoinHandle;
@@ -6,6 +7,12 @@ use tokio::task::JoinHandle;
 pub struct DesktopLink {
     bluetooth: DesktopBluetooth,
     watcher: JoinHandle<()>,
+}
+
+impl DesktopLink {
+    pub(crate) fn local_audio(&self) -> Arc<dyn LocalAudio> {
+        Arc::clone(&self.bluetooth.local_audio)
+    }
 }
 
 impl Drop for DesktopLink {

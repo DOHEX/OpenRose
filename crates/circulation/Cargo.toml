@@ -12,6 +12,7 @@ uniffi = ["dep:uniffi", "openrose-control/uniffi", "openrose-headset/uniffi"]
 openrose-control = { path = "../control" }
 openrose-headset = { path = "../headset" }
 async-trait.workspace = true
+if-addrs = "0.15"
 rcgen = { version = "0.14.10", default-features = false, features = ["crypto", "ring"] }
 ring = "0.17.14"
 rustls = { version = "0.23.46", default-features = false, features = ["ring", "std", "tls12"] }

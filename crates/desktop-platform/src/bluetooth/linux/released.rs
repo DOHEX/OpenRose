@@ -1,6 +1,6 @@
 use super::bus::{
     ADAPTER, BluezBus, BluezError, BluezObjects, BluezSignal, BluezValue, CLASSIC_BEARER, DEVICE,
-    LE_BEARER, MEDIA_TRANSPORT, adapter_of, media_belongs_to, on_powered_adapter,
+    LE_BEARER, MEDIA_TRANSPORT, adapter_of, bearer_connected, media_belongs_to, on_powered_adapter,
 };
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
@@ -55,7 +55,7 @@ impl ReleasedBluezLinks {
     {
         let owner = bus
             .owner()
-            .ok_or_else(|| "BlueZ 服务不可用".to_string())?;
+            .ok_or_else(|| "BlueZ service unavailable".to_string())?;
         let release = {
             let mut guard = self.lock.lock().await;
             guard.next_id += 1;
@@ -109,7 +109,7 @@ impl ReleasedBluezLinks {
                     }
                 }
                 if bus.owner().as_deref() != Some(owner.as_str()) {
-                    return Err("让出期间 BlueZ 服务已更换".to_string());
+                    return Err("BlueZ service changed while releasing".to_string());
                 }
                 for path in paths {
                     guard.released.insert(path.clone(), Arc::clone(&release));
@@ -131,10 +131,10 @@ impl ReleasedBluezLinks {
                 {
                     let mut state = release.lock().await;
                     if state.resumed_locally {
-                        return Err("本机已重新请求接入耳机".to_string());
+                        return Err("local side requested the headset again".to_string());
                     }
                     if bus.owner().as_deref() != Some(state.owner.as_str()) {
-                        return Err("让出期间 BlueZ 服务已更换".to_string());
+                        return Err("BlueZ service changed while releasing".to_string());
                     }
                     state.confirmed = true;
                 }
@@ -153,12 +153,12 @@ impl ReleasedBluezLinks {
                             .await
                             .map_err(|err| err.to_string())?
                         {
-                            return Err("本机已重新接入耳机音频".to_string());
+                            return Err("local side reconnected the headset audio".to_string());
                         }
                     }
                 }
                 if bus.owner().as_deref() != Some(owner.as_str()) {
-                    return Err("让出期间 BlueZ 服务已更换".to_string());
+                    return Err("BlueZ service changed while releasing".to_string());
                 }
             }
             Ok(())
@@ -297,14 +297,8 @@ async fn release_returned_le(
     let still_released = bus.owner().as_deref() == Some(owner.as_str())
         && on_powered_adapter(objects, path)
         && interfaces.is_some_and(|ifaces| ifaces.contains_key(DEVICE));
-    let classic = interfaces
-        .and_then(|ifaces| ifaces.get(CLASSIC_BEARER))
-        .and_then(|props| props.get("Connected"))
-        .and_then(BluezValue::as_bool);
-    let le = interfaces
-        .and_then(|ifaces| ifaces.get(LE_BEARER))
-        .and_then(|props| props.get("Connected"))
-        .and_then(BluezValue::as_bool);
+    let classic = interfaces.and_then(|ifaces| bearer_connected(ifaces, CLASSIC_BEARER));
+    let le = interfaces.and_then(|ifaces| bearer_connected(ifaces, LE_BEARER));
     let has_media = super::bus::has_media_transport(objects, path);
 
     if !still_released {
