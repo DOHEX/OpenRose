@@ -3,6 +3,26 @@ import { OpenRoseCatalog, OpenRoseClient, OpenRoseSettings } from "openrose-nati
 
 export type BatteryLayout = "EarbudsAndCase" | "EarbudsOnly" | "SingleUnit";
 export type ProtocolFamilyId = "Zt" | "RsCommonV2" | "F8" | "RsCommon";
+const FIRMWARE_HINT_TEXT: Record<ProtocolFamilyId, string> = {
+  Zt: "三位 0–15 数字或十六进制（如 125 或 1.2.5）",
+  RsCommonV2: "三段 0–255 版本（如 2.1.3 或 125）",
+  RsCommon: "三段版本（首段 0–15，后两段 0–255，如 1.2.5 或 125）",
+  F8: "单个 0–65535 整数（如 125 或 300）",
+};
+
+export function firmwareHintText(family: ProtocolFamilyId): string {
+  return FIRMWARE_HINT_TEXT[family];
+}
+
+const INVALID_FIRMWARE_PREFIX = "invalid_firmware:";
+
+export function devErrorText(message: string): string {
+  if (!message.startsWith(INVALID_FIRMWARE_PREFIX)) return message;
+  const family = message.slice(INVALID_FIRMWARE_PREFIX.length);
+  const hint = family in FIRMWARE_HINT_TEXT ? FIRMWARE_HINT_TEXT[family as ProtocolFamilyId] : null;
+  return hint === null ? "固件版本格式不对" : `固件版本格式不对：${hint}`;
+}
+
 export type ConnectionPhase = "Connecting" | "Discovering" | "Subscribing" | "Initializing" | "Ready";
 export type SettingStage =
   | "Submitted"
@@ -597,7 +617,7 @@ export function createHeadsetController(): HeadsetController {
       devConfig.set(updated);
       return true;
     } catch (error) {
-      devError.set(error instanceof Error ? error.message : String(error));
+      devError.set(devErrorText(error instanceof Error ? error.message : String(error)));
       return false;
     } finally {
       devBusy.set(false);

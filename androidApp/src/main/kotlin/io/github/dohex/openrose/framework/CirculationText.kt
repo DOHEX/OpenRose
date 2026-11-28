@@ -11,6 +11,7 @@ internal const val UNSUPPORTED_REMOTE_SETTING = "不支持远程设置该项"
 internal const val PAIRED_MESSAGE = "已配对"
 internal const val FORGOTTEN_MESSAGE = "已解除配对"
 
+@Suppress("CyclomaticComplexMethod")
 internal fun RemoteError.text(): String = when (this) {
     is RemoteError.ControlFailed -> "耳机未确认 · ${v1.text()}"
     is RemoteError.YieldRefused -> "原音源未让出耳机 · ${v1.holderText()}"

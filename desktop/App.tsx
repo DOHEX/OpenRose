@@ -38,6 +38,7 @@ import { HeadsetInfoPage } from "./src/pages/HeadsetInfoPage";
 import {
   createHeadsetController,
   errorCategoryLabel,
+  firmwareHintText,
   noiseModeLabel,
 } from "./src/model/headset";
 import type { HeadsetController } from "./src/model/headset";
@@ -622,7 +623,7 @@ function DesktopApp(props: {
                   familyHint={
                     selectedEntry() ? `协议族：${selectedEntry()!.familyLabel}` : undefined
                   }
-                  firmwareHint={selectedEntry()?.firmwareHint}
+                  firmwareHint={selectedEntry() ? firmwareHintText(selectedEntry()!.family) : undefined}
                   devError={controller.devError()}
                   devBusy={controller.devBusy()}
                   latencyOptions={LATENCY_OPTIONS}

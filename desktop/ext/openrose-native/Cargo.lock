@@ -1306,6 +1306,7 @@ name = "openrose-circulation"
 version = "0.1.1"
 dependencies = [
  "async-trait",
+ "if-addrs",
  "openrose-control",
  "openrose-headset",
  "rcgen",
@@ -1339,7 +1340,6 @@ dependencies = [
  "async-trait",
  "bluer",
  "futures",
- "if-addrs",
  "mdns-sd",
  "openrose-circulation",
  "openrose-control",
