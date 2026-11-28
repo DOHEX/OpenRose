@@ -119,7 +119,7 @@ class ModuleHostBinderLinkCirculationTest {
     fun aReplyFromAnotherWireVersionBecomesAnUnsupportedVersionFailure() {
         val bytes = RustReply.Forgotten.encodeToBytes().apply { this[3] = (circulationWireFormatVersionNumber().toInt() + 1).toByte() }
         val result = exchange(reply(BridgeWire.STATUS_OK, bytes), CirculationCommand.Forget("peer")).second
-        assertEquals(CirculationFailure("对端互联协议版本不兼容"), result)
+        assertEquals(CirculationFailure("对端流转协议版本不兼容"), result)
     }
 
     @Test

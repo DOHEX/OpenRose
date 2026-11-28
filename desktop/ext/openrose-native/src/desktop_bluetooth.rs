@@ -1,5 +1,6 @@
 use super::{ControlConfig, ControlRuntime, ObserverHub, OpenRoseClient, SHARED_RUNTIME, SystemClock};
 use nsh_core::prelude::*;
+use openrose_circulation::LocalAudio;
 use openrose_desktop_platform::bluetooth::{
     DesktopBluetooth, bluetooth_settings_command, create_desktop_bluetooth, open_bluetooth_settings,
 };
@@ -9,6 +10,12 @@ use tokio::task::JoinHandle;
 pub struct DesktopLink {
     bluetooth: DesktopBluetooth,
     watcher: JoinHandle<()>,
+}
+
+impl DesktopLink {
+    pub(crate) fn local_audio(&self) -> Arc<dyn LocalAudio> {
+        Arc::clone(&self.bluetooth.local_audio)
+    }
 }
 
 impl Drop for DesktopLink {
@@ -60,7 +67,7 @@ impl OpenRoseBluetooth {
 
     /// Opens the system Bluetooth settings program, failing when none is installed.
     pub fn open_settings() -> Result<(), JsError> {
-        open_bluetooth_settings().map_err(JsError::Error)
+        open_bluetooth_settings().map_err(|error| JsError::Error(error.code().to_string()))
     }
 }
 

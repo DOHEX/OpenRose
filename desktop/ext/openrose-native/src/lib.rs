@@ -165,7 +165,6 @@ struct ModelCatalogEntry {
     family_label: &'static str,
     battery_layout: openrose_headset::BatteryLayout,
     default_firmware: &'static str,
-    firmware_hint: &'static str,
 }
 
 #[derive(Serialize)]
@@ -248,7 +247,6 @@ impl OpenRoseCatalog {
                 family_label: profile.family().display_name(),
                 battery_layout: profile.battery_layout(),
                 default_firmware: "125",
-                firmware_hint: profile.family().firmware_hint(),
             })
             .collect();
         serde_json::to_value(entries).expect("model catalog serializes")

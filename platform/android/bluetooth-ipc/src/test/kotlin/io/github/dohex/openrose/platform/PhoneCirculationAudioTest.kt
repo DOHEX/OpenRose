@@ -29,4 +29,14 @@ class PhoneCirculationAudioTest {
         }
         assertEquals(YieldRefusalKind.IN_CALL, error.kind)
     }
+
+    @Test
+    fun aHolderThatCannotReadItsAudioStateRefusesInsteadOfAnsweringNotHolding() {
+        val context: Context = RuntimeEnvironment.getApplication()
+        shadowOf(RuntimeEnvironment.getApplication()).grantPermissions(Manifest.permission.BLUETOOTH_CONNECT)
+        val error = assertFailsWith<DriverException.YieldRefused> {
+            runBlocking { PhoneCirculationAudio(context).isConnected("11:22:33:44:55:66") }
+        }
+        assertEquals(YieldRefusalKind.AUDIO_STATE_UNREADABLE, error.kind)
+    }
 }

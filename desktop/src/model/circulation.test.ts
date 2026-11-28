@@ -103,7 +103,11 @@ test("the first holder in paired order is the remote headset shown by the tray",
 test("pull error and outcome codes map to expected Chinese feedback", () => {
   expect(circulationErrorText("YieldRefused:InCall")).toBe("对方正在通话，暂时无法切换");
   expect(circulationErrorText("YieldRefused:MicInUse")).toBe("麦克风正在使用，暂时无法切换");
-  expect(circulationErrorText("AcquireFailed:Unavailable")).toBe("本机接入耳机失败");
+  expect(circulationErrorText("YieldRefused:AudioStateUnreadable")).toBe("对端读不到耳机的音频状态，暂时无法切换");
+  expect(circulationErrorText("YieldRefused:StillConnected")).toBe("对端让出后仍与耳机保持连接，请稍后重试");
+  expect(circulationErrorText("AcquireFailed:PlatformUnavailable")).toBe("本机接入耳机失败");
+  expect(circulationErrorText("AcquireFailed:MediaNotConnected")).toBe("耳机已连接，但没有接入音频，请重试");
+  expect(circulationErrorText("SettingsNotInstalled")).toBe("未找到系统设置程序");
   expect(circulationErrorText("PullInProgress")).toBe("正在将耳机接到这台电脑，请稍候");
   expect(circulationErrorText("Timeout")).toBe("对端响应超时");
 

@@ -105,7 +105,6 @@ function controller(
           familyLabel: "ZT",
           batteryLayout: "EarbudsAndCase",
           defaultFirmware: "125",
-          firmwareHint: "",
         },
       ],
     ]),
