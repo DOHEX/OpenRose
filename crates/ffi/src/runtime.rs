@@ -18,7 +18,7 @@ static SHARED_RUNTIME: LazyLock<Runtime> = LazyLock::new(|| {
         .expect("openrose tokio runtime")
 });
 
-fn with_runtime<T>(work: impl FnOnce() -> T) -> T {
+pub(crate) fn with_runtime<T>(work: impl FnOnce() -> T) -> T {
     if tokio::runtime::Handle::try_current().is_ok() {
         work()
     } else {
@@ -29,7 +29,13 @@ fn with_runtime<T>(work: impl FnOnce() -> T) -> T {
 
 #[derive(uniffi::Object)]
 pub struct ControlRuntime {
-    inner: CoreControlRuntime,
+    inner: Arc<CoreControlRuntime>,
+}
+
+impl ControlRuntime {
+    pub(crate) fn core(&self) -> Arc<CoreControlRuntime> {
+        Arc::clone(&self.inner)
+    }
 }
 
 #[uniffi::export]
@@ -58,7 +64,9 @@ impl ControlRuntime {
                 config,
             )
         });
-        Arc::new(Self { inner })
+        Arc::new(Self {
+            inner: Arc::new(inner),
+        })
     }
 
     pub fn snapshot(&self) -> ControlSnapshot {

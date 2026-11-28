@@ -1,5 +1,8 @@
 use async_trait::async_trait;
-use openrose_control::audio::{RawAudioDevice, RawAudioEvent, RawAudioSnapshot};
+use openrose_control::audio::{
+    AudioConnectionState, AudioProfile, RawAudioDevice, RawAudioEvent, RawAudioSnapshot,
+    RawProfileSnapshot,
+};
 use openrose_control::gatt::{
     GattCharacteristic, GattEvent, GattFailureKind, GattService, GattSubscription,
 };
@@ -59,6 +62,7 @@ pub struct FakeHeadset {
     address: String,
     device: Mutex<SimulatedHeadset>,
     muted: AtomicBool,
+    audio_connected: AtomicBool,
     fail_connect: Mutex<Option<DriverError>>,
     fail_open: Mutex<Option<DriverError>>,
     panic_on_open: AtomicBool,
@@ -79,6 +83,7 @@ impl FakeHeadset {
                     .expect("simulated device"),
             ),
             muted: AtomicBool::new(false),
+            audio_connected: AtomicBool::new(false),
             fail_connect: Mutex::new(None),
             fail_open: Mutex::new(None),
             panic_on_open: AtomicBool::new(false),
@@ -95,6 +100,10 @@ impl FakeHeadset {
 
     pub fn mute(&self, muted: bool) {
         self.muted.store(muted, Ordering::SeqCst);
+    }
+
+    pub fn set_audio_connected(&self, connected: bool) {
+        self.audio_connected.store(connected, Ordering::SeqCst);
     }
 
     pub fn fail_connect_with(&self, error: Option<DriverError>) {
@@ -290,12 +299,24 @@ impl AudioFactsDriver for FakeAudio {
     }
 
     async fn snapshot(&self, _target_addresses: Vec<String>) -> Option<RawAudioSnapshot> {
+        let mut profiles = BTreeMap::new();
+        if self.0.audio_connected.load(Ordering::SeqCst) {
+            let mut states = BTreeMap::new();
+            states.insert(self.0.address.clone(), AudioConnectionState::Connected);
+            profiles.insert(
+                AudioProfile::A2dp,
+                Some(RawProfileSnapshot {
+                    connected_addresses: vec![self.0.address.clone()],
+                    states,
+                }),
+            );
+        }
         Some(RawAudioSnapshot {
             enabled: true,
             spp_available: false,
             le_audio_observable: false,
             bonded_devices: vec![self.paired()],
-            profiles: BTreeMap::new(),
+            profiles,
         })
     }
 }
