@@ -90,7 +90,7 @@ test("panel noise mode writes once and ignores choosing the confirmed mode again
   await app.press("id:tray-noise-normal");
   expect(app.shows("text:正在切换至关闭…")).toBe(true);
   await app.press("id:nav-headset");
-  await app.waitFor("text:当前：关闭");
+  await app.waitFor("text:已确认：关闭");
   expect(app.shows("text:正在切换至关闭…")).toBe(false);
 
   await app.press("id:tray-noise-normal");
