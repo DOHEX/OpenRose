@@ -3,6 +3,7 @@ import {
   circulationErrorText,
   firstRemoteHolder,
   pullOutcomeFeedback,
+  pullProgressFeedback,
   remoteBatteryText,
   remoteHeadsetView,
 } from "./circulation";
@@ -43,6 +44,7 @@ function snapshot(pairedPeers: PairedPeerView[]): CirculationSnapshot {
     pairingOffer: null,
     remoteReadings: {},
     pendingNoiseWrites: {},
+    pullStage: null,
     lastError: null,
   };
 }
@@ -123,4 +125,32 @@ test("pull error and outcome codes map to expected Chinese feedback", () => {
     title: "已接到这台电脑",
     detail: "联系不上任何对端",
   });
+});
+
+test("the pull progress names each stage, and the offline stage says no peer could be reached", () => {
+  expect(pullProgressFeedback(null)).toEqual({
+    kind: "in_progress",
+    tone: "accent",
+    title: "正在将耳机接到这台电脑…",
+  });
+  expect(pullProgressFeedback("ContactingPeers").title).toBe("正在联系对端…");
+  expect(pullProgressFeedback("Acquiring").title).toBe("对端已让出耳机，正在接入本机…");
+  expect(pullProgressFeedback("AcquiringOffline").title).toBe(
+    "联系不上任何对端，正在直接接入本机…",
+  );
+});
+
+test("an unknown pull outcome is an error, not a success", () => {
+  expect(pullOutcomeFeedback("Surprise")).toEqual({
+    kind: "error",
+    tone: "danger",
+    title: "流转失败（Surprise）",
+  });
+});
+
+test("acquire failure and timeout have their own text", () => {
+  expect(circulationErrorText("AcquireFailed:InCall")).toBe("本机正在通话，无法接入耳机");
+  expect(circulationErrorText("AcquireFailed:MicInUse")).toBe("本机麦克风正在使用，无法接入耳机");
+  expect(circulationErrorText("AcquireFailed:Unavailable")).toBe("本机接入耳机失败");
+  expect(circulationErrorText("Timeout")).toBe("对端响应超时");
 });

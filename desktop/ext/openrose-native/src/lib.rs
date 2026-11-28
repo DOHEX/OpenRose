@@ -9,12 +9,15 @@ use openrose_control::simulator::{SimulatedHeadsetHandle, SimulatedTransport};
 use openrose_control::snapshot::{
     ControlSnapshot, HostPlatform, PermissionState, PlatformState, TransportAvailability,
 };
-use openrose_control::{ControlConfig, ControlObserver, ControlRuntime, LocalClock};
+use openrose_control::{
+    ControlConfig, ControlError, ControlErrorCode, ControlObserver, ControlRuntime, LocalClock,
+};
 use openrose_headset::{
     FirmwareVersion, HeadsetCommand, HeadsetId, LocalDateTime, ModelProfile, NoiseMode,
     ProtocolFamily, decode_hex,
 };
 use serde::Serialize;
+use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, LazyLock, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -42,7 +45,6 @@ fn native(registry: &mut Registry) {
         .module::<OpenRoseCatalog>()
         .module::<tray::OpenRoseTray>()
         .module::<settings::OpenRoseSettings>()
-        .module::<desktop_bluetooth::OpenRoseBluetooth>()
         .module::<login_launch::OpenRoseLoginLaunch>()
         .class::<OpenRoseClient>()
         .class::<circulation::OpenRoseCirculation>()
@@ -84,27 +86,27 @@ fn civil_from_days(days_since_epoch: i64) -> (i64, u8, u8) {
 
 #[derive(Default)]
 struct ObserverHub {
-    sender: Mutex<Option<mpsc::UnboundedSender<ControlSnapshot>>>,
+    next_id: AtomicU64,
+    senders: Mutex<BTreeMap<u64, mpsc::UnboundedSender<ControlSnapshot>>>,
 }
 
 impl ObserverHub {
-    fn subscribe(&self) -> mpsc::UnboundedReceiver<ControlSnapshot> {
+    fn subscribe(&self) -> (u64, mpsc::UnboundedReceiver<ControlSnapshot>) {
+        let id = self.next_id.fetch_add(1, Ordering::Relaxed) + 1;
         let (tx, rx) = mpsc::unbounded_channel();
-        *self.sender.lock().expect("observer hub lock") = Some(tx);
-        rx
+        self.senders.lock().expect("observer hub lock").insert(id, tx);
+        (id, rx)
     }
 
-    fn clear(&self) {
-        *self.sender.lock().expect("observer hub lock") = None;
+    fn remove(&self, id: u64) {
+        self.senders.lock().expect("observer hub lock").remove(&id);
     }
 }
 
 impl ControlObserver for ObserverHub {
     fn state_changed(&self, snapshot: &ControlSnapshot) {
-        let sender = self.sender.lock().expect("observer hub lock").clone();
-        if let Some(tx) = sender {
-            let _ = tx.send(snapshot.clone());
-        }
+        let mut senders = self.senders.lock().expect("observer hub lock");
+        senders.retain(|_, tx| tx.send(snapshot.clone()).is_ok());
     }
 }
 
@@ -213,6 +215,14 @@ fn snapshot_to_json(snapshot: &ControlSnapshot) -> JsonValue {
     serde_json::to_value(snapshot).expect("control snapshot serializes to json")
 }
 
+pub(crate) fn error_code(code: ControlErrorCode) -> String {
+    format!("{code:?}")
+}
+
+pub(crate) fn control_error_code(err: ControlError) -> String {
+    error_code(err.code)
+}
+
 pub(crate) fn run_on_core<T: Send + Ret + 'static>(
     work: impl Future<Output = Result<T, String>> + Send + 'static,
 ) -> Later<T> {
@@ -223,7 +233,7 @@ pub(crate) fn run_on_core<T: Send + Ret + 'static>(
             let _ = tx.send(result);
         });
         rx.await
-            .map_err(|_| JsError::Error("核心任务意外中断".to_string()))?
+            .map_err(|_| JsError::Error(error_code(ControlErrorCode::Disconnected)))?
             .map_err(JsError::Error)
     })
 }
@@ -323,11 +333,11 @@ impl OpenRoseClient {
         .await;
         if observed.is_err() {
             runtime.stop_scan().await;
-            return Err("模拟耳机广播未被扫描到".to_string());
+            return Err(error_code(ControlErrorCode::Timeout));
         }
         let result = runtime.connect_for_add_headset(id).await;
         runtime.stop_scan().await;
-        result.map_err(|err| err.message)
+        result.map_err(control_error_code)
     }
 }
 
@@ -349,7 +359,7 @@ impl OpenRoseClient {
 
     /// Subscribes to ControlRuntime snapshot updates and forwards each pushed snapshot to JS.
     pub fn subscribe(&self, cx: CallCx<'_>, on_snapshot: Callback<JsonValue>) -> Stop {
-        let mut rx = self.observer.subscribe();
+        let (subscription, mut rx) = self.observer.subscribe();
         let initial = snapshot_to_json(&self.runtime.snapshot());
         on_snapshot.post(initial);
         cx.start(async move {
@@ -359,7 +369,7 @@ impl OpenRoseClient {
         });
         let observer = Arc::clone(&self.observer);
         Stop::new(move || {
-            observer.clear();
+            observer.remove(subscription);
         })
     }
 
@@ -372,13 +382,13 @@ impl OpenRoseClient {
                 runtime
                     .connect(HeadsetId::new(id))
                     .await
-                    .map_err(|err| err.message)
+                    .map_err(control_error_code)
             } else if let Some(dev) = dev {
                 let id = dev.active_id.lock().expect("dev id lock").clone();
                 let profile = *dev.active_profile.lock().expect("dev profile lock");
                 Self::connect_dev_headset(&runtime, &dev, id, profile).await
             } else {
-                Err("需要指定要连接的耳机".to_string())
+                Err(error_code(ControlErrorCode::InvalidArgument))
             }
         })
     }
@@ -401,7 +411,7 @@ impl OpenRoseClient {
     /// Starts scanning for nearby ROSE headsets via the active transport.
     pub fn start_scan(&self) -> Later<()> {
         let runtime = Arc::clone(&self.runtime);
-        run_on_core(async move { runtime.start_scan().await.map_err(|err| err.message) })
+        run_on_core(async move { runtime.start_scan().await.map_err(control_error_code) })
     }
 
     /// Stops any active headset discovery scan.
@@ -422,12 +432,25 @@ impl OpenRoseClient {
     pub fn set_noise_mode(&self, mode: String, expected_session: Option<u64>) -> Later<()> {
         let runtime = Arc::clone(&self.runtime);
         run_on_core(async move {
-            let parsed =
-                NoiseMode::from_id(&mode).ok_or_else(|| format!("不支持的降噪模式: {mode}"))?;
+            let parsed = NoiseMode::from_id(&mode)
+                .ok_or_else(|| error_code(ControlErrorCode::InvalidArgument))?;
             runtime
                 .set(HeadsetCommand::NoiseMode(parsed), expected_session)
                 .await
-                .map_err(|err| err.message)
+                .map_err(control_error_code)
+        })
+    }
+
+    /// Executes a serialized HeadsetCommand against the ControlRuntime and resolves after headset confirmation.
+    pub fn execute_command(&self, command_json: String, expected_session: Option<u64>) -> Later<()> {
+        let runtime = Arc::clone(&self.runtime);
+        run_on_core(async move {
+            let command: HeadsetCommand = serde_json::from_str(&command_json)
+                .map_err(|_| error_code(ControlErrorCode::InvalidArgument))?;
+            runtime
+                .set(command, expected_session)
+                .await
+                .map_err(control_error_code)
         })
     }
 
@@ -436,19 +459,19 @@ impl OpenRoseClient {
         let runtime = Arc::clone(&self.runtime);
         let dev = self.dev.clone();
         run_on_core(async move {
-            let dev = dev.ok_or_else(|| "当前未启用开发模式模拟器".to_string())?;
-            let profile =
-                ModelProfile::from_id(&model_id).ok_or_else(|| format!("未知型号: {model_id}"))?;
+            let dev = dev.ok_or_else(|| error_code(ControlErrorCode::Unsupported))?;
+            let profile = ModelProfile::from_id(&model_id)
+                .ok_or_else(|| error_code(ControlErrorCode::InvalidArgument))?;
             let parsed_fw = profile
                 .family()
                 .parse_firmware(&firmware)
-                .map_err(|err| err.to_string())?;
+                .map_err(|_| error_code(ControlErrorCode::InvalidArgument))?;
             let seq = dev.sequence.fetch_add(1, Ordering::SeqCst) + 1;
             let new_id = HeadsetId::new(format!("sim:{}:{seq}", profile.id()));
             let handle = dev
                 .transport
                 .add_headset(new_id.clone(), profile, parsed_fw.clone())
-                .map_err(|err| err.to_string())?;
+                .map_err(|_| error_code(ControlErrorCode::Failed))?;
             let latency = dev.reply_latency_ms.load(Ordering::SeqCst);
             handle.reply_latency(Duration::from_millis(latency));
             let old_id = {
@@ -471,7 +494,7 @@ impl OpenRoseClient {
         let dev = self
             .dev
             .as_ref()
-            .ok_or_else(|| JsError::Error("当前未启用开发模式模拟器".to_string()))?;
+            .ok_or_else(|| JsError::Error(error_code(ControlErrorCode::Unsupported)))?;
         dev.reply_latency_ms
             .store(u64::from(millis), Ordering::SeqCst);
         dev.active_handle
@@ -498,7 +521,7 @@ mod tests {
     #[test]
     fn simulated_i5_connects_reads_battery_shows_pending_then_confirmed_and_switches_model() {
         let client = OpenRoseClient::create_dev(40);
-        let mut rx = client.observer.subscribe();
+        let (_, mut rx) = client.observer.subscribe();
         let runtime = Arc::clone(&client.runtime);
         let dev = client.dev.as_ref().expect("dev state").clone();
 
@@ -565,4 +588,21 @@ mod tests {
         });
     }
 
+    #[test]
+    fn observer_hub_stop_detaches_only_its_own_subscription() {
+        let client = OpenRoseClient::create_dev(10);
+        let snapshot = client.runtime.snapshot();
+        let hub = ObserverHub::default();
+        let (first, mut first_rx) = hub.subscribe();
+        let (_second, mut second_rx) = hub.subscribe();
+
+        hub.state_changed(&snapshot);
+        assert!(first_rx.try_recv().is_ok());
+        assert!(second_rx.try_recv().is_ok());
+
+        hub.remove(first);
+        hub.state_changed(&snapshot);
+        assert!(first_rx.try_recv().is_err());
+        assert!(second_rx.try_recv().is_ok());
+    }
 }

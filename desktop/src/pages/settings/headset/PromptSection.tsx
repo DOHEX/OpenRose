@@ -1,9 +1,4 @@
-import {
-  gainLevelLabel,
-  hearingProtectionLabel,
-  promptVolumeLabel,
-} from "../../../model/settings";
-import type { HeadsetSettingsModel } from "../../../model/settings";
+import type { HeadsetSettingsModel } from "../../../ui";
 import { Card, SectionTitle, SelectField } from "../../../ui";
 import { ChoiceTabs, SettingGroup, levelOptions } from "./shared";
 
@@ -33,7 +28,11 @@ export function PromptSection(props: { model: HeadsetSettingsModel }) {
       {prompt().promptVolume ? (
         <ChoiceTabs
           label="提示音音量"
-          options={levelOptions("setting-prompt-volume", prompt().promptVolume!.levels, promptVolumeLabel)}
+          options={levelOptions(
+            "setting-prompt-volume",
+            prompt().promptVolume!.levels,
+            props.model.promptVolumeLabel,
+          )}
           confirmed={
             prompt().promptVolume!.confirmed !== null ? String(prompt().promptVolume!.confirmed) : null
           }
@@ -46,7 +45,7 @@ export function PromptSection(props: { model: HeadsetSettingsModel }) {
       {prompt().gain ? (
         <ChoiceTabs
           label="增益档位"
-          options={levelOptions("setting-gain", prompt().gain!.levels, gainLevelLabel)}
+          options={levelOptions("setting-gain", prompt().gain!.levels, props.model.gainLevelLabel)}
           confirmed={prompt().gain!.confirmed !== null ? String(prompt().gain!.confirmed) : null}
           disabled={!model.canWrite("Gain")}
           feedback={model.feedback("Gain")}
@@ -61,7 +60,7 @@ export function PromptSection(props: { model: HeadsetSettingsModel }) {
             label="听力保护阈值"
             items={prompt().hearingProtection!.levels.map((level) => ({
               value: String(level),
-              title: hearingProtectionLabel(level),
+              title: props.model.hearingProtectionLabel(level),
             }))}
             value={
               prompt().hearingProtection!.confirmed !== null

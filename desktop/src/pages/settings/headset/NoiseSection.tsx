@@ -1,4 +1,4 @@
-import type { HeadsetSettingsModel } from "../../../model/settings";
+import type { HeadsetSettingsModel } from "../../../ui";
 import { Card, CheckboxRow, Column, Row, SectionTitle, StatusBadge } from "../../../ui";
 import { ChoiceTabs, SettingGroup, levelOptions } from "./shared";
 

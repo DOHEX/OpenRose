@@ -6,8 +6,17 @@ use std::path::{Component, Path, PathBuf};
 
 const AUTOSTART_ARG: &str = "--started-at-login";
 const AUTOSTART_FILE_NAME: &str = "openrose.desktop";
-const DEVELOPMENT_REASON: &str = "仅安装版可设置登录时启动";
-const UNSUPPORTED_REASON: &str = "当前系统暂不支持登录时启动";
+
+#[derive(Serialize, Debug, Clone, Copy, PartialEq, Eq)]
+enum LoginLaunchReason {
+    DevelopmentBuild,
+    UnsupportedSystem,
+    Sandboxed,
+    ConfigDirUnknown,
+    ConfigReadFailed,
+    ConfigWriteFailed,
+    InvalidExecutable,
+}
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -15,7 +24,7 @@ struct LoginLaunchReport {
     installed: bool,
     supported: bool,
     enabled: bool,
-    reason: Option<String>,
+    reason: Option<LoginLaunchReason>,
 }
 
 impl LoginLaunchReport {
@@ -24,16 +33,16 @@ impl LoginLaunchReport {
             installed: false,
             supported: cfg!(target_os = "linux"),
             enabled: false,
-            reason: Some(DEVELOPMENT_REASON.to_string()),
+            reason: Some(LoginLaunchReason::DevelopmentBuild),
         }
     }
 
-    fn unsupported(reason: &str) -> Self {
+    fn unsupported(reason: LoginLaunchReason) -> Self {
         Self {
             installed: true,
             supported: false,
             enabled: false,
-            reason: Some(reason.to_string()),
+            reason: Some(reason),
         }
     }
 
@@ -306,11 +315,11 @@ fn desktop_entry_value(text: &str, key: &str) -> Option<String> {
 }
 
 #[cfg(target_os = "linux")]
-fn build_desktop_entry(exe: &Path) -> Result<String, String> {
+fn build_desktop_entry(exe: &Path) -> Result<String, LoginLaunchReason> {
     let exe_str = exe
         .to_str()
         .filter(|value| !value.is_empty() && !value.chars().any(char::is_control))
-        .ok_or_else(|| format!("可执行文件路径无效: {}", exe.display()))?;
+        .ok_or(LoginLaunchReason::InvalidExecutable)?;
     Ok(format!(
         "[Desktop Entry]\nType=Application\nVersion=1.0\nName=OpenRose\nComment=OpenRose 耳机控制客户端\nExec={} {AUTOSTART_ARG}\nTryExec={}\nIcon=openrose\nTerminal=false\nCategories=AudioVideo;Utility;\nX-GNOME-Autostart-enabled=true\n",
         format_exec_arg(exe_str),
@@ -319,12 +328,12 @@ fn build_desktop_entry(exe: &Path) -> Result<String, String> {
 }
 
 #[cfg(target_os = "linux")]
-fn read_enabled_in(dir: &Path, exe: &Path) -> Result<bool, String> {
+fn read_enabled_in(dir: &Path, exe: &Path) -> Result<bool, LoginLaunchReason> {
     let path = dir.join(AUTOSTART_FILE_NAME);
     let bytes = match std::fs::read(&path) {
         Ok(bytes) => bytes,
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(false),
-        Err(err) => return Err(format!("无法读取自启动配置 {}: {err}", path.display())),
+        Err(_) => return Err(LoginLaunchReason::ConfigReadFailed),
     };
     let text = String::from_utf8_lossy(&bytes);
     if desktop_entry_value(&text, "Hidden").is_some_and(|v| v.trim() == "true") {
@@ -351,25 +360,25 @@ fn read_enabled_in(dir: &Path, exe: &Path) -> Result<bool, String> {
 }
 
 #[cfg(target_os = "linux")]
-fn set_enabled_in(dir: &Path, exe: &Path, enabled: bool) -> Result<bool, String> {
+fn set_enabled_in(dir: &Path, exe: &Path, enabled: bool) -> Result<bool, LoginLaunchReason> {
     let path = dir.join(AUTOSTART_FILE_NAME);
     if enabled {
         let entry = build_desktop_entry(exe)?;
         std::fs::create_dir_all(dir)
-            .map_err(|err| format!("无法创建自启动目录 {}: {err}", dir.display()))?;
+            .map_err(|_| LoginLaunchReason::ConfigWriteFailed)?;
         let tmp = dir.join(format!(".{AUTOSTART_FILE_NAME}.{}.tmp", std::process::id()));
         std::fs::write(&tmp, entry)
             .and_then(|()| std::fs::rename(&tmp, &path))
-            .map_err(|err| {
+            .map_err(|_| {
                 let _ = std::fs::remove_file(&tmp);
-                format!("无法写入自启动配置 {}: {err}", path.display())
+                LoginLaunchReason::ConfigWriteFailed
             })?;
         read_enabled_in(dir, exe)
     } else {
         match std::fs::remove_file(&path) {
             Ok(()) => Ok(false),
             Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(false),
-            Err(err) => Err(format!("无法移除自启动配置 {}: {err}", path.display())),
+            Err(_) => Err(LoginLaunchReason::ConfigWriteFailed),
         }
     }
 }
@@ -392,13 +401,13 @@ fn linux_context(development: bool) -> Result<(PathBuf, PathBuf), LoginLaunchRep
         Path::new("/.flatpak-info").exists(),
         std::env::var_os("SNAP").as_deref(),
     ) {
-        return Err(LoginLaunchReport::unsupported("当前沙盒环境暂不支持登录时启动"));
+        return Err(LoginLaunchReport::unsupported(LoginLaunchReason::Sandboxed));
     }
     let Some(dir) = autostart_dir_from(
         std::env::var_os("XDG_CONFIG_HOME").as_deref(),
         std::env::var_os("HOME").as_deref(),
     ) else {
-        return Err(LoginLaunchReport::unsupported("无法定位用户配置目录（XDG_CONFIG_HOME / HOME）"));
+        return Err(LoginLaunchReport::unsupported(LoginLaunchReason::ConfigDirUnknown));
     };
     Ok((dir, exe))
 }
@@ -411,7 +420,7 @@ fn read_status(development: bool) -> LoginLaunchReport {
     };
     match read_enabled_in(&dir, &exe) {
         Ok(enabled) => LoginLaunchReport::ready(enabled),
-        Err(err) => LoginLaunchReport::unsupported(&err),
+        Err(reason) => LoginLaunchReport::unsupported(reason),
     }
 }
 
@@ -420,18 +429,16 @@ fn read_status(development: bool) -> LoginLaunchReport {
     if development {
         LoginLaunchReport::hidden()
     } else {
-        LoginLaunchReport::unsupported(UNSUPPORTED_REASON)
+        LoginLaunchReport::unsupported(LoginLaunchReason::UnsupportedSystem)
     }
 }
 
 #[cfg(target_os = "linux")]
-fn update_enabled(development: bool, enabled: bool) -> Result<LoginLaunchReport, String> {
+fn update_enabled(development: bool, enabled: bool) -> Result<LoginLaunchReport, LoginLaunchReason> {
     let (dir, exe) = match linux_context(development) {
         Ok(ctx) => ctx,
         Err(report) => {
-            return Err(report
-                .reason
-                .unwrap_or_else(|| UNSUPPORTED_REASON.to_string()));
+            return Err(report.reason.unwrap_or(LoginLaunchReason::UnsupportedSystem));
         }
     };
     let active = set_enabled_in(&dir, &exe, enabled)?;
@@ -439,11 +446,11 @@ fn update_enabled(development: bool, enabled: bool) -> Result<LoginLaunchReport,
 }
 
 #[cfg(not(target_os = "linux"))]
-fn update_enabled(development: bool, _enabled: bool) -> Result<LoginLaunchReport, String> {
+fn update_enabled(development: bool, _enabled: bool) -> Result<LoginLaunchReport, LoginLaunchReason> {
     if development {
-        Err(DEVELOPMENT_REASON.to_string())
+        Err(LoginLaunchReason::DevelopmentBuild)
     } else {
-        Err(UNSUPPORTED_REASON.to_string())
+        Err(LoginLaunchReason::UnsupportedSystem)
     }
 }
 
@@ -464,7 +471,8 @@ impl OpenRoseLoginLaunch {
 
     /// Enables or disables launch-at-login by writing or removing the XDG autostart entry.
     pub fn set_enabled(development: bool, enabled: bool) -> Result<JsonValue, JsError> {
-        let report = update_enabled(development, enabled).map_err(JsError::Error)?;
+        let report = update_enabled(development, enabled)
+            .map_err(|reason| JsError::Error(format!("{reason:?}")))?;
         Ok(serde_json::to_value(report).expect("login launch report serializes"))
     }
 

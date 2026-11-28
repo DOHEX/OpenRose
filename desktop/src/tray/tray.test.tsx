@@ -137,7 +137,7 @@ test("independent microphone mode explains its prerequisite and noise levels fol
   await app.press("id:btn-toggle-tray-panel");
   await switchModel(app, "speakfeel2", "SPEAKFEEL (speakfeel2)");
   expect(app.shows("id:tray-toggle-independent_mic")).toBe(true);
-  expect(app.shows("text:需先激活独立麦克风")).toBe(true);
+  expect(app.shows("text:请先激活独立麦克风")).toBe(true);
 
   await switchModel(app, "EXPLORER", "EXPLORER");
   expect(app.shows("id:tray-control-noise_level")).toBe(true);
@@ -188,7 +188,7 @@ test("without background control, or without a tray, closing the window quits", 
   await off.window("main").pressClose();
   await waitForQuit(off);
 
-  const unavailable = await openApp({ available: false, reason: "没有已注册的系统托盘宿主" });
+  const unavailable = await openApp({ available: false, reason: "NoHost" });
   await unavailable.press("id:nav-tray");
   expect(unavailable.shows("text:托盘不可用，关闭窗口将直接退出：没有已注册的系统托盘宿主")).toBe(true);
   await unavailable.window("main").pressClose();
@@ -251,7 +251,7 @@ test("launch at login defaults to off in installed builds, toggles autostart and
           installed: true,
           supported: false,
           enabled: false,
-          reason: "当前系统暂不支持登录时启动",
+          reason: "UnsupportedSystem",
         },
       },
     },
@@ -308,7 +308,7 @@ test("login launch starts in tray only when background control and tray are avai
     height: 700,
     modules: {
       "openrose-native": {
-        "OpenRoseTray.checkAvailability": { available: false, reason: "没有已注册的系统托盘宿主" },
+        "OpenRoseTray.checkAvailability": { available: false, reason: "NoHost" },
         "OpenRoseLoginLaunch.wasStartedAtLogin": true,
       },
     },

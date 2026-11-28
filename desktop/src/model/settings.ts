@@ -1,39 +1,56 @@
 import { computed, effect, signal } from "nsh";
 import { OpenRoseSettings } from "openrose-native";
 import {
-  noiseModeLabel,
+  controlErrorOf,
+  isFailedStage,
+  isPendingStage,
+  readKnownIntegerList,
+  readKnownNoiseCycle,
+  readKnownNumber,
+  readKnownText,
+  readKnownToggle,
+  readKnownTouchKeys,
 } from "./headset";
 import type {
   ControlError,
   ControlSnapshot,
   CustomEqualizerCapabilities,
   FieldReading,
-  ModelCatalogEntry,
+  HeadsetController,
   SettingOperation,
   SettingStage,
-  TouchBinding,
   TouchControlCapabilities,
   TouchSlot,
 } from "./headset";
-
-export interface HeadsetController {
-  snapshot: () => ControlSnapshot;
-  connectionStatus: () => { kind: "disconnected" | "connecting" | "connected" };
-  currentModel: () => ModelCatalogEntry | null;
-  setNoiseMode: (mode: string) => Promise<void>;
-  executeCommand: (commandJson: string, expectedSession: number | null) => Promise<void>;
-}
-
-export interface ProfileLabels {
-  versionName: string | null;
-  equalizerPresetLabels: Record<string, string>;
-}
+import {
+  equalizerPresetLabel,
+  hasEqualizerPresets,
+  profileLabelsOf,
+  unmetPrerequisites,
+  visibleLevels,
+} from "./headsetRules";
+import type { ProfileLabels } from "./headsetRules";
+import {
+  errorCategoryLabel,
+  noiseModeLabel,
+  prerequisiteLabel,
+  semanticLabel,
+  settingLabel,
+  sortNoiseModes,
+} from "./labels";
 
 export type SettingFeedback =
   | { kind: "idle" }
   | { kind: "in_progress"; setting: string; label: string; stage: SettingStage }
   | { kind: "confirmed"; setting: string; label: string }
-  | { kind: "failed"; setting: string; label: string; code: string; message: string };
+  | {
+      kind: "failed";
+      setting: string;
+      label: string;
+      code: string;
+      reason: string;
+      message: string;
+    };
 
 export interface Choice {
   value: string;
@@ -176,39 +193,18 @@ export interface HeadsetSettingsModel {
   setPromptVolume: (level: number) => void;
   setGain: (level: number) => void;
   setHearingProtection: (level: number) => void;
+  formatBandHz: (hz: number) => string;
+  formatGainDb: (gain: number) => string;
+  promptVolumeLabel: (level: number) => string;
+  gainLevelLabel: (level: number) => string;
+  hearingProtectionLabel: (level: number) => string;
 }
 
 type EqChoice =
   | { kind: "preset"; preset: string }
   | { kind: "curve"; gains: number[] };
 
-const PENDING_STAGES = new Set<SettingStage>(["Submitted", "PartiallyWritten", "Written"]);
-const FAILED_STAGES = new Set<SettingStage>(["NotApplied", "TimedOut", "Disconnected", "Failed"]);
-
-const NOISE_MODE_ORDER = [
-  "anc",
-  "wind",
-  "transparency",
-  "normal",
-  "auto",
-  "dynamic",
-  "deep",
-] as const;
-
-const PREREQUISITE_LABELS: Record<string, string> = {
-  SpatialModeRequired: "请先开启空间模式",
-  IndependentMicActivationRequired: "请先激活独立麦克风",
-};
-
 const PRESET_ORDER = ["pop", "hifi", "rock", "light", "eap"] as const;
-
-const PRESET_CODES: Record<string, string> = {
-  pop: "POP",
-  hifi: "HIFI",
-  rock: "ROCK",
-  light: "LIGHT",
-  eap: "EAP",
-};
 
 const WRITE_GROUP: Record<string, string> = {
   AncLevel: "NoiseMode",
@@ -222,115 +218,29 @@ const WRITE_GROUP: Record<string, string> = {
   IndependentMicMode: "IndependentMicActivation",
 };
 
-const SETTING_LABELS: Record<string, string> = {
-  NoiseMode: "降噪模式",
-  AncLevel: "降噪档位",
-  TransparencyLevel: "通透档位",
-  NoiseCycle: "降噪轮换",
-  Eq: "预设均衡器",
-  CustomEq: "自定义均衡器",
-  BassBoost: "低音增强",
-  GameMode: "游戏模式",
-  AudioMode: "音频模式",
-  Multipoint: "多点连接",
-  SpatialAudio: "空间音频",
-  SpatialMode: "空间模式",
-  SpatialContent: "空间音频内容",
-  EarAdaptive: "耳道自适应",
-  IndependentMicActivation: "激活独立麦克风",
-  IndependentMicMode: "独立麦克风模式",
-  TouchEnabled: "触控总开关",
-  EarDetection: "佩戴检测功能",
-  TouchBinding: "触控手势",
-  TapEnabled: "轻拍开关",
-  TapBinding: "轻拍绑定",
-  PromptLanguage: "提示音语言",
-  PromptVolume: "提示音音量",
-  Gain: "增益档位",
-  HearingProtection: "听力保护阈值",
-};
-
-const SEMANTIC_LABELS: Record<string, string> = {
-  anc: "主动降噪",
-  normal: "关闭",
-  wind: "抗风噪",
-  transparency: "通透",
-  auto: "自适应",
-  deep: "深度降噪",
-  dynamic: "动态降噪",
-  aac_sbc: "AAC / SBC",
-  ldac: "LDAC",
-  ldac_lhdc: "LDAC + LHDC",
-  lhdc: "LHDC",
-  lc3: "LC3",
-  chinese: "中文",
-  english: "英文",
-  pop: "流行",
-  hifi: "Hi-Fi",
-  rock: "摇滚",
-  light: "轻音乐",
-  eap: "EAP",
-  custom: "自定义",
-  off: "关闭",
-  head_tracking: "头部跟踪",
-  fixed: "固定",
-  tv: "电视",
-  music: "音乐",
-  movie: "电影",
-  game: "游戏",
-  volume_up: "增加音量",
-  volume_down: "减小音量",
-  previous_track: "上一曲",
-  next_track: "下一曲",
-  voice_assistant: "语音助手",
-  play_pause: "播放 / 暂停",
-  none: "无操作",
-  noise_cycle: "降噪轮换",
-  game_mode: "游戏模式",
-};
-
-export function settingLabel(setting: string): string {
-  return SETTING_LABELS[setting] ?? setting;
-}
-
-export function semanticLabel(value: string): string {
-  return SEMANTIC_LABELS[value] ?? value;
-}
-
-export function formatBandHz(hz: number): string {
+function formatBandHz(hz: number): string {
   return hz >= 1000 ? `${(hz / 1000).toFixed(hz % 1000 === 0 ? 0 : 1)}k` : `${hz}`;
 }
 
-export function formatGainDb(gain: number): string {
+function formatGainDb(gain: number): string {
   return gain > 0 ? `+${gain} dB` : `${gain} dB`;
 }
 
-export function gainLevelLabel(level: number): string {
+function gainLevelLabel(level: number): string {
   if (level === 0) return "低";
   if (level === 1) return "中";
   if (level === 2) return "高";
   return `${level} 档`;
 }
 
-export function promptVolumeLabel(level: number): string {
+function promptVolumeLabel(level: number): string {
   return level === 0 ? "关闭" : `${level} 档`;
 }
 
-export function hearingProtectionLabel(level: number): string {
+function hearingProtectionLabel(level: number): string {
   if (level === 0) return "关闭";
   const db = OpenRoseSettings.hearingProtectionThresholdDb(level);
   return db !== null ? `${db} dB` : `${level}`;
-}
-
-export function equalizerPresetLabel(
-  preset: string,
-  presetLabels: Record<string, string>,
-): string {
-  const code = PRESET_CODES[preset];
-  const custom = presetLabels[preset];
-  if (!code) return custom ?? semanticLabel(preset);
-  if (!custom || custom.toLowerCase() === code.toLowerCase()) return code;
-  return `${custom} · ${code}`;
 }
 
 export function touchSideLabel(side: string): string {
@@ -365,49 +275,6 @@ export function touchSideTitle(side: string, touch: TouchControlCapabilities): s
   return entry ? entry.label : touchSideLabel(side);
 }
 
-function readKnownValue(fields: Record<string, FieldReading>, key: string) {
-  const reading = fields[key];
-  if (reading && typeof reading === "object" && "Known" in reading) {
-    return reading.Known.value;
-  }
-  return null;
-}
-
-function readKnownNumber(fields: Record<string, FieldReading>, key: string): number | null {
-  const value = readKnownValue(fields, key);
-  return value && "Number" in value ? value.Number : null;
-}
-
-function readKnownToggle(fields: Record<string, FieldReading>, key: string): boolean | null {
-  const value = readKnownValue(fields, key);
-  return value && "Toggle" in value ? value.Toggle : null;
-}
-
-function readKnownText(fields: Record<string, FieldReading>, key: string): string | null {
-  const value = readKnownValue(fields, key);
-  return value && "Text" in value ? value.Text : null;
-}
-
-function readKnownIntegerList(fields: Record<string, FieldReading>, key: string): number[] | null {
-  const value = readKnownValue(fields, key);
-  return value && "IntegerList" in value ? value.IntegerList : null;
-}
-
-function readKnownTouchKeys(
-  fields: Record<string, FieldReading>,
-  key: string,
-): TouchBinding[] | null {
-  const value = readKnownValue(fields, key);
-  return value && "TouchKeys" in value ? value.TouchKeys : null;
-}
-
-function readKnownNoiseCycle(
-  fields: Record<string, FieldReading>,
-): Record<string, boolean | null> | null {
-  const value = readKnownValue(fields, "NoiseCycle");
-  return value && "NoiseCycle" in value ? value.NoiseCycle : null;
-}
-
 function readConfirmedBassBoost(
   fields: Record<string, FieldReading>,
   levels: number[],
@@ -432,14 +299,6 @@ function readConfirmedBassBoost(
 
 function writeGroupOf(setting: string): string {
   return WRITE_GROUP[setting] ?? setting;
-}
-
-function sortModes(modes: string[]): string[] {
-  return [...modes].sort((a, b) => {
-    const ia = NOISE_MODE_ORDER.indexOf(a as (typeof NOISE_MODE_ORDER)[number]);
-    const ib = NOISE_MODE_ORDER.indexOf(b as (typeof NOISE_MODE_ORDER)[number]);
-    return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
-  });
 }
 
 function sortSlots(slots: TouchSlot[]): TouchSlot[] {
@@ -503,17 +362,9 @@ export function createHeadsetSettingsModel(controller: HeadsetController): Heads
     queuedEq = null;
   });
 
-  const profileLabels = computed<ProfileLabels>(() => {
-    const profileId = headset()?.readings.profile ?? controller.currentModel()?.id ?? null;
-    if (!profileId) {
-      return { versionName: null, equalizerPresetLabels: {} };
-    }
-    const cached = profileLabelsCache.get(profileId);
-    if (cached) return cached;
-    const loaded = OpenRoseSettings.profileLabels(profileId) as ProfileLabels;
-    profileLabelsCache.set(profileId, loaded);
-    return loaded;
-  });
+  const profileLabels = computed<ProfileLabels>(() =>
+    profileLabelsOf(headset()?.readings.profile ?? controller.currentModel()?.id ?? null),
+  );
 
   const capabilities = computed(() => headset()?.readings.capabilities ?? null);
   const fields = computed(() => headset()?.readings.fields ?? {});
@@ -529,7 +380,7 @@ export function createHeadsetSettingsModel(controller: HeadsetController): Heads
   function isGroupBusy(setting: string): boolean {
     const group = writeGroupOf(setting);
     const pendingInSnapshot = activeOperations().some(
-      (op) => PENDING_STAGES.has(op.stage) && writeGroupOf(op.setting) === group,
+      (op) => isPendingStage(op.stage) && writeGroupOf(op.setting) === group,
     );
     if (pendingInSnapshot) return true;
     return Object.entries(inFlight()).some(
@@ -537,13 +388,11 @@ export function createHeadsetSettingsModel(controller: HeadsetController): Heads
     );
   }
 
-  const prerequisites = computed(
-    () => OpenRoseSettings.settingPrerequisites(fields()) as Record<string, string>,
-  );
+  const prerequisites = computed(() => unmetPrerequisites(fields()));
 
   function prerequisiteText(setting: string): string | null {
     const category = prerequisites()[setting];
-    return category ? PREREQUISITE_LABELS[category] ?? category : null;
+    return category ? prerequisiteLabel(category) : null;
   }
 
   function canWrite(setting: string): boolean {
@@ -560,7 +409,7 @@ export function createHeadsetSettingsModel(controller: HeadsetController): Heads
 
     if (latest) {
       const label = settingLabel(latest.setting);
-      if (PENDING_STAGES.has(latest.stage)) {
+      if (isPendingStage(latest.stage)) {
         return { kind: "in_progress", setting: latest.setting, label, stage: latest.stage };
       }
       if (localInFlight) {
@@ -571,12 +420,13 @@ export function createHeadsetSettingsModel(controller: HeadsetController): Heads
           stage: "Submitted",
         };
       }
-      if (FAILED_STAGES.has(latest.stage)) {
+      if (isFailedStage(latest.stage)) {
         return {
           kind: "failed",
           setting: latest.setting,
           label,
           code: latest.error?.code ?? latest.stage,
+          reason: errorCategoryLabel(latest.error?.code ?? latest.stage),
           message: latest.error?.message ?? "",
         };
       }
@@ -588,6 +438,7 @@ export function createHeadsetSettingsModel(controller: HeadsetController): Heads
             setting: localErrEntry[0],
             label: settingLabel(localErrEntry[0]),
             code: localErrEntry[1].code,
+            reason: errorCategoryLabel(localErrEntry[1].code),
             message: localErrEntry[1].message,
           };
         }
@@ -612,6 +463,7 @@ export function createHeadsetSettingsModel(controller: HeadsetController): Heads
           setting: s,
           label: settingLabel(s),
           code: err.code,
+          reason: errorCategoryLabel(err.code),
           message: err.message,
         };
       }
@@ -628,14 +480,7 @@ export function createHeadsetSettingsModel(controller: HeadsetController): Heads
     try {
       await write();
     } catch (error) {
-      const snapErr = controller.snapshot().last_error;
-      localErrors.set({
-        ...localErrors(),
-        [setting]: snapErr ?? {
-          code: "Failed",
-          message: error instanceof Error ? error.message : String(error),
-        },
-      });
+      localErrors.set({ ...localErrors(), [setting]: controlErrorOf(error) });
     } finally {
       const updated = { ...inFlight() };
       delete updated[setting];
@@ -646,7 +491,7 @@ export function createHeadsetSettingsModel(controller: HeadsetController): Heads
   function submitCommand(setting: string, commandPayload: Record<string, unknown>) {
     const expectedSession = sessionId();
     return trackWrite(setting, () =>
-      controller.executeCommand(JSON.stringify(commandPayload), expectedSession),
+      controller.executeCommand(commandPayload, expectedSession),
     );
   }
 
@@ -687,25 +532,14 @@ export function createHeadsetSettingsModel(controller: HeadsetController): Heads
     const writable = writableSet();
     const currentMode = confirmedNoiseMode();
     const hasMode = writable.has("NoiseMode") && noise.modes.length > 0;
-    const ancCap = noise.anc_level;
-    const showAncLevel =
-      writable.has("AncLevel") &&
-      ancCap !== null &&
-      ancCap.levels.length > 0 &&
-      currentMode !== null &&
-      ancCap.visible_modes.includes(currentMode);
-    const transCap = noise.transparency_level;
-    const showTransLevel =
-      writable.has("TransparencyLevel") &&
-      transCap !== null &&
-      transCap.levels.length > 0 &&
-      currentMode !== null &&
-      transCap.visible_modes.includes(currentMode);
+    const levels = visibleLevels(caps, currentMode);
+    const ancLevel = levels.find((level) => level.setting === "AncLevel") ?? null;
+    const transLevel = levels.find((level) => level.setting === "TransparencyLevel") ?? null;
     const showCycle = writable.has("NoiseCycle") && noise.cycle_modes.length > 0;
-    if (!hasMode && !showAncLevel && !showTransLevel && !showCycle) return null;
+    if (!hasMode && !ancLevel && !transLevel && !showCycle) return null;
 
     const cycleFlags = readKnownNoiseCycle(fields());
-    const cycleModes = sortModes(noise.cycle_modes);
+    const cycleModes = sortNoiseModes(noise.cycle_modes);
     const cycleKnown =
       cycleFlags !== null && cycleModes.every((mode) => typeof cycleFlags[mode] === "boolean");
     const checkedCycle = cycleModes.filter((mode) => cycleFlags?.[mode] === true);
@@ -713,20 +547,20 @@ export function createHeadsetSettingsModel(controller: HeadsetController): Heads
 
     return {
       hasMode,
-      modes: sortModes(noise.modes).map((mode) => ({
+      modes: sortNoiseModes(noise.modes).map((mode) => ({
         value: mode,
         label: noiseModeLabel(mode),
       })),
       confirmedMode: currentMode,
-      ancLevel: showAncLevel
+      ancLevel: ancLevel
         ? {
-            levels: [...ancCap!.levels].sort((a, b) => a - b),
+            levels: ancLevel.levels,
             confirmed: readKnownNumber(fields(), "AncLevel"),
           }
         : null,
-      transparencyLevel: showTransLevel
+      transparencyLevel: transLevel
         ? {
-            levels: [...transCap!.levels].sort((a, b) => a - b),
+            levels: transLevel.levels,
             confirmed: readKnownNumber(fields(), "TransparencyLevel"),
           }
         : null,
@@ -760,7 +594,7 @@ export function createHeadsetSettingsModel(controller: HeadsetController): Heads
     const writable = writableSet();
     const bassLevels = [...(caps?.bass_boost_levels ?? [])].sort((a, b) => a - b);
     const hasBassBoost = writable.has("BassBoost") && bassLevels.length > 0;
-    const hasPresets = writable.has("Eq") && (eq?.presets.length ?? 0) > 0;
+    const hasPresets = caps !== null && hasEqualizerPresets(caps);
     const customCap =
       writable.has("CustomEq") && eq?.custom && eq.custom.min_gain <= eq.custom.max_gain
         ? eq.custom
@@ -768,13 +602,13 @@ export function createHeadsetSettingsModel(controller: HeadsetController): Heads
 
     if (!caps || (!hasPresets && !customCap && !hasBassBoost)) return null;
 
-    const labels = profileLabels().equalizerPresetLabels;
     const rawPresets = sortPresets(
       (eq?.presets ?? []).filter((preset) => !(customCap && preset === "custom")),
     );
+    const profileId = headset()?.readings.profile ?? null;
     const presetOptions = rawPresets.map((preset) => ({
       value: preset,
-      label: equalizerPresetLabel(preset, labels),
+      label: equalizerPresetLabel(profileId, preset),
     }));
     if (customCap) {
       presetOptions.push({ value: "custom", label: "自定义" });
@@ -861,7 +695,7 @@ export function createHeadsetSettingsModel(controller: HeadsetController): Heads
 
     const coupledFootnote =
       hasAudioMode && hasMultipoint && audioCap?.multipoint_coupled
-        ? "该型号的 LDAC 与多点连接互斥；切换多点时设备会改用 AAC / SBC。"
+        ? "该型号的 LDAC 与多点连接互斥；切换多点时耳机会改用 AAC / SBC。"
         : null;
 
     return {
@@ -1062,6 +896,11 @@ export function createHeadsetSettingsModel(controller: HeadsetController): Heads
   return {
     connected,
     profileLabels,
+    formatBandHz,
+    formatGainDb,
+    promptVolumeLabel,
+    gainLevelLabel,
+    hearingProtectionLabel,
     noiseSection,
     equalizerSection,
     audioSection,
