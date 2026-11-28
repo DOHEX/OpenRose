@@ -1,4 +1,4 @@
-import { colorScheme, mount, signal } from "nsh";
+import { colorScheme, effect, mount, signal } from "nsh";
 import { Window } from "nsh/desktop";
 import {
   candidateDisplayName,
@@ -38,6 +38,13 @@ import {
   errorCategoryLabel,
   noiseModeLabel,
 } from "./src/model/headset";
+import type { HeadsetController } from "./src/model/headset";
+import { createDesktopSettingsStore, createTrayAvailabilityStore } from "./src/model/trayPanelSettings";
+import type { DesktopSettingsStore, TrayAvailabilityStore } from "./src/model/trayPanelSettings";
+import { TraySettingsPage } from "./src/pages/settings/TrayControlsSettingsPage";
+import { TrayHost } from "./src/tray/TrayHost";
+import { createDesktopLifecycle } from "./src/tray/lifecycle";
+import type { DesktopLifecycle } from "./src/tray/lifecycle";
 import { DevModePage } from "./src/pages/DevModePage";
 import { DevScenariosPage } from "./src/pages/DevScenariosPage";
 import { createDevScenarioModel } from "./src/model/devScenarios";
@@ -62,7 +69,7 @@ import type {
   ToneVariant,
 } from "./src/ui";
 
-type DesktopPageId = "headset" | "add-headset" | "info" | "diagnostics" | "dev";
+type DesktopPageId = "headset" | "add-headset" | "info" | "diagnostics" | "tray" | "dev";
 
 const LATENCY_OPTIONS: SegmentOption[] = [
   { value: "40", label: "40 ms", testID: "latency-40" },
@@ -85,6 +92,7 @@ const NAV_ITEMS: SidebarNavItem[] = [
     testID: "nav-diagnostics",
     accessibilityLabel: "诊断与记录",
   },
+  { id: "tray", label: "托盘与后台", testID: "nav-tray", accessibilityLabel: "托盘与后台" },
 ];
 
 const DEV_NAV_ITEM: SidebarNavItem = {
@@ -107,12 +115,22 @@ const PLATFORM_OPTIONS: SegmentOption[] = [
   { value: "transport-unavailable", label: "传输不可用", testID: "platform-transport-unavailable" },
 ];
 
-function DesktopApp() {
-  const controller = createHeadsetController();
+function DesktopApp(props: {
+  controller: HeadsetController;
+  settings: DesktopSettingsStore;
+  tray: TrayAvailabilityStore;
+  lifecycle: DesktopLifecycle;
+}) {
+  const controller = props.controller;
   const addModel = createAddHeadsetModel(controller);
   const scenarios = createDevScenarioModel(controller);
   const initialConfig = controller.devConfig();
   const activePage = signal<DesktopPageId>("headset");
+  effect(() => {
+    const requested = props.lifecycle.requestedView();
+    if (requested === "add-headset") activePage.set("add-headset");
+    if (requested === "tray-controls") activePage.set("tray");
+  });
   const rawDataOpen = signal(false);
   const selectedModelId = signal<string>(initialConfig?.modelId ?? "I5_ZT");
   const firmwareInput = signal<string>(initialConfig?.firmware ?? "125");
@@ -586,6 +604,13 @@ function DesktopApp() {
                   onChangeLatency={handleLatencyChange}
                 />
               </Column>
+            ) : activePage() === "tray" ? (
+              <TraySettingsPage
+                settings={props.settings}
+                availability={props.tray.availability()}
+                panelOpen={props.lifecycle.panelOpen()}
+                onTogglePanel={() => props.lifecycle.setPanelOpen(!props.lifecycle.panelOpen())}
+              />
             ) : activePage() === "add-headset" ? (
               <AddHeadsetPage
                 scanning={fullSnapshot().scan === "Scanning"}
@@ -626,13 +651,26 @@ function DesktopApp() {
   );
 }
 
-mount(() => (
-  <Window
-    id="main"
-    title="OpenRose"
-    defaultSize={{ width: 880, height: 640 }}
-    minSize={{ width: 640, height: 520 }}
-  >
-    <DesktopApp />
-  </Window>
-));
+function DesktopRoot() {
+  const controller = createHeadsetController();
+  const settings = createDesktopSettingsStore();
+  const tray = createTrayAvailabilityStore();
+  const lifecycle = createDesktopLifecycle({ controller, settings, tray });
+  return (
+    <>
+      <TrayHost controller={controller} settings={settings} tray={tray} lifecycle={lifecycle} />
+      <Window
+        id="main"
+        title="OpenRose"
+        closeOnPress={false}
+        onClosePress={lifecycle.closeMainWindow}
+        defaultSize={{ width: 880, height: 640 }}
+        minSize={{ width: 640, height: 520 }}
+      >
+        <DesktopApp controller={controller} settings={settings} tray={tray} lifecycle={lifecycle} />
+      </Window>
+    </>
+  );
+}
+
+mount(() => <DesktopRoot />);

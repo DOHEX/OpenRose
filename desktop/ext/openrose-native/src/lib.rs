@@ -1,3 +1,5 @@
+mod tray;
+
 use nsh_core::prelude::*;
 use nsh_core::JsonValue;
 use nsh_core::element::Ret;
@@ -36,6 +38,7 @@ const DEFAULT_DEV_REPLY_LATENCY_MS: u64 = 160;
 fn native(registry: &mut Registry) {
     registry
         .module::<OpenRoseCatalog>()
+        .module::<tray::OpenRoseTray>()
         .module::<desktop_bluetooth::OpenRoseBluetooth>()
         .class::<OpenRoseClient>()
         .module::<headset_flow::OpenRoseHeadsetFlow>();

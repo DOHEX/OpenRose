@@ -41,9 +41,18 @@ export function ScrollArea(props: { children?: JSX.Element; class?: string }) {
   );
 }
 
-export function Column(props: { children?: JSX.Element; class?: string; testID?: string }) {
+export function Column(props: {
+  children?: JSX.Element;
+  class?: string;
+  testID?: string;
+  onPointerEnter?: () => void;
+}) {
   return (
-    <View testID={props.testID} class={`flex-col ${props.class ?? ""}`}>
+    <View
+      testID={props.testID}
+      onMouseEnter={() => props.onPointerEnter?.()}
+      class={`flex-col ${props.class ?? ""}`}
+    >
       {props.children}
     </View>
   );

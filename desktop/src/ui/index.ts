@@ -9,6 +9,7 @@ export {
   SidebarNav,
   StatusBadge,
   TextField,
+  ToggleSwitch,
 } from "./controls";
 export type {
   ButtonVariant,

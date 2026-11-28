@@ -63,14 +63,24 @@ export type FieldReading =
   | { Unknown: { raw_hex: string } }
   | { Known: { value: FieldValue; raw_hex: string } };
 
+export interface NoiseLevelCapabilities {
+  levels: number[];
+  visible_modes: string[];
+}
+
 export interface HeadsetCapabilities {
   readable_fields: string[];
   writable_settings: string[];
   noise_control: {
     modes: string[];
     cycle_modes: string[];
+    anc_level: NoiseLevelCapabilities | null;
+    transparency_level: NoiseLevelCapabilities | null;
     minimum_cycle_selections: number;
   } | null;
+  equalizer: { presets: string[] } | null;
+  spatial_modes: string[];
+  spatial_contents: string[];
 }
 
 export interface HeadsetState {
@@ -101,12 +111,23 @@ export type ConnectionState =
   | { Connecting: { headset_id: string; session_id: number; phase: ConnectionPhase } }
   | { Connected: { headset_id: string; session_id: number; profile: string } };
 
+export interface HeadsetCandidate {
+  id: string;
+  name: string | null;
+  profile: string | null;
+  classic_address: string | null;
+}
+
 export interface ControlSnapshot {
   revision: number;
   connection: ConnectionState;
+  bonded_headsets: HeadsetCandidate[];
   headset: HeadsetState | null;
   last_error: ControlError | null;
   setting_operations: SettingOperation[];
+  audio_headset_id: string | null;
+  connection_target: HeadsetCandidate | null;
+  selected_headset_id: string | null;
   connection_block_reason: unknown | null;
 }
 
@@ -173,7 +194,7 @@ export function errorCategoryLabel(code: string): string {
   return ERROR_CATEGORY_LABELS[code] ?? code;
 }
 
-function readKnownNumber(fields: Record<string, FieldReading>, key: string): number | null {
+export function readKnownNumber(fields: Record<string, FieldReading>, key: string): number | null {
   const reading = fields[key];
   if (reading && typeof reading === "object" && "Known" in reading) {
     const val = reading.Known.value;
@@ -182,7 +203,7 @@ function readKnownNumber(fields: Record<string, FieldReading>, key: string): num
   return null;
 }
 
-function readKnownToggle(fields: Record<string, FieldReading>, key: string): boolean | null {
+export function readKnownToggle(fields: Record<string, FieldReading>, key: string): boolean | null {
   const reading = fields[key];
   if (reading && typeof reading === "object" && "Known" in reading) {
     const val = reading.Known.value;
@@ -191,7 +212,7 @@ function readKnownToggle(fields: Record<string, FieldReading>, key: string): boo
   return null;
 }
 
-function readKnownText(fields: Record<string, FieldReading>, key: string): string | null {
+export function readKnownText(fields: Record<string, FieldReading>, key: string): string | null {
   const reading = fields[key];
   if (reading && typeof reading === "object" && "Known" in reading) {
     const val = reading.Known.value;
@@ -231,7 +252,44 @@ function formatUnitCaption(charging: boolean | null, inCase: boolean | null): st
   return parts.length > 0 ? parts.join(" · ") : null;
 }
 
-export function createHeadsetController() {
+export interface ConnectionStatusView {
+  kind: "disconnected" | "connecting" | "connected";
+  label: string;
+  phaseLabel: string;
+  sessionId: number | null;
+  profileId: string | null;
+}
+
+export interface HeadsetController {
+  client: OpenRoseClient;
+  catalog: ModelCatalogEntry[];
+  catalogById: Map<string, ModelCatalogEntry>;
+  snapshot: () => ControlSnapshot;
+  devConfig: () => DevHeadsetConfig | null;
+  connectionStatus: () => ConnectionStatusView;
+  connectionBusy: () => boolean;
+  connectionError: () => ControlError | null;
+  currentModel: () => ModelCatalogEntry | null;
+  firmwareText: () => string | null;
+  batterySlots: () => BatterySlotView[];
+  noiseModes: () => string[];
+  confirmedNoiseMode: () => string | null;
+  canControlNoiseMode: () => boolean;
+  noiseFeedback: () => NoiseFeedback;
+  submittingNoiseMode: () => string | null;
+  devBusy: () => boolean;
+  devError: () => string | null;
+  connect: (headsetId?: string | null) => Promise<void>;
+  disconnect: () => Promise<void>;
+  setNoiseMode: (mode: string, expectedSession?: number | null) => Promise<void>;
+  executeCommand: (commandJson: string, expectedSession: number | null) => Promise<void>;
+  switchSimulatedHeadset: (modelId: string, firmware: string) => Promise<boolean>;
+  setSimulatedLatencyMs: (millis: number) => void;
+  selectCurrentHeadset: (headsetId: string) => void;
+  refreshBondedHeadsets: () => Promise<void>;
+}
+
+export function createHeadsetController(): HeadsetController {
   const catalog = OpenRoseCatalog.listModels() as ModelCatalogEntry[];
   const catalogById = new Map(catalog.map((entry) => [entry.id, entry]));
   const client = new OpenRoseClient(appInfo().development);
@@ -460,13 +518,14 @@ export function createHeadsetController() {
     }
   }
 
-  async function setNoiseMode(mode: string) {
+  async function setNoiseMode(mode: string, expectedSession?: number | null) {
     if (submittingNoiseMode()) return;
-    const expectedSession = snapshot().headset?.session_id ?? null;
+    const session =
+      expectedSession === undefined ? (snapshot().headset?.session_id ?? null) : expectedSession;
     submittingNoiseMode.set(mode);
     localNoiseError.set(null);
     try {
-      await client.setNoiseMode(mode, expectedSession);
+      await client.setNoiseMode(mode, session);
     } catch (error) {
       const snapErr = snapshot().last_error;
       localNoiseError.set({
@@ -479,6 +538,10 @@ export function createHeadsetController() {
     } finally {
       submittingNoiseMode.set(null);
     }
+  }
+
+  async function executeCommand(commandJson: string, expectedSession: number | null) {
+    await client.executeCommand(commandJson, expectedSession);
   }
 
   async function switchSimulatedHeadset(modelId: string, firmware: string) {
@@ -547,6 +610,7 @@ export function createHeadsetController() {
     selectCurrentHeadset,
     refreshBondedHeadsets,
     setNoiseMode,
+    executeCommand,
     switchSimulatedHeadset,
     setSimulatedLatencyMs,
   };

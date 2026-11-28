@@ -1,6 +1,6 @@
 import { Text, View } from "nsh";
 import type { JSX } from "nsh";
-import { Button, Collapsible, Input, Select, Tab, Tabs } from "nsh/base";
+import { Button, Collapsible, Input, Select, Switch, Tab, Tabs } from "nsh/base";
 import type { SelectItem } from "nsh/base";
 import { MOTION_CLASS, MOTION_DISTANCE, createSurfaceMotion } from "../../motion";
 
@@ -149,6 +149,7 @@ export function SelectField(props: {
   testID?: string;
   searchTestID?: string;
   hint?: string;
+  onOpenChange?: (open: boolean) => void;
 }) {
   const selectedTitle = () => {
     const match = props.items.find((item) => item.value === props.value);
@@ -163,6 +164,7 @@ export function SelectField(props: {
         items={props.items}
         value={props.value}
         onChange={({ value }) => props.onChange(value)}
+        onOpenChange={({ open }) => props.onOpenChange?.(open)}
         searchable={props.searchable}
         searchPlaceholder={props.searchPlaceholder}
         searchAccessibilityLabel={props.searchPlaceholder ?? props.label}
@@ -295,6 +297,28 @@ export function MetricGrid(props: { items: MetricItem[] }) {
         )}
       </Each>
     </View>
+  );
+}
+
+export function ToggleSwitch(props: {
+  checked: boolean;
+  disabled?: boolean;
+  onChange: (checked: boolean) => void;
+  accessibilityLabel?: string;
+  testID?: string;
+}) {
+  return (
+    <Switch
+      testID={props.testID}
+      checked={props.checked}
+      disabled={props.disabled}
+      accessibilityLabel={props.accessibilityLabel}
+      onChange={({ checked }) => props.onChange(checked)}
+      hitSlop={6}
+      class="flex-row items-center disabled:opacity-50"
+      trackClass={`h-5 w-9 justify-center rounded-full border border-border bg-muted px-0.5 checked:border-primary checked:bg-primary ${MOTION_CLASS.colorTransition}`}
+      thumbClass={`size-4 rounded-full bg-card shadow-xs checked:translate-x-4 ${MOTION_CLASS.interactiveTransition}`}
+    />
   );
 }
 

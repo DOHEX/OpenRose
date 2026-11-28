@@ -8,7 +8,7 @@
   "appearance": "system",
   "singleInstance": true,
   "application": {
-    "quitMode": "lastWindowClosed"
+    "quitMode": "explicit"
   },
   "window": {
     "title": "OpenRose",
