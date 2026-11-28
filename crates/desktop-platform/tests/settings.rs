@@ -1,6 +1,7 @@
 #![cfg(unix)]
 
 use openrose_desktop_platform::bluetooth::linux::settings::first_installed_command;
+use openrose_desktop_platform::audio::linux::settings::sound_settings_command_in;
 use std::ffi::OsString;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
@@ -57,4 +58,39 @@ fn the_first_known_program_in_candidate_order_wins_with_its_arguments() {
     let gnome = install(&second, "gnome-control-center", 0o755);
     let command = first_installed_command(&search_path(&[&first, &second]), CANDIDATES).expect("command");
     assert_eq!(command, vec![gnome.to_string_lossy().into_owned(), "bluetooth".to_string()]);
+}
+
+#[test]
+fn sound_settings_entry_requires_an_executable_known_program() {
+    let empty = scratch("sound-empty");
+    assert_eq!(sound_settings_command_in(&search_path(&[&empty])), None);
+    install(&empty, "pavucontrol", 0o644);
+    assert_eq!(sound_settings_command_in(&search_path(&[&empty])), None);
+}
+
+#[test]
+fn sound_settings_picks_first_installed_candidate_in_order() {
+    let first = scratch("sound-first");
+    let second = scratch("sound-second");
+    let kde = install(&first, "systemsettings", 0o755);
+    assert_eq!(
+        sound_settings_command_in(&search_path(&[&first, &second])),
+        Some(vec![
+            kde.to_string_lossy().into_owned(),
+            "kcm_pulseaudio".to_string()
+        ])
+    );
+    let gnome = install(&second, "gnome-control-center", 0o755);
+    assert_eq!(
+        sound_settings_command_in(&search_path(&[&first, &second])),
+        Some(vec![
+            gnome.to_string_lossy().into_owned(),
+            "sound".to_string()
+        ])
+    );
+    let pavu = install(&second, "pavucontrol", 0o755);
+    assert_eq!(
+        sound_settings_command_in(&search_path(&[&first, &second])),
+        Some(vec![pavu.to_string_lossy().into_owned()])
+    );
 }
