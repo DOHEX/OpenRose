@@ -86,8 +86,6 @@ pub struct Peer {
     pub name: String,
 }
 
-pub type PeerInfo = Peer;
-
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct NearbyPeer {
     pub id: PeerId,
@@ -272,12 +270,15 @@ pub struct YieldReceipt {
 pub enum YieldRefusal {
     InCall,
     MicInUse,
-    Unavailable(String),
+    StillConnected,
+    MediaNotConnected,
+    AudioStateUnreadable { detail: String },
+    PlatformUnavailable { detail: String },
 }
 
 #[async_trait]
 pub trait LocalAudio: Send + Sync {
-    async fn is_connected(&self, address: &str) -> bool;
+    async fn is_connected(&self, address: &str) -> Result<bool, YieldRefusal>;
     async fn is_media_connected(&self, address: &str) -> bool;
     async fn yield_audio(&self, address: &str) -> Result<YieldReceipt, YieldRefusal>;
     async fn acquire(&self, address: &str) -> Result<(), YieldRefusal>;

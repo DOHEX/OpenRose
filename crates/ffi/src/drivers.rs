@@ -22,7 +22,8 @@ use std::sync::Arc;
 pub enum YieldRefusalKind {
     InCall,
     MicInUse,
-    Unavailable,
+    AudioStateUnreadable,
+    PlatformUnavailable,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Error)]
@@ -111,6 +112,7 @@ impl From<DriverError> for SppError {
         }
     }
 }
+
 impl From<DriverError> for YieldRefusal {
     fn from(error: DriverError) -> Self {
         match error {
@@ -123,10 +125,16 @@ impl From<DriverError> for YieldRefusal {
                 ..
             } => Self::MicInUse,
             DriverError::YieldRefused {
-                kind: YieldRefusalKind::Unavailable,
+                kind: YieldRefusalKind::AudioStateUnreadable,
                 detail,
-            } => Self::Unavailable(detail),
-            other => Self::Unavailable(other.to_string()),
+            } => Self::AudioStateUnreadable { detail },
+            DriverError::YieldRefused {
+                kind: YieldRefusalKind::PlatformUnavailable,
+                detail,
+            } => Self::PlatformUnavailable { detail },
+            other => Self::PlatformUnavailable {
+                detail: other.to_string(),
+            },
         }
     }
 }

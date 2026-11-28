@@ -55,7 +55,7 @@ impl ReleasedBluezLinks {
     {
         let owner = bus
             .owner()
-            .ok_or_else(|| "BlueZ 服务不可用".to_string())?;
+            .ok_or_else(|| "BlueZ service unavailable".to_string())?;
         let release = {
             let mut guard = self.lock.lock().await;
             guard.next_id += 1;
@@ -109,7 +109,7 @@ impl ReleasedBluezLinks {
                     }
                 }
                 if bus.owner().as_deref() != Some(owner.as_str()) {
-                    return Err("让出期间 BlueZ 服务已更换".to_string());
+                    return Err("BlueZ service changed while releasing".to_string());
                 }
                 for path in paths {
                     guard.released.insert(path.clone(), Arc::clone(&release));
@@ -131,10 +131,10 @@ impl ReleasedBluezLinks {
                 {
                     let mut state = release.lock().await;
                     if state.resumed_locally {
-                        return Err("本机已重新请求接入耳机".to_string());
+                        return Err("local side requested the headset again".to_string());
                     }
                     if bus.owner().as_deref() != Some(state.owner.as_str()) {
-                        return Err("让出期间 BlueZ 服务已更换".to_string());
+                        return Err("BlueZ service changed while releasing".to_string());
                     }
                     state.confirmed = true;
                 }
@@ -153,12 +153,12 @@ impl ReleasedBluezLinks {
                             .await
                             .map_err(|err| err.to_string())?
                         {
-                            return Err("本机已重新接入耳机音频".to_string());
+                            return Err("local side reconnected the headset audio".to_string());
                         }
                     }
                 }
                 if bus.owner().as_deref() != Some(owner.as_str()) {
-                    return Err("让出期间 BlueZ 服务已更换".to_string());
+                    return Err("BlueZ service changed while releasing".to_string());
                 }
             }
             Ok(())

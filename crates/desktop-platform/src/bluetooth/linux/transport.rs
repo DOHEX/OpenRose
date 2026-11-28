@@ -604,7 +604,7 @@ impl BluezAudioProfiles {
             .map_err(|err| err.to_string())?;
         let objects = current.objects().await.map_err(|err| err.to_string())?;
         let path = device_path(&objects, address, true, None)
-            .ok_or_else(|| "Linux 尚未在已开启的适配器上配对这副耳机".to_string())?;
+            .ok_or_else(|| "headset is not paired on a powered adapter".to_string())?;
         self.transport.released_links.resume_local(&path).await;
         let objects = current.objects().await.map_err(|err| err.to_string())?;
         if has_media(&objects, address) {
@@ -633,13 +633,13 @@ impl BluezAudioProfiles {
             if start_le {
                 let _owner = le_owner
                     .as_ref()
-                    .ok_or_else(|| "BlueZ 服务不可用".to_string())?;
+                    .ok_or_else(|| "BlueZ service unavailable".to_string())?;
                 opened_le = match current.connect_gatt(&path, true).await {
                     Ok(()) => true,
                     Err(BluezError::AlreadyConnected(_) | BluezError::InProgress(_)) => false,
                     Err(err) => return Err(err.to_string()),
                 };
-                await_connection("Linux 接入耳机 LE 链路超时", || async {
+                await_connection("timed out bringing up the LE link", || async {
                     let objs = current.objects().await.ok()?;
                     let connected = objs
                         .get(&path)
@@ -652,7 +652,7 @@ impl BluezAudioProfiles {
                 .await?;
             }
             let accepted = std::sync::atomic::AtomicBool::new(false);
-            await_connection("Linux 接入耳机音频超时", || async {
+            await_connection("timed out bringing up the audio link", || async {
                 let objs = current.objects().await.ok()?;
                 let ready = has_media(&objs, address);
                 if !ready && !accepted.load(std::sync::atomic::Ordering::SeqCst) {
@@ -688,13 +688,13 @@ impl BluezAudioProfiles {
             .map_err(|err| err.to_string())?;
         let objects = current.objects().await.map_err(|err| err.to_string())?;
         if device_path(&objects, address, true, None).is_none() {
-            return Err("未找到正在让出的耳机".to_string());
+            return Err("headset to release not found".to_string());
         }
         let paths = connected_paths(&objects, address)?;
         self.transport
             .released_links
             .release(&*current, &paths, || async {
-                await_connection("Linux 尚未让出耳机的音频或蓝牙链路", || async {
+                await_connection("timed out waiting for the audio or Bluetooth link to drop", || async {
                     let objs = current.objects().await.ok()?;
                     let remaining = connected_paths(&objs, address).ok()?;
                     Some(remaining.is_empty())
@@ -767,7 +767,7 @@ pub fn has_connected_bearer(
         _ => device
             .get("Connected")
             .and_then(BluezValue::as_bool)
-            .ok_or_else(|| "无法确认耳机蓝牙链路状态".to_string()),
+            .ok_or_else(|| "headset link state unreadable".to_string()),
     }
 }
 

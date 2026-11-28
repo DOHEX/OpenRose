@@ -5,7 +5,9 @@ use crate::contract::{
 };
 use async_trait::async_trait;
 use openrose_control::ControlRuntime;
-use openrose_control::snapshot::{ControlSnapshot, HeadsetCandidate, HeadsetState, SessionReference};
+use openrose_control::snapshot::{
+    ControlSnapshot, HeadsetCandidate, HeadsetState, SessionReference,
+};
 use openrose_headset::{
     HeadsetCommand, HeadsetField, HeadsetSetting, ValidationErrorKind, encode_hex,
 };
@@ -16,9 +18,7 @@ use std::sync::Arc;
 #[async_trait]
 pub trait RemoteHandler: Send + Sync {
     async fn handle(&self, command: RemoteCommand) -> Result<RemoteReading, RemoteError>;
-    async fn yield_audio(&self, _address: &str) -> Result<YieldResponse, RemoteError> {
-        Err(RemoteError::UnsupportedOperation)
-    }
+    async fn yield_audio(&self, address: &str) -> Result<YieldResponse, RemoteError>;
 }
 
 pub struct HeadsetEndpoint {
@@ -31,10 +31,6 @@ pub struct HeadsetEndpoint {
 }
 
 impl HeadsetEndpoint {
-    pub fn new(peer_id: PeerId, control: Arc<ControlRuntime>) -> Self {
-        Self::with_owner_active(peer_id, control, Arc::new(|| true))
-    }
-
     pub fn with_owner_active(
         peer_id: PeerId,
         control: Arc<ControlRuntime>,
@@ -61,7 +57,10 @@ impl HeadsetEndpoint {
         format!("{}/{}", self.incarnation, session.session_id)
     }
 
-    fn held<'a>(&self, snapshot: &'a ControlSnapshot) -> Option<(SessionReference, &'a HeadsetState)> {
+    fn held<'a>(
+        &self,
+        snapshot: &'a ControlSnapshot,
+    ) -> Option<(SessionReference, &'a HeadsetState)> {
         let headset = snapshot.headset.as_ref()?;
         if !supports_circulation(Some(headset.profile())) || !snapshot.headset_has_system_audio() {
             return None;
@@ -90,7 +89,9 @@ impl HeadsetEndpoint {
         };
         let battery = Some(BatterySlots {
             left: headset.readings.confirmed_number(HeadsetField::LeftBattery),
-            right: headset.readings.confirmed_number(HeadsetField::RightBattery),
+            right: headset
+                .readings
+                .confirmed_number(HeadsetField::RightBattery),
             case: headset.readings.confirmed_number(HeadsetField::CaseBattery),
             layout: headset.profile().battery_layout(),
         });
@@ -193,26 +194,27 @@ pub(crate) async fn yield_via_local_audio(
     control: Option<&ControlRuntime>,
     address: &str,
 ) -> Result<YieldResponse, RemoteError> {
-    if !audio.is_connected(address).await {
-        return Ok(YieldResponse::NotHolding);
+    match audio.is_connected(address).await {
+        Ok(true) => {}
+        Ok(false) => return Ok(YieldResponse::NotHolding),
+        Err(refusal) => return Ok(YieldResponse::Refused(refusal)),
     }
-    match audio.yield_audio(address).await {
-        Ok(receipt) => {
-            if audio.is_connected(address).await {
-                return Ok(YieldResponse::Refused(YieldRefusal::Unavailable(
-                    "still_connected".to_string(),
-                )));
-            }
-            if let Some(control) = control {
-                let snapshot = control.snapshot();
-                if snapshot_matches_address(&snapshot, address) {
-                    control.disconnect().await;
-                }
-            }
-            Ok(YieldResponse::Yielded(receipt))
+    let receipt = match audio.yield_audio(address).await {
+        Ok(receipt) => receipt,
+        Err(refusal) => return Ok(YieldResponse::Refused(refusal)),
+    };
+    match audio.is_connected(address).await {
+        Ok(false) => {}
+        Ok(true) => return Ok(YieldResponse::Refused(YieldRefusal::StillConnected)),
+        Err(refusal) => return Ok(YieldResponse::Refused(refusal)),
+    }
+    if let Some(control) = control {
+        let snapshot = control.snapshot();
+        if snapshot_matches_address(&snapshot, address) {
+            control.disconnect().await;
         }
-        Err(refusal) => Ok(YieldResponse::Refused(refusal)),
     }
+    Ok(YieldResponse::Yielded(receipt))
 }
 
 fn snapshot_matches_address(snapshot: &ControlSnapshot, address: &str) -> bool {

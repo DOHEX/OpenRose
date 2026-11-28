@@ -14,6 +14,7 @@ use openrose_desktop_platform::bluetooth::linux::bus::{
 use openrose_desktop_platform::bluetooth::linux::transport::BluezControlTransport;
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 use support::*;
 
 const TARGET_ADDRESS: &str = "00:11:22:33:44:55";
@@ -69,9 +70,6 @@ impl FakePactl {
         })
     }
 
-    fn calls(&self) -> Vec<Vec<String>> {
-        self.calls.lock().expect("calls").clone()
-    }
 }
 
 #[async_trait]
@@ -188,17 +186,17 @@ async fn connection_and_media_facts_follow_bluez_objects() {
     transport.await_initialization().await;
     let audio = LinuxLocalAudio::with_pactl(transport.audio_profiles(), FakePactl::new(vec![]));
 
-    assert!(audio.is_connected("00:11:22:33:44:55").await);
+    assert_eq!(audio.is_connected("00:11:22:33:44:55").await, Ok(true));
     assert!(audio.is_media_connected("00:11:22:33:44:55").await);
-    assert!(!audio.is_connected("invalid").await);
+    assert_eq!(audio.is_connected("invalid").await, Ok(false));
     assert!(!audio.is_media_connected("invalid").await);
 
     bus.set_snapshot(headset_objects(false, true, false));
-    assert!(audio.is_connected(TARGET_ADDRESS).await);
+    assert_eq!(audio.is_connected(TARGET_ADDRESS).await, Ok(true));
     assert!(!audio.is_media_connected(TARGET_ADDRESS).await);
 
     bus.set_snapshot(headset_objects(false, false, false));
-    assert!(!audio.is_connected(TARGET_ADDRESS).await);
+    assert_eq!(audio.is_connected(TARGET_ADDRESS).await, Ok(false));
 }
 
 #[tokio::test]
@@ -303,12 +301,75 @@ async fn yield_audio_disconnects_bluez_links_and_returns_normalized_receipt() {
     );
 }
 
-#[tokio::test(start_paused = true)]
-async fn acquire_connects_audio_and_restores_previous_default_sink_only_if_switched() {
+struct SinkPactl {
+    default: Mutex<Option<String>>,
+    broken: bool,
+    calls: Mutex<Vec<Vec<String>>>,
+}
+
+impl SinkPactl {
+    fn new(default: Option<&str>, broken: bool) -> Arc<Self> {
+        Arc::new(Self {
+            default: Mutex::new(default.map(str::to_string)),
+            broken,
+            calls: Mutex::new(Vec::new()),
+        })
+    }
+
+    fn switch_to(&self, sink: &str) {
+        *self.default.lock().expect("default") = Some(sink.to_string());
+    }
+
+    fn default_sink(&self) -> Option<String> {
+        self.default.lock().expect("default").clone()
+    }
+
+    fn set_calls(&self) -> Vec<Vec<String>> {
+        self.calls
+            .lock()
+            .expect("calls")
+            .iter()
+            .filter(|call| call.first().map(String::as_str) == Some("set-default-sink"))
+            .cloned()
+            .collect()
+    }
+}
+
+#[async_trait]
+impl PactlRunner for SinkPactl {
+    async fn run(&self, args: &[&str]) -> Result<String, String> {
+        self.calls
+            .lock()
+            .expect("calls")
+            .push(args.iter().map(|arg| (*arg).to_string()).collect());
+        if self.broken {
+            return Err("pactl unavailable".to_string());
+        }
+        match args {
+            ["get-default-sink"] => self
+                .default_sink()
+                .map(|sink| format!("{sink}\n"))
+                .ok_or_else(|| "no default sink".to_string()),
+            ["set-default-sink", sink] => {
+                self.switch_to(sink);
+                Ok(String::new())
+            }
+            other => panic!("unexpected pactl call: {other:?}"),
+        }
+    }
+}
+
+const SPEAKER: &str = "alsa_output.speaker";
+const HEADSET_SINK: &str = "bluez_output.00_11_22_33_44_55.1";
+
+fn bus_that_brings_up_audio_on_connect(
+    on_audio_connected: impl Fn() + Send + Sync + 'static,
+) -> (Arc<FakeBluezBus>, Arc<Mutex<Vec<String>>>) {
     let bus = FakeBluezBus::with_snapshot(headset_objects(false, false, false));
     let adding = bus.clone();
     let connected_paths = Arc::new(Mutex::new(Vec::new()));
     let record = connected_paths.clone();
+    let on_audio_connected = Arc::new(on_audio_connected);
     bus.with(|inner| {
         inner.on_connect = Some(hook(move |_| {
             let adding = adding.clone();
@@ -321,6 +382,7 @@ async fn acquire_connects_audio_and_restores_previous_default_sink_only_if_switc
         inner.on_audio_connect = Some(hook(move |path| {
             let record = record.clone();
             let adding = adding.clone();
+            let on_audio_connected = on_audio_connected.clone();
             async move {
                 record.lock().expect("record").push(path);
                 adding.with(|inner| {
@@ -334,80 +396,133 @@ async fn acquire_connects_audio_and_restores_previous_default_sink_only_if_switc
                         .expect("device")
                         .insert("UUIDs".to_string(), strings(&[AUDIO_SINK_UUID]));
                 });
+                on_audio_connected();
                 Ok(())
             }
         }));
     });
+    (bus, connected_paths)
+}
+
+#[tokio::test(start_paused = true)]
+async fn acquire_puts_the_default_output_back_when_the_headset_sink_takes_over_later() {
+    let pactl = SinkPactl::new(Some(SPEAKER), false);
+    let late = pactl.clone();
+    let (bus, connected_paths) = bus_that_brings_up_audio_on_connect(move || {
+        let late = late.clone();
+        tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_secs(3)).await;
+            late.switch_to(HEADSET_SINK);
+        });
+    });
     let transport = BluezControlTransport::with_bus(bus);
     transport.await_initialization().await;
-
-    let pactl = FakePactl::new(vec![
-        (&["get-default-sink"], Ok("alsa_output.speaker\n")),
-        (&["set-default-sink", "alsa_output.speaker"], Ok("")),
-        (
-            &["get-default-sink"],
-            Ok("bluez_output.00_11_22_33_44_55.1\n"),
-        ),
-        (&["set-default-sink", "alsa_output.speaker"], Ok("")),
-    ]);
     let audio = LinuxLocalAudio::with_pactl(transport.audio_profiles(), pactl.clone());
-    audio.acquire("00:11:22:33:44:55").await.expect("acquire");
+
+    audio.acquire(TARGET_ADDRESS).await.expect("acquire");
     assert_eq!(
         *connected_paths.lock().expect("record"),
         vec![TARGET_PATH.to_string()]
     );
-    assert_eq!(
-        pactl.calls(),
-        vec![
-            vec!["get-default-sink"],
-            vec!["set-default-sink", "alsa_output.speaker"],
-            vec!["get-default-sink"],
-            vec!["set-default-sink", "alsa_output.speaker"],
-        ]
-    );
+    assert_eq!(pactl.default_sink().as_deref(), Some(SPEAKER));
+    assert!(pactl.set_calls().is_empty());
 
-    let unchanged_pactl = FakePactl::new(vec![
-        (&["get-default-sink"], Ok("alsa_output.speaker\n")),
-        (&["set-default-sink", "alsa_output.speaker"], Ok("")),
-        (&["get-default-sink"], Ok("alsa_output.speaker\n")),
-    ]);
-    let audio_unchanged =
-        LinuxLocalAudio::with_pactl(transport.audio_profiles(), unchanged_pactl.clone());
-    audio_unchanged
-        .acquire("00:11:22:33:44:55")
-        .await
-        .expect("acquire when already active");
+    tokio::time::sleep(Duration::from_secs(6)).await;
+    assert_eq!(pactl.default_sink().as_deref(), Some(SPEAKER));
     assert_eq!(
-        unchanged_pactl.calls(),
-        vec![
-            vec!["get-default-sink"],
-            vec!["set-default-sink", "alsa_output.speaker"],
-            vec!["get-default-sink"],
-        ]
+        pactl.set_calls(),
+        vec![vec!["set-default-sink".to_string(), SPEAKER.to_string()]]
     );
 }
 
-#[tokio::test]
-async fn acquire_still_restores_default_sink_when_bluez_acquire_fails() {
+#[tokio::test(start_paused = true)]
+async fn acquire_leaves_the_default_output_alone_when_the_headset_sink_never_takes_over() {
+    let pactl = SinkPactl::new(Some(SPEAKER), false);
+    let (bus, _) = bus_that_brings_up_audio_on_connect(|| {});
+    let transport = BluezControlTransport::with_bus(bus);
+    transport.await_initialization().await;
+    let audio = LinuxLocalAudio::with_pactl(transport.audio_profiles(), pactl.clone());
+
+    audio.acquire(TARGET_ADDRESS).await.expect("acquire");
+    tokio::time::sleep(Duration::from_secs(30)).await;
+
+    assert_eq!(pactl.default_sink().as_deref(), Some(SPEAKER));
+    assert!(pactl.set_calls().is_empty());
+}
+
+#[tokio::test(start_paused = true)]
+async fn acquire_connects_even_when_pactl_or_the_default_sink_is_unavailable() {
+    for pactl in [SinkPactl::new(Some(SPEAKER), true), SinkPactl::new(None, false)] {
+        let (bus, connected_paths) = bus_that_brings_up_audio_on_connect(|| {});
+        let transport = BluezControlTransport::with_bus(bus);
+        transport.await_initialization().await;
+        let audio = LinuxLocalAudio::with_pactl(transport.audio_profiles(), pactl.clone());
+
+        audio.acquire(TARGET_ADDRESS).await.expect("acquire");
+        assert_eq!(
+            *connected_paths.lock().expect("record"),
+            vec![TARGET_PATH.to_string()]
+        );
+        tokio::time::sleep(Duration::from_secs(30)).await;
+        assert!(pactl.set_calls().is_empty());
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_failed_bluez_acquire_is_a_platform_refusal_and_still_restores_the_default() {
     let bus = FakeBluezBus::with_snapshot(objects(&[(ADAPTER_PATH, adapter(true))]));
     let transport = BluezControlTransport::with_bus(bus);
     transport.await_initialization().await;
-    let pactl = FakePactl::new(vec![
-        (&["get-default-sink"], Ok("alsa_output.speaker\n")),
-        (&["set-default-sink", "alsa_output.speaker"], Ok("")),
-        (
-            &["get-default-sink"],
-            Ok("bluez_sink.00_11_22_33_44_55.a2dp_sink\n"),
-        ),
-        (&["set-default-sink", "alsa_output.speaker"], Ok("")),
-    ]);
+    let pactl = SinkPactl::new(Some(SPEAKER), false);
     let audio = LinuxLocalAudio::with_pactl(transport.audio_profiles(), pactl.clone());
+
     let err = audio
         .acquire(TARGET_ADDRESS)
         .await
         .expect_err("unpaired headset fails");
-    assert!(matches!(err, YieldRefusal::Unavailable(_)));
-    assert_eq!(pactl.calls().len(), 4);
+    assert!(matches!(err, YieldRefusal::PlatformUnavailable { .. }));
+
+    pactl.switch_to(HEADSET_SINK);
+    tokio::time::sleep(Duration::from_secs(1)).await;
+    assert_eq!(pactl.default_sink().as_deref(), Some(SPEAKER));
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_holder_that_cannot_read_its_bluez_state_reports_unreadable_instead_of_disconnected() {
+    let mut snapshot = headset_objects(true, true, false);
+    snapshot
+        .get_mut(TARGET_PATH)
+        .and_then(|node| node.remove(CLASSIC_BEARER));
+    snapshot
+        .get_mut(TARGET_PATH)
+        .and_then(|node| node.remove(LE_BEARER));
+    let transport = BluezControlTransport::with_bus(FakeBluezBus::with_snapshot(snapshot));
+    transport.await_initialization().await;
+    let audio = LinuxLocalAudio::with_pactl(transport.audio_profiles(), FakePactl::new(vec![]));
+
+    assert!(matches!(
+        audio.is_connected(TARGET_ADDRESS).await,
+        Err(YieldRefusal::AudioStateUnreadable { .. })
+    ));
+}
+
+#[tokio::test]
+async fn an_unreadable_pactl_refuses_the_yield_with_a_state_code_not_a_sentence() {
+    let transport = BluezControlTransport::with_bus(FakeBluezBus::with_snapshot(headset_objects(
+        true, false, true,
+    )));
+    transport.await_initialization().await;
+    let audio = LinuxLocalAudio::with_pactl(
+        transport.audio_profiles(),
+        FakePactl::new(vec![(&["list", "cards"], Err("pactl unavailable"))]),
+    );
+
+    assert_eq!(
+        audio.yield_audio(TARGET_ADDRESS).await,
+        Err(YieldRefusal::AudioStateUnreadable {
+            detail: "pactl unavailable".to_string()
+        })
+    );
 }
 
 #[tokio::test]
@@ -434,14 +549,14 @@ async fn current_output_uses_description_and_falls_back_to_sink_name() {
 #[tokio::test]
 async fn unsupported_local_audio_reports_unavailable_and_disconnected() {
     let audio = UnsupportedLocalAudio;
-    assert!(!audio.is_connected(TARGET_ADDRESS).await);
+    assert_eq!(audio.is_connected(TARGET_ADDRESS).await, Ok(false));
     assert!(!audio.is_media_connected(TARGET_ADDRESS).await);
     assert!(matches!(
         audio.yield_audio(TARGET_ADDRESS).await,
-        Err(YieldRefusal::Unavailable(_))
+        Err(YieldRefusal::PlatformUnavailable { .. })
     ));
     assert!(matches!(
         audio.acquire(TARGET_ADDRESS).await,
-        Err(YieldRefusal::Unavailable(_))
+        Err(YieldRefusal::PlatformUnavailable { .. })
     ));
 }

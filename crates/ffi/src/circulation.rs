@@ -163,11 +163,13 @@ struct LocalAudioAdapter(Arc<dyn LocalAudio>);
 
 #[async_trait]
 impl CoreLocalAudio for LocalAudioAdapter {
-    async fn is_connected(&self, address: &str) -> bool {
+    async fn is_connected(&self, address: &str) -> Result<bool, YieldRefusal> {
         self.0
             .is_connected(address.to_string())
             .await
-            .unwrap_or(false)
+            .map_err(|error| YieldRefusal::AudioStateUnreadable {
+                detail: error.to_string(),
+            })
     }
 
     async fn is_media_connected(&self, address: &str) -> bool {

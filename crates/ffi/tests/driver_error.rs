@@ -117,14 +117,27 @@ fn a_yield_refusal_keeps_its_kind_and_detail() {
         })
     );
     assert_eq!(
-        YieldRefusal::Unavailable("audio_changing".to_string()),
+        YieldRefusal::AudioStateUnreadable {
+            detail: "proxy timeout".to_string(),
+        },
         YieldRefusal::from(DriverError::YieldRefused {
-            kind: YieldRefusalKind::Unavailable,
+            kind: YieldRefusalKind::AudioStateUnreadable,
+            detail: "proxy timeout".to_string(),
+        })
+    );
+    assert_eq!(
+        YieldRefusal::PlatformUnavailable {
+            detail: "audio_changing".to_string(),
+        },
+        YieldRefusal::from(DriverError::YieldRefused {
+            kind: YieldRefusalKind::PlatformUnavailable,
             detail: "audio_changing".to_string(),
         })
     );
     assert_eq!(
-        YieldRefusal::Unavailable("link lost".to_string()),
+        YieldRefusal::PlatformUnavailable {
+            detail: "link lost".to_string(),
+        },
         YieldRefusal::from(DriverError::Terminal {
             detail: "link lost".to_string(),
         })
