@@ -43,6 +43,8 @@ import {
 import type { HeadsetController } from "./src/model/headset";
 import { createDesktopSettingsStore, createTrayAvailabilityStore } from "./src/model/trayPanelSettings";
 import type { DesktopSettingsStore, TrayAvailabilityStore } from "./src/model/trayPanelSettings";
+import { createLoginLaunchStore, wasStartedAtLogin } from "./src/model/loginLaunch";
+import type { LoginLaunchStore } from "./src/model/loginLaunch";
 import { TraySettingsPage } from "./src/pages/settings/TrayControlsSettingsPage";
 import { TrayHost } from "./src/tray/TrayHost";
 import { createDesktopLifecycle } from "./src/tray/lifecycle";
@@ -128,6 +130,7 @@ function DesktopApp(props: {
   settings: DesktopSettingsStore;
   tray: TrayAvailabilityStore;
   lifecycle: DesktopLifecycle;
+  loginLaunch: LoginLaunchStore;
 }) {
   const controller = props.controller;
   const addModel = createAddHeadsetModel(controller);
@@ -616,6 +619,7 @@ function DesktopApp(props: {
             ) : activePage() === "tray" ? (
               <TraySettingsPage
                 settings={props.settings}
+                loginLaunch={props.loginLaunch}
                 availability={props.tray.availability()}
                 panelOpen={props.lifecycle.panelOpen()}
                 onTogglePanel={() => props.lifecycle.setPanelOpen(!props.lifecycle.panelOpen())}
@@ -666,19 +670,32 @@ function DesktopRoot() {
   const controller = createHeadsetController();
   const settings = createDesktopSettingsStore();
   const tray = createTrayAvailabilityStore();
-  const lifecycle = createDesktopLifecycle({ controller, settings, tray });
+  const loginLaunch = createLoginLaunchStore();
+  const lifecycle = createDesktopLifecycle({
+    controller,
+    settings,
+    tray,
+    startedAtLogin: wasStartedAtLogin(),
+  });
   return (
     <>
       <TrayHost controller={controller} settings={settings} tray={tray} lifecycle={lifecycle} />
       <Window
         id="main"
+        open={lifecycle.mainOpen()}
         title="OpenRose"
         closeOnPress={false}
         onClosePress={lifecycle.closeMainWindow}
         defaultSize={{ width: 880, height: 640 }}
         minSize={{ width: 640, height: 520 }}
       >
-        <DesktopApp controller={controller} settings={settings} tray={tray} lifecycle={lifecycle} />
+        <DesktopApp
+          controller={controller}
+          settings={settings}
+          tray={tray}
+          lifecycle={lifecycle}
+          loginLaunch={loginLaunch}
+        />
       </Window>
     </>
   );

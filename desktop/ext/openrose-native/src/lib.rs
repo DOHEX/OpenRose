@@ -23,6 +23,7 @@ mod headset_flow;
 use tokio::sync::{mpsc, oneshot};
 
 mod desktop_bluetooth;
+mod login_launch;
 
 static SHARED_RUNTIME: LazyLock<Runtime> = LazyLock::new(|| {
     Builder::new_multi_thread()
@@ -42,6 +43,7 @@ fn native(registry: &mut Registry) {
         .module::<tray::OpenRoseTray>()
         .module::<settings::OpenRoseSettings>()
         .module::<desktop_bluetooth::OpenRoseBluetooth>()
+        .module::<login_launch::OpenRoseLoginLaunch>()
         .class::<OpenRoseClient>()
         .module::<headset_flow::OpenRoseHeadsetFlow>();
 }
