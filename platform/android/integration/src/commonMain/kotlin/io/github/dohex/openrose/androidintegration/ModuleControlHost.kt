@@ -189,6 +189,7 @@ class ModuleControlHost(
             leaseFor(caller, leaseId) ?: return HostReadResult.Rejected(HostRejection.INVALID_LEASE, "控制宿主授权无效或已过期")
             return when (val current = currentOwner(generation)) {
                 is OwnerCheck.Rejected -> HostReadResult.Rejected(current.rejection, current.message)
+
                 is OwnerCheck.Current -> {
                     val session = current.owner.runtime.readSession(reference)
                     HostReadResult.Available(session, current.owner.coreState.value)

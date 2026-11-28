@@ -80,8 +80,11 @@ data class NativeHeadsetSnapshot(
 
         private fun FieldReading.toNative(): FieldReading = when (this) {
             FieldReading.Loading -> FieldReading.Loading
+
             is FieldReading.NotProvided -> FieldReading.NotProvided("")
+
             is FieldReading.Unknown -> FieldReading.Unknown("")
+
             is FieldReading.Known -> when (value) {
                 is FieldValue.Number, is FieldValue.Toggle, is FieldValue.Text -> FieldReading.Known(value, "")
                 else -> FieldReading.Unknown("")

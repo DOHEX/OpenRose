@@ -106,10 +106,13 @@ internal fun modeLabel(mode: String): String = when (mode) {
     else -> mode
 }
 
-internal fun NativeHeadsetSnapshot.knownBattery(field: DeviceField): Int? =
-    ((fields[field] as? FieldReading.Known)?.value as? FieldValue.Number)?.value?.takeIf { it in 0..100 }
+private fun NativeHeadsetSnapshot.knownValue(field: DeviceField): FieldValue? = (fields[field] as? FieldReading.Known)?.value
 
-internal fun NativeHeadsetSnapshot.knownCharging(field: DeviceField): Boolean? =
-    ((fields[field] as? FieldReading.Known)?.value as? FieldValue.Toggle)?.value
+internal fun NativeHeadsetSnapshot.knownBattery(field: DeviceField): Int? {
+    val level = (knownValue(field) as? FieldValue.Number)?.value
+    return level?.takeIf { it in 0..100 }
+}
+
+internal fun NativeHeadsetSnapshot.knownCharging(field: DeviceField): Boolean? = (knownValue(field) as? FieldValue.Toggle)?.value
 
 private const val INVALID_SESSION_ID = Long.MIN_VALUE

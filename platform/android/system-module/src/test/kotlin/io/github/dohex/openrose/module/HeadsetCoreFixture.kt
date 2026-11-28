@@ -51,6 +51,7 @@ import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.withTimeoutOrNull
 import org.robolectric.RuntimeEnvironment
+import uniffi.openrose_control.ControlSnapshot
 import uniffi.openrose_control.SessionTiming
 import uniffi.openrose_ffi.LocalClock
 import uniffi.openrose_ffi.modelDisplayName
@@ -171,17 +172,20 @@ internal class TestHeadsetDrivers(private val connected: Boolean) : PlatformDriv
     }
 }
 
-internal suspend fun readyHeadsetFrame(): Bundle {
+internal class ReadyHeadset(val frame: Bundle, val hostState: ControlSnapshot)
+
+internal suspend fun readyHeadset(): ReadyHeadset {
     val target = BridgeTarget.BLUETOOTH
     val hostScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     try {
         val drivers = TestHeadsetDrivers(connected = true)
+        lateinit var runtime: CoreControlRuntime
         val host = ModuleControlHost(
             target.packageName,
             target.packageName,
             "test-host",
             { ClientRole.HOST_PRESENTATION },
-            { scope, settings, platform, base -> coreRuntime(scope, settings, platform, base, drivers) },
+            { scope, settings, platform, base -> coreRuntime(scope, settings, platform, base, drivers).also { runtime = it } },
             hostScope,
             { "lease" },
         )
@@ -207,8 +211,10 @@ internal suspend fun readyHeadsetFrame(): Bundle {
                 native.fields.values.none { it is FieldReading.Loading }
             } == true
         }
-        return assertNotNull(frame)
+        return ReadyHeadset(assertNotNull(frame), runtime.coreState.value)
     } finally {
         hostScope.cancel()
     }
 }
+
+internal suspend fun readyHeadsetFrame(): Bundle = readyHeadset().frame

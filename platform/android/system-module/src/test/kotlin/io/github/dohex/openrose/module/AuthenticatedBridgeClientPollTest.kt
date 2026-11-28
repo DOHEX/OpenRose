@@ -78,20 +78,27 @@ class AuthenticatedBridgeClientPollTest {
         val reader = shadowOf(client.handler.looper)
         reader.pause()
         try {
-            host.coreBytes = { "corrupt".encodeToByteArray() }
             client.start()
             reader.idle()
-            assertTrue("clear" in events, "$events")
-            assertFalse(events.any { it.startsWith("snapshot") || it.startsWith("ack") }, "$events")
+            assertEquals(listOf("watch host#1", "read host#1", "ack host#1", "snapshot host#1"), events)
 
             events.clear()
-            host.coreBytes = { it.copyOf().apply { this[3] = (coreWireFormatVersion().toInt() + 1).toByte() } }
+            host.sequence = 8
+            host.coreBytes = { "corrupt".encodeToByteArray() }
             reader.runToNextTask()
-            assertFalse(events.any { it.startsWith("snapshot") || it.startsWith("ack") }, "$events")
+            assertEquals(listOf("read host#1", "clear"), events)
 
+            events.clear()
+            host.sequence = 9
             host.coreBytes = { it }
             reader.runToNextTask()
-            assertTrue("snapshot host#1" in events, "$events")
+            assertEquals(listOf("read host#1", "ack host#1", "snapshot host#1"), events)
+
+            events.clear()
+            host.sequence = 10
+            host.coreBytes = { it.copyOf().apply { this[3] = (coreWireFormatVersion().toInt() + 1).toByte() } }
+            reader.runToNextTask()
+            assertEquals(listOf("read host#1", "clear"), events)
         } finally {
             reader.unPause()
             assertTrue(client.close())
@@ -144,6 +151,7 @@ class AuthenticatedBridgeClientPollTest {
 
     private class PollingHost(private val events: MutableList<String>, private val frame: Bundle) : IControlBridge.Default() {
         var generation = "host#1"
+        var sequence = 7L
         var openFailure: Throwable? = null
         var coreBytes: (ByteArray) -> ByteArray = { it }
 
@@ -156,7 +164,7 @@ class AuthenticatedBridgeClientPollTest {
             putString(BridgeWire.HOST_EPOCH, generation)
             putString(BridgeWire.DEVICE_ID, frame.getString(BridgeWire.DEVICE_ID))
             putLong(BridgeWire.SESSION_ID, frame.getLong(BridgeWire.SESSION_ID))
-            putLong(BridgeWire.READ_SEQUENCE, 7)
+            putLong(BridgeWire.READ_SEQUENCE, sequence)
             putLong(BridgeWire.CAPTURED_ELAPSED_MILLIS, 123)
         }
 
@@ -172,7 +180,7 @@ class AuthenticatedBridgeClientPollTest {
                     BridgeWire.SNAPSHOT,
                     Bundle(frame).apply {
                         putString(BridgeWire.HOST_EPOCH, generation)
-                        putLong(BridgeWire.READ_SEQUENCE, 7)
+                        putLong(BridgeWire.READ_SEQUENCE, sequence)
                         putLong(BridgeWire.CAPTURED_ELAPSED_MILLIS, 123)
                         putByteArray(BridgeWire.CORE_SNAPSHOT, coreBytes(requireNotNull(frame.getByteArray(BridgeWire.CORE_SNAPSHOT))))
                     },

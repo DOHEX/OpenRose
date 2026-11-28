@@ -394,9 +394,8 @@ internal class HostEndpoint(
                         synchronized(lock) {
                             lease.awaiting = PendingRead(reference, sequence, generation, snapshot.device, snapshot.presentation)
                         }
-                        BridgeBundles.response(BridgeWire.STATUS_OK).apply {
-                            putBundle(BridgeWire.SNAPSHOT, snapshotFrame(generation, reference, sequence, result.core, snapshot.presentation))
-                        }
+                        val frame = snapshotFrame(generation, reference, sequence, result.core, snapshot.presentation)
+                        BridgeBundles.response(BridgeWire.STATUS_OK).apply { putBundle(BridgeWire.SNAPSHOT, frame) }
                     }
 
                     is SessionSnapshotResult.Failure -> {
