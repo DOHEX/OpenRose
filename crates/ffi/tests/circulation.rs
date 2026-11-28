@@ -327,11 +327,9 @@ async fn phone_facade_pairs_serves_remote_read_set_gates_owner_and_yields_on_pul
     let world = World::i5();
     world.headset.set_audio_connected(true);
     world.runtime.connect(world.id()).await.expect("connect");
-    eventually("phone control connected", || {
-        matches!(
-            world.snapshot().connection,
-            ConnectionState::Connected { .. }
-        )
+    eventually("phone control ready with system audio", || {
+        let snapshot = world.snapshot();
+        snapshot.ready_session().is_some() && snapshot.headset_has_system_audio()
     })
     .await;
 
@@ -600,11 +598,9 @@ async fn linked_pair(server_audio: ForeignAudio) -> (World, World, Facade, Facad
         .connect(server_world.id())
         .await
         .expect("connect");
-    eventually("server control connected", || {
-        matches!(
-            server_world.snapshot().connection,
-            ConnectionState::Connected { .. }
-        )
+    eventually("server control ready with system audio", || {
+        let snapshot = server_world.snapshot();
+        snapshot.ready_session().is_some() && snapshot.headset_has_system_audio()
     })
     .await;
     let client_world = World::i5();
