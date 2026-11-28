@@ -102,8 +102,10 @@ class CoreControlRuntimeTest {
     fun theKotlinStateFollowsTheSnapshotsTheCorePushes() = runBlocking<Unit> {
         rig().use { rig ->
             withRuntime(rig) { runtime, _ ->
+                val backed: CoreBackedRuntime = runtime
                 assertEquals(OperationResult.Success, runtime.connect(DeviceId(ADDRESS)))
                 val state = runtime.state.eventually { it.connection is ConnectionState.Connected }
+                assertEquals(state, backed.coreState.value.toControlState())
                 val device = assertNotNull(state.device)
                 assertEquals(ModelProfile.I5_ZT, device.profile)
                 assertEquals(DeviceId(ADDRESS), device.deviceId)

@@ -23,16 +23,22 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import uniffi.openrose_control.ControlSnapshot as RustSnapshot
 
+interface CoreBackedRuntime : ControlRuntime {
+    val coreState: StateFlow<RustSnapshot>
+}
+
 class CoreControlRuntime internal constructor(
     private val rust: RustControlRuntime,
     scope: CoroutineScope,
     onClose: () -> Unit,
-) : ControlRuntime {
+) : CoreBackedRuntime {
     private val linkReleased = AtomicBoolean(false)
     private val closing = ClosingBarrier {
         rust.close()
         onClose()
     }
+
+    override val coreState: StateFlow<RustSnapshot> = rust.state
 
     override val state: StateFlow<ControlState> = ProjectedStateFlow(rust.state, RustSnapshot::toControlState)
 

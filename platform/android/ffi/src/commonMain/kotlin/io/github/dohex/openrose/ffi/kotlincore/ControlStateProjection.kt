@@ -43,7 +43,7 @@ private val settingStages = EnumNames(SettingStage.entries)
 private val recoveryReasons = EnumNames(TransportRecoveryReason.entries)
 private val selectionReasons = EnumNames(TransportSelectionReason.entries)
 
-internal fun RustSnapshot.toControlState(): ControlState = ControlState(
+fun RustSnapshot.toControlState(): ControlState = ControlState(
     platform = platform.toKotlin(),
     connection = connection.toKotlin(),
     settings = UserSettings(forceBle = settings.forceBle),
