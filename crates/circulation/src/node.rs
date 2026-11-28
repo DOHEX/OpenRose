@@ -1,8 +1,9 @@
 use crate::contract::{
-    DEFAULT_PORT, NearbyPeer, PairingOffer, Peer, PeerDiscovery, PeerId, RemoteCommand,
-    RemoteError, RemoteReading, RemoteSessionReference,
+    DEFAULT_PORT, LocalAudio, NearbyPeer, PairingOffer, Peer, PeerDiscovery, PeerId, PullOutcome,
+    RemoteCommand, RemoteError, RemoteReading, RemoteSessionReference, YieldRefusal,
+    YieldResponse, same_address,
 };
-use crate::endpoint::{HeadsetEndpoint, RemoteHandler};
+use crate::endpoint::{HeadsetEndpoint, RemoteHandler, yield_via_local_audio};
 use crate::identity::{PeerIdentity, cert_fingerprint};
 use crate::pairing::{PairingRequest, PairingWindow, initiate_pairing, parse_qr_payload, respond_pairing};
 use crate::trust::PeerTrust;
@@ -31,6 +32,7 @@ pub struct CirculationConfig {
     pub name: String,
     pub bind_ip: IpAddr,
     pub listen_port: Option<u16>,
+    pub response_timeout: Duration,
 }
 
 impl CirculationConfig {
@@ -40,6 +42,7 @@ impl CirculationConfig {
             name: name.into(),
             bind_ip: IpAddr::V4(Ipv4Addr::UNSPECIFIED),
             listen_port: None,
+            response_timeout: RESPONSE_TIMEOUT,
         }
     }
 
@@ -49,7 +52,13 @@ impl CirculationConfig {
             name: name.into(),
             bind_ip: IpAddr::V4(Ipv4Addr::LOCALHOST),
             listen_port: Some(0),
+            response_timeout: RESPONSE_TIMEOUT,
         }
+    }
+
+    pub fn with_response_timeout(mut self, timeout: Duration) -> Self {
+        self.response_timeout = timeout;
+        self
     }
 }
 
@@ -69,12 +78,16 @@ struct NodeInner {
     pairing: PairingWindow,
     discovery: Arc<dyn PeerDiscovery>,
     handler: Option<Arc<dyn RemoteHandler>>,
+    local_audio: Option<Arc<dyn LocalAudio>>,
     nearby_tx: watch::Sender<Vec<NearbyPeer>>,
     _nearby_rx: watch::Receiver<Vec<NearbyPeer>>,
     readings_tx: watch::Sender<BTreeMap<PeerId, RemoteReading>>,
     _readings_rx: watch::Receiver<BTreeMap<PeerId, RemoteReading>>,
     running: AsyncMutex<Option<RunningState>>,
     bound_addr_sync: Mutex<Option<SocketAddr>>,
+    pull_lock: AsyncMutex<()>,
+    yield_lock: AsyncMutex<()>,
+    response_timeout: Duration,
 }
 
 #[derive(Clone)]
@@ -87,7 +100,7 @@ impl CirculationNode {
         config: CirculationConfig,
         discovery: Arc<dyn PeerDiscovery>,
     ) -> Result<Self, RemoteError> {
-        Self::build(config, discovery, None)
+        Self::build(config, discovery, None, None)
     }
 
     pub fn with_control(
@@ -98,7 +111,28 @@ impl CirculationNode {
         let identity = PeerIdentity::load_or_create(&config.storage_dir)?;
         let handler: Arc<dyn RemoteHandler> =
             Arc::new(HeadsetEndpoint::new(identity.id().clone(), control));
-        Self::build_with_identity(config, identity, discovery, Some(handler))
+        Self::build_with_identity(config, identity, discovery, Some(handler), None)
+    }
+
+    pub fn with_audio(
+        config: CirculationConfig,
+        discovery: Arc<dyn PeerDiscovery>,
+        audio: Arc<dyn LocalAudio>,
+    ) -> Result<Self, RemoteError> {
+        Self::build(config, discovery, None, Some(audio))
+    }
+
+    pub fn with_control_and_audio(
+        config: CirculationConfig,
+        discovery: Arc<dyn PeerDiscovery>,
+        control: Arc<ControlRuntime>,
+        audio: Arc<dyn LocalAudio>,
+    ) -> Result<Self, RemoteError> {
+        let identity = PeerIdentity::load_or_create(&config.storage_dir)?;
+        let handler: Arc<dyn RemoteHandler> = Arc::new(
+            HeadsetEndpoint::new(identity.id().clone(), control).with_local_audio(Arc::clone(&audio)),
+        );
+        Self::build_with_identity(config, identity, discovery, Some(handler), Some(audio))
     }
 
     pub fn with_handler(
@@ -106,16 +140,17 @@ impl CirculationNode {
         discovery: Arc<dyn PeerDiscovery>,
         handler: Arc<dyn RemoteHandler>,
     ) -> Result<Self, RemoteError> {
-        Self::build(config, discovery, Some(handler))
+        Self::build(config, discovery, Some(handler), None)
     }
 
     fn build(
         config: CirculationConfig,
         discovery: Arc<dyn PeerDiscovery>,
         handler: Option<Arc<dyn RemoteHandler>>,
+        local_audio: Option<Arc<dyn LocalAudio>>,
     ) -> Result<Self, RemoteError> {
         let identity = PeerIdentity::load_or_create(&config.storage_dir)?;
-        Self::build_with_identity(config, identity, discovery, handler)
+        Self::build_with_identity(config, identity, discovery, handler, local_audio)
     }
 
     fn build_with_identity(
@@ -123,6 +158,7 @@ impl CirculationNode {
         identity: PeerIdentity,
         discovery: Arc<dyn PeerDiscovery>,
         handler: Option<Arc<dyn RemoteHandler>>,
+        local_audio: Option<Arc<dyn LocalAudio>>,
     ) -> Result<Self, RemoteError> {
         let trust = PeerTrust::load(&config.storage_dir)?;
         let (nearby_tx, nearby_rx) = watch::channel(Vec::new());
@@ -142,12 +178,16 @@ impl CirculationNode {
                 pairing: PairingWindow::new(),
                 discovery,
                 handler,
+                local_audio,
                 nearby_tx,
                 _nearby_rx: nearby_rx,
                 readings_tx,
                 _readings_rx: readings_rx,
                 running: AsyncMutex::new(None),
                 bound_addr_sync: Mutex::new(None),
+                pull_lock: AsyncMutex::new(()),
+                yield_lock: AsyncMutex::new(()),
+                response_timeout: config.response_timeout,
             }),
         })
     }
@@ -416,6 +456,63 @@ impl CirculationNode {
         result
     }
 
+    pub async fn pull(&self, address: &str) -> Result<PullOutcome, RemoteError> {
+        let Ok(_guard) = self.inner.pull_lock.try_lock() else {
+            return Err(RemoteError::PullInProgress);
+        };
+        self.require_bound_addr()?;
+        let Some(local_audio) = &self.inner.local_audio else {
+            return Err(RemoteError::UnsupportedOperation);
+        };
+        let address = address.trim();
+        if address.is_empty() {
+            return Err(RemoteError::InvalidArgument);
+        }
+        let peers = self.inner.trust.list();
+        if peers.is_empty() {
+            return Err(RemoteError::NotPaired);
+        }
+        if local_audio.is_media_connected(address).await {
+            return Ok(PullOutcome::AlreadyConnected);
+        }
+
+        let mut reachable = 0usize;
+        for peer in &peers {
+            match self.send_yield(&peer.id, address).await {
+                Ok(YieldResponse::Yielded(receipt)) => {
+                    if !same_address(&receipt.address, address) {
+                        return Err(RemoteError::Protocol);
+                    }
+                    reachable += 1;
+                }
+                Ok(YieldResponse::NotHolding) => {
+                    reachable += 1;
+                }
+                Ok(YieldResponse::Refused(refusal)) => {
+                    return Err(RemoteError::YieldRefused(refusal));
+                }
+                Err(RemoteError::PeerOffline) => {}
+                Err(err) => return Err(err),
+            }
+        }
+
+        local_audio
+            .acquire(address)
+            .await
+            .map_err(RemoteError::AcquireFailed)?;
+        if !local_audio.is_media_connected(address).await {
+            return Err(RemoteError::AcquireFailed(YieldRefusal::Unavailable(
+                "media_not_connected".to_string(),
+            )));
+        }
+
+        if reachable == 0 {
+            Ok(PullOutcome::AcquiredWithPeersUnreachable)
+        } else {
+            Ok(PullOutcome::Acquired)
+        }
+    }
+
     fn set_peer_reading(&self, peer_id: &PeerId, reading: RemoteReading) {
         if self.inner.trust.grant(peer_id).is_none() {
             return;
@@ -430,6 +527,37 @@ impl CirculationNode {
         peer_id: &PeerId,
         command: RemoteCommand,
     ) -> Result<RemoteReading, RemoteError> {
+        match self
+            .send_peer_frame(peer_id, |grant| WireBody::Request { grant, command })
+            .await?
+        {
+            WireBody::Reading(reading) => Ok(reading),
+            _ => Err(RemoteError::Protocol),
+        }
+    }
+
+    async fn send_yield(
+        &self,
+        peer_id: &PeerId,
+        address: &str,
+    ) -> Result<YieldResponse, RemoteError> {
+        match self
+            .send_peer_frame(peer_id, |grant| WireBody::Yield {
+                grant,
+                address: address.to_string(),
+            })
+            .await?
+        {
+            WireBody::YieldReply(reply) => Ok(reply),
+            _ => Err(RemoteError::Protocol),
+        }
+    }
+
+    async fn send_peer_frame(
+        &self,
+        peer_id: &PeerId,
+        build: impl FnOnce(String) -> WireBody,
+    ) -> Result<WireBody, RemoteError> {
         self.require_bound_addr()?;
         let grant = self
             .inner
@@ -438,15 +566,9 @@ impl CirculationNode {
             .ok_or(RemoteError::NotPaired)?;
         let addrs = self.addresses_for(peer_id)?;
         let mut tls = self.open_route(peer_id, &addrs).await?;
-        let response = timeout(RESPONSE_TIMEOUT, async {
-            send_frame(
-                &mut tls,
-                WireBody::Request {
-                    grant: grant.token.clone(),
-                    command,
-                },
-            )
-            .await?;
+        let frame = build(grant.token.clone());
+        let response = timeout(self.inner.response_timeout, async {
+            send_frame(&mut tls, frame).await?;
             recv_frame(&mut tls).await
         })
         .await
@@ -457,7 +579,6 @@ impl CirculationNode {
         }
 
         match response {
-            WireBody::Reading(reading) => Ok(reading),
             WireBody::Error(RemoteError::NotPaired) => {
                 let _ = self.inner.trust.remove(peer_id);
                 self.inner.readings_tx.send_modify(|map| {
@@ -466,7 +587,7 @@ impl CirculationNode {
                 Err(RemoteError::NotPaired)
             }
             WireBody::Error(err) => Err(err),
-            _ => Err(RemoteError::Protocol),
+            other => Ok(other),
         }
     }
 
@@ -500,11 +621,15 @@ impl CirculationNode {
         let server_name =
             ServerName::try_from("openrose.peer").map_err(|_| RemoteError::IdentityError)?;
         for addr in sorted {
-            let Ok(Ok(tcp)) = timeout(CONNECT_TIMEOUT, TcpStream::connect(addr)).await else {
+            let connect_limit = CONNECT_TIMEOUT.min(self.inner.response_timeout);
+            let Ok(Ok(tcp)) = timeout(connect_limit, TcpStream::connect(addr)).await else {
                 continue;
             };
-            let Ok(Ok(tls)) =
-                timeout(RESPONSE_TIMEOUT, connector.connect(server_name.clone(), tcp)).await
+            let Ok(Ok(tls)) = timeout(
+                self.inner.response_timeout,
+                connector.connect(server_name.clone(), tcp),
+            )
+            .await
             else {
                 continue;
             };
@@ -624,7 +749,28 @@ async fn handle_connection(
                 },
                 None => WireBody::Error(RemoteError::UnsupportedOperation),
             };
-            let _ = timeout(RESPONSE_TIMEOUT, send_frame(&mut tls, reply)).await;
+            let _ = timeout(inner.response_timeout, send_frame(&mut tls, reply)).await;
+        }
+        WireBody::Yield { grant, address } => {
+            if inner.trust.verify(&remote_id, &grant).is_none() {
+                let _ = send_frame(&mut tls, WireBody::Error(RemoteError::NotPaired)).await;
+                return Ok(());
+            }
+            let reply = if let Some(handler) = &inner.handler {
+                match handler.yield_audio(&address).await {
+                    Ok(resp) => WireBody::YieldReply(resp),
+                    Err(err) => WireBody::Error(err),
+                }
+            } else if let Some(audio) = &inner.local_audio {
+                let _guard = inner.yield_lock.lock().await;
+                match yield_via_local_audio(audio.as_ref(), None, &address).await {
+                    Ok(resp) => WireBody::YieldReply(resp),
+                    Err(err) => WireBody::Error(err),
+                }
+            } else {
+                WireBody::Error(RemoteError::UnsupportedOperation)
+            };
+            let _ = timeout(inner.response_timeout, send_frame(&mut tls, reply)).await;
         }
         WireBody::Forget { grant } => {
             if inner.trust.verify(&remote_id, &grant).is_none() {
@@ -635,7 +781,7 @@ async fn handle_connection(
             inner.readings_tx.send_modify(|map| {
                 map.remove(&remote_id);
             });
-            let _ = timeout(RESPONSE_TIMEOUT, send_frame(&mut tls, WireBody::Ack)).await;
+            let _ = timeout(inner.response_timeout, send_frame(&mut tls, WireBody::Ack)).await;
         }
         _ => {
             let _ = send_frame(

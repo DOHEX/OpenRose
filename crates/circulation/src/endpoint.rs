@@ -1,6 +1,7 @@
 use crate::contract::{
-    BatterySlots, PeerId, REMOTE_CONTROL_SETTINGS, RemoteCommand, RemoteControlStatus, RemoteError,
-    RemoteReading, RemoteSessionReference, is_remote_control_setting, supports_circulation,
+    BatterySlots, LocalAudio, PeerId, REMOTE_CONTROL_SETTINGS, RemoteCommand, RemoteControlStatus,
+    RemoteError, RemoteReading, RemoteSessionReference, YieldRefusal, YieldResponse,
+    is_remote_control_setting, same_address, supports_circulation,
 };
 use async_trait::async_trait;
 use openrose_control::ControlRuntime;
@@ -15,6 +16,9 @@ use std::sync::Arc;
 #[async_trait]
 pub trait RemoteHandler: Send + Sync {
     async fn handle(&self, command: RemoteCommand) -> Result<RemoteReading, RemoteError>;
+    async fn yield_audio(&self, _address: &str) -> Result<YieldResponse, RemoteError> {
+        Err(RemoteError::UnsupportedOperation)
+    }
 }
 
 pub struct HeadsetEndpoint {
@@ -22,6 +26,8 @@ pub struct HeadsetEndpoint {
     control: Arc<ControlRuntime>,
     incarnation: String,
     owner_active: Arc<dyn Fn() -> bool + Send + Sync>,
+    audio: Option<Arc<dyn LocalAudio>>,
+    yield_lock: tokio::sync::Mutex<()>,
 }
 
 impl HeadsetEndpoint {
@@ -41,7 +47,14 @@ impl HeadsetEndpoint {
             control,
             incarnation: encode_hex(&bytes),
             owner_active,
+            audio: None,
+            yield_lock: tokio::sync::Mutex::new(()),
         }
+    }
+
+    pub fn with_local_audio(mut self, audio: Arc<dyn LocalAudio>) -> Self {
+        self.audio = Some(audio);
+        self
     }
 
     fn token(&self, session: &SessionReference) -> String {
@@ -162,6 +175,60 @@ impl RemoteHandler for HeadsetEndpoint {
             RemoteCommand::Set { session, command } => self.set(&session, command).await,
         }
     }
+
+    async fn yield_audio(&self, address: &str) -> Result<YieldResponse, RemoteError> {
+        if !(self.owner_active)() {
+            return Err(RemoteError::OwnerInactive);
+        }
+        let Some(audio) = &self.audio else {
+            return Err(RemoteError::UnsupportedOperation);
+        };
+        let _guard = self.yield_lock.lock().await;
+        yield_via_local_audio(audio.as_ref(), Some(&self.control), address).await
+    }
+}
+
+pub(crate) async fn yield_via_local_audio(
+    audio: &dyn LocalAudio,
+    control: Option<&ControlRuntime>,
+    address: &str,
+) -> Result<YieldResponse, RemoteError> {
+    if !audio.is_connected(address).await {
+        return Ok(YieldResponse::NotHolding);
+    }
+    match audio.yield_audio(address).await {
+        Ok(receipt) => {
+            if audio.is_connected(address).await {
+                return Ok(YieldResponse::Refused(YieldRefusal::Unavailable(
+                    "still_connected".to_string(),
+                )));
+            }
+            if let Some(control) = control {
+                let snapshot = control.snapshot();
+                if snapshot_matches_address(&snapshot, address) {
+                    control.disconnect().await;
+                }
+            }
+            Ok(YieldResponse::Yielded(receipt))
+        }
+        Err(refusal) => Ok(YieldResponse::Refused(refusal)),
+    }
+}
+
+fn snapshot_matches_address(snapshot: &ControlSnapshot, address: &str) -> bool {
+    let headset = snapshot.headset.as_ref().is_some_and(|h| {
+        same_address(h.headset_id.as_str(), address)
+            || h.classic_address
+                .as_deref()
+                .is_some_and(|classic| same_address(classic, address))
+    });
+    let target = snapshot.connection_target.as_ref().is_some_and(|c| {
+        same_address(c.id.as_str(), address)
+            || c.classic_address
+                .as_deref()
+                .is_some_and(|classic| same_address(classic, address))
+    });
+    headset || target
 }
 
 fn fill_ready_settings(

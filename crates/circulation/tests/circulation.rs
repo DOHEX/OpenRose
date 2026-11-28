@@ -1,12 +1,13 @@
 use async_trait::async_trait;
 use openrose_circulation::{
-    CirculationConfig, CirculationNode, HeadsetEndpoint, NearbyPeer, PeerDiscovery, PeerId,
-    RemoteCommand, RemoteControlStatus, RemoteError, RemoteHandler,
+    CirculationConfig, CirculationNode, HeadsetEndpoint, LocalAudio, NearbyPeer, PeerDiscovery,
+    PeerId, PullOutcome, RemoteCommand, RemoteControlStatus, RemoteError, RemoteHandler,
+    YieldReceipt, YieldRefusal,
 };
 use openrose_control::audio::RawAudioDevice;
 use openrose_control::simulator::{SimulatedClock, SimulatedHeadsetHandle, SimulatedTransport};
 use openrose_control::snapshot::{
-    ControlSnapshot, PermissionState, PlatformState, TransportAvailability,
+    ConnectionState, ControlSnapshot, PermissionState, PlatformState, TransportAvailability,
 };
 use openrose_control::{ControlConfig, ControlObserver, ControlRuntime, SessionTiming};
 use openrose_headset::{
@@ -128,6 +129,10 @@ struct ControlRig {
 
 impl ControlRig {
     async fn ready_i5(id: &str) -> Self {
+        Self::i5(id, true).await
+    }
+
+    async fn i5(id: &str, connected: bool) -> Self {
         let transport = Arc::new(SimulatedTransport::new());
         let headset = transport
             .add_headset(
@@ -139,7 +144,9 @@ impl ControlRig {
         transport
             .audio()
             .pair(RawAudioDevice::new(Some("EarFree i5"), id));
-        transport.audio().set_audio_connected(Some(id));
+        if connected {
+            transport.audio().set_audio_connected(Some(id));
+        }
 
         let clock = Arc::new(SimulatedClock::new(
             LocalDateTime::new(2026, 11, 28, 10, 0, 0).expect("valid time"),
@@ -159,10 +166,12 @@ impl ControlRig {
             Arc::new(NoopObserver),
             config,
         ));
-        runtime
-            .connect(HeadsetId::new(id))
-            .await
-            .expect("connect control");
+        if connected {
+            runtime
+                .connect(HeadsetId::new(id))
+                .await
+                .expect("connect control");
+        }
 
         Self {
             runtime,
@@ -565,4 +574,413 @@ async fn owner_inactive_refuses_remote_requests() {
         .await
         .expect("active owner succeeds");
     assert_eq!(ok.status, RemoteControlStatus::Ready);
+}
+
+struct ScriptedAudioState {
+    headset: String,
+    connected: bool,
+    media_connected: bool,
+    yield_refusal: Option<YieldRefusal>,
+    acquire_refusal: Option<YieldRefusal>,
+    yield_delay: Duration,
+    acquire_delay: Duration,
+}
+
+struct ScriptedAudio {
+    label: String,
+    transport: Arc<SimulatedTransport>,
+    events: Arc<Mutex<Vec<String>>>,
+    state: Mutex<ScriptedAudioState>,
+    yield_gate: tokio::sync::Notify,
+}
+
+impl ScriptedAudio {
+    fn new(
+        label: &str,
+        headset: &str,
+        connected: bool,
+        transport: Arc<SimulatedTransport>,
+        events: Arc<Mutex<Vec<String>>>,
+    ) -> Arc<Self> {
+        Arc::new(Self {
+            label: label.to_string(),
+            transport,
+            events,
+            state: Mutex::new(ScriptedAudioState {
+                headset: headset.to_string(),
+                connected,
+                media_connected: connected,
+                yield_refusal: None,
+                acquire_refusal: None,
+                yield_delay: Duration::ZERO,
+                acquire_delay: Duration::ZERO,
+            }),
+            yield_gate: tokio::sync::Notify::new(),
+        })
+    }
+
+    fn set_connected_only(&self, connected: bool) {
+        let mut state = self.state.lock().expect("audio state lock");
+        state.connected = connected;
+        state.media_connected = false;
+    }
+
+    fn set_yield_refusal(&self, refusal: Option<YieldRefusal>) {
+        self.state.lock().expect("audio state lock").yield_refusal = refusal;
+    }
+
+    fn set_acquire_refusal(&self, refusal: Option<YieldRefusal>) {
+        self.state.lock().expect("audio state lock").acquire_refusal = refusal;
+    }
+
+    fn set_yield_delay(&self, delay: Duration) {
+        self.state.lock().expect("audio state lock").yield_delay = delay;
+    }
+
+    fn is_holding(&self) -> bool {
+        let state = self.state.lock().expect("audio state lock");
+        state.connected && state.media_connected
+    }
+}
+
+#[async_trait]
+impl LocalAudio for ScriptedAudio {
+    async fn is_connected(&self, address: &str) -> bool {
+        let state = self.state.lock().expect("audio state lock");
+        state.connected && state.headset.eq_ignore_ascii_case(address)
+    }
+
+    async fn is_media_connected(&self, address: &str) -> bool {
+        let state = self.state.lock().expect("audio state lock");
+        state.media_connected && state.headset.eq_ignore_ascii_case(address)
+    }
+
+    async fn yield_audio(&self, address: &str) -> Result<YieldReceipt, YieldRefusal> {
+        self.yield_gate.notify_waiters();
+        let (delay, refusal) = {
+            let state = self.state.lock().expect("audio state lock");
+            (state.yield_delay, state.yield_refusal.clone())
+        };
+        if !delay.is_zero() {
+            tokio::time::sleep(delay).await;
+        }
+        if let Some(refusal) = refusal {
+            return Err(refusal);
+        }
+        {
+            let mut state = self.state.lock().expect("audio state lock");
+            state.connected = false;
+            state.media_connected = false;
+        }
+        self.transport.audio().set_audio_connected(None);
+        self.events
+            .lock()
+            .expect("events lock")
+            .push(format!("{} yield", self.label));
+        Ok(YieldReceipt {
+            address: address.to_string(),
+        })
+    }
+
+    async fn acquire(&self, address: &str) -> Result<(), YieldRefusal> {
+        let (delay, refusal) = {
+            let state = self.state.lock().expect("audio state lock");
+            (state.acquire_delay, state.acquire_refusal.clone())
+        };
+        if !delay.is_zero() {
+            tokio::time::sleep(delay).await;
+        }
+        if let Some(refusal) = refusal {
+            return Err(refusal);
+        }
+        {
+            let mut state = self.state.lock().expect("audio state lock");
+            state.connected = true;
+            state.media_connected = true;
+        }
+        self.transport
+            .audio()
+            .set_audio_connected(Some(address));
+        self.events
+            .lock()
+            .expect("events lock")
+            .push(format!("{} acquire", self.label));
+        Ok(())
+    }
+}
+
+struct PullPair {
+    _dir_desktop: TempDir,
+    _dir_phone: TempDir,
+    desktop_rig: ControlRig,
+    phone_rig: ControlRig,
+    desktop_audio: Arc<ScriptedAudio>,
+    phone_audio: Arc<ScriptedAudio>,
+    desktop: CirculationNode,
+    phone: CirculationNode,
+    events: Arc<Mutex<Vec<String>>>,
+}
+
+impl PullPair {
+    async fn paired(
+        headset: &str,
+        desktop_holds: bool,
+        phone_holds: bool,
+        desktop_timeout: Option<Duration>,
+    ) -> Self {
+        let hub = LoopbackDiscoveryHub::new();
+        let dir_desktop = TempDir::new("pull-desktop");
+        let dir_phone = TempDir::new("pull-phone");
+        let events = Arc::new(Mutex::new(Vec::new()));
+
+        let desktop_rig = ControlRig::i5(headset, desktop_holds).await;
+        let phone_rig = ControlRig::i5(headset, phone_holds).await;
+        let desktop_audio = ScriptedAudio::new(
+            "Desktop",
+            headset,
+            desktop_holds,
+            Arc::clone(&desktop_rig.transport),
+            Arc::clone(&events),
+        );
+        let phone_audio = ScriptedAudio::new(
+            "Phone",
+            headset,
+            phone_holds,
+            Arc::clone(&phone_rig.transport),
+            Arc::clone(&events),
+        );
+
+        let mut desktop_cfg = CirculationConfig::loopback(&dir_desktop.path, "Desktop");
+        if let Some(timeout) = desktop_timeout {
+            desktop_cfg = desktop_cfg.with_response_timeout(timeout);
+        }
+        let desktop = CirculationNode::with_control_and_audio(
+            desktop_cfg,
+            hub.client(),
+            Arc::clone(&desktop_rig.runtime),
+            desktop_audio.clone(),
+        )
+        .expect("desktop node");
+        let phone = CirculationNode::with_control_and_audio(
+            CirculationConfig::loopback(&dir_phone.path, "Phone"),
+            hub.client(),
+            Arc::clone(&phone_rig.runtime),
+            phone_audio.clone(),
+        )
+        .expect("phone node");
+
+        desktop.start().await.expect("start desktop");
+        phone.start().await.expect("start phone");
+        wait_until(|| phone.nearby().iter().any(|p| &p.id == desktop.id())).await;
+
+        let offer = desktop.offer_pairing().expect("offer");
+        phone.pair_qr(&offer.qr).await.expect("pair");
+        wait_until(|| desktop.nearby().iter().any(|p| &p.id == phone.id())).await;
+
+        Self {
+            _dir_desktop: dir_desktop,
+            _dir_phone: dir_phone,
+            desktop_rig,
+            phone_rig,
+            desktop_audio,
+            phone_audio,
+            desktop,
+            phone,
+            events,
+        }
+    }
+
+    async fn close(self) {
+        self.desktop.close().await;
+        self.phone.close().await;
+    }
+}
+
+#[tokio::test]
+async fn pull_receipt_then_acquire_moves_audio_and_control() {
+    let headset = "AA:BB:CC:00:00:05";
+    let pair = PullPair::paired(headset, false, true, None).await;
+
+    pair.desktop_audio.set_connected_only(true);
+    let outcome = pair.desktop.pull(headset).await.expect("pull should succeed");
+    assert_eq!(outcome, PullOutcome::Acquired);
+    assert_eq!(
+        *pair.events.lock().expect("events lock"),
+        vec!["Phone yield".to_string(), "Desktop acquire".to_string()]
+    );
+    assert!(!pair.phone_audio.is_holding());
+    assert!(pair.desktop_audio.is_holding());
+
+    wait_until(|| {
+        matches!(
+            pair.phone_rig.runtime.snapshot().connection,
+            ConnectionState::Disconnected
+        ) && pair.desktop_rig.runtime.snapshot().ready_session().is_some()
+    })
+    .await;
+
+    assert_eq!(
+        pair.desktop.pull(headset).await.expect("already connected"),
+        PullOutcome::AlreadyConnected
+    );
+
+    let back = pair
+        .phone
+        .pull(headset)
+        .await
+        .expect("pull back to phone");
+    assert_eq!(back, PullOutcome::Acquired);
+    wait_until(|| {
+        matches!(
+            pair.desktop_rig.runtime.snapshot().connection,
+            ConnectionState::Disconnected
+        ) && pair.phone_rig.runtime.snapshot().ready_session().is_some()
+    })
+    .await;
+
+    pair.close().await;
+}
+
+#[tokio::test]
+async fn pull_refused_in_call_and_mic_in_use_keep_holder_connected() {
+    let headset = "AA:BB:CC:00:00:06";
+    let pair = PullPair::paired(headset, false, true, None).await;
+
+    pair.phone_audio
+        .set_yield_refusal(Some(YieldRefusal::InCall));
+    assert_eq!(
+        pair.desktop.pull(headset).await,
+        Err(RemoteError::YieldRefused(YieldRefusal::InCall))
+    );
+    assert!(pair.phone_audio.is_holding());
+    assert!(!pair.desktop_audio.is_holding());
+    assert!(pair.phone_rig.runtime.snapshot().ready_session().is_some());
+    assert!(pair.desktop_rig.runtime.snapshot().ready_session().is_none());
+    assert!(pair.events.lock().expect("events lock").is_empty());
+
+    pair.phone_audio
+        .set_yield_refusal(Some(YieldRefusal::MicInUse));
+    assert_eq!(
+        pair.desktop.pull(headset).await,
+        Err(RemoteError::YieldRefused(YieldRefusal::MicInUse))
+    );
+    assert!(pair.phone_audio.is_holding());
+    assert!(!pair.desktop_audio.is_holding());
+    assert!(pair.phone_rig.runtime.snapshot().ready_session().is_some());
+    assert!(pair.desktop_rig.runtime.snapshot().ready_session().is_none());
+    assert!(pair.events.lock().expect("events lock").is_empty());
+
+    pair.close().await;
+}
+
+#[tokio::test]
+async fn pull_when_nobody_holds_acquires_directly() {
+    let headset = "AA:BB:CC:00:00:07";
+    let pair = PullPair::paired(headset, false, false, None).await;
+
+    assert_eq!(
+        pair.desktop.pull(headset).await,
+        Ok(PullOutcome::Acquired)
+    );
+    assert_eq!(
+        *pair.events.lock().expect("events lock"),
+        vec!["Desktop acquire".to_string()]
+    );
+    assert!(pair.desktop_audio.is_holding());
+    assert!(!pair.phone_audio.is_holding());
+    wait_until(|| pair.desktop_rig.runtime.snapshot().ready_session().is_some()).await;
+
+    pair.close().await;
+}
+
+#[tokio::test]
+async fn pull_when_nobody_reachable_still_attempts_acquire() {
+    let headset = "AA:BB:CC:00:00:08";
+    let pair = PullPair::paired(headset, false, false, None).await;
+
+    pair.phone.close().await;
+    wait_until(|| pair.desktop.nearby().is_empty()).await;
+
+    assert_eq!(
+        pair.desktop.pull(headset).await,
+        Ok(PullOutcome::AcquiredWithPeersUnreachable)
+    );
+    assert_eq!(
+        *pair.events.lock().expect("events lock"),
+        vec!["Desktop acquire".to_string()]
+    );
+    assert!(pair.desktop_audio.is_holding());
+    wait_until(|| pair.desktop_rig.runtime.snapshot().ready_session().is_some()).await;
+
+    pair.desktop.close().await;
+}
+
+#[tokio::test]
+async fn pull_acquire_failure_returns_error_and_never_switches_back() {
+    let headset = "AA:BB:CC:00:00:09";
+    let pair = PullPair::paired(headset, false, true, None).await;
+    let refusal = YieldRefusal::Unavailable("a2dp_connect_failed".to_string());
+    pair.desktop_audio
+        .set_acquire_refusal(Some(refusal.clone()));
+
+    assert_eq!(
+        pair.desktop.pull(headset).await,
+        Err(RemoteError::AcquireFailed(refusal))
+    );
+    assert_eq!(
+        *pair.events.lock().expect("events lock"),
+        vec!["Phone yield".to_string()]
+    );
+    assert!(!pair.phone_audio.is_holding());
+    assert!(!pair.desktop_audio.is_holding());
+    wait_until(|| {
+        matches!(
+            pair.phone_rig.runtime.snapshot().connection,
+            ConnectionState::Disconnected
+        )
+    })
+    .await;
+    assert!(pair.desktop_rig.runtime.snapshot().ready_session().is_none());
+
+    pair.close().await;
+}
+
+#[tokio::test]
+async fn pull_timeout_returns_error_without_acquiring() {
+    let headset = "AA:BB:CC:00:00:0A";
+    let pair = PullPair::paired(headset, false, true, Some(Duration::from_millis(120))).await;
+    pair.phone_audio
+        .set_yield_delay(Duration::from_millis(350));
+
+    assert_eq!(pair.desktop.pull(headset).await, Err(RemoteError::Timeout));
+    assert!(!pair.desktop_audio.is_holding());
+    assert!(pair.desktop_rig.runtime.snapshot().ready_session().is_none());
+
+    pair.close().await;
+}
+
+#[tokio::test]
+async fn concurrent_pull_is_refused() {
+    let headset = "AA:BB:CC:00:00:0B";
+    let pair = PullPair::paired(headset, false, true, None).await;
+    pair.phone_audio
+        .set_yield_delay(Duration::from_millis(120));
+
+    let first_notified = pair.phone_audio.yield_gate.notified();
+    let desktop_first = pair.desktop.clone();
+    let first = tokio::spawn(async move { desktop_first.pull(headset).await });
+    first_notified.await;
+
+    assert_eq!(
+        pair.desktop.pull(headset).await,
+        Err(RemoteError::PullInProgress)
+    );
+    assert_eq!(
+        first.await.expect("join first pull"),
+        Ok(PullOutcome::Acquired)
+    );
+    assert!(pair.desktop_audio.is_holding());
+    assert!(!pair.phone_audio.is_holding());
+
+    pair.close().await;
 }
