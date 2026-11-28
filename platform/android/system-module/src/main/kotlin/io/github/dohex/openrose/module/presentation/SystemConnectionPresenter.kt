@@ -7,6 +7,7 @@ import android.os.Looper
 import android.os.SystemClock
 import android.util.Log
 import io.github.dohex.openrose.androidintegration.wire.BridgePresentationWire
+import io.github.dohex.openrose.androidintegration.wire.NativeHeadsetSnapshot
 import java.util.UUID
 
 internal class SystemConnectionPresenter(
@@ -20,9 +21,9 @@ internal class SystemConnectionPresenter(
 
     @Volatile private var closed = false
 
-    fun show(snapshot: Bundle, promptId: String) {
+    fun show(snapshot: Bundle, native: NativeHeadsetSnapshot, promptId: String) {
         handler.dispatch {
-            if (!closed) showOnHandler(Bundle(snapshot), promptId)
+            if (!closed) showOnHandler(Bundle(snapshot), native, promptId)
         }
     }
 
@@ -57,8 +58,8 @@ internal class SystemConnectionPresenter(
         }
     }
 
-    private fun showOnHandler(snapshot: Bundle, promptId: String) {
-        val request = decodeRequest(snapshot, promptId)
+    private fun showOnHandler(snapshot: Bundle, native: NativeHeadsetSnapshot, promptId: String) {
+        val request = decodeRequest(snapshot, native, promptId)
         when {
             request == null -> report(snapshot, BridgePresentationWire.UNAVAILABLE, "system_prompt_or_session_not_ready")
 

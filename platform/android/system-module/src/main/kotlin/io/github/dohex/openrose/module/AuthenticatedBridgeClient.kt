@@ -14,6 +14,8 @@ import android.os.RemoteException
 import android.util.Log
 import io.github.dohex.openrose.androidintegration.wire.BridgePresentationWire
 import io.github.dohex.openrose.androidintegration.wire.BridgeWire
+import io.github.dohex.openrose.androidintegration.wire.NativeHeadsetSnapshot
+import io.github.dohex.openrose.androidintegration.wire.NativeSessionReference
 import io.github.dohex.openrose.bridge.BridgeBundles
 import io.github.dohex.openrose.bridge.BridgeTarget
 import io.github.dohex.openrose.bridge.IControlBridge
@@ -24,7 +26,7 @@ internal class AuthenticatedBridgeClient(
     context: Context,
     private val target: BridgeTarget,
     private val processName: String,
-    private val onSnapshot: (Bundle) -> Unit,
+    private val onSnapshot: (Bundle, NativeHeadsetSnapshot) -> Unit,
     private val onSnapshotFresh: (Long) -> Unit,
     private val onClear: () -> Unit,
     private val onBonded: (Set<String>) -> Unit,
@@ -381,8 +383,8 @@ internal class AuthenticatedBridgeClient(
             reference: SessionReference,
         ) {
             val response = bridge.read(sessionRequest(lease, ownerGeneration, reference))
-            val snapshot = snapshotFromRead(bridge, response, ownerGeneration, reference) ?: return
-            val sequence = snapshot.getLong(BridgeWire.READ_SEQUENCE, INVALID_READ_SEQUENCE)
+            val frame = snapshotFromRead(bridge, response, ownerGeneration, reference) ?: return
+            val sequence = frame.bundle.getLong(BridgeWire.READ_SEQUENCE, INVALID_READ_SEQUENCE)
             if (sequence <= 0L) {
                 confirmation.clearSnapshot()
                 recordStatus("snapshot_read_sequence_missing")
@@ -400,7 +402,7 @@ internal class AuthenticatedBridgeClient(
                 deliveredSequence = sequence
                 deliveredSnapshot = true
                 systemIntegrationResult {
-                    onSnapshot(Bundle(snapshot))
+                    onSnapshot(Bundle(frame.bundle), frame.native)
                     recordStatus("snapshot_acknowledged session=${reference.sessionId}")
                 }.onFailure { failure ->
                     Log.e(TAG, "snapshot_callback_failed target=$target", failure)
@@ -414,7 +416,7 @@ internal class AuthenticatedBridgeClient(
             response: Bundle,
             ownerGeneration: String,
             reference: SessionReference,
-        ): Bundle? {
+        ): ReadFrame? {
             if (!hasWireVersion(response)) {
                 confirmation.clearSnapshot()
                 recordStatus("read_invalid_version")
@@ -426,14 +428,30 @@ internal class AuthenticatedBridgeClient(
                 recordStatus("read_$status")
                 null
             } else {
-                val snapshot = response.getBundle(BridgeWire.SNAPSHOT)?.takeIf {
+                val frame = response.getBundle(BridgeWire.SNAPSHOT)?.takeIf {
                     hasWireVersion(it) && it.getString(BridgeWire.HOST_EPOCH) == ownerGeneration && sessionReferenceOf(it) == reference
                 }
-                if (snapshot == null) {
+                if (frame == null) {
                     confirmation.clearSnapshot()
                     recordStatus("snapshot_identity_mismatch")
+                    null
+                } else {
+                    when (val decoded = decodeNativeSnapshot(frame)) {
+                        is NativeSnapshotDecode.Rejected -> {
+                            confirmation.clearSnapshot()
+                            recordStatus(decoded.reason)
+                            null
+                        }
+
+                        is NativeSnapshotDecode.Decoded -> if (decoded.native.reference == reference.native(ownerGeneration)) {
+                            ReadFrame(frame, decoded.native)
+                        } else {
+                            confirmation.clearSnapshot()
+                            recordStatus("snapshot_identity_mismatch")
+                            null
+                        }
+                    }
                 }
-                snapshot
             }
         }
 
@@ -675,3 +693,7 @@ private inline fun <T> binderReply(action: () -> T): Result<T> = try {
 } catch (nativeCoreMissing: LinkageError) {
     Result.failure(nativeCoreMissing)
 }
+
+private class ReadFrame(val bundle: Bundle, val native: NativeHeadsetSnapshot)
+
+private fun SessionReference.native(generation: String) = NativeSessionReference(generation, deviceId, sessionId)

@@ -4,15 +4,17 @@ import android.bluetooth.BluetoothAdapter
 import android.os.Bundle
 import io.github.dohex.openrose.androidintegration.wire.BridgePresentationWire
 import io.github.dohex.openrose.androidintegration.wire.BridgeWire
+import io.github.dohex.openrose.androidintegration.wire.NativeHeadsetSnapshot
 import io.github.dohex.openrose.core.NoiseMode
-import io.github.dohex.openrose.core.protocol.ModelProfile
+import io.github.dohex.openrose.core.protocol.DeviceField
+import io.github.dohex.openrose.core.protocol.FieldReading
+import io.github.dohex.openrose.core.protocol.FieldValue
 
 internal data class RenderedSnapshot(
     val wire: Bundle,
     val identity: SessionIdentity,
     val readSequence: Long,
-    val fields: Bundle,
-    val capabilities: Bundle,
+    val native: NativeHeadsetSnapshot,
     val presentation: Bundle,
     val mode: String,
     val statusNotificationEnabled: Boolean,
@@ -23,42 +25,31 @@ internal data class RenderedSnapshot(
 ) {
     fun batterySummary(): String {
         val parts = buildList {
-            batteryValue(LEFT_BATTERY)?.let { add("L $it%${chargingMark(LEFT_CHARGING)}") }
-            batteryValue(RIGHT_BATTERY)?.let { add("R $it%${chargingMark(RIGHT_CHARGING)}") }
-            batteryValue(CASE_BATTERY)?.let { add("C $it%") }
+            batteryValue(DeviceField.LEFT_BATTERY)?.let { add("L $it%${chargingMark(DeviceField.LEFT_CHARGING)}") }
+            batteryValue(DeviceField.RIGHT_BATTERY)?.let { add("R $it%${chargingMark(DeviceField.RIGHT_CHARGING)}") }
+            batteryValue(DeviceField.CASE_BATTERY)?.let { add("C $it%") }
         }
         return parts.takeIf { it.isNotEmpty() }?.joinToString(" · ") ?: "电量未知"
     }
 
-    private fun chargingMark(fieldName: String): String = if (fields.knownCharging(fieldName) == true) "⚡" else ""
+    private fun chargingMark(field: DeviceField): String = if (native.knownCharging(field) == true) "⚡" else ""
 
     fun aodTitle(): String? = listOfNotNull(
-        batteryValue(LEFT_BATTERY)?.let { "L $it%" },
-        batteryValue(RIGHT_BATTERY)?.let { "R $it%" },
+        batteryValue(DeviceField.LEFT_BATTERY)?.let { "L $it%" },
+        batteryValue(DeviceField.RIGHT_BATTERY)?.let { "R $it%" },
     ).takeIf { it.isNotEmpty() }?.joinToString(" | ")
 
-    fun batteryValue(fieldName: String): Int? = fields.knownBattery(fieldName)
+    fun batteryValue(field: DeviceField): Int? = native.knownBattery(field)
 
     fun knownNoiseMode(): String? {
-        val reading = fields.getBundle(NOISE_FIELD) ?: return null
-        if (reading.getString(BridgeWire.STATUS) != KNOWN) return null
-        val value = reading.getBundle("value") ?: return null
-        if (value.getString("type") != TEXT) return null
-        val mode = value.getString("value")?.lowercase()?.takeIf { it.isNotBlank() } ?: return null
-        val modes = availableNoiseModes()
-        return mode.takeIf { it in modes }
+        val text = ((native.fields[DeviceField.NOISE_MODE] as? FieldReading.Known)?.value as? FieldValue.Text)?.value
+        val mode = text?.lowercase()?.takeIf { it.isNotBlank() } ?: return null
+        return mode.takeIf { it in availableNoiseModes() }
     }
 
-    fun availableNoiseModes(): List<String> {
-        val modeBundle = capabilities.getBundle("noise") ?: return emptyList()
-        val modes = modeBundle.getStringArrayList("modes")?.map { it.lowercase() }?.toSet() ?: return emptyList()
-        return NoiseMode.entries.map(NoiseMode::id).filter { it in modes }
-    }
+    fun availableNoiseModes(): List<String> = NoiseMode.entries.map(NoiseMode::id).filter { it in native.noiseModes }
 
-    fun canControlNoise(currentMode: String): Boolean {
-        val writable = capabilities.getStringArrayList("writable_settings") ?: return false
-        return "NOISE_MODE" in writable && currentMode in availableNoiseModes()
-    }
+    fun canControlNoise(currentMode: String): Boolean = "NOISE_MODE" in native.writableSettings && currentMode in availableNoiseModes()
 
     fun nextNoiseMode(currentMode: String): String? {
         val modes = availableNoiseModes()
@@ -66,18 +57,16 @@ internal data class RenderedSnapshot(
         return modes[(modes.indexOf(currentMode) + 1) % modes.size]
     }
 
-    fun profileLabel(): String = ModelProfile.fromName(wire.getString("profile"))?.displayName ?: "OpenRose 耳机"
+    fun profileLabel(): String = native.profile.displayName
 }
 
 internal data class SessionIdentity(val deviceId: String, val sessionId: Long, val hostEpoch: String) {
     val stableKey: String get() = "$hostEpoch:$deviceId:$sessionId"
 }
 
-internal fun decodePresentationSnapshot(snapshot: Bundle): RenderedSnapshot? {
+internal fun decodePresentationSnapshot(snapshot: Bundle, native: NativeHeadsetSnapshot): RenderedSnapshot? {
     val identity = sessionIdentity(snapshot) ?: return null
     if (snapshot.getInt(BridgeWire.KEY_VERSION, -1) != BridgeWire.VERSION) return null
-    val fields = snapshot.getBundle("fields") ?: return null
-    val capabilities = snapshot.getBundle("capabilities") ?: return null
     val presentation = snapshot.getBundle(BridgePresentationWire.PRESENTATION) ?: return null
     val mode = presentation.getString(BridgePresentationWire.MODE)?.takeIf {
         it == BridgePresentationWire.OFF || it == BridgePresentationWire.SYSTEM_STYLE || it == BridgePresentationWire.OPENROSE_STYLE
@@ -87,21 +76,15 @@ internal fun decodePresentationSnapshot(snapshot: Bundle): RenderedSnapshot? {
         wire = Bundle(snapshot),
         identity = identity,
         readSequence = snapshot.getLong(BridgeWire.READ_SEQUENCE, 0L),
-        fields = Bundle(fields),
-        capabilities = Bundle(capabilities),
+        native = native,
         presentation = Bundle(presentation),
         mode = mode,
         statusNotificationEnabled = presentation.getBoolean(BridgePresentationWire.STATUS_NOTIFICATION_ENABLED),
         statusIsland = presentation.getBoolean(BridgePresentationWire.STATUS_SUMMARY_ISLAND, false),
         statusTarget = presentation.getString(BridgePresentationWire.STATUS_TARGET, BridgePresentationWire.TARGET_OPENROSE),
         dynamicColor = presentation.getBoolean(BridgePresentationWire.DYNAMIC_COLOR, false),
-        address = bluetoothAddress(snapshot),
+        address = native.addresses.firstOrNull(BluetoothAdapter::checkBluetoothAddress),
     )
-}
-
-private fun bluetoothAddress(snapshot: Bundle): String? {
-    val address = snapshot.getString(CLASSIC_ADDRESS) ?: snapshot.getString(DEVICE_ADDRESS)
-    return address?.takeIf(BluetoothAdapter::checkBluetoothAddress)
 }
 
 internal fun sessionIdentity(snapshot: Bundle): SessionIdentity? {
@@ -123,31 +106,13 @@ internal fun modeLabel(mode: String): String = when (mode) {
     else -> mode
 }
 
-internal fun Bundle.knownBattery(fieldName: String): Int? {
-    val value = knownValue(fieldName, NUMBER) ?: return null
-    return value.getInt("value", INVALID_BATTERY).takeIf { it in 0..100 }
+private fun NativeHeadsetSnapshot.knownValue(field: DeviceField): FieldValue? = (fields[field] as? FieldReading.Known)?.value
+
+internal fun NativeHeadsetSnapshot.knownBattery(field: DeviceField): Int? {
+    val level = (knownValue(field) as? FieldValue.Number)?.value
+    return level?.takeIf { it in 0..100 }
 }
 
-@Suppress("DEPRECATION")
-internal fun Bundle.knownCharging(fieldName: String): Boolean? = knownValue(fieldName, TOGGLE)?.get("value") as? Boolean
+internal fun NativeHeadsetSnapshot.knownCharging(field: DeviceField): Boolean? = (knownValue(field) as? FieldValue.Toggle)?.value
 
-private fun Bundle.knownValue(fieldName: String, type: String): Bundle? {
-    val reading = getBundle(fieldName) ?: return null
-    if (reading.getString(BridgeWire.STATUS) != KNOWN) return null
-    return reading.getBundle("value")?.takeIf { it.getString("type") == type }
-}
-
-private const val KNOWN = "KNOWN"
-private const val NUMBER = "NUMBER"
-private const val TEXT = "TEXT"
-private const val TOGGLE = "TOGGLE"
-private const val NOISE_FIELD = "NOISE_MODE"
-private const val LEFT_CHARGING = "LEFT_CHARGING"
-private const val RIGHT_CHARGING = "RIGHT_CHARGING"
-private const val CLASSIC_ADDRESS = "classic_address"
-private const val DEVICE_ADDRESS = "device_address"
-private const val LEFT_BATTERY = "LEFT_BATTERY"
-private const val RIGHT_BATTERY = "RIGHT_BATTERY"
-private const val CASE_BATTERY = "CASE_BATTERY"
 private const val INVALID_SESSION_ID = Long.MIN_VALUE
-private const val INVALID_BATTERY = -1

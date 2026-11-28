@@ -10,7 +10,6 @@ import io.github.dohex.openrose.androidintegration.wire.BridgePresentationWire
 import io.github.dohex.openrose.androidintegration.wire.BridgeWire
 import io.github.dohex.openrose.androidintegration.wire.NativeHeadsetSnapshot
 import io.github.dohex.openrose.bridge.BridgeTarget
-import io.github.dohex.openrose.bridge.asWireMap
 import io.github.dohex.openrose.module.nativeheadset.AuthenticatedNativeHeadsetCallbacks
 import io.github.dohex.openrose.module.nativeheadset.MiLinkNativeHeadsetAdapter
 import io.github.dohex.openrose.module.nativeheadset.NativeHeadsetBinderAdapter
@@ -218,10 +217,9 @@ class OpenRoseBluetoothModule : XposedModule() {
                 .reportPresentation(snapshot, feature, status, detail)
         }
 
-        fun publish(snapshot: Bundle) {
+        fun publish(snapshot: Bundle, native: NativeHeadsetSnapshot) {
             val connected = client ?: return
             val context = targetContext ?: return
-            val native = NativeHeadsetSnapshot.fromWire(snapshot.asWireMap())
             nativeSnapshot = native
             latestFrame = Bundle(snapshot)
             binderAdapter?.publish(native)
@@ -230,20 +228,20 @@ class OpenRoseBluetoothModule : XposedModule() {
                 BridgeTarget.BLUETOOTH -> {
                     val output = renderer ?: SystemPresentationRenderer(context, connected.handler, presentationCallbacks(connected))
                         .also { renderer = it }
-                    output.render(snapshot)
+                    output.render(snapshot, native)
                 }
 
                 BridgeTarget.XIAOMI_BLUETOOTH -> {
                     val output = systemPresenter ?: SystemConnectionPresenter(context, connected.handler, presentationCallbacks(connected))
                         .also { systemPresenter = it }
-                    publishSystemPrompt(snapshot, output)
+                    publishSystemPrompt(snapshot, native, output)
                 }
 
                 else -> Unit
             }
         }
 
-        private fun publishSystemPrompt(snapshot: Bundle, output: SystemConnectionPresenter) {
+        private fun publishSystemPrompt(snapshot: Bundle, native: NativeHeadsetSnapshot, output: SystemConnectionPresenter) {
             val identity = "${snapshot.getString(BridgeWire.HOST_EPOCH)}:" +
                 "${snapshot.getString(BridgeWire.DEVICE_ID)}:" +
                 "${snapshot.getLong(BridgeWire.SESSION_ID)}"
@@ -261,7 +259,7 @@ class OpenRoseBluetoothModule : XposedModule() {
             }
             val prompt = spec.getBundle(BridgePresentationWire.PROMPT)
             val id = prompt?.getString(BridgePresentationWire.PROMPT_ID) ?: return
-            if (consumedSystemPrompts.add(id) && !prompt.getBoolean(BridgePresentationWire.CLAIMED)) output.show(snapshot, id)
+            if (consumedSystemPrompts.add(id) && !prompt.getBoolean(BridgePresentationWire.CLAIMED)) output.show(snapshot, native, id)
         }
 
         fun refreshSnapshot(capturedAt: Long) {

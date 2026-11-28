@@ -1,8 +1,6 @@
 package io.github.dohex.openrose.androidintegration
 
 import io.github.dohex.openrose.androidintegration.wire.NativeHeadsetSnapshot
-import io.github.dohex.openrose.androidintegration.wire.asWireMap
-import io.github.dohex.openrose.androidintegration.wire.toBridgeSnapshot
 import io.github.dohex.openrose.core.DeviceCandidate
 import io.github.dohex.openrose.core.OperationResult
 import io.github.dohex.openrose.core.protocol.DeviceField
@@ -24,7 +22,8 @@ class ModelBatteryPresentationTest {
         for (profile in listOf(ModelProfile.SWIFT2_RS_V2, ModelProfile.JASMINE_RS_V2)) {
             val id = DeviceId("11:22:33:44:55:66")
             val earphones = DeviceCandidate(id, profile.displayName, null, profile, "")
-            val session = SystemEntryRuntime(hostHeadset(SharedHeadset(), earphones).runtime(backgroundScope), backgroundScope)
+            val core = hostHeadset(SharedHeadset(), earphones).runtime(backgroundScope)
+            val session = SystemEntryRuntime(core, backgroundScope)
             session.refreshBondedDevices()
             assertEquals(OperationResult.Success, session.connect(id))
             eventually("the battery to be read") { session.state.value.device?.diagnostics?.fields?.get(DeviceField.LEFT_BATTERY).let { it != null && it !is FieldReading.Loading } }
@@ -35,7 +34,7 @@ class ModelBatteryPresentationTest {
             } else {
                 assertIs<FieldReading.NotProvided>(caseBattery)
             }
-            val native = assertNotNull(NativeHeadsetSnapshot.fromWire(device.toBridgeSnapshot("host", 1, 100).asWireMap()))
+            val native = assertNotNull(NativeHeadsetSnapshot.from(core.coreState.value, "host", 100))
             assertFalse(DeviceField.CASE_BATTERY in native.fields)
             assertFalse(DeviceField.CASE_FLAG in native.fields)
             if (profile == ModelProfile.SWIFT2_RS_V2) {

@@ -26,7 +26,7 @@ class AuthenticatedBridgeClientCloseTest {
         }
         val started = CountDownLatch(1)
         val release = CountDownLatch(1)
-        val client = AuthenticatedBridgeClient(context, target, target.packageName, {}, {}, {}, {}, onClosing = {
+        val client = AuthenticatedBridgeClient(context, target, target.packageName, { _, _ -> }, {}, {}, {}, onClosing = {
             started.countDown()
             check(release.await(5, TimeUnit.SECONDS))
         })

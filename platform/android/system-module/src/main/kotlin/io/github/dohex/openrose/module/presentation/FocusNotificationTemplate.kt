@@ -10,6 +10,7 @@ import android.graphics.drawable.Icon
 import android.os.Build
 import android.os.Bundle
 import androidx.core.graphics.PathParser
+import io.github.dohex.openrose.core.protocol.DeviceField
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -46,8 +47,8 @@ internal class FocusNotificationTemplate(private val appContext: Context) {
         .apply { if (noiseText != null) put("subContent", noiseText) }
 
     private fun promptIsland(snapshot: RenderedSnapshot): JSONObject {
-        val left = snapshot.batteryValue("LEFT_BATTERY")
-        val right = snapshot.batteryValue("RIGHT_BATTERY")
+        val left = snapshot.batteryValue(DeviceField.LEFT_BATTERY)
+        val right = snapshot.batteryValue(DeviceField.RIGHT_BATTERY)
 
         fun imageText(type: Int, pictureKey: String, value: Int?): JSONObject = JSONObject()
             .put("type", type)

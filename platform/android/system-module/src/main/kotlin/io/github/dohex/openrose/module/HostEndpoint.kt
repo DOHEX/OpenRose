@@ -42,7 +42,6 @@ import io.github.dohex.openrose.androidintegration.wire.WireFormatException
 import io.github.dohex.openrose.androidintegration.wire.parseWire
 import io.github.dohex.openrose.androidintegration.wire.render
 import io.github.dohex.openrose.androidintegration.wire.toBridgePresentation
-import io.github.dohex.openrose.androidintegration.wire.toBridgeSnapshot
 import io.github.dohex.openrose.bridge.BridgeBundles
 import io.github.dohex.openrose.bridge.BridgeTarget
 import io.github.dohex.openrose.bridge.IControlBridge
@@ -61,6 +60,7 @@ import io.github.dohex.openrose.core.SessionReference
 import io.github.dohex.openrose.core.transport.DeviceId
 import io.github.dohex.openrose.ffi.CoreDecodeResult
 import io.github.dohex.openrose.ffi.coreWireFormatVersion
+import io.github.dohex.openrose.ffi.encodeToBytes
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -74,6 +74,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import uniffi.openrose_control.ControlSnapshot
 import java.util.concurrent.atomic.AtomicLong
 
 internal class AndroidCallerAuthority(
@@ -393,15 +394,8 @@ internal class HostEndpoint(
                         synchronized(lock) {
                             lease.awaiting = PendingRead(reference, sequence, generation, snapshot.device, snapshot.presentation)
                         }
-                        BridgeBundles.response(BridgeWire.STATUS_OK).apply {
-                            putBundle(
-                                BridgeWire.SNAPSHOT,
-                                (
-                                    snapshot.device.toBridgeSnapshot(generation.toString(), sequence, SystemClock.elapsedRealtime()) +
-                                        (BridgePresentationWire.PRESENTATION to snapshot.presentation.toBridgePresentation())
-                                    ).toBundle(),
-                            )
-                        }
+                        val frame = snapshotFrame(generation, reference, sequence, result.core, snapshot.presentation)
+                        BridgeBundles.response(BridgeWire.STATUS_OK).apply { putBundle(BridgeWire.SNAPSHOT, frame) }
                     }
 
                     is SessionSnapshotResult.Failure -> {
@@ -410,6 +404,22 @@ internal class HostEndpoint(
                     }
                 }
             }
+        }
+
+        private fun snapshotFrame(
+            generation: OwnerGeneration,
+            reference: SessionReference,
+            sequence: Long,
+            core: ControlSnapshot,
+            presentation: SystemPresentationState,
+        ): Bundle = mapOf(BridgePresentationWire.PRESENTATION to presentation.toBridgePresentation()).toBundle().apply {
+            putInt(BridgeWire.KEY_VERSION, BridgeWire.VERSION)
+            putString(BridgeWire.HOST_EPOCH, generation.toString())
+            putString(BridgeWire.DEVICE_ID, reference.deviceId.value)
+            putLong(BridgeWire.SESSION_ID, reference.sessionId)
+            putLong(BridgeWire.READ_SEQUENCE, sequence)
+            putLong(BridgeWire.CAPTURED_ELAPSED_MILLIS, SystemClock.elapsedRealtime())
+            putByteArray(BridgeWire.CORE_SNAPSHOT, core.encodeToBytes())
         }
 
         fun acknowledge(receipt: Bundle): Bundle {

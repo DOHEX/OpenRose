@@ -85,6 +85,10 @@ linker 报错出现在 `UnsatisfiedLinkError` 的消息里（`native_library_loa
 
 实测后在本页补一个「实测结果」小节，不改上面的步骤。按 [CONTRIBUTING.md](../../CONTRIBUTING.md) 的要求写明：耳机型号与固件、手机型号与系统版本、LSPosed 版本、OpenRose 版本与 APK 的 SHA-256、每一步的实际观察，再把 `trial.log` 里的关键行、`avc`／linker 的原文和 pid 变化附上。没有做的步骤写“未验证”。结论为失败时，在 #167 记下失败的判据与原文，由 ADR 0038 的失败处理重开 ADR 0011。
 
+## #171 待测：`com.xiaomi.bluetooth` 与 `com.milink.service` 的解码
+
+#169 起宿主给三个系统入口进程的快照帧携带核心 `ControlSnapshot` 字节，客户端用 `decodeControlSnapshot` 解码后才有电量、降噪与地址。上面的门槛只在 `com.android.bluetooth` 实测过，另外两个进程是否能加载 `libopenrose_ffi.so` 与 JNA 并解码，未验证。实测时在两个进程里确认：`AuthenticatedBridgeClient` 的状态日志出现 `snapshot_acknowledged`，而不是 `snapshot_core_unavailable`、`snapshot_core_malformed` 或 `snapshot_core_unsupported_version`；岛、状态通知与小米互联的原生耳机入口显示的电量与降噪与应用一致；同时对这两个进程查 `avc: denied` 与 linker 行（读法见上）。加载失败时这两个进程拿不到快照，状态为 `snapshot_core_unavailable`，不会崩溃。
+
 ## 实测结果
 
 ### 测试环境

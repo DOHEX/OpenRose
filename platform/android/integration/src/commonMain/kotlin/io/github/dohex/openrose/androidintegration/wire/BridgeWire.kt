@@ -12,6 +12,7 @@ object BridgeWire {
     const val RESOLUTION = "resolution"
     const val LEASE_ID = "lease_id"
     const val SNAPSHOT = "snapshot"
+    const val CORE_SNAPSHOT = "core_snapshot"
     const val DEVICE_ID = "device_id"
     const val SESSION_ID = "session_id"
     const val READ_SEQUENCE = "read_sequence"
