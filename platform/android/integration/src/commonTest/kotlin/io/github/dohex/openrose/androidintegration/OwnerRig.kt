@@ -13,6 +13,7 @@ import io.github.dohex.openrose.core.protocol.ModelProfile
 import io.github.dohex.openrose.core.protocol.ProtocolFamily
 import io.github.dohex.openrose.core.transport.Advertisement
 import io.github.dohex.openrose.core.transport.DeviceId
+import io.github.dohex.openrose.ffi.CoreDecodeResult
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
@@ -147,7 +148,11 @@ internal class InProcessHostLink(
 
         override suspend fun execute(generation: OwnerGeneration, command: HostCommand): HostCallResult {
             ensureOpen()
-            val sent = HostWire.decodeCommand(parseWire(HostWire.encode(command).render()))
+            val sent = when (val decoded = HostWire.decodeCommand(HostWire.encode(command))) {
+                is CoreDecodeResult.Ok -> decoded.value
+                is CoreDecodeResult.Error.Malformed -> throw HostLinkException("无效命令：${decoded.detail}")
+                is CoreDecodeResult.Error.UnsupportedVersion -> throw HostLinkException("协议版本不匹配")
+            }
             val result = host.control.execute(identity, lease.id, generation, sent)
             ensureOpen()
             return HostWire.decodeCallResult(parseWire(HostWire.encode(result).render()))

@@ -34,13 +34,15 @@ import io.github.dohex.openrose.core.protocol.FieldReading
 import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.dohex.openrose.core.protocol.ModelProfile
 import io.github.dohex.openrose.core.transport.DeviceId
+import io.github.dohex.openrose.ffi.CoreDecodeResult
+import io.github.dohex.openrose.ffi.coreWireFormatVersion
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.persistentMapOf
 import kotlinx.collections.immutable.persistentSetOf
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
-import kotlin.test.assertNull
+import kotlin.test.assertIs
 
 class HostWireTest {
     private val generation = OwnerGeneration("incarnation-a", 3)
@@ -65,7 +67,8 @@ class HostWireTest {
         )
 
         for (command in commands) {
-            assertEquals(command, HostWire.decodeCommand(HostWire.encode(command)))
+            val decoded = assertIs<CoreDecodeResult.Ok<HostCommand>>(HostWire.decodeCommand(HostWire.encode(command)))
+            assertEquals(command, decoded.value)
         }
     }
 
@@ -86,39 +89,20 @@ class HostWireTest {
         assertEquals(DeviceSetting.entries.toSet(), writes.map { it.setting }.toSet())
         for (write in writes) {
             val expected = HostCommand.Set(reference, write)
-            assertEquals(expected, HostWire.decodeCommand(HostWire.encode(expected)))
+            val decoded = assertIs<CoreDecodeResult.Ok<HostCommand>>(HostWire.decodeCommand(HostWire.encode(expected)))
+            assertEquals(expected, decoded.value)
         }
     }
 
     @Test
-    fun malformedHeadsetSettingNeverReachesTheHost() {
-        for ((setting, value) in listOf(
-            DeviceSetting.BASS_BOOST to FieldValue.Toggle(true),
-            DeviceSetting.PROMPT_LANGUAGE to FieldValue.Number(0),
-            DeviceSetting.PROMPT_VOLUME to FieldValue.Toggle(false),
-            DeviceSetting.NOISE_MODE to FieldValue.Toggle(true),
-            DeviceSetting.NOISE_CYCLE to FieldValue.NoiseCycle(mapOf("normal" to true, "transparency" to null, "wind" to false, "anc" to true)),
-            DeviceSetting.EQ to FieldValue.Number(0),
-            DeviceSetting.EQ to FieldValue.Toggle(true),
-            DeviceSetting.GAME_MODE to FieldValue.Number(1),
-            DeviceSetting.GAME_MODE to FieldValue.Text("on"),
-            DeviceSetting.TOUCH_BINDING to FieldValue.Text("play_pause"),
-            DeviceSetting.TOUCH_ENABLED to FieldValue.Number(1),
-            DeviceSetting.EAR_DETECTION to FieldValue.Text("on"),
-            DeviceSetting.AUDIO_MODE to FieldValue.Toggle(true),
-            DeviceSetting.MULTIPOINT to FieldValue.Number(1),
-        )) {
-            assertNull(HeadsetCommand.decode(setting, value), "$setting/$value")
-            val malformed = Wire.Obj(
-                mapOf(
-                    "t" to Wire.Str("set"),
-                    "reference" to Wire.Null,
-                    "setting" to Wire.Str(setting.name),
-                    "value" to ControlWire.encode(value),
-                ),
-            )
-            assertFailsWith<WireFormatException> { HostWire.decodeCommand(malformed) }
+    fun malformedOrUnsupportedCoreCommandBytesAreRejectedWithTypedErrors() {
+        assertIs<CoreDecodeResult.Error.Malformed>(HostWire.decodeCommand("corrupt".encodeToByteArray()))
+        val wrongVersion = HostWire.encode(HostCommand.StartScan).apply {
+            this[3] = (coreWireFormatVersion().toInt() + 1).toByte()
         }
+        val versionError = assertIs<CoreDecodeResult.Error.UnsupportedVersion>(HostWire.decodeCommand(wrongVersion))
+        assertEquals(coreWireFormatVersion(), versionError.expected)
+        assertEquals((coreWireFormatVersion().toInt() + 1).toUByte(), versionError.actual)
     }
 
     @Test
@@ -228,13 +212,6 @@ class HostWireTest {
     }
 
     @Test
-    fun aCommandAddressedToAGenerationKeepsBothParts() {
-        val command = HostCommand.ClaimPrompt(reference, "prompt-1")
-
-        assertEquals(generation to command, HostWire.decodeCall(HostWire.encodeCall(generation, command)))
-    }
-
-    @Test
     fun aSwitchRequestWithoutAnObservedGenerationKeepsThatAbsence() {
         val request = SwitchRequest("switch-2", ControlWay.MODULE, ControlWay.APP)
 
@@ -316,7 +293,6 @@ class HostWireTest {
     fun aKindFromAnotherVersionIsRejectedInsteadOfGuessed() {
         val foreign = Wire.Obj(mapOf("t" to Wire.Str("teleport")))
 
-        assertFailsWith<WireFormatException> { HostWire.decodeCommand(foreign) }
         assertFailsWith<WireFormatException> { HostWire.decodeCallResult(foreign) }
         assertFailsWith<WireFormatException> { HandoffWire.decodeReleaseResult(foreign) }
         assertFailsWith<WireFormatException> { HandoffWire.decodeAcquireResult(foreign) }

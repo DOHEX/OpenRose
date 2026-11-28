@@ -237,7 +237,13 @@ class ModuleHostBinderLink(
         override suspend fun status(): HostStatus = call({ bridge.ownerStatus(request()) }, HostIdentityWire::decodeStatus)
 
         override suspend fun execute(generation: OwnerGeneration, command: HostCommand): HostCallResult = call(
-            { bridge.execute(request(HostWire.encodeCall(generation, command))) },
+            {
+                bridge.execute(
+                    request(HostIdentityWire.encode(generation)).apply {
+                        putByteArray(BridgeWire.COMMAND, HostWire.encode(command))
+                    },
+                )
+            },
             HostWire::decodeCallResult,
         )
 

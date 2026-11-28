@@ -8,6 +8,8 @@ import android.os.IBinder
 import android.os.Parcel
 import io.github.dohex.openrose.androidintegration.ClientRole
 import io.github.dohex.openrose.androidintegration.ControlWay
+import io.github.dohex.openrose.androidintegration.HostCallResult
+import io.github.dohex.openrose.androidintegration.HostCommand
 import io.github.dohex.openrose.androidintegration.HostConfiguration
 import io.github.dohex.openrose.androidintegration.HostFacts
 import io.github.dohex.openrose.androidintegration.HostSettings
@@ -17,6 +19,7 @@ import io.github.dohex.openrose.androidintegration.ModuleControlHost
 import io.github.dohex.openrose.androidintegration.wire.BridgeWire
 import io.github.dohex.openrose.androidintegration.wire.HostIdentityWire
 import io.github.dohex.openrose.androidintegration.wire.HostWire
+import io.github.dohex.openrose.androidintegration.wire.parseWire
 import io.github.dohex.openrose.androidintegration.wire.render
 import io.github.dohex.openrose.bridge.BridgeBundles
 import io.github.dohex.openrose.bridge.BridgeTarget
@@ -35,6 +38,7 @@ import io.github.dohex.openrose.core.protocol.FieldReading
 import io.github.dohex.openrose.core.protocol.FieldValue
 import io.github.dohex.openrose.core.protocol.ModelProfile
 import io.github.dohex.openrose.core.transport.DeviceId
+import io.github.dohex.openrose.ffi.coreWireFormatVersion
 import kotlinx.collections.immutable.persistentMapOf
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -238,5 +242,75 @@ class HostEndpointTest {
         assertFalse(current().containsKey(BridgeWire.READ_SEQUENCE))
         state.value = state.value.copy(connection = ConnectionState.Disconnected)
         assertEquals(BridgeWire.STATUS_NO_SESSION, current().getString(BridgeWire.STATUS))
+    }
+
+    @Test
+    fun helloWithWrongCoreWireFormatVersionIsRefusedWithUnsupportedVersion() = runTest {
+        val host = ModuleControlHost(
+            "bluetooth",
+            "bluetooth",
+            "host",
+            { ClientRole.APP },
+            { scope, settings, platform, _ -> LocalControlRuntime(platform, settings, scope = scope) },
+            backgroundScope,
+            { "lease" },
+        )
+        val endpoint = HostEndpoint(RuntimeEnvironment.getApplication(), host, MutableStateFlow(HostFacts()), backgroundScope)
+        val wrongWireFormat = BridgeBundles.hello(null, null).apply {
+            putInt(BridgeWire.WIRE_FORMAT_VERSION, coreWireFormatVersion().toInt() + 1)
+        }
+        val refused = endpoint.open(wrongWireFormat, Binder())
+        assertEquals(BridgeWire.STATUS_UNSUPPORTED_VERSION, refused.getString(BridgeWire.STATUS))
+        assertFalse(refused.containsKey(BridgeWire.LEASE_ID))
+
+        val missingWireFormat = BridgeBundles.hello(null, null).apply {
+            remove(BridgeWire.WIRE_FORMAT_VERSION)
+        }
+        assertEquals(BridgeWire.STATUS_UNSUPPORTED_VERSION, endpoint.open(missingWireFormat, Binder()).getString(BridgeWire.STATUS))
+    }
+
+    @Test
+    fun executeDecodesCoreCommandBytesAndRejectsMalformedOrUnsupportedVersion() = runTest {
+        val host = ModuleControlHost(
+            "bluetooth",
+            "bluetooth",
+            "host",
+            { ClientRole.APP },
+            { scope, settings, platform, _ -> LocalControlRuntime(platform, settings, scope = scope) },
+            backgroundScope,
+            { "lease" },
+        )
+        host.configure { HostConfiguration(true, HostSettings(integration = IntegrationSettings(controlWay = ControlWay.MODULE))) }
+        val generation = assertIs<HostStatus.Active>(host.status.value).generation
+        val endpoint = HostEndpoint(RuntimeEnvironment.getApplication(), host, MutableStateFlow(HostFacts()), backgroundScope)
+        val lease = assertNotNull(endpoint.open(BridgeBundles.hello(null, null), Binder()).getString(BridgeWire.LEASE_ID))
+
+        fun commandRequest(bytes: ByteArray?): Bundle = Bundle().apply {
+            putInt(BridgeWire.KEY_VERSION, BridgeWire.VERSION)
+            putString(BridgeWire.LEASE_ID, lease)
+            putString(BridgeWire.PAYLOAD, HostIdentityWire.encode(generation).render())
+            bytes?.let { putByteArray(BridgeWire.COMMAND, it) }
+        }
+
+        val okReply = endpoint.execute(commandRequest(HostWire.encode(HostCommand.StartScan)))
+        assertEquals(BridgeWire.STATUS_OK, okReply.getString(BridgeWire.STATUS))
+        assertIs<HostCallResult.Operation>(HostWire.decodeCallResult(parseWire(okReply.getString(BridgeWire.PAYLOAD).orEmpty())))
+
+        assertEquals(
+            BridgeWire.STATUS_INVALID_ARGUMENT,
+            endpoint.execute(commandRequest(null)).getString(BridgeWire.STATUS),
+        )
+        assertEquals(
+            BridgeWire.STATUS_INVALID_ARGUMENT,
+            endpoint.execute(commandRequest("corrupt".encodeToByteArray())).getString(BridgeWire.STATUS),
+        )
+
+        val wrongCoreVersion = HostWire.encode(HostCommand.StartScan).apply {
+            this[3] = (coreWireFormatVersion().toInt() + 1).toByte()
+        }
+        assertEquals(
+            BridgeWire.STATUS_UNSUPPORTED_VERSION,
+            endpoint.execute(commandRequest(wrongCoreVersion)).getString(BridgeWire.STATUS),
+        )
     }
 }
