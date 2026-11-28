@@ -20,6 +20,7 @@ object BridgeWire {
 
     const val PAYLOAD = "payload"
     const val COMMAND = "command"
+    const val CIRCULATION = "circulation"
 
     const val GENERATION = "generation"
 
