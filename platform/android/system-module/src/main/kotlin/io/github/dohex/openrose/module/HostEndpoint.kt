@@ -623,7 +623,7 @@ internal class HostEndpoint(
                 }
             } catch (cancelled: CancellationException) {
                 if (owner.scope.isActive) throw cancelled
-                return BridgeBundles.response(BridgeWire.STATUS_UNAVAILABLE)
+                null
             }
             if (reply == null || !ownerIsCurrent()) return BridgeBundles.response(BridgeWire.STATUS_UNAVAILABLE)
             return BridgeBundles.response(BridgeWire.STATUS_OK).apply {

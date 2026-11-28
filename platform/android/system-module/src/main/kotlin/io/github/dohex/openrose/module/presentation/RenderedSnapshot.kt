@@ -50,7 +50,8 @@ internal data class RenderedSnapshot(
 
     fun availableNoiseModes(): List<String> = NoiseMode.entries.map(NoiseMode::id).filter { it in native.noiseModes }
 
-    fun canControlNoise(currentMode: String): Boolean = DeviceSetting.NOISE_MODE in native.writableSettings && currentMode in availableNoiseModes()
+    fun canControlNoise(currentMode: String): Boolean =
+        DeviceSetting.NOISE_MODE in native.writableSettings && currentMode in availableNoiseModes()
 
     fun nextNoiseMode(currentMode: String): String? {
         val modes = availableNoiseModes()

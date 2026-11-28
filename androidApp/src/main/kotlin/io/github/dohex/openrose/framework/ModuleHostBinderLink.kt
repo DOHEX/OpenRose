@@ -272,7 +272,8 @@ class ModuleHostBinderLink(
                 override fun onFrame(frame: Bundle) {
                     try {
                         val payload = parseWire(frame.getString(BridgeWire.PAYLOAD).orEmpty())
-                        trySend(HostFrameWire.decodeFrame(EncodedHostFrame(payload, frame.getByteArray(BridgeWire.CORE_SNAPSHOT) ?: ByteArray(0))))
+                        val snapshot = frame.getByteArray(BridgeWire.CORE_SNAPSHOT) ?: ByteArray(0)
+                        trySend(HostFrameWire.decodeFrame(EncodedHostFrame(payload, snapshot)))
                     } catch (failure: WireFormatException) {
                         this@callbackFlow.close(HostLinkException("宿主返回了无法识别的状态帧", failure))
                     }

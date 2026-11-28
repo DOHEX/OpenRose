@@ -233,7 +233,8 @@ class ModuleControlHost(
             }
             return callbackFlow {
                 val collector = launch {
-                    combine(active.runtime.presented(active.coreState) { it.toControlState() }, facts) { (snapshot, presentation), reported ->
+                    val presented = active.runtime.presented(active.coreState) { it.toControlState() }
+                    combine(presented, facts) { (snapshot, presentation), reported ->
                         HostFrame(active.generation, active.holder, snapshot, presentation, reported)
                     }.distinctUntilChanged().collect { send(it) }
                 }
