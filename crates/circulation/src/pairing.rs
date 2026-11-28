@@ -302,13 +302,17 @@ pub async fn initiate_pairing<S: AsyncRead + AsyncWrite + Unpin>(
     Ok(grant)
 }
 
+pub struct PairingRequest {
+    pub peer_id: PeerId,
+    pub name: String,
+    pub spake_msg: Vec<u8>,
+}
+
 pub async fn respond_pairing<S: AsyncRead + AsyncWrite + Unpin>(
     stream: &mut S,
     local_id: &PeerId,
     local_name: &str,
-    remote_id: &PeerId,
-    initiator_name: String,
-    msg_a: Vec<u8>,
+    request: PairingRequest,
     window: &PairingWindow,
     trust: &PeerTrust,
 ) -> Result<PeerGrant, RemoteError> {
@@ -322,10 +326,10 @@ pub async fn respond_pairing<S: AsyncRead + AsyncWrite + Unpin>(
 
     let (state, msg_b) = Spake2::<Ed25519Group>::start_b(
         &Password::new(code.as_bytes()),
-        &Identity::new(remote_id.as_str().as_bytes()),
+        &Identity::new(request.peer_id.as_str().as_bytes()),
         &Identity::new(local_id.as_str().as_bytes()),
     );
-    let shared_key = match state.finish(&msg_a) {
+    let shared_key = match state.finish(&request.spake_msg) {
         Ok(key) => key,
         Err(_) => {
             let _ = send_frame(stream, WireBody::Error(RemoteError::PairingRejected)).await;
@@ -333,7 +337,7 @@ pub async fn respond_pairing<S: AsyncRead + AsyncWrite + Unpin>(
         }
     };
     let (expected_a, confirm_b) =
-        transcript_confirmations(remote_id, local_id, &msg_a, &msg_b, &shared_key);
+        transcript_confirmations(&request.peer_id, local_id, &request.spake_msg, &msg_b, &shared_key);
 
     send_frame(
         stream,
@@ -360,8 +364,8 @@ pub async fn respond_pairing<S: AsyncRead + AsyncWrite + Unpin>(
         .map_err(|_| RemoteError::IdentityError)?;
     let pending = PeerGrant {
         peer: Peer {
-            id: remote_id.clone(),
-            name: truncate_name(&initiator_name, 128),
+            id: request.peer_id,
+            name: truncate_name(&request.name, 128),
         },
         token: encode_hex(&token_bytes),
     };

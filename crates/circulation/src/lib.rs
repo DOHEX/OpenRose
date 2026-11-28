@@ -1,5 +1,6 @@
 pub mod contract;
 pub mod endpoint;
+pub mod node;
 pub mod pairing;
 pub mod identity;
 pub mod trust;
@@ -12,3 +13,4 @@ pub use contract::{
     WIRE_VERSION, YieldReceipt, YieldRefusal, is_remote_control_setting, supports_circulation,
 };
 pub use endpoint::{HeadsetEndpoint, RemoteHandler};
+pub use node::{CirculationConfig, CirculationNode};
