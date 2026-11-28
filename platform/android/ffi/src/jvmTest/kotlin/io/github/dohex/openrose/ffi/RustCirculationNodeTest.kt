@@ -2,6 +2,7 @@ package io.github.dohex.openrose.ffi
 
 import io.github.dohex.openrose.ffi.drivers.ADDRESS
 import io.github.dohex.openrose.ffi.drivers.ControlTransportAdapter
+import io.github.dohex.openrose.ffi.drivers.SimulatedDrivers
 import io.github.dohex.openrose.ffi.drivers.clock
 import io.github.dohex.openrose.ffi.drivers.platformState
 import io.github.dohex.openrose.ffi.drivers.rig
@@ -34,6 +35,7 @@ import uniffi.openrose_headset.HeadsetCommand
 import uniffi.openrose_headset.NoiseMode
 import java.net.Socket
 import java.nio.file.Files
+import java.nio.file.Path
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
@@ -140,8 +142,74 @@ class RustCirculationNodeTest {
         }
     }
 
+    private class PairedNodes(
+        phoneDir: Path,
+        peerDir: Path,
+        val phoneControl: RustControlRuntime,
+        peerControl: RustControlRuntime,
+    ) {
+        val phoneDiscovery = FakePeerDiscovery()
+        private val peerDiscovery = FakePeerDiscovery()
+        val phoneAudio = FakeLocalAudio(initialHolding = true)
+        val peerAudio = FakeLocalAudio(initialHolding = false)
+        val peerDialer = TcpPeerRouteDialer()
+        val phoneOwnerActive = AtomicBoolean(true)
+        val phoneNode = node(phoneDir, "Phone", phoneControl, phoneDiscovery, phoneAudio, TcpPeerRouteDialer()) { phoneOwnerActive.get() }
+        val peerNode = node(peerDir, "Peer", peerControl, peerDiscovery, peerAudio, peerDialer) { true }
+
+        suspend fun pair() {
+            val phonePort = phoneNode.start()
+            val peerPort = peerNode.start()
+            phoneDiscovery.publish(listOf(NearbyPeerRecord(id = peerNode.id(), name = "Peer", addresses = listOf("127.0.0.1"), port = peerPort)))
+            peerDiscovery.publish(listOf(NearbyPeerRecord(id = phoneNode.id(), name = "Phone", addresses = listOf("127.0.0.1"), port = phonePort)))
+            withTimeout(2_000) {
+                while (phoneNode.nearby().isEmpty() || peerNode.nearby().isEmpty()) delay(10)
+            }
+            val offer = phoneNode.offerPairing()
+            assertEquals(phoneNode.id(), peerNode.pair(phoneNode.id(), offer.code).id)
+        }
+
+        suspend fun close() {
+            phoneNode.closeNode()
+            peerNode.closeNode()
+        }
+    }
+
     @Test
-    fun phoneFacadePairsServesRemoteControlAndYieldsOnPullThroughUniffi() = runBlocking<Unit> {
+    fun aPeerPairsWithThePhoneAndControlsItsHeadsetThroughUniffi() = withPairedNodes {
+        assertEquals(1u, phoneDiscovery.startedWireVersion.get())
+        assertEquals(1, phoneNode.peers().size)
+        assertTrue(peerDialer.dialedCount.get() >= 1)
+
+        val reading = peerNode.remoteRead(phoneNode.id())
+        assertEquals(RemoteControlStatus.READY, reading.status)
+        val updated = peerNode.remoteSet(phoneNode.id(), requireNotNull(reading.session), HeadsetCommand.NoiseMode(NoiseMode.TRANSPARENCY))
+        assertEquals(NoiseMode.TRANSPARENCY, updated.noiseMode)
+    }
+
+    @Test
+    fun thePhoneRefusesRemoteRequestsWhileItsOwnerIsInactive() = withPairedNodes {
+        phoneOwnerActive.set(false)
+        val failure = assertFailsWith<CirculationFailure.Failed> { peerNode.remoteRead(phoneNode.id()) }
+        assertEquals(RemoteError.OwnerInactive, failure.error)
+    }
+
+    @Test
+    fun aPullFromThePeerMakesThePhoneYieldAndItsControlFollowsTheAudio() = withPairedNodes {
+        val before = phoneNode.handoffStatus(ADDRESS)
+        assertTrue(before.available)
+        assertTrue(before.mediaReady)
+        assertFalse(before.offline)
+
+        assertEquals(PullOutcome.ACQUIRED, peerNode.pull(ADDRESS))
+        assertEquals(listOf(ADDRESS), phoneAudio.yieldCalls.toList())
+        assertEquals(listOf(ADDRESS), peerAudio.acquireCalls.toList())
+        withTimeout(2_000) {
+            phoneControl.state.first { it.connection is ConnectionState.Disconnected }
+        }
+    }
+
+    private fun withPairedNodes(test: suspend PairedNodes.() -> Unit) = runBlocking<Unit> {
         val phoneDir = Files.createTempDirectory("openrose-phone-ffi")
         val peerDir = Files.createTempDirectory("openrose-peer-ffi")
         try {
@@ -150,126 +218,16 @@ class RustCirculationNodeTest {
                     peerRig.audioConnected = false
                     ControlTransportAdapter(phoneRig).use { phoneTransport ->
                         ControlTransportAdapter(peerRig).use { peerTransport ->
-                            RustControlRuntime(
-                                transport = phoneTransport,
-                                initialPlatformState = phoneRig.platformState(),
-                                clock = phoneRig.clock(),
-                                timing = phoneRig.timing(),
-                            ).use { phoneControl ->
-                                RustControlRuntime(
-                                    transport = peerTransport,
-                                    initialPlatformState = peerRig.platformState(),
-                                    clock = peerRig.clock(),
-                                    timing = peerRig.timing(),
-                                ).use { peerControl ->
+                            runtime(phoneRig, phoneTransport).use { phoneControl ->
+                                runtime(peerRig, peerTransport).use { peerControl ->
                                     assertEquals(RustControlResult.Success, phoneControl.connect(ADDRESS))
-                                    withTimeout(2_000) {
-                                        phoneControl.state.first { it.connection is ConnectionState.Connected }
-                                    }
-
-                                    val phoneDiscovery = FakePeerDiscovery()
-                                    val peerDiscovery = FakePeerDiscovery()
-                                    val phoneAudio = FakeLocalAudio(initialHolding = true)
-                                    val peerAudio = FakeLocalAudio(initialHolding = false)
-                                    val phoneDialer = TcpPeerRouteDialer()
-                                    val peerDialer = TcpPeerRouteDialer()
-                                    val phoneOwnerActive = AtomicBoolean(true)
-
-                                    val phoneNode = CirculationNode(
-                                        storageDir = phoneDir.toString(),
-                                        name = "Phone",
-                                        listenPort = 0u,
-                                        control = phoneControl.handle,
-                                        discovery = phoneDiscovery,
-                                        audio = phoneAudio,
-                                        dialer = phoneDialer,
-                                        ownerActive = object : OwnerActive {
-                                            override fun isActive(): Boolean = phoneOwnerActive.get()
-                                        },
-                                    )
-                                    val peerNode = CirculationNode(
-                                        storageDir = peerDir.toString(),
-                                        name = "Peer",
-                                        listenPort = 0u,
-                                        control = peerControl.handle,
-                                        discovery = peerDiscovery,
-                                        audio = peerAudio,
-                                        dialer = peerDialer,
-                                        ownerActive = object : OwnerActive {
-                                            override fun isActive(): Boolean = true
-                                        },
-                                    )
-
-                                    val phonePort = phoneNode.start()
-                                    val peerPort = peerNode.start()
+                                    withTimeout(2_000) { phoneControl.state.first { it.connection is ConnectionState.Connected } }
+                                    val nodes = PairedNodes(phoneDir, peerDir, phoneControl, peerControl)
                                     try {
-                                        assertEquals(1u, phoneDiscovery.startedWireVersion.get())
-                                        phoneDiscovery.publish(
-                                            listOf(
-                                                NearbyPeerRecord(
-                                                    id = peerNode.id(),
-                                                    name = "Peer",
-                                                    addresses = listOf("127.0.0.1"),
-                                                    port = peerPort,
-                                                ),
-                                            ),
-                                        )
-                                        peerDiscovery.publish(
-                                            listOf(
-                                                NearbyPeerRecord(
-                                                    id = phoneNode.id(),
-                                                    name = "Phone",
-                                                    addresses = listOf("127.0.0.1"),
-                                                    port = phonePort,
-                                                ),
-                                            ),
-                                        )
-                                        withTimeout(2_000) {
-                                            while (phoneNode.nearby().isEmpty() || peerNode.nearby().isEmpty()) {
-                                                delay(10)
-                                            }
-                                        }
-
-                                        val offer = phoneNode.offerPairing()
-                                        val paired = peerNode.pair(phoneNode.id(), offer.code)
-                                        assertEquals(phoneNode.id(), paired.id)
-                                        assertEquals(1, phoneNode.peers().size)
-                                        assertTrue((peerDialer.dialedCount.get()) >= 1)
-
-                                        val reading = peerNode.remoteRead(phoneNode.id())
-                                        assertEquals(RemoteControlStatus.READY, reading.status)
-                                        val session = requireNotNull(reading.session)
-
-                                        val updated = peerNode.remoteSet(
-                                            phoneNode.id(),
-                                            session,
-                                            HeadsetCommand.NoiseMode(NoiseMode.TRANSPARENCY),
-                                        )
-                                        assertEquals(NoiseMode.TRANSPARENCY, updated.noiseMode)
-
-                                        phoneOwnerActive.set(false)
-                                        val inactiveFailure = assertFailsWith<CirculationFailure.Failed> {
-                                            peerNode.remoteRead(phoneNode.id())
-                                        }
-                                        assertEquals(RemoteError.OwnerInactive, inactiveFailure.error)
-                                        phoneOwnerActive.set(true)
-
-                                        val handoffBefore = phoneNode.handoffStatus(ADDRESS)
-                                        assertTrue(handoffBefore.available)
-                                        assertTrue(handoffBefore.mediaReady)
-                                        assertFalse(handoffBefore.offline)
-
-                                        val outcome = peerNode.pull(ADDRESS)
-                                        assertEquals(PullOutcome.ACQUIRED, outcome)
-                                        assertEquals(listOf(ADDRESS), phoneAudio.yieldCalls.toList())
-                                        assertEquals(listOf(ADDRESS), peerAudio.acquireCalls.toList())
-
-                                        withTimeout(2_000) {
-                                            phoneControl.state.first { it.connection is ConnectionState.Disconnected }
-                                        }
+                                        nodes.pair()
+                                        nodes.test()
                                     } finally {
-                                        phoneNode.closeNode()
-                                        peerNode.closeNode()
+                                        nodes.close()
                                     }
                                 }
                             }
@@ -319,3 +277,31 @@ class RustCirculationNodeTest {
         assertEquals(YieldRefusalKind.IN_CALL, refused.kind)
     }
 }
+
+private fun runtime(rig: SimulatedDrivers, transport: ControlTransportAdapter) = RustControlRuntime(
+    transport = transport,
+    initialPlatformState = rig.platformState(),
+    clock = rig.clock(),
+    timing = rig.timing(),
+)
+
+private fun node(
+    dir: Path,
+    name: String,
+    control: RustControlRuntime,
+    discovery: PeerDiscovery,
+    audio: LocalAudio,
+    dialer: PeerRouteDialer,
+    active: () -> Boolean,
+) = CirculationNode(
+    storageDir = dir.toString(),
+    name = name,
+    listenPort = 0u,
+    control = control.handle,
+    discovery = discovery,
+    audio = audio,
+    dialer = dialer,
+    ownerActive = object : OwnerActive {
+        override fun isActive(): Boolean = active()
+    },
+)
