@@ -1,7 +1,6 @@
 package io.github.dohex.openrose.platform
 
 import android.annotation.SuppressLint
-import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothProfile
@@ -94,18 +93,14 @@ class PhoneCirculationAudio(private val context: Context) : LocalAudio {
         }
     }
 
-    private fun systemAdapter(): BluetoothAdapter = context.getSystemService(BluetoothManager::class.java)?.adapter
-        ?: throw refused(YieldRefusalKind.UNAVAILABLE, "系统蓝牙不可用")
-
-    private fun BluetoothAdapter.bonded(address: String): BluetoothDevice = bondedDevices.firstOrNull { it.address.equals(address, true) }
-        ?: throw refused(YieldRefusalKind.UNAVAILABLE, "手机尚未配对这副耳机")
-
     private suspend fun <T> withProfiles(
         address: String,
         action: suspend (BluetoothDevice, List<AndroidAudioProfiles.ProfileProxyLease>) -> T,
     ): T {
-        val adapter = systemAdapter()
-        val device = adapter.bonded(address)
+        val adapter = context.getSystemService(BluetoothManager::class.java)?.adapter
+            ?: throw refused(YieldRefusalKind.UNAVAILABLE, "系统蓝牙不可用")
+        val device = adapter.bondedDevices.firstOrNull { it.address.equals(address, ignoreCase = true) }
+            ?: throw refused(YieldRefusalKind.UNAVAILABLE, "手机尚未配对这副耳机")
         val leases = mutableListOf<AndroidAudioProfiles.ProfileProxyLease>()
         try {
             val ready = withTimeoutOrNull(2_500L) {
