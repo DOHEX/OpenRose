@@ -278,8 +278,7 @@ class ModuleControlHostTest {
         rig.eventually("the module owner to become ready") { runtime.integration.value.owner.readiness == OwnerReadiness.Ready }
         val generation = requireNotNull(runtime.integration.value.owner.holder).generation
 
-        fun tamperSnapshot(encoded: EncodedHostFrame, transform: (ByteArray) -> ByteArray): EncodedHostFrame =
-            EncodedHostFrame(encoded.payload, transform(encoded.snapshot))
+        fun tamperSnapshot(encoded: EncodedHostFrame, transform: (ByteArray) -> ByteArray): EncodedHostFrame = EncodedHostFrame(encoded.payload, transform(encoded.snapshot))
 
         val connection = assertIs<LinkOpenResult.Open>(rig.link.open()).connection
         try {
